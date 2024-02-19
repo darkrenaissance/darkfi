@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -17,92 +17,114 @@
  */
 
 use std::{
+    fs,
     io::{stdin, Read},
     process::exit,
     str::FromStr,
+    sync::Arc,
     time::Instant,
 };
 
-use anyhow::{anyhow, Context, Result};
-use clap::{CommandFactory, Parser, Subcommand};
-use clap_complete::{generate, Shell};
-use darkfi::{tx::Transaction, util::parse::decode_base10, zk::halo2::Field};
-use darkfi_money_contract::model::Coin;
-use darkfi_sdk::{
-    crypto::{PublicKey, SecretKey, TokenId},
-    pasta::{group::ff::PrimeField, pallas},
-};
-use darkfi_serial::{deserialize, serialize};
 use prettytable::{format, row, Table};
 use rand::rngs::OsRng;
-use serde_json::json;
-use simplelog::{ColorChoice, TermLogger, TerminalMode};
+use smol::stream::StreamExt;
+use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;
 
 use darkfi::{
-    cli_desc,
-    rpc::{client::RpcClient, jsonrpc::JsonRequest},
+    async_daemonize, cli_desc,
+    rpc::{client::RpcClient, jsonrpc::JsonRequest, util::JsonValue},
+    tx::Transaction,
     util::{
-        cli::{get_log_config, get_log_level},
-        parse::encode_base10,
+        parse::{decode_base10, encode_base10},
+        path::expand_path,
     },
+    zk::halo2::Field,
+    Result,
 };
+use darkfi_money_contract::model::{Coin, TokenId};
+use darkfi_sdk::{
+    crypto::{FuncId, PublicKey, SecretKey},
+    pasta::{group::ff::PrimeField, pallas},
+};
+use darkfi_serial::{deserialize, serialize};
 
-/// Airdrop methods
-mod rpc_airdrop;
+/// Error codes
+mod error;
+
+/// darkfid JSON-RPC related methods
+mod rpc;
 
 /// Payment methods
-mod rpc_transfer;
+mod transfer;
 
 /// Swap methods
-mod rpc_swap;
-use rpc_swap::PartialSwapData;
-
-/// DAO methods
-mod rpc_dao;
+mod swap;
+use swap::PartialSwapData;
 
 /// Token methods
-mod rpc_token;
-
-/// Blockchain methods
-mod rpc_blockchain;
+mod token;
 
 /// CLI utility functions
 mod cli_util;
-use cli_util::{kaching, parse_token_pair, parse_value_pair};
-
-/// Wallet functionality related to drk operations
-mod wallet;
-
-/// Wallet functionality related to DAO
-mod wallet_dao;
-use wallet_dao::DaoParams;
+use cli_util::{generate_completions, kaching, parse_token_pair, parse_value_pair};
 
 /// Wallet functionality related to Money
-mod wallet_money;
+mod money;
+use money::BALANCE_BASE10_DECIMALS;
 
-/// Wallet functionality related to arbitrary tokens
-mod wallet_token;
+/// Wallet functionality related to Dao
+mod dao;
+use dao::DaoParams;
 
 /// Wallet functionality related to transactions history
-mod wallet_txs_history;
+mod txs_history;
 
-#[derive(Parser)]
-#[command(about = cli_desc!())]
+/// Wallet database operations handler
+mod walletdb;
+use walletdb::{WalletDb, WalletPtr};
+
+const CONFIG_FILE: &str = "drk_config.toml";
+const CONFIG_FILE_CONTENTS: &str = include_str!("../drk_config.toml");
+
+// Dev Note: when adding/modifying args here,
+// don't forget to update cli_util::generate_completions()
+#[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
+#[serde(default)]
+#[structopt(name = "drk", about = cli_desc!())]
 struct Args {
-    #[arg(short, action = clap::ArgAction::Count)]
-    /// Increase verbosity (-vvv supported)
-    verbose: u8,
+    #[structopt(short, long)]
+    /// Configuration file to use
+    config: Option<String>,
 
-    #[arg(short, long, default_value = "tcp://127.0.0.1:8340")]
+    #[structopt(long, default_value = "~/.local/darkfi/drk/wallet.db")]
+    /// Path to wallet database
+    wallet_path: String,
+
+    #[structopt(long, default_value = "changeme")]
+    /// Password for the wallet database
+    wallet_pass: String,
+
+    #[structopt(short, long, default_value = "tcp://127.0.0.1:8340")]
     /// darkfid JSON-RPC endpoint
     endpoint: Url,
 
-    #[command(subcommand)]
+    #[structopt(subcommand)]
+    /// Sub command to execute
     command: Subcmd,
+
+    #[structopt(short, long)]
+    /// Set log file to ouput into
+    log: Option<String>,
+
+    #[structopt(short, parse(from_occurrences))]
+    /// Increase verbosity (-vvv supported)
+    verbose: u8,
 }
 
-#[derive(Subcommand)]
+// Dev Note: when adding/modifying commands here,
+// don't forget to update cli_util::generate_completions()
+#[derive(Clone, Debug, Deserialize, StructOpt)]
 enum Subcmd {
     /// Fun
     Kaching,
@@ -113,40 +135,48 @@ enum Subcmd {
     /// Generate a SHELL completion script and print to stdout
     Completions {
         /// The Shell you want to generate script for
-        shell: Shell,
+        shell: String,
     },
 
     /// Wallet operations
     Wallet {
-        #[arg(long)]
-        /// Initialize wallet with data for Money Contract (run this first)
+        #[structopt(long)]
+        /// Initialize wallet database
         initialize: bool,
 
-        #[arg(long)]
+        #[structopt(long)]
         /// Generate a new keypair in the wallet
         keygen: bool,
 
-        #[arg(long)]
+        #[structopt(long)]
         /// Query the wallet for known balances
         balance: bool,
 
-        #[arg(long)]
+        #[structopt(long)]
         /// Get the default address in the wallet
         address: bool,
 
-        #[arg(long)]
+        #[structopt(long)]
+        /// Print all the addresses in the wallet
+        addresses: bool,
+
+        #[structopt(long)]
+        /// Set the default address in the wallet
+        default_address: Option<usize>,
+
+        #[structopt(long)]
         /// Print all the secret keys from the wallet
         secrets: bool,
 
-        #[arg(long)]
+        #[structopt(long)]
         /// Import secret keys from stdin into the wallet, separated by newlines
         import_secrets: bool,
 
-        #[arg(long)]
+        #[structopt(long)]
         /// Print the Merkle tree in the wallet
         tree: bool,
 
-        #[arg(long)]
+        #[structopt(long)]
         /// Print all the coins in the wallet
         coins: bool,
     },
@@ -155,19 +185,6 @@ enum Subcmd {
     Unspend {
         /// base58-encoded coin to mark as unspent
         coin: String,
-    },
-
-    /// Airdrop some tokens
-    Airdrop {
-        /// Faucet JSON-RPC endpoint
-        #[arg(short, long, default_value = "tls://faucetd.testnet.dark.fi:18340")]
-        faucet_endpoint: Url,
-
-        /// Amount to request from the faucet
-        amount: String,
-
-        /// Optional address to send tokens to (defaults to main address in wallet)
-        address: Option<String>,
     },
 
     /// Create a payment transaction
@@ -180,18 +197,14 @@ enum Subcmd {
 
         /// Recipient address
         recipient: String,
-
-        /// Mark if this is being sent to a DAO
-        #[clap(long)]
-        dao: bool,
-
-        /// DAO bulla, if the tokens are being sent to a DAO
-        dao_bulla: Option<String>,
     },
 
     /// OTC atomic swap
-    #[command(subcommand)]
-    Otc(OtcSubcmd),
+    Otc {
+        #[structopt(subcommand)]
+        /// Sub command to execute
+        command: OtcSubcmd,
+    },
 
     /// Inspect a transaction from stdin
     Inspect,
@@ -199,52 +212,66 @@ enum Subcmd {
     /// Read a transaction from stdin and broadcast it
     Broadcast,
 
-    /// Subscribe to incoming notifications from darkfid
-    #[command(subcommand)]
-    Subscribe(SubscribeSubcmd),
+    /// This subscription will listen for incoming blocks from darkfid and look
+    /// through their transactions to see if there's any that interest us.
+    /// With `drk` we look at transactions calling the money contract so we can
+    /// find coins sent to us and fill our wallet with the necessary metadata.
+    Subscribe,
 
     /// DAO functionalities
-    #[command(subcommand)]
-    Dao(DaoSubcmd),
+    Dao {
+        #[structopt(subcommand)]
+        /// Sub command to execute
+        command: DaoSubcmd,
+    },
 
     /// Scan the blockchain and parse relevant transactions
     Scan {
-        #[arg(long)]
-        /// Reset Merkle tree and start scanning from first slot
+        #[structopt(long)]
+        /// Reset Merkle tree and start scanning from first block
         reset: bool,
 
-        #[arg(long)]
+        #[structopt(long)]
         /// List all available checkpoints
         list: bool,
 
-        #[arg(short, long)]
+        #[structopt(long)]
         /// Reset Merkle tree to checkpoint index and start scanning
         checkpoint: Option<u64>,
     },
 
     /// Explorer related subcommands
-    #[command(subcommand)]
-    Explorer(ExplorerSubcmd),
+    Explorer {
+        #[structopt(subcommand)]
+        /// Sub command to execute
+        command: ExplorerSubcmd,
+    },
 
     /// Manage Token aliases
-    #[command(subcommand)]
-    Alias(AliasSubcmd),
+    Alias {
+        #[structopt(subcommand)]
+        /// Sub command to execute
+        command: AliasSubcmd,
+    },
 
     /// Token functionalities
-    #[command(subcommand)]
-    Token(TokenSubcmd),
+    Token {
+        #[structopt(subcommand)]
+        /// Sub command to execute
+        command: TokenSubcmd,
+    },
 }
 
-#[derive(Subcommand)]
+#[derive(Clone, Debug, Deserialize, StructOpt)]
 enum OtcSubcmd {
     /// Initialize the first half of the atomic swap
     Init {
         /// Value pair to send:recv (11.55:99.42)
-        #[clap(short, long)]
+        #[structopt(short, long)]
         value_pair: String,
 
         /// Token pair to send:recv (f00:b4r)
-        #[clap(short, long)]
+        #[structopt(short, long)]
         token_pair: String,
     },
 
@@ -258,7 +285,7 @@ enum OtcSubcmd {
     Sign,
 }
 
-#[derive(Subcommand)]
+#[derive(Clone, Debug, Deserialize, StructOpt)]
 enum DaoSubcmd {
     /// Create DAO parameters
     Create {
@@ -266,7 +293,7 @@ enum DaoSubcmd {
         proposer_limit: String,
         /// Minimal threshold of participating total tokens needed for a proposal to pass
         quorum: String,
-        /// The ratio of winning votes/total votes needed for a proposal to pass (2 decimals),
+        /// The ratio of winning votes/total votes needed for a proposal to pass (2 decimals)
         approval_ratio: f64,
         /// DAO's governance token ID
         gov_token_id: String,
@@ -354,18 +381,18 @@ enum DaoSubcmd {
     },
 }
 
-#[derive(Subcommand)]
+#[derive(Clone, Debug, Deserialize, StructOpt)]
 enum ExplorerSubcmd {
     /// Fetch a blockchain transaction by hash
     FetchTx {
         /// Transaction hash
         tx_hash: String,
 
-        #[arg(long)]
+        #[structopt(long)]
         /// Print the full transaction information
         full: bool,
 
-        #[arg(long)]
+        #[structopt(long)]
         /// Encode transaction to base58
         encode: bool,
     },
@@ -378,14 +405,13 @@ enum ExplorerSubcmd {
         /// Fetch specific history record (optional)
         tx_hash: Option<String>,
 
-        #[arg(long)]
-        /// Encode specific history record transaction
-        /// to base58.
+        #[structopt(long)]
+        /// Encode specific history record transaction to base58
         encode: bool,
     },
 }
 
-#[derive(Subcommand)]
+#[derive(Clone, Debug, Deserialize, StructOpt)]
 enum AliasSubcmd {
     /// Create a Token alias
     Add {
@@ -400,11 +426,11 @@ enum AliasSubcmd {
     /// If no argument is provided, list all the aliases in the wallet.
     Show {
         /// Token alias to search for
-        #[clap(short, long)]
+        #[structopt(short, long)]
         alias: Option<String>,
 
         /// Token to search alias for
-        #[clap(short, long)]
+        #[structopt(short, long)]
         token: Option<String>,
     },
 
@@ -415,7 +441,7 @@ enum AliasSubcmd {
     },
 }
 
-#[derive(Subcommand)]
+#[derive(Clone, Debug, Deserialize, StructOpt)]
 enum TokenSubcmd {
     /// Import a mint authority secret from stdin
     Import,
@@ -440,55 +466,79 @@ enum TokenSubcmd {
 
     /// Freeze a token mint
     Freeze {
-        /// Token ID mint to freeze
+        /// Token ID to freeze
         token: String,
     },
 }
 
-#[derive(Subcommand)]
-enum SubscribeSubcmd {
-    /// This subscription will listen for incoming blocks from darkfid and look
-    /// through their transactions to see if there's any that interest us.
-    /// With `drk` we look at transactions calling the money contract so we can
-    /// find coins sent to us and fill our wallet with the necessary metadata.
-    Blocks,
-
-    /// This subscription will listen for erroneous transactions that got
-    /// removed from darkfid mempool.
-    Transactions,
-}
-
+/// CLI-util structure
 pub struct Drk {
+    /// Wallet database operations handler
+    pub wallet: WalletPtr,
+    /// JSON-RPC client to execute requests to darkfid daemon
     pub rpc_client: RpcClient,
 }
 
 impl Drk {
-    async fn new(endpoint: Url) -> Result<Self> {
-        let rpc_client = RpcClient::new(endpoint, None).await?;
-        Ok(Self { rpc_client })
+    async fn new(
+        wallet_path: String,
+        wallet_pass: String,
+        endpoint: Url,
+        ex: Arc<smol::Executor<'static>>,
+    ) -> Result<Self> {
+        // Script kiddies protection
+        if wallet_pass == "changeme" {
+            eprintln!("Please don't use default wallet password...");
+            exit(2);
+        }
+
+        // Initialize wallet
+        let wallet_path = expand_path(&wallet_path)?;
+        if !wallet_path.exists() {
+            if let Some(parent) = wallet_path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+        }
+        let wallet = match WalletDb::new(Some(wallet_path), Some(&wallet_pass)) {
+            Ok(w) => w,
+            Err(e) => {
+                eprintln!("Error initializing wallet: {e:?}");
+                exit(2);
+            }
+        };
+
+        // Initialize rpc client
+        let rpc_client = RpcClient::new(endpoint, ex).await?;
+
+        Ok(Self { wallet, rpc_client })
     }
 
+    /// Initialize wallet with tables for drk
+    async fn initialize_wallet(&self) -> Result<()> {
+        let wallet_schema = include_str!("../wallet.sql");
+        if let Err(e) = self.wallet.exec_batch_sql(wallet_schema).await {
+            eprintln!("Error initializing wallet: {e:?}");
+            exit(2);
+        }
+
+        Ok(())
+    }
+
+    /// Auxilliary function to ping configured darkfid daemon for liveness.
     async fn ping(&self) -> Result<()> {
+        eprintln!("Executing ping request to darkfid...");
         let latency = Instant::now();
-        let req = JsonRequest::new("ping", json!([]));
+        let req = JsonRequest::new("ping", JsonValue::Array(vec![]));
         let rep = self.rpc_client.oneshot_request(req).await?;
         let latency = latency.elapsed();
-        println!("Got reply: {}", rep);
-        println!("Latency: {:?}", latency);
+        eprintln!("Got reply: {rep:?}");
+        eprintln!("Latency: {latency:?}");
         Ok(())
     }
 }
 
-#[async_std::main]
-async fn main() -> Result<()> {
-    let args = Args::parse();
-
-    if args.verbose > 0 {
-        let log_level = get_log_level(args.verbose);
-        let log_config = get_log_config(args.verbose);
-        TermLogger::init(log_level, log_config, TerminalMode::Mixed, ColorChoice::Auto)?;
-    }
-
+async_daemonize!(realmain);
+async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     match args.command {
         Subcmd::Kaching => {
             kaching().await;
@@ -496,23 +546,19 @@ async fn main() -> Result<()> {
         }
 
         Subcmd::Ping => {
-            let drk = Drk::new(args.endpoint).await?;
-            drk.ping().await.with_context(|| "Failed to ping darkfid RPC endpoint")?;
-
-            Ok(())
+            let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+            drk.ping().await
         }
-        Subcmd::Completions { shell } => {
-            let mut cmd = Args::command();
-            generate(shell, &mut cmd, "./drk", &mut std::io::stdout());
 
-            Ok(())
-        }
+        Subcmd::Completions { shell } => generate_completions(&shell),
 
         Subcmd::Wallet {
             initialize,
             keygen,
             balance,
             address,
+            addresses,
+            default_address,
             secrets,
             import_secrets,
             tree,
@@ -522,6 +568,8 @@ async fn main() -> Result<()> {
                 !keygen &&
                 !balance &&
                 !address &&
+                !addresses &&
+                default_address.is_none() &&
                 !secrets &&
                 !tree &&
                 !coins &&
@@ -532,28 +580,33 @@ async fn main() -> Result<()> {
                 exit(2);
             }
 
-            let drk = Drk::new(args.endpoint).await?;
+            let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
 
             if initialize {
                 drk.initialize_wallet().await?;
-                drk.initialize_money().await?;
-                drk.initialize_dao().await?;
+                if let Err(e) = drk.initialize_money().await {
+                    eprintln!("Failed to initialize Money: {e:?}");
+                    exit(2);
+                }
+                if let Err(e) = drk.initialize_dao().await {
+                    eprintln!("Failed to initialize DAO: {e:?}");
+                    exit(2);
+                }
                 return Ok(())
             }
 
             if keygen {
-                drk.money_keygen().await.with_context(|| "Failed to generate keypair")?;
+                if let Err(e) = drk.money_keygen().await {
+                    eprintln!("Failed to generate keypair: {e:?}");
+                    exit(2);
+                }
                 return Ok(())
             }
 
             if balance {
-                let balmap =
-                    drk.money_balance().await.with_context(|| "Failed to fetch wallet balance")?;
+                let balmap = drk.money_balance().await?;
 
-                let aliases_map = drk
-                    .get_aliases_mapped_by_token()
-                    .await
-                    .with_context(|| "Failed to fetch wallet aliases")?;
+                let aliases_map = drk.get_aliases_mapped_by_token().await?;
 
                 // Create a prettytable with the new data:
                 let mut table = Table::new();
@@ -565,40 +618,73 @@ async fn main() -> Result<()> {
                         None => "-",
                     };
 
-                    // FIXME: Don't hardcode to 8 decimals
-                    table.add_row(row![token_id, aliases, encode_base10(*balance, 8)]);
+                    table.add_row(row![
+                        token_id,
+                        aliases,
+                        encode_base10(*balance, BALANCE_BASE10_DECIMALS)
+                    ]);
                 }
 
                 if table.is_empty() {
-                    println!("No unspent balances found");
+                    eprintln!("No unspent balances found");
                 } else {
-                    println!("{}", table);
+                    eprintln!("{table}");
                 }
 
                 return Ok(())
             }
 
             if address {
-                let address = drk
-                    .wallet_address(1) // <-- TODO: Use is_default from the sql table
-                    .await
-                    .with_context(|| "Failed to fetch default address")?;
+                let address = match drk.default_address().await {
+                    Ok(a) => a,
+                    Err(e) => {
+                        eprintln!("Failed to fetch default address: {e:?}");
+                        exit(2);
+                    }
+                };
 
-                println!("{}", address);
+                eprintln!("{address}");
 
                 return Ok(())
             }
 
-            if secrets {
-                let v = drk
-                    .get_money_secrets()
-                    .await
-                    .with_context(|| "Failed to fetch wallet secrets")?;
+            if addresses {
+                let addresses = drk.addresses().await?;
 
-                drk.rpc_client.close().await?;
+                // Create a prettytable with the new data:
+                let mut table = Table::new();
+                table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+                table.set_titles(row!["Key ID", "Public Key", "Secret Key", "Is Default"]);
+                for (key_id, public_key, secret_key, is_default) in addresses {
+                    let is_default = match is_default {
+                        1 => "*",
+                        _ => "",
+                    };
+                    table.add_row(row![key_id, public_key, secret_key, is_default]);
+                }
+
+                if table.is_empty() {
+                    eprintln!("No addresses found");
+                } else {
+                    eprintln!("{table}");
+                }
+
+                return Ok(())
+            }
+
+            if let Some(idx) = default_address {
+                if let Err(e) = drk.set_default_address(idx).await {
+                    eprintln!("Failed to set default address: {e:?}");
+                    exit(2);
+                }
+                return Ok(())
+            }
+
+            if secrets {
+                let v = drk.get_money_secrets().await?;
 
                 for i in v {
-                    println!("{}", i);
+                    eprintln!("{i}");
                 }
 
                 return Ok(())
@@ -611,49 +697,40 @@ async fn main() -> Result<()> {
                     if let Ok(line) = line {
                         let bytes = bs58::decode(&line.trim()).into_vec()?;
                         let Ok(secret) = deserialize(&bytes) else {
-                            eprintln!("Warning: Failed to deserialize secret on line {}", i);
+                            eprintln!("Warning: Failed to deserialize secret on line {i}");
                             continue
                         };
                         secrets.push(secret);
                     }
                 }
 
-                let pubkeys = drk
-                    .import_money_secrets(secrets)
-                    .await
-                    .with_context(|| "Failed to import secret keys into wallet")?;
-
-                drk.rpc_client.close().await?;
+                let pubkeys = match drk.import_money_secrets(secrets).await {
+                    Ok(p) => p,
+                    Err(e) => {
+                        eprintln!("Failed to import secret keys into wallet: {e:?}");
+                        exit(2);
+                    }
+                };
 
                 for key in pubkeys {
-                    println!("{}", key);
+                    eprintln!("{key}");
                 }
 
                 return Ok(())
             }
 
             if tree {
-                let v =
-                    drk.get_money_tree().await.with_context(|| "Failed to fetch Merkle tree")?;
-                drk.rpc_client.close().await?;
+                let tree = drk.get_money_tree().await?;
 
-                println!("{:#?}", v);
+                eprintln!("{tree:#?}");
 
                 return Ok(())
             }
 
             if coins {
-                let coins = drk
-                    .get_coins(true)
-                    .await
-                    .with_context(|| "Failed to fetch coins from wallet")?;
+                let coins = drk.get_coins(true).await?;
 
-                let aliases_map = drk
-                    .get_aliases_mapped_by_token()
-                    .await
-                    .with_context(|| "Failed to fetch wallet aliases")?;
-
-                drk.rpc_client.close().await?;
+                let aliases_map = drk.get_aliases_mapped_by_token().await?;
 
                 if coins.is_empty() {
                     return Ok(())
@@ -670,20 +747,21 @@ async fn main() -> Result<()> {
                     "Spend Hook",
                     "User Data"
                 ]);
-                let zero = pallas::Base::zero();
                 for coin in coins {
                     let aliases = match aliases_map.get(&coin.0.note.token_id.to_string()) {
                         Some(a) => a,
                         None => "-",
                     };
 
-                    let spend_hook = if coin.0.note.spend_hook != zero {
-                        bs58::encode(&serialize(&coin.0.note.spend_hook)).into_string().to_string()
+                    let spend_hook = if coin.0.note.spend_hook != FuncId::none() {
+                        bs58::encode(&serialize(&coin.0.note.spend_hook.inner()))
+                            .into_string()
+                            .to_string()
                     } else {
                         String::from("-")
                     };
 
-                    let user_data = if coin.0.note.user_data != zero {
+                    let user_data = if coin.0.note.user_data != pallas::Base::ZERO {
                         bs58::encode(&serialize(&coin.0.note.user_data)).into_string().to_string()
                     } else {
                         String::from("-")
@@ -694,13 +772,17 @@ async fn main() -> Result<()> {
                         coin.1,
                         coin.0.note.token_id,
                         aliases,
-                        format!("{} ({})", coin.0.note.value, encode_base10(coin.0.note.value, 8)),
+                        format!(
+                            "{} ({})",
+                            coin.0.note.value,
+                            encode_base10(coin.0.note.value, BALANCE_BASE10_DECIMALS)
+                        ),
                         spend_hook,
                         user_data
                     ]);
                 }
 
-                println!("{}", table);
+                eprintln!("{table}");
 
                 return Ok(())
             }
@@ -709,69 +791,84 @@ async fn main() -> Result<()> {
         }
 
         Subcmd::Unspend { coin } => {
-            let bytes: [u8; 32] = bs58::decode(&coin).into_vec()?.try_into().unwrap();
+            let bytes: [u8; 32] = match bs58::decode(&coin).into_vec()?.try_into() {
+                Ok(b) => b,
+                Err(e) => {
+                    eprintln!("Invalid coin: {e:?}");
+                    exit(2);
+                }
+            };
 
             let elem: pallas::Base = match pallas::Base::from_repr(bytes).into() {
                 Some(v) => v,
-                None => return Err(anyhow!("Invalid coin")),
+                None => {
+                    eprintln!("Invalid coin");
+                    exit(2);
+                }
             };
 
             let coin = Coin::from(elem);
-            let drk = Drk::new(args.endpoint).await?;
-            drk.unspend_coin(&coin).await.with_context(|| "Failed to mark coin as unspent")?;
+            let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+            if let Err(e) = drk.unspend_coin(&coin).await {
+                eprintln!("Failed to mark coin as unspent: {e:?}");
+                exit(2);
+            }
 
             Ok(())
         }
 
-        Subcmd::Airdrop { faucet_endpoint, amount, address } => {
-            let amount = f64::from_str(&amount).with_context(|| "Invalid amount")?;
-            let drk = Drk::new(args.endpoint).await?;
+        Subcmd::Transfer { amount, token, recipient } => {
+            let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
 
-            let address = match address {
-                Some(v) => PublicKey::from_str(v.as_str()).with_context(|| "Invalid address")?,
-                None => drk.wallet_address(1).await.with_context(|| {
-                    "Failed to fetch default address, perhaps the wallet was not initialized?"
-                })?,
+            if let Err(e) = f64::from_str(&amount) {
+                eprintln!("Invalid amount: {e:?}");
+                exit(2);
+            }
+
+            let rcpt = match PublicKey::from_str(&recipient) {
+                Ok(r) => r,
+                Err(e) => {
+                    eprintln!("Invalid recipient: {e:?}");
+                    exit(2);
+                }
             };
 
-            let txid = drk
-                .request_airdrop(faucet_endpoint, amount, address)
-                .await
-                .with_context(|| "Failed to request airdrop")?;
+            let token_id = match drk.get_token(token).await {
+                Ok(t) => t,
+                Err(e) => {
+                    eprintln!("Invalid token alias: {e:?}");
+                    exit(2);
+                }
+            };
 
-            println!("Transaction ID: {}", txid);
-
-            Ok(())
-        }
-
-        Subcmd::Transfer { amount, token, recipient, dao, dao_bulla } => {
-            let _ = f64::from_str(&amount).with_context(|| "Invalid amount")?;
-            let rcpt = PublicKey::from_str(&recipient).with_context(|| "Invalid recipient")?;
-            let drk = Drk::new(args.endpoint).await?;
-            let token_id = drk.get_token(token).await.with_context(|| "Invalid token alias")?;
-
-            let tx = drk
-                .transfer(&amount, token_id, rcpt, dao, dao_bulla)
-                .await
-                .with_context(|| "Failed to create payment transaction")?;
+            let tx = match drk.transfer(&amount, token_id, rcpt).await {
+                Ok(t) => t,
+                Err(e) => {
+                    eprintln!("Failed to create payment transaction: {e:?}");
+                    exit(2);
+                }
+            };
 
             println!("{}", bs58::encode(&serialize(&tx)).into_string());
 
             Ok(())
         }
 
-        Subcmd::Otc(cmd) => {
-            let drk = Drk::new(args.endpoint).await?;
+        Subcmd::Otc { command } => {
+            let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
 
-            match cmd {
+            match command {
                 OtcSubcmd::Init { value_pair, token_pair } => {
                     let (vp_send, vp_recv) = parse_value_pair(&value_pair)?;
                     let (tp_send, tp_recv) = parse_token_pair(&drk, &token_pair).await?;
 
-                    let half = drk
-                        .init_swap(vp_send, tp_send, vp_recv, tp_recv)
-                        .await
-                        .with_context(|| "Failed to create swap transaction half")?;
+                    let half = match drk.init_swap(vp_send, tp_send, vp_recv, tp_recv).await {
+                        Ok(h) => h,
+                        Err(e) => {
+                            eprintln!("Failed to create swap transaction half: {e:?}");
+                            exit(2);
+                        }
+                    };
 
                     println!("{}", bs58::encode(&serialize(&half)).into_string());
                     Ok(())
@@ -783,10 +880,13 @@ async fn main() -> Result<()> {
                     let bytes = bs58::decode(&buf.trim()).into_vec()?;
                     let partial: PartialSwapData = deserialize(&bytes)?;
 
-                    let tx = drk
-                        .join_swap(partial)
-                        .await
-                        .with_context(|| "Failed to create a join swap transaction")?;
+                    let tx = match drk.join_swap(partial).await {
+                        Ok(tx) => tx,
+                        Err(e) => {
+                            eprintln!("Failed to create a join swap transaction: {e:?}");
+                            exit(2);
+                        }
+                    };
 
                     println!("{}", bs58::encode(&serialize(&tx)).into_string());
                     Ok(())
@@ -797,7 +897,11 @@ async fn main() -> Result<()> {
                     stdin().read_to_string(&mut buf)?;
                     let bytes = bs58::decode(&buf.trim()).into_vec()?;
 
-                    drk.inspect_swap(bytes).await.with_context(|| "Failed to inspect swap")?;
+                    if let Err(e) = drk.inspect_swap(bytes).await {
+                        eprintln!("Failed to inspect swap: {e:?}");
+                        exit(2);
+                    };
+
                     Ok(())
                 }
 
@@ -807,9 +911,10 @@ async fn main() -> Result<()> {
                     let bytes = bs58::decode(&buf.trim()).into_vec()?;
                     let mut tx: Transaction = deserialize(&bytes)?;
 
-                    drk.sign_swap(&mut tx)
-                        .await
-                        .with_context(|| "Failed to sign joined swap transaction")?;
+                    if let Err(e) = drk.sign_swap(&mut tx).await {
+                        eprintln!("Failed to sign joined swap transaction: {e:?}");
+                        exit(2);
+                    };
 
                     println!("{}", bs58::encode(&serialize(&tx)).into_string());
                     Ok(())
@@ -817,103 +922,36 @@ async fn main() -> Result<()> {
             }
         }
 
-        Subcmd::Inspect => {
-            let mut buf = String::new();
-            stdin().read_to_string(&mut buf)?;
-            let bytes = bs58::decode(&buf.trim()).into_vec()?;
-            let tx: Transaction = deserialize(&bytes)?;
-            println!("{:#?}", tx);
-            Ok(())
-        }
-
-        Subcmd::Broadcast => {
-            eprintln!("Reading transaction from stdin...");
-            let mut buf = String::new();
-            stdin().read_to_string(&mut buf)?;
-            let bytes = bs58::decode(&buf.trim()).into_vec()?;
-            let tx = deserialize(&bytes)?;
-
-            let drk = Drk::new(args.endpoint).await?;
-
-            let txid =
-                drk.broadcast_tx(&tx).await.with_context(|| "Failed to broadcast transaction")?;
-
-            println!("Transaction ID: {}", txid);
-
-            Ok(())
-        }
-
-        Subcmd::Subscribe(cmd) => match cmd {
-            SubscribeSubcmd::Blocks => {
-                let drk = Drk::new(args.endpoint.clone()).await?;
-
-                drk.subscribe_blocks(args.endpoint.clone())
-                    .await
-                    .with_context(|| "Block subscription failed")?;
-
-                Ok(())
-            }
-
-            SubscribeSubcmd::Transactions => {
-                let drk = Drk::new(args.endpoint.clone()).await?;
-
-                drk.subscribe_err_txs(args.endpoint)
-                    .await
-                    .with_context(|| "Erroneous transactions subscription failed")?;
-
-                Ok(())
-            }
-        },
-
-        Subcmd::Scan { reset, list, checkpoint } => {
-            let drk = Drk::new(args.endpoint).await?;
-
-            if reset {
-                eprintln!("Reset requested.");
-                drk.scan_blocks(true).await.with_context(|| "Failed during scanning")?;
-
-                return Ok(())
-            }
-
-            if list {
-                eprintln!("List requested.");
-                // TODO: implement
-
-                return Ok(())
-            }
-
-            if let Some(c) = checkpoint {
-                eprintln!("Checkpoint requested: {}", c);
-                // TODO: implement
-
-                return Ok(())
-            }
-
-            drk.scan_blocks(false).await.with_context(|| "Failed during scanning")?;
-            eprintln!("Finished scanning blockchain");
-
-            Ok(())
-        }
-
-        Subcmd::Dao(cmd) => match cmd {
+        Subcmd::Dao { command } => match command {
             DaoSubcmd::Create { proposer_limit, quorum, approval_ratio, gov_token_id } => {
-                let _ = f64::from_str(&proposer_limit).with_context(|| "Invalid proposer limit")?;
-                let _ = f64::from_str(&quorum).with_context(|| "Invalid quorum")?;
+                if let Err(e) = f64::from_str(&proposer_limit) {
+                    eprintln!("Invalid proposer limit: {e:?}");
+                    exit(2);
+                }
+                if let Err(e) = f64::from_str(&quorum) {
+                    eprintln!("Invalid quorum: {e:?}");
+                    exit(2);
+                }
 
-                let proposer_limit = decode_base10(&proposer_limit, 8, true)?;
-                let quorum = decode_base10(&quorum, 8, true)?;
+                let proposer_limit = decode_base10(&proposer_limit, BALANCE_BASE10_DECIMALS, true)?;
+                let quorum = decode_base10(&quorum, BALANCE_BASE10_DECIMALS, true)?;
 
                 if approval_ratio > 1.0 {
                     eprintln!("Error: Approval ratio cannot be >1.0");
-                    exit(1);
+                    exit(2);
                 }
 
                 let approval_ratio_base = 100_u64;
                 let approval_ratio_quot = (approval_ratio * approval_ratio_base as f64) as u64;
 
-                let drk = Drk::new(args.endpoint).await?;
-                let gov_token_id =
-                    drk.get_token(gov_token_id).await.with_context(|| "Invalid Token ID")?;
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+                let gov_token_id = match drk.get_token(gov_token_id).await {
+                    Ok(g) => g,
+                    Err(e) => {
+                        eprintln!("Invalid Token ID: {e:?}");
+                        exit(2);
+                    }
+                };
 
                 let secret_key = SecretKey::random(&mut OsRng);
                 let bulla_blind = pallas::Base::random(&mut OsRng);
@@ -929,7 +967,7 @@ async fn main() -> Result<()> {
                 };
 
                 let encoded = bs58::encode(&serialize(&dao_params)).into_string();
-                println!("{}", encoded);
+                eprintln!("{encoded}");
 
                 Ok(())
             }
@@ -939,7 +977,7 @@ async fn main() -> Result<()> {
                 stdin().read_to_string(&mut buf)?;
                 let bytes = bs58::decode(&buf.trim()).into_vec()?;
                 let dao_params: DaoParams = deserialize(&bytes)?;
-                println!("{}", dao_params);
+                eprintln!("{dao_params}");
 
                 Ok(())
             }
@@ -950,39 +988,51 @@ async fn main() -> Result<()> {
                 let bytes = bs58::decode(&buf.trim()).into_vec()?;
                 let dao_params: DaoParams = deserialize(&bytes)?;
 
-                let drk = Drk::new(args.endpoint).await?;
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
 
-                drk.import_dao(dao_name, dao_params)
-                    .await
-                    .with_context(|| "Failed to import DAO")?;
+                if let Err(e) = drk.import_dao(dao_name, dao_params).await {
+                    eprintln!("Failed to import DAO: {e:?}");
+                    exit(2);
+                }
 
                 Ok(())
             }
 
             DaoSubcmd::List { dao_alias } => {
-                let drk = Drk::new(args.endpoint).await?;
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
                 // We cannot use .map() since get_dao_id() uses ?
                 let dao_id = match dao_alias {
                     Some(alias) => Some(drk.get_dao_id(&alias).await?),
                     None => None,
                 };
 
-                drk.dao_list(dao_id).await.with_context(|| "Failed to list DAO")?;
+                if let Err(e) = drk.dao_list(dao_id).await {
+                    eprintln!("Failed to list DAO: {e:?}");
+                    exit(2);
+                }
 
                 Ok(())
             }
 
             DaoSubcmd::Balance { dao_alias } => {
-                let drk = Drk::new(args.endpoint).await?;
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
                 let dao_id = drk.get_dao_id(&dao_alias).await?;
 
-                let balmap =
-                    drk.dao_balance(dao_id).await.with_context(|| "Failed to fetch DAO balance")?;
+                let balmap = match drk.dao_balance(dao_id).await {
+                    Ok(b) => b,
+                    Err(e) => {
+                        eprintln!("Failed to fetch DAO balance: {e:?}");
+                        exit(2);
+                    }
+                };
 
-                let aliases_map = drk
-                    .get_aliases_mapped_by_token()
-                    .await
-                    .with_context(|| "Failed to fetch wallet aliases")?;
+                let aliases_map = match drk.get_aliases_mapped_by_token().await {
+                    Ok(a) => a,
+                    Err(e) => {
+                        eprintln!("Failed to fetch wallet aliases: {e:?}");
+                        exit(2);
+                    }
+                };
 
                 // Create a prettytable with the new data:
                 let mut table = Table::new();
@@ -994,149 +1044,271 @@ async fn main() -> Result<()> {
                         None => "-",
                     };
 
-                    // FIXME: Don't hardcode to 8 decimals
-                    table.add_row(row![token_id, aliases, encode_base10(*balance, 8)]);
+                    table.add_row(row![
+                        token_id,
+                        aliases,
+                        encode_base10(*balance, BALANCE_BASE10_DECIMALS)
+                    ]);
                 }
 
                 if table.is_empty() {
-                    println!("No unspent balances found");
+                    eprintln!("No unspent balances found");
                 } else {
-                    println!("{}", table);
+                    eprintln!("{table}");
                 }
 
                 Ok(())
             }
 
             DaoSubcmd::Mint { dao_alias } => {
-                let drk = Drk::new(args.endpoint).await?;
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
                 let dao_id = drk.get_dao_id(&dao_alias).await?;
 
-                let tx = drk.dao_mint(dao_id).await.with_context(|| "Failed to mint DAO")?;
-                println!("{}", bs58::encode(&serialize(&tx)).into_string());
+                let tx = match drk.dao_mint(dao_id).await {
+                    Ok(tx) => tx,
+                    Err(e) => {
+                        eprintln!("Failed to mint DAO: {e:?}");
+                        exit(2);
+                    }
+                };
+                eprintln!("{}", bs58::encode(&serialize(&tx)).into_string());
                 Ok(())
             }
 
             DaoSubcmd::Propose { dao_alias, recipient, amount, token } => {
-                let _ = f64::from_str(&amount).with_context(|| "Invalid amount")?;
-                let amount = decode_base10(&amount, 8, true)?;
-                let rcpt = PublicKey::from_str(&recipient).with_context(|| "Invalid recipient")?;
-                let drk = Drk::new(args.endpoint).await?;
+                if let Err(e) = f64::from_str(&amount) {
+                    eprintln!("Invalid amount: {e:?}");
+                    exit(2);
+                }
+                let amount = decode_base10(&amount, BALANCE_BASE10_DECIMALS, true)?;
+                let rcpt = match PublicKey::from_str(&recipient) {
+                    Ok(r) => r,
+                    Err(e) => {
+                        eprintln!("Invalid recipient: {e:?}");
+                        exit(2);
+                    }
+                };
+
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
                 let dao_id = drk.get_dao_id(&dao_alias).await?;
-                let token_id = drk.get_token(token).await.with_context(|| "Invalid token alias")?;
+                let token_id = match drk.get_token(token).await {
+                    Ok(t) => t,
+                    Err(e) => {
+                        eprintln!("Invalid token alias: {e:?}");
+                        exit(2);
+                    }
+                };
 
-                let tx = drk
-                    .dao_propose(dao_id, rcpt, amount, token_id)
-                    .await
-                    .with_context(|| "Failed to create DAO proposal")?;
-
-                println!("{}", bs58::encode(&serialize(&tx)).into_string());
+                let tx = match drk.dao_propose(dao_id, rcpt, amount, token_id).await {
+                    Ok(tx) => tx,
+                    Err(e) => {
+                        eprintln!("Failed to create DAO proposal: {e:?}");
+                        exit(2);
+                    }
+                };
+                eprintln!("{}", bs58::encode(&serialize(&tx)).into_string());
                 Ok(())
             }
 
             DaoSubcmd::Proposals { dao_alias } => {
-                let drk = Drk::new(args.endpoint).await?;
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
                 let dao_id = drk.get_dao_id(&dao_alias).await?;
 
                 let proposals = drk.get_dao_proposals(dao_id).await?;
 
                 for proposal in proposals {
-                    println!("[{}] {:?}", proposal.id, proposal.bulla());
+                    eprintln!("[{}] {:?}", proposal.id, proposal.bulla());
                 }
 
                 Ok(())
             }
 
             DaoSubcmd::Proposal { dao_alias, proposal_id } => {
-                let drk = Drk::new(args.endpoint).await?;
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
                 let dao_id = drk.get_dao_id(&dao_alias).await?;
 
                 let proposals = drk.get_dao_proposals(dao_id).await?;
                 let Some(proposal) = proposals.iter().find(|x| x.id == proposal_id) else {
                     eprintln!("No such DAO proposal found");
-                    exit(1);
+                    exit(2);
                 };
 
-                println!("{}", proposal);
+                eprintln!("{proposal}");
 
                 let votes = drk.get_dao_proposal_votes(proposal_id).await?;
-                println!("votes:");
+                eprintln!("votes:");
                 for vote in votes {
                     let option = if vote.vote_option { "yes" } else { "no " };
-                    println!("  {} {}", option, vote.all_vote_value);
+                    eprintln!("  {option} {}", vote.all_vote_value);
                 }
 
                 Ok(())
             }
 
             DaoSubcmd::Vote { dao_alias, proposal_id, vote, vote_weight } => {
-                let drk = Drk::new(args.endpoint).await?;
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
                 let dao_id = drk.get_dao_id(&dao_alias).await?;
 
-                let _ = f64::from_str(&vote_weight).with_context(|| "Invalid vote weight")?;
-                let weight = decode_base10(&vote_weight, 8, true)?;
+                if let Err(e) = f64::from_str(&vote_weight) {
+                    eprintln!("Invalid vote weight: {e:?}");
+                    exit(2);
+                }
+                let weight = decode_base10(&vote_weight, BALANCE_BASE10_DECIMALS, true)?;
 
                 if vote > 1 {
                     eprintln!("Vote can be either 0 (NO) or 1 (YES)");
-                    exit(1);
+                    exit(2);
                 }
                 let vote = vote != 0;
 
-                let tx = drk
-                    .dao_vote(dao_id, proposal_id, vote, weight)
-                    .await
-                    .with_context(|| "Failed to create DAO Vote transaction")?;
+                let tx = match drk.dao_vote(dao_id, proposal_id, vote, weight).await {
+                    Ok(tx) => tx,
+                    Err(e) => {
+                        eprintln!("Failed to create DAO Vote transaction: {e:?}");
+                        exit(2);
+                    }
+                };
 
                 // TODO: Write our_vote in the proposal sql.
 
-                println!("{}", bs58::encode(&serialize(&tx)).into_string());
+                eprintln!("{}", bs58::encode(&serialize(&tx)).into_string());
 
                 Ok(())
             }
 
             DaoSubcmd::Exec { dao_alias, proposal_id } => {
-                let drk = Drk::new(args.endpoint).await?;
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
                 let dao_id = drk.get_dao_id(&dao_alias).await?;
                 let dao = drk.get_dao_by_id(dao_id).await?;
                 let proposal = drk.get_dao_proposal_by_id(proposal_id).await?;
                 assert!(proposal.dao_bulla == dao.bulla());
 
-                let tx = drk
-                    .dao_exec(dao, proposal)
-                    .await
-                    .with_context(|| "Failed to execute DAO proposal")?;
-
-                println!("{}", bs58::encode(&serialize(&tx)).into_string());
+                let tx = match drk.dao_exec(dao, proposal).await {
+                    Ok(tx) => tx,
+                    Err(e) => {
+                        eprintln!("Failed to execute DAO proposal: {e:?}");
+                        exit(2);
+                    }
+                };
+                eprintln!("{}", bs58::encode(&serialize(&tx)).into_string());
 
                 Ok(())
             }
         },
 
-        Subcmd::Explorer(cmd) => match cmd {
+        Subcmd::Inspect => {
+            let mut buf = String::new();
+            stdin().read_to_string(&mut buf)?;
+            let bytes = bs58::decode(&buf.trim()).into_vec()?;
+            let tx: Transaction = deserialize(&bytes)?;
+            eprintln!("{tx:#?}");
+            Ok(())
+        }
+
+        Subcmd::Broadcast => {
+            eprintln!("Reading transaction from stdin...");
+            let mut buf = String::new();
+            stdin().read_to_string(&mut buf)?;
+            let bytes = bs58::decode(&buf.trim()).into_vec()?;
+            let tx = deserialize(&bytes)?;
+
+            let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+
+            let txid = match drk.broadcast_tx(&tx).await {
+                Ok(t) => t,
+                Err(e) => {
+                    eprintln!("Failed to broadcast transaction: {e:?}");
+                    exit(2);
+                }
+            };
+
+            eprintln!("Transaction ID: {txid}");
+
+            Ok(())
+        }
+
+        Subcmd::Subscribe => {
+            let drk =
+                Drk::new(args.wallet_path, args.wallet_pass, args.endpoint.clone(), ex.clone())
+                    .await?;
+
+            if let Err(e) = drk.subscribe_blocks(args.endpoint, ex).await {
+                eprintln!("Block subscription failed: {e:?}");
+                exit(2);
+            }
+
+            Ok(())
+        }
+
+        Subcmd::Scan { reset, list, checkpoint } => {
+            let drk =
+                Drk::new(args.wallet_path, args.wallet_pass, args.endpoint.clone(), ex.clone())
+                    .await?;
+
+            if reset {
+                eprintln!("Reset requested.");
+                if let Err(e) = drk.scan_blocks(true).await {
+                    eprintln!("Failed during scanning: {e:?}");
+                    exit(2);
+                }
+                eprintln!("Finished scanning blockchain");
+
+                return Ok(())
+            }
+
+            if list {
+                eprintln!("List requested.");
+                // TODO: implement
+                unimplemented!()
+            }
+
+            if let Some(c) = checkpoint {
+                eprintln!("Checkpoint requested: {c}");
+                // TODO: implement
+                unimplemented!()
+            }
+
+            if let Err(e) = drk.scan_blocks(false).await {
+                eprintln!("Failed during scanning: {e:?}");
+                exit(2);
+            }
+            eprintln!("Finished scanning blockchain");
+
+            Ok(())
+        }
+
+        Subcmd::Explorer { command } => match command {
             ExplorerSubcmd::FetchTx { tx_hash, full, encode } => {
                 let tx_hash = blake3::Hash::from_hex(&tx_hash)?;
 
-                let drk = Drk::new(args.endpoint).await?;
+                let drk =
+                    Drk::new(args.wallet_path, args.wallet_pass, args.endpoint.clone(), ex.clone())
+                        .await?;
 
-                let tx = if let Some(tx) =
-                    drk.get_tx(&tx_hash).await.with_context(|| "Failed to fetch transaction")?
-                {
-                    tx
-                } else {
+                let tx = match drk.get_tx(&tx_hash).await {
+                    Ok(tx) => tx,
+                    Err(e) => {
+                        eprintln!("Failed to fetch transaction: {e:?}");
+                        exit(2);
+                    }
+                };
+
+                let Some(tx) = tx else {
                     eprintln!("Transaction was not found");
                     exit(1);
                 };
 
                 // Make sure the tx is correct
-                assert_eq!(tx.hash(), tx_hash);
+                assert_eq!(tx.hash()?, tx_hash);
 
                 if encode {
-                    println!("{}", bs58::encode(&serialize(&tx)).into_string());
+                    eprintln!("{}", bs58::encode(&serialize(&tx)).into_string());
                     exit(1)
                 }
 
-                println!("Transaction ID: {}", tx_hash);
+                eprintln!("Transaction ID: {tx_hash}");
                 if full {
-                    println!("{:?}", tx);
+                    eprintln!("{tx:?}");
                 }
 
                 Ok(())
@@ -1149,19 +1321,28 @@ async fn main() -> Result<()> {
                 let bytes = bs58::decode(&buf.trim()).into_vec()?;
                 let tx = deserialize(&bytes)?;
 
-                let drk = Drk::new(args.endpoint).await?;
+                let drk =
+                    Drk::new(args.wallet_path, args.wallet_pass, args.endpoint.clone(), ex.clone())
+                        .await?;
 
-                let is_valid =
-                    drk.simulate_tx(&tx).await.with_context(|| "Failed to simulate tx")?;
+                let is_valid = match drk.simulate_tx(&tx).await {
+                    Ok(b) => b,
+                    Err(e) => {
+                        eprintln!("Failed to simulate tx: {e:?}");
+                        exit(2);
+                    }
+                };
 
-                println!("Transaction ID: {}", tx.hash());
-                println!("State: {}", if is_valid { "valid" } else { "invalid" });
+                eprintln!("Transaction ID: {}", tx.hash()?);
+                eprintln!("State: {}", if is_valid { "valid" } else { "invalid" });
 
                 Ok(())
             }
 
             ExplorerSubcmd::TxsHistory { tx_hash, encode } => {
-                let drk = Drk::new(args.endpoint).await?;
+                let drk =
+                    Drk::new(args.wallet_path, args.wallet_pass, args.endpoint.clone(), ex.clone())
+                        .await?;
 
                 if let Some(c) = tx_hash {
                     let (tx_hash, status, tx) = drk.get_tx_history_record(&c).await?;
@@ -1171,14 +1352,20 @@ async fn main() -> Result<()> {
                         exit(1)
                     }
 
-                    println!("Transaction ID: {}", tx_hash);
-                    println!("Status: {}", status);
-                    println!("{:?}", tx);
+                    eprintln!("Transaction ID: {tx_hash}");
+                    eprintln!("Status: {status}");
+                    eprintln!("{tx:?}");
 
                     return Ok(())
                 }
 
-                let map = drk.get_txs_history().await?;
+                let map = match drk.get_txs_history().await {
+                    Ok(m) => m,
+                    Err(e) => {
+                        eprintln!("Failed to retrieve transactions history records: {e:?}");
+                        exit(2);
+                    }
+                };
 
                 // Create a prettytable with the new data:
                 let mut table = Table::new();
@@ -1189,39 +1376,52 @@ async fn main() -> Result<()> {
                 }
 
                 if table.is_empty() {
-                    println!("No transactions found");
+                    eprintln!("No transactions found");
                 } else {
-                    println!("{}", table);
+                    eprintln!("{table}");
                 }
 
                 Ok(())
             }
         },
 
-        Subcmd::Alias(cmd) => match cmd {
+        Subcmd::Alias { command } => match command {
             AliasSubcmd::Add { alias, token } => {
                 if alias.chars().count() > 5 {
                     eprintln!("Error: Alias exceeds 5 characters");
-                    exit(1);
+                    exit(2);
                 }
 
-                let token_id =
-                    TokenId::from_str(token.as_str()).with_context(|| "Invalid Token ID")?;
-                let drk = Drk::new(args.endpoint).await?;
-                drk.add_alias(alias, token_id).await?;
+                let token_id = match TokenId::from_str(token.as_str()) {
+                    Ok(t) => t,
+                    Err(e) => {
+                        eprintln!("Invalid Token ID: {e:?}");
+                        exit(2);
+                    }
+                };
+
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+                if let Err(e) = drk.add_alias(alias, token_id).await {
+                    eprintln!("Failed to add alias: {e:?}");
+                    exit(2);
+                }
 
                 Ok(())
             }
 
             AliasSubcmd::Show { alias, token } => {
                 let token_id = match token {
-                    Some(t) => {
-                        Some(TokenId::from_str(t.as_str()).with_context(|| "Invalid Token ID")?)
-                    }
+                    Some(t) => match TokenId::from_str(t.as_str()) {
+                        Ok(t) => Some(t),
+                        Err(e) => {
+                            eprintln!("Invalid Token ID: {e:?}");
+                            exit(2);
+                        }
+                    },
                     None => None,
                 };
 
-                let drk = Drk::new(args.endpoint).await?;
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
                 let map = drk.get_aliases(alias, token_id).await?;
 
                 // Create a prettytable with the new data:
@@ -1233,34 +1433,45 @@ async fn main() -> Result<()> {
                 }
 
                 if table.is_empty() {
-                    println!("No aliases found");
+                    eprintln!("No aliases found");
                 } else {
-                    println!("{}", table);
+                    eprintln!("{table}");
                 }
 
                 Ok(())
             }
 
             AliasSubcmd::Remove { alias } => {
-                let drk = Drk::new(args.endpoint).await?;
-                drk.remove_alias(alias).await?;
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+                if let Err(e) = drk.remove_alias(alias).await {
+                    eprintln!("Failed to remove alias: {e:?}");
+                    exit(2);
+                }
 
                 Ok(())
             }
         },
 
-        Subcmd::Token(cmd) => match cmd {
+        Subcmd::Token { command } => match command {
             TokenSubcmd::Import => {
                 let mut buf = String::new();
                 stdin().read_to_string(&mut buf)?;
-                let mint_authority =
-                    SecretKey::from_str(buf.trim()).with_context(|| "Invalid secret key")?;
+                let mint_authority = match SecretKey::from_str(buf.trim()) {
+                    Ok(ma) => ma,
+                    Err(e) => {
+                        eprintln!("Invalid secret key: {e:?}");
+                        exit(2);
+                    }
+                };
 
-                let drk = Drk::new(args.endpoint).await?;
-                drk.import_mint_authority(mint_authority).await?;
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+                if let Err(e) = drk.import_mint_authority(mint_authority).await {
+                    eprintln!("Importing mint authority failed: {e:?}");
+                    exit(2);
+                };
 
                 let token_id = TokenId::derive(mint_authority);
-                eprintln!("Successfully imported mint authority for token ID: {}", token_id);
+                eprintln!("Successfully imported mint authority for token ID: {token_id}");
 
                 Ok(())
             }
@@ -1268,22 +1479,30 @@ async fn main() -> Result<()> {
             TokenSubcmd::GenerateMint => {
                 let mint_authority = SecretKey::random(&mut OsRng);
 
-                let drk = Drk::new(args.endpoint).await?;
-                drk.import_mint_authority(mint_authority).await?;
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
 
+                if let Err(e) = drk.import_mint_authority(mint_authority).await {
+                    eprintln!("Importing mint authority failed: {e:?}");
+                    exit(2);
+                };
+
+                // TODO: see TokenAttributes struct. I'm not sure how to restructure this rn.
                 let token_id = TokenId::derive(mint_authority);
-                eprintln!("Successfully imported mint authority for token ID: {}", token_id);
+                eprintln!("Successfully imported mint authority for token ID: {token_id}");
 
                 Ok(())
             }
 
             TokenSubcmd::List => {
-                let drk = Drk::new(args.endpoint).await?;
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
                 let tokens = drk.list_tokens().await?;
-                let aliases_map = drk
-                    .get_aliases_mapped_by_token()
-                    .await
-                    .with_context(|| "Failed to fetch wallet aliases")?;
+                let aliases_map = match drk.get_aliases_mapped_by_token().await {
+                    Ok(map) => map,
+                    Err(e) => {
+                        eprintln!("Failed to fetch wallet aliases: {e:?}");
+                        exit(2);
+                    }
+                };
 
                 let mut table = Table::new();
                 table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
@@ -1299,9 +1518,9 @@ async fn main() -> Result<()> {
                 }
 
                 if table.is_empty() {
-                    println!("No tokens found");
+                    eprintln!("No tokens found");
                 } else {
-                    println!("{}", table);
+                    eprintln!("{table}");
                 }
 
                 Ok(())
@@ -1309,33 +1528,65 @@ async fn main() -> Result<()> {
 
             // TODO: Mint directly into DAO treasury
             TokenSubcmd::Mint { token, amount, recipient } => {
-                let drk = Drk::new(args.endpoint).await?;
-                let _ = f64::from_str(&amount).with_context(|| "Invalid amount")?;
-                let rcpt = PublicKey::from_str(&recipient).with_context(|| "Invalid recipient")?;
-                let token_id = drk.get_token(token).await.with_context(|| "Invalid Token ID")?;
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
 
-                let tx = drk
-                    .mint_token(&amount, rcpt, token_id)
-                    .await
-                    .with_context(|| "Failed to create token mint transaction")?;
+                if let Err(e) = f64::from_str(&amount) {
+                    eprintln!("Invalid amount: {e:?}");
+                    exit(2);
+                }
 
-                println!("{}", bs58::encode(&serialize(&tx)).into_string());
+                let _rcpt = match PublicKey::from_str(&recipient) {
+                    Ok(r) => r,
+                    Err(e) => {
+                        eprintln!("Invalid recipient: {e:?}");
+                        exit(2);
+                    }
+                };
 
-                Ok(())
+                let _token_id = match drk.get_token(token).await {
+                    Ok(t) => t,
+                    Err(e) => {
+                        eprintln!("Invalid Token ID: {e:?}");
+                        exit(2);
+                    }
+                };
+
+                panic!("temporarily disabled due to change of API for drk.mint_token() fn");
+                //let tx = match drk.mint_token(&amount, rcpt, token_id).await {
+                //    Ok(tx) => tx,
+                //    Err(e) => {
+                //        eprintln!("Failed to create token mint transaction: {e:?}");
+                //        exit(2);
+                //    }
+                //};
+
+                //eprintln!("{}", bs58::encode(&serialize(&tx)).into_string());
+
+                //Ok(())
             }
 
             TokenSubcmd::Freeze { token } => {
-                let drk = Drk::new(args.endpoint).await?;
-                let token_id = drk.get_token(token).await.with_context(|| "Invalid Token ID")?;
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+                let _token_id = match drk.get_token(token).await {
+                    Ok(t) => t,
+                    Err(e) => {
+                        eprintln!("Invalid Token ID: {e:?}");
+                        exit(2);
+                    }
+                };
 
-                let tx = drk
-                    .freeze_token(token_id)
-                    .await
-                    .with_context(|| "Failed to create token freeze transaction")?;
+                panic!("temporarily disabled due to change of API for drk.mint_token() fn");
+                //let tx = match drk.freeze_token(token_id).await {
+                //    Ok(tx) => tx,
+                //    Err(e) => {
+                //        eprintln!("Failed to create token freeze transaction: {e:?}");
+                //        exit(2);
+                //    }
+                //};
 
-                println!("{}", bs58::encode(&serialize(&tx)).into_string());
+                //eprintln!("{}", bs58::encode(&serialize(&tx)).into_string());
 
-                Ok(())
+                //Ok(())
             }
         },
     }

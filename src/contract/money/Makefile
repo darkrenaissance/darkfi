@@ -3,6 +3,19 @@
 # Cargo binary
 CARGO = cargo
 
+# Compile target for system binaries
+RUST_TARGET = $(shell rustc -Vv | grep '^host: ' | cut -d' ' -f2)
+# Uncomment when doing musl static builds
+#RUSTFLAGS = -C target-feature=+crt-static -C link-self-contained=yes
+
+# wasm build target
+WASM_TARGET = wasm32-unknown-unknown
+
+# Cargo package name
+PKGNAME = $(shell grep '^name = ' Cargo.toml | cut -d' ' -f3 | tr -d '"')
+# wasm contract binary
+WASM_BIN = $(PKGNAME:=.wasm)
+
 # zkas compiler binary
 ZKAS = ../../../zkas
 
@@ -12,64 +25,63 @@ PROOFS_BIN = $(PROOFS_SRC:=.bin)
 
 # wasm source files
 WASM_SRC = \
-	$(shell find src -type f) \
+	Cargo.toml \
+	../../../Cargo.toml \
+	../../../src/sdk/Cargo.toml \
+	../../../src/serial/Cargo.toml \
+	$(shell find src -type f -name '*.rs') \
 	$(shell find ../../sdk -type f -name '*.rs') \
 	$(shell find ../../serial -type f -name '*.rs')
 
-# wasm contract binary
-WASM_BIN = money_contract.wasm
-
-# Just compile the tests
-NO_RUN = "--no-run"
-
 all: $(WASM_BIN)
-
-$(WASM_BIN): $(WASM_SRC) $(PROOFS_BIN)
-	$(CARGO) build --release --package darkfi-money-contract --target wasm32-unknown-unknown
-	cp -f ../../../target/wasm32-unknown-unknown/release/darkfi_money_contract.wasm $@
 
 $(PROOFS_BIN): $(ZKAS) $(PROOFS_SRC)
 	$(ZKAS) $(basename $@) -o $@
 
+$(WASM_BIN): $(WASM_SRC) $(PROOFS_BIN)
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) build --target=$(WASM_TARGET) \
+		--release --package $(PKGNAME)
+	cp -f ../../../target/$(WASM_TARGET)/release/$@ $@
+	wasm-strip $@
+
 test-integration: all
-	$(CARGO) test --release --features=no-entrypoint,client \
-		--package darkfi-money-contract \
-		--test integration $(ARGS)
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) test --target=$(RUST_TARGET) \
+		--release --package $(PKGNAME) \
+		--features=no-entrypoint,client \
+		--test integration
 
 test-mint-pay-swap: all
-	$(CARGO) test --release --features=no-entrypoint,client \
-		--package darkfi-money-contract \
-		--test mint_pay_swap $(ARGS)
-
-test-txs-verification: all
-	$(CARGO) test --release --features=no-entrypoint,client \
-		--package darkfi-money-contract \
-		--test txs_verification $(ARGS)
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) test --target=$(RUST_TARGET) \
+		--release --package $(PKGNAME) \
+		--features=no-entrypoint,client \
+		--test mint_pay_swap
 
 test-genesis-mint: all
-	$(CARGO) test --release --features=no-entrypoint,client \
-		--package darkfi-money-contract \
-		--test genesis_mint $(ARGS)
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) test --target=$(RUST_TARGET) \
+		--release --package $(PKGNAME) \
+		--features=no-entrypoint,client \
+		--test genesis_mint
 
-test-pow-reward: all
-	$(CARGO) test --release --features=no-entrypoint,client \
-		--package darkfi-money-contract \
-		--test pow_reward $(ARGS)
+test-token-mint: all
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) test --target=$(RUST_TARGET) \
+		--release --package $(PKGNAME) \
+		--features=no-entrypoint,client \
+		--test token_mint
 
-bench:
-	$(CARGO) test --release --features=no-entrypoint,client \
-		--package darkfi-money-contract \
-		--test verification_bench $(FILTER)
+test: test-integration test-mint-pay-swap test-genesis-mint test-token-mint
 
-test: test-integration test-mint-pay-swap test-txs-verification test-genesis-mint test-pow-reward
-
-test-no-run:
-	$(MAKE) test-integration ARGS=$(NO_RUN)
-	$(MAKE) test-mint-pay-swap ARGS=$(NO_RUN)
-	$(MAKE) test-txs-verification ARGS=$(NO_RUN)
-	$(MAKE) test-genesis-mint ARGS=$(NO_RUN)
+clippy: all
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --target=$(WASM_TARGET) \
+		--release --package $(PKGNAME)
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --target=$(RUST_TARGET) \
+		--release --package $(PKGNAME) \
+		--features=no-entrypoint,client --tests
 
 clean:
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clean --target=$(WASM_TARGET) \
+		--release --package $(PKGNAME)
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clean --target=$(RUST_TARGET) \
+		--release --package $(PKGNAME)
 	rm -f $(PROOFS_BIN) $(WASM_BIN)
 
-.PHONY: all test-integration test-mint-pay-swap test-txs-verification test-genesis-mint bench test clean
+.PHONY: all test-integration test-mint-pay-swap test-genesis-mint test clippy clean

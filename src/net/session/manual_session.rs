@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -82,16 +82,15 @@ impl ManualSession {
     pub async fn connect(self: Arc<Self>, addr: Url) {
         let ex = self.p2p().executor();
         let task = StoppableTask::new();
+        self.connect_slots.lock().await.push(task.clone());
 
-        task.clone().start(
+        task.start(
             self.clone().channel_connect_loop(addr),
             // Ignore stop handler
             |_| async {},
             Error::NetworkServiceStopped,
             ex,
         );
-
-        self.connect_slots.lock().await.push(task);
     }
 
     /// Creates a connector object and tries to connect using it
@@ -126,12 +125,16 @@ impl ManualSession {
                     let stop_sub =
                         channel.subscribe_stop().await.expect("Channel should not be stopped");
 
+                    // Channel is now connected but not yet setup
+
                     // Register the new channel
                     self.register_channel(channel.clone(), ex.clone()).await?;
 
-                    // Channel is now connected but not yet setup
                     // Remove pending lock since register_channel will add the channel to p2p
                     self.p2p().remove_pending(&addr).await;
+
+                    // Add this connection to the anchorlist
+                    self.p2p().hosts().upgrade_host(&addr).await;
 
                     // Notify that channel processing has finished
                     self.channel_subscriber.notify(Ok(channel)).await;
@@ -142,6 +145,7 @@ impl ManualSession {
                         target: "net::manual_session",
                         "[P2P] Manual outbound disconnected [{}]", url,
                     );
+
                     // DEV NOTE: Here we can choose to attempt reconnection again
                     return Ok(())
                 }

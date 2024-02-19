@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -107,7 +107,7 @@ impl Acceptor {
                 // These channels are the channels spawned below on listener.next().is_ok().
                 // After the notification, we reset the condvar and retry this loop to see
                 // if we can accept more connections, and if not - we'll be back here.
-                debug!(target: "net::acceptor::run_accept_loop()", "Reached incoming conn limit, waiting...");
+                warn!(target: "net::acceptor::run_accept_loop()", "Reached incoming conn limit, waiting...");
                 cv.wait().await;
                 cv.reset();
                 continue
@@ -183,7 +183,7 @@ impl Acceptor {
                 // Handle ErrorKind::Other
                 Err(e) if e.kind() == ErrorKind::Other => {
                     if let Some(inner) = std::error::Error::source(&e) {
-                        if let Some(inner) = inner.downcast_ref::<async_rustls::rustls::Error>() {
+                        if let Some(inner) = inner.downcast_ref::<futures_rustls::rustls::Error>() {
                             error!(
                                 target: "net::acceptor::run_accept_loop()",
                                 "[P2P] rustls listener error: {:?}", inner,

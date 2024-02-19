@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -24,7 +24,6 @@ use smol::Executor;
 
 use super::super::{
     channel::ChannelPtr,
-    hosts::HostsPtr,
     message::{VerackMessage, VersionMessage},
     message_subscriber::MessageSubscription,
     settings::SettingsPtr,
@@ -38,14 +37,13 @@ pub struct ProtocolVersion {
     version_sub: MessageSubscription<VersionMessage>,
     verack_sub: MessageSubscription<VerackMessage>,
     settings: SettingsPtr,
-    hosts: HostsPtr,
 }
 
 impl ProtocolVersion {
     /// Create a new version protocol. Makes a version and version ack
     /// subscription, then adds them to a version protocol instance.
-    pub async fn new(channel: ChannelPtr, settings: SettingsPtr, hosts: HostsPtr) -> Arc<Self> {
-        // Creates a versi5on subscription
+    pub async fn new(channel: ChannelPtr, settings: SettingsPtr) -> Arc<Self> {
+        // Creates a version subscription
         let version_sub =
             channel.subscribe_msg::<VersionMessage>().await.expect("Missing version dispatcher!");
 
@@ -53,7 +51,7 @@ impl ProtocolVersion {
         let verack_sub =
             channel.subscribe_msg::<VerackMessage>().await.expect("Missing verack dispatcher!");
 
-        Arc::new(Self { channel, version_sub, verack_sub, settings, hosts })
+        Arc::new(Self { channel, version_sub, verack_sub, settings })
     }
 
     /// Start version information exchange. Start the timer. Send version
@@ -78,8 +76,6 @@ impl ProtocolVersion {
                 self.channel.address(), e,
             );
 
-            // Remove from hosts
-            self.hosts.remove(self.channel.address()).await;
             self.channel.stop().await;
             return Err(Error::ChannelTimeout)
         }
@@ -153,7 +149,6 @@ impl ProtocolVersion {
                 self.channel.address(),
             );
 
-            self.hosts.remove(self.channel.address()).await;
             self.channel.stop().await;
             return Err(Error::ChannelStopped)
         }

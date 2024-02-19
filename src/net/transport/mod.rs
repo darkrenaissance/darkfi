@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -212,7 +212,7 @@ impl Dialer {
             DialerVariant::TcpTls(dialer) => {
                 let sockaddr = self.endpoint.socket_addrs(|| None)?;
                 let stream = dialer.do_dial(sockaddr[0], timeout).await?;
-                let tlsupgrade = tls::TlsUpgrade::new();
+                let tlsupgrade = tls::TlsUpgrade::new().await;
                 let stream = tlsupgrade.upgrade_dialer_tls(stream).await?;
                 Ok(Box::new(stream))
             }
@@ -252,7 +252,7 @@ impl Dialer {
                     }
                 };
                 let stream = result?;
-                let tlsupgrade = tls::TlsUpgrade::new();
+                let tlsupgrade = tls::TlsUpgrade::new().await;
                 let stream = tlsupgrade.upgrade_dialer_tls(stream).await?;
                 Ok(Box::new(stream))
             }
@@ -348,7 +348,7 @@ impl Listener {
             ListenerVariant::TcpTls(listener) => {
                 let sockaddr = self.endpoint.socket_addrs(|| None)?;
                 let l = listener.do_listen(sockaddr[0]).await?;
-                let tlsupgrade = tls::TlsUpgrade::new();
+                let tlsupgrade = tls::TlsUpgrade::new().await;
                 let l = tlsupgrade.upgrade_listener_tcp_tls(l).await?;
                 Ok(Box::new(l))
             }
@@ -377,13 +377,13 @@ pub trait PtStream: AsyncRead + AsyncWrite + Unpin + Send {}
 impl PtStream for smol::net::TcpStream {}
 
 #[cfg(feature = "p2p-tcp")]
-impl PtStream for async_rustls::TlsStream<smol::net::TcpStream> {}
+impl PtStream for futures_rustls::TlsStream<smol::net::TcpStream> {}
 
 #[cfg(feature = "p2p-tor")]
 impl PtStream for arti_client::DataStream {}
 
 #[cfg(feature = "p2p-tor")]
-impl PtStream for async_rustls::TlsStream<arti_client::DataStream> {}
+impl PtStream for futures_rustls::TlsStream<arti_client::DataStream> {}
 
 #[cfg(feature = "p2p-unix")]
 impl PtStream for smol::net::unix::UnixStream {}

@@ -15,6 +15,9 @@ engine that makes everything run.
 
 ### Using a venv
 
+Dnet requires Python 3.12.0. Make sure Python is installed and on the
+latest version.
+
 Depending on your setup you may need to install a virtual environment
 for Python. Do so as follows:
 
@@ -51,18 +54,21 @@ If you don't require a venv, install the requirements and run dnet as follows:
 % python main.py
 ```
 
+## Config
+
+On first run, `dnet` will create a config file in the config directory
+specific to your operating system.
+
+To use `dnet` you will need to open the config file and modify it. Enter
+the RPC ports of the nodes you want to connect to and title them as you
+see fit. The default config file uses localhost, but you can replace
+this with hostnames or external IP addresses. You must also specify
+whether it is a `NORMAL` or a `LILITH` node.
+
 ## Usage
 
 Navigate up and down using the arrow keys. Scroll the message log using
 `PageUp` and `PageDown`. Type `q` to quit.
-
-## Config
-
-The `dnet` config file can be found in `bin/dnet/config.toml`. Enter the
-RPC ports of the nodes you want to connect to and title them as you see
-fit. The default config file uses localhost, but you can replace this
-with hostnames or external IP addresses. You must also specify whether
-it is a `NORMAL` or a `LILITH` node.
 
 ## Logging
 

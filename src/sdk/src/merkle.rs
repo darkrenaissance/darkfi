@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -54,5 +54,5 @@ pub fn merkle_add(
 }
 
 extern "C" {
-    fn merkle_add_(ptr: *const u8, len: u32) -> i32;
+    fn merkle_add_(ptr: *const u8, len: u32) -> i64;
 }

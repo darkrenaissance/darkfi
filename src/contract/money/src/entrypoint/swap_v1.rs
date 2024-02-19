@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -17,12 +17,11 @@
  */
 
 use darkfi_sdk::{
-    crypto::{pasta_prelude::*, ContractId},
+    crypto::ContractId,
+    dark_tree::DarkLeaf,
     db::{db_contains_key, db_lookup},
     error::{ContractError, ContractResult},
-    msg,
-    pasta::pallas,
-    ContractCall,
+    msg, ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
@@ -38,7 +37,7 @@ use crate::{
 pub(crate) fn money_otcswap_get_metadata_v1(
     cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
     // In here we can use the same function as we use in `TransferV1`.
     money_transfer_get_metadata_v1(cid, call_idx, calls)
@@ -48,9 +47,9 @@ pub(crate) fn money_otcswap_get_metadata_v1(
 pub(crate) fn money_otcswap_process_instruction_v1(
     cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx as usize].data;
     let params: MoneyTransferParamsV1 = deserialize(&self_.data[1..])?;
 
     // The atomic swap is able to use the same parameters as `TransferV1`.
@@ -59,12 +58,6 @@ pub(crate) fn money_otcswap_process_instruction_v1(
     // every atomic swap looks the same on the network, therefore there is
     // no special anonymity leak for different swaps that are being done,
     // at least in the scope of this contract call.
-
-    if !params.clear_inputs.is_empty() {
-        msg!("[OtcSwapV1] Error: Clear inputs are not empty");
-        return Err(MoneyError::InvalidNumberOfInputs.into())
-    }
-
     if params.inputs.len() != 2 {
         msg!("[OtcSwapV1] Error: Expected 2 inputs");
         return Err(MoneyError::InvalidNumberOfInputs.into())
@@ -112,7 +105,7 @@ pub(crate) fn money_otcswap_process_instruction_v1(
         // For now, make sure that the inputs' spend hooks are zero.
         // This should however be allowed to some extent, e.g. if we
         // want a DAO to be able to do an atomic swap.
-        if input.spend_hook != pallas::Base::ZERO {
+        if calls[call_idx as usize].parent_index.is_some() {
             msg!("[OtcSwapV1] Error: Unable to swap coins with spend_hook != 0 (input {})", i);
             return Err(MoneyError::SpendHookNonZero.into())
         }

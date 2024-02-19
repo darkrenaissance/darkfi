@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -42,7 +42,7 @@ const VALID_ECFIXEDPOINT: [&str; 1] = ["VALUE_COMMIT_RANDOM"];
 const VALID_ECFIXEDPOINTSHORT: [&str; 1] = ["VALUE_COMMIT_VALUE"];
 
 /// Valid EcFixedPointBase constant names supported by the VM.
-const VALID_ECFIXEDPOINTBASE: [&str; 1] = ["NULLIFIER_K"];
+const VALID_ECFIXEDPOINTBASE: [&str; 2] = ["VALUE_COMMIT_RANDOM_BASE", "NULLIFIER_K"];
 
 #[derive(Clone)]
 struct IndexMap<K, V> {

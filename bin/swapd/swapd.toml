@@ -1,0 +1,14 @@
+## darkfi-swapd configuration file
+##
+## Please make sure you go through all the settings so you can configure
+## your daemon properly.
+##
+## The default values are left commented. They can be overridden either by
+## uncommenting, or by using the command-line.
+
+#[swapd]
+# darkfi-swapd JSON-RPC listen URL.
+#swapd_rpc = "tcp://127.0.0.1:52821"
+
+# Path to swapd's filesystem database
+#swapd_db = "~/.local/darkfi/swapd"

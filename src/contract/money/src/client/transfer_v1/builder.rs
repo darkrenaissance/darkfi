@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -23,8 +23,8 @@ use darkfi::{
 use darkfi_sdk::{
     bridgetree,
     crypto::{
-        note::AeadEncryptedNote, pasta_prelude::*, MerkleNode, Nullifier, PublicKey, SecretKey,
-        TokenId,
+        note::AeadEncryptedNote, pasta_prelude::*, BaseBlind, Blind, MerkleNode, ScalarBlind,
+        SecretKey,
     },
     pasta::pallas,
 };
@@ -33,8 +33,8 @@ use rand::rngs::OsRng;
 
 use super::proof::{create_transfer_burn_proof, create_transfer_mint_proof};
 use crate::{
-    client::{MoneyNote, OwnCoin},
-    model::{ClearInput, Input, MoneyTransferParamsV1, Output},
+    client::{compute_remainder_blind, MoneyNote, OwnCoin, TokenId},
+    model::{CoinAttributes, Input, MoneyTransferParamsV1, Output},
 };
 
 /// Struct holding necessary information to build a `Money::TransferV1` contract call.
@@ -68,70 +68,27 @@ pub struct TransferCallInput {
     pub note: MoneyNote,
     // In the DAO all inputs must have the same user_data_enc and use the same blind
     // So support allowing the user to set their own blind.
-    pub user_data_blind: pallas::Base,
+    pub user_data_blind: BaseBlind,
 }
 
-pub struct TransferCallOutput {
-    pub value: u64,
-    pub token_id: TokenId,
-    pub public_key: PublicKey,
-    pub spend_hook: pallas::Base,
-    pub user_data: pallas::Base,
-}
+pub type TransferCallOutput = CoinAttributes;
 
 impl TransferCallBuilder {
-    fn compute_remainder_blind(
-        clear_inputs: &[ClearInput],
-        input_blinds: &[pallas::Scalar],
-        output_blinds: &[pallas::Scalar],
-    ) -> pallas::Scalar {
-        let mut total = pallas::Scalar::zero();
-
-        for input in clear_inputs {
-            total += input.value_blind;
-        }
-
-        for input_blind in input_blinds {
-            total += input_blind;
-        }
-
-        for output_blind in output_blinds {
-            total -= output_blind;
-        }
-
-        total
-    }
-
     pub fn build(self) -> Result<(MoneyTransferParamsV1, TransferCallSecrets)> {
         debug!("Building Money::TransferV1 contract call");
         assert!(self.clear_inputs.len() + self.inputs.len() > 0);
 
-        let mut params =
-            MoneyTransferParamsV1 { clear_inputs: vec![], inputs: vec![], outputs: vec![] };
+        let mut params = MoneyTransferParamsV1 { inputs: vec![], outputs: vec![] };
         let mut signature_secrets = vec![];
         let mut proofs = vec![];
 
-        let token_blind = pallas::Base::random(&mut OsRng);
-        debug!("Building clear inputs");
-        for input in self.clear_inputs {
-            let signature_public = PublicKey::from_secret(input.signature_secret);
-            let value_blind = pallas::Scalar::random(&mut OsRng);
-
-            params.clear_inputs.push(ClearInput {
-                value: input.value,
-                token_id: input.token_id,
-                value_blind,
-                token_blind,
-                signature_public,
-            });
-        }
-
+        let token_blind = BaseBlind::random(&mut OsRng);
         let mut input_blinds = vec![];
         let mut output_blinds = vec![];
 
         debug!("Building anonymous inputs");
         for (i, input) in self.inputs.iter().enumerate() {
-            let value_blind = pallas::Scalar::random(&mut OsRng);
+            let value_blind = Blind::random(&mut OsRng);
             input_blinds.push(value_blind);
 
             let signature_secret = SecretKey::random(&mut OsRng);
@@ -152,7 +109,6 @@ impl TransferCallBuilder {
                 token_commit: public_inputs.token_commit,
                 nullifier: public_inputs.nullifier,
                 merkle_root: public_inputs.merkle_root,
-                spend_hook: public_inputs.spend_hook,
                 user_data_enc: public_inputs.user_data_enc,
                 signature_public: public_inputs.signature_public,
             });
@@ -167,14 +123,12 @@ impl TransferCallBuilder {
 
         for (i, output) in self.outputs.iter().enumerate() {
             let value_blind = if i == self.outputs.len() - 1 {
-                Self::compute_remainder_blind(&params.clear_inputs, &input_blinds, &output_blinds)
+                compute_remainder_blind(&input_blinds, &output_blinds)
             } else {
-                pallas::Scalar::random(&mut OsRng)
+                Blind::random(&mut OsRng)
             };
 
             output_blinds.push(value_blind);
-
-            let serial = pallas::Base::random(&mut OsRng);
 
             info!("Creating transfer mint proof for output {}", i);
             let (proof, public_inputs) = create_transfer_mint_proof(
@@ -183,20 +137,20 @@ impl TransferCallBuilder {
                 output,
                 value_blind,
                 token_blind,
-                serial,
                 output.spend_hook,
                 output.user_data,
+                output.blind,
             )?;
 
             proofs.push(proof);
 
             // Encrypted note
             let note = MoneyNote {
-                serial,
                 value: output.value,
                 token_id: output.token_id,
                 spend_hook: output.spend_hook,
                 user_data: output.user_data,
+                coin_blind: output.blind,
                 value_blind,
                 token_blind,
                 memo: vec![],
@@ -236,9 +190,9 @@ pub struct TransferCallSecrets {
     pub output_notes: Vec<MoneyNote>,
 
     /// The value blinds created for the inputs
-    pub input_value_blinds: Vec<pallas::Scalar>,
+    pub input_value_blinds: Vec<ScalarBlind>,
     /// The value blinds created for the outputs
-    pub output_value_blinds: Vec<pallas::Scalar>,
+    pub output_value_blinds: Vec<ScalarBlind>,
 }
 
 impl TransferCallSecrets {
@@ -249,7 +203,6 @@ impl TransferCallSecrets {
                 coin: output.coin,
                 note: output_note.clone(),
                 secret: SecretKey::from(pallas::Base::ZERO),
-                nullifier: Nullifier::from(pallas::Base::ZERO),
                 leaf_position: 0.into(),
             });
         }

@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -22,10 +22,10 @@ use std::{
 };
 
 pub use async_trait::async_trait;
-use futures_lite::{
-    io::Cursor, AsyncReadExt as FutAsyncReadExt, AsyncWriteExt as FutAsyncWriteExt,
+pub use futures_lite::{
+    io::Cursor, AsyncRead, AsyncReadExt as FutAsyncReadExt, AsyncWrite,
+    AsyncWriteExt as FutAsyncWriteExt,
 };
-pub use futures_lite::{AsyncRead, AsyncWrite};
 
 use crate::{endian, VarInt};
 

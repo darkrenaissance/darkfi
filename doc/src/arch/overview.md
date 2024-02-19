@@ -1,14 +1,14 @@
 # Overview
 
-DarkFi is a layer one proof-of-stake blockchain that supports anonymous
+DarkFi is a layer one Proof-of-Work blockchain that supports anonymous
 applications. It is currently under development. This overview will
 outline a few key terms that help explain DarkFi.
 
-**Blockchain:** The DarkFi blockchain is based off proof of stake Ouroboros Crypsinous, tuned with a discrete controller to achieve a stable supply, currently
-under development to achieve instant finality using parallel leader election
-blockchain. uses Drk consensus token.
-
-DarkFi blockchain's leadership, staking, unstaking, and transaction contracts are written in zkas language, on a P2P Network.
+**Blockchain:** The DarkFi blockchain is based off Proof of Work RandomX
+algorithm, paired with Delayed finality. Consensus participating nodes,
+called miners, produce and propose new blocks to the network, extending
+some fork chain, which once it reaches a finality security thresshold,
+can be appended to canonical by all nodes in the network.
 
 **Wallet:** A wallet is a portal to the DarkFi network. It provides
 the user with the ability to send and receive anonymous _darkened_

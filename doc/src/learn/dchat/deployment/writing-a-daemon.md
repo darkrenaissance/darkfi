@@ -2,41 +2,58 @@
 
 DarkFi consists of many seperate daemons communicating with each other. To
 run the p2p network, we'll need to implement our own daemon.  So we'll
-start building `dchat` by configuring our main function into a daemon that
-can run the p2p network.
+start building `dchat` by creating a daemon that we call `dchatd`.
+
+To do this, we'll make use of a DarkFi macro called
+[async_daemonize](https://github.com/darkrenaissance/darkfi/blob/0aba4e7864d459301a6c5afd8bda6a3d9f240b86/src/util/cli.rs).
+
+`async_daemonize`is the standard way of daemonizing darkfi binaries. It
+implements TOML config file configuration, argument parsing and a
+multithreaded async executor that can be passed into the given function.
+
+We use `async_daemonize` as follows:
 
 ```rust
-{{#include ../../../../../example/dchat/src/main.rs:daemon_deps}}
+use darkfi::{async_daemonize, cli_desc, Result};
+use smol::stream::StreamExt;
+use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 
-#[async_std::main]
-async fn main() -> Result<()> {
-    let ex = Arc::new(Executor::new());
-    let ex2 = ex.clone();
+const CONFIG_FILE: &str = "dchatd_config.toml";
+const CONFIG_FILE_CONTENTS: &str = include_str!("../dchatd_config.toml");
 
-    let nthreads = std::thread::available_parallelism().unwrap().get();
-    let (signal, shutdown) = smol::channel::unbounded::<()>();
+#[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
+#[serde(default)]
+#[structopt(name = "daemond", about = cli_desc!())]
+struct Args {
+    #[structopt(short, long)]
+    /// Configuration file to use
+    config: Option<String>,
 
-    let (_, result) = Parallel::new()
-        .each(0..nthreads, |_| smol::future::block_on(ex2.run(shutdown.recv())))
-        .finish(|| {
-            smol::future::block_on(async move {
-                drop(signal);
-                Ok(())
-            })
-        });
+    #[structopt(short, long)]
+    /// Set log file to ouput into
+    log: Option<String>,
 
-    result
+    #[structopt(short, parse(from_occurrences))]
+    /// Increase verbosity (-vvv supported)
+    verbose: u8,
+}
 
+async_daemonize!(realmain);
+async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
+    println!("Hello, world!");
+    Ok(())
 }
 ```
 
-We get the number of cpu cores using
-`std::thread::available_parallelism()` and spin up a bunch of threads
-in parallel using `easy_parallel`. Right now it doesn't do anything,
-but soon we'll run dchat inside this block.
+Behind the scenes, `async_daemonize` uses `structopt` and `structopt_toml`
+crates to build command line arguments as a struct called `Args`. It spins
+up a async executor using parallel threads, and implements signal handling
+to properly terminate the daemon on receipt of a stop signal.
 
-**Note**: DarkFi includes a macro called `async_daemonize` that is used by
-DarkFi binaries to minimize boilerplate in the repo.  To keep things
-simple we will ignore this macro for the purpose of this tutorial.  But
-check it out if you are curious: [util/cli.rs](https://github.com/darkrenaissance/darkfi/blob/master/src/util/cli.rs#L154).
+`async_daemonize` allow us to spawn the config data we specify at
+`CONFIG_FILE_CONTENTS` into a directory either specified using the
+command-line flag `--config`, or in the default darkfi config directory.
 
+`async_daemonize` also implements logging that will output
+different levels of debug info to the terminal, or to both the terminal
+and a log file if a log file is specified.

@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -142,6 +142,7 @@ impl std::cmp::Eq for StoppableTask {}
 mod tests {
     use super::*;
     use crate::{error::Error, system::sleep_forever};
+    use log::warn;
     use smol::Executor;
     use std::sync::Arc;
 
@@ -150,13 +151,21 @@ mod tests {
         let mut cfg = simplelog::ConfigBuilder::new();
         cfg.add_filter_ignore("async_io".to_string());
         cfg.add_filter_ignore("polling".to_string());
-        simplelog::TermLogger::init(
+
+        // We check this error so we can execute same file tests in parallel,
+        // otherwise second one fails to init logger here.
+        if simplelog::TermLogger::init(
+            //simplelog::LevelFilter::Info,
+            //simplelog::LevelFilter::Debug,
             simplelog::LevelFilter::Trace,
             cfg.build(),
             simplelog::TerminalMode::Mixed,
             simplelog::ColorChoice::Auto,
         )
-        .unwrap();
+        .is_err()
+        {
+            warn!(target: "test_harness", "Logger already initialized");
+        }
 
         let executor = Arc::new(Executor::new());
         let executor_ = executor.clone();

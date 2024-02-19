@@ -1,6 +1,11 @@
 Hosting anonymous nodes
 =======================
 
+_To connect to Tor, we use [Arti](https://gitlab.torproject.org/tpo/core/arti). 
+This is an experimental project with incomplete security features. See Arti's 
+[roadmap](https://gitlab.torproject.org/tpo/core/arti#roadmap) for more 
+information._
+
 Using Tor, we can host anonymous nodes as Tor hidden services. To do
 this, we need to set up our Tor daemon and create a hidden service.
 The following instructions should work on any Linux system.

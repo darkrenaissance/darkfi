@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -39,7 +39,7 @@ pub struct Args {
     pub rpc_listen: Url,
 
     /// Sets Datastore Path
-    #[structopt(long, default_value = "~/.local/darkfi/tau")]
+    #[structopt(long, default_value = "~/.local/darkfi/taud_db")]
     pub datastore: String,
 
     #[structopt(flatten)]

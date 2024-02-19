@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -19,7 +19,7 @@
 //! IRC command implemenatations
 //!
 //! These try to follow the RFCs, modified in order for our P2P stack.
-//! Copied from https://simple.wikipedia.org/wiki/List_of_Internet_Relay_Chat_commands
+//! Copied from <https://simple.wikipedia.org/wiki/List_of_Internet_Relay_Chat_commands>
 //!
 //! Unimplemented commands:
 //! * `AWAY`
@@ -354,7 +354,7 @@ impl Client {
     /// `LIST [<channels> [<server>]]`
     ///
     /// List all channels on the server. If the list `<channels>` is given, it
-    /// will return the channel topics. If <server> is given, the command will
+    /// will return the channel topics. If `<server>` is given, the command will
     /// be sent to `<server>` for evaluation.
     pub async fn handle_cmd_list(&self, _args: &str) -> Result<Vec<ReplyType>> {
         if !self.registered.load(SeqCst) {
@@ -431,7 +431,7 @@ impl Client {
 
     /// `MOTD [<server>]`
     ///
-    /// Returns the message of the day on <server> or the current server if
+    /// Returns the message of the day on `<server>` or the current server if
     /// it is not stated.
     pub async fn handle_cmd_motd(&self, _args: &str) -> Result<Vec<ReplyType>> {
         let nick = self.nickname.read().await.to_string();
@@ -448,8 +448,8 @@ impl Client {
 
     /// `NAMES [<channel>]`
     ///
-    /// Returns a list of who is on the list of <channel>, by channel name.
-    /// If <channel> is not used, all users are shown. They are grouped by
+    /// Returns a list of who is on the list of `<channel>`, by channel name.
+    /// If `<channel>` is not used, all users are shown. They are grouped by
     /// channel name with all users who are not on a channel being shown as
     /// part of channel "*".
     pub async fn handle_cmd_names(&self, args: &str) -> Result<Vec<ReplyType>> {
@@ -563,7 +563,7 @@ impl Client {
 
     /// `PART <channel>`
     ///
-    /// Causes a user to leave the channel <channel>.
+    /// Causes a user to leave the channel `<channel>`.
     pub async fn handle_cmd_part(&self, args: &str) -> Result<Vec<ReplyType>> {
         if !self.registered.load(SeqCst) {
             self.penalty.fetch_add(1, SeqCst);
@@ -635,7 +635,7 @@ impl Client {
 
     /// `PRIVMSG <msgtarget> <message>`
     ///
-    /// Sends <message> to <msgtarget>. The target is usually a user or
+    /// Sends `<message>` to `<msgtarget>`. The target is usually a user or
     /// a channel.
     pub async fn handle_cmd_privmsg(&self, args: &str) -> Result<Vec<ReplyType>> {
         if !self.registered.load(SeqCst) {
@@ -703,8 +703,8 @@ impl Client {
 
     /// `TOPIC <channel> [<topic>]`
     ///
-    /// Used to get the channel topic on <channel>. If <topic> is given, it
-    /// sets the channel topic to <topic>.
+    /// Used to get the channel topic on `<channel>`. If `<topic>` is given, it
+    /// sets the channel topic to `<topic>`.
     pub async fn handle_cmd_topic(&self, args: &str) -> Result<Vec<ReplyType>> {
         if !self.registered.load(SeqCst) {
             self.penalty.fetch_add(1, SeqCst);
@@ -762,7 +762,7 @@ impl Client {
     ///
     /// This command is used at the beginning of a connection to specify the
     /// username, hostname, real name, and the initial user modes of the
-    /// connecting client. <realname> may contain spaces, and thus must be
+    /// connecting client. `<realname>` may contain spaces, and thus must be
     /// prefixed with a colon.
     pub async fn handle_cmd_user(&self, args: &str) -> Result<Vec<ReplyType>> {
         if self.registered.load(SeqCst) {

@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -19,7 +19,7 @@
 use std::collections::HashSet;
 
 use async_trait::async_trait;
-use log::{debug, error, info};
+use log::{debug, error};
 use smol::lock::{Mutex, MutexGuard};
 use tinyjson::JsonValue;
 
@@ -105,7 +105,7 @@ impl JsonRpcInterface {
         let genevent: GenEvent = deserialize(&dec).unwrap();
 
         // Build a DAG event and return it.
-        let event = Event::new(serialize_async(&genevent).await, self.event_graph.clone()).await;
+        let event = Event::new(serialize_async(&genevent).await, &self.event_graph).await;
 
         if let Err(e) = self.event_graph.dag_insert(&[event.clone()]).await {
             error!("Failed inserting new event to DAG: {}", e);
@@ -140,7 +140,7 @@ impl JsonRpcInterface {
                 }
             };
 
-            info!("Marking event {} as seen", event_id);
+            debug!("Marking event {} as seen", event_id);
             seen_events.push(genevent);
         }
 

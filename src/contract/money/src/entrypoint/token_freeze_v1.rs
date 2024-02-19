@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -17,7 +17,8 @@
  */
 
 use darkfi_sdk::{
-    crypto::{ContractId, PublicKey, TokenId},
+    crypto::{ContractId, PublicKey},
+    dark_tree::DarkLeaf,
     db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
     msg,
@@ -36,24 +37,23 @@ use crate::{
 pub(crate) fn money_token_freeze_get_metadata_v1(
     _cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx as usize].data;
     let params: MoneyTokenFreezeParamsV1 = deserialize(&self_.data[1..])?;
 
     // Public inputs for the ZK proofs we have to verify
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
     // Public keys for the transaction signatures we have to verify
-    let signature_pubkeys: Vec<PublicKey> = vec![params.signature_public];
+    let signature_pubkeys: Vec<PublicKey> = vec![params.mint_public];
 
     // Derive the TokenId from the public key
-    let (sig_x, sig_y) = params.signature_public.xy();
-    let token_id = TokenId::derive_public(params.signature_public);
+    let (mint_x, mint_y) = params.mint_public.xy();
 
     // In ZK we just verify that the token ID is properly derived from the authority.
     zk_public_inputs.push((
         MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1.to_string(),
-        vec![sig_x, sig_y, token_id.inner()],
+        vec![mint_x, mint_y, params.token_id.inner()],
     ));
 
     // Serialize everything gathered and return it
@@ -68,23 +68,22 @@ pub(crate) fn money_token_freeze_get_metadata_v1(
 pub(crate) fn money_token_freeze_process_instruction_v1(
     cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx as usize].data;
     let params: MoneyTokenFreezeParamsV1 = deserialize(&self_.data[1..])?;
 
     // We just check if the mint was already frozen beforehand
     let token_freeze_db = db_lookup(cid, MONEY_CONTRACT_TOKEN_FREEZE_TREE)?;
-    let token_id = TokenId::derive_public(params.signature_public);
 
     // Check that the mint is not frozen
-    if db_contains_key(token_freeze_db, &serialize(&token_id))? {
-        msg!("[MintV1] Error: Token mint for {} is frozen", token_id);
+    if db_contains_key(token_freeze_db, &serialize(&params.token_id))? {
+        msg!("[MintV1] Error: Token mint for {} is frozen", params.token_id);
         return Err(MoneyError::TokenMintFrozen.into())
     }
 
     // Create a state update. We only need the new coin.
-    let update = MoneyTokenFreezeUpdateV1 { signature_public: params.signature_public };
+    let update = MoneyTokenFreezeUpdateV1 { token_id: params.token_id };
     let mut update_data = vec![];
     update_data.write_u8(MoneyFunction::TokenFreezeV1 as u8)?;
     update.encode(&mut update_data)?;
@@ -98,9 +97,8 @@ pub(crate) fn money_token_freeze_process_update_v1(
     update: MoneyTokenFreezeUpdateV1,
 ) -> ContractResult {
     let token_freeze_db = db_lookup(cid, MONEY_CONTRACT_TOKEN_FREEZE_TREE)?;
-    let token_id = TokenId::derive_public(update.signature_public);
-    msg!("[MintV1] Freezing mint for token {}", token_id);
-    db_set(token_freeze_db, &serialize(&token_id), &[])?;
+    msg!("[MintV1] Freezing mint for token {}", update.token_id);
+    db_set(token_freeze_db, &serialize(&update.token_id), &[])?;
 
     Ok(())
 }

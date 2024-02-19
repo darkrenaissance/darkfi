@@ -4,60 +4,61 @@ field = "pallas";
 
 # The constants we define for our circuit
 constant "Mint_V1" {
-	EcFixedPointShort VALUE_COMMIT_VALUE,
-	EcFixedPoint VALUE_COMMIT_RANDOM,
-	EcFixedPointBase NULLIFIER_K,
+    EcFixedPointShort VALUE_COMMIT_VALUE,
+    EcFixedPoint VALUE_COMMIT_RANDOM,
+    EcFixedPointBase NULLIFIER_K,
 }
 
-# The witness values we define for our circuit
+# The witness coin_values we define for our circuit
 witness "Mint_V1" {
-	# X coordinate for public key
-	Base pub_x,
-	# Y coordinate for public key
-	Base pub_y,
-	# The value of this coin
-	Base value,
-	# The token ID
-	Base token,
-	# Unique serial number corresponding to this coin
-	Base serial,
-	# Allows composing this ZK proof to invoke other contracts
-	Base spend_hook,
-	# Data passed from this coin to the invoked contract
-	Base user_data,
-	# Random blinding factor for the value commitment
-	Scalar value_blind,
-	# Random blinding factor for the token ID
-	Base token_blind,
+    # X coordinate for public key
+    Base coin_public_x,
+    # Y coordinate for public key
+    Base coin_public_y,
+    # The coin_value of this coin
+    Base coin_value,
+    # The coin_token_id ID
+    Base coin_token_id,
+    # Allows composing this ZK proof to invoke other contracts
+    Base coin_spend_hook,
+    # Data passed from this coin to the invoked contract
+    Base coin_user_data,
+    # Unique serial number corresponding to this coin
+    Base coin_blind,
+
+    # Random blinding factor for the coin_value commitment
+    Scalar value_blind,
+    # Random blinding factor for the coin_token_id ID
+    Base token_id_blind,
 }
 
 # The definition of our circuit
 circuit "Mint_V1" {
-	# Poseidon hash of the coin
-	C = poseidon_hash(
-		pub_x,
-		pub_y,
-		value,
-		token,
-		serial,
-		spend_hook,
-		user_data,
-	);
-	constrain_instance(C);
+    # Poseidon hash of the coin
+    C = poseidon_hash(
+        coin_public_x,
+        coin_public_y,
+        coin_value,
+        coin_token_id,
+        coin_spend_hook,
+        coin_user_data,
+        coin_blind,
+    );
+    constrain_instance(C);
 
-	# Pedersen commitment for coin's value
-	vcv = ec_mul_short(value, VALUE_COMMIT_VALUE);
-	vcr = ec_mul(value_blind, VALUE_COMMIT_RANDOM);
-	value_commit = ec_add(vcv, vcr);
-	# Since the value commit is a curve point, we fetch its coordinates
-	# and constrain them:
-	constrain_instance(ec_get_x(value_commit));
-	constrain_instance(ec_get_y(value_commit));
+    # Pedersen commitment for coin's coin_value
+    vcv = ec_mul_short(coin_value, VALUE_COMMIT_VALUE);
+    vcr = ec_mul(value_blind, VALUE_COMMIT_RANDOM);
+    coin_value_commit = ec_add(vcv, vcr);
+    # Since the coin_value commit is a curve point, we fetch its coordinates
+    # and constrain them:
+    constrain_instance(ec_get_x(coin_value_commit));
+    constrain_instance(ec_get_y(coin_value_commit));
 
-	# Commitment for coin's token ID. We do a poseidon hash since it's
-	# cheaper than EC operations and doesn't need the homomorphic prop.
-	token_commit = poseidon_hash(token, token_blind);
-	constrain_instance(token_commit);
+    # Commitment for coin's coin_token_id ID. We do a poseidon hash since it's
+    # cheaper than EC operations and doesn't need the homomorphic prop.
+    coin_token_id_commit = poseidon_hash(coin_token_id, token_id_blind);
+    constrain_instance(coin_token_id_commit);
 
-	# At this point we've enforced all of our public inputs.
+    # At this point we've enforced all of our public inputs.
 }

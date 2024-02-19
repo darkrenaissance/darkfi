@@ -14,7 +14,7 @@
 #irc_tls_secret = "/etc/letsencrypt/darkirc/privkey.pem"
 
 ## Sets Datastore Path
-#datastore = "~/.local/darkfi/darkirc"
+#datastore = "~/.local/darkfi/darkirc_db"
 
 ## List of channels to autojoin for new client connections
 autojoin = [
@@ -32,6 +32,9 @@ autojoin = [
 
 # P2P network settings
 [net]
+# Path to a configured hostlist for saving known peers
+hostlist = "~/.local/darkfi/darkirc/hostlist.tsv"
+
 ## P2P accept addresses
 #inbound = ["tcp+tls://0.0.0.0:26661", "tcp+tls://[::]:26661"]
 

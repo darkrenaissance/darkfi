@@ -22,16 +22,6 @@ Also keep in mind that commit messages can be longer than a single
 line, so use it to your advantage to explain your commit and
 intentions.
 
-## ChangeLog
-
-Whenever a major change or sub-project is completed, a summary must be noted
-in the [ChangeLog](https://github.com/darkrenaissance/darkfi/blob/master/ChangeLog).
-Think of this as a bulletin board where the rest of the team is notified of
-important progress.
-
-As we move through the stages, the current yyyy-mm-dd marker is updated with
-the current date, and a new section above is created.
-
 ## cargo fmt pre-commit hook
 
 To ensure every contributor uses the same code style, make sure
@@ -48,8 +38,8 @@ fi
 exit 0
 ```
 
-Place this script in `.git/hooks/pre-commit` and make sure it's
-executable by running `chmod +x .git/hooks/pre-commit`.
+Inside the darkfi project repo, place this script in `.git/hooks/pre-commit`
+and make sure it's executable by running `chmod +x .git/hooks/pre-commit`.
 
 
 ## Testing crate features
@@ -96,6 +86,8 @@ You can then find the reports in `target/llvm-cov/html/index.html`
 
 ## Static binary builds
 
+### Using LXC
+
 Using musl-libc, we should be able to produce statically linked
 binaries from our codebase. A short setup using a Debian system and
 `lxc` can be the following:
@@ -134,4 +126,16 @@ And now we should be able to build a statically linked binary:
 ## Uncomment RUSTFLAGS in the main Makefile
 # sed -e 's,^#RUSTFLAGS ,RUSTFLAGS ,' -i Makefile
 # make darkirc
+```
+
+### Native
+
+In certain cases, it might also be possible to build natively by
+installing the musl toolchain:
+
+```
+$ rustup target add x86_64-unknown-linux-musl --toolchain nightly
+## Uncomment RUSTFLAGS in the main Makefile
+$ sed -e 's,^#RUSTFLAGS ,RUSTFLAGS ,' -i Makefile
+$ make RUST_TARGET=x86_64-unknown-linux-musl darkirc
 ```

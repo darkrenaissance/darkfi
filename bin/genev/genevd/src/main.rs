@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -54,7 +54,7 @@ struct Args {
     pub net: SettingsOpt,
 
     /// Sets Datastore Path
-    #[structopt(long, default_value = "~/.local/darkfi/genev")]
+    #[structopt(long, default_value = "~/.local/darkfi/genev_db")]
     pub datastore: String,
 
     #[structopt(short, long)]
@@ -142,6 +142,8 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
                 }
             }
         }
+    } else {
+        *event_graph.synced.write().await = true;
     }
 
     ////////////////////

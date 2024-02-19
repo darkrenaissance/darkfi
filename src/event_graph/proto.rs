@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -19,6 +19,7 @@
 // TODO: FIXME: Some of the protocols should block operations until DAG is synced.
 
 use std::{
+    collections::{BTreeMap, HashSet},
     sync::{
         atomic::{AtomicUsize, Ordering::SeqCst},
         Arc,
@@ -26,11 +27,11 @@ use std::{
     time::Duration,
 };
 
-use darkfi_serial::{async_trait, deserialize_async, SerialDecodable, SerialEncodable};
+use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 use log::{debug, error, trace, warn};
 use smol::Executor;
 
-use super::{Event, EventGraph, EventGraphPtr, NULL_ID};
+use super::{Event, EventGraphPtr, NULL_ID};
 use crate::{impl_p2p_message, net::*, system::timeout::timeout, Error, Result};
 
 /// Malicious behaviour threshold. If the threshold is reached, we will
@@ -68,12 +69,12 @@ impl_p2p_message!(EventPut, "EventGraph::EventPut");
 
 /// A P2P message representing an event request
 #[derive(Clone, SerialEncodable, SerialDecodable)]
-pub struct EventReq(pub blake3::Hash);
+pub struct EventReq(pub Vec<blake3::Hash>);
 impl_p2p_message!(EventReq, "EventGraph::EventReq");
 
 /// A P2P message representing an event reply
 #[derive(Clone, SerialEncodable, SerialDecodable)]
-pub struct EventRep(pub Event);
+pub struct EventRep(pub Vec<Event>);
 impl_p2p_message!(EventRep, "EventGraph::EventRep");
 
 /// A P2P message representing a request for a peer's DAG tips
@@ -83,7 +84,7 @@ impl_p2p_message!(TipReq, "EventGraph::TipReq");
 
 /// A P2P message representing a reply for the peer's DAG tips
 #[derive(Clone, SerialEncodable, SerialDecodable)]
-pub struct TipRep(pub Vec<blake3::Hash>);
+pub struct TipRep(pub BTreeMap<u64, HashSet<blake3::Hash>>);
 impl_p2p_message!(TipRep, "EventGraph::TipRep");
 
 #[async_trait]
@@ -129,6 +130,26 @@ impl ProtocolEventGraph {
         }))
     }
 
+    async fn increase_malicious_count(self: Arc<Self>) -> Result<()> {
+        let malicious_count = self.malicious_count.fetch_add(1, SeqCst);
+        if malicious_count + 1 == MALICIOUS_THRESHOLD {
+            error!(
+                target: "event_graph::protocol::handle_event_put()",
+                "[EVENTGRAPH] Peer {} reached malicious threshold. Dropping connection.",
+                self.channel.address(),
+            );
+            self.channel.stop().await;
+            return Err(Error::ChannelStopped)
+        }
+
+        warn!(
+            target: "event_graph::protocol::handle_event_put()",
+            "[EVENTGRAPH] Peer {} sent us a malicious event", self.channel.address(),
+        );
+
+        Ok(())
+    }
+
     /// Protocol function handling `EventPut`.
     /// This is triggered whenever someone broadcasts (or relays) a new
     /// event on the network.
@@ -142,50 +163,6 @@ impl ProtocolEventGraph {
                  target: "event_graph::protocol::handle_event_put()",
                  "Got EventPut: {} [{}]", event.id(), self.channel.address(),
             );
-            // Check if the event is older than the genesis event. If so, we should
-            // not include it in our Dag.
-            // The genesis event marks the last time the Dag has been pruned of old
-            // events. The pruning interval is defined by the days_rotation field
-            // of [`EventGraph`].
-            // TODO it would be better to store/cache this instead of calculating
-            // on every broadcast/relay.
-            let genesis_timestamp =
-                EventGraph::generate_genesis(self.event_graph.days_rotation()).timestamp;
-            if event.timestamp < genesis_timestamp {
-                debug!(
-                    target: "event_graph::protocol::handle_event_put()",
-                    "Event {} is older than genesis. Event timestamp: `{}`. Genesis timestamp: `{}`",
-                event.id(), event.timestamp, genesis_timestamp
-                );
-            }
-
-            // We received an event. Check if we already have it in our DAG.
-            // Also check if we have the event's parents. In the case we do
-            // not have the parents, we'll request them from the peer that has
-            // sent this event to us. In case they do not reply in time, we drop
-            // the event.
-
-            // Validate the event first. If we do not consider it valid, we
-            // will just drop it and stay quiet. If the malicious threshold
-            // is reached, we will stop the connection.
-            if !event.validate() {
-                let malicious_count = self.malicious_count.fetch_add(1, SeqCst);
-                if malicious_count + 1 == MALICIOUS_THRESHOLD {
-                    error!(
-                        target: "event_graph::protocol::handle_event_put()",
-                        "[EVENTGRAPH] Peer {} reached malicious threshold. Dropping connection.",
-                        self.channel.address(),
-                    );
-                    self.channel.stop().await;
-                    return Err(Error::ChannelStopped)
-                }
-
-                warn!(
-                    target: "event_graph::protocol::handle_event_put()",
-                    "[EVENTGRAPH] Peer {} sent us a malicious event", self.channel.address(),
-                );
-                continue
-            }
 
             // If we have already seen the event, we'll stay quiet.
             let event_id = event.id();
@@ -197,6 +174,35 @@ impl ProtocolEventGraph {
                 continue
             }
 
+            // We received an event. Check if we already have it in our DAG.
+            // Check event is not older that current genesis event timestamp.
+            // Also check if we have the event's parents. In the case we do
+            // not have the parents, we'll request them from the peer that has
+            // sent this event to us. In case they do not reply in time, we drop
+            // the event.
+
+            // Check if the event is older than the genesis event. If so, we should
+            // not include it in our Dag.
+            // The genesis event marks the last time the Dag has been pruned of old
+            // events. The pruning interval is defined by the days_rotation field
+            // of [`EventGraph`].
+            let genesis_timestamp = self.event_graph.current_genesis.read().await.timestamp;
+            if event.timestamp < genesis_timestamp {
+                debug!(
+                    target: "event_graph::protocol::handle_event_put()",
+                    "Event {} is older than genesis. Event timestamp: `{}`. Genesis timestamp: `{}`",
+                event.id(), event.timestamp, genesis_timestamp
+                );
+            }
+
+            // Validate the new event first. If we do not consider it valid, we
+            // will just drop it and stay quiet. If the malicious threshold
+            // is reached, we will stop the connection.
+            if !event.validate_new() {
+                self.clone().increase_malicious_count().await?;
+                continue
+            }
+
             // At this point, this is a new event to us. Let's see if we
             // have all of its parents.
             debug!(
@@ -204,16 +210,16 @@ impl ProtocolEventGraph {
                 "Event {} is new", event_id,
             );
 
-            let mut missing_parents = vec![];
+            let mut missing_parents = HashSet::new();
             for parent_id in event.parents.iter() {
-                // `event.validate()` should have already made sure that
+                // `event.validate_new()` should have already made sure that
                 // not all parents are NULL, and that there are no duplicates.
                 if parent_id == &NULL_ID {
                     continue
                 }
 
                 if !self.event_graph.dag.contains_key(parent_id.as_bytes()).unwrap() {
-                    missing_parents.push(*parent_id);
+                    missing_parents.insert(*parent_id);
                 }
             }
 
@@ -221,13 +227,13 @@ impl ProtocolEventGraph {
             // fetch them from this peer. Do this recursively until we
             // find all of them.
             if !missing_parents.is_empty() {
-                // We track the received events in a vec. If/when we get all
-                // of them, we need to insert them in reverse so the DAG state
-                // stays correct and unreferenced tips represent the actual thing
-                // they should. If we insert them out of order, then we might have
-                // wrong unreferenced tips.
-                // TODO: What should we do if at some point the events become too old?
-                let mut received_events = vec![];
+                // We track the received events mapped by their layer.
+                // If/when we get all of them, we need to insert them in order so
+                // the DAG state stays correct and unreferenced tips represent the
+                // actual thing they should. If we insert them out of order, then
+                // we might have wrong unreferenced tips.
+                let mut received_events: BTreeMap<u64, Vec<Event>> = BTreeMap::new();
+                let mut received_events_hashes = HashSet::new();
 
                 debug!(
                     target: "event_graph::protocol::handle_event_put()",
@@ -235,28 +241,32 @@ impl ProtocolEventGraph {
                 );
 
                 while !missing_parents.is_empty() {
-                    for parent_id in missing_parents.clone().iter() {
-                        debug!(
-                            target: "event_graph::protocol::handle_event_put()",
-                            "Requesting {}...", parent_id,
-                        );
+                    // for parent_id in missing_parents.clone().iter() {
+                    debug!(
+                        target: "event_graph::protocol::handle_event_put()",
+                        "Requesting {:?}...", missing_parents,
+                    );
 
-                        self.channel.send(&EventReq(*parent_id)).await?;
-                        let parent = match timeout(REPLY_TIMEOUT, self.ev_rep_sub.receive()).await {
-                            Ok(parent) => parent?,
-                            Err(_) => {
-                                error!(
-                                    target: "event_graph::protocol::handle_event_put()",
-                                    "[EVENTGRAPH] Timeout while waiting for parent {} from {}",
-                                    parent_id, self.channel.address(),
-                                );
-                                self.channel.stop().await;
-                                return Err(Error::ChannelStopped)
-                            }
-                        };
-                        let parent = parent.0.clone();
+                    self.channel
+                        .send(&EventReq(missing_parents.clone().into_iter().collect()))
+                        .await?;
+                    let parents = match timeout(REPLY_TIMEOUT, self.ev_rep_sub.receive()).await {
+                        Ok(parent) => parent?,
+                        Err(_) => {
+                            error!(
+                                target: "event_graph::protocol::handle_event_put()",
+                                "[EVENTGRAPH] Timeout while waiting for parents {:?} from {}",
+                                missing_parents, self.channel.address(),
+                            );
+                            self.channel.stop().await;
+                            return Err(Error::ChannelStopped)
+                        }
+                    };
+                    let parents = parents.0.clone();
 
-                        if &parent.id() != parent_id {
+                    for parent in parents {
+                        let parent_id = parent.id();
+                        if !missing_parents.contains(&parent_id) {
                             error!(
                                 target: "event_graph::protocol::handle_event_put()",
                                 "[EVENTGRAPH] Peer {} replied with a wrong event: {}",
@@ -271,9 +281,15 @@ impl ProtocolEventGraph {
                             "Got correct parent event {}", parent.id(),
                         );
 
-                        received_events.push(parent.clone());
-                        let pos = missing_parents.iter().position(|id| id == &parent.id()).unwrap();
-                        missing_parents.remove(pos);
+                        if let Some(layer_events) = received_events.get_mut(&parent.layer) {
+                            layer_events.push(parent.clone());
+                        } else {
+                            let layer_events = vec![parent.clone()];
+                            received_events.insert(parent.layer, layer_events);
+                        }
+                        received_events_hashes.insert(parent_id);
+
+                        missing_parents.remove(&parent_id);
 
                         // See if we have the upper parents
                         for upper_parent in parent.parents.iter() {
@@ -281,13 +297,19 @@ impl ProtocolEventGraph {
                                 continue
                             }
 
-                            if !self.event_graph.dag.contains_key(upper_parent.as_bytes()).unwrap()
+                            if !missing_parents.contains(upper_parent) &&
+                                !received_events_hashes.contains(upper_parent) &&
+                                !self
+                                    .event_graph
+                                    .dag
+                                    .contains_key(upper_parent.as_bytes())
+                                    .unwrap()
                             {
                                 debug!(
                                     target: "event_graph::protocol::handle_event_put()",
                                     "Found upper missing parent event{}", upper_parent,
                                 );
-                                missing_parents.push(*upper_parent);
+                                missing_parents.insert(*upper_parent);
                             }
                         }
                     }
@@ -295,19 +317,29 @@ impl ProtocolEventGraph {
 
                 // At this point we should've got all the events.
                 // We should add them to the DAG.
-                // TODO: FIXME: Also validate these events.
-                let received_events_rev: Vec<Event> =
-                    received_events.iter().rev().cloned().collect();
-                self.event_graph.dag_insert(&received_events_rev).await.unwrap();
+                let mut events = vec![];
+                for (_, tips) in received_events {
+                    for tip in tips {
+                        events.push(tip);
+                    }
+                }
+                if self.event_graph.dag_insert(&events).await.is_err() {
+                    self.clone().increase_malicious_count().await?;
+                    continue
+                }
             } // <-- !missing_parents.is_empty()
 
             // If we're here, we have all the parents, and we can now
-            // add the actual event to the DAG.
+            // perform a full validation and add the actual event to
+            // the DAG.
             debug!(
                 target: "event_graph::protocol::handle_event_put()",
                 "Got all parents necessary for insertion",
             );
-            self.event_graph.dag_insert(&[event.clone()]).await.unwrap();
+            if self.event_graph.dag_insert(&[event.clone()]).await.is_err() {
+                self.clone().increase_malicious_count().await?;
+                continue
+            }
 
             // Relay the event to other peers.
             self.event_graph
@@ -321,14 +353,23 @@ impl ProtocolEventGraph {
     /// This is triggered whenever someone requests an event from us.
     async fn handle_event_req(self: Arc<Self>) -> Result<()> {
         loop {
-            let event_id = match self.ev_req_sub.receive().await {
-                Ok(v) => v.0,
+            let event_ids = match self.ev_req_sub.receive().await {
+                Ok(v) => v.0.clone(),
                 Err(_) => continue,
             };
             trace!(
-                target: "event_graph::protocol::handle_event_req()",
-                "Got EventReq: {} [{}]", event_id, self.channel.address(),
+                target: "event_graph::protocol::handle_multi_event_req()",
+                "Got MultiEventReq: {:?} [{}]", event_ids, self.channel.address(),
             );
+
+            // Check if node has finished syncing its DAG
+            if !*self.event_graph.synced.read().await {
+                debug!(
+                    target: "event_graph::protocol::handle_event_put",
+                    "DAG is still syncing, skipping..."
+                );
+                continue
+            }
 
             // We received an event request from somebody.
             // If we do have it, we will send it back to them as `EventRep`.
@@ -341,67 +382,68 @@ impl ProtocolEventGraph {
             // I dunno if this is a good idea, but it seems it will help
             // against malicious event requests where they want us to keep
             // reading our db and steal our bandwidth.
-            if !self.event_graph.broadcasted_ids.read().await.contains(&event_id) {
-                let malicious_count = self.malicious_count.fetch_add(1, SeqCst);
-                if malicious_count + 1 == MALICIOUS_THRESHOLD {
-                    error!(
+            let mut events = vec![];
+            for event_id in event_ids {
+                if !self.event_graph.broadcasted_ids.read().await.contains(&event_id) {
+                    let malicious_count = self.malicious_count.fetch_add(1, SeqCst);
+                    if malicious_count + 1 == MALICIOUS_THRESHOLD {
+                        error!(
+                            target: "event_graph::protocol::handle_event_req()",
+                            "[EVENTGRAPH] Peer {} reached malicious threshold. Dropping connection.",
+                            self.channel.address(),
+                        );
+                        self.channel.stop().await;
+                        return Err(Error::ChannelStopped)
+                    }
+
+                    warn!(
                         target: "event_graph::protocol::handle_event_req()",
-                        "[EVENTGRAPH] Peer {} reached malicious threshold. Dropping connection.",
-                        self.channel.address(),
+                        "[EVENTGRAPH] Peer {} requested an unexpected event {:?}",
+                        self.channel.address(), event_id,
                     );
-                    self.channel.stop().await;
-                    return Err(Error::ChannelStopped)
+                    continue
                 }
 
-                warn!(
+                // At this point we should have it in our DAG.
+                // This code panics if this is not the case.
+                debug!(
                     target: "event_graph::protocol::handle_event_req()",
-                    "[EVENTGRAPH] Peer {} requested an unexpected event {}",
-                    self.channel.address(), event_id,
+                    "Fetching event {:?} from DAG", event_id,
                 );
-                continue
+                events.push(self.event_graph.dag_get(&event_id).await.unwrap().unwrap());
             }
 
-            // At this point we should have it in our DAG.
-            // This code panics if this is not the case.
-            debug!(
-                target: "event_graph::protocol::handle_event_req()",
-                "Fetching event {} from DAG", event_id,
-            );
-            let event = self.event_graph.dag.get(event_id.as_bytes()).unwrap().unwrap();
-            let event: Event = deserialize_async(&event).await.unwrap();
-
-            // Check if the event is older than the genesis event. If so, something
+            // Check if the incoming event is older than the genesis event. If so, something
             // has gone wrong. The event should have been pruned during the last
             // rotation.
-            // TODO it would be better to store/cache this instead of calculating
-            // on every broadcast/relay.
-            let genesis_timestamp =
-                EventGraph::generate_genesis(self.event_graph.days_rotation()).timestamp;
-            if event.timestamp < genesis_timestamp {
-                error!(
-                    target: "event_graph::protocol::handle_event_req()",
-                    "Requested event {} is older than previous rotation period. It should have been pruned.
-                Event timestamp: `{}`. Genesis timestamp: `{}`",
-                event.id(), event.timestamp, genesis_timestamp
-                );
-            }
-
-            // Now let's get the upper level of event IDs. When we reply, we could
-            // get requests for those IDs as well.
+            let genesis_timestamp = self.event_graph.current_genesis.read().await.timestamp;
             let mut bcast_ids = self.event_graph.broadcasted_ids.write().await;
-            for parent_id in event.parents.iter() {
-                if parent_id != &NULL_ID {
-                    bcast_ids.insert(*parent_id);
+
+            for event in events.iter() {
+                if event.timestamp < genesis_timestamp {
+                    error!(
+                        target: "event_graph::protocol::handle_event_req()",
+                        "Requested event by peer {} is older than previous rotation period. It should have been pruned.
+                    Event timestamp: `{}`. Genesis timestamp: `{}`",
+                    event.id(), event.timestamp, genesis_timestamp
+                    );
+                }
+
+                // Now let's get the upper level of event IDs. When we reply, we could
+                // get requests for those IDs as well.
+                for parent_id in event.parents.iter() {
+                    if parent_id != &NULL_ID {
+                        bcast_ids.insert(*parent_id);
+                    }
                 }
             }
-
             // TODO: We should remove the reply from the bcast IDs for this specific channel.
             //       We can't remove them for everyone.
             //bcast_ids.remove(&event_id);
             drop(bcast_ids);
 
             // Reply with the event
-            self.channel.send(&EventRep(event)).await?;
+            self.channel.send(&EventRep(events)).await?;
         }
     }
 
@@ -416,20 +458,29 @@ impl ProtocolEventGraph {
                 "Got TipReq [{}]", self.channel.address(),
             );
 
+            // Check if node has finished syncing its DAG
+            if !*self.event_graph.synced.read().await {
+                debug!(
+                    target: "event_graph::protocol::handle_event_put",
+                    "DAG is still syncing, skipping..."
+                );
+                continue
+            }
+
             // TODO: Rate limit
 
             // We received a tip request. Let's find them, add them to
             // our bcast ids list, and reply with them.
-            let mut tips = self.event_graph.get_unreferenced_tips().await.to_vec();
-            tips.retain(|x| x != &NULL_ID);
-
+            let layers = self.event_graph.unreferenced_tips.read().await.clone();
             let mut bcast_ids = self.event_graph.broadcasted_ids.write().await;
-            for tip in tips.iter() {
-                bcast_ids.insert(*tip);
+            for (_, tips) in layers.iter() {
+                for tip in tips {
+                    bcast_ids.insert(*tip);
+                }
             }
             drop(bcast_ids);
 
-            self.channel.send(&TipRep(tips)).await?;
+            self.channel.send(&TipRep(layers)).await?;
         }
     }
 }

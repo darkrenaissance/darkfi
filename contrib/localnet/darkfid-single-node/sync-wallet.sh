@@ -3,7 +3,7 @@ set -e
 set -x
 
 # Path to `drk` binary
-DRK="../../../drk"
+DRK="../../../drk -vv -c drk.toml"
 
 while true; do
     if $DRK ping 2> /dev/null; then
@@ -12,7 +12,5 @@ while true; do
     sleep 1
 done
 
-$DRK wallet --initialize
 $DRK scan
-$DRK subscribe blocks
-
+$DRK subscribe

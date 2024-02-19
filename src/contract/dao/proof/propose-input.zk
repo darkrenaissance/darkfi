@@ -1,0 +1,68 @@
+k = 13;
+field = "pallas";
+
+constant "ProposeInput" {
+    EcFixedPointBase NULLIFIER_K,
+    EcFixedPoint VALUE_COMMIT_RANDOM,
+    EcFixedPointShort VALUE_COMMIT_VALUE,
+}
+
+witness "ProposeInput" {
+    Base coin_secret,
+    Base coin_value,
+    Base coin_token,
+    Base coin_spend_hook,
+    Base coin_user_data,
+    Base coin_blind,
+
+    Scalar value_blind,
+    Base coin_token_blind,
+
+    Uint32 leaf_pos,
+    MerklePath path,
+
+    Base signature_secret,
+}
+
+circuit "ProposeInput" {
+    # Coin hash
+    pub = ec_mul_base(coin_secret, NULLIFIER_K);
+    pub_x = ec_get_x(pub);
+    pub_y = ec_get_y(pub);
+    coin = poseidon_hash(
+        pub_x,
+        pub_y,
+        coin_value,
+        coin_token,
+        coin_spend_hook,
+        coin_user_data,
+        coin_blind,
+    );
+
+    # We need this to detect whether the above coin was already spent.
+    # To avoid leaking timing & other info, we can just make a
+    # money::transfer() call within the same tx.
+    nullifier = poseidon_hash(coin_secret, coin);
+    constrain_instance(nullifier);
+
+    # Pedersen commitment for coin's coin_value
+    vcv = ec_mul_short(coin_value, VALUE_COMMIT_VALUE);
+    vcr = ec_mul(value_blind, VALUE_COMMIT_RANDOM);
+    coin_value_commit = ec_add(vcv, vcr);
+    constrain_instance(ec_get_x(coin_value_commit));
+    constrain_instance(ec_get_y(coin_value_commit));
+
+    # Commitment for coin's coin_token ID
+    coin_token_commit = poseidon_hash(coin_token, coin_token_blind);
+    constrain_instance(coin_token_commit);
+
+    # Merkle root
+    root = merkle_root(leaf_pos, path, coin);
+    constrain_instance(root);
+
+    # Finally we derive a public key for the signature and constrain
+    # its coordinates:
+    signature_public = ec_mul_base(signature_secret, NULLIFIER_K);
+    constrain_instance(ec_get_x(signature_public));
+    constrain_instance(ec_get_y(signature_public));
+}

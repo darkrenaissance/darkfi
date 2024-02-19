@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -32,7 +32,7 @@ pub const INVALID_SYNTAX: &str = "Syntax error";
 /// The first message sent after client registration.
 pub const RPL_WELCOME: u16 = 001;
 
-/// `<client> :Your host is <servername>, running version <version`
+/// `<client> :Your host is <servername>, running version <version>`
 ///
 /// Part of the post-registration greeting.
 pub const RPL_YOURHOST: u16 = 002;
@@ -50,19 +50,19 @@ pub const RPL_ADMINME: u16 = 256;
 
 /// `<client> :<info>`
 ///
-/// Sent as a reply to an ADMIN command. <info> is a string intended to
+/// Sent as a reply to an ADMIN command. `<info>` is a string intended to
 /// provide information about the location of the server.
 pub const RPL_ADMINLOC1: u16 = 257;
 
 /// `<client> :<info>`
 ///
-/// Sent as a reply to an ADMIN command. <info> is a string intended to
+/// Sent as a reply to an ADMIN command. `<info>` is a string intended to
 /// provide information about whoever runs the server.
 pub const RPL_ADMINLOC2: u16 = 258;
 
 /// `<client> :<info>`
 ///
-/// Sent as a reply to an ADMIN command. <info> MUST contain the email
+/// Sent as a reply to an ADMIN command. `<info>` MUST contain the email
 /// address to contact the administrator(s) of the server.
 pub const RPL_ADMINEMAIL: u16 = 259;
 
@@ -75,12 +75,12 @@ pub const RPL_LISTSTART: u16 = 321;
 /// `<client> <channel> <client count> :<topic>`
 ///
 /// Sent as a reply to the LIST command, this numeric sends information
-/// about a channel to the client. <channel> is the name of the channel.
-/// <client count> is an integer indicating how many clients are joined
-/// to that channel. <topic> is the channel’s topic.
+/// about a channel to the client. `<channel>` is the name of the channel.
+/// `<client count>` is an integer indicating how many clients are joined
+/// to that channel. `<topic>` is the channel’s topic.
 pub const RPL_LIST: u16 = 322;
 
-/// <client> :End of /LIST
+/// `<client> :End of /LIST`
 ///
 /// Sent as a reply to the LIST command, this numeric indicates the end
 /// of a LIST response.
@@ -89,18 +89,18 @@ pub const RPL_LISTEND: u16 = 323;
 /// `<client> <channel> <modestring> <mode arguments>...`
 ///
 /// Sent to a client to inform them of the currently-set modes of a channel.
-/// <channel> is the name of the channel.
+/// `<channel>` is the name of the channel.
 pub const RPL_CHANNELMODEIS: u16 = 324;
 
 /// `<client> <channel> :No topic is set`
 ///
 /// Sent to a client when joining a channel to inform them that the channel
-/// with the name <channel> does not have any topic set.
+/// with the name `<channel>` does not have any topic set.
 pub const RPL_NOTOPIC: u16 = 331;
 
 /// `<client> <channel> :<topic>`
 ///
-/// Sent to a client when joining the <channel> to inform them of the
+/// Sent to a client when joining the `<channel>` to inform them of the
 /// current topic of the channel.
 pub const RPL_TOPIC: u16 = 332;
 
@@ -159,7 +159,7 @@ pub const ERR_NOSUCHCHANNEL: u16 = 403;
 ///
 /// Indicates a PING or PONG message missing the originator parameter
 /// which is required by old IRC servers. Nowadays, this may be used by
-/// some servers when the PING <token> is empty.
+/// some servers when the PING `<token>` is empty.
 pub const ERR_NOORIGIN: u16 = 409;
 
 /// `<client> :No recipient given (<command>)`
@@ -174,7 +174,7 @@ pub const ERR_NORECIPIENT: u16 = 411;
 /// delivered because there was no text to send.
 pub const ERR_NOTEXTTOSEND: u16 = 412;
 
-/// <client> <nick> :Erroneus nickname
+/// `<client> <nick> :Erroneus nickname`
 ///
 /// Returned when a NICK command cannot be successfully completed as
 /// the desired nickname contains characters that are disallowed by the server.

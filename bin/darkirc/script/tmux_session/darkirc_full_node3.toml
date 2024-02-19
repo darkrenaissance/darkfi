@@ -13,11 +13,14 @@ autojoin = ["#dev", "#test"]
 ## P2P net settings
 [net]
 ## Connection slots
-outbound_connections = 3
+outbound_connections = 8
 
-inbound = ["tcp://127.0.0.1:25554"]
+## Inbound connection slots
+# inbound_connections = 8
 
-external_addrs = ["tcp://127.0.0.1:25554"]
+# inbound = ["tcp://127.0.0.1:25554"]
+
+# external_addrs = ["tcp://127.0.0.1:25554"]
 
 # peers = ["tcp://127.0.0.1:25552"]
 
@@ -28,6 +31,8 @@ seeds = ["tcp://127.0.0.1:25551"]
 allowed_transports = ["tcp"]
 
 localnet = true
+hostlist = "/tmp/darkirc_test/darkirc3-host.tsv"
+# advertise = true
 #
 # [channel."#dev"]
 # topic = "DarkFi Development HQ"

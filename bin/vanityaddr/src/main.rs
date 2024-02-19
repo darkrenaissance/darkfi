@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -24,7 +24,8 @@ use std::{
 
 use arg::Args;
 use darkfi::{util::cli::ProgressInc, ANSI_LOGO};
-use darkfi_sdk::crypto::{ContractId, PublicKey, SecretKey, TokenId};
+use darkfi_money_contract::model::TokenId;
+use darkfi_sdk::crypto::{ContractId, PublicKey, SecretKey};
 use rand::rngs::OsRng;
 use rayon::iter::ParallelIterator;
 

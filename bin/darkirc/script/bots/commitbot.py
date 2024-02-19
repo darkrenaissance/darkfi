@@ -81,7 +81,7 @@ def get_branch_name_from_push_event(data):
     return data['ref'].split('/')[-1]
 
 def handle_forward_push(irc, data):
-    author = data['pusher']['name']
+    author = data['commits'][0]['author']['name']
 
     num_commits = len(data['commits'])
     num_commits = str(num_commits) + " commit" + ('s' if num_commits > 1 else '')

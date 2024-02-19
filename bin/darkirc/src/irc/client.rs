@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -359,11 +359,8 @@ impl Client {
             self.server.try_encrypt(&mut privmsg).await;
 
             // Build a DAG event and return it.
-            let event = Event::new(
-                serialize_async(&privmsg).await,
-                self.server.darkirc.event_graph.clone(),
-            )
-            .await;
+            let event =
+                Event::new(serialize_async(&privmsg).await, &self.server.darkirc.event_graph).await;
 
             return Ok(Some(event))
         }
