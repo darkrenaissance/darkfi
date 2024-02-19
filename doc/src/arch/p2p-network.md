@@ -36,6 +36,49 @@ Then each slot performs this algorithm:
        otherwise it will do a seed server sync.
     3. Peer discovery then wakes any sleeping slots and goes back to sleep.
 
+## Hostlist filtering
+
+Node maintain a hostlist consisting of three parts, a whitelist, a
+greylist and an anchorlist. Each hostlist entry is a tuple of two parts,
+a URL address and a `last_seen` data field, which is a timestamp of the
+last time the peer was interacted with.
+
+The lists are ordered chronologically according to `last_seen`, with the
+most recently seen peers at the top of the list. The whitelist max size
+is 1000. The greylist max size is 5000. If the number of peers in these
+lists reach this maximum, then the peers with the oldest `last_seen`
+fields are removed from the list.
+
+Each time a node receives info about a set of peers, the info is
+inserted into its greylist. To discover peers, nodes broadcast `GetAddr`
+messages. Upon receiving a `GetAddr` message, peers reply with an `Addr`
+message containing their whitelist. The requester inserts the received
+peer data into its greylist.
+
+Nodes update their hostlists through a mechanism called
+"greylist housekeeping", which periodically pings randomly selected peers
+from its greylist. If a peer is responsive, then it is promoted to the
+whitelist with an updated `last_seen` field, otherwise it is removed
+from the greylist.
+
+On shutdown, whitelist entries are downgraded to greylist. This forces
+all whitelisted entries through the greylist refinery each time a node
+is started, further ensuring that whitelisted entries are active.
+
+If a connection is established to a host, that host is promoted to 
+anchorlist. If anchorlist or whitelist nodes disconnect or cannot
+be connected to, those hosts are downgraded to greylist.
+
+Nodes can configure how many anchorlist connections or what percentage
+of whitelist connections they would like to make, and this configuration
+influences the connection behavior in `OutboundSession`. If there's
+not enough anchorlist entries, the connection loop will select from
+the whitelist. If there's not enough whitelist entries in the hostlist,
+it will select from the greylist.
+
+This design has been largely informed by the [Monero p2p
+algo](https://eprint.iacr.org/2019/411.pdf)
+
 ## Security
 
 ### Design Considerations
@@ -131,3 +174,12 @@ routing tables is a kind of decentralized lilith which keeps track of all the sw
 
 Possibly a post-mainnet feature depending on the scale of architectural changes or new code required in the net submodule.
 
+## Scoring Subsystem
+
+Connections should maintain a scoring system. Protocols can increment the score.
+
+The score backs off exponentially. If the watermark is crossed then the
+connection is dropped.
+
+Since the reader in `messages.rs` preallocs buffers, there should be a hard
+limit here, and the raw reads also affects your score too.

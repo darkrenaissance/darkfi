@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -55,14 +55,6 @@ pub enum Error {
 
     #[error(transparent)]
     TryFromSliceError(#[from] std::array::TryFromSliceError),
-
-    #[cfg(feature = "dashu")]
-    #[error(transparent)]
-    DashuConversionError(#[from] dashu::base::error::ConversionError),
-
-    #[cfg(feature = "dashu")]
-    #[error(transparent)]
-    DashuParseError(#[from] dashu::base::error::ParseError),
 
     #[cfg(feature = "semver")]
     #[error("semver parse error: {0}")]
@@ -190,6 +182,9 @@ pub enum Error {
     #[error("P2P network stopped")]
     P2PNetworkStopped,
 
+    #[error("No matching hostlist entry")]
+    HostDoesNotExist,
+
     // =============
     // Crypto errors
     // =============
@@ -279,12 +274,6 @@ pub enum Error {
     #[error("Public inputs are invalid")]
     InvalidPublicInputsError,
 
-    #[error("Coin is not the slot block producer")]
-    CoinIsNotSlotProducer,
-
-    #[error("Error during leader proof verification")]
-    LeaderProofVerification,
-
     #[error("Signature could not be verified")]
     InvalidSignature,
 
@@ -297,26 +286,11 @@ pub enum Error {
     #[error("Check if proposal extends any existing fork chains failed")]
     ExtendedChainIndexNotFound,
 
-    #[error("Proposal received after finalization sync period")]
-    ProposalAfterFinalizationError,
-
-    #[error("Proposal received not for current slot")]
-    ProposalNotForCurrentSlotError,
-
     #[error("Proposal contains missmatched hashes")]
     ProposalHashesMissmatchError,
 
-    #[error("Proposal contains unknown slots")]
-    ProposalContainsUnknownSlots,
-
     #[error("Proposal contains missmatched headers")]
     ProposalHeadersMissmatchError,
-
-    #[error("Proposal contains different coin creation eta")]
-    ProposalDifferentCoinEtaError,
-
-    #[error("Proposal contains spent coin")]
-    ProposalIsSpent,
 
     #[error("Proposal contains more transactions than configured cap")]
     ProposalTxsExceedCapError,
@@ -324,17 +298,17 @@ pub enum Error {
     #[error("Unable to verify transfer transaction")]
     TransferTxVerification,
 
-    #[error("Unable to verify proposed mu values")]
-    ProposalPublicValuesMismatched,
-
-    #[error("Proposer is not eligible to produce proposals")]
-    ProposalProposerNotEligible,
-
     #[error("Erroneous transactions detected")]
     ErroneousTxsDetected,
 
     #[error("Proposal task stopped")]
     ProposalTaskStopped,
+
+    #[error("Proposal already exists")]
+    ProposalAlreadyExists,
+
+    #[error("Consensus task stopped")]
+    ConsensusTaskStopped,
 
     #[error("Miner task stopped")]
     MinerTaskStopped,
@@ -399,21 +373,6 @@ pub enum Error {
     #[error("Block {0} contains 0 transactions")]
     BlockContainsNoTransactions(String),
 
-    #[error("Verifying slot missmatch")]
-    VerifyingSlotMissmatch(),
-
-    #[error("Slot {0} is invalid")]
-    SlotIsInvalid(u64),
-
-    #[error("Slot {0} not found in database")]
-    SlotNotFound(u64),
-
-    #[error("Block {0} slots not found in database")]
-    BlockSlotsNotFound(String),
-
-    #[error("Future slot {0} was received")]
-    FutureSlotReceived(u64),
-
     #[error("Contract {0} not found in database")]
     ContractNotFound(String),
 
@@ -425,18 +384,6 @@ pub enum Error {
 
     #[error("zkas bincode not found in sled database")]
     ZkasBincodeNotFound,
-
-    // =============
-    // Wallet errors
-    // =============
-    #[error("Wallet password is empty")]
-    WalletEmptyPassword,
-
-    #[error("Merkle tree already exists in wallet")]
-    WalletTreeExists,
-
-    #[error("Wallet insufficient balance")]
-    WalletInsufficientBalance,
 
     // ===================
     // wasm runtime errors
@@ -466,8 +413,12 @@ pub enum Error {
     WasmerOomError(String),
 
     #[cfg(feature = "darkfi-sdk")]
-    #[error("Contract execution failed")]
+    #[error("Contract execution failed: {0}")]
     ContractError(darkfi_sdk::error::ContractError),
+
+    #[cfg(feature = "darkfi-sdk")]
+    #[error("Invalid DarkTree: {0}")]
+    DarkTreeError(darkfi_sdk::error::DarkTreeError),
 
     #[cfg(feature = "blockchain")]
     #[error("contract wasm bincode not found")]
@@ -481,11 +432,18 @@ pub enum Error {
     #[error("contract execution error")]
     ContractExecError(u64),
 
+    #[cfg(feature = "wasm-runtime")]
+    #[error("wasm function ACL denied")]
+    WasmFunctionAclDenied,
+
     // ====================
     // Event Graph errors
     // ====================
     #[error("Event is not found in tree: {0}")]
     EventNotFound(String),
+
+    #[error("Event is invalid")]
+    EventIsInvalid,
 
     // ====================
     // Miscellaneous errors
@@ -609,11 +567,17 @@ pub enum TxVerifyFailed {
     #[error("Missing contract calls in transaction")]
     MissingCalls,
 
+    #[error("Invalid ZK proof in transaction")]
+    InvalidZkProof,
+
     #[error("Missing Money::Fee call in transaction")]
     MissingFee,
 
-    #[error("Invalid ZK proof in transaction")]
-    InvalidZkProof,
+    #[error("Invalid Money::Fee call in transaction")]
+    InvalidFee,
+
+    #[error("Insufficient fee paid")]
+    InsufficientFee,
 
     #[error("Erroneous transactions found")]
     ErroneousTxs(Vec<crate::tx::Transaction>),
@@ -845,5 +809,12 @@ impl From<wasmer::MemoryError> for Error {
 impl From<darkfi_sdk::error::ContractError> for Error {
     fn from(err: darkfi_sdk::error::ContractError) -> Self {
         Self::ContractError(err)
+    }
+}
+
+#[cfg(feature = "darkfi-sdk")]
+impl From<darkfi_sdk::error::DarkTreeError> for Error {
+    fn from(err: darkfi_sdk::error::DarkTreeError) -> Self {
+        Self::DarkTreeError(err)
     }
 }

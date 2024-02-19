@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -23,11 +23,6 @@ pub use error::{ClientFailed, ClientResult, Error, Result};
 
 #[cfg(feature = "blockchain")]
 pub mod blockchain;
-
-/*
-#[cfg(feature = "validator")]
-pub mod consensus;
-*/
 
 #[cfg(feature = "validator")]
 pub mod validator;
@@ -52,9 +47,6 @@ pub mod tx;
 
 #[cfg(feature = "util")]
 pub mod util;
-
-#[cfg(feature = "wallet")]
-pub mod wallet;
 
 #[cfg(feature = "wasm-runtime")]
 pub mod runtime;

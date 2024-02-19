@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -16,11 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::{
-    blockchain::block_version,
-    crypto::MerkleTree,
-    pasta::{group::ff::Field, pallas},
-};
+use darkfi_sdk::{blockchain::block_version, crypto::MerkleTree};
 
 #[cfg(feature = "async-serial")]
 use darkfi_serial::async_trait;
@@ -30,38 +26,28 @@ use crate::{util::time::Timestamp, Error, Result};
 
 use super::{parse_record, SledDbOverlayPtr};
 
-/// This struct represents a tuple of the form (version, previous, epoch, height, timestamp, nonce, merkle_root).
+/// This struct represents a tuple of the form (version, previous, height, timestamp, nonce, merkle_tree).
 #[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct Header {
     /// Block version
     pub version: u8,
     /// Previous block hash
     pub previous: blake3::Hash,
-    /// Epoch number
-    pub epoch: u64,
-    /// Block/Slot height
+    /// Block height
     pub height: u64,
     /// Block creation timestamp
     pub timestamp: Timestamp,
-    /// The block's nonce.
-    /// In PoW, this value changes arbitrarily with mining.
-    /// In PoS, we can use this value as our block producer ETA.
-    pub nonce: pallas::Base,
-    /// Merkle tree of the transactions contained in this block
+    /// The block's nonce. This value changes arbitrarily with mining.
+    pub nonce: u64,
+    /// Merkle tree of the transactions hashes contained in this block
     pub tree: MerkleTree,
 }
 
 impl Header {
-    pub fn new(
-        previous: blake3::Hash,
-        epoch: u64,
-        height: u64,
-        timestamp: Timestamp,
-        nonce: pallas::Base,
-    ) -> Self {
+    pub fn new(previous: blake3::Hash, height: u64, timestamp: Timestamp, nonce: u64) -> Self {
         let version = block_version(height);
         let tree = MerkleTree::new(1);
-        Self { version, previous, epoch, height, timestamp, nonce, tree }
+        Self { version, previous, height, timestamp, nonce, tree }
     }
 
     /// Compute the header's hash
@@ -70,7 +56,6 @@ impl Header {
 
         self.version.encode(&mut hasher)?;
         self.previous.encode(&mut hasher)?;
-        self.epoch.encode(&mut hasher)?;
         self.height.encode(&mut hasher)?;
         self.timestamp.encode(&mut hasher)?;
         self.nonce.encode(&mut hasher)?;
@@ -83,13 +68,7 @@ impl Header {
 impl Default for Header {
     /// Represents the genesis header on current timestamp
     fn default() -> Self {
-        Header::new(
-            blake3::hash(b"Let there be dark!"),
-            0,
-            0,
-            Timestamp::current_time(),
-            pallas::Base::ZERO,
-        )
+        Header::new(blake3::hash(b"Let there be dark!"), 0, Timestamp::current_time(), 0)
     }
 }
 

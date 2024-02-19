@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -69,6 +69,9 @@ pub enum ContractError {
     #[error("Db get failed")]
     DbGetFailed,
 
+    #[error("Db get empty")]
+    DbGetEmpty,
+
     #[error("Db contains_key failed")]
     DbContainsKeyFailed,
 
@@ -83,6 +86,12 @@ pub enum ContractError {
 
     #[error("Error retrieving system time")]
     GetSystemTimeFailed,
+
+    // Provide feedback when the data sent is too large. For example,
+    // if a user tries to send > u32::MAX bytes, we can limit the
+    // size and present this error.
+    #[error("Data too large")]
+    DataTooLarge,
 }
 
 /// Builtin return values occupy the upper 32 bits
@@ -105,12 +114,14 @@ pub const DB_NOT_FOUND: i64 = to_builtin!(10);
 pub const DB_SET_FAILED: i64 = to_builtin!(11);
 pub const DB_LOOKUP_FAILED: i64 = to_builtin!(12);
 pub const DB_GET_FAILED: i64 = to_builtin!(13);
-pub const DB_CONTAINS_KEY_FAILED: i64 = to_builtin!(14);
-pub const INVALID_FUNCTION: i64 = to_builtin!(15);
-pub const DB_DEL_FAILED: i64 = to_builtin!(16);
-pub const SMT_INVALID_LEAF: i64 = to_builtin!(17);
-pub const SMT_INVALID_PATH_NODES: i64 = to_builtin!(18);
-pub const GET_SYSTEM_TIME_FAILED: i64 = to_builtin!(19);
+pub const DB_GET_EMPTY: i64 = to_builtin!(14);
+pub const DB_CONTAINS_KEY_FAILED: i64 = to_builtin!(15);
+pub const INVALID_FUNCTION: i64 = to_builtin!(16);
+pub const DB_DEL_FAILED: i64 = to_builtin!(17);
+pub const SMT_INVALID_LEAF: i64 = to_builtin!(18);
+pub const SMT_INVALID_PATH_NODES: i64 = to_builtin!(19);
+pub const GET_SYSTEM_TIME_FAILED: i64 = to_builtin!(20);
+pub const DATA_TOO_LARGE: i64 = to_builtin!(21);
 
 impl From<ContractError> for i64 {
     fn from(err: ContractError) -> Self {
@@ -127,12 +138,14 @@ impl From<ContractError> for i64 {
             ContractError::DbSetFailed => DB_SET_FAILED,
             ContractError::DbLookupFailed => DB_LOOKUP_FAILED,
             ContractError::DbGetFailed => DB_GET_FAILED,
+            ContractError::DbGetEmpty => DB_GET_EMPTY,
             ContractError::DbContainsKeyFailed => DB_CONTAINS_KEY_FAILED,
             ContractError::InvalidFunction => INVALID_FUNCTION,
             ContractError::DbDelFailed => DB_DEL_FAILED,
             ContractError::SmtInvalidLeaf => SMT_INVALID_LEAF,
             ContractError::SmtInvalidPathNodes => SMT_INVALID_PATH_NODES,
             ContractError::GetSystemTimeFailed => GET_SYSTEM_TIME_FAILED,
+            ContractError::DataTooLarge => DATA_TOO_LARGE,
             ContractError::Custom(error) => {
                 if error == 0 {
                     CUSTOM_ZERO
@@ -160,12 +173,14 @@ impl From<i64> for ContractError {
             DB_SET_FAILED => Self::DbSetFailed,
             DB_LOOKUP_FAILED => Self::DbLookupFailed,
             DB_GET_FAILED => Self::DbGetFailed,
+            DB_GET_EMPTY => Self::DbGetEmpty,
             DB_CONTAINS_KEY_FAILED => Self::DbContainsKeyFailed,
             INVALID_FUNCTION => Self::InvalidFunction,
             DB_DEL_FAILED => Self::DbDelFailed,
             SMT_INVALID_LEAF => Self::SmtInvalidLeaf,
             SMT_INVALID_PATH_NODES => Self::SmtInvalidPathNodes,
             GET_SYSTEM_TIME_FAILED => Self::GetSystemTimeFailed,
+            DATA_TOO_LARGE => Self::DataTooLarge,
             _ => Self::Custom(error as u32),
         }
     }
@@ -181,4 +196,32 @@ impl From<bs58::decode::Error> for ContractError {
     fn from(err: bs58::decode::Error) -> Self {
         Self::IoError(format!("{}", err))
     }
+}
+
+/// Main result type used by DarkTree.
+pub type DarkTreeResult<T> = ResultGeneric<T, DarkTreeError>;
+
+/// General DarkTree related errors.
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum DarkTreeError {
+    #[error("Invalid DarkLeaf index found: {0} (Expected: {1}")]
+    InvalidLeafIndex(usize, usize),
+
+    #[error("Invalid DarkLeaf parent index found for leaf: {0}")]
+    InvalidLeafParentIndex(usize),
+
+    #[error("Invalid DarkLeaf children index found for leaf: {0}")]
+    InvalidLeafChildrenIndexes(usize),
+
+    #[error("Invalid DarkTree min capacity found: {0} (Expected: >= 1)")]
+    InvalidMinCapacity(usize),
+
+    #[error("DarkTree min capacity has not been exceeded")]
+    MinCapacityNotExceeded,
+
+    #[error("Invalid DarkTree max capacity found: {0} (Expected: >= {1})")]
+    InvalidMaxCapacity(usize, usize),
+
+    #[error("DarkTree max capacity has been exceeded")]
+    MaxCapacityExceeded,
 }

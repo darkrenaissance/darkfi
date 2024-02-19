@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -21,53 +21,38 @@ use darkfi::rpc::jsonrpc::{ErrorCode::ServerError, JsonError, JsonResult};
 /// Custom RPC errors available for darkfid.
 /// Please sort them sensefully.
 pub enum RpcError {
-    /*
-    // Wallet/Key-related errors
-    NoRowsFoundInWallet = -32101,
-    Keygen = -32101,
-    KeypairFetch = -32102,
-    KeypairNotFound = -32103,
-    InvalidKeypair = -32104,
-    InvalidAddressParam = -32105,
-    DecryptionFailed = -32106,
-    */
     // Transaction-related errors
     TxSimulationFail = -32110,
     TxBroadcastFail = -32111,
 
     // State-related errors,
     NotSynced = -32120,
-    UnknownSlot = -32121,
+    UnknownBlockHeight = -32121,
 
     // Parsing errors
     ParseError = -32190,
 
     // Contract-related errors
     ContractZkasDbNotFound = -32200,
+
+    // Misc errors
+    PingFailed = -32300,
 }
 
 fn to_tuple(e: RpcError) -> (i32, String) {
     let msg = match e {
-        /*
-        // Wallet/Key-related errors
-        RpcError::NoRowsFoundInWallet => "No queried rows found in wallet",
-        RpcError::Keygen => "Failed generating keypair",
-        RpcError::KeypairFetch => "Failed fetching keypairs from wallet",
-        RpcError::KeypairNotFound => "Keypair not found",
-        RpcError::InvalidKeypair => "Invalid keypair",
-        RpcError::InvalidAddressParam => "Invalid address parameter",
-        RpcError::DecryptionFailed => "Decryption failed",
-        */
         // Transaction-related errors
         RpcError::TxSimulationFail => "Failed simulating transaction state change",
         RpcError::TxBroadcastFail => "Failed broadcasting transaction",
         // State-related errors
         RpcError::NotSynced => "Blockchain is not synced",
-        RpcError::UnknownSlot => "Did not find slot",
+        RpcError::UnknownBlockHeight => "Did not find block height",
         // Parsing errors
         RpcError::ParseError => "Parse error",
         // Contract-related errors
         RpcError::ContractZkasDbNotFound => "zkas database not found for given contract",
+        // Misc errors
+        RpcError::PingFailed => "Miner daemon ping error",
     };
 
     (e as i32, msg.to_string())

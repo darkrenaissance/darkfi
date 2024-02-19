@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -17,35 +17,33 @@
  */
 
 use darkfi_sdk::{
-    crypto::{pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, SecretKey},
+    crypto::{
+        pasta_prelude::*, pedersen_commitment_u64, BaseBlind, PublicKey, ScalarBlind, SecretKey,
+    },
     pasta::pallas,
 };
 
-use halo2_proofs::circuit::Value;
 use log::debug;
 use rand::rngs::OsRng;
 
 use darkfi::{
-    zk::{Proof, ProvingKey, Witness, ZkCircuit},
+    zk::{halo2::Value, Proof, ProvingKey, Witness, ZkCircuit},
     zkas::ZkBinary,
     Result,
 };
 
-use super::{DaoInfo, DaoProposalInfo};
-use crate::model::{DaoBlindAggregateVote, DaoExecParams, DaoProposalBulla};
+use crate::model::{Dao, DaoBlindAggregateVote, DaoExecParams, DaoProposal, VecAuthCallCommit};
 
 pub struct DaoExecCall {
-    pub proposal: DaoProposalInfo,
-    pub dao: DaoInfo,
+    pub proposal: DaoProposal,
+    pub dao: Dao,
     pub yes_vote_value: u64,
     pub all_vote_value: u64,
-    pub yes_vote_blind: pallas::Scalar,
-    pub all_vote_blind: pallas::Scalar,
-    pub user_serial: pallas::Base,
-    pub dao_serial: pallas::Base,
+    pub yes_vote_blind: ScalarBlind,
+    pub all_vote_blind: ScalarBlind,
     pub input_value: u64,
-    pub input_value_blind: pallas::Scalar,
-    pub input_user_data_blind: pallas::Base,
+    pub input_value_blind: ScalarBlind,
+    pub input_user_data_blind: BaseBlind,
     pub hook_dao_exec: pallas::Base,
     pub signature_secret: SecretKey,
 }
@@ -59,10 +57,6 @@ impl DaoExecCall {
         debug!(target: "dao", "build()");
         let mut proofs = vec![];
 
-        let (proposal_dest_x, proposal_dest_y) = self.proposal.dest.xy();
-
-        let proposal_amount = pallas::Base::from(self.proposal.amount);
-
         let dao_proposer_limit = pallas::Base::from(self.dao.proposer_limit);
         let dao_quorum = pallas::Base::from(self.dao.quorum);
         let dao_approval_ratio_quot = pallas::Base::from(self.dao.approval_ratio_quot);
@@ -70,66 +64,9 @@ impl DaoExecCall {
 
         let (dao_pub_x, dao_pub_y) = self.dao.public_key.xy();
 
-        let user_spend_hook = pallas::Base::from(0);
-        let user_data = pallas::Base::from(0);
-        let input_value = pallas::Base::from(self.input_value);
-        let change = input_value - proposal_amount;
-
-        let dao_bulla = poseidon_hash::<8>([
-            dao_proposer_limit,
-            dao_quorum,
-            dao_approval_ratio_quot,
-            dao_approval_ratio_base,
-            self.dao.gov_token_id.inner(),
-            dao_pub_x,
-            dao_pub_y,
-            self.dao.bulla_blind,
-        ]);
-
-        let proposal_bulla = DaoProposalBulla::from(poseidon_hash::<6>([
-            proposal_dest_x,
-            proposal_dest_y,
-            proposal_amount,
-            self.proposal.token_id.inner(),
-            dao_bulla,
-            self.proposal.blind,
-        ]));
-
-        let coin_0 = poseidon_hash::<7>([
-            proposal_dest_x,
-            proposal_dest_y,
-            proposal_amount,
-            self.proposal.token_id.inner(),
-            self.user_serial,
-            user_spend_hook,
-            user_data,
-        ]);
-        debug!("created coin {:?}", coin_0);
-        debug!("  proposal_dest_x: {:?}", proposal_dest_x);
-        debug!("  proposal_dest_y: {:?}", proposal_dest_y);
-        debug!("  proposal_amount: {:?}", proposal_amount);
-        debug!("  proposal.token_id: {:?}", self.proposal.token_id.inner());
-        debug!("  user_serial: {:?}", self.user_serial);
-        debug!("  user_spend_hook: {:?}", user_spend_hook);
-        debug!("  user_data: {:?}", user_data);
-
-        let coin_1 = poseidon_hash::<7>([
-            dao_pub_x,
-            dao_pub_y,
-            change,
-            self.proposal.token_id.inner(),
-            self.dao_serial,
-            self.hook_dao_exec,
-            dao_bulla,
-        ]);
-        debug!("created coin {:?}", coin_1);
-        debug!("  dao_pub_x: {:?}", dao_pub_x);
-        debug!("  dao_pub_y: {:?}", dao_pub_y);
-        debug!("  change: {:?}", change);
-        debug!("  proposal.token_id: {:?}", self.proposal.token_id.inner());
-        debug!("  dao_serial: {:?}", self.dao_serial);
-        debug!("  hook_dao_exec: {:?}", self.hook_dao_exec);
-        debug!("  dao_bulla: {:?}", dao_bulla);
+        let dao_bulla = self.dao.to_bulla();
+        assert_eq!(dao_bulla, self.proposal.dao_bulla);
+        let proposal_bulla = self.proposal.to_bulla();
 
         let yes_vote_commit = pedersen_commitment_u64(self.yes_vote_value, self.yes_vote_blind);
         let yes_vote_commit_coords = yes_vote_commit.to_affine().coordinates().unwrap();
@@ -137,16 +74,17 @@ impl DaoExecCall {
         let all_vote_commit = pedersen_commitment_u64(self.all_vote_value, self.all_vote_blind);
         let all_vote_commit_coords = all_vote_commit.to_affine().coordinates().unwrap();
 
-        let input_value_commit = pedersen_commitment_u64(self.input_value, self.input_value_blind);
-        let input_value_commit_coords = input_value_commit.to_affine().coordinates().unwrap();
+        let proposal_auth_calls_commit = self.proposal.auth_calls.commit();
+
+        let signature_public = PublicKey::from_secret(self.signature_secret);
 
         let prover_witnesses = vec![
             // proposal params
-            Witness::Base(Value::known(proposal_dest_x)),
-            Witness::Base(Value::known(proposal_dest_y)),
-            Witness::Base(Value::known(proposal_amount)),
-            Witness::Base(Value::known(self.proposal.token_id.inner())),
-            Witness::Base(Value::known(self.proposal.blind)),
+            Witness::Base(Value::known(proposal_auth_calls_commit)),
+            Witness::Base(Value::known(pallas::Base::from(self.proposal.creation_day))),
+            Witness::Base(Value::known(pallas::Base::from(self.proposal.duration_days))),
+            Witness::Base(Value::known(self.proposal.user_data)),
+            Witness::Base(Value::known(self.proposal.blind.inner())),
             // DAO params
             Witness::Base(Value::known(dao_proposer_limit)),
             Witness::Base(Value::known(dao_quorum)),
@@ -155,54 +93,38 @@ impl DaoExecCall {
             Witness::Base(Value::known(self.dao.gov_token_id.inner())),
             Witness::Base(Value::known(dao_pub_x)),
             Witness::Base(Value::known(dao_pub_y)),
-            Witness::Base(Value::known(self.dao.bulla_blind)),
+            Witness::Base(Value::known(self.dao.bulla_blind.inner())),
             // votes
             Witness::Base(Value::known(pallas::Base::from(self.yes_vote_value))),
             Witness::Base(Value::known(pallas::Base::from(self.all_vote_value))),
-            Witness::Scalar(Value::known(self.yes_vote_blind)),
-            Witness::Scalar(Value::known(self.all_vote_blind)),
-            // outputs + inputs
-            Witness::Base(Value::known(self.user_serial)),
-            Witness::Base(Value::known(self.dao_serial)),
-            Witness::Base(Value::known(input_value)),
-            Witness::Scalar(Value::known(self.input_value_blind)),
-            // misc
-            Witness::Base(Value::known(self.hook_dao_exec)),
-            Witness::Base(Value::known(user_spend_hook)),
-            Witness::Base(Value::known(user_data)),
-            // DAO bulla spend check
-            Witness::Base(Value::known(self.input_user_data_blind)),
+            Witness::Scalar(Value::known(self.yes_vote_blind.inner())),
+            Witness::Scalar(Value::known(self.all_vote_blind.inner())),
+            // signature secret
+            Witness::Base(Value::known(self.signature_secret.inner())),
         ];
-
-        let input_user_data_enc = poseidon_hash([dao_bulla, self.input_user_data_blind]);
-        debug!(target: "dao", "input_user_data_enc: {:?}", input_user_data_enc);
 
         debug!(target: "dao", "proposal_bulla: {:?}", proposal_bulla);
         let public_inputs = vec![
             proposal_bulla.inner(),
-            coin_0,
-            coin_1,
+            proposal_auth_calls_commit,
             *yes_vote_commit_coords.x(),
             *yes_vote_commit_coords.y(),
             *all_vote_commit_coords.x(),
             *all_vote_commit_coords.y(),
-            *input_value_commit_coords.x(),
-            *input_value_commit_coords.y(),
-            self.hook_dao_exec,
-            user_spend_hook,
-            user_data,
-            input_user_data_enc,
+            signature_public.x(),
+            signature_public.y(),
         ];
         //export_witness_json("witness.json", &prover_witnesses, &public_inputs);
 
         let circuit = ZkCircuit::new(prover_witnesses, exec_zkbin);
-        let input_proof = Proof::create(exec_pk, &[circuit], &public_inputs, &mut OsRng)
-            .expect("DAO::exec() proving error!)");
+        let input_proof = Proof::create(exec_pk, &[circuit], &public_inputs, &mut OsRng)?;
         proofs.push(input_proof);
 
         let params = DaoExecParams {
-            proposal: proposal_bulla,
+            proposal_bulla,
+            proposal_auth_calls: self.proposal.auth_calls,
             blind_total_vote: DaoBlindAggregateVote { yes_vote_commit, all_vote_commit },
+            signature_public,
         };
 
         Ok((params, proofs))

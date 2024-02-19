@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -18,7 +18,9 @@
 
 use darkfi_sdk::{
     crypto::{ContractId, PublicKey},
+    dark_tree::DarkLeaf,
     db::{db_get, db_lookup, db_set},
+    deploy::DeployParamsV1,
     error::{ContractError, ContractResult},
     msg,
     pasta::pallas,
@@ -31,19 +33,18 @@ use wasmparser::{
 };
 
 use crate::{
-    error::DeployError,
-    model::{DeployParamsV1, DeployUpdateV1},
-    DeployFunction, DEPLOY_CONTRACT_LOCK_TREE, DEPLOY_CONTRACT_ZKAS_DERIVE_NS_V1,
+    error::DeployError, model::DeployUpdateV1, DeployFunction, DEPLOY_CONTRACT_LOCK_TREE,
+    DEPLOY_CONTRACT_ZKAS_DERIVE_NS_V1,
 };
 
 /// `get_metadata` function for `Deploy::DeployV1`
 pub(crate) fn deploy_get_metadata_v1(
     _cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize];
-    let params: DeployParamsV1 = deserialize(&self_.data[1..])?;
+    let params: DeployParamsV1 = deserialize(&self_.data.data[1..])?;
 
     // Public inputs for the ZK proofs we have to verify
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
@@ -72,10 +73,10 @@ pub(crate) fn deploy_get_metadata_v1(
 pub(crate) fn deploy_process_instruction_v1(
     cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize];
-    let params: DeployParamsV1 = deserialize(&self_.data[1..])?;
+    let params: DeployParamsV1 = deserialize(&self_.data.data[1..])?;
 
     // In this function, we have to check that the contract isn't locked.
     let lock_db = db_lookup(cid, DEPLOY_CONTRACT_LOCK_TREE)?;

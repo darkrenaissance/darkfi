@@ -26,8 +26,7 @@ a link in a `PRIVMSG`.
 the tweet text and print it out in irc.
 
 ## Requirment
- `git clone https://github.com/Dastan-glitch/tweety.git`\
- `cd tweety && pip install .`
+ `pip install tweety-ns`
 
 ## `tau-notifier`
 sends notifications about some `tau` commands (namely: adding a new 

@@ -147,7 +147,7 @@ pub struct Child {
     // ...
 }
 
-impl ManualSession {
+impl Child {
     pub fn new() -> Arc<Self> {
         Arc::new(Self {
             parent: LazyWeak::new(),

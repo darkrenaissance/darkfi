@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -280,10 +280,10 @@ impl Proof {
         Self(proof)
     }
 
-    fn verify(&self, vk: &PyCell<VerifyingKey>, instances: Vec<&PyCell<Fp>>) {
+    fn verify(&self, vk: &PyCell<VerifyingKey>, instances: Vec<&PyCell<Fp>>) -> bool {
         let vk = vk.borrow().deref().0.clone();
         let instances: Vec<pallas::Base> = instances.iter().map(|i| i.borrow().deref().0).collect();
-        self.0.verify(&vk, instances.as_slice()).unwrap();
+        self.0.verify(&vk, instances.as_slice()).is_ok()
     }
 }
 

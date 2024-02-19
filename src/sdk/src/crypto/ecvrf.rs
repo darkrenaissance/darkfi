@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -33,7 +33,7 @@ use pasta_curves::{
 };
 use rand_core::{CryptoRng, RngCore};
 
-use super::{constants::NullifierK, util::mod_r_p, PublicKey, SecretKey};
+use super::{constants::NullifierK, util::fp_mod_fv, PublicKey, SecretKey};
 
 /// Prefix domain used for `hash_to_curve` calls
 const VRF_DOMAIN: &str = "DarkFi_ECVRF";
@@ -57,7 +57,7 @@ impl VrfProof {
         message.extend_from_slice(alpha_string);
         let H = pallas::Point::hash_to_curve(VRF_DOMAIN)(&message);
 
-        let gamma = H * mod_r_p(x.inner());
+        let gamma = H * fp_mod_fv(x.inner());
         let k = pallas::Scalar::random(rng);
 
         let mut hasher = blake3::Hasher::new();
@@ -73,7 +73,7 @@ impl VrfProof {
         c_scalar[..blake3::OUT_LEN].copy_from_slice(c.as_bytes());
         let c_scalar = pallas::Scalar::from_uniform_bytes(&c_scalar);
 
-        let s = k + c_scalar * mod_r_p(x.inner());
+        let s = k + c_scalar * fp_mod_fv(x.inner());
 
         Self { gamma, c, s }
     }

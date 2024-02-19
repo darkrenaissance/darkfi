@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -16,11 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-/// Main wasm vm runtime implementation
+/// Main WASM VM runtime implementation
 pub mod vm_runtime;
 
 /// VM memory access (read/write)
 pub(crate) mod memory;
 
-/// Imported host functions
+/// Imported WASM host functions
 pub(crate) mod import;

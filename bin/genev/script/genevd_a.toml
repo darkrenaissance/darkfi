@@ -13,7 +13,7 @@ datastore = "/tmp/genev_test/datastore/node1"
 inbound = ["tcp://127.0.0.1:28882"]
 
 ## Connection slots
-outbound_connections = 8
+outbound_connections = 4
 
 ## Inbound connection slots
 inbound_connections = 4

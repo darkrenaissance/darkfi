@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -15,6 +15,10 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
+/// Blinding factors
+pub mod blind;
+pub use blind::{BaseBlind, Blind, ScalarBlind};
 
 /// Cryptographic constants
 pub mod constants;
@@ -32,11 +36,11 @@ pub use keypair::{Keypair, PublicKey, SecretKey};
 
 /// Contract ID definitions and methods
 pub mod contract_id;
-pub use contract_id::{ContractId, CONSENSUS_CONTRACT_ID, DAO_CONTRACT_ID, MONEY_CONTRACT_ID};
+pub use contract_id::{ContractId, DAO_CONTRACT_ID, DEPLOYOOOR_CONTRACT_ID, MONEY_CONTRACT_ID};
 
-/// Token ID definitions and methods
-pub mod token_id;
-pub use token_id::{TokenId, DARK_TOKEN_ID};
+/// Function ID definitions and methods
+pub mod func_ref;
+pub use func_ref::{FuncId, FuncRef};
 
 /// Merkle node definitions
 pub mod merkle_node;
@@ -44,10 +48,6 @@ pub use merkle_node::{MerkleNode, MerkleTree};
 
 /// Note encryption
 pub mod note;
-
-/// Nullifier definitions
-pub mod nullifier;
-pub use nullifier::Nullifier;
 
 /// Pedersen commitment utilities
 pub mod pedersen;
@@ -71,15 +71,11 @@ pub mod pasta_prelude {
     pub use pasta_curves::{
         arithmetic::{CurveAffine, CurveExt},
         group::{
-            ff::{Field, PrimeField},
+            ff::{Field, FromUniformBytes, PrimeField},
             Curve, Group,
         },
     };
 }
-
-/// Wallet Import Format
-pub mod wif;
-pub use wif::Wif;
 
 #[macro_export]
 macro_rules! fp_from_bs58 {

@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -16,13 +16,15 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::pasta::pallas;
+use darkfi_sdk::{crypto::pasta_prelude::*, pasta::pallas};
 use log::error;
 
 #[cfg(feature = "tinyjson")]
 use {
     std::{collections::HashMap, fs::File, io::Write, path::Path},
-    tinyjson::JsonValue::{Array as JsonArray, Object as JsonObj, String as JsonStr},
+    tinyjson::JsonValue::{
+        Array as JsonArray, Number as JsonNum, Object as JsonObj, String as JsonStr,
+    },
 };
 
 use super::{Witness, ZkCircuit};
@@ -40,16 +42,42 @@ pub fn export_witness_json<P: AsRef<Path>>(
         let mut value_json = HashMap::new();
         match witness {
             Witness::Base(value) => {
-                value.map(|w1| {
-                    value_json.insert("Base".to_string(), JsonStr(format!("{:?}", w1)));
-                    w1
+                value.map(|w| {
+                    value_json.insert("Base".to_string(), JsonStr(format!("{:?}", w)));
+                    w
                 });
             }
             Witness::Scalar(value) => {
-                value.map(|w1| {
-                    value_json.insert("Scalar".to_string(), JsonStr(format!("{:?}", w1)));
-                    w1
+                value.map(|w| {
+                    value_json.insert("Scalar".to_string(), JsonStr(format!("{:?}", w)));
+                    w
                 });
+            }
+            Witness::Uint32(value) => {
+                value.map(|w| {
+                    value_json.insert("Uint32".to_string(), JsonNum(w.into()));
+                    w
+                });
+            }
+            Witness::MerklePath(value) => {
+                let mut path = Vec::new();
+                value.map(|w| {
+                    for node in w {
+                        path.push(JsonStr(format!("{:?}", node.inner())));
+                    }
+                    w
+                });
+                value_json.insert("MerklePath".to_string(), JsonArray(path));
+            }
+            Witness::EcNiPoint(value) => {
+                let (mut x, mut y) = (pallas::Base::ZERO, pallas::Base::ZERO);
+                value.map(|w| {
+                    let coords = w.to_affine().coordinates().unwrap();
+                    (x, y) = (*coords.x(), *coords.y());
+                    w
+                });
+                let coords = vec![JsonStr(format!("{:?}", x)), JsonStr(format!("{:?}", y))];
+                value_json.insert("EcNiPoint".to_string(), JsonArray(coords));
             }
             _ => unimplemented!(),
         }
@@ -78,7 +106,7 @@ pub fn export_witness_json<P: AsRef<Path>>(
 pub fn zkas_type_checks(
     circuit: &ZkCircuit,
     binary: &zkas::ZkBinary,
-    instances: &Vec<pallas::Base>,
+    instances: &[pallas::Base],
 ) -> Result<()> {
     if circuit.witnesses.len() != binary.witnesses.len() {
         error!(

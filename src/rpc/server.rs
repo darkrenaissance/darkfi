@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -287,6 +287,7 @@ async fn run_accept_loop(
                 task.clone().start(
                     accept(reader, writer, url.clone(), rh.clone(), conn_limit, ex_),
                     |_| async move {
+                        info!(target: "rpc::server", "[RPC] Closed conn from {}", url);
                         rh_.clone().unmark_connection(task_.clone()).await;
                     },
                     Error::ChannelStopped,

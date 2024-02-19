@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -16,36 +16,26 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use darkfi_money_contract::model::{CoinAttributes, Nullifier};
 use darkfi_sdk::{
     bridgetree,
     bridgetree::Hashable,
     crypto::{
-        note::AeadEncryptedNote, pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, Keypair,
-        MerkleNode, Nullifier, PublicKey, SecretKey,
+        note::ElGamalEncryptedNote, pasta_prelude::*, pedersen_commitment_u64, poseidon_hash,
+        util::fv_mod_fp_unsafe, Blind, FuncId, Keypair, MerkleNode, PublicKey, SecretKey,
     },
     pasta::pallas,
 };
-use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 use log::debug;
 use rand::rngs::OsRng;
 
 use darkfi::{
-    zk::{halo2, Proof, ProvingKey, Witness, ZkCircuit},
+    zk::{halo2::Value, Proof, ProvingKey, Witness, ZkCircuit},
     zkas::ZkBinary,
     Result,
 };
 
-use super::{DaoInfo, DaoProposalInfo};
-use crate::model::{DaoProposalBulla, DaoVoteParams, DaoVoteParamsInput};
-
-#[derive(SerialEncodable, SerialDecodable)]
-pub struct DaoVoteNote {
-    pub vote_option: bool,
-    pub yes_vote_blind: pallas::Scalar,
-    // yes_vote_value = vote_option * all_vote_value
-    pub all_vote_value: u64,
-    pub all_vote_blind: pallas::Scalar,
-}
+use crate::model::{Dao, DaoProposal, DaoVoteParams, DaoVoteParamsInput, VecAuthCallCommit};
 
 pub struct DaoVoteInput {
     pub secret: SecretKey,
@@ -55,14 +45,14 @@ pub struct DaoVoteInput {
     pub signature_secret: SecretKey,
 }
 
-// Inside ZKproof, check proposal is correct.
+// Inside ZK proof, check proposal is correct.
 pub struct DaoVoteCall {
     pub inputs: Vec<DaoVoteInput>,
     pub vote_option: bool,
-    pub yes_vote_blind: pallas::Scalar,
-    pub vote_keypair: Keypair,
-    pub proposal: DaoProposalInfo,
-    pub dao: DaoInfo,
+    pub proposal: DaoProposal,
+    pub dao: Dao,
+    pub dao_keypair: Keypair,
+    pub current_day: u64,
 }
 
 impl DaoVoteCall {
@@ -82,8 +72,29 @@ impl DaoVoteCall {
         let mut all_vote_value = 0;
         let mut all_vote_blind = pallas::Scalar::from(0);
 
-        for input in self.inputs {
-            let value_blind = pallas::Scalar::random(&mut OsRng);
+        let last_input_idx = self.inputs.len() - 1;
+        for (i, input) in self.inputs.into_iter().enumerate() {
+            // Last input
+            // Choose a blinding factor that can be converted to pallas::Base exactly.
+            // We need this so we can verifiably encrypt the sum of input blinds
+            // in the next section.
+            // TODO: make a generalized widget for this, and also picking blinds in money::transfer()
+            let mut value_blind = pallas::Scalar::random(&mut OsRng);
+
+            if i == last_input_idx {
+                // It's near zero chance it ever loops at all.
+                // P(random 𝔽ᵥ ∉ 𝔽ₚ) = (q - p)/q = 2.99 × 10⁻⁵¹
+                loop {
+                    let av_blind = fv_mod_fp_unsafe(all_vote_blind + value_blind);
+
+                    if av_blind.is_none().into() {
+                        value_blind = pallas::Scalar::random(&mut OsRng);
+                        continue
+                    }
+
+                    break
+                }
+            }
 
             all_vote_value += input.note.value;
             all_vote_blind += value_blind;
@@ -95,37 +106,33 @@ impl DaoVoteCall {
             let leaf_pos: u64 = input.leaf_position.into();
 
             let prover_witnesses = vec![
-                Witness::Base(halo2::Value::known(input.secret.inner())),
-                Witness::Base(halo2::Value::known(note.serial)),
-                Witness::Base(halo2::Value::known(pallas::Base::from(0))),
-                Witness::Base(halo2::Value::known(pallas::Base::from(0))),
-                Witness::Base(halo2::Value::known(pallas::Base::from(note.value))),
-                Witness::Base(halo2::Value::known(note.token_id.inner())),
-                Witness::Scalar(halo2::Value::known(all_vote_blind)),
-                Witness::Base(halo2::Value::known(gov_token_blind)),
-                Witness::Uint32(halo2::Value::known(leaf_pos.try_into().unwrap())),
-                Witness::MerklePath(halo2::Value::known(
-                    input.merkle_path.clone().try_into().unwrap(),
-                )),
-                Witness::Base(halo2::Value::known(input.signature_secret.inner())),
+                Witness::Base(Value::known(input.secret.inner())),
+                Witness::Base(Value::known(pallas::Base::from(note.value))),
+                Witness::Base(Value::known(note.token_id.inner())),
+                Witness::Base(Value::known(pallas::Base::ZERO)),
+                Witness::Base(Value::known(pallas::Base::ZERO)),
+                Witness::Base(Value::known(note.coin_blind.inner())),
+                Witness::Scalar(Value::known(value_blind)),
+                Witness::Base(Value::known(gov_token_blind)),
+                Witness::Uint32(Value::known(leaf_pos.try_into().unwrap())),
+                Witness::MerklePath(Value::known(input.merkle_path.clone().try_into().unwrap())),
+                Witness::Base(Value::known(input.signature_secret.inner())),
             ];
 
             let public_key = PublicKey::from_secret(input.secret);
-            let (pub_x, pub_y) = public_key.xy();
-
-            let coin = poseidon_hash::<7>([
-                pub_x,
-                pub_y,
-                pallas::Base::from(note.value),
-                note.token_id.inner(),
-                note.serial,
-                pallas::Base::from(0),
-                pallas::Base::from(0),
-            ]);
+            let coin = CoinAttributes {
+                public_key,
+                value: note.value,
+                token_id: note.token_id,
+                spend_hook: FuncId::none(),
+                user_data: pallas::Base::ZERO,
+                blind: note.coin_blind,
+            }
+            .to_coin();
 
             let merkle_root = {
                 let position: u64 = input.leaf_position.into();
-                let mut current = MerkleNode::from(coin);
+                let mut current = MerkleNode::from(coin.inner());
                 for (level, sibling) in input.merkle_path.iter().enumerate() {
                     let level = level as u8;
                     current = if position & (1 << level) == 0 {
@@ -137,12 +144,12 @@ impl DaoVoteCall {
                 current
             };
 
-            let token_commit = poseidon_hash::<2>([note.token_id.inner(), gov_token_blind]);
+            let token_commit = poseidon_hash([note.token_id.inner(), gov_token_blind]);
             assert_eq!(self.dao.gov_token_id, note.token_id);
 
-            let nullifier = poseidon_hash::<2>([input.secret.inner(), note.serial]);
+            let nullifier = poseidon_hash([input.secret.inner(), coin.inner()]);
 
-            let vote_commit = pedersen_commitment_u64(note.value, all_vote_blind);
+            let vote_commit = pedersen_commitment_u64(note.value, Blind(value_blind));
             let vote_commit_coords = vote_commit.to_affine().coordinates().unwrap();
 
             let (sig_x, sig_y) = signature_public.xy();
@@ -159,8 +166,7 @@ impl DaoVoteCall {
 
             let circuit = ZkCircuit::new(prover_witnesses, burn_zkbin);
             debug!(target: "dao", "input_proof Proof::create()");
-            let input_proof = Proof::create(burn_pk, &[circuit], &public_inputs, &mut OsRng)
-                .expect("DAO::vote() proving error!");
+            let input_proof = Proof::create(burn_pk, &[circuit], &public_inputs, &mut OsRng)?;
             proofs.push(input_proof);
 
             let input = DaoVoteParamsInput {
@@ -172,100 +178,100 @@ impl DaoVoteCall {
             inputs.push(input);
         }
 
-        let token_commit = poseidon_hash::<2>([self.dao.gov_token_id.inner(), gov_token_blind]);
-
-        let (proposal_dest_x, proposal_dest_y) = self.proposal.dest.xy();
-
-        let proposal_amount = pallas::Base::from(self.proposal.amount);
+        let token_commit = poseidon_hash([self.dao.gov_token_id.inner(), gov_token_blind]);
 
         let dao_proposer_limit = pallas::Base::from(self.dao.proposer_limit);
         let dao_quorum = pallas::Base::from(self.dao.quorum);
         let dao_approval_ratio_quot = pallas::Base::from(self.dao.approval_ratio_quot);
         let dao_approval_ratio_base = pallas::Base::from(self.dao.approval_ratio_base);
-
-        let (dao_pub_x, dao_pub_y) = self.dao.public_key.xy();
-
-        let dao_bulla = poseidon_hash::<8>([
-            dao_proposer_limit,
-            dao_quorum,
-            dao_approval_ratio_quot,
-            dao_approval_ratio_base,
-            self.dao.gov_token_id.inner(),
-            dao_pub_x,
-            dao_pub_y,
-            self.dao.bulla_blind,
-        ]);
-
-        let proposal_bulla = DaoProposalBulla::from(poseidon_hash::<6>([
-            proposal_dest_x,
-            proposal_dest_y,
-            proposal_amount,
-            self.proposal.token_id.inner(),
-            dao_bulla,
-            self.proposal.blind,
-        ]));
+        let dao_public_key = self.dao.public_key.inner();
 
         let vote_option = self.vote_option as u64;
         assert!(vote_option == 0 || vote_option == 1);
 
+        // Create a random blind b ∈ 𝔽ᵥ, such that b ∈ 𝔽ₚ
+        let yes_vote_blind = loop {
+            let blind = pallas::Scalar::random(&mut OsRng);
+            if fv_mod_fp_unsafe(blind).is_some().into() {
+                break blind
+            }
+        };
         let yes_vote_commit =
-            pedersen_commitment_u64(vote_option * all_vote_value, self.yes_vote_blind);
+            pedersen_commitment_u64(vote_option * all_vote_value, Blind(yes_vote_blind));
         let yes_vote_commit_coords = yes_vote_commit.to_affine().coordinates().unwrap();
 
-        let all_vote_commit = pedersen_commitment_u64(all_vote_value, all_vote_blind);
+        let all_vote_commit = pedersen_commitment_u64(all_vote_value, Blind(all_vote_blind));
+        assert_eq!(all_vote_commit, inputs.iter().map(|i| i.vote_commit).sum());
         let all_vote_commit_coords = all_vote_commit.to_affine().coordinates().unwrap();
 
+        // Convert blinds to 𝔽ₚ, which should work fine since we selected them
+        // to be convertable.
+        let yes_vote_blind = Blind(fv_mod_fp_unsafe(yes_vote_blind).unwrap());
+        let all_vote_blind = Blind(fv_mod_fp_unsafe(all_vote_blind).unwrap());
+
+        let vote_option = pallas::Base::from(vote_option);
+        let all_vote_value_fp = pallas::Base::from(all_vote_value);
+        let ephem_secret = SecretKey::random(&mut OsRng);
+        let ephem_pubkey = PublicKey::from_secret(ephem_secret);
+        let (ephem_x, ephem_y) = ephem_pubkey.xy();
+
+        let current_day = pallas::Base::from(self.current_day);
         let prover_witnesses = vec![
             // proposal params
-            Witness::Base(halo2::Value::known(proposal_dest_x)),
-            Witness::Base(halo2::Value::known(proposal_dest_y)),
-            Witness::Base(halo2::Value::known(proposal_amount)),
-            Witness::Base(halo2::Value::known(self.proposal.token_id.inner())),
-            Witness::Base(halo2::Value::known(self.proposal.blind)),
+            Witness::Base(Value::known(self.proposal.auth_calls.commit())),
+            Witness::Base(Value::known(pallas::Base::from(self.proposal.creation_day))),
+            Witness::Base(Value::known(pallas::Base::from(self.proposal.duration_days))),
+            Witness::Base(Value::known(self.proposal.user_data)),
+            Witness::Base(Value::known(self.proposal.blind.inner())),
             // DAO params
-            Witness::Base(halo2::Value::known(dao_proposer_limit)),
-            Witness::Base(halo2::Value::known(dao_quorum)),
-            Witness::Base(halo2::Value::known(dao_approval_ratio_quot)),
-            Witness::Base(halo2::Value::known(dao_approval_ratio_base)),
-            Witness::Base(halo2::Value::known(self.dao.gov_token_id.inner())),
-            Witness::Base(halo2::Value::known(dao_pub_x)),
-            Witness::Base(halo2::Value::known(dao_pub_y)),
-            Witness::Base(halo2::Value::known(self.dao.bulla_blind)),
+            Witness::Base(Value::known(dao_proposer_limit)),
+            Witness::Base(Value::known(dao_quorum)),
+            Witness::Base(Value::known(dao_approval_ratio_quot)),
+            Witness::Base(Value::known(dao_approval_ratio_base)),
+            Witness::Base(Value::known(self.dao.gov_token_id.inner())),
+            Witness::EcNiPoint(Value::known(dao_public_key)),
+            Witness::Base(Value::known(self.dao.bulla_blind.inner())),
             // Vote
-            Witness::Base(halo2::Value::known(pallas::Base::from(vote_option))),
-            Witness::Scalar(halo2::Value::known(self.yes_vote_blind)),
+            Witness::Base(Value::known(vote_option)),
+            Witness::Base(Value::known(yes_vote_blind.inner())),
             // Total number of gov tokens allocated
-            Witness::Base(halo2::Value::known(pallas::Base::from(all_vote_value))),
-            Witness::Scalar(halo2::Value::known(all_vote_blind)),
+            Witness::Base(Value::known(all_vote_value_fp)),
+            Witness::Base(Value::known(all_vote_blind.inner())),
             // gov token
-            Witness::Base(halo2::Value::known(gov_token_blind)),
+            Witness::Base(Value::known(gov_token_blind)),
+            // time checks
+            Witness::Base(Value::known(current_day)),
+            // verifiable encryption
+            Witness::Base(Value::known(ephem_secret.inner())),
         ];
+
+        assert_eq!(self.dao.to_bulla(), self.proposal.dao_bulla);
+        let proposal_bulla = self.proposal.to_bulla();
+
+        let note = [vote_option, yes_vote_blind.inner(), all_vote_value_fp, all_vote_blind.inner()];
+        let enc_note = ElGamalEncryptedNote::encrypt(note, &ephem_secret, &self.dao_keypair.public);
 
         let public_inputs = vec![
             token_commit,
             proposal_bulla.inner(),
-            // this should be a value commit??
             *yes_vote_commit_coords.x(),
             *yes_vote_commit_coords.y(),
             *all_vote_commit_coords.x(),
             *all_vote_commit_coords.y(),
+            current_day,
+            ephem_x,
+            ephem_y,
+            enc_note.encrypted_values[0],
+            enc_note.encrypted_values[1],
+            enc_note.encrypted_values[2],
+            enc_note.encrypted_values[3],
         ];
 
         let circuit = ZkCircuit::new(prover_witnesses, main_zkbin);
 
         debug!(target: "dao", "main_proof = Proof::create()");
-        let main_proof = Proof::create(main_pk, &[circuit], &public_inputs, &mut OsRng)
-            .expect("DAO::vote() proving error!");
+        let main_proof = Proof::create(main_pk, &[circuit], &public_inputs, &mut OsRng)?;
         proofs.push(main_proof);
-
-        let note = DaoVoteNote {
-            vote_option: self.vote_option,
-            yes_vote_blind: self.yes_vote_blind,
-            all_vote_value,
-            all_vote_blind,
-        };
-        let enc_note =
-            AeadEncryptedNote::encrypt(&note, &self.vote_keypair.public, &mut OsRng).unwrap();
 
         let params =
             DaoVoteParams { token_commit, proposal_bulla, yes_vote_commit, note: enc_note, inputs };

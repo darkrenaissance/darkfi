@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -25,7 +25,7 @@ use super::crypto::ContractId;
 // ANCHOR: contractcall
 /// A ContractCall is the part of a transaction that executes a certain
 /// `contract_id` with `data` as the call's payload.
-#[derive(Debug, Clone, Eq, PartialEq, SerialEncodable, SerialDecodable)]
+#[derive(Clone, Eq, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct ContractCall {
     /// ID of the contract invoked
     pub contract_id: ContractId,
@@ -33,3 +33,15 @@ pub struct ContractCall {
     pub data: Vec<u8>,
 }
 // ANCHOR_END: contractcall
+
+// Avoid showing the data in the debug output since often the calldata is very long.
+impl std::fmt::Debug for ContractCall {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ContractCall(id={:?}", self.contract_id.inner())?;
+        let calldata = &self.data;
+        if !calldata.is_empty() {
+            write!(f, ", function_code={}", calldata[0])?;
+        }
+        write!(f, ")")
+    }
+}

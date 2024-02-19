@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -16,39 +16,30 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
 use darkfi::{
     async_daemonize, cli_desc,
     rpc::{
-        jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResult},
-        server::{listen_and_serve, RequestHandler},
+        jsonrpc::{JsonRequest, JsonResponse},
+        util::JsonValue,
     },
-    system::{StoppableTask, StoppableTaskPtr},
     Error, Result,
 };
-use darkfi_serial::async_trait;
-use log::{error, info};
+use log::{debug, error, info};
 use serde::Deserialize;
-use smol::{
-    lock::{Mutex, MutexGuard, RwLock},
-    net::TcpStream,
-    stream::StreamExt,
-    Executor,
-};
+use smol::{stream::StreamExt, Executor};
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
+use surf::StatusCode;
 use url::Url;
-use uuid::Uuid;
-
-mod error;
-mod stratum;
 
 const CONFIG_FILE: &str = "darkfi_mmproxy.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../darkfi_mmproxy.toml");
+
+/// Monero RPC functions
+mod monerod;
+use monerod::MonerodRequest;
 
 #[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
 #[serde(default)]
@@ -62,17 +53,12 @@ struct Args {
     /// Configuration file to use
     config: Option<String>,
 
-    #[structopt(long, default_value = "tcp://127.0.0.1:3333")]
-    /// mmproxy JSON-RPC server listen URL
-    rpc_listen: Url,
-
-    #[structopt(long)]
-    /// List of worker logins
-    workers: Vec<String>,
-
     #[structopt(long)]
     /// Set log file output
     log: Option<String>,
+
+    #[structopt(flatten)]
+    mmproxy: MmproxyArgs,
 
     #[structopt(flatten)]
     monerod: MonerodArgs,
@@ -80,100 +66,177 @@ struct Args {
 
 #[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
 #[structopt()]
-struct MonerodArgs {
-    #[structopt(long, default_value = "mainnet")]
-    /// Mining reward wallet address
-    network: String,
-
-    #[structopt(long, default_value = "http://127.0.0.1:28081/json_rpc")]
-    /// monerod JSON-RPC server listen URL
-    rpc: Url,
+struct MmproxyArgs {
+    #[structopt(long, default_value = "http://127.0.0.1:3333")]
+    /// darkfi-mmproxy JSON-RPC server listen URL
+    mmproxy_rpc: Url,
 }
 
+#[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
+#[structopt()]
+struct MonerodArgs {
+    #[structopt(long, default_value = "mainnet")]
+    /// Monero network type (mainnet/testnet)
+    monero_network: String,
+
+    #[structopt(long, default_value = "http://127.0.0.1:18081")]
+    /// monerod JSON-RPC server listen URL
+    monero_rpc: Url,
+}
+
+/// Mining proxy state
 struct MiningProxy {
-    /// monerod network type
-    monerod_network: monero::Network,
-    /// monerod RPC address
-    monerod_rpc: Url,
-    /// Workers UUIDs
-    workers: Arc<RwLock<HashMap<Uuid, stratum::Worker>>>,
-    /// JSON-RPC connection tracker
-    rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
-    /// Main async executor reference
-    executor: Arc<Executor<'static>>,
+    /// Monero network type
+    monero_network: monero::Network,
+    /// Monero RPC address
+    monero_rpc: Url,
 }
 
 impl MiningProxy {
-    async fn new(monerod: MonerodArgs, executor: Arc<Executor<'static>>) -> Result<Self> {
-        let monerod_network = match monerod.network.as_str() {
+    /// Instantiate `MiningProxy` state
+    async fn new(monerod: MonerodArgs) -> Result<Self> {
+        let monero_network = match monerod.monero_network.to_lowercase().as_str() {
             "mainnet" => monero::Network::Mainnet,
             "testnet" => monero::Network::Testnet,
             _ => {
-                error!("Invalid Monero network \"{}\"", monerod.network);
-                return Err(Error::Custom("Invalid Monero network".to_string()))
+                error!("Invalid Monero network \"{}\"", monerod.monero_network);
+                return Err(Error::Custom(format!(
+                    "Invalid Monero network \"{}\"",
+                    monerod.monero_network
+                )))
             }
         };
 
-        // Test that monerod RPC is reachable
-        if let Err(e) = TcpStream::connect(monerod.rpc.socket_addrs(|| None)?[0]).await {
-            error!("Failed connecting to monerod RPC: {}", e);
-            return Err(e.into())
+        // Test that monerod RPC is reachable and is configured
+        // with the matching network
+        let self_ = Self { monero_network, monero_rpc: monerod.monero_rpc };
+
+        let req = JsonRequest::new("getinfo", vec![].into());
+        let rep: JsonResponse = match self_.monero_request(MonerodRequest::Post(req)).await {
+            Ok(v) => JsonResponse::try_from(&v)?,
+            Err(e) => {
+                error!("Failed connecting to monerod RPC: {}", e);
+                return Err(e)
+            }
+        };
+
+        let Some(result) = rep.result.get::<HashMap<String, JsonValue>>() else {
+            error!("Invalid response from monerod RPC");
+            return Err(Error::Custom("Invalid response from monerod RPC".to_string()))
+        };
+
+        let nettype = result.get("nettype").unwrap().get::<String>().unwrap();
+
+        let mut xmr_is_mainnet = false;
+        let mut xmr_is_testnet = false;
+
+        match nettype.as_str() {
+            // Here we allow fakechain, which we get with monerod --regtest
+            "mainnet" | "fakechain" => xmr_is_mainnet = true,
+            "testnet" => xmr_is_testnet = true,
+            _ => unimplemented!("Missing handler for network {}", nettype),
         }
 
-        let workers = Arc::new(RwLock::new(HashMap::new()));
-        let rpc_connections = Mutex::new(HashSet::new());
-
-        Ok(Self { monerod_network, monerod_rpc: monerod.rpc, workers, rpc_connections, executor })
-    }
-}
-
-#[async_trait]
-#[rustfmt::skip]
-impl RequestHandler for MiningProxy {
-    async fn handle_request(&self, req: JsonRequest) -> JsonResult {
-        match req.method.as_str() {
-            "ping" => self.pong(req.id, req.params).await,
-
-            // Stratum methods
-            "login" => self.stratum_login(req.id, req.params).await,
-            "submit" => self.stratum_submit(req.id, req.params).await,
-            "keepalived" => self.stratum_keepalived(req.id, req.params).await,
-
-            _ => JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
+        if xmr_is_mainnet && !(monero_network == monero::Network::Mainnet) {
+            error!("mmproxy requested testnet, but monerod is mainnet");
+            return Err(Error::Custom("Monero network mismatch".to_string()))
         }
-    }
 
-    async fn connections_mut(&self) -> MutexGuard<'_, HashSet<StoppableTaskPtr>> {
-        self.rpc_connections.lock().await
+        if xmr_is_testnet && !(monero_network == monero::Network::Testnet) {
+            error!("mmproxy requested mainnet, but monerod is testnet");
+            return Err(Error::Custom("Monero network mismatch".to_string()))
+        }
+
+        Ok(self_)
     }
 }
 
 async_daemonize!(realmain);
 async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
-    info!("Starting DarkFi x Monero merge mining proxy...");
+    info!("Starting DarkFi x Monero merge mining proxy");
 
-    let mmproxy = Arc::new(MiningProxy::new(args.monerod, ex.clone()).await?);
+    let mmproxy = Arc::new(MiningProxy::new(args.monerod).await?);
+    let mut app = tide::with_state(mmproxy);
 
-    info!("Starting JSON-RPC server");
-    let rpc_task = StoppableTask::new();
-    rpc_task.clone().start(
-        listen_and_serve(args.rpc_listen, mmproxy.clone(), None, ex.clone()),
-        |res| async move {
-            match res {
-                Ok(()) | Err(Error::RpcServerStopped) => mmproxy.stop_connections().await,
-                Err(e) => error!("Failed stopping JSON-RPC server: {}", e),
+    // monerod `/getheight` endpoint proxy [HTTP GET]
+    app.at("/getheight").get(|req: tide::Request<Arc<MiningProxy>>| async move {
+        debug!(target: "monerod::getheight", "--> /getheight");
+        let mmproxy = req.state();
+        let return_data = mmproxy.monerod_get_height().await?;
+        let return_data = return_data.stringify()?;
+        debug!(target: "monerod::getheight", "<-- {}", return_data);
+        Ok(return_data)
+    });
+
+    // monerod `/getinfo` endpoint proxy [HTTP GET]
+    app.at("/getinfo").get(|req: tide::Request<Arc<MiningProxy>>| async move {
+        debug!(target: "monerod::getinfo", "--> /getinfo");
+        let mmproxy = req.state();
+        let return_data = mmproxy.monerod_get_info().await?;
+        let return_data = return_data.stringify()?;
+        debug!(target: "monerod::getinfo", "<-- {}", return_data);
+        Ok(return_data)
+    });
+
+    // monerod `/json_rpc` endpoint proxy [HTTP POST]
+    app.at("/json_rpc").post(|mut req: tide::Request<Arc<MiningProxy>>| async move {
+        let body_string = match req.body_string().await {
+            Ok(v) => v,
+            Err(e) => {
+                error!(target: "monerod::json_rpc", "Failed reading request body: {}", e);
+                return Err(surf::Error::new(StatusCode::BadRequest, Error::Custom(e.to_string())))
             }
-        },
-        Error::RpcServerStopped,
-        ex.clone(),
-    );
+        };
+        debug!(target: "monerod::json_rpc", "--> {}", body_string);
 
-    info!("Merge mining proxy ready, waiting for connections...");
+        let json_str: JsonValue = match body_string.parse() {
+            Ok(v) => v,
+            Err(e) => {
+                error!(target: "monerod::json_rpc", "Failed parsing JSON body: {}", e);
+                return Err(surf::Error::new(StatusCode::BadRequest, Error::Custom(e.to_string())))
+            }
+        };
+
+        let JsonValue::Object(ref request) = json_str else {
+            return Err(surf::Error::new(
+                StatusCode::BadRequest,
+                Error::Custom("Invalid JSONRPC request".to_string()),
+            ))
+        };
+
+        if !request.contains_key("method") || !request["method"].is_string() {
+            return Err(surf::Error::new(
+                StatusCode::BadRequest,
+                Error::Custom("Invalid JSONRPC request".to_string()),
+            ))
+        }
+
+        let mmproxy = req.state();
+
+        // For XMRig we only have to handle 2 methods:
+        let return_data: JsonValue = match request["method"].get::<String>().unwrap().as_str() {
+            "getblocktemplate" => mmproxy.monerod_getblocktemplate(&json_str).await?,
+            "submitblock" => mmproxy.monerod_submit_block(&json_str).await?,
+            _ => {
+                return Err(surf::Error::new(
+                    StatusCode::BadRequest,
+                    Error::Custom("Invalid JSONRPC request".to_string()),
+                ))
+            }
+        };
+
+        let return_data = return_data.stringify()?;
+        debug!(target: "monerod::json_rpc",  "<-- {}", return_data);
+        Ok(return_data)
+    });
+
+    ex.spawn(async move { app.listen(args.mmproxy.mmproxy_rpc).await.unwrap() }).detach();
+    info!("Merge mining proxy ready, waiting for connections");
 
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new(ex)?;
     signals_handler.wait_termination(signals_task).await?;
-    info!("Caught termination signal, cleaning up and exiting...");
+    info!("Caught termination signal, cleaning up and exiting");
 
     Ok(())
 }

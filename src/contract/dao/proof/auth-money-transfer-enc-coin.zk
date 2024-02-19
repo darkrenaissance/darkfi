@@ -1,0 +1,86 @@
+k = 13;
+field = "pallas";
+
+constant "AuthMoneyTransferEncCoin" {
+    EcFixedPointShort VALUE_COMMIT_VALUE,
+    EcFixedPoint VALUE_COMMIT_RANDOM,
+    EcFixedPointBase NULLIFIER_K,
+}
+
+witness "AuthMoneyTransferEncCoin" {
+    # Coin attributes
+    EcNiPoint coin_public_key,
+    Base coin_value,
+    Base coin_token_id,
+    Base coin_spend_hook,
+    Base coin_user_data,
+    Base coin_blind,
+
+    # Epehemeral secret used for diffie-hellman shared secret derivation
+    Base ephem_secret,
+}
+
+circuit "AuthMoneyTransferEncCoin" {
+    # cast to EcPoint
+    # (otherwise zkas refuses to compile)
+    ONE = witness_base(1);
+    pubkey = ec_mul_var_base(ONE, coin_public_key);
+
+    coin = poseidon_hash(
+        ec_get_x(pubkey),
+        ec_get_y(pubkey),
+        coin_value,
+        coin_token_id,
+        coin_spend_hook,
+        coin_user_data,
+        coin_blind,
+    );
+    constrain_instance(coin);
+
+    # Let e be the ephem_secret and P = dG be the public key.
+    # Then E = eG is the ephem_public.
+    ephem_public = ec_mul_base(ephem_secret, NULLIFIER_K);
+    constrain_instance(ec_get_x(ephem_public));
+    constrain_instance(ec_get_y(ephem_public));
+
+    # The shared_point C = eP = dE
+    shared_point = ec_mul_var_base(ephem_secret, coin_public_key);
+    shared_secret = poseidon_hash(
+        ec_get_x(shared_point),
+        ec_get_y(shared_point),
+    );
+
+    # Now encrypt the coin attributes
+
+    const_1 = witness_base(1);
+    const_2 = witness_base(2);
+    const_3 = witness_base(3);
+    const_4 = witness_base(4);
+    const_5 = witness_base(5);
+
+    # Each blinding coin_value must be used only once otherwise they
+    # could be calculated.
+
+    # We can skip the coin_public_key since it's inferred by the receiver
+
+    shared_secret_1 = poseidon_hash(shared_secret, const_1);
+    enc_coin_value = base_add(coin_value, shared_secret_1);
+    constrain_instance(enc_coin_value);
+
+    shared_secret_2 = poseidon_hash(shared_secret, const_2);
+    enc_coin_token_id = base_add(coin_token_id, shared_secret_2);
+    constrain_instance(enc_coin_token_id);
+
+    shared_secret_3 = poseidon_hash(shared_secret, const_3);
+    enc_coin_spend_hook = base_add(coin_spend_hook, shared_secret_3);
+    constrain_instance(enc_coin_spend_hook);
+
+    shared_secret_4 = poseidon_hash(shared_secret, const_4);
+    enc_coin_user_data = base_add(coin_user_data, shared_secret_4);
+    constrain_instance(enc_coin_user_data);
+
+    shared_secret_5 = poseidon_hash(shared_secret, const_5);
+    enc_coin_blind = base_add(coin_blind, shared_secret_5);
+    constrain_instance(enc_coin_blind);
+}
+

@@ -36,9 +36,13 @@ you have all the necessary dependencies.
 
 This is for Android 64 bit (which is most phones).
 
-1. Install Docker
-2. Run `cd bin/ircd/ && make android`. The resulting file will be called
-   `ircd.aarch64-android`. Copy this to your phone.
+1. Setup Docker on your machine which may look like:
+    1. Install docker and docker-buildx packages.
+    2. Enable the docker daemon service.
+    3. Add your user to the docker group and refresh the session
+       (either with `su -c $USER` or logout/login).
+2. Run `cd bin/darkirc/ && make docker-android`. The resulting file will be
+   called `darkirc.aarch64-android`. Copy this to your phone.
 3. Install Termux and RevolutionIRC on F-Droid.
 4. You can access the phone storage from `/sdcard/` and copy the file
    into the Termux home.
@@ -46,6 +50,13 @@ This is for Android 64 bit (which is most phones).
 6. Run the daemon. You can open new Termux sessions by swiping from
    the left to bring up the sidebar.
 7. Connect the RevolutionIRC frontend.
+
+## Logs
+
+The public channels have [logs available](https://agorism.dev/log/), and
+additionally there is a mirror on telegram @darkfi_darkirc channel.
+You can also message @darkirc_bot with "sub" to avoid doxxing your username.
+Use "unsub" to unsubscribe.
 
 ## Usage (DarkFi Network)
 

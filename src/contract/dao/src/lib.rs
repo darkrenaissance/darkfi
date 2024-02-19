@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -28,6 +28,7 @@ pub enum DaoFunction {
     Propose = 0x01,
     Vote = 0x02,
     Exec = 0x03,
+    AuthMoneyTransfer = 0x04,
 }
 
 impl TryFrom<u8> for DaoFunction {
@@ -39,6 +40,7 @@ impl TryFrom<u8> for DaoFunction {
             0x01 => Ok(DaoFunction::Propose),
             0x02 => Ok(DaoFunction::Vote),
             0x03 => Ok(DaoFunction::Exec),
+            0x04 => Ok(DaoFunction::AuthMoneyTransfer),
             _ => Err(ContractError::InvalidFunction),
         }
     }
@@ -66,19 +68,35 @@ pub const DAO_CONTRACT_DB_PROPOSAL_BULLAS: &str = "dao_proposals";
 pub const DAO_CONTRACT_DB_VOTE_NULLIFIERS: &str = "dao_vote_nullifiers";
 
 // These are keys inside the info tree
-pub const DAO_CONTRACT_KEY_DB_VERSION: &str = "db_version";
-pub const DAO_CONTRACT_KEY_DAO_MERKLE_TREE: &str = "dao_merkle_tree";
-pub const DAO_CONTRACT_KEY_LATEST_DAO_ROOT: &str = "dao_last_root";
+pub const DAO_CONTRACT_KEY_DB_VERSION: &[u8] = b"db_version";
+pub const DAO_CONTRACT_KEY_DAO_MERKLE_TREE: &[u8] = b"dao_merkle_tree";
+pub const DAO_CONTRACT_KEY_LATEST_DAO_ROOT: &[u8] = b"dao_last_root";
 
 /// zkas dao mint circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_MINT_NS: &str = "DaoMint";
-/// zkas dao exec circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_EXEC_NS: &str = "DaoExec";
+pub const DAO_CONTRACT_ZKAS_DAO_MINT_NS: &str = "Mint";
 /// zkas dao vote input circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS: &str = "DaoVoteInput";
+pub const DAO_CONTRACT_ZKAS_DAO_VOTE_INPUT_NS: &str = "VoteInput";
 /// zkas dao vote main circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS: &str = "DaoVoteMain";
+pub const DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS: &str = "VoteMain";
 /// zkas dao propose input circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS: &str = "DaoProposeInput";
+pub const DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS: &str = "ProposeInput";
 /// zkas dao propose main circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS: &str = "DaoProposeMain";
+pub const DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS: &str = "ProposeMain";
+/// zkas dao exec circuit namespace
+pub const DAO_CONTRACT_ZKAS_DAO_EXEC_NS: &str = "Exec";
+/// zkas dao auth money_transfer circuit namespace
+pub const DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS: &str = "AuthMoneyTransfer";
+/// zkas dao auth money_transfer encrypted coin circuit namespace
+pub const DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS: &str = "AuthMoneyTransferEncCoin";
+
+// ANCHOR: dao-blockwindow
+const BLOCK_TIME: u64 = 90;
+const SECS_IN_HOUR: u64 = 60 * 60;
+const WINDOW_TIME_HR: u64 = 4;
+
+/// Blockwindow from blockheight. Used for time limit on DAO proposals.
+pub fn blockwindow(height: u64) -> u64 {
+    let timestamp_secs = height * BLOCK_TIME;
+    timestamp_secs / (WINDOW_TIME_HR * SECS_IN_HOUR)
+}
+// ANCHOR_END: dao-blockwindow

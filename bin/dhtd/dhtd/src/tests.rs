@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -33,7 +33,7 @@ use darkfi::{
 use rand::{rngs::OsRng, RngCore};
 use smol::Executor;
 use url::Url;
-use log::error;
+use log::{error, warn};
 
 use super::{proto::ProtocolDht, Dhtd};
 
@@ -144,12 +144,20 @@ fn dht_remote_get_insert() -> Result<()> {
     cfg.add_filter_ignore("net::protocol_version".to_string());
     cfg.add_filter_ignore("net::protocol_ping".to_string());
 
-    simplelog::TermLogger::init(
+    // We check this error so we can execute same file tests in parallel,
+    // otherwise second one fails to init logger here.
+    if simplelog::TermLogger::init(
         simplelog::LevelFilter::Info,
+        //simplelog::LevelFilter::Debug,
+        //simplelog::LevelFilter::Trace,
         cfg.build(),
         simplelog::TerminalMode::Mixed,
         simplelog::ColorChoice::Auto,
-    )?;
+    )
+    .is_err()
+    {
+        warn!(target: "test_harness", "Logger already initialized");
+    }
 
     let ex = Arc::new(Executor::new());
     let (signal, shutdown) = async_std::channel::unbounded::<()>();

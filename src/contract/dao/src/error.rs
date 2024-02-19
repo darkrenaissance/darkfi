@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -53,17 +53,38 @@ pub enum DaoError {
     #[error("Attempted double vote")]
     DoubleVote,
 
+    #[error("Exec calls len does not match auth spec")]
+    ExecCallWrongChildCallsLen,
+
+    #[error("Child of exec call does not match proposal")]
+    ExecCallWrongChildCall,
+
     #[error("Exec call has invalid tx format")]
     ExecCallInvalidFormat,
-
-    #[error("Exec call outputs.len() should be 2")]
-    ExecCallOutputsLenNot2,
 
     #[error("Exec call value commitment mismatch")]
     ExecCallValueMismatch,
 
     #[error("Vote commitments mismatch")]
     VoteCommitMismatch,
+
+    #[error("Sibling contract ID is not money::transfer()")]
+    AuthXferSiblingWrongContractId,
+
+    #[error("Sibling function code is not money::transfer()")]
+    AuthXferSiblingWrongFunctionCode,
+
+    #[error("Inputs with non-matching encrypted input user data")]
+    AuthXferNonMatchingEncInputUserData,
+
+    #[error("Auth call not found in parent")]
+    AuthXferCallNotFoundInParent,
+
+    #[error("Wrong number of outputs")]
+    AuthXferWrongNumberOutputs,
+
+    #[error("Wrong output coin")]
+    AuthXferWrongOutputCoin,
 }
 
 impl From<DaoError> for ContractError {
@@ -80,10 +101,17 @@ impl From<DaoError> for ContractError {
             DaoError::ProposalEnded => Self::Custom(9),
             DaoError::CoinAlreadySpent => Self::Custom(10),
             DaoError::DoubleVote => Self::Custom(11),
-            DaoError::ExecCallInvalidFormat => Self::Custom(12),
-            DaoError::ExecCallOutputsLenNot2 => Self::Custom(13),
-            DaoError::ExecCallValueMismatch => Self::Custom(14),
-            DaoError::VoteCommitMismatch => Self::Custom(15),
+            DaoError::ExecCallWrongChildCallsLen => Self::Custom(12),
+            DaoError::ExecCallWrongChildCall => Self::Custom(13),
+            DaoError::ExecCallInvalidFormat => Self::Custom(14),
+            DaoError::ExecCallValueMismatch => Self::Custom(15),
+            DaoError::VoteCommitMismatch => Self::Custom(16),
+            DaoError::AuthXferSiblingWrongContractId => Self::Custom(17),
+            DaoError::AuthXferSiblingWrongFunctionCode => Self::Custom(18),
+            DaoError::AuthXferNonMatchingEncInputUserData => Self::Custom(19),
+            DaoError::AuthXferCallNotFoundInParent => Self::Custom(20),
+            DaoError::AuthXferWrongNumberOutputs => Self::Custom(21),
+            DaoError::AuthXferWrongOutputCoin => Self::Custom(22),
         }
     }
 }

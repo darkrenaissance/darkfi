@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -29,7 +29,8 @@ mod async_lib;
 #[cfg(feature = "async")]
 pub use async_lib::{
     async_trait, deserialize_async, deserialize_async_partial, serialize_async, AsyncDecodable,
-    AsyncEncodable, AsyncRead, AsyncWrite, FutAsyncReadExt, FutAsyncWriteExt,
+    AsyncEncodable, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, FutAsyncReadExt,
+    FutAsyncWriteExt,
 };
 
 mod endian;

@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -26,21 +26,11 @@ use super::{
 
 pub type DbHandle = u32;
 
-pub const DB_SUCCESS: i32 = 0;
-pub const CALLER_ACCESS_DENIED: i32 = -1;
-pub const DB_INIT_FAILED: i32 = -2;
-pub const DB_LOOKUP_FAILED: i32 = -3;
-pub const DB_GET_FAILED: i32 = -4;
-pub const DB_CONTAINS_KEY_FAILED: i32 = -5;
-pub const DB_SET_FAILED: i32 = -6;
-pub const DB_DEL_FAILED: i32 = -7;
-
-/// Only deploy() can call this. Creates a new database instance for this contract.
+/// Create a new database instance for the given contract.
+/// This should be called in the `init_contract()` section to create any databases
+/// that the contract might need or use.
 ///
-/// ```
-///     type DbHandle = u32;
-///     db_init(db_name) -> DbHandle
-/// ```
+/// Returns a `DbHandle` which provides methods for reading and writing.
 pub fn db_init(contract_id: ContractId, db_name: &str) -> GenericResult<DbHandle> {
     unsafe {
         let mut len = 0;
@@ -51,11 +41,7 @@ pub fn db_init(contract_id: ContractId, db_name: &str) -> GenericResult<DbHandle
         let ret = db_init_(buf.as_ptr(), len as u32);
 
         if ret < 0 {
-            match ret {
-                CALLER_ACCESS_DENIED => return Err(ContractError::CallerAccessDenied),
-                DB_INIT_FAILED => return Err(ContractError::DbInitFailed),
-                _ => unimplemented!(),
-            }
+            return Err(ContractError::from(ret))
         }
 
         Ok(ret as u32)
@@ -73,11 +59,7 @@ pub fn db_lookup(contract_id: ContractId, db_name: &str) -> GenericResult<DbHand
         let ret = db_lookup_(buf.as_ptr(), len as u32);
 
         if ret < 0 {
-            match ret {
-                CALLER_ACCESS_DENIED => return Err(ContractError::CallerAccessDenied),
-                DB_LOOKUP_FAILED => return Err(ContractError::DbLookupFailed),
-                _ => unimplemented!(),
-            }
+            return Err(ContractError::from(ret))
         }
 
         Ok(ret as u32)
@@ -114,12 +96,14 @@ pub fn db_contains_key(db_handle: DbHandle, key: &[u8]) -> GenericResult<bool> {
 
     let ret = unsafe { db_contains_key_(buf.as_ptr(), len as u32) };
 
+    if ret < 0 {
+        return Err(ContractError::from(ret))
+    }
+
     match ret {
-        CALLER_ACCESS_DENIED => Err(ContractError::CallerAccessDenied),
-        DB_CONTAINS_KEY_FAILED => Err(ContractError::DbContainsKeyFailed),
         0 => Ok(false),
         1 => Ok(true),
-        _ => unimplemented!(),
+        _ => unreachable!(),
     }
 }
 
@@ -137,12 +121,13 @@ pub fn db_set(db_handle: DbHandle, key: &[u8], value: &[u8]) -> GenericResult<()
         len += key.to_vec().encode(&mut buf)?;
         len += value.to_vec().encode(&mut buf)?;
 
-        match db_set_(buf.as_ptr(), len as u32) {
-            CALLER_ACCESS_DENIED => Err(ContractError::CallerAccessDenied),
-            DB_SET_FAILED => Err(ContractError::DbSetFailed),
-            DB_SUCCESS => Ok(()),
-            _ => unreachable!(),
+        let ret = db_set_(buf.as_ptr(), len as u32);
+
+        if ret != crate::entrypoint::SUCCESS {
+            return Err(ContractError::from(ret))
         }
+
+        Ok(())
     }
 }
 
@@ -159,12 +144,13 @@ pub fn db_del(db_handle: DbHandle, key: &[u8]) -> GenericResult<()> {
         len += db_handle.encode(&mut buf)?;
         len += key.to_vec().encode(&mut buf)?;
 
-        match db_del_(buf.as_ptr(), len as u32) {
-            CALLER_ACCESS_DENIED => Err(ContractError::CallerAccessDenied),
-            DB_DEL_FAILED => Err(ContractError::DbDelFailed),
-            DB_SUCCESS => Ok(()),
-            _ => unreachable!(),
+        let ret = db_del_(buf.as_ptr(), len as u32);
+
+        if ret != crate::entrypoint::SUCCESS {
+            return Err(ContractError::from(ret))
         }
+
+        Ok(())
     }
 }
 
@@ -175,22 +161,23 @@ pub fn zkas_db_set(bincode: &[u8]) -> GenericResult<()> {
         let mut buf = vec![];
         len += bincode.to_vec().encode(&mut buf)?;
 
-        match zkas_db_set_(buf.as_ptr(), len as u32) {
-            CALLER_ACCESS_DENIED => Err(ContractError::CallerAccessDenied),
-            DB_SET_FAILED => Err(ContractError::DbSetFailed),
-            DB_SUCCESS => Ok(()),
-            _ => unreachable!(),
+        let ret = zkas_db_set_(buf.as_ptr(), len as u32);
+
+        if ret != crate::entrypoint::SUCCESS {
+            return Err(ContractError::from(ret))
         }
+
+        Ok(())
     }
 }
 
 extern "C" {
-    fn db_init_(ptr: *const u8, len: u32) -> i32;
-    fn db_lookup_(ptr: *const u8, len: u32) -> i32;
+    fn db_init_(ptr: *const u8, len: u32) -> i64;
+    fn db_lookup_(ptr: *const u8, len: u32) -> i64;
     fn db_get_(ptr: *const u8, len: u32) -> i64;
-    fn db_contains_key_(ptr: *const u8, len: u32) -> i32;
-    fn db_set_(ptr: *const u8, len: u32) -> i32;
-    fn db_del_(ptr: *const u8, len: u32) -> i32;
+    fn db_contains_key_(ptr: *const u8, len: u32) -> i64;
+    fn db_set_(ptr: *const u8, len: u32) -> i64;
+    fn db_del_(ptr: *const u8, len: u32) -> i64;
 
-    fn zkas_db_set_(ptr: *const u8, len: u32) -> i32;
+    fn zkas_db_set_(ptr: *const u8, len: u32) -> i64;
 }

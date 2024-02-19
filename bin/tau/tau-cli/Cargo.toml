@@ -9,22 +9,22 @@ homepage = "https://dark.fi"
 repository = "https://github.com/darkrenaissance/darkfi"
 
 [dependencies]
-libc = "0.2.150"
+libc = "0.2.152"
 darkfi = {path = "../../../", features = ["rpc"]}
 taud = {path = "../taud"}
 
 # Misc
 chrono = "0.4.31"
-colored = "2.0.4"
+colored = "2.1.0"
 log = "0.4.20"
 prettytable-rs = "0.10.0"
 simplelog = "0.12.1"
 smol = "1.3.0"
 term_grid = { git = "https://github.com/Dastan-glitch/rust-term-grid.git" }
 textwrap = "0.16.0"
-url = "2.4.1"
+url = "2.5.0"
 
 # Encoding and parsing
-clap = {version = "4.4.7", features = ["derive"]}
-serde = {version = "1.0.192", features = ["derive"]}
+clap = {version = "4.4.14", features = ["derive"]}
+serde = {version = "1.0.195", features = ["derive"]}
 tinyjson = "2.5.1"

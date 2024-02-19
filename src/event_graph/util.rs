@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -17,6 +17,8 @@
  */
 
 use std::time::UNIX_EPOCH;
+
+use crate::event_graph::{Event, GENESIS_CONTENTS, INITIAL_GENESIS, NULL_ID, N_EVENT_PARENTS};
 
 /// Seconds in a day
 pub(super) const DAY: i64 = 86400;
@@ -87,6 +89,29 @@ pub(super) fn seconds_until_next_rotation(next_rotation: u64) -> u64 {
         panic!("Next rotation timestamp is in the past");
     }
     next_rotation - now
+}
+
+/// Generate a deterministic genesis event corresponding to the DAG's configuration.
+pub(super) fn generate_genesis(days_rotation: u64) -> Event {
+    // Days rotation is u64 except zero
+    let timestamp = if days_rotation == 0 {
+        INITIAL_GENESIS
+    } else {
+        // First check how many days passed since initial genesis.
+        let days_passed = days_since(INITIAL_GENESIS);
+
+        // Calculate the number of days_rotation intervals since INITIAL_GENESIS
+        let rotations_since_genesis = days_passed / days_rotation;
+
+        // Calculate the timestamp of the most recent event
+        INITIAL_GENESIS + (rotations_since_genesis * days_rotation * DAY as u64)
+    };
+    Event {
+        timestamp,
+        content: GENESIS_CONTENTS.to_vec(),
+        parents: [NULL_ID; N_EVENT_PARENTS],
+        layer: 0,
+    }
 }
 
 #[cfg(test)]

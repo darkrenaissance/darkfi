@@ -15,11 +15,11 @@ There behavior is as follows:
 address configured in settings.
 
 **Outbound**: Starts a connect loop for every connect slot configured in
-settings. Establishes a connection using `Connector.connect()`: a method
+settings. Establishes a connection using `Connector.connect`: a method
 that takes an address returns a `Channel`.
 
 **Manual**: Uses a `Connector` to connect to a single address that is passed
-to `ManualSession::connect()`. Used to create an explicit connection to
+to `ManualSession::connect`. Used to create an explicit connection to
 a specified address.
 
 **SeedSync**: Creates a connection to the seed nodes specified in settings.

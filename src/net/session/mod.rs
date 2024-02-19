@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -95,17 +95,28 @@ pub trait Session: Sync {
             p2p.protocol_registry().attach(self.type_id(), channel.clone(), p2p.clone()).await;
 
         // Perform the handshake protocol
-        let protocol_version =
-            ProtocolVersion::new(channel.clone(), p2p.settings().clone(), p2p.hosts().clone())
-                .await;
+        let protocol_version = ProtocolVersion::new(channel.clone(), p2p.settings().clone()).await;
+        debug!(target: "net::session::register_channel()",
+        "Performing handshake protocols {}", channel.clone().address());
         let handshake_task =
             self.perform_handshake_protocols(protocol_version, channel.clone(), executor.clone());
 
         // Switch on the channel
-        channel.start(executor.clone());
+        channel.clone().start(executor.clone());
 
         // Wait for handshake to finish.
-        handshake_task.await?;
+        // If the handshake returns an error, remove this host from all hostlists.
+        match handshake_task.await {
+            Ok(()) => {
+                debug!(target: "net::session::register_channel()",
+                "Handshake successful {}", channel.clone().address());
+            }
+            Err(e) => {
+                debug!(target: "net::session::register_channel()",
+                "Handshake error {}. Removing {} from hostlists", e, channel.clone().address());
+                p2p.hosts().remove_host(channel.address()).await;
+            }
+        }
 
         // Now the channel is ready
         debug!(target: "net::session::register_channel()", "Session handshake complete");
@@ -133,8 +144,6 @@ pub trait Session: Sync {
     ) -> Result<()> {
         // Perform handshake
         protocol_version.run(executor.clone()).await?;
-
-        // Channel is now initialized
 
         // Add channel to p2p
         self.p2p().store(channel.clone()).await;

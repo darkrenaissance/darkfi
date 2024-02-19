@@ -42,6 +42,15 @@ $(WASM_BIN): $(WASM_SRC) $(PROOFS_BIN)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) build --target=$(WASM_TARGET) \
 		--release --package $(PKGNAME)
 	cp -f ../../../target/$(WASM_TARGET)/release/$@ $@
+	wasm-strip $@
+
+test-integration: all
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) test --target=$(RUST_TARGET) \
+		--release --package $(PKGNAME) \
+		--features=no-entrypoint,client \
+		--test integration
+
+test: test-integration
 
 clippy: all
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --target=$(WASM_TARGET) \
@@ -57,4 +66,4 @@ clean:
 		--release --package $(PKGNAME)
 	rm -f $(PROOFS_BIN) $(WASM_BIN)
 
-.PHONY: all clippy clean
+.PHONY: all test-integration test clippy clean

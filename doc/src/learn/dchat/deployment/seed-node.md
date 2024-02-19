@@ -1,77 +1,41 @@
 # The seed node
 
-Let's create an instance of dchat inside our main function and pass the
-p2p network into it.  Then we'll add `dchat::start()` to our async loop
-in the main function. 
+Let's try building `dchatd` at this point and running it. Assuming
+`dchatd` is located in the `example/dchat` directory, we build it from
+the `darkfi` root directory using the following command:
 
-```rust
-#[async_std::main]
-async fn main() -> Result<()> {
-    let settings: Result<Settings> = match std::env::args().nth(1) {
-        Some(id) => match id.as_str() {
-            "a" => alice(),
-            "b" => bob(),
-            _ => Err(MissingSpecifier.into()),
-        },
-        None => Err(MissingSpecifier.into()),
-    };
-
-    let p2p = net::P2p::new(settings?.into()).await;
-
-    let dchat = Dchat::new(p2p);
-
-    let nthreads = std::thread::available_parallelism().unwrap().get();
-    let (signal, shutdown) = async_channel::unbounded::<()>();
-
-    let ex = Arc::new(Executor::new());
-    let ex2 = ex.clone();
-
-    let (_, result) = Parallel::new()
-        .each(0..nthreads, |_| {
-            smol::future::block_on(ex.run(shutdown.recv()))
-        })
-        .finish(|| {
-            smol::future::block_on(async move {
-                dchat.start(ex2).await?;
-                drop(signal);
-                Ok(())
-            })
-        });
-
-    result
-}
+```bash
+cargo build --all-features --package dchatd
 ```
 
-Now try to run the program, don't forget to add a specifier `a` or `b`
-to define the type of node.
+On first run, it will create a config file from the defaults we specified
+earlier. Run it as follows:
 
-It should output the following error: 
+```bash
+./dchatd
+```
+It should output the following:
 
 ```
-Error: NetworkOperationFailed
+[WARN] [P2P] Failure contacting seed #0 [tcp://127.0.0.1:50515]: IO error: connection refused
+[WARN] [P2P] Seed #0 connection failed: IO error: connection refused
+[ERROR] [P2P] Network reseed failed: Failed to reach any seeds
 ```
 
-That's because there is no seed node online for our nodes to connect to. A
+That's because there is no seed node online for our node to connect to. A
 seed node is used when connecting to the network: it is a special kind
 of inbound node that gets connected to, sends over a list of addresses
 and disconnects again.  This behavior is defined in the `ProtocolSeed`.
 
-Everytime we run `p2p.start()` we attempt to connect to a seed using a
-`SeedSyncSession`.  If the `SeedSyncSession` fails, `p2p.start()` will fail,
-so without a seed node, our inbound and outbound nodes cannot establish
-a connection to the network. Let's remedy that.
+Everytime we start an `OutboundSession`, we attempt to connect to a seed
+using a `SeedSyncSession`.  If the `SeedSyncSession` fails we cannot
+establish any outbound connections. Let's remedy that.
 
-We have two options here. First, we could implement our own seed node.
-Alternatively, DarkFi maintains a master seed node called `lilith` that
-can act as the seed for many different protocols at the same time. For
-the purpose of this tutorial let's use `lilith`.
+`darkfi` provides a standard seed node called `lilith` that can act as
+the seed for many different protocols at the same time.
 
-What `lilith` does in the background is very simple. Just like any p2p
-daemon, a seed node defines its networks settings into a type called
-`Settings` and creates a new instance of the p2p network. It then runs
-`p2p::start()` and `p2p::run()`. The difference is in the settings: a seed
-node just specifies an inbound address which other nodes will connect to.
-
-Crucially, this inbound address must match the seed address we specified
-earlier in Alice and Bob's settings.
-
+Just like any p2p daemon, a seed node defines its networks settings
+from a config file, using the network type `Settings`. `lilith` allows
+for multiple networks to be configured in its config file. Crucially,
+each network must specify an `acccept_addr` which nodes on the network
+can connect to.

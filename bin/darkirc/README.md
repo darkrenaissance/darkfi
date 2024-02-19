@@ -1,7 +1,10 @@
 darkirc
 =======
 
-[Installation Guide](https://darkrenaissance.github.io/darkfi/misc/darkirc/darkirc.html)
+If you're trying to join the chat, then for now, use the older ircd,
+[Installation Guide](https://darkrenaissance.github.io/darkfi/misc/ircd/ircd.html).
+
+DarkIRC is still pending a few more upgrades before we switch over.
 
 ## Android build
 

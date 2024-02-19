@@ -1,0 +1,113 @@
+k = 13;
+field = "pallas";
+
+constant "Fee_V1" {
+    EcFixedPointShort VALUE_COMMIT_VALUE,
+    EcFixedPoint VALUE_COMMIT_RANDOM,
+    EcFixedPointBase NULLIFIER_K,
+}
+
+witness "Fee_V1" {
+    # Secret key used to derive input's nullifier
+    Base input_secret,
+    # Input coin's leaf position in the Merkle tree of coins
+    Uint32 input_leaf_pos,
+    # Merkle path to the coin
+    MerklePath input_path,
+    # Secret key used to derive public key for the tx signature
+    Base signature_secret,
+    # Value of the input coin
+    Base input_value,
+    # Random blinding factor for the input value commitment
+    Scalar input_value_blind,
+    # Input coin's spend hook
+    Base input_spend_hook,
+    # Data passed from the input to the invoked contract
+    Base input_user_data,
+    # Unique coin blind corresponding to the input coin
+    Base input_coin_blind,
+    # Blinding factor for the encrypted user_data
+    Base input_user_data_blind,
+    # Value of the output coin
+    Base output_value,
+    # Output coin's spend hook
+    Base output_spend_hook,
+    # Data passed from the output coin to the invoked contract
+    Base output_user_data,
+    # Random blinding factor for the output value commitment
+    Scalar output_value_blind,
+    # Unique coin blind corresponding to the output coin
+    Base output_coin_blind,
+    # Token ID
+    Base token,
+    # Random blinding factor for the token ID
+    Base token_blind,
+
+}
+
+circuit "Fee_V1" {
+    # Derive the input coin
+    pub = ec_mul_base(input_secret, NULLIFIER_K);
+    pub_x = ec_get_x(pub);
+    pub_y = ec_get_y(pub);
+    input_coin = poseidon_hash(
+        pub_x,
+        pub_y,
+        input_value,
+        token,
+        input_spend_hook,
+        input_user_data,
+        input_coin_blind,
+    );
+
+    nullifier = poseidon_hash(input_secret, input_coin);
+    constrain_instance(nullifier);
+
+    # Pedersen commitment for the input coin value
+    input_vcv = ec_mul_short(input_value, VALUE_COMMIT_VALUE);
+    input_vcr = ec_mul(input_value_blind, VALUE_COMMIT_RANDOM);
+    input_value_commit = ec_add(input_vcv, input_vcr);
+    constrain_instance(ec_get_x(input_value_commit));
+    constrain_instance(ec_get_y(input_value_commit));
+
+    # Commitment for the token ID
+    token_commit = poseidon_hash(token, token_blind);
+    constrain_instance(token_commit);
+
+    # Merkle root
+    root = merkle_root(input_leaf_pos, input_path, input_coin);
+    constrain_instance(root);
+
+    # Export user_data
+    user_data_enc = poseidon_hash(input_user_data, input_user_data_blind);
+    constrain_instance(user_data_enc);
+
+    # Reveal spend_hook
+    ZERO = witness_base(0);
+    constrain_equal_base(input_spend_hook, ZERO);
+
+    # Derive a public key for the signature and
+    # constrain its coordinates
+    signature_public = ec_mul_base(signature_secret, NULLIFIER_K);
+    constrain_instance(ec_get_x(signature_public));
+    constrain_instance(ec_get_y(signature_public));
+
+    # Derive output coin
+    output_coin = poseidon_hash(
+        pub_x,
+        pub_y,
+        output_value,
+        token,
+        output_spend_hook,
+        output_user_data,
+        output_coin_blind,
+    );
+    constrain_instance(output_coin);
+
+    # Pedersen commitment for the output coin value
+    output_vcv = ec_mul_short(output_value, VALUE_COMMIT_VALUE);
+    output_vcr = ec_mul(output_value_blind, VALUE_COMMIT_RANDOM);
+    output_value_commit = ec_add(output_vcv, output_vcr);
+    constrain_instance(ec_get_x(output_value_commit));
+    constrain_instance(ec_get_y(output_value_commit));
+}

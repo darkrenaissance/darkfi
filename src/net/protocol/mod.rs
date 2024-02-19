@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -57,7 +57,7 @@ pub use protocol_ping::ProtocolPing;
 pub mod protocol_address;
 pub use protocol_address::ProtocolAddress;
 
-/// Seed servere protocol. Seed server is used when connecting to the network
+/// Seed server protocol. Seed server is used when connecting to the network
 /// for the first time. Returns a list of peers that nodes can connect to.
 ///
 /// To start the seed protocol, we create a subscription to the address

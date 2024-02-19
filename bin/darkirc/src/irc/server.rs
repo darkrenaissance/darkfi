@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -18,12 +18,15 @@
 
 use std::{collections::HashMap, fs::File, io::BufReader, path::PathBuf, sync::Arc};
 
-use async_rustls::{rustls, TlsAcceptor};
 use darkfi::{
     event_graph::Event,
     system::{StoppableTask, StoppableTaskPtr, Subscription},
     util::path::expand_path,
     Error, Result,
+};
+use futures_rustls::{
+    rustls::{self, pki_types::PrivateKeyDer},
+    TlsAcceptor,
 };
 use log::{debug, error, info};
 use smol::{
@@ -97,19 +100,18 @@ impl IrcServer {
                 // openssl x509 -req -in example.com.csr -signkey example.com.key -out example.com.crt
                 let f = File::open(expand_path(tls_secret.as_ref().unwrap())?)?;
                 let mut reader = BufReader::new(f);
-                let secret =
-                    &rustls_pemfile::pkcs8_private_keys(&mut reader).next().unwrap().unwrap();
-                let secret = rustls::PrivateKey(secret.secret_pkcs8_der().to_vec());
+                let secret = PrivateKeyDer::Pkcs8(
+                    rustls_pemfile::pkcs8_private_keys(&mut reader).next().unwrap().unwrap(),
+                );
 
                 let f = File::open(expand_path(tls_cert.as_ref().unwrap())?)?;
                 let mut reader = BufReader::new(f);
-                let cert = &rustls_pemfile::certs(&mut reader).next().unwrap().unwrap();
-                let cert = rustls::Certificate(cert.to_vec());
+                let cert = rustls_pemfile::certs(&mut reader).next().unwrap().unwrap();
 
                 let config = rustls::ServerConfig::builder()
-                    .with_safe_defaults()
                     .with_no_client_auth()
-                    .with_single_cert(vec![cert], secret)?;
+                    .with_single_cert(vec![cert], secret)
+                    .unwrap();
 
                 let acceptor = TlsAcceptor::from(Arc::new(config));
                 Some(acceptor)

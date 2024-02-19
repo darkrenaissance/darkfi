@@ -1,6 +1,6 @@
 # This file is part of DarkFi (https://dark.fi)
 #
-# Copyright (C) 2020-2023 Dyne.org foundation
+# Copyright (C) 2020-2024 Dyne.org foundation
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -104,54 +104,57 @@ class View():
         self.refresh = False
 
     #-----------------------------------------------------------------
-    # Render get_info()
+    # Render dnet.get_info() RPC call
     #-----------------------------------------------------------------
     def draw_info(self, node_name, info):
-        if 'spawns' in info and info['spawns']:
+        #logging.debug('draw_info() [START]')
+        if 'spawns' in info:
+            #logging.debug(f'drawing lilith name={node_name} info={info}')
             self.draw_lilith(node_name, info)
-            return
 
-        node = Node(node_name, "node")
-        node.set_txt(False)
-        self.listw.append(node)
-        
-        if 'outbound' in info and info['outbound']:
-            session = Session(node_name, "outbound")
-            session.set_txt()
-            self.listw.append(session)
-            for i, addr in info['outbound'].items():
-                slot = Slot(node_name, "outbound-slot")
-                slot.set_txt(i, addr)
-                self.listw.append(slot)
-
-        if 'inbound' in info and info['inbound']:
-            if any(info['inbound'].values()):
-                session = Session(node_name, "inbound")
+        else:
+            #logging.debug(f'drawing node name={node_name} info={info}')
+            node = Node(node_name, "node")
+            node.set_txt(False)
+            self.listw.append(node)
+            
+            if 'outbound' in info and info['outbound']:
+                session = Session(node_name, "outbound")
                 session.set_txt()
                 self.listw.append(session)
-                for i, addr in info['inbound'].items():
-                    if bool(addr):
-                        slot = Slot(node_name, "inbound-slot")
-                        slot.set_txt(i, addr)
-                        self.listw.append(slot)
+                for i, addr in info['outbound'].items():
+                    slot = Slot(node_name, "outbound-slot")
+                    slot.set_txt(i, addr)
+                    self.listw.append(slot)
 
-        if 'manual' in info and info['manual']:
-            session = Session(node_name, "manual")
-            session.set_txt()
-            self.listw.append(session)
-            for i, addr in info['manual'].items():
-                slot = Slot(node_name, "manual-slot")
-                slot.set_txt(i, addr)
-                self.listw.append(slot)
+            if 'inbound' in info and info['inbound']:
+                if any(info['inbound'].values()):
+                    session = Session(node_name, "inbound")
+                    session.set_txt()
+                    self.listw.append(session)
+                    for i, addr in info['inbound'].items():
+                        if bool(addr):
+                            slot = Slot(node_name, "inbound-slot")
+                            slot.set_txt(i, addr)
+                            self.listw.append(slot)
 
-        if 'seed' in info and info['seed']:
-            session = Session(node_name, "seed")
-            session.set_txt()
-            self.listw.append(session)
-            for i, info in info['seed'].items():
-                slot = Slot(node_name, "seed-slot")
-                slot.set_txt(i, addr)
-                self.listw.append(slot)
+            if 'manual' in info and info['manual']:
+                session = Session(node_name, "manual")
+                session.set_txt()
+                self.listw.append(session)
+                for i, addr in info['manual'].items():
+                    slot = Slot(node_name, "manual-slot")
+                    slot.set_txt(i, addr)
+                    self.listw.append(slot)
+
+            if 'seed' in info and info['seed']:
+                session = Session(node_name, "seed")
+                session.set_txt()
+                self.listw.append(session)
+                for i, info in info['seed'].items():
+                    slot = Slot(node_name, "seed-slot")
+                    slot.set_txt(i, addr)
+                    self.listw.append(slot)
 
     def draw_lilith(self, node_name, info):
         node = Node(node_name, "lilith-node")
@@ -168,7 +171,8 @@ class View():
         self.listw.append(node)
 
     #-----------------------------------------------------------------
-    # Render subscribe_events() (left menu)
+    # Render dnet.subscribe_events() RPC call 
+    # Left hand panel only
     #-----------------------------------------------------------------
     def fill_left_box(self):
         live_inbound = []
@@ -184,7 +188,65 @@ class View():
                     self.listw[index] = slot
 
     #-----------------------------------------------------------------
-    # Render subscribe_events() (right menu)
+    # Render lilith.spawns() RPC call 
+    # Right hand panel only
+    #-----------------------------------------------------------------
+    def fill_lilith_right_box(self):
+        self.pile.contents.clear()
+        focus_w = self.list.get_focus()
+        if focus_w[0] is None:
+            return
+        session = focus_w[0].session
+        if session == "spawn-slot":
+            node_name = focus_w[0].node_name
+            spawn_name = focus_w[0].id
+            lilith = self.model.liliths.get(node_name)
+            spawns = lilith.get('spawns')
+            info = spawns.get(spawn_name)
+
+            if info['urls']:
+                urls = info['urls']
+                self.pile.contents.append((urwid.Text(
+                    f"Accept addrs:"),
+                    self.pile.options()))
+                for url in urls:
+                    self.pile.contents.append((urwid.Text(
+                        f"  {url}"),
+                        self.pile.options()))
+
+            if info['whitelist']:
+                whitelist = info['whitelist']
+                self.pile.contents.append((urwid.Text(
+                    f"Whitelist:"),
+                    self.pile.options()))
+                for host in whitelist:
+                    self.pile.contents.append((urwid.Text(
+                        f"  {host}"),
+                        self.pile.options()))
+
+            if info['greylist']:
+                greylist = info['greylist']
+                self.pile.contents.append((urwid.Text(
+                    f"Greylist:"),
+                    self.pile.options()))
+                for host in greylist:
+                    self.pile.contents.append((urwid.Text(
+                        f"  {host}"),
+                        self.pile.options()))
+
+            if info['anchorlist']:
+                anchorlist = info['anchorlist']
+                self.pile.contents.append((urwid.Text(
+                    f"Anchorlist:"),
+                    self.pile.options()))
+                for host in anchorlist:
+                    self.pile.contents.append((urwid.Text(
+                        f"  {host}"),
+                        self.pile.options()))
+
+    #-----------------------------------------------------------------
+    # Render dnet.subscribe_events() RPC call
+    # Right hand menu only
     #-----------------------------------------------------------------
     def fill_right_box(self):
         self.pile.contents.clear()
@@ -235,17 +297,40 @@ class View():
                         f"  {url}"),
                         self.pile.options()))
 
-            if info['hosts']:
-                hosts = info['hosts']
+            if info['whitelist']:
+                whitelist = info['whitelist']
                 self.pile.contents.append((urwid.Text(
-                    f"Hosts:"),
+                    f"Whitelist:"),
                     self.pile.options()))
-                for host in hosts:
+                for host in whitelist:
                     self.pile.contents.append((urwid.Text(
                         f"  {host}"),
                         self.pile.options()))
 
-    # Sort nodes into lists.
+            if info['greylist']:
+                greylist = info['greylist']
+                self.pile.contents.append((urwid.Text(
+                    f"Greylist:"),
+                    self.pile.options()))
+                for host in greylist:
+                    self.pile.contents.append((urwid.Text(
+                        f"  {host}"),
+                        self.pile.options()))
+
+            if info['anchorlist']:
+                anchorlist = info['anchorlist']
+                self.pile.contents.append((urwid.Text(
+                    f"Anchorlist:"),
+                    self.pile.options()))
+                for host in anchorlist:
+                    self.pile.contents.append((urwid.Text(
+                        f"  {host}"),
+                        self.pile.options()))
+
+    #-----------------------------------------------------------------
+    # Sort through node info, checking whether we are already 
+    # tracking this node or if the node's state has changed.
+    #-----------------------------------------------------------------
     def sort(self, nodes):
         for name, info in nodes:
             if bool(info) and name not in self.live_nodes:
@@ -259,8 +344,11 @@ class View():
                 logging.debug("Refresh: online node offline.")
                 self.refresh = True
 
-    # Display nodes according to list.
-    async def draw(self, nodes):
+    #-----------------------------------------------------------------
+    # Checks whether we are already displaying this node, and draw
+    # it if not. 
+    #-----------------------------------------------------------------
+    async def display(self, nodes):
         for name, info in nodes:
             if name in self.live_nodes and name not in self.known_nodes:
                 self.draw_info(name, info)
@@ -277,9 +365,10 @@ class View():
                 self.refresh = False
                 self.listw.clear()
                 logging.debug("Refresh complete.")
-
+    #-----------------------------------------------------------------
     # Handle events.
-    def events(self, nodes):
+    #-----------------------------------------------------------------
+    def draw_events(self, nodes):
         for name, info in nodes:
             if bool(info) and name in self.known_nodes:
                 self.fill_left_box()
@@ -324,6 +413,8 @@ class View():
             liliths = self.model.liliths.items()
             evloop.call_soon(loop.draw_screen)
 
+            # We first ensure that we are keeping track
+            # of all the displayed widgets.
             for index, item in enumerate(self.listw):
                 # Keep track of known nodes.
                 if item.node_name not in self.known_nodes:
@@ -341,7 +432,8 @@ class View():
             self.sort(nodes)
             self.sort(liliths)
             
-            await self.draw(nodes)
-            await self.draw(liliths)
+            await self.display(nodes)
+            await self.display(liliths)
 
-            self.events(nodes)
+            self.fill_lilith_right_box()
+            self.draw_events(nodes)

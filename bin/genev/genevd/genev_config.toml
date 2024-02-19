@@ -4,13 +4,16 @@
 ## Current display name
 #nickname="NICKNAME"
 
+## Sets Datastore Path
+#datastore = "~/.local/darkfi/genev_db"
+
 ## net settings
 [net]
 ## P2P accept addresses
 #inbound = ["tcp://127.0.0.1:28881"]
 
 ## Connection slots
-outbound_connections=8
+outbound_connections = 8
 
 ## P2P external addresses
 #external_addr = ["tls://127.0.0.1:28881"]
@@ -19,7 +22,7 @@ outbound_connections=8
 #peers = ["tls://127.0.0.1:28881"]
 
 ## Seed nodes to connect to
-seeds=["tls://lilith0.dark.fi:28881", "tls://lilith1.dark.fi:28881"]
+seeds = ["tls://lilith0.dark.fi:28881", "tls://lilith1.dark.fi:28881"]
 
 # Prefered transports for outbound connections
 #transports = ["tls", "tcp"]
@@ -30,5 +33,3 @@ seeds=["tls://lilith0.dark.fi:28881", "tls://lilith1.dark.fi:28881"]
 #connect_timeout_seconds=10
 #channel_handshake_seconds=4
 #channel_heartbeat_seconds=10
-
-

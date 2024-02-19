@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -18,7 +18,7 @@
 
 use std::{sync::Arc, time::Duration};
 
-use smol::{Executor, Timer};
+use smol::{future::Future, Executor, Timer};
 
 /// Condition variable which allows a task to block until woken up
 pub mod condvar;
@@ -57,4 +57,22 @@ pub async fn sleep_forever() {
 /// Sleep for any number of milliseconds.
 pub async fn msleep(millis: u64) {
     Timer::after(Duration::from_millis(millis)).await;
+}
+
+/// Run a task until it has fully completed, irrespective of whether the parent task still exists.
+pub async fn run_until_completion<'a, R: Send + 'a, F: Future<Output = R> + Send + 'a>(
+    func: F,
+    executor: Arc<Executor<'a>>,
+) -> R {
+    let (sender, recv_queue) = smol::channel::bounded::<R>(1);
+    executor
+        .spawn(async move {
+            let result = func.await;
+            // We ignore this result: an error would mean the parent task has been cancelled,
+            // which is valid behavior.
+            let _ = sender.send(result).await;
+        })
+        .detach();
+    // This should never panic because it would mean the detached task has not completed.
+    recv_queue.recv().await.expect("Run until completion task failed")
 }

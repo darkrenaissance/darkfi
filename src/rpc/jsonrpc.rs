@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -374,6 +374,12 @@ impl TryFrom<&JsonValue> for JsonResponse {
         if !map.contains_key("id") || !map["id"].is_number() {
             return Err(RpcError::InvalidJson(
                 "Response does not contain valid \"id\" field".to_string(),
+            ))
+        }
+
+        if !map.contains_key("result") {
+            return Err(RpcError::InvalidJson(
+                "Response does not contain valid \"result\" field".to_string(),
             ))
         }
 

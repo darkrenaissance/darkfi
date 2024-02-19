@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -23,222 +23,9 @@ use darkfi_serial::async_trait;
 
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 
-use crate::Result;
-
 const SECS_IN_DAY: u64 = 86400;
 const MIN_IN_HOUR: u64 = 60;
 const SECS_IN_HOUR: u64 = 3600;
-
-/// Helper structure providing time related calculations.
-/// This struct is optimized for performance. The developer is responsible
-/// for ensuring `slot_time` and `epoch_length` are greater than 0.
-/// Values of 0 for these fields are incoherent and unsafe in asynchronous
-/// context.
-/// [`TimeKeeperSafe`] should be used if safety is more important than
-/// performance.
-#[derive(Clone)]
-pub struct TimeKeeper {
-    /// Genesis block creation timestamp
-    pub genesis_ts: Timestamp,
-    /// Currently configured epoch duration
-    pub epoch_length: u64,
-    /// Currently configured slot duration
-    pub slot_time: u64,
-    /// Slot number runtime can access to verify against
-    pub verifying_slot: u64,
-}
-
-impl TimeKeeper {
-    pub fn new(
-        genesis_ts: Timestamp,
-        epoch_length: u64,
-        slot_time: u64,
-        verifying_slot: u64,
-    ) -> Self {
-        Self { genesis_ts, epoch_length, slot_time, verifying_slot }
-    }
-
-    /// Generate a TimeKeeper for current slot
-    pub fn current(&self) -> Self {
-        Self {
-            genesis_ts: self.genesis_ts,
-            epoch_length: self.epoch_length,
-            slot_time: self.slot_time,
-            verifying_slot: self.current_slot(),
-        }
-    }
-
-    /// Calculates current epoch.
-    pub fn current_epoch(&self) -> u64 {
-        self.slot_epoch(self.current_slot())
-    }
-
-    /// Calculates the epoch of the provided slot.
-    /// Only slot 0 exists in epoch 0, everything
-    /// else is incremented by one. This practically
-    /// means that epoch 0 has 1 slot(the genesis slot),
-    /// epoch 1 has one less slot(the genesis slot) and
-    /// rest epoch have the normal amount of slots.
-    pub fn slot_epoch(&self, slot: u64) -> u64 {
-        if slot == 0 {
-            return 0
-        }
-        (slot / self.epoch_length) + 1
-    }
-
-    /// Calculates current slot, based on elapsed time from the genesis block.
-    // TODO: Since we are doing a PoW->PoS transition, this should use the last
-    // PoW block timestamp as genesis, and add POW_CUTTOF slots on top.
-    pub fn current_slot(&self) -> u64 {
-        self.genesis_ts.elapsed() / self.slot_time
-    }
-
-    /// Calculates the relative number of the provided slot.
-    pub fn relative_slot(&self, slot: u64) -> u64 {
-        slot % self.epoch_length
-    }
-
-    /// Calculates the epoch of the verifying slot.
-    pub fn verifying_slot_epoch(&self) -> u64 {
-        self.slot_epoch(self.verifying_slot)
-    }
-
-    /// Calculates seconds until next Nth slot starting time.
-    pub fn next_n_slot_start(&self, n: u64) -> u64 {
-        assert!(n > 0);
-        let next_slot_start = self.genesis_ts.0 + (self.current_slot() + n) * self.slot_time;
-        next_slot_start - Timestamp::current_time().0
-    }
-
-    /// Calculate slots until next Nth epoch.
-    /// Epoch duration is configured using the EPOCH_LENGTH value.
-    pub fn slots_to_next_n_epoch(&self, n: u64) -> u64 {
-        assert!(n > 0);
-        let slots_till_next_epoch = self.epoch_length - self.relative_slot(self.current_slot());
-        ((n - 1) * self.epoch_length) + slots_till_next_epoch
-    }
-
-    /// Calculates seconds until next Nth epoch starting time.
-    pub fn next_n_epoch_start(&self, n: u64) -> u64 {
-        self.next_n_slot_start(self.slots_to_next_n_epoch(n))
-    }
-
-    /// Calculates current blockchain timestamp.
-    /// Blockchain timestamp is the time elapsed since
-    /// Genesis timestamp, based on slot time ticking,
-    /// therefore representing the starting timestamp of
-    /// current slot.
-    pub fn blockchain_timestamp(&self) -> u64 {
-        self.genesis_ts.0 + self.current_slot() * self.slot_time
-    }
-
-    /// Calculates current system timestamp.
-    pub fn system_timestamp(&self) -> Result<u64> {
-        Ok(UNIX_EPOCH.elapsed()?.as_secs())
-    }
-}
-/// Wrapper struct that allows only coherent and safe values for a [`TimeKeeper`].
-#[derive(Clone)]
-pub struct TimeKeeperSafe {
-    timekeeper: TimeKeeper,
-}
-
-impl TimeKeeperSafe {
-    pub fn new(
-        genesis_ts: Timestamp,
-        epoch_length: u64,
-        slot_time: u64,
-        verifying_slot: u64,
-    ) -> Self {
-        // TimeKeeper uses epoch_length and slot_time as divisors so they should
-        // never be zero in this struct.
-        if epoch_length == 0 {
-            panic!("Epoch length cannot be zero");
-        }
-        if slot_time == 0 {
-            panic!("Slot time cannot be zero");
-        }
-        Self { timekeeper: TimeKeeper { genesis_ts, epoch_length, slot_time, verifying_slot } }
-    }
-    /// Generate a TimeKeeperSafe for current slot
-    pub fn current(&self) -> TimeKeeperSafe {
-        TimeKeeperSafe::new(
-            self.timekeeper.genesis_ts,
-            self.timekeeper.epoch_length,
-            self.timekeeper.slot_time,
-            self.timekeeper.verifying_slot,
-        )
-    }
-
-    /// Calculates current epoch.
-    pub fn current_epoch(&self) -> u64 {
-        self.timekeeper.current_epoch()
-    }
-
-    /// Calculates the epoch of the provided slot.
-    /// Only slot 0 exists in epoch 0, everything
-    /// else is incremented by one. This practically
-    /// means that epoch 0 has 1 slot(the genesis slot),
-    /// epoch 1 has one less slot(the genesis slot) and
-    /// rest epoch have the normal amount of slots.
-    pub fn slot_epoch(&self, slot: u64) -> u64 {
-        if self.timekeeper.epoch_length == 0 {
-            panic!("Epoch length cannot be zero");
-        }
-        self.timekeeper.slot_epoch(slot)
-    }
-
-    /// Calculates current slot, based on elapsed time from the genesis block.
-    pub fn current_slot(&self) -> u64 {
-        if self.timekeeper.slot_time == 0 {
-            panic!("Slot time cannot be zero");
-        }
-        self.timekeeper.current_slot()
-    }
-
-    /// Calculates the relative number of the provided slot.
-    pub fn relative_slot(&self, slot: u64) -> u64 {
-        if self.timekeeper.epoch_length == 0 {
-            panic!("Epoch length cannot be zero");
-        }
-        self.timekeeper.relative_slot(slot)
-    }
-
-    /// Calculates the epoch of the verifying slot.
-    pub fn verifying_slot_epoch(&self) -> u64 {
-        self.timekeeper.verifying_slot_epoch()
-    }
-
-    /// Calculates seconds until next Nth slot starting time.
-    pub fn next_n_slot_start(&self, n: u64) -> u64 {
-        self.timekeeper.next_n_slot_start(n)
-    }
-
-    /// Calculate slots until next Nth epoch.
-    /// Epoch duration is configured using the EPOCH_LENGTH value.
-    pub fn slots_to_next_n_epoch(&self, n: u64) -> u64 {
-        self.timekeeper.slots_to_next_n_epoch(n)
-    }
-
-    /// Calculates seconds until next Nth epoch starting time.
-    pub fn next_n_epoch_start(&self, n: u64) -> u64 {
-        self.timekeeper.next_n_epoch_start(n)
-    }
-
-    /// Calculates current blockchain timestamp.
-    /// Blockchain timestamp is the time elapsed since
-    /// Genesis timestamp, based on slot time ticking,
-    /// therefore representing the starting timestamp of
-    /// current slot.
-    pub fn blockchain_timestamp(&self) -> u64 {
-        self.timekeeper.blockchain_timestamp()
-    }
-
-    /// Calculates current system timestamp.
-    pub fn system_timestamp(&self) -> Result<u64> {
-        self.timekeeper.system_timestamp()
-    }
-}
 
 /// Wrapper struct to represent system timestamps.
 #[derive(Hash, Clone, Copy, Debug, SerialEncodable, SerialDecodable, PartialEq, PartialOrd, Eq)]
@@ -251,13 +38,29 @@ impl Timestamp {
     }
 
     /// Calculates elapsed time of a `Timestamp`.
+    /// TODO: Rework this function to return the result of checked_sub and make calling code
+    /// check whether it is Some/None
     pub fn elapsed(&self) -> u64 {
-        UNIX_EPOCH.elapsed().unwrap().as_secs() - self.0
+        let now = UNIX_EPOCH.elapsed().unwrap().as_secs();
+        if let Some(elapsed) = now.checked_sub(self.0) {
+            elapsed
+        } else {
+            panic!(
+                "Cannot subtract Timestamp value {} from current time {}. (Integer underflow)",
+                self.0, now
+            );
+        }
     }
 
     /// Increment a 'Timestamp'.
+    /// TODO: Rework this function to return the result of checked_add and make calling code
+    /// check whether it is Some/None
     pub fn add(&mut self, inc: u64) {
-        self.0 += inc;
+        if let Some(sum) = self.0.checked_add(inc) {
+            self.0 = sum
+        } else {
+            panic!("Cannot add {} to Timestamp {}. (Integer overflow)", self.0, inc);
+        }
     }
 }
 
@@ -398,45 +201,22 @@ pub fn timestamp_to_date(timestamp: u64, format: DateFormat) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{TimeKeeper, TimeKeeperSafe, Timestamp};
+    use super::Timestamp;
 
     #[test]
     #[should_panic]
-    fn panic_on_unsafe_epoch_length() {
-        // Ensure panic when epoch_length is 0.
-        TimeKeeperSafe::new(Timestamp::current_time(), 0, 1, 1);
+    fn panic_on_add_overflow() {
+        // Panic when the Timestamp func add() overflows u64.
+        let mut ts = Timestamp::current_time();
+        ts.add(u64::MAX);
     }
 
     #[test]
     #[should_panic]
-    fn panic_on_unsafe_slot_time() {
-        TimeKeeperSafe::new(Timestamp::current_time(), 1, 0, 1);
-    }
-
-    #[test]
-    #[should_panic]
-    fn panic_on_unsafe_call_to_method_current_slot() {
-        // Test against manual initialization of unsafe TimeKeeper fields.
-        let tk_unsafe =
-            TimeKeeperSafe { timekeeper: TimeKeeper::new(Timestamp::current_time(), 0, 0, 0) };
-        tk_unsafe.current_slot();
-    }
-
-    #[test]
-    #[should_panic]
-    fn panic_on_unsafe_call_to_method_relative_slot() {
-        // Test against manual initialization of unsafe TimeKeeper fields.
-        let tk_unsafe =
-            TimeKeeperSafe { timekeeper: TimeKeeper::new(Timestamp::current_time(), 0, 0, 0) };
-        tk_unsafe.relative_slot(0);
-    }
-
-    #[test]
-    #[should_panic]
-    fn panic_on_unsafe_call_to_method_slot_epoch() {
-        // Test against manual initialization of unsafe TimeKeeper fields.
-        let tk_unsafe =
-            TimeKeeperSafe { timekeeper: TimeKeeper::new(Timestamp::current_time(), 0, 0, 0) };
-        tk_unsafe.slot_epoch(0);
+    fn panic_on_elapsed_underflow() {
+        // Panic when the Timestamp function elapsed() underflows u64.
+        let mut ts = Timestamp::current_time();
+        ts.add(10_000);
+        ts.elapsed();
     }
 }
