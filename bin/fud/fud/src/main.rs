@@ -110,14 +110,14 @@ pub struct Fud {
 #[async_trait]
 impl RequestHandler for Fud {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
-        match req.method.as_str() {
-            "ping" => return self.pong(req.id, req.params).await,
+        return match req.method.as_str() {
+            "ping" => self.pong(req.id, req.params).await,
 
-            "put" => return self.put(req.id, req.params).await,
-            "get" => return self.get(req.id, req.params).await,
+            "put" => self.put(req.id, req.params).await,
+            "get" => self.get(req.id, req.params).await,
 
-            "dnet_switch" => return self.dnet_switch(req.id, req.params).await,
-            _ => return JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
+            "dnet_switch" => self.dnet_switch(req.id, req.params).await,
+            _ => JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         }
     }
 

@@ -126,14 +126,14 @@ impl Dhtd {
         // Check if key is local or shoud query network
         let local = exists.unwrap();
         if local {
-            match self.dht.read().await.get(key_hash.clone()) {
+            return match self.dht.read().await.get(key_hash.clone()) {
                 Some(value) => {
                     let string = std::str::from_utf8(&value).unwrap().to_string();
-                    return JsonResponse::new(json!((key, string)), id).into()
+                    JsonResponse::new(json!((key, string)), id).into()
                 }
                 None => {
                     info!("Did not find key: {}", key);
-                    return server_error(RpcError::UnknownKey, id).into()
+                    server_error(RpcError::UnknownKey, id).into()
                 }
             }
         }
@@ -256,13 +256,13 @@ impl RequestHandler for Dhtd {
 
         let params = req.params.as_array().unwrap();
 
-        match req.method.as_str() {
-            Some("get") => return self.get(req.id, params).await,
-            Some("insert") => return self.insert(req.id, params).await,
-            Some("remove") => return self.remove(req.id, params).await,
-            Some("map") => return self.map(req.id, params).await,
-            Some("lookup") => return self.lookup(req.id, params).await,
-            Some(_) | None => return JsonError::new(MethodNotFound, None, req.id).into(),
+        return match req.method.as_str() {
+            Some("get") => self.get(req.id, params).await,
+            Some("insert") => self.insert(req.id, params).await,
+            Some("remove") => self.remove(req.id, params).await,
+            Some("map") => self.map(req.id, params).await,
+            Some("lookup") => self.lookup(req.id, params).await,
+            Some(_) | None => JsonError::new(MethodNotFound, None, req.id).into(),
         }
     }
 }
