@@ -1880,7 +1880,6 @@ dependencies = [
  "darkfi-derive",
  "darkfi-sdk",
  "darkfi-serial",
- "dashu",
  "easy-parallel",
  "ed25519-compact",
  "futures",
@@ -1927,11 +1926,9 @@ name = "darkfi-contract-test-harness"
 version = "0.4.1"
 dependencies = [
  "blake3 1.5.0",
- "bs58",
  "darkfi",
  "darkfi-sdk",
  "darkfi-serial",
- "darkfi_consensus_contract",
  "darkfi_dao_contract",
  "darkfi_deployooor_contract",
  "darkfi_money_contract",
@@ -2033,28 +2030,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "darkfi_consensus_contract"
-version = "0.4.1"
-dependencies = [
- "blake3 1.5.0",
- "bs58",
- "chacha20poly1305",
- "darkfi",
- "darkfi-contract-test-harness",
- "darkfi-sdk",
- "darkfi-serial",
- "darkfi_money_contract",
- "getrandom 0.2.12",
- "halo2_proofs",
- "log",
- "rand 0.8.5",
- "simplelog",
- "sled",
- "smol",
- "thiserror",
-]
-
-[[package]]
 name = "darkfi_dao_contract"
 version = "0.4.1"
 dependencies = [
@@ -2105,6 +2080,7 @@ dependencies = [
  "darkfi-serial",
  "getrandom 0.2.12",
  "halo2_proofs",
+ "lazy_static",
  "log",
  "rand 0.8.5",
  "simplelog",
@@ -2114,17 +2090,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "darkfid2"
+name = "darkfid"
 version = "0.4.1"
 dependencies = [
  "async-trait",
  "blake3 1.5.0",
- "bs58",
  "darkfi",
  "darkfi-contract-test-harness",
  "darkfi-sdk",
  "darkfi-serial",
- "darkfi_consensus_contract",
  "darkfi_money_contract",
  "easy-parallel",
  "log",
@@ -2159,6 +2133,7 @@ dependencies = [
  "futures-rustls",
  "libc",
  "log",
+ "openssl",
  "rand 0.8.5",
  "rustls-pemfile",
  "serde",
@@ -2292,78 +2267,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dashu"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b669b1473cc6b33aba72ab3ddfe1055ff8fc28accd85130c412c2cd922a7c4e"
-dependencies = [
- "dashu-base",
- "dashu-float",
- "dashu-int",
- "dashu-macros",
- "dashu-ratio",
-]
-
-[[package]]
-name = "dashu-base"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e183fc153511989674ede304b5592c74683393ca09cf20391898c28d6ba04264"
-
-[[package]]
-name = "dashu-float"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a672ddc5e64033c8279692d973a89831eb3c3f0ebb1def47435aee0401b6269d"
-dependencies = [
- "dashu-base",
- "dashu-int",
- "num-modular",
- "num-order",
- "static_assertions",
-]
-
-[[package]]
-name = "dashu-int"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc257a884b3e8c9a1a577ff7226dcb4d6bda0ff96dfa76975e2c9d7205e3b8ea"
-dependencies = [
- "cfg-if 1.0.0",
- "dashu-base",
- "num-modular",
- "num-order",
- "static_assertions",
-]
-
-[[package]]
-name = "dashu-macros"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e496c319e615b86b21d6b0ea9e2f96a4f5fb2eb4178293b04a51ffc30a6c3f54"
-dependencies = [
- "dashu-base",
- "dashu-float",
- "dashu-int",
- "dashu-ratio",
- "proc-macro2",
- "quote",
-]
-
-[[package]]
-name = "dashu-ratio"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f0f73f0ad6cbc94f52306455603e307b065af83bc61101968d53b6870127a05"
-dependencies = [
- "dashu-base",
- "dashu-float",
- "dashu-int",
- "num-modular",
- "num-order",
-]
-
-[[package]]
 name = "dasp_sample"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2377,7 +2280,7 @@ checksum = "7e962a19be5cfc3f3bf6dd8f61eb50107f356ad6270fbb3ed41476571db78be5"
 
 [[package]]
 name = "dchatd"
-version = "0.4.2"
+version = "0.4.1"
 dependencies = [
  "async-trait",
  "darkfi",
@@ -2679,6 +2582,7 @@ dependencies = [
  "darkfi_dao_contract",
  "darkfi_money_contract",
  "easy-parallel",
+ "lazy_static",
  "log",
  "prettytable-rs",
  "rand 0.8.5",
@@ -4292,6 +4196,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "minerd"
+version = "0.4.1"
+dependencies = [
+ "darkfi",
+ "darkfi-sdk",
+ "darkfi-serial",
+ "easy-parallel",
+ "log",
+ "num-bigint",
+ "serde",
+ "signal-hook",
+ "signal-hook-async-std",
+ "simplelog",
+ "smol",
+ "structopt",
+ "structopt-toml",
+ "tinyjson",
+ "url",
+]
+
+[[package]]
 name = "minimal-lexical"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4480,21 +4405,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "num-modular"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "17bb261bf36fa7d83f4c294f834e91256769097b3cb505d44831e0a179ac647f"
-
-[[package]]
-name = "num-order"
-version = "1.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "537b596b97c40fcf8056d153049eb22f481c17ebce72a513ec9286e4986d1bb6"
-dependencies = [
- "num-modular",
-]
-
-[[package]]
 name = "num-rational"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4652,6 +4562,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 
 [[package]]
+name = "openssl-src"
+version = "300.2.3+3.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5cff92b6f71555b61bb9315f7c64da3ca43d87531622120fea0195fc761b4843"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "openssl-sys"
 version = "0.9.98"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4659,6 +4578,7 @@ checksum = "c1665caf8ab2dc9aef43d1c0023bd904633a6a05cb30b0ad59bec2ae986e57a7"
 dependencies = [
  "cc",
  "libc",
+ "openssl-src",
  "pkg-config",
  "vcpkg",
 ]
@@ -8295,6 +8215,7 @@ dependencies = [
  "ctrlc",
  "darkfi",
  "darkfi-sdk",
+ "darkfi_money_contract",
  "rand 0.8.5",
  "rayon",
 ]

@@ -17,13 +17,11 @@
  */
 
 use darkfi_sdk::{
-    crypto::{pasta_prelude::*, ContractId},
+    crypto::ContractId,
     dark_tree::DarkLeaf,
     db::{db_contains_key, db_lookup},
     error::{ContractError, ContractResult},
-    msg,
-    pasta::pallas,
-    ContractCall,
+    msg, ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
@@ -60,12 +58,6 @@ pub(crate) fn money_otcswap_process_instruction_v1(
     // every atomic swap looks the same on the network, therefore there is
     // no special anonymity leak for different swaps that are being done,
     // at least in the scope of this contract call.
-
-    if !params.clear_inputs.is_empty() {
-        msg!("[OtcSwapV1] Error: Clear inputs are not empty");
-        return Err(MoneyError::InvalidNumberOfInputs.into())
-    }
-
     if params.inputs.len() != 2 {
         msg!("[OtcSwapV1] Error: Expected 2 inputs");
         return Err(MoneyError::InvalidNumberOfInputs.into())
@@ -113,7 +105,7 @@ pub(crate) fn money_otcswap_process_instruction_v1(
         // For now, make sure that the inputs' spend hooks are zero.
         // This should however be allowed to some extent, e.g. if we
         // want a DAO to be able to do an atomic swap.
-        if input.spend_hook != pallas::Base::ZERO {
+        if calls[call_idx as usize].parent_index.is_some() {
             msg!("[OtcSwapV1] Error: Unable to swap coins with spend_hook != 0 (input {})", i);
             return Err(MoneyError::SpendHookNonZero.into())
         }

@@ -28,9 +28,6 @@ pub enum MoneyError {
     #[error("Missing outputs in transfer call")]
     TransferMissingOutputs,
 
-    #[error("Missing faucet pubkeys from info db")]
-    TransferMissingFaucetKeys,
-
     #[error("Clear input used non-native token")]
     TransferClearInputNonNativeToken,
 
@@ -42,12 +39,6 @@ pub enum MoneyError {
 
     #[error("Duplicate nullifier found")]
     DuplicateNullifier,
-
-    #[error("Call index out of bounds")]
-    CallIdxOutOfBounds,
-
-    #[error("Spend hook mismatch")]
-    SpendHookMismatch,
 
     #[error("Duplicate coin found")]
     DuplicateCoin,
@@ -76,30 +67,6 @@ pub enum MoneyError {
     #[error("Token mint is frozen")]
     TokenMintFrozen,
 
-    #[error("Input used non-native token")]
-    StakeInputNonNativeToken,
-
-    #[error("Missing spend hook")]
-    StakeMissingSpendHook,
-
-    #[error("Missing nullifier")]
-    StakeMissingNullifier,
-
-    #[error("Parent contract call is not consensus contract")]
-    StakeParentCallNotConsensusContract,
-
-    #[error("Child contract call is not money contract")]
-    StakeChildCallNotMoneyContract,
-
-    #[error("Spend hook is not consensus contract")]
-    UnstakeSpendHookNotConsensusContract,
-
-    #[error("Parent contract call is not money contract")]
-    UnstakeParentCallNotMoneyContract,
-
-    #[error("Child contract call is not consensus contract")]
-    UnstakeChildCallNotConsensusContract,
-
     #[error("Parent call function mismatch")]
     ParentCallFunctionMismatch,
 
@@ -115,20 +82,17 @@ pub enum MoneyError {
     #[error("Call is not executed on genesis block")]
     GenesisCallNonGenesisBlock,
 
-    #[error("Call is not executed on genesis slot")]
-    GenesisCallNonGenesisSlot,
-
     #[error("Missing nullifier in set")]
     MissingNullifier,
 
-    #[error("Call is executed after cutoff block height")]
-    PoWRewardCallAfterCutoffBlockHeight,
+    #[error("Call is executed on genesis block height")]
+    PoWRewardCallOnGenesisBlock,
 
-    #[error("Missing slot from db")]
-    PoWRewardMissingSlot,
+    #[error("Could not retrieve last block from db")]
+    PoWRewardRetrieveLastBlockError,
 
-    #[error("Block extends unknown fork")]
-    PoWRewardExtendsUnknownFork,
+    #[error("Call is not executed on next block height")]
+    PoWRewardCallNotOnNextBlockHeight,
 
     #[error("Eta VRF proof couldn't be verified")]
     PoWRewardErroneousVrfProof,
@@ -149,13 +113,13 @@ impl From<MoneyError> for ContractError {
         match e {
             MoneyError::TransferMissingInputs => Self::Custom(1),
             MoneyError::TransferMissingOutputs => Self::Custom(2),
-            MoneyError::TransferMissingFaucetKeys => Self::Custom(3),
+            // 3 was removed
             MoneyError::TransferClearInputNonNativeToken => Self::Custom(4),
             MoneyError::TransferClearInputUnauthorised => Self::Custom(5),
             MoneyError::TransferMerkleRootNotFound => Self::Custom(6),
             MoneyError::DuplicateNullifier => Self::Custom(7),
-            MoneyError::CallIdxOutOfBounds => Self::Custom(8),
-            MoneyError::SpendHookMismatch => Self::Custom(9),
+            // 8 was removed
+            // 9 was removed
             MoneyError::DuplicateCoin => Self::Custom(10),
             MoneyError::ValueMismatch => Self::Custom(11),
             MoneyError::TokenMismatch => Self::Custom(12),
@@ -165,28 +129,19 @@ impl From<MoneyError> for ContractError {
             MoneyError::SwapMerkleRootNotFound => Self::Custom(16),
             MoneyError::TokenIdDoesNotDeriveFromMint => Self::Custom(17),
             MoneyError::TokenMintFrozen => Self::Custom(18),
-            MoneyError::StakeInputNonNativeToken => Self::Custom(19),
-            MoneyError::StakeMissingSpendHook => Self::Custom(20),
-            MoneyError::StakeMissingNullifier => Self::Custom(21),
-            MoneyError::StakeParentCallNotConsensusContract => Self::Custom(22),
-            MoneyError::StakeChildCallNotMoneyContract => Self::Custom(23),
-            MoneyError::UnstakeSpendHookNotConsensusContract => Self::Custom(24),
-            MoneyError::UnstakeParentCallNotMoneyContract => Self::Custom(25),
-            MoneyError::UnstakeChildCallNotConsensusContract => Self::Custom(26),
-            MoneyError::ParentCallFunctionMismatch => Self::Custom(27),
-            MoneyError::ParentCallInputMismatch => Self::Custom(28),
-            MoneyError::ChildCallFunctionMismatch => Self::Custom(29),
-            MoneyError::ChildCallInputMismatch => Self::Custom(30),
-            MoneyError::GenesisCallNonGenesisBlock => Self::Custom(31),
-            MoneyError::GenesisCallNonGenesisSlot => Self::Custom(32),
-            MoneyError::MissingNullifier => Self::Custom(33),
-            MoneyError::PoWRewardCallAfterCutoffBlockHeight => Self::Custom(34),
-            MoneyError::PoWRewardMissingSlot => Self::Custom(35),
-            MoneyError::PoWRewardExtendsUnknownFork => Self::Custom(36),
-            MoneyError::PoWRewardErroneousVrfProof => Self::Custom(37),
-            MoneyError::FeeMissingInputs => Self::Custom(38),
-            MoneyError::InsufficientFee => Self::Custom(39),
-            MoneyError::CoinMerkleRootNotFound => Self::Custom(40),
+            MoneyError::ParentCallFunctionMismatch => Self::Custom(19),
+            MoneyError::ParentCallInputMismatch => Self::Custom(20),
+            MoneyError::ChildCallFunctionMismatch => Self::Custom(21),
+            MoneyError::ChildCallInputMismatch => Self::Custom(22),
+            MoneyError::GenesisCallNonGenesisBlock => Self::Custom(23),
+            MoneyError::MissingNullifier => Self::Custom(24),
+            MoneyError::PoWRewardCallOnGenesisBlock => Self::Custom(25),
+            MoneyError::PoWRewardRetrieveLastBlockError => Self::Custom(26),
+            MoneyError::PoWRewardCallNotOnNextBlockHeight => Self::Custom(27),
+            MoneyError::PoWRewardErroneousVrfProof => Self::Custom(28),
+            MoneyError::FeeMissingInputs => Self::Custom(29),
+            MoneyError::InsufficientFee => Self::Custom(30),
+            MoneyError::CoinMerkleRootNotFound => Self::Custom(31),
         }
     }
 }

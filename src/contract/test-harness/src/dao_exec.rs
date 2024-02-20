@@ -16,9 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::time::Instant;
-
-use darkfi::{tx::Transaction, Result};
+use darkfi::{
+    tx::{ContractCallLeaf, Transaction, TransactionBuilder},
+    Result,
+};
 use darkfi_dao_contract::{
     client::{DaoAuthMoneyTransferCall, DaoExecCall},
     model::{Dao, DaoBulla, DaoExecParams, DaoProposal},
@@ -26,37 +27,40 @@ use darkfi_dao_contract::{
     DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS, DAO_CONTRACT_ZKAS_DAO_EXEC_NS,
 };
 use darkfi_money_contract::{
-    client::transfer_v1 as xfer,
-    model::{CoinAttributes, MoneyTransferParamsV1},
+    client::{transfer_v1 as xfer, MoneyNote, OwnCoin},
+    model::{CoinAttributes, MoneyFeeParamsV1, MoneyTransferParamsV1},
     MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{
-        pasta_prelude::Field, pedersen_commitment_u64, MerkleNode, SecretKey, DAO_CONTRACT_ID,
-        MONEY_CONTRACT_ID,
+        contract_id::{DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
+        pedersen_commitment_u64, Blind, FuncRef, MerkleNode, ScalarBlind, SecretKey,
     },
-    dark_tree::DarkLeaf,
-    pasta::pallas,
+    dark_tree::DarkTree,
     ContractCall,
 };
-use darkfi_serial::{serialize, Encodable};
+use darkfi_serial::AsyncEncodable;
+use log::debug;
 use rand::rngs::OsRng;
 
-use super::{Holder, TestHarness, TxAction};
+use super::{Holder, TestHarness};
 
 impl TestHarness {
+    /// Create a `Dao::Exec` transaction.
     #[allow(clippy::too_many_arguments)]
-    pub fn dao_exec(
+    pub async fn dao_exec(
         &mut self,
+        holder: &Holder,
         dao: &Dao,
         dao_bulla: &DaoBulla,
         proposal: &DaoProposal,
         proposal_coinattrs: Vec<CoinAttributes>,
         yes_vote_value: u64,
         all_vote_value: u64,
-        yes_vote_blind: pallas::Scalar,
-        all_vote_blind: pallas::Scalar,
-    ) -> Result<(Transaction, MoneyTransferParamsV1, DaoExecParams)> {
+        yes_vote_blind: ScalarBlind,
+        all_vote_blind: ScalarBlind,
+        block_height: u64,
+    ) -> Result<(Transaction, MoneyTransferParamsV1, DaoExecParams, Option<MoneyFeeParamsV1>)> {
         let dao_wallet = self.holders.get(&Holder::Dao).unwrap();
 
         let (mint_pk, mint_zkbin) =
@@ -74,11 +78,7 @@ impl TestHarness {
             .get(&DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS.to_string())
             .unwrap();
 
-        let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&TxAction::DaoExec).unwrap();
-        let timer = Instant::now();
-
-        let input_user_data_blind = pallas::Base::random(&mut OsRng);
-        // TODO: FIXME: This is not checked anywhere!
+        let input_user_data_blind = Blind::random(&mut OsRng);
         let exec_signature_secret = SecretKey::random(&mut OsRng);
 
         assert!(!proposal_coinattrs.is_empty());
@@ -115,13 +115,17 @@ impl TestHarness {
             outputs.push(coin_attr);
         }
 
+        let spend_hook =
+            FuncRef { contract_id: *DAO_CONTRACT_ID, func_code: DaoFunction::Exec as u8 }
+                .to_func_id();
+
         let dao_coin_attrs = CoinAttributes {
             public_key: dao_wallet.keypair.public,
             value: change_value,
             token_id: proposal_token_id,
-            serial: pallas::Base::random(&mut OsRng),
-            spend_hook: DAO_CONTRACT_ID.inner(),
+            spend_hook,
             user_data: dao_bulla.inner(),
+            blind: Blind::random(&mut OsRng),
         };
         outputs.push(dao_coin_attrs.clone());
 
@@ -137,26 +141,21 @@ impl TestHarness {
 
         let (xfer_params, xfer_secrets) = xfer_builder.build()?;
         let mut data = vec![MoneyFunction::TransferV1 as u8];
-        xfer_params.encode(&mut data)?;
+        xfer_params.encode_async(&mut data).await?;
         let xfer_call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
 
         // We need to extract stuff from the inputs and outputs that we'll also
         // use in the DAO::Exec call. This DAO API needs to be better.
         let mut input_value = 0;
-        let mut input_value_blind = pallas::Scalar::ZERO;
+        let mut input_value_blind = Blind::ZERO;
         for (input, blind) in spent_coins.iter().zip(xfer_secrets.input_value_blinds.iter()) {
             input_value += input.note.value;
-            input_value_blind += blind;
+            input_value_blind += *blind;
         }
         assert_eq!(
             pedersen_commitment_u64(input_value, input_value_blind),
             xfer_params.inputs.iter().map(|input| input.value_commit).sum()
         );
-
-        // First output is change, second output is recipient.
-        let minted_coins = xfer_secrets.minted_coins(&xfer_params);
-        let user_serial = minted_coins[0].note.serial;
-        let dao_serial = minted_coins[1].note.serial;
 
         let exec_builder = DaoExecCall {
             proposal: proposal.clone(),
@@ -165,8 +164,6 @@ impl TestHarness {
             all_vote_value,
             yes_vote_blind,
             all_vote_blind,
-            user_serial,
-            dao_serial,
             input_value,
             input_value_blind,
             input_user_data_blind,
@@ -176,7 +173,7 @@ impl TestHarness {
 
         let (exec_params, exec_proofs) = exec_builder.make(dao_exec_zkbin, dao_exec_pk)?;
         let mut data = vec![DaoFunction::Exec as u8];
-        exec_params.encode(&mut data)?;
+        exec_params.encode_async(&mut data).await?;
         let exec_call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
 
         // Auth module
@@ -194,7 +191,7 @@ impl TestHarness {
             dao_auth_xfer_enc_coin_pk,
         )?;
         let mut data = vec![DaoFunction::AuthMoneyTransfer as u8];
-        auth_xfer_params.encode(&mut data)?;
+        auth_xfer_params.encode_async(&mut data).await?;
         let auth_xfer_call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
 
         // We need to construct this tree, where exec is the parent:
@@ -204,61 +201,122 @@ impl TestHarness {
         //       xfer
         //
 
-        //let mut tx_builder = TransactionBuilder::new(
-        //    ContractCallLeaf { call: exec_call, proofs: exec_proofs },
-        //    vec![],
-        //)?;
-        //tx_builder
-        //    .append(ContractCallLeaf { call: auth_xfer_call, proofs: auth_xfer_proofs }, vec![])?;
-        //tx_builder
-        //let mut tx = tx_builder.build()?;
-
-        let mut tx = Transaction {
-            calls: vec![
-                DarkLeaf { data: auth_xfer_call, parent_index: Some(2), children_indexes: vec![] },
-                DarkLeaf { data: xfer_call, parent_index: Some(2), children_indexes: vec![] },
-                DarkLeaf { data: exec_call, parent_index: None, children_indexes: vec![0, 1] },
+        let mut tx_builder = TransactionBuilder::new(
+            ContractCallLeaf { call: exec_call, proofs: exec_proofs },
+            vec![
+                DarkTree::new(
+                    ContractCallLeaf { call: auth_xfer_call, proofs: auth_xfer_proofs },
+                    vec![],
+                    None,
+                    None,
+                ),
+                DarkTree::new(
+                    ContractCallLeaf { call: xfer_call, proofs: xfer_secrets.proofs },
+                    vec![],
+                    None,
+                    None,
+                ),
             ],
-            proofs: vec![auth_xfer_proofs, xfer_secrets.proofs, exec_proofs],
-            signatures: vec![],
-        };
+        )?;
+
+        // If fees are enabled, make an offering
+        let mut fee_params = None;
+        let mut fee_signature_secrets = None;
+        if self.verify_fees {
+            let mut tx = tx_builder.build()?;
+            let auth_xfer_sigs = vec![];
+            let xfer_sigs = tx.create_sigs(&mut OsRng, &xfer_secrets.signature_secrets)?;
+            let exec_sigs = tx.create_sigs(&mut OsRng, &[exec_signature_secret])?;
+            tx.signatures = vec![auth_xfer_sigs, xfer_sigs, exec_sigs];
+
+            let (fee_call, fee_proofs, fee_secrets, _spent_fee_coins, fee_call_params) =
+                self.append_fee_call(holder, tx, block_height, &[]).await?;
+
+            // Append the fee call to the transaction
+            tx_builder.append(ContractCallLeaf { call: fee_call, proofs: fee_proofs }, vec![])?;
+            fee_signature_secrets = Some(fee_secrets);
+            fee_params = Some(fee_call_params);
+        }
+
+        // Now build the actual transaction and sign it with necessary keys.
+        let mut tx = tx_builder.build()?;
         let auth_xfer_sigs = vec![];
         let xfer_sigs = tx.create_sigs(&mut OsRng, &xfer_secrets.signature_secrets)?;
         let exec_sigs = tx.create_sigs(&mut OsRng, &[exec_signature_secret])?;
         tx.signatures = vec![auth_xfer_sigs, xfer_sigs, exec_sigs];
-        tx_action_benchmark.creation_times.push(timer.elapsed());
 
-        // Calculate transaction sizes
-        let encoded: Vec<u8> = serialize(&tx);
-        let size = std::mem::size_of_val(&*encoded);
-        tx_action_benchmark.sizes.push(size);
-        let base58 = bs58::encode(&encoded).into_string();
-        let size = std::mem::size_of_val(&*base58);
-        tx_action_benchmark.broadcasted_sizes.push(size);
+        if let Some(fee_signature_secrets) = fee_signature_secrets {
+            let sigs = tx.create_sigs(&mut OsRng, &fee_signature_secrets)?;
+            tx.signatures.push(sigs);
+        }
 
-        Ok((tx, xfer_params, exec_params))
+        Ok((tx, xfer_params, exec_params, fee_params))
     }
 
+    /// Execute the transaction made by `dao_exec()` for a given [`Holder`].
+    ///
+    /// Returns any found [`OwnCoin`]s.
+    #[allow(clippy::too_many_arguments)]
     pub async fn execute_dao_exec_tx(
         &mut self,
         holder: &Holder,
-        tx: &Transaction,
+        tx: Transaction,
         xfer_params: &MoneyTransferParamsV1,
         _exec_params: &DaoExecParams,
-        slot: u64,
-    ) -> Result<()> {
+        fee_params: &Option<MoneyFeeParamsV1>,
+        block_height: u64,
+        append: bool,
+    ) -> Result<Vec<OwnCoin>> {
         let wallet = self.holders.get_mut(holder).unwrap();
-        let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&TxAction::DaoExec).unwrap();
-        let timer = Instant::now();
 
-        wallet.validator.add_transactions(&[tx.clone()], slot, true).await?;
+        // Execute the transaction
+        wallet.validator.add_transactions(&[tx], block_height, true, self.verify_fees).await?;
 
-        for output in &xfer_params.outputs {
-            wallet.money_merkle_tree.append(MerkleNode::from(output.coin.inner()));
+        if !append {
+            return Ok(vec![])
         }
 
-        tx_action_benchmark.verify_times.push(timer.elapsed());
+        let mut inputs = xfer_params.inputs.to_vec();
+        let mut outputs = xfer_params.outputs.to_vec();
 
-        Ok(())
+        if let Some(ref fee_params) = fee_params {
+            inputs.push(fee_params.input.clone());
+            outputs.push(fee_params.output.clone());
+        }
+
+        for input in inputs {
+            if let Some(spent_coin) = wallet
+                .unspent_money_coins
+                .iter()
+                .find(|x| x.nullifier() == input.nullifier)
+                .cloned()
+            {
+                debug!("Found spent OwnCoin({}) for {:?}", spent_coin.coin, holder);
+                wallet.unspent_money_coins.retain(|x| x.nullifier() != input.nullifier);
+                wallet.spent_money_coins.push(spent_coin.clone());
+            }
+        }
+
+        let mut found_owncoins = vec![];
+        for output in outputs {
+            wallet.money_merkle_tree.append(MerkleNode::from(output.coin.inner()));
+
+            let Ok(note) = output.note.decrypt::<MoneyNote>(&wallet.keypair.secret) else {
+                continue
+            };
+
+            let owncoin = OwnCoin {
+                coin: output.coin,
+                note: note.clone(),
+                secret: wallet.keypair.secret,
+                leaf_position: wallet.money_merkle_tree.mark().unwrap(),
+            };
+
+            debug!("Found new OwnCoin({}) for {:?}", owncoin.coin, holder);
+            wallet.unspent_money_coins.push(owncoin.clone());
+            found_owncoins.push(owncoin);
+        }
+
+        Ok(found_owncoins)
     }
 }

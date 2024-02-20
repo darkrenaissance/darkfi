@@ -16,13 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_money_contract::model::CoinAttributes;
+use darkfi_money_contract::model::{CoinAttributes, Nullifier};
 use darkfi_sdk::{
     bridgetree,
     bridgetree::Hashable,
     crypto::{
         note::AeadEncryptedNote, pasta_prelude::*, pedersen::pedersen_commitment_u64,
-        poseidon_hash, MerkleNode, Nullifier, PublicKey, SecretKey,
+        poseidon_hash, Blind, FuncId, MerkleNode, PublicKey, ScalarBlind, SecretKey,
     },
     pasta::pallas,
 };
@@ -63,14 +63,14 @@ impl DaoProposeCall {
     ) -> Result<(DaoProposeParams, Vec<Proof>)> {
         let mut proofs = vec![];
 
-        let gov_token_blind = pallas::Base::random(&mut OsRng);
+        let gov_token_blind = Blind::random(&mut OsRng);
 
         let mut inputs = vec![];
         let mut total_funds = 0;
-        let mut total_funds_blinds = pallas::Scalar::from(0);
+        let mut total_funds_blinds = ScalarBlind::ZERO;
 
         for input in self.inputs {
-            let funds_blind = pallas::Scalar::random(&mut OsRng);
+            let funds_blind = Blind::random(&mut OsRng);
             total_funds += input.note.value;
             total_funds_blinds += funds_blind;
 
@@ -82,13 +82,13 @@ impl DaoProposeCall {
 
             let prover_witnesses = vec![
                 Witness::Base(Value::known(input.secret.inner())),
-                Witness::Base(Value::known(note.serial)),
-                Witness::Base(Value::known(pallas::Base::ZERO)),
-                Witness::Base(Value::known(pallas::Base::ZERO)),
                 Witness::Base(Value::known(pallas::Base::from(note.value))),
                 Witness::Base(Value::known(note.token_id.inner())),
-                Witness::Scalar(Value::known(funds_blind)),
-                Witness::Base(Value::known(gov_token_blind)),
+                Witness::Base(Value::known(pallas::Base::ZERO)),
+                Witness::Base(Value::known(pallas::Base::ZERO)),
+                Witness::Base(Value::known(note.coin_blind.inner())),
+                Witness::Scalar(Value::known(funds_blind.inner())),
+                Witness::Base(Value::known(gov_token_blind.inner())),
                 Witness::Uint32(Value::known(leaf_pos.try_into().unwrap())),
                 Witness::MerklePath(Value::known(input.merkle_path.clone().try_into().unwrap())),
                 Witness::Base(Value::known(input.signature_secret.inner())),
@@ -99,9 +99,9 @@ impl DaoProposeCall {
                 public_key,
                 value: note.value,
                 token_id: note.token_id,
-                serial: note.serial,
-                spend_hook: pallas::Base::ZERO,
+                spend_hook: FuncId::none(),
                 user_data: pallas::Base::ZERO,
+                blind: note.coin_blind,
             }
             .to_coin();
 
@@ -123,7 +123,7 @@ impl DaoProposeCall {
 
             let nullifier: Nullifier = poseidon_hash([input.secret.inner(), coin.inner()]).into();
 
-            let token_commit = poseidon_hash([note.token_id.inner(), gov_token_blind]);
+            let token_commit = poseidon_hash([note.token_id.inner(), gov_token_blind.inner()]);
             assert_eq!(self.dao.gov_token_id, note.token_id);
 
             let value_commit = pedersen_commitment_u64(note.value, funds_blind);
@@ -143,8 +143,7 @@ impl DaoProposeCall {
             let circuit = ZkCircuit::new(prover_witnesses, burn_zkbin);
 
             let proving_key = &burn_pk;
-            let input_proof = Proof::create(proving_key, &[circuit], &public_inputs, &mut OsRng)
-                .expect("DAO::propose() proving error!");
+            let input_proof = Proof::create(proving_key, &[circuit], &public_inputs, &mut OsRng)?;
             proofs.push(input_proof);
 
             let input =
@@ -156,7 +155,7 @@ impl DaoProposeCall {
         let total_funds_coords = total_funds_commit.to_affine().coordinates().unwrap();
         let total_funds = pallas::Base::from(total_funds);
 
-        let token_commit = poseidon_hash([self.dao.gov_token_id.inner(), gov_token_blind]);
+        let token_commit = poseidon_hash([self.dao.gov_token_id.inner(), gov_token_blind.inner()]);
 
         let dao_proposer_limit = pallas::Base::from(self.dao.proposer_limit);
         let dao_quorum = pallas::Base::from(self.dao.quorum);
@@ -172,15 +171,15 @@ impl DaoProposeCall {
         let prover_witnesses = vec![
             // Proposers total number of gov tokens
             Witness::Base(Value::known(total_funds)),
-            Witness::Scalar(Value::known(total_funds_blinds)),
+            Witness::Scalar(Value::known(total_funds_blinds.inner())),
             // Used for blinding exported gov token ID
-            Witness::Base(Value::known(gov_token_blind)),
+            Witness::Base(Value::known(gov_token_blind.inner())),
             // proposal params
             Witness::Base(Value::known(self.proposal.auth_calls.commit())),
             Witness::Base(Value::known(pallas::Base::from(self.proposal.creation_day))),
             Witness::Base(Value::known(pallas::Base::from(self.proposal.duration_days))),
             Witness::Base(Value::known(self.proposal.user_data)),
-            Witness::Base(Value::known(self.proposal.blind)),
+            Witness::Base(Value::known(self.proposal.blind.inner())),
             // DAO params
             Witness::Base(Value::known(dao_proposer_limit)),
             Witness::Base(Value::known(dao_quorum)),
@@ -189,7 +188,7 @@ impl DaoProposeCall {
             Witness::Base(Value::known(self.dao.gov_token_id.inner())),
             Witness::Base(Value::known(dao_pub_x)),
             Witness::Base(Value::known(dao_pub_y)),
-            Witness::Base(Value::known(self.dao.bulla_blind)),
+            Witness::Base(Value::known(self.dao.bulla_blind.inner())),
             Witness::Uint32(Value::known(dao_leaf_position.try_into().unwrap())),
             Witness::MerklePath(Value::known(self.dao_merkle_path.try_into().unwrap())),
         ];
@@ -203,8 +202,7 @@ impl DaoProposeCall {
         ];
         let circuit = ZkCircuit::new(prover_witnesses, main_zkbin);
 
-        let main_proof = Proof::create(main_pk, &[circuit], &public_inputs, &mut OsRng)
-            .expect("DAO::propose() proving error!");
+        let main_proof = Proof::create(main_pk, &[circuit], &public_inputs, &mut OsRng)?;
         proofs.push(main_proof);
 
         let enc_note =

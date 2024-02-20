@@ -16,32 +16,37 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::time::Instant;
-
 use darkfi::{
+    blockchain::{BlockInfo, Header},
     tx::{ContractCallLeaf, Transaction, TransactionBuilder},
+    zk::halo2::Field,
     Result,
 };
 use darkfi_money_contract::{
-    client::pow_reward_v1::PoWRewardCallBuilder, model::MoneyPoWRewardParamsV1, MoneyFunction,
-    MONEY_CONTRACT_ZKAS_MINT_NS_V1,
+    client::{pow_reward_v1::PoWRewardCallBuilder, MoneyNote, OwnCoin},
+    model::MoneyPoWRewardParamsV1,
+    MoneyFunction, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    crypto::{MerkleNode, MONEY_CONTRACT_ID},
+    crypto::{contract_id::MONEY_CONTRACT_ID, FuncId, MerkleNode},
     pasta::pallas,
     ContractCall,
 };
-use darkfi_serial::{serialize, Encodable};
+use darkfi_serial::AsyncEncodable;
+use log::info;
 use rand::rngs::OsRng;
 
-use super::{Holder, TestHarness, TxAction};
+use super::{Holder, TestHarness};
 
 impl TestHarness {
-    pub fn pow_reward(
+    /// Create a `Money::PoWReward` transaction for a given [`Holder`].
+    ///
+    /// Optionally takes a specific reward recipient and a nonstandard reward value.
+    /// Returns the created [`Transaction`] and [`MoneyPoWRewardParamsV1`].
+    async fn pow_reward(
         &mut self,
         holder: &Holder,
         recipient: Option<&Holder>,
-        block_height: u64,
         reward: Option<u64>,
     ) -> Result<(Transaction, MoneyPoWRewardParamsV1)> {
         let wallet = self.holders.get(holder).unwrap();
@@ -49,35 +54,25 @@ impl TestHarness {
         let (mint_pk, mint_zkbin) =
             self.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1.to_string()).unwrap();
 
-        let tx_action_benchmark =
-            self.tx_action_benchmarks.get_mut(&TxAction::MoneyPoWReward).unwrap();
+        // Reference the last block in the holder's blockchain
+        let last_block = wallet.validator.blockchain.last_block()?;
 
-        let timer = Instant::now();
-
-        // Proposals always extend genesis block
-        let last_nonce = self.genesis_block.header.nonce;
-        let fork_hash = self.genesis_block.hash()?;
-
-        // We're just going to be using a zero spend-hook and user-data
-        let spend_hook = pallas::Base::zero();
-        let user_data = pallas::Base::zero();
-
+        // If there's a set reward recipient, use it, otherwise reward the holder
         let recipient = if let Some(holder) = recipient {
-            let holder = self.holders.get(holder).unwrap();
-            holder.keypair.public
+            self.holders.get(holder).unwrap().keypair.public
         } else {
             wallet.keypair.public
         };
 
+        // Build the transaction
         let builder = PoWRewardCallBuilder {
             secret: wallet.keypair.secret,
             recipient,
-            block_height,
-            last_nonce,
-            fork_hash,
-            fork_previous_hash: fork_hash,
-            spend_hook,
-            user_data,
+            block_height: last_block.header.height + 1,
+            last_nonce: last_block.header.nonce,
+            fork_previous_hash: last_block.header.previous,
+            spend_hook: FuncId::none(),
+            user_data: pallas::Base::ZERO,
             mint_zkbin: mint_zkbin.clone(),
             mint_pk: mint_pk.clone(),
         };
@@ -87,64 +82,80 @@ impl TestHarness {
             None => builder.build()?,
         };
 
+        // Encode the transaction
         let mut data = vec![MoneyFunction::PoWRewardV1 as u8];
-        debris.params.encode(&mut data)?;
+        debris.params.encode_async(&mut data).await?;
         let call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
         let mut tx_builder =
             TransactionBuilder::new(ContractCallLeaf { call, proofs: debris.proofs }, vec![])?;
         let mut tx = tx_builder.build()?;
         let sigs = tx.create_sigs(&mut OsRng, &[wallet.keypair.secret])?;
         tx.signatures = vec![sigs];
-        tx_action_benchmark.creation_times.push(timer.elapsed());
-
-        // Calculate transaction sizes
-        let encoded: Vec<u8> = serialize(&tx);
-        let size = std::mem::size_of_val(&*encoded);
-        tx_action_benchmark.sizes.push(size);
-        let base58 = bs58::encode(&encoded).into_string();
-        let size = std::mem::size_of_val(&*base58);
-        tx_action_benchmark.broadcasted_sizes.push(size);
 
         Ok((tx, debris.params))
     }
 
-    pub async fn execute_pow_reward_tx(
+    /// Generate and add an empty block to the given [`Holder`]s blockchains.
+    /// The `miner` holder will produce the block and receive the reward.
+    ///
+    /// Returns any found [`OwnCoin`]s.
+    pub async fn generate_block(
         &mut self,
-        holder: &Holder,
-        tx: &Transaction,
-        params: &MoneyPoWRewardParamsV1,
-        block_height: u64,
-    ) -> Result<()> {
-        let wallet = self.holders.get_mut(holder).unwrap();
-        let tx_action_benchmark =
-            self.tx_action_benchmarks.get_mut(&TxAction::MoneyPoWReward).unwrap();
-        let timer = Instant::now();
+        miner: &Holder,
+        holders: &[Holder],
+    ) -> Result<Vec<OwnCoin>> {
+        // Build the POW reward transaction
+        info!("Building PoWReward transaction for {:?}", miner);
+        let (tx, params) = self.pow_reward(miner, None, None).await?;
 
-        wallet.validator.add_test_producer_transaction(tx, block_height, 1, true).await?;
-        wallet.money_merkle_tree.append(MerkleNode::from(params.output.coin.inner()));
-        tx_action_benchmark.verify_times.push(timer.elapsed());
+        // Fetch the last block in the blockchain
+        let wallet = self.holders.get(miner).unwrap();
+        let previous = wallet.validator.blockchain.last_block()?;
 
-        Ok(())
-    }
+        // We increment timestamp so we don't have to use sleep
+        let mut timestamp = previous.header.timestamp;
+        timestamp.add(1);
 
-    pub async fn execute_erroneous_pow_reward_tx(
-        &mut self,
-        holder: &Holder,
-        tx: &Transaction,
-        block_height: u64,
-    ) -> Result<()> {
-        let wallet = self.holders.get_mut(holder).unwrap();
-        let tx_action_benchmark =
-            self.tx_action_benchmarks.get_mut(&TxAction::MoneyPoWReward).unwrap();
-        let timer = Instant::now();
+        // Generate block header
+        let header = Header::new(
+            previous.hash()?,
+            previous.header.height + 1,
+            timestamp,
+            previous.header.nonce,
+        );
 
-        assert!(wallet
-            .validator
-            .add_test_producer_transaction(tx, block_height, 1, true)
-            .await
-            .is_err());
-        tx_action_benchmark.verify_times.push(timer.elapsed());
+        // Generate the block
+        let mut block = BlockInfo::new_empty(header);
 
-        Ok(())
+        // Add producer transaction to the block
+        block.append_txs(vec![tx])?;
+
+        // Attach signature
+        block.sign(&wallet.keypair.secret)?;
+
+        // For all holders, append the block
+        let mut found_owncoins = vec![];
+        for holder in holders {
+            let wallet = self.holders.get_mut(holder).unwrap();
+            wallet.validator.add_blocks(&[block.clone()]).await?;
+            wallet.money_merkle_tree.append(MerkleNode::from(params.output.coin.inner()));
+
+            // Attempt to decrypt the note to see if this is a coin for the holder
+            let Ok(note) = params.output.note.decrypt::<MoneyNote>(&wallet.keypair.secret) else {
+                continue
+            };
+
+            let owncoin = OwnCoin {
+                coin: params.output.coin,
+                note: note.clone(),
+                secret: wallet.keypair.secret,
+                leaf_position: wallet.money_merkle_tree.mark().unwrap(),
+            };
+
+            wallet.unspent_money_coins.push(owncoin.clone());
+            found_owncoins.push(owncoin);
+        }
+
+        Ok(found_owncoins)
     }
 }

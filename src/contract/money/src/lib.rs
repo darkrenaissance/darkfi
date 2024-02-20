@@ -31,9 +31,8 @@ pub enum MoneyFunction {
     OtcSwapV1 = 0x03,
     TokenMintV1 = 0x04,
     TokenFreezeV1 = 0x05,
-    StakeV1 = 0x06,
-    UnstakeV1 = 0x07,
-    PoWRewardV1 = 0x08,
+    PoWRewardV1 = 0x06,
+    AuthTokenMintV1 = 0x07,
 }
 // ANCHOR_END: money-function
 
@@ -48,9 +47,8 @@ impl TryFrom<u8> for MoneyFunction {
             0x03 => Ok(Self::OtcSwapV1),
             0x04 => Ok(Self::TokenMintV1),
             0x05 => Ok(Self::TokenFreezeV1),
-            0x06 => Ok(Self::StakeV1),
-            0x07 => Ok(Self::UnstakeV1),
-            0x08 => Ok(Self::PoWRewardV1),
+            0x06 => Ok(Self::PoWRewardV1),
+            0x07 => Ok(Self::AuthTokenMintV1),
             _ => Err(ContractError::InvalidFunction),
         }
     }
@@ -81,7 +79,6 @@ pub const MONEY_CONTRACT_TOKEN_FREEZE_TREE: &str = "token_freezes";
 pub const MONEY_CONTRACT_DB_VERSION: &[u8] = b"db_version";
 pub const MONEY_CONTRACT_COIN_MERKLE_TREE: &[u8] = b"coin_tree";
 pub const MONEY_CONTRACT_LATEST_COIN_ROOT: &[u8] = b"last_root";
-pub const MONEY_CONTRACT_FAUCET_PUBKEYS: &[u8] = b"faucet_pubkeys";
 pub const MONEY_CONTRACT_TOTAL_FEES_PAID: &[u8] = b"total_fees_paid";
 
 /// zkas fee circuit namespace
@@ -94,29 +91,5 @@ pub const MONEY_CONTRACT_ZKAS_BURN_NS_V1: &str = "Burn_V1";
 pub const MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1: &str = "TokenMint_V1";
 /// zkas token freeze circuit namespace
 pub const MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1: &str = "TokenFreeze_V1";
-
-// These are the different sled trees that will be created
-// for the consensus contract.
-// We keep them here so we can reference them both in `Money`
-// and `Consensus` contracts.
-pub const CONSENSUS_CONTRACT_INFO_TREE: &str = "consensus_info";
-pub const CONSENSUS_CONTRACT_NULLIFIERS_TREE: &str = "consensus_nullifiers";
-pub const CONSENSUS_CONTRACT_STAKED_COINS_TREE: &str = "consensus_staked_coins";
-pub const CONSENSUS_CONTRACT_UNSTAKED_COINS_TREE: &str = "consensus_unstaked_coins";
-pub const CONSENSUS_CONTRACT_STAKED_COIN_ROOTS_TREE: &str = "consensus_staked_coin_roots";
-pub const CONSENSUS_CONTRACT_UNSTAKED_COIN_ROOTS_TREE: &str = "consensus_unstaked_coin_roots";
-
-// These are keys inside the consensus info tree
-pub const CONSENSUS_CONTRACT_DB_VERSION: &[u8] = b"db_version";
-pub const CONSENSUS_CONTRACT_STAKED_COIN_MERKLE_TREE: &[u8] = b"consensus_staked_coin_tree";
-pub const CONSENSUS_CONTRACT_STAKED_COIN_LATEST_COIN_ROOT: &[u8] = b"consensus_staked_last_root";
-pub const CONSENSUS_CONTRACT_UNSTAKED_COIN_MERKLE_TREE: &[u8] = b"consensus_unstaked_coin_tree";
-pub const CONSENSUS_CONTRACT_UNSTAKED_COIN_LATEST_COIN_ROOT: &[u8] =
-    b"consensus_unstaked_last_root";
-
-/// zkas consensus mint circuit namespace
-pub const CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1: &str = "ConsensusMint_V1";
-/// zkas consensus burn circuit namespace
-pub const CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1: &str = "ConsensusBurn_V1";
-/// zkas proposal circuit namespace
-pub const CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1: &str = "ConsensusProposal_V1";
+/// zkas token auth mint circuit namespace
+pub const MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1: &str = "AuthTokenMint_V1";

@@ -16,49 +16,65 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashSet, path::Path, str::FromStr, sync::Arc};
-
-use async_trait::async_trait;
-use darkfi_sdk::crypto::PublicKey;
-use log::{error, info};
-use smol::{
-    lock::{Mutex, MutexGuard},
-    stream::StreamExt,
+use std::{
+    collections::{HashMap, HashSet},
+    str::FromStr,
+    sync::Arc,
 };
+
+use log::{error, info};
+use smol::{lock::Mutex, stream::StreamExt};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;
 
 use darkfi::{
-    async_daemonize, cli_desc,
-    consensus::{
-        constants::{
-            MAINNET_BOOTSTRAP_TIMESTAMP, MAINNET_GENESIS_HASH_BYTES, MAINNET_GENESIS_TIMESTAMP,
-            MAINNET_INITIAL_DISTRIBUTION, TESTNET_BOOTSTRAP_TIMESTAMP, TESTNET_GENESIS_HASH_BYTES,
-            TESTNET_GENESIS_TIMESTAMP, TESTNET_INITIAL_DISTRIBUTION,
-        },
-        proto::{ProtocolProposal, ProtocolSync, ProtocolSyncConsensus, ProtocolTx},
-        task::{block_sync_task, proposal_task},
-        validator::ValidatorStatePtr,
-        ValidatorState,
-    },
-    net,
-    net::P2pPtr,
+    async_daemonize,
+    blockchain::BlockInfo,
+    cli_desc,
+    net::{settings::SettingsOpt, P2pPtr},
     rpc::{
-        clock_sync::check_clock,
-        jsonrpc::{ErrorCode::MethodNotFound, JsonError, JsonRequest, JsonResult},
+        client::RpcClient,
+        jsonrpc::JsonSubscriber,
         server::{listen_and_serve, RequestHandler},
     },
     system::{StoppableTask, StoppableTaskPtr},
-    util::path::expand_path,
-    wallet::{WalletDb, WalletPtr},
+    util::{encoding::base64, path::expand_path},
+    validator::{Validator, ValidatorConfig, ValidatorPtr},
     Error, Result,
 };
+use darkfi_sdk::crypto::PublicKey;
+use darkfi_serial::deserialize_async;
+
+#[cfg(test)]
+mod tests;
 
 mod error;
 use error::{server_error, RpcError};
 
+/// JSON-RPC requests handler and methods
+mod rpc;
+mod rpc_blockchain;
+mod rpc_tx;
+
+/// Validator async tasks
+mod task;
+use task::{consensus_task, miner_task, sync_task};
+
+/// P2P net protocols
+mod proto;
+
+/// Utility functions
+mod utils;
+use utils::{parse_blockchain_config, spawn_miners_p2p, spawn_sync_p2p};
+
 const CONFIG_FILE: &str = "darkfid_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../darkfid_config.toml");
+/// Note:
+/// If you change these don't forget to remove their corresponding database folder,
+/// since if it already has a genesis block, provided one is ignored.
+const GENESIS_BLOCK_LOCALNET: &str = include_str!("../genesis_block_localnet");
+const GENESIS_BLOCK_TESTNET: &str = include_str!("../genesis_block_testnet");
+const GENESIS_BLOCK_MAINNET: &str = include_str!("../genesis_block_mainnet");
 
 #[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
 #[serde(default)]
@@ -68,109 +84,13 @@ struct Args {
     /// Configuration file to use
     config: Option<String>,
 
-    #[structopt(long, default_value = "testnet")]
-    /// Chain to use (testnet, mainnet)
-    chain: String,
-
-    #[structopt(long)]
-    /// Participate in consensus
-    consensus: bool,
-
-    #[structopt(long)]
-    /// Enable single-node mode for local testing
-    single_node: bool,
-
-    #[structopt(long, default_value = "~/.config/darkfi/darkfid_wallet.db")]
-    /// Path to wallet database
-    wallet_path: String,
-
-    #[structopt(long, default_value = "changeme")]
-    /// Password for the wallet database
-    wallet_pass: String,
-
-    #[structopt(long, default_value = "~/.config/darkfi/darkfid_blockchain")]
-    /// Path to blockchain database
-    database: String,
-
-    #[structopt(long, default_value = "tcp://127.0.0.1:8340")]
+    #[structopt(short, long, default_value = "tcp://127.0.0.1:8340")]
     /// JSON-RPC listen URL
     rpc_listen: Url,
 
-    #[structopt(long)]
-    /// P2P accept addresses for the consensus protocol (repeatable flag)
-    consensus_p2p_accept: Vec<Url>,
-
-    #[structopt(long)]
-    /// P2P external addresses for the consensus protocol (repeatable flag)
-    consensus_p2p_external: Vec<Url>,
-
-    #[structopt(long, default_value = "8")]
-    /// Connection slots for the consensus protocol
-    consensus_slots: usize,
-
-    #[structopt(long)]
-    /// Connect to peer for the consensus protocol (repeatable flag)
-    consensus_p2p_peer: Vec<Url>,
-
-    #[structopt(long)]
-    /// Peers JSON-RPC listen URL for clock synchronization (repeatable flag)
-    consensus_peer_rpc: Vec<Url>,
-
-    #[structopt(long)]
-    /// Connect to seed for the consensus protocol (repeatable flag)
-    consensus_p2p_seed: Vec<Url>,
-
-    #[structopt(long)]
-    /// Seed nodes JSON-RPC listen URL for clock synchronization (repeatable flag)
-    consensus_seed_rpc: Vec<Url>,
-
-    #[structopt(long)]
-    /// Prefered transports of outbound connections for the consensus protocol (repeatable flag)
-    consensus_p2p_transports: Vec<String>,
-
-    #[structopt(long)]
-    /// P2P accept addresses for the syncing protocol (repeatable flag)
-    sync_p2p_accept: Vec<Url>,
-
-    #[structopt(long)]
-    /// P2P external addresses for the syncing protocol (repeatable flag)
-    sync_p2p_external: Vec<Url>,
-
-    #[structopt(long, default_value = "8")]
-    /// Connection slots for the syncing protocol
-    sync_slots: usize,
-
-    #[structopt(long)]
-    /// Connect to peer for the syncing protocol (repeatable flag)
-    sync_p2p_peer: Vec<Url>,
-
-    #[structopt(long)]
-    /// Connect to seed for the syncing protocol (repeatable flag)
-    sync_p2p_seed: Vec<Url>,
-
-    #[structopt(long)]
-    /// Prefered transports of outbound connections for the syncing protocol (repeatable flag)
-    sync_p2p_transports: Vec<String>,
-
-    #[structopt(long)]
-    /// Enable localnet hosts
-    localnet: bool,
-
-    #[structopt(long)]
-    /// Enable channel log
-    channel_log: bool,
-
-    #[structopt(long)]
-    /// Whitelisted cashier public key (repeatable flag)
-    cashier_pub: Vec<String>,
-
-    #[structopt(long)]
-    /// Whitelisted faucet public key (repeatable flag)
-    faucet_pub: Vec<String>,
-
-    #[structopt(long)]
-    /// Verify system clock is correct
-    clock_sync: bool,
+    #[structopt(short, long, default_value = "testnet")]
+    /// Blockchain network to use
+    network: String,
 
     #[structopt(short, long)]
     /// Set log file to ouput into
@@ -181,268 +101,195 @@ struct Args {
     verbose: u8,
 }
 
-pub struct Darkfid {
-    synced: Mutex<bool>, // AtomicBool is weird in Arc
-    consensus_p2p: Option<P2pPtr>,
-    sync_p2p: Option<P2pPtr>,
-    _wallet: WalletPtr,
-    validator_state: ValidatorStatePtr,
-    rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
+/// Defines a blockchain network configuration.
+/// Default values correspond to a local network.
+#[derive(Clone, Debug, serde::Deserialize, structopt::StructOpt, structopt_toml::StructOptToml)]
+#[structopt()]
+pub struct BlockchainNetwork {
+    #[structopt(long, default_value = "~/.local/darkfi/darkfid_blockchain_localnet")]
+    /// Path to blockchain database
+    pub database: String,
+
+    #[structopt(long, default_value = "3")]
+    /// Finalization threshold, denominated by number of blocks
+    pub threshold: usize,
+
+    #[structopt(long, default_value = "tcp://127.0.0.1:28467")]
+    /// minerd JSON-RPC endpoint
+    pub minerd_endpoint: Url,
+
+    #[structopt(long, default_value = "10")]
+    /// PoW block production target, in seconds
+    pub pow_target: usize,
+
+    #[structopt(long)]
+    /// Optional fixed PoW difficulty, used for testing
+    pub pow_fixed_difficulty: Option<usize>,
+
+    #[structopt(long)]
+    /// Participate in block production
+    pub miner: bool,
+
+    #[structopt(long)]
+    /// Wallet address to receive mining rewards
+    pub recipient: Option<String>,
+
+    #[structopt(long)]
+    /// Skip syncing process and start node right away
+    pub skip_sync: bool,
+
+    /// Syncing network settings
+    #[structopt(flatten)]
+    pub sync_net: SettingsOpt,
+
+    /// Miners network settings
+    #[structopt(flatten)]
+    pub miners_net: SettingsOpt,
 }
 
-// JSON-RPC methods
-mod rpc_blockchain;
-mod rpc_misc;
-mod rpc_tx;
-mod rpc_wallet;
-
-// Internal methods
-//mod internal;
-
-#[async_trait]
-impl RequestHandler for Darkfid {
-    async fn handle_request(&self, req: JsonRequest) -> JsonResult {
-        match req.method.as_str() {
-            // =====================
-            // Miscellaneous methods
-            // =====================
-            "ping" => return self.pong(req.id, req.params).await,
-            "clock" => return self.misc_clock(req.id, req.params).await,
-            "sync_dnet_switch" => return self.misc_sync_dnet_switch(req.id, req.params).await,
-            "consensus_dnet_switch" => {
-                return self.misc_consensus_dnet_switch(req.id, req.params).await
-            }
-
-            // ==================
-            // Blockchain methods
-            // ==================
-            "blockchain.get_slot" => return self.blockchain_get_slot(req.id, req.params).await,
-            "blockchain.get_tx" => return self.blockchain_get_tx(req.id, req.params).await,
-            "blockchain.last_known_slot" => {
-                return self.blockchain_last_known_slot(req.id, req.params).await
-            }
-            "blockchain.subscribe_blocks" => {
-                return self.blockchain_subscribe_blocks(req.id, req.params).await
-            }
-            "blockchain.subscribe_err_txs" => {
-                return self.blockchain_subscribe_err_txs(req.id, req.params).await
-            }
-            "blockchain.lookup_zkas" => {
-                return self.blockchain_lookup_zkas(req.id, req.params).await
-            }
-
-            // ===================
-            // Transaction methods
-            // ===================
-            "tx.simulate" => return self.tx_simulate(req.id, req.params).await,
-            "tx.broadcast" => return self.tx_broadcast(req.id, req.params).await,
-
-            // ==============
-            // Wallet methods
-            // ==============
-            "wallet.exec_sql" => return self.wallet_exec_sql(req.id, req.params).await,
-            "wallet.query_row_single" => {
-                return self.wallet_query_row_single(req.id, req.params).await
-            }
-            "wallet.query_row_multi" => {
-                return self.wallet_query_row_multi(req.id, req.params).await
-            }
-
-            // ==============
-            // Invalid method
-            // ==============
-            _ => return JsonError::new(MethodNotFound, None, req.id).into(),
-        }
-    }
-
-    async fn connections_mut(&self) -> MutexGuard<'_, HashSet<StoppableTaskPtr>> {
-        self.rpc_connections.lock().await
-    }
+/// Daemon structure
+pub struct Darkfid {
+    /// Syncing P2P network pointer
+    sync_p2p: P2pPtr,
+    /// Optional miners P2P network pointer
+    miners_p2p: Option<P2pPtr>,
+    /// Validator(node) pointer
+    validator: ValidatorPtr,
+    /// A map of various subscribers exporting live info from the blockchain
+    subscribers: HashMap<&'static str, JsonSubscriber>,
+    /// JSON-RPC connection tracker
+    rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
+    /// JSON-RPC client to execute requests to the miner daemon
+    rpc_client: Option<RpcClient>,
 }
 
 impl Darkfid {
     pub async fn new(
-        validator_state: ValidatorStatePtr,
-        consensus_p2p: Option<P2pPtr>,
-        sync_p2p: Option<P2pPtr>,
-        _wallet: WalletPtr,
+        sync_p2p: P2pPtr,
+        miners_p2p: Option<P2pPtr>,
+        validator: ValidatorPtr,
+        subscribers: HashMap<&'static str, JsonSubscriber>,
+        rpc_client: Option<RpcClient>,
     ) -> Self {
         Self {
-            synced: Mutex::new(false),
-            consensus_p2p,
             sync_p2p,
-            _wallet,
-            validator_state,
+            miners_p2p,
+            validator,
+            subscribers,
             rpc_connections: Mutex::new(HashSet::new()),
+            rpc_client,
         }
     }
 }
 
 async_daemonize!(realmain);
 async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
-    if args.consensus && args.clock_sync {
-        // We verify that if peer/seed nodes are configured, their rpc config also exists
-        if ((!args.consensus_p2p_peer.is_empty() && args.consensus_peer_rpc.is_empty()) ||
-            (args.consensus_p2p_peer.is_empty() && !args.consensus_peer_rpc.is_empty())) ||
-            ((!args.consensus_p2p_seed.is_empty() && args.consensus_seed_rpc.is_empty()) ||
-                (args.consensus_p2p_seed.is_empty() && !args.consensus_seed_rpc.is_empty()))
-        {
-            error!(
-                "Consensus peer/seed nodes misconfigured: both p2p and rpc urls must be present"
-            );
-            return Err(Error::ConfigInvalid)
+    info!(target: "darkfid", "Initializing DarkFi node...");
+
+    // Grab blockchain network configuration
+    let (blockchain_config, genesis_block) = match args.network.as_str() {
+        "localnet" => {
+            (parse_blockchain_config(args.config, "localnet").await?, GENESIS_BLOCK_LOCALNET)
         }
-        // We verify that the system clock is valid before initializing
-        let peers = [&args.consensus_peer_rpc[..], &args.consensus_seed_rpc[..]].concat();
-        if (check_clock(&peers).await).is_err() {
-            error!("System clock is invalid, terminating...");
-            return Err(Error::InvalidClock)
-        };
-    }
-
-    // Initialize or load wallet
-    let wallet = WalletDb::new(Some(expand_path(&args.wallet_path)?), Some(&args.wallet_pass))?;
-
-    // Initialize or open sled database
-    let db_path =
-        Path::new(expand_path(&args.database)?.to_str().unwrap()).join(args.chain.clone());
-    let sled_db = sled::open(&db_path)?;
-
-    // Initialize validator state
-    let (bootstrap_ts, genesis_ts, genesis_data, initial_distribution) = match args.chain.as_str() {
-        "mainnet" => (
-            *MAINNET_BOOTSTRAP_TIMESTAMP,
-            *MAINNET_GENESIS_TIMESTAMP,
-            *MAINNET_GENESIS_HASH_BYTES,
-            *MAINNET_INITIAL_DISTRIBUTION,
-        ),
-        "testnet" => (
-            *TESTNET_BOOTSTRAP_TIMESTAMP,
-            *TESTNET_GENESIS_TIMESTAMP,
-            *TESTNET_GENESIS_HASH_BYTES,
-            *TESTNET_INITIAL_DISTRIBUTION,
-        ),
-        x => {
-            error!("Unsupported chain `{}`", x);
+        "testnet" => {
+            (parse_blockchain_config(args.config, "testnet").await?, GENESIS_BLOCK_TESTNET)
+        }
+        "mainnet" => {
+            (parse_blockchain_config(args.config, "mainnet").await?, GENESIS_BLOCK_MAINNET)
+        }
+        _ => {
+            error!("Unsupported chain `{}`", args.network);
             return Err(Error::UnsupportedChain)
         }
     };
-    // Parse faucet addresses
-    let mut faucet_pubkeys = vec![];
 
-    for i in args.cashier_pub {
-        let pk = PublicKey::from_str(&i)?;
-        faucet_pubkeys.push(pk);
-    }
+    // Parse the genesis block
+    let bytes = base64::decode(genesis_block.trim()).unwrap();
+    let genesis_block: BlockInfo = deserialize_async(&bytes).await?;
 
-    for i in args.faucet_pub {
-        let pk = PublicKey::from_str(&i)?;
-        faucet_pubkeys.push(pk);
-    }
+    // Initialize or open sled database
+    let db_path = expand_path(&blockchain_config.database)?;
+    let sled_db = sled::open(&db_path)?;
 
-    if args.single_node {
-        info!("Node is configured to run in single-node mode!");
-    }
+    // Initialize validator configuration
+    let pow_fixed_difficulty = if let Some(diff) = blockchain_config.pow_fixed_difficulty {
+        info!(target: "darkfid", "Node is configured to run with fixed PoW difficulty: {}", diff);
+        Some(diff.into())
+    } else {
+        None
+    };
 
-    // Initialize validator state
-    let state = ValidatorState::new(
-        &sled_db,
-        bootstrap_ts,
-        genesis_ts,
-        genesis_data,
-        initial_distribution,
-        wallet.clone(),
-        faucet_pubkeys,
-        args.consensus,
-        args.single_node,
-    )
-    .await?;
+    let config = ValidatorConfig {
+        finalization_threshold: blockchain_config.threshold,
+        pow_target: blockchain_config.pow_target,
+        pow_fixed_difficulty,
+        genesis_block,
+        verify_fees: false, // TODO: Make configurable
+    };
 
-    let sync_p2p = {
-        info!("Registering block sync P2P protocols...");
-        let sync_network_settings = net::Settings {
-            inbound_addrs: args.sync_p2p_accept,
-            outbound_connections: args.sync_slots,
-            external_addrs: args.sync_p2p_external,
-            peers: args.sync_p2p_peer.clone(),
-            seeds: args.sync_p2p_seed.clone(),
-            allowed_transports: args.sync_p2p_transports,
-            localnet: args.localnet,
-            ..Default::default()
+    // Initialize validator
+    let validator = Validator::new(&sled_db, config).await?;
+
+    // Here we initialize various subscribers that can export live blockchain/consensus data.
+    let mut subscribers = HashMap::new();
+    subscribers.insert("blocks", JsonSubscriber::new("blockchain.subscribe_blocks"));
+    subscribers.insert("txs", JsonSubscriber::new("blockchain.subscribe_txs"));
+    subscribers.insert("proposals", JsonSubscriber::new("blockchain.subscribe_proposals"));
+
+    // Initialize syncing P2P network
+    let sync_p2p =
+        spawn_sync_p2p(&blockchain_config.sync_net.into(), &validator, &subscribers, ex.clone())
+            .await;
+
+    // Initialize miners P2P network
+    let (miners_p2p, rpc_client) = if blockchain_config.miner {
+        let Ok(rpc_client) = RpcClient::new(blockchain_config.minerd_endpoint, ex.clone()).await
+        else {
+            error!(target: "darkfid", "Failed to initialize miner daemon rpc client, check if minerd is running");
+            return Err(Error::RpcClientStopped)
         };
-
-        let p2p = net::P2p::new(sync_network_settings, ex.clone()).await;
-        let registry = p2p.protocol_registry();
-
-        let _state = state.clone();
-        registry
-            .register(net::SESSION_ALL, move |channel, p2p| {
-                let state = _state.clone();
-                async move {
-                    ProtocolSync::init(channel, state, p2p, args.consensus)
-                        .await
-                        .unwrap()
-                }
-            })
-            .await;
-
-        let _state = state.clone();
-        registry
-            .register(net::SESSION_ALL, move |channel, p2p| {
-                let state = _state.clone();
-                async move { ProtocolTx::init(channel, state, p2p).await.unwrap() }
-            })
-            .await;
-
-        Some(p2p)
+        (
+            Some(
+                spawn_miners_p2p(
+                    &blockchain_config.miners_net.into(),
+                    &validator,
+                    &subscribers,
+                    ex.clone(),
+                )
+                .await,
+            ),
+            Some(rpc_client),
+        )
+    } else {
+        (None, None)
     };
 
-    // P2P network settings for the consensus protocol
-    let consensus_p2p = {
-        if !args.consensus {
-            None
-        } else {
-            info!("Registering consensus P2P protocols...");
-            let consensus_network_settings = net::Settings {
-                inbound_addrs: args.consensus_p2p_accept,
-                outbound_connections: args.consensus_slots,
-                external_addrs: args.consensus_p2p_external,
-                peers: args.consensus_p2p_peer.clone(),
-                seeds: args.consensus_p2p_seed.clone(),
-                allowed_transports: args.consensus_p2p_transports,
-                localnet: args.localnet,
-                ..Default::default()
-            };
-            let p2p = net::P2p::new(consensus_network_settings, ex.clone()).await;
-            let registry = p2p.protocol_registry();
-
-            let _state = state.clone();
-            registry
-                .register(net::SESSION_ALL, move |channel, p2p| {
-                    let state = _state.clone();
-                    async move { ProtocolProposal::init(channel, state, p2p).await.unwrap() }
-                })
-                .await;
-
-            let _state = state.clone();
-            registry
-                .register(net::SESSION_ALL, move |channel, p2p| {
-                    let state = _state.clone();
-                    async move { ProtocolSyncConsensus::init(channel, state, p2p).await.unwrap() }
-                })
-                .await;
-
-            Some(p2p)
-        }
-    };
-
-    // Initialize program state
-    let darkfid =
-        Darkfid::new(state.clone(), consensus_p2p.clone(), sync_p2p.clone(), wallet.clone()).await;
+    // Initialize node
+    let darkfid = Darkfid::new(
+        sync_p2p.clone(),
+        miners_p2p.clone(),
+        validator.clone(),
+        subscribers,
+        rpc_client,
+    )
+    .await;
     let darkfid = Arc::new(darkfid);
+    info!(target: "darkfid", "Node initialized successfully!");
+
+    // Pinging minerd daemon to verify it listens
+    if blockchain_config.miner {
+        if let Err(e) = darkfid.ping_miner_daemon().await {
+            error!(target: "darkfid", "Failed to ping miner daemon: {}", e);
+            return Err(Error::RpcClientStopped)
+        }
+    }
 
     // JSON-RPC server
-    info!("Starting JSON-RPC server");
+    info!(target: "darkfid", "Starting JSON-RPC server");
+    // Here we create a task variable so we can manually close the
+    // task later. P2P tasks don't need this since it has its own
+    // stop() function to shut down, also terminating the task we
+    // created for it.
     let rpc_task = StoppableTask::new();
     let darkfid_ = darkfid.clone();
     rpc_task.clone().start(
@@ -457,69 +304,95 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         ex.clone(),
     );
 
-    info!("Starting sync P2P network");
-    sync_p2p.clone().unwrap().start().await?;
+    info!(target: "darkfid", "Starting sync P2P network");
+    sync_p2p.clone().start().await?;
 
-    // TODO: I think this is not necessary anymore
-    //info!("Waiting for sync P2P outbound connections");
-    //sync_p2p.clone().unwrap().wait_for_outbound(ex.clone()).await?;
-
-    match block_sync_task(sync_p2p.clone().unwrap(), state.clone()).await {
-        Ok(()) => *darkfid.synced.lock().await = true,
-        Err(e) => error!("Failed syncing blockchain: {}", e),
+    // Start miners P2P network
+    if blockchain_config.miner {
+        info!(target: "darkfid", "Starting miners P2P network");
+        let miners_p2p = miners_p2p.clone().unwrap();
+        miners_p2p.clone().start().await?;
+    } else {
+        info!(target: "darkfid", "Not starting miners P2P network");
     }
 
+    // Sync blockchain
+    if !blockchain_config.skip_sync {
+        sync_task(&darkfid).await?;
+    } else {
+        *darkfid.validator.synced.write().await = true;
+    }
+
+    // Clean node pending transactions
+    darkfid.validator.purge_pending_txs().await?;
+
     // Consensus protocol
-    let proposal_task = if args.consensus && *darkfid.synced.lock().await {
-        info!("Starting consensus P2P network");
-        let consensus_p2p = consensus_p2p.clone().unwrap();
-        consensus_p2p.clone().start().await?;
+    info!(target: "darkfid", "Starting consensus protocol task");
+    let consensus_task = if blockchain_config.miner {
+        // Grab rewards recipient public key(address)
+        if blockchain_config.recipient.is_none() {
+            return Err(Error::ParseFailed("Recipient address missing"))
+        }
+        let recipient = match PublicKey::from_str(&blockchain_config.recipient.unwrap()) {
+            Ok(address) => address,
+            Err(_) => return Err(Error::InvalidAddress),
+        };
 
-        // TODO: I think this is not necessary anymore
-        //info!("Waiting for consensus P2P outbound connections");
-        //consensus_p2p.clone().unwrap().wait_for_outbound(ex.clone()).await?;
-
-        info!("Starting consensus protocol task");
         let task = StoppableTask::new();
         task.clone().start(
-            proposal_task(consensus_p2p.clone(), sync_p2p.clone().unwrap(), state, ex.clone()),
+            // Weird hack to prevent lifetimes hell
+            async move { miner_task(&darkfid, &recipient, blockchain_config.skip_sync).await },
             |res| async {
                 match res {
-                    Ok(()) | Err(Error::ProposalTaskStopped) => { /* Do nothing */ }
-                    Err(e) => error!(target: "darkfid", "Failed starting proposal task: {}", e),
+                    Ok(()) | Err(Error::MinerTaskStopped) => { /* Do nothing */ }
+                    Err(e) => error!(target: "darkfid", "Failed starting miner task: {}", e),
                 }
             },
-            Error::ProposalTaskStopped,
+            Error::MinerTaskStopped,
             ex.clone(),
         );
-        Some(task)
+
+        task
     } else {
-        info!("Not starting consensus P2P network");
-        None
+        let task = StoppableTask::new();
+        task.clone().start(
+            // Weird hack to prevent lifetimes hell
+            async move { consensus_task(&darkfid).await },
+            |res| async {
+                match res {
+                    Ok(()) | Err(Error::ConsensusTaskStopped) => { /* Do nothing */ }
+                    Err(e) => error!(target: "darkfid", "Failed starting consensus task: {}", e),
+                }
+            },
+            Error::ConsensusTaskStopped,
+            ex.clone(),
+        );
+
+        task
     };
 
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new(ex)?;
     signals_handler.wait_termination(signals_task).await?;
-    info!("Caught termination signal, cleaning up and exiting...");
+    info!(target: "darkfid", "Caught termination signal, cleaning up and exiting...");
 
     info!(target: "darkfid", "Stopping JSON-RPC server...");
     rpc_task.stop().await;
 
     info!(target: "darkfid", "Stopping syncing P2P network...");
-    sync_p2p.clone().unwrap().stop().await;
+    sync_p2p.stop().await;
 
-    if let Some(task) = proposal_task {
-        info!(target: "darkfid", "Stopping proposal task...");
-        task.stop().await;
-
-        info!(target: "darkfid", "Stopping consensus P2P network...");
-        consensus_p2p.unwrap().stop().await;
+    if blockchain_config.miner {
+        info!(target: "darkfid", "Stopping miners P2P network...");
+        miners_p2p.unwrap().stop().await;
     }
 
-    info!("Flushing sled database...");
+    info!(target: "darkfid", "Stopping consensus task...");
+    consensus_task.stop().await;
+
+    info!(target: "darkfid", "Flushing sled database...");
     let flushed_bytes = sled_db.flush_async().await?;
-    info!("Flushed {} bytes", flushed_bytes);
+    info!(target: "darkfid", "Flushed {} bytes", flushed_bytes);
 
     Ok(())
 }

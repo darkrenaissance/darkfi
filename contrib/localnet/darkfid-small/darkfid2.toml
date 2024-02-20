@@ -6,71 +6,39 @@
 ## The default values are left commented. They can be overridden either by
 ## uncommenting, or by using the command-line.
 
-# Chain to use (testnet, mainnet)
-chain = "testnet"
+# JSON-RPC listen URL
+rpc_listen = "tcp://127.0.0.1:48540"
 
-# Path to the wallet database
-wallet_path = "darkfid2/wallet.db"
+# Blockchain network to use
+network = "localnet"
 
-# Password for the wallet database
-wallet_pass = "changeme"
-
+# Localnet blockchain network configuration
+[network_config."localnet"]
 # Path to the blockchain database directory
-database = "darkfid2/blockchain"
+database = "darkfid2"
 
-# JSON-RPC listen url
-rpc_listen = "tcp://127.0.0.1:8540"
+# Finalization threshold, denominated by number of blocks
+threshold = 3
 
-# Participate in the consensus protocol
-consensus = false
+# PoW block production target, in seconds
+pow_target = 20
 
-# Enable single-node mode for local testing
-single_node = false
+# Participate in block production
+miner = false
 
-# P2P accept addresses for the consensus protocol
-#consensus_p2p_accept = ["tcp://127.0.0.1:8541"]
+# Skip syncing process and start node right away
+skip_sync = false
 
-# P2P external addressesfor the consensus protocol
-#consensus_p2p_external = ["tcp://127.0.0.1:8541"]
+## Localnet sync P2P network settings
+[network_config."localnet".sync_net]
+# P2P accept addresses the instance listens on for inbound connections
+inbound = ["tcp+tls://0.0.0.0:48442"]
 
-# Connection slots for the consensus protocol
-#consensus_slots = 8
+# Whitelisted network transports for outbound connections
+allowed_transports = ["tcp+tls"]
 
-# Connection slots for the consensus protocol
-#consensus_p2p_seed = ["tcp://127.0.0.1:33033"]
+# Peer nodes to manually connect to
+peers = ["tcp+tls://0.0.0.0:48242", "tcp+tls://0.0.0.0:48342"]
 
-# Peers to connect to for the consensus protocol
-#consensus_p2p_peer = []
-
-# Prefered transports of outbound connections for the consensus protocol
-consensus_p2p_transports = ["tls", "tcp"]
-
-# P2P accept addresses for the syncing protocol
-sync_p2p_accept = ["tcp://127.0.0.1:8542"]
-
-# P2P external addresses for the syncing protocol
-sync_p2p_external = ["tcp://127.0.0.1:8542"]
-
-# Connection slots for the syncing protocol
-#sync_slots = 8
-
-# Seed nodes to connect to for the syncing protocol
-#sync_p2p_seed = []
-
-# Peers to connect to for the syncing protocol
-sync_p2p_peer = ["tcp://127.0.0.1:8342", "tcp://127.0.0.1:8442"]
-
-# Prefered transports of outbound connections for the syncing protocol
-sync_p2p_transports = ["tls", "tcp"]
-
-# Enable localnet hosts
+# Allow localnet hosts
 localnet = true
-
-# Enable channel log
-channel_log = true
-
-# Whitelisted faucet public key
-#faucet_pub = []
-
-# Verify system clock is correct
-#clock_sync = true

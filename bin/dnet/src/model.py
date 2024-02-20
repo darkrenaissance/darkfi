@@ -153,6 +153,7 @@ class Model:
 
 
     def add_lilith(self, lilith):
+        #logging.debug(f'adding lilith {lilith}')
         key = list(lilith.keys())[0]
         values = list(lilith.values())[0]
         info = values['result']
@@ -164,10 +165,17 @@ class Model:
         for (i, spawn) in enumerate(spawns):
             name = spawn['name']
             urls = spawn['urls']
-            hosts = spawn['hosts']
+            whitelist = spawn['whitelist']
+            greylist = spawn['greylist']
+            anchorlist = spawn['greylist']
+
             spawn = self.liliths[key]['spawns'][name] = {}
             spawn['urls'] = urls
-            spawn['hosts'] = hosts
+            spawn['whitelist'] = whitelist
+            spawn['greylist'] = greylist
+            spawn['anchorlist'] = anchorlist
+
+        #logging.debug(f'added lilith {self.liliths}')
 
     def __repr__(self):
         return f'{self.nodes}'

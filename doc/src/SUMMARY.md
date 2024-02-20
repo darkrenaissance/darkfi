@@ -3,6 +3,7 @@
 # About
 
 - [DarkFi](README.md)
+- [Start Here](start-here.md)
 - [Philosophy](philosophy/philosophy.md)
   - [Ideology](philosophy/ideology.md)
   - [Books](philosophy/books.md)
@@ -30,13 +31,7 @@
 - [Architecture](arch/arch.md)
   - [Overview](arch/overview.md)
   - [Anonymous assets](arch/anonymous_assets.md)
-  - [Blockchain](arch/blockchain.md)
   - [Consensus](arch/consensus.md)
-    - [GenesisStake](arch/consensus/genesis_stake.md)
-    - [Stake](arch/consensus/stake.md)
-    - [Proposal](arch/consensus/proposal.md)
-    - [UnstakeRequest](arch/consensus/unstake_request.md)
-    - [Unstake](arch/consensus/unstake.md)
   - [Transactions](arch/tx_lifetime.md)
   - [Smart Contracts](arch/smart_contracts.md)
   - [Bridge](arch/bridge.md)
@@ -54,7 +49,6 @@
     - [Anonymous payments](zkas/examples/sapling.md)
 - [Client](clients/clients.md)
   - [darkfid JSON-RPC API](clients/darkfid_jsonrpc.md)
-  - [faucetd JSON-RPC API](clients/faucetd_jsonrpc.md)
   - [Anonymous Nodes](clients/anonymous_nodes.md)
     - [Tor Inbound Node](clients/tor_inbound.md)
     - [Nym Outbound Node](clients/nym_outbound.md)
@@ -70,8 +64,9 @@
 
 # DEP
 
-- [DEP 0001: Version Message Info](dep/0001.md)
-- [DEP 0002: Smart Contract Composability](dep/0002.md)
+- [DEP 0001: Version Message Info (accepted)](dep/0001.md)
+- [DEP 0002: Smart Contract Composability (deprecated)](dep/0002.md)
+- [DEP 0003: Token Mint Authorization (accepted)](dep/0003.md)
 
 # Specs
 
@@ -83,7 +78,7 @@
     - [Concepts](spec/contract/dao/concepts.md)
     - [Model](spec/contract/dao/model.md)
     - [Scheme](spec/contract/dao/scheme.md)
-  - [Money]()
+  - [Money](spec/contract/money/money.md)
     - [Model](spec/contract/money/model.md)
     - [Scheme](spec/contract/money/scheme.md)
 

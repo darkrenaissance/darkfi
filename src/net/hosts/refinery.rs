@@ -108,9 +108,22 @@ impl GreylistRefinery {
                         continue
                     }
 
+                    // Don't refine nodes that we are already connected to.
+                    if self.p2p().exists(url).await {
+                        continue
+                    }
+
+                    // Don't refine nodes that we are trying to connect to.
+                    if !self.p2p().add_pending(url).await {
+                        continue
+                    }
+
                     let mut greylist = hosts.greylist.write().await;
                     if !ping_node(url.clone(), self.p2p().clone()).await {
                         greylist.remove(position);
+
+                        // Remove connection from pending
+                        self.p2p().remove_pending(url).await;
                         debug!(
                             target: "net::refinery",
                             "Peer {} is non-responsive. Removed from greylist", url,
@@ -127,6 +140,9 @@ impl GreylistRefinery {
 
                     // Remove whitelisted peer from the greylist.
                     hosts.greylist_remove(url, position).await;
+
+                    // Remove connection from pending
+                    self.p2p().remove_pending(url).await;
                 }
                 None => {
                     debug!(target: "net::refinery", "No matching greylist entries found. Cannot proceed with refinery");
@@ -164,16 +180,20 @@ async fn ping_node_impl(addr: Url, p2p: P2pPtr) -> bool {
 
     debug!(target: "net::refinery::ping_node()", "Attempting to connect to {}", addr);
     match connector.connect(&addr).await {
-        Ok((_url, channel)) => {
-            debug!(target: "net::refinery::ping_node()", "Connected successfully!");
+        Ok((url, channel)) => {
+            debug!(target: "net::refinery::ping_node()", "Successfully created a channel with {}", url);
+            // First initialize the version protocol and its Version, Verack subscribers.
             let proto_ver = ProtocolVersion::new(channel.clone(), p2p.settings()).await;
 
+            debug!(target: "net::refinery::ping_node()", "Performing handshake protocols with {}", url);
+            // Then run the version exchange, store the channel and subscribe to a stop signal.
             let handshake_task = session_outbound.perform_handshake_protocols(
                 proto_ver,
                 channel.clone(),
                 p2p.executor(),
             );
 
+            debug!(target: "net::refinery::ping_node()", "Starting channel {}", url);
             channel.clone().start(p2p.executor());
 
             // Ensure the channel gets stopped by adding a timeout to the handshake. Otherwise if
@@ -181,15 +201,16 @@ async fn ping_node_impl(addr: Url, p2p: P2pPtr) -> bool {
             // zombie processes.
             let result = timeout(Duration::from_secs(5), handshake_task).await;
 
+            debug!(target: "net::refinery::ping_node()", "Stopping channel {}", url);
+            channel.stop().await;
+
             match result {
                 Ok(_) => {
-                    debug!(target: "net::refinery::ping_node()", "Handshake success! Stopping channel.");
-                    channel.stop().await;
+                    debug!(target: "net::refinery::ping_node()", "Handshake success!");
                     true
                 }
                 Err(e) => {
-                    debug!(target: "net::refinery::ping_node()", "Handshake timed out! {}", e);
-                    channel.stop().await;
+                    debug!(target: "net::refinery::ping_node()", "Handshake err: {}", e);
                     false
                 }
             }

@@ -70,13 +70,13 @@ darkfi_sdk::define_contract!(
 fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     // The zkas circuits can simply be embedded in the wasm and set up by
     // the initialization.
-    zkas_db_set(&include_bytes!("../../proof/dao-mint.zk.bin")[..])?;
-    zkas_db_set(&include_bytes!("../../proof/dao-propose-input.zk.bin")[..])?;
-    zkas_db_set(&include_bytes!("../../proof/dao-propose-main.zk.bin")[..])?;
-    zkas_db_set(&include_bytes!("../../proof/dao-vote-input.zk.bin")[..])?;
-    zkas_db_set(&include_bytes!("../../proof/dao-vote-main.zk.bin")[..])?;
-    zkas_db_set(&include_bytes!("../../proof/dao-exec.zk.bin")[..])?;
-    zkas_db_set(&include_bytes!("../../proof/dao-auth-money-transfer.zk.bin")[..])?;
+    zkas_db_set(&include_bytes!("../../proof/mint.zk.bin")[..])?;
+    zkas_db_set(&include_bytes!("../../proof/propose-input.zk.bin")[..])?;
+    zkas_db_set(&include_bytes!("../../proof/propose-main.zk.bin")[..])?;
+    zkas_db_set(&include_bytes!("../../proof/vote-input.zk.bin")[..])?;
+    zkas_db_set(&include_bytes!("../../proof/vote-main.zk.bin")[..])?;
+    zkas_db_set(&include_bytes!("../../proof/exec.zk.bin")[..])?;
+    zkas_db_set(&include_bytes!("../../proof/auth-money-transfer.zk.bin")[..])?;
 
     // Set up db for general info
     let dao_info_db = match db_lookup(cid, DAO_CONTRACT_DB_INFO_TREE) {
@@ -152,7 +152,8 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
         DaoFunction::Exec => dao_exec_get_metadata(cid, call_idx, calls)?,
         DaoFunction::AuthMoneyTransfer => dao_authxfer_get_metadata(cid, call_idx, calls)?,
     };
-    Ok(set_return_data(&metadata)?)
+
+    set_return_data(&metadata)
 }
 
 /// This function verifies a state transition and produces a state update
@@ -169,7 +170,8 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
         DaoFunction::Exec => dao_exec_process_instruction(cid, call_idx, calls)?,
         DaoFunction::AuthMoneyTransfer => dao_authxfer_process_instruction(cid, call_idx, calls)?,
     };
-    Ok(set_return_data(&update_data)?)
+
+    set_return_data(&update_data)
 }
 
 /// This function attempts to write a given state update provided the previous

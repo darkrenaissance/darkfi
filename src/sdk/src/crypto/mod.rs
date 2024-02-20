@@ -16,6 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+/// Blinding factors
+pub mod blind;
+pub use blind::{BaseBlind, Blind, ScalarBlind};
+
 /// Cryptographic constants
 pub mod constants;
 
@@ -32,13 +36,11 @@ pub use keypair::{Keypair, PublicKey, SecretKey};
 
 /// Contract ID definitions and methods
 pub mod contract_id;
-pub use contract_id::{
-    ContractId, CONSENSUS_CONTRACT_ID, DAO_CONTRACT_ID, DEPLOYOOOR_CONTRACT_ID, MONEY_CONTRACT_ID,
-};
+pub use contract_id::{ContractId, DAO_CONTRACT_ID, DEPLOYOOOR_CONTRACT_ID, MONEY_CONTRACT_ID};
 
-/// Token ID definitions and methods
-pub mod token_id;
-pub use token_id::{TokenId, DARK_TOKEN_ID};
+/// Function ID definitions and methods
+pub mod func_ref;
+pub use func_ref::{FuncId, FuncRef};
 
 /// Merkle node definitions
 pub mod merkle_node;
@@ -46,10 +48,6 @@ pub use merkle_node::{MerkleNode, MerkleTree};
 
 /// Note encryption
 pub mod note;
-
-/// Nullifier definitions
-pub mod nullifier;
-pub use nullifier::Nullifier;
 
 /// Pedersen commitment utilities
 pub mod pedersen;

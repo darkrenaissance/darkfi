@@ -24,11 +24,6 @@ pub use error::{ClientFailed, ClientResult, Error, Result};
 #[cfg(feature = "blockchain")]
 pub mod blockchain;
 
-/*
-#[cfg(feature = "validator")]
-pub mod consensus;
-*/
-
 #[cfg(feature = "validator")]
 pub mod validator;
 

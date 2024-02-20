@@ -43,7 +43,7 @@ impl ProtocolVersion {
     /// Create a new version protocol. Makes a version and version ack
     /// subscription, then adds them to a version protocol instance.
     pub async fn new(channel: ChannelPtr, settings: SettingsPtr) -> Arc<Self> {
-        // Creates a versi5on subscription
+        // Creates a version subscription
         let version_sub =
             channel.subscribe_msg::<VersionMessage>().await.expect("Missing version dispatcher!");
 

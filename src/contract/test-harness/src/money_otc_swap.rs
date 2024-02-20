@@ -16,36 +16,39 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::time::Instant;
-
 use darkfi::{
     tx::{ContractCallLeaf, Transaction, TransactionBuilder},
     zk::halo2::Field,
     Result,
 };
 use darkfi_money_contract::{
-    client::{swap_v1::SwapCallBuilder, OwnCoin},
-    model::MoneyTransferParamsV1,
+    client::{swap_v1::SwapCallBuilder, MoneyNote, OwnCoin},
+    model::{MoneyFeeParamsV1, MoneyTransferParamsV1},
     MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    crypto::{MerkleNode, MONEY_CONTRACT_ID},
+    crypto::{contract_id::MONEY_CONTRACT_ID, BaseBlind, Blind, FuncId, MerkleNode},
     pasta::pallas,
     ContractCall,
 };
-use darkfi_serial::{serialize, Encodable};
+use darkfi_serial::AsyncEncodable;
+use log::debug;
 use rand::rngs::OsRng;
 
-use super::{Holder, TestHarness, TxAction};
+use super::{Holder, TestHarness};
 
 impl TestHarness {
-    pub fn otc_swap(
+    /// Create a `Money::OtcSwap` transaction with two given [`Holder`]s.
+    ///
+    /// Returns the [`Transaction`], and the transaction parameters.
+    pub async fn otc_swap(
         &mut self,
         holder0: &Holder,
         owncoin0: &OwnCoin,
         holder1: &Holder,
         owncoin1: &OwnCoin,
-    ) -> Result<(Transaction, MoneyTransferParamsV1)> {
+        block_height: u64,
+    ) -> Result<(Transaction, MoneyTransferParamsV1, Option<MoneyFeeParamsV1>)> {
         let wallet0 = self.holders.get(holder0).unwrap();
         let wallet1 = self.holders.get(holder1).unwrap();
 
@@ -55,23 +58,18 @@ impl TestHarness {
         let (burn_pk, burn_zkbin) =
             self.proving_keys.get(&MONEY_CONTRACT_ZKAS_BURN_NS_V1.to_string()).unwrap();
 
-        let tx_action_benchmark =
-            self.tx_action_benchmarks.get_mut(&TxAction::MoneyOtcSwap).unwrap();
+        // Use a zero spend_hook and user_data
+        let rcpt_spend_hook = FuncId::none();
+        let rcpt_user_data = pallas::Base::ZERO;
+        let rcpt_user_data_blind = Blind::random(&mut OsRng);
 
-        let timer = Instant::now();
+        // Create blinding factors for commitments
+        let value_send_blind = Blind::random(&mut OsRng);
+        let value_recv_blind = Blind::random(&mut OsRng);
+        let token_send_blind = BaseBlind::random(&mut OsRng);
+        let token_recv_blind = BaseBlind::random(&mut OsRng);
 
-        // We're just going to be using a zero spend-hook and user-data
-        let rcpt_spend_hook = pallas::Base::zero();
-        let rcpt_user_data = pallas::Base::zero();
-        let rcpt_user_data_blind = pallas::Base::random(&mut OsRng);
-
-        // Generating  swap blinds
-        let value_send_blind = pallas::Scalar::random(&mut OsRng);
-        let value_recv_blind = pallas::Scalar::random(&mut OsRng);
-        let token_send_blind = pallas::Base::random(&mut OsRng);
-        let token_recv_blind = pallas::Base::random(&mut OsRng);
-
-        // Builder first holder part
+        // Build the first half of the swap for Holder0
         let builder = SwapCallBuilder {
             pubkey: wallet0.keypair.public,
             value_send: owncoin0.note.value,
@@ -92,11 +90,10 @@ impl TestHarness {
         };
 
         let debris0 = builder.build()?;
-
         assert!(debris0.params.inputs.len() == 1);
         assert!(debris0.params.outputs.len() == 1);
 
-        // Builder second holder part
+        // Build the second half of the swap for Holder1
         let builder = SwapCallBuilder {
             pubkey: wallet1.keypair.public,
             value_send: owncoin1.note.value,
@@ -117,13 +114,11 @@ impl TestHarness {
         };
 
         let debris1 = builder.build()?;
-
         assert!(debris1.params.inputs.len() == 1);
         assert!(debris1.params.outputs.len() == 1);
 
-        // Then second holder combines the halves
+        // Holder1 then combines the halves
         let swap_full_params = MoneyTransferParamsV1 {
-            clear_inputs: vec![],
             inputs: vec![debris0.params.inputs[0].clone(), debris1.params.inputs[0].clone()],
             outputs: vec![debris0.params.outputs[0].clone(), debris1.params.outputs[0].clone()],
         };
@@ -135,53 +130,113 @@ impl TestHarness {
             debris1.proofs[1].clone(),
         ];
 
-        // And signs the transaction
+        // Encode the contract call
         let mut data = vec![MoneyFunction::OtcSwapV1 as u8];
-        swap_full_params.encode(&mut data)?;
+        swap_full_params.encode_async(&mut data).await?;
         let call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
         let mut tx_builder =
             TransactionBuilder::new(ContractCallLeaf { call, proofs: swap_full_proofs }, vec![])?;
+
+        // If we have tx fees enabled, make an offering
+        let mut fee_params = None;
+        let mut fee_signature_secrets = None;
+        if self.verify_fees {
+            let mut tx = tx_builder.build()?;
+            let sigs = tx.create_sigs(&mut OsRng, &[debris1.signature_secret])?;
+            tx.signatures = vec![sigs];
+
+            // First holder gets the partially signed transaction and adds their signature
+            let sigs = tx.create_sigs(&mut OsRng, &[debris0.signature_secret])?;
+            tx.signatures[0].insert(0, sigs[0]);
+
+            let (fee_call, fee_proofs, fee_secrets, _spent_fee_coins, fee_call_params) =
+                self.append_fee_call(holder0, tx, block_height, &[owncoin0.clone()]).await?;
+
+            // Append the fee call to the transaction
+            tx_builder.append(ContractCallLeaf { call: fee_call, proofs: fee_proofs }, vec![])?;
+            fee_signature_secrets = Some(fee_secrets);
+            fee_params = Some(fee_call_params);
+        }
+
+        // Now build the actual transaction and sign it with necessary keys.
         let mut tx = tx_builder.build()?;
         let sigs = tx.create_sigs(&mut OsRng, &[debris1.signature_secret])?;
         tx.signatures = vec![sigs];
-
         // First holder gets the partially signed transaction and adds their signature
         let sigs = tx.create_sigs(&mut OsRng, &[debris0.signature_secret])?;
         tx.signatures[0].insert(0, sigs[0]);
-        tx_action_benchmark.creation_times.push(timer.elapsed());
 
-        // Calculate transaction sizes
-        let encoded: Vec<u8> = serialize(&tx);
-        let size = std::mem::size_of_val(&*encoded);
-        tx_action_benchmark.sizes.push(size);
-        let base58 = bs58::encode(&encoded).into_string();
-        let size = std::mem::size_of_val(&*base58);
-        tx_action_benchmark.broadcasted_sizes.push(size);
+        if let Some(fee_signature_secrets) = fee_signature_secrets {
+            let sigs = tx.create_sigs(&mut OsRng, &fee_signature_secrets)?;
+            tx.signatures.push(sigs);
+        }
 
-        Ok((tx, swap_full_params))
+        Ok((tx, swap_full_params, fee_params))
     }
 
+    /// Execute the transaction created by `otc_swap()` for a given [`Holder`].
+    ///
+    /// Returns any found [`OwnCoin`]s.
     pub async fn execute_otc_swap_tx(
         &mut self,
         holder: &Holder,
-        tx: &Transaction,
-        params: &MoneyTransferParamsV1,
-        slot: u64,
+        tx: Transaction,
+        swap_params: &MoneyTransferParamsV1,
+        fee_params: &Option<MoneyFeeParamsV1>,
+        block_height: u64,
         append: bool,
-    ) -> Result<()> {
+    ) -> Result<Vec<OwnCoin>> {
         let wallet = self.holders.get_mut(holder).unwrap();
-        let tx_action_benchmark =
-            self.tx_action_benchmarks.get_mut(&TxAction::MoneyOtcSwap).unwrap();
-        let timer = Instant::now();
 
-        wallet.validator.add_transactions(&[tx.clone()], slot, true).await?;
-        if append {
-            for output in &params.outputs {
-                wallet.money_merkle_tree.append(MerkleNode::from(output.coin.inner()));
+        // Execute the transaction
+        wallet.validator.add_transactions(&[tx], block_height, true, self.verify_fees).await?;
+
+        let mut found_owncoins = vec![];
+
+        if !append {
+            return Ok(found_owncoins)
+        }
+
+        let mut inputs = swap_params.inputs.to_vec();
+        let mut outputs = swap_params.outputs.to_vec();
+        if let Some(ref fee_params) = fee_params {
+            inputs.push(fee_params.input.clone());
+            outputs.push(fee_params.output.clone());
+        }
+
+        for input in inputs {
+            if let Some(spent_coin) = wallet
+                .unspent_money_coins
+                .iter()
+                .find(|x| x.nullifier() == input.nullifier)
+                .cloned()
+            {
+                debug!("Found spent OwnCoin({}) for {:?}", spent_coin.coin, holder);
+                wallet.unspent_money_coins.retain(|x| x.nullifier() != input.nullifier);
+                wallet.spent_money_coins.push(spent_coin.clone());
             }
         }
-        tx_action_benchmark.verify_times.push(timer.elapsed());
 
-        Ok(())
+        for output in outputs {
+            wallet.money_merkle_tree.append(MerkleNode::from(output.coin.inner()));
+
+            // Attempt to decrypt the encrypted note
+            let Ok(note) = output.note.decrypt::<MoneyNote>(&wallet.keypair.secret) else {
+                continue
+            };
+
+            let owncoin = OwnCoin {
+                coin: output.coin,
+                note: note.clone(),
+                secret: wallet.keypair.secret,
+                leaf_position: wallet.money_merkle_tree.mark().unwrap(),
+            };
+
+            debug!("Found new OwnCoin({}) for {:?}", owncoin.coin, holder);
+            wallet.unspent_money_coins.push(owncoin.clone());
+            found_owncoins.push(owncoin);
+        }
+
+        Ok(found_owncoins)
     }
 }

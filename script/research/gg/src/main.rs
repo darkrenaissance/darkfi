@@ -27,11 +27,8 @@ use darkfi::{
     blockchain::{BlockInfo, Blockchain, BlockchainOverlay},
     cli_desc,
     tx::Transaction,
-    util::{
-        path::expand_path,
-        time::{TimeKeeper, Timestamp},
-    },
-    validator::{utils::genesis_txs_total, verification::verify_genesis_block},
+    util::{encoding::base64, path::expand_path, time::Timestamp},
+    validator::verification::verify_genesis_block,
 };
 use darkfi_contract_test_harness::vks;
 use darkfi_serial::{deserialize, serialize};
@@ -68,7 +65,7 @@ fn read_block() -> Result<BlockInfo> {
     eprintln!("Reading genesis block from stdin...");
     let mut buf = String::new();
     stdin().read_to_string(&mut buf)?;
-    let bytes = bs58::decode(&buf.trim()).into_vec()?;
+    let bytes = base64::decode(buf.trim()).unwrap();
     let block = deserialize(&bytes)?;
     Ok(block)
 }
@@ -91,7 +88,7 @@ async fn main() -> Result<()> {
             let txs_folder = expand_path(&txs_folder).unwrap();
             let mut genesis_txs: Vec<Transaction> = vec![];
             for file in read_dir(txs_folder)? {
-                let bytes = bs58::decode(&read_to_string(file?.path())?.trim()).into_vec()?;
+                let bytes = base64::decode(read_to_string(file?.path())?.trim()).unwrap();
                 let tx = deserialize(&bytes)?;
                 genesis_txs.push(tx);
             }
@@ -104,21 +101,18 @@ async fn main() -> Result<()> {
                 genesis_block.header.timestamp = Timestamp(timestamp);
             }
 
+            // Retrieve genesis producer transaction
+            let producer_tx = genesis_block.txs.pop().unwrap();
+
             // Append genesis transactions
             if !genesis_txs.is_empty() {
-                // Retrieve genesis producer transaction
-                let producer_tx = genesis_block.txs.pop().unwrap();
-
-                // Append genesis transactions and calculate their total
-                genesis_block.txs.append(&mut genesis_txs);
-                genesis_block.txs.push(producer_tx);
-                let genesis_txs_total = genesis_txs_total(&genesis_block.txs)?;
-                genesis_block.slots[0].total_tokens = genesis_txs_total;
+                genesis_block.append_txs(genesis_txs)?;
             }
+            genesis_block.append_txs(vec![producer_tx])?;
 
             // Write generated genesis block to stdin
-            let encoded = bs58::encode(&serialize(&genesis_block)).into_string();
-            println!("{}", encoded);
+            let encoded = base64::encode(&serialize(&genesis_block));
+            println!("{encoded}");
 
             Ok(())
         }
@@ -131,20 +125,14 @@ async fn main() -> Result<()> {
 
             // Initialize a temporary sled database
             let sled_db = sled::Config::new().temporary(true).open()?;
-            let (_, vks) = vks::read_or_gen_vks_and_pks()?;
+            let (_, vks) = vks::get_cached_pks_and_vks()?;
             vks::inject(&sled_db, &vks)?;
 
             // Create an overlay over whole blockchain
             let blockchain = Blockchain::new(&sled_db)?;
             let overlay = BlockchainOverlay::new(&blockchain)?;
 
-            // Generate a dummy time keeper
-            let time_keeper = TimeKeeper::new(genesis_block.header.timestamp, 10, 90, 0);
-
-            // Grab block txs total
-            let genesis_txs_total = genesis_txs_total(&genesis_block.txs)?;
-
-            verify_genesis_block(&overlay, &time_keeper, &genesis_block, genesis_txs_total).await?;
+            verify_genesis_block(&overlay, &genesis_block).await?;
 
             println!("Genesis block {hash} verified successfully!");
 

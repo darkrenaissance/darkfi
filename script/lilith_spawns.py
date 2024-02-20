@@ -83,17 +83,26 @@ async def main(argv):
     for spawn in spawns:
         urls = spawn["urls"]
         name = spawn["name"]
-        hosts = spawn["hosts"]
+        whitelist = spawn["whitelist"]
+        greylist = spawn["greylist"]
+        anchorlist = spawn["anchorlist"]
 
         print(f"\nname: {name}")
         print(f"urls:")
         for url in urls:
             print(f"    {url}")
-        if hosts:
-            print(f"hosts:")
-            for host in hosts:
+        if whitelist:
+            print(f"whitelist:")
+            for host in whitelist:
                 print(f"    {host}")
-
+        if greylist:
+            print(f"greylist:")
+            for host in greylist:
+                print(f"    {host}")
+        if anchorlist:
+            print(f"anchorlist:")
+            for host in anchorlist:
+                print(f"    {host}")
     await rpc.stop()
 
 

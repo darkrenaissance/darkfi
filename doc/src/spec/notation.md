@@ -1,5 +1,8 @@
 # Notation
 
+We use superscript$^*$ to denote an arbitrary length ordered array, usually
+corresponding to the `Vec` type in Rust.
+
 $ℕ$ denotes the non-negative integers. $ℕ₆₄$ denotes $ℕ$ restricted to the range
 corresponding to `u64` in Rust of $[0, 2⁶⁴)$.
 

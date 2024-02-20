@@ -1,19 +1,42 @@
-# Money Contract Specification
-
-The _Money_ contract implements network fees, token transfers,
-atomic swaps, token minting and freezing, and staking/unstaking of
-PoS consensus tokens.
-
-The functions/entrypoints provided by this smart contract are:
-```rust
-{{#include ../../../../../src/contract/money/src/lib.rs:money-function}}
-```
-
-## `MoneyFunction::TransferV1`
+# Scheme
 
 Let $\t{PoseidonHash}$ be defined as in the section [PoseidonHash Function](../../crypto-schemes.md#poseidonhash-function).
 
-### ZK proofs
+## Transfer
+
+This function transfers value by burning a set of coins $𝐂$, and minting a
+set of coins, such that the value spent and created are equal.
+
+* Wallet:
+  * Builder: `src/contract/money/src/client/transfer_v1/builder.rs`
+  * Convenience methods: `src/contract/money/src/client/transfer_v1/mod.rs`
+  * Build proofs: `src/contract/money/src/client/transfer_v1/proof.rs`
+* WASM VM code: `src/contract/money/src/entrypoint/transfer_v1.rs`
+* ZK proofs:
+  * `src/contract/money/proof/burn_v1.zk`
+  * `src/contract/money/proof/mint_v1.zk`
+
+### Function Params
+
+Let $\t{MoneyClearInput}, \t{MoneyInput}, \t{MoneyOutput}$
+be defined as in [Inputs and Outputs](model.md#inputs-and-outputs).
+
+Define the Money transfer function params
+$$ \begin{aligned}
+  𝐣 &∈ \t{MoneyClearInput}^* \\
+  𝐢 &∈ \t{MoneyInput}^* \\
+  𝐨 &∈ \t{MoneyOutput}^*
+\end{aligned} $$
+
+```rust
+{{#include ../../../../../src/contract/money/src/model/mod.rs:money-params}}
+```
+
+### Contract Statement
+
+Let $π_\t{mint}, π_\t{burn}$ be defined as in [ZK Proofs](#zk-proofs).
+
+### ZK Proofs
 
 #### `Mint_V1`
 
@@ -21,6 +44,8 @@ Using the `Mint_V1` circuit, we are able to create outputs
 in our UTXO set. It is used along with the `Burn_V1` circuit in
 `MoneyFunction::TransferV1` where we perform a payment to some address
 on the network.
+
+Denote this proof by $π_\t{mint}$.
 
 **Circuit witnesses:**
 
@@ -30,8 +55,8 @@ on the network.
 * $s$ - Unique serial number of the coin commitment (pallas base field element)
 * $h$ - Spend hook, allows composing this ZK proof to invoke other contracts (pallas base field element)
 * $u$ - Data passed from this coin to the invoked contract (pallas base field element)
-* $v_{\text{blind}}$ - Random blinding factor for a Pedersen commitment to $v$ (pallas scalar field element)
-* $t_{\text{blind}}$ - Random blinding factor for a commitment to $t$ (pallas base field element)
+* $v_\t{blind}$ - Random blinding factor for a Pedersen commitment to $v$ (pallas scalar field element)
+* $t_\t{blind}$ - Random blinding factor for a commitment to $t$ (pallas base field element)
 
 **Circuit public inputs:**
 
@@ -59,6 +84,8 @@ Using the `Burn_V1` circuit, we are able to create inputs in
 our UTXO set. It is used along with the `Mint_V1` circuit in
 `MoneyFunction::TransferV1` where we perform a payment to some address
 on the network.
+
+Denote this proof by $π_\t{burn}$.
 
 **Circuit witnesses:**
 
@@ -106,7 +133,7 @@ generator in the codebase known as `NULLIFIER_K`:
 We use this because the Merkle tree is instantiated with a fake coin of
 value 0 and so we're able to produce dummy inputs of value 0.
 
-## Contract call creation
+### Contract call creation
 
 Assuming a coin $C$ exists on the blockchain on leaf position $l$ and
 does not have a corresponding published nullifier $N$, it can be spent.
@@ -144,14 +171,14 @@ number of inputs that were created with `Burn_V1` and a number of
 outputs created with `Mint_V1`.
 
 ```rust
-{{#include ../../../../../src/contract/money/src/model.rs:money-params}}
+{{#include ../../../../../src/contract/money/src/model/mod.rs:money-params}}
 ```
 
 This gets encoded into the `Transaction` format and the transaction is
 signed with a Schnorr signature scheme using the $z$ secret key chosen
 in `Burn_V1`.
 
-## Contract call execution
+### Contract call execution
 
 For `MoneyFunction::TransferV1`, we have the following functions, in
 order:

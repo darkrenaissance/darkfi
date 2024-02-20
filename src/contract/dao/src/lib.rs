@@ -73,30 +73,30 @@ pub const DAO_CONTRACT_KEY_DAO_MERKLE_TREE: &[u8] = b"dao_merkle_tree";
 pub const DAO_CONTRACT_KEY_LATEST_DAO_ROOT: &[u8] = b"dao_last_root";
 
 /// zkas dao mint circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_MINT_NS: &str = "DaoMint";
+pub const DAO_CONTRACT_ZKAS_DAO_MINT_NS: &str = "Mint";
 /// zkas dao vote input circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_VOTE_INPUT_NS: &str = "DaoVoteInput";
+pub const DAO_CONTRACT_ZKAS_DAO_VOTE_INPUT_NS: &str = "VoteInput";
 /// zkas dao vote main circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS: &str = "DaoVoteMain";
+pub const DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS: &str = "VoteMain";
 /// zkas dao propose input circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS: &str = "DaoProposeInput";
+pub const DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS: &str = "ProposeInput";
 /// zkas dao propose main circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS: &str = "DaoProposeMain";
+pub const DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS: &str = "ProposeMain";
 /// zkas dao exec circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_EXEC_NS: &str = "DaoExec";
+pub const DAO_CONTRACT_ZKAS_DAO_EXEC_NS: &str = "Exec";
 /// zkas dao auth money_transfer circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS: &str = "DaoAuthMoneyTransfer";
+pub const DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS: &str = "AuthMoneyTransfer";
 /// zkas dao auth money_transfer encrypted coin circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS: &str =
-    "DaoAuthMoneyTransferEncCoin";
+pub const DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS: &str = "AuthMoneyTransferEncCoin";
 
-// ANCHOR: dao-blockheight_to_day
+// ANCHOR: dao-blockwindow
 const BLOCK_TIME: u64 = 90;
-const SECS_IN_DAY: u64 = 24 * 60 * 60;
+const SECS_IN_HOUR: u64 = 60 * 60;
+const WINDOW_TIME_HR: u64 = 4;
 
-/// Days since genesis block. Used for time limit on DAO proposals.
-pub fn blockheight_to_day(height: u64) -> u64 {
+/// Blockwindow from blockheight. Used for time limit on DAO proposals.
+pub fn blockwindow(height: u64) -> u64 {
     let timestamp_secs = height * BLOCK_TIME;
-    timestamp_secs / SECS_IN_DAY
+    timestamp_secs / (WINDOW_TIME_HR * SECS_IN_HOUR)
 }
-// ANCHOR_END: dao-blockheight_to_day
+// ANCHOR_END: dao-blockwindow

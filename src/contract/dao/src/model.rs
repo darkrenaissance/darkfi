@@ -18,11 +18,12 @@
 
 use core::str::FromStr;
 
+use darkfi_money_contract::model::{Nullifier, TokenId};
 use darkfi_sdk::{
     crypto::{
         note::{AeadEncryptedNote, ElGamalEncryptedNote},
         pasta_prelude::*,
-        poseidon_hash, MerkleNode, Nullifier, PublicKey, TokenId,
+        poseidon_hash, BaseBlind, ContractId, MerkleNode, PublicKey,
     },
     error::ContractError,
     pasta::pallas,
@@ -42,7 +43,7 @@ pub struct Dao {
     pub approval_ratio_base: u64,
     pub gov_token_id: TokenId,
     pub public_key: PublicKey,
-    pub bulla_blind: pallas::Base,
+    pub bulla_blind: BaseBlind,
 }
 // ANCHOR_END: dao
 
@@ -61,7 +62,7 @@ impl Dao {
             self.gov_token_id.inner(),
             pub_x,
             pub_y,
-            self.bulla_blind,
+            self.bulla_blind.inner(),
         ]);
         DaoBulla(bulla)
     }
@@ -107,7 +108,7 @@ darkfi_sdk::ty_from_fp!(DaoBulla);
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 // ANCHOR: dao-auth-call
 pub struct DaoAuthCall {
-    pub contract_id: pallas::Base,
+    pub contract_id: ContractId,
     pub function_code: u8,
     pub auth_data: Vec<u8>,
 }
@@ -147,7 +148,7 @@ pub struct DaoProposal {
     /// Arbitrary data provided by the user. We don't use this.
     pub user_data: pallas::Base,
     pub dao_bulla: DaoBulla,
-    pub blind: pallas::Base,
+    pub blind: BaseBlind,
 }
 // ANCHOR_END: dao-proposal
 
@@ -159,7 +160,7 @@ impl DaoProposal {
             pallas::Base::from(self.duration_days),
             self.user_data,
             self.dao_bulla.inner(),
-            self.blind,
+            self.blind.inner(),
         ]);
         DaoProposalBulla(bulla)
     }
@@ -351,6 +352,9 @@ pub struct DaoExecParams {
     pub proposal_auth_calls: Vec<DaoAuthCall>,
     /// Aggregated blinds for the vote commitments
     pub blind_total_vote: DaoBlindAggregateVote,
+    /// Public key for the signature.
+    /// The signature ensures this DAO::exec call cannot be modified with other calls.
+    pub signature_public: PublicKey,
 }
 // ANCHOR_END: dao-exec-params
 

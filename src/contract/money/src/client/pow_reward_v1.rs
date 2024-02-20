@@ -24,8 +24,8 @@ use darkfi::{
 use darkfi_sdk::{
     blockchain::expected_reward,
     crypto::{
-        ecvrf::VrfProof, note::AeadEncryptedNote, pasta_prelude::*, PublicKey, SecretKey,
-        DARK_TOKEN_ID,
+        ecvrf::VrfProof, note::AeadEncryptedNote, pasta_prelude::*, Blind, FuncId, PublicKey,
+        SecretKey,
     },
     pasta::pallas,
 };
@@ -39,7 +39,7 @@ use crate::{
         },
         MoneyNote,
     },
-    model::{ClearInput, Coin, MoneyPoWRewardParamsV1, Output},
+    model::{ClearInput, Coin, MoneyPoWRewardParamsV1, Output, DARK_TOKEN_ID},
 };
 
 pub struct PoWRewardCallDebris {
@@ -69,17 +69,15 @@ pub struct PoWRewardCallBuilder {
     pub secret: SecretKey,
     /// Reward recipient's public key
     pub recipient: PublicKey,
-    /// Rewarded block height(slot)
+    /// Rewarded block height
     pub block_height: u64,
     /// Extending fork last proposal/block nonce
-    pub last_nonce: pallas::Base,
-    /// Extending fork last proposal/block hash
-    pub fork_hash: blake3::Hash,
+    pub last_nonce: u64,
     /// Extending fork second to last proposal/block hash
     pub fork_previous_hash: blake3::Hash,
     /// Merkle tree of coins used to create inclusion proofs
     /// Spend hook for the output
-    pub spend_hook: pallas::Base,
+    pub spend_hook: FuncId,
     /// User data for the output
     pub user_data: pallas::Base,
     /// `Mint_V1` zkas circuit ZkBinary
@@ -102,16 +100,16 @@ impl PoWRewardCallBuilder {
             public_key: self.recipient,
             value,
             token_id,
-            serial: pallas::Base::random(&mut OsRng),
-            spend_hook: pallas::Base::ZERO,
+            spend_hook: FuncId::none(),
             user_data: pallas::Base::ZERO,
+            blind: Blind::random(&mut OsRng),
         };
 
         // We just create the commitment blinds here. We simply encofce
         // that the clear input and the anon output have the same commitments.
         // Not sure if this can be avoided, but also is it really necessary to avoid?
-        let value_blind = pallas::Scalar::random(&mut OsRng);
-        let token_blind = pallas::Base::random(&mut OsRng);
+        let value_blind = Blind::random(&mut OsRng);
+        let token_blind = Blind::random(&mut OsRng);
 
         let c_input = ClearInput {
             value: input.value,
@@ -121,7 +119,7 @@ impl PoWRewardCallBuilder {
             signature_public: PublicKey::from_secret(input.signature_secret),
         };
 
-        let serial = pallas::Base::random(&mut OsRng);
+        let coin_blind = Blind::random(&mut OsRng);
 
         info!("Creating token mint proof for output");
         let (proof, public_inputs) = create_transfer_mint_proof(
@@ -130,17 +128,17 @@ impl PoWRewardCallBuilder {
             &output,
             value_blind,
             token_blind,
-            serial,
             self.spend_hook,
             self.user_data,
+            coin_blind,
         )?;
 
         let note = MoneyNote {
-            serial,
             value: output.value,
             token_id: output.token_id,
             spend_hook: self.spend_hook,
             user_data: self.user_data,
+            coin_blind,
             value_blind,
             token_blind,
             memo: vec![],
@@ -157,18 +155,12 @@ impl PoWRewardCallBuilder {
 
         info!("Building Consensus::ProposalV1 VRF proof");
         let mut vrf_input = Vec::with_capacity(32 + blake3::OUT_LEN + 32);
-        vrf_input.extend_from_slice(&self.last_nonce.to_repr());
+        vrf_input.extend_from_slice(&pallas::Base::from(self.last_nonce).to_repr());
         vrf_input.extend_from_slice(self.fork_previous_hash.as_bytes());
         vrf_input.extend_from_slice(&pallas::Base::from(self.block_height).to_repr());
         let vrf_proof = VrfProof::prove(self.secret, &vrf_input, &mut OsRng);
 
-        let params = MoneyPoWRewardParamsV1 {
-            input: c_input,
-            output: c_output,
-            fork_hash: self.fork_hash,
-            fork_previous_hash: self.fork_previous_hash,
-            vrf_proof,
-        };
+        let params = MoneyPoWRewardParamsV1 { input: c_input, output: c_output, vrf_proof };
         let debris = PoWRewardCallDebris { params, proofs: vec![proof] };
         Ok(debris)
     }

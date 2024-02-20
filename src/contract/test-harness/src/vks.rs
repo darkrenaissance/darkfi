@@ -38,22 +38,22 @@ use darkfi_dao_contract::{
 };
 use darkfi_deployooor_contract::DEPLOY_CONTRACT_ZKAS_DERIVE_NS_V1;
 use darkfi_money_contract::{
-    CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1, CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,
-    CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1, MONEY_CONTRACT_ZKAS_BURN_NS_V1,
+    MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1, MONEY_CONTRACT_ZKAS_BURN_NS_V1,
     MONEY_CONTRACT_ZKAS_FEE_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
     MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1, MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
 };
-use darkfi_sdk::crypto::{
-    contract_id::DEPLOYOOOR_CONTRACT_ID, CONSENSUS_CONTRACT_ID, DAO_CONTRACT_ID, MONEY_CONTRACT_ID,
-};
+use darkfi_sdk::crypto::{contract_id::DEPLOYOOOR_CONTRACT_ID, DAO_CONTRACT_ID, MONEY_CONTRACT_ID};
 use darkfi_serial::{deserialize, serialize};
+
 use log::debug;
 
-/// Update this if any circuits are changed
-const VKS_HASH: &str = "15c86acb8a96c21d9233e432975c1579c5b3b39c0b7568c4f3ae167783eeb548";
-const PKS_HASH: &str = "3bb43dbb2a5fbb54d406e637681c70bc748f158f4d725e71c1db38e85106966e";
+/// Update these if any circuits are changed.
+/// Delete the existing cachefiles, and enable debug logging, you will see the new hashes.
+const VKS_HASH: &str = "605a72d885e6194ac346a328482504ca37f0c990c2d636ad1b548a8bfb05542b";
+const PKS_HASH: &str = "277228a59ed3cc1df8a9d9e61b3230b4417512d649b4aca1fb3e5f02514a2e96";
 
-fn pks_path(typ: &str) -> Result<PathBuf> {
+/// Build a `PathBuf` to a cachefile
+fn cache_path(typ: &str) -> Result<PathBuf> {
     let output = Command::new("git").arg("rev-parse").arg("--show-toplevel").output()?.stdout;
     let mut path = PathBuf::from(String::from_utf8(output[..output.len() - 1].to_vec())?);
     path.push("src");
@@ -65,36 +65,19 @@ fn pks_path(typ: &str) -> Result<PathBuf> {
 
 /// (Bincode, Namespace, VK)
 pub type Vks = Vec<(Vec<u8>, String, Vec<u8>)>;
+/// (Bincode, Namespace, VK)
 pub type Pks = Vec<(Vec<u8>, String, Vec<u8>)>;
 
-pub fn read_or_gen_vks_and_pks() -> Result<(Pks, Vks)> {
-    let vks_path = pks_path("vks.bin")?;
-    let pks_path = pks_path("pks.bin")?;
+/// Generate or read cached PKs and VKs
+pub fn get_cached_pks_and_vks() -> Result<(Pks, Vks)> {
+    let pks_path = cache_path("pks.bin")?;
+    let vks_path = cache_path("vks.bin")?;
 
-    let mut vks = None;
     let mut pks = None;
-
-    if vks_path.exists() {
-        debug!("Found vks.bin");
-        let mut f = File::open(vks_path.clone())?;
-        let mut data = vec![];
-        f.read_to_end(&mut data)?;
-
-        let known_hash = blake3::Hash::from_hex(VKS_HASH)?;
-        let found_hash = blake3::hash(&data);
-
-        debug!("Known VKS hash: {}", known_hash);
-        debug!("Found VKS hash: {}", found_hash);
-
-        if known_hash == found_hash {
-            vks = Some(deserialize(&data)?)
-        }
-
-        drop(f);
-    }
+    let mut vks = None;
 
     if pks_path.exists() {
-        debug!("Found pks.bin");
+        debug!("Found {:?}", pks_path);
         let mut f = File::open(pks_path.clone())?;
         let mut data = vec![];
         f.read_to_end(&mut data)?;
@@ -112,10 +95,31 @@ pub fn read_or_gen_vks_and_pks() -> Result<(Pks, Vks)> {
         drop(f);
     }
 
+    if vks_path.exists() {
+        debug!("Found {:?}", vks_path);
+        let mut f = File::open(vks_path.clone())?;
+        let mut data = vec![];
+        f.read_to_end(&mut data)?;
+
+        let known_hash = blake3::Hash::from_hex(VKS_HASH)?;
+        let found_hash = blake3::hash(&data);
+
+        debug!("Known VKS hash: {}", known_hash);
+        debug!("Found VKS hash: {}", found_hash);
+
+        if known_hash == found_hash {
+            vks = Some(deserialize(&data)?)
+        }
+
+        drop(f);
+    }
+
+    // Cache is correct, return
     if let (Some(pks), Some(vks)) = (pks, vks) {
         return Ok((pks, vks))
     }
 
+    // Otherwise, build them
     let bins = vec![
         // Money
         &include_bytes!("../../money/proof/fee_v1.zk.bin")[..],
@@ -123,95 +127,85 @@ pub fn read_or_gen_vks_and_pks() -> Result<(Pks, Vks)> {
         &include_bytes!("../../money/proof/burn_v1.zk.bin")[..],
         &include_bytes!("../../money/proof/token_mint_v1.zk.bin")[..],
         &include_bytes!("../../money/proof/token_freeze_v1.zk.bin")[..],
+        &include_bytes!("../../money/proof/auth_token_mint_v1.zk.bin")[..],
         // DAO
-        &include_bytes!("../../dao/proof/dao-mint.zk.bin")[..],
-        &include_bytes!("../../dao/proof/dao-propose-input.zk.bin")[..],
-        &include_bytes!("../../dao/proof/dao-propose-main.zk.bin")[..],
-        &include_bytes!("../../dao/proof/dao-vote-input.zk.bin")[..],
-        &include_bytes!("../../dao/proof/dao-vote-main.zk.bin")[..],
-        &include_bytes!("../../dao/proof/dao-exec.zk.bin")[..],
-        &include_bytes!("../../dao/proof/dao-auth-money-transfer.zk.bin")[..],
-        &include_bytes!("../../dao/proof/dao-auth-money-transfer-enc-coin.zk.bin")[..],
-        // Consensus
-        &include_bytes!("../../consensus/proof/consensus_burn_v1.zk.bin")[..],
-        &include_bytes!("../../consensus/proof/consensus_mint_v1.zk.bin")[..],
-        &include_bytes!("../../consensus/proof/consensus_proposal_v1.zk.bin")[..],
+        &include_bytes!("../../dao/proof/mint.zk.bin")[..],
+        &include_bytes!("../../dao/proof/propose-input.zk.bin")[..],
+        &include_bytes!("../../dao/proof/propose-main.zk.bin")[..],
+        &include_bytes!("../../dao/proof/vote-input.zk.bin")[..],
+        &include_bytes!("../../dao/proof/vote-main.zk.bin")[..],
+        &include_bytes!("../../dao/proof/exec.zk.bin")[..],
+        &include_bytes!("../../dao/proof/auth-money-transfer.zk.bin")[..],
+        &include_bytes!("../../dao/proof/auth-money-transfer-enc-coin.zk.bin")[..],
         // Deployooor
         &include_bytes!("../../deployooor/proof/derive_contract_id.zk.bin")[..],
     ];
 
-    let mut vks = vec![];
     let mut pks = vec![];
+    let mut vks = vec![];
 
     for bincode in bins.iter() {
         let zkbin = ZkBinary::decode(bincode)?;
-        debug!("Building VK for {}", zkbin.namespace);
+        debug!("Building PK for {}", zkbin.namespace);
         let witnesses = empty_witnesses(&zkbin)?;
         let circuit = ZkCircuit::new(witnesses, &zkbin);
-        let vk = VerifyingKey::build(zkbin.k, &circuit);
-        let mut vk_buf = vec![];
-        vk.write(&mut vk_buf)?;
-        vks.push((bincode.to_vec(), zkbin.namespace.clone(), vk_buf));
 
         let pk = ProvingKey::build(zkbin.k, &circuit);
         let mut pk_buf = vec![];
         pk.write(&mut pk_buf)?;
-        pks.push((bincode.to_vec(), zkbin.namespace, pk_buf));
+        pks.push((bincode.to_vec(), zkbin.namespace.clone(), pk_buf));
+
+        debug!("Building VK for {}", zkbin.namespace);
+        let vk = VerifyingKey::build(zkbin.k, &circuit);
+        let mut vk_buf = vec![];
+        vk.write(&mut vk_buf)?;
+        vks.push((bincode.to_vec(), zkbin.namespace.clone(), vk_buf));
     }
 
-    debug!("Writing to {:?}", vks_path);
-    let mut f = File::create(vks_path)?;
-    let ser = serialize(&vks);
-    let hash = blake3::hash(&ser);
-    debug!("vks.bin {}", hash);
-    f.write_all(&ser)?;
-
-    debug!("Writing to {:?}", pks_path);
-    let mut f = File::create(pks_path)?;
+    debug!("Writing PKs to {:?}", pks_path);
+    let mut f = File::create(&pks_path)?;
     let ser = serialize(&pks);
     let hash = blake3::hash(&ser);
-    debug!("pks.bin {}", hash);
+    debug!("{:?} {}", pks_path, hash);
+    f.write_all(&ser)?;
+
+    debug!("Writing VKs to {:?}", vks_path);
+    let mut f = File::create(&vks_path)?;
+    let ser = serialize(&vks);
+    let hash = blake3::hash(&ser);
+    debug!("{:?} {}", vks_path, hash);
     f.write_all(&ser)?;
 
     Ok((pks, vks))
 }
 
+/// Inject cached VKs into a given blockchain database reference
 pub fn inject(sled_db: &sled::Db, vks: &Vks) -> Result<()> {
-    // Inject vks into the db
-    let money_zkas_tree_ptr = MONEY_CONTRACT_ID.hash_state_id(SMART_CONTRACT_ZKAS_DB_NAME);
-    let money_zkas_tree = sled_db.open_tree(money_zkas_tree_ptr)?;
+    // Derive the database names for the specific contracts
+    let money_db_name = MONEY_CONTRACT_ID.hash_state_id(SMART_CONTRACT_ZKAS_DB_NAME);
+    let dao_db_name = DAO_CONTRACT_ID.hash_state_id(SMART_CONTRACT_ZKAS_DB_NAME);
+    let deployooor_db_name = DEPLOYOOOR_CONTRACT_ID.hash_state_id(SMART_CONTRACT_ZKAS_DB_NAME);
 
-    let dao_zkas_tree_ptr = DAO_CONTRACT_ID.hash_state_id(SMART_CONTRACT_ZKAS_DB_NAME);
-    let dao_zkas_tree = sled_db.open_tree(dao_zkas_tree_ptr)?;
-
-    let consensus_zkas_tree_ptr = CONSENSUS_CONTRACT_ID.hash_state_id(SMART_CONTRACT_ZKAS_DB_NAME);
-    let consensus_zkas_tree = sled_db.open_tree(consensus_zkas_tree_ptr)?;
-
-    let deployooor_zkas_tree_ptr =
-        DEPLOYOOOR_CONTRACT_ID.hash_state_id(SMART_CONTRACT_ZKAS_DB_NAME);
-    let deployooor_zkas_tree = sled_db.open_tree(deployooor_zkas_tree_ptr)?;
+    // Create the db trees
+    let money_tree = sled_db.open_tree(money_db_name)?;
+    let dao_tree = sled_db.open_tree(dao_db_name)?;
+    let deployooor_tree = sled_db.open_tree(deployooor_db_name)?;
 
     for (bincode, namespace, vk) in vks.iter() {
         match namespace.as_str() {
-            // Money circuits
+            // Money contract circuits
             MONEY_CONTRACT_ZKAS_FEE_NS_V1 |
             MONEY_CONTRACT_ZKAS_MINT_NS_V1 |
             MONEY_CONTRACT_ZKAS_BURN_NS_V1 |
             MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1 |
-            MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1 => {
+            MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1 |
+            MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1 => {
                 let key = serialize(&namespace.as_str());
                 let value = serialize(&(bincode.clone(), vk.clone()));
-                money_zkas_tree.insert(key, value)?;
+                money_tree.insert(key, value)?;
             }
 
-            // Deployooor circuits
-            DEPLOY_CONTRACT_ZKAS_DERIVE_NS_V1 => {
-                let key = serialize(&namespace.as_str());
-                let value = serialize(&(bincode.clone(), vk.clone()));
-                deployooor_zkas_tree.insert(key, value)?;
-            }
-
-            // DAO circuits
+            // DAO contract circuits
             DAO_CONTRACT_ZKAS_DAO_MINT_NS |
             DAO_CONTRACT_ZKAS_DAO_VOTE_INPUT_NS |
             DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS |
@@ -222,16 +216,14 @@ pub fn inject(sled_db: &sled::Db, vks: &Vks) -> Result<()> {
             DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS => {
                 let key = serialize(&namespace.as_str());
                 let value = serialize(&(bincode.clone(), vk.clone()));
-                dao_zkas_tree.insert(key, value)?;
+                dao_tree.insert(key, value)?;
             }
 
-            // Consensus circuits
-            CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1 |
-            CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1 |
-            CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1 => {
+            // Deployooor contract circuits
+            DEPLOY_CONTRACT_ZKAS_DERIVE_NS_V1 => {
                 let key = serialize(&namespace.as_str());
                 let value = serialize(&(bincode.clone(), vk.clone()));
-                consensus_zkas_tree.insert(key, value)?;
+                deployooor_tree.insert(key, value)?;
             }
 
             x => panic!("Found unhandled zkas namespace {}", x),

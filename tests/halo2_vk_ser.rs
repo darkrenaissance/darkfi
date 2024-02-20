@@ -18,7 +18,7 @@
 use std::io::Cursor;
 
 use darkfi_sdk::crypto::{
-    pedersen::pedersen_commitment_u64, util::fp_mod_fv, MerkleNode, MerkleTree, PublicKey,
+    pedersen::pedersen_commitment_u64, util::fp_mod_fv, Blind, MerkleNode, MerkleTree, PublicKey,
     SecretKey,
 };
 use halo2_gadgets::poseidon::{
@@ -88,7 +88,7 @@ fn halo2_vk_ser() -> Result<()> {
     let pk = ProvingKey::build(zkbin.k, &circuit);
 
     let value = 666_u64;
-    let value_blind = pallas::Scalar::random(&mut OsRng);
+    let value_blind = Blind::random(&mut OsRng);
     let blind = pallas::Base::random(&mut OsRng);
     let secret = pallas::Base::random(&mut OsRng);
     let a = pallas::Base::from(42);
@@ -120,7 +120,7 @@ fn halo2_vk_ser() -> Result<()> {
     let (ephem_x, ephem_y) = PublicKey::from(pubkey * fp_mod_fv(ephem_secret.inner())).xy();
     let prover_witnesses = vec![
         Witness::Base(Value::known(pallas::Base::from(value))),
-        Witness::Scalar(Value::known(value_blind)),
+        Witness::Scalar(Value::known(value_blind.inner())),
         Witness::Base(Value::known(blind)),
         Witness::Base(Value::known(a)),
         Witness::Base(Value::known(b)),

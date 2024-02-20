@@ -85,7 +85,7 @@ struct Spawn {
 }
 
 impl Spawn {
-    async fn addresses(&self) -> Vec<JsonValue> {
+    async fn get_whitelist(&self) -> Vec<JsonValue> {
         self.p2p
             .hosts()
             .whitelist_fetch_all()
@@ -95,6 +95,25 @@ impl Spawn {
             .collect()
     }
 
+    async fn get_greylist(&self) -> Vec<JsonValue> {
+        self.p2p
+            .hosts()
+            .greylist_fetch_all()
+            .await
+            .iter()
+            .map(|(addr, _url)| JsonValue::String(addr.to_string()))
+            .collect()
+    }
+
+    async fn get_anchorlist(&self) -> Vec<JsonValue> {
+        self.p2p
+            .hosts()
+            .anchorlist_fetch_all()
+            .await
+            .iter()
+            .map(|(addr, _url)| JsonValue::String(addr.to_string()))
+            .collect()
+    }
     async fn info(&self) -> JsonValue {
         let mut addr_vec = vec![];
         for addr in &self.p2p.settings().inbound_addrs {
@@ -104,7 +123,9 @@ impl Spawn {
         JsonValue::Object(HashMap::from([
             ("name".to_string(), JsonValue::String(self.name.clone())),
             ("urls".to_string(), JsonValue::Array(addr_vec)),
-            ("hosts".to_string(), JsonValue::Array(self.addresses().await)),
+            ("whitelist".to_string(), JsonValue::Array(self.get_whitelist().await)),
+            ("greylist".to_string(), JsonValue::Array(self.get_greylist().await)),
+            ("anchorlist".to_string(), JsonValue::Array(self.get_anchorlist().await)),
         ]))
     }
 }
@@ -154,6 +175,16 @@ impl Lilith {
 
             let (entry, position) = hosts.whitelist_fetch_last().await;
             let url = &entry.0;
+
+            // Skip this node if it's being migrated currently.
+            if hosts.is_migrating(url).await {
+                continue
+            }
+
+            // Don't refine nodes that we are already connected to.
+            if p2p.exists(url).await {
+                continue
+            }
 
             if !ping_node(url.clone(), p2p.clone()).await {
                 let (_addr, last_seen) = hosts.get_whitelist_entry_at_addr(url).await.unwrap();

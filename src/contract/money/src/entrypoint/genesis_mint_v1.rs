@@ -17,10 +17,7 @@
  */
 
 use darkfi_sdk::{
-    crypto::{
-        pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, ContractId, MerkleNode,
-        DARK_TOKEN_ID,
-    },
+    crypto::{pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, ContractId, MerkleNode},
     dark_tree::DarkLeaf,
     db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
@@ -33,7 +30,7 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{
     error::MoneyError,
-    model::{MoneyGenesisMintParamsV1, MoneyGenesisMintUpdateV1},
+    model::{MoneyGenesisMintParamsV1, MoneyGenesisMintUpdateV1, DARK_TOKEN_ID},
     MoneyFunction, MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_MERKLE_TREE,
     MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_INFO_TREE, MONEY_CONTRACT_LATEST_COIN_ROOT,
     MONEY_CONTRACT_ZKAS_MINT_NS_V1,
@@ -87,13 +84,13 @@ pub(crate) fn money_genesis_mint_process_instruction_v1(
     let verifying_block_height = get_verifying_block_height();
     if verifying_block_height != 0 {
         msg!(
-            "[GenesisMintV1] Error: Call is executed for slot {}, not genesis",
+            "[GenesisMintV1] Error: Call is executed for block {}, not genesis",
             verifying_block_height
         );
         return Err(MoneyError::GenesisCallNonGenesisBlock.into())
     }
 
-    // Only DARK_TOKEN_ID can be minted on genesis slot.
+    // Only DARK_TOKEN_ID can be minted on genesis block
     if params.input.token_id != *DARK_TOKEN_ID {
         msg!("[GenesisMintV1] Error: Clear input used non-native token");
         return Err(MoneyError::TransferClearInputNonNativeToken.into())
@@ -119,7 +116,7 @@ pub(crate) fn money_genesis_mint_process_instruction_v1(
         return Err(MoneyError::ValueMismatch.into())
     }
 
-    if poseidon_hash([params.input.token_id.inner(), params.input.token_blind]) !=
+    if poseidon_hash([params.input.token_id.inner(), params.input.token_blind.inner()]) !=
         params.output.token_commit
     {
         msg!("[GenesisMintV1] Error: Token commitment mismatch");

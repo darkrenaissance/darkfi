@@ -16,94 +16,104 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::time::Instant;
-
 use darkfi::{
     tx::{ContractCallLeaf, Transaction, TransactionBuilder},
+    zk::halo2::Field,
     Result,
 };
 use darkfi_money_contract::{
-    client::genesis_mint_v1::GenesisMintCallBuilder, model::MoneyTokenMintParamsV1, MoneyFunction,
-    MONEY_CONTRACT_ZKAS_MINT_NS_V1,
+    client::{genesis_mint_v1::GenesisMintCallBuilder, MoneyNote, OwnCoin},
+    model::MoneyGenesisMintParamsV1,
+    MoneyFunction, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    crypto::{MerkleNode, MONEY_CONTRACT_ID},
+    crypto::{contract_id::MONEY_CONTRACT_ID, FuncId, MerkleNode},
     pasta::pallas,
     ContractCall,
 };
-use darkfi_serial::{serialize, Encodable};
+use darkfi_serial::AsyncEncodable;
+use log::debug;
 use rand::rngs::OsRng;
 
-use super::{Holder, TestHarness, TxAction};
+use super::{Holder, TestHarness};
 
 impl TestHarness {
-    pub fn genesis_mint(
+    /// Create a `Money::GenesisMint` transaction for a given [`Holder`].
+    ///
+    /// Returns the created [`Transaction`] and its parameters.
+    pub async fn genesis_mint(
         &mut self,
         holder: &Holder,
         amount: u64,
-    ) -> Result<(Transaction, MoneyTokenMintParamsV1)> {
+        spend_hook: Option<FuncId>,
+        user_data: Option<pallas::Base>,
+    ) -> Result<(Transaction, MoneyGenesisMintParamsV1)> {
         let wallet = self.holders.get(holder).unwrap();
 
         let (mint_pk, mint_zkbin) =
             self.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1.to_string()).unwrap();
 
-        let tx_action_benchmark =
-            self.tx_action_benchmarks.get_mut(&TxAction::MoneyGenesisMint).unwrap();
-
-        let timer = Instant::now();
-
-        // We're just going to be using a zero spend-hook and user-data
-        let spend_hook = pallas::Base::zero();
-        let user_data = pallas::Base::zero();
-
+        // Build the contract call
         let builder = GenesisMintCallBuilder {
             keypair: wallet.keypair,
             amount,
-            spend_hook,
-            user_data,
+            spend_hook: spend_hook.unwrap_or(FuncId::none()),
+            user_data: user_data.unwrap_or(pallas::Base::ZERO),
             mint_zkbin: mint_zkbin.clone(),
             mint_pk: mint_pk.clone(),
         };
 
         let debris = builder.build()?;
 
+        // Encode and build the transaction
         let mut data = vec![MoneyFunction::GenesisMintV1 as u8];
-        debris.params.encode(&mut data)?;
+        debris.params.encode_async(&mut data).await?;
         let call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
         let mut tx_builder =
             TransactionBuilder::new(ContractCallLeaf { call, proofs: debris.proofs }, vec![])?;
         let mut tx = tx_builder.build()?;
         let sigs = tx.create_sigs(&mut OsRng, &[wallet.keypair.secret])?;
         tx.signatures = vec![sigs];
-        tx_action_benchmark.creation_times.push(timer.elapsed());
-
-        // Calculate transaction sizes
-        let encoded: Vec<u8> = serialize(&tx);
-        let size = std::mem::size_of_val(&*encoded);
-        tx_action_benchmark.sizes.push(size);
-        let base58 = bs58::encode(&encoded).into_string();
-        let size = std::mem::size_of_val(&*base58);
-        tx_action_benchmark.broadcasted_sizes.push(size);
 
         Ok((tx, debris.params))
     }
 
+    /// Execute the [`Transaction`] created by `genesis_mint()`.
+    ///
+    /// Returns any found [`OwnCoin`]s.
     pub async fn execute_genesis_mint_tx(
         &mut self,
         holder: &Holder,
-        tx: &Transaction,
-        params: &MoneyTokenMintParamsV1,
-        slot: u64,
-    ) -> Result<()> {
+        tx: Transaction,
+        params: &MoneyGenesisMintParamsV1,
+        block_height: u64,
+        append: bool,
+    ) -> Result<Vec<OwnCoin>> {
         let wallet = self.holders.get_mut(holder).unwrap();
-        let tx_action_benchmark =
-            self.tx_action_benchmarks.get_mut(&TxAction::MoneyGenesisMint).unwrap();
-        let timer = Instant::now();
 
-        wallet.validator.add_transactions(&[tx.clone()], slot, true).await?;
+        // Execute the transaction
+        wallet.validator.add_transactions(&[tx], block_height, true, self.verify_fees).await?;
+
+        if !append {
+            return Ok(vec![])
+        }
+
         wallet.money_merkle_tree.append(MerkleNode::from(params.output.coin.inner()));
-        tx_action_benchmark.verify_times.push(timer.elapsed());
 
-        Ok(())
+        let Ok(note) = params.output.note.decrypt::<MoneyNote>(&wallet.keypair.secret) else {
+            return Ok(vec![])
+        };
+
+        let owncoin = OwnCoin {
+            coin: params.output.coin,
+            note: note.clone(),
+            secret: wallet.keypair.secret,
+            leaf_position: wallet.money_merkle_tree.mark().unwrap(),
+        };
+
+        debug!("Found new OwnCoin({}) for {:?}", owncoin.coin, holder);
+        wallet.unspent_money_coins.push(owncoin.clone());
+
+        Ok(vec![owncoin])
     }
 }

@@ -16,9 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use lazy_static::lazy_static;
 use rusqlite::types::Value;
 
 use darkfi::{tx::Transaction, Error, Result};
+use darkfi_sdk::crypto::MONEY_CONTRACT_ID;
 use darkfi_serial::{deserialize, serialize};
 
 use crate::{
@@ -28,8 +30,11 @@ use crate::{
 };
 
 // Wallet SQL table constant names. These have to represent the `wallet.sql`
-// SQL schema.
-const WALLET_TXS_HISTORY_TABLE: &str = "transactions_history";
+// SQL schema. Table names are prefixed with the contract ID to avoid collisions.
+lazy_static! {
+    pub static ref WALLET_TXS_HISTORY_TABLE: String =
+        format!("{}_transactions_history", MONEY_CONTRACT_ID.to_string());
+}
 const WALLET_TXS_HISTORY_COL_TX_HASH: &str = "transaction_hash";
 const WALLET_TXS_HISTORY_COL_STATUS: &str = "status";
 const WALLET_TXS_HISTORY_COL_TX: &str = "tx";
@@ -39,7 +44,7 @@ impl Drk {
     pub async fn insert_tx_history_record(&self, tx: &Transaction) -> WalletDbResult<()> {
         let query = format!(
             "INSERT INTO {} ({}, {}, {}) VALUES (?1, ?2, ?3);",
-            WALLET_TXS_HISTORY_TABLE,
+            *WALLET_TXS_HISTORY_TABLE,
             WALLET_TXS_HISTORY_COL_TX_HASH,
             WALLET_TXS_HISTORY_COL_STATUS,
             WALLET_TXS_HISTORY_COL_TX,
@@ -65,7 +70,7 @@ impl Drk {
         let row = match self
             .wallet
             .query_single(
-                WALLET_TXS_HISTORY_TABLE,
+                &WALLET_TXS_HISTORY_TABLE,
                 &[],
                 convert_named_params! {(WALLET_TXS_HISTORY_COL_TX_HASH, tx_hash)},
             )
@@ -107,7 +112,7 @@ impl Drk {
         let rows = self
             .wallet
             .query_multiple(
-                WALLET_TXS_HISTORY_TABLE,
+                &WALLET_TXS_HISTORY_TABLE,
                 &[WALLET_TXS_HISTORY_COL_TX_HASH, WALLET_TXS_HISTORY_COL_STATUS],
                 &[],
             )
@@ -139,7 +144,9 @@ impl Drk {
     ) -> WalletDbResult<()> {
         let query = format!(
             "UPDATE {} SET {} = ?1 WHERE {} = ?2;",
-            WALLET_TXS_HISTORY_TABLE, WALLET_TXS_HISTORY_COL_STATUS, WALLET_TXS_HISTORY_COL_TX_HASH,
+            *WALLET_TXS_HISTORY_TABLE,
+            WALLET_TXS_HISTORY_COL_STATUS,
+            WALLET_TXS_HISTORY_COL_TX_HASH,
         );
         self.wallet.exec_sql(&query, rusqlite::params![status, tx_hash]).await
     }
@@ -157,12 +164,12 @@ impl Drk {
         let mut txs_hashes = Vec::with_capacity(txs.len());
         for tx in txs {
             let Ok(tx_hash) = tx.hash() else { return Err(WalletDbError::QueryPreparationFailed) };
-            txs_hashes.push(tx_hash);
+            txs_hashes.push(format!("{tx_hash}"));
         }
         let txs_hashes_string = format!("{:?}", txs_hashes).replace('[', "(").replace(']', ")");
         let query = format!(
             "UPDATE {} SET {} = ?1 WHERE {} IN {};",
-            WALLET_TXS_HISTORY_TABLE,
+            *WALLET_TXS_HISTORY_TABLE,
             WALLET_TXS_HISTORY_COL_STATUS,
             WALLET_TXS_HISTORY_COL_TX_HASH,
             txs_hashes_string
@@ -175,7 +182,7 @@ impl Drk {
     pub async fn update_all_tx_history_records_status(&self, status: &str) -> WalletDbResult<()> {
         let query = format!(
             "UPDATE {} SET {} = ?1",
-            WALLET_TXS_HISTORY_TABLE, WALLET_TXS_HISTORY_COL_STATUS,
+            *WALLET_TXS_HISTORY_TABLE, WALLET_TXS_HISTORY_COL_STATUS,
         );
         self.wallet.exec_sql(&query, rusqlite::params![status]).await
     }

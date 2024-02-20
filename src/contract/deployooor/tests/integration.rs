@@ -25,22 +25,29 @@ fn deploy_integration() -> Result<()> {
     smol::block_on(async {
         init_logger();
 
-        // Slot to verify against
-        let current_slot = 0;
+        // Block height to verify against
+        let current_block_height = 0;
 
         // Initialize harness
-        let mut th =
-            TestHarness::new(&["money".to_string(), "deployooor".to_string()], false).await?;
+        let mut th = TestHarness::new(&[Holder::Alice], false).await?;
 
         // WASM bincode to deploy
         let wasm_bincode = include_bytes!("../../dao/darkfi_dao_contract.wasm");
 
         info!("[Alice] Building deploy tx");
-        let (deploy_tx, deploy_params) =
-            th.deploy_contract(&Holder::Alice, wasm_bincode.to_vec())?;
+        let (deploy_tx, deploy_params, fee_params) =
+            th.deploy_contract(&Holder::Alice, wasm_bincode.to_vec(), current_block_height).await?;
 
         info!("[Alice] Executing deploy tx");
-        th.execute_deploy_tx(&Holder::Alice, &deploy_tx, &deploy_params, current_slot).await?;
+        th.execute_deploy_tx(
+            &Holder::Alice,
+            deploy_tx,
+            &deploy_params,
+            &fee_params,
+            current_block_height,
+            true,
+        )
+        .await?;
 
         // Thanks for reading
         Ok(())

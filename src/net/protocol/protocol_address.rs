@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{sync::Arc, time::UNIX_EPOCH};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use log::{debug, warn};
@@ -25,7 +25,7 @@ use smol::Executor;
 use super::{
     super::{
         channel::ChannelPtr,
-        hosts::{refinery::ping_node, store::HostsPtr},
+        hosts::store::HostsPtr,
         message::{AddrsMessage, GetAddrsMessage},
         message_subscriber::MessageSubscription,
         p2p::P2pPtr,
@@ -37,9 +37,27 @@ use super::{
 };
 use crate::Result;
 
-/// Defines address and get-address messages.
-/// On receiving GetAddr, nodes send an AddrMessage containing whitelisted nodes.
-/// On receiving an AddrMessage, nodes enter the info into their greylists.
+/// Defines address and get-address messages. On receiving GetAddr, nodes
+/// reply an AddrMessage containing nodes from their hostlist.  On receiving
+/// an AddrMessage, nodes enter the info into their greylists.
+///
+/// The node selection logic for creating an AddrMessage is as follows:
+///
+/// 1. First select nodes matching the requested transports from the
+/// anchorlist. These nodes have the highest guarantee of being reachable, so we
+/// prioritize them first.
+///
+/// 2. Then select nodes matching the requested transports from the
+/// whitelist.
+///
+/// 3. Next select whitelist nodes that don't match our transports. We do
+/// this so that nodes share and propagate nodes of different transports,
+/// even if they can't connect to them themselves.
+///
+/// 4. Finally, if there's still space available, fill the remaining vector
+/// space with greylist entries. This is necessary in case this node does
+/// not support the transports of the requesting node (non-supported
+/// transports are stored on the greylist).
 pub struct ProtocolAddress {
     channel: ChannelPtr,
     addrs_sub: MessageSubscription<AddrsMessage>,
@@ -104,8 +122,9 @@ impl ProtocolAddress {
         }
     }
 
-    /// Handles receiving the get-address message. Continually receives get-address
-    /// messages on the get-address subscription. Then replies with an address message.
+    /// Handles receiving the get-address message. Continually receives
+    /// get-address messages on the get-address subscription. Then replies
+    /// with an address message.
     async fn handle_receive_get_addrs(self: Arc<Self>) -> Result<()> {
         debug!(
             target: "net::protocol_address::handle_receive_get_addrs()",
@@ -133,15 +152,31 @@ impl ProtocolAddress {
                 continue
             }
 
-            // First we grab address with the requested transports
+            // First we grab address with the requested transports from the anchorlist
             debug!(target: "net::protocol_address::handle_receive_get_addrs()",
-            "Fetching whitelist entries with schemes");
+            "Fetching anchorlist entries with schemes");
             let mut addrs = self
                 .hosts
-                .whitelist_fetch_n_random_with_schemes(&get_addrs_msg.transports, get_addrs_msg.max)
+                .anchorlist_fetch_n_random_with_schemes(
+                    &get_addrs_msg.transports,
+                    get_addrs_msg.max,
+                )
                 .await;
 
-            // Then we grab addresses without the requested transports
+            // Then we grab address with the requested transports from the whitelist
+            debug!(target: "net::protocol_address::handle_receive_get_addrs()",
+            "Fetching whitelist entries with schemes");
+            addrs.append(
+                &mut self
+                    .hosts
+                    .whitelist_fetch_n_random_with_schemes(
+                        &get_addrs_msg.transports,
+                        get_addrs_msg.max,
+                    )
+                    .await,
+            );
+
+            // Next we grab addresses without the requested transports
             // to fill a 2 * max length vector.
             debug!(target: "net::protocol_address::handle_receive_get_addrs()",
             "Fetching whitelist entries without schemes");
@@ -170,47 +205,45 @@ impl ProtocolAddress {
         }
     }
 
-    // If it's an outbound session, we have an extern_addr, and address advertising
-    // is enabled, send our address.
+    /// Send our own external addresses over a channel. Get the latest
+    /// last_seen field from InboundSession, and send it along with our
+    /// external address.
+    ///
+    /// If our external address is misconfigured, send an empty vector.
+    /// If we have reached our inbound connection limit, send our external
+    /// address with a `last_seen` field that corresponds to the last time
+    /// we could receive inbound connections.
     async fn send_my_addrs(self: Arc<Self>) -> Result<()> {
-        debug!(target: "net::protocol_address::send_my_addrs()", "[START]");
-        let type_id = self.channel.session_type_id();
+        debug!(
+            target: "net::protocol_address::send_my_addrs()",
+            "[START] channel address={}", self.channel.address(),
+        );
 
+        let type_id = self.channel.session_type_id();
         if type_id != SESSION_OUTBOUND {
-            debug!(target: "net::protocol_address::send_my_addrs()", "Not an outbound session. Stopping");
+            debug!(target: "net::protocol_address::send_my_addrs()",
+            "Not an outbound session. Stopping");
             return Ok(())
         }
 
         if self.settings.external_addrs.is_empty() {
-            debug!(target: "net::protocol_address::send_my_addrs()", "External addr not configured. Stopping");
+            debug!(target: "net::protocol_address::send_my_addrs()",
+            "External addr not configured. Stopping");
             return Ok(())
         }
 
-        debug!(
-            target: "net::protocol_address::send_my_addrs()",
-            "[START] address={}", self.channel.address(),
-        );
-
         let mut addrs = vec![];
-        for addr in self.settings.external_addrs.clone() {
-            //addrs.push((addr, 0));
-            debug!(target: "net::protocol_address::send_my_addrs()", "Attempting to ping self");
-
-            // See if we can do a version exchange with ourself.
-            if ping_node(addr.clone(), self.p2p.clone()).await {
-                // We're online. Update last_seen and broadcast our address.
-                let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-                addrs.push((addr, last_seen));
-            } else {
-                // Our external addr is invalid. If every external addr in the list is invalid
-                // we will just broadcast an empty AddrsMessage.
-                debug!(target: "net::protocol_address::send_my_addrs()", "Ping self failed!");
-            }
+        let inbound = self.p2p.session_inbound();
+        for (addr, last_seen) in inbound.ping_self.addrs.lock().await.iter() {
+            addrs.push((addr.clone(), *last_seen));
         }
-        debug!(target: "net::protocol_address::send_my_addrs()", "Broadcasting {} addresses", addrs.len());
+
+        debug!(target: "net::protocol_address::send_my_addrs()",
+        "Broadcasting {} addresses", addrs.len());
         let ext_addr_msg = AddrsMessage { addrs };
         self.channel.send(&ext_addr_msg).await?;
-        debug!(target: "net::protocol_address::send_my_addrs()", "[END]");
+        debug!(target: "net::protocol_address::send_my_addrs()",
+        "[END] channel address={}", self.channel.address());
 
         Ok(())
     }
@@ -218,12 +251,13 @@ impl ProtocolAddress {
 
 #[async_trait]
 impl ProtocolBase for ProtocolAddress {
-    /// Starts the address protocol. If it's an outbound session, has an external address
-    /// is set to advertise, pings our external address and sends it if everything is fine.
-    /// Runs receive address and get address protocols on the protocol task manager.
-    /// Then sends get-address msg.
+    /// Start the address protocol. If it's an outbound session and has an
+    /// external address, send our external address. Run receive address
+    /// and get address protocols on the protocol task manager. Then send
+    /// get-address msg.
     async fn start(self: Arc<Self>, ex: Arc<Executor<'_>>) -> Result<()> {
-        debug!(target: "net::protocol_address::start()", "START => address={}", self.channel.address());
+        debug!(target: "net::protocol_address::start()",
+        "START => address={}", self.channel.address());
 
         self.jobsman.clone().start(ex.clone());
 
@@ -240,7 +274,9 @@ impl ProtocolBase for ProtocolAddress {
         };
         self.channel.send(&get_addrs).await?;
 
-        debug!(target: "net::protocol_address::start()", "END => address={}", self.channel.address());
+        debug!(target: "net::protocol_address::start()",
+        "END => address={}", self.channel.address());
+
         Ok(())
     }
     fn name(&self) -> &'static str {

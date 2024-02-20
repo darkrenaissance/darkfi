@@ -20,12 +20,12 @@ witness "Fee_V1" {
     Base input_value,
     # Random blinding factor for the input value commitment
     Scalar input_value_blind,
-    # Unique serial corresponding to the input coin
-    Base input_serial,
     # Input coin's spend hook
     Base input_spend_hook,
     # Data passed from the input to the invoked contract
     Base input_user_data,
+    # Unique coin blind corresponding to the input coin
+    Base input_coin_blind,
     # Blinding factor for the encrypted user_data
     Base input_user_data_blind,
     # Value of the output coin
@@ -36,8 +36,8 @@ witness "Fee_V1" {
     Base output_user_data,
     # Random blinding factor for the output value commitment
     Scalar output_value_blind,
-    # Unique serial corresponding to the output coin
-    Base output_serial,
+    # Unique coin blind corresponding to the output coin
+    Base output_coin_blind,
     # Token ID
     Base token,
     # Random blinding factor for the token ID
@@ -55,9 +55,9 @@ circuit "Fee_V1" {
         pub_y,
         input_value,
         token,
-        input_serial,
         input_spend_hook,
         input_user_data,
+        input_coin_blind,
     );
 
     nullifier = poseidon_hash(input_secret, input_coin);
@@ -83,7 +83,8 @@ circuit "Fee_V1" {
     constrain_instance(user_data_enc);
 
     # Reveal spend_hook
-    constrain_instance(input_spend_hook);
+    ZERO = witness_base(0);
+    constrain_equal_base(input_spend_hook, ZERO);
 
     # Derive a public key for the signature and
     # constrain its coordinates
@@ -97,9 +98,9 @@ circuit "Fee_V1" {
         pub_y,
         output_value,
         token,
-        output_serial,
         output_spend_hook,
         output_user_data,
+        output_coin_blind,
     );
     constrain_instance(output_coin);
 

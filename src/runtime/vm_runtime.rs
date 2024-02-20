@@ -37,7 +37,6 @@ use wasmer_middlewares::{
 use super::{import, import::db::DbHandle, memory::MemoryManipulation};
 use crate::{
     blockchain::{contract_store::SMART_CONTRACT_ZKAS_DB_NAME, BlockchainOverlayPtr},
-    util::time::TimeKeeper,
     Error, Result,
 };
 
@@ -95,8 +94,8 @@ pub struct Env {
     pub memory: Option<Memory>,
     /// Object store for transferring memory from the host to VM
     pub objects: RefCell<Vec<Vec<u8>>>,
-    /// Helper structure to calculate time related operations
-    pub time_keeper: TimeKeeper,
+    /// Block height number runtime verifys against
+    pub verifying_block_height: u64,
     /// Parent `Instance`
     pub instance: Option<Arc<Instance>>,
 }
@@ -151,7 +150,7 @@ impl Runtime {
         wasm_bytes: &[u8],
         blockchain: BlockchainOverlayPtr,
         contract_id: ContractId,
-        time_keeper: TimeKeeper,
+        verifying_block_height: u64,
     ) -> Result<Self> {
         info!(target: "runtime::vm_runtime", "[WASM] Instantiating a new runtime");
         // This function will be called for each `Operator` encountered during
@@ -192,7 +191,7 @@ impl Runtime {
                 logs,
                 memory: None,
                 objects: RefCell::new(vec![]),
-                time_keeper,
+                verifying_block_height,
                 instance: None,
             },
         );
@@ -277,34 +276,10 @@ impl Runtime {
                     import::merkle::merkle_add,
                 ),
 
-                "get_current_epoch_" => Function::new_typed_with_env(
-                    &mut store,
-                    &ctx,
-                    import::util::get_current_epoch,
-                ),
-
-                "get_current_block_height_" => Function::new_typed_with_env(
-                    &mut store,
-                    &ctx,
-                    import::util::get_current_block_height,
-                ),
-
-                "get_current_slot_" => Function::new_typed_with_env(
-                    &mut store,
-                    &ctx,
-                    import::util::get_current_slot,
-                ),
-
                 "get_verifying_block_height_" => Function::new_typed_with_env(
                     &mut store,
                     &ctx,
                     import::util::get_verifying_block_height,
-                ),
-
-                "get_verifying_slot_" => Function::new_typed_with_env(
-                    &mut store,
-                    &ctx,
-                    import::util::get_verifying_slot,
                 ),
 
                 "get_verifying_block_height_epoch_" => Function::new_typed_with_env(
@@ -313,22 +288,16 @@ impl Runtime {
                     import::util::get_verifying_block_height_epoch,
                 ),
 
-                "get_verifying_slot_epoch_" => Function::new_typed_with_env(
-                    &mut store,
-                    &ctx,
-                    import::util::get_verifying_slot_epoch,
-                ),
-
-                "get_slot_" => Function::new_typed_with_env(
-                    &mut store,
-                    &ctx,
-                    import::util::get_slot,
-                ),
-
                 "get_blockchain_time_" => Function::new_typed_with_env(
                     &mut store,
                     &ctx,
                     import::util::get_blockchain_time,
+                ),
+
+                "get_last_block_info_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::util::get_last_block_info,
                 ),
             }
         };

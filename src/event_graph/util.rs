@@ -94,18 +94,18 @@ pub(super) fn seconds_until_next_rotation(next_rotation: u64) -> u64 {
 /// Generate a deterministic genesis event corresponding to the DAG's configuration.
 pub(super) fn generate_genesis(days_rotation: u64) -> Event {
     // Days rotation is u64 except zero
-    let genesis_days_rotation = if days_rotation == 0 { 1 } else { days_rotation };
+    let timestamp = if days_rotation == 0 {
+        INITIAL_GENESIS
+    } else {
+        // First check how many days passed since initial genesis.
+        let days_passed = days_since(INITIAL_GENESIS);
 
-    // First check how many days passed since initial genesis.
-    let days_passed = days_since(INITIAL_GENESIS);
+        // Calculate the number of days_rotation intervals since INITIAL_GENESIS
+        let rotations_since_genesis = days_passed / days_rotation;
 
-    // Calculate the number of days_rotation intervals since INITIAL_GENESIS
-    let rotations_since_genesis = days_passed / genesis_days_rotation;
-
-    // Calculate the timestamp of the most recent event
-    let timestamp =
-        INITIAL_GENESIS + (rotations_since_genesis * genesis_days_rotation * DAY as u64);
-
+        // Calculate the timestamp of the most recent event
+        INITIAL_GENESIS + (rotations_since_genesis * days_rotation * DAY as u64)
+    };
     Event {
         timestamp,
         content: GENESIS_CONTENTS.to_vec(),

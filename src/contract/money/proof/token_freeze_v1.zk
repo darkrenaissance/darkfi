@@ -6,22 +6,26 @@ constant "TokenFreeze_V1" {
 }
 
 witness "TokenFreeze_V1" {
-    # Token mint authority secret
-    Base mint_authority,
+    # TokenAttributes {
+    Base token_auth_parent,
+    Base token_blind,
+    # }
+
+    # Secret key used by mint
+    Base mint_secret,
 }
 
 circuit "TokenFreeze_V1" {
-    # TokenID derivation path (See darkfi_sdk::crypto::ContractId)
-    derivation_path = witness_base(69);
-
     # Derive public key for the mint authority
-    mint_public = ec_mul_base(mint_authority, NULLIFIER_K);
+    mint_public = ec_mul_base(mint_secret, NULLIFIER_K);
     mint_x = ec_get_x(mint_public);
     mint_y = ec_get_y(mint_public);
     constrain_instance(mint_x);
     constrain_instance(mint_y);
 
     # Derive the token ID
-    token_id = poseidon_hash(derivation_path, mint_x, mint_y);
+    token_user_data = poseidon_hash(mint_x, mint_y);
+    token_id = poseidon_hash(token_auth_parent, token_user_data, token_blind);
     constrain_instance(token_id);
 }
+

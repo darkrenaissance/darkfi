@@ -18,7 +18,9 @@
 
 use darkfi::Result;
 use darkfi_contract_test_harness::{init_logger, Holder, TestHarness};
+use darkfi_sdk::crypto::BaseBlind;
 use log::info;
+use rand::rngs::OsRng;
 
 #[test]
 fn token_mint() -> Result<()> {
@@ -31,40 +33,60 @@ fn token_mint() -> Result<()> {
         // Some numbers we want to assert
         const BOB_SUPPLY: u64 = 2000000000; // 10 BOB
 
-        // Slot to verify against
-        let current_slot = 0;
+        // Block height to verify against
+        let current_block_height = 0;
 
         // Initialize harness
-        let mut th = TestHarness::new(&["money".to_string()], false).await?;
+        let mut th = TestHarness::new(&HOLDERS, false).await?;
 
         info!("[Bob] Building BOB token mint tx");
-        let (token_mint_tx, token_mint_params) =
-            th.token_mint(BOB_SUPPLY, &Holder::Bob, &Holder::Bob, None, None)?;
+        let bob_token_blind = BaseBlind::random(&mut OsRng);
+        let (token_mint_tx, token_mint_params, token_auth_mint_params, fee_params) = th
+            .token_mint(
+                BOB_SUPPLY,
+                &Holder::Bob,
+                &Holder::Bob,
+                bob_token_blind,
+                None,
+                None,
+                current_block_height,
+            )
+            .await?;
 
         for holder in &HOLDERS {
             info!("[{holder:?}] Executing BOB token mint tx");
-            th.execute_token_mint_tx(holder, &token_mint_tx, &token_mint_params, current_slot)
-                .await?;
+            th.execute_token_mint_tx(
+                holder,
+                token_mint_tx.clone(),
+                &token_mint_params,
+                &token_auth_mint_params,
+                &fee_params,
+                current_block_height,
+                true,
+            )
+            .await?;
         }
 
         th.assert_trees(&HOLDERS);
 
-        // Bob gathers his new coin
-        th.gather_owncoin(&Holder::Bob, &token_mint_params.output, None)?;
-
         info!("[Bob] Building BOB token freeze tx");
-        let (token_frz_tx, token_frz_params) = th.token_freeze(&Holder::Bob)?;
+        let (token_frz_tx, token_frz_params, fee_params) =
+            th.token_freeze(&Holder::Bob, current_block_height).await?;
 
         for holder in &HOLDERS {
             info!("[{holder:?}] Executing BOB token freeze tx");
-            th.execute_token_freeze_tx(holder, &token_frz_tx, &token_frz_params, current_slot)
-                .await?;
+            th.execute_token_freeze_tx(
+                holder,
+                token_frz_tx.clone(),
+                &token_frz_params,
+                &fee_params,
+                current_block_height,
+                true,
+            )
+            .await?;
         }
 
         th.assert_trees(&HOLDERS);
-
-        // Statistics
-        th.statistics();
 
         // Thanks for reading
         Ok(())

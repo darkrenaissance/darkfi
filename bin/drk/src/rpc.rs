@@ -32,12 +32,12 @@ use darkfi::{
     util::encoding::base64,
     Error, Result,
 };
-use darkfi_money_contract::client::{MONEY_INFO_COL_LAST_SCANNED_SLOT, MONEY_INFO_TABLE};
 use darkfi_sdk::crypto::ContractId;
 use darkfi_serial::{deserialize, serialize};
 
-use super::{
+use crate::{
     error::{WalletDbError, WalletDbResult},
+    money::{MONEY_INFO_COL_LAST_SCANNED_BLOCK, MONEY_INFO_TABLE},
     Drk,
 };
 
@@ -52,20 +52,20 @@ impl Drk {
         endpoint: Url,
         ex: Arc<smol::Executor<'static>>,
     ) -> Result<()> {
-        let req = JsonRequest::new("blockchain.last_known_slot", JsonValue::Array(vec![]));
+        let req = JsonRequest::new("blockchain.last_known_block", JsonValue::Array(vec![]));
         let rep = self.rpc_client.request(req).await?;
         let last_known = *rep.get::<f64>().unwrap() as u64;
-        let last_scanned = match self.last_scanned_slot().await {
+        let last_scanned = match self.last_scanned_block().await {
             Ok(l) => l,
             Err(e) => {
                 return Err(Error::RusqliteError(format!(
-                    "[subscribe_blocks] Retrieving last scanned slot failed: {e:?}"
+                    "[subscribe_blocks] Retrieving last scanned block failed: {e:?}"
                 )))
             }
         };
 
         if last_known != last_scanned {
-            eprintln!("Warning: Last scanned slot is not the last known slot.");
+            eprintln!("Warning: Last scanned block is not the last known block.");
             eprintln!("You should first fully scan the blockchain, and then subscribe");
             return Err(Error::RusqliteError(
                 "[subscribe_blocks] Blockchain not fully scanned".to_string(),
@@ -124,7 +124,7 @@ impl Drk {
 
                     for param in params {
                         let param = param.get::<String>().unwrap();
-                        let bytes = bs58::decode(param).into_vec()?;
+                        let bytes = base64::decode(param).unwrap();
 
                         let block_data: BlockInfo = deserialize(&bytes)?;
                         eprintln!("=======================================");
@@ -177,12 +177,12 @@ impl Drk {
             self.apply_tx_money_data(tx, true).await?;
         }
 
-        // Write this slot into `last_scanned_slot`
+        // Write this block height into `last_scanned_block`
         let query =
-            format!("UPDATE {} SET {} = ?1;", MONEY_INFO_TABLE, MONEY_INFO_COL_LAST_SCANNED_SLOT);
+            format!("UPDATE {} SET {} = ?1;", *MONEY_INFO_TABLE, MONEY_INFO_COL_LAST_SCANNED_BLOCK);
         if let Err(e) = self.wallet.exec_sql(&query, rusqlite::params![block.header.height]).await {
             return Err(Error::RusqliteError(format!(
-                "[scan_block_money] Update last scanned slot failed: {e:?}"
+                "[scan_block_money] Update last scanned block failed: {e:?}"
             )))
         }
 
@@ -202,12 +202,17 @@ impl Drk {
         Ok(())
     }
 
-    /// Scans the blockchain starting from the last scanned slot, for relevant
+    /// Scans the blockchain starting from the last scanned block, for relevant
     /// money transfer transactions. If reset flag is provided, Merkle tree state
     /// and coins are reset, and start scanning from beginning. Alternatively,
     /// it looks for a checkpoint in the wallet to reset and start scanning from.
     pub async fn scan_blocks(&self, reset: bool) -> WalletDbResult<()> {
-        let mut sl = if reset {
+        // Grab last scanned block height
+        let mut height = self.last_scanned_block().await?;
+        // If last scanned block is genesis (0) or reset flag
+        // has been provided we reset, otherwise continue with
+        // the next block height
+        if height == 0 || reset {
             self.reset_money_tree().await?;
             self.reset_money_coins().await?;
             self.reset_dao_trees().await?;
@@ -215,40 +220,39 @@ impl Drk {
             self.reset_dao_proposals().await?;
             self.reset_dao_votes().await?;
             self.update_all_tx_history_records_status("Rejected").await?;
-            0
+            height = 0;
         } else {
-            self.last_scanned_slot().await?
+            height += 1;
         };
 
-        let req = JsonRequest::new("blockchain.last_known_slot", JsonValue::Array(vec![]));
-        let rep = match self.rpc_client.request(req).await {
-            Ok(r) => r,
-            Err(e) => {
-                eprintln!("[scan_blocks] RPC client request failed: {e:?}");
-                return Err(WalletDbError::GenericError)
-            }
-        };
-        let last = *rep.get::<f64>().unwrap() as u64;
-
-        eprintln!("Requested to scan from slot number: {sl}");
-        eprintln!("Last known slot number reported by darkfid: {last}");
-
-        // Already scanned last known slot
-        if sl == last {
-            return Ok(())
-        }
-
-        while sl <= last {
-            eprint!("Requesting slot {}... ", sl);
-            let requested_block = match self.get_block_by_slot(sl).await {
+        loop {
+            let req = JsonRequest::new("blockchain.last_known_block", JsonValue::Array(vec![]));
+            let rep = match self.rpc_client.request(req).await {
                 Ok(r) => r,
                 Err(e) => {
                     eprintln!("[scan_blocks] RPC client request failed: {e:?}");
                     return Err(WalletDbError::GenericError)
                 }
             };
-            if let Some(block) = requested_block {
-                eprintln!("Found");
+            let last = *rep.get::<f64>().unwrap() as u64;
+
+            eprintln!("Requested to scan from block number: {height}");
+            eprintln!("Last known block number reported by darkfid: {last}");
+
+            // Already scanned last known block
+            if height >= last {
+                return Ok(())
+            }
+
+            while height <= last {
+                eprint!("Requesting block {}... ", height);
+                let block = match self.get_block_by_height(height).await {
+                    Ok(r) => r,
+                    Err(e) => {
+                        eprintln!("[scan_blocks] RPC client request failed: {e:?}");
+                        return Err(WalletDbError::GenericError)
+                    }
+                };
                 if let Err(e) = self.scan_block_money(&block).await {
                     eprintln!("[scan_blocks] Scan block Money failed: {e:?}");
                     return Err(WalletDbError::GenericError)
@@ -258,41 +262,23 @@ impl Drk {
                     return Err(WalletDbError::GenericError)
                 };
                 self.update_tx_history_records_status(&block.txs, "Finalized").await?;
-            } else {
-                eprintln!("Not found");
-                // Write down the slot number into back to the wallet
-                // This might be a bit intense, but we accept it for now.
-                let query = format!(
-                    "UPDATE {} SET {} = ?1;",
-                    MONEY_INFO_TABLE, MONEY_INFO_COL_LAST_SCANNED_SLOT
-                );
-                self.wallet.exec_sql(&query, rusqlite::params![sl]).await?;
+                height += 1;
             }
-            sl += 1;
         }
-
-        Ok(())
     }
 
-    // Queries darkfid for a block with given slot
-    async fn get_block_by_slot(&self, slot: u64) -> Result<Option<BlockInfo>> {
+    // Queries darkfid for a block with given height
+    async fn get_block_by_height(&self, height: u64) -> Result<BlockInfo> {
         let req = JsonRequest::new(
-            "blockchain.get_slot",
-            JsonValue::Array(vec![JsonValue::String(slot.to_string())]),
+            "blockchain.get_block",
+            JsonValue::Array(vec![JsonValue::String(height.to_string())]),
         );
 
-        // This API is weird, we need some way of telling it's an empty slot and
-        // not an error
-        match self.rpc_client.request(req).await {
-            Ok(params) => {
-                let param = params.get::<String>().unwrap();
-                let bytes = bs58::decode(param).into_vec()?;
-                let block = deserialize(&bytes)?;
-                Ok(Some(block))
-            }
-
-            Err(_) => Ok(None),
-        }
+        let params = self.rpc_client.request(req).await?;
+        let param = params.get::<String>().unwrap();
+        let bytes = base64::decode(param).unwrap();
+        let block = deserialize(&bytes)?;
+        Ok(block)
     }
 
     /// Broadcast a given transaction to darkfid and forward onto the network.

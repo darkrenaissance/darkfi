@@ -132,9 +132,11 @@ impl Transaction {
             "tx.verify_sigs: data_hash: {:?}", data_hash.as_bytes(),
         );
 
-        assert!(pub_table.len() == self.signatures.len());
+        assert_eq!(self.signatures.len(), pub_table.len());
 
         for (i, (sigs, pubkeys)) in self.signatures.iter().zip(pub_table.iter()).enumerate() {
+            assert_eq!(sigs.len(), pubkeys.len());
+
             for (pubkey, signature) in pubkeys.iter().zip(sigs) {
                 debug!(
                     target: "tx::verify_sigs",

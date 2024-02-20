@@ -18,6 +18,7 @@
 
 use std::{collections::HashMap, fmt};
 
+use lazy_static::lazy_static;
 use rand::rngs::OsRng;
 use rusqlite::types::Value;
 
@@ -29,35 +30,20 @@ use darkfi::{
     Error, Result,
 };
 use darkfi_dao_contract::{
-    client::{
-        make_mint_call, DaoProposeCall, DaoProposeStakeInput, DaoVoteCall, DaoVoteInput,
-        DAO_DAOS_COL_APPROVAL_RATIO_BASE, DAO_DAOS_COL_APPROVAL_RATIO_QUOT,
-        DAO_DAOS_COL_BULLA_BLIND, DAO_DAOS_COL_CALL_INDEX, DAO_DAOS_COL_DAO_ID,
-        DAO_DAOS_COL_GOV_TOKEN_ID, DAO_DAOS_COL_LEAF_POSITION, DAO_DAOS_COL_NAME,
-        DAO_DAOS_COL_PROPOSER_LIMIT, DAO_DAOS_COL_QUORUM, DAO_DAOS_COL_SECRET,
-        DAO_DAOS_COL_TX_HASH, DAO_DAOS_TABLE, DAO_PROPOSALS_COL_AMOUNT,
-        DAO_PROPOSALS_COL_BULLA_BLIND, DAO_PROPOSALS_COL_CALL_INDEX, DAO_PROPOSALS_COL_DAO_ID,
-        DAO_PROPOSALS_COL_LEAF_POSITION, DAO_PROPOSALS_COL_MONEY_SNAPSHOT_TREE,
-        DAO_PROPOSALS_COL_PROPOSAL_ID, DAO_PROPOSALS_COL_RECV_PUBLIC,
-        DAO_PROPOSALS_COL_SENDCOIN_TOKEN_ID, DAO_PROPOSALS_COL_TX_HASH, DAO_PROPOSALS_TABLE,
-        DAO_TREES_COL_DAOS_TREE, DAO_TREES_COL_PROPOSALS_TREE, DAO_TREES_TABLE,
-        DAO_VOTES_COL_ALL_VOTE_BLIND, DAO_VOTES_COL_ALL_VOTE_VALUE, DAO_VOTES_COL_CALL_INDEX,
-        DAO_VOTES_COL_PROPOSAL_ID, DAO_VOTES_COL_TX_HASH, DAO_VOTES_COL_VOTE_OPTION,
-        DAO_VOTES_COL_YES_VOTE_BLIND, DAO_VOTES_TABLE,
-    },
+    client::{make_mint_call, DaoProposeCall, DaoProposeStakeInput, DaoVoteCall, DaoVoteInput},
     model::{DaoAuthCall, DaoBulla, DaoMintParams, DaoProposeParams, DaoVoteParams},
     DaoFunction, DAO_CONTRACT_ZKAS_DAO_MINT_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS,
     DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS, DAO_CONTRACT_ZKAS_DAO_VOTE_INPUT_NS,
     DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS,
 };
-use darkfi_money_contract::{client::OwnCoin, MoneyFunction};
+use darkfi_money_contract::{client::OwnCoin, model::TokenId, MoneyFunction};
 use darkfi_sdk::{
     bridgetree,
     crypto::{
         poseidon_hash,
         util::{fp_mod_fv, fp_to_u64},
-        Keypair, MerkleNode, MerkleTree, PublicKey, SecretKey, TokenId, DAO_CONTRACT_ID,
-        MONEY_CONTRACT_ID,
+        BaseBlind, Blind, FuncId, FuncRef, Keypair, MerkleNode, MerkleTree, PublicKey, ScalarBlind,
+        SecretKey, DAO_CONTRACT_ID, MONEY_CONTRACT_ID,
     },
     pasta::pallas,
     ContractCall,
@@ -73,12 +59,68 @@ use crate::{
     Drk,
 };
 
+// Wallet SQL table constant names. These have to represent the `wallet.sql`
+// SQL schema. Table names are prefixed with the contract ID to avoid collisions.
+lazy_static! {
+    pub static ref DAO_DAOS_TABLE: String = format!("{}_dao_daos", DAO_CONTRACT_ID.to_string());
+    pub static ref DAO_TREES_TABLE: String = format!("{}_dao_trees", DAO_CONTRACT_ID.to_string());
+    pub static ref DAO_COINS_TABLE: String = format!("{}_dao_coins", DAO_CONTRACT_ID.to_string());
+    pub static ref DAO_PROPOSALS_TABLE: String =
+        format!("{}_dao_proposals", DAO_CONTRACT_ID.to_string());
+    pub static ref DAO_VOTES_TABLE: String = format!("{}_dao_votes", DAO_CONTRACT_ID.to_string());
+}
+
+// DAO_DAOS_TABLE
+pub const DAO_DAOS_COL_DAO_ID: &str = "dao_id";
+pub const DAO_DAOS_COL_NAME: &str = "name";
+pub const DAO_DAOS_COL_PROPOSER_LIMIT: &str = "proposer_limit";
+pub const DAO_DAOS_COL_QUORUM: &str = "quorum";
+pub const DAO_DAOS_COL_APPROVAL_RATIO_BASE: &str = "approval_ratio_base";
+pub const DAO_DAOS_COL_APPROVAL_RATIO_QUOT: &str = "approval_ratio_quot";
+pub const DAO_DAOS_COL_GOV_TOKEN_ID: &str = "gov_token_id";
+pub const DAO_DAOS_COL_SECRET: &str = "secret";
+pub const DAO_DAOS_COL_BULLA_BLIND: &str = "bulla_blind";
+pub const DAO_DAOS_COL_LEAF_POSITION: &str = "leaf_position";
+pub const DAO_DAOS_COL_TX_HASH: &str = "tx_hash";
+pub const DAO_DAOS_COL_CALL_INDEX: &str = "call_index";
+
+// DAO_TREES_TABLE
+pub const DAO_TREES_COL_DAOS_TREE: &str = "daos_tree";
+pub const DAO_TREES_COL_PROPOSALS_TREE: &str = "proposals_tree";
+
+// DAO_COINS_TABLE
+pub const _DAO_COINS_COL_COIN_ID: &str = "coin_id";
+pub const _DAO_COINS_COL_DAO_ID: &str = "dao_id";
+
+// DAO_PROPOSALS_TABLE
+pub const DAO_PROPOSALS_COL_PROPOSAL_ID: &str = "proposal_id";
+pub const DAO_PROPOSALS_COL_DAO_ID: &str = "dao_id";
+pub const DAO_PROPOSALS_COL_RECV_PUBLIC: &str = "recv_public";
+pub const DAO_PROPOSALS_COL_AMOUNT: &str = "amount";
+pub const DAO_PROPOSALS_COL_SENDCOIN_TOKEN_ID: &str = "sendcoin_token_id";
+pub const DAO_PROPOSALS_COL_BULLA_BLIND: &str = "bulla_blind";
+pub const DAO_PROPOSALS_COL_LEAF_POSITION: &str = "leaf_position";
+pub const DAO_PROPOSALS_COL_MONEY_SNAPSHOT_TREE: &str = "money_snapshot_tree";
+pub const DAO_PROPOSALS_COL_TX_HASH: &str = "tx_hash";
+pub const DAO_PROPOSALS_COL_CALL_INDEX: &str = "call_index";
+pub const _DAO_PROPOSALS_COL_OUR_VOTE_ID: &str = "our_vote_id";
+
+// DAO_VOTES_TABLE
+pub const _DAO_VOTES_COL_VOTE_ID: &str = "vote_id";
+pub const DAO_VOTES_COL_PROPOSAL_ID: &str = "proposal_id";
+pub const DAO_VOTES_COL_VOTE_OPTION: &str = "vote_option";
+pub const DAO_VOTES_COL_YES_VOTE_BLIND: &str = "yes_vote_blind";
+pub const DAO_VOTES_COL_ALL_VOTE_VALUE: &str = "all_vote_value";
+pub const DAO_VOTES_COL_ALL_VOTE_BLIND: &str = "all_vote_blind";
+pub const DAO_VOTES_COL_TX_HASH: &str = "tx_hash";
+pub const DAO_VOTES_COL_CALL_INDEX: &str = "call_index";
+
 #[derive(SerialEncodable, SerialDecodable, Clone)]
 pub struct DaoProposalInfo {
     pub dest: PublicKey,
     pub amount: u64,
     pub token_id: TokenId,
-    pub blind: pallas::Base,
+    pub blind: BaseBlind,
 }
 
 #[derive(SerialEncodable, SerialDecodable)]
@@ -151,7 +193,7 @@ pub struct Dao {
     /// Secret key for the DAO
     pub secret_key: SecretKey,
     /// DAO bulla blind
-    pub bulla_blind: pallas::Base,
+    pub bulla_blind: BaseBlind,
     /// Leaf position of the DAO in the Merkle tree of DAOs
     pub leaf_position: Option<bridgetree::Position>,
     /// The transaction hash where the DAO was deployed
@@ -172,7 +214,7 @@ impl Dao {
             self.gov_token_id.inner(),
             x,
             y,
-            self.bulla_blind,
+            self.bulla_blind.inner(),
         ]))
     }
 
@@ -234,7 +276,7 @@ pub struct DaoProposal {
     /// Token ID to be sent
     pub token_id: TokenId,
     /// Proposal's bulla blind
-    pub bulla_blind: pallas::Base,
+    pub bulla_blind: BaseBlind,
     /// Leaf position of this proposal in the Merkle tree of proposals
     pub leaf_position: Option<bridgetree::Position>,
     /// Snapshotted Money Merkle tree
@@ -257,7 +299,7 @@ impl DaoProposal {
             pallas::Base::from(self.amount),
             self.token_id.inner(),
             self.dao_bulla.inner(),
-            self.bulla_blind,
+            self.bulla_blind.inner(),
         ])
     }
 }
@@ -304,11 +346,11 @@ pub struct DaoVote {
     /// The vote
     pub vote_option: bool,
     /// Blinding factor for the yes vote
-    pub yes_vote_blind: pallas::Scalar,
+    pub yes_vote_blind: ScalarBlind,
     /// Value of all votes
     pub all_vote_value: u64,
     /// Blinding facfor of all votes
-    pub all_vote_blind: pallas::Scalar,
+    pub all_vote_blind: ScalarBlind,
     /// Transaction hash where this vote was casted
     pub tx_hash: Option<blake3::Hash>,
     /// call index in the transaction where this vote was casted
@@ -319,7 +361,7 @@ impl Drk {
     /// Initialize wallet with tables for the DAO contract.
     pub async fn initialize_dao(&self) -> WalletDbResult<()> {
         // Initialize DAO wallet schema
-        let wallet_schema = include_str!("../../../src/contract/dao/wallet.sql");
+        let wallet_schema = include_str!("../dao.sql");
         self.wallet.exec_batch_sql(wallet_schema).await?;
 
         // Check if we have to initialize the Merkle trees.
@@ -327,7 +369,11 @@ impl Drk {
         // a bit better and safer.
         // For now, on success, we don't care what's returned, but in the future
         // we should actually check it.
-        if self.wallet.query_single(DAO_TREES_TABLE, &[DAO_TREES_COL_DAOS_TREE], &[]).await.is_err()
+        if self
+            .wallet
+            .query_single(&DAO_TREES_TABLE, &[DAO_TREES_COL_DAOS_TREE], &[])
+            .await
+            .is_err()
         {
             eprintln!("Initializing DAO Merkle trees");
             let tree = MerkleTree::new(100);
@@ -345,13 +391,13 @@ impl Drk {
         proposals_tree: &MerkleTree,
     ) -> WalletDbResult<()> {
         // First we remove old records
-        let query = format!("DELETE FROM {};", DAO_TREES_TABLE);
+        let query = format!("DELETE FROM {};", *DAO_TREES_TABLE);
         self.wallet.exec_sql(&query, &[]).await?;
 
         // then we insert the new one
         let query = format!(
             "INSERT INTO {} ({}, {}) VALUES (?1, ?2);",
-            DAO_TREES_TABLE, DAO_TREES_COL_DAOS_TREE, DAO_TREES_COL_PROPOSALS_TREE,
+            *DAO_TREES_TABLE, DAO_TREES_COL_DAOS_TREE, DAO_TREES_COL_PROPOSALS_TREE,
         );
         self.wallet
             .exec_sql(&query, rusqlite::params![serialize(daos_tree), serialize(proposals_tree)])
@@ -360,7 +406,7 @@ impl Drk {
 
     /// Fetch DAO Merkle trees from the wallet.
     pub async fn get_dao_trees(&self) -> Result<(MerkleTree, MerkleTree)> {
-        let row = match self.wallet.query_single(DAO_TREES_TABLE, &[], &[]).await {
+        let row = match self.wallet.query_single(&DAO_TREES_TABLE, &[], &[]).await {
             Ok(r) => r,
             Err(e) => {
                 return Err(Error::RusqliteError(format!(
@@ -395,7 +441,7 @@ impl Drk {
 
     /// Fetch all known DAOs from the wallet.
     pub async fn get_daos(&self) -> Result<Vec<Dao>> {
-        let rows = match self.wallet.query_multiple(DAO_DAOS_TABLE, &[], &[]).await {
+        let rows = match self.wallet.query_multiple(&DAO_DAOS_TABLE, &[], &[]).await {
             Ok(r) => r,
             Err(e) => {
                 return Err(Error::RusqliteError(format!("[get_daos] DAOs retrieval failed: {e:?}")))
@@ -611,7 +657,7 @@ impl Drk {
         let rows = match self
             .wallet
             .query_multiple(
-                DAO_PROPOSALS_TABLE,
+                &DAO_PROPOSALS_TABLE,
                 &[],
                 convert_named_params! {(DAO_PROPOSALS_COL_DAO_ID, dao_id)},
             )
@@ -773,9 +819,9 @@ impl Drk {
                     let vote_option = fp_to_u64(note[0]).unwrap();
                     assert!(vote_option == 0 || vote_option == 1);
                     let vote_option = vote_option != 0;
-                    let yes_vote_blind = fp_mod_fv(note[1]);
+                    let yes_vote_blind = Blind(fp_mod_fv(note[1]));
                     let all_vote_value = fp_to_u64(note[2]).unwrap();
-                    let all_vote_blind = fp_mod_fv(note[3]);
+                    let all_vote_blind = Blind(fp_mod_fv(note[3]));
 
                     let v = DaoVote {
                         id: 0,
@@ -822,7 +868,7 @@ impl Drk {
         for dao in daos {
             let query = format!(
                 "UPDATE {} SET {} = ?1, {} = ?2, {} = ?3 WHERE {} = {};",
-                DAO_DAOS_TABLE,
+                *DAO_DAOS_TABLE,
                 DAO_DAOS_COL_LEAF_POSITION,
                 DAO_DAOS_COL_TX_HASH,
                 DAO_DAOS_COL_CALL_INDEX,
@@ -849,7 +895,7 @@ impl Drk {
         for dao in daos {
             let query = format!(
                 "UPDATE {} SET {} = ?1, {} = ?2, {} = ?3 WHERE {} = {};",
-                DAO_DAOS_TABLE,
+                *DAO_DAOS_TABLE,
                 DAO_DAOS_COL_LEAF_POSITION,
                 DAO_DAOS_COL_TX_HASH,
                 DAO_DAOS_COL_CALL_INDEX,
@@ -877,7 +923,7 @@ impl Drk {
 
             let query = format!(
                 "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9);",
-                DAO_PROPOSALS_TABLE,
+                *DAO_PROPOSALS_TABLE,
                 DAO_PROPOSALS_COL_DAO_ID,
                 DAO_PROPOSALS_COL_RECV_PUBLIC,
                 DAO_PROPOSALS_COL_AMOUNT,
@@ -923,7 +969,7 @@ impl Drk {
 
             let query = format!(
                 "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7);",
-                DAO_VOTES_TABLE,
+                *DAO_VOTES_TABLE,
                 DAO_VOTES_COL_PROPOSAL_ID,
                 DAO_VOTES_COL_VOTE_OPTION,
                 DAO_VOTES_COL_YES_VOTE_BLIND,
@@ -983,14 +1029,14 @@ impl Drk {
     /// Reset all DAO proposals in the wallet.
     pub async fn reset_dao_proposals(&self) -> WalletDbResult<()> {
         eprintln!("Resetting DAO proposals");
-        let query = format!("DELETE FROM {};", DAO_PROPOSALS_TABLE);
+        let query = format!("DELETE FROM {};", *DAO_PROPOSALS_TABLE);
         self.wallet.exec_sql(&query, &[]).await
     }
 
     /// Reset all DAO votes in the wallet.
     pub async fn reset_dao_votes(&self) -> WalletDbResult<()> {
         eprintln!("Resetting DAO votes");
-        let query = format!("DELETE FROM {};", DAO_VOTES_TABLE);
+        let query = format!("DELETE FROM {};", *DAO_VOTES_TABLE);
         self.wallet.exec_sql(&query, &[]).await
     }
 
@@ -1011,7 +1057,7 @@ impl Drk {
 
         let query = format!(
             "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8);",
-            DAO_DAOS_TABLE,
+            *DAO_DAOS_TABLE,
             DAO_DAOS_COL_NAME,
             DAO_DAOS_COL_PROPOSER_LIMIT,
             DAO_DAOS_COL_QUORUM,
@@ -1049,7 +1095,7 @@ impl Drk {
         let row = match self
             .wallet
             .query_single(
-                DAO_DAOS_TABLE,
+                &DAO_DAOS_TABLE,
                 &[DAO_DAOS_COL_DAO_ID],
                 convert_named_params! {(DAO_DAOS_COL_NAME, alias_filter)},
             )
@@ -1129,8 +1175,12 @@ impl Drk {
             return Err(Error::RusqliteError(format!("DAO with ID {dao_id} not found in wallet")))
         };
 
+        let dao_spend_hook =
+            FuncRef { contract_id: *DAO_CONTRACT_ID, func_code: DaoFunction::Exec as u8 }
+                .to_func_id();
+
         let mut coins = self.get_coins(false).await?;
-        coins.retain(|x| x.0.note.spend_hook == DAO_CONTRACT_ID.inner());
+        coins.retain(|x| x.0.note.spend_hook == dao_spend_hook);
         coins.retain(|x| x.0.note.user_data == dao.bulla().inner());
 
         // Fill this map with balances
@@ -1155,7 +1205,7 @@ impl Drk {
         let row = match self
             .wallet
             .query_single(
-                DAO_PROPOSALS_TABLE,
+                &DAO_PROPOSALS_TABLE,
                 &[],
                 convert_named_params! {(DAO_PROPOSALS_COL_PROPOSAL_ID, proposal_id)},
             )
@@ -1187,7 +1237,7 @@ impl Drk {
         let rows = match self
             .wallet
             .query_multiple(
-                DAO_VOTES_TABLE,
+                &DAO_VOTES_TABLE,
                 &[],
                 convert_named_params! {(DAO_VOTES_COL_PROPOSAL_ID, proposal_id)},
             )
@@ -1355,10 +1405,14 @@ impl Drk {
         let bulla = dao.bulla();
         let owncoins = self.get_coins(false).await?;
 
+        let dao_spend_hook =
+            FuncRef { contract_id: *DAO_CONTRACT_ID, func_code: DaoFunction::Exec as u8 }
+                .to_func_id();
+
         let mut dao_owncoins: Vec<OwnCoin> = owncoins.iter().map(|x| x.0.clone()).collect();
         dao_owncoins.retain(|x| {
             x.note.token_id == token_id &&
-                x.note.spend_hook == DAO_CONTRACT_ID.inner() &&
+                x.note.spend_hook == dao_spend_hook &&
                 x.note.user_data == bulla.inner()
         });
 
@@ -1468,12 +1522,12 @@ impl Drk {
 
         let auth_calls = vec![
             DaoAuthCall {
-                contract_id: DAO_CONTRACT_ID.inner(),
+                contract_id: *DAO_CONTRACT_ID,
                 function_code: DaoFunction::AuthMoneyTransfer as u8,
                 auth_data: proposal_data,
             },
             DaoAuthCall {
-                contract_id: MONEY_CONTRACT_ID.inner(),
+                contract_id: *MONEY_CONTRACT_ID,
                 function_code: MoneyFunction::TransferV1 as u8,
                 auth_data: vec![],
             },
@@ -1491,7 +1545,7 @@ impl Drk {
             duration_days: 30,
             user_data: pallas::Base::ZERO,
             dao_bulla: dao.bulla(),
-            blind: pallas::Base::random(&mut OsRng),
+            blind: Blind::random(&mut OsRng),
         };
 
         // TODO: Simplify this model struct import once
@@ -1554,7 +1608,7 @@ impl Drk {
             self.get_coins(false).await?.iter().map(|x| x.0.clone()).collect();
 
         coins.retain(|x| x.note.token_id == dao.gov_token_id);
-        coins.retain(|x| x.note.spend_hook == pallas::Base::zero());
+        coins.retain(|x| x.note.spend_hook == FuncId::none());
 
         if coins.iter().map(|x| x.note.value).sum::<u64>() < weight {
             return Err(Error::Custom("[dao_vote] Not enough balance for vote weight".to_string()))
@@ -1604,7 +1658,7 @@ impl Drk {
             duration_days: 30,
             user_data: pallas::Base::ZERO,
             dao_bulla: dao.bulla(),
-            blind: pallas::Base::random(&mut OsRng),
+            blind: Blind::random(&mut OsRng),
         };
 
         // TODO: Simplify this model struct import once

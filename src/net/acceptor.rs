@@ -107,7 +107,7 @@ impl Acceptor {
                 // These channels are the channels spawned below on listener.next().is_ok().
                 // After the notification, we reset the condvar and retry this loop to see
                 // if we can accept more connections, and if not - we'll be back here.
-                debug!(target: "net::acceptor::run_accept_loop()", "Reached incoming conn limit, waiting...");
+                warn!(target: "net::acceptor::run_accept_loop()", "Reached incoming conn limit, waiting...");
                 cv.wait().await;
                 cv.reset();
                 continue

@@ -3,14 +3,12 @@ set -e
 set -x
 
 # Path to `drk` binary
-DRK="../../../drk"
+DRK="../../../drk -c drk.toml"
 
 # First run the consensus node and the faucet:
 #
-#   ./tmux_sessions.sh now && cd ../../../ && make darkfid faucetd && cd -
 #   ./clean.sh
-#   ./tmux_sessions.sh -v
-#   ./sync-wallet.sh
+#   ./tmux_sessions.sh -vv
 #
 # In another term run the wallet syncing:
 #

@@ -63,6 +63,13 @@ pub struct Hosts {
     /// Nodes to which we have already been able to establish a connection.
     pub anchorlist: RwLock<Vec<(Url, u64)>>,
 
+    /// Set of stored addresses that are quarantined.
+    /// We quarantine peers we've been unable to connect to, but we keep them
+    /// around so we can potentially try them again, up to n tries. This should
+    /// be helpful in order to self-heal the p2p connections in case we have an
+    /// Internet interrupt (goblins unplugging cables)
+    quarantine: RwLock<HashMap<Url, usize>>,
+
     /// Peers we reject from connecting to
     rejected: RwLock<HashSet<String>>,
 
@@ -83,6 +90,7 @@ impl Hosts {
             greylist: RwLock::new(Vec::new()),
             whitelist: RwLock::new(Vec::new()),
             anchorlist: RwLock::new(Vec::new()),
+            quarantine: RwLock::new(HashMap::new()),
             rejected: RwLock::new(HashSet::new()),
             migrating: RwLock::new(HashSet::new()),
             store_subscriber: Subscriber::new(),
@@ -274,8 +282,9 @@ impl Hosts {
         self.anchorlist_store_or_update(&[(addr.clone(), last_seen)]).await;
     }
 
-    /// Remove an entry from the hostlist. Called when we cannot establish a connection to a host or
-    /// when a pre-existing connection disconnects.
+    /// Remove an entry from the hostlist. Called when a handshake fails in
+    /// session::register_channel(), or after we have failed to connect to them
+    /// outbound_connect_limit times in quarantine()
     pub async fn remove_host(&self, addr: &Url) {
         debug!(target: "store::remove_host", "Removing host {}", addr);
         self.mark_migrating(addr).await;
@@ -642,6 +651,28 @@ impl Hosts {
         ret
     }
 
+    /// Quarantine a peer.
+    /// If they've been quarantined for more than a configured limit, forget them.
+    pub async fn quarantine(&self, url: &Url) {
+        debug!(target: "store::remove()", "Quarantining peer {}", url);
+        // Remove from the entire hosts set
+        self.remove_host(url).await;
+
+        let mut q = self.quarantine.write().await;
+        if let Some(retries) = q.get_mut(url) {
+            *retries += 1;
+            debug!(target: "net::hosts::quarantine()", "Peer {} quarantined {} times", url, retries);
+            if *retries == self.settings.hosts_quarantine_limit {
+                debug!(target: "net::hosts::quarantine()", "Banning peer {}", url);
+                q.remove(url);
+                self.mark_rejected(url).await;
+            }
+        } else {
+            debug!(target: "net::hosts::remove()", "Added peer {} to quarantine", url);
+            q.insert(url.clone(), 0);
+        }
+    }
+
     /// Check if a given peer (URL) is in the set of rejected hosts
     pub async fn is_rejected(&self, peer: &Url) -> bool {
         // Skip lookup for UNIX sockets and localhost connections
@@ -767,6 +798,16 @@ impl Hosts {
     /// Return all known whitelisted hosts
     pub async fn whitelist_fetch_all(&self) -> Vec<(Url, u64)> {
         self.whitelist.read().await.iter().cloned().collect()
+    }
+
+    /// Return all known greylisted hosts
+    pub async fn greylist_fetch_all(&self) -> Vec<(Url, u64)> {
+        self.greylist.read().await.iter().cloned().collect()
+    }
+
+    /// Return all known anchorlisted hosts
+    pub async fn anchorlist_fetch_all(&self) -> Vec<(Url, u64)> {
+        self.anchorlist.read().await.iter().cloned().collect()
     }
 
     /// Return all greylist and anchorlist hosts. Called on stop().
@@ -902,6 +943,31 @@ impl Hosts {
         if hosts.is_empty() {
             debug!(target: "store::whitelist_fetch_n_random_with_schemes",
                   "No such schemes found on whitelist!");
+            return hosts
+        }
+
+        // Grab random ones
+        let urls = hosts.iter().choose_multiple(&mut OsRng, n.min(hosts.len()));
+        urls.iter().map(|&url| url.clone()).collect()
+    }
+
+    /// Get up to n random anchorlist peers that match the given transport schemes.
+    pub async fn anchorlist_fetch_n_random_with_schemes(
+        &self,
+        schemes: &[String],
+        n: u32,
+    ) -> Vec<(Url, u64)> {
+        let n = n as usize;
+        if n == 0 {
+            return vec![]
+        }
+        trace!(target: "store::anchorlist_fetch_n_random_with_schemes", "[START]");
+
+        // Retrieve all peers corresponding to that transport schemes
+        let hosts = self.anchorlist_fetch_with_schemes(schemes, None).await;
+        if hosts.is_empty() {
+            debug!(target: "store::anchorlist_fetch_n_random_with_schemes",
+                  "No such schemes found on anchorlist!");
             return hosts
         }
 

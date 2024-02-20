@@ -223,18 +223,3 @@ For signature verification, the data we are verifying is simply
 the entire transactions minus the actual signatures. That's why the
 signatures are a separate top level field in the transaction.
 
-## Parallelisation Techniques
-
-Since verification is done through `state_transition()` which returns
-an update that is then committed to the state using `apply()`, we
-can verify all transactions in a block in parallel.
-
-To enable calling another transaction within the same block (such
-as flashloans), we can add a special depends field within the tx
-that makes a tx wait on another tx before being allowed to verify.
-This causes a small deanonymization to occur but brings a massive
-scalability benefit to the entire system.
-
-ZK proof verification should be done automatically by the system. Any
-proof that fails marks the entire tx as invalid, and the tx is
-discarded. This should also be parallelized.

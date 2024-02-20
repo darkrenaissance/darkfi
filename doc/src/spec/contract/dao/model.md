@@ -90,18 +90,18 @@ Let $P$ be a proposal bulla as in the section [Proposal](#proposal).
 Define $\t{Nullifier}_\t{Vote} : 𝔽ₚ × 𝔽ₚ × 𝔽ₚ → 𝔽ₚ$ as follows:
 $$ \t{Nullifier}_\t{Vote}(\mathcal{C}.s, C, P) = \t{PoseidonHash}(\mathcal{C}.s, C, P) $$
 
-## Current Day
+## Blockwindow
 
-Time limits on proposals are expressed in terms of days. Since proofs cannot
+Time limits on proposals are expressed in 4 hour windows. Since proofs cannot
 guarantee which block they get into, we therefore must modulo the block height
 a certain number which we use in the proofs.
 
 ```rust
-{{#include ../../../../../src/contract/dao/src/lib.rs:dao-blockheight_to_day}}
+{{#include ../../../../../src/contract/dao/src/lib.rs:dao-blockwindow}}
 ```
 
 which can be used like this
 ```rust
-{{#include ../../../../../src/contract/dao/src/entrypoint/propose.rs:dao-blockheight_to_day-example-usage}}
+{{#include ../../../../../src/contract/dao/src/entrypoint/propose.rs:dao-blockwindow-example-usage}}
 ```
 

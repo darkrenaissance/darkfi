@@ -17,10 +17,9 @@
  */
 
 use darkfi_sdk::{
-    blockchain::Slot,
     crypto::{
         schnorr::{SchnorrSecret, Signature},
-        SecretKey,
+        MerkleTree, SecretKey,
     },
     pasta::{group::ff::FromUniformBytes, pallas},
 };
@@ -80,8 +79,6 @@ pub struct BlockInfo {
     pub txs: Vec<Transaction>,
     /// Block producer signature
     pub signature: Signature,
-    /// Slots payload
-    pub slots: Vec<Slot>,
 }
 
 impl Default for BlockInfo {
@@ -91,28 +88,21 @@ impl Default for BlockInfo {
             header: Header::default(),
             txs: vec![Transaction::default()],
             signature: Signature::dummy(),
-            slots: vec![Slot::default()],
         }
     }
 }
 
 impl BlockInfo {
-    pub fn new(
-        header: Header,
-        txs: Vec<Transaction>,
-        signature: Signature,
-        slots: Vec<Slot>,
-    ) -> Self {
-        Self { header, txs, signature, slots }
+    pub fn new(header: Header, txs: Vec<Transaction>, signature: Signature) -> Self {
+        Self { header, txs, signature }
     }
 
-    /// Generate an empty block for provided Header
-    /// and slots vector. Transactions and the producer
-    /// signature must be added after.
-    pub fn new_empty(header: Header, slots: Vec<Slot>) -> Self {
+    /// Generate an empty block for provided Header.
+    /// Transactions and the producer signature must be added after.
+    pub fn new_empty(header: Header) -> Self {
         let txs = vec![];
         let signature = Signature::dummy();
-        Self { header, txs, signature, slots }
+        Self { header, txs, signature }
     }
 
     /// A block's hash is the same as the hash of its header
@@ -129,11 +119,7 @@ impl BlockInfo {
 
     /// Append a transaction to the block. Also adds it to the Merkle tree.
     pub fn append_tx(&mut self, tx: Transaction) -> Result<()> {
-        let mut buf = [0u8; 64];
-        buf[..blake3::OUT_LEN].copy_from_slice(tx.hash()?.as_bytes());
-        let leaf = pallas::Base::from_uniform_bytes(&buf);
-
-        self.header.tree.append(leaf.into());
+        append_tx_to_merkle_tree(&mut self.header.tree, &tx)?;
         self.txs.push(tx);
 
         Ok(())
@@ -490,7 +476,10 @@ impl BlockOrderStoreOverlay {
     /// Fetch the last block hash in the overlay, based on the `Ord`
     /// implementation for `Vec<u8>`.
     pub fn get_last(&self) -> Result<(u64, blake3::Hash)> {
-        let found = self.0.lock().unwrap().last(SLED_BLOCK_ORDER_TREE)?.unwrap();
+        let found = match self.0.lock().unwrap().last(SLED_BLOCK_ORDER_TREE)? {
+            Some(b) => b,
+            None => return Err(Error::BlockNumberNotFound(0)),
+        };
         let (number, hash) = parse_u64_key_record(found)?;
 
         Ok((number, hash))
@@ -668,4 +657,13 @@ impl BlockDifficultyStoreOverlay {
 
         Ok(())
     }
+}
+
+/// Auxiliary function to append a transaction to a Merkle tree.
+pub fn append_tx_to_merkle_tree(tree: &mut MerkleTree, tx: &Transaction) -> Result<()> {
+    let mut buf = [0u8; 64];
+    buf[..blake3::OUT_LEN].copy_from_slice(tx.hash()?.as_bytes());
+    let leaf = pallas::Base::from_uniform_bytes(&buf);
+    tree.append(leaf.into());
+    Ok(())
 }

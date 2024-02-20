@@ -66,8 +66,8 @@ fn p2p_test() {
     // We check this error so we can execute same file tests in parallel,
     // otherwise second one fails to init logger here.
     if simplelog::TermLogger::init(
-        simplelog::LevelFilter::Info,
-        //simplelog::LevelFilter::Debug,
+        //simplelog::LevelFilter::Info,
+        simplelog::LevelFilter::Debug,
         //simplelog::LevelFilter::Trace,
         cfg.build(),
         simplelog::TerminalMode::Mixed,
@@ -155,26 +155,10 @@ async fn hostlist_propagation(ex: Arc<Executor<'static>>) {
     info!("Waiting until all peers connect");
     sleep(10).await;
 
-    info!("Inspecting hostlists...");
     for p2p in p2p_instances.iter() {
         let hosts = p2p.hosts();
-
-        let greylist = hosts.greylist.read().await;
-        let whitelist = hosts.whitelist.read().await;
-        let anchorlist = hosts.anchorlist.read().await;
-
-        info!("Node {}", p2p.settings().node_id);
-        for (i, (url, last_seen)) in greylist.iter().enumerate() {
-            info!("Greylist entry {}: {}, {}", i, url, last_seen);
-        }
-
-        for (i, (url, last_seen)) in whitelist.iter().enumerate() {
-            info!("Whitelist entry {}: {}, {}", i, url, last_seen);
-        }
-
-        for (i, (url, last_seen)) in anchorlist.iter().enumerate() {
-            info!("Anchorlist entry {}: {}, {}", i, url, last_seen);
-        }
+        // We should have some greylist entries at this point.
+        assert!(!hosts.is_empty_greylist().await);
     }
 
     // Stop the P2P network

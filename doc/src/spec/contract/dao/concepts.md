@@ -41,7 +41,7 @@ There are currently two voting options:
 
 ### Voting Period
 
-Once a proposal passes its duration, which is measured in days, participants can
+Once a proposal passes its duration, which is measured in 4 hour block windows, participants can
 no longer vote on the proposal, and it is considered *expired*.
 
 ### Quorum

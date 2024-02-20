@@ -15,7 +15,6 @@ Here the rustdoc for this repository's crates can be found.
 
 * [`darkfid`](darkfid/index.html)
 * [`drk`](drk/index.html)
-* [`faucetd`](faucetd/index.html)
 * [`fu`](fu/index.html)
 * [`fud`](fud/index.html)
 * [`darkirc`](darkirc/index.html)
