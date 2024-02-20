@@ -71,10 +71,6 @@ fn validate_dnsname(cert: &X509Certificate) -> std::result::Result<(), rustls::E
 #[derive(Debug)]
 struct ServerCertificateVerifier;
 impl ServerCertVerifier for ServerCertificateVerifier {
-    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
-        vec![SignatureScheme::ED25519]
-    }
-
     fn verify_server_cert(
         &self,
         end_entity: &CertificateDer,
@@ -151,20 +147,20 @@ impl ServerCertVerifier for ServerCertificateVerifier {
 
         Ok(HandshakeSignatureValid::assertion())
     }
+
+    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+        vec![SignatureScheme::ED25519]
+    }
 }
 
 #[derive(Debug)]
 struct ClientCertificateVerifier;
 impl ClientCertVerifier for ClientCertificateVerifier {
-    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
-        vec![SignatureScheme::ED25519]
-    }
-
-    fn client_auth_mandatory(&self) -> bool {
+    fn offer_client_auth(&self) -> bool {
         true
     }
 
-    fn offer_client_auth(&self) -> bool {
+    fn client_auth_mandatory(&self) -> bool {
         true
     }
 
@@ -245,6 +241,10 @@ impl ClientCertVerifier for ClientCertificateVerifier {
         }
 
         Ok(HandshakeSignatureValid::assertion())
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+        vec![SignatureScheme::ED25519]
     }
 }
 

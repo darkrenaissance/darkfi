@@ -133,8 +133,8 @@ impl ConstBaseFieldElement {
 
 impl FixedPoints<pallas::Affine> for OrchardFixedBases {
     type FullScalar = OrchardFixedBasesFull;
-    type Base = ConstBaseFieldElement;
     type ShortScalar = ValueCommitV;
+    type Base = ConstBaseFieldElement;
 }
 
 impl FixedPoint<pallas::Affine> for OrchardFixedBasesFull {
