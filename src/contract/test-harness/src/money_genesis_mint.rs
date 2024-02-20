@@ -33,7 +33,6 @@ use darkfi_sdk::{
 };
 use darkfi_serial::AsyncEncodable;
 use log::debug;
-use rand::rngs::OsRng;
 
 use super::{Holder, TestHarness};
 
@@ -72,7 +71,7 @@ impl TestHarness {
         let mut tx_builder =
             TransactionBuilder::new(ContractCallLeaf { call, proofs: debris.proofs }, vec![])?;
         let mut tx = tx_builder.build()?;
-        let sigs = tx.create_sigs(&mut OsRng, &[wallet.keypair.secret])?;
+        let sigs = tx.create_sigs(&[wallet.keypair.secret])?;
         tx.signatures = vec![sigs];
 
         Ok((tx, debris.params))

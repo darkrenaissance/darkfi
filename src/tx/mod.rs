@@ -34,7 +34,6 @@ use darkfi_serial::async_trait;
 
 use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
 use log::{debug, error};
-use rand::{CryptoRng, RngCore};
 
 use crate::{
     error::TxVerifyFailed,
@@ -158,11 +157,7 @@ impl Transaction {
     }
 
     /// Create Schnorr signatures for the entire transaction.
-    pub fn create_sigs(
-        &self,
-        rng: &mut (impl CryptoRng + RngCore),
-        secret_keys: &[SecretKey],
-    ) -> Result<Vec<Signature>> {
+    pub fn create_sigs(&self, secret_keys: &[SecretKey]) -> Result<Vec<Signature>> {
         // Hash the transaction without the signatures
         let mut hasher = blake3::Hasher::new();
         self.calls.encode(&mut hasher)?;
@@ -180,7 +175,7 @@ impl Transaction {
                 target: "tx::create_sigs",
                 "[TX] Creating signature with public key: {}", PublicKey::from_secret(*secret),
             );
-            let signature = secret.sign(rng, &data_hash.as_bytes()[..]);
+            let signature = secret.sign(&data_hash.as_bytes()[..]);
             sigs.push(signature);
         }
 

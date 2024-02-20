@@ -142,11 +142,11 @@ impl TestHarness {
         let mut fee_signature_secrets = None;
         if self.verify_fees {
             let mut tx = tx_builder.build()?;
-            let sigs = tx.create_sigs(&mut OsRng, &[debris1.signature_secret])?;
+            let sigs = tx.create_sigs(&[debris1.signature_secret])?;
             tx.signatures = vec![sigs];
 
             // First holder gets the partially signed transaction and adds their signature
-            let sigs = tx.create_sigs(&mut OsRng, &[debris0.signature_secret])?;
+            let sigs = tx.create_sigs(&[debris0.signature_secret])?;
             tx.signatures[0].insert(0, sigs[0]);
 
             let (fee_call, fee_proofs, fee_secrets, _spent_fee_coins, fee_call_params) =
@@ -160,14 +160,14 @@ impl TestHarness {
 
         // Now build the actual transaction and sign it with necessary keys.
         let mut tx = tx_builder.build()?;
-        let sigs = tx.create_sigs(&mut OsRng, &[debris1.signature_secret])?;
+        let sigs = tx.create_sigs(&[debris1.signature_secret])?;
         tx.signatures = vec![sigs];
         // First holder gets the partially signed transaction and adds their signature
-        let sigs = tx.create_sigs(&mut OsRng, &[debris0.signature_secret])?;
+        let sigs = tx.create_sigs(&[debris0.signature_secret])?;
         tx.signatures[0].insert(0, sigs[0]);
 
         if let Some(fee_signature_secrets) = fee_signature_secrets {
-            let sigs = tx.create_sigs(&mut OsRng, &fee_signature_secrets)?;
+            let sigs = tx.create_sigs(&fee_signature_secrets)?;
             tx.signatures.push(sigs);
         }
 

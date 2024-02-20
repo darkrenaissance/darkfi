@@ -39,7 +39,6 @@ use darkfi_sdk::{
 };
 use darkfi_serial::Encodable;
 use num_bigint::BigUint;
-use rand::rngs::OsRng;
 use url::Url;
 
 use crate::{
@@ -216,7 +215,7 @@ impl Harness {
         let mut tx_builder =
             TransactionBuilder::new(ContractCallLeaf { call, proofs: debris.proofs }, vec![])?;
         let mut tx = tx_builder.build()?;
-        let sigs = tx.create_sigs(&mut OsRng, &[keypair.secret])?;
+        let sigs = tx.create_sigs(&[keypair.secret])?;
         tx.signatures = vec![sigs];
 
         // We increment timestamp so we don't have to use sleep

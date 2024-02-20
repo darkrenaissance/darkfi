@@ -1378,7 +1378,7 @@ impl Drk {
         let call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
         let mut tx_builder = TransactionBuilder::new(ContractCallLeaf { call, proofs }, vec![])?;
         let mut tx = tx_builder.build()?;
-        let sigs = tx.create_sigs(&mut OsRng, &[dao.secret_key])?;
+        let sigs = tx.create_sigs(&[dao.secret_key])?;
         tx.signatures = vec![sigs];
 
         Ok(tx)
@@ -1582,7 +1582,7 @@ impl Drk {
         let call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
         let mut tx_builder = TransactionBuilder::new(ContractCallLeaf { call, proofs }, vec![])?;
         let mut tx = tx_builder.build()?;
-        let sigs = tx.create_sigs(&mut OsRng, &[signature_secret])?;
+        let sigs = tx.create_sigs(&[signature_secret])?;
         tx.signatures = vec![sigs];
 
         Ok(tx)
@@ -1722,7 +1722,7 @@ impl Drk {
         let call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
         let mut tx_builder = TransactionBuilder::new(ContractCallLeaf { call, proofs }, vec![])?;
         let mut tx = tx_builder.build()?;
-        let sigs = tx.create_sigs(&mut OsRng, &input_secrets)?;
+        let sigs = tx.create_sigs(&input_secrets)?;
         tx.signatures = vec![sigs];
 
         Ok(tx)

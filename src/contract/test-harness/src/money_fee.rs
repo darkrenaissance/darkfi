@@ -148,7 +148,7 @@ impl TestHarness {
         let mut tx_builder =
             TransactionBuilder::new(ContractCallLeaf { call, proofs: vec![proof] }, vec![])?;
         let mut tx = tx_builder.build()?;
-        let sigs = tx.create_sigs(&mut OsRng, &[signature_secret])?;
+        let sigs = tx.create_sigs(&[signature_secret])?;
         tx.signatures = vec![sigs];
 
         Ok((tx, params))

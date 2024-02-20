@@ -28,7 +28,6 @@ use darkfi_serial::async_trait;
 
 use darkfi_serial::{deserialize, serialize, Encodable, SerialDecodable, SerialEncodable};
 use num_bigint::BigUint;
-use rand::rngs::OsRng;
 
 use crate::{tx::Transaction, Error, Result};
 
@@ -138,7 +137,7 @@ impl BlockInfo {
     /// Sign block header using provided secret key
     // TODO: sign more stuff?
     pub fn sign(&mut self, secret_key: &SecretKey) -> Result<()> {
-        self.signature = secret_key.sign(&mut OsRng, &self.hash()?.as_bytes()[..]);
+        self.signature = secret_key.sign(&self.hash()?.as_bytes()[..]);
 
         Ok(())
     }
