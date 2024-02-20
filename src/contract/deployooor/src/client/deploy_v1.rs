@@ -16,19 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi::{
-    zk::{Proof, ProvingKey},
-    zkas::ZkBinary,
-    Result,
-};
+use darkfi::Result;
 use darkfi_sdk::{crypto::Keypair, deploy::DeployParamsV1};
-use log::{debug, info};
-
-use super::create_derive_contractid_proof;
+use log::info;
 
 pub struct DeployCallDebris {
     pub params: DeployParamsV1,
-    pub proofs: Vec<Proof>,
 }
 
 /// Struct holding necessary information to build a `Deployooor::DeployV1` contract call.
@@ -39,10 +32,6 @@ pub struct DeployCallBuilder {
     pub wasm_bincode: Vec<u8>,
     /// Serialized deployment payload instruction
     pub deploy_ix: Vec<u8>,
-    /// `DeriveContractID` zkas circuit ZkBinary
-    pub derivecid_zkbin: ZkBinary,
-    /// Proving key for the `DeriveContractID` zk circuit
-    pub derivecid_pk: ProvingKey,
 }
 
 impl DeployCallBuilder {
@@ -50,20 +39,13 @@ impl DeployCallBuilder {
         info!("Building Deployooor::DeployV1 contract call");
         assert!(!self.wasm_bincode.is_empty());
 
-        debug!("Creating DeriveContractID ZK proof");
-        let (proof, _public_inputs) = create_derive_contractid_proof(
-            &self.derivecid_zkbin,
-            &self.derivecid_pk,
-            &self.deploy_keypair,
-        )?;
-
         let params = DeployParamsV1 {
             wasm_bincode: self.wasm_bincode.clone(),
             public_key: self.deploy_keypair.public,
             ix: self.deploy_ix.clone(),
         };
 
-        let debris = DeployCallDebris { params, proofs: vec![proof] };
+        let debris = DeployCallDebris { params };
 
         Ok(debris)
     }

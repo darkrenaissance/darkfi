@@ -16,13 +16,6 @@ PKGNAME = $(shell grep '^name = ' Cargo.toml | cut -d' ' -f3 | tr -d '"')
 # wasm contract binary
 WASM_BIN = $(PKGNAME:=.wasm)
 
-# zkas compiler binary
-ZKAS = ../../../zkas
-
-# zkas circuits
-PROOFS_SRC = $(shell find proof -type f -name '*.zk')
-PROOFS_BIN = $(PROOFS_SRC:=.bin)
-
 # wasm source files
 WASM_SRC = \
 	Cargo.toml \
@@ -35,10 +28,7 @@ WASM_SRC = \
 
 all: $(WASM_BIN)
 
-$(PROOFS_BIN): $(ZKAS) $(PROOFS_SRC)
-	$(ZKAS) $(basename $@) -o $@
-
-$(WASM_BIN): $(WASM_SRC) $(PROOFS_BIN)
+$(WASM_BIN): $(WASM_SRC)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) build --target=$(WASM_TARGET) \
 		--release --package $(PKGNAME)
 	cp -f ../../../target/$(WASM_TARGET)/release/$@ $@
@@ -64,6 +54,6 @@ clean:
 		--release --package $(PKGNAME)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clean --target=$(RUST_TARGET) \
 		--release --package $(PKGNAME)
-	rm -f $(PROOFS_BIN) $(WASM_BIN)
+	rm -f $(WASM_BIN)
 
 .PHONY: all test-integration test clippy clean

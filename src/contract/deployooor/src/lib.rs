@@ -59,6 +59,3 @@ pub const DEPLOY_CONTRACT_LOCK_TREE: &str = "lock";
 
 // These are keys inside the info tree
 pub const DEPLOY_CONTRACT_DB_VERSION: &[u8] = b"db_version";
-
-/// zkas derive circuit namespace
-pub const DEPLOY_CONTRACT_ZKAS_DERIVE_NS_V1: &str = "DeriveContractID";

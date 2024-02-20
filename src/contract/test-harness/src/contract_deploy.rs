@@ -20,9 +20,7 @@ use darkfi::{
     tx::{ContractCallLeaf, Transaction, TransactionBuilder},
     Result,
 };
-use darkfi_deployooor_contract::{
-    client::deploy_v1::DeployCallBuilder, DeployFunction, DEPLOY_CONTRACT_ZKAS_DERIVE_NS_V1,
-};
+use darkfi_deployooor_contract::{client::deploy_v1::DeployCallBuilder, DeployFunction};
 use darkfi_money_contract::{
     client::{MoneyNote, OwnCoin},
     model::MoneyFeeParamsV1,
@@ -50,17 +48,8 @@ impl TestHarness {
         let wallet = self.holders.get(holder).unwrap();
         let deploy_keypair = wallet.contract_deploy_authority;
 
-        let (derivecid_pk, derivecid_zkbin) =
-            self.proving_keys.get(&DEPLOY_CONTRACT_ZKAS_DERIVE_NS_V1.to_string()).unwrap();
-
         // Build the contract call
-        let builder = DeployCallBuilder {
-            deploy_keypair,
-            wasm_bincode,
-            deploy_ix: vec![],
-            derivecid_zkbin: derivecid_zkbin.clone(),
-            derivecid_pk: derivecid_pk.clone(),
-        };
+        let builder = DeployCallBuilder { deploy_keypair, wasm_bincode, deploy_ix: vec![] };
         let debris = builder.build()?;
 
         // Encode the call
@@ -68,7 +57,7 @@ impl TestHarness {
         debris.params.encode_async(&mut data).await?;
         let call = ContractCall { contract_id: *DEPLOYOOOR_CONTRACT_ID, data };
         let mut tx_builder =
-            TransactionBuilder::new(ContractCallLeaf { call, proofs: debris.proofs }, vec![])?;
+            TransactionBuilder::new(ContractCallLeaf { call, proofs: vec![] }, vec![])?;
 
         // If we have tx fees enabled, make an offering
         let mut fee_params = None;

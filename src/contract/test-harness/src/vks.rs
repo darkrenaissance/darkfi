@@ -36,21 +36,20 @@ use darkfi_dao_contract::{
     DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS, DAO_CONTRACT_ZKAS_DAO_VOTE_INPUT_NS,
     DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS,
 };
-use darkfi_deployooor_contract::DEPLOY_CONTRACT_ZKAS_DERIVE_NS_V1;
 use darkfi_money_contract::{
     MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1, MONEY_CONTRACT_ZKAS_BURN_NS_V1,
     MONEY_CONTRACT_ZKAS_FEE_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
     MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1, MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
 };
-use darkfi_sdk::crypto::{contract_id::DEPLOYOOOR_CONTRACT_ID, DAO_CONTRACT_ID, MONEY_CONTRACT_ID};
+use darkfi_sdk::crypto::{DAO_CONTRACT_ID, MONEY_CONTRACT_ID};
 use darkfi_serial::{deserialize, serialize};
 
 use log::debug;
 
 /// Update these if any circuits are changed.
 /// Delete the existing cachefiles, and enable debug logging, you will see the new hashes.
-const VKS_HASH: &str = "605a72d885e6194ac346a328482504ca37f0c990c2d636ad1b548a8bfb05542b";
-const PKS_HASH: &str = "277228a59ed3cc1df8a9d9e61b3230b4417512d649b4aca1fb3e5f02514a2e96";
+const PKS_HASH: &str = "b19792d5c813eebe339af055fc3459cdad8e97e766a35a79f3e42964a2d6e610";
+const VKS_HASH: &str = "9a92231ef4edfc20c2043d5255b558de5c07a9a4efda07718b689c299ac9440e";
 
 /// Build a `PathBuf` to a cachefile
 fn cache_path(typ: &str) -> Result<PathBuf> {
@@ -137,8 +136,6 @@ pub fn get_cached_pks_and_vks() -> Result<(Pks, Vks)> {
         &include_bytes!("../../dao/proof/exec.zk.bin")[..],
         &include_bytes!("../../dao/proof/auth-money-transfer.zk.bin")[..],
         &include_bytes!("../../dao/proof/auth-money-transfer-enc-coin.zk.bin")[..],
-        // Deployooor
-        &include_bytes!("../../deployooor/proof/derive_contract_id.zk.bin")[..],
     ];
 
     let mut pks = vec![];
@@ -184,12 +181,10 @@ pub fn inject(sled_db: &sled::Db, vks: &Vks) -> Result<()> {
     // Derive the database names for the specific contracts
     let money_db_name = MONEY_CONTRACT_ID.hash_state_id(SMART_CONTRACT_ZKAS_DB_NAME);
     let dao_db_name = DAO_CONTRACT_ID.hash_state_id(SMART_CONTRACT_ZKAS_DB_NAME);
-    let deployooor_db_name = DEPLOYOOOR_CONTRACT_ID.hash_state_id(SMART_CONTRACT_ZKAS_DB_NAME);
 
     // Create the db trees
     let money_tree = sled_db.open_tree(money_db_name)?;
     let dao_tree = sled_db.open_tree(dao_db_name)?;
-    let deployooor_tree = sled_db.open_tree(deployooor_db_name)?;
 
     for (bincode, namespace, vk) in vks.iter() {
         match namespace.as_str() {
@@ -217,13 +212,6 @@ pub fn inject(sled_db: &sled::Db, vks: &Vks) -> Result<()> {
                 let key = serialize(&namespace.as_str());
                 let value = serialize(&(bincode.clone(), vk.clone()));
                 dao_tree.insert(key, value)?;
-            }
-
-            // Deployooor contract circuits
-            DEPLOY_CONTRACT_ZKAS_DERIVE_NS_V1 => {
-                let key = serialize(&namespace.as_str());
-                let value = serialize(&(bincode.clone(), vk.clone()));
-                deployooor_tree.insert(key, value)?;
             }
 
             x => panic!("Found unhandled zkas namespace {}", x),

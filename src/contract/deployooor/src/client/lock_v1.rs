@@ -16,45 +16,28 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi::{
-    zk::{Proof, ProvingKey},
-    zkas::ZkBinary,
-    Result,
-};
+use darkfi::Result;
 use darkfi_sdk::crypto::Keypair;
-use log::{debug, info};
+use log::info;
 
-use super::create_derive_contractid_proof;
 use crate::model::LockParamsV1;
 
 pub struct LockCallDebris {
     pub params: LockParamsV1,
-    pub proofs: Vec<Proof>,
 }
 
 /// Struct holding necessary information to build a `Deployooor::LockV1` contract call.
 pub struct LockCallBuilder {
     /// Contract deploy keypair
     pub deploy_keypair: Keypair,
-    /// `DeriveContractID` zkas circuit ZkBinary,
-    pub derivecid_zkbin: ZkBinary,
-    /// Proving key for the `DeriveContractId` zk circuit
-    pub derivecid_pk: ProvingKey,
 }
 
 impl LockCallBuilder {
     pub fn build(&self) -> Result<LockCallDebris> {
         info!("Building Deployooor::LockV1 contract call");
 
-        debug!("Creating DeriveContractID ZK proof");
-        let (proof, _public_inputs) = create_derive_contractid_proof(
-            &self.derivecid_zkbin,
-            &self.derivecid_pk,
-            &self.deploy_keypair,
-        )?;
-
         let params = LockParamsV1 { public_key: self.deploy_keypair.public };
-        let debris = LockCallDebris { params, proofs: vec![proof] };
+        let debris = LockCallDebris { params };
 
         Ok(debris)
     }

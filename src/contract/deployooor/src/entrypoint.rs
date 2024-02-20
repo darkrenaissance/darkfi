@@ -19,7 +19,7 @@
 use darkfi_sdk::{
     crypto::ContractId,
     dark_tree::DarkLeaf,
-    db::{db_init, db_lookup, db_set, zkas_db_set},
+    db::{db_init, db_lookup, db_set},
     error::ContractResult,
     util::set_return_data,
     ContractCall,
@@ -51,10 +51,6 @@ darkfi_sdk::define_contract!(
 /// We use this function to initialize all the necessary databases and prepare them
 /// with initial data if necessary.
 fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
-    // Set up the zkas circuit tree
-    let derive_cid_bincode = include_bytes!("../proof/derive_contract_id.zk.bin");
-    zkas_db_set(&derive_cid_bincode[..])?;
-
     // Set up a database tree for arbitrary data
     let info_db = match db_lookup(cid, DEPLOY_CONTRACT_INFO_TREE) {
         Ok(v) => v,
