@@ -119,10 +119,10 @@ pub async fn block_rank(block: &BlockInfo, previous_previous: &BlockInfo) -> Res
     let data = &tx.calls[0].data.data;
     let mut decoder = Cursor::new(&data);
     // PoW uses MoneyPoWRewardParamsV1
-    decoder.set_position(499);
-    let vrf_proof: VrfProof = AsyncDecodable::decode_async(&mut decoder).await?;
+    decoder.set_position(499); // FIXME: This should not be done like this
 
     // Get the VRF output as big-endian
+    let vrf_proof: VrfProof = AsyncDecodable::decode_async(&mut decoder).await?;
     let vrf_output = BigUint::from_bytes_be(vrf_proof.hash_output().as_bytes());
 
     // Finally, compute the rank
