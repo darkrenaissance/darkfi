@@ -799,7 +799,7 @@ impl Drk {
             for vote in new_dao_votes {
                 for dao in &daos {
                     // TODO: we shouldn't decrypt with all DAOs here
-                    let note = vote.0.note.decrypt_unsafe(&dao.secret_key);
+                    let note = vote.0.note.decrypt_unsafe(&dao.secret_key)?;
                     eprintln!("Managed to decrypt DAO proposal vote note");
                     let daos_proposals = self.get_dao_proposals(dao.id).await?;
                     let mut proposal_id = None;

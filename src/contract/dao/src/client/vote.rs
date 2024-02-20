@@ -250,7 +250,7 @@ impl DaoVoteCall {
 
         let note = [vote_option, yes_vote_blind.inner(), all_vote_value_fp, all_vote_blind.inner()];
         let enc_note =
-            ElGamalEncryptedNote::encrypt_unsafe(note, &ephem_secret, &self.dao_keypair.public);
+            ElGamalEncryptedNote::encrypt_unsafe(note, &ephem_secret, &self.dao_keypair.public)?;
 
         let public_inputs = vec![
             token_commit,

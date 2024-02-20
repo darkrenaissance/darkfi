@@ -54,7 +54,6 @@ impl VrfProof {
     /// and a seed input `alpha_string`.
     pub fn prove(x: SecretKey, alpha_string: &[u8]) -> Self {
         let Y = PublicKey::from_secret(x);
-        assert!(!bool::from(Y.inner().is_identity()));
 
         let mut message = vec![];
         message.extend_from_slice(&Y.to_bytes());
@@ -86,10 +85,6 @@ impl VrfProof {
 
     /// Verify a `VrfProof` given a `Publickey` and a seed input `alpha_string`.
     pub fn verify(&self, Y: PublicKey, alpha_string: &[u8]) -> bool {
-        if bool::from(Y.inner().is_identity()) {
-            return false
-        }
-
         let mut message = vec![];
         message.extend_from_slice(&Y.to_bytes());
         message.extend_from_slice(alpha_string);
