@@ -392,9 +392,9 @@ fn integration_test() -> Result<()> {
         }
 
         // Gather and decrypt all vote notes
-        let vote_note_1 = alice_vote_params.note.decrypt(&dao_keypair.secret);
-        let vote_note_2 = bob_vote_params.note.decrypt(&dao_keypair.secret);
-        let vote_note_3 = charlie_vote_params.note.decrypt(&dao_keypair.secret);
+        let vote_note_1 = alice_vote_params.note.decrypt_unsafe(&dao_keypair.secret);
+        let vote_note_2 = bob_vote_params.note.decrypt_unsafe(&dao_keypair.secret);
+        let vote_note_3 = charlie_vote_params.note.decrypt_unsafe(&dao_keypair.secret);
 
         // Count the votes
         let mut total_yes_vote_value = 0;

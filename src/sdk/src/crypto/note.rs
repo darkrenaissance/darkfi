@@ -81,15 +81,26 @@ impl AeadEncryptedNote {
     }
 }
 
-/// An encrypted note using an ElGamal scheme verifiable in ZK
+/// An encrypted note using an ElGamal scheme verifiable in ZK.
+///
+/// **WARNING:**
+/// Without ZK, there is no authentication of the ciphertexts so these should
+/// not be used without a corresponding ZK proof.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct ElGamalEncryptedNote<const N: usize> {
+    /// The values encrypted with the derived shared secret using Diffie-Hellman
     pub encrypted_values: [pallas::Base; N],
+    /// The ephemeral public key used for Diffie-Hellman key derivation
     pub ephem_public: PublicKey,
 }
 
 impl<const N: usize> ElGamalEncryptedNote<N> {
-    pub fn encrypt(
+    /// Encrypt given values to the given `PublicKey` using a `SecretKey` for Diffie-Hellman
+    ///
+    /// Note that this does not do any message authentication.
+    /// This means that alterations of the ciphertexts lead to the same alterations
+    /// on the plaintexts.
+    pub fn encrypt_unsafe(
         values: [pallas::Base; N],
         ephem_secret: &SecretKey,
         public: &PublicKey,
@@ -99,11 +110,13 @@ impl<const N: usize> ElGamalEncryptedNote<N> {
         let (ss_x, ss_y) = PublicKey::from(public.inner() * fp_mod_fv(ephem_secret.inner())).xy();
         let shared_secret = poseidon_hash([ss_x, ss_y]);
 
+        // Derive the blinds using the shared secret and incremental nonces
         let mut blinds = [pallas::Base::ZERO; N];
         for (i, item) in blinds.iter_mut().enumerate().take(N) {
             *item = poseidon_hash([shared_secret, pallas::Base::from(i as u64 + 1)]);
         }
 
+        // Encrypt the values
         let mut encrypted_values = [pallas::Base::ZERO; N];
         for i in 0..N {
             encrypted_values[i] = values[i] + blinds[i];
@@ -112,7 +125,13 @@ impl<const N: usize> ElGamalEncryptedNote<N> {
         Self { encrypted_values, ephem_public }
     }
 
-    pub fn decrypt(&self, secret: &SecretKey) -> [pallas::Base; N] {
+    /// Decrypt the `ElGamalEncryptedNote` using a `SecretKey` for shared secret derivation
+    /// using Diffie-Hellman
+    ///
+    /// Note that this does not do any message authentication.
+    /// This means that alterations of the ciphertexts lead to the same alterations
+    /// on the plaintexts.
+    pub fn decrypt_unsafe(&self, secret: &SecretKey) -> [pallas::Base; N] {
         // Derive shared secret using DH
         let (ss_x, ss_y) =
             PublicKey::from(self.ephem_public.inner() * fp_mod_fv(secret.inner())).xy();
@@ -162,9 +181,9 @@ mod tests {
         let ephem_secret = SecretKey::random(&mut OsRng);
 
         let encrypted_note =
-            ElGamalEncryptedNote::encrypt(plain_values, &ephem_secret, &keypair.public);
+            ElGamalEncryptedNote::encrypt_unsafe(plain_values, &ephem_secret, &keypair.public);
 
-        let decrypted_values = encrypted_note.decrypt(&keypair.secret);
+        let decrypted_values = encrypted_note.decrypt_unsafe(&keypair.secret);
 
         assert_eq!(plain_values, decrypted_values);
     }

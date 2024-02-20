@@ -72,7 +72,7 @@ impl DaoAuthMoneyTransferCall {
                 coin_attrs.blind.inner(),
             ];
             let enc_note =
-                ElGamalEncryptedNote::encrypt(note, &ephem_secret, &coin_attrs.public_key);
+                ElGamalEncryptedNote::encrypt_unsafe(note, &ephem_secret, &coin_attrs.public_key);
 
             let prover_witnesses = vec![
                 Witness::EcNiPoint(Value::known(coin_attrs.public_key.inner())),
@@ -118,7 +118,7 @@ impl DaoAuthMoneyTransferCall {
             self.dao_coin_attrs.blind.inner(),
         ];
         let dao_change_attrs =
-            ElGamalEncryptedNote::encrypt(note, &ephem_secret, &self.dao.public_key);
+            ElGamalEncryptedNote::encrypt_unsafe(note, &ephem_secret, &self.dao.public_key);
 
         let params = DaoAuthMoneyTransferParams { enc_attrs, dao_change_attrs };
 
