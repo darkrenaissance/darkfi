@@ -22,7 +22,7 @@ use darkfi::{
     Result,
 };
 use darkfi_sdk::{
-    bridgetree::{self, Hashable},
+    bridgetree::Hashable,
     crypto::{
         pasta_prelude::{Curve, CurveAffine},
         pedersen_commitment_u64, poseidon_hash, BaseBlind, FuncId, MerkleNode, PublicKey,
@@ -33,8 +33,8 @@ use darkfi_sdk::{
 use rand::rngs::OsRng;
 
 use crate::{
-    client::{Coin, MoneyNote},
-    model::{CoinAttributes, Nullifier, NullifierAttributes},
+    client::{Coin, MoneyNote, OwnCoin},
+    model::{CoinAttributes, Nullifier},
 };
 
 /// Fixed gas used by the fee call.
@@ -102,10 +102,11 @@ impl FeeRevealed {
 }
 
 pub struct FeeCallInput {
-    pub leaf_position: bridgetree::Position,
+    /// The [`OwnCoin`] containing necessary metadata to create an input
+    pub coin: OwnCoin,
+    /// Merkle path in the Money Merkle tree for `coin`
     pub merkle_path: Vec<MerkleNode>,
-    pub secret: SecretKey,
-    pub note: MoneyNote,
+    /// The blinding factor for user_data
     pub user_data_blind: BaseBlind,
 }
 
@@ -126,25 +127,22 @@ pub fn create_fee_proof(
     token_blind: BaseBlind,
     signature_secret: SecretKey,
 ) -> Result<(Proof, FeeRevealed)> {
-    let public_key = PublicKey::from_secret(input.secret);
+    let public_key = PublicKey::from_secret(input.coin.secret);
     let signature_public = PublicKey::from_secret(signature_secret);
 
     // Create input coin
     let input_coin = CoinAttributes {
         public_key,
-        value: input.note.value,
-        token_id: input.note.token_id,
-        spend_hook: input.note.spend_hook,
-        user_data: input.note.user_data,
-        blind: input.note.coin_blind,
+        value: input.coin.note.value,
+        token_id: input.coin.note.token_id,
+        spend_hook: input.coin.note.spend_hook,
+        user_data: input.coin.note.user_data,
+        blind: input.coin.note.coin_blind,
     }
     .to_coin();
 
-    let nullifier =
-        NullifierAttributes { secret_key: input.secret, coin: input_coin }.to_nullifier();
-
     let merkle_root = {
-        let position: u64 = input.leaf_position.into();
+        let position: u64 = input.coin.leaf_position.into();
         let mut current = MerkleNode::from(input_coin.inner());
         for (level, sibling) in input.merkle_path.iter().enumerate() {
             let level = level as u8;
@@ -157,10 +155,11 @@ pub fn create_fee_proof(
         current
     };
 
-    let input_user_data_enc = poseidon_hash([input.note.user_data, input.user_data_blind.inner()]);
-    let input_value_commit = pedersen_commitment_u64(input.note.value, input_value_blind);
+    let input_user_data_enc =
+        poseidon_hash([input.coin.note.user_data, input.user_data_blind.inner()]);
+    let input_value_commit = pedersen_commitment_u64(input.coin.note.value, input_value_blind);
     let output_value_commit = pedersen_commitment_u64(output.value, output_value_blind);
-    let token_commit = poseidon_hash([input.note.token_id.inner(), token_blind.inner()]);
+    let token_commit = poseidon_hash([input.coin.note.token_id.inner(), token_blind.inner()]);
 
     // Create output coin
     let output_coin = CoinAttributes {
@@ -174,7 +173,7 @@ pub fn create_fee_proof(
     .to_coin();
 
     let public_inputs = FeeRevealed {
-        nullifier,
+        nullifier: input.coin.nullifier(),
         input_value_commit,
         token_commit,
         merkle_root,
@@ -185,22 +184,22 @@ pub fn create_fee_proof(
     };
 
     let prover_witnesses = vec![
-        Witness::Base(Value::known(input.secret.inner())),
-        Witness::Uint32(Value::known(u64::from(input.leaf_position).try_into().unwrap())),
+        Witness::Base(Value::known(input.coin.secret.inner())),
+        Witness::Uint32(Value::known(u64::from(input.coin.leaf_position).try_into().unwrap())),
         Witness::MerklePath(Value::known(input.merkle_path.clone().try_into().unwrap())),
         Witness::Base(Value::known(signature_secret.inner())),
-        Witness::Base(Value::known(pallas::Base::from(input.note.value))),
+        Witness::Base(Value::known(pallas::Base::from(input.coin.note.value))),
         Witness::Scalar(Value::known(input_value_blind.inner())),
-        Witness::Base(Value::known(input.note.spend_hook.inner())),
-        Witness::Base(Value::known(input.note.user_data)),
-        Witness::Base(Value::known(input.note.coin_blind.inner())),
+        Witness::Base(Value::known(input.coin.note.spend_hook.inner())),
+        Witness::Base(Value::known(input.coin.note.user_data)),
+        Witness::Base(Value::known(input.coin.note.coin_blind.inner())),
         Witness::Base(Value::known(input.user_data_blind.inner())),
         Witness::Base(Value::known(pallas::Base::from(output.value))),
         Witness::Base(Value::known(output_spend_hook.inner())),
         Witness::Base(Value::known(output_user_data)),
         Witness::Scalar(Value::known(output_value_blind.inner())),
         Witness::Base(Value::known(output_coin_blind.inner())),
-        Witness::Base(Value::known(input.note.token_id.inner())),
+        Witness::Base(Value::known(input.coin.note.token_id.inner())),
         Witness::Base(Value::known(token_blind.inner())),
     ];
 

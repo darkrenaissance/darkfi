@@ -97,14 +97,9 @@ impl TestHarness {
 
         let mut inputs = vec![];
         for coin in &spent_coins {
-            let leaf_position = coin.leaf_position;
-            let merkle_path = tree.witness(leaf_position, 0).unwrap();
-
             inputs.push(xfer::TransferCallInput {
-                leaf_position,
-                merkle_path,
-                secret: coin.secret,
-                note: coin.note.clone(),
+                coin: coin.clone(),
+                merkle_path: tree.witness(coin.leaf_position, 0).unwrap(),
                 user_data_blind: input_user_data_blind,
             });
         }

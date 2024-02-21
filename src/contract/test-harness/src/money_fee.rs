@@ -65,10 +65,8 @@ impl TestHarness {
 
         // Input and output setup
         let input = FeeCallInput {
-            leaf_position: coin.leaf_position,
+            coin: coin.clone(),
             merkle_path: wallet.money_merkle_tree.witness(coin.leaf_position, 0).unwrap(),
-            secret: coin.secret,
-            note: coin.note.clone(),
             user_data_blind: Blind::random(&mut OsRng),
         };
 
@@ -230,10 +228,8 @@ impl TestHarness {
 
         // Input and output setup
         let input = FeeCallInput {
-            leaf_position: coin.leaf_position,
+            coin: coin.clone(),
             merkle_path: wallet.money_merkle_tree.witness(coin.leaf_position, 0).unwrap(),
-            secret: coin.secret,
-            note: coin.note.clone(),
             user_data_blind: BaseBlind::random(&mut OsRng),
         };
 

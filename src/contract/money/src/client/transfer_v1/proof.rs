@@ -33,7 +33,7 @@ use log::debug;
 use rand::rngs::OsRng;
 
 use super::{TransferCallInput, TransferCallOutput};
-use crate::model::{Coin, CoinAttributes, Nullifier, NullifierAttributes};
+use crate::model::{Coin, CoinAttributes, Nullifier};
 
 pub struct TransferMintRevealed {
     pub coin: Coin,
@@ -89,23 +89,21 @@ pub fn create_transfer_burn_proof(
     token_blind: BaseBlind,
     signature_secret: SecretKey,
 ) -> Result<(Proof, TransferBurnRevealed)> {
-    let public_key = PublicKey::from_secret(input.secret);
+    let public_key = PublicKey::from_secret(input.coin.secret);
     let signature_public = PublicKey::from_secret(signature_secret);
 
     let coin = CoinAttributes {
         public_key,
-        value: input.note.value,
-        token_id: input.note.token_id,
-        spend_hook: input.note.spend_hook,
-        user_data: input.note.user_data,
-        blind: input.note.coin_blind,
+        value: input.coin.note.value,
+        token_id: input.coin.note.token_id,
+        spend_hook: input.coin.note.spend_hook,
+        user_data: input.coin.note.user_data,
+        blind: input.coin.note.coin_blind,
     }
     .to_coin();
 
-    let nullifier = NullifierAttributes { secret_key: input.secret, coin }.to_nullifier();
-
     let merkle_root = {
-        let position: u64 = input.leaf_position.into();
+        let position: u64 = input.coin.leaf_position.into();
         let mut current = MerkleNode::from(coin.inner());
         for (level, sibling) in input.merkle_path.iter().enumerate() {
             let level = level as u8;
@@ -118,31 +116,31 @@ pub fn create_transfer_burn_proof(
         current
     };
 
-    let user_data_enc = poseidon_hash([input.note.user_data, input.user_data_blind.inner()]);
-    let value_commit = pedersen_commitment_u64(input.note.value, value_blind);
-    let token_commit = poseidon_hash([input.note.token_id.inner(), token_blind.inner()]);
+    let user_data_enc = poseidon_hash([input.coin.note.user_data, input.user_data_blind.inner()]);
+    let value_commit = pedersen_commitment_u64(input.coin.note.value, value_blind);
+    let token_commit = poseidon_hash([input.coin.note.token_id.inner(), token_blind.inner()]);
 
     let public_inputs = TransferBurnRevealed {
         value_commit,
         token_commit,
-        nullifier,
+        nullifier: input.coin.nullifier(),
         merkle_root,
-        spend_hook: input.note.spend_hook,
+        spend_hook: input.coin.note.spend_hook,
         user_data_enc,
         signature_public,
     };
 
     let prover_witnesses = vec![
-        Witness::Base(Value::known(input.secret.inner())),
-        Witness::Base(Value::known(pallas::Base::from(input.note.value))),
-        Witness::Base(Value::known(input.note.token_id.inner())),
-        Witness::Base(Value::known(input.note.spend_hook.inner())),
-        Witness::Base(Value::known(input.note.user_data)),
-        Witness::Base(Value::known(input.note.coin_blind.inner())),
+        Witness::Base(Value::known(input.coin.secret.inner())),
+        Witness::Base(Value::known(pallas::Base::from(input.coin.note.value))),
+        Witness::Base(Value::known(input.coin.note.token_id.inner())),
+        Witness::Base(Value::known(input.coin.note.spend_hook.inner())),
+        Witness::Base(Value::known(input.coin.note.user_data)),
+        Witness::Base(Value::known(input.coin.note.coin_blind.inner())),
         Witness::Scalar(Value::known(value_blind.inner())),
         Witness::Base(Value::known(token_blind.inner())),
         Witness::Base(Value::known(input.user_data_blind.inner())),
-        Witness::Uint32(Value::known(u64::from(input.leaf_position).try_into().unwrap())),
+        Witness::Uint32(Value::known(u64::from(input.coin.leaf_position).try_into().unwrap())),
         Witness::MerklePath(Value::known(input.merkle_path.clone().try_into().unwrap())),
         Witness::Base(Value::known(signature_secret.inner())),
     ];

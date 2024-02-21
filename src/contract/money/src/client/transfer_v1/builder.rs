@@ -21,7 +21,6 @@ use darkfi::{
     Result,
 };
 use darkfi_sdk::{
-    bridgetree,
     crypto::{
         note::AeadEncryptedNote, pasta_prelude::*, BaseBlind, Blind, MerkleNode, ScalarBlind,
         SecretKey,
@@ -62,10 +61,10 @@ pub struct TransferCallClearInput {
 }
 
 pub struct TransferCallInput {
-    pub leaf_position: bridgetree::Position,
+    /// The [`OwnCoin`] containing necessary metadata to create an input
+    pub coin: OwnCoin,
+    /// Merkle path in the Money Merkle tree for `coin`
     pub merkle_path: Vec<MerkleNode>,
-    pub secret: SecretKey,
-    pub note: MoneyNote,
     // In the DAO all inputs must have the same user_data_enc and use the same blind
     // So support allowing the user to set their own blind.
     pub user_data_blind: BaseBlind,

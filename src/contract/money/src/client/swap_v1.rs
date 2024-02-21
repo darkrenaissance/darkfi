@@ -108,14 +108,9 @@ impl SwapCallBuilder {
             return Err(ClientFailed::InvalidTokenId(self.coin.note.token_id.to_string()).into())
         }
 
-        let leaf_position = self.coin.leaf_position;
-        let merkle_path = self.tree.witness(leaf_position, 0).unwrap();
-
         let input = TransferCallInput {
-            leaf_position,
-            merkle_path,
-            secret: self.coin.secret,
-            note: self.coin.note.clone(),
+            coin: self.coin.clone(),
+            merkle_path: self.tree.witness(self.coin.leaf_position, 0).unwrap(),
             user_data_blind: self.user_data_blind_send,
         };
 
