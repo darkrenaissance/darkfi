@@ -69,10 +69,7 @@ pub fn darkfi_serialize(input: TokenStream) -> TokenStream {
         unreachable!()
     };
 
-    TokenStream::from(match res {
-        Ok(res) => res,
-        Err(err) => err.to_compile_error(),
-    })
+    TokenStream::from(res.unwrap_or_else(|err| err.to_compile_error()))
 }
 
 #[proc_macro_derive(SerialDecodable, attributes(skip_serialize))]
@@ -116,8 +113,5 @@ pub fn darkfi_deserialize(input: TokenStream) -> TokenStream {
         unreachable!()
     };
 
-    TokenStream::from(match res {
-        Ok(res) => res,
-        Err(err) => err.to_compile_error(),
-    })
+    TokenStream::from(res.unwrap_or_else(|err| err.to_compile_error()))
 }
