@@ -65,7 +65,7 @@ async def add_task(task_args, server_name, port):
         pass
 
     if await api.add_task(task, server_name, port):
-        print(f"Created task '{title}'.")
+        return title
 
 def prompt_text(comment_lines):
     temp = tempfile.NamedTemporaryFile()
@@ -548,7 +548,9 @@ Examples:
         return 0
     elif sys.argv[1] == "add":
         task_args = sys.argv[2:]
-        await add_task(task_args, server_name, port)
+        title = await add_task(task_args, server_name, port)
+        if title:
+            print(f"Created task ({find_free_id(free_ids)}) '{title}'.")
         return 0
     elif sys.argv[1] == "archive":
         if len(sys.argv) == 4:
