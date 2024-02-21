@@ -149,10 +149,26 @@ impl Harness {
 
         let alice_blockchain_len = alice.blockchain.len();
         assert_eq!(alice_blockchain_len, bob.blockchain.len());
-        // Last block is not finalized yet
-        assert_eq!(alice_blockchain_len, total_blocks - 1);
+        assert_eq!(alice_blockchain_len, total_blocks);
 
         Ok(())
+    }
+
+    pub async fn validate_fork_chains(&self, total_forks: usize, fork_sizes: Vec<usize>) {
+        let alice = &self.alice.validator.consensus.forks.read().await;
+        let bob = &self.bob.validator.consensus.forks.read().await;
+
+        let alice_forks_len = alice.len();
+        assert_eq!(alice_forks_len, bob.len());
+        assert_eq!(alice_forks_len, total_forks);
+
+        for (index, fork) in alice.iter().enumerate() {
+            assert_eq!(fork.proposals.len(), fork_sizes[index]);
+        }
+
+        for (index, fork) in bob.iter().enumerate() {
+            assert_eq!(fork.proposals.len(), fork_sizes[index]);
+        }
     }
 
     pub async fn add_blocks(&self, blocks: &[BlockInfo]) -> Result<()> {
@@ -163,11 +179,12 @@ impl Harness {
             self.alice.validator.consensus.append_proposal(&proposal).await?;
             let message = ProposalMessage(proposal);
             self.alice.miners_p2p.as_ref().unwrap().broadcast(&message).await;
+            self.alice.sync_p2p.as_ref().broadcast(&message).await;
         }
 
         // Sleep a bit so blocks can be propagated and then
         // trigger finalization check to Alice and Bob
-        sleep(1).await;
+        sleep(5).await;
         self.alice.validator.finalization().await?;
         self.bob.validator.finalization().await?;
 

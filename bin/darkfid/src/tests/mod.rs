@@ -54,10 +54,20 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     let block4 = th.generate_next_block(&block3).await?;
 
     // Add them to nodes
-    th.add_blocks(&vec![block1, block2, block3, block4]).await?;
+    th.add_blocks(&vec![block1, block2, block3.clone(), block4.clone()]).await?;
+
+    // Extend current fork sequence
+    let block5 = th.generate_next_block(&block4).await?;
+    // Create a new fork extending canonical
+    let block6 = th.generate_next_block(&block3).await?;
+    // Add them to nodes
+    th.add_blocks(&vec![block5, block6.clone()]).await?;
 
     // Validate chains
-    th.validate_chains(5).await?;
+    // Last blocks are not finalized yet
+    th.validate_chains(4).await?;
+    // Nodes must have one fork with 2 blocks and one with 1 block
+    th.validate_fork_chains(2, vec![2, 1]).await;
 
     // We are going to create a third node and try to sync from the previous two
     let mut sync_settings =
@@ -73,8 +83,53 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     // Verify node synced
     let alice = &th.alice.validator;
     let charlie = &charlie.validator;
+    charlie.validate_blockchain(pow_target, pow_fixed_difficulty.clone()).await?;
+    assert_eq!(alice.blockchain.len(), charlie.blockchain.len());
+    // Node must have one fork with 2 blocks
+    let charlie_forks = charlie.consensus.forks.read().await;
+    assert_eq!(charlie_forks.len(), 1);
+    assert_eq!(charlie_forks[0].proposals.len(), 2);
+    drop(charlie_forks);
+
+    // Extend the small fork sequence and add it to nodes
+    let block7 = th.generate_next_block(&block6).await?;
+    th.add_blocks(&vec![block7.clone()]).await?;
+
+    // Nodes must have two forks with 2 blocks each
+    th.validate_fork_chains(2, vec![2, 2]).await;
+    // Charlie didn't originaly have the fork, but it
+    // should be synced when its proposal was received
+    let charlie_forks = charlie.consensus.forks.read().await;
+    assert_eq!(charlie_forks.len(), 2);
+    assert_eq!(charlie_forks[0].proposals.len(), 2);
+    assert_eq!(charlie_forks[1].proposals.len(), 2);
+    drop(charlie_forks);
+
+    // Extend the second fork and add it to nodes
+    let block8 = th.generate_next_block(&block7).await?;
+    th.add_blocks(&vec![block8.clone()]).await?;
+
+    // Nodes must have executed finalization, so we validate their chains
+    th.validate_chains(6).await?;
+    let bob = &th.bob.validator;
+    let last = alice.blockchain.last()?.1;
+    assert_eq!(last, block7.hash()?);
+    assert_eq!(last, bob.blockchain.last()?.1);
+    // Nodes must have one fork with 1 block
+    th.validate_fork_chains(1, vec![1]).await;
+    let last_proposal = *alice.consensus.forks.read().await[0].proposals.last().unwrap();
+    assert_eq!(last_proposal, block8.hash()?);
+    assert_eq!(&last_proposal, bob.consensus.forks.read().await[0].proposals.last().unwrap());
+
+    // Same for Charlie
+    charlie.finalization().await?;
     charlie.validate_blockchain(pow_target, pow_fixed_difficulty).await?;
     assert_eq!(alice.blockchain.len(), charlie.blockchain.len());
+    assert_eq!(last, charlie.blockchain.last()?.1);
+    let charlie_forks = charlie.consensus.forks.read().await;
+    assert_eq!(charlie_forks.len(), 1);
+    assert_eq!(charlie_forks[0].proposals.len(), 1);
+    assert_eq!(last_proposal, charlie_forks[0].proposals[0]);
 
     // Thanks for reading
     Ok(())
