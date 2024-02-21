@@ -659,6 +659,12 @@ Examples:
             else:
                 print("Command prevented from running.")
                 exit(-1)
+        elif any(id == rfid[:6] for rfid in refids):
+            refid = []
+            for rid in refids:
+                if id[:6] == rid[:6]:
+                    refid.append(rid)
+            args = sys.argv[2:]
         else:
             lines = id.split(',')
             numbers = []
