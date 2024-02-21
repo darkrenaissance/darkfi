@@ -27,7 +27,7 @@ use pasta_curves::{
     arithmetic::CurveExt,
     group::{
         ff::{FromUniformBytes, PrimeField},
-        Group, GroupEncoding,
+        GroupEncoding,
     },
     pallas,
 };
