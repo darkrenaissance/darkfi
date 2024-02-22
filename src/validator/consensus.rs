@@ -141,18 +141,23 @@ impl Consensus {
         // If a fork index was found, replace forks with the mutated one,
         // otherwise push the new fork.
         let mut lock = self.forks.write().await;
+        // Check if fork already exists
+        for f in lock.iter() {
+            if f.proposals == fork.proposals {
+                drop(lock);
+                return Err(Error::ProposalAlreadyExists)
+            }
+        }
         match index {
             Some(i) => {
-                lock[i] = fork;
+                if i < lock.len() && lock[i].proposals == fork.proposals[..fork.proposals.len() - 1]
+                {
+                    lock[i] = fork;
+                } else {
+                    lock.push(fork);
+                }
             }
             None => {
-                // Check if fork already exists
-                for f in lock.iter() {
-                    if f.proposals == fork.proposals {
-                        drop(lock);
-                        return Err(Error::ProposalAlreadyExists)
-                    }
-                }
                 lock.push(fork);
             }
         }

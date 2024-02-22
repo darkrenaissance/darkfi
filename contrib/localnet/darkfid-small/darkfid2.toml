@@ -20,6 +20,9 @@ database = "darkfid2"
 # Finalization threshold, denominated by number of blocks
 threshold = 3
 
+# minerd JSON-RPC endpoint
+minerd_endpoint = "tcp://127.0.0.1:28467"
+
 # PoW block production target, in seconds
 pow_target = 20
 
@@ -39,6 +42,20 @@ allowed_transports = ["tcp+tls"]
 
 # Peer nodes to manually connect to
 peers = ["tcp+tls://0.0.0.0:48242", "tcp+tls://0.0.0.0:48342"]
+
+# Allow localnet hosts
+localnet = true
+
+## Localnet miners P2P network settings
+[network_config."localnet".miners_net]
+# P2P accept addresses the instance listens on for inbound connections
+inbound = ["tcp+tls://0.0.0.0:48441"]
+
+# Whitelisted network transports for outbound connections
+allowed_transports = ["tcp+tls"]
+
+# Peer nodes to manually connect to
+peers = ["tcp+tls://0.0.0.0:48241", "tcp+tls://0.0.0.0:48341"]
 
 # Allow localnet hosts
 localnet = true
