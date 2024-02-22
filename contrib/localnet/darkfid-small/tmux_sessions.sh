@@ -1,10 +1,10 @@
 #!/bin/sh
 set -e
 
-session=darkfid-small
-
 # Start a tmux session with two mining and a non-mining darkfid nodes.
 # Additionally, start two minerd daemons.
+
+session=darkfid-small
 
 if [ "$1" = "-vv" ]; then
 	verbose="-vv"
