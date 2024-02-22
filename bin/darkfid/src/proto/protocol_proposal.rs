@@ -67,6 +67,7 @@ impl ProtocolProposal {
         );
         let msg_subsystem = channel.message_subsystem();
         msg_subsystem.add_dispatch::<ProposalMessage>().await;
+        msg_subsystem.add_dispatch::<ForkSyncRequest>().await;
         msg_subsystem.add_dispatch::<ForkSyncResponse>().await;
 
         let proposal_sub = channel.subscribe_msg::<ProposalMessage>().await?;
