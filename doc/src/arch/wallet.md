@@ -51,7 +51,7 @@ the web browser's plugin architecture. This has several undesirable effects:
     but they deleted this and just put Chrome's addon architecture which made
     a whole load of addons no longer possible.
 
-Benefits of [hackable software](Browser extensions are underrated: the promise of hackable software) are:
+Benefits of [hackable software](https://www.geoffreylitt.com/2019/07/29/browser-extensions) are:
 
 * Small tools, not big apps. The software is just a minimal shell. All
   functionality exists as plugins.
