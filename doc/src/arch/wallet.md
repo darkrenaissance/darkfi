@@ -50,6 +50,15 @@ the web browser's plugin architecture. This has several undesirable effects:
     like remote CLI control of the browser or interfacing with other tools,
     but they deleted this and just put Chrome's addon architecture which made
     a whole load of addons no longer possible.
+* Non-portable. Running metamask ethereum apps on mobile is generally
+  non-trivial. Wallets should easily work across all platforms and devices
+  seamlessly.
+  * Metamask has a separate standalone Android app which is non-ideal since
+    now the big app has 2 separate impls. Ideally there is just one big app
+    since diverging impls lead to fragmentation.
+* The architecture is specific to browsers and non-portable to other software
+  unless they include a browser engine like WebKit which is a huge chunk of
+  code.
 
 Benefits of [hackable software](https://www.geoffreylitt.com/2019/07/29/browser-extensions) are:
 
@@ -155,6 +164,28 @@ Laundry list of required features:
   * User input should remain as consistent and predictable as possible.
 * Installation free: run out of the box for new installs, not requiring
   root system access.
+* Responsive design across desktop and mobile devices with minimal specific code
+  or changes required. Ideally none at all.
+* First class CLI support with access to all functionality existing in the UI.
+  * Possibly there is a way of transforming the UI schema specced by addons
+    into a command line interface.
 
 See also the [Blender Human Interface Guidelines: Paradigms](https://developer.blender.org/docs/features/interface/human_interface_guidelines/paradigms/).
+
+## Roadmap
+
+1. Simple `drk` CLI tool with basic core apps working. We want to ship so
+   this is the only core prerequisite to start.
+2. We can add WASM addons with the basic framework after. Then migrate core apps
+   such as money or DAO to this.
+3. Add modules subsystem.
+4. Construct the UI.
+  1. Create the overall framework of resizable 'editors' and define the
+     terminology.
+  2. Add in the scripting functionality for the UI.
+  3. Ensure cross-platform support and clean architecture.
+  4. Iterate on finer UI design specifics.
+  5. Allow customization of UI such as colors and style (optional).
+
+Steps 3 and 4 can be done in parallel.
 
