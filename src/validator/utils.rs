@@ -96,9 +96,9 @@ pub async fn deploy_native_contracts(overlay: &BlockchainOverlayPtr) -> Result<(
     Ok(())
 }
 
-/// Compute a block's rank, assuming the its valid.
+/// Compute a block's rank, assuming that its valid.
 /// Genesis block has rank 0.
-/// First 2 blocks rank is equal to their nonce, since their previous
+/// First 2 blocks rank is equal to their hash number, since their previous
 /// previous block producer doesn't exist or have a VRF.
 pub async fn block_rank(block: &BlockInfo, previous_previous: &BlockInfo) -> Result<BigUint> {
     // Genesis block has rank 0
@@ -106,12 +106,12 @@ pub async fn block_rank(block: &BlockInfo, previous_previous: &BlockInfo) -> Res
         return Ok(0u64.into())
     }
 
-    // Grab block nonce
-    let nonce = block.header.nonce;
+    // Grab block hash number
+    let hash_number = BigUint::from_bytes_be(block.hash()?.as_bytes());
 
-    // First 2 blocks have rank equal to their nonce
+    // First 2 blocks have rank equal to their block hash number
     if block.header.height < 3 {
-        return Ok(nonce.into())
+        return Ok(hash_number)
     }
 
     // Extract VRF proof from the previous previous producer transaction
@@ -126,7 +126,7 @@ pub async fn block_rank(block: &BlockInfo, previous_previous: &BlockInfo) -> Res
     let vrf_output = BigUint::from_bytes_be(vrf_proof.hash_output().as_bytes());
 
     // Finally, compute the rank
-    let rank = if nonce != 0 { vrf_output % nonce } else { vrf_output };
+    let rank = if hash_number != 0u8.into() { vrf_output % hash_number } else { vrf_output };
 
     Ok(rank)
 }
