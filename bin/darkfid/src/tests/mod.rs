@@ -18,7 +18,7 @@
 
 use std::sync::Arc;
 
-use darkfi::{net::Settings, Result};
+use darkfi::{net::Settings, validator::utils::best_forks_indexes, Result};
 use darkfi_contract_test_harness::init_logger;
 use darkfi_sdk::num_traits::One;
 use num_bigint::BigUint;
@@ -85,10 +85,15 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     let charlie = &charlie.validator;
     charlie.validate_blockchain(pow_target, pow_fixed_difficulty.clone()).await?;
     assert_eq!(alice.blockchain.len(), charlie.blockchain.len());
-    // Node must have one fork with 2 blocks
+    // Node must have just the best fork
+    let forks = alice.consensus.forks.read().await;
+    let best_fork_index = best_forks_indexes(&forks)?[0];
+    let best_fork = &forks[best_fork_index];
     let charlie_forks = charlie.consensus.forks.read().await;
     assert_eq!(charlie_forks.len(), 1);
-    assert_eq!(charlie_forks[0].proposals.len(), 2);
+    assert_eq!(charlie_forks[0].proposals.len(), best_fork.proposals.len());
+    let small_best = best_fork.proposals.len() == 1;
+    drop(forks);
     drop(charlie_forks);
 
     // Extend the small fork sequence and add it to nodes
@@ -97,12 +102,19 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
 
     // Nodes must have two forks with 2 blocks each
     th.validate_fork_chains(2, vec![2, 2]).await;
-    // Charlie didn't originaly have the fork, but it
-    // should be synced when its proposal was received
+    // If Charlie already had the small fork as its best,
+    // it will have a single fork with 2 blocks.
     let charlie_forks = charlie.consensus.forks.read().await;
-    assert_eq!(charlie_forks.len(), 2);
-    assert_eq!(charlie_forks[0].proposals.len(), 2);
-    assert_eq!(charlie_forks[1].proposals.len(), 2);
+    if small_best {
+        assert_eq!(charlie_forks.len(), 1);
+        assert_eq!(charlie_forks[0].proposals.len(), 2);
+    } else {
+        // Charlie didn't originaly have the fork, but it
+        // should be synced when its proposal was received
+        assert_eq!(charlie_forks.len(), 2);
+        assert_eq!(charlie_forks[0].proposals.len(), 2);
+        assert_eq!(charlie_forks[1].proposals.len(), 2);
+    }
     drop(charlie_forks);
 
     // Extend the second fork and add it to nodes

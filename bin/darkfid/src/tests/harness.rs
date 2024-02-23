@@ -179,7 +179,10 @@ impl Harness {
             self.alice.validator.consensus.append_proposal(&proposal).await?;
             let message = ProposalMessage(proposal);
             self.alice.miners_p2p.as_ref().unwrap().broadcast(&message).await;
+            // FIXME: some miners might not be connected our peers in the sync p2p,
+            // so we must broadcast to both networks when receiving a proposal
             self.alice.sync_p2p.as_ref().broadcast(&message).await;
+            self.bob.sync_p2p.as_ref().broadcast(&message).await;
         }
 
         // Sleep a bit so blocks can be propagated and then
