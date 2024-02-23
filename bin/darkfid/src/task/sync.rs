@@ -22,24 +22,56 @@ use log::{debug, info, warn};
 use tinyjson::JsonValue;
 
 use crate::{
-    proto::{ForkSyncRequest, ForkSyncResponse, SyncRequest, SyncResponse},
+    proto::{
+        ForkSyncRequest, ForkSyncResponse, IsSyncedRequest, IsSyncedResponse, SyncRequest,
+        SyncResponse,
+    },
     Darkfid,
 };
 
 /// async task used for block syncing
 pub async fn sync_task(node: &Darkfid) -> Result<()> {
     info!(target: "darkfid::task::sync_task", "Starting blockchain sync...");
-    // Block until at least node is connected to at least one peer
+    // Block until at least node is connected to at least one synced peer
+    let mut peers = vec![];
     loop {
-        if !node.sync_p2p.channels().await.is_empty() {
+        // Grab channels
+        let channels = node.sync_p2p.channels().await;
+
+        // Check anyone is connected
+        if !channels.is_empty() {
+            // Ask each peer if they are synced
+            for channel in channels {
+                // Communication setup
+                let msg_subsystem = channel.message_subsystem();
+                msg_subsystem.add_dispatch::<IsSyncedResponse>().await;
+                let response_sub = channel.subscribe_msg::<IsSyncedResponse>().await?;
+
+                // Node creates a `IsSyncedRequest` and sends it
+                let request = IsSyncedRequest {};
+                channel.send(&request).await?;
+
+                // Node waits for response
+                let Ok(response) = response_sub.receive_with_timeout(15).await else { continue };
+
+                // Parse response
+                if response.synced {
+                    peers.push(channel)
+                }
+            }
+        }
+
+        // Check if we got peers to sync from
+        if !peers.is_empty() {
             break
         }
+
         warn!(target: "darkfid::task::sync_task", "Node is not connected to other nodes, waiting to retry...");
         sleep(10).await;
     }
 
-    // Getting a random connected channel to ask from peers
-    let channel = node.sync_p2p.random_channel().await.unwrap();
+    // Getting a peer to ask for blocks
+    let channel = &peers[0];
 
     // Communication setup
     let msg_subsystem = channel.message_subsystem();

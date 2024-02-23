@@ -274,11 +274,16 @@ pub async fn generate_node(
     subscribers.insert("txs", JsonSubscriber::new("blockchain.subscribe_txs"));
     subscribers.insert("proposals", JsonSubscriber::new("blockchain.subscribe_proposals"));
 
-    let sync_p2p = spawn_sync_p2p(sync_settings, &validator, &subscribers, ex.clone()).await;
-    let miners_p2p = if let Some(settings) = miners_settings {
-        Some(spawn_miners_p2p(settings, &validator, &subscribers, ex.clone()).await)
+    let (sync_p2p, miners_p2p) = if let Some(settings) = miners_settings {
+        let sync_p2p =
+            spawn_sync_p2p(sync_settings, &validator, &subscribers, ex.clone(), true).await;
+        let miners_p2p =
+            Some(spawn_miners_p2p(settings, &validator, &subscribers, ex.clone()).await);
+        (sync_p2p, miners_p2p)
     } else {
-        None
+        let sync_p2p =
+            spawn_sync_p2p(sync_settings, &validator, &subscribers, ex.clone(), false).await;
+        (sync_p2p, None)
     };
     let node =
         Darkfid::new(sync_p2p.clone(), miners_p2p.clone(), validator, subscribers, None).await;

@@ -39,6 +39,21 @@ const BATCH: u64 = 10;
 
 /// Auxiliary structure used for blockchain syncing.
 #[derive(Debug, SerialEncodable, SerialDecodable)]
+pub struct IsSyncedRequest {}
+
+impl_p2p_message!(IsSyncedRequest, "issyncedrequest");
+
+/// Auxiliary structure used for blockchain syncing.
+#[derive(Debug, SerialEncodable, SerialDecodable)]
+pub struct IsSyncedResponse {
+    /// Flag indicating the node is synced
+    pub synced: bool,
+}
+
+impl_p2p_message!(IsSyncedResponse, "issyncedresponse");
+
+/// Auxiliary structure used for blockchain syncing.
+#[derive(Debug, SerialEncodable, SerialDecodable)]
 pub struct SyncRequest {
     /// Block height
     pub height: u64,
@@ -76,6 +91,7 @@ pub struct ForkSyncResponse {
 impl_p2p_message!(ForkSyncResponse, "forksyncresponse");
 
 pub struct ProtocolSync {
+    is_synced_sub: MessageSubscription<IsSyncedRequest>,
     request_sub: MessageSubscription<SyncRequest>,
     fork_request_sub: MessageSubscription<ForkSyncRequest>,
     jobsman: ProtocolJobsManagerPtr,
@@ -90,19 +106,47 @@ impl ProtocolSync {
             "Adding ProtocolSync to the protocol registry"
         );
         let msg_subsystem = channel.message_subsystem();
+        msg_subsystem.add_dispatch::<IsSyncedRequest>().await;
         msg_subsystem.add_dispatch::<SyncRequest>().await;
         msg_subsystem.add_dispatch::<ForkSyncRequest>().await;
 
+        let is_synced_sub = channel.subscribe_msg::<IsSyncedRequest>().await?;
         let request_sub = channel.subscribe_msg::<SyncRequest>().await?;
         let fork_request_sub = channel.subscribe_msg::<ForkSyncRequest>().await?;
 
         Ok(Arc::new(Self {
+            is_synced_sub,
             request_sub,
             fork_request_sub,
             jobsman: ProtocolJobsManager::new("SyncProtocol", channel.clone()),
             validator,
             channel,
         }))
+    }
+
+    async fn handle_receive_is_synced_request(self: Arc<Self>) -> Result<()> {
+        debug!(target: "darkfid::proto::protocol_sync::handle_receive_is_synced_request", "START");
+        loop {
+            if let Err(e) = self.is_synced_sub.receive().await {
+                debug!(
+                    target: "darkfid::proto::protocol_sync::handle_receive_is_synced_request",
+                    "recv fail: {}",
+                    e
+                );
+                continue
+            };
+
+            // TODO: This needs to be protected so peer can't spam us
+            // Check if node has finished syncing its blockchain and respond
+            let response = IsSyncedResponse { synced: *self.validator.synced.read().await };
+            if let Err(e) = self.channel.send(&response).await {
+                error!(
+                    target: "darkfid::proto::protocol_sync::handle_receive_is_synced_request",
+                    "channel send fail: {}",
+                    e
+                )
+            };
+        }
     }
 
     async fn handle_receive_request(self: Arc<Self>) -> Result<()> {
@@ -213,6 +257,10 @@ impl ProtocolBase for ProtocolSync {
     async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "darkfid::proto::protocol_sync::start", "START");
         self.jobsman.clone().start(executor.clone());
+        self.jobsman
+            .clone()
+            .spawn(self.clone().handle_receive_is_synced_request(), executor.clone())
+            .await;
         self.jobsman.clone().spawn(self.clone().handle_receive_request(), executor.clone()).await;
         self.jobsman
             .clone()

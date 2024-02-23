@@ -52,6 +52,7 @@ pub struct ProtocolProposal {
     p2p: P2pPtr,
     channel: ChannelPtr,
     subscriber: JsonSubscriber,
+    miner: bool,
 }
 
 impl ProtocolProposal {
@@ -60,6 +61,7 @@ impl ProtocolProposal {
         validator: ValidatorPtr,
         p2p: P2pPtr,
         subscriber: JsonSubscriber,
+        miner: bool,
     ) -> Result<ProtocolBasePtr> {
         debug!(
             target: "darkfid::proto::protocol_proposal::init",
@@ -81,6 +83,7 @@ impl ProtocolProposal {
             p2p,
             channel,
             subscriber,
+            miner,
         }))
     }
 
@@ -105,6 +108,15 @@ impl ProtocolProposal {
                 debug!(
                     target: "darkfid::proto::protocol_proposal::handle_receive_proposal",
                     "Node still syncing blockchain, skipping..."
+                );
+                continue
+            }
+
+            // Check if node is connected to the miners network {
+            if self.miner {
+                debug!(
+                    target: "darkfid::proto::protocol_proposal::handle_receive_proposal",
+                    "Node is connected to the miners network, skipping..."
                 );
                 continue
             }

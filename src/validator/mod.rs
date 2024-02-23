@@ -325,7 +325,7 @@ impl Validator {
         // Append finalized blocks
         info!(target: "validator::finalization", "Finalizing {} proposals:", finalized.len());
         for block in &finalized {
-            info!(target: "validator::finalization", "\t{}", block.hash()?);
+            info!(target: "validator::finalization", "\t{} - {}", block.hash()?, block.header.height);
         }
         self.add_blocks(&finalized).await?;
 
@@ -365,6 +365,12 @@ impl Validator {
 
         // Validate and insert each block
         for block in blocks {
+            // Skip already existing block
+            if overlay.lock().unwrap().has_block(block)? {
+                previous = block;
+                continue;
+            }
+
             // Verify block
             if verify_block(&overlay, &module, block, previous).await.is_err() {
                 error!(target: "validator::add_blocks", "Erroneous block found in set");

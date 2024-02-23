@@ -41,6 +41,7 @@ pub async fn spawn_sync_p2p(
     validator: &ValidatorPtr,
     subscribers: &HashMap<&'static str, JsonSubscriber>,
     executor: Arc<Executor<'static>>,
+    miner: bool,
 ) -> P2pPtr {
     info!(target: "darkfid", "Registering sync network P2P protocols...");
     let p2p = P2p::new(settings.clone(), executor.clone()).await;
@@ -52,7 +53,9 @@ pub async fn spawn_sync_p2p(
         .register(SESSION_ALL, move |channel, p2p| {
             let validator = _validator.clone();
             let subscriber = _subscriber.clone();
-            async move { ProtocolProposal::init(channel, validator, p2p, subscriber).await.unwrap() }
+            async move {
+                ProtocolProposal::init(channel, validator, p2p, subscriber, miner).await.unwrap()
+            }
         })
         .await;
 
@@ -94,7 +97,9 @@ pub async fn spawn_miners_p2p(
         .register(SESSION_ALL, move |channel, p2p| {
             let validator = _validator.clone();
             let subscriber = _subscriber.clone();
-            async move { ProtocolProposal::init(channel, validator, p2p, subscriber).await.unwrap() }
+            async move {
+                ProtocolProposal::init(channel, validator, p2p, subscriber, false).await.unwrap()
+            }
         })
         .await;
 
