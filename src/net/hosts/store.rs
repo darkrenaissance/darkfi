@@ -655,14 +655,13 @@ impl Hosts {
     /// If they've been quarantined for more than a configured limit, forget them.
     pub async fn quarantine(&self, url: &Url) {
         debug!(target: "store::remove()", "Quarantining peer {}", url);
-        // Remove from the entire hosts set
-        self.remove_host(url).await;
-
         let mut q = self.quarantine.write().await;
         if let Some(retries) = q.get_mut(url) {
             *retries += 1;
             debug!(target: "net::hosts::quarantine()", "Peer {} quarantined {} times", url, retries);
             if *retries == self.settings.hosts_quarantine_limit {
+                debug!(target: "net::hosts::quarantine()", "Removing from hostlist {}", url);
+                self.remove_host(url).await;
                 debug!(target: "net::hosts::quarantine()", "Banning peer {}", url);
                 q.remove(url);
                 self.mark_rejected(url).await;
