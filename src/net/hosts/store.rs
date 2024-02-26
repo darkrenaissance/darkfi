@@ -21,7 +21,7 @@ use std::{
     fs,
     fs::File,
     sync::Arc,
-    time::UNIX_EPOCH,
+    time::{Instant, UNIX_EPOCH},
 };
 
 use log::{debug, error, info, trace, warn};
@@ -225,6 +225,7 @@ impl Hosts {
     /// *   We already have this connection established
     /// *   We already have this configured as a manual peer
     /// *   This address is already pending a connection
+    /// *   This peer is migrating between hostlists
     pub async fn check_address_with_lock(
         &self,
         p2p: P2pPtr,
@@ -249,6 +250,16 @@ impl Hosts {
                 debug!(
                     target: "store::check_address_with_lock()",
                     "Host '{}' configured as manual peer so skipping",
+                    host
+                );
+                continue
+            }
+
+            // Check this peer isn't currently being migrated from hostlists
+            if self.is_migrating(&host).await {
+                debug!(
+                    target: "store::check_address_with_lock()",
+                    "Host '{}' is migrating so skipping",
                     host
                 );
                 continue
@@ -655,11 +666,13 @@ impl Hosts {
     /// If they've been quarantined for more than a configured limit, forget them.
     pub async fn quarantine(&self, url: &Url) {
         debug!(target: "store::remove()", "Quarantining peer {}", url);
+        let timer = Instant::now();
         let mut q = self.quarantine.write().await;
         if let Some(retries) = q.get_mut(url) {
             *retries += 1;
             debug!(target: "net::hosts::quarantine()", "Peer {} quarantined {} times", url, retries);
             if *retries == self.settings.hosts_quarantine_limit {
+                debug!(target: "net::hosts::quarantine()", "Reached quarantine limited after {:?}", timer.elapsed());
                 debug!(target: "net::hosts::quarantine()", "Removing from hostlist {}", url);
                 self.remove_host(url).await;
                 debug!(target: "net::hosts::quarantine()", "Banning peer {}", url);
@@ -667,7 +680,7 @@ impl Hosts {
                 self.mark_rejected(url).await;
             }
         } else {
-            debug!(target: "net::hosts::remove()", "Added peer {} to quarantine", url);
+            debug!(target: "net::hosts::quarantine()", "Added peer {} to quarantine", url);
             q.insert(url.clone(), 0);
         }
     }
