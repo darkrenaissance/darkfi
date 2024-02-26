@@ -23,8 +23,9 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - run: |
-          sudo apt update -y && sudo apt upgrade -y
+      - name: Update apt cache
+        run: |
+          sudo apt update -y
 
       - name: Install dependencies (Linux)
         run: |
@@ -60,8 +61,9 @@ jobs:
       - uses: taiki-e/install-action@cargo-hack
       - uses: Swatinem/rust-cache@v2
 
-      - run: |
-          sudo apt update -y && sudo apt upgrade -y
+      - name: Update apt cache
+        run: |
+          sudo apt update -y
 
       - name: Install dependencies (Linux)
         run: |
