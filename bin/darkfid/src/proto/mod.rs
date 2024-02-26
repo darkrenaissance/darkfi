@@ -30,3 +30,6 @@ pub use protocol_sync::{
 /// Transaction broadcast protocol
 mod protocol_tx;
 pub use protocol_tx::ProtocolTx;
+
+/// Communications timeout
+pub const COMMS_TIMEOUT: u64 = 15;

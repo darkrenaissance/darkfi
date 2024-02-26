@@ -36,7 +36,7 @@ use darkfi::{
 };
 use darkfi_serial::{serialize_async, SerialDecodable, SerialEncodable};
 
-use crate::proto::{ForkSyncRequest, ForkSyncResponse};
+use crate::proto::{ForkSyncRequest, ForkSyncResponse, COMMS_TIMEOUT};
 
 /// Auxiliary [`Proposal`] wrapper structure used for messaging.
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
@@ -46,13 +46,13 @@ impl_p2p_message!(ProposalMessage, "proposal");
 
 pub struct ProtocolProposal {
     proposal_sub: MessageSubscription<ProposalMessage>,
-    proposals_response_sub: MessageSubscription<ForkSyncResponse>,
     jobsman: ProtocolJobsManagerPtr,
     validator: ValidatorPtr,
     p2p: P2pPtr,
     channel: ChannelPtr,
     subscriber: JsonSubscriber,
     miner: bool,
+    sync_p2p: Option<P2pPtr>,
 }
 
 impl ProtocolProposal {
@@ -62,6 +62,7 @@ impl ProtocolProposal {
         p2p: P2pPtr,
         subscriber: JsonSubscriber,
         miner: bool,
+        sync_p2p: Option<P2pPtr>,
     ) -> Result<ProtocolBasePtr> {
         debug!(
             target: "darkfid::proto::protocol_proposal::init",
@@ -73,17 +74,16 @@ impl ProtocolProposal {
         msg_subsystem.add_dispatch::<ForkSyncResponse>().await;
 
         let proposal_sub = channel.subscribe_msg::<ProposalMessage>().await?;
-        let proposals_response_sub = channel.subscribe_msg::<ForkSyncResponse>().await?;
 
         Ok(Arc::new(Self {
             proposal_sub,
-            proposals_response_sub,
             jobsman: ProtocolJobsManager::new("ProposalProtocol", channel.clone()),
             validator,
             p2p,
             channel,
             subscriber,
             miner,
+            sync_p2p,
         }))
     }
 
@@ -112,7 +112,7 @@ impl ProtocolProposal {
                 continue
             }
 
-            // Check if node is connected to the miners network {
+            // Check if node is connected to the miners network
             if self.miner {
                 debug!(
                     target: "darkfid::proto::protocol_proposal::handle_receive_proposal",
@@ -126,6 +126,9 @@ impl ProtocolProposal {
             match self.validator.consensus.append_proposal(&proposal_copy.0).await {
                 Ok(()) => {
                     self.p2p.broadcast_with_exclude(&proposal_copy, &exclude_list).await;
+                    if let Some(sync_p2p) = self.sync_p2p.as_ref() {
+                        sync_p2p.broadcast_with_exclude(&proposal_copy, &exclude_list).await;
+                    }
                     let enc_prop =
                         JsonValue::String(base64::encode(&serialize_async(&proposal_copy).await));
                     self.subscriber.notify(vec![enc_prop].into()).await;
@@ -149,11 +152,14 @@ impl ProtocolProposal {
             debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Asking peer for fork sequence");
             let last = self.validator.blockchain.last()?;
             let request = ForkSyncRequest { tip: last.1, fork_tip: Some(proposal_copy.0.hash) };
+            let proposals_response_sub = self.channel.subscribe_msg::<ForkSyncResponse>().await?;
             self.channel.send(&request).await?;
 
-            // TODO: add a timeout here to retry
             // Node waits for response
-            let response = self.proposals_response_sub.receive().await?;
+            let Ok(response) = proposals_response_sub.receive_with_timeout(COMMS_TIMEOUT).await
+            else {
+                continue
+            };
 
             // Verify and store retrieved proposals
             debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Processing received proposals");

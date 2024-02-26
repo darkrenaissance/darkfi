@@ -69,15 +69,14 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     // Nodes must have one fork with 2 blocks and one with 1 block
     th.validate_fork_chains(2, vec![2, 1]).await;
 
-    // We are going to create a third node and try to sync from the previous two
+    // We are going to create a third node and try to sync from Bob
     let mut sync_settings =
         Settings { localnet: true, inbound_connections: 3, ..Default::default() };
 
     let charlie_url = Url::parse("tcp+tls://127.0.0.1:18342")?;
     sync_settings.inbound_addrs = vec![charlie_url];
-    let alice_url = th.alice.sync_p2p.settings().inbound_addrs[0].clone();
     let bob_url = th.bob.sync_p2p.settings().inbound_addrs[0].clone();
-    sync_settings.peers = vec![alice_url, bob_url];
+    sync_settings.peers = vec![bob_url];
     let charlie =
         generate_node(&th.vks, &th.validator_config, &sync_settings, None, &ex, false).await?;
     // Verify node synced

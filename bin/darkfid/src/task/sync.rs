@@ -24,7 +24,7 @@ use tinyjson::JsonValue;
 use crate::{
     proto::{
         ForkSyncRequest, ForkSyncResponse, IsSyncedRequest, IsSyncedResponse, SyncRequest,
-        SyncResponse,
+        SyncResponse, COMMS_TIMEOUT,
     },
     Darkfid,
 };
@@ -52,7 +52,9 @@ pub async fn sync_task(node: &Darkfid) -> Result<()> {
                 channel.send(&request).await?;
 
                 // Node waits for response
-                let Ok(response) = response_sub.receive_with_timeout(15).await else { continue };
+                let Ok(response) = response_sub.receive_with_timeout(COMMS_TIMEOUT).await else {
+                    continue
+                };
 
                 // Parse response
                 if response.synced {

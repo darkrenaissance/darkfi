@@ -260,6 +260,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     &validator,
                     &subscribers,
                     ex.clone(),
+                    sync_p2p.clone(),
                 )
                 .await,
             ),
