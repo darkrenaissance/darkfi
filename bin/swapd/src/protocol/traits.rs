@@ -3,7 +3,7 @@ use crate::{ethereum::swap_creator::SwapCreator, protocol::initiator::Event};
 use darkfi_serial::async_trait;
 use ethers::prelude::*;
 use eyre::Result;
-use smol::channel::Sender;
+use smol::channel;
 
 // Initial parameters required by the swap initiator.
 // TODO: make Address/U256 generic; these are ethers-specific right now
@@ -79,27 +79,27 @@ pub(crate) trait Initiator {
 #[async_trait]
 pub(crate) trait InitiatorEventWatcher {
     async fn run_received_counterparty_keys_watcher(
-        event_tx: Sender<Event>,
-        counterparty_keys_rx: async_oneshot::Receiver<CounterpartyKeys>,
+        event_tx: channel::Sender<Event>,
+        counterparty_keys_rx: channel::Receiver<CounterpartyKeys>,
     ) -> Result<()>;
 
-    async fn run_counterparty_funds_locked_watcher(event_tx: Sender<Event>) -> Result<()>;
+    async fn run_counterparty_funds_locked_watcher(event_tx: channel::Sender<Event>) -> Result<()>;
 
     // TODO: make this generic for both chains
     async fn run_counterparty_funds_claimed_watcher<M: Middleware>(
-        event_tx: Sender<Event>,
+        event_tx: channel::Sender<Event>,
         contract: SwapCreator<M>,
         contract_swap_id: &[u8; 32],
         from_block: u64,
     ) -> Result<()>;
 
     async fn run_timeout_1_watcher(
-        event_tx: Sender<Event>,
+        event_tx: channel::Sender<Event>,
         timeout_1: u64,
         buffer_seconds: u64,
     ) -> Result<()>;
 
-    async fn run_timeout_2_watcher(event_tx: Sender<Event>, timeout_2: u64) -> Result<()>;
+    async fn run_timeout_2_watcher(event_tx: channel::Sender<Event>, timeout_2: u64) -> Result<()>;
 }
 
 /// the chain that is the counterparty to the swap; ie. the second-mover

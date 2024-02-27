@@ -224,6 +224,8 @@ mod test {
 
     use std::sync::Arc;
 
+    use smol::channel::bounded;
+
     use crate::ethereum::{
         initiator::OtherChainClient, swap_creator::SwapCreator, EthInitiator, Watcher,
     };
@@ -287,7 +289,7 @@ mod test {
 
         let swap_task = smol::spawn(async move { swap.run().await });
 
-        let (mut counterparty_keys_tx, counterparty_keys_rx) = async_oneshot::oneshot();
+        let (mut counterparty_keys_tx, counterparty_keys_rx) = bounded(1);
         let join_handle = smol::spawn(Watcher::run_received_counterparty_keys_watcher(
             event_tx.clone(),
             counterparty_keys_rx,

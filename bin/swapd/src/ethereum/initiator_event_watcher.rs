@@ -17,10 +17,12 @@ pub(crate) struct Watcher;
 impl InitiatorEventWatcher for Watcher {
     async fn run_received_counterparty_keys_watcher(
         event_tx: channel::Sender<Event>,
-        counterparty_keys_rx: async_oneshot::Receiver<CounterpartyKeys>,
+        counterparty_keys_rx: channel::Receiver<CounterpartyKeys>,
     ) -> Result<()> {
-        let counterparty_keys =
-            counterparty_keys_rx.await.map_err(|_| eyre!("counterparty_keys channel closed"))?;
+        let counterparty_keys = counterparty_keys_rx
+            .recv()
+            .await
+            .map_err(|_| eyre!("counterparty_keys channel closed"))?;
         event_tx.send(Event::ReceivedCounterpartyKeys(counterparty_keys)).await.unwrap();
         Ok(())
     }
