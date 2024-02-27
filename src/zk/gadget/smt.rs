@@ -208,14 +208,17 @@ mod tests {
     use super::*;
 
     use darkfi_sdk::crypto::smt::{Poseidon, SparseMerkleTree};
-    use halo2_proofs::{arithmetic::Field, circuit::floor_planner, plonk::Circuit};
+    use halo2_proofs::{
+        arithmetic::Field, circuit::floor_planner, dev::MockProver, plonk::Circuit,
+    };
+    use rand::rngs::OsRng;
 
     const HEIGHT: usize = 3;
 
     struct TestCircuit {
-        root: Fp,
+        root: Value<Fp>,
         path: Path<Fp, Poseidon<Fp, 2>, HEIGHT>,
-        leaf: Fp,
+        leaf: Value<Fp>,
     }
 
     impl Circuit<Fp> for TestCircuit {
@@ -224,13 +227,13 @@ mod tests {
         type Params = ();
 
         fn without_witnesses(&self) -> Self {
-            todo!()
+            Self { root: Value::unknown(), path: self.path.clone(), leaf: Value::unknown() }
         }
 
         fn configure(meta: &mut ConstraintSystem<Fp>) -> Self::Config {
             let advices = [(); HEIGHT].map(|_| meta.advice_column());
             let utility_advices = [(); NUM_OF_UTILITY_ADVICE_COLUMNS].map(|_| meta.advice_column());
-            let poseidon_advices = [(); 5].map(|_| meta.advice_column());
+            let poseidon_advices = [(); 4].map(|_| meta.advice_column());
 
             for advice in &advices {
                 meta.enable_equality(*advice);
@@ -244,12 +247,15 @@ mod tests {
                 meta.enable_equality(*advice);
             }
 
+            let col_const = meta.fixed_column();
+            meta.enable_constant(col_const);
+
             let rc_a = [(); 3].map(|_| meta.fixed_column());
             let rc_b = [(); 3].map(|_| meta.fixed_column());
 
             let poseidon_config = PoseidonChip::configure::<poseidon::P128Pow5T3>(
                 meta,
-                poseidon_advices[1..5].try_into().unwrap(),
+                poseidon_advices[1..4].try_into().unwrap(),
                 poseidon_advices[0],
                 rc_a,
                 rc_b,
@@ -268,40 +274,44 @@ mod tests {
             config: Self::Config,
             mut layouter: impl Layouter<Fp>,
         ) -> Result<(), plonk::Error> {
-            let (root_cell, leaf_cell, one) = layouter.assign_region(
-                || "test circuit",
+            // Initialize the Path chip
+            let path_chip =
+                PathChip::from_native(config.clone(), &mut layouter, self.path.clone())?;
+
+            // Initialize the AssertEqual chip
+            let assert_eq_chip = config.assert_eq_chip();
+
+            // Witness values
+            let (root, leaf, one) = layouter.assign_region(
+                || "witness",
                 |mut region| {
-                    let root_cell = region.assign_advice(
-                        || "root",
-                        config.advices[0],
-                        0,
-                        || Value::known(self.root),
-                    )?;
-
-                    let leaf_cell = region.assign_advice(
-                        || "leaf",
-                        config.advices[1],
-                        0,
-                        || Value::known(self.leaf),
-                    )?;
-
                     let one = region.assign_advice(
-                        || "one",
+                        || "witness one",
                         config.advices[2],
                         0,
                         || Value::known(Fp::ONE),
                     )?;
-                    Ok((root_cell, leaf_cell, one))
+
+                    let leaf = region.assign_advice(
+                        || "witness leaf",
+                        config.advices[1],
+                        0,
+                        || self.leaf,
+                    )?;
+
+                    let root = region.assign_advice(
+                        || "witness root",
+                        config.advices[0],
+                        0,
+                        || self.root,
+                    )?;
+
+                    Ok((root, leaf, one))
                 },
             )?;
 
-            let path_chip =
-                PathChip::from_native(config.clone(), &mut layouter, self.path.clone())?;
-
-            let res = path_chip.check_membership(&mut layouter, root_cell, leaf_cell)?;
-
-            let assert_eq_chip = config.assert_eq_chip();
-            assert_eq_chip.assert_equal(&mut layouter, res, one)?;
+            let is_valid = path_chip.check_membership(&mut layouter, root, leaf)?;
+            assert_eq_chip.assert_equal(&mut layouter, is_valid, one)?;
 
             Ok(())
         }
@@ -310,7 +320,7 @@ mod tests {
     #[test]
     fn test_smt_circuit() {
         let hasher = Poseidon::<Fp, 2>::hasher();
-        let leaves: [Fp; HEIGHT] = [Fp::ZERO, Fp::ZERO, Fp::ZERO];
+        let leaves: [Fp; HEIGHT] = [(); HEIGHT].map(|_| Fp::random(&mut OsRng));
         let empty_leaf = [0u8; 64];
 
         let smt = SparseMerkleTree::<Fp, Poseidon<Fp, 2>, HEIGHT>::new_sequential(
@@ -320,9 +330,14 @@ mod tests {
         )
         .unwrap();
 
+        //println!("{:#?}", smt);
+
         let path = smt.generate_membership_proof(0);
         let root = path.calculate_root(&leaves[0], &hasher.clone()).unwrap();
 
-        let _circuit = TestCircuit { root, path, leaf: leaves[0] };
+        let circuit = TestCircuit { root: Value::known(root), path, leaf: Value::known(leaves[0]) };
+
+        let prover = MockProver::run(13, &circuit, vec![]).unwrap();
+        prover.assert_satisfied();
     }
 }

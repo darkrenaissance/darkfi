@@ -162,6 +162,7 @@ impl<F: WithSmallOrderMulGroup<3> + Ord, H: FieldHasher<F, 2>, const N: usize> P
 ///
 /// SMT stores a set of leaves represented in a map and a set of empty
 /// hashes that it uses to represent the sparse areas of the tree.
+#[derive(Debug)]
 pub struct SparseMerkleTree<
     F: WithSmallOrderMulGroup<3> + Ord,
     H: FieldHasher<F, 2>,
