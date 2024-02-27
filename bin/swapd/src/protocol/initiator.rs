@@ -236,10 +236,6 @@ mod test {
     };
 
     use crate::protocol::traits::{CounterpartyKeys, InitiatorEventWatcher as _};
-    // use ethers::{
-    //     core::k256::elliptic_curve::{PublicKey, SecretKey},
-    //     prelude::rand,
-    // };
 
     struct MockOtherChainClient;
 
@@ -262,9 +258,6 @@ mod test {
         let refund_secret = [0; 32]; // TODO generate an actual secp256k1 private key for refund testing
         let initiator =
             EthInitiator::new(contract.clone(), signer.clone(), other_chain_client, refund_secret);
-
-        // let counterparty_secret = SecretKey::<Secp256k1>::random(&mut rand::thread_rng());
-        // let counterparty_public_key = PublicKey::<Secp256k1>::from_secret_scalar(&counterparty_secret.to_nonzero_scalar());
 
         // TODO: this is the same key as the initiator right now.
         let counterparty_secret: [u8; 32] = anvil.keys()[0].to_bytes().try_into().unwrap();
@@ -289,7 +282,7 @@ mod test {
 
         let swap_task = smol::spawn(async move { swap.run().await });
 
-        let (mut counterparty_keys_tx, counterparty_keys_rx) = bounded(1);
+        let (counterparty_keys_tx, counterparty_keys_rx) = bounded(1);
         let join_handle = smol::spawn(Watcher::run_received_counterparty_keys_watcher(
             event_tx.clone(),
             counterparty_keys_rx,
@@ -297,6 +290,7 @@ mod test {
 
         counterparty_keys_tx
             .send(CounterpartyKeys { secp256k1_public_key: [0; 33] })
+            .await
             .expect("should send counterparty keys");
         state.changed().await.expect("state should change");
         assert!(*state.borrow() == State::WaitingForCounterpartyFundsLocked);
