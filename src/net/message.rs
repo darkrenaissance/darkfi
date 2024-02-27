@@ -135,21 +135,17 @@ pub async fn send_packet<W: AsyncWrite + Unpin + Send + Sized>(
     packet: Packet,
 ) -> Result<usize> {
     assert!(!packet.command.is_empty());
-    //assert!(!packet.payload.is_empty());
     assert!(std::mem::size_of::<usize>() <= std::mem::size_of::<u64>());
 
     let mut written: usize = 0;
 
     trace!(target: "net::message", "Sending magic...");
-    stream.write_all(&MAGIC_BYTES).await?;
-    written += MAGIC_BYTES.len();
+    written += MAGIC_BYTES.encode_async(stream).await?;
     trace!(target: "net::message", "Sent magic");
 
-    trace!(target: "net::message", "Sending command...");
     written += packet.command.encode_async(stream).await?;
     trace!(target: "net::message", "Sent command: {}", packet.command);
 
-    trace!(target: "net::message", "Sending payload...");
     written += packet.payload.encode_async(stream).await?;
     trace!(target: "net::message", "Sent payload {} bytes", packet.payload.len() as u64);
 
