@@ -293,16 +293,15 @@ impl Hosts {
         self.anchorlist_store_or_update(&[(addr.clone(), last_seen)]).await;
     }
 
-    /// Remove an entry from the hostlist. Called when a handshake fails in
-    /// session::register_channel(), or after we have failed to connect to them
+    /// Downgrade a host to greylist. Called after we have failed to connect to a host
     /// outbound_connect_limit times in quarantine()
-    pub async fn remove_host(&self, addr: &Url) {
-        debug!(target: "store::remove_host", "Removing host {}", addr);
+    pub async fn downgrade_host(&self, addr: &Url, last_seen: u64) {
+        debug!(target: "store::downgrade_host", "Downgrading host {}", addr);
         self.mark_migrating(addr).await;
 
         // Remove channel from anchorlist
         if self.anchorlist_contains(addr).await {
-            debug!(target: "store::remove_host", "Removing from anchorlist {}", addr);
+            debug!(target: "store::downgrade_host", "Removing from anchorlist {}", addr);
 
             let index = self
                 .get_anchorlist_index_at_addr(addr.clone())
@@ -314,7 +313,7 @@ impl Hosts {
 
         // Remove channel from whitelist
         if self.whitelist_contains(addr).await {
-            debug!(target: "store::remove_host", "Removing from whitelist {}", addr);
+            debug!(target: "store::downgrade_host", "Removing from whitelist {}", addr);
 
             let index = self
                 .get_whitelist_index_at_addr(addr.clone())
@@ -324,17 +323,7 @@ impl Hosts {
             self.whitelist_remove(addr, index).await;
         }
 
-        // Remove channel the greylist
-        if self.greylist_contains(addr).await {
-            debug!(target: "store::remove_host", "Removing from greylist {}", addr);
-
-            let index = self
-                .get_greylist_index_at_addr(addr.clone())
-                .await
-                .expect("Expected greylist index to exist");
-
-            self.greylist_remove(addr, index).await;
-        }
+        self.greylist_store_or_update(&[(addr.clone(), last_seen)]).await;
 
         self.unmark_migrating(addr).await;
     }
@@ -365,6 +354,8 @@ impl Hosts {
                     .get_greylist_index_at_addr(addr.clone())
                     .await
                     .expect("Expected greylist entry to exist");
+                debug!(target: "store::greylist_store_or_update()",
+                        "Selected index, updating last seen...");
                 self.greylist_update_last_seen(&addr, last_seen, index).await;
                 self.store_subscriber.notify(filtered_addrs_len).await;
             }
@@ -663,25 +654,22 @@ impl Hosts {
     }
 
     /// Quarantine a peer.
-    /// If they've been quarantined for more than a configured limit, forget them.
-    pub async fn quarantine(&self, url: &Url) {
-        debug!(target: "store::remove()", "Quarantining peer {}", url);
+    /// If they've been quarantined for more than a configured limit, downgrade to greylist.
+    pub async fn quarantine(&self, addr: &Url, last_seen: u64) {
+        debug!(target: "store::remove()", "Quarantining peer {}", addr);
         let timer = Instant::now();
         let mut q = self.quarantine.write().await;
-        if let Some(retries) = q.get_mut(url) {
+        if let Some(retries) = q.get_mut(addr) {
             *retries += 1;
-            debug!(target: "net::hosts::quarantine()", "Peer {} quarantined {} times", url, retries);
+            debug!(target: "net::hosts::quarantine()", "Peer {} quarantined {} times", addr, retries);
             if *retries == self.settings.hosts_quarantine_limit {
                 debug!(target: "net::hosts::quarantine()", "Reached quarantine limited after {:?}", timer.elapsed());
-                debug!(target: "net::hosts::quarantine()", "Removing from hostlist {}", url);
-                self.remove_host(url).await;
-                debug!(target: "net::hosts::quarantine()", "Banning peer {}", url);
-                q.remove(url);
-                self.mark_rejected(url).await;
+                debug!(target: "net::hosts::quarantine()", "Removing from hostlist {}", addr);
+                self.downgrade_host(addr, last_seen).await;
             }
         } else {
-            debug!(target: "net::hosts::quarantine()", "Added peer {} to quarantine", url);
-            q.insert(url.clone(), 0);
+            debug!(target: "net::hosts::quarantine()", "Added peer {} to quarantine", addr);
+            q.insert(addr.clone(), 0);
         }
     }
 

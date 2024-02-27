@@ -113,8 +113,7 @@ pub trait Session: Sync {
             }
             Err(e) => {
                 debug!(target: "net::session::register_channel()",
-                "Handshake error {}. Removing {} from hostlists", e, channel.clone().address());
-                p2p.hosts().remove_host(channel.address()).await;
+                "Handshake error {} {}", e, channel.clone().address());
             }
         }
 

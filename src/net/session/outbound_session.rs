@@ -296,6 +296,7 @@ impl Slot {
             };
 
             let host = addr.0;
+            let last_seen = addr.1;
             let slot = self.slot;
 
             info!(
@@ -309,7 +310,7 @@ impl Slot {
                 addr: host.clone(),
             });
 
-            let (addr, channel) = match self.try_connect(host.clone()).await {
+            let (addr, channel) = match self.try_connect(host.clone(), last_seen).await {
                 Ok(connect_info) => connect_info,
                 Err(err) => {
                     debug!(
@@ -378,7 +379,7 @@ impl Slot {
     /// the list of pending channels, and starts sending messages across the
     /// channel. In case of any failures, a network error is returned and the
     /// main connect loop (parent of this function) will iterate again.
-    async fn try_connect(&self, addr: Url) -> Result<(Url, ChannelPtr)> {
+    async fn try_connect(&self, addr: Url, last_seen: u64) -> Result<(Url, ChannelPtr)> {
         let parent = Arc::downgrade(&self.session());
         let connector = Connector::new(self.p2p().settings(), parent);
 
@@ -393,7 +394,7 @@ impl Slot {
                 );
 
                 // At this point we failed to connect. We'll quarantine this peer now.
-                self.p2p().hosts().quarantine(&addr).await;
+                self.p2p().hosts().quarantine(&addr, last_seen).await;
 
                 // Remove connection from pending
                 self.p2p().remove_pending(&addr).await;
