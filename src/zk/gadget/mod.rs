@@ -39,3 +39,6 @@ pub mod cond_select;
 
 /// Conditional selection based on lhs (will output lhs if lhs==0, otherwise rhs)
 pub mod zero_cond;
+
+/// Poseidon-based sparse Merkle tree chip
+pub mod smt;

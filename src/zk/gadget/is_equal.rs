@@ -53,10 +53,7 @@ impl<F: WithSmallOrderMulGroup<3> + Ord> Chip<F> for IsEqualChip<F> {
 }
 
 impl<F: WithSmallOrderMulGroup<3> + Ord> IsEqualChip<F> {
-    pub fn construct(
-        config: <Self as Chip<F>>::Config,
-        _loaded: <Self as Chip<F>>::Loaded,
-    ) -> Self {
+    pub fn construct(config: <Self as Chip<F>>::Config) -> Self {
         Self { config }
     }
 
@@ -158,10 +155,7 @@ impl<F: WithSmallOrderMulGroup<3> + Ord> Chip<F> for AssertEqualChip<F> {
 }
 
 impl<F: WithSmallOrderMulGroup<3> + Ord> AssertEqualChip<F> {
-    pub fn construct(
-        config: <Self as Chip<F>>::Config,
-        _loaded: <Self as Chip<F>>::Loaded,
-    ) -> Self {
+    pub fn construct(config: <Self as Chip<F>>::Config) -> Self {
         Self { config }
     }
 

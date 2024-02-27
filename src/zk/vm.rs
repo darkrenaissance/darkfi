@@ -191,7 +191,7 @@ impl VmConfig {
             return None
         };
 
-        Some(ConditionalSelectChip::construct(condselect_config.clone(), ()))
+        Some(ConditionalSelectChip::construct(condselect_config.clone()))
     }
 
     fn zerocond_chip(&self) -> Option<ZeroCondChip<pallas::Base>> {

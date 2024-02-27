@@ -39,7 +39,6 @@ pub struct ConditionalSelectConfig<F: WithSmallOrderMulGroup<3> + Ord> {
 
 pub struct ConditionalSelectChip<F: WithSmallOrderMulGroup<3> + Ord> {
     config: ConditionalSelectConfig<F>,
-    _marker: PhantomData<F>,
 }
 
 impl<F: WithSmallOrderMulGroup<3> + Ord> Chip<F> for ConditionalSelectChip<F> {
@@ -56,11 +55,8 @@ impl<F: WithSmallOrderMulGroup<3> + Ord> Chip<F> for ConditionalSelectChip<F> {
 }
 
 impl<F: WithSmallOrderMulGroup<3> + Ord> ConditionalSelectChip<F> {
-    pub fn construct(
-        config: <Self as Chip<F>>::Config,
-        _loaded: <Self as Chip<F>>::Loaded,
-    ) -> Self {
-        Self { config, _marker: PhantomData }
+    pub fn construct(config: <Self as Chip<F>>::Config) -> Self {
+        Self { config }
     }
 
     pub fn configure(
