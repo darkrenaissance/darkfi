@@ -665,6 +665,7 @@ impl Hosts {
             if *retries == self.settings.hosts_quarantine_limit {
                 debug!(target: "net::hosts::quarantine()", "Reached quarantine limited after {:?}", timer.elapsed());
                 debug!(target: "net::hosts::quarantine()", "Removing from hostlist {}", addr);
+                drop(q);
                 self.downgrade_host(addr, last_seen).await;
             }
         } else {
