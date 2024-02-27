@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -17,7 +17,7 @@
  */
 
 use darkfi_sdk::{
-    crypto::{pasta_prelude::Field, ContractId, MerkleNode, MerkleTree, PublicKey},
+    crypto::{pasta_prelude::Field, ContractId, MerkleNode, MerkleTree},
     dark_tree::DarkLeaf,
     db::{db_init, db_lookup, db_set, zkas_db_set},
     error::ContractResult,
@@ -29,13 +29,13 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{
     model::{
-        MoneyFeeUpdateV1, MoneyGenesisMintUpdateV1, MoneyPoWRewardUpdateV1, MoneyStakeUpdateV1,
-        MoneyTokenFreezeUpdateV1, MoneyTokenMintUpdateV1, MoneyTransferUpdateV1,
-        MoneyUnstakeUpdateV1,
+        MoneyAuthTokenMintUpdateV1, MoneyFeeUpdateV1, MoneyGenesisMintUpdateV1,
+        MoneyPoWRewardUpdateV1, MoneyTokenFreezeUpdateV1, MoneyTokenMintUpdateV1,
+        MoneyTransferUpdateV1,
     },
     MoneyFunction, MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_MERKLE_TREE,
-    MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_DB_VERSION, MONEY_CONTRACT_FAUCET_PUBKEYS,
-    MONEY_CONTRACT_INFO_TREE, MONEY_CONTRACT_NULLIFIERS_TREE, MONEY_CONTRACT_TOKEN_FREEZE_TREE,
+    MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_DB_VERSION, MONEY_CONTRACT_INFO_TREE,
+    MONEY_CONTRACT_NULLIFIERS_TREE, MONEY_CONTRACT_TOKEN_FREEZE_TREE,
     MONEY_CONTRACT_TOTAL_FEES_PAID,
 };
 
@@ -80,24 +80,18 @@ use token_freeze_v1::{
     money_token_freeze_process_update_v1,
 };
 
-/// `Money::Stake` functions
-mod stake_v1;
-use stake_v1::{
-    money_stake_get_metadata_v1, money_stake_process_instruction_v1, money_stake_process_update_v1,
-};
-
-/// `Money::Unstake` functions
-mod unstake_v1;
-use unstake_v1::{
-    money_unstake_get_metadata_v1, money_unstake_process_instruction_v1,
-    money_unstake_process_update_v1,
-};
-
 /// `Money::PoWReward` functions
 mod pow_reward_v1;
 use pow_reward_v1::{
     money_pow_reward_get_metadata_v1, money_pow_reward_process_instruction_v1,
     money_pow_reward_process_update_v1,
+};
+
+/// `Money::AuthTokenMint` functions
+mod auth_token_mint_v1;
+use auth_token_mint_v1::{
+    money_auth_token_mint_get_metadata_v1, money_auth_token_mint_process_instruction_v1,
+    money_auth_token_mint_process_update_v1,
 };
 
 darkfi_sdk::define_contract!(
@@ -111,11 +105,7 @@ darkfi_sdk::define_contract!(
 /// We use this function to initialize all the necessary databases and prepare them
 /// with initial data if necessary. This is also the place where we bundle the zkas
 /// circuits that are to be used with functions provided by the contract.
-fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
-    // The payload for now contains a vector of `PublicKey` used to
-    // whitelist faucets that can create clear inputs.
-    let faucet_pubkeys: Vec<PublicKey> = deserialize(ix)?;
-
+fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     // zkas circuits can simply be embedded in the wasm and set up by using
     // respective db functions. The special `zkas db` operations exist in
     // order to be able to verify the circuits being bundled and enforcing
@@ -179,9 +169,6 @@ fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
         }
     };
 
-    // Whitelisted faucets
-    db_set(info_db, MONEY_CONTRACT_FAUCET_PUBKEYS, &serialize(&faucet_pubkeys))?;
-
     // Update db version
     db_set(info_db, MONEY_CONTRACT_DB_VERSION, &serialize(&env!("CARGO_PKG_VERSION")))?;
 
@@ -209,9 +196,10 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
         MoneyFunction::GenesisMintV1 => money_genesis_mint_get_metadata_v1(cid, call_idx, calls)?,
         MoneyFunction::TokenMintV1 => money_token_mint_get_metadata_v1(cid, call_idx, calls)?,
         MoneyFunction::TokenFreezeV1 => money_token_freeze_get_metadata_v1(cid, call_idx, calls)?,
-        MoneyFunction::StakeV1 => money_stake_get_metadata_v1(cid, call_idx, calls)?,
-        MoneyFunction::UnstakeV1 => money_unstake_get_metadata_v1(cid, call_idx, calls)?,
         MoneyFunction::PoWRewardV1 => money_pow_reward_get_metadata_v1(cid, call_idx, calls)?,
+        MoneyFunction::AuthTokenMintV1 => {
+            money_auth_token_mint_get_metadata_v1(cid, call_idx, calls)?
+        }
     };
 
     set_return_data(&metadata)
@@ -245,10 +233,11 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
         MoneyFunction::TokenFreezeV1 => {
             money_token_freeze_process_instruction_v1(cid, call_idx, calls)?
         }
-        MoneyFunction::StakeV1 => money_stake_process_instruction_v1(cid, call_idx, calls)?,
-        MoneyFunction::UnstakeV1 => money_unstake_process_instruction_v1(cid, call_idx, calls)?,
         MoneyFunction::PoWRewardV1 => {
             money_pow_reward_process_instruction_v1(cid, call_idx, calls)?
+        }
+        MoneyFunction::AuthTokenMintV1 => {
+            money_auth_token_mint_process_instruction_v1(cid, call_idx, calls)?
         }
     };
 
@@ -293,19 +282,14 @@ fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
             Ok(money_token_freeze_process_update_v1(cid, update)?)
         }
 
-        MoneyFunction::StakeV1 => {
-            let update: MoneyStakeUpdateV1 = deserialize(&update_data[1..])?;
-            Ok(money_stake_process_update_v1(cid, update)?)
-        }
-
-        MoneyFunction::UnstakeV1 => {
-            let update: MoneyUnstakeUpdateV1 = deserialize(&update_data[1..])?;
-            Ok(money_unstake_process_update_v1(cid, update)?)
-        }
-
         MoneyFunction::PoWRewardV1 => {
             let update: MoneyPoWRewardUpdateV1 = deserialize(&update_data[1..])?;
             Ok(money_pow_reward_process_update_v1(cid, update)?)
+        }
+
+        MoneyFunction::AuthTokenMintV1 => {
+            let update: MoneyAuthTokenMintUpdateV1 = deserialize(&update_data[1..])?;
+            Ok(money_auth_token_mint_process_update_v1(cid, update)?)
         }
     }
 }

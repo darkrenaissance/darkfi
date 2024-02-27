@@ -42,7 +42,7 @@ To install wasm32 target, execute:
 % rustup target add wasm32-unknown-unknown
 % rustup target add wasm32-unknown-unknown --toolchain nightly
 ```
-Minimum Rust version supported is **1.67.0 (stable)**.
+Minimum Rust version supported is **1.77.0 (nightly)**.
 
 The following dependencies are also required:
 
@@ -92,6 +92,33 @@ If you want to hack on the source code, make sure to read some
 introductory advice in the
 [DarkFi book](https://darkrenaissance.github.io/darkfi/development/development.html).
 
+### Living on the cutting edge
+
+Since the project uses the nightly toolchain, breaking changes are bound
+to happen from time to time. As a workaround, we can configure an older
+nightly version, which was known to work:
+
+```shell
+% rustup toolchain install nightly-2024-02-01
+% rustup target add wasm32-unknown-unknown --toolchain nightly-2024-02-01
+```
+
+Now we can use that toolchain in `make` directly:
+
+```shell
+% make CARGO="cargo +nightly-2024-02-01" {target}
+```
+
+Or, if we are lazy, we can modify the `Makefile` to always use that:
+
+```shell
+% sed -i Makefile -e "s|nightly|nightly-2024-02-01|g"
+```
+
+Under no circumstances commit or push the Makefile change.
+
+When using `cargo` directly, you have to add the `+nightly-2024-02-01` flag,
+in order for it to use the older nightly version.
 
 ## Install
 

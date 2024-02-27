@@ -1,6 +1,6 @@
-## lilith configuration file
+## lilith.localuration file
 ##
-## Please make sure you go through all the settings so you can configure
+## Please make sure you go through all the settings so you can.localure
 ## your daemon properly.
 ##
 ## The default values are left commented. They can be overridden either by
@@ -9,9 +9,6 @@
 # JSON-RPC listen URL
 #rpc_listen = "tcp://127.0.0.1:18927"
 
-# Hosts .tsv file to use
-#hosts_file="~/.config/darkfi/lilith_hosts.tsv"
-
 ## Per-network settings
 #[network."darkfid_sync_v4"]
 #accept_addrs = ["tcp+tls://0.0.0.0:33022"]
@@ -19,6 +16,7 @@
 #peers = []
 #version = "0.4.1"
 #localnet = false
+#hostlist ="~/.local/darkfi/lilith/darkfid_sync_hostlist.tsv"
 
 #[network."darkfid_consensus_v4"]
 #accept_addrs = ["tcp+tls://0.0.0.0:33023"]
@@ -26,6 +24,7 @@
 #peers = []
 #version = "0.4.1"
 #localnet = false
+#hostlist ="~/.local/darkfi/lilith/darkfid_consensus_hostlist.tsv"
 
 #[network."darkirc_v4"]
 #accept_addrs = ["tcp+tls://0.0.0.0:25551"]
@@ -33,6 +32,7 @@
 #peers = []
 #version = "0.4.1"
 #localnet = false
+#hostlist ="~/.local/darkfi/lilith/darkirc_hostlist.tsv"
 
 #[network."taud_v4"]
 #accept_addrs = ["tcp+tls://0.0.0.0:23331"]
@@ -40,3 +40,4 @@
 #peers = []
 #version = "0.4.1"
 #localnet = false
+#hostlist ="~/.local/darkfi/lilith/taud_hostlist.tsv"

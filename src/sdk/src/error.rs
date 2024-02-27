@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -69,6 +69,9 @@ pub enum ContractError {
     #[error("Db get failed")]
     DbGetFailed,
 
+    #[error("Db get empty")]
+    DbGetEmpty,
+
     #[error("Db contains_key failed")]
     DbContainsKeyFailed,
 
@@ -111,13 +114,14 @@ pub const DB_NOT_FOUND: i64 = to_builtin!(10);
 pub const DB_SET_FAILED: i64 = to_builtin!(11);
 pub const DB_LOOKUP_FAILED: i64 = to_builtin!(12);
 pub const DB_GET_FAILED: i64 = to_builtin!(13);
-pub const DB_CONTAINS_KEY_FAILED: i64 = to_builtin!(14);
-pub const INVALID_FUNCTION: i64 = to_builtin!(15);
-pub const DB_DEL_FAILED: i64 = to_builtin!(16);
-pub const SMT_INVALID_LEAF: i64 = to_builtin!(17);
-pub const SMT_INVALID_PATH_NODES: i64 = to_builtin!(18);
-pub const GET_SYSTEM_TIME_FAILED: i64 = to_builtin!(19);
-pub const DATA_TOO_LARGE: i64 = to_builtin!(20);
+pub const DB_GET_EMPTY: i64 = to_builtin!(14);
+pub const DB_CONTAINS_KEY_FAILED: i64 = to_builtin!(15);
+pub const INVALID_FUNCTION: i64 = to_builtin!(16);
+pub const DB_DEL_FAILED: i64 = to_builtin!(17);
+pub const SMT_INVALID_LEAF: i64 = to_builtin!(18);
+pub const SMT_INVALID_PATH_NODES: i64 = to_builtin!(19);
+pub const GET_SYSTEM_TIME_FAILED: i64 = to_builtin!(20);
+pub const DATA_TOO_LARGE: i64 = to_builtin!(21);
 
 impl From<ContractError> for i64 {
     fn from(err: ContractError) -> Self {
@@ -134,6 +138,7 @@ impl From<ContractError> for i64 {
             ContractError::DbSetFailed => DB_SET_FAILED,
             ContractError::DbLookupFailed => DB_LOOKUP_FAILED,
             ContractError::DbGetFailed => DB_GET_FAILED,
+            ContractError::DbGetEmpty => DB_GET_EMPTY,
             ContractError::DbContainsKeyFailed => DB_CONTAINS_KEY_FAILED,
             ContractError::InvalidFunction => INVALID_FUNCTION,
             ContractError::DbDelFailed => DB_DEL_FAILED,
@@ -168,6 +173,7 @@ impl From<i64> for ContractError {
             DB_SET_FAILED => Self::DbSetFailed,
             DB_LOOKUP_FAILED => Self::DbLookupFailed,
             DB_GET_FAILED => Self::DbGetFailed,
+            DB_GET_EMPTY => Self::DbGetEmpty,
             DB_CONTAINS_KEY_FAILED => Self::DbContainsKeyFailed,
             INVALID_FUNCTION => Self::InvalidFunction,
             DB_DEL_FAILED => Self::DbDelFailed,

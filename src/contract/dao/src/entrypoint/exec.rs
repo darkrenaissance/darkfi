@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -45,7 +45,7 @@ pub(crate) fn dao_exec_get_metadata(
     // Public inputs for the ZK proofs we have to verify
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
     // Public keys for the transaction signatures we have to verify
-    let signature_pubkeys: Vec<PublicKey> = vec![];
+    let signature_pubkeys: Vec<PublicKey> = vec![params.signature_public];
 
     let blind_vote = params.blind_total_vote;
     let yes_vote_coords = blind_vote.yes_vote_commit.to_affine().coordinates().unwrap();
@@ -60,6 +60,8 @@ pub(crate) fn dao_exec_get_metadata(
             *yes_vote_coords.y(),
             *all_vote_coords.x(),
             *all_vote_coords.y(),
+            params.signature_public.x(),
+            params.signature_public.y(),
         ],
     ));
 
@@ -98,7 +100,7 @@ pub(crate) fn dao_exec_process_instruction(
         // Auth modules should check the direct parent is DAO::exec().
         // Doing anything else is potentially risky.
 
-        let contract_id = child_call.contract_id.inner();
+        let contract_id = child_call.contract_id;
         let function_code = child_call.data[0];
 
         // Check they match the auth call spec

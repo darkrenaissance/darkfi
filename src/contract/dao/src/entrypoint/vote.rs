@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -24,16 +24,17 @@ use darkfi_sdk::{
     error::{ContractError, ContractResult},
     msg,
     pasta::pallas,
-    util::get_verifying_slot,
+    util::get_verifying_block_height,
     ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{
+    blockwindow,
     error::DaoError,
     model::{DaoProposalMetadata, DaoVoteParams, DaoVoteUpdate},
-    slot_to_day, DaoFunction, DAO_CONTRACT_DB_PROPOSAL_BULLAS, DAO_CONTRACT_DB_VOTE_NULLIFIERS,
-    DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS, DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS,
+    DaoFunction, DAO_CONTRACT_DB_PROPOSAL_BULLAS, DAO_CONTRACT_DB_VOTE_NULLIFIERS,
+    DAO_CONTRACT_ZKAS_DAO_VOTE_INPUT_NS, DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS,
 };
 
 /// `get_metdata` function for `Dao::Vote`
@@ -67,7 +68,7 @@ pub(crate) fn dao_vote_get_metadata(
         let (sig_x, sig_y) = input.signature_public.xy();
 
         zk_public_inputs.push((
-            DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS.to_string(),
+            DAO_CONTRACT_ZKAS_DAO_VOTE_INPUT_NS.to_string(),
             vec![
                 input.nullifier.inner(),
                 *value_coords.x(),
@@ -80,11 +81,12 @@ pub(crate) fn dao_vote_get_metadata(
         ));
     }
 
-    let current_day = slot_to_day(get_verifying_slot());
+    let current_day = blockwindow(get_verifying_block_height());
 
     let yes_vote_commit_coords = params.yes_vote_commit.to_affine().coordinates().unwrap();
     let all_vote_commit_coords = all_vote_commit.to_affine().coordinates().unwrap();
 
+    let (ephem_x, ephem_y) = params.note.ephem_public.xy();
     zk_public_inputs.push((
         DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS.to_string(),
         vec![
@@ -95,6 +97,12 @@ pub(crate) fn dao_vote_get_metadata(
             *all_vote_commit_coords.x(),
             *all_vote_commit_coords.y(),
             pallas::Base::from(current_day),
+            ephem_x,
+            ephem_y,
+            params.note.encrypted_values[0],
+            params.note.encrypted_values[1],
+            params.note.encrypted_values[2],
+            params.note.encrypted_values[3],
         ],
     ));
 

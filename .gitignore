@@ -1,20 +1,28 @@
 /target
+/supply-chain
 
 *.pyc
 *.sage.py
 *.wasm
 *.zk.bin
 
+witness.json
 *_circuit_layout.png
 
 /bin/zkas/zkas
 /zkas
 
-/bin/darkfid2/darkfid2
-/darkfid2
+/bin/darkfid/darkfid
+/darkfid
+
+/bin/minerd/minerd
+/minerd
 
 /bin/darkfi-mmproxy/darkfi-mmproxy
 /darkfi-mmproxy
+
+/bin/drk/drk
+/drk
 
 /bin/darkirc/darkirc
 /darkirc

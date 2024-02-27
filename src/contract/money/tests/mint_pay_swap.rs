@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -29,7 +29,9 @@
 
 use darkfi::Result;
 use darkfi_contract_test_harness::{init_logger, Holder, TestHarness};
+use darkfi_sdk::crypto::BaseBlind;
 use log::info;
+use rand::rngs::OsRng;
 
 #[test]
 fn mint_pay_swap() -> Result<()> {
@@ -37,7 +39,7 @@ fn mint_pay_swap() -> Result<()> {
         init_logger();
 
         // Holders this test will use
-        const HOLDERS: [Holder; 3] = [Holder::Faucet, Holder::Alice, Holder::Bob];
+        const HOLDERS: [Holder; 2] = [Holder::Alice, Holder::Bob];
 
         // Some numbers we want to assert
         const ALICE_INITIAL: u64 = 100;
@@ -50,66 +52,98 @@ fn mint_pay_swap() -> Result<()> {
         // Bob = 20 BOB + 50 ALICE
         const BOB_FIRST_SEND: u64 = BOB_INITIAL - 20;
 
-        // Slot to verify against
-        let current_slot = 0;
+        // Block height to verify against
+        let current_block_height = 0;
 
         // Initialize harness
-        let mut th = TestHarness::new(&["money".to_string()], false).await?;
-
-        let mut alice_owncoins = vec![];
-        let mut bob_owncoins = vec![];
+        let mut th = TestHarness::new(&HOLDERS, false).await?;
 
         info!(target: "money", "[Alice] ================================");
         info!(target: "money", "[Alice] Building token mint tx for Alice");
         info!(target: "money", "[Alice] ================================");
-        let (mint_tx, params) =
-            th.token_mint(ALICE_INITIAL, &Holder::Alice, &Holder::Alice, None, None)?;
+        let alice_token_blind = BaseBlind::random(&mut OsRng);
+        let (mint_tx, mint_params, mint_auth_params, fee_params) = th
+            .token_mint(
+                ALICE_INITIAL,
+                &Holder::Alice,
+                &Holder::Alice,
+                alice_token_blind,
+                None,
+                None,
+                current_block_height,
+            )
+            .await?;
 
         for holder in &HOLDERS {
             info!(target: "money", "[{holder:?}] ==============================");
             info!(target: "money", "[{holder:?}] Executing Alice token mint tx");
             info!(target: "money", "[{holder:?}] ==============================");
-            th.execute_token_mint_tx(holder, &mint_tx, &params, current_slot).await?;
+            th.execute_token_mint_tx(
+                holder,
+                mint_tx.clone(),
+                &mint_params,
+                &mint_auth_params,
+                &fee_params,
+                current_block_height,
+                true,
+            )
+            .await?;
         }
 
         th.assert_trees(&HOLDERS);
 
-        // Alice gathers her new owncoin
-        let alice_oc = th.gather_owncoin(&Holder::Alice, &params.output, None)?;
-        let alice_token_id = alice_oc.note.token_id;
-        alice_owncoins.push(alice_oc);
-
         info!(target: "money", "[Bob] ==============================");
         info!(target: "money", "[Bob] Building token mint tx for Bob");
         info!(target: "money", "[Bob] ==============================");
-        let (mint_tx, params) =
-            th.token_mint(BOB_INITIAL, &Holder::Bob, &Holder::Bob, None, None)?;
+        let bob_token_blind = BaseBlind::random(&mut OsRng);
+        let (mint_tx, mint_params, mint_auth_params, fee_params) = th
+            .token_mint(
+                BOB_INITIAL,
+                &Holder::Bob,
+                &Holder::Bob,
+                bob_token_blind,
+                None,
+                None,
+                current_block_height,
+            )
+            .await?;
 
         for holder in &HOLDERS {
             info!(target: "money", "[{holder:?}] ===========================");
             info!(target: "money", "[{holder:?}] Executing Bob token mint tx");
             info!(target: "money", "[{holder:?}] ===========================");
-            th.execute_token_mint_tx(holder, &mint_tx, &params, current_slot).await?;
+            th.execute_token_mint_tx(
+                holder,
+                mint_tx.clone(),
+                &mint_params,
+                &mint_auth_params,
+                &fee_params,
+                current_block_height,
+                true,
+            )
+            .await?;
         }
 
         th.assert_trees(&HOLDERS);
-
-        // Bob  gathers hist new owncoin
-        let bob_oc = th.gather_owncoin(&Holder::Bob, &params.output, None)?;
-        let bob_token_id = bob_oc.note.token_id;
-        bob_owncoins.push(bob_oc);
 
         // Now Alice can send a little bit of funds to Bob
         info!(target: "money", "[Alice] ====================================================");
         info!(target: "money", "[Alice] Building Money::Transfer params for a payment to Bob");
         info!(target: "money", "[Alice] ====================================================");
-        let (transfer_tx, transfer_params, spent_coins) = th.transfer(
-            ALICE_FIRST_SEND,
-            &Holder::Alice,
-            &Holder::Bob,
-            &alice_owncoins,
-            alice_token_id,
-        )?;
+        let mut alice_owncoins =
+            th.holders.get(&Holder::Alice).unwrap().unspent_money_coins.clone();
+        let alice_token_id = alice_owncoins[0].note.token_id;
+
+        let (transfer_tx, (transfer_params, fee_params), spent_coins) = th
+            .transfer(
+                ALICE_FIRST_SEND,
+                &Holder::Alice,
+                &Holder::Bob,
+                &alice_owncoins,
+                alice_token_id,
+                current_block_height,
+            )
+            .await?;
 
         // Validating transfer params
         assert!(transfer_params.inputs.len() == 1);
@@ -122,19 +156,21 @@ fn mint_pay_swap() -> Result<()> {
             info!(target: "money", "[{holder:?}] ==============================");
             info!(target: "money", "[{holder:?}] Executing Alice2Bob payment tx");
             info!(target: "money", "[{holder:?}] ==============================");
-            let write = holder == &Holder::Faucet;
-            th.execute_transfer_tx(holder, &transfer_tx, &transfer_params, current_slot, write)
-                .await?;
+            th.execute_transfer_tx(
+                holder,
+                transfer_tx.clone(),
+                &transfer_params,
+                &fee_params,
+                current_block_height,
+                true,
+            )
+            .await?;
         }
 
-        // Bob should now have a new OwnCoin.
-        let bob_oc = th.gather_owncoin_at_index(&Holder::Bob, &transfer_params.outputs, 0)?;
-        bob_owncoins.push(bob_oc);
-
         // Alice should now have one OwnCoin with the change from the above transfer.
-        let alice_oc = th.gather_owncoin_at_index(&Holder::Alice, &transfer_params.outputs, 1)?;
-        alice_owncoins.push(alice_oc);
-
+        // Bob should now have a new OwnCoin.
+        let alice_owncoins = &th.holders.get(&Holder::Alice).unwrap().unspent_money_coins;
+        let mut bob_owncoins = th.holders.get(&Holder::Bob).unwrap().unspent_money_coins.clone();
         assert!(alice_owncoins.len() == 1);
         assert!(bob_owncoins.len() == 2);
 
@@ -144,15 +180,19 @@ fn mint_pay_swap() -> Result<()> {
         info!(target: "money", "[Bob] ======================================================");
         info!(target: "money", "[Bob] Building Money::Transfer params for a payment to Alice");
         info!(target: "money", "[Bob] ======================================================");
+        let bob_token_id = bob_owncoins[0].note.token_id;
         let mut bob_owncoins_tmp = bob_owncoins.clone();
         bob_owncoins_tmp.retain(|x| x.note.token_id == bob_token_id);
-        let (transfer_tx, transfer_params, spent_coins) = th.transfer(
-            BOB_FIRST_SEND,
-            &Holder::Bob,
-            &Holder::Alice,
-            &bob_owncoins_tmp,
-            bob_token_id,
-        )?;
+        let (transfer_tx, (transfer_params, fee_params), spent_coins) = th
+            .transfer(
+                BOB_FIRST_SEND,
+                &Holder::Bob,
+                &Holder::Alice,
+                &bob_owncoins_tmp,
+                bob_token_id,
+                current_block_height,
+            )
+            .await?;
 
         // Validating transfer params
         assert!(transfer_params.inputs.len() == 1);
@@ -165,18 +205,22 @@ fn mint_pay_swap() -> Result<()> {
             info!(target: "money", "[{holder:?}] ==============================");
             info!(target: "money", "[{holder:?}] Executing Bob2Alice payment tx");
             info!(target: "money", "[{holder:?}] ==============================");
-            let write = holder == &Holder::Faucet;
-            th.execute_transfer_tx(holder, &transfer_tx, &transfer_params, current_slot, write)
-                .await?;
+            th.execute_transfer_tx(
+                holder,
+                transfer_tx.clone(),
+                &transfer_params,
+                &fee_params,
+                current_block_height,
+                true,
+            )
+            .await?;
         }
 
         // Alice should now have two OwnCoins
-        let alice_oc = th.gather_owncoin_at_index(&Holder::Alice, &transfer_params.outputs, 0)?;
-        alice_owncoins.push(alice_oc);
-
         // Bob should have two with the change from the above tx
-        let bob_oc = th.gather_owncoin_at_index(&Holder::Bob, &transfer_params.outputs, 1)?;
-        bob_owncoins.push(bob_oc);
+        let mut alice_owncoins =
+            th.holders.get(&Holder::Alice).unwrap().unspent_money_coins.clone();
+        let mut bob_owncoins = th.holders.get(&Holder::Bob).unwrap().unspent_money_coins.clone();
 
         assert!(alice_owncoins.len() == 2);
         assert!(bob_owncoins.len() == 2);
@@ -205,30 +249,35 @@ fn mint_pay_swap() -> Result<()> {
         bob_owncoins.remove(0);
         assert!(bob_owncoins.len() == 1);
 
-        let (otc_swap_tx, otc_swap_params) =
-            th.otc_swap(&Holder::Alice, &alice_oc, &Holder::Bob, &bob_oc)?;
+        let (otc_swap_tx, otc_swap_params, fee_params) = th
+            .otc_swap(&Holder::Alice, &alice_oc, &Holder::Bob, &bob_oc, current_block_height)
+            .await?;
 
         for holder in &HOLDERS {
             info!(target: "money", "[{holder:?}] ==========================");
             info!(target: "money", "[{holder:?}] Executing AliceBob swap tx");
             info!(target: "money", "[{holder:?}] ==========================");
-            let write = holder == &Holder::Faucet;
-            th.execute_otc_swap_tx(holder, &otc_swap_tx, &otc_swap_params, current_slot, write)
-                .await?;
+            th.execute_otc_swap_tx(
+                holder,
+                otc_swap_tx.clone(),
+                &otc_swap_params,
+                &fee_params,
+                current_block_height,
+                true,
+            )
+            .await?;
         }
 
         // Alice should now have two OwnCoins with the same token ID (ALICE)
-        let alice_oc = th.gather_owncoin_at_index(&Holder::Alice, &otc_swap_params.outputs, 0)?;
-        alice_owncoins.push(alice_oc);
+        let mut alice_owncoins =
+            th.holders.get(&Holder::Alice).unwrap().unspent_money_coins.clone();
+        let mut bob_owncoins = th.holders.get(&Holder::Bob).unwrap().unspent_money_coins.clone();
 
         assert!(alice_owncoins.len() == 2);
         assert!(alice_owncoins[0].note.token_id == alice_token_id);
         assert!(alice_owncoins[1].note.token_id == alice_token_id);
 
         // Same for Bob with BOB tokens
-        let bob_oc = th.gather_owncoin_at_index(&Holder::Bob, &otc_swap_params.outputs, 1)?;
-        bob_owncoins.push(bob_oc);
-
         assert!(bob_owncoins.len() == 2);
         assert!(bob_owncoins[0].note.token_id == bob_token_id);
         assert!(bob_owncoins[1].note.token_id == bob_token_id);
@@ -239,13 +288,16 @@ fn mint_pay_swap() -> Result<()> {
         info!(target: "money", "[Alice] ======================================================");
         info!(target: "money", "[Alice] Building Money::Transfer params for a payment to Alice");
         info!(target: "money", "[Alice] ======================================================");
-        let (tx, params, spent_coins) = th.transfer(
-            ALICE_INITIAL,
-            &Holder::Alice,
-            &Holder::Alice,
-            &alice_owncoins,
-            alice_token_id,
-        )?;
+        let (tx, (params, fee_params), spent_coins) = th
+            .transfer(
+                ALICE_INITIAL,
+                &Holder::Alice,
+                &Holder::Alice,
+                &alice_owncoins,
+                alice_token_id,
+                current_block_height,
+            )
+            .await?;
 
         for coin in spent_coins {
             alice_owncoins.retain(|x| x != &coin);
@@ -258,15 +310,21 @@ fn mint_pay_swap() -> Result<()> {
             info!(target: "money", "[{holder:?}] ================================");
             info!(target: "money", "[{holder:?}] Executing Alice2Alice payment tx");
             info!(target: "money", "[{holder:?}] ================================");
-            th.execute_transfer_tx(holder, &tx, &params, current_slot, true).await?;
+            th.execute_transfer_tx(
+                holder,
+                tx.clone(),
+                &params,
+                &fee_params,
+                current_block_height,
+                true,
+            )
+            .await?;
         }
 
         th.assert_trees(&HOLDERS);
 
         // Alice should now have a single OwnCoin with her initial airdrop
-        let alice_oc = th.gather_owncoin(&Holder::Alice, &params.outputs[0], None)?;
-        alice_owncoins.push(alice_oc);
-
+        let alice_owncoins = th.holders.get(&Holder::Alice).unwrap().unspent_money_coins.clone();
         assert!(alice_owncoins.len() == 1);
         assert!(alice_owncoins[0].note.value == ALICE_INITIAL);
         assert!(alice_owncoins[0].note.token_id == alice_token_id);
@@ -275,8 +333,16 @@ fn mint_pay_swap() -> Result<()> {
         info!(target: "money", "[Bob] ====================================================");
         info!(target: "money", "[Bob] Building Money::Transfer params for a payment to Bob");
         info!(target: "money", "[Bob] ====================================================");
-        let (tx, params, spent_coins) =
-            th.transfer(BOB_INITIAL, &Holder::Bob, &Holder::Bob, &bob_owncoins, bob_token_id)?;
+        let (tx, (params, fee_params), spent_coins) = th
+            .transfer(
+                BOB_INITIAL,
+                &Holder::Bob,
+                &Holder::Bob,
+                &bob_owncoins,
+                bob_token_id,
+                current_block_height,
+            )
+            .await?;
 
         for coin in spent_coins {
             bob_owncoins.retain(|x| x != &coin);
@@ -289,15 +355,21 @@ fn mint_pay_swap() -> Result<()> {
             info!(target: "money", "[{holder:?}] ============================");
             info!(target: "money", "[{holder:?}] Executing Bob2Bob payment tx");
             info!(target: "money", "[{holder:?}] ============================");
-            th.execute_transfer_tx(holder, &tx, &params, current_slot, true).await?;
+            th.execute_transfer_tx(
+                holder,
+                tx.clone(),
+                &params,
+                &fee_params,
+                current_block_height,
+                true,
+            )
+            .await?;
         }
 
         th.assert_trees(&HOLDERS);
 
         // Bob should now have a single OwnCoin with his initial airdrop
-        let bob_oc = th.gather_owncoin(&Holder::Bob, &params.outputs[0], None)?;
-        bob_owncoins.push(bob_oc);
-
+        let bob_owncoins = th.holders.get(&Holder::Bob).unwrap().unspent_money_coins.clone();
         assert!(bob_owncoins.len() == 1);
         assert!(bob_owncoins[0].note.value == BOB_INITIAL);
         assert!(bob_owncoins[0].note.token_id == bob_token_id);
@@ -306,6 +378,10 @@ fn mint_pay_swap() -> Result<()> {
         info!(target: "money", "[Alice, Bob] ================");
         info!(target: "money", "[Alice, Bob] Building OtcSwap");
         info!(target: "money", "[Alice, Bob] ================");
+        let mut alice_owncoins =
+            th.holders.get(&Holder::Alice).unwrap().unspent_money_coins.clone();
+        let mut bob_owncoins = th.holders.get(&Holder::Bob).unwrap().unspent_money_coins.clone();
+
         let alice_oc = alice_owncoins[0].clone();
         alice_owncoins.remove(0);
         assert!(alice_owncoins.is_empty());
@@ -313,40 +389,40 @@ fn mint_pay_swap() -> Result<()> {
         bob_owncoins.remove(0);
         assert!(bob_owncoins.is_empty());
 
-        let (otc_swap_tx, otc_swap_params) =
-            th.otc_swap(&Holder::Alice, &alice_oc, &Holder::Bob, &bob_oc)?;
+        let (otc_swap_tx, otc_swap_params, fee_params) = th
+            .otc_swap(&Holder::Alice, &alice_oc, &Holder::Bob, &bob_oc, current_block_height)
+            .await?;
 
         for holder in &HOLDERS {
             info!(target: "money", "[{holder:?}] ==========================");
             info!(target: "money", "[{holder:?}] Executing AliceBob swap tx");
             info!(target: "money", "[{holder:?}] ==========================");
-            let write = holder == &Holder::Faucet;
-            th.execute_otc_swap_tx(holder, &otc_swap_tx, &otc_swap_params, current_slot, write)
-                .await?;
+            th.execute_otc_swap_tx(
+                holder,
+                otc_swap_tx.clone(),
+                &otc_swap_params,
+                &fee_params,
+                current_block_height,
+                true,
+            )
+            .await?;
         }
 
         assert_eq!(otc_swap_params.outputs.len(), 2);
 
         // Alice should now have Bob's BOB tokens
-        let alice_oc = th.gather_owncoin_at_index(&Holder::Alice, &otc_swap_params.outputs, 0)?;
-        alice_owncoins.push(alice_oc);
-
+        let alice_owncoins = th.holders.get(&Holder::Alice).unwrap().unspent_money_coins.clone();
         assert!(alice_owncoins.len() == 1);
         assert!(alice_owncoins[0].note.value == BOB_INITIAL);
         assert!(alice_owncoins[0].note.token_id == bob_token_id);
 
         // And Bob should have Alice's ALICE tokens
-        let bob_oc = th.gather_owncoin_at_index(&Holder::Bob, &otc_swap_params.outputs, 1)?;
-        bob_owncoins.push(bob_oc);
-
+        let bob_owncoins = th.holders.get(&Holder::Bob).unwrap().unspent_money_coins.clone();
         assert!(bob_owncoins.len() == 1);
         assert!(bob_owncoins[0].note.value == ALICE_INITIAL);
         assert!(bob_owncoins[0].note.token_id == alice_token_id);
 
         th.assert_trees(&HOLDERS);
-
-        // Statistics
-        th.statistics();
 
         // Thanks for reading
         Ok(())

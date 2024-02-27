@@ -13,15 +13,19 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: nightly-2024-02-01
           override: true
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: nightly-2024-02-01
           target: wasm32-unknown-unknown
           override: true
 
       - uses: Swatinem/rust-cache@v2
+
+      - name: Update apt cache
+        run: |
+          sudo apt update -y
 
       - name: Install dependencies (Linux)
         run: |
@@ -30,11 +34,11 @@ jobs:
 
       - name: Run test units
         run: |
-          make test
+          make CARGO="cargo +nightly-2024-02-01" test
 
       - name: Compile all bins
         run: |
-          make
+          make CARGO="cargo +nightly-2024-02-01"
 
   feature-powerset:
     name: Test crate feature powerset on ${{ matrix.os }}
@@ -47,15 +51,19 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: nightly-2024-02-01
           override: true
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: nightly-2024-02-01
           target: wasm32-unknown-unknown
           override: true
       - uses: taiki-e/install-action@cargo-hack
       - uses: Swatinem/rust-cache@v2
+
+      - name: Update apt cache
+        run: |
+          sudo apt update -y
 
       - name: Install dependencies (Linux)
         run: |
@@ -64,7 +72,7 @@ jobs:
 
       - name: Run feature powerset builds
         run: |
-          make check
+          make CARGO="cargo +nightly-2024-02-01" check
 
   fmt:
     name: rustfmt
@@ -74,8 +82,8 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          toolchain: nightly-2024-02-01
           components: rustfmt
           override: true
       - run: |
-          cargo fmt -- --check
+          cargo +nightly-2024-02-01 fmt -- --check

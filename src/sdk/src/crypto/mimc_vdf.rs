@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -30,14 +30,14 @@ const L_FERMAT_EXPONENT: &str =
     "77194726158210796949047323339125271902179989777093709359638389337603730746027";
 
 /// Calculates set of round constants to perform MiMC-calculation on.
-fn calculate_round_constants() -> [u64; 64] {
-    let mut round_constants = [0u64; 64];
+fn calculate_round_constants() -> [BigUint; 64] {
+    let mut round_constants: Vec<BigUint> = vec![];
     #[allow(clippy::needless_range_loop)]
-    for i in 0usize..64 {
-        round_constants[i] = (i.pow(7) ^ 42) as u64;
+    for i in 0u64..64 {
+        round_constants.push(BigUint::from(i).pow(7) ^ BigUint::from(42u64));
     }
 
-    round_constants
+    round_constants.try_into().unwrap()
 }
 
 /// Executes `num_steps` of MiMC-calculation in forward direction for the given `input`
@@ -49,8 +49,8 @@ fn forward_mimc(num_steps: u64, input: &BigUint) -> BigUint {
     let three = BigUint::from(3_u64);
     for i in 1..num_steps {
         result = (result.modpow(&three, &modulus) +
-            BigUint::from(round_constants[i as usize % round_constants.len()])) %
-            &modulus;
+            &round_constants[i as usize % round_constants.len()])
+            .modpow(&BigUint::from(1_u64), &modulus);
     }
 
     result
@@ -67,8 +67,8 @@ fn backward_mimc(num_steps: u64, input: &BigUint) -> BigUint {
 
     let mut result = input.clone();
     for i in (1..num_steps).rev() {
-        let round_constant = BigUint::from(round_constants[i as usize % round_constants.len()]);
-        result = (&result - &round_constant).modpow(&l_fermat_exp, &modulus);
+        let round_constant = &round_constants[i as usize % round_constants.len()];
+        result = (&result - round_constant).modpow(&l_fermat_exp, &modulus);
     }
 
     result

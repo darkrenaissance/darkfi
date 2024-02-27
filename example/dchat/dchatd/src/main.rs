@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -169,12 +169,14 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     signals_handler.wait_termination(signals_task).await?;
     info!("Caught termination signal, cleaning up and exiting...");
 
-    info!("Stopping P2P network");
-    p2p.stop().await;
-
     info!("Stopping JSON-RPC server");
     rpc_task.stop().await;
+
+    info!("Stopping dnet tasks");
     dnet_task.stop().await;
+
+    info!("Stopping P2P network");
+    p2p.stop().await;
 
     info!("Shut down successfully");
     // ANCHOR_END: shutdown

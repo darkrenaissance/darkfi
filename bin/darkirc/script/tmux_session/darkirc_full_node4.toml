@@ -16,11 +16,11 @@ autojoin = ["#dev", "#test"]
 outbound_connections = 8
 
 ## Inbound connection slots
-inbound_connections = 8
+# inbound_connections = 8
 
-inbound = ["tcp://127.0.0.1:25555"]
+# inbound = ["tcp://127.0.0.1:25555"]
 
-external_addrs = ["tcp://127.0.0.1:25555"]
+# external_addrs = ["tcp://127.0.0.1:25555"]
 
 # peers = ["tcp://127.0.0.1:25554"]
 
@@ -31,8 +31,8 @@ seeds = ["tcp://127.0.0.1:25551"]
 allowed_transports = ["tcp"]
 
 localnet = true
-
-channel_handshake_timeout = 25
+hostlist = "/tmp/darkirc_test/darkirc4-host.tsv"
+# advertise = true
 #
 # [channel."#dev"]
 # topic = "DarkFi Development HQ"

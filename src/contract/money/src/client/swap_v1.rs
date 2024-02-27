@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -25,7 +25,8 @@ use darkfi::{
 };
 use darkfi_sdk::{
     crypto::{
-        note::AeadEncryptedNote, pasta_prelude::*, MerkleTree, PublicKey, SecretKey, TokenId,
+        note::AeadEncryptedNote, pasta_prelude::*, BaseBlind, Blind, FuncId, MerkleTree, PublicKey,
+        ScalarBlind, SecretKey,
     },
     pasta::pallas,
 };
@@ -41,7 +42,7 @@ use crate::{
         },
         MoneyNote, OwnCoin,
     },
-    model::{Input, MoneyTransferParamsV1, Output},
+    model::{Input, MoneyTransferParamsV1, Output, TokenId},
 };
 
 pub struct SwapCallDebris {
@@ -65,18 +66,18 @@ pub struct SwapCallBuilder {
     /// The token ID of the party's output to receive
     pub token_id_recv: TokenId,
     /// User data blind for the party's input
-    pub user_data_blind_send: pallas::Base,
+    pub user_data_blind_send: BaseBlind,
     /// Spend hook for the party's output
-    pub spend_hook_recv: pallas::Base,
+    pub spend_hook_recv: FuncId,
     /// User data for the party's output
     pub user_data_recv: pallas::Base,
     /// The blinds to be used for value pedersen commitments
     /// `[0]` is used for input 0 and output 1, and `[1]` is
     /// used for input 1 and output 0. The same applies to
     /// `token_blinds`.
-    pub value_blinds: [pallas::Scalar; 2],
+    pub value_blinds: [ScalarBlind; 2],
     /// The blinds to be used for token ID pedersen commitments
-    pub token_blinds: [pallas::Base; 2],
+    pub token_blinds: [BaseBlind; 2],
     /// The coin to be used as the input to the swap
     pub coin: OwnCoin,
     /// Merkle tree of coins used to create inclusion proofs
@@ -107,14 +108,9 @@ impl SwapCallBuilder {
             return Err(ClientFailed::InvalidTokenId(self.coin.note.token_id.to_string()).into())
         }
 
-        let leaf_position = self.coin.leaf_position;
-        let merkle_path = self.tree.witness(leaf_position, 0).unwrap();
-
         let input = TransferCallInput {
-            leaf_position,
-            merkle_path,
-            secret: self.coin.secret,
-            note: self.coin.note.clone(),
+            coin: self.coin.clone(),
+            merkle_path: self.tree.witness(self.coin.leaf_position, 0).unwrap(),
             user_data_blind: self.user_data_blind_send,
         };
 
@@ -122,14 +118,13 @@ impl SwapCallBuilder {
             public_key: self.pubkey,
             value: self.value_recv,
             token_id: self.token_id_recv,
-            serial: pallas::Base::random(&mut OsRng),
-            spend_hook: pallas::Base::ZERO,
+            spend_hook: FuncId::none(),
             user_data: pallas::Base::ZERO,
+            blind: Blind::random(&mut OsRng),
         };
 
         // Now we fill this with necessary stuff
-        let mut params =
-            MoneyTransferParamsV1 { clear_inputs: vec![], inputs: vec![], outputs: vec![] };
+        let mut params = MoneyTransferParamsV1 { inputs: vec![], outputs: vec![] };
 
         // Create a new ephemeral secret key
         let signature_secret = SecretKey::random(&mut OsRng);
@@ -150,15 +145,14 @@ impl SwapCallBuilder {
             token_commit: public_inputs.token_commit,
             nullifier: public_inputs.nullifier,
             merkle_root: public_inputs.merkle_root,
-            spend_hook: public_inputs.spend_hook,
             user_data_enc: public_inputs.user_data_enc,
             signature_public: public_inputs.signature_public,
         });
 
         proofs.push(proof);
 
-        // For the output, we create a new serial
-        let serial = pallas::Base::random(&mut OsRng);
+        // For the output, we create a new coin blind
+        let coin_blind = Blind::random(&mut OsRng);
 
         info!("Creating mint proof for output");
         let (proof, public_inputs) = create_transfer_mint_proof(
@@ -167,20 +161,20 @@ impl SwapCallBuilder {
             &output,
             self.value_blinds[1],
             self.token_blinds[1],
-            serial,
             self.spend_hook_recv,
             self.user_data_recv,
+            coin_blind,
         )?;
 
         proofs.push(proof);
 
         // Encrypted note
         let note = MoneyNote {
-            serial,
             value: output.value,
             token_id: output.token_id,
             spend_hook: self.spend_hook_recv,
             user_data: self.user_data_recv,
+            coin_blind,
             value_blind: self.value_blinds[1],
             token_blind: self.token_blinds[1],
             // Here we store our secret key we use for signing

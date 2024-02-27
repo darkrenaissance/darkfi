@@ -3,4 +3,6 @@
 \t:{\textrm{#1}}
 \~:{\sim}
 \cN:{\mathcal{N}}
+\cX:{\mathcal{X}}
+\cY:{\mathcal{Y}}
 

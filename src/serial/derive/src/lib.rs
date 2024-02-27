@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -69,10 +69,7 @@ pub fn darkfi_serialize(input: TokenStream) -> TokenStream {
         unreachable!()
     };
 
-    TokenStream::from(match res {
-        Ok(res) => res,
-        Err(err) => err.to_compile_error(),
-    })
+    TokenStream::from(res.unwrap_or_else(|err| err.to_compile_error()))
 }
 
 #[proc_macro_derive(SerialDecodable, attributes(skip_serialize))]
@@ -116,8 +113,5 @@ pub fn darkfi_deserialize(input: TokenStream) -> TokenStream {
         unreachable!()
     };
 
-    TokenStream::from(match res {
-        Ok(res) => res,
-        Err(err) => err.to_compile_error(),
-    })
+    TokenStream::from(res.unwrap_or_else(|err| err.to_compile_error()))
 }

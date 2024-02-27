@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -17,13 +17,16 @@
  */
 use darkfi::{zk::ProvingKey, zkas::ZkBinary, ClientFailed, Result};
 use darkfi_sdk::{
-    crypto::{pasta_prelude::*, Keypair, MerkleTree, PublicKey, TokenId},
+    crypto::{pasta_prelude::*, Blind, FuncId, Keypair, MerkleTree, PublicKey},
     pasta::pallas,
 };
 use log::{debug, error};
 use rand::rngs::OsRng;
 
-use crate::{client::OwnCoin, model::MoneyTransferParamsV1};
+use crate::{
+    client::OwnCoin,
+    model::{MoneyTransferParamsV1, TokenId},
+};
 
 mod builder;
 pub use builder::{
@@ -107,15 +110,10 @@ pub fn make_transfer_call(
     let (spent_coins, change_value) = select_coins(coins, value)?;
 
     for coin in spent_coins.iter() {
-        let leaf_position = coin.leaf_position;
-        let merkle_path = tree.witness(leaf_position, 0).unwrap();
-
         let input = TransferCallInput {
-            leaf_position,
-            merkle_path,
-            secret: coin.secret,
-            note: coin.note.clone(),
-            user_data_blind: pallas::Base::random(&mut OsRng),
+            coin: coin.clone(),
+            merkle_path: tree.witness(coin.leaf_position, 0).unwrap(),
+            user_data_blind: Blind::random(&mut OsRng),
         };
 
         inputs.push(input);
@@ -126,9 +124,9 @@ pub fn make_transfer_call(
         public_key: recipient,
         value,
         token_id,
-        serial: pallas::Base::random(&mut OsRng),
-        spend_hook: pallas::Base::ZERO,
+        spend_hook: FuncId::none(),
         user_data: pallas::Base::ZERO,
+        blind: Blind::random(&mut OsRng),
     });
 
     if change_value > 0 {
@@ -136,9 +134,9 @@ pub fn make_transfer_call(
             public_key: keypair.public,
             value: change_value,
             token_id,
-            serial: pallas::Base::random(&mut OsRng),
-            spend_hook: pallas::Base::ZERO,
+            spend_hook: FuncId::none(),
             user_data: pallas::Base::ZERO,
+            blind: Blind::random(&mut OsRng),
         });
     }
 

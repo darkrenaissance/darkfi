@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -26,14 +26,19 @@
 //! the necessary objects provided by the caller. This is intentional, so we
 //! are able to abstract away any wallet interfaces to client implementations.
 
+use std::hash::{Hash, Hasher};
+
 use darkfi_sdk::{
     bridgetree,
-    crypto::{pasta_prelude::*, Nullifier, SecretKey, TokenId, DARK_TOKEN_ID},
+    crypto::{
+        pasta_prelude::{Field, PrimeField},
+        poseidon_hash, BaseBlind, Blind, FuncId, ScalarBlind, SecretKey,
+    },
     pasta::pallas,
 };
 use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 
-use crate::model::Coin;
+use crate::model::{Coin, Nullifier, TokenId};
 
 /// `Money::FeeV1` API
 pub mod fee_v1;
@@ -53,53 +58,11 @@ pub mod token_mint_v1;
 /// `Money::TokenFreezeV1` API
 pub mod token_freeze_v1;
 
-/// `Money::StakeV1` API
-pub mod stake_v1;
-
-/// `Money::UnstakeV1` API
-pub mod unstake_v1;
-
 /// `Money::PoWRewardV1` API
 pub mod pow_reward_v1;
 
-// Wallet SQL table constant names. These have to represent the `wallet.sql`
-// SQL schema.
-// TODO: They should also be prefixed with the contract ID to avoid collisions.
-pub const MONEY_INFO_TABLE: &str = "money_info";
-pub const MONEY_INFO_COL_LAST_SCANNED_SLOT: &str = "last_scanned_slot";
-
-pub const MONEY_TREE_TABLE: &str = "money_tree";
-pub const MONEY_TREE_COL_TREE: &str = "tree";
-
-pub const MONEY_KEYS_TABLE: &str = "money_keys";
-pub const MONEY_KEYS_COL_KEY_ID: &str = "key_id";
-pub const MONEY_KEYS_COL_IS_DEFAULT: &str = "is_default";
-pub const MONEY_KEYS_COL_PUBLIC: &str = "public";
-pub const MONEY_KEYS_COL_SECRET: &str = "secret";
-
-pub const MONEY_COINS_TABLE: &str = "money_coins";
-pub const MONEY_COINS_COL_COIN: &str = "coin";
-pub const MONEY_COINS_COL_IS_SPENT: &str = "is_spent";
-pub const MONEY_COINS_COL_SERIAL: &str = "serial";
-pub const MONEY_COINS_COL_VALUE: &str = "value";
-pub const MONEY_COINS_COL_TOKEN_ID: &str = "token_id";
-pub const MONEY_COINS_COL_SPEND_HOOK: &str = "spend_hook";
-pub const MONEY_COINS_COL_USER_DATA: &str = "user_data";
-pub const MONEY_COINS_COL_VALUE_BLIND: &str = "value_blind";
-pub const MONEY_COINS_COL_TOKEN_BLIND: &str = "token_blind";
-pub const MONEY_COINS_COL_SECRET: &str = "secret";
-pub const MONEY_COINS_COL_NULLIFIER: &str = "nullifier";
-pub const MONEY_COINS_COL_LEAF_POSITION: &str = "leaf_position";
-pub const MONEY_COINS_COL_MEMO: &str = "memo";
-
-pub const MONEY_TOKENS_TABLE: &str = "money_tokens";
-pub const MONEY_TOKENS_COL_MINT_AUTHORITY: &str = "mint_authority";
-pub const MONEY_TOKENS_COL_TOKEN_ID: &str = "token_id";
-pub const MONEY_TOKENS_COL_IS_FROZEN: &str = "is_frozen";
-
-pub const MONEY_ALIASES_TABLE: &str = "money_aliases";
-pub const MONEY_ALIASES_COL_ALIAS: &str = "alias";
-pub const MONEY_ALIASES_COL_TOKEN_ID: &str = "token_id";
+/// `Money::AuthTokenMintV1` API
+pub mod auth_token_mint_v1;
 
 /// `MoneyNote` holds the inner attributes of a `Coin`
 /// It does not store the public key since it's encrypted for that key,
@@ -107,22 +70,22 @@ pub const MONEY_ALIASES_COL_TOKEN_ID: &str = "token_id";
 /// All other coin attributes must be present.
 #[derive(Debug, Clone, Eq, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct MoneyNote {
-    /// Serial number of the coin, used for the nullifier
-    pub serial: pallas::Base,
     /// Value of the coin
     pub value: u64,
     /// Token ID of the coin
     pub token_id: TokenId,
     /// Spend hook used for protocol-owned liquidity.
     /// Specifies which contract owns this coin.
-    pub spend_hook: pallas::Base,
+    pub spend_hook: FuncId,
     /// User data used by protocol when spend hook is enabled
     pub user_data: pallas::Base,
+    /// Blinding factor for the coin
+    pub coin_blind: BaseBlind,
     // TODO: look into removing these fields. We potentially don't need them [
     /// Blinding factor for the value pedersen commitment
-    pub value_blind: pallas::Scalar,
+    pub value_blind: ScalarBlind,
     /// Blinding factor for the token ID pedersen commitment
-    pub token_blind: pallas::Base,
+    pub token_blind: BaseBlind,
     // ] ^ the receiver is not interested in the value commit / token commits.
     // we just want to examine the coins in the outputs. The money::transfer() contract
     // should ensure everything else is correct.
@@ -139,89 +102,36 @@ pub struct OwnCoin {
     pub note: MoneyNote,
     /// Coin's secret key
     pub secret: SecretKey,
-    /// Coin's nullifier
-    pub nullifier: Nullifier,
     /// Coin's leaf position in the Merkle tree of coins
     pub leaf_position: bridgetree::Position,
 }
 
-/// `ConsensusNote` holds the inner attributes of a `Coin`.
-#[derive(Debug, Clone, Eq, PartialEq, SerialEncodable, SerialDecodable)]
-pub struct ConsensusNote {
-    /// Serial number of the coin, used for the nullifier
-    pub serial: pallas::Base,
-    /// Value of the coin
-    pub value: u64,
-    /// Epoch the coin was minted
-    pub epoch: u64,
-    /// Blinding factor for the value pedersen commitment
-    pub value_blind: pallas::Scalar,
-    /// Value of the reward
-    pub reward: u64,
-    /// Blinding factor for the reward value pedersen commitment
-    pub reward_blind: pallas::Scalar,
-}
-
-impl From<ConsensusNote> for MoneyNote {
-    fn from(consensus_note: ConsensusNote) -> Self {
-        MoneyNote {
-            serial: consensus_note.serial,
-            value: consensus_note.value,
-            token_id: *DARK_TOKEN_ID,
-            spend_hook: pallas::Base::ZERO,
-            user_data: pallas::Base::ZERO,
-            value_blind: consensus_note.value_blind,
-            token_blind: pallas::Base::ZERO,
-            memo: vec![],
-        }
+impl OwnCoin {
+    /// Derive the [`Nullifier`] for this [`OwnCoin`]
+    pub fn nullifier(&self) -> Nullifier {
+        Nullifier::from(poseidon_hash([self.secret.inner(), self.coin.inner()]))
     }
 }
 
-/// `ConsensusOwnCoin` is a representation of `Coin` with its respective metadata.
-#[derive(Debug, Clone, Eq, PartialEq, SerialEncodable, SerialDecodable)]
-pub struct ConsensusOwnCoin {
-    /// The coin hash
-    pub coin: Coin,
-    /// The attached `ConsensusNote`
-    pub note: ConsensusNote,
-    /// Coin's secret key
-    pub secret: SecretKey,
-    /// Coin's nullifier
-    pub nullifier: Nullifier,
-    /// Coin's leaf position in the Merkle tree of coins
-    pub leaf_position: bridgetree::Position,
-}
-
-impl From<ConsensusOwnCoin> for OwnCoin {
-    fn from(consensus_own_coin: ConsensusOwnCoin) -> Self {
-        OwnCoin {
-            coin: consensus_own_coin.coin,
-            note: consensus_own_coin.note.into(),
-            secret: consensus_own_coin.secret,
-            nullifier: consensus_own_coin.nullifier,
-            leaf_position: consensus_own_coin.leaf_position,
-        }
+impl Hash for OwnCoin {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.coin.inner().to_repr().hash(state);
     }
 }
 
 pub fn compute_remainder_blind(
-    clear_inputs: &[crate::model::ClearInput],
-    input_blinds: &[pallas::Scalar],
-    output_blinds: &[pallas::Scalar],
-) -> pallas::Scalar {
-    let mut total = pallas::Scalar::zero();
-
-    for input in clear_inputs {
-        total += input.value_blind;
-    }
+    input_blinds: &[ScalarBlind],
+    output_blinds: &[ScalarBlind],
+) -> ScalarBlind {
+    let mut total = pallas::Scalar::ZERO;
 
     for input_blind in input_blinds {
-        total += input_blind;
+        total += input_blind.inner();
     }
 
     for output_blind in output_blinds {
-        total -= output_blind;
+        total -= output_blind.inner();
     }
 
-    total
+    Blind(total)
 }

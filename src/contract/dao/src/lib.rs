@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -73,28 +73,30 @@ pub const DAO_CONTRACT_KEY_DAO_MERKLE_TREE: &[u8] = b"dao_merkle_tree";
 pub const DAO_CONTRACT_KEY_LATEST_DAO_ROOT: &[u8] = b"dao_last_root";
 
 /// zkas dao mint circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_MINT_NS: &str = "DaoMint";
+pub const DAO_CONTRACT_ZKAS_DAO_MINT_NS: &str = "Mint";
 /// zkas dao vote input circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS: &str = "DaoVoteInput";
+pub const DAO_CONTRACT_ZKAS_DAO_VOTE_INPUT_NS: &str = "VoteInput";
 /// zkas dao vote main circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS: &str = "DaoVoteMain";
+pub const DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS: &str = "VoteMain";
 /// zkas dao propose input circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS: &str = "DaoProposeInput";
+pub const DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS: &str = "ProposeInput";
 /// zkas dao propose main circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS: &str = "DaoProposeMain";
+pub const DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS: &str = "ProposeMain";
 /// zkas dao exec circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_EXEC_NS: &str = "DaoExec";
+pub const DAO_CONTRACT_ZKAS_DAO_EXEC_NS: &str = "Exec";
 /// zkas dao auth money_transfer circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS: &str = "DaoAuthMoneyTransfer";
+pub const DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS: &str = "AuthMoneyTransfer";
 /// zkas dao auth money_transfer encrypted coin circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS: &str =
-    "DaoAuthMoneyTransferEncCoin";
+pub const DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS: &str = "AuthMoneyTransferEncCoin";
 
-const SLOT_TIME: u64 = 90;
-const SECS_IN_DAY: u64 = 24 * 60 * 60;
+// ANCHOR: dao-blockwindow
+const BLOCK_TIME: u64 = 90;
+const SECS_IN_HOUR: u64 = 60 * 60;
+const WINDOW_TIME_HR: u64 = 4;
 
-/// Days since genesis block. Used for time limit on DAO proposals.
-pub fn slot_to_day(slot: u64) -> u64 {
-    let timestamp_secs = slot * SLOT_TIME;
-    timestamp_secs / SECS_IN_DAY
+/// Blockwindow from blockheight. Used for time limit on DAO proposals.
+pub fn blockwindow(height: u64) -> u64 {
+    let timestamp_secs = height * BLOCK_TIME;
+    timestamp_secs / (WINDOW_TIME_HR * SECS_IN_HOUR)
 }
+// ANCHOR_END: dao-blockwindow

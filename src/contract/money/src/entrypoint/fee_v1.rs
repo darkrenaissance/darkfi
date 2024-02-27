@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -18,8 +18,7 @@
 
 use darkfi_sdk::{
     crypto::{
-        pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, ContractId, MerkleNode,
-        PublicKey, DARK_TOKEN_ID,
+        pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, ContractId, MerkleNode, PublicKey,
     },
     dark_tree::DarkLeaf,
     db::{db_contains_key, db_get, db_lookup, db_set},
@@ -32,7 +31,7 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{
     error::MoneyError,
-    model::{MoneyFeeParamsV1, MoneyFeeUpdateV1},
+    model::{MoneyFeeParamsV1, MoneyFeeUpdateV1, DARK_TOKEN_ID},
     MoneyFunction, MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_MERKLE_TREE,
     MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_INFO_TREE, MONEY_CONTRACT_LATEST_COIN_ROOT,
     MONEY_CONTRACT_NULLIFIERS_TREE, MONEY_CONTRACT_TOTAL_FEES_PAID, MONEY_CONTRACT_ZKAS_FEE_NS_V1,
@@ -68,7 +67,6 @@ pub(crate) fn money_fee_get_metadata_v1(
             params.input.token_commit,
             params.input.merkle_root.inner(),
             params.input.user_data_enc,
-            params.input.spend_hook,
             sig_x,
             sig_y,
             params.output.coin.inner(),
@@ -95,13 +93,11 @@ pub(crate) fn money_fee_process_instruction_v1(
     let fee: u64 = deserialize(&self_.data.data[1..9])?;
     let params: MoneyFeeParamsV1 = deserialize(&self_.data.data[9..])?;
 
-    // We should have some fee paid...
-    /* XXX:
+    // We should have _some_ fee paid...
     if fee == 0 {
         msg!("[FeeV1] Error: Paid fee is 0");
         return Err(MoneyError::InsufficientFee.into())
     }
-    */
 
     // Access the necessary databases where there is information to
     // validate this state transition.
@@ -112,7 +108,7 @@ pub(crate) fn money_fee_process_instruction_v1(
 
     // Fees can only be paid using the native token, so we'll compare
     // the token commitments with this one:
-    let native_token_commit = poseidon_hash([DARK_TOKEN_ID.inner(), params.token_blind]);
+    let native_token_commit = poseidon_hash([DARK_TOKEN_ID.inner(), params.token_blind.inner()]);
 
     // ===================================
     // Perform the actual state transition
@@ -126,12 +122,6 @@ pub(crate) fn money_fee_process_instruction_v1(
     if params.output.token_commit != native_token_commit {
         msg!("[FeeV1] Error: Output token commitment is not native token");
         return Err(MoneyError::TokenMismatch.into())
-    }
-
-    // The spend hook must be zero.
-    if params.input.spend_hook != pallas::Base::ZERO {
-        msg!("[FeeV1] Error: Input spend hook is nonzero");
-        return Err(MoneyError::SpendHookNonZero.into())
     }
 
     // The Merkle root is used to know whether this is a coin that

@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -17,24 +17,21 @@
  */
 
 use darkfi_sdk::{
-    blockchain::{expected_reward, Slot, POW_CUTOFF},
-    crypto::{
-        pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, ContractId, MerkleNode,
-        DARK_TOKEN_ID,
-    },
+    blockchain::expected_reward,
+    crypto::{pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, ContractId, MerkleNode},
     dark_tree::DarkLeaf,
     db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
     merkle_add, msg,
     pasta::pallas,
-    util::{get_slot, get_verifying_slot},
+    util::{get_last_block_info, get_verifying_block_height},
     ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{
     error::MoneyError,
-    model::{MoneyPoWRewardParamsV1, MoneyPoWRewardUpdateV1},
+    model::{MoneyPoWRewardParamsV1, MoneyPoWRewardUpdateV1, DARK_TOKEN_ID},
     MoneyFunction, MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_MERKLE_TREE,
     MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_INFO_TREE, MONEY_CONTRACT_LATEST_COIN_ROOT,
     MONEY_CONTRACT_ZKAS_MINT_NS_V1,
@@ -84,43 +81,36 @@ pub(crate) fn money_pow_reward_process_instruction_v1(
     let self_ = &calls[call_idx as usize].data;
     let params: MoneyPoWRewardParamsV1 = deserialize(&self_.data[1..])?;
 
-    // Verify this contract call is verified against a slot(block height) before PoS transition,
-    // excluding genesis.
-    let verifying_slot = get_verifying_slot();
-    if verifying_slot == 0 || verifying_slot > POW_CUTOFF {
-        msg!(
-            "[PoWRewardV1] Error: Call is executed for slot {}(cutoff slot {})",
-            verifying_slot,
-            POW_CUTOFF
-        );
-        return Err(MoneyError::PoWRewardCallAfterCutoffSlot.into())
+    // Verify this contract call is not verified against genesis block
+    let verifying_block_height = get_verifying_block_height();
+    if verifying_block_height == 0 {
+        msg!("[PoWRewardV1] Error: Call is executed for genesis block");
+        return Err(MoneyError::PoWRewardCallOnGenesisBlock.into())
     }
 
-    // Grab the slot to validate consensus params against
-    let Some(slot) = get_slot(verifying_slot)? else {
-        msg!("[PoWRewardV1] Error: Missing slot {} from db", verifying_slot);
-        return Err(MoneyError::PoWRewardMissingSlot.into())
+    // Grab last block information to use in the VRF
+    let Some(last_block_info) = get_last_block_info()? else {
+        msg!("[PoWRewardV1] Error: Could not receive last block from db");
+        return Err(MoneyError::PoWRewardRetrieveLastBlockError.into())
     };
-    let slot: Slot = deserialize(&slot)?;
+    let height: u64 = deserialize(&last_block_info[..8])?;
 
-    // Verify proposal extends a known fork
-    if !slot.previous.last_hashes.contains(&params.fork_hash) {
-        msg!("[PoWRewardV1] Error: Block extends unknown fork {}", params.fork_hash);
-        return Err(MoneyError::PoWRewardExtendsUnknownFork.into())
-    }
-
-    // Verify sequence is correct
-    if !slot.previous.second_to_last_hashes.contains(&params.fork_previous_hash) {
-        let fork_prev = &params.fork_previous_hash;
-        msg!("[PoWRewardV1] Error: Block extends unknown fork {}", fork_prev);
-        return Err(MoneyError::PoWRewardExtendsUnknownFork.into())
+    // Verify this contract call is verified against next block height
+    if verifying_block_height != height + 1 {
+        msg!(
+            "[PoWRewardV1] Error: Call is executed for block height {}, not next one: {}",
+            verifying_block_height,
+            height
+        );
+        return Err(MoneyError::PoWRewardCallNotOnNextBlockHeight.into())
     }
 
     // Construct VRF input
     let mut vrf_input = Vec::with_capacity(32 + blake3::OUT_LEN + 32);
-    vrf_input.extend_from_slice(&slot.last_nonce.to_repr());
-    vrf_input.extend_from_slice(params.fork_previous_hash.as_bytes());
-    vrf_input.extend_from_slice(&pallas::Base::from(slot.id).to_repr());
+    let nonce: u64 = deserialize(&last_block_info[8..16])?;
+    vrf_input.extend_from_slice(&pallas::Base::from(nonce).to_repr());
+    vrf_input.extend_from_slice(&last_block_info[16..]);
+    vrf_input.extend_from_slice(&pallas::Base::from(verifying_block_height).to_repr());
 
     // Verify VRF proof
     if !params.vrf_proof.verify(params.input.signature_public, &vrf_input) {
@@ -134,13 +124,13 @@ pub(crate) fn money_pow_reward_process_instruction_v1(
         return Err(MoneyError::TransferClearInputNonNativeToken.into())
     }
 
-    // Verify reward value matches the expected one for this slot(block height)
-    let expected_reward = expected_reward(verifying_slot);
+    // Verify reward value matches the expected one for this block height
+    let expected_reward = expected_reward(verifying_block_height);
     if params.input.value != expected_reward {
         msg!(
             "[PoWRewardV1] Error: Reward value({}) is not the block height({}) expected one: {}",
             params.input.value,
-            verifying_slot,
+            verifying_block_height,
             expected_reward
         );
         return Err(MoneyError::ValueMismatch.into())
@@ -166,7 +156,7 @@ pub(crate) fn money_pow_reward_process_instruction_v1(
         return Err(MoneyError::ValueMismatch.into())
     }
 
-    if poseidon_hash([params.input.token_id.inner(), params.input.token_blind]) !=
+    if poseidon_hash([params.input.token_id.inner(), params.input.token_blind.inner()]) !=
         params.output.token_commit
     {
         msg!("[PoWRewardV1] Error: Token commitment mismatch");

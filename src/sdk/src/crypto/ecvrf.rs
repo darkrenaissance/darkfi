@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -26,14 +26,17 @@ use halo2_gadgets::ecc::chip::FixedPoint;
 use pasta_curves::{
     arithmetic::CurveExt,
     group::{
-        ff::{Field, FromUniformBytes},
+        ff::{FromUniformBytes, PrimeField},
         GroupEncoding,
     },
     pallas,
 };
-use rand_core::{CryptoRng, RngCore};
 
-use super::{constants::NullifierK, util::mod_r_p, PublicKey, SecretKey};
+use super::{
+    constants::NullifierK,
+    util::{fp_mod_fv, hash_to_scalar},
+    PublicKey, SecretKey,
+};
 
 /// Prefix domain used for `hash_to_curve` calls
 const VRF_DOMAIN: &str = "DarkFi_ECVRF";
@@ -48,8 +51,8 @@ pub struct VrfProof {
 
 impl VrfProof {
     /// Execute the VRF function and create a proof given a `SecretKey`
-    /// a seed input `alpha_string`, and an RNG instance.
-    pub fn prove(x: SecretKey, alpha_string: &[u8], rng: &mut (impl CryptoRng + RngCore)) -> Self {
+    /// and a seed input `alpha_string`.
+    pub fn prove(x: SecretKey, alpha_string: &[u8]) -> Self {
         let Y = PublicKey::from_secret(x);
 
         let mut message = vec![];
@@ -57,8 +60,10 @@ impl VrfProof {
         message.extend_from_slice(alpha_string);
         let H = pallas::Point::hash_to_curve(VRF_DOMAIN)(&message);
 
-        let gamma = H * mod_r_p(x.inner());
-        let k = pallas::Scalar::random(rng);
+        let gamma = H * fp_mod_fv(x.inner());
+
+        // Generate a determinnistic nonce
+        let k = hash_to_scalar(VRF_DOMAIN.as_bytes(), &[&x.inner().to_repr(), &H.to_bytes()]);
 
         let mut hasher = blake3::Hasher::new();
         hasher.update(&H.to_bytes());
@@ -73,7 +78,7 @@ impl VrfProof {
         c_scalar[..blake3::OUT_LEN].copy_from_slice(c.as_bytes());
         let c_scalar = pallas::Scalar::from_uniform_bytes(&c_scalar);
 
-        let s = k + c_scalar * mod_r_p(x.inner());
+        let s = k + c_scalar * fp_mod_fv(x.inner());
 
         Self { gamma, c, s }
     }
@@ -101,8 +106,9 @@ impl VrfProof {
         hasher.finalize() == self.c
     }
 
-    /// Returns the VRF output. **It is necessary** to do `VrfProof::verify` first in
-    /// order to trust this function's output.
+    /// Returns the VRF output.
+    /// **It is necessary** to do `VrfProof::verify` first in order to trust this function's output.
+    /// TODO: FIXME: We should enforce verification before getting the output.
     pub fn hash_output(&self) -> blake3::Hash {
         let mut hasher = blake3::Hasher::new();
         hasher.update(VRF_DOMAIN.as_bytes());
@@ -126,7 +132,7 @@ mod tests {
         // VRF input
         let input = [0xde, 0xad, 0xbe, 0xef];
 
-        let proof = VrfProof::prove(secret_key, &input, &mut OsRng);
+        let proof = VrfProof::prove(secret_key, &input);
         assert!(proof.verify(public_key, &input));
 
         // Forged public key

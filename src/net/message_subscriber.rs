@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{any::Any, collections::HashMap, io::Cursor, sync::Arc};
+use std::{any::Any, collections::HashMap, io::Cursor, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use futures::stream::{FuturesUnordered, StreamExt};
@@ -25,7 +25,7 @@ use rand::{rngs::OsRng, Rng};
 use smol::lock::Mutex;
 
 use super::message::Message;
-use crate::{Error, Result};
+use crate::{system::timeout::timeout, Error, Result};
 
 /// 64-bit identifier for message subscription.
 pub type MessageSubscriptionId = u64;
@@ -141,6 +141,20 @@ impl<M: Message> MessageSubscription<M> {
         match self.recv_queue.recv().await {
             Ok(message) => message,
             Err(e) => panic!("MessageSubscription::receive(): recv_queue failed! {}", e),
+        }
+    }
+
+    /// Start receiving messages with timeout.
+    pub async fn receive_with_timeout(&self, seconds: u64) -> MessageResult<M> {
+        let dur = Duration::from_secs(seconds);
+        let Ok(res) = timeout(dur, self.recv_queue.recv()).await else {
+            return Err(Error::ConnectTimeout)
+        };
+        match res {
+            Ok(message) => message,
+            Err(e) => {
+                panic!("MessageSubscription::receive_with_timeout(): recv_queue failed! {}", e)
+            }
         }
     }
 

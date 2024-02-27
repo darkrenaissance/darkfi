@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -59,10 +59,10 @@ impl RequestHandler for RpcSrv {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
         assert!(req.params.is_array());
 
-        match req.method.as_str() {
-            "ping" => return self.pong(req.id, req.params).await,
-            "kill" => return self.kill(req.id, req.params).await,
-            _ => return JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
+        return match req.method.as_str() {
+            "ping" => self.pong(req.id, req.params).await,
+            "kill" => self.kill(req.id, req.params).await,
+            _ => JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         }
     }
 

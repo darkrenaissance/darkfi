@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -17,7 +17,8 @@
  */
 
 use darkfi_sdk::crypto::{
-    pedersen::pedersen_commitment_u64, util::mod_r_p, MerkleNode, MerkleTree, PublicKey, SecretKey,
+    pedersen::pedersen_commitment_u64, util::fp_mod_fv, Blind, MerkleNode, MerkleTree, PublicKey,
+    SecretKey,
 };
 use halo2_gadgets::poseidon::{
     primitives as poseidon,
@@ -49,7 +50,7 @@ fn zkvm_opcodes() -> Result<()> {
 
     // Values for the proof
     let value = 666_u64;
-    let value_blind = pallas::Scalar::random(&mut OsRng);
+    let value_blind = Blind::random(&mut OsRng);
     let blind = pallas::Base::random(&mut OsRng);
     let secret = pallas::Base::random(&mut OsRng);
     let a = pallas::Base::from(42);
@@ -78,11 +79,12 @@ fn zkvm_opcodes() -> Result<()> {
 
     let ephem_secret = SecretKey::random(&mut OsRng);
     let pubkey = PublicKey::from_secret(ephem_secret).inner();
-    let (ephem_x, ephem_y) = PublicKey::from(pubkey * mod_r_p(ephem_secret.inner())).xy();
+    let (ephem_x, ephem_y) =
+        PublicKey::try_from(pubkey * fp_mod_fv(ephem_secret.inner())).unwrap().xy();
 
     let prover_witnesses = vec![
         Witness::Base(Value::known(pallas::Base::from(value))),
-        Witness::Scalar(Value::known(value_blind)),
+        Witness::Scalar(Value::known(value_blind.inner())),
         Witness::Base(Value::known(blind)),
         Witness::Base(Value::known(a)),
         Witness::Base(Value::known(b)),

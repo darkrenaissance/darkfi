@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -40,6 +40,8 @@ pub struct RpcClient {
     req_send: channel::Sender<(JsonRequest, bool)>,
     /// The channel used to read the JSON-RPC response object.
     rep_recv: channel::Receiver<JsonResult>,
+    /// The channel used to skip waiting for a JSON-RPC client request
+    req_skip_send: channel::Sender<()>,
     /// The stoppable task pointer, used on [`RpcClient::stop()`]
     task: StoppableTaskPtr,
 }
@@ -52,6 +54,7 @@ impl RpcClient {
         // Instantiate communication channels
         let (req_send, req_recv) = channel::unbounded();
         let (rep_send, rep_recv) = channel::unbounded();
+        let (req_skip_send, req_skip_recv) = channel::unbounded();
 
         // Instantiate Dialer and dial the server
         // TODO: Could add a timeout here
@@ -63,7 +66,7 @@ impl RpcClient {
         // using `RpcClient::stop()`.
         let task = StoppableTask::new();
         task.clone().start(
-            Self::reqrep_loop(stream, rep_send, req_recv),
+            Self::reqrep_loop(stream, rep_send, req_recv, req_skip_recv),
             |res| async move {
                 match res {
                     Ok(()) | Err(Error::RpcClientStopped) => {}
@@ -74,7 +77,7 @@ impl RpcClient {
             ex.clone(),
         );
 
-        Ok(Self { req_send, rep_recv, task })
+        Ok(Self { req_send, rep_recv, task, req_skip_send })
     }
 
     /// Stop the JSON-RPC client. This will trigger `stop()` on the inner
@@ -89,6 +92,7 @@ impl RpcClient {
         stream: Box<dyn PtStream>,
         rep_send: channel::Sender<JsonResult>,
         req_recv: channel::Receiver<(JsonRequest, bool)>,
+        req_skip_recv: channel::Receiver<()>,
     ) -> Result<()> {
         debug!(target: "rpc::client::reqrep_loop()", "Starting reqrep loop");
 
@@ -97,11 +101,25 @@ impl RpcClient {
 
         loop {
             let mut buf = Vec::with_capacity(INIT_BUF_SIZE);
+            let mut with_timeout = false;
 
-            let (request, with_timeout) = req_recv.recv().await?;
+            // Read an incoming client request, or skip it if triggered from
+            // a JSONRPC notification subscriber
+            smol::future::or(
+                async {
+                    let (request, timeout) = req_recv.recv().await?;
+                    with_timeout = timeout;
 
-            let request = JsonResult::Request(request);
-            write_to_stream(&mut writer, &request).await?;
+                    let request = JsonResult::Request(request);
+                    write_to_stream(&mut writer, &request).await?;
+                    Ok::<(), crate::Error>(())
+                },
+                async {
+                    req_skip_recv.recv().await?;
+                    Ok::<(), crate::Error>(())
+                },
+            )
+            .await?;
 
             if with_timeout {
                 let _ = io_timeout(READ_TIMEOUT, read_from_stream(&mut reader, &mut buf)).await?;
@@ -205,6 +223,7 @@ impl RpcClient {
             match notification {
                 JsonResult::Notification(ref n) => {
                     debug!(target: "rpc::client", "<-- {}", n.stringify()?);
+                    self.req_skip_send.send(()).await?;
                     sub.notify(notification.clone()).await;
                     continue
                 }
@@ -216,6 +235,69 @@ impl RpcClient {
 
                 JsonResult::Response(r) | JsonResult::SubscriberWithReply(_, r) => {
                     debug!(target: "rpc::client", "<-- {}", r.stringify()?);
+                    let e = JsonError::new(ErrorCode::InvalidReply, None, req_id);
+                    return Err(Error::JsonRpcError((e.error.code, e.error.message)))
+                }
+
+                JsonResult::Request(r) => {
+                    debug!(target: "rpc::client", "<-- {}", r.stringify()?);
+                    let e = JsonError::new(ErrorCode::InvalidReply, None, req_id);
+                    return Err(Error::JsonRpcError((e.error.code, e.error.message)))
+                }
+
+                JsonResult::Subscriber(_) => {
+                    // When?
+                    let e = JsonError::new(ErrorCode::InvalidReply, None, req_id);
+                    return Err(Error::JsonRpcError((e.error.code, e.error.message)))
+                }
+            }
+        }
+    }
+
+    /// Highly experimental request when you know what you and the other
+    /// side is doing. This should be used when you have consecutive requests
+    /// and want to skip unconsumed data from the multiplexer, until you
+    /// reach the ones corresponding to the provided request.
+    /// Additionally, this request is executed without a timeout.
+    pub async fn chad_request(&self, req: JsonRequest) -> Result<JsonValue> {
+        // Consume anything existing in the multiplexer
+        let _ = self.rep_recv.try_recv();
+
+        // Perform initial request
+        let req_id = req.id;
+        debug!(target: "rpc::client", "--> {}", req.stringify()?);
+
+        // If the connection is closed, the sender will get an error
+        // for sending to a closed channel.
+        self.req_send.send((req, false)).await?;
+
+        // Now loop until we receive our response
+        loop {
+            // If the connection is closed, the receiver will get an error
+            // for waiting on a closed channel.
+            let reply = self.rep_recv.recv().await?;
+
+            // Handle the response
+            match reply {
+                JsonResult::Response(rep) | JsonResult::SubscriberWithReply(_, rep) => {
+                    debug!(target: "rpc::client", "<-- {}", rep.stringify()?);
+
+                    // Check if the IDs match
+                    if req_id != rep.id {
+                        self.req_skip_send.send(()).await?;
+                        continue
+                    }
+
+                    return Ok(rep.result)
+                }
+
+                JsonResult::Error(e) => {
+                    debug!(target: "rpc::client", "<-- {}", e.stringify()?);
+                    return Err(Error::JsonRpcError((e.error.code, e.error.message)))
+                }
+
+                JsonResult::Notification(n) => {
+                    debug!(target: "rpc::client", "<-- {}", n.stringify()?);
                     let e = JsonError::new(ErrorCode::InvalidReply, None, req_id);
                     return Err(Error::JsonRpcError((e.error.code, e.error.message)))
                 }

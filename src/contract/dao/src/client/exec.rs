@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -17,7 +17,9 @@
  */
 
 use darkfi_sdk::{
-    crypto::{pasta_prelude::*, pedersen_commitment_u64, SecretKey},
+    crypto::{
+        pasta_prelude::*, pedersen_commitment_u64, BaseBlind, PublicKey, ScalarBlind, SecretKey,
+    },
     pasta::pallas,
 };
 
@@ -37,13 +39,11 @@ pub struct DaoExecCall {
     pub dao: Dao,
     pub yes_vote_value: u64,
     pub all_vote_value: u64,
-    pub yes_vote_blind: pallas::Scalar,
-    pub all_vote_blind: pallas::Scalar,
-    pub user_serial: pallas::Base,
-    pub dao_serial: pallas::Base,
+    pub yes_vote_blind: ScalarBlind,
+    pub all_vote_blind: ScalarBlind,
     pub input_value: u64,
-    pub input_value_blind: pallas::Scalar,
-    pub input_user_data_blind: pallas::Base,
+    pub input_value_blind: ScalarBlind,
+    pub input_user_data_blind: BaseBlind,
     pub hook_dao_exec: pallas::Base,
     pub signature_secret: SecretKey,
 }
@@ -76,13 +76,15 @@ impl DaoExecCall {
 
         let proposal_auth_calls_commit = self.proposal.auth_calls.commit();
 
+        let signature_public = PublicKey::from_secret(self.signature_secret);
+
         let prover_witnesses = vec![
             // proposal params
             Witness::Base(Value::known(proposal_auth_calls_commit)),
             Witness::Base(Value::known(pallas::Base::from(self.proposal.creation_day))),
             Witness::Base(Value::known(pallas::Base::from(self.proposal.duration_days))),
             Witness::Base(Value::known(self.proposal.user_data)),
-            Witness::Base(Value::known(self.proposal.blind)),
+            Witness::Base(Value::known(self.proposal.blind.inner())),
             // DAO params
             Witness::Base(Value::known(dao_proposer_limit)),
             Witness::Base(Value::known(dao_quorum)),
@@ -91,12 +93,14 @@ impl DaoExecCall {
             Witness::Base(Value::known(self.dao.gov_token_id.inner())),
             Witness::Base(Value::known(dao_pub_x)),
             Witness::Base(Value::known(dao_pub_y)),
-            Witness::Base(Value::known(self.dao.bulla_blind)),
+            Witness::Base(Value::known(self.dao.bulla_blind.inner())),
             // votes
             Witness::Base(Value::known(pallas::Base::from(self.yes_vote_value))),
             Witness::Base(Value::known(pallas::Base::from(self.all_vote_value))),
-            Witness::Scalar(Value::known(self.yes_vote_blind)),
-            Witness::Scalar(Value::known(self.all_vote_blind)),
+            Witness::Scalar(Value::known(self.yes_vote_blind.inner())),
+            Witness::Scalar(Value::known(self.all_vote_blind.inner())),
+            // signature secret
+            Witness::Base(Value::known(self.signature_secret.inner())),
         ];
 
         debug!(target: "dao", "proposal_bulla: {:?}", proposal_bulla);
@@ -107,18 +111,20 @@ impl DaoExecCall {
             *yes_vote_commit_coords.y(),
             *all_vote_commit_coords.x(),
             *all_vote_commit_coords.y(),
+            signature_public.x(),
+            signature_public.y(),
         ];
         //export_witness_json("witness.json", &prover_witnesses, &public_inputs);
 
         let circuit = ZkCircuit::new(prover_witnesses, exec_zkbin);
-        let input_proof = Proof::create(exec_pk, &[circuit], &public_inputs, &mut OsRng)
-            .expect("DAO::exec() proving error!)");
+        let input_proof = Proof::create(exec_pk, &[circuit], &public_inputs, &mut OsRng)?;
         proofs.push(input_proof);
 
         let params = DaoExecParams {
             proposal_bulla,
             proposal_auth_calls: self.proposal.auth_calls,
             blind_total_vote: DaoBlindAggregateVote { yes_vote_commit, all_vote_commit },
+            signature_public,
         };
 
         Ok((params, proofs))

@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -87,8 +87,8 @@ pub struct Channel {
 
 impl Channel {
     /// Sets up a new channel. Creates a reader and writer [`PtStream`] and
-    /// summons the message subscriber subsystem. Performs a network handshake
-    /// on the subsystem dispatchers.
+    /// the message subscriber subsystem. Performs a network handshake on the
+    /// subsystem dispatchers.
     pub async fn new(stream: Box<dyn PtStream>, addr: Url, session: SessionWeakPtr) -> Arc<Self> {
         let (reader, writer) = io::split(stream);
         let reader = Mutex::new(reader);
@@ -150,7 +150,7 @@ impl Channel {
     pub async fn subscribe_stop(&self) -> Result<Subscription<Error>> {
         debug!(target: "net::channel::subscribe_stop()", "START {:?}", self);
 
-        if self.stopped.load(SeqCst) {
+        if self.is_stopped() {
             return Err(Error::ChannelStopped)
         }
 
@@ -174,7 +174,7 @@ impl Channel {
              M::NAME, self,
         );
 
-        if self.stopped.load(SeqCst) {
+        if self.is_stopped() {
             return Err(Error::ChannelStopped)
         }
 
@@ -299,13 +299,7 @@ impl Channel {
                     debug!(target: "net::channel::main_receive_loop()", "Stopping channel {:?}", self);
 
                     // We will reject further connections from this peer
-                    self.session
-                        .upgrade()
-                        .unwrap()
-                        .p2p()
-                        .hosts()
-                        .mark_rejected(self.address())
-                        .await;
+                    self.p2p().hosts().mark_rejected(self.address()).await;
 
                     return Err(Error::ChannelStopped)
                 }

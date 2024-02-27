@@ -1,22 +1,30 @@
 #!/bin/sh
 set -e
 
-# Start a tmux session with two consensus and a non-consensus node.
+# Start a tmux session with two mining and a non-mining darkfid nodes.
+# Additionally, start two minerd daemons.
 
-if [ "$1" = "-v" ]; then
-	verbose="-v"
+session=darkfid-small
+
+if [ "$1" = "-vv" ]; then
+	verbose="-vv"
+	shift
 else
 	verbose=""
 fi
 
-tmux new-session -d
-tmux send-keys "LOG_TARGETS='!sled' ../../../darkfid ${verbose} -c darkfid0.toml" Enter
-tmux split-window -v
+tmux new-session -d -s $session
+tmux send-keys -t $session "../../../minerd ${verbose} -c minerd0.toml" Enter
+sleep 1
+tmux split-window -t $session -v -l 90%
+tmux send-keys -t $session "LOG_TARGETS='!sled,!runtime' ../../../darkfid ${verbose} -c darkfid0.toml" Enter
 sleep 2
-tmux select-pane -t 0
-tmux split-window -h
-tmux send-keys "LOG_TARGETS='!sled' ../../../darkfid ${verbose} -c darkfid1.toml" Enter
+tmux new-window -t $session
+tmux send-keys -t $session "../../../minerd ${verbose} -c minerd1.toml" Enter
+sleep 1
+tmux split-window -t $session -v -l 90%
+tmux send-keys -t $session "LOG_TARGETS='!sled,!runtime' ../../../darkfid ${verbose} -c darkfid1.toml" Enter
 sleep 2
-tmux select-pane -t 2
-tmux send-keys "LOG_TARGETS='!sled' ../../../darkfid ${verbose} -c darkfid2.toml" Enter 
-tmux attach
+tmux new-window -t $session
+tmux send-keys -t $session "LOG_TARGETS='!sled,!runtime' ../../../darkfid ${verbose} -c darkfid2.toml" Enter
+tmux attach -t $session

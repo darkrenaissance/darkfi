@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -23,7 +23,7 @@
 //! with an error, or times out.
 //!
 //! If a seed node connects successfully, it runs a version exchange protocol,
-//! stores the channel in the p2p list of channels, and discoonnects, removing
+//! stores the channel in the p2p list of channels, and disconnects, removing
 //! the channel from the channel list.
 //!
 //! The channel is registered using the [`Session::register_channel()`] trait
@@ -115,8 +115,8 @@ impl SeedSyncSession {
         }
 
         // Seed process complete
-        if self.p2p().hosts().is_empty().await {
-            warn!(target: "net::session::seedsync_session", "[P2P] Hosts pool empty after seeding");
+        if self.p2p().hosts().is_empty_greylist().await {
+            warn!(target: "net::session::seedsync_session", "[P2P] Greylist empty after seeding");
         }
 
         debug!(target: "net::session::seedsync_session", "SeedSyncSession::start() [END]");

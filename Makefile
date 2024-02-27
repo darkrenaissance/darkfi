@@ -18,7 +18,8 @@ PROOFS_BIN = $(PROOFS_SRC:=.bin)
 # List of all binaries built
 BINS = \
 	zkas \
-	darkfid2 \
+	darkfid \
+	minerd \
 	darkfi-mmproxy \
 	darkirc \
 	genev \
@@ -42,11 +43,17 @@ $(PROOFS_BIN): zkas $(PROOFS_SRC)
 
 contracts: zkas
 	$(MAKE) -C src/contract/money
-	$(MAKE) -C src/contract/consensus
 	$(MAKE) -C src/contract/dao
 	$(MAKE) -C src/contract/deployooor
 
-darkfid2: contracts
+darkfid: contracts
+	$(MAKE) -C bin/$@ \
+		PREFIX="$(PREFIX)" \
+		CARGO="$(CARGO)" \
+		RUST_TARGET="$(RUST_TARGET)" \
+		RUSTFLAGS="$(RUSTFLAGS)"
+
+minerd:
 	$(MAKE) -C bin/$@ \
 		PREFIX="$(PREFIX)" \
 		CARGO="$(CARGO)" \
@@ -54,6 +61,13 @@ darkfid2: contracts
 		RUSTFLAGS="$(RUSTFLAGS)"
 
 darkfi-mmproxy:
+	$(MAKE) -C bin/$@ \
+		PREFIX="$(PREFIX)" \
+		CARGO="$(CARGO)" \
+		RUST_TARGET="$(RUST_TARGET)" \
+		RUSTFLAGS="$(RUSTFLAGS)"
+
+drk: contracts
 	$(MAKE) -C bin/$@ \
 		PREFIX="$(PREFIX)" \
 		CARGO="$(CARGO)" \
@@ -140,11 +154,11 @@ coverage: contracts $(PROOFS_BIN)
 
 clean:
 	$(MAKE) -C src/contract/money clean
-	$(MAKE) -C src/contract/consensus clean
 	$(MAKE) -C src/contract/dao clean
 	$(MAKE) -C src/contract/deployooor clean
 	$(MAKE) -C bin/zkas clean
-	$(MAKE) -C bin/darkfid2 clean
+	$(MAKE) -C bin/darkfid clean
+	$(MAKE) -C bin/minerd clean
 	$(MAKE) -C bin/darkfi-mmproxy clean
 	$(MAKE) -C bin/darkirc clean
 	$(MAKE) -C bin/genev/genev-cli clean

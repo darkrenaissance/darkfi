@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -21,7 +21,8 @@ use std::collections::HashSet;
 use darkfi_sdk::crypto::constants::{
     sinsemilla::{OrchardCommitDomains, OrchardHashDomains},
     util::gen_const_array,
-    NullifierK, OrchardFixedBases, OrchardFixedBasesFull, ValueCommitV, MERKLE_DEPTH_ORCHARD,
+    ConstBaseFieldElement, OrchardFixedBases, OrchardFixedBasesFull, ValueCommitV,
+    MERKLE_DEPTH_ORCHARD,
 };
 use halo2_gadgets::{
     ecc::{
@@ -632,8 +633,14 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let vcr = FixedPoint::from_inner(ecc_chip.as_ref().unwrap().clone(), vcr);
                     heap.push(HeapVar::EcFixedPoint(vcr));
                 }
+                "VALUE_COMMIT_RANDOM_BASE" => {
+                    let vcr = ConstBaseFieldElement::value_commit_r();
+                    let vcr =
+                        FixedPointBaseField::from_inner(ecc_chip.as_ref().unwrap().clone(), vcr);
+                    heap.push(HeapVar::EcFixedPointBase(vcr));
+                }
                 "NULLIFIER_K" => {
-                    let nfk = NullifierK;
+                    let nfk = ConstBaseFieldElement::nullifier_k();
                     let nfk =
                         FixedPointBaseField::from_inner(ecc_chip.as_ref().unwrap().clone(), nfk);
                     heap.push(HeapVar::EcFixedPointBase(nfk));

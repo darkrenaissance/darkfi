@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -16,10 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use super::{
-    db::{CALLER_ACCESS_DENIED, DB_GET_FAILED},
-    error::{ContractError, GenericResult},
-};
+use super::error::{ContractError, GenericResult};
 
 /// Calls the `set_return_data` WASM function. Returns Ok(()) on success.
 /// Otherwise, convert the i64 error code into a [`ContractError`].
@@ -52,18 +49,18 @@ pub fn get_object_size(object_index: u32) -> i64 {
     unsafe { get_object_size_(object_index) }
 }
 
-/// Auxiliary function to parse db_get and get_slot return value.
+/// Auxiliary function to parse db_get return value.
 /// If either of these functions returns a negative integer error code,
 /// convert it into a [`ContractError`].
 pub(crate) fn parse_ret(ret: i64) -> GenericResult<Option<Vec<u8>>> {
     // Negative values represent an error code.
     if ret < 0 {
-        match ret {
-            CALLER_ACCESS_DENIED => return Err(ContractError::CallerAccessDenied),
-            DB_GET_FAILED => return Err(ContractError::DbGetFailed),
-            -127 => return Ok(None),
-            _ => unimplemented!(),
+        // However here on the special case, we'll return Ok(None)
+        if ret == crate::error::DB_GET_EMPTY {
+            return Ok(None)
         }
+
+        return Err(ContractError::from(ret))
     }
 
     // Ensure that the returned value fits into the u32 datatype.
@@ -80,52 +77,24 @@ pub(crate) fn parse_ret(ret: i64) -> GenericResult<Option<Vec<u8>>> {
     Ok(Some(buf))
 }
 
-/// Everyone can call this. Will return current epoch.
+/// Everyone can call this. Will return runtime configured
+/// verifying block height.
 ///
 /// ```
-/// epoch = get_current_epoch();
+/// block_height = get_verifying_block_height();
 /// ```
-pub fn get_current_epoch() -> u64 {
-    unsafe { get_current_epoch_() }
-}
-
-/// Everyone can call this. Will return current slot.
-///
-/// ```
-/// slot = get_current_slot();
-/// ```
-pub fn get_current_slot() -> u64 {
-    unsafe { get_current_slot_() }
+pub fn get_verifying_block_height() -> u64 {
+    unsafe { get_verifying_block_height_() }
 }
 
 /// Everyone can call this. Will return runtime configured
-/// verifying slot.
+/// verifying block height epoch.
 ///
 /// ```
-/// slot = get_verifying_slot();
+/// epoch = get_verifying_block_height_epoch();
 /// ```
-pub fn get_verifying_slot() -> u64 {
-    unsafe { get_verifying_slot_() }
-}
-
-/// Everyone can call this. Will return runtime configured
-/// verifying slot epoch.
-///
-/// ```
-/// slot = get_verifying_slot_epoch();
-/// ```
-pub fn get_verifying_slot_epoch() -> u64 {
-    unsafe { get_verifying_slot_epoch_() }
-}
-
-/// Everyone can call this. Will return requested slot from `SlotStore`.
-///
-/// ```
-/// slot = get_slot(slot);
-/// ```
-pub fn get_slot(slot: u64) -> GenericResult<Option<Vec<u8>>> {
-    let ret = unsafe { get_slot_(slot) };
-    parse_ret(ret)
+pub fn get_verifying_block_height_epoch() -> u64 {
+    unsafe { get_verifying_block_height_epoch_() }
 }
 
 /// Everyone can call this. Will return current blockchain timestamp.
@@ -133,8 +102,19 @@ pub fn get_slot(slot: u64) -> GenericResult<Option<Vec<u8>>> {
 /// ```
 /// timestamp = get_blockchain_time();
 /// ```
-pub fn get_blockchain_time() -> u64 {
-    unsafe { get_blockchain_time_() }
+pub fn get_blockchain_time() -> GenericResult<Option<Vec<u8>>> {
+    let ret = unsafe { get_blockchain_time_() };
+    parse_ret(ret)
+}
+
+/// Only exec() can call this. Will return last block information.
+///
+/// ```
+/// last_block_info = get_last_block_info();
+/// ```
+pub fn get_last_block_info() -> GenericResult<Option<Vec<u8>>> {
+    let ret = unsafe { get_last_block_info_() };
+    parse_ret(ret)
 }
 
 extern "C" {
@@ -143,10 +123,8 @@ extern "C" {
     fn get_object_bytes_(ptr: *const u8, len: u32) -> i64;
     fn get_object_size_(len: u32) -> i64;
 
-    fn get_current_epoch_() -> u64;
-    fn get_current_slot_() -> u64;
-    fn get_verifying_slot_() -> u64;
-    fn get_verifying_slot_epoch_() -> u64;
-    fn get_slot_(slot: u64) -> i64;
-    fn get_blockchain_time_() -> u64;
+    fn get_verifying_block_height_() -> u64;
+    fn get_verifying_block_height_epoch_() -> u64;
+    fn get_blockchain_time_() -> i64;
+    fn get_last_block_info_() -> i64;
 }

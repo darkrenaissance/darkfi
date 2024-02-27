@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -27,16 +27,17 @@ use darkfi_sdk::{
     error::{ContractError, ContractResult},
     msg,
     pasta::pallas,
-    util::get_verifying_slot,
+    util::get_verifying_block_height,
     ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{
+    blockwindow,
     error::DaoError,
     model::{DaoBlindAggregateVote, DaoProposalMetadata, DaoProposeParams, DaoProposeUpdate},
-    slot_to_day, DaoFunction, DAO_CONTRACT_DB_DAO_MERKLE_ROOTS, DAO_CONTRACT_DB_PROPOSAL_BULLAS,
-    DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS,
+    DaoFunction, DAO_CONTRACT_DB_DAO_MERKLE_ROOTS, DAO_CONTRACT_DB_PROPOSAL_BULLAS,
+    DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS,
 };
 
 /// `get_metdata` function for `Dao::Propose`
@@ -70,7 +71,7 @@ pub(crate) fn dao_propose_get_metadata(
         let (sig_x, sig_y) = input.signature_public.xy();
 
         zk_public_inputs.push((
-            DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS.to_string(),
+            DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS.to_string(),
             vec![
                 input.nullifier.inner(),
                 *value_coords.x(),
@@ -83,7 +84,9 @@ pub(crate) fn dao_propose_get_metadata(
         ));
     }
 
-    let current_day = slot_to_day(get_verifying_slot());
+    // ANCHOR: dao-blockwindow-example-usage
+    let current_day = blockwindow(get_verifying_block_height());
+    // ANCHOR_END: dao-blockwindow-example-usage
 
     let total_funds_coords = total_funds_commit.to_affine().coordinates().unwrap();
     zk_public_inputs.push((
@@ -117,6 +120,8 @@ pub(crate) fn dao_propose_process_instruction(
 
     let coin_roots_db = db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
     let money_nullifier_db = db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_NULLIFIERS_TREE)?;
+    let mut propose_nullifiers = Vec::with_capacity(params.inputs.len());
+
     for input in &params.inputs {
         // Check the Merkle roots for the input coins are valid
         if !db_contains_key(coin_roots_db, &serialize(&input.merkle_root))? {
@@ -125,10 +130,15 @@ pub(crate) fn dao_propose_process_instruction(
         }
 
         // Check the coins weren't already spent
-        if db_contains_key(money_nullifier_db, &serialize(&input.nullifier))? {
+        // The nullifiers should not already exist. It is the double-spend protection.
+        if propose_nullifiers.contains(&input.nullifier) ||
+            db_contains_key(money_nullifier_db, &serialize(&input.nullifier))?
+        {
             msg!("[Dao::Vote] Error: Coin is already spent");
             return Err(DaoError::CoinAlreadySpent.into())
         }
+
+        propose_nullifiers.push(input.nullifier);
     }
 
     // Is the DAO bulla generated in the ZK proof valid

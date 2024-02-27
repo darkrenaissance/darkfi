@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -18,10 +18,12 @@
 
 use core::str::FromStr;
 
+use darkfi_money_contract::model::{Nullifier, TokenId};
 use darkfi_sdk::{
     crypto::{
-        note::AeadEncryptedNote, pasta_prelude::*, poseidon_hash, MerkleNode, Nullifier, PublicKey,
-        TokenId,
+        note::{AeadEncryptedNote, ElGamalEncryptedNote},
+        pasta_prelude::*,
+        poseidon_hash, BaseBlind, ContractId, MerkleNode, PublicKey,
     },
     error::ContractError,
     pasta::pallas,
@@ -41,7 +43,7 @@ pub struct Dao {
     pub approval_ratio_base: u64,
     pub gov_token_id: TokenId,
     pub public_key: PublicKey,
-    pub bulla_blind: pallas::Base,
+    pub bulla_blind: BaseBlind,
 }
 // ANCHOR_END: dao
 
@@ -60,7 +62,7 @@ impl Dao {
             self.gov_token_id.inner(),
             pub_x,
             pub_y,
-            self.bulla_blind,
+            self.bulla_blind.inner(),
         ]);
         DaoBulla(bulla)
     }
@@ -106,7 +108,7 @@ darkfi_sdk::ty_from_fp!(DaoBulla);
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 // ANCHOR: dao-auth-call
 pub struct DaoAuthCall {
-    pub contract_id: pallas::Base,
+    pub contract_id: ContractId,
     pub function_code: u8,
     pub auth_data: Vec<u8>,
 }
@@ -146,7 +148,7 @@ pub struct DaoProposal {
     /// Arbitrary data provided by the user. We don't use this.
     pub user_data: pallas::Base,
     pub dao_bulla: DaoBulla,
-    pub blind: pallas::Base,
+    pub blind: BaseBlind,
 }
 // ANCHOR_END: dao-proposal
 
@@ -158,7 +160,7 @@ impl DaoProposal {
             pallas::Base::from(self.duration_days),
             self.user_data,
             self.dao_bulla.inner(),
-            self.blind,
+            self.blind.inner(),
         ]);
         DaoProposalBulla(bulla)
     }
@@ -237,7 +239,7 @@ pub struct DaoProposeParams {
 // ANCHOR_END: dao-propose-params
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
-// ANCHOR: dao-propose-input-params
+// ANCHOR: dao-propose-params-input
 /// Input for a DAO proposal
 pub struct DaoProposeParamsInput {
     pub nullifier: Nullifier,
@@ -248,7 +250,7 @@ pub struct DaoProposeParamsInput {
     /// Public key used for signing
     pub signature_public: PublicKey,
 }
-// ANCHOR_END: dao-propose-input-params
+// ANCHOR_END: dao-propose-params-input
 
 /// State update for `Dao::Propose`
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
@@ -268,8 +270,9 @@ pub struct DaoProposalMetadata {
     pub snapshot_root: MerkleNode,
 }
 
-/// Parameters for `Dao::Vote`
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+// ANCHOR: dao-vote-params
+/// Parameters for `Dao::Vote`
 pub struct DaoVoteParams {
     /// Token commitment for the vote inputs
     pub token_commit: pallas::Base,
@@ -278,13 +281,15 @@ pub struct DaoVoteParams {
     /// Commitment for yes votes
     pub yes_vote_commit: pallas::Point,
     /// Encrypted note
-    pub note: AeadEncryptedNote,
+    pub note: ElGamalEncryptedNote<4>,
     /// Inputs for the vote
     pub inputs: Vec<DaoVoteParamsInput>,
 }
+// ANCHOR_END: dao-vote-params
 
-/// Input for a DAO proposal vote
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+// ANCHOR: dao-vote-params-input
+/// Input for a DAO proposal vote
 pub struct DaoVoteParamsInput {
     /// Revealed nullifier
     pub nullifier: Nullifier,
@@ -295,6 +300,8 @@ pub struct DaoVoteParamsInput {
     /// Public key used for signing
     pub signature_public: PublicKey,
 }
+// ANCHOR_END: dao-vote-params-input
+/// Input for a DAO proposal vote
 
 /// State update for `Dao::Vote`
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
@@ -307,15 +314,17 @@ pub struct DaoVoteUpdate {
     pub vote_nullifiers: Vec<Nullifier>,
 }
 
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+// ANCHOR: dao-blind-aggregate-vote
 /// Represents a single or multiple blinded votes.
 /// These can be summed together.
-#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct DaoBlindAggregateVote {
     /// Weighted vote commit
     pub yes_vote_commit: pallas::Point,
     /// All value staked in the vote
     pub all_vote_commit: pallas::Point,
 }
+// ANCHOR_END: dao-blind-aggregate-vote
 
 impl DaoBlindAggregateVote {
     /// Aggregate a vote with existing one
@@ -334,15 +343,20 @@ impl Default for DaoBlindAggregateVote {
     }
 }
 
-/// Parameters for `Dao::Exec`
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+// ANCHOR: dao-exec-params
+/// Parameters for `Dao::Exec`
 pub struct DaoExecParams {
     /// The proposal bulla
     pub proposal_bulla: DaoProposalBulla,
     pub proposal_auth_calls: Vec<DaoAuthCall>,
     /// Aggregated blinds for the vote commitments
     pub blind_total_vote: DaoBlindAggregateVote,
+    /// Public key for the signature.
+    /// The signature ensures this DAO::exec call cannot be modified with other calls.
+    pub signature_public: PublicKey,
 }
+// ANCHOR_END: dao-exec-params
 
 /// State update for `Dao::Exec`
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
@@ -352,18 +366,10 @@ pub struct DaoExecUpdate {
 }
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
-pub struct DaoAuthCoinAttrs {
-    pub value: pallas::Base,
-    pub token_id: pallas::Base,
-    pub serial: pallas::Base,
-    pub spend_hook: pallas::Base,
-    pub user_data: pallas::Base,
-
-    pub ephem_pubkey: PublicKey,
-}
-
+// ANCHOR: dao-auth_xfer-params
 /// Parameters for `Dao::AuthMoneyTransfer`
-#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct DaoAuthMoneyTransferParams {
-    pub enc_attrs: Vec<DaoAuthCoinAttrs>,
+    pub enc_attrs: Vec<ElGamalEncryptedNote<5>>,
+    pub dao_change_attrs: ElGamalEncryptedNote<3>,
 }
+// ANCHOR_END: dao-auth_xfer-params

@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -68,6 +68,14 @@ pub struct Settings {
     pub outbound_peer_discovery_cooloff_time: u64,
     /// Time between peer discovery attempts
     pub outbound_peer_discovery_attempt_time: u64,
+    /// Hostlist storage path
+    pub hostlist: String,
+    /// Pause interval within greylist refinery process
+    pub greylist_refinery_interval: u64,
+    /// Percent of connections to come from the whitelist
+    pub white_connection_percent: usize,
+    /// Number of anchorlist connections
+    pub anchor_connection_count: usize,
 }
 
 impl Default for Settings {
@@ -82,10 +90,10 @@ impl Default for Settings {
             peers: vec![],
             seeds: vec![],
             app_version,
-            allowed_transports: vec![],
+            allowed_transports: vec!["tcp+tls".to_string()],
             transport_mixing: true,
             outbound_connections: 0,
-            inbound_connections: 0,
+            inbound_connections: 10,
             manual_attempt_limit: 0,
             outbound_connect_timeout: 15,
             channel_handshake_timeout: 10,
@@ -94,6 +102,10 @@ impl Default for Settings {
             hosts_quarantine_limit: 50,
             outbound_peer_discovery_cooloff_time: 30,
             outbound_peer_discovery_attempt_time: 5,
+            hostlist: "/dev/null".to_string(),
+            greylist_refinery_interval: 5,
+            white_connection_percent: 90,
+            anchor_connection_count: 2,
         }
     }
 }
@@ -160,7 +172,7 @@ pub struct SettingsOpt {
     /// Preferred transports for outbound connections
     #[serde(default)]
     #[structopt(long = "transports")]
-    pub allowed_transports: Vec<String>,
+    pub allowed_transports: Option<Vec<String>>,
 
     /// Allow transport mixing (e.g. Tor would be allowed to connect to `tcp://`)
     #[structopt(long)]
@@ -182,6 +194,23 @@ pub struct SettingsOpt {
     /// Time between peer discovery attempts
     #[structopt(skip)]
     pub outbound_peer_discovery_attempt_time: Option<u64>,
+
+    /// Hosts .tsv file to use
+    #[serde(default)]
+    #[structopt(long)]
+    pub hostlist: Option<String>,
+
+    /// Pause interval within greylist refinery process
+    #[structopt(skip)]
+    pub greylist_refinery_interval: Option<u64>,
+
+    /// Percent of connections to come from the whitelist
+    #[structopt(skip)]
+    pub white_connection_percent: Option<usize>,
+
+    /// Number of anchorlist connections
+    #[structopt(skip)]
+    pub anchor_connection_count: Option<usize>,
 }
 
 impl From<SettingsOpt> for Settings {
@@ -195,7 +224,7 @@ impl From<SettingsOpt> for Settings {
             peers: opt.peers,
             seeds: opt.seeds,
             app_version: def.app_version,
-            allowed_transports: opt.allowed_transports,
+            allowed_transports: opt.allowed_transports.unwrap_or(def.allowed_transports),
             transport_mixing: opt.transport_mixing.unwrap_or(def.transport_mixing),
             outbound_connections: opt.outbound_connections.unwrap_or(def.outbound_connections),
             inbound_connections: opt.inbound_connections.unwrap_or(def.inbound_connections),
@@ -219,6 +248,16 @@ impl From<SettingsOpt> for Settings {
             outbound_peer_discovery_attempt_time: opt
                 .outbound_peer_discovery_attempt_time
                 .unwrap_or(def.outbound_peer_discovery_attempt_time),
+            hostlist: opt.hostlist.unwrap_or(def.hostlist),
+            greylist_refinery_interval: opt
+                .greylist_refinery_interval
+                .unwrap_or(def.greylist_refinery_interval),
+            white_connection_percent: opt
+                .white_connection_percent
+                .unwrap_or(def.white_connection_percent),
+            anchor_connection_count: opt
+                .anchor_connection_count
+                .unwrap_or(def.anchor_connection_count),
         }
     }
 }

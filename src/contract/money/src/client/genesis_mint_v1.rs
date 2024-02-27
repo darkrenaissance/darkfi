@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -22,7 +22,7 @@ use darkfi::{
     Result,
 };
 use darkfi_sdk::{
-    crypto::{note::AeadEncryptedNote, pasta_prelude::*, Keypair, PublicKey, DARK_TOKEN_ID},
+    crypto::{note::AeadEncryptedNote, pasta_prelude::*, Blind, FuncId, Keypair, PublicKey},
     pasta::pallas,
 };
 use log::{debug, info};
@@ -35,11 +35,11 @@ use crate::{
         },
         MoneyNote,
     },
-    model::{ClearInput, Coin, MoneyTokenMintParamsV1, Output},
+    model::{ClearInput, Coin, MoneyGenesisMintParamsV1, Output, DARK_TOKEN_ID},
 };
 
 pub struct GenesisMintCallDebris {
-    pub params: MoneyTokenMintParamsV1,
+    pub params: MoneyGenesisMintParamsV1,
     pub proofs: Vec<Proof>,
 }
 
@@ -66,7 +66,7 @@ pub struct GenesisMintCallBuilder {
     /// Amount of tokens we want to mint
     pub amount: u64,
     /// Spend hook for the output
-    pub spend_hook: pallas::Base,
+    pub spend_hook: FuncId,
     /// User data for the output
     pub user_data: pallas::Base,
     /// `Mint_V1` zkas circuit ZkBinary
@@ -81,7 +81,7 @@ impl GenesisMintCallBuilder {
         assert!(self.amount != 0);
 
         // In this call, we will build one clear input and one anonymous output.
-        // Only DARK_TOKEN_ID can be minted on genesis slot.
+        // Only DARK_TOKEN_ID can be minted on genesis block.
         let token_id = *DARK_TOKEN_ID;
 
         let input = TransferCallClearInput {
@@ -94,16 +94,16 @@ impl GenesisMintCallBuilder {
             public_key: self.keypair.public,
             value: self.amount,
             token_id,
-            serial: pallas::Base::random(&mut OsRng),
-            spend_hook: pallas::Base::ZERO,
+            spend_hook: FuncId::none(),
             user_data: pallas::Base::ZERO,
+            blind: Blind::random(&mut OsRng),
         };
 
         // We just create the commitment blinds here. We simply encofce
         // that the clear input and the anon output have the same commitments.
         // Not sure if this can be avoided, but also is it really necessary to avoid?
-        let value_blind = pallas::Scalar::random(&mut OsRng);
-        let token_blind = pallas::Base::random(&mut OsRng);
+        let value_blind = Blind::random(&mut OsRng);
+        let token_blind = Blind::random(&mut OsRng);
 
         let c_input = ClearInput {
             value: input.value,
@@ -113,7 +113,7 @@ impl GenesisMintCallBuilder {
             signature_public: PublicKey::from_secret(input.signature_secret),
         };
 
-        let serial = pallas::Base::random(&mut OsRng);
+        let coin_blind = Blind::random(&mut OsRng);
 
         info!("Creating token mint proof for output");
         let (proof, public_inputs) = create_transfer_mint_proof(
@@ -122,17 +122,17 @@ impl GenesisMintCallBuilder {
             &output,
             value_blind,
             token_blind,
-            serial,
             self.spend_hook,
             self.user_data,
+            coin_blind,
         )?;
 
         let note = MoneyNote {
-            serial,
             value: output.value,
             token_id: output.token_id,
             spend_hook: self.spend_hook,
             user_data: self.user_data,
+            coin_blind,
             value_blind,
             token_blind,
             memo: vec![],
@@ -147,7 +147,7 @@ impl GenesisMintCallBuilder {
             note: encrypted_note,
         };
 
-        let params = MoneyTokenMintParamsV1 { input: c_input, output: c_output };
+        let params = MoneyGenesisMintParamsV1 { input: c_input, output: c_output };
         let debris = GenesisMintCallDebris { params, proofs: vec![proof] };
         Ok(debris)
     }

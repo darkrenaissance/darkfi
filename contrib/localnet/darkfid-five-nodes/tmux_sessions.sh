@@ -1,31 +1,44 @@
 #!/bin/sh
 set -e
 
-# Start a tmux session with 5 consensus nodes.
+# Start a tmux session with five minerd daemons and five darkfid nodes
 
-if [ "$1" = "-v" ]; then
-	verbose="-v"
+session=darkfid-five-nodes
+
+if [ "$1" = "-vv" ]; then
+	verbose="-vv"
+	shift
 else
 	verbose=""
 fi
 
-touch /tmp/f_history.log
-touch /tmp/lead_history.log
-touch /tmp/lottery_history.log
-
-tmux new-session -d
-tmux send-keys "LOG_TARGETS='!sled' ../../../darkfid ${verbose} -c darkfid0.toml" Enter
+tmux new-session -d -s $session
+tmux send-keys -t $session "../../../minerd ${verbose} -c minerd0.toml" Enter
+sleep 1
+tmux split-window -t $session -v -l 90%
+tmux send-keys -t $session "LOG_TARGETS='!sled,!runtime' ../../../darkfid ${verbose} -c darkfid0.toml" Enter
 sleep 2
-tmux split-window -h
-tmux send-keys "LOG_TARGETS='!sled' ../../../darkfid ${verbose} -c darkfid1.toml" Enter
+tmux new-window -t $session
+tmux send-keys -t $session "../../../minerd ${verbose} -c minerd1.toml" Enter
+sleep 1
+tmux split-window -t $session -v -l 90%
+tmux send-keys -t $session "LOG_TARGETS='!sled,!runtime' ../../../darkfid ${verbose} -c darkfid1.toml" Enter
 sleep 2
-tmux split-window -h
-tmux send-keys "LOG_TARGETS='!sled' ../../../darkfid ${verbose} -c darkfid2.toml" Enter
+tmux new-window -t $session
+tmux send-keys -t $session "../../../minerd ${verbose} -c minerd2.toml" Enter
+sleep 1
+tmux split-window -t $session -v -l 90%
+tmux send-keys -t $session "LOG_TARGETS='!sled,!runtime' ../../../darkfid ${verbose} -c darkfid2.toml" Enter
 sleep 2
-tmux split-window -h
-tmux send-keys "LOG_TARGETS='!sled' ../../../darkfid ${verbose} -c darkfid3.toml" Enter
+tmux new-window -t $session
+tmux send-keys -t $session "../../../minerd ${verbose} -c minerd3.toml" Enter
+sleep 1
+tmux split-window -t $session -v -l 90%
+tmux send-keys -t $session "LOG_TARGETS='!sled,!runtime' ../../../darkfid ${verbose} -c darkfid3.toml" Enter
 sleep 2
-tmux split-window -h
-tmux send-keys "LOG_TARGETS='!sled' ../../../darkfid ${verbose} -c darkfid4.toml" Enter
-tmux select-layout even-horizontal
-tmux attach
+tmux new-window -t $session
+tmux send-keys -t $session "../../../minerd ${verbose} -c minerd4.toml" Enter
+sleep 1
+tmux split-window -t $session -v -l 90%
+tmux send-keys -t $session "LOG_TARGETS='!sled,!runtime' ../../../darkfid ${verbose} -c darkfid4.toml" Enter
+tmux attach -t $session

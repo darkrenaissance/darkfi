@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -17,12 +17,9 @@
  */
 
 use darkfi_sdk::{
-    crypto::{
-        pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, ContractId, MerkleNode,
-        PublicKey, DARK_TOKEN_ID,
-    },
+    crypto::{pasta_prelude::*, ContractId, FuncId, FuncRef, MerkleNode, PublicKey},
     dark_tree::DarkLeaf,
-    db::{db_contains_key, db_get, db_lookup, db_set},
+    db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
     merkle_add, msg,
     pasta::pallas,
@@ -34,9 +31,8 @@ use crate::{
     error::MoneyError,
     model::{MoneyTransferParamsV1, MoneyTransferUpdateV1},
     MoneyFunction, MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_MERKLE_TREE,
-    MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_FAUCET_PUBKEYS, MONEY_CONTRACT_INFO_TREE,
-    MONEY_CONTRACT_LATEST_COIN_ROOT, MONEY_CONTRACT_NULLIFIERS_TREE,
-    MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
+    MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_INFO_TREE, MONEY_CONTRACT_LATEST_COIN_ROOT,
+    MONEY_CONTRACT_NULLIFIERS_TREE, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 
 /// `get_metadata` function for `Money::TransferV1`
@@ -53,10 +49,17 @@ pub(crate) fn money_transfer_get_metadata_v1(
     // Public keys for the transaction signatures we have to verify
     let mut signature_pubkeys: Vec<PublicKey> = vec![];
 
-    // Take all the pubkeys from any clear inputs
-    for input in &params.clear_inputs {
-        signature_pubkeys.push(input.signature_public);
-    }
+    // Calculate the spend hook
+    let spend_hook = match calls[call_idx as usize].parent_index {
+        Some(parent_idx) => {
+            let parent_call = &calls[parent_idx].data;
+            let contract_id = parent_call.contract_id;
+            let func_code = parent_call.data[0];
+
+            FuncRef { contract_id, func_code }.to_func_id()
+        }
+        None => FuncId::none(),
+    };
 
     // Grab the pedersen commitments and signature pubkeys from the
     // anonymous inputs
@@ -76,7 +79,7 @@ pub(crate) fn money_transfer_get_metadata_v1(
                 input.token_commit,
                 input.merkle_root.inner(),
                 input.user_data_enc,
-                input.spend_hook,
+                spend_hook.inner(),
                 sig_x,
                 sig_y,
             ],
@@ -112,7 +115,7 @@ pub(crate) fn money_transfer_process_instruction_v1(
     let self_ = &calls[call_idx as usize];
     let params: MoneyTransferParamsV1 = deserialize(&self_.data.data[1..])?;
 
-    if params.clear_inputs.len() + params.inputs.len() < 1 {
+    if params.inputs.is_empty() {
         msg!("[TransferV1] Error: No inputs in the call");
         return Err(MoneyError::TransferMissingInputs.into())
     }
@@ -124,19 +127,9 @@ pub(crate) fn money_transfer_process_instruction_v1(
 
     // Access the necessary databases where there is information to
     // validate this state transition.
-    let info_db = db_lookup(cid, MONEY_CONTRACT_INFO_TREE)?;
     let coins_db = db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
     let nullifiers_db = db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
     let coin_roots_db = db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
-
-    // FIXME: Remove faucet references
-    // Grab faucet pubkeys. They're allowed to create clear inputs.
-    // Currently we use them for airdrops in the testnet.
-    let Some(faucet_pubkeys) = db_get(info_db, MONEY_CONTRACT_FAUCET_PUBKEYS)? else {
-        msg!("[TransferV1] Error: Missing faucet pubkeys from info db");
-        return Err(MoneyError::TransferMissingFaucetKeys.into())
-    };
-    let faucet_pubkeys: Vec<PublicKey> = deserialize(&faucet_pubkeys)?;
 
     // Accumulator for the value commitments. We add inputs to it, and subtract
     // outputs from it. For the commitments to be valid, the accumulator must
@@ -146,26 +139,6 @@ pub(crate) fn money_transfer_process_instruction_v1(
     // ===================================
     // Perform the actual state transition
     // ===================================
-
-    // For clear inputs, we only allow the whitelisted faucet(s) to create them.
-    // Additionally, only DARK_TOKEN_ID is able to be here. For any arbitrary
-    // tokens, there is another functionality in this contract called `Mint` which
-    // allows users to mint their own tokens.
-    msg!("[TransferV1] Iterating over clear inputs");
-    for (i, input) in params.clear_inputs.iter().enumerate() {
-        if input.token_id != *DARK_TOKEN_ID {
-            msg!("[TransferV1] Error: Clear input {} used non-native token", i);
-            return Err(MoneyError::TransferClearInputNonNativeToken.into())
-        }
-
-        if !faucet_pubkeys.contains(&input.signature_public) {
-            msg!("[TransferV1] Error: Clear input {} used unauthorised pubkey", i);
-            return Err(MoneyError::TransferClearInputUnauthorised.into())
-        }
-
-        // Add this input to the value commitment accumulator
-        valcom_total += pedersen_commitment_u64(input.value, input.value_blind);
-    }
 
     // For anonymous inputs, we must also gather all the new nullifiers
     // that are introduced.
@@ -187,27 +160,6 @@ pub(crate) fn money_transfer_process_instruction_v1(
             return Err(MoneyError::DuplicateNullifier.into())
         }
 
-        // If spend hook is set, check its correctness
-        if input.spend_hook != pallas::Base::ZERO {
-            let parent_call_idx = self_.parent_index;
-            if parent_call_idx.is_none() {
-                msg!("[TransferV1] Error: parent_call_idx is missing");
-                return Err(MoneyError::CallIdxOutOfBounds.into())
-            }
-            let parent_call_idx = parent_call_idx.unwrap();
-
-            if parent_call_idx >= calls.len() {
-                msg!("[TransferV1] Error: parent_call_idx out of bounds (input {})", i);
-                return Err(MoneyError::CallIdxOutOfBounds.into())
-            }
-
-            let parent = &calls[parent_call_idx].data;
-            if parent.contract_id.inner() != input.spend_hook {
-                msg!("[TransferV1] Error: Invoked contract call does not match spend hook in input {}", i);
-                return Err(MoneyError::SpendHookMismatch.into())
-            }
-        }
-
         // Append this new nullifier to seen nullifiers, and accumulate the value commitment
         new_nullifiers.push(input.nullifier);
         valcom_total += input.value_commit;
@@ -216,6 +168,7 @@ pub(crate) fn money_transfer_process_instruction_v1(
     // Newly created coins for this call are in the outputs. Here we gather them,
     // and we also check that they haven't existed before.
     let mut new_coins = Vec::with_capacity(params.outputs.len());
+    msg!("[TransferV1] Iterating over anonymous outputs");
     for (i, output) in params.outputs.iter().enumerate() {
         if new_coins.contains(&output.coin) || db_contains_key(coins_db, &serialize(&output.coin))?
         {
@@ -240,13 +193,9 @@ pub(crate) fn money_transfer_process_instruction_v1(
     // transferred. For exchanging we use another functionality of this
     // contract called `OtcSwap`.
     let tokcom = params.outputs[0].token_commit;
-    let mut failed_tokcom = params.inputs.iter().any(|x| x.token_commit != tokcom);
-    failed_tokcom = failed_tokcom || params.outputs.iter().any(|x| x.token_commit != tokcom);
-    failed_tokcom = failed_tokcom ||
-        params
-            .clear_inputs
-            .iter()
-            .any(|x| poseidon_hash([x.token_id.inner(), x.token_blind]) != tokcom);
+
+    let failed_tokcom = params.inputs.iter().any(|x| x.token_commit != tokcom) ||
+        params.outputs.iter().any(|x| x.token_commit != tokcom);
 
     if failed_tokcom {
         msg!("[TransferV1] Error: Token commitments do not match");

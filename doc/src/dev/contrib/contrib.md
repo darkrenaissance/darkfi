@@ -32,6 +32,31 @@ To find them, run the following command:
 $ git grep -E 'TODO|FIXME'
 ```
 
+## Employment
+
+We are only looking for devs right now. If you're not a dev, see the
+[learn section](dev/learn.md). We offer mentoring. Anybody can become a dev.
+It's not that hard, you just need focus and dedication.
+
+To be hired as a dev, you must make commits to the repo, preferably
+more than minor cosmetic changes. It also is useful to have online repositories
+containing your work. We don't care about degrees or qualifications -
+many of the best coders don't have any.
+
+Secondly you need to get on [our online chat](misc/ircd/ircd.md) and
+make yourself known. We are not spending time on social media or proprietary
+chats like Telegram because we're very busy.
+
+We value people who have initiative. We value this so highly in fact that
+even if someone is less skilled but shows the ability to learn, we will welcome
+them and give them everything they need to prosper. Our philosophy is that
+of training leaders rather than hiring workers. Our team is self-led. We don't
+have any managers or busybody people. We discuss the problems amongst ourselves
+and everybody works autonomously on tasks. We don't keep people around who
+need a manager looking over their shoulder. The work and tasks should be
+obvious, but to help you along below you will find lists of tasks to get started
+on.
+
 ## Areas of work
 
 There are several areas of work that are either undergoing maintenance 
@@ -48,6 +73,7 @@ or need to be maintained:
     * DarkIRC encrypted DMs to nonexistant users should not be allowed.
     * Currently closing DarkIRC with ctrl-c stalls in `p2p.stop()`. This should be fixed.
     * Add `log = path` and `log_level = debug` config setting to DarkIRC
+    * StoppableTask should panic when we call stop() on a task that has not been started.
 * **Tooling:** Creating new tools or improving existing ones.
     * Improve the ZK tooling. For example tools to work with txs, smart contracts and ZK proofs.
     * Also document zkrunner and other tools.
@@ -91,9 +117,9 @@ _Tasks are in no particular order. Use common sense._
 12. ~~Implement verifiable encryption for `DAO` payments~~
 13. ~~`DAO` should be able to perform arbitrary contract calls, it should act as a voted multisig~~
 14. Implement cross-chain atomic swaps (XMR, ETH, anything applicable)
-15. Rework the connection algo for p2p to use black list, grey and white list
-  * https://eprint.iacr.org/2019/411.pdf (Section 2.2)
-  * See also [P2P Network: Common Mitigations](arch/p2p-network.md#common-mitigations)
+15. ~~Rework the connection algo for p2p to use black list, grey and white list~~
+  * ~~https://eprint.iacr.org/2019/411.pdf (Section 2.2)~~
+  * ~~See also [P2P Network: Common Mitigations](arch/p2p-network.md#common-mitigations)~~
 16. Create a P2P stack test harness in order to be able to easily simulate network
     behaviour
   * Possibly we can create a dummy p2p which can simulate network connections and routing traffic.
@@ -119,7 +145,13 @@ _Tasks are in no particular order. Use common sense._
     have this mixed with a bunch of random addrs to avoid leaking our own addr.
 27. Add support for colorizing zkas code samples in darkfi book (see arch/dao page)
 28. Tutorial creating a ZK credentials scheme.
-99. resource manager for p2p (DoS protection, disconnect bad nodes)
+29. resource manager for p2p (DoS protection, disconnect bad nodes)
+30. apply DEP 0001
+31. fix channel `main_receive_loop()` to use `Weak`
+32. configurable MAGIC_BYTES for net code
+33. configurable fields for version messages
+34. make `PeerDiscovery` in `outbound_session.rs` a trait object which is
+    configurable in P2p, but by default is set to `PeerSeedDiscovery`.
 
 
 |  Task #  |  Assignee  |

@@ -20,11 +20,10 @@ doctest = false
 [workspace]
 members = [
     "bin/zkas",
-    #"bin/darkfid",
-    "bin/darkfid2",
+    "bin/darkfid",
+    "bin/minerd",
     "bin/darkfi-mmproxy",
-    #"bin/drk",
-    #"bin/faucetd",
+    "bin/drk",
     #"bin/fud/fu",
     #"bin/fud/fud",
     "bin/genev/genevd",
@@ -46,7 +45,6 @@ members = [
     "src/contract/test-harness",
     "src/contract/money",
     "src/contract/dao",
-    "src/contract/consensus",
     "src/contract/deployooor",
 
     "example/dchat/dchatd",
@@ -89,9 +87,6 @@ semver = {version = "1.0.21", optional = true}
 structopt = {version= "0.3.26", optional = true}
 structopt-toml = {version= "0.5.1", optional = true}
 toml = {version = "0.8.8", optional = true}
-# Big float high precision arithmetics
-dashu = {version = "0.4.0", optional = true}
-num-bigint = {version = "0.4.4", optional = true}
 
 # Utilities
 # TODO: check chrono usage and impl our own
@@ -99,6 +94,7 @@ chrono = {version = "0.4.31", optional = true}
 darkfi-serial = {path = "src/serial", optional = true}
 darkfi-derive = {path = "src/serial/derive", optional = true}
 lazy_static = {version = "1.4.0", optional = true}
+num-bigint = {version = "0.4.4", optional = true}
 url = {version = "2.5.0", features = ["serde"], optional = true}
 
 # Misc
@@ -117,7 +113,7 @@ wasmer = {version = "4.2.5", optional = true}
 wasmer-compiler-singlepass = {version = "4.2.5", optional = true}
 wasmer-middlewares = {version = "4.2.5", optional = true}
 
-# Wallet management
+# SQLite stuff
 rusqlite = {version = "0.30.0", features = ["sqlcipher"], optional = true}
 libsqlite3-sys = {version = "0.27.0", features = ["sqlcipher"], optional = true}
 
@@ -166,7 +162,6 @@ validator = [
     "async-trait",
     "blake3",
     "crypto_api_chachapoly",
-    "dashu",
     "halo2_proofs",
     "lazy_static",
     "num-bigint",
@@ -184,7 +179,6 @@ validator = [
     "system",
     "tx",
     "util",
-    "wallet",
     "wasm-runtime",
     "zk",
     "zkas",
@@ -282,11 +276,6 @@ util = [
     "tinyjson",
 
     "darkfi-serial",
-]
-
-wallet = [
-    "rusqlite",
-    "smol",
 ]
 
 wasm-runtime = [

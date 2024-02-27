@@ -36,6 +36,49 @@ Then each slot performs this algorithm:
        otherwise it will do a seed server sync.
     3. Peer discovery then wakes any sleeping slots and goes back to sleep.
 
+## Hostlist filtering
+
+Node maintain a hostlist consisting of three parts, a whitelist, a
+greylist and an anchorlist. Each hostlist entry is a tuple of two parts,
+a URL address and a `last_seen` data field, which is a timestamp of the
+last time the peer was interacted with.
+
+The lists are ordered chronologically according to `last_seen`, with the
+most recently seen peers at the top of the list. The whitelist max size
+is 1000. The greylist max size is 5000. If the number of peers in these
+lists reach this maximum, then the peers with the oldest `last_seen`
+fields are removed from the list.
+
+Each time a node receives info about a set of peers, the info is
+inserted into its greylist. To discover peers, nodes broadcast `GetAddr`
+messages. Upon receiving a `GetAddr` message, peers reply with an `Addr`
+message containing their whitelist. The requester inserts the received
+peer data into its greylist.
+
+Nodes update their hostlists through a mechanism called
+"greylist housekeeping", which periodically pings randomly selected peers
+from its greylist. If a peer is responsive, then it is promoted to the
+whitelist with an updated `last_seen` field, otherwise it is removed
+from the greylist.
+
+On shutdown, whitelist entries are downgraded to greylist. This forces
+all whitelisted entries through the greylist refinery each time a node
+is started, further ensuring that whitelisted entries are active.
+
+If a connection is established to a host, that host is promoted to 
+anchorlist. If anchorlist or whitelist nodes disconnect or cannot
+be connected to, those hosts are downgraded to greylist.
+
+Nodes can configure how many anchorlist connections or what percentage
+of whitelist connections they would like to make, and this configuration
+influences the connection behavior in `OutboundSession`. If there's
+not enough anchorlist entries, the connection loop will select from
+the whitelist. If there's not enough whitelist entries in the hostlist,
+it will select from the greylist.
+
+This design has been largely informed by the [Monero p2p
+algo](https://eprint.iacr.org/2019/411.pdf)
+
 ## Security
 
 ### Design Considerations
@@ -140,75 +183,3 @@ connection is dropped.
 
 Since the reader in `messages.rs` preallocs buffers, there should be a hard
 limit here, and the raw reads also affects your score too.
-
-## Proposed update
-
-### Monero p2p recap
-
-In Monero, each node maintains a host list consisting of two parts,
-a whitelist and a greylist. Host lists contain a `last_seen`
-data field, a timestamp of the last time the peer was interacted with.
-
-The lists are ordered chronologically according to `last_seen`, with the
-most recently seen peers at the top of the list. The whitelist max size
-is 1000. The greylist max size is 5000. If the number of peers in these
-lists reach this maximum, then the peers with the oldest `last_seen`
-fields are removed from the list.
-
-Each time a node receives info about a set of peers, the info is inserted
-into its greylist. To discover peers, nodes exchange `SYN` messages
-to their neighbors. Upon receiving a `SYN` message, peers reply with
-a message with the top 250 peers from their whitelist. The requester
-inserts the received peer data into its greylist.
-
-Nodes update their whitelist and greylist through a mechanism called
-"greylist housekeeping", which periodically pings randomly selected peers
-from its greylist. If a peer is responsive, then it is promoted to the
-whitelist with an updated `last_seen` field, otherwise it is removed
-from the greylist.
-
-To handle idle connections, nodes check connections through the
-`IDLE_HANDSHAKE` protocol. Nodes iterate through their connections, send a
-`SYN` message, and update the last seen fields of the connection if they
-receive a response. Otherwise, they drop the associated connection and
-select another peer from the whitelist. The disconnected peer stays on
-the whitelist.
-
-Nodes broadcast messages to connections choosen from their whitelist. If
-not enough peers from the whitelist are currently online, then a node
-will establish connections from its greylist. Nodes to which previous
-connections were established are classified as anchor nodes, and stored
-in the white list. Monero ensures that every node is connected to at
-least two anchor nodes.
-
-[Source](https://eprint.iacr.org/2019/411.pdf)
-
-### Scope of the update
-
-* Refactor `src/hosts.rs` to store two `Vec<(Url, u64)>` instead of single
-`Hashset<Url>`, replacing the host list and its associated methods with
-a whitelist and a greylist. [STATUS: COMPLETE]
-
-* Create a `GreylistRefinery` protocol (renamed from Monero's "greylist
-housekeeping" for succinctness) that periodically selects random peers
-from its greylist and pings them. If a peer is responsive, update the
-`last_seen` field and add it to the whitelist, otherwise remove it from
-the greylist. [STATUS: COMPLETE]
-
-* `ProtocolAddress`: On receiving an address, append it to the
-greylist. On receiving `get_addr`, fetch an address from the
-whitelist. [STATUS: COMPLETE].
-
-* `SeedSyncSession`: on receiving whitelisted peers, append them to
-greylist. [STATUS: COMPLETE]
-
-* `ProtocolSeed`: Send our address to the seed node, and on receiving
-addresses, append them to the whitelist. [STATUS: COMPLETE]
-
-* Create a new list in `hosts.rs` called `anchorlist`. `OutboundSession`
-first tries to connect to address in the `anchorlist` on `start()`. [STATUS:
-COMPLETE]
-
-* Call ping_node() on idle connections. If they do not respond, drop the
-associated connection and select a new peer from the whitelist. [STATUS:
-EVALUATE]

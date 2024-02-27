@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -26,13 +26,13 @@ use pasta_curves::{
     arithmetic::CurveAffine,
     group::{
         ff::{Field, PrimeField},
-        Curve, GroupEncoding,
+        Curve, Group, GroupEncoding,
     },
     pallas,
 };
 use rand_core::{CryptoRng, RngCore};
 
-use super::{constants::NullifierK, util::mod_r_p};
+use super::{constants::NullifierK, util::fp_mod_fv};
 use crate::error::ContractError;
 
 /// Keypair structure holding a `SecretKey` and its respective `PublicKey`
@@ -129,15 +129,25 @@ impl PublicKey {
 
     /// Derive a new `PublicKey` object given a `SecretKey`
     pub fn from_secret(s: SecretKey) -> Self {
-        let p = NullifierK.generator() * mod_r_p(s.inner());
+        let p = NullifierK.generator() * fp_mod_fv(s.inner());
         Self(p)
     }
 
     /// Instantiate a `PublicKey` given 32 bytes. Returns an error
     /// if the representation is noncanonical.
     pub fn from_bytes(bytes: [u8; 32]) -> Result<Self, ContractError> {
-        match pallas::Point::from_bytes(&bytes).into() {
-            Some(k) => Ok(Self(k)),
+        match <subtle::CtOption<pallas::Point> as Into<Option<pallas::Point>>>::into(
+            pallas::Point::from_bytes(&bytes),
+        ) {
+            Some(k) => {
+                if bool::from(k.is_identity()) {
+                    return Err(ContractError::IoError(
+                        "Could not convert bytes to PublicKey".to_string(),
+                    ))
+                }
+
+                Ok(Self(k))
+            }
             None => Err(ContractError::IoError("Could not convert bytes to PublicKey".to_string())),
         }
     }
@@ -164,9 +174,17 @@ impl PublicKey {
     }
 }
 
-impl From<pallas::Point> for PublicKey {
-    fn from(x: pallas::Point) -> Self {
-        Self(x)
+impl TryFrom<pallas::Point> for PublicKey {
+    type Error = ContractError;
+
+    fn try_from(x: pallas::Point) -> Result<Self, Self::Error> {
+        if bool::from(x.is_identity()) {
+            return Err(ContractError::IoError(
+                "Could not convert identity point to PublicKey".to_string(),
+            ))
+        }
+
+        Ok(Self(x))
     }
 }
 

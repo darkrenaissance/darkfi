@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -59,6 +59,3 @@ pub const DEPLOY_CONTRACT_LOCK_TREE: &str = "lock";
 
 // These are keys inside the info tree
 pub const DEPLOY_CONTRACT_DB_VERSION: &[u8] = b"db_version";
-
-/// zkas derive circuit namespace
-pub const DEPLOY_CONTRACT_ZKAS_DERIVE_NS_V1: &str = "DeriveContractID";

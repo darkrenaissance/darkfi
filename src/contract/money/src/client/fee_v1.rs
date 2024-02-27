@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -16,165 +16,30 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::HashMap;
-
 use darkfi::{
-    blockchain::BlockchainOverlayPtr,
-    tx::TransactionBuilder,
-    util::time::TimeKeeper,
-    validator::verification::verify_transaction,
-    zk::{halo2::Value, Proof, ProvingKey, VerifyingKey, Witness, ZkCircuit},
+    zk::{halo2::Value, Proof, ProvingKey, Witness, ZkCircuit},
     zkas::ZkBinary,
-    ClientFailed, Result,
+    Result,
 };
 use darkfi_sdk::{
-    bridgetree::{self, Hashable},
+    bridgetree::Hashable,
     crypto::{
-        note::AeadEncryptedNote,
-        pasta_prelude::{Curve, CurveAffine, Field},
-        pedersen_commitment_u64, poseidon_hash, Keypair, MerkleNode, MerkleTree, Nullifier,
-        PublicKey, SecretKey, DARK_TOKEN_ID,
+        pasta_prelude::{Curve, CurveAffine},
+        pedersen_commitment_u64, poseidon_hash, BaseBlind, FuncId, MerkleNode, PublicKey,
+        ScalarBlind, SecretKey,
     },
     pasta::pallas,
 };
-use log::{error, info};
 use rand::rngs::OsRng;
 
 use crate::{
-    client::{compute_remainder_blind, Coin, MoneyNote, OwnCoin},
-    model::{CoinAttributes, Input, MoneyFeeParamsV1, NullifierAttributes, Output},
+    client::{Coin, MoneyNote, OwnCoin},
+    model::{CoinAttributes, Nullifier},
 };
 
-/// Append a fee-paying call to the given `TransactionBuilder`.
-///
-/// * `keypair`: Caller's keypair
-/// * `coin`: `OwnCoin` to use in this builder
-/// * `tree`: Merkle tree of coins used to create inclusion proofs
-/// * `fee_zkbin`: `Fee_V1` zkas circuit ZkBinary
-/// * `fee_pk`: `Fee_V1` zk circuit proving key
-/// * `tx_builder`: `TransactionBuilder of the tx we want to pay fee for
-/// * `overlay`: `BlockchainOverlayPtr` against which to verify the tx
-/// * `time_keeper`: `TimeKeeper` needed for tx verification
-/// * `verifying_keys`: ZK verifying keys needed for tx verification
-#[allow(clippy::too_many_arguments)]
-pub async fn append_fee_call(
-    keypair: &Keypair,
-    coin: &OwnCoin,
-    tree: MerkleTree,
-    fee_zkbin: &ZkBinary,
-    fee_pk: &ProvingKey,
-    tx_builder: &mut TransactionBuilder,
-    overlay: &BlockchainOverlayPtr,
-    time_keeper: &TimeKeeper,
-    verifying_keys: &mut HashMap<[u8; 32], HashMap<String, VerifyingKey>>,
-) -> Result<(MoneyFeeParamsV1, FeeCallSecrets)> {
-    assert!(coin.note.value > 0);
-    assert!(coin.note.token_id == *DARK_TOKEN_ID);
-    assert!(coin.note.user_data == pallas::Base::ZERO);
-    assert!(coin.note.spend_hook == pallas::Base::ZERO);
-
-    // First we will verify the fee-less transaction to see how much gas
-    // it uses for execution and verification.
-    let tx = tx_builder.build()?;
-    let gas_used = verify_transaction(overlay, time_keeper, &tx, verifying_keys, false).await?;
-
-    // TODO: We could actually take a set of coins and then find one with
-    //       enough value, instead of expecting one. It depends, the API
-    //       is a bit weird.
-
-    // TODO: FIXME: Proper fee pricing
-    if coin.note.value < gas_used {
-        error!(
-            target: "money_contract::client::fee_v1",
-            "Not enough value in given OwnCoin for fee, have {}, need {}",
-            coin.note.value, gas_used,
-        );
-        return Err(ClientFailed::NotEnoughValue(coin.note.value).into())
-    }
-
-    let change_value = coin.note.value - gas_used;
-
-    let input = FeeCallInput {
-        leaf_position: coin.leaf_position,
-        merkle_path: tree.witness(coin.leaf_position, 0).unwrap(),
-        secret: coin.secret,
-        note: coin.note.clone(),
-        user_data_blind: pallas::Base::random(&mut OsRng),
-    };
-
-    let output = FeeCallOutput {
-        public_key: keypair.public,
-        value: change_value,
-        token_id: coin.note.token_id,
-        serial: pallas::Base::random(&mut OsRng),
-        spend_hook: pallas::Base::ZERO,
-        user_data: pallas::Base::ZERO,
-    };
-
-    let token_blind = pallas::Base::random(&mut OsRng);
-
-    let input_value_blind = pallas::Scalar::random(&mut OsRng);
-    let fee_value_blind = pallas::Scalar::random(&mut OsRng);
-    let output_value_blind = compute_remainder_blind(&[], &[input_value_blind], &[fee_value_blind]);
-
-    let signature_secret = SecretKey::random(&mut OsRng);
-
-    info!(target: "money_contract::client::fee_v1", "Creating Fee_V1 ZK proof...");
-    let (proof, public_inputs) = create_fee_proof(
-        fee_zkbin,
-        fee_pk,
-        &input,
-        input_value_blind,
-        &output,
-        output_value_blind,
-        output.serial,
-        output.spend_hook,
-        output.user_data,
-        token_blind,
-        signature_secret,
-    )?;
-
-    // Encrypted note for the output
-    let note = MoneyNote {
-        serial: output.serial,
-        value: output.value,
-        token_id: output.token_id,
-        spend_hook: output.spend_hook,
-        user_data: output.user_data,
-        value_blind: output_value_blind,
-        token_blind,
-        memo: vec![],
-    };
-
-    let encrypted_note = AeadEncryptedNote::encrypt(&note, &output.public_key, &mut OsRng)?;
-
-    let params = MoneyFeeParamsV1 {
-        input: Input {
-            value_commit: public_inputs.input_value_commit,
-            token_commit: public_inputs.token_commit,
-            nullifier: public_inputs.nullifier,
-            merkle_root: public_inputs.merkle_root,
-            spend_hook: public_inputs.input_spend_hook,
-            user_data_enc: public_inputs.input_user_data_enc,
-            signature_public: public_inputs.signature_public,
-        },
-        output: Output {
-            value_commit: public_inputs.output_value_commit,
-            token_commit: public_inputs.token_commit,
-            coin: public_inputs.output_coin,
-            note: encrypted_note,
-        },
-        fee_value_blind,
-        token_blind,
-    };
-
-    let secrets =
-        FeeCallSecrets { proof, signature_secret, note, input_value_blind, output_value_blind };
-
-    // TODO: Append call to tx builder
-
-    Ok((params, secrets))
-}
+/// Fixed gas used by the fee call.
+/// This is the minimum gas any fee-paying transaction will use.
+pub const FEE_CALL_GAS: u64 = 41_000_000;
 
 /// Private values related to the Fee call
 pub struct FeeCallSecrets {
@@ -185,9 +50,9 @@ pub struct FeeCallSecrets {
     /// Decrypted note associated with the output
     pub note: MoneyNote,
     /// The value blind created for the input
-    pub input_value_blind: pallas::Scalar,
+    pub input_value_blind: ScalarBlind,
     /// The value blind created for the output
-    pub output_value_blind: pallas::Scalar,
+    pub output_value_blind: ScalarBlind,
 }
 
 /// Revealed public inputs of the `Fee_V1` ZK proof
@@ -202,8 +67,6 @@ pub struct FeeRevealed {
     pub merkle_root: MerkleNode,
     /// Encrypted user data for input coin
     pub input_user_data_enc: pallas::Base,
-    /// Input's spend hook
-    pub input_spend_hook: pallas::Base,
     /// Public key used to sign transaction
     pub signature_public: PublicKey,
     /// Output coin commitment
@@ -229,7 +92,6 @@ impl FeeRevealed {
             self.token_commit,
             self.merkle_root.inner(),
             self.input_user_data_enc,
-            self.input_spend_hook,
             *sigpub_coords.x(),
             *sigpub_coords.y(),
             self.output_coin.inner(),
@@ -239,50 +101,48 @@ impl FeeRevealed {
     }
 }
 
-struct FeeCallInput {
-    leaf_position: bridgetree::Position,
-    merkle_path: Vec<MerkleNode>,
-    secret: SecretKey,
-    note: MoneyNote,
-    user_data_blind: pallas::Base,
+pub struct FeeCallInput {
+    /// The [`OwnCoin`] containing necessary metadata to create an input
+    pub coin: OwnCoin,
+    /// Merkle path in the Money Merkle tree for `coin`
+    pub merkle_path: Vec<MerkleNode>,
+    /// The blinding factor for user_data
+    pub user_data_blind: BaseBlind,
 }
 
-type FeeCallOutput = CoinAttributes;
+pub type FeeCallOutput = CoinAttributes;
 
 /// Create the `Fee_V1` ZK proof given parameters
 #[allow(clippy::too_many_arguments)]
-fn create_fee_proof(
+pub fn create_fee_proof(
     zkbin: &ZkBinary,
     pk: &ProvingKey,
     input: &FeeCallInput,
-    input_value_blind: pallas::Scalar,
+    input_value_blind: ScalarBlind,
     output: &FeeCallOutput,
-    output_value_blind: pallas::Scalar,
-    output_serial: pallas::Base,
-    output_spend_hook: pallas::Base,
+    output_value_blind: ScalarBlind,
+    output_spend_hook: FuncId,
     output_user_data: pallas::Base,
-    token_blind: pallas::Base,
+    output_coin_blind: BaseBlind,
+    token_blind: BaseBlind,
     signature_secret: SecretKey,
 ) -> Result<(Proof, FeeRevealed)> {
-    let public_key = PublicKey::from_secret(input.secret);
+    let public_key = PublicKey::from_secret(input.coin.secret);
     let signature_public = PublicKey::from_secret(signature_secret);
 
     // Create input coin
     let input_coin = CoinAttributes {
         public_key,
-        value: input.note.value,
-        token_id: input.note.token_id,
-        serial: input.note.serial,
-        spend_hook: input.note.spend_hook,
-        user_data: input.note.user_data,
+        value: input.coin.note.value,
+        token_id: input.coin.note.token_id,
+        spend_hook: input.coin.note.spend_hook,
+        user_data: input.coin.note.user_data,
+        blind: input.coin.note.coin_blind,
     }
     .to_coin();
 
-    let nullifier =
-        NullifierAttributes { secret_key: input.secret, coin: input_coin }.to_nullifier();
-
     let merkle_root = {
-        let position: u64 = input.leaf_position.into();
+        let position: u64 = input.coin.leaf_position.into();
         let mut current = MerkleNode::from(input_coin.inner());
         for (level, sibling) in input.merkle_path.iter().enumerate() {
             let level = level as u8;
@@ -295,53 +155,55 @@ fn create_fee_proof(
         current
     };
 
-    let input_user_data_enc = poseidon_hash([input.note.user_data, input.user_data_blind]);
-    let input_value_commit = pedersen_commitment_u64(input.note.value, input_value_blind);
+    let input_user_data_enc =
+        poseidon_hash([input.coin.note.user_data, input.user_data_blind.inner()]);
+    let input_value_commit = pedersen_commitment_u64(input.coin.note.value, input_value_blind);
     let output_value_commit = pedersen_commitment_u64(output.value, output_value_blind);
-    let token_commit = poseidon_hash([input.note.token_id.inner(), token_blind]);
+    let token_commit = poseidon_hash([input.coin.note.token_id.inner(), token_blind.inner()]);
 
     // Create output coin
     let output_coin = CoinAttributes {
         public_key: output.public_key,
         value: output.value,
         token_id: output.token_id,
-        serial: output_serial,
         spend_hook: output_spend_hook,
         user_data: output_user_data,
+        blind: output_coin_blind,
     }
     .to_coin();
 
     let public_inputs = FeeRevealed {
-        nullifier,
+        nullifier: input.coin.nullifier(),
         input_value_commit,
         token_commit,
         merkle_root,
         input_user_data_enc,
-        input_spend_hook: input.note.spend_hook,
         signature_public,
         output_coin,
         output_value_commit,
     };
 
     let prover_witnesses = vec![
-        Witness::Base(Value::known(input.secret.inner())),
-        Witness::Uint32(Value::known(u64::from(input.leaf_position).try_into().unwrap())),
+        Witness::Base(Value::known(input.coin.secret.inner())),
+        Witness::Uint32(Value::known(u64::from(input.coin.leaf_position).try_into().unwrap())),
         Witness::MerklePath(Value::known(input.merkle_path.clone().try_into().unwrap())),
         Witness::Base(Value::known(signature_secret.inner())),
-        Witness::Base(Value::known(pallas::Base::from(input.note.value))),
-        Witness::Scalar(Value::known(input_value_blind)),
-        Witness::Base(Value::known(input.note.serial)),
-        Witness::Base(Value::known(input.note.spend_hook)),
-        Witness::Base(Value::known(input.note.user_data)),
-        Witness::Base(Value::known(input.user_data_blind)),
+        Witness::Base(Value::known(pallas::Base::from(input.coin.note.value))),
+        Witness::Scalar(Value::known(input_value_blind.inner())),
+        Witness::Base(Value::known(input.coin.note.spend_hook.inner())),
+        Witness::Base(Value::known(input.coin.note.user_data)),
+        Witness::Base(Value::known(input.coin.note.coin_blind.inner())),
+        Witness::Base(Value::known(input.user_data_blind.inner())),
         Witness::Base(Value::known(pallas::Base::from(output.value))),
-        Witness::Base(Value::known(output_spend_hook)),
+        Witness::Base(Value::known(output_spend_hook.inner())),
         Witness::Base(Value::known(output_user_data)),
-        Witness::Scalar(Value::known(output_value_blind)),
-        Witness::Base(Value::known(output_serial)),
-        Witness::Base(Value::known(input.note.token_id.inner())),
-        Witness::Base(Value::known(token_blind)),
+        Witness::Scalar(Value::known(output_value_blind.inner())),
+        Witness::Base(Value::known(output_coin_blind.inner())),
+        Witness::Base(Value::known(input.coin.note.token_id.inner())),
+        Witness::Base(Value::known(token_blind.inner())),
     ];
+
+    //darkfi::zk::export_witness_json("witness.json", &prover_witnesses, &public_inputs.to_vec());
 
     let circuit = ZkCircuit::new(prover_witnesses, zkbin);
     let proof = Proof::create(pk, &[circuit], &public_inputs.to_vec(), &mut OsRng)?;

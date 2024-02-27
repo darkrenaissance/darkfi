@@ -1,6 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
- * Copyright (C) 2020-2023 Dyne.org foundation
+ * Copyright (C) 2020-2024 Dyne.org foundation
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -21,7 +21,7 @@ use darkfi_money_contract::{
     MoneyFunction,
 };
 use darkfi_sdk::{
-    crypto::{ContractId, PublicKey, DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
+    crypto::{ContractId, FuncRef, PublicKey, DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
     dark_tree::DarkLeaf,
     error::ContractError,
     msg,
@@ -54,26 +54,26 @@ pub(crate) fn dao_authxfer_get_metadata(
     let exec_callnode = &calls[parent_idx];
     let exec_params: DaoExecParams = deserialize(&exec_callnode.data.data[1..])?;
 
-    assert!(xfer_params.inputs.len() > 0);
-    assert!(xfer_params.outputs.len() > 0);
+    assert!(!xfer_params.inputs.is_empty());
+    assert!(!xfer_params.outputs.is_empty());
 
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
     let signature_pubkeys: Vec<PublicKey> = vec![];
 
-    for (output, attrs) in xfer_params.outputs.iter().zip(self_params.enc_attrs.iter()) {
+    for (output, enc_attrs) in xfer_params.outputs.iter().zip(self_params.enc_attrs.iter()) {
         let coin = output.coin;
-        let (ephem_x, ephem_y) = attrs.ephem_pubkey.xy();
+        let (ephem_x, ephem_y) = enc_attrs.ephem_public.xy();
         zk_public_inputs.push((
             DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS.to_string(),
             vec![
                 coin.inner(),
                 ephem_x,
                 ephem_y,
-                attrs.value,
-                attrs.token_id,
-                attrs.serial,
-                attrs.spend_hook,
-                attrs.user_data,
+                enc_attrs.encrypted_values[0],
+                enc_attrs.encrypted_values[1],
+                enc_attrs.encrypted_values[2],
+                enc_attrs.encrypted_values[3],
+                enc_attrs.encrypted_values[4],
             ],
         ));
     }
@@ -84,14 +84,23 @@ pub(crate) fn dao_authxfer_get_metadata(
     // Also check the coin in the change output
     let last_coin = xfer_params.outputs.last().unwrap().coin;
 
+    let spend_hook =
+        FuncRef { contract_id: *DAO_CONTRACT_ID, func_code: DaoFunction::Exec as u8 }.to_func_id();
+
+    let (ephem_x, ephem_y) = self_params.dao_change_attrs.ephem_public.xy();
     zk_public_inputs.push((
         DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS.to_string(),
         vec![
             exec_params.proposal_bulla.inner(),
             input_user_data_enc,
             last_coin.inner(),
-            DAO_CONTRACT_ID.inner(),
+            spend_hook.inner(),
             exec_params.proposal_auth_calls.commit(),
+            ephem_x,
+            ephem_y,
+            self_params.dao_change_attrs.encrypted_values[0],
+            self_params.dao_change_attrs.encrypted_values[1],
+            self_params.dao_change_attrs.encrypted_values[2],
         ],
     ));
 
@@ -114,7 +123,7 @@ fn find_auth_in_parent(
             return Some(auth_call)
         }
     }
-    return None
+    None
 }
 
 /// `process_instruction` function for `Dao::Exec`
@@ -144,7 +153,7 @@ pub(crate) fn dao_authxfer_process_instruction(
     ///////////////////////////////////////////////////
 
     let xfer_params: MoneyTransferParamsV1 = deserialize(&xfer_call.data[1..])?;
-    assert!(xfer_params.inputs.len() > 0);
+    assert!(!xfer_params.inputs.is_empty());
     // We need the last output to be the change
     assert!(xfer_params.outputs.len() > 1);
 
@@ -168,7 +177,7 @@ pub(crate) fn dao_authxfer_process_instruction(
     let exec_callnode = &calls[parent_idx];
     let exec_params: DaoExecParams = deserialize(&exec_callnode.data.data[1..])?;
 
-    let auth_call = find_auth_in_parent(&exec_callnode, exec_params.proposal_auth_calls, call_idx);
+    let auth_call = find_auth_in_parent(exec_callnode, exec_params.proposal_auth_calls, call_idx);
     if auth_call.is_none() {
         return Err(DaoError::AuthXferCallNotFoundInParent.into())
     }
@@ -177,11 +186,12 @@ pub(crate) fn dao_authxfer_process_instruction(
     let proposal_coins: Vec<Coin> = deserialize(&auth_call.unwrap().auth_data[..])?;
 
     // Check all the outputs except the last match
-    let send_outs = xfer_params.outputs.split_last().unwrap().1;
-    if send_outs.len() != proposal_coins.len() {
+    // There is the additional DAO change output which is always last.
+    let outs = xfer_params.outputs;
+    if outs.len() != proposal_coins.len() + 1 {
         return Err(DaoError::AuthXferWrongNumberOutputs.into())
     }
-    for (output, coin) in send_outs.iter().zip(proposal_coins.iter()) {
+    for (output, coin) in outs.iter().zip(proposal_coins.iter()) {
         if output.coin != *coin {
             return Err(DaoError::AuthXferWrongOutputCoin.into())
         }
