@@ -24,7 +24,7 @@ use std::{
     },
 };
 
-use log::{debug, error, warn};
+use log::{error, warn};
 use smol::Executor;
 use url::Url;
 
@@ -117,8 +117,8 @@ impl Acceptor {
             match listener.next().await {
                 Ok((stream, url)) => {
                     // Check if we reject this peer
-                    if self.session.upgrade().unwrap().p2p().hosts().is_rejected(&url).await {
-                        debug!(target: "net::acceptor::run_accept_loop()", "Peer {} is rejected", url);
+                    if self.session.upgrade().unwrap().p2p().hosts().is_blacklist(&url).await {
+                        warn!(target: "net::acceptor::run_accept_loop()", "Peer {} is blacklisted", url);
                         continue
                     }
 

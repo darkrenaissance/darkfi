@@ -70,8 +70,9 @@ pub struct Hosts {
     /// Internet interrupt (goblins unplugging cables)
     quarantine: RwLock<HashMap<Url, usize>>,
 
-    /// Peers we reject from connecting to
-    rejected: RwLock<HashSet<String>>,
+    /// Peers on the blacklist are considered hostile and can neither be connected to
+    /// nor establish connections to us for the duration of the program.
+    blacklist: RwLock<HashSet<String>>,
 
     /// Peers that are currently being removed from the hostlist
     migrating: RwLock<HashSet<Url>>,
@@ -91,7 +92,7 @@ impl Hosts {
             whitelist: RwLock::new(Vec::new()),
             anchorlist: RwLock::new(Vec::new()),
             quarantine: RwLock::new(HashMap::new()),
-            rejected: RwLock::new(HashSet::new()),
+            blacklist: RwLock::new(HashSet::new()),
             migrating: RwLock::new(HashSet::new()),
             store_subscriber: Subscriber::new(),
             settings,
@@ -592,8 +593,8 @@ impl Hosts {
                 continue
             }
 
-            if self.is_rejected(addr_).await {
-                debug!(target: "store::filter_addresses()", "Peer {} is rejected", addr_);
+            if self.is_blacklist(addr_).await {
+                warn!(target: "store::filter_addresses()", "Peer {} is blacklisted", addr_);
                 continue
             }
 
@@ -674,38 +675,38 @@ impl Hosts {
         }
     }
 
-    /// Check if a given peer (URL) is in the set of rejected hosts
-    pub async fn is_rejected(&self, peer: &Url) -> bool {
+    /// Check if a given peer (URL) is in the set of blacklist hosts
+    pub async fn is_blacklist(&self, peer: &Url) -> bool {
         // Skip lookup for UNIX sockets and localhost connections
-        // as they should never belong to the list of rejected URLs.
+        // as they should never belong to the blacklist.
         let Some(hostname) = peer.host_str() else { return false };
 
         if self.is_local_host(peer.clone()).await {
             return false
         }
 
-        self.rejected.read().await.contains(hostname)
+        self.blacklist.read().await.contains(hostname)
     }
 
-    /// Mark a peer as rejected by adding it to the set of rejected URLs.
-    pub async fn mark_rejected(&self, peer: &Url) {
+    /// Mark a peer as blacklist by adding it to the set of blacklist URLs.
+    pub async fn blacklist(&self, peer: &Url) {
         // We ignore UNIX sockets here so we will just work
         // with stuff that has host_str().
         if let Some(hostname) = peer.host_str() {
-            // Localhost connections should not be rejected
+            // Localhost connections should never enter the blacklist
             // This however allows any Tor and Nym connections.
             if self.is_local_host(peer.clone()).await {
                 return
             }
 
-            self.rejected.write().await.insert(hostname.to_string());
+            self.blacklist.write().await.insert(hostname.to_string());
         }
     }
 
-    /// Unmark a rejected peer
-    pub async fn unmark_rejected(&self, peer: &Url) {
+    /// Unmark a blacklist peer
+    pub async fn unblacklist(&self, peer: &Url) {
         if let Some(hostname) = peer.host_str() {
-            self.rejected.write().await.remove(hostname);
+            self.blacklist.write().await.remove(hostname);
         }
     }
 

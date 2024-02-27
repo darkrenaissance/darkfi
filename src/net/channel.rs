@@ -311,9 +311,9 @@ impl Channel {
     /// Ban a malicious peer and stop the channel.
     pub async fn ban(&self, peer: &Url) {
         debug!(target: "net::channel::ban()", "START {:?}", self);
-        self.p2p().hosts().mark_rejected(peer).await;
+        self.p2p().hosts().blacklist(peer).await;
         self.stop().await;
-        debug!(target: "net::channel::ban()", "START {:?}", self);
+        debug!(target: "net::channel::ban()", "STOP {:?}", self);
     }
 
     /// Returns the local socket address
