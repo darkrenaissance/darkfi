@@ -1,8 +1,8 @@
 [package]
 name = "lilith"
 description = "Daemon that spawns P2P seeds"
-version = "0.4.1"
-edition = "2021"
+version = "0.4.2"
+edition = "2024"
 authors = ["Dyne.org foundation <foundation@dyne.org>"]
 license = "AGPL-3.0-only"
 homepage = "https://dark.fi"
