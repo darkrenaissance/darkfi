@@ -31,6 +31,9 @@ pub mod less_than;
 /// is_zero comparison gadget
 pub mod is_zero;
 
+/// is_equal comparison gadget
+pub mod is_equal;
+
 /// Conditional selection
 pub mod cond_select;
 

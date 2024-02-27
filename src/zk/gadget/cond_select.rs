@@ -120,6 +120,7 @@ impl<F: WithSmallOrderMulGroup<3> + Ord> ConditionalSelectChip<F> {
 
                 let cell =
                     region.assign_advice(|| "select result", config.advices[2], 0, || selected)?;
+
                 Ok(cell)
             },
         )?;
