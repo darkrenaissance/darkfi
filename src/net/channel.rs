@@ -299,13 +299,21 @@ impl Channel {
                     debug!(target: "net::channel::main_receive_loop()", "Stopping channel {:?}", self);
 
                     // We will reject further connections from this peer
-                    self.p2p().hosts().mark_rejected(self.address()).await;
+                    self.ban(self.address()).await;
 
                     return Err(Error::ChannelStopped)
                 }
                 Err(_) => unreachable!("You added a new error in notify()"),
             }
         }
+    }
+
+    /// Ban a malicious peer and stop the channel.
+    pub async fn ban(&self, peer: &Url) {
+        debug!(target: "net::channel::ban()", "START {:?}", self);
+        self.p2p().hosts().mark_rejected(peer).await;
+        self.stop().await;
+        debug!(target: "net::channel::ban()", "START {:?}", self);
     }
 
     /// Returns the local socket address
