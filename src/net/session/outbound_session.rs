@@ -436,6 +436,25 @@ impl Slot {
     }
 }
 
+/// TODO: doc
+#[async_trait]
+pub trait PeerDiscoveryBase {
+    async fn start(self: Arc<Self>);
+
+    async fn stop(self: Arc<Self>);
+
+    async fn run(self: Arc<Self>);
+
+    async fn wait(&self) -> bool;
+
+    fn notify(&self);
+
+    fn session(&self) -> OutboundSessionPtr;
+
+    fn p2p(&self) -> P2pPtr;
+}
+
+/// TODO: doc
 struct PeerDiscovery {
     process: StoppableTaskPtr,
     wakeup_self: CondVar,
@@ -450,7 +469,10 @@ impl PeerDiscovery {
             session: LazyWeak::new(),
         })
     }
+}
 
+#[async_trait]
+impl PeerDiscoveryBase for PeerDiscovery {
     async fn start(self: Arc<Self>) {
         let ex = self.p2p().executor();
         self.process.clone().start(
@@ -610,10 +632,10 @@ impl PeerDiscovery {
     fn notify(&self) {
         self.wakeup_self.notify()
     }
-
     fn session(&self) -> OutboundSessionPtr {
         self.session.upgrade()
     }
+
     fn p2p(&self) -> P2pPtr {
         self.session().p2p()
     }
