@@ -21,7 +21,7 @@ use std::{
     fs,
     fs::File,
     sync::Arc,
-    time::UNIX_EPOCH,
+    time::{Instant, UNIX_EPOCH},
 };
 
 use log::{debug, error, info, trace, warn};
@@ -70,8 +70,9 @@ pub struct Hosts {
     /// Internet interrupt (goblins unplugging cables)
     quarantine: RwLock<HashMap<Url, usize>>,
 
-    /// Peers we reject from connecting to
-    rejected: RwLock<HashSet<String>>,
+    /// Peers on the blacklist are considered hostile and can neither be connected to
+    /// nor establish connections to us for the duration of the program.
+    blacklist: RwLock<HashSet<String>>,
 
     /// Peers that are currently being removed from the hostlist
     migrating: RwLock<HashSet<Url>>,
@@ -91,7 +92,7 @@ impl Hosts {
             whitelist: RwLock::new(Vec::new()),
             anchorlist: RwLock::new(Vec::new()),
             quarantine: RwLock::new(HashMap::new()),
-            rejected: RwLock::new(HashSet::new()),
+            blacklist: RwLock::new(HashSet::new()),
             migrating: RwLock::new(HashSet::new()),
             store_subscriber: Subscriber::new(),
             settings,
@@ -225,6 +226,7 @@ impl Hosts {
     /// *   We already have this connection established
     /// *   We already have this configured as a manual peer
     /// *   This address is already pending a connection
+    /// *   This peer is migrating between hostlists
     pub async fn check_address_with_lock(
         &self,
         p2p: P2pPtr,
@@ -249,6 +251,16 @@ impl Hosts {
                 debug!(
                     target: "store::check_address_with_lock()",
                     "Host '{}' configured as manual peer so skipping",
+                    host
+                );
+                continue
+            }
+
+            // Check this peer isn't currently being migrated from hostlists
+            if self.is_migrating(&host).await {
+                debug!(
+                    target: "store::check_address_with_lock()",
+                    "Host '{}' is migrating so skipping",
                     host
                 );
                 continue
@@ -282,16 +294,15 @@ impl Hosts {
         self.anchorlist_store_or_update(&[(addr.clone(), last_seen)]).await;
     }
 
-    /// Remove an entry from the hostlist. Called when a handshake fails in
-    /// session::register_channel(), or after we have failed to connect to them
+    /// Downgrade a host to greylist. Called after we have failed to connect to a host
     /// outbound_connect_limit times in quarantine()
-    pub async fn remove_host(&self, addr: &Url) {
-        debug!(target: "store::remove_host", "Removing host {}", addr);
+    pub async fn downgrade_host(&self, addr: &Url, last_seen: u64) {
+        debug!(target: "store::downgrade_host", "Downgrading host {}", addr);
         self.mark_migrating(addr).await;
 
         // Remove channel from anchorlist
         if self.anchorlist_contains(addr).await {
-            debug!(target: "store::remove_host", "Removing from anchorlist {}", addr);
+            debug!(target: "store::downgrade_host", "Removing from anchorlist {}", addr);
 
             let index = self
                 .get_anchorlist_index_at_addr(addr.clone())
@@ -303,7 +314,7 @@ impl Hosts {
 
         // Remove channel from whitelist
         if self.whitelist_contains(addr).await {
-            debug!(target: "store::remove_host", "Removing from whitelist {}", addr);
+            debug!(target: "store::downgrade_host", "Removing from whitelist {}", addr);
 
             let index = self
                 .get_whitelist_index_at_addr(addr.clone())
@@ -313,17 +324,7 @@ impl Hosts {
             self.whitelist_remove(addr, index).await;
         }
 
-        // Remove channel the greylist
-        if self.greylist_contains(addr).await {
-            debug!(target: "store::remove_host", "Removing from greylist {}", addr);
-
-            let index = self
-                .get_greylist_index_at_addr(addr.clone())
-                .await
-                .expect("Expected greylist index to exist");
-
-            self.greylist_remove(addr, index).await;
-        }
+        self.greylist_store_or_update(&[(addr.clone(), last_seen)]).await;
 
         self.unmark_migrating(addr).await;
     }
@@ -354,6 +355,8 @@ impl Hosts {
                     .get_greylist_index_at_addr(addr.clone())
                     .await
                     .expect("Expected greylist entry to exist");
+                debug!(target: "store::greylist_store_or_update()",
+                        "Selected index, updating last seen...");
                 self.greylist_update_last_seen(&addr, last_seen, index).await;
                 self.store_subscriber.notify(filtered_addrs_len).await;
             }
@@ -590,8 +593,8 @@ impl Hosts {
                 continue
             }
 
-            if self.is_rejected(addr_).await {
-                debug!(target: "store::filter_addresses()", "Peer {} is rejected", addr_);
+            if self.is_blacklist(addr_).await {
+                warn!(target: "store::filter_addresses()", "Peer {} is blacklisted", addr_);
                 continue
             }
 
@@ -652,59 +655,58 @@ impl Hosts {
     }
 
     /// Quarantine a peer.
-    /// If they've been quarantined for more than a configured limit, forget them.
-    pub async fn quarantine(&self, url: &Url) {
-        debug!(target: "store::remove()", "Quarantining peer {}", url);
-        // Remove from the entire hosts set
-        self.remove_host(url).await;
-
+    /// If they've been quarantined for more than a configured limit, downgrade to greylist.
+    pub async fn quarantine(&self, addr: &Url, last_seen: u64) {
+        debug!(target: "store::remove()", "Quarantining peer {}", addr);
+        let timer = Instant::now();
         let mut q = self.quarantine.write().await;
-        if let Some(retries) = q.get_mut(url) {
+        if let Some(retries) = q.get_mut(addr) {
             *retries += 1;
-            debug!(target: "net::hosts::quarantine()", "Peer {} quarantined {} times", url, retries);
+            debug!(target: "net::hosts::quarantine()", "Peer {} quarantined {} times", addr, retries);
             if *retries == self.settings.hosts_quarantine_limit {
-                debug!(target: "net::hosts::quarantine()", "Banning peer {}", url);
-                q.remove(url);
-                self.mark_rejected(url).await;
+                debug!(target: "net::hosts::quarantine()", "Reached quarantine limited after {:?}", timer.elapsed());
+                debug!(target: "net::hosts::quarantine()", "Removing from hostlist {}", addr);
+                drop(q);
+                self.downgrade_host(addr, last_seen).await;
             }
         } else {
-            debug!(target: "net::hosts::remove()", "Added peer {} to quarantine", url);
-            q.insert(url.clone(), 0);
+            debug!(target: "net::hosts::quarantine()", "Added peer {} to quarantine", addr);
+            q.insert(addr.clone(), 0);
         }
     }
 
-    /// Check if a given peer (URL) is in the set of rejected hosts
-    pub async fn is_rejected(&self, peer: &Url) -> bool {
+    /// Check if a given peer (URL) is in the set of blacklist hosts
+    pub async fn is_blacklist(&self, peer: &Url) -> bool {
         // Skip lookup for UNIX sockets and localhost connections
-        // as they should never belong to the list of rejected URLs.
+        // as they should never belong to the blacklist.
         let Some(hostname) = peer.host_str() else { return false };
 
         if self.is_local_host(peer.clone()).await {
             return false
         }
 
-        self.rejected.read().await.contains(hostname)
+        self.blacklist.read().await.contains(hostname)
     }
 
-    /// Mark a peer as rejected by adding it to the set of rejected URLs.
-    pub async fn mark_rejected(&self, peer: &Url) {
+    /// Mark a peer as blacklist by adding it to the set of blacklist URLs.
+    pub async fn blacklist(&self, peer: &Url) {
         // We ignore UNIX sockets here so we will just work
         // with stuff that has host_str().
         if let Some(hostname) = peer.host_str() {
-            // Localhost connections should not be rejected
+            // Localhost connections should never enter the blacklist
             // This however allows any Tor and Nym connections.
             if self.is_local_host(peer.clone()).await {
                 return
             }
 
-            self.rejected.write().await.insert(hostname.to_string());
+            self.blacklist.write().await.insert(hostname.to_string());
         }
     }
 
-    /// Unmark a rejected peer
-    pub async fn unmark_rejected(&self, peer: &Url) {
+    /// Unmark a blacklist peer
+    pub async fn unblacklist(&self, peer: &Url) {
         if let Some(hostname) = peer.host_str() {
-            self.rejected.write().await.remove(hostname);
+            self.blacklist.write().await.remove(hostname);
         }
     }
 
@@ -1360,7 +1362,7 @@ mod tests {
                     .unwrap(),
             ];
             for host in remote_hosts {
-                assert!(!(hosts.is_local_host(host).await))
+                assert!(!hosts.is_local_host(host).await)
             }
         });
     }
@@ -1387,11 +1389,11 @@ mod tests {
             assert!(!hosts.is_empty_greylist().await);
 
             let local_hosts = vec![
-                (Url::parse("tcp://localhost:3921").unwrap()),
-                (Url::parse("tor://[::1]:21481").unwrap()),
-                (Url::parse("tcp://192.168.10.65:311").unwrap()),
-                (Url::parse("tcp+tls://0.0.0.0:2312").unwrap()),
-                (Url::parse("tcp://255.255.255.255:2131").unwrap()),
+                Url::parse("tcp://localhost:3921").unwrap(),
+                Url::parse("tor://[::1]:21481").unwrap(),
+                Url::parse("tcp://192.168.10.65:311").unwrap(),
+                Url::parse("tcp+tls://0.0.0.0:2312").unwrap(),
+                Url::parse("tcp://255.255.255.255:2131").unwrap(),
             ];
 
             for host in &local_hosts {
@@ -1400,9 +1402,9 @@ mod tests {
             assert!(!hosts.is_empty_greylist().await);
 
             let remote_hosts = vec![
-                (Url::parse("tcp://dark.fi:80").unwrap()),
-                (Url::parse("tcp://http.cat:401").unwrap()),
-                (Url::parse("tcp://foo.bar:111").unwrap()),
+                Url::parse("tcp://dark.fi:80").unwrap(),
+                Url::parse("tcp://http.cat:401").unwrap(),
+                Url::parse("tcp://foo.bar:111").unwrap(),
             ];
 
             for host in &remote_hosts {

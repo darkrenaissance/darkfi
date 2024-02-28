@@ -113,22 +113,6 @@ impl TokenAttributes {
     }
 }
 
-#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
-pub struct NullifierAttributes {
-    /// Secret key for the public key in the coin.
-    /// We need some secret info to avoid revealing which coin this
-    /// nullifier is connected to. We use the secret key for that.
-    pub secret_key: SecretKey,
-    /// The corresponding coin being spent.
-    pub coin: Coin,
-}
-
-impl NullifierAttributes {
-    pub fn to_nullifier(&self) -> Nullifier {
-        Nullifier::from(poseidon_hash([self.secret_key.inner(), self.coin.inner()]))
-    }
-}
-
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 // ANCHOR: money-clear-input
 /// A contract call's clear input

@@ -22,30 +22,67 @@ use log::{debug, info, warn};
 use tinyjson::JsonValue;
 
 use crate::{
-    proto::{SyncRequest, SyncResponse},
+    proto::{
+        ForkSyncRequest, ForkSyncResponse, IsSyncedRequest, IsSyncedResponse, SyncRequest,
+        SyncResponse, COMMS_TIMEOUT,
+    },
     Darkfid,
 };
 
 /// async task used for block syncing
 pub async fn sync_task(node: &Darkfid) -> Result<()> {
     info!(target: "darkfid::task::sync_task", "Starting blockchain sync...");
-    // Block until at least node is connected to at least one peer
+    // Block until at least node is connected to at least one synced peer
+    let mut peers = vec![];
     loop {
-        if !node.sync_p2p.channels().await.is_empty() {
+        // Grab channels
+        let channels = node.sync_p2p.channels().await;
+
+        // Check anyone is connected
+        if !channels.is_empty() {
+            // Ask each peer if they are synced
+            for channel in channels {
+                // Communication setup
+                let msg_subsystem = channel.message_subsystem();
+                msg_subsystem.add_dispatch::<IsSyncedResponse>().await;
+                let response_sub = channel.subscribe_msg::<IsSyncedResponse>().await?;
+
+                // Node creates a `IsSyncedRequest` and sends it
+                let request = IsSyncedRequest {};
+                channel.send(&request).await?;
+
+                // Node waits for response
+                let Ok(response) = response_sub.receive_with_timeout(COMMS_TIMEOUT).await else {
+                    continue
+                };
+
+                // Parse response
+                if response.synced {
+                    peers.push(channel)
+                }
+            }
+        }
+
+        // Check if we got peers to sync from
+        if !peers.is_empty() {
             break
         }
+
         warn!(target: "darkfid::task::sync_task", "Node is not connected to other nodes, waiting to retry...");
         sleep(10).await;
     }
 
-    // Getting a random connected channel to ask from peers
-    let channel = node.sync_p2p.random_channel().await.unwrap();
+    // Getting a peer to ask for blocks
+    let channel = &peers[0];
 
     // Communication setup
     let msg_subsystem = channel.message_subsystem();
     msg_subsystem.add_dispatch::<SyncResponse>().await;
+    msg_subsystem.add_dispatch::<ForkSyncResponse>().await;
     let block_response_sub = channel.subscribe_msg::<SyncResponse>().await?;
+    let proposals_response_sub = channel.subscribe_msg::<ForkSyncResponse>().await?;
     let notif_sub = node.subscribers.get("blocks").unwrap();
+    let proposal_notif_sub = node.subscribers.get("proposals").unwrap();
 
     // TODO: make this parallel and use a head selection method,
     // for example use a manual known head and only connect to nodes
@@ -84,6 +121,23 @@ pub async fn sync_task(node: &Darkfid) -> Result<()> {
         }
 
         last = last_received;
+    }
+
+    // Node syncs current best fork
+    let request = ForkSyncRequest { tip: last.1, fork_tip: None };
+    channel.send(&request).await?;
+
+    // TODO: add a timeout here to retry
+    // Node waits for response
+    let response = proposals_response_sub.receive().await?;
+
+    // Verify and store retrieved proposals
+    debug!(target: "darkfid::task::sync_task", "Processing received proposals");
+    for proposal in &response.proposals {
+        node.validator.consensus.append_proposal(proposal).await?;
+        // Notify subscriber
+        let enc_prop = JsonValue::String(base64::encode(&serialize_async(proposal).await));
+        proposal_notif_sub.notify(vec![enc_prop].into()).await;
     }
 
     *node.validator.synced.write().await = true;

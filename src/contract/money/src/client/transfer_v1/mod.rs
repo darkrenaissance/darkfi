@@ -110,14 +110,9 @@ pub fn make_transfer_call(
     let (spent_coins, change_value) = select_coins(coins, value)?;
 
     for coin in spent_coins.iter() {
-        let leaf_position = coin.leaf_position;
-        let merkle_path = tree.witness(leaf_position, 0).unwrap();
-
         let input = TransferCallInput {
-            leaf_position,
-            merkle_path,
-            secret: coin.secret,
-            note: coin.note.clone(),
+            coin: coin.clone(),
+            merkle_path: tree.witness(coin.leaf_position, 0).unwrap(),
             user_data_blind: Blind::random(&mut OsRng),
         };
 

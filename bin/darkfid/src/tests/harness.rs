@@ -39,7 +39,6 @@ use darkfi_sdk::{
 };
 use darkfi_serial::Encodable;
 use num_bigint::BigUint;
-use rand::rngs::OsRng;
 use url::Url;
 
 use crate::{
@@ -150,10 +149,26 @@ impl Harness {
 
         let alice_blockchain_len = alice.blockchain.len();
         assert_eq!(alice_blockchain_len, bob.blockchain.len());
-        // Last block is not finalized yet
-        assert_eq!(alice_blockchain_len, total_blocks - 1);
+        assert_eq!(alice_blockchain_len, total_blocks);
 
         Ok(())
+    }
+
+    pub async fn validate_fork_chains(&self, total_forks: usize, fork_sizes: Vec<usize>) {
+        let alice = &self.alice.validator.consensus.forks.read().await;
+        let bob = &self.bob.validator.consensus.forks.read().await;
+
+        let alice_forks_len = alice.len();
+        assert_eq!(alice_forks_len, bob.len());
+        assert_eq!(alice_forks_len, total_forks);
+
+        for (index, fork) in alice.iter().enumerate() {
+            assert_eq!(fork.proposals.len(), fork_sizes[index]);
+        }
+
+        for (index, fork) in bob.iter().enumerate() {
+            assert_eq!(fork.proposals.len(), fork_sizes[index]);
+        }
     }
 
     pub async fn add_blocks(&self, blocks: &[BlockInfo]) -> Result<()> {
@@ -168,7 +183,7 @@ impl Harness {
 
         // Sleep a bit so blocks can be propagated and then
         // trigger finalization check to Alice and Bob
-        sleep(1).await;
+        sleep(5).await;
         self.alice.validator.finalization().await?;
         self.bob.validator.finalization().await?;
 
@@ -216,7 +231,7 @@ impl Harness {
         let mut tx_builder =
             TransactionBuilder::new(ContractCallLeaf { call, proofs: debris.proofs }, vec![])?;
         let mut tx = tx_builder.build()?;
-        let sigs = tx.create_sigs(&mut OsRng, &[keypair.secret])?;
+        let sigs = tx.create_sigs(&[keypair.secret])?;
         tx.signatures = vec![sigs];
 
         // We increment timestamp so we don't have to use sleep
@@ -258,11 +273,18 @@ pub async fn generate_node(
     subscribers.insert("txs", JsonSubscriber::new("blockchain.subscribe_txs"));
     subscribers.insert("proposals", JsonSubscriber::new("blockchain.subscribe_proposals"));
 
-    let sync_p2p = spawn_sync_p2p(sync_settings, &validator, &subscribers, ex.clone()).await;
-    let miners_p2p = if let Some(settings) = miners_settings {
-        Some(spawn_miners_p2p(settings, &validator, &subscribers, ex.clone()).await)
+    let (sync_p2p, miners_p2p) = if let Some(settings) = miners_settings {
+        let sync_p2p =
+            spawn_sync_p2p(sync_settings, &validator, &subscribers, ex.clone(), true).await;
+        let miners_p2p = Some(
+            spawn_miners_p2p(settings, &validator, &subscribers, ex.clone(), sync_p2p.clone())
+                .await,
+        );
+        (sync_p2p, miners_p2p)
     } else {
-        None
+        let sync_p2p =
+            spawn_sync_p2p(sync_settings, &validator, &subscribers, ex.clone(), false).await;
+        (sync_p2p, None)
     };
     let node =
         Darkfid::new(sync_p2p.clone(), miners_p2p.clone(), validator, subscribers, None).await;

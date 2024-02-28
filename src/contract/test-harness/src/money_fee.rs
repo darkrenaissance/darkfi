@@ -65,10 +65,8 @@ impl TestHarness {
 
         // Input and output setup
         let input = FeeCallInput {
-            leaf_position: coin.leaf_position,
+            coin: coin.clone(),
             merkle_path: wallet.money_merkle_tree.witness(coin.leaf_position, 0).unwrap(),
-            secret: coin.secret,
-            note: coin.note.clone(),
             user_data_blind: Blind::random(&mut OsRng),
         };
 
@@ -148,7 +146,7 @@ impl TestHarness {
         let mut tx_builder =
             TransactionBuilder::new(ContractCallLeaf { call, proofs: vec![proof] }, vec![])?;
         let mut tx = tx_builder.build()?;
-        let sigs = tx.create_sigs(&mut OsRng, &[signature_secret])?;
+        let sigs = tx.create_sigs(&[signature_secret])?;
         tx.signatures = vec![sigs];
 
         Ok((tx, params))
@@ -230,10 +228,8 @@ impl TestHarness {
 
         // Input and output setup
         let input = FeeCallInput {
-            leaf_position: coin.leaf_position,
+            coin: coin.clone(),
             merkle_path: wallet.money_merkle_tree.witness(coin.leaf_position, 0).unwrap(),
-            secret: coin.secret,
-            note: coin.note.clone(),
             user_data_blind: BaseBlind::random(&mut OsRng),
         };
 

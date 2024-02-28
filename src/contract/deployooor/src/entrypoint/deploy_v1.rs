@@ -32,10 +32,7 @@ use wasmparser::{
     Payload::ExportSection,
 };
 
-use crate::{
-    error::DeployError, model::DeployUpdateV1, DeployFunction, DEPLOY_CONTRACT_LOCK_TREE,
-    DEPLOY_CONTRACT_ZKAS_DERIVE_NS_V1,
-};
+use crate::{error::DeployError, model::DeployUpdateV1, DeployFunction, DEPLOY_CONTRACT_LOCK_TREE};
 
 /// `get_metadata` function for `Deploy::DeployV1`
 pub(crate) fn deploy_get_metadata_v1(
@@ -47,19 +44,9 @@ pub(crate) fn deploy_get_metadata_v1(
     let params: DeployParamsV1 = deserialize(&self_.data.data[1..])?;
 
     // Public inputs for the ZK proofs we have to verify
-    let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
+    let zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
     // Public keys for the transaction signatures we have to verify
     let signature_pubkeys: Vec<PublicKey> = vec![params.public_key];
-
-    // Derive the ContractID from the public key
-    let (sig_x, sig_y) = params.public_key.xy();
-    let contract_id = ContractId::derive_public(params.public_key);
-
-    // Append the ZK public inputs
-    zk_public_inputs.push((
-        DEPLOY_CONTRACT_ZKAS_DERIVE_NS_V1.to_string(),
-        vec![sig_x, sig_y, contract_id.inner()],
-    ));
 
     // Serialize everything gathered and return it
     let mut metadata = vec![];

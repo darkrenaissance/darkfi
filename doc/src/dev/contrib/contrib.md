@@ -145,7 +145,13 @@ _Tasks are in no particular order. Use common sense._
     have this mixed with a bunch of random addrs to avoid leaking our own addr.
 27. Add support for colorizing zkas code samples in darkfi book (see arch/dao page)
 28. Tutorial creating a ZK credentials scheme.
-99. resource manager for p2p (DoS protection, disconnect bad nodes)
+29. resource manager for p2p (DoS protection, disconnect bad nodes)
+30. apply DEP 0001
+31. fix channel `main_receive_loop()` to use `Weak`
+32. configurable MAGIC_BYTES for net code
+33. configurable fields for version messages
+34. make `PeerDiscovery` in `outbound_session.rs` a trait object which is
+    configurable in P2p, but by default is set to `PeerSeedDiscovery`.
 
 
 |  Task #  |  Assignee  |

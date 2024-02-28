@@ -141,9 +141,21 @@ impl Consensus {
         // If a fork index was found, replace forks with the mutated one,
         // otherwise push the new fork.
         let mut lock = self.forks.write().await;
+        // Check if fork already exists
+        for f in lock.iter() {
+            if f.proposals == fork.proposals {
+                drop(lock);
+                return Err(Error::ProposalAlreadyExists)
+            }
+        }
         match index {
             Some(i) => {
-                lock[i] = fork;
+                if i < lock.len() && lock[i].proposals == fork.proposals[..fork.proposals.len() - 1]
+                {
+                    lock[i] = fork;
+                } else {
+                    lock.push(fork);
+                }
             }
             None => {
                 lock.push(fork);
@@ -266,6 +278,79 @@ impl Consensus {
         drop(forks);
 
         Ok(finalized)
+    }
+
+    /// Auxilliary function to retrieve a fork proposals.
+    /// If provided tip is not the canonical(finalized), or fork doesn't exists,
+    /// an empty vector is returned.
+    pub async fn get_fork_proposals(
+        &self,
+        tip: blake3::Hash,
+        fork_tip: blake3::Hash,
+    ) -> Result<Vec<Proposal>> {
+        // Tip must be canonical(finalized) blockchain last
+        if self.blockchain.last()?.1 != tip {
+            return Ok(vec![])
+        }
+
+        // Grab a lock over current forks
+        let forks = self.forks.read().await;
+
+        // Check if node has any forks
+        if forks.is_empty() {
+            drop(forks);
+            return Ok(vec![])
+        }
+
+        // Find fork by its tip
+        for fork in forks.iter() {
+            if fork.proposals.last() == Some(&fork_tip) {
+                // Grab its proposals
+                let blocks = fork.overlay.lock().unwrap().get_blocks_by_hash(&fork.proposals)?;
+                let mut ret = Vec::with_capacity(blocks.len());
+                for block in blocks {
+                    ret.push(Proposal::new(block)?);
+                }
+                drop(forks);
+                return Ok(ret)
+            }
+        }
+
+        // Fork was not found
+        Ok(vec![])
+    }
+
+    /// Auxilliary function to retrieve current best fork proposals.
+    /// If multiple best forks exist, grab the proposals of the first one
+    /// If provided tip is not the canonical(finalized), or no forks exist,
+    /// an empty vector is returned.
+    pub async fn get_best_fork_proposals(&self, tip: blake3::Hash) -> Result<Vec<Proposal>> {
+        // Tip must be canonical(finalized) blockchain last
+        if self.blockchain.last()?.1 != tip {
+            return Ok(vec![])
+        }
+
+        // Grab a lock over current forks
+        let forks = self.forks.read().await;
+
+        // Check if node has any forks
+        if forks.is_empty() {
+            drop(forks);
+            return Ok(vec![])
+        }
+
+        // Grab best fork
+        let forks_indexes = best_forks_indexes(&forks)?;
+        let fork = &forks[forks_indexes[0]];
+
+        // Grab its proposals
+        let blocks = fork.overlay.lock().unwrap().get_blocks_by_hash(&fork.proposals)?;
+        let mut ret = Vec::with_capacity(blocks.len());
+        for block in blocks {
+            ret.push(Proposal::new(block)?);
+        }
+
+        Ok(ret)
     }
 }
 

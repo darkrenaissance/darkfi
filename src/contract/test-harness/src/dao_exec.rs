@@ -97,14 +97,9 @@ impl TestHarness {
 
         let mut inputs = vec![];
         for coin in &spent_coins {
-            let leaf_position = coin.leaf_position;
-            let merkle_path = tree.witness(leaf_position, 0).unwrap();
-
             inputs.push(xfer::TransferCallInput {
-                leaf_position,
-                merkle_path,
-                secret: coin.secret,
-                note: coin.note.clone(),
+                coin: coin.clone(),
+                merkle_path: tree.witness(coin.leaf_position, 0).unwrap(),
                 user_data_blind: input_user_data_blind,
             });
         }
@@ -225,8 +220,8 @@ impl TestHarness {
         if self.verify_fees {
             let mut tx = tx_builder.build()?;
             let auth_xfer_sigs = vec![];
-            let xfer_sigs = tx.create_sigs(&mut OsRng, &xfer_secrets.signature_secrets)?;
-            let exec_sigs = tx.create_sigs(&mut OsRng, &[exec_signature_secret])?;
+            let xfer_sigs = tx.create_sigs(&xfer_secrets.signature_secrets)?;
+            let exec_sigs = tx.create_sigs(&[exec_signature_secret])?;
             tx.signatures = vec![auth_xfer_sigs, xfer_sigs, exec_sigs];
 
             let (fee_call, fee_proofs, fee_secrets, _spent_fee_coins, fee_call_params) =
@@ -241,12 +236,12 @@ impl TestHarness {
         // Now build the actual transaction and sign it with necessary keys.
         let mut tx = tx_builder.build()?;
         let auth_xfer_sigs = vec![];
-        let xfer_sigs = tx.create_sigs(&mut OsRng, &xfer_secrets.signature_secrets)?;
-        let exec_sigs = tx.create_sigs(&mut OsRng, &[exec_signature_secret])?;
+        let xfer_sigs = tx.create_sigs(&xfer_secrets.signature_secrets)?;
+        let exec_sigs = tx.create_sigs(&[exec_signature_secret])?;
         tx.signatures = vec![auth_xfer_sigs, xfer_sigs, exec_sigs];
 
         if let Some(fee_signature_secrets) = fee_signature_secrets {
-            let sigs = tx.create_sigs(&mut OsRng, &fee_signature_secrets)?;
+            let sigs = tx.create_sigs(&fee_signature_secrets)?;
             tx.signatures.push(sigs);
         }
 

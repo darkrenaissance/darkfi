@@ -140,8 +140,8 @@ impl TestHarness {
         let mut fee_signature_secrets = None;
         if self.verify_fees {
             let mut tx = tx_builder.build()?;
-            let mint_sigs = tx.create_sigs(&mut OsRng, &[])?;
-            let auth_sigs = tx.create_sigs(&mut OsRng, &[mint_authority.secret])?;
+            let mint_sigs = tx.create_sigs(&[])?;
+            let auth_sigs = tx.create_sigs(&[mint_authority.secret])?;
             tx.signatures = vec![mint_sigs, auth_sigs];
 
             let (fee_call, fee_proofs, fee_secrets, _spent_fee_coins, fee_call_params) =
@@ -155,11 +155,11 @@ impl TestHarness {
 
         // Now build the actual transaction and sign it with necessary keys.
         let mut tx = tx_builder.build()?;
-        let mint_sigs = tx.create_sigs(&mut OsRng, &[])?;
-        let auth_sigs = tx.create_sigs(&mut OsRng, &[mint_authority.secret])?;
+        let mint_sigs = tx.create_sigs(&[])?;
+        let auth_sigs = tx.create_sigs(&[mint_authority.secret])?;
         tx.signatures = vec![mint_sigs, auth_sigs];
         if let Some(fee_signature_secrets) = fee_signature_secrets {
-            let sigs = tx.create_sigs(&mut OsRng, &fee_signature_secrets)?;
+            let sigs = tx.create_sigs(&fee_signature_secrets)?;
             tx.signatures.push(sigs);
         }
 
@@ -296,7 +296,7 @@ impl TestHarness {
         let mut fee_signature_secrets = None;
         if self.verify_fees {
             let mut tx = tx_builder.build()?;
-            let freeze_sigs = tx.create_sigs(&mut OsRng, &[mint_authority.secret])?;
+            let freeze_sigs = tx.create_sigs(&[mint_authority.secret])?;
             tx.signatures = vec![freeze_sigs];
 
             let (fee_call, fee_proofs, fee_secrets, _spent_fee_coins, fee_call_params) =
@@ -310,10 +310,10 @@ impl TestHarness {
 
         // Now build the actual transaction and sign it with necessary keys.
         let mut tx = tx_builder.build()?;
-        let freeze_sigs = tx.create_sigs(&mut OsRng, &[mint_authority.secret])?;
+        let freeze_sigs = tx.create_sigs(&[mint_authority.secret])?;
         tx.signatures = vec![freeze_sigs];
         if let Some(fee_signature_secrets) = fee_signature_secrets {
-            let sigs = tx.create_sigs(&mut OsRng, &fee_signature_secrets)?;
+            let sigs = tx.create_sigs(&fee_signature_secrets)?;
             tx.signatures.push(sigs);
         }
 

@@ -263,7 +263,7 @@ impl Drk {
             TransactionBuilder::new(ContractCallLeaf { call, proofs: full_proofs }, vec![])?;
         let mut tx = tx_builder.build()?;
         eprintln!("Signing swap transaction");
-        let sigs = tx.create_sigs(&mut OsRng, &[debris.signature_secret])?;
+        let sigs = tx.create_sigs(&[debris.signature_secret])?;
         tx.signatures = vec![sigs];
 
         Ok(tx)
@@ -454,7 +454,7 @@ impl Drk {
         };
 
         eprintln!("Signing swap transaction");
-        let sigs = tx.create_sigs(&mut OsRng, &[skey])?;
+        let sigs = tx.create_sigs(&[skey])?;
         tx.signatures[0].insert(0, sigs[0]);
 
         Ok(())

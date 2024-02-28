@@ -45,7 +45,7 @@ impl AeadEncryptedNote {
     ) -> Result<Self, ContractError> {
         let ephem_secret = SecretKey::random(rng);
         let ephem_public = PublicKey::from_secret(ephem_secret);
-        let shared_secret = diffie_hellman::sapling_ka_agree(&ephem_secret, public);
+        let shared_secret = diffie_hellman::sapling_ka_agree(&ephem_secret, public)?;
         let key = diffie_hellman::kdf_sapling(&shared_secret, &ephem_public);
 
         let mut input = Vec::new();
@@ -63,7 +63,7 @@ impl AeadEncryptedNote {
     }
 
     pub fn decrypt<D: Decodable>(&self, secret: &SecretKey) -> Result<D, ContractError> {
-        let shared_secret = diffie_hellman::sapling_ka_agree(secret, &self.ephem_public);
+        let shared_secret = diffie_hellman::sapling_ka_agree(secret, &self.ephem_public)?;
         let key = diffie_hellman::kdf_sapling(&shared_secret, &self.ephem_public);
 
         let ct_len = self.ciphertext.len();
@@ -81,41 +81,61 @@ impl AeadEncryptedNote {
     }
 }
 
-/// An encrypted note using an ElGamal scheme verifiable in ZK
+/// An encrypted note using an ElGamal scheme verifiable in ZK.
+///
+/// **WARNING:**
+/// Without ZK, there is no authentication of the ciphertexts so these should
+/// not be used without a corresponding ZK proof.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct ElGamalEncryptedNote<const N: usize> {
+    /// The values encrypted with the derived shared secret using Diffie-Hellman
     pub encrypted_values: [pallas::Base; N],
+    /// The ephemeral public key used for Diffie-Hellman key derivation
     pub ephem_public: PublicKey,
 }
 
 impl<const N: usize> ElGamalEncryptedNote<N> {
-    pub fn encrypt(
+    /// Encrypt given values to the given `PublicKey` using a `SecretKey` for Diffie-Hellman
+    ///
+    /// Note that this does not do any message authentication.
+    /// This means that alterations of the ciphertexts lead to the same alterations
+    /// on the plaintexts.
+    pub fn encrypt_unsafe(
         values: [pallas::Base; N],
         ephem_secret: &SecretKey,
         public: &PublicKey,
-    ) -> Self {
+    ) -> Result<Self, ContractError> {
         // Derive shared secret using DH
         let ephem_public = PublicKey::from_secret(*ephem_secret);
-        let (ss_x, ss_y) = PublicKey::from(public.inner() * fp_mod_fv(ephem_secret.inner())).xy();
+        let (ss_x, ss_y) =
+            PublicKey::try_from(public.inner() * fp_mod_fv(ephem_secret.inner()))?.xy();
         let shared_secret = poseidon_hash([ss_x, ss_y]);
 
+        // Derive the blinds using the shared secret and incremental nonces
         let mut blinds = [pallas::Base::ZERO; N];
         for (i, item) in blinds.iter_mut().enumerate().take(N) {
             *item = poseidon_hash([shared_secret, pallas::Base::from(i as u64 + 1)]);
         }
 
+        // Encrypt the values
         let mut encrypted_values = [pallas::Base::ZERO; N];
         for i in 0..N {
             encrypted_values[i] = values[i] + blinds[i];
         }
 
-        Self { encrypted_values, ephem_public }
+        Ok(Self { encrypted_values, ephem_public })
     }
 
-    pub fn decrypt(&self, secret: &SecretKey) -> [pallas::Base; N] {
+    /// Decrypt the `ElGamalEncryptedNote` using a `SecretKey` for shared secret derivation
+    /// using Diffie-Hellman
+    ///
+    /// Note that this does not do any message authentication.
+    /// This means that alterations of the ciphertexts lead to the same alterations
+    /// on the plaintexts.
+    pub fn decrypt_unsafe(&self, secret: &SecretKey) -> Result<[pallas::Base; N], ContractError> {
         // Derive shared secret using DH
         let (ss_x, ss_y) =
-            PublicKey::from(self.ephem_public.inner() * fp_mod_fv(secret.inner())).xy();
+            PublicKey::try_from(self.ephem_public.inner() * fp_mod_fv(secret.inner()))?.xy();
         let shared_secret = poseidon_hash([ss_x, ss_y]);
 
         let mut blinds = [pallas::Base::ZERO; N];
@@ -128,7 +148,7 @@ impl<const N: usize> ElGamalEncryptedNote<N> {
             decrypted_values[i] = self.encrypted_values[i] - blinds[i];
         }
 
-        decrypted_values
+        Ok(decrypted_values)
     }
 }
 
@@ -162,9 +182,10 @@ mod tests {
         let ephem_secret = SecretKey::random(&mut OsRng);
 
         let encrypted_note =
-            ElGamalEncryptedNote::encrypt(plain_values, &ephem_secret, &keypair.public);
+            ElGamalEncryptedNote::encrypt_unsafe(plain_values, &ephem_secret, &keypair.public)
+                .unwrap();
 
-        let decrypted_values = encrypted_note.decrypt(&keypair.secret);
+        let decrypted_values = encrypted_note.decrypt_unsafe(&keypair.secret).unwrap();
 
         assert_eq!(plain_values, decrypted_values);
     }

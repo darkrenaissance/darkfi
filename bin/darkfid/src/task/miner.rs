@@ -109,12 +109,15 @@ pub async fn miner_task(node: &Darkfid, recipient: &PublicKey, skip_sync: bool) 
 
     // Start miner loop
     loop {
-        // Grab best current fork index
-        let fork_index = best_forks_indexes(&node.validator.consensus.forks.read().await)?[0];
+        // Grab best current fork proposals sequence
+        let forks = node.validator.consensus.forks.read().await;
+        let fork_index = best_forks_indexes(&forks)?[0];
+        let fork_proposals = forks[fork_index].proposals.clone();
+        drop(forks);
 
         // Start listenning for network proposals and mining next block for best fork.
         smol::future::or(
-            listen_to_network(node, fork_index, &subscription),
+            listen_to_network(node, fork_proposals, &subscription),
             mine_next_block(node, fork_index, &mut secret, recipient, &zkbin, &pk),
         )
         .await?;
@@ -134,19 +137,29 @@ pub async fn miner_task(node: &Darkfid, recipient: &PublicKey, skip_sync: bool) 
 /// Auxiliary function to listen for incoming proposals and check if the best fork has changed
 async fn listen_to_network(
     node: &Darkfid,
-    fork_index: usize,
+    fork_proposals: Vec<blake3::Hash>,
     subscription: &Subscription<JsonNotification>,
 ) -> Result<()> {
-    loop {
+    'main_loop: loop {
         // Wait until a new proposal has been received
         subscription.receive().await;
 
-        // Grab best current fork indexes
-        let fork_indexes = best_forks_indexes(&node.validator.consensus.forks.read().await)?;
+        // Grab a lock over node forks
+        let forks = node.validator.consensus.forks.read().await;
 
-        if !fork_indexes.contains(&fork_index) {
-            return Ok(())
+        // Grab best current fork indexes
+        let fork_indexes = best_forks_indexes(&forks)?;
+
+        // Iterate to verify if proposals sequence has changed
+        for index in fork_indexes {
+            if forks[index].proposals == fork_proposals {
+                drop(forks);
+                continue 'main_loop
+            }
         }
+
+        drop(forks);
+        return Ok(())
     }
 }
 
@@ -263,7 +276,7 @@ fn generate_transaction(
     let mut tx_builder =
         TransactionBuilder::new(ContractCallLeaf { call, proofs: debris.proofs }, vec![])?;
     let mut tx = tx_builder.build()?;
-    let sigs = tx.create_sigs(&mut OsRng, &[*secret])?;
+    let sigs = tx.create_sigs(&[*secret])?;
     tx.signatures = vec![sigs];
 
     Ok(tx)

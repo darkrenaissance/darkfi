@@ -23,6 +23,10 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      - name: Update apt cache
+        run: |
+          sudo apt update -y
+
       - name: Install dependencies (Linux)
         run: |
           sh contrib/dependency_setup.sh
@@ -56,6 +60,10 @@ jobs:
           override: true
       - uses: taiki-e/install-action@cargo-hack
       - uses: Swatinem/rust-cache@v2
+
+      - name: Update apt cache
+        run: |
+          sudo apt update -y
 
       - name: Install dependencies (Linux)
         run: |

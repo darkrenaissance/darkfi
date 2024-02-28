@@ -20,9 +20,7 @@ use darkfi::{
     tx::{ContractCallLeaf, Transaction, TransactionBuilder},
     Result,
 };
-use darkfi_deployooor_contract::{
-    client::deploy_v1::DeployCallBuilder, DeployFunction, DEPLOY_CONTRACT_ZKAS_DERIVE_NS_V1,
-};
+use darkfi_deployooor_contract::{client::deploy_v1::DeployCallBuilder, DeployFunction};
 use darkfi_money_contract::{
     client::{MoneyNote, OwnCoin},
     model::MoneyFeeParamsV1,
@@ -34,7 +32,6 @@ use darkfi_sdk::{
 };
 use darkfi_serial::AsyncEncodable;
 use log::debug;
-use rand::rngs::OsRng;
 
 use super::{Holder, TestHarness};
 
@@ -51,17 +48,8 @@ impl TestHarness {
         let wallet = self.holders.get(holder).unwrap();
         let deploy_keypair = wallet.contract_deploy_authority;
 
-        let (derivecid_pk, derivecid_zkbin) =
-            self.proving_keys.get(&DEPLOY_CONTRACT_ZKAS_DERIVE_NS_V1.to_string()).unwrap();
-
         // Build the contract call
-        let builder = DeployCallBuilder {
-            deploy_keypair,
-            wasm_bincode,
-            deploy_ix: vec![],
-            derivecid_zkbin: derivecid_zkbin.clone(),
-            derivecid_pk: derivecid_pk.clone(),
-        };
+        let builder = DeployCallBuilder { deploy_keypair, wasm_bincode, deploy_ix: vec![] };
         let debris = builder.build()?;
 
         // Encode the call
@@ -69,14 +57,14 @@ impl TestHarness {
         debris.params.encode_async(&mut data).await?;
         let call = ContractCall { contract_id: *DEPLOYOOOR_CONTRACT_ID, data };
         let mut tx_builder =
-            TransactionBuilder::new(ContractCallLeaf { call, proofs: debris.proofs }, vec![])?;
+            TransactionBuilder::new(ContractCallLeaf { call, proofs: vec![] }, vec![])?;
 
         // If we have tx fees enabled, make an offering
         let mut fee_params = None;
         let mut fee_signature_secrets = None;
         if self.verify_fees {
             let mut tx = tx_builder.build()?;
-            let sigs = tx.create_sigs(&mut OsRng, &[deploy_keypair.secret])?;
+            let sigs = tx.create_sigs(&[deploy_keypair.secret])?;
             tx.signatures = vec![sigs];
 
             let (fee_call, fee_proofs, fee_secrets, _spent_fee_coins, fee_call_params) =
@@ -90,10 +78,10 @@ impl TestHarness {
 
         // Now build the actual transaction and sign it with necessary keys.
         let mut tx = tx_builder.build()?;
-        let sigs = tx.create_sigs(&mut OsRng, &[deploy_keypair.secret])?;
+        let sigs = tx.create_sigs(&[deploy_keypair.secret])?;
         tx.signatures = vec![sigs];
         if let Some(fee_signature_secrets) = fee_signature_secrets {
-            let sigs = tx.create_sigs(&mut OsRng, &fee_signature_secrets)?;
+            let sigs = tx.create_sigs(&fee_signature_secrets)?;
             tx.signatures.push(sigs);
         }
 

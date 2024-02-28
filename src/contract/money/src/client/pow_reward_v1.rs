@@ -158,7 +158,7 @@ impl PoWRewardCallBuilder {
         vrf_input.extend_from_slice(&pallas::Base::from(self.last_nonce).to_repr());
         vrf_input.extend_from_slice(self.fork_previous_hash.as_bytes());
         vrf_input.extend_from_slice(&pallas::Base::from(self.block_height).to_repr());
-        let vrf_proof = VrfProof::prove(self.secret, &vrf_input, &mut OsRng);
+        let vrf_proof = VrfProof::prove(self.secret, &vrf_input);
 
         let params = MoneyPoWRewardParamsV1 { input: c_input, output: c_output, vrf_proof };
         let debris = PoWRewardCallDebris { params, proofs: vec![proof] };

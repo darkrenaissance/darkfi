@@ -140,7 +140,7 @@ impl ProtocolVersion {
         );
 
         // MAJOR and MINOR should be the same.
-        if self.settings.app_version.major != verack_msg.app_version.major ||
+        if self.settings.app_version.major != verack_msg.app_version.major &&
             self.settings.app_version.minor != verack_msg.app_version.minor
         {
             error!(

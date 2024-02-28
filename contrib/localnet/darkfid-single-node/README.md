@@ -25,3 +25,11 @@ Then we replace the `recipient` field in `darkfid.toml`
 config with the output of the last command, and restart
 the daemon. After some blocks have been generated we
 will see some `DRK` in our test wallet.
+
+```
+% ../../../drk -c drk.toml scan
+% ../../../drk -c drk.toml wallet --balance
+```
+
+See the user guide in the book for more info.
+

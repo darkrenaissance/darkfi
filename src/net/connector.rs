@@ -18,7 +18,7 @@
 
 use std::time::Duration;
 
-use log::debug;
+use log::warn;
 use url::Url;
 
 use super::{
@@ -45,8 +45,8 @@ impl Connector {
 
     /// Establish an outbound connection
     pub async fn connect(&self, url: &Url) -> Result<(Url, ChannelPtr)> {
-        if self.session.upgrade().unwrap().p2p().hosts().is_rejected(url).await {
-            debug!(target: "net::connector::connect", "Peer {} is rejected", url);
+        if self.session.upgrade().unwrap().p2p().hosts().is_blacklist(url).await {
+            warn!(target: "net::connector::connect", "Peer {} is blacklisted", url);
             return Err(Error::ConnectFailed)
         }
 

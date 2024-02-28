@@ -41,10 +41,10 @@ Leaders must possess:
    direct activity.
 2. Strong techncial skills to directly affect change themselves.
 
-We emphasize a combination of both. As Marx said: ideas should
-not gather dust in books. We must put our ideas into action through
-practice. However, blind undirected action is wasted effort. Therefore
-we seek to foster both theory and practice in participants.
+We emphasize a combination of both. Ideas should not gather dust in
+books. We must put our ideas into action through practice. However,
+blind undirected action is wasted effort. Therefore we seek to foster
+both theory and practice in participants.
 
 With the mentorship system, participants are self directed but are under
 the influence of more senior mentors.  If they get stuck, they can
@@ -173,9 +173,11 @@ and participating in crypto communities.
 1. Download and install a simple Linux operating system to get started. Options can be Ubuntu or Manjaro Linux.
 2. Watch [Finematics videos](https://www.youtube.com/c/Finematics/videos).
 3. Begin the initial stage listed above.
-4. Follow the instructions on the Darkfi Book and run [darkirc](Book https://darkrenaissance.github.io/darkfi/misc/darkirc/darkirc.html) to connect with the team.
+4. Follow the instructions on the Darkfi Book and run [darkirc](https://darkrenaissance.github.io/darkfi/misc/darkirc/darkirc.html) to connect with the team.
 
 ## Further Reading
+
+* [DarkFi Insights](https://dark.fi/insights/)
 
 ### Current Situation and Macro Overview
 

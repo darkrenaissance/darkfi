@@ -79,7 +79,8 @@ fn zkvm_opcodes() -> Result<()> {
 
     let ephem_secret = SecretKey::random(&mut OsRng);
     let pubkey = PublicKey::from_secret(ephem_secret).inner();
-    let (ephem_x, ephem_y) = PublicKey::from(pubkey * fp_mod_fv(ephem_secret.inner())).xy();
+    let (ephem_x, ephem_y) =
+        PublicKey::try_from(pubkey * fp_mod_fv(ephem_secret.inner())).unwrap().xy();
 
     let prover_witnesses = vec![
         Witness::Base(Value::known(pallas::Base::from(value))),

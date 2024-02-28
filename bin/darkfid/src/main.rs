@@ -237,9 +237,14 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     subscribers.insert("proposals", JsonSubscriber::new("blockchain.subscribe_proposals"));
 
     // Initialize syncing P2P network
-    let sync_p2p =
-        spawn_sync_p2p(&blockchain_config.sync_net.into(), &validator, &subscribers, ex.clone())
-            .await;
+    let sync_p2p = spawn_sync_p2p(
+        &blockchain_config.sync_net.into(),
+        &validator,
+        &subscribers,
+        ex.clone(),
+        blockchain_config.miner,
+    )
+    .await;
 
     // Initialize miners P2P network
     let (miners_p2p, rpc_client) = if blockchain_config.miner {
@@ -255,6 +260,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     &validator,
                     &subscribers,
                     ex.clone(),
+                    sync_p2p.clone(),
                 )
                 .await,
             ),

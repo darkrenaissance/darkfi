@@ -31,8 +31,14 @@ pub mod less_than;
 /// is_zero comparison gadget
 pub mod is_zero;
 
+/// is_equal comparison gadget
+pub mod is_equal;
+
 /// Conditional selection
 pub mod cond_select;
 
 /// Conditional selection based on lhs (will output lhs if lhs==0, otherwise rhs)
 pub mod zero_cond;
+
+/// Poseidon-based sparse Merkle tree chip
+pub mod smt;

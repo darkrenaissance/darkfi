@@ -22,8 +22,14 @@ pub use protocol_proposal::{ProposalMessage, ProtocolProposal};
 
 /// Validator blockchain sync protocol
 mod protocol_sync;
-pub use protocol_sync::{ProtocolSync, SyncRequest, SyncResponse};
+pub use protocol_sync::{
+    ForkSyncRequest, ForkSyncResponse, IsSyncedRequest, IsSyncedResponse, ProtocolSync,
+    SyncRequest, SyncResponse,
+};
 
 /// Transaction broadcast protocol
 mod protocol_tx;
 pub use protocol_tx::ProtocolTx;
+
+/// Communications timeout
+pub const COMMS_TIMEOUT: u64 = 15;

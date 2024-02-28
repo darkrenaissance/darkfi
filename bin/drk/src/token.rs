@@ -258,8 +258,8 @@ impl Drk {
             proofs: vec![mint_debris.proofs, auth_debris.proofs],
             signatures: vec![],
         };
-        let mint_sigs = tx.create_sigs(&mut OsRng, &[])?;
-        let auth_sigs = tx.create_sigs(&mut OsRng, &[mint_authority.secret])?;
+        let mint_sigs = tx.create_sigs(&[])?;
+        let auth_sigs = tx.create_sigs(&[mint_authority.secret])?;
         tx.signatures = vec![mint_sigs, auth_sigs];
 
         Ok(tx)
@@ -314,7 +314,7 @@ impl Drk {
         let mut tx_builder =
             TransactionBuilder::new(ContractCallLeaf { call, proofs: debris.proofs }, vec![])?;
         let mut tx = tx_builder.build()?;
-        let sigs = tx.create_sigs(&mut OsRng, &[mint_authority.secret])?;
+        let sigs = tx.create_sigs(&[mint_authority.secret])?;
         tx.signatures = vec![sigs];
 
         Ok(tx)

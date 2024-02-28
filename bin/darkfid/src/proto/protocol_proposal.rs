@@ -22,7 +22,6 @@ use async_trait::async_trait;
 use log::debug;
 use smol::Executor;
 use tinyjson::JsonValue;
-use url::Url;
 
 use darkfi::{
     impl_p2p_message,
@@ -33,9 +32,11 @@ use darkfi::{
     rpc::jsonrpc::JsonSubscriber,
     util::encoding::base64,
     validator::{consensus::Proposal, ValidatorPtr},
-    Result,
+    Error, Result,
 };
 use darkfi_serial::{serialize_async, SerialDecodable, SerialEncodable};
+
+use crate::proto::{ForkSyncRequest, ForkSyncResponse, COMMS_TIMEOUT};
 
 /// Auxiliary [`Proposal`] wrapper structure used for messaging.
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
@@ -48,8 +49,10 @@ pub struct ProtocolProposal {
     jobsman: ProtocolJobsManagerPtr,
     validator: ValidatorPtr,
     p2p: P2pPtr,
-    channel_address: Url,
+    channel: ChannelPtr,
     subscriber: JsonSubscriber,
+    miner: bool,
+    sync_p2p: Option<P2pPtr>,
 }
 
 impl ProtocolProposal {
@@ -58,6 +61,8 @@ impl ProtocolProposal {
         validator: ValidatorPtr,
         p2p: P2pPtr,
         subscriber: JsonSubscriber,
+        miner: bool,
+        sync_p2p: Option<P2pPtr>,
     ) -> Result<ProtocolBasePtr> {
         debug!(
             target: "darkfid::proto::protocol_proposal::init",
@@ -65,6 +70,8 @@ impl ProtocolProposal {
         );
         let msg_subsystem = channel.message_subsystem();
         msg_subsystem.add_dispatch::<ProposalMessage>().await;
+        msg_subsystem.add_dispatch::<ForkSyncRequest>().await;
+        msg_subsystem.add_dispatch::<ForkSyncResponse>().await;
 
         let proposal_sub = channel.subscribe_msg::<ProposalMessage>().await?;
 
@@ -73,14 +80,16 @@ impl ProtocolProposal {
             jobsman: ProtocolJobsManager::new("ProposalProtocol", channel.clone()),
             validator,
             p2p,
-            channel_address: channel.address().clone(),
+            channel,
             subscriber,
+            miner,
+            sync_p2p,
         }))
     }
 
     async fn handle_receive_proposal(self: Arc<Self>) -> Result<()> {
         debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "START");
-        let exclude_list = vec![self.channel_address.clone()];
+        let exclude_list = vec![self.channel.address().clone()];
         loop {
             let proposal = match self.proposal_sub.receive().await {
                 Ok(v) => v,
@@ -103,14 +112,27 @@ impl ProtocolProposal {
                 continue
             }
 
+            // Check if node is connected to the miners network
+            if self.miner {
+                debug!(
+                    target: "darkfid::proto::protocol_proposal::handle_receive_proposal",
+                    "Node is connected to the miners network, skipping..."
+                );
+                continue
+            }
+
             let proposal_copy = (*proposal).clone();
 
             match self.validator.consensus.append_proposal(&proposal_copy.0).await {
                 Ok(()) => {
                     self.p2p.broadcast_with_exclude(&proposal_copy, &exclude_list).await;
+                    if let Some(sync_p2p) = self.sync_p2p.as_ref() {
+                        sync_p2p.broadcast_with_exclude(&proposal_copy, &exclude_list).await;
+                    }
                     let enc_prop =
                         JsonValue::String(base64::encode(&serialize_async(&proposal_copy).await));
                     self.subscriber.notify(vec![enc_prop].into()).await;
+                    continue
                 }
                 Err(e) => {
                     debug!(
@@ -118,8 +140,60 @@ impl ProtocolProposal {
                         "append_proposal fail: {}",
                         e
                     );
+
+                    match e {
+                        Error::ExtendedChainIndexNotFound => { /* Do nothing */ }
+                        _ => continue,
+                    }
                 }
             };
+
+            // If proposal fork chain was not found, we ask our peer for its sequence
+            debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Asking peer for fork sequence");
+            let last = self.validator.blockchain.last()?;
+            let request = ForkSyncRequest { tip: last.1, fork_tip: Some(proposal_copy.0.hash) };
+            let proposals_response_sub = self.channel.subscribe_msg::<ForkSyncResponse>().await?;
+            self.channel.send(&request).await?;
+
+            // Node waits for response
+            let Ok(response) = proposals_response_sub.receive_with_timeout(COMMS_TIMEOUT).await
+            else {
+                continue
+            };
+
+            // Verify and store retrieved proposals
+            debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Processing received proposals");
+
+            // Response should not be empty
+            if response.proposals.is_empty() {
+                debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Peer responded with empty sequence");
+                continue
+            }
+
+            // Sequence length must correspond to requested height
+            if response.proposals.len() as u64 != proposal_copy.0.block.header.height - last.0 {
+                debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Response sequence length is erroneous");
+                continue
+            }
+
+            // First proposal must extend canonical
+            if response.proposals[0].block.header.previous != last.1 {
+                debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Response sequence doesn't extend canonical");
+                continue
+            }
+
+            // Last proposal must be the same as the one requested
+            if response.proposals.last().unwrap().hash != proposal_copy.0.hash {
+                debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Response sequence doesn't correspond to requested tip");
+                continue
+            }
+
+            for proposal in &response.proposals {
+                self.validator.consensus.append_proposal(proposal).await?;
+                // Notify subscriber
+                let enc_prop = JsonValue::String(base64::encode(&serialize_async(proposal).await));
+                self.subscriber.notify(vec![enc_prop].into()).await;
+            }
         }
     }
 }

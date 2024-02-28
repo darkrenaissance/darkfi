@@ -799,7 +799,7 @@ impl Drk {
             for vote in new_dao_votes {
                 for dao in &daos {
                     // TODO: we shouldn't decrypt with all DAOs here
-                    let note = vote.0.note.decrypt(&dao.secret_key);
+                    let note = vote.0.note.decrypt_unsafe(&dao.secret_key)?;
                     eprintln!("Managed to decrypt DAO proposal vote note");
                     let daos_proposals = self.get_dao_proposals(dao.id).await?;
                     let mut proposal_id = None;
@@ -1378,7 +1378,7 @@ impl Drk {
         let call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
         let mut tx_builder = TransactionBuilder::new(ContractCallLeaf { call, proofs }, vec![])?;
         let mut tx = tx_builder.build()?;
-        let sigs = tx.create_sigs(&mut OsRng, &[dao.secret_key])?;
+        let sigs = tx.create_sigs(&[dao.secret_key])?;
         tx.signatures = vec![sigs];
 
         Ok(tx)
@@ -1582,7 +1582,7 @@ impl Drk {
         let call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
         let mut tx_builder = TransactionBuilder::new(ContractCallLeaf { call, proofs }, vec![])?;
         let mut tx = tx_builder.build()?;
-        let sigs = tx.create_sigs(&mut OsRng, &[signature_secret])?;
+        let sigs = tx.create_sigs(&[signature_secret])?;
         tx.signatures = vec![sigs];
 
         Ok(tx)
@@ -1722,7 +1722,7 @@ impl Drk {
         let call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
         let mut tx_builder = TransactionBuilder::new(ContractCallLeaf { call, proofs }, vec![])?;
         let mut tx = tx_builder.build()?;
-        let sigs = tx.create_sigs(&mut OsRng, &input_secrets)?;
+        let sigs = tx.create_sigs(&input_secrets)?;
         tx.signatures = vec![sigs];
 
         Ok(tx)

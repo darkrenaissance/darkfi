@@ -25,14 +25,16 @@ use pasta_curves::{
 use std::io::Cursor;
 use subtle::CtOption;
 
-/// Hash `a` and `b` together with a prefix `persona` and return a `pallas::Scalar`
-/// element from the digest.
-pub fn hash_to_scalar(persona: &[u8], a: &[u8], b: &[u8]) -> pallas::Scalar {
+/// Hash a slice of values together with a prefix `persona` using BLAKE2b
+/// and return a `pallas::Scalar` element from the digest.
+pub fn hash_to_scalar(persona: &[u8], vals: &[&[u8]]) -> pallas::Scalar {
     let mut hasher = blake2b_simd::Params::new().hash_length(64).personal(persona).to_state();
-    hasher.update(a);
-    hasher.update(b);
-    let ret = hasher.finalize();
-    pallas::Scalar::from_uniform_bytes(ret.as_array())
+
+    for v in vals {
+        hasher.update(v);
+    }
+
+    pallas::Scalar::from_uniform_bytes(hasher.finalize().as_array())
 }
 
 /// Converts from pallas::Base to pallas::Scalar (aka $x \pmod{r_\mathbb{P}}$).

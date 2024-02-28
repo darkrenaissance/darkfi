@@ -31,7 +31,6 @@ use darkfi_sdk::{
 };
 use darkfi_serial::AsyncEncodable;
 use log::debug;
-use rand::rngs::OsRng;
 
 use super::{Holder, TestHarness};
 
@@ -90,7 +89,7 @@ impl TestHarness {
         let mut fee_signature_secrets = None;
         if self.verify_fees {
             let mut tx = tx_builder.build()?;
-            let sigs = tx.create_sigs(&mut OsRng, &secrets.signature_secrets)?;
+            let sigs = tx.create_sigs(&secrets.signature_secrets)?;
             tx.signatures = vec![sigs];
 
             let (fee_call, fee_proofs, fee_secrets, spent_fee_coins, fee_call_params) =
@@ -105,10 +104,10 @@ impl TestHarness {
 
         // Now build the actual transaction and sign it with all necessary keys.
         let mut tx = tx_builder.build()?;
-        let sigs = tx.create_sigs(&mut OsRng, &secrets.signature_secrets)?;
+        let sigs = tx.create_sigs(&secrets.signature_secrets)?;
         tx.signatures = vec![sigs];
         if let Some(fee_signature_secrets) = fee_signature_secrets {
-            let sigs = tx.create_sigs(&mut OsRng, &fee_signature_secrets)?;
+            let sigs = tx.create_sigs(&fee_signature_secrets)?;
             tx.signatures.push(sigs);
         }
 

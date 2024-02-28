@@ -16,8 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use rand::rngs::OsRng;
-
 use darkfi::{
     tx::{ContractCallLeaf, Transaction, TransactionBuilder},
     util::parse::{decode_base10, encode_base10},
@@ -117,7 +115,7 @@ impl Drk {
         let mut tx_builder =
             TransactionBuilder::new(ContractCallLeaf { call, proofs: secrets.proofs }, vec![])?;
         let mut tx = tx_builder.build()?;
-        let sigs = tx.create_sigs(&mut OsRng, &secrets.signature_secrets)?;
+        let sigs = tx.create_sigs(&secrets.signature_secrets)?;
         tx.signatures = vec![sigs];
 
         // We need to mark the coins we've spent in our wallet
