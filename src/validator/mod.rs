@@ -306,16 +306,35 @@ impl Validator {
         Ok(())
     }
 
+    /// The node locks its consensus state and tries to append provided proposal.
+    pub async fn append_proposal(&self, proposal: &Proposal) -> Result<()> {
+        // Grab append lock so we restrict concurrent calls of this function
+        let append_lock = self.consensus.append_lock.write().await;
+
+        // Execute append
+        self.consensus.append_proposal(proposal).await?;
+
+        // Release append lock
+        drop(append_lock);
+
+        Ok(())
+    }
+
     /// The node checks if proposals can be finalized.
     /// If proposals are found, node appends them to canonical, excluding the
     /// last one, and rebuild the finalized fork to contain the last one.
     pub async fn finalization(&self) -> Result<Vec<BlockInfo>> {
+        // Grab append lock so no new proposals can be appended while
+        // we execute finalization
+        let append_lock = self.consensus.append_lock.write().await;
+
         info!(target: "validator::finalization", "Performing finalization check");
 
         // Grab blocks that can be finalized
         let mut finalized = self.consensus.finalization().await?;
         if finalized.is_empty() {
             info!(target: "validator::finalization", "No proposals can be finalized");
+            drop(append_lock);
             return Ok(vec![])
         }
 
@@ -333,6 +352,9 @@ impl Validator {
         *self.consensus.forks.write().await = vec![];
         self.consensus.append_proposal(&Proposal::new(last)?).await?;
         info!(target: "validator::finalization", "Finalization completed!");
+
+        // Release append lock
+        drop(append_lock);
 
         Ok(finalized)
     }

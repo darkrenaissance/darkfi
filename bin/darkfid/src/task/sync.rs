@@ -134,7 +134,7 @@ pub async fn sync_task(node: &Darkfid) -> Result<()> {
     // Verify and store retrieved proposals
     debug!(target: "darkfid::task::sync_task", "Processing received proposals");
     for proposal in &response.proposals {
-        node.validator.consensus.append_proposal(proposal).await?;
+        node.validator.append_proposal(proposal).await?;
         // Notify subscriber
         let enc_prop = JsonValue::String(base64::encode(&serialize_async(proposal).await));
         proposal_notif_sub.notify(vec![enc_prop].into()).await;

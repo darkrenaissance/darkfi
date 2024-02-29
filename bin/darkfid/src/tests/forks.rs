@@ -34,7 +34,7 @@ fn forks() -> Result<()> {
         let module = PoWModule::new(blockchain.clone(), 90, None)?;
 
         // Create a fork
-        let fork = Fork::new(&blockchain, module).await?;
+        let fork = Fork::new(blockchain.clone(), module).await?;
 
         // Add a dummy record to fork
         fork.overlay.lock().unwrap().order.insert(&[0], &[record0])?;
