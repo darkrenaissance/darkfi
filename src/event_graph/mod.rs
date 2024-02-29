@@ -24,18 +24,26 @@ use std::{
 
 use async_recursion::async_recursion;
 use darkfi_serial::{deserialize_async, serialize_async};
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use num_bigint::BigUint;
 use sled_overlay::SledTreeOverlay;
 use smol::{
     lock::{OnceCell, RwLock},
     Executor,
 };
+use tinyjson::JsonValue::{self};
 
 use crate::{
     event_graph::util::seconds_until_next_rotation,
     net::P2pPtr,
-    system::{sleep, timeout::timeout, StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr},
+    rpc::{
+        jsonrpc::{JsonResponse, JsonResult},
+        util::json_map,
+    },
+    system::{
+        sleep, timeout::timeout, StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr,
+        Subscription,
+    },
     Error, Result,
 };
 
@@ -50,6 +58,10 @@ use proto::{EventRep, EventReq, TipRep, TipReq, REPLY_TIMEOUT};
 /// Utility functions
 mod util;
 use util::{generate_genesis, next_rotation_timestamp};
+
+// Debugging event graph
+pub(crate) mod deg;
+use deg::DegEvent;
 
 #[cfg(test)]
 mod tests;
@@ -95,6 +107,11 @@ pub struct EventGraph {
     days_rotation: u64,
     /// Flag signalling DAG has finished initial sync
     pub synced: RwLock<bool>,
+
+    /// Enable graph debugging
+    pub deg_enabled: RwLock<bool>,
+    /// The subscriber for which we can give dnet info over
+    deg_subscriber: SubscriberPtr<DegEvent>,
 }
 
 impl EventGraph {
@@ -124,6 +141,8 @@ impl EventGraph {
             current_genesis: RwLock::new(current_genesis.clone()),
             days_rotation,
             synced: RwLock::new(false),
+            deg_enabled: RwLock::new(false),
+            deg_subscriber: Subscriber::new(),
         });
 
         // Check if we have it in our DAG.
@@ -775,5 +794,59 @@ impl EventGraph {
         parents2.sort_unstable();
 
         parents1 == parents2
+    }
+
+    /// Enable graph debugging
+    pub async fn deg_enable(&self) {
+        *self.deg_enabled.write().await = true;
+        warn!("[EVENTGRAPH] Graph debugging enabled!");
+    }
+
+    /// Disable graph debugging
+    pub async fn deg_disable(&self) {
+        *self.deg_enabled.write().await = false;
+        warn!("[EVENTGRAPH] Graph debugging disabled!");
+    }
+
+    /// Subscribe to dnet events
+    pub async fn deg_subscribe(&self) -> Subscription<DegEvent> {
+        self.deg_subscriber.clone().subscribe().await
+    }
+
+    /// Send a deg notification over the subscriber
+    pub async fn deg_notify(&self, event: DegEvent) {
+        self.deg_subscriber.notify(event).await;
+    }
+
+    pub async fn eventgraph_info(&self, id: u16, _params: JsonValue) -> JsonResult {
+        let u_tips = self.unreferenced_tips.read().await.clone();
+        let u_tips_vals = u_tips
+            .into_values()
+            .map(|v| v.into_iter().map(|x| JsonValue::String(x.to_string())).collect::<Vec<_>>())
+            .collect::<Vec<_>>()
+            .concat();
+
+        let b_ids = self
+            .broadcasted_ids
+            .read()
+            .await
+            .clone()
+            .into_iter()
+            .map(|id| JsonValue::String(id.to_string()))
+            .collect::<Vec<_>>();
+
+        let values = json_map([
+            ("unreferenced_tips", JsonValue::Array(u_tips_vals)),
+            ("broadcasted_ids", JsonValue::Array(b_ids)),
+            ("synced", JsonValue::Boolean(*self.synced.read().await)),
+            (
+                "current_genesis",
+                JsonValue::String(self.current_genesis.read().await.clone().id().to_string()),
+            ),
+        ]);
+
+        let result = JsonValue::Object(HashMap::from([("eventgraph_info".to_string(), values)]));
+
+        JsonResponse::new(result, id).into()
     }
 }
