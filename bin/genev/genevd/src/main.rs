@@ -170,6 +170,30 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
         executor.clone(),
     );
 
+    info!("Starting dnet subs task");
+    let dnet_sub = JsonSubscriber::new("dnet.subscribe_events");
+    let dnet_sub_ = dnet_sub.clone();
+    let p2p_ = p2p.clone();
+    let dnet_task = StoppableTask::new();
+    dnet_task.clone().start(
+        async move {
+            let dnet_sub = p2p_.dnet_subscribe().await;
+            loop {
+                let event = dnet_sub.receive().await;
+                debug!("Got dnet event: {:?}", event);
+                dnet_sub_.notify(vec![event.into()].into()).await;
+            }
+        },
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                Err(e) => panic!("{}", e),
+            }
+        },
+        Error::DetachedTaskStopped,
+        executor.clone(),
+    );
+
     info!("Starting deg subs task");
     let deg_sub = JsonSubscriber::new("deg.subscribe_events");
     let deg_sub_ = deg_sub.clone();
@@ -201,6 +225,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
         "Alolymous".to_string(),
         event_graph.clone(),
         p2p.clone(),
+        dnet_sub,
         deg_sub,
     ));
     let rpc_task = StoppableTask::new();
@@ -224,6 +249,9 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
 
     info!(target: "genevd", "Stopping JSON-RPC server...");
     rpc_task.stop().await;
+
+    info!(target: "genevd", "Stopping Debugging tasks...");
+    dnet_task.stop().await;
     deg_task.stop().await;
 
     info!(target: "genevd", "Stopping sync loop task...");

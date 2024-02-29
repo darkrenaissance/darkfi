@@ -28,6 +28,7 @@ use darkfi::{
     net,
     rpc::{
         jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult, JsonSubscriber},
+        p2p_method::HandlerP2p,
         server::RequestHandler,
     },
     system::StoppableTaskPtr,
@@ -42,6 +43,7 @@ pub struct JsonRpcInterface {
     event_graph: EventGraphPtr,
     p2p: net::P2pPtr,
     rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
+    dnet_sub: JsonSubscriber,
     deg_sub: JsonSubscriber,
 }
 
@@ -53,7 +55,9 @@ impl RequestHandler for JsonRpcInterface {
             "list" => self.list(req.id, req.params).await,
 
             "ping" => self.pong(req.id, req.params).await,
-            "dnet_switch" => self.dnet_switch(req.id, req.params).await,
+            "dnet.subscribe_events" => self.dnet_subscribe_events(req.id, req.params).await,
+            "dnet.switch" => self.dnet_switch(req.id, req.params).await,
+            "p2p.get_info" => self.p2p_get_info(req.id, req.params).await,
 
             "deg.switch" => self.deg_switch(req.id, req.params).await,
             "deg.subscribe_events" => self.deg_subscribe_events(req.id, req.params).await,
@@ -69,14 +73,44 @@ impl RequestHandler for JsonRpcInterface {
     }
 }
 
+impl HandlerP2p for JsonRpcInterface {
+    fn p2p(&self) -> net::P2pPtr {
+        self.p2p.clone()
+    }
+}
+
 impl JsonRpcInterface {
     pub fn new(
         _nickname: String,
         event_graph: EventGraphPtr,
         p2p: net::P2pPtr,
+        dnet_sub: JsonSubscriber,
         deg_sub: JsonSubscriber,
     ) -> Self {
-        Self { _nickname, event_graph, p2p, rpc_connections: Mutex::new(HashSet::new()), deg_sub }
+        Self {
+            _nickname,
+            event_graph,
+            p2p,
+            rpc_connections: Mutex::new(HashSet::new()),
+            dnet_sub,
+            deg_sub,
+        }
+    }
+
+    // RPCAPI:
+    // Initializes a subscription to p2p dnet events.
+    // Once a subscription is established, `darkirc` will send JSON-RPC notifications of
+    // new network events to the subscriber.
+    //
+    // --> {"jsonrpc": "2.0", "method": "dnet.subscribe_events", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "method": "dnet.subscribe_events", "params": [`event`]}
+    pub async fn dnet_subscribe_events(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
+        if !params.is_empty() {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        }
+
+        self.dnet_sub.clone().into()
     }
 
     // RPCAPI:
@@ -104,7 +138,7 @@ impl JsonRpcInterface {
     }
 
     // RPCAPI:
-    // Initializes a subscription to p2p deg events.
+    // Initializes a subscription to deg events.
     // Once a subscription is established, apps using eventgraph will send JSON-RPC notifications of
     // new eventgraph events to the subscriber.
     //
