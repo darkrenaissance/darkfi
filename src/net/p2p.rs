@@ -248,6 +248,11 @@ impl P2p {
         self.pending.lock().await.insert(addr.clone())
     }
 
+    /// Check whether a connection is currently pending.
+    pub(super) async fn is_pending(&self, addr: &Url) -> bool {
+        self.pending.lock().await.contains(addr)
+    }
+
     /// Remove a channel from the list of pending channels.
     pub(super) async fn remove_pending(&self, addr: &Url) {
         self.pending.lock().await.remove(addr);
