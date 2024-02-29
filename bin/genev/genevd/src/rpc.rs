@@ -27,12 +27,13 @@ use darkfi::{
     event_graph::{proto::EventPut, Event, EventGraphPtr},
     net,
     rpc::{
-        jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult},
+        jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult, JsonSubscriber},
         server::RequestHandler,
     },
     system::StoppableTaskPtr,
     util::encoding::base64,
 };
+
 use darkfi_serial::{deserialize, deserialize_async_partial, serialize_async};
 use genevd::GenEvent;
 
@@ -41,6 +42,7 @@ pub struct JsonRpcInterface {
     event_graph: EventGraphPtr,
     p2p: net::P2pPtr,
     rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
+    deg_sub: JsonSubscriber,
 }
 
 #[async_trait]
@@ -52,6 +54,12 @@ impl RequestHandler for JsonRpcInterface {
 
             "ping" => self.pong(req.id, req.params).await,
             "dnet_switch" => self.dnet_switch(req.id, req.params).await,
+
+            "deg.switch" => self.deg_switch(req.id, req.params).await,
+            "deg.subscribe_events" => self.deg_subscribe_events(req.id, req.params).await,
+
+            "eventgraph.get_info" => self.eg_get_info(req.id, req.params).await,
+
             _ => return JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         }
     }
@@ -62,8 +70,13 @@ impl RequestHandler for JsonRpcInterface {
 }
 
 impl JsonRpcInterface {
-    pub fn new(_nickname: String, event_graph: EventGraphPtr, p2p: net::P2pPtr) -> Self {
-        Self { _nickname, event_graph, p2p, rpc_connections: Mutex::new(HashSet::new()) }
+    pub fn new(
+        _nickname: String,
+        event_graph: EventGraphPtr,
+        p2p: net::P2pPtr,
+        deg_sub: JsonSubscriber,
+    ) -> Self {
+        Self { _nickname, event_graph, p2p, rpc_connections: Mutex::new(HashSet::new()), deg_sub }
     }
 
     // RPCAPI:
@@ -88,6 +101,60 @@ impl JsonRpcInterface {
         }
 
         JsonResponse::new(JsonValue::Boolean(true), id).into()
+    }
+
+    // RPCAPI:
+    // Initializes a subscription to p2p deg events.
+    // Once a subscription is established, apps using eventgraph will send JSON-RPC notifications of
+    // new eventgraph events to the subscriber.
+    //
+    // --> {"jsonrpc": "2.0", "method": "deg.subscribe_events", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "method": "deg.subscribe_events", "params": [`event`]}
+    pub async fn deg_subscribe_events(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
+        if !params.is_empty() {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        }
+
+        self.deg_sub.clone().into()
+    }
+
+    // RPCAPI:
+    // Activate or deactivate deg in the EVENTGRAPH.
+    // By sending `true`, deg will be activated, and by sending `false` deg
+    // will be deactivated. Returns `true` on success.
+    //
+    // --> {"jsonrpc": "2.0", "method": "deg.switch", "params": [true], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
+    async fn deg_switch(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
+        if params.len() != 1 || !params[0].is_bool() {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        }
+
+        let switch = params[0].get::<bool>().unwrap();
+
+        if *switch {
+            self.event_graph.deg_enable().await;
+        } else {
+            self.event_graph.deg_disable().await;
+        }
+
+        JsonResponse::new(JsonValue::Boolean(true), id).into()
+    }
+
+    // RPCAPI:
+    // Get EVENTGRAPH info.
+    //
+    // --> {"jsonrpc": "2.0", "method": "deg.switch", "params": [true], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
+    async fn eg_get_info(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params_ = params.get::<Vec<JsonValue>>().unwrap();
+        if !params_.is_empty() {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        }
+
+        self.event_graph.eventgraph_info(id, params).await
     }
 
     // RPCAPI:

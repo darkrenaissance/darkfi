@@ -17,7 +17,7 @@
  */
 
 use super::util::*;
-use crate::net;
+use crate::{event_graph, net};
 
 #[cfg(feature = "net")]
 impl From<net::channel::ChannelInfo> for JsonValue {
@@ -119,6 +119,31 @@ impl From<net::dnet::DnetEvent> for JsonValue {
             }
             net::dnet::DnetEvent::OutboundPeerDiscovery(info) => {
                 json_map([("event", json_str("outbound_peer_discovery")), ("info", info.into())])
+            }
+        }
+    }
+}
+
+#[cfg(feature = "net")]
+impl From<event_graph::deg::MessageInfo> for JsonValue {
+    fn from(info: event_graph::deg::MessageInfo) -> JsonValue {
+        json_map([
+            ("info", JsonArray(info.info.into_iter().map(JsonStr).collect())),
+            ("cmd", JsonStr(info.cmd)),
+            ("time", JsonStr(info.time.0.to_string())),
+        ])
+    }
+}
+
+#[cfg(feature = "net")]
+impl From<event_graph::deg::DegEvent> for JsonValue {
+    fn from(event: event_graph::deg::DegEvent) -> JsonValue {
+        match event {
+            event_graph::deg::DegEvent::SendMessage(info) => {
+                json_map([("event", json_str("send")), ("info", info.into())])
+            }
+            event_graph::deg::DegEvent::RecvMessage(info) => {
+                json_map([("event", json_str("recv")), ("info", info.into())])
             }
         }
     }
