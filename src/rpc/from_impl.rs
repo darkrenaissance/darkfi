@@ -17,7 +17,10 @@
  */
 
 use super::util::*;
-use crate::{event_graph, net};
+use crate::net;
+
+#[cfg(feature = "event-graph")]
+use crate::event_graph;
 
 #[cfg(feature = "net")]
 impl From<net::channel::ChannelInfo> for JsonValue {
@@ -124,7 +127,7 @@ impl From<net::dnet::DnetEvent> for JsonValue {
     }
 }
 
-#[cfg(feature = "net")]
+#[cfg(feature = "event-graph")]
 impl From<event_graph::deg::MessageInfo> for JsonValue {
     fn from(info: event_graph::deg::MessageInfo) -> JsonValue {
         json_map([
@@ -135,7 +138,7 @@ impl From<event_graph::deg::MessageInfo> for JsonValue {
     }
 }
 
-#[cfg(feature = "net")]
+#[cfg(feature = "event-graph")]
 impl From<event_graph::deg::DegEvent> for JsonValue {
     fn from(event: event_graph::deg::DegEvent) -> JsonValue {
         match event {

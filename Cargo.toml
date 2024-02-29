@@ -206,6 +206,7 @@ event-graph = [
     "darkfi-serial/hash",
 
     "net",
+    "rpc",
     "system",
     "util",
 ]
