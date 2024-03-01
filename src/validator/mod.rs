@@ -320,9 +320,9 @@ impl Validator {
         Ok(())
     }
 
-    /// The node checks if proposals can be finalized.
-    /// If proposals are found, node appends them to canonical, excluding the
-    /// last one, and rebuild the finalized fork to contain the last one.
+    /// The node checks if best fork can be finalized.
+    /// If proposals can be finalized, node appends them to canonical,
+    /// and rebuilds the best fork.
     pub async fn finalization(&self) -> Result<Vec<BlockInfo>> {
         // Grab append lock so no new proposals can be appended while
         // we execute finalization
@@ -330,33 +330,41 @@ impl Validator {
 
         info!(target: "validator::finalization", "Performing finalization check");
 
-        // Grab blocks that can be finalized
-        let mut finalized = self.consensus.finalization().await?;
-        if finalized.is_empty() {
+        // Grab best fork index that can be finalized
+        let finalized_fork = self.consensus.finalization().await?;
+        if finalized_fork.is_none() {
             info!(target: "validator::finalization", "No proposals can be finalized");
             drop(append_lock);
             return Ok(vec![])
         }
 
-        // Exclude last proposal
-        let last = finalized.pop().unwrap();
+        // Grab fork proposals sequence
+        let forks = self.consensus.forks.read().await;
+        let fork = &forks[finalized_fork.unwrap()];
+        let mut proposals = fork.overlay.lock().unwrap().get_blocks_by_hash(&fork.proposals)?;
+        drop(forks);
+
+        // Find the excess over finalization threshold
+        let excess = (proposals.len() - self.consensus.finalization_threshold) + 1;
+
+        // Grab non finalized blocks
+        let non_finalized = proposals.split_off(excess);
 
         // Append finalized blocks
-        info!(target: "validator::finalization", "Finalizing {} proposals:", finalized.len());
-        for block in &finalized {
+        info!(target: "validator::finalization", "Finalizing proposals:");
+        for block in &proposals {
             info!(target: "validator::finalization", "\t{} - {}", block.hash()?, block.header.height);
         }
-        self.add_blocks(&finalized).await?;
+        self.add_blocks(&proposals).await?;
 
-        // Rebuild best fork using last proposal
-        *self.consensus.forks.write().await = vec![];
-        self.consensus.append_proposal(&Proposal::new(last)?).await?;
+        // Rebuild best fork using rest proposals
+        self.consensus.rebuild_best_fork(&non_finalized).await?;
         info!(target: "validator::finalization", "Finalization completed!");
 
         // Release append lock
         drop(append_lock);
 
-        Ok(finalized)
+        Ok(proposals)
     }
 
     // ==========================

@@ -202,13 +202,14 @@ impl Consensus {
         Ok((fork, None))
     }
 
+    /// Check if best fork proposals can be finalized.
     /// Consensus finalization logic:
-    /// - If the current best fork has reached greater length than the security threshold, and
-    ///   no other fork exist with same rank, all proposals excluding the last one in that fork
-    //    can be finalized (append to canonical blockchain).
-    /// When best fork can be finalized, blocks(proposals) should be appended to canonical, excluding the
-    /// last one, and fork should be rebuilt.
-    pub async fn finalization(&self) -> Result<Vec<BlockInfo>> {
+    /// - If the current best fork has reached greater length than the security threshold,
+    ///   and no other fork exist with same rank, first proposal(s) in that fork can be
+    ///   appended to canonical blockchain (finalize).
+    /// When best fork can be finalized, first block(s) should be appended to canonical,
+    /// and fork should be rebuilt.
+    pub async fn finalization(&self) -> Result<Option<usize>> {
         debug!(target: "validator::consensus::finalization", "Started finalization check");
 
         // Grab best forks
@@ -217,7 +218,7 @@ impl Consensus {
         // Check if multiple forks with same rank were found
         if forks_indexes.len() > 1 {
             debug!(target: "validator::consensus::finalization", "Multiple best ranked forks were found");
-            return Ok(vec![])
+            return Ok(None)
         }
 
         // Grag the actual best fork
@@ -227,16 +228,13 @@ impl Consensus {
         let length = fork.proposals.len();
         if length < self.finalization_threshold {
             debug!(target: "validator::consensus::finalization", "Nothing to finalize yet, best fork size: {}", length);
-            return Ok(vec![])
+            return Ok(None)
         }
-
-        // Grab finalized blocks
-        let finalized = fork.overlay.lock().unwrap().get_blocks_by_hash(&fork.proposals)?;
 
         // Drop forks lock
         drop(forks);
 
-        Ok(finalized)
+        Ok(Some(forks_indexes[0]))
     }
 
     /// Auxilliary function to retrieve a fork proposals.
@@ -310,6 +308,60 @@ impl Consensus {
         }
 
         Ok(ret)
+    }
+
+    /// Auxilliary function to purge current forks and build one from the
+    /// provided proposals sequence.
+    pub async fn rebuild_best_fork(&self, proposals: &[BlockInfo]) -> Result<()> {
+        // Grab a lock over current forks
+        let mut forks = self.forks.write().await;
+
+        // Purge existing forks;
+        *forks = vec![];
+
+        // Create a new fork extending canonical
+        let mut fork = Fork::new(self.blockchain.clone(), self.module.read().await.clone()).await?;
+
+        // Check if we got any proposals to append
+        if proposals.is_empty() {
+            // Push the fork
+            forks.push(fork);
+
+            // Drop forks lock
+            drop(forks);
+
+            return Ok(())
+        }
+
+        // Grab overlay last block
+        let mut previous = &fork.overlay.lock().unwrap().last_block()?;
+
+        // Append all proposals
+        for proposal in proposals {
+            let proposal_hash = proposal.hash()?;
+            if verify_block(&fork.overlay, &fork.module, proposal, previous).await.is_err() {
+                error!(target: "validator::consensus::rebuild_best_fork", "Erroneous proposal block found");
+                fork.overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
+                return Err(Error::BlockIsInvalid(proposal_hash.to_string()))
+            };
+
+            // Append proposal to the fork
+            fork.append_proposal(proposal_hash).await?;
+
+            // Update PoW module
+            fork.module.append(proposal.header.timestamp.0, &fork.module.next_difficulty()?);
+
+            // Set proposals as previous
+            previous = proposal;
+        }
+
+        // Push the fork
+        forks.push(fork);
+
+        // Drop forks lock
+        drop(forks);
+
+        Ok(())
     }
 }
 

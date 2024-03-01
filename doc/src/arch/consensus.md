@@ -169,14 +169,18 @@ Extending the canonical blockchain with a new block proposal:
 
 When the finalization check kicks in, each node will grab its best fork.
 
+A security threshold is set, which refers to the height where the probability
+to produce a fork, able to reorg the current best ranking fork reaches zero,
+similar to the # of block confirmation used by other PoW based protocols.
+
 If more than one fork exists with same rank, the node will not finalize any
 block proposals. If the fork's length exceeds the security threshold, the node
-will finalize all block proposals, excluding the last ($n$)-block proposal, by
-appending them to the canonical blockchain. We exclude the last ($n$)-block
-proposal to eliminate network race conditions for blocks of the same height.
+will push (finalize) its first proposal to the canonical blockchain. The fork
+acts as a queue (buffer) for to-be-finalized proposals.
 
-Once finalized, all the remaining fork chains are removed from the node's
-memory pool.
+Once a finalization occurs, all the remaining fork chains are removed from the
+node's memory pool, keeping just the best ranking one, along with its remaining
+proposals.
 
 Because of this design, finalization cannot occur while there are competing
 fork chains of the same rank whose length exceeds the security threshold. In
