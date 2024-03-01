@@ -10,4 +10,4 @@
 rpc_listen = "tcp://127.0.0.1:48667"
 
 # PoW miner number of threads to use
-threads = 2
+threads = 1
