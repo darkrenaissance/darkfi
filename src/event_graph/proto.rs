@@ -533,8 +533,6 @@ impl ProtocolEventGraph {
                 time: NanoTimestamp::current_time(),
             });
 
-            let _ = self.event_graph.eventgraph_info(1, tinyjson::JsonValue::Array(vec![])).await;
-
             self.channel.send(&TipRep(layers)).await?;
         }
     }

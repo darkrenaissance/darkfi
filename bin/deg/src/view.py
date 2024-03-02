@@ -190,7 +190,15 @@ class View():
             info = self.model.nodes.get(node_name)
 
             if key in info:
-                ev = info.get(key)
+                ev = list(info.get(key))
+                if info['msgs']:
+                    msg = info['msgs'].get(node_name)
+                    for m in msg:
+                        event = m[1]
+                        event_info = m[2]
+                        msg = m[3]
+                        if event_info == "dag_insert" and event == "send":
+                            ev = msg
                 self.pile.contents.append((
                     urwid.Text(f" {ev}"),
                     self.pile.options()))
@@ -237,16 +245,13 @@ class View():
     def draw_events(self, nodes):
         for name, info in nodes:
             if bool(info) and name in self.known_nodes:
-                # info = info ['result']
                 self.fill_right_box()
-
-                # logging.debug(f"info: {info}")
                 
                 if 'unreferenced_tips' in info:
                         val = info['unreferenced_tips']
                         if not bool(val) or not val == None:
                             continue
-                        logging.debug(f"Refresh: unreferenced_tips online")
+                        logging.debug(f"Refresh: unreferenced_tips")
                         self.refresh = True
 
     async def update_view(self, evloop: asyncio.AbstractEventLoop,
@@ -267,7 +272,5 @@ class View():
             self.sort(nodes)
             
             await self.display(nodes)
-
-            # logging.debug(f"nodes: {nodes}")
 
             self.draw_events(nodes)

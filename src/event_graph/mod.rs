@@ -44,6 +44,7 @@ use crate::{
         sleep, timeout::timeout, StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr,
         Subscription,
     },
+    util::time::NanoTimestamp,
     Error, Result,
 };
 
@@ -107,10 +108,9 @@ pub struct EventGraph {
     days_rotation: u64,
     /// Flag signalling DAG has finished initial sync
     pub synced: RwLock<bool>,
-
     /// Enable graph debugging
     pub deg_enabled: RwLock<bool>,
-    /// The subscriber for which we can give dnet info over
+    /// The subscriber for which we can give deg info over
     deg_subscriber: SubscriberPtr<DegEvent>,
 }
 
@@ -625,6 +625,25 @@ impl EventGraph {
         drop(unreferenced_tips);
         drop(broadcasted_ids);
 
+        let info = self
+            .unreferenced_tips
+            .read()
+            .await
+            .clone()
+            .into_values()
+            .map(|v| v.into_iter().map(|id| id.to_string()).collect::<Vec<_>>())
+            .collect::<Vec<_>>()
+            .concat();
+
+        if *self.deg_enabled.read().await {
+            let event = DegEvent::SendMessage(deg::SendMessage {
+                info,
+                cmd: "dag_insert".to_string(),
+                time: NanoTimestamp::current_time(),
+            });
+            self.deg_notify(event).await;
+        };
+
         Ok(ids)
     }
 
@@ -808,7 +827,7 @@ impl EventGraph {
         warn!("[EVENTGRAPH] Graph debugging disabled!");
     }
 
-    /// Subscribe to dnet events
+    /// Subscribe to deg events
     pub async fn deg_subscribe(&self) -> Subscription<DegEvent> {
         self.deg_subscriber.clone().subscribe().await
     }

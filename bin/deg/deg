@@ -100,8 +100,6 @@ class Degview:
             if not values:
                 self.model.add_offline(info)
 
-            logging.debug(f"values: {values}")
-
             if 'result' in values:
                 result = values.get('result')
                 if 'eventgraph_info' in result:
