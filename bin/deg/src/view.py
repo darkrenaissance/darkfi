@@ -129,9 +129,13 @@ class View():
             return
         session = focus_w[0].session
 
+        node_name = focus_w[0].node_name
+        info = self.model.nodes.get(node_name)
+
+        if node_name not in self.live_nodes:
+            return
+
         if session == "node":
-            node_name = focus_w[0].node_name
-            info = self.model.nodes.get(node_name)
             if info['msgs']:
                 msg = info['msgs'].get(node_name)
                 for m in msg:
@@ -144,23 +148,15 @@ class View():
                             self.pile.options()))
 
         if session == "current_genesis":
-            key = "current_genesis"
-            node_name = focus_w[0].node_name
-            info = self.model.nodes.get(node_name)
-
-            if key in info:
-                ev = info.get(key)
+            if session in info:
+                ev = info.get(session)
                 self.pile.contents.append((
                     urwid.Text(f" {ev}"),
                     self.pile.options()))
         
         if session == "broadcasted_ids":
-            key = "broadcasted_ids"
-            node_name = focus_w[0].node_name
-            info = self.model.nodes.get(node_name)
-
-            if key in info:
-                ev = list(info.get(key))
+            if session in info:
+                ev = list(info.get(session))
                 if info['msgs']:
                     msg = info['msgs'].get(node_name)
                     for m in msg:
@@ -174,23 +170,15 @@ class View():
                     self.pile.options()))
 
         if session == "synced":
-            key = "synced"
-            node_name = focus_w[0].node_name
-            info = self.model.nodes.get(node_name)
-
-            if key in info:
-                ev = info.get(key)
+            if session in info:
+                ev = info.get(session)
                 self.pile.contents.append((
                     urwid.Text(f" {ev}"),
                     self.pile.options()))
         
         if session == "unreferenced_tips":
-            key = "unreferenced_tips"
-            node_name = focus_w[0].node_name
-            info = self.model.nodes.get(node_name)
-
-            if key in info:
-                ev = list(info.get(key))
+            if session in info:
+                ev = list(info.get(session))
                 if info['msgs']:
                     msg = info['msgs'].get(node_name)
                     for m in msg:
