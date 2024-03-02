@@ -342,6 +342,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     info!("Stopping JSON-RPC server");
     rpc_task.stop().await;
     dnet_task.stop().await;
+    deg_task.stop().await;
 
     info!("Stopping IRC server");
     irc_task.stop().await;
