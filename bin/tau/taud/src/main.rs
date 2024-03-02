@@ -484,6 +484,30 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
         executor.clone(),
     );
 
+    info!("Starting deg subs task");
+    let deg_sub = JsonSubscriber::new("deg.subscribe_events");
+    let deg_sub_ = deg_sub.clone();
+    let event_graph_ = event_graph.clone();
+    let deg_task = StoppableTask::new();
+    deg_task.clone().start(
+        async move {
+            let deg_sub = event_graph_.deg_subscribe().await;
+            loop {
+                let event = deg_sub.receive().await;
+                debug!("Got deg event: {:?}", event);
+                deg_sub_.notify(vec![event.into()].into()).await;
+            }
+        },
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                Err(e) => panic!("{}", e),
+            }
+        },
+        Error::DetachedTaskStopped,
+        executor.clone(),
+    );
+
     //
     // RPC interface
     //
@@ -493,7 +517,9 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
         nickname.unwrap(),
         workspaces.clone(),
         p2p.clone(),
+        event_graph.clone(),
         json_sub,
+        deg_sub,
     ));
     let rpc_task = StoppableTask::new();
     rpc_task.clone().start(
