@@ -119,6 +119,8 @@ pub struct DarkIrc {
     rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
     /// dnet JSON-RPC subscriber
     dnet_sub: JsonSubscriber,
+    /// deg JSON-RPC subscriber
+    deg_sub: JsonSubscriber,
 }
 
 impl DarkIrc {
@@ -127,8 +129,16 @@ impl DarkIrc {
         sled: sled::Db,
         event_graph: EventGraphPtr,
         dnet_sub: JsonSubscriber,
+        deg_sub: JsonSubscriber,
     ) -> Self {
-        Self { p2p, sled, event_graph, rpc_connections: Mutex::new(HashSet::new()), dnet_sub }
+        Self {
+            p2p,
+            sled,
+            event_graph,
+            rpc_connections: Mutex::new(HashSet::new()),
+            dnet_sub,
+            deg_sub,
+        }
     }
 }
 
@@ -220,9 +230,38 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         ex.clone(),
     );
 
+    info!("Starting deg subs task");
+    let deg_sub = JsonSubscriber::new("deg.subscribe_events");
+    let deg_sub_ = deg_sub.clone();
+    let event_graph_ = event_graph.clone();
+    let deg_task = StoppableTask::new();
+    deg_task.clone().start(
+        async move {
+            let deg_sub = event_graph_.deg_subscribe().await;
+            loop {
+                let event = deg_sub.receive().await;
+                debug!("Got deg event: {:?}", event);
+                deg_sub_.notify(vec![event.into()].into()).await;
+            }
+        },
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                Err(e) => panic!("{}", e),
+            }
+        },
+        Error::DetachedTaskStopped,
+        ex.clone(),
+    );
+
     info!("Starting JSON-RPC server");
-    let darkirc =
-        Arc::new(DarkIrc::new(p2p.clone(), sled_db.clone(), event_graph.clone(), dnet_sub));
+    let darkirc = Arc::new(DarkIrc::new(
+        p2p.clone(),
+        sled_db.clone(),
+        event_graph.clone(),
+        dnet_sub,
+        deg_sub,
+    ));
     let darkirc_ = Arc::clone(&darkirc);
     let rpc_task = StoppableTask::new();
     rpc_task.clone().start(
