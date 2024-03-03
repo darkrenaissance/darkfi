@@ -313,7 +313,7 @@ which means it's sufficient to compare $𝐚$ and $𝐛$ directly.
 
 With a PoW mining system, we are guaranteed to always have that the block hash
 $h(b) ≤ T(b)$. Since the block hashes $( h(b₁), …, h(bₘ) )$ for a sequence
-$( b₁, …, bₘ )$ have the property that $∑ h(bᵢ) ≤ T(bᵢ)$, as well as being
+$( b₁, …, bₘ )$ have the property that $∑ h(bᵢ) ≤ ∑ T(bᵢ)$, as well as being
 sufficiently random, we can use them to define our work function.
 
 Because $W$ is required to be additive, we define a block work function
@@ -349,8 +349,6 @@ construct two distinct sequences $𝐚 = (a₁, …, aₘ)$ and $𝐛 = (b₁, �
 such that $H(a₁) + ⋯ + H(aₘ) = H(b₁) + ⋯ + H(bₙ)$.*
 
 By property (2), we cannot find a $H(x) = 0$.
-This means we cannot construct an $x$ such that $H(x) + H(a) = H(b)$ for
-any $a, b ∈ ℕ$.
+Again by (2), we cannot construct an $x$ such that $H(x) + H(a) = H(b)$ for
+any $a, b ∈ ℕ$. Recursive application of (2) leads us to the stated theorem.
 
-Let $y = (H(b₁) + ⋯ + H(bₙ)) - (H(a₂) + ⋯ + H(aₘ))$, then we cannot find
-any $H(x) = y$ by property (2) for $H$.
