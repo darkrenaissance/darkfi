@@ -45,6 +45,7 @@ use super::{
     Session, SessionBitFlag, SESSION_MANUAL,
 };
 use crate::{
+    net::hosts::store::HostState,
     system::{sleep, LazyWeak, StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr},
     Error, Result,
 };
@@ -103,9 +104,6 @@ impl ManualSession {
         let attempts = settings.manual_attempt_limit;
         let mut remaining = attempts;
 
-        // Add the peer to list of pending channels
-        self.p2p().add_pending(&addr).await;
-
         // Loop forever if attempts==0, otherwise loop attempts number of times.
         let mut tried_attempts = 0;
         loop {
@@ -115,6 +113,13 @@ impl ManualSession {
                 "[P2P] Connecting to manual outbound [{}] (attempt #{})",
                 addr, tried_attempts,
             );
+
+            if let Err(_) =
+                self.p2p().hosts().try_update_registry(addr.clone(), HostState::Pending).await
+            {
+                continue
+            }
+
             match connector.connect(&addr).await {
                 Ok((url, channel)) => {
                     info!(
@@ -129,9 +134,6 @@ impl ManualSession {
 
                     // Register the new channel
                     self.register_channel(channel.clone(), ex.clone()).await?;
-
-                    // Remove pending lock since register_channel will add the channel to p2p
-                    self.p2p().remove_pending(&addr).await;
 
                     // Add this connection to the anchorlist
                     self.p2p().hosts().upgrade_host(&addr).await;
@@ -181,8 +183,6 @@ impl ManualSession {
             "[P2P] Suspending manual connection to {} after {} failed attempts",
             addr, attempts,
         );
-
-        self.p2p().remove_pending(&addr).await;
 
         Ok(())
     }

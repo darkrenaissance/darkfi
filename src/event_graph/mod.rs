@@ -204,7 +204,7 @@ impl EventGraph {
         //   from the beginning
 
         // Get references to all our peers.
-        let channels = self.p2p.channels().await;
+        let channels = self.p2p.hosts().channels().await;
         let mut communicated_peers = channels.len();
         info!(
             target: "event_graph::dag_sync()",

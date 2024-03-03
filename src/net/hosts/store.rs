@@ -18,7 +18,7 @@
 
 use std::{
     collections::{HashMap, HashSet},
-    fs,
+    fmt, fs,
     fs::File,
     sync::Arc,
     time::{Instant, UNIX_EPOCH},
@@ -29,23 +29,113 @@ use rand::{prelude::IteratorRandom, rngs::OsRng, Rng};
 use smol::lock::RwLock;
 use url::Url;
 
-use super::super::{p2p::P2pPtr, settings::SettingsPtr};
+use super::super::{settings::SettingsPtr, ChannelPtr};
 use crate::{
     system::{Subscriber, SubscriberPtr, Subscription},
     util::{
         file::{load_file, save_file},
         path::expand_path,
     },
-    Result,
+    Error, Result,
 };
 
 /// Atomic pointer to hosts object
 pub type HostsPtr = Arc<Hosts>;
 
+/// Keeps track of hosts and their current state. Prevents race conditions
+/// where multiple threads are simultaenously trying to change the state of
+/// a given host.
+pub type HostRegistry = RwLock<HashMap<Url, HostState>>;
+
+/// HostState is a set of mutually exclusive states that can be Pending,
+/// Connected, Disconnected or Refining. The state is `None` when the
+/// corresponding host has been removed from the HostRegistry.
+///
+///                              +----------+
+///                          +-- | refining | --+
+///                          |   +----------+   |
+///                          |                  |
+///                          v                  v
+///          +---------+    +-----------+    +------+
+///          | pending | -> | connected | -> | None |
+///          +---------+    +-----------+    +------+
+///               |                             ^
+///               |                             |
+///               |       +-------------+       |
+///               +-----> | downgrading | ------+
+///                       +-------------+
+///
+#[derive(Clone, Debug)]
+pub enum HostState {
+    /// Hosts that are being connected to in Outbound and Manual Session.
+    Pending,
+    /// Hosts that have been successfully connected to.
+    Connected(ChannelPtr),
+    /// Hosts that we have repeatedly failed to connect to, and that are being
+    /// removed from the anchorlist and whitelist and added to the greylist.
+    Downgrading,
+    /// Hosts that are migrating from the greylist to the whitelist or being
+    /// removed from the greylist, as defined in `refinery.rs`.
+    Refining,
+}
+
+impl HostState {
+    // Try to change state to Downgrading. Only possible if this
+    // connection is pending i.e. if we are trying to connect to this
+    // host.
+    fn try_downgrade(&self) -> Result<Self> {
+        match self {
+            HostState::Pending => Ok(HostState::Downgrading),
+            HostState::Connected(_) => Err(Error::StateBlocked(self.to_string())),
+            HostState::Downgrading => Err(Error::StateBlocked(self.to_string())),
+            HostState::Refining => Err(Error::StateBlocked(self.to_string())),
+        }
+    }
+
+    // Try to change state to Refining. Only possible if we are not yet
+    // tracking this host in the HostRegistry.
+    fn try_refine(&self) -> Result<Self> {
+        match self {
+            HostState::Pending => Err(Error::StateBlocked(self.to_string())),
+            HostState::Connected(_) => Err(Error::StateBlocked(self.to_string())),
+            HostState::Downgrading => Err(Error::StateBlocked(self.to_string())),
+            HostState::Refining => Err(Error::StateBlocked(self.to_string())),
+        }
+    }
+
+    // Try to change state to Connected. Possible if this peer is
+    // currently Pending or being Refined. The latter is necessary since
+    // the refinery process requires us to establish a connection to
+    // a peer.
+    fn try_connect(&self, channel: ChannelPtr) -> Result<Self> {
+        match self {
+            HostState::Pending => Ok(HostState::Connected(channel)),
+            HostState::Connected(_) => Err(Error::StateBlocked(self.to_string())),
+            HostState::Downgrading => Err(Error::StateBlocked(self.to_string())),
+            HostState::Refining => Ok(HostState::Connected(channel)),
+        }
+    }
+
+    // Try to change state to Pending. Only possible if we are not yet
+    // tracking this host in the HostRegistry.
+    fn try_pending(&self) -> Result<Self> {
+        match self {
+            HostState::Pending => Err(Error::StateBlocked(self.to_string())),
+            HostState::Connected(_) => Err(Error::StateBlocked(self.to_string())),
+            HostState::Downgrading => Err(Error::StateBlocked(self.to_string())),
+            HostState::Refining => Err(Error::StateBlocked(self.to_string())),
+        }
+    }
+}
+impl fmt::Display for HostState {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Debug::fmt(self, f)
+    }
+}
+
 // An array containing all possible local host strings
 // TODO: This could perhaps be more exhaustive?
 pub const LOCAL_HOST_STRS: [&str; 2] = ["localhost", "localhost.localdomain"];
-
 const WHITELIST_MAX_LEN: usize = 5000;
 const GREYLIST_MAX_LEN: usize = 2000;
 
@@ -63,6 +153,9 @@ pub struct Hosts {
     /// Nodes to which we have already been able to establish a connection.
     pub anchorlist: RwLock<Vec<(Url, u64)>>,
 
+    /// Subscriber for notifications of new channels
+    channel_subscriber: SubscriberPtr<Result<ChannelPtr>>,
+
     /// Set of stored addresses that are quarantined.
     /// We quarantine peers we've been unable to connect to, but we keep them
     /// around so we can potentially try them again, up to n tries. This should
@@ -70,12 +163,12 @@ pub struct Hosts {
     /// Internet interrupt (goblins unplugging cables)
     quarantine: RwLock<HashMap<Url, usize>>,
 
+    /// A registry that tracks hosts and their current state.
+    registry: HostRegistry,
+
     /// Peers on the blacklist are considered hostile and can neither be connected to
     /// nor establish connections to us for the duration of the program.
     blacklist: RwLock<HashSet<String>>,
-
-    /// Peers that are currently being removed from the hostlist
-    migrating: RwLock<HashSet<Url>>,
 
     /// Subscriber listening for store updates
     store_subscriber: SubscriberPtr<usize>,
@@ -91,12 +184,148 @@ impl Hosts {
             greylist: RwLock::new(Vec::new()),
             whitelist: RwLock::new(Vec::new()),
             anchorlist: RwLock::new(Vec::new()),
+            channel_subscriber: Subscriber::new(),
             quarantine: RwLock::new(HashMap::new()),
+            registry: RwLock::new(HashMap::new()),
             blacklist: RwLock::new(HashSet::new()),
-            migrating: RwLock::new(HashSet::new()),
             store_subscriber: Subscriber::new(),
             settings,
         })
+    }
+
+    /// Try to update the registry. If the host already exists, try to update its state.
+    /// Otherwise add the host to the registry along with its state.
+    pub async fn try_update_registry(&self, addr: Url, new_state: HostState) -> Result<HostState> {
+        let mut registry = self.registry.write().await;
+
+        if registry.contains_key(&addr) {
+            let current_state = registry.get(&addr).unwrap().clone();
+
+            debug!(target: "store::try_update_registry()",
+            "Attempting to update addr={} current_state={}, new_state={}",
+            addr, current_state, new_state.to_string());
+
+            let result: Result<HostState> = match new_state {
+                HostState::Pending => current_state.try_pending(),
+                HostState::Connected(c) => current_state.try_connect(c),
+                HostState::Downgrading => current_state.try_downgrade(),
+                HostState::Refining => current_state.try_refine(),
+            };
+
+            if let Ok(state) = &result {
+                registry.insert(addr.clone(), state.clone());
+            }
+
+            result
+        } else {
+            // We don't know this peer. We can safely update the state.
+            registry.insert(addr.clone(), new_state.clone());
+
+            Ok(new_state)
+        }
+    }
+
+    pub async fn check_address(&self, hosts: Vec<(Url, u64)>) -> Option<(Url, u64)> {
+        // Try to find an unused host in the set.
+        for (host, last_seen) in hosts {
+            debug!(target: "store::check_address()", "Starting checks");
+
+            if let Err(_) = self.try_update_registry(host.clone(), HostState::Pending).await {
+                continue
+            }
+
+            debug!(
+                target: "store::check_address()",
+                "Found valid host {}",
+                host
+            );
+            return Some((host.clone(), last_seen))
+        }
+
+        None
+    }
+
+    /// Remove a channel from the list of connected channels. Called
+    /// when a channel disconnects.
+    pub async fn remove_connected(&self, channel: ChannelPtr) {
+        debug!(target: "store", "remove_connected() Removing {}", channel.address());
+        let mut registry = self.registry.write().await;
+        let addr = channel.address();
+
+        let state = registry.get(addr).unwrap();
+
+        if let HostState::Connected(_) = state {
+            debug!(target: "store", "remove_connected() Removed {}", channel.address());
+            registry.remove(addr);
+        }
+    }
+
+    /// Remove a host from the list of downgrading hosts. Must be called
+    /// when downgrade process is finished to avoid the host getting stuck
+    /// in the Downgrading state.
+    pub async fn remove_downgrading(&self, addr: &Url) {
+        debug!(target: "store", "remove_downgrading() Removing {}", addr);
+        let mut registry = self.registry.write().await;
+
+        let state = registry.get(addr).unwrap();
+
+        if let HostState::Downgrading = state {
+            debug!(target: "store", "remove_downgrading() Removed {}", addr);
+            registry.remove(addr);
+        }
+    }
+
+    /// Remove a host from the list of refining hosts. Must be called
+    /// when refinery process fails to avoid the host getting stuck
+    /// in the Refining state.
+    ///
+    /// It is not necessary to call this when the refinery passes, since the
+    /// host state will be changed to Connected (and then the host will be removed
+    /// from the HostRegistry with remove_connected()).
+    pub async fn remove_refining(&self, addr: &Url) {
+        debug!(target: "store", "remove_refining() Removing {}", addr);
+        let mut registry = self.registry.write().await;
+
+        let state = registry.get(addr).unwrap();
+
+        if let HostState::Refining = state {
+            debug!(target: "store", "remove_refining() Removed {}", addr);
+            registry.remove(addr);
+        }
+    }
+
+    /// Returns the list of connected channels.
+    pub async fn channels(&self) -> Vec<ChannelPtr> {
+        let registry = self.registry.read().await;
+        let mut channels = Vec::new();
+
+        for (_, value) in registry.iter() {
+            if let HostState::Connected(c) = value {
+                channels.push(c.clone());
+            }
+        }
+        channels
+    }
+
+    /// Retrieve a random connected channel
+    pub async fn random_channel(&self) -> ChannelPtr {
+        let channels = self.channels().await;
+        let position = rand::thread_rng().gen_range(0..channels.len());
+        channels[position].clone()
+    }
+
+    /// Add a channel to the set of connected channels
+    pub async fn store(&self, channel: ChannelPtr) -> Result<()> {
+        let address = channel.address().clone();
+
+        if let Err(e) =
+            self.try_update_registry(address.clone(), HostState::Connected(channel.clone())).await
+        {
+            return Err(e)
+        }
+
+        self.channel_subscriber.notify(Ok(channel)).await;
+        Ok(())
     }
 
     /// Loops through greylist addresses to find an outbound address that we can
@@ -222,71 +451,6 @@ impl Hosts {
         hosts
     }
 
-    /// Check whether:
-    /// *   We already have this connection established
-    /// *   We already have this configured as a manual peer
-    /// *   This address is already pending a connection
-    /// *   This peer is migrating between hostlists
-    pub async fn check_address_with_lock(
-        &self,
-        p2p: P2pPtr,
-        hosts: Vec<(Url, u64)>,
-    ) -> Option<(Url, u64)> {
-        // Try to find an unused host in the set.
-        for (host, last_seen) in hosts {
-            debug!(target: "store::check_address_with_lock()",
-            "Starting checks");
-            // Check if we already have this connection established
-            if p2p.exists(&host).await {
-                debug!(
-                    target: "store::check_address_with_lock()",
-                    "Host '{}' exists so skipping",
-                    host
-                );
-                continue
-            }
-
-            // Check if we already have this configured as a manual peer
-            if self.settings.peers.contains(&host) {
-                debug!(
-                    target: "store::check_address_with_lock()",
-                    "Host '{}' configured as manual peer so skipping",
-                    host
-                );
-                continue
-            }
-
-            // Check this peer isn't currently being migrated from hostlists
-            if self.is_migrating(&host).await {
-                debug!(
-                    target: "store::check_address_with_lock()",
-                    "Host '{}' is migrating so skipping",
-                    host
-                );
-                continue
-            }
-
-            // Obtain a lock on this address to prevent duplicate connection
-            if !p2p.add_pending(&host).await {
-                debug!(
-                    target: "store::check_address_with_lock()",
-                    "Host '{}' pending so skipping",
-                    host
-                );
-                continue
-            }
-
-            debug!(
-                target: "store::check_address_with_lock()",
-                "Found valid host {}",
-                host
-            );
-            return Some((host.clone(), last_seen))
-        }
-
-        None
-    }
-
     /// Upgrade a connection to the anchorlist. Called after a connection has been successfully
     /// established in Outbound and Manual sessions.
     pub async fn upgrade_host(&self, addr: &Url) {
@@ -294,13 +458,19 @@ impl Hosts {
         self.anchorlist_store_or_update(&[(addr.clone(), last_seen)]).await;
     }
 
-    /// Downgrade a host to greylist. Called after we have failed to connect to a host
-    /// outbound_connect_limit times in quarantine()
+    /// Downgrade a host to greylist. If the host is on the anchorlist or whitelist, remove it.
+    /// If it's already on the greylist we can't do anything here.
     pub async fn downgrade_host(&self, addr: &Url, last_seen: u64) {
-        debug!(target: "store::downgrade_host", "Downgrading host {}", addr);
-        self.mark_migrating(addr).await;
+        if let Err(_) = self.try_update_registry(addr.clone(), HostState::Downgrading).await {
+            return
+        }
 
-        // Remove channel from anchorlist
+        debug!(target: "store::downgrade_host", "Downgrading host {}", addr);
+        if self.greylist_contains(addr).await {
+            warn!(target: "store::downgrade_host",
+                  "Cannot downgrade a host that is already on the greylist! {}", addr);
+        }
+
         if self.anchorlist_contains(addr).await {
             debug!(target: "store::downgrade_host", "Removing from anchorlist {}", addr);
 
@@ -310,9 +480,9 @@ impl Hosts {
                 .expect("Expected anchorlist index to exist");
 
             self.anchorlist_remove(addr, index).await;
+            self.greylist_store_or_update(&[(addr.clone(), last_seen)]).await;
         }
 
-        // Remove channel from whitelist
         if self.whitelist_contains(addr).await {
             debug!(target: "store::downgrade_host", "Removing from whitelist {}", addr);
 
@@ -322,11 +492,12 @@ impl Hosts {
                 .expect("Expected whitelist index to exist");
 
             self.whitelist_remove(addr, index).await;
+            self.greylist_store_or_update(&[(addr.clone(), last_seen)]).await;
         }
 
-        self.greylist_store_or_update(&[(addr.clone(), last_seen)]).await;
-
-        self.unmark_migrating(addr).await;
+        // Remove this entry from HostRegistry to avoid this host getting
+        // stuck in the Downgrading state.
+        self.remove_downgrading(&addr).await;
     }
 
     /// Stores an address on the greylist or updates its last_seen field if we already
@@ -338,7 +509,7 @@ impl Hosts {
         let filtered_addrs_len = filtered_addrs.len();
 
         if filtered_addrs.is_empty() {
-            debug!(target: "store::greylist_store_or_update()", "Filtered out all received addresses");
+            debug!(target: "store::greylist_store_or_update()", "Filtered out all addresses");
         }
 
         for (addr, last_seen) in filtered_addrs {
@@ -657,15 +828,15 @@ impl Hosts {
     /// Quarantine a peer.
     /// If they've been quarantined for more than a configured limit, downgrade to greylist.
     pub async fn quarantine(&self, addr: &Url, last_seen: u64) {
-        debug!(target: "store::remove()", "Quarantining peer {}", addr);
+        debug!(target: "store::quarantine()", "Quarantining peer {}", addr);
         let timer = Instant::now();
         let mut q = self.quarantine.write().await;
         if let Some(retries) = q.get_mut(addr) {
             *retries += 1;
-            debug!(target: "net::hosts::quarantine()", "Peer {} quarantined {} times", addr, retries);
+            debug!(target: "store::quarantine()", "Peer {} quarantined {} times", addr, retries);
             if *retries == self.settings.hosts_quarantine_limit {
-                debug!(target: "net::hosts::quarantine()", "Reached quarantine limited after {:?}", timer.elapsed());
-                debug!(target: "net::hosts::quarantine()", "Removing from hostlist {}", addr);
+                debug!(target: "store::quarantine()", "Reached quarantine limited after {:?}", timer.elapsed());
+                debug!(target: "store::quarantine()", "Removing from hostlist {}", addr);
                 drop(q);
                 self.downgrade_host(addr, last_seen).await;
             }
@@ -708,21 +879,6 @@ impl Hosts {
         if let Some(hostname) = peer.host_str() {
             self.blacklist.write().await.remove(hostname);
         }
-    }
-
-    /// Peer that is currently being removed from hostlists.
-    pub async fn is_migrating(&self, peer: &Url) -> bool {
-        self.migrating.read().await.contains(peer)
-    }
-
-    /// Mark a peer as currently migrating.
-    pub async fn mark_migrating(&self, peer: &Url) {
-        self.migrating.write().await.insert(peer.clone());
-    }
-
-    /// Unmark a migrating peer.
-    pub async fn unmark_migrating(&self, peer: &Url) {
-        self.migrating.write().await.remove(peer);
     }
 
     /// Check if the greylist is empty.

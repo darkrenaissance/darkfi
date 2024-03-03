@@ -185,6 +185,7 @@ impl Slot {
         self.process.stop().await
     }
 
+    // TODO: rethink this logic.
     async fn fetch_address(&self, slot_count: usize, transports: &[String]) -> Option<(Url, u64)> {
         let hosts = self.p2p().hosts();
         let connects = self.p2p().settings().outbound_connections;
@@ -199,19 +200,19 @@ impl Slot {
             if !hosts.anchorlist_fetch_address(transports).await.is_empty() {
                 let addrs = hosts.anchorlist_fetch_address(transports).await;
 
-                return hosts.check_address_with_lock(self.p2p(), addrs).await
+                return hosts.check_address(addrs).await
             }
 
             if !hosts.whitelist_fetch_address(transports).await.is_empty() {
                 let addrs = hosts.whitelist_fetch_address(transports).await;
 
-                return hosts.check_address_with_lock(self.p2p(), addrs).await
+                return hosts.check_address(addrs).await
             }
 
             if !hosts.greylist_fetch_address(transports).await.is_empty() {
                 let addrs = hosts.greylist_fetch_address(transports).await;
 
-                return hosts.check_address_with_lock(self.p2p(), addrs).await
+                return hosts.check_address(addrs).await
             }
         } else if slot_count < white_count {
             // Up to white_connection_percent connections:
@@ -221,13 +222,13 @@ impl Slot {
             if !hosts.whitelist_fetch_address(transports).await.is_empty() {
                 let addrs = hosts.whitelist_fetch_address(transports).await;
 
-                return hosts.check_address_with_lock(self.p2p(), addrs).await
+                return hosts.check_address(addrs).await
             }
 
             if !hosts.greylist_fetch_address(transports).await.is_empty() {
                 let addrs = hosts.greylist_fetch_address(transports).await;
 
-                return hosts.check_address_with_lock(self.p2p(), addrs).await
+                return hosts.check_address(addrs).await
             }
         } else {
             // All other connections:
@@ -236,7 +237,7 @@ impl Slot {
             if !hosts.greylist_fetch_address(transports).await.is_empty() {
                 let addrs = hosts.greylist_fetch_address(transports).await;
 
-                return hosts.check_address_with_lock(self.p2p(), addrs).await
+                return hosts.check_address(addrs).await
             }
         }
 
@@ -345,7 +346,7 @@ impl Slot {
 
             let stop_sub = channel.subscribe_stop().await.expect("Channel should not be stopped");
             // Setup new channel
-            if let Err(err) = self.setup_channel(host.clone(), channel.clone()).await {
+            if let Err(err) = self.setup_channel(channel.clone()).await {
                 info!(
                     target: "net::outbound_session",
                     "[P2P] Outbound slot #{} disconnected: {}",
@@ -393,11 +394,8 @@ impl Slot {
                     self.slot, addr, e
                 );
 
-                // At this point we failed to connect. We'll quarantine this peer now.
+                // At this point we failed to connect. We'll downgrade this peer now.
                 self.p2p().hosts().quarantine(&addr, last_seen).await;
-
-                // Remove connection from pending
-                self.p2p().remove_pending(&addr).await;
 
                 // Notify that channel processing failed
                 self.session().channel_subscriber.notify(Err(Error::ConnectFailed)).await;
@@ -407,16 +405,12 @@ impl Slot {
         }
     }
 
-    async fn setup_channel(&self, addr: Url, channel: ChannelPtr) -> Result<()> {
+    async fn setup_channel(&self, channel: ChannelPtr) -> Result<()> {
         // Register the new channel
         debug!(target: "net::outbound_session::setup_channel", "register_channel {}", channel.clone().address());
         self.session().register_channel(channel.clone(), self.p2p().executor()).await?;
 
         // Channel is now connected but not yet setup
-        // Remove pending lock since register_channel will add the channel to p2p
-        debug!(target: "net::outbound_session::setup_channel", "removing channel...");
-        self.p2p().remove_pending(&addr).await;
-        debug!(target: "net::outbound_session::setup_channel", "channel removed!");
 
         // Notify that channel processing has been finished
         self.session().channel_subscriber.notify(Ok(channel)).await;
