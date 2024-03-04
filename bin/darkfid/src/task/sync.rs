@@ -36,7 +36,7 @@ pub async fn sync_task(node: &Darkfid) -> Result<()> {
     let mut peers = vec![];
     loop {
         // Grab channels
-        let channels = node.sync_p2p.channels().await;
+        let channels = node.sync_p2p.hosts().channels().await;
 
         // Check anyone is connected
         if !channels.is_empty() {
