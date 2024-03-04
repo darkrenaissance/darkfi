@@ -122,7 +122,10 @@ impl GreylistRefinery {
 
                         // Remove this entry from HostRegistry to avoid this host getting
                         // stuck in the Refining state.
-                        hosts.remove_refining(url).await;
+                        //
+                        // It is not necessary to call this when the refinery passes, since the
+                        // state will be changed to Connected.
+                        hosts.remove(url).await;
 
                         continue
                     }

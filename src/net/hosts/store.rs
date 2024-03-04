@@ -245,53 +245,12 @@ impl Hosts {
         None
     }
 
-    /// Remove a channel from the list of connected channels. Called
-    /// when a channel disconnects.
-    pub async fn remove_connected(&self, channel: ChannelPtr) {
-        debug!(target: "store", "remove_connected() Removing {}", channel.address());
-        let mut registry = self.registry.write().await;
-        let addr = channel.address();
-
-        let state = registry.get(addr).unwrap();
-
-        if let HostState::Connected(_) = state {
-            debug!(target: "store", "remove_connected() Removed {}", channel.address());
-            registry.remove(addr);
-        }
-    }
-
-    /// Remove a host from the list of downgrading hosts. Must be called
-    /// when downgrade process is finished to avoid the host getting stuck
-    /// in the Downgrading state.
-    pub async fn remove_downgrading(&self, addr: &Url) {
-        debug!(target: "store", "remove_downgrading() Removing {}", addr);
-        let mut registry = self.registry.write().await;
-
-        let state = registry.get(addr).unwrap();
-
-        if let HostState::Downgrading = state {
-            debug!(target: "store", "remove_downgrading() Removed {}", addr);
-            registry.remove(addr);
-        }
-    }
-
-    /// Remove a host from the list of refining hosts. Must be called
-    /// when refinery process fails to avoid the host getting stuck
-    /// in the Refining state.
-    ///
-    /// It is not necessary to call this when the refinery passes, since the
-    /// host state will be changed to Connected (and then the host will be removed
-    /// from the HostRegistry with remove_connected()).
-    pub async fn remove_refining(&self, addr: &Url) {
-        debug!(target: "store", "remove_refining() Removing {}", addr);
-        let mut registry = self.registry.write().await;
-
-        let state = registry.get(addr).unwrap();
-
-        if let HostState::Refining = state {
-            debug!(target: "store", "remove_refining() Removed {}", addr);
-            registry.remove(addr);
-        }
+    /// Remove a host from the HostRegistry. Must be called after downgrade(), when the refinery
+    /// process fails, or when a channel stops. Prevents hosts from getting trapped in the
+    /// HostState logical machinery.
+    pub async fn remove(&self, addr: &Url) {
+        debug!(target: "store", "remove() Removing {} from HostRegistry", addr);
+        self.registry.write().await.remove(addr);
     }
 
     /// Returns the list of connected channels.
@@ -497,7 +456,7 @@ impl Hosts {
 
         // Remove this entry from HostRegistry to avoid this host getting
         // stuck in the Downgrading state.
-        self.remove_downgrading(&addr).await;
+        self.remove(&addr).await;
     }
 
     /// Stores an address on the greylist or updates its last_seen field if we already

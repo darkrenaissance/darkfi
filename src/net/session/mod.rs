@@ -62,7 +62,7 @@ pub async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr) {
     );
 
     // Remove channel from p2p
-    p2p.hosts().remove_connected(channel).await;
+    p2p.hosts().remove(channel.address()).await;
     debug!(target: "net::session::remove_sub_on_stop()", "[END]");
 }
 

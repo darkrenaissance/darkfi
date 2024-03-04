@@ -199,7 +199,7 @@ impl InboundSession {
 
         stop_sub.receive().await;
 
-        self.p2p().hosts().remove_connected(channel.clone()).await;
+        self.p2p().hosts().remove(channel.clone().address()).await;
 
         debug!(
             target: "net::inbound_session::setup_channel()",
