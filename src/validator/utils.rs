@@ -16,13 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::crypto::{
-    ecvrf::VrfProof, DAO_CONTRACT_ID, DEPLOYOOOR_CONTRACT_ID, MONEY_CONTRACT_ID,
-};
-use darkfi_serial::AsyncDecodable;
+use darkfi_sdk::crypto::{DAO_CONTRACT_ID, DEPLOYOOOR_CONTRACT_ID, MONEY_CONTRACT_ID};
 use log::info;
 use num_bigint::BigUint;
-use smol::io::Cursor;
+use randomx::{RandomXCache, RandomXFlags, RandomXVM};
 
 use crate::{
     blockchain::{BlockInfo, BlockchainOverlayPtr},
@@ -96,39 +93,35 @@ pub async fn deploy_native_contracts(overlay: &BlockchainOverlayPtr) -> Result<(
     Ok(())
 }
 
-/// Compute a block's rank, assuming that its valid.
-/// Genesis block has rank 0.
-/// First 2 blocks rank is equal to their hash number, since their previous
-/// previous block producer doesn't exist or have a VRF.
-pub async fn block_rank(block: &BlockInfo, previous_previous: &BlockInfo) -> Result<BigUint> {
+/// Compute a block's rank, assuming that its valid, based on provided mining target.
+/// Block's rank is the tuple of its squared mining target distance from max 32 bytes int,
+/// along with its squared RandomX hash number distance from max 32 bytes int.
+/// Genesis block has rank (0, 0).
+pub fn block_rank(block: &BlockInfo, target: &BigUint) -> Result<(BigUint, BigUint)> {
     // Genesis block has rank 0
     if block.header.height == 0 {
-        return Ok(0u64.into())
+        return Ok((0u64.into(), 0u64.into()))
     }
 
-    // Grab block hash number
-    let hash_number = BigUint::from_bytes_be(block.hash()?.as_bytes());
+    // Grab the max 32 bytes int
+    let max = BigUint::from_bytes_be(&[0xFF; 32]);
 
-    // First 2 blocks have rank equal to their block hash number
-    if block.header.height < 3 {
-        return Ok(hash_number)
-    }
+    // Compute the squared mining target distance
+    let target_distance = &max - target;
+    let target_distance_sq = &target_distance * &target_distance;
 
-    // Extract VRF proof from the previous previous producer transaction
-    let tx = previous_previous.txs.last().unwrap();
-    let data = &tx.calls[0].data.data;
-    let mut decoder = Cursor::new(&data);
-    // PoW uses MoneyPoWRewardParamsV1
-    decoder.set_position(499); // FIXME: This should not be done like this
+    // Setup RandomX verifier
+    let flags = RandomXFlags::default();
+    let cache = RandomXCache::new(flags, block.header.previous.as_bytes()).unwrap();
+    let vm = RandomXVM::new(flags, &cache).unwrap();
 
-    // Get the VRF output as big-endian
-    let vrf_proof: VrfProof = AsyncDecodable::decode_async(&mut decoder).await?;
-    let vrf_output = BigUint::from_bytes_be(vrf_proof.hash_output().as_bytes());
+    // Compute the output hash distance
+    let out_hash = vm.hash(block.hash()?.as_bytes());
+    let out_hash = BigUint::from_bytes_be(&out_hash);
+    let hash_distance = max - out_hash;
+    let hash_distance_sq = &hash_distance * &hash_distance;
 
-    // Finally, compute the rank
-    let rank = if hash_number != 0u8.into() { vrf_output % hash_number } else { vrf_output };
-
-    Ok(rank)
+    Ok((target_distance_sq, hash_distance_sq))
 }
 
 /// Auxiliary function to calculate the middle value between provided u64 numbers
@@ -190,8 +183,13 @@ pub fn find_extended_fork_index(forks: &[Fork], proposal: &Proposal) -> Result<(
     Err(Error::ExtendedChainIndexNotFound)
 }
 
-/// Auxiliary function to find best ranked forks indexes.
-pub fn best_forks_indexes(forks: &[Fork]) -> Result<Vec<usize>> {
+/// Auxiliary function to find best ranked fork.
+/// The best ranked fork is the one with the highest sum of
+/// its blocks squared mining target distances, from max 32
+/// bytes int. In case of a tie, the fork with the highest
+/// sum of its blocks squared RandomX hash number distances,
+/// from max 32 bytes int, wins.
+pub fn best_fork_index(forks: &[Fork]) -> Result<usize> {
     // Check if node has any forks
     if forks.is_empty() {
         return Err(Error::ForksNotFound)
@@ -201,7 +199,7 @@ pub fn best_forks_indexes(forks: &[Fork]) -> Result<Vec<usize>> {
     let mut best = BigUint::from(0u64);
     let mut indexes = vec![];
     for (f_index, fork) in forks.iter().enumerate() {
-        let rank = &fork.rank;
+        let rank = &fork.targets_rank;
 
         // Fork ranks lower that current best
         if rank < &best {
@@ -219,5 +217,18 @@ pub fn best_forks_indexes(forks: &[Fork]) -> Result<Vec<usize>> {
         indexes = vec![f_index];
     }
 
-    Ok(indexes)
+    // If a single best ranking fork exists, return it
+    if indexes.len() == 1 {
+        return Ok(indexes[0])
+    }
+
+    // Break tie using their hash distances rank
+    let mut best_index = indexes[0];
+    for index in &indexes[1..] {
+        if forks[*index].hashes_rank > forks[best_index].hashes_rank {
+            best_index = *index;
+        }
+    }
+
+    Ok(best_index)
 }

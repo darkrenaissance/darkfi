@@ -341,24 +341,22 @@ impl Validator {
         // Grab fork proposals sequence
         let forks = self.consensus.forks.read().await;
         let fork = &forks[finalized_fork.unwrap()];
-        let mut proposals = fork.overlay.lock().unwrap().get_blocks_by_hash(&fork.proposals)?;
+        let proposals = fork.overlay.lock().unwrap().get_blocks_by_hash(&fork.proposals)?;
         drop(forks);
 
         // Find the excess over finalization threshold
         let excess = (proposals.len() - self.consensus.finalization_threshold) + 1;
 
-        // Grab non finalized blocks
-        let non_finalized = proposals.split_off(excess);
-
         // Append finalized blocks
+        let finalized = &proposals[..excess];
         info!(target: "validator::finalization", "Finalizing proposals:");
-        for block in &proposals {
+        for block in finalized {
             info!(target: "validator::finalization", "\t{} - {}", block.hash()?, block.header.height);
         }
-        self.add_blocks(&proposals).await?;
+        self.add_blocks(finalized).await?;
 
-        // Rebuild best fork using rest proposals
-        self.consensus.rebuild_best_fork(&non_finalized).await?;
+        // Rebuild forks starting with the finalized blocks
+        self.consensus.rebuild_forks(finalized).await?;
         info!(target: "validator::finalization", "Finalization completed!");
 
         // Release append lock

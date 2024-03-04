@@ -28,7 +28,7 @@ use crate::{
     util::time::Timestamp,
     validator::{
         pow::PoWModule,
-        utils::{best_forks_indexes, block_rank, find_extended_fork_index},
+        utils::{best_fork_index, block_rank, find_extended_fork_index},
         verify_block, verify_proposal, verify_transactions, TxVerifyFailed,
     },
     Error, Result,
@@ -99,10 +99,10 @@ impl Consensus {
         let (mut fork, index) = verify_proposal(self, proposal).await?;
 
         // Append proposal to the fork
-        fork.append_proposal(proposal.hash).await?;
+        fork.append_proposal(proposal).await?;
 
-        // Update PoW module
-        fork.module.append(proposal.block.header.timestamp.0, &fork.module.next_difficulty()?);
+        // TODO: to keep memory usage low, we should only append forks that
+        // are higher ranking than our current best one
 
         // If a fork index was found, replace forks with the mutated one,
         // otherwise push the new fork.
@@ -208,33 +208,27 @@ impl Consensus {
     ///   and no other fork exist with same rank, first proposal(s) in that fork can be
     ///   appended to canonical blockchain (finalize).
     /// When best fork can be finalized, first block(s) should be appended to canonical,
-    /// and fork should be rebuilt.
+    /// and forks should be rebuilt.
     pub async fn finalization(&self) -> Result<Option<usize>> {
         debug!(target: "validator::consensus::finalization", "Started finalization check");
 
-        // Grab best forks
+        // Grab best fork
         let forks = self.forks.read().await;
-        let forks_indexes = best_forks_indexes(&forks)?;
-        // Check if multiple forks with same rank were found
-        if forks_indexes.len() > 1 {
-            debug!(target: "validator::consensus::finalization", "Multiple best ranked forks were found");
-            return Ok(None)
-        }
-
-        // Grag the actual best fork
-        let fork = &forks[forks_indexes[0]];
+        let index = best_fork_index(&forks)?;
+        let fork = &forks[index];
 
         // Check its length
         let length = fork.proposals.len();
         if length < self.finalization_threshold {
             debug!(target: "validator::consensus::finalization", "Nothing to finalize yet, best fork size: {}", length);
+            drop(forks);
             return Ok(None)
         }
 
         // Drop forks lock
         drop(forks);
 
-        Ok(Some(forks_indexes[0]))
+        Ok(Some(index))
     }
 
     /// Auxilliary function to retrieve a fork proposals.
@@ -297,8 +291,7 @@ impl Consensus {
         }
 
         // Grab best fork
-        let forks_indexes = best_forks_indexes(&forks)?;
-        let fork = &forks[forks_indexes[0]];
+        let fork = &forks[best_fork_index(&forks)?];
 
         // Grab its proposals
         let blocks = fork.overlay.lock().unwrap().get_blocks_by_hash(&fork.proposals)?;
@@ -310,53 +303,68 @@ impl Consensus {
         Ok(ret)
     }
 
-    /// Auxilliary function to purge current forks and build one from the
-    /// provided proposals sequence.
-    pub async fn rebuild_best_fork(&self, proposals: &[BlockInfo]) -> Result<()> {
+    /// Auxilliary function to purge current forks and rebuild the ones starting
+    /// with the provided prefix. This function assumes that the prefix blocks have
+    /// already been appended to canonical chain.
+    pub async fn rebuild_forks(&self, prefix: &[BlockInfo]) -> Result<()> {
         // Grab a lock over current forks
         let mut forks = self.forks.write().await;
+
+        // Find all the forks that start with the provided prefix,
+        // and grab their proposals
+        let suffix_start_index = prefix.len();
+        let prefix_last_index = suffix_start_index - 1;
+        let prefix_last = prefix.last().unwrap().hash()?;
+        let mut forks_proposals: Vec<Vec<BlockInfo>> = vec![];
+        for fork in forks.iter() {
+            if fork.proposals.is_empty() ||
+                prefix_last_index >= fork.proposals.len() ||
+                fork.proposals[prefix_last_index] != prefix_last
+            {
+                continue
+            }
+            let suffix_proposals = fork
+                .overlay
+                .lock()
+                .unwrap()
+                .get_blocks_by_hash(&fork.proposals[suffix_start_index..])?;
+            // TODO add a stale forks purging logic, aka forks that
+            // we keep should be close to buffer size, for lower
+            // memory consumption
+            forks_proposals.push(suffix_proposals);
+        }
 
         // Purge existing forks;
         *forks = vec![];
 
-        // Create a new fork extending canonical
-        let mut fork = Fork::new(self.blockchain.clone(), self.module.read().await.clone()).await?;
+        // Rebuild forks
+        for proposals in forks_proposals {
+            // Create a new fork extending canonical
+            let mut fork =
+                Fork::new(self.blockchain.clone(), self.module.read().await.clone()).await?;
 
-        // Check if we got any proposals to append
-        if proposals.is_empty() {
+            // Grab overlay last block
+            let mut previous = &fork.overlay.lock().unwrap().last_block()?;
+
+            // Append all proposals
+            for proposal in &proposals {
+                if verify_block(&fork.overlay, &fork.module, proposal, previous).await.is_err() {
+                    error!(target: "validator::consensus::rebuild_best_fork", "Erroneous proposal block found");
+                    fork.overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
+                    drop(forks);
+                    return Err(Error::BlockIsInvalid(proposal.hash()?.to_string()))
+                };
+
+                // Append proposal to the fork
+                fork.append_proposal(&Proposal::new(proposal.clone())?).await?;
+
+                // Set proposals as previous
+                previous = proposal;
+            }
+
             // Push the fork
             forks.push(fork);
-
-            // Drop forks lock
-            drop(forks);
-
-            return Ok(())
         }
-
-        // Grab overlay last block
-        let mut previous = &fork.overlay.lock().unwrap().last_block()?;
-
-        // Append all proposals
-        for proposal in proposals {
-            let proposal_hash = proposal.hash()?;
-            if verify_block(&fork.overlay, &fork.module, proposal, previous).await.is_err() {
-                error!(target: "validator::consensus::rebuild_best_fork", "Erroneous proposal block found");
-                fork.overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
-                return Err(Error::BlockIsInvalid(proposal_hash.to_string()))
-            };
-
-            // Append proposal to the fork
-            fork.append_proposal(proposal_hash).await?;
-
-            // Update PoW module
-            fork.module.append(proposal.header.timestamp.0, &fork.module.next_difficulty()?);
-
-            // Set proposals as previous
-            previous = proposal;
-        }
-
-        // Push the fork
-        forks.push(fork);
 
         // Drop forks lock
         drop(forks);
@@ -403,8 +411,10 @@ pub struct Fork {
     pub proposals: Vec<blake3::Hash>,
     /// Valid pending transaction hashes
     pub mempool: Vec<blake3::Hash>,
-    /// Current fork rank, cached for better performance
-    pub rank: BigUint,
+    /// Current fork mining targets rank, cached for better performance
+    pub targets_rank: BigUint,
+    /// Current fork hashes rank, cached for better performance
+    pub hashes_rank: BigUint,
 }
 
 impl Fork {
@@ -418,7 +428,8 @@ impl Fork {
             module,
             proposals: vec![],
             mempool,
-            rank: BigUint::from(0u64),
+            targets_rank: BigUint::from(0u64),
+            hashes_rank: BigUint::from(0u64),
         })
     }
 
@@ -466,15 +477,28 @@ impl Fork {
         Ok(proposal)
     }
 
-    /// Auxiliary function to append a proposal and recalculate current fork rank
-    pub async fn append_proposal(&mut self, proposal: blake3::Hash) -> Result<()> {
-        self.proposals.push(proposal);
-        self.rank = self.rank().await?;
+    /// Auxiliary function to append a proposal and update current fork rank.
+    pub async fn append_proposal(&mut self, proposal: &Proposal) -> Result<()> {
+        // Grab next mine target and difficulty
+        let (next_target, next_difficulty) = self.module.next_mine_target_and_difficulty()?;
+
+        // Calculate block rank
+        let (target_distance_sq, hash_distance_sq) = block_rank(&proposal.block, &next_target)?;
+
+        // Update PoW module
+        self.module.append(proposal.block.header.timestamp.0, &next_difficulty);
+
+        // Update fork ranks
+        self.targets_rank += target_distance_sq;
+        self.hashes_rank += hash_distance_sq;
+
+        // Push proposal's hash
+        self.proposals.push(proposal.hash);
 
         Ok(())
     }
 
-    /// Auxiliary function to retrieve last proposal
+    /// Auxiliary function to retrieve last proposal.
     pub fn last_proposal(&self) -> Result<Proposal> {
         let block = if self.proposals.is_empty() {
             self.overlay.lock().unwrap().last_block()?
@@ -560,38 +584,6 @@ impl Fork {
         Ok(unproposed_txs)
     }
 
-    /// Auxiliarry function to compute fork's rank, assuming all proposals are valid.
-    pub async fn rank(&self) -> Result<BigUint> {
-        // If the fork is empty its rank is 0
-        if self.proposals.is_empty() {
-            return Ok(0u64.into())
-        }
-
-        // Retrieve the sum of all fork proposals ranks
-        let mut sum = BigUint::from(0_u64);
-        let proposals = self.overlay.lock().unwrap().get_blocks_by_hash(&self.proposals)?;
-        for proposal in &proposals {
-            // For block height < 3 we use the same proposal reference, since
-            // block_rank() will ignore it
-            if proposal.header.height < 3 {
-                sum += block_rank(proposal, proposal).await?;
-                continue
-            }
-
-            // For block height > 2, retrieve their previous previous block
-            let previous =
-                &self.overlay.lock().unwrap().get_blocks_by_hash(&[proposal.header.previous])?[0];
-            let previous_previous =
-                &self.overlay.lock().unwrap().get_blocks_by_hash(&[previous.header.previous])?[0];
-            sum += block_rank(proposal, previous_previous).await?;
-        }
-
-        // Use fork(proposals) length as a multiplier to compute the actual fork rank
-        let rank = proposals.len() as u64 * sum;
-
-        Ok(rank)
-    }
-
     /// Auxiliary function to create a full clone using BlockchainOverlay::full_clone.
     /// Changes to this copy don't affect original fork overlay records, since underlying
     /// overlay pointer have been updated to the cloned one.
@@ -601,8 +593,9 @@ impl Fork {
         let module = self.module.clone();
         let proposals = self.proposals.clone();
         let mempool = self.mempool.clone();
-        let rank = self.rank.clone();
+        let targets_rank = self.targets_rank.clone();
+        let hashes_rank = self.hashes_rank.clone();
 
-        Ok(Self { blockchain, overlay, module, proposals, mempool, rank })
+        Ok(Self { blockchain, overlay, module, proposals, mempool, targets_rank, hashes_rank })
     }
 }

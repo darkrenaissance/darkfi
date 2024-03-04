@@ -188,6 +188,13 @@ impl PoWModule {
         Ok(BigUint::from_bytes_be(&[0xFF; 32]) / &self.next_difficulty()?)
     }
 
+    /// Compute the next mine target and difficulty
+    pub fn next_mine_target_and_difficulty(&self) -> Result<(BigUint, BigUint)> {
+        let difficulty = self.next_difficulty()?;
+        let mine_target = BigUint::from_bytes_be(&[0xFF; 32]) / &difficulty;
+        Ok((mine_target, difficulty))
+    }
+
     /// Verify provided difficulty corresponds to the next one
     pub fn verify_difficulty(&self, difficulty: &BigUint) -> Result<bool> {
         Ok(difficulty == &self.next_difficulty()?)

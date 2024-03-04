@@ -18,7 +18,7 @@
 
 use std::sync::Arc;
 
-use darkfi::{net::Settings, validator::utils::best_forks_indexes, Result};
+use darkfi::{net::Settings, validator::utils::best_fork_index, Result};
 use darkfi_contract_test_harness::init_logger;
 use darkfi_sdk::num_traits::One;
 use num_bigint::BigUint;
@@ -86,8 +86,7 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     assert_eq!(alice.blockchain.len(), charlie.blockchain.len());
     // Node must have just the best fork
     let forks = alice.consensus.forks.read().await;
-    let best_fork_index = best_forks_indexes(&forks)?[0];
-    let best_fork = &forks[best_fork_index];
+    let best_fork = &forks[best_fork_index(&forks)?];
     let charlie_forks = charlie.consensus.forks.read().await;
     assert_eq!(charlie_forks.len(), 1);
     assert_eq!(charlie_forks[0].proposals.len(), best_fork.proposals.len());
