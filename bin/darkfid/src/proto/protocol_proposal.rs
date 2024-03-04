@@ -123,7 +123,7 @@ impl ProtocolProposal {
 
             let proposal_copy = (*proposal).clone();
 
-            match self.validator.consensus.append_proposal(&proposal_copy.0).await {
+            match self.validator.append_proposal(&proposal_copy.0).await {
                 Ok(()) => {
                     self.p2p.broadcast_with_exclude(&proposal_copy, &exclude_list).await;
                     if let Some(sync_p2p) = self.sync_p2p.as_ref() {
@@ -189,7 +189,12 @@ impl ProtocolProposal {
             }
 
             for proposal in &response.proposals {
-                self.validator.consensus.append_proposal(proposal).await?;
+                self.validator.append_proposal(proposal).await?;
+                let message = ProposalMessage(proposal.clone());
+                self.p2p.broadcast_with_exclude(&message, &exclude_list).await;
+                if let Some(sync_p2p) = self.sync_p2p.as_ref() {
+                    sync_p2p.broadcast_with_exclude(&message, &exclude_list).await;
+                }
                 // Notify subscriber
                 let enc_prop = JsonValue::String(base64::encode(&serialize_async(proposal).await));
                 self.subscriber.notify(vec![enc_prop].into()).await;

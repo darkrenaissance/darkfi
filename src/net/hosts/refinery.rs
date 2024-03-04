@@ -26,7 +26,9 @@ use url::Url;
 
 use super::super::p2p::{P2p, P2pPtr};
 use crate::{
-    net::{connector::Connector, protocol::ProtocolVersion, session::Session},
+    net::{
+        connector::Connector, hosts::store::HostState, protocol::ProtocolVersion, session::Session,
+    },
     system::{
         run_until_completion, sleep, timeout::timeout, LazyWeak, StoppableTask, StoppableTaskPtr,
     },
@@ -85,6 +87,8 @@ impl GreylistRefinery {
     }
 
     // Randomly select a peer on the greylist and probe it.
+    // This method will remove from the greylist and store on the whitelist
+    // providing the peer is responsive.
     async fn run(self: Arc<Self>) {
         loop {
             sleep(self.p2p().settings().greylist_refinery_interval).await;
@@ -103,35 +107,28 @@ impl GreylistRefinery {
                 Some((entry, position)) => {
                     let url = &entry.0;
 
-                    // Skip this node if it's being migrated currently.
-                    if hosts.is_migrating(url).await {
+                    if let Err(_) =
+                        hosts.try_update_registry(url.clone(), HostState::Refining).await
+                    {
                         continue
                     }
-
-                    // Don't refine nodes that we are already connected to.
-                    if self.p2p().exists(url).await {
-                        continue
-                    }
-
-                    // Don't refine nodes that we are trying to connect to.
-                    if !self.p2p().add_pending(url).await {
-                        continue
-                    }
-
-                    let mut greylist = hosts.greylist.write().await;
                     if !ping_node(url.clone(), self.p2p().clone()).await {
-                        greylist.remove(position);
+                        hosts.greylist_remove(url, position).await;
 
-                        // Remove connection from pending
-                        self.p2p().remove_pending(url).await;
                         debug!(
                             target: "net::refinery",
                             "Peer {} is non-responsive. Removed from greylist", url,
                         );
 
+                        // Remove this entry from HostRegistry to avoid this host getting
+                        // stuck in the Refining state.
+                        //
+                        // It is not necessary to call this when the refinery passes, since the
+                        // state will be changed to Connected.
+                        hosts.remove(url).await;
+
                         continue
                     }
-                    drop(greylist);
 
                     let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
 
@@ -140,9 +137,6 @@ impl GreylistRefinery {
 
                     // Remove whitelisted peer from the greylist.
                     hosts.greylist_remove(url, position).await;
-
-                    // Remove connection from pending
-                    self.p2p().remove_pending(url).await;
                 }
                 None => {
                     debug!(target: "net::refinery", "No matching greylist entries found. Cannot proceed with refinery");

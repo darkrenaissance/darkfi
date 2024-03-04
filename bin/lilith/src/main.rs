@@ -39,7 +39,7 @@ use url::Url;
 
 use darkfi::{
     async_daemonize, cli_desc,
-    net::{self, hosts::refinery::ping_node, P2p, P2pPtr},
+    net::{self, hosts::store::HostState, hosts::refinery::ping_node, P2p, P2pPtr},
     rpc::{
         jsonrpc::*,
         server::{listen_and_serve, RequestHandler},
@@ -176,13 +176,9 @@ impl Lilith {
             let (entry, position) = hosts.whitelist_fetch_last().await;
             let url = &entry.0;
 
-            // Skip this node if it's being migrated currently.
-            if hosts.is_migrating(url).await {
-                continue
-            }
-
-            // Don't refine nodes that we are already connected to.
-            if p2p.exists(url).await {
+            if let Err(_) =
+                hosts.try_update_registry(url.clone(), HostState::Refining).await
+            {
                 continue
             }
 
@@ -192,6 +188,13 @@ impl Lilith {
 
                 hosts.whitelist_remove(url, position).await;
                 debug!(target: "lilith", "Host {} is not responsive. Downgraded from whitelist", url);
+
+                // Remove this entry from HostRegistry to avoid this host getting
+                // stuck in the Refining state.
+                //
+                // It is not necessary to call this when the refinery passes, since the
+                // state will be changed to Connected.
+                hosts.remove(url).await;
 
                 continue
             }

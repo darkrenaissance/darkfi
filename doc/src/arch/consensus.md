@@ -169,14 +169,18 @@ Extending the canonical blockchain with a new block proposal:
 
 When the finalization check kicks in, each node will grab its best fork.
 
+A security threshold is set, which refers to the height where the probability
+to produce a fork, able to reorg the current best ranking fork reaches zero,
+similar to the # of block confirmation used by other PoW based protocols.
+
 If more than one fork exists with same rank, the node will not finalize any
 block proposals. If the fork's length exceeds the security threshold, the node
-will finalize all block proposals, excluding the last ($n$)-block proposal, by
-appending them to the canonical blockchain. We exclude the last ($n$)-block
-proposal to eliminate network race conditions for blocks of the same height.
+will push (finalize) its first proposal to the canonical blockchain. The fork
+acts as a queue (buffer) for to-be-finalized proposals.
 
-Once finalized, all the remaining fork chains are removed from the node's
-memory pool.
+Once a finalization occurs, all the remaining fork chains are removed from the
+node's memory pool, keeping just the best ranking one, along with its remaining
+proposals.
 
 Because of this design, finalization cannot occur while there are competing
 fork chains of the same rank whose length exceeds the security threshold. In
@@ -224,7 +228,7 @@ current state is:
 
     [C]--...--[C]--|--[M7] <-- F2
 
-# Appendix
+# Appendix: Data Structures
 
 This section gives further details about the high level structures that will be
 used by the protocol.
@@ -269,4 +273,82 @@ used by the protocol.
 |-------------|-------------------|----------------------------------------|
 | `canonical` | `Blockchain`      | Canonical (finalized) blockchain       |
 | `forks`     | `Vec<Blockchain>` | Fork chains containing block proposals |
+
+# Appendix: Ranking Blocks
+
+## Sequences
+
+Denote blocks by the symbols $bᵢ ∈ B$, then a sequence of blocks (alternatively
+a fork) is an ordered series $𝐛 = (b₁, …, bₘ)$.
+
+Use $S$ for all sets of sequences for blocks in $B$.
+
+## Properties for Rank
+
+Each block is associated with a target $T : B → 𝕀$ where $𝕀 ⊂ ℕ$.
+
+1. Blocks with lower targets are harder to create and ranked higher in a sequence of blocks.
+2. Given two competing forks $𝐚 = (a₁, …, aₘ)$ and $b = (b₁, …, bₙ)$,
+   we wish to select a winner. Assume $𝐚$ is the winner, then $∑ T(aᵢ) ≤ ∑ T(bᵢ)$.
+3. There should only ever be a single winner.
+   When $∑ T(aᵢ) = ∑ T(bᵢ)$, then we have logic to break the tie.
+
+Property (2) can also be statistically true for $p > 0.5$.
+
+This is used to define a *fork-ranking* function $W : S → ℕ$.
+This function must *always* have unique values for distinct sequences.
+
+### Additivity
+
+We also would like the property $W$ is additive on subsequences
+$$ W((b₁, …, bₘ)) = W((b₁)) + ⋯ + W((bₘ)) $$
+which allows comparing forks from any point within the blockchain. For example
+let $𝐬 = (s₁, …, sₖ)$ be the blockchain together with forks $𝐚, 𝐛$ extending $𝐬$
+into $𝐬 ⊕  𝐚 = (s₁, …, sₖ, a₁, …, aₘ)$ and $𝐬 ⊕  𝐛 = (s₁, …, sₖ, b₁, …, bₙ)$.
+Then we have that
+$$ W(𝐬 ⊕  𝐚) < W(𝐬 ⊕  𝐛) ⟺  W(𝐚) < W(𝐛) $$
+which means it's sufficient to compare $𝐚$ and $𝐛$ directly.
+
+## Proposed Rank
+
+With a PoW mining system, we are guaranteed to always have that the block hash
+$h(b) ≤ T(b)$. Since the block hashes $( h(b₁), …, h(bₘ) )$ for a sequence
+$( b₁, …, bₘ )$ have the property that $∑ h(bᵢ) ≤ ∑ T(bᵢ)$, as well as being
+sufficiently random, we can use them to define our work function.
+
+Because $W$ is required to be additive, we define a block work function
+$w : B → ℕ$, and $W(𝐛) = ∑ w(bᵢ)$.
+
+The block work function should have a statistically higher score for
+blocks with a smaller target, and always be distinct for unique blocks.
+We define $w$ as
+$$ w(b) = \max(𝕀) - h(b) $$
+since $h(b) < T(b) < \max(𝕀)$ this function is well defined on the codomain.
+
+## Hash Function
+
+Let $𝕀$ be a fixed subset of $ℕ$ representing the output of a hash function
+$[0, \max(𝕀)]$.
+
+**Definition:** a *hash function* is a function $H : ℕ → 𝕀$ having the
+following properties:
+
+1. *Uniformity*, for any $y ∈ 𝕀$ and any $n ∈ ℕ$, there exists an $N > n$
+   such that $H(N) = y$.
+2. *One-way*, for any $y ∈ 𝕀$, we are unable to construct an $x ∈ ℕ$ such
+   that $H(x) = y$.
+
+Note: the above notions rely on purely algebraic properties of $H$ without
+requiring the machinery of probability. The second property of being one-way
+is a stronger notion than $\ran(H)$ being statistically random. Indeed if the
+probability is non-zero then we could find such an $(x, y)$ which breaks the
+one-way property.
+
+**Theorem:** *given a hash function $H : ℕ → 𝕀$ as defined above, it's impossible to
+construct two distinct sequences $𝐚 = (a₁, …, aₘ)$ and $𝐛 = (b₁, …, bₙ)$
+such that $H(a₁) + ⋯ + H(aₘ) = H(b₁) + ⋯ + H(bₙ)$.*
+
+By property (2), we cannot find a $H(x) = 0$.
+Again by (2), we cannot construct an $x$ such that $H(x) + H(a) = H(b)$ for
+any $a, b ∈ ℕ$. Recursive application of (2) leads us to the stated theorem.
 

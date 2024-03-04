@@ -42,4 +42,4 @@ pub mod refinery;
 ///
 /// `store` contains various methods for reading from, quering and writing to the hostlists.
 /// It is also responsible for filtering addresses and ensuring channel transport validity.
-pub(super) mod store;
+pub mod store;

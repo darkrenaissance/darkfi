@@ -33,7 +33,7 @@ use darkfi::{
     cli_desc,
     net::{settings::SettingsOpt, P2pPtr},
     rpc::{
-        client::RpcClient,
+        client::RpcChadClient,
         jsonrpc::JsonSubscriber,
         server::{listen_and_serve, RequestHandler},
     },
@@ -160,7 +160,7 @@ pub struct Darkfid {
     /// JSON-RPC connection tracker
     rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
     /// JSON-RPC client to execute requests to the miner daemon
-    rpc_client: Option<RpcClient>,
+    rpc_client: Option<RpcChadClient>,
 }
 
 impl Darkfid {
@@ -169,7 +169,7 @@ impl Darkfid {
         miners_p2p: Option<P2pPtr>,
         validator: ValidatorPtr,
         subscribers: HashMap<&'static str, JsonSubscriber>,
-        rpc_client: Option<RpcClient>,
+        rpc_client: Option<RpcChadClient>,
     ) -> Self {
         Self {
             sync_p2p,
@@ -248,7 +248,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
     // Initialize miners P2P network
     let (miners_p2p, rpc_client) = if blockchain_config.miner {
-        let Ok(rpc_client) = RpcClient::new(blockchain_config.minerd_endpoint, ex.clone()).await
+        let Ok(rpc_client) =
+            RpcChadClient::new(blockchain_config.minerd_endpoint, ex.clone()).await
         else {
             error!(target: "darkfid", "Failed to initialize miner daemon rpc client, check if minerd is running");
             return Err(Error::RpcClientStopped)

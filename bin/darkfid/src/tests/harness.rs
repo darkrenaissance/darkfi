@@ -176,7 +176,7 @@ impl Harness {
         // and then we broadcast it to rest nodes
         for block in blocks {
             let proposal = Proposal::new(block.clone())?;
-            self.alice.validator.consensus.append_proposal(&proposal).await?;
+            self.alice.validator.append_proposal(&proposal).await?;
             let message = ProposalMessage(proposal);
             self.alice.miners_p2p.as_ref().unwrap().broadcast(&message).await;
         }

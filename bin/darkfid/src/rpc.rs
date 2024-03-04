@@ -170,7 +170,7 @@ impl Darkfid {
         debug!(target: "darkfid::rpc::miner_daemon_request", "Executing request {} with params: {:?}", method, params);
         let latency = Instant::now();
         let req = JsonRequest::new(method, params);
-        let rep = rpc_client.chad_request(req).await?;
+        let rep = rpc_client.request(req).await?;
         let latency = latency.elapsed();
         debug!(target: "darkfid::rpc::miner_daemon_request", "Got reply: {:?}", rep);
         debug!(target: "darkfid::rpc::miner_daemon_request", "Latency: {:?}", latency);
