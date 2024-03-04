@@ -12,7 +12,7 @@
   finance work on a fundamental level. Emphasizes the importance of
   economic networks in issuing credit, and goes through all the major
   economic schools of thought.
-* [Authoritarian vs Democratic Technics](https://wiki.polytech.barcelona/index.php?title=File:Mumford_authoritarian_vs_democratic_technics.pdf)
+* [Authoritarian vs Democratic Technics](http://tal.teias.org/en/l/lm/lewis-mumford-authoritarian-and-democratic-technics.pdf)
   by Mumford is a short 10 page summary of his books
   [The Myth of the Machine parts 1 & 2](https://en.wikipedia.org/wiki/The_Myth_of_the_Machine).
   Mumford was a historian and philosopher of science and technology. His

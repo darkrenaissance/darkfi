@@ -18,7 +18,7 @@ access to values (variables) that are constructed within
 the ZK circuit.  Upon initialization, the VM instantiates
 two heaps, of which one holds literals (currently `u64` is
 supported), and the other holds arbitrary types defined in
-[`HeapVar`](https://darkrenaissance.github.io/darkfi/development/darkfi/zk/vm_heap/enum.HeapVar.html)
+[`HeapVar`](https://github.com/darkrenaissance/darkfi/blob/5559e46ba96c2700067969b784e6bdfb4ccc9704/src/zk/vm_heap.rs#L95)
 
 Once the heaps are instantiated, the circuit initializes all the
 available halo2 gadgets so they're ready for use, and also to create
