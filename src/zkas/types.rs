@@ -68,8 +68,11 @@ pub enum VarType {
     /// Scalar field element array
     ScalarArray = 0x13,
 
-    /// A Merkle tree path
+    /// Merkle tree path
     MerklePath = 0x20,
+
+    /// Sparse merkle tree path
+    SparseMerklePath = 0x21,
 
     /// Unsigned 32-bit integer
     Uint32 = 0x30,
@@ -94,6 +97,7 @@ impl VarType {
             0x12 => Some(Self::Scalar),
             0x13 => Some(Self::ScalarArray),
             0x20 => Some(Self::MerklePath),
+            0x21 => Some(Self::SparseMerklePath),
             0x30 => Some(Self::Uint32),
             0x31 => Some(Self::Uint64),
             0xff => Some(Self::Any),
@@ -114,6 +118,7 @@ impl VarType {
             Self::Scalar => "Scalar",
             Self::ScalarArray => "ScalarArray",
             Self::MerklePath => "MerklePath",
+            Self::SparseMerklePath => "SparseMerklePath",
             Self::Uint32 => "Uint32",
             Self::Uint64 => "Uint64",
             Self::Any => "Any",

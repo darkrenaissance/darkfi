@@ -127,6 +127,7 @@ pub fn zkas_type_checks(
             Witness::Base(_) => *binary_witness == zkas::VarType::Base,
             Witness::Scalar(_) => *binary_witness == zkas::VarType::Scalar,
             Witness::MerklePath(_) => *binary_witness == zkas::VarType::MerklePath,
+            Witness::SparseMerklePath(_) => *binary_witness == zkas::VarType::SparseMerklePath,
             Witness::Uint32(_) => *binary_witness == zkas::VarType::Uint32,
             Witness::Uint64(_) => *binary_witness == zkas::VarType::Uint64,
         };

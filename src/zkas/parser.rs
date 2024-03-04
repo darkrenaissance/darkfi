@@ -683,6 +683,7 @@ impl Parser {
             }
 
             // Valid witness types
+            // TODO: change to TryFrom impl for VarType
             match v.1.token.as_str() {
                 "EcPoint" => {
                     ret.push(Witness {
@@ -724,6 +725,15 @@ impl Parser {
                     ret.push(Witness {
                         name: k.to_string(),
                         typ: VarType::MerklePath,
+                        line: v.0.line,
+                        column: v.0.column,
+                    });
+                }
+
+                "SparseMerklePath" => {
+                    ret.push(Witness {
+                        name: k.to_string(),
+                        typ: VarType::SparseMerklePath,
                         line: v.0.line,
                         column: v.0.column,
                     });

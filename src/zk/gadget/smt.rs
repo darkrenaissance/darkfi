@@ -20,7 +20,7 @@
 
 use std::marker::PhantomData;
 
-use darkfi_sdk::crypto::smt::{FieldHasher, Path};
+use darkfi_sdk::crypto::smt::FieldHasher;
 use halo2_gadgets::poseidon::{
     primitives as poseidon, Hash as PoseidonHash, Pow5Chip as PoseidonChip,
     Pow5Config as PoseidonConfig,
@@ -64,6 +64,7 @@ impl<const N: usize> PathConfig<N> {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct PathChip<H: FieldHasher<Fp, 2>, const N: usize> {
     path: [(AssignedCell<Fp, Fp>, AssignedCell<Fp, Fp>); N],
     config: PathConfig<N>,
@@ -103,7 +104,7 @@ impl<H: FieldHasher<Fp, 2>, const N: usize> PathChip<H, N> {
     pub fn from_native(
         config: PathConfig<N>,
         layouter: &mut impl Layouter<Fp>,
-        native: Path<Fp, H, N>,
+        path: [(Value<Fp>, Value<Fp>); N],
     ) -> Result<Self, plonk::Error> {
         let path = layouter.assign_region(
             || "path",
@@ -115,7 +116,7 @@ impl<H: FieldHasher<Fp, 2>, const N: usize> PathChip<H, N> {
                             || format!("path[{}][{}]", i, 0),
                             config.advices[i],
                             0,
-                            || Value::known(native.path[i].0),
+                            || path[i].0,
                         )
                     })
                     .collect::<Result<Vec<AssignedCell<Fp, Fp>>, plonk::Error>>();
@@ -126,7 +127,7 @@ impl<H: FieldHasher<Fp, 2>, const N: usize> PathChip<H, N> {
                             || format!("path[{}][{}]", i, 1),
                             config.advices[i],
                             1,
-                            || Value::known(native.path[i].1),
+                            || path[i].1,
                         )
                     })
                     .collect::<Result<Vec<AssignedCell<Fp, Fp>>, plonk::Error>>();
@@ -217,7 +218,7 @@ mod tests {
 
     struct TestCircuit {
         root: Value<Fp>,
-        path: Path<Fp, Poseidon<Fp, 2>, HEIGHT>,
+        path: [(Value<Fp>, Value<Fp>); HEIGHT],
         leaf: Value<Fp>,
     }
 
@@ -275,7 +276,7 @@ mod tests {
             mut layouter: impl Layouter<Fp>,
         ) -> Result<(), plonk::Error> {
             // Initialize the Path chip
-            let path_chip =
+            let path_chip: PathChip<Poseidon<Fp, 2>, HEIGHT> =
                 PathChip::from_native(config.clone(), &mut layouter, self.path.clone())?;
 
             // Initialize the AssertEqual chip
@@ -334,6 +335,12 @@ mod tests {
 
         let path = smt.generate_membership_proof(0);
         let root = path.calculate_root(&leaves[0], &hasher.clone()).unwrap();
+
+        let mut witnessed_path = [(Value::unknown(), Value::unknown()); HEIGHT];
+        for (i, (left, right)) in path.path.into_iter().enumerate() {
+            witnessed_path[i] = (Value::known(left), Value::known(right));
+        }
+        let path = witnessed_path;
 
         let circuit = TestCircuit { root: Value::known(root), path, leaf: Value::known(leaves[0]) };
 
