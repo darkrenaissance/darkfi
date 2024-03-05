@@ -91,6 +91,13 @@ Addons should be sandboxed. By default access to all host functions is
 blacklisted, and they must be explicitly whitelisted to call any function,
 including other addons.
 
+We can run addons in separate threads so that if one of them crashes,
+the host application can simply kill the process. Addons can then run alongside
+each other without any effect on each other. However this leads to increased
+memory usage from the overhead of having every addon spawning a new thread,
+so we may wish to use WASM functionality to interpret addon functions that
+take too long.
+
 There is a special function inside the WASM which is called on startup
 called `requested_permissions()`. This is used to request the permissions
 from the user who then adds it to the whitelist for this addon.
@@ -106,6 +113,29 @@ the DHT network.
 ![firefox addons](../assets/firefox-addons.png)
 
 Blender's addon browser looks much better than Firefox's.
+
+When creating addon UIs, there should be a way to allow live reloading of the
+UI for convenient design, and possibly the impl too which makes live debugging
+possible.
+
+#### Addon Maintenance
+
+Overtime there will be a tension between upgrading the core API and maintaining
+a large ecosystem of addons. Therefore there should be a centralized git repo
+for all addons listed in the wallet. Addon authors can tag releases and request
+their addon be updated downstream by the wallet maintainers.
+
+This way when large breaking API changes are needed, we have the ability to:
+
+* Simultaneously update all addons at once.
+* Communicate with addon authors to coordinate any changes needed such
+  as architectural ones.
+* Ensure a canonical repository of vetted addons.
+
+This is similar to how Linux distributions maintain packages.
+
+Addons must also have contact details so darkfi core and the wallet team are
+able to contact them.
 
 ### Modules
 
@@ -151,6 +181,8 @@ through generic node interfaces.
 
 Laundry list of required features:
 
+* XUL/bpy inspired. There is a small wallet core, but the entire UI is created
+  using definitions and the DSL.
 * Dynamic fractional scaling.
 * Customizable scriptable interface, preferably using Python and/or Rust.
 * Calm UI with default darkmode. No animations.
@@ -161,6 +193,9 @@ Laundry list of required features:
   * Tools and interface options designed to not block the user from
     using any other parts.
     * The UI should stay responsive by all means.
+        * This means the UI runs in its own thread, communicating with the
+          backend which runs on another thread.
+        * Non blocking and async. Remains responsive despite work happening.
   * User input should remain as consistent and predictable as possible.
 * Installation free: run out of the box for new installs, not requiring
   root system access.
