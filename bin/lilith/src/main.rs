@@ -39,7 +39,11 @@ use url::Url;
 
 use darkfi::{
     async_daemonize, cli_desc,
-    net::{self, hosts::store::HostState, hosts::refinery::ping_node, P2p, P2pPtr},
+    net::{
+        self,
+        hosts::{refinery::ping_node, store::HostState},
+        P2p, P2pPtr,
+    },
     rpc::{
         jsonrpc::*,
         server::{listen_and_serve, RequestHandler},
@@ -176,9 +180,7 @@ impl Lilith {
             let (entry, position) = hosts.whitelist_fetch_last().await;
             let url = &entry.0;
 
-            if let Err(_) =
-                hosts.try_update_registry(url.clone(), HostState::Refining).await
-            {
+            if let Err(_) = hosts.try_update_registry(url.clone(), HostState::Refining).await {
                 continue
             }
 

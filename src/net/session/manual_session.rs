@@ -158,10 +158,9 @@ impl ManualSession {
                         addr, e,
                     );
 
-                // Stop tracking this address in the HostRegistry.
-                // Otherwise, host will be stuck in Pending state.
-                self.p2p().hosts().remove(&addr).await;
-
+                    // Stop tracking this address in the HostRegistry.
+                    // Otherwise, host will be stuck in Pending state.
+                    self.p2p().hosts().remove(&addr).await;
                 }
             }
 
