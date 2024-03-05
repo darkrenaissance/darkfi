@@ -32,7 +32,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use log::{info, warn};
+use log::{debug, info, warn};
 use smol::lock::Mutex;
 use url::Url;
 
@@ -114,10 +114,10 @@ impl ManualSession {
                 addr, tried_attempts,
             );
 
-            if let Err(_) =
+            if let Err(e) =
                 self.p2p().hosts().try_update_registry(addr.clone(), HostState::Pending).await
             {
-                continue
+                warn!(target: "net::manual_session", "{}", e);
             }
 
             match connector.connect(&addr).await {
@@ -157,10 +157,6 @@ impl ManualSession {
                         "[P2P] Unable to connect to manual outbound [{}]: {}",
                         addr, e,
                     );
-
-                    // Stop tracking this address in the HostRegistry.
-                    // Otherwise, host will be stuck in Pending state.
-                    self.p2p().hosts().remove(&addr).await;
                 }
             }
 
@@ -187,6 +183,9 @@ impl ManualSession {
             "[P2P] Suspending manual connection to {} after {} failed attempts",
             addr, attempts,
         );
+        // Stop tracking this address in the HostRegistry.
+        // Otherwise, host will be stuck in Pending state.
+        self.p2p().hosts().remove(&addr).await;
 
         Ok(())
     }
