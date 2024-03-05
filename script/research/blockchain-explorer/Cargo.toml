@@ -11,7 +11,7 @@ edition = "2021"
 
 [dependencies]
 blake3 = "1.5.0"
-clap = {version = "4.4.14", features = ["derive"]}
+clap = {version = "4.5.1", features = ["derive"]}
 darkfi = {path = "../../../", features = ["blockchain", "wallet", "rpc"]}
 darkfi-sdk = {path = "../../../src/sdk"}
 sled = "0.34.7"

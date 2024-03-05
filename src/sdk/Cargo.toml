@@ -17,7 +17,7 @@ async = ["darkfi-serial/async"]
 
 [dependencies]
 # Error handling
-thiserror = "1.0.56"
+thiserror = "1.0.57"
 
 # Serialization
 darkfi-serial = {path = "../serial", features = ["crypto"]}
@@ -33,7 +33,7 @@ chacha20poly1305 = "0.10.1"
 halo2_gadgets = "0.3.0"
 bridgetree = "0.4.0"
 num-bigint = "0.4.4"
-num-traits = "0.2.17"
+num-traits = "0.2.18"
 pasta_curves = "0.5.1"
 rand_core = "0.6.4"
 

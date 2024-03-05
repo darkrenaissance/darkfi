@@ -16,13 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{
-    clone::Clone,
-    collections::VecDeque,
-    iter::FusedIterator,
-    marker::{Send, Sync},
-    mem,
-};
+use std::{clone::Clone, collections::VecDeque, iter::FusedIterator, mem};
 
 #[cfg(feature = "async")]
 use darkfi_serial::async_trait;
