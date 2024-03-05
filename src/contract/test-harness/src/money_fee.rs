@@ -89,8 +89,7 @@ impl TestHarness {
         let signature_secret = SecretKey::random(&mut OsRng);
 
         info!("Creting FeeV1 ZK proof");
-        let (fee_pk, fee_zkbin) =
-            self.proving_keys.get(&MONEY_CONTRACT_ZKAS_FEE_NS_V1.to_string()).unwrap();
+        let (fee_pk, fee_zkbin) = self.proving_keys.get(MONEY_CONTRACT_ZKAS_FEE_NS_V1).unwrap();
 
         let (proof, public_inputs) = create_fee_proof(
             fee_zkbin,
@@ -252,8 +251,7 @@ impl TestHarness {
         let signature_secret = SecretKey::random(&mut OsRng);
 
         info!("Creating FeeV1 ZK proof");
-        let (fee_pk, fee_zkbin) =
-            self.proving_keys.get(&MONEY_CONTRACT_ZKAS_FEE_NS_V1.to_string()).unwrap();
+        let (fee_pk, fee_zkbin) = self.proving_keys.get(MONEY_CONTRACT_ZKAS_FEE_NS_V1).unwrap();
 
         let (proof, public_inputs) = create_fee_proof(
             fee_zkbin,

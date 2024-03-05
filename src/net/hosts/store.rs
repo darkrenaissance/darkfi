@@ -1434,7 +1434,6 @@ mod tests {
     };
     use crate::{net::hosts::refinery::ping_node, system::sleep};
     use smol::Executor;
-    use std::{sync::Arc, time::UNIX_EPOCH};
 
     #[test]
     fn test_ping_node() {

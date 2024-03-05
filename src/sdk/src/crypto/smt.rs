@@ -390,17 +390,14 @@ mod tests {
 
     /// Helper to change leaves array to BTreeMap and then create SMT.
     fn create_merkle_tree<
-        F: WithSmallOrderMulGroup<3> + Ord,
+        F: WithSmallOrderMulGroup<3> + Ord + FromUniformBytes<64>,
         H: FieldHasher<F, 2>,
         const N: usize,
     >(
         hasher: H,
         leaves: &[F],
         default_leaf: &[u8; 64],
-    ) -> SparseMerkleTree<F, H, N>
-    where
-        F: FromUniformBytes<64>,
-    {
+    ) -> SparseMerkleTree<F, H, N> {
         SparseMerkleTree::<F, H, N>::new_sequential(leaves, &hasher, default_leaf).unwrap()
     }
 

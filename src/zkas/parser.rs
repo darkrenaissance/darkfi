@@ -61,18 +61,16 @@ where
     K: Eq + Hash + Send + Sync + Clone + 'static,
     V: Send + Sync + Clone + 'static,
 {
-    fn contains_key<Q: ?Sized>(&self, k: &Q) -> bool
+    fn contains_key<Q: Hash + Eq + ?Sized>(&self, k: &Q) -> bool
     where
         K: Borrow<Q>,
-        Q: Hash + Eq,
     {
         self.map.contains_key(k)
     }
 
-    fn get<Q: ?Sized>(&self, k: &Q) -> Option<&V>
+    fn get<Q: Hash + Eq + ?Sized>(&self, k: &Q) -> Option<&V>
     where
         K: Borrow<Q>,
-        Q: Hash + Eq,
     {
         self.map.get(k)
     }

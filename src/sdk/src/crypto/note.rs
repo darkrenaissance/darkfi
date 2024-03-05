@@ -157,7 +157,6 @@ mod tests {
     use super::*;
     use crate::crypto::Keypair;
 
-    use halo2_proofs::arithmetic::Field;
     use rand::rngs::OsRng;
 
     #[test]

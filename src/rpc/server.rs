@@ -348,7 +348,7 @@ pub async fn listen_and_serve(
 mod tests {
     use super::*;
     use crate::{rpc::client::RpcClient, system::msleep};
-    use smol::{lock::Mutex, net::TcpListener, Executor};
+    use smol::{net::TcpListener, Executor};
 
     struct RpcServer {
         rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,

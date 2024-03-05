@@ -68,10 +68,10 @@ impl TestHarness {
         let rcpt = self.holders.get(recipient).unwrap().keypair.public;
 
         let (token_mint_pk, token_mint_zkbin) =
-            self.proving_keys.get(&MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1.to_string()).unwrap();
+            self.proving_keys.get(MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1).unwrap();
 
         let (auth_mint_pk, auth_mint_zkbin) =
-            self.proving_keys.get(&MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1.to_string()).unwrap();
+            self.proving_keys.get(MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1).unwrap();
 
         // Create the Auth FuncID
         let auth_func_id = FuncRef {
@@ -256,7 +256,7 @@ impl TestHarness {
         let mint_authority = wallet.token_mint_authority;
 
         let (frz_pk, frz_zkbin) =
-            self.proving_keys.get(&MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1.to_string()).unwrap();
+            self.proving_keys.get(MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1).unwrap();
 
         let auth_func_id = FuncRef {
             contract_id: *MONEY_CONTRACT_ID,

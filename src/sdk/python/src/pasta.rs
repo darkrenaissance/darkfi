@@ -20,7 +20,7 @@ use std::ops::Deref;
 
 use darkfi_sdk::{
     crypto::{constants::NullifierK, pasta_prelude::*, util},
-    pasta::{group::ff::FromUniformBytes, pallas, vesta},
+    pasta::{pallas, vesta},
 };
 use halo2_gadgets::ecc::chip::FixedPoint;
 use pyo3::{

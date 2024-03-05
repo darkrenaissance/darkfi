@@ -238,10 +238,7 @@ impl MonthTasks {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        fs::{create_dir_all, remove_dir_all},
-        path::PathBuf,
-    };
+    use std::fs::{create_dir_all, remove_dir_all};
 
     use super::*;
     use darkfi::Result;

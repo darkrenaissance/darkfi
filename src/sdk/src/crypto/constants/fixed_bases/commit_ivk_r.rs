@@ -2953,7 +2953,7 @@ mod tests {
         ecc::chip::constants::{test_lagrange_coeffs, test_zs_and_us},
         sinsemilla::primitives::CommitDomain,
     };
-    use pasta_curves::{arithmetic::CurveAffine, group::Curve, pallas};
+    use pasta_curves::group::Curve;
 
     #[test]
     fn generator() {

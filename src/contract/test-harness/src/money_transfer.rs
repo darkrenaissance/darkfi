@@ -49,11 +49,8 @@ impl TestHarness {
         let wallet = self.holders.get(holder).unwrap();
         let rcpt = self.holders.get(recipient).unwrap().keypair.public;
 
-        let (mint_pk, mint_zkbin) =
-            self.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1.to_string()).unwrap();
-
-        let (burn_pk, burn_zkbin) =
-            self.proving_keys.get(&MONEY_CONTRACT_ZKAS_BURN_NS_V1.to_string()).unwrap();
+        let (mint_pk, mint_zkbin) = self.proving_keys.get(MONEY_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
+        let (burn_pk, burn_zkbin) = self.proving_keys.get(MONEY_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
 
         // Create the transfer call
         let (params, secrets, mut spent_coins) = make_transfer_call(

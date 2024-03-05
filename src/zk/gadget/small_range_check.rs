@@ -109,7 +109,6 @@ mod tests {
         circuit::{floor_planner, Value},
         dev::MockProver,
         pasta::pallas,
-        plonk,
         plonk::Circuit,
     };
 
