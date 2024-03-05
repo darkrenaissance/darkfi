@@ -21,6 +21,7 @@ use darkfi_serial::{async_trait, AsyncDecodable, AsyncEncodable};
 use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 
 use pasta_curves::{group::ff::Field, pallas};
+use rand_core::{CryptoRng, RngCore};
 
 #[cfg(feature = "async")]
 pub trait EncDecode: Encodable + Decodable + AsyncEncodable + AsyncDecodable {}
@@ -37,7 +38,7 @@ pub struct Blind<F: Field + EncDecode>(pub F);
 impl<F: Field + EncDecode> Blind<F> {
     pub const ZERO: Self = Self(F::ZERO);
 
-    pub fn random<RngCore: rand_core::RngCore>(rng: &mut RngCore) -> Self {
+    pub fn random(rng: &mut (impl CryptoRng + RngCore)) -> Self {
         Self(F::random(rng))
     }
 
