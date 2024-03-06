@@ -51,6 +51,7 @@ use url::Url;
 use super::{
     super::{
         connector::Connector,
+        hosts::store::HostColor,
         p2p::{P2p, P2pPtr},
     },
     Session, SessionBitFlag, SESSION_SEED,
@@ -115,7 +116,7 @@ impl SeedSyncSession {
         }
 
         // Seed process complete
-        if self.p2p().hosts().is_empty_greylist().await {
+        if self.p2p().hosts().container.is_empty(HostColor::Grey).await {
             warn!(target: "net::session::seedsync_session", "[P2P] Greylist empty after seeding");
         }
 

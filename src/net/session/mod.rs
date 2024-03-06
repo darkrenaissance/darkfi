@@ -62,7 +62,7 @@ pub async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr) {
     );
 
     // Remove channel from p2p
-    p2p.hosts().remove(channel.address()).await;
+    p2p.hosts().unregister(channel.address()).await;
     debug!(target: "net::session::remove_sub_on_stop()", "[END]");
 }
 
@@ -145,9 +145,9 @@ pub trait Session: Sync {
         protocol_version.run(executor.clone()).await?;
 
         // Attempt to add channel to registry
-        if let Err(e) = self.p2p().hosts().store(channel.clone()).await {
+        if let Err(e) = self.p2p().hosts().register_channel(channel.clone()).await {
             warn!(target: "net::session::perform_handshake_protocols()",
-            "Couldn't add channel {} to registry!! {}", channel.address(), e);
+            "Couldn't add channel {} to registry! {}", channel.address(), e);
             return Err(e)
         }
 

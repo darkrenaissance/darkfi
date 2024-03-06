@@ -32,6 +32,7 @@
 /// and `ProtocolAddress`.
 pub mod refinery;
 
+/// TODO: update documentation
 /// The main interface for interacting with the hostlist.
 ///
 /// The hostlist is stored in three sections: white, grey, and anchorlists.

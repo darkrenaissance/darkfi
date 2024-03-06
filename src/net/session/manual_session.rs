@@ -32,7 +32,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use log::{debug, info, warn};
+use log::{info, warn};
 use smol::lock::Mutex;
 use url::Url;
 
@@ -114,8 +114,7 @@ impl ManualSession {
                 addr, tried_attempts,
             );
 
-            if let Err(e) =
-                self.p2p().hosts().try_update_registry(addr.clone(), HostState::Pending).await
+            if let Err(e) = self.p2p().hosts().try_register(addr.clone(), HostState::Pending).await
             {
                 warn!(target: "net::manual_session", "{}", e);
             }
@@ -136,7 +135,7 @@ impl ManualSession {
                     self.register_channel(channel.clone(), ex.clone()).await?;
 
                     // Add this connection to the anchorlist
-                    self.p2p().hosts().upgrade_host(&addr).await;
+                    self.p2p().hosts().container.upgrade_host(&addr).await;
 
                     // Notify that channel processing has finished
                     self.channel_subscriber.notify(Ok(channel)).await;
@@ -185,7 +184,7 @@ impl ManualSession {
         );
         // Stop tracking this address in the HostRegistry.
         // Otherwise, host will be stuck in Pending state.
-        self.p2p().hosts().remove(&addr).await;
+        self.p2p().hosts().unregister(&addr).await;
 
         Ok(())
     }
