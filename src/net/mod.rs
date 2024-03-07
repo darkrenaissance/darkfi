@@ -99,7 +99,7 @@ pub use protocol::{
 /// Defines the interaction between nodes during a connection.
 /// Consists of an inbound session, which describes how to set up an
 /// incoming connection, and an outbound session, which describes setting
-/// up an outbound connection. Also describes the sesd session, which is
+/// up an outbound connection. Also describes the seed session, which is
 /// the type of connection used when a node connects to the network for
 /// the first time. Implements the `Session` trait which describes the
 /// common functions across all sessions.
