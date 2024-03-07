@@ -15,10 +15,11 @@ blockchain achieve consensus.
 | P2P network            | Peer-to-peer network on which nodes communicate with each other                        |
 | Finalization           | State achieved when a block and its contents are appended to the canonical blockchain  |
 | Fork                   | Chain of block proposals that begins with the last block of the canonical blockchain   |
+| MAX_INT                | The maximum 32 bytes (256 bits) integer 2^256 − 1                                      |
 
 ## Miner main loop
 
-DarkFi uses a Proof of Work RandomX algorithm paired with delayed finality.
+DarkFi uses RandomX Proof of Work algorithm with enforced finality.
 Therefore, block production involves the following steps:
 
 * First, a miner grabs its current best ranking fork and extends it with a
@@ -64,32 +65,26 @@ new best fork.
 
 ## Ranking
 
-Block producers create a reward transaction containing a `ECVRF` proof (`VRF`)
-that contributes to ranking logic. The `VRF` is built using the `pallas::Base`
-of the $(n-1)$-block proposal's nonce, the $(n-2)$-block proposal's hash, and
-the `pallas::Base` of the block proposal's block height. The `VRF`'s purpose
-is to eliminate long range attacks by predicting a high-ranking future block
-that we can produce in advance.
+Each block proposal is ranked based on how hard it is to produce. To measure
+that, we compute the squared distance of its height target from `MAX_INT`.
+For two honest nodes that mine the next block height of the highest ranking
+fork, their block will have the same rank. To mitigate this tie scenario,
+we also compute the squared distance of the blocks `RandomX` hash from
+`MAX_INT`, allowing us to always chose the actual higher ranking block for
+that height, in case of ties. The complete block rank is a tuple containing
+both squared distances.
 
-Each block proposal is ranked based on the modulus of the $(n-2)$-block
-proposal's `VRF` proof (attached to the block producer's reward transaction)
-and the big-integer from the big endian output of its hash.
+Proof of Work algorithm lowers the difficulty target as hashpower grows.
+This means that blocks will have to be mined for a lower target, therefore
+rank higher, as they go further away from `MAX_INT`.
 
-The rank of the genesis block is 0. The rank of the following 2 blocks is equal
-to their hash output, since there is no $(n-2)$-block producer or `VRF` attached to the
-reward transaction.
-
-For all other blocks, the rank is computed as follows:
-
-1. Obtain a big-integer from the big endian output of the blocks hash
-2. Grab the `VRF` proof from the reward transaction of the $(n-2)$-block proposal
-3. Obtain a big-integer from the big endian output of the `VRF`
-4. Compute the rank: `vrf.output` % `hash_output` (If `hash_output` is 0, rank is equal to `vrf.output`)
-
-To calculate each fork rank, we simply multiply the sum of every block
-proposal's rank in the fork by the fork's length. We use the length
-multiplier to give a preference to longer forks (i.e. longer forks are
-likely to have a higher ranking).
+Similar to blocks, forks rank is a tuple, with the first part being the
+sum of its block's squared target distances, and the second being the sum of
+their squared hash distances Squared distances are used to disproportionately
+favors smaller targets, with the idea being that it will be harder to trigger
+a longer reorg between forks. When we compare forks, we first check the first
+sum, and if its tied, we use the second as the tie breaker, since we know it
+will be statistically unique for each sequence.
 
 The ranking of a fork is always increasing as new blocks are appended.
 To see this, let $F = (M₁ ⋯  Mₙ)$ be a fork with a finite sequence of blocks $(Mᵢ)$
@@ -167,24 +162,19 @@ Extending the canonical blockchain with a new block proposal:
 
 ## Finalization
 
-When the finalization check kicks in, each node will grab its best fork.
-
+Based on the rank properties, each node will diverge to the highest ranking
+fork, and new fork wil emerge extending that at its tips.
 A security threshold is set, which refers to the height where the probability
 to produce a fork, able to reorg the current best ranking fork reaches zero,
 similar to the # of block confirmation used by other PoW based protocols.
 
-If more than one fork exists with same rank, the node will not finalize any
-block proposals. If the fork's length exceeds the security threshold, the node
-will push (finalize) its first proposal to the canonical blockchain. The fork
-acts as a queue (buffer) for to-be-finalized proposals.
+When the finalization check kicks in, each node will grab its best fork.
+If the fork's length exceeds the security threshold, the node will push (finalize)
+its first proposal to the canonical blockchain. The fork acts as a queue (buffer)
+for the to-be-finalized proposals.
 
-Once a finalization occurs, all the remaining fork chains are removed from the
-node's memory pool, keeping just the best ranking one, along with its remaining
-proposals.
-
-Because of this design, finalization cannot occur while there are competing
-fork chains of the same rank whose length exceeds the security threshold. In
-this case, finalization will occur when a single highest ranking fork emerges.
+Once a finalization occurs, all the fork chains not starting with the finalized
+block(s) are removed from the node's memory pool.
 
 We continue Case 3 from the previous section to visualize this logic.
 
@@ -199,8 +189,6 @@ proposals. One extends the F0 fork and the other extends the F2 fork:
                    |
                    |--[M4]              <-- F3
 
-The two competing fork chains also have the same rank, therefore finalization
-cannot occur.
 
 Later, the node only observes 1 proposal, extending the F2 fork:
 
@@ -212,10 +200,10 @@ Later, the node only observes 1 proposal, extending the F2 fork:
                    |
                    |--[M4]                    <-- F3
 
-When the finalization sync period starts, the node finalizes fork F2 and all
-other forks get dropped:
+When the finalization sync period starts, the node finalizes block M0 and
+keeps the forks that extend that:
 
-                   |/--[M0]--[M2]--[M5]      <-- F0
+                   |--[M0]--[M2]--[M5]       <-- F0
     [C]--...--[C]--|
                    |/--[M1]                  <-- F1
                    |
@@ -223,10 +211,11 @@ other forks get dropped:
                    |
                    |/--[M4]                  <-- F3
 
-The canonical blockchain now contains blocks M0, M3, M6 from fork F2. The
-current state is:
+The canonical blockchain now contains blocks M0 and the current state is:
 
-    [C]--...--[C]--|--[M7] <-- F2
+                   |--[M2]--[M5]       <-- F0
+    [C]--...--[C]--|
+                   |--[M3]--[M6]--[M7] <-- F2
 
 # Appendix: Data Structures
 

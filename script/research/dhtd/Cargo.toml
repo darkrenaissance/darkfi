@@ -10,22 +10,22 @@ path = "../../../"
 features = ["dht"]
 
 [dependencies]
-async-channel = "2.1.1"
-async-executor = "1.8.0"
+async-channel = "2.2.0"
+async-executor = "1.9.0"
 async-std = "1.12.0"
 async-trait = "0.1.77"
 blake3 = "1.5.0"
 ctrlc = { version = "3.4.2", features = ["termination"] }
 easy-parallel = "3.3.1"
 futures-lite = "2.2.0"
-log = "0.4.20"
-serde_json = "1.0.111"
-simplelog = "0.12.1"
+log = "0.4.21"
+serde_json = "1.0.114"
+simplelog = "0.12.2"
 url = "2.5.0"
 
 # Argument parsing
-serde = "1.0.195"
-serde_derive = "1.0.195"
+serde = "1.0.197"
+serde_derive = "1.0.197"
 structopt = "0.3.26"
 structopt-toml = "0.5.1"
 

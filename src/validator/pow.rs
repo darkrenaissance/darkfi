@@ -69,7 +69,7 @@ const CUT_END: usize = 660;
 /// How many most recent blocks to use to verify new blocks' timestamp
 const BLOCKCHAIN_TIMESTAMP_CHECK_WINDOW: usize = 60;
 /// Time limit in the future of what blocks can be
-const BLOCK_FUTURE_TIME_LIMIT: u64 = 60 * 60 * 2;
+const BLOCK_FUTURE_TIME_LIMIT: Timestamp = Timestamp::from_u64(60 * 60 * 2);
 
 /// This struct represents the information required by the PoW algorithm
 #[derive(Clone)]
@@ -79,7 +79,7 @@ pub struct PoWModule {
     /// Optional fixed difficulty
     pub fixed_difficulty: Option<BigUint>,
     /// Latest block timestamps ringbuffer
-    pub timestamps: RingBuffer<u64, BUF_SIZE>,
+    pub timestamps: RingBuffer<Timestamp, BUF_SIZE>,
     /// Latest block cummulative difficulties ringbuffer
     pub difficulties: RingBuffer<BigUint, BUF_SIZE>,
     /// Total blocks cummulative difficulty
@@ -95,8 +95,8 @@ impl PoWModule {
         target: usize,
         fixed_difficulty: Option<BigUint>,
     ) -> Result<Self> {
-        // Retrieving last BUF_ZISE difficulties from blockchain to build the buffers
-        let mut timestamps = RingBuffer::<u64, BUF_SIZE>::new();
+        // Retrieving last BUF_SIZE difficulties from blockchain to build the buffers
+        let mut timestamps = RingBuffer::<Timestamp, BUF_SIZE>::new();
         let mut difficulties = RingBuffer::<BigUint, BUF_SIZE>::new();
         let mut cummulative_difficulty = BigUint::zero();
         let last_n = blockchain.difficulties.get_last_n(BUF_SIZE)?;
@@ -120,8 +120,8 @@ impl PoWModule {
     /// return that after first 2 difficulties.
     pub fn next_difficulty(&self) -> Result<BigUint> {
         // Retrieve first DIFFICULTY_WINDOW timestamps from the ring buffer
-        let mut timestamps: Vec<u64> =
-            self.timestamps.iter().take(DIFFICULTY_WINDOW).copied().collect();
+        let mut timestamps: Vec<Timestamp> =
+            self.timestamps.iter().take(DIFFICULTY_WINDOW).cloned().collect();
 
         // Check we have enough timestamps
         let length = timestamps.len();
@@ -142,9 +142,10 @@ impl PoWModule {
 
         // Calculate total time span
         let cut_end = cut_end - 1;
-        let mut time_span = timestamps[cut_end] - timestamps[cut_begin];
-        if time_span == 0 {
-            time_span = 1;
+
+        let mut time_span = timestamps[cut_end].checked_sub(timestamps[cut_begin])?;
+        if time_span.inner() == 0 {
+            time_span = 1.into();
         }
 
         // Calculate total work done during this time span
@@ -154,7 +155,8 @@ impl PoWModule {
         }
 
         // Compute next difficulty
-        let next_difficulty = (total_work * self.target + time_span - BigUint::one()) / time_span;
+        let next_difficulty =
+            (total_work * self.target + time_span.inner() - BigUint::one()) / time_span.inner();
 
         Ok(next_difficulty)
     }
@@ -188,6 +190,13 @@ impl PoWModule {
         Ok(BigUint::from_bytes_be(&[0xFF; 32]) / &self.next_difficulty()?)
     }
 
+    /// Compute the next mine target and difficulty
+    pub fn next_mine_target_and_difficulty(&self) -> Result<(BigUint, BigUint)> {
+        let difficulty = self.next_difficulty()?;
+        let mine_target = BigUint::from_bytes_be(&[0xFF; 32]) / &difficulty;
+        Ok((mine_target, difficulty))
+    }
+
     /// Verify provided difficulty corresponds to the next one
     pub fn verify_difficulty(&self, difficulty: &BigUint) -> Result<bool> {
         Ok(difficulty == &self.next_difficulty()?)
@@ -195,31 +204,37 @@ impl PoWModule {
 
     /// Verify provided block timestamp is not far in the future and
     /// check its valid acorrding to current timestamps median
-    pub fn verify_current_timestamp(&self, timestamp: u64) -> bool {
-        if timestamp > Timestamp::current_time().0 + BLOCK_FUTURE_TIME_LIMIT {
-            return false
+    pub fn verify_current_timestamp(&self, timestamp: Timestamp) -> Result<bool> {
+        if timestamp > Timestamp::current_time().checked_add(BLOCK_FUTURE_TIME_LIMIT)? {
+            return Ok(false)
         }
 
-        self.verify_timestamp_by_median(timestamp)
+        Ok(self.verify_timestamp_by_median(timestamp))
     }
 
     /// Verify provided block timestamp is valid and matches certain criteria
-    pub fn verify_timestamp_by_median(&self, timestamp: u64) -> bool {
+    pub fn verify_timestamp_by_median(&self, timestamp: Timestamp) -> bool {
         // If not enough blocks, no proper median yet, return true
         if self.timestamps.len() < BLOCKCHAIN_TIMESTAMP_CHECK_WINDOW {
             return true
         }
 
         // Make sure the timestamp is higher or equal to the median
-        let timestamps =
-            self.timestamps.iter().rev().take(BLOCKCHAIN_TIMESTAMP_CHECK_WINDOW).copied().collect();
-        timestamp >= median(timestamps)
+        let timestamps = self
+            .timestamps
+            .iter()
+            .rev()
+            .take(BLOCKCHAIN_TIMESTAMP_CHECK_WINDOW)
+            .map(|x| x.inner())
+            .collect();
+
+        timestamp >= median(timestamps).into()
     }
 
     /// Verify provided block timestamp and hash
     pub fn verify_current_block(&self, block: &BlockInfo) -> Result<()> {
         // First we verify the block's timestamp
-        if !self.verify_current_timestamp(block.header.timestamp.0) {
+        if !self.verify_current_timestamp(block.header.timestamp)? {
             return Err(Error::PoWInvalidTimestamp)
         }
 
@@ -256,7 +271,7 @@ impl PoWModule {
     }
 
     /// Append provided timestamp and difficulty to the ring buffers
-    pub fn append(&mut self, timestamp: u64, difficulty: &BigUint) {
+    pub fn append(&mut self, timestamp: Timestamp, difficulty: &BigUint) {
         self.timestamps.push(timestamp);
         self.cummulative_difficulty += difficulty;
         self.difficulties.push(self.cummulative_difficulty.clone());
@@ -416,7 +431,7 @@ mod tests {
             let parts: Vec<String> = line.split(' ').map(|x| x.to_string()).collect();
             assert!(parts.len() == 2);
 
-            let timestamp = parts[0].parse::<u64>().unwrap();
+            let timestamp = parts[0].parse::<u64>().unwrap().into();
             let difficulty = BigUint::from_str_radix(&parts[1], 10).unwrap();
 
             let res = module.next_difficulty()?;

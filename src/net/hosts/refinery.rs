@@ -24,7 +24,10 @@ use std::{
 use log::{debug, warn};
 use url::Url;
 
-use super::super::p2p::{P2p, P2pPtr};
+use super::{
+    super::p2p::{P2p, P2pPtr},
+    store::HostColor,
+};
 use crate::{
     net::{
         connector::Connector, hosts::store::HostState, protocol::ProtocolVersion, session::Session,
@@ -52,7 +55,7 @@ impl GreylistRefinery {
     }
 
     pub async fn start(self: Arc<Self>) {
-        match self.p2p().hosts().load_hosts().await {
+        match self.p2p().hosts().container.load_all(&self.p2p().settings().hostlist).await {
             Ok(()) => {
                 debug!(target: "net::refinery::start()", "Load hosts successful!");
             }
@@ -76,7 +79,7 @@ impl GreylistRefinery {
     pub async fn stop(self: Arc<Self>) {
         self.process.stop().await;
 
-        match self.p2p().hosts().save_hosts().await {
+        match self.p2p().hosts().container.save_all(&self.p2p().settings().hostlist).await {
             Ok(()) => {
                 debug!(target: "net::refinery::stop()", "Save hosts successful!");
             }
@@ -95,7 +98,7 @@ impl GreylistRefinery {
 
             let hosts = self.p2p().hosts();
 
-            if hosts.is_empty_greylist().await {
+            if hosts.container.is_empty(HostColor::Grey).await {
                 debug!(target: "net::refinery",
                 "Greylist is empty! Cannot start refinery process");
 
@@ -103,17 +106,23 @@ impl GreylistRefinery {
             }
 
             // Only attempt to refine peers that match our transports.
-            match hosts.greylist_fetch_random_with_schemes().await {
+            match hosts
+                .container
+                .fetch_random_with_schemes(
+                    HostColor::Grey,
+                    &self.p2p().settings().allowed_transports,
+                )
+                .await
+            {
                 Some((entry, position)) => {
                     let url = &entry.0;
 
-                    if let Err(_) =
-                        hosts.try_update_registry(url.clone(), HostState::Refining).await
-                    {
+                    if hosts.try_register(url.clone(), HostState::Refining).await.is_err() {
                         continue
                     }
+
                     if !ping_node(url.clone(), self.p2p().clone()).await {
-                        hosts.greylist_remove(url, position).await;
+                        hosts.container.remove(HostColor::Grey, url, position).await;
 
                         debug!(
                             target: "net::refinery",
@@ -125,7 +134,7 @@ impl GreylistRefinery {
                         //
                         // It is not necessary to call this when the refinery passes, since the
                         // state will be changed to Connected.
-                        hosts.remove(url).await;
+                        hosts.unregister(url).await;
 
                         continue
                     }
@@ -133,10 +142,13 @@ impl GreylistRefinery {
                     let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
 
                     // Append to the whitelist.
-                    hosts.whitelist_store_or_update(&[(url.clone(), last_seen)]).await;
+                    hosts
+                        .container
+                        .store_or_update(HostColor::White, &[(url.clone(), last_seen)])
+                        .await;
 
                     // Remove whitelisted peer from the greylist.
-                    hosts.greylist_remove(url, position).await;
+                    hosts.container.remove(HostColor::Grey, url, position).await;
                 }
                 None => {
                     debug!(target: "net::refinery", "No matching greylist entries found. Cannot proceed with refinery");

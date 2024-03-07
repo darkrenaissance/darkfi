@@ -19,9 +19,9 @@ darkfi-contract-test-harness = {path = "../../../src/contract/test-harness"}
 darkfi-serial = {path = "../../../src/serial"}
 
 # Misc
-anyhow = "1.0.79"
+anyhow = "1.0.80"
 async-std = {version = "1.12.0", features = ["attributes"]}
-clap = {version = "4.4.14", features = ["derive"]}
+clap = {version = "4.5.2", features = ["derive"]}
 sled = "0.34.7"
 
 [patch.crates-io]

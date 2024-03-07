@@ -44,6 +44,7 @@ use super::{
         channel::ChannelPtr,
         connector::Connector,
         dnet::{self, dnetev, DnetEvent},
+        hosts::store::HostColor,
         message::GetAddrsMessage,
         p2p::{P2p, P2pPtr},
     },
@@ -190,6 +191,7 @@ impl Slot {
         let hosts = self.p2p().hosts();
         let connects = self.p2p().settings().outbound_connections;
         let white_count = connects * self.p2p().settings().white_connection_percent / 100;
+        let transport_mixing = self.p2p().settings().transport_mixing;
 
         if slot_count < self.p2p().settings().anchor_connection_count {
             //  Up to anchor_connection_count connections:
@@ -197,20 +199,44 @@ impl Slot {
             //  If the anchorlist is empty, select from the whitelist
             //  If the whitelist is empty, select from the greylist
             //  If the greylist is empty, return None and do peer discovery
-            if !hosts.anchorlist_fetch_address(transports).await.is_empty() {
-                let addrs = hosts.anchorlist_fetch_address(transports).await;
+            if !hosts
+                .container
+                .fetch_address(HostColor::Gold, transports, transport_mixing)
+                .await
+                .is_empty()
+            {
+                let addrs = hosts
+                    .container
+                    .fetch_address(HostColor::Gold, transports, transport_mixing)
+                    .await;
 
                 return hosts.check_address(addrs).await
             }
 
-            if !hosts.whitelist_fetch_address(transports).await.is_empty() {
-                let addrs = hosts.whitelist_fetch_address(transports).await;
+            if !hosts
+                .container
+                .fetch_address(HostColor::White, transports, transport_mixing)
+                .await
+                .is_empty()
+            {
+                let addrs = hosts
+                    .container
+                    .fetch_address(HostColor::White, transports, transport_mixing)
+                    .await;
 
                 return hosts.check_address(addrs).await
             }
 
-            if !hosts.greylist_fetch_address(transports).await.is_empty() {
-                let addrs = hosts.greylist_fetch_address(transports).await;
+            if !hosts
+                .container
+                .fetch_address(HostColor::Grey, transports, transport_mixing)
+                .await
+                .is_empty()
+            {
+                let addrs = hosts
+                    .container
+                    .fetch_address(HostColor::Grey, transports, transport_mixing)
+                    .await;
 
                 return hosts.check_address(addrs).await
             }
@@ -219,14 +245,30 @@ impl Slot {
             //  Select from the whitelist
             //  If the whitelist is empty, select from the greylist
             //  If the greylist is empty, return None and do peer discovery
-            if !hosts.whitelist_fetch_address(transports).await.is_empty() {
-                let addrs = hosts.whitelist_fetch_address(transports).await;
+            if !hosts
+                .container
+                .fetch_address(HostColor::White, transports, transport_mixing)
+                .await
+                .is_empty()
+            {
+                let addrs = hosts
+                    .container
+                    .fetch_address(HostColor::White, transports, transport_mixing)
+                    .await;
 
                 return hosts.check_address(addrs).await
             }
 
-            if !hosts.greylist_fetch_address(transports).await.is_empty() {
-                let addrs = hosts.greylist_fetch_address(transports).await;
+            if !hosts
+                .container
+                .fetch_address(HostColor::Grey, transports, transport_mixing)
+                .await
+                .is_empty()
+            {
+                let addrs = hosts
+                    .container
+                    .fetch_address(HostColor::Grey, transports, transport_mixing)
+                    .await;
 
                 return hosts.check_address(addrs).await
             }
@@ -234,8 +276,16 @@ impl Slot {
             // All other connections:
             //  Select from the greylist
             //  If the greylist is empty, do peer discovery
-            if !hosts.greylist_fetch_address(transports).await.is_empty() {
-                let addrs = hosts.greylist_fetch_address(transports).await;
+            if !hosts
+                .container
+                .fetch_address(HostColor::Grey, transports, transport_mixing)
+                .await
+                .is_empty()
+            {
+                let addrs = hosts
+                    .container
+                    .fetch_address(HostColor::Grey, transports, transport_mixing)
+                    .await;
 
                 return hosts.check_address(addrs).await
             }
@@ -264,7 +314,7 @@ impl Slot {
 
             // Do peer discovery if we don't have a hostlist (first time connecting
             // to the network).
-            if hosts.is_empty_hostlist().await {
+            if hosts.container.is_empty(HostColor::Grey).await {
                 dnetev!(self, OutboundSlotSleeping, {
                     slot: self.slot,
                 });
@@ -365,7 +415,7 @@ impl Slot {
             self.channel_id.store(channel.info.id, Ordering::Relaxed);
 
             // Add this connection to the anchorlist
-            hosts.upgrade_host(&addr).await;
+            hosts.move_host(&addr, last_seen, HostColor::Gold).await;
 
             // Wait for channel to close
             stop_sub.receive().await;

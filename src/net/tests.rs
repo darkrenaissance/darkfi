@@ -26,7 +26,7 @@ use smol::{channel, future, Executor};
 use url::Url;
 
 use crate::{
-    net::{P2p, Settings},
+    net::{hosts::store::HostColor, P2p, Settings},
     system::sleep,
 };
 
@@ -158,7 +158,7 @@ async fn hostlist_propagation(ex: Arc<Executor<'static>>) {
     for p2p in p2p_instances.iter() {
         let hosts = p2p.hosts();
         // We should have some greylist entries at this point.
-        assert!(!hosts.is_empty_greylist().await);
+        assert!(!hosts.container.is_empty(HostColor::Grey).await);
     }
 
     // Stop the P2P network

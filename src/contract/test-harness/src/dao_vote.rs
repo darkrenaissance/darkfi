@@ -56,10 +56,10 @@ impl TestHarness {
         let wallet = self.holders.get(voter).unwrap();
 
         let (dao_vote_burn_pk, dao_vote_burn_zkbin) =
-            self.proving_keys.get(&DAO_CONTRACT_ZKAS_DAO_VOTE_INPUT_NS.to_string()).unwrap();
+            self.proving_keys.get(DAO_CONTRACT_ZKAS_DAO_VOTE_INPUT_NS).unwrap();
 
         let (dao_vote_main_pk, dao_vote_main_zkbin) =
-            self.proving_keys.get(&DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS.to_string()).unwrap();
+            self.proving_keys.get(DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS).unwrap();
 
         let (_proposal_leaf_pos, snapshot_money_merkle_tree) =
             wallet.dao_prop_leafs.get(proposal_bulla).unwrap();

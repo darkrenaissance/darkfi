@@ -43,6 +43,7 @@
   - [DAO](arch/dao.md)
   - [Wallet](arch/wallet.md)
 - [zkas](zkas/index.md)
+  - [Writing ZK Proofs](zkas/writing-zk-proofs.md)
   - [Bincode](zkas/bincode.md)
   - [zkVM](zkas/zkvm.md)
   - [Examples](zkas/examples.md)

@@ -24,7 +24,7 @@ use darkfi::{
     util::encoding::base64,
     validator::{
         consensus::{Fork, Proposal},
-        utils::best_forks_indexes,
+        utils::best_fork_index,
     },
     zk::{empty_witnesses, ProvingKey, ZkCircuit},
     zkas::ZkBinary,
@@ -111,7 +111,7 @@ pub async fn miner_task(node: &Darkfid, recipient: &PublicKey, skip_sync: bool) 
     loop {
         // Grab best current fork
         let forks = node.validator.consensus.forks.read().await;
-        let extended_fork = forks[best_forks_indexes(&forks)?[0]].full_clone()?;
+        let extended_fork = forks[best_fork_index(&forks)?].full_clone()?;
         drop(forks);
 
         // Start listenning for network proposals and mining next block for best fork.
@@ -148,16 +148,16 @@ async fn listen_to_network(
         // Grab a lock over node forks
         let forks = node.validator.consensus.forks.read().await;
 
-        // Grab best current fork indexes
-        let fork_indexes = best_forks_indexes(&forks)?;
+        // Grab best current fork index
+        let index = best_fork_index(&forks)?;
 
-        // Iterate to verify if proposals sequence has changed
-        for index in fork_indexes {
-            if forks[index].last_proposal()?.hash != last_proposal_hash {
-                drop(forks);
-                return Ok(())
-            }
+        // Verify if proposals sequence has changed
+        if forks[index].last_proposal()?.hash != last_proposal_hash {
+            drop(forks);
+            return Ok(())
         }
+
+        drop(forks);
     }
 }
 

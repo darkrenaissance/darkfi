@@ -182,6 +182,9 @@ pub enum Error {
     #[error("P2P network stopped")]
     P2PNetworkStopped,
 
+    #[error("No such host color exists")]
+    InvalidHostColor,
+
     #[error("No matching hostlist entry")]
     HostDoesNotExist,
 
@@ -492,6 +495,12 @@ pub enum Error {
 
     #[error("Detached task stopped")]
     DetachedTaskStopped,
+
+    #[error("Addition overflow")]
+    AdditionOverflow,
+
+    #[error("Subtraction underflow")]
+    SubtractionUnderflow,
 
     // ==============================================
     // Wrappers for other error types in this library

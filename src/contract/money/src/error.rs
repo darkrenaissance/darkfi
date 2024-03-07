@@ -88,14 +88,11 @@ pub enum MoneyError {
     #[error("Call is executed on genesis block height")]
     PoWRewardCallOnGenesisBlock,
 
-    #[error("Could not retrieve last block from db")]
-    PoWRewardRetrieveLastBlockError,
+    #[error("Could not retrieve last block height from db")]
+    PoWRewardRetrieveLastBlockHeightError,
 
     #[error("Call is not executed on next block height")]
     PoWRewardCallNotOnNextBlockHeight,
-
-    #[error("Eta VRF proof couldn't be verified")]
-    PoWRewardErroneousVrfProof,
 
     #[error("No inputs in fee call")]
     FeeMissingInputs,
@@ -136,12 +133,11 @@ impl From<MoneyError> for ContractError {
             MoneyError::GenesisCallNonGenesisBlock => Self::Custom(23),
             MoneyError::MissingNullifier => Self::Custom(24),
             MoneyError::PoWRewardCallOnGenesisBlock => Self::Custom(25),
-            MoneyError::PoWRewardRetrieveLastBlockError => Self::Custom(26),
+            MoneyError::PoWRewardRetrieveLastBlockHeightError => Self::Custom(26),
             MoneyError::PoWRewardCallNotOnNextBlockHeight => Self::Custom(27),
-            MoneyError::PoWRewardErroneousVrfProof => Self::Custom(28),
-            MoneyError::FeeMissingInputs => Self::Custom(29),
-            MoneyError::InsufficientFee => Self::Custom(30),
-            MoneyError::CoinMerkleRootNotFound => Self::Custom(31),
+            MoneyError::FeeMissingInputs => Self::Custom(28),
+            MoneyError::InsufficientFee => Self::Custom(29),
+            MoneyError::CoinMerkleRootNotFound => Self::Custom(30),
         }
     }
 }

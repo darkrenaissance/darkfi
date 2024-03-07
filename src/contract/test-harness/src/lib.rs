@@ -196,7 +196,7 @@ impl TestHarness {
     pub async fn new(holders: &[Holder], verify_fees: bool) -> Result<Self> {
         // Create a genesis block
         let mut genesis_block = BlockInfo::default();
-        genesis_block.header.timestamp = Timestamp(1689772567);
+        genesis_block.header.timestamp = Timestamp::from_u64(1689772567);
         let producer_tx = genesis_block.txs.pop().unwrap();
         genesis_block.append_txs(vec![producer_tx])?;
 

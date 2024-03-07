@@ -39,7 +39,14 @@ use url::Url;
 
 use darkfi::{
     async_daemonize, cli_desc,
-    net::{self, hosts::store::HostState, hosts::refinery::ping_node, P2p, P2pPtr},
+    net::{
+        self,
+        hosts::{
+            refinery::ping_node,
+            store::{HostColor, HostState},
+        },
+        P2p, P2pPtr,
+    },
     rpc::{
         jsonrpc::*,
         server::{listen_and_serve, RequestHandler},
@@ -88,7 +95,8 @@ impl Spawn {
     async fn get_whitelist(&self) -> Vec<JsonValue> {
         self.p2p
             .hosts()
-            .whitelist_fetch_all()
+            .container
+            .fetch_all(HostColor::White)
             .await
             .iter()
             .map(|(addr, _url)| JsonValue::String(addr.to_string()))
@@ -98,7 +106,8 @@ impl Spawn {
     async fn get_greylist(&self) -> Vec<JsonValue> {
         self.p2p
             .hosts()
-            .greylist_fetch_all()
+            .container
+            .fetch_all(HostColor::Grey)
             .await
             .iter()
             .map(|(addr, _url)| JsonValue::String(addr.to_string()))
@@ -108,12 +117,14 @@ impl Spawn {
     async fn get_anchorlist(&self) -> Vec<JsonValue> {
         self.p2p
             .hosts()
-            .anchorlist_fetch_all()
+            .container
+            .fetch_all(HostColor::Gold)
             .await
             .iter()
             .map(|(addr, _url)| JsonValue::String(addr.to_string()))
             .collect()
     }
+
     async fn info(&self) -> JsonValue {
         let mut addr_vec = vec![];
         for addr in &self.p2p.settings().inbound_addrs {
@@ -167,26 +178,28 @@ impl Lilith {
         loop {
             sleep(REFINERY_INTERVAL).await;
 
-            if hosts.is_empty_whitelist().await {
+            if hosts.container.is_empty(HostColor::White).await {
                 warn!(target: "lilith", "Whitelist is empty! Cannot start refinery process");
 
                 continue
             }
 
-            let (entry, position) = hosts.whitelist_fetch_last().await;
+            let (entry, position) = hosts.container.fetch_last(HostColor::White).await;
             let url = &entry.0;
 
-            if let Err(_) =
-                hosts.try_update_registry(url.clone(), HostState::Refining).await
-            {
+            if hosts.try_register(url.clone(), HostState::Refining).await.is_err() {
                 continue
             }
 
             if !ping_node(url.clone(), p2p.clone()).await {
-                let (_addr, last_seen) = hosts.get_whitelist_entry_at_addr(url).await.unwrap();
-                hosts.greylist_store_or_update(&[(url.clone(), last_seen)]).await;
+                let (_addr, last_seen) = hosts
+                    .container
+                    .get_entry_at_addr(HostColor::White as usize, url)
+                    .await
+                    .unwrap();
+                hosts.insert(HostColor::Grey, &[(url.clone(), last_seen)]).await;
 
-                hosts.whitelist_remove(url, position).await;
+                hosts.container.remove(HostColor::White, url, position).await;
                 debug!(target: "lilith", "Host {} is not responsive. Downgraded from whitelist", url);
 
                 // Remove this entry from HostRegistry to avoid this host getting
@@ -194,14 +207,17 @@ impl Lilith {
                 //
                 // It is not necessary to call this when the refinery passes, since the
                 // state will be changed to Connected.
-                hosts.remove(url).await;
+                hosts.unregister(url).await;
 
                 continue
             }
 
             // This node is active. Update the last seen field.
             let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-            hosts.whitelist_update_last_seen(url, last_seen, position).await;
+            hosts
+                .container
+                .update_last_seen(HostColor::White as usize, url, last_seen, position)
+                .await;
         }
     }
 

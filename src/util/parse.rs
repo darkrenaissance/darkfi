@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{iter::FromIterator, str::FromStr};
+use std::str::FromStr;
 
 use crate::{Error, Result};
 

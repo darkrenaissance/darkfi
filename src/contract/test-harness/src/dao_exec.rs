@@ -63,20 +63,15 @@ impl TestHarness {
     ) -> Result<(Transaction, MoneyTransferParamsV1, DaoExecParams, Option<MoneyFeeParamsV1>)> {
         let dao_wallet = self.holders.get(&Holder::Dao).unwrap();
 
-        let (mint_pk, mint_zkbin) =
-            self.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1.to_string()).unwrap();
-        let (burn_pk, burn_zkbin) =
-            self.proving_keys.get(&MONEY_CONTRACT_ZKAS_BURN_NS_V1.to_string()).unwrap();
+        let (mint_pk, mint_zkbin) = self.proving_keys.get(MONEY_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
+        let (burn_pk, burn_zkbin) = self.proving_keys.get(MONEY_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
+
         let (dao_exec_pk, dao_exec_zkbin) =
-            self.proving_keys.get(&DAO_CONTRACT_ZKAS_DAO_EXEC_NS.to_string()).unwrap();
-        let (dao_auth_xfer_pk, dao_auth_xfer_zkbin) = self
-            .proving_keys
-            .get(&DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS.to_string())
-            .unwrap();
-        let (dao_auth_xfer_enc_coin_pk, dao_auth_xfer_enc_coin_zkbin) = self
-            .proving_keys
-            .get(&DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS.to_string())
-            .unwrap();
+            self.proving_keys.get(DAO_CONTRACT_ZKAS_DAO_EXEC_NS).unwrap();
+        let (dao_auth_xfer_pk, dao_auth_xfer_zkbin) =
+            self.proving_keys.get(DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS).unwrap();
+        let (dao_auth_xfer_enc_coin_pk, dao_auth_xfer_enc_coin_zkbin) =
+            self.proving_keys.get(DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS).unwrap();
 
         let input_user_data_blind = Blind::random(&mut OsRng);
         let exec_signature_secret = SecretKey::random(&mut OsRng);

@@ -20,6 +20,7 @@
 use darkfi_sdk::crypto::{constants::OrchardFixedBases, MerkleNode};
 use halo2_gadgets::ecc::{
     chip::EccChip, FixedPoint, FixedPointBaseField, FixedPointShort, NonIdentityPoint, Point,
+    ScalarFixed,
 };
 use halo2_proofs::{
     circuit::{AssignedCell, Value},
@@ -63,10 +64,6 @@ impl Witness {
     }
 }
 
-pub enum Literal {
-    Uint64(Value<u64>),
-}
-
 /// Helper function for verifiers to generate empty witnesses for
 /// a given decoded zkas binary
 pub fn empty_witnesses(zkbin: &ZkBinary) -> Result<Vec<Witness>> {
@@ -99,7 +96,7 @@ pub enum HeapVar {
     EcFixedPointShort(FixedPointShort<pallas::Affine, EccChip<OrchardFixedBases>>),
     EcFixedPointBase(FixedPointBaseField<pallas::Affine, EccChip<OrchardFixedBases>>),
     Base(AssignedCell<pallas::Base, pallas::Base>),
-    Scalar(Value<pallas::Scalar>),
+    Scalar(ScalarFixed<pallas::Affine, EccChip<OrchardFixedBases>>),
     MerklePath(Value<[pallas::Base; 32]>),
     Uint32(Value<u32>),
     Uint64(Value<u64>),
@@ -128,7 +125,7 @@ impl_try_from!(EcNiPoint, NonIdentityPoint<pallas::Affine, EccChip<OrchardFixedB
 impl_try_from!(EcFixedPoint, FixedPoint<pallas::Affine, EccChip<OrchardFixedBases>>);
 impl_try_from!(EcFixedPointShort, FixedPointShort<pallas::Affine, EccChip<OrchardFixedBases>>);
 impl_try_from!(EcFixedPointBase, FixedPointBaseField<pallas::Affine, EccChip<OrchardFixedBases>>);
-impl_try_from!(Scalar, Value<pallas::Scalar>);
+impl_try_from!(Scalar, ScalarFixed<pallas::Affine, EccChip<OrchardFixedBases>>);
 impl_try_from!(Base, AssignedCell<pallas::Base, pallas::Base>);
 impl_try_from!(Uint32, Value<u32>);
 impl_try_from!(MerklePath, Value<[pallas::Base; 32]>);

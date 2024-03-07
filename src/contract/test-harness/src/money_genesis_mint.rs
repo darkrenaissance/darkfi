@@ -49,8 +49,7 @@ impl TestHarness {
     ) -> Result<(Transaction, MoneyGenesisMintParamsV1)> {
         let wallet = self.holders.get(holder).unwrap();
 
-        let (mint_pk, mint_zkbin) =
-            self.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1.to_string()).unwrap();
+        let (mint_pk, mint_zkbin) = self.proving_keys.get(MONEY_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
 
         // Build the contract call
         let builder = GenesisMintCallBuilder {

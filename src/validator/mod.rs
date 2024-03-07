@@ -341,24 +341,22 @@ impl Validator {
         // Grab fork proposals sequence
         let forks = self.consensus.forks.read().await;
         let fork = &forks[finalized_fork.unwrap()];
-        let mut proposals = fork.overlay.lock().unwrap().get_blocks_by_hash(&fork.proposals)?;
+        let proposals = fork.overlay.lock().unwrap().get_blocks_by_hash(&fork.proposals)?;
         drop(forks);
 
         // Find the excess over finalization threshold
         let excess = (proposals.len() - self.consensus.finalization_threshold) + 1;
 
-        // Grab non finalized blocks
-        let non_finalized = proposals.split_off(excess);
-
         // Append finalized blocks
+        let finalized = &proposals[..excess];
         info!(target: "validator::finalization", "Finalizing proposals:");
-        for block in &proposals {
+        for block in finalized {
             info!(target: "validator::finalization", "\t{} - {}", block.hash()?, block.header.height);
         }
-        self.add_blocks(&proposals).await?;
+        self.add_blocks(finalized).await?;
 
-        // Rebuild best fork using rest proposals
-        self.consensus.rebuild_best_fork(&non_finalized).await?;
+        // Rebuild forks starting with the finalized blocks
+        self.consensus.rebuild_forks(finalized).await?;
         info!(target: "validator::finalization", "Finalization completed!");
 
         // Release append lock
@@ -413,7 +411,7 @@ impl Validator {
             let cummulative_difficulty = module.cummulative_difficulty.clone() + difficulty.clone();
             let block_difficulty = BlockDifficulty::new(
                 block.header.height,
-                block.header.timestamp.0,
+                block.header.timestamp,
                 difficulty,
                 cummulative_difficulty,
             );
@@ -578,7 +576,7 @@ impl Validator {
 
             // Update PoW module
             if block.header.version == 1 {
-                module.append(block.header.timestamp.0, &module.next_difficulty()?);
+                module.append(block.header.timestamp, &module.next_difficulty()?);
             }
 
             // Use last inserted block as next iteration previous

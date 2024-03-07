@@ -29,7 +29,7 @@
 //! and insures that no other part of the program uses the slots at the
 //! same time.
 
-use std::sync::Arc;
+use std::{sync::Arc, time::UNIX_EPOCH};
 
 use async_trait::async_trait;
 use log::{info, warn};
@@ -45,7 +45,7 @@ use super::{
     Session, SessionBitFlag, SESSION_MANUAL,
 };
 use crate::{
-    net::hosts::store::HostState,
+    net::hosts::store::{HostColor, HostState},
     system::{sleep, LazyWeak, StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr},
     Error, Result,
 };
@@ -114,10 +114,9 @@ impl ManualSession {
                 addr, tried_attempts,
             );
 
-            if let Err(_) =
-                self.p2p().hosts().try_update_registry(addr.clone(), HostState::Pending).await
+            if let Err(e) = self.p2p().hosts().try_register(addr.clone(), HostState::Pending).await
             {
-                continue
+                warn!(target: "net::manual_session", "{}", e);
             }
 
             match connector.connect(&addr).await {
@@ -135,8 +134,9 @@ impl ManualSession {
                     // Register the new channel
                     self.register_channel(channel.clone(), ex.clone()).await?;
 
+                    let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
                     // Add this connection to the anchorlist
-                    self.p2p().hosts().upgrade_host(&addr).await;
+                    self.p2p().hosts().move_host(&addr, last_seen, HostColor::Gold).await;
 
                     // Notify that channel processing has finished
                     self.channel_subscriber.notify(Ok(channel)).await;
@@ -157,11 +157,6 @@ impl ManualSession {
                         "[P2P] Unable to connect to manual outbound [{}]: {}",
                         addr, e,
                     );
-
-                // Stop tracking this address in the HostRegistry.
-                // Otherwise, host will be stuck in Pending state.
-                self.p2p().hosts().remove(&addr).await;
-
                 }
             }
 
@@ -188,6 +183,9 @@ impl ManualSession {
             "[P2P] Suspending manual connection to {} after {} failed attempts",
             addr, attempts,
         );
+        // Stop tracking this address in the HostRegistry.
+        // Otherwise, host will be stuck in Pending state.
+        self.p2p().hosts().unregister(&addr).await;
 
         Ok(())
     }

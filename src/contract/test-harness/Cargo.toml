@@ -16,7 +16,7 @@ darkfi_deployooor_contract = {path = "../deployooor", features = ["client", "no-
 
 num-bigint = "0.4.4"
 blake3 = "1.5.0"
-log = "0.4.20"
+log = "0.4.21"
 rand = "0.8.5"
-simplelog = "0.12.1"
+simplelog = "0.12.2"
 sled = "0.34.7"

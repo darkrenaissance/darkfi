@@ -107,13 +107,13 @@ pub fn get_blockchain_time() -> GenericResult<Option<Vec<u8>>> {
     parse_ret(ret)
 }
 
-/// Only exec() can call this. Will return last block information.
+/// Only exec() can call this. Will return last block height.
 ///
 /// ```
-/// last_block_info = get_last_block_info();
+/// last_block_height = get_last_block_height();
 /// ```
-pub fn get_last_block_info() -> GenericResult<Option<Vec<u8>>> {
-    let ret = unsafe { get_last_block_info_() };
+pub fn get_last_block_height() -> GenericResult<Option<Vec<u8>>> {
+    let ret = unsafe { get_last_block_height_() };
     parse_ret(ret)
 }
 
@@ -126,5 +126,5 @@ extern "C" {
     fn get_verifying_block_height_() -> u64;
     fn get_verifying_block_height_epoch_() -> u64;
     fn get_blockchain_time_() -> i64;
-    fn get_last_block_info_() -> i64;
+    fn get_last_block_height_() -> i64;
 }

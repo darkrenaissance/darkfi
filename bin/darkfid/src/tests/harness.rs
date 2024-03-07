@@ -235,8 +235,7 @@ impl Harness {
         tx.signatures = vec![sigs];
 
         // We increment timestamp so we don't have to use sleep
-        let mut timestamp = previous.header.timestamp;
-        timestamp.add(1);
+        let timestamp = previous.header.timestamp.checked_add(1.into())?;
 
         // Generate header
         let header = Header::new(previous.hash()?, block_height, timestamp, last_nonce);

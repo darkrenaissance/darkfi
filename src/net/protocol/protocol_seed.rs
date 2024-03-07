@@ -25,7 +25,7 @@ use smol::Executor;
 use super::{
     super::{
         channel::ChannelPtr,
-        hosts::store::HostsPtr,
+        hosts::store::{HostColor, HostsPtr},
         message::{AddrsMessage, GetAddrsMessage},
         message_subscriber::MessageSubscription,
         p2p::P2pPtr,
@@ -123,7 +123,7 @@ impl ProtocolBase for ProtocolSeed {
             target: "net::protocol_seed::start()",
             "Appending to greylist...",
         );
-        self.hosts.greylist_store_or_update(&addrs_msg.addrs).await;
+        self.hosts.insert(HostColor::Grey, &addrs_msg.addrs).await;
 
         debug!(target: "net::protocol_seed::start()", "END => address={}", self.channel.address());
         Ok(())

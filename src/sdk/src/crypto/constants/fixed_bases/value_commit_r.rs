@@ -2951,11 +2951,7 @@ mod tests {
         *,
     };
     use halo2_gadgets::ecc::chip::constants::{test_lagrange_coeffs, test_zs_and_us};
-    use pasta_curves::{
-        arithmetic::{CurveAffine, CurveExt},
-        group::Curve,
-        pallas,
-    };
+    use pasta_curves::{arithmetic::CurveExt, group::Curve};
 
     #[test]
     fn generator() {

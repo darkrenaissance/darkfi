@@ -30,6 +30,7 @@ use url::Url;
 
 use super::{
     channel::{Channel, ChannelPtr},
+    hosts::store::HostColor,
     session::SessionWeakPtr,
     transport::{Listener, PtListener},
 };
@@ -117,7 +118,16 @@ impl Acceptor {
             match listener.next().await {
                 Ok((stream, url)) => {
                     // Check if we reject this peer
-                    if self.session.upgrade().unwrap().p2p().hosts().is_blacklist(&url).await {
+                    if self
+                        .session
+                        .upgrade()
+                        .unwrap()
+                        .p2p()
+                        .hosts()
+                        .container
+                        .contains(HostColor::Black as usize, &url)
+                        .await
+                    {
                         warn!(target: "net::acceptor::run_accept_loop()", "Peer {} is blacklisted", url);
                         continue
                     }

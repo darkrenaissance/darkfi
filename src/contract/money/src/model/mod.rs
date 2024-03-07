@@ -18,8 +18,8 @@
 
 use darkfi_sdk::{
     crypto::{
-        ecvrf::VrfProof, note::AeadEncryptedNote, pasta_prelude::PrimeField, poseidon_hash,
-        BaseBlind, FuncId, MerkleNode, PublicKey, ScalarBlind, SecretKey,
+        note::AeadEncryptedNote, pasta_prelude::PrimeField, poseidon_hash, BaseBlind, FuncId,
+        MerkleNode, PublicKey, ScalarBlind, SecretKey,
     },
     error::ContractError,
     pasta::pallas,
@@ -276,8 +276,6 @@ pub struct MoneyPoWRewardParamsV1 {
     pub input: ClearInput,
     /// Anonymous output
     pub output: Output,
-    /// VRF proof for block rank calculation
-    pub vrf_proof: VrfProof,
 }
 
 /// State update for `Money::PoWReward`

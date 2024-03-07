@@ -52,7 +52,7 @@ impl From<MonthTasks> for JsonValue {
             mt.deactive_tks.iter().map(|x| JsonValue::String(x.clone())).collect();
 
         JsonValue::Object(HashMap::from([
-            ("created_at".to_string(), JsonValue::String(mt.created_at.0.to_string())),
+            ("created_at".to_string(), JsonValue::String(mt.created_at.inner().to_string())),
             ("active_tks".to_string(), JsonValue::Array(active_tks)),
             ("deactive_tks".to_string(), JsonValue::Array(deactive_tks)),
         ]))
@@ -63,7 +63,7 @@ impl From<JsonValue> for MonthTasks {
     fn from(value: JsonValue) -> MonthTasks {
         let created_at = {
             let u64_str = value["created_at"].get::<String>().unwrap();
-            Timestamp(u64_str.parse::<u64>().unwrap())
+            Timestamp::from_u64(u64_str.parse::<u64>().unwrap())
         };
 
         let active_tks: Vec<String> = value["active_tks"]
@@ -134,7 +134,10 @@ impl MonthTasks {
     fn get_path(date: &Timestamp, dataset_path: &Path) -> PathBuf {
         debug!(target: "tau", "MonthTasks::get_path()");
         dataset_path.join("month").join(
-            Utc.timestamp_opt(date.0.try_into().unwrap(), 0).unwrap().format("%m%y").to_string(),
+            Utc.timestamp_opt(date.inner().try_into().unwrap(), 0)
+                .unwrap()
+                .format("%m%y")
+                .to_string(),
         )
     }
 
@@ -238,10 +241,7 @@ impl MonthTasks {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        fs::{create_dir_all, remove_dir_all},
-        path::PathBuf,
-    };
+    use std::fs::{create_dir_all, remove_dir_all};
 
     use super::*;
     use darkfi::Result;

@@ -123,7 +123,7 @@ impl From<TaskEvent> for JsonValue {
             ("action".to_string(), JsonValue::String(task_event.action.clone())),
             ("author".to_string(), JsonValue::String(task_event.author.clone())),
             ("content".to_string(), JsonValue::String(task_event.content.clone())),
-            ("timestamp".to_string(), JsonValue::String(task_event.timestamp.0.to_string())),
+            ("timestamp".to_string(), JsonValue::String(task_event.timestamp.inner().to_string())),
         ]))
     }
 }
@@ -135,7 +135,9 @@ impl From<&JsonValue> for TaskEvent {
             action: map["action"].get::<String>().unwrap().clone(),
             author: map["author"].get::<String>().unwrap().clone(),
             content: map["content"].get::<String>().unwrap().clone(),
-            timestamp: Timestamp(map["timestamp"].get::<String>().unwrap().parse::<u64>().unwrap()),
+            timestamp: Timestamp::from_u64(
+                map["timestamp"].get::<String>().unwrap().parse::<u64>().unwrap(),
+            ),
         }
     }
 }
@@ -158,7 +160,7 @@ impl From<Comment> for JsonValue {
         JsonValue::Object(HashMap::from([
             ("content".to_string(), JsonValue::String(comment.content.clone())),
             ("author".to_string(), JsonValue::String(comment.author.clone())),
-            ("timestamp".to_string(), JsonValue::String(comment.timestamp.0.to_string())),
+            ("timestamp".to_string(), JsonValue::String(comment.timestamp.inner().to_string())),
         ]))
     }
 }
@@ -169,7 +171,9 @@ impl From<JsonValue> for Comment {
         Comment {
             content: map["content"].get::<String>().unwrap().clone(),
             author: map["author"].get::<String>().unwrap().clone(),
-            timestamp: Timestamp(map["timestamp"].get::<String>().unwrap().parse::<u64>().unwrap()),
+            timestamp: Timestamp::from_u64(
+                map["timestamp"].get::<String>().unwrap().parse::<u64>().unwrap(),
+            ),
         }
     }
 }
@@ -218,7 +222,7 @@ impl From<&TaskInfo> for JsonValue {
             task.project.iter().map(|x| JsonValue::String(x.clone())).collect();
 
         let due = if let Some(ts) = task.due {
-            JsonValue::String(ts.0.to_string())
+            JsonValue::String(ts.inner().to_string())
         } else {
             JsonValue::Null
         };
@@ -229,7 +233,7 @@ impl From<&TaskInfo> for JsonValue {
             JsonValue::Null
         };
 
-        let created_at = JsonValue::String(task.created_at.0.to_string());
+        let created_at = JsonValue::String(task.created_at.inner().to_string());
         let state = JsonValue::String(task.state.clone());
         let events: Vec<JsonValue> = task.events.iter().map(|x| x.clone().into()).collect();
         let comments: Vec<JsonValue> = task.comments.iter().map(|x| x.clone().into()).collect();
@@ -266,7 +270,7 @@ impl From<JsonValue> for TaskInfo {
                 None
             } else {
                 let u64_str = value["due"].get::<String>().unwrap();
-                Some(Timestamp(u64_str.parse::<u64>().unwrap()))
+                Some(Timestamp::from_u64(u64_str.parse::<u64>().unwrap()))
             }
         };
 
@@ -280,7 +284,7 @@ impl From<JsonValue> for TaskInfo {
 
         let created_at = {
             let u64_str = value["created_at"].get::<String>().unwrap();
-            Timestamp(u64_str.parse::<u64>().unwrap())
+            Timestamp::from_u64(u64_str.parse::<u64>().unwrap())
         };
 
         let events: Vec<TaskEvent> = events.iter().map(|x| x.into()).collect();

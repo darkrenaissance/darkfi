@@ -137,12 +137,12 @@ impl MiningProxy {
             _ => unimplemented!("Missing handler for network {}", nettype),
         }
 
-        if xmr_is_mainnet && !(monero_network == monero::Network::Mainnet) {
+        if xmr_is_mainnet && monero_network != monero::Network::Mainnet {
             error!("mmproxy requested testnet, but monerod is mainnet");
             return Err(Error::Custom("Monero network mismatch".to_string()))
         }
 
-        if xmr_is_testnet && !(monero_network == monero::Network::Testnet) {
+        if xmr_is_testnet && monero_network != monero::Network::Testnet {
             error!("mmproxy requested mainnet, but monerod is testnet");
             return Err(Error::Custom("Monero network mismatch".to_string()))
         }

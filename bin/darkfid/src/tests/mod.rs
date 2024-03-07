@@ -18,7 +18,7 @@
 
 use std::sync::Arc;
 
-use darkfi::{net::Settings, validator::utils::best_forks_indexes, Result};
+use darkfi::{net::Settings, validator::utils::best_fork_index, Result};
 use darkfi_contract_test_harness::init_logger;
 use darkfi_sdk::num_traits::One;
 use num_bigint::BigUint;
@@ -63,9 +63,6 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     // Add them to nodes
     th.add_blocks(&vec![block5, block6.clone()]).await?;
 
-    // Validate chains
-    // Last blocks are not finalized yet
-    th.validate_chains(4).await?;
     // Nodes must have one fork with 2 blocks and one with 1 block
     th.validate_fork_chains(2, vec![2, 1]).await;
 
@@ -86,8 +83,7 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     assert_eq!(alice.blockchain.len(), charlie.blockchain.len());
     // Node must have just the best fork
     let forks = alice.consensus.forks.read().await;
-    let best_fork_index = best_forks_indexes(&forks)?[0];
-    let best_fork = &forks[best_fork_index];
+    let best_fork = &forks[best_fork_index(&forks)?];
     let charlie_forks = charlie.consensus.forks.read().await;
     assert_eq!(charlie_forks.len(), 1);
     assert_eq!(charlie_forks[0].proposals.len(), best_fork.proposals.len());
@@ -116,21 +112,31 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     }
     drop(charlie_forks);
 
-    // Extend the second fork and add it to nodes
-    let block8 = th.generate_next_block(&block7).await?;
-    th.add_blocks(&vec![block8.clone()]).await?;
+    // Since the don't know if the second fork was the best,
+    // we extend it until it becomes best and a finalization
+    // occurred.
+    let mut fork_sequence = vec![block6, block7];
+    loop {
+        let proposal = th.generate_next_block(fork_sequence.last().unwrap()).await?;
+        th.add_blocks(&vec![proposal.clone()]).await?;
+        fork_sequence.push(proposal);
+        // Check if finalization occured
+        if th.alice.validator.blockchain.len() > 4 {
+            break
+        }
+    }
 
     // Nodes must have executed finalization, so we validate their chains
-    th.validate_chains(6).await?;
+    th.validate_chains(4 + (fork_sequence.len() - 2)).await?;
     let bob = &th.bob.validator;
     let last = alice.blockchain.last()?.1;
-    assert_eq!(last, block7.hash()?);
+    assert_eq!(last, fork_sequence[fork_sequence.len() - 3].hash()?);
     assert_eq!(last, bob.blockchain.last()?.1);
-    // Nodes must have one fork with 1 block
-    th.validate_fork_chains(1, vec![1]).await;
-    let last_proposal = *alice.consensus.forks.read().await[0].proposals.last().unwrap();
-    assert_eq!(last_proposal, block8.hash()?);
-    assert_eq!(&last_proposal, bob.consensus.forks.read().await[0].proposals.last().unwrap());
+    // Nodes must have one fork with 2 blocks
+    th.validate_fork_chains(1, vec![2]).await;
+    let last_proposal = alice.consensus.forks.read().await[0].proposals[1];
+    assert_eq!(last_proposal, fork_sequence.last().unwrap().hash()?);
+    assert_eq!(last_proposal, bob.consensus.forks.read().await[0].proposals[1]);
 
     // Same for Charlie
     charlie.finalization().await?;
@@ -139,8 +145,8 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     assert_eq!(last, charlie.blockchain.last()?.1);
     let charlie_forks = charlie.consensus.forks.read().await;
     assert_eq!(charlie_forks.len(), 1);
-    assert_eq!(charlie_forks[0].proposals.len(), 1);
-    assert_eq!(last_proposal, charlie_forks[0].proposals[0]);
+    assert_eq!(charlie_forks[0].proposals.len(), 2);
+    assert_eq!(last_proposal, charlie_forks[0].proposals[1]);
 
     // Thanks for reading
     Ok(())
