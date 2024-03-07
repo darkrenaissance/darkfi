@@ -524,7 +524,7 @@ impl Drk {
         Ok(())
     }
 
-    /// Auxilliary function to ping configured darkfid daemon for liveness.
+    /// Auxiliary function to ping configured darkfid daemon for liveness.
     async fn ping(&self) -> Result<()> {
         eprintln!("Executing ping request to darkfid...");
         let latency = Instant::now();
