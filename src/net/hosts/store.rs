@@ -1014,28 +1014,6 @@ impl Hosts {
             q.insert(addr.clone(), 0);
         }
     }
-
-    /// Mark a peer as blacklist.
-    pub async fn blacklist(&self, peer: &Url) {
-        // We ignore UNIX sockets here so we will just work
-        // with stuff that has host_str().
-        if peer.host_str().is_some() {
-            // Localhost connections should never enter the blacklist
-            // This however allows any Tor and Nym connections.
-            if self.is_local_host(peer.clone()).await {
-                return
-            }
-
-            // Insert into the blacklist. We set last_seen to 0 (we don't care about this
-            // field).
-            self.container.hostlists[HostColor::Black as usize]
-                .write()
-                .await
-                .push((peer.clone(), 0));
-        }
-    }
-=======
->>>>>>> 8aad26601 (net: replace downgrade() and update(), and blacklist methods with a single method move_hosts())
 }
 
 #[cfg(test)]
