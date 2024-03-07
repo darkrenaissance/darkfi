@@ -39,6 +39,12 @@ use crate::{
     Error, Result,
 };
 
+// An array containing all possible local host strings
+// TODO: This could perhaps be more exhaustive?
+pub const LOCAL_HOST_STRS: [&str; 2] = ["localhost", "localhost.localdomain"];
+const WHITELIST_MAX_LEN: usize = 5000;
+const GREYLIST_MAX_LEN: usize = 2000;
+
 /// Atomic pointer to hosts object
 pub type HostsPtr = Arc<Hosts>;
 
@@ -146,23 +152,478 @@ pub enum HostColor {
     Black = 3,
 }
 
-/// A Container for managing Grey, White, Gold and Black hostlists. Exposes a common interface for
-/// writing to and querying hostlists.
-/// TODO: Currently hosts (aside from hosts on the Black list) are on multiple lists at once.
-/// This needs to be considered closely.
+/// A Container for managing Grey, White, Gold and Black
+/// hostlists. Exposes a common interface for writing to and querying
+/// hostlists.
+// TODO: Currently hosts (aside from hosts on the Black list) are on
+// multiple lists at once. This needs to be reconsidered.
+// Rethink upgrade/ downgrade methods and consider a single method move() which
+// removes from one hostlist and places on another.
 // TODO: Verify the performance overhead of using vectors for hostlists.
 // TODO: Check whether anchorlist (Gold) has a max size in Monero.
 pub struct HostContainer {
     pub hostlists: [RwLock<Vec<(Url, u64)>>; 4],
 }
 
-// An array containing all possible local host strings
-// TODO: This could perhaps be more exhaustive?
-pub const LOCAL_HOST_STRS: [&str; 2] = ["localhost", "localhost.localdomain"];
-const WHITELIST_MAX_LEN: usize = 5000;
-const GREYLIST_MAX_LEN: usize = 2000;
+impl HostContainer {
+    fn new() -> Self {
+        let hostlists: [RwLock<Vec<(Url, u64)>>; 4] = [
+            RwLock::new(Vec::new()),
+            RwLock::new(Vec::new()),
+            RwLock::new(Vec::new()),
+            RwLock::new(Vec::new()),
+        ];
 
-/// Manages a store of network addresses
+        Self { hostlists }
+    }
+
+    /// Append host to a hostlist.
+    pub async fn store(&self, color: usize, addr: Url, last_seen: u64) {
+        trace!(target: "net::hosts::store()", "[START]");
+        let mut list = self.hostlists[color].write().await;
+
+        list.push((addr, last_seen));
+
+        if color == 0 {
+            if list.len() == GREYLIST_MAX_LEN {
+                let last_entry = list.pop().unwrap();
+                debug!(target: "net::hosts::store()",
+            "Greylist reached max size. Removed {:?}", last_entry);
+            }
+        }
+        if color == 1 {
+            if list.len() == WHITELIST_MAX_LEN {
+                let last_entry = list.pop().unwrap();
+                debug!(target: "net::hosts::store()",
+            "Whitelist reached max size. Removed {:?}", last_entry);
+            }
+        }
+
+        // Sort the list by last_seen.
+        list.sort_by_key(|entry| entry.1);
+        list.reverse();
+        trace!(target: "net::hosts::store()", "[END]");
+    }
+
+    /// Stores an address on a hostlist or updates its last_seen field if we already
+    /// have the address.
+    pub async fn store_or_update(&self, color: HostColor, addrs: &[(Url, u64)]) {
+        trace!(target: "net::hosts::store_or_update()", "[START]");
+        let parent_index = color as usize;
+        for (addr, last_seen) in addrs {
+            if !self.contains(parent_index, &addr).await {
+                debug!(target: "net::hosts::store_or_update()",
+                    "We do not have this entry in the hostlist. Adding to store...");
+
+                self.store(parent_index, addr.clone(), *last_seen).await;
+            } else {
+                debug!(target: "net::hosts::store_or_update()",
+                        "We have this entry in the hostlist. Updating last seen...");
+
+                let child_index = self
+                    .get_index_at_addr(parent_index, addr.clone())
+                    .await
+                    .expect("Expected entry to exist");
+                debug!(target: "net::hosts::store_or_update()",
+                        "Selected index, updating last seen...");
+                self.update_last_seen(parent_index, &addr, *last_seen, child_index).await;
+            }
+        }
+    }
+
+    /// Update the last_seen field of a peer on a hostlist.
+    pub async fn update_last_seen(&self, color: usize, addr: &Url, last_seen: u64, index: usize) {
+        trace!(target: "net::hosts::update_last_seen()", "[START]");
+        let mut list = self.hostlists[color].write().await;
+
+        list[index] = (addr.clone(), last_seen);
+
+        list.sort_by_key(|entry| entry.1);
+        list.reverse();
+        trace!(target: "net::hosts::update_last_seen()", "[END]");
+    }
+
+    /// Return all known hosts on a hostlist.
+    pub async fn fetch_all(&self, color: HostColor) -> Vec<(Url, u64)> {
+        self.hostlists[color as usize].read().await.iter().cloned().collect()
+    }
+
+    /// Get the oldest entry from a hostlist.
+    pub async fn fetch_last(&self, color: HostColor) -> ((Url, u64), usize) {
+        let list = self.hostlists[color as usize].read().await;
+        let position = list.len() - 1;
+        let entry = &list[position];
+        (entry.clone(), position)
+    }
+
+    /// TODO: documentation
+    pub async fn fetch_address(
+        &self,
+        color: HostColor,
+        transports: &[String],
+        transport_mixing: bool,
+    ) -> Vec<(Url, u64)> {
+        trace!(target: "net::hosts::fetch_address()", "[START]");
+        let mut hosts = vec![];
+        let index = color as usize;
+
+        // If transport mixing is enabled, then for example we're allowed to
+        // use tor:// to connect to tcp:// and tor+tls:// to connect to tcp+tls://.
+        // However, **do not** mix tor:// and tcp+tls://, nor tor+tls:// and tcp://.
+        macro_rules! mix_transport {
+            ($a:expr, $b:expr) => {
+                if transports.contains(&$a.to_string()) && transport_mixing {
+                    let mut a_to_b = self.fetch_with_schemes(index, &[$b.to_string()], None).await;
+                    for (addr, last_seen) in a_to_b.iter_mut() {
+                        addr.set_scheme($a).unwrap();
+                        hosts.push((addr.clone(), last_seen.clone()));
+                    }
+                }
+            };
+        }
+
+        mix_transport!("tor", "tcp");
+        mix_transport!("tor+tls", "tcp+tls");
+        mix_transport!("nym", "tcp");
+        mix_transport!("nym+tls", "tcp+tls");
+
+        // And now the actual requested transports
+        for (addr, last_seen) in self.fetch_with_schemes(index, transports, None).await {
+            hosts.push((addr, last_seen));
+        }
+
+        trace!(target: "net::hosts::fetch_address()", "Grabbed hosts, length: {}", hosts.len());
+
+        hosts
+    }
+
+    /// Get up to limit peers that match the given transport schemes from a hostlist.
+    /// If limit was not provided, return all matching peers.
+    async fn fetch_with_schemes(
+        &self,
+        color: usize,
+        schemes: &[String],
+        limit: Option<usize>,
+    ) -> Vec<(Url, u64)> {
+        trace!(target: "net::hosts::fetch_with_schemes()", "[START]");
+        let list = self.hostlists[color].read().await;
+
+        let mut limit = match limit {
+            Some(l) => l.min(list.len()),
+            None => list.len(),
+        };
+        let mut ret = vec![];
+
+        if limit == 0 {
+            return ret
+        }
+
+        for (addr, last_seen) in list.iter() {
+            if schemes.contains(&addr.scheme().to_string()) {
+                ret.push((addr.clone(), *last_seen));
+                limit -= 1;
+                if limit == 0 {
+                    debug!(target: "net::hosts::fetch_with_schemes()",
+                        "Found matching scheme, returning {} addresses",
+                        ret.len());
+                    return ret
+                }
+            }
+        }
+
+        if ret.is_empty() {
+            debug!(target: "net::hosts::fetch_with_schemes()",
+                  "No such schemes found!")
+        }
+
+        ret
+    }
+
+    /// Get up to limit peers that don't match the given transport schemes from a hostlist.
+    /// If limit was not provided, return all matching peers.
+    pub async fn fetch_excluding_schemes(
+        &self,
+        color: usize,
+        schemes: &[String],
+        limit: Option<usize>,
+    ) -> Vec<(Url, u64)> {
+        let list = self.hostlists[color].read().await;
+
+        let mut limit = match limit {
+            Some(l) => l.min(list.len()),
+            None => list.len(),
+        };
+        let mut ret = vec![];
+
+        if limit == 0 {
+            return ret
+        }
+
+        for (addr, last_seen) in list.iter() {
+            if !schemes.contains(&addr.scheme().to_string()) {
+                ret.push((addr.clone(), *last_seen));
+                limit -= 1;
+                if limit == 0 {
+                    return ret
+                }
+            }
+        }
+
+        if ret.is_empty() {
+            debug!(target: "net::hosts::fetch_excluding_schemes()",
+                    "No such schemes found!")
+        }
+
+        ret
+    }
+
+    /// Get a random peer from a hostlist.
+    pub async fn fetch_random(&self, color: HostColor) -> ((Url, u64), usize) {
+        let list = self.hostlists[color as usize].read().await;
+        let position = rand::thread_rng().gen_range(0..list.len());
+        let entry = &list[position];
+        (entry.clone(), position)
+    }
+
+    /// Get a random peer from a hostlist that matches the given transport schemes.
+    pub async fn fetch_random_with_schemes(
+        &self,
+        color: HostColor,
+        schemes: &[String],
+    ) -> Option<((Url, u64), usize)> {
+        // Retrieve all peers corresponding to that transport schemes
+        trace!(target: "net::hosts::fetch_random_with_schemes()", "[START]");
+        let list = self.fetch_with_schemes(color as usize, schemes, None).await;
+
+        if list.is_empty() {
+            return None
+        }
+
+        let position = rand::thread_rng().gen_range(0..list.len());
+        let entry = &list[position];
+        Some((entry.clone(), position))
+    }
+
+    /// Get up to n random peers. Schemes are not taken into account.
+    pub async fn fetch_n_random(&self, color: HostColor, n: u32) -> Vec<(Url, u64)> {
+        trace!(target: "net::hosts::fetch_n_random()", "[START]");
+        let n = n as usize;
+        if n == 0 {
+            return vec![]
+        }
+        let mut hosts = vec![];
+
+        let list = self.hostlists[color as usize].read().await;
+
+        for (addr, last_seen) in list.iter() {
+            hosts.push((addr.clone(), *last_seen));
+        }
+
+        if hosts.is_empty() {
+            debug!(target: "net::hosts::fetch_n_random()",
+                        "No entries found!");
+            return hosts
+        }
+
+        // Grab random ones
+        let urls = hosts.iter().choose_multiple(&mut OsRng, n.min(hosts.len()));
+        urls.iter().map(|&url| url.clone()).collect()
+    }
+
+    /// Get up to n random peers that match the given transport schemes.
+    pub async fn fetch_n_random_with_schemes(
+        &self,
+        color: HostColor,
+        schemes: &[String],
+        n: u32,
+    ) -> Vec<(Url, u64)> {
+        trace!(target: "net::hosts::fetch_n_random_with_schemes()", "[START]");
+        let index = color as usize;
+        let n = n as usize;
+        if n == 0 {
+            return vec![]
+        }
+
+        // Retrieve all peers corresponding to that transport schemes
+        let hosts = self.fetch_with_schemes(index, schemes, None).await;
+        if hosts.is_empty() {
+            debug!(target: "net::hosts::fetch_n_random_with_schemes()",
+                  "No such schemes found!");
+            return hosts
+        }
+
+        // Grab random ones
+        let urls = hosts.iter().choose_multiple(&mut OsRng, n.min(hosts.len()));
+        urls.iter().map(|&url| url.clone()).collect()
+    }
+
+    /// Get up to n random peers that don't match the given transport schemes from
+    /// a hostlist.
+    pub async fn fetch_n_random_excluding_schemes(
+        &self,
+        color: HostColor,
+        schemes: &[String],
+        n: u32,
+    ) -> Vec<(Url, u64)> {
+        trace!(target: "net::hosts::fetch_excluding_schemes()", "[START]");
+        let index = color as usize;
+        let n = n as usize;
+        if n == 0 {
+            return vec![]
+        }
+        // Retrieve all peers not corresponding to that transport schemes
+        let hosts = self.fetch_excluding_schemes(index, schemes, None).await;
+
+        if hosts.is_empty() {
+            debug!(target: "net::hosts::fetch_n_random_excluding_schemes()",
+            "No such schemes found!");
+            return hosts
+        }
+
+        // Grab random ones
+        let urls = hosts.iter().choose_multiple(&mut OsRng, n.min(hosts.len()));
+        urls.iter().map(|&url| url.clone()).collect()
+    }
+
+    /// Upgrade a connection to the anchorlist. Called after a connection has been successfully
+    /// established in Outbound and Manual sessions.
+    pub async fn upgrade_host(&self, addr: &Url) {
+        let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+        self.store_or_update(HostColor::Gold, &[(addr.clone(), last_seen)]).await;
+    }
+
+    /// Remove an entry from a hostlist.
+    pub async fn remove(&self, color: HostColor, addr: &Url, index: usize) {
+        debug!(target: "net::hosts::remove()", "Removing peer {} from hostlist", addr);
+        let mut list = self.hostlists[color as usize].write().await;
+        list.remove(index);
+    }
+
+    /// Check if a hostlist is empty.
+    pub async fn is_empty(&self, color: HostColor) -> bool {
+        self.hostlists[color as usize].read().await.is_empty()
+    }
+
+    /// Check if host is in a hostlist
+    pub async fn contains(&self, color: usize, addr: &Url) -> bool {
+        self.hostlists[color].read().await.iter().any(|(u, _t)| u == addr)
+    }
+
+    /// Get the index for a given addr on a hostlist.
+    pub async fn get_index_at_addr(&self, color: usize, addr: Url) -> Option<usize> {
+        self.hostlists[color].read().await.iter().position(|a| a.0 == addr)
+    }
+
+    /// Get the entry for a given addr on the hostlist.
+    pub async fn get_entry_at_addr(&self, color: usize, addr: &Url) -> Option<(Url, u64)> {
+        self.hostlists[color]
+            .read()
+            .await
+            .iter()
+            .find(|(url, _)| url == addr)
+            .map(|(url, time)| (url.clone(), *time))
+    }
+
+    /// Load the hostlists from a file.
+    pub async fn load_all(&self, path: &String) -> Result<()> {
+        let path = expand_path(path)?;
+
+        if !path.exists() {
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+
+            File::create(path.clone())?;
+        }
+
+        let contents = load_file(&path);
+        if let Err(e) = contents {
+            warn!(target: "net::hosts::load_hosts()", "Failed retrieving saved hosts: {}", e);
+            return Ok(())
+        }
+
+        for line in contents.unwrap().lines() {
+            let data: Vec<&str> = line.split('\t').collect();
+
+            let url = match Url::parse(data[1]) {
+                Ok(u) => u,
+                Err(e) => {
+                    debug!(target: "net::hosts::load_hosts()", "Skipping malformed URL {}", e);
+                    continue
+                }
+            };
+
+            let last_seen = match data[2].parse::<u64>() {
+                Ok(t) => t,
+                Err(e) => {
+                    debug!(target: "net::hosts::load_hosts()", "Skipping malformed last seen {}", e);
+                    continue
+                }
+            };
+
+            match data[0] {
+                "greylist" => {
+                    self.store(HostColor::Grey as usize, url, last_seen).await;
+                }
+                "whitelist" => {
+                    self.store(HostColor::White as usize, url, last_seen).await;
+                }
+                "anchorlist" => {
+                    self.store(HostColor::Gold as usize, url, last_seen).await;
+                }
+                _ => {
+                    debug!(target: "net::hosts::load_hosts()", "Malformed list name...");
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Save the hostlist to a file. Whitelist gets written to the greylist to force
+    /// whitelist entries through the refinery on start.
+    pub async fn save_all(&self, path: &String) -> Result<()> {
+        let path = expand_path(path)?;
+
+        let mut tsv = String::new();
+        let mut white = vec![];
+        let mut greygold: HashMap<String, Vec<(Url, u64)>> = HashMap::new();
+
+        // First gather all the whitelist entries we don't have in greylist.
+        for (url, last_seen) in self.fetch_all(HostColor::White).await {
+            if !self.contains(HostColor::Grey as usize, &url).await {
+                white.push((url, last_seen))
+            }
+        }
+
+        // Then gather the greylist and anchorlist entries.
+        greygold.insert("anchorlist".to_string(), self.fetch_all(HostColor::Gold).await);
+        greygold.insert("greylist".to_string(), self.fetch_all(HostColor::Grey).await);
+
+        // We write whitelist entries to the greylist on p2p.stop() to force
+        // them through the refinery on start().
+        for (name, mut list) in greygold {
+            if name == *"greylist".to_string() {
+                list.append(&mut white)
+            }
+            for (url, last_seen) in list {
+                tsv.push_str(&format!("{}\t{}\t{}\n", name, url, last_seen));
+            }
+        }
+
+        if !tsv.eq("") {
+            info!(target: "net::hosts::save_hosts()", "Saving hosts to: {:?}",
+                  path);
+            if let Err(e) = save_file(&path, &tsv) {
+                error!(target: "net::hosts::save_hosts()", "Failed saving hosts: {}", e);
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// TODO: documentation
 pub struct Hosts {
     /// Subscriber for notifications of new channels
     channel_subscriber: SubscriberPtr<Result<ChannelPtr>>,
@@ -222,7 +683,7 @@ impl Hosts {
         if registry.contains_key(&addr) {
             let current_state = registry.get(&addr).unwrap().clone();
 
-            debug!(target: "net::hosts::store::try_update_registry()",
+            debug!(target: "net::hosts::try_update_registry()",
             "Attempting to update addr={} current_state={}, new_state={}",
             addr, current_state, new_state.to_string());
 
@@ -249,14 +710,14 @@ impl Hosts {
     pub async fn check_address(&self, hosts: Vec<(Url, u64)>) -> Option<(Url, u64)> {
         // Try to find an unused host in the set.
         for (host, last_seen) in hosts {
-            debug!(target: "net::hosts::store::check_address()", "Starting checks");
+            debug!(target: "net::hosts::check_address()", "Starting checks");
 
             if let Err(_) = self.try_register(host.clone(), HostState::Pending).await {
                 continue
             }
 
             debug!(
-                target: "net::hosts::store::check_address()",
+                target: "net::hosts::check_address()",
                 "Found valid host {}",
                 host
             );
@@ -270,7 +731,7 @@ impl Hosts {
     /// process fails, or when a channel stops. Prevents hosts from getting trapped in the
     /// HostState logical machinery.
     pub async fn unregister(&self, addr: &Url) {
-        debug!(target: "net::hosts::store::unregister()", "Removing {} from HostRegistry", addr);
+        debug!(target: "net::hosts::unregister()", "Removing {} from HostRegistry", addr);
         self.registry.write().await.remove(addr);
     }
 
@@ -355,7 +816,7 @@ impl Hosts {
         settings: SettingsPtr,
         addrs: &[(Url, u64)],
     ) -> Vec<(Url, u64)> {
-        trace!(target: "net::hosts::store::filter_addresses()", "Filtering addrs: {:?}", addrs);
+        trace!(target: "net::hosts::filter_addresses()", "Filtering addrs: {:?}", addrs);
         let mut ret = vec![];
         let localnet = self.settings.localnet;
 
@@ -411,7 +872,7 @@ impl Hosts {
                     if tor_hscrypto::pk::HsId::from_str(host_str).is_err() {
                         continue
                     }
-                    trace!(target: "net::hosts::store::filter_addresses()",
+                    trace!(target: "net::hosts::filter_addresses()",
                     "[Tor] Valid: {}", host_str);
                 }
 
@@ -420,7 +881,7 @@ impl Hosts {
 
                 #[cfg(feature = "p2p-tcp")]
                 "tcp" | "tcp+tls" => {
-                    trace!(target: "net::hosts::store::filter_addresses()",
+                    trace!(target: "net::hosts::filter_addresses()",
                     "[TCP] Valid: {}", host_str);
                 }
 
@@ -439,7 +900,7 @@ impl Hosts {
             return
         }
 
-        debug!(target: "net::hosts::store::downgrade_host()", "Downgrading host {}", addr);
+        debug!(target: "net::hosts::downgrade_host()", "Downgrading host {}", addr);
         if self.container.contains(HostColor::Grey as usize, addr).await {
             warn!(target: "net::hosts::downgrade_host()",
                   "Cannot downgrade a host that is already on the greylist! {}", addr);
@@ -479,17 +940,17 @@ impl Hosts {
     /// Quarantine a peer.
     /// If they've been quarantined for more than a configured limit, downgrade to greylist.
     pub async fn quarantine(&self, addr: &Url, last_seen: u64) {
-        debug!(target: "net::hosts::store::quarantine()", "Quarantining peer {}", addr);
+        debug!(target: "net::hosts::quarantine()", "Quarantining peer {}", addr);
         let timer = Instant::now();
         let mut q = self.quarantine.write().await;
         if let Some(retries) = q.get_mut(addr) {
             *retries += 1;
-            debug!(target: "net::hosts::store::quarantine()",
+            debug!(target: "net::hosts::quarantine()",
             "Peer {} quarantined {} times", addr, retries);
             if *retries == self.settings.hosts_quarantine_limit {
-                debug!(target: "net::hosts::store::quarantine()",
+                debug!(target: "net::hosts::quarantine()",
                 "Reached quarantine limited after {:?}", timer.elapsed());
-                debug!(target: "net::hosts::store::quarantine()",
+                debug!(target: "net::hosts::quarantine()",
                 "Removing from hostlist {}", addr);
                 drop(q);
                 self.downgrade_host(addr, last_seen).await;
@@ -518,475 +979,6 @@ impl Hosts {
                 .await
                 .push((peer.clone(), 0));
         }
-    }
-}
-
-impl HostContainer {
-    fn new() -> Self {
-        let hostlists: [RwLock<Vec<(Url, u64)>>; 4] = [
-            RwLock::new(Vec::new()),
-            RwLock::new(Vec::new()),
-            RwLock::new(Vec::new()),
-            RwLock::new(Vec::new()),
-        ];
-
-        Self { hostlists }
-    }
-
-    /// TODO: documentation
-    pub async fn fetch_address(
-        &self,
-        color: HostColor,
-        transports: &[String],
-        transport_mixing: bool,
-    ) -> Vec<(Url, u64)> {
-        trace!(target: "net::hosts::fetch_address()", "[START]");
-        let mut hosts = vec![];
-        let index = color as usize;
-
-        // If transport mixing is enabled, then for example we're allowed to
-        // use tor:// to connect to tcp:// and tor+tls:// to connect to tcp+tls://.
-        // However, **do not** mix tor:// and tcp+tls://, nor tor+tls:// and tcp://.
-        macro_rules! mix_transport {
-            ($a:expr, $b:expr) => {
-                if transports.contains(&$a.to_string()) && transport_mixing {
-                    let mut a_to_b = self.fetch_with_schemes(index, &[$b.to_string()], None).await;
-                    for (addr, last_seen) in a_to_b.iter_mut() {
-                        addr.set_scheme($a).unwrap();
-                        hosts.push((addr.clone(), last_seen.clone()));
-                    }
-                }
-            };
-        }
-
-        mix_transport!("tor", "tcp");
-        mix_transport!("tor+tls", "tcp+tls");
-        mix_transport!("nym", "tcp");
-        mix_transport!("nym+tls", "tcp+tls");
-
-        // And now the actual requested transports
-        for (addr, last_seen) in self.fetch_with_schemes(index, transports, None).await {
-            hosts.push((addr, last_seen));
-        }
-
-        trace!(target: "net::hosts::fetch_address()", "Grabbed hosts, length: {}", hosts.len());
-
-        hosts
-    }
-
-    /// Upgrade a connection to the anchorlist. Called after a connection has been successfully
-    /// established in Outbound and Manual sessions.
-    pub async fn upgrade_host(&self, addr: &Url) {
-        let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-        self.store_or_update(HostColor::Gold, &[(addr.clone(), last_seen)]).await;
-    }
-
-    /// Stores an address on a hostlist or updates its last_seen field if we already
-    /// have the address.
-    pub async fn store_or_update(&self, color: HostColor, addrs: &[(Url, u64)]) {
-        trace!(target: "net::hosts::store_or_update()", "[START]");
-        let parent_index = color as usize;
-        for (addr, last_seen) in addrs {
-            if !self.contains(parent_index, &addr).await {
-                debug!(target: "net::hosts::store_or_update()",
-                    "We do not have this entry in the hostlist. Adding to store...");
-
-                self.store(parent_index, addr.clone(), *last_seen).await;
-            } else {
-                debug!(target: "net::hosts::store_or_update()",
-                        "We have this entry in the hostlist. Updating last seen...");
-
-                let child_index = self
-                    .get_index_at_addr(parent_index, addr.clone())
-                    .await
-                    .expect("Expected entry to exist");
-                debug!(target: "net::hosts::store_or_update()",
-                        "Selected index, updating last seen...");
-                self.update_last_seen(parent_index, &addr, *last_seen, child_index).await;
-            }
-        }
-    }
-
-    /// Append host to a hostlist.
-    pub async fn store(&self, color: usize, addr: Url, last_seen: u64) {
-        trace!(target: "net::hosts::store()", "[START]");
-        let mut list = self.hostlists[color].write().await;
-
-        list.push((addr, last_seen));
-
-        if color == 0 {
-            if list.len() == GREYLIST_MAX_LEN {
-                let last_entry = list.pop().unwrap();
-                debug!(target: "net::hosts::store()",
-            "Greylist reached max size. Removed {:?}", last_entry);
-            }
-        }
-        if color == 1 {
-            if list.len() == WHITELIST_MAX_LEN {
-                let last_entry = list.pop().unwrap();
-                debug!(target: "net::hosts::store()",
-            "Whitelist reached max size. Removed {:?}", last_entry);
-            }
-        }
-
-        // Sort the list by last_seen.
-        list.sort_by_key(|entry| entry.1);
-        list.reverse();
-        trace!(target: "net::hosts::store()", "[END]");
-    }
-
-    /// Update the last_seen field of a peer on a hostlist.
-    pub async fn update_last_seen(&self, color: usize, addr: &Url, last_seen: u64, index: usize) {
-        trace!(target: "net::hosts::update_last_seen()", "[START]");
-        let mut list = self.hostlists[color].write().await;
-
-        list[index] = (addr.clone(), last_seen);
-
-        list.sort_by_key(|entry| entry.1);
-        list.reverse();
-        trace!(target: "net::hosts::update_last_seen()", "[END]");
-    }
-
-    /// Remove an entry from a hostlist.
-    pub async fn remove(&self, color: HostColor, addr: &Url, index: usize) {
-        debug!(target: "net::hosts::remove()", "Removing peer {} from hostlist", addr);
-        let mut list = self.hostlists[color as usize].write().await;
-        list.remove(index);
-    }
-
-    /// Check if a hostlist is empty.
-    pub async fn is_empty(&self, color: HostColor) -> bool {
-        self.hostlists[color as usize].read().await.is_empty()
-    }
-
-    /// Check if host is in a hostlist
-    pub async fn contains(&self, color: usize, addr: &Url) -> bool {
-        self.hostlists[color].read().await.iter().any(|(u, _t)| u == addr)
-    }
-
-    /// Get the index for a given addr on a hostlist.
-    pub async fn get_index_at_addr(&self, color: usize, addr: Url) -> Option<usize> {
-        self.hostlists[color].read().await.iter().position(|a| a.0 == addr)
-    }
-
-    /// Get the entry for a given addr on the hostlist.
-    pub async fn get_entry_at_addr(&self, color: usize, addr: &Url) -> Option<(Url, u64)> {
-        self.hostlists[color]
-            .read()
-            .await
-            .iter()
-            .find(|(url, _)| url == addr)
-            .map(|(url, time)| (url.clone(), *time))
-    }
-
-    /// Return all known hosts on a hostlist.
-    pub async fn fetch_all(&self, color: HostColor) -> Vec<(Url, u64)> {
-        self.hostlists[color as usize].read().await.iter().cloned().collect()
-    }
-
-    /// Return all greylist and anchorlist hosts. Called on stop().
-    /// Note: we do not return whitelist entries here since whitelist entries must go via the
-    /// greylist refinery in the lifetime of the p2p network.
-    pub async fn hostlist_fetch_safe(&self) -> HashMap<String, Vec<(Url, u64)>> {
-        let mut hostlist = HashMap::new();
-        hostlist.insert(
-            "anchorlist".to_string(),
-            self.hostlists[HostColor::Gold as usize].read().await.iter().cloned().collect(),
-        );
-        hostlist.insert(
-            "greylist".to_string(),
-            self.hostlists[HostColor::Grey as usize].read().await.iter().cloned().collect(),
-        );
-        hostlist
-    }
-
-    /// Get a random peer from a hostlist.
-    pub async fn fetch_random(&self, color: HostColor) -> ((Url, u64), usize) {
-        let list = self.hostlists[color as usize].read().await;
-        let position = rand::thread_rng().gen_range(0..list.len());
-        let entry = &list[position];
-        (entry.clone(), position)
-    }
-
-    /// Get the oldest entry from a hostlist.
-    pub async fn fetch_last(&self, color: HostColor) -> ((Url, u64), usize) {
-        let list = self.hostlists[color as usize].read().await;
-        let position = list.len() - 1;
-        let entry = &list[position];
-        (entry.clone(), position)
-    }
-
-    /// Get a random peer from a hostlist that matches the given transport schemes.
-    pub async fn fetch_random_with_schemes(
-        &self,
-        color: HostColor,
-        schemes: &[String],
-    ) -> Option<((Url, u64), usize)> {
-        trace!(target: "net::hosts::fetch_random_with_schemes()", "[START]");
-        // Retrieve all peers corresponding to that transport schemes
-        let list = self.fetch_with_schemes(color as usize, schemes, None).await;
-
-        if list.is_empty() {
-            return None
-        }
-
-        let position = rand::thread_rng().gen_range(0..list.len());
-        let entry = &list[position];
-        Some((entry.clone(), position))
-    }
-
-    /// Get up to n random peers. Schemes are not taken into account.
-    pub async fn fetch_n_random(&self, color: HostColor, n: u32) -> Vec<(Url, u64)> {
-        trace!(target: "net::hosts::fetch_n_random()", "[START]");
-        let n = n as usize;
-        if n == 0 {
-            return vec![]
-        }
-        let mut hosts = vec![];
-
-        let list = self.hostlists[color as usize].read().await;
-
-        for (addr, last_seen) in list.iter() {
-            hosts.push((addr.clone(), *last_seen));
-        }
-
-        if hosts.is_empty() {
-            debug!(target: "net::hosts::fetch_n_random()",
-                        "No entries found!");
-            return hosts
-        }
-
-        // Grab random ones
-        let urls = hosts.iter().choose_multiple(&mut OsRng, n.min(hosts.len()));
-        urls.iter().map(|&url| url.clone()).collect()
-    }
-
-    /// Get up to n random peers that match the given transport schemes.
-    pub async fn fetch_n_random_with_schemes(
-        &self,
-        color: HostColor,
-        schemes: &[String],
-        n: u32,
-    ) -> Vec<(Url, u64)> {
-        trace!(target: "net::hosts::fetch_n_random_with_schemes()", "[START]");
-        let index = color as usize;
-        let n = n as usize;
-        if n == 0 {
-            return vec![]
-        }
-
-        // Retrieve all peers corresponding to that transport schemes
-        let hosts = self.fetch_with_schemes(index, schemes, None).await;
-        if hosts.is_empty() {
-            debug!(target: "net::hosts::fetch_n_random_with_schemes()",
-                  "No such schemes found!");
-            return hosts
-        }
-
-        // Grab random ones
-        let urls = hosts.iter().choose_multiple(&mut OsRng, n.min(hosts.len()));
-        urls.iter().map(|&url| url.clone()).collect()
-    }
-
-    /// Get up to limit peers that don't match the given transport schemes from a hostlist.
-    /// If limit was not provided, return all matching peers.
-    pub async fn fetch_excluding_schemes(
-        &self,
-        color: usize,
-        schemes: &[String],
-        limit: Option<usize>,
-    ) -> Vec<(Url, u64)> {
-        let list = self.hostlists[color].read().await;
-
-        let mut limit = match limit {
-            Some(l) => l.min(list.len()),
-            None => list.len(),
-        };
-        let mut ret = vec![];
-
-        if limit == 0 {
-            return ret
-        }
-
-        for (addr, last_seen) in list.iter() {
-            if !schemes.contains(&addr.scheme().to_string()) {
-                ret.push((addr.clone(), *last_seen));
-                limit -= 1;
-                if limit == 0 {
-                    return ret
-                }
-            }
-        }
-
-        if ret.is_empty() {
-            debug!(target: "net::hosts::fetch_excluding_schemes()",
-                    "No such schemes found!")
-        }
-
-        ret
-    }
-
-    /// Get up to n random peers that don't match the given transport schemes from
-    /// a hostlist.
-    pub async fn fetch_n_random_excluding_schemes(
-        &self,
-        color: HostColor,
-        schemes: &[String],
-        n: u32,
-    ) -> Vec<(Url, u64)> {
-        trace!(target: "net::hosts::fetch_excluding_schemes()", "[START]");
-        let index = color as usize;
-        let n = n as usize;
-        if n == 0 {
-            return vec![]
-        }
-        // Retrieve all peers not corresponding to that transport schemes
-        let hosts = self.fetch_excluding_schemes(index, schemes, None).await;
-
-        if hosts.is_empty() {
-            debug!(target: "net::hosts::fetch_n_random_excluding_schemes()",
-            "No such schemes found!");
-            return hosts
-        }
-
-        // Grab random ones
-        let urls = hosts.iter().choose_multiple(&mut OsRng, n.min(hosts.len()));
-        urls.iter().map(|&url| url.clone()).collect()
-    }
-
-    /// Get up to limit peers that match the given transport schemes from a hostlist.
-    /// If limit was not provided, return all matching peers.
-    async fn fetch_with_schemes(
-        &self,
-        color: usize,
-        schemes: &[String],
-        limit: Option<usize>,
-    ) -> Vec<(Url, u64)> {
-        trace!(target: "net::hosts::fetch_with_schemes()", "[START]");
-        let list = self.hostlists[color].read().await;
-
-        let mut limit = match limit {
-            Some(l) => l.min(list.len()),
-            None => list.len(),
-        };
-        let mut ret = vec![];
-
-        if limit == 0 {
-            return ret
-        }
-
-        for (addr, last_seen) in list.iter() {
-            if schemes.contains(&addr.scheme().to_string()) {
-                ret.push((addr.clone(), *last_seen));
-                limit -= 1;
-                if limit == 0 {
-                    debug!(target: "net::hosts::fetch_with_schemes()",
-                        "Found matching scheme, returning {} addresses",
-                        ret.len());
-                    return ret
-                }
-            }
-        }
-
-        if ret.is_empty() {
-            debug!(target: "net::hosts::fetch_with_schemes()",
-                  "No such schemes found!")
-        }
-
-        ret
-    }
-
-    /// Load the hostlists from a file.
-    pub async fn load_all(&self, path: &String) -> Result<()> {
-        let path = expand_path(path)?;
-
-        if !path.exists() {
-            if let Some(parent) = path.parent() {
-                fs::create_dir_all(parent)?;
-            }
-
-            File::create(path.clone())?;
-        }
-
-        let contents = load_file(&path);
-        if let Err(e) = contents {
-            warn!(target: "net::hosts::load_hosts()", "Failed retrieving saved hosts: {}", e);
-            return Ok(())
-        }
-
-        for line in contents.unwrap().lines() {
-            let data: Vec<&str> = line.split('\t').collect();
-
-            let url = match Url::parse(data[1]) {
-                Ok(u) => u,
-                Err(e) => {
-                    debug!(target: "net::hosts::load_hosts()", "Skipping malformed URL {}", e);
-                    continue
-                }
-            };
-
-            let last_seen = match data[2].parse::<u64>() {
-                Ok(t) => t,
-                Err(e) => {
-                    debug!(target: "net::hosts::load_hosts()", "Skipping malformed last seen {}", e);
-                    continue
-                }
-            };
-
-            match data[0] {
-                "greylist" => {
-                    self.store(HostColor::Grey as usize, url, last_seen).await;
-                }
-                "whitelist" => {
-                    self.store(HostColor::White as usize, url, last_seen).await;
-                }
-                "anchorlist" => {
-                    self.store(HostColor::Gold as usize, url, last_seen).await;
-                }
-                _ => {
-                    debug!(target: "net::hosts::load_hosts()", "Malformed list name...");
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Save the hostlist to a file. Whitelist gets written to the greylist to force
-    /// whitelist entries through the refinery on start.
-    pub async fn save_all(&self, path: &String) -> Result<()> {
-        let path = expand_path(path)?;
-
-        let mut tsv = String::new();
-        let mut whitelist = vec![];
-
-        // First gather all the whitelist entries we don't have in greylist.
-        for (url, last_seen) in self.fetch_all(HostColor::White).await {
-            if !self.contains(HostColor::Grey as usize, &url).await {
-                whitelist.push((url, last_seen))
-            }
-        }
-
-        // Collect the greylist and anchorlist entries, and append any whitelist entries to the
-        // greylist before saving.
-        for (name, mut list) in self.hostlist_fetch_safe().await {
-            if name == *"greylist".to_string() {
-                list.append(&mut whitelist)
-            }
-            for (url, last_seen) in list {
-                tsv.push_str(&format!("{}\t{}\t{}\n", name, url, last_seen));
-            }
-        }
-
-        if !tsv.eq("") {
-            info!(target: "net::hosts::store::save_hosts()", "Saving hosts to: {:?}",
-                  path);
-            if let Err(e) = save_file(&path, &tsv) {
-                error!(target: "net::hosts::store::save_hosts()", "Failed saving hosts: {}", e);
-            }
-        }
-
-        Ok(())
     }
 }
 
