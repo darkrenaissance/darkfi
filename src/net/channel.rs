@@ -37,11 +37,11 @@ use url::Url;
 
 use super::{
     dnet::{self, dnetev, DnetEvent},
+    hosts::store::HostColor,
     message,
     message::Packet,
     message_subscriber::{MessageSubscription, MessageSubsystem},
     p2p::P2pPtr,
-    hosts::store::HostColor,
     session::{Session, SessionBitFlag, SessionWeakPtr},
     transport::PtStream,
 };
