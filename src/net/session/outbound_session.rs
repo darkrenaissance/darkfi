@@ -415,7 +415,7 @@ impl Slot {
             self.channel_id.store(channel.info.id, Ordering::Relaxed);
 
             // Add this connection to the anchorlist
-            hosts.container.upgrade_host(&addr).await;
+            hosts.move_host(&addr, last_seen, HostColor::Gold).await;
 
             // Wait for channel to close
             stop_sub.receive().await;

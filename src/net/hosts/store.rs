@@ -16,13 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{
-    collections::HashMap,
-    fmt, fs,
-    fs::File,
-    sync::Arc,
-    time::{Instant, UNIX_EPOCH},
-};
+use std::{collections::HashMap, fmt, fs, fs::File, sync::Arc, time::Instant};
 
 use log::{debug, error, info, trace, warn};
 use rand::{prelude::IteratorRandom, rngs::OsRng, Rng};
@@ -73,27 +67,26 @@ pub type HostRegistry = RwLock<HashMap<Url, HostState>>;
 ///
 #[derive(Clone, Debug)]
 pub enum HostState {
+    /// TODO: doc
+    Moving,
     /// Hosts that are being connected to in Outbound and Manual Session.
     Pending,
     /// Hosts that have been successfully connected to.
     Connected(ChannelPtr),
-    /// Hosts that we have repeatedly failed to connect to, and that are being
-    /// removed from the anchorlist and whitelist and added to the greylist.
-    Downgrading,
     /// Hosts that are migrating from the greylist to the whitelist or being
     /// removed from the greylist, as defined in `refinery.rs`.
     Refining,
 }
 
 impl HostState {
-    // Try to change state to Downgrading. Only possible if this
+    // Try to change state to Moving. Only possible if this
     // connection is pending i.e. if we are trying to connect to this
     // host.
-    fn try_downgrade(&self) -> Result<Self> {
+    fn try_move(&self) -> Result<Self> {
         match self {
-            HostState::Pending => Ok(HostState::Downgrading),
+            HostState::Pending => Ok(HostState::Moving),
             HostState::Connected(_) => Err(Error::StateBlocked(self.to_string())),
-            HostState::Downgrading => Err(Error::StateBlocked(self.to_string())),
+            HostState::Moving => Err(Error::StateBlocked(self.to_string())),
             HostState::Refining => Err(Error::StateBlocked(self.to_string())),
         }
     }
@@ -104,7 +97,7 @@ impl HostState {
         match self {
             HostState::Pending => Err(Error::StateBlocked(self.to_string())),
             HostState::Connected(_) => Err(Error::StateBlocked(self.to_string())),
-            HostState::Downgrading => Err(Error::StateBlocked(self.to_string())),
+            HostState::Moving => Err(Error::StateBlocked(self.to_string())),
             HostState::Refining => Err(Error::StateBlocked(self.to_string())),
         }
     }
@@ -117,7 +110,7 @@ impl HostState {
         match self {
             HostState::Pending => Ok(HostState::Connected(channel)),
             HostState::Connected(_) => Err(Error::StateBlocked(self.to_string())),
-            HostState::Downgrading => Err(Error::StateBlocked(self.to_string())),
+            HostState::Moving => Err(Error::StateBlocked(self.to_string())),
             HostState::Refining => Ok(HostState::Connected(channel)),
         }
     }
@@ -128,7 +121,7 @@ impl HostState {
         match self {
             HostState::Pending => Err(Error::StateBlocked(self.to_string())),
             HostState::Connected(_) => Err(Error::StateBlocked(self.to_string())),
-            HostState::Downgrading => Err(Error::StateBlocked(self.to_string())),
+            HostState::Moving => Err(Error::StateBlocked(self.to_string())),
             HostState::Refining => Err(Error::StateBlocked(self.to_string())),
         }
     }
@@ -140,6 +133,7 @@ impl fmt::Display for HostState {
 }
 
 #[repr(u8)]
+#[derive(Clone, Debug)]
 pub enum HostColor {
     /// Intermediary nodes that are periodically probed and updated to White.
     Grey = 0,
@@ -152,12 +146,26 @@ pub enum HostColor {
     Black = 3,
 }
 
+impl TryFrom<usize> for HostColor {
+    type Error = Error;
+
+    fn try_from(value: usize) -> Result<Self> {
+        match value {
+            0 => Ok(HostColor::Grey),
+            1 => Ok(HostColor::White),
+            2 => Ok(HostColor::Gold),
+            3 => Ok(HostColor::Black),
+            _ => Err(Error::InvalidHostColor),
+        }
+    }
+}
+
 /// A Container for managing Grey, White, Gold and Black
 /// hostlists. Exposes a common interface for writing to and querying
 /// hostlists.
 // TODO: Currently hosts (aside from hosts on the Black list) are on
 // multiple lists at once. This needs to be reconsidered.
-// Rethink upgrade/ downgrade methods and consider a single method move() which
+// Rethink upgrade/ move methods and consider a single method move() which
 // removes from one hostlist and places on another.
 // TODO: Verify the performance overhead of using vectors for hostlists.
 // TODO: Check whether anchorlist (Gold) has a max size in Monero.
@@ -179,7 +187,9 @@ impl HostContainer {
 
     /// Append host to a hostlist.
     pub async fn store(&self, color: usize, addr: Url, last_seen: u64) {
-        trace!(target: "net::hosts::store()", "[START]");
+        trace!(target: "net::hosts::store()", "[START] {:?}",
+        HostColor::try_from(color).unwrap());
+
         let mut list = self.hostlists[color].write().await;
 
         list.push((addr, last_seen));
@@ -203,45 +213,51 @@ impl HostContainer {
         // Sort the list by last_seen.
         list.sort_by_key(|entry| entry.1);
         list.reverse();
-        trace!(target: "net::hosts::store()", "[END]");
+
+        trace!(target: "net::hosts::store()", "[END] {:?}",
+        HostColor::try_from(color).unwrap());
     }
 
     /// Stores an address on a hostlist or updates its last_seen field if we already
     /// have the address.
     pub async fn store_or_update(&self, color: HostColor, addrs: &[(Url, u64)]) {
-        trace!(target: "net::hosts::store_or_update()", "[START]");
-        let parent_index = color as usize;
+        trace!(target: "net::hosts::store_or_update()", "[START] {:?}", color);
+        let color = color as usize;
         for (addr, last_seen) in addrs {
-            if !self.contains(parent_index, addr).await {
+            if !self.contains(color, addr).await {
                 debug!(target: "net::hosts::store_or_update()",
-                    "We do not have this entry in the hostlist. Adding to store...");
+                    "We do not have {} in the hostlist. Adding to store...", addr);
 
-                self.store(parent_index, addr.clone(), *last_seen).await;
+                self.store(color, addr.clone(), *last_seen).await;
             } else {
                 debug!(target: "net::hosts::store_or_update()",
-                        "We have this entry in the hostlist. Updating last seen...");
+                        "We have {} in the hostlist. Updating last seen...", addr);
 
-                let child_index = self
-                    .get_index_at_addr(parent_index, addr.clone())
+                let position = self
+                    .get_index_at_addr(color, addr.clone())
                     .await
                     .expect("Expected entry to exist");
                 debug!(target: "net::hosts::store_or_update()",
                         "Selected index, updating last seen...");
-                self.update_last_seen(parent_index, addr, *last_seen, child_index).await;
+                self.update_last_seen(color, addr, *last_seen, position).await;
             }
         }
+        trace!(target: "net::hosts::store_or_update()", "[END] {:?}", color);
     }
 
     /// Update the last_seen field of a peer on a hostlist.
     pub async fn update_last_seen(&self, color: usize, addr: &Url, last_seen: u64, index: usize) {
-        trace!(target: "net::hosts::update_last_seen()", "[START]");
+        trace!(target: "net::hosts::update_last_seen()", "[START] {:?}",
+        HostColor::try_from(color).unwrap());
+
         let mut list = self.hostlists[color].write().await;
 
         list[index] = (addr.clone(), last_seen);
 
         list.sort_by_key(|entry| entry.1);
         list.reverse();
-        trace!(target: "net::hosts::update_last_seen()", "[END]");
+        trace!(target: "net::hosts::update_last_seen()", "[END] {:?}",
+        HostColor::try_from(color).unwrap());
     }
 
     /// Return all known hosts on a hostlist.
@@ -264,7 +280,7 @@ impl HostContainer {
         transports: &[String],
         transport_mixing: bool,
     ) -> Vec<(Url, u64)> {
-        trace!(target: "net::hosts::fetch_address()", "[START]");
+        trace!(target: "net::hosts::fetch_address()", "[START] {:?}", color);
         let mut hosts = vec![];
         let index = color as usize;
 
@@ -306,7 +322,9 @@ impl HostContainer {
         schemes: &[String],
         limit: Option<usize>,
     ) -> Vec<(Url, u64)> {
-        trace!(target: "net::hosts::fetch_with_schemes()", "[START]");
+        trace!(target: "net::hosts::fetch_with_schemes()", "[START] {:?}",
+        HostColor::try_from(color).unwrap());
+
         let list = self.hostlists[color].read().await;
 
         let mut limit = match limit {
@@ -325,8 +343,8 @@ impl HostContainer {
                 limit -= 1;
                 if limit == 0 {
                     debug!(target: "net::hosts::fetch_with_schemes()",
-                        "Found matching scheme, returning {} addresses",
-                        ret.len());
+                        "Found matching {:?} scheme, returning {} addresses",
+                        HostColor::try_from(color).unwrap(), ret.len());
                     return ret
                 }
             }
@@ -334,7 +352,7 @@ impl HostContainer {
 
         if ret.is_empty() {
             debug!(target: "net::hosts::fetch_with_schemes()",
-                  "No such schemes found!")
+                  "No such {:?} schemes found!", HostColor::try_from(color).unwrap())
         }
 
         ret
@@ -348,6 +366,9 @@ impl HostContainer {
         schemes: &[String],
         limit: Option<usize>,
     ) -> Vec<(Url, u64)> {
+        trace!(target: "net::hosts::fetch_with_schemes()", "[START] {:?}",
+        HostColor::try_from(color).unwrap());
+
         let list = self.hostlists[color].read().await;
 
         let mut limit = match limit {
@@ -393,7 +414,7 @@ impl HostContainer {
         schemes: &[String],
     ) -> Option<((Url, u64), usize)> {
         // Retrieve all peers corresponding to that transport schemes
-        trace!(target: "net::hosts::fetch_random_with_schemes()", "[START]");
+        trace!(target: "net::hosts::fetch_random_with_schemes()", "[START] {:?}", color);
         let list = self.fetch_with_schemes(color as usize, schemes, None).await;
 
         if list.is_empty() {
@@ -407,7 +428,7 @@ impl HostContainer {
 
     /// Get up to n random peers. Schemes are not taken into account.
     pub async fn fetch_n_random(&self, color: HostColor, n: u32) -> Vec<(Url, u64)> {
-        trace!(target: "net::hosts::fetch_n_random()", "[START]");
+        trace!(target: "net::hosts::fetch_n_random()", "[START] {:?}", color);
         let n = n as usize;
         if n == 0 {
             return vec![]
@@ -438,7 +459,7 @@ impl HostContainer {
         schemes: &[String],
         n: u32,
     ) -> Vec<(Url, u64)> {
-        trace!(target: "net::hosts::fetch_n_random_with_schemes()", "[START]");
+        trace!(target: "net::hosts::fetch_n_random_with_schemes()", "[START] {:?}", color);
         let index = color as usize;
         let n = n as usize;
         if n == 0 {
@@ -466,7 +487,7 @@ impl HostContainer {
         schemes: &[String],
         n: u32,
     ) -> Vec<(Url, u64)> {
-        trace!(target: "net::hosts::fetch_excluding_schemes()", "[START]");
+        trace!(target: "net::hosts::fetch_excluding_schemes()", "[START] {:?}", color);
         let index = color as usize;
         let n = n as usize;
         if n == 0 {
@@ -486,18 +507,21 @@ impl HostContainer {
         urls.iter().map(|&url| url.clone()).collect()
     }
 
-    /// Upgrade a connection to the anchorlist. Called after a connection has been successfully
-    /// established in Outbound and Manual sessions.
-    pub async fn upgrade_host(&self, addr: &Url) {
-        let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-        self.store_or_update(HostColor::Gold, &[(addr.clone(), last_seen)]).await;
-    }
-
     /// Remove an entry from a hostlist.
     pub async fn remove(&self, color: HostColor, addr: &Url, index: usize) {
-        debug!(target: "net::hosts::remove()", "Removing peer {} from hostlist", addr);
+        debug!(target: "net::hosts::remove()", "Removing peer {} from {:?}", addr, color);
         let mut list = self.hostlists[color as usize].write().await;
         list.remove(index);
+    }
+
+    /// TODO: documentation
+    pub async fn remove_if_exists(&self, color: HostColor, addr: &Url) {
+        let index = color.clone() as usize;
+        if self.contains(index, addr).await {
+            let position =
+                self.get_index_at_addr(index, addr.clone()).await.expect("Expected index to exist");
+            self.remove(color, addr, position).await;
+        }
     }
 
     /// Check if a hostlist is empty.
@@ -691,7 +715,7 @@ impl Hosts {
             let result: Result<HostState> = match new_state {
                 HostState::Pending => current_state.try_pending(),
                 HostState::Connected(c) => current_state.try_connect(c),
-                HostState::Downgrading => current_state.try_downgrade(),
+                HostState::Moving => current_state.try_move(),
                 HostState::Refining => current_state.try_refine(),
             };
 
@@ -728,7 +752,7 @@ impl Hosts {
         None
     }
 
-    /// Remove a host from the HostRegistry. Must be called after downgrade(), when the refinery
+    /// Remove a host from the HostRegistry. Must be called after move(), when the refinery
     /// process fails, or when a channel stops. Prevents hosts from getting trapped in the
     /// HostState logical machinery.
     pub async fn unregister(&self, addr: &Url) {
@@ -827,6 +851,7 @@ impl Hosts {
                 continue
             }
 
+            // Blacklist peers should never enter the hostlist.
             if self.container.contains(HostColor::Black as usize, addr_).await {
                 warn!(target: "net::hosts::filter_addresses()",
                 "Peer {} is blacklisted", addr_);
@@ -890,52 +915,84 @@ impl Hosts {
 
         ret
     }
-    /// Downgrade a host to greylist. If the host is on the anchorlist or whitelist, remove it.
-    /// If it's already on the greylist we can't do anything here.
-    pub async fn downgrade_host(&self, addr: &Url, last_seen: u64) {
-        if self.try_register(addr.clone(), HostState::Downgrading).await.is_err() {
+
+    /// TODO: documentation
+    pub async fn move_host(&self, addr: &Url, last_seen: u64, destination: HostColor) {
+        if self.try_register(addr.clone(), HostState::Moving).await.is_err() {
             return
         }
 
-        debug!(target: "net::hosts::downgrade_host()", "Downgrading host {}", addr);
-        if self.container.contains(HostColor::Grey as usize, addr).await {
-            warn!(target: "net::hosts::downgrade_host()",
-                  "Cannot downgrade a host that is already on the greylist! {}", addr);
-        }
+        match destination {
+            // Downgrade to grey. Remove from white and gold.
+            HostColor::Grey => {
+                // Remove from the Anchorlist.
+                self.container.remove_if_exists(HostColor::Gold, addr).await;
 
-        if self.container.contains(HostColor::Gold as usize, addr).await {
-            debug!(target: "net::hosts::downgrade_host()", "Removing from anchorlist {}", addr);
+                // Remove from the Whitelist.
+                self.container.remove_if_exists(HostColor::White, addr).await;
 
-            let index = self
-                .container
-                .get_index_at_addr(HostColor::Gold as usize, addr.clone())
-                .await
-                .expect("Expected anchorlist index to exist");
+                // Write to the Greylist.
+                self.container.store_or_update(HostColor::Grey, &[(addr.clone(), last_seen)]).await;
+            }
 
-            self.container.remove(HostColor::Gold, addr, index).await;
-            self.container.store_or_update(HostColor::Grey, &[(addr.clone(), last_seen)]).await;
-        }
+            // Remove from Greylist, add to Whitelist. Called by the Refinery.
+            HostColor::White => {
+                // Remove from the Greylist.
+                self.container.remove_if_exists(HostColor::Grey, addr).await;
 
-        if self.container.contains(HostColor::White as usize, addr).await {
-            debug!(target: "net::hosts::downgrade_host()", "Removing from whitelist {}", addr);
+                // Add to the Whitelist.
+                self.container
+                    .store_or_update(HostColor::White, &[(addr.clone(), last_seen)])
+                    .await;
+            }
 
-            let index = self
-                .container
-                .get_index_at_addr(HostColor::White as usize, addr.clone())
-                .await
-                .expect("Expected whitelist index to exist");
+            // Upgrade to gold. Remove from white or grey.
+            HostColor::Gold => {
+                // Remove from the Greylist.
+                self.container.remove_if_exists(HostColor::Grey, addr).await;
 
-            self.container.remove(HostColor::White, addr, index).await;
-            self.container.store_or_update(HostColor::Grey, &[(addr.clone(), last_seen)]).await;
+                // Remove from the Whitelist.
+                self.container.remove_if_exists(HostColor::White, addr).await;
+
+                // Add to the Anchorlist.
+                self.container.store_or_update(HostColor::Gold, &[(addr.clone(), last_seen)]).await;
+            }
+
+            // Move to black. Remove from all other lists.
+            HostColor::Black => {
+                // We ignore UNIX sockets here so we will just work
+                // with stuff that has host_str().
+                if let Some(_) = addr.host_str() {
+                    // Localhost connections should never enter the blacklist
+                    // This however allows any Tor and Nym connections.
+                    if self.is_local_host(addr.clone()).await {
+                        return
+                    }
+
+                    // Remove from the Greylist.
+                    self.container.remove_if_exists(HostColor::Grey, addr).await;
+
+                    // Remove from the Whitelist.
+                    self.container.remove_if_exists(HostColor::White, addr).await;
+
+                    // Remove from the Anchorlist.
+                    self.container.remove_if_exists(HostColor::Gold, addr).await;
+
+                    // Add to the Blacklist.
+                    self.container
+                        .store_or_update(HostColor::Black, &[(addr.clone(), last_seen)])
+                        .await;
+                }
+            }
         }
 
         // Remove this entry from HostRegistry to avoid this host getting
-        // stuck in the Downgrading state.
-        self.unregister(addr).await;
+        // stuck in the Moving state.
+        self.unregister(&addr).await;
     }
 
     /// Quarantine a peer.
-    /// If they've been quarantined for more than a configured limit, downgrade to greylist.
+    /// If they've been quarantined for more than a configured limit, move to greylist.
     pub async fn quarantine(&self, addr: &Url, last_seen: u64) {
         debug!(target: "net::hosts::quarantine()", "Quarantining peer {}", addr);
         let timer = Instant::now();
@@ -947,10 +1004,10 @@ impl Hosts {
             if *retries == self.settings.hosts_quarantine_limit {
                 debug!(target: "net::hosts::quarantine()",
                 "Reached quarantine limited after {:?}", timer.elapsed());
-                debug!(target: "net::hosts::quarantine()",
-                "Removing from hostlist {}", addr);
                 drop(q);
-                self.downgrade_host(addr, last_seen).await;
+
+                debug!(target: "net::hosts::quarantine()", "Moving to greylist {}", addr);
+                self.move_host(addr, last_seen, HostColor::Grey).await;
             }
         } else {
             debug!(target: "net::hosts::quarantine()", "Added peer {} to quarantine", addr);
@@ -977,16 +1034,20 @@ impl Hosts {
                 .push((peer.clone(), 0));
         }
     }
+=======
+>>>>>>> 8aad26601 (net: replace downgrade() and update(), and blacklist methods with a single method move_hosts())
 }
 
 #[cfg(test)]
 mod tests {
+    use smol::Executor;
+    use std::time::UNIX_EPOCH;
+
     use super::{
         super::super::{settings::Settings, P2p},
         *,
     };
     use crate::{net::hosts::refinery::ping_node, system::sleep};
-    use smol::Executor;
 
     #[test]
     fn test_ping_node() {

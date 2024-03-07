@@ -22,6 +22,7 @@ use std::{
         atomic::{AtomicBool, Ordering::SeqCst},
         Arc,
     },
+    time::UNIX_EPOCH,
 };
 
 use darkfi_serial::{async_trait, serialize, SerialDecodable, SerialEncodable};
@@ -40,6 +41,7 @@ use super::{
     message::Packet,
     message_subscriber::{MessageSubscription, MessageSubsystem},
     p2p::P2pPtr,
+    hosts::store::HostColor,
     session::{Session, SessionBitFlag, SessionWeakPtr},
     transport::PtStream,
 };
@@ -311,7 +313,8 @@ impl Channel {
     /// Ban a malicious peer and stop the channel.
     pub async fn ban(&self, peer: &Url) {
         debug!(target: "net::channel::ban()", "START {:?}", self);
-        self.p2p().hosts().blacklist(peer).await;
+        let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+        self.p2p().hosts().move_host(&peer, last_seen, HostColor::Black).await;
 
         self.stop().await;
         debug!(target: "net::channel::ban()", "STOP {:?}", self);
