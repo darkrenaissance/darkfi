@@ -64,10 +64,6 @@ impl Witness {
     }
 }
 
-pub enum Literal {
-    Uint64(Value<u64>),
-}
-
 /// Helper function for verifiers to generate empty witnesses for
 /// a given decoded zkas binary
 pub fn empty_witnesses(zkbin: &ZkBinary) -> Result<Vec<Witness>> {
