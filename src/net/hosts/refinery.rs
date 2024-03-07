@@ -117,9 +117,10 @@ impl GreylistRefinery {
                 Some((entry, position)) => {
                     let url = &entry.0;
 
-                    if let Err(_) = hosts.try_register(url.clone(), HostState::Refining).await {
+                    if hosts.try_register(url.clone(), HostState::Refining).await.is_err() {
                         continue
                     }
+
                     if !ping_node(url.clone(), self.p2p().clone()).await {
                         hosts.container.remove(HostColor::Grey, url, position).await;
 

@@ -184,19 +184,20 @@ impl HostContainer {
 
         list.push((addr, last_seen));
 
-        if color == 0 {
-            if list.len() == GREYLIST_MAX_LEN {
-                let last_entry = list.pop().unwrap();
-                debug!(target: "net::hosts::store()",
-            "Greylist reached max size. Removed {:?}", last_entry);
-            }
+        if color == 0 && list.len() == GREYLIST_MAX_LEN {
+            let last_entry = list.pop().unwrap();
+            debug!(
+                target: "net::hosts::store()",
+                "Greylist reached max size. Removed {:?}", last_entry,
+            );
         }
-        if color == 1 {
-            if list.len() == WHITELIST_MAX_LEN {
-                let last_entry = list.pop().unwrap();
-                debug!(target: "net::hosts::store()",
-            "Whitelist reached max size. Removed {:?}", last_entry);
-            }
+
+        if color == 1 && list.len() == WHITELIST_MAX_LEN {
+            let last_entry = list.pop().unwrap();
+            debug!(
+                target: "net::hosts::store()",
+                "Whitelist reached max size. Removed {:?}", last_entry,
+            );
         }
 
         // Sort the list by last_seen.
@@ -211,7 +212,7 @@ impl HostContainer {
         trace!(target: "net::hosts::store_or_update()", "[START]");
         let parent_index = color as usize;
         for (addr, last_seen) in addrs {
-            if !self.contains(parent_index, &addr).await {
+            if !self.contains(parent_index, addr).await {
                 debug!(target: "net::hosts::store_or_update()",
                     "We do not have this entry in the hostlist. Adding to store...");
 
@@ -226,7 +227,7 @@ impl HostContainer {
                     .expect("Expected entry to exist");
                 debug!(target: "net::hosts::store_or_update()",
                         "Selected index, updating last seen...");
-                self.update_last_seen(parent_index, &addr, *last_seen, child_index).await;
+                self.update_last_seen(parent_index, addr, *last_seen, child_index).await;
             }
         }
     }
@@ -525,7 +526,7 @@ impl HostContainer {
     }
 
     /// Load the hostlists from a file.
-    pub async fn load_all(&self, path: &String) -> Result<()> {
+    pub async fn load_all(&self, path: &str) -> Result<()> {
         let path = expand_path(path)?;
 
         if !path.exists() {
@@ -582,7 +583,7 @@ impl HostContainer {
 
     /// Save the hostlist to a file. Whitelist gets written to the greylist to force
     /// whitelist entries through the refinery on start.
-    pub async fn save_all(&self, path: &String) -> Result<()> {
+    pub async fn save_all(&self, path: &str) -> Result<()> {
         let path = expand_path(path)?;
 
         let mut tsv = String::new();
@@ -712,7 +713,7 @@ impl Hosts {
         for (host, last_seen) in hosts {
             debug!(target: "net::hosts::check_address()", "Starting checks");
 
-            if let Err(_) = self.try_register(host.clone(), HostState::Pending).await {
+            if self.try_register(host.clone(), HostState::Pending).await.is_err() {
                 continue
             }
 
@@ -759,11 +760,7 @@ impl Hosts {
     pub async fn register_channel(&self, channel: ChannelPtr) -> Result<()> {
         let address = channel.address().clone();
 
-        if let Err(e) =
-            self.try_register(address.clone(), HostState::Connected(channel.clone())).await
-        {
-            return Err(e)
-        }
+        self.try_register(address.clone(), HostState::Connected(channel.clone())).await?;
 
         self.channel_subscriber.notify(Ok(channel)).await;
         Ok(())
@@ -896,7 +893,7 @@ impl Hosts {
     /// Downgrade a host to greylist. If the host is on the anchorlist or whitelist, remove it.
     /// If it's already on the greylist we can't do anything here.
     pub async fn downgrade_host(&self, addr: &Url, last_seen: u64) {
-        if let Err(_) = self.try_register(addr.clone(), HostState::Downgrading).await {
+        if self.try_register(addr.clone(), HostState::Downgrading).await.is_err() {
             return
         }
 
@@ -934,7 +931,7 @@ impl Hosts {
 
         // Remove this entry from HostRegistry to avoid this host getting
         // stuck in the Downgrading state.
-        self.unregister(&addr).await;
+        self.unregister(addr).await;
     }
 
     /// Quarantine a peer.
@@ -965,7 +962,7 @@ impl Hosts {
     pub async fn blacklist(&self, peer: &Url) {
         // We ignore UNIX sockets here so we will just work
         // with stuff that has host_str().
-        if let Some(_) = peer.host_str() {
+        if peer.host_str().is_some() {
             // Localhost connections should never enter the blacklist
             // This however allows any Tor and Nym connections.
             if self.is_local_host(peer.clone()).await {
@@ -1246,7 +1243,7 @@ mod tests {
             assert!(!hosts.is_empty(HostColor::White).await);
             assert!(!hosts.is_empty(HostColor::Gold).await);
 
-            let transports = &vec!["tcp".to_string()];
+            let transports = ["tcp".to_string()];
             let white_count =
                 p2p.settings().outbound_connections * p2p.settings().white_connection_percent / 100;
             let localnet = true;
@@ -1254,46 +1251,52 @@ mod tests {
             // Simulate the address selection logic found in outbound_session::fetch_address()
             for i in 0..8 {
                 if i < p2p.settings().anchor_connection_count {
-                    if !hosts.fetch_address(HostColor::Gold, transports, localnet).await.is_empty()
+                    if !hosts.fetch_address(HostColor::Gold, &transports, localnet).await.is_empty()
                     {
                         let addrs =
-                            hosts.fetch_address(HostColor::Gold, transports, localnet).await;
+                            hosts.fetch_address(HostColor::Gold, &transports, localnet).await;
                         hostlist.push(addrs);
                     }
 
-                    if !hosts.fetch_address(HostColor::White, transports, localnet).await.is_empty()
+                    if !hosts
+                        .fetch_address(HostColor::White, &transports, localnet)
+                        .await
+                        .is_empty()
                     {
                         let addrs =
-                            hosts.fetch_address(HostColor::White, transports, localnet).await;
+                            hosts.fetch_address(HostColor::White, &transports, localnet).await;
                         hostlist.push(addrs);
                     }
 
-                    if !hosts.fetch_address(HostColor::Grey, transports, localnet).await.is_empty()
+                    if !hosts.fetch_address(HostColor::Grey, &transports, localnet).await.is_empty()
                     {
                         let addrs =
-                            hosts.fetch_address(HostColor::Grey, transports, localnet).await;
+                            hosts.fetch_address(HostColor::Grey, &transports, localnet).await;
                         hostlist.push(addrs);
                     }
                 } else if i < white_count {
-                    if !hosts.fetch_address(HostColor::White, transports, localnet).await.is_empty()
+                    if !hosts
+                        .fetch_address(HostColor::White, &transports, localnet)
+                        .await
+                        .is_empty()
                     {
                         let addrs =
-                            hosts.fetch_address(HostColor::White, transports, localnet).await;
+                            hosts.fetch_address(HostColor::White, &transports, localnet).await;
                         hostlist.push(addrs);
                     }
 
-                    if !hosts.fetch_address(HostColor::Grey, transports, localnet).await.is_empty()
+                    if !hosts.fetch_address(HostColor::Grey, &transports, localnet).await.is_empty()
                     {
                         let addrs =
-                            hosts.fetch_address(HostColor::Grey, transports, localnet).await;
+                            hosts.fetch_address(HostColor::Grey, &transports, localnet).await;
                         hostlist.push(addrs);
                     }
                 } else if !hosts
-                    .fetch_address(HostColor::Grey, transports, localnet)
+                    .fetch_address(HostColor::Grey, &transports, localnet)
                     .await
                     .is_empty()
                 {
-                    let addrs = hosts.fetch_address(HostColor::Grey, transports, localnet).await;
+                    let addrs = hosts.fetch_address(HostColor::Grey, &transports, localnet).await;
                     hostlist.push(addrs);
                 }
             }

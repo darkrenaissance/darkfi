@@ -187,7 +187,7 @@ impl Lilith {
             let (entry, position) = hosts.container.fetch_last(HostColor::White).await;
             let url = &entry.0;
 
-            if let Err(_) = hosts.try_register(url.clone(), HostState::Refining).await {
+            if hosts.try_register(url.clone(), HostState::Refining).await.is_err() {
                 continue
             }
 
