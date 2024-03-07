@@ -722,11 +722,15 @@ impl Circuit<pallas::Base> for ZkCircuit {
                 }
 
                 Witness::Scalar(w) => {
-                    // NOTE: Because the type in `halo2_gadgets` does not have a `Clone`
-                    //       impl, we push scalars as-is to the heap. They get witnessed
-                    //       when they get used.
+                    trace!(target: "zk::vm", "Witnessing Scalar into circuit");
+                    let scalar = ScalarFixed::new(
+                        ecc_chip.as_ref().unwrap().clone(),
+                        layouter.namespace(|| "Witness ScalarFixed"),
+                        *w,
+                    )?;
+
                     trace!(target: "zk::vm", "Pushing Scalar to heap address {}", heap.len());
-                    heap.push(HeapVar::Scalar(*w));
+                    heap.push(HeapVar::Scalar(scalar));
                 }
 
                 Witness::MerklePath(w) => {
@@ -783,11 +787,8 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let lhs: FixedPoint<pallas::Affine, EccChip<OrchardFixedBases>> =
                         heap[args[1].1].clone().try_into()?;
 
-                    let rhs = ScalarFixed::new(
-                        ecc_chip.as_ref().unwrap().clone(),
-                        layouter.namespace(|| "EcMul: ScalarFixed::new()"),
-                        heap[args[0].1].clone().try_into()?,
-                    )?;
+                    let rhs: ScalarFixed<pallas::Affine, EccChip<OrchardFixedBases>> =
+                        heap[args[0].1].clone().try_into()?;
 
                     let (ret, _) = lhs.mul(layouter.namespace(|| "EcMul()"), rhs)?;
 
