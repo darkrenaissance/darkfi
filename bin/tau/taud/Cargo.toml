@@ -40,7 +40,7 @@ toml = "0.8.10"
 
 # Misc
 async-trait = "0.1.77"
-chrono = "0.4.34"
+chrono = "0.4.35"
 futures = "0.3.30"
 libc = "0.2.153"
 log = "0.4.21"

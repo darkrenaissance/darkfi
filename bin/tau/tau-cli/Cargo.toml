@@ -14,7 +14,7 @@ darkfi = {path = "../../../", features = ["rpc"]}
 taud = {path = "../taud"}
 
 # Misc
-chrono = "0.4.34"
+chrono = "0.4.35"
 colored = "2.1.0"
 log = "0.4.21"
 prettytable-rs = "0.10.0"
@@ -25,6 +25,6 @@ textwrap = "0.16.1"
 url = "2.5.0"
 
 # Encoding and parsing
-clap = {version = "4.5.1", features = ["derive"]}
+clap = {version = "4.5.2", features = ["derive"]}
 serde = {version = "1.0.197", features = ["derive"]}
 tinyjson = "2.5.1"

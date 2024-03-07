@@ -21,7 +21,7 @@ darkfi-serial = {path = "../../../src/serial"}
 # Misc
 anyhow = "1.0.80"
 async-std = {version = "1.12.0", features = ["attributes"]}
-clap = {version = "4.5.1", features = ["derive"]}
+clap = {version = "4.5.2", features = ["derive"]}
 sled = "0.34.7"
 
 [patch.crates-io]
