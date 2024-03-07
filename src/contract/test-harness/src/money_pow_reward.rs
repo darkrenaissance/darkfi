@@ -111,8 +111,7 @@ impl TestHarness {
         let previous = wallet.validator.blockchain.last_block()?;
 
         // We increment timestamp so we don't have to use sleep
-        let mut timestamp = previous.header.timestamp;
-        timestamp.add(1);
+        let timestamp = previous.header.timestamp.checked_add(1.into())?;
 
         // Generate block header
         let header = Header::new(

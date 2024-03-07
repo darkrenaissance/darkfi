@@ -134,7 +134,7 @@ pub fn validate_block(block: &BlockInfo, previous: &BlockInfo, module: &PoWModul
     }
 
     // Check timestamp validity (4)
-    if !module.verify_timestamp_by_median(block.header.timestamp.0) {
+    if !module.verify_timestamp_by_median(block.header.timestamp) {
         return Err(Error::BlockIsInvalid(block.hash()?.to_string()))
     }
 
@@ -161,7 +161,7 @@ pub fn validate_blockchain(
         let full_block = &full_blocks[1];
         validate_block(full_block, &full_blocks[0], &module)?;
         // Update PoW module
-        module.append(full_block.header.timestamp.0, &module.next_difficulty()?);
+        module.append(full_block.header.timestamp, &module.next_difficulty()?);
     }
 
     Ok(())

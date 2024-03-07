@@ -259,7 +259,7 @@ impl JsonRpcInterface {
 
         let due = match params["due"] {
             JsonValue::Null => None,
-            JsonValue::Number(numba) => Some(Timestamp(numba as u64)),
+            JsonValue::Number(numba) => Some(Timestamp::from_u64(numba as u64)),
             _ => return Err(TaudError::InvalidData("Invalid parameter \"due\"".to_string())),
         };
 
@@ -323,7 +323,7 @@ impl JsonRpcInterface {
             &self.nickname,
             due,
             rank,
-            Timestamp(created_at.unwrap()),
+            Timestamp::from_u64(created_at.unwrap()),
         )?;
         new_task.set_project(&projects);
         new_task.set_assign(&assigns);
@@ -360,7 +360,7 @@ impl JsonRpcInterface {
 
         let month = match params[0].get::<String>() {
             Some(u64_str) => match u64_str.parse::<u64>() {
-                Ok(v) => Some(Timestamp(v)),
+                Ok(v) => Some(Timestamp::from_u64(v)),
                 //Err(e) => return Err(TaudError::InvalidData(e.to_string())),
                 Err(_) => None,
             },
@@ -492,7 +492,7 @@ impl JsonRpcInterface {
 
         let month = match params[0].get::<String>() {
             Some(u64_str) => match u64_str.parse::<u64>() {
-                Ok(v) => Some(Timestamp(v)),
+                Ok(v) => Some(Timestamp::from_u64(v)),
                 //Err(e) => return Err(TaudError::InvalidData(e.to_string())),
                 Err(_) => None,
             },
@@ -520,7 +520,7 @@ impl JsonRpcInterface {
 
         let month = match params[1].get::<String>() {
             Some(u64_str) => match u64_str.parse::<u64>() {
-                Ok(v) => Some(Timestamp(v)),
+                Ok(v) => Some(Timestamp::from_u64(v)),
                 //Err(e) => return Err(TaudError::InvalidData(e.to_string())),
                 Err(_) => None,
             },
@@ -696,7 +696,7 @@ impl JsonRpcInterface {
             match &fields["due"] {
                 JsonValue::Null => set_event(&mut task, "due", &self.nickname, "None"),
                 JsonValue::Number(ts_num) => {
-                    task.set_due(Some(Timestamp(*ts_num as u64)));
+                    task.set_due(Some(Timestamp::from_u64(*ts_num as u64)));
                     set_event(&mut task, "due", &self.nickname, &ts_num.to_string())
                 }
                 _ => unreachable!(),

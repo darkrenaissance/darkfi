@@ -261,7 +261,7 @@ pub(crate) fn get_blockchain_time(mut ctx: FunctionEnvMut<Env>) -> i64 {
 
     // Create the return object
     let mut ret = Vec::with_capacity(8);
-    ret.extend_from_slice(&block.header.timestamp.0.to_be_bytes());
+    ret.extend_from_slice(&block.header.timestamp.inner().to_be_bytes());
 
     // Copy Vec<u8> to the VM
     let mut objects = env.objects.borrow_mut();

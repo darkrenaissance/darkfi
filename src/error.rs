@@ -493,6 +493,12 @@ pub enum Error {
     #[error("Detached task stopped")]
     DetachedTaskStopped,
 
+    #[error("Addition overflow")]
+    AdditionOverflow,
+
+    #[error("Subtraction underflow")]
+    SubtractionUnderflow,
+
     // ==============================================
     // Wrappers for other error types in this library
     // ==============================================

@@ -93,7 +93,8 @@ impl Darkfid {
     // --> {"jsonrpc": "2.0", "method": "clock", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "1234", "id": 1}
     async fn clock(&self, id: u16, _params: JsonValue) -> JsonResult {
-        JsonResponse::new(JsonValue::String(Timestamp::current_time().0.to_string()), id).into()
+        JsonResponse::new(JsonValue::String(Timestamp::current_time().inner().to_string()), id)
+            .into()
     }
 
     // RPCAPI:

@@ -190,7 +190,7 @@ impl Consensus {
             };
 
             // Update PoW module
-            fork.module.append(block.header.timestamp.0, &fork.module.next_difficulty()?);
+            fork.module.append(block.header.timestamp, &fork.module.next_difficulty()?);
 
             // Use last inserted block as next iteration previous
             previous = block;
@@ -486,7 +486,7 @@ impl Fork {
         let (target_distance_sq, hash_distance_sq) = block_rank(&proposal.block, &next_target)?;
 
         // Update PoW module
-        self.module.append(proposal.block.header.timestamp.0, &next_difficulty);
+        self.module.append(proposal.block.header.timestamp, &next_difficulty);
 
         // Update fork ranks
         self.targets_rank += target_distance_sq;

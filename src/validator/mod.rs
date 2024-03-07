@@ -411,7 +411,7 @@ impl Validator {
             let cummulative_difficulty = module.cummulative_difficulty.clone() + difficulty.clone();
             let block_difficulty = BlockDifficulty::new(
                 block.header.height,
-                block.header.timestamp.0,
+                block.header.timestamp,
                 difficulty,
                 cummulative_difficulty,
             );
@@ -576,7 +576,7 @@ impl Validator {
 
             // Update PoW module
             if block.header.version == 1 {
-                module.append(block.header.timestamp.0, &module.next_difficulty()?);
+                module.append(block.header.timestamp, &module.next_difficulty()?);
             }
 
             // Use last inserted block as next iteration previous
