@@ -43,35 +43,34 @@ async fn sync_forks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     let th = Harness::new(config, true, &ex).await?;
 
     // Retrieve genesis block and generate 3 forks
-    let previous = th.alice.validator.blockchain.last_block()?;
+    let genesis = th.alice.validator.blockchain.last_block()?;
 
     // Generate a fork with 3 blocks
-    let block1 = th.generate_next_block(&previous).await?;
+    let block1 = th.generate_next_block(&genesis).await?;
     let block2 = th.generate_next_block(&block1).await?;
     let block3 = th.generate_next_block(&block2).await?;
     th.add_blocks(&vec![block1, block2, block3]).await?;
 
     // Generate a fork with 1 block
-    let block4 = th.generate_next_block(&previous).await?;
+    let block4 = th.generate_next_block(&genesis).await?;
     th.add_blocks(&vec![block4.clone()]).await?;
 
     // Generate a fork with 1 block
-    let block5 = th.generate_next_block(&previous).await?;
+    let block5 = th.generate_next_block(&genesis).await?;
     th.add_blocks(&vec![block5.clone()]).await?;
 
     // Check nodes have all the forks
     th.validate_fork_chains(3, vec![3, 1, 1]).await;
 
     // We are going to create a third node and try to sync from Bob
-    let mut sync_settings =
-        Settings { localnet: true, inbound_connections: 3, ..Default::default() };
+    let mut settings = Settings { localnet: true, inbound_connections: 3, ..Default::default() };
 
     let charlie_url = Url::parse("tcp+tls://127.0.0.1:18342")?;
-    sync_settings.inbound_addrs = vec![charlie_url];
-    let bob_url = th.bob.sync_p2p.settings().inbound_addrs[0].clone();
-    sync_settings.peers = vec![bob_url];
+    settings.inbound_addrs = vec![charlie_url];
+    let bob_url = th.bob.p2p.settings().inbound_addrs[0].clone();
+    settings.peers = vec![bob_url];
     let charlie =
-        generate_node(&th.vks, &th.validator_config, &sync_settings, None, &ex, false).await?;
+        generate_node(&th.vks, &th.validator_config, &settings, &ex, false, false).await?;
 
     // Verify node synced the big(best) fork
     let charlie_forks = charlie.validator.consensus.forks.read().await;

@@ -48,31 +48,30 @@ impl RequestHandler for Darkfid {
             // =====================
             // Miscellaneous methods
             // =====================
-            "ping" => return self.pong(req.id, req.params).await,
-            "clock" => return self.clock(req.id, req.params).await,
-            "sync_dnet_switch" => return self.sync_dnet_switch(req.id, req.params).await,
-            "miners_dnet_switch" => return self.miners_dnet_switch(req.id, req.params).await,
-            "ping_miner" => return self.ping_miner(req.id, req.params).await,
+            "ping" => self.pong(req.id, req.params).await,
+            "clock" => self.clock(req.id, req.params).await,
+            "dnet_switch" => self.dnet_switch(req.id, req.params).await,
+            "ping_miner" => self.ping_miner(req.id, req.params).await,
 
             // ==================
             // Blockchain methods
             // ==================
-            "blockchain.get_block" => return self.blockchain_get_block(req.id, req.params).await,
-            "blockchain.get_tx" => return self.blockchain_get_tx(req.id, req.params).await,
-            "blockchain.last_known_block" => return self.blockchain_last_known_block(req.id, req.params).await,
-            "blockchain.lookup_zkas" => return self.blockchain_lookup_zkas(req.id, req.params).await,
-            "blockchain.subscribe_blocks" => return self.blockchain_subscribe_blocks(req.id, req.params).await,
-            "blockchain.subscribe_txs" =>  return self.blockchain_subscribe_txs(req.id, req.params).await,
-            "blockchain.subscribe_proposals" => return self.blockchain_subscribe_proposals(req.id, req.params).await,
-            "merge_mining_get_chain_id" => return self.merge_mining_get_chain_id(req.id, req.params).await,
+            "blockchain.get_block" => self.blockchain_get_block(req.id, req.params).await,
+            "blockchain.get_tx" => self.blockchain_get_tx(req.id, req.params).await,
+            "blockchain.last_known_block" => self.blockchain_last_known_block(req.id, req.params).await,
+            "blockchain.lookup_zkas" => self.blockchain_lookup_zkas(req.id, req.params).await,
+            "blockchain.subscribe_blocks" => self.blockchain_subscribe_blocks(req.id, req.params).await,
+            "blockchain.subscribe_txs" =>  self.blockchain_subscribe_txs(req.id, req.params).await,
+            "blockchain.subscribe_proposals" => self.blockchain_subscribe_proposals(req.id, req.params).await,
+            "merge_mining_get_chain_id" => self.merge_mining_get_chain_id(req.id, req.params).await,
 
             // ===================
             // Transaction methods
             // ===================
-            "tx.simulate" => return self.tx_simulate(req.id, req.params).await,
-            "tx.broadcast" => return self.tx_broadcast(req.id, req.params).await,
-            "tx.pending" => return self.tx_pending(req.id, req.params).await,
-            "tx.clean_pending" => return self.tx_pending(req.id, req.params).await,
+            "tx.simulate" => self.tx_simulate(req.id, req.params).await,
+            "tx.broadcast" => self.tx_broadcast(req.id, req.params).await,
+            "tx.pending" => self.tx_pending(req.id, req.params).await,
+            "tx.clean_pending" => self.tx_pending(req.id, req.params).await,
 
             // ==============
             // Invalid method
@@ -98,13 +97,13 @@ impl Darkfid {
     }
 
     // RPCAPI:
-    // Activate or deactivate dnet in the sync P2P stack.
+    // Activate or deactivate dnet in the P2P stack.
     // By sending `true`, dnet will be activated, and by sending `false` dnet
     // will be deactivated. Returns `true` on success.
     //
-    // --> {"jsonrpc": "2.0", "method": "sync_dnet_switch", "params": [true], "id": 42}
+    // --> {"jsonrpc": "2.0", "method": "dnet_switch", "params": [true], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
-    async fn sync_dnet_switch(&self, id: u16, params: JsonValue) -> JsonResult {
+    async fn dnet_switch(&self, id: u16, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if params.len() != 1 || !params[0].is_bool() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
@@ -113,34 +112,9 @@ impl Darkfid {
         let switch = params[0].get::<bool>().unwrap();
 
         if *switch {
-            self.sync_p2p.dnet_enable().await;
+            self.p2p.dnet_enable().await;
         } else {
-            self.sync_p2p.dnet_disable().await;
-        }
-
-        JsonResponse::new(JsonValue::Boolean(true), id).into()
-    }
-
-    // RPCAPI:
-    // Activate or deactivate dnet in the miners P2P stack.
-    // By sending `true`, dnet will be activated, and by sending `false` dnet
-    // will be deactivated. Returns `true` on success.
-    //
-    // --> {"jsonrpc": "2.0", "method": "miners_dnet_switch", "params": [true], "id": 42}
-    // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
-    async fn miners_dnet_switch(&self, id: u16, params: JsonValue) -> JsonResult {
-        let params = params.get::<Vec<JsonValue>>().unwrap();
-        if params.len() != 1 || !params[0].is_bool() {
-            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
-        }
-
-        if self.miners_p2p.is_some() {
-            let switch = params[0].get::<bool>().unwrap();
-            if *switch {
-                self.miners_p2p.as_ref().unwrap().dnet_enable().await;
-            } else {
-                self.miners_p2p.as_ref().unwrap().dnet_disable().await;
-            }
+            self.p2p.dnet_disable().await;
         }
 
         JsonResponse::new(JsonValue::Boolean(true), id).into()

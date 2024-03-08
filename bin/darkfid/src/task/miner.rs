@@ -195,8 +195,7 @@ async fn mine_next_block(
 
     // Broadcast proposal to the network
     let message = ProposalMessage(proposal);
-    node.miners_p2p.as_ref().unwrap().broadcast(&message).await;
-    node.sync_p2p.broadcast(&message).await;
+    node.p2p.broadcast(&message).await;
 
     Ok(())
 }

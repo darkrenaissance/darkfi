@@ -107,8 +107,11 @@ impl ProtocolSync {
         );
         let msg_subsystem = channel.message_subsystem();
         msg_subsystem.add_dispatch::<IsSyncedRequest>().await;
+        msg_subsystem.add_dispatch::<IsSyncedResponse>().await;
         msg_subsystem.add_dispatch::<SyncRequest>().await;
+        msg_subsystem.add_dispatch::<SyncResponse>().await;
         msg_subsystem.add_dispatch::<ForkSyncRequest>().await;
+        msg_subsystem.add_dispatch::<ForkSyncResponse>().await;
 
         let is_synced_sub = channel.subscribe_msg::<IsSyncedRequest>().await?;
         let request_sub = channel.subscribe_msg::<SyncRequest>().await?;

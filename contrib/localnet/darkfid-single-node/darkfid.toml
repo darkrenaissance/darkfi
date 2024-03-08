@@ -40,18 +40,10 @@ recipient = "9vw6WznKk7xEFQwwXhJWMMdjUPi3cXL8NrFKQpKifG1U"
 # Skip syncing process and start node right away
 skip_sync = true
 
-## Localnet sync P2P network settings
-[network_config."localnet".sync_net]
+## Localnet P2P network settings
+[network_config."localnet".net]
 # P2P accept addresses the instance listens on for inbound connections
 inbound = ["tcp+tls://0.0.0.0:48242"]
-
-# Allow localnet hosts
-localnet = true
-
-## Localnet miners P2P network settings
-[network_config."localnet".miners_net]
-# P2P accept addresses the instance listens on for inbound connections
-inbound = ["tcp+tls://0.0.0.0:48241"]
 
 # Allow localnet hosts
 localnet = true

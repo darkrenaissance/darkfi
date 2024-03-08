@@ -41,12 +41,7 @@ use darkfi_serial::Encodable;
 use num_bigint::BigUint;
 use url::Url;
 
-use crate::{
-    proto::ProposalMessage,
-    task::sync::sync_task,
-    utils::{spawn_miners_p2p, spawn_sync_p2p},
-    Darkfid,
-};
+use crate::{proto::ProposalMessage, task::sync::sync_task, utils::spawn_p2p, Darkfid};
 
 pub struct HarnessConfig {
     pub pow_target: usize,
@@ -97,42 +92,19 @@ impl Harness {
 
         // Generate validators using pregenerated vks
         let (_, vks) = vks::get_cached_pks_and_vks()?;
-        let mut sync_settings =
-            Settings { localnet: true, inbound_connections: 3, ..Default::default() };
-        let mut miners_settings =
+        let mut settings =
             Settings { localnet: true, inbound_connections: 3, ..Default::default() };
 
         // Alice
         let alice_url = Url::parse("tcp+tls://127.0.0.1:18340")?;
-        sync_settings.inbound_addrs = vec![alice_url.clone()];
-        let alice_miners_url = Url::parse("tcp+tls://127.0.0.1:18350")?;
-        miners_settings.inbound_addrs = vec![alice_miners_url.clone()];
-        let alice = generate_node(
-            &vks,
-            &validator_config,
-            &sync_settings,
-            Some(&miners_settings),
-            ex,
-            true,
-        )
-        .await?;
+        settings.inbound_addrs = vec![alice_url.clone()];
+        let alice = generate_node(&vks, &validator_config, &settings, ex, true, true).await?;
 
         // Bob
         let bob_url = Url::parse("tcp+tls://127.0.0.1:18341")?;
-        sync_settings.inbound_addrs = vec![bob_url];
-        sync_settings.peers = vec![alice_url];
-        let bob_miners_url = Url::parse("tcp+tls://127.0.0.1:18351")?;
-        miners_settings.inbound_addrs = vec![bob_miners_url];
-        miners_settings.peers = vec![alice_miners_url];
-        let bob = generate_node(
-            &vks,
-            &validator_config,
-            &sync_settings,
-            Some(&miners_settings),
-            ex,
-            false,
-        )
-        .await?;
+        settings.inbound_addrs = vec![bob_url];
+        settings.peers = vec![alice_url];
+        let bob = generate_node(&vks, &validator_config, &settings, ex, true, false).await?;
 
         Ok(Self { config, vks, validator_config, alice, bob })
     }
@@ -179,7 +151,7 @@ impl Harness {
             let proposal = Proposal::new(block.clone())?;
             self.alice.validator.append_proposal(&proposal).await?;
             let message = ProposalMessage(proposal);
-            self.alice.miners_p2p.as_ref().unwrap().broadcast(&message).await;
+            self.alice.p2p.broadcast(&message).await;
         }
 
         // Sleep a bit so blocks can be propagated and then
@@ -258,9 +230,9 @@ impl Harness {
 pub async fn generate_node(
     vks: &Vec<(Vec<u8>, String, Vec<u8>)>,
     config: &ValidatorConfig,
-    sync_settings: &Settings,
-    miners_settings: Option<&Settings>,
+    settings: &Settings,
     ex: &Arc<smol::Executor<'static>>,
+    miner: bool,
     skip_sync: bool,
 ) -> Result<Darkfid> {
     let sled_db = sled::Config::new().temporary(true).open()?;
@@ -273,28 +245,10 @@ pub async fn generate_node(
     subscribers.insert("txs", JsonSubscriber::new("blockchain.subscribe_txs"));
     subscribers.insert("proposals", JsonSubscriber::new("blockchain.subscribe_proposals"));
 
-    let (sync_p2p, miners_p2p) = if let Some(settings) = miners_settings {
-        let sync_p2p =
-            spawn_sync_p2p(sync_settings, &validator, &subscribers, ex.clone(), true).await;
-        let miners_p2p = Some(
-            spawn_miners_p2p(settings, &validator, &subscribers, ex.clone(), sync_p2p.clone())
-                .await,
-        );
-        (sync_p2p, miners_p2p)
-    } else {
-        let sync_p2p =
-            spawn_sync_p2p(sync_settings, &validator, &subscribers, ex.clone(), false).await;
-        (sync_p2p, None)
-    };
-    let node =
-        Darkfid::new(sync_p2p.clone(), miners_p2p.clone(), validator, subscribers, None).await;
+    let p2p = spawn_p2p(settings, &validator, &subscribers, ex.clone()).await;
+    let node = Darkfid::new(p2p.clone(), validator, miner, subscribers, None).await;
 
-    sync_p2p.clone().start().await?;
-
-    if miners_settings.is_some() {
-        let miners_p2p = miners_p2p.unwrap();
-        miners_p2p.clone().start().await?;
-    }
+    p2p.start().await?;
 
     if !skip_sync {
         sync_task(&node).await?;
