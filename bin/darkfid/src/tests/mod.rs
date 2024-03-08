@@ -30,6 +30,8 @@ use harness::{generate_node, Harness, HarnessConfig};
 
 mod forks;
 
+mod sync_forks;
+
 async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     init_logger();
 
@@ -39,6 +41,7 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     let config = HarnessConfig {
         pow_target,
         pow_fixed_difficulty: pow_fixed_difficulty.clone(),
+        finalization_threshold: 6,
         alice_initial: 1000,
         bob_initial: 500,
     };

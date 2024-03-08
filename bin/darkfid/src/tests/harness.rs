@@ -51,6 +51,7 @@ use crate::{
 pub struct HarnessConfig {
     pub pow_target: usize,
     pub pow_fixed_difficulty: Option<BigUint>,
+    pub finalization_threshold: usize,
     pub alice_initial: u64,
     pub bob_initial: u64,
 }
@@ -87,7 +88,7 @@ impl Harness {
         // NOTE: we are not using consensus constants here so we
         // don't get circular dependencies.
         let validator_config = ValidatorConfig {
-            finalization_threshold: 3,
+            finalization_threshold: config.finalization_threshold,
             pow_target: config.pow_target,
             pow_fixed_difficulty: config.pow_fixed_difficulty.clone(),
             genesis_block,
