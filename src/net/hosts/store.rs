@@ -222,16 +222,19 @@ impl HostContainer {
     /// have the address.
     pub async fn store_or_update(&self, color: HostColor, addrs: &[(Url, u64)]) {
         trace!(target: "net::hosts::store_or_update()", "[START] {:?}", color);
-        let color = color as usize;
+        let color = color.clone() as usize;
+
         for (addr, last_seen) in addrs {
             if !self.contains(color, addr).await {
                 debug!(target: "net::hosts::store_or_update()",
-                    "We do not have {} in the hostlist. Adding to store...", addr);
+                    "We do not have {} in {:?} list. Adding to store...", addr,
+                    HostColor::try_from(color).unwrap());
 
                 self.store(color, addr.clone(), *last_seen).await;
             } else {
                 debug!(target: "net::hosts::store_or_update()",
-                        "We have {} in the hostlist. Updating last seen...", addr);
+                        "We have {} in {:?} list. Updating last seen...", addr,
+                        HostColor::try_from(color).unwrap());
 
                 let position = self
                     .get_index_at_addr(color, addr.clone())
@@ -831,7 +834,8 @@ impl Hosts {
         false
     }
 
-    /// Filter given addresses based on certain rulesets and validity.
+    /// Filter given addresses based on certain rulesets and validity. Strictly called only on
+    /// the first time learning of a new peer.
     async fn filter_addresses(
         &self,
         settings: SettingsPtr,
@@ -855,6 +859,15 @@ impl Hosts {
             if self.container.contains(HostColor::Black as usize, addr_).await {
                 warn!(target: "net::hosts::filter_addresses()",
                 "Peer {} is blacklisted", addr_);
+                continue
+            }
+
+            // Reject this peer if it's already stored on the hostlist.
+            if self.container.contains(HostColor::Gold as usize, addr_).await ||
+                self.container.contains(HostColor::White as usize, addr_).await
+            {
+                debug!(target: "net::hosts::filter_addresses()",
+                    "We already have {} in the hostlist. Skipping", addr_);
                 continue
             }
 
@@ -925,22 +938,16 @@ impl Hosts {
         match destination {
             // Downgrade to grey. Remove from white and gold.
             HostColor::Grey => {
-                // Remove from the Anchorlist.
                 self.container.remove_if_exists(HostColor::Gold, addr).await;
-
-                // Remove from the Whitelist.
                 self.container.remove_if_exists(HostColor::White, addr).await;
 
-                // Write to the Greylist.
                 self.container.store_or_update(HostColor::Grey, &[(addr.clone(), last_seen)]).await;
             }
 
             // Remove from Greylist, add to Whitelist. Called by the Refinery.
             HostColor::White => {
-                // Remove from the Greylist.
                 self.container.remove_if_exists(HostColor::Grey, addr).await;
 
-                // Add to the Whitelist.
                 self.container
                     .store_or_update(HostColor::White, &[(addr.clone(), last_seen)])
                     .await;
@@ -948,13 +955,9 @@ impl Hosts {
 
             // Upgrade to gold. Remove from white or grey.
             HostColor::Gold => {
-                // Remove from the Greylist.
                 self.container.remove_if_exists(HostColor::Grey, addr).await;
-
-                // Remove from the Whitelist.
                 self.container.remove_if_exists(HostColor::White, addr).await;
 
-                // Add to the Anchorlist.
                 self.container.store_or_update(HostColor::Gold, &[(addr.clone(), last_seen)]).await;
             }
 
@@ -969,16 +972,10 @@ impl Hosts {
                         return
                     }
 
-                    // Remove from the Greylist.
                     self.container.remove_if_exists(HostColor::Grey, addr).await;
-
-                    // Remove from the Whitelist.
                     self.container.remove_if_exists(HostColor::White, addr).await;
-
-                    // Remove from the Anchorlist.
                     self.container.remove_if_exists(HostColor::Gold, addr).await;
 
-                    // Add to the Blacklist.
                     self.container
                         .store_or_update(HostColor::Black, &[(addr.clone(), last_seen)])
                         .await;
