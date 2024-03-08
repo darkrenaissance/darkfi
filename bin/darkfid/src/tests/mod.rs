@@ -41,17 +41,17 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     let config = HarnessConfig {
         pow_target,
         pow_fixed_difficulty: pow_fixed_difficulty.clone(),
-        finalization_threshold: 6,
+        finalization_threshold: 3,
         alice_initial: 1000,
         bob_initial: 500,
     };
     let th = Harness::new(config, true, &ex).await?;
 
     // Retrieve genesis block
-    let previous = th.alice.validator.blockchain.last_block()?;
+    let genesis = th.alice.validator.blockchain.last_block()?;
 
     // Generate next blocks
-    let block1 = th.generate_next_block(&previous).await?;
+    let block1 = th.generate_next_block(&genesis).await?;
     let block2 = th.generate_next_block(&block1).await?;
     let block3 = th.generate_next_block(&block2).await?;
     let block4 = th.generate_next_block(&block3).await?;
@@ -99,10 +99,11 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
 
     // Nodes must have two forks with 2 blocks each
     th.validate_fork_chains(2, vec![2, 2]).await;
-    // If Charlie already had the small fork as its best,
-    // it will have a single fork with 2 blocks.
+    // Check charlie has the correct forks
     let charlie_forks = charlie.consensus.forks.read().await;
     if small_best {
+        // If Charlie already had the small fork as its best,
+        // it will have a single fork with 2 blocks.
         assert_eq!(charlie_forks.len(), 1);
         assert_eq!(charlie_forks[0].proposals.len(), 2);
     } else {

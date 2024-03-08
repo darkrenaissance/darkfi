@@ -223,6 +223,8 @@ impl ProtocolSync {
                 continue
             }
 
+            debug!(target: "darkfid::proto::protocol_sync::handle_receive_request", "Received request: {request:?}");
+
             // If a fork tip is provided, grab its fork proposals sequence.
             // Otherwise, grab best fork proposals sequence.
             let proposals = match request.fork_tip {
@@ -244,6 +246,7 @@ impl ProtocolSync {
             };
 
             let response = ForkSyncResponse { proposals };
+            debug!(target: "darkfid::proto::protocol_sync::handle_receive_request", "Response: {response:?}");
             if let Err(e) = self.channel.send(&response).await {
                 debug!(
                     target: "darkfid::proto::protocol_sync::handle_receive_fork_request",

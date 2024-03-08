@@ -133,6 +133,11 @@ impl ProtocolProposal {
 
             // If proposal fork chain was not found, we ask our peer for its sequence
             debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Asking peer for fork sequence");
+
+            // Cleanup subscriber
+            self.proposals_response_sub.clean().await?;
+
+            // Grab last known block to create the request and execute it
             let last = self.validator.blockchain.last()?;
             let request = ForkSyncRequest { tip: last.1, fork_tip: Some(proposal_copy.0.hash) };
             self.channel.send(&request).await?;
@@ -149,6 +154,7 @@ impl ProtocolProposal {
                     continue
                 }
             };
+            debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Peer response: {response:?}");
 
             // Verify and store retrieved proposals
             debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Processing received proposals");

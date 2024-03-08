@@ -18,7 +18,7 @@
 
 use std::sync::Arc;
 
-use darkfi::{net::Settings, Result};
+use darkfi::{net::Settings, validator::utils::best_fork_index, Result};
 use darkfi_contract_test_harness::init_logger;
 use darkfi_sdk::num_traits::One;
 use num_bigint::BigUint;
@@ -72,10 +72,14 @@ async fn sync_forks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     let charlie =
         generate_node(&th.vks, &th.validator_config, &settings, &ex, false, false).await?;
 
-    // Verify node synced the big(best) fork
+    // Verify node synced the best fork
+    let forks = th.alice.validator.consensus.forks.read().await;
+    let best_fork = &forks[best_fork_index(&forks)?];
     let charlie_forks = charlie.validator.consensus.forks.read().await;
     assert_eq!(charlie_forks.len(), 1);
-    assert_eq!(charlie_forks[0].proposals.len(), 3);
+    assert_eq!(charlie_forks[0].proposals.len(), best_fork.proposals.len());
+    let small_best = best_fork.proposals.len() == 1;
+    drop(forks);
     drop(charlie_forks);
 
     // Extend the small fork sequences and add it to nodes
@@ -85,12 +89,22 @@ async fn sync_forks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     let block7 = th.generate_next_block(&block5).await?;
     th.add_blocks(&vec![block7]).await?;
 
-    // Check charlie has all the forks
+    // Check charlie has the correct forks
     let charlie_forks = charlie.validator.consensus.forks.read().await;
-    assert_eq!(charlie_forks.len(), 3);
-    assert_eq!(charlie_forks[0].proposals.len(), 3);
-    assert_eq!(charlie_forks[1].proposals.len(), 2);
-    assert_eq!(charlie_forks[2].proposals.len(), 2);
+    if small_best {
+        // If Charlie already had a small fork as its best,
+        // it will have two forks with 2 blocks each.
+        assert_eq!(charlie_forks.len(), 2);
+        assert_eq!(charlie_forks[0].proposals.len(), 2);
+        assert_eq!(charlie_forks[1].proposals.len(), 2);
+    } else {
+        // Charlie didn't originaly have the forks, but they
+        // should be synced when their proposals were received
+        assert_eq!(charlie_forks.len(), 3);
+        assert_eq!(charlie_forks[0].proposals.len(), 3);
+        assert_eq!(charlie_forks[1].proposals.len(), 2);
+        assert_eq!(charlie_forks[2].proposals.len(), 2);
+    }
     drop(charlie_forks);
 
     // Thanks for reading
