@@ -91,6 +91,7 @@ pub async fn miner_task(node: &Darkfid, recipient: &PublicKey, skip_sync: bool) 
 
     // Listen for blocks until next finalization, for optimal conditions
     if !skip_sync {
+        info!(target: "darkfid::task::miner_task", "Waiting for next finalization...");
         loop {
             subscription.receive().await;
 
@@ -106,6 +107,8 @@ pub async fn miner_task(node: &Darkfid, recipient: &PublicKey, skip_sync: bool) 
             }
         }
     }
+
+    info!(target: "darkfid::task::miner_task", "Miner initialized successfully!");
 
     // Start miner loop
     loop {

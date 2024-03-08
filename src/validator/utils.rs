@@ -196,24 +196,24 @@ pub fn best_fork_index(forks: &[Fork]) -> Result<usize> {
     }
 
     // Find the best ranked forks
-    let mut best = BigUint::from(0u64);
+    let mut best = &BigUint::from(0u64);
     let mut indexes = vec![];
     for (f_index, fork) in forks.iter().enumerate() {
         let rank = &fork.targets_rank;
 
         // Fork ranks lower that current best
-        if rank < &best {
+        if rank < best {
             continue
         }
 
         // Fork has same rank as current best
-        if rank == &best {
+        if rank == best {
             indexes.push(f_index);
             continue
         }
 
         // Fork ranks higher that current best
-        best = rank.clone();
+        best = rank;
         indexes = vec![f_index];
     }
 
