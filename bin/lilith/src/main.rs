@@ -41,10 +41,7 @@ use darkfi::{
     async_daemonize, cli_desc,
     net::{
         self,
-        hosts::{
-            refinery::ping_node,
-            store::{HostColor, HostState},
-        },
+        hosts::{refinery::ping_node, store::HostColor},
         P2p, P2pPtr,
     },
     rpc::{
@@ -186,28 +183,11 @@ impl Lilith {
 
             let (entry, position) = hosts.container.fetch_last(HostColor::White).await;
             let url = &entry.0;
-
-            if hosts.try_register(url.clone(), HostState::Refining).await.is_err() {
-                continue
-            }
+            let last_seen = &entry.1;
 
             if !ping_node(url.clone(), p2p.clone()).await {
-                let (_addr, last_seen) = hosts
-                    .container
-                    .get_entry_at_addr(HostColor::White as usize, url)
-                    .await
-                    .unwrap();
-                hosts.insert(HostColor::Grey, &[(url.clone(), last_seen)]).await;
-
-                hosts.container.remove(HostColor::White, url, position).await;
-                debug!(target: "lilith", "Host {} is not responsive. Downgraded from whitelist", url);
-
-                // Remove this entry from HostRegistry to avoid this host getting
-                // stuck in the Refining state.
-                //
-                // It is not necessary to call this when the refinery passes, since the
-                // state will be changed to Connected.
-                hosts.unregister(url).await;
+                debug!(target: "lilith", "Host {} is not responsive. Downgrading from whitelist", url);
+                hosts.move_host(url, *last_seen, HostColor::Grey).await;
 
                 continue
             }
@@ -216,7 +196,7 @@ impl Lilith {
             let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
             hosts
                 .container
-                .update_last_seen(HostColor::White as usize, url, last_seen, position)
+                .update_last_seen(HostColor::White as usize, url, last_seen, Some(position))
                 .await;
         }
     }
