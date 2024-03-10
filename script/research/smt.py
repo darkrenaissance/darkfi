@@ -98,5 +98,6 @@ for bit, other_node in zip(bits, path):
     nodes = (other_node, node) if bit else (node, other_node)
     node = hash_node(*nodes)
 assert root == node
+assert pos == 5
 print("Passed")
 
