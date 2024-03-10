@@ -50,79 +50,95 @@ pub type HostRegistry = RwLock<HashMap<Url, HostState>>;
 /// HostState is a set of mutually exclusive states that can be Pending,
 /// Connected, Disconnected or Refining. The state is `None` when the
 /// corresponding host has been removed from the HostRegistry.
-///
-///                              +----------+
-///                          +-- | refining | --+
-///                          |   +----------+   |
+/// ```
+///                              +--------+
+///                          +-- | refine | ----+
+///                          |   +--------+     |
 ///                          |                  |
 ///                          v                  v
-///          +---------+    +-----------+    +------+
-///          | pending | -> | connected | -> | None |
-///          +---------+    +-----------+    +------+
+///          +---------+    +-----------+    +------+    +--------+
+///          | connect | -> | connected | -> | None | <- | insert |
+///          +---------+    +-----------+    +------+    +--------+
 ///               |                             ^
 ///               |                             |
-///               |       +-------------+       |
-///               +-----> | downgrading | ------+
-///                       +-------------+
-///
+///               |          +------+           |
+///               +--------> | move | ----------+
+///                          +------+
+/// ```
 #[derive(Clone, Debug)]
 pub enum HostState {
     /// TODO: doc
-    Moving,
-    /// Hosts that are being connected to in Outbound and Manual Session.
-    Pending,
-    /// Hosts that have been successfully connected to.
-    Connected(ChannelPtr),
+    Insert,
     /// Hosts that are migrating from the greylist to the whitelist or being
     /// removed from the greylist, as defined in `refinery.rs`.
-    Refining,
+    Refine,
+    /// Hosts that are being connected to in Outbound and Manual Session.
+    Connect,
+    /// Hosts that have been successfully connected to.
+    Connected(ChannelPtr),
+    /// TODO: doc
+    Move,
 }
 
 impl HostState {
-    // Try to change state to Moving. Only possible if this
-    // connection is pending i.e. if we are trying to connect to this
-    // host.
-    fn try_move(&self) -> Result<Self> {
+    // Try to change state to Insert. Only possible if we are not yet tracking this host in the
+    // HostRegistry.
+    fn try_insert(&self) -> Result<Self> {
         match self {
-            HostState::Pending => Ok(HostState::Moving),
+            HostState::Insert => Err(Error::StateBlocked(self.to_string())),
+            HostState::Refine => Err(Error::StateBlocked(self.to_string())),
+            HostState::Connect => Err(Error::StateBlocked(self.to_string())),
             HostState::Connected(_) => Err(Error::StateBlocked(self.to_string())),
-            HostState::Moving => Err(Error::StateBlocked(self.to_string())),
-            HostState::Refining => Err(Error::StateBlocked(self.to_string())),
+            HostState::Move => Err(Error::StateBlocked(self.to_string())),
         }
     }
 
-    // Try to change state to Refining. Only possible if we are not yet
-    // tracking this host in the HostRegistry.
+    // Try to change state to Refine. Only possible if we are not yet tracking this host in the
+    // HostRegistry.
     fn try_refine(&self) -> Result<Self> {
         match self {
-            HostState::Pending => Err(Error::StateBlocked(self.to_string())),
+            HostState::Insert => Err(Error::StateBlocked(self.to_string())),
+            HostState::Refine => Err(Error::StateBlocked(self.to_string())),
+            HostState::Connect => Err(Error::StateBlocked(self.to_string())),
             HostState::Connected(_) => Err(Error::StateBlocked(self.to_string())),
-            HostState::Moving => Err(Error::StateBlocked(self.to_string())),
-            HostState::Refining => Err(Error::StateBlocked(self.to_string())),
+            HostState::Move => Err(Error::StateBlocked(self.to_string())),
         }
     }
 
-    // Try to change state to Connected. Possible if this peer is
-    // currently Pending or being Refined. The latter is necessary since
-    // the refinery process requires us to establish a connection to
-    // a peer.
-    fn try_connect(&self, channel: ChannelPtr) -> Result<Self> {
+    // Try to change state to Connect. Only possible if we are not yet tracking this host in the
+    // HostRegistry.
+    fn try_connect(&self) -> Result<Self> {
         match self {
-            HostState::Pending => Ok(HostState::Connected(channel)),
+            HostState::Insert => Err(Error::StateBlocked(self.to_string())),
+            HostState::Refine => Err(Error::StateBlocked(self.to_string())),
+            HostState::Connect => Err(Error::StateBlocked(self.to_string())),
             HostState::Connected(_) => Err(Error::StateBlocked(self.to_string())),
-            HostState::Moving => Err(Error::StateBlocked(self.to_string())),
-            HostState::Refining => Ok(HostState::Connected(channel)),
+            HostState::Move => Err(Error::StateBlocked(self.to_string())),
         }
     }
 
-    // Try to change state to Pending. Only possible if we are not yet
-    // tracking this host in the HostRegistry.
-    fn try_pending(&self) -> Result<Self> {
+    // Try to change state to Connected. Possible if this peer's state is currently Connect or
+    // Refine. The latter is necessary since the refinery process requires us to establish a
+    // connection to a peer.
+    fn try_connected(&self, channel: ChannelPtr) -> Result<Self> {
         match self {
-            HostState::Pending => Err(Error::StateBlocked(self.to_string())),
+            HostState::Insert => Err(Error::StateBlocked(self.to_string())),
+            HostState::Refine => Ok(HostState::Connected(channel)),
+            HostState::Connect => Ok(HostState::Connected(channel)),
             HostState::Connected(_) => Err(Error::StateBlocked(self.to_string())),
-            HostState::Moving => Err(Error::StateBlocked(self.to_string())),
-            HostState::Refining => Err(Error::StateBlocked(self.to_string())),
+            HostState::Move => Err(Error::StateBlocked(self.to_string())),
+        }
+    }
+
+    // Try to change state to move. Only possible if this connection is Connect i.e. if we are
+    // trying to connect to this host.
+    fn try_move(&self) -> Result<Self> {
+        match self {
+            HostState::Insert => Err(Error::StateBlocked(self.to_string())),
+            HostState::Refine => Err(Error::StateBlocked(self.to_string())),
+            HostState::Connect => Ok(HostState::Move),
+            HostState::Connected(_) => Err(Error::StateBlocked(self.to_string())),
+            HostState::Move => Err(Error::StateBlocked(self.to_string())),
         }
     }
 }
@@ -186,8 +202,8 @@ impl HostContainer {
     }
 
     /// Append host to a hostlist.
-    pub async fn store(&self, color: usize, addr: Url, last_seen: u64) {
-        trace!(target: "net::hosts::store()", "[START] {:?}",
+    async fn store(&self, color: usize, addr: Url, last_seen: u64) {
+        trace!(target: "net::hosts::store()", "[START] list={:?}",
         HostColor::try_from(color).unwrap());
 
         let mut list = self.hostlists[color].write().await;
@@ -214,52 +230,53 @@ impl HostContainer {
         list.sort_by_key(|entry| entry.1);
         list.reverse();
 
-        trace!(target: "net::hosts::store()", "[END] {:?}",
+        trace!(target: "net::hosts::store()", "[END] list={:?}",
         HostColor::try_from(color).unwrap());
     }
 
     /// Stores an address on a hostlist or updates its last_seen field if we already
     /// have the address.
-    pub async fn store_or_update(&self, color: HostColor, addrs: &[(Url, u64)]) {
-        trace!(target: "net::hosts::store_or_update()", "[START] {:?}", color);
-        let color = color.clone() as usize;
+    pub async fn store_or_update(&self, color: HostColor, addr: Url, last_seen: u64) {
+        trace!(target: "net::hosts::store_or_update()", "[START] list={:?}", color);
+        let color_int = color.clone() as usize;
 
-        for (addr, last_seen) in addrs {
-            if !self.contains(color, addr).await {
-                debug!(target: "net::hosts::store_or_update()",
+        if !self.contains(color_int, &addr).await {
+            debug!(target: "net::hosts::store_or_update()",
                     "We do not have {} in {:?} list. Adding to store...", addr,
-                    HostColor::try_from(color).unwrap());
+                    color);
 
-                self.store(color, addr.clone(), *last_seen).await;
-            } else {
-                debug!(target: "net::hosts::store_or_update()",
+            self.store(color_int, addr, last_seen).await;
+        } else {
+            debug!(target: "net::hosts::store_or_update()",
                         "We have {} in {:?} list. Updating last seen...", addr,
-                        HostColor::try_from(color).unwrap());
-
-                let position = self
-                    .get_index_at_addr(color, addr.clone())
-                    .await
-                    .expect("Expected entry to exist");
-                debug!(target: "net::hosts::store_or_update()",
-                        "Selected index, updating last seen...");
-                self.update_last_seen(color, addr, *last_seen, position).await;
-            }
+                        color);
+            self.update_last_seen(color_int, &addr, last_seen, None).await;
         }
-        trace!(target: "net::hosts::store_or_update()", "[END] {:?}", color);
+        trace!(target: "net::hosts::store_or_update()", "[END] list={:?}", color);
     }
 
     /// Update the last_seen field of a peer on a hostlist.
-    pub async fn update_last_seen(&self, color: usize, addr: &Url, last_seen: u64, index: usize) {
-        trace!(target: "net::hosts::update_last_seen()", "[START] {:?}",
+    pub async fn update_last_seen(
+        &self,
+        color: usize,
+        addr: &Url,
+        last_seen: u64,
+        position: Option<usize>,
+    ) {
+        trace!(target: "net::hosts::update_last_seen()", "[START] list={:?}",
         HostColor::try_from(color).unwrap());
 
+        let i = match position {
+            Some(i) => i,
+            None => self.get_index_at_addr(color, addr.clone()).await.unwrap(),
+        };
+
         let mut list = self.hostlists[color].write().await;
-
-        list[index] = (addr.clone(), last_seen);
-
+        list[i] = (addr.clone(), last_seen);
         list.sort_by_key(|entry| entry.1);
         list.reverse();
-        trace!(target: "net::hosts::update_last_seen()", "[END] {:?}",
+
+        trace!(target: "net::hosts::update_last_seen()", "[END] list={:?}",
         HostColor::try_from(color).unwrap());
     }
 
@@ -363,7 +380,7 @@ impl HostContainer {
 
     /// Get up to limit peers that don't match the given transport schemes from a hostlist.
     /// If limit was not provided, return all matching peers.
-    pub async fn fetch_excluding_schemes(
+    async fn fetch_excluding_schemes(
         &self,
         color: usize,
         schemes: &[String],
@@ -538,18 +555,8 @@ impl HostContainer {
     }
 
     /// Get the index for a given addr on a hostlist.
-    pub async fn get_index_at_addr(&self, color: usize, addr: Url) -> Option<usize> {
+    async fn get_index_at_addr(&self, color: usize, addr: Url) -> Option<usize> {
         self.hostlists[color].read().await.iter().position(|a| a.0 == addr)
-    }
-
-    /// Get the entry for a given addr on the hostlist.
-    pub async fn get_entry_at_addr(&self, color: usize, addr: &Url) -> Option<(Url, u64)> {
-        self.hostlists[color]
-            .read()
-            .await
-            .iter()
-            .find(|(url, _)| url == addr)
-            .map(|(url, time)| (url.clone(), *time))
     }
 
     /// Load the hostlists from a file.
@@ -672,11 +679,12 @@ pub struct Hosts {
     /// Pointer to configured P2P settings
     settings: SettingsPtr,
 
+    /// TODO: documentation
     pub container: HostContainer,
 }
 
 impl Hosts {
-    /// Create a new hosts list>
+    /// Create a new hosts list
     pub fn new(settings: SettingsPtr) -> HostsPtr {
         Arc::new(Self {
             channel_subscriber: Subscriber::new(),
@@ -691,16 +699,32 @@ impl Hosts {
     /// Safely insert into the HostContainer. Filters the addresses first before storing and
     /// notifies the subscriber. Must be called when first receiving greylist addresses.
     pub async fn insert(&self, color: HostColor, addrs: &[(Url, u64)]) {
-        trace!(target: "net::hosts:insert()", "[START]");
+        debug!(target: "net::hosts:insert()", "[START] node={}", self.settings.node_id);
+
+        // First filter these address to ensure this peer doesn't exist in our black, gold or
+        // whitelist and apply transport filtering.
         let filtered_addrs = self.filter_addresses(self.settings.clone(), addrs).await;
-        let filtered_addrs_len = filtered_addrs.len();
+        let mut addrs_len = 0;
 
         if filtered_addrs.is_empty() {
             debug!(target: "net::hosts::insert()", "Filtered out all addresses");
         }
 
-        self.container.store_or_update(color, &filtered_addrs).await;
-        self.store_subscriber.notify(filtered_addrs_len).await;
+        // Then ensure we aren't currently trying to add this peer to the hostlist.
+        for (i, (addr, last_seen)) in filtered_addrs.iter().enumerate() {
+            if self.try_register(addr.clone(), HostState::Insert).await.is_err() {
+                debug!(target: "net::hosts::store_or_update()",
+            "We are already trying to insert {}. Skipping...", addr);
+                continue
+            }
+
+            addrs_len += i + 1;
+            self.container.store_or_update(color.clone(), addr.clone(), last_seen.clone()).await;
+            self.unregister(addr).await;
+        }
+
+        self.store_subscriber.notify(addrs_len).await;
+        debug!(target: "net::hosts:insert()", "[END] node={}", self.settings.node_id);
     }
 
     /// Try to update the registry. If the host already exists, try to update its state.
@@ -716,10 +740,11 @@ impl Hosts {
             addr, current_state, new_state.to_string());
 
             let result: Result<HostState> = match new_state {
-                HostState::Pending => current_state.try_pending(),
-                HostState::Connected(c) => current_state.try_connect(c),
-                HostState::Moving => current_state.try_move(),
-                HostState::Refining => current_state.try_refine(),
+                HostState::Insert => current_state.try_insert(),
+                HostState::Refine => current_state.try_refine(),
+                HostState::Connect => current_state.try_connect(),
+                HostState::Connected(c) => current_state.try_connected(c),
+                HostState::Move => current_state.try_move(),
             };
 
             if let Ok(state) = &result {
@@ -729,18 +754,21 @@ impl Hosts {
             result
         } else {
             // We don't know this peer. We can safely update the state.
+            debug!(target: "net::hosts::try_update_registry()", "Inserting addr={}, state={}",
+            addr, new_state.to_string());
             registry.insert(addr.clone(), new_state.clone());
 
             Ok(new_state)
         }
     }
 
+    // TODO: documentation/ re-evaluate
     pub async fn check_address(&self, hosts: Vec<(Url, u64)>) -> Option<(Url, u64)> {
         // Try to find an unused host in the set.
         for (host, last_seen) in hosts {
             debug!(target: "net::hosts::check_address()", "Starting checks");
 
-            if self.try_register(host.clone(), HostState::Pending).await.is_err() {
+            if self.try_register(host.clone(), HostState::Connect).await.is_err() {
                 continue
             }
 
@@ -931,7 +959,7 @@ impl Hosts {
 
     /// TODO: documentation
     pub async fn move_host(&self, addr: &Url, last_seen: u64, destination: HostColor) {
-        if self.try_register(addr.clone(), HostState::Moving).await.is_err() {
+        if self.try_register(addr.clone(), HostState::Move).await.is_err() {
             return
         }
 
@@ -940,32 +968,27 @@ impl Hosts {
             HostColor::Grey => {
                 self.container.remove_if_exists(HostColor::Gold, addr).await;
                 self.container.remove_if_exists(HostColor::White, addr).await;
-
-                self.container.store_or_update(HostColor::Grey, &[(addr.clone(), last_seen)]).await;
+                self.container.store_or_update(HostColor::Grey, addr.clone(), last_seen).await;
             }
 
             // Remove from Greylist, add to Whitelist. Called by the Refinery.
             HostColor::White => {
                 self.container.remove_if_exists(HostColor::Grey, addr).await;
-
-                self.container
-                    .store_or_update(HostColor::White, &[(addr.clone(), last_seen)])
-                    .await;
+                self.container.store_or_update(HostColor::White, addr.clone(), last_seen).await;
             }
 
             // Upgrade to gold. Remove from white or grey.
             HostColor::Gold => {
                 self.container.remove_if_exists(HostColor::Grey, addr).await;
                 self.container.remove_if_exists(HostColor::White, addr).await;
-
-                self.container.store_or_update(HostColor::Gold, &[(addr.clone(), last_seen)]).await;
+                self.container.store_or_update(HostColor::Gold, addr.clone(), last_seen).await;
             }
 
             // Move to black. Remove from all other lists.
             HostColor::Black => {
                 // We ignore UNIX sockets here so we will just work
                 // with stuff that has host_str().
-                if let Some(_) = addr.host_str() {
+                if addr.host_str().is_some() {
                     // Localhost connections should never enter the blacklist
                     // This however allows any Tor and Nym connections.
                     if self.is_local_host(addr.clone()).await {
@@ -975,17 +998,14 @@ impl Hosts {
                     self.container.remove_if_exists(HostColor::Grey, addr).await;
                     self.container.remove_if_exists(HostColor::White, addr).await;
                     self.container.remove_if_exists(HostColor::Gold, addr).await;
-
-                    self.container
-                        .store_or_update(HostColor::Black, &[(addr.clone(), last_seen)])
-                        .await;
+                    self.container.store_or_update(HostColor::Black, addr.clone(), last_seen).await;
                 }
             }
         }
 
         // Remove this entry from HostRegistry to avoid this host getting
         // stuck in the Moving state.
-        self.unregister(&addr).await;
+        self.unregister(addr).await;
     }
 
     /// Quarantine a peer.
@@ -1156,31 +1176,6 @@ mod tests {
 
             let (entry, _position) = hosts.container.fetch_last(HostColor::White).await;
             println!("last entry: {} {}", entry.0, entry.1);
-        });
-    }
-
-    #[test]
-    fn test_get_entry() {
-        smol::block_on(async {
-            let settings = Settings { ..Default::default() };
-            let hosts = Hosts::new(Arc::new(settings.clone()));
-
-            let url = Url::parse("tcp://dark.renaissance:333").unwrap();
-            let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-
-            hosts.container.store(HostColor::White as usize, url.clone(), last_seen).await;
-            hosts.container.store(HostColor::Gold as usize, url.clone(), last_seen).await;
-
-            assert!(hosts
-                .container
-                .get_entry_at_addr(HostColor::White as usize, &url)
-                .await
-                .is_some());
-            assert!(hosts
-                .container
-                .get_entry_at_addr(HostColor::Gold as usize, &url)
-                .await
-                .is_some());
         });
     }
 

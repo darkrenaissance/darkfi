@@ -18,7 +18,7 @@
 
 // cargo +nightly test --release --features=net --lib p2p -- --include-ignored
 
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use log::{debug, info, warn};
 use rand::Rng;
@@ -157,8 +157,23 @@ async fn hostlist_propagation(ex: Arc<Executor<'static>>) {
 
     for p2p in p2p_instances.iter() {
         let hosts = p2p.hosts();
-        // We should have some greylist entries at this point.
-        assert!(!hosts.container.is_empty(HostColor::Grey).await);
+
+        // Ensure there are no duplicate entries in and between any of the hostlists.
+        let mut urls = HashSet::new();
+        let greylist = hosts.container.fetch_all(HostColor::Grey).await;
+        for (url, _) in greylist {
+            assert!(urls.insert(url));
+        }
+        let whitelist = hosts.container.fetch_all(HostColor::White).await;
+        for (url, _) in whitelist {
+            assert!(urls.insert(url));
+        }
+        let anchorlist = hosts.container.fetch_all(HostColor::Gold).await;
+        for (url, _) in anchorlist {
+            assert!(urls.insert(url));
+        }
+        // We should have some peers at this point.
+        assert!(!urls.is_empty());
     }
 
     // Stop the P2P network

@@ -114,7 +114,7 @@ impl ManualSession {
                 addr, tried_attempts,
             );
 
-            if let Err(e) = self.p2p().hosts().try_register(addr.clone(), HostState::Pending).await
+            if let Err(e) = self.p2p().hosts().try_register(addr.clone(), HostState::Connect).await
             {
                 warn!(target: "net::manual_session", "{}", e);
             }

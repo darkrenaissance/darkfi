@@ -117,7 +117,7 @@ impl GreylistRefinery {
                 Some((entry, position)) => {
                     let url = &entry.0;
 
-                    if hosts.try_register(url.clone(), HostState::Refining).await.is_err() {
+                    if hosts.try_register(url.clone(), HostState::Refine).await.is_err() {
                         continue
                     }
 
@@ -142,10 +142,7 @@ impl GreylistRefinery {
                     let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
 
                     // Append to the whitelist.
-                    hosts
-                        .container
-                        .store_or_update(HostColor::White, &[(url.clone(), last_seen)])
-                        .await;
+                    hosts.container.store_or_update(HostColor::White, url.clone(), last_seen).await;
 
                     // Remove whitelisted peer from the greylist.
                     hosts.container.remove(HostColor::Grey, url, position).await;
