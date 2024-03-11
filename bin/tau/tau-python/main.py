@@ -661,10 +661,10 @@ Examples:
             else:
                 print("Command prevented from running.")
                 exit(-1)
-        elif any(id == rfid[:6] or id == rfid for rfid in refids):
+        elif any(id == rfid[:len(id)] or id == rfid for rfid in refids):
             refid = []
             for rid in refids:
-                if id[:6] == rid[:6]:
+                if id == rid[:len(id)]:
                     refid.append(rid)
             args = sys.argv[2:]
         else:
