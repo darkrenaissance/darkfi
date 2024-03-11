@@ -48,6 +48,7 @@ impl RequestHandler for Minerd {
 
         match req.method.as_str() {
             "ping" => self.pong(req.id, req.params).await,
+            "abort" => self.abort(req.id, req.params).await,
             "mine" => self.mine(req.id, req.params).await,
             _ => JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         }
@@ -59,6 +60,19 @@ impl RequestHandler for Minerd {
 }
 
 impl Minerd {
+    // RPCAPI:
+    // Signals miner daemon to abort mining pending request.
+    // Returns `true` on success.
+    //
+    // --> {"jsonrpc": "2.0", "method": "abort", "params": [], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result": "true", "id": 42}
+    async fn abort(&self, id: u16, _params: JsonValue) -> JsonResult {
+        if let Some(e) = self.abort_pending(id).await {
+            return e
+        };
+        JsonResponse::new(JsonValue::Boolean(true), id).into()
+    }
+
     // RPCAPI:
     // Mine provided block for requested mine target, and return the corresponding nonce value.
     //
@@ -89,27 +103,9 @@ impl Minerd {
         };
 
         // Check if another request is being processed
-        if self.stop_signal.receiver_count() > 1 {
-            info!(target: "minerd::rpc", "Another request is in progress, sending stop signal...");
-            // Send stop signal to other worker
-            if self.sender.send(()).await.is_err() {
-                error!(target: "minerd::rpc", "Failed to stop previous request");
-                return server_error(RpcError::StopFailed, id, None)
-            }
-
-            // Wait for other worker to terminate
-            info!(target: "minerd::rpc", "Waiting for request to terminate...");
-            while self.stop_signal.receiver_count() > 1 {
-                sleep(1).await;
-            }
-            info!(target: "minerd::rpc", "Previous request terminated!");
-
-            // Consume channel item so its empty again
-            if self.stop_signal.recv().await.is_err() {
-                error!(target: "minerd::rpc", "Failed to cleanup stop signal channel");
-                return server_error(RpcError::StopFailed, id, None)
-            }
-        }
+        if let Some(e) = self.abort_pending(id).await {
+            return e
+        };
 
         // Mine provided block
         let Ok(block_hash) = block.hash() else {
@@ -124,5 +120,35 @@ impl Minerd {
 
         // Return block nonce
         JsonResponse::new(JsonValue::Number(block.header.nonce as f64), id).into()
+    }
+
+    /// Auxiliary function to abort pending request.
+    async fn abort_pending(&self, id: u16) -> Option<JsonResult> {
+        // Check if a pending request is being processed
+        if self.stop_signal.receiver_count() == 0 {
+            return None
+        }
+
+        info!(target: "minerd::rpc", "Pending request is in progress, sending stop signal...");
+        // Send stop signal to worker
+        if self.sender.send(()).await.is_err() {
+            error!(target: "minerd::rpc", "Failed to stop pending request");
+            return Some(server_error(RpcError::StopFailed, id, None))
+        }
+
+        // Wait for worker to terminate
+        info!(target: "minerd::rpc", "Waiting for request to terminate...");
+        while self.stop_signal.receiver_count() > 1 {
+            sleep(1).await;
+        }
+        info!(target: "minerd::rpc", "Pending request terminated!");
+
+        // Consume channel item so its empty again
+        if self.stop_signal.recv().await.is_err() {
+            error!(target: "minerd::rpc", "Failed to cleanup stop signal channel");
+            return Some(server_error(RpcError::StopFailed, id, None))
+        }
+
+        None
     }
 }

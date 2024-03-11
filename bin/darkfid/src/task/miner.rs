@@ -19,7 +19,7 @@
 use darkfi::{
     blockchain::BlockInfo,
     rpc::{jsonrpc::JsonNotification, util::JsonValue},
-    system::Subscription,
+    system::{sleep, Subscription},
     tx::{ContractCallLeaf, Transaction, TransactionBuilder},
     util::encoding::base64,
     validator::{
@@ -42,12 +42,13 @@ use darkfi_serial::{serialize, Encodable};
 use log::info;
 use num_bigint::BigUint;
 use rand::rngs::OsRng;
+use smol::channel::{Receiver, Sender};
 
 use crate::{proto::ProposalMessage, Darkfid};
 
 // TODO: handle all ? so the task don't stop on errors
 
-/// async task used for participating in the PoW block production.
+/// Async task used for participating in the PoW block production.
 /// Miner initializes their setup and waits for next finalization,
 /// by listenning for new proposals from the network, for optimal
 /// conditions. After finalization occurs, they start the actual
@@ -108,6 +109,9 @@ pub async fn miner_task(node: &Darkfid, recipient: &PublicKey, skip_sync: bool) 
         }
     }
 
+    // Create channels so threads can signal each other
+    let (sender, stop_signal) = smol::channel::bounded(1);
+
     info!(target: "darkfid::task::miner_task", "Miner initialized successfully!");
 
     // Start miner loop
@@ -119,8 +123,8 @@ pub async fn miner_task(node: &Darkfid, recipient: &PublicKey, skip_sync: bool) 
 
         // Start listenning for network proposals and mining next block for best fork.
         smol::future::or(
-            listen_to_network(node, &extended_fork, &subscription),
-            mine_next_block(node, &extended_fork, &mut secret, recipient, &zkbin, &pk),
+            listen_to_network(node, &extended_fork, &subscription, &sender),
+            mine(node, &extended_fork, &mut secret, recipient, &zkbin, &pk, &stop_signal),
         )
         .await?;
 
@@ -136,11 +140,12 @@ pub async fn miner_task(node: &Darkfid, recipient: &PublicKey, skip_sync: bool) 
     }
 }
 
-/// Auxiliary function to listen for incoming proposals and check if the best fork has changed
+/// Async task to listen for incoming proposals and check if the best fork has changed
 async fn listen_to_network(
     node: &Darkfid,
     extended_fork: &Fork,
     subscription: &Subscription<JsonNotification>,
+    sender: &Sender<()>,
 ) -> Result<()> {
     // Grab extended fork last proposal hash
     let last_proposal_hash = extended_fork.last_proposal()?.hash;
@@ -157,14 +162,53 @@ async fn listen_to_network(
         // Verify if proposals sequence has changed
         if forks[index].last_proposal()?.hash != last_proposal_hash {
             drop(forks);
-            return Ok(())
+            break
         }
 
         drop(forks);
     }
+
+    // Signal miner to abort mining
+    sender.send(()).await?;
+    node.miner_daemon_request("abort", JsonValue::Array(vec![])).await?;
+
+    Ok(())
 }
 
-/// Auxiliary function to generate and mine provided fork index next block
+/// Async task to generate and mine provided fork index next block,
+/// while listening for a stop signal
+async fn mine(
+    node: &Darkfid,
+    extended_fork: &Fork,
+    secret: &mut SecretKey,
+    recipient: &PublicKey,
+    zkbin: &ZkBinary,
+    pk: &ProvingKey,
+    stop_signal: &Receiver<()>,
+) -> Result<()> {
+    smol::future::or(
+        wait_stop_signal(stop_signal),
+        mine_next_block(node, extended_fork, secret, recipient, zkbin, pk),
+    )
+    .await
+}
+
+/// Async task to wait for listener's stop signal.
+async fn wait_stop_signal(stop_signal: &Receiver<()>) -> Result<()> {
+    // Clean stop signal channel
+    if stop_signal.is_full() {
+        stop_signal.recv().await?;
+    }
+
+    // Wait for listener signal
+    stop_signal.recv().await?;
+    // Take a nap to let listener notify minerd
+    sleep(10).await;
+
+    Ok(())
+}
+
+/// Async task to generate and mine provided fork index next block
 async fn mine_next_block(
     node: &Darkfid,
     extended_fork: &Fork,
