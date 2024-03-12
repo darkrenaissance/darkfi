@@ -55,9 +55,13 @@ use halo2_gadgets::poseidon::{
     primitives as poseidon,
     primitives::{ConstantLength, P128Pow5T3, Spec},
 };
-use pasta_curves::group::ff::{FromUniformBytes, WithSmallOrderMulGroup};
+use pasta_curves::group::ff::{PrimeField, WithSmallOrderMulGroup};
 
 use crate::error::{ContractError, GenericResult};
+
+pub trait FieldElement: WithSmallOrderMulGroup<3> + Ord + PrimeField {}
+impl FieldElement for pasta_curves::Fp {}
+impl FieldElement for pasta_curves::Fq {}
 
 pub trait FieldHasher<F: WithSmallOrderMulGroup<3> + Ord, const L: usize> {
     fn hash(&self, inputs: [F; L]) -> GenericResult<F>;
@@ -163,11 +167,7 @@ impl<F: WithSmallOrderMulGroup<3> + Ord, H: FieldHasher<F, 2>, const N: usize> P
 /// SMT stores a set of leaves represented in a map and a set of empty
 /// hashes that it uses to represent the sparse areas of the tree.
 #[derive(Debug)]
-pub struct SparseMerkleTree<
-    F: WithSmallOrderMulGroup<3> + Ord,
-    H: FieldHasher<F, 2>,
-    const N: usize,
-> {
+pub struct SparseMerkleTree<F: FieldElement, H: FieldHasher<F, 2>, const N: usize> {
     /// A map from leaf indices to leaf data stored as field elements.
     pub tree: BTreeMap<u64, F>,
     /// An array of default hashes hashed with themselves `N` times.
@@ -176,18 +176,9 @@ pub struct SparseMerkleTree<
     marker: PhantomData<H>,
 }
 
-impl<
-        F: WithSmallOrderMulGroup<3> + Ord + FromUniformBytes<64>,
-        H: FieldHasher<F, 2>,
-        const N: usize,
-    > SparseMerkleTree<F, H, N>
-{
+impl<F: FieldElement, H: FieldHasher<F, 2>, const N: usize> SparseMerkleTree<F, H, N> {
     /// Creates a new SMT from a map of indices to field elements.
-    pub fn new(
-        leaves: &BTreeMap<u32, F>,
-        hasher: &H,
-        empty_leaf: &[u8; 64],
-    ) -> GenericResult<Self> {
+    pub fn new(leaves: &BTreeMap<u32, F>, hasher: &H, empty_leaf: F::Repr) -> GenericResult<Self> {
         // Ensure the tree can hold this many leaves
         let last_level_size = leaves.len().next_power_of_two();
         let tree_size = 2 * last_level_size - 1;
@@ -206,7 +197,7 @@ impl<
     }
 
     /// Creates a new SMT from an array of field elements.
-    pub fn new_sequential(leaves: &[F], hasher: &H, empty_leaf: &[u8; 64]) -> GenericResult<Self> {
+    pub fn new_sequential(leaves: &[F], hasher: &H, empty_leaf: F::Repr) -> GenericResult<Self> {
         let pairs: BTreeMap<u32, F> =
             leaves.iter().enumerate().map(|(i, l)| (i as u32, *l)).collect();
 
@@ -295,17 +286,22 @@ impl<
 /// intermediate results. These are used to initialize the sparse portion
 /// of the SMT.
 pub fn gen_empty_hashes<
-    F: WithSmallOrderMulGroup<3> + Ord + FromUniformBytes<64>,
+    F: WithSmallOrderMulGroup<3> + Ord + PrimeField,
     H: FieldHasher<F, 2>,
     const N: usize,
 >(
     hasher: &H,
-    default_leaf: &[u8; 64],
+    default_leaf: F::Repr,
 ) -> GenericResult<[F; N]> {
     let mut empty_hashes = [F::ZERO; N];
 
-    let mut empty_hash = F::from_uniform_bytes(default_leaf);
-    for item in empty_hashes.iter_mut().take(N) {
+    let empty_hash = F::from_repr(default_leaf);
+    let mut empty_hash = if empty_hash.is_some().into() {
+        empty_hash.unwrap()
+    } else {
+        return Err(ContractError::Internal)
+    };
+    for item in empty_hashes.iter_mut() {
         *item = empty_hash;
         empty_hash = hasher.hash([empty_hash, empty_hash])?;
     }
@@ -389,14 +385,10 @@ mod tests {
     use rand::rngs::OsRng;
 
     /// Helper to change leaves array to BTreeMap and then create SMT.
-    fn create_merkle_tree<
-        F: WithSmallOrderMulGroup<3> + Ord + FromUniformBytes<64>,
-        H: FieldHasher<F, 2>,
-        const N: usize,
-    >(
+    fn create_merkle_tree<F: FieldElement, H: FieldHasher<F, 2>, const N: usize>(
         hasher: H,
         leaves: &[F],
-        default_leaf: &[u8; 64],
+        default_leaf: F::Repr,
     ) -> SparseMerkleTree<F, H, N> {
         SparseMerkleTree::<F, H, N>::new_sequential(leaves, &hasher, default_leaf).unwrap()
     }
@@ -404,20 +396,20 @@ mod tests {
     #[test]
     fn poseidon_smt() {
         let poseidon = Poseidon::<Fp, 2>::new();
-        let default_leaf = [0u8; 64];
+        let default_leaf = [0u8; 32];
         let leaves = [Fp::random(&mut OsRng), Fp::random(&mut OsRng), Fp::random(&mut OsRng)];
         const HEIGHT: usize = 3;
 
         let smt = create_merkle_tree::<Fp, Poseidon<Fp, 2>, HEIGHT>(
             poseidon.clone(),
             &leaves,
-            &default_leaf,
+            default_leaf.clone(),
         );
 
         let root = smt.root();
 
         let empty_hashes =
-            gen_empty_hashes::<Fp, Poseidon<Fp, 2>, HEIGHT>(&poseidon, &default_leaf).unwrap();
+            gen_empty_hashes::<Fp, Poseidon<Fp, 2>, HEIGHT>(&poseidon, default_leaf).unwrap();
 
         let hash1 = leaves[0];
         let hash2 = leaves[1];
@@ -435,14 +427,14 @@ mod tests {
     #[test]
     fn poseidon_smt_incl_proof() {
         let poseidon = Poseidon::<Fp, 2>::new();
-        let default_leaf = [0u8; 64];
+        let default_leaf = [0u8; 32];
         let leaves = [Fp::random(&mut OsRng), Fp::random(&mut OsRng), Fp::random(&mut OsRng)];
         const HEIGHT: usize = 3;
 
         let smt = create_merkle_tree::<Fp, Poseidon<Fp, 2>, HEIGHT>(
             poseidon.clone(),
             &leaves,
-            &default_leaf,
+            default_leaf,
         );
 
         let proof = smt.generate_membership_proof(0);
