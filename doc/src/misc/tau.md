@@ -10,8 +10,27 @@ and all users will have synced tasks.
 ```shell
 % git clone https://github.com/darkrenaissance/darkfi 
 % cd darkfi
-% make BINS="taud tau"
-% sudo make install "BINS=taud tau"
+% make BINS="taud"
+```
+
+If you want to have `taud` system wide:
+```shell
+% sudo make install BINS="taud"
+```
+
+And then run the daemon:
+```shell
+% taud
+```
+
+For the CLI part of `tau`, we use `tau-python`, you can run it with:
+```shell
+% cd bin/tau/tau-python
+% python main.py
+```
+Or you can alias it by adding this line to your `bashrc`:
+```shell
+% alias tau=/path-to-darkfi/bin/tau/tau-python/main.py
 ```
 
 ## Usage 
@@ -21,38 +40,24 @@ To run your own instance check [Local Deployment](#local-deployment)
 ```shell
 % tau --help 
 ```
-	tau 0.4.1
+	USAGE:
+		tau [OPTIONS] [SUBCOMMAND]
 
-	Usage: tau [OPTIONS] [FILTERS]... [COMMAND]
+	OPTIONS:
+		-h, --help                   Print help information
 
-	Commands:
-	  add      Add a new task.
-	  modify   Modify/Edit an existing task
-	  list     List tasks
-	  start    Start task(s)
-	  open     Open task(s)
-	  pause    Pause task(s)
-	  stop     Stop task(s)
-	  comment  Set or Get comment for task(s)
-	  info     Get all data about selected task(s)
-	  switch   Switch workspace
-	  import   Import tasks from a specified directory
-	  export   Export tasks to a specified directory
-	  log      Log drawdown
-	  help     Print this message or the help of the given subcommand(s)
+	SUBCOMMANDS:
+		add        Add a new task.
+		archive    Show completed tasks.
+		comment    Write comment for task by id.
+		modify     Modify an existing task by id.
+		pause      Pause task(s).
+		start      Start task(s).
+		stop       Stop task(s).
+		switch     Switch between configured workspaces.
+		show       List filtered tasks.
+		help       Show this help text.
 
-	Arguments:
-	  [FILTERS]...  Search filters (zero or more)
-
-	Options:
-	  -v...                      Increase verbosity (-vvv supported)
-	  -e, --endpoint <ENDPOINT>  taud JSON-RPC endpoint [default: tcp://127.0.0.1:23330]
-	  -h, --help                 Print help
-	  -V, --version              Print version
-
-```shell
-% tau [SUBCOMMAND] --help
-```
 
 ### Quick start
 
@@ -62,7 +67,7 @@ Add a new task with the title "review tau usage" with the description text
 "description" set to "review tau".
 
 ```bash
-tau add review tau usage desc:"review tau"
+% tau add review tau usage desc:"review tau"
 ```
 
 Add another task with the title "second task" assigned to dave.
@@ -70,7 +75,7 @@ Because no description is set, it will open your EDITOR and prompt you
 for a description which allows entering multiline text.
 
 ```bash
-tau add second task @dave
+% tau add second task @dave
 ```
 
 ```
@@ -86,10 +91,8 @@ tau add second task @dave
 % tau				# all non-stop tasks
 % tau list			# all non-stop tasks
 % tau 1-3			# tasks 1 to 3
-% tau 1,2 state:open		# tasks 1 and 2 and if they are open
-% tau rank:gt:2			# all tasks that have rank greater than 2
-% tau due.not:today		# all tasks that thier due date is not today
-% tau due.after:0909		# all tasks that thier due date is after September 9th
+% tau show state:open	# list open tasks
+% tau rank:2			# all tasks that have rank 2
 % tau @dave			# tasks that assign field is "dave"
 ```
 
@@ -107,7 +110,6 @@ Note: All filters from the previous section could work with mod commands.
 % tau 2,4 modify due:2009	# edit due to September in tasks 2 and 4 
 % tau 1-4 modify project:tau	# edit project to tau in tasks 1,2,3 and 4
 % tau state:pause open		# open paused tasks
-% tau 3 info			# show information about task 3 (does not modify)
 ```
 
 #### Comments
@@ -117,13 +119,6 @@ Note: All filters from the previous section could work with mod commands.
 % tau 3 comment				# will open the editor to write a comment
 ```
 
-#### Log drawdown
-
-```shell
-% tau log 0922			# will list assignees of stopped tasks
-% tau log 0922 [<Assignee>]	# will draw a heatmap of stopped tasks for [Assignee]
-```
-
 #### Export and Import
 
 ```shell
@@ -131,11 +126,27 @@ Note: All filters from the previous section could work with mod commands.
 % tau import ~/example_dir	# will reload saved json files from the path
 ```
 
+### archive
+
+```shell
+% tau archive                 # current month's completed tasks
+% tau archive 1122            # completed tasks in Nov. 2022
+% tau archive 1 1122          # show info of task by it's ID completed in Nov. 2022
+```
 
 #### Switch workspace
 
 ```shell
 % tau switch darkfi	# darkfi workspace needs to be configured in config file
+```
+
+In addition to indexing tasks by there IDs, one can use their RefID (Reference ID):
+```shell
+% tau SjJ2OANxVIdLivItcrMplpOFbLWgzR
+# or
+% tau SjJ2OANxV
+# or even
+% tau SjJ
 ```
 
 ## Local Deployment
