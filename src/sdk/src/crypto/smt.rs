@@ -47,6 +47,16 @@
 //! is our Sparse Merkle tree, and `a` through `g` are field elements stored at
 //! the nodes. Then the merkle proof path `e-b-a` from leaf `e` to root `a` is
 //! stored as `[(d,e), (b,c)]`
+//!
+//! # Terminology
+//!
+//! * **level** - the depth in the tree. Type: `u32`
+//! * **location** - a `(level, position)` tuple
+//! * **position** - the leaf index, or equivalently the binary direction through the tree
+//!   with type `F`.
+//! * **index** - the internal index used in the DB which is `BigUint`. Leaf node indexes are
+//!   calculated as `leaf_idx = final_level_start_idx + position`.
+//! * **node** - either the leaf values or parent nodes `hash(left, right)`.
 
 use core::marker::PhantomData;
 use std::collections::{BTreeMap, BTreeSet};
