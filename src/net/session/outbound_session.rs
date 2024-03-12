@@ -445,7 +445,7 @@ impl Slot {
                 );
 
                 // At this point we failed to connect. We'll downgrade this peer now.
-                self.p2p().hosts().quarantine(&addr, last_seen).await;
+                self.p2p().hosts().move_host(&addr, last_seen, HostColor::Grey).await;
 
                 // Notify that channel processing failed
                 self.session().channel_subscriber.notify(Err(Error::ConnectFailed)).await;

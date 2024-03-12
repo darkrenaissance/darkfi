@@ -18,7 +18,7 @@
 
 use std::{
     sync::Arc,
-    time::{Duration, UNIX_EPOCH},
+    time::{Duration, Instant, UNIX_EPOCH},
 };
 
 use log::{debug, warn};
@@ -93,10 +93,12 @@ impl GreylistRefinery {
     // This method will remove from the greylist and store on the whitelist
     // providing the peer is responsive.
     async fn run(self: Arc<Self>) {
-        loop {
-            sleep(self.p2p().settings().greylist_refinery_interval).await;
+        let mut last_online = Instant::now();
+        let settings = self.p2p().settings();
+        let hosts = self.p2p().hosts();
 
-            let hosts = self.p2p().hosts();
+        loop {
+            sleep(settings.greylist_refinery_interval).await;
 
             if hosts.container.is_empty(HostColor::Grey).await {
                 debug!(target: "net::refinery",
@@ -105,13 +107,35 @@ impl GreylistRefinery {
                 continue
             }
 
+            // Pause the refinery if we've had zero connections for longer than the configured
+            // limit.
+            if hosts.channels().await.is_empty() {
+                let time_offline = Instant::now().duration_since(last_online);
+                let offline_limit = Duration::from_secs(settings.time_with_no_connections);
+
+                if time_offline >= offline_limit {
+                    warn!(target: "net::refinery", "No connections for {}s. Refinery paused.",
+                          time_offline.as_secs());
+
+                    // It is neccessary to clear suspended hosts at this point, otherwise these
+                    // hosts cannot be connected to in Outbound Session. Failure to do this could
+                    // result in the refinery being paused forver (since connections could never be
+                    // made).
+                    let suspended_hosts = hosts.suspended().await;
+                    for host in suspended_hosts {
+                        hosts.unregister(&host).await;
+                    }
+
+                    continue
+                }
+            } else {
+                last_online = Instant::now();
+            }
+
             // Only attempt to refine peers that match our transports.
             match hosts
                 .container
-                .fetch_random_with_schemes(
-                    HostColor::Grey,
-                    &self.p2p().settings().allowed_transports,
-                )
+                .fetch_random_with_schemes(HostColor::Grey, &settings.allowed_transports)
                 .await
             {
                 Some((entry, position)) => {

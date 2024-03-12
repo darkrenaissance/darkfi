@@ -32,7 +32,7 @@
 use std::{sync::Arc, time::UNIX_EPOCH};
 
 use async_trait::async_trait;
-use log::{info, warn};
+use log::{debug, info, warn};
 use smol::lock::Mutex;
 use url::Url;
 
@@ -116,7 +116,7 @@ impl ManualSession {
 
             if let Err(e) = self.p2p().hosts().try_register(addr.clone(), HostState::Connect).await
             {
-                warn!(target: "net::manual_session", "{}", e);
+                debug!(target: "net::manual_session", "{} addr={}", e, addr.clone());
             }
 
             match connector.connect(&addr).await {

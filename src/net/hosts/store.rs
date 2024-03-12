@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashMap, fmt, fs, fs::File, sync::Arc, time::Instant};
+use std::{collections::HashMap, fmt, fs, fs::File, sync::Arc};
 
 use log::{debug, error, info, trace, warn};
 use rand::{prelude::IteratorRandom, rngs::OsRng, Rng};
@@ -51,19 +51,24 @@ pub type HostRegistry = RwLock<HashMap<Url, HostState>>;
 /// Connected, Disconnected or Refining. The state is `None` when the
 /// corresponding host has been removed from the HostRegistry.
 /// ```
-///                              +--------+
-///                          +-- | refine | ----+
-///                          |   +--------+     |
-///                          |                  |
-///                          v                  v
-///          +---------+    +-----------+    +------+    +--------+
-///          | connect | -> | connected | -> | None | <- | insert |
-///          +---------+    +-----------+    +------+    +--------+
-///               |                             ^
-///               |                             |
-///               |          +------+           |
-///               +--------> | move | ----------+
-///                          +------+
+///                                +--------+                       
+///                                | refine | <------------+
+///                                +--------+              |          
+///                   +---------+    |    |   +--------+   |
+///                   | connect |----+    |   | insert |   |
+///                   +---------+    |    |   +--------+   |
+///                   |              |    |      |         |
+///                   |              |    +------+         |
+///                   |              |           |         |
+///                   |              v           v         |
+///                   |  +-----------+    +------+    +---------+  
+///                   |  | connected | -> | None | <- | suspend |  
+///                   |  +-----------+    +------+    +---------+  
+///                   |                          ^         ^
+///                   |      +------+            |         |
+///                   +----> | move | -----------+---------+
+///                          +------+                   
+///                                               
 /// ```
 #[derive(Clone, Debug)]
 pub enum HostState {
@@ -74,6 +79,8 @@ pub enum HostState {
     Refine,
     /// Hosts that are being connected to in Outbound and Manual Session.
     Connect,
+    /// TODO: documentation
+    Suspend,
     /// Hosts that have been successfully connected to.
     Connected(ChannelPtr),
     /// TODO: doc
@@ -88,6 +95,7 @@ impl HostState {
             HostState::Insert => Err(Error::StateBlocked(self.to_string())),
             HostState::Refine => Err(Error::StateBlocked(self.to_string())),
             HostState::Connect => Err(Error::StateBlocked(self.to_string())),
+            HostState::Suspend => Err(Error::StateBlocked(self.to_string())),
             HostState::Connected(_) => Err(Error::StateBlocked(self.to_string())),
             HostState::Move => Err(Error::StateBlocked(self.to_string())),
         }
@@ -100,6 +108,7 @@ impl HostState {
             HostState::Insert => Err(Error::StateBlocked(self.to_string())),
             HostState::Refine => Err(Error::StateBlocked(self.to_string())),
             HostState::Connect => Err(Error::StateBlocked(self.to_string())),
+            HostState::Suspend => Ok(HostState::Refine),
             HostState::Connected(_) => Err(Error::StateBlocked(self.to_string())),
             HostState::Move => Err(Error::StateBlocked(self.to_string())),
         }
@@ -112,6 +121,7 @@ impl HostState {
             HostState::Insert => Err(Error::StateBlocked(self.to_string())),
             HostState::Refine => Err(Error::StateBlocked(self.to_string())),
             HostState::Connect => Err(Error::StateBlocked(self.to_string())),
+            HostState::Suspend => Err(Error::StateBlocked(self.to_string())),
             HostState::Connected(_) => Err(Error::StateBlocked(self.to_string())),
             HostState::Move => Err(Error::StateBlocked(self.to_string())),
         }
@@ -125,6 +135,7 @@ impl HostState {
             HostState::Insert => Err(Error::StateBlocked(self.to_string())),
             HostState::Refine => Ok(HostState::Connected(channel)),
             HostState::Connect => Ok(HostState::Connected(channel)),
+            HostState::Suspend => Err(Error::StateBlocked(self.to_string())),
             HostState::Connected(_) => Err(Error::StateBlocked(self.to_string())),
             HostState::Move => Err(Error::StateBlocked(self.to_string())),
         }
@@ -137,8 +148,21 @@ impl HostState {
             HostState::Insert => Err(Error::StateBlocked(self.to_string())),
             HostState::Refine => Err(Error::StateBlocked(self.to_string())),
             HostState::Connect => Ok(HostState::Move),
+            HostState::Suspend => Err(Error::StateBlocked(self.to_string())),
             HostState::Connected(_) => Err(Error::StateBlocked(self.to_string())),
             HostState::Move => Err(Error::StateBlocked(self.to_string())),
+        }
+    }
+
+    // TODO
+    fn try_suspend(&self) -> Result<Self> {
+        match self {
+            HostState::Insert => Err(Error::StateBlocked(self.to_string())),
+            HostState::Refine => Err(Error::StateBlocked(self.to_string())),
+            HostState::Connect => Err(Error::StateBlocked(self.to_string())),
+            HostState::Suspend => Err(Error::StateBlocked(self.to_string())),
+            HostState::Connected(_) => Err(Error::StateBlocked(self.to_string())),
+            HostState::Move => Ok(HostState::Suspend),
         }
     }
 }
@@ -663,13 +687,6 @@ pub struct Hosts {
     /// Subscriber for notifications of new channels
     channel_subscriber: SubscriberPtr<Result<ChannelPtr>>,
 
-    /// Set of stored addresses that are quarantined.
-    /// We quarantine peers we've been unable to connect to, but we keep them
-    /// around so we can potentially try them again, up to n tries. This should
-    /// be helpful in order to self-heal the p2p connections in case we have an
-    /// Internet interrupt (goblins unplugging cables)
-    quarantine: RwLock<HashMap<Url, usize>>,
-
     /// A registry that tracks hosts and their current state.
     registry: HostRegistry,
 
@@ -688,7 +705,6 @@ impl Hosts {
     pub fn new(settings: SettingsPtr) -> HostsPtr {
         Arc::new(Self {
             channel_subscriber: Subscriber::new(),
-            quarantine: RwLock::new(HashMap::new()),
             registry: RwLock::new(HashMap::new()),
             store_subscriber: Subscriber::new(),
             settings,
@@ -699,7 +715,7 @@ impl Hosts {
     /// Safely insert into the HostContainer. Filters the addresses first before storing and
     /// notifies the subscriber. Must be called when first receiving greylist addresses.
     pub async fn insert(&self, color: HostColor, addrs: &[(Url, u64)]) {
-        debug!(target: "net::hosts:insert()", "[START] node={}", self.settings.node_id);
+        trace!(target: "net::hosts:insert()", "[START]");
 
         // First filter these address to ensure this peer doesn't exist in our black, gold or
         // whitelist and apply transport filtering.
@@ -714,17 +730,17 @@ impl Hosts {
         for (i, (addr, last_seen)) in filtered_addrs.iter().enumerate() {
             if self.try_register(addr.clone(), HostState::Insert).await.is_err() {
                 debug!(target: "net::hosts::store_or_update()",
-            "We are already trying to insert {}. Skipping...", addr);
+            "We are already tracking {}. Skipping...", addr);
                 continue
             }
 
             addrs_len += i + 1;
-            self.container.store_or_update(color.clone(), addr.clone(), last_seen.clone()).await;
+            self.container.store_or_update(color.clone(), addr.clone(), *last_seen).await;
             self.unregister(addr).await;
         }
 
         self.store_subscriber.notify(addrs_len).await;
-        debug!(target: "net::hosts:insert()", "[END] node={}", self.settings.node_id);
+        trace!(target: "net::hosts:insert()", "[END]");
     }
 
     /// Try to update the registry. If the host already exists, try to update its state.
@@ -743,6 +759,7 @@ impl Hosts {
                 HostState::Insert => current_state.try_insert(),
                 HostState::Refine => current_state.try_refine(),
                 HostState::Connect => current_state.try_connect(),
+                HostState::Suspend => current_state.try_suspend(),
                 HostState::Connected(c) => current_state.try_connected(c),
                 HostState::Move => current_state.try_move(),
             };
@@ -796,12 +813,25 @@ impl Hosts {
         let registry = self.registry.read().await;
         let mut channels = Vec::new();
 
-        for (_, value) in registry.iter() {
-            if let HostState::Connected(c) = value {
+        for (_, state) in registry.iter() {
+            if let HostState::Connected(c) = state {
                 channels.push(c.clone());
             }
         }
         channels
+    }
+
+    /// Returns the list of connected channels.
+    pub async fn suspended(&self) -> Vec<Url> {
+        let registry = self.registry.read().await;
+        let mut addrs = Vec::new();
+
+        for (url, state) in registry.iter() {
+            if let HostState::Suspend = state {
+                addrs.push(url.clone());
+            }
+        }
+        addrs
     }
 
     /// Retrieve a random connected channel
@@ -965,10 +995,15 @@ impl Hosts {
 
         match destination {
             // Downgrade to grey. Remove from white and gold.
+            // TODO: doc
             HostColor::Grey => {
                 self.container.remove_if_exists(HostColor::Gold, addr).await;
                 self.container.remove_if_exists(HostColor::White, addr).await;
                 self.container.store_or_update(HostColor::Grey, addr.clone(), last_seen).await;
+
+                // This should never panic.
+                self.try_register(addr.clone(), HostState::Suspend).await.unwrap();
+                return
             }
 
             // Remove from Greylist, add to Whitelist. Called by the Refinery.
@@ -1006,30 +1041,6 @@ impl Hosts {
         // Remove this entry from HostRegistry to avoid this host getting
         // stuck in the Moving state.
         self.unregister(addr).await;
-    }
-
-    /// Quarantine a peer.
-    /// If they've been quarantined for more than a configured limit, move to greylist.
-    pub async fn quarantine(&self, addr: &Url, last_seen: u64) {
-        debug!(target: "net::hosts::quarantine()", "Quarantining peer {}", addr);
-        let timer = Instant::now();
-        let mut q = self.quarantine.write().await;
-        if let Some(retries) = q.get_mut(addr) {
-            *retries += 1;
-            debug!(target: "net::hosts::quarantine()",
-            "Peer {} quarantined {} times", addr, retries);
-            if *retries == self.settings.hosts_quarantine_limit {
-                debug!(target: "net::hosts::quarantine()",
-                "Reached quarantine limited after {:?}", timer.elapsed());
-                drop(q);
-
-                debug!(target: "net::hosts::quarantine()", "Moving to greylist {}", addr);
-                self.move_host(addr, last_seen, HostColor::Grey).await;
-            }
-        } else {
-            debug!(target: "net::hosts::quarantine()", "Added peer {} to quarantine", addr);
-            q.insert(addr.clone(), 0);
-        }
     }
 }
 
