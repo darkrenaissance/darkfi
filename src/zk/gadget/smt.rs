@@ -322,12 +322,12 @@ mod tests {
     fn test_smt_circuit() {
         let hasher = Poseidon::<Fp, 2>::hasher();
         let leaves: [Fp; HEIGHT] = [(); HEIGHT].map(|_| Fp::random(&mut OsRng));
-        let empty_leaf = [0u8; 64];
+        let empty_leaf = [0u8; 32];
 
         let smt = SparseMerkleTree::<Fp, Poseidon<Fp, 2>, HEIGHT>::new_sequential(
             &leaves,
             &hasher.clone(),
-            &empty_leaf,
+            empty_leaf,
         )
         .unwrap();
 

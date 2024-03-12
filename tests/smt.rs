@@ -40,13 +40,13 @@ fn zkvm_smt() -> Result<()> {
     let zkbin = ZkBinary::decode(bincode)?;
 
     let poseidon = Poseidon::<Fp, 2>::new();
-    let empty_leaf = [0u8; 64];
+    let empty_leaf = [0u8; 32];
     let leaves = [Fp::random(&mut OsRng), Fp::random(&mut OsRng), Fp::random(&mut OsRng)];
 
     let smt = SparseMerkleTree::<Fp, Poseidon<Fp, 2>, SPARSE_MERKLE_DEPTH>::new_sequential(
         &leaves,
         &poseidon.clone(),
-        &empty_leaf,
+        empty_leaf,
     )
     .unwrap();
 
