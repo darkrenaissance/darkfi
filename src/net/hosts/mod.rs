@@ -32,15 +32,25 @@
 /// and `ProtocolAddress`.
 pub mod refinery;
 
-/// TODO: update documentation
-/// The main interface for interacting with the hostlist.
+/// The main interface for interacting with the hostlist. Contains the following:
 ///
-/// The hostlist is stored in three sections: white, grey, and anchorlists.
-/// The _whitelist_ contains hosts that have been seen recently.
-/// The _anchorlist_ contains hosts that we have been able to establish a connection to.
-/// The _greylist_ is an intermediary host list of recently received hosts that is
-/// periodically refreshed using the greylist refinery.
+/// `Hosts`: the main parent class that manages HostRegistry and HostContainer. It is also
+///  responsible for filtering addresses before writing to the hostlist.
 ///
-/// `store` contains various methods for reading from, quering and writing to the hostlists.
-/// It is also responsible for filtering addresses and ensuring channel transport validity.
+/// `HostRegistry`: A locked HashMap that maps peer addresses onto mutually exclusive
+///  states (`HostState`). Prevents race conditions by dictating a strict flow of logically
+///  acceptable states.
+///
+/// `HostContainer`: A wrapper for the hostlists. Each hostlist is represented by a `HostColor`,
+///  which can be Grey, White, Gold or Black. Exposes a common interface for hostlist queries and
+///  utilities.
+///
+/// `HostColor`: White hosts have been seen recently. Gold hosts we have been able to establish
+///  a connection to. Grey hosts are recently received hosts that are periodically refreshed
+///  using the greylist refinery. Black hosts are considerede hostile and are strictly avoided
+///  for the duration of the program.
+///
+/// `HostState`: a set of mutually exclusive states that can be Insert, Refine, Connect, Suspend
+///  or Connected. The state is `None` when the corresponding host has been removed from the
+///  HostRegistry.
 pub mod store;

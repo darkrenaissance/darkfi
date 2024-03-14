@@ -186,111 +186,124 @@ impl Slot {
         self.process.stop().await
     }
 
-    // TODO: rethink this logic.
-    async fn fetch_address(&self, slot_count: usize, transports: &[String]) -> Option<(Url, u64)> {
-        let hosts = self.p2p().hosts();
-        let connects = self.p2p().settings().outbound_connections;
-        let white_count = connects * self.p2p().settings().white_connection_percent / 100;
-        let transport_mixing = self.p2p().settings().transport_mixing;
+    // Address selection algorithm that works as follows: up to anchor_count, select from the
+    // anchorlist. Up to white_count, select from the whitelist. For all other slots, select from
+    // the greylist.
+    //
+    // If we didn't find an address with this selection logic, downgrade our preferences. Up to
+    // anchor_count, select from the whitelist, up until white_count, select from the greylist.
+    //
+    // If we still didn't find an address, select from the greylist. In all other cases, return an
+    // empty vector. This will trigger fetch_addrs() to return None and initiate peer discovery.
+    async fn fetch_addrs_with_preference(
+        &self,
+        preference: usize,
+        slot_count: usize,
+        transports: &[String],
+        transport_mixing: bool,
+        white_count: usize,
+        anchor_count: usize,
+    ) -> Vec<(Url, u64)> {
+        let hosts = &self.p2p().hosts().container;
 
-        if slot_count < self.p2p().settings().anchor_connection_count {
-            //  Up to anchor_connection_count connections:
-            //  Select from the anchorlist
-            //  If the anchorlist is empty, select from the whitelist
-            //  If the whitelist is empty, select from the greylist
-            //  If the greylist is empty, return None and do peer discovery
-            if !hosts
-                .container
-                .fetch_address(HostColor::Gold, transports, transport_mixing)
-                .await
-                .is_empty()
-            {
-                let addrs = hosts
-                    .container
-                    .fetch_address(HostColor::Gold, transports, transport_mixing)
-                    .await;
-
-                return hosts.check_address(addrs).await
+        match preference {
+            // Highest preference that corresponds to the anchor and white count preference set in
+            // Settings.
+            0 => {
+                if slot_count < anchor_count {
+                    hosts.fetch_addrs(HostColor::Gold, transports, transport_mixing).await
+                } else if slot_count < white_count {
+                    hosts.fetch_addrs(HostColor::White, transports, transport_mixing).await
+                } else {
+                    hosts.fetch_addrs(HostColor::Grey, transports, transport_mixing).await
+                }
             }
-
-            if !hosts
-                .container
-                .fetch_address(HostColor::White, transports, transport_mixing)
-                .await
-                .is_empty()
-            {
-                let addrs = hosts
-                    .container
-                    .fetch_address(HostColor::White, transports, transport_mixing)
-                    .await;
-
-                return hosts.check_address(addrs).await
+            // Reduced preference in case we don't have sufficient hosts to satisfy our highest
+            // preference.
+            1 => {
+                if slot_count < anchor_count {
+                    hosts.fetch_addrs(HostColor::White, transports, transport_mixing).await
+                } else if slot_count < white_count {
+                    hosts.fetch_addrs(HostColor::Grey, transports, transport_mixing).await
+                } else {
+                    vec![]
+                }
             }
-
-            if !hosts
-                .container
-                .fetch_address(HostColor::Grey, transports, transport_mixing)
-                .await
-                .is_empty()
-            {
-                let addrs = hosts
-                    .container
-                    .fetch_address(HostColor::Grey, transports, transport_mixing)
-                    .await;
-
-                return hosts.check_address(addrs).await
+            // Lowest preference if we still haven't been able to find a host.
+            2 => {
+                if slot_count < anchor_count {
+                    hosts.fetch_addrs(HostColor::Grey, transports, transport_mixing).await
+                } else {
+                    vec![]
+                }
             }
-        } else if slot_count < white_count {
-            // Up to white_connection_percent connections:
-            //  Select from the whitelist
-            //  If the whitelist is empty, select from the greylist
-            //  If the greylist is empty, return None and do peer discovery
-            if !hosts
-                .container
-                .fetch_address(HostColor::White, transports, transport_mixing)
-                .await
-                .is_empty()
-            {
-                let addrs = hosts
-                    .container
-                    .fetch_address(HostColor::White, transports, transport_mixing)
-                    .await;
-
-                return hosts.check_address(addrs).await
-            }
-
-            if !hosts
-                .container
-                .fetch_address(HostColor::Grey, transports, transport_mixing)
-                .await
-                .is_empty()
-            {
-                let addrs = hosts
-                    .container
-                    .fetch_address(HostColor::Grey, transports, transport_mixing)
-                    .await;
-
-                return hosts.check_address(addrs).await
-            }
-        } else {
-            // All other connections:
-            //  Select from the greylist
-            //  If the greylist is empty, do peer discovery
-            if !hosts
-                .container
-                .fetch_address(HostColor::Grey, transports, transport_mixing)
-                .await
-                .is_empty()
-            {
-                let addrs = hosts
-                    .container
-                    .fetch_address(HostColor::Grey, transports, transport_mixing)
-                    .await;
-
-                return hosts.check_address(addrs).await
+            _ => {
+                panic!()
             }
         }
+    }
 
+    // Fetch an address we can connect to acccording to the white and anchor connection counts
+    // configured in Settings.
+    async fn fetch_addrs(&self, slot_count: usize, transports: &[String]) -> Option<(Url, u64)> {
+        let hosts = self.p2p().hosts();
+        let transport_mixing = self.p2p().settings().transport_mixing;
+        let anchor_count = self.p2p().settings().anchor_connection_count;
+        let white_count = slot_count * self.p2p().settings().white_connection_percent / 100;
+
+        // First select an addresses that match our white and anchor requirements configured in
+        // Settings.
+        let preference = 0;
+        let addrs = self
+            .fetch_addrs_with_preference(
+                preference,
+                slot_count,
+                transports,
+                transport_mixing,
+                white_count,
+                anchor_count,
+            )
+            .await;
+
+        if !addrs.is_empty() {
+            return hosts.check_addrs(addrs).await;
+        }
+
+        // If no addresses were returned, go for the second best thing (white and grey).
+        let preference = 1;
+        let addrs = self
+            .fetch_addrs_with_preference(
+                preference,
+                slot_count,
+                transports,
+                transport_mixing,
+                white_count,
+                anchor_count,
+            )
+            .await;
+
+        if !addrs.is_empty() {
+            return hosts.check_addrs(addrs).await;
+        }
+
+        // If we still have no addresses, go for the least favored option.
+        let preference = 2;
+        let addrs = self
+            .fetch_addrs_with_preference(
+                preference,
+                slot_count,
+                transports,
+                transport_mixing,
+                white_count,
+                anchor_count,
+            )
+            .await;
+
+        if !addrs.is_empty() {
+            return hosts.check_addrs(addrs).await;
+        }
+
+        // If we still don't have an address, return None and do peer discovery.
         None
     }
 
@@ -328,7 +341,7 @@ impl Slot {
                 continue
             }
 
-            let addr = if let Some(addr) = self.fetch_address(slot_count, transports).await {
+            let addr = if let Some(addr) = self.fetch_addrs(slot_count, transports).await {
                 debug!(target: "net::outbound_session::run()", "Fetched address: {:?}", addr);
                 addr
             } else {
@@ -480,7 +493,10 @@ impl Slot {
     }
 }
 
-/// TODO: doc
+/// PeerDiscoveryBase defines a common interface for multiple peer discovery processes. Currently
+/// only one Peer Discovery implementation exists. Making Peer Discovery generic enables us to
+/// support network swarming, since the peer discovery process will differ depending on whether it
+/// occurs on the overlay network or a subnet.
 #[async_trait]
 pub trait PeerDiscoveryBase {
     async fn start(self: Arc<Self>);
@@ -498,7 +514,8 @@ pub trait PeerDiscoveryBase {
     fn p2p(&self) -> P2pPtr;
 }
 
-/// TODO: doc
+/// Main PeerDiscovery process that loops through connected channels and sends out a `GetAddrs`
+/// when it is active.
 struct PeerDiscovery {
     process: StoppableTaskPtr,
     wakeup_self: CondVar,

@@ -47,8 +47,8 @@ pub type HostsPtr = Arc<Hosts>;
 /// a given host.
 pub type HostRegistry = RwLock<HashMap<Url, HostState>>;
 
-/// HostState is a set of mutually exclusive states that can be Pending,
-/// Connected, Disconnected or Refining. The state is `None` when the
+/// HostState is a set of mutually exclusive states that can be Insert,
+/// Refine, Connect, Suspend or Connected. The state is `None` when the
 /// corresponding host has been removed from the HostRegistry.
 /// ```
 ///                                +--------+                       
@@ -72,18 +72,22 @@ pub type HostRegistry = RwLock<HashMap<Url, HostState>>;
 /// ```
 #[derive(Clone, Debug)]
 pub enum HostState {
-    /// TODO: doc
+    /// Hosts that are currently being inserting into the hostlist.
     Insert,
     /// Hosts that are migrating from the greylist to the whitelist or being
     /// removed from the greylist, as defined in `refinery.rs`.
     Refine,
     /// Hosts that are being connected to in Outbound and Manual Session.
     Connect,
-    /// TODO: documentation
+    /// Hosts that we have just failed to connect to. Marking a host
+    /// as Suspend effectively gives it a priority in the refinery,
+    /// since Suspend-> Refine is an accessible state transition.
+    // TODO: We will probably make Suspend a `Red list` instead of a HostState.
     Suspend,
     /// Hosts that have been successfully connected to.
     Connected(ChannelPtr),
-    /// TODO: doc
+    /// Host that are moving between hostlists, implemented in
+    /// store::move_host().
     Move,
 }
 
@@ -141,7 +145,7 @@ impl HostState {
         }
     }
 
-    // Try to change state to move. Only possible if this connection is Connect i.e. if we are
+    // Try to change state to Move. Only possible if this connection is Connect i.e. if we are
     // trying to connect to this host.
     fn try_move(&self) -> Result<Self> {
         match self {
@@ -154,7 +158,8 @@ impl HostState {
         }
     }
 
-    // TODO
+    // Try to change the state to Suspend. Only possible when we are currently moving this host,
+    // since we suspend a host after failing to connect to it and then downgrading in move_host.
     fn try_suspend(&self) -> Result<Self> {
         match self {
             HostState::Insert => Err(Error::StateBlocked(self.to_string())),
@@ -203,10 +208,6 @@ impl TryFrom<usize> for HostColor {
 /// A Container for managing Grey, White, Gold and Black
 /// hostlists. Exposes a common interface for writing to and querying
 /// hostlists.
-// TODO: Currently hosts (aside from hosts on the Black list) are on
-// multiple lists at once. This needs to be reconsidered.
-// Rethink upgrade/ move methods and consider a single method move() which
-// removes from one hostlist and places on another.
 // TODO: Verify the performance overhead of using vectors for hostlists.
 // TODO: Check whether anchorlist (Gold) has a max size in Monero.
 pub struct HostContainer {
@@ -317,14 +318,15 @@ impl HostContainer {
         (entry.clone(), position)
     }
 
-    /// TODO: documentation
-    pub async fn fetch_address(
+    /// Fetch addresses that match the provided transports or acceptable mixed transports.
+    /// Will return an empty Vector if no such addresses were found.
+    pub async fn fetch_addrs(
         &self,
         color: HostColor,
         transports: &[String],
         transport_mixing: bool,
     ) -> Vec<(Url, u64)> {
-        trace!(target: "net::hosts::fetch_address()", "[START] {:?}", color);
+        trace!(target: "net::hosts::fetch_addrs()", "[START] {:?}", color);
         let mut hosts = vec![];
         let index = color as usize;
 
@@ -353,7 +355,7 @@ impl HostContainer {
             hosts.push((addr, last_seen));
         }
 
-        trace!(target: "net::hosts::fetch_address()", "Grabbed hosts, length: {}", hosts.len());
+        trace!(target: "net::hosts::fetch_addrs()", "Grabbed hosts, length: {}", hosts.len());
 
         hosts
     }
@@ -558,7 +560,7 @@ impl HostContainer {
         list.remove(index);
     }
 
-    /// TODO: documentation
+    /// Remove an entry from a hostlist if it exists.
     pub async fn remove_if_exists(&self, color: HostColor, addr: &Url) {
         let index = color.clone() as usize;
         if self.contains(index, addr).await {
@@ -682,33 +684,37 @@ impl HostContainer {
     }
 }
 
-/// TODO: documentation
+/// Main parent class for the management and manipulation of hostlists. Keeps
+/// track of hosts and their current state via the HostRegistry, and stores
+/// hostlists and associated methods in the HostContainer. Also operates
+/// two subscribers to notify other parts of the code base when new channels
+/// have been created or new hosts have been added to the hostlist.
 pub struct Hosts {
-    /// Subscriber for notifications of new channels
-    channel_subscriber: SubscriberPtr<Result<ChannelPtr>>,
-
     /// A registry that tracks hosts and their current state.
     registry: HostRegistry,
+
+    /// Hostlists and associated methods.
+    pub container: HostContainer,
 
     /// Subscriber listening for store updates
     store_subscriber: SubscriberPtr<usize>,
 
+    /// Subscriber for notifications of new channels
+    channel_subscriber: SubscriberPtr<Result<ChannelPtr>>,
+
     /// Pointer to configured P2P settings
     settings: SettingsPtr,
-
-    /// TODO: documentation
-    pub container: HostContainer,
 }
 
 impl Hosts {
     /// Create a new hosts list
     pub fn new(settings: SettingsPtr) -> HostsPtr {
         Arc::new(Self {
-            channel_subscriber: Subscriber::new(),
             registry: RwLock::new(HashMap::new()),
-            store_subscriber: Subscriber::new(),
-            settings,
             container: HostContainer::new(),
+            store_subscriber: Subscriber::new(),
+            channel_subscriber: Subscriber::new(),
+            settings,
         })
     }
 
@@ -779,18 +785,18 @@ impl Hosts {
         }
     }
 
-    // TODO: documentation/ re-evaluate
-    pub async fn check_address(&self, hosts: Vec<(Url, u64)>) -> Option<(Url, u64)> {
-        // Try to find an unused host in the set.
+    // Loop through hosts selected by Outbound Session and see if any of them are
+    // free to connect to.
+    pub async fn check_addrs(&self, hosts: Vec<(Url, u64)>) -> Option<(Url, u64)> {
         for (host, last_seen) in hosts {
-            debug!(target: "net::hosts::check_address()", "Starting checks");
+            debug!(target: "net::hosts::check_addrs()", "Starting checks");
 
             if self.try_register(host.clone(), HostState::Connect).await.is_err() {
                 continue
             }
 
             debug!(
-                target: "net::hosts::check_address()",
+                target: "net::hosts::check_addrs()",
                 "Found valid host {}",
                 host
             );
@@ -987,7 +993,12 @@ impl Hosts {
         ret
     }
 
-    /// TODO: documentation
+    /// A single function for moving hosts between hostlists. Called on the following occasions:
+    ///
+    /// * When we cannot connect to a peer: move to grey, remove from white and gold.
+    /// * When the refinery passes successfully: move to white, remove from greylist.
+    /// * When we connect to a peer, move to gold, remove from white or grey.
+    /// * When we add a peer to the black list: move to black, remove from all other lists.
     pub async fn move_host(&self, addr: &Url, last_seen: u64, destination: HostColor) {
         if self.try_register(addr.clone(), HostState::Move).await.is_err() {
             return
@@ -995,13 +1006,13 @@ impl Hosts {
 
         match destination {
             // Downgrade to grey. Remove from white and gold.
-            // TODO: doc
             HostColor::Grey => {
                 self.container.remove_if_exists(HostColor::Gold, addr).await;
                 self.container.remove_if_exists(HostColor::White, addr).await;
                 self.container.store_or_update(HostColor::Grey, addr.clone(), last_seen).await;
 
-                // This should never panic.
+                // We mark this peer as Suspend which means we do not try to connect to it until it
+                // has passed through the refinery. This should never panic.
                 self.try_register(addr.clone(), HostState::Suspend).await.unwrap();
                 return
             }
@@ -1232,128 +1243,5 @@ mod tests {
                 println!("{}, {}", url, last_seen);
             }
         });
-    }
-
-    #[test]
-    fn test_fetch_address() {
-        smol::block_on(async {
-            let mut hostlist = vec![];
-            let mut grey_urls = vec![];
-            let mut white_urls = vec![];
-            let mut anchor_urls = vec![];
-
-            let ex = Arc::new(Executor::new());
-
-            let settings = Settings { ..Default::default() };
-            let p2p = P2p::new(settings, ex.clone()).await;
-            let hosts = &p2p.hosts().container;
-
-            // Build up a hostlist
-            for i in 0..5 {
-                let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-                hosts
-                    .store(
-                        HostColor::Grey as usize,
-                        Url::parse(&format!("tcp://greylist{}:123", i)).unwrap(),
-                        last_seen,
-                    )
-                    .await;
-                hosts
-                    .store(
-                        HostColor::White as usize,
-                        Url::parse(&format!("tcp://whitelist{}:123", i)).unwrap(),
-                        last_seen,
-                    )
-                    .await;
-                hosts
-                    .store(
-                        HostColor::Gold as usize,
-                        Url::parse(&format!("tcp://anchorlist{}:123", i)).unwrap(),
-                        last_seen,
-                    )
-                    .await;
-
-                grey_urls
-                    .push((Url::parse(&format!("tcp://greylist{}:123", i)).unwrap(), last_seen));
-                white_urls
-                    .push((Url::parse(&format!("tcp://whitelist{}:123", i)).unwrap(), last_seen));
-                anchor_urls
-                    .push((Url::parse(&format!("tcp://anchorlist{}:123", i)).unwrap(), last_seen));
-            }
-
-            assert!(!hosts.is_empty(HostColor::Grey).await);
-            assert!(!hosts.is_empty(HostColor::White).await);
-            assert!(!hosts.is_empty(HostColor::Gold).await);
-
-            let transports = ["tcp".to_string()];
-            let white_count =
-                p2p.settings().outbound_connections * p2p.settings().white_connection_percent / 100;
-            let localnet = true;
-
-            // Simulate the address selection logic found in outbound_session::fetch_address()
-            for i in 0..8 {
-                if i < p2p.settings().anchor_connection_count {
-                    if !hosts.fetch_address(HostColor::Gold, &transports, localnet).await.is_empty()
-                    {
-                        let addrs =
-                            hosts.fetch_address(HostColor::Gold, &transports, localnet).await;
-                        hostlist.push(addrs);
-                    }
-
-                    if !hosts
-                        .fetch_address(HostColor::White, &transports, localnet)
-                        .await
-                        .is_empty()
-                    {
-                        let addrs =
-                            hosts.fetch_address(HostColor::White, &transports, localnet).await;
-                        hostlist.push(addrs);
-                    }
-
-                    if !hosts.fetch_address(HostColor::Grey, &transports, localnet).await.is_empty()
-                    {
-                        let addrs =
-                            hosts.fetch_address(HostColor::Grey, &transports, localnet).await;
-                        hostlist.push(addrs);
-                    }
-                } else if i < white_count {
-                    if !hosts
-                        .fetch_address(HostColor::White, &transports, localnet)
-                        .await
-                        .is_empty()
-                    {
-                        let addrs =
-                            hosts.fetch_address(HostColor::White, &transports, localnet).await;
-                        hostlist.push(addrs);
-                    }
-
-                    if !hosts.fetch_address(HostColor::Grey, &transports, localnet).await.is_empty()
-                    {
-                        let addrs =
-                            hosts.fetch_address(HostColor::Grey, &transports, localnet).await;
-                        hostlist.push(addrs);
-                    }
-                } else if !hosts
-                    .fetch_address(HostColor::Grey, &transports, localnet)
-                    .await
-                    .is_empty()
-                {
-                    let addrs = hosts.fetch_address(HostColor::Grey, &transports, localnet).await;
-                    hostlist.push(addrs);
-                }
-            }
-
-            // Check we're returning the correct addresses.
-            anchor_urls.sort();
-            white_urls.sort();
-            grey_urls.sort();
-            hostlist[0].sort();
-            hostlist[4].sort();
-            hostlist[7].sort();
-
-            assert!(anchor_urls == hostlist[0]);
-            assert!(white_urls == hostlist[4]);
-            assert!(grey_urls == hostlist[7]);
-        })
     }
 }
