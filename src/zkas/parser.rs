@@ -946,7 +946,15 @@ impl Parser {
                 // call, so we check if it's legit and start digging.
                 let func_name = token.token.as_str();
 
-                // TODO: MAKE SURE IT'S A SYMBOL
+                // Ensure the current function is a symbol
+                if token.token_type != TokenType::Symbol {
+                    return Err(self.error.abort(
+                        "This token is not a symbol.",
+                        token.line,
+                        token.column
+                    ))
+                }
+
                 if let Some(op) = Opcode::from_name(func_name) {
                     let rhs = self.parse_function_call(token, &mut iter)?;
                     stmt.opcode = op;
