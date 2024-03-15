@@ -165,8 +165,7 @@ struct Lilith {
 
 impl Lilith {
     /// Periodically ping nodes on the whitelist. If they are still reachable, update their last
-    /// seen field. Otherwise, downgrade them to the greylist (i.e. do not broadcast them to other
-    /// peers).
+    /// seen field. Otherwise, downgrade them to the greylist.
     async fn whitelist_refinery(name: String, p2p: P2pPtr) -> Result<()> {
         info!(target: "lilith", "Starting whitelist refinery for \"{}\"", name);
 
