@@ -231,7 +231,7 @@ impl Consensus {
         Ok(Some(index))
     }
 
-    /// Auxilliary function to retrieve a fork proposals.
+    /// Auxiliary function to retrieve a fork proposals.
     /// If provided tip is not the canonical(finalized), or fork doesn't exists,
     /// an empty vector is returned.
     pub async fn get_fork_proposals(
@@ -271,7 +271,7 @@ impl Consensus {
         Ok(vec![])
     }
 
-    /// Auxilliary function to retrieve current best fork proposals.
+    /// Auxiliary function to retrieve current best fork proposals.
     /// If multiple best forks exist, grab the proposals of the first one
     /// If provided tip is not the canonical(finalized), or no forks exist,
     /// an empty vector is returned.
@@ -303,7 +303,7 @@ impl Consensus {
         Ok(ret)
     }
 
-    /// Auxilliary function to purge current forks and rebuild the ones starting
+    /// Auxiliary function to purge current forks and rebuild the ones starting
     /// with the provided prefix. This function assumes that the prefix blocks have
     /// already been appended to canonical chain.
     pub async fn rebuild_forks(&self, prefix: &[BlockInfo]) -> Result<()> {

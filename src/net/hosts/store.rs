@@ -43,7 +43,7 @@ const GREYLIST_MAX_LEN: usize = 2000;
 pub type HostsPtr = Arc<Hosts>;
 
 /// Keeps track of hosts and their current state. Prevents race conditions
-/// where multiple threads are simultaenously trying to change the state of
+/// where multiple threads are simultaneously trying to change the state of
 /// a given host.
 pub type HostRegistry = RwLock<HashMap<Url, HostState>>;
 
