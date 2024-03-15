@@ -670,7 +670,8 @@ impl Client {
             ))])
         }
 
-        // We only send a client reply if the message is for ourself.
+        // We only send a client reply if the message is for ourself or if
+        // we're trying to communicate with IRC services.
         // Anything else is rendered by the IRC client and not supposed
         // to be echoed by the IRC serer.
         if target == nick {
@@ -678,6 +679,11 @@ impl Client {
                 target.to_string(),
                 format!("PRIVMSG {} {}", target, message),
             ))])
+        }
+
+        // Handle queries to NickServ
+        if target.to_lowercase().as_str() == "nickserv" {
+            return self.nickserv.handle_query(message.strip_prefix(':').unwrap()).await
         }
 
         // If it's a DM and we don't have an encryption key, we will

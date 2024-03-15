@@ -41,7 +41,7 @@ use smol::{
 
 use super::{
     server::{IrcServer, MAX_NICK_LEN},
-    Privmsg, SERVER_NAME,
+    NickServ, Privmsg, SERVER_NAME,
 };
 
 const PENALTY_LIMIT: usize = 5;
@@ -56,6 +56,8 @@ pub enum ReplyType {
     Pong(String),
     /// CAP reply
     Cap(String),
+    /// NOTICE reply (from, to, what)
+    Notice((String, String, String)),
 }
 
 /// Stateful IRC client handler, used for each client connection
@@ -77,9 +79,9 @@ pub struct Client {
     /// Registration pause marker
     pub reg_paused: AtomicBool,
     /// Client username
-    pub username: RwLock<String>,
+    pub username: Arc<RwLock<String>>,
     /// Client nickname
-    pub nickname: RwLock<String>,
+    pub nickname: Arc<RwLock<String>>,
     /// Client realname
     pub realname: RwLock<String>,
     /// Client caps
@@ -87,6 +89,8 @@ pub struct Client {
     /// Set of seen messages for the user
     /// TODO: It grows indefinitely, needs to be pruned.
     pub seen: OnceCell<sled::Tree>,
+    /// NickServ instance
+    pub nickserv: Arc<NickServ>,
 }
 
 impl Client {
@@ -98,8 +102,11 @@ impl Client {
     ) -> Result<Self> {
         let caps = HashMap::from([("no-history".to_string(), false)]);
 
+        let username = Arc::new(RwLock::new(String::from("*")));
+        let nickname = Arc::new(RwLock::new(String::from("*")));
+
         Ok(Self {
-            server,
+            server: server.clone(),
             incoming,
             addr,
             last_sent: RwLock::new(NULL_ID),
@@ -107,11 +114,12 @@ impl Client {
             penalty: AtomicUsize::new(0),
             registered: AtomicBool::new(false),
             reg_paused: AtomicBool::new(false),
-            username: RwLock::new(String::from("*")),
-            nickname: RwLock::new(String::from("*")),
+            username: username.clone(),
+            nickname: nickname.clone(),
             realname: RwLock::new(String::from("*")),
             caps: RwLock::new(caps),
             seen: OnceCell::new(),
+            nickserv: Arc::new(NickServ::new(username.clone(), nickname.clone(), server.clone())),
         })
     }
 
@@ -215,6 +223,11 @@ impl Client {
                         }
                     };
 
+                    // We should skip any attempts to contact services from the network.
+                    if ["nickserv", "chanserv"].contains(&privmsg.nick.to_lowercase().as_str()) {
+                        continue
+                    }
+
                     // If successful, potentially decrypt it:
                     self.server.try_decrypt(&mut privmsg).await;
 
@@ -265,6 +278,9 @@ impl Client {
             ReplyType::Client((nick, msg)) => format!(":{}!~anon@darkirc {}", nick, msg),
             ReplyType::Pong(origin) => format!(":{} PONG :{}", SERVER_NAME, origin),
             ReplyType::Cap(msg) => format!(":{} {}", SERVER_NAME, msg),
+            ReplyType::Notice((src, dst, msg)) => {
+                format!(":{}!~anon@darkirc NOTICE {} :{}", src, dst, msg)
+            }
         };
 
         debug!("[{}] <-- {}", self.addr, r);
