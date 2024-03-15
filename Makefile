@@ -168,6 +168,7 @@ clean:
 	$(MAKE) -C bin/tau/taud clean
 	$(MAKE) -C bin/vanityaddr clean
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clean --target=$(RUST_TARGET) --release
+	rm -f $(PROOFS_BIN)
 
 distclean: clean
 	rm -rf target
