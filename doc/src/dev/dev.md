@@ -31,7 +31,7 @@ to do this by creating a git `pre-commit` hook like the following:
 ```shell
 #!/bin/sh
 if ! cargo +nightly fmt --all -- --check >/dev/null; then
-    echo "There are some code style issues. Run 'cargo fmt' to fix it."
+    echo "There are some code style issues. Run 'make fmt' on repo root to fix it."
     exit 1
 fi
 
