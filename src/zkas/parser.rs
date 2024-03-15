@@ -951,7 +951,7 @@ impl Parser {
                     return Err(self.error.abort(
                         "This token is not a symbol.",
                         token.line,
-                        token.column
+                        token.column,
                     ))
                 }
 
