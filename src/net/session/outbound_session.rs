@@ -601,7 +601,7 @@ impl PeerDiscoveryBase for PeerDiscovery {
                 p2p.broadcast(&get_addrs).await;
 
                 // Wait for a hosts store update event
-                let store_sub = self.p2p().hosts().subscribe_store().await.unwrap();
+                let store_sub = self.p2p().hosts().subscribe_store().await;
 
                 let result = timeout(
                     Duration::from_secs(p2p.settings().outbound_peer_discovery_attempt_time),

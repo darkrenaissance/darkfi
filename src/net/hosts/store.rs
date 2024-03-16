@@ -866,8 +866,8 @@ impl Hosts {
         Ok(())
     }
 
-    pub async fn subscribe_store(&self) -> Result<Subscription<usize>> {
-        Ok(self.store_subscriber.clone().subscribe().await)
+    pub async fn subscribe_store(&self) -> Subscription<usize> {
+        self.store_subscriber.clone().subscribe().await
     }
 
     pub async fn subscribe_channel(&self) -> Subscription<Result<ChannelPtr>> {
