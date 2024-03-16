@@ -25,7 +25,7 @@ use rand::rngs::OsRng;
 fn empties() {
     let hasher = Poseidon::<Fp, 2>::new();
     let empty_leaf = Fp::from(0);
-    let empty_nodes = gen_empty_nodes::<3, _, _>(&hasher, empty_leaf);
+    let empty_nodes = gen_empty_nodes::<{ 3 + 1 }, _, _>(&hasher, empty_leaf);
 
     let empty_node1 = hasher.hash([empty_leaf, empty_leaf]);
     let empty_node2 = hasher.hash([empty_node1, empty_node1]);
@@ -44,8 +44,11 @@ fn poseidon_smt() {
     let empty_leaf = Fp::from(0);
 
     let store = MemoryStorage::<Fp>::new();
-    let mut smt =
-        SparseMerkleTree::<HEIGHT, _, _, _>::new(store, hasher.clone(), empty_leaf.clone());
+    let mut smt = SparseMerkleTree::<HEIGHT, { HEIGHT + 1 }, _, _, _>::new(
+        store,
+        hasher.clone(),
+        empty_leaf.clone(),
+    );
 
     // Both reprs should match
     assert_eq!(Fp::from(1).as_biguint(), BigUint::from(1u32));
@@ -58,7 +61,7 @@ fn poseidon_smt() {
     ];
     smt.insert_batch(leaves.clone());
 
-    let empty_nodes = gen_empty_nodes::<HEIGHT, _, _>(&hasher, empty_leaf);
+    let empty_nodes = gen_empty_nodes::<{ HEIGHT + 1 }, _, _>(&hasher, empty_leaf);
 
     let hash1 = leaves[0].1;
     let hash2 = leaves[1].1;
@@ -114,8 +117,11 @@ fn poseidon_smt_incl_proof() {
     let empty_leaf = Fp::from(0);
 
     let store = MemoryStorage::<Fp>::new();
-    let mut smt =
-        SparseMerkleTree::<HEIGHT, _, _, _>::new(store, hasher.clone(), empty_leaf.clone());
+    let mut smt = SparseMerkleTree::<HEIGHT, { HEIGHT + 1 }, _, _, _>::new(
+        store,
+        hasher.clone(),
+        empty_leaf.clone(),
+    );
 
     let leaves = vec![
         (Fp::from(1), Fp::random(&mut OsRng)),

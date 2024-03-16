@@ -84,7 +84,7 @@ pub struct MemoryStorage<F: FieldElement> {
 }
 
 impl<F: FieldElement> MemoryStorage<F> {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self { tree: HashMap::new() }
     }
 }
@@ -110,27 +110,31 @@ impl<F: FieldElement> StorageAdapter for MemoryStorage<F> {
 #[derive(Debug)]
 pub struct SparseMerkleTree<
     const N: usize,
+    // M = N + 1
+    const M: usize,
     F: FieldElement,
     H: FieldHasher<F, 2>,
     S: StorageAdapter<Value = F>,
-> where
-    [(); N + 1]:,
-{
+> {
     /// A map from leaf indices to leaf data stored as field elements.
     store: S,
     /// The hasher used to build the Merkle tree.
     hasher: H,
     /// An array of empty hashes hashed with themselves `N` times.
-    empty_nodes: [F; N + 1],
+    empty_nodes: [F; M],
 }
 
-impl<const N: usize, F: FieldElement, H: FieldHasher<F, 2>, S: StorageAdapter<Value = F>>
-    SparseMerkleTree<N, F, H, S>
-where
-    [(); N + 1]:,
+impl<
+        const N: usize,
+        const M: usize,
+        F: FieldElement,
+        H: FieldHasher<F, 2>,
+        S: StorageAdapter<Value = F>,
+    > SparseMerkleTree<N, M, F, H, S>
 {
     /// Creates a new SMT
     pub fn new(store: S, hasher: H, empty_leaf: F) -> Self {
+        assert_eq!(M, N + 1);
         let empty_nodes = gen_empty_nodes(&hasher, empty_leaf);
 
         Self { store, hasher, empty_nodes }
@@ -258,11 +262,11 @@ impl<const N: usize, F: FieldElement, H: FieldHasher<F, 2>> Path<N, F, H> {
 /// of the SMT.
 ///
 /// Ordering is depth-wise starting from root going down.
-pub fn gen_empty_nodes<const N: usize, F: FieldElement, H: FieldHasher<F, 2>>(
+pub fn gen_empty_nodes<const M: usize, F: FieldElement, H: FieldHasher<F, 2>>(
     hasher: &H,
     empty_leaf: F,
-) -> [F; N + 1] {
-    let mut empty_nodes = [F::ZERO; N + 1];
+) -> [F; M] {
+    let mut empty_nodes = [F::ZERO; M];
 
     let mut empty_node = empty_leaf;
     for item in empty_nodes.iter_mut().rev() {
