@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashMap, fmt, fs, fs::File, sync::Arc};
+use std::{collections::HashMap, fmt, fs, fs::File, sync::Arc, time::Instant};
 
 use log::{debug, error, info, trace, warn};
 use rand::{prelude::IteratorRandom, rngs::OsRng, Rng};
@@ -702,6 +702,9 @@ pub struct Hosts {
     /// Subscriber for notifications of new channels
     channel_subscriber: SubscriberPtr<Result<ChannelPtr>>,
 
+    /// Keeps track of the last time a connection was made.
+    pub last_connection: RwLock<Instant>,
+
     /// Pointer to configured P2P settings
     settings: SettingsPtr,
 }
@@ -714,6 +717,7 @@ impl Hosts {
             container: HostContainer::new(),
             store_subscriber: Subscriber::new(),
             channel_subscriber: Subscriber::new(),
+            last_connection: RwLock::new(Instant::now()),
             settings,
         })
     }
@@ -736,7 +740,7 @@ impl Hosts {
         for (i, (addr, last_seen)) in filtered_addrs.iter().enumerate() {
             if self.try_register(addr.clone(), HostState::Insert).await.is_err() {
                 debug!(target: "net::hosts::store_or_update()",
-            "We are already tracking {}. Skipping...", addr);
+                "{} is already registered. Skipping...", addr);
                 continue
             }
 
@@ -853,13 +857,16 @@ impl Hosts {
 
         self.try_register(address.clone(), HostState::Connected(channel.clone())).await?;
 
-        self.channel_subscriber.notify(Ok(channel)).await;
+        self.channel_subscriber.notify(Ok(channel.clone())).await;
+
+        let mut last_online = self.last_connection.write().await;
+        *last_online = Instant::now();
+
         Ok(())
     }
 
     pub async fn subscribe_store(&self) -> Result<Subscription<usize>> {
-        let sub = self.store_subscriber.clone().subscribe().await;
-        Ok(sub)
+        Ok(self.store_subscriber.clone().subscribe().await)
     }
 
     // Verify whether a URL is local.

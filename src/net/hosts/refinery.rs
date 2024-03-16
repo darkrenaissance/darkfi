@@ -66,6 +66,7 @@ impl GreylistRefinery {
         let ex = self.p2p().executor();
         self.process.clone().start(
             async move {
+                //self.listen_for_channels().await;
                 self.run().await;
                 unreachable!();
             },
@@ -93,10 +94,8 @@ impl GreylistRefinery {
     // This method will remove from the greylist and store on the whitelist
     // providing the peer is responsive.
     async fn run(self: Arc<Self>) {
-        let mut last_online = Instant::now();
         let settings = self.p2p().settings();
         let hosts = self.p2p().hosts();
-
         loop {
             sleep(settings.greylist_refinery_interval).await;
 
@@ -109,27 +108,23 @@ impl GreylistRefinery {
 
             // Pause the refinery if we've had zero connections for longer than the configured
             // limit.
-            if hosts.channels().await.is_empty() {
-                let time_offline = Instant::now().duration_since(last_online);
-                let offline_limit = Duration::from_secs(settings.time_with_no_connections);
+            let offline_limit = Duration::from_secs(settings.time_with_no_connections);
+            let offline_timer = Instant::now().duration_since(*hosts.last_connection.read().await);
 
-                if time_offline >= offline_limit {
-                    warn!(target: "net::refinery", "No connections for {}s. Refinery paused.",
-                          time_offline.as_secs());
+            if hosts.channels().await.is_empty() && offline_timer >= offline_limit {
+                warn!(target: "net::refinery", "No connections for {}s. Refinery paused.",
+                          offline_timer.as_secs());
 
-                    // It is neccessary to clear suspended hosts at this point, otherwise these
-                    // hosts cannot be connected to in Outbound Session. Failure to do this could
-                    // result in the refinery being paused forver (since connections could never be
-                    // made).
-                    let suspended_hosts = hosts.suspended().await;
-                    for host in suspended_hosts {
-                        hosts.unregister(&host).await;
-                    }
-
-                    continue
+                // It is neccessary to clear suspended hosts at this point, otherwise these
+                // hosts cannot be connected to in Outbound Session. Failure to do this could
+                // result in the refinery being paused forver (since connections could never be
+                // made).
+                let suspended_hosts = hosts.suspended().await;
+                for host in suspended_hosts {
+                    hosts.unregister(&host).await;
                 }
-            } else {
-                last_online = Instant::now();
+
+                continue
             }
 
             // Only attempt to refine peers that match our transports.
