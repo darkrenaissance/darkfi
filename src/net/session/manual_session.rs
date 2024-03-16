@@ -38,7 +38,6 @@ use url::Url;
 
 use super::{
     super::{
-        channel::ChannelPtr,
         connector::Connector,
         p2p::{P2p, P2pPtr},
     },
@@ -46,7 +45,7 @@ use super::{
 };
 use crate::{
     net::hosts::store::{HostColor, HostState},
-    system::{sleep, LazyWeak, StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr},
+    system::{sleep, LazyWeak, StoppableTask, StoppableTaskPtr},
     Error, Result,
 };
 
@@ -56,18 +55,12 @@ pub type ManualSessionPtr = Arc<ManualSession>;
 pub struct ManualSession {
     pub(in crate::net) p2p: LazyWeak<P2p>,
     connect_slots: Mutex<Vec<StoppableTaskPtr>>,
-    /// Subscriber used to signal channels processing
-    channel_subscriber: SubscriberPtr<Result<ChannelPtr>>,
 }
 
 impl ManualSession {
     /// Create a new manual session.
     pub fn new() -> ManualSessionPtr {
-        Arc::new(Self {
-            p2p: LazyWeak::new(),
-            connect_slots: Mutex::new(Vec::new()),
-            channel_subscriber: Subscriber::new(),
-        })
+        Arc::new(Self { p2p: LazyWeak::new(), connect_slots: Mutex::new(Vec::new()) })
     }
 
     /// Stops the manual session.
@@ -138,9 +131,6 @@ impl ManualSession {
                     // Add this connection to the anchorlist
                     self.p2p().hosts().move_host(&addr, last_seen, HostColor::Gold).await;
 
-                    // Notify that channel processing has finished
-                    self.channel_subscriber.notify(Ok(channel)).await;
-
                     // Wait for channel to close
                     stop_sub.receive().await;
                     info!(
@@ -163,7 +153,7 @@ impl ManualSession {
             // Wait and try again.
             // TODO: Should we notify about the failure now, or after all attempts
             // have failed?
-            self.channel_subscriber.notify(Err(Error::ConnectFailed)).await;
+            self.p2p().hosts().channel_subscriber.notify(Err(Error::ConnectFailed)).await;
 
             remaining = if attempts == 0 { 1 } else { remaining - 1 };
             if remaining == 0 {

@@ -51,10 +51,7 @@ use super::{
     Session, SessionBitFlag, SESSION_OUTBOUND,
 };
 use crate::{
-    system::{
-        sleep, timeout::timeout, CondVar, LazyWeak, StoppableTask, StoppableTaskPtr, Subscriber,
-        SubscriberPtr,
-    },
+    system::{sleep, timeout::timeout, CondVar, LazyWeak, StoppableTask, StoppableTaskPtr},
     Error, Result,
 };
 
@@ -64,9 +61,6 @@ pub type OutboundSessionPtr = Arc<OutboundSession>;
 pub struct OutboundSession {
     /// Weak pointer to parent p2p object
     pub(in crate::net) p2p: LazyWeak<P2p>,
-    /// Subscriber used to signal channels processing
-    channel_subscriber: SubscriberPtr<Result<ChannelPtr>>,
-
     /// Outbound connection slots
     slots: Mutex<Vec<Arc<Slot>>>,
     /// Peer discovery task
@@ -78,7 +72,6 @@ impl OutboundSession {
     pub(crate) fn new() -> OutboundSessionPtr {
         let self_ = Arc::new(Self {
             p2p: LazyWeak::new(),
-            channel_subscriber: Subscriber::new(),
             slots: Mutex::new(Vec::new()),
             peer_discovery: PeerDiscovery::new(),
         });
@@ -409,7 +402,9 @@ impl Slot {
 
             let stop_sub = channel.subscribe_stop().await.expect("Channel should not be stopped");
             // Setup new channel
-            if let Err(err) = self.setup_channel(channel.clone()).await {
+            if let Err(err) =
+                self.session().register_channel(channel.clone(), self.p2p().executor()).await
+            {
                 info!(
                     target: "net::outbound_session",
                     "[P2P] Outbound slot #{} disconnected: {}",
@@ -461,24 +456,11 @@ impl Slot {
                 self.p2p().hosts().move_host(&addr, last_seen, HostColor::Grey).await;
 
                 // Notify that channel processing failed
-                self.session().channel_subscriber.notify(Err(Error::ConnectFailed)).await;
+                self.p2p().hosts().channel_subscriber.notify(Err(Error::ConnectFailed)).await;
 
                 Err(Error::ConnectFailed)
             }
         }
-    }
-
-    async fn setup_channel(&self, channel: ChannelPtr) -> Result<()> {
-        // Register the new channel
-        debug!(target: "net::outbound_session::setup_channel", "register_channel {}", channel.clone().address());
-        self.session().register_channel(channel.clone(), self.p2p().executor()).await?;
-
-        // Channel is now connected but not yet setup
-
-        // Notify that channel processing has been finished
-        self.session().channel_subscriber.notify(Ok(channel)).await;
-
-        Ok(())
     }
 
     fn notify(&self) {

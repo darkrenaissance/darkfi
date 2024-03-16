@@ -700,7 +700,7 @@ pub struct Hosts {
     store_subscriber: SubscriberPtr<usize>,
 
     /// Subscriber for notifications of new channels
-    channel_subscriber: SubscriberPtr<Result<ChannelPtr>>,
+    pub channel_subscriber: SubscriberPtr<Result<ChannelPtr>>,
 
     /// Keeps track of the last time a connection was made.
     pub last_connection: RwLock<Instant>,
@@ -857,6 +857,7 @@ impl Hosts {
 
         self.try_register(address.clone(), HostState::Connected(channel.clone())).await?;
 
+        // Notify that channel processing failed
         self.channel_subscriber.notify(Ok(channel.clone())).await;
 
         let mut last_online = self.last_connection.write().await;
@@ -867,6 +868,10 @@ impl Hosts {
 
     pub async fn subscribe_store(&self) -> Result<Subscription<usize>> {
         Ok(self.store_subscriber.clone().subscribe().await)
+    }
+
+    pub async fn subscribe_channel(&self) -> Subscription<Result<ChannelPtr>> {
+        self.channel_subscriber.clone().subscribe().await
     }
 
     // Verify whether a URL is local.
