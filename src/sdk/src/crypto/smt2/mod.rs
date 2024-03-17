@@ -66,8 +66,18 @@ pub use util::Poseidon;
 
 use num_bigint::BigUint;
 use std::collections::HashMap;
+// Only used for the type aliases below
+use pasta_curves::pallas;
 
 use util::{FieldElement, FieldHasher};
+
+// Bit size for Fp (and Fq)
+pub const SMT_FP_DEPTH: usize = 255;
+pub type PoseidonFp = Poseidon<pallas::Base, 2>;
+pub type MemoryStorageFp = MemoryStorage<pallas::Base>;
+pub type SmtMemoryFp =
+    SparseMerkleTree<SMT_FP_DEPTH, { SMT_FP_DEPTH + 1 }, pallas::Base, PoseidonFp, MemoryStorageFp>;
+pub type PathFp = Path<SMT_FP_DEPTH, pallas::Base, PoseidonFp>;
 
 /// Pluggable storage backend for the SMT.
 /// Has a minimal interface to simply put and get objects from the store.
@@ -242,10 +252,11 @@ impl<const N: usize, F: FieldElement, H: FieldHasher<F, 2>> Path<N, F, H> {
             let sibling_node = self.path[i];
 
             let is_right = pos.bit((N - 1 - i) as u64);
-            //println!("is_right: {}", is_right);
             let (left, right) =
                 if is_right { (sibling_node, current_node) } else { (current_node, sibling_node) };
+            //println!("is_right: {}", is_right);
             //println!("left: {:?}, right: {:?}", left, right);
+            //println!("current_node: {:?}", current_node);
 
             current_node = self.hasher.hash([left, right]);
         }

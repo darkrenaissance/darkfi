@@ -42,3 +42,4 @@ pub mod zero_cond;
 
 /// Poseidon-based sparse Merkle tree chip
 pub mod smt;
+pub mod smt2;
