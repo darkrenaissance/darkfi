@@ -80,7 +80,8 @@ impl Connector {
         let timeout = Duration::from_secs(self.settings.outbound_connect_timeout);
         let ptstream = dialer.dial(Some(timeout)).await?;
 
-        let channel = Channel::new(ptstream, endpoint.clone(), self.session.clone()).await;
+        let channel =
+            Channel::new(ptstream, Some(endpoint.clone()), url.clone(), self.session.clone()).await;
         Ok((endpoint, channel))
     }
 }

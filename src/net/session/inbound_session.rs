@@ -189,7 +189,7 @@ impl InboundSession {
         );
 
         dnetev!(self, InboundConnected, {
-            addr: channel.info.addr.clone(),
+            addr: channel.info.connect_addr.clone(),
             channel_id: channel.info.id,
         });
 
@@ -207,7 +207,7 @@ impl InboundSession {
         );
 
         dnetev!(self, InboundDisconnected, {
-            addr: channel.info.addr.clone(),
+            addr: channel.info.connect_addr.clone(),
             channel_id: channel.info.id,
         });
 

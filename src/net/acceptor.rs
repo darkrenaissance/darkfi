@@ -134,7 +134,7 @@ impl Acceptor {
 
                     // Create the new Channel.
                     let session = self.session.clone();
-                    let channel = Channel::new(stream, url, session).await;
+                    let channel = Channel::new(stream, None, url, session).await;
 
                     // Increment the connection counter
                     self.conn_count.fetch_add(1, SeqCst);

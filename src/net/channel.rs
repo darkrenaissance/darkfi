@@ -57,13 +57,14 @@ pub type ChannelPtr = Arc<Channel>;
 /// Channel debug info
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct ChannelInfo {
-    pub addr: Url,
+    pub resolve_addr: Option<Url>,
+    pub connect_addr: Url,
     pub id: u32,
 }
 
 impl ChannelInfo {
-    fn new(addr: Url) -> Self {
-        Self { addr, id: OsRng.gen() }
+    fn new(resolve_addr: Option<Url>, connect_addr: Url) -> Self {
+        Self { resolve_addr, connect_addr, id: OsRng.gen() }
     }
 }
 
@@ -91,7 +92,12 @@ impl Channel {
     /// Sets up a new channel. Creates a reader and writer [`PtStream`] and
     /// the message subscriber subsystem. Performs a network handshake on the
     /// subsystem dispatchers.
-    pub async fn new(stream: Box<dyn PtStream>, addr: Url, session: SessionWeakPtr) -> Arc<Self> {
+    pub async fn new(
+        stream: Box<dyn PtStream>,
+        resolve_addr: Option<Url>,
+        connect_addr: Url,
+        session: SessionWeakPtr,
+    ) -> Arc<Self> {
         let (reader, writer) = io::split(stream);
         let reader = Mutex::new(reader);
         let writer = Mutex::new(writer);
@@ -99,7 +105,7 @@ impl Channel {
         let message_subsystem = MessageSubsystem::new();
         Self::setup_dispatchers(&message_subsystem).await;
 
-        let info = ChannelInfo::new(addr.clone());
+        let info = ChannelInfo::new(resolve_addr, connect_addr.clone());
 
         Arc::new(Self {
             reader,
@@ -320,9 +326,24 @@ impl Channel {
         debug!(target: "net::channel::ban()", "STOP {:?}", self);
     }
 
-    /// Returns the local socket address
+    /// Returns the relevant socket address for this connection.  If this is
+    /// an outbound connection, the transport-processed resolve_addr will
+    /// be returned.  Otherwise for inbound connections it will default
+    /// to connect_addr.
     pub fn address(&self) -> &Url {
-        &self.info.addr
+        if self.info.resolve_addr.is_some() {
+            self.resolve_addr()
+        } else {
+            self.connect_addr()
+        }
+    }
+
+    fn resolve_addr(&self) -> &Url {
+        &self.info.resolve_addr.as_ref().unwrap()
+    }
+
+    fn connect_addr(&self) -> &Url {
+        &self.info.connect_addr
     }
 
     /// Returns the inner [`MessageSubsystem`] reference
@@ -353,6 +374,6 @@ impl Channel {
 
 impl fmt::Debug for Channel {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "<Channel addr='{}' id={}>", self.info.addr, self.info.id)
+        write!(f, "<Channel addr='{}' id={}>", self.address(), self.info.id)
     }
 }

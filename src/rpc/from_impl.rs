@@ -25,7 +25,10 @@ use crate::event_graph;
 #[cfg(feature = "net")]
 impl From<net::channel::ChannelInfo> for JsonValue {
     fn from(info: net::channel::ChannelInfo) -> JsonValue {
-        json_map([("addr", JsonStr(info.addr.to_string())), ("id", JsonNum(info.id.into()))])
+        json_map([
+            ("addr", JsonStr(info.connect_addr.to_string())),
+            ("id", JsonNum(info.id.into())),
+        ])
     }
 }
 
