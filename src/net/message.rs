@@ -82,6 +82,22 @@ impl_p2p_message!(AddrsMessage, "addr");
 pub struct VersionMessage {
     /// Only used for debugging. Compromises privacy when set.
     pub node_id: String,
+    /// Identifies protocol version being used by the node
+    pub version: semver::Version,
+    /// UNIX timestamp of when the VersionMessage was created.
+    pub timestamp: u64,
+    /// Network address of the node receiving this message (before
+    /// resolving).
+    pub connect_recv_addr: Url,
+    /// Network address of the node receiving this message (after
+    /// resolving). Optional because only used by outbound connections.
+    pub resolve_recv_addr: Option<Url>,
+    /// External address of the sender node, if it exists (empty
+    /// otherwise).
+    pub ext_send_addr: Vec<Url>,
+    /// List of features consisting of a tuple of (services, version)
+    /// to be enabled for this connection
+    pub features: Vec<(String, u32)>,
 }
 impl_p2p_message!(VersionMessage, "version");
 

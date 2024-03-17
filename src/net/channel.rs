@@ -332,17 +332,20 @@ impl Channel {
     /// to connect_addr.
     pub fn address(&self) -> &Url {
         if self.info.resolve_addr.is_some() {
-            self.resolve_addr()
+            self.info.resolve_addr.as_ref().unwrap()
         } else {
-            self.connect_addr()
+            &self.info.connect_addr
         }
     }
 
-    fn resolve_addr(&self) -> &Url {
-        &self.info.resolve_addr.as_ref().unwrap()
+    /// Returns the socket address that has undergone transport
+    /// processing, if it exists. Returns None otherwise.
+    pub fn resolve_addr(&self) -> Option<Url> {
+        self.info.resolve_addr.clone()
     }
 
-    fn connect_addr(&self) -> &Url {
+    /// Return the socket address without transport processing.
+    pub fn connect_addr(&self) -> &Url {
         &self.info.connect_addr
     }
 

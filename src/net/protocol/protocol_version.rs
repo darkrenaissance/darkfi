@@ -16,7 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::Arc,
+    time::{Duration, UNIX_EPOCH},
+};
 
 use futures::future::join_all;
 use log::{debug, error};
@@ -126,7 +129,18 @@ impl ProtocolVersion {
             "START => address={}", self.channel.address(),
         );
 
-        let version = VersionMessage { node_id: self.settings.node_id.clone() };
+        let version = VersionMessage {
+            node_id: self.settings.node_id.clone(),
+            version: self.settings.app_version.clone(),
+            timestamp: UNIX_EPOCH.elapsed().unwrap().as_secs(),
+            connect_recv_addr: self.channel.connect_addr().clone(),
+            resolve_recv_addr: self.channel.resolve_addr().clone(),
+            ext_send_addr: self.settings.external_addrs.clone(),
+            /* TODO: `features` is a list of enabled features in the
+            format Vec<(service, version)>.  Protocols will add their
+            own data to this field when they are attached.*/
+            features: vec![],
+        };
         self.channel.send(&version).await?;
 
         // Wait for verack
