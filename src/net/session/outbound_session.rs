@@ -179,15 +179,23 @@ impl Slot {
         self.process.stop().await
     }
 
-    // Address selection algorithm that works as follows: up to anchor_count, select from the
-    // anchorlist. Up to white_count, select from the whitelist. For all other slots, select from
-    // the greylist.
-    //
-    // If we didn't find an address with this selection logic, downgrade our preferences. Up to
-    // anchor_count, select from the whitelist, up until white_count, select from the greylist.
-    //
-    // If we still didn't find an address, select from the greylist. In all other cases, return an
-    // empty vector. This will trigger fetch_addrs() to return None and initiate peer discovery.
+    /// Address selection algorithm that works as follows: up to
+    /// anchor_count, select from the anchorlist. Up to white_count,
+    /// select from the whitelist. For all other slots, select from
+    /// the greylist.
+
+    /// If we didn't find an address with this selection logic, downgrade
+    /// our preferences. Up to anchor_count, select from the whitelist,
+    /// up until white_count, select from the greylist.
+
+    /// If we still didn't find an address, select from the greylist. In
+    /// all other cases, return an empty vector. This will trigger
+    /// fetch_addrs() to return None and initiate peer discovery.
+    /* NOTE: Selecting from the greylist for some % of the slots is
+    necessary and healthy since we require the network retains some
+    unreliable connections. A network that purely favors uptime over
+    unreliable connections may be vulnerable to sybil by attackers with
+    good uptime.*/
     async fn fetch_addrs_with_preference(
         &self,
         preference: usize,
@@ -475,10 +483,11 @@ impl Slot {
     }
 }
 
-/// PeerDiscoveryBase defines a common interface for multiple peer discovery processes. Currently
-/// only one Peer Discovery implementation exists. Making Peer Discovery generic enables us to
-/// support network swarming, since the peer discovery process will differ depending on whether it
-/// occurs on the overlay network or a subnet.
+/// Defines a common interface for multiple peer discovery processes.
+/* NOTE: Currently only one Peer Discovery implementation exists. Making
+Peer Discovery generic enables us to support network swarming, since
+the peer discovery process will differ depending on whether it occurs
+on the overlay network or a subnet.*/
 #[async_trait]
 pub trait PeerDiscoveryBase {
     async fn start(self: Arc<Self>);
@@ -496,8 +505,8 @@ pub trait PeerDiscoveryBase {
     fn p2p(&self) -> P2pPtr;
 }
 
-/// Main PeerDiscovery process that loops through connected channels and sends out a `GetAddrs`
-/// when it is active.
+/// Main PeerDiscovery process that loops through connected channels
+/// and sends out a `GetAddrs` when it is active.
 struct PeerDiscovery {
     process: StoppableTaskPtr,
     wakeup_self: CondVar,

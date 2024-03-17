@@ -66,7 +66,6 @@ impl GreylistRefinery {
         let ex = self.p2p().executor();
         self.process.clone().start(
             async move {
-                //self.listen_for_channels().await;
                 self.run().await;
                 unreachable!();
             },
@@ -90,9 +89,8 @@ impl GreylistRefinery {
         }
     }
 
-    // Randomly select a peer on the greylist and probe it.
-    // This method will remove from the greylist and store on the whitelist
-    // providing the peer is responsive.
+    // Randomly select a peer on the greylist and probe it. This method will remove from the
+    // greylist and store on the whitelist providing the peer is responsive.
     async fn run(self: Arc<Self>) {
         let settings = self.p2p().settings();
         let hosts = self.p2p().hosts();

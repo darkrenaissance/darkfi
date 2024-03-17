@@ -70,6 +70,19 @@ pub type HostRegistry = RwLock<HashMap<Url, HostState>>;
 ///                          +------+                   
 ///                                               
 /// ```
+
+/* NOTE: Currently if a user loses connectivity, they will be deleted from
+our hostlist by the refinery process and forgotten about until they regain
+connectivity and share their external address with the p2p network again.
+
+We may want to keep nodes with patchy connections in a `Red` list
+and periodically try to connect to them in Outbound Session, rather
+than sending them to the refinery (which will delete them if they are
+offline) as we do using `Suspend`. The current design favors reliability
+of connections but this may come at a risk for security since an attacker
+is likely to have good uptime. We want to insure that users with patchy
+connections or on mobile are still likely to be connected to.*/
+
 #[derive(Clone, Debug)]
 pub enum HostState {
     /// Hosts that are currently being inserting into the hostlist.
@@ -79,21 +92,24 @@ pub enum HostState {
     Refine,
     /// Hosts that are being connected to in Outbound and Manual Session.
     Connect,
-    /// Hosts that we have just failed to connect to. Marking a host
-    /// as Suspend effectively gives it a priority in the refinery,
-    /// since Suspend-> Refine is an accessible state transition.
-    // TODO: We will probably make Suspend a `Red list` instead of a HostState.
+    /// Hosts that we have just failed to connect to. Marking a host as
+    /// Suspend effectively sends this host to refinery, since Suspend->
+    /// Refine is an acceptable state transition. Being marked as Suspend does
+    /// not increase a host's probability of being refined, since the refinery
+    /// selects its subjects randomly (with the caveat that we cannot refine
+    /// nodes marked as Connect, Connected, Insert or Move). It does however
+    /// mean this host cannot be connected to unless it passes through the
+    /// refinery successfully.
     Suspend,
     /// Hosts that have been successfully connected to.
     Connected(ChannelPtr),
-    /// Host that are moving between hostlists, implemented in
-    /// store::move_host().
+    /// Host that are moving between hostlists, implemented in store::move_host().
     Move,
 }
 
 impl HostState {
-    // Try to change state to Insert. Only possible if we are not yet tracking this host in the
-    // HostRegistry.
+    // Try to change state to Insert. Only possible if we are not yet
+    // tracking this host in the HostRegistry.
     fn try_insert(&self) -> Result<Self> {
         match self {
             HostState::Insert => Err(Error::StateBlocked(self.to_string())),
@@ -105,8 +121,8 @@ impl HostState {
         }
     }
 
-    // Try to change state to Refine. Only possible if we are not yet tracking this host in the
-    // HostRegistry.
+    // Try to change state to Refine. Only possible if we are not yet
+    // tracking this host in the HostRegistry.
     fn try_refine(&self) -> Result<Self> {
         match self {
             HostState::Insert => Err(Error::StateBlocked(self.to_string())),
@@ -118,8 +134,8 @@ impl HostState {
         }
     }
 
-    // Try to change state to Connect. Only possible if we are not yet tracking this host in the
-    // HostRegistry.
+    // Try to change state to Connect. Only possible if we are not yet
+    // tracking this host in the HostRegistry.
     fn try_connect(&self) -> Result<Self> {
         match self {
             HostState::Insert => Err(Error::StateBlocked(self.to_string())),
@@ -131,9 +147,9 @@ impl HostState {
         }
     }
 
-    // Try to change state to Connected. Possible if this peer's state is currently Connect or
-    // Refine. The latter is necessary since the refinery process requires us to establish a
-    // connection to a peer.
+    // Try to change state to Connected. Possible if this peer's state
+    // is currently Connect or Refine. The latter is necessary since the
+    // refinery process requires us to establish a connection to a peer.
     fn try_connected(&self, channel: ChannelPtr) -> Result<Self> {
         match self {
             HostState::Insert => Err(Error::StateBlocked(self.to_string())),
@@ -145,8 +161,8 @@ impl HostState {
         }
     }
 
-    // Try to change state to Move. Only possible if this connection is Connect i.e. if we are
-    // trying to connect to this host.
+    // Try to change state to Move. Only possible if this connection is
+    // Connect i.e. if we are trying to connect to this host.
     fn try_move(&self) -> Result<Self> {
         match self {
             HostState::Insert => Err(Error::StateBlocked(self.to_string())),
@@ -158,8 +174,9 @@ impl HostState {
         }
     }
 
-    // Try to change the state to Suspend. Only possible when we are currently moving this host,
-    // since we suspend a host after failing to connect to it and then downgrading in move_host.
+    // Try to change the state to Suspend. Only possible when we are
+    // currently moving this host, since we suspend a host after failing
+    // to connect to it and then downgrading in move_host.
     fn try_suspend(&self) -> Result<Self> {
         match self {
             HostState::Insert => Err(Error::StateBlocked(self.to_string())),
@@ -180,11 +197,13 @@ impl fmt::Display for HostState {
 #[repr(u8)]
 #[derive(Clone, Debug)]
 pub enum HostColor {
-    /// Intermediary nodes that are periodically probed and updated to White.
+    /// Intermediary nodes that are periodically probed and updated
+    /// to White.
     Grey = 0,
     /// Recently seen hosts. Shared with other nodes.
     White = 1,
-    /// Nodes to which we have already been able to establish a connection.
+    /// Nodes to which we have already been able to establish a
+    /// connection.
     Gold = 2,
     /// Hostile peers that can neither be connected to nor establish
     /// connections to us for the duration of the program.
@@ -205,9 +224,8 @@ impl TryFrom<usize> for HostColor {
     }
 }
 
-/// A Container for managing Grey, White, Gold and Black
-/// hostlists. Exposes a common interface for writing to and querying
-/// hostlists.
+/// A Container for managing Grey, White, Gold and Black hostlists. Exposes
+/// a common interface for writing to and querying hostlists.
 // TODO: Verify the performance overhead of using vectors for hostlists.
 // TODO: Check whether anchorlist (Gold) has a max size in Monero.
 pub struct HostContainer {
@@ -259,8 +277,8 @@ impl HostContainer {
         HostColor::try_from(color).unwrap());
     }
 
-    /// Stores an address on a hostlist or updates its last_seen field if we already
-    /// have the address.
+    /// Stores an address on a hostlist or updates its last_seen field if
+    /// we already have the address.
     pub async fn store_or_update(&self, color: HostColor, addr: Url, last_seen: u64) {
         trace!(target: "net::hosts::store_or_update()", "[START] list={:?}", color);
         let color_int = color.clone() as usize;
@@ -318,8 +336,9 @@ impl HostContainer {
         (entry.clone(), position)
     }
 
-    /// Fetch addresses that match the provided transports or acceptable mixed transports.
-    /// Will return an empty Vector if no such addresses were found.
+    /// Fetch addresses that match the provided transports or acceptable
+    /// mixed transports.  Will return an empty Vector if no such addresses
+    /// were found.
     pub async fn fetch_addrs(
         &self,
         color: HostColor,
@@ -360,8 +379,8 @@ impl HostContainer {
         hosts
     }
 
-    /// Get up to limit peers that match the given transport schemes from a hostlist.
-    /// If limit was not provided, return all matching peers.
+    /// Get up to limit peers that match the given transport schemes from
+    /// a hostlist.  If limit was not provided, return all matching peers.
     async fn fetch_with_schemes(
         &self,
         color: usize,
@@ -404,8 +423,9 @@ impl HostContainer {
         ret
     }
 
-    /// Get up to limit peers that don't match the given transport schemes from a hostlist.
-    /// If limit was not provided, return all matching peers.
+    /// Get up to limit peers that don't match the given transport schemes
+    /// from a hostlist.  If limit was not provided, return all matching
+    /// peers.
     async fn fetch_excluding_schemes(
         &self,
         color: usize,
@@ -453,7 +473,8 @@ impl HostContainer {
         (entry.clone(), position)
     }
 
-    /// Get a random peer from a hostlist that matches the given transport schemes.
+    /// Get a random peer from a hostlist that matches the given transport
+    /// schemes.
     pub async fn fetch_random_with_schemes(
         &self,
         color: HostColor,
@@ -525,8 +546,8 @@ impl HostContainer {
         urls.iter().map(|&url| url.clone()).collect()
     }
 
-    /// Get up to n random peers that don't match the given transport schemes from
-    /// a hostlist.
+    /// Get up to n random peers that don't match the given transport schemes
+    /// from a hostlist.
     pub async fn fetch_n_random_excluding_schemes(
         &self,
         color: HostColor,
@@ -641,8 +662,8 @@ impl HostContainer {
         Ok(())
     }
 
-    /// Save the hostlist to a file. Whitelist gets written to the greylist to force
-    /// whitelist entries through the refinery on start.
+    /// Save the hostlist to a file. Whitelist gets written to the greylist
+    /// to force whitelist entries through the refinery on start.
     pub async fn save_all(&self, path: &str) -> Result<()> {
         let path = expand_path(path)?;
 
@@ -684,11 +705,12 @@ impl HostContainer {
     }
 }
 
-/// Main parent class for the management and manipulation of hostlists. Keeps
-/// track of hosts and their current state via the HostRegistry, and stores
-/// hostlists and associated methods in the HostContainer. Also operates
-/// two subscribers to notify other parts of the code base when new channels
-/// have been created or new hosts have been added to the hostlist.
+/// Main parent class for the management and manipulation of
+/// hostlists. Keeps track of hosts and their current state via the
+/// HostRegistry, and stores hostlists and associated methods in the
+/// HostContainer. Also operates two subscribers to notify other parts
+/// of the code base when new channels have been created or new hosts
+/// have been added to the hostlist.
 pub struct Hosts {
     /// A registry that tracks hosts and their current state.
     registry: HostRegistry,

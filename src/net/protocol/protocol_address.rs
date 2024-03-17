@@ -197,8 +197,15 @@ impl ProtocolAddress {
                     .await,
             );
 
-            // If there's still space available, take from the greylist.
-            // Schemes are not taken into account.
+            // If there's still space available, take from the
+            // greylist. Schemes are not taken into account.
+            //
+            /* NOTE: We share peers from our greylist because our
+            greylist is likely to contain peers that do not match our
+            transports or the requested transports. We want to ensure
+            that non-compatiable transports are shared with other nodes
+            so that they propagate on the network even if they're not
+            popular transports. */
             debug!(target: "net::protocol_address::handle_receive_get_addrs()",
             "Fetching greylist entries");
             let remain = 2 * get_addrs_msg.max - addrs.len() as u32;
