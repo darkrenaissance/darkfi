@@ -329,7 +329,7 @@ mod tests {
     #[test]
     fn test_smt_circuit() {
         let hasher = PoseidonFp::new();
-        let empty_leaf = Fp::from(0);
+        let empty_leaf = Fp::ZERO;
 
         let store = MemoryStorageFp::new();
         let mut smt = SmtMemoryFp::new(store, hasher.clone(), empty_leaf.clone());

@@ -22,6 +22,7 @@ use super::{
     crypto::MerkleNode,
     db::DbHandle,
     error::{ContractError, GenericResult},
+    pasta::pallas,
 };
 
 /// Add given elements into a Merkle tree.
@@ -53,6 +54,24 @@ pub fn merkle_add(
     }
 }
 
+pub fn sparse_merkle_insert_batch(
+    db_smt: DbHandle,
+    elements: &[pallas::Base],
+) -> GenericResult<()> {
+    let mut buf = vec![];
+    let mut len = 0;
+    len += db_smt.encode(&mut buf)?;
+    len += elements.to_vec().encode(&mut buf)?;
+
+    match unsafe { sparse_merkle_insert_batch_(buf.as_ptr(), len as u32) } {
+        0 => Ok(()),
+        -1 => Err(ContractError::CallerAccessDenied),
+        -2 => Err(ContractError::DbSetFailed),
+        _ => unreachable!(),
+    }
+}
+
 extern "C" {
     fn merkle_add_(ptr: *const u8, len: u32) -> i64;
+    fn sparse_merkle_insert_batch_(ptr: *const u8, len: u32) -> i64;
 }

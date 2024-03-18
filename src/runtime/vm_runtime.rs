@@ -276,6 +276,12 @@ impl Runtime {
                     import::merkle::merkle_add,
                 ),
 
+                "sparse_merkle_insert_batch_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::smt::sparse_merkle_insert_batch,
+                ),
+
                 "get_verifying_block_height_" => Function::new_typed_with_env(
                     &mut store,
                     &ctx,

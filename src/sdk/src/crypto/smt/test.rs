@@ -22,6 +22,19 @@ use pasta_curves::Fp;
 use rand::rngs::OsRng;
 
 #[test]
+fn check_empties() {
+    use empty::EMPTY_NODES_FP;
+    let hasher = Poseidon::<Fp, 2>::new();
+    let empty_leaf = Fp::from(0);
+    let empty_nodes = gen_empty_nodes::<{ SMT_FP_DEPTH + 1 }, _, _>(&hasher, empty_leaf);
+    assert_eq!(empty_nodes.len(), SMT_FP_DEPTH + 1);
+    for (left, right) in empty_nodes.iter().zip(EMPTY_NODES_FP.iter()) {
+        //println!("  Fp::from_raw([{:?}]),", left);
+        assert_eq!(left, right);
+    }
+}
+
+#[test]
 fn empties() {
     let hasher = Poseidon::<Fp, 2>::new();
     let empty_leaf = Fp::from(0);
@@ -42,12 +55,13 @@ fn poseidon_smt() {
     const HEIGHT: usize = 3;
     let hasher = Poseidon::<Fp, 2>::new();
     let empty_leaf = Fp::from(0);
+    let empty_nodes = gen_empty_nodes::<{ HEIGHT + 1 }, _, _>(&hasher, empty_leaf);
 
     let store = MemoryStorage::<Fp>::new();
     let mut smt = SparseMerkleTree::<HEIGHT, { HEIGHT + 1 }, _, _, _>::new(
         store,
         hasher.clone(),
-        empty_leaf.clone(),
+        &empty_nodes,
     );
 
     // Both reprs should match
@@ -59,9 +73,7 @@ fn poseidon_smt() {
         (Fp::from(2), Fp::random(&mut OsRng)),
         (Fp::from(3), Fp::random(&mut OsRng)),
     ];
-    smt.insert_batch(leaves.clone());
-
-    let empty_nodes = gen_empty_nodes::<{ HEIGHT + 1 }, _, _>(&hasher, empty_leaf);
+    smt.insert_batch(leaves.clone()).unwrap();
 
     let hash1 = leaves[0].1;
     let hash2 = leaves[1].1;
@@ -115,12 +127,13 @@ fn poseidon_smt_incl_proof() {
     const HEIGHT: usize = 3;
     let hasher = Poseidon::<Fp, 2>::new();
     let empty_leaf = Fp::from(0);
+    let empty_nodes = gen_empty_nodes::<{ HEIGHT + 1 }, _, _>(&hasher, empty_leaf);
 
     let store = MemoryStorage::<Fp>::new();
     let mut smt = SparseMerkleTree::<HEIGHT, { HEIGHT + 1 }, _, _, _>::new(
         store,
         hasher.clone(),
-        empty_leaf.clone(),
+        &empty_nodes,
     );
 
     let leaves = vec![
@@ -128,7 +141,7 @@ fn poseidon_smt_incl_proof() {
         (Fp::from(2), Fp::random(&mut OsRng)),
         (Fp::from(3), Fp::random(&mut OsRng)),
     ];
-    smt.insert_batch(leaves.clone());
+    smt.insert_batch(leaves.clone()).unwrap();
 
     let (pos, leaf) = leaves[2];
     assert_eq!(smt.get_leaf(&pos), leaf);

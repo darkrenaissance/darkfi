@@ -58,25 +58,37 @@
 //!   calculated as `leaf_idx = final_level_start_idx + position`.
 //! * **node** - either the leaf values or parent nodes `hash(left, right)`.
 
+mod empty;
+pub use empty::EMPTY_NODES_FP;
+
 #[cfg(test)]
 mod test;
 
 mod util;
 pub use util::Poseidon;
 
+pub mod wasmdb;
+
 use num_bigint::BigUint;
 use std::collections::HashMap;
 // Only used for the type aliases below
 use pasta_curves::pallas;
 
+use crate::error::{ContractError, ContractResult};
 use util::{FieldElement, FieldHasher};
 
 // Bit size for Fp (and Fq)
 pub const SMT_FP_DEPTH: usize = 255;
 pub type PoseidonFp = Poseidon<pallas::Base, 2>;
 pub type MemoryStorageFp = MemoryStorage<pallas::Base>;
-pub type SmtMemoryFp =
-    SparseMerkleTree<SMT_FP_DEPTH, { SMT_FP_DEPTH + 1 }, pallas::Base, PoseidonFp, MemoryStorageFp>;
+pub type SmtMemoryFp = SparseMerkleTree<
+    'static,
+    SMT_FP_DEPTH,
+    { SMT_FP_DEPTH + 1 },
+    pallas::Base,
+    PoseidonFp,
+    MemoryStorageFp,
+>;
 pub type PathFp = Path<SMT_FP_DEPTH, pallas::Base, PoseidonFp>;
 
 /// Pluggable storage backend for the SMT.
@@ -84,7 +96,7 @@ pub type PathFp = Path<SMT_FP_DEPTH, pallas::Base, PoseidonFp>;
 pub trait StorageAdapter {
     type Value;
 
-    fn put(&mut self, key: BigUint, value: Self::Value);
+    fn put(&mut self, key: BigUint, value: Self::Value) -> bool;
     fn get(&self, key: &BigUint) -> Option<Self::Value>;
 }
 
@@ -102,8 +114,9 @@ impl<F: FieldElement> MemoryStorage<F> {
 impl<F: FieldElement> StorageAdapter for MemoryStorage<F> {
     type Value = F;
 
-    fn put(&mut self, key: BigUint, value: F) {
+    fn put(&mut self, key: BigUint, value: F) -> bool {
         self.tree.insert(key, value);
+        true
     }
     fn get(&self, key: &BigUint) -> Option<F> {
         self.tree.get(key).copied()
@@ -119,6 +132,7 @@ impl<F: FieldElement> StorageAdapter for MemoryStorage<F> {
 /// will have `N + 1` levels.
 #[derive(Debug)]
 pub struct SparseMerkleTree<
+    'a,
     const N: usize,
     // M = N + 1
     const M: usize,
@@ -131,33 +145,32 @@ pub struct SparseMerkleTree<
     /// The hasher used to build the Merkle tree.
     hasher: H,
     /// An array of empty hashes hashed with themselves `N` times.
-    empty_nodes: [F; M],
+    empty_nodes: &'a [F; M],
 }
 
 impl<
+        'a,
         const N: usize,
         const M: usize,
         F: FieldElement,
         H: FieldHasher<F, 2>,
         S: StorageAdapter<Value = F>,
-    > SparseMerkleTree<N, M, F, H, S>
+    > SparseMerkleTree<'a, N, M, F, H, S>
 {
     /// Creates a new SMT
-    pub fn new(store: S, hasher: H, empty_leaf: F) -> Self {
+    pub fn new(store: S, hasher: H, empty_nodes: &'a [F; M]) -> Self {
         assert_eq!(M, N + 1);
-        let empty_nodes = gen_empty_nodes(&hasher, empty_leaf);
-
         Self { store, hasher, empty_nodes }
     }
 
     /// Takes a batch of field elements, inserts these hashes into the tree,
     /// and updates the Merkle root.
-    pub fn insert_batch(&mut self, leaves: Vec<(F, F)>) {
+    pub fn insert_batch(&mut self, leaves: Vec<(F, F)>) -> ContractResult {
         // Nodes that need recalculating
         let mut dirty_idxs = Vec::new();
         for (pos, leaf) in leaves {
             let idx = util::leaf_pos_to_index::<N, _>(&pos);
-            self.store.put(idx.clone(), leaf);
+            self.put_node(idx.clone(), leaf)?;
 
             // Mark node parent as dirty
             let parent_idx = util::parent(&idx).unwrap();
@@ -176,7 +189,7 @@ impl<
                 // Recalculate the node
                 let node = self.hasher.hash([left, right]);
 
-                self.store.put(idx.clone(), node);
+                self.put_node(idx.clone(), node)?;
 
                 // Add this node's parent to the update list
                 let parent_idx = match util::parent(&idx) {
@@ -189,6 +202,7 @@ impl<
 
             dirty_idxs = new_dirty_idxs;
         }
+        Ok(())
     }
 
     /// Returns the Merkle tree root.
@@ -227,6 +241,13 @@ impl<
         let lvl = util::log2(&idx);
         let empty_node = self.empty_nodes[lvl as usize];
         self.store.get(&idx).unwrap_or(empty_node)
+    }
+
+    fn put_node(&mut self, key: BigUint, value: F) -> ContractResult {
+        if !self.store.put(key, value) {
+            return Err(ContractError::SmtPutFailed)
+        }
+        Ok(())
     }
 }
 

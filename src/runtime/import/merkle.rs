@@ -164,6 +164,7 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
         return darkfi_sdk::error::INTERNAL_ERROR
     }
 
+    // TODO: FIXME locking should happen for the entire duration of this fn. This is unsafe otherwise.
     // Read the current tree
     let ret = match env
         .blockchain
