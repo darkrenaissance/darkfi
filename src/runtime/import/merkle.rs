@@ -164,17 +164,11 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
         return darkfi_sdk::error::INTERNAL_ERROR
     }
 
-    // TODO: FIXME locking should happen for the entire duration of this fn. This is unsafe otherwise.
+    // Locking should happen for the entire duration of this fn. This is unsafe otherwise.
+    let lock = env.blockchain.lock().unwrap();
+    let mut overlay = lock.overlay.lock().unwrap();
     // Read the current tree
-    let ret = match env
-        .blockchain
-        .lock()
-        .unwrap()
-        .overlay
-        .lock()
-        .unwrap()
-        .get(&db_info.tree, &tree_key)
-    {
+    let ret = match overlay.get(&db_info.tree, &tree_key) {
         Ok(v) => v,
         Err(e) => {
             error!(
@@ -255,8 +249,6 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
     }
 
     // Apply changes to overlay
-    let lock = env.blockchain.lock().unwrap();
-    let mut overlay = lock.overlay.lock().unwrap();
     if overlay.insert(&db_info.tree, &tree_key, &tree_data).is_err() {
         error!(
             target: "runtime::merkle::merkle_add",
