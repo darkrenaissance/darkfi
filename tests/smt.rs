@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::crypto::smt2::{MemoryStorageFp, PoseidonFp, SmtMemoryFp};
+use darkfi_sdk::crypto::smt::{MemoryStorageFp, PoseidonFp, SmtMemoryFp};
 use halo2_proofs::{arithmetic::Field, circuit::Value, dev::MockProver, pasta::Fp};
 use rand::rngs::OsRng;
 

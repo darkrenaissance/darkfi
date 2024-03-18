@@ -64,7 +64,6 @@ pub mod ecvrf;
 
 /// Sparse Merkle Tree implementation
 pub mod smt;
-pub mod smt2;
 
 /// Convenience module to import all the pasta traits.
 /// You still have to import the curves.

@@ -25,7 +25,7 @@ use darkfi_sdk::crypto::{
         ConstBaseFieldElement, OrchardFixedBases, OrchardFixedBasesFull, ValueCommitV,
         MERKLE_DEPTH_ORCHARD,
     },
-    smt2::SMT_FP_DEPTH,
+    smt::SMT_FP_DEPTH,
 };
 use halo2_gadgets::{
     ecc::{
@@ -64,7 +64,7 @@ use super::{
         less_than::{LessThanChip, LessThanConfig},
         native_range_check::{NativeRangeCheckChip, NativeRangeCheckConfig},
         small_range_check::{SmallRangeCheckChip, SmallRangeCheckConfig},
-        smt2 as smt,
+        smt,
         zero_cond::{ZeroCondChip, ZeroCondConfig},
     },
     tracer::ZkTracer,

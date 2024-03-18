@@ -19,7 +19,7 @@
 //! VM heap type abstractions
 use darkfi_sdk::crypto::{
     constants::{OrchardFixedBases, MERKLE_DEPTH_ORCHARD},
-    smt2::SMT_FP_DEPTH,
+    smt::SMT_FP_DEPTH,
     MerkleNode,
 };
 use halo2_gadgets::ecc::{
