@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::crypto::smt::{MemoryStorageFp, PoseidonFp, SmtMemoryFp};
+use darkfi_sdk::crypto::smt::{MemoryStorageFp, PoseidonFp, SmtMemoryFp, EMPTY_NODES_FP};
 use halo2_proofs::{arithmetic::Field, circuit::Value, dev::MockProver, pasta::Fp};
 use rand::rngs::OsRng;
 
@@ -37,10 +37,8 @@ fn zkvm_smt() -> Result<()> {
     let zkbin = ZkBinary::decode(bincode)?;
 
     let hasher = PoseidonFp::new();
-    let empty_leaf = Fp::from(0);
-
     let store = MemoryStorageFp::new();
-    let mut smt = SmtMemoryFp::new(store, hasher.clone(), empty_leaf.clone());
+    let mut smt = SmtMemoryFp::new(store, hasher.clone(), &EMPTY_NODES_FP);
 
     let leaves = vec![Fp::random(&mut OsRng), Fp::random(&mut OsRng), Fp::random(&mut OsRng)];
     // Use the leaf value as its position in the SMT

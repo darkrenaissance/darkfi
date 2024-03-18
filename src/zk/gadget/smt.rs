@@ -224,7 +224,7 @@ impl PathChip {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use darkfi_sdk::crypto::smt::{MemoryStorageFp, PoseidonFp, SmtMemoryFp};
+    use darkfi_sdk::crypto::smt::{MemoryStorageFp, PoseidonFp, SmtMemoryFp, EMPTY_NODES_FP};
     use halo2_proofs::{circuit::floor_planner, dev::MockProver, plonk::Circuit};
     use rand::rngs::OsRng;
 
@@ -329,10 +329,8 @@ mod tests {
     #[test]
     fn test_smt_circuit() {
         let hasher = PoseidonFp::new();
-        let empty_leaf = Fp::ZERO;
-
         let store = MemoryStorageFp::new();
-        let mut smt = SmtMemoryFp::new(store, hasher.clone(), empty_leaf.clone());
+        let mut smt = SmtMemoryFp::new(store, hasher.clone(), &EMPTY_NODES_FP);
 
         let leaves = vec![Fp::random(&mut OsRng), Fp::random(&mut OsRng), Fp::random(&mut OsRng)];
         // Use the leaf value as its position in the SMT
