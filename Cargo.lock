@@ -7918,7 +7918,7 @@ dependencies = [
  "structopt",
  "structopt-toml",
  "swapd",
- "tracing",
+ "thiserror",
  "url",
 ]
 

@@ -7,8 +7,8 @@ use darkfi_serial::async_trait;
 use ethers::prelude::*;
 use eyre::{ensure, Result, WrapErr as _};
 
+use log::info;
 use std::sync::Arc;
-use tracing::info;
 
 /// Implemented on top of the non-initiating chain
 ///
@@ -142,7 +142,10 @@ impl<M: Middleware + 'static, C: OtherChainClient + Send + Sync> Initiator for E
             nonce,
         };
 
-        info!(contract_swap_id = ?swap_id, "initiated swap on-chain");
+        info!(
+            "initiated swap on-chain: contract_swap_id = {}",
+            ethers::utils::hex::encode(&swap_id)
+        );
 
         Ok(HandleCounterpartyKeysReceivedResult {
             contract_swap_id: swap_id,
@@ -174,7 +177,7 @@ impl<M: Middleware + 'static, C: OtherChainClient + Send + Sync> Initiator for E
             receipt
         );
 
-        info!(contract_swap_id = ?swap_id, "contract set to ready");
+        info!("contract set to ready, contract_swap_id = {}", ethers::utils::hex::encode(swap_id));
         Ok(())
     }
 

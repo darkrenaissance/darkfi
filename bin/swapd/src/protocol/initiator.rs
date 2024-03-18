@@ -3,8 +3,8 @@ use crate::protocol::traits::{
     Initiator,
 };
 use eyre::{eyre, Context, Result};
+use log::{info, warn};
 use smol::channel;
-use tracing::{info, warn};
 
 #[derive(Debug)]
 pub(crate) enum Event {
