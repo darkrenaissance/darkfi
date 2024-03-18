@@ -103,7 +103,7 @@ impl PathChip {
         bits
     }
 
-    fn check_membership(
+    pub fn check_membership(
         &self,
         layouter: &mut impl Layouter<Fp>,
         root: AssignedCell<Fp, Fp>,

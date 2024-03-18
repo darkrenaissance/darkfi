@@ -223,9 +223,10 @@ impl Opcode {
                 (vec![VarType::Base], vec![VarType::Uint32, VarType::MerklePath, VarType::Base])
             }
 
-            Opcode::SparseTreeIsMember => {
-                (vec![VarType::Base], vec![VarType::Base, VarType::SparseMerklePath, VarType::Base])
-            }
+            Opcode::SparseTreeIsMember => (
+                vec![VarType::Base],
+                vec![VarType::Base, VarType::SparseMerklePath, VarType::Base, VarType::Base],
+            ),
 
             Opcode::BaseAdd => (vec![VarType::Base], vec![VarType::Base, VarType::Base]),
 
