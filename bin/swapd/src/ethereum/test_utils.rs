@@ -18,7 +18,6 @@ pub(crate) async fn deploy_swap_creator() -> (Address, Arc<Provider<Ws>>, LocalW
     // compile contract for testing
     let source = Path::new(&env!("CARGO_MANIFEST_DIR")).join("ethereum/src/SwapCreator.sol");
     let input = CompilerInput::new(source.clone()).unwrap().first().unwrap().clone();
-    //.evm_version(EvmVersion::Homestead); // TODO: idk why the default version doesn't work
     let compiled = Solc::default().compile(&input).expect("could not compile contract");
     assert!(compiled.errors.is_empty(), "errors: {:?}", compiled.errors);
 
