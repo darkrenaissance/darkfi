@@ -1,4 +1,4 @@
-k = 13;
+k = 14;
 field = "pallas";
 
 constant "SMT" {
@@ -11,7 +11,7 @@ witness "SMT" {
 }
 
 circuit "SMT" {
-    is_member = sparse_tree_is_member(root, path, leaf);
+    is_member = sparse_tree_is_member(root, path, leaf, leaf);
 
     ONE = witness_base(1);
     constrain_equal_base(is_member, ONE);

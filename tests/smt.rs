@@ -16,10 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::crypto::{
-    constants::SPARSE_MERKLE_DEPTH,
-    smt::{Poseidon, SparseMerkleTree},
-};
+use darkfi_sdk::crypto::smt::{MemoryStorageFp, PoseidonFp, SmtMemoryFp};
 use halo2_proofs::{arithmetic::Field, circuit::Value, dev::MockProver, pasta::Fp};
 use rand::rngs::OsRng;
 
@@ -39,31 +36,31 @@ fn zkvm_smt() -> Result<()> {
     let bincode = include_bytes!("../proof/smt.zk.bin");
     let zkbin = ZkBinary::decode(bincode)?;
 
-    let poseidon = Poseidon::<Fp, 2>::new();
-    let empty_leaf = [0u8; 32];
-    let leaves = [Fp::random(&mut OsRng), Fp::random(&mut OsRng), Fp::random(&mut OsRng)];
+    let hasher = PoseidonFp::new();
+    let empty_leaf = Fp::from(0);
 
-    let smt = SparseMerkleTree::<Fp, Poseidon<Fp, 2>, SPARSE_MERKLE_DEPTH>::new_sequential(
-        &leaves,
-        &poseidon.clone(),
-        empty_leaf,
-    )
-    .unwrap();
+    let store = MemoryStorageFp::new();
+    let mut smt = SmtMemoryFp::new(store, hasher.clone(), empty_leaf.clone());
 
-    let path = smt.generate_membership_proof(0);
-    let root = path.calculate_root(&leaves[0], &poseidon).unwrap();
+    let leaves = vec![Fp::random(&mut OsRng), Fp::random(&mut OsRng), Fp::random(&mut OsRng)];
+    // Use the leaf value as its position in the SMT
+    // Therefore we need an additional constraint that leaf == pos
+    let leaves: Vec<_> = leaves.into_iter().map(|l| (l, l)).collect();
+    smt.insert_batch(leaves.clone());
 
-    let mut witnessed_path = [(Value::unknown(), Value::unknown()); SPARSE_MERKLE_DEPTH];
-    for (i, (left, right)) in path.path.into_iter().enumerate() {
-        witnessed_path[i] = (Value::known(left), Value::known(right));
-    }
-    let path = witnessed_path;
+    let (pos, leaf) = leaves[2];
+    assert_eq!(pos, leaf);
+    assert_eq!(smt.get_leaf(&pos), leaf);
+
+    let root = smt.root();
+    let path = smt.prove_membership(&pos);
+    assert!(path.verify(&root, &leaf, &pos));
 
     // Values for the proof
     let prover_witnesses = vec![
         Witness::Base(Value::known(root)),
-        Witness::SparseMerklePath(path),
-        Witness::Base(Value::known(leaves[0])),
+        Witness::SparseMerklePath(Value::known(path.path)),
+        Witness::Base(Value::known(leaf)),
     ];
 
     let public_inputs = vec![root];

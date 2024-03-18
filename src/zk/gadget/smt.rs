@@ -1,34 +1,16 @@
-/* This file is part of DarkFi (https://dark.fi)
- *
- * Copyright (C) 2020-2024 Dyne.org foundation
- * Copyright (C) 2022 zkMove Authors (Apache-2.0)
- * Copyright (C) 2021 Webb Technologies Inc. (Apache-2.0)
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
- */
-
-use std::marker::PhantomData;
-
-use darkfi_sdk::crypto::smt::FieldHasher;
+use darkfi_sdk::crypto::smt::SMT_FP_DEPTH;
 use halo2_gadgets::poseidon::{
     primitives as poseidon, Hash as PoseidonHash, Pow5Chip as PoseidonChip,
     Pow5Config as PoseidonConfig,
 };
 use halo2_proofs::{
     circuit::{AssignedCell, Layouter, Value},
-    pasta::Fp,
-    plonk::{self, Advice, Column, ConstraintSystem, Selector},
+    pasta::{
+        group::ff::{Field, PrimeFieldBits},
+        Fp,
+    },
+    plonk::{self, Advice, Column, ConstraintSystem, Constraints, Selector},
+    poly::Rotation,
 };
 
 use super::{
@@ -37,16 +19,16 @@ use super::{
 };
 
 #[derive(Clone, Debug)]
-pub struct PathConfig<const N: usize> {
+pub struct PathConfig {
     s_path: Selector,
-    advices: [Column<Advice>; N],
+    advices: [Column<Advice>; 2],
     poseidon_config: PoseidonConfig<Fp, 3, 2>,
     is_eq_config: IsEqualConfig<Fp>,
     conditional_select_config: ConditionalSelectConfig<Fp>,
     assert_equal_config: AssertEqualConfig<Fp>,
 }
 
-impl<const N: usize> PathConfig<N> {
+impl PathConfig {
     fn poseidon_chip(&self) -> PoseidonChip<Fp, 3, 2> {
         PoseidonChip::construct(self.poseidon_config.clone())
     }
@@ -65,19 +47,17 @@ impl<const N: usize> PathConfig<N> {
 }
 
 #[derive(Clone, Debug)]
-pub struct PathChip<H: FieldHasher<Fp, 2>, const N: usize> {
-    path: [(AssignedCell<Fp, Fp>, AssignedCell<Fp, Fp>); N],
-    config: PathConfig<N>,
-    _hasher: PhantomData<H>,
+pub struct PathChip {
+    config: PathConfig,
 }
 
-impl<H: FieldHasher<Fp, 2>, const N: usize> PathChip<H, N> {
+impl PathChip {
     pub fn configure(
         meta: &mut ConstraintSystem<Fp>,
-        advices: [Column<Advice>; N],
+        advices: [Column<Advice>; 2],
         utility_advices: [Column<Advice>; NUM_OF_UTILITY_ADVICE_COLUMNS],
         poseidon_config: PoseidonConfig<Fp, 3, 2>,
-    ) -> PathConfig<N> {
+    ) -> PathConfig {
         let s_path = meta.selector();
 
         for advice in &advices {
@@ -87,6 +67,15 @@ impl<H: FieldHasher<Fp, 2>, const N: usize> PathChip<H, N> {
         for advice in &utility_advices {
             meta.enable_equality(*advice);
         }
+
+        meta.create_gate("Path builder", |meta| {
+            let s_path = meta.query_selector(s_path);
+            let current_path = meta.query_advice(advices[0], Rotation::cur());
+            let bit = meta.query_advice(advices[1], Rotation::cur());
+            let next_path = meta.query_advice(advices[0], Rotation::next());
+
+            Constraints::with_selector(s_path, Some(next_path - (current_path * Fp::from(2) + bit)))
+        });
 
         PathConfig {
             s_path,
@@ -101,76 +90,115 @@ impl<H: FieldHasher<Fp, 2>, const N: usize> PathChip<H, N> {
         }
     }
 
-    pub fn from_native(
-        config: PathConfig<N>,
-        layouter: &mut impl Layouter<Fp>,
-        path: [(Value<Fp>, Value<Fp>); N],
-    ) -> Result<Self, plonk::Error> {
-        let path = layouter.assign_region(
-            || "path",
-            |mut region| {
-                config.s_path.enable(&mut region, 0)?;
-                let left = (0..N)
-                    .map(|i| {
-                        region.assign_advice(
-                            || format!("path[{}][{}]", i, 0),
-                            config.advices[i],
-                            0,
-                            || path[i].0,
-                        )
-                    })
-                    .collect::<Result<Vec<AssignedCell<Fp, Fp>>, plonk::Error>>();
-
-                let right = (0..N)
-                    .map(|i| {
-                        region.assign_advice(
-                            || format!("path[{}][{}]", i, 1),
-                            config.advices[i],
-                            1,
-                            || path[i].1,
-                        )
-                    })
-                    .collect::<Result<Vec<AssignedCell<Fp, Fp>>, plonk::Error>>();
-
-                let result = left?
-                    .into_iter()
-                    .zip(right?.into_iter())
-                    .collect::<Vec<(AssignedCell<Fp, Fp>, AssignedCell<Fp, Fp>)>>();
-
-                Ok(result.try_into().unwrap())
-            },
-        )?;
-
-        Ok(PathChip { path, config, _hasher: PhantomData })
+    pub fn construct(config: PathConfig) -> Self {
+        Self { config }
     }
 
-    pub fn calculate_root(
+    fn decompose_value(value: &Fp) -> Vec<Fp> {
+        // Returns 256 bits, but the last bit is uneeded
+        let bits: Vec<bool> = value.to_le_bits().into_iter().collect();
+
+        let mut bits: Vec<Fp> = bits[..SMT_FP_DEPTH].iter().map(|x| Fp::from(*x)).collect();
+        bits.resize(SMT_FP_DEPTH, Fp::from(0));
+        bits
+    }
+
+    pub fn check_membership(
         &self,
         layouter: &mut impl Layouter<Fp>,
+        root: AssignedCell<Fp, Fp>,
         leaf: AssignedCell<Fp, Fp>,
+        pos: AssignedCell<Fp, Fp>,
+        path: Value<[Fp; SMT_FP_DEPTH]>,
     ) -> Result<AssignedCell<Fp, Fp>, plonk::Error> {
-        // Check levels between leaf level and root
-        let mut previous_hash = leaf;
+        let path = path.transpose_array();
+        // Witness values
+        let (bits, path, zero) = layouter.assign_region(
+            || "witness",
+            |mut region| {
+                let bits = pos.value().map(Self::decompose_value).transpose_vec(SMT_FP_DEPTH);
+                assert_eq!(bits.len(), SMT_FP_DEPTH);
+
+                let mut witness_bits = vec![];
+                let mut witness_path = vec![];
+                for (i, (bit, sibling)) in bits.into_iter().zip(path.into_iter()).enumerate() {
+                    let bit = region.assign_advice(
+                        || "witness root",
+                        self.config.advices[0],
+                        i,
+                        || bit,
+                    )?;
+                    witness_bits.push(bit);
+
+                    let sibling = region.assign_advice(
+                        || "witness root",
+                        self.config.advices[1],
+                        i,
+                        || sibling,
+                    )?;
+                    witness_path.push(sibling);
+                }
+
+                let zero = region.assign_advice(
+                    || "witness one",
+                    self.config.advices[0],
+                    SMT_FP_DEPTH,
+                    || Value::known(Fp::ZERO),
+                )?;
+                region.constrain_constant(zero.cell(), Fp::ZERO)?;
+
+                Ok((witness_bits, witness_path, zero))
+            },
+        )?;
+        assert_eq!(bits.len(), path.len());
+        assert_eq!(bits.len(), SMT_FP_DEPTH);
 
         let iseq_chip = self.config.is_eq_chip();
         let condselect_chip = self.config.conditional_select_chip();
         let asserteq_chip = self.config.assert_eq_chip();
 
-        for (left_hash, right_hash) in self.path.iter() {
-            // Check if previous_hash matches the correct current hash
-            let previous_is_left =
-                iseq_chip.is_eq_with_output(layouter, previous_hash.clone(), left_hash.clone())?;
+        // Check path construction
+        let mut current_path = zero;
+        for bit in bits.iter().rev() {
+            current_path = layouter.assign_region(
+                || "pᵢ₊₁ = 2pᵢ + bᵢ",
+                |mut region| {
+                    self.config.s_path.enable(&mut region, 0)?;
 
-            let left_or_right = condselect_chip.conditional_select(
-                layouter,
-                left_hash.clone(),
-                right_hash.clone(),
-                previous_is_left,
+                    current_path.copy_advice(
+                        || "current path",
+                        &mut region,
+                        self.config.advices[0],
+                        0,
+                    )?;
+                    bit.copy_advice(|| "path bit", &mut region, self.config.advices[1], 0)?;
+
+                    let next_path =
+                        current_path.value().zip(bit.value()).map(|(p, b)| p * Fp::from(2) + b);
+                    region.assign_advice(|| "next path", self.config.advices[0], 1, || next_path)
+                },
             )?;
+        }
 
-            asserteq_chip.assert_equal(layouter, previous_hash, left_or_right)?;
+        // Check tree construction
+        let mut current_node = leaf.clone();
+        for (bit, sibling) in bits.into_iter().zip(path.into_iter().rev()) {
+            // Conditional select also constraints the bit ∈ {0, 1}
+            let left = condselect_chip.conditional_select(
+                layouter,
+                sibling.clone(),
+                current_node.clone(),
+                bit.clone(),
+            )?;
+            let right = condselect_chip.conditional_select(
+                layouter,
+                current_node.clone(),
+                sibling,
+                bit.clone(),
+            )?;
+            //println!("bit: {:?}", bit);
+            //println!("left: {:?}, right: {:?}", left, right);
 
-            // Update previous_hash
             let hasher = PoseidonHash::<
                 _,
                 _,
@@ -183,71 +211,50 @@ impl<H: FieldHasher<Fp, 2>, const N: usize> PathChip<H, N> {
                 layouter.namespace(|| "SmtPoseidonHash init"),
             )?;
 
-            previous_hash = hasher.hash(
-                layouter.namespace(|| "SmtPoseidonHash hash"),
-                [left_hash.clone(), right_hash.clone()],
-            )?;
+            current_node =
+                hasher.hash(layouter.namespace(|| "SmtPoseidonHash hash"), [left, right])?;
         }
 
-        Ok(previous_hash)
-    }
+        asserteq_chip.assert_equal(layouter, current_path, pos)?;
 
-    pub fn check_membership(
-        &self,
-        layouter: &mut impl Layouter<Fp>,
-        root_hash: AssignedCell<Fp, Fp>,
-        leaf: AssignedCell<Fp, Fp>,
-    ) -> Result<AssignedCell<Fp, Fp>, plonk::Error> {
-        let computed_root = self.calculate_root(layouter, leaf)?;
-
-        self.config.is_eq_chip().is_eq_with_output(layouter, computed_root, root_hash)
+        iseq_chip.is_eq_with_output(layouter, current_node, root)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    use darkfi_sdk::crypto::smt::{Poseidon, SparseMerkleTree};
-    use halo2_proofs::{
-        arithmetic::Field, circuit::floor_planner, dev::MockProver, plonk::Circuit,
-    };
+    use darkfi_sdk::crypto::smt::{MemoryStorageFp, PoseidonFp, SmtMemoryFp};
+    use halo2_proofs::{circuit::floor_planner, dev::MockProver, plonk::Circuit};
     use rand::rngs::OsRng;
-
-    const HEIGHT: usize = 3;
 
     struct TestCircuit {
         root: Value<Fp>,
-        path: [(Value<Fp>, Value<Fp>); HEIGHT],
+        path: Value<[Fp; SMT_FP_DEPTH]>,
         leaf: Value<Fp>,
     }
 
     impl Circuit<Fp> for TestCircuit {
-        type Config = PathConfig<HEIGHT>;
+        type Config = PathConfig;
         type FloorPlanner = floor_planner::V1;
         type Params = ();
 
         fn without_witnesses(&self) -> Self {
-            Self { root: Value::unknown(), path: self.path.clone(), leaf: Value::unknown() }
+            Self { root: Value::unknown(), path: Value::unknown(), leaf: Value::unknown() }
         }
 
         fn configure(meta: &mut ConstraintSystem<Fp>) -> Self::Config {
-            let advices = [(); HEIGHT].map(|_| meta.advice_column());
+            // Advice wires required by PathChip
+            let advices = [(); 2].map(|_| meta.advice_column());
             let utility_advices = [(); NUM_OF_UTILITY_ADVICE_COLUMNS].map(|_| meta.advice_column());
+
+            // Setup poseidon config
             let poseidon_advices = [(); 4].map(|_| meta.advice_column());
-
-            for advice in &advices {
-                meta.enable_equality(*advice);
-            }
-
-            for advice in &utility_advices {
-                meta.enable_equality(*advice);
-            }
-
             for advice in &poseidon_advices {
                 meta.enable_equality(*advice);
             }
 
+            // Needed for poseidon hash
             let col_const = meta.fixed_column();
             meta.enable_constant(col_const);
 
@@ -262,12 +269,7 @@ mod tests {
                 rc_b,
             );
 
-            PathChip::<Poseidon<Fp, 2>, HEIGHT>::configure(
-                meta,
-                advices,
-                utility_advices,
-                poseidon_config,
-            )
+            PathChip::configure(meta, advices, utility_advices, poseidon_config)
         }
 
         fn synthesize(
@@ -276,8 +278,7 @@ mod tests {
             mut layouter: impl Layouter<Fp>,
         ) -> Result<(), plonk::Error> {
             // Initialize the Path chip
-            let path_chip: PathChip<Poseidon<Fp, 2>, HEIGHT> =
-                PathChip::from_native(config.clone(), &mut layouter, self.path.clone())?;
+            let path_chip = PathChip::construct(config.clone());
 
             // Initialize the AssertEqual chip
             let assert_eq_chip = config.assert_eq_chip();
@@ -286,11 +287,11 @@ mod tests {
             let (root, leaf, one) = layouter.assign_region(
                 || "witness",
                 |mut region| {
-                    let one = region.assign_advice(
-                        || "witness one",
-                        config.advices[2],
+                    let root = region.assign_advice(
+                        || "witness root",
+                        config.advices[0],
                         0,
-                        || Value::known(Fp::ONE),
+                        || self.root,
                     )?;
 
                     let leaf = region.assign_advice(
@@ -300,18 +301,25 @@ mod tests {
                         || self.leaf,
                     )?;
 
-                    let root = region.assign_advice(
-                        || "witness root",
-                        config.advices[0],
-                        0,
-                        || self.root,
+                    let one = region.assign_advice(
+                        || "witness one",
+                        config.advices[1],
+                        1,
+                        || Value::known(Fp::ONE),
                     )?;
+                    region.constrain_constant(one.cell(), Fp::ONE)?;
 
                     Ok((root, leaf, one))
                 },
             )?;
 
-            let is_valid = path_chip.check_membership(&mut layouter, root, leaf)?;
+            let is_valid = path_chip.check_membership(
+                &mut layouter,
+                root,
+                leaf.clone(),
+                leaf.clone(),
+                self.path,
+            )?;
             assert_eq_chip.assert_equal(&mut layouter, is_valid, one)?;
 
             Ok(())
@@ -320,31 +328,39 @@ mod tests {
 
     #[test]
     fn test_smt_circuit() {
-        let hasher = Poseidon::<Fp, 2>::hasher();
-        let leaves: [Fp; HEIGHT] = [(); HEIGHT].map(|_| Fp::random(&mut OsRng));
-        let empty_leaf = [0u8; 32];
+        let hasher = PoseidonFp::new();
+        let empty_leaf = Fp::from(0);
 
-        let smt = SparseMerkleTree::<Fp, Poseidon<Fp, 2>, HEIGHT>::new_sequential(
-            &leaves,
-            &hasher.clone(),
-            empty_leaf,
-        )
-        .unwrap();
+        let store = MemoryStorageFp::new();
+        let mut smt = SmtMemoryFp::new(store, hasher.clone(), empty_leaf.clone());
 
-        //println!("{:#?}", smt);
+        let leaves = vec![Fp::random(&mut OsRng), Fp::random(&mut OsRng), Fp::random(&mut OsRng)];
+        // Use the leaf value as its position in the SMT
+        // Therefore we need an additional constraint that leaf == pos
+        let leaves: Vec<_> = leaves.into_iter().map(|l| (l, l)).collect();
+        smt.insert_batch(leaves.clone());
 
-        let path = smt.generate_membership_proof(0);
-        let root = path.calculate_root(&leaves[0], &hasher.clone()).unwrap();
+        let (pos, leaf) = leaves[2];
+        assert_eq!(pos, leaf);
+        assert_eq!(smt.get_leaf(&pos), leaf);
 
-        let mut witnessed_path = [(Value::unknown(), Value::unknown()); HEIGHT];
-        for (i, (left, right)) in path.path.into_iter().enumerate() {
-            witnessed_path[i] = (Value::known(left), Value::known(right));
-        }
-        let path = witnessed_path;
+        let root = smt.root();
+        let path = smt.prove_membership(&pos);
+        assert!(path.verify(&root, &leaf, &pos));
 
-        let circuit = TestCircuit { root: Value::known(root), path, leaf: Value::known(leaves[0]) };
+        let circuit = TestCircuit {
+            root: Value::known(root),
+            path: Value::known(path.path),
+            leaf: Value::known(leaf),
+        };
 
-        let prover = MockProver::run(13, &circuit, vec![]).unwrap();
+        const K: u32 = 14;
+        let prover = MockProver::run(K, &circuit, vec![]).unwrap();
         prover.assert_satisfied();
+
+        //use halo2_proofs::dev::CircuitLayout;
+        //use plotters::prelude::*;
+        //let root = BitMapBackend::new("target/smt.png", (3840, 2160)).into_drawing_area();
+        //CircuitLayout::default().render(K, &circuit, &root).unwrap();
     }
 }

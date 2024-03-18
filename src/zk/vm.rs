@@ -23,9 +23,9 @@ use darkfi_sdk::crypto::{
         sinsemilla::{OrchardCommitDomains, OrchardHashDomains},
         util::gen_const_array,
         ConstBaseFieldElement, OrchardFixedBases, OrchardFixedBasesFull, ValueCommitV,
-        MERKLE_DEPTH_ORCHARD, SPARSE_MERKLE_DEPTH,
+        MERKLE_DEPTH_ORCHARD,
     },
-    smt,
+    smt::SMT_FP_DEPTH,
 };
 use halo2_gadgets::{
     ecc::{
@@ -64,7 +64,7 @@ use super::{
         less_than::{LessThanChip, LessThanConfig},
         native_range_check::{NativeRangeCheckChip, NativeRangeCheckConfig},
         small_range_check::{SmallRangeCheckChip, SmallRangeCheckConfig},
-        smt as smt_gadget,
+        smt,
         zero_cond::{ZeroCondChip, ZeroCondConfig},
     },
     tracer::ZkTracer,
@@ -73,10 +73,6 @@ use crate::zkas::{
     types::{HeapType, LitType},
     Opcode, ZkBinary,
 };
-
-type SmtPathConfig = smt_gadget::PathConfig<SPARSE_MERKLE_DEPTH>;
-pub(super) type SmtPathChip =
-    smt_gadget::PathChip<smt::Poseidon<pallas::Base, 2>, SPARSE_MERKLE_DEPTH>;
 
 /// Available chips/gadgets in the zkvm
 #[derive(Debug, Clone)]
@@ -94,7 +90,7 @@ enum VmChip {
     ),
 
     /// Sparse merkle tree (using Poseidon)
-    SparseTree(SmtPathConfig),
+    SparseTree(smt::PathConfig),
 
     /// Sinsemilla chip
     Sinsemilla(
@@ -175,14 +171,14 @@ impl VmConfig {
         Some(MerkleChip::construct(merkle_cfg2.clone()))
     }
 
-    fn sparse_tree_cfg(&self) -> Option<SmtPathConfig> {
-        let Some(VmChip::SparseTree(smt_config)) =
+    fn smt_chip(&self) -> Option<smt::PathChip> {
+        let Some(VmChip::SparseTree(config)) =
             self.chips.iter().find(|&c| matches!(c, VmChip::SparseTree(_)))
         else {
             return None
         };
 
-        Some(smt_config.clone())
+        Some(smt::PathChip::construct(config.clone()))
     }
 
     fn poseidon_chip(&self) -> Option<PoseidonChip<pallas::Base, 3, 2>> {
@@ -493,10 +489,10 @@ impl Circuit<pallas::Base> for ZkCircuit {
             (sinsemilla_cfg2, merkle_cfg2)
         };
 
-        let smt_config = SmtPathChip::configure(
+        let smt_config = smt::PathChip::configure(
             meta,
-            advices[..SPARSE_MERKLE_DEPTH].try_into().unwrap(),
-            advices[1..5].try_into().unwrap(),
+            advices[0..2].try_into().unwrap(),
+            advices[2..6].try_into().unwrap(),
             poseidon_config.clone(),
         );
 
@@ -626,6 +622,9 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
         // Construct the zero_cond selection chip
         let zerocond_chip = config.zerocond_chip();
+
+        // Construct sparse Merkle tree chip
+        let smt_chip = config.smt_chip().unwrap();
 
         // ==========================
         // Constants setup
@@ -772,11 +771,11 @@ impl Circuit<pallas::Base> for ZkCircuit {
                 }
 
                 Witness::SparseMerklePath(w) => {
-                    let path_cfg = config.sparse_tree_cfg().unwrap();
-                    let path_chip = SmtPathChip::from_native(path_cfg, &mut layouter, *w)?;
+                    let path: Value<[pallas::Base; SMT_FP_DEPTH]> =
+                        w.map(|typed_path| gen_const_array(|i| typed_path[i]));
 
                     trace!(target: "zk::vm", "Pushing SparseMerklePath to heap address {}", heap.len());
-                    heap.push(HeapVar::SparseMerklePath(path_chip));
+                    heap.push(HeapVar::SparseMerklePath(path));
                 }
 
                 Witness::Uint32(w) => {
@@ -980,7 +979,8 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let args = &opcode.1;
 
                     let leaf_pos = heap[args[0].1].clone().try_into()?;
-                    let merkle_path = heap[args[1].1].clone().try_into()?;
+                    let merkle_path: Value<[Fp; MERKLE_DEPTH_ORCHARD]> =
+                        heap[args[1].1].clone().try_into()?;
                     let leaf = heap[args[2].1].clone().try_into()?;
 
                     let merkle_inputs = MerklePath::construct(
@@ -1003,10 +1003,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let args = &opcode.1;
 
                     let root = heap[args[0].1].clone().try_into()?;
-                    let path_chip: SmtPathChip = heap[args[1].1].clone().try_into()?;
+                    let path: Value<[Fp; SMT_FP_DEPTH]> = heap[args[1].1].clone().try_into()?;
                     let leaf = heap[args[2].1].clone().try_into()?;
+                    let pos = heap[args[3].1].clone().try_into()?;
 
-                    let is_member = path_chip.check_membership(&mut layouter, root, leaf)?;
+                    let is_member =
+                        smt_chip.check_membership(&mut layouter, root, leaf, pos, path)?;
 
                     self.tracer.push_base(&is_member);
                     heap.push(HeapVar::Base(is_member));
