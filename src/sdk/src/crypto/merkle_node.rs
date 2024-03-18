@@ -166,7 +166,6 @@ mod tests {
     use super::*;
 
     use halo2_proofs::arithmetic::Field;
-    use pasta_curves::pallas;
     use rand::rngs::OsRng;
 
     #[test]

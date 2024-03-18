@@ -18,11 +18,14 @@
 
 use std::collections::HashSet;
 
-use darkfi_sdk::crypto::constants::{
-    sinsemilla::{OrchardCommitDomains, OrchardHashDomains},
-    util::gen_const_array,
-    ConstBaseFieldElement, OrchardFixedBases, OrchardFixedBasesFull, ValueCommitV,
-    MERKLE_DEPTH_ORCHARD,
+use darkfi_sdk::crypto::{
+    constants::{
+        sinsemilla::{OrchardCommitDomains, OrchardHashDomains},
+        util::gen_const_array,
+        ConstBaseFieldElement, OrchardFixedBases, OrchardFixedBasesFull, ValueCommitV,
+        MERKLE_DEPTH_ORCHARD,
+    },
+    smt::SMT_FP_DEPTH,
 };
 use halo2_gadgets::{
     ecc::{
@@ -61,6 +64,7 @@ use super::{
         less_than::{LessThanChip, LessThanConfig},
         native_range_check::{NativeRangeCheckChip, NativeRangeCheckConfig},
         small_range_check::{SmallRangeCheckChip, SmallRangeCheckConfig},
+        smt,
         zero_cond::{ZeroCondChip, ZeroCondConfig},
     },
     tracer::ZkTracer,
@@ -84,6 +88,9 @@ enum VmChip {
             MerkleConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
         ),
     ),
+
+    /// Sparse merkle tree (using Poseidon)
+    SparseTree(smt::PathConfig),
 
     /// Sinsemilla chip
     Sinsemilla(
@@ -164,6 +171,16 @@ impl VmConfig {
         Some(MerkleChip::construct(merkle_cfg2.clone()))
     }
 
+    fn smt_chip(&self) -> Option<smt::PathChip> {
+        let Some(VmChip::SparseTree(config)) =
+            self.chips.iter().find(|&c| matches!(c, VmChip::SparseTree(_)))
+        else {
+            return None
+        };
+
+        Some(smt::PathChip::construct(config.clone()))
+    }
+
     fn poseidon_chip(&self) -> Option<PoseidonChip<pallas::Base, 3, 2>> {
         let Some(VmChip::Poseidon(poseidon_config)) =
             self.chips.iter().find(|&c| matches!(c, VmChip::Poseidon(_)))
@@ -191,7 +208,7 @@ impl VmConfig {
             return None
         };
 
-        Some(ConditionalSelectChip::construct(condselect_config.clone(), ()))
+        Some(ConditionalSelectChip::construct(condselect_config.clone()))
     }
 
     fn zerocond_chip(&self) -> Option<ZeroCondChip<pallas::Base>> {
@@ -472,6 +489,13 @@ impl Circuit<pallas::Base> for ZkCircuit {
             (sinsemilla_cfg2, merkle_cfg2)
         };
 
+        let smt_config = smt::PathChip::configure(
+            meta,
+            advices[0..2].try_into().unwrap(),
+            advices[2..6].try_into().unwrap(),
+            poseidon_config.clone(),
+        );
+
         // K-table for 64 bit range check lookups
         let k_values_table_64 = meta.lookup_table_column();
         let native_64_range_check_config =
@@ -511,6 +535,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
         let chips = vec![
             VmChip::Ecc(ecc_config),
             VmChip::Merkle((merkle_cfg1, merkle_cfg2)),
+            VmChip::SparseTree(smt_config),
             VmChip::Sinsemilla((sinsemilla_cfg1, sinsemilla_cfg2)),
             VmChip::Poseidon(poseidon_config),
             VmChip::Arithmetic(arith_config),
@@ -597,6 +622,9 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
         // Construct the zero_cond selection chip
         let zerocond_chip = config.zerocond_chip();
+
+        // Construct sparse Merkle tree chip
+        let smt_chip = config.smt_chip().unwrap();
 
         // ==========================
         // Constants setup
@@ -722,11 +750,15 @@ impl Circuit<pallas::Base> for ZkCircuit {
                 }
 
                 Witness::Scalar(w) => {
-                    // NOTE: Because the type in `halo2_gadgets` does not have a `Clone`
-                    //       impl, we push scalars as-is to the heap. They get witnessed
-                    //       when they get used.
+                    trace!(target: "zk::vm", "Witnessing Scalar into circuit");
+                    let scalar = ScalarFixed::new(
+                        ecc_chip.as_ref().unwrap().clone(),
+                        layouter.namespace(|| "Witness ScalarFixed"),
+                        *w,
+                    )?;
+
                     trace!(target: "zk::vm", "Pushing Scalar to heap address {}", heap.len());
-                    heap.push(HeapVar::Scalar(*w));
+                    heap.push(HeapVar::Scalar(scalar));
                 }
 
                 Witness::MerklePath(w) => {
@@ -736,6 +768,14 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
                     trace!(target: "zk::vm", "Pushing MerklePath to heap address {}", heap.len());
                     heap.push(HeapVar::MerklePath(path));
+                }
+
+                Witness::SparseMerklePath(w) => {
+                    let path: Value<[pallas::Base; SMT_FP_DEPTH]> =
+                        w.map(|typed_path| gen_const_array(|i| typed_path[i]));
+
+                    trace!(target: "zk::vm", "Pushing SparseMerklePath to heap address {}", heap.len());
+                    heap.push(HeapVar::SparseMerklePath(path));
                 }
 
                 Witness::Uint32(w) => {
@@ -783,11 +823,8 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let lhs: FixedPoint<pallas::Affine, EccChip<OrchardFixedBases>> =
                         heap[args[1].1].clone().try_into()?;
 
-                    let rhs = ScalarFixed::new(
-                        ecc_chip.as_ref().unwrap().clone(),
-                        layouter.namespace(|| "EcMul: ScalarFixed::new()"),
-                        heap[args[0].1].clone().try_into()?,
-                    )?;
+                    let rhs: ScalarFixed<pallas::Affine, EccChip<OrchardFixedBases>> =
+                        heap[args[0].1].clone().try_into()?;
 
                     let (ret, _) = lhs.mul(layouter.namespace(|| "EcMul()"), rhs)?;
 
@@ -937,11 +974,13 @@ impl Circuit<pallas::Base> for ZkCircuit {
                 }
 
                 Opcode::MerkleRoot => {
+                    // TODO: all these trace statements could have trace!(..., args) instead
                     trace!(target: "zk::vm", "Executing `MerkleRoot{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
                     let leaf_pos = heap[args[0].1].clone().try_into()?;
-                    let merkle_path = heap[args[1].1].clone().try_into()?;
+                    let merkle_path: Value<[Fp; MERKLE_DEPTH_ORCHARD]> =
+                        heap[args[1].1].clone().try_into()?;
                     let leaf = heap[args[2].1].clone().try_into()?;
 
                     let merkle_inputs = MerklePath::construct(
@@ -957,6 +996,22 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     trace!(target: "zk::vm", "Pushing merkle root to heap address {}", heap.len());
                     self.tracer.push_base(&root);
                     heap.push(HeapVar::Base(root));
+                }
+
+                Opcode::SparseTreeIsMember => {
+                    trace!(target: "zk::vm", "Executing `SparseTreeIsMember{:?}` opcode", opcode.1);
+                    let args = &opcode.1;
+
+                    let root = heap[args[0].1].clone().try_into()?;
+                    let path: Value<[Fp; SMT_FP_DEPTH]> = heap[args[1].1].clone().try_into()?;
+                    let leaf = heap[args[2].1].clone().try_into()?;
+                    let pos = heap[args[3].1].clone().try_into()?;
+
+                    let is_member =
+                        smt_chip.check_membership(&mut layouter, root, leaf, pos, path)?;
+
+                    self.tracer.push_base(&is_member);
+                    heap.push(HeapVar::Base(is_member));
                 }
 
                 Opcode::BaseAdd => {

@@ -42,7 +42,7 @@ mod tests {
     use std::io::Cursor;
 
     use darkfi_serial::Decodable;
-    use wasmer::{Memory, MemoryType, Store, WasmPtr};
+    use wasmer::{Memory, MemoryType, Store};
 
     #[test]
     fn test_memoryview_writeslice() {

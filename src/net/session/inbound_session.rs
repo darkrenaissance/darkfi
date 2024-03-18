@@ -189,7 +189,7 @@ impl InboundSession {
         );
 
         dnetev!(self, InboundConnected, {
-            addr: channel.info.addr.clone(),
+            addr: channel.info.connect_addr.clone(),
             channel_id: channel.info.id,
         });
 
@@ -199,7 +199,7 @@ impl InboundSession {
 
         stop_sub.receive().await;
 
-        self.p2p().remove(channel.clone()).await;
+        self.p2p().hosts().unregister(channel.clone().address()).await;
 
         debug!(
             target: "net::inbound_session::setup_channel()",
@@ -207,7 +207,7 @@ impl InboundSession {
         );
 
         dnetev!(self, InboundDisconnected, {
-            addr: channel.info.addr.clone(),
+            addr: channel.info.connect_addr.clone(),
             channel_id: channel.info.id,
         });
 

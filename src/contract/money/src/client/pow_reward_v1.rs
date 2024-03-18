@@ -23,10 +23,7 @@ use darkfi::{
 };
 use darkfi_sdk::{
     blockchain::expected_reward,
-    crypto::{
-        ecvrf::VrfProof, note::AeadEncryptedNote, pasta_prelude::*, Blind, FuncId, PublicKey,
-        SecretKey,
-    },
+    crypto::{note::AeadEncryptedNote, pasta_prelude::*, Blind, FuncId, PublicKey, SecretKey},
     pasta::pallas,
 };
 use log::{debug, info};
@@ -65,7 +62,7 @@ impl PoWRewardRevealed {
 
 /// Struct holding necessary information to build a `Money::PoWRewardV1` contract call.
 pub struct PoWRewardCallBuilder {
-    /// Caller's secret key, used for signing and VRF proof generation
+    /// Caller's secret key, used for signing
     pub secret: SecretKey,
     /// Reward recipient's public key
     pub recipient: PublicKey,
@@ -153,14 +150,7 @@ impl PoWRewardCallBuilder {
             note: encrypted_note,
         };
 
-        info!("Building Consensus::ProposalV1 VRF proof");
-        let mut vrf_input = Vec::with_capacity(32 + blake3::OUT_LEN + 32);
-        vrf_input.extend_from_slice(&pallas::Base::from(self.last_nonce).to_repr());
-        vrf_input.extend_from_slice(self.fork_previous_hash.as_bytes());
-        vrf_input.extend_from_slice(&pallas::Base::from(self.block_height).to_repr());
-        let vrf_proof = VrfProof::prove(self.secret, &vrf_input);
-
-        let params = MoneyPoWRewardParamsV1 { input: c_input, output: c_output, vrf_proof };
+        let params = MoneyPoWRewardParamsV1 { input: c_input, output: c_output };
         let debris = PoWRewardCallDebris { params, proofs: vec![proof] };
         Ok(debris)
     }

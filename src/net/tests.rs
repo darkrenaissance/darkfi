@@ -18,7 +18,7 @@
 
 // cargo +nightly test --release --features=net --lib p2p -- --include-ignored
 
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use log::{debug, info, warn};
 use rand::Rng;
@@ -26,7 +26,7 @@ use smol::{channel, future, Executor};
 use url::Url;
 
 use crate::{
-    net::{P2p, Settings},
+    net::{hosts::store::HostColor, P2p, Settings},
     system::sleep,
 };
 
@@ -107,7 +107,6 @@ async fn hostlist_propagation(ex: Arc<Executor<'static>>) {
         //outbound_connect_timeout: 10,
         inbound_connections: usize::MAX,
         seeds: vec![],
-        hostlist: String::from("~/.local/darkfi/p2p-test/seed.tsv"),
         peers: vec![],
         allowed_transports: vec!["tcp".to_string()],
         node_id: "seed".to_string(),
@@ -136,7 +135,6 @@ async fn hostlist_propagation(ex: Arc<Executor<'static>>) {
             //outbound_connect_timeout: 10,
             inbound_connections: usize::MAX,
             seeds: vec![seed_addr.clone()],
-            hostlist: format!("~/.local/darkfi/p2p-test/hosts{}.tsv", i),
             peers,
             allowed_transports: vec!["tcp".to_string()],
             node_id: i.to_string(),
@@ -157,8 +155,23 @@ async fn hostlist_propagation(ex: Arc<Executor<'static>>) {
 
     for p2p in p2p_instances.iter() {
         let hosts = p2p.hosts();
-        // We should have some greylist entries at this point.
-        assert!(!hosts.is_empty_greylist().await);
+
+        // Ensure there are no duplicate entries in and between any of the hostlists.
+        let mut urls = HashSet::new();
+        let greylist = hosts.container.fetch_all(HostColor::Grey).await;
+        for (url, _) in greylist {
+            assert!(urls.insert(url));
+        }
+        let whitelist = hosts.container.fetch_all(HostColor::White).await;
+        for (url, _) in whitelist {
+            assert!(urls.insert(url));
+        }
+        let anchorlist = hosts.container.fetch_all(HostColor::Gold).await;
+        for (url, _) in anchorlist {
+            assert!(urls.insert(url));
+        }
+        // We should have some peers at this point.
+        assert!(!urls.is_empty());
     }
 
     // Stop the P2P network

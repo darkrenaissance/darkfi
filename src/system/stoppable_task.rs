@@ -143,8 +143,6 @@ mod tests {
     use super::*;
     use crate::{error::Error, system::sleep_forever};
     use log::warn;
-    use smol::Executor;
-    use std::sync::Arc;
 
     #[test]
     fn stoppit_mom() {

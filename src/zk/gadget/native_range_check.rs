@@ -162,6 +162,9 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
 
         bits.chunks_exact(WINDOW_SIZE)
             .map(|x| {
+                // Because bits <= WINDOW_SIZE * NUM_BITS, the last window may be
+                // smaller than WINDOW_SIZE.
+                // Additionally we have a slice, so convert them all to a fixed length array.
                 let mut chunks = [false; WINDOW_SIZE];
                 chunks.copy_from_slice(x);
                 chunks
@@ -169,12 +172,15 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
             .collect()
     }
 
+    /// This is the main chip function. Attempts to witness the bits for `z_0` proving
+    /// it is within the allowed range.
     pub fn decompose(
         &self,
         region: &mut Region<'_, pallas::Base>,
         z_0: AssignedCell<pallas::Base, pallas::Base>,
         offset: usize,
     ) -> Result<(), plonk::Error> {
+        // Check NUM_WINDOWS is the minimum required to cover NUM_BITS
         assert!(WINDOW_SIZE * NUM_WINDOWS < NUM_BITS + WINDOW_SIZE);
 
         // The number of bits in the last chunk.
@@ -188,19 +194,33 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
 
         let mut z_values: Vec<AssignedCell<pallas::Base, pallas::Base>> = vec![z_0.clone()];
         let mut z = z_0;
+        // Convert `z_0` into a `Vec<Value<Fp>>` where each value corresponds to a chunk.
         let decomposed_chunks = z.value().map(Self::decompose_value).transpose_vec(NUM_WINDOWS);
 
         let two_pow_k = pallas::Base::from(1 << WINDOW_SIZE as u64);
         let two_pow_k_inverse = Value::known(two_pow_k.invert().unwrap());
 
+        //   z = 2⁰b₀ + 2¹b₁ + ⋯ + 2ⁿbₙ
+        //     = c₀ + 2ʷc₁ + 2²ʷc₂ + ⋯ + 2ᵐʷcₘ
+        // where cᵢ are the chunks.
+        //
+        // We want to show each cᵢ consists of WINDOW_SIZE bits which we do using
+        // the lookup table.
+        // The algo starts with z₀ = z, then calculates:
+        //   zᵢ = (zᵢ₋₁ - cᵢ₋₁)/2ʷ
+        // Doing this for all chunks, we end up with zₘ = 0 which is done after.
+
+        // Loop over the decomposed chunks...
         for (i, chunk) in decomposed_chunks.iter().enumerate() {
             let z_next = {
                 let z_curr = z.value().copied();
+                // Convert the chunk Value<[bool; WINDOW_SIZE]> into Value<pallas::Base>
                 let chunk_value = chunk.map(|c| {
                     pallas::Base::from(c.iter().rev().fold(0, |acc, c| (acc << 1) + *c as u64))
                 });
-                // z_next = (z_curr - k_i) / 2^K
+                // Calc z_next = (z_curr - k_i) / 2^K
                 let z_next = (z_curr - chunk_value) * two_pow_k_inverse;
+                // Witness z_next into the running sum decomposition gate
                 region.assign_advice(
                     || format!("z_{}", i + offset + 1),
                     self.config.z,
@@ -214,7 +234,7 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
 
         assert!(z_values.len() == NUM_WINDOWS + 1);
 
-        // Constrain the remaining bits to be zero
+        // Constrain the last chunk zₘ = 0
         region.constrain_constant(z_values.last().unwrap().cell(), pallas::Base::zero())?;
 
         // If the last chunk is `s` bits where `s < WINDOW_SIZE`,

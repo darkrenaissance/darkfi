@@ -18,11 +18,12 @@
 
 use std::time::Duration;
 
-use log::debug;
+use log::warn;
 use url::Url;
 
 use super::{
     channel::{Channel, ChannelPtr},
+    hosts::store::HostColor,
     session::SessionWeakPtr,
     settings::SettingsPtr,
     transport::Dialer,
@@ -45,8 +46,17 @@ impl Connector {
 
     /// Establish an outbound connection
     pub async fn connect(&self, url: &Url) -> Result<(Url, ChannelPtr)> {
-        if self.session.upgrade().unwrap().p2p().hosts().is_rejected(url).await {
-            debug!(target: "net::connector::connect", "Peer {} is rejected", url);
+        if self
+            .session
+            .upgrade()
+            .unwrap()
+            .p2p()
+            .hosts()
+            .container
+            .contains(HostColor::Black as usize, url)
+            .await
+        {
+            warn!(target: "net::connector::connect", "Peer {} is blacklisted", url);
             return Err(Error::ConnectFailed)
         }
 
@@ -70,7 +80,8 @@ impl Connector {
         let timeout = Duration::from_secs(self.settings.outbound_connect_timeout);
         let ptstream = dialer.dial(Some(timeout)).await?;
 
-        let channel = Channel::new(ptstream, endpoint.clone(), self.session.clone()).await;
+        let channel =
+            Channel::new(ptstream, Some(endpoint.clone()), url.clone(), self.session.clone()).await;
         Ok((endpoint, channel))
     }
 }

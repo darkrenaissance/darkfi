@@ -18,15 +18,20 @@
 
 use std::{
     sync::Arc,
-    time::{Duration, UNIX_EPOCH},
+    time::{Duration, Instant, UNIX_EPOCH},
 };
 
 use log::{debug, warn};
 use url::Url;
 
-use super::super::p2p::{P2p, P2pPtr};
+use super::{
+    super::p2p::{P2p, P2pPtr},
+    store::HostColor,
+};
 use crate::{
-    net::{connector::Connector, protocol::ProtocolVersion, session::Session},
+    net::{
+        connector::Connector, hosts::store::HostState, protocol::ProtocolVersion, session::Session,
+    },
     system::{
         run_until_completion, sleep, timeout::timeout, LazyWeak, StoppableTask, StoppableTaskPtr,
     },
@@ -50,7 +55,7 @@ impl GreylistRefinery {
     }
 
     pub async fn start(self: Arc<Self>) {
-        match self.p2p().hosts().load_hosts().await {
+        match self.p2p().hosts().container.load_all(&self.p2p().settings().hostlist).await {
             Ok(()) => {
                 debug!(target: "net::refinery::start()", "Load hosts successful!");
             }
@@ -74,7 +79,7 @@ impl GreylistRefinery {
     pub async fn stop(self: Arc<Self>) {
         self.process.stop().await;
 
-        match self.p2p().hosts().save_hosts().await {
+        match self.p2p().hosts().container.save_all(&self.p2p().settings().hostlist).await {
             Ok(()) => {
                 debug!(target: "net::refinery::stop()", "Save hosts successful!");
             }
@@ -84,65 +89,80 @@ impl GreylistRefinery {
         }
     }
 
-    // Randomly select a peer on the greylist and probe it.
+    // Randomly select a peer on the greylist and probe it. This method will remove from the
+    // greylist and store on the whitelist providing the peer is responsive.
     async fn run(self: Arc<Self>) {
+        let settings = self.p2p().settings();
+        let hosts = self.p2p().hosts();
         loop {
-            sleep(self.p2p().settings().greylist_refinery_interval).await;
+            sleep(settings.greylist_refinery_interval).await;
 
-            let hosts = self.p2p().hosts();
-
-            if hosts.is_empty_greylist().await {
+            if hosts.container.is_empty(HostColor::Grey).await {
                 debug!(target: "net::refinery",
                 "Greylist is empty! Cannot start refinery process");
 
                 continue
             }
 
+            // Pause the refinery if we've had zero connections for longer than the configured
+            // limit.
+            let offline_limit = Duration::from_secs(settings.time_with_no_connections);
+            let offline_timer = Instant::now().duration_since(*hosts.last_connection.read().await);
+
+            if hosts.channels().await.is_empty() && offline_timer >= offline_limit {
+                warn!(target: "net::refinery", "No connections for {}s. Refinery paused.",
+                          offline_timer.as_secs());
+
+                // It is neccessary to clear suspended hosts at this point, otherwise these
+                // hosts cannot be connected to in Outbound Session. Failure to do this could
+                // result in the refinery being paused forver (since connections could never be
+                // made).
+                let suspended_hosts = hosts.suspended().await;
+                for host in suspended_hosts {
+                    hosts.unregister(&host).await;
+                }
+
+                continue
+            }
+
             // Only attempt to refine peers that match our transports.
-            match hosts.greylist_fetch_random_with_schemes().await {
+            match hosts
+                .container
+                .fetch_random_with_schemes(HostColor::Grey, &settings.allowed_transports)
+                .await
+            {
                 Some((entry, position)) => {
                     let url = &entry.0;
 
-                    // Skip this node if it's being migrated currently.
-                    if hosts.is_migrating(url).await {
+                    if hosts.try_register(url.clone(), HostState::Refine).await.is_err() {
                         continue
                     }
 
-                    // Don't refine nodes that we are already connected to.
-                    if self.p2p().exists(url).await {
-                        continue
-                    }
-
-                    // Don't refine nodes that we are trying to connect to.
-                    if !self.p2p().add_pending(url).await {
-                        continue
-                    }
-
-                    let mut greylist = hosts.greylist.write().await;
                     if !ping_node(url.clone(), self.p2p().clone()).await {
-                        greylist.remove(position);
+                        hosts.container.remove(HostColor::Grey, url, position).await;
 
-                        // Remove connection from pending
-                        self.p2p().remove_pending(url).await;
                         debug!(
                             target: "net::refinery",
                             "Peer {} is non-responsive. Removed from greylist", url,
                         );
 
+                        // Remove this entry from HostRegistry to avoid this host getting
+                        // stuck in the Refining state.
+                        //
+                        // It is not necessary to call this when the refinery passes, since the
+                        // state will be changed to Connected.
+                        hosts.unregister(url).await;
+
                         continue
                     }
-                    drop(greylist);
 
                     let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
 
                     // Append to the whitelist.
-                    hosts.whitelist_store_or_update(&[(url.clone(), last_seen)]).await;
+                    hosts.container.store_or_update(HostColor::White, url.clone(), last_seen).await;
 
                     // Remove whitelisted peer from the greylist.
-                    hosts.greylist_remove(url, position).await;
-
-                    // Remove connection from pending
-                    self.p2p().remove_pending(url).await;
+                    hosts.container.remove(HostColor::Grey, url, position).await;
                 }
                 None => {
                     debug!(target: "net::refinery", "No matching greylist entries found. Cannot proceed with refinery");

@@ -261,7 +261,7 @@ pub(crate) fn get_blockchain_time(mut ctx: FunctionEnvMut<Env>) -> i64 {
 
     // Create the return object
     let mut ret = Vec::with_capacity(8);
-    ret.extend_from_slice(&block.header.timestamp.0.to_be_bytes());
+    ret.extend_from_slice(&block.header.timestamp.inner().to_be_bytes());
 
     // Copy Vec<u8> to the VM
     let mut objects = env.objects.borrow_mut();
@@ -274,12 +274,11 @@ pub(crate) fn get_blockchain_time(mut ctx: FunctionEnvMut<Env>) -> i64 {
 }
 
 /// Grabs last block from the `Blockchain` overlay and then copies its
-/// height, nonce and previous block hash into the VM, by appending the data
-/// to the VM's object store.
+/// height to the VM's object store.
 ///
 /// On success, returns the index of the new object in the object store.
 /// Otherwise, returns an error code.
-pub(crate) fn get_last_block_info(mut ctx: FunctionEnvMut<Env>) -> i64 {
+pub(crate) fn get_last_block_height(mut ctx: FunctionEnvMut<Env>) -> i64 {
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = &env.contract_id;
 
@@ -305,13 +304,12 @@ pub(crate) fn get_last_block_info(mut ctx: FunctionEnvMut<Env>) -> i64 {
     };
 
     // Subtract used gas. Here we count the size of the object.
-    env.subtract_gas(&mut store, (8 + 8 + blake3::OUT_LEN) as u64);
+    // u64 is 8 bytes.
+    env.subtract_gas(&mut store, 8);
 
     // Create the return object
-    let mut ret = Vec::with_capacity(8 + 8 + blake3::OUT_LEN);
+    let mut ret = Vec::with_capacity(8);
     ret.extend_from_slice(&darkfi_serial::serialize(&block.header.height));
-    ret.extend_from_slice(&darkfi_serial::serialize(&block.header.nonce));
-    ret.extend_from_slice(block.header.previous.as_bytes());
 
     // Copy Vec<u8> to the VM
     let mut objects = env.objects.borrow_mut();

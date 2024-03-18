@@ -18,7 +18,7 @@
 
 use darkfi_serial::{
     async_trait, AsyncDecodable, AsyncEncodable, Decodable, Encodable, SerialDecodable,
-    SerialEncodable, VarInt,
+    SerialEncodable,
 };
 use log::trace;
 use smol::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
@@ -82,6 +82,22 @@ impl_p2p_message!(AddrsMessage, "addr");
 pub struct VersionMessage {
     /// Only used for debugging. Compromises privacy when set.
     pub node_id: String,
+    /// Identifies protocol version being used by the node
+    pub version: semver::Version,
+    /// UNIX timestamp of when the VersionMessage was created.
+    pub timestamp: u64,
+    /// Network address of the node receiving this message (before
+    /// resolving).
+    pub connect_recv_addr: Url,
+    /// Network address of the node receiving this message (after
+    /// resolving). Optional because only used by outbound connections.
+    pub resolve_recv_addr: Option<Url>,
+    /// External address of the sender node, if it exists (empty
+    /// otherwise).
+    pub ext_send_addr: Vec<Url>,
+    /// List of features consisting of a tuple of (services, version)
+    /// to be enabled for this connection
+    pub features: Vec<(String, u32)>,
 }
 impl_p2p_message!(VersionMessage, "version");
 
@@ -118,17 +134,12 @@ pub async fn read_packet<R: AsyncRead + Unpin + Send + Sized>(stream: &mut R) ->
     }
 
     // The type of the message.
-    let command_len = VarInt::decode_async(stream).await?.0 as usize;
-    let mut cmd = vec![0u8; command_len];
-    stream.read_exact(&mut cmd).await?;
-    let command = String::from_utf8(cmd)?;
+    let command = String::decode_async(stream).await?;
     trace!(target: "net::message", "Read command: {}", command);
 
     // The message-dependent data (see message types)
-    let payload_len = VarInt::decode_async(stream).await?.0 as usize;
-    let mut payload = vec![0u8; payload_len];
-    stream.read_exact(&mut payload).await?;
-    trace!(target: "net::message", "Read payload {} bytes", payload_len);
+    let payload = Vec::<u8>::decode_async(stream).await?;
+    trace!(target: "net::message", "Read payload {} bytes", payload.len());
 
     Ok(Packet { command, payload })
 }
@@ -140,27 +151,18 @@ pub async fn send_packet<W: AsyncWrite + Unpin + Send + Sized>(
     packet: Packet,
 ) -> Result<usize> {
     assert!(!packet.command.is_empty());
-    //assert!(!packet.payload.is_empty());
     assert!(std::mem::size_of::<usize>() <= std::mem::size_of::<u64>());
 
     let mut written: usize = 0;
 
     trace!(target: "net::message", "Sending magic...");
-    stream.write_all(&MAGIC_BYTES).await?;
-    written += MAGIC_BYTES.len();
+    written += MAGIC_BYTES.encode_async(stream).await?;
     trace!(target: "net::message", "Sent magic");
 
-    trace!(target: "net::message", "Sending command...");
-    written += VarInt(packet.command.len() as u64).encode_async(stream).await?;
-    let cmd_ref = packet.command.as_bytes();
-    stream.write_all(cmd_ref).await?;
-    written += cmd_ref.len();
+    written += packet.command.encode_async(stream).await?;
     trace!(target: "net::message", "Sent command: {}", packet.command);
 
-    trace!(target: "net::message", "Sending payload...");
-    written += VarInt(packet.payload.len() as u64).encode_async(stream).await?;
-    stream.write_all(&packet.payload).await?;
-    written += packet.payload.len();
+    written += packet.payload.encode_async(stream).await?;
     trace!(target: "net::message", "Sent payload {} bytes", packet.payload.len() as u64);
 
     stream.flush().await?;

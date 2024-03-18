@@ -19,12 +19,12 @@
 use darkfi::{
     blockchain::BlockInfo,
     rpc::{jsonrpc::JsonNotification, util::JsonValue},
-    system::Subscription,
+    system::{sleep, Subscription},
     tx::{ContractCallLeaf, Transaction, TransactionBuilder},
     util::encoding::base64,
     validator::{
         consensus::{Fork, Proposal},
-        utils::best_forks_indexes,
+        utils::best_fork_index,
     },
     zk::{empty_witnesses, ProvingKey, ZkCircuit},
     zkas::ZkBinary,
@@ -42,12 +42,13 @@ use darkfi_serial::{serialize, Encodable};
 use log::info;
 use num_bigint::BigUint;
 use rand::rngs::OsRng;
+use smol::channel::{Receiver, Sender};
 
 use crate::{proto::ProposalMessage, Darkfid};
 
 // TODO: handle all ? so the task don't stop on errors
 
-/// async task used for participating in the PoW block production.
+/// Async task used for participating in the PoW block production.
 /// Miner initializes their setup and waits for next finalization,
 /// by listenning for new proposals from the network, for optimal
 /// conditions. After finalization occurs, they start the actual
@@ -91,6 +92,7 @@ pub async fn miner_task(node: &Darkfid, recipient: &PublicKey, skip_sync: bool) 
 
     // Listen for blocks until next finalization, for optimal conditions
     if !skip_sync {
+        info!(target: "darkfid::task::miner_task", "Waiting for next finalization...");
         loop {
             subscription.receive().await;
 
@@ -107,18 +109,22 @@ pub async fn miner_task(node: &Darkfid, recipient: &PublicKey, skip_sync: bool) 
         }
     }
 
+    // Create channels so threads can signal each other
+    let (sender, stop_signal) = smol::channel::bounded(1);
+
+    info!(target: "darkfid::task::miner_task", "Miner initialized successfully!");
+
     // Start miner loop
     loop {
-        // Grab best current fork proposals sequence
+        // Grab best current fork
         let forks = node.validator.consensus.forks.read().await;
-        let fork_index = best_forks_indexes(&forks)?[0];
-        let fork_proposals = forks[fork_index].proposals.clone();
+        let extended_fork = forks[best_fork_index(&forks)?].full_clone()?;
         drop(forks);
 
         // Start listenning for network proposals and mining next block for best fork.
         smol::future::or(
-            listen_to_network(node, fork_proposals, &subscription),
-            mine_next_block(node, fork_index, &mut secret, recipient, &zkbin, &pk),
+            listen_to_network(node, &extended_fork, &subscription, &sender),
+            mine(node, &extended_fork, &mut secret, recipient, &zkbin, &pk, &stop_signal),
         )
         .await?;
 
@@ -134,39 +140,78 @@ pub async fn miner_task(node: &Darkfid, recipient: &PublicKey, skip_sync: bool) 
     }
 }
 
-/// Auxiliary function to listen for incoming proposals and check if the best fork has changed
+/// Async task to listen for incoming proposals and check if the best fork has changed
 async fn listen_to_network(
     node: &Darkfid,
-    fork_proposals: Vec<blake3::Hash>,
+    extended_fork: &Fork,
     subscription: &Subscription<JsonNotification>,
+    sender: &Sender<()>,
 ) -> Result<()> {
-    'main_loop: loop {
+    // Grab extended fork last proposal hash
+    let last_proposal_hash = extended_fork.last_proposal()?.hash;
+    loop {
         // Wait until a new proposal has been received
         subscription.receive().await;
 
         // Grab a lock over node forks
         let forks = node.validator.consensus.forks.read().await;
 
-        // Grab best current fork indexes
-        let fork_indexes = best_forks_indexes(&forks)?;
+        // Grab best current fork index
+        let index = best_fork_index(&forks)?;
 
-        // Iterate to verify if proposals sequence has changed
-        for index in fork_indexes {
-            if forks[index].proposals == fork_proposals {
-                drop(forks);
-                continue 'main_loop
-            }
+        // Verify if proposals sequence has changed
+        if forks[index].last_proposal()?.hash != last_proposal_hash {
+            drop(forks);
+            break
         }
 
         drop(forks);
-        return Ok(())
     }
+
+    // Signal miner to abort mining
+    sender.send(()).await?;
+    node.miner_daemon_request("abort", JsonValue::Array(vec![])).await?;
+
+    Ok(())
 }
 
-/// Auxiliary function to generate and mine provided fork index next block
+/// Async task to generate and mine provided fork index next block,
+/// while listening for a stop signal
+async fn mine(
+    node: &Darkfid,
+    extended_fork: &Fork,
+    secret: &mut SecretKey,
+    recipient: &PublicKey,
+    zkbin: &ZkBinary,
+    pk: &ProvingKey,
+    stop_signal: &Receiver<()>,
+) -> Result<()> {
+    smol::future::or(
+        wait_stop_signal(stop_signal),
+        mine_next_block(node, extended_fork, secret, recipient, zkbin, pk),
+    )
+    .await
+}
+
+/// Async task to wait for listener's stop signal.
+async fn wait_stop_signal(stop_signal: &Receiver<()>) -> Result<()> {
+    // Clean stop signal channel
+    if stop_signal.is_full() {
+        stop_signal.recv().await?;
+    }
+
+    // Wait for listener signal
+    stop_signal.recv().await?;
+    // Take a nap to let listener notify minerd
+    sleep(10).await;
+
+    Ok(())
+}
+
+/// Async task to generate and mine provided fork index next block
 async fn mine_next_block(
     node: &Darkfid,
-    fork_index: usize,
+    extended_fork: &Fork,
     secret: &mut SecretKey,
     recipient: &PublicKey,
     zkbin: &ZkBinary,
@@ -174,7 +219,7 @@ async fn mine_next_block(
 ) -> Result<()> {
     // Grab next target and block
     let (next_target, mut next_block) =
-        generate_next_block(node, fork_index, secret, recipient, zkbin, pk).await?;
+        generate_next_block(extended_fork, secret, recipient, zkbin, pk).await?;
 
     // Execute request to minerd and parse response
     let target = JsonValue::String(next_target.to_string());
@@ -186,68 +231,57 @@ async fn mine_next_block(
     next_block.sign(secret)?;
 
     // Verify it
-    node.validator.consensus.module.read().await.verify_current_block(&next_block)?;
+    extended_fork.module.verify_current_block(&next_block)?;
 
     // Append the mined block as a proposal
     let proposal = Proposal::new(next_block)?;
-    node.validator.consensus.append_proposal(&proposal).await?;
+    node.validator.append_proposal(&proposal).await?;
 
     // Broadcast proposal to the network
     let message = ProposalMessage(proposal);
-    node.miners_p2p.as_ref().unwrap().broadcast(&message).await;
-    node.sync_p2p.broadcast(&message).await;
+    node.p2p.broadcast(&message).await;
 
     Ok(())
 }
 
 /// Auxiliary function to generate next block in an atomic manner
 async fn generate_next_block(
-    node: &Darkfid,
-    fork_index: usize,
+    extended_fork: &Fork,
     secret: &mut SecretKey,
     recipient: &PublicKey,
     zkbin: &ZkBinary,
     pk: &ProvingKey,
 ) -> Result<(BigUint, BlockInfo)> {
-    // Grab a lock over nodes' current forks
-    let forks = node.validator.consensus.forks.read().await;
+    // Grab extended fork last proposal hash
+    let last_proposal = extended_fork.last_proposal()?;
 
-    // Grab best current fork
-    let fork = &forks[fork_index];
-
-    // Generate new signing key for next block
-    let next_block_height = fork.get_next_block_height()?;
     // We are deriving the next secret key for optimization.
     // Next secret is the poseidon hash of:
     //  [prefix, current(previous) secret, signing(block) height].
     let prefix = pallas::Base::from_raw([4, 0, 0, 0]);
-    let next_secret = poseidon_hash([prefix, secret.inner(), next_block_height.into()]);
+    let next_secret =
+        poseidon_hash([prefix, secret.inner(), (last_proposal.block.header.height + 1).into()]);
     *secret = SecretKey::from(next_secret);
 
     // Generate reward transaction
-    let tx = generate_transaction(fork, secret, recipient, zkbin, pk, next_block_height)?;
+    let tx = generate_transaction(&extended_fork.last_proposal()?, secret, recipient, zkbin, pk)?;
 
     // Generate next block proposal
-    let target = fork.module.next_mine_target()?;
-    let next_block = node.validator.consensus.generate_unsigned_block(fork, tx).await?;
-
-    // Drop forks lock
-    drop(forks);
+    let target = extended_fork.module.next_mine_target()?;
+    let next_block = extended_fork.generate_unsigned_block(tx).await?;
 
     Ok((target, next_block))
 }
 
 /// Auxiliary function to generate a Money::PoWReward transaction
 fn generate_transaction(
-    fork: &Fork,
+    last_proposal: &Proposal,
     secret: &SecretKey,
     recipient: &PublicKey,
     zkbin: &ZkBinary,
     pk: &ProvingKey,
-    block_height: u64,
 ) -> Result<Transaction> {
     // Grab extended proposal info
-    let last_proposal = fork.last_proposal()?;
     let last_nonce = last_proposal.block.header.nonce;
     let fork_previous_hash = last_proposal.block.header.previous;
 
@@ -259,7 +293,7 @@ fn generate_transaction(
     let debris = PoWRewardCallBuilder {
         secret: *secret,
         recipient: *recipient,
-        block_height,
+        block_height: last_proposal.block.header.height + 1,
         last_nonce,
         fork_previous_hash,
         spend_hook,

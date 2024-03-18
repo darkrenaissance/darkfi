@@ -30,7 +30,6 @@ pub struct ZeroCondConfig<F> {
     selector: Selector,
     a: Column<Advice>,
     b: Column<Advice>,
-    _z: Column<Advice>,
     is_zero: IsZeroConfig<F>,
     output: Column<Advice>,
 }
@@ -45,6 +44,13 @@ impl<F: WithSmallOrderMulGroup<3> + Ord> ZeroCondChip<F> {
         Self { config }
     }
 
+    /// Configure the chip.
+    ///
+    /// Advice columns:
+    /// * `[0]` - a
+    /// * `[1]` - b
+    /// * `[2]` - is_zero output
+    /// * `[3]` - zero_cond output
     pub fn configure(
         meta: &mut ConstraintSystem<F>,
         advices: [Column<Advice>; 4],
@@ -62,26 +68,18 @@ impl<F: WithSmallOrderMulGroup<3> + Ord> ZeroCondChip<F> {
             advices[2],
         );
 
+        // NOTE: a is not used here because it already went into IsZero
         meta.create_gate("f(a, b) = if a == 0 {a} else {b}", |meta| {
             let s = meta.query_selector(selector);
-            let a = meta.query_advice(advices[0], Rotation::cur());
             let b = meta.query_advice(advices[1], Rotation::cur());
             let output = meta.query_advice(advices[3], Rotation::cur());
 
             let one = Expression::Constant(F::ONE);
-            vec![
-                s * (is_zero.expr() * (output.clone() - a) + (one - is_zero.expr()) * (output - b)),
-            ]
+
+            vec![s * (is_zero.expr() * output.clone() + (one - is_zero.expr()) * (output - b))]
         });
 
-        ZeroCondConfig {
-            selector,
-            a: advices[0],
-            b: advices[1],
-            _z: advices[2],
-            is_zero,
-            output: advices[3],
-        }
+        ZeroCondConfig { selector, a: advices[0], b: advices[1], is_zero, output: advices[3] }
     }
 
     pub fn assign(

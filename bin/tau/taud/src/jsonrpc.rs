@@ -30,6 +30,7 @@ use smol::lock::{Mutex, MutexGuard};
 use tinyjson::JsonValue;
 
 use darkfi::{
+    event_graph::EventGraphPtr,
     net,
     rpc::{
         jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResult, JsonSubscriber},
@@ -55,7 +56,9 @@ pub struct JsonRpcInterface {
     workspace: Mutex<String>,
     workspaces: Arc<HashMap<String, ChaChaBox>>,
     p2p: net::P2pPtr,
+    event_graph: EventGraphPtr,
     dnet_sub: JsonSubscriber,
+    deg_sub: JsonSubscriber,
     rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
 }
 
@@ -80,6 +83,11 @@ impl RequestHandler for JsonRpcInterface {
             "ping" => return self.pong(req.id, req.params).await,
             "dnet.subscribe_events" => return self.dnet_subscribe_events(req.id, req.params).await,
             "dnet.switch" => self.dnet_switch(req.params).await,
+
+            "deg.switch" => self.deg_switch(req.id, req.params).await,
+            "deg.subscribe_events" => return self.deg_subscribe_events(req.id, req.params).await,
+            "eventgraph.get_info" => return self.eg_get_info(req.id, req.params).await,
+
             // TODO: make this optional
             "p2p.get_info" => return self.p2p_get_info(req.id, req.params).await,
             _ => return JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
@@ -100,13 +108,16 @@ impl HandlerP2p for JsonRpcInterface {
 }
 
 impl JsonRpcInterface {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         dataset_path: PathBuf,
         notify_queue_sender: smol::channel::Sender<TaskInfo>,
         nickname: String,
         workspaces: Arc<HashMap<String, ChaChaBox>>,
         p2p: net::P2pPtr,
+        event_graph: EventGraphPtr,
         dnet_sub: JsonSubscriber,
+        deg_sub: JsonSubscriber,
     ) -> Self {
         let workspace = Mutex::new(workspaces.iter().last().unwrap().0.clone());
         Self {
@@ -116,8 +127,10 @@ impl JsonRpcInterface {
             workspaces,
             notify_queue_sender,
             p2p,
+            event_graph,
             rpc_connections: Mutex::new(HashSet::new()),
             dnet_sub,
+            deg_sub,
         }
     }
 
@@ -162,6 +175,60 @@ impl JsonRpcInterface {
     }
 
     // RPCAPI:
+    // Initializes a subscription to deg events.
+    // Once a subscription is established, apps using eventgraph will send JSON-RPC notifications of
+    // new eventgraph events to the subscriber.
+    //
+    // --> {"jsonrpc": "2.0", "method": "deg.subscribe_events", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "method": "deg.subscribe_events", "params": [`event`]}
+    pub async fn deg_subscribe_events(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
+        if !params.is_empty() {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        }
+
+        self.deg_sub.clone().into()
+    }
+
+    // RPCAPI:
+    // Activate or deactivate deg in the EVENTGRAPH.
+    // By sending `true`, deg will be activated, and by sending `false` deg
+    // will be deactivated. Returns `true` on success.
+    //
+    // --> {"jsonrpc": "2.0", "method": "deg.switch", "params": [true], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
+    async fn deg_switch(&self, _id: u16, params: JsonValue) -> TaudResult<JsonValue> {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
+        if params.len() != 1 || !params[0].is_bool() {
+            return Err(TaudError::InvalidData("Invalid parameters".into()))
+        }
+
+        let switch = params[0].get::<bool>().unwrap();
+
+        if *switch {
+            self.event_graph.deg_enable().await;
+        } else {
+            self.event_graph.deg_disable().await;
+        }
+
+        Ok(JsonValue::Boolean(true))
+    }
+
+    // RPCAPI:
+    // Get EVENTGRAPH info.
+    //
+    // --> {"jsonrpc": "2.0", "method": "deg.switch", "params": [true], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
+    async fn eg_get_info(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params_ = params.get::<Vec<JsonValue>>().unwrap();
+        if !params_.is_empty() {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        }
+
+        self.event_graph.eventgraph_info(id, params).await
+    }
+
+    // RPCAPI:
     // Add new task and returns `true` upon success.
     // --> {"jsonrpc": "2.0", "method": "add",
     //      "params":
@@ -192,7 +259,7 @@ impl JsonRpcInterface {
 
         let due = match params["due"] {
             JsonValue::Null => None,
-            JsonValue::Number(numba) => Some(Timestamp(numba as u64)),
+            JsonValue::Number(numba) => Some(Timestamp::from_u64(numba as u64)),
             _ => return Err(TaudError::InvalidData("Invalid parameter \"due\"".to_string())),
         };
 
@@ -256,7 +323,7 @@ impl JsonRpcInterface {
             &self.nickname,
             due,
             rank,
-            Timestamp(created_at.unwrap()),
+            Timestamp::from_u64(created_at.unwrap()),
         )?;
         new_task.set_project(&projects);
         new_task.set_assign(&assigns);
@@ -293,7 +360,7 @@ impl JsonRpcInterface {
 
         let month = match params[0].get::<String>() {
             Some(u64_str) => match u64_str.parse::<u64>() {
-                Ok(v) => Some(Timestamp(v)),
+                Ok(v) => Some(Timestamp::from_u64(v)),
                 //Err(e) => return Err(TaudError::InvalidData(e.to_string())),
                 Err(_) => None,
             },
@@ -425,7 +492,7 @@ impl JsonRpcInterface {
 
         let month = match params[0].get::<String>() {
             Some(u64_str) => match u64_str.parse::<u64>() {
-                Ok(v) => Some(Timestamp(v)),
+                Ok(v) => Some(Timestamp::from_u64(v)),
                 //Err(e) => return Err(TaudError::InvalidData(e.to_string())),
                 Err(_) => None,
             },
@@ -453,7 +520,7 @@ impl JsonRpcInterface {
 
         let month = match params[1].get::<String>() {
             Some(u64_str) => match u64_str.parse::<u64>() {
-                Ok(v) => Some(Timestamp(v)),
+                Ok(v) => Some(Timestamp::from_u64(v)),
                 //Err(e) => return Err(TaudError::InvalidData(e.to_string())),
                 Err(_) => None,
             },
@@ -629,7 +696,7 @@ impl JsonRpcInterface {
             match &fields["due"] {
                 JsonValue::Null => set_event(&mut task, "due", &self.nickname, "None"),
                 JsonValue::Number(ts_num) => {
-                    task.set_due(Some(Timestamp(*ts_num as u64)));
+                    task.set_due(Some(Timestamp::from_u64(*ts_num as u64)));
                     set_event(&mut task, "due", &self.nickname, &ts_num.to_string())
                 }
                 _ => unreachable!(),

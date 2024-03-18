@@ -119,28 +119,22 @@ impl Darkfid {
             }
         };
 
-        if self.miners_p2p.is_some() {
-            // Block production participants can directly perform
-            // the state transition check and append to their
-            // pending transactions store.
-            if self.validator.append_tx(&tx, true).await.is_err() {
-                error!(target: "darkfid::rpc::tx_broadcast", "Failed to append transaction to mempool");
-                return server_error(RpcError::TxSimulationFail, id, None)
-            }
+        // Block production participants can directly perform
+        // the state transition check and append to their
+        // pending transactions store.
+        let error_message = if self.miner {
+            "Failed to append transaction to mempool"
         } else {
-            // We'll perform the state transition check here.
-            let result = self.validator.append_tx(&tx, false).await;
-            if result.is_err() {
-                error!(
-                    target: "darkfid::rpc::tx_broadcast", "Failed to validate state transition: {}",
-                    result.err().unwrap()
-                );
-                return server_error(RpcError::TxSimulationFail, id, None)
-            };
-        }
+            "Failed to validate state transition"
+        };
+        // We'll perform the state transition check here.
+        if let Err(e) = self.validator.append_tx(&tx, self.miner).await {
+            error!(target: "darkfid::rpc::tx_broadcast", "{}: {}", error_message, e);
+            return server_error(RpcError::TxSimulationFail, id, None)
+        };
 
-        self.sync_p2p.broadcast(&tx).await;
-        if self.sync_p2p.channels().await.is_empty() {
+        self.p2p.broadcast(&tx).await;
+        if self.p2p.hosts().channels().await.is_empty() {
             error!(target: "darkfid::rpc::tx_broadcast", "Failed broadcasting tx, no connected channels");
             return server_error(RpcError::TxBroadcastFail, id, None)
         }

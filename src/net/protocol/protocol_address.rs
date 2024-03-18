@@ -25,7 +25,7 @@ use smol::Executor;
 use super::{
     super::{
         channel::ChannelPtr,
-        hosts::store::HostsPtr,
+        hosts::store::{HostColor, HostsPtr},
         message::{AddrsMessage, GetAddrsMessage},
         message_subscriber::MessageSubscription,
         p2p::P2pPtr,
@@ -118,7 +118,7 @@ impl ProtocolAddress {
                 "Appending to greylist...",
             );
 
-            self.hosts.greylist_store_or_update(&addrs_msg.addrs).await;
+            self.hosts.insert(HostColor::Grey, &addrs_msg.addrs).await;
         }
     }
 
@@ -157,7 +157,9 @@ impl ProtocolAddress {
             "Fetching anchorlist entries with schemes");
             let mut addrs = self
                 .hosts
-                .anchorlist_fetch_n_random_with_schemes(
+                .container
+                .fetch_n_random_with_schemes(
+                    HostColor::Gold,
                     &get_addrs_msg.transports,
                     get_addrs_msg.max,
                 )
@@ -169,7 +171,9 @@ impl ProtocolAddress {
             addrs.append(
                 &mut self
                     .hosts
-                    .whitelist_fetch_n_random_with_schemes(
+                    .container
+                    .fetch_n_random_with_schemes(
+                        HostColor::White,
                         &get_addrs_msg.transports,
                         get_addrs_msg.max,
                     )
@@ -184,16 +188,28 @@ impl ProtocolAddress {
             addrs.append(
                 &mut self
                     .hosts
-                    .whitelist_fetch_n_random_excluding_schemes(&get_addrs_msg.transports, remain)
+                    .container
+                    .fetch_n_random_excluding_schemes(
+                        HostColor::White,
+                        &get_addrs_msg.transports,
+                        remain,
+                    )
                     .await,
             );
 
-            // If there's still space available, take from the greylist.
-            // Schemes are not taken into account.
+            // If there's still space available, take from the
+            // greylist. Schemes are not taken into account.
+            //
+            /* NOTE: We share peers from our greylist because our
+            greylist is likely to contain peers that do not match our
+            transports or the requested transports. We want to ensure
+            that non-compatiable transports are shared with other nodes
+            so that they propagate on the network even if they're not
+            popular transports. */
             debug!(target: "net::protocol_address::handle_receive_get_addrs()",
             "Fetching greylist entries");
             let remain = 2 * get_addrs_msg.max - addrs.len() as u32;
-            addrs.append(&mut self.hosts.greylist_fetch_n_random(remain).await);
+            addrs.append(&mut self.hosts.container.fetch_n_random(HostColor::Grey, remain).await);
 
             debug!(
                 target: "net::protocol_address::handle_receive_get_addrs()",

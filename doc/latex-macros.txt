@@ -5,4 +5,6 @@
 \cN:{\mathcal{N}}
 \cX:{\mathcal{X}}
 \cY:{\mathcal{Y}}
+\ran:{\textrm{ran}}
+\max:{\textrm{max}}
 

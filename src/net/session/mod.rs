@@ -19,7 +19,7 @@
 use std::sync::{Arc, Weak};
 
 use async_trait::async_trait;
-use log::debug;
+use log::{debug, warn};
 use smol::Executor;
 
 use super::{channel::ChannelPtr, p2p::P2pPtr, protocol::ProtocolVersion};
@@ -62,7 +62,7 @@ pub async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr) {
     );
 
     // Remove channel from p2p
-    p2p.remove(channel).await;
+    p2p.hosts().unregister(channel.address()).await;
     debug!(target: "net::session::remove_sub_on_stop()", "[END]");
 }
 
@@ -113,8 +113,7 @@ pub trait Session: Sync {
             }
             Err(e) => {
                 debug!(target: "net::session::register_channel()",
-                "Handshake error {}. Removing {} from hostlists", e, channel.clone().address());
-                p2p.hosts().remove_host(channel.address()).await;
+                "Handshake error {} {}", e, channel.clone().address());
             }
         }
 
@@ -145,10 +144,14 @@ pub trait Session: Sync {
         // Perform handshake
         protocol_version.run(executor.clone()).await?;
 
-        // Add channel to p2p
-        self.p2p().store(channel.clone()).await;
+        // Attempt to add channel to registry
+        if let Err(e) = self.p2p().hosts().register_channel(channel.clone()).await {
+            warn!(target: "net::session::perform_handshake_protocols()",
+            "Couldn't add channel {} to registry! {}", channel.address(), e);
+            return Err(e)
+        }
 
-        // Subscribe to stop, so we can remove from p2p
+        // Subscribe to stop, so we can remove from registry
         executor.spawn(remove_sub_on_stop(self.p2p(), channel)).detach();
 
         // Channel is ready for use

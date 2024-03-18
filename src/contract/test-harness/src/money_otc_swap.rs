@@ -52,11 +52,8 @@ impl TestHarness {
         let wallet0 = self.holders.get(holder0).unwrap();
         let wallet1 = self.holders.get(holder1).unwrap();
 
-        let (mint_pk, mint_zkbin) =
-            self.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1.to_string()).unwrap();
-
-        let (burn_pk, burn_zkbin) =
-            self.proving_keys.get(&MONEY_CONTRACT_ZKAS_BURN_NS_V1.to_string()).unwrap();
+        let (mint_pk, mint_zkbin) = self.proving_keys.get(MONEY_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
+        let (burn_pk, burn_zkbin) = self.proving_keys.get(MONEY_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
 
         // Use a zero spend_hook and user_data
         let rcpt_spend_hook = FuncId::none();

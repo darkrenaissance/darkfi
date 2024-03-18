@@ -22,6 +22,7 @@ use std::{
         atomic::{AtomicBool, Ordering::SeqCst},
         Arc,
     },
+    time::UNIX_EPOCH,
 };
 
 use darkfi_serial::{async_trait, serialize, SerialDecodable, SerialEncodable};
@@ -36,6 +37,7 @@ use url::Url;
 
 use super::{
     dnet::{self, dnetev, DnetEvent},
+    hosts::store::HostColor,
     message,
     message::Packet,
     message_subscriber::{MessageSubscription, MessageSubsystem},
@@ -55,13 +57,14 @@ pub type ChannelPtr = Arc<Channel>;
 /// Channel debug info
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct ChannelInfo {
-    pub addr: Url,
+    pub resolve_addr: Option<Url>,
+    pub connect_addr: Url,
     pub id: u32,
 }
 
 impl ChannelInfo {
-    fn new(addr: Url) -> Self {
-        Self { addr, id: OsRng.gen() }
+    fn new(resolve_addr: Option<Url>, connect_addr: Url) -> Self {
+        Self { resolve_addr, connect_addr, id: OsRng.gen() }
     }
 }
 
@@ -89,7 +92,12 @@ impl Channel {
     /// Sets up a new channel. Creates a reader and writer [`PtStream`] and
     /// the message subscriber subsystem. Performs a network handshake on the
     /// subsystem dispatchers.
-    pub async fn new(stream: Box<dyn PtStream>, addr: Url, session: SessionWeakPtr) -> Arc<Self> {
+    pub async fn new(
+        stream: Box<dyn PtStream>,
+        resolve_addr: Option<Url>,
+        connect_addr: Url,
+        session: SessionWeakPtr,
+    ) -> Arc<Self> {
         let (reader, writer) = io::split(stream);
         let reader = Mutex::new(reader);
         let writer = Mutex::new(writer);
@@ -97,7 +105,7 @@ impl Channel {
         let message_subsystem = MessageSubsystem::new();
         Self::setup_dispatchers(&message_subsystem).await;
 
-        let info = ChannelInfo::new(addr.clone());
+        let info = ChannelInfo::new(resolve_addr, connect_addr.clone());
 
         Arc::new(Self {
             reader,
@@ -299,7 +307,7 @@ impl Channel {
                     debug!(target: "net::channel::main_receive_loop()", "Stopping channel {:?}", self);
 
                     // We will reject further connections from this peer
-                    self.p2p().hosts().mark_rejected(self.address()).await;
+                    self.ban(self.address()).await;
 
                     return Err(Error::ChannelStopped)
                 }
@@ -308,9 +316,37 @@ impl Channel {
         }
     }
 
-    /// Returns the local socket address
+    /// Ban a malicious peer and stop the channel.
+    pub async fn ban(&self, peer: &Url) {
+        debug!(target: "net::channel::ban()", "START {:?}", self);
+        let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+        self.p2p().hosts().move_host(peer, last_seen, HostColor::Black).await;
+
+        self.stop().await;
+        debug!(target: "net::channel::ban()", "STOP {:?}", self);
+    }
+
+    /// Returns the relevant socket address for this connection.  If this is
+    /// an outbound connection, the transport-processed resolve_addr will
+    /// be returned.  Otherwise for inbound connections it will default
+    /// to connect_addr.
     pub fn address(&self) -> &Url {
-        &self.info.addr
+        if self.info.resolve_addr.is_some() {
+            self.info.resolve_addr.as_ref().unwrap()
+        } else {
+            &self.info.connect_addr
+        }
+    }
+
+    /// Returns the socket address that has undergone transport
+    /// processing, if it exists. Returns None otherwise.
+    pub fn resolve_addr(&self) -> Option<Url> {
+        self.info.resolve_addr.clone()
+    }
+
+    /// Return the socket address without transport processing.
+    pub fn connect_addr(&self) -> &Url {
+        &self.info.connect_addr
     }
 
     /// Returns the inner [`MessageSubsystem`] reference
@@ -341,6 +377,6 @@ impl Channel {
 
 impl fmt::Debug for Channel {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "<Channel addr='{}' id={}>", self.info.addr, self.info.id)
+        write!(f, "<Channel addr='{}' id={}>", self.address(), self.info.id)
     }
 }

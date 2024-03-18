@@ -29,23 +29,23 @@
 //! and insures that no other part of the program uses the slots at the
 //! same time.
 
-use std::sync::Arc;
+use std::{sync::Arc, time::UNIX_EPOCH};
 
 use async_trait::async_trait;
-use log::{info, warn};
+use log::{debug, info, warn};
 use smol::lock::Mutex;
 use url::Url;
 
 use super::{
     super::{
-        channel::ChannelPtr,
         connector::Connector,
         p2p::{P2p, P2pPtr},
     },
     Session, SessionBitFlag, SESSION_MANUAL,
 };
 use crate::{
-    system::{sleep, LazyWeak, StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr},
+    net::hosts::store::{HostColor, HostState},
+    system::{sleep, LazyWeak, StoppableTask, StoppableTaskPtr},
     Error, Result,
 };
 
@@ -55,18 +55,12 @@ pub type ManualSessionPtr = Arc<ManualSession>;
 pub struct ManualSession {
     pub(in crate::net) p2p: LazyWeak<P2p>,
     connect_slots: Mutex<Vec<StoppableTaskPtr>>,
-    /// Subscriber used to signal channels processing
-    channel_subscriber: SubscriberPtr<Result<ChannelPtr>>,
 }
 
 impl ManualSession {
     /// Create a new manual session.
     pub fn new() -> ManualSessionPtr {
-        Arc::new(Self {
-            p2p: LazyWeak::new(),
-            connect_slots: Mutex::new(Vec::new()),
-            channel_subscriber: Subscriber::new(),
-        })
+        Arc::new(Self { p2p: LazyWeak::new(), connect_slots: Mutex::new(Vec::new()) })
     }
 
     /// Stops the manual session.
@@ -103,9 +97,6 @@ impl ManualSession {
         let attempts = settings.manual_attempt_limit;
         let mut remaining = attempts;
 
-        // Add the peer to list of pending channels
-        self.p2p().add_pending(&addr).await;
-
         // Loop forever if attempts==0, otherwise loop attempts number of times.
         let mut tried_attempts = 0;
         loop {
@@ -115,6 +106,12 @@ impl ManualSession {
                 "[P2P] Connecting to manual outbound [{}] (attempt #{})",
                 addr, tried_attempts,
             );
+
+            if let Err(e) = self.p2p().hosts().try_register(addr.clone(), HostState::Connect).await
+            {
+                debug!(target: "net::manual_session", "{} addr={}", e, addr.clone());
+            }
+
             match connector.connect(&addr).await {
                 Ok((url, channel)) => {
                     info!(
@@ -130,14 +127,9 @@ impl ManualSession {
                     // Register the new channel
                     self.register_channel(channel.clone(), ex.clone()).await?;
 
-                    // Remove pending lock since register_channel will add the channel to p2p
-                    self.p2p().remove_pending(&addr).await;
-
+                    let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
                     // Add this connection to the anchorlist
-                    self.p2p().hosts().upgrade_host(&addr).await;
-
-                    // Notify that channel processing has finished
-                    self.channel_subscriber.notify(Ok(channel)).await;
+                    self.p2p().hosts().move_host(&addr, last_seen, HostColor::Gold).await;
 
                     // Wait for channel to close
                     stop_sub.receive().await;
@@ -161,7 +153,7 @@ impl ManualSession {
             // Wait and try again.
             // TODO: Should we notify about the failure now, or after all attempts
             // have failed?
-            self.channel_subscriber.notify(Err(Error::ConnectFailed)).await;
+            self.p2p().hosts().channel_subscriber.notify(Err(Error::ConnectFailed)).await;
 
             remaining = if attempts == 0 { 1 } else { remaining - 1 };
             if remaining == 0 {
@@ -181,8 +173,9 @@ impl ManualSession {
             "[P2P] Suspending manual connection to {} after {} failed attempts",
             addr, attempts,
         );
-
-        self.p2p().remove_pending(&addr).await;
+        // Stop tracking this address in the HostRegistry.
+        // Otherwise, host will be stuck in Pending state.
+        self.p2p().hosts().unregister(&addr).await;
 
         Ok(())
     }

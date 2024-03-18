@@ -32,7 +32,10 @@ pub const BLOCK_HASH_DOMAIN: &str = "DarkFi:Block";
 
 pub const MERKLE_DEPTH_ORCHARD: usize = 32;
 
+// TODO: move to merkle_node.rs
 pub const MERKLE_DEPTH: u8 = MERKLE_DEPTH_ORCHARD as u8;
+
+pub const SPARSE_MERKLE_DEPTH: usize = 3;
 
 #[allow(dead_code)]
 /// $\ell^\mathsf{Orchard}_\mathsf{base}$

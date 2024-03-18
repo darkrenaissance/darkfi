@@ -33,7 +33,7 @@ use darkfi::{
     cli_desc,
     net::{settings::SettingsOpt, P2pPtr},
     rpc::{
-        client::RpcClient,
+        client::RpcChadClient,
         jsonrpc::JsonSubscriber,
         server::{listen_and_serve, RequestHandler},
     },
@@ -65,7 +65,7 @@ mod proto;
 
 /// Utility functions
 mod utils;
-use utils::{parse_blockchain_config, spawn_miners_p2p, spawn_sync_p2p};
+use utils::{parse_blockchain_config, spawn_p2p};
 
 const CONFIG_FILE: &str = "darkfid_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../darkfid_config.toml");
@@ -138,43 +138,39 @@ pub struct BlockchainNetwork {
     /// Skip syncing process and start node right away
     pub skip_sync: bool,
 
-    /// Syncing network settings
+    /// P2P network settings
     #[structopt(flatten)]
-    pub sync_net: SettingsOpt,
-
-    /// Miners network settings
-    #[structopt(flatten)]
-    pub miners_net: SettingsOpt,
+    pub net: SettingsOpt,
 }
 
 /// Daemon structure
 pub struct Darkfid {
-    /// Syncing P2P network pointer
-    sync_p2p: P2pPtr,
-    /// Optional miners P2P network pointer
-    miners_p2p: Option<P2pPtr>,
+    /// P2P network pointer
+    p2p: P2pPtr,
     /// Validator(node) pointer
     validator: ValidatorPtr,
+    /// Flag to specify node is a miner
+    miner: bool,
     /// A map of various subscribers exporting live info from the blockchain
     subscribers: HashMap<&'static str, JsonSubscriber>,
     /// JSON-RPC connection tracker
     rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
     /// JSON-RPC client to execute requests to the miner daemon
-    rpc_client: Option<RpcClient>,
+    rpc_client: Option<RpcChadClient>,
 }
 
 impl Darkfid {
     pub async fn new(
-        sync_p2p: P2pPtr,
-        miners_p2p: Option<P2pPtr>,
+        p2p: P2pPtr,
         validator: ValidatorPtr,
+        miner: bool,
         subscribers: HashMap<&'static str, JsonSubscriber>,
-        rpc_client: Option<RpcClient>,
+        rpc_client: Option<RpcChadClient>,
     ) -> Self {
         Self {
-            sync_p2p,
-            miners_p2p,
+            p2p,
             validator,
+            miner,
             subscribers,
             rpc_connections: Mutex::new(HashSet::new()),
             rpc_client,
@@ -236,45 +232,27 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     subscribers.insert("txs", JsonSubscriber::new("blockchain.subscribe_txs"));
     subscribers.insert("proposals", JsonSubscriber::new("blockchain.subscribe_proposals"));
 
-    // Initialize syncing P2P network
-    let sync_p2p = spawn_sync_p2p(
-        &blockchain_config.sync_net.into(),
-        &validator,
-        &subscribers,
-        ex.clone(),
-        blockchain_config.miner,
-    )
-    .await;
+    // Initialize P2P network
+    let p2p = spawn_p2p(&blockchain_config.net.into(), &validator, &subscribers, ex.clone()).await;
 
-    // Initialize miners P2P network
-    let (miners_p2p, rpc_client) = if blockchain_config.miner {
-        let Ok(rpc_client) = RpcClient::new(blockchain_config.minerd_endpoint, ex.clone()).await
+    // Initialize JSON-RPC client to perform requests to minerd
+    let rpc_client = if blockchain_config.miner {
+        let Ok(rpc_client) =
+            RpcChadClient::new(blockchain_config.minerd_endpoint, ex.clone()).await
         else {
             error!(target: "darkfid", "Failed to initialize miner daemon rpc client, check if minerd is running");
             return Err(Error::RpcClientStopped)
         };
-        (
-            Some(
-                spawn_miners_p2p(
-                    &blockchain_config.miners_net.into(),
-                    &validator,
-                    &subscribers,
-                    ex.clone(),
-                    sync_p2p.clone(),
-                )
-                .await,
-            ),
-            Some(rpc_client),
-        )
+        Some(rpc_client)
     } else {
-        (None, None)
+        None
     };
 
     // Initialize node
     let darkfid = Darkfid::new(
-        sync_p2p.clone(),
-        miners_p2p.clone(),
+        p2p.clone(),
         validator.clone(),
+        blockchain_config.miner,
         subscribers,
         rpc_client,
     )
@@ -310,17 +288,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         ex.clone(),
     );
 
-    info!(target: "darkfid", "Starting sync P2P network");
-    sync_p2p.clone().start().await?;
-
-    // Start miners P2P network
-    if blockchain_config.miner {
-        info!(target: "darkfid", "Starting miners P2P network");
-        let miners_p2p = miners_p2p.clone().unwrap();
-        miners_p2p.clone().start().await?;
-    } else {
-        info!(target: "darkfid", "Not starting miners P2P network");
-    }
+    info!(target: "darkfid", "Starting P2P network");
+    p2p.clone().start().await?;
 
     // Sync blockchain
     if !blockchain_config.skip_sync {
@@ -385,13 +354,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     info!(target: "darkfid", "Stopping JSON-RPC server...");
     rpc_task.stop().await;
 
-    info!(target: "darkfid", "Stopping syncing P2P network...");
-    sync_p2p.stop().await;
-
-    if blockchain_config.miner {
-        info!(target: "darkfid", "Stopping miners P2P network...");
-        miners_p2p.unwrap().stop().await;
-    }
+    info!(target: "darkfid", "Stopping P2P network...");
+    p2p.stop().await;
 
     info!(target: "darkfid", "Stopping consensus task...");
     consensus_task.stop().await;

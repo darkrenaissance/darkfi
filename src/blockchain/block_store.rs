@@ -29,7 +29,7 @@ use darkfi_serial::async_trait;
 use darkfi_serial::{deserialize, serialize, Encodable, SerialDecodable, SerialEncodable};
 use num_bigint::BigUint;
 
-use crate::{tx::Transaction, Error, Result};
+use crate::{tx::Transaction, util::time::Timestamp, Error, Result};
 
 use super::{parse_record, parse_u64_key_record, Header, SledDbOverlayPtr};
 
@@ -499,7 +499,7 @@ pub struct BlockDifficulty {
     /// Block height number
     pub height: u64,
     /// Block creation timestamp
-    pub timestamp: u64,
+    pub timestamp: Timestamp,
     /// Height difficulty
     pub difficulty: BigUint,
     /// Height cummulative difficulty (total + height difficulty)
@@ -509,7 +509,7 @@ pub struct BlockDifficulty {
 impl BlockDifficulty {
     pub fn new(
         height: u64,
-        timestamp: u64,
+        timestamp: Timestamp,
         difficulty: BigUint,
         cummulative_difficulty: BigUint,
     ) -> Self {
@@ -533,7 +533,7 @@ impl darkfi_serial::Encodable for BlockDifficulty {
 impl darkfi_serial::Decodable for BlockDifficulty {
     fn decode<D: std::io::Read>(mut d: D) -> std::io::Result<Self> {
         let height: u64 = darkfi_serial::Decodable::decode(&mut d)?;
-        let timestamp: u64 = darkfi_serial::Decodable::decode(&mut d)?;
+        let timestamp: Timestamp = darkfi_serial::Decodable::decode(&mut d)?;
         let bytes: Vec<u8> = darkfi_serial::Decodable::decode(&mut d)?;
         let difficulty: BigUint = BigUint::from_bytes_be(&bytes);
         let bytes: Vec<u8> = darkfi_serial::Decodable::decode(&mut d)?;

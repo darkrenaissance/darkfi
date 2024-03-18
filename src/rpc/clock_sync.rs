@@ -46,7 +46,7 @@ pub async fn ntp_request() -> Result<Timestamp> {
     sock.recv(&mut packet[..])?;
     let (bytes, _) = packet[40..44].split_at(core::mem::size_of::<u32>());
     let num = u32::from_be_bytes(bytes.try_into().unwrap());
-    let timestamp = Timestamp((num - EPOCH) as u64);
+    let timestamp = Timestamp::from_u64((num - EPOCH) as u64);
 
     Ok(timestamp)
 }
@@ -85,24 +85,20 @@ async fn clock_check(_peers: &[Url]) -> Result<()> {
     // Start elapsed time counter to cover for NTP request and processing time
     let ntp_request_start = Timestamp::current_time();
     // Poll ntp.org for current timestamp
-    let mut ntp_time = ntp_request().await?;
+    let ntp_time = ntp_request().await?;
 
     // Stop elapsed time counters
-    let ntp_elapsed_time = ntp_request_start.elapsed();
-    let requests_elapsed_time = requests_start.elapsed();
+    let ntp_elapsed_time = ntp_request_start.elapsed()?;
+    let requests_elapsed_time = requests_start.elapsed()?;
 
     // Current system time
     let system_time = Timestamp::current_time();
 
     // Add elapsed time to response times
-    ntp_time.add(ntp_elapsed_time);
+    let ntp_time = ntp_time.checked_add(ntp_elapsed_time)?;
     let peer_time = match peer_time {
         None => None,
-        Some(p) => {
-            let mut t = p;
-            t.add(requests_elapsed_time);
-            Some(t)
-        }
+        Some(p) => Some(p.checked_add(requests_elapsed_time)?),
     };
 
     debug!(target: "rpc::clock_sync", "peer_time: {:#?}", peer_time);

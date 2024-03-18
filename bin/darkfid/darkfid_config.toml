@@ -40,8 +40,8 @@ recipient = "5ZHfYpt4mpJcwBNxfEyxLzeFJUEeoePs5NQ5jVEgHrMf"
 # Skip syncing process and start node right away
 skip_sync = true
 
-## Localnet sync P2P network settings
-[network_config."localnet".sync_net]
+## Localnet P2P network settings
+[network_config."localnet".net]
 # P2P accept addresses the instance listens on for inbound connections
 inbound = ["tcp+tls://0.0.0.0:8242"]
 
@@ -94,56 +94,6 @@ localnet = true
 # Time between peer discovery attempts
 #outbound_peer_discovery_attempt_time = 5
 
-## Localnet miners P2P network settings
-[network_config."localnet".miners_net]
-# P2P accept addresses the instance listens on for inbound connections
-#inbound = ["tcp+tls://0.0.0.0:8241"]
-
-# P2P external addresses the instance advertises so other peers can
-# reach us and connect to us, as long as inbound addrs are configured.
-#external_addrs = []
-
-# Peer nodes to manually connect to
-#peers = []
-
-# Seed nodes to connect to for peer discovery and/or adversising our
-# own external addresses
-#seeds = []
-
-# Whitelisted network transports for outbound connections
-#allowed_transports = ["tcp+tls"]
-
-# Allow transport mixing (e.g. Tor would be allowed to connect to `tcp://`)
-#transport_mixing = true
-
-# Outbound connection slots number, this many connections will be
-# attempted. (This does not include manual connections)
-#outbound_connections = 8
-
-# Manual connections retry limit, 0 for forever looping
-#manual_attempt_limit = 0
-
-# Outbound connection timeout (in seconds)
-#outbound_connect_timeout = 10
-
-# Exchange versions (handshake) timeout (in seconds)
-#channel_handshake_timeout = 4
-
-# Ping-pong exchange execution interval (in seconds)
-#channel_heartbeat_interval = 10
-
-# Allow localnet hosts
-localnet = true
-
-# Delete a peer from hosts if they've been quarantined N times
-#hosts_quarantine_limit = 50
-
-# Cooling off time for peer discovery when unsuccessful
-#outbound_peer_discovery_cooloff_time = 30
-
-# Time between peer discovery attempts
-#outbound_peer_discovery_attempt_time = 5
-
 # Testnet blockchain network configuration
 [network_config."testnet"]
 # Path to the blockchain database directory
@@ -167,8 +117,8 @@ miner = false
 # Skip syncing process and start node right away
 skip_sync = false
 
-## Testnet sync P2P network settings
-[network_config."testnet".sync_net]
+## Testnet P2P network settings
+[network_config."testnet".net]
 # P2P accept addresses the instance listens on for inbound connections
 # You can also use an IPv6 address
 inbound = ["tcp+tls://0.0.0.0:8342"]
@@ -231,66 +181,6 @@ localnet = false
 # Time between peer discovery attempts
 #outbound_peer_discovery_attempt_time = 5
 
-## Testnet miners P2P network settings
-[network_config."testnet".miners_net]
-# P2P accept addresses the instance listens on for inbound connections
-# You can also use an IPv6 address
-inbound = ["tcp+tls://0.0.0.0:8341"]
-# IPv6 version:
-#inbound = ["tcp+tls://[::]:8341"]
-# Combined:
-#inbound = ["tcp+tls://0.0.0.0:8341", "tcp+tls://[::]:8341"]
-
-# P2P external addresses the instance advertises so other peers can
-# reach us and connect to us, as long as inbound addrs are configured.
-# You can also use an IPv6 address
-#external_addrs = ["tcp+tls://XXX.XXX.XXX.XXX:8341"]
-# IPv6 version:
-#external_addrs = ["tcp+tls://[ipv6 address here]:8341"]
-# Combined:
-#external_addrs = ["tcp+tls://XXX.XXX.XXX.XXX:8341", "tcp+tls://[ipv6 address here]:8341"]
-
-# Peer nodes to manually connect to
-#peers = []
-
-# Seed nodes to connect to for peer discovery and/or adversising our
-# own external addresses
-seeds = ["tcp+tls://lilith0.dark.fi:8341", "tcp+tls://lilith1.dark.fi:8341"]
-
-# Whitelisted network transports for outbound connections
-allowed_transports = ["tcp+tls"]
-
-# Allow transport mixing (e.g. Tor would be allowed to connect to `tcp://`)
-#transport_mixing = true
-
-# Outbound connection slots number, this many connections will be
-# attempted. (This does not include manual connections)
-#outbound_connections = 8
-
-# Manual connections retry limit, 0 for forever looping
-#manual_attempt_limit = 0
-
-# Outbound connection timeout (in seconds)
-#outbound_connect_timeout = 10
-
-# Exchange versions (handshake) timeout (in seconds)
-#channel_handshake_timeout = 4
-
-# Ping-pong exchange execution interval (in seconds)
-#channel_heartbeat_interval = 10
-
-# Allow localnet hosts
-localnet = false
-
-# Delete a peer from hosts if they've been quarantined N times
-#hosts_quarantine_limit = 50
-
-# Cooling off time for peer discovery when unsuccessful
-#outbound_peer_discovery_cooloff_time = 30
-
-# Time between peer discovery attempts
-#outbound_peer_discovery_attempt_time = 5
-
 # Mainnet blockchain network configuration
 [network_config."mainnet"]
 # Path to the blockchain database directory
@@ -314,8 +204,8 @@ miner = false
 # Skip syncing process and start node right away
 skip_sync = false
 
-## Mainnet sync P2P network settings
-[network_config."mainnet".sync_net]
+## Mainnet P2P network settings
+[network_config."mainnet".net]
 # P2P accept addresses the instance listens on for inbound connections
 # You can also use an IPv6 address
 inbound = ["tcp+tls://0.0.0.0:8442"]
@@ -353,66 +243,6 @@ outbound_connections = 8
 # Inbound connections slots number, this many active inbound connections
 # will be allowed. (This does not include manual or outbound connections)
 #inbound_connections = 0
-
-# Manual connections retry limit, 0 for forever looping
-#manual_attempt_limit = 0
-
-# Outbound connection timeout (in seconds)
-#outbound_connect_timeout = 10
-
-# Exchange versions (handshake) timeout (in seconds)
-#channel_handshake_timeout = 4
-
-# Ping-pong exchange execution interval (in seconds)
-#channel_heartbeat_interval = 10
-
-# Allow localnet hosts
-localnet = false
-
-# Delete a peer from hosts if they've been quarantined N times
-#hosts_quarantine_limit = 50
-
-# Cooling off time for peer discovery when unsuccessful
-#outbound_peer_discovery_cooloff_time = 30
-
-# Time between peer discovery attempts
-#outbound_peer_discovery_attempt_time = 5
-
-## Mainnet miners P2P network settings
-[network_config."mainnet".miners_net]
-# P2P accept addresses the instance listens on for inbound connections
-# You can also use an IPv6 address
-inbound = ["tcp+tls://0.0.0.0:8441"]
-# IPv6 version:
-#inbound = ["tcp+tls://[::]:8441"]
-# Combined:
-#inbound = ["tcp+tls://0.0.0.0:8441", "tcp+tls://[::]:8441"]
-
-# P2P external addresses the instance advertises so other peers can
-# reach us and connect to us, as long as inbound addrs are configured.
-# You can also use an IPv6 address
-#external_addrs = ["tcp+tls://XXX.XXX.XXX.XXX:8441"]
-# IPv6 version:
-#external_addrs = ["tcp+tls://[ipv6 address here]:8441"]
-# Combined:
-#external_addrs = ["tcp+tls://XXX.XXX.XXX.XXX:8441", "tcp+tls://[ipv6 address here]:8441"]
-
-# Peer nodes to manually connect to
-#peers = []
-
-# Seed nodes to connect to for peer discovery and/or adversising our
-# own external addresses
-seeds = ["tcp+tls://lilith0.dark.fi:8441", "tcp+tls://lilith1.dark.fi:8441"]
-
-# Whitelisted network transports for outbound connections
-allowed_transports = ["tcp+tls"]
-
-# Allow transport mixing (e.g. Tor would be allowed to connect to `tcp://`)
-#transport_mixing = true
-
-# Outbound connection slots number, this many connections will be
-# attempted. (This does not include manual connections)
-#outbound_connections = 8
 
 # Manual connections retry limit, 0 for forever looping
 #manual_attempt_limit = 0

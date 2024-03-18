@@ -24,7 +24,7 @@ use darkfi_sdk::{
     error::{ContractError, ContractResult},
     merkle_add, msg,
     pasta::pallas,
-    util::{get_last_block_info, get_verifying_block_height},
+    util::{get_last_block_height, get_verifying_block_height},
     ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
@@ -88,34 +88,19 @@ pub(crate) fn money_pow_reward_process_instruction_v1(
         return Err(MoneyError::PoWRewardCallOnGenesisBlock.into())
     }
 
-    // Grab last block information to use in the VRF
-    let Some(last_block_info) = get_last_block_info()? else {
-        msg!("[PoWRewardV1] Error: Could not receive last block from db");
-        return Err(MoneyError::PoWRewardRetrieveLastBlockError.into())
-    };
-    let height: u64 = deserialize(&last_block_info[..8])?;
-
     // Verify this contract call is verified against next block height
-    if verifying_block_height != height + 1 {
+    let Some(last_block_height) = get_last_block_height()? else {
+        msg!("[PoWRewardV1] Error: Could not receive last block height from db");
+        return Err(MoneyError::PoWRewardRetrieveLastBlockHeightError.into())
+    };
+    let last_block_height: u64 = deserialize(&last_block_height)?;
+    if verifying_block_height != last_block_height + 1 {
         msg!(
             "[PoWRewardV1] Error: Call is executed for block height {}, not next one: {}",
             verifying_block_height,
-            height
+            last_block_height
         );
         return Err(MoneyError::PoWRewardCallNotOnNextBlockHeight.into())
-    }
-
-    // Construct VRF input
-    let mut vrf_input = Vec::with_capacity(32 + blake3::OUT_LEN + 32);
-    let nonce: u64 = deserialize(&last_block_info[8..16])?;
-    vrf_input.extend_from_slice(&pallas::Base::from(nonce).to_repr());
-    vrf_input.extend_from_slice(&last_block_info[16..]);
-    vrf_input.extend_from_slice(&pallas::Base::from(verifying_block_height).to_repr());
-
-    // Verify VRF proof
-    if !params.vrf_proof.verify(params.input.signature_public, &vrf_input) {
-        msg!("[PoWRewardV1] Error: VRF proof couldn't be verified");
-        return Err(MoneyError::PoWRewardErroneousVrfProof.into())
     }
 
     // Only DARK_TOKEN_ID can be minted as PoW reward.

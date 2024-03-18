@@ -32,6 +32,8 @@ pub fn range_check<F: WithSmallOrderMulGroup<3> + Ord>(
     word: Expression<F>,
     range: u8,
 ) -> Expression<F> {
+    assert!(range > 0);
+
     (1..(range as usize))
         .fold(word.clone(), |acc, i| acc * (Expression::Constant(F::from(i as u64)) - word.clone()))
 }
@@ -109,7 +111,6 @@ mod tests {
         circuit::{floor_planner, Value},
         dev::MockProver,
         pasta::pallas,
-        plonk,
         plonk::Circuit,
     };
 

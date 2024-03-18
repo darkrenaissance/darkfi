@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::crypto::constants::MERKLE_DEPTH_ORCHARD;
+use darkfi_sdk::crypto::constants::{MERKLE_DEPTH_ORCHARD, SPARSE_MERKLE_DEPTH};
 
 use crate::zkas::{Opcode, VarType, ZkBinary};
 
@@ -48,6 +48,7 @@ pub fn circuit_gas_use(zkbin: &ZkBinary) -> u64 {
             VarType::Scalar => 20,
             VarType::ScalarArray => unreachable!(),
             VarType::MerklePath => 10 * MERKLE_DEPTH_ORCHARD as u64,
+            VarType::SparseMerklePath => 10 * SPARSE_MERKLE_DEPTH as u64,
             VarType::Uint32 => 10,
             VarType::Uint64 => 10,
             VarType::Any => 10,
@@ -69,6 +70,7 @@ pub fn circuit_gas_use(zkbin: &ZkBinary) -> u64 {
             Opcode::EcGetY => 5,
             Opcode::PoseidonHash => 20 + 10 * opcode.1.len() as u64,
             Opcode::MerkleRoot => 10 * MERKLE_DEPTH_ORCHARD as u64,
+            Opcode::SparseTreeIsMember => 10 * SPARSE_MERKLE_DEPTH as u64,
             Opcode::BaseAdd => 15,
             Opcode::BaseMul => 15,
             Opcode::BaseSub => 15,

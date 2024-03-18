@@ -59,10 +59,10 @@ impl TestHarness {
         let wallet = self.holders.get(proposer).unwrap();
 
         let (dao_propose_burn_pk, dao_propose_burn_zkbin) =
-            self.proving_keys.get(&DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS.to_string()).unwrap();
+            self.proving_keys.get(DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS).unwrap();
 
         let (dao_propose_main_pk, dao_propose_main_zkbin) =
-            self.proving_keys.get(&DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS.to_string()).unwrap();
+            self.proving_keys.get(DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS).unwrap();
 
         let propose_owncoin: OwnCoin = wallet
             .unspent_money_coins

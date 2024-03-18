@@ -107,8 +107,11 @@ impl ProtocolSync {
         );
         let msg_subsystem = channel.message_subsystem();
         msg_subsystem.add_dispatch::<IsSyncedRequest>().await;
+        msg_subsystem.add_dispatch::<IsSyncedResponse>().await;
         msg_subsystem.add_dispatch::<SyncRequest>().await;
+        msg_subsystem.add_dispatch::<SyncResponse>().await;
         msg_subsystem.add_dispatch::<ForkSyncRequest>().await;
+        msg_subsystem.add_dispatch::<ForkSyncResponse>().await;
 
         let is_synced_sub = channel.subscribe_msg::<IsSyncedRequest>().await?;
         let request_sub = channel.subscribe_msg::<SyncRequest>().await?;
@@ -220,6 +223,8 @@ impl ProtocolSync {
                 continue
             }
 
+            debug!(target: "darkfid::proto::protocol_sync::handle_receive_request", "Received request: {request:?}");
+
             // If a fork tip is provided, grab its fork proposals sequence.
             // Otherwise, grab best fork proposals sequence.
             let proposals = match request.fork_tip {
@@ -241,6 +246,7 @@ impl ProtocolSync {
             };
 
             let response = ForkSyncResponse { proposals };
+            debug!(target: "darkfid::proto::protocol_sync::handle_receive_request", "Response: {response:?}");
             if let Err(e) = self.channel.send(&response).await {
                 debug!(
                     target: "darkfid::proto::protocol_sync::handle_receive_fork_request",

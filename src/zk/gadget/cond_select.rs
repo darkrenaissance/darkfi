@@ -39,7 +39,6 @@ pub struct ConditionalSelectConfig<F: WithSmallOrderMulGroup<3> + Ord> {
 
 pub struct ConditionalSelectChip<F: WithSmallOrderMulGroup<3> + Ord> {
     config: ConditionalSelectConfig<F>,
-    _marker: PhantomData<F>,
 }
 
 impl<F: WithSmallOrderMulGroup<3> + Ord> Chip<F> for ConditionalSelectChip<F> {
@@ -56,11 +55,8 @@ impl<F: WithSmallOrderMulGroup<3> + Ord> Chip<F> for ConditionalSelectChip<F> {
 }
 
 impl<F: WithSmallOrderMulGroup<3> + Ord> ConditionalSelectChip<F> {
-    pub fn construct(
-        config: <Self as Chip<F>>::Config,
-        _loaded: <Self as Chip<F>>::Loaded,
-    ) -> Self {
-        Self { config, _marker: PhantomData }
+    pub fn construct(config: <Self as Chip<F>>::Config) -> Self {
+        Self { config }
     }
 
     pub fn configure(
@@ -120,9 +116,130 @@ impl<F: WithSmallOrderMulGroup<3> + Ord> ConditionalSelectChip<F> {
 
                 let cell =
                     region.assign_advice(|| "select result", config.advices[2], 0, || selected)?;
+
                 Ok(cell)
             },
         )?;
         Ok(out)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::zk::assign_free_advice;
+
+    use halo2_proofs::{
+        arithmetic::Field,
+        circuit::{floor_planner, Value},
+        dev::MockProver,
+        pasta::pallas,
+        plonk,
+        plonk::{Circuit, Instance},
+    };
+    use rand::rngs::OsRng;
+
+    #[derive(Clone)]
+    struct CondSelectConfig {
+        primary: Column<Instance>,
+        condselect_config: ConditionalSelectConfig<pallas::Base>,
+    }
+
+    #[derive(Default)]
+    struct CondSelectCircuit {
+        pub cond: Value<pallas::Base>,
+        pub a: Value<pallas::Base>,
+        pub b: Value<pallas::Base>,
+    }
+
+    impl Circuit<pallas::Base> for CondSelectCircuit {
+        type Config = CondSelectConfig;
+        type FloorPlanner = floor_planner::V1;
+        type Params = ();
+
+        fn without_witnesses(&self) -> Self {
+            Self::default()
+        }
+
+        fn configure(meta: &mut ConstraintSystem<pallas::Base>) -> Self::Config {
+            let advices: [Column<Advice>; NUM_OF_UTILITY_ADVICE_COLUMNS] = [
+                meta.advice_column(),
+                meta.advice_column(),
+                meta.advice_column(),
+                meta.advice_column(),
+            ];
+
+            let primary = meta.instance_column();
+            meta.enable_equality(primary);
+
+            for advice in advices.iter() {
+                meta.enable_equality(*advice);
+            }
+
+            let condselect_config = ConditionalSelectChip::configure(meta, advices);
+
+            Self::Config { primary, condselect_config }
+        }
+
+        fn synthesize(
+            &self,
+            config: Self::Config,
+            mut layouter: impl Layouter<pallas::Base>,
+        ) -> Result<(), plonk::Error> {
+            let condselect_chip =
+                ConditionalSelectChip::construct(config.condselect_config.clone());
+
+            let cond = assign_free_advice(
+                layouter.namespace(|| "Witness cond"),
+                config.condselect_config.advices[0],
+                self.cond,
+            )?;
+
+            let a = assign_free_advice(
+                layouter.namespace(|| "Witness a"),
+                config.condselect_config.advices[1],
+                self.a,
+            )?;
+
+            let b = assign_free_advice(
+                layouter.namespace(|| "Witness b"),
+                config.condselect_config.advices[2],
+                self.b,
+            )?;
+
+            let selection = condselect_chip.conditional_select(&mut layouter, a, b, cond)?;
+            layouter.constrain_instance(selection.cell(), config.primary, 0)?;
+
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn cond_select_chip() -> crate::Result<()> {
+        // 1 should select A
+        let cond = pallas::Base::ONE;
+        let a = pallas::Base::random(&mut OsRng);
+        let b = pallas::Base::random(&mut OsRng);
+        let public_inputs = vec![a];
+
+        let circuit =
+            CondSelectCircuit { cond: Value::known(cond), a: Value::known(a), b: Value::known(b) };
+
+        let prover = MockProver::run(4, &circuit, vec![public_inputs])?;
+        prover.assert_satisfied();
+
+        // 0 should select B
+        let cond = pallas::Base::ZERO;
+        let a = pallas::Base::random(&mut OsRng);
+        let b = pallas::Base::random(&mut OsRng);
+        let public_inputs = vec![b];
+
+        let circuit =
+            CondSelectCircuit { cond: Value::known(cond), a: Value::known(a), b: Value::known(b) };
+
+        let prover = MockProver::run(4, &circuit, vec![public_inputs])?;
+        prover.assert_satisfied();
+
+        Ok(())
     }
 }

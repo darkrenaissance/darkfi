@@ -1,0 +1,11 @@
+[[nodes]]
+name = "darkirc"
+host = "localhost"
+port = 26660
+type = "NORMAL"
+
+[[nodes]]
+name = "genev"
+host = "localhost"
+port = 28880
+type = "NORMAL"

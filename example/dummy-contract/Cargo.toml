@@ -21,7 +21,7 @@ getrandom = { version = "0.2.8", features = ["custom"] }
 [dev-dependencies]
 sled = "0.34.7"
 darkfi = {path = "../../", features = ["wasm-runtime"]}
-simplelog = "0.12.1"
+simplelog = "0.12.2"
 
 [[example]]
 name = "runtime"

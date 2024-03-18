@@ -158,6 +158,17 @@ impl<M: Message> MessageSubscription<M> {
         }
     }
 
+    /// Cleans existing items from the receiver channel.
+    pub async fn clean(&self) -> Result<()> {
+        loop {
+            match self.recv_queue.try_recv() {
+                Ok(_) => continue,
+                Err(smol::channel::TryRecvError::Empty) => return Ok(()),
+                Err(e) => panic!("MessageSubscription::receive(): recv_queue failed! {}", e),
+            }
+        }
+    }
+
     /// Unsubscribe from a message subscription. Must be called manually.
     pub async fn unsubscribe(&self) {
         self.parent.unsubscribe(self.id).await

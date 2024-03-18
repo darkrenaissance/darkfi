@@ -2954,7 +2954,7 @@ mod tests {
         sinsemilla::primitives::CommitDomain,
     };
 
-    use pasta_curves::{arithmetic::CurveAffine, group::Curve, pallas};
+    use pasta_curves::group::Curve;
 
     #[test]
     fn generator() {

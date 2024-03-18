@@ -306,35 +306,63 @@ impl Validator {
         Ok(())
     }
 
-    /// The node checks if proposals can be finalized.
-    /// If proposals are found, node appends them to canonical, excluding the
-    /// last one, and rebuild the finalized fork to contain the last one.
+    /// The node locks its consensus state and tries to append provided proposal.
+    pub async fn append_proposal(&self, proposal: &Proposal) -> Result<()> {
+        // Grab append lock so we restrict concurrent calls of this function
+        let append_lock = self.consensus.append_lock.write().await;
+
+        // Execute append
+        self.consensus.append_proposal(proposal).await?;
+
+        // Release append lock
+        drop(append_lock);
+
+        Ok(())
+    }
+
+    /// The node checks if best fork can be finalized.
+    /// If proposals can be finalized, node appends them to canonical,
+    /// and rebuilds the best fork.
     pub async fn finalization(&self) -> Result<Vec<BlockInfo>> {
+        // Grab append lock so no new proposals can be appended while
+        // we execute finalization
+        let append_lock = self.consensus.append_lock.write().await;
+
         info!(target: "validator::finalization", "Performing finalization check");
 
-        // Grab blocks that can be finalized
-        let mut finalized = self.consensus.finalization().await?;
-        if finalized.is_empty() {
+        // Grab best fork index that can be finalized
+        let finalized_fork = self.consensus.finalization().await?;
+        if finalized_fork.is_none() {
             info!(target: "validator::finalization", "No proposals can be finalized");
+            drop(append_lock);
             return Ok(vec![])
         }
 
-        // Exclude last proposal
-        let last = finalized.pop().unwrap();
+        // Grab fork proposals sequence
+        let forks = self.consensus.forks.read().await;
+        let fork = &forks[finalized_fork.unwrap()];
+        let proposals = fork.overlay.lock().unwrap().get_blocks_by_hash(&fork.proposals)?;
+        drop(forks);
+
+        // Find the excess over finalization threshold
+        let excess = (proposals.len() - self.consensus.finalization_threshold) + 1;
 
         // Append finalized blocks
-        info!(target: "validator::finalization", "Finalizing {} proposals:", finalized.len());
-        for block in &finalized {
+        let finalized = &proposals[..excess];
+        info!(target: "validator::finalization", "Finalizing proposals:");
+        for block in finalized {
             info!(target: "validator::finalization", "\t{} - {}", block.hash()?, block.header.height);
         }
-        self.add_blocks(&finalized).await?;
+        self.add_blocks(finalized).await?;
 
-        // Rebuild best fork using last proposal
-        *self.consensus.forks.write().await = vec![];
-        self.consensus.append_proposal(&Proposal::new(last)?).await?;
+        // Rebuild forks starting with the finalized blocks
+        self.consensus.rebuild_forks(finalized).await?;
         info!(target: "validator::finalization", "Finalization completed!");
 
-        Ok(finalized)
+        // Release append lock
+        drop(append_lock);
+
+        Ok(proposals)
     }
 
     // ==========================
@@ -383,7 +411,7 @@ impl Validator {
             let cummulative_difficulty = module.cummulative_difficulty.clone() + difficulty.clone();
             let block_difficulty = BlockDifficulty::new(
                 block.header.height,
-                block.header.timestamp.0,
+                block.header.timestamp,
                 difficulty,
                 cummulative_difficulty,
             );
@@ -548,7 +576,7 @@ impl Validator {
 
             // Update PoW module
             if block.header.version == 1 {
-                module.append(block.header.timestamp.0, &module.next_difficulty()?);
+                module.append(block.header.timestamp, &module.next_difficulty()?);
             }
 
             // Use last inserted block as next iteration previous

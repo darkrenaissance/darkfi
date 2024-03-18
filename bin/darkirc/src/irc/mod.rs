@@ -30,6 +30,10 @@ pub(crate) mod server;
 /// IRC command handler
 pub(crate) mod command;
 
+/// Services implementations
+pub(crate) mod services;
+pub(crate) use services::nickserv::NickServ;
+
 /// IRC numerics and server replies
 pub(crate) mod rpl;
 

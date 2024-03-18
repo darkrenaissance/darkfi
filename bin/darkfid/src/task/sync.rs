@@ -36,15 +36,13 @@ pub async fn sync_task(node: &Darkfid) -> Result<()> {
     let mut peers = vec![];
     loop {
         // Grab channels
-        let channels = node.sync_p2p.channels().await;
+        let channels = node.p2p.hosts().channels().await;
 
         // Check anyone is connected
         if !channels.is_empty() {
             // Ask each peer if they are synced
             for channel in channels {
                 // Communication setup
-                let msg_subsystem = channel.message_subsystem();
-                msg_subsystem.add_dispatch::<IsSyncedResponse>().await;
                 let response_sub = channel.subscribe_msg::<IsSyncedResponse>().await?;
 
                 // Node creates a `IsSyncedRequest` and sends it
@@ -76,9 +74,6 @@ pub async fn sync_task(node: &Darkfid) -> Result<()> {
     let channel = &peers[0];
 
     // Communication setup
-    let msg_subsystem = channel.message_subsystem();
-    msg_subsystem.add_dispatch::<SyncResponse>().await;
-    msg_subsystem.add_dispatch::<ForkSyncResponse>().await;
     let block_response_sub = channel.subscribe_msg::<SyncResponse>().await?;
     let proposals_response_sub = channel.subscribe_msg::<ForkSyncResponse>().await?;
     let notif_sub = node.subscribers.get("blocks").unwrap();
@@ -134,7 +129,7 @@ pub async fn sync_task(node: &Darkfid) -> Result<()> {
     // Verify and store retrieved proposals
     debug!(target: "darkfid::task::sync_task", "Processing received proposals");
     for proposal in &response.proposals {
-        node.validator.consensus.append_proposal(proposal).await?;
+        node.validator.append_proposal(proposal).await?;
         // Notify subscriber
         let enc_prop = JsonValue::String(base64::encode(&serialize_async(proposal).await));
         proposal_notif_sub.notify(vec![enc_prop].into()).await;

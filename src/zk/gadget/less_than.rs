@@ -273,9 +273,8 @@ mod tests {
     use super::*;
     use darkfi_sdk::crypto::pasta_prelude::PrimeField;
     use halo2_proofs::{
-        circuit::{floor_planner, Value},
+        circuit::floor_planner,
         dev::{CircuitLayout, MockProver},
-        pasta::pallas,
         plonk::Circuit,
     };
 

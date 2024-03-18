@@ -90,7 +90,7 @@ to the latest tag, and use the provided Makefile to build the project:
 
 If you want to hack on the source code, make sure to read some
 introductory advice in the
-[DarkFi book](https://darkrenaissance.github.io/darkfi/development/development.html).
+[DarkFi book](https://darkrenaissance.github.io/darkfi/dev/dev.html).
 
 ### Living on the cutting edge
 

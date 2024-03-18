@@ -23,44 +23,62 @@ use darkfi_serial::async_trait;
 
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 
+use crate::{Error, Result};
+
 const SECS_IN_DAY: u64 = 86400;
 const MIN_IN_HOUR: u64 = 60;
 const SECS_IN_HOUR: u64 = 3600;
 
 /// Wrapper struct to represent system timestamps.
-#[derive(Hash, Clone, Copy, Debug, SerialEncodable, SerialDecodable, PartialEq, PartialOrd, Eq)]
-pub struct Timestamp(pub u64);
+#[derive(
+    Hash, Clone, Copy, Debug, SerialEncodable, SerialDecodable, PartialEq, PartialOrd, Ord, Eq,
+)]
+pub struct Timestamp(u64);
 
 impl Timestamp {
+    /// Returns the inner `u64` of `Timestamp`
+    pub fn inner(&self) -> u64 {
+        self.0
+    }
+
     /// Generate a `Timestamp` of the current time.
     pub fn current_time() -> Self {
         Self(UNIX_EPOCH.elapsed().unwrap().as_secs())
     }
 
-    /// Calculates elapsed time of a `Timestamp`.
-    /// TODO: Rework this function to return the result of checked_sub and make calling code
-    /// check whether it is Some/None
-    pub fn elapsed(&self) -> u64 {
-        let now = UNIX_EPOCH.elapsed().unwrap().as_secs();
-        if let Some(elapsed) = now.checked_sub(self.0) {
-            elapsed
+    /// Calculates the elapsed time of a `Timestamp` up to the time of calling the function.
+    pub fn elapsed(&self) -> Result<Self> {
+        Self::current_time().checked_sub(*self)
+    }
+
+    /// Add `self` to a given timestamp
+    /// Errors on integer overflow.
+    pub fn checked_add(&self, ts: Timestamp) -> Result<Self> {
+        if let Some(result) = self.inner().checked_add(ts.inner()) {
+            Ok(Self(result))
         } else {
-            panic!(
-                "Cannot subtract Timestamp value {} from current time {}. (Integer underflow)",
-                self.0, now
-            );
+            Err(Error::AdditionOverflow)
         }
     }
 
-    /// Increment a 'Timestamp'.
-    /// TODO: Rework this function to return the result of checked_add and make calling code
-    /// check whether it is Some/None
-    pub fn add(&mut self, inc: u64) {
-        if let Some(sum) = self.0.checked_add(inc) {
-            self.0 = sum
+    /// Subtract `self` with a given timestamp
+    /// Errors on integer underflow.
+    pub fn checked_sub(&self, ts: Timestamp) -> Result<Self> {
+        if let Some(result) = self.inner().checked_sub(ts.inner()) {
+            Ok(Self(result))
         } else {
-            panic!("Cannot add {} to Timestamp {}. (Integer overflow)", self.0, inc);
+            Err(Error::SubtractionUnderflow)
         }
+    }
+
+    pub const fn from_u64(x: u64) -> Self {
+        Self(x)
+    }
+}
+
+impl From<u64> for Timestamp {
+    fn from(x: u64) -> Self {
+        Self(x)
     }
 }
 
@@ -204,19 +222,13 @@ mod tests {
     use super::Timestamp;
 
     #[test]
-    #[should_panic]
-    fn panic_on_add_overflow() {
-        // Panic when the Timestamp func add() overflows u64.
-        let mut ts = Timestamp::current_time();
-        ts.add(u64::MAX);
+    fn check_ts_add_overflow() {
+        assert!(Timestamp::current_time().checked_add(u64::MAX.into()).is_err());
     }
 
     #[test]
-    #[should_panic]
-    fn panic_on_elapsed_underflow() {
-        // Panic when the Timestamp function elapsed() underflows u64.
-        let mut ts = Timestamp::current_time();
-        ts.add(10_000);
-        ts.elapsed();
+    fn check_ts_sub_underflow() {
+        let cur = Timestamp::current_time().checked_add(10_000.into()).unwrap();
+        assert!(cur.elapsed().is_err());
     }
 }

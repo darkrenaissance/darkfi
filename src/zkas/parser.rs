@@ -61,18 +61,16 @@ where
     K: Eq + Hash + Send + Sync + Clone + 'static,
     V: Send + Sync + Clone + 'static,
 {
-    fn contains_key<Q: ?Sized>(&self, k: &Q) -> bool
+    fn contains_key<Q: Hash + Eq + ?Sized>(&self, k: &Q) -> bool
     where
         K: Borrow<Q>,
-        Q: Hash + Eq,
     {
         self.map.contains_key(k)
     }
 
-    fn get<Q: ?Sized>(&self, k: &Q) -> Option<&V>
+    fn get<Q: Hash + Eq + ?Sized>(&self, k: &Q) -> Option<&V>
     where
         K: Borrow<Q>,
-        Q: Hash + Eq,
     {
         self.map.get(k)
     }
@@ -685,6 +683,7 @@ impl Parser {
             }
 
             // Valid witness types
+            // TODO: change to TryFrom impl for VarType
             match v.1.token.as_str() {
                 "EcPoint" => {
                     ret.push(Witness {
@@ -726,6 +725,15 @@ impl Parser {
                     ret.push(Witness {
                         name: k.to_string(),
                         typ: VarType::MerklePath,
+                        line: v.0.line,
+                        column: v.0.column,
+                    });
+                }
+
+                "SparseMerklePath" => {
+                    ret.push(Witness {
+                        name: k.to_string(),
+                        typ: VarType::SparseMerklePath,
                         line: v.0.line,
                         column: v.0.column,
                     });
@@ -938,7 +946,15 @@ impl Parser {
                 // call, so we check if it's legit and start digging.
                 let func_name = token.token.as_str();
 
-                // TODO: MAKE SURE IT'S A SYMBOL
+                // Ensure the current function is a symbol
+                if token.token_type != TokenType::Symbol {
+                    return Err(self.error.abort(
+                        "This token is not a symbol.",
+                        token.line,
+                        token.column,
+                    ))
+                }
+
                 if let Some(op) = Opcode::from_name(func_name) {
                     let rhs = self.parse_function_call(token, &mut iter)?;
                     stmt.opcode = op;

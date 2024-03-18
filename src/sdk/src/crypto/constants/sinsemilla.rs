@@ -145,14 +145,12 @@ impl CommitDomains<pallas::Affine, OrchardFixedBases, OrchardHashDomains> for Or
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::crypto::constants::{
-        fixed_bases::{COMMIT_IVK_PERSONALIZATION, NOTE_COMMITMENT_PERSONALIZATION},
-        sinsemilla::MERKLE_CRH_PERSONALIZATION,
+    use crate::crypto::constants::fixed_bases::{
+        COMMIT_IVK_PERSONALIZATION, NOTE_COMMITMENT_PERSONALIZATION,
     };
     use halo2_gadgets::sinsemilla::primitives::{CommitDomain, HashDomain};
-    use halo2_proofs::{arithmetic::CurveAffine, pasta::pallas};
-    use pasta_curves::group::{ff::PrimeField, Curve};
-    use rand::{self, rngs::OsRng, Rng};
+    use pasta_curves::group::Curve;
+    use rand::{rngs::OsRng, Rng};
 
     #[test]
     // Nodes in the Merkle tree are Pallas base field elements.

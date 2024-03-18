@@ -62,7 +62,7 @@ pub struct Settings {
     pub channel_heartbeat_interval: u64,
     /// Allow localnet hosts
     pub localnet: bool,
-    /// Delete a peer from hosts if they've been quarantined N times
+    /// Downgrade a peer to greylist if they've been quarantined N times
     pub hosts_quarantine_limit: usize,
     /// Cooling off time for peer discovery when unsuccessful
     pub outbound_peer_discovery_cooloff_time: u64,
@@ -76,6 +76,9 @@ pub struct Settings {
     pub white_connection_percent: usize,
     /// Number of anchorlist connections
     pub anchor_connection_count: usize,
+    /// Number of seconds with no connections after which refinery
+    /// process is paused.
+    pub time_with_no_connections: u64,
 }
 
 impl Default for Settings {
@@ -103,9 +106,10 @@ impl Default for Settings {
             outbound_peer_discovery_cooloff_time: 30,
             outbound_peer_discovery_attempt_time: 5,
             hostlist: "/dev/null".to_string(),
-            greylist_refinery_interval: 5,
+            greylist_refinery_interval: 15,
             white_connection_percent: 90,
             anchor_connection_count: 2,
+            time_with_no_connections: 30,
         }
     }
 }
@@ -183,7 +187,7 @@ pub struct SettingsOpt {
     #[structopt(long)]
     pub localnet: bool,
 
-    /// Delete a peer from hosts if they've been quarantined N times
+    /// Downgrade a peer to greylist if they've been quarantined N times
     #[structopt(skip)]
     pub hosts_quarantine_limit: Option<usize>,
 
@@ -211,6 +215,11 @@ pub struct SettingsOpt {
     /// Number of anchorlist connections
     #[structopt(skip)]
     pub anchor_connection_count: Option<usize>,
+
+    /// Number of seconds with no connections after which refinery
+    /// process is paused.
+    #[structopt(skip)]
+    pub time_with_no_connections: Option<u64>,
 }
 
 impl From<SettingsOpt> for Settings {
@@ -258,6 +267,9 @@ impl From<SettingsOpt> for Settings {
             anchor_connection_count: opt
                 .anchor_connection_count
                 .unwrap_or(def.anchor_connection_count),
+            time_with_no_connections: opt
+                .time_with_no_connections
+                .unwrap_or(def.time_with_no_connections),
         }
     }
 }

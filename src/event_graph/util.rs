@@ -116,8 +116,6 @@ pub(super) fn generate_genesis(days_rotation: u64) -> Event {
 
 #[cfg(test)]
 mod tests {
-    use crate::event_graph::INITIAL_GENESIS;
-
     use super::*;
 
     #[test]

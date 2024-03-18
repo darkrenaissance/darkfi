@@ -44,16 +44,14 @@ use super::{
         channel::ChannelPtr,
         connector::Connector,
         dnet::{self, dnetev, DnetEvent},
+        hosts::store::HostColor,
         message::GetAddrsMessage,
         p2p::{P2p, P2pPtr},
     },
     Session, SessionBitFlag, SESSION_OUTBOUND,
 };
 use crate::{
-    system::{
-        sleep, timeout::timeout, CondVar, LazyWeak, StoppableTask, StoppableTaskPtr, Subscriber,
-        SubscriberPtr,
-    },
+    system::{sleep, timeout::timeout, CondVar, LazyWeak, StoppableTask, StoppableTaskPtr},
     Error, Result,
 };
 
@@ -63,9 +61,6 @@ pub type OutboundSessionPtr = Arc<OutboundSession>;
 pub struct OutboundSession {
     /// Weak pointer to parent p2p object
     pub(in crate::net) p2p: LazyWeak<P2p>,
-    /// Subscriber used to signal channels processing
-    channel_subscriber: SubscriberPtr<Result<ChannelPtr>>,
-
     /// Outbound connection slots
     slots: Mutex<Vec<Arc<Slot>>>,
     /// Peer discovery task
@@ -77,7 +72,6 @@ impl OutboundSession {
     pub(crate) fn new() -> OutboundSessionPtr {
         let self_ = Arc::new(Self {
             p2p: LazyWeak::new(),
-            channel_subscriber: Subscriber::new(),
             slots: Mutex::new(Vec::new()),
             peer_discovery: PeerDiscovery::new(),
         });
@@ -185,61 +179,132 @@ impl Slot {
         self.process.stop().await
     }
 
-    async fn fetch_address(&self, slot_count: usize, transports: &[String]) -> Option<(Url, u64)> {
-        let hosts = self.p2p().hosts();
-        let connects = self.p2p().settings().outbound_connections;
-        let white_count = connects * self.p2p().settings().white_connection_percent / 100;
+    /// Address selection algorithm that works as follows: up to
+    /// anchor_count, select from the anchorlist. Up to white_count,
+    /// select from the whitelist. For all other slots, select from
+    /// the greylist.
 
-        if slot_count < self.p2p().settings().anchor_connection_count {
-            //  Up to anchor_connection_count connections:
-            //  Select from the anchorlist
-            //  If the anchorlist is empty, select from the whitelist
-            //  If the whitelist is empty, select from the greylist
-            //  If the greylist is empty, return None and do peer discovery
-            if !hosts.anchorlist_fetch_address(transports).await.is_empty() {
-                let addrs = hosts.anchorlist_fetch_address(transports).await;
+    /// If we didn't find an address with this selection logic, downgrade
+    /// our preferences. Up to anchor_count, select from the whitelist,
+    /// up until white_count, select from the greylist.
 
-                return hosts.check_address_with_lock(self.p2p(), addrs).await
+    /// If we still didn't find an address, select from the greylist. In
+    /// all other cases, return an empty vector. This will trigger
+    /// fetch_addrs() to return None and initiate peer discovery.
+    /* NOTE: Selecting from the greylist for some % of the slots is
+    necessary and healthy since we require the network retains some
+    unreliable connections. A network that purely favors uptime over
+    unreliable connections may be vulnerable to sybil by attackers with
+    good uptime.*/
+    async fn fetch_addrs_with_preference(
+        &self,
+        preference: usize,
+        slot_count: usize,
+        transports: &[String],
+        transport_mixing: bool,
+        white_count: usize,
+        anchor_count: usize,
+    ) -> Vec<(Url, u64)> {
+        let hosts = &self.p2p().hosts().container;
+
+        match preference {
+            // Highest preference that corresponds to the anchor and white count preference set in
+            // Settings.
+            0 => {
+                if slot_count < anchor_count {
+                    hosts.fetch_addrs(HostColor::Gold, transports, transport_mixing).await
+                } else if slot_count < white_count {
+                    hosts.fetch_addrs(HostColor::White, transports, transport_mixing).await
+                } else {
+                    hosts.fetch_addrs(HostColor::Grey, transports, transport_mixing).await
+                }
             }
-
-            if !hosts.whitelist_fetch_address(transports).await.is_empty() {
-                let addrs = hosts.whitelist_fetch_address(transports).await;
-
-                return hosts.check_address_with_lock(self.p2p(), addrs).await
+            // Reduced preference in case we don't have sufficient hosts to satisfy our highest
+            // preference.
+            1 => {
+                if slot_count < anchor_count {
+                    hosts.fetch_addrs(HostColor::White, transports, transport_mixing).await
+                } else if slot_count < white_count {
+                    hosts.fetch_addrs(HostColor::Grey, transports, transport_mixing).await
+                } else {
+                    vec![]
+                }
             }
-
-            if !hosts.greylist_fetch_address(transports).await.is_empty() {
-                let addrs = hosts.greylist_fetch_address(transports).await;
-
-                return hosts.check_address_with_lock(self.p2p(), addrs).await
+            // Lowest preference if we still haven't been able to find a host.
+            2 => {
+                if slot_count < anchor_count {
+                    hosts.fetch_addrs(HostColor::Grey, transports, transport_mixing).await
+                } else {
+                    vec![]
+                }
             }
-        } else if slot_count < white_count {
-            // Up to white_connection_percent connections:
-            //  Select from the whitelist
-            //  If the whitelist is empty, select from the greylist
-            //  If the greylist is empty, return None and do peer discovery
-            if !hosts.whitelist_fetch_address(transports).await.is_empty() {
-                let addrs = hosts.whitelist_fetch_address(transports).await;
-
-                return hosts.check_address_with_lock(self.p2p(), addrs).await
-            }
-
-            if !hosts.greylist_fetch_address(transports).await.is_empty() {
-                let addrs = hosts.greylist_fetch_address(transports).await;
-
-                return hosts.check_address_with_lock(self.p2p(), addrs).await
-            }
-        } else {
-            // All other connections:
-            //  Select from the greylist
-            //  If the greylist is empty, do peer discovery
-            if !hosts.greylist_fetch_address(transports).await.is_empty() {
-                let addrs = hosts.greylist_fetch_address(transports).await;
-
-                return hosts.check_address_with_lock(self.p2p(), addrs).await
+            _ => {
+                panic!()
             }
         }
+    }
 
+    // Fetch an address we can connect to acccording to the white and anchor connection counts
+    // configured in Settings.
+    async fn fetch_addrs(&self, slot_count: usize, transports: &[String]) -> Option<(Url, u64)> {
+        let hosts = self.p2p().hosts();
+        let transport_mixing = self.p2p().settings().transport_mixing;
+        let anchor_count = self.p2p().settings().anchor_connection_count;
+        let white_count = slot_count * self.p2p().settings().white_connection_percent / 100;
+
+        // First select an addresses that match our white and anchor requirements configured in
+        // Settings.
+        let preference = 0;
+        let addrs = self
+            .fetch_addrs_with_preference(
+                preference,
+                slot_count,
+                transports,
+                transport_mixing,
+                white_count,
+                anchor_count,
+            )
+            .await;
+
+        if !addrs.is_empty() {
+            return hosts.check_addrs(addrs).await;
+        }
+
+        // If no addresses were returned, go for the second best thing (white and grey).
+        let preference = 1;
+        let addrs = self
+            .fetch_addrs_with_preference(
+                preference,
+                slot_count,
+                transports,
+                transport_mixing,
+                white_count,
+                anchor_count,
+            )
+            .await;
+
+        if !addrs.is_empty() {
+            return hosts.check_addrs(addrs).await;
+        }
+
+        // If we still have no addresses, go for the least favored option.
+        let preference = 2;
+        let addrs = self
+            .fetch_addrs_with_preference(
+                preference,
+                slot_count,
+                transports,
+                transport_mixing,
+                white_count,
+                anchor_count,
+            )
+            .await;
+
+        if !addrs.is_empty() {
+            return hosts.check_addrs(addrs).await;
+        }
+
+        // If we still don't have an address, return None and do peer discovery.
         None
     }
 
@@ -263,7 +328,7 @@ impl Slot {
 
             // Do peer discovery if we don't have a hostlist (first time connecting
             // to the network).
-            if hosts.is_empty_hostlist().await {
+            if hosts.container.is_empty(HostColor::Grey).await {
                 dnetev!(self, OutboundSlotSleeping, {
                     slot: self.slot,
                 });
@@ -277,7 +342,7 @@ impl Slot {
                 continue
             }
 
-            let addr = if let Some(addr) = self.fetch_address(slot_count, transports).await {
+            let addr = if let Some(addr) = self.fetch_addrs(slot_count, transports).await {
                 debug!(target: "net::outbound_session::run()", "Fetched address: {:?}", addr);
                 addr
             } else {
@@ -296,6 +361,7 @@ impl Slot {
             };
 
             let host = addr.0;
+            let last_seen = addr.1;
             let slot = self.slot;
 
             info!(
@@ -309,7 +375,7 @@ impl Slot {
                 addr: host.clone(),
             });
 
-            let (addr, channel) = match self.try_connect(host.clone()).await {
+            let (addr, channel) = match self.try_connect(host.clone(), last_seen).await {
                 Ok(connect_info) => connect_info,
                 Err(err) => {
                     debug!(
@@ -344,7 +410,9 @@ impl Slot {
 
             let stop_sub = channel.subscribe_stop().await.expect("Channel should not be stopped");
             // Setup new channel
-            if let Err(err) = self.setup_channel(host.clone(), channel.clone()).await {
+            if let Err(err) =
+                self.session().register_channel(channel.clone(), self.p2p().executor()).await
+            {
                 info!(
                     target: "net::outbound_session",
                     "[P2P] Outbound slot #{} disconnected: {}",
@@ -363,7 +431,7 @@ impl Slot {
             self.channel_id.store(channel.info.id, Ordering::Relaxed);
 
             // Add this connection to the anchorlist
-            hosts.upgrade_host(&addr).await;
+            hosts.move_host(&addr, last_seen, HostColor::Gold).await;
 
             // Wait for channel to close
             stop_sub.receive().await;
@@ -378,7 +446,7 @@ impl Slot {
     /// the list of pending channels, and starts sending messages across the
     /// channel. In case of any failures, a network error is returned and the
     /// main connect loop (parent of this function) will iterate again.
-    async fn try_connect(&self, addr: Url) -> Result<(Url, ChannelPtr)> {
+    async fn try_connect(&self, addr: Url, last_seen: u64) -> Result<(Url, ChannelPtr)> {
         let parent = Arc::downgrade(&self.session());
         let connector = Connector::new(self.p2p().settings(), parent);
 
@@ -392,35 +460,15 @@ impl Slot {
                     self.slot, addr, e
                 );
 
-                // At this point we failed to connect. We'll quarantine this peer now.
-                self.p2p().hosts().quarantine(&addr).await;
-
-                // Remove connection from pending
-                self.p2p().remove_pending(&addr).await;
+                // At this point we failed to connect. We'll downgrade this peer now.
+                self.p2p().hosts().move_host(&addr, last_seen, HostColor::Grey).await;
 
                 // Notify that channel processing failed
-                self.session().channel_subscriber.notify(Err(Error::ConnectFailed)).await;
+                self.p2p().hosts().channel_subscriber.notify(Err(Error::ConnectFailed)).await;
 
                 Err(Error::ConnectFailed)
             }
         }
-    }
-
-    async fn setup_channel(&self, addr: Url, channel: ChannelPtr) -> Result<()> {
-        // Register the new channel
-        debug!(target: "net::outbound_session::setup_channel", "register_channel {}", channel.clone().address());
-        self.session().register_channel(channel.clone(), self.p2p().executor()).await?;
-
-        // Channel is now connected but not yet setup
-        // Remove pending lock since register_channel will add the channel to p2p
-        debug!(target: "net::outbound_session::setup_channel", "removing channel...");
-        self.p2p().remove_pending(&addr).await;
-        debug!(target: "net::outbound_session::setup_channel", "channel removed!");
-
-        // Notify that channel processing has been finished
-        self.session().channel_subscriber.notify(Ok(channel)).await;
-
-        Ok(())
     }
 
     fn notify(&self) {
@@ -435,6 +483,30 @@ impl Slot {
     }
 }
 
+/// Defines a common interface for multiple peer discovery processes.
+/* NOTE: Currently only one Peer Discovery implementation exists. Making
+Peer Discovery generic enables us to support network swarming, since
+the peer discovery process will differ depending on whether it occurs
+on the overlay network or a subnet.*/
+#[async_trait]
+pub trait PeerDiscoveryBase {
+    async fn start(self: Arc<Self>);
+
+    async fn stop(self: Arc<Self>);
+
+    async fn run(self: Arc<Self>);
+
+    async fn wait(&self) -> bool;
+
+    fn notify(&self);
+
+    fn session(&self) -> OutboundSessionPtr;
+
+    fn p2p(&self) -> P2pPtr;
+}
+
+/// Main PeerDiscovery process that loops through connected channels
+/// and sends out a `GetAddrs` when it is active.
 struct PeerDiscovery {
     process: StoppableTaskPtr,
     wakeup_self: CondVar,
@@ -449,7 +521,10 @@ impl PeerDiscovery {
             session: LazyWeak::new(),
         })
     }
+}
 
+#[async_trait]
+impl PeerDiscoveryBase for PeerDiscovery {
     async fn start(self: Arc<Self>) {
         let ex = self.p2p().executor();
         self.process.clone().start(
@@ -535,7 +610,7 @@ impl PeerDiscovery {
                 p2p.broadcast(&get_addrs).await;
 
                 // Wait for a hosts store update event
-                let store_sub = self.p2p().hosts().subscribe_store().await.unwrap();
+                let store_sub = self.p2p().hosts().subscribe_store().await;
 
                 let result = timeout(
                     Duration::from_secs(p2p.settings().outbound_peer_discovery_attempt_time),
@@ -609,10 +684,10 @@ impl PeerDiscovery {
     fn notify(&self) {
         self.wakeup_self.notify()
     }
-
     fn session(&self) -> OutboundSessionPtr {
         self.session.upgrade()
     }
+
     fn p2p(&self) -> P2pPtr {
         self.session().p2p()
     }

@@ -17,9 +17,14 @@
  */
 
 //! VM heap type abstractions
-use darkfi_sdk::crypto::{constants::OrchardFixedBases, MerkleNode};
+use darkfi_sdk::crypto::{
+    constants::{OrchardFixedBases, MERKLE_DEPTH_ORCHARD},
+    smt::SMT_FP_DEPTH,
+    MerkleNode,
+};
 use halo2_gadgets::ecc::{
     chip::EccChip, FixedPoint, FixedPointBaseField, FixedPointShort, NonIdentityPoint, Point,
+    ScalarFixed,
 };
 use halo2_proofs::{
     circuit::{AssignedCell, Value},
@@ -43,7 +48,8 @@ pub enum Witness {
     EcFixedPoint(Value<pallas::Point>),
     Base(Value<pallas::Base>),
     Scalar(Value<pallas::Scalar>),
-    MerklePath(Value<[MerkleNode; 32]>),
+    MerklePath(Value<[MerkleNode; MERKLE_DEPTH_ORCHARD]>),
+    SparseMerklePath(Value<[pallas::Base; SMT_FP_DEPTH]>),
     Uint32(Value<u32>),
     Uint64(Value<u64>),
 }
@@ -57,14 +63,11 @@ impl Witness {
             Self::Base(_) => "Base",
             Self::Scalar(_) => "Scalar",
             Self::MerklePath(_) => "MerklePath",
+            Self::SparseMerklePath(_) => "SparseMerklePath",
             Self::Uint32(_) => "Uint32",
             Self::Uint64(_) => "Uint64",
         }
     }
-}
-
-pub enum Literal {
-    Uint64(Value<u64>),
 }
 
 /// Helper function for verifiers to generate empty witnesses for
@@ -80,6 +83,7 @@ pub fn empty_witnesses(zkbin: &ZkBinary) -> Result<Vec<Witness>> {
             VarType::Base => ret.push(Witness::Base(Value::unknown())),
             VarType::Scalar => ret.push(Witness::Scalar(Value::unknown())),
             VarType::MerklePath => ret.push(Witness::MerklePath(Value::unknown())),
+            VarType::SparseMerklePath => ret.push(Witness::SparseMerklePath(Value::unknown())),
             VarType::Uint32 => ret.push(Witness::Uint32(Value::unknown())),
             VarType::Uint64 => ret.push(Witness::Uint64(Value::unknown())),
             x => return Err(ZkasDecoderError(format!("Unsupported witness type: {:?}", x))),
@@ -99,8 +103,9 @@ pub enum HeapVar {
     EcFixedPointShort(FixedPointShort<pallas::Affine, EccChip<OrchardFixedBases>>),
     EcFixedPointBase(FixedPointBaseField<pallas::Affine, EccChip<OrchardFixedBases>>),
     Base(AssignedCell<pallas::Base, pallas::Base>),
-    Scalar(Value<pallas::Scalar>),
-    MerklePath(Value<[pallas::Base; 32]>),
+    Scalar(ScalarFixed<pallas::Affine, EccChip<OrchardFixedBases>>),
+    MerklePath(Value<[pallas::Base; MERKLE_DEPTH_ORCHARD]>),
+    SparseMerklePath(Value<[pallas::Base; SMT_FP_DEPTH]>),
     Uint32(Value<u32>),
     Uint64(Value<u64>),
 }
@@ -128,7 +133,8 @@ impl_try_from!(EcNiPoint, NonIdentityPoint<pallas::Affine, EccChip<OrchardFixedB
 impl_try_from!(EcFixedPoint, FixedPoint<pallas::Affine, EccChip<OrchardFixedBases>>);
 impl_try_from!(EcFixedPointShort, FixedPointShort<pallas::Affine, EccChip<OrchardFixedBases>>);
 impl_try_from!(EcFixedPointBase, FixedPointBaseField<pallas::Affine, EccChip<OrchardFixedBases>>);
-impl_try_from!(Scalar, Value<pallas::Scalar>);
+impl_try_from!(Scalar, ScalarFixed<pallas::Affine, EccChip<OrchardFixedBases>>);
 impl_try_from!(Base, AssignedCell<pallas::Base, pallas::Base>);
 impl_try_from!(Uint32, Value<u32>);
-impl_try_from!(MerklePath, Value<[pallas::Base; 32]>);
+impl_try_from!(MerklePath, Value<[pallas::Base; MERKLE_DEPTH_ORCHARD]>);
+impl_try_from!(SparseMerklePath, Value<[pallas::Base; SMT_FP_DEPTH]>);

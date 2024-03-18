@@ -22,7 +22,10 @@ use darkfi::{
     async_daemonize, cli_desc,
     event_graph::{proto::ProtocolEventGraph, EventGraph, EventGraphPtr, NULL_ID},
     net::{settings::SettingsOpt, P2p, SESSION_ALL},
-    rpc::server::{listen_and_serve, RequestHandler},
+    rpc::{
+        jsonrpc::JsonSubscriber,
+        server::{listen_and_serve, RequestHandler},
+    },
     system::{sleep, StoppableTask},
     util::path::expand_path,
     Error, Result,
@@ -167,11 +170,64 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
         executor.clone(),
     );
 
+    info!("Starting dnet subs task");
+    let dnet_sub = JsonSubscriber::new("dnet.subscribe_events");
+    let dnet_sub_ = dnet_sub.clone();
+    let p2p_ = p2p.clone();
+    let dnet_task = StoppableTask::new();
+    dnet_task.clone().start(
+        async move {
+            let dnet_sub = p2p_.dnet_subscribe().await;
+            loop {
+                let event = dnet_sub.receive().await;
+                debug!("Got dnet event: {:?}", event);
+                dnet_sub_.notify(vec![event.into()].into()).await;
+            }
+        },
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                Err(e) => panic!("{}", e),
+            }
+        },
+        Error::DetachedTaskStopped,
+        executor.clone(),
+    );
+
+    info!("Starting deg subs task");
+    let deg_sub = JsonSubscriber::new("deg.subscribe_events");
+    let deg_sub_ = deg_sub.clone();
+    let event_graph_ = event_graph.clone();
+    let deg_task = StoppableTask::new();
+    deg_task.clone().start(
+        async move {
+            let deg_sub = event_graph_.deg_subscribe().await;
+            loop {
+                let event = deg_sub.receive().await;
+                debug!("Got deg event: {:?}", event);
+                deg_sub_.notify(vec![event.into()].into()).await;
+            }
+        },
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                Err(e) => panic!("{}", e),
+            }
+        },
+        Error::DetachedTaskStopped,
+        executor.clone(),
+    );
+
     //
     // RPC interface
     //
-    let rpc_interface =
-        Arc::new(JsonRpcInterface::new("Alolymous".to_string(), event_graph.clone(), p2p.clone()));
+    let rpc_interface = Arc::new(JsonRpcInterface::new(
+        "Alolymous".to_string(),
+        event_graph.clone(),
+        p2p.clone(),
+        dnet_sub,
+        deg_sub,
+    ));
     let rpc_task = StoppableTask::new();
     let rpc_interface_ = rpc_interface.clone();
     rpc_task.clone().start(
@@ -193,6 +249,10 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
 
     info!(target: "genevd", "Stopping JSON-RPC server...");
     rpc_task.stop().await;
+
+    info!(target: "genevd", "Stopping Debugging tasks...");
+    dnet_task.stop().await;
+    deg_task.stop().await;
 
     info!(target: "genevd", "Stopping sync loop task...");
     sync_loop_task.stop().await;

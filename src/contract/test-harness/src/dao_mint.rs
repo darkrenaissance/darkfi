@@ -51,7 +51,7 @@ impl TestHarness {
         block_height: u64,
     ) -> Result<(Transaction, DaoMintParams, Option<MoneyFeeParamsV1>)> {
         let (dao_mint_pk, dao_mint_zkbin) =
-            self.proving_keys.get(&DAO_CONTRACT_ZKAS_DAO_MINT_NS.to_string()).unwrap();
+            self.proving_keys.get(DAO_CONTRACT_ZKAS_DAO_MINT_NS).unwrap();
 
         // Create the call
         let (params, proofs) =

@@ -25,5 +25,8 @@ pub(crate) mod db;
 /// Host functions for merkle tree functions
 pub(crate) mod merkle;
 
+/// Host functions for sparse merkle tree functions
+pub(crate) mod smt;
+
 /// Host functions for utilities
 pub(crate) mod util;

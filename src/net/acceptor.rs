@@ -24,12 +24,13 @@ use std::{
     },
 };
 
-use log::{debug, error, warn};
+use log::{error, warn};
 use smol::Executor;
 use url::Url;
 
 use super::{
     channel::{Channel, ChannelPtr},
+    hosts::store::HostColor,
     session::SessionWeakPtr,
     transport::{Listener, PtListener},
 };
@@ -117,14 +118,23 @@ impl Acceptor {
             match listener.next().await {
                 Ok((stream, url)) => {
                     // Check if we reject this peer
-                    if self.session.upgrade().unwrap().p2p().hosts().is_rejected(&url).await {
-                        debug!(target: "net::acceptor::run_accept_loop()", "Peer {} is rejected", url);
+                    if self
+                        .session
+                        .upgrade()
+                        .unwrap()
+                        .p2p()
+                        .hosts()
+                        .container
+                        .contains(HostColor::Black as usize, &url)
+                        .await
+                    {
+                        warn!(target: "net::acceptor::run_accept_loop()", "Peer {} is blacklisted", url);
                         continue
                     }
 
                     // Create the new Channel.
                     let session = self.session.clone();
-                    let channel = Channel::new(stream, url, session).await;
+                    let channel = Channel::new(stream, None, url, session).await;
 
                     // Increment the connection counter
                     self.conn_count.fetch_add(1, SeqCst);

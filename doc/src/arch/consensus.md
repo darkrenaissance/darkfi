@@ -15,10 +15,11 @@ blockchain achieve consensus.
 | P2P network            | Peer-to-peer network on which nodes communicate with each other                        |
 | Finalization           | State achieved when a block and its contents are appended to the canonical blockchain  |
 | Fork                   | Chain of block proposals that begins with the last block of the canonical blockchain   |
+| MAX_INT                | The maximum 32 bytes (256 bits) integer 2^256 − 1                                      |
 
 ## Miner main loop
 
-DarkFi uses a Proof of Work RandomX algorithm paired with delayed finality.
+DarkFi uses RandomX Proof of Work algorithm with enforced finality.
 Therefore, block production involves the following steps:
 
 * First, a miner grabs its current best ranking fork and extends it with a
@@ -64,32 +65,26 @@ new best fork.
 
 ## Ranking
 
-Block producers create a reward transaction containing a `ECVRF` proof (`VRF`)
-that contributes to ranking logic. The `VRF` is built using the `pallas::Base`
-of the $(n-1)$-block proposal's nonce, the $(n-2)$-block proposal's hash, and
-the `pallas::Base` of the block proposal's block height. The `VRF`'s purpose
-is to eliminate long range attacks by predicting a high-ranking future block
-that we can produce in advance.
+Each block proposal is ranked based on how hard it is to produce. To measure
+that, we compute the squared distance of its height target from `MAX_INT`.
+For two honest nodes that mine the next block height of the highest ranking
+fork, their block will have the same rank. To mitigate this tie scenario,
+we also compute the squared distance of the blocks `RandomX` hash from
+`MAX_INT`, allowing us to always chose the actual higher ranking block for
+that height, in case of ties. The complete block rank is a tuple containing
+both squared distances.
 
-Each block proposal is ranked based on the modulus of the $(n-2)$-block
-proposal's `VRF` proof (attached to the block producer's reward transaction)
-and the big-integer from the big endian output of its hash.
+Proof of Work algorithm lowers the difficulty target as hashpower grows.
+This means that blocks will have to be mined for a lower target, therefore
+rank higher, as they go further away from `MAX_INT`.
 
-The rank of the genesis block is 0. The rank of the following 2 blocks is equal
-to their hash output, since there is no $(n-2)$-block producer or `VRF` attached to the
-reward transaction.
-
-For all other blocks, the rank is computed as follows:
-
-1. Obtain a big-integer from the big endian output of the blocks hash
-2. Grab the `VRF` proof from the reward transaction of the $(n-2)$-block proposal
-3. Obtain a big-integer from the big endian output of the `VRF`
-4. Compute the rank: `vrf.output` % `hash_output` (If `hash_output` is 0, rank is equal to `vrf.output`)
-
-To calculate each fork rank, we simply multiply the sum of every block
-proposal's rank in the fork by the fork's length. We use the length
-multiplier to give a preference to longer forks (i.e. longer forks are
-likely to have a higher ranking).
+Similar to blocks, forks rank is a tuple, with the first part being the
+sum of its block's squared target distances, and the second being the sum of
+their squared hash distances Squared distances are used to disproportionately
+favors smaller targets, with the idea being that it will be harder to trigger
+a longer reorg between forks. When we compare forks, we first check the first
+sum, and if its tied, we use the second as the tie breaker, since we know it
+will be statistically unique for each sequence.
 
 The ranking of a fork is always increasing as new blocks are appended.
 To see this, let $F = (M₁ ⋯  Mₙ)$ be a fork with a finite sequence of blocks $(Mᵢ)$
@@ -167,20 +162,19 @@ Extending the canonical blockchain with a new block proposal:
 
 ## Finalization
 
+Based on the rank properties, each node will diverge to the highest ranking
+fork, and new fork wil emerge extending that at its tips.
+A security threshold is set, which refers to the height where the probability
+to produce a fork, able to reorg the current best ranking fork reaches zero,
+similar to the # of block confirmation used by other PoW based protocols.
+
 When the finalization check kicks in, each node will grab its best fork.
+If the fork's length exceeds the security threshold, the node will push (finalize)
+its first proposal to the canonical blockchain. The fork acts as a queue (buffer)
+for the to-be-finalized proposals.
 
-If more than one fork exists with same rank, the node will not finalize any
-block proposals. If the fork's length exceeds the security threshold, the node
-will finalize all block proposals, excluding the last ($n$)-block proposal, by
-appending them to the canonical blockchain. We exclude the last ($n$)-block
-proposal to eliminate network race conditions for blocks of the same height.
-
-Once finalized, all the remaining fork chains are removed from the node's
-memory pool.
-
-Because of this design, finalization cannot occur while there are competing
-fork chains of the same rank whose length exceeds the security threshold. In
-this case, finalization will occur when a single highest ranking fork emerges.
+Once a finalization occurs, all the fork chains not starting with the finalized
+block(s) are removed from the node's memory pool.
 
 We continue Case 3 from the previous section to visualize this logic.
 
@@ -195,8 +189,6 @@ proposals. One extends the F0 fork and the other extends the F2 fork:
                    |
                    |--[M4]              <-- F3
 
-The two competing fork chains also have the same rank, therefore finalization
-cannot occur.
 
 Later, the node only observes 1 proposal, extending the F2 fork:
 
@@ -208,10 +200,10 @@ Later, the node only observes 1 proposal, extending the F2 fork:
                    |
                    |--[M4]                    <-- F3
 
-When the finalization sync period starts, the node finalizes fork F2 and all
-other forks get dropped:
+When the finalization sync period starts, the node finalizes block M0 and
+keeps the forks that extend that:
 
-                   |/--[M0]--[M2]--[M5]      <-- F0
+                   |--[M0]--[M2]--[M5]       <-- F0
     [C]--...--[C]--|
                    |/--[M1]                  <-- F1
                    |
@@ -219,12 +211,13 @@ other forks get dropped:
                    |
                    |/--[M4]                  <-- F3
 
-The canonical blockchain now contains blocks M0, M3, M6 from fork F2. The
-current state is:
+The canonical blockchain now contains blocks M0 and the current state is:
 
-    [C]--...--[C]--|--[M7] <-- F2
+                   |--[M2]--[M5]       <-- F0
+    [C]--...--[C]--|
+                   |--[M3]--[M6]--[M7] <-- F2
 
-# Appendix
+# Appendix: Data Structures
 
 This section gives further details about the high level structures that will be
 used by the protocol.
@@ -269,4 +262,82 @@ used by the protocol.
 |-------------|-------------------|----------------------------------------|
 | `canonical` | `Blockchain`      | Canonical (finalized) blockchain       |
 | `forks`     | `Vec<Blockchain>` | Fork chains containing block proposals |
+
+# Appendix: Ranking Blocks
+
+## Sequences
+
+Denote blocks by the symbols $bᵢ ∈ B$, then a sequence of blocks (alternatively
+a fork) is an ordered series $𝐛 = (b₁, …, bₘ)$.
+
+Use $S$ for all sets of sequences for blocks in $B$.
+
+## Properties for Rank
+
+Each block is associated with a target $T : B → 𝕀$ where $𝕀 ⊂ ℕ$.
+
+1. Blocks with lower targets are harder to create and ranked higher in a sequence of blocks.
+2. Given two competing forks $𝐚 = (a₁, …, aₘ)$ and $b = (b₁, …, bₙ)$,
+   we wish to select a winner. Assume $𝐚$ is the winner, then $∑ T(aᵢ) ≤ ∑ T(bᵢ)$.
+3. There should only ever be a single winner.
+   When $∑ T(aᵢ) = ∑ T(bᵢ)$, then we have logic to break the tie.
+
+Property (2) can also be statistically true for $p > 0.5$.
+
+This is used to define a *fork-ranking* function $W : S → ℕ$.
+This function must *always* have unique values for distinct sequences.
+
+### Additivity
+
+We also would like the property $W$ is additive on subsequences
+$$ W((b₁, …, bₘ)) = W((b₁)) + ⋯ + W((bₘ)) $$
+which allows comparing forks from any point within the blockchain. For example
+let $𝐬 = (s₁, …, sₖ)$ be the blockchain together with forks $𝐚, 𝐛$ extending $𝐬$
+into $𝐬 ⊕  𝐚 = (s₁, …, sₖ, a₁, …, aₘ)$ and $𝐬 ⊕  𝐛 = (s₁, …, sₖ, b₁, …, bₙ)$.
+Then we have that
+$$ W(𝐬 ⊕  𝐚) < W(𝐬 ⊕  𝐛) ⟺  W(𝐚) < W(𝐛) $$
+which means it's sufficient to compare $𝐚$ and $𝐛$ directly.
+
+## Proposed Rank
+
+With a PoW mining system, we are guaranteed to always have that the block hash
+$h(b) ≤ T(b)$. Since the block hashes $( h(b₁), …, h(bₘ) )$ for a sequence
+$( b₁, …, bₘ )$ have the property that $∑ h(bᵢ) ≤ ∑ T(bᵢ)$, as well as being
+sufficiently random, we can use them to define our work function.
+
+Because $W$ is required to be additive, we define a block work function
+$w : B → ℕ$, and $W(𝐛) = ∑ w(bᵢ)$.
+
+The block work function should have a statistically higher score for
+blocks with a smaller target, and always be distinct for unique blocks.
+We define $w$ as
+$$ w(b) = \max(𝕀) - h(b) $$
+since $h(b) < T(b) < \max(𝕀)$ this function is well defined on the codomain.
+
+## Hash Function
+
+Let $𝕀$ be a fixed subset of $ℕ$ representing the output of a hash function
+$[0, \max(𝕀)]$.
+
+**Definition:** a *hash function* is a function $H : ℕ → 𝕀$ having the
+following properties:
+
+1. *Uniformity*, for any $y ∈ 𝕀$ and any $n ∈ ℕ$, there exists an $N > n$
+   such that $H(N) = y$.
+2. *One-way*, for any $y ∈ 𝕀$, we are unable to construct an $x ∈ ℕ$ such
+   that $H(x) = y$.
+
+Note: the above notions rely on purely algebraic properties of $H$ without
+requiring the machinery of probability. The second property of being one-way
+is a stronger notion than $\ran(H)$ being statistically random. Indeed if the
+probability is non-zero then we could find such an $(x, y)$ which breaks the
+one-way property.
+
+**Theorem:** *given a hash function $H : ℕ → 𝕀$ as defined above, it's impossible to
+construct two distinct sequences $𝐚 = (a₁, …, aₘ)$ and $𝐛 = (b₁, …, bₙ)$
+such that $H(a₁) + ⋯ + H(aₘ) = H(b₁) + ⋯ + H(bₙ)$.*
+
+By property (2), we cannot find a $H(x) = 0$.
+Again by (2), we cannot construct an $x$ such that $H(x) + H(a) = H(b)$ for
+any $a, b ∈ ℕ$. Recursive application of (2) leads us to the stated theorem.
 

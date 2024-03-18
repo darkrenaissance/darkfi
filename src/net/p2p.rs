@@ -23,7 +23,6 @@ use std::{
 
 use futures::{stream::FuturesUnordered, TryFutureExt};
 use log::{debug, error, info, warn};
-use rand::{prelude::IteratorRandom, rngs::OsRng};
 use smol::{lock::Mutex, stream::StreamExt};
 use url::Url;
 
@@ -58,12 +57,6 @@ pub type P2pPtr = Arc<P2p>;
 pub struct P2p {
     /// Global multithreaded executor reference
     executor: ExecutorPtr,
-    /// Channels pending connection
-    pending: PendingChannels,
-    /// Connected channels
-    channels: ConnectedChannels,
-    /// Subscriber for notifications of new channels
-    channel_subscriber: SubscriberPtr<Result<ChannelPtr>>,
     /// Known hosts (peers)
     hosts: HostsPtr,
     /// Protocol registry
@@ -85,7 +78,7 @@ pub struct P2p {
     /// The subscriber for which we can give dnet info over
     dnet_subscriber: SubscriberPtr<DnetEvent>,
 
-    // Greylist refinery process
+    /// Greylist refinery process
     greylist_refinery: Arc<GreylistRefinery>,
 }
 
@@ -103,9 +96,6 @@ impl P2p {
 
         let self_ = Arc::new(Self {
             executor,
-            pending: Mutex::new(HashSet::new()),
-            channels: Mutex::new(HashMap::new()),
-            channel_subscriber: Subscriber::new(),
             hosts: Hosts::new(settings.clone()),
             protocol_registry: ProtocolRegistry::new(),
             settings,
@@ -192,7 +182,7 @@ impl P2p {
     /// the ones provided in `exclude_list`.
     pub async fn broadcast_with_exclude<M: Message>(&self, message: &M, exclude_list: &[Url]) {
         let mut channels = Vec::new();
-        for channel in self.channels().await {
+        for channel in self.hosts().channels().await {
             if exclude_list.contains(channel.address()) {
                 continue
             }
@@ -226,46 +216,8 @@ impl P2p {
         let _results: Vec<_> = futures.collect().await;
     }
 
-    /// Check whether we're connected to a given address
-    pub async fn exists(&self, addr: &Url) -> bool {
-        self.channels.lock().await.contains_key(addr)
-    }
-
-    /// Add a channel to the set of connected channels
-    pub(super) async fn store(&self, channel: ChannelPtr) {
-        self.channels.lock().await.insert(channel.address().clone(), channel.clone());
-
-        self.channel_subscriber.notify(Ok(channel)).await;
-    }
-
-    /// Remove a channel from the set of connected channels
-    pub(super) async fn remove(&self, channel: ChannelPtr) {
-        self.channels.lock().await.remove(channel.address());
-    }
-
-    /// Add an address to the list of pending channels.
-    pub(super) async fn add_pending(&self, addr: &Url) -> bool {
-        self.pending.lock().await.insert(addr.clone())
-    }
-
-    /// Remove a channel from the list of pending channels.
-    pub(super) async fn remove_pending(&self, addr: &Url) {
-        self.pending.lock().await.remove(addr);
-    }
-
-    /// Return all connected channels
-    pub async fn channels(&self) -> Vec<ChannelPtr> {
-        self.channels.lock().await.values().cloned().collect()
-    }
-
-    /// Retrieve a random connected channel from the
-    pub async fn random_channel(&self) -> Option<ChannelPtr> {
-        let channels = self.channels.lock().await;
-        channels.values().choose(&mut OsRng).cloned()
-    }
-
     pub async fn is_connected(&self) -> bool {
-        !self.channels.lock().await.is_empty()
+        !self.hosts().channels().await.is_empty()
     }
 
     /// Return an atomic pointer to the set network settings
