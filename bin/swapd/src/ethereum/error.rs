@@ -1,6 +1,3 @@
-// TODO: having the generic middleware here is extremely cursed,
-// maybe we should just flatten the error and display it as a string
-// instead of having the generic.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("counterparty keys channel closed")]
