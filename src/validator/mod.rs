@@ -346,31 +346,34 @@ impl Validator {
         // Find the excess over finalization threshold
         let excess = (fork.proposals.len() - self.consensus.finalization_threshold) + 1;
 
-        // Apply finalized proposals diffs
+        // Grab finalized proposals and update fork's sequences
         let rest_proposals = fork.proposals.split_off(excess);
         let rest_diffs = fork.diffs.split_off(excess);
-        let finalized = fork.proposals.clone();
+        let finalized_proposals = fork.proposals.clone();
         let mut diffs = fork.diffs.clone();
         fork.proposals = rest_proposals;
         fork.diffs = rest_diffs;
+
+        // Grab finalized proposals blocks
+        let finalized_blocks =
+            fork.overlay.lock().unwrap().get_blocks_by_hash(&finalized_proposals)?;
+
+        // Apply finalized proposals diffs
         info!(target: "validator::finalization", "Finalizing proposals:");
-        for (index, proposal) in finalized.iter().enumerate() {
-            info!(target: "validator::finalization", "\t{}", proposal);
+        for (index, proposal) in finalized_proposals.iter().enumerate() {
+            info!(target: "validator::finalization", "\t{} - {}", proposal, finalized_blocks[index].header.height);
             fork.overlay.lock().unwrap().overlay.lock().unwrap().apply_diff(&mut diffs[index])?;
         }
         drop(forks);
 
         // Reset forks starting with the finalized blocks
-        self.consensus.reset_forks(&finalized, &finalized_fork).await;
+        self.consensus.reset_forks(&finalized_proposals, &finalized_fork).await;
         info!(target: "validator::finalization", "Finalization completed!");
 
         // Release append lock
         drop(append_lock);
 
-        // Grab finalized blocks
-        let finalized = self.blockchain.get_blocks_by_hash(&finalized)?;
-
-        Ok(finalized)
+        Ok(finalized_blocks)
     }
 
     // ==========================

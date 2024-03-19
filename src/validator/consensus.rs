@@ -322,7 +322,7 @@ impl Consensus {
         let excess = prefix.len();
         let prefix_last_index = excess - 1;
         let prefix_last = prefix.last().unwrap();
-        let mut dropped_forks = vec![];
+        let mut keep = vec![true; forks.len()];
         for (index, fork) in forks.iter_mut().enumerate() {
             if &index == finalized_fork_index {
                 continue
@@ -332,7 +332,7 @@ impl Consensus {
                 prefix_last_index >= fork.proposals.len() ||
                 &fork.proposals[prefix_last_index] != prefix_last
             {
-                dropped_forks.push(index);
+                keep[index] = false;
                 continue
             }
 
@@ -347,9 +347,8 @@ impl Consensus {
         }
 
         // Drop invalid forks
-        for index in dropped_forks {
-            forks.remove(index);
-        }
+        let mut iter = keep.iter();
+        forks.retain(|_| *iter.next().unwrap());
 
         // Drop forks lock
         drop(forks);
