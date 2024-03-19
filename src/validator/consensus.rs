@@ -20,6 +20,7 @@ use darkfi_sdk::crypto::{MerkleTree, SecretKey};
 use darkfi_serial::{async_trait, serialize, SerialDecodable, SerialEncodable};
 use log::{debug, error, info};
 use num_bigint::BigUint;
+use sled_overlay::database::SledDbOverlayState;
 use smol::lock::RwLock;
 
 use crate::{
@@ -170,9 +171,11 @@ impl Consensus {
             return Ok((original_fork.full_clone()?, Some(f_index)))
         }
 
+        // TODO: use new sled overlay diffs logic to make this not having rebuild the whole fork
         // Rebuild fork
         let mut fork = Fork::new(self.blockchain.clone(), self.module.read().await.clone()).await?;
         fork.proposals = original_fork.proposals[..p_index + 1].to_vec();
+        fork.diffs = original_fork.diffs[..p_index + 1].to_vec();
 
         // Retrieve proposals blocks from original fork
         let blocks = &original_fork.overlay.lock().unwrap().get_blocks_by_hash(&fork.proposals)?;
@@ -303,73 +306,53 @@ impl Consensus {
         Ok(ret)
     }
 
-    /// Auxiliary function to purge current forks and rebuild the ones starting
-    /// with the provided prefix. This function assumes that the prefix blocks have
-    /// already been appended to canonical chain.
-    pub async fn rebuild_forks(&self, prefix: &[BlockInfo]) -> Result<()> {
+    /// Auxiliary function to purge current forks and reset the ones starting
+    /// with the provided prefix, excluding provided finalized fork.
+    /// This function assumes that the prefix blocks have already been appended
+    /// to canonical chain from the finalized fork.
+    pub async fn reset_forks(&self, prefix: &[blake3::Hash], finalized_fork_index: &usize) {
         // Grab a lock over current forks
         let mut forks = self.forks.write().await;
 
         // Find all the forks that start with the provided prefix,
-        // and grab their proposals
-        let suffix_start_index = prefix.len();
-        let prefix_last_index = suffix_start_index - 1;
-        let prefix_last = prefix.last().unwrap().hash()?;
-        let mut forks_proposals: Vec<Vec<BlockInfo>> = vec![];
-        for fork in forks.iter() {
-            if fork.proposals.is_empty() ||
-                prefix_last_index >= fork.proposals.len() ||
-                fork.proposals[prefix_last_index] != prefix_last
-            {
+        // excluding finalized fork index, and remove their prefixed
+        // proposals, and their corresponding diffs.
+        // If the fork is not starting with the provided prefix,
+        // drop it.
+        let excess = prefix.len();
+        let prefix_last_index = excess - 1;
+        let prefix_last = prefix.last().unwrap();
+        let mut dropped_forks = vec![];
+        for (index, fork) in forks.iter_mut().enumerate() {
+            if &index == finalized_fork_index {
                 continue
             }
-            let suffix_proposals = fork
-                .overlay
-                .lock()
-                .unwrap()
-                .get_blocks_by_hash(&fork.proposals[suffix_start_index..])?;
-            // TODO add a stale forks purging logic, aka forks that
-            // we keep should be close to buffer size, for lower
-            // memory consumption
-            forks_proposals.push(suffix_proposals);
-        }
 
-        // Purge existing forks;
-        *forks = vec![];
-
-        // Rebuild forks
-        for proposals in forks_proposals {
-            // Create a new fork extending canonical
-            let mut fork =
-                Fork::new(self.blockchain.clone(), self.module.read().await.clone()).await?;
-
-            // Grab overlay last block
-            let mut previous = &fork.overlay.lock().unwrap().last_block()?;
-
-            // Append all proposals
-            for proposal in &proposals {
-                if verify_block(&fork.overlay, &fork.module, proposal, previous).await.is_err() {
-                    error!(target: "validator::consensus::rebuild_best_fork", "Erroneous proposal block found");
-                    fork.overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
-                    drop(forks);
-                    return Err(Error::BlockIsInvalid(proposal.hash()?.to_string()))
-                };
-
-                // Append proposal to the fork
-                fork.append_proposal(&Proposal::new(proposal.clone())?).await?;
-
-                // Set proposals as previous
-                previous = proposal;
+            if fork.proposals.is_empty() ||
+                prefix_last_index >= fork.proposals.len() ||
+                &fork.proposals[prefix_last_index] != prefix_last
+            {
+                dropped_forks.push(index);
+                continue
             }
 
-            // Push the fork
-            forks.push(fork);
+            let rest_proposals = fork.proposals.split_off(excess);
+            let rest_diffs = fork.diffs.split_off(excess);
+            let mut diffs = fork.diffs.clone();
+            fork.proposals = rest_proposals;
+            fork.diffs = rest_diffs;
+            for diff in diffs.iter_mut() {
+                fork.overlay.lock().unwrap().overlay.lock().unwrap().remove_diff(diff);
+            }
+        }
+
+        // Drop invalid forks
+        for index in dropped_forks {
+            forks.remove(index);
         }
 
         // Drop forks lock
         drop(forks);
-
-        Ok(())
     }
 }
 
@@ -409,6 +392,8 @@ pub struct Fork {
     pub module: PoWModule,
     /// Fork proposal hashes sequence
     pub proposals: Vec<blake3::Hash>,
+    /// Fork proposal overlay diffs sequence
+    pub diffs: Vec<SledDbOverlayState>,
     /// Valid pending transaction hashes
     pub mempool: Vec<blake3::Hash>,
     /// Current fork mining targets rank, cached for better performance
@@ -427,6 +412,7 @@ impl Fork {
             overlay,
             module,
             proposals: vec![],
+            diffs: vec![],
             mempool,
             targets_rank: BigUint::from(0u64),
             hashes_rank: BigUint::from(0u64),
@@ -494,6 +480,9 @@ impl Fork {
 
         // Push proposal's hash
         self.proposals.push(proposal.hash);
+
+        // Push proposal overlay diff
+        self.diffs.push(self.overlay.lock().unwrap().overlay.lock().unwrap().diff(&self.diffs));
 
         Ok(())
     }
@@ -592,10 +581,20 @@ impl Fork {
         let overlay = self.overlay.lock().unwrap().full_clone()?;
         let module = self.module.clone();
         let proposals = self.proposals.clone();
+        let diffs = self.diffs.clone();
         let mempool = self.mempool.clone();
         let targets_rank = self.targets_rank.clone();
         let hashes_rank = self.hashes_rank.clone();
 
-        Ok(Self { blockchain, overlay, module, proposals, mempool, targets_rank, hashes_rank })
+        Ok(Self {
+            blockchain,
+            overlay,
+            module,
+            proposals,
+            diffs,
+            mempool,
+            targets_rank,
+            hashes_rank,
+        })
     }
 }

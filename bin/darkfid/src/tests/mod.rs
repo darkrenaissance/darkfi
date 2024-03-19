@@ -59,6 +59,9 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     // Add them to nodes
     th.add_blocks(&vec![block1, block2, block3.clone(), block4.clone()]).await?;
 
+    // Nodes must have one fork with 2 blocks
+    th.validate_fork_chains(1, vec![2]).await;
+
     // Extend current fork sequence
     let block5 = th.generate_next_block(&block4).await?;
     // Create a new fork extending canonical
@@ -66,8 +69,19 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     // Add them to nodes
     th.add_blocks(&vec![block5, block6.clone()]).await?;
 
-    // Nodes must have one fork with 2 blocks and one with 1 block
-    th.validate_fork_chains(2, vec![2, 1]).await;
+    // Grab current best fork index
+    let forks = th.alice.validator.consensus.forks.read().await;
+    // If index corresponds to the small fork, finalization
+    // did not occur, as it's size is not over the threshold.
+    let small_best = best_fork_index(&forks)? == 1;
+    drop(forks);
+    if small_best {
+        // Nodes must have one fork with 3 blocks and one with 2 blocks
+        th.validate_fork_chains(2, vec![3, 2]).await;
+    } else {
+        // Nodes must have one fork with 2 blocks and one with 1 block
+        th.validate_fork_chains(2, vec![2, 1]).await;
+    }
 
     // We are going to create a third node and try to sync from Bob
     let mut settings = Settings { localnet: true, inbound_connections: 3, ..Default::default() };
@@ -89,7 +103,7 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     let charlie_forks = charlie.consensus.forks.read().await;
     assert_eq!(charlie_forks.len(), 1);
     assert_eq!(charlie_forks[0].proposals.len(), best_fork.proposals.len());
-    let small_best = best_fork.proposals.len() == 1;
+    assert_eq!(charlie_forks[0].diffs.len(), best_fork.diffs.len());
     drop(forks);
     drop(charlie_forks);
 
@@ -106,12 +120,15 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
         // it will have a single fork with 2 blocks.
         assert_eq!(charlie_forks.len(), 1);
         assert_eq!(charlie_forks[0].proposals.len(), 2);
+        assert_eq!(charlie_forks[0].diffs.len(), 2);
     } else {
         // Charlie didn't originaly have the fork, but it
         // should be synced when its proposal was received
         assert_eq!(charlie_forks.len(), 2);
         assert_eq!(charlie_forks[0].proposals.len(), 2);
+        assert_eq!(charlie_forks[0].diffs.len(), 2);
         assert_eq!(charlie_forks[1].proposals.len(), 2);
+        assert_eq!(charlie_forks[1].diffs.len(), 2);
     }
     drop(charlie_forks);
 
@@ -149,6 +166,7 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     let charlie_forks = charlie.consensus.forks.read().await;
     assert_eq!(charlie_forks.len(), 1);
     assert_eq!(charlie_forks[0].proposals.len(), 2);
+    assert_eq!(charlie_forks[0].diffs.len(), 2);
     assert_eq!(last_proposal, charlie_forks[0].proposals[1]);
 
     // Thanks for reading

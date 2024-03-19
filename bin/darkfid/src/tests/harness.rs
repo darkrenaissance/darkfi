@@ -137,10 +137,12 @@ impl Harness {
 
         for (index, fork) in alice.iter().enumerate() {
             assert_eq!(fork.proposals.len(), fork_sizes[index]);
+            assert_eq!(fork.diffs.len(), fork_sizes[index]);
         }
 
         for (index, fork) in bob.iter().enumerate() {
             assert_eq!(fork.proposals.len(), fork_sizes[index]);
+            assert_eq!(fork.diffs.len(), fork_sizes[index]);
         }
     }
 

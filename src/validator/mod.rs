@@ -338,31 +338,39 @@ impl Validator {
             return Ok(vec![])
         }
 
-        // Grab fork proposals sequence
-        let forks = self.consensus.forks.read().await;
-        let fork = &forks[finalized_fork.unwrap()];
-        let proposals = fork.overlay.lock().unwrap().get_blocks_by_hash(&fork.proposals)?;
-        drop(forks);
+        // Grab the actual best fork
+        let finalized_fork = finalized_fork.unwrap();
+        let mut forks = self.consensus.forks.write().await;
+        let fork = &mut forks[finalized_fork];
 
         // Find the excess over finalization threshold
-        let excess = (proposals.len() - self.consensus.finalization_threshold) + 1;
+        let excess = (fork.proposals.len() - self.consensus.finalization_threshold) + 1;
 
-        // Append finalized blocks
-        let finalized = &proposals[..excess];
+        // Apply finalized proposals diffs
+        let rest_proposals = fork.proposals.split_off(excess);
+        let rest_diffs = fork.diffs.split_off(excess);
+        let finalized = fork.proposals.clone();
+        let mut diffs = fork.diffs.clone();
+        fork.proposals = rest_proposals;
+        fork.diffs = rest_diffs;
         info!(target: "validator::finalization", "Finalizing proposals:");
-        for block in finalized {
-            info!(target: "validator::finalization", "\t{} - {}", block.hash()?, block.header.height);
+        for (index, proposal) in finalized.iter().enumerate() {
+            info!(target: "validator::finalization", "\t{}", proposal);
+            fork.overlay.lock().unwrap().overlay.lock().unwrap().apply_diff(&mut diffs[index])?;
         }
-        self.add_blocks(finalized).await?;
+        drop(forks);
 
-        // Rebuild forks starting with the finalized blocks
-        self.consensus.rebuild_forks(finalized).await?;
+        // Reset forks starting with the finalized blocks
+        self.consensus.reset_forks(&finalized, &finalized_fork).await;
         info!(target: "validator::finalization", "Finalization completed!");
 
         // Release append lock
         drop(append_lock);
 
-        Ok(proposals)
+        // Grab finalized blocks
+        let finalized = self.blockchain.get_blocks_by_hash(&finalized)?;
+
+        Ok(finalized)
     }
 
     // ==========================
