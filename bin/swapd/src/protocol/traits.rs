@@ -1,9 +1,12 @@
 use crate::ethereum::swap_creator::Swap; // TODO: shouldn't depend on this
-use crate::{ethereum::swap_creator::SwapCreator, protocol::initiator::Event};
+use crate::{error::Error, ethereum::swap_creator::SwapCreator, protocol::initiator::Event};
 use darkfi_serial::async_trait;
-use ethers::prelude::*;
-use eyre::Result;
+use ethers::{prelude::*, utils::hex};
 use smol::channel;
+use std::{
+    fmt,
+    fmt::{Display, Formatter},
+};
 
 // Initial parameters required by the swap initiator.
 // TODO: make Address/U256 generic; these are ethers-specific right now
@@ -39,6 +42,16 @@ pub(crate) struct CounterpartyKeys {
     pub(crate) secp256k1_public_key: [u8; 33],
 }
 
+impl Display for CounterpartyKeys {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "CounterpartyKeys {{ secp256k1_public_key: {:?} }}",
+            hex::encode(self.secp256k1_public_key)
+        )
+    }
+}
+
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub(crate) struct HandleCounterpartyKeysReceivedResult {
@@ -64,16 +77,23 @@ pub(crate) trait Initiator {
     async fn handle_counterparty_keys_received(
         &self,
         args: InitiateSwapArgs,
-    ) -> Result<HandleCounterpartyKeysReceivedResult>;
+    ) -> Result<HandleCounterpartyKeysReceivedResult, Error>;
 
     // handles the counterparty locking funds
-    async fn handle_counterparty_funds_locked(&self, swap: Swap, swap_id: [u8; 32]) -> Result<()>;
+    async fn handle_counterparty_funds_locked(
+        &self,
+        swap: Swap,
+        swap_id: [u8; 32],
+    ) -> Result<(), Error>;
 
     // handles the counterparty claiming funds
-    async fn handle_counterparty_funds_claimed(&self, counterparty_secret: [u8; 32]) -> Result<()>;
+    async fn handle_counterparty_funds_claimed(
+        &self,
+        counterparty_secret: [u8; 32],
+    ) -> Result<(), Error>;
 
     // handles the timeout cases where we need to refund funds
-    async fn handle_should_refund(&self, swap: Swap) -> Result<()>;
+    async fn handle_should_refund(&self, swap: Swap) -> Result<(), Error>;
 }
 
 #[async_trait]
@@ -81,9 +101,11 @@ pub(crate) trait InitiatorEventWatcher {
     async fn run_received_counterparty_keys_watcher(
         event_tx: channel::Sender<Event>,
         counterparty_keys_rx: channel::Receiver<CounterpartyKeys>,
-    ) -> Result<()>;
+    ) -> Result<(), Error>;
 
-    async fn run_counterparty_funds_locked_watcher(event_tx: channel::Sender<Event>) -> Result<()>;
+    async fn run_counterparty_funds_locked_watcher(
+        event_tx: channel::Sender<Event>,
+    ) -> Result<(), Error>;
 
     // TODO: make this generic for both chains
     async fn run_counterparty_funds_claimed_watcher<M: Middleware>(
@@ -91,15 +113,18 @@ pub(crate) trait InitiatorEventWatcher {
         contract: SwapCreator<M>,
         contract_swap_id: &[u8; 32],
         from_block: u64,
-    ) -> Result<()>;
+    ) -> Result<(), Error>;
 
     async fn run_timeout_1_watcher(
         event_tx: channel::Sender<Event>,
         timeout_1: u64,
         buffer_seconds: u64,
-    ) -> Result<()>;
+    ) -> Result<(), Error>;
 
-    async fn run_timeout_2_watcher(event_tx: channel::Sender<Event>, timeout_2: u64) -> Result<()>;
+    async fn run_timeout_2_watcher(
+        event_tx: channel::Sender<Event>,
+        timeout_2: u64,
+    ) -> Result<(), Error>;
 }
 
 /// the chain that is the counterparty to the swap; ie. the second-mover

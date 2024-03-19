@@ -34,7 +34,6 @@ structopt = "0.3.26"
 structopt-toml = "0.5.1"
 
 async-watch = "0.3.1"
-eyre = "0.6"
 ethers = { version = "2.0", features = ["ethers-solc", "ws"] }
 thiserror = "1.0.57"
 

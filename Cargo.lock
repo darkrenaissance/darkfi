@@ -7907,7 +7907,6 @@ dependencies = [
  "darkfi-serial",
  "easy-parallel",
  "ethers",
- "eyre",
  "log",
  "serde",
  "signal-hook",

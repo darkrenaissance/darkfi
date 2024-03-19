@@ -1,7 +1,9 @@
+mod error;
 pub(crate) mod initiator;
 mod initiator_event_watcher;
 pub(crate) mod swap_creator;
 
+pub use error::Error;
 #[allow(unused_imports)]
 pub(crate) use initiator::EthInitiator;
 #[allow(unused_imports)]

@@ -1,8 +1,10 @@
-use crate::protocol::traits::{
-    CounterpartyKeys, HandleCounterpartyKeysReceivedResult, InitiateSwapArgs, InitiationArgs,
-    Initiator,
+use crate::protocol::{
+    traits::{
+        CounterpartyKeys, HandleCounterpartyKeysReceivedResult, InitiateSwapArgs, InitiationArgs,
+        Initiator,
+    },
+    Error,
 };
-use eyre::{eyre, Context, Result};
 use log::{info, warn};
 use smol::channel;
 
@@ -74,7 +76,7 @@ impl Swap {
         )
     }
 
-    async fn run(self) -> Result<()> {
+    async fn run(self) -> Result<(), crate::Error> {
         loop {
             match self.event_rx.recv().await {
                 Ok(Event::ReceivedCounterpartyKeys(counterparty_keys)) => {
@@ -85,10 +87,10 @@ impl Swap {
                             "unexpected event ReceivedCounterpartyKeys, state is {:?}",
                             *self.state_rx.borrow()
                         );
-                        return Err(eyre!(
-                            "unexpected event: {:?}",
-                            Event::ReceivedCounterpartyKeys(counterparty_keys)
-                        ));
+                        return Err(Error::UnexpectedReceivedCounterpartyKeysEvent(
+                            counterparty_keys,
+                        )
+                        .into());
                     }
 
                     let refund_commitment =
@@ -105,12 +107,8 @@ impl Swap {
                         nonce: self.args.nonce,
                     };
 
-                    let contract_swap_info = Some(
-                        self.handler
-                            .handle_counterparty_keys_received(args)
-                            .await
-                            .wrap_err("failed to handle receiving counterparty keys")?,
-                    );
+                    let contract_swap_info =
+                        Some(self.handler.handle_counterparty_keys_received(args).await?);
 
                     let _ = self.contract_swap_info_tx.send(contract_swap_info.clone());
                     self.state_tx
@@ -121,7 +119,7 @@ impl Swap {
                     info!("counterparty funds locked");
                     if !matches!(*self.state_rx.borrow(), State::WaitingForCounterpartyFundsLocked)
                     {
-                        return Err(eyre!("unexpected event: {:?}", Event::CounterpartyFundsLocked));
+                        return Err(Error::UnexpectedCounterpartyFundsLockedEvent.into());
                     }
 
                     let contract_swap_info = self
@@ -144,10 +142,10 @@ impl Swap {
                 Ok(Event::CounterpartyFundsClaimed(counterparty_secret)) => {
                     if !matches!(*self.state_rx.borrow(), State::WaitingForCounterpartyFundsClaimed)
                     {
-                        return Err(eyre!(
-                            "unexpected event: {:?}",
-                            Event::CounterpartyFundsClaimed(counterparty_secret)
-                        ));
+                        return Err(Error::UnexpectedCounterpartyFundsClaimedEvent(
+                            counterparty_secret,
+                        )
+                        .into());
                     }
 
                     self.handler.handle_counterparty_funds_claimed(counterparty_secret).await?;
@@ -160,7 +158,7 @@ impl Swap {
                         State::WaitingForCounterpartyFundsLocked |
                         State::WaitingForCounterpartyFundsClaimed => {}
                         _ => {
-                            return Err(eyre!("unexpected event: {:?}", Event::AlmostTimeout1));
+                            return Err(Error::UnexpectedAlmostTimeout1Event.into());
                         }
                     }
 
@@ -183,7 +181,7 @@ impl Swap {
                 Ok(Event::PastTimeout2) => {
                     if !matches!(*self.state_rx.borrow(), State::WaitingForCounterpartyFundsClaimed)
                     {
-                        return Err(eyre!("unexpected event: {:?}", Event::PastTimeout2));
+                        return Err(Error::UnexpectedPastTimeout2Event.into());
                     }
 
                     let contract_swap_info = self
