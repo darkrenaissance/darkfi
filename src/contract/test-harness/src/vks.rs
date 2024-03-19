@@ -48,8 +48,8 @@ use log::debug;
 
 /// Update these if any circuits are changed.
 /// Delete the existing cachefiles, and enable debug logging, you will see the new hashes.
-const PKS_HASH: &str = "b19792d5c813eebe339af055fc3459cdad8e97e766a35a79f3e42964a2d6e610";
-const VKS_HASH: &str = "9a92231ef4edfc20c2043d5255b558de5c07a9a4efda07718b689c299ac9440e";
+const PKS_HASH: &str = "828a7f6d28fc2ec89898f3eb29a00e972609debfab2574e4473f18607a9fd1ec";
+const VKS_HASH: &str = "c1f1d1bcab1a6046c5a938931f6eab28d4da5840d4bd80a0f0d719d654699439";
 
 /// Build a `PathBuf` to a cachefile
 fn cache_path(typ: &str) -> Result<PathBuf> {
