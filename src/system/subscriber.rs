@@ -26,6 +26,7 @@ pub type SubscriberPtr<T> = Arc<Subscriber<T>>;
 pub type SubscriptionId = usize;
 
 #[derive(Debug)]
+/// Subscription to the Subscriber. Created using `subscriber.subscribe().await`.
 pub struct Subscription<T> {
     id: SubscriptionId,
     recv_queue: smol::channel::Receiver<T>,
@@ -37,6 +38,7 @@ impl<T: Clone> Subscription<T> {
         self.id
     }
 
+    /// Receive message.
     pub async fn receive(&self) -> T {
         let message_result = self.recv_queue.recv().await;
 
@@ -54,13 +56,14 @@ impl<T: Clone> Subscription<T> {
     }
 }
 
-/// Simple broadcast (publish-subscribe) class
+/// Simple broadcast (publish-subscribe) class.
 #[derive(Debug)]
 pub struct Subscriber<T> {
     subs: Mutex<HashMap<SubscriptionId, smol::channel::Sender<T>>>,
 }
 
 impl<T: Clone> Subscriber<T> {
+    /// Construct a new subscriber.
     pub fn new() -> Arc<Self> {
         Arc::new(Self { subs: Mutex::new(HashMap::new()) })
     }
@@ -69,6 +72,10 @@ impl<T: Clone> Subscriber<T> {
         OsRng.gen()
     }
 
+    /// Make sure you call this method early in your setup. That way the subscription
+    /// will begin accumulating messages from notify.
+    /// Then when your main loop begins calling `sub.receive().await`, the messages will
+    /// already be queued.
     pub async fn subscribe(self: Arc<Self>) -> Subscription<T> {
         let (sender, recvr) = smol::channel::unbounded();
 
@@ -88,17 +95,12 @@ impl<T: Clone> Subscriber<T> {
         self.subs.lock().await.remove(&sub_id);
     }
 
+    /// Publish a message to all listening subscriptions.
     pub async fn notify(&self, message_result: T) {
-        for sub in (*self.subs.lock().await).values() {
-            if let Err(e) = sub.send(message_result.clone()).await {
-                warn!(
-                    target: "system::subscriber",
-                    "[system::subscriber] Error returned sending message in notify() call: {}", e,
-                );
-            }
-        }
+        self.notify_with_exclude(message_result, &[]).await
     }
 
+    /// Publish a message to all listening subscriptions but exclude some subset.
     pub async fn notify_with_exclude(&self, message_result: T, exclude_list: &[SubscriptionId]) {
         for (id, sub) in (*self.subs.lock().await).iter() {
             if exclude_list.contains(id) {
