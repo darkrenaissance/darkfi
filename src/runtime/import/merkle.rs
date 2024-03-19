@@ -233,6 +233,7 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
     // Here we add the new coins into the tree.
     let mut new_roots = vec![];
 
+    assert!(!coins.is_empty());
     for coin in coins {
         tree.append(coin);
         let Some(root) = tree.root(0) else {
@@ -267,44 +268,37 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
     }
 
     // Here we add the Merkle root to our set of roots
-    for root in new_roots.iter() {
-        debug!(
-            target: "runtime::merkle::merkle_add",
-            "[WASM] [{}] merkle_add(): Appending Merkle root to db: {:?}", cid, root,
-        );
-        let root_value: Vec<u8> = serialize(root);
-        if root_value.len() != 32 {
-            error!(
-                target: "runtime::merkle::merkle_add",
-                "[WASM] [{}] merkle_add(): Couldn't serialize root value", cid,
-            );
-            return darkfi_sdk::error::INTERNAL_ERROR
-        }
+    // Since each update to the tree is atomic, we only need to add the last root.
+    assert!(!new_roots.is_empty());
+    let latest_root = new_roots.last().unwrap();
 
-        if overlay.insert(&db_roots.tree, &root_value, &[]).is_err() {
-            error!(
-                target: "runtime::merkle::merkle_add",
-                "[WASM] [{}] merkle_add(): Couldn't insert to db_roots tree", cid,
-            );
-            return darkfi_sdk::error::INTERNAL_ERROR
-        }
+    debug!(
+        target: "runtime::merkle::merkle_add",
+        "[WASM] [{}] merkle_add(): Appending Merkle root to db: {:?}", cid, latest_root,
+    );
+    let latest_root_data = serialize(latest_root);
+    assert_eq!(latest_root_data.len(), 32);
+
+    if overlay.insert(&db_roots.tree, &latest_root_data, &[]).is_err() {
+        error!(
+            target: "runtime::merkle::merkle_add",
+            "[WASM] [{}] merkle_add(): Couldn't insert to db_roots tree", cid,
+        );
+        return darkfi_sdk::error::INTERNAL_ERROR
     }
 
     // Write a pointer to the latest known root
-    if !new_roots.is_empty() {
-        debug!(
-            target: "runtime::merkle::merkle_add",
-            "[WASM] [{}] merkle_add(): Replacing latest Merkle root pointer", cid,
-        );
+    debug!(
+        target: "runtime::merkle::merkle_add",
+        "[WASM] [{}] merkle_add(): Replacing latest Merkle root pointer", cid,
+    );
 
-        let latest_root = serialize(new_roots.last().unwrap());
-        if overlay.insert(&db_info.tree, &root_key, &latest_root).is_err() {
-            error!(
-                target: "runtime::merkle::merkle_add",
-                "[WASM] [{}] merkle_add(): Couldn't insert latest root to db_info tree", cid,
-            );
-            return darkfi_sdk::error::INTERNAL_ERROR
-        }
+    if overlay.insert(&db_info.tree, &root_key, &latest_root_data).is_err() {
+        error!(
+            target: "runtime::merkle::merkle_add",
+            "[WASM] [{}] merkle_add(): Couldn't insert latest root to db_info tree", cid,
+        );
+        return darkfi_sdk::error::INTERNAL_ERROR
     }
 
     // Subtract used gas.
