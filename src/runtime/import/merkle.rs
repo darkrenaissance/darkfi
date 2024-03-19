@@ -20,7 +20,7 @@ use std::io::Cursor;
 
 use darkfi_sdk::crypto::{MerkleNode, MerkleTree};
 use darkfi_serial::{serialize, Decodable, Encodable, WriteExt};
-use log::{debug, error};
+use log::{debug, error, warn};
 use wasmer::{FunctionEnvMut, WasmPtr};
 
 use super::acl::acl_allow;
@@ -131,7 +131,7 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
         }
     };
 
-    // This `key` represents the sled database tree name
+    // This `key` represents the sled key in info where the Merkle tree is
     let tree_key: Vec<u8> = match Decodable::decode(&mut buf_reader) {
         Ok(v) => v,
         Err(e) => {
@@ -154,6 +154,15 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
             return darkfi_sdk::error::INTERNAL_ERROR
         }
     };
+
+    // Nothing to do so just return here
+    if coins.is_empty() {
+        warn!(
+            target: "runtime::merkle::merkle_add",
+            "[WASM] [{}] merkle_add(): Nothing to add! Returning.", cid,
+        );
+        return darkfi_sdk::entrypoint::SUCCESS
+    }
 
     // Make sure we've read the entire buffer
     if buf_reader.position() != (len as u64) {
@@ -258,11 +267,7 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
     }
 
     // Here we add the Merkle root to our set of roots
-    // TODO: We should probably make sure that this root isn't in the set
     for root in new_roots.iter() {
-        // FIXME: Why were we writing the set size here?
-        //let root_index: Vec<u8> = serialize(&(set_size as u32));
-        //assert_eq!(root_index.len(), 4);
         debug!(
             target: "runtime::merkle::merkle_add",
             "[WASM] [{}] merkle_add(): Appending Merkle root to db: {:?}", cid, root,
