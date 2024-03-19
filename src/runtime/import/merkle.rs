@@ -45,6 +45,7 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
     }
 
     // Subtract used gas. Here we count the length read from the memory slice.
+    // This makes calling the function which returns early have some (small) cost.
     env.subtract_gas(&mut store, len as u64);
 
     let memory_view = env.memory_view(&store);
@@ -278,8 +279,10 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
     );
     let latest_root_data = serialize(latest_root);
     assert_eq!(latest_root_data.len(), 32);
+    let blockheight_data = serialize(&env.verifying_block_height);
+    assert_eq!(blockheight_data.len(), 8);
 
-    if overlay.insert(&db_roots.tree, &latest_root_data, &[]).is_err() {
+    if overlay.insert(&db_roots.tree, &latest_root_data, &blockheight_data).is_err() {
         error!(
             target: "runtime::merkle::merkle_add",
             "[WASM] [{}] merkle_add(): Couldn't insert to db_roots tree", cid,

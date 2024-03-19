@@ -31,6 +31,22 @@ use super::{
 /// * `root_key` is the serialized key pointing to the latest Merkle root in `db_info`
 /// * `tree_key` is the serialized key pointing to the Merkle tree in `db_info`.
 /// * `elements` are the items we want to add to the Merkle tree.
+///
+/// There are 2 databases:
+///
+/// * `db_info` stores general metadata or info.
+/// * `db_roots` stores a log of all the merkle roots.
+///
+/// Inside `db_info` we store:
+///
+/// * The [latest root hash:32] under `root_key`.
+/// * The incremental merkle tree under `tree_key`.
+///
+/// Inside `db_roots` we store:
+///
+/// * All [merkle root:32]s as keys. The value is the current [blockheight:8].
+///   Every blockheight should have a unique merkle root associated with it
+///   although this index is not tracked.
 pub fn merkle_add(
     db_info: DbHandle,
     db_roots: DbHandle,

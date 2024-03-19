@@ -89,6 +89,7 @@ pub(crate) fn sparse_merkle_insert_batch(
     }
 
     // Subtract used gas. Here we count the length read from the memory slice.
+    // This makes calling the function which returns early have some (small) cost.
     env.subtract_gas(&mut store, len as u64);
 
     let memory_view = env.memory_view(&store);
