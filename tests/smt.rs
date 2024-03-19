@@ -44,7 +44,7 @@ fn zkvm_smt() -> Result<()> {
     // Use the leaf value as its position in the SMT
     // Therefore we need an additional constraint that leaf == pos
     let leaves: Vec<_> = leaves.into_iter().map(|l| (l, l)).collect();
-    smt.insert_batch(leaves.clone());
+    smt.insert_batch(leaves.clone()).unwrap();
 
     let (pos, leaf) = leaves[2];
     assert_eq!(pos, leaf);
