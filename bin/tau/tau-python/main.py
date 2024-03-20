@@ -66,6 +66,9 @@ async def add_task(task_args, server_name, port):
 
     if await api.add_task(task, server_name, port):
         return title
+    else:
+        print("You don't have write access")
+        exit(-1)
 
 def prompt_text(comment_lines):
     temp = tempfile.NamedTemporaryFile()
@@ -396,7 +399,9 @@ async def modify_task(refid, args, server_name, port):
             changes[str(attr)] = val
         else:
             print(f"warning: unknown arg '{arg}'. Skipping...", file=sys.stderr)
-    await api.modify_task(refid, changes, server_name, port)
+    if not await api.modify_task(refid, changes, server_name, port):
+        print("You don't have write access")
+        exit(-1)
     return 0
 
 async def change_task_status(refid, status, server_name, port):
