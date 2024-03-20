@@ -35,15 +35,14 @@ $ git grep -E 'TODO|FIXME'
 ## Employment
 
 We are only looking for devs right now. If you're not a dev, see the
-[learn section](dev/learn.md). We offer mentoring. Anybody can become a dev.
-It's not that hard, you just need focus and dedication.
+[learn section](https://darkrenaissance.github.io/darkfi/dev/learn.html). We offer mentoring. Anybody can become a dev. It's not that hard, you just need focus and dedication.
 
 To be hired as a dev, you must make commits to the repo, preferably
 more than minor cosmetic changes. It also is useful to have online repositories
 containing your work. We don't care about degrees or qualifications -
 many of the best coders don't have any.
 
-Secondly you need to get on [our online chat](misc/ircd/ircd.md) and
+Secondly you need to get on [our online chat](https://darkrenaissance.github.io/darkfi/misc/ircd/ircd.html) and
 make yourself known. We are not spending time on social media or proprietary
 chats like Telegram because we're very busy.
 
@@ -145,13 +144,7 @@ _Tasks are in no particular order. Use common sense._
     have this mixed with a bunch of random addrs to avoid leaking our own addr.
 27. Add support for colorizing zkas code samples in darkfi book (see arch/dao page)
 28. Tutorial creating a ZK credentials scheme.
-29. resource manager for p2p (DoS protection, disconnect bad nodes)
-30. apply DEP 0001
-31. fix channel `main_receive_loop()` to use `Weak`
-32. configurable MAGIC_BYTES for net code
-33. configurable fields for version messages
-34. make `PeerDiscovery` in `outbound_session.rs` a trait object which is
-    configurable in P2p, but by default is set to `PeerSeedDiscovery`.
+99. resource manager for p2p (DoS protection, disconnect bad nodes)
 
 
 |  Task #  |  Assignee  |
