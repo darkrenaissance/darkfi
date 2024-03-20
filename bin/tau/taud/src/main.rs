@@ -516,6 +516,8 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
         broadcast_snd,
         nickname.unwrap(),
         workspaces.clone(),
+        settings.write,
+        settings.password,
         p2p.clone(),
         event_graph.clone(),
         json_sub,

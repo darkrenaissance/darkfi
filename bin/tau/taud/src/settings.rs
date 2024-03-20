@@ -57,6 +57,14 @@ pub struct Args {
     #[structopt(long)]
     pub workspaces: Vec<String>,
 
+    /// Write access key
+    #[structopt(long)]
+    pub write: Option<String>,
+
+    /// Password
+    #[structopt(long)]
+    pub password: Option<String>,
+
     ///  Clean all the local data in datastore path
     /// (BE CAREFUL) Check the datastore path in the config file before running this
     #[structopt(long)]

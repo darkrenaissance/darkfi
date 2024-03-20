@@ -46,7 +46,7 @@ use taud::{
     error::{to_json_result, TaudError, TaudResult},
     month_tasks::MonthTasks,
     task_info::{Comment, TaskInfo},
-    util::set_event,
+    util::{check_write_access, set_event},
 };
 
 pub struct JsonRpcInterface {
@@ -55,6 +55,8 @@ pub struct JsonRpcInterface {
     nickname: String,
     workspace: Mutex<String>,
     workspaces: Arc<HashMap<String, ChaChaBox>>,
+    write: Option<String>,
+    password: Option<String>,
     p2p: net::P2pPtr,
     event_graph: EventGraphPtr,
     dnet_sub: JsonSubscriber,
@@ -114,6 +116,8 @@ impl JsonRpcInterface {
         notify_queue_sender: smol::channel::Sender<TaskInfo>,
         nickname: String,
         workspaces: Arc<HashMap<String, ChaChaBox>>,
+        write: Option<String>,
+        password: Option<String>,
         p2p: net::P2pPtr,
         event_graph: EventGraphPtr,
         dnet_sub: JsonSubscriber,
@@ -126,6 +130,8 @@ impl JsonRpcInterface {
             workspace,
             workspaces,
             notify_queue_sender,
+            write,
+            password,
             p2p,
             event_graph,
             rpc_connections: Mutex::new(HashSet::new()),
@@ -316,6 +322,10 @@ impl JsonRpcInterface {
             _ => return Err(TaudError::InvalidData("Invalid parameter \"created_at\"".to_string())),
         };
 
+        if !check_write_access(self.write.clone(), self.password.clone())? {
+            return Ok(JsonValue::Boolean(false))
+        }
+
         let mut new_task: TaskInfo = TaskInfo::new(
             self.workspace.lock().await.clone(),
             params["title"].get::<String>().unwrap(),
@@ -389,6 +399,10 @@ impl JsonRpcInterface {
             return Err(TaudError::InvalidData("len of params should be 2".into()))
         }
 
+        if !check_write_access(self.write.clone(), self.password.clone())? {
+            return Ok(JsonValue::Boolean(false))
+        }
+
         let ws = self.workspace.lock().await.clone();
 
         let task = self.check_params_for_modify(
@@ -417,6 +431,10 @@ impl JsonRpcInterface {
             return Err(TaudError::InvalidData("len of params should be 2".into()))
         }
 
+        if !check_write_access(self.write.clone(), self.password.clone())? {
+            return Ok(JsonValue::Boolean(false))
+        }
+
         let state = params[1].get::<String>().unwrap();
         let ws = self.workspace.lock().await.clone();
 
@@ -443,6 +461,10 @@ impl JsonRpcInterface {
 
         if params.len() != 2 || !params[0].is_string() || !params[1].is_string() {
             return Err(TaudError::InvalidData("len of params should be 2".into()))
+        }
+
+        if !check_write_access(self.write.clone(), self.password.clone())? {
+            return Ok(JsonValue::Boolean(false))
         }
 
         let ref_id = params[0].get::<String>().unwrap();
@@ -628,6 +650,10 @@ impl JsonRpcInterface {
 
         if !params[0].is_string() {
             return Err(TaudError::InvalidData("Invalid path".into()))
+        }
+
+        if !check_write_access(self.write.clone(), self.password.clone())? {
+            return Ok(JsonValue::Boolean(false))
         }
 
         let path = params[0].get::<String>().unwrap();

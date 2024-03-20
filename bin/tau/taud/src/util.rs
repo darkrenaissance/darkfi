@@ -22,12 +22,16 @@ use std::{
     path::Path,
 };
 
-use log::debug;
+use crypto_box::aead::Aead;
+use log::{debug, error};
 
 use darkfi::{Error, Result};
 use rand::{distributions::Alphanumeric, rngs::OsRng, Rng};
 
-use crate::task_info::{TaskEvent, TaskInfo};
+use crate::{
+    error::{TaudError, TaudResult},
+    task_info::{TaskEvent, TaskInfo},
+};
 
 pub fn set_event(task_info: &mut TaskInfo, action: &str, author: &str, content: &str) {
     debug!(target: "tau", "TaskInfo::set_event()");
@@ -42,4 +46,50 @@ pub fn pipe_write<P: AsRef<Path>>(path: P) -> Result<File> {
 
 pub fn gen_id(len: usize) -> String {
     OsRng.sample_iter(&Alphanumeric).take(len).map(char::from).collect()
+}
+
+pub fn check_write_access(write: Option<String>, password: Option<String>) -> TaudResult<bool> {
+    let secret = if write.is_some() {
+        let scrt = write.clone().unwrap();
+        let bytes: [u8; 32] = bs58::decode(scrt)
+            .into_vec()
+            .map_err(|_| {
+                Error::ParseFailed("Parse secret key failed, couldn't decode into vector of bytes")
+            })?
+            .try_into()
+            .map_err(|_| Error::ParseFailed("Parse secret key failed"))?;
+        crypto_box::SecretKey::from(bytes)
+    } else {
+        crypto_box::SecretKey::generate(&mut OsRng)
+    };
+
+    let public = secret.public_key();
+    let chacha_box = crypto_box::ChaChaBox::new(&public, &secret);
+
+    if password.is_some() {
+        let bytes = match bs58::decode(password.clone().unwrap()).into_vec() {
+            Ok(v) => v,
+            Err(_) => return Err(TaudError::DecryptionError("Error decoding payload".to_string())),
+        };
+
+        if bytes.len() < 25 {
+            return Err(TaudError::DecryptionError("Invalid bytes length".to_string()))
+        }
+
+        // Try extracting the nonce
+        let nonce = bytes[0..24].into();
+
+        // Take the remaining ciphertext
+        let pswd = &bytes[24..];
+
+        if chacha_box.decrypt(nonce, pswd).is_err() {
+            error!(target: "taud", "You don't have write access");
+            return Ok(false);
+        };
+    } else {
+        error!(target: "taud", "You don't have write access");
+        return Ok(false);
+    };
+
+    Ok(true)
 }
