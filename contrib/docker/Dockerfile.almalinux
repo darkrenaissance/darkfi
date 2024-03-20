@@ -1,7 +1,8 @@
-# Use: docker build . --pull --no-cache --shm-size=196m -t darkfi:almalinux -f ./contrib/docker/Dockerfile.almalinux --build-arg DONT_EXEC_TESTS=1
+# Use: docker build . --pull --no-cache --shm-size=196m -t darkfi:almalinux -f ./contrib/docker/Dockerfile.almalinux
 #   optionally with: --build-arg OS_VER=almalinux/8-minimal --build-arg RUST_VER=nightly
+#   optionally with: --build-arg BINS="darkfid  darkfid2" --build-arg DONT_EXEC_TESTS=1
 
-ARG RUST_VER=nightly-2023-06-21  # stable nightly beta 1.72
+ARG RUST_VER=nightly             # stable nightly beta 1.72
 ARG OS_VER=almalinux/9-minimal   # almalinux/8-minimal
 
 FROM ${OS_VER} as rust_builder
@@ -13,7 +14,16 @@ RUN microdnf -y install gcc gcc-c++ kernel-headers cmake jq wget \
   openssl-devel findutils fontconfig-devel \
   lato-fonts alsa-lib-devel python3-devel \
   perl-FindBin perl-File-Compare perl-lib sqlite-devel \
-  perl-interpreter
+  perl-interpreter epel-release
+
+# epel-release needs to be installed first
+RUN microdnf install -y sqlcipher-devel
+
+# not sure where to get the right one
+# RUN wget https://www.rpmfind.net/linux/epel/7/aarch64/Packages/w/wabt-1.0.11-1.el7.aarch64.rpm
+ENV WABT_RPM=wabt-1.0.24-1.el7.x86_64.rpm
+RUN wget https://dl.fedoraproject.org/pub/epel/7/x86_64/Packages/w/$WABT_RPM
+RUN rpm -Uvh ./$WABT_RPM
 
 RUN curl https://sh.rustup.rs -sSf | bash -s -- -y --default-toolchain "${RUST_VER}"
 
@@ -28,6 +38,7 @@ FROM rust_builder as builder
 
 ARG DONT_EXEC_TESTS
 ARG RUST_VER
+ARG BINS
 
 WORKDIR /opt/darkfi
 
@@ -35,24 +46,29 @@ COPY . /opt/darkfi
 
 RUN make clean
 
+RUN  sed -i.bac1 's#let output = Command::new("git")#//let output = Command::new("git")#g' ./src/contract/test-harness/src/vks.rs
+
+RUN  sed -i.bac2 's#let mut path = PathBuf::from(String::from_utf8(output\[\.\.output.len() - 1\].to_vec())?);#let mut path = PathBuf::from("/opt/darkfi");#g' ./src/contract/test-harness/src/vks.rs
+
 RUN cargo update
 
 RUN rm -rf ./target/ zkas proof/*.bin
 
-RUN bash -c "if [ -z \"$DONT_EXEC_TESTS\" ]; then make -j test; fi"
+RUN bash -c "if [ -z \"$DONT_EXEC_TESTS\" ]; then make test; fi"
 
-RUN bash -c 'make -j all'
+RUN bash -c "make $BINS"
+
+RUN mkdir -p /opt/darkfi/compiled-bins
+
+RUN cp $(find . -maxdepth 1  -type f -executable) /opt/darkfi/compiled-bins
 
 # 3. stage
 FROM ${OS_VER}
 
-RUN microdnf -y install openssl lato-fonts alsa-lib\
-  && microdnf clean all \
+RUN microdnf -y install openssl lato-fonts alsa-lib epel-release \
+  && microdnf install -y sqlcipher && microdnf clean all \
   && rm -rf /var/cache/dnf
 
 WORKDIR /opt/darkfi
 
-COPY --from=builder /opt/darkfi/drk /opt/darkfi/darkfid  \
-   /opt/darkfi/darkirc /opt/darkfi/faucetd \
-   /opt/darkfi/zkas /opt/darkfi/vanityaddr \
-   /opt/darkfi/tau /opt/darkfi/taud   ./
+COPY --from=builder /opt/darkfi/compiled-bins/* ./
