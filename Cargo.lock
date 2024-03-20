@@ -6734,25 +6734,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "swapd"
-version = "0.4.1"
-dependencies = [
- "darkfi",
- "darkfi-serial",
- "easy-parallel",
- "log",
- "serde",
- "signal-hook",
- "signal-hook-async-std",
- "simplelog",
- "sled",
- "smol",
- "structopt",
- "structopt-toml",
- "url",
-]
-
-[[package]]
 name = "syn"
 version = "1.0.109"
 source = "registry+https://github.com/rust-lang/crates.io-index"
