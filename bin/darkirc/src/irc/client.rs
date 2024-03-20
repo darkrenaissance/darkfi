@@ -119,7 +119,9 @@ impl Client {
             realname: RwLock::new(String::from("*")),
             caps: RwLock::new(caps),
             seen: OnceCell::new(),
-            nickserv: Arc::new(NickServ::new(username.clone(), nickname.clone(), server.clone())),
+            nickserv: Arc::new(
+                NickServ::new(username.clone(), nickname.clone(), server.clone()).await?,
+            ),
         })
     }
 

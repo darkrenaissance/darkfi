@@ -64,6 +64,9 @@ docker-android:
 _aarch64-android:
 	cargo build --release --target aarch64-linux-android --package darkirc
 
+clippy: all
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --target=$(RUST_TARGET) --release --package $(BIN) --tests
+
 clean:
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clean --target=$(RUST_TARGET) --release --package $(BIN)
 	rm -f $(BIN) ../../$(BIN) $(BIN).android64 $(BIN).android32
