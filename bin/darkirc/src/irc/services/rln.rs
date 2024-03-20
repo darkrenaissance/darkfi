@@ -16,8 +16,16 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-/// Rate-Limit Nullifiers
-pub mod rln;
+use darkfi_sdk::{bridgetree, crypto::SecretKey};
+use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 
-/// NickServ implementation, used for account management
-pub mod nickserv;
+/// Rate-Limit Nullifier account data
+#[derive(Debug, Copy, Clone, SerialEncodable, SerialDecodable)]
+pub struct RlnIdentity {
+    /// Identity nullifier secret
+    pub identity_nullifier: SecretKey,
+    /// Identity trapdoor secret
+    pub identity_trapdoor: SecretKey,
+    /// Leaf position of the identity commitment in the accounts' Merkle tree
+    pub leaf_pos: bridgetree::Position,
+}

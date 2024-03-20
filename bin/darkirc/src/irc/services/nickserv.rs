@@ -16,19 +16,24 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{str::SplitAsciiWhitespace, sync::Arc};
+use std::{
+    str::{FromStr, SplitAsciiWhitespace},
+    sync::Arc,
+};
 
 use darkfi::Result;
 use darkfi_sdk::crypto::SecretKey;
 use darkfi_serial::serialize_async;
-use rand::rngs::OsRng;
 use smol::lock::RwLock;
 
-use super::super::{client::ReplyType, rpl::*};
+use super::{
+    super::{client::ReplyType, rpl::*},
+    rln::RlnIdentity,
+};
 use crate::IrcServer;
 
 const ACCOUNTS_DB_PREFIX: &str = "darkirc_account_";
-const ACCOUNTS_KEY_SECRET: &[u8] = b"secret_key";
+const ACCOUNTS_KEY_RLN_IDENTITY: &[u8] = b"rln_identity";
 
 const NICKSERV_USAGE: &str = r#"***** NickServ Help ***** 
 
@@ -106,13 +111,36 @@ impl NickServ {
         nick: &str,
         tokens: &mut SplitAsciiWhitespace<'_>,
     ) -> Result<Vec<ReplyType>> {
-        let Some(account_name) = tokens.next() else {
-            return Ok(vec![ReplyType::Notice((
-                "NickServ".to_string(),
-                nick.to_string(),
-                "Invalid syntax. Use `REGISTER <account_name>`.".to_string(),
-            ))])
+        // Gather the tokens
+        let account_name = tokens.next();
+        let identity_nullifier = tokens.next();
+        let identity_trapdoor = tokens.next();
+        let leaf_pos = tokens.next();
+
+        if account_name.is_none() ||
+            identity_nullifier.is_none() ||
+            identity_trapdoor.is_none() ||
+            leaf_pos.is_none()
+        {
+            return Ok(vec![
+                ReplyType::Notice((
+                    "NickServ".to_string(),
+                    nick.to_string(),
+                    "Invalid syntax.".to_string(),
+                )),
+                ReplyType::Notice((
+                    "NickServ".to_string(),
+                    nick.to_string(),
+                    "Use `REGISTER <account_name> <identity_nullifier> <identity_trapdoor> <leaf_pos>`."
+                        .to_string(),
+                )),
+            ])
         };
+
+        let account_name = account_name.unwrap();
+        let identity_nullifier = identity_nullifier.unwrap();
+        let identity_trapdoor = identity_trapdoor.unwrap();
+        let leaf_pos = leaf_pos.unwrap();
 
         // Open the sled tree
         let db = self
@@ -125,13 +153,49 @@ impl NickServ {
             return Ok(vec![ReplyType::Notice((
                 "NickServ".to_string(),
                 nick.to_string(),
-                "This account is already registered.".to_string(),
+                "This account name is already registered.".to_string(),
             ))])
         }
 
-        // Create a new secret key and insert it into the db.
-        let secret = SecretKey::random(&mut OsRng);
-        db.insert(ACCOUNTS_KEY_SECRET, serialize_async(&secret).await)?;
+        // TODO: WIF
+        // Parse the secrets
+        let identity_nullifier = match SecretKey::from_str(identity_nullifier) {
+            Ok(v) => v,
+            Err(e) => {
+                return Ok(vec![ReplyType::Notice((
+                    "NickServ".to_string(),
+                    nick.to_string(),
+                    format!("Invalid identity_nullifier: {}", e),
+                ))])
+            }
+        };
+
+        let identity_trapdoor = match SecretKey::from_str(identity_trapdoor) {
+            Ok(v) => v,
+            Err(e) => {
+                return Ok(vec![ReplyType::Notice((
+                    "NickServ".to_string(),
+                    nick.to_string(),
+                    format!("Invalid identity_trapdoor: {}", e),
+                ))])
+            }
+        };
+
+        let leaf_pos = match u64::from_str(leaf_pos) {
+            Ok(v) => v,
+            Err(e) => {
+                return Ok(vec![ReplyType::Notice((
+                    "NickServ".to_string(),
+                    nick.to_string(),
+                    format!("Invalid leaf_pos: {}", e),
+                ))])
+            }
+        };
+
+        // Create a new RLN identity and insert it into the db tree
+        let rln_identity =
+            RlnIdentity { identity_nullifier, identity_trapdoor, leaf_pos: leaf_pos.into() };
+        db.insert(ACCOUNTS_KEY_RLN_IDENTITY, serialize_async(&rln_identity).await)?;
 
         Ok(vec![ReplyType::Notice((
             "NickServ".to_string(),
