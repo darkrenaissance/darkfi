@@ -431,10 +431,14 @@ impl Slot {
             self.channel_id.store(channel.info.id, Ordering::Relaxed);
 
             // Add this connection to the anchorlist
-            hosts.move_host(&addr, last_seen, HostColor::Gold).await;
+            hosts.move_host(&addr, last_seen, HostColor::Gold, false, Some(channel.clone())).await;
 
             // Wait for channel to close
             stop_sub.receive().await;
+
+            // Channel has disconnected. Downgrade this host to greylist.
+            hosts.move_host(&addr, last_seen, HostColor::Grey, false, None).await;
+
             self.channel_id.store(0, Ordering::Relaxed);
         }
     }
@@ -461,7 +465,7 @@ impl Slot {
                 );
 
                 // At this point we failed to connect. We'll downgrade this peer now.
-                self.p2p().hosts().move_host(&addr, last_seen, HostColor::Grey).await;
+                self.p2p().hosts().move_host(&addr, last_seen, HostColor::Grey, true, None).await;
 
                 // Notify that channel processing failed
                 self.p2p().hosts().channel_subscriber.notify(Err(Error::ConnectFailed)).await;

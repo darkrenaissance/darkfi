@@ -107,49 +107,70 @@ impl ManualSession {
                 addr, tried_attempts,
             );
 
-            if let Err(e) = self.p2p().hosts().try_register(addr.clone(), HostState::Connect).await
-            {
-                debug!(target: "net::manual_session", "{} addr={}", e, addr.clone());
-            }
+            match self.p2p().hosts().try_register(addr.clone(), HostState::Connect).await {
+                Ok(_) => {
+                    match connector.connect(&addr).await {
+                        Ok((url, channel)) => {
+                            info!(
+                                target: "net::manual_session",
+                                "[P2P] Manual outbound connected [{}]", url,
+                            );
 
-            match connector.connect(&addr).await {
-                Ok((url, channel)) => {
-                    info!(
-                        target: "net::manual_session",
-                        "[P2P] Manual outbound connected [{}]", url,
-                    );
+                            let stop_sub = channel
+                                .subscribe_stop()
+                                .await
+                                .expect("Channel should not be stopped");
 
-                    let stop_sub =
-                        channel.subscribe_stop().await.expect("Channel should not be stopped");
+                            // Channel is now connected but not yet setup
 
-                    // Channel is now connected but not yet setup
+                            // Register the new channel
+                            self.register_channel(channel.clone(), ex.clone()).await?;
 
-                    // Register the new channel
-                    self.register_channel(channel.clone(), ex.clone()).await?;
+                            let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
 
-                    let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-                    // Add this connection to the anchorlist
-                    self.p2p().hosts().move_host(&addr, last_seen, HostColor::Gold).await;
+                            // Add this connection to the anchorlist
+                            self.p2p()
+                                .hosts()
+                                .move_host(
+                                    &addr,
+                                    last_seen,
+                                    HostColor::Gold,
+                                    false,
+                                    Some(channel.clone()),
+                                )
+                                .await;
 
-                    // Wait for channel to close
-                    stop_sub.receive().await;
-                    info!(
-                        target: "net::manual_session",
-                        "[P2P] Manual outbound disconnected [{}]", url,
-                    );
+                            // Wait for channel to close
+                            stop_sub.receive().await;
 
-                    // DEV NOTE: Here we can choose to attempt reconnection again
-                    return Ok(())
+                            // Channel has disconnected. Downgrade this host to greylist.
+                            self.p2p()
+                                .hosts()
+                                .move_host(&addr, last_seen, HostColor::Grey, false, None)
+                                .await;
+
+                            info!(
+                                target: "net::manual_session",
+                                "[P2P] Manual outbound disconnected [{}]", url,
+                            );
+
+                            // DEV NOTE: Here we can choose to attempt reconnection again
+                            return Ok(())
+                        }
+                        Err(e) => {
+                            warn!(
+                                target: "net::manual_session",
+                                "[P2P] Unable to connect to manual outbound [{}]: {}",
+                                addr, e,
+                            );
+                        }
+                    }
                 }
+                // This address is currently unavailable.
                 Err(e) => {
-                    warn!(
-                        target: "net::manual_session",
-                        "[P2P] Unable to connect to manual outbound [{}]: {}",
-                        addr, e,
-                    );
+                    debug!(target: "net::manual_session", "{} addr={}", e, addr.clone());
                 }
             }
-
             // Wait and try again.
             // TODO: Should we notify about the failure now, or after all attempts
             // have failed?
@@ -174,7 +195,7 @@ impl ManualSession {
             addr, attempts,
         );
         // Stop tracking this address in the HostRegistry.
-        // Otherwise, host will be stuck in Pending state.
+        // Otherwise, host will be stuck in the Connect state.
         self.p2p().hosts().unregister(&addr).await;
 
         Ok(())

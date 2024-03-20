@@ -291,7 +291,7 @@ impl PingSelfProcess {
                 sleep(600).await;
             }
 
-            // Only proceed if the external address is not configured.
+            // Only proceed if the external address is configured.
             if external_addrs.is_empty() {
                 current_attempt += 1;
                 continue

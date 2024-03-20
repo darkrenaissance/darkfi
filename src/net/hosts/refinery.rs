@@ -158,11 +158,8 @@ impl GreylistRefinery {
 
                     let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
 
-                    // Append to the whitelist.
-                    hosts.container.store_or_update(HostColor::White, url.clone(), last_seen).await;
-
-                    // Remove whitelisted peer from the greylist.
-                    hosts.container.remove(HostColor::Grey, url, position).await;
+                    // Add to the whitelist and remove from the greylist.
+                    hosts.move_host(url, last_seen, HostColor::White, false, None).await;
                 }
                 None => {
                     debug!(target: "net::refinery", "No matching greylist entries found. Cannot proceed with refinery");

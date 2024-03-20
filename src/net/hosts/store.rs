@@ -48,29 +48,34 @@ pub type HostsPtr = Arc<Hosts>;
 pub type HostRegistry = RwLock<HashMap<Url, HostState>>;
 
 /// HostState is a set of mutually exclusive states that can be Insert,
-/// Refine, Connect, Suspend or Connected. The state is `None` when the
+/// Refine, Move, Connect, Suspend or Connected. The state is `None` when the
 /// corresponding host has been removed from the HostRegistry.
 /// ```
-///                                +--------+                       
-///                                | refine | <------------+
-///                                +--------+              |          
-///                   +---------+    |    |   +--------+   |
-///                   | connect |----+    |   | insert |   |
-///                   +---------+    |    |   +--------+   |
-///                   |              |    |      |         |
-///                   |              |    +------+         |
-///                   |              |           |         |
-///                   |              v           v         |
-///                   |  +-----------+    +------+    +---------+  
-///                   |  | connected | -> | None | <- | suspend |  
-///                   |  +-----------+    +------+    +---------+  
-///                   |                          ^         ^
-///                   |      +------+            |         |
-///                   +----> | move | -----------+---------+
-///                          +------+                   
-///                                               
+///                +------+
+///                | None |
+///                +------+
+///                   ^
+///                   |
+///                +------+      +---------+
+///       +------> | move | ---> | suspend |
+///       |        +------+      +---------+
+///       |           ^               |       +--------+
+///       |           |               |       | insert |
+///       |                           v       +--------+
+///  +---------+      |          +--------+        |
+///  | connect |      |          | refine |        |
+///  +---------+      |          +--------+        |
+///       |           v               |            v
+///       |     +-----------+         |        +------+
+///       +---> | connected | <-------+------> | None |
+///             +-----------+                  +------+
+///                   |
+///                   v
+///                +------+
+///                | None |
+///                +------+
+///
 /// ```
-
 /* NOTE: Currently if a user loses connectivity, they will be deleted from
 our hostlist by the refinery process and forgotten about until they regain
 connectivity and share their external address with the p2p network again.
@@ -103,8 +108,11 @@ pub enum HostState {
     Suspend,
     /// Hosts that have been successfully connected to.
     Connected(ChannelPtr),
-    /// Host that are moving between hostlists, implemented in store::move_host().
-    Move,
+    /// Host that are moving between hostlists, implemented in
+    /// store::move_host().  Move takes a ChannelPtr so that Channels that
+    /// are being promoted to the Gold list can be re-inserted into the
+    /// Connected once the promotion is safely finalized.
+    Move(Option<ChannelPtr>),
 }
 
 impl HostState {
@@ -117,12 +125,13 @@ impl HostState {
             HostState::Connect => Err(Error::StateBlocked(self.to_string())),
             HostState::Suspend => Err(Error::StateBlocked(self.to_string())),
             HostState::Connected(_) => Err(Error::StateBlocked(self.to_string())),
-            HostState::Move => Err(Error::StateBlocked(self.to_string())),
+            HostState::Move(_) => Err(Error::StateBlocked(self.to_string())),
         }
     }
 
     // Try to change state to Refine. Only possible if we are not yet
-    // tracking this host in the HostRegistry.
+    // tracking this host in the HostRegistry or if the host is marked as
+    // Suspend i.e. we have failed to connect to it.
     fn try_refine(&self) -> Result<Self> {
         match self {
             HostState::Insert => Err(Error::StateBlocked(self.to_string())),
@@ -130,7 +139,7 @@ impl HostState {
             HostState::Connect => Err(Error::StateBlocked(self.to_string())),
             HostState::Suspend => Ok(HostState::Refine),
             HostState::Connected(_) => Err(Error::StateBlocked(self.to_string())),
-            HostState::Move => Err(Error::StateBlocked(self.to_string())),
+            HostState::Move(_) => Err(Error::StateBlocked(self.to_string())),
         }
     }
 
@@ -143,13 +152,16 @@ impl HostState {
             HostState::Connect => Err(Error::StateBlocked(self.to_string())),
             HostState::Suspend => Err(Error::StateBlocked(self.to_string())),
             HostState::Connected(_) => Err(Error::StateBlocked(self.to_string())),
-            HostState::Move => Err(Error::StateBlocked(self.to_string())),
+            HostState::Move(_) => Err(Error::StateBlocked(self.to_string())),
         }
     }
 
     // Try to change state to Connected. Possible if this peer's state
-    // is currently Connect or Refine. The latter is necessary since the
+    // is currently Connect, Refine or Move. Refine is necessary since the
     // refinery process requires us to establish a connection to a peer.
+    // Move is necessary in the case that a host is being promoted to Gold list,
+    // and must be re-added to the Connected() state after the promotion
+    // has completed.
     fn try_connected(&self, channel: ChannelPtr) -> Result<Self> {
         match self {
             HostState::Insert => Err(Error::StateBlocked(self.to_string())),
@@ -157,20 +169,21 @@ impl HostState {
             HostState::Connect => Ok(HostState::Connected(channel)),
             HostState::Suspend => Err(Error::StateBlocked(self.to_string())),
             HostState::Connected(_) => Err(Error::StateBlocked(self.to_string())),
-            HostState::Move => Err(Error::StateBlocked(self.to_string())),
+            HostState::Move(_) => Ok(HostState::Connected(channel)),
         }
     }
 
-    // Try to change state to Move. Only possible if this connection is
-    // Connect i.e. if we are trying to connect to this host.
-    fn try_move(&self) -> Result<Self> {
+    // Try to change state to Move. Possibly if this host is currently
+    // Connect i.e. it is being connected to, or if we are currently Connected
+    // to this peer (necessary due to Gold list promotion sequence).
+    fn try_move(&self, channel: Option<ChannelPtr>) -> Result<Self> {
         match self {
             HostState::Insert => Err(Error::StateBlocked(self.to_string())),
             HostState::Refine => Err(Error::StateBlocked(self.to_string())),
-            HostState::Connect => Ok(HostState::Move),
+            HostState::Connect => Ok(HostState::Move(channel)),
             HostState::Suspend => Err(Error::StateBlocked(self.to_string())),
-            HostState::Connected(_) => Err(Error::StateBlocked(self.to_string())),
-            HostState::Move => Err(Error::StateBlocked(self.to_string())),
+            HostState::Connected(_) => Ok(HostState::Move(channel)),
+            HostState::Move(_) => Err(Error::StateBlocked(self.to_string())),
         }
     }
 
@@ -184,10 +197,11 @@ impl HostState {
             HostState::Connect => Err(Error::StateBlocked(self.to_string())),
             HostState::Suspend => Err(Error::StateBlocked(self.to_string())),
             HostState::Connected(_) => Err(Error::StateBlocked(self.to_string())),
-            HostState::Move => Ok(HostState::Suspend),
+            HostState::Move(_) => Ok(HostState::Suspend),
         }
     }
 }
+
 impl fmt::Display for HostState {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Debug::fmt(self, f)
@@ -583,12 +597,14 @@ impl HostContainer {
 
     /// Remove an entry from a hostlist if it exists.
     pub async fn remove_if_exists(&self, color: HostColor, addr: &Url) {
+        trace!(target: "net::hosts::remove_if_exists()", "[START] addr={} list={:?}", addr, color);
         let index = color.clone() as usize;
         if self.contains(index, addr).await {
             let position =
                 self.get_index_at_addr(index, addr.clone()).await.expect("Expected index to exist");
-            self.remove(color, addr, position).await;
+            self.remove(color.clone(), addr, position).await;
         }
+        trace!(target: "net::hosts::remove_if_exists()", "[STOP] addr={} list={:?}", addr, color);
     }
 
     /// Check if a hostlist is empty.
@@ -604,6 +620,16 @@ impl HostContainer {
     /// Get the index for a given addr on a hostlist.
     async fn get_index_at_addr(&self, color: usize, addr: Url) -> Option<usize> {
         self.hostlists[color].read().await.iter().position(|a| a.0 == addr)
+    }
+
+    /// Get the last_seen field for a given entry on a hostlist.
+    pub async fn get_last_seen(&self, color: usize, addr: &Url) -> Option<u64> {
+        self.hostlists[color]
+            .read()
+            .await
+            .iter()
+            .find(|(url, _)| url == addr)
+            .map(|(_, last_seen)| *last_seen)
     }
 
     /// Load the hostlists from a file.
@@ -793,7 +819,7 @@ impl Hosts {
                 HostState::Connect => current_state.try_connect(),
                 HostState::Suspend => current_state.try_suspend(),
                 HostState::Connected(c) => current_state.try_connected(c),
-                HostState::Move => current_state.try_move(),
+                HostState::Move(c) => current_state.try_move(c),
             };
 
             if let Ok(state) = &result {
@@ -877,9 +903,9 @@ impl Hosts {
     pub async fn register_channel(&self, channel: ChannelPtr) -> Result<()> {
         let address = channel.address().clone();
 
-        self.try_register(address.clone(), HostState::Connected(channel.clone())).await?;
+        self.try_register(address.clone(), HostState::Connected(channel.clone())).await.unwrap();
 
-        // Notify that channel processing failed
+        // Notify that channel processing was successful
         self.channel_subscriber.notify(Ok(channel.clone())).await;
 
         let mut last_online = self.last_connection.write().await;
@@ -1027,41 +1053,150 @@ impl Hosts {
         ret
     }
 
-    /// A single function for moving hosts between hostlists. Called on the following occasions:
+    /// A single atomic function for moving hosts between hostlists. Called on the following occasions:
     ///
     /// * When we cannot connect to a peer: move to grey, remove from white and gold.
+    /// * When a peer disconnects from us: move to grey, remove from white and gold.
     /// * When the refinery passes successfully: move to white, remove from greylist.
     /// * When we connect to a peer, move to gold, remove from white or grey.
     /// * When we add a peer to the black list: move to black, remove from all other lists.
-    pub async fn move_host(&self, addr: &Url, last_seen: u64, destination: HostColor) {
-        if self.try_register(addr.clone(), HostState::Move).await.is_err() {
-            return
-        }
+    pub async fn move_host(
+        &self,
+        addr: &Url,
+        last_seen: u64,
+        destination: HostColor,
+        suspend: bool,
+        channel: Option<ChannelPtr>,
+    ) {
+        debug!(target: "net::hosts::move_host()", "Trying to move addr={} node={} destination={:?}",
+        addr, self.settings.node_id, destination);
+
+        // This should never panic. Failure indicates a misuse of the HostState API.
+        self.try_register(addr.clone(), HostState::Move(channel.clone())).await.unwrap();
 
         match destination {
             // Downgrade to grey. Remove from white and gold.
             HostColor::Grey => {
-                self.container.remove_if_exists(HostColor::Gold, addr).await;
-                self.container.remove_if_exists(HostColor::White, addr).await;
-                self.container.store_or_update(HostColor::Grey, addr.clone(), last_seen).await;
+                // Remove from the gold list if it exists.
+                let mut gold = self.container.hostlists[HostColor::Gold as usize].write().await;
+                if gold.iter().any(|(u, _t)| u == addr) {
+                    let position = gold.iter().position(|a| a.0 == *addr).unwrap();
+                    gold.remove(position);
+                }
+                drop(gold);
 
-                // We mark this peer as Suspend which means we do not try to connect to it until it
-                // has passed through the refinery. This should never panic.
-                self.try_register(addr.clone(), HostState::Suspend).await.unwrap();
-                return
+                // Remove from the white list if it exists.
+                let mut white = self.container.hostlists[HostColor::White as usize].write().await;
+                if white.iter().any(|(u, _t)| u == addr) {
+                    let position = white.iter().position(|a| a.0 == *addr).unwrap();
+                    white.remove(position);
+                }
+                drop(white);
+
+                // If it exists on the grey list, update its last seen field.
+                // Otherwise, write to the greylist.
+                let mut grey = self.container.hostlists[HostColor::Grey as usize].write().await;
+                if grey.iter().any(|(u, _t)| u == addr) {
+                    let position = grey.iter().position(|a| a.0 == *addr).unwrap();
+                    grey[position] = (addr.clone(), last_seen);
+                } else {
+                    // We don't have this entry.
+                    if grey.len() == GREYLIST_MAX_LEN {
+                        let last_entry = grey.pop().unwrap();
+                        debug!(
+                            target: "net::hosts::move_host()",
+                            "Greylist reached max size. Removed {:?}", last_entry,
+                        );
+                    }
+                    grey.push((addr.clone(), last_seen));
+
+                    // Sort the list by last_seen.
+                    grey.sort_by_key(|entry| entry.1);
+                    grey.reverse();
+                }
+                drop(grey);
+
+                if suspend {
+                    // We mark this peer as Suspend which means we do not try to connect to it until it
+                    // has passed through the refinery. This should never panic.
+                    self.try_register(addr.clone(), HostState::Suspend).await.unwrap();
+                    return
+                }
             }
 
             // Remove from Greylist, add to Whitelist. Called by the Refinery.
             HostColor::White => {
-                self.container.remove_if_exists(HostColor::Grey, addr).await;
-                self.container.store_or_update(HostColor::White, addr.clone(), last_seen).await;
+                // Remove from the grey list if it exists.
+                let mut grey = self.container.hostlists[HostColor::Grey as usize].write().await;
+                if grey.iter().any(|(u, _t)| u == addr) {
+                    let position = grey.iter().position(|a| a.0 == *addr).unwrap();
+                    grey.remove(position);
+                }
+                drop(grey);
+
+                // If it exists on the white list, update its last seen field.
+                // Otherwise, write to the white list.
+                let mut white = self.container.hostlists[HostColor::White as usize].write().await;
+                if white.iter().any(|(u, _t)| u == addr) {
+                    let position = white.iter().position(|a| a.0 == *addr).unwrap();
+                    white[position] = (addr.clone(), last_seen);
+                } else {
+                    // We don't have this entry.
+                    if white.len() == WHITELIST_MAX_LEN {
+                        let last_entry = white.pop().unwrap();
+                        debug!(
+                            target: "net::hosts::move_host()",
+                            "Whitelist reached max size. Removed {:?}", last_entry,
+                        );
+                    }
+                    white.push((addr.clone(), last_seen));
+
+                    // Sort the list by last_seen.
+                    white.sort_by_key(|entry| entry.1);
+                    white.reverse();
+                }
+                drop(white);
             }
 
             // Upgrade to gold. Remove from white or grey.
             HostColor::Gold => {
-                self.container.remove_if_exists(HostColor::Grey, addr).await;
-                self.container.remove_if_exists(HostColor::White, addr).await;
-                self.container.store_or_update(HostColor::Gold, addr.clone(), last_seen).await;
+                // Remove from the grey list if it exists.
+                let mut grey = self.container.hostlists[HostColor::Grey as usize].write().await;
+                if grey.iter().any(|(u, _t)| u == addr) {
+                    let position = grey.iter().position(|a| a.0 == *addr).unwrap();
+                    grey.remove(position);
+                }
+                drop(grey);
+
+                // Remove from the white list if it exists.
+                let mut white = self.container.hostlists[HostColor::White as usize].write().await;
+                if white.iter().any(|(u, _t)| u == addr) {
+                    let position = white.iter().position(|a| a.0 == *addr).unwrap();
+                    white.remove(position);
+                }
+                drop(white);
+
+                // If it exists on the gold list, update its last seen field.
+                // Otherwise, write to the gold list.
+                let mut gold = self.container.hostlists[HostColor::Gold as usize].write().await;
+                if gold.iter().any(|(u, _t)| u == addr) {
+                    let position = gold.iter().position(|a| a.0 == *addr).unwrap();
+                    gold[position] = (addr.clone(), last_seen);
+                } else {
+                    gold.push((addr.clone(), last_seen));
+
+                    // Sort the list by last_seen.
+                    gold.sort_by_key(|entry| entry.1);
+                    gold.reverse();
+                }
+                drop(gold);
+
+                // Re-register this host as Connected. We want to keep track of all connected peers
+                // in the Connected() state.
+                self.try_register(addr.clone(), HostState::Connected(channel.unwrap()))
+                    .await
+                    .unwrap();
+                return
             }
 
             // Move to black. Remove from all other lists.
@@ -1075,10 +1210,42 @@ impl Hosts {
                         return
                     }
 
-                    self.container.remove_if_exists(HostColor::Grey, addr).await;
-                    self.container.remove_if_exists(HostColor::White, addr).await;
-                    self.container.remove_if_exists(HostColor::Gold, addr).await;
-                    self.container.store_or_update(HostColor::Black, addr.clone(), last_seen).await;
+                    // Remove from the grey list if it exists.
+                    let mut grey = self.container.hostlists[HostColor::Grey as usize].write().await;
+                    if grey.iter().any(|(u, _t)| u == addr) {
+                        let position = grey.iter().position(|a| a.0 == *addr).unwrap();
+                        grey.remove(position);
+                    }
+                    drop(grey);
+
+                    // Remove from the white list if it exists.
+                    let mut white =
+                        self.container.hostlists[HostColor::White as usize].write().await;
+                    if white.iter().any(|(u, _t)| u == addr) {
+                        let position = white.iter().position(|a| a.0 == *addr).unwrap();
+                        white.remove(position);
+                    }
+                    drop(white);
+
+                    // Remove from the gold list if it exists.
+                    let mut gold =
+                        self.container.hostlists[HostColor::White as usize].write().await;
+                    if gold.iter().any(|(u, _t)| u == addr) {
+                        let position = gold.iter().position(|a| a.0 == *addr).unwrap();
+                        gold.remove(position);
+                    }
+                    drop(gold);
+
+                    // Add to the black list.
+                    let mut black =
+                        self.container.hostlists[HostColor::Gold as usize].write().await;
+                    if black.iter().any(|(u, _t)| u == addr) {
+                        let position = black.iter().position(|a| a.0 == *addr).unwrap();
+                        black[position] = (addr.clone(), last_seen);
+                    } else {
+                        black.push((addr.clone(), last_seen));
+                    }
+                    drop(black);
                 }
             }
         }

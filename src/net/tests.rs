@@ -55,8 +55,6 @@ fn p2p_test() {
     cfg.add_filter_ignore("net::channel".to_string());
     cfg.add_filter_ignore("net::p2p::seed".to_string());
     cfg.add_filter_ignore("net::p2p::start".to_string());
-    cfg.add_filter_ignore("store".to_string());
-    cfg.add_filter_ignore("net::store".to_string());
     cfg.add_filter_ignore("net::channel::send()".to_string());
     cfg.add_filter_ignore("net::channel::start()".to_string());
     cfg.add_filter_ignore("net::channel::subscribe_msg()".to_string());
