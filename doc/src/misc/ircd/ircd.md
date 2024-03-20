@@ -22,6 +22,12 @@ Nothing else exists like it.
 
 ## Installation
 
+You can either manually install it on your system or use the [turn-key deployment](https://github.com/odyslam/darkfi-starter) 
+the community has developed. It uses Docker containers and automatically exposes the service via Tor. 
+You don't need to install any dependencies or configure anything on your system. We suggest that you use
+this setup on a home device so that it is always online and connected to the network, receiving all the messages
+even while your computer is turned off.
+
 Follow the instructions in the
 [README](https://darkrenaissance.github.io/darkfi/index.html#build) to ensure
 you have all the necessary dependencies.
