@@ -101,6 +101,7 @@ pub trait StorageAdapter {
 }
 
 /// An in-memory storage, useful for unit tests and smaller trees.
+#[derive(Default)]
 pub struct MemoryStorage<F: FieldElement> {
     tree: HashMap<BigUint, F>,
 }
@@ -238,9 +239,9 @@ impl<
     }
 
     fn get_node(&self, idx: &BigUint) -> F {
-        let lvl = util::log2(&idx);
+        let lvl = util::log2(idx);
         let empty_node = self.empty_nodes[lvl as usize];
-        self.store.get(&idx).unwrap_or(empty_node)
+        self.store.get(idx).unwrap_or(empty_node)
     }
 
     fn put_node(&mut self, key: BigUint, value: F) -> ContractResult {

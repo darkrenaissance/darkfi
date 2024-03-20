@@ -50,12 +50,14 @@ impl StorageAdapter for SmtWasmDbStorage {
     fn put(&mut self, key: BigUint, value: pallas::Base) -> bool {
         db_set(self.db, &key.to_bytes_le(), &value.to_repr()).is_ok()
     }
+
     fn get(&self, key: &BigUint) -> Option<pallas::Base> {
         let Ok(value) = db_get(self.db, &key.to_bytes_le()) else {
             msg!("[WasmDbStorage] get() for DB failed");
             return None
         };
-        let Some(value) = value else { return None };
+
+        let value = value?;
 
         let mut repr = [0; 32];
         repr.copy_from_slice(&value);
