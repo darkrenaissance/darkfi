@@ -20,7 +20,7 @@ use std::collections::BTreeSet;
 
 use darkfi_sdk::crypto::{MerkleTree, SecretKey};
 use darkfi_serial::{async_trait, serialize, SerialDecodable, SerialEncodable};
-use log::{debug, error, info};
+use log::{debug, info};
 use num_bigint::BigUint;
 use sled_overlay::database::SledDbOverlayState;
 use smol::lock::RwLock;
@@ -32,7 +32,7 @@ use crate::{
     validator::{
         pow::PoWModule,
         utils::{best_fork_index, block_rank, find_extended_fork_index},
-        verify_block, verify_proposal, verify_transactions, TxVerifyFailed,
+        verify_proposal, verify_transactions, TxVerifyFailed,
     },
     Error, Result,
 };
@@ -92,6 +92,7 @@ impl Consensus {
             for p in fork.proposals.iter().rev() {
                 if p == &proposal.hash {
                     drop(lock);
+                    debug!(target: "validator::consensus::append_proposal", "Proposal {} already exists", proposal.hash);
                     return Err(Error::ProposalAlreadyExists)
                 }
             }
@@ -173,7 +174,6 @@ impl Consensus {
             return Ok((original_fork.full_clone()?, Some(f_index)))
         }
 
-        // TODO: use new sled overlay diffs logic to make this not having rebuild the whole fork
         // Rebuild fork
         let mut fork = Fork::new(self.blockchain.clone(), self.module.read().await.clone()).await?;
         fork.proposals = original_fork.proposals[..p_index + 1].to_vec();
@@ -181,24 +181,22 @@ impl Consensus {
 
         // Retrieve proposals blocks from original fork
         let blocks = &original_fork.overlay.lock().unwrap().get_blocks_by_hash(&fork.proposals)?;
+        for (index, block) in blocks.iter().enumerate() {
+            // Apply block diffs
+            fork.overlay.lock().unwrap().overlay.lock().unwrap().add_diff(&fork.diffs[index]);
 
-        // Retrieve last block
-        let mut previous = &fork.overlay.lock().unwrap().last_block()?;
+            // Grab next mine target and difficulty
+            let (next_target, next_difficulty) = fork.module.next_mine_target_and_difficulty()?;
 
-        // Validate and insert each block
-        for block in blocks {
-            // Verify block
-            if verify_block(&fork.overlay, &fork.module, block, previous).await.is_err() {
-                error!(target: "validator::consensus::find_extended_fork_overlay", "Erroneous block found in set");
-                fork.overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
-                return Err(Error::BlockIsInvalid(block.hash()?.to_string()))
-            };
+            // Calculate block rank
+            let (target_distance_sq, hash_distance_sq) = block_rank(block, &next_target)?;
 
             // Update PoW module
-            fork.module.append(block.header.timestamp, &fork.module.next_difficulty()?);
+            fork.module.append(block.header.timestamp, &next_difficulty);
 
-            // Use last inserted block as next iteration previous
-            previous = block;
+            // Update fork ranks
+            fork.targets_rank += target_distance_sq;
+            fork.hashes_rank += hash_distance_sq;
         }
 
         // Drop forks lock
