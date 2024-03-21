@@ -199,9 +199,6 @@ impl ManualSession {
             addr, attempts,
         );
 
-        // Mark this peer as Suspend, which sends it to the Refinery for processing.
-        self.p2p().hosts().try_register(addr.clone(), HostState::Suspend).await.unwrap();
-
         Ok(())
     }
 }
