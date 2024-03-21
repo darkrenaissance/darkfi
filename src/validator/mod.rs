@@ -367,7 +367,7 @@ impl Validator {
         drop(forks);
 
         // Reset forks starting with the finalized blocks
-        self.consensus.reset_forks(&finalized_proposals, &finalized_fork).await;
+        self.consensus.reset_forks(&finalized_proposals, &finalized_fork).await?;
         info!(target: "validator::finalization", "Finalization completed!");
 
         // Release append lock
