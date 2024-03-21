@@ -26,7 +26,10 @@ use sled_overlay::database::SledDbOverlayState;
 use smol::lock::RwLock;
 
 use crate::{
-    blockchain::{BlockInfo, Blockchain, BlockchainOverlay, BlockchainOverlayPtr, Header},
+    blockchain::{
+        block_store::BlockDifficulty, BlockInfo, Blockchain, BlockchainOverlay,
+        BlockchainOverlayPtr, Header,
+    },
     tx::Transaction,
     util::time::Timestamp,
     validator::{
@@ -539,8 +542,16 @@ impl Fork {
         // Calculate block rank
         let (target_distance_sq, hash_distance_sq) = block_rank(&proposal.block, &next_target)?;
 
-        // Update PoW module
-        self.module.append(proposal.block.header.timestamp, &next_difficulty);
+        // Generate block difficulty and update PoW module
+        let cummulative_difficulty =
+            self.module.cummulative_difficulty.clone() + next_difficulty.clone();
+        let block_difficulty = BlockDifficulty::new(
+            proposal.block.header.height,
+            proposal.block.header.timestamp,
+            next_difficulty,
+            cummulative_difficulty,
+        );
+        self.module.append_difficulty(&self.overlay, block_difficulty)?;
 
         // Update fork ranks
         self.targets_rank += target_distance_sq;

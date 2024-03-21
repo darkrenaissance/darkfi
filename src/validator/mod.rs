@@ -358,12 +358,16 @@ impl Validator {
         let finalized_blocks =
             fork.overlay.lock().unwrap().get_blocks_by_hash(&finalized_proposals)?;
 
-        // Apply finalized proposals diffs
+        // Apply finalized proposals diffs and update PoW module
+        let mut module = self.consensus.module.write().await;
         info!(target: "validator::finalization", "Finalizing proposals:");
         for (index, proposal) in finalized_proposals.iter().enumerate() {
             info!(target: "validator::finalization", "\t{} - {}", proposal, finalized_blocks[index].header.height);
             fork.overlay.lock().unwrap().overlay.lock().unwrap().apply_diff(&mut diffs[index])?;
+            let next_difficulty = module.next_difficulty()?;
+            module.append(finalized_blocks[index].header.timestamp, &next_difficulty);
         }
+        drop(module);
         drop(forks);
 
         // Reset forks starting with the finalized blocks
