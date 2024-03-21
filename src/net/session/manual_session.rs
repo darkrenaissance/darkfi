@@ -163,6 +163,10 @@ impl ManualSession {
                                 "[P2P] Unable to connect to manual outbound [{}]: {}",
                                 addr, e,
                             );
+
+                            // Stop tracking this peer, to avoid it getting stuck in the Connect
+                            // state.
+                            self.p2p().hosts().unregister(&addr).await;
                         }
                     }
                 }
@@ -194,9 +198,9 @@ impl ManualSession {
             "[P2P] Suspending manual connection to {} after {} failed attempts",
             addr, attempts,
         );
-        // Stop tracking this address in the HostRegistry.
-        // Otherwise, host will be stuck in the Connect state.
-        self.p2p().hosts().unregister(&addr).await;
+
+        // Mark this peer as Suspend, which sends it to the Refinery for processing.
+        self.p2p().hosts().try_register(addr.clone(), HostState::Suspend).await.unwrap();
 
         Ok(())
     }

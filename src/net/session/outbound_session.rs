@@ -464,7 +464,8 @@ impl Slot {
                     self.slot, addr, e
                 );
 
-                // At this point we failed to connect. We'll downgrade this peer now.
+                // At this point we failed to connect. We'll downgrade this peer and
+                // mark its state as Suspend, which sends it to the Refinery for processing.
                 self.p2p().hosts().move_host(&addr, last_seen, HostColor::Grey, true, None).await;
 
                 // Notify that channel processing failed
