@@ -107,18 +107,113 @@ proposal where voting passed the threshold and so on.
 Assuming both contracts validate successfully, the funds are transferred out
 of the DAO treasury.
 
-## Generalizing DAO Calling Mechanism
+# Formalism
 
-Currently the calling params for a contract is just a big binary blob.
-The idea is we introduce some kind of ABI.
+Let the $ℂ$ be the category for all sets of coins $C$ with one-way arrows
+$C → C'$ such that $C ⊆ C'$ and an initial object $C₀ = ∅ $.
+We require that arrows with the same source and target commute.
+$$ \begin{CD}
+   C @>c_b>> C_b \\
+@VcₐVV @Vc_a'VV \\
+   Cₐ @>c_b'>> C_{ab}
+\end{CD} $$
 
-Then the DAO proposal would commit to some part of those params that
-we are interested in.
+We define the nullifier functor $N : ℂ^{\t{op}} → ℕ$ which is an isomorphism
+of $ℂ$ that reverses arrows.
 
-In the final step of `DAO::exec()`, only these params would be checked.
-For more info see
-[DEP 0002](https://darkrenaissance.github.io/darkfi/dep/0002.html).
+$$ \begin{CD}
+   C @>>> NC \\
+@VcVV @AANcA \\
+   C' @>>> NC'
+\end{CD} $$
+We can see the action of adding $c$ to $C$ (expressed as the left downwards
+arrow) gets lifted to the arrow going backwards in the nullifier category.
+The collection of arrows in $ℂ$ and $ℕ$ then describes the coins and nullifier
+sets which are represented in merkle trees.
 
-This would be one way to enable composability, but by no means is it the
-only way.
+From the diagram we see that $C → C' → NC' → NC → C$ so that $Nc$ cancels $c$.
+Pasting diagrams together, we get
+
+$$ \begin{CD}
+   C₀ @>>> NC₀ \\
+@Vc₁VV @AANc₁A \\
+   C₁ @>>> NC₁ \\
+@Vc₂VV @AANc₂A \\
+   C₂ @>>> NC₂ \\
+\end{CD} $$
+where all squares commute. Since all paths in $ℂ$ are one way, proving a
+coin $cₖ : Cₖ₋₁ → Cₖ$ exists is equivalent to being at any state $Cₖ, Cₖ₊₁, Cₖ₊₂, …$.
+
+**Lemma:** If our state is $Cₖ$ then our set must contain the coins
+represented as arrows $c₁, …, cₖ$.
+
+# Anon Voting Mechanics
+
+When making a proposal, we need to prove ownership of a threshold of coins.
+Likewise for voting. Essentially they are similar problems of proving ownership
+of a coin $c$ that is still valid. As showed above this reduces to the following
+statements:
+
+* Is $c$ in the set of all coins $C$?
+* If yes, then is $n(c)$ *not* in the set of nullifiers $N$?
+
+Normally this logic is handled by transfers, but we need to additionally
+check it without leaking info about $c$. Since $n(c)$ is derived
+deterministically, leaking $n(c)$ also leaks info on $c$.
+
+Nullifiers must be checked otherwise expired coins can be used.
+
+## Forking the Global State
+
+The first method involves copying the coins state $C$. Every proof makes use
+of $C$ while revealing $n(c)$ which is checked against the current nullifier
+state. To avoid anonymity leaks from revealing $n(c)$, we additionally move the coin
+using a `Money::transfer()` call.
+
+The downside is that wallets need to:
+
+* Keep track of the coins tree $C$. This will involve logic to periodically
+  checkpoint the incremental tree in a deterministic way.
+* When doing any action, the wallet must move coins simultaneously.
+  Wallets must also keep track of the unspent coin since for example it might
+  be used in another vote (or the wallet makes a proposal and wants to vote
+  with the same coin).
+
+Additionally you cannot obtain a coin then vote. You must own the coin before
+the vote is proposed.
+
+## Forking the Global State (with SMT)
+
+Instead of revealing the nullifier, we instead snapshot the the nullifier
+tree alongside $C$.
+
+The downsides are:
+
+* More expensive for voters since SMT is expensive in ZK.
+* We're taking an older snapshot of the coins state. Spent coins spent after
+  the vote are proposed will still be able to vote.
+
+## Tracking Coins with Local State
+
+Each coin's `user_data` contains an SMT of all proposals they voted in.
+When transferring a coin, you must preserve this `user_data`.
+The `spend_hook` only allows modifying it with a parent call that adds
+proposals when voting to the SMT field in the coin.
+
+The downside for wallets is that:
+
+* The SMT committed to is large and needs to be transferred to receivers
+  when sending the coin.
+    * Alternatively coins could contain a special key (also in the `user_data`
+      field), which when voting you must make a verifiable encryption.
+      That way wallets can later scan all proposals for a DAO to find where
+      their particular governance token voted.
+* It's very complex. For example, can DAOs own governance tokens? So far DAO
+  tokens must have the `spend_hook` set, but with this, we now require another
+  `spend_hook` which preserves the SMT when transferring coins. The mechanics
+  for two parents of a call aren't specified, so we'd maybe have to add some
+  concept of symlinks.
+
+However while complex, it is the most accurate of all 3 methods reflecting
+the current state.
 
