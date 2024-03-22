@@ -16,10 +16,15 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashMap, io::Cursor};
+use std::{
+    collections::HashMap,
+    io::{Cursor, Write},
+};
 
 use darkfi::{
-    blockchain::BlockInfo,
+    blockchain::{BlockInfo, BlockchainOverlay},
+    runtime::vm_runtime::Runtime,
+    tx::Transaction,
     util::{pcg::Pcg32, time::Timestamp},
     validator::{Validator, ValidatorConfig, ValidatorPtr},
     zk::{empty_witnesses, halo2::Field, ProvingKey, ZkCircuit},
@@ -33,6 +38,7 @@ use darkfi_sdk::{
     crypto::{Keypair, MerkleNode, MerkleTree},
     pasta::pallas,
 };
+use darkfi_serial::{Encodable, WriteExt};
 use log::debug;
 use num_bigint::BigUint;
 
@@ -128,6 +134,8 @@ pub struct Wallet {
     pub dao_leafs: HashMap<DaoBulla, bridgetree::Position>,
     /// Dao Proposal snapshots
     pub dao_prop_leafs: HashMap<DaoProposalBulla, (bridgetree::Position, MerkleTree)>,
+    /// Create bench.csv file
+    pub bench_wasm: bool,
 }
 
 impl Wallet {
@@ -174,7 +182,23 @@ impl Wallet {
             spent_money_coins: vec![],
             dao_leafs: HashMap::new(),
             dao_prop_leafs: HashMap::new(),
+            bench_wasm: false,
         })
+    }
+
+    pub async fn add_transaction(
+        &mut self,
+        callname: &str,
+        tx: Transaction,
+        block_height: u64,
+        verify_fees: bool,
+    ) -> Result<()> {
+        if self.bench_wasm {
+            benchmark_wasm_calls(callname, &self.validator, &tx, block_height);
+        }
+
+        self.validator.add_transactions(&[tx], block_height, true, verify_fees).await?;
+        Ok(())
     }
 }
 
@@ -251,5 +275,54 @@ impl TestHarness {
         for wallet in &wallets[1..] {
             assert!(money_root == wallet.money_merkle_tree.root(0).unwrap());
         }
+    }
+}
+
+fn benchmark_wasm_calls(
+    callname: &str,
+    validator: &Validator,
+    tx: &Transaction,
+    block_height: u64,
+) {
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .append(true)
+        .open("bench.csv")
+        .unwrap();
+
+    for (idx, call) in tx.calls.iter().enumerate() {
+        let overlay = BlockchainOverlay::new(&validator.blockchain).expect("blockchain overlay");
+        let wasm = overlay.lock().unwrap().wasm_bincode.get(call.data.contract_id).unwrap();
+        let mut runtime = Runtime::new(&wasm, overlay.clone(), call.data.contract_id, block_height)
+            .expect("runtime");
+        let mut payload = vec![];
+        payload.write_u32(idx as u32).unwrap(); // Call index
+        tx.calls.encode(&mut payload).unwrap(); // Actual call data
+
+        let mut times = [0; 3];
+        let now = std::time::Instant::now();
+        let _metadata = runtime.metadata(&payload).expect("metadata");
+        times[0] = now.elapsed().as_millis();
+
+        let now = std::time::Instant::now();
+        let update = runtime.exec(&payload).expect("exec");
+        times[1] = now.elapsed().as_millis();
+
+        let now = std::time::Instant::now();
+        runtime.apply(&update).expect("update");
+        times[2] = now.elapsed().as_millis();
+
+        writeln!(
+            file,
+            "{}, {}, {}, {}, {}, {}",
+            callname,
+            tx.hash().unwrap(),
+            idx,
+            times[0],
+            times[1],
+            times[2]
+        )
+        .unwrap();
     }
 }

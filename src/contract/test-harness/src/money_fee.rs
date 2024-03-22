@@ -163,7 +163,7 @@ impl TestHarness {
     ) -> Result<Vec<OwnCoin>> {
         let wallet = self.holders.get_mut(holder).unwrap();
 
-        wallet.validator.add_transactions(&[tx], block_height, true, self.verify_fees).await?;
+        wallet.add_transaction("money::fee", tx, block_height, self.verify_fees).await?;
         wallet.money_merkle_tree.append(MerkleNode::from(params.output.coin.inner()));
 
         // Attempt to decrypt the output note to see if this is a coin for the holder

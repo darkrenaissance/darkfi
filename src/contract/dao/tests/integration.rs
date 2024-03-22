@@ -54,7 +54,8 @@ fn integration_test() -> Result<()> {
         let mut th = TestHarness::new(&HOLDERS, false).await?;
 
         // We'll use the ALICE token as the DAO governance token
-        let wallet = th.holders.get(&Holder::Alice).unwrap();
+        let wallet = th.holders.get_mut(&Holder::Alice).unwrap();
+        //wallet.bench_wasm = true;
         let mint_authority = wallet.token_mint_authority;
         let gov_token_blind = BaseBlind::random(&mut OsRng);
 

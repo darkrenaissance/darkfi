@@ -183,7 +183,7 @@ impl TestHarness {
         let wallet = self.holders.get_mut(holder).unwrap();
 
         // Execute the transaction
-        wallet.validator.add_transactions(&[tx], block_height, true, self.verify_fees).await?;
+        wallet.add_transaction("money::token_mint", tx, block_height, self.verify_fees).await?;
 
         // Iterate over all inputs to mark any spent coins
         if let Some(ref fee_params) = fee_params {
@@ -335,7 +335,7 @@ impl TestHarness {
         let wallet = self.holders.get_mut(holder).unwrap();
 
         // Execute the transaction
-        wallet.validator.add_transactions(&[tx], block_height, true, self.verify_fees).await?;
+        wallet.add_transaction("money::token_freeze", tx, block_height, self.verify_fees).await?;
 
         let mut found_owncoins = vec![];
         if let Some(ref fee_params) = fee_params {

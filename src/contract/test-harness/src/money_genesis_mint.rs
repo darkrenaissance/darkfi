@@ -90,7 +90,7 @@ impl TestHarness {
         let wallet = self.holders.get_mut(holder).unwrap();
 
         // Execute the transaction
-        wallet.validator.add_transactions(&[tx], block_height, true, self.verify_fees).await?;
+        wallet.add_transaction("money::genesis_mint", tx, block_height, self.verify_fees).await?;
 
         if !append {
             return Ok(vec![])
