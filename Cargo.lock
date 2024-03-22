@@ -3447,7 +3447,7 @@ dependencies = [
 [[package]]
 name = "halo2_gadgets"
 version = "0.3.0"
-source = "git+https://github.com/parazyd/halo2?branch=v4#787993657e97b67948addc247a3f546e5d2627fa"
+source = "git+https://github.com/parazyd/halo2?branch=v4#23d312ee30307c47388a810c2997a2d19186e24a"
 dependencies = [
  "arrayvec 0.7.4",
  "bitvec",
@@ -3465,7 +3465,7 @@ dependencies = [
 [[package]]
 name = "halo2_proofs"
 version = "0.3.0"
-source = "git+https://github.com/parazyd/halo2?branch=v4#787993657e97b67948addc247a3f546e5d2627fa"
+source = "git+https://github.com/parazyd/halo2?branch=v4#23d312ee30307c47388a810c2997a2d19186e24a"
 dependencies = [
  "blake2b_simd",
  "ff",
