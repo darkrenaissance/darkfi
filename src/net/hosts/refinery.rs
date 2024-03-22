@@ -134,7 +134,9 @@ impl GreylistRefinery {
                 Some((entry, position)) => {
                     let url = &entry.0;
 
-                    if hosts.try_register(url.clone(), HostState::Refine).await.is_err() {
+                    if let Err(e) = hosts.try_register(url.clone(), HostState::Refine).await {
+                        debug!(target: "net::refinery", "Unable to refine addr={}, err={}",
+                               url.clone(), e);
                         continue
                     }
 

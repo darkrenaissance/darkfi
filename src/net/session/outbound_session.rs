@@ -551,7 +551,7 @@ impl PeerDiscoveryBase for PeerDiscovery {
     /// connected P2P channels and send out a `GetAddrs` message to request more
     /// peers. Other parts of the P2P stack will then handle the incoming addresses
     /// and place them in the hosts list.
-    /// This function will also sleep `Settings::outbound_connect_timeout` seconds
+    /// This function will also sleep `Settings::outbound_peer_discovery_attempt_time` seconds
     /// after broadcasting in order to let the P2P stack receive and work through
     /// the addresses it is expecting.
     async fn run(self: Arc<Self>) {

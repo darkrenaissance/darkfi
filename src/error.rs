@@ -188,8 +188,8 @@ pub enum Error {
     #[error("No matching hostlist entry")]
     HostDoesNotExist,
 
-    #[error("Attempted state change was blocked: {0}")]
-    StateBlocked(String),
+    #[error("Invalid state transition: current_state={0}, end_state={0}")]
+    HostStateBlocked(String, String),
 
     // =============
     // Crypto errors

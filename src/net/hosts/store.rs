@@ -119,13 +119,15 @@ impl HostState {
     // Try to change state to Insert. Only possible if we are not yet
     // tracking this host in the HostRegistry.
     fn try_insert(&self) -> Result<Self> {
+        let start = self.to_string();
+        let end = HostState::Insert.to_string();
         match self {
-            HostState::Insert => Err(Error::StateBlocked(self.to_string())),
-            HostState::Refine => Err(Error::StateBlocked(self.to_string())),
-            HostState::Connect => Err(Error::StateBlocked(self.to_string())),
-            HostState::Suspend => Err(Error::StateBlocked(self.to_string())),
-            HostState::Connected(_) => Err(Error::StateBlocked(self.to_string())),
-            HostState::Move(_) => Err(Error::StateBlocked(self.to_string())),
+            HostState::Insert => Err(Error::HostStateBlocked(start, end)),
+            HostState::Refine => Err(Error::HostStateBlocked(start, end)),
+            HostState::Connect => Err(Error::HostStateBlocked(start, end)),
+            HostState::Suspend => Err(Error::HostStateBlocked(start, end)),
+            HostState::Connected(_) => Err(Error::HostStateBlocked(start, end)),
+            HostState::Move(_) => Err(Error::HostStateBlocked(start, end)),
         }
     }
 
@@ -133,26 +135,30 @@ impl HostState {
     // tracking this host in the HostRegistry or if the host is marked as
     // Suspend i.e. we have failed to connect to it.
     fn try_refine(&self) -> Result<Self> {
+        let start = self.to_string();
+        let end = HostState::Refine.to_string();
         match self {
-            HostState::Insert => Err(Error::StateBlocked(self.to_string())),
-            HostState::Refine => Err(Error::StateBlocked(self.to_string())),
-            HostState::Connect => Err(Error::StateBlocked(self.to_string())),
+            HostState::Insert => Err(Error::HostStateBlocked(start, end)),
+            HostState::Refine => Err(Error::HostStateBlocked(start, end)),
+            HostState::Connect => Err(Error::HostStateBlocked(start, end)),
             HostState::Suspend => Ok(HostState::Refine),
-            HostState::Connected(_) => Err(Error::StateBlocked(self.to_string())),
-            HostState::Move(_) => Err(Error::StateBlocked(self.to_string())),
+            HostState::Connected(_) => Err(Error::HostStateBlocked(start, end)),
+            HostState::Move(_) => Err(Error::HostStateBlocked(start, end)),
         }
     }
 
     // Try to change state to Connect. Only possible if we are not yet
     // tracking this host in the HostRegistry.
     fn try_connect(&self) -> Result<Self> {
+        let start = self.to_string();
+        let end = HostState::Connect.to_string();
         match self {
-            HostState::Insert => Err(Error::StateBlocked(self.to_string())),
-            HostState::Refine => Err(Error::StateBlocked(self.to_string())),
-            HostState::Connect => Err(Error::StateBlocked(self.to_string())),
-            HostState::Suspend => Err(Error::StateBlocked(self.to_string())),
-            HostState::Connected(_) => Err(Error::StateBlocked(self.to_string())),
-            HostState::Move(_) => Err(Error::StateBlocked(self.to_string())),
+            HostState::Insert => Err(Error::HostStateBlocked(start, end)),
+            HostState::Refine => Err(Error::HostStateBlocked(start, end)),
+            HostState::Connect => Err(Error::HostStateBlocked(start, end)),
+            HostState::Suspend => Err(Error::HostStateBlocked(start, end)),
+            HostState::Connected(_) => Err(Error::HostStateBlocked(start, end)),
+            HostState::Move(_) => Err(Error::HostStateBlocked(start, end)),
         }
     }
 
@@ -163,12 +169,14 @@ impl HostState {
     // and must be re-added to the Connected() state after the promotion
     // has completed.
     fn try_connected(&self, channel: ChannelPtr) -> Result<Self> {
+        let start = self.to_string();
+        let end = HostState::Connected(channel.clone()).to_string();
         match self {
-            HostState::Insert => Err(Error::StateBlocked(self.to_string())),
+            HostState::Insert => Err(Error::HostStateBlocked(start, end)),
             HostState::Refine => Ok(HostState::Connected(channel)),
             HostState::Connect => Ok(HostState::Connected(channel)),
-            HostState::Suspend => Err(Error::StateBlocked(self.to_string())),
-            HostState::Connected(_) => Err(Error::StateBlocked(self.to_string())),
+            HostState::Suspend => Err(Error::HostStateBlocked(start, end)),
+            HostState::Connected(_) => Err(Error::HostStateBlocked(start, end)),
             HostState::Move(_) => Ok(HostState::Connected(channel)),
         }
     }
@@ -177,13 +185,15 @@ impl HostState {
     // Connect i.e. it is being connected to, or if we are currently Connected
     // to this peer (necessary due to Gold list promotion sequence).
     fn try_move(&self, channel: Option<ChannelPtr>) -> Result<Self> {
+        let start = self.to_string();
+        let end = HostState::Move(channel.clone()).to_string();
         match self {
-            HostState::Insert => Err(Error::StateBlocked(self.to_string())),
-            HostState::Refine => Err(Error::StateBlocked(self.to_string())),
+            HostState::Insert => Err(Error::HostStateBlocked(start, end)),
+            HostState::Refine => Err(Error::HostStateBlocked(start, end)),
             HostState::Connect => Ok(HostState::Move(channel)),
-            HostState::Suspend => Err(Error::StateBlocked(self.to_string())),
+            HostState::Suspend => Err(Error::HostStateBlocked(start, end)),
             HostState::Connected(_) => Ok(HostState::Move(channel)),
-            HostState::Move(_) => Err(Error::StateBlocked(self.to_string())),
+            HostState::Move(_) => Err(Error::HostStateBlocked(start, end)),
         }
     }
 
@@ -191,12 +201,14 @@ impl HostState {
     // currently moving this host, since we suspend a host after failing
     // to connect to it and then downgrading in move_host.
     fn try_suspend(&self) -> Result<Self> {
+        let start = self.to_string();
+        let end = HostState::Suspend.to_string();
         match self {
-            HostState::Insert => Err(Error::StateBlocked(self.to_string())),
-            HostState::Refine => Err(Error::StateBlocked(self.to_string())),
-            HostState::Connect => Err(Error::StateBlocked(self.to_string())),
-            HostState::Suspend => Err(Error::StateBlocked(self.to_string())),
-            HostState::Connected(_) => Err(Error::StateBlocked(self.to_string())),
+            HostState::Insert => Err(Error::HostStateBlocked(start, end)),
+            HostState::Refine => Err(Error::HostStateBlocked(start, end)),
+            HostState::Connect => Err(Error::HostStateBlocked(start, end)),
+            HostState::Suspend => Err(Error::HostStateBlocked(start, end)),
+            HostState::Connected(_) => Err(Error::HostStateBlocked(start, end)),
             HostState::Move(_) => Ok(HostState::Suspend),
         }
     }
@@ -786,9 +798,10 @@ impl Hosts {
 
         // Then ensure we aren't currently trying to add this peer to the hostlist.
         for (i, (addr, last_seen)) in filtered_addrs.iter().enumerate() {
-            if self.try_register(addr.clone(), HostState::Insert).await.is_err() {
-                debug!(target: "net::hosts::store_or_update()",
-                "{} is already registered. Skipping...", addr);
+            if let Err(e) = self.try_register(addr.clone(), HostState::Insert).await {
+                debug!(target: "net::hosts::store_or_update", "Cannot insert addr={}, err={}",
+                       addr.clone(), e);
+
                 continue
             }
 
@@ -808,10 +821,6 @@ impl Hosts {
 
         if registry.contains_key(&addr) {
             let current_state = registry.get(&addr).unwrap().clone();
-
-            debug!(target: "net::hosts::try_update_registry()",
-            "Attempting to update addr={} current_state={}, new_state={}",
-            addr, current_state, new_state.to_string());
 
             let result: Result<HostState> = match new_state {
                 HostState::Insert => current_state.try_insert(),
@@ -843,7 +852,10 @@ impl Hosts {
         for (host, last_seen) in hosts {
             debug!(target: "net::hosts::check_addrs()", "Starting checks");
 
-            if self.try_register(host.clone(), HostState::Connect).await.is_err() {
+            if let Err(e) = self.try_register(host.clone(), HostState::Connect).await {
+                debug!(target: "net::hosts::check_addrs", "Skipping addr={}, err={}",
+                       host.clone(), e);
+
                 continue
             }
 
@@ -986,7 +998,9 @@ impl Hosts {
                 continue
             }
 
-            // Reject this peer if it's already stored on the hostlist.
+            // Reject this peer if it's already stored on the Gold or White list.
+            // If it exists on the Grey list, we will simply update its last_seen
+            // field.
             if self.container.contains(HostColor::Gold as usize, addr_).await ||
                 self.container.contains(HostColor::White as usize, addr_).await
             {

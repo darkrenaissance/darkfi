@@ -172,7 +172,8 @@ impl ManualSession {
                 }
                 // This address is currently unavailable.
                 Err(e) => {
-                    debug!(target: "net::manual_session", "{} addr={}", e, addr.clone());
+                    debug!(target: "net::manual_session", "[P2P] Unable to connect to manual
+                           outbound [{}]: {}", addr.clone(), e);
                 }
             }
             // Wait and try again.
