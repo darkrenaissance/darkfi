@@ -62,8 +62,6 @@ pub struct Settings {
     pub channel_heartbeat_interval: u64,
     /// Allow localnet hosts
     pub localnet: bool,
-    /// Downgrade a peer to greylist if they've been quarantined N times
-    pub hosts_quarantine_limit: usize,
     /// Cooling off time for peer discovery when unsuccessful
     pub outbound_peer_discovery_cooloff_time: u64,
     /// Time between peer discovery attempts
@@ -102,7 +100,6 @@ impl Default for Settings {
             channel_handshake_timeout: 10,
             channel_heartbeat_interval: 30,
             localnet: false,
-            hosts_quarantine_limit: 50,
             outbound_peer_discovery_cooloff_time: 30,
             outbound_peer_discovery_attempt_time: 5,
             hostlist: "/dev/null".to_string(),
@@ -187,10 +184,6 @@ pub struct SettingsOpt {
     #[structopt(long)]
     pub localnet: bool,
 
-    /// Downgrade a peer to greylist if they've been quarantined N times
-    #[structopt(skip)]
-    pub hosts_quarantine_limit: Option<usize>,
-
     /// Cooling off time for peer discovery when unsuccessful
     #[structopt(skip)]
     pub outbound_peer_discovery_cooloff_time: Option<u64>,
@@ -248,9 +241,6 @@ impl From<SettingsOpt> for Settings {
                 .channel_heartbeat_interval
                 .unwrap_or(def.channel_heartbeat_interval),
             localnet: opt.localnet,
-            hosts_quarantine_limit: opt
-                .hosts_quarantine_limit
-                .unwrap_or(def.hosts_quarantine_limit),
             outbound_peer_discovery_cooloff_time: opt
                 .outbound_peer_discovery_cooloff_time
                 .unwrap_or(def.outbound_peer_discovery_cooloff_time),
