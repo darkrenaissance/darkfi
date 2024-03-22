@@ -117,10 +117,10 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     let charlie_forks = charlie.consensus.forks.read().await;
     if small_best {
         // If Charlie already had the small fork as its best,
-        // it will have a single fork with 2 blocks.
+        // it will have a single fork with 3 blocks.
         assert_eq!(charlie_forks.len(), 1);
-        assert_eq!(charlie_forks[0].proposals.len(), 2);
-        assert_eq!(charlie_forks[0].diffs.len(), 2);
+        assert_eq!(charlie_forks[0].proposals.len(), 3);
+        assert_eq!(charlie_forks[0].diffs.len(), 3);
     } else {
         // Charlie didn't originaly have the fork, but it
         // should be synced when its proposal was received
