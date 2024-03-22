@@ -490,6 +490,61 @@ impl BlockOrderStoreOverlay {
     }
 }
 
+/// Auxiliary structure used to keep track of block ranking information.
+/// Note: we only need height cummulative ranks, but we also keep its actual
+/// ranks, so we can verify the sequence and/or know specific block height
+/// ranks, if ever needed.
+#[derive(Debug)]
+pub struct BlockRanks {
+    /// Block target rank
+    pub target_rank: BigUint,
+    /// Height cummulative targets rank
+    pub targets_rank: BigUint,
+    /// Block hash rank
+    pub hash_rank: BigUint,
+    /// Height cummulative hashes rank
+    pub hashes_rank: BigUint,
+}
+
+impl BlockRanks {
+    pub fn new(
+        target_rank: BigUint,
+        targets_rank: BigUint,
+        hash_rank: BigUint,
+        hashes_rank: BigUint,
+    ) -> Self {
+        Self { target_rank, targets_rank, hash_rank, hashes_rank }
+    }
+}
+
+// Note: Doing all the imports here as this might get obselete if
+// we implemented Encodable/Decodable for num_bigint::BigUint.
+impl darkfi_serial::Encodable for BlockRanks {
+    fn encode<S: std::io::Write>(&self, mut s: S) -> std::io::Result<usize> {
+        let mut len = 0;
+        len += self.target_rank.to_bytes_be().encode(&mut s)?;
+        len += self.targets_rank.to_bytes_be().encode(&mut s)?;
+        len += self.hash_rank.to_bytes_be().encode(&mut s)?;
+        len += self.hashes_rank.to_bytes_be().encode(&mut s)?;
+        Ok(len)
+    }
+}
+
+impl darkfi_serial::Decodable for BlockRanks {
+    fn decode<D: std::io::Read>(mut d: D) -> std::io::Result<Self> {
+        let bytes: Vec<u8> = darkfi_serial::Decodable::decode(&mut d)?;
+        let target_rank: BigUint = BigUint::from_bytes_be(&bytes);
+        let bytes: Vec<u8> = darkfi_serial::Decodable::decode(&mut d)?;
+        let targets_rank: BigUint = BigUint::from_bytes_be(&bytes);
+        let bytes: Vec<u8> = darkfi_serial::Decodable::decode(&mut d)?;
+        let hash_rank: BigUint = BigUint::from_bytes_be(&bytes);
+        let bytes: Vec<u8> = darkfi_serial::Decodable::decode(&mut d)?;
+        let hashes_rank: BigUint = BigUint::from_bytes_be(&bytes);
+        let ret = Self { target_rank, targets_rank, hash_rank, hashes_rank };
+        Ok(ret)
+    }
+}
+
 /// Auxiliary structure used to keep track of block PoW difficulty information.
 /// Note: we only need height cummulative difficulty, but we also keep its actual
 /// difficulty, so we can verify the sequence and/or know specific block height
@@ -504,6 +559,8 @@ pub struct BlockDifficulty {
     pub difficulty: BigUint,
     /// Height cummulative difficulty (total + height difficulty)
     pub cummulative_difficulty: BigUint,
+    /// Block ranks
+    pub ranks: BlockRanks,
 }
 
 impl BlockDifficulty {
@@ -512,8 +569,20 @@ impl BlockDifficulty {
         timestamp: Timestamp,
         difficulty: BigUint,
         cummulative_difficulty: BigUint,
+        ranks: BlockRanks,
     ) -> Self {
-        Self { height, timestamp, difficulty, cummulative_difficulty }
+        Self { height, timestamp, difficulty, cummulative_difficulty, ranks }
+    }
+
+    /// Represents the genesis block difficulty
+    pub fn genesis(timestamp: Timestamp) -> Self {
+        let ranks = BlockRanks::new(
+            BigUint::from(0u64),
+            BigUint::from(0u64),
+            BigUint::from(0u64),
+            BigUint::from(0u64),
+        );
+        BlockDifficulty::new(0, timestamp, BigUint::from(0u64), BigUint::from(0u64), ranks)
     }
 }
 
@@ -526,6 +595,7 @@ impl darkfi_serial::Encodable for BlockDifficulty {
         len += self.timestamp.encode(&mut s)?;
         len += self.difficulty.to_bytes_be().encode(&mut s)?;
         len += self.cummulative_difficulty.to_bytes_be().encode(&mut s)?;
+        len += self.ranks.encode(&mut s)?;
         Ok(len)
     }
 }
@@ -538,7 +608,8 @@ impl darkfi_serial::Decodable for BlockDifficulty {
         let difficulty: BigUint = BigUint::from_bytes_be(&bytes);
         let bytes: Vec<u8> = darkfi_serial::Decodable::decode(&mut d)?;
         let cummulative_difficulty: BigUint = BigUint::from_bytes_be(&bytes);
-        let ret = Self { height, timestamp, difficulty, cummulative_difficulty };
+        let ranks: BlockRanks = darkfi_serial::Decodable::decode(&mut d)?;
+        let ret = Self { height, timestamp, difficulty, cummulative_difficulty, ranks };
         Ok(ret)
     }
 }
@@ -603,6 +674,15 @@ impl BlockDifficultyStore {
         }
 
         Ok(ret)
+    }
+
+    /// Fetch the last record in the tree, based on the `Ord`
+    /// implementation for `Vec<u8>`. If the tree is empty,
+    /// returns `None`.
+    pub fn get_last(&self) -> Result<Option<BlockDifficulty>> {
+        let Some(found) = self.0.last()? else { return Ok(None) };
+        let block_difficulty = deserialize(&found.1)?;
+        Ok(Some(block_difficulty))
     }
 
     /// Fetch the last N records from the block difficulties store, in order.

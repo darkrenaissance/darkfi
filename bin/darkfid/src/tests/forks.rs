@@ -17,7 +17,7 @@
  */
 
 use darkfi::{
-    blockchain::Blockchain,
+    blockchain::{BlockInfo, Blockchain},
     validator::{consensus::Fork, pow::PoWModule},
     Result,
 };
@@ -26,38 +26,55 @@ use darkfi::{
 fn forks() -> Result<()> {
     smol::block_on(async {
         // Dummy records we will insert
-        let record0 = blake3::hash(b"Let there be dark!");
-        let record1 = blake3::hash(b"Never skip brain day.");
+        let record1 = blake3::hash(b"Let there be dark!");
+        let record2 = blake3::hash(b"Never skip brain day.");
 
         // Create a temporary blockchain and a PoW module
         let blockchain = Blockchain::new(&sled::Config::new().temporary(true).open()?)?;
         let module = PoWModule::new(blockchain.clone(), 90, None)?;
 
+        // Generate and insert default genesis block
+        let genesis_block = BlockInfo::default();
+        blockchain.add_block(&genesis_block)?;
+        let genesis_block_hash = genesis_block.hash()?;
+
         // Create a fork
         let fork = Fork::new(blockchain.clone(), module).await?;
 
         // Add a dummy record to fork
-        fork.overlay.lock().unwrap().order.insert(&[0], &[record0])?;
+        fork.overlay.lock().unwrap().order.insert(&[1], &[record1])?;
 
         // Verify blockchain doesn't contain the record
-        assert_eq!(blockchain.order.get(&[0], false)?, [None]);
-        assert_eq!(fork.overlay.lock().unwrap().order.get(&[0], true)?, [Some(record0)]);
+        assert_eq!(blockchain.order.get(&[0, 1], false)?, [Some(genesis_block_hash), None]);
+        assert_eq!(
+            fork.overlay.lock().unwrap().order.get(&[0, 1], true)?,
+            [Some(genesis_block_hash), Some(record1)]
+        );
 
         // Now we are going to clone the fork
         let fork_clone = fork.full_clone()?;
 
-        // Verify it cointains the original record
-        assert_eq!(fork_clone.overlay.lock().unwrap().order.get(&[0], true)?, [Some(record0)]);
-
-        // Add another dummy record to cloned fork
-        fork_clone.overlay.lock().unwrap().order.insert(&[1], &[record1])?;
-
-        // Verify blockchain and original fork don't contain the second record
-        assert_eq!(blockchain.order.get(&[0, 1], false)?, [None, None]);
-        assert_eq!(fork.overlay.lock().unwrap().order.get(&[0, 1], false)?, [Some(record0), None]);
+        // Verify it contains the original records
         assert_eq!(
             fork_clone.overlay.lock().unwrap().order.get(&[0, 1], true)?,
-            [Some(record0), Some(record1)]
+            [Some(genesis_block_hash), Some(record1)]
+        );
+
+        // Add another dummy record to cloned fork
+        fork_clone.overlay.lock().unwrap().order.insert(&[2], &[record2])?;
+
+        // Verify blockchain and original fork don't contain the second record
+        assert_eq!(
+            blockchain.order.get(&[0, 1, 2], false)?,
+            [Some(genesis_block_hash), None, None]
+        );
+        assert_eq!(
+            fork.overlay.lock().unwrap().order.get(&[0, 1, 2], false)?,
+            [Some(genesis_block_hash), Some(record1), None]
+        );
+        assert_eq!(
+            fork_clone.overlay.lock().unwrap().order.get(&[0, 1, 2], true)?,
+            [Some(genesis_block_hash), Some(record1), Some(record2)]
         );
 
         Ok(())

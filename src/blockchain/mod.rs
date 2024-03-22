@@ -28,8 +28,8 @@ use crate::{tx::Transaction, Error, Result};
 /// Block related definitions and storage implementations
 pub mod block_store;
 pub use block_store::{
-    Block, BlockDifficultyStore, BlockDifficultyStoreOverlay, BlockInfo, BlockOrderStore,
-    BlockOrderStoreOverlay, BlockStore, BlockStoreOverlay,
+    Block, BlockDifficulty, BlockDifficultyStore, BlockDifficultyStoreOverlay, BlockInfo,
+    BlockOrderStore, BlockOrderStoreOverlay, BlockStore, BlockStoreOverlay,
 };
 
 /// Header definition and storage implementation
@@ -223,6 +223,12 @@ impl Blockchain {
         self.order.get_first()
     }
 
+    /// Retrieve genesis (first) block info.
+    pub fn genesis_block(&self) -> Result<BlockInfo> {
+        let (_, hash) = self.genesis()?;
+        Ok(self.get_blocks_by_hash(&[hash])?[0].clone())
+    }
+
     /// Retrieve the last block height and hash.
     pub fn last(&self) -> Result<(u64, blake3::Hash)> {
         self.order.get_last()
@@ -232,6 +238,17 @@ impl Blockchain {
     pub fn last_block(&self) -> Result<BlockInfo> {
         let (_, hash) = self.last()?;
         Ok(self.get_blocks_by_hash(&[hash])?[0].clone())
+    }
+
+    /// Retrieve the last block difficulty. If the tree is empty,
+    /// returns `BlockDifficulty::genesis` difficulty.
+    pub fn last_block_difficulty(&self) -> Result<BlockDifficulty> {
+        if let Some(found) = self.difficulties.get_last()? {
+            return Ok(found)
+        }
+
+        let genesis_block = self.genesis_block()?;
+        Ok(BlockDifficulty::genesis(genesis_block.header.timestamp))
     }
 
     /// Check if block order for the given height is in the database.

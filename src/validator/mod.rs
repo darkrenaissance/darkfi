@@ -26,7 +26,7 @@ use smol::lock::RwLock;
 
 use crate::{
     blockchain::{
-        block_store::{BlockDifficulty, BlockInfo},
+        block_store::{BlockDifficulty, BlockInfo, BlockRanks},
         Blockchain, BlockchainOverlay,
     },
     error::TxVerifyFailed,
@@ -54,7 +54,7 @@ pub mod fees;
 
 /// Helper utilities
 pub mod utils;
-use utils::deploy_native_contracts;
+use utils::{block_rank, deploy_native_contracts};
 
 /// Configuration for initializing [`Validator`]
 #[derive(Clone)]
@@ -400,6 +400,11 @@ impl Validator {
         // Retrieve last block
         let mut previous = &overlay.lock().unwrap().last_block()?;
 
+        // Retrieve last block difficulty to access current ranks
+        let last_difficulty = self.blockchain.last_block_difficulty()?;
+        let mut current_targets_rank = last_difficulty.ranks.targets_rank;
+        let mut current_hashes_rank = last_difficulty.ranks.hashes_rank;
+
         // Grab current PoW module to validate each block
         let mut module = self.consensus.module.read().await.clone();
 
@@ -421,14 +426,31 @@ impl Validator {
                 return Err(Error::BlockIsInvalid(block.hash()?.to_string()))
             };
 
-            // Generate block difficulty
-            let difficulty = module.next_difficulty()?;
-            let cummulative_difficulty = module.cummulative_difficulty.clone() + difficulty.clone();
+            // Grab next mine target and difficulty
+            let (next_target, next_difficulty) = module.next_mine_target_and_difficulty()?;
+
+            // Calculate block rank
+            let (target_distance_sq, hash_distance_sq) = block_rank(block, &next_target)?;
+
+            // Update current ranks
+            current_targets_rank += target_distance_sq.clone();
+            current_hashes_rank += hash_distance_sq.clone();
+
+            // Generate block difficulty and update PoW module
+            let cummulative_difficulty =
+                module.cummulative_difficulty.clone() + next_difficulty.clone();
+            let ranks = BlockRanks::new(
+                target_distance_sq,
+                current_targets_rank.clone(),
+                hash_distance_sq,
+                current_hashes_rank.clone(),
+            );
             let block_difficulty = BlockDifficulty::new(
                 block.header.height,
                 block.header.timestamp,
-                difficulty,
+                next_difficulty,
                 cummulative_difficulty,
+                ranks,
             );
             module.append_difficulty(&overlay, block_difficulty)?;
 

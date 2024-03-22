@@ -78,9 +78,9 @@ Proof of Work algorithm lowers the difficulty target as hashpower grows.
 This means that blocks will have to be mined for a lower target, therefore
 rank higher, as they go further away from `MAX_INT`.
 
-Similar to blocks, forks rank is a tuple, with the first part being the
+Similar to blocks, blockchain/forks rank is a tuple, with the first part being the
 sum of its block's squared target distances, and the second being the sum of
-their squared hash distances Squared distances are used to disproportionately
+their squared hash distances. Squared distances are used to disproportionately
 favors smaller targets, with the idea being that it will be harder to trigger
 a longer reorg between forks. When we compare forks, we first check the first
 sum, and if its tied, we use the second as the tie breaker, since we know it

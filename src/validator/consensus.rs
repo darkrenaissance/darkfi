@@ -27,8 +27,8 @@ use smol::lock::RwLock;
 
 use crate::{
     blockchain::{
-        block_store::BlockDifficulty, BlockInfo, Blockchain, BlockchainOverlay,
-        BlockchainOverlayPtr, Header,
+        block_store::{BlockDifficulty, BlockRanks},
+        BlockInfo, Blockchain, BlockchainOverlay, BlockchainOverlayPtr, Header,
     },
     tx::Transaction,
     util::time::Timestamp,
@@ -478,6 +478,10 @@ impl Fork {
         let mempool =
             blockchain.get_pending_txs()?.iter().map(|tx| blake3::hash(&serialize(tx))).collect();
         let overlay = BlockchainOverlay::new(&blockchain)?;
+        // Retrieve last block difficulty to access current ranks
+        let last_difficulty = blockchain.last_block_difficulty()?;
+        let targets_rank = last_difficulty.ranks.targets_rank;
+        let hashes_rank = last_difficulty.ranks.hashes_rank;
         Ok(Self {
             blockchain,
             overlay,
@@ -485,8 +489,8 @@ impl Fork {
             proposals: vec![],
             diffs: vec![],
             mempool,
-            targets_rank: BigUint::from(0u64),
-            hashes_rank: BigUint::from(0u64),
+            targets_rank,
+            hashes_rank,
         })
     }
 
@@ -542,20 +546,27 @@ impl Fork {
         // Calculate block rank
         let (target_distance_sq, hash_distance_sq) = block_rank(&proposal.block, &next_target)?;
 
+        // Update fork ranks
+        self.targets_rank += target_distance_sq.clone();
+        self.hashes_rank += hash_distance_sq.clone();
+
         // Generate block difficulty and update PoW module
         let cummulative_difficulty =
             self.module.cummulative_difficulty.clone() + next_difficulty.clone();
+        let ranks = BlockRanks::new(
+            target_distance_sq,
+            self.targets_rank.clone(),
+            hash_distance_sq,
+            self.hashes_rank.clone(),
+        );
         let block_difficulty = BlockDifficulty::new(
             proposal.block.header.height,
             proposal.block.header.timestamp,
             next_difficulty,
             cummulative_difficulty,
+            ranks,
         );
         self.module.append_difficulty(&self.overlay, block_difficulty)?;
-
-        // Update fork ranks
-        self.targets_rank += target_distance_sq;
-        self.hashes_rank += hash_distance_sq;
 
         // Push proposal's hash
         self.proposals.push(proposal.hash);
