@@ -21,19 +21,24 @@ use std::{fs::File, io::Write};
 use clap::Parser;
 use darkfi::{
     blockchain::{
-        block_store::{Block, BlockOrderStore, BlockProducer, BlockStore},
+        block_store::{
+            Block, BlockDifficulty, BlockDifficultyStore, BlockOrderStore, BlockRanks, BlockStore,
+        },
+        contract_store::{ContractStateStore, WasmStore},
         header_store::{Header, HeaderStore},
-        slot_store::SlotStore,
-        tx_store::TxStore,
+        tx_store::{PendingTxOrderStore, PendingTxStore, TxStore},
         Blockchain,
     },
     cli_desc,
-    consensus::constants::EPOCH_LENGTH,
     tx::Transaction,
     util::{path::expand_path, time::Timestamp},
     Result,
 };
-use darkfi_sdk::crypto::MerkleNode;
+use darkfi_sdk::{
+    blockchain::block_epoch,
+    crypto::{ContractId, MerkleTree},
+};
+use num_bigint::BigUint;
 
 #[derive(Parser)]
 #[command(about = cli_desc!())]
@@ -42,11 +47,11 @@ struct Args {
     /// Path containing the node folders
     path: String,
 
-    #[arg(short, long, default_values = ["darkfid0", "faucetd"])]
+    #[arg(short, long, default_values = ["darkfid"])]
     /// Node folder name (supports multiple values)
     node: Vec<String>,
 
-    #[arg(short, long, default_value = "/blockchain/testnet")]
+    #[arg(short, long, default_value = "")]
     /// Node blockchain folder
     blockchain: String,
 
@@ -56,39 +61,27 @@ struct Args {
 }
 
 #[derive(Debug)]
-struct BlockProducerInfo {
-    _signature: String,
-    _proposal: Transaction,
-}
-
-impl BlockProducerInfo {
-    pub fn new(producer: &BlockProducer) -> BlockProducerInfo {
-        let _signature = format!("{:?}", producer.signature);
-        let _proposal = producer.proposal.clone();
-        BlockProducerInfo { _signature, _proposal }
-    }
-}
-
-#[derive(Debug)]
 struct HeaderInfo {
     _hash: blake3::Hash,
     _version: u8,
     _previous: blake3::Hash,
-    _epoch: u64,
-    _slot: u64,
+    _height: u64,
     _timestamp: Timestamp,
-    _root: MerkleNode,
+    _nonce: u64,
+    _tree: MerkleTree,
 }
 
 impl HeaderInfo {
     pub fn new(_hash: blake3::Hash, header: &Header) -> HeaderInfo {
-        let _version = header.version;
-        let _previous = header.previous;
-        let _epoch = header.epoch;
-        let _slot = header.slot;
-        let _timestamp = header.timestamp;
-        let _root = header.root;
-        HeaderInfo { _hash, _version, _previous, _epoch, _slot, _timestamp, _root }
+        HeaderInfo {
+            _hash,
+            _version: header.version,
+            _previous: header.previous,
+            _height: header.height,
+            _timestamp: header.timestamp,
+            _nonce: header.nonce,
+            _tree: header.tree.clone(),
+        }
     }
 }
 
@@ -104,7 +97,7 @@ impl HeaderStoreInfo {
         match result {
             Ok(iter) => {
                 for (hash, header) in iter.iter() {
-                    _headers.push(HeaderInfo::new(hash.clone(), &header));
+                    _headers.push(HeaderInfo::new(*hash, header));
                 }
             }
             Err(e) => println!("Error: {:?}", e),
@@ -116,21 +109,19 @@ impl HeaderStoreInfo {
 #[derive(Debug)]
 struct BlockInfo {
     _hash: blake3::Hash,
-    _magic: [u8; 4],
     _header: blake3::Hash,
     _txs: Vec<blake3::Hash>,
-    _producer: BlockProducerInfo,
-    _slots: Vec<u64>,
+    _signature: String,
 }
 
 impl BlockInfo {
     pub fn new(_hash: blake3::Hash, block: &Block) -> BlockInfo {
-        let _magic = block.magic;
-        let _header = block.header;
-        let _txs = block.txs.clone();
-        let _producer = BlockProducerInfo::new(&block.producer);
-        let _slots = block.slots.clone();
-        BlockInfo { _hash, _magic, _header, _txs, _producer, _slots }
+        BlockInfo {
+            _hash,
+            _header: block.header,
+            _txs: block.txs.clone(),
+            _signature: format!("{:?}", block.signature),
+        }
     }
 }
 
@@ -146,7 +137,7 @@ impl BlockInfoChain {
         match result {
             Ok(iter) => {
                 for (hash, block) in iter.iter() {
-                    _blocks.push(BlockInfo::new(hash.clone(), &block));
+                    _blocks.push(BlockInfo::new(*hash, block));
                 }
             }
             Err(e) => println!("Error: {:?}", e),
@@ -157,13 +148,13 @@ impl BlockInfoChain {
 
 #[derive(Debug)]
 struct OrderInfo {
-    _slot: u64,
+    _height: u64,
     _hash: blake3::Hash,
 }
 
 impl OrderInfo {
-    pub fn new(_slot: u64, _hash: blake3::Hash) -> OrderInfo {
-        OrderInfo { _slot, _hash }
+    pub fn new(_height: u64, _hash: blake3::Hash) -> OrderInfo {
+        OrderInfo { _height, _hash }
     }
 }
 
@@ -178,8 +169,8 @@ impl BlockOrderStoreInfo {
         let result = orderstore.get_all();
         match result {
             Ok(iter) => {
-                for (slot, hash) in iter.iter() {
-                    _order.push(OrderInfo::new(slot.clone(), hash.clone()));
+                for (height, hash) in iter.iter() {
+                    _order.push(OrderInfo::new(*height, *hash));
                 }
             }
             Err(e) => println!("Error: {:?}", e),
@@ -189,42 +180,63 @@ impl BlockOrderStoreInfo {
 }
 
 #[derive(Debug)]
-struct SlotInfo {
-    _id: u64,
-    _eta: String,
-    _sigma1: String,
-    _sigma2: String,
+struct BlockRanksInfo {
+    _target_rank: BigUint,
+    _targets_rank: BigUint,
+    _hash_rank: BigUint,
+    _hashes_rank: BigUint,
 }
 
-impl SlotInfo {
-    pub fn new(_id: u64, _eta: String, _sigma1: String, _sigma2: String) -> SlotInfo {
-        SlotInfo { _id, _eta, _sigma1, _sigma2 }
+impl BlockRanksInfo {
+    pub fn new(ranks: &BlockRanks) -> BlockRanksInfo {
+        BlockRanksInfo {
+            _target_rank: ranks.target_rank.clone(),
+            _targets_rank: ranks.targets_rank.clone(),
+            _hash_rank: ranks.hash_rank.clone(),
+            _hashes_rank: ranks.hashes_rank.clone(),
+        }
     }
 }
 
 #[derive(Debug)]
-struct SlotStoreInfo {
-    _slots: Vec<SlotInfo>,
+struct BlockDifficultyInfo {
+    _height: u64,
+    _timestamp: Timestamp,
+    _difficulty: BigUint,
+    _cummulative_difficulty: BigUint,
+    _ranks: BlockRanksInfo,
 }
 
-impl SlotStoreInfo {
-    pub fn new(slot_store: &SlotStore) -> SlotStoreInfo {
-        let mut _slots = Vec::new();
-        let result = slot_store.get_all();
+impl BlockDifficultyInfo {
+    pub fn new(difficulty: &BlockDifficulty) -> BlockDifficultyInfo {
+        BlockDifficultyInfo {
+            _height: difficulty.height,
+            _timestamp: difficulty.timestamp,
+            _difficulty: difficulty.difficulty.clone(),
+            _cummulative_difficulty: difficulty.cummulative_difficulty.clone(),
+            _ranks: BlockRanksInfo::new(&difficulty.ranks),
+        }
+    }
+}
+
+#[derive(Debug)]
+struct BlockDifficultyStoreInfo {
+    _difficulties: Vec<BlockDifficultyInfo>,
+}
+
+impl BlockDifficultyStoreInfo {
+    pub fn new(difficultiesstore: &BlockDifficultyStore) -> BlockDifficultyStoreInfo {
+        let mut _difficulties = Vec::new();
+        let result = difficultiesstore.get_all();
         match result {
             Ok(iter) => {
-                for slot in iter.iter() {
-                    _slots.push(SlotInfo::new(
-                        slot.id,
-                        format!("{:?}", slot.previous_eta),
-                        format!("{:?}", slot.sigma1),
-                        format!("{:?}", slot.sigma2),
-                    ));
+                for (_, difficulty) in iter.iter() {
+                    _difficulties.push(BlockDifficultyInfo::new(difficulty));
                 }
             }
             Err(e) => println!("Error: {:?}", e),
         }
-        SlotStoreInfo { _slots }
+        BlockDifficultyStoreInfo { _difficulties }
     }
 }
 
@@ -236,8 +248,7 @@ struct TxInfo {
 
 impl TxInfo {
     pub fn new(_hash: blake3::Hash, tx: &Transaction) -> TxInfo {
-        let _payload = tx.clone();
-        TxInfo { _hash, _payload }
+        TxInfo { _hash, _payload: tx.clone() }
     }
 }
 
@@ -253,7 +264,7 @@ impl TxStoreInfo {
         match result {
             Ok(iter) => {
                 for (hash, tx) in iter.iter() {
-                    _transactions.push(TxInfo::new(hash.clone(), &tx));
+                    _transactions.push(TxInfo::new(*hash, tx));
                 }
             }
             Err(e) => println!("Error: {:?}", e),
@@ -263,22 +274,140 @@ impl TxStoreInfo {
 }
 
 #[derive(Debug)]
+struct PendingTxStoreInfo {
+    _transactions: Vec<TxInfo>,
+}
+
+impl PendingTxStoreInfo {
+    pub fn new(pendingtxstore: &PendingTxStore) -> PendingTxStoreInfo {
+        let mut _transactions = Vec::new();
+        let result = pendingtxstore.get_all();
+        match result {
+            Ok(iter) => {
+                for (hash, tx) in iter.iter() {
+                    _transactions.push(TxInfo::new(*hash, tx));
+                }
+            }
+            Err(e) => println!("Error: {:?}", e),
+        }
+        PendingTxStoreInfo { _transactions }
+    }
+}
+
+#[derive(Debug)]
+struct PendingTxOrderStoreInfo {
+    _order: Vec<OrderInfo>,
+}
+
+impl PendingTxOrderStoreInfo {
+    pub fn new(orderstore: &PendingTxOrderStore) -> PendingTxOrderStoreInfo {
+        let mut _order = Vec::new();
+        let result = orderstore.get_all();
+        match result {
+            Ok(iter) => {
+                for (height, hash) in iter.iter() {
+                    _order.push(OrderInfo::new(*height, *hash));
+                }
+            }
+            Err(e) => println!("Error: {:?}", e),
+        }
+        PendingTxOrderStoreInfo { _order }
+    }
+}
+
+#[derive(Debug)]
+struct ContractStateInfo {
+    _id: ContractId,
+    _state_hashes: Vec<blake3::Hash>,
+}
+
+impl ContractStateInfo {
+    pub fn new(_id: ContractId, state_hashes: &[blake3::Hash]) -> ContractStateInfo {
+        ContractStateInfo { _id, _state_hashes: state_hashes.to_vec() }
+    }
+}
+
+#[derive(Debug)]
+struct ContractStateStoreInfo {
+    _contracts: Vec<ContractStateInfo>,
+}
+
+impl ContractStateStoreInfo {
+    pub fn new(contractsstore: &ContractStateStore) -> ContractStateStoreInfo {
+        let mut _contracts = Vec::new();
+        let result = contractsstore.get_all();
+        match result {
+            Ok(iter) => {
+                for (id, state_hash) in iter.iter() {
+                    _contracts.push(ContractStateInfo::new(*id, state_hash));
+                }
+            }
+            Err(e) => println!("Error: {:?}", e),
+        }
+        ContractStateStoreInfo { _contracts }
+    }
+}
+
+#[derive(Debug)]
+struct WasmInfo {
+    _id: ContractId,
+    _bincode_hash: blake3::Hash,
+}
+
+impl WasmInfo {
+    pub fn new(_id: ContractId, bincode: &[u8]) -> WasmInfo {
+        let _bincode_hash = blake3::hash(bincode);
+        WasmInfo { _id, _bincode_hash }
+    }
+}
+
+#[derive(Debug)]
+struct WasmStoreInfo {
+    _wasm_bincodes: Vec<WasmInfo>,
+}
+
+impl WasmStoreInfo {
+    pub fn new(wasmstore: &WasmStore) -> WasmStoreInfo {
+        let mut _wasm_bincodes = Vec::new();
+        let result = wasmstore.get_all();
+        match result {
+            Ok(iter) => {
+                for (id, bincode) in iter.iter() {
+                    _wasm_bincodes.push(WasmInfo::new(*id, bincode));
+                }
+            }
+            Err(e) => println!("Error: {:?}", e),
+        }
+        WasmStoreInfo { _wasm_bincodes }
+    }
+}
+
+#[derive(Debug)]
 struct BlockchainInfo {
     _headers: HeaderStoreInfo,
     _blocks: BlockInfoChain,
     _order: BlockOrderStoreInfo,
-    _slots: SlotStoreInfo,
+    _difficulties: BlockDifficultyStoreInfo,
     _transactions: TxStoreInfo,
+    _pending_txs: PendingTxStoreInfo,
+    _pending_txs_order: PendingTxOrderStoreInfo,
+    _contracts: ContractStateStoreInfo,
+    _wasm_bincode: WasmStoreInfo,
 }
 
 impl BlockchainInfo {
     pub fn new(blockchain: &Blockchain) -> BlockchainInfo {
-        let _headers = HeaderStoreInfo::new(&blockchain.headers);
-        let _blocks = BlockInfoChain::new(&blockchain.blocks);
-        let _order = BlockOrderStoreInfo::new(&blockchain.order);
-        let _slots = SlotStoreInfo::new(&blockchain.slots);
-        let _transactions = TxStoreInfo::new(&blockchain.transactions);
-        BlockchainInfo { _headers, _blocks, _order, _slots, _transactions }
+        BlockchainInfo {
+            _headers: HeaderStoreInfo::new(&blockchain.headers),
+            _blocks: BlockInfoChain::new(&blockchain.blocks),
+            _order: BlockOrderStoreInfo::new(&blockchain.order),
+            _difficulties: BlockDifficultyStoreInfo::new(&blockchain.difficulties),
+            _transactions: TxStoreInfo::new(&blockchain.transactions),
+            _pending_txs: PendingTxStoreInfo::new(&blockchain.pending_txs),
+            _pending_txs_order: PendingTxOrderStoreInfo::new(&blockchain.pending_txs_order),
+            _contracts: ContractStateStoreInfo::new(&blockchain.contracts),
+            _wasm_bincode: WasmStoreInfo::new(&blockchain.wasm_bincode),
+        }
     }
 }
 
@@ -291,19 +420,18 @@ fn statistics(folder: &str, node: &str, blockchain: &str) -> Result<()> {
     // Initialize or load sled database
     let path = folder.to_owned() + blockchain;
     let db_path = expand_path(&path).unwrap();
-    let sled_db = sled::open(&db_path)?;
+    let sled_db = sled::open(db_path)?;
 
     // Retrieve statistics
     let blockchain = Blockchain::new(&sled_db)?;
-    let slot = blockchain.last_slot()?.id;
-    let epoch = slot / EPOCH_LENGTH as u64;
-    let (_, block) = blockchain.last()?;
+    let (height, block) = blockchain.last()?;
+    let epoch = block_epoch(height);
     let blocks = blockchain.len();
     let txs = blockchain.txs_len();
     drop(sled_db);
 
     // Print statistics
-    println!("Latest slot: {slot}");
+    println!("Latest height: {height}");
     println!("Epoch: {epoch}");
     println!("Latest block: {block}");
     println!("Total blocks: {blocks}");
@@ -321,7 +449,7 @@ fn export(folder: &str, node: &str, blockchain: &str) -> Result<()> {
     // Initialize or load sled database
     let path = folder.to_owned() + blockchain;
     let db_path = expand_path(&path).unwrap();
-    let sled_db = sled::open(&db_path)?;
+    let sled_db = sled::open(db_path)?;
 
     // Data export
     let blockchain = Blockchain::new(&sled_db)?;
@@ -329,7 +457,7 @@ fn export(folder: &str, node: &str, blockchain: &str) -> Result<()> {
     let info_string = format!("{:#?}", info);
     let file_name = node.to_owned() + "_db";
     let mut file = File::create(file_name.clone())?;
-    file.write(info_string.as_bytes())?;
+    file.write_all(info_string.as_bytes())?;
     drop(sled_db);
     println!("Data exported to file: {file_name}");
 
