@@ -921,9 +921,12 @@ impl Hosts {
     }
 
     /// Add a channel to the set of connected channels
-    pub async fn register_channel(&self, channel: ChannelPtr) -> Result<()> {
+    pub async fn register_channel(&self, channel: ChannelPtr) {
         let address = channel.address().clone();
 
+        // This will panic if we are already connected to this peer, this peer
+        // is suspended, or this peer is currently being inserted into the hostlist.
+        // None of these scenarios should ever happen.
         self.try_register(address.clone(), HostState::Connected(channel.clone())).await.unwrap();
 
         // Notify that channel processing was successful
@@ -931,8 +934,6 @@ impl Hosts {
 
         let mut last_online = self.last_connection.write().await;
         *last_online = Instant::now();
-
-        Ok(())
     }
 
     pub async fn subscribe_store(&self) -> Subscription<usize> {

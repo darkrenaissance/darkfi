@@ -19,7 +19,7 @@
 use std::sync::{Arc, Weak};
 
 use async_trait::async_trait;
-use log::{debug, warn};
+use log::debug;
 use smol::Executor;
 
 use super::{channel::ChannelPtr, p2p::P2pPtr, protocol::ProtocolVersion};
@@ -145,11 +145,7 @@ pub trait Session: Sync {
         protocol_version.run(executor.clone()).await?;
 
         // Attempt to add channel to registry
-        if let Err(e) = self.p2p().hosts().register_channel(channel.clone()).await {
-            warn!(target: "net::session::perform_handshake_protocols()",
-            "Couldn't add channel {} to registry! {}", channel.address(), e);
-            return Err(e)
-        }
+        self.p2p().hosts().register_channel(channel.clone()).await;
 
         // Subscribe to stop, so we can remove from registry
         executor.spawn(remove_sub_on_stop(self.p2p(), channel)).detach();
