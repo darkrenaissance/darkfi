@@ -28,7 +28,7 @@ use crate::{
     Error, Result,
 };
 
-use super::SledDbOverlayPtr;
+use super::{parse_record, SledDbOverlayPtr};
 
 const SLED_CONTRACTS_TREE: &[u8] = b"_contracts";
 const SLED_BINCODE_TREE: &[u8] = b"_wasm_bincode";
@@ -61,6 +61,21 @@ impl WasmStore {
         }
 
         Err(Error::WasmBincodeNotFound)
+    }
+
+    /// Retrieve all wasm bincodes from the `WasmStore` in the form of a tuple
+    /// (`contract_id`, `bincode`).
+    /// Be careful as this will try to load everything in memory.
+    pub fn get_all(&self) -> Result<Vec<(ContractId, Vec<u8>)>> {
+        let mut bincodes = vec![];
+
+        for bincode in self.0.iter() {
+            let bincode = bincode.unwrap();
+            let contract_id = deserialize(&bincode.0)?;
+            bincodes.push((contract_id, bincode.1.to_vec()));
+        }
+
+        Ok(bincodes)
     }
 }
 
@@ -220,6 +235,19 @@ impl ContractStateStore {
         let vk = VerifyingKey::read::<Cursor<Vec<u8>>, ZkCircuit>(&mut vk_buf, circuit).unwrap();
 
         Ok((zkbin, vk))
+    }
+
+    /// Retrieve all contract states from the `ContractStateStore` in the form of a tuple
+    /// (`contract_id`, `state_hashes`).
+    /// Be careful as this will try to load everything in memory.
+    pub fn get_all(&self) -> Result<Vec<(ContractId, Vec<blake3::Hash>)>> {
+        let mut contracts = vec![];
+
+        for contract in self.0.iter() {
+            contracts.push(parse_record(contract.unwrap())?);
+        }
+
+        Ok(contracts)
     }
 }
 
