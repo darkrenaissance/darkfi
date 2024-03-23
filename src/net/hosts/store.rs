@@ -852,10 +852,19 @@ impl Hosts {
         for (host, last_seen) in hosts {
             debug!(target: "net::hosts::check_addrs()", "Starting checks");
 
+            // Print a warning if we are trying to connect to a seed node in
+            // Outbound session. This shouldn't happen as we reject configured
+            // seed nodes from entering our hostlist in filter_addrs().
+            if self.settings.seeds.contains(&host) {
+                warn!(target: "net::hosts::check_addrs",
+                      "Seed addr={} has entered the hostlist! Skipping",
+                      host.clone());
+                continue
+            }
+
             if let Err(e) = self.try_register(host.clone(), HostState::Connect).await {
                 debug!(target: "net::hosts::check_addrs", "Skipping addr={}, err={}",
                        host.clone(), e);
-
                 continue
             }
 
@@ -988,6 +997,13 @@ impl Hosts {
                 addr_.cannot_be_a_base() ||
                 addr_.path_segments().is_some()
             {
+                continue
+            }
+
+            // Configured seeds should never enter the hostlist.
+            if self.settings.seeds.contains(addr_) {
+                debug!(target: "net::hosts::filter_addresses()",
+                    "[{}] is a configured seed. Skipping", addr_);
                 continue
             }
 

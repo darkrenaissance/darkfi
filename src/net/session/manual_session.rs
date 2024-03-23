@@ -32,7 +32,7 @@
 use std::{sync::Arc, time::UNIX_EPOCH};
 
 use async_trait::async_trait;
-use log::{debug, info, warn};
+use log::{debug, error, info, warn};
 use smol::lock::Mutex;
 use url::Url;
 
@@ -106,6 +106,14 @@ impl ManualSession {
                 "[P2P] Connecting to manual outbound [{}] (attempt #{})",
                 addr, tried_attempts,
             );
+
+            // Do not establish a connection to a host that is also configured as a seed.
+            // This indicates a user misconfiguration.
+            if settings.seeds.contains(&addr) {
+                error!(target: "net::manual_session", 
+                       "[P2P] Suspending manual connection to seed [{}]", addr.clone());
+                return Ok(())
+            }
 
             match self.p2p().hosts().try_register(addr.clone(), HostState::Connect).await {
                 Ok(_) => {
