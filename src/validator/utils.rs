@@ -146,12 +146,12 @@ pub fn median(mut v: Vec<u64>) -> u64 {
     }
 }
 
-/// Given a proposal, find the index of the fork chain it extends, along with the specific
+/// Given a proposal, find the index of a fork chain it extends, along with the specific
 /// extended proposal index. Additionally, check that proposal doesn't already exists in any
 /// fork chain.
 pub fn find_extended_fork_index(forks: &[Fork], proposal: &Proposal) -> Result<(usize, usize)> {
     // Grab provided proposal hash
-    let proposal_hash = proposal.block.hash()?;
+    let proposal_hash = proposal.hash;
 
     // Keep track of fork and proposal indexes
     let (mut fork_index, mut proposal_index) = (None, None);
@@ -167,10 +167,6 @@ pub fn find_extended_fork_index(forks: &[Fork], proposal: &Proposal) -> Result<(
 
             // Check if proposal extends this fork
             if &proposal.block.header.previous == p_hash {
-                // Proposal must only extend a single fork
-                if fork_index.is_some() {
-                    return Err(Error::ProposalAlreadyExists)
-                }
                 (fork_index, proposal_index) = (Some(f_index), Some(p_index));
             }
         }

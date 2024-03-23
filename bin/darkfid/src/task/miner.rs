@@ -19,7 +19,7 @@
 use darkfi::{
     blockchain::BlockInfo,
     rpc::{jsonrpc::JsonNotification, util::JsonValue},
-    system::{sleep, Subscription},
+    system::Subscription,
     tx::{ContractCallLeaf, Transaction, TransactionBuilder},
     util::encoding::base64,
     validator::{
@@ -202,8 +202,6 @@ async fn wait_stop_signal(stop_signal: &Receiver<()>) -> Result<()> {
 
     // Wait for listener signal
     stop_signal.recv().await?;
-    // Take a nap to let listener notify minerd
-    sleep(10).await;
 
     Ok(())
 }

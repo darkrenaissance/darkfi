@@ -312,12 +312,12 @@ impl Validator {
         let append_lock = self.consensus.append_lock.write().await;
 
         // Execute append
-        self.consensus.append_proposal(proposal).await?;
+        let result = self.consensus.append_proposal(proposal).await;
 
         // Release append lock
         drop(append_lock);
 
-        Ok(())
+        result
     }
 
     /// The node checks if best fork can be finalized.
@@ -331,7 +331,13 @@ impl Validator {
         info!(target: "validator::finalization", "Performing finalization check");
 
         // Grab best fork index that can be finalized
-        let finalized_fork = self.consensus.finalization().await?;
+        let finalized_fork = match self.consensus.finalization().await {
+            Ok(f) => f,
+            Err(e) => {
+                drop(append_lock);
+                return Err(e)
+            }
+        };
         if finalized_fork.is_none() {
             info!(target: "validator::finalization", "No proposals can be finalized");
             drop(append_lock);
