@@ -541,7 +541,7 @@ pub fn dark_leaf_vec_integrity_check<T: Clone + Send + Sync>(
     }
 
     // Setup offset
-    let offset = if let Some(offset) = offset { offset } else { 0 };
+    let offset = offset.unwrap_or_default();
 
     // Grab root index
     let root_index = leafs.len() - 1 + offset;

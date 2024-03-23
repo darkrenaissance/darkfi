@@ -87,7 +87,7 @@ impl ContractId {
         self.0.to_repr()
     }
 
-    /// `blake3(self || tree_name)` is used in datbases to have a
+    /// `blake3(self || tree_name)` is used in databases to have a
     /// fixed-size name for a contract's state db.
     pub fn hash_state_id(&self, tree_name: &str) -> [u8; 32] {
         let mut hasher = blake3::Hasher::new();
