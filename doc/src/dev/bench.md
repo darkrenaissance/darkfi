@@ -113,7 +113,6 @@ directory and repeating the steps again.
 | dao::exec           | 304d95c75850c837059cb94b4dafbdf5bb06711f31e79ec2ffecc9cb3101193f |          0 |     2236 |        1143 |          9 |
 | dao::exec           | 304d95c75850c837059cb94b4dafbdf5bb06711f31e79ec2ffecc9cb3101193f |          1 |     1440 |         480 |      11331 |
 | dao::exec           | 304d95c75850c837059cb94b4dafbdf5bb06711f31e79ec2ffecc9cb3101193f |          2 |     1350 |         381 |         14 |
-[/tmp]$ 
 
 ## Laptop
 
