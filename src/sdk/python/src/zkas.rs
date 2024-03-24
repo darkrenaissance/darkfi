@@ -189,6 +189,24 @@ impl ZkCircuit {
         }
         result
     }
+
+    fn render(&self, k: u32, filename: &str, width: u32, height: u32, font_size: u32) -> bool {
+        use plotters::prelude::*;
+        let root = BitMapBackend::new(filename, (width, height)).into_drawing_area();
+        if let Err(_) = root.fill(&WHITE) {
+            return false
+        }
+        let root = if let Ok(root) = root.titled("circuit", ("sans-serif", font_size)) {
+            root
+        } else {
+            return false
+        };
+
+        match halo2_proofs::dev::CircuitLayout::default().render(k, &self.0, &root) {
+            Ok(()) => true,
+            Err(_) => false,
+        }
+    }
 }
 
 #[pyclass]

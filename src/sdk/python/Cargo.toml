@@ -16,6 +16,8 @@ doc = false
 [dependencies]
 darkfi = {path = "../../../", features = ["zk", "zkas"]}
 darkfi-sdk = {path = "../"}
+halo2_proofs = {version = "0.3.0", features = ["dev-graph", "sanity-checks"]}
 halo2_gadgets = "0.3.0"
+plotters = "0.3.5"
 pyo3 = "0.20.3"
 rand = "0.8.5"

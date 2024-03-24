@@ -1993,6 +1993,8 @@ dependencies = [
  "darkfi",
  "darkfi-sdk",
  "halo2_gadgets",
+ "halo2_proofs",
+ "plotters",
  "pyo3",
  "rand 0.8.5",
 ]

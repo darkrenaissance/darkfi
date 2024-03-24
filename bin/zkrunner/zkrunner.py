@@ -40,44 +40,15 @@ def show_trace(opcodes, trace):
         optype = str(optype)
         print(f"{i:<4} {opcode:<22} {optype:<10} {args}")
 
-def main(witness_file, source_file, mock=False, trace=False):
-    """main zkrunner logic"""
-    # We will first attempt to decode the witnesses from the JSON file.
+def load_circuit_witness(circuit, witness_file):
+    # We attempt to decode the witnesses from the JSON file.
     # Refer to the `witness_gen.py` file to see what the format of this
     # file should be.
-    print("Decoding witnesses...")
     if witness_file == "-":
         witness_data = json.load(sys.stdin)
     else:
         with open(witness_file, "r", encoding="utf-8") as json_file:
             witness_data = json.load(json_file)
-
-    # Then we attempt to compile the given zkas code and create a
-    # zkVM circuit. This compiling logic happens in the Python bindings'
-    # `ZkBinary::new` function, and should be equivalent to the actual
-    # `zkas` binary provided in the DarkFi codebase.
-    print("Compiling zkas code...")
-    with open(source_file, "r", encoding="utf-8") as zkas_file:
-        zkas_source = zkas_file.read()
-
-    # This line will compile the source code
-    zkbin = ZkBinary(source_file, zkas_source)
-
-    # Construct the initial circuit object.
-    circuit = ZkCircuit(zkbin)
-
-    # If we want to build an actual proof, we'll need a proving key
-    # and a verifying key.
-    # circuit.verifier_build() is called so that the inital circuit
-    # (which contains no witnesses) actually calls empty_witnesses()
-    # in order to have the correct code path when the circuit gets
-    # synthesized.
-    if not mock:
-        print("Building proving key...")
-        proving_key = ProvingKey.build(zkbin.k(), circuit.verifier_build())
-
-        print("Building verifying key...")
-        verifying_key = VerifyingKey.build(zkbin.k(), circuit.verifier_build())
 
     # Now we scan through the parsed JSON witness file and
     # build our "heap". These will be appended to the initial
@@ -113,6 +84,44 @@ def main(witness_file, source_file, mock=False, trace=False):
             eprint(f"Invalid Witness type for witness {witness}")
             return -1
 
+    # Instances are our public inputs for the proof and they're also
+    # part of the JSON file.
+    instances = []
+    for instance in witness_data["instances"]:
+        instances.append(Fp(instance))
+    return instances
+
+def main(witness_file, source_file, mock=False, trace=False):
+    """main zkrunner logic"""
+    # Then we attempt to compile the given zkas code and create a
+    # zkVM circuit. This compiling logic happens in the Python bindings'
+    # `ZkBinary::new` function, and should be equivalent to the actual
+    # `zkas` binary provided in the DarkFi codebase.
+    print("Compiling zkas code...")
+    with open(source_file, "r", encoding="utf-8") as zkas_file:
+        zkas_source = zkas_file.read()
+
+    # This line will compile the source code
+    zkbin = ZkBinary(source_file, zkas_source)
+
+    # Construct the initial circuit object.
+    circuit = ZkCircuit(zkbin)
+    print("Decoding witnesses...")
+    instances = load_circuit_witness(circuit, witness_file)
+
+    # If we want to build an actual proof, we'll need a proving key
+    # and a verifying key.
+    # circuit.verifier_build() is called so that the inital circuit
+    # (which contains no witnesses) actually calls empty_witnesses()
+    # in order to have the correct code path when the circuit gets
+    # synthesized.
+    if not mock:
+        print("Building proving key...")
+        proving_key = ProvingKey.build(zkbin.k(), circuit.verifier_build())
+
+        print("Building verifying key...")
+        verifying_key = VerifyingKey.build(zkbin.k(), circuit.verifier_build())
+
     # circuit.prover_build() will actually construct the circuit
     # with the values witnessed above.
     circuit = circuit.prover_build()
@@ -121,12 +130,6 @@ def main(witness_file, source_file, mock=False, trace=False):
             eprint(f"Debug trace can only be enabled with --prove")
             return -2
         circuit.enable_trace()
-
-    # Instances are our public inputs for the proof and they're also
-    # part of the JSON file.
-    instances = []
-    for instance in witness_data["instances"]:
-        instances.append(Fp(instance))
 
     # If we're building an actual proof, we'll use the ProvingKey to
     # prove and our VerifyingKey to verify the proof.
