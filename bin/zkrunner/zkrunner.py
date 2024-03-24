@@ -133,6 +133,9 @@ def main(witness_file, source_file, mock=False, trace=False):
     if not mock:
         print("Proving knowledge of witnesses...")
         proof = Proof.create(proving_key, [circuit], instances)
+        if proof is None:
+            eprint(f"Proof creation failed")
+            return -3
 
         if trace:
             show_trace(zkbin.opcodes(), circuit.opvalues())

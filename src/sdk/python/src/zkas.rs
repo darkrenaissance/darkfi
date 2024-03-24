@@ -232,7 +232,7 @@ impl Proof {
         pk: &PyCell<ProvingKey>,
         circuits: Vec<&PyCell<ZkCircuit>>,
         instances: Vec<&PyCell<Fp>>,
-    ) -> Self {
+    ) -> Option<Self> {
         let pk = pk.borrow().deref().0.clone();
 
         // Ugh this is so annoying. The halo2 API expects &[] of values.
@@ -268,16 +268,22 @@ impl Proof {
 
         let instances: Vec<pallas::Base> = instances.iter().map(|i| i.borrow().deref().0).collect();
 
-        let proof =
-            zk::proof::Proof::create(&pk, ucircuits.as_slice(), instances.as_slice(), &mut OsRng)
-                .unwrap();
+        let proof = match zk::proof::Proof::create(
+            &pk,
+            ucircuits.as_slice(),
+            instances.as_slice(),
+            &mut OsRng,
+        ) {
+            Ok(proof) => proof,
+            Err(_) => return None,
+        };
 
         // Now replace the "stuff" back again
         for (old_circ, (circ, stuff)) in circuits.iter().zip(ucircuits.into_iter().zip(other_stuff))
         {
             old_circ.replace(ZkCircuit(circ, stuff.0, stuff.1));
         }
-        Self(proof)
+        Some(Self(proof))
     }
 
     fn verify(&self, vk: &PyCell<VerifyingKey>, instances: Vec<&PyCell<Fp>>) -> bool {
