@@ -1,6 +1,10 @@
 # ZK Circuits
 
-Tested with `proof/arithmetic.zk`
+Tested with `proof/arithmetic.zk`. Graph of verification times:
+
+![ZK verification benchmarks](../assets/zk-verif-bench.png)
+
+Proving times graph looks the same.
 
 ## Desktop
 
