@@ -46,6 +46,8 @@ fn bench_zk() -> Result<()> {
     let public_inputs = vec![a + b, a * b, a - b];
 
     // I tried cargo bench, but there's no way to display k=X for each individual bench
+    // TODO: make a benchmark group and use bench_with_input (cargo bench)
+    // see https://github.com/getsentry/relay/blob/master/relay-cardinality/benches/redis_impl.rs#L137-L165
     for k in 11..20 {
         println!("Benchmarking k={}", k);
 

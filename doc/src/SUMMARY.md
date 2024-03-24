@@ -28,6 +28,7 @@
   - [API Rustdoc](dev/rustdoc.md)
   - [Native Contracts](dev/native_contracts.md)
   - [Seminars](dev/seminars.md)
+  - [Benchmark](dev/bench.md)
 - [Architecture](arch/arch.md)
   - [Overview](arch/overview.md)
   - [Anonymous assets](arch/anonymous_assets.md)
