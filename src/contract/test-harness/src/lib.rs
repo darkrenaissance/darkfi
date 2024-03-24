@@ -303,15 +303,15 @@ fn benchmark_wasm_calls(
         let mut times = [0; 3];
         let now = std::time::Instant::now();
         let _metadata = runtime.metadata(&payload).expect("metadata");
-        times[0] = now.elapsed().as_millis();
+        times[0] = now.elapsed().as_micros();
 
         let now = std::time::Instant::now();
         let update = runtime.exec(&payload).expect("exec");
-        times[1] = now.elapsed().as_millis();
+        times[1] = now.elapsed().as_micros();
 
         let now = std::time::Instant::now();
         runtime.apply(&update).expect("update");
-        times[2] = now.elapsed().as_millis();
+        times[2] = now.elapsed().as_micros();
 
         writeln!(
             file,
