@@ -526,13 +526,13 @@ impl Drk {
 
     /// Auxiliary function to ping configured darkfid daemon for liveness.
     async fn ping(&self) -> Result<()> {
-        eprintln!("Executing ping request to darkfid...");
+        println!("Executing ping request to darkfid...");
         let latency = Instant::now();
         let req = JsonRequest::new("ping", JsonValue::Array(vec![]));
         let rep = self.rpc_client.oneshot_request(req).await?;
         let latency = latency.elapsed();
-        eprintln!("Got reply: {rep:?}");
-        eprintln!("Latency: {latency:?}");
+        println!("Got reply: {rep:?}");
+        println!("Latency: {latency:?}");
         Ok(())
     }
 }
@@ -626,9 +626,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 }
 
                 if table.is_empty() {
-                    eprintln!("No unspent balances found");
+                    println!("No unspent balances found");
                 } else {
-                    eprintln!("{table}");
+                    println!("{table}");
                 }
 
                 return Ok(())
@@ -643,7 +643,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     }
                 };
 
-                eprintln!("{address}");
+                println!("{address}");
 
                 return Ok(())
             }
@@ -664,9 +664,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 }
 
                 if table.is_empty() {
-                    eprintln!("No addresses found");
+                    println!("No addresses found");
                 } else {
-                    eprintln!("{table}");
+                    println!("{table}");
                 }
 
                 return Ok(())
@@ -684,7 +684,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 let v = drk.get_money_secrets().await?;
 
                 for i in v {
-                    eprintln!("{i}");
+                    println!("{i}");
                 }
 
                 return Ok(())
@@ -697,7 +697,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     if let Ok(line) = line {
                         let bytes = bs58::decode(&line.trim()).into_vec()?;
                         let Ok(secret) = deserialize(&bytes) else {
-                            eprintln!("Warning: Failed to deserialize secret on line {i}");
+                            println!("Warning: Failed to deserialize secret on line {i}");
                             continue
                         };
                         secrets.push(secret);
@@ -713,7 +713,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 };
 
                 for key in pubkeys {
-                    eprintln!("{key}");
+                    println!("{key}");
                 }
 
                 return Ok(())
@@ -722,7 +722,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             if tree {
                 let tree = drk.get_money_tree().await?;
 
-                eprintln!("{tree:#?}");
+                println!("{tree:#?}");
 
                 return Ok(())
             }
@@ -782,7 +782,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     ]);
                 }
 
-                eprintln!("{table}");
+                println!("{table}");
 
                 return Ok(())
             }
@@ -967,7 +967,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 };
 
                 let encoded = bs58::encode(&serialize(&dao_params)).into_string();
-                eprintln!("{encoded}");
+                println!("{encoded}");
 
                 Ok(())
             }
@@ -977,7 +977,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 stdin().read_to_string(&mut buf)?;
                 let bytes = bs58::decode(&buf.trim()).into_vec()?;
                 let dao_params: DaoParams = deserialize(&bytes)?;
-                eprintln!("{dao_params}");
+                println!("{dao_params}");
 
                 Ok(())
             }
@@ -1052,9 +1052,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 }
 
                 if table.is_empty() {
-                    eprintln!("No unspent balances found");
+                    println!("No unspent balances found");
                 } else {
-                    eprintln!("{table}");
+                    println!("{table}");
                 }
 
                 Ok(())
@@ -1071,7 +1071,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                         exit(2);
                     }
                 };
-                eprintln!("{}", bs58::encode(&serialize(&tx)).into_string());
+                println!("{}", bs58::encode(&serialize(&tx)).into_string());
                 Ok(())
             }
 
@@ -1106,7 +1106,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                         exit(2);
                     }
                 };
-                eprintln!("{}", bs58::encode(&serialize(&tx)).into_string());
+                println!("{}", bs58::encode(&serialize(&tx)).into_string());
                 Ok(())
             }
 
@@ -1117,7 +1117,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 let proposals = drk.get_dao_proposals(dao_id).await?;
 
                 for proposal in proposals {
-                    eprintln!("[{}] {:?}", proposal.id, proposal.bulla());
+                    println!("[{}] {:?}", proposal.id, proposal.bulla());
                 }
 
                 Ok(())
@@ -1133,10 +1133,10 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     exit(2);
                 };
 
-                eprintln!("{proposal}");
+                println!("{proposal}");
 
                 let votes = drk.get_dao_proposal_votes(proposal_id).await?;
-                eprintln!("votes:");
+                println!("votes:");
                 for vote in votes {
                     let option = if vote.vote_option { "yes" } else { "no " };
                     eprintln!("  {option} {}", vote.all_vote_value);
@@ -1171,7 +1171,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
                 // TODO: Write our_vote in the proposal sql.
 
-                eprintln!("{}", bs58::encode(&serialize(&tx)).into_string());
+                println!("{}", bs58::encode(&serialize(&tx)).into_string());
 
                 Ok(())
             }
@@ -1190,7 +1190,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                         exit(2);
                     }
                 };
-                eprintln!("{}", bs58::encode(&serialize(&tx)).into_string());
+                println!("{}", bs58::encode(&serialize(&tx)).into_string());
 
                 Ok(())
             }
@@ -1201,12 +1201,12 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             stdin().read_to_string(&mut buf)?;
             let bytes = bs58::decode(&buf.trim()).into_vec()?;
             let tx: Transaction = deserialize(&bytes)?;
-            eprintln!("{tx:#?}");
+            println!("{tx:#?}");
             Ok(())
         }
 
         Subcmd::Broadcast => {
-            eprintln!("Reading transaction from stdin...");
+            println!("Reading transaction from stdin...");
             let mut buf = String::new();
             stdin().read_to_string(&mut buf)?;
             let bytes = bs58::decode(&buf.trim()).into_vec()?;
@@ -1222,7 +1222,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 }
             };
 
-            eprintln!("Transaction ID: {txid}");
+            println!("Transaction ID: {txid}");
 
             Ok(())
         }
@@ -1246,24 +1246,24 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     .await?;
 
             if reset {
-                eprintln!("Reset requested.");
+                println!("Reset requested.");
                 if let Err(e) = drk.scan_blocks(true).await {
                     eprintln!("Failed during scanning: {e:?}");
                     exit(2);
                 }
-                eprintln!("Finished scanning blockchain");
+                println!("Finished scanning blockchain");
 
                 return Ok(())
             }
 
             if list {
-                eprintln!("List requested.");
+                println!("List requested.");
                 // TODO: implement
                 unimplemented!()
             }
 
             if let Some(c) = checkpoint {
-                eprintln!("Checkpoint requested: {c}");
+                println!("Checkpoint requested: {c}");
                 // TODO: implement
                 unimplemented!()
             }
@@ -1272,7 +1272,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 eprintln!("Failed during scanning: {e:?}");
                 exit(2);
             }
-            eprintln!("Finished scanning blockchain");
+            println!("Finished scanning blockchain");
 
             Ok(())
         }
@@ -1294,7 +1294,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 };
 
                 let Some(tx) = tx else {
-                    eprintln!("Transaction was not found");
+                    println!("Transaction was not found");
                     exit(1);
                 };
 
@@ -1302,20 +1302,20 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 assert_eq!(tx.hash()?, tx_hash);
 
                 if encode {
-                    eprintln!("{}", bs58::encode(&serialize(&tx)).into_string());
+                    println!("{}", bs58::encode(&serialize(&tx)).into_string());
                     exit(1)
                 }
 
-                eprintln!("Transaction ID: {tx_hash}");
+                println!("Transaction ID: {tx_hash}");
                 if full {
-                    eprintln!("{tx:?}");
+                    println!("{tx:?}");
                 }
 
                 Ok(())
             }
 
             ExplorerSubcmd::SimulateTx => {
-                eprintln!("Reading transaction from stdin...");
+                println!("Reading transaction from stdin...");
                 let mut buf = String::new();
                 stdin().read_to_string(&mut buf)?;
                 let bytes = bs58::decode(&buf.trim()).into_vec()?;
@@ -1333,8 +1333,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     }
                 };
 
-                eprintln!("Transaction ID: {}", tx.hash()?);
-                eprintln!("State: {}", if is_valid { "valid" } else { "invalid" });
+                println!("Transaction ID: {}", tx.hash()?);
+                println!("State: {}", if is_valid { "valid" } else { "invalid" });
 
                 Ok(())
             }
@@ -1352,9 +1352,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                         exit(1)
                     }
 
-                    eprintln!("Transaction ID: {tx_hash}");
-                    eprintln!("Status: {status}");
-                    eprintln!("{tx:?}");
+                    println!("Transaction ID: {tx_hash}");
+                    println!("Status: {status}");
+                    println!("{tx:?}");
 
                     return Ok(())
                 }
@@ -1376,9 +1376,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 }
 
                 if table.is_empty() {
-                    eprintln!("No transactions found");
+                    println!("No transactions found");
                 } else {
-                    eprintln!("{table}");
+                    println!("{table}");
                 }
 
                 Ok(())
@@ -1433,9 +1433,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 }
 
                 if table.is_empty() {
-                    eprintln!("No aliases found");
+                    println!("No aliases found");
                 } else {
-                    eprintln!("{table}");
+                    println!("{table}");
                 }
 
                 Ok(())
@@ -1471,7 +1471,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 };
 
                 let token_id = TokenId::derive(mint_authority);
-                eprintln!("Successfully imported mint authority for token ID: {token_id}");
+                println!("Successfully imported mint authority for token ID: {token_id}");
 
                 Ok(())
             }
@@ -1488,7 +1488,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
                 // TODO: see TokenAttributes struct. I'm not sure how to restructure this rn.
                 let token_id = TokenId::derive(mint_authority);
-                eprintln!("Successfully imported mint authority for token ID: {token_id}");
+                println!("Successfully imported mint authority for token ID: {token_id}");
 
                 Ok(())
             }
@@ -1518,9 +1518,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 }
 
                 if table.is_empty() {
-                    eprintln!("No tokens found");
+                    println!("No tokens found");
                 } else {
-                    eprintln!("{table}");
+                    println!("{table}");
                 }
 
                 Ok(())
@@ -1560,7 +1560,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 //    }
                 //};
 
-                //eprintln!("{}", bs58::encode(&serialize(&tx)).into_string());
+                //println!("{}", bs58::encode(&serialize(&tx)).into_string());
 
                 //Ok(())
             }
@@ -1584,7 +1584,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 //    }
                 //};
 
-                //eprintln!("{}", bs58::encode(&serialize(&tx)).into_string());
+                //println!("{}", bs58::encode(&serialize(&tx)).into_string());
 
                 //Ok(())
             }

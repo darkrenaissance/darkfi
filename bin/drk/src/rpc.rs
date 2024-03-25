@@ -72,7 +72,7 @@ impl Drk {
             ))
         }
 
-        eprintln!("Subscribing to receive notifications of incoming blocks");
+        println!("Subscribing to receive notifications of incoming blocks");
         let subscriber = Subscriber::new();
         let subscription = subscriber.clone().subscribe().await;
         let _ex = ex.clone();
@@ -95,13 +95,13 @@ impl Drk {
             Error::RpcServerStopped,
             ex,
         );
-        eprintln!("Detached subscription to background");
-        eprintln!("All is good. Waiting for block notifications...");
+        println!("Detached subscription to background");
+        println!("All is good. Waiting for block notifications...");
 
         let e = loop {
             match subscription.receive().await {
                 JsonResult::Notification(n) => {
-                    eprintln!("Got Block notification from darkfid subscription");
+                    println!("Got Block notification from darkfid subscription");
                     if n.method != "blockchain.subscribe_blocks" {
                         break Error::UnexpectedJsonRpc(format!(
                             "Got foreign notification from darkfid: {}",
@@ -127,11 +127,11 @@ impl Drk {
                         let bytes = base64::decode(param).unwrap();
 
                         let block_data: BlockInfo = deserialize(&bytes)?;
-                        eprintln!("=======================================");
-                        eprintln!("Block header:\n{:#?}", block_data.header);
-                        eprintln!("=======================================");
+                        println!("=======================================");
+                        println!("Block header:\n{:#?}", block_data.header);
+                        println!("=======================================");
 
-                        eprintln!("Deserialized successfully. Scanning block...");
+                        println!("Deserialized successfully. Scanning block...");
                         if let Err(e) = self.scan_block_money(&block_data).await {
                             return Err(Error::RusqliteError(format!(
                                 "[subscribe_blocks] Scaning blocks for Money failed: {e:?}"
@@ -171,7 +171,7 @@ impl Drk {
     /// to us. If any are found, the metadata is extracted and placed into the wallet
     /// for future use.
     async fn scan_block_money(&self, block: &BlockInfo) -> Result<()> {
-        eprintln!("[Money] Iterating over {} transactions", block.txs.len());
+        println!("[Money] Iterating over {} transactions", block.txs.len());
 
         for tx in block.txs.iter() {
             self.apply_tx_money_data(tx, true).await?;
@@ -194,7 +194,7 @@ impl Drk {
     /// to us. If any are found, the metadata is extracted and placed into the wallet
     /// for future use.
     async fn scan_block_dao(&self, block: &BlockInfo) -> Result<()> {
-        eprintln!("[DAO] Iterating over {} transactions", block.txs.len());
+        println!("[DAO] Iterating over {} transactions", block.txs.len());
         for tx in block.txs.iter() {
             self.apply_tx_dao_data(tx, true).await?;
         }
@@ -236,8 +236,8 @@ impl Drk {
             };
             let last = *rep.get::<f64>().unwrap() as u64;
 
-            eprintln!("Requested to scan from block number: {height}");
-            eprintln!("Last known block number reported by darkfid: {last}");
+            println!("Requested to scan from block number: {height}");
+            println!("Last known block number reported by darkfid: {last}");
 
             // Already scanned last known block
             if height >= last {
@@ -284,7 +284,7 @@ impl Drk {
     /// Broadcast a given transaction to darkfid and forward onto the network.
     /// Returns the transaction ID upon success
     pub async fn broadcast_tx(&self, tx: &Transaction) -> Result<String> {
-        eprintln!("Broadcasting transaction...");
+        println!("Broadcasting transaction...");
 
         let params =
             JsonValue::Array(vec![JsonValue::String(bs58::encode(&serialize(tx)).into_string())]);
@@ -335,7 +335,7 @@ impl Drk {
 
     /// Try to fetch zkas bincodes for the given `ContractId`.
     pub async fn lookup_zkas(&self, contract_id: &ContractId) -> Result<Vec<(String, Vec<u8>)>> {
-        eprintln!("Querying zkas bincode for {contract_id}");
+        println!("Querying zkas bincode for {contract_id}");
 
         let params = JsonValue::Array(vec![JsonValue::String(format!("{contract_id}"))]);
         let req = JsonRequest::new("blockchain.lookup_zkas", params);

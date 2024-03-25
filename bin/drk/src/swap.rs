@@ -129,7 +129,7 @@ impl Drk {
         let token_blinds = [Blind::random(&mut OsRng), Blind::random(&mut OsRng)];
 
         // Now we should have everything we need to build the swap half
-        eprintln!("Creating Mint and Burn circuit proving keys");
+        println!("Creating Mint and Burn circuit proving keys");
         let mint_pk = ProvingKey::build(mint_zkbin.k, &mint_circuit);
         let burn_pk = ProvingKey::build(burn_zkbin.k, &burn_circuit);
         let builder = SwapCallBuilder {
@@ -151,7 +151,7 @@ impl Drk {
             burn_pk,
         };
 
-        eprintln!("Building first half of the swap transaction");
+        println!("Building first half of the swap transaction");
         let debris = builder.build()?;
 
         // Now we have the half, so we can build `PartialSwapData` and return it.
@@ -219,7 +219,7 @@ impl Drk {
         // TODO: Maybe some kind of verification at this point
 
         // Now we should have everything we need to build the swap half
-        eprintln!("Creating Mint and Burn circuit proving keys");
+        println!("Creating Mint and Burn circuit proving keys");
         let mint_pk = ProvingKey::build(mint_zkbin.k, &mint_circuit);
         let burn_pk = ProvingKey::build(burn_zkbin.k, &burn_circuit);
         let builder = SwapCallBuilder {
@@ -241,7 +241,7 @@ impl Drk {
             burn_pk,
         };
 
-        eprintln!("Building second half of the swap transaction");
+        println!("Building second half of the swap transaction");
         let debris = builder.build()?;
 
         let full_params = MoneyTransferParamsV1 {
@@ -262,7 +262,7 @@ impl Drk {
         let mut tx_builder =
             TransactionBuilder::new(ContractCallLeaf { call, proofs: full_proofs }, vec![])?;
         let mut tx = tx_builder.build()?;
-        eprintln!("Signing swap transaction");
+        println!("Signing swap transaction");
         let sigs = tx.create_sigs(&[debris.signature_secret])?;
         tx.signatures = vec![sigs];
 
@@ -303,7 +303,7 @@ impl Drk {
             }
 
             let params: MoneyTransferParamsV1 = deserialize(&tx.calls[0].data.data[1..])?;
-            eprintln!("Parameters:\n{:#?}", params);
+            println!("Parameters:\n{:#?}", params);
 
             if params.inputs.len() != 2 {
                 eprintln!("Found {} inputs, there should be 2", params.inputs.len());
@@ -322,14 +322,14 @@ impl Drk {
             let mut output_idx = 0;
 
             for output in &params.outputs {
-                eprintln!("Trying to decrypt note in output {output_idx}");
+                println!("Trying to decrypt note in output {output_idx}");
 
                 for secret in &secret_keys {
                     if let Ok(d_note) = output.note.decrypt::<MoneyNote>(secret) {
                         let s: SecretKey = deserialize(&d_note.memo)?;
                         skey = Some(s);
                         note = Some(d_note);
-                        eprintln!("Successfully decrypted and found an ephemeral secret");
+                        println!("Successfully decrypted and found an ephemeral secret");
                         break
                     }
                 }
@@ -346,12 +346,12 @@ impl Drk {
                 return insection_error
             };
 
-            eprintln!(
+            println!(
                 "Output[{output_idx}] value: {} ({})",
                 note.value,
                 encode_base10(note.value, BALANCE_BASE10_DECIMALS)
             );
-            eprintln!("Output[{output_idx}] token ID: {}", note.token_id);
+            println!("Output[{output_idx}] token ID: {}", note.token_id);
 
             let skey = skey.unwrap();
             let (pub_x, pub_y) = PublicKey::from_secret(skey).xy();
@@ -364,7 +364,7 @@ impl Drk {
             ]));
 
             if coin == params.outputs[output_idx].coin {
-                eprintln!("Output[{output_idx}] coin matches decrypted note metadata");
+                println!("Output[{output_idx}] coin matches decrypted note metadata");
             } else {
                 eprintln!("Error: Output[{output_idx}] coin does not match note metadata");
                 return insection_error
@@ -387,7 +387,7 @@ impl Drk {
                 return insection_error
             }
 
-            eprintln!("Value and token commitments match decrypted note metadata");
+            println!("Value and token commitments match decrypted note metadata");
 
             // Verify that the output commitments match the other input commitments
             match output_idx {
@@ -410,7 +410,7 @@ impl Drk {
                 _ => unreachable!(),
             }
 
-            eprintln!("Found matching pedersen commitments for outputs and inputs");
+            println!("Found matching pedersen commitments for outputs and inputs");
 
             // TODO: Verify signature
             // TODO: Verify ZK proofs
@@ -419,7 +419,7 @@ impl Drk {
 
         // Inspect PartialSwapData
         let partial = half.unwrap();
-        eprintln!("{partial}");
+        println!("{partial}");
 
         Ok(())
     }
@@ -434,13 +434,13 @@ impl Drk {
         // Our output should be outputs[0] so we try to decrypt that.
         let encrypted_note = &params.outputs[0].note;
 
-        eprintln!("Trying to decrypt note in outputs[0]");
+        println!("Trying to decrypt note in outputs[0]");
         let mut skey = None;
 
         for secret in &secret_keys {
             if let Ok(note) = encrypted_note.decrypt::<MoneyNote>(secret) {
                 let s: SecretKey = deserialize(&note.memo)?;
-                eprintln!("Successfully decrypted and found an ephemeral secret");
+                println!("Successfully decrypted and found an ephemeral secret");
                 skey = Some(s);
                 break
             }
@@ -453,7 +453,7 @@ impl Drk {
             ))
         };
 
-        eprintln!("Signing swap transaction");
+        println!("Signing swap transaction");
         let sigs = tx.create_sigs(&[skey])?;
         tx.signatures[0].insert(0, sigs[0]);
 

@@ -115,12 +115,12 @@ impl Drk {
         // For now, on success, we don't care what's returned, but in the future
         // we should actually check it.
         if self.get_money_tree().await.is_err() {
-            eprintln!("Initializing Money Merkle tree");
+            println!("Initializing Money Merkle tree");
             let mut tree = MerkleTree::new(100);
             tree.append(MerkleNode::from(pallas::Base::ZERO));
             let _ = tree.mark().unwrap();
             self.put_money_tree(&tree).await?;
-            eprintln!("Successfully initialized Merkle tree for the Money contract");
+            println!("Successfully initialized Merkle tree for the Money contract");
         }
 
         // We maintain the last scanned block as part of the Money contract,
@@ -141,7 +141,7 @@ impl Drk {
 
     /// Generate a new keypair and place it into the wallet.
     pub async fn money_keygen(&self) -> WalletDbResult<()> {
-        eprintln!("Generating a new keypair");
+        println!("Generating a new keypair");
 
         // TODO: We might want to have hierarchical deterministic key derivation.
         let keypair = Keypair::random(&mut OsRng);
@@ -165,8 +165,8 @@ impl Drk {
             )
             .await?;
 
-        eprintln!("New address:");
-        eprintln!("{}", keypair.public);
+        println!("New address:");
+        println!("{}", keypair.public);
 
         Ok(())
     }
@@ -326,7 +326,7 @@ impl Drk {
         for secret in secrets {
             // Check if secret already exists
             if existing_secrets.contains(&secret) {
-                eprintln!("Existing key found: {secret}");
+                println!("Existing key found: {secret}");
                 continue
             }
 
@@ -491,7 +491,7 @@ impl Drk {
 
     /// Create an alias record for provided Token ID.
     pub async fn add_alias(&self, alias: String, token_id: TokenId) -> WalletDbResult<()> {
-        eprintln!("Generating alias {alias} for Token: {token_id}");
+        println!("Generating alias {alias} for Token: {token_id}");
         let query = format!(
             "INSERT OR REPLACE INTO {} ({}, {}) VALUES (?1, ?2);",
             *MONEY_ALIASES_TABLE, MONEY_ALIASES_COL_ALIAS, MONEY_ALIASES_COL_TOKEN_ID,
@@ -561,7 +561,7 @@ impl Drk {
 
     /// Remove provided alias record from the wallet database.
     pub async fn remove_alias(&self, alias: String) -> WalletDbResult<()> {
-        eprintln!("Removing alias: {alias}");
+        println!("Removing alias: {alias}");
         let query = format!(
             "DELETE FROM {} WHERE {} = ?1;",
             *MONEY_ALIASES_TABLE, MONEY_ALIASES_COL_ALIAS,
@@ -638,7 +638,7 @@ impl Drk {
         for (i, call) in tx.calls.iter().enumerate() {
             if call.data.contract_id == cid && call.data.data[0] == MoneyFunction::PoWRewardV1 as u8
             {
-                eprintln!("Found Money::PoWRewardV1 in call {i}");
+                println!("Found Money::PoWRewardV1 in call {i}");
                 let params: MoneyPoWRewardParamsV1 = deserialize(&call.data.data[1..])?;
 
                 coins.push(params.output.coin);
@@ -649,7 +649,7 @@ impl Drk {
 
             if call.data.contract_id == cid && call.data.data[0] == MoneyFunction::TransferV1 as u8
             {
-                eprintln!("Found Money::TransferV1 in call {i}");
+                println!("Found Money::TransferV1 in call {i}");
                 let params: MoneyTransferParamsV1 = deserialize(&call.data.data[1..])?;
 
                 for input in params.inputs {
@@ -665,7 +665,7 @@ impl Drk {
             }
 
             if call.data.contract_id == cid && call.data.data[0] == MoneyFunction::OtcSwapV1 as u8 {
-                eprintln!("Found Money::OtcSwapV1 in call {i}");
+                println!("Found Money::OtcSwapV1 in call {i}");
                 let params: MoneyTransferParamsV1 = deserialize(&call.data.data[1..])?;
 
                 for input in params.inputs {
@@ -682,7 +682,7 @@ impl Drk {
 
             if call.data.contract_id == cid && call.data.data[0] == MoneyFunction::TokenMintV1 as u8
             {
-                eprintln!("Found Money::MintV1 in call {i}");
+                println!("Found Money::MintV1 in call {i}");
                 let params: MoneyTokenMintParamsV1 = deserialize(&call.data.data[1..])?;
                 coins.push(params.coin);
                 //notes.push(output.note);
@@ -692,7 +692,7 @@ impl Drk {
             if call.data.contract_id == cid &&
                 call.data.data[0] == MoneyFunction::TokenFreezeV1 as u8
             {
-                eprintln!("Found Money::FreezeV1 in call {i}");
+                println!("Found Money::FreezeV1 in call {i}");
                 let params: MoneyTokenFreezeParamsV1 = deserialize(&call.data.data[1..])?;
                 let token_id = TokenId::derive_public(params.mint_public);
                 freezes.push(token_id);
@@ -712,8 +712,8 @@ impl Drk {
             // Attempt to decrypt the note
             for secret in secrets.iter().chain(dao_secrets.iter()) {
                 if let Ok(note) = note.decrypt::<MoneyNote>(secret) {
-                    eprintln!("Successfully decrypted a Money Note");
-                    eprintln!("Witnessing coin in Merkle tree");
+                    println!("Successfully decrypted a Money Note");
+                    println!("Witnessing coin in Merkle tree");
                     let leaf_position = tree.mark().unwrap();
 
                     let owncoin =
@@ -753,9 +753,9 @@ impl Drk {
             MONEY_COINS_COL_MEMO,
         );
 
-        eprintln!("Found {} OwnCoin(s) in transaction", owncoins.len());
+        println!("Found {} OwnCoin(s) in transaction", owncoins.len());
         for owncoin in &owncoins {
-            eprintln!("OwnCoin: {:?}", owncoin.coin);
+            println!("OwnCoin: {:?}", owncoin.coin);
             let params = rusqlite::params![
                 serialize(&owncoin.coin),
                 0, // <-- is_spent
@@ -832,22 +832,22 @@ impl Drk {
 
     /// Reset the Money Merkle tree in the wallet
     pub async fn reset_money_tree(&self) -> WalletDbResult<()> {
-        eprintln!("Resetting Money Merkle tree");
+        println!("Resetting Money Merkle tree");
         let mut tree = MerkleTree::new(100);
         tree.append(MerkleNode::from(pallas::Base::ZERO));
         let _ = tree.mark().unwrap();
         self.put_money_tree(&tree).await?;
-        eprintln!("Successfully reset Money Merkle tree");
+        println!("Successfully reset Money Merkle tree");
 
         Ok(())
     }
 
     /// Reset the Money coins in the wallet
     pub async fn reset_money_coins(&self) -> WalletDbResult<()> {
-        eprintln!("Resetting coins");
+        println!("Resetting coins");
         let query = format!("DELETE FROM {};", *MONEY_COINS_TABLE);
         self.wallet.exec_sql(&query, &[]).await?;
-        eprintln!("Successfully reset coins");
+        println!("Successfully reset coins");
 
         Ok(())
     }

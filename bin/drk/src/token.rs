@@ -157,7 +157,7 @@ impl Drk {
             let mint_zkbin = ZkBinary::decode(&token_mint_zkbin.1)?;
             let token_mint_circuit = ZkCircuit::new(empty_witnesses(&mint_zkbin)?, &mint_zkbin);
 
-            eprintln!("Creating token mint circuit proving keys");
+            println!("Creating token mint circuit proving keys");
             let mint_pk = ProvingKey::build(mint_zkbin.k, &token_mint_circuit);
 
             (mint_zkbin, mint_pk)
@@ -174,7 +174,7 @@ impl Drk {
             let token_auth_mint_circuit =
                 ZkCircuit::new(empty_witnesses(&auth_mint_zkbin)?, &auth_mint_zkbin);
 
-            eprintln!("Creating token mint circuit proving keys");
+            println!("Creating token mint circuit proving keys");
             let auth_mint_pk = ProvingKey::build(auth_mint_zkbin.k, &token_auth_mint_circuit);
 
             (auth_mint_zkbin, auth_mint_pk)
@@ -191,7 +191,7 @@ impl Drk {
             token_mint_pk,
         };
 
-        eprintln!("Building transaction parameters");
+        println!("Building transaction parameters");
         let debris = mint_builder.build()?;
 
         // Encode and sign the transaction
@@ -295,7 +295,7 @@ impl Drk {
         let freeze_zkbin = ZkBinary::decode(&token_freeze_zkbin.1)?;
         let token_freeze_circuit = ZkCircuit::new(empty_witnesses(&freeze_zkbin)?, &freeze_zkbin);
 
-        eprintln!("Creating token freeze circuit proving keys");
+        println!("Creating token freeze circuit proving keys");
         let freeze_pk = ProvingKey::build(freeze_zkbin.k, &token_freeze_circuit);
         let freeze_builder = TokenFreezeCallBuilder {
             mint_keypair: mint_authority,
@@ -304,7 +304,7 @@ impl Drk {
             freeze_pk,
         };
 
-        eprintln!("Building transaction parameters");
+        println!("Building transaction parameters");
         let debris = freeze_builder.build()?;
 
         // Encode and sign the transaction

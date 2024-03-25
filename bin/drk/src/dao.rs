@@ -375,10 +375,10 @@ impl Drk {
             .await
             .is_err()
         {
-            eprintln!("Initializing DAO Merkle trees");
+            println!("Initializing DAO Merkle trees");
             let tree = MerkleTree::new(100);
             self.put_dao_trees(&tree, &tree).await?;
-            eprintln!("Successfully initialized Merkle trees for the DAO contract");
+            println!("Successfully initialized Merkle trees for the DAO contract");
         }
 
         Ok(())
@@ -708,7 +708,7 @@ impl Drk {
         // Run through the transaction and see what we got:
         for (i, call) in tx.calls.iter().enumerate() {
             if call.data.contract_id == cid && call.data.data[0] == DaoFunction::Mint as u8 {
-                eprintln!("Found Dao::Mint in call {i}");
+                println!("Found Dao::Mint in call {i}");
                 let params: DaoMintParams = deserialize(&call.data.data[1..])?;
                 let tx_hash = if confirm { Some(blake3::hash(&serialize(tx))) } else { None };
                 new_dao_bullas.push((params.dao_bulla, tx_hash, i as u32));
@@ -716,7 +716,7 @@ impl Drk {
             }
 
             if call.data.contract_id == cid && call.data.data[0] == DaoFunction::Propose as u8 {
-                eprintln!("Found Dao::Propose in call {i}");
+                println!("Found Dao::Propose in call {i}");
                 let params: DaoProposeParams = deserialize(&call.data.data[1..])?;
                 let tx_hash = if confirm { Some(blake3::hash(&serialize(tx))) } else { None };
                 // We need to clone the tree here for reproducing the snapshot Merkle root
@@ -726,7 +726,7 @@ impl Drk {
             }
 
             if call.data.contract_id == cid && call.data.data[0] == DaoFunction::Vote as u8 {
-                eprintln!("Found Dao::Vote in call {i}");
+                println!("Found Dao::Vote in call {i}");
                 let params: DaoVoteParams = deserialize(&call.data.data[1..])?;
                 let tx_hash = if confirm { Some(blake3::hash(&serialize(tx))) } else { None };
                 new_dao_votes.push((params, tx_hash, i as u32));
@@ -735,7 +735,7 @@ impl Drk {
 
             if call.data.contract_id == cid && call.data.data[0] == DaoFunction::Exec as u8 {
                 // This seems to not need any special action
-                eprintln!("Found Dao::Exec in call {i}");
+                println!("Found Dao::Exec in call {i}");
                 continue
             }
         }
@@ -748,10 +748,7 @@ impl Drk {
                 daos_tree.append(MerkleNode::from(new_bulla.0.inner()));
                 for dao in daos.iter_mut() {
                     if dao.bulla() == new_bulla.0 {
-                        eprintln!(
-                            "Found minted DAO {}, noting down for wallet update",
-                            new_bulla.0
-                        );
+                        println!("Found minted DAO {}, noting down for wallet update", new_bulla.0);
                         // We have this DAO imported in our wallet. Add the metadata:
                         dao.leaf_position = daos_tree.mark();
                         dao.tx_hash = new_bulla.1;
@@ -773,7 +770,7 @@ impl Drk {
                         // ID by looking at how many proposals we already have.
                         // We also assume we don't mantain duplicate DAOs in the
                         // wallet.
-                        eprintln!("Managed to decrypt DAO proposal note");
+                        println!("Managed to decrypt DAO proposal note");
                         let daos_proposals = self.get_dao_proposals(dao.id).await?;
                         let our_prop = DaoProposal {
                             // This ID stuff is flaky.
@@ -800,7 +797,7 @@ impl Drk {
                 for dao in &daos {
                     // TODO: we shouldn't decrypt with all DAOs here
                     let note = vote.0.note.decrypt_unsafe(&dao.secret_key)?;
-                    eprintln!("Managed to decrypt DAO proposal vote note");
+                    println!("Managed to decrypt DAO proposal vote note");
                     let daos_proposals = self.get_dao_proposals(dao.id).await?;
                     let mut proposal_id = None;
 
@@ -812,7 +809,7 @@ impl Drk {
                     }
 
                     if proposal_id.is_none() {
-                        eprintln!("Warning: Decrypted DaoVoteNote but did not find proposal");
+                        println!("Warning: Decrypted DaoVoteNote but did not find proposal");
                         break
                     }
 
@@ -994,7 +991,7 @@ impl Drk {
                 )
                 .await?;
 
-            eprintln!("DAO vote added to wallet");
+            println!("DAO vote added to wallet");
         }
 
         Ok(())
@@ -1002,40 +999,40 @@ impl Drk {
 
     /// Reset the DAO Merkle trees in the wallet.
     pub async fn reset_dao_trees(&self) -> WalletDbResult<()> {
-        eprintln!("Resetting DAO Merkle trees");
+        println!("Resetting DAO Merkle trees");
         let tree = MerkleTree::new(100);
         self.put_dao_trees(&tree, &tree).await?;
-        eprintln!("Successfully reset DAO Merkle trees");
+        println!("Successfully reset DAO Merkle trees");
 
         Ok(())
     }
 
     /// Reset confirmed DAOs in the wallet.
     pub async fn reset_daos(&self) -> WalletDbResult<()> {
-        eprintln!("Resetting DAO confirmations");
+        println!("Resetting DAO confirmations");
         let daos = match self.get_daos().await {
             Ok(d) => d,
             Err(e) => {
-                eprintln!("[reset_daos] DAOs retrieval failed: {e:?}");
+                println!("[reset_daos] DAOs retrieval failed: {e:?}");
                 return Err(WalletDbError::GenericError);
             }
         };
         self.unconfirm_daos(&daos).await?;
-        eprintln!("Successfully unconfirmed DAOs");
+        println!("Successfully unconfirmed DAOs");
 
         Ok(())
     }
 
     /// Reset all DAO proposals in the wallet.
     pub async fn reset_dao_proposals(&self) -> WalletDbResult<()> {
-        eprintln!("Resetting DAO proposals");
+        println!("Resetting DAO proposals");
         let query = format!("DELETE FROM {};", *DAO_PROPOSALS_TABLE);
         self.wallet.exec_sql(&query, &[]).await
     }
 
     /// Reset all DAO votes in the wallet.
     pub async fn reset_dao_votes(&self) -> WalletDbResult<()> {
-        eprintln!("Resetting DAO votes");
+        println!("Resetting DAO votes");
         let query = format!("DELETE FROM {};", *DAO_VOTES_TABLE);
         self.wallet.exec_sql(&query, &[]).await
     }
@@ -1053,7 +1050,7 @@ impl Drk {
             ))
         }
 
-        eprintln!("Importing \"{dao_name}\" DAO into the wallet");
+        println!("Importing \"{dao_name}\" DAO into the wallet");
 
         let query = format!(
             "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8);",
@@ -1150,7 +1147,7 @@ impl Drk {
 
         let daos = self.get_daos().await?;
         for dao in daos {
-            eprintln!("[{}] {}", dao.id, dao.name);
+            println!("[{}] {}", dao.id, dao.name);
         }
 
         Ok(())
@@ -1160,7 +1157,7 @@ impl Drk {
     async fn dao_list_single(&self, dao_id: u64) -> Result<()> {
         let dao = self.get_dao_by_id(dao_id).await?;
 
-        eprintln!("{dao}");
+        println!("{dao}");
 
         Ok(())
     }
@@ -1367,7 +1364,7 @@ impl Drk {
 
         let dao_mint_zkbin = ZkBinary::decode(&dao_mint_zkbin.1)?;
         let dao_mint_circuit = ZkCircuit::new(empty_witnesses(&dao_mint_zkbin)?, &dao_mint_zkbin);
-        eprintln!("Creating DAO Mint proving key");
+        println!("Creating DAO Mint proving key");
         let dao_mint_pk = ProvingKey::build(dao_mint_zkbin.k, &dao_mint_circuit);
 
         let (params, proofs) =
@@ -1479,9 +1476,9 @@ impl Drk {
         let propose_main_circuit =
             ZkCircuit::new(empty_witnesses(&propose_main_zkbin)?, &propose_main_zkbin);
 
-        eprintln!("Creating Propose Burn circuit proving key");
+        println!("Creating Propose Burn circuit proving key");
         let propose_burn_pk = ProvingKey::build(propose_burn_zkbin.k, &propose_burn_circuit);
-        eprintln!("Creating Propose Main circuit proving key");
+        println!("Creating Propose Main circuit proving key");
         let propose_main_pk = ProvingKey::build(propose_main_zkbin.k, &propose_main_circuit);
 
         // Now create the parameters for the proposal tx
@@ -1569,7 +1566,7 @@ impl Drk {
             dao_merkle_root,
         };
 
-        eprintln!("Creating ZK proofs...");
+        println!("Creating ZK proofs...");
         let (params, proofs) = call.make(
             &propose_burn_zkbin,
             &propose_burn_pk,
@@ -1705,9 +1702,9 @@ impl Drk {
         let dao_vote_main_circuit =
             ZkCircuit::new(empty_witnesses(&dao_vote_main_zkbin)?, &dao_vote_main_zkbin);
 
-        eprintln!("Creating DAO Vote Burn proving key");
+        println!("Creating DAO Vote Burn proving key");
         let dao_vote_burn_pk = ProvingKey::build(dao_vote_burn_zkbin.k, &dao_vote_burn_circuit);
-        eprintln!("Creating DAO Vote Main proving key");
+        println!("Creating DAO Vote Main proving key");
         let dao_vote_main_pk = ProvingKey::build(dao_vote_main_zkbin.k, &dao_vote_main_circuit);
 
         let (params, proofs) = call.make(
