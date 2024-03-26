@@ -700,32 +700,18 @@ impl HostContainer {
         Ok(())
     }
 
-    /// Save the hostlist to a file. Whitelist gets written to the greylist
-    /// to force whitelist entries through the refinery on start.
+    /// Save the hostlist to a file.
     pub async fn save_all(&self, path: &str) -> Result<()> {
         let path = expand_path(path)?;
 
         let mut tsv = String::new();
-        let mut white = vec![];
-        let mut greygold: HashMap<String, Vec<(Url, u64)>> = HashMap::new();
+        let mut hostlist: HashMap<String, Vec<(Url, u64)>> = HashMap::new();
 
-        // First gather all the whitelist entries we don't have in greylist.
-        for (url, last_seen) in self.fetch_all(HostColor::White).await {
-            if !self.contains(HostColor::Grey as usize, &url).await {
-                white.push((url, last_seen))
-            }
-        }
+        hostlist.insert("gold".to_string(), self.fetch_all(HostColor::Gold).await);
+        hostlist.insert("white".to_string(), self.fetch_all(HostColor::White).await);
+        hostlist.insert("grey".to_string(), self.fetch_all(HostColor::Grey).await);
 
-        // Then gather the greylist and anchorlist entries.
-        greygold.insert("anchorlist".to_string(), self.fetch_all(HostColor::Gold).await);
-        greygold.insert("greylist".to_string(), self.fetch_all(HostColor::Grey).await);
-
-        // We write whitelist entries to the greylist on p2p.stop() to force
-        // them through the refinery on start().
-        for (name, mut list) in greygold {
-            if name == *"greylist".to_string() {
-                list.append(&mut white)
-            }
+        for (name, list) in hostlist {
             for (url, last_seen) in list {
                 tsv.push_str(&format!("{}\t{}\t{}\n", name, url, last_seen));
             }
