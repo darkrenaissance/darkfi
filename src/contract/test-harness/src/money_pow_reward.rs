@@ -67,8 +67,6 @@ impl TestHarness {
             secret: wallet.keypair.secret,
             recipient,
             block_height: last_block.header.height + 1,
-            last_nonce: last_block.header.nonce,
-            fork_previous_hash: last_block.header.previous,
             spend_hook: FuncId::none(),
             user_data: pallas::Base::ZERO,
             mint_zkbin: mint_zkbin.clone(),

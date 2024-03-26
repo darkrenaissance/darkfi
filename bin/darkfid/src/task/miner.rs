@@ -38,7 +38,7 @@ use darkfi_sdk::{
     pasta::pallas,
     ContractCall,
 };
-use darkfi_serial::{serialize, Encodable};
+use darkfi_serial::{serialize_async, Encodable};
 use log::info;
 use num_bigint::BigUint;
 use rand::rngs::OsRng;
@@ -101,7 +101,8 @@ pub async fn miner_task(node: &Darkfid, recipient: &PublicKey, skip_sync: bool) 
             if !finalized.is_empty() {
                 let mut notif_blocks = Vec::with_capacity(finalized.len());
                 for block in finalized {
-                    notif_blocks.push(JsonValue::String(base64::encode(&serialize(&block))));
+                    notif_blocks
+                        .push(JsonValue::String(base64::encode(&serialize_async(&block).await)));
                 }
                 block_sub.notify(JsonValue::Array(notif_blocks)).await;
                 break;
@@ -133,7 +134,8 @@ pub async fn miner_task(node: &Darkfid, recipient: &PublicKey, skip_sync: bool) 
         if !finalized.is_empty() {
             let mut notif_blocks = Vec::with_capacity(finalized.len());
             for block in finalized {
-                notif_blocks.push(JsonValue::String(base64::encode(&serialize(&block))));
+                notif_blocks
+                    .push(JsonValue::String(base64::encode(&serialize_async(&block).await)));
             }
             block_sub.notify(JsonValue::Array(notif_blocks)).await;
         }
@@ -221,7 +223,7 @@ async fn mine_next_block(
 
     // Execute request to minerd and parse response
     let target = JsonValue::String(next_target.to_string());
-    let block = JsonValue::String(base64::encode(&serialize(&next_block)));
+    let block = JsonValue::String(base64::encode(&serialize_async(&next_block).await));
     let response = node.miner_daemon_request("mine", JsonValue::Array(vec![target, block])).await?;
     next_block.header.nonce = *response.get::<f64>().unwrap() as u64;
 
@@ -250,19 +252,19 @@ async fn generate_next_block(
     zkbin: &ZkBinary,
     pk: &ProvingKey,
 ) -> Result<(BigUint, BlockInfo)> {
-    // Grab extended fork last proposal hash
+    // Grab extended fork next block height
     let last_proposal = extended_fork.last_proposal()?;
+    let next_block_height = last_proposal.block.header.height + 1;
 
     // We are deriving the next secret key for optimization.
     // Next secret is the poseidon hash of:
     //  [prefix, current(previous) secret, signing(block) height].
     let prefix = pallas::Base::from_raw([4, 0, 0, 0]);
-    let next_secret =
-        poseidon_hash([prefix, secret.inner(), (last_proposal.block.header.height + 1).into()]);
+    let next_secret = poseidon_hash([prefix, secret.inner(), next_block_height.into()]);
     *secret = SecretKey::from(next_secret);
 
     // Generate reward transaction
-    let tx = generate_transaction(&extended_fork.last_proposal()?, secret, recipient, zkbin, pk)?;
+    let tx = generate_transaction(next_block_height, secret, recipient, zkbin, pk)?;
 
     // Generate next block proposal
     let target = extended_fork.module.next_mine_target()?;
@@ -273,16 +275,12 @@ async fn generate_next_block(
 
 /// Auxiliary function to generate a Money::PoWReward transaction
 fn generate_transaction(
-    last_proposal: &Proposal,
+    block_height: u64,
     secret: &SecretKey,
     recipient: &PublicKey,
     zkbin: &ZkBinary,
     pk: &ProvingKey,
 ) -> Result<Transaction> {
-    // Grab extended proposal info
-    let last_nonce = last_proposal.block.header.nonce;
-    let fork_previous_hash = last_proposal.block.header.previous;
-
     // We're just going to be using a zero spend-hook and user-data
     let spend_hook = pallas::Base::zero().into();
     let user_data = pallas::Base::zero();
@@ -291,9 +289,7 @@ fn generate_transaction(
     let debris = PoWRewardCallBuilder {
         secret: *secret,
         recipient: *recipient,
-        block_height: last_proposal.block.header.height + 1,
-        last_nonce,
-        fork_previous_hash,
+        block_height,
         spend_hook,
         user_data,
         mint_zkbin: zkbin.clone(),

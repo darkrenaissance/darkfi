@@ -37,8 +37,6 @@ async fn sync_forks_real(ex: Arc<Executor<'static>>) -> Result<()> {
         pow_target,
         pow_fixed_difficulty: pow_fixed_difficulty.clone(),
         finalization_threshold: 6,
-        alice_initial: 1000,
-        bob_initial: 500,
     };
     let th = Harness::new(config, true, &ex).await?;
 

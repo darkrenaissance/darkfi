@@ -28,7 +28,7 @@ use darkfi::{
     zk::{empty_witnesses, ProvingKey, ZkCircuit},
     Result,
 };
-use darkfi_contract_test_harness::{vks, Holder, TestHarness};
+use darkfi_contract_test_harness::vks;
 use darkfi_money_contract::{
     client::pow_reward_v1::PoWRewardCallBuilder, MoneyFunction, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
@@ -47,8 +47,6 @@ pub struct HarnessConfig {
     pub pow_target: usize,
     pub pow_fixed_difficulty: Option<BigUint>,
     pub finalization_threshold: usize,
-    pub alice_initial: u64,
-    pub bob_initial: u64,
 }
 
 pub struct Harness {
@@ -65,19 +63,14 @@ impl Harness {
         verify_fees: bool,
         ex: &Arc<smol::Executor<'static>>,
     ) -> Result<Self> {
-        // Use test harness to generate genesis transactions
-        let mut th = TestHarness::new(&[Holder::Bob], verify_fees).await?;
-        let (genesis_mint_tx, _) =
-            th.genesis_mint(&Holder::Bob, config.bob_initial, None, None).await?;
-
         // Generate default genesis block
         let mut genesis_block = BlockInfo::default();
 
         // Retrieve genesis producer transaction
         let producer_tx = genesis_block.txs.pop().unwrap();
 
-        // Append genesis transactions
-        genesis_block.append_txs(vec![genesis_mint_tx, producer_tx])?;
+        // Append it again so its added to the merkle tree
+        genesis_block.append_txs(vec![producer_tx])?;
 
         // Generate validators configuration
         // NOTE: we are not using consensus constants here so we
@@ -169,7 +162,6 @@ impl Harness {
         // Next block info
         let block_height = previous.header.height + 1;
         let last_nonce = previous.header.nonce;
-        let fork_previous_hash = previous.header.previous;
 
         // Generate a producer transaction
         let keypair = Keypair::default();
@@ -190,8 +182,6 @@ impl Harness {
             secret: keypair.secret,
             recipient: keypair.public,
             block_height,
-            last_nonce,
-            fork_previous_hash,
             spend_hook,
             user_data,
             mint_zkbin: zkbin.clone(),

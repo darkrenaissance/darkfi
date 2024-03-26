@@ -17,7 +17,7 @@
  */
 
 use darkfi::{rpc::util::JsonValue, util::encoding::base64, Result};
-use darkfi_serial::serialize;
+use darkfi_serial::serialize_async;
 use log::info;
 
 use crate::Darkfid;
@@ -43,7 +43,8 @@ pub async fn consensus_task(node: &Darkfid) -> Result<()> {
         if !finalized.is_empty() {
             let mut notif_blocks = Vec::with_capacity(finalized.len());
             for block in finalized {
-                notif_blocks.push(JsonValue::String(base64::encode(&serialize(&block))));
+                notif_blocks
+                    .push(JsonValue::String(base64::encode(&serialize_async(&block).await)));
             }
             block_sub.notify(JsonValue::Array(notif_blocks)).await;
         }

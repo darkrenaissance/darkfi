@@ -68,10 +68,6 @@ pub struct PoWRewardCallBuilder {
     pub recipient: PublicKey,
     /// Rewarded block height
     pub block_height: u64,
-    /// Extending fork last proposal/block nonce
-    pub last_nonce: u64,
-    /// Extending fork second to last proposal/block hash
-    pub fork_previous_hash: blake3::Hash,
     /// Merkle tree of coins used to create inclusion proofs
     /// Spend hook for the output
     pub spend_hook: FuncId,
