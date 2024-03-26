@@ -34,7 +34,7 @@ use darkfi::{
     validator::pow::mine_block,
 };
 use darkfi_sdk::num_traits::Num;
-use darkfi_serial::{async_trait, deserialize};
+use darkfi_serial::{async_trait, deserialize_async};
 
 use crate::{
     error::{server_error, RpcError},
@@ -97,7 +97,7 @@ impl Minerd {
             error!(target: "minerd::rpc", "Failed to parse block bytes");
             return server_error(RpcError::BlockParseError, id, None)
         };
-        let Ok(mut block) = deserialize::<BlockInfo>(&block_bytes) else {
+        let Ok(mut block) = deserialize_async::<BlockInfo>(&block_bytes).await else {
             error!(target: "minerd::rpc", "Failed to parse block");
             return server_error(RpcError::BlockParseError, id, None)
         };
