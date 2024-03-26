@@ -45,20 +45,21 @@ pub struct TokenId(pallas::Base);
 
 impl TokenId {
     /// Derives a `TokenId` from a `SecretKey` (mint authority)
-    #[deprecated]
+    // TODO: this got deprected from DEP 0003, but why? ain't that mean
+    // we don't allow users to hold mint keys with their secret?
+    //#[deprecated]
     pub fn derive(mint_authority: SecretKey) -> Self {
         let public_key = PublicKey::from_secret(mint_authority);
-        let (x, y) = public_key.xy();
-        let hash = poseidon_hash([*TOKEN_ID_PREFIX, x, y]);
-        Self(hash)
+        Self::derive_public(public_key)
     }
 
     /// Derives a `TokenId` from a `PublicKey`
-    #[deprecated]
+    // TODO: this got deprected from DEP 0003, but why? ain't that mean
+    // we don't allow users to hold mint keys with their secret?
+    //#[deprecated]
     pub fn derive_public(public_key: PublicKey) -> Self {
         let (x, y) = public_key.xy();
-        let hash = poseidon_hash([*TOKEN_ID_PREFIX, x, y]);
-        Self(hash)
+        Self::derive_from(*TOKEN_ID_PREFIX, x, y)
     }
 
     pub fn derive_from(
