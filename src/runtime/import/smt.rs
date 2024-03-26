@@ -59,7 +59,7 @@ impl<'a> StorageAdapter for SledStorage<'a> {
             );
             return None
         };
-        let Some(value) = value else { return None };
+        let value = value?;
         let mut repr = [0; 32];
         repr.copy_from_slice(&value);
         let value = pallas::Base::from_repr(repr);

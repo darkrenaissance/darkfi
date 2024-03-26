@@ -253,7 +253,7 @@ impl Analyzer {
 
                     // We replace self.heap here so we can do proper heap lookups.
                     heap.push(v.clone());
-                    self.heap = heap.clone();
+                    self.heap.clone_from(&heap);
 
                     //println!("{:#?}", heap);
                     //println!("{:#?}", statements);
@@ -390,7 +390,7 @@ impl Analyzer {
                 var.typ = return_types[0];
                 stmt.lhs = Some(var.clone());
                 heap.push(var.clone());
-                self.heap = heap.clone();
+                self.heap.clone_from(&heap);
             }
 
             //println!("{:#?}", stmt);

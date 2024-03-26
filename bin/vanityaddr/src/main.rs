@@ -68,7 +68,7 @@ struct DrkContract {
 trait Prefixable {
     fn new() -> Self;
     fn to_string(&self) -> String;
-    fn get_secret(&self) -> SecretKey;
+    fn _get_secret(&self) -> SecretKey;
 
     fn starts_with(&self, prefix: &str, case_sensitive: bool) -> bool {
         if case_sensitive {
@@ -94,7 +94,7 @@ impl Prefixable for DrkAddr {
         self.public.to_string()
     }
 
-    fn get_secret(&self) -> SecretKey {
+    fn _get_secret(&self) -> SecretKey {
         self.secret
     }
 }
@@ -110,7 +110,7 @@ impl Prefixable for DrkToken {
         self.token_id.to_string()
     }
 
-    fn get_secret(&self) -> SecretKey {
+    fn _get_secret(&self) -> SecretKey {
         self.secret
     }
 }
@@ -126,7 +126,7 @@ impl Prefixable for DrkContract {
         self.contract_id.to_string()
     }
 
-    fn get_secret(&self) -> SecretKey {
+    fn _get_secret(&self) -> SecretKey {
         self.secret
     }
 }

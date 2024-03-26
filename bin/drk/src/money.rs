@@ -460,7 +460,7 @@ impl Drk {
             let Value::Blob(ref nullifier_bytes) = row[10] else {
                 return Err(Error::ParseFailed("[get_coins] Nullifier bytes parsing failed"))
             };
-            let nullifier: Nullifier = deserialize(nullifier_bytes)?;
+            let _nullifier: Nullifier = deserialize(nullifier_bytes)?;
 
             let Value::Blob(ref leaf_position_bytes) = row[11] else {
                 return Err(Error::ParseFailed("[get_coins] Leaf position bytes parsing failed"))

@@ -193,7 +193,7 @@ impl ZkCircuit {
     fn render(&self, k: u32, filename: &str, width: u32, height: u32, font_size: u32) -> bool {
         use plotters::prelude::*;
         let root = BitMapBackend::new(filename, (width, height)).into_drawing_area();
-        if let Err(_) = root.fill(&WHITE) {
+        if root.fill(&WHITE).is_err() {
             return false
         }
         let root = if let Ok(root) = root.titled("circuit", ("sans-serif", font_size)) {

@@ -25,6 +25,8 @@ use crate::{util::encoding::base32, Result};
 
 /// Unique, randomly-generated per-connection ID that's used to
 /// identify which connection a message belongs to.
+// TODO: remove this when implemented properly
+#[allow(dead_code)]
 #[derive(Clone, Eq, PartialEq, Hash)]
 struct ConnectionId([u8; 32]);
 

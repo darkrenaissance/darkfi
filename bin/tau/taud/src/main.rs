@@ -234,7 +234,7 @@ async fn on_receive_task(
 
         let mut task = task.unwrap();
         info!(target: "taud", "Save the task: ref: {}", task.ref_id);
-        task.workspace = workspace.clone();
+        task.workspace.clone_from(workspace);
         if piped {
             // if we can't load the task then it's a new task.
             // otherwise it's a modification.

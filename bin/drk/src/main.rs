@@ -882,7 +882,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 OtcSubcmd::Join => {
                     let mut buf = String::new();
                     stdin().read_to_string(&mut buf)?;
-                    let Some(bytes) = base64::decode(&buf.trim()) else {
+                    let Some(bytes) = base64::decode(buf.trim()) else {
                         eprintln!("Failed to decode partial swap data");
                         exit(2);
                     };
@@ -904,7 +904,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 OtcSubcmd::Inspect => {
                     let mut buf = String::new();
                     stdin().read_to_string(&mut buf)?;
-                    let Some(bytes) = base64::decode(&buf.trim()) else {
+                    let Some(bytes) = base64::decode(buf.trim()) else {
                         eprintln!("Failed to decode swap transaction");
                         exit(2);
                     };
@@ -920,7 +920,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 OtcSubcmd::Sign => {
                     let mut buf = String::new();
                     stdin().read_to_string(&mut buf)?;
-                    let Some(bytes) = base64::decode(&buf.trim()) else {
+                    let Some(bytes) = base64::decode(buf.trim()) else {
                         eprintln!("Failed to decode swap transaction");
                         exit(1);
                     };
@@ -1215,7 +1215,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         Subcmd::Inspect => {
             let mut buf = String::new();
             stdin().read_to_string(&mut buf)?;
-            let Some(bytes) = base64::decode(&buf.trim()) else {
+            let Some(bytes) = base64::decode(buf.trim()) else {
                 eprintln!("Failed to decode transaction");
                 exit(1);
             };
@@ -1229,7 +1229,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             println!("Reading transaction from stdin...");
             let mut buf = String::new();
             stdin().read_to_string(&mut buf)?;
-            let Some(bytes) = base64::decode(&buf.trim()) else {
+            let Some(bytes) = base64::decode(buf.trim()) else {
                 eprintln!("Failed to decode transaction");
                 exit(1);
             };
@@ -1342,7 +1342,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 println!("Reading transaction from stdin...");
                 let mut buf = String::new();
                 stdin().read_to_string(&mut buf)?;
-                let Some(bytes) = base64::decode(&buf.trim()) else {
+                let Some(bytes) = base64::decode(buf.trim()) else {
                     eprintln!("Failed to decode transaction");
                     exit(1);
                 };

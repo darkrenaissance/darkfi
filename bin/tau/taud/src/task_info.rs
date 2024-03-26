@@ -434,7 +434,7 @@ impl TaskInfo {
 
     pub fn set_project(&mut self, projects: &[String]) {
         debug!(target: "tau", "TaskInfo::set_project()");
-        self.project = projects.to_owned();
+        projects.clone_into(&mut self.project);
     }
 
     pub fn set_comment(&mut self, c: Comment) {

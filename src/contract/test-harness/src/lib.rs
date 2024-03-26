@@ -284,12 +284,7 @@ fn benchmark_wasm_calls(
     tx: &Transaction,
     block_height: u64,
 ) {
-    let mut file = std::fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .append(true)
-        .open("bench.csv")
-        .unwrap();
+    let mut file = std::fs::OpenOptions::new().create(true).append(true).open("bench.csv").unwrap();
 
     for (idx, call) in tx.calls.iter().enumerate() {
         let overlay = BlockchainOverlay::new(&validator.blockchain).expect("blockchain overlay");
