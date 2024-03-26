@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use halo2_proofs::{circuit::Value, pasta::Fp};
 use rand::rngs::OsRng;
 
@@ -27,53 +28,44 @@ use darkfi::{
         Proof,
     },
     zkas::ZkBinary,
-    Result,
 };
 
-const SAMPLES: u128 = 10;
-
-#[test]
-#[ignore]
-fn bench_zk() -> Result<()> {
+fn zk_arith_bench(c: &mut Criterion) {
     let bincode = include_bytes!("../proof/arithmetic.zk.bin");
-    let zkbin = ZkBinary::decode(bincode)?;
+    let zkbin = ZkBinary::decode(bincode).unwrap();
 
     let a = Fp::from(4);
     let b = Fp::from(110);
 
-    // Values for the proof
     let prover_witnesses = vec![Witness::Base(Value::known(a)), Witness::Base(Value::known(b))];
-
     let public_inputs = vec![a + b, a * b, a - b];
 
-    // I tried cargo bench, but there's no way to display k=X for each individual bench
-    // TODO: make a benchmark group and use bench_with_input (cargo bench)
-    // see https://github.com/getsentry/relay/blob/master/relay-cardinality/benches/redis_impl.rs#L137-L165
+    let circuit = ZkCircuit::new(prover_witnesses.clone(), &zkbin);
+
+    let mut prove_group = c.benchmark_group("prove");
     for k in 11..20 {
-        println!("Benchmarking k={}", k);
+        let proving_key = ProvingKey::build(k, &circuit.clone());
+        prove_group.bench_with_input(BenchmarkId::from_parameter(k), &k, |b, &_k| {
+            b.iter(|| Proof::create(&proving_key, &[circuit.clone()], &public_inputs, &mut OsRng))
+        });
+    }
+    prove_group.finish();
 
-        let circuit = ZkCircuit::new(prover_witnesses.clone(), &zkbin);
-        let proving_key = ProvingKey::build(k, &circuit);
-        let mut total = 0;
-        for _ in 0..SAMPLES {
-            let now = std::time::Instant::now();
-            let _ = Proof::create(&proving_key, &[circuit.clone()], &public_inputs, &mut OsRng)?;
-            total += now.elapsed().as_millis();
-        }
-        println!("Avg proving time: {} ms", total / SAMPLES);
-        let proof = Proof::create(&proving_key, &[circuit], &public_inputs, &mut OsRng)?;
-
-        let verifier_witnesses = empty_witnesses(&zkbin)?;
+    let mut verif_group = c.benchmark_group("verify");
+    for k in 11..20 {
+        let proving_key = ProvingKey::build(k, &circuit.clone());
+        let proof =
+            Proof::create(&proving_key, &[circuit.clone()], &public_inputs, &mut OsRng).unwrap();
+        let verifier_witnesses = empty_witnesses(&zkbin).unwrap();
         let circuit = ZkCircuit::new(verifier_witnesses, &zkbin);
         let verifying_key = VerifyingKey::build(k, &circuit);
-        let mut total = 0;
-        for _ in 0..SAMPLES {
-            let now = std::time::Instant::now();
-            proof.verify(&verifying_key, &public_inputs)?;
-            total += now.elapsed().as_millis();
-        }
-        println!("Avg verification time: {} ms", total / SAMPLES);
-    }
 
-    Ok(())
+        verif_group.bench_with_input(BenchmarkId::from_parameter(k), &k, |b, &_k| {
+            b.iter(|| proof.verify(&verifying_key, &public_inputs))
+        });
+    }
+    verif_group.finish();
 }
+
+criterion_group!(benches, zk_arith_bench);
+criterion_main!(benches);

@@ -130,6 +130,8 @@ halo2_gadgets = "0.3.0"
 plotters = "0.3.5"
 easy-parallel = "3.3.1"
 prettytable-rs = "0.10.0"
+# Used for benchmarks
+criterion = { version = "0.4", features = ["html_reports"] }
 
 # -----BEGIN LIBRARY FEATURES-----
 [features]
@@ -312,3 +314,9 @@ halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v4"}
 halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v4"}
 # Temp rust nightly fix
 pathfinder_simd = {git="https://github.com/servo/pathfinder", branch="main"}
+
+[[bench]]
+name = "zk_arith"
+harness = false
+path = "bench/zk_arith.rs"
+
