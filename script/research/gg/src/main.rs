@@ -43,7 +43,7 @@ use darkfi_sdk::{
     pasta::pallas,
     ContractCall,
 };
-use darkfi_serial::{deserialize, serialize, AsyncEncodable};
+use darkfi_serial::{deserialize_async, serialize_async, AsyncEncodable};
 
 #[derive(Parser)]
 #[command(about = cli_desc!())]
@@ -80,12 +80,12 @@ enum Subcmd {
 }
 
 /// Auxiliary function to read a bs58 genesis block from stdin
-fn read_block() -> Result<BlockInfo> {
+async fn read_block() -> Result<BlockInfo> {
     println!("Reading genesis block from stdin...");
     let mut buf = String::new();
     stdin().read_to_string(&mut buf)?;
     let bytes = base64::decode(buf.trim()).unwrap();
-    let block = deserialize(&bytes)?;
+    let block = deserialize_async(&bytes).await?;
     Ok(block)
 }
 
@@ -97,7 +97,7 @@ async fn main() -> Result<()> {
     // Execute a subcommand
     match args.command {
         Subcmd::Display => {
-            let genesis_block = read_block()?;
+            let genesis_block = read_block().await;
             println!("{genesis_block:#?}");
         }
 
@@ -107,12 +107,8 @@ async fn main() -> Result<()> {
             let mut genesis_txs: Vec<Transaction> = vec![];
             for file in read_dir(txs_folder)? {
                 let file = file?;
-                let Ok(bytes) = bs58::decode(&read_to_string(file.path())?.trim()).into_vec()
-                else {
-                    eprintln!("Error: Failed to decode transaction: {:?}", file.path());
-                    exit(2);
-                };
-                let tx = deserialize(&bytes)?;
+                let bytes = base64::decode(read_to_string(file.path())?.trim()).unwrap();
+                let tx = deserialize_async(&bytes).await?;
                 genesis_txs.push(tx);
             }
 
@@ -134,12 +130,12 @@ async fn main() -> Result<()> {
             genesis_block.append_txs(vec![producer_tx])?;
 
             // Write generated genesis block to stdin
-            let encoded = base64::encode(&serialize(&genesis_block));
+            let encoded = base64::encode(&serialize_async(&genesis_block).await);
             println!("{encoded}");
         }
 
         Subcmd::Verify => {
-            let genesis_block = read_block()?;
+            let genesis_block = read_block().await?;
             let hash = genesis_block.hash()?;
 
             println!("Verifying genesis block: {hash}");
@@ -166,7 +162,7 @@ async fn main() -> Result<()> {
                 eprintln!("Error: Failed to decode stdin buffer");
                 exit(2);
             };
-            let secret = deserialize::<SecretKey>(&bytes)?;
+            let secret = deserialize_async::<SecretKey>(&bytes).await?;
             let keypair = Keypair::new(secret);
 
             if let Err(e) = f64::from_str(&amount) {
@@ -215,7 +211,7 @@ async fn main() -> Result<()> {
             let sigs = tx.create_sigs(&[keypair.secret])?;
             tx.signatures = vec![sigs];
 
-            println!("{}", bs58::encode(&serialize(&tx)).into_string());
+            println!("{}", base64::encode(&serialize_async(&tx).await));
         }
     }
 
