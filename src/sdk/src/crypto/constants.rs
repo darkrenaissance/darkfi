@@ -49,3 +49,6 @@ pub(crate) const L_VALUE: usize = 64;
 
 /// WIF checksum length
 pub const WIF_CHECKSUM_LEN: usize = 4;
+
+/// Domain prefix used for Schnorr signatures, with `hash_to_scalar`.
+pub const DRK_TOKEN_ID_PERSONALIZATION: &[u8] = b"DarkFi:DRK_Native_Token";

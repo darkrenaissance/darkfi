@@ -16,7 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::{crypto::pasta_prelude::PrimeField, error::ContractError, pasta::pallas};
+use darkfi_sdk::{
+    crypto::{
+        constants::DRK_TOKEN_ID_PERSONALIZATION, pasta_prelude::PrimeField, util::hash_to_base,
+    },
+    error::ContractError,
+    pasta::pallas,
+};
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use lazy_static::lazy_static;
 
@@ -26,17 +32,14 @@ use darkfi_serial::async_trait;
 use super::{poseidon_hash, PublicKey, SecretKey};
 
 lazy_static! {
-    // The idea here is that 0 is not a valid x coordinate for any pallas point,
-    // therefore a signature cannot be produced for such IDs. This allows us to
-    // avoid hardcoding contract IDs for arbitrary contract deployments, because
-    // the contracts with 0 as their x coordinate can never have a valid signature.
-
+    // Is this even needed? Not used elsewhere except here.
     /// Derivation prefix for `TokenId`
     pub static ref TOKEN_ID_PREFIX: pallas::Base = pallas::Base::from(69);
 
-    /// Native DARK token ID
-    pub static ref DARK_TOKEN_ID: TokenId =
-        TokenId::from(poseidon_hash([*TOKEN_ID_PREFIX, pallas::Base::zero(), pallas::Base::from(42)]));
+    /// Native DARK token ID.
+    /// It does not correspond to any real commitment since we only rely on this value as
+    /// a constant.
+    pub static ref DARK_TOKEN_ID: TokenId = TokenId(hash_to_base(&[0x69], &[DRK_TOKEN_ID_PERSONALIZATION]));
 }
 
 /// TokenId represents an on-chain identifier for a certain token.
