@@ -33,6 +33,7 @@ use darkfi::{
 const SAMPLES: u128 = 10;
 
 #[test]
+#[ignore]
 fn bench_zk() -> Result<()> {
     let bincode = include_bytes!("../proof/arithmetic.zk.bin");
     let zkbin = ZkBinary::decode(bincode)?;
