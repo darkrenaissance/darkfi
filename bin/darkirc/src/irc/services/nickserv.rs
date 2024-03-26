@@ -55,7 +55,7 @@ For more information on a NickServ command, type:
 /// NickServ implementation used for IRC account management
 pub struct NickServ {
     /// Client username
-    pub username: Arc<RwLock<String>>,
+    pub _username: Arc<RwLock<String>>,
     /// Client nickname
     pub nickname: Arc<RwLock<String>>,
     /// Pointer to parent `IrcServer`
@@ -66,11 +66,11 @@ impl NickServ {
     /// Instantiate a new `NickServ` for a client. This should be called after
     /// the user/nick are successfully registered.
     pub async fn new(
-        username: Arc<RwLock<String>>,
+        _username: Arc<RwLock<String>>,
         nickname: Arc<RwLock<String>>,
         server: Arc<IrcServer>,
     ) -> Result<Self> {
-        Ok(Self { username, nickname, server })
+        Ok(Self { _username, nickname, server })
     }
 
     /// Handle a `NickServ` query. This is the main command handler.
