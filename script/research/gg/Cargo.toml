@@ -15,12 +15,14 @@ edition = "2021"
 [dependencies]
 # Darkfi
 darkfi = {path = "../../../", features = ["validator"]}
+darkfi_money_contract = {path = "../../../src/contract/money", features = ["no-entrypoint", "client"]}
 darkfi-contract-test-harness = {path = "../../../src/contract/test-harness"}
+darkfi-sdk = {path = "../../../src/sdk"}
 darkfi-serial = {path = "../../../src/serial"}
 
 # Misc
-anyhow = "1.0.80"
 async-std = {version = "1.12.0", features = ["attributes"]}
+bs58 = "0.5.0"
 clap = {version = "4.5.2", features = ["derive"]}
 sled = "0.34.7"
 
