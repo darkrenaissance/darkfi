@@ -36,6 +36,7 @@ use darkfi::{
     rpc::{client::RpcClient, jsonrpc::JsonRequest, util::JsonValue},
     tx::Transaction,
     util::{
+        encoding::base64,
         parse::{decode_base10, encode_base10},
         path::expand_path,
     },
@@ -47,7 +48,7 @@ use darkfi_sdk::{
     crypto::{FuncId, PublicKey, SecretKey},
     pasta::{group::ff::PrimeField, pallas},
 };
-use darkfi_serial::{deserialize, serialize};
+use darkfi_serial::{deserialize_async, serialize_async};
 
 /// Error codes
 mod error;
@@ -696,7 +697,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 for (i, line) in lines.enumerate() {
                     if let Ok(line) = line {
                         let bytes = bs58::decode(&line.trim()).into_vec()?;
-                        let Ok(secret) = deserialize(&bytes) else {
+                        let Ok(secret) = deserialize_async(&bytes).await else {
                             println!("Warning: Failed to deserialize secret on line {i}");
                             continue
                         };
@@ -754,7 +755,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     };
 
                     let spend_hook = if coin.0.note.spend_hook != FuncId::none() {
-                        bs58::encode(&serialize(&coin.0.note.spend_hook.inner()))
+                        bs58::encode(&serialize_async(&coin.0.note.spend_hook.inner()).await)
                             .into_string()
                             .to_string()
                     } else {
@@ -762,13 +763,17 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     };
 
                     let user_data = if coin.0.note.user_data != pallas::Base::ZERO {
-                        bs58::encode(&serialize(&coin.0.note.user_data)).into_string().to_string()
+                        bs58::encode(&serialize_async(&coin.0.note.user_data).await)
+                            .into_string()
+                            .to_string()
                     } else {
                         String::from("-")
                     };
 
                     table.add_row(row![
-                        bs58::encode(&serialize(&coin.0.coin.inner())).into_string().to_string(),
+                        bs58::encode(&serialize_async(&coin.0.coin.inner()).await)
+                            .into_string()
+                            .to_string(),
                         coin.1,
                         coin.0.note.token_id,
                         aliases,
@@ -849,7 +854,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 }
             };
 
-            println!("{}", bs58::encode(&serialize(&tx)).into_string());
+            println!("{}", base64::encode(&serialize_async(&tx).await));
 
             Ok(())
         }
@@ -870,15 +875,19 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                         }
                     };
 
-                    println!("{}", bs58::encode(&serialize(&half)).into_string());
+                    println!("{}", base64::encode(&serialize_async(&half).await));
                     Ok(())
                 }
 
                 OtcSubcmd::Join => {
                     let mut buf = String::new();
                     stdin().read_to_string(&mut buf)?;
-                    let bytes = bs58::decode(&buf.trim()).into_vec()?;
-                    let partial: PartialSwapData = deserialize(&bytes)?;
+                    let Some(bytes) = base64::decode(&buf.trim()) else {
+                        eprintln!("Failed to decode partial swap data");
+                        exit(2);
+                    };
+
+                    let partial: PartialSwapData = deserialize_async(&bytes).await?;
 
                     let tx = match drk.join_swap(partial).await {
                         Ok(tx) => tx,
@@ -888,14 +897,17 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                         }
                     };
 
-                    println!("{}", bs58::encode(&serialize(&tx)).into_string());
+                    println!("{}", base64::encode(&serialize_async(&tx).await));
                     Ok(())
                 }
 
                 OtcSubcmd::Inspect => {
                     let mut buf = String::new();
                     stdin().read_to_string(&mut buf)?;
-                    let bytes = bs58::decode(&buf.trim()).into_vec()?;
+                    let Some(bytes) = base64::decode(&buf.trim()) else {
+                        eprintln!("Failed to decode swap transaction");
+                        exit(2);
+                    };
 
                     if let Err(e) = drk.inspect_swap(bytes).await {
                         eprintln!("Failed to inspect swap: {e:?}");
@@ -908,15 +920,19 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 OtcSubcmd::Sign => {
                     let mut buf = String::new();
                     stdin().read_to_string(&mut buf)?;
-                    let bytes = bs58::decode(&buf.trim()).into_vec()?;
-                    let mut tx: Transaction = deserialize(&bytes)?;
+                    let Some(bytes) = base64::decode(&buf.trim()) else {
+                        eprintln!("Failed to decode swap transaction");
+                        exit(1);
+                    };
+
+                    let mut tx: Transaction = deserialize_async(&bytes).await?;
 
                     if let Err(e) = drk.sign_swap(&mut tx).await {
                         eprintln!("Failed to sign joined swap transaction: {e:?}");
                         exit(2);
                     };
 
-                    println!("{}", bs58::encode(&serialize(&tx)).into_string());
+                    println!("{}", base64::encode(&serialize_async(&tx).await));
                     Ok(())
                 }
             }
@@ -966,7 +982,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     bulla_blind,
                 };
 
-                let encoded = bs58::encode(&serialize(&dao_params)).into_string();
+                let encoded = bs58::encode(&serialize_async(&dao_params).await).into_string();
                 println!("{encoded}");
 
                 Ok(())
@@ -976,7 +992,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 let mut buf = String::new();
                 stdin().read_to_string(&mut buf)?;
                 let bytes = bs58::decode(&buf.trim()).into_vec()?;
-                let dao_params: DaoParams = deserialize(&bytes)?;
+                let dao_params: DaoParams = deserialize_async(&bytes).await?;
                 println!("{dao_params}");
 
                 Ok(())
@@ -986,7 +1002,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 let mut buf = String::new();
                 stdin().read_to_string(&mut buf)?;
                 let bytes = bs58::decode(&buf.trim()).into_vec()?;
-                let dao_params: DaoParams = deserialize(&bytes)?;
+                let dao_params: DaoParams = deserialize_async(&bytes).await?;
 
                 let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
 
@@ -1071,7 +1087,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                         exit(2);
                     }
                 };
-                println!("{}", bs58::encode(&serialize(&tx)).into_string());
+                println!("{}", base64::encode(&serialize_async(&tx).await));
                 Ok(())
             }
 
@@ -1106,7 +1122,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                         exit(2);
                     }
                 };
-                println!("{}", bs58::encode(&serialize(&tx)).into_string());
+                println!("{}", base64::encode(&serialize_async(&tx).await));
                 Ok(())
             }
 
@@ -1171,7 +1187,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
                 // TODO: Write our_vote in the proposal sql.
 
-                println!("{}", bs58::encode(&serialize(&tx)).into_string());
+                println!("{}", bs58::encode(&serialize_async(&tx).await).into_string());
 
                 Ok(())
             }
@@ -1190,7 +1206,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                         exit(2);
                     }
                 };
-                println!("{}", bs58::encode(&serialize(&tx)).into_string());
+                println!("{}", base64::encode(&serialize_async(&tx).await));
 
                 Ok(())
             }
@@ -1199,8 +1215,12 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         Subcmd::Inspect => {
             let mut buf = String::new();
             stdin().read_to_string(&mut buf)?;
-            let bytes = bs58::decode(&buf.trim()).into_vec()?;
-            let tx: Transaction = deserialize(&bytes)?;
+            let Some(bytes) = base64::decode(&buf.trim()) else {
+                eprintln!("Failed to decode transaction");
+                exit(1);
+            };
+
+            let tx: Transaction = deserialize_async(&bytes).await?;
             println!("{tx:#?}");
             Ok(())
         }
@@ -1209,8 +1229,12 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             println!("Reading transaction from stdin...");
             let mut buf = String::new();
             stdin().read_to_string(&mut buf)?;
-            let bytes = bs58::decode(&buf.trim()).into_vec()?;
-            let tx = deserialize(&bytes)?;
+            let Some(bytes) = base64::decode(&buf.trim()) else {
+                eprintln!("Failed to decode transaction");
+                exit(1);
+            };
+
+            let tx = deserialize_async(&bytes).await?;
 
             let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
 
@@ -1302,7 +1326,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 assert_eq!(tx.hash()?, tx_hash);
 
                 if encode {
-                    println!("{}", bs58::encode(&serialize(&tx)).into_string());
+                    println!("{}", base64::encode(&serialize_async(&tx).await));
                     exit(1)
                 }
 
@@ -1318,8 +1342,12 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 println!("Reading transaction from stdin...");
                 let mut buf = String::new();
                 stdin().read_to_string(&mut buf)?;
-                let bytes = bs58::decode(&buf.trim()).into_vec()?;
-                let tx = deserialize(&bytes)?;
+                let Some(bytes) = base64::decode(&buf.trim()) else {
+                    eprintln!("Failed to decode transaction");
+                    exit(1);
+                };
+
+                let tx = deserialize_async(&bytes).await?;
 
                 let drk =
                     Drk::new(args.wallet_path, args.wallet_pass, args.endpoint.clone(), ex.clone())
@@ -1348,7 +1376,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     let (tx_hash, status, tx) = drk.get_tx_history_record(&c).await?;
 
                     if encode {
-                        println!("{}", bs58::encode(&serialize(&tx)).into_string());
+                        println!("{}", base64::encode(&serialize_async(&tx).await));
                         exit(1)
                     }
 
@@ -1560,7 +1588,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 //    }
                 //};
 
-                //println!("{}", bs58::encode(&serialize(&tx)).into_string());
+                //println!("{}", base64::encode(&serialize_async(&tx).await));
 
                 //Ok(())
             }
@@ -1584,7 +1612,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 //    }
                 //};
 
-                //println!("{}", bs58::encode(&serialize(&tx)).into_string());
+                //println!("{}", base64::encode(&serialize_async(&tx).await));
 
                 //Ok(())
             }

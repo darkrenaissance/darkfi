@@ -33,7 +33,7 @@ use darkfi::{
     Error, Result,
 };
 use darkfi_sdk::crypto::ContractId;
-use darkfi_serial::{deserialize, serialize};
+use darkfi_serial::{deserialize_async, serialize_async};
 
 use crate::{
     error::{WalletDbError, WalletDbResult},
@@ -126,7 +126,7 @@ impl Drk {
                         let param = param.get::<String>().unwrap();
                         let bytes = base64::decode(param).unwrap();
 
-                        let block_data: BlockInfo = deserialize(&bytes)?;
+                        let block_data: BlockInfo = deserialize_async(&bytes).await?;
                         println!("=======================================");
                         println!("Block header:\n{:#?}", block_data.header);
                         println!("=======================================");
@@ -277,7 +277,7 @@ impl Drk {
         let params = self.rpc_client.request(req).await?;
         let param = params.get::<String>().unwrap();
         let bytes = base64::decode(param).unwrap();
-        let block = deserialize(&bytes)?;
+        let block = deserialize_async(&bytes).await?;
         Ok(block)
     }
 
@@ -287,7 +287,7 @@ impl Drk {
         println!("Broadcasting transaction...");
 
         let params =
-            JsonValue::Array(vec![JsonValue::String(bs58::encode(&serialize(tx)).into_string())]);
+            JsonValue::Array(vec![JsonValue::String(base64::encode(&serialize_async(tx).await))]);
         let req = JsonRequest::new("tx.broadcast", params);
         let rep = self.rpc_client.request(req).await?;
 
@@ -314,7 +314,7 @@ impl Drk {
         match self.rpc_client.request(req).await {
             Ok(param) => {
                 let tx_bytes = base64::decode(param.get::<String>().unwrap()).unwrap();
-                let tx = deserialize(&tx_bytes)?;
+                let tx = deserialize_async(&tx_bytes).await?;
                 Ok(Some(tx))
             }
 
@@ -324,7 +324,7 @@ impl Drk {
 
     /// Simulate the transaction with the state machine
     pub async fn simulate_tx(&self, tx: &Transaction) -> Result<bool> {
-        let tx_str = bs58::encode(&serialize(tx)).into_string();
+        let tx_str = base64::encode(&serialize_async(tx).await);
         let req =
             JsonRequest::new("tx.simulate", JsonValue::Array(vec![JsonValue::String(tx_str)]));
         let rep = self.rpc_client.request(req).await?;
@@ -347,7 +347,7 @@ impl Drk {
         for param in params {
             let zkas_ns = param[0].get::<String>().unwrap().clone();
             let zkas_bincode_bytes = base64::decode(param.get::<String>().unwrap()).unwrap();
-            let zkas_bincode = deserialize(&zkas_bincode_bytes)?;
+            let zkas_bincode = deserialize_async(&zkas_bincode_bytes).await?;
             ret.push((zkas_ns, zkas_bincode));
         }
 

@@ -19,9 +19,9 @@
 use lazy_static::lazy_static;
 use rusqlite::types::Value;
 
-use darkfi::{tx::Transaction, Error, Result};
+use darkfi::{tx::Transaction, util::encoding::base64, Error, Result};
 use darkfi_sdk::crypto::MONEY_CONTRACT_ID;
-use darkfi_serial::{deserialize, serialize};
+use darkfi_serial::{deserialize_async, serialize_async};
 
 use crate::{
     convert_named_params,
@@ -56,7 +56,7 @@ impl Drk {
                 rusqlite::params![
                     tx_hash.to_string(),
                     "Broadcasted",
-                    bs58::encode(&serialize(tx)).into_string()
+                    base64::encode(&serialize_async(tx).await),
                 ],
             )
             .await
@@ -101,8 +101,14 @@ impl Drk {
                 "[get_tx_history_record] Encoded transaction parsing failed",
             ))
         };
-        let tx_bytes: Vec<u8> = bs58::decode(tx_encoded).into_vec()?;
-        let tx: Transaction = deserialize(&tx_bytes)?;
+
+        let Some(tx_bytes) = base64::decode(tx_encoded) else {
+            return Err(Error::ParseFailed(
+                "[get_tx_history_record] Encoded transaction parsing failed",
+            ))
+        };
+
+        let tx: Transaction = deserialize_async(&tx_bytes).await?;
 
         Ok((tx_hash, status, tx))
     }
