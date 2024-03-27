@@ -89,6 +89,9 @@ pub enum ContractError {
     // size and present this error.
     #[error("Data too large")]
     DataTooLarge,
+
+    #[error("Hex string is not properly formatted")]
+    HexFmtErr,
 }
 
 /// Builtin return values occupy the upper 32 bits
@@ -118,6 +121,7 @@ pub const DB_DEL_FAILED: i64 = to_builtin!(17);
 pub const SMT_PUT_FAILED: i64 = to_builtin!(18);
 pub const GET_SYSTEM_TIME_FAILED: i64 = to_builtin!(19);
 pub const DATA_TOO_LARGE: i64 = to_builtin!(20);
+pub const HEX_FMT_ERR: i64 = to_builtin!(21);
 
 impl From<ContractError> for i64 {
     fn from(err: ContractError) -> Self {
@@ -141,6 +145,7 @@ impl From<ContractError> for i64 {
             ContractError::SmtPutFailed => SMT_PUT_FAILED,
             ContractError::GetSystemTimeFailed => GET_SYSTEM_TIME_FAILED,
             ContractError::DataTooLarge => DATA_TOO_LARGE,
+            ContractError::HexFmtErr => HEX_FMT_ERR,
             ContractError::Custom(error) => {
                 if error == 0 {
                     CUSTOM_ZERO
@@ -175,6 +180,7 @@ impl From<i64> for ContractError {
             SMT_PUT_FAILED => Self::SmtPutFailed,
             GET_SYSTEM_TIME_FAILED => Self::GetSystemTimeFailed,
             DATA_TOO_LARGE => Self::DataTooLarge,
+            HEX_FMT_ERR => Self::HexFmtErr,
             _ => Self::Custom(error as u32),
         }
     }

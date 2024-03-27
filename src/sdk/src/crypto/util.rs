@@ -25,6 +25,8 @@ use pasta_curves::{
 use std::io::Cursor;
 use subtle::CtOption;
 
+use crate::error::{ContractError, GenericResult};
+
 #[inline]
 fn hash_to_field_elem<F: FromUniformBytes<64>>(persona: &[u8], vals: &[&[u8]]) -> F {
     let mut hasher = blake2b_simd::Params::new().hash_length(64).personal(persona).to_state();
@@ -85,6 +87,43 @@ pub fn fp_to_u64(value: pallas::Base) -> Option<u64> {
     Some(uint)
 }
 
+// Not allowed to implement external traits for external crates
+pub trait FieldElemAsStr: PrimeField<Repr = [u8; 32]> {
+    fn to_str(&self) -> String {
+        let mut repr = String::new();
+        for &b in self.to_repr().iter().rev() {
+            repr += &format!("{:02x}", b);
+        }
+        repr
+    }
+
+    fn from_str(hex: &str) -> GenericResult<Self> {
+        if hex.len() != 32 * 2 {
+            return Err(ContractError::HexFmtErr)
+        }
+
+        let mut bytes = [0u8; 32];
+        for i in 0..32 {
+            // Bytes are little endian but str repr is big endian
+            bytes[32 - i - 1] = if let Ok(byte) = u8::from_str_radix(&hex[2 * i..2 * i + 2], 16) {
+                byte
+            } else {
+                return Err(ContractError::HexFmtErr)
+            };
+        }
+
+        let value = Self::from_repr(bytes);
+        if value.is_some().into() {
+            Ok(value.unwrap())
+        } else {
+            Err(ContractError::HexFmtErr)
+        }
+    }
+}
+
+impl FieldElemAsStr for pallas::Base {}
+impl FieldElemAsStr for pallas::Scalar {}
+
 #[test]
 fn test_fp_to_u64() {
     use super::pasta_prelude::Field;
@@ -92,4 +131,16 @@ fn test_fp_to_u64() {
     let fp = pallas::Base::from(u64::MAX);
     assert_eq!(fp_to_u64(fp), Some(u64::MAX));
     assert_eq!(fp_to_u64(fp + pallas::Base::ONE), None);
+}
+
+#[test]
+fn test_fp_to_str() {
+    use self::FieldElemAsStr;
+    let fpstr = "227ae0da79929f3e23f8d5bc9992f5f140f5198932378731e1b49b67fdc296c8";
+    assert_eq!(pallas::Base::from_str(fpstr).unwrap().to_str(), fpstr);
+
+    let fpstr = "000000000000000000000000000000000000000000000000ffffffffffffffff";
+    let fp = pallas::Base::from(u64::MAX);
+    assert_eq!(fp.to_str(), fpstr);
+    assert_eq!(pallas::Base::from_str(fpstr).unwrap(), fp);
 }
