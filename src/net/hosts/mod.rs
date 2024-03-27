@@ -47,8 +47,9 @@ pub mod refinery;
 ///
 /// `HostColor`: White hosts have been seen recently. Gold hosts we have been able to establish
 ///  a connection to. Grey hosts are recently received hosts that are periodically refreshed
-///  using the greylist refinery. Black hosts are considerede hostile and are strictly avoided
-///  for the duration of the program.
+///  using the greylist refinery. Black hosts are considered hostile and are strictly avoided
+///  for the duration of the program. Dark hosts are hosts that do not match our transports, but
+///  that we continue to share with other peers. They are otherwise ignored.
 ///
 /// `HostState`: a set of mutually exclusive states that can be Insert, Refine, Connect, Suspend
 ///  or Connected. The state is `None` when the corresponding host has been removed from the

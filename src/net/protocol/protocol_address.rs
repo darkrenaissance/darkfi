@@ -55,9 +55,8 @@ use crate::Result;
 /// even if they can't connect to them themselves.
 ///
 /// 4. Finally, if there's still space available, fill the remaining vector
-/// space with greylist entries. This is necessary in case this node does
-/// not support the transports of the requesting node (non-supported
-/// transports are stored on the greylist).
+/// space with darklist entries. This is necessary to propagate transports
+/// that neither this node nor the receiving node support.
 pub struct ProtocolAddress {
     channel: ChannelPtr,
     addrs_sub: MessageSubscription<AddrsMessage>,

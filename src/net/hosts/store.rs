@@ -60,16 +60,15 @@ pub type HostRegistry = RwLock<HashMap<Url, HostState>>;
 ///                +------+      +---------+
 ///       +------> | move | ---> | suspend |
 ///       |        +------+      +---------+
-///       |           ^               |       +--------+
-///       |           |               |       | insert |
-///       |                           v       +--------+
-///  +---------+      |          +--------+        |
-///  | connect |      |          | refine |        |
+///       |           ^               |
+///       |           |               v        +--------+
+///  +---------+      |          +--------+    | insert |
+///  | connect |      |          | refine |    +--------+
 ///  +---------+      |          +--------+        |
 ///       |           v               |            v
-///       |     +-----------+         |        +------+
-///       +---> | connected | <-------+------> | None |
-///             +-----------+                  +------+
+///       |     +-----------+         |         +------+
+///       +---> | connected | <-------+-------> | None |
+///             +-----------+                   +------+
 ///                   |
 ///                   v
 ///                +------+
@@ -853,9 +852,8 @@ impl Hosts {
     // Loop through hosts selected by Outbound Session and see if any of them are
     // free to connect to.
     pub async fn check_addrs(&self, hosts: Vec<(Url, u64)>) -> Option<(Url, u64)> {
+        debug!(target: "net::hosts::check_addrs()", "Starting checks");
         for (host, last_seen) in hosts {
-            debug!(target: "net::hosts::check_addrs()", "Starting checks");
-
             // Print a warning if we are trying to connect to a seed node in
             // Outbound session. This shouldn't happen as we reject configured
             // seed nodes from entering our hostlist in filter_addrs().
@@ -867,7 +865,7 @@ impl Hosts {
             }
 
             if let Err(e) = self.try_register(host.clone(), HostState::Connect).await {
-                debug!(target: "net::hosts::check_addrs", "Skipping addr={}, err={}",
+                trace!(target: "net::hosts::check_addrs", "Skipping addr={}, err={}",
                        host.clone(), e);
                 continue
             }
