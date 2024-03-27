@@ -203,8 +203,11 @@ pub fn create_fee_proof(
         Witness::Base(Value::known(token_blind.inner())),
     ];
 
-    //darkfi::zk::export_witness_json("witness.json", &prover_witnesses, &public_inputs.to_vec());
-
+    darkfi::zk::export_witness_json(
+        "proof/witness/fee_v1.json",
+        &prover_witnesses,
+        &public_inputs.to_vec(),
+    );
     let circuit = ZkCircuit::new(prover_witnesses, zkbin);
     let proof = Proof::create(pk, &[circuit], &public_inputs.to_vec(), &mut OsRng)?;
 

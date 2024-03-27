@@ -71,6 +71,7 @@ pub fn make_mint_call(
     let dao_bulla = dao.to_bulla();
     let public = vec![pub_x, pub_y, dao_bulla.inner()];
 
+    //darkfi::zk::export_witness_json("proof/witness/mint.json", &prover_witnesses, &public);
     let circuit = ZkCircuit::new(prover_witnesses, dao_mint_zkbin);
     let proof = Proof::create(dao_mint_pk, &[circuit], &public, &mut OsRng)?;
 

@@ -63,6 +63,8 @@ fn zkvm_smt() -> Result<()> {
 
     let public_inputs = vec![root];
 
+    //darkfi::zk::export_witness_json("proof/witness/smt.json", &prover_witnesses, &public_inputs);
+    //let (prover_witnesses, public_inputs) = darkfi::zk::import_witness_json("witness.json");
     let circuit = ZkCircuit::new(prover_witnesses, &zkbin);
 
     let mockprover = MockProver::run(zkbin.k, &circuit, vec![public_inputs.clone()])?;

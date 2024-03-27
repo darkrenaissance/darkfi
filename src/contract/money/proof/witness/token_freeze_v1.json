@@ -1,0 +1,18 @@
+{
+  "instances": [
+    "3aa3904484b7b8ab6da61d8ae91dd71a55be07168a37e310ac6a8c6c2568fcdc",
+    "0ce67a960b8d0092c1c49da2d8b476e7dd7bd3e18c4040749eba7fdd49c7b5fe",
+    "22e9f1c2a04377abb08563ae8f4fdde5b8ec854c6744002e216980fc3120cb11"
+  ],
+  "witnesses": [
+    {
+      "Base": "2edd443860b042d6eadf74f6787bc99befe5a5c5f1b23c3cc8fbfa9f7f063a3e"
+    },
+    {
+      "Base": "3a0599eaa80debc262f335f78732d3842b3a707f75723228839c56676d49a507"
+    },
+    {
+      "Base": "36e43135c0f58c3bf4201f9829f71f93d9727ecd5c804f184987cd71de7190ab"
+    }
+  ]
+}

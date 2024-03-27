@@ -164,6 +164,7 @@ impl DaoVoteCall {
                 sig_y,
             ];
 
+            //darkfi::zk::export_witness_json("proof/witness/vote-input.json", &prover_witnesses, &public_inputs);
             let circuit = ZkCircuit::new(prover_witnesses, burn_zkbin);
             debug!(target: "dao", "input_proof Proof::create()");
             let input_proof = Proof::create(burn_pk, &[circuit], &public_inputs, &mut OsRng)?;
@@ -268,6 +269,7 @@ impl DaoVoteCall {
             enc_note.encrypted_values[3],
         ];
 
+        //darkfi::zk::export_witness_json("proof/witness/vote-main.json", &prover_witnesses, &public_inputs);
         let circuit = ZkCircuit::new(prover_witnesses, main_zkbin);
 
         debug!(target: "dao", "main_proof = Proof::create()");

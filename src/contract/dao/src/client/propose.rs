@@ -140,6 +140,7 @@ impl DaoProposeCall {
                 sig_x,
                 sig_y,
             ];
+            //darkfi::zk::export_witness_json("proof/witness/propose-input.json", &prover_witnesses, &public_inputs);
             let circuit = ZkCircuit::new(prover_witnesses, burn_zkbin);
 
             let proving_key = &burn_pk;
@@ -200,6 +201,7 @@ impl DaoProposeCall {
             *total_funds_coords.x(),
             *total_funds_coords.y(),
         ];
+        //darkfi::zk::export_witness_json("proof/witness/propose-main.json", &prover_witnesses, &public_inputs);
         let circuit = ZkCircuit::new(prover_witnesses, main_zkbin);
 
         let main_proof = Proof::create(main_pk, &[circuit], &public_inputs, &mut OsRng)?;

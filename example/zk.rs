@@ -65,6 +65,7 @@ fn main() -> Result<()> {
     let public_inputs = vec![*value_coords.x(), *value_coords.y()];
 
     // Create the circuit
+    //darkfi::zk::export_witness_json("example/simple.witness.json", &prover_witnesses, &public_inputs);
     let mut circuit = ZkCircuit::new(prover_witnesses, &zkbin.clone());
     circuit.enable_trace();
 

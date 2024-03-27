@@ -119,6 +119,7 @@ fn zkvm_opcodes() -> Result<()> {
         pallas::Base::ZERO,
     ];
 
+    //darkfi::zk::export_witness_json("proof/witness/opcodes.json", &prover_witnesses, &public_inputs);
     let circuit = ZkCircuit::new(prover_witnesses, &zkbin);
 
     let mockprover = MockProver::run(zkbin.k, &circuit, vec![public_inputs.clone()])?;

@@ -95,6 +95,7 @@ impl DaoAuthMoneyTransferCall {
                 enc_note.encrypted_values[4],
             ];
 
+            //darkfi::zk::export_witness_json("proof/witness/auth-money-transfer-enc-coin.json", &prover_witnesses, &public_inputs);
             let circuit = ZkCircuit::new(prover_witnesses, auth_xfer_enc_coin_zkbin);
             let proof =
                 Proof::create(auth_xfer_enc_coin_pk, &[circuit], &public_inputs, &mut OsRng)?;
@@ -171,6 +172,7 @@ impl DaoAuthMoneyTransferCall {
             dao_change_attrs.encrypted_values[2],
         ];
 
+        //darkfi::zk::export_witness_json("proof/witness/auth-money-transfer.json", &prover_witnesses, &public_inputs);
         let circuit = ZkCircuit::new(prover_witnesses, auth_xfer_zkbin);
         let proof = Proof::create(auth_xfer_pk, &[circuit], &public_inputs, &mut OsRng)?;
         proofs.push(proof);

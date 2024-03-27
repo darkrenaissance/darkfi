@@ -145,6 +145,11 @@ pub fn create_transfer_burn_proof(
         Witness::Base(Value::known(signature_secret.inner())),
     ];
 
+    darkfi::zk::export_witness_json(
+        "proof/witness/burn_v1.json",
+        &prover_witnesses,
+        &public_inputs.to_vec(),
+    );
     let circuit = ZkCircuit::new(prover_witnesses, zkbin);
     let proof = Proof::create(pk, &[circuit], &public_inputs.to_vec(), &mut OsRng)?;
 
@@ -191,6 +196,11 @@ pub fn create_transfer_mint_proof(
         Witness::Base(Value::known(token_blind.inner())),
     ];
 
+    darkfi::zk::export_witness_json(
+        "proof/witness/mint_v1.json",
+        &prover_witnesses,
+        &public_inputs.to_vec(),
+    );
     let circuit = ZkCircuit::new(prover_witnesses, zkbin);
     let proof = Proof::create(pk, &[circuit], &public_inputs.to_vec(), &mut OsRng)?;
 
