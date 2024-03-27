@@ -574,8 +574,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
             SinsemillaChip::load(sinsemilla_cfg1.clone(), &mut layouter)?;
         }
 
-        let no_sinsemilla_chip =
-            config.chips.iter().find(|&c| matches!(c, VmChip::Sinsemilla(_))).is_none();
+        let no_sinsemilla_chip = !config.chips.iter().any(|c| matches!(c, VmChip::Sinsemilla(_)));
 
         // Construct the 64-bit NativeRangeCheck chip
         let rangecheck64_chip = config.rangecheck64_chip();
@@ -592,7 +591,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
         }
 
         let no_rangecheck64_chip =
-            config.chips.iter().find(|&c| matches!(c, VmChip::NativeRange64(_))).is_none();
+            !config.chips.iter().any(|c| matches!(c, VmChip::NativeRange64(_)));
 
         // Construct the 253-bit NativeRangeCheck and LessThan chips.
         let rangecheck253_chip = config.rangecheck253_chip();

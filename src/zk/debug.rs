@@ -132,15 +132,15 @@ pub fn import_witness_json<P: AsRef<Path>>(input_path: P) -> (Vec<Witness>, Vec<
 
     let jval_as_fp = |j_val: &JsonValue| {
         let valstr: &String = j_val.get().expect("value str");
-        pallas::Base::from_str(&valstr).unwrap()
+        pallas::Base::from_str(valstr).unwrap()
     };
 
     let jval_as_vecfp = |j_val: &JsonValue| {
         j_val
             .get::<Vec<_>>()
             .expect("value str")
-            .into_iter()
-            .map(|v| jval_as_fp(v))
+            .iter()
+            .map(jval_as_fp)
             .collect::<Vec<pallas::Base>>()
     };
 
@@ -156,7 +156,7 @@ pub fn import_witness_json<P: AsRef<Path>>(input_path: P) -> (Vec<Witness>, Vec<
             }
             "Scalar" => {
                 let valstr: &String = j_val.get().expect("value str");
-                let fq = pallas::Scalar::from_str(&valstr).unwrap();
+                let fq = pallas::Scalar::from_str(valstr).unwrap();
                 witnesses.push(Witness::Scalar(Value::known(fq)));
             }
             "Uint32" => {
@@ -164,8 +164,7 @@ pub fn import_witness_json<P: AsRef<Path>>(input_path: P) -> (Vec<Witness>, Vec<
                 witnesses.push(Witness::Uint32(Value::known(*val as u32)));
             }
             "MerklePath" => {
-                let vals: Vec<_> =
-                    jval_as_vecfp(j_val).into_iter().map(|v| MerkleNode::new(v)).collect();
+                let vals: Vec<_> = jval_as_vecfp(j_val).into_iter().map(MerkleNode::new).collect();
                 assert_eq!(vals.len(), 32);
                 let vals: [MerkleNode; 32] = vals.try_into().unwrap();
                 witnesses.push(Witness::MerklePath(Value::known(vals)));
