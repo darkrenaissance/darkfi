@@ -34,34 +34,26 @@ use halo2_proofs::{
 use super::native_range_check::{NativeRangeCheckChip, NativeRangeCheckConfig};
 
 #[derive(Clone, Debug)]
-pub struct LessThanConfig<
-    const WINDOW_SIZE: usize,
-    const NUM_OF_BITS: usize,
-    const NUM_OF_WINDOWS: usize,
-> {
+pub struct LessThanConfig<const WINDOW_SIZE: usize, const NUM_OF_BITS: usize> {
     pub s_lt: Selector,
     pub s_leq: Selector,
     pub a: Column<Advice>,
     pub b: Column<Advice>,
     pub a_offset: Column<Advice>,
-    pub range_a_config: NativeRangeCheckConfig<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>,
-    pub range_a_offset_config: NativeRangeCheckConfig<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>,
+    pub range_a_config: NativeRangeCheckConfig<WINDOW_SIZE, NUM_OF_BITS>,
+    pub range_a_offset_config: NativeRangeCheckConfig<WINDOW_SIZE, NUM_OF_BITS>,
     pub k_values_table: TableColumn,
 }
 
 #[derive(Clone, Debug)]
-pub struct LessThanChip<
-    const WINDOW_SIZE: usize,
-    const NUM_OF_BITS: usize,
-    const NUM_OF_WINDOWS: usize,
-> {
-    config: LessThanConfig<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>,
+pub struct LessThanChip<const WINDOW_SIZE: usize, const NUM_OF_BITS: usize> {
+    config: LessThanConfig<WINDOW_SIZE, NUM_OF_BITS>,
 }
 
-impl<const WINDOW_SIZE: usize, const NUM_OF_BITS: usize, const NUM_OF_WINDOWS: usize>
-    Chip<pallas::Base> for LessThanChip<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>
+impl<const WINDOW_SIZE: usize, const NUM_OF_BITS: usize> Chip<pallas::Base>
+    for LessThanChip<WINDOW_SIZE, NUM_OF_BITS>
 {
-    type Config = LessThanConfig<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>;
+    type Config = LessThanConfig<WINDOW_SIZE, NUM_OF_BITS>;
     type Loaded = ();
 
     fn config(&self) -> &Self::Config {
@@ -73,10 +65,8 @@ impl<const WINDOW_SIZE: usize, const NUM_OF_BITS: usize, const NUM_OF_WINDOWS: u
     }
 }
 
-impl<const WINDOW_SIZE: usize, const NUM_OF_BITS: usize, const NUM_OF_WINDOWS: usize>
-    LessThanChip<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>
-{
-    pub fn construct(config: LessThanConfig<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>) -> Self {
+impl<const WINDOW_SIZE: usize, const NUM_OF_BITS: usize> LessThanChip<WINDOW_SIZE, NUM_OF_BITS> {
+    pub fn construct(config: LessThanConfig<WINDOW_SIZE, NUM_OF_BITS>) -> Self {
         Self { config }
     }
 
@@ -88,7 +78,7 @@ impl<const WINDOW_SIZE: usize, const NUM_OF_BITS: usize, const NUM_OF_WINDOWS: u
         z1: Column<Advice>,
         z2: Column<Advice>,
         k_values_table: TableColumn,
-    ) -> LessThanConfig<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS> {
+    ) -> LessThanConfig<WINDOW_SIZE, NUM_OF_BITS> {
         let s_lt = meta.selector();
         let s_leq = meta.selector();
 
@@ -100,18 +90,10 @@ impl<const WINDOW_SIZE: usize, const NUM_OF_BITS: usize, const NUM_OF_WINDOWS: u
 
         // configure range check for `a` and `offset`
         let range_a_config =
-            NativeRangeCheckChip::<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>::configure(
-                meta,
-                z1,
-                k_values_table,
-            );
+            NativeRangeCheckChip::<WINDOW_SIZE, NUM_OF_BITS>::configure(meta, z1, k_values_table);
 
         let range_a_offset_config =
-            NativeRangeCheckChip::<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>::configure(
-                meta,
-                z2,
-                k_values_table,
-            );
+            NativeRangeCheckChip::<WINDOW_SIZE, NUM_OF_BITS>::configure(meta, z2, k_values_table);
 
         let config = LessThanConfig {
             s_lt,
@@ -223,14 +205,12 @@ impl<const WINDOW_SIZE: usize, const NUM_OF_BITS: usize, const NUM_OF_WINDOWS: u
         a: AssignedCell<pallas::Base, pallas::Base>,
         a_offset: AssignedCell<pallas::Base, pallas::Base>,
     ) -> Result<(), Error> {
-        let range_a_chip =
-            NativeRangeCheckChip::<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>::construct(
-                self.config.range_a_config.clone(),
-            );
-        let range_a_offset_chip =
-            NativeRangeCheckChip::<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>::construct(
-                self.config.range_a_offset_config.clone(),
-            );
+        let range_a_chip = NativeRangeCheckChip::<WINDOW_SIZE, NUM_OF_BITS>::construct(
+            self.config.range_a_config.clone(),
+        );
+        let range_a_offset_chip = NativeRangeCheckChip::<WINDOW_SIZE, NUM_OF_BITS>::construct(
+            self.config.range_a_offset_config.clone(),
+        );
 
         range_a_chip.copy_range_check(layouter.namespace(|| "a copy_range_check"), a)?;
 
@@ -279,7 +259,7 @@ mod tests {
     };
 
     macro_rules! test_circuit {
-        ($k: expr, $strict:expr, $window_size:expr, $num_bits:expr, $num_windows:expr, $valid_pairs:expr, $invalid_pairs:expr) => {
+        ($k: expr, $strict:expr, $window_size:expr, $num_bits:expr, $valid_pairs:expr, $invalid_pairs:expr) => {
             #[derive(Default)]
             struct LessThanCircuit {
                 a: Value<pallas::Base>,
@@ -287,8 +267,7 @@ mod tests {
             }
 
             impl Circuit<pallas::Base> for LessThanCircuit {
-                type Config =
-                    (LessThanConfig<$window_size, $num_bits, $num_windows>, Column<Advice>);
+                type Config = (LessThanConfig<$window_size, $num_bits>, Column<Advice>);
                 type FloorPlanner = floor_planner::V1;
                 type Params = ();
 
@@ -312,7 +291,7 @@ mod tests {
                     meta.enable_constant(constants);
 
                     (
-                        LessThanChip::<$window_size, $num_bits, $num_windows>::configure(
+                        LessThanChip::<$window_size, $num_bits>::configure(
                             meta,
                             a,
                             b,
@@ -331,11 +310,9 @@ mod tests {
                     mut layouter: impl Layouter<pallas::Base>,
                 ) -> Result<(), Error> {
                     let less_than_chip =
-                        LessThanChip::<$window_size, $num_bits, $num_windows>::construct(
-                            config.0.clone(),
-                        );
+                        LessThanChip::<$window_size, $num_bits>::construct(config.0.clone());
 
-                    NativeRangeCheckChip::<$window_size, $num_bits, $num_windows>::load_k_table(
+                    NativeRangeCheckChip::<$window_size, $num_bits>::load_k_table(
                         &mut layouter,
                         config.0.k_values_table,
                     )?;
@@ -383,7 +360,6 @@ mod tests {
         let k = 5;
         const WINDOW_SIZE: usize = 3;
         const NUM_OF_BITS: usize = 64;
-        const NUM_OF_WINDOWS: usize = 22;
 
         let valid_pairs = [
             (pallas::Base::ZERO, pallas::Base::ZERO),
@@ -400,15 +376,7 @@ mod tests {
             (pallas::Base::from(u64::MAX), pallas::Base::ZERO),
             (pallas::Base::ONE, pallas::Base::ZERO),
         ];
-        test_circuit!(
-            k,
-            false,
-            WINDOW_SIZE,
-            NUM_OF_BITS,
-            NUM_OF_WINDOWS,
-            valid_pairs,
-            invalid_pairs
-        );
+        test_circuit!(k, false, WINDOW_SIZE, NUM_OF_BITS, valid_pairs, invalid_pairs);
     }
 
     #[test]
@@ -416,7 +384,6 @@ mod tests {
         let k = 5;
         const WINDOW_SIZE: usize = 3;
         const NUM_OF_BITS: usize = 64;
-        const NUM_OF_WINDOWS: usize = 22;
 
         let valid_pairs = [
             (pallas::Base::from(13), pallas::Base::from(15)),
@@ -433,15 +400,7 @@ mod tests {
             (pallas::Base::ONE, pallas::Base::ZERO),
             (pallas::Base::from(u64::MAX), pallas::Base::from(u64::MAX)),
         ];
-        test_circuit!(
-            k,
-            true,
-            WINDOW_SIZE,
-            NUM_OF_BITS,
-            NUM_OF_WINDOWS,
-            valid_pairs,
-            invalid_pairs
-        );
+        test_circuit!(k, true, WINDOW_SIZE, NUM_OF_BITS, valid_pairs, invalid_pairs);
     }
 
     #[test]
@@ -449,7 +408,6 @@ mod tests {
         let k = 7;
         const WINDOW_SIZE: usize = 3;
         const NUM_OF_BITS: usize = 253;
-        const NUM_OF_WINDOWS: usize = 85;
 
         const P_MINUS_1: pallas::Base = pallas::Base::from_raw([
             0x992d30ed00000000,
@@ -493,15 +451,7 @@ mod tests {
             (MAX_253 + pallas::Base::ONE, MAX_253 + pallas::Base::from(2)),
         ];
 
-        test_circuit!(
-            k,
-            false,
-            WINDOW_SIZE,
-            NUM_OF_BITS,
-            NUM_OF_WINDOWS,
-            valid_pairs,
-            invalid_pairs
-        );
+        test_circuit!(k, false, WINDOW_SIZE, NUM_OF_BITS, valid_pairs, invalid_pairs);
     }
 
     #[test]
@@ -509,7 +459,6 @@ mod tests {
         let k = 7;
         const WINDOW_SIZE: usize = 3;
         const NUM_OF_BITS: usize = 253;
-        const NUM_OF_WINDOWS: usize = 85;
 
         const P_MINUS_1: pallas::Base = pallas::Base::from_raw([
             0x992d30ed00000000,
@@ -553,14 +502,6 @@ mod tests {
             (MAX_253 + pallas::Base::ONE, MAX_253 + pallas::Base::from(2)),
         ];
 
-        test_circuit!(
-            k,
-            true,
-            WINDOW_SIZE,
-            NUM_OF_BITS,
-            NUM_OF_WINDOWS,
-            valid_pairs,
-            invalid_pairs
-        );
+        test_circuit!(k, true, WINDOW_SIZE, NUM_OF_BITS, valid_pairs, invalid_pairs);
     }
 }
