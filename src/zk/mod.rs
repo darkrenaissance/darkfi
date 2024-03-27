@@ -36,9 +36,9 @@ mod tracer;
 pub use tracer::DebugOpValue;
 
 mod debug;
-#[cfg(feature = "tinyjson")]
-pub use debug::export_witness_json;
 pub use debug::zkas_type_checks;
+#[cfg(feature = "tinyjson")]
+pub use debug::{export_witness_json, import_witness_json};
 
 pub mod halo2 {
     pub use halo2_proofs::{

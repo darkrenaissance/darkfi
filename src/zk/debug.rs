@@ -16,22 +16,27 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::{crypto::pasta_prelude::*, pasta::pallas};
+use darkfi_sdk::{
+    crypto::{pasta_prelude::*, util::FieldElemAsStr, MerkleNode},
+    pasta::pallas,
+};
 use log::error;
+use std::io::Read;
 
 #[cfg(feature = "tinyjson")]
 use {
     std::{collections::HashMap, fs::File, io::Write, path::Path},
     tinyjson::JsonValue::{
-        Array as JsonArray, Number as JsonNum, Object as JsonObj, String as JsonStr,
+        self, Array as JsonArray, Number as JsonNum, Object as JsonObj, String as JsonStr,
     },
 };
 
-use super::{Witness, ZkCircuit};
+use super::{halo2::Value, Witness, ZkCircuit};
 use crate::{zkas, Error, Result};
 
 #[cfg(feature = "tinyjson")]
 /// Export witness.json which can be used by zkrunner for debugging circuits
+/// Note that this function makes liberal use of unwraps so it could panic.
 pub fn export_witness_json<P: AsRef<Path>>(
     output_path: P,
     prover_witnesses: &Vec<Witness>,
@@ -43,13 +48,13 @@ pub fn export_witness_json<P: AsRef<Path>>(
         match witness {
             Witness::Base(value) => {
                 value.map(|w| {
-                    value_json.insert("Base".to_string(), JsonStr(format!("{:?}", w)));
+                    value_json.insert("Base".to_string(), JsonStr(w.to_str()));
                     w
                 });
             }
             Witness::Scalar(value) => {
                 value.map(|w| {
-                    value_json.insert("Scalar".to_string(), JsonStr(format!("{:?}", w)));
+                    value_json.insert("Scalar".to_string(), JsonStr(w.to_str()));
                     w
                 });
             }
@@ -63,11 +68,21 @@ pub fn export_witness_json<P: AsRef<Path>>(
                 let mut path = Vec::new();
                 value.map(|w| {
                     for node in w {
-                        path.push(JsonStr(format!("{:?}", node.inner())));
+                        path.push(JsonStr(node.inner().to_str()));
                     }
                     w
                 });
                 value_json.insert("MerklePath".to_string(), JsonArray(path));
+            }
+            Witness::SparseMerklePath(value) => {
+                let mut path = Vec::new();
+                value.map(|w| {
+                    for node in w {
+                        path.push(JsonStr(node.to_str()));
+                    }
+                    w
+                });
+                value_json.insert("SparseMerklePath".to_string(), JsonArray(path));
             }
             Witness::EcNiPoint(value) => {
                 let (mut x, mut y) = (pallas::Base::ZERO, pallas::Base::ZERO);
@@ -76,7 +91,7 @@ pub fn export_witness_json<P: AsRef<Path>>(
                     (x, y) = (*coords.x(), *coords.y());
                     w
                 });
-                let coords = vec![JsonStr(format!("{:?}", x)), JsonStr(format!("{:?}", y))];
+                let coords = vec![JsonStr(x.to_str()), JsonStr(y.to_str())];
                 value_json.insert("EcNiPoint".to_string(), JsonArray(coords));
             }
             _ => unimplemented!(),
@@ -86,7 +101,7 @@ pub fn export_witness_json<P: AsRef<Path>>(
 
     let mut instances = Vec::new();
     for instance in public_inputs {
-        instances.push(JsonStr(format!("{:?}", instance)));
+        instances.push(JsonStr(instance.to_str()));
     }
 
     let witnesses_json = JsonArray(witnesses);
@@ -99,6 +114,81 @@ pub fn export_witness_json<P: AsRef<Path>>(
     let json = witness_json.format().expect("cannot create debug json");
     let mut output = File::create(output_path).expect("cannot write file");
     output.write_all(json.as_bytes()).expect("write failed");
+}
+
+#[cfg(feature = "tinyjson")]
+/// Import witness.json which can be used to debug or benchmark circuits.
+/// Note that if the path or provided json is incorrect then this function will panic.
+pub fn import_witness_json<P: AsRef<Path>>(input_path: P) -> (Vec<Witness>, Vec<pallas::Base>) {
+    let mut input = File::open(input_path).expect("could not open input file");
+    let mut json_str = String::new();
+    input.read_to_string(&mut json_str).expect("unable to read to string");
+    let json: JsonValue = json_str.parse().unwrap();
+    drop(input);
+    drop(json_str);
+
+    let root: &HashMap<_, _> = json.get().expect("root");
+    let json_witness: &Vec<_> = root["witnesses"].get().expect("witnesses");
+
+    let jval_as_fp = |j_val: &JsonValue| {
+        let valstr: &String = j_val.get().expect("value str");
+        pallas::Base::from_str(&valstr).unwrap()
+    };
+
+    let jval_as_vecfp = |j_val: &JsonValue| {
+        j_val
+            .get::<Vec<_>>()
+            .expect("value str")
+            .into_iter()
+            .map(|v| jval_as_fp(v))
+            .collect::<Vec<pallas::Base>>()
+    };
+
+    let mut witnesses = Vec::new();
+    for j_witness in json_witness {
+        let item: &HashMap<_, _> = j_witness.get().expect("root");
+        assert_eq!(item.len(), 1);
+        let (typename, j_val) = item.iter().next().expect("witness has single item");
+        match typename.as_str() {
+            "Base" => {
+                let fp = jval_as_fp(j_val);
+                witnesses.push(Witness::Base(Value::known(fp)));
+            }
+            "Scalar" => {
+                let valstr: &String = j_val.get().expect("value str");
+                let fq = pallas::Scalar::from_str(&valstr).unwrap();
+                witnesses.push(Witness::Scalar(Value::known(fq)));
+            }
+            "Uint32" => {
+                let val: &f64 = j_val.get().expect("value str");
+                witnesses.push(Witness::Uint32(Value::known(*val as u32)));
+            }
+            "MerklePath" => {
+                let vals: Vec<_> =
+                    jval_as_vecfp(j_val).into_iter().map(|v| MerkleNode::new(v)).collect();
+                assert_eq!(vals.len(), 32);
+                let vals: [MerkleNode; 32] = vals.try_into().unwrap();
+                witnesses.push(Witness::MerklePath(Value::known(vals)));
+            }
+            "SparseMerklePath" => {
+                let vals = jval_as_vecfp(j_val);
+                assert_eq!(vals.len(), 255);
+                let vals: [pallas::Base; 255] = vals.try_into().unwrap();
+                witnesses.push(Witness::SparseMerklePath(Value::known(vals)));
+            }
+            "EcNiPoint" => {
+                let vals = jval_as_vecfp(j_val);
+                assert_eq!(vals.len(), 2);
+                let (_x, _y) = (vals[0], vals[1]);
+                todo!();
+            }
+            _ => unimplemented!(),
+        }
+    }
+
+    let instances = jval_as_vecfp(&root["instances"]);
+
+    (witnesses, instances)
 }
 
 /// Call this before `Proof::create()` to perform type checks on the witnesses and check
