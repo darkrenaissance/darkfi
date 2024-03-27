@@ -20,7 +20,7 @@ use std::collections::HashSet;
 
 use darkfi_sdk::crypto::{
     constants::{
-        sinsemilla::{OrchardCommitDomains, OrchardHashDomains},
+        sinsemilla::{OrchardCommitDomains, OrchardHashDomains, K},
         util::gen_const_array,
         ConstBaseFieldElement, OrchardFixedBases, OrchardFixedBasesFull, ValueCommitV,
         MERKLE_DEPTH_ORCHARD,
@@ -107,13 +107,13 @@ enum VmChip {
     Arithmetic(ArithConfig),
 
     /// 64 bit native range check
-    NativeRange64(NativeRangeCheckConfig<3, 64, 22>),
+    NativeRange64(NativeRangeCheckConfig<K, 64>),
 
     /// 253 bit native range check
-    NativeRange253(NativeRangeCheckConfig<3, 253, 85>),
+    NativeRange253(NativeRangeCheckConfig<K, 253>),
 
     /// 253 bit `a < b` check
-    LessThan(LessThanConfig<3, 253, 85>),
+    LessThan(LessThanConfig<K, 253>),
 
     /// Boolean check
     BoolCheck(SmallRangeCheckConfig),
@@ -221,7 +221,7 @@ impl VmConfig {
         Some(ZeroCondChip::construct(zerocond_config.clone()))
     }
 
-    fn rangecheck64_chip(&self) -> Option<NativeRangeCheckChip<3, 64, 22>> {
+    fn rangecheck64_chip(&self) -> Option<NativeRangeCheckChip<K, 64>> {
         let Some(VmChip::NativeRange64(range_config)) =
             self.chips.iter().find(|&c| matches!(c, VmChip::NativeRange64(_)))
         else {
@@ -231,7 +231,7 @@ impl VmConfig {
         Some(NativeRangeCheckChip::construct(range_config.clone()))
     }
 
-    fn rangecheck253_chip(&self) -> Option<NativeRangeCheckChip<3, 253, 85>> {
+    fn rangecheck253_chip(&self) -> Option<NativeRangeCheckChip<K, 253>> {
         let Some(VmChip::NativeRange253(range_config)) =
             self.chips.iter().find(|&c| matches!(c, VmChip::NativeRange253(_)))
         else {
@@ -241,7 +241,7 @@ impl VmConfig {
         Some(NativeRangeCheckChip::construct(range_config.clone()))
     }
 
-    fn lessthan_chip(&self) -> Option<LessThanChip<3, 253, 85>> {
+    fn lessthan_chip(&self) -> Option<LessThanChip<K, 253>> {
         let Some(VmChip::LessThan(lessthan_config)) =
             self.chips.iter().find(|&c| matches!(c, VmChip::LessThan(_)))
         else {
@@ -497,27 +497,19 @@ impl Circuit<pallas::Base> for ZkCircuit {
         );
 
         // K-table for 64 bit range check lookups
-        let k_values_table_64 = meta.lookup_table_column();
         let native_64_range_check_config =
-            NativeRangeCheckChip::<3, 64, 22>::configure(meta, advices[8], k_values_table_64);
+            NativeRangeCheckChip::<K, 64>::configure(meta, advices[8], table_idx);
 
         // K-table for 253 bit range check lookups
-        let k_values_table_253 = meta.lookup_table_column();
         let native_253_range_check_config =
-            NativeRangeCheckChip::<3, 253, 85>::configure(meta, advices[8], k_values_table_253);
+            NativeRangeCheckChip::<K, 253>::configure(meta, advices[8], table_idx);
 
         // TODO: FIXME: Configure these better, this is just a stop-gap
         let z1 = meta.advice_column();
         let z2 = meta.advice_column();
 
-        let lessthan_config = LessThanChip::<3, 253, 85>::configure(
-            meta,
-            advices[6],
-            advices[7],
-            advices[8],
-            z1,
-            z2,
-            k_values_table_253,
+        let lessthan_config = LessThanChip::<K, 253>::configure(
+            meta, advices[6], advices[7], advices[8], z1, z2, table_idx,
         );
 
         // Configuration for boolean checks, it uses the small_range_check
@@ -582,17 +574,25 @@ impl Circuit<pallas::Base> for ZkCircuit {
             SinsemillaChip::load(sinsemilla_cfg1.clone(), &mut layouter)?;
         }
 
+        let no_sinsemilla_chip =
+            config.chips.iter().find(|&c| matches!(c, VmChip::Sinsemilla(_))).is_none();
+
         // Construct the 64-bit NativeRangeCheck chip
         let rangecheck64_chip = config.rangecheck64_chip();
         if let Some(VmChip::NativeRange64(rangecheck64_config)) =
             config.chips.iter().find(|&c| matches!(c, VmChip::NativeRange64(_)))
         {
-            trace!(target: "zk::vm", "Initializing k table for 64bit NativeRangeCheck");
-            NativeRangeCheckChip::<3, 64, 22>::load_k_table(
-                &mut layouter,
-                rangecheck64_config.k_values_table,
-            )?;
+            if no_sinsemilla_chip {
+                trace!(target: "zk::vm", "Initializing k table for 64bit NativeRangeCheck");
+                NativeRangeCheckChip::<K, 64>::load_k_table(
+                    &mut layouter,
+                    rangecheck64_config.k_values_table,
+                )?;
+            }
         }
+
+        let no_rangecheck64_chip =
+            config.chips.iter().find(|&c| matches!(c, VmChip::NativeRange64(_))).is_none();
 
         // Construct the 253-bit NativeRangeCheck and LessThan chips.
         let rangecheck253_chip = config.rangecheck253_chip();
@@ -601,11 +601,13 @@ impl Circuit<pallas::Base> for ZkCircuit {
         if let Some(VmChip::NativeRange253(rangecheck253_config)) =
             config.chips.iter().find(|&c| matches!(c, VmChip::NativeRange253(_)))
         {
-            trace!(target: "zk::vm", "Initializing k table for 253bit NativeRangeCheck");
-            NativeRangeCheckChip::<3, 253, 85>::load_k_table(
-                &mut layouter,
-                rangecheck253_config.k_values_table,
-            )?;
+            if no_sinsemilla_chip && no_rangecheck64_chip {
+                trace!(target: "zk::vm", "Initializing k table for 253bit NativeRangeCheck");
+                NativeRangeCheckChip::<K, 253>::load_k_table(
+                    &mut layouter,
+                    rangecheck253_config.k_values_table,
+                )?;
+            }
         }
 
         // Construct the ECC chip.

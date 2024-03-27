@@ -28,11 +28,7 @@ use halo2_proofs::{
 };
 
 #[derive(Clone, Debug)]
-pub struct NativeRangeCheckConfig<
-    const WINDOW_SIZE: usize,
-    const NUM_BITS: usize,
-    const NUM_WINDOWS: usize,
-> {
+pub struct NativeRangeCheckConfig<const WINDOW_SIZE: usize, const NUM_BITS: usize> {
     pub z: Column<Advice>,
     pub s_rc: Selector,
     pub s_short: Selector,
@@ -40,18 +36,14 @@ pub struct NativeRangeCheckConfig<
 }
 
 #[derive(Clone, Debug)]
-pub struct NativeRangeCheckChip<
-    const WINDOW_SIZE: usize,
-    const NUM_BITS: usize,
-    const NUM_WINDOWS: usize,
-> {
-    config: NativeRangeCheckConfig<WINDOW_SIZE, NUM_BITS, NUM_WINDOWS>,
+pub struct NativeRangeCheckChip<const WINDOW_SIZE: usize, const NUM_BITS: usize> {
+    config: NativeRangeCheckConfig<WINDOW_SIZE, NUM_BITS>,
 }
 
-impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize> Chip<pallas::Base>
-    for NativeRangeCheckChip<WINDOW_SIZE, NUM_BITS, NUM_WINDOWS>
+impl<const WINDOW_SIZE: usize, const NUM_BITS: usize> Chip<pallas::Base>
+    for NativeRangeCheckChip<WINDOW_SIZE, NUM_BITS>
 {
-    type Config = NativeRangeCheckConfig<WINDOW_SIZE, NUM_BITS, NUM_WINDOWS>;
+    type Config = NativeRangeCheckConfig<WINDOW_SIZE, NUM_BITS>;
     type Loaded = ();
 
     fn config(&self) -> &Self::Config {
@@ -63,10 +55,8 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize> 
     }
 }
 
-impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
-    NativeRangeCheckChip<WINDOW_SIZE, NUM_BITS, NUM_WINDOWS>
-{
-    pub fn construct(config: NativeRangeCheckConfig<WINDOW_SIZE, NUM_BITS, NUM_WINDOWS>) -> Self {
+impl<const WINDOW_SIZE: usize, const NUM_BITS: usize> NativeRangeCheckChip<WINDOW_SIZE, NUM_BITS> {
+    pub fn construct(config: NativeRangeCheckConfig<WINDOW_SIZE, NUM_BITS>) -> Self {
         Self { config }
     }
 
@@ -74,7 +64,7 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
         meta: &mut ConstraintSystem<pallas::Base>,
         z: Column<Advice>,
         k_values_table: TableColumn,
-    ) -> NativeRangeCheckConfig<WINDOW_SIZE, NUM_BITS, NUM_WINDOWS> {
+    ) -> NativeRangeCheckConfig<WINDOW_SIZE, NUM_BITS> {
         // Enable permutation on z column
         meta.enable_equality(z);
 
@@ -157,8 +147,12 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
     }
 
     fn decompose_value(value: &pallas::Base) -> Vec<[bool; WINDOW_SIZE]> {
-        let bits: Vec<bool> =
-            value.to_le_bits().into_iter().take(WINDOW_SIZE * NUM_WINDOWS).collect();
+        let bits: Vec<_> = value
+            .to_le_bits()
+            .into_iter()
+            .take(NUM_BITS)
+            .chain(std::iter::repeat(false).take(WINDOW_SIZE - (NUM_BITS % WINDOW_SIZE)))
+            .collect();
 
         bits.chunks_exact(WINDOW_SIZE)
             .map(|x| {
@@ -180,22 +174,21 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
         z_0: AssignedCell<pallas::Base, pallas::Base>,
         offset: usize,
     ) -> Result<(), plonk::Error> {
-        // Check NUM_WINDOWS is the minimum required to cover NUM_BITS
-        assert!(WINDOW_SIZE * NUM_WINDOWS < NUM_BITS + WINDOW_SIZE);
+        let num_windows = NUM_BITS.div_ceil(WINDOW_SIZE);
 
         // The number of bits in the last chunk.
-        let last_chunk_length = NUM_BITS - (WINDOW_SIZE * (NUM_WINDOWS - 1));
+        let last_chunk_length = NUM_BITS - (WINDOW_SIZE * (num_windows - 1));
         assert!(last_chunk_length > 0);
 
         // Enable selectors for running sum decomposition
-        for index in 0..NUM_WINDOWS {
+        for index in 0..num_windows {
             self.config.s_rc.enable(region, index + offset)?;
         }
 
         let mut z_values: Vec<AssignedCell<pallas::Base, pallas::Base>> = vec![z_0.clone()];
         let mut z = z_0;
         // Convert `z_0` into a `Vec<Value<Fp>>` where each value corresponds to a chunk.
-        let decomposed_chunks = z.value().map(Self::decompose_value).transpose_vec(NUM_WINDOWS);
+        let decomposed_chunks = z.value().map(Self::decompose_value).transpose_vec(num_windows);
 
         let two_pow_k = pallas::Base::from(1 << WINDOW_SIZE as u64);
         let two_pow_k_inverse = Value::known(two_pow_k.invert().unwrap());
@@ -232,7 +225,7 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
             z = z_next.clone();
         }
 
-        assert!(z_values.len() == NUM_WINDOWS + 1);
+        assert!(z_values.len() == num_windows + 1);
 
         // Constrain the last chunk zₘ = 0
         region.constrain_constant(z_values.last().unwrap().cell(), pallas::Base::zero())?;
@@ -248,7 +241,7 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
         //  |  0  |    0    |             1 >> s              |
 
         if last_chunk_length < WINDOW_SIZE {
-            let s_short_offset = NUM_WINDOWS + offset;
+            let s_short_offset = num_windows + offset;
             self.config.s_short.enable(region, s_short_offset)?;
 
             // 1 >> s = 2^{-s}
@@ -324,15 +317,14 @@ mod tests {
     };
 
     macro_rules! test_circuit {
-        ($k: expr, $window_size:expr, $num_bits: expr, $num_windows:expr, $valid_values:expr, $invalid_values:expr) => {
+        ($k: expr, $window_size:expr, $num_bits: expr, $valid_values:expr, $invalid_values:expr) => {
             #[derive(Default)]
             struct RangeCheckCircuit {
                 a: Value<pallas::Base>,
             }
 
             impl Circuit<pallas::Base> for RangeCheckCircuit {
-                type Config =
-                    (NativeRangeCheckConfig<$window_size, $num_bits, $num_windows>, Column<Advice>);
+                type Config = (NativeRangeCheckConfig<$window_size, $num_bits>, Column<Advice>);
                 type FloorPlanner = floor_planner::V1;
                 type Params = ();
 
@@ -349,7 +341,7 @@ mod tests {
                     let constants = meta.fixed_column();
                     meta.enable_constant(constants);
                     (
-                        NativeRangeCheckChip::<$window_size, $num_bits, $num_windows>::configure(
+                        NativeRangeCheckChip::<$window_size, $num_bits>::configure(
                             meta,
                             z,
                             table_column,
@@ -364,10 +356,10 @@ mod tests {
                     mut layouter: impl Layouter<pallas::Base>,
                 ) -> Result<(), plonk::Error> {
                     let rangecheck_chip =
-                        NativeRangeCheckChip::<$window_size, $num_bits, $num_windows>::construct(
+                        NativeRangeCheckChip::<$window_size, $num_bits>::construct(
                             config.0.clone(),
                         );
-                    NativeRangeCheckChip::<$window_size, $num_bits, $num_windows>::load_k_table(
+                    NativeRangeCheckChip::<$window_size, $num_bits>::load_k_table(
                         &mut layouter,
                         config.0.k_values_table,
                     )?;
@@ -421,14 +413,13 @@ mod tests {
         let k = 6;
         const WINDOW_SIZE: usize = 5;
         const NUM_BITS: usize = 2;
-        const NUM_WINDOWS: usize = 1;
 
         // [0, 1, 2, 3]
         let valid_values: Vec<_> = (0..(1 << NUM_BITS)).map(pallas::Base::from).collect();
         // [4, 5, 6, ..., 32]
         let invalid_values: Vec<_> =
             ((1 << NUM_BITS)..=(1 << WINDOW_SIZE)).map(pallas::Base::from).collect();
-        test_circuit!(k, WINDOW_SIZE, NUM_BITS, NUM_WINDOWS, valid_values, invalid_values);
+        test_circuit!(k, WINDOW_SIZE, NUM_BITS, valid_values, invalid_values);
     }
 
     #[test]
@@ -436,7 +427,6 @@ mod tests {
         let k = 6;
         const WINDOW_SIZE: usize = 3;
         const NUM_BITS: usize = 64;
-        const NUM_WINDOWS: usize = 22;
 
         let valid_values = vec![
             pallas::Base::zero(),
@@ -461,7 +451,7 @@ mod tests {
             //)
             //.unwrap(),
         ];
-        test_circuit!(k, WINDOW_SIZE, NUM_BITS, NUM_WINDOWS, valid_values, invalid_values);
+        test_circuit!(k, WINDOW_SIZE, NUM_BITS, valid_values, invalid_values);
     }
 
     #[test]
@@ -469,7 +459,6 @@ mod tests {
         let k = 7;
         const WINDOW_SIZE: usize = 3;
         const NUM_BITS: usize = 128;
-        const NUM_WINDOWS: usize = 43;
 
         let valid_values = vec![
             pallas::Base::zero(),
@@ -484,7 +473,7 @@ mod tests {
             -pallas::Base::from_u128(u128::MAX) + pallas::Base::one(),
             -pallas::Base::from_u128(u128::MAX),
         ];
-        test_circuit!(k, WINDOW_SIZE, NUM_BITS, NUM_WINDOWS, valid_values, invalid_values);
+        test_circuit!(k, WINDOW_SIZE, NUM_BITS, valid_values, invalid_values);
     }
 
     #[test]
@@ -492,7 +481,6 @@ mod tests {
         let k = 8;
         const WINDOW_SIZE: usize = 3;
         const NUM_BITS: usize = 253;
-        const NUM_WINDOWS: usize = 85;
 
         // 2^253 - 1
         let max_253 = pallas::Base::from_str_vartime(
@@ -520,6 +508,6 @@ mod tests {
             .unwrap(),
             max_253 + pallas::Base::one(),
         ];
-        test_circuit!(k, WINDOW_SIZE, NUM_BITS, NUM_WINDOWS, valid_values, invalid_values);
+        test_circuit!(k, WINDOW_SIZE, NUM_BITS, valid_values, invalid_values);
     }
 }
