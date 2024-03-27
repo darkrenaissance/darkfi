@@ -186,7 +186,7 @@ impl Lilith {
 
             if !ping_node(url.clone(), p2p.clone()).await {
                 debug!(target: "lilith", "Host {} is not responsive. Downgrading from whitelist", url);
-                hosts.move_host(url, *last_seen, HostColor::Grey, false, None).await;
+                hosts.move_host(url, *last_seen, HostColor::Grey, false, None).await?;
 
                 continue
             }

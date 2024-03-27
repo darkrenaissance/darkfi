@@ -152,9 +152,9 @@ impl ProtocolAddress {
                 continue
             }
 
-            // First we grab address with the requested transports from the anchorlist
+            // First we grab address with the requested transports from the gold list
             debug!(target: "net::protocol_address::handle_receive_get_addrs()",
-            "Fetching anchorlist entries with schemes");
+            "Fetching gold entries with schemes");
             let mut addrs = self
                 .hosts
                 .container
@@ -182,8 +182,26 @@ impl ProtocolAddress {
 
             // Next we grab addresses without the requested transports
             // to fill a 2 * max length vector.
+
+            // Then we grab address without the requested transports from the gold list
             debug!(target: "net::protocol_address::handle_receive_get_addrs()",
-            "Fetching whitelist entries without schemes");
+            "Fetching gold entries without schemes");
+            let remain = 2 * get_addrs_msg.max - addrs.len() as u32;
+            addrs.append(
+                &mut self
+                    .hosts
+                    .container
+                    .fetch_n_random_excluding_schemes(
+                        HostColor::Gold,
+                        &get_addrs_msg.transports,
+                        remain,
+                    )
+                    .await,
+            );
+
+            // Then we grab address without the requested transports from the white list
+            debug!(target: "net::protocol_address::handle_receive_get_addrs()",
+            "Fetching white entries without schemes");
             let remain = 2 * get_addrs_msg.max - addrs.len() as u32;
             addrs.append(
                 &mut self
@@ -197,19 +215,17 @@ impl ProtocolAddress {
                     .await,
             );
 
-            // If there's still space available, take from the
-            // greylist. Schemes are not taken into account.
-            //
-            /* NOTE: We share peers from our greylist because our
-            greylist is likely to contain peers that do not match our
-            transports or the requested transports. We want to ensure
+            // If there's still space available, take from the Dark list.
+
+            /* NOTE: We share peers from our Dark list because to ensure
             that non-compatiable transports are shared with other nodes
             so that they propagate on the network even if they're not
             popular transports. */
+
             debug!(target: "net::protocol_address::handle_receive_get_addrs()",
-            "Fetching greylist entries");
+            "Fetching dark entries");
             let remain = 2 * get_addrs_msg.max - addrs.len() as u32;
-            addrs.append(&mut self.hosts.container.fetch_n_random(HostColor::Grey, remain).await);
+            addrs.append(&mut self.hosts.container.fetch_n_random(HostColor::Dark, remain).await);
 
             debug!(
                 target: "net::protocol_address::handle_receive_get_addrs()",

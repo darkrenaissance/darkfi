@@ -38,6 +38,7 @@ use crate::{
 pub const LOCAL_HOST_STRS: [&str; 2] = ["localhost", "localhost.localdomain"];
 const WHITELIST_MAX_LEN: usize = 5000;
 const GREYLIST_MAX_LEN: usize = 2000;
+const DARKLIST_MAX_LEN: usize = 1000;
 
 /// Atomic pointer to hosts object
 pub type HostsPtr = Arc<Hosts>;
@@ -234,6 +235,10 @@ pub enum HostColor {
     /// Hostile peers that can neither be connected to nor establish
     /// connections to us for the duration of the program.
     Black = 3,
+    /// Peers that do not match our accepted transports. We are blind
+    /// to these nodes (we do not use them) but we send them around
+    /// the network anyway to ensure all transports are propagated.
+    Dark = 4,
 }
 
 impl TryFrom<usize> for HostColor {
@@ -245,6 +250,7 @@ impl TryFrom<usize> for HostColor {
             1 => Ok(HostColor::White),
             2 => Ok(HostColor::Gold),
             3 => Ok(HostColor::Black),
+            4 => Ok(HostColor::Dark),
             _ => Err(Error::InvalidHostColor),
         }
     }
@@ -255,12 +261,13 @@ impl TryFrom<usize> for HostColor {
 // TODO: Verify the performance overhead of using vectors for hostlists.
 // TODO: Check whether anchorlist (Gold) has a max size in Monero.
 pub struct HostContainer {
-    pub hostlists: [RwLock<Vec<(Url, u64)>>; 4],
+    pub hostlists: [RwLock<Vec<(Url, u64)>>; 5],
 }
 
 impl HostContainer {
     fn new() -> Self {
-        let hostlists: [RwLock<Vec<(Url, u64)>>; 4] = [
+        let hostlists: [RwLock<Vec<(Url, u64)>>; 5] = [
+            RwLock::new(Vec::new()),
             RwLock::new(Vec::new()),
             RwLock::new(Vec::new()),
             RwLock::new(Vec::new()),
@@ -276,7 +283,6 @@ impl HostContainer {
         HostColor::try_from(color).unwrap());
 
         let mut list = self.hostlists[color].write().await;
-
         list.push((addr, last_seen));
 
         if color == 0 && list.len() == GREYLIST_MAX_LEN {
@@ -292,6 +298,14 @@ impl HostContainer {
             debug!(
                 target: "net::hosts::store()",
                 "Whitelist reached max size. Removed {:?}", last_entry,
+            );
+        }
+
+        if color == 4 && list.len() == DARKLIST_MAX_LEN {
+            let last_entry = list.pop().unwrap();
+            debug!(
+                target: "net::hosts::store()",
+                "Darklist reached max size. Removed {:?}", last_entry,
             );
         }
 
@@ -682,14 +696,17 @@ impl HostContainer {
             };
 
             match data[0] {
-                "greylist" => {
-                    self.store(HostColor::Grey as usize, url, last_seen).await;
+                "gold" => {
+                    self.store(HostColor::Gold as usize, url, last_seen).await;
                 }
-                "whitelist" => {
+                "white" => {
                     self.store(HostColor::White as usize, url, last_seen).await;
                 }
-                "anchorlist" => {
-                    self.store(HostColor::Gold as usize, url, last_seen).await;
+                "grey" => {
+                    self.store(HostColor::Grey as usize, url, last_seen).await;
+                }
+                "dark" => {
+                    self.store(HostColor::Dark as usize, url, last_seen).await;
                 }
                 _ => {
                     debug!(target: "net::hosts::load_hosts()", "Malformed list name...");
@@ -707,9 +724,10 @@ impl HostContainer {
         let mut tsv = String::new();
         let mut hostlist: HashMap<String, Vec<(Url, u64)>> = HashMap::new();
 
-        hostlist.insert("gold".to_string(), self.fetch_all(HostColor::Gold).await);
-        hostlist.insert("white".to_string(), self.fetch_all(HostColor::White).await);
+        hostlist.insert("dark".to_string(), self.fetch_all(HostColor::Dark).await);
         hostlist.insert("grey".to_string(), self.fetch_all(HostColor::Grey).await);
+        hostlist.insert("white".to_string(), self.fetch_all(HostColor::White).await);
+        hostlist.insert("gold".to_string(), self.fetch_all(HostColor::Gold).await);
 
         for (name, list) in hostlist {
             for (url, last_seen) in list {
@@ -1001,17 +1019,6 @@ impl Hosts {
                 continue
             }
 
-            // Reject this peer if it's already stored on the Gold or White list.
-            // If it exists on the Grey list, we will simply update its last_seen
-            // field.
-            if self.container.contains(HostColor::Gold as usize, addr_).await ||
-                self.container.contains(HostColor::White as usize, addr_).await
-            {
-                debug!(target: "net::hosts::filter_addresses()",
-                    "We already have {} in the hostlist. Skipping", addr_);
-                continue
-            }
-
             let host_str = addr_.host_str().unwrap();
 
             if !localnet {
@@ -1064,6 +1071,30 @@ impl Hosts {
                 _ => continue,
             }
 
+            // Store this peer on Dark list if we do not support this transport.
+            // We will personally ignore this peer but still send it to others in
+            // Protocol Addr to ensure all transports get propagated.
+            if !settings.allowed_transports.contains(&addr_.scheme().to_string()) {
+                self.container.store_or_update(HostColor::Dark, addr_.clone(), *last_seen).await;
+
+                debug!(target: "net::hosts::filter_addresses()",
+                    "Added unsupported peer {} to Dark list", addr_);
+                continue
+            }
+
+            // Reject this peer if it's already stored on the Gold or White list.
+            // If it exists on the Grey list, we will simply update its last_seen
+            // field.
+            //
+            // We do this last since it is the most expensive operation.
+            if self.container.contains(HostColor::Gold as usize, addr_).await ||
+                self.container.contains(HostColor::White as usize, addr_).await
+            {
+                debug!(target: "net::hosts::filter_addresses()",
+                    "We already have {} in the hostlist. Skipping", addr_);
+                continue
+            }
+
             ret.push((addr_.clone(), *last_seen));
         }
 
@@ -1084,7 +1115,7 @@ impl Hosts {
         destination: HostColor,
         suspend: bool,
         channel: Option<ChannelPtr>,
-    ) {
+    ) -> Result<()> {
         debug!(target: "net::hosts::move_host()", "Trying to move addr={} node={} destination={:?}",
         addr, self.settings.node_id, destination);
 
@@ -1137,7 +1168,7 @@ impl Hosts {
                     // We mark this peer as Suspend which means we do not try to connect to it until it
                     // has passed through the refinery. This should never panic.
                     self.try_register(addr.clone(), HostState::Suspend).await.unwrap();
-                    return
+                    return Ok(());
                 }
             }
 
@@ -1213,7 +1244,7 @@ impl Hosts {
                 self.try_register(addr.clone(), HostState::Connected(channel.unwrap()))
                     .await
                     .unwrap();
-                return
+                return Ok(());
             }
 
             // Move to black. Remove from all other lists.
@@ -1224,7 +1255,7 @@ impl Hosts {
                     // Localhost connections should never enter the blacklist
                     // This however allows any Tor and Nym connections.
                     if self.is_local_host(addr.clone()).await {
-                        return
+                        return Ok(());
                     }
 
                     // Remove from the grey list if it exists.
@@ -1265,11 +1296,15 @@ impl Hosts {
                     drop(black);
                 }
             }
+
+            HostColor::Dark => return Err(Error::InvalidHostColor),
         }
 
         // Remove this entry from HostRegistry to avoid this host getting
         // stuck in the Moving state.
         self.unregister(addr).await;
+
+        Ok(())
     }
 }
 

@@ -146,7 +146,7 @@ impl ManualSession {
                                     false,
                                     Some(channel.clone()),
                                 )
-                                .await;
+                                .await?;
 
                             // Wait for channel to close
                             stop_sub.receive().await;
@@ -155,7 +155,7 @@ impl ManualSession {
                             self.p2p()
                                 .hosts()
                                 .move_host(&addr, last_seen, HostColor::Grey, false, None)
-                                .await;
+                                .await?;
 
                             info!(
                                 target: "net::manual_session",
