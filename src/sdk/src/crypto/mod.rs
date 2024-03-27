@@ -72,6 +72,7 @@ pub mod pasta_prelude {
         arithmetic::{CurveAffine, CurveExt},
         group::{
             ff::{Field, FromUniformBytes, PrimeField},
+            prime::PrimeCurveAffine,
             Curve, Group,
         },
     };

@@ -179,8 +179,9 @@ pub fn import_witness_json<P: AsRef<Path>>(input_path: P) -> (Vec<Witness>, Vec<
             "EcNiPoint" => {
                 let vals = jval_as_vecfp(j_val);
                 assert_eq!(vals.len(), 2);
-                let (_x, _y) = (vals[0], vals[1]);
-                todo!();
+                let (x, y) = (vals[0], vals[1]);
+                let point: pallas::Point = pallas::Affine::from_xy(x, y).unwrap().to_curve();
+                witnesses.push(Witness::EcNiPoint(Value::known(point)));
             }
             _ => unimplemented!(),
         }

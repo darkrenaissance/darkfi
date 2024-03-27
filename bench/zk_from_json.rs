@@ -36,93 +36,96 @@ fn zk_from_json(c: &mut Criterion) {
     let tests = [
         (
             "Opcodes",
-            "../proof/opcodes.zk",
-            "../proof/witness/opcodes.json"
+            "proof/opcodes.zk.bin",
+            "proof/witness/opcodes.json"
         ),
         (
             "Arithmetic",
-            "../proof/arithmetic.zk",
-            "../proof/witness/arithmetic.json"
+            "proof/arithmetic.zk.bin",
+            "proof/witness/arithmetic.json"
         ),
         (
             "SMT",
-            "../proof/smt.zk",
-            "../proof/witness/smt.json"
+            "proof/smt.zk.bin",
+            "proof/witness/smt.json"
         ),
         (
             "DAO::mint",
-            "../src/contract/dao/proof/mint.zk",
-            "../src/contract/dao/proof/witness/mint.json"
+            "src/contract/dao/proof/mint.zk.bin",
+            "src/contract/dao/proof/witness/mint.json"
         ),
         (
             "DAO::propose-input",
-            "../src/contract/dao/proof/propose-input.zk",
-            "../src/contract/dao/proof/witness/propose-input.json"
+            "src/contract/dao/proof/propose-input.zk.bin",
+            "src/contract/dao/proof/witness/propose-input.json"
         ),
         (
             "DAO::propose",
-            "../src/contract/dao/proof/propose-main.zk",
-            "../src/contract/dao/proof/witness/propose-main.json"
+            "src/contract/dao/proof/propose-main.zk.bin",
+            "src/contract/dao/proof/witness/propose-main.json"
         ),
         (
             "DAO::vote-input",
-            "../src/contract/dao/proof/vote-input.zk",
-            "../src/contract/dao/proof/witness/vote-input.json"
+            "src/contract/dao/proof/vote-input.zk.bin",
+            "src/contract/dao/proof/witness/vote-input.json"
         ),
         (
             "DAO::vote",
-            "../src/contract/dao/proof/vote-main.zk",
-            "../src/contract/dao/proof/witness/vote-main.json"
+            "src/contract/dao/proof/vote-main.zk.bin",
+            "src/contract/dao/proof/witness/vote-main.json"
         ),
         (
             "DAO::exec",
-            "../src/contract/dao/proof/exec.zk",
-            "../src/contract/dao/proof/witness/exec.json"
+            "src/contract/dao/proof/exec.zk.bin",
+            "src/contract/dao/proof/witness/exec.json"
         ),
         (
             "DAO::auth_xfer-coin",
-            "../src/contract/dao/proof/auth-money-transfer-enc-coin.zk",
-            "../src/contract/dao/proof/witness/auth-money-transfer-enc-coin.json"
+            "src/contract/dao/proof/auth-money-transfer-enc-coin.zk.bin",
+            "src/contract/dao/proof/witness/auth-money-transfer-enc-coin.json"
         ),
         (
             "DAO::auth_xfer",
-            "../src/contract/dao/proof/auth-money-transfer.zk",
-            "../src/contract/dao/proof/witness/auth-money-transfer.json"
+            "src/contract/dao/proof/auth-money-transfer.zk.bin",
+            "src/contract/dao/proof/witness/auth-money-transfer.json"
         ),
         (
             "Money::xfer-mint",
-            "../src/contract/money/proof/mint_v1.zk",
-            "../src/contract/money/proof/witness/mint_v1.json"
+            "src/contract/money/proof/mint_v1.zk.bin",
+            "src/contract/money/proof/witness/mint_v1.json"
         ),
         (
             "Money::xfer-burn",
-            "../src/contract/money/proof/burn_v1.zk",
-            "../src/contract/money/proof/witness/burn_v1.json"
+            "src/contract/money/proof/burn_v1.zk.bin",
+            "src/contract/money/proof/witness/burn_v1.json"
         ),
         (
             "Money::fee",
-            "../src/contract/money/proof/fee_v1.zk",
-            "../src/contract/money/proof/witness/fee_v1.json"
+            "src/contract/money/proof/fee_v1.zk.bin",
+            "src/contract/money/proof/witness/fee_v1.json"
         ),
         (
             "Money::auth_token-mint",
-            "../src/contract/money/proof/auth_token_mint_v1.zk",
-            "../src/contract/money/proof/witness/auth_token_mint_v1.json"
+            "src/contract/money/proof/auth_token_mint_v1.zk.bin",
+            "src/contract/money/proof/witness/auth_token_mint_v1.json"
         ),
         (
             "Money::token-mint",
-            "../src/contract/money/proof/token_mint_v1.zk",
-            "../src/contract/money/proof/witness/token_mint_v1.json"
+            "src/contract/money/proof/token_mint_v1.zk.bin",
+            "src/contract/money/proof/witness/token_mint_v1.json"
         ),
         (
             "Money::token-freeze",
-            "../src/contract/money/proof/token_freeze_v1.zk",
-            "../src/contract/money/proof/witness/token_freeze_v1.json"
+            "src/contract/money/proof/token_freeze_v1.zk.bin",
+            "src/contract/money/proof/witness/token_freeze_v1.json"
         ),
     ];
 
+    println!("Running ZK Json benchmarks");
     for (name, proof, witness) in &tests {
+        println!("Benchmarking '{}': {} {}", name, proof, witness);
         run_benchmark(c, name, proof, witness);
+        println!("Done!");
     }
 }
 
