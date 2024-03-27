@@ -30,7 +30,7 @@ use darkfi::{
     zkas::ZkBinary,
 };
 
-fn zk_arith_bench(c: &mut Criterion) {
+fn zk_arith(c: &mut Criterion) {
     let bincode = include_bytes!("../proof/arithmetic.zk.bin");
     let zkbin = ZkBinary::decode(bincode).unwrap();
 
@@ -40,10 +40,12 @@ fn zk_arith_bench(c: &mut Criterion) {
     let prover_witnesses = vec![Witness::Base(Value::known(a)), Witness::Base(Value::known(b))];
     let public_inputs = vec![a + b, a * b, a - b];
 
+    //darkfi::zk::export_witness_json("proof/witness/arithmetic.json", &prover_witnesses, &public_inputs);
     let circuit = ZkCircuit::new(prover_witnesses.clone(), &zkbin);
 
     let mut prove_group = c.benchmark_group("prove");
-    for k in 11..20 {
+    prove_group.significance_level(0.01).sample_size(10);
+    for k in zkbin.k..20 {
         let proving_key = ProvingKey::build(k, &circuit.clone());
         prove_group.bench_with_input(BenchmarkId::from_parameter(k), &k, |b, &_k| {
             b.iter(|| Proof::create(&proving_key, &[circuit.clone()], &public_inputs, &mut OsRng))
@@ -52,7 +54,8 @@ fn zk_arith_bench(c: &mut Criterion) {
     prove_group.finish();
 
     let mut verif_group = c.benchmark_group("verify");
-    for k in 11..20 {
+    verif_group.significance_level(0.01).sample_size(10);
+    for k in zkbin.k..20 {
         let proving_key = ProvingKey::build(k, &circuit.clone());
         let proof =
             Proof::create(&proving_key, &[circuit.clone()], &public_inputs, &mut OsRng).unwrap();
@@ -67,5 +70,5 @@ fn zk_arith_bench(c: &mut Criterion) {
     verif_group.finish();
 }
 
-criterion_group!(benches, zk_arith_bench);
-criterion_main!(benches);
+criterion_group!(bench, zk_arith);
+criterion_main!(bench);

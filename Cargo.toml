@@ -319,4 +319,8 @@ pathfinder_simd = {git="https://github.com/servo/pathfinder", branch="main"}
 name = "zk_arith"
 harness = false
 path = "bench/zk_arith.rs"
+[[bench]]
+name = "zk_from_json"
+harness = false
+path = "bench/zk_from_json.rs"
 
