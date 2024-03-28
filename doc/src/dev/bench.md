@@ -4,12 +4,12 @@ Use `make bench`. For more info, see the [Criterion docs](https://bheisler.githu
 
 ## Verify `DAO::vote()` Input Proof
 
-### Desktop
-
 Comparison nullifier (red) and SMT (blue)
 
-<img src="../assets/bench_verify_dao-vote-input_pdf.svg"  width="500">
-<img src="../assets/bench_verify_dao-vote-input_iter.svg"  width="500">
+### Desktop
+
+<img src="../assets/bench/bench_desktop_verify_dao-vote-input_pdf.svg"  width="500">
+<img src="../assets/bench/bench_desktop_verify_dao-vote-input_iter.svg"  width="500">
 
 | Test       | #         |
 |------------|-----------|
@@ -17,20 +17,42 @@ Comparison nullifier (red) and SMT (blue)
 | SMT        | 14.551 ms |
 | Change (%) | +54.969%  |
 
-## Verify `DAO::propose()` Input Proof
+### Laptop
 
-### Desktop
+<img src="../assets/bench/bench_laptop_verify_dao-vote-input_pdf.svg"  width="500">
+<img src="../assets/bench/bench_laptop_verify_dao-vote-input_iter.svg"  width="500">
+
+| Test       | #         |
+|------------|-----------|
+| Nullifier  | 40.638 ms |
+| SMT        | 69.919 ms |
+| Change (%) | +72.052%  |
+
+## Verify `DAO::propose()` Input Proof
 
 Comparison nullifier (red) and SMT (blue)
 
-<img src="../assets/bench_verify_dao-propose-input_pdf.svg"  width="500">
-<img src="../assets/bench_verify_dao-propose-input_iter.svg"  width="500">
+### Desktop
+
+<img src="../assets/bench/bench_desktop_verify_dao-propose-input_pdf.svg"  width="500">
+<img src="../assets/bench/bench_desktop_verify_dao-propose-input_iter.svg"  width="500">
 
 | Test       | #         |
 |------------|-----------|
 | Nullifier  | 9.0842 ms |
 | SMT        | 14.274 ms |
 | Change (%) | +57.126%  |
+
+### Laptop
+
+<img src="../assets/bench/bench_laptop_verify_dao-propose-input_pdf.svg"  width="500">
+<img src="../assets/bench/bench_laptop_verify_dao-propose-input_iter.svg"  width="500">
+
+| Test       | #         |
+|------------|-----------|
+| Nullifier  | 39.598 ms |
+| SMT        | 70.908 ms |
+| Change (%) | +79.068%  |
 
 # WASM
 
