@@ -89,8 +89,8 @@ pub fn fp_to_u64(value: pallas::Base) -> Option<u64> {
 
 // Not allowed to implement external traits for external crates
 pub trait FieldElemAsStr: PrimeField<Repr = [u8; 32]> {
-    fn to_str(&self) -> String {
-        let mut repr = String::new();
+    fn to_string(&self) -> String {
+        let mut repr = "0x".to_string();
         for &b in self.to_repr().iter().rev() {
             repr += &format!("{:02x}", b);
         }
@@ -98,18 +98,17 @@ pub trait FieldElemAsStr: PrimeField<Repr = [u8; 32]> {
     }
 
     fn from_str(hex: &str) -> GenericResult<Self> {
-        if hex.len() != 32 * 2 {
+        if hex.len() != 33 * 2 {
             return Err(ContractError::HexFmtErr)
         }
+
+        let hex = hex.strip_prefix("0x").ok_or(ContractError::HexFmtErr)?;
 
         let mut bytes = [0u8; 32];
         for i in 0..32 {
             // Bytes are little endian but str repr is big endian
-            bytes[32 - i - 1] = if let Ok(byte) = u8::from_str_radix(&hex[2 * i..2 * i + 2], 16) {
-                byte
-            } else {
-                return Err(ContractError::HexFmtErr)
-            };
+            bytes[32 - i - 1] = u8::from_str_radix(&hex[2 * i..2 * i + 2], 16)
+                .map_err(|_| ContractError::HexFmtErr)?;
         }
 
         let value = Self::from_repr(bytes);

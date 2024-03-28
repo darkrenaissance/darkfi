@@ -48,13 +48,13 @@ pub fn export_witness_json<P: AsRef<Path>>(
         match witness {
             Witness::Base(value) => {
                 value.map(|w| {
-                    value_json.insert("Base".to_string(), JsonStr(w.to_str()));
+                    value_json.insert("Base".to_string(), JsonStr(w.to_string()));
                     w
                 });
             }
             Witness::Scalar(value) => {
                 value.map(|w| {
-                    value_json.insert("Scalar".to_string(), JsonStr(w.to_str()));
+                    value_json.insert("Scalar".to_string(), JsonStr(w.to_string()));
                     w
                 });
             }
@@ -68,7 +68,7 @@ pub fn export_witness_json<P: AsRef<Path>>(
                 let mut path = Vec::new();
                 value.map(|w| {
                     for node in w {
-                        path.push(JsonStr(node.inner().to_str()));
+                        path.push(JsonStr(node.inner().to_string()));
                     }
                     w
                 });
@@ -78,7 +78,7 @@ pub fn export_witness_json<P: AsRef<Path>>(
                 let mut path = Vec::new();
                 value.map(|w| {
                     for node in w {
-                        path.push(JsonStr(node.to_str()));
+                        path.push(JsonStr(node.to_string()));
                     }
                     w
                 });
@@ -91,7 +91,7 @@ pub fn export_witness_json<P: AsRef<Path>>(
                     (x, y) = (*coords.x(), *coords.y());
                     w
                 });
-                let coords = vec![JsonStr(x.to_str()), JsonStr(y.to_str())];
+                let coords = vec![JsonStr(x.to_string()), JsonStr(y.to_string())];
                 value_json.insert("EcNiPoint".to_string(), JsonArray(coords));
             }
             _ => unimplemented!(),
@@ -101,7 +101,7 @@ pub fn export_witness_json<P: AsRef<Path>>(
 
     let mut instances = Vec::new();
     for instance in public_inputs {
-        instances.push(JsonStr(instance.to_str()));
+        instances.push(JsonStr(instance.to_string()));
     }
 
     let witnesses_json = JsonArray(witnesses);
