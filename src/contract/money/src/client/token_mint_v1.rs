@@ -66,11 +66,7 @@ impl TokenMintCallBuilder {
 
         let public_inputs = vec![self.token_attrs.auth_parent.inner(), coin.inner()];
 
-        darkfi::zk::export_witness_json(
-            "proof/witness/token_mint_v1.json",
-            &prover_witnesses,
-            &public_inputs,
-        );
+        //darkfi::zk::export_witness_json( "proof/witness/token_mint_v1.json", &prover_witnesses, &public_inputs);
         let circuit = ZkCircuit::new(prover_witnesses, &self.mint_zkbin);
         let proof = Proof::create(&self.mint_pk, &[circuit], &public_inputs, &mut OsRng)?;
 

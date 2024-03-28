@@ -92,11 +92,7 @@ impl AuthTokenMintCallBuilder {
             *value_coords.y(),
         ];
 
-        darkfi::zk::export_witness_json(
-            "proof/witness/auth_token_mint_v1.json",
-            &prover_witnesses,
-            &public_inputs,
-        );
+        //darkfi::zk::export_witness_json("proof/witness/auth_token_mint_v1.json", &prover_witnesses, &public_inputs);
         let circuit = ZkCircuit::new(prover_witnesses, &self.auth_mint_zkbin);
         let proof = Proof::create(&self.auth_mint_pk, &[circuit], &public_inputs, &mut OsRng)?;
 
