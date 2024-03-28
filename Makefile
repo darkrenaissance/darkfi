@@ -141,13 +141,13 @@ test: contracts $(PROOFS_BIN)
 		--release --all-features --workspace
 
 bench_zk-from-json: contracts $(PROOFS_BIN)
-	rm src/contract/test-harness/*.bin
+	rm -f src/contract/test-harness/*.bin
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) bench --target=$(RUST_TARGET) \
 		--bench zk_from_json --all-features --workspace \
 		-- --save-baseline master
 
 bench: contracts $(PROOFS_BIN)
-	rm src/contract/test-harness/*.bin
+	rm -f src/contract/test-harness/*.bin
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) bench --target=$(RUST_TARGET) \
 		--all-features --workspace \
 		-- --save-baseline master
