@@ -11,6 +11,7 @@ edition = "2021"
 [lib]
 name = "darkfi"
 doctest = false
+bench = false
 
 #[profile.release]
 #debug = true
