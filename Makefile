@@ -140,6 +140,16 @@ test: contracts $(PROOFS_BIN)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) test --target=$(RUST_TARGET) \
 		--release --all-features --workspace
 
+bench_zk-from-json: $(PROOFS_BIN)
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) bench --target=$(RUST_TARGET) \
+		--bench zk_from_json --all-features --workspace \
+		-- --save-baseline master
+
+bench: $(PROOFS_BIN)
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) bench --target=$(RUST_TARGET) \
+		--all-features --workspace \
+		-- --save-baseline master
+
 coverage: contracts $(PROOFS_BIN)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) llvm-cov --target=$(RUST_TARGET) \
 		--release --all-features --workspace --html
