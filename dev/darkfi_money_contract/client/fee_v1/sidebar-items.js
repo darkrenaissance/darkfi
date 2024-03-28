@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["FEE_CALL_GAS"],"fn":["create_fee_proof"],"struct":["FeeCallInput","FeeCallSecrets","FeeRevealed"],"type":["FeeCallOutput"]};

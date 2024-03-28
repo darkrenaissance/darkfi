@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["MessageDispatcher","MessageSubscription","MessageSubsystem"],"trait":["MessageDispatcherInterface"],"type":["MessageResult","MessageSubscriptionId"]};

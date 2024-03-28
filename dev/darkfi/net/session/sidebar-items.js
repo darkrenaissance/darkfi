@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["SESSION_ALL","SESSION_INBOUND","SESSION_MANUAL","SESSION_OUTBOUND","SESSION_SEED"],"fn":["remove_sub_on_stop"],"mod":["inbound_session","manual_session","outbound_session","seedsync_session"],"trait":["Session"],"type":["SessionBitFlag","SessionWeakPtr"]};

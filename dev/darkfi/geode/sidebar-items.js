@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["CHUNKS_PATH","FILES_PATH","MAX_CHUNK_SIZE"],"struct":["ChunkedFile","Geode"]};

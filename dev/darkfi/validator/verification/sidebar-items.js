@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["validate_block","validate_blockchain","verify_block","verify_genesis_block","verify_producer_signature","verify_producer_transaction","verify_proposal","verify_transaction","verify_transactions"]};

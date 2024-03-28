@@ -1,0 +1,9 @@
+(function() {var implementors = {
+"darkfi":[["impl StructOptToml for <a class=\"struct\" href=\"darkfi/net/settings/struct.SettingsOpt.html\" title=\"struct darkfi::net::settings::SettingsOpt\">SettingsOpt</a>"]],
+"darkfi_mmproxy":[["impl StructOptToml for <a class=\"struct\" href=\"darkfi_mmproxy/struct.Args.html\" title=\"struct darkfi_mmproxy::Args\">Args</a>"],["impl StructOptToml for <a class=\"struct\" href=\"darkfi_mmproxy/struct.MmproxyArgs.html\" title=\"struct darkfi_mmproxy::MmproxyArgs\">MmproxyArgs</a>"],["impl StructOptToml for <a class=\"struct\" href=\"darkfi_mmproxy/struct.MonerodArgs.html\" title=\"struct darkfi_mmproxy::MonerodArgs\">MonerodArgs</a>"]],
+"darkfid":[["impl StructOptToml for <a class=\"struct\" href=\"darkfid/struct.Args.html\" title=\"struct darkfid::Args\">Args</a>"],["impl StructOptToml for <a class=\"struct\" href=\"darkfid/struct.BlockchainNetwork.html\" title=\"struct darkfid::BlockchainNetwork\">BlockchainNetwork</a>"]],
+"dchatd":[["impl StructOptToml for <a class=\"struct\" href=\"dchatd/struct.Args.html\" title=\"struct dchatd::Args\">Args</a>"]],
+"drk":[["impl StructOptToml for <a class=\"struct\" href=\"drk/struct.Args.html\" title=\"struct drk::Args\">Args</a>"]],
+"lilith":[["impl StructOptToml for <a class=\"struct\" href=\"lilith/struct.Args.html\" title=\"struct lilith::Args\">Args</a>"]],
+"minerd":[["impl StructOptToml for <a class=\"struct\" href=\"minerd/struct.Args.html\" title=\"struct minerd::Args\">Args</a>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

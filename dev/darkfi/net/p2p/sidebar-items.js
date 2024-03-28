@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["P2p"],"type":["ConnectedChannels","P2pPtr","PendingChannels"]};

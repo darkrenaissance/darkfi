@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["INIT_BUF_SIZE","MAX_BUF_SIZE","READ_TIMEOUT"],"fn":["read_from_stream","write_to_stream"]};

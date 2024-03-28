@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DegEvent"],"macro":["degev"],"struct":["MessageInfo"],"type":["RecvMessage","SendMessage"]};
