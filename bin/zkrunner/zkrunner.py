@@ -74,6 +74,11 @@ def load_circuit_witness(circuit, witness_file):
             assert len(path) == 32
             circuit.witness_merklepath(path)
 
+        elif value := witness.get("SparseMerklePath"):
+            path = [Fp(i) for i in value]
+            assert len(path) == 255
+            circuit.witness_sparsemerklepath(path)
+
         elif value := witness.get("Uint32"):
             circuit.witness_uint32(value)
 

@@ -162,6 +162,12 @@ impl ZkCircuit {
         self.1.push(zk::vm::Witness::MerklePath(Value::known(path.try_into().unwrap())));
     }
 
+    fn witness_sparsemerklepath(&mut self, w: Vec<&PyCell<Fp>>) {
+        assert!(w.len() == 255);
+        let path: Vec<pallas::Base> = w.iter().map(|x| x.borrow().deref().0).collect();
+        self.1.push(zk::vm::Witness::SparseMerklePath(Value::known(path.try_into().unwrap())));
+    }
+
     fn witness_uint32(&mut self, w: u32) {
         self.1.push(zk::vm::Witness::Uint32(Value::known(w)));
     }
