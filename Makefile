@@ -140,7 +140,7 @@ test: contracts $(PROOFS_BIN)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) test --target=$(RUST_TARGET) \
 		--release --all-features --workspace
 
-bench_zk-from-json: contracts $(PROOFS_BIN)
+bench-zk-from-json: contracts $(PROOFS_BIN)
 	rm -f src/contract/test-harness/*.bin
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) bench --target=$(RUST_TARGET) \
 		--bench zk_from_json --all-features --workspace \
@@ -176,4 +176,4 @@ clean:
 distclean: clean
 	rm -rf target
 
-.PHONY: all $(BINS) fmt check clippy fix rustdoc test coverage clean distclean
+.PHONY: all $(BINS) fmt check clippy fix rustdoc test bench-zk-from-json bench coverage clean distclean
