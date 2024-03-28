@@ -3,7 +3,7 @@
 DarkFi network allows for the issuance and transfer of anonymous assets
 with an arbitrary number of parameters. These tokens are anonymous,
 relying on zero-knowledge proofs to ensure validity without revealing
-any other information.
+any other information. **All transactions over the network are managed by smart contracts.**
 
 New tokens are created and destroyed every time you send an anonymous
 transaction. To send a transaction on DarkFi, you must first issue a
