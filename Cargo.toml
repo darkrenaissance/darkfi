@@ -324,4 +324,8 @@ path = "bench/zk_arith.rs"
 name = "zk_from_json"
 harness = false
 path = "bench/zk_from_json.rs"
+[[bench]]
+name = "sled"
+harness = false
+path = "bench/sled.rs"
 
