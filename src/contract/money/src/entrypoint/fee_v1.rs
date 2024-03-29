@@ -18,12 +18,19 @@
 
 use darkfi_sdk::{
     crypto::{
-        pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, ContractId, MerkleNode, PublicKey,
+        pasta_prelude::*,
+        pedersen_commitment_u64, poseidon_hash,
+        smt::{
+            wasmdb::{SmtWasmDbStorage, SmtWasmFp},
+            PoseidonFp, EMPTY_NODES_FP,
+        },
+        ContractId, MerkleNode, PublicKey,
     },
     dark_tree::DarkLeaf,
     db::{db_contains_key, db_get, db_lookup, db_set},
     error::{ContractError, ContractResult},
-    merkle_add, msg,
+    merkle::{merkle_add, sparse_merkle_insert_batch},
+    msg,
     pasta::pallas,
     ContractCall,
 };
@@ -131,8 +138,13 @@ pub(crate) fn money_fee_process_instruction_v1(
         return Err(MoneyError::CoinMerkleRootNotFound.into())
     }
 
+    let hasher = PoseidonFp::new();
+    let empty_leaf = pallas::Base::ZERO;
+    let smt_store = SmtWasmDbStorage::new(nullifiers_db);
+    let smt = SmtWasmFp::new(smt_store, hasher, &EMPTY_NODES_FP);
+
     // The nullifiers should not already exist. It is the double-spend protection.
-    if db_contains_key(nullifiers_db, &serialize(&params.input.nullifier))? {
+    if smt.get_leaf(&params.input.nullifier.inner()) != empty_leaf {
         msg!("[FeeV1] Error: Duplicate nullifier found");
         return Err(MoneyError::DuplicateNullifier.into())
     }
@@ -195,7 +207,9 @@ pub(crate) fn money_fee_process_update_v1(
     let coin_roots_db = db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
 
     db_set(info_db, MONEY_CONTRACT_TOTAL_FEES_PAID, &serialize(&update.fee))?;
-    db_set(nullifiers_db, &serialize(&update.nullifier), &[])?;
+
+    sparse_merkle_insert_batch(nullifiers_db, &[update.nullifier.inner()])?;
+
     db_set(coins_db, &serialize(&update.coin), &[])?;
 
     merkle_add(

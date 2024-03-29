@@ -17,11 +17,20 @@
  */
 
 use darkfi_sdk::{
-    crypto::ContractId,
+    crypto::{
+        pasta_prelude::*,
+        smt::{
+            wasmdb::{SmtWasmDbStorage, SmtWasmFp},
+            PoseidonFp, EMPTY_NODES_FP,
+        },
+        ContractId,
+    },
     dark_tree::DarkLeaf,
     db::{db_contains_key, db_lookup},
     error::{ContractError, ContractResult},
-    msg, ContractCall,
+    msg,
+    pasta::pallas,
+    ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
@@ -100,6 +109,11 @@ pub(crate) fn money_otcswap_process_instruction_v1(
         return Err(MoneyError::TokenMismatch.into())
     }
 
+    let hasher = PoseidonFp::new();
+    let empty_leaf = pallas::Base::ZERO;
+    let smt_store = SmtWasmDbStorage::new(nullifiers_db);
+    let smt = SmtWasmFp::new(smt_store, hasher, &EMPTY_NODES_FP);
+
     msg!("[OtcSwapV1] Iterating over anonymous inputs");
     for (i, input) in params.inputs.iter().enumerate() {
         // For now, make sure that the inputs' spend hooks are zero.
@@ -119,7 +133,7 @@ pub(crate) fn money_otcswap_process_instruction_v1(
 
         // The nullifiers should not already exist. It is the double-spend protection.
         if new_nullifiers.contains(&input.nullifier) ||
-            db_contains_key(nullifiers_db, &serialize(&input.nullifier))?
+            smt.get_leaf(&input.nullifier.inner()) != empty_leaf
         {
             msg!("[OtcSwapV1] Error: Duplicate nullifier found in input {}", i);
             return Err(MoneyError::DuplicateNullifier.into())
