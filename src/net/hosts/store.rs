@@ -791,7 +791,8 @@ impl Hosts {
         trace!(target: "net::hosts:insert()", "[START]");
 
         // First filter these address to ensure this peer doesn't exist in our black, gold or
-        // whitelist and apply transport filtering.
+        // whitelist and apply transport filtering. If we don't support this transport,
+        // store the peer on our dark list to broadcast to other nodes.
         let filtered_addrs = self.filter_addresses(self.settings.clone(), addrs).await;
         let mut addrs_len = 0;
 
@@ -989,7 +990,7 @@ impl Hosts {
         settings: SettingsPtr,
         addrs: &[(Url, u64)],
     ) -> Vec<(Url, u64)> {
-        trace!(target: "net::hosts::filter_addresses()", "Filtering addrs: {:?}", addrs);
+        debug!(target: "net::hosts::filter_addresses()", "Filtering addrs: {:?}", addrs);
         let mut ret = vec![];
         let localnet = self.settings.localnet;
 
@@ -1000,6 +1001,8 @@ impl Hosts {
                 addr_.cannot_be_a_base() ||
                 addr_.path_segments().is_some()
             {
+                debug!(target: "net::hosts::filter_addresses()",
+                    "[{}] has invalid addr format. Skipping", addr_);
                 continue
             }
 
@@ -1013,7 +1016,7 @@ impl Hosts {
             // Blacklist peers should never enter the hostlist.
             if self.container.contains(HostColor::Black as usize, addr_).await {
                 warn!(target: "net::hosts::filter_addresses()",
-                "Peer {} is blacklisted", addr_);
+                "[{}] is blacklisted", addr_);
                 continue
             }
 
@@ -1023,14 +1026,19 @@ impl Hosts {
                 // Our own external addresses should never enter the hosts set.
                 for ext in &settings.external_addrs {
                     if host_str == ext.host_str().unwrap() {
+                        debug!(target: "net::hosts::filter_addresses()",
+                            "[{}] is our own external addr. Skipping", addr_);
                         continue 'addr_loop
                     }
                 }
-            }
-            // On localnet, make sure ours ports don't enter the host set.
-            for ext in &settings.external_addrs {
-                if addr_.port() == ext.port() {
-                    continue 'addr_loop
+            } else {
+                // On localnet, make sure ours ports don't enter the host set.
+                for ext in &settings.external_addrs {
+                    if addr_.port() == ext.port() {
+                        debug!(target: "net::hosts::filter_addresses()",
+                           "[{}] is our own localnet port. Skipping", addr_);
+                        continue 'addr_loop
+                    }
                 }
             }
 
@@ -1042,6 +1050,8 @@ impl Hosts {
             // Should never be allowed in production, so we don't really care
             // about some of them (e.g. 0.0.0.0, or broadcast, etc.).
             if !localnet && self.is_local_host(addr).await {
+                debug!(target: "net::hosts::filter_addresses()",
+                    "[{}] Filtering non-global ranges", addr_);
                 continue
             }
 
