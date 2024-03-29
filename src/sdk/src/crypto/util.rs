@@ -136,10 +136,10 @@ fn test_fp_to_u64() {
 fn test_fp_to_str() {
     use self::FieldElemAsStr;
     let fpstr = "227ae0da79929f3e23f8d5bc9992f5f140f5198932378731e1b49b67fdc296c8";
-    assert_eq!(pallas::Base::from_str(fpstr).unwrap().to_str(), fpstr);
+    assert_eq!(pallas::Base::from_str(fpstr).unwrap().to_string(), fpstr);
 
     let fpstr = "000000000000000000000000000000000000000000000000ffffffffffffffff";
     let fp = pallas::Base::from(u64::MAX);
-    assert_eq!(fp.to_str(), fpstr);
+    assert_eq!(fp.to_string(), fpstr);
     assert_eq!(pallas::Base::from_str(fpstr).unwrap(), fp);
 }
