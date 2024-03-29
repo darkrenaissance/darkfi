@@ -85,9 +85,6 @@ inbound = ["tcp+tls://0.0.0.0:8242"]
 # Allow localnet hosts
 localnet = true
 
-# Delete a peer from hosts if they've been quarantined N times
-#hosts_quarantine_limit = 50
-
 # Cooling off time for peer discovery when unsuccessful
 #outbound_peer_discovery_cooloff_time = 30
 
@@ -172,9 +169,6 @@ outbound_connections = 8
 # Allow localnet hosts
 localnet = false
 
-# Delete a peer from hosts if they've been quarantined N times
-#hosts_quarantine_limit = 50
-
 # Cooling off time for peer discovery when unsuccessful
 #outbound_peer_discovery_cooloff_time = 30
 
@@ -258,9 +252,6 @@ outbound_connections = 8
 
 # Allow localnet hosts
 localnet = false
-
-# Delete a peer from hosts if they've been quarantined N times
-#hosts_quarantine_limit = 50
 
 # Cooling off time for peer discovery when unsuccessful
 #outbound_peer_discovery_cooloff_time = 30

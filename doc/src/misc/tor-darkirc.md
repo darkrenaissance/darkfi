@@ -23,7 +23,6 @@ Some settings may be commented-out by default.
 outbound_connect_timeout = 60
 channel_handshake_timeout = 55
 channel_heartbeat_interval = 90
-hosts_quarantine_limit = 10
 outbound_peer_discovery_cooloff_time = 60
 
 allowed_transports = ["tor", "tor+tls"]
