@@ -217,3 +217,95 @@ The downside for wallets is that:
 However while complex, it is the most accurate of all 3 methods reflecting
 the current state.
 
+# Tree States On Disk
+
+This section is not specific to DAO or Money, but describes a generic set
+abstraction which you can add or remove items from.
+
+Requirements:
+
+* Add and remove items, which is represented by two G-sets denoted coins $Cₖ$
+  and nullifiers $Nₖ$. Let $Rₖ$ and $Sₖ$ be commitments to them both
+  respectively.
+* Given any snapshot $(Rₖ, Sₖ)$, it's possible to definitively say whether the
+  set it represents contains an item $x$ or not.
+    * Be able to do this fully ZK.
+* Wallets can easily take any snapshot, and using delta manipulation of the
+  state, be able to make inclusion and exclusion proofs easily.
+* Verify in WASM that $Rₖ$ and $Sₖ$ correspond to the same $k$.
+
+The proposal is as follows and involves a merkle tree $𝐂$, and a SMT $𝐍$.
+
+For the sake of clarity, we will not detail the storing of the trees themselves.
+For $𝐂$, the tree is stored in `db_info`, while $𝐍$ has a full on-disk
+representation. Instead the info in this section concerns the auxilliary data
+required for using the trees with snapshotted states.
+
+## DB Merkle Roots
+
+This is used to quickly lookup a state commitment for $𝐂$ and figure out when it
+occurred.
+
+| Key or Value | Field Name | Size | Desc                       |
+|--------------|------------|------|----------------------------|
+| k            | Root       | 32   | The current root hash $Rₖ$ |
+| v            | Tx hash    | 32   | Tx hash which made update  |
+| v            | Call index | 2    | Index of contract call     |
+
+The values in these calls, all looking up the block index (from the tx hash)
+and figuring out all info about this state change (such as when it occurred).
+
+We could optionally additionally include block height, which would avoid
+needing to use the tx hash to get the block height.
+
+> Another option is to replace tx hash with (block height, tx index).
+
+Q: is this resilient? In bitcoin we usually prefer tx hash since reorgs
+could invalidate this tuple.
+
+## DB SMT Roots
+
+Just like for the merkle case, we want to quickly see whether $Rₖ$ and
+$Sₖ$ correspond to each other. We then use the table to lookup
+(tx hash, call index) and check they match.
+
+| Key or Value | Field Name | Size | Desc                       |
+|--------------|------------|------|----------------------------|
+| k            | Root       | 32   | The current root hash $Sₖ$ |
+| v            | Tx hash    | 32   | Tx hash which made update  |
+| v            | Call index | 2    | Index of contract call     |
+
+## DB Coins (Wallets)
+
+This DB is maintained by the user wallet, and periodic garbage collection will
+remove values older than a cutoff.
+
+Keeps track of values added to $𝐂$ or $𝐍$.
+
+For $𝐂$ given an earlier tree checkpoint state, we can rewind, then fast forward
+to have a valid merkle tree for the given snapshot.
+Wallets should additionally periodically copy the merkle tree $𝐂$.
+
+In the case of $𝐍$, we construct an overlay for SMT, which allows rewinding the
+tree so exclusion proofs can be constructed.
+
+| Key or Value | Field Name   | Size | Desc                                  |
+|--------------|--------------|------|---------------------------------------|
+| k            | Block height | 3    | Block height for coin                 |
+| k            | Tx index     | 2    | Index in block for tx containing coin |
+| k            | Call index   | 2    | Index of contract call                |
+| k            | Val index    | 2    | Index of this coin or nullifier       |
+| v            | Value        | 32   | Coin or nullifier                     |
+| v            | Type         | 1    | Single byte indicating the type       |
+
+Note: 3 bytes for blockheight can store 50 years worth of blocks.
+
+This structure for the keys in an ordered B-Tree, means it can be iterated
+from any point. We can start from any location from our last stored merkle
+tree checkpoint, and iterate forwards adding coins until we reach our
+desired snapshot $(Rₖ, Sₖ)$. We then have a valid merkle tree and SMT
+reconstructed and can create the desired inclusion or exclusion proofs.
+
+Q: should this be 2 databases or one? If we use 2 then we can remove the type
+byte. Maybe more conceptually clearer?
+
