@@ -196,44 +196,47 @@ impl Slot {
     unreliable connections. A network that purely favors uptime over
     unreliable connections may be vulnerable to sybil by attackers with
     good uptime.*/
-    async fn fetch_addrs_with_preference(
-        &self,
-        preference: usize,
-        slot_count: usize,
-        transports: &[String],
-        transport_mixing: bool,
-        white_count: usize,
-        anchor_count: usize,
-    ) -> Vec<(Url, u64)> {
+    async fn fetch_addrs_with_preference(&self, preference: usize) -> Vec<(Url, u64)> {
+        let slot = self.slot;
+        let settings = self.p2p().settings();
         let hosts = &self.p2p().hosts().container;
+
+        let white_count = settings.white_connect_count;
+        let anchor_count = settings.anchor_connect_count;
+
+        let transports = &settings.allowed_transports;
+        let transport_mixing = settings.transport_mixing;
+
+        debug!(target: "net::outbound_session::fetch_addrs_with_preference()",
+        "slot={}, preference={}", slot, preference);
 
         match preference {
             // Highest preference that corresponds to the anchor and white count preference set in
             // Settings.
             0 => {
-                if slot_count < anchor_count {
-                    hosts.fetch_addrs(HostColor::Gold, transports, transport_mixing).await
-                } else if slot_count < white_count {
-                    hosts.fetch_addrs(HostColor::White, transports, transport_mixing).await
+                if slot < anchor_count {
+                    hosts.fetch(HostColor::Gold, transports, transport_mixing).await
+                } else if slot < white_count {
+                    hosts.fetch(HostColor::White, transports, transport_mixing).await
                 } else {
-                    hosts.fetch_addrs(HostColor::Grey, transports, transport_mixing).await
+                    hosts.fetch(HostColor::Grey, transports, transport_mixing).await
                 }
             }
             // Reduced preference in case we don't have sufficient hosts to satisfy our highest
             // preference.
             1 => {
-                if slot_count < anchor_count {
-                    hosts.fetch_addrs(HostColor::White, transports, transport_mixing).await
-                } else if slot_count < white_count {
-                    hosts.fetch_addrs(HostColor::Grey, transports, transport_mixing).await
+                if slot < anchor_count {
+                    hosts.fetch(HostColor::White, transports, transport_mixing).await
+                } else if slot < white_count {
+                    hosts.fetch(HostColor::Grey, transports, transport_mixing).await
                 } else {
                     vec![]
                 }
             }
             // Lowest preference if we still haven't been able to find a host.
             2 => {
-                if slot_count < anchor_count {
-                    hosts.fetch_addrs(HostColor::Grey, transports, transport_mixing).await
+                if slot < anchor_count {
+                    hosts.fetch(HostColor::Grey, transports, transport_mixing).await
                 } else {
                     vec![]
                 }
@@ -246,25 +249,13 @@ impl Slot {
 
     // Fetch an address we can connect to acccording to the white and anchor connection counts
     // configured in Settings.
-    async fn fetch_addrs(&self, slot_count: usize, transports: &[String]) -> Option<(Url, u64)> {
+    async fn fetch_addrs(&self) -> Option<(Url, u64)> {
         let hosts = self.p2p().hosts();
-        let transport_mixing = self.p2p().settings().transport_mixing;
-        let anchor_count = self.p2p().settings().anchor_connection_count;
-        let white_count = slot_count * self.p2p().settings().white_connection_percent / 100;
 
         // First select an addresses that match our white and anchor requirements configured in
         // Settings.
         let preference = 0;
-        let addrs = self
-            .fetch_addrs_with_preference(
-                preference,
-                slot_count,
-                transports,
-                transport_mixing,
-                white_count,
-                anchor_count,
-            )
-            .await;
+        let addrs = self.fetch_addrs_with_preference(preference).await;
 
         if !addrs.is_empty() {
             return hosts.check_addrs(addrs).await;
@@ -272,16 +263,7 @@ impl Slot {
 
         // If no addresses were returned, go for the second best thing (white and grey).
         let preference = 1;
-        let addrs = self
-            .fetch_addrs_with_preference(
-                preference,
-                slot_count,
-                transports,
-                transport_mixing,
-                white_count,
-                anchor_count,
-            )
-            .await;
+        let addrs = self.fetch_addrs_with_preference(preference).await;
 
         if !addrs.is_empty() {
             return hosts.check_addrs(addrs).await;
@@ -289,16 +271,7 @@ impl Slot {
 
         // If we still have no addresses, go for the least favored option.
         let preference = 2;
-        let addrs = self
-            .fetch_addrs_with_preference(
-                preference,
-                slot_count,
-                transports,
-                transport_mixing,
-                white_count,
-                anchor_count,
-            )
-            .await;
+        let addrs = self.fetch_addrs_with_preference(preference).await;
 
         if !addrs.is_empty() {
             return hosts.check_addrs(addrs).await;
@@ -313,7 +286,6 @@ impl Slot {
     // connections we make from the greylist.
     async fn run(self: Arc<Self>) {
         let hosts = self.p2p().hosts();
-        let slot_count = self.p2p().settings().outbound_connections;
 
         loop {
             // Activate the slot
@@ -322,9 +294,6 @@ impl Slot {
                 "[P2P] Finding a host to connect to for outbound slot #{}",
                 self.slot,
             );
-
-            // Retrieve outbound transports
-            let transports = &self.p2p().settings().allowed_transports;
 
             // Do peer discovery if we don't have a hostlist (first time connecting
             // to the network).
@@ -342,7 +311,7 @@ impl Slot {
                 continue
             }
 
-            let addr = if let Some(addr) = self.fetch_addrs(slot_count, transports).await {
+            let addr = if let Some(addr) = self.fetch_addrs().await {
                 debug!(target: "net::outbound_session::run()", "Fetched address: {:?}", addr);
                 addr
             } else {

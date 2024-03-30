@@ -378,7 +378,7 @@ impl HostContainer {
     /// Fetch addresses that match the provided transports or acceptable
     /// mixed transports.  Will return an empty Vector if no such addresses
     /// were found.
-    pub async fn fetch_addrs(
+    pub async fn fetch(
         &self,
         color: HostColor,
         transports: &[String],
@@ -853,7 +853,7 @@ impl Hosts {
     // Loop through hosts selected by Outbound Session and see if any of them are
     // free to connect to.
     pub async fn check_addrs(&self, hosts: Vec<(Url, u64)>) -> Option<(Url, u64)> {
-        debug!(target: "net::hosts::check_addrs()", "Starting checks");
+        trace!(target: "net::hosts::check_addrs()", "[START]");
         for (host, last_seen) in hosts {
             // Print a warning if we are trying to connect to a seed node in
             // Outbound session. This shouldn't happen as we reject configured

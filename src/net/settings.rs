@@ -71,9 +71,9 @@ pub struct Settings {
     /// Pause interval within greylist refinery process
     pub greylist_refinery_interval: u64,
     /// Percent of connections to come from the whitelist
-    pub white_connection_percent: usize,
+    pub white_connect_count: u32,
     /// Number of anchorlist connections
-    pub anchor_connection_count: usize,
+    pub anchor_connect_count: u32,
     /// Number of seconds with no connections after which refinery
     /// process is paused.
     pub time_with_no_connections: u64,
@@ -104,8 +104,8 @@ impl Default for Settings {
             outbound_peer_discovery_attempt_time: 5,
             hostlist: "/dev/null".to_string(),
             greylist_refinery_interval: 15,
-            white_connection_percent: 90,
-            anchor_connection_count: 2,
+            white_connect_count: 90,
+            anchor_connect_count: 2,
             time_with_no_connections: 30,
         }
     }
@@ -201,13 +201,13 @@ pub struct SettingsOpt {
     #[structopt(skip)]
     pub greylist_refinery_interval: Option<u64>,
 
-    /// Percent of connections to come from the whitelist
+    /// Number of whitelist connections
     #[structopt(skip)]
-    pub white_connection_percent: Option<usize>,
+    pub white_connect_count: Option<u32>,
 
     /// Number of anchorlist connections
     #[structopt(skip)]
-    pub anchor_connection_count: Option<usize>,
+    pub anchor_connect_count: Option<u32>,
 
     /// Number of seconds with no connections after which refinery
     /// process is paused.
@@ -251,12 +251,8 @@ impl From<SettingsOpt> for Settings {
             greylist_refinery_interval: opt
                 .greylist_refinery_interval
                 .unwrap_or(def.greylist_refinery_interval),
-            white_connection_percent: opt
-                .white_connection_percent
-                .unwrap_or(def.white_connection_percent),
-            anchor_connection_count: opt
-                .anchor_connection_count
-                .unwrap_or(def.anchor_connection_count),
+            white_connect_count: opt.white_connect_count.unwrap_or(def.white_connect_count),
+            anchor_connect_count: opt.anchor_connect_count.unwrap_or(def.anchor_connect_count),
             time_with_no_connections: opt
                 .time_with_no_connections
                 .unwrap_or(def.time_with_no_connections),

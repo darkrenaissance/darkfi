@@ -102,7 +102,6 @@ async fn hostlist_propagation(ex: Arc<Executor<'static>>) {
         inbound_addrs: vec![seed_addr.clone()],
         external_addrs: vec![seed_addr.clone()],
         outbound_connections: 0,
-        //outbound_connect_timeout: 10,
         inbound_connections: usize::MAX,
         seeds: vec![],
         peers: vec![],
@@ -130,13 +129,11 @@ async fn hostlist_propagation(ex: Arc<Executor<'static>>) {
             inbound_addrs: vec![Url::parse(&format!("tcp://127.0.0.1:{}", 53200 + i)).unwrap()],
             external_addrs: vec![Url::parse(&format!("tcp://127.0.0.1:{}", 53200 + i)).unwrap()],
             outbound_connections: 8,
-            //outbound_connect_timeout: 10,
             inbound_connections: usize::MAX,
             seeds: vec![seed_addr.clone()],
             peers,
             allowed_transports: vec!["tcp".to_string()],
             node_id: i.to_string(),
-            anchor_connection_count: 2,
             ..Default::default()
         };
 
