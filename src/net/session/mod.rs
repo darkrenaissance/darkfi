@@ -70,7 +70,7 @@ pub async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr, type_id: Sessi
 
         if !p2p.hosts().is_connection_to_self(addr).await {
             let last_seen = p2p.hosts().fetch_last_seen(addr).await.unwrap();
-            p2p.hosts().move_host(addr, last_seen, HostColor::Grey, false, None).await.unwrap();
+            p2p.hosts().move_host(addr, last_seen, HostColor::Grey, None).await.unwrap();
         }
     }
 

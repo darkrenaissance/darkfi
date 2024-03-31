@@ -139,13 +139,7 @@ impl ManualSession {
                             // Add this connection to the anchorlist
                             self.p2p()
                                 .hosts()
-                                .move_host(
-                                    &addr,
-                                    last_seen,
-                                    HostColor::Gold,
-                                    false,
-                                    Some(channel.clone()),
-                                )
+                                .move_host(&addr, last_seen, HostColor::Gold, Some(channel.clone()))
                                 .await?;
 
                             // Wait for channel to close

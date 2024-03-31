@@ -44,7 +44,7 @@ use super::{
         channel::ChannelPtr,
         connector::Connector,
         dnet::{self, dnetev, DnetEvent},
-        hosts::store::HostColor,
+        hosts::store::{HostColor, HostState},
         message::GetAddrsMessage,
         p2p::{P2p, P2pPtr},
     },
@@ -401,7 +401,7 @@ impl Slot {
 
             // Add this connection to the anchorlist
             hosts
-                .move_host(&addr, last_seen, HostColor::Gold, false, Some(channel.clone()))
+                .move_host(&addr, last_seen, HostColor::Gold, Some(channel.clone()))
                 .await
                 .unwrap();
 
@@ -433,9 +433,11 @@ impl Slot {
                     self.slot, addr, e
                 );
 
-                // At this point we failed to connect. We'll downgrade this peer and
-                // mark its state as Suspend, which sends it to the Refinery for processing.
-                self.p2p().hosts().move_host(&addr, last_seen, HostColor::Grey, true, None).await?;
+                // At this point we failed to connect. We'll downgrade this peer now.
+                self.p2p().hosts().move_host(&addr, last_seen, HostColor::Grey, None).await?;
+
+                // Mark its state as Suspend, which sends it to the Refinery for processing.
+                self.p2p().hosts().try_register(addr.clone(), HostState::Suspend).await.unwrap();
 
                 // Notify that channel processing failed
                 self.p2p().hosts().channel_subscriber.notify(Err(Error::ConnectFailed)).await;

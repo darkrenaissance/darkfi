@@ -1160,7 +1160,6 @@ impl Hosts {
         addr: &Url,
         last_seen: u64,
         destination: HostColor,
-        suspend: bool,
         channel: Option<ChannelPtr>,
     ) -> Result<()> {
         debug!(target: "net::hosts::move_host()", "Trying to move addr={} node={} destination={:?}",
@@ -1172,54 +1171,22 @@ impl Hosts {
         match destination {
             // Downgrade to grey. Remove from white and gold.
             HostColor::Grey => {
-                // Remove from the gold list if it exists.
                 self.container.remove_if_exists(HostColor::Gold, addr).await;
-
-                // Remove from the white list if it exists.
                 self.container.remove_if_exists(HostColor::White, addr).await;
-
-                // If it exists on the grey list, update its last seen field.
-                // Otherwise, write to the greylist.
                 self.container.store_or_update(HostColor::Grey, addr.clone(), last_seen).await;
-
-                if suspend {
-                    // We mark this peer as Suspend which means we do not try to connect to it until it
-                    // has passed through the refinery. This should never panic.
-                    self.try_register(addr.clone(), HostState::Suspend).await.unwrap();
-                    return Ok(());
-                } else {
-                    return Ok(());
-                }
             }
 
             // Remove from Greylist, add to Whitelist. Called by the Refinery.
             HostColor::White => {
-                // Remove from the grey list if it exists.
                 self.container.remove_if_exists(HostColor::Grey, addr).await;
-
-                // If it exists on the white list, update its last seen field.
-                // Otherwise, write to the white list.
                 self.container.store_or_update(HostColor::White, addr.clone(), last_seen).await;
             }
 
             // Upgrade to gold. Remove from white or grey.
             HostColor::Gold => {
-                // Remove from the grey list if it exists.
                 self.container.remove_if_exists(HostColor::Grey, addr).await;
-
-                // Remove from the white list if it exists.
                 self.container.remove_if_exists(HostColor::White, addr).await;
-
-                // If it exists on the gold list, update its last seen field.
-                // Otherwise, write to the gold list.
                 self.container.store_or_update(HostColor::Gold, addr.clone(), last_seen).await;
-
-                // Re-register this host as Connected. We want to keep track of all connected peers
-                // in the Connected() state.
-                self.try_register(addr.clone(), HostState::Connected(channel.unwrap()))
-                    .await
-                    .unwrap();
-                return Ok(());
             }
 
             // Move to black. Remove from all other lists.
@@ -1233,26 +1200,15 @@ impl Hosts {
                         return Ok(());
                     }
 
-                    // Remove from the grey list if it exists.
                     self.container.remove_if_exists(HostColor::Grey, addr).await;
-
-                    // Remove from the white list if it exists.
                     self.container.remove_if_exists(HostColor::White, addr).await;
-
-                    // Remove from the gold list if it exists.
                     self.container.remove_if_exists(HostColor::Gold, addr).await;
-
-                    // Add to the black list.
                     self.container.store_or_update(HostColor::Gold, addr.clone(), last_seen).await;
                 }
             }
 
             HostColor::Dark => return Err(Error::InvalidHostColor),
         }
-
-        // Remove this entry from HostRegistry to avoid this host getting
-        // stuck in the Moving state.
-        self.unregister(addr).await;
 
         Ok(())
     }
