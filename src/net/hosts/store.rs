@@ -276,7 +276,7 @@ impl HostContainer {
         Self { hostlists }
     }
 
-    /// Append host to a hostlist.
+    /// Append host to a hostlist. Called when initalizing the hostlist in load_hosts().
     async fn store(&self, color: usize, addr: Url, last_seen: u64) {
         trace!(target: "net::hosts::store()", "[START] list={:?}",
         HostColor::try_from(color).unwrap());
@@ -319,22 +319,39 @@ impl HostContainer {
     /// Stores an address on a hostlist or updates its last_seen field if
     /// we already have the address.
     pub async fn store_or_update(&self, color: HostColor, addr: Url, last_seen: u64) {
-        trace!(target: "net::hosts::store_or_update()", "[START] list={:?}", color);
-        let color_int = color.clone() as usize;
-
-        if !self.contains(color_int, &addr).await {
-            debug!(target: "net::hosts::store_or_update()",
-                    "We do not have {} in {:?} list. Adding to store...", addr,
-                    color);
-
-            self.store(color_int, addr, last_seen).await;
+        let color_code = color as usize;
+        let mut list = self.hostlists[color_code].write().await;
+        if let Some(position) = list.iter().position(|(u, _)| u == &addr) {
+            list[position] = (addr.clone(), last_seen);
         } else {
-            debug!(target: "net::hosts::store_or_update()",
-                        "We have {} in {:?} list. Updating last seen...", addr,
-                        color);
-            self.update_last_seen(color_int, &addr, last_seen, None).await;
+            if color_code == 0 && list.len() == GREYLIST_MAX_LEN {
+                let last_entry = list.pop().unwrap();
+                debug!(
+                    target: "net::hosts::store()",
+                    "Greylist reached max size. Removed {:?}", last_entry,
+                );
+            }
+
+            if color_code == 1 && list.len() == WHITELIST_MAX_LEN {
+                let last_entry = list.pop().unwrap();
+                debug!(
+                    target: "net::hosts::store()",
+                    "Whitelist reached max size. Removed {:?}", last_entry,
+                );
+            }
+
+            if color_code == 4 && list.len() == DARKLIST_MAX_LEN {
+                let last_entry = list.pop().unwrap();
+                debug!(
+                    target: "net::hosts::store()",
+                    "Darklist reached max size. Removed {:?}", last_entry,
+                );
+            }
+
+            list.push((addr.clone(), last_seen));
+            list.sort_by_key(|entry| entry.1);
+            list.reverse();
         }
-        trace!(target: "net::hosts::store_or_update()", "[END] list={:?}", color);
     }
 
     /// Update the last_seen field of a peer on a hostlist.
@@ -622,14 +639,12 @@ impl HostContainer {
 
     /// Remove an entry from a hostlist if it exists.
     pub async fn remove_if_exists(&self, color: HostColor, addr: &Url) {
-        trace!(target: "net::hosts::remove_if_exists()", "[START] addr={} list={:?}", addr, color);
-        let index = color.clone() as usize;
-        if self.contains(index, addr).await {
-            let position =
-                self.get_index_at_addr(index, addr.clone()).await.expect("Expected index to exist");
-            self.remove(color.clone(), addr, position).await;
+        let color_code = color.clone() as usize;
+        let mut list = self.hostlists[color_code].write().await;
+        if let Some(position) = list.iter().position(|(u, _)| u == addr) {
+            debug!(target: "net::hosts::remove_if_exists()", "Removing addr={} list={:?}", addr, color);
+            list.remove(position);
         }
-        trace!(target: "net::hosts::remove_if_exists()", "[STOP] addr={} list={:?}", addr, color);
     }
 
     /// Check if a hostlist is empty.
@@ -843,7 +858,7 @@ impl Hosts {
         } else {
             // We don't know this peer. We can safely update the state.
             debug!(target: "net::hosts::try_update_registry()", "Inserting addr={}, state={}",
-            addr, new_state.to_string());
+            addr, &new_state);
 
             registry.insert(addr.clone(), new_state.clone());
 
@@ -1158,43 +1173,14 @@ impl Hosts {
             // Downgrade to grey. Remove from white and gold.
             HostColor::Grey => {
                 // Remove from the gold list if it exists.
-                let mut gold = self.container.hostlists[HostColor::Gold as usize].write().await;
-                if gold.iter().any(|(u, _t)| u == addr) {
-                    let position = gold.iter().position(|a| a.0 == *addr).unwrap();
-                    gold.remove(position);
-                }
-                drop(gold);
+                self.container.remove_if_exists(HostColor::Gold, addr).await;
 
                 // Remove from the white list if it exists.
-                let mut white = self.container.hostlists[HostColor::White as usize].write().await;
-                if white.iter().any(|(u, _t)| u == addr) {
-                    let position = white.iter().position(|a| a.0 == *addr).unwrap();
-                    white.remove(position);
-                }
-                drop(white);
+                self.container.remove_if_exists(HostColor::White, addr).await;
 
                 // If it exists on the grey list, update its last seen field.
                 // Otherwise, write to the greylist.
-                let mut grey = self.container.hostlists[HostColor::Grey as usize].write().await;
-                if grey.iter().any(|(u, _t)| u == addr) {
-                    let position = grey.iter().position(|a| a.0 == *addr).unwrap();
-                    grey[position] = (addr.clone(), last_seen);
-                } else {
-                    // We don't have this entry.
-                    if grey.len() == GREYLIST_MAX_LEN {
-                        let last_entry = grey.pop().unwrap();
-                        debug!(
-                            target: "net::hosts::move_host()",
-                            "Greylist reached max size. Removed {:?}", last_entry,
-                        );
-                    }
-                    grey.push((addr.clone(), last_seen));
-
-                    // Sort the list by last_seen.
-                    grey.sort_by_key(|entry| entry.1);
-                    grey.reverse();
-                }
-                drop(grey);
+                self.container.store_or_update(HostColor::Grey, addr.clone(), last_seen).await;
 
                 if suspend {
                     // We mark this peer as Suspend which means we do not try to connect to it until it
@@ -1209,69 +1195,24 @@ impl Hosts {
             // Remove from Greylist, add to Whitelist. Called by the Refinery.
             HostColor::White => {
                 // Remove from the grey list if it exists.
-                let mut grey = self.container.hostlists[HostColor::Grey as usize].write().await;
-                if grey.iter().any(|(u, _t)| u == addr) {
-                    let position = grey.iter().position(|a| a.0 == *addr).unwrap();
-                    grey.remove(position);
-                }
-                drop(grey);
+                self.container.remove_if_exists(HostColor::Grey, addr).await;
 
                 // If it exists on the white list, update its last seen field.
                 // Otherwise, write to the white list.
-                let mut white = self.container.hostlists[HostColor::White as usize].write().await;
-                if white.iter().any(|(u, _t)| u == addr) {
-                    let position = white.iter().position(|a| a.0 == *addr).unwrap();
-                    white[position] = (addr.clone(), last_seen);
-                } else {
-                    // We don't have this entry.
-                    if white.len() == WHITELIST_MAX_LEN {
-                        let last_entry = white.pop().unwrap();
-                        debug!(
-                            target: "net::hosts::move_host()",
-                            "Whitelist reached max size. Removed {:?}", last_entry,
-                        );
-                    }
-                    white.push((addr.clone(), last_seen));
-
-                    // Sort the list by last_seen.
-                    white.sort_by_key(|entry| entry.1);
-                    white.reverse();
-                }
-                drop(white);
+                self.container.store_or_update(HostColor::White, addr.clone(), last_seen).await;
             }
 
             // Upgrade to gold. Remove from white or grey.
             HostColor::Gold => {
                 // Remove from the grey list if it exists.
-                let mut grey = self.container.hostlists[HostColor::Grey as usize].write().await;
-                if grey.iter().any(|(u, _t)| u == addr) {
-                    let position = grey.iter().position(|a| a.0 == *addr).unwrap();
-                    grey.remove(position);
-                }
-                drop(grey);
+                self.container.remove_if_exists(HostColor::Grey, addr).await;
 
                 // Remove from the white list if it exists.
-                let mut white = self.container.hostlists[HostColor::White as usize].write().await;
-                if white.iter().any(|(u, _t)| u == addr) {
-                    let position = white.iter().position(|a| a.0 == *addr).unwrap();
-                    white.remove(position);
-                }
-                drop(white);
+                self.container.remove_if_exists(HostColor::White, addr).await;
 
                 // If it exists on the gold list, update its last seen field.
                 // Otherwise, write to the gold list.
-                let mut gold = self.container.hostlists[HostColor::Gold as usize].write().await;
-                if gold.iter().any(|(u, _t)| u == addr) {
-                    let position = gold.iter().position(|a| a.0 == *addr).unwrap();
-                    gold[position] = (addr.clone(), last_seen);
-                } else {
-                    gold.push((addr.clone(), last_seen));
-
-                    // Sort the list by last_seen.
-                    gold.sort_by_key(|entry| entry.1);
-                    gold.reverse();
-                }
-                drop(gold);
+                self.container.store_or_update(HostColor::Gold, addr.clone(), last_seen).await;
 
                 // Re-register this host as Connected. We want to keep track of all connected peers
                 // in the Connected() state.
@@ -1293,41 +1234,16 @@ impl Hosts {
                     }
 
                     // Remove from the grey list if it exists.
-                    let mut grey = self.container.hostlists[HostColor::Grey as usize].write().await;
-                    if grey.iter().any(|(u, _t)| u == addr) {
-                        let position = grey.iter().position(|a| a.0 == *addr).unwrap();
-                        grey.remove(position);
-                    }
-                    drop(grey);
+                    self.container.remove_if_exists(HostColor::Grey, addr).await;
 
                     // Remove from the white list if it exists.
-                    let mut white =
-                        self.container.hostlists[HostColor::White as usize].write().await;
-                    if white.iter().any(|(u, _t)| u == addr) {
-                        let position = white.iter().position(|a| a.0 == *addr).unwrap();
-                        white.remove(position);
-                    }
-                    drop(white);
+                    self.container.remove_if_exists(HostColor::White, addr).await;
 
                     // Remove from the gold list if it exists.
-                    let mut gold =
-                        self.container.hostlists[HostColor::White as usize].write().await;
-                    if gold.iter().any(|(u, _t)| u == addr) {
-                        let position = gold.iter().position(|a| a.0 == *addr).unwrap();
-                        gold.remove(position);
-                    }
-                    drop(gold);
+                    self.container.remove_if_exists(HostColor::Gold, addr).await;
 
                     // Add to the black list.
-                    let mut black =
-                        self.container.hostlists[HostColor::Gold as usize].write().await;
-                    if black.iter().any(|(u, _t)| u == addr) {
-                        let position = black.iter().position(|a| a.0 == *addr).unwrap();
-                        black[position] = (addr.clone(), last_seen);
-                    } else {
-                        black.push((addr.clone(), last_seen));
-                    }
-                    drop(black);
+                    self.container.store_or_update(HostColor::Gold, addr.clone(), last_seen).await;
                 }
             }
 
