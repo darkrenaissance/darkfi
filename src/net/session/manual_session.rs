@@ -151,12 +151,6 @@ impl ManualSession {
                             // Wait for channel to close
                             stop_sub.receive().await;
 
-                            // Channel has disconnected. Downgrade this host to greylist.
-                            self.p2p()
-                                .hosts()
-                                .move_host(&addr, last_seen, HostColor::Grey, false, None)
-                                .await?;
-
                             info!(
                                 target: "net::manual_session",
                                 "[P2P] Manual outbound disconnected [{}]", url,

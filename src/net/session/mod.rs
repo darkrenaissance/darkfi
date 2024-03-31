@@ -22,7 +22,7 @@ use async_trait::async_trait;
 use log::debug;
 use smol::Executor;
 
-use super::{channel::ChannelPtr, p2p::P2pPtr, protocol::ProtocolVersion};
+use super::{channel::ChannelPtr, hosts::store::HostColor, p2p::P2pPtr, protocol::ProtocolVersion};
 use crate::Result;
 
 pub mod inbound_session;
@@ -46,8 +46,10 @@ pub type SessionWeakPtr = Weak<dyn Session + Send + Sync + 'static>;
 
 /// Removes channel from the list of connected channels when a stop signal
 /// is received.
-pub async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr) {
+pub async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr, type_id: SessionBitFlag) {
     debug!(target: "net::session::remove_sub_on_stop()", "[START]");
+    let addr = channel.address();
+
     // Subscribe to stop events
     let stop_sub = channel.clone().subscribe_stop().await;
 
@@ -55,14 +57,26 @@ pub async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr) {
         // Wait for a stop event
         stop_sub.receive().await;
     }
-
     debug!(
         target: "net::session::remove_sub_on_stop()",
-        "Received stop event. Removing channel {}", channel.address(),
+        "Received stop event. Removing channel {}", addr,
     );
+
+    if let SESSION_OUTBOUND | SESSION_MANUAL = type_id {
+        debug!(
+            target: "net::session::remove_sub_on_stop()",
+            "Downgrading {}", addr,
+        );
+
+        if !p2p.hosts().is_connection_to_self(addr).await {
+            let last_seen = p2p.hosts().fetch_last_seen(addr).await.unwrap();
+            p2p.hosts().move_host(addr, last_seen, HostColor::Grey, false, None).await.unwrap();
+        }
+    }
 
     // Remove channel from p2p
     p2p.hosts().unregister(channel.address()).await;
+
     debug!(target: "net::session::remove_sub_on_stop()", "[END]");
 }
 
@@ -148,7 +162,7 @@ pub trait Session: Sync {
         self.p2p().hosts().register_channel(channel.clone()).await;
 
         // Subscribe to stop, so we can remove from registry
-        executor.spawn(remove_sub_on_stop(self.p2p(), channel)).detach();
+        executor.spawn(remove_sub_on_stop(self.p2p(), channel, self.type_id())).detach();
 
         // Channel is ready for use
         Ok(())

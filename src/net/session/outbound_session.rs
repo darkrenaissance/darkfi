@@ -408,9 +408,6 @@ impl Slot {
             // Wait for channel to close
             stop_sub.receive().await;
 
-            // Channel has disconnected. Downgrade this host to greylist.
-            hosts.move_host(&addr, last_seen, HostColor::Grey, false, None).await.unwrap();
-
             self.channel_id.store(0, Ordering::Relaxed);
         }
     }

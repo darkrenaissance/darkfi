@@ -844,6 +844,7 @@ impl Hosts {
             // We don't know this peer. We can safely update the state.
             debug!(target: "net::hosts::try_update_registry()", "Inserting addr={}, state={}",
             addr, new_state.to_string());
+
             registry.insert(addr.clone(), new_state.clone());
 
             Ok(new_state)
@@ -983,6 +984,16 @@ impl Hosts {
         false
     }
 
+    // TODO: doc
+    pub async fn is_connection_to_self(&self, url: &Url) -> bool {
+        let host_str = url.host_str().unwrap();
+        if self.settings.localnet {
+            self.settings.external_addrs.iter().any(|ext| host_str == ext.host_str().unwrap())
+        } else {
+            self.settings.external_addrs.iter().any(|ext| url.port() == ext.port())
+        }
+    }
+
     /// Filter given addresses based on certain rulesets and validity. Strictly called only on
     /// the first time learning of a new peer.
     async fn filter_addresses(
@@ -1109,6 +1120,19 @@ impl Hosts {
         ret
     }
 
+    // TODO: doc
+    pub async fn fetch_last_seen(&self, addr: &Url) -> Option<u64> {
+        if self.container.contains(HostColor::Gold as usize, addr).await {
+            self.container.get_last_seen(HostColor::Gold as usize, addr).await
+        } else if self.container.contains(HostColor::White as usize, addr).await {
+            self.container.get_last_seen(HostColor::White as usize, addr).await
+        } else if self.container.contains(HostColor::Grey as usize, addr).await {
+            self.container.get_last_seen(HostColor::Grey as usize, addr).await
+        } else {
+            None
+        }
+    }
+
     /// A single atomic function for moving hosts between hostlists. Called on the following occasions:
     ///
     /// * When we cannot connect to a peer: move to grey, remove from white and gold.
@@ -1176,6 +1200,8 @@ impl Hosts {
                     // We mark this peer as Suspend which means we do not try to connect to it until it
                     // has passed through the refinery. This should never panic.
                     self.try_register(addr.clone(), HostState::Suspend).await.unwrap();
+                    return Ok(());
+                } else {
                     return Ok(());
                 }
             }
