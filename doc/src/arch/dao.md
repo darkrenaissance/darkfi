@@ -246,34 +246,32 @@ required for using the trees with snapshotted states.
 This is used to quickly lookup a state commitment for $𝐂$ and figure out when it
 occurred.
 
-| Key or Value | Field Name | Size | Desc                       |
-|--------------|------------|------|----------------------------|
-| k            | Root       | 32   | The current root hash $Rₖ$ |
-| v            | Tx hash    | 32   | Tx hash which made update  |
-| v            | Call index | 2    | Index of contract call     |
+| Key or Value | Field Name   | Size | Desc                       |
+|--------------|--------------|------|----------------------------|
+| k            | Root         | 32   | The current root hash $Rₖ$ |
+| v            | Block height | 3    | Current block height       |
+| v            | Tx index     | 2    | Tx index                   |
+| v            | Call index   | 2    | Index of contract call     |
 
-The values in these calls, all looking up the block index (from the tx hash)
-and figuring out all info about this state change (such as when it occurred).
+Note: 3 bytes for blockheight can store 50 years worth of blocks.
 
-We could optionally additionally include block height, which would avoid
-needing to use the tx hash to get the block height.
-
-> Another option is to replace tx hash with (block height, tx index).
-
-Q: is this resilient? In bitcoin we usually prefer tx hash since reorgs
-could invalidate this tuple.
+We use the `(block_height, tx_index)` tuple to figure out all info about
+this state change (such as when it occurred).
+We can even get the tx itself if desired.
 
 ## DB SMT Roots
 
 Just like for the merkle case, we want to quickly see whether $Rₖ$ and
 $Sₖ$ correspond to each other. We then use the table to lookup
-(tx hash, call index) and check they match.
+`(block_height, tx_index, call_index)` and check they match.
+If so, then they both exist in the same `update()` call.
 
-| Key or Value | Field Name | Size | Desc                       |
-|--------------|------------|------|----------------------------|
-| k            | Root       | 32   | The current root hash $Sₖ$ |
-| v            | Tx hash    | 32   | Tx hash which made update  |
-| v            | Call index | 2    | Index of contract call     |
+| Key or Value | Field Name   | Size | Desc                       |
+|--------------|--------------|------|----------------------------|
+| k            | Root         | 32   | The current root hash $Sₖ$ |
+| v            | Block height | 3    | Current block height       |
+| v            | Tx index     | 2    | Tx index                   |
+| v            | Call index   | 2    | Index of contract call     |
 
 ## DB Coins (Wallets)
 
@@ -297,8 +295,6 @@ tree so exclusion proofs can be constructed.
 | k            | Val index    | 2    | Index of this coin or nullifier       |
 | v            | Value        | 32   | Coin or nullifier                     |
 | v            | Type         | 1    | Single byte indicating the type       |
-
-Note: 3 bytes for blockheight can store 50 years worth of blocks.
 
 This structure for the keys in an ordered B-Tree, means it can be iterated
 from any point. We can start from any location from our last stored merkle
