@@ -36,9 +36,9 @@ use darkfi_sdk::crypto::ContractId;
 use darkfi_serial::{deserialize_async, serialize_async};
 
 use crate::{
-    drk::Drk,
     error::{WalletDbError, WalletDbResult},
     money::{MONEY_INFO_COL_LAST_SCANNED_BLOCK, MONEY_INFO_TABLE},
+    Drk,
 };
 
 impl Drk {

@@ -42,10 +42,9 @@ use darkfi_sdk::{
 use darkfi_serial::{deserialize, serialize};
 
 use crate::{
-    cli_util::kaching,
     convert_named_params,
-    drk::Drk,
     error::{WalletDbError, WalletDbResult},
+    kaching, Drk,
 };
 
 // Wallet SQL table constant names. These have to represent the `wallet.sql`
