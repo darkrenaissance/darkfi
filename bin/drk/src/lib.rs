@@ -1,5 +1,6 @@
 /// Error codes
 mod error;
+pub use error::WalletDbError;
 
 /// CLI wallet structure
 mod drk;
