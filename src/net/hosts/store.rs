@@ -1003,9 +1003,11 @@ impl Hosts {
     pub async fn is_connection_to_self(&self, url: &Url) -> bool {
         let host_str = url.host_str().unwrap();
         if self.settings.localnet {
-            self.settings.external_addrs.iter().any(|ext| host_str == ext.host_str().unwrap())
-        } else {
+            // If on localhost, check whether this connection is to our own port.
             self.settings.external_addrs.iter().any(|ext| url.port() == ext.port())
+        } else {
+            // Otherwise, check whether this connection is to our own external address.
+            self.settings.external_addrs.iter().any(|ext| host_str == ext.host_str().unwrap())
         }
     }
 
