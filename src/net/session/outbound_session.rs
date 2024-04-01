@@ -44,7 +44,7 @@ use super::{
         channel::ChannelPtr,
         connector::Connector,
         dnet::{self, dnetev, DnetEvent},
-        hosts::store::{HostColor, HostState},
+        hosts::{HostColor, HostState},
         message::GetAddrsMessage,
         p2p::{P2p, P2pPtr},
     },
@@ -99,6 +99,7 @@ impl OutboundSession {
 
     /// Stops the outbound session.
     pub(crate) async fn stop(&self) {
+        debug!(target: "net::outbound_session", "Stopping outbound session");
         let slots = &*self.slots.lock().await;
 
         for slot in slots {
@@ -398,12 +399,6 @@ impl Slot {
             }
 
             self.channel_id.store(channel.info.id, Ordering::Relaxed);
-
-            // Add this connection to the anchorlist
-            hosts
-                .move_host(&addr, last_seen, HostColor::Gold, Some(channel.clone()))
-                .await
-                .unwrap();
 
             // Wait for channel to close
             stop_sub.receive().await;

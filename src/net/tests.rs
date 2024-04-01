@@ -26,7 +26,7 @@ use smol::{channel, future, Executor};
 use url::Url;
 
 use crate::{
-    net::{hosts::store::HostColor, P2p, Settings},
+    net::{hosts::HostColor, P2p, Settings},
     system::sleep,
 };
 
@@ -102,6 +102,7 @@ async fn hostlist_propagation(ex: Arc<Executor<'static>>) {
         inbound_addrs: vec![seed_addr.clone()],
         external_addrs: vec![seed_addr.clone()],
         outbound_connections: 0,
+        greylist_refinery_interval: 2,
         inbound_connections: usize::MAX,
         seeds: vec![],
         peers: vec![],
@@ -146,7 +147,7 @@ async fn hostlist_propagation(ex: Arc<Executor<'static>>) {
     }
 
     info!("Waiting until all peers connect");
-    sleep(10).await;
+    sleep(15).await;
 
     for p2p in p2p_instances.iter() {
         let hosts = p2p.hosts();

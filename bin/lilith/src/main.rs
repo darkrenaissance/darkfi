@@ -39,11 +39,7 @@ use url::Url;
 
 use darkfi::{
     async_daemonize, cli_desc,
-    net::{
-        self,
-        hosts::{refinery::ping_node, store::HostColor},
-        P2p, P2pPtr,
-    },
+    net::{self, hosts::HostColor, P2p, P2pPtr},
     rpc::{
         jsonrpc::*,
         server::{listen_and_serve, RequestHandler},
@@ -184,7 +180,7 @@ impl Lilith {
             let url = &entry.0;
             let last_seen = &entry.1;
 
-            if !ping_node(url.clone(), p2p.clone()).await {
+            if !p2p.session_refine().handshake_node(url.clone(), p2p.clone()).await {
                 debug!(target: "lilith", "Host {} is not responsive. Downgrading from whitelist", url);
                 hosts.move_host(url, *last_seen, HostColor::Grey, None).await?;
                 hosts.unregister(url).await;

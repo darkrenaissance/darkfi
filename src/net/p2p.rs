@@ -29,15 +29,12 @@ use url::Url;
 use super::{
     channel::ChannelPtr,
     dnet::DnetEvent,
-    hosts::{
-        refinery::{GreylistRefinery, GreylistRefineryPtr},
-        store::{Hosts, HostsPtr},
-    },
+    hosts::{Hosts, HostsPtr},
     message::Message,
     protocol::{protocol_registry::ProtocolRegistry, register_default_protocols},
     session::{
         InboundSession, InboundSessionPtr, ManualSession, ManualSessionPtr, OutboundSession,
-        OutboundSessionPtr, SeedSyncSession,
+        OutboundSessionPtr, RefineSession, RefineSessionPtr, SeedSyncSession,
     },
     settings::{Settings, SettingsPtr},
 };
@@ -72,14 +69,13 @@ pub struct P2p {
     session_inbound: InboundSessionPtr,
     /// Reference to configured [`OutboundSession`]
     session_outbound: OutboundSessionPtr,
+    /// Reference to configured [`RefineSession`]
+    session_refine: RefineSessionPtr,
 
     /// Enable network debugging
     pub dnet_enabled: Mutex<bool>,
     /// The subscriber for which we can give dnet info over
     dnet_subscriber: SubscriberPtr<DnetEvent>,
-
-    /// Greylist refinery process
-    greylist_refinery: Arc<GreylistRefinery>,
 }
 
 impl P2p {
@@ -104,18 +100,17 @@ impl P2p {
             session_manual: ManualSession::new(),
             session_inbound: InboundSession::new(),
             session_outbound: OutboundSession::new(),
+            session_refine: RefineSession::new(),
 
             dnet_enabled: Mutex::new(false),
             dnet_subscriber: Subscriber::new(),
-
-            greylist_refinery: GreylistRefinery::new(),
         });
 
         self_.session_manual.p2p.init(self_.clone());
         self_.session_inbound.p2p.init(self_.clone());
         self_.session_outbound.p2p.init(self_.clone());
+        self_.session_refine.p2p.init(self_.clone());
 
-        self_.greylist_refinery.p2p.init(self_.clone());
         register_default_protocols(self_.clone()).await;
 
         self_
@@ -138,11 +133,11 @@ impl P2p {
             return Err(err)
         }
 
-        info!(target: "net::p2p::start()", "Starting greylist refinery process");
-        self.greylist_refinery.clone().start().await;
-
         // Start the outbound session
         self.session_outbound().start().await;
+
+        // Start the refine session
+        self.session_refine().start().await;
 
         info!(target: "net::p2p::start()", "[P2P] P2P subsystem started");
         Ok(())
@@ -168,9 +163,7 @@ impl P2p {
         self.session_manual().stop().await;
         self.session_inbound().stop().await;
         self.session_outbound().stop().await;
-
-        // Stop greylist refinery process
-        self.greylist_refinery().stop().await;
+        self.session_refine().stop().await;
     }
 
     /// Broadcasts a message concurrently across all active channels.
@@ -255,9 +248,9 @@ impl P2p {
         self.session_outbound.clone()
     }
 
-    /// Get pointer to greylist refinery
-    pub fn greylist_refinery(&self) -> GreylistRefineryPtr {
-        self.greylist_refinery.clone()
+    /// Get pointer to refine session
+    pub fn session_refine(&self) -> RefineSessionPtr {
+        self.session_refine.clone()
     }
 
     /// Enable network debugging

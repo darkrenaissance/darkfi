@@ -23,7 +23,7 @@ use rand::{prelude::IteratorRandom, rngs::OsRng, Rng};
 use smol::lock::RwLock;
 use url::Url;
 
-use super::super::{settings::SettingsPtr, ChannelPtr};
+use super::{settings::SettingsPtr, ChannelPtr};
 use crate::{
     system::{Subscriber, SubscriberPtr, Subscription},
     util::{
@@ -32,6 +32,29 @@ use crate::{
     },
     Error, Result,
 };
+
+/// The main interface for interacting with the hostlist. Contains the following:
+///
+/// `Hosts`: the main parent class that manages HostRegistry and HostContainer. It is also
+///  responsible for filtering addresses before writing to the hostlist.
+///
+/// `HostRegistry`: A locked HashMap that maps peer addresses onto mutually exclusive
+///  states (`HostState`). Prevents race conditions by dictating a strict flow of logically
+///  acceptable states.
+///
+/// `HostContainer`: A wrapper for the hostlists. Each hostlist is represented by a `HostColor`,
+///  which can be Grey, White, Gold or Black. Exposes a common interface for hostlist queries and
+///  utilities.
+///
+/// `HostColor`: White hosts have been seen recently. Gold hosts we have been able to establish
+///  a connection to. Grey hosts are recently received hosts that are periodically refreshed
+///  using the greylist refinery. Black hosts are considered hostile and are strictly avoided
+///  for the duration of the program. Dark hosts are hosts that do not match our transports, but
+///  that we continue to share with other peers. They are otherwise ignored.
+///
+/// `HostState`: a set of mutually exclusive states that can be Insert, Refine, Connect, Suspend
+///  or Connected. The state is `None` when the corresponding host has been removed from the
+///  HostRegistry.
 
 // An array containing all possible local host strings
 // TODO: This could perhaps be more exhaustive?
@@ -108,6 +131,7 @@ pub enum HostState {
     Suspend,
     /// Hosts that have been successfully connected to.
     Connected(ChannelPtr),
+
     /// Host that are moving between hostlists, implemented in
     /// store::move_host().  Move takes a ChannelPtr so that Channels that
     /// are being promoted to the Gold list can be re-inserted into the
@@ -838,6 +862,9 @@ impl Hosts {
     pub async fn try_register(&self, addr: Url, new_state: HostState) -> Result<HostState> {
         let mut registry = self.registry.write().await;
 
+        debug!(target: "net::hosts::try_update_registry()", "Try register addr={}, state={}",
+       addr, &new_state);
+
         if registry.contains_key(&addr) {
             let current_state = registry.get(&addr).unwrap().clone();
 
@@ -853,6 +880,8 @@ impl Hosts {
             if let Ok(state) = &result {
                 registry.insert(addr.clone(), state.clone());
             }
+
+            debug!(target: "net::hosts::try_update_registry()", "Returning result {:?}", result);
 
             result
         } else {
@@ -904,6 +933,7 @@ impl Hosts {
     pub async fn unregister(&self, addr: &Url) {
         debug!(target: "net::hosts::unregister()", "Removing {} from HostRegistry", addr);
         self.registry.write().await.remove(addr);
+        debug!(target: "net::hosts::unregister()", "Removed {} from HostRegistry", addr);
     }
 
     /// Returns the list of connected channels.
@@ -1218,37 +1248,10 @@ impl Hosts {
 
 #[cfg(test)]
 mod tests {
-    use smol::Executor;
     use std::time::UNIX_EPOCH;
 
-    use super::{
-        super::super::{settings::Settings, P2p},
-        *,
-    };
-    use crate::{net::hosts::refinery::ping_node, system::sleep};
-
-    #[test]
-    fn test_ping_node() {
-        smol::block_on(async {
-            let settings = Settings {
-                localnet: false,
-                external_addrs: vec![
-                    Url::parse("tcp://foo.bar:123").unwrap(),
-                    Url::parse("tcp://lol.cat:321").unwrap(),
-                ],
-                ..Default::default()
-            };
-
-            let ex = Arc::new(Executor::new());
-            let p2p = P2p::new(settings, ex.clone()).await;
-
-            let url = Url::parse("tcp://xeno.systems.wtf").unwrap();
-            println!("Pinging node...");
-            let task = ex.spawn(ping_node(url.clone(), p2p));
-            ex.run(task).await;
-            println!("Ping node complete!");
-        });
-    }
+    use super::{super::settings::Settings, *};
+    use crate::system::sleep;
 
     #[test]
     fn test_is_local_host() {

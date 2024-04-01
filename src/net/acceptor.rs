@@ -30,7 +30,7 @@ use url::Url;
 
 use super::{
     channel::{Channel, ChannelPtr},
-    hosts::store::HostColor,
+    hosts::HostColor,
     session::SessionWeakPtr,
     transport::{Listener, PtListener},
 };

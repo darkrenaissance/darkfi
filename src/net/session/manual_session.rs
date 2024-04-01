@@ -29,7 +29,7 @@
 //! and insures that no other part of the program uses the slots at the
 //! same time.
 
-use std::{sync::Arc, time::UNIX_EPOCH};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use log::{debug, error, info, warn};
@@ -44,7 +44,7 @@ use super::{
     Session, SessionBitFlag, SESSION_MANUAL,
 };
 use crate::{
-    net::hosts::store::{HostColor, HostState},
+    net::hosts::HostState,
     system::{sleep, LazyWeak, StoppableTask, StoppableTaskPtr},
     Error, Result,
 };
@@ -133,14 +133,6 @@ impl ManualSession {
 
                             // Register the new channel
                             self.register_channel(channel.clone(), ex.clone()).await?;
-
-                            let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-
-                            // Add this connection to the anchorlist
-                            self.p2p()
-                                .hosts()
-                                .move_host(&addr, last_seen, HostColor::Gold, Some(channel.clone()))
-                                .await?;
 
                             // Wait for channel to close
                             stop_sub.receive().await;

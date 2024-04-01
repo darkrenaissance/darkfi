@@ -37,7 +37,7 @@ use url::Url;
 
 use super::{
     dnet::{self, dnetev, DnetEvent},
-    hosts::store::HostColor,
+    hosts::HostColor,
     message,
     message::Packet,
     message_subscriber::{MessageSubscription, MessageSubsystem},
