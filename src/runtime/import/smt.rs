@@ -22,7 +22,7 @@ use darkfi_sdk::crypto::{
     pasta_prelude::*,
     smt::{PoseidonFp, SparseMerkleTree, StorageAdapter, EMPTY_NODES_FP, SMT_FP_DEPTH},
 };
-use darkfi_serial::{serialize, Decodable, Encodable, WriteExt};
+use darkfi_serial::{serialize, Decodable, Encodable};
 use halo2_proofs::pasta::pallas;
 use log::{debug, error, warn};
 use num_bigint::BigUint;
@@ -254,20 +254,13 @@ pub(crate) fn sparse_merkle_insert_batch(
     let latest_root_data = serialize(&latest_root);
     assert_eq!(latest_root_data.len(), 32);
 
-    let blockheight_data = serialize(&(env.verifying_block_height as u32));
     // This is hardcoded but should not be
-    let tx_idx: u16 = 0;
     let call_idx: u16 = 0;
 
-    assert_eq!(blockheight_data.len(), 4);
-    // Little-endian
-    assert_eq!(blockheight_data[3], 0);
-
-    let mut value_data = Vec::with_capacity(7);
-    value_data.write_slice(&blockheight_data[..3]).expect("Unable to serialize blockheight data");
-    tx_idx.encode(&mut value_data).expect("Unable to serialize tx_id");
+    let mut value_data = Vec::with_capacity(32 + 2);
+    env.tx_hash.inner().encode(&mut value_data).expect("Unable to serialize tx_hash");
     call_idx.encode(&mut value_data).expect("Unable to serialize call_idx");
-    assert_eq!(value_data.len(), 7);
+    assert_eq!(value_data.len(), 32 + 2);
 
     if overlay.insert(&db_roots.tree, &latest_root_data, &value_data).is_err() {
         error!(

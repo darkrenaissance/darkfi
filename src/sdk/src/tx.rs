@@ -37,6 +37,7 @@ impl TransactionHash {
         Self([0; 32])
     }
 
+    #[inline]
     pub fn inner(&self) -> &[u8; 32] {
         &self.0
     }
