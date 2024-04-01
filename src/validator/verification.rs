@@ -155,7 +155,7 @@ pub fn validate_blockchain(
     // Generate a PoW module
     let mut module = PoWModule::new(blockchain.clone(), pow_target, pow_fixed_difficulty)?;
     // We use block order store here so we have all blocks in order
-    let blocks = blockchain.order.get_all()?;
+    let blocks = blockchain.blocks.get_all_order()?;
     for (index, block) in blocks[1..].iter().enumerate() {
         let full_blocks = blockchain.get_blocks_by_hash(&[blocks[index].1, block.1])?;
         let full_block = &full_blocks[1];

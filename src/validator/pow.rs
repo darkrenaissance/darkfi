@@ -99,7 +99,7 @@ impl PoWModule {
         let mut timestamps = RingBuffer::<Timestamp, BUF_SIZE>::new();
         let mut difficulties = RingBuffer::<BigUint, BUF_SIZE>::new();
         let mut cummulative_difficulty = BigUint::zero();
-        let last_n = blockchain.difficulties.get_last_n(BUF_SIZE)?;
+        let last_n = blockchain.blocks.get_last_n_difficulties(BUF_SIZE)?;
         for difficulty in last_n {
             timestamps.push(difficulty.timestamp);
             difficulties.push(difficulty.cummulative_difficulty.clone());
@@ -285,7 +285,7 @@ impl PoWModule {
         difficulty: BlockDifficulty,
     ) -> Result<()> {
         self.append(difficulty.timestamp, &difficulty.difficulty);
-        overlay.lock().unwrap().difficulties.insert(&[difficulty])
+        overlay.lock().unwrap().blocks.insert_difficulty(&[difficulty])
     }
 
     /// Mine provided block, based on next mine target

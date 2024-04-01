@@ -42,12 +42,12 @@ fn forks() -> Result<()> {
         let fork = Fork::new(blockchain.clone(), module).await?;
 
         // Add a dummy record to fork
-        fork.overlay.lock().unwrap().order.insert(&[1], &[record1])?;
+        fork.overlay.lock().unwrap().blocks.insert_order(&[1], &[record1])?;
 
         // Verify blockchain doesn't contain the record
-        assert_eq!(blockchain.order.get(&[0, 1], false)?, [Some(genesis_block_hash), None]);
+        assert_eq!(blockchain.blocks.get_order(&[0, 1], false)?, [Some(genesis_block_hash), None]);
         assert_eq!(
-            fork.overlay.lock().unwrap().order.get(&[0, 1], true)?,
+            fork.overlay.lock().unwrap().blocks.get_order(&[0, 1], true)?,
             [Some(genesis_block_hash), Some(record1)]
         );
 
@@ -56,24 +56,24 @@ fn forks() -> Result<()> {
 
         // Verify it contains the original records
         assert_eq!(
-            fork_clone.overlay.lock().unwrap().order.get(&[0, 1], true)?,
+            fork_clone.overlay.lock().unwrap().blocks.get_order(&[0, 1], true)?,
             [Some(genesis_block_hash), Some(record1)]
         );
 
         // Add another dummy record to cloned fork
-        fork_clone.overlay.lock().unwrap().order.insert(&[2], &[record2])?;
+        fork_clone.overlay.lock().unwrap().blocks.insert_order(&[2], &[record2])?;
 
         // Verify blockchain and original fork don't contain the second record
         assert_eq!(
-            blockchain.order.get(&[0, 1, 2], false)?,
+            blockchain.blocks.get_order(&[0, 1, 2], false)?,
             [Some(genesis_block_hash), None, None]
         );
         assert_eq!(
-            fork.overlay.lock().unwrap().order.get(&[0, 1, 2], false)?,
+            fork.overlay.lock().unwrap().blocks.get_order(&[0, 1, 2], false)?,
             [Some(genesis_block_hash), Some(record1), None]
         );
         assert_eq!(
-            fork_clone.overlay.lock().unwrap().order.get(&[0, 1, 2], true)?,
+            fork_clone.overlay.lock().unwrap().blocks.get_order(&[0, 1, 2], true)?,
             [Some(genesis_block_hash), Some(record1), Some(record2)]
         );
 

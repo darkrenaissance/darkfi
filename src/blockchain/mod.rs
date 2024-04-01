@@ -27,10 +27,7 @@ use crate::{tx::Transaction, util::time::Timestamp, Error, Result};
 
 /// Block related definitions and storage implementations
 pub mod block_store;
-pub use block_store::{
-    Block, BlockDifficulty, BlockDifficultyStore, BlockDifficultyStoreOverlay, BlockInfo,
-    BlockOrderStore, BlockOrderStoreOverlay, BlockStore, BlockStoreOverlay,
-};
+pub use block_store::{Block, BlockDifficulty, BlockInfo, BlockStore, BlockStoreOverlay};
 
 /// Header definition and storage implementation
 pub mod header_store;
@@ -53,10 +50,6 @@ pub struct Blockchain {
     pub headers: HeaderStore,
     /// Blocks sled tree
     pub blocks: BlockStore,
-    /// Block order sled tree
-    pub order: BlockOrderStore,
-    /// Block height difficulties sled tree,
-    pub difficulties: BlockDifficultyStore,
     /// Transactions related sled trees
     pub transactions: TxStore,
     /// Contracts related sled trees
@@ -68,20 +61,10 @@ impl Blockchain {
     pub fn new(db: &sled::Db) -> Result<Self> {
         let headers = HeaderStore::new(db)?;
         let blocks = BlockStore::new(db)?;
-        let order = BlockOrderStore::new(db)?;
-        let difficulties = BlockDifficultyStore::new(db)?;
         let transactions = TxStore::new(db)?;
         let contracts = ContractStore::new(db)?;
 
-        Ok(Self {
-            sled_db: db.clone(),
-            headers,
-            blocks,
-            order,
-            difficulties,
-            transactions,
-            contracts,
-        })
+        Ok(Self { sled_db: db.clone(), headers, blocks, transactions, contracts })
     }
 
     /// Insert a given [`BlockInfo`] into the blockchain database.
@@ -108,13 +91,13 @@ impl Blockchain {
         let (bocks_batch, block_hashes) = self.blocks.insert_batch(&[blk])?;
         let block_hash = block_hashes[0];
         let block_hash_vec = [block_hash];
-        trees.push(self.blocks.0.clone());
+        trees.push(self.blocks.main.clone());
         batches.push(bocks_batch);
 
         // Store block order
         let blocks_order_batch =
-            self.order.insert_batch(&[block.header.height], &block_hash_vec)?;
-        trees.push(self.order.0.clone());
+            self.blocks.insert_batch_order(&[block.header.height], &block_hash_vec)?;
+        trees.push(self.blocks.order.clone());
         batches.push(blocks_order_batch);
 
         // Perform an atomic transaction over the trees and apply the batches.
@@ -125,7 +108,7 @@ impl Blockchain {
 
     /// Check if the given [`BlockInfo`] is in the database and all trees.
     pub fn has_block(&self, block: &BlockInfo) -> Result<bool> {
-        let blockhash = match self.order.get(&[block.header.height], true) {
+        let blockhash = match self.blocks.get_order(&[block.header.height], true) {
             Ok(v) => v[0].unwrap(),
             Err(_) => return Ok(false),
         };
@@ -172,7 +155,7 @@ impl Blockchain {
     /// Retrieve [`BlockInfo`]s by given heights. Does not fail if any of them are not found.
     pub fn get_blocks_by_heights(&self, heights: &[u64]) -> Result<Vec<BlockInfo>> {
         debug!(target: "blockchain", "get_blocks_by_heights(): {:?}", heights);
-        let blockhashes = self.order.get(heights, false)?;
+        let blockhashes = self.blocks.get_order(heights, false)?;
 
         let mut hashes = vec![];
         for i in blockhashes.into_iter().flatten() {
@@ -185,13 +168,13 @@ impl Blockchain {
     /// Retrieve n blocks after given start block height.
     pub fn get_blocks_after(&self, height: u64, n: u64) -> Result<Vec<BlockInfo>> {
         debug!(target: "blockchain", "get_blocks_after(): {} -> {}", height, n);
-        let hashes = self.order.get_after(height, n)?;
+        let hashes = self.blocks.get_after(height, n)?;
         self.get_blocks_by_hash(&hashes)
     }
 
     /// Retrieve stored blocks count
     pub fn len(&self) -> usize {
-        self.order.len()
+        self.blocks.len()
     }
 
     /// Retrieve stored txs count
@@ -201,12 +184,12 @@ impl Blockchain {
 
     /// Check if blockchain contains any blocks
     pub fn is_empty(&self) -> bool {
-        self.order.is_empty()
+        self.blocks.is_empty()
     }
 
     /// Retrieve genesis (first) block height and hash.
     pub fn genesis(&self) -> Result<(u64, blake3::Hash)> {
-        self.order.get_first()
+        self.blocks.get_first()
     }
 
     /// Retrieve genesis (first) block info.
@@ -217,7 +200,7 @@ impl Blockchain {
 
     /// Retrieve the last block height and hash.
     pub fn last(&self) -> Result<(u64, blake3::Hash)> {
-        self.order.get_last()
+        self.blocks.get_last()
     }
 
     /// Retrieve the last block info.
@@ -229,7 +212,7 @@ impl Blockchain {
     /// Retrieve the last block difficulty. If the tree is empty,
     /// returns `BlockDifficulty::genesis` difficulty.
     pub fn last_block_difficulty(&self) -> Result<BlockDifficulty> {
-        if let Some(found) = self.difficulties.get_last()? {
+        if let Some(found) = self.blocks.get_last_difficulty()? {
             return Ok(found)
         }
 
@@ -239,7 +222,7 @@ impl Blockchain {
 
     /// Check if block order for the given height is in the database.
     pub fn has_height(&self, height: u64) -> Result<bool> {
-        let vec = match self.order.get(&[height], true) {
+        let vec = match self.blocks.get_order(&[height], true) {
             Ok(v) => v,
             Err(_) => return Ok(false),
         };
@@ -323,7 +306,7 @@ impl Blockchain {
     /// Retrieve all blocks contained in the blockchain in order.
     /// Be careful as this will try to load everything in memory.
     pub fn get_all(&self) -> Result<Vec<BlockInfo>> {
-        let order = self.order.get_all()?;
+        let order = self.blocks.get_all_order()?;
         let order: Vec<blake3::Hash> = order.iter().map(|x| x.1).collect();
         let blocks = self.get_blocks_by_hash(&order)?;
 
@@ -345,10 +328,6 @@ pub struct BlockchainOverlay {
     pub headers: HeaderStoreOverlay,
     /// Blocks overlay
     pub blocks: BlockStoreOverlay,
-    /// Block order overlay
-    pub order: BlockOrderStoreOverlay,
-    /// Block height difficulties overlay,
-    pub difficulties: BlockDifficultyStoreOverlay,
     /// Transactions overlay
     pub transactions: TxStoreOverlay,
     /// Contract overlay
@@ -361,30 +340,20 @@ impl BlockchainOverlay {
         let overlay = Arc::new(Mutex::new(sled_overlay::SledDbOverlay::new(&blockchain.sled_db)));
         let headers = HeaderStoreOverlay::new(&overlay)?;
         let blocks = BlockStoreOverlay::new(&overlay)?;
-        let order = BlockOrderStoreOverlay::new(&overlay)?;
-        let difficulties = BlockDifficultyStoreOverlay::new(&overlay)?;
         let transactions = TxStoreOverlay::new(&overlay)?;
         let contracts = ContractStoreOverlay::new(&overlay)?;
 
-        Ok(Arc::new(Mutex::new(Self {
-            overlay,
-            headers,
-            blocks,
-            order,
-            difficulties,
-            transactions,
-            contracts,
-        })))
+        Ok(Arc::new(Mutex::new(Self { overlay, headers, blocks, transactions, contracts })))
     }
 
     /// Check if blockchain contains any blocks
     pub fn is_empty(&self) -> Result<bool> {
-        self.order.is_empty()
+        self.blocks.is_empty()
     }
 
     /// Retrieve the last block height and hash.
     pub fn last(&self) -> Result<(u64, blake3::Hash)> {
-        self.order.get_last()
+        self.blocks.get_last()
     }
 
     /// Retrieve the last block info.
@@ -424,14 +393,14 @@ impl BlockchainOverlay {
         let block_hash_vec = [block_hash];
 
         // Store block order
-        self.order.insert(&[block.header.height], &block_hash_vec)?;
+        self.blocks.insert_order(&[block.header.height], &block_hash_vec)?;
 
         Ok(block_hash)
     }
 
     /// Check if the given [`BlockInfo`] is in the database and all trees.
     pub fn has_block(&self, block: &BlockInfo) -> Result<bool> {
-        let blockhash = match self.order.get(&[block.header.height], true) {
+        let blockhash = match self.blocks.get_order(&[block.header.height], true) {
             Ok(v) => v[0].unwrap(),
             Err(_) => return Ok(false),
         };
@@ -504,20 +473,10 @@ impl BlockchainOverlay {
         let overlay = Arc::new(Mutex::new(self.overlay.lock().unwrap().clone()));
         let headers = HeaderStoreOverlay::new(&overlay)?;
         let blocks = BlockStoreOverlay::new(&overlay)?;
-        let order = BlockOrderStoreOverlay::new(&overlay)?;
-        let difficulties = BlockDifficultyStoreOverlay::new(&overlay)?;
         let transactions = TxStoreOverlay::new(&overlay)?;
         let contracts = ContractStoreOverlay::new(&overlay)?;
 
-        Ok(Arc::new(Mutex::new(Self {
-            overlay,
-            headers,
-            blocks,
-            order,
-            difficulties,
-            transactions,
-            contracts,
-        })))
+        Ok(Arc::new(Mutex::new(Self { overlay, headers, blocks, transactions, contracts })))
     }
 }
 
