@@ -16,7 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::crypto::{DAO_CONTRACT_ID, DEPLOYOOOR_CONTRACT_ID, MONEY_CONTRACT_ID};
+use darkfi_sdk::{
+    crypto::{DAO_CONTRACT_ID, DEPLOYOOOR_CONTRACT_ID, MONEY_CONTRACT_ID},
+    tx::TransactionHash,
+};
 use log::info;
 use num_bigint::BigUint;
 use randomx::{RandomXCache, RandomXFlags, RandomXVM};

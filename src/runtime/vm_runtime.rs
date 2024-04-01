@@ -21,7 +21,7 @@ use std::{
     sync::Arc,
 };
 
-use darkfi_sdk::{crypto::ContractId, entrypoint};
+use darkfi_sdk::{crypto::ContractId, entrypoint, tx::TransactionHash};
 use darkfi_serial::serialize;
 use log::{debug, error, info};
 use wasmer::{

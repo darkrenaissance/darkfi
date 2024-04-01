@@ -96,7 +96,7 @@ pub async fn verify_genesis_block(overlay: &BlockchainOverlayPtr, block: &BlockI
     }
 
     // Append producer transaction to the tree and check tree matches header one
-    append_tx_to_merkle_tree(&mut tree, producer_tx)?;
+    append_tx_to_merkle_tree(&mut tree, producer_tx);
     if tree != block.header.tree {
         error!(target: "validator::verification::verify_genesis_block", "Genesis Merkle tree is invalid");
         return Err(Error::BlockIsInvalid(block_hash))
@@ -246,7 +246,7 @@ pub async fn verify_producer_transaction(
     tx: &Transaction,
     tree: &mut MerkleTree,
 ) -> Result<PublicKey> {
-    let tx_hash = tx.hash()?;
+    let tx_hash = tx.hash();
     debug!(target: "validator::verification::verify_producer_transaction", "Validating proposal transaction {}", tx_hash);
 
     // Producer transactions must contain a single, non-empty call
@@ -360,7 +360,7 @@ pub async fn verify_producer_transaction(
     debug!(target: "validator::verification::verify_producer_transaction", "ZK proof verification successful");
 
     // Append hash to merkle tree
-    append_tx_to_merkle_tree(tree, tx)?;
+    append_tx_to_merkle_tree(tree, tx);
 
     debug!(target: "validator::verification::verify_producer_transaction", "Proposal transaction {} verified successfully", tx_hash);
 
@@ -378,7 +378,7 @@ pub async fn verify_transaction(
     verifying_keys: &mut HashMap<[u8; 32], HashMap<String, VerifyingKey>>,
     verify_fee: bool,
 ) -> Result<u64> {
-    let tx_hash = tx.hash()?;
+    let tx_hash = tx.hash();
     debug!(target: "validator::verification::verify_transaction", "Validating transaction {}", tx_hash);
 
     // Gas accumulator
@@ -518,6 +518,7 @@ pub async fn verify_transaction(
                 overlay.clone(),
                 deploy_cid,
                 verifying_block_height,
+                tx_hash.clone(),
             )?;
 
             deploy_runtime.deploy(&deploy_params.ix)?;
@@ -598,7 +599,7 @@ pub async fn verify_transaction(
     debug!(target: "validator::verification::verify_transaction", "ZK proof verification successful");
 
     // Append hash to merkle tree
-    append_tx_to_merkle_tree(tree, tx)?;
+    append_tx_to_merkle_tree(tree, tx);
 
     debug!(target: "validator::verification::verify_transaction", "Transaction {} verified successfully", tx_hash);
     Ok(gas_used)

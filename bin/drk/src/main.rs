@@ -47,6 +47,7 @@ use darkfi_money_contract::model::{Coin, TokenId};
 use darkfi_sdk::{
     crypto::{FuncId, PublicKey, SecretKey},
     pasta::{group::ff::PrimeField, pallas},
+    tx::TransactionHash,
 };
 use darkfi_serial::{deserialize_async, serialize_async};
 
@@ -1303,7 +1304,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
         Subcmd::Explorer { command } => match command {
             ExplorerSubcmd::FetchTx { tx_hash, full, encode } => {
-                let tx_hash = blake3::Hash::from_hex(&tx_hash)?;
+                let tx_hash = TransactionHash(*blake3::Hash::from_hex(&tx_hash)?.as_bytes());
 
                 let drk =
                     Drk::new(args.wallet_path, args.wallet_pass, args.endpoint.clone(), ex.clone())
@@ -1323,7 +1324,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 };
 
                 // Make sure the tx is correct
-                assert_eq!(tx.hash()?, tx_hash);
+                assert_eq!(tx.hash(), tx_hash);
 
                 if encode {
                     println!("{}", base64::encode(&serialize_async(&tx).await));
@@ -1361,7 +1362,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     }
                 };
 
-                println!("Transaction ID: {}", tx.hash()?);
+                println!("Transaction ID: {}", tx.hash());
                 println!("State: {}", if is_valid { "valid" } else { "invalid" });
 
                 Ok(())

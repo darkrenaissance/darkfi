@@ -222,7 +222,7 @@ impl TestHarness {
         let mut genesis_block = BlockInfo::default();
         genesis_block.header.timestamp = Timestamp::from_u64(1689772567);
         let producer_tx = genesis_block.txs.pop().unwrap();
-        genesis_block.append_txs(vec![producer_tx])?;
+        genesis_block.append_txs(vec![producer_tx]);
 
         // Deterministic PRNG
         let mut rng = Pcg32::new(42);
@@ -312,7 +312,7 @@ fn benchmark_wasm_calls(
             file,
             "{}, {}, {}, {}, {}, {}",
             callname,
-            tx.hash().unwrap(),
+            tx.hash(),
             idx,
             times[0],
             times[1],

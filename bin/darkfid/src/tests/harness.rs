@@ -70,7 +70,7 @@ impl Harness {
         let producer_tx = genesis_block.txs.pop().unwrap();
 
         // Append it again so its added to the merkle tree
-        genesis_block.append_txs(vec![producer_tx])?;
+        genesis_block.append_txs(vec![producer_tx]);
 
         // Generate validators configuration
         // NOTE: we are not using consensus constants here so we
@@ -209,7 +209,7 @@ impl Harness {
         let mut block = BlockInfo::new_empty(header);
 
         // Add producer transaction to the block
-        block.append_txs(vec![tx])?;
+        block.append_txs(vec![tx]);
 
         // Attach signature
         block.sign(&keypair.secret)?;

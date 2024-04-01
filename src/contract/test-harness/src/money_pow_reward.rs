@@ -123,7 +123,7 @@ impl TestHarness {
         let mut block = BlockInfo::new_empty(header);
 
         // Add producer transaction to the block
-        block.append_txs(vec![tx])?;
+        block.append_txs(vec![tx]);
 
         // Attach signature
         block.sign(&wallet.keypair.secret)?;

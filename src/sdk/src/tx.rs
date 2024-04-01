@@ -16,11 +16,37 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::fmt::{self, Debug};
+
 #[cfg(feature = "async")]
 use darkfi_serial::async_trait;
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 
 use super::crypto::ContractId;
+
+#[derive(Clone, Debug, PartialEq)]
+// We have to introduce a type rather than using an alias so we can implement Display
+pub struct TransactionHash(pub [u8; 32]);
+
+impl TransactionHash {
+    pub fn new(data: [u8; 32]) -> Self {
+        Self(data)
+    }
+
+    pub fn none() -> Self {
+        Self([0; 32])
+    }
+
+    pub fn inner(&self) -> &[u8; 32] {
+        &self.0
+    }
+}
+
+impl fmt::Display for TransactionHash {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        self.0[..].fmt(formatter)
+    }
+}
 
 // ANCHOR: contractcall
 /// A ContractCall is the part of a transaction that executes a certain

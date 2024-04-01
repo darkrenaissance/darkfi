@@ -32,7 +32,7 @@ use darkfi::{
     util::encoding::base64,
     Error, Result,
 };
-use darkfi_sdk::crypto::ContractId;
+use darkfi_sdk::{crypto::ContractId, tx::TransactionHash};
 use darkfi_serial::{deserialize_async, serialize_async};
 
 use crate::{
@@ -304,8 +304,8 @@ impl Drk {
     }
 
     /// Queries darkfid for a tx with given hash
-    pub async fn get_tx(&self, tx_hash: &blake3::Hash) -> Result<Option<Transaction>> {
-        let tx_hash_str = tx_hash.to_hex().to_string();
+    pub async fn get_tx(&self, tx_hash: &TransactionHash) -> Result<Option<Transaction>> {
+        let tx_hash_str = tx_hash.to_string();
         let req = JsonRequest::new(
             "blockchain.get_tx",
             JsonValue::Array(vec![JsonValue::String(tx_hash_str)]),

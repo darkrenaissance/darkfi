@@ -117,21 +117,17 @@ impl BlockInfo {
     }
 
     /// Append a transaction to the block. Also adds it to the Merkle tree.
-    pub fn append_tx(&mut self, tx: Transaction) -> Result<()> {
-        append_tx_to_merkle_tree(&mut self.header.tree, &tx)?;
+    pub fn append_tx(&mut self, tx: Transaction) {
+        append_tx_to_merkle_tree(&mut self.header.tree, &tx);
         self.txs.push(tx);
-
-        Ok(())
     }
 
     /// Append a vector of transactions to the block. Also adds them to the
     /// Merkle tree.
-    pub fn append_txs(&mut self, txs: Vec<Transaction>) -> Result<()> {
+    pub fn append_txs(&mut self, txs: Vec<Transaction>) {
         for tx in txs {
-            self.append_tx(tx)?;
+            self.append_tx(tx);
         }
-
-        Ok(())
     }
 
     /// Sign block header using provided secret key
@@ -739,10 +735,9 @@ impl BlockDifficultyStoreOverlay {
 }
 
 /// Auxiliary function to append a transaction to a Merkle tree.
-pub fn append_tx_to_merkle_tree(tree: &mut MerkleTree, tx: &Transaction) -> Result<()> {
+pub fn append_tx_to_merkle_tree(tree: &mut MerkleTree, tx: &Transaction) {
     let mut buf = [0u8; 64];
-    buf[..blake3::OUT_LEN].copy_from_slice(tx.hash()?.as_bytes());
+    buf[..blake3::OUT_LEN].copy_from_slice(tx.hash().inner());
     let leaf = pallas::Base::from_uniform_bytes(&buf);
     tree.append(leaf.into());
-    Ok(())
 }
