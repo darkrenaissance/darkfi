@@ -452,13 +452,13 @@ impl Runtime {
         //debug!(target: "runtime::vm_runtime", "[WASM] payload: {:?}", payload);
         let _ = self.call(ContractSection::Deploy, payload)?;
 
-        // Update the wasm bincode in the WasmStore if the deploy exec passed successfully.
+        // Update the wasm bincode in the ContractStore wasm tree if the deploy exec passed successfully.
         let env_mut = self.ctx.as_mut(&mut self.store);
         env_mut
             .blockchain
             .lock()
             .unwrap()
-            .wasm_bincode
+            .contracts
             .insert(env_mut.contract_id, &env_mut.contract_bincode)?;
 
         info!(target: "runtime::vm_runtime", "[WASM] Successfully deployed ContractID: {}", cid);

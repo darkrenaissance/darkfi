@@ -42,9 +42,7 @@ pub use tx_store::{TxStore, TxStoreOverlay};
 
 /// Contracts and Wasm storage implementations
 pub mod contract_store;
-pub use contract_store::{
-    ContractStateStore, ContractStateStoreOverlay, WasmStore, WasmStoreOverlay,
-};
+pub use contract_store::{ContractStore, ContractStoreOverlay};
 
 /// Structure holding all sled trees that define the concept of Blockchain.
 #[derive(Clone)]
@@ -61,10 +59,8 @@ pub struct Blockchain {
     pub difficulties: BlockDifficultyStore,
     /// Transactions related sled trees
     pub transactions: TxStore,
-    /// Contract states
-    pub contracts: ContractStateStore,
-    /// Wasm bincodes
-    pub wasm_bincode: WasmStore,
+    /// Contracts related sled trees
+    pub contracts: ContractStore,
 }
 
 impl Blockchain {
@@ -75,8 +71,7 @@ impl Blockchain {
         let order = BlockOrderStore::new(db)?;
         let difficulties = BlockDifficultyStore::new(db)?;
         let transactions = TxStore::new(db)?;
-        let contracts = ContractStateStore::new(db)?;
-        let wasm_bincode = WasmStore::new(db)?;
+        let contracts = ContractStore::new(db)?;
 
         Ok(Self {
             sled_db: db.clone(),
@@ -86,7 +81,6 @@ impl Blockchain {
             difficulties,
             transactions,
             contracts,
-            wasm_bincode,
         })
     }
 
@@ -357,10 +351,8 @@ pub struct BlockchainOverlay {
     pub difficulties: BlockDifficultyStoreOverlay,
     /// Transactions overlay
     pub transactions: TxStoreOverlay,
-    /// Contract states overlay
-    pub contracts: ContractStateStoreOverlay,
-    /// Wasm bincodes overlay
-    pub wasm_bincode: WasmStoreOverlay,
+    /// Contract overlay
+    pub contracts: ContractStoreOverlay,
 }
 
 impl BlockchainOverlay {
@@ -372,8 +364,7 @@ impl BlockchainOverlay {
         let order = BlockOrderStoreOverlay::new(&overlay)?;
         let difficulties = BlockDifficultyStoreOverlay::new(&overlay)?;
         let transactions = TxStoreOverlay::new(&overlay)?;
-        let contracts = ContractStateStoreOverlay::new(&overlay)?;
-        let wasm_bincode = WasmStoreOverlay::new(&overlay)?;
+        let contracts = ContractStoreOverlay::new(&overlay)?;
 
         Ok(Arc::new(Mutex::new(Self {
             overlay,
@@ -383,7 +374,6 @@ impl BlockchainOverlay {
             difficulties,
             transactions,
             contracts,
-            wasm_bincode,
         })))
     }
 
@@ -517,8 +507,7 @@ impl BlockchainOverlay {
         let order = BlockOrderStoreOverlay::new(&overlay)?;
         let difficulties = BlockDifficultyStoreOverlay::new(&overlay)?;
         let transactions = TxStoreOverlay::new(&overlay)?;
-        let contracts = ContractStateStoreOverlay::new(&overlay)?;
-        let wasm_bincode = WasmStoreOverlay::new(&overlay)?;
+        let contracts = ContractStoreOverlay::new(&overlay)?;
 
         Ok(Arc::new(Mutex::new(Self {
             overlay,
@@ -528,7 +517,6 @@ impl BlockchainOverlay {
             difficulties,
             transactions,
             contracts,
-            wasm_bincode,
         })))
     }
 }

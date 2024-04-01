@@ -280,7 +280,7 @@ pub async fn verify_producer_transaction(
     tx.calls.encode_async(&mut payload).await?; // Actual call data
 
     debug!(target: "validator::verification::verify_producer_transaction", "Instantiating WASM runtime");
-    let wasm = overlay.lock().unwrap().wasm_bincode.get(call.data.contract_id)?;
+    let wasm = overlay.lock().unwrap().contracts.get(call.data.contract_id)?;
 
     let mut runtime = Runtime::new(
         &wasm,
@@ -447,7 +447,7 @@ pub async fn verify_transaction(
         tx.calls.encode_async(&mut payload).await?; // Actual call data
 
         debug!(target: "validator::verification::verify_transaction", "Instantiating WASM runtime");
-        let wasm = overlay.lock().unwrap().wasm_bincode.get(call.data.contract_id)?;
+        let wasm = overlay.lock().unwrap().contracts.get(call.data.contract_id)?;
 
         let mut runtime = Runtime::new(
             &wasm,

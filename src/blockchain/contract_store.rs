@@ -36,91 +36,19 @@ const SLED_BINCODE_TREE: &[u8] = b"_wasm_bincode";
 /// The hardcoded db name for the zkas circuits database tree
 pub const SMART_CONTRACT_ZKAS_DB_NAME: &str = "_zkas";
 
-/// The `WasmStore` is a `sled` tree that stores the wasm bincode for deployed
-/// contracts.
+/// The `ContractStore` is a structure representing all `sled` trees related
+/// to storing the blockchain's contracts information.
 #[derive(Clone)]
-pub struct WasmStore(sled::Tree);
-
-impl WasmStore {
-    /// Opens or creates a `WasmStore`. This tree holds the wasm bincode.
+pub struct ContractStore {
+    /// The `sled` tree storing the wasm bincode for deployed contracts.
     /// The layout looks like this:
     /// ```plaintext
     ///  tree: "_wasm_bincode"
     ///   key: ContractId
     /// value: Vec<u8>
-    pub fn new(db: &sled::Db) -> Result<Self> {
-        let tree = db.open_tree(SLED_BINCODE_TREE)?;
-        Ok(Self(tree))
-    }
-
-    /// Fetches the bincode for a given ContractId
-    /// Returns an error if the bincode is not found.
-    pub fn get(&self, contract_id: ContractId) -> Result<Vec<u8>> {
-        if let Some(bincode) = self.0.get(serialize(&contract_id))? {
-            return Ok(bincode.to_vec())
-        }
-
-        Err(Error::WasmBincodeNotFound)
-    }
-
-    /// Retrieve all wasm bincodes from the `WasmStore` in the form of a tuple
-    /// (`contract_id`, `bincode`).
-    /// Be careful as this will try to load everything in memory.
-    pub fn get_all(&self) -> Result<Vec<(ContractId, Vec<u8>)>> {
-        let mut bincodes = vec![];
-
-        for bincode in self.0.iter() {
-            let bincode = bincode.unwrap();
-            let contract_id = deserialize(&bincode.0)?;
-            bincodes.push((contract_id, bincode.1.to_vec()));
-        }
-
-        Ok(bincodes)
-    }
-}
-
-/// Overlay structure over a [`WasmStore`] instance.
-pub struct WasmStoreOverlay(SledDbOverlayPtr);
-
-impl WasmStoreOverlay {
-    pub fn new(overlay: &SledDbOverlayPtr) -> Result<Self> {
-        overlay.lock().unwrap().open_tree(SLED_BINCODE_TREE)?;
-        Ok(Self(overlay.clone()))
-    }
-
-    /// Fetches the bincode for a given ContractId
-    /// Returns an error if the bincode is not found.
-    pub fn get(&self, contract_id: ContractId) -> Result<Vec<u8>> {
-        if let Some(bincode) =
-            self.0.lock().unwrap().get(SLED_BINCODE_TREE, &serialize(&contract_id))?
-        {
-            return Ok(bincode.to_vec())
-        }
-
-        Err(Error::WasmBincodeNotFound)
-    }
-
-    /// Inserts or replaces the bincode for a given ContractId
-    pub fn insert(&self, contract_id: ContractId, bincode: &[u8]) -> Result<()> {
-        if let Err(e) =
-            self.0.lock().unwrap().insert(SLED_BINCODE_TREE, &serialize(&contract_id), bincode)
-        {
-            error!(target: "blockchain::contractstoreoverlay", "Failed to insert bincode to WasmStore: {}", e);
-            return Err(e.into())
-        }
-
-        Ok(())
-    }
-}
-
-/// The `ContractStateStore` is a `sled` tree that stores pointers to contracts'
-/// databases. See the rustdoc for the impl functions for more info.
-#[derive(Clone)]
-pub struct ContractStateStore(sled::Tree);
-
-impl ContractStateStore {
-    /// Opens or creates a `ContractStateStore`. This main tree holds the links
-    /// of contracts' states.
+    pub wasm: sled::Tree,
+    /// The `sled` tree storing the pointers to contracts' databases.
+    /// See the rustdoc for the impl functions for more info.
     /// The layout looks like this:
     /// ```plaintext
     ///  tree: "_contracts"
@@ -128,9 +56,25 @@ impl ContractStateStore {
     /// value: Vec<blake3(ContractId || tree_name)>
     /// ```
     /// These values get mutated with `init()` and `remove()`.
+    pub state: sled::Tree,
+}
+
+impl ContractStore {
+    /// Opens a new or existing `ContractStore` on the given sled database.
     pub fn new(db: &sled::Db) -> Result<Self> {
-        let tree = db.open_tree(SLED_CONTRACTS_TREE)?;
-        Ok(Self(tree))
+        let wasm = db.open_tree(SLED_BINCODE_TREE)?;
+        let state = db.open_tree(SLED_CONTRACTS_TREE)?;
+        Ok(Self { wasm, state })
+    }
+
+    /// Fetches the bincode for a given ContractId from the store's wasm tree.
+    /// Returns an error if the bincode is not found.
+    pub fn get(&self, contract_id: ContractId) -> Result<Vec<u8>> {
+        if let Some(bincode) = self.wasm.get(serialize(&contract_id))? {
+            return Ok(bincode.to_vec())
+        }
+
+        Err(Error::WasmBincodeNotFound)
     }
 
     /// Do a lookup of an existing contract state. In order to succeed, the
@@ -149,11 +93,11 @@ impl ContractStateStore {
         let ptr = contract_id.hash_state_id(tree_name);
 
         // A guard to make sure we went through init()
-        if !self.0.contains_key(&contract_id_bytes)? {
+        if !self.state.contains_key(&contract_id_bytes)? {
             return Err(Error::ContractNotFound(contract_id.to_string()))
         }
 
-        let state_pointers = self.0.get(&contract_id_bytes)?.unwrap();
+        let state_pointers = self.state.get(&contract_id_bytes)?.unwrap();
         let state_pointers: Vec<[u8; 32]> = deserialize(&state_pointers)?;
 
         // We assume the tree has been created already, so it should be listed
@@ -181,11 +125,11 @@ impl ContractStateStore {
         let ptr = contract_id.hash_state_id(tree_name);
 
         // A guard to make sure we went through init()
-        if !self.0.contains_key(&contract_id_bytes)? {
+        if !self.state.contains_key(&contract_id_bytes)? {
             return Err(Error::ContractNotFound(contract_id.to_string()))
         }
 
-        let state_pointers = self.0.get(&contract_id_bytes)?.unwrap();
+        let state_pointers = self.state.get(&contract_id_bytes)?.unwrap();
         let mut state_pointers: Vec<[u8; 32]> = deserialize(&state_pointers)?;
 
         // We assume the tree has been created already, so it should be listed
@@ -196,7 +140,7 @@ impl ContractStateStore {
 
         // Remove the deleted tree from the state pointer set.
         state_pointers.retain(|x| *x != ptr);
-        self.0.insert(contract_id_bytes, serialize(&state_pointers))?;
+        self.state.insert(contract_id_bytes, serialize(&state_pointers))?;
 
         // Drop the deleted tree from the database
         db.drop_tree(ptr)?;
@@ -237,13 +181,28 @@ impl ContractStateStore {
         Ok((zkbin, vk))
     }
 
-    /// Retrieve all contract states from the `ContractStateStore` in the form of a tuple
-    /// (`contract_id`, `state_hashes`).
+    /// Retrieve all wasm bincodes from the store's wasm tree in the form
+    /// of a tuple (`contract_id`, `bincode`).
     /// Be careful as this will try to load everything in memory.
-    pub fn get_all(&self) -> Result<Vec<(ContractId, Vec<blake3::Hash>)>> {
+    pub fn get_all_wasm(&self) -> Result<Vec<(ContractId, Vec<u8>)>> {
+        let mut bincodes = vec![];
+
+        for bincode in self.wasm.iter() {
+            let bincode = bincode.unwrap();
+            let contract_id = deserialize(&bincode.0)?;
+            bincodes.push((contract_id, bincode.1.to_vec()));
+        }
+
+        Ok(bincodes)
+    }
+
+    /// Retrieve all contract states from the store's state tree in the
+    /// form of a tuple (`contract_id`, `state_hashes`).
+    /// Be careful as this will try to load everything in memory.
+    pub fn get_all_states(&self) -> Result<Vec<(ContractId, Vec<blake3::Hash>)>> {
         let mut contracts = vec![];
 
-        for contract in self.0.iter() {
+        for contract in self.state.iter() {
             contracts.push(parse_record(contract.unwrap())?);
         }
 
@@ -251,13 +210,39 @@ impl ContractStateStore {
     }
 }
 
-/// Overlay structure over a [`ContractStateStore`] instance.
-pub struct ContractStateStoreOverlay(SledDbOverlayPtr);
+/// Overlay structure over a [`ContractStore`] instance.
+pub struct ContractStoreOverlay(SledDbOverlayPtr);
 
-impl ContractStateStoreOverlay {
+impl ContractStoreOverlay {
     pub fn new(overlay: &SledDbOverlayPtr) -> Result<Self> {
+        overlay.lock().unwrap().open_tree(SLED_BINCODE_TREE)?;
         overlay.lock().unwrap().open_tree(SLED_CONTRACTS_TREE)?;
         Ok(Self(overlay.clone()))
+    }
+
+    /// Fetches the bincode for a given ContractId from the overlay's wasm tree.
+    /// Returns an error if the bincode is not found.
+    pub fn get(&self, contract_id: ContractId) -> Result<Vec<u8>> {
+        if let Some(bincode) =
+            self.0.lock().unwrap().get(SLED_BINCODE_TREE, &serialize(&contract_id))?
+        {
+            return Ok(bincode.to_vec())
+        }
+
+        Err(Error::WasmBincodeNotFound)
+    }
+
+    /// Inserts or replaces the bincode for a given ContractId into the overlay's
+    /// wasm tree.
+    pub fn insert(&self, contract_id: ContractId, bincode: &[u8]) -> Result<()> {
+        if let Err(e) =
+            self.0.lock().unwrap().insert(SLED_BINCODE_TREE, &serialize(&contract_id), bincode)
+        {
+            error!(target: "blockchain::contractstoreoverlay", "Failed to insert bincode to Wasm tree: {}", e);
+            return Err(e.into())
+        }
+
+        Ok(())
     }
 
     /// Try to initialize a new contract state. Contracts can create a number
