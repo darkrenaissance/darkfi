@@ -38,7 +38,7 @@ pub use header_store::{Header, HeaderStore, HeaderStoreOverlay};
 
 /// Transactions related storage implementations
 pub mod tx_store;
-pub use tx_store::{PendingTxOrderStore, PendingTxStore, TxStore, TxStoreOverlay};
+pub use tx_store::{TxStore, TxStoreOverlay};
 
 /// Contracts and Wasm storage implementations
 pub mod contract_store;
@@ -59,12 +59,8 @@ pub struct Blockchain {
     pub order: BlockOrderStore,
     /// Block height difficulties sled tree,
     pub difficulties: BlockDifficultyStore,
-    /// Transactions sled tree
+    /// Transactions related sled trees
     pub transactions: TxStore,
-    /// Pending transactions sled tree
-    pub pending_txs: PendingTxStore,
-    /// Pending transactions order sled tree
-    pub pending_txs_order: PendingTxOrderStore,
     /// Contract states
     pub contracts: ContractStateStore,
     /// Wasm bincodes
@@ -79,8 +75,6 @@ impl Blockchain {
         let order = BlockOrderStore::new(db)?;
         let difficulties = BlockDifficultyStore::new(db)?;
         let transactions = TxStore::new(db)?;
-        let pending_txs = PendingTxStore::new(db)?;
-        let pending_txs_order = PendingTxOrderStore::new(db)?;
         let contracts = ContractStateStore::new(db)?;
         let wasm_bincode = WasmStore::new(db)?;
 
@@ -91,8 +85,6 @@ impl Blockchain {
             order,
             difficulties,
             transactions,
-            pending_txs,
-            pending_txs_order,
             contracts,
             wasm_bincode,
         })
@@ -109,7 +101,7 @@ impl Blockchain {
 
         // Store transactions
         let (txs_batch, _) = self.transactions.insert_batch(&block.txs)?;
-        trees.push(self.transactions.0.clone());
+        trees.push(self.transactions.main.clone());
         batches.push(txs_batch);
 
         // Store header
@@ -264,11 +256,11 @@ impl Blockchain {
     /// On success, the function returns the transaction hashes in the same order
     /// as the input transactions.
     pub fn add_pending_txs(&self, txs: &[Transaction]) -> Result<Vec<blake3::Hash>> {
-        let (txs_batch, txs_hashes) = self.pending_txs.insert_batch(txs)?;
-        let txs_order_batch = self.pending_txs_order.insert_batch(&txs_hashes)?;
+        let (txs_batch, txs_hashes) = self.transactions.insert_batch_pending(txs)?;
+        let txs_order_batch = self.transactions.insert_batch_pending_order(&txs_hashes)?;
 
         // Perform an atomic transaction over the trees and apply the batches.
-        let trees = [self.pending_txs.0.clone(), self.pending_txs_order.0.clone()];
+        let trees = [self.transactions.pending.clone(), self.transactions.pending_order.clone()];
         let batches = [txs_batch, txs_order_batch];
         self.atomic_write(&trees, &batches)?;
 
@@ -278,8 +270,8 @@ impl Blockchain {
     /// Retrieve all transactions from the pending tx store.
     /// Be careful as this will try to load everything in memory.
     pub fn get_pending_txs(&self) -> Result<Vec<Transaction>> {
-        let txs = self.pending_txs.get_all()?;
-        let indexes = self.pending_txs_order.get_all()?;
+        let txs = self.transactions.get_all_pending()?;
+        let indexes = self.transactions.get_all_pending_order()?;
         if txs.len() != indexes.len() {
             return Err(Error::InvalidInputLengths)
         }
@@ -296,7 +288,7 @@ impl Blockchain {
     pub fn remove_pending_txs(&self, txs: &[Transaction]) -> Result<()> {
         let txs_hashes: Vec<blake3::Hash> =
             txs.iter().map(|x| blake3::hash(&serialize(x))).collect();
-        let indexes = self.pending_txs_order.get_all()?;
+        let indexes = self.transactions.get_all_pending_order()?;
         // We could do indexes.iter().map(|x| txs_hashes.contains(x.1)).collect.map(|x| x.0).collect
         // but this is faster since we don't do the second iteration
         let mut removed_indexes = vec![];
@@ -306,11 +298,11 @@ impl Blockchain {
             }
         }
 
-        let txs_batch = self.pending_txs.remove_batch(&txs_hashes);
-        let txs_order_batch = self.pending_txs_order.remove_batch(&removed_indexes);
+        let txs_batch = self.transactions.remove_batch_pending(&txs_hashes);
+        let txs_order_batch = self.transactions.remove_batch_pending_order(&removed_indexes);
 
         // Perform an atomic transaction over the trees and apply the batches.
-        let trees = [self.pending_txs.0.clone(), self.pending_txs_order.0.clone()];
+        let trees = [self.transactions.pending.clone(), self.transactions.pending_order.clone()];
         let batches = [txs_batch, txs_order_batch];
         self.atomic_write(&trees, &batches)?;
 

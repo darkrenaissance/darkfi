@@ -135,7 +135,7 @@ impl Validator {
 
         // Check if we have already seen this tx
         let tx_in_txstore = self.blockchain.transactions.contains(&tx_hash)?;
-        let tx_in_pending_txs_store = self.blockchain.pending_txs.contains(&tx_hash)?;
+        let tx_in_pending_txs_store = self.blockchain.transactions.contains_pending(&tx_hash)?;
 
         if tx_in_txstore || tx_in_pending_txs_store {
             info!(target: "validator::append_tx", "We have already seen this tx");

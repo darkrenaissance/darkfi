@@ -28,28 +28,57 @@ const SLED_TX_TREE: &[u8] = b"_transactions";
 const SLED_PENDING_TX_TREE: &[u8] = b"_pending_transactions";
 const SLED_PENDING_TX_ORDER_TREE: &[u8] = b"_pending_transactions_order";
 
-/// The `TxStore` is a `sled` tree storing all the blockchain's
-/// transactions where the key is the transaction hash, and the value is
-/// the serialized transaction.
+/// The `TxStore` is a structure representing all `sled` trees related
+/// to storing the blockchain's transactions information.
 #[derive(Clone)]
-pub struct TxStore(pub sled::Tree);
+pub struct TxStore {
+    /// Main `sled` tree, storing all the blockchain's transactions, where
+    /// the key is the transaction hash, and the value is the serialized
+    /// transaction.
+    pub main: sled::Tree,
+    /// The `sled` tree storing all the node pending transactions, where
+    /// the key is the transaction hash, and the value is the serialized
+    /// transaction.
+    pub pending: sled::Tree,
+    /// The `sled` tree storing the order of all the node pending transactions,
+    /// where the key is an incremental value, and the value is the serialized
+    /// transaction.
+    pub pending_order: sled::Tree,
+}
 
 impl TxStore {
     /// Opens a new or existing `TxStore` on the given sled database.
     pub fn new(db: &sled::Db) -> Result<Self> {
-        let tree = db.open_tree(SLED_TX_TREE)?;
-        Ok(Self(tree))
+        let main = db.open_tree(SLED_TX_TREE)?;
+        let pending = db.open_tree(SLED_PENDING_TX_TREE)?;
+        let pending_order = db.open_tree(SLED_PENDING_TX_ORDER_TREE)?;
+        Ok(Self { main, pending, pending_order })
     }
 
-    /// Insert a slice of [`Transaction`] into the txstore.
+    /// Insert a slice of [`Transaction`] into the store's main tree.
     pub fn insert(&self, transactions: &[Transaction]) -> Result<Vec<blake3::Hash>> {
         let (batch, ret) = self.insert_batch(transactions)?;
-        self.0.apply_batch(batch)?;
+        self.main.apply_batch(batch)?;
         Ok(ret)
     }
 
-    /// Generate the sled batch corresponding to an insert, so caller
-    /// can handle the write operation.
+    /// Insert a slice of [`Transaction`] into the store's pending txs tree.
+    pub fn insert_pending(&self, transactions: &[Transaction]) -> Result<Vec<blake3::Hash>> {
+        let (batch, ret) = self.insert_batch_pending(transactions)?;
+        self.pending.apply_batch(batch)?;
+        Ok(ret)
+    }
+
+    /// Insert a slice of [`blake3::Hash`] into the store's pending txs order tree.
+    /// With sled, the operation is done as a batch.
+    pub fn insert_pending_order(&self, txs_hashes: &[blake3::Hash]) -> Result<()> {
+        let batch = self.insert_batch_pending_order(txs_hashes)?;
+        self.pending_order.apply_batch(batch)?;
+        Ok(())
+    }
+
+    /// Generate the sled batch corresponding to an insert to the main tree,
+    /// so caller can handle the write operation.
     /// The transactions are hashed with BLAKE3 and this hash is used as
     /// the key, while the value is the serialized [`Transaction`] itself.
     /// On success, the function returns the transaction hashes in the same
@@ -72,12 +101,63 @@ impl TxStore {
         Ok((batch, ret))
     }
 
-    /// Check if the txstore contains a given transaction hash.
-    pub fn contains(&self, tx_hash: &blake3::Hash) -> Result<bool> {
-        Ok(self.0.contains_key(tx_hash.as_bytes())?)
+    /// Generate the sled batch corresponding to an insert to the pending txs tree,
+    /// so caller can handle the write operation.
+    /// The transactions are hashed with BLAKE3 and this hash is used as
+    /// the key, while the value is the serialized [`Transaction`] itself.
+    /// On success, the function returns the transaction hashes in the same
+    /// order as the input transactions, along with the corresponding operation
+    /// batch.
+    pub fn insert_batch_pending(
+        &self,
+        transactions: &[Transaction],
+    ) -> Result<(sled::Batch, Vec<blake3::Hash>)> {
+        let mut ret = Vec::with_capacity(transactions.len());
+        let mut batch = sled::Batch::default();
+
+        for tx in transactions {
+            let serialized = serialize(tx);
+            let tx_hash = blake3::hash(&serialized);
+            batch.insert(tx_hash.as_bytes(), serialized);
+            ret.push(tx_hash);
+        }
+
+        Ok((batch, ret))
     }
 
-    /// Fetch given tx hashes from the txstore.
+    /// Generate the sled batch corresponding to an insert to the pending txs
+    /// order tree, so caller can handle the write operation.
+    pub fn insert_batch_pending_order(&self, txs_hashes: &[blake3::Hash]) -> Result<sled::Batch> {
+        let mut batch = sled::Batch::default();
+
+        let mut next_index = match self.pending_order.last()? {
+            Some(n) => {
+                let prev_bytes: [u8; 8] = n.0.as_ref().try_into().unwrap();
+                let prev = u64::from_be_bytes(prev_bytes);
+                prev + 1
+            }
+            None => 0,
+        };
+
+        for txs_hash in txs_hashes {
+            batch.insert(&next_index.to_be_bytes(), txs_hash.as_bytes());
+            next_index += 1;
+        }
+
+        Ok(batch)
+    }
+
+    /// Check if the store's main tree contains a given transaction hash.
+    pub fn contains(&self, tx_hash: &blake3::Hash) -> Result<bool> {
+        Ok(self.main.contains_key(tx_hash.as_bytes())?)
+    }
+
+    /// Check if the store's pending txs tree contains a given transaction hash.
+    pub fn contains_pending(&self, tx_hash: &blake3::Hash) -> Result<bool> {
+        Ok(self.pending.contains_key(tx_hash.as_bytes())?)
+    }
+
+    /// Fetch given tx hashes from the store's main tree.
     /// The resulting vector contains `Option`, which is `Some` if the tx
     /// was found in the txstore, and otherwise it is `None`, if it has not.
     /// The second parameter is a boolean which tells the function to fail in
@@ -90,7 +170,7 @@ impl TxStore {
         let mut ret = Vec::with_capacity(tx_hashes.len());
 
         for tx_hash in tx_hashes {
-            if let Some(found) = self.0.get(tx_hash.as_bytes())? {
+            if let Some(found) = self.main.get(tx_hash.as_bytes())? {
                 let tx = deserialize(&found)?;
                 ret.push(Some(tx));
                 continue
@@ -105,26 +185,121 @@ impl TxStore {
         Ok(ret)
     }
 
-    /// Retrieve all transactions from the txstore in the form of a tuple
-    /// (`tx_hash`, `tx`).
+    /// Fetch given tx hashes from the store's pending txs tree.
+    /// The resulting vector contains `Option`, which is `Some` if the tx
+    /// was found in the pending tx store, and otherwise it is `None`, if it has not.
+    /// The second parameter is a boolean which tells the function to fail in
+    /// case at least one tx was not found.
+    pub fn get_pending(
+        &self,
+        tx_hashes: &[blake3::Hash],
+        strict: bool,
+    ) -> Result<Vec<Option<Transaction>>> {
+        let mut ret = Vec::with_capacity(tx_hashes.len());
+
+        for tx_hash in tx_hashes {
+            if let Some(found) = self.pending.get(tx_hash.as_bytes())? {
+                let tx = deserialize(&found)?;
+                ret.push(Some(tx));
+                continue
+            }
+            if strict {
+                let s = tx_hash.to_hex().as_str().to_string();
+                return Err(Error::TransactionNotFound(s))
+            }
+            ret.push(None);
+        }
+
+        Ok(ret)
+    }
+
+    /// Retrieve all transactions from the store's main tree in the form of
+    /// a tuple (`tx_hash`, `tx`).
     /// Be careful as this will try to load everything in memory.
     pub fn get_all(&self) -> Result<Vec<(blake3::Hash, Transaction)>> {
         let mut txs = vec![];
 
-        for tx in self.0.iter() {
+        for tx in self.main.iter() {
             txs.push(parse_record(tx.unwrap())?);
         }
 
         Ok(txs)
     }
 
-    /// Retrieve records count
-    pub fn len(&self) -> usize {
-        self.0.len()
+    /// Retrieve all transactions from the store's pending txs tree in the
+    /// form of a HashMap with key the transaction hash and value the
+    /// transaction itself.
+    /// Be careful as this will try to load everything in memory.
+    pub fn get_all_pending(&self) -> Result<HashMap<blake3::Hash, Transaction>> {
+        let mut txs = HashMap::new();
+
+        for tx in self.pending.iter() {
+            let (key, value) = parse_record(tx.unwrap())?;
+            txs.insert(key, value);
+        }
+
+        Ok(txs)
     }
 
+    /// Retrieve all transactions from the store's pending txs order tree in
+    /// the form of a tuple (`u64`, `blake3::Hash`).
+    /// Be careful as this will try to load everything in memory.
+    pub fn get_all_pending_order(&self) -> Result<Vec<(u64, blake3::Hash)>> {
+        let mut txs = vec![];
+
+        for tx in self.pending_order.iter() {
+            txs.push(parse_u64_key_record(tx.unwrap())?);
+        }
+
+        Ok(txs)
+    }
+
+    /// Retrieve records count of the store's main tree.
+    pub fn len(&self) -> usize {
+        self.main.len()
+    }
+
+    /// Check if the store's main tree is empty.
     pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.main.is_empty()
+    }
+
+    /// Remove a slice of [`blake3::Hash`] from the store's pending txs tree.
+    pub fn remove_pending(&self, txs_hashes: &[blake3::Hash]) -> Result<()> {
+        let batch = self.remove_batch_pending(txs_hashes);
+        self.pending.apply_batch(batch)?;
+        Ok(())
+    }
+
+    /// Remove a slice of [`u64`] from the store's pending txs order tree.
+    pub fn remove_pending_order(&self, indexes: &[u64]) -> Result<()> {
+        let batch = self.remove_batch_pending_order(indexes);
+        self.pending_order.apply_batch(batch)?;
+        Ok(())
+    }
+
+    /// Generate the sled batch corresponding to a remove from the store's pending
+    /// txs tree, so caller can handle the write operation.
+    pub fn remove_batch_pending(&self, txs_hashes: &[blake3::Hash]) -> sled::Batch {
+        let mut batch = sled::Batch::default();
+
+        for tx_hash in txs_hashes {
+            batch.remove(tx_hash.as_bytes());
+        }
+
+        batch
+    }
+
+    /// Generate the sled batch corresponding to a remove from the store's pending
+    /// txs order tree, so caller can handle the write operation.
+    pub fn remove_batch_pending_order(&self, indexes: &[u64]) -> sled::Batch {
+        let mut batch = sled::Batch::default();
+
+        for index in indexes {
+            batch.remove(&index.to_be_bytes());
+        }
+
+        batch
     }
 }
 
@@ -137,7 +312,7 @@ impl TxStoreOverlay {
         Ok(Self(overlay.clone()))
     }
 
-    /// Insert a slice of [`Transaction`] into the overlay.
+    /// Insert a slice of [`Transaction`] into the overlay's main tree.
     /// The transactions are hashed with BLAKE3 and this hash is used as
     /// the key, while the value is the serialized [`Transaction`] itself.
     /// On success, the function returns the transaction hashes in the same
@@ -156,7 +331,7 @@ impl TxStoreOverlay {
         Ok(ret)
     }
 
-    /// Fetch given tx hashes from the overlay.
+    /// Fetch given tx hashes from the overlay's main tree.
     /// The resulting vector contains `Option`, which is `Some` if the tx
     /// was found in the overlay, and otherwise it is `None`, if it has not.
     /// The second parameter is a boolean which tells the function to fail in
@@ -185,7 +360,7 @@ impl TxStoreOverlay {
         Ok(ret)
     }
 
-    /// Fetch given tx hash from the overlay. This function uses
+    /// Fetch given tx hash from the overlay's main tree. This function uses
     /// raw bytes as input and doesn't deserialize the retrieved value.
     /// The resulting vector contains `Option`, which is `Some` if the tx
     /// was found in the overlay, and otherwise it is `None`, if it has not.
@@ -195,193 +370,5 @@ impl TxStoreOverlay {
             return Ok(Some(found.to_vec()))
         }
         Ok(None)
-    }
-}
-
-/// The `PendingTxStore` is a `sled` tree storing all the node pending
-/// transactions where the key is the transaction hash, and the value is
-/// the serialized transaction.
-#[derive(Clone)]
-pub struct PendingTxStore(pub sled::Tree);
-
-impl PendingTxStore {
-    /// Opens a new or existing `PendingTxStore` on the given sled database.
-    pub fn new(db: &sled::Db) -> Result<Self> {
-        let tree = db.open_tree(SLED_PENDING_TX_TREE)?;
-        Ok(Self(tree))
-    }
-
-    /// Insert a slice of [`Transaction`] into the pending tx store.   
-    pub fn insert(&self, transactions: &[Transaction]) -> Result<Vec<blake3::Hash>> {
-        let (batch, ret) = self.insert_batch(transactions)?;
-        self.0.apply_batch(batch)?;
-        Ok(ret)
-    }
-
-    /// Generate the sled batch corresponding to an insert, so caller
-    /// can handle the write operation.
-    /// The transactions are hashed with BLAKE3 and this hash is used as
-    /// the key, while the value is the serialized [`Transaction`] itself.
-    /// On success, the function returns the transaction hashes in the same
-    /// order as the input transactions, along with the corresponding operation
-    /// batch.
-    pub fn insert_batch(
-        &self,
-        transactions: &[Transaction],
-    ) -> Result<(sled::Batch, Vec<blake3::Hash>)> {
-        let mut ret = Vec::with_capacity(transactions.len());
-        let mut batch = sled::Batch::default();
-
-        for tx in transactions {
-            let serialized = serialize(tx);
-            let tx_hash = blake3::hash(&serialized);
-            batch.insert(tx_hash.as_bytes(), serialized);
-            ret.push(tx_hash);
-        }
-
-        Ok((batch, ret))
-    }
-
-    /// Check if the pending tx store contains a given transaction hash.
-    pub fn contains(&self, tx_hash: &blake3::Hash) -> Result<bool> {
-        Ok(self.0.contains_key(tx_hash.as_bytes())?)
-    }
-
-    /// Fetch given tx hashes from the pending tx store.
-    /// The resulting vector contains `Option`, which is `Some` if the tx
-    /// was found in the pending tx store, and otherwise it is `None`, if it has not.
-    /// The second parameter is a boolean which tells the function to fail in
-    /// case at least one tx was not found.
-    pub fn get(
-        &self,
-        tx_hashes: &[blake3::Hash],
-        strict: bool,
-    ) -> Result<Vec<Option<Transaction>>> {
-        let mut ret = Vec::with_capacity(tx_hashes.len());
-
-        for tx_hash in tx_hashes {
-            if let Some(found) = self.0.get(tx_hash.as_bytes())? {
-                let tx = deserialize(&found)?;
-                ret.push(Some(tx));
-                continue
-            }
-            if strict {
-                let s = tx_hash.to_hex().as_str().to_string();
-                return Err(Error::TransactionNotFound(s))
-            }
-            ret.push(None);
-        }
-
-        Ok(ret)
-    }
-
-    /// Retrieve all transactions from the pending tx store in the form of
-    /// a HashMap with key the transaction hash and value the transaction
-    /// itself.
-    /// Be careful as this will try to load everything in memory.
-    pub fn get_all(&self) -> Result<HashMap<blake3::Hash, Transaction>> {
-        let mut txs = HashMap::new();
-
-        for tx in self.0.iter() {
-            let (key, value) = parse_record(tx.unwrap())?;
-            txs.insert(key, value);
-        }
-
-        Ok(txs)
-    }
-
-    /// Remove a slice of [`blake3::Hash`] from the pending tx store.
-    pub fn remove(&self, txs_hashes: &[blake3::Hash]) -> Result<()> {
-        let batch = self.remove_batch(txs_hashes);
-        self.0.apply_batch(batch)?;
-        Ok(())
-    }
-
-    /// Generate the sled batch corresponding to a remove, so caller
-    /// can handle the write operation.
-    pub fn remove_batch(&self, txs_hashes: &[blake3::Hash]) -> sled::Batch {
-        let mut batch = sled::Batch::default();
-
-        for tx_hash in txs_hashes {
-            batch.remove(tx_hash.as_bytes());
-        }
-
-        batch
-    }
-}
-
-/// The `PendingTxOrderStore` is a `sled` tree storing the order of all
-/// the node pending transactions where the key is an incremental value,
-/// and the value is the serialized transaction.
-#[derive(Clone)]
-pub struct PendingTxOrderStore(pub sled::Tree);
-
-impl PendingTxOrderStore {
-    /// Opens a new or existing `PendingTxOrderStore` on the given sled database.
-    pub fn new(db: &sled::Db) -> Result<Self> {
-        let tree = db.open_tree(SLED_PENDING_TX_ORDER_TREE)?;
-        Ok(Self(tree))
-    }
-
-    /// Insert a slice of [`blake3::Hash`] into the pending tx order store.
-    /// With sled, the operation is done as a batch.
-    pub fn insert(&self, txs_hashes: &[blake3::Hash]) -> Result<()> {
-        let batch = self.insert_batch(txs_hashes)?;
-        self.0.apply_batch(batch)?;
-        Ok(())
-    }
-
-    /// Generate the sled batch corresponding to an insert, so caller
-    /// can handle the write operation.
-    pub fn insert_batch(&self, txs_hashes: &[blake3::Hash]) -> Result<sled::Batch> {
-        let mut batch = sled::Batch::default();
-
-        let mut next_index = match self.0.last()? {
-            Some(n) => {
-                let prev_bytes: [u8; 8] = n.0.as_ref().try_into().unwrap();
-                let prev = u64::from_be_bytes(prev_bytes);
-                prev + 1
-            }
-            None => 0,
-        };
-
-        for txs_hash in txs_hashes {
-            batch.insert(&next_index.to_be_bytes(), txs_hash.as_bytes());
-            next_index += 1;
-        }
-
-        Ok(batch)
-    }
-
-    /// Retrieve all transactions from the pending tx order store in the form
-    /// of a tuple (`u64`, `blake3::Hash`).
-    /// Be careful as this will try to load everything in memory.
-    pub fn get_all(&self) -> Result<Vec<(u64, blake3::Hash)>> {
-        let mut txs = vec![];
-
-        for tx in self.0.iter() {
-            txs.push(parse_u64_key_record(tx.unwrap())?);
-        }
-
-        Ok(txs)
-    }
-
-    /// Remove a slice of [`u64`] from the pending tx order store.
-    pub fn remove(&self, indexes: &[u64]) -> Result<()> {
-        let batch = self.remove_batch(indexes);
-        self.0.apply_batch(batch)?;
-        Ok(())
-    }
-
-    /// Generate the sled batch corresponding to a remove, so caller
-    /// can handle the write operation.
-    pub fn remove_batch(&self, indexes: &[u64]) -> sled::Batch {
-        let mut batch = sled::Batch::default();
-
-        for index in indexes {
-            batch.remove(&index.to_be_bytes());
-        }
-
-        batch
     }
 }

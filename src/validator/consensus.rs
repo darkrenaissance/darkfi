@@ -633,8 +633,8 @@ impl Fork {
 
         // Retrieve the actual unproposed transactions
         let mut unproposed_txs: Vec<Transaction> = blockchain
-            .pending_txs
-            .get(&unproposed_txs, true)?
+            .transactions
+            .get_pending(&unproposed_txs, true)?
             .iter()
             .map(|x| x.clone().unwrap())
             .collect();
