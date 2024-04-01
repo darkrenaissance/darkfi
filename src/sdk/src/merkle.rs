@@ -71,12 +71,18 @@ pub fn merkle_add(
 }
 
 pub fn sparse_merkle_insert_batch(
+    db_info: DbHandle,
     db_smt: DbHandle,
+    db_roots: DbHandle,
+    root_key: &[u8],
     elements: &[pallas::Base],
 ) -> GenericResult<()> {
     let mut buf = vec![];
     let mut len = 0;
+    len += db_info.encode(&mut buf)?;
     len += db_smt.encode(&mut buf)?;
+    len += db_roots.encode(&mut buf)?;
+    len += root_key.to_vec().encode(&mut buf)?;
     len += elements.to_vec().encode(&mut buf)?;
 
     match unsafe { sparse_merkle_insert_batch_(buf.as_ptr(), len as u32) } {

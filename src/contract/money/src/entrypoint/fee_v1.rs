@@ -41,7 +41,9 @@ use crate::{
     model::{MoneyFeeParamsV1, MoneyFeeUpdateV1, DARK_TOKEN_ID},
     MoneyFunction, MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_MERKLE_TREE,
     MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_INFO_TREE, MONEY_CONTRACT_LATEST_COIN_ROOT,
-    MONEY_CONTRACT_NULLIFIERS_TREE, MONEY_CONTRACT_TOTAL_FEES_PAID, MONEY_CONTRACT_ZKAS_FEE_NS_V1,
+    MONEY_CONTRACT_LATEST_NULLIFIER_ROOT, MONEY_CONTRACT_NULLIFIERS_TREE,
+    MONEY_CONTRACT_NULLIFIER_ROOTS_TREE, MONEY_CONTRACT_TOTAL_FEES_PAID,
+    MONEY_CONTRACT_ZKAS_FEE_NS_V1,
 };
 
 /// `get_metadata` function for `Money::FeeV1`
@@ -205,10 +207,17 @@ pub(crate) fn money_fee_process_update_v1(
     let coins_db = db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
     let nullifiers_db = db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
     let coin_roots_db = db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
+    let nullifier_roots_db = db_lookup(cid, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE)?;
 
     db_set(info_db, MONEY_CONTRACT_TOTAL_FEES_PAID, &serialize(&update.fee))?;
 
-    sparse_merkle_insert_batch(nullifiers_db, &[update.nullifier.inner()])?;
+    sparse_merkle_insert_batch(
+        info_db,
+        nullifiers_db,
+        nullifier_roots_db,
+        MONEY_CONTRACT_LATEST_NULLIFIER_ROOT,
+        &[update.nullifier.inner()],
+    )?;
 
     db_set(coins_db, &serialize(&update.coin), &[])?;
 

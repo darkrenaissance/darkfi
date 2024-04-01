@@ -279,10 +279,23 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
     );
     let latest_root_data = serialize(latest_root);
     assert_eq!(latest_root_data.len(), 32);
-    let blockheight_data = serialize(&env.verifying_block_height);
-    assert_eq!(blockheight_data.len(), 8);
 
-    if overlay.insert(&db_roots.tree, &latest_root_data, &blockheight_data).is_err() {
+    let blockheight_data = serialize(&(env.verifying_block_height as u32));
+    // This is hardcoded but should not be
+    let tx_idx: u16 = 0;
+    let call_idx: u16 = 0;
+
+    assert_eq!(blockheight_data.len(), 4);
+    // Little-endian
+    assert_eq!(blockheight_data[3], 0);
+
+    let mut value_data = Vec::with_capacity(7);
+    value_data.write_slice(&blockheight_data[..3]).expect("Unable to serialize blockheight data");
+    tx_idx.encode(&mut value_data).expect("Unable to serialize tx_id");
+    call_idx.encode(&mut value_data).expect("Unable to serialize call_idx");
+    assert_eq!(value_data.len(), 7);
+
+    if overlay.insert(&db_roots.tree, &latest_root_data, &value_data).is_err() {
         error!(
             target: "runtime::merkle::merkle_add",
             "[WASM] [{}] merkle_add(): Couldn't insert to db_roots tree", cid,

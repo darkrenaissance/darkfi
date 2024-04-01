@@ -22,9 +22,9 @@ use darkfi_sdk::crypto::{
     pasta_prelude::*,
     smt::{PoseidonFp, SparseMerkleTree, StorageAdapter, EMPTY_NODES_FP, SMT_FP_DEPTH},
 };
-use darkfi_serial::Decodable;
+use darkfi_serial::{serialize, Decodable, Encodable, WriteExt};
 use halo2_proofs::pasta::pallas;
-use log::{error, warn};
+use log::{debug, error, warn};
 use num_bigint::BigUint;
 use wasmer::{FunctionEnvMut, WasmPtr};
 
@@ -112,8 +112,21 @@ pub(crate) fn sparse_merkle_insert_batch(
 
     // The buffer should deserialize into:
     // - db_smt
+    // - db_roots
     // - nullifiers (as Vec<pallas::Base>)
     let mut buf_reader = Cursor::new(buf);
+    let db_info_index: u32 = match Decodable::decode(&mut buf_reader) {
+        Ok(v) => v,
+        Err(e) => {
+            error!(
+                target: "runtime::smt::sparse_merkle_insert_batch",
+                "[WASM] [{}] sparse_merkle_insert_batch(): Failed to decode db_info DbHandle: {}", cid, e,
+            );
+            return darkfi_sdk::error::INTERNAL_ERROR
+        }
+    };
+    let db_info_index = db_info_index as usize;
+
     let db_smt_index: u32 = match Decodable::decode(&mut buf_reader) {
         Ok(v) => v,
         Err(e) => {
@@ -126,26 +139,55 @@ pub(crate) fn sparse_merkle_insert_batch(
     };
     let db_smt_index = db_smt_index as usize;
 
+    let db_roots_index: u32 = match Decodable::decode(&mut buf_reader) {
+        Ok(v) => v,
+        Err(e) => {
+            error!(
+                target: "runtime::smt::sparse_merkle_insert_batch",
+                "[WASM] [{}] sparse_merkle_insert_batch(): Failed to decode db_roots DbHandle: {}", cid, e,
+            );
+            return darkfi_sdk::error::INTERNAL_ERROR
+        }
+    };
+    let db_roots_index = db_roots_index as usize;
+
     let db_handles = env.db_handles.borrow();
     let n_dbs = db_handles.len();
 
-    if n_dbs <= db_smt_index {
+    if n_dbs <= db_info_index || n_dbs <= db_smt_index || n_dbs <= db_roots_index {
         error!(
             target: "runtime::smt::sparse_merkle_insert_batch",
             "[WASM] [{}] sparse_merkle_insert_batch(): Requested DbHandle that is out of bounds", cid,
         );
         return darkfi_sdk::error::INTERNAL_ERROR
     }
+    let db_info = &db_handles[db_info_index];
     let db_smt = &db_handles[db_smt_index];
+    let db_roots = &db_handles[db_roots_index];
 
     // Make sure that the contract owns the dbs it wants to write to
-    if db_smt.contract_id != env.contract_id {
+    if db_info.contract_id != env.contract_id ||
+        db_smt.contract_id != env.contract_id ||
+        db_roots.contract_id != env.contract_id
+    {
         error!(
             target: "runtime::smt::sparse_merkle_insert_batch",
             "[WASM] [{}] sparse_merkle_insert_batch(): Unauthorized to write to DbHandle", cid,
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
+
+    // This `key` represents the sled key in info where the latest root is
+    let root_key: Vec<u8> = match Decodable::decode(&mut buf_reader) {
+        Ok(v) => v,
+        Err(e) => {
+            error!(
+                target: "runtime::smt::sparse_merkle_insert_batch",
+                "[WASM] [{}] sparse_merkle_insert_batch(): Failed to decode key vec: {}", cid, e,
+            );
+            return darkfi_sdk::error::INTERNAL_ERROR
+        }
+    };
 
     // This `nullifier` represents the leaf we're adding to the Merkle tree
     let nullifiers: Vec<pallas::Base> = match Decodable::decode(&mut buf_reader) {
@@ -200,6 +242,54 @@ pub(crate) fn sparse_merkle_insert_batch(
         );
         return darkfi_sdk::error::INTERNAL_ERROR
     };
+
+    // Here we add the SMT root to our set of roots
+    // Since each update to the tree is atomic, we only need to add the last root.
+    let latest_root = smt.root();
+
+    debug!(
+        target: "runtime::smt::sparse_merkle_insert_batch",
+        "[WASM] [{}] sparse_merkle_insert_batch(): Appending SMT root to db: {:?}", cid, latest_root,
+    );
+    let latest_root_data = serialize(&latest_root);
+    assert_eq!(latest_root_data.len(), 32);
+
+    let blockheight_data = serialize(&(env.verifying_block_height as u32));
+    // This is hardcoded but should not be
+    let tx_idx: u16 = 0;
+    let call_idx: u16 = 0;
+
+    assert_eq!(blockheight_data.len(), 4);
+    // Little-endian
+    assert_eq!(blockheight_data[3], 0);
+
+    let mut value_data = Vec::with_capacity(7);
+    value_data.write_slice(&blockheight_data[..3]).expect("Unable to serialize blockheight data");
+    tx_idx.encode(&mut value_data).expect("Unable to serialize tx_id");
+    call_idx.encode(&mut value_data).expect("Unable to serialize call_idx");
+    assert_eq!(value_data.len(), 7);
+
+    if overlay.insert(&db_roots.tree, &latest_root_data, &value_data).is_err() {
+        error!(
+            target: "runtime::smt::sparse_merkle_insert_batch",
+            "[WASM] [{}] sparse_merkle_insert_batch(): Couldn't insert to db_roots tree", cid,
+        );
+        return darkfi_sdk::error::INTERNAL_ERROR
+    }
+
+    // Write a pointer to the latest known root
+    debug!(
+        target: "runtime::smt::sparse_merkle_insert_batch",
+        "[WASM] [{}] sparse_merkle_insert_batch(): Replacing latest SMT root pointer", cid,
+    );
+
+    if overlay.insert(&db_info.tree, &root_key, &latest_root_data).is_err() {
+        error!(
+            target: "runtime::smt::sparse_merkle_insert_batch",
+            "[WASM] [{}] sparse_merkle_insert_batch(): Couldn't insert latest root to db_info tree", cid,
+        );
+        return darkfi_sdk::error::INTERNAL_ERROR
+    }
 
     // Subtract used gas.
     // Here we count:

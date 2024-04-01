@@ -35,8 +35,8 @@ use crate::{
     },
     MoneyFunction, MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_MERKLE_TREE,
     MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_DB_VERSION, MONEY_CONTRACT_INFO_TREE,
-    MONEY_CONTRACT_NULLIFIERS_TREE, MONEY_CONTRACT_TOKEN_FREEZE_TREE,
-    MONEY_CONTRACT_TOTAL_FEES_PAID,
+    MONEY_CONTRACT_NULLIFIERS_TREE, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE,
+    MONEY_CONTRACT_TOKEN_FREEZE_TREE, MONEY_CONTRACT_TOTAL_FEES_PAID,
 };
 
 /// `Money::Fee` functions
@@ -123,10 +123,16 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     zkas_db_set(&token_mint_v1_bincode[..])?;
     zkas_db_set(&token_frz_v1_bincode[..])?;
 
-    // Set up a database tree to hold Merkle roots of all coins
+    // Set up a database tree to hold Merkle roots of all coin trees
     // k=MerkleNode, v=[]
     if db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE).is_err() {
         db_init(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
+    }
+
+    // Set up a database tree to hold Merkle roots of all nullifier trees
+    // k=MerkleNode, v=[]
+    if db_lookup(cid, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE).is_err() {
+        db_init(cid, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE)?;
     }
 
     // Set up a database tree to hold all coins ever seen
