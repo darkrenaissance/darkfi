@@ -17,7 +17,7 @@
  */
 
 use darkfi_sdk::{
-    crypto::{pasta_prelude::Field, ContractId, MerkleNode, MerkleTree},
+    crypto::{pasta_prelude::Field, smt::EMPTY_NODES_FP, ContractId, MerkleNode, MerkleTree},
     dark_tree::DarkLeaf,
     db::{db_init, db_lookup, db_set, zkas_db_set},
     error::ContractResult,
@@ -33,10 +33,12 @@ use crate::{
         MoneyPoWRewardUpdateV1, MoneyTokenFreezeUpdateV1, MoneyTokenMintUpdateV1,
         MoneyTransferUpdateV1,
     },
-    MoneyFunction, MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_MERKLE_TREE,
-    MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_DB_VERSION, MONEY_CONTRACT_INFO_TREE,
-    MONEY_CONTRACT_NULLIFIERS_TREE, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE,
-    MONEY_CONTRACT_TOKEN_FREEZE_TREE, MONEY_CONTRACT_TOTAL_FEES_PAID,
+    MoneyFunction, EMPTY_COINS_TREE_ROOT, MONEY_CONTRACT_COINS_TREE,
+    MONEY_CONTRACT_COIN_MERKLE_TREE, MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_DB_VERSION,
+    MONEY_CONTRACT_INFO_TREE, MONEY_CONTRACT_LATEST_COIN_ROOT,
+    MONEY_CONTRACT_LATEST_NULLIFIER_ROOT, MONEY_CONTRACT_NULLIFIERS_TREE,
+    MONEY_CONTRACT_NULLIFIER_ROOTS_TREE, MONEY_CONTRACT_TOKEN_FREEZE_TREE,
+    MONEY_CONTRACT_TOTAL_FEES_PAID,
 };
 
 /// `Money::Fee` functions
@@ -124,13 +126,13 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     zkas_db_set(&token_frz_v1_bincode[..])?;
 
     // Set up a database tree to hold Merkle roots of all coin trees
-    // k=MerkleNode, v=[]
+    // k=root_hash:32, v=(block_height:3, tx_idx:2, call_idx: 2)
     if db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE).is_err() {
         db_init(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
     }
 
     // Set up a database tree to hold Merkle roots of all nullifier trees
-    // k=MerkleNode, v=[]
+    // k=root_hash:32, v=(block_height:3, tx_idx:2, call_idx: 2)
     if db_lookup(cid, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE).is_err() {
         db_init(cid, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE)?;
     }
@@ -170,6 +172,12 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
 
             // Initialize the paid fees accumulator
             db_set(info_db, MONEY_CONTRACT_TOTAL_FEES_PAID, &serialize(&0_u64))?;
+
+            // Initialize coins and nulls latest root field
+            // This will result in exhausted gas so we use a precalculated value:
+            //let root = coin_tree.root(0).unwrap();
+            db_set(info_db, MONEY_CONTRACT_LATEST_COIN_ROOT, &serialize(&EMPTY_COINS_TREE_ROOT))?;
+            db_set(info_db, MONEY_CONTRACT_LATEST_NULLIFIER_ROOT, &serialize(&EMPTY_NODES_FP[0]))?;
 
             info_db
         }

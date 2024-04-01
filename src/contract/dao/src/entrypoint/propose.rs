@@ -18,7 +18,8 @@
 
 use darkfi_money_contract::{
     MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_INFO_TREE, MONEY_CONTRACT_LATEST_COIN_ROOT,
-    MONEY_CONTRACT_NULLIFIERS_TREE,
+    MONEY_CONTRACT_LATEST_NULLIFIER_ROOT, MONEY_CONTRACT_NULLIFIERS_TREE,
+    MONEY_CONTRACT_NULLIFIER_ROOTS_TREE,
 };
 use darkfi_sdk::{
     crypto::{contract_id::MONEY_CONTRACT_ID, pasta_prelude::*, ContractId, MerkleNode, PublicKey},
@@ -161,11 +162,23 @@ pub(crate) fn dao_propose_process_instruction(
         msg!("[Dao::Propose] Error: Failed to fetch latest Money Merkle root");
         return Err(ContractError::Internal)
     };
-    let snapshot_root: MerkleNode = deserialize(&data)?;
-    msg!("[Dao::Propose] Snapshotting Money at Merkle root {}", snapshot_root);
+    let snapshot_coins: MerkleNode = deserialize(&data)?;
+
+    let Some(data) = db_get(money_info_db, MONEY_CONTRACT_LATEST_NULLIFIER_ROOT)? else {
+        msg!("[Dao::Propose] Error: Failed to fetch latest Money SMT root");
+        return Err(ContractError::Internal)
+    };
+    let snapshot_nulls: pallas::Base = deserialize(&data)?;
+
+    msg!(
+        "[Dao::Propose] Snapshotting Money at Merkle {} and SMT {:?}",
+        snapshot_coins,
+        snapshot_nulls
+    );
 
     // Create state update
-    let update = DaoProposeUpdate { proposal_bulla: params.proposal_bulla, snapshot_root };
+    let update =
+        DaoProposeUpdate { proposal_bulla: params.proposal_bulla, snapshot_coins, snapshot_nulls };
     let mut update_data = vec![];
     update_data.write_u8(DaoFunction::Propose as u8)?;
     update.encode(&mut update_data)?;
@@ -183,7 +196,8 @@ pub(crate) fn dao_propose_process_update(
     // Build the proposal metadata
     let proposal_metadata = DaoProposalMetadata {
         vote_aggregate: DaoBlindAggregateVote::default(),
-        snapshot_root: update.snapshot_root,
+        snapshot_coins: update.snapshot_coins,
+        snapshot_nulls: update.snapshot_nulls,
     };
 
     // Set the new proposal in the db

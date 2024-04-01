@@ -258,7 +258,9 @@ pub struct DaoProposeUpdate {
     /// Minted proposal bulla
     pub proposal_bulla: DaoProposalBulla,
     /// Snapshotted Merkle root in the Money state
-    pub snapshot_root: MerkleNode,
+    pub snapshot_coins: MerkleNode,
+    /// Snapshotted SMT root in the Money state
+    pub snapshot_nulls: pallas::Base,
 }
 
 /// Metadata for a DAO proposal on the blockchain
@@ -267,7 +269,9 @@ pub struct DaoProposalMetadata {
     /// Vote aggregate
     pub vote_aggregate: DaoBlindAggregateVote,
     /// Snapshotted Merkle root in the Money state
-    pub snapshot_root: MerkleNode,
+    pub snapshot_coins: MerkleNode,
+    /// Snapshotted SMT root in the Money state
+    pub snapshot_nulls: pallas::Base,
 }
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]

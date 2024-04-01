@@ -83,6 +83,12 @@ pub const MONEY_CONTRACT_LATEST_COIN_ROOT: &[u8] = b"last_coins_root";
 pub const MONEY_CONTRACT_LATEST_NULLIFIER_ROOT: &[u8] = b"last_nullifiers_root";
 pub const MONEY_CONTRACT_TOTAL_FEES_PAID: &[u8] = b"total_fees_paid";
 
+/// Precalculated root hash for a tree containing Fp::ZERO to save gas
+pub const EMPTY_COINS_TREE_ROOT: [u8; 32] = [
+    0xb8, 0xc1, 0x07, 0x5a, 0x80, 0xa8, 0x09, 0x65, 0xc2, 0x39, 0x8f, 0x71, 0x1f, 0xe7, 0x3e, 0x05,
+    0xb4, 0xed, 0xae, 0xde, 0xf1, 0x62, 0xf2, 0x61, 0xd4, 0xee, 0xd7, 0xcd, 0x72, 0x74, 0x8d, 0x17,
+];
+
 /// zkas fee circuit namespace
 pub const MONEY_CONTRACT_ZKAS_FEE_NS_V1: &str = "Fee_V1";
 /// zkas mint circuit namespace

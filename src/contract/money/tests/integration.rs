@@ -18,7 +18,6 @@
 
 use darkfi::Result;
 use darkfi_contract_test_harness::{init_logger, Holder, TestHarness};
-use darkfi_sdk::blockchain::expected_reward;
 
 #[test]
 fn money_integration() -> Result<()> {

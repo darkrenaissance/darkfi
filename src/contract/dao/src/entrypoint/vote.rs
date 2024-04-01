@@ -139,11 +139,12 @@ pub(crate) fn dao_vote_process_instruction(
     let mut vote_nullifiers = vec![];
 
     for input in &params.inputs {
-        if proposal_metadata.snapshot_root != input.merkle_root {
+        // TODO: remove merkle_coins entirely from input. It's not needed.
+        if proposal_metadata.snapshot_coins != input.merkle_root {
             msg!(
                 "[Dao::Vote] Error: Invalid input Merkle root: {} (expected {})",
                 input.merkle_root,
-                proposal_metadata.snapshot_root
+                proposal_metadata.snapshot_coins
             );
             return Err(DaoError::InvalidInputMerkleRoot.into())
         }
