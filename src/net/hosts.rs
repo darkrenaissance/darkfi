@@ -859,7 +859,7 @@ impl Hosts {
     pub async fn try_register(&self, addr: Url, new_state: HostState) -> Result<HostState> {
         let mut registry = self.registry.write().await;
 
-        debug!(target: "net::hosts::try_update_registry()", "Try register addr={}, state={}",
+        trace!(target: "net::hosts::try_update_registry()", "Try register addr={}, state={}",
        addr, &new_state);
 
         if registry.contains_key(&addr) {
@@ -878,7 +878,7 @@ impl Hosts {
                 registry.insert(addr.clone(), state.clone());
             }
 
-            debug!(target: "net::hosts::try_update_registry()", "Returning result {:?}", result);
+            trace!(target: "net::hosts::try_update_registry()", "Returning result {:?}", result);
 
             result
         } else {
