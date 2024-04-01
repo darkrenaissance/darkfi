@@ -320,7 +320,7 @@ impl Channel {
     pub async fn ban(&self, peer: &Url) {
         debug!(target: "net::channel::ban()", "START {:?}", self);
         let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-        self.p2p().hosts().move_host(peer, last_seen, HostColor::Black, None).await.unwrap();
+        self.p2p().hosts().move_host(peer, last_seen, HostColor::Black).await.unwrap();
 
         self.stop().await;
         debug!(target: "net::channel::ban()", "STOP {:?}", self);

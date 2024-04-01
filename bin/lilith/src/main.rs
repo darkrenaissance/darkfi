@@ -182,7 +182,7 @@ impl Lilith {
 
             if !p2p.session_refine().handshake_node(url.clone(), p2p.clone()).await {
                 debug!(target: "lilith", "Host {} is not responsive. Downgrading from whitelist", url);
-                hosts.move_host(url, *last_seen, HostColor::Grey, None).await?;
+                hosts.move_host(url, *last_seen, HostColor::Grey).await?;
                 hosts.unregister(url).await;
 
                 continue

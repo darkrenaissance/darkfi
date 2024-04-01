@@ -429,7 +429,7 @@ impl Slot {
                 );
 
                 // At this point we failed to connect. We'll downgrade this peer now.
-                self.p2p().hosts().move_host(&addr, last_seen, HostColor::Grey, None).await?;
+                self.p2p().hosts().move_host(&addr, last_seen, HostColor::Grey).await?;
 
                 // Mark its state as Suspend, which sends it to the Refinery for processing.
                 self.p2p().hosts().try_register(addr.clone(), HostState::Suspend).await.unwrap();

@@ -274,7 +274,7 @@ impl GreylistRefinery {
                     let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
 
                     // Add to the whitelist and remove from the greylist.
-                    hosts.move_host(url, last_seen, HostColor::White, None).await.unwrap();
+                    hosts.move_host(url, last_seen, HostColor::White).await.unwrap();
                     hosts.unregister(url).await;
 
                     debug!(target: "net::refinery", "GreylistRefinery complete!");

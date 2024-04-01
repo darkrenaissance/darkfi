@@ -83,7 +83,7 @@ pub type HostRegistry = RwLock<HashMap<Url, HostState>>;
 ///                +------+      +---------+
 ///       +------> | move | ---> | suspend |
 ///       |        +------+      +---------+
-///       |           ^               |
+///       |           |               |
 ///       |           |               v        +--------+
 ///  +---------+      |          +--------+    | insert |
 ///  | connect |      |          | refine |    +--------+
@@ -133,10 +133,8 @@ pub enum HostState {
     Connected(ChannelPtr),
 
     /// Host that are moving between hostlists, implemented in
-    /// store::move_host().  Move takes a ChannelPtr so that Channels that
-    /// are being promoted to the Gold list can be re-inserted into the
-    /// Connected once the promotion is safely finalized.
-    Move(Option<ChannelPtr>),
+    /// store::move_host().
+    Move,
 }
 
 impl HostState {
@@ -151,7 +149,7 @@ impl HostState {
             HostState::Connect => Err(Error::HostStateBlocked(start, end)),
             HostState::Suspend => Err(Error::HostStateBlocked(start, end)),
             HostState::Connected(_) => Err(Error::HostStateBlocked(start, end)),
-            HostState::Move(_) => Err(Error::HostStateBlocked(start, end)),
+            HostState::Move => Err(Error::HostStateBlocked(start, end)),
         }
     }
 
@@ -167,7 +165,7 @@ impl HostState {
             HostState::Connect => Err(Error::HostStateBlocked(start, end)),
             HostState::Suspend => Ok(HostState::Refine),
             HostState::Connected(_) => Err(Error::HostStateBlocked(start, end)),
-            HostState::Move(_) => Err(Error::HostStateBlocked(start, end)),
+            HostState::Move => Err(Error::HostStateBlocked(start, end)),
         }
     }
 
@@ -182,16 +180,15 @@ impl HostState {
             HostState::Connect => Err(Error::HostStateBlocked(start, end)),
             HostState::Suspend => Err(Error::HostStateBlocked(start, end)),
             HostState::Connected(_) => Err(Error::HostStateBlocked(start, end)),
-            HostState::Move(_) => Err(Error::HostStateBlocked(start, end)),
+            HostState::Move => Err(Error::HostStateBlocked(start, end)),
         }
     }
 
     // Try to change state to Connected. Possible if this peer's state
-    // is currently Connect, Refine or Move. Refine is necessary since the
+    // is currently Connect or Refine, or Move. Refine is necessary since the
     // refinery process requires us to establish a connection to a peer.
-    // Move is necessary in the case that a host is being promoted to Gold list,
-    // and must be re-added to the Connected() state after the promotion
-    // has completed.
+    // Move is necessary due to the upgrade to Gold sequence in
+    // `session::perform_handshake_protocols`.
     fn try_connected(&self, channel: ChannelPtr) -> Result<Self> {
         let start = self.to_string();
         let end = HostState::Connected(channel.clone()).to_string();
@@ -201,23 +198,23 @@ impl HostState {
             HostState::Connect => Ok(HostState::Connected(channel)),
             HostState::Suspend => Err(Error::HostStateBlocked(start, end)),
             HostState::Connected(_) => Err(Error::HostStateBlocked(start, end)),
-            HostState::Move(_) => Ok(HostState::Connected(channel)),
+            HostState::Move => Ok(HostState::Connected(channel)),
         }
     }
 
     // Try to change state to Move. Possibly if this host is currently
     // Connect i.e. it is being connected to, or if we are currently Connected
-    // to this peer (necessary due to Gold list promotion sequence).
-    fn try_move(&self, channel: Option<ChannelPtr>) -> Result<Self> {
+    // to this peer (due to host Downgrade sequence in `session::remove_sub_on_stop`)
+    fn try_move(&self) -> Result<Self> {
         let start = self.to_string();
-        let end = HostState::Move(channel.clone()).to_string();
+        let end = HostState::Move.to_string();
         match self {
             HostState::Insert => Err(Error::HostStateBlocked(start, end)),
             HostState::Refine => Err(Error::HostStateBlocked(start, end)),
-            HostState::Connect => Ok(HostState::Move(channel)),
+            HostState::Connect => Ok(HostState::Move),
             HostState::Suspend => Err(Error::HostStateBlocked(start, end)),
-            HostState::Connected(_) => Ok(HostState::Move(channel)),
-            HostState::Move(_) => Err(Error::HostStateBlocked(start, end)),
+            HostState::Connected(_) => Ok(HostState::Move),
+            HostState::Move => Err(Error::HostStateBlocked(start, end)),
         }
     }
 
@@ -233,7 +230,7 @@ impl HostState {
             HostState::Connect => Err(Error::HostStateBlocked(start, end)),
             HostState::Suspend => Err(Error::HostStateBlocked(start, end)),
             HostState::Connected(_) => Err(Error::HostStateBlocked(start, end)),
-            HostState::Move(_) => Ok(HostState::Suspend),
+            HostState::Move => Ok(HostState::Suspend),
         }
     }
 }
@@ -874,7 +871,7 @@ impl Hosts {
                 HostState::Connect => current_state.try_connect(),
                 HostState::Suspend => current_state.try_suspend(),
                 HostState::Connected(c) => current_state.try_connected(c),
-                HostState::Move(c) => current_state.try_move(c),
+                HostState::Move => current_state.try_move(),
             };
 
             if let Ok(state) = &result {
@@ -1192,13 +1189,12 @@ impl Hosts {
         addr: &Url,
         last_seen: u64,
         destination: HostColor,
-        channel: Option<ChannelPtr>,
     ) -> Result<()> {
         debug!(target: "net::hosts::move_host()", "Trying to move addr={} node={} destination={:?}",
         addr, self.settings.node_id, destination);
 
         // This should never panic. Failure indicates a misuse of the HostState API.
-        self.try_register(addr.clone(), HostState::Move(channel.clone())).await.unwrap();
+        self.try_register(addr.clone(), HostState::Move).await.unwrap();
 
         match destination {
             // Downgrade to grey. Remove from white and gold.
