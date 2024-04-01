@@ -196,13 +196,13 @@ impl BlockStore {
             if let Some(found) = self.0.get(hash.as_bytes())? {
                 let block = deserialize(&found)?;
                 ret.push(Some(block));
-            } else {
-                if strict {
-                    let s = hash.to_hex().as_str().to_string();
-                    return Err(Error::BlockNotFound(s))
-                }
-                ret.push(None);
+                continue
             }
+            if strict {
+                let s = hash.to_hex().as_str().to_string();
+                return Err(Error::BlockNotFound(s))
+            }
+            ret.push(None);
         }
 
         Ok(ret)
@@ -261,13 +261,13 @@ impl BlockStoreOverlay {
             if let Some(found) = lock.get(SLED_BLOCK_TREE, hash.as_bytes())? {
                 let block = deserialize(&found)?;
                 ret.push(Some(block));
-            } else {
-                if strict {
-                    let s = hash.to_hex().as_str().to_string();
-                    return Err(Error::BlockNotFound(s))
-                }
-                ret.push(None);
+                continue
             }
+            if strict {
+                let s = hash.to_hex().as_str().to_string();
+                return Err(Error::BlockNotFound(s))
+            }
+            ret.push(None);
         }
 
         Ok(ret)
@@ -340,12 +340,12 @@ impl BlockOrderStore {
             if let Some(found) = self.0.get(number.to_be_bytes())? {
                 let block_hash = deserialize(&found)?;
                 ret.push(Some(block_hash));
-            } else {
-                if strict {
-                    return Err(Error::BlockNumberNotFound(*number))
-                }
-                ret.push(None);
+                continue
             }
+            if strict {
+                return Err(Error::BlockNumberNotFound(*number))
+            }
+            ret.push(None);
         }
 
         Ok(ret)
@@ -457,12 +457,12 @@ impl BlockOrderStoreOverlay {
             if let Some(found) = lock.get(SLED_BLOCK_ORDER_TREE, &number.to_be_bytes())? {
                 let block_hash = deserialize(&found)?;
                 ret.push(Some(block_hash));
-            } else {
-                if strict {
-                    return Err(Error::BlockNumberNotFound(*number))
-                }
-                ret.push(None);
+                continue
             }
+            if strict {
+                return Err(Error::BlockNumberNotFound(*number))
+            }
+            ret.push(None);
         }
 
         Ok(ret)
@@ -661,12 +661,12 @@ impl BlockDifficultyStore {
             if let Some(found) = self.0.get(height.to_be_bytes())? {
                 let block_difficulty = deserialize(&found)?;
                 ret.push(Some(block_difficulty));
-            } else {
-                if strict {
-                    return Err(Error::BlockDifficultyNotFound(*height))
-                }
-                ret.push(None);
+                continue
             }
+            if strict {
+                return Err(Error::BlockDifficultyNotFound(*height))
+            }
+            ret.push(None);
         }
 
         Ok(ret)

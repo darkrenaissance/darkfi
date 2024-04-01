@@ -130,13 +130,13 @@ impl HeaderStore {
             if let Some(found) = self.0.get(hash.as_bytes())? {
                 let header = deserialize(&found)?;
                 ret.push(Some(header));
-            } else {
-                if strict {
-                    let s = hash.to_hex().as_str().to_string();
-                    return Err(Error::HeaderNotFound(s))
-                }
-                ret.push(None);
+                continue
             }
+            if strict {
+                let s = hash.to_hex().as_str().to_string();
+                return Err(Error::HeaderNotFound(s))
+            }
+            ret.push(None);
         }
 
         Ok(ret)
@@ -195,13 +195,13 @@ impl HeaderStoreOverlay {
             if let Some(found) = lock.get(SLED_HEADER_TREE, hash.as_bytes())? {
                 let header = deserialize(&found)?;
                 ret.push(Some(header));
-            } else {
-                if strict {
-                    let s = hash.to_hex().as_str().to_string();
-                    return Err(Error::HeaderNotFound(s))
-                }
-                ret.push(None);
+                continue
             }
+            if strict {
+                let s = hash.to_hex().as_str().to_string();
+                return Err(Error::HeaderNotFound(s))
+            }
+            ret.push(None);
         }
 
         Ok(ret)

@@ -81,7 +81,7 @@ impl TxStore {
     /// The resulting vector contains `Option`, which is `Some` if the tx
     /// was found in the txstore, and otherwise it is `None`, if it has not.
     /// The second parameter is a boolean which tells the function to fail in
-    /// case at least one block was not found.
+    /// case at least one tx was not found.
     pub fn get(
         &self,
         tx_hashes: &[blake3::Hash],
@@ -93,13 +93,13 @@ impl TxStore {
             if let Some(found) = self.0.get(tx_hash.as_bytes())? {
                 let tx = deserialize(&found)?;
                 ret.push(Some(tx));
-            } else {
-                if strict {
-                    let s = tx_hash.to_hex().as_str().to_string();
-                    return Err(Error::TransactionNotFound(s))
-                }
-                ret.push(None);
+                continue
             }
+            if strict {
+                let s = tx_hash.to_hex().as_str().to_string();
+                return Err(Error::TransactionNotFound(s))
+            }
+            ret.push(None);
         }
 
         Ok(ret)
@@ -160,7 +160,7 @@ impl TxStoreOverlay {
     /// The resulting vector contains `Option`, which is `Some` if the tx
     /// was found in the overlay, and otherwise it is `None`, if it has not.
     /// The second parameter is a boolean which tells the function to fail in
-    /// case at least one block was not found.
+    /// case at least one tx was not found.
     pub fn get(
         &self,
         tx_hashes: &[blake3::Hash],
@@ -173,13 +173,13 @@ impl TxStoreOverlay {
             if let Some(found) = lock.get(SLED_TX_TREE, tx_hash.as_bytes())? {
                 let tx = deserialize(&found)?;
                 ret.push(Some(tx));
-            } else {
-                if strict {
-                    let s = tx_hash.to_hex().as_str().to_string();
-                    return Err(Error::TransactionNotFound(s))
-                }
-                ret.push(None);
+                continue
             }
+            if strict {
+                let s = tx_hash.to_hex().as_str().to_string();
+                return Err(Error::TransactionNotFound(s))
+            }
+            ret.push(None);
         }
 
         Ok(ret)
@@ -239,7 +239,7 @@ impl PendingTxStore {
     /// The resulting vector contains `Option`, which is `Some` if the tx
     /// was found in the pending tx store, and otherwise it is `None`, if it has not.
     /// The second parameter is a boolean which tells the function to fail in
-    /// case at least one block was not found.
+    /// case at least one tx was not found.
     pub fn get(
         &self,
         tx_hashes: &[blake3::Hash],
@@ -251,13 +251,13 @@ impl PendingTxStore {
             if let Some(found) = self.0.get(tx_hash.as_bytes())? {
                 let tx = deserialize(&found)?;
                 ret.push(Some(tx));
-            } else {
-                if strict {
-                    let s = tx_hash.to_hex().as_str().to_string();
-                    return Err(Error::TransactionNotFound(s))
-                }
-                ret.push(None);
+                continue
             }
+            if strict {
+                let s = tx_hash.to_hex().as_str().to_string();
+                return Err(Error::TransactionNotFound(s))
+            }
+            ret.push(None);
         }
 
         Ok(ret)
