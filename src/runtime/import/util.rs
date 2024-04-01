@@ -248,7 +248,7 @@ pub(crate) fn get_blockchain_time(mut ctx: FunctionEnvMut<Env>) -> i64 {
         Ok(b) => b,
         Err(e) => {
             error!(
-                target: "runtime::db::get_blockchain_time",
+                target: "runtime::util::get_blockchain_time",
                 "[WASM] [{}] get_blockchain_time(): Internal error getting from blocks tree: {}", cid, e,
             );
             return darkfi_sdk::error::DB_GET_FAILED
@@ -285,7 +285,7 @@ pub(crate) fn get_last_block_height(mut ctx: FunctionEnvMut<Env>) -> i64 {
     // Enforce function ACL
     if let Err(e) = acl_allow(env, &[ContractSection::Exec]) {
         error!(
-            target: "runtime::db::get_last_block_height",
+            target: "runtime::util::get_last_block_height",
             "[WASM] [{}] get_last_block_height(): Called in unauthorized section: {}", cid, e,
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
@@ -296,7 +296,7 @@ pub(crate) fn get_last_block_height(mut ctx: FunctionEnvMut<Env>) -> i64 {
         Ok(b) => b,
         Err(e) => {
             error!(
-                target: "runtime::db::get_last_block_height",
+                target: "runtime::util::get_last_block_height",
                 "[WASM] [{}] get_last_block_height(): Internal error getting from blocks tree: {}", cid, e,
             );
             return darkfi_sdk::error::DB_GET_FAILED
