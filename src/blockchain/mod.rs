@@ -76,11 +76,6 @@ impl Blockchain {
         let mut trees = vec![];
         let mut batches = vec![];
 
-        // Store transactions
-        let (txs_batch, _) = self.transactions.insert_batch(&block.txs)?;
-        trees.push(self.transactions.main.clone());
-        batches.push(txs_batch);
-
         // Store header
         let (headers_batch, _) = self.headers.insert_batch(&[block.header.clone()])?;
         trees.push(self.headers.0.clone());
@@ -99,6 +94,17 @@ impl Blockchain {
             self.blocks.insert_batch_order(&[block.header.height], &block_hash_vec)?;
         trees.push(self.blocks.order.clone());
         batches.push(blocks_order_batch);
+
+        // Store transactions
+        let (txs_batch, txs_hashes) = self.transactions.insert_batch(&block.txs)?;
+        trees.push(self.transactions.main.clone());
+        batches.push(txs_batch);
+
+        // Store transactions_locations
+        let txs_locations_batch =
+            self.transactions.insert_batch_location(&txs_hashes, block.header.height)?;
+        trees.push(self.transactions.location.clone());
+        batches.push(txs_locations_batch);
 
         // Perform an atomic transaction over the trees and apply the batches.
         self.atomic_write(&trees, &batches)?;
@@ -381,19 +387,23 @@ impl BlockchainOverlay {
     /// Since we are adding to the overlay, we don't need to exeucte
     /// the writes atomically.
     pub fn add_block(&self, block: &BlockInfo) -> Result<blake3::Hash> {
-        // Store transactions
-        self.transactions.insert(&block.txs)?;
-
         // Store header
         self.headers.insert(&[block.header.clone()])?;
 
         // Store block
         let blk: Block = Block::from_block_info(block)?;
+        let txs_hashes = blk.txs.clone();
         let block_hash = self.blocks.insert(&[blk])?[0];
         let block_hash_vec = [block_hash];
 
         // Store block order
         self.blocks.insert_order(&[block.header.height], &block_hash_vec)?;
+
+        // Store transactions
+        self.transactions.insert(&block.txs)?;
+
+        // Store transactions locations
+        self.transactions.insert_location(&txs_hashes, block.header.height)?;
 
         Ok(block_hash)
     }

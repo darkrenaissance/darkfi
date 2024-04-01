@@ -116,8 +116,8 @@ impl TxStore {
 
     /// Generate the sled batch corresponding to an insert to the location tree,
     /// so caller can handle the write operation.
-    /// The tuple is built using the index of each location in the slice,
-    /// along with the provided block height
+    /// The location tuple is built using the index of each transaction has in
+    /// the slice, along with the provided block height
     pub fn insert_batch_location(
         &self,
         txs_hashes: &[blake3::Hash],
@@ -403,6 +403,20 @@ impl TxStoreOverlay {
         }
 
         Ok(ret)
+    }
+
+    /// Insert a slice of [`blake3::Hash`] into the overlay's location tree.
+    /// The location tuple is built using the index of each transaction hash
+    /// in the slice, along with the provided block height
+    pub fn insert_location(&self, txs_hashes: &[blake3::Hash], block_height: u64) -> Result<()> {
+        let mut lock = self.0.lock().unwrap();
+
+        for (index, tx_hash) in txs_hashes.iter().enumerate() {
+            let serialized = serialize(&(block_height, index as u64));
+            lock.insert(SLED_TX_LOCATION_TREE, tx_hash.as_bytes(), &serialized)?;
+        }
+
+        Ok(())
     }
 
     /// Fetch given tx hashes from the overlay's main tree.
