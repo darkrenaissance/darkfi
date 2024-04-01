@@ -158,6 +158,21 @@ pub fn get_tx(hash: blake3::Hash) -> GenericResult<Option<Vec<u8>>> {
     parse_ret(ret)
 }
 
+/// Only metadata() and exec() can call this. Will return transaction
+/// location bytes by provided hash.
+///
+/// ```
+/// tx_location_bytes = get_tx_location(hash);
+/// (block_height, tx_index) = deserialize(&tx_location_bytes)?;
+/// ```
+pub fn get_tx_location(hash: blake3::Hash) -> GenericResult<Option<Vec<u8>>> {
+    let mut buf = vec![];
+    hash.encode(&mut buf)?;
+
+    let ret = unsafe { get_tx_location_(buf.as_ptr()) };
+    parse_ret(ret)
+}
+
 extern "C" {
     fn set_return_data_(ptr: *const u8, len: u32) -> i64;
     fn put_object_bytes_(ptr: *const u8, len: u32) -> i64;
@@ -170,4 +185,5 @@ extern "C" {
     fn get_blockchain_time_() -> i64;
     fn get_last_block_height_() -> i64;
     fn get_tx_(ptr: *const u8) -> i64;
+    fn get_tx_location_(ptr: *const u8) -> i64;
 }

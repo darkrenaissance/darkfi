@@ -326,6 +326,12 @@ impl Runtime {
                     &ctx,
                     import::util::get_tx,
                 ),
+
+                "get_tx_location_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::util::get_tx_location,
+                ),
             }
         };
 

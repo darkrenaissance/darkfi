@@ -452,3 +452,107 @@ pub(crate) fn get_tx(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>) -> i64 {
     objects.push(return_data.to_vec());
     (objects.len() - 1) as i64
 }
+
+/// Reads a transaction location by hash from the transactions store.
+///
+/// This function can be called from the Exec or Metadata [`ContractSection`].
+///
+/// On success, returns the length of the transaction location bytes vector in
+/// the environment. Otherwise, returns an error code.
+pub(crate) fn get_tx_location(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>) -> i64 {
+    let (env, mut store) = ctx.data_and_store_mut();
+    let cid = env.contract_id;
+
+    if let Err(e) = acl_allow(env, &[ContractSection::Exec, ContractSection::Metadata]) {
+        error!(
+            target: "runtime::util::get_tx_location",
+            "[WASM] [{}] get_tx_location(): Called in unauthorized section: {}", cid, e,
+        );
+        return darkfi_sdk::error::CALLER_ACCESS_DENIED
+    }
+
+    // Subtract used gas. Here we count the length of the looked-up hash.
+    env.subtract_gas(&mut store, blake3::OUT_LEN as u64);
+
+    // Ensure that it is possible to read memory
+    let memory_view = env.memory_view(&store);
+    let Ok(mem_slice) = ptr.slice(&memory_view, blake3::OUT_LEN as u32) else {
+        error!(
+            target: "runtime::util::get_tx_location",
+            "[WASM] [{}] get_tx_location(): Failed to make slice from ptr", cid,
+        );
+        return darkfi_sdk::error::DB_GET_FAILED
+    };
+
+    let mut buf = vec![0_u8; blake3::OUT_LEN];
+    if let Err(e) = mem_slice.read_slice(&mut buf) {
+        error!(
+            target: "runtime::util::get_tx_location",
+            "[WASM] [{}] get_tx_location(): Failed to read from memory slice: {}", cid, e,
+        );
+        return darkfi_sdk::error::DB_GET_FAILED
+    };
+
+    let mut buf_reader = Cursor::new(buf);
+
+    // Decode hash bytes for transaction that we wish to retrieve
+    let hash: [u8; blake3::OUT_LEN] = match Decodable::decode(&mut buf_reader) {
+        Ok(v) => v,
+        Err(e) => {
+            error!(
+                target: "runtime::util::get_tx_location",
+                "[WASM] [{}] get_tx_location(): Failed to decode hash from vec: {}", cid, e,
+            );
+            return darkfi_sdk::error::DB_GET_FAILED
+        }
+    };
+
+    // Make sure there are no trailing bytes in the buffer. This means we've used all data that was
+    // supplied.
+    if buf_reader.position() != blake3::OUT_LEN as u64 {
+        error!(
+            target: "runtime::util::get_tx_location",
+            "[WASM] [{}] get_tx_location(): Trailing bytes in argument stream", cid,
+        );
+        return darkfi_sdk::error::DB_GET_FAILED
+    }
+
+    // Retrieve transaction using the `hash`
+    let ret = match env.blockchain.lock().unwrap().transactions.get_location_raw(&hash) {
+        Ok(v) => v,
+        Err(e) => {
+            error!(
+                target: "runtime::util::get_tx_location",
+                "[WASM] [{}] get_tx_location(): Internal error getting from tree: {}", cid, e,
+            );
+            return darkfi_sdk::error::DB_GET_FAILED
+        }
+    };
+
+    // Return special error if the data is empty
+    let Some(return_data) = ret else {
+        debug!(
+            target: "runtime::util::get_tx_location",
+            "[WASM] [{}] get_tx_location(): Return data is empty", cid,
+        );
+        return darkfi_sdk::error::DB_GET_EMPTY
+    };
+
+    if return_data.len() > u32::MAX as usize {
+        return darkfi_sdk::error::DATA_TOO_LARGE
+    }
+
+    // Subtract used gas. Here we count the length of the data read from db.
+    env.subtract_gas(&mut store, return_data.len() as u64);
+
+    // Copy the data (Vec<u8>) to the VM by pushing it to the objects Vector.
+    let mut objects = env.objects.borrow_mut();
+    if objects.len() == u32::MAX as usize {
+        return darkfi_sdk::error::DATA_TOO_LARGE
+    }
+
+    // Return the length of the objects Vector.
+    // This is the location of the data that was retrieved and pushed
+    objects.push(return_data.to_vec());
+    (objects.len() - 1) as i64
+}

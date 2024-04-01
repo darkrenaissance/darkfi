@@ -25,6 +25,7 @@ use crate::{tx::Transaction, Error, Result};
 use super::{parse_record, parse_u64_key_record, SledDbOverlayPtr};
 
 const SLED_TX_TREE: &[u8] = b"_transactions";
+const SLED_TX_LOCATION_TREE: &[u8] = b"_transaction_location";
 const SLED_PENDING_TX_TREE: &[u8] = b"_pending_transactions";
 const SLED_PENDING_TX_ORDER_TREE: &[u8] = b"_pending_transactions_order";
 
@@ -36,6 +37,11 @@ pub struct TxStore {
     /// the key is the transaction hash, and the value is the serialized
     /// transaction.
     pub main: sled::Tree,
+    /// The `sled` tree storing the location of the blockchain's transactions
+    /// locations, where the key is the transaction hash, and the value is a
+    /// serialized tuple containing the height and the vector index of the
+    /// block the transaction is included.
+    pub location: sled::Tree,
     /// The `sled` tree storing all the node pending transactions, where
     /// the key is the transaction hash, and the value is the serialized
     /// transaction.
@@ -50,9 +56,10 @@ impl TxStore {
     /// Opens a new or existing `TxStore` on the given sled database.
     pub fn new(db: &sled::Db) -> Result<Self> {
         let main = db.open_tree(SLED_TX_TREE)?;
+        let location = db.open_tree(SLED_TX_LOCATION_TREE)?;
         let pending = db.open_tree(SLED_PENDING_TX_TREE)?;
         let pending_order = db.open_tree(SLED_PENDING_TX_ORDER_TREE)?;
-        Ok(Self { main, pending, pending_order })
+        Ok(Self { main, location, pending, pending_order })
     }
 
     /// Insert a slice of [`Transaction`] into the store's main tree.
@@ -60,6 +67,13 @@ impl TxStore {
         let (batch, ret) = self.insert_batch(transactions)?;
         self.main.apply_batch(batch)?;
         Ok(ret)
+    }
+
+    /// Insert a slice of [`blake3::Hash`] into the store's location tree.
+    pub fn insert_location(&self, txs_hashes: &[blake3::Hash], block_height: u64) -> Result<()> {
+        let batch = self.insert_batch_location(txs_hashes, block_height)?;
+        self.location.apply_batch(batch)?;
+        Ok(())
     }
 
     /// Insert a slice of [`Transaction`] into the store's pending txs tree.
@@ -70,7 +84,6 @@ impl TxStore {
     }
 
     /// Insert a slice of [`blake3::Hash`] into the store's pending txs order tree.
-    /// With sled, the operation is done as a batch.
     pub fn insert_pending_order(&self, txs_hashes: &[blake3::Hash]) -> Result<()> {
         let batch = self.insert_batch_pending_order(txs_hashes)?;
         self.pending_order.apply_batch(batch)?;
@@ -99,6 +112,25 @@ impl TxStore {
         }
 
         Ok((batch, ret))
+    }
+
+    /// Generate the sled batch corresponding to an insert to the location tree,
+    /// so caller can handle the write operation.
+    /// The tuple is built using the index of each location in the slice,
+    /// along with the provided block height
+    pub fn insert_batch_location(
+        &self,
+        txs_hashes: &[blake3::Hash],
+        block_height: u64,
+    ) -> Result<sled::Batch> {
+        let mut batch = sled::Batch::default();
+
+        for (index, tx_hash) in txs_hashes.iter().enumerate() {
+            let serialized = serialize(&(block_height, index as u64));
+            batch.insert(tx_hash.as_bytes(), serialized);
+        }
+
+        Ok(batch)
     }
 
     /// Generate the sled batch corresponding to an insert to the pending txs tree,
@@ -185,6 +217,34 @@ impl TxStore {
         Ok(ret)
     }
 
+    /// Fetch given tx hashes locations from the store's location tree.
+    /// The resulting vector contains `Option`, which is `Some` if the tx
+    /// was found in the txstore, and otherwise it is `None`, if it has not.
+    /// The second parameter is a boolean which tells the function to fail in
+    /// case at least one tx was not found.
+    pub fn get_location(
+        &self,
+        tx_hashes: &[blake3::Hash],
+        strict: bool,
+    ) -> Result<Vec<Option<(u64, u64)>>> {
+        let mut ret = Vec::with_capacity(tx_hashes.len());
+
+        for tx_hash in tx_hashes {
+            if let Some(found) = self.location.get(tx_hash.as_bytes())? {
+                let location = deserialize(&found)?;
+                ret.push(Some(location));
+                continue
+            }
+            if strict {
+                let s = tx_hash.to_hex().as_str().to_string();
+                return Err(Error::TransactionNotFound(s))
+            }
+            ret.push(None);
+        }
+
+        Ok(ret)
+    }
+
     /// Fetch given tx hashes from the store's pending txs tree.
     /// The resulting vector contains `Option`, which is `Some` if the tx
     /// was found in the pending tx store, and otherwise it is `None`, if it has not.
@@ -224,6 +284,19 @@ impl TxStore {
         }
 
         Ok(txs)
+    }
+
+    /// Retrieve all transactions locations from the store's location tree in
+    /// the form of a tuple (`tx_hash`, (`block_height`, `index`)).
+    /// Be careful as this will try to load everything in memory.
+    pub fn get_all_location(&self) -> Result<Vec<(blake3::Hash, (u64, u64))>> {
+        let mut locations = vec![];
+
+        for location in self.location.iter() {
+            locations.push(parse_record(location.unwrap())?);
+        }
+
+        Ok(locations)
     }
 
     /// Retrieve all transactions from the store's pending txs tree in the
@@ -309,6 +382,7 @@ pub struct TxStoreOverlay(SledDbOverlayPtr);
 impl TxStoreOverlay {
     pub fn new(overlay: &SledDbOverlayPtr) -> Result<Self> {
         overlay.lock().unwrap().open_tree(SLED_TX_TREE)?;
+        overlay.lock().unwrap().open_tree(SLED_TX_LOCATION_TREE)?;
         Ok(Self(overlay.clone()))
     }
 
@@ -367,6 +441,19 @@ impl TxStoreOverlay {
     pub fn get_raw(&self, tx_hash: &[u8; blake3::OUT_LEN]) -> Result<Option<Vec<u8>>> {
         let lock = self.0.lock().unwrap();
         if let Some(found) = lock.get(SLED_TX_TREE, tx_hash)? {
+            return Ok(Some(found.to_vec()))
+        }
+        Ok(None)
+    }
+
+    /// Fetch given tx hash location from the overlay's location tree.
+    /// This function uses raw bytes as input and doesn't deserialize the
+    /// retrieved value. The resulting vector contains `Option`, which is
+    /// `Some` if the location was found in the overlay, and otherwise it
+    /// is `None`, if it has not.
+    pub fn get_location_raw(&self, tx_hash: &[u8; blake3::OUT_LEN]) -> Result<Option<Vec<u8>>> {
+        let lock = self.0.lock().unwrap();
+        if let Some(found) = lock.get(SLED_TX_LOCATION_TREE, tx_hash)? {
             return Ok(Some(found.to_vec()))
         }
         Ok(None)
