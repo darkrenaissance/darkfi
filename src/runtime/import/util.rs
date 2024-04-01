@@ -229,15 +229,29 @@ pub(crate) fn get_verifying_block_height(mut ctx: FunctionEnvMut<Env>) -> u64 {
     env.verifying_block_height
 }
 
-/// Will return current runtime configured verifying block height epoch number
-pub(crate) fn get_verifying_block_height_epoch(mut ctx: FunctionEnvMut<Env>) -> u64 {
+/// Will return current runtime configured transaction hash
+pub(crate) fn get_tx_hash(mut ctx: FunctionEnvMut<Env>) -> i64 {
     let (env, mut store) = ctx.data_and_store_mut();
+    let cid = env.contract_id;
+
+    if let Err(e) =
+        acl_allow(env, &[ContractSection::Deploy, ContractSection::Exec, ContractSection::Metadata])
+    {
+        error!(
+            target: "runtime::util::get_tx",
+            "[WASM] [{}] get_tx(): Called in unauthorized section: {}", cid, e,
+        );
+        return darkfi_sdk::error::CALLER_ACCESS_DENIED
+    }
 
     // Subtract used gas. Here we count the size of the object.
-    // u64 is 8 bytes.
-    env.subtract_gas(&mut store, 8);
+    env.subtract_gas(&mut store, 32);
 
-    darkfi_sdk::blockchain::block_epoch(env.verifying_block_height)
+    // Return the length of the objects Vector.
+    // This is the location of the data that was retrieved and pushed
+    let mut objects = env.objects.borrow_mut();
+    objects.push(env.tx_hash.inner().to_vec());
+    (objects.len() - 1) as i64
 }
 
 /// Will return current blockchain timestamp,

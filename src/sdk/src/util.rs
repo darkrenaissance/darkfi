@@ -18,7 +18,10 @@
 
 use darkfi_serial::Encodable;
 
-use super::error::{ContractError, GenericResult};
+use super::{
+    error::{ContractError, GenericResult},
+    tx::TransactionHash,
+};
 
 /// Calls the `set_return_data` WASM function. Returns Ok(()) on success.
 /// Otherwise, convert the i64 error code into a [`ContractError`].
@@ -89,14 +92,25 @@ pub fn get_verifying_block_height() -> u64 {
     unsafe { get_verifying_block_height_() }
 }
 
-/// Everyone can call this. Will return runtime configured
-/// verifying block height epoch.
+/// Only deploy(), metadata() and exec() can call this. Will return runtime configured
+/// transaction hash.
 ///
 /// ```
-/// epoch = get_verifying_block_height_epoch();
+/// tx_hash = get_tx_hash();
 /// ```
-pub fn get_verifying_block_height_epoch() -> u64 {
-    unsafe { get_verifying_block_height_epoch_() }
+pub fn get_tx_hash() -> GenericResult<TransactionHash> {
+    let ret = unsafe { get_tx_hash_() };
+    if ret < 0 {
+        return Err(ContractError::from(ret))
+    }
+    assert!(ret >= 0);
+    // This should always be possible
+    let obj = ret as u32;
+
+    let mut tx_hash_data = [0u8; 32];
+    assert_eq!(get_object_size(obj), 32);
+    get_object_bytes(&mut tx_hash_data, obj);
+    Ok(TransactionHash(tx_hash_data))
 }
 
 /// Everyone can call this. Will return current blockchain timestamp.
@@ -141,7 +155,7 @@ extern "C" {
     fn get_object_size_(len: u32) -> i64;
 
     fn get_verifying_block_height_() -> u64;
-    fn get_verifying_block_height_epoch_() -> u64;
+    fn get_tx_hash_() -> i64;
     fn get_blockchain_time_() -> i64;
     fn get_last_block_height_() -> i64;
     fn get_tx_(ptr: *const u8) -> i64;
