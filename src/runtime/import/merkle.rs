@@ -271,12 +271,9 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
     let latest_root_data = serialize(latest_root);
     assert_eq!(latest_root_data.len(), 32);
 
-    // This is hardcoded but should not be
-    let call_idx: u16 = 0;
-
     let mut value_data = Vec::with_capacity(32 + 2);
     env.tx_hash.inner().encode(&mut value_data).expect("Unable to serialize tx_hash");
-    call_idx.encode(&mut value_data).expect("Unable to serialize call_idx");
+    (env.call_idx as u16).encode(&mut value_data).expect("Unable to serialize call_idx");
     assert_eq!(value_data.len(), 32 + 2);
 
     if overlay.insert(&db_roots.tree, &latest_root_data, &value_data).is_err() {
