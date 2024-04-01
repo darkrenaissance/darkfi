@@ -41,6 +41,7 @@ use darkfi_sdk::{
     bridgetree,
     crypto::{
         poseidon_hash,
+        smt::{MemoryStorageFp, PoseidonFp, SmtMemoryFp, EMPTY_NODES_FP},
         util::{fp_mod_fv, fp_to_u64},
         BaseBlind, Blind, FuncId, FuncRef, Keypair, MerkleNode, MerkleTree, PublicKey, ScalarBlind,
         SecretKey, DAO_CONTRACT_ID, MONEY_CONTRACT_ID,
@@ -1491,11 +1492,19 @@ impl Drk {
         // Fetch the daos Merkle tree
         let (daos_tree, _) = self.get_dao_trees().await?;
 
+        // This is complete wrong and needs to be fixed later
+        // Non-trivial to fix, so we just make a workaround for now
+
+        let hasher = PoseidonFp::new();
+        let store = MemoryStorageFp::new();
+        let money_null_smt = SmtMemoryFp::new(store, hasher.clone(), &EMPTY_NODES_FP);
+
         let input = DaoProposeStakeInput {
             secret: gov_coin.secret, // <-- TODO: Is this correct?
             note: gov_coin.note.clone(),
             leaf_position: gov_coin.leaf_position,
             merkle_path: gov_coin_merkle_path,
+            money_null_smt: &money_null_smt,
             signature_secret,
         };
 

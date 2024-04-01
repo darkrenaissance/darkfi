@@ -73,8 +73,8 @@ impl TestHarness {
 
         let signature_secret = SecretKey::random(&mut OsRng);
 
-        debug!("ABOUT TO SHOW DB INTERNALZZZ!!!!!");
-        {
+        // Useful code snippet to dump a sled contract DB
+        /*{
             let blockchain = &wallet.validator.blockchain;
             let contracts = &blockchain.contracts;
             let tree = contracts
@@ -85,19 +85,7 @@ impl TestHarness {
                 debug!("STATE {:?}", key);
                 debug!("  => {:?}", value);
             }
-        }
-        debug!("[REDUX] ABOUT TO SHOW DB INTERNALZZZ!!!!!");
-        {
-            let blockchain = &wallet.validator.blockchain;
-            let contracts = &blockchain.contracts;
-            let tree =
-                contracts.lookup(&blockchain.sled_db, &MONEY_CONTRACT_ID, "coin_roots").unwrap();
-            for kv in tree.iter() {
-                let (key, value) = kv.unwrap();
-                debug!("STATE {:?}", key);
-                debug!("  => {:?}", value);
-            }
-        }
+        }*/
 
         let input = DaoProposeStakeInput {
             secret: wallet.keypair.secret,
