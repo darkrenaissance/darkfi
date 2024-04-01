@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use darkfi_serial::Encodable;
+
 use super::error::{ContractError, GenericResult};
 
 /// Calls the `set_return_data` WASM function. Returns Ok(()) on success.
@@ -117,6 +119,21 @@ pub fn get_last_block_height() -> GenericResult<Option<Vec<u8>>> {
     parse_ret(ret)
 }
 
+/// Only metadata() and exec() can call this. Will return transaction
+/// bytes by provided hash.
+///
+/// ```
+/// tx_bytes = get_tx(hash);
+/// tx = deserialize(&tx_bytes)?;
+/// ```
+pub fn get_tx(hash: blake3::Hash) -> GenericResult<Option<Vec<u8>>> {
+    let mut buf = vec![];
+    hash.encode(&mut buf)?;
+
+    let ret = unsafe { get_tx_(buf.as_ptr()) };
+    parse_ret(ret)
+}
+
 extern "C" {
     fn set_return_data_(ptr: *const u8, len: u32) -> i64;
     fn put_object_bytes_(ptr: *const u8, len: u32) -> i64;
@@ -127,4 +144,5 @@ extern "C" {
     fn get_verifying_block_height_epoch_() -> u64;
     fn get_blockchain_time_() -> i64;
     fn get_last_block_height_() -> i64;
+    fn get_tx_(ptr: *const u8) -> i64;
 }

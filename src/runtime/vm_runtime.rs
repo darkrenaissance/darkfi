@@ -310,6 +310,12 @@ impl Runtime {
                     &ctx,
                     import::util::get_last_block_height,
                 ),
+
+                "get_tx_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::util::get_tx,
+                ),
             }
         };
 

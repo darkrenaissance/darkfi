@@ -184,6 +184,18 @@ impl TxStoreOverlay {
 
         Ok(ret)
     }
+
+    /// Fetch given tx hash from the overlay. This function uses
+    /// raw bytes as input and doesn't deserialize the retrieved value.
+    /// The resulting vector contains `Option`, which is `Some` if the tx
+    /// was found in the overlay, and otherwise it is `None`, if it has not.
+    pub fn get_raw(&self, tx_hash: &[u8; blake3::OUT_LEN]) -> Result<Option<Vec<u8>>> {
+        let lock = self.0.lock().unwrap();
+        if let Some(found) = lock.get(SLED_TX_TREE, tx_hash)? {
+            return Ok(Some(found.to_vec()))
+        }
+        Ok(None)
+    }
 }
 
 /// The `PendingTxStore` is a `sled` tree storing all the node pending
