@@ -167,6 +167,10 @@ impl<
     /// Takes a batch of field elements, inserts these hashes into the tree,
     /// and updates the Merkle root.
     pub fn insert_batch(&mut self, leaves: Vec<(F, F)>) -> ContractResult {
+        if leaves.is_empty() {
+            return Ok(())
+        }
+
         // Nodes that need recalculating
         let mut dirty_idxs = Vec::new();
         for (pos, leaf) in leaves {

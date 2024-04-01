@@ -274,6 +274,9 @@ impl TestHarness {
             outputs.push(fee_params.output.clone());
         }
 
+        let nullifiers = inputs.iter().map(|i| i.nullifier.inner()).map(|l| (l, l)).collect();
+        wallet.money_null_smt.insert_batch(nullifiers).expect("smt.insert_batch()");
+
         for input in inputs {
             if let Some(spent_coin) = wallet
                 .unspent_money_coins

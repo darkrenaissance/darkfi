@@ -125,16 +125,29 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     zkas_db_set(&token_mint_v1_bincode[..])?;
     zkas_db_set(&token_frz_v1_bincode[..])?;
 
+    // FIXME: Get tx hash from env
+    let tx_hash = [0u8; 32];
+    // No way to access call_idx here
+    //assert!(ix.len() > 4);
+    //let call_idx: u32 = deserialize(&ix[0..4])?;
+    let call_idx = 110u16;
+    let mut roots_value_data = Vec::with_capacity(32 + 2);
+    tx_hash.encode(&mut roots_value_data)?;
+    call_idx.encode(&mut roots_value_data)?;
+    assert_eq!(roots_value_data.len(), 32 + 2);
+
     // Set up a database tree to hold Merkle roots of all coin trees
-    // k=root_hash:32, v=(block_height:3, tx_idx:2, call_idx: 2)
+    // k=root_hash:32, v=(tx_hash:32, call_idx: 2)
     if db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE).is_err() {
-        db_init(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
+        let db_coin_roots = db_init(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
+        db_set(db_coin_roots, &serialize(&EMPTY_COINS_TREE_ROOT), &roots_value_data)?;
     }
 
     // Set up a database tree to hold Merkle roots of all nullifier trees
-    // k=root_hash:32, v=(block_height:3, tx_idx:2, call_idx: 2)
+    // k=root_hash:32, v=(tx_hash:32, call_idx: 2)
     if db_lookup(cid, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE).is_err() {
-        db_init(cid, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE)?;
+        let db_null_roots = db_init(cid, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE)?;
+        db_set(db_null_roots, &serialize(&EMPTY_NODES_FP[0]), &roots_value_data)?;
     }
 
     // Set up a database tree to hold all coins ever seen

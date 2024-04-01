@@ -24,7 +24,7 @@ use darkfi_sdk::crypto::{
 };
 use darkfi_serial::{serialize, Decodable, Encodable};
 use halo2_proofs::pasta::pallas;
-use log::{debug, error, warn};
+use log::{debug, error};
 use num_bigint::BigUint;
 use wasmer::{FunctionEnvMut, WasmPtr};
 
@@ -200,15 +200,6 @@ pub(crate) fn sparse_merkle_insert_batch(
             return darkfi_sdk::error::INTERNAL_ERROR
         }
     };
-
-    // Nothing to do so just return here
-    if nullifiers.is_empty() {
-        warn!(
-            target: "runtime::smt::sparse_merkle_insert_batch",
-            "[WASM] [{}] sparse_merkle_insert_batch(): Nothing to add! Returning.", cid
-        );
-        return darkfi_sdk::entrypoint::SUCCESS
-    }
 
     // Make sure we've read the entire buffer
     if buf_reader.position() != (len as u64) {

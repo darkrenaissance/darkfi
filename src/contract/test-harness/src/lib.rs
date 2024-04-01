@@ -35,7 +35,10 @@ use darkfi_dao_contract::model::{DaoBulla, DaoProposalBulla};
 use darkfi_money_contract::client::OwnCoin;
 use darkfi_sdk::{
     bridgetree,
-    crypto::{Keypair, MerkleNode, MerkleTree},
+    crypto::{
+        smt::{MemoryStorageFp, PoseidonFp, SmtMemoryFp, EMPTY_NODES_FP},
+        Keypair, MerkleNode, MerkleTree,
+    },
     pasta::pallas,
 };
 use darkfi_serial::{Encodable, WriteExt};
@@ -87,8 +90,8 @@ pub fn init_logger() {
     // We check this error so we can execute same file tests in parallel,
     // otherwise second one fails to init logger here.
     if simplelog::TermLogger::init(
-        simplelog::LevelFilter::Info,
-        //simplelog::LevelFilter::Debug,
+        //simplelog::LevelFilter::Info,
+        simplelog::LevelFilter::Debug,
         //simplelog::LevelFilter::Trace,
         cfg.build(),
         simplelog::TerminalMode::Mixed,
@@ -122,6 +125,8 @@ pub struct Wallet {
     pub validator: ValidatorPtr,
     /// Holder's instance of the Merkle tree for the `Money` contract
     pub money_merkle_tree: MerkleTree,
+    /// Holder's instance of the Merkle tree for the `Money` contract
+    pub money_null_smt: SmtMemoryFp,
     /// Holder's instance of the Merkle tree for the `DAO` contract (holding DAO bullas)
     pub dao_merkle_tree: MerkleTree,
     /// Holder's instance of the Merkle tree for the `DAO` contract (holding DAO proposals)
@@ -170,12 +175,17 @@ impl Wallet {
         money_merkle_tree.append(MerkleNode::from(pallas::Base::ZERO));
         money_merkle_tree.mark().unwrap();
 
+        let hasher = PoseidonFp::new();
+        let store = MemoryStorageFp::new();
+        let money_null_smt = SmtMemoryFp::new(store, hasher.clone(), &EMPTY_NODES_FP);
+
         Ok(Self {
             keypair,
             token_mint_authority,
             contract_deploy_authority,
             validator,
             money_merkle_tree,
+            money_null_smt,
             dao_merkle_tree: MerkleTree::new(100),
             dao_proposals_tree: MerkleTree::new(100),
             unspent_money_coins: vec![],

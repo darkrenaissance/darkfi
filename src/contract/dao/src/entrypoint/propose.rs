@@ -18,8 +18,7 @@
 
 use darkfi_money_contract::{
     MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_INFO_TREE, MONEY_CONTRACT_LATEST_COIN_ROOT,
-    MONEY_CONTRACT_LATEST_NULLIFIER_ROOT, MONEY_CONTRACT_NULLIFIERS_TREE,
-    MONEY_CONTRACT_NULLIFIER_ROOTS_TREE,
+    MONEY_CONTRACT_LATEST_NULLIFIER_ROOT, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE,
 };
 use darkfi_sdk::{
     crypto::{contract_id::MONEY_CONTRACT_ID, pasta_prelude::*, ContractId, MerkleNode, PublicKey},
@@ -39,6 +38,7 @@ use crate::{
     model::{DaoBlindAggregateVote, DaoProposalMetadata, DaoProposeParams, DaoProposeUpdate},
     DaoFunction, DAO_CONTRACT_DB_DAO_MERKLE_ROOTS, DAO_CONTRACT_DB_PROPOSAL_BULLAS,
     DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS,
+    PROPOSAL_SNAPSHOT_CUTOFF_LIMIT,
 };
 
 /// `get_metdata` function for `Dao::Propose`
@@ -74,11 +74,11 @@ pub(crate) fn dao_propose_get_metadata(
         zk_public_inputs.push((
             DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS.to_string(),
             vec![
-                input.nullifier.inner(),
+                input.smt_null_root,
                 *value_coords.x(),
                 *value_coords.y(),
                 params.token_commit,
-                input.merkle_root.inner(),
+                input.merkle_coin_root.inner(),
                 sig_x,
                 sig_y,
             ],
@@ -120,26 +120,42 @@ pub(crate) fn dao_propose_process_instruction(
     let params: DaoProposeParams = deserialize(&self_.data[1..])?;
 
     let coin_roots_db = db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
-    let money_nullifier_db = db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_NULLIFIERS_TREE)?;
-    let mut propose_nullifiers = Vec::with_capacity(params.inputs.len());
+    let null_roots_db = db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE)?;
 
     for input in &params.inputs {
         // Check the Merkle roots for the input coins are valid
-        if !db_contains_key(coin_roots_db, &serialize(&input.merkle_root))? {
-            msg!("[Dao::Propose] Error: Invalid input Merkle root: {}", input.merkle_root);
+        let Some(coin_root_data) = db_get(coin_roots_db, &serialize(&input.merkle_coin_root))?
+        else {
+            msg!(
+                "[Dao::Propose] Error: Invalid input Merkle root: {:?}",
+                input.merkle_coin_root.inner()
+            );
             return Err(DaoError::InvalidInputMerkleRoot.into())
+        };
+
+        // Check the SMT roots for the input nullifiers are valid
+        let Some(null_root_data) = db_get(null_roots_db, &serialize(&input.smt_null_root))? else {
+            msg!("[Dao::Propose] Error: Invalid input SMT root: {:?}", input.smt_null_root);
+            return Err(DaoError::InvalidInputMerkleRoot.into())
+        };
+
+        // Both roots must snapshot the exact same state
+        if coin_root_data != null_root_data {
+            msg!("[Dao::Propose] Error: coin roots snapshot for {:?} does not match nulls root snapshot {:?}",
+                 input.merkle_coin_root.inner(), input.smt_null_root);
+            return Err(DaoError::NonMatchingSnapshotRoots.into())
         }
 
-        // Check the coins weren't already spent
-        // The nullifiers should not already exist. It is the double-spend protection.
-        if propose_nullifiers.contains(&input.nullifier) ||
-            db_contains_key(money_nullifier_db, &serialize(&input.nullifier))?
-        {
-            msg!("[Dao::Vote] Error: Coin is already spent");
-            return Err(DaoError::CoinAlreadySpent.into())
+        assert_eq!(coin_root_data.len(), 32 + 2);
+        let tx_hash = &coin_root_data[0..32];
+        // Get block_height where tx_hash was confirmed
+        let tx_height = get_verifying_block_height() as u32;
+        let current_height = get_verifying_block_height() as u32;
+        if current_height - tx_height > PROPOSAL_SNAPSHOT_CUTOFF_LIMIT {
+            msg!("[Dao::Propose] Error: Snapshot is too old. Current height: {}, snapshot height: {}",
+                 current_height, tx_height);
+            return Err(DaoError::SnapshotTooOld.into())
         }
-
-        propose_nullifiers.push(input.nullifier);
     }
 
     // Is the DAO bulla generated in the ZK proof valid

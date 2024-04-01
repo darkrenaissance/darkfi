@@ -73,6 +73,32 @@ impl TestHarness {
 
         let signature_secret = SecretKey::random(&mut OsRng);
 
+        debug!("ABOUT TO SHOW DB INTERNALZZZ!!!!!");
+        {
+            let blockchain = &wallet.validator.blockchain;
+            let contracts = &blockchain.contracts;
+            let tree = contracts
+                .lookup(&blockchain.sled_db, &MONEY_CONTRACT_ID, "nullifier_roots")
+                .unwrap();
+            for kv in tree.iter() {
+                let (key, value) = kv.unwrap();
+                debug!("STATE {:?}", key);
+                debug!("  => {:?}", value);
+            }
+        }
+        debug!("[REDUX] ABOUT TO SHOW DB INTERNALZZZ!!!!!");
+        {
+            let blockchain = &wallet.validator.blockchain;
+            let contracts = &blockchain.contracts;
+            let tree =
+                contracts.lookup(&blockchain.sled_db, &MONEY_CONTRACT_ID, "coin_roots").unwrap();
+            for kv in tree.iter() {
+                let (key, value) = kv.unwrap();
+                debug!("STATE {:?}", key);
+                debug!("  => {:?}", value);
+            }
+        }
+
         let input = DaoProposeStakeInput {
             secret: wallet.keypair.secret,
             note: propose_owncoin.note.clone(),
@@ -81,6 +107,7 @@ impl TestHarness {
                 .money_merkle_tree
                 .witness(propose_owncoin.leaf_position, 0)
                 .unwrap(),
+            money_null_smt: &wallet.money_null_smt,
             signature_secret,
         };
 
@@ -197,6 +224,12 @@ impl TestHarness {
         wallet.dao_prop_leafs.insert(params.proposal_bulla, (prop_leaf_pos, prop_money_snapshot));
 
         if let Some(ref fee_params) = fee_params {
+            let nullifier = fee_params.input.nullifier.inner();
+            wallet
+                .money_null_smt
+                .insert_batch(vec![(nullifier, nullifier)])
+                .expect("smt.insert_batch()");
+
             if let Some(spent_coin) = wallet
                 .unspent_money_coins
                 .iter()

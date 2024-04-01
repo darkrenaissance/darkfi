@@ -340,6 +340,12 @@ impl TestHarness {
         let mut found_owncoins = vec![];
         if let Some(ref fee_params) = fee_params {
             if append {
+                let nullifier = fee_params.input.nullifier.inner();
+                wallet
+                    .money_null_smt
+                    .insert_batch(vec![(nullifier, nullifier)])
+                    .expect("smt.insert_batch()");
+
                 if let Some(spent_coin) = wallet
                     .unspent_money_coins
                     .iter()

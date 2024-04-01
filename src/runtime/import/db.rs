@@ -192,7 +192,7 @@ pub(crate) fn db_init(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u
 }
 
 /// Lookup a database handle from its name.
-/// If it does not exist, push it to the Vector of db_handles.
+/// If it exists, push it to the Vector of db_handles.
 ///
 /// Returns the index of the DbHandle in the db_handles Vector on success.
 /// Otherwise, returns an error value.

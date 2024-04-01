@@ -44,7 +44,6 @@ pub mod crypto;
 
 /// Merkle
 pub mod merkle;
-pub use merkle::merkle_add;
 
 /// Transaction structure
 pub mod tx;

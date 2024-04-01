@@ -20,7 +20,7 @@ use std::io::Cursor;
 
 use darkfi_sdk::crypto::{MerkleNode, MerkleTree};
 use darkfi_serial::{serialize, Decodable, Encodable, WriteExt};
-use log::{debug, error, warn};
+use log::{debug, error};
 use wasmer::{FunctionEnvMut, WasmPtr};
 
 use super::acl::acl_allow;
@@ -155,15 +155,6 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
             return darkfi_sdk::error::INTERNAL_ERROR
         }
     };
-
-    // Nothing to do so just return here
-    if coins.is_empty() {
-        warn!(
-            target: "runtime::merkle::merkle_add",
-            "[WASM] [{}] merkle_add(): Nothing to add! Returning.", cid,
-        );
-        return darkfi_sdk::entrypoint::SUCCESS
-    }
 
     // Make sure we've read the entire buffer
     if buf_reader.position() != (len as u64) {

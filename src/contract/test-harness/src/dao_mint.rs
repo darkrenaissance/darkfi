@@ -118,6 +118,12 @@ impl TestHarness {
         wallet.dao_leafs.insert(params.dao_bulla, leaf_pos);
 
         if let Some(ref fee_params) = fee_params {
+            let nullifier = fee_params.input.nullifier.inner();
+            wallet
+                .money_null_smt
+                .insert_batch(vec![(nullifier, nullifier)])
+                .expect("smt.insert_batch()");
+
             if let Some(spent_coin) = wallet
                 .unspent_money_coins
                 .iter()

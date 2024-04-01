@@ -21,7 +21,8 @@ use darkfi_sdk::{
     dark_tree::DarkLeaf,
     db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
-    merkle_add, msg,
+    merkle::merkle_add,
+    msg,
     pasta::pallas,
     ContractCall,
 };

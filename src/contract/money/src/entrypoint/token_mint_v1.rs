@@ -21,7 +21,8 @@ use darkfi_sdk::{
     dark_tree::DarkLeaf,
     db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
-    merkle_add, msg,
+    merkle::{merkle_add, sparse_merkle_insert_batch},
+    msg,
     pasta::pallas,
     ContractCall,
 };
@@ -32,7 +33,8 @@ use crate::{
     model::{MoneyTokenMintParamsV1, MoneyTokenMintUpdateV1},
     MoneyFunction, MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_MERKLE_TREE,
     MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_INFO_TREE, MONEY_CONTRACT_LATEST_COIN_ROOT,
-    MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
+    MONEY_CONTRACT_LATEST_NULLIFIER_ROOT, MONEY_CONTRACT_NULLIFIERS_TREE,
+    MONEY_CONTRACT_NULLIFIER_ROOTS_TREE, MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
 };
 
 /// `get_metadata` function for `Money::TokenMintV1`
@@ -106,7 +108,19 @@ pub(crate) fn money_token_mint_process_update_v1(
     // Grab all db handles we want to work on
     let info_db = db_lookup(cid, MONEY_CONTRACT_INFO_TREE)?;
     let coins_db = db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
+    let nullifiers_db = db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
     let coin_roots_db = db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
+    let nullifier_roots_db = db_lookup(cid, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE)?;
+
+    // This will just make a snapshot to match the coins one
+    msg!("[MintV1] Updating nullifiers snapshot");
+    sparse_merkle_insert_batch(
+        info_db,
+        nullifiers_db,
+        nullifier_roots_db,
+        MONEY_CONTRACT_LATEST_NULLIFIER_ROOT,
+        &vec![],
+    )?;
 
     msg!("[MintV1] Adding new coin to the set");
     db_set(coins_db, &serialize(&update.coin), &[])?;
