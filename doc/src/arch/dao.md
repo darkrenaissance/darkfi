@@ -249,28 +249,24 @@ occurred.
 | Key or Value | Field Name   | Size | Desc                       |
 |--------------|--------------|------|----------------------------|
 | k            | Root         | 32   | The current root hash $Rₖ$ |
-| v            | Block height | 3    | Current block height       |
-| v            | Tx index     | 2    | Tx index                   |
+| v            | Tx hash      | 32   | Current block height       |
 | v            | Call index   | 2    | Index of contract call     |
 
-Note: 3 bytes for blockheight can store 50 years worth of blocks.
-
-We use the `(block_height, tx_index)` tuple to figure out all info about
+We call `get_tx_location(tx_hash) -> (block_height, tx_index)`, and
+then use the `(block_height, tx_index)` tuple to figure out all info about
 this state change (such as when it occurred).
-We can even get the tx itself if desired.
 
 ## DB SMT Roots
 
 Just like for the merkle case, we want to quickly see whether $Rₖ$ and
-$Sₖ$ correspond to each other. We then use the table to lookup
-`(block_height, tx_index, call_index)` and check they match.
-If so, then they both exist in the same `update()` call.
+$Sₖ$ correspond to each other.
+We just compare the tx hash and call index.
+If they match, then they both exist in the same `update()` call.
 
 | Key or Value | Field Name   | Size | Desc                       |
 |--------------|--------------|------|----------------------------|
 | k            | Root         | 32   | The current root hash $Sₖ$ |
-| v            | Block height | 3    | Current block height       |
-| v            | Tx index     | 2    | Tx index                   |
+| v            | Tx hash      | 32   | Current block height       |
 | v            | Call index   | 2    | Index of contract call     |
 
 ## DB Coins (Wallets)
