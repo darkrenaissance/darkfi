@@ -23,7 +23,7 @@ use sled::Transactional;
 
 use darkfi_serial::{deserialize, serialize, Decodable};
 
-use crate::{tx::Transaction, Error, Result};
+use crate::{tx::Transaction, util::time::Timestamp, Error, Result};
 
 /// Block related definitions and storage implementations
 pub mod block_store;
@@ -409,6 +409,17 @@ impl BlockchainOverlay {
     pub fn last_block(&self) -> Result<BlockInfo> {
         let (_, hash) = self.last()?;
         Ok(self.get_blocks_by_hash(&[hash])?[0].clone())
+    }
+
+    /// Retrieve the last block height.
+    pub fn last_block_height(&self) -> Result<u64> {
+        Ok(self.last()?.0)
+    }
+
+    /// Retrieve the last block timestamp.
+    pub fn last_block_timestamp(&self) -> Result<Timestamp> {
+        let (_, hash) = self.last()?;
+        Ok(self.get_blocks_by_hash(&[hash])?[0].header.timestamp)
     }
 
     /// Insert a given [`BlockInfo`] into the overlay.

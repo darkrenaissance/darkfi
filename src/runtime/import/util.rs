@@ -244,7 +244,7 @@ pub(crate) fn get_blockchain_time(mut ctx: FunctionEnvMut<Env>) -> i64 {
     let cid = &env.contract_id;
 
     // Grab current last block
-    let block = match env.blockchain.lock().unwrap().last_block() {
+    let timestamp = match env.blockchain.lock().unwrap().last_block_timestamp() {
         Ok(b) => b,
         Err(e) => {
             error!(
@@ -261,7 +261,7 @@ pub(crate) fn get_blockchain_time(mut ctx: FunctionEnvMut<Env>) -> i64 {
 
     // Create the return object
     let mut ret = Vec::with_capacity(8);
-    ret.extend_from_slice(&block.header.timestamp.inner().to_be_bytes());
+    ret.extend_from_slice(&timestamp.inner().to_be_bytes());
 
     // Copy Vec<u8> to the VM
     let mut objects = env.objects.borrow_mut();
@@ -285,19 +285,19 @@ pub(crate) fn get_last_block_height(mut ctx: FunctionEnvMut<Env>) -> i64 {
     // Enforce function ACL
     if let Err(e) = acl_allow(env, &[ContractSection::Exec]) {
         error!(
-            target: "runtime::db::get_last_block_info",
-            "[WASM] [{}] get_last_block_info(): Called in unauthorized section: {}", cid, e,
+            target: "runtime::db::get_last_block_height",
+            "[WASM] [{}] get_last_block_height(): Called in unauthorized section: {}", cid, e,
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
 
-    // Grab current last block
-    let block = match env.blockchain.lock().unwrap().last_block() {
+    // Grab current last block height
+    let height = match env.blockchain.lock().unwrap().last_block_height() {
         Ok(b) => b,
         Err(e) => {
             error!(
-                target: "runtime::db::get_last_block_info",
-                "[WASM] [{}] get_last_block_info(): Internal error getting from blocks tree: {}", cid, e,
+                target: "runtime::db::get_last_block_height",
+                "[WASM] [{}] get_last_block_height(): Internal error getting from blocks tree: {}", cid, e,
             );
             return darkfi_sdk::error::DB_GET_FAILED
         }
@@ -309,7 +309,7 @@ pub(crate) fn get_last_block_height(mut ctx: FunctionEnvMut<Env>) -> i64 {
 
     // Create the return object
     let mut ret = Vec::with_capacity(8);
-    ret.extend_from_slice(&darkfi_serial::serialize(&block.header.height));
+    ret.extend_from_slice(&darkfi_serial::serialize(&height));
 
     // Copy Vec<u8> to the VM
     let mut objects = env.objects.borrow_mut();
