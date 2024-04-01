@@ -94,8 +94,11 @@ pub struct Env {
     pub memory: Option<Memory>,
     /// Object store for transferring memory from the host to VM
     pub objects: RefCell<Vec<Vec<u8>>>,
-    /// Block height number runtime verifys against
+    /// Block height number runtime verifies against.
+    /// For unconfirmed txs, this will be the current max height in the chain.
     pub verifying_block_height: u64,
+    /// The hash for this transaction the runtime is being run against.
+    pub tx_hash: TransactionHash,
     /// Parent `Instance`
     pub instance: Option<Arc<Instance>>,
 }
@@ -151,6 +154,7 @@ impl Runtime {
         blockchain: BlockchainOverlayPtr,
         contract_id: ContractId,
         verifying_block_height: u64,
+        tx_hash: TransactionHash,
     ) -> Result<Self> {
         info!(target: "runtime::vm_runtime", "[WASM] Instantiating a new runtime");
         // This function will be called for each `Operator` encountered during
@@ -192,6 +196,7 @@ impl Runtime {
                 memory: None,
                 objects: RefCell::new(vec![]),
                 verifying_block_height,
+                tx_hash,
                 instance: None,
             },
         );

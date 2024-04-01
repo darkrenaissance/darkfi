@@ -84,7 +84,13 @@ pub async fn deploy_native_contracts(overlay: &BlockchainOverlayPtr) -> Result<(
     for nc in native_contracts {
         info!(target: "validator::utils::deploy_native_contracts", "Deploying {} with ContractID {}", nc.0, nc.1);
 
-        let mut runtime = Runtime::new(&nc.2[..], overlay.clone(), nc.1, verifying_block_height)?;
+        let mut runtime = Runtime::new(
+            &nc.2[..],
+            overlay.clone(),
+            nc.1,
+            verifying_block_height,
+            TransactionHash::none(),
+        )?;
 
         runtime.deploy(&nc.3)?;
 

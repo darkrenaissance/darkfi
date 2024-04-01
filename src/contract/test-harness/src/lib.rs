@@ -289,8 +289,14 @@ fn benchmark_wasm_calls(
     for (idx, call) in tx.calls.iter().enumerate() {
         let overlay = BlockchainOverlay::new(&validator.blockchain).expect("blockchain overlay");
         let wasm = overlay.lock().unwrap().wasm_bincode.get(call.data.contract_id).unwrap();
-        let mut runtime = Runtime::new(&wasm, overlay.clone(), call.data.contract_id, block_height)
-            .expect("runtime");
+        let mut runtime = Runtime::new(
+            &wasm,
+            overlay.clone(),
+            call.data.contract_id,
+            block_height,
+            tx.hash().clone(),
+        )
+        .expect("runtime");
         let mut payload = vec![];
         payload.write_u32(idx as u32).unwrap(); // Call index
         tx.calls.encode(&mut payload).unwrap(); // Actual call data
