@@ -41,7 +41,7 @@ use darkfi_sdk::{
     },
     pasta::pallas,
 };
-use darkfi_serial::{Encodable, WriteExt};
+use darkfi_serial::Encodable;
 use log::debug;
 use num_bigint::BigUint;
 
@@ -305,11 +305,13 @@ fn benchmark_wasm_calls(
             call.data.contract_id,
             block_height,
             tx.hash().clone(),
+            idx as u32,
         )
         .expect("runtime");
+
+        // Write call data
         let mut payload = vec![];
-        payload.write_u32(idx as u32).unwrap(); // Call index
-        tx.calls.encode(&mut payload).unwrap(); // Actual call data
+        tx.calls.encode(&mut payload).unwrap();
 
         let mut times = [0; 3];
         let now = std::time::Instant::now();

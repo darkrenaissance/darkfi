@@ -254,6 +254,17 @@ pub(crate) fn get_tx_hash(mut ctx: FunctionEnvMut<Env>) -> i64 {
     (objects.len() - 1) as i64
 }
 
+/// Will return current runtime configured verifying block height number
+pub(crate) fn get_call_index(mut ctx: FunctionEnvMut<Env>) -> u32 {
+    let (env, mut store) = ctx.data_and_store_mut();
+
+    // Subtract used gas. Here we count the size of the object.
+    // u32 is 4 bytes.
+    env.subtract_gas(&mut store, 4);
+
+    env.call_idx
+}
+
 /// Will return current blockchain timestamp,
 /// defined as the last block's timestamp.
 pub(crate) fn get_blockchain_time(mut ctx: FunctionEnvMut<Env>) -> i64 {

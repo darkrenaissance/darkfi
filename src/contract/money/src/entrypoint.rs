@@ -21,8 +21,9 @@ use darkfi_sdk::{
     dark_tree::DarkLeaf,
     db::{db_init, db_lookup, db_set, zkas_db_set},
     error::ContractResult,
+    msg,
     pasta::pallas,
-    util::set_return_data,
+    util::{get_call_index, set_return_data},
     ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
@@ -206,7 +207,8 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
 /// for verifying signatures and zk proofs. The payload given here are all the
 /// contract calls in the transaction.
 fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
-    let (call_idx, calls): (u32, Vec<DarkLeaf<ContractCall>>) = deserialize(ix)?;
+    let call_idx = get_call_index();
+    let calls: Vec<DarkLeaf<ContractCall>> = deserialize(ix)?;
     let self_ = &calls[call_idx as usize].data;
     let func = MoneyFunction::try_from(self_.data[0])?;
 
@@ -236,7 +238,8 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
 /// if everything is successful. This step should happen **after** the host
 /// has successfully verified the metadata from `get_metadata()`.
 fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
-    let (call_idx, calls): (u32, Vec<DarkLeaf<ContractCall>>) = deserialize(ix)?;
+    let call_idx = get_call_index();
+    let calls: Vec<DarkLeaf<ContractCall>> = deserialize(ix)?;
     let self_ = &calls[call_idx as usize].data;
     let func = MoneyFunction::try_from(self_.data[0])?;
 

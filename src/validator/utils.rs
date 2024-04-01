@@ -81,7 +81,7 @@ pub async fn deploy_native_contracts(overlay: &BlockchainOverlayPtr) -> Result<(
         Err(_) => 0,
     };
 
-    for nc in native_contracts {
+    for (call_idx, nc) in native_contracts.into_iter().enumerate() {
         info!(target: "validator::utils::deploy_native_contracts", "Deploying {} with ContractID {}", nc.0, nc.1);
 
         let mut runtime = Runtime::new(
@@ -90,6 +90,7 @@ pub async fn deploy_native_contracts(overlay: &BlockchainOverlayPtr) -> Result<(
             nc.1,
             verifying_block_height,
             TransactionHash::none(),
+            call_idx as u32,
         )?;
 
         runtime.deploy(&nc.3)?;

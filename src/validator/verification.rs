@@ -28,9 +28,7 @@ use darkfi_sdk::{
     deploy::DeployParamsV1,
     pasta::pallas,
 };
-use darkfi_serial::{
-    deserialize_async, serialize_async, AsyncDecodable, AsyncEncodable, AsyncWriteExt, WriteExt,
-};
+use darkfi_serial::{deserialize_async, serialize_async, AsyncDecodable, AsyncEncodable};
 use log::{debug, error, warn};
 use num_bigint::BigUint;
 use smol::io::Cursor;
@@ -276,7 +274,6 @@ pub async fn verify_producer_transaction(
 
     // Write the actual payload data
     let mut payload = vec![];
-    payload.write_u32_async(0).await?; // Call index
     tx.calls.encode_async(&mut payload).await?; // Actual call data
 
     debug!(target: "validator::verification::verify_producer_transaction", "Instantiating WASM runtime");
@@ -288,6 +285,8 @@ pub async fn verify_producer_transaction(
         call.data.contract_id,
         verifying_block_height,
         tx_hash.clone(),
+        // Call index in producer tx is 0
+        0,
     )?;
 
     debug!(target: "validator::verification::verify_producer_transaction", "Executing \"metadata\" call");
@@ -443,8 +442,7 @@ pub async fn verify_transaction(
 
         // Write the actual payload data
         let mut payload = vec![];
-        payload.write_u32(idx as u32)?; // Call index
-        tx.calls.encode_async(&mut payload).await?; // Actual call data
+        tx.calls.encode_async(&mut payload).await?;
 
         debug!(target: "validator::verification::verify_transaction", "Instantiating WASM runtime");
         let wasm = overlay.lock().unwrap().contracts.get(call.data.contract_id)?;
@@ -455,6 +453,7 @@ pub async fn verify_transaction(
             call.data.contract_id,
             verifying_block_height,
             tx_hash.clone(),
+            idx as u32,
         )?;
 
         debug!(target: "validator::verification::verify_transaction", "Executing \"metadata\" call");
@@ -529,6 +528,7 @@ pub async fn verify_transaction(
                 deploy_cid,
                 verifying_block_height,
                 tx_hash.clone(),
+                idx as u32,
             )?;
 
             deploy_runtime.deploy(&deploy_params.ix)?;

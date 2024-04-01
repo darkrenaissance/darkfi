@@ -99,6 +99,8 @@ pub struct Env {
     pub verifying_block_height: u64,
     /// The hash for this transaction the runtime is being run against.
     pub tx_hash: TransactionHash,
+    /// The index for this call in the transaction
+    pub call_idx: u32,
     /// Parent `Instance`
     pub instance: Option<Arc<Instance>>,
 }
@@ -155,6 +157,7 @@ impl Runtime {
         contract_id: ContractId,
         verifying_block_height: u64,
         tx_hash: TransactionHash,
+        call_idx: u32,
     ) -> Result<Self> {
         info!(target: "runtime::vm_runtime", "[WASM] Instantiating a new runtime");
         // This function will be called for each `Operator` encountered during
@@ -197,6 +200,7 @@ impl Runtime {
                 objects: RefCell::new(vec![]),
                 verifying_block_height,
                 tx_hash,
+                call_idx,
                 instance: None,
             },
         );
@@ -297,6 +301,12 @@ impl Runtime {
                     &mut store,
                     &ctx,
                     import::util::get_tx_hash,
+                ),
+
+                "get_call_index_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::util::get_call_index,
                 ),
 
                 "get_blockchain_time_" => Function::new_typed_with_env(

@@ -23,7 +23,7 @@ use darkfi_sdk::{
     dark_tree::DarkLeaf,
     db::{db_get, db_init, db_lookup, db_set, zkas_db_set},
     error::ContractResult,
-    util::set_return_data,
+    util::{get_call_index, set_return_data},
     ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Decodable, Encodable, WriteExt};
@@ -141,7 +141,8 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
 /// for verifying signatures and ZK proofs. The payload given here are all the
 /// contract calls in the transaction.
 fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
-    let (call_idx, calls): (u32, Vec<DarkLeaf<ContractCall>>) = deserialize(ix)?;
+    let call_idx = get_call_index();
+    let calls: Vec<DarkLeaf<ContractCall>> = deserialize(ix)?;
     let self_ = &calls[call_idx as usize].data;
     let func = DaoFunction::try_from(self_.data[0])?;
 
@@ -159,7 +160,8 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
 /// This function verifies a state transition and produces a state update
 /// if everything is successful.
 fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
-    let (call_idx, calls): (u32, Vec<DarkLeaf<ContractCall>>) = deserialize(ix)?;
+    let call_idx = get_call_index();
+    let calls: Vec<DarkLeaf<ContractCall>> = deserialize(ix)?;
     let self_ = &calls[call_idx as usize].data;
     let func = DaoFunction::try_from(self_.data[0])?;
 

@@ -113,6 +113,16 @@ pub fn get_tx_hash() -> GenericResult<TransactionHash> {
     Ok(TransactionHash(tx_hash_data))
 }
 
+/// Only deploy(), metadata() and exec() can call this. Will return runtime configured
+/// verifying block height.
+///
+/// ```
+/// call_idx = get_call_index();
+/// ```
+pub fn get_call_index() -> u32 {
+    unsafe { get_call_index_() }
+}
+
 /// Everyone can call this. Will return current blockchain timestamp.
 ///
 /// ```
@@ -156,6 +166,7 @@ extern "C" {
 
     fn get_verifying_block_height_() -> u64;
     fn get_tx_hash_() -> i64;
+    fn get_call_index_() -> u32;
     fn get_blockchain_time_() -> i64;
     fn get_last_block_height_() -> i64;
     fn get_tx_(ptr: *const u8) -> i64;
