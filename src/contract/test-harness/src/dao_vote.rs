@@ -83,6 +83,7 @@ impl TestHarness {
 
         let current_day = blockwindow(block_height);
         let call = DaoVoteCall {
+            money_null_smt: &wallet.money_null_smt_snapshot.as_ref().unwrap(),
             inputs: vec![input],
             vote_option,
             proposal: proposal.clone(),

@@ -39,7 +39,7 @@ use crate::{
 
 /// `get_metdata` function for `Dao::Vote`
 pub(crate) fn dao_vote_get_metadata(
-    _cid: ContractId,
+    cid: ContractId,
     call_idx: u32,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
@@ -59,6 +59,14 @@ pub(crate) fn dao_vote_get_metadata(
     // Commitment calculation for all votes
     let mut all_vote_commit = pallas::Point::identity();
 
+    let proposal_votes_db = db_lookup(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS)?;
+    let Some(data) = db_get(proposal_votes_db, &serialize(&params.proposal_bulla))? else {
+        msg!("[Dao::Vote] Error: Proposal doesn't exist: {:?}", params.proposal_bulla);
+        return Err(DaoError::ProposalNonexistent.into())
+    };
+    // Get the current votes
+    let mut proposal_metadata: DaoProposalMetadata = deserialize(&data)?;
+
     // Iterate through inputs
     for input in &params.inputs {
         signature_pubkeys.push(input.signature_public);
@@ -70,11 +78,13 @@ pub(crate) fn dao_vote_get_metadata(
         zk_public_inputs.push((
             DAO_CONTRACT_ZKAS_DAO_VOTE_INPUT_NS.to_string(),
             vec![
-                input.nullifier.inner(),
+                proposal_metadata.snapshot_nulls,
+                params.proposal_bulla.inner(),
+                input.vote_nullifier.inner(),
                 *value_coords.x(),
                 *value_coords.y(),
                 params.token_commit,
-                input.merkle_root.inner(),
+                proposal_metadata.snapshot_coins.inner(),
                 sig_x,
                 sig_y,
             ],
@@ -139,26 +149,11 @@ pub(crate) fn dao_vote_process_instruction(
     let mut vote_nullifiers = vec![];
 
     for input in &params.inputs {
-        // TODO: remove merkle_coins entirely from input. It's not needed.
-        if proposal_metadata.snapshot_coins != input.merkle_root {
-            msg!(
-                "[Dao::Vote] Error: Invalid input Merkle root: {} (expected {})",
-                input.merkle_root,
-                proposal_metadata.snapshot_coins
-            );
-            return Err(DaoError::InvalidInputMerkleRoot.into())
-        }
-
-        if db_contains_key(money_nullifier_db, &serialize(&input.nullifier))? {
-            msg!("[Dao::Vote] Error: Coin is already spent");
-            return Err(DaoError::CoinAlreadySpent.into())
-        }
-
         // Prefix nullifier with proposal bulla so nullifiers from different proposals
         // don't interfere with each other.
-        let null_key = serialize(&(params.proposal_bulla, input.nullifier));
+        let null_key = serialize(&(params.proposal_bulla, input.vote_nullifier));
 
-        if vote_nullifiers.contains(&input.nullifier) ||
+        if vote_nullifiers.contains(&input.vote_nullifier) ||
             db_contains_key(dao_vote_nullifier_db, &null_key)?
         {
             msg!("[Dao::Vote] Error: Attempted double vote");
@@ -166,7 +161,7 @@ pub(crate) fn dao_vote_process_instruction(
         }
 
         proposal_metadata.vote_aggregate.all_vote_commit += input.vote_commit;
-        vote_nullifiers.push(input.nullifier);
+        vote_nullifiers.push(input.vote_nullifier);
     }
 
     proposal_metadata.vote_aggregate.yes_vote_commit += params.yes_vote_commit;

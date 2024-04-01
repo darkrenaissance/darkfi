@@ -202,6 +202,8 @@ impl TestHarness {
         // Execute the transaction
         wallet.add_transaction("dao::propose", tx, block_height, self.verify_fees).await?;
 
+        wallet.money_null_smt_snapshot = Some(wallet.money_null_smt.clone());
+
         if !append {
             return Ok(vec![])
         }

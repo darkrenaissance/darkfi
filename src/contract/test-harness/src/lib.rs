@@ -125,8 +125,10 @@ pub struct Wallet {
     pub validator: ValidatorPtr,
     /// Holder's instance of the Merkle tree for the `Money` contract
     pub money_merkle_tree: MerkleTree,
-    /// Holder's instance of the Merkle tree for the `Money` contract
+    /// Holder's instance of the SMT tree for the `Money` contract
     pub money_null_smt: SmtMemoryFp,
+    /// Holder's instance of the SMT tree for the `Money` contract (snapshotted for DAO::propose())
+    pub money_null_smt_snapshot: Option<SmtMemoryFp>,
     /// Holder's instance of the Merkle tree for the `DAO` contract (holding DAO bullas)
     pub dao_merkle_tree: MerkleTree,
     /// Holder's instance of the Merkle tree for the `DAO` contract (holding DAO proposals)
@@ -186,6 +188,7 @@ impl Wallet {
             validator,
             money_merkle_tree,
             money_null_smt,
+            money_null_smt_snapshot: None,
             dao_merkle_tree: MerkleTree::new(100),
             dao_proposals_tree: MerkleTree::new(100),
             unspent_money_coins: vec![],

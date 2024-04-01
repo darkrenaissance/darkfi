@@ -296,12 +296,10 @@ pub struct DaoVoteParams {
 // ANCHOR: dao-vote-params-input
 /// Input for a DAO proposal vote
 pub struct DaoVoteParamsInput {
-    /// Revealed nullifier
-    pub nullifier: Nullifier,
     /// Vote commitment
     pub vote_commit: pallas::Point,
-    /// Merkle root for the input's inclusion proof
-    pub merkle_root: MerkleNode,
+    /// Vote nullifier
+    pub vote_nullifier: Nullifier,
     /// Public key used for signing
     pub signature_public: PublicKey,
 }

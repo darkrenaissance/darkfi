@@ -101,7 +101,7 @@ pub trait StorageAdapter {
 }
 
 /// An in-memory storage, useful for unit tests and smaller trees.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct MemoryStorage<F: FieldElement> {
     tree: HashMap<BigUint, F>,
 }
@@ -131,7 +131,7 @@ impl<F: FieldElement> StorageAdapter for MemoryStorage<F> {
 ///
 /// The trait param `N` is the depth of the tree. A tree with a depth of `N`
 /// will have `N + 1` levels.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SparseMerkleTree<
     'a,
     const N: usize,

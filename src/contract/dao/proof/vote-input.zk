@@ -1,4 +1,4 @@
-k = 13;
+k = 14;
 field = "pallas";
 
 constant "VoteInput" {
@@ -15,11 +15,16 @@ witness "VoteInput" {
     Base coin_user_data,
     Base coin_blind,
 
+    Base proposal_bulla,
+
     Scalar value_blind,
     Base gov_token_blind,
 
     Uint32 leaf_pos,
-    MerklePath path,
+    MerklePath coin_path,
+
+    Base null_tree_root,
+    SparseMerklePath null_path,
 
     Base signature_secret,
 }
@@ -38,14 +43,25 @@ circuit "VoteInput" {
         coin_blind,
     );
 
-    # This is the same as for money::transfer() calls. We could use
-    # a set non-membership proof here, or alternatively just add a
-    # money::transfer() call for every DAO::vote() call. There's a
-    # limitation where votes across proposals are linked where this
-    # coin is active. The best fix would be the set non-membership,
-    # but that possibly has scaling issues.
+    # We need this to detect whether the above coin was already spent.
+    # Use a SMT, and show that at this position, the leaf is ZERO
+    ZERO = witness_base(0);
+    ONE = witness_base(1);
     nullifier = poseidon_hash(coin_secret, coin);
-    constrain_instance(nullifier);
+    is_member = sparse_tree_is_member(
+        null_tree_root,         # Expected root
+        null_path,              # Path to root
+        ZERO,                   # Leaf value
+        nullifier               # Position
+    );
+    constrain_equal_base(is_member, ONE);
+    constrain_instance(null_tree_root);
+
+    # Include some secret information in vote nullifier to defeat correlation
+    # attacks. We reveal the proposal_bulla in vote-main.zk as well.
+    vote_nullifier = poseidon_hash(nullifier, coin_secret, proposal_bulla);
+    constrain_instance(proposal_bulla);
+    constrain_instance(vote_nullifier);
 
     vcv = ec_mul_short(coin_value, VALUE_COMMIT_VALUE);
     vcr = ec_mul(value_blind, VALUE_COMMIT_RANDOM);
@@ -57,8 +73,8 @@ circuit "VoteInput" {
     constrain_instance(token_commit);
 
     # Merkle root
-    root = merkle_root(leaf_pos, path, coin);
-    constrain_instance(root);
+    merkle_coin_root = merkle_root(leaf_pos, coin_path, coin);
+    constrain_instance(merkle_coin_root);
 
     signature_public = ec_mul_base(signature_secret, NULLIFIER_K);
     constrain_instance(ec_get_x(signature_public));
