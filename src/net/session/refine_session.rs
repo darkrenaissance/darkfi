@@ -250,9 +250,8 @@ impl GreylistRefinery {
                     }
 
                     // Freeze the greylist in this state. Necessary since the greylist
-                    // can be modified by `hosts::move_host()`.
-                    let mut greylist =
-                        hosts.container.hostlists[HostColor::Grey as usize].write().await;
+                    // can be modified by `hosts::move_host()` or `hosts::store()`.
+                    let mut greylist = hosts.container.hostlists[HostColor::Grey as usize].write().await;
 
                     if !self.session().handshake_node(url.clone(), self.p2p().clone()).await {
                         greylist.remove(position);
