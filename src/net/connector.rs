@@ -54,7 +54,8 @@ impl Connector {
             .hosts()
             .container
             .contains(HostColor::Black as usize, url)
-            .await
+            .await ||
+            self.session.upgrade().unwrap().p2p().settings().blacklist.contains(url)
         {
             warn!(target: "net::connector::connect", "Peer {} is blacklisted", url);
             return Err(Error::ConnectFailed)

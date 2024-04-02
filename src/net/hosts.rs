@@ -303,7 +303,9 @@ impl HostContainer {
         HostColor::try_from(color).unwrap());
 
         let mut list = self.hostlists[color].write().await;
-        list.push((addr, last_seen));
+        list.push((addr.clone(), last_seen));
+        debug!(target: "net::hosts::store()", "Added [{}] to {:?} list",
+        addr, HostColor::try_from(color).unwrap());
 
         if color == 0 && list.len() == GREYLIST_MAX_LEN {
             let last_entry = list.pop().unwrap();
@@ -928,7 +930,6 @@ impl Hosts {
     /// process fails, or when a channel stops. Prevents hosts from getting trapped in the
     /// HostState logical machinery.
     pub async fn unregister(&self, addr: &Url) {
-        debug!(target: "net::hosts::unregister()", "Removing {} from HostRegistry", addr);
         self.registry.write().await.remove(addr);
         debug!(target: "net::hosts::unregister()", "Removed {} from HostRegistry", addr);
     }
@@ -1069,7 +1070,9 @@ impl Hosts {
             }
 
             // Blacklist peers should never enter the hostlist.
-            if self.container.contains(HostColor::Black as usize, addr_).await {
+            if self.container.contains(HostColor::Black as usize, addr_).await ||
+                settings.blacklist.contains(addr_)
+            {
                 warn!(target: "net::hosts::filter_addresses()",
                 "[{}] is blacklisted", addr_);
                 continue
@@ -1140,8 +1143,6 @@ impl Hosts {
             if !settings.allowed_transports.contains(&addr_.scheme().to_string()) {
                 self.container.store_or_update(HostColor::Dark, addr_.clone(), *last_seen).await;
 
-                debug!(target: "net::hosts::filter_addresses()",
-                    "Added unsupported peer {} to Dark list", addr_);
                 continue
             }
 
@@ -1152,8 +1153,7 @@ impl Hosts {
                 self.container.contains(HostColor::White as usize, addr_).await ||
                 self.container.contains(HostColor::Grey as usize, addr_).await
             {
-                debug!(target: "net::hosts::filter_addresses()",
-                    "We already have {} in the hostlist. Skipping", addr_);
+                debug!(target: "net::hosts::filter_addresses()", "[{}] exists! Skipping", addr_);
                 continue
             }
 

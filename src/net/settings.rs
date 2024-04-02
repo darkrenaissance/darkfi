@@ -77,6 +77,8 @@ pub struct Settings {
     /// Number of seconds with no connections after which refinery
     /// process is paused.
     pub time_with_no_connections: u64,
+    /// Nodes to avoid interacting with for the duration of the program.
+    pub blacklist: Vec<Url>,
 }
 
 impl Default for Settings {
@@ -107,6 +109,7 @@ impl Default for Settings {
             white_connect_count: 90,
             anchor_connect_count: 2,
             time_with_no_connections: 30,
+            blacklist: vec![],
         }
     }
 }
@@ -213,6 +216,11 @@ pub struct SettingsOpt {
     /// process is paused.
     #[structopt(skip)]
     pub time_with_no_connections: Option<u64>,
+
+    /// Nodes to avoid interacting with for the duration of the program.
+    #[serde(default)]
+    #[structopt(long)]
+    pub blacklist: Vec<Url>,
 }
 
 impl From<SettingsOpt> for Settings {
@@ -256,6 +264,7 @@ impl From<SettingsOpt> for Settings {
             time_with_no_connections: opt
                 .time_with_no_connections
                 .unwrap_or(def.time_with_no_connections),
+            blacklist: opt.blacklist,
         }
     }
 }

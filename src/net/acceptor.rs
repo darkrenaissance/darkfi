@@ -126,7 +126,8 @@ impl Acceptor {
                         .hosts()
                         .container
                         .contains(HostColor::Black as usize, &url)
-                        .await
+                        .await ||
+                        self.session.upgrade().unwrap().p2p().settings().blacklist.contains(&url)
                     {
                         warn!(target: "net::acceptor::run_accept_loop()", "Peer {} is blacklisted", url);
                         continue
