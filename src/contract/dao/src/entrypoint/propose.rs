@@ -151,8 +151,7 @@ pub(crate) fn dao_propose_process_instruction(
         let tx_hash_data: [u8; 32] = coin_root_data[0..32].try_into().unwrap();
         let tx_hash = TransactionHash(tx_hash_data);
         // Get block_height where tx_hash was confirmed
-        //let (tx_height, _) = get_tx_location(&tx_hash)?;
-        let tx_height = 0;
+        let (tx_height, _) = get_tx_location(&tx_hash)?;
         let current_height = get_verifying_block_height();
         if current_height - tx_height > PROPOSAL_SNAPSHOT_CUTOFF_LIMIT {
             msg!("[Dao::Propose] Error: Snapshot is too old. Current height: {}, snapshot height: {}",

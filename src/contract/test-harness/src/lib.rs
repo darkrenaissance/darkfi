@@ -210,7 +210,17 @@ impl Wallet {
             benchmark_wasm_calls(callname, &self.validator, &tx, block_height);
         }
 
-        self.validator.add_transactions(&[tx], block_height, true, verify_fees).await?;
+        self.validator.add_transactions(&[tx.clone()], block_height, true, verify_fees).await?;
+
+        // Write the data
+        {
+            let blockchain = &self.validator.blockchain;
+            let txs = &blockchain.transactions;
+            txs.insert(&[tx.clone()]).expect("insert tx");
+            txs.insert_location(&[blake3::Hash::from_bytes(tx.hash().0)], block_height)
+                .expect("insert loc");
+        }
+
         Ok(())
     }
 }

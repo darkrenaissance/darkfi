@@ -81,7 +81,7 @@ fn integration_test() -> Result<()> {
         const PROPOSAL_AMOUNT: u64 = 250_000_000;
 
         // Block height to verify against
-        let current_block_height = 0;
+        let mut current_block_height = 0;
 
         // DAO parameters
         let dao_keypair = th.holders.get(&Holder::Dao).unwrap().keypair;
@@ -94,6 +94,45 @@ fn integration_test() -> Result<()> {
             public_key: dao_keypair.public,
             bulla_blind: Blind::random(&mut OsRng),
         };
+
+        // =======================================
+        // Airdrop some treasury tokens to the DAO
+        // =======================================
+        info!("[Dao] Building DAO airdrop tx");
+        assert_eq!(current_block_height, 0);
+
+        let spend_hook =
+            FuncRef { contract_id: *DAO_CONTRACT_ID, func_code: DaoFunction::Exec as u8 }
+                .to_func_id();
+
+        let (genesis_mint_tx, genesis_mint_params) = th
+            .genesis_mint(
+                &Holder::Dao,
+                DRK_TOKEN_SUPPLY,
+                Some(spend_hook),
+                Some(dao.to_bulla().inner()),
+            )
+            .await?;
+
+        for holder in &HOLDERS {
+            th.execute_genesis_mint_tx(
+                holder,
+                genesis_mint_tx.clone(),
+                &genesis_mint_params,
+                current_block_height,
+                true,
+            )
+            .await?;
+        }
+
+        th.assert_trees(&HOLDERS);
+
+        let _dao_tokens = &th.holders.get(&Holder::Dao).unwrap().unspent_money_coins;
+        assert!(_dao_tokens.len() == 1);
+        assert!(_dao_tokens[0].note.token_id == *DARK_TOKEN_ID);
+        assert!(_dao_tokens[0].note.value == DRK_TOKEN_SUPPLY);
+
+        current_block_height += 1;
 
         // ====================
         // Dao::Mint
@@ -120,40 +159,7 @@ fn integration_test() -> Result<()> {
 
         th.assert_trees(&HOLDERS);
 
-        // =======================================
-        // Airdrop some treasury tokens to the DAO
-        // =======================================
-        info!("[Dao] Building DAO airdrop tx");
-        let spend_hook =
-            FuncRef { contract_id: *DAO_CONTRACT_ID, func_code: DaoFunction::Exec as u8 }
-                .to_func_id();
-
-        let (genesis_mint_tx, genesis_mint_params) = th
-            .genesis_mint(
-                &Holder::Dao,
-                DRK_TOKEN_SUPPLY,
-                Some(spend_hook),
-                Some(dao_mint_params.dao_bulla.inner()),
-            )
-            .await?;
-
-        for holder in &HOLDERS {
-            th.execute_genesis_mint_tx(
-                holder,
-                genesis_mint_tx.clone(),
-                &genesis_mint_params,
-                current_block_height,
-                true,
-            )
-            .await?;
-        }
-
-        th.assert_trees(&HOLDERS);
-
-        let _dao_tokens = &th.holders.get(&Holder::Dao).unwrap().unspent_money_coins;
-        assert!(_dao_tokens.len() == 1);
-        assert!(_dao_tokens[0].note.token_id == *DARK_TOKEN_ID);
-        assert!(_dao_tokens[0].note.value == DRK_TOKEN_SUPPLY);
+        current_block_height += 1;
 
         // ======================================
         // Mint the governance token to 3 holders
@@ -262,6 +268,8 @@ fn integration_test() -> Result<()> {
         assert!(_charlie_tokens[0].note.token_id == gov_token_id);
         assert!(_charlie_tokens[0].note.value == CHARLIE_GOV_SUPPLY);
 
+        current_block_height += 1;
+
         // ================
         // Dao::Propose
         // Propose the vote
@@ -311,6 +319,8 @@ fn integration_test() -> Result<()> {
         }
 
         th.assert_trees(&HOLDERS);
+
+        current_block_height += 1;
 
         // =====================================
         // Dao::Vote
@@ -458,6 +468,8 @@ fn integration_test() -> Result<()> {
             blind_total_vote.yes_vote_commit ==
                 pedersen_commitment_u64(total_yes_vote_value, total_yes_vote_blind)
         );
+
+        current_block_height += 1;
 
         // ================
         // Dao::Exec
