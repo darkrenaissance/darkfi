@@ -187,8 +187,6 @@ impl InboundSession {
 
         stop_sub.receive().await;
 
-        self.p2p().hosts().unregister(channel.clone().address()).await;
-
         debug!(
             target: "net::inbound_session::setup_channel()",
             "Received stop_sub, channel removed from P2P",
