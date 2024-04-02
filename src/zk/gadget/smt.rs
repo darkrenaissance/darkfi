@@ -33,7 +33,7 @@ use halo2_proofs::{
 
 use super::{
     cond_select::{ConditionalSelectChip, ConditionalSelectConfig, NUM_OF_UTILITY_ADVICE_COLUMNS},
-    is_equal::{AssertEqualChip, AssertEqualConfig, IsEqualChip, IsEqualConfig},
+    is_equal::{AssertEqualChip, AssertEqualConfig},
 };
 
 #[derive(Clone, Debug)]
@@ -41,7 +41,6 @@ pub struct PathConfig {
     s_path: Selector,
     advices: [Column<Advice>; 2],
     poseidon_config: PoseidonConfig<Fp, 3, 2>,
-    is_eq_config: IsEqualConfig<Fp>,
     conditional_select_config: ConditionalSelectConfig<Fp>,
     assert_equal_config: AssertEqualConfig<Fp>,
 }
@@ -49,10 +48,6 @@ pub struct PathConfig {
 impl PathConfig {
     fn poseidon_chip(&self) -> PoseidonChip<Fp, 3, 2> {
         PoseidonChip::construct(self.poseidon_config.clone())
-    }
-
-    fn is_eq_chip(&self) -> IsEqualChip<Fp> {
-        IsEqualChip::construct(self.is_eq_config.clone())
     }
 
     fn conditional_select_chip(&self) -> ConditionalSelectChip<Fp> {
@@ -99,7 +94,6 @@ impl PathChip {
             s_path,
             advices,
             poseidon_config,
-            is_eq_config: IsEqualChip::configure(meta, utility_advices),
             conditional_select_config: ConditionalSelectChip::configure(meta, utility_advices),
             assert_equal_config: AssertEqualChip::configure(
                 meta,
@@ -124,10 +118,9 @@ impl PathChip {
     pub fn check_membership(
         &self,
         layouter: &mut impl Layouter<Fp>,
-        root: AssignedCell<Fp, Fp>,
-        leaf: AssignedCell<Fp, Fp>,
         pos: AssignedCell<Fp, Fp>,
         path: Value<[Fp; SMT_FP_DEPTH]>,
+        leaf: AssignedCell<Fp, Fp>,
     ) -> Result<AssignedCell<Fp, Fp>, plonk::Error> {
         let path = path.transpose_array();
         // Witness values
@@ -141,7 +134,7 @@ impl PathChip {
                 let mut witness_path = vec![];
                 for (i, (bit, sibling)) in bits.into_iter().zip(path.into_iter()).enumerate() {
                     let bit = region.assign_advice(
-                        || "witness root",
+                        || "witness pos bit",
                         self.config.advices[0],
                         i,
                         || bit,
@@ -149,7 +142,7 @@ impl PathChip {
                     witness_bits.push(bit);
 
                     let sibling = region.assign_advice(
-                        || "witness root",
+                        || "witness path sibling",
                         self.config.advices[1],
                         i,
                         || sibling,
@@ -158,7 +151,7 @@ impl PathChip {
                 }
 
                 let zero = region.assign_advice(
-                    || "witness one",
+                    || "witness zero",
                     self.config.advices[0],
                     SMT_FP_DEPTH,
                     || Value::known(Fp::ZERO),
@@ -171,7 +164,6 @@ impl PathChip {
         assert_eq!(bits.len(), path.len());
         assert_eq!(bits.len(), SMT_FP_DEPTH);
 
-        let iseq_chip = self.config.is_eq_chip();
         let condselect_chip = self.config.conditional_select_chip();
         let asserteq_chip = self.config.assert_eq_chip();
 
@@ -235,7 +227,8 @@ impl PathChip {
 
         asserteq_chip.assert_equal(layouter, current_path, pos)?;
 
-        iseq_chip.is_eq_with_output(layouter, current_node, root)
+        let root = current_node;
+        Ok(root)
     }
 }
 
@@ -247,9 +240,9 @@ mod tests {
     use rand::rngs::OsRng;
 
     struct TestCircuit {
-        root: Value<Fp>,
         path: Value<[Fp; SMT_FP_DEPTH]>,
         leaf: Value<Fp>,
+        root: Value<Fp>,
     }
 
     impl Circuit<Fp> for TestCircuit {
@@ -302,43 +295,31 @@ mod tests {
             let assert_eq_chip = config.assert_eq_chip();
 
             // Witness values
-            let (root, leaf, one) = layouter.assign_region(
+            let (leaf, root) = layouter.assign_region(
                 || "witness",
                 |mut region| {
-                    let root = region.assign_advice(
-                        || "witness root",
-                        config.advices[0],
-                        0,
-                        || self.root,
-                    )?;
-
                     let leaf = region.assign_advice(
                         || "witness leaf",
-                        config.advices[1],
+                        config.advices[0],
                         0,
                         || self.leaf,
                     )?;
-
-                    let one = region.assign_advice(
-                        || "witness one",
+                    let root = region.assign_advice(
+                        || "witness root",
                         config.advices[1],
-                        1,
-                        || Value::known(Fp::ONE),
+                        0,
+                        || self.root,
                     )?;
-                    region.constrain_constant(one.cell(), Fp::ONE)?;
-
-                    Ok((root, leaf, one))
+                    Ok((leaf, root))
                 },
             )?;
 
-            let is_valid = path_chip.check_membership(
-                &mut layouter,
-                root,
-                leaf.clone(),
-                leaf.clone(),
-                self.path,
-            )?;
-            assert_eq_chip.assert_equal(&mut layouter, is_valid, one)?;
+            let calc_root =
+                path_chip.check_membership(&mut layouter, leaf.clone(), self.path, leaf.clone())?;
+            // Normally we just reveal it as a public input.
+            // But I'm too lazy to make a separate config for this unit test so
+            // do this instead.
+            assert_eq_chip.assert_equal(&mut layouter, calc_root, root)?;
 
             Ok(())
         }
@@ -365,9 +346,9 @@ mod tests {
         assert!(path.verify(&root, &leaf, &pos));
 
         let circuit = TestCircuit {
-            root: Value::known(root),
             path: Value::known(path.path),
             leaf: Value::known(leaf),
+            root: Value::known(root),
         };
 
         const K: u32 = 14;

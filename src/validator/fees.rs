@@ -70,7 +70,7 @@ pub fn circuit_gas_use(zkbin: &ZkBinary) -> u64 {
             Opcode::EcGetY => 5,
             Opcode::PoseidonHash => 20 + 10 * opcode.1.len() as u64,
             Opcode::MerkleRoot => 10 * MERKLE_DEPTH_ORCHARD as u64,
-            Opcode::SparseTreeIsMember => 10 * SPARSE_MERKLE_DEPTH as u64,
+            Opcode::SparseMerkleRoot => 10 * SPARSE_MERKLE_DEPTH as u64,
             Opcode::BaseAdd => 15,
             Opcode::BaseMul => 15,
             Opcode::BaseSub => 15,

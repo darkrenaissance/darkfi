@@ -109,7 +109,6 @@ impl<'a> DaoProposeCall<'a> {
                 Witness::Base(Value::known(gov_token_blind.inner())),
                 Witness::Uint32(Value::known(leaf_pos.try_into().unwrap())),
                 Witness::MerklePath(Value::known(input.merkle_path.clone().try_into().unwrap())),
-                Witness::Base(Value::known(smt_null_root)),
                 Witness::SparseMerklePath(Value::known(smt_null_path.path)),
                 Witness::Base(Value::known(input.signature_secret.inner())),
             ];

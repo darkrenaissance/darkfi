@@ -16,9 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_money_contract::MONEY_CONTRACT_NULLIFIERS_TREE;
 use darkfi_sdk::{
-    crypto::{contract_id::MONEY_CONTRACT_ID, pasta_prelude::*, ContractId, PublicKey},
+    crypto::{pasta_prelude::*, ContractId, PublicKey},
     dark_tree::DarkLeaf,
     db::{db_contains_key, db_get, db_lookup, db_set},
     error::{ContractError, ContractResult},
@@ -65,7 +64,7 @@ pub(crate) fn dao_vote_get_metadata(
         return Err(DaoError::ProposalNonexistent.into())
     };
     // Get the current votes
-    let mut proposal_metadata: DaoProposalMetadata = deserialize(&data)?;
+    let proposal_metadata: DaoProposalMetadata = deserialize(&data)?;
 
     // Iterate through inputs
     for input in &params.inputs {
@@ -144,7 +143,6 @@ pub(crate) fn dao_vote_process_instruction(
     let mut proposal_metadata: DaoProposalMetadata = deserialize(&data)?;
 
     // Check the Merkle root and nullifiers for the input coins are valid
-    let money_nullifier_db = db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_NULLIFIERS_TREE)?;
     let dao_vote_nullifier_db = db_lookup(cid, DAO_CONTRACT_DB_VOTE_NULLIFIERS)?;
     let mut vote_nullifiers = vec![];
 

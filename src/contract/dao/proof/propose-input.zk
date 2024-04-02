@@ -21,7 +21,6 @@ witness "ProposeInput" {
     Uint32 leaf_pos,
     MerklePath coin_path,
 
-    Base null_tree_root,
     SparseMerklePath null_path,
 
     Base signature_secret,
@@ -45,15 +44,12 @@ circuit "ProposeInput" {
     # We need this to detect whether the above coin was already spent.
     # Use a SMT, and show that at this position, the leaf is ZERO
     ZERO = witness_base(0);
-    ONE = witness_base(1);
     nullifier = poseidon_hash(coin_secret, coin);
-    is_member = sparse_tree_is_member(
-        null_tree_root,         # Expected root
+    null_tree_root = sparse_merkle_root(
+        nullifier,              # Position
         null_path,              # Path to root
         ZERO,                   # Leaf value
-        nullifier               # Position
     );
-    constrain_equal_base(is_member, ONE);
     constrain_instance(null_tree_root);
 
     # Pedersen commitment for coin's coin_value

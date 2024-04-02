@@ -5,17 +5,12 @@ constant "SMT" {
 }
 
 witness "SMT" {
-    Base root,
     SparseMerklePath path,
     Base leaf,
 }
 
 circuit "SMT" {
-    is_member = sparse_tree_is_member(root, path, leaf, leaf);
-
-    ONE = witness_base(1);
-    constrain_equal_base(is_member, ONE);
-
+    root = sparse_merkle_root(leaf, path, leaf);
     constrain_instance(root);
 }
 
