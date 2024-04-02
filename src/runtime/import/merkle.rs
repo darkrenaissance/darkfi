@@ -18,7 +18,10 @@
 
 use std::io::Cursor;
 
-use darkfi_sdk::crypto::{MerkleNode, MerkleTree};
+use darkfi_sdk::{
+    crypto::{MerkleNode, MerkleTree},
+    AsHex,
+};
 use darkfi_serial::{serialize, Decodable, Encodable, WriteExt};
 use log::{debug, error};
 use wasmer::{FunctionEnvMut, WasmPtr};
@@ -195,8 +198,8 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
     );
     debug!(
         target: "runtime::merkle::merkle_add",
-        "                 {:02x?}",
-        return_data
+        "                 {}",
+        return_data.hex()
     );
 
     let mut decoder = Cursor::new(&return_data);

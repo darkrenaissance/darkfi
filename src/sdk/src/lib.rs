@@ -54,3 +54,24 @@ pub mod util;
 
 /// DarkTree structures
 pub mod dark_tree;
+
+/// Creates a hex formatted string of the data
+#[inline]
+pub fn hex_from_iter<I: Iterator<Item = u8>>(iter: I) -> String {
+    let mut repr = String::new();
+    for b in iter {
+        repr += &format!("{:02x}", b);
+    }
+    repr
+}
+
+pub trait AsHex {
+    fn hex(&self) -> String;
+}
+
+impl<T: AsRef<[u8]>> AsHex for T {
+    /// Creates a hex formatted string of the data (big endian)
+    fn hex(&self) -> String {
+        hex_from_iter(self.as_ref().iter().cloned())
+    }
+}

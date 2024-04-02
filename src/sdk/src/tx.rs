@@ -22,7 +22,7 @@ use std::fmt::{self, Debug};
 use darkfi_serial::async_trait;
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 
-use super::crypto::ContractId;
+use super::{crypto::ContractId, AsHex};
 
 #[derive(Clone, Debug, PartialEq, SerialEncodable, SerialDecodable)]
 // We have to introduce a type rather than using an alias so we can implement Display
@@ -44,8 +44,8 @@ impl TransactionHash {
 }
 
 impl fmt::Display for TransactionHash {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        self.0[..].fmt(formatter)
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.0.hex())
     }
 }
 

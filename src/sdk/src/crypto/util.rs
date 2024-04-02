@@ -25,7 +25,10 @@ use pasta_curves::{
 use std::io::Cursor;
 use subtle::CtOption;
 
-use crate::error::{ContractError, GenericResult};
+use crate::{
+    error::{ContractError, GenericResult},
+    hex_from_iter,
+};
 
 #[inline]
 fn hash_to_field_elem<F: FromUniformBytes<64>>(persona: &[u8], vals: &[&[u8]]) -> F {
@@ -90,11 +93,8 @@ pub fn fp_to_u64(value: pallas::Base) -> Option<u64> {
 // Not allowed to implement external traits for external crates
 pub trait FieldElemAsStr: PrimeField<Repr = [u8; 32]> {
     fn to_string(&self) -> String {
-        let mut repr = "0x".to_string();
-        for &b in self.to_repr().iter().rev() {
-            repr += &format!("{:02x}", b);
-        }
-        repr
+        // We reverse repr since it is little endian encoded
+        "0x".to_string() + &hex_from_iter(self.to_repr().iter().cloned().rev())
     }
 
     fn from_str(hex: &str) -> GenericResult<Self> {

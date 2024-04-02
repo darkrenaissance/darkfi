@@ -21,7 +21,7 @@ use std::{
     sync::Arc,
 };
 
-use darkfi_sdk::{crypto::ContractId, entrypoint, tx::TransactionHash};
+use darkfi_sdk::{crypto::ContractId, entrypoint, tx::TransactionHash, AsHex};
 use darkfi_serial::serialize;
 use log::{debug, error, info};
 use wasmer::{
@@ -491,9 +491,9 @@ impl Runtime {
         let cid = self.ctx.as_ref(&self.store).contract_id;
         info!(target: "runtime::vm_runtime", "[WASM] Running metadata() for ContractID: {}", cid);
 
-        debug!(target: "runtime::vm_runtime", "metadata payload: {:?}", payload);
+        debug!(target: "runtime::vm_runtime", "metadata payload: {}", payload.hex());
         let ret = self.call(ContractSection::Metadata, payload)?;
-        debug!(target: "runtime::vm_runtime", "metadata returned: {:?}", ret);
+        debug!(target: "runtime::vm_runtime", "metadata returned: {:?}", ret.hex());
 
         info!(target: "runtime::vm_runtime", "[WASM] Successfully got metadata ContractID: {}", cid);
         Ok(ret)
@@ -508,9 +508,9 @@ impl Runtime {
         let cid = self.ctx.as_ref(&self.store).contract_id;
         info!(target: "runtime::vm_runtime", "[WASM] Running exec() for ContractID: {}", cid);
 
-        debug!(target: "runtime::vm_runtime", "exec payload: {:?}", payload);
+        debug!(target: "runtime::vm_runtime", "exec payload: {}", payload.hex());
         let ret = self.call(ContractSection::Exec, payload)?;
-        debug!(target: "runtime::vm_runtime", "exec returned: {:?}", ret);
+        debug!(target: "runtime::vm_runtime", "exec returned: {:?}", ret.hex());
 
         info!(target: "runtime::vm_runtime", "[WASM] Successfully executed ContractID: {}", cid);
         Ok(ret)
@@ -526,9 +526,9 @@ impl Runtime {
         let cid = self.ctx.as_ref(&self.store).contract_id;
         info!(target: "runtime::vm_runtime", "[WASM] Running apply() for ContractID: {}", cid);
 
-        debug!(target: "runtime::vm_runtime", "apply payload: {:?}", update);
+        debug!(target: "runtime::vm_runtime", "apply payload: {:?}", update.hex());
         let ret = self.call(ContractSection::Update, update)?;
-        debug!(target: "runtime::vm_runtime", "apply returned: {:?}", ret);
+        debug!(target: "runtime::vm_runtime", "apply returned: {:?}", ret.hex());
 
         info!(target: "runtime::vm_runtime", "[WASM] Successfully applied ContractID: {}", cid);
         Ok(())

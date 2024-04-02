@@ -27,6 +27,7 @@ use darkfi_sdk::{
     error::DarkTreeResult,
     pasta::pallas,
     tx::{ContractCall, TransactionHash},
+    AsHex,
 };
 
 #[cfg(feature = "async-serial")]
@@ -128,7 +129,7 @@ impl Transaction {
 
         debug!(
             target: "tx::verify_sigs",
-            "tx.verify_sigs: data_hash: {:?}", data_hash.as_bytes(),
+            "tx.verify_sigs: data_hash: {}", data_hash.as_bytes().hex(),
         );
 
         assert_eq!(self.signatures.len(), pub_table.len());
@@ -166,7 +167,7 @@ impl Transaction {
 
         debug!(
             target: "tx::create_sigs",
-            "[TX] tx.create_sigs: data_hash: {:?}", data_hash.as_bytes(),
+            "[TX] tx.create_sigs: data_hash: {:?}", data_hash.as_bytes().hex(),
         );
 
         let mut sigs = vec![];
