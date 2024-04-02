@@ -160,11 +160,10 @@ pub fn get_tx(hash: &TransactionHash) -> GenericResult<Option<Vec<u8>>> {
 }
 
 /// Only metadata() and exec() can call this. Will return transaction
-/// location bytes by provided hash.
+/// location by provided hash.
 ///
 /// ```
-/// tx_location_bytes = get_tx_location(hash);
-/// (block_height, tx_index) = deserialize(&tx_location_bytes)?;
+/// (block_height, tx_index) = get_tx_location(hash)?;
 /// ```
 pub fn get_tx_location(hash: &TransactionHash) -> GenericResult<(u64, u64)> {
     let mut buf = vec![];
