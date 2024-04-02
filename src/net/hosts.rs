@@ -1150,7 +1150,7 @@ impl Hosts {
             // We do this last since it is the most expensive operation.
             if self.container.contains(HostColor::Gold as usize, addr_).await ||
                 self.container.contains(HostColor::White as usize, addr_).await ||
-                    self.container.contains(HostColor::Grey as usize, addr_).await
+                self.container.contains(HostColor::Grey as usize, addr_).await
             {
                 debug!(target: "net::hosts::filter_addresses()",
                     "We already have {} in the hostlist. Skipping", addr_);

@@ -90,7 +90,7 @@ pub const DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS: &str = "AuthMoneyTransfe
 pub const DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS: &str = "AuthMoneyTransferEncCoin";
 
 /// Not allowed to make proposals using snapshots with block heights older than this depth
-pub const PROPOSAL_SNAPSHOT_CUTOFF_LIMIT: u32 = 100;
+pub const PROPOSAL_SNAPSHOT_CUTOFF_LIMIT: u64 = 100;
 
 // ANCHOR: dao-blockwindow
 const BLOCK_TIME: u64 = 90;

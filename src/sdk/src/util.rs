@@ -16,7 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_serial::Encodable;
+use darkfi_serial::{Decodable, Encodable};
+use std::io::Cursor;
 
 use super::{
     error::{ContractError, GenericResult},
@@ -150,7 +151,7 @@ pub fn get_last_block_height() -> GenericResult<Option<Vec<u8>>> {
 /// tx_bytes = get_tx(hash);
 /// tx = deserialize(&tx_bytes)?;
 /// ```
-pub fn get_tx(hash: blake3::Hash) -> GenericResult<Option<Vec<u8>>> {
+pub fn get_tx(hash: &TransactionHash) -> GenericResult<Option<Vec<u8>>> {
     let mut buf = vec![];
     hash.encode(&mut buf)?;
 
@@ -165,12 +166,14 @@ pub fn get_tx(hash: blake3::Hash) -> GenericResult<Option<Vec<u8>>> {
 /// tx_location_bytes = get_tx_location(hash);
 /// (block_height, tx_index) = deserialize(&tx_location_bytes)?;
 /// ```
-pub fn get_tx_location(hash: blake3::Hash) -> GenericResult<Option<Vec<u8>>> {
+pub fn get_tx_location(hash: &TransactionHash) -> GenericResult<(u64, u64)> {
     let mut buf = vec![];
     hash.encode(&mut buf)?;
 
     let ret = unsafe { get_tx_location_(buf.as_ptr()) };
-    parse_ret(ret)
+    let loc_data = parse_ret(ret)?.ok_or(ContractError::DbGetFailed)?;
+    let mut cursor = Cursor::new(loc_data);
+    Ok((Decodable::decode(&mut cursor)?, Decodable::decode(cursor)?))
 }
 
 extern "C" {

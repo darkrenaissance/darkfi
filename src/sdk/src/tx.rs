@@ -24,7 +24,7 @@ use darkfi_serial::{SerialDecodable, SerialEncodable};
 
 use super::crypto::ContractId;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, SerialEncodable, SerialDecodable)]
 // We have to introduce a type rather than using an alias so we can implement Display
 pub struct TransactionHash(pub [u8; 32]);
 
