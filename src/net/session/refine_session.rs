@@ -249,8 +249,12 @@ impl GreylistRefinery {
                         continue
                     }
 
+                    // Freeze the greylist in this state. Necessary since the greylist
+                    // can be modified by `hosts::move_host()`.
+                    let mut greylist = hosts.container.hostlists[HostColor::Grey as usize].write().await;
+
                     if !self.session().handshake_node(url.clone(), self.p2p().clone()).await {
-                        hosts.container.remove(HostColor::Grey, url, position).await;
+                        greylist.remove(position);
 
                         debug!(
                             target: "net::refinery",
@@ -262,8 +266,12 @@ impl GreylistRefinery {
                         // modification is now complete.
                         hosts.unregister(url).await;
 
+                        drop(greylist);
+
                         continue
                     }
+
+                    drop(greylist);
 
                     debug!(
                         target: "net::refinery",
