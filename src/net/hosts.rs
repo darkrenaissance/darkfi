@@ -1145,13 +1145,12 @@ impl Hosts {
                 continue
             }
 
-            // Reject this peer if it's already stored on the Gold or White list.
-            // If it exists on the Grey list, we will simply update its last_seen
-            // field.
+            // Reject this peer if it's already stored on the Gold, White or Grey list.
             //
             // We do this last since it is the most expensive operation.
             if self.container.contains(HostColor::Gold as usize, addr_).await ||
-                self.container.contains(HostColor::White as usize, addr_).await
+                self.container.contains(HostColor::White as usize, addr_).await ||
+                    self.container.contains(HostColor::Grey as usize, addr_).await
             {
                 debug!(target: "net::hosts::filter_addresses()",
                     "We already have {} in the hostlist. Skipping", addr_);
