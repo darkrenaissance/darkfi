@@ -16,10 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use super::*;
 use halo2_proofs::arithmetic::Field;
 use pasta_curves::Fp;
 use rand::rngs::OsRng;
+
+use super::*;
 
 #[test]
 fn check_empties() {

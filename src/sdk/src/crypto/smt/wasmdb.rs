@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use num_bigint::BigUint;
+
 use super::{PoseidonFp, SparseMerkleTree, StorageAdapter, SMT_FP_DEPTH};
 use crate::{
     crypto::pasta_prelude::*,
@@ -23,7 +25,6 @@ use crate::{
     msg,
     pasta::pallas,
 };
-use num_bigint::BigUint;
 
 pub type SmtWasmFp = SparseMerkleTree<
     'static,
@@ -61,11 +62,7 @@ impl StorageAdapter for SmtWasmDbStorage {
 
         let mut repr = [0; 32];
         repr.copy_from_slice(&value);
-        let value = pallas::Base::from_repr(repr);
-        if value.is_none().into() {
-            None
-        } else {
-            Some(value.unwrap())
-        }
+
+        pallas::Base::from_repr(repr).into()
     }
 }

@@ -58,6 +58,14 @@
 //!   calculated as `leaf_idx = final_level_start_idx + position`.
 //! * **node** - either the leaf values or parent nodes `hash(left, right)`.
 
+use num_bigint::BigUint;
+use std::collections::HashMap;
+// Only used for the type aliases below
+use pasta_curves::pallas;
+
+use crate::error::{ContractError, ContractResult};
+use util::{FieldElement, FieldHasher};
+
 mod empty;
 pub use empty::EMPTY_NODES_FP;
 
@@ -68,14 +76,6 @@ mod util;
 pub use util::Poseidon;
 
 pub mod wasmdb;
-
-use num_bigint::BigUint;
-use std::collections::HashMap;
-// Only used for the type aliases below
-use pasta_curves::pallas;
-
-use crate::error::{ContractError, ContractResult};
-use util::{FieldElement, FieldHasher};
 
 // Bit size for Fp (and Fq)
 pub const SMT_FP_DEPTH: usize = 255;
@@ -119,6 +119,7 @@ impl<F: FieldElement> StorageAdapter for MemoryStorage<F> {
         self.tree.insert(key, value);
         true
     }
+
     fn get(&self, key: &BigUint) -> Option<F> {
         self.tree.get(key).copied()
     }
@@ -207,6 +208,7 @@ impl<
 
             dirty_idxs = new_dirty_idxs;
         }
+
         Ok(())
     }
 
@@ -304,8 +306,8 @@ pub fn gen_empty_nodes<const M: usize, F: FieldElement, H: FieldHasher<F, 2>>(
     empty_leaf: F,
 ) -> [F; M] {
     let mut empty_nodes = [F::ZERO; M];
-
     let mut empty_node = empty_leaf;
+
     for item in empty_nodes.iter_mut().rev() {
         *item = empty_node;
         empty_node = hasher.hash([empty_node, empty_node]);
