@@ -849,6 +849,9 @@ impl Hosts {
 
             addrs_len += i + 1;
             self.container.store_or_update(color.clone(), addr.clone(), *last_seen).await;
+
+            // Free up this peer for usage by other parts of the code base.
+            // This is a safe since the hostlist modification is now complete.
             self.unregister(addr).await;
         }
 
@@ -929,6 +932,10 @@ impl Hosts {
     /// Remove a host from the HostRegistry. Must be called after move(), when the refinery
     /// process fails, or when a channel stops. Prevents hosts from getting trapped in the
     /// HostState logical machinery.
+    ///
+    /// NOTE: Misuse of this call is dangerous since it frees up the peer to be used by
+    /// the refinery or outbound connect loop, and may result in invalid states. It should
+    /// only be called when it is completely safe to do so.
     pub async fn unregister(&self, addr: &Url) {
         self.registry.write().await.remove(addr);
         debug!(target: "net::hosts::unregister()", "Removed {} from HostRegistry", addr);

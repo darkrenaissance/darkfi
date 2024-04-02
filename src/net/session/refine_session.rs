@@ -258,10 +258,8 @@ impl GreylistRefinery {
                         );
 
                         // Remove this entry from HostRegistry to avoid this host getting
-                        // stuck in the Refining state.
-                        //
-                        // It is not necessary to call this when the refinery passes, since the
-                        // state will be changed to Connected.
+                        // stuck in the Refining state. This is a safe since the hostlist
+                        // modification is now complete.
                         hosts.unregister(url).await;
 
                         continue
@@ -275,6 +273,8 @@ impl GreylistRefinery {
 
                     // Add to the whitelist and remove from the greylist.
                     hosts.move_host(url, last_seen, HostColor::White).await.unwrap();
+
+                    // When move is complete we can safely stop tracking this peer.
                     hosts.unregister(url).await;
 
                     debug!(target: "net::refinery", "GreylistRefinery complete!");

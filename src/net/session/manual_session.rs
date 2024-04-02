@@ -153,7 +153,7 @@ impl ManualSession {
                             );
 
                             // Stop tracking this peer, to avoid it getting stuck in the Connect
-                            // state.
+                            // state. This is safe since we have failed to connect at this point.
                             self.p2p().hosts().unregister(&addr).await;
                         }
                     }

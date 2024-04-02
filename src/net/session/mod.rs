@@ -78,7 +78,7 @@ pub async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr, type_id: Sessi
         p2p.hosts().move_host(addr, last_seen, HostColor::Grey).await.unwrap();
     }
 
-    // Remove channel from p2p
+    // Remove channel from the HostRegistry. Free up this addr for any future operation.
     p2p.hosts().unregister(channel.address()).await;
 
     debug!(target: "net::session::remove_sub_on_stop()", "[END]");
