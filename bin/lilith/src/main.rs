@@ -39,7 +39,11 @@ use url::Url;
 
 use darkfi::{
     async_daemonize, cli_desc,
-    net::{self, hosts::HostColor, P2p, P2pPtr},
+    net::{
+        self,
+        hosts::{HostColor, HostState},
+        P2p, P2pPtr,
+    },
     rpc::{
         jsonrpc::*,
         server::{listen_and_serve, RequestHandler},
@@ -53,6 +57,7 @@ const CONFIG_FILE: &str = "lilith_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../lilith_config.toml");
 
 /// Interval after which the refinery happens (in seconds)
+// TODO: Make this configurable
 const REFINERY_INTERVAL: u64 = 60;
 
 #[derive(Clone, Debug, serde::Deserialize, StructOpt, StructOptToml)]
@@ -177,8 +182,16 @@ impl Lilith {
             }
 
             let (entry, position) = hosts.container.fetch_last(HostColor::White).await;
+
             let url = &entry.0;
             let last_seen = &entry.1;
+
+            if let Err(e) = hosts.try_register(url.clone(), HostState::Refine).await {
+                debug!(target: "lilith", "Unable to refine addr={}, err={}",
+                       url.clone(), e);
+
+                continue
+            }
 
             if !p2p.session_refine().handshake_node(url.clone(), p2p.clone()).await {
                 debug!(target: "lilith", "Host {} is not responsive. Downgrading from whitelist", url);
@@ -187,6 +200,8 @@ impl Lilith {
 
                 continue
             }
+
+            debug!(target: "lilith","Peer {} is responsive. Updating last_seen", url);
 
             // This node is active. Update the last seen field.
             let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
