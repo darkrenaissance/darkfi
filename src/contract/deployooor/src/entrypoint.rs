@@ -17,14 +17,7 @@
  */
 
 use darkfi_sdk::{
-    crypto::ContractId,
-    dark_tree::DarkLeaf,
-    error::ContractResult,
-    wasm::{
-        db::{db_init, db_lookup, db_set},
-        util::set_return_data,
-    },
-    ContractCall,
+    crypto::ContractId, dark_tree::DarkLeaf, error::ContractResult, wasm, ContractCall,
 };
 use darkfi_serial::{deserialize, serialize};
 
@@ -54,19 +47,19 @@ darkfi_sdk::define_contract!(
 /// with initial data if necessary.
 fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     // Set up a database tree for arbitrary data
-    let info_db = match db_lookup(cid, DEPLOY_CONTRACT_INFO_TREE) {
+    let info_db = match wasm::db::db_lookup(cid, DEPLOY_CONTRACT_INFO_TREE) {
         Ok(v) => v,
-        Err(_) => db_init(cid, DEPLOY_CONTRACT_INFO_TREE)?,
+        Err(_) => wasm::db::db_init(cid, DEPLOY_CONTRACT_INFO_TREE)?,
     };
 
     // Set up a database to hold the set of locked contracts
     // k=ContractId, v=bool
-    if db_lookup(cid, DEPLOY_CONTRACT_LOCK_TREE).is_err() {
-        db_init(cid, DEPLOY_CONTRACT_LOCK_TREE)?;
+    if wasm::db::db_lookup(cid, DEPLOY_CONTRACT_LOCK_TREE).is_err() {
+        wasm::db::db_init(cid, DEPLOY_CONTRACT_LOCK_TREE)?;
     }
 
     // Update db version
-    db_set(info_db, DEPLOY_CONTRACT_DB_VERSION, &serialize(&env!("CARGO_PKG_VERSION")))?;
+    wasm::db::db_set(info_db, DEPLOY_CONTRACT_DB_VERSION, &serialize(&env!("CARGO_PKG_VERSION")))?;
 
     Ok(())
 }
@@ -84,7 +77,7 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
         DeployFunction::LockV1 => lock_get_metadata_v1(cid, call_idx, calls)?,
     };
 
-    set_return_data(&metadata)
+    wasm::util::set_return_data(&metadata)
 }
 
 /// This function verifies a state transition and produces a state update
@@ -99,7 +92,7 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
         DeployFunction::LockV1 => lock_process_instruction_v1(cid, call_idx, calls)?,
     };
 
-    set_return_data(&update_data)
+    wasm::util::set_return_data(&update_data)
 }
 
 /// This function attempts to write a given state update provided the previous

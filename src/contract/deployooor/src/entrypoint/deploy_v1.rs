@@ -23,8 +23,7 @@ use darkfi_sdk::{
     error::{ContractError, ContractResult},
     msg,
     pasta::pallas,
-    wasm::db::{db_get, db_lookup, db_set},
-    ContractCall,
+    wasm, ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 use wasmparser::{
@@ -66,10 +65,10 @@ pub(crate) fn deploy_process_instruction_v1(
     let params: DeployParamsV1 = deserialize(&self_.data.data[1..])?;
 
     // In this function, we have to check that the contract isn't locked.
-    let lock_db = db_lookup(cid, DEPLOY_CONTRACT_LOCK_TREE)?;
+    let lock_db = wasm::db::db_lookup(cid, DEPLOY_CONTRACT_LOCK_TREE)?;
     let contract_id = ContractId::derive_public(params.public_key);
 
-    if let Some(v) = db_get(lock_db, &serialize(&contract_id))? {
+    if let Some(v) = wasm::db::db_get(lock_db, &serialize(&contract_id))? {
         let locked: bool = deserialize(&v)?;
         if locked {
             msg!("[DeployV1] Error: Contract is locked. Cannot redeploy.");
@@ -153,8 +152,8 @@ pub(crate) fn deploy_process_instruction_v1(
 pub(crate) fn deploy_process_update_v1(cid: ContractId, update: DeployUpdateV1) -> ContractResult {
     // We add the contract to the list
     msg!("[DeployV1] Adding ContractID to deployed list");
-    let lock_db = db_lookup(cid, DEPLOY_CONTRACT_LOCK_TREE)?;
-    db_set(lock_db, &serialize(&update.contract_id), &serialize(&false))?;
+    let lock_db = wasm::db::db_lookup(cid, DEPLOY_CONTRACT_LOCK_TREE)?;
+    wasm::db::db_set(lock_db, &serialize(&update.contract_id), &serialize(&false))?;
 
     Ok(())
 }
