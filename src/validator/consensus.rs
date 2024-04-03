@@ -18,8 +18,11 @@
 
 use std::collections::BTreeSet;
 
-use darkfi_sdk::crypto::{MerkleTree, SecretKey};
-use darkfi_serial::{async_trait, serialize, SerialDecodable, SerialEncodable};
+use darkfi_sdk::{
+    crypto::{MerkleTree, SecretKey},
+    tx::TransactionHash,
+};
+use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 use log::{debug, info};
 use num_bigint::BigUint;
 use sled_overlay::database::SledDbOverlayState;
@@ -466,7 +469,7 @@ pub struct Fork {
     /// Fork proposal overlay diffs sequence
     pub diffs: Vec<SledDbOverlayState>,
     /// Valid pending transaction hashes
-    pub mempool: Vec<blake3::Hash>,
+    pub mempool: Vec<TransactionHash>,
     /// Current fork mining targets rank, cached for better performance
     pub targets_rank: BigUint,
     /// Current fork hashes rank, cached for better performance
@@ -475,8 +478,7 @@ pub struct Fork {
 
 impl Fork {
     pub async fn new(blockchain: Blockchain, module: PoWModule) -> Result<Self> {
-        let mempool =
-            blockchain.get_pending_txs()?.iter().map(|tx| blake3::hash(&serialize(tx))).collect();
+        let mempool = blockchain.get_pending_txs()?.iter().map(|tx| tx.hash()).collect();
         let overlay = BlockchainOverlay::new(&blockchain)?;
         // Retrieve last block difficulty to access current ranks
         let last_difficulty = blockchain.last_block_difficulty()?;
@@ -618,7 +620,7 @@ impl Fork {
             }
 
             // Push the tx hash into the unproposed transactions vector
-            unproposed_txs.push(*tx);
+            unproposed_txs.push(tx.clone());
 
             // Check limit
             if unproposed_txs.len() == TXS_CAP {
@@ -653,7 +655,7 @@ impl Fork {
         .await
         {
             match e {
-                crate::Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(erroneous_txs)) => {
+                Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(erroneous_txs)) => {
                     unproposed_txs.retain(|x| !erroneous_txs.contains(x))
                 }
                 _ => return Err(e),

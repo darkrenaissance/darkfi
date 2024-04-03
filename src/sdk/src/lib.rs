@@ -65,6 +65,28 @@ pub fn hex_from_iter<I: Iterator<Item = u8>>(iter: I) -> String {
     repr
 }
 
+/*
+/// Decode hex string into bytes
+pub fn decode_hex(hex: &str) -> Iterator<Item = u8> {
+    HexDecodeIter {
+        hex,
+        curr: 0
+    }
+}
+
+struct HexDecodeIter<'a> {
+    hex: &'a str,
+    curr: usize,
+}
+
+impl<'a> Iterator for HexDecodeIter<'a> {
+    type Item = u8;
+
+    fn next(&mut self) -> Option<Self::Item> {
+    }
+}
+*/
+
 pub trait AsHex {
     fn hex(&self) -> String;
 }

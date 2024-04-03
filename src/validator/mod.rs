@@ -19,7 +19,6 @@
 use std::sync::Arc;
 
 use darkfi_sdk::crypto::MerkleTree;
-use darkfi_serial::serialize_async;
 use log::{debug, error, info, warn};
 use num_bigint::BigUint;
 use smol::lock::RwLock;
@@ -131,7 +130,7 @@ impl Validator {
     /// The node retrieves a transaction, validates its state transition,
     /// and appends it to the pending txs store.
     pub async fn append_tx(&self, tx: &Transaction, write: bool) -> Result<()> {
-        let tx_hash = blake3::hash(&serialize_async(tx).await);
+        let tx_hash = tx.hash();
 
         // Check if we have already seen this tx
         let tx_in_txstore = self.blockchain.transactions.contains(&tx_hash)?;
@@ -170,7 +169,7 @@ impl Validator {
             .await
             {
                 Ok(_) => {}
-                Err(crate::Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(_))) => continue,
+                Err(Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(_))) => continue,
                 Err(e) => return Err(e),
             }
 
@@ -178,7 +177,7 @@ impl Validator {
 
             // Store transaction hash in forks' mempool
             if write {
-                fork.mempool.push(tx_hash);
+                fork.mempool.push(tx_hash.clone());
             }
         }
 
@@ -196,9 +195,7 @@ impl Validator {
         .await
         {
             Ok(_) => valid = true,
-            Err(crate::Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(etx))) => {
-                erroneous_txs = etx
-            }
+            Err(Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(etx))) => erroneous_txs = etx,
             Err(e) => return Err(e),
         }
 
@@ -235,7 +232,7 @@ impl Validator {
 
         let mut removed_txs = vec![];
         for tx in pending_txs {
-            let tx_hash = &blake3::hash(&serialize_async(&tx).await);
+            let tx_hash = tx.hash();
             let tx_vec = [tx.clone()];
             let mut valid = false;
 
@@ -262,12 +259,12 @@ impl Validator {
                         valid = true;
                         continue
                     }
-                    Err(crate::Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(_))) => {}
+                    Err(Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(_))) => {}
                     Err(e) => return Err(e),
                 }
 
                 // Remove erroneous transaction from forks' mempool
-                fork.mempool.retain(|x| x != tx_hash);
+                fork.mempool.retain(|x| *x != tx_hash);
             }
 
             // Verify transaction against canonical state
@@ -283,7 +280,7 @@ impl Validator {
             .await
             {
                 Ok(_) => valid = true,
-                Err(crate::Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(_))) => {}
+                Err(Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(_))) => {}
                 Err(e) => return Err(e),
             }
 

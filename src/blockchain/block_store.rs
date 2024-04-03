@@ -22,11 +22,12 @@ use darkfi_sdk::{
         MerkleTree, SecretKey,
     },
     pasta::{group::ff::FromUniformBytes, pallas},
+    tx::TransactionHash,
 };
 #[cfg(feature = "async-serial")]
 use darkfi_serial::async_trait;
 
-use darkfi_serial::{deserialize, serialize, Encodable, SerialDecodable, SerialEncodable};
+use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
 use num_bigint::BigUint;
 
 use crate::{tx::Transaction, util::time::Timestamp, Error, Result};
@@ -42,13 +43,13 @@ pub struct Block {
     /// Block header
     pub header: blake3::Hash,
     /// Trasaction hashes
-    pub txs: Vec<blake3::Hash>,
+    pub txs: Vec<TransactionHash>,
     /// Block producer signature
     pub signature: Signature,
 }
 
 impl Block {
-    pub fn new(header: blake3::Hash, txs: Vec<blake3::Hash>, signature: Signature) -> Self {
+    pub fn new(header: blake3::Hash, txs: Vec<TransactionHash>, signature: Signature) -> Self {
         Self { header, txs, signature }
     }
 
@@ -60,7 +61,7 @@ impl Block {
     /// Generate a `Block` from a `BlockInfo`
     pub fn from_block_info(block_info: &BlockInfo) -> Result<Self> {
         let header = block_info.header.hash()?;
-        let txs = block_info.txs.iter().map(|x| blake3::hash(&serialize(x))).collect();
+        let txs = block_info.txs.iter().map(|tx| tx.hash()).collect();
         let signature = block_info.signature;
         Ok(Self { header, txs, signature })
     }
@@ -107,13 +108,6 @@ impl BlockInfo {
     /// A block's hash is the same as the hash of its header
     pub fn hash(&self) -> Result<blake3::Hash> {
         self.header.hash()
-    }
-
-    /// Compute the block's full hash
-    pub fn full_hash(&self) -> Result<blake3::Hash> {
-        let mut hasher = blake3::Hasher::new();
-        self.encode(&mut hasher)?;
-        Ok(hasher.finalize())
     }
 
     /// Append a transaction to the block. Also adds it to the Merkle tree.

@@ -21,7 +21,8 @@ use std::sync::{Arc, Mutex};
 use log::debug;
 use sled::Transactional;
 
-use darkfi_serial::{deserialize, serialize, Decodable};
+use darkfi_sdk::tx::TransactionHash;
+use darkfi_serial::{deserialize, Decodable};
 
 use crate::{tx::Transaction, util::time::Timestamp, Error, Result};
 
@@ -120,8 +121,7 @@ impl Blockchain {
         };
 
         // Check if we have all transactions
-        let txs: Vec<blake3::Hash> =
-            block.txs.iter().map(|x| blake3::hash(&serialize(x))).collect();
+        let txs: Vec<TransactionHash> = block.txs.iter().map(|tx| tx.hash()).collect();
         if self.transactions.get(&txs, true).is_err() {
             return Ok(false)
         }
@@ -238,7 +238,7 @@ impl Blockchain {
     /// Insert a given slice of pending transactions into the blockchain database.
     /// On success, the function returns the transaction hashes in the same order
     /// as the input transactions.
-    pub fn add_pending_txs(&self, txs: &[Transaction]) -> Result<Vec<blake3::Hash>> {
+    pub fn add_pending_txs(&self, txs: &[Transaction]) -> Result<Vec<TransactionHash>> {
         let (txs_batch, txs_hashes) = self.transactions.insert_batch_pending(txs)?;
         let txs_order_batch = self.transactions.insert_batch_pending_order(&txs_hashes)?;
 
@@ -269,8 +269,7 @@ impl Blockchain {
 
     /// Remove a given slice of pending transactions from the blockchain database.
     pub fn remove_pending_txs(&self, txs: &[Transaction]) -> Result<()> {
-        let txs_hashes: Vec<blake3::Hash> =
-            txs.iter().map(|x| blake3::hash(&serialize(x))).collect();
+        let txs_hashes: Vec<TransactionHash> = txs.iter().map(|tx| tx.hash()).collect();
         let indexes = self.transactions.get_all_pending_order()?;
         // We could do indexes.iter().map(|x| txs_hashes.contains(x.1)).collect.map(|x| x.0).collect
         // but this is faster since we don't do the second iteration
@@ -416,8 +415,7 @@ impl BlockchainOverlay {
         };
 
         // Check if we have all transactions
-        let txs: Vec<blake3::Hash> =
-            block.txs.iter().map(|x| blake3::hash(&serialize(x))).collect();
+        let txs: Vec<TransactionHash> = block.txs.iter().map(|tx| tx.hash()).collect();
         if self.transactions.get(&txs, true).is_err() {
             return Ok(false)
         }
@@ -455,7 +453,7 @@ impl BlockchainOverlay {
     }
 
     /// Retrieve [`Block`]s by given hashes and return their transactions hashes.
-    pub fn get_blocks_txs_hashes(&self, hashes: &[blake3::Hash]) -> Result<Vec<blake3::Hash>> {
+    pub fn get_blocks_txs_hashes(&self, hashes: &[blake3::Hash]) -> Result<Vec<TransactionHash>> {
         let blocks = self.blocks.get(hashes, true)?;
         let mut ret = vec![];
         for block in blocks {

@@ -217,8 +217,7 @@ impl Wallet {
             let blockchain = &self.validator.blockchain;
             let txs = &blockchain.transactions;
             txs.insert(&[tx.clone()]).expect("insert tx");
-            txs.insert_location(&[blake3::Hash::from_bytes(tx.hash().0)], block_height)
-                .expect("insert loc");
+            txs.insert_location(&[tx.hash()], block_height).expect("insert loc");
         }
 
         Ok(())

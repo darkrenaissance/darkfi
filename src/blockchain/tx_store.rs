@@ -18,6 +18,7 @@
 
 use std::collections::HashMap;
 
+use darkfi_sdk::{tx::TransactionHash, AsHex};
 use darkfi_serial::{deserialize, serialize};
 
 use crate::{tx::Transaction, Error, Result};
@@ -63,28 +64,28 @@ impl TxStore {
     }
 
     /// Insert a slice of [`Transaction`] into the store's main tree.
-    pub fn insert(&self, transactions: &[Transaction]) -> Result<Vec<blake3::Hash>> {
+    pub fn insert(&self, transactions: &[Transaction]) -> Result<Vec<TransactionHash>> {
         let (batch, ret) = self.insert_batch(transactions)?;
         self.main.apply_batch(batch)?;
         Ok(ret)
     }
 
-    /// Insert a slice of [`blake3::Hash`] into the store's location tree.
-    pub fn insert_location(&self, txs_hashes: &[blake3::Hash], block_height: u64) -> Result<()> {
+    /// Insert a slice of [`TransactionHash`] into the store's location tree.
+    pub fn insert_location(&self, txs_hashes: &[TransactionHash], block_height: u64) -> Result<()> {
         let batch = self.insert_batch_location(txs_hashes, block_height)?;
         self.location.apply_batch(batch)?;
         Ok(())
     }
 
     /// Insert a slice of [`Transaction`] into the store's pending txs tree.
-    pub fn insert_pending(&self, transactions: &[Transaction]) -> Result<Vec<blake3::Hash>> {
+    pub fn insert_pending(&self, transactions: &[Transaction]) -> Result<Vec<TransactionHash>> {
         let (batch, ret) = self.insert_batch_pending(transactions)?;
         self.pending.apply_batch(batch)?;
         Ok(ret)
     }
 
-    /// Insert a slice of [`blake3::Hash`] into the store's pending txs order tree.
-    pub fn insert_pending_order(&self, txs_hashes: &[blake3::Hash]) -> Result<()> {
+    /// Insert a slice of [`TransactionHash`] into the store's pending txs order tree.
+    pub fn insert_pending_order(&self, txs_hashes: &[TransactionHash]) -> Result<()> {
         let batch = self.insert_batch_pending_order(txs_hashes)?;
         self.pending_order.apply_batch(batch)?;
         Ok(())
@@ -100,14 +101,13 @@ impl TxStore {
     pub fn insert_batch(
         &self,
         transactions: &[Transaction],
-    ) -> Result<(sled::Batch, Vec<blake3::Hash>)> {
+    ) -> Result<(sled::Batch, Vec<TransactionHash>)> {
         let mut ret = Vec::with_capacity(transactions.len());
         let mut batch = sled::Batch::default();
 
         for tx in transactions {
-            let serialized = serialize(tx);
-            let tx_hash = blake3::hash(&serialized);
-            batch.insert(tx_hash.as_bytes(), serialized);
+            let tx_hash = tx.hash();
+            batch.insert(tx_hash.inner(), serialize(tx));
             ret.push(tx_hash);
         }
 
@@ -120,14 +120,14 @@ impl TxStore {
     /// the slice, along with the provided block height
     pub fn insert_batch_location(
         &self,
-        txs_hashes: &[blake3::Hash],
+        txs_hashes: &[TransactionHash],
         block_height: u64,
     ) -> Result<sled::Batch> {
         let mut batch = sled::Batch::default();
 
         for (index, tx_hash) in txs_hashes.iter().enumerate() {
             let serialized = serialize(&(block_height, index as u64));
-            batch.insert(tx_hash.as_bytes(), serialized);
+            batch.insert(tx_hash.inner(), serialized);
         }
 
         Ok(batch)
@@ -143,14 +143,13 @@ impl TxStore {
     pub fn insert_batch_pending(
         &self,
         transactions: &[Transaction],
-    ) -> Result<(sled::Batch, Vec<blake3::Hash>)> {
+    ) -> Result<(sled::Batch, Vec<TransactionHash>)> {
         let mut ret = Vec::with_capacity(transactions.len());
         let mut batch = sled::Batch::default();
 
         for tx in transactions {
-            let serialized = serialize(tx);
-            let tx_hash = blake3::hash(&serialized);
-            batch.insert(tx_hash.as_bytes(), serialized);
+            let tx_hash = tx.hash();
+            batch.insert(tx_hash.inner(), serialize(tx));
             ret.push(tx_hash);
         }
 
@@ -159,7 +158,7 @@ impl TxStore {
 
     /// Generate the sled batch corresponding to an insert to the pending txs
     /// order tree, so caller can handle the write operation.
-    pub fn insert_batch_pending_order(&self, txs_hashes: &[blake3::Hash]) -> Result<sled::Batch> {
+    pub fn insert_batch_pending_order(&self, tx_hashes: &[TransactionHash]) -> Result<sled::Batch> {
         let mut batch = sled::Batch::default();
 
         let mut next_index = match self.pending_order.last()? {
@@ -171,8 +170,8 @@ impl TxStore {
             None => 0,
         };
 
-        for txs_hash in txs_hashes {
-            batch.insert(&next_index.to_be_bytes(), txs_hash.as_bytes());
+        for tx_hash in tx_hashes {
+            batch.insert(&next_index.to_be_bytes(), tx_hash.inner());
             next_index += 1;
         }
 
@@ -180,13 +179,13 @@ impl TxStore {
     }
 
     /// Check if the store's main tree contains a given transaction hash.
-    pub fn contains(&self, tx_hash: &blake3::Hash) -> Result<bool> {
-        Ok(self.main.contains_key(tx_hash.as_bytes())?)
+    pub fn contains(&self, tx_hash: &TransactionHash) -> Result<bool> {
+        Ok(self.main.contains_key(tx_hash.inner())?)
     }
 
     /// Check if the store's pending txs tree contains a given transaction hash.
-    pub fn contains_pending(&self, tx_hash: &blake3::Hash) -> Result<bool> {
-        Ok(self.pending.contains_key(tx_hash.as_bytes())?)
+    pub fn contains_pending(&self, tx_hash: &TransactionHash) -> Result<bool> {
+        Ok(self.pending.contains_key(tx_hash.inner())?)
     }
 
     /// Fetch given tx hashes from the store's main tree.
@@ -196,19 +195,19 @@ impl TxStore {
     /// case at least one tx was not found.
     pub fn get(
         &self,
-        tx_hashes: &[blake3::Hash],
+        tx_hashes: &[TransactionHash],
         strict: bool,
     ) -> Result<Vec<Option<Transaction>>> {
         let mut ret = Vec::with_capacity(tx_hashes.len());
 
         for tx_hash in tx_hashes {
-            if let Some(found) = self.main.get(tx_hash.as_bytes())? {
+            if let Some(found) = self.main.get(tx_hash.inner())? {
                 let tx = deserialize(&found)?;
                 ret.push(Some(tx));
                 continue
             }
             if strict {
-                let s = tx_hash.to_hex().as_str().to_string();
+                let s = tx_hash.inner().hex().as_str().to_string();
                 return Err(Error::TransactionNotFound(s))
             }
             ret.push(None);
@@ -224,19 +223,19 @@ impl TxStore {
     /// case at least one tx was not found.
     pub fn get_location(
         &self,
-        tx_hashes: &[blake3::Hash],
+        tx_hashes: &[TransactionHash],
         strict: bool,
     ) -> Result<Vec<Option<(u64, u64)>>> {
         let mut ret = Vec::with_capacity(tx_hashes.len());
 
         for tx_hash in tx_hashes {
-            if let Some(found) = self.location.get(tx_hash.as_bytes())? {
+            if let Some(found) = self.location.get(tx_hash.inner())? {
                 let location = deserialize(&found)?;
                 ret.push(Some(location));
                 continue
             }
             if strict {
-                let s = tx_hash.to_hex().as_str().to_string();
+                let s = tx_hash.inner().hex();
                 return Err(Error::TransactionNotFound(s))
             }
             ret.push(None);
@@ -252,19 +251,19 @@ impl TxStore {
     /// case at least one tx was not found.
     pub fn get_pending(
         &self,
-        tx_hashes: &[blake3::Hash],
+        tx_hashes: &[TransactionHash],
         strict: bool,
     ) -> Result<Vec<Option<Transaction>>> {
         let mut ret = Vec::with_capacity(tx_hashes.len());
 
         for tx_hash in tx_hashes {
-            if let Some(found) = self.pending.get(tx_hash.as_bytes())? {
+            if let Some(found) = self.pending.get(tx_hash.inner())? {
                 let tx = deserialize(&found)?;
                 ret.push(Some(tx));
                 continue
             }
             if strict {
-                let s = tx_hash.to_hex().as_str().to_string();
+                let s = tx_hash.inner().hex();
                 return Err(Error::TransactionNotFound(s))
             }
             ret.push(None);
@@ -276,7 +275,7 @@ impl TxStore {
     /// Retrieve all transactions from the store's main tree in the form of
     /// a tuple (`tx_hash`, `tx`).
     /// Be careful as this will try to load everything in memory.
-    pub fn get_all(&self) -> Result<Vec<(blake3::Hash, Transaction)>> {
+    pub fn get_all(&self) -> Result<Vec<(TransactionHash, Transaction)>> {
         let mut txs = vec![];
 
         for tx in self.main.iter() {
@@ -289,7 +288,7 @@ impl TxStore {
     /// Retrieve all transactions locations from the store's location tree in
     /// the form of a tuple (`tx_hash`, (`block_height`, `index`)).
     /// Be careful as this will try to load everything in memory.
-    pub fn get_all_location(&self) -> Result<Vec<(blake3::Hash, (u64, u64))>> {
+    pub fn get_all_location(&self) -> Result<Vec<(TransactionHash, (u64, u64))>> {
         let mut locations = vec![];
 
         for location in self.location.iter() {
@@ -303,7 +302,7 @@ impl TxStore {
     /// form of a HashMap with key the transaction hash and value the
     /// transaction itself.
     /// Be careful as this will try to load everything in memory.
-    pub fn get_all_pending(&self) -> Result<HashMap<blake3::Hash, Transaction>> {
+    pub fn get_all_pending(&self) -> Result<HashMap<TransactionHash, Transaction>> {
         let mut txs = HashMap::new();
 
         for tx in self.pending.iter() {
@@ -315,9 +314,9 @@ impl TxStore {
     }
 
     /// Retrieve all transactions from the store's pending txs order tree in
-    /// the form of a tuple (`u64`, `blake3::Hash`).
+    /// the form of a tuple (`u64`, `TransactionHash`).
     /// Be careful as this will try to load everything in memory.
-    pub fn get_all_pending_order(&self) -> Result<Vec<(u64, blake3::Hash)>> {
+    pub fn get_all_pending_order(&self) -> Result<Vec<(u64, TransactionHash)>> {
         let mut txs = vec![];
 
         for tx in self.pending_order.iter() {
@@ -337,8 +336,8 @@ impl TxStore {
         self.main.is_empty()
     }
 
-    /// Remove a slice of [`blake3::Hash`] from the store's pending txs tree.
-    pub fn remove_pending(&self, txs_hashes: &[blake3::Hash]) -> Result<()> {
+    /// Remove a slice of [`TransactionHash`] from the store's pending txs tree.
+    pub fn remove_pending(&self, txs_hashes: &[TransactionHash]) -> Result<()> {
         let batch = self.remove_batch_pending(txs_hashes);
         self.pending.apply_batch(batch)?;
         Ok(())
@@ -353,11 +352,11 @@ impl TxStore {
 
     /// Generate the sled batch corresponding to a remove from the store's pending
     /// txs tree, so caller can handle the write operation.
-    pub fn remove_batch_pending(&self, txs_hashes: &[blake3::Hash]) -> sled::Batch {
+    pub fn remove_batch_pending(&self, txs_hashes: &[TransactionHash]) -> sled::Batch {
         let mut batch = sled::Batch::default();
 
         for tx_hash in txs_hashes {
-            batch.remove(tx_hash.as_bytes());
+            batch.remove(tx_hash.inner());
         }
 
         batch
@@ -391,29 +390,28 @@ impl TxStoreOverlay {
     /// the key, while the value is the serialized [`Transaction`] itself.
     /// On success, the function returns the transaction hashes in the same
     /// order as the input transactions.
-    pub fn insert(&self, transactions: &[Transaction]) -> Result<Vec<blake3::Hash>> {
+    pub fn insert(&self, transactions: &[Transaction]) -> Result<Vec<TransactionHash>> {
         let mut ret = Vec::with_capacity(transactions.len());
         let mut lock = self.0.lock().unwrap();
 
         for tx in transactions {
-            let serialized = serialize(tx);
-            let tx_hash = blake3::hash(&serialized);
-            lock.insert(SLED_TX_TREE, tx_hash.as_bytes(), &serialized)?;
+            let tx_hash = tx.hash();
+            lock.insert(SLED_TX_TREE, tx_hash.inner(), &serialize(tx))?;
             ret.push(tx_hash);
         }
 
         Ok(ret)
     }
 
-    /// Insert a slice of [`blake3::Hash`] into the overlay's location tree.
+    /// Insert a slice of [`TransactionHash`] into the overlay's location tree.
     /// The location tuple is built using the index of each transaction hash
     /// in the slice, along with the provided block height
-    pub fn insert_location(&self, txs_hashes: &[blake3::Hash], block_height: u64) -> Result<()> {
+    pub fn insert_location(&self, txs_hashes: &[TransactionHash], block_height: u64) -> Result<()> {
         let mut lock = self.0.lock().unwrap();
 
         for (index, tx_hash) in txs_hashes.iter().enumerate() {
             let serialized = serialize(&(block_height, index as u64));
-            lock.insert(SLED_TX_LOCATION_TREE, tx_hash.as_bytes(), &serialized)?;
+            lock.insert(SLED_TX_LOCATION_TREE, tx_hash.inner(), &serialized)?;
         }
 
         Ok(())
@@ -426,20 +424,20 @@ impl TxStoreOverlay {
     /// case at least one tx was not found.
     pub fn get(
         &self,
-        tx_hashes: &[blake3::Hash],
+        tx_hashes: &[TransactionHash],
         strict: bool,
     ) -> Result<Vec<Option<Transaction>>> {
         let mut ret = Vec::with_capacity(tx_hashes.len());
         let lock = self.0.lock().unwrap();
 
         for tx_hash in tx_hashes {
-            if let Some(found) = lock.get(SLED_TX_TREE, tx_hash.as_bytes())? {
+            if let Some(found) = lock.get(SLED_TX_TREE, tx_hash.inner())? {
                 let tx = deserialize(&found)?;
                 ret.push(Some(tx));
                 continue
             }
             if strict {
-                let s = tx_hash.to_hex().as_str().to_string();
+                let s = tx_hash.inner().hex();
                 return Err(Error::TransactionNotFound(s))
             }
             ret.push(None);

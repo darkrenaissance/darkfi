@@ -1680,6 +1680,9 @@ impl Drk {
         };
 
         // TODO: get current height to calculate day
+        let hasher = PoseidonFp::new();
+        let store = MemoryStorageFp::new();
+        let money_null_smt = SmtMemoryFp::new(store, hasher.clone(), &EMPTY_NODES_FP);
 
         let call = DaoVoteCall {
             inputs,
@@ -1687,6 +1690,7 @@ impl Drk {
             current_day: 0,
             dao_keypair,
             proposal,
+            money_null_smt: &money_null_smt,
             dao: dao_info,
         };
 

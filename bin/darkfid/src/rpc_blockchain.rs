@@ -95,6 +95,9 @@ impl Darkfid {
         }
 
         let tx_hash = params[0].get::<String>().unwrap();
+        return JsonError::new(InvalidParams, None, id).into()
+        /*
+        // I'm fixing this rn (see next commit)
         let tx_hash = match blake3::Hash::from_hex(tx_hash) {
             Ok(v) => v,
             Err(_) => return JsonError::new(ParseError, None, id).into(),
@@ -114,6 +117,7 @@ impl Darkfid {
 
         let tx_enc = base64::encode(&serialize_async(tx).await);
         JsonResponse::new(JsonValue::String(tx_enc), id).into()
+        */
     }
 
     // RPCAPI:
