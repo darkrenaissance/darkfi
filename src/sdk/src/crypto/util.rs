@@ -107,10 +107,7 @@ pub trait FieldElemAsStr: PrimeField<Repr = [u8; 32]> {
         let mut bytes = decode_hex_arr(hex)?;
         bytes.reverse();
 
-        match Self::from_repr(bytes).into() {
-            Some(v) => Ok(v),
-            None => Err(ContractError::HexFmtErr),
-        }
+        Option::from(Self::from_repr(bytes)).ok_or(ContractError::HexFmtErr)
     }
 }
 

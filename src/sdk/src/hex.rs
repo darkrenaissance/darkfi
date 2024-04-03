@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::{ContractError, GenericResult};
+use crate::{util::Itertools, ContractError, GenericResult};
 
 /// Creates a hex formatted string of the data
 #[inline]
@@ -66,7 +66,7 @@ impl<'a> Iterator for HexDecodeIter<'a> {
 }
 
 pub fn decode_hex_arr<const N: usize>(hex: &str) -> GenericResult<[u8; N]> {
-    let decoded = decode_hex(hex).collect::<GenericResult<Vec<_>>>()?;
+    let decoded: Vec<_> = decode_hex(hex).try_collect()?;
     let bytes: [u8; N] = decoded.try_into().map_err(|_| ContractError::HexFmtErr)?;
     Ok(bytes)
 }

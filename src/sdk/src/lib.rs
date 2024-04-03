@@ -48,6 +48,9 @@ pub mod crypto;
 pub mod tx;
 pub use tx::ContractCall;
 
+/// Convenience utilities
+pub mod util;
+
 #[macro_use]
 /// WASM API functions
 pub mod wasm;
