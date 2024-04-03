@@ -16,7 +16,16 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-//! TODO: doc
+//! `RefineSession` manages two processes, the `GreylistRefinery`, which
+//! periodically pings entries on the greylist and updates them to whitelist
+//! if active, and `SelfHandshake`, which periodically pings our own external
+//! addresses to ensure they are active before broadcasting to the network.
+//!
+//! Both processes make use of a `RefineSession` method called
+//! `handshake_node()`, which uses a `Connector` to establish a `Channel` with
+//! a provided address, and then does a version exchange across the channel
+//! (`perform_handshake_protocols`). `handshake_node()` can either succeed,
+//! fail, or timeout.
 
 use std::{
     collections::HashMap,
@@ -67,6 +76,7 @@ impl RefineSession {
         self_
     }
 
+    /// Start the refinery and self handshake processes.
     pub(crate) async fn start(self: Arc<Self>) {
         debug!(target: "net::refine_session", "Starting greylist refinery process");
         self.refinery.clone().start().await;
@@ -75,6 +85,7 @@ impl RefineSession {
         self.self_handshake.clone().start().await;
     }
 
+    /// Stop the refinery and self handshake processes.
     pub(crate) async fn stop(&self) {
         debug!(target: "net::refine_session", "Stopping refinery process");
         self.refinery.clone().stop().await;
@@ -83,7 +94,10 @@ impl RefineSession {
         self.self_handshake.clone().stop().await;
     }
 
-    // TODO: doc and explain why it's public
+    /// Globally accessible function to perform a version exchange with a
+    /// given address.  Returns `true` if an address is accessible, false
+    /// otherwise.  Used by `GreylistRefinery`, `SelfHandshake`, and in
+    /// `Lilith`, which contains an implemenenation of a whitelist refinery.
     pub async fn handshake_node(self: Arc<Self>, addr: Url, p2p: P2pPtr) -> bool {
         let self_ = Arc::downgrade(&self);
         let connector = Connector::new(self.p2p().settings(), self_);
@@ -251,7 +265,8 @@ impl GreylistRefinery {
 
                     // Freeze the greylist in this state. Necessary since the greylist
                     // can be modified by `hosts::move_host()` or `hosts::store()`.
-                    let mut greylist = hosts.container.hostlists[HostColor::Grey as usize].write().await;
+                    let mut greylist =
+                        hosts.container.hostlists[HostColor::Grey as usize].write().await;
 
                     if !self.session().handshake_node(url.clone(), self.p2p().clone()).await {
                         greylist.remove(position);

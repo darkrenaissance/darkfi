@@ -220,7 +220,8 @@ impl HostState {
 
     // Try to change the state to Suspend. Only possible when we are
     // currently moving this host, since we suspend a host after failing
-    // to connect to it and then downgrading in move_host.
+    // to connect to it in `outbound_session::try_connect` and then downgrading
+    // in `hosts::move_host`.
     fn try_suspend(&self) -> Result<Self> {
         let start = self.to_string();
         let end = HostState::Suspend.to_string();
@@ -1034,18 +1035,6 @@ impl Hosts {
         false
     }
 
-    // TODO: doc
-    pub async fn is_connection_to_self(&self, url: &Url) -> bool {
-        let host_str = url.host_str().unwrap();
-        if self.settings.localnet {
-            // If on localhost, check whether this connection is to our own port.
-            self.settings.external_addrs.iter().any(|ext| url.port() == ext.port())
-        } else {
-            // Otherwise, check whether this connection is to our own external address.
-            self.settings.external_addrs.iter().any(|ext| host_str == ext.host_str().unwrap())
-        }
-    }
-
     /// Filter given addresses based on certain rulesets and validity. Strictly called only on
     /// the first time learning of a new peer.
     async fn filter_addresses(
@@ -1170,7 +1159,8 @@ impl Hosts {
         ret
     }
 
-    // TODO: doc
+    /// Method to fetch the last_seen field for a give address when we do
+    /// not know what hostlist it is on.
     pub async fn fetch_last_seen(&self, addr: &Url) -> Option<u64> {
         if self.container.contains(HostColor::Gold as usize, addr).await {
             self.container.get_last_seen(HostColor::Gold as usize, addr).await

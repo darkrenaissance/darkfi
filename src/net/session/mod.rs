@@ -40,6 +40,8 @@ pub mod refine_session;
 pub use refine_session::{RefineSession, RefineSessionPtr};
 
 /// Bitwise selectors for the `protocol_registry`
+// TODO: SESSION_ALL currently does not include SESSION_REFINE, which is
+// conceptually wrong.  Should we rename SESSION_ALL to SESSION_DEFAULT?
 pub type SessionBitFlag = u32;
 pub const SESSION_INBOUND: SessionBitFlag = 0b0001;
 pub const SESSION_OUTBOUND: SessionBitFlag = 0b0010;
