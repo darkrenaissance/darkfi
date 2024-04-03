@@ -19,12 +19,10 @@
 use darkfi_sdk::{
     crypto::{pasta_prelude::*, ContractId, PublicKey},
     dark_tree::DarkLeaf,
-    db::{db_contains_key, db_get, db_lookup, db_set},
     error::{ContractError, ContractResult},
     msg,
     pasta::pallas,
-    util::get_verifying_block_height,
-    ContractCall,
+    wasm, ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
@@ -58,8 +56,9 @@ pub(crate) fn dao_vote_get_metadata(
     // Commitment calculation for all votes
     let mut all_vote_commit = pallas::Point::identity();
 
-    let proposal_votes_db = db_lookup(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS)?;
-    let Some(data) = db_get(proposal_votes_db, &serialize(&params.proposal_bulla))? else {
+    let proposal_votes_db = wasm::db::db_lookup(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS)?;
+    let Some(data) = wasm::db::db_get(proposal_votes_db, &serialize(&params.proposal_bulla))?
+    else {
         msg!("[Dao::Vote] Error: Proposal doesn't exist: {:?}", params.proposal_bulla);
         return Err(DaoError::ProposalNonexistent.into())
     };
@@ -90,7 +89,7 @@ pub(crate) fn dao_vote_get_metadata(
         ));
     }
 
-    let current_day = blockwindow(get_verifying_block_height());
+    let current_day = blockwindow(wasm::util::get_verifying_block_height());
 
     let yes_vote_commit_coords = params.yes_vote_commit.to_affine().coordinates().unwrap();
     let all_vote_commit_coords = all_vote_commit.to_affine().coordinates().unwrap();
@@ -133,8 +132,9 @@ pub(crate) fn dao_vote_process_instruction(
     let params: DaoVoteParams = deserialize(&self_.data[1..])?;
 
     // Check proposal bulla exists
-    let proposal_votes_db = db_lookup(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS)?;
-    let Some(data) = db_get(proposal_votes_db, &serialize(&params.proposal_bulla))? else {
+    let proposal_votes_db = wasm::db::db_lookup(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS)?;
+    let Some(data) = wasm::db::db_get(proposal_votes_db, &serialize(&params.proposal_bulla))?
+    else {
         msg!("[Dao::Vote] Error: Proposal doesn't exist: {:?}", params.proposal_bulla);
         return Err(DaoError::ProposalNonexistent.into())
     };
@@ -143,7 +143,7 @@ pub(crate) fn dao_vote_process_instruction(
     let mut proposal_metadata: DaoProposalMetadata = deserialize(&data)?;
 
     // Check the Merkle root and nullifiers for the input coins are valid
-    let dao_vote_nullifier_db = db_lookup(cid, DAO_CONTRACT_DB_VOTE_NULLIFIERS)?;
+    let dao_vote_nullifier_db = wasm::db::db_lookup(cid, DAO_CONTRACT_DB_VOTE_NULLIFIERS)?;
     let mut vote_nullifiers = vec![];
 
     for input in &params.inputs {
@@ -152,7 +152,7 @@ pub(crate) fn dao_vote_process_instruction(
         let null_key = serialize(&(params.proposal_bulla, input.vote_nullifier));
 
         if vote_nullifiers.contains(&input.vote_nullifier) ||
-            db_contains_key(dao_vote_nullifier_db, &null_key)?
+            wasm::db::db_contains_key(dao_vote_nullifier_db, &null_key)?
         {
             msg!("[Dao::Vote] Error: Attempted double vote");
             return Err(DaoError::DoubleVote.into())
@@ -177,24 +177,24 @@ pub(crate) fn dao_vote_process_instruction(
 /// `process_update` function for `Dao::Vote`
 pub(crate) fn dao_vote_process_update(cid: ContractId, update: DaoVoteUpdate) -> ContractResult {
     // Grab all db handles we want to work on
-    let proposal_vote_db = db_lookup(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS)?;
+    let proposal_vote_db = wasm::db::db_lookup(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS)?;
 
     // Perform this code:
     //   total_yes_vote_commit += update.yes_vote_commit
     //   total_all_vote_commit += update.all_vote_commit
-    db_set(
+    wasm::db::db_set(
         proposal_vote_db,
         &serialize(&update.proposal_bulla),
         &serialize(&update.proposal_metadata),
     )?;
 
     // We are essentially doing: vote_nulls.append(update_nulls)
-    let dao_vote_nulls_db = db_lookup(cid, DAO_CONTRACT_DB_VOTE_NULLIFIERS)?;
+    let dao_vote_nulls_db = wasm::db::db_lookup(cid, DAO_CONTRACT_DB_VOTE_NULLIFIERS)?;
 
     for nullifier in update.vote_nullifiers {
         // Uniqueness is enforced for (proposal_bulla, nullifier)
         let key = serialize(&(update.proposal_bulla, nullifier));
-        db_set(dao_vote_nulls_db, &key, &[])?;
+        wasm::db::db_set(dao_vote_nulls_db, &key, &[])?;
     }
 
     Ok(())

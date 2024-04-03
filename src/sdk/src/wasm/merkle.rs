@@ -18,11 +18,11 @@
 
 use darkfi_serial::Encodable;
 
-use super::{
+use crate::{
     crypto::MerkleNode,
-    db::DbHandle,
     error::{ContractError, GenericResult},
     pasta::pallas,
+    wasm::db::DbHandle,
 };
 
 /// Add given elements into a Merkle tree.

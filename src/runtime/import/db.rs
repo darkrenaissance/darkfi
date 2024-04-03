@@ -18,7 +18,7 @@
 
 use std::io::Cursor;
 
-use darkfi_sdk::crypto::ContractId;
+use darkfi_sdk::{crypto::ContractId, wasm};
 use darkfi_serial::{deserialize, serialize, Decodable};
 use log::{debug, error, info};
 use wasmer::{FunctionEnvMut, WasmPtr};
@@ -448,7 +448,7 @@ pub(crate) fn db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
         return darkfi_sdk::error::DB_SET_FAILED
     }
 
-    darkfi_sdk::entrypoint::SUCCESS
+    wasm::entrypoint::SUCCESS
 }
 
 /// Remove a key from the database.
@@ -558,7 +558,7 @@ pub(crate) fn db_del(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
         return darkfi_sdk::error::DB_DEL_FAILED
     }
 
-    darkfi_sdk::entrypoint::SUCCESS
+    wasm::entrypoint::SUCCESS
 }
 
 /// Reads a value by key from the key-value store.
@@ -910,7 +910,7 @@ pub(crate) fn zkas_db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_le
                         "[WASM] [{}] zkas_db_set(): Existing zkas bincode is the same. Skipping.",
                         cid,
                     );
-                    return darkfi_sdk::entrypoint::SUCCESS
+                    return wasm::entrypoint::SUCCESS
                 }
             }
         }
@@ -977,5 +977,5 @@ pub(crate) fn zkas_db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_le
     // Subtract used gas. Here we count the bytes written into the db.
     env.subtract_gas(&mut store, (key.len() + value.len()) as u64);
 
-    darkfi_sdk::entrypoint::SUCCESS
+    wasm::entrypoint::SUCCESS
 }

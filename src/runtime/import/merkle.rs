@@ -20,7 +20,8 @@ use std::io::Cursor;
 
 use darkfi_sdk::{
     crypto::{MerkleNode, MerkleTree},
-    AsHex,
+    hex::AsHex,
+    wasm,
 };
 use darkfi_serial::{serialize, Decodable, Encodable, WriteExt};
 use log::{debug, error};
@@ -312,5 +313,5 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
     let spent_gas = return_data.len() + tree_data.len() + (new_roots.len() * 32);
     env.subtract_gas(&mut store, spent_gas as u64);
 
-    darkfi_sdk::entrypoint::SUCCESS
+    wasm::entrypoint::SUCCESS
 }

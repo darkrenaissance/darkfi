@@ -34,37 +34,37 @@ macro_rules! define_contract {
         /// # Safety
         #[no_mangle]
         pub unsafe extern "C" fn __initialize(input: *mut u8) -> i64 {
-            let (contract_id, instruction_data) = $crate::entrypoint::deserialize(input);
+            let (contract_id, instruction_data) = $crate::wasm::entrypoint::deserialize(input);
 
             match $init_func(contract_id, &instruction_data) {
-                Ok(()) => $crate::entrypoint::SUCCESS,
+                Ok(()) => $crate::wasm::entrypoint::SUCCESS,
                 Err(e) => e.into(),
             }
         }
         #[no_mangle]
         pub unsafe extern "C" fn __entrypoint(input: *mut u8) -> i64 {
-            let (contract_id, instruction_data) = $crate::entrypoint::deserialize(input);
+            let (contract_id, instruction_data) = $crate::wasm::entrypoint::deserialize(input);
 
             match $exec_func(contract_id, &instruction_data) {
-                Ok(()) => $crate::entrypoint::SUCCESS,
+                Ok(()) => $crate::wasm::entrypoint::SUCCESS,
                 Err(e) => e.into(),
             }
         }
         #[no_mangle]
         pub unsafe extern "C" fn __update(input: *mut u8) -> i64 {
-            let (contract_id, update_data) = $crate::entrypoint::deserialize(input);
+            let (contract_id, update_data) = $crate::wasm::entrypoint::deserialize(input);
 
             match $apply_func(contract_id, &update_data) {
-                Ok(()) => $crate::entrypoint::SUCCESS,
+                Ok(()) => $crate::wasm::entrypoint::SUCCESS,
                 Err(e) => e.into(),
             }
         }
         #[no_mangle]
         pub unsafe extern "C" fn __metadata(input: *mut u8) -> i64 {
-            let (contract_id, instruction_data) = $crate::entrypoint::deserialize(input);
+            let (contract_id, instruction_data) = $crate::wasm::entrypoint::deserialize(input);
 
             match $metadata_func(contract_id, &instruction_data) {
-                Ok(()) => $crate::entrypoint::SUCCESS,
+                Ok(()) => $crate::wasm::entrypoint::SUCCESS,
                 Err(e) => e.into(),
             }
         }

@@ -19,11 +19,10 @@
 use darkfi_sdk::{
     crypto::{pasta_prelude::*, ContractId, PublicKey},
     dark_tree::DarkLeaf,
-    db::{db_contains_key, db_lookup},
     error::{ContractError, ContractResult},
     msg,
     pasta::pallas,
-    ContractCall,
+    wasm, ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
@@ -85,10 +84,10 @@ pub(crate) fn money_auth_token_mint_process_instruction_v1(
     let params: MoneyAuthTokenMintParamsV1 = deserialize(&self_.data[1..])?;
 
     // We have to check if the token mint is frozen.
-    let token_freeze_db = db_lookup(cid, MONEY_CONTRACT_TOKEN_FREEZE_TREE)?;
+    let token_freeze_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_TOKEN_FREEZE_TREE)?;
 
     // Check that the mint is not frozen
-    if db_contains_key(token_freeze_db, &serialize(&params.token_id))? {
+    if wasm::db::db_contains_key(token_freeze_db, &serialize(&params.token_id))? {
         msg!("[MintV1] Error: Token mint for {} is frozen", params.token_id);
         return Err(MoneyError::TokenMintFrozen.into())
     }

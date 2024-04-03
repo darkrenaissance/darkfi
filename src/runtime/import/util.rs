@@ -18,6 +18,7 @@
 
 use std::io::Cursor;
 
+use darkfi_sdk::wasm;
 use darkfi_serial::Decodable;
 use log::{debug, error};
 use wasmer::{FunctionEnvMut, WasmPtr};
@@ -80,7 +81,7 @@ pub(crate) fn set_return_data(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, le
     }
     env.contract_return_data.set(Some(return_data));
 
-    darkfi_sdk::entrypoint::SUCCESS
+    wasm::entrypoint::SUCCESS
 }
 
 /// Appends a new object to the [`Env`] objects store.
@@ -183,7 +184,7 @@ pub(crate) fn get_object_bytes(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, i
         return darkfi_sdk::error::INTERNAL_ERROR
     };
 
-    darkfi_sdk::entrypoint::SUCCESS
+    wasm::entrypoint::SUCCESS
 }
 
 /// Returns the size (number of bytes) of an object in the object store

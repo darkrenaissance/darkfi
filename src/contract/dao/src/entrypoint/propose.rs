@@ -23,13 +23,11 @@ use darkfi_money_contract::{
 use darkfi_sdk::{
     crypto::{contract_id::MONEY_CONTRACT_ID, pasta_prelude::*, ContractId, MerkleNode, PublicKey},
     dark_tree::DarkLeaf,
-    db::{db_contains_key, db_get, db_lookup, db_set},
     error::{ContractError, ContractResult},
     msg,
     pasta::pallas,
     tx::TransactionHash,
-    util::{get_tx_location, get_verifying_block_height},
-    ContractCall,
+    wasm, ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
@@ -87,7 +85,7 @@ pub(crate) fn dao_propose_get_metadata(
     }
 
     // ANCHOR: dao-blockwindow-example-usage
-    let current_day = blockwindow(get_verifying_block_height());
+    let current_day = blockwindow(wasm::util::get_verifying_block_height());
     // ANCHOR_END: dao-blockwindow-example-usage
 
     let total_funds_coords = total_funds_commit.to_affine().coordinates().unwrap();
@@ -120,12 +118,14 @@ pub(crate) fn dao_propose_process_instruction(
     let self_ = &calls[call_idx as usize].data;
     let params: DaoProposeParams = deserialize(&self_.data[1..])?;
 
-    let coin_roots_db = db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
-    let null_roots_db = db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE)?;
+    let coin_roots_db = wasm::db::db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
+    let null_roots_db =
+        wasm::db::db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE)?;
 
     for input in &params.inputs {
         // Check the Merkle roots for the input coins are valid
-        let Some(coin_root_data) = db_get(coin_roots_db, &serialize(&input.merkle_coin_root))?
+        let Some(coin_root_data) =
+            wasm::db::db_get(coin_roots_db, &serialize(&input.merkle_coin_root))?
         else {
             msg!(
                 "[Dao::Propose] Error: Invalid input Merkle root: {:?}",
@@ -135,7 +135,9 @@ pub(crate) fn dao_propose_process_instruction(
         };
 
         // Check the SMT roots for the input nullifiers are valid
-        let Some(null_root_data) = db_get(null_roots_db, &serialize(&input.smt_null_root))? else {
+        let Some(null_root_data) =
+            wasm::db::db_get(null_roots_db, &serialize(&input.smt_null_root))?
+        else {
             msg!("[Dao::Propose] Error: Invalid input SMT root: {:?}", input.smt_null_root);
             return Err(DaoError::InvalidInputMerkleRoot.into())
         };
@@ -151,8 +153,8 @@ pub(crate) fn dao_propose_process_instruction(
         let tx_hash_data: [u8; 32] = coin_root_data[0..32].try_into().unwrap();
         let tx_hash = TransactionHash(tx_hash_data);
         // Get block_height where tx_hash was confirmed
-        let (tx_height, _) = get_tx_location(&tx_hash)?;
-        let current_height = get_verifying_block_height();
+        let (tx_height, _) = wasm::util::get_tx_location(&tx_hash)?;
+        let current_height = wasm::util::get_verifying_block_height();
         if current_height - tx_height > PROPOSAL_SNAPSHOT_CUTOFF_LIMIT {
             msg!("[Dao::Propose] Error: Snapshot is too old. Current height: {}, snapshot height: {}",
                  current_height, tx_height);
@@ -161,28 +163,28 @@ pub(crate) fn dao_propose_process_instruction(
     }
 
     // Is the DAO bulla generated in the ZK proof valid
-    let dao_roots_db = db_lookup(cid, DAO_CONTRACT_DB_DAO_MERKLE_ROOTS)?;
-    if !db_contains_key(dao_roots_db, &serialize(&params.dao_merkle_root))? {
+    let dao_roots_db = wasm::db::db_lookup(cid, DAO_CONTRACT_DB_DAO_MERKLE_ROOTS)?;
+    if !wasm::db::db_contains_key(dao_roots_db, &serialize(&params.dao_merkle_root))? {
         msg!("[Dao::Propose] Error: Invalid DAO Merkle root: {}", params.dao_merkle_root);
         return Err(DaoError::InvalidDaoMerkleRoot.into())
     }
 
     // Make sure the proposal doesn't already exist
-    let proposal_db = db_lookup(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS)?;
-    if db_contains_key(proposal_db, &serialize(&params.proposal_bulla))? {
+    let proposal_db = wasm::db::db_lookup(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS)?;
+    if wasm::db::db_contains_key(proposal_db, &serialize(&params.proposal_bulla))? {
         msg!("[Dao::Propose] Error: Proposal already exists: {:?}", params.proposal_bulla);
         return Err(DaoError::ProposalAlreadyExists.into())
     }
 
     // Snapshot the latest Money merkle tree
-    let money_info_db = db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_INFO_TREE)?;
-    let Some(data) = db_get(money_info_db, MONEY_CONTRACT_LATEST_COIN_ROOT)? else {
+    let money_info_db = wasm::db::db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_INFO_TREE)?;
+    let Some(data) = wasm::db::db_get(money_info_db, MONEY_CONTRACT_LATEST_COIN_ROOT)? else {
         msg!("[Dao::Propose] Error: Failed to fetch latest Money Merkle root");
         return Err(ContractError::Internal)
     };
     let snapshot_coins: MerkleNode = deserialize(&data)?;
 
-    let Some(data) = db_get(money_info_db, MONEY_CONTRACT_LATEST_NULLIFIER_ROOT)? else {
+    let Some(data) = wasm::db::db_get(money_info_db, MONEY_CONTRACT_LATEST_NULLIFIER_ROOT)? else {
         msg!("[Dao::Propose] Error: Failed to fetch latest Money SMT root");
         return Err(ContractError::Internal)
     };
@@ -209,7 +211,7 @@ pub(crate) fn dao_propose_process_update(
     update: DaoProposeUpdate,
 ) -> ContractResult {
     // Grab all db handles we want to work on
-    let proposal_vote_db = db_lookup(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS)?;
+    let proposal_vote_db = wasm::db::db_lookup(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS)?;
 
     // Build the proposal metadata
     let proposal_metadata = DaoProposalMetadata {
@@ -219,7 +221,11 @@ pub(crate) fn dao_propose_process_update(
     };
 
     // Set the new proposal in the db
-    db_set(proposal_vote_db, &serialize(&update.proposal_bulla), &serialize(&proposal_metadata))?;
+    wasm::db::db_set(
+        proposal_vote_db,
+        &serialize(&update.proposal_bulla),
+        &serialize(&proposal_metadata),
+    )?;
 
     Ok(())
 }

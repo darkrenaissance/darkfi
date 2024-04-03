@@ -19,12 +19,10 @@
 use darkfi_sdk::{
     crypto::{ContractId, FuncRef, MerkleNode, PublicKey},
     dark_tree::DarkLeaf,
-    db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
-    merkle::{merkle_add, sparse_merkle_insert_batch},
     msg,
     pasta::pallas,
-    ContractCall,
+    wasm, ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
@@ -83,10 +81,10 @@ pub(crate) fn money_token_mint_process_instruction_v1(
 
     // We have to check if the token mint is frozen, and if by some chance
     // the minted coin has existed already.
-    let coins_db = db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
+    let coins_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
 
     // Check that the coin from the output hasn't existed before
-    if db_contains_key(coins_db, &serialize(&params.coin))? {
+    if wasm::db::db_contains_key(coins_db, &serialize(&params.coin))? {
         msg!("[MintV1] Error: Duplicate coin in output");
         return Err(MoneyError::DuplicateCoin.into())
     }
@@ -106,15 +104,15 @@ pub(crate) fn money_token_mint_process_update_v1(
     update: MoneyTokenMintUpdateV1,
 ) -> ContractResult {
     // Grab all db handles we want to work on
-    let info_db = db_lookup(cid, MONEY_CONTRACT_INFO_TREE)?;
-    let coins_db = db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
-    let nullifiers_db = db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
-    let coin_roots_db = db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
-    let nullifier_roots_db = db_lookup(cid, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE)?;
+    let info_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_INFO_TREE)?;
+    let coins_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
+    let nullifiers_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
+    let coin_roots_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
+    let nullifier_roots_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE)?;
 
     // This will just make a snapshot to match the coins one
     msg!("[MintV1] Updating nullifiers snapshot");
-    sparse_merkle_insert_batch(
+    wasm::merkle::sparse_merkle_insert_batch(
         info_db,
         nullifiers_db,
         nullifier_roots_db,
@@ -123,11 +121,11 @@ pub(crate) fn money_token_mint_process_update_v1(
     )?;
 
     msg!("[MintV1] Adding new coin to the set");
-    db_set(coins_db, &serialize(&update.coin), &[])?;
+    wasm::db::db_set(coins_db, &serialize(&update.coin), &[])?;
 
     msg!("[MintV1] Adding new coin to the Merkle tree");
     let coins = vec![MerkleNode::from(update.coin.inner())];
-    merkle_add(
+    wasm::merkle::merkle_add(
         info_db,
         coin_roots_db,
         MONEY_CONTRACT_LATEST_COIN_ROOT,

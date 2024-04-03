@@ -19,11 +19,10 @@
 use darkfi_sdk::{
     crypto::{pasta_prelude::*, ContractId, PublicKey},
     dark_tree::DarkLeaf,
-    db::{db_del, db_get, db_lookup},
     error::{ContractError, ContractResult},
     msg,
     pasta::pallas,
-    ContractCall,
+    wasm, ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
@@ -115,8 +114,8 @@ pub(crate) fn dao_exec_process_instruction(
     ///////////////////////////////////////////////////
 
     // Get the ProposalVote from DAO state
-    let proposal_db = db_lookup(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS)?;
-    let Some(data) = db_get(proposal_db, &serialize(&params.proposal_bulla))? else {
+    let proposal_db = wasm::db::db_lookup(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS)?;
+    let Some(data) = wasm::db::db_get(proposal_db, &serialize(&params.proposal_bulla))? else {
         msg!("[Dao::Exec] Error: Proposal {:?} not found", params.proposal_bulla);
         return Err(DaoError::ProposalNonexistent.into())
     };
@@ -140,8 +139,8 @@ pub(crate) fn dao_exec_process_instruction(
 /// `process_update` function for `Dao::Exec`
 pub(crate) fn dao_exec_process_update(cid: ContractId, update: DaoExecUpdate) -> ContractResult {
     // Remove proposal from db
-    let proposal_vote_db = db_lookup(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS)?;
-    db_del(proposal_vote_db, &serialize(&update.proposal_bulla))?;
+    let proposal_vote_db = wasm::db::db_lookup(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS)?;
+    wasm::db::db_del(proposal_vote_db, &serialize(&update.proposal_bulla))?;
 
     Ok(())
 }

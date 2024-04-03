@@ -27,12 +27,10 @@ use darkfi_sdk::{
         ContractId, MerkleNode, PublicKey,
     },
     dark_tree::DarkLeaf,
-    db::{db_contains_key, db_get, db_lookup, db_set},
     error::{ContractError, ContractResult},
-    merkle::{merkle_add, sparse_merkle_insert_batch},
     msg,
     pasta::pallas,
-    ContractCall,
+    wasm, ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
@@ -110,10 +108,10 @@ pub(crate) fn money_fee_process_instruction_v1(
 
     // Access the necessary databases where there is information to
     // validate this state transition.
-    let info_db = db_lookup(cid, MONEY_CONTRACT_INFO_TREE)?;
-    let coins_db = db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
-    let nullifiers_db = db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
-    let coin_roots_db = db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
+    let info_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_INFO_TREE)?;
+    let coins_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
+    let nullifiers_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
+    let coin_roots_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
 
     // Fees can only be paid using the native token, so we'll compare
     // the token commitments with this one:
@@ -135,7 +133,7 @@ pub(crate) fn money_fee_process_instruction_v1(
 
     // The Merkle root is used to know whether this is a coin that
     // existed in a previous state.
-    if !db_contains_key(coin_roots_db, &serialize(&params.input.merkle_root))? {
+    if !wasm::db::db_contains_key(coin_roots_db, &serialize(&params.input.merkle_root))? {
         msg!("[FeeV1] Error: Input Merkle root not found in previous state");
         return Err(MoneyError::CoinMerkleRootNotFound.into())
     }
@@ -152,7 +150,7 @@ pub(crate) fn money_fee_process_instruction_v1(
     }
 
     // The new coin should not exist
-    if db_contains_key(coins_db, &serialize(&params.output.coin))? {
+    if wasm::db::db_contains_key(coins_db, &serialize(&params.output.coin))? {
         msg!("[FeeV1] Error: Duplicate coin found");
         return Err(MoneyError::DuplicateCoin.into())
     }
@@ -181,7 +179,7 @@ pub(crate) fn money_fee_process_instruction_v1(
 
     // Accumulate the paid fee
     let mut paid_fee: u64 =
-        deserialize(&db_get(info_db, MONEY_CONTRACT_TOTAL_FEES_PAID)?.unwrap())?;
+        deserialize(&wasm::db::db_get(info_db, MONEY_CONTRACT_TOTAL_FEES_PAID)?.unwrap())?;
     paid_fee += fee;
 
     // At this point the state transition has passed, so we create a state update.
@@ -203,15 +201,15 @@ pub(crate) fn money_fee_process_update_v1(
     update: MoneyFeeUpdateV1,
 ) -> ContractResult {
     // Grab all necessary db handles for where we want to write
-    let info_db = db_lookup(cid, MONEY_CONTRACT_INFO_TREE)?;
-    let coins_db = db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
-    let nullifiers_db = db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
-    let coin_roots_db = db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
-    let nullifier_roots_db = db_lookup(cid, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE)?;
+    let info_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_INFO_TREE)?;
+    let coins_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
+    let nullifiers_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
+    let coin_roots_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
+    let nullifier_roots_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE)?;
 
-    db_set(info_db, MONEY_CONTRACT_TOTAL_FEES_PAID, &serialize(&update.fee))?;
+    wasm::db::db_set(info_db, MONEY_CONTRACT_TOTAL_FEES_PAID, &serialize(&update.fee))?;
 
-    sparse_merkle_insert_batch(
+    wasm::merkle::sparse_merkle_insert_batch(
         info_db,
         nullifiers_db,
         nullifier_roots_db,
@@ -219,9 +217,9 @@ pub(crate) fn money_fee_process_update_v1(
         &[update.nullifier.inner()],
     )?;
 
-    db_set(coins_db, &serialize(&update.coin), &[])?;
+    wasm::db::db_set(coins_db, &serialize(&update.coin), &[])?;
 
-    merkle_add(
+    wasm::merkle::merkle_add(
         info_db,
         coin_roots_db,
         MONEY_CONTRACT_LATEST_COIN_ROOT,

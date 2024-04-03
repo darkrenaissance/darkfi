@@ -26,12 +26,10 @@ use darkfi_sdk::{
         ContractId, FuncId, FuncRef, MerkleNode, PublicKey,
     },
     dark_tree::DarkLeaf,
-    db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
-    merkle::{merkle_add, sparse_merkle_insert_batch},
     msg,
     pasta::pallas,
-    ContractCall,
+    wasm, ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
@@ -137,9 +135,9 @@ pub(crate) fn money_transfer_process_instruction_v1(
 
     // Access the necessary databases where there is information to
     // validate this state transition.
-    let coins_db = db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
-    let nullifiers_db = db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
-    let coin_roots_db = db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
+    let coins_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
+    let nullifiers_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
+    let coin_roots_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
 
     // Accumulator for the value commitments. We add inputs to it, and subtract
     // outputs from it. For the commitments to be valid, the accumulator must
@@ -162,7 +160,7 @@ pub(crate) fn money_transfer_process_instruction_v1(
     for (i, input) in params.inputs.iter().enumerate() {
         // The Merkle root is used to know whether this is a coin that
         // existed in a previous state.
-        if !db_contains_key(coin_roots_db, &serialize(&input.merkle_root))? {
+        if !wasm::db::db_contains_key(coin_roots_db, &serialize(&input.merkle_root))? {
             msg!("[TransferV1] Error: Merkle root not found in previous state (input {})", i);
             return Err(MoneyError::TransferMerkleRootNotFound.into())
         }
@@ -185,7 +183,8 @@ pub(crate) fn money_transfer_process_instruction_v1(
     let mut new_coins = Vec::with_capacity(params.outputs.len());
     msg!("[TransferV1] Iterating over anonymous outputs");
     for (i, output) in params.outputs.iter().enumerate() {
-        if new_coins.contains(&output.coin) || db_contains_key(coins_db, &serialize(&output.coin))?
+        if new_coins.contains(&output.coin) ||
+            wasm::db::db_contains_key(coins_db, &serialize(&output.coin))?
         {
             msg!("[TransferV1] Error: Duplicate coin found in output {}", i);
             return Err(MoneyError::DuplicateCoin.into())
@@ -232,14 +231,14 @@ pub(crate) fn money_transfer_process_update_v1(
     update: MoneyTransferUpdateV1,
 ) -> ContractResult {
     // Grab all necessary db handles for where we want to write
-    let info_db = db_lookup(cid, MONEY_CONTRACT_INFO_TREE)?;
-    let coins_db = db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
-    let nullifiers_db = db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
-    let coin_roots_db = db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
-    let nullifier_roots_db = db_lookup(cid, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE)?;
+    let info_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_INFO_TREE)?;
+    let coins_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
+    let nullifiers_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
+    let coin_roots_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
+    let nullifier_roots_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE)?;
 
     msg!("[TransferV1] Adding new nullifiers to the set");
-    sparse_merkle_insert_batch(
+    wasm::merkle::sparse_merkle_insert_batch(
         info_db,
         nullifiers_db,
         nullifier_roots_db,
@@ -249,12 +248,12 @@ pub(crate) fn money_transfer_process_update_v1(
 
     msg!("[TransferV1] Adding new coins to the set");
     for coin in &update.coins {
-        db_set(coins_db, &serialize(coin), &[])?;
+        wasm::db::db_set(coins_db, &serialize(coin), &[])?;
     }
 
     msg!("[TransferV1] Adding new coins to the Merkle tree");
     let coins: Vec<_> = update.coins.iter().map(|x| MerkleNode::from(x.inner())).collect();
-    merkle_add(
+    wasm::merkle::merkle_add(
         info_db,
         coin_roots_db,
         MONEY_CONTRACT_LATEST_COIN_ROOT,

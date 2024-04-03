@@ -18,9 +18,12 @@
 
 use std::io::Cursor;
 
-use darkfi_sdk::crypto::{
-    pasta_prelude::*,
-    smt::{PoseidonFp, SparseMerkleTree, StorageAdapter, EMPTY_NODES_FP, SMT_FP_DEPTH},
+use darkfi_sdk::{
+    crypto::{
+        pasta_prelude::*,
+        smt::{PoseidonFp, SparseMerkleTree, StorageAdapter, EMPTY_NODES_FP, SMT_FP_DEPTH},
+    },
+    wasm,
 };
 use darkfi_serial::{serialize, Decodable, Encodable};
 use halo2_proofs::pasta::pallas;
@@ -281,5 +284,5 @@ pub(crate) fn sparse_merkle_insert_batch(
     let spent_gas = leaves_len * 32;
     env.subtract_gas(&mut store, spent_gas as u64);
 
-    darkfi_sdk::entrypoint::SUCCESS
+    wasm::entrypoint::SUCCESS
 }

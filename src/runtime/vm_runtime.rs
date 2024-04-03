@@ -21,7 +21,7 @@ use std::{
     sync::Arc,
 };
 
-use darkfi_sdk::{crypto::ContractId, entrypoint, tx::TransactionHash, AsHex};
+use darkfi_sdk::{crypto::ContractId, tx::TransactionHash, wasm, AsHex};
 use darkfi_serial::serialize;
 use log::{debug, error, info};
 use wasmer::{
@@ -405,7 +405,7 @@ impl Runtime {
                 // Return a success value if there is no return value from
                 // the contract.
                 debug!(target: "runtime::vm_runtime", "Contract has no return value (expected)");
-                entrypoint::SUCCESS
+                wasm::entrypoint::SUCCESS
             }
             _ => {
                 match ret[0] {
@@ -424,7 +424,7 @@ impl Runtime {
         // corresponds to a successful contract call; in this case, we return the contract's
         // result data. Otherwise, map the integer return value to a [`ContractError`].
         match retval {
-            entrypoint::SUCCESS => Ok(retdata),
+            wasm::entrypoint::SUCCESS => Ok(retdata),
             _ => {
                 let err = darkfi_sdk::error::ContractError::from(retval);
                 error!(target: "runtime::vm_runtime", "[WASM] Contract returned: {:?}", err);

@@ -26,11 +26,10 @@ use darkfi_sdk::{
         ContractId,
     },
     dark_tree::DarkLeaf,
-    db::{db_contains_key, db_lookup},
     error::{ContractError, ContractResult},
     msg,
     pasta::pallas,
-    ContractCall,
+    wasm, ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
@@ -78,9 +77,9 @@ pub(crate) fn money_otcswap_process_instruction_v1(
     }
 
     // Grab the db handles we'll be using here
-    let coins_db = db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
-    let nullifiers_db = db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
-    let coin_roots_db = db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
+    let coins_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
+    let nullifiers_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
+    let coin_roots_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
 
     // We expect two new nullifiers and two new coins
     let mut new_nullifiers = Vec::with_capacity(2);
@@ -126,7 +125,7 @@ pub(crate) fn money_otcswap_process_instruction_v1(
 
         // The Merkle root is used to know whether this coin
         // has existed in a previous state.
-        if !db_contains_key(coin_roots_db, &serialize(&input.merkle_root))? {
+        if !wasm::db::db_contains_key(coin_roots_db, &serialize(&input.merkle_root))? {
             msg!("[OtcSwapV1] Error: Merkle root not found in previous state (input {})", i);
             return Err(MoneyError::SwapMerkleRootNotFound.into())
         }
@@ -144,7 +143,8 @@ pub(crate) fn money_otcswap_process_instruction_v1(
 
     // Newly created coins for this call are in the outputs
     for (i, output) in params.outputs.iter().enumerate() {
-        if new_coins.contains(&output.coin) || db_contains_key(coins_db, &serialize(&output.coin))?
+        if new_coins.contains(&output.coin) ||
+            wasm::db::db_contains_key(coins_db, &serialize(&output.coin))?
         {
             msg!("[OtcSwapV1] Error: Duplicate coin found in output {}", i);
             return Err(MoneyError::DuplicateCoin.into())

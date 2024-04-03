@@ -19,7 +19,7 @@
 use darkfi_serial::{Decodable, Encodable};
 use std::io::Cursor;
 
-use super::{
+use crate::{
     error::{ContractError, GenericResult},
     tx::TransactionHash,
 };

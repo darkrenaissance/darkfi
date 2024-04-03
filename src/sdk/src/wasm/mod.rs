@@ -16,38 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-pub use bridgetree;
-pub use num_bigint;
-pub use num_traits;
-pub use pasta_curves as pasta;
+/// Database functions
+pub mod db;
 
-/// Blockchain structures
-pub mod blockchain;
+/// Entrypoint used for the wasm binaries
+pub mod entrypoint;
 
-/// DarkTree structures
-pub mod dark_tree;
+/// Merkle
+pub mod merkle;
 
-/// Contract deployment utilities
-pub mod deploy;
-
-/// Error handling
-pub mod error;
-pub use error::{ContractError, GenericResult};
-
-/// Hex encoding/decoding from bytes
-pub mod hex;
-pub use hex::AsHex;
-
-/// Logging infrastructure
-pub mod log;
-
-/// Crypto-related definitions
-pub mod crypto;
-
-/// Transaction structure
-pub mod tx;
-pub use tx::ContractCall;
-
-#[macro_use]
-/// WASM API functions
-pub mod wasm;
+/// Utility functions
+pub mod util;

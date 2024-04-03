@@ -21,9 +21,9 @@ use num_bigint::BigUint;
 use super::{PoseidonFp, SparseMerkleTree, StorageAdapter, SMT_FP_DEPTH};
 use crate::{
     crypto::pasta_prelude::*,
-    db::{db_get, db_set, DbHandle},
     msg,
     pasta::pallas,
+    wasm::db::{db_get, db_set, DbHandle},
 };
 
 pub type SmtWasmFp = SparseMerkleTree<
