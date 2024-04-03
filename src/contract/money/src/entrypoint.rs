@@ -125,7 +125,7 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
 
     let tx_hash = wasm::util::get_tx_hash()?;
     // The max outputs for a tx in BTC is 2501
-    let call_idx = wasm::util::get_call_index() as u16;
+    let call_idx = wasm::util::get_call_index()? as u16;
     let mut roots_value_data = Vec::with_capacity(32 + 2);
     tx_hash.encode(&mut roots_value_data)?;
     call_idx.encode(&mut roots_value_data)?;
@@ -209,7 +209,7 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
 /// for verifying signatures and zk proofs. The payload given here are all the
 /// contract calls in the transaction.
 fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
-    let call_idx = wasm::util::get_call_index();
+    let call_idx = wasm::util::get_call_index()?;
     let calls: Vec<DarkLeaf<ContractCall>> = deserialize(ix)?;
     let self_ = &calls[call_idx as usize].data;
     let func = MoneyFunction::try_from(self_.data[0])?;
@@ -240,7 +240,7 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
 /// if everything is successful. This step should happen **after** the host
 /// has successfully verified the metadata from `get_metadata()`.
 fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
-    let call_idx = wasm::util::get_call_index();
+    let call_idx = wasm::util::get_call_index()?;
     let calls: Vec<DarkLeaf<ContractCall>> = deserialize(ix)?;
     let self_ = &calls[call_idx as usize].data;
     let func = MoneyFunction::try_from(self_.data[0])?;

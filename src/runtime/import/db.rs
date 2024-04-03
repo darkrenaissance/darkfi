@@ -51,6 +51,8 @@ impl DbHandle {
 ///
 /// This function should **only** be allowed in `ContractSection::Deploy`, as that
 /// is called when a contract is being (re)deployed and databases have to be created.
+///
+/// Permissions: deploy
 pub(crate) fn db_init(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i64 {
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = env.contract_id;
@@ -198,6 +200,8 @@ pub(crate) fn db_init(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u
 /// Otherwise, returns an error value.
 ///
 /// This function can be called from any [`ContractSection`].
+///
+/// Permissions: deploy, metadata, exec, update
 pub(crate) fn db_lookup(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i64 {
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = env.contract_id;
@@ -207,8 +211,8 @@ pub(crate) fn db_lookup(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len:
         env,
         &[
             ContractSection::Deploy,
-            ContractSection::Exec,
             ContractSection::Metadata,
+            ContractSection::Exec,
             ContractSection::Update,
         ],
     ) {
@@ -325,6 +329,8 @@ pub(crate) fn db_lookup(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len:
 ///
 /// This function can be called only from the Deploy or Update [`ContractSection`].
 /// Returns `SUCCESS` on success, otherwise returns an error value.
+///
+/// Permissions: deploy, update
 pub(crate) fn db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i64 {
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = env.contract_id;
@@ -455,6 +461,8 @@ pub(crate) fn db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
 ///
 /// This function can be called only from the Deploy or Update [`ContractSection`].
 /// Returns `SUCCESS` on success, otherwise returns an error value.
+///
+/// Permissions: deploy, update
 pub(crate) fn db_del(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i64 {
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = env.contract_id;
@@ -567,12 +575,14 @@ pub(crate) fn db_del(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
 ///
 /// On success, returns the length of the `objects` Vector in the environment.
 /// Otherwise, returns an error code.
+///
+/// Permissions: deploy, metadata, exec
 pub(crate) fn db_get(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i64 {
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = env.contract_id;
 
     if let Err(e) =
-        acl_allow(env, &[ContractSection::Deploy, ContractSection::Exec, ContractSection::Metadata])
+        acl_allow(env, &[ContractSection::Deploy, ContractSection::Metadata, ContractSection::Exec])
     {
         error!(
             target: "runtime::db::db_get",
@@ -702,12 +712,14 @@ pub(crate) fn db_get(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u3
 /// Returns `1` if the key is found.
 /// Returns `0` if the key is not found and there are no errors.
 /// Otherwise, returns an error code.
+///
+/// Permissions: deploy, metadata, exec
 pub(crate) fn db_contains_key(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i64 {
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = env.contract_id;
 
     if let Err(e) =
-        acl_allow(env, &[ContractSection::Deploy, ContractSection::Exec, ContractSection::Metadata])
+        acl_allow(env, &[ContractSection::Deploy, ContractSection::Metadata, ContractSection::Exec])
     {
         error!(
             target: "runtime::db::db_contains_key",
@@ -808,6 +820,8 @@ pub(crate) fn db_contains_key(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, pt
 ///
 /// This function can only be called from the Deploy [`ContractSection`].
 /// Returns `SUCCESS` on success, otherwise returns an error code.
+///
+/// Permissions: deploy
 pub(crate) fn zkas_db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i64 {
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = env.contract_id;

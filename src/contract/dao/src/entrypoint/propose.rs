@@ -85,7 +85,7 @@ pub(crate) fn dao_propose_get_metadata(
     }
 
     // ANCHOR: dao-blockwindow-example-usage
-    let current_day = blockwindow(wasm::util::get_verifying_block_height());
+    let current_day = blockwindow(wasm::util::get_verifying_block_height()?);
     // ANCHOR_END: dao-blockwindow-example-usage
 
     let total_funds_coords = total_funds_commit.to_affine().coordinates().unwrap();
@@ -154,8 +154,8 @@ pub(crate) fn dao_propose_process_instruction(
         let tx_hash = TransactionHash(tx_hash_data);
         // Get block_height where tx_hash was confirmed
         let (tx_height, _) = wasm::util::get_tx_location(&tx_hash)?;
-        let current_height = wasm::util::get_verifying_block_height();
-        if current_height - tx_height > PROPOSAL_SNAPSHOT_CUTOFF_LIMIT {
+        let current_height = wasm::util::get_verifying_block_height()?;
+        if current_height - tx_height as u32 > PROPOSAL_SNAPSHOT_CUTOFF_LIMIT {
             msg!("[Dao::Propose] Error: Snapshot is too old. Current height: {}, snapshot height: {}",
                  current_height, tx_height);
             return Err(DaoError::SnapshotTooOld.into())

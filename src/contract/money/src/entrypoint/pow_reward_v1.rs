@@ -81,7 +81,7 @@ pub(crate) fn money_pow_reward_process_instruction_v1(
     let params: MoneyPoWRewardParamsV1 = deserialize(&self_.data[1..])?;
 
     // Verify this contract call is not verified against genesis block
-    let verifying_block_height = wasm::util::get_verifying_block_height();
+    let verifying_block_height = wasm::util::get_verifying_block_height()?;
     if verifying_block_height == 0 {
         msg!("[PoWRewardV1] Error: Call is executed for genesis block");
         return Err(MoneyError::PoWRewardCallOnGenesisBlock.into())
@@ -93,7 +93,7 @@ pub(crate) fn money_pow_reward_process_instruction_v1(
         return Err(MoneyError::PoWRewardRetrieveLastBlockHeightError.into())
     };
     let last_block_height: u64 = deserialize(&last_block_height)?;
-    if verifying_block_height != last_block_height + 1 {
+    if verifying_block_height != last_block_height as u32 + 1 {
         msg!(
             "[PoWRewardV1] Error: Call is executed for block height {}, not next one: {}",
             verifying_block_height,
@@ -109,7 +109,7 @@ pub(crate) fn money_pow_reward_process_instruction_v1(
     }
 
     // Verify reward value matches the expected one for this block height
-    let expected_reward = expected_reward(verifying_block_height);
+    let expected_reward = expected_reward(verifying_block_height as u64);
     if params.input.value != expected_reward {
         msg!(
             "[PoWRewardV1] Error: Reward value({}) is not the block height({}) expected one: {}",

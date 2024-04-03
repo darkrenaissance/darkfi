@@ -55,6 +55,8 @@ pub(crate) fn drk_log(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) 
 ///
 /// Returns `SUCCESS` on success, otherwise returns an error code corresponding
 /// to a [`ContractError`].
+///
+/// Permissions: metadata, exec
 pub(crate) fn set_return_data(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i64 {
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = &env.contract_id;
@@ -89,9 +91,20 @@ pub(crate) fn set_return_data(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, le
 ///
 /// Returns an index corresponding to the new object's index in the objects
 /// store. (This index is equal to the last index in the store.)
+///
+/// Permissions:
 pub(crate) fn put_object_bytes(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i64 {
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = env.contract_id;
+
+    // Enforce function ACL
+    if let Err(e) = acl_allow(env, &[]) {
+        error!(
+            target: "runtime::util::put_object_bytes()",
+            "[WASM] [{}] put_object_bytes(): Called in unauthorized section: {}", cid, e,
+        );
+        return darkfi_sdk::error::CALLER_ACCESS_DENIED
+    }
 
     // Subtract used gas. Here we count the length read from the memory slice.
     env.subtract_gas(&mut store, len as u64);
@@ -141,10 +154,23 @@ pub(crate) fn put_object_bytes(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, l
 /// The object's data is written to `ptr`.
 ///
 /// Returns `SUCCESS` on success and an error code otherwise.
+///
+/// Permissions: deploy, metadata, exec
 pub(crate) fn get_object_bytes(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, idx: u32) -> i64 {
     // Get the slice, where we will read the size of the buffer
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = env.contract_id;
+
+    // Enforce function ACL
+    if let Err(e) =
+        acl_allow(env, &[ContractSection::Deploy, ContractSection::Metadata, ContractSection::Exec])
+    {
+        error!(
+            target: "runtime::util::get_object_bytes()",
+            "[WASM] [{}] get_object_bytes(): Called in unauthorized section: {}", cid, e,
+        );
+        return darkfi_sdk::error::CALLER_ACCESS_DENIED
+    }
 
     // Get the object from env
     let objects = env.objects.borrow();
@@ -189,10 +215,23 @@ pub(crate) fn get_object_bytes(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, i
 
 /// Returns the size (number of bytes) of an object in the object store
 /// specified by index `idx`.
+///
+/// Permissions: deploy, metadata, exec
 pub(crate) fn get_object_size(mut ctx: FunctionEnvMut<Env>, idx: u32) -> i64 {
     // Get the slice, where we will read the size of the buffer
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = env.contract_id;
+
+    // Enforce function ACL
+    if let Err(e) =
+        acl_allow(env, &[ContractSection::Deploy, ContractSection::Metadata, ContractSection::Exec])
+    {
+        error!(
+            target: "runtime::util::get_object_size()",
+            "[WASM] [{}] get_object_size(): Called in unauthorized section: {}", cid, e,
+        );
+        return darkfi_sdk::error::CALLER_ACCESS_DENIED
+    }
 
     // Get the object from env
     let objects = env.objects.borrow();
@@ -220,27 +259,43 @@ pub(crate) fn get_object_size(mut ctx: FunctionEnvMut<Env>, idx: u32) -> i64 {
 }
 
 /// Will return current runtime configured verifying block height number
-pub(crate) fn get_verifying_block_height(mut ctx: FunctionEnvMut<Env>) -> u64 {
+///
+/// Permissions: deploy, metadata, exec
+pub(crate) fn get_verifying_block_height(mut ctx: FunctionEnvMut<Env>) -> i64 {
     let (env, mut store) = ctx.data_and_store_mut();
+    let cid = env.contract_id;
+
+    if let Err(e) =
+        acl_allow(env, &[ContractSection::Deploy, ContractSection::Metadata, ContractSection::Exec])
+    {
+        error!(
+            target: "runtime::util::get_verifying_block_height",
+            "[WASM] [{}] get_verifying_block_height(): Called in unauthorized section: {}", cid, e,
+        );
+        return darkfi_sdk::error::CALLER_ACCESS_DENIED
+    }
 
     // Subtract used gas. Here we count the size of the object.
     // u64 is 8 bytes.
     env.subtract_gas(&mut store, 8);
 
-    env.verifying_block_height
+    assert!(env.verifying_block_height <= i64::MAX as u64);
+    env.verifying_block_height as i64
 }
 
 /// Will return current runtime configured transaction hash
+///
+/// Permissions: deploy, metadata, exec
 pub(crate) fn get_tx_hash(mut ctx: FunctionEnvMut<Env>) -> i64 {
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = env.contract_id;
 
     if let Err(e) =
-        acl_allow(env, &[ContractSection::Deploy, ContractSection::Exec, ContractSection::Metadata])
+        acl_allow(env, &[ContractSection::Deploy, ContractSection::Metadata, ContractSection::Exec])
     {
         error!(
-            target: "runtime::util::get_tx",
-            "[WASM] [{}] get_tx(): Called in unauthorized section: {}", cid, e,
+            target: "runtime::util::get_tx_hash",
+            "[WASM] [{}] get_tx_hash(): Called in unauthorized section: {}", cid, e,
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
@@ -256,21 +311,46 @@ pub(crate) fn get_tx_hash(mut ctx: FunctionEnvMut<Env>) -> i64 {
 }
 
 /// Will return current runtime configured verifying block height number
-pub(crate) fn get_call_index(mut ctx: FunctionEnvMut<Env>) -> u32 {
+///
+/// Permissions: deploy, metadata, exec
+pub(crate) fn get_call_index(mut ctx: FunctionEnvMut<Env>) -> i64 {
     let (env, mut store) = ctx.data_and_store_mut();
+    let cid = env.contract_id;
+
+    if let Err(e) =
+        acl_allow(env, &[ContractSection::Deploy, ContractSection::Metadata, ContractSection::Exec])
+    {
+        error!(
+            target: "runtime::util::get_call_index",
+            "[WASM] [{}] get_call_index(): Called in unauthorized section: {}", cid, e,
+        );
+        return darkfi_sdk::error::CALLER_ACCESS_DENIED
+    }
 
     // Subtract used gas. Here we count the size of the object.
     // u32 is 4 bytes.
     env.subtract_gas(&mut store, 4);
 
-    env.call_idx
+    env.call_idx as i64
 }
 
 /// Will return current blockchain timestamp,
 /// defined as the last block's timestamp.
+///
+/// Permissions: deploy, metadata, exec
 pub(crate) fn get_blockchain_time(mut ctx: FunctionEnvMut<Env>) -> i64 {
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = &env.contract_id;
+
+    if let Err(e) =
+        acl_allow(env, &[ContractSection::Deploy, ContractSection::Metadata, ContractSection::Exec])
+    {
+        error!(
+            target: "runtime::util::get_blockchain_time",
+            "[WASM] [{}] get_blockchain_time(): Called in unauthorized section: {}", cid, e,
+        );
+        return darkfi_sdk::error::CALLER_ACCESS_DENIED
+    }
 
     // Grab current last block
     let timestamp = match env.blockchain.lock().unwrap().last_block_timestamp() {
@@ -307,12 +387,16 @@ pub(crate) fn get_blockchain_time(mut ctx: FunctionEnvMut<Env>) -> i64 {
 ///
 /// On success, returns the index of the new object in the object store.
 /// Otherwise, returns an error code.
+///
+/// Permissions: deploy, metadata, exec
 pub(crate) fn get_last_block_height(mut ctx: FunctionEnvMut<Env>) -> i64 {
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = &env.contract_id;
 
     // Enforce function ACL
-    if let Err(e) = acl_allow(env, &[ContractSection::Exec]) {
+    if let Err(e) =
+        acl_allow(env, &[ContractSection::Deploy, ContractSection::Metadata, ContractSection::Exec])
+    {
         error!(
             target: "runtime::util::get_last_block_height",
             "[WASM] [{}] get_last_block_height(): Called in unauthorized section: {}", cid, e,
@@ -356,11 +440,15 @@ pub(crate) fn get_last_block_height(mut ctx: FunctionEnvMut<Env>) -> i64 {
 ///
 /// On success, returns the length of the transaction bytes vector in the environment.
 /// Otherwise, returns an error code.
+///
+/// Permissions: deploy, metadata, exec
 pub(crate) fn get_tx(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>) -> i64 {
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = env.contract_id;
 
-    if let Err(e) = acl_allow(env, &[ContractSection::Exec, ContractSection::Metadata]) {
+    if let Err(e) =
+        acl_allow(env, &[ContractSection::Deploy, ContractSection::Metadata, ContractSection::Exec])
+    {
         error!(
             target: "runtime::util::get_tx",
             "[WASM] [{}] get_tx(): Called in unauthorized section: {}", cid, e,
@@ -460,11 +548,15 @@ pub(crate) fn get_tx(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>) -> i64 {
 ///
 /// On success, returns the length of the transaction location bytes vector in
 /// the environment. Otherwise, returns an error code.
+///
+/// Permissions: deploy, metadata, exec
 pub(crate) fn get_tx_location(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>) -> i64 {
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = env.contract_id;
 
-    if let Err(e) = acl_allow(env, &[ContractSection::Exec, ContractSection::Metadata]) {
+    if let Err(e) =
+        acl_allow(env, &[ContractSection::Deploy, ContractSection::Metadata, ContractSection::Exec])
+    {
         error!(
             target: "runtime::util::get_tx_location",
             "[WASM] [{}] get_tx_location(): Called in unauthorized section: {}", cid, e,

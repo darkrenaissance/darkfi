@@ -80,7 +80,7 @@ pub(crate) fn money_genesis_mint_process_instruction_v1(
     let params: MoneyGenesisMintParamsV1 = deserialize(&self_.data[1..])?;
 
     // Verify this contract call is verified against genesis block(0).
-    let verifying_block_height = wasm::util::get_verifying_block_height();
+    let verifying_block_height = wasm::util::get_verifying_block_height()?;
     if verifying_block_height != 0 {
         msg!(
             "[GenesisMintV1] Error: Call is executed for block {}, not genesis",

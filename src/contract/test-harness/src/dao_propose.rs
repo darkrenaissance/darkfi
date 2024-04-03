@@ -121,7 +121,7 @@ impl TestHarness {
             },
         ];
 
-        let creation_day = blockwindow(block_height);
+        let creation_day = blockwindow(block_height as u32);
         let proposal = DaoProposal {
             auth_calls,
             creation_day,

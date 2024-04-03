@@ -35,6 +35,8 @@ use crate::runtime::vm_runtime::{ContractSection, Env};
 /// Returns `0` on success; otherwise, returns an error-code corresponding to a
 /// [`ContractError`] (defined in the SDK).
 /// See also the method `merkle_add` in `sdk/src/merkle.rs`.
+///
+/// Permissions: update
 pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i64 {
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = env.contract_id;

@@ -83,14 +83,25 @@ pub(crate) fn parse_ret(ret: i64) -> GenericResult<Option<Vec<u8>>> {
     Ok(Some(buf))
 }
 
+fn parse_retval_u32(ret: i64) -> GenericResult<u32> {
+    if ret < 0 {
+        return Err(ContractError::from(ret))
+    }
+    assert!(ret >= 0);
+    // This should always be possible
+    let obj = ret as u32;
+    Ok(obj)
+}
+
 /// Everyone can call this. Will return runtime configured
 /// verifying block height.
 ///
 /// ```
 /// block_height = get_verifying_block_height();
 /// ```
-pub fn get_verifying_block_height() -> u64 {
-    unsafe { get_verifying_block_height_() }
+pub fn get_verifying_block_height() -> GenericResult<u32> {
+    let ret = unsafe { get_verifying_block_height_() };
+    parse_retval_u32(ret)
 }
 
 /// Only deploy(), metadata() and exec() can call this. Will return runtime configured
@@ -101,13 +112,7 @@ pub fn get_verifying_block_height() -> u64 {
 /// ```
 pub fn get_tx_hash() -> GenericResult<TransactionHash> {
     let ret = unsafe { get_tx_hash_() };
-    if ret < 0 {
-        return Err(ContractError::from(ret))
-    }
-    assert!(ret >= 0);
-    // This should always be possible
-    let obj = ret as u32;
-
+    let obj = parse_retval_u32(ret)?;
     let mut tx_hash_data = [0u8; 32];
     assert_eq!(get_object_size(obj), 32);
     get_object_bytes(&mut tx_hash_data, obj);
@@ -120,8 +125,9 @@ pub fn get_tx_hash() -> GenericResult<TransactionHash> {
 /// ```
 /// call_idx = get_call_index();
 /// ```
-pub fn get_call_index() -> u32 {
-    unsafe { get_call_index_() }
+pub fn get_call_index() -> GenericResult<u32> {
+    let ret = unsafe { get_call_index_() };
+    parse_retval_u32(ret)
 }
 
 /// Everyone can call this. Will return current blockchain timestamp.
@@ -181,9 +187,9 @@ extern "C" {
     fn get_object_bytes_(ptr: *const u8, len: u32) -> i64;
     fn get_object_size_(len: u32) -> i64;
 
-    fn get_verifying_block_height_() -> u64;
+    fn get_verifying_block_height_() -> i64;
     fn get_tx_hash_() -> i64;
-    fn get_call_index_() -> u32;
+    fn get_call_index_() -> i64;
     fn get_blockchain_time_() -> i64;
     fn get_last_block_height_() -> i64;
     fn get_tx_(ptr: *const u8) -> i64;
