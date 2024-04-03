@@ -25,7 +25,8 @@ use crate::{
     wasm::db::DbHandle,
 };
 
-/// Add given elements into a Merkle tree.
+/// Add given elements into a Merkle tree. Used for inclusion proofs.
+///
 /// * `db_info` is a handle for a database where the Merkle tree is stored.
 /// * `db_roots` is a handle for a database where all the new Merkle roots are stored.
 /// * `root_key` is the serialized key pointing to the latest Merkle root in `db_info`
@@ -44,9 +45,8 @@ use crate::{
 ///
 /// Inside `db_roots` we store:
 ///
-/// * All [merkle root:32]s as keys. The value is the current [blockheight:8].
-///   Every blockheight should have a unique merkle root associated with it
-///   although this index is not tracked.
+/// * All [merkle root:32]s as keys. The value is the current [tx_hash:32][call_idx:2].
+///   If no new values are added, then the root key is updated to the current (tx_hash, call_idx).
 pub fn merkle_add(
     db_info: DbHandle,
     db_roots: DbHandle,
@@ -70,6 +70,27 @@ pub fn merkle_add(
     }
 }
 
+/// Add given elements into a sparse Merkle tree. Used for exclusion proofs.
+///
+/// * `db_info` is a handle for a database where the latest root is stored.
+/// * `db_smt` is a handle for a database where all the actual tree is stored.
+/// * `db_roots` is a handle for a database where all the new roots are stored.
+/// * `root_key` is the serialized key pointing to the latest Merkle root in `db_info`
+/// * `elements` are the items we want to add to the tree.
+///
+/// There are 2 databases:
+///
+/// * `db_info` stores general metadata or info.
+/// * `db_roots` stores a log of all the merkle roots.
+///
+/// Inside `db_info` we store:
+///
+/// * The [latest root hash:32] under `root_key`.
+///
+/// Inside `db_roots` we store:
+///
+/// * All [merkle root:32]s as keys. The value is the current [tx_hash:32][call_idx:2].
+///   If no new values are added, then the root key is updated to the current (tx_hash, call_idx).
 pub fn sparse_merkle_insert_batch(
     db_info: DbHandle,
     db_smt: DbHandle,

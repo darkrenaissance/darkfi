@@ -35,6 +35,7 @@ use wasmer::{FunctionEnvMut, WasmPtr};
 use super::acl::acl_allow;
 use crate::runtime::vm_runtime::{ContractSection, Env};
 
+/// An SMT adapter for sled overlay storage. Compatible with the WasmDb SMT adapter
 pub struct SledStorage<'a> {
     overlay: &'a mut sled_overlay::SledDbOverlay,
     tree_key: &'a [u8],
@@ -90,6 +91,13 @@ impl<'a> StorageAdapter for SledStorage<'a> {
     }
 }
 
+/// Adds data to sparse merkle tree. The tree, database connection, and new data to add is
+/// read from `ptr` at offset specified by `len`.
+/// Returns `0` on success; otherwise, returns an error-code corresponding to a
+/// [`ContractError`] (defined in the SDK).
+/// See also the method `merkle_add` in `sdk/src/merkle.rs`.
+///
+/// Permissions: update
 pub(crate) fn sparse_merkle_insert_batch(
     mut ctx: FunctionEnvMut<Env>,
     ptr: WasmPtr<u8>,

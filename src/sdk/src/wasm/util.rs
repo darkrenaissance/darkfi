@@ -39,10 +39,12 @@ pub fn set_return_data(data: &[u8]) -> Result<(), ContractError> {
     }
 }
 
+/// Internal function, get raw bytes from the objects store
 pub fn get_object_bytes(data: &mut [u8], object_index: u32) -> i64 {
     unsafe { get_object_bytes_(data.as_mut_ptr(), object_index) }
 }
 
+/// Internal function, get bytes size for an object in the store
 pub fn get_object_size(object_index: u32) -> i64 {
     unsafe { get_object_size_(object_index) }
 }
