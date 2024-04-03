@@ -16,6 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+// https://stackoverflow.com/questions/35901547/how-can-i-find-a-subsequence-in-a-u8-slice
+pub fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    haystack.windows(needle.len()).position(|window| window == needle)
+}
+
 /// Extra methods for Iterator. Copied from [itertools](https://github.com/rust-itertools/itertools).
 ///
 /// Licensed under MIT.
@@ -50,3 +55,30 @@ pub trait Itertools: Iterator {
 }
 
 impl<T> Itertools for T where T: Iterator + ?Sized {}
+
+pub trait NextTuple3<I>: Iterator<Item = I> {
+    fn next_tuple(&mut self) -> Option<(I, I, I)>;
+}
+
+impl<I: Iterator<Item = T>, T> NextTuple3<T> for I {
+    fn next_tuple(&mut self) -> Option<(T, T, T)> {
+        let a = self.next()?;
+        let b = self.next()?;
+        let c = self.next()?;
+        Some((a, b, c))
+    }
+}
+
+pub trait NextTuple4<I>: Iterator<Item = I> {
+    fn next_tuple(&mut self) -> Option<(I, I, I, I)>;
+}
+
+impl<I: Iterator<Item = T>, T> NextTuple4<T> for I {
+    fn next_tuple(&mut self) -> Option<(T, T, T, T)> {
+        let a = self.next()?;
+        let b = self.next()?;
+        let c = self.next()?;
+        let d = self.next()?;
+        Some((a, b, c, d))
+    }
+}
