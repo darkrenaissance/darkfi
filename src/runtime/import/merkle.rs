@@ -227,24 +227,14 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
     };
 
     // Here we add the new coins into the tree.
-    let mut new_roots = vec![];
-
-    assert!(!coins.is_empty());
+    let coins_len = coins.len();
     for coin in coins {
         tree.append(coin);
-        let Some(root) = tree.root(0) else {
-            error!(
-                target: "runtime::merkle::merkle_add",
-                "[WASM] [{}] merkle_add(): Unable to read the root of tree", cid,
-            );
-            return darkfi_sdk::error::INTERNAL_ERROR
-        };
-        new_roots.push(root);
     }
 
     // And we serialize the tree back to bytes
     let mut tree_data = Vec::new();
-    if tree_data.write_u32(set_size + new_roots.len() as u32).is_err() ||
+    if tree_data.write_u32(set_size + coins_len as u32).is_err() ||
         tree.encode(&mut tree_data).is_err()
     {
         error!(
@@ -265,14 +255,19 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
 
     // Here we add the Merkle root to our set of roots
     // Since each update to the tree is atomic, we only need to add the last root.
-    assert!(!new_roots.is_empty());
-    let latest_root = new_roots.last().unwrap();
+    let Some(latest_root) = tree.root(0) else {
+        error!(
+            target: "runtime::merkle::merkle_add",
+            "[WASM] [{}] merkle_add(): Unable to read the root of tree", cid,
+        );
+        return darkfi_sdk::error::INTERNAL_ERROR
+    };
 
     debug!(
         target: "runtime::merkle::merkle_add",
         "[WASM] [{}] merkle_add(): Appending Merkle root to db: {:?}", cid, latest_root,
     );
-    let latest_root_data = serialize(latest_root);
+    let latest_root_data = serialize(&latest_root);
     assert_eq!(latest_root_data.len(), 32);
 
     let mut value_data = Vec::with_capacity(32 + 2);
@@ -310,7 +305,7 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
     drop(overlay);
     drop(lock);
     drop(db_handles);
-    let spent_gas = return_data.len() + tree_data.len() + (new_roots.len() * 32);
+    let spent_gas = return_data.len() + tree_data.len() + (coins_len * 32);
     env.subtract_gas(&mut store, spent_gas as u64);
 
     wasm::entrypoint::SUCCESS
