@@ -160,10 +160,10 @@ impl P2p {
     /// Stop the running P2P subsystem
     pub async fn stop(&self) {
         // Stop the sessions
+        self.session_refine().stop().await;
         self.session_manual().stop().await;
         self.session_inbound().stop().await;
         self.session_outbound().stop().await;
-        self.session_refine().stop().await;
     }
 
     /// Broadcasts a message concurrently across all active channels.
