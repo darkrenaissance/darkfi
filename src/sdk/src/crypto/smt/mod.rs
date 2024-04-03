@@ -189,31 +189,7 @@ impl<
             dirty_idxs.push(parent_idx);
         }
 
-        // Depth first from the bottom of the tree
-        for _ in 0..N + 1 {
-            let mut new_dirty_idxs = Vec::new();
-
-            for idx in dirty_idxs {
-                let left_idx = util::left_child(&idx);
-                let right_idx = util::right_child(&idx);
-                let left = self.get_node(&left_idx);
-                let right = self.get_node(&right_idx);
-                // Recalculate the node
-                let node = self.hasher.hash([left, right]);
-
-                self.put_node(idx.clone(), node)?;
-
-                // Add this node's parent to the update list
-                let parent_idx = match util::parent(&idx) {
-                    Some(idx) => idx,
-                    // We are at the root node so no parents exist
-                    None => break,
-                };
-                new_dirty_idxs.push(parent_idx);
-            }
-
-            dirty_idxs = new_dirty_idxs;
-        }
+        self.recompute_tree(&mut dirty_idxs)?;
 
         Ok(())
     }
@@ -233,31 +209,7 @@ impl<
             dirty_idxs.push(parent_idx);
         }
 
-        // Depth first from the bottom of the tree
-        for _ in 0..N + 1 {
-            let mut new_dirty_idxs = Vec::new();
-
-            for idx in dirty_idxs {
-                let left_idx = util::left_child(&idx);
-                let right_idx = util::right_child(&idx);
-                let left = self.get_node(&left_idx);
-                let right = self.get_node(&right_idx);
-                // Recalculate the node
-                let node = self.hasher.hash([left, right]);
-
-                self.put_node(idx.clone(), node)?;
-
-                // Add this node's parent to the update list
-                let parent_idx = match util::parent(&idx) {
-                    Some(idx) => idx,
-                    // We are at the root node so no parents exist
-                    None => break,
-                };
-                new_dirty_idxs.push(parent_idx);
-            }
-
-            dirty_idxs = new_dirty_idxs;
-        }
+        self.recompute_tree(&mut dirty_idxs)?;
 
         Ok(())
     }
@@ -265,6 +217,36 @@ impl<
     /// Returns the Merkle tree root.
     pub fn root(&self) -> F {
         self.get_node(&BigUint::from(0u32))
+    }
+
+    /// Recomputes the Merkle tree depth first from the bottom of the tree
+    fn recompute_tree(&mut self, dirty_idxs: &mut Vec<BigUint>) -> ContractResult {
+        for _ in 0..N + 1 {
+            let mut new_dirty_idxs = vec![];
+
+            for idx in &mut *dirty_idxs {
+                let left_idx = util::left_child(idx);
+                let right_idx = util::right_child(idx);
+                let left = self.get_node(&left_idx);
+                let right = self.get_node(&right_idx);
+                // Recalclate the node
+                let node = self.hasher.hash([left, right]);
+                self.put_node(idx.clone(), node)?;
+
+                // Add this node's parent to the update list
+                let parent_idx = match util::parent(idx) {
+                    Some(idx) => idx,
+                    // We are at the root node so no parents exist
+                    None => break,
+                };
+
+                new_dirty_idxs.push(parent_idx);
+            }
+
+            *dirty_idxs = new_dirty_idxs;
+        }
+
+        Ok(())
     }
 
     /// Give the path leading from the leaf at `index` up to the root. This is
