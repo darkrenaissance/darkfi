@@ -177,6 +177,37 @@ through generic node interfaces.
 
 *scenegraph in blender*
 
+```
+Application
+    SettingsRegistry
+    Window #1
+        TabBar
+            Tab #1
+                Panel #1
+                    WasmSandbox
+                        ...
+                Panel #2
+                ...
+            Tab #2
+                ...
+            ...
+    Window #2
+        ...
+    Module #1
+```
+
+* Each object can emit events, and subscribe to events from other objects.
+  All objects have an `event()` method and `update()` method.
+  Update is called per frame, while event can be used for timer events such
+  as periodic updates or wakeups, as well as input events.
+* Drawing related objects have a boundary where they can draw.
+  They all implement a `draw()` method. Drawing outside the boundary is
+  disallowed.
+* Everything has names, attributes and methods with docstrings.
+  This is all introspectable and eventually scriptable.
+  Also the internal state can be accessed through inbuilt terminal, possibly
+  using Python.
+
 ## UI Specifics
 
 Laundry list of required features:
