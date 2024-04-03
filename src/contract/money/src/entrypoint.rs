@@ -123,12 +123,9 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     wasm::db::zkas_db_set(&token_mint_v1_bincode[..])?;
     wasm::db::zkas_db_set(&token_frz_v1_bincode[..])?;
 
-    // FIXME: Get tx hash from env
-    let tx_hash = [0u8; 32];
-    // No way to access call_idx here
-    //assert!(ix.len() > 4);
-    //let call_idx: u32 = deserialize(&ix[0..4])?;
-    let call_idx = 110u16;
+    let tx_hash = wasm::util::get_tx_hash()?;
+    // The max outputs for a tx in BTC is 2501
+    let call_idx = wasm::util::get_call_index() as u16;
     let mut roots_value_data = Vec::with_capacity(32 + 2);
     tx_hash.encode(&mut roots_value_data)?;
     call_idx.encode(&mut roots_value_data)?;
