@@ -35,6 +35,11 @@ pub mod entrypoint;
 
 /// Error handling
 pub mod error;
+pub use error::{ContractError, GenericResult};
+
+/// Hex encoding/decoding from bytes
+pub mod hex;
+pub use hex::AsHex;
 
 /// Logging infrastructure
 pub mod log;
@@ -54,46 +59,3 @@ pub mod util;
 
 /// DarkTree structures
 pub mod dark_tree;
-
-/// Creates a hex formatted string of the data
-#[inline]
-pub fn hex_from_iter<I: Iterator<Item = u8>>(iter: I) -> String {
-    let mut repr = String::new();
-    for b in iter {
-        repr += &format!("{:02x}", b);
-    }
-    repr
-}
-
-/*
-/// Decode hex string into bytes
-pub fn decode_hex(hex: &str) -> Iterator<Item = u8> {
-    HexDecodeIter {
-        hex,
-        curr: 0
-    }
-}
-
-struct HexDecodeIter<'a> {
-    hex: &'a str,
-    curr: usize,
-}
-
-impl<'a> Iterator for HexDecodeIter<'a> {
-    type Item = u8;
-
-    fn next(&mut self) -> Option<Self::Item> {
-    }
-}
-*/
-
-pub trait AsHex {
-    fn hex(&self) -> String;
-}
-
-impl<T: AsRef<[u8]>> AsHex for T {
-    /// Creates a hex formatted string of the data (big endian)
-    fn hex(&self) -> String {
-        hex_from_iter(self.as_ref().iter().cloned())
-    }
-}

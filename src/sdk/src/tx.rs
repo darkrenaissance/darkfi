@@ -16,13 +16,20 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::fmt::{self, Debug};
+use std::{
+    fmt::{self, Debug},
+    str::FromStr,
+};
 
 #[cfg(feature = "async")]
 use darkfi_serial::async_trait;
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 
-use super::{crypto::ContractId, AsHex};
+use super::{
+    crypto::ContractId,
+    hex::{decode_hex_arr, AsHex},
+    ContractError, GenericResult,
+};
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, SerialEncodable, SerialDecodable)]
 // We have to introduce a type rather than using an alias so we can implement Display
@@ -40,6 +47,14 @@ impl TransactionHash {
     #[inline]
     pub fn inner(&self) -> &[u8; 32] {
         &self.0
+    }
+}
+
+impl FromStr for TransactionHash {
+    type Err = ContractError;
+
+    fn from_str(tx_hash_str: &str) -> GenericResult<Self> {
+        Ok(Self(decode_hex_arr(tx_hash_str)?))
     }
 }
 

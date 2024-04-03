@@ -27,7 +27,7 @@ use subtle::CtOption;
 
 use crate::{
     error::{ContractError, GenericResult},
-    hex_from_iter,
+    hex::{decode_hex_arr, hex_from_iter},
 };
 
 #[inline]
@@ -104,12 +104,8 @@ pub trait FieldElemAsStr: PrimeField<Repr = [u8; 32]> {
 
         let hex = hex.strip_prefix("0x").ok_or(ContractError::HexFmtErr)?;
 
-        let mut bytes = [0u8; 32];
-        for i in 0..32 {
-            // Bytes are little endian but str repr is big endian
-            bytes[32 - i - 1] = u8::from_str_radix(&hex[2 * i..2 * i + 2], 16)
-                .map_err(|_| ContractError::HexFmtErr)?;
-        }
+        let mut bytes = decode_hex_arr(hex)?;
+        bytes.reverse();
 
         let value = Self::from_repr(bytes);
         if value.is_some().into() {
