@@ -47,7 +47,7 @@ impl<'a> StorageAdapter for SledStorage<'a> {
         if let Err(e) = self.overlay.insert(self.tree_key, &key.to_bytes_le(), &value.to_repr()) {
             error!(
                 target: "runtime::smt::SledStorage::put",
-                "[WASM] sparse_merkle_insert_batch(): inserting key {:?}, value {:?} into DB tree: {:?}: {}",
+                "[WASM] SledStorage::put(): inserting key {:?}, value {:?} into DB tree: {:?}: {}",
                 key, value, self.tree_key, e,
             );
             return Err(ContractError::SmtPutFailed)
