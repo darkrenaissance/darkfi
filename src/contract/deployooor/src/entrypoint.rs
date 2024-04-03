@@ -19,9 +19,11 @@
 use darkfi_sdk::{
     crypto::ContractId,
     dark_tree::DarkLeaf,
-    db::{db_init, db_lookup, db_set},
     error::ContractResult,
-    util::set_return_data,
+    wasm::{
+        db::{db_init, db_lookup, db_set},
+        util::set_return_data,
+    },
     ContractCall,
 };
 use darkfi_serial::{deserialize, serialize};

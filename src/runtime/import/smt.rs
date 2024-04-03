@@ -23,6 +23,7 @@ use darkfi_sdk::{
         pasta_prelude::*,
         smt::{PoseidonFp, SparseMerkleTree, StorageAdapter, EMPTY_NODES_FP, SMT_FP_DEPTH},
     },
+    error::{ContractError, ContractResult},
     wasm,
 };
 use darkfi_serial::{serialize, Decodable, Encodable};
@@ -42,35 +43,50 @@ pub struct SledStorage<'a> {
 impl<'a> StorageAdapter for SledStorage<'a> {
     type Value = pallas::Base;
 
-    fn put(&mut self, key: BigUint, value: pallas::Base) -> bool {
-        if self.overlay.insert(self.tree_key, &key.to_bytes_le(), &value.to_repr()).is_err() {
+    fn put(&mut self, key: BigUint, value: pallas::Base) -> ContractResult {
+        if let Err(e) = self.overlay.insert(self.tree_key, &key.to_bytes_le(), &value.to_repr()) {
             error!(
                 target: "runtime::smt::SledStorage::put",
-                "[WASM] sparse_merkle_insert_batch(): inserting key {:?}, value {:?} into DB tree: {:?}",
-                key, value, self.tree_key
+                "[WASM] sparse_merkle_insert_batch(): inserting key {:?}, value {:?} into DB tree: {:?}: {}",
+                key, value, self.tree_key, e,
             );
-            return false
+            return Err(ContractError::SmtPutFailed)
         }
-        true
+
+        Ok(())
     }
+
     fn get(&self, key: &BigUint) -> Option<pallas::Base> {
-        let Ok(value) = self.overlay.get(self.tree_key, &key.to_bytes_le()) else {
-            error!(
-                target: "runtime::smt::SledStorage::get",
-                "[WASM] sparse_merkle_insert_batch(): fetching key {:?} from DB tree: {:?}",
-                key, self.tree_key
-            );
-            return None
+        let value = match self.overlay.get(self.tree_key, &key.to_bytes_le()) {
+            Ok(v) => v,
+            Err(e) => {
+                error!(
+                    target: "runtime::smt::SledStorage::get",
+                    "[WASM] SledStorage::get(): Fetching key {:?} from DB tree: {:?}: {}",
+                    key, self.tree_key, e,
+                );
+                return None
+            }
         };
+
         let value = value?;
         let mut repr = [0; 32];
         repr.copy_from_slice(&value);
-        let value = pallas::Base::from_repr(repr);
-        if value.is_none().into() {
-            None
-        } else {
-            Some(value.unwrap())
+
+        pallas::Base::from_repr(repr).into()
+    }
+
+    fn del(&mut self, key: &BigUint) -> ContractResult {
+        if let Err(e) = self.overlay.remove(self.tree_key, &key.to_bytes_le()) {
+            error!(
+                target: "runtime::smt::SledStorage::del",
+                "[WASM] SledStorage::del(): Removing key {:?} from DB tree: {:?}: {}",
+                key, self.tree_key, e,
+            );
+            return Err(ContractError::SmtDelFailed)
         }
+
+        Ok(())
     }
 }
 

@@ -19,11 +19,11 @@
 use darkfi_sdk::{
     crypto::{ContractId, PublicKey},
     dark_tree::DarkLeaf,
-    db::{db_get, db_lookup, db_set},
     deploy::DeployParamsV1,
     error::{ContractError, ContractResult},
     msg,
     pasta::pallas,
+    wasm::db::{db_get, db_lookup, db_set},
     ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};

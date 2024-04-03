@@ -21,9 +21,10 @@ use num_bigint::BigUint;
 use super::{PoseidonFp, SparseMerkleTree, StorageAdapter, SMT_FP_DEPTH};
 use crate::{
     crypto::pasta_prelude::*,
+    error::ContractResult,
     msg,
     pasta::pallas,
-    wasm::db::{db_get, db_set, DbHandle},
+    wasm::db::{db_del, db_get, db_set, DbHandle},
 };
 
 pub type SmtWasmFp = SparseMerkleTree<
@@ -48,8 +49,8 @@ impl SmtWasmDbStorage {
 impl StorageAdapter for SmtWasmDbStorage {
     type Value = pallas::Base;
 
-    fn put(&mut self, key: BigUint, value: pallas::Base) -> bool {
-        db_set(self.db, &key.to_bytes_le(), &value.to_repr()).is_ok()
+    fn put(&mut self, key: BigUint, value: pallas::Base) -> ContractResult {
+        db_set(self.db, &key.to_bytes_le(), &value.to_repr())
     }
 
     fn get(&self, key: &BigUint) -> Option<pallas::Base> {
@@ -64,5 +65,9 @@ impl StorageAdapter for SmtWasmDbStorage {
         repr.copy_from_slice(&value);
 
         pallas::Base::from_repr(repr).into()
+    }
+
+    fn del(&mut self, key: &BigUint) -> ContractResult {
+        db_del(self.db, &key.to_bytes_le())
     }
 }
