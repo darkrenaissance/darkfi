@@ -39,14 +39,6 @@ pub fn set_return_data(data: &[u8]) -> Result<(), ContractError> {
     }
 }
 
-pub fn put_object_bytes(data: &[u8]) -> Result<i64, ContractError> {
-    // Ensure that the number of bytes fits within the u32 data type.
-    match u32::try_from(data.len()) {
-        Ok(len) => unsafe { Ok(put_object_bytes_(data.as_ptr(), len)) },
-        Err(_) => Err(ContractError::DataTooLarge),
-    }
-}
-
 pub fn get_object_bytes(data: &mut [u8], object_index: u32) -> i64 {
     unsafe { get_object_bytes_(data.as_mut_ptr(), object_index) }
 }
@@ -183,7 +175,6 @@ pub fn get_tx_location(hash: &TransactionHash) -> GenericResult<(u64, u64)> {
 
 extern "C" {
     fn set_return_data_(ptr: *const u8, len: u32) -> i64;
-    fn put_object_bytes_(ptr: *const u8, len: u32) -> i64;
     fn get_object_bytes_(ptr: *const u8, len: u32) -> i64;
     fn get_object_size_(len: u32) -> i64;
 

@@ -261,12 +261,6 @@ impl Runtime {
                     import::db::zkas_db_set,
                 ),
 
-                "put_object_bytes_" => Function::new_typed_with_env(
-                    &mut store,
-                    &ctx,
-                    import::util::put_object_bytes,
-                ),
-
                 "get_object_bytes_" => Function::new_typed_with_env(
                     &mut store,
                     &ctx,
