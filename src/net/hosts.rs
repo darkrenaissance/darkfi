@@ -1035,6 +1035,35 @@ impl Hosts {
         false
     }
 
+    /// Import blacklisted peers specified in the config file.
+    pub async fn import_blacklist(&self) -> Result<()> {
+        for (mut host, ports) in self.settings.blacklist.clone() {
+            // If the ports are empty, simply store the host_str. We will use this to
+            // blacklist all ports of a given peer in `block_all_ports()`.
+            if ports.is_empty() {
+                self.container.store(HostColor::Black as usize, host.clone(), 0).await;
+            }
+            // Otherwise, store all the specified ports.
+            else {
+                for port in ports {
+                    host.set_port(Some(port))?;
+                    self.container.store(HostColor::Black as usize, host.clone(), 0).await;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// If we have the Host of the Url in the hostlist, and there are no ports stored,
+    /// we should block all ports of this peer.
+    pub async fn block_all_ports(&self, addr: String) -> bool {
+        self.container.hostlists[HostColor::Black as usize]
+            .read()
+            .await
+            .iter()
+            .any(|(u, _t)| u.host_str().unwrap() == addr && u.port().is_none())
+    }
+
     /// Filter given addresses based on certain rulesets and validity. Strictly called only on
     /// the first time learning of a new peer.
     async fn filter_addresses(
@@ -1067,7 +1096,7 @@ impl Hosts {
 
             // Blacklist peers should never enter the hostlist.
             if self.container.contains(HostColor::Black as usize, addr_).await ||
-                settings.blacklist.contains(addr_)
+                self.block_all_ports(addr_.host_str().unwrap().to_string()).await
             {
                 warn!(target: "net::hosts::filter_addresses()",
                 "[{}] is blacklisted", addr_);
@@ -1227,7 +1256,7 @@ impl Hosts {
                     self.container.remove_if_exists(HostColor::Grey, addr).await;
                     self.container.remove_if_exists(HostColor::White, addr).await;
                     self.container.remove_if_exists(HostColor::Gold, addr).await;
-                    self.container.store_or_update(HostColor::Gold, addr.clone(), last_seen).await;
+                    self.container.store_or_update(HostColor::Black, addr.clone(), last_seen).await;
                 }
             }
 
@@ -1279,6 +1308,23 @@ mod tests {
             for host in remote_hosts {
                 assert!(!hosts.is_local_host(host).await)
             }
+        });
+    }
+
+    #[test]
+    fn test_block_all_ports() {
+        smol::block_on(async {
+            let settings = Settings { ..Default::default() };
+
+            let hosts = Hosts::new(Arc::new(settings.clone()));
+            let blacklist1 = Url::parse("tcp+tls://nietzsche.king:333").unwrap();
+            let blacklist2 = Url::parse("tcp+tls://agorism.xyz").unwrap();
+
+            hosts.container.store(HostColor::Black as usize, blacklist1.clone(), 0).await;
+            hosts.container.store(HostColor::Black as usize, blacklist2.clone(), 0).await;
+
+            assert!(hosts.block_all_ports(blacklist2.host_str().unwrap().to_string()).await);
+            assert!(!hosts.block_all_ports(blacklist1.host_str().unwrap().to_string()).await);
         });
     }
 

@@ -77,8 +77,9 @@ pub struct Settings {
     /// Number of seconds with no connections after which refinery
     /// process is paused.
     pub time_with_no_connections: u64,
-    /// Nodes to avoid interacting with for the duration of the program.
-    pub blacklist: Vec<Url>,
+    /// Nodes to avoid interacting with for the duration of the program,
+    /// in the format ["scheme://host", [port, port]]
+    pub blacklist: Vec<(Url, Vec<u16>)>,
 }
 
 impl Default for Settings {
@@ -217,10 +218,11 @@ pub struct SettingsOpt {
     #[structopt(skip)]
     pub time_with_no_connections: Option<u64>,
 
-    /// Nodes to avoid interacting with for the duration of the program.
+    /// Nodes to avoid interacting with for the duration of the program,
+    /// in the format ["scheme://host", [port, port]]
     #[serde(default)]
-    #[structopt(long)]
-    pub blacklist: Vec<Url>,
+    #[structopt(skip)]
+    pub blacklist: Vec<(Url, Vec<u16>)>,
 }
 
 impl From<SettingsOpt> for Settings {

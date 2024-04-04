@@ -78,6 +78,24 @@ impl RefineSession {
 
     /// Start the refinery and self handshake processes.
     pub(crate) async fn start(self: Arc<Self>) {
+        match self.p2p().hosts().container.load_all(&self.p2p().settings().hostlist).await {
+            Ok(()) => {
+                debug!(target: "net::refine_session::start()", "Load hosts successful!");
+            }
+            Err(e) => {
+                warn!(target: "net::refine_session::start()", "Error loading hosts {}", e);
+            }
+        }
+        match self.p2p().hosts().import_blacklist().await {
+            Ok(()) => {
+                debug!(target: "net::refine_session::start()", "Import blacklist successful!");
+            }
+            Err(e) => {
+                warn!(target: "net::refine_session::start()",
+                    "Error importing blacklist from config file {}", e);
+            }
+        }
+
         debug!(target: "net::refine_session", "Starting greylist refinery process");
         self.refinery.clone().start().await;
 
@@ -87,6 +105,15 @@ impl RefineSession {
 
     /// Stop the refinery and self handshake processes.
     pub(crate) async fn stop(&self) {
+        match self.p2p().hosts().container.save_all(&self.p2p().settings().hostlist).await {
+            Ok(()) => {
+                debug!(target: "net::refine_session::stop()", "Save hosts successful!");
+            }
+            Err(e) => {
+                warn!(target: "net::refine_session::stop()", "Error saving hosts {}", e);
+            }
+        }
+
         debug!(target: "net::refine_session", "Stopping refinery process");
         self.refinery.clone().stop().await;
 
@@ -177,14 +204,6 @@ impl GreylistRefinery {
     }
 
     pub async fn start(self: Arc<Self>) {
-        match self.p2p().hosts().container.load_all(&self.p2p().settings().hostlist).await {
-            Ok(()) => {
-                debug!(target: "net::refinery::start()", "Load hosts successful!");
-            }
-            Err(e) => {
-                warn!(target: "net::refinery::start()", "Error loading hosts {}", e);
-            }
-        }
         let ex = self.p2p().executor();
         self.process.clone().start(
             async move {
@@ -201,15 +220,6 @@ impl GreylistRefinery {
     pub async fn stop(self: Arc<Self>) {
         debug!(target: "net::refinery", "Stopping refinery");
         self.process.stop().await;
-
-        match self.p2p().hosts().container.save_all(&self.p2p().settings().hostlist).await {
-            Ok(()) => {
-                debug!(target: "net::refinery::stop()", "Save hosts successful!");
-            }
-            Err(e) => {
-                warn!(target: "net::refinery::stop()", "Error saving hosts {}", e);
-            }
-        }
     }
 
     // Randomly select a peer on the greylist and probe it. This method will remove from the
