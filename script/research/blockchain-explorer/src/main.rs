@@ -23,7 +23,7 @@ use darkfi::{
     blockchain::{
         block_store::{Block, BlockDifficulty, BlockRanks, BlockStore},
         contract_store::ContractStore,
-        header_store::{Header, HeaderStore},
+        header_store::{Header, HeaderHash, HeaderStore},
         tx_store::TxStore,
         Blockchain,
     },
@@ -35,6 +35,7 @@ use darkfi::{
 use darkfi_sdk::{
     blockchain::block_epoch,
     crypto::{ContractId, MerkleTree},
+    tx::TransactionHash,
 };
 use num_bigint::BigUint;
 
@@ -60,9 +61,9 @@ struct Args {
 
 #[derive(Debug)]
 struct HeaderInfo {
-    _hash: blake3::Hash,
+    _hash: HeaderHash,
     _version: u8,
-    _previous: blake3::Hash,
+    _previous: HeaderHash,
     _height: u64,
     _timestamp: Timestamp,
     _nonce: u64,
@@ -70,7 +71,7 @@ struct HeaderInfo {
 }
 
 impl HeaderInfo {
-    pub fn new(_hash: blake3::Hash, header: &Header) -> HeaderInfo {
+    pub fn new(_hash: HeaderHash, header: &Header) -> HeaderInfo {
         HeaderInfo {
             _hash,
             _version: header.version,
@@ -106,14 +107,14 @@ impl HeaderStoreInfo {
 
 #[derive(Debug)]
 struct BlockInfo {
-    _hash: blake3::Hash,
-    _header: blake3::Hash,
-    _txs: Vec<blake3::Hash>,
+    _hash: HeaderHash,
+    _header: HeaderHash,
+    _txs: Vec<TransactionHash>,
     _signature: String,
 }
 
 impl BlockInfo {
-    pub fn new(_hash: blake3::Hash, block: &Block) -> BlockInfo {
+    pub fn new(_hash: HeaderHash, block: &Block) -> BlockInfo {
         BlockInfo {
             _hash,
             _header: block.header,
@@ -126,11 +127,11 @@ impl BlockInfo {
 #[derive(Debug)]
 struct OrderInfo {
     _height: u64,
-    _hash: blake3::Hash,
+    _hash: HeaderHash,
 }
 
 impl OrderInfo {
-    pub fn new(_height: u64, _hash: blake3::Hash) -> OrderInfo {
+    pub fn new(_height: u64, _hash: HeaderHash) -> OrderInfo {
         OrderInfo { _height, _hash }
     }
 }
@@ -220,26 +221,38 @@ impl BlockStoreInfo {
 
 #[derive(Debug)]
 struct TxInfo {
-    _hash: blake3::Hash,
+    _hash: TransactionHash,
     _payload: Transaction,
 }
 
 impl TxInfo {
-    pub fn new(_hash: blake3::Hash, tx: &Transaction) -> TxInfo {
+    pub fn new(_hash: TransactionHash, tx: &Transaction) -> TxInfo {
         TxInfo { _hash, _payload: tx.clone() }
     }
 }
 
 #[derive(Debug)]
 struct TxLocationInfo {
-    _hash: blake3::Hash,
+    _hash: TransactionHash,
     _block_height: u64,
     _index: u64,
 }
 
 impl TxLocationInfo {
-    pub fn new(_hash: blake3::Hash, _block_height: u64, _index: u64) -> TxLocationInfo {
+    pub fn new(_hash: TransactionHash, _block_height: u64, _index: u64) -> TxLocationInfo {
         TxLocationInfo { _hash, _block_height, _index }
+    }
+}
+
+#[derive(Debug)]
+struct PendingOrderInfo {
+    _order: u64,
+    _hash: TransactionHash,
+}
+
+impl PendingOrderInfo {
+    pub fn new(_order: u64, _hash: TransactionHash) -> PendingOrderInfo {
+        PendingOrderInfo { _order, _hash }
     }
 }
 
@@ -248,7 +261,7 @@ struct TxStoreInfo {
     _main: Vec<TxInfo>,
     _location: Vec<TxLocationInfo>,
     _pending: Vec<TxInfo>,
-    _pending_order: Vec<OrderInfo>,
+    _pending_order: Vec<PendingOrderInfo>,
 }
 
 impl TxStoreInfo {
@@ -287,8 +300,8 @@ impl TxStoreInfo {
         let result = txstore.get_all_pending_order();
         match result {
             Ok(iter) => {
-                for (height, hash) in iter.iter() {
-                    _pending_order.push(OrderInfo::new(*height, *hash));
+                for (order, hash) in iter.iter() {
+                    _pending_order.push(PendingOrderInfo::new(*order, *hash));
                 }
             }
             Err(e) => println!("Error: {:?}", e),

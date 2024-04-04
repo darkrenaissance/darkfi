@@ -32,7 +32,7 @@ pub use block_store::{Block, BlockDifficulty, BlockInfo, BlockStore, BlockStoreO
 
 /// Header definition and storage implementation
 pub mod header_store;
-pub use header_store::{Header, HeaderStore, HeaderStoreOverlay};
+pub use header_store::{Header, HeaderHash, HeaderStore, HeaderStoreOverlay};
 
 /// Transactions related storage implementations
 pub mod tx_store;
@@ -73,18 +73,18 @@ impl Blockchain {
     /// data that can be fed into the different trees of the database.
     /// Upon success, the functions returns the block hash that
     /// were given and appended to the ledger.
-    pub fn add_block(&self, block: &BlockInfo) -> Result<blake3::Hash> {
+    pub fn add_block(&self, block: &BlockInfo) -> Result<HeaderHash> {
         let mut trees = vec![];
         let mut batches = vec![];
 
         // Store header
-        let (headers_batch, _) = self.headers.insert_batch(&[block.header.clone()])?;
+        let (headers_batch, _) = self.headers.insert_batch(&[block.header.clone()]);
         trees.push(self.headers.0.clone());
         batches.push(headers_batch);
 
         // Store block
-        let blk: Block = Block::from_block_info(block)?;
-        let (bocks_batch, block_hashes) = self.blocks.insert_batch(&[blk])?;
+        let blk: Block = Block::from_block_info(block);
+        let (bocks_batch, block_hashes) = self.blocks.insert_batch(&[blk]);
         let block_hash = block_hashes[0];
         let block_hash_vec = [block_hash];
         trees.push(self.blocks.main.clone());
@@ -92,18 +92,18 @@ impl Blockchain {
 
         // Store block order
         let blocks_order_batch =
-            self.blocks.insert_batch_order(&[block.header.height], &block_hash_vec)?;
+            self.blocks.insert_batch_order(&[block.header.height], &block_hash_vec);
         trees.push(self.blocks.order.clone());
         batches.push(blocks_order_batch);
 
         // Store transactions
-        let (txs_batch, txs_hashes) = self.transactions.insert_batch(&block.txs)?;
+        let (txs_batch, txs_hashes) = self.transactions.insert_batch(&block.txs);
         trees.push(self.transactions.main.clone());
         batches.push(txs_batch);
 
         // Store transactions_locations
         let txs_locations_batch =
-            self.transactions.insert_batch_location(&txs_hashes, block.header.height)?;
+            self.transactions.insert_batch_location(&txs_hashes, block.header.height);
         trees.push(self.transactions.location.clone());
         batches.push(txs_locations_batch);
 
@@ -127,11 +127,11 @@ impl Blockchain {
         }
 
         // Check provided info produces the same hash
-        Ok(blockhash == block.hash()?)
+        Ok(blockhash == block.hash())
     }
 
     /// Retrieve [`BlockInfo`]s by given hashes. Fails if any of them is not found.
-    pub fn get_blocks_by_hash(&self, hashes: &[blake3::Hash]) -> Result<Vec<BlockInfo>> {
+    pub fn get_blocks_by_hash(&self, hashes: &[HeaderHash]) -> Result<Vec<BlockInfo>> {
         let blocks = self.blocks.get(hashes, true)?;
         let blocks: Vec<Block> = blocks.iter().map(|x| x.clone().unwrap()).collect();
         let ret = self.get_blocks_infos(&blocks)?;
@@ -194,7 +194,7 @@ impl Blockchain {
     }
 
     /// Retrieve genesis (first) block height and hash.
-    pub fn genesis(&self) -> Result<(u64, blake3::Hash)> {
+    pub fn genesis(&self) -> Result<(u64, HeaderHash)> {
         self.blocks.get_first()
     }
 
@@ -205,7 +205,7 @@ impl Blockchain {
     }
 
     /// Retrieve the last block height and hash.
-    pub fn last(&self) -> Result<(u64, blake3::Hash)> {
+    pub fn last(&self) -> Result<(u64, HeaderHash)> {
         self.blocks.get_last()
     }
 
@@ -239,7 +239,7 @@ impl Blockchain {
     /// On success, the function returns the transaction hashes in the same order
     /// as the input transactions.
     pub fn add_pending_txs(&self, txs: &[Transaction]) -> Result<Vec<TransactionHash>> {
-        let (txs_batch, txs_hashes) = self.transactions.insert_batch_pending(txs)?;
+        let (txs_batch, txs_hashes) = self.transactions.insert_batch_pending(txs);
         let txs_order_batch = self.transactions.insert_batch_pending_order(&txs_hashes)?;
 
         // Perform an atomic transaction over the trees and apply the batches.
@@ -312,7 +312,7 @@ impl Blockchain {
     /// Be careful as this will try to load everything in memory.
     pub fn get_all(&self) -> Result<Vec<BlockInfo>> {
         let order = self.blocks.get_all_order()?;
-        let order: Vec<blake3::Hash> = order.iter().map(|x| x.1).collect();
+        let order: Vec<HeaderHash> = order.iter().map(|x| x.1).collect();
         let blocks = self.get_blocks_by_hash(&order)?;
 
         Ok(blocks)
@@ -357,7 +357,7 @@ impl BlockchainOverlay {
     }
 
     /// Retrieve the last block height and hash.
-    pub fn last(&self) -> Result<(u64, blake3::Hash)> {
+    pub fn last(&self) -> Result<(u64, HeaderHash)> {
         self.blocks.get_last()
     }
 
@@ -385,12 +385,12 @@ impl BlockchainOverlay {
     /// were given and appended to the overlay.
     /// Since we are adding to the overlay, we don't need to exeucte
     /// the writes atomically.
-    pub fn add_block(&self, block: &BlockInfo) -> Result<blake3::Hash> {
+    pub fn add_block(&self, block: &BlockInfo) -> Result<HeaderHash> {
         // Store header
         self.headers.insert(&[block.header.clone()])?;
 
         // Store block
-        let blk: Block = Block::from_block_info(block)?;
+        let blk: Block = Block::from_block_info(block);
         let txs_hashes = blk.txs.clone();
         let block_hash = self.blocks.insert(&[blk])?[0];
         let block_hash_vec = [block_hash];
@@ -421,11 +421,11 @@ impl BlockchainOverlay {
         }
 
         // Check provided info produces the same hash
-        Ok(blockhash == block.hash()?)
+        Ok(blockhash == block.hash())
     }
 
     /// Retrieve [`BlockInfo`]s by given hashes. Fails if any of them is not found.
-    pub fn get_blocks_by_hash(&self, hashes: &[blake3::Hash]) -> Result<Vec<BlockInfo>> {
+    pub fn get_blocks_by_hash(&self, hashes: &[HeaderHash]) -> Result<Vec<BlockInfo>> {
         let blocks = self.blocks.get(hashes, true)?;
         let blocks: Vec<Block> = blocks.iter().map(|x| x.clone().unwrap()).collect();
         let ret = self.get_blocks_infos(&blocks)?;
@@ -453,7 +453,7 @@ impl BlockchainOverlay {
     }
 
     /// Retrieve [`Block`]s by given hashes and return their transactions hashes.
-    pub fn get_blocks_txs_hashes(&self, hashes: &[blake3::Hash]) -> Result<Vec<TransactionHash>> {
+    pub fn get_blocks_txs_hashes(&self, hashes: &[HeaderHash]) -> Result<Vec<TransactionHash>> {
         let blocks = self.blocks.get(hashes, true)?;
         let mut ret = vec![];
         for block in blocks {

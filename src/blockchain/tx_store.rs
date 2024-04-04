@@ -18,7 +18,7 @@
 
 use std::collections::HashMap;
 
-use darkfi_sdk::{tx::TransactionHash, AsHex};
+use darkfi_sdk::tx::TransactionHash;
 use darkfi_serial::{deserialize, serialize};
 
 use crate::{tx::Transaction, Error, Result};
@@ -65,21 +65,21 @@ impl TxStore {
 
     /// Insert a slice of [`Transaction`] into the store's main tree.
     pub fn insert(&self, transactions: &[Transaction]) -> Result<Vec<TransactionHash>> {
-        let (batch, ret) = self.insert_batch(transactions)?;
+        let (batch, ret) = self.insert_batch(transactions);
         self.main.apply_batch(batch)?;
         Ok(ret)
     }
 
     /// Insert a slice of [`TransactionHash`] into the store's location tree.
     pub fn insert_location(&self, txs_hashes: &[TransactionHash], block_height: u64) -> Result<()> {
-        let batch = self.insert_batch_location(txs_hashes, block_height)?;
+        let batch = self.insert_batch_location(txs_hashes, block_height);
         self.location.apply_batch(batch)?;
         Ok(())
     }
 
     /// Insert a slice of [`Transaction`] into the store's pending txs tree.
     pub fn insert_pending(&self, transactions: &[Transaction]) -> Result<Vec<TransactionHash>> {
-        let (batch, ret) = self.insert_batch_pending(transactions)?;
+        let (batch, ret) = self.insert_batch_pending(transactions);
         self.pending.apply_batch(batch)?;
         Ok(ret)
     }
@@ -101,7 +101,7 @@ impl TxStore {
     pub fn insert_batch(
         &self,
         transactions: &[Transaction],
-    ) -> Result<(sled::Batch, Vec<TransactionHash>)> {
+    ) -> (sled::Batch, Vec<TransactionHash>) {
         let mut ret = Vec::with_capacity(transactions.len());
         let mut batch = sled::Batch::default();
 
@@ -111,7 +111,7 @@ impl TxStore {
             ret.push(tx_hash);
         }
 
-        Ok((batch, ret))
+        (batch, ret)
     }
 
     /// Generate the sled batch corresponding to an insert to the location tree,
@@ -122,7 +122,7 @@ impl TxStore {
         &self,
         txs_hashes: &[TransactionHash],
         block_height: u64,
-    ) -> Result<sled::Batch> {
+    ) -> sled::Batch {
         let mut batch = sled::Batch::default();
 
         for (index, tx_hash) in txs_hashes.iter().enumerate() {
@@ -130,7 +130,7 @@ impl TxStore {
             batch.insert(tx_hash.inner(), serialized);
         }
 
-        Ok(batch)
+        batch
     }
 
     /// Generate the sled batch corresponding to an insert to the pending txs tree,
@@ -143,7 +143,7 @@ impl TxStore {
     pub fn insert_batch_pending(
         &self,
         transactions: &[Transaction],
-    ) -> Result<(sled::Batch, Vec<TransactionHash>)> {
+    ) -> (sled::Batch, Vec<TransactionHash>) {
         let mut ret = Vec::with_capacity(transactions.len());
         let mut batch = sled::Batch::default();
 
@@ -153,7 +153,7 @@ impl TxStore {
             ret.push(tx_hash);
         }
 
-        Ok((batch, ret))
+        (batch, ret)
     }
 
     /// Generate the sled batch corresponding to an insert to the pending txs
@@ -207,8 +207,7 @@ impl TxStore {
                 continue
             }
             if strict {
-                let s = tx_hash.inner().hex().as_str().to_string();
-                return Err(Error::TransactionNotFound(s))
+                return Err(Error::TransactionNotFound(tx_hash.as_string()))
             }
             ret.push(None);
         }
@@ -235,8 +234,7 @@ impl TxStore {
                 continue
             }
             if strict {
-                let s = tx_hash.inner().hex();
-                return Err(Error::TransactionNotFound(s))
+                return Err(Error::TransactionNotFound(tx_hash.as_string()))
             }
             ret.push(None);
         }
@@ -263,8 +261,7 @@ impl TxStore {
                 continue
             }
             if strict {
-                let s = tx_hash.inner().hex();
-                return Err(Error::TransactionNotFound(s))
+                return Err(Error::TransactionNotFound(tx_hash.as_string()))
             }
             ret.push(None);
         }
@@ -437,8 +434,7 @@ impl TxStoreOverlay {
                 continue
             }
             if strict {
-                let s = tx_hash.inner().hex();
-                return Err(Error::TransactionNotFound(s))
+                return Err(Error::TransactionNotFound(tx_hash.as_string()))
             }
             ret.push(None);
         }
@@ -450,7 +446,7 @@ impl TxStoreOverlay {
     /// raw bytes as input and doesn't deserialize the retrieved value.
     /// The resulting vector contains `Option`, which is `Some` if the tx
     /// was found in the overlay, and otherwise it is `None`, if it has not.
-    pub fn get_raw(&self, tx_hash: &[u8; blake3::OUT_LEN]) -> Result<Option<Vec<u8>>> {
+    pub fn get_raw(&self, tx_hash: &[u8; 32]) -> Result<Option<Vec<u8>>> {
         let lock = self.0.lock().unwrap();
         if let Some(found) = lock.get(SLED_TX_TREE, tx_hash)? {
             return Ok(Some(found.to_vec()))
@@ -463,7 +459,7 @@ impl TxStoreOverlay {
     /// retrieved value. The resulting vector contains `Option`, which is
     /// `Some` if the location was found in the overlay, and otherwise it
     /// is `None`, if it has not.
-    pub fn get_location_raw(&self, tx_hash: &[u8; blake3::OUT_LEN]) -> Result<Option<Vec<u8>>> {
+    pub fn get_location_raw(&self, tx_hash: &[u8; 32]) -> Result<Option<Vec<u8>>> {
         let lock = self.0.lock().unwrap();
         if let Some(found) = lock.get(SLED_TX_LOCATION_TREE, tx_hash)? {
             return Ok(Some(found.to_vec()))

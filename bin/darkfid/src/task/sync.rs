@@ -88,7 +88,7 @@ pub async fn sync_task(node: &Darkfid) -> Result<()> {
     // and loops until the response is the same block (used to utilize
     // batch requests).
     let mut last = node.validator.blockchain.last()?;
-    info!(target: "darkfid::task::sync_task", "Last known block: {:?} - {:?}", last.0, last.1);
+    info!(target: "darkfid::task::sync_task", "Last known block: {} - {}", last.0, last.1);
     loop {
         // Node creates a `SyncRequest` and sends it
         let request = SyncRequest { height: last.0 };
@@ -109,7 +109,7 @@ pub async fn sync_task(node: &Darkfid) -> Result<()> {
         }
 
         let last_received = node.validator.blockchain.last()?;
-        info!(target: "darkfid::task::sync_task", "Last received block: {:?} - {:?}", last_received.0, last_received.1);
+        info!(target: "darkfid::task::sync_task", "Last received block: {} - {}", last_received.0, last_received.1);
 
         if last == last_received {
             break

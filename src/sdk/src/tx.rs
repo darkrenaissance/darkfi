@@ -31,7 +31,7 @@ use super::{
     ContractError, GenericResult,
 };
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, SerialEncodable, SerialDecodable)]
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq, SerialEncodable, SerialDecodable)]
 // We have to introduce a type rather than using an alias so we can implement Display
 pub struct TransactionHash(pub [u8; 32]);
 
@@ -47,6 +47,10 @@ impl TransactionHash {
     #[inline]
     pub fn inner(&self) -> &[u8; 32] {
         &self.0
+    }
+
+    pub fn as_string(&self) -> String {
+        self.0.hex().to_string()
     }
 }
 

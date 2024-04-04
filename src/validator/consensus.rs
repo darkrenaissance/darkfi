@@ -31,7 +31,7 @@ use smol::lock::RwLock;
 use crate::{
     blockchain::{
         block_store::{BlockDifficulty, BlockRanks},
-        BlockInfo, Blockchain, BlockchainOverlay, BlockchainOverlayPtr, Header,
+        BlockInfo, Blockchain, BlockchainOverlay, BlockchainOverlayPtr, Header, HeaderHash,
     },
     tx::Transaction,
     util::time::Timestamp,
@@ -195,7 +195,7 @@ impl Consensus {
             let (next_target, next_difficulty) = fork.module.next_mine_target_and_difficulty()?;
 
             // Calculate block rank
-            let (target_distance_sq, hash_distance_sq) = block_rank(block, &next_target)?;
+            let (target_distance_sq, hash_distance_sq) = block_rank(block, &next_target);
 
             // Update PoW module
             fork.module.append(block.header.timestamp, &next_difficulty);
@@ -245,8 +245,8 @@ impl Consensus {
     /// an empty vector is returned.
     pub async fn get_fork_proposals(
         &self,
-        tip: blake3::Hash,
-        fork_tip: blake3::Hash,
+        tip: HeaderHash,
+        fork_tip: HeaderHash,
     ) -> Result<Vec<Proposal>> {
         // Tip must be canonical(finalized) blockchain last
         if self.blockchain.last()?.1 != tip {
@@ -269,7 +269,7 @@ impl Consensus {
                 let blocks = fork.overlay.lock().unwrap().get_blocks_by_hash(&fork.proposals)?;
                 let mut ret = Vec::with_capacity(blocks.len());
                 for block in blocks {
-                    ret.push(Proposal::new(block)?);
+                    ret.push(Proposal::new(block));
                 }
                 drop(forks);
                 return Ok(ret)
@@ -284,7 +284,7 @@ impl Consensus {
     /// If multiple best forks exist, grab the proposals of the first one
     /// If provided tip is not the canonical(finalized), or no forks exist,
     /// an empty vector is returned.
-    pub async fn get_best_fork_proposals(&self, tip: blake3::Hash) -> Result<Vec<Proposal>> {
+    pub async fn get_best_fork_proposals(&self, tip: HeaderHash) -> Result<Vec<Proposal>> {
         // Tip must be canonical(finalized) blockchain last
         if self.blockchain.last()?.1 != tip {
             return Ok(vec![])
@@ -306,7 +306,7 @@ impl Consensus {
         let blocks = fork.overlay.lock().unwrap().get_blocks_by_hash(&fork.proposals)?;
         let mut ret = Vec::with_capacity(blocks.len());
         for block in blocks {
-            ret.push(Proposal::new(block)?);
+            ret.push(Proposal::new(block));
         }
 
         Ok(ret)
@@ -318,7 +318,7 @@ impl Consensus {
     /// to canonical chain from the finalized fork.
     pub async fn reset_forks(
         &self,
-        prefix: &[blake3::Hash],
+        prefix: &[HeaderHash],
         finalized_fork_index: &usize,
     ) -> Result<()> {
         // Grab a lock over current forks
@@ -434,15 +434,15 @@ impl Consensus {
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct Proposal {
     /// Block hash
-    pub hash: blake3::Hash,
+    pub hash: HeaderHash,
     /// Block data
     pub block: BlockInfo,
 }
 
 impl Proposal {
-    pub fn new(block: BlockInfo) -> Result<Self> {
-        let hash = block.hash()?;
-        Ok(Self { hash, block })
+    pub fn new(block: BlockInfo) -> Self {
+        let hash = block.hash();
+        Self { hash, block }
     }
 }
 
@@ -465,7 +465,7 @@ pub struct Fork {
     /// Current PoW module state,
     pub module: PoWModule,
     /// Fork proposal hashes sequence
-    pub proposals: Vec<blake3::Hash>,
+    pub proposals: Vec<HeaderHash>,
     /// Fork proposal overlay diffs sequence
     pub diffs: Vec<SledDbOverlayState>,
     /// Valid pending transaction hashes
@@ -510,7 +510,7 @@ impl Fork {
 
         // Generate the new header
         let header =
-            Header::new(previous.block.hash()?, next_block_height, Timestamp::current_time(), 0);
+            Header::new(previous.block.hash(), next_block_height, Timestamp::current_time(), 0);
 
         // Generate the block
         let mut block = BlockInfo::new_empty(header);
@@ -532,10 +532,10 @@ impl Fork {
         let mut block = self.generate_unsigned_block(producer_tx).await?;
 
         // Sign block
-        block.sign(secret_key)?;
+        block.sign(secret_key);
 
         // Generate the block proposal from the block
-        let proposal = Proposal::new(block)?;
+        let proposal = Proposal::new(block);
 
         Ok(proposal)
     }
@@ -546,7 +546,7 @@ impl Fork {
         let (next_target, next_difficulty) = self.module.next_mine_target_and_difficulty()?;
 
         // Calculate block rank
-        let (target_distance_sq, hash_distance_sq) = block_rank(&proposal.block, &next_target)?;
+        let (target_distance_sq, hash_distance_sq) = block_rank(&proposal.block, &next_target);
 
         // Update fork ranks
         self.targets_rank += target_distance_sq.clone();
@@ -588,7 +588,7 @@ impl Fork {
                 .clone()
         };
 
-        Proposal::new(block)
+        Ok(Proposal::new(block))
     }
 
     /// Auxiliary function to compute forks' next block height.
@@ -620,7 +620,7 @@ impl Fork {
             }
 
             // Push the tx hash into the unproposed transactions vector
-            unproposed_txs.push(tx.clone());
+            unproposed_txs.push(*tx);
 
             // Check limit
             if unproposed_txs.len() == TXS_CAP {

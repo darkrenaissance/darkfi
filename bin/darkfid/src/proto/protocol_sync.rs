@@ -23,7 +23,7 @@ use log::{debug, error};
 use smol::Executor;
 
 use darkfi::{
-    blockchain::BlockInfo,
+    blockchain::{BlockInfo, HeaderHash},
     impl_p2p_message,
     net::{
         ChannelPtr, Message, MessageSubscription, ProtocolBase, ProtocolBasePtr,
@@ -74,9 +74,9 @@ impl_p2p_message!(SyncResponse, "syncresponse");
 #[derive(Debug, SerialEncodable, SerialDecodable)]
 pub struct ForkSyncRequest {
     /// Canonical(finalized) tip block hash
-    pub tip: blake3::Hash,
+    pub tip: HeaderHash,
     /// Optional fork tip block hash
-    pub fork_tip: Option<blake3::Hash>,
+    pub fork_tip: Option<HeaderHash>,
 }
 
 impl_p2p_message!(ForkSyncRequest, "forksyncrequest");

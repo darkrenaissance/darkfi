@@ -143,7 +143,7 @@ impl Harness {
         // We append the block as a proposal to Alice,
         // and then we broadcast it to rest nodes
         for block in blocks {
-            let proposal = Proposal::new(block.clone())?;
+            let proposal = Proposal::new(block.clone());
             self.alice.validator.append_proposal(&proposal).await?;
             let message = ProposalMessage(proposal);
             self.alice.p2p.broadcast(&message).await;
@@ -203,7 +203,7 @@ impl Harness {
         let timestamp = previous.header.timestamp.checked_add(1.into())?;
 
         // Generate header
-        let header = Header::new(previous.hash()?, block_height, timestamp, last_nonce);
+        let header = Header::new(previous.hash(), block_height, timestamp, last_nonce);
 
         // Generate the block
         let mut block = BlockInfo::new_empty(header);
@@ -212,7 +212,7 @@ impl Harness {
         block.append_txs(vec![tx]);
 
         // Attach signature
-        block.sign(&keypair.secret)?;
+        block.sign(&keypair.secret);
 
         Ok(block)
     }

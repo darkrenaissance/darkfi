@@ -108,10 +108,7 @@ impl Minerd {
         };
 
         // Mine provided block
-        let Ok(block_hash) = block.hash() else {
-            error!(target: "minerd::rpc", "Failed to hash block");
-            return server_error(RpcError::HashingFailed, id, None)
-        };
+        let block_hash = block.hash();
         info!(target: "minerd::rpc", "Mining block {} for target: {}", block_hash, target);
         if let Err(e) = mine_block(&target, &mut block, self.threads, &self.stop_signal.clone()) {
             error!(target: "minerd::rpc", "Failed mining block {} with error: {}", block_hash, e);

@@ -316,7 +316,7 @@ fn benchmark_wasm_calls(
             overlay.clone(),
             call.data.contract_id,
             block_height,
-            tx.hash().clone(),
+            tx.hash(),
             idx as u32,
         )
         .expect("runtime");

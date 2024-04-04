@@ -51,7 +51,7 @@ use crate::{
 
 /// Verify given genesis [`BlockInfo`], and apply it to the provided overlay
 pub async fn verify_genesis_block(overlay: &BlockchainOverlayPtr, block: &BlockInfo) -> Result<()> {
-    let block_hash = block.hash()?.to_string();
+    let block_hash = block.hash().as_string();
     debug!(target: "validator::verification::verify_genesis_block", "Validating genesis block {}", block_hash);
 
     // Check if block already exists
@@ -117,23 +117,22 @@ pub async fn verify_genesis_block(overlay: &BlockchainOverlayPtr, block: &BlockI
 pub fn validate_block(block: &BlockInfo, previous: &BlockInfo, module: &PoWModule) -> Result<()> {
     // Check block version (1)
     if block.header.version != block_version(block.header.height) {
-        return Err(Error::BlockIsInvalid(block.hash()?.to_string()))
+        return Err(Error::BlockIsInvalid(block.hash().as_string()))
     }
 
     // Check previous hash (2)
-    let previous_hash = previous.hash()?;
-    if block.header.previous != previous_hash {
-        return Err(Error::BlockIsInvalid(block.hash()?.to_string()))
+    if block.header.previous != previous.hash() {
+        return Err(Error::BlockIsInvalid(block.hash().as_string()))
     }
 
     // Check heights are incremental (3)
     if block.header.height != previous.header.height + 1 {
-        return Err(Error::BlockIsInvalid(block.hash()?.to_string()))
+        return Err(Error::BlockIsInvalid(block.hash().as_string()))
     }
 
     // Check timestamp validity (4)
     if !module.verify_timestamp_by_median(block.header.timestamp) {
-        return Err(Error::BlockIsInvalid(block.hash()?.to_string()))
+        return Err(Error::BlockIsInvalid(block.hash().as_string()))
     }
 
     // Check block hash corresponds to next one (5)
@@ -172,12 +171,12 @@ pub async fn verify_block(
     block: &BlockInfo,
     previous: &BlockInfo,
 ) -> Result<()> {
-    let block_hash = block.hash()?.to_string();
+    let block_hash = block.hash();
     debug!(target: "validator::verification::verify_block", "Validating block {}", block_hash);
 
     // Check if block already exists
     if overlay.lock().unwrap().has_block(block)? {
-        return Err(Error::BlockAlreadyExists(block_hash))
+        return Err(Error::BlockAlreadyExists(block_hash.as_string()))
     }
 
     // Validate block, using its previous
@@ -185,7 +184,7 @@ pub async fn verify_block(
 
     // Verify transactions vector contains at least one(producers) transaction
     if block.txs.is_empty() {
-        return Err(Error::BlockContainsNoTransactions(block_hash))
+        return Err(Error::BlockContainsNoTransactions(block_hash.as_string()))
     }
 
     // Verify transactions, exluding producer(last) one
@@ -214,7 +213,7 @@ pub async fn verify_block(
     // Verify tree matches header one
     if tree != block.header.tree {
         error!(target: "validator::verification::verify_block", "Block Merkle tree is invalid");
-        return Err(Error::BlockIsInvalid(block_hash))
+        return Err(Error::BlockIsInvalid(block_hash.as_string()))
     }
 
     // Insert block
@@ -227,7 +226,7 @@ pub async fn verify_block(
 /// Verify block proposer signature, using the proposal transaction signature as signing key
 /// over blocks header hash.
 pub fn verify_producer_signature(block: &BlockInfo, public_key: &PublicKey) -> Result<()> {
-    if !public_key.verify(&block.header.hash()?.as_bytes()[..], &block.signature) {
+    if !public_key.verify(block.header.hash().inner(), &block.signature) {
         warn!(target: "validator::verification::verify_producer_signature", "Proposer {} signature could not be verified", public_key);
         return Err(Error::InvalidSignature)
     }
@@ -284,7 +283,7 @@ pub async fn verify_producer_transaction(
         overlay.clone(),
         call.data.contract_id,
         verifying_block_height,
-        tx_hash.clone(),
+        tx_hash,
         // Call index in producer tx is 0
         0,
     )?;
@@ -452,7 +451,7 @@ pub async fn verify_transaction(
             overlay.clone(),
             call.data.contract_id,
             verifying_block_height,
-            tx_hash.clone(),
+            tx_hash,
             idx as u32,
         )?;
 
@@ -527,7 +526,7 @@ pub async fn verify_transaction(
                 overlay.clone(),
                 deploy_cid,
                 verifying_block_height,
-                tx_hash.clone(),
+                tx_hash,
                 idx as u32,
             )?;
 
@@ -680,7 +679,7 @@ pub async fn verify_proposal(
     proposal: &Proposal,
 ) -> Result<(Fork, Option<usize>)> {
     // Check if proposal hash matches actual one (1)
-    let proposal_hash = proposal.block.hash()?;
+    let proposal_hash = proposal.block.hash();
     if proposal.hash != proposal_hash {
         warn!(
             target: "validator::verification::verify_pow_proposal", "Received proposal contains mismatched hashes: {} - {}",
@@ -709,7 +708,7 @@ pub async fn verify_proposal(
     if verify_block(&fork.overlay, &fork.module, &proposal.block, &previous).await.is_err() {
         error!(target: "validator::verification::verify_pow_proposal", "Erroneous proposal block found");
         fork.overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
-        return Err(Error::BlockIsInvalid(proposal.hash.to_string()))
+        return Err(Error::BlockIsInvalid(proposal.hash.as_string()))
     };
 
     Ok((fork, index))

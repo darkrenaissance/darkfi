@@ -228,13 +228,13 @@ async fn mine_next_block(
     next_block.header.nonce = *response.get::<f64>().unwrap() as u64;
 
     // Sign the mined block
-    next_block.sign(secret)?;
+    next_block.sign(secret);
 
     // Verify it
     extended_fork.module.verify_current_block(&next_block)?;
 
     // Append the mined block as a proposal
-    let proposal = Proposal::new(next_block)?;
+    let proposal = Proposal::new(next_block);
     node.validator.append_proposal(&proposal).await?;
 
     // Broadcast proposal to the network

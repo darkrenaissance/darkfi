@@ -32,7 +32,7 @@ use num_bigint::BigUint;
 
 use crate::{tx::Transaction, util::time::Timestamp, Error, Result};
 
-use super::{parse_record, parse_u64_key_record, Header, SledDbOverlayPtr};
+use super::{parse_record, parse_u64_key_record, Header, HeaderHash, SledDbOverlayPtr};
 
 /// This struct represents a tuple of the form (`header`, `txs`, `signature`).
 /// The header and transactions are stored as hashes, serving as pointers to the actual data
@@ -41,7 +41,7 @@ use super::{parse_record, parse_u64_key_record, Header, SledDbOverlayPtr};
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct Block {
     /// Block header
-    pub header: blake3::Hash,
+    pub header: HeaderHash,
     /// Trasaction hashes
     pub txs: Vec<TransactionHash>,
     /// Block producer signature
@@ -49,21 +49,21 @@ pub struct Block {
 }
 
 impl Block {
-    pub fn new(header: blake3::Hash, txs: Vec<TransactionHash>, signature: Signature) -> Self {
+    pub fn new(header: HeaderHash, txs: Vec<TransactionHash>, signature: Signature) -> Self {
         Self { header, txs, signature }
     }
 
     /// A block's hash is the same as the hash of its header
-    pub fn hash(&self) -> blake3::Hash {
+    pub fn hash(&self) -> HeaderHash {
         self.header
     }
 
     /// Generate a `Block` from a `BlockInfo`
-    pub fn from_block_info(block_info: &BlockInfo) -> Result<Self> {
-        let header = block_info.header.hash()?;
+    pub fn from_block_info(block_info: &BlockInfo) -> Self {
+        let header = block_info.header.hash();
         let txs = block_info.txs.iter().map(|tx| tx.hash()).collect();
         let signature = block_info.signature;
-        Ok(Self { header, txs, signature })
+        Self { header, txs, signature }
     }
 }
 
@@ -106,7 +106,7 @@ impl BlockInfo {
     }
 
     /// A block's hash is the same as the hash of its header
-    pub fn hash(&self) -> Result<blake3::Hash> {
+    pub fn hash(&self) -> HeaderHash {
         self.header.hash()
     }
 
@@ -126,10 +126,8 @@ impl BlockInfo {
 
     /// Sign block header using provided secret key
     // TODO: sign more stuff?
-    pub fn sign(&mut self, secret_key: &SecretKey) -> Result<()> {
-        self.signature = secret_key.sign(&self.hash()?.as_bytes()[..]);
-
-        Ok(())
+    pub fn sign(&mut self, secret_key: &SecretKey) {
+        self.signature = secret_key.sign(self.hash().inner());
     }
 }
 
@@ -139,7 +137,7 @@ pub struct BlockOrder {
     /// Order number
     pub number: u64,
     /// Block headerhash of that number
-    pub block: blake3::Hash,
+    pub block: HeaderHash,
 }
 
 /// Auxiliary structure used to keep track of block ranking information.
@@ -297,16 +295,16 @@ impl BlockStore {
     }
 
     /// Insert a slice of [`Block`] into the store's main tree.
-    pub fn insert(&self, blocks: &[Block]) -> Result<Vec<blake3::Hash>> {
-        let (batch, ret) = self.insert_batch(blocks)?;
+    pub fn insert(&self, blocks: &[Block]) -> Result<Vec<HeaderHash>> {
+        let (batch, ret) = self.insert_batch(blocks);
         self.main.apply_batch(batch)?;
         Ok(ret)
     }
 
     /// Insert a slice of `u64` and block hashes into the store's
     /// order tree.
-    pub fn insert_order(&self, order: &[u64], hashes: &[blake3::Hash]) -> Result<()> {
-        let batch = self.insert_batch_order(order, hashes)?;
+    pub fn insert_order(&self, order: &[u64], hashes: &[HeaderHash]) -> Result<()> {
+        let batch = self.insert_batch_order(order, hashes);
         self.order.apply_batch(batch)?;
         Ok(())
     }
@@ -314,7 +312,7 @@ impl BlockStore {
     /// Insert a slice of [`BlockDifficulty`] into the store's
     /// difficulty tree.
     pub fn insert_difficulty(&self, block_difficulties: &[BlockDifficulty]) -> Result<()> {
-        let batch = self.insert_batch_difficulty(block_difficulties)?;
+        let batch = self.insert_batch_difficulty(block_difficulties);
         self.difficulty.apply_batch(batch)?;
         Ok(())
     }
@@ -324,60 +322,49 @@ impl BlockStore {
     /// The block's hash() function output is used as the key,
     /// while value is the serialized [`Block`] itself.
     /// On success, the function returns the block hashes in the same order.
-    pub fn insert_batch(&self, blocks: &[Block]) -> Result<(sled::Batch, Vec<blake3::Hash>)> {
+    pub fn insert_batch(&self, blocks: &[Block]) -> (sled::Batch, Vec<HeaderHash>) {
         let mut ret = Vec::with_capacity(blocks.len());
         let mut batch = sled::Batch::default();
 
         for block in blocks {
             let blockhash = block.hash();
-            batch.insert(blockhash.as_bytes(), serialize(block));
+            batch.insert(blockhash.inner(), serialize(block));
             ret.push(blockhash);
         }
 
-        Ok((batch, ret))
+        (batch, ret)
     }
 
     /// Generate the sled batch corresponding to an insert to the order
     /// tree, so caller can handle the write operation.
     /// The block order number is used as the key, and the block hash is used as value.
-    pub fn insert_batch_order(
-        &self,
-        order: &[u64],
-        hashes: &[blake3::Hash],
-    ) -> Result<sled::Batch> {
-        if order.len() != hashes.len() {
-            return Err(Error::InvalidInputLengths)
-        }
-
+    pub fn insert_batch_order(&self, order: &[u64], hashes: &[HeaderHash]) -> sled::Batch {
         let mut batch = sled::Batch::default();
 
         for (i, number) in order.iter().enumerate() {
-            batch.insert(&number.to_be_bytes(), hashes[i].as_bytes());
+            batch.insert(&number.to_be_bytes(), hashes[i].inner());
         }
 
-        Ok(batch)
+        batch
     }
 
     /// Generate the sled batch corresponding to an insert to the difficulty
     /// tree, so caller can handle the write operation.
     /// The block's height number is used as the key, while value is
     //  the serialized [`BlockDifficulty`] itself.
-    pub fn insert_batch_difficulty(
-        &self,
-        block_difficulties: &[BlockDifficulty],
-    ) -> Result<sled::Batch> {
+    pub fn insert_batch_difficulty(&self, block_difficulties: &[BlockDifficulty]) -> sled::Batch {
         let mut batch = sled::Batch::default();
 
         for block_difficulty in block_difficulties {
             batch.insert(&block_difficulty.height.to_be_bytes(), serialize(block_difficulty));
         }
 
-        Ok(batch)
+        batch
     }
 
     /// Check if the store's main tree contains a given block hash.
-    pub fn contains(&self, blockhash: &blake3::Hash) -> Result<bool> {
-        Ok(self.main.contains_key(blockhash.as_bytes())?)
+    pub fn contains(&self, blockhash: &HeaderHash) -> Result<bool> {
+        Ok(self.main.contains_key(blockhash.inner())?)
     }
 
     /// Check if the store's order tree contains a given order number.
@@ -390,18 +377,17 @@ impl BlockStore {
     /// was found in the block store, and otherwise it is `None`, if it has not.
     /// The second parameter is a boolean which tells the function to fail in
     /// case at least one block was not found.
-    pub fn get(&self, block_hashes: &[blake3::Hash], strict: bool) -> Result<Vec<Option<Block>>> {
+    pub fn get(&self, block_hashes: &[HeaderHash], strict: bool) -> Result<Vec<Option<Block>>> {
         let mut ret = Vec::with_capacity(block_hashes.len());
 
         for hash in block_hashes {
-            if let Some(found) = self.main.get(hash.as_bytes())? {
+            if let Some(found) = self.main.get(hash.inner())? {
                 let block = deserialize(&found)?;
                 ret.push(Some(block));
                 continue
             }
             if strict {
-                let s = hash.to_hex().as_str().to_string();
-                return Err(Error::BlockNotFound(s))
+                return Err(Error::BlockNotFound(hash.as_string()))
             }
             ret.push(None);
         }
@@ -414,7 +400,7 @@ impl BlockStore {
     /// was found in the block order store, and otherwise it is `None`, if it has not.
     /// The second parameter is a boolean which tells the function to fail in
     /// case at least one order number was not found.
-    pub fn get_order(&self, order: &[u64], strict: bool) -> Result<Vec<Option<blake3::Hash>>> {
+    pub fn get_order(&self, order: &[u64], strict: bool) -> Result<Vec<Option<HeaderHash>>> {
         let mut ret = Vec::with_capacity(order.len());
 
         for number in order {
@@ -463,7 +449,7 @@ impl BlockStore {
     /// Retrieve all blocks from the store's main tree in the form of a
     /// tuple (`hash`, `block`).
     /// Be careful as this will try to load everything in memory.
-    pub fn get_all(&self) -> Result<Vec<(blake3::Hash, Block)>> {
+    pub fn get_all(&self) -> Result<Vec<(HeaderHash, Block)>> {
         let mut blocks = vec![];
 
         for block in self.main.iter() {
@@ -476,7 +462,7 @@ impl BlockStore {
     /// Retrieve complete order from the store's order tree in the form
     /// of a vector containing (`number`, `hash`) tuples.
     /// Be careful as this will try to load everything in memory.
-    pub fn get_all_order(&self) -> Result<Vec<(u64, blake3::Hash)>> {
+    pub fn get_all_order(&self) -> Result<Vec<(u64, HeaderHash)>> {
         let mut order = vec![];
 
         for record in self.order.iter() {
@@ -502,7 +488,7 @@ impl BlockStore {
     /// Fetch n hashes after given order number. In the iteration, if an order
     /// number is not found, the iteration stops and the function returns what
     /// it has found so far in the `BlockOrderStore`.
-    pub fn get_after(&self, number: u64, n: u64) -> Result<Vec<blake3::Hash>> {
+    pub fn get_after(&self, number: u64, n: u64) -> Result<Vec<HeaderHash>> {
         let mut ret = vec![];
 
         let mut key = number;
@@ -523,7 +509,7 @@ impl BlockStore {
 
     /// Fetch the first block hash in the order tree, based on the `Ord`
     /// implementation for `Vec<u8>`.
-    pub fn get_first(&self) -> Result<(u64, blake3::Hash)> {
+    pub fn get_first(&self) -> Result<(u64, HeaderHash)> {
         let found = match self.order.first()? {
             Some(s) => s,
             None => return Err(Error::BlockNumberNotFound(0)),
@@ -535,7 +521,7 @@ impl BlockStore {
 
     /// Fetch the last block hash in the order tree, based on the `Ord`
     /// implementation for `Vec<u8>`.
-    pub fn get_last(&self) -> Result<(u64, blake3::Hash)> {
+    pub fn get_last(&self) -> Result<(u64, HeaderHash)> {
         let found = self.order.last()?.unwrap();
         let (number, hash) = parse_u64_key_record(found)?;
 
@@ -591,13 +577,13 @@ impl BlockStoreOverlay {
     /// The block's hash() function output is used as the key,
     /// while value is the serialized [`Block`] itself.
     /// On success, the function returns the block hashes in the same order.
-    pub fn insert(&self, blocks: &[Block]) -> Result<Vec<blake3::Hash>> {
+    pub fn insert(&self, blocks: &[Block]) -> Result<Vec<HeaderHash>> {
         let mut ret = Vec::with_capacity(blocks.len());
         let mut lock = self.0.lock().unwrap();
 
         for block in blocks {
             let blockhash = block.hash();
-            lock.insert(SLED_BLOCK_TREE, blockhash.as_bytes(), &serialize(block))?;
+            lock.insert(SLED_BLOCK_TREE, blockhash.inner(), &serialize(block))?;
             ret.push(blockhash);
         }
 
@@ -606,7 +592,7 @@ impl BlockStoreOverlay {
 
     /// Insert a slice of `u64` and block hashes into overlay's order tree.
     /// The block order number is used as the key, and the blockhash is used as value.
-    pub fn insert_order(&self, order: &[u64], hashes: &[blake3::Hash]) -> Result<()> {
+    pub fn insert_order(&self, order: &[u64], hashes: &[HeaderHash]) -> Result<()> {
         if order.len() != hashes.len() {
             return Err(Error::InvalidInputLengths)
         }
@@ -614,7 +600,7 @@ impl BlockStoreOverlay {
         let mut lock = self.0.lock().unwrap();
 
         for (i, number) in order.iter().enumerate() {
-            lock.insert(SLED_BLOCK_ORDER_TREE, &number.to_be_bytes(), hashes[i].as_bytes())?;
+            lock.insert(SLED_BLOCK_ORDER_TREE, &number.to_be_bytes(), hashes[i].inner())?;
         }
 
         Ok(())
@@ -640,19 +626,18 @@ impl BlockStoreOverlay {
     /// was found in the overlay, and otherwise it is `None`, if it has not.
     /// The second parameter is a boolean which tells the function to fail in
     /// case at least one block was not found.
-    pub fn get(&self, block_hashes: &[blake3::Hash], strict: bool) -> Result<Vec<Option<Block>>> {
+    pub fn get(&self, block_hashes: &[HeaderHash], strict: bool) -> Result<Vec<Option<Block>>> {
         let mut ret = Vec::with_capacity(block_hashes.len());
         let lock = self.0.lock().unwrap();
 
         for hash in block_hashes {
-            if let Some(found) = lock.get(SLED_BLOCK_TREE, hash.as_bytes())? {
+            if let Some(found) = lock.get(SLED_BLOCK_TREE, hash.inner())? {
                 let block = deserialize(&found)?;
                 ret.push(Some(block));
                 continue
             }
             if strict {
-                let s = hash.to_hex().as_str().to_string();
-                return Err(Error::BlockNotFound(s))
+                return Err(Error::BlockNotFound(hash.as_string()))
             }
             ret.push(None);
         }
@@ -665,7 +650,7 @@ impl BlockStoreOverlay {
     /// was found in the overlay, and otherwise it is `None`, if it has not.
     /// The second parameter is a boolean which tells the function to fail in
     /// case at least one number was not found.
-    pub fn get_order(&self, order: &[u64], strict: bool) -> Result<Vec<Option<blake3::Hash>>> {
+    pub fn get_order(&self, order: &[u64], strict: bool) -> Result<Vec<Option<HeaderHash>>> {
         let mut ret = Vec::with_capacity(order.len());
         let lock = self.0.lock().unwrap();
 
@@ -686,7 +671,7 @@ impl BlockStoreOverlay {
 
     /// Fetch the last block hash in the overlay's order tree, based on the `Ord`
     /// implementation for `Vec<u8>`.
-    pub fn get_last(&self) -> Result<(u64, blake3::Hash)> {
+    pub fn get_last(&self) -> Result<(u64, HeaderHash)> {
         let found = match self.0.lock().unwrap().last(SLED_BLOCK_ORDER_TREE)? {
             Some(b) => b,
             None => return Err(Error::BlockNumberNotFound(0)),
@@ -705,7 +690,7 @@ impl BlockStoreOverlay {
 /// Auxiliary function to append a transaction to a Merkle tree.
 pub fn append_tx_to_merkle_tree(tree: &mut MerkleTree, tx: &Transaction) {
     let mut buf = [0u8; 64];
-    buf[..blake3::OUT_LEN].copy_from_slice(tx.hash().inner());
+    buf[..32].copy_from_slice(tx.hash().inner());
     let leaf = pallas::Base::from_uniform_bytes(&buf);
     tree.append(leaf.into());
 }

@@ -17,7 +17,7 @@
  */
 
 use darkfi::{
-    blockchain::{BlockInfo, Blockchain},
+    blockchain::{BlockInfo, Blockchain, HeaderHash},
     validator::{consensus::Fork, pow::PoWModule},
     Result,
 };
@@ -26,8 +26,8 @@ use darkfi::{
 fn forks() -> Result<()> {
     smol::block_on(async {
         // Dummy records we will insert
-        let record1 = blake3::hash(b"Let there be dark!");
-        let record2 = blake3::hash(b"Never skip brain day.");
+        let record1 = HeaderHash::new(blake3::hash(b"Let there be dark!").into());
+        let record2 = HeaderHash::new(blake3::hash(b"Never skip brain day.").into());
 
         // Create a temporary blockchain and a PoW module
         let blockchain = Blockchain::new(&sled::Config::new().temporary(true).open()?)?;
@@ -36,7 +36,7 @@ fn forks() -> Result<()> {
         // Generate and insert default genesis block
         let genesis_block = BlockInfo::default();
         blockchain.add_block(&genesis_block)?;
-        let genesis_block_hash = genesis_block.hash()?;
+        let genesis_block_hash = genesis_block.hash();
 
         // Create a fork
         let fork = Fork::new(blockchain.clone(), module).await?;

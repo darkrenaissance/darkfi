@@ -138,7 +138,7 @@ impl Validator {
 
         if tx_in_txstore || tx_in_pending_txs_store {
             info!(target: "validator::append_tx", "We have already seen this tx");
-            return Err(TxVerifyFailed::AlreadySeenTx(tx_hash.to_string()).into())
+            return Err(TxVerifyFailed::AlreadySeenTx(tx_hash.as_string()).into())
         }
 
         // Verify state transition
@@ -177,7 +177,7 @@ impl Validator {
 
             // Store transaction hash in forks' mempool
             if write {
-                fork.mempool.push(tx_hash.clone());
+                fork.mempool.push(tx_hash);
             }
         }
 
@@ -426,14 +426,14 @@ impl Validator {
             if verify_block(&overlay, &module, block, previous).await.is_err() {
                 error!(target: "validator::add_blocks", "Erroneous block found in set");
                 overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
-                return Err(Error::BlockIsInvalid(block.hash()?.to_string()))
+                return Err(Error::BlockIsInvalid(block.hash().as_string()))
             };
 
             // Grab next mine target and difficulty
             let (next_target, next_difficulty) = module.next_mine_target_and_difficulty()?;
 
             // Calculate block rank
-            let (target_distance_sq, hash_distance_sq) = block_rank(block, &next_target)?;
+            let (target_distance_sq, hash_distance_sq) = block_rank(block, &next_target);
 
             // Update current ranks
             current_targets_rank += target_distance_sq.clone();
@@ -611,7 +611,7 @@ impl Validator {
             if verify_block(&overlay, &module, block, previous).await.is_err() {
                 error!(target: "validator::validate_blockchain", "Erroneous block found in set");
                 overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
-                return Err(Error::BlockIsInvalid(block.hash()?.to_string()))
+                return Err(Error::BlockIsInvalid(block.hash().as_string()))
             };
 
             // Update PoW module

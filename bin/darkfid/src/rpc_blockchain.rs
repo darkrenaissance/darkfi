@@ -274,7 +274,7 @@ impl Darkfid {
         JsonResponse::new(
             JsonValue::Object(HashMap::from([(
                 "chain_id".to_string(),
-                chain_id.to_hex().to_string().into(),
+                chain_id.as_string().into(),
             )])),
             id,
         )
