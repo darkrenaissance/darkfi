@@ -120,6 +120,7 @@ vanityaddr:
 fmt:
 	$(CARGO) fmt --all
 
+# cargo install cargo-hack
 check: contracts $(PROOFS_BIN)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) hack check --target=$(RUST_TARGET) \
 		--release --feature-powerset --workspace
