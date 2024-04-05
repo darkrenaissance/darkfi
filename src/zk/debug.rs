@@ -16,22 +16,25 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::{
-    crypto::{pasta_prelude::*, util::FieldElemAsStr, MerkleNode},
-    pasta::pallas,
-};
-use log::error;
-use std::io::Read;
-
 #[cfg(feature = "tinyjson")]
 use {
-    std::{collections::HashMap, fs::File, io::Write, path::Path},
+    super::halo2::Value,
+    darkfi_sdk::crypto::{pasta_prelude::*, util::FieldElemAsStr, MerkleNode},
+    std::{
+        collections::HashMap,
+        fs::File,
+        io::{Read, Write},
+        path::Path,
+    },
     tinyjson::JsonValue::{
         self, Array as JsonArray, Number as JsonNum, Object as JsonObj, String as JsonStr,
     },
 };
 
-use super::{halo2::Value, Witness, ZkCircuit};
+use darkfi_sdk::pasta::pallas;
+use log::error;
+
+use super::{Witness, ZkCircuit};
 use crate::{zkas, Error, Result};
 
 #[cfg(feature = "tinyjson")]
