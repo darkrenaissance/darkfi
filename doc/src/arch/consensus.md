@@ -222,23 +222,38 @@ The canonical blockchain now contains blocks M0 and the current state is:
 This section gives further details about the high level structures that will be
 used by the protocol.
 
+Note that for hashes, we define custom types like `TransactionHash`, but here
+we will just use the raw byte representation `[u8; 32]`.
+
+| Index         | Type           | Description                                         |
+|---------------|----------------|-----------------------------------------------------|
+| `block_index` | `u32`          | Block height                                        |
+| `tx_index`    | `u16`          | Index of a tx within a block                        |
+| `call_index`  | `u16`          | Index of contract call within a single tx           |
+
+`u32` can store 4.29 billion blocks, which with a 90 second blocktime
+corresponds to 12.2k years.
+
+`u16` max value 65535 which is far above the expected limits. By comparison
+the tx in Bitcoin with the most outputs has 2501.
+
 ## Header
 
-| Field       | Type           | Description                                    |
-|-------------|----------------|------------------------------------------------|
-| `version`   | `u8`           | Block version                                  |
-| `previous`  | `blake3::Hash` | Previous block hash                            |
-| `height`    | `u64`          | Block height                                   |
-| `timestamp` | `Timestamp`    | Block creation timestamp                       |
-| `nonce`     | `u64`          | The block's nonce value                        |
-| `tree`      | `MerkleTree`   | Merkle tree of the block's transactions hashes |
+| Field       | Type           | Description                                         |
+|-------------|----------------|-----------------------------------------------------|
+| `version`   | `u8`           | Block version                                       |
+| `previous`  | `[u8; 32]`     | Previous block hash                                 |
+| `height`    | `u32`          | Block height                                        |
+| `timestamp` | `u64`          | Block creation timestamp                            |
+| `nonce`     | `u64`          | The block's nonce value                             |
+| `tree_root` | `[u8; 32]`     | Merkle tree root of the block's transactions hashes |
 
 ## Block
 
 | Field       | Type                | Description              |
 |-------------|---------------------|--------------------------|
-| `header`    | `blake3::Hash`      | Block header hash        |
-| `txs`       | `Vec<blake3::Hash>` | Transaction hashes       |
+| `header`    | `[u8; 32]`          | Block header hash        |
+| `txs`       | `Vec<[u8; 32]`      | Transaction hashes       |
 | `signature` | `Signature`         | Block producer signature |
 
 ## Blockchain
@@ -253,8 +268,8 @@ used by the protocol.
 | Field       | Type                | Description                      |
 |-------------|---------------------|----------------------------------|
 | `chain`     | `Blockchain`        | Forks current blockchain state   |
-| `proposals` | `Vec<blake3::Hash>` | Fork proposal hashes sequence    |
-| `mempool`   | `Vec<blake3::Hash>` | Valid pending transaction hashes |
+| `proposals` | `Vec<[u8; 32]`      | Fork proposal hashes sequence    |
+| `mempool`   | `Vec<[u8; 32]`      | Valid pending transaction hashes |
 
 ## Validator
 
