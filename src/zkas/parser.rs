@@ -20,8 +20,6 @@ use std::{
     borrow::Borrow, collections::HashMap, hash::Hash, io::Result, iter::Peekable, str::Chars,
 };
 
-use darkfi_sdk::util::{NextTuple3, NextTuple4};
-
 use super::{
     ast::{Arg, Constant, Literal, Statement, StatementType, Variable, Witness},
     constants::{ALLOWED_FIELDS, MAX_K, MAX_NS_LEN},
@@ -1159,5 +1157,32 @@ impl Parser {
         }
 
         Ok(ret)
+    }
+}
+
+trait NextTuple3<I>: Iterator<Item = I> {
+    fn next_tuple(&mut self) -> Option<(I, I, I)>;
+}
+
+impl<I: Iterator<Item = T>, T> NextTuple3<T> for I {
+    fn next_tuple(&mut self) -> Option<(T, T, T)> {
+        let a = self.next()?;
+        let b = self.next()?;
+        let c = self.next()?;
+        Some((a, b, c))
+    }
+}
+
+trait NextTuple4<I>: Iterator<Item = I> {
+    fn next_tuple(&mut self) -> Option<(I, I, I, I)>;
+}
+
+impl<I: Iterator<Item = T>, T> NextTuple4<T> for I {
+    fn next_tuple(&mut self) -> Option<(T, T, T, T)> {
+        let a = self.next()?;
+        let b = self.next()?;
+        let c = self.next()?;
+        let d = self.next()?;
+        Some((a, b, c, d))
     }
 }

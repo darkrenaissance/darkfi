@@ -307,7 +307,6 @@ zk = [
 
 zkas = [
     "darkfi-serial",
-    "darkfi-sdk",
 ]
 # -----END LIBRARY FEATURES-----
 

@@ -16,7 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::util::find_subslice;
 use darkfi_serial::{deserialize_partial, VarInt};
 
 use super::{
@@ -37,6 +36,11 @@ pub struct ZkBinary {
     pub literals: Vec<(LitType, String)>,
     pub witnesses: Vec<VarType>,
     pub opcodes: Vec<(Opcode, Vec<(HeapType, usize)>)>,
+}
+
+// https://stackoverflow.com/questions/35901547/how-can-i-find-a-subsequence-in-a-u8-slice
+fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    haystack.windows(needle.len()).position(|window| window == needle)
 }
 
 impl ZkBinary {
