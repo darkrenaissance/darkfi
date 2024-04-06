@@ -48,7 +48,7 @@ use darkfi::{
         proto::{EventPut, ProtocolEventGraph},
         Event, EventGraph, EventGraphPtr, NULL_ID,
     },
-    net::{P2p, P2pPtr, SESSION_ALL},
+    net::{P2p, P2pPtr, SESSION_NET},
     rpc::{
         jsonrpc::JsonSubscriber,
         server::{listen_and_serve, RequestHandler},
@@ -362,7 +362,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
     let event_graph_ = Arc::clone(&event_graph);
     let registry = p2p.protocol_registry();
     registry
-        .register(SESSION_ALL, move |channel, _| {
+        .register(SESSION_NET, move |channel, _| {
             let event_graph_ = event_graph_.clone();
             async move { ProtocolEventGraph::init(event_graph_, channel).await.unwrap() }
         })

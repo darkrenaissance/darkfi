@@ -40,15 +40,17 @@ pub mod refine_session;
 pub use refine_session::{RefineSession, RefineSessionPtr};
 
 /// Bitwise selectors for the `protocol_registry`
-// TODO: SESSION_ALL currently does not include SESSION_REFINE, which is
-// conceptually wrong.  Should we rename SESSION_ALL to SESSION_DEFAULT?
 pub type SessionBitFlag = u32;
-pub const SESSION_INBOUND: SessionBitFlag = 0b0001;
-pub const SESSION_OUTBOUND: SessionBitFlag = 0b0010;
-pub const SESSION_MANUAL: SessionBitFlag = 0b0100;
-pub const SESSION_SEED: SessionBitFlag = 0b1000;
-pub const SESSION_REFINE: SessionBitFlag = 0b0000;
-pub const SESSION_ALL: SessionBitFlag = 0b1111;
+pub const SESSION_INBOUND: SessionBitFlag = 0b00001;
+pub const SESSION_OUTBOUND: SessionBitFlag = 0b00010;
+pub const SESSION_MANUAL: SessionBitFlag = 0b00100;
+pub const SESSION_SEED: SessionBitFlag = 0b01000;
+pub const SESSION_REFINE: SessionBitFlag = 0b10000;
+
+// Equivalent to !SESSION_REFINE.
+pub const SESSION_NET: SessionBitFlag = 0b01111;
+// Equivalent to !SESSION_REFINE & !SESSION_SEED.
+pub const SESSION_DEFAULT: SessionBitFlag = 0b00111;
 
 pub type SessionWeakPtr = Weak<dyn Session + Send + Sync + 'static>;
 

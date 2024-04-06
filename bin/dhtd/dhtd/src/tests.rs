@@ -74,7 +74,7 @@ async fn dht_remote_get_insert_real(ex: Arc<Executor<'_>>) -> Result<()> {
 
         let _dhtd = dhtd.clone();
         registry
-            .register(net::SESSION_ALL, move |channel, p2p| {
+            .register(net::SESSION_NET, move |channel, p2p| {
                 let dhtd = _dhtd.clone();
                 async move { ProtocolDht::init(channel, p2p, dhtd).await.unwrap() }
             })

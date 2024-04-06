@@ -604,7 +604,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     let registry = p2p.protocol_registry();
     let fud_ = fud.clone();
     registry
-        .register(net::SESSION_ALL, move |channel, p2p| {
+        .register(net::SESSION_NET, move |channel, p2p| {
             let fud_ = fud_.clone();
             async move { ProtocolFud::init(fud_, channel, p2p).await.unwrap() }
         })
