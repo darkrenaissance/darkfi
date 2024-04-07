@@ -311,7 +311,7 @@ async fn p2p_test_real(ex: Arc<Executor<'static>>) {
 
     // ===========================================================
     // 3. Assert that all nodes have shared their external addr
-    //    with the seed node. 
+    //    with the seed node.
     // ===========================================================
     let greylist = seed.hosts().container.fetch_all(HostColor::Grey).await;
     assert!(greylist.len() == N_NODES);
