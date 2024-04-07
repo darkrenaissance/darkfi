@@ -133,11 +133,11 @@ impl P2p {
             return Err(err)
         }
 
-        // Start the outbound session
-        self.session_outbound().start().await;
-
         // Start the refine session
         self.session_refine().start().await;
+
+        // Start the outbound session
+        self.session_outbound().start().await;
 
         info!(target: "net::p2p::start()", "[P2P] P2P subsystem started");
         Ok(())
@@ -160,9 +160,9 @@ impl P2p {
     /// Stop the running P2P subsystem
     pub async fn stop(&self) {
         // Stop the sessions
-        self.session_refine().stop().await;
         self.session_manual().stop().await;
         self.session_inbound().stop().await;
+        self.session_refine().stop().await;
         self.session_outbound().stop().await;
     }
 
