@@ -296,9 +296,12 @@ impl Slot {
                 self.slot,
             );
 
-            // Do peer discovery if we don't have a hostlist (first time connecting
-            // to the network).
-            if hosts.container.is_empty(HostColor::Grey).await {
+            // Do peer discovery if we don't have any peers on the Grey, White or Gold list
+            // (first time connecting to the network).
+            if hosts.container.is_empty(HostColor::Grey).await &&
+                hosts.container.is_empty(HostColor::White).await &&
+                hosts.container.is_empty(HostColor::Gold).await
+            {
                 dnetev!(self, OutboundSlotSleeping, {
                     slot: self.slot,
                 });
