@@ -343,15 +343,22 @@ impl HostContainer {
     /// Stores an address on a hostlist or updates its last_seen field if
     /// we already have the address.
     pub async fn store_or_update(&self, color: HostColor, addr: Url, last_seen: u64) {
-        let color_code = color as usize;
+        trace!(target: "net::hosts::store_or_update()", "[START]");
+        let color_code = color.clone() as usize;
         let mut list = self.hostlists[color_code].write().await;
         if let Some(position) = list.iter().position(|(u, _)| u == &addr) {
             list[position] = (addr.clone(), last_seen);
+            debug!(target: "net::hosts::store_or_update()", "Updated [{}] entry on {:?} list",
+                addr, color.clone());
         } else {
+            list.push((addr.clone(), last_seen));
+            debug!(target: "net::hosts::store_or_update()", "Added [{}] to {:?} list",
+            addr, HostColor::try_from(color).unwrap());
+
             if color_code == 0 && list.len() == GREYLIST_MAX_LEN {
                 let last_entry = list.pop().unwrap();
                 debug!(
-                    target: "net::hosts::store()",
+                    target: "net::hosts::store_or_update()",
                     "Greylist reached max size. Removed {:?}", last_entry,
                 );
             }
@@ -359,7 +366,7 @@ impl HostContainer {
             if color_code == 1 && list.len() == WHITELIST_MAX_LEN {
                 let last_entry = list.pop().unwrap();
                 debug!(
-                    target: "net::hosts::store()",
+                    target: "net::hosts::store_or_update()",
                     "Whitelist reached max size. Removed {:?}", last_entry,
                 );
             }
@@ -367,15 +374,16 @@ impl HostContainer {
             if color_code == 4 && list.len() == DARKLIST_MAX_LEN {
                 let last_entry = list.pop().unwrap();
                 debug!(
-                    target: "net::hosts::store()",
+                    target: "net::hosts::store_or_update()",
                     "Darklist reached max size. Removed {:?}", last_entry,
                 );
             }
 
-            list.push((addr.clone(), last_seen));
+            // Sort the list by last_seen.
             list.sort_by_key(|entry| entry.1);
             list.reverse();
         }
+        trace!(target: "net::hosts::store_or_update()", "[STOP]");
     }
 
     /// Update the last_seen field of a peer on a hostlist.
