@@ -838,31 +838,49 @@ impl EventGraph {
     }
 
     pub async fn eventgraph_info(&self, id: u16, _params: JsonValue) -> JsonResult {
-        let u_tips = self.unreferenced_tips.read().await.clone();
-        let u_tips_vals = u_tips
-            .into_values()
-            .map(|v| v.into_iter().map(|x| JsonValue::String(x.to_string())).collect::<Vec<_>>())
-            .collect::<Vec<_>>()
-            .concat();
+        let mut graph = HashMap::new();
+        for iter_elem in self.dag.iter() {
+            let (id, val) = iter_elem.unwrap();
+            let id = blake3::Hash::from_bytes((&id as &[u8]).try_into().unwrap());
+            let val: Event = deserialize_async(&val).await.unwrap();
+            graph.insert(id, val);
+        }
 
-        let b_ids = self
-            .broadcasted_ids
-            .read()
-            .await
-            .clone()
+        let json_graph = graph
             .into_iter()
-            .map(|id| JsonValue::String(id.to_string()))
-            .collect::<Vec<_>>();
+            .map(|(k, v)| {
+                let key = k.to_string();
+                let value = JsonValue::from(v);
+                (key, value)
+            })
+            .collect();
+        let values = json_map([("dag", JsonValue::Object(json_graph))]);
 
-        let values = json_map([
-            ("unreferenced_tips", JsonValue::Array(u_tips_vals)),
-            ("broadcasted_ids", JsonValue::Array(b_ids)),
-            ("synced", JsonValue::Boolean(*self.synced.read().await)),
-            (
-                "current_genesis",
-                JsonValue::String(self.current_genesis.read().await.clone().id().to_string()),
-            ),
-        ]);
+        // let u_tips = self.unreferenced_tips.read().await.clone();
+        // let u_tips_vals = u_tips
+        //     .into_values()
+        //     .map(|v| v.into_iter().map(|x| JsonValue::String(x.to_string())).collect::<Vec<_>>())
+        //     .collect::<Vec<_>>()
+        //     .concat();
+
+        // let b_ids = self
+        //     .broadcasted_ids
+        //     .read()
+        //     .await
+        //     .clone()
+        //     .into_iter()
+        //     .map(|id| JsonValue::String(id.to_string()))
+        //     .collect::<Vec<_>>();
+
+        // let values = json_map([
+        //     ("unreferenced_tips", JsonValue::Array(u_tips_vals)),
+        //     ("broadcasted_ids", JsonValue::Array(b_ids)),
+        //     ("synced", JsonValue::Boolean(*self.synced.read().await)),
+        //     (
+        //         "current_genesis",
+        //         JsonValue::String(self.current_genesis.read().await.clone().id().to_string()),
+        //     ),
+        // ]);
 
         let result = JsonValue::Object(HashMap::from([("eventgraph_info".to_string(), values)]));
 
