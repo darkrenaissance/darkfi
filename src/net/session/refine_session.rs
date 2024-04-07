@@ -78,6 +78,9 @@ impl RefineSession {
 
     /// Start the refinery and self handshake processes.
     pub(crate) async fn start(self: Arc<Self>) {
+        debug!(target: "net::refine_session", "Starting self handshake process");
+        self.self_handshake.clone().start().await;
+
         match self.p2p().hosts().container.load_all(&self.p2p().settings().hostlist).await {
             Ok(()) => {
                 debug!(target: "net::refine_session::start()", "Load hosts successful!");
@@ -98,13 +101,16 @@ impl RefineSession {
 
         debug!(target: "net::refine_session", "Starting greylist refinery process");
         self.refinery.clone().start().await;
-
-        debug!(target: "net::refine_session", "Starting self handshake process");
-        self.self_handshake.clone().start().await;
     }
 
     /// Stop the refinery and self handshake processes.
     pub(crate) async fn stop(&self) {
+        debug!(target: "net::refine_session", "Stopping self handshake process");
+        self.self_handshake.clone().stop().await;
+
+        debug!(target: "net::refine_session", "Stopping refinery process");
+        self.refinery.clone().stop().await;
+
         match self.p2p().hosts().container.save_all(&self.p2p().settings().hostlist).await {
             Ok(()) => {
                 debug!(target: "net::refine_session::stop()", "Save hosts successful!");
@@ -113,12 +119,6 @@ impl RefineSession {
                 warn!(target: "net::refine_session::stop()", "Error saving hosts {}", e);
             }
         }
-
-        debug!(target: "net::refine_session", "Stopping refinery process");
-        self.refinery.clone().stop().await;
-
-        debug!(target: "net::refine_session", "Stopping self handshake process");
-        self.self_handshake.clone().stop().await;
     }
 
     /// Globally accessible function to perform a version exchange with a
