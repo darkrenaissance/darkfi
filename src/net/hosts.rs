@@ -352,8 +352,7 @@ impl HostContainer {
                 addr, color.clone());
         } else {
             list.push((addr.clone(), last_seen));
-            debug!(target: "net::hosts::store_or_update()", "Added [{}] to {:?} list",
-            addr, HostColor::try_from(color).unwrap());
+            debug!(target: "net::hosts::store_or_update()", "Added [{}] to {:?} list", addr, color);
 
             if color_code == 0 && list.len() == GREYLIST_MAX_LEN {
                 let last_entry = list.pop().unwrap();

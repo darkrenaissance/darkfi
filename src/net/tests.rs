@@ -96,9 +96,7 @@ async fn spawn_node(
         ..Default::default()
     };
 
-    let p2p = P2p::new(settings, ex.clone()).await;
-
-    p2p
+    P2p::new(settings, ex.clone()).await
 }
 
 async fn spawn_seed_session(starting_port: usize, ex: Arc<Executor<'static>>) -> Vec<Arc<P2p>> {
@@ -200,7 +198,7 @@ async fn spawn_seed_session(starting_port: usize, ex: Arc<Executor<'static>>) ->
     assert!(random_node.hosts().container.contains(color as usize, entry).await);
 }*/
 
-async fn get_random_gold_host(p2p_instances: &Vec<Arc<P2p>>, index: usize) -> ((Url, u64), usize) {
+async fn get_random_gold_host(p2p_instances: &[Arc<P2p>], index: usize) -> ((Url, u64), usize) {
     let random_node = &p2p_instances[index];
     let external_addr = &random_node.settings().external_addrs[0];
 
