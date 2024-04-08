@@ -162,7 +162,6 @@ impl Slot {
     }
 
     async fn start(self: Arc<Self>) {
-        // TODO: way too many clones, look into making this implicit. See implicit-clone crate
         let ex = self.p2p().executor();
 
         self.process.clone().start(

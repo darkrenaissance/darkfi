@@ -159,6 +159,11 @@ impl P2p {
 
     /// Stop the running P2P subsystem
     pub async fn stop(&self) {
+        // Stop all channels
+        for channel in self.hosts.channels().await {
+            channel.stop().await;
+        }
+
         // Stop the sessions
         self.session_manual().stop().await;
         self.session_inbound().stop().await;
