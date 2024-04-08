@@ -48,7 +48,7 @@ impl TestHarness {
         holder: &Holder,
         dao_info: &Dao,
         dao_kp: &Keypair,
-        block_height: u64,
+        block_height: u32,
     ) -> Result<(Transaction, DaoMintParams, Option<MoneyFeeParamsV1>)> {
         let (dao_mint_pk, dao_mint_zkbin) =
             self.proving_keys.get(DAO_CONTRACT_ZKAS_DAO_MINT_NS).unwrap();
@@ -101,7 +101,7 @@ impl TestHarness {
         tx: Transaction,
         params: &DaoMintParams,
         fee_params: &Option<MoneyFeeParamsV1>,
-        block_height: u64,
+        block_height: u32,
         append: bool,
     ) -> Result<Vec<OwnCoin>> {
         let wallet = self.holders.get_mut(holder).unwrap();

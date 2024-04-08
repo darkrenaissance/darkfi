@@ -488,7 +488,7 @@ impl Validator {
     pub async fn add_transactions(
         &self,
         txs: &[Transaction],
-        verifying_block_height: u64,
+        verifying_block_height: u32,
         write: bool,
         verify_fees: bool,
     ) -> Result<u64> {
@@ -534,7 +534,7 @@ impl Validator {
     pub async fn add_test_producer_transaction(
         &self,
         tx: &Transaction,
-        verifying_block_height: u64,
+        verifying_block_height: u32,
         write: bool,
     ) -> Result<()> {
         debug!(target: "validator::add_test_producer_transaction", "Instantiating BlockchainOverlay");

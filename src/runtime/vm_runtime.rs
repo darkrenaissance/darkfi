@@ -96,7 +96,7 @@ pub struct Env {
     pub objects: RefCell<Vec<Vec<u8>>>,
     /// Block height number runtime verifies against.
     /// For unconfirmed txs, this will be the current max height in the chain.
-    pub verifying_block_height: u64,
+    pub verifying_block_height: u32,
     /// The hash for this transaction the runtime is being run against.
     pub tx_hash: TransactionHash,
     /// The index for this call in the transaction
@@ -155,7 +155,7 @@ impl Runtime {
         wasm_bytes: &[u8],
         blockchain: BlockchainOverlayPtr,
         contract_id: ContractId,
-        verifying_block_height: u64,
+        verifying_block_height: u32,
         tx_hash: TransactionHash,
         call_idx: u8,
     ) -> Result<Self> {

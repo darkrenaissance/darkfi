@@ -159,7 +159,7 @@ impl TestHarness {
         holder: &Holder,
         tx: Transaction,
         params: &MoneyFeeParamsV1,
-        block_height: u64,
+        block_height: u32,
     ) -> Result<Vec<OwnCoin>> {
         let wallet = self.holders.get_mut(holder).unwrap();
 
@@ -211,7 +211,7 @@ impl TestHarness {
         &mut self,
         holder: &Holder,
         tx: Transaction,
-        block_height: u64,
+        block_height: u32,
         spent_coins: &[OwnCoin],
     ) -> Result<(ContractCall, Vec<Proof>, Vec<SecretKey>, Vec<OwnCoin>, MoneyFeeParamsV1)> {
         // First we verify the fee-less transaction to see how much gas it uses for execution

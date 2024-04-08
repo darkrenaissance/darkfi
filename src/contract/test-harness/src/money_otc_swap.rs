@@ -47,7 +47,7 @@ impl TestHarness {
         owncoin0: &OwnCoin,
         holder1: &Holder,
         owncoin1: &OwnCoin,
-        block_height: u64,
+        block_height: u32,
     ) -> Result<(Transaction, MoneyTransferParamsV1, Option<MoneyFeeParamsV1>)> {
         let wallet0 = self.holders.get(holder0).unwrap();
         let wallet1 = self.holders.get(holder1).unwrap();
@@ -180,7 +180,7 @@ impl TestHarness {
         tx: Transaction,
         swap_params: &MoneyTransferParamsV1,
         fee_params: &Option<MoneyFeeParamsV1>,
-        block_height: u64,
+        block_height: u32,
         append: bool,
     ) -> Result<Vec<OwnCoin>> {
         let wallet = self.holders.get_mut(holder).unwrap();

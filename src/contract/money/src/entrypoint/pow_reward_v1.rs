@@ -92,8 +92,8 @@ pub(crate) fn money_pow_reward_process_instruction_v1(
         msg!("[PoWRewardV1] Error: Could not receive last block height from db");
         return Err(MoneyError::PoWRewardRetrieveLastBlockHeightError.into())
     };
-    let last_block_height: u64 = deserialize(&last_block_height)?;
-    if verifying_block_height != last_block_height as u32 + 1 {
+    let last_block_height: u32 = deserialize(&last_block_height)?;
+    if verifying_block_height != last_block_height + 1 {
         msg!(
             "[PoWRewardV1] Error: Call is executed for block height {}, not next one: {}",
             verifying_block_height,
@@ -109,7 +109,7 @@ pub(crate) fn money_pow_reward_process_instruction_v1(
     }
 
     // Verify reward value matches the expected one for this block height
-    let expected_reward = expected_reward(verifying_block_height as u64);
+    let expected_reward = expected_reward(verifying_block_height);
     if params.input.value != expected_reward {
         msg!(
             "[PoWRewardV1] Error: Reward value({}) is not the block height({}) expected one: {}",

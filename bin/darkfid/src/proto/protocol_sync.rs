@@ -35,7 +35,7 @@ use darkfi::{
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 
 // Constant defining how many blocks we send during syncing.
-const BATCH: u64 = 10;
+const BATCH: usize = 10;
 
 /// Auxiliary structure used for blockchain syncing.
 #[derive(Debug, SerialEncodable, SerialDecodable)]
@@ -56,7 +56,7 @@ impl_p2p_message!(IsSyncedResponse, "issyncedresponse");
 #[derive(Debug, SerialEncodable, SerialDecodable)]
 pub struct SyncRequest {
     /// Block height
-    pub height: u64,
+    pub height: u32,
 }
 
 impl_p2p_message!(SyncRequest, "syncrequest");

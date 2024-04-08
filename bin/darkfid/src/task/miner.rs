@@ -260,7 +260,7 @@ async fn generate_next_block(
     // Next secret is the poseidon hash of:
     //  [prefix, current(previous) secret, signing(block) height].
     let prefix = pallas::Base::from_raw([4, 0, 0, 0]);
-    let next_secret = poseidon_hash([prefix, secret.inner(), next_block_height.into()]);
+    let next_secret = poseidon_hash([prefix, secret.inner(), (next_block_height as u64).into()]);
     *secret = SecretKey::from(next_secret);
 
     // Generate reward transaction
@@ -275,7 +275,7 @@ async fn generate_next_block(
 
 /// Auxiliary function to generate a Money::PoWReward transaction
 fn generate_transaction(
-    block_height: u64,
+    block_height: u32,
     secret: &SecretKey,
     recipient: &PublicKey,
     zkbin: &ZkBinary,

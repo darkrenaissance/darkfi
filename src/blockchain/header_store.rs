@@ -61,7 +61,7 @@ pub struct Header {
     /// Previous block hash
     pub previous: HeaderHash,
     /// Block height
-    pub height: u64,
+    pub height: u32,
     /// Block creation timestamp
     pub timestamp: Timestamp,
     /// The block's nonce. This value changes arbitrarily with mining.
@@ -71,7 +71,7 @@ pub struct Header {
 }
 
 impl Header {
-    pub fn new(previous: HeaderHash, height: u64, timestamp: Timestamp, nonce: u64) -> Self {
+    pub fn new(previous: HeaderHash, height: u32, timestamp: Timestamp, nonce: u64) -> Self {
         let version = block_version(height);
         let tree = MerkleTree::new(1);
         Self { version, previous, height, timestamp, nonce, tree }
@@ -100,9 +100,9 @@ impl Default for Header {
     fn default() -> Self {
         Header::new(
             HeaderHash::new(blake3::hash(b"Let there be dark!").into()),
-            0,
+            0u32,
             Timestamp::current_time(),
-            0,
+            0u64,
         )
     }
 }

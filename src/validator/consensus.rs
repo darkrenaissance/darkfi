@@ -592,7 +592,7 @@ impl Fork {
     }
 
     /// Auxiliary function to compute forks' next block height.
-    pub fn get_next_block_height(&self) -> Result<u64> {
+    pub fn get_next_block_height(&self) -> Result<u32> {
         let proposal = self.last_proposal()?;
         Ok(proposal.block.header.height + 1)
     }
@@ -601,7 +601,7 @@ impl Fork {
     pub async fn unproposed_txs(
         &self,
         blockchain: &Blockchain,
-        verifying_block_height: u64,
+        verifying_block_height: u32,
     ) -> Result<Vec<Transaction>> {
         // Check if our mempool is not empty
         if self.mempool.is_empty() {

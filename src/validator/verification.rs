@@ -239,7 +239,7 @@ pub fn verify_producer_signature(block: &BlockInfo, public_key: &PublicKey) -> R
 /// Additionally, append its hash to the provided Merkle tree.
 pub async fn verify_producer_transaction(
     overlay: &BlockchainOverlayPtr,
-    verifying_block_height: u64,
+    verifying_block_height: u32,
     tx: &Transaction,
     tree: &mut MerkleTree,
 ) -> Result<PublicKey> {
@@ -375,7 +375,7 @@ pub async fn verify_producer_transaction(
 /// provided Merkle tree.
 pub async fn verify_transaction(
     overlay: &BlockchainOverlayPtr,
-    verifying_block_height: u64,
+    verifying_block_height: u32,
     tx: &Transaction,
     tree: &mut MerkleTree,
     verifying_keys: &mut HashMap<[u8; 32], HashMap<String, VerifyingKey>>,
@@ -620,7 +620,7 @@ pub async fn verify_transaction(
 /// all the transactions. Additionally, their hash is appended to the provided Merkle tree.
 pub async fn verify_transactions(
     overlay: &BlockchainOverlayPtr,
-    verifying_block_height: u64,
+    verifying_block_height: u32,
     txs: &[Transaction],
     tree: &mut MerkleTree,
     verify_fees: bool,

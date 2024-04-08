@@ -67,7 +67,7 @@ pub struct PoWRewardCallBuilder {
     /// Reward recipient's public key
     pub recipient: PublicKey,
     /// Rewarded block height
-    pub block_height: u64,
+    pub block_height: u32,
     /// Merkle tree of coins used to create inclusion proofs
     /// Spend hook for the output
     pub spend_hook: FuncId,

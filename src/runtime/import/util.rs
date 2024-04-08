@@ -212,10 +212,9 @@ pub(crate) fn get_verifying_block_height(mut ctx: FunctionEnvMut<Env>) -> i64 {
     }
 
     // Subtract used gas. Here we count the size of the object.
-    // u64 is 8 bytes.
-    env.subtract_gas(&mut store, 8);
+    // u32 is 4 bytes.
+    env.subtract_gas(&mut store, 4);
 
-    assert!(env.verifying_block_height <= i64::MAX as u64);
     env.verifying_block_height as i64
 }
 

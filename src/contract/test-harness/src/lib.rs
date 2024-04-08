@@ -203,7 +203,7 @@ impl Wallet {
         &mut self,
         callname: &str,
         tx: Transaction,
-        block_height: u64,
+        block_height: u32,
         verify_fees: bool,
     ) -> Result<()> {
         if self.bench_wasm {
@@ -304,7 +304,7 @@ fn benchmark_wasm_calls(
     callname: &str,
     validator: &Validator,
     tx: &Transaction,
-    block_height: u64,
+    block_height: u32,
 ) {
     let mut file = std::fs::OpenOptions::new().create(true).append(true).open("bench.csv").unwrap();
 

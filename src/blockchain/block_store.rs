@@ -32,7 +32,7 @@ use num_bigint::BigUint;
 
 use crate::{tx::Transaction, util::time::Timestamp, Error, Result};
 
-use super::{parse_record, parse_u64_key_record, Header, HeaderHash, SledDbOverlayPtr};
+use super::{parse_record, parse_u32_key_record, Header, HeaderHash, SledDbOverlayPtr};
 
 /// This struct represents a tuple of the form (`header`, `txs`, `signature`).
 /// The header and transactions are stored as hashes, serving as pointers to the actual data
@@ -134,9 +134,9 @@ impl BlockInfo {
 /// Auxiliary structure used to keep track of blocks order.
 #[derive(Debug, SerialEncodable, SerialDecodable)]
 pub struct BlockOrder {
-    /// Order number
-    pub number: u64,
-    /// Block headerhash of that number
+    /// Block height
+    pub height: u32,
+    /// Block header hash of that height
     pub block: HeaderHash,
 }
 
@@ -202,7 +202,7 @@ impl darkfi_serial::Decodable for BlockRanks {
 #[derive(Debug)]
 pub struct BlockDifficulty {
     /// Block height number
-    pub height: u64,
+    pub height: u32,
     /// Block creation timestamp
     pub timestamp: Timestamp,
     /// Height difficulty
@@ -215,7 +215,7 @@ pub struct BlockDifficulty {
 
 impl BlockDifficulty {
     pub fn new(
-        height: u64,
+        height: u32,
         timestamp: Timestamp,
         difficulty: BigUint,
         cummulative_difficulty: BigUint,
@@ -232,7 +232,7 @@ impl BlockDifficulty {
             BigUint::from(0u64),
             BigUint::from(0u64),
         );
-        BlockDifficulty::new(0, timestamp, BigUint::from(0u64), BigUint::from(0u64), ranks)
+        BlockDifficulty::new(0u32, timestamp, BigUint::from(0u64), BigUint::from(0u64), ranks)
     }
 }
 
@@ -252,7 +252,7 @@ impl darkfi_serial::Encodable for BlockDifficulty {
 
 impl darkfi_serial::Decodable for BlockDifficulty {
     fn decode<D: std::io::Read>(mut d: D) -> std::io::Result<Self> {
-        let height: u64 = darkfi_serial::Decodable::decode(&mut d)?;
+        let height: u32 = darkfi_serial::Decodable::decode(&mut d)?;
         let timestamp: Timestamp = darkfi_serial::Decodable::decode(&mut d)?;
         let bytes: Vec<u8> = darkfi_serial::Decodable::decode(&mut d)?;
         let difficulty: BigUint = BigUint::from_bytes_be(&bytes);
@@ -276,7 +276,7 @@ pub struct BlockStore {
     /// key is the blocks' hash, and value is the serialized block.
     pub main: sled::Tree,
     /// The `sled` tree storing the order of the blockchain's blocks,
-    /// where the key is the order number, and the value is the blocks'
+    /// where the key is the height number, and the value is the blocks'
     /// hash.
     pub order: sled::Tree,
     /// The `sled` tree storing the the difficulty information of the
@@ -301,10 +301,10 @@ impl BlockStore {
         Ok(ret)
     }
 
-    /// Insert a slice of `u64` and block hashes into the store's
+    /// Insert a slice of `u32` and block hashes into the store's
     /// order tree.
-    pub fn insert_order(&self, order: &[u64], hashes: &[HeaderHash]) -> Result<()> {
-        let batch = self.insert_batch_order(order, hashes);
+    pub fn insert_order(&self, heights: &[u32], hashes: &[HeaderHash]) -> Result<()> {
+        let batch = self.insert_batch_order(heights, hashes);
         self.order.apply_batch(batch)?;
         Ok(())
     }
@@ -337,12 +337,12 @@ impl BlockStore {
 
     /// Generate the sled batch corresponding to an insert to the order
     /// tree, so caller can handle the write operation.
-    /// The block order number is used as the key, and the block hash is used as value.
-    pub fn insert_batch_order(&self, order: &[u64], hashes: &[HeaderHash]) -> sled::Batch {
+    /// The block height is used as the key, and the block hash is used as value.
+    pub fn insert_batch_order(&self, heights: &[u32], hashes: &[HeaderHash]) -> sled::Batch {
         let mut batch = sled::Batch::default();
 
-        for (i, number) in order.iter().enumerate() {
-            batch.insert(&number.to_be_bytes(), hashes[i].inner());
+        for (i, height) in heights.iter().enumerate() {
+            batch.insert(&height.to_be_bytes(), hashes[i].inner());
         }
 
         batch
@@ -367,9 +367,9 @@ impl BlockStore {
         Ok(self.main.contains_key(blockhash.inner())?)
     }
 
-    /// Check if the store's order tree contains a given order number.
-    pub fn contains_order(&self, number: u64) -> Result<bool> {
-        Ok(self.order.contains_key(number.to_be_bytes())?)
+    /// Check if the store's order tree contains a given height.
+    pub fn contains_order(&self, height: u32) -> Result<bool> {
+        Ok(self.order.contains_key(height.to_be_bytes())?)
     }
 
     /// Fetch given block hashes from the store's main tree.
@@ -395,22 +395,22 @@ impl BlockStore {
         Ok(ret)
     }
 
-    /// Fetch given order numbers from the store's order tree.
-    /// The resulting vector contains `Option`, which is `Some` if the number
+    /// Fetch given heights from the store's order tree.
+    /// The resulting vector contains `Option`, which is `Some` if the height
     /// was found in the block order store, and otherwise it is `None`, if it has not.
     /// The second parameter is a boolean which tells the function to fail in
-    /// case at least one order number was not found.
-    pub fn get_order(&self, order: &[u64], strict: bool) -> Result<Vec<Option<HeaderHash>>> {
-        let mut ret = Vec::with_capacity(order.len());
+    /// case at least one height was not found.
+    pub fn get_order(&self, heights: &[u32], strict: bool) -> Result<Vec<Option<HeaderHash>>> {
+        let mut ret = Vec::with_capacity(heights.len());
 
-        for number in order {
-            if let Some(found) = self.order.get(number.to_be_bytes())? {
+        for height in heights {
+            if let Some(found) = self.order.get(height.to_be_bytes())? {
                 let block_hash = deserialize(&found)?;
                 ret.push(Some(block_hash));
                 continue
             }
             if strict {
-                return Err(Error::BlockNumberNotFound(*number))
+                return Err(Error::BlockHeightNotFound(*height))
             }
             ret.push(None);
         }
@@ -426,7 +426,7 @@ impl BlockStore {
     /// case at least one block height number was not found.
     pub fn get_difficulty(
         &self,
-        heights: &[u64],
+        heights: &[u32],
         strict: bool,
     ) -> Result<Vec<Option<BlockDifficulty>>> {
         let mut ret = Vec::with_capacity(heights.len());
@@ -460,13 +460,13 @@ impl BlockStore {
     }
 
     /// Retrieve complete order from the store's order tree in the form
-    /// of a vector containing (`number`, `hash`) tuples.
+    /// of a vector containing (`height`, `hash`) tuples.
     /// Be careful as this will try to load everything in memory.
-    pub fn get_all_order(&self) -> Result<Vec<(u64, HeaderHash)>> {
+    pub fn get_all_order(&self) -> Result<Vec<(u32, HeaderHash)>> {
         let mut order = vec![];
 
         for record in self.order.iter() {
-            order.push(parse_u64_key_record(record.unwrap())?);
+            order.push(parse_u32_key_record(record.unwrap())?);
         }
 
         Ok(order)
@@ -475,28 +475,28 @@ impl BlockStore {
     /// Retrieve all block difficulties from the store's difficulty tree in
     /// the form of a vector containing (`height`, `difficulty`) tuples.
     /// Be careful as this will try to load everything in memory.
-    pub fn get_all_difficulty(&self) -> Result<Vec<(u64, BlockDifficulty)>> {
+    pub fn get_all_difficulty(&self) -> Result<Vec<(u32, BlockDifficulty)>> {
         let mut block_difficulties = vec![];
 
         for record in self.difficulty.iter() {
-            block_difficulties.push(parse_u64_key_record(record.unwrap())?);
+            block_difficulties.push(parse_u32_key_record(record.unwrap())?);
         }
 
         Ok(block_difficulties)
     }
 
-    /// Fetch n hashes after given order number. In the iteration, if an order
-    /// number is not found, the iteration stops and the function returns what
+    /// Fetch n hashes after given height. In the iteration, if an order
+    /// height is not found, the iteration stops and the function returns what
     /// it has found so far in the `BlockOrderStore`.
-    pub fn get_after(&self, number: u64, n: u64) -> Result<Vec<HeaderHash>> {
+    pub fn get_after(&self, height: u32, n: usize) -> Result<Vec<HeaderHash>> {
         let mut ret = vec![];
 
-        let mut key = number;
+        let mut key = height;
         let mut counter = 0;
         while counter <= n {
             if let Some(found) = self.order.get_gt(key.to_be_bytes())? {
-                let (number, hash) = parse_u64_key_record(found)?;
-                key = number;
+                let (height, hash) = parse_u32_key_record(found)?;
+                key = height;
                 ret.push(hash);
                 counter += 1;
                 continue
@@ -509,23 +509,23 @@ impl BlockStore {
 
     /// Fetch the first block hash in the order tree, based on the `Ord`
     /// implementation for `Vec<u8>`.
-    pub fn get_first(&self) -> Result<(u64, HeaderHash)> {
+    pub fn get_first(&self) -> Result<(u32, HeaderHash)> {
         let found = match self.order.first()? {
             Some(s) => s,
-            None => return Err(Error::BlockNumberNotFound(0)),
+            None => return Err(Error::BlockHeightNotFound(0u32)),
         };
-        let (number, hash) = parse_u64_key_record(found)?;
+        let (height, hash) = parse_u32_key_record(found)?;
 
-        Ok((number, hash))
+        Ok((height, hash))
     }
 
     /// Fetch the last block hash in the order tree, based on the `Ord`
     /// implementation for `Vec<u8>`.
-    pub fn get_last(&self) -> Result<(u64, HeaderHash)> {
+    pub fn get_last(&self) -> Result<(u32, HeaderHash)> {
         let found = self.order.last()?.unwrap();
-        let (number, hash) = parse_u64_key_record(found)?;
+        let (height, hash) = parse_u32_key_record(found)?;
 
-        Ok((number, hash))
+        Ok((height, hash))
     }
 
     /// Fetch the last record in the difficulty tree, based on the `Ord`
@@ -590,17 +590,17 @@ impl BlockStoreOverlay {
         Ok(ret)
     }
 
-    /// Insert a slice of `u64` and block hashes into overlay's order tree.
-    /// The block order number is used as the key, and the blockhash is used as value.
-    pub fn insert_order(&self, order: &[u64], hashes: &[HeaderHash]) -> Result<()> {
-        if order.len() != hashes.len() {
+    /// Insert a slice of `u32` and block hashes into overlay's order tree.
+    /// The block height is used as the key, and the blockhash is used as value.
+    pub fn insert_order(&self, heights: &[u32], hashes: &[HeaderHash]) -> Result<()> {
+        if heights.len() != hashes.len() {
             return Err(Error::InvalidInputLengths)
         }
 
         let mut lock = self.0.lock().unwrap();
 
-        for (i, number) in order.iter().enumerate() {
-            lock.insert(SLED_BLOCK_ORDER_TREE, &number.to_be_bytes(), hashes[i].inner())?;
+        for (i, height) in heights.iter().enumerate() {
+            lock.insert(SLED_BLOCK_ORDER_TREE, &height.to_be_bytes(), hashes[i].inner())?;
         }
 
         Ok(())
@@ -645,23 +645,23 @@ impl BlockStoreOverlay {
         Ok(ret)
     }
 
-    /// Fetch given order numbers from the overlay's order tree.
-    /// The resulting vector contains `Option`, which is `Some` if the number
+    /// Fetch given heights from the overlay's order tree.
+    /// The resulting vector contains `Option`, which is `Some` if the height
     /// was found in the overlay, and otherwise it is `None`, if it has not.
     /// The second parameter is a boolean which tells the function to fail in
-    /// case at least one number was not found.
-    pub fn get_order(&self, order: &[u64], strict: bool) -> Result<Vec<Option<HeaderHash>>> {
-        let mut ret = Vec::with_capacity(order.len());
+    /// case at least one height was not found.
+    pub fn get_order(&self, heights: &[u32], strict: bool) -> Result<Vec<Option<HeaderHash>>> {
+        let mut ret = Vec::with_capacity(heights.len());
         let lock = self.0.lock().unwrap();
 
-        for number in order {
-            if let Some(found) = lock.get(SLED_BLOCK_ORDER_TREE, &number.to_be_bytes())? {
+        for height in heights {
+            if let Some(found) = lock.get(SLED_BLOCK_ORDER_TREE, &height.to_be_bytes())? {
                 let block_hash = deserialize(&found)?;
                 ret.push(Some(block_hash));
                 continue
             }
             if strict {
-                return Err(Error::BlockNumberNotFound(*number))
+                return Err(Error::BlockHeightNotFound(*height))
             }
             ret.push(None);
         }
@@ -671,14 +671,14 @@ impl BlockStoreOverlay {
 
     /// Fetch the last block hash in the overlay's order tree, based on the `Ord`
     /// implementation for `Vec<u8>`.
-    pub fn get_last(&self) -> Result<(u64, HeaderHash)> {
+    pub fn get_last(&self) -> Result<(u32, HeaderHash)> {
         let found = match self.0.lock().unwrap().last(SLED_BLOCK_ORDER_TREE)? {
             Some(b) => b,
-            None => return Err(Error::BlockNumberNotFound(0)),
+            None => return Err(Error::BlockHeightNotFound(0u32)),
         };
-        let (number, hash) = parse_u64_key_record(found)?;
+        let (height, hash) = parse_u32_key_record(found)?;
 
-        Ok((number, hash))
+        Ok((height, hash))
     }
 
     /// Check if overlay's order tree contains any records.

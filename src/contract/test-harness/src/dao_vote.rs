@@ -51,7 +51,7 @@ impl TestHarness {
         dao_keypair: &Keypair,
         proposal: &DaoProposal,
         proposal_bulla: &DaoProposalBulla,
-        block_height: u64,
+        block_height: u32,
     ) -> Result<(Transaction, DaoVoteParams, Option<MoneyFeeParamsV1>)> {
         let wallet = self.holders.get(voter).unwrap();
 
@@ -81,7 +81,7 @@ impl TestHarness {
             signature_secret,
         };
 
-        let current_day = blockwindow(block_height as u32);
+        let current_day = blockwindow(block_height);
         let call = DaoVoteCall {
             money_null_smt: wallet.money_null_smt_snapshot.as_ref().unwrap(),
             inputs: vec![input],
@@ -143,7 +143,7 @@ impl TestHarness {
         tx: Transaction,
         _params: &DaoVoteParams,
         fee_params: &Option<MoneyFeeParamsV1>,
-        block_height: u64,
+        block_height: u32,
         append: bool,
     ) -> Result<Vec<OwnCoin>> {
         let wallet = self.holders.get_mut(holder).unwrap();

@@ -166,7 +166,7 @@ impl ProtocolProposal {
             }
 
             // Sequence length must correspond to requested height
-            if response.proposals.len() as u64 != proposal_copy.0.block.header.height - last.0 {
+            if response.proposals.len() as u32 != proposal_copy.0.block.header.height - last.0 {
                 debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Response sequence length is erroneous");
                 continue
             }

@@ -54,7 +54,7 @@ impl TestHarness {
         user_data: pallas::Base,
         dao: &Dao,
         dao_bulla: &DaoBulla,
-        block_height: u64,
+        block_height: u32,
     ) -> Result<(Transaction, (DaoProposeParams, Option<MoneyFeeParamsV1>), DaoProposal)> {
         let wallet = self.holders.get(proposer).unwrap();
 
@@ -121,7 +121,7 @@ impl TestHarness {
             },
         ];
 
-        let creation_day = blockwindow(block_height as u32);
+        let creation_day = blockwindow(block_height);
         let proposal = DaoProposal {
             auth_calls,
             creation_day,
@@ -194,7 +194,7 @@ impl TestHarness {
         tx: Transaction,
         params: &DaoProposeParams,
         fee_params: &Option<MoneyFeeParamsV1>,
-        block_height: u64,
+        block_height: u32,
         append: bool,
     ) -> Result<Vec<OwnCoin>> {
         let wallet = self.holders.get_mut(holder).unwrap();

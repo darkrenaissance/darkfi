@@ -611,7 +611,7 @@ impl Drk {
     }
 
     /// Get the last scanned block height from the wallet.
-    pub async fn last_scanned_block(&self) -> WalletDbResult<u64> {
+    pub async fn last_scanned_block(&self) -> WalletDbResult<u32> {
         let ret = self
             .wallet
             .query_single(&MONEY_INFO_TABLE, &[MONEY_INFO_COL_LAST_SCANNED_BLOCK], &[])
@@ -619,7 +619,7 @@ impl Drk {
         let Value::Integer(height) = ret[0] else {
             return Err(WalletDbError::ParseColumnValueError);
         };
-        let Ok(height) = u64::try_from(height) else {
+        let Ok(height) = u32::try_from(height) else {
             return Err(WalletDbError::ParseColumnValueError);
         };
 

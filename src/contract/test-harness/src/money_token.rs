@@ -56,7 +56,7 @@ impl TestHarness {
         token_blind: BaseBlind,
         spend_hook: Option<FuncId>,
         user_data: Option<pallas::Base>,
-        block_height: u64,
+        block_height: u32,
     ) -> Result<(
         Transaction,
         MoneyTokenMintParamsV1,
@@ -177,7 +177,7 @@ impl TestHarness {
         mint_params: &MoneyTokenMintParamsV1,
         auth_params: &MoneyAuthTokenMintParamsV1,
         fee_params: &Option<MoneyFeeParamsV1>,
-        block_height: u64,
+        block_height: u32,
         append: bool,
     ) -> Result<Vec<OwnCoin>> {
         let wallet = self.holders.get_mut(holder).unwrap();
@@ -250,7 +250,7 @@ impl TestHarness {
     pub async fn token_freeze(
         &mut self,
         holder: &Holder,
-        block_height: u64,
+        block_height: u32,
     ) -> Result<(Transaction, MoneyTokenFreezeParamsV1, Option<MoneyFeeParamsV1>)> {
         let wallet = self.holders.get(holder).unwrap();
         let mint_authority = wallet.token_mint_authority;
@@ -329,7 +329,7 @@ impl TestHarness {
         tx: Transaction,
         _freeze_params: &MoneyTokenFreezeParamsV1,
         fee_params: &Option<MoneyFeeParamsV1>,
-        block_height: u64,
+        block_height: u32,
         append: bool,
     ) -> Result<Vec<OwnCoin>> {
         let wallet = self.holders.get_mut(holder).unwrap();

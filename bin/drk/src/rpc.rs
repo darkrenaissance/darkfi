@@ -54,7 +54,7 @@ impl Drk {
     ) -> Result<()> {
         let req = JsonRequest::new("blockchain.last_known_block", JsonValue::Array(vec![]));
         let rep = self.rpc_client.request(req).await?;
-        let last_known = *rep.get::<f64>().unwrap() as u64;
+        let last_known = *rep.get::<f64>().unwrap() as u32;
         let last_scanned = match self.last_scanned_block().await {
             Ok(l) => l,
             Err(e) => {
@@ -234,7 +234,7 @@ impl Drk {
                     return Err(WalletDbError::GenericError)
                 }
             };
-            let last = *rep.get::<f64>().unwrap() as u64;
+            let last = *rep.get::<f64>().unwrap() as u32;
 
             println!("Requested to scan from block number: {height}");
             println!("Last known block number reported by darkfid: {last}");
@@ -268,7 +268,7 @@ impl Drk {
     }
 
     // Queries darkfid for a block with given height
-    async fn get_block_by_height(&self, height: u64) -> Result<BlockInfo> {
+    async fn get_block_by_height(&self, height: u32) -> Result<BlockInfo> {
         let req = JsonRequest::new(
             "blockchain.get_block",
             JsonValue::Array(vec![JsonValue::String(height.to_string())]),

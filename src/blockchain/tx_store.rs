@@ -71,7 +71,7 @@ impl TxStore {
     }
 
     /// Insert a slice of [`TransactionHash`] into the store's location tree.
-    pub fn insert_location(&self, txs_hashes: &[TransactionHash], block_height: u64) -> Result<()> {
+    pub fn insert_location(&self, txs_hashes: &[TransactionHash], block_height: u32) -> Result<()> {
         let batch = self.insert_batch_location(txs_hashes, block_height);
         self.location.apply_batch(batch)?;
         Ok(())
@@ -121,7 +121,7 @@ impl TxStore {
     pub fn insert_batch_location(
         &self,
         txs_hashes: &[TransactionHash],
-        block_height: u64,
+        block_height: u32,
     ) -> sled::Batch {
         let mut batch = sled::Batch::default();
 
@@ -285,7 +285,7 @@ impl TxStore {
     /// Retrieve all transactions locations from the store's location tree in
     /// the form of a tuple (`tx_hash`, (`block_height`, `index`)).
     /// Be careful as this will try to load everything in memory.
-    pub fn get_all_location(&self) -> Result<Vec<(TransactionHash, (u64, u16))>> {
+    pub fn get_all_location(&self) -> Result<Vec<(TransactionHash, (u32, u16))>> {
         let mut locations = vec![];
 
         for location in self.location.iter() {
@@ -403,7 +403,7 @@ impl TxStoreOverlay {
     /// Insert a slice of [`TransactionHash`] into the overlay's location tree.
     /// The location tuple is built using the index of each transaction hash
     /// in the slice, along with the provided block height
-    pub fn insert_location(&self, txs_hashes: &[TransactionHash], block_height: u64) -> Result<()> {
+    pub fn insert_location(&self, txs_hashes: &[TransactionHash], block_height: u32) -> Result<()> {
         let mut lock = self.0.lock().unwrap();
 
         for (index, tx_hash) in txs_hashes.iter().enumerate() {

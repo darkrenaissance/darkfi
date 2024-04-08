@@ -54,7 +54,7 @@ impl Darkfid {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
-        let block_height = match params[0].get::<String>().unwrap().parse::<u64>() {
+        let block_height = match params[0].get::<String>().unwrap().parse::<u32>() {
             Ok(v) => v,
             Err(_) => return JsonError::new(ParseError, None, id).into(),
         };

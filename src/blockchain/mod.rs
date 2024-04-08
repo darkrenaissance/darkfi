@@ -159,7 +159,7 @@ impl Blockchain {
     }
 
     /// Retrieve [`BlockInfo`]s by given heights. Does not fail if any of them are not found.
-    pub fn get_blocks_by_heights(&self, heights: &[u64]) -> Result<Vec<BlockInfo>> {
+    pub fn get_blocks_by_heights(&self, heights: &[u32]) -> Result<Vec<BlockInfo>> {
         debug!(target: "blockchain", "get_blocks_by_heights(): {:?}", heights);
         let blockhashes = self.blocks.get_order(heights, false)?;
 
@@ -172,7 +172,7 @@ impl Blockchain {
     }
 
     /// Retrieve n blocks after given start block height.
-    pub fn get_blocks_after(&self, height: u64, n: u64) -> Result<Vec<BlockInfo>> {
+    pub fn get_blocks_after(&self, height: u32, n: usize) -> Result<Vec<BlockInfo>> {
         debug!(target: "blockchain", "get_blocks_after(): {} -> {}", height, n);
         let hashes = self.blocks.get_after(height, n)?;
         self.get_blocks_by_hash(&hashes)
@@ -194,7 +194,7 @@ impl Blockchain {
     }
 
     /// Retrieve genesis (first) block height and hash.
-    pub fn genesis(&self) -> Result<(u64, HeaderHash)> {
+    pub fn genesis(&self) -> Result<(u32, HeaderHash)> {
         self.blocks.get_first()
     }
 
@@ -205,7 +205,7 @@ impl Blockchain {
     }
 
     /// Retrieve the last block height and hash.
-    pub fn last(&self) -> Result<(u64, HeaderHash)> {
+    pub fn last(&self) -> Result<(u32, HeaderHash)> {
         self.blocks.get_last()
     }
 
@@ -227,7 +227,7 @@ impl Blockchain {
     }
 
     /// Check if block order for the given height is in the database.
-    pub fn has_height(&self, height: u64) -> Result<bool> {
+    pub fn has_height(&self, height: u32) -> Result<bool> {
         let vec = match self.blocks.get_order(&[height], true) {
             Ok(v) => v,
             Err(_) => return Ok(false),
@@ -357,7 +357,7 @@ impl BlockchainOverlay {
     }
 
     /// Retrieve the last block height and hash.
-    pub fn last(&self) -> Result<(u64, HeaderHash)> {
+    pub fn last(&self) -> Result<(u32, HeaderHash)> {
         self.blocks.get_last()
     }
 
@@ -368,7 +368,7 @@ impl BlockchainOverlay {
     }
 
     /// Retrieve the last block height.
-    pub fn last_block_height(&self) -> Result<u64> {
+    pub fn last_block_height(&self) -> Result<u32> {
         Ok(self.last()?.0)
     }
 
@@ -488,7 +488,16 @@ impl BlockchainOverlay {
     }
 }
 
-/// Parse a sled record with a u64 keyin the form of a tuple (`key`, `value`).
+/// Parse a sled record with a u32 key in the form of a tuple (`key`, `value`).
+pub fn parse_u32_key_record<T: Decodable>(record: (sled::IVec, sled::IVec)) -> Result<(u32, T)> {
+    let key_bytes: [u8; 4] = record.0.as_ref().try_into().unwrap();
+    let key = u32::from_be_bytes(key_bytes);
+    let value = deserialize(&record.1)?;
+
+    Ok((key, value))
+}
+
+/// Parse a sled record with a u64 key in the form of a tuple (`key`, `value`).
 pub fn parse_u64_key_record<T: Decodable>(record: (sled::IVec, sled::IVec)) -> Result<(u64, T)> {
     let key_bytes: [u8; 8] = record.0.as_ref().try_into().unwrap();
     let key = u64::from_be_bytes(key_bytes);
