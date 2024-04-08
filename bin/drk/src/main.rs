@@ -45,7 +45,7 @@ use darkfi::{
 };
 use darkfi_money_contract::model::{Coin, TokenId};
 use darkfi_sdk::{
-    crypto::{FuncId, PublicKey, SecretKey},
+    crypto::{ContractId, FuncId, PublicKey, SecretKey},
     pasta::{group::ff::PrimeField, pallas},
     tx::TransactionHash,
 };
@@ -262,6 +262,13 @@ enum Subcmd {
         /// Sub command to execute
         command: TokenSubcmd,
     },
+
+    /// Contract functionalities
+    Contract {
+        #[structopt(subcommand)]
+        /// Sub command to execute
+        command: ContractSubcmd,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize, StructOpt)]
@@ -471,6 +478,22 @@ enum TokenSubcmd {
         /// Token ID to freeze
         token: String,
     },
+}
+
+#[derive(Clone, Debug, Deserialize, StructOpt)]
+enum ContractSubcmd {
+    /// Generate a new deploy authority
+    GenerateDeploy,
+    /*
+    /// Deploy a smart contract
+    Deploy {
+        /// Path to deploy authority
+        deploy_auth: String,
+
+        /// Path to contract wasm bincode
+        wasm_path: String,
+    },
+    */
 }
 
 /// CLI-util structure
@@ -1616,6 +1639,22 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 //println!("{}", base64::encode(&serialize_async(&tx).await));
 
                 //Ok(())
+            }
+        },
+
+        Subcmd::Contract { command } => match command {
+            ContractSubcmd::GenerateDeploy => {
+                let deploy_authority = SecretKey::random(&mut OsRng);
+                let contract_id = ContractId::derive(deploy_authority);
+                println!(
+                    "Deploy authority: {}",
+                    bs58::encode(deploy_authority.inner().to_repr()).into_string()
+                );
+                println!(
+                    "Contract ID: {}",
+                    bs58::encode(&contract_id.inner().to_repr()).into_string()
+                );
+                Ok(())
             }
         },
     }
