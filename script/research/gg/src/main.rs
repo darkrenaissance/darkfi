@@ -125,9 +125,9 @@ async fn main() -> Result<()> {
 
             // Append genesis transactions
             if !genesis_txs.is_empty() {
-                genesis_block.append_txs(genesis_txs)?;
+                genesis_block.append_txs(genesis_txs);
             }
-            genesis_block.append_txs(vec![producer_tx])?;
+            genesis_block.append_txs(vec![producer_tx]);
 
             // Write generated genesis block to stdin
             let encoded = base64::encode(&serialize_async(&genesis_block).await);
@@ -136,7 +136,7 @@ async fn main() -> Result<()> {
 
         Subcmd::Verify => {
             let genesis_block = read_block().await?;
-            let hash = genesis_block.hash()?;
+            let hash = genesis_block.hash();
 
             println!("Verifying genesis block: {hash}");
 
