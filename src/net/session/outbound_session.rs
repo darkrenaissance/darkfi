@@ -141,7 +141,7 @@ impl Session for OutboundSession {
     }
 }
 
-pub struct Slot {
+struct Slot {
     slot: u32,
     process: StoppableTaskPtr,
     wakeup_self: CondVar,
@@ -184,11 +184,11 @@ impl Slot {
     /// anchor_count, select from the anchorlist. Up to white_count,
     /// select from the whitelist. For all other slots, select from
     /// the greylist.
-
+    ///
     /// If we didn't find an address with this selection logic, downgrade
     /// our preferences. Up to anchor_count, select from the whitelist,
     /// up until white_count, select from the greylist.
-
+    ///
     /// If we still didn't find an address, select from the greylist. In
     /// all other cases, return an empty vector. This will trigger
     /// fetch_addrs() to return None and initiate peer discovery.
