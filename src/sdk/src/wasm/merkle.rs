@@ -45,7 +45,7 @@ use crate::{
 ///
 /// Inside `db_roots` we store:
 ///
-/// * All [merkle root:32]s as keys. The value is the current [tx_hash:32][call_idx:2].
+/// * All [merkle root:32]s as keys. The value is the current [tx_hash:32][call_idx:1].
 ///   If no new values are added, then the root key is updated to the current (tx_hash, call_idx).
 pub fn merkle_add(
     db_info: DbHandle,
@@ -89,7 +89,7 @@ pub fn merkle_add(
 ///
 /// Inside `db_roots` we store:
 ///
-/// * All [merkle root:32]s as keys. The value is the current [tx_hash:32][call_idx:2].
+/// * All [merkle root:32]s as keys. The value is the current [tx_hash:32][call_idx:1].
 ///   If no new values are added, then the root key is updated to the current (tx_hash, call_idx).
 pub fn sparse_merkle_insert_batch(
     db_info: DbHandle,

@@ -43,7 +43,7 @@ use crate::{
 /// `get_metdata` function for `Dao::Propose`
 pub(crate) fn dao_propose_get_metadata(
     _cid: ContractId,
-    call_idx: u32,
+    call_idx: u8,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize].data;
@@ -112,7 +112,7 @@ pub(crate) fn dao_propose_get_metadata(
 /// `process_instruction` function for `Dao::Propose`
 pub(crate) fn dao_propose_process_instruction(
     cid: ContractId,
-    call_idx: u32,
+    call_idx: u8,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize].data;
@@ -149,7 +149,7 @@ pub(crate) fn dao_propose_process_instruction(
             return Err(DaoError::NonMatchingSnapshotRoots.into())
         }
 
-        assert_eq!(coin_root_data.len(), 32 + 2);
+        assert_eq!(coin_root_data.len(), 32 + 1);
         let tx_hash_data: [u8; 32] = coin_root_data[0..32].try_into().unwrap();
         let tx_hash = TransactionHash(tx_hash_data);
         // Get block_height where tx_hash was confirmed

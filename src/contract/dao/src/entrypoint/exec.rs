@@ -35,7 +35,7 @@ use crate::{
 /// `get_metdata` function for `Dao::Exec`
 pub(crate) fn dao_exec_get_metadata(
     _cid: ContractId,
-    call_idx: u32,
+    call_idx: u8,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize];
@@ -75,7 +75,7 @@ pub(crate) fn dao_exec_get_metadata(
 /// `process_instruction` function for `Dao::Exec`
 pub(crate) fn dao_exec_process_instruction(
     cid: ContractId,
-    call_idx: u32,
+    call_idx: u8,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize];

@@ -35,7 +35,7 @@ use crate::{
 /// `get_metadata` function for `Deploy::LockV1`
 pub(crate) fn lock_get_metadata_v1(
     _cid: ContractId,
-    call_idx: u32,
+    call_idx: u8,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize];
@@ -57,7 +57,7 @@ pub(crate) fn lock_get_metadata_v1(
 /// `process_instruction` function for `Deploy::LockV1`
 pub(crate) fn lock_process_instruction_v1(
     cid: ContractId,
-    call_idx: u32,
+    call_idx: u8,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize];

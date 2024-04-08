@@ -119,9 +119,15 @@ pub fn get_tx_hash() -> GenericResult<TransactionHash> {
 /// ```
 /// call_idx = get_call_index();
 /// ```
-pub fn get_call_index() -> GenericResult<u32> {
+pub fn get_call_index() -> GenericResult<u8> {
     let ret = unsafe { get_call_index_() };
-    parse_retval_u32(ret)
+    if ret < 0 {
+        return Err(ContractError::from(ret))
+    }
+    assert!(ret >= 0);
+    // This should always be possible
+    let obj = ret as u8;
+    Ok(obj)
 }
 
 /// Everyone can call this. Will return current blockchain timestamp.

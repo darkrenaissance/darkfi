@@ -272,10 +272,10 @@ pub(crate) fn sparse_merkle_insert_batch(
     let latest_root_data = serialize(&latest_root);
     assert_eq!(latest_root_data.len(), 32);
 
-    let mut value_data = Vec::with_capacity(32 + 2);
+    let mut value_data = Vec::with_capacity(32 + 1);
     env.tx_hash.inner().encode(&mut value_data).expect("Unable to serialize tx_hash");
-    (env.call_idx as u16).encode(&mut value_data).expect("Unable to serialize call_idx");
-    assert_eq!(value_data.len(), 32 + 2);
+    env.call_idx.encode(&mut value_data).expect("Unable to serialize call_idx");
+    assert_eq!(value_data.len(), 32 + 1);
 
     if overlay.insert(&db_roots.tree, &latest_root_data, &value_data).is_err() {
         error!(

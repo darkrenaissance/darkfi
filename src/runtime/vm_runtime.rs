@@ -100,7 +100,7 @@ pub struct Env {
     /// The hash for this transaction the runtime is being run against.
     pub tx_hash: TransactionHash,
     /// The index for this call in the transaction
-    pub call_idx: u32,
+    pub call_idx: u8,
     /// Parent `Instance`
     pub instance: Option<Arc<Instance>>,
 }
@@ -157,7 +157,7 @@ impl Runtime {
         contract_id: ContractId,
         verifying_block_height: u64,
         tx_hash: TransactionHash,
-        call_idx: u32,
+        call_idx: u8,
     ) -> Result<Self> {
         info!(target: "runtime::vm_runtime", "[WASM] Instantiating a new runtime");
         // This function will be called for each `Operator` encountered during

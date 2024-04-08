@@ -90,7 +90,7 @@ pub async fn deploy_native_contracts(overlay: &BlockchainOverlayPtr) -> Result<(
             nc.1,
             verifying_block_height,
             TransactionHash::none(),
-            call_idx as u32,
+            call_idx as u8,
         )?;
 
         runtime.deploy(&nc.3)?;

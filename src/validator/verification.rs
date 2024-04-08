@@ -452,7 +452,7 @@ pub async fn verify_transaction(
             call.data.contract_id,
             verifying_block_height,
             tx_hash,
-            idx as u32,
+            idx as u8,
         )?;
 
         debug!(target: "validator::verification::verify_transaction", "Executing \"metadata\" call");
@@ -527,7 +527,7 @@ pub async fn verify_transaction(
                 deploy_cid,
                 verifying_block_height,
                 tx_hash,
-                idx as u32,
+                idx as u8,
             )?;
 
             deploy_runtime.deploy(&deploy_params.ix)?;

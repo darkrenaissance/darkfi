@@ -38,7 +38,7 @@ use crate::{
 /// `get_metadata` function for `Money::TokenMintV1`
 pub(crate) fn money_token_mint_get_metadata_v1(
     _cid: ContractId,
-    call_idx: u32,
+    call_idx: u8,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize].data;
@@ -73,7 +73,7 @@ pub(crate) fn money_token_mint_get_metadata_v1(
 /// `process_instruction` function for `Money::TokenMintV1`
 pub(crate) fn money_token_mint_process_instruction_v1(
     cid: ContractId,
-    call_idx: u32,
+    call_idx: u8,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize].data;

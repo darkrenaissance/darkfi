@@ -200,7 +200,7 @@ pub struct Dao {
     /// The transaction hash where the DAO was deployed
     pub tx_hash: Option<blake3::Hash>,
     /// The call index in the transaction where the DAO was deployed
-    pub call_index: Option<u32>,
+    pub call_index: Option<u8>,
 }
 
 impl Dao {
@@ -285,7 +285,7 @@ pub struct DaoProposal {
     /// Transaction hash where this proposal was proposed
     pub tx_hash: Option<blake3::Hash>,
     /// call index in the transaction where this proposal was proposed
-    pub call_index: Option<u32>,
+    pub call_index: Option<u8>,
     /// The vote ID we've voted on this proposal
     pub vote_id: Option<pallas::Base>,
 }
@@ -355,7 +355,7 @@ pub struct DaoVote {
     /// Transaction hash where this vote was casted
     pub tx_hash: Option<blake3::Hash>,
     /// call index in the transaction where this vote was casted
-    pub call_index: Option<u32>,
+    pub call_index: Option<u8>,
 }
 
 impl Drk {
@@ -520,7 +520,7 @@ impl Drk {
             let Value::Integer(call_index) = row[11] else {
                 return Err(Error::ParseFailed("[get_daos] Call index parsing failed"))
             };
-            let Ok(call_index) = u32::try_from(call_index) else {
+            let Ok(call_index) = u8::try_from(call_index) else {
                 return Err(Error::ParseFailed("[get_daos] Call index parsing failed"))
             };
             let call_index = Some(call_index);
@@ -620,7 +620,7 @@ impl Drk {
         let Value::Integer(call_index) = row[9] else {
             return Err(Error::ParseFailed("[get_dao_proposals] Call index parsing failed"))
         };
-        let Ok(call_index) = u32::try_from(call_index) else {
+        let Ok(call_index) = u8::try_from(call_index) else {
             return Err(Error::ParseFailed("[get_dao_proposals] Call index parsing failed"))
         };
         let call_index = Some(call_index);
@@ -693,17 +693,17 @@ impl Drk {
         let (mut daos_tree, mut proposals_tree) = self.get_dao_trees().await?;
 
         // DAOs that have been minted
-        let mut new_dao_bullas: Vec<(DaoBulla, Option<blake3::Hash>, u32)> = vec![];
+        let mut new_dao_bullas: Vec<(DaoBulla, Option<blake3::Hash>, u8)> = vec![];
         // DAO proposals that have been minted
         let mut new_dao_proposals: Vec<(
             DaoProposeParams,
             Option<MerkleTree>,
             Option<blake3::Hash>,
-            u32,
+            u8,
         )> = vec![];
         let mut our_proposals: Vec<DaoProposal> = vec![];
         // DAO votes that have been seen
-        let mut new_dao_votes: Vec<(DaoVoteParams, Option<blake3::Hash>, u32)> = vec![];
+        let mut new_dao_votes: Vec<(DaoVoteParams, Option<blake3::Hash>, u8)> = vec![];
         let mut dao_votes: Vec<DaoVote> = vec![];
 
         // Run through the transaction and see what we got:
@@ -712,7 +712,7 @@ impl Drk {
                 println!("Found Dao::Mint in call {i}");
                 let params: DaoMintParams = deserialize(&call.data.data[1..])?;
                 let tx_hash = if confirm { Some(blake3::hash(&serialize(tx))) } else { None };
-                new_dao_bullas.push((params.dao_bulla, tx_hash, i as u32));
+                new_dao_bullas.push((params.dao_bulla, tx_hash, i as u8));
                 continue
             }
 
@@ -722,7 +722,7 @@ impl Drk {
                 let tx_hash = if confirm { Some(blake3::hash(&serialize(tx))) } else { None };
                 // We need to clone the tree here for reproducing the snapshot Merkle root
                 let money_tree = if confirm { Some(self.get_money_tree().await?) } else { None };
-                new_dao_proposals.push((params, money_tree, tx_hash, i as u32));
+                new_dao_proposals.push((params, money_tree, tx_hash, i as u8));
                 continue
             }
 
@@ -730,7 +730,7 @@ impl Drk {
                 println!("Found Dao::Vote in call {i}");
                 let params: DaoVoteParams = deserialize(&call.data.data[1..])?;
                 let tx_hash = if confirm { Some(blake3::hash(&serialize(tx))) } else { None };
-                new_dao_votes.push((params, tx_hash, i as u32));
+                new_dao_votes.push((params, tx_hash, i as u8));
                 continue
             }
 
@@ -1313,7 +1313,7 @@ impl Drk {
             let Value::Integer(call_index) = row[7] else {
                 return Err(Error::ParseFailed("[get_dao_proposal_votes] Call index parsing failed"))
             };
-            let Ok(call_index) = u32::try_from(call_index) else {
+            let Ok(call_index) = u8::try_from(call_index) else {
                 return Err(Error::ParseFailed("[get_dao_proposal_votes] Call index parsing failed"))
             };
             let call_index = Some(call_index);

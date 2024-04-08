@@ -37,7 +37,7 @@ use crate::{
 /// `get_metdata` function for `Dao::Vote`
 pub(crate) fn dao_vote_get_metadata(
     cid: ContractId,
-    call_idx: u32,
+    call_idx: u8,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize].data;
@@ -125,7 +125,7 @@ pub(crate) fn dao_vote_get_metadata(
 /// `process_instruction` function for `Dao::Vote`
 pub(crate) fn dao_vote_process_instruction(
     cid: ContractId,
-    call_idx: u32,
+    call_idx: u8,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize].data;

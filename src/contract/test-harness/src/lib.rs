@@ -317,7 +317,7 @@ fn benchmark_wasm_calls(
             call.data.contract_id,
             block_height,
             tx.hash(),
-            idx as u32,
+            idx as u8,
         )
         .expect("runtime");
 

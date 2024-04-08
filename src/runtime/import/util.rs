@@ -264,8 +264,8 @@ pub(crate) fn get_call_index(mut ctx: FunctionEnvMut<Env>) -> i64 {
     }
 
     // Subtract used gas. Here we count the size of the object.
-    // u32 is 4 bytes.
-    env.subtract_gas(&mut store, 4);
+    // u8 is 1 byte.
+    env.subtract_gas(&mut store, 1);
 
     env.call_idx as i64
 }
