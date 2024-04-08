@@ -306,7 +306,7 @@ impl HostContainer {
         let mut list = self.hostlists[color].write().await;
         list.push((addr.clone(), last_seen));
         debug!(target: "net::hosts::store()", "Added [{}] to {:?} list",
-        addr, HostColor::try_from(color).unwrap());
+               addr, HostColor::try_from(color).unwrap());
 
         if color == 0 && list.len() == GREYLIST_MAX_LEN {
             let last_entry = list.pop().unwrap();
@@ -337,7 +337,7 @@ impl HostContainer {
         list.reverse();
 
         trace!(target: "net::hosts::store()", "[END] list={:?}",
-        HostColor::try_from(color).unwrap());
+               HostColor::try_from(color).unwrap());
     }
 
     /// Stores an address on a hostlist or updates its last_seen field if
@@ -407,7 +407,7 @@ impl HostContainer {
         list.reverse();
 
         trace!(target: "net::hosts::update_last_seen()", "[END] list={:?}",
-        HostColor::try_from(color).unwrap());
+               HostColor::try_from(color).unwrap());
     }
 
     /// Return all known hosts on a hostlist.
@@ -475,7 +475,7 @@ impl HostContainer {
         limit: Option<usize>,
     ) -> Vec<(Url, u64)> {
         trace!(target: "net::hosts::fetch_with_schemes()", "[START] {:?}",
-        HostColor::try_from(color).unwrap());
+               HostColor::try_from(color).unwrap());
 
         let list = self.hostlists[color].read().await;
 
@@ -495,8 +495,8 @@ impl HostContainer {
                 limit -= 1;
                 if limit == 0 {
                     debug!(target: "net::hosts::fetch_with_schemes()",
-                        "Found matching {:?} scheme, returning {} addresses",
-                        HostColor::try_from(color).unwrap(), ret.len());
+                           "Found matching {:?} scheme, returning {} addresses",
+                           HostColor::try_from(color).unwrap(), ret.len());
                     return ret
                 }
             }
@@ -504,7 +504,7 @@ impl HostContainer {
 
         if ret.is_empty() {
             debug!(target: "net::hosts::fetch_with_schemes()",
-                  "No such {:?} schemes found!", HostColor::try_from(color).unwrap())
+                   "No such {:?} schemes found!", HostColor::try_from(color).unwrap())
         }
 
         ret
@@ -520,7 +520,7 @@ impl HostContainer {
         limit: Option<usize>,
     ) -> Vec<(Url, u64)> {
         trace!(target: "net::hosts::fetch_with_schemes()", "[START] {:?}",
-        HostColor::try_from(color).unwrap());
+               HostColor::try_from(color).unwrap());
 
         let list = self.hostlists[color].read().await;
 
@@ -545,8 +545,7 @@ impl HostContainer {
         }
 
         if ret.is_empty() {
-            debug!(target: "net::hosts::fetch_excluding_schemes()",
-                    "No such schemes found!")
+            debug!(target: "net::hosts::fetch_excluding_schemes()", "No such schemes found!");
         }
 
         ret
@@ -596,8 +595,7 @@ impl HostContainer {
         }
 
         if hosts.is_empty() {
-            debug!(target: "net::hosts::fetch_n_random()",
-                        "No entries found!");
+            debug!(target: "net::hosts::fetch_n_random()", "No entries found!");
             return hosts
         }
 
@@ -873,7 +871,7 @@ impl Hosts {
         let mut registry = self.registry.write().await;
 
         trace!(target: "net::hosts::try_update_registry()", "Try register addr={}, state={}",
-       addr, &new_state);
+               addr, &new_state);
 
         if registry.contains_key(&addr) {
             let current_state = registry.get(&addr).unwrap().clone();
@@ -897,7 +895,7 @@ impl Hosts {
         } else {
             // We don't know this peer. We can safely update the state.
             debug!(target: "net::hosts::try_update_registry()", "Inserting addr={}, state={}",
-            addr, &new_state);
+                   addr, &new_state);
 
             registry.insert(addr.clone(), new_state.clone());
 
@@ -926,11 +924,7 @@ impl Hosts {
                 continue
             }
 
-            debug!(
-                target: "net::hosts::check_addrs()",
-                "Found valid host {}",
-                host
-            );
+            debug!(target: "net::hosts::check_addrs()", "Found valid host {}", host);
             return Some((host.clone(), last_seen))
         }
 
@@ -1090,14 +1084,14 @@ impl Hosts {
                 addr_.path_segments().is_some()
             {
                 debug!(target: "net::hosts::filter_addresses()",
-                    "[{}] has invalid addr format. Skipping", addr_);
+                       "[{}] has invalid addr format. Skipping", addr_);
                 continue
             }
 
             // Configured seeds should never enter the hostlist.
             if self.settings.seeds.contains(addr_) {
                 debug!(target: "net::hosts::filter_addresses()",
-                    "[{}] is a configured seed. Skipping", addr_);
+                       "[{}] is a configured seed. Skipping", addr_);
                 continue
             }
 
@@ -1106,7 +1100,7 @@ impl Hosts {
                 self.block_all_ports(addr_.host_str().unwrap().to_string()).await
             {
                 warn!(target: "net::hosts::filter_addresses()",
-                "[{}] is blacklisted", addr_);
+                      "[{}] is blacklisted", addr_);
                 continue
             }
 
@@ -1117,7 +1111,7 @@ impl Hosts {
                 for ext in &settings.external_addrs {
                     if host_str == ext.host_str().unwrap() {
                         debug!(target: "net::hosts::filter_addresses()",
-                            "[{}] is our own external addr. Skipping", addr_);
+                               "[{}] is our own external addr. Skipping", addr_);
                         continue 'addr_loop
                     }
                 }
@@ -1126,7 +1120,7 @@ impl Hosts {
                 for ext in &settings.external_addrs {
                     if addr_.port() == ext.port() {
                         debug!(target: "net::hosts::filter_addresses()",
-                           "[{}] is our own localnet port. Skipping", addr_);
+                               "[{}] is our own localnet port. Skipping", addr_);
                         continue 'addr_loop
                     }
                 }
@@ -1141,7 +1135,7 @@ impl Hosts {
             // about some of them (e.g. 0.0.0.0, or broadcast, etc.).
             if !localnet && self.is_local_host(addr).await {
                 debug!(target: "net::hosts::filter_addresses()",
-                    "[{}] Filtering non-global ranges", addr_);
+                       "[{}] Filtering non-global ranges", addr_);
                 continue
             }
 
@@ -1154,7 +1148,7 @@ impl Hosts {
                         continue
                     }
                     trace!(target: "net::hosts::filter_addresses()",
-                    "[Tor] Valid: {}", host_str);
+                           "[Tor] Valid: {}", host_str);
                 }
 
                 #[cfg(feature = "p2p-nym")]
@@ -1163,7 +1157,7 @@ impl Hosts {
                 #[cfg(feature = "p2p-tcp")]
                 "tcp" | "tcp+tls" => {
                     trace!(target: "net::hosts::filter_addresses()",
-                    "[TCP] Valid: {}", host_str);
+                           "[TCP] Valid: {}", host_str);
                 }
 
                 _ => continue,
@@ -1223,7 +1217,7 @@ impl Hosts {
         destination: HostColor,
     ) -> Result<()> {
         debug!(target: "net::hosts::move_host()", "Trying to move addr={} node={} destination={:?}",
-        addr, self.settings.node_id, destination);
+               addr, self.settings.node_id, destination);
 
         // This should never panic. Failure indicates a misuse of the HostState API.
         self.try_register(addr.clone(), HostState::Move).await.unwrap();
