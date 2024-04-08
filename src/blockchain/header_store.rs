@@ -18,7 +18,11 @@
 
 use std::fmt;
 
-use darkfi_sdk::{blockchain::block_version, crypto::MerkleTree, AsHex};
+use darkfi_sdk::{
+    blockchain::block_version,
+    crypto::{MerkleNode, MerkleTree},
+    AsHex,
+};
 
 #[cfg(feature = "async-serial")]
 use darkfi_serial::async_trait;
@@ -66,15 +70,15 @@ pub struct Header {
     pub timestamp: Timestamp,
     /// The block's nonce. This value changes arbitrarily with mining.
     pub nonce: u64,
-    /// Merkle tree of the transactions hashes contained in this block
-    pub tree: MerkleTree,
+    /// Merkle tree root of the transactions hashes contained in this block
+    pub root: MerkleNode,
 }
 
 impl Header {
     pub fn new(previous: HeaderHash, height: u32, timestamp: Timestamp, nonce: u64) -> Self {
         let version = block_version(height);
-        let tree = MerkleTree::new(1);
-        Self { version, previous, height, timestamp, nonce, tree }
+        let root = MerkleTree::new(1).root(0).unwrap();
+        Self { version, previous, height, timestamp, nonce, root }
     }
 
     /// Compute the header's hash
@@ -84,12 +88,7 @@ impl Header {
         // Blake3 hasher .update() method never fails.
         // This call returns a Result due to how the Write trait is specified.
         // Calling unwrap() here should be safe.
-        self.version.encode(&mut hasher).expect("blake3 hasher");
-        self.previous.encode(&mut hasher).expect("blake3 hasher");
-        self.height.encode(&mut hasher).expect("blake3 hasher");
-        self.timestamp.encode(&mut hasher).expect("blake3 hasher");
-        self.nonce.encode(&mut hasher).expect("blake3 hasher");
-        self.tree.root(0).unwrap().encode(&mut hasher).expect("blake3 hasher");
+        self.encode(&mut hasher).expect("blake3 hasher");
 
         HeaderHash(hasher.finalize().into())
     }

@@ -95,7 +95,7 @@ pub async fn verify_genesis_block(overlay: &BlockchainOverlayPtr, block: &BlockI
 
     // Append producer transaction to the tree and check tree matches header one
     append_tx_to_merkle_tree(&mut tree, producer_tx);
-    if tree != block.header.tree {
+    if tree.root(0).unwrap() != block.header.root {
         error!(target: "validator::verification::verify_genesis_block", "Genesis Merkle tree is invalid");
         return Err(Error::BlockIsInvalid(block_hash))
     }
@@ -208,13 +208,15 @@ pub async fn verify_block(
         &mut tree,
     )
     .await?;
-    verify_producer_signature(block, &public_key)?;
 
-    // Verify tree matches header one
-    if tree != block.header.tree {
-        error!(target: "validator::verification::verify_block", "Block Merkle tree is invalid");
+    // Verify transactions merkle tree root matches header one
+    if tree.root(0).unwrap() != block.header.root {
+        error!(target: "validator::verification::verify_block", "Block Merkle tree root is invalid");
         return Err(Error::BlockIsInvalid(block_hash.as_string()))
     }
+
+    // Verify producer signature
+    verify_producer_signature(block, &public_key)?;
 
     // Insert block
     overlay.lock().unwrap().add_block(block)?;

@@ -111,21 +111,41 @@ impl BlockInfo {
     }
 
     /// Append a transaction to the block. Also adds it to the Merkle tree.
+    /// Note: when we append a tx we rebuild the whole tree, so its preferable
+    /// to append them all at once using `append_txs`.
     pub fn append_tx(&mut self, tx: Transaction) {
-        append_tx_to_merkle_tree(&mut self.header.tree, &tx);
+        let mut tree = MerkleTree::new(1);
+        // Append existing block transactions to the tree
+        for block_tx in &self.txs {
+            append_tx_to_merkle_tree(&mut tree, block_tx);
+        }
+        // Append the new transaction
+        append_tx_to_merkle_tree(&mut tree, &tx);
         self.txs.push(tx);
+        // Grab the tree root and store it in the header
+        self.header.root = tree.root(0).unwrap();
     }
 
     /// Append a vector of transactions to the block. Also adds them to the
     /// Merkle tree.
+    /// Note: when we append txs we rebuild the whole tree, so its preferable
+    /// to append them all at once.
     pub fn append_txs(&mut self, txs: Vec<Transaction>) {
-        for tx in txs {
-            self.append_tx(tx);
+        let mut tree = MerkleTree::new(1);
+        // Append existing block transactions to the tree
+        for block_tx in &self.txs {
+            append_tx_to_merkle_tree(&mut tree, block_tx);
         }
+        // Append the new transactions
+        for tx in txs {
+            append_tx_to_merkle_tree(&mut tree, &tx);
+            self.txs.push(tx);
+        }
+        // Grab the tree root and store it in the header
+        self.header.root = tree.root(0).unwrap();
     }
 
     /// Sign block header using provided secret key
-    // TODO: sign more stuff?
     pub fn sign(&mut self, secret_key: &SecretKey) {
         self.signature = secret_key.sign(self.hash().inner());
     }
