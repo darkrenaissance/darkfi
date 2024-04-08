@@ -34,7 +34,7 @@ use darkfi::{
 };
 use darkfi_sdk::{
     blockchain::block_epoch,
-    crypto::{ContractId, MerkleTree},
+    crypto::{ContractId, MerkleNode},
     tx::TransactionHash,
 };
 use num_bigint::BigUint;
@@ -64,10 +64,10 @@ struct HeaderInfo {
     _hash: HeaderHash,
     _version: u8,
     _previous: HeaderHash,
-    _height: u64,
+    _height: u32,
     _timestamp: Timestamp,
     _nonce: u64,
-    _tree: MerkleTree,
+    _root: MerkleNode,
 }
 
 impl HeaderInfo {
@@ -79,7 +79,7 @@ impl HeaderInfo {
             _height: header.height,
             _timestamp: header.timestamp,
             _nonce: header.nonce,
-            _tree: header.tree.clone(),
+            _root: header.root,
         }
     }
 }
@@ -126,12 +126,12 @@ impl BlockInfo {
 
 #[derive(Debug)]
 struct OrderInfo {
-    _height: u64,
+    _height: u32,
     _hash: HeaderHash,
 }
 
 impl OrderInfo {
-    pub fn new(_height: u64, _hash: HeaderHash) -> OrderInfo {
+    pub fn new(_height: u32, _hash: HeaderHash) -> OrderInfo {
         OrderInfo { _height, _hash }
     }
 }
@@ -157,7 +157,7 @@ impl BlockRanksInfo {
 
 #[derive(Debug)]
 struct BlockDifficultyInfo {
-    _height: u64,
+    _height: u32,
     _timestamp: Timestamp,
     _difficulty: BigUint,
     _cummulative_difficulty: BigUint,
@@ -234,12 +234,12 @@ impl TxInfo {
 #[derive(Debug)]
 struct TxLocationInfo {
     _hash: TransactionHash,
-    _block_height: u64,
-    _index: u64,
+    _block_height: u32,
+    _index: u16,
 }
 
 impl TxLocationInfo {
-    pub fn new(_hash: TransactionHash, _block_height: u64, _index: u64) -> TxLocationInfo {
+    pub fn new(_hash: TransactionHash, _block_height: u32, _index: u16) -> TxLocationInfo {
         TxLocationInfo { _hash, _block_height, _index }
     }
 }
