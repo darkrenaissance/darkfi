@@ -171,7 +171,7 @@ pub fn get_tx(hash: &TransactionHash) -> GenericResult<Option<Vec<u8>>> {
 /// ```
 /// (block_height, tx_index) = get_tx_location(hash)?;
 /// ```
-pub fn get_tx_location(hash: &TransactionHash) -> GenericResult<(u64, u64)> {
+pub fn get_tx_location(hash: &TransactionHash) -> GenericResult<(u64, u16)> {
     let mut buf = vec![];
     hash.encode(&mut buf)?;
 

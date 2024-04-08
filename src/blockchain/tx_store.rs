@@ -126,7 +126,7 @@ impl TxStore {
         let mut batch = sled::Batch::default();
 
         for (index, tx_hash) in txs_hashes.iter().enumerate() {
-            let serialized = serialize(&(block_height, index as u64));
+            let serialized = serialize(&(block_height, index as u16));
             batch.insert(tx_hash.inner(), serialized);
         }
 
@@ -224,7 +224,7 @@ impl TxStore {
         &self,
         tx_hashes: &[TransactionHash],
         strict: bool,
-    ) -> Result<Vec<Option<(u64, u64)>>> {
+    ) -> Result<Vec<Option<(u64, u16)>>> {
         let mut ret = Vec::with_capacity(tx_hashes.len());
 
         for tx_hash in tx_hashes {
@@ -285,7 +285,7 @@ impl TxStore {
     /// Retrieve all transactions locations from the store's location tree in
     /// the form of a tuple (`tx_hash`, (`block_height`, `index`)).
     /// Be careful as this will try to load everything in memory.
-    pub fn get_all_location(&self) -> Result<Vec<(TransactionHash, (u64, u64))>> {
+    pub fn get_all_location(&self) -> Result<Vec<(TransactionHash, (u64, u16))>> {
         let mut locations = vec![];
 
         for location in self.location.iter() {
@@ -407,7 +407,7 @@ impl TxStoreOverlay {
         let mut lock = self.0.lock().unwrap();
 
         for (index, tx_hash) in txs_hashes.iter().enumerate() {
-            let serialized = serialize(&(block_height, index as u64));
+            let serialized = serialize(&(block_height, index as u16));
             lock.insert(SLED_TX_LOCATION_TREE, tx_hash.inner(), &serialized)?;
         }
 
