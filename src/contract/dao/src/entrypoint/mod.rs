@@ -143,9 +143,9 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
 /// for verifying signatures and ZK proofs. The payload given here are all the
 /// contract calls in the transaction.
 fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
-    let call_idx = wasm::util::get_call_index()?;
+    let call_idx = wasm::util::get_call_index()? as usize;
     let calls: Vec<DarkLeaf<ContractCall>> = deserialize(ix)?;
-    let self_ = &calls[call_idx as usize].data;
+    let self_ = &calls[call_idx].data;
     let func = DaoFunction::try_from(self_.data[0])?;
 
     let metadata = match func {
@@ -162,9 +162,9 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
 /// This function verifies a state transition and produces a state update
 /// if everything is successful.
 fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
-    let call_idx = wasm::util::get_call_index()?;
+    let call_idx = wasm::util::get_call_index()? as usize;
     let calls: Vec<DarkLeaf<ContractCall>> = deserialize(ix)?;
-    let self_ = &calls[call_idx as usize].data;
+    let self_ = &calls[call_idx].data;
     let func = DaoFunction::try_from(self_.data[0])?;
 
     let update_data = match func {

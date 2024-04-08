@@ -47,10 +47,10 @@ use crate::{
 /// `get_metadata` function for `Money::FeeV1`
 pub(crate) fn money_fee_get_metadata_v1(
     _cid: ContractId,
-    call_idx: u8,
+    call_idx: usize,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize].data;
+    let self_ = &calls[call_idx].data;
     // The first 8 bytes here is the u64 fee, so we get the params from that offset.
     // (Plus 1, which is the function identifier byte)
     let params: MoneyFeeParamsV1 = deserialize(&self_.data[9..])?;
@@ -93,10 +93,10 @@ pub(crate) fn money_fee_get_metadata_v1(
 /// `process_instruction` function for `Money::FeeV1`
 pub(crate) fn money_fee_process_instruction_v1(
     cid: ContractId,
-    call_idx: u8,
+    call_idx: usize,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx];
     let fee: u64 = deserialize(&self_.data.data[1..9])?;
     let params: MoneyFeeParamsV1 = deserialize(&self_.data.data[9..])?;
 

@@ -35,10 +35,10 @@ use crate::{
 /// `get_metdata` function for `Dao::Exec`
 pub(crate) fn dao_exec_get_metadata(
     _cid: ContractId,
-    call_idx: u8,
+    call_idx: usize,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx];
     let params: DaoExecParams = deserialize(&self_.data.data[1..])?;
 
     // Public inputs for the ZK proofs we have to verify
@@ -75,10 +75,10 @@ pub(crate) fn dao_exec_get_metadata(
 /// `process_instruction` function for `Dao::Exec`
 pub(crate) fn dao_exec_process_instruction(
     cid: ContractId,
-    call_idx: u8,
+    call_idx: usize,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx];
     let params: DaoExecParams = deserialize(&self_.data.data[1..])?;
 
     ///////////////////////////////////////////////////

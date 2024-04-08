@@ -38,10 +38,10 @@ use crate::{
 /// `get_metadata` function for `Money::TokenMintV1`
 pub(crate) fn money_token_mint_get_metadata_v1(
     _cid: ContractId,
-    call_idx: u8,
+    call_idx: usize,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize].data;
+    let self_ = &calls[call_idx].data;
     let params: MoneyTokenMintParamsV1 = deserialize(&self_.data[1..])?;
 
     let parent_idx = calls[call_idx as usize].parent_index.unwrap();
@@ -73,10 +73,10 @@ pub(crate) fn money_token_mint_get_metadata_v1(
 /// `process_instruction` function for `Money::TokenMintV1`
 pub(crate) fn money_token_mint_process_instruction_v1(
     cid: ContractId,
-    call_idx: u8,
+    call_idx: usize,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize].data;
+    let self_ = &calls[call_idx].data;
     let params: MoneyTokenMintParamsV1 = deserialize(&self_.data[1..])?;
 
     // We have to check if the token mint is frozen, and if by some chance

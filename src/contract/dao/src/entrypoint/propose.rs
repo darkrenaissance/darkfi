@@ -43,10 +43,10 @@ use crate::{
 /// `get_metdata` function for `Dao::Propose`
 pub(crate) fn dao_propose_get_metadata(
     _cid: ContractId,
-    call_idx: u8,
+    call_idx: usize,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize].data;
+    let self_ = &calls[call_idx].data;
     let params: DaoProposeParams = deserialize(&self_.data[1..])?;
 
     if params.inputs.is_empty() {
@@ -112,10 +112,10 @@ pub(crate) fn dao_propose_get_metadata(
 /// `process_instruction` function for `Dao::Propose`
 pub(crate) fn dao_propose_process_instruction(
     cid: ContractId,
-    call_idx: u8,
+    call_idx: usize,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize].data;
+    let self_ = &calls[call_idx].data;
     let params: DaoProposeParams = deserialize(&self_.data[1..])?;
 
     let coin_roots_db = wasm::db::db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_COIN_ROOTS_TREE)?;

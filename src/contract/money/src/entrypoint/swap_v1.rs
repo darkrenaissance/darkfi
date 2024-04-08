@@ -44,7 +44,7 @@ use crate::{
 /// `get_metadata` function for `Money::OtcSwapV1`
 pub(crate) fn money_otcswap_get_metadata_v1(
     cid: ContractId,
-    call_idx: u8,
+    call_idx: usize,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
     // In here we can use the same function as we use in `TransferV1`.
@@ -54,10 +54,10 @@ pub(crate) fn money_otcswap_get_metadata_v1(
 /// `process_instruction` function for `Money::OtcSwapV1`
 pub(crate) fn money_otcswap_process_instruction_v1(
     cid: ContractId,
-    call_idx: u8,
+    call_idx: usize,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize].data;
+    let self_ = &calls[call_idx].data;
     let params: MoneyTransferParamsV1 = deserialize(&self_.data[1..])?;
 
     // The atomic swap is able to use the same parameters as `TransferV1`.

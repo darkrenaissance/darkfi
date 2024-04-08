@@ -37,10 +37,10 @@ use crate::{
 /// `get_metadata` function for `Dao::Mint`
 pub(crate) fn dao_mint_get_metadata(
     _cid: ContractId,
-    call_idx: u8,
+    call_idx: usize,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize].data;
+    let self_ = &calls[call_idx].data;
     let params: DaoMintParams = deserialize(&self_.data[1..])?;
 
     // Public inputs for the ZK proofs we have to verify
@@ -67,10 +67,10 @@ pub(crate) fn dao_mint_get_metadata(
 /// `process_instruction` function for `Dao::Mint`
 pub(crate) fn dao_mint_process_instruction(
     cid: ContractId,
-    call_idx: u8,
+    call_idx: usize,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize].data;
+    let self_ = &calls[call_idx].data;
     let params: DaoMintParams = deserialize(&self_.data[1..])?;
 
     // Check the DAO bulla doesn't already exist

@@ -37,10 +37,10 @@ use crate::{
 /// `get_metdata` function for `Dao::Vote`
 pub(crate) fn dao_vote_get_metadata(
     cid: ContractId,
-    call_idx: u8,
+    call_idx: usize,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize].data;
+    let self_ = &calls[call_idx].data;
     let params: DaoVoteParams = deserialize(&self_.data[1..])?;
 
     if params.inputs.is_empty() {
@@ -125,10 +125,10 @@ pub(crate) fn dao_vote_get_metadata(
 /// `process_instruction` function for `Dao::Vote`
 pub(crate) fn dao_vote_process_instruction(
     cid: ContractId,
-    call_idx: u8,
+    call_idx: usize,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize].data;
+    let self_ = &calls[call_idx].data;
     let params: DaoVoteParams = deserialize(&self_.data[1..])?;
 
     // Check proposal bulla exists

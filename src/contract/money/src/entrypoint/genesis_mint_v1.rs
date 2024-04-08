@@ -38,10 +38,10 @@ use crate::{
 /// `get_metadata` function for `Money::GenesisMintV1`
 pub(crate) fn money_genesis_mint_get_metadata_v1(
     _cid: ContractId,
-    call_idx: u8,
+    call_idx: usize,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize].data;
+    let self_ = &calls[call_idx].data;
     let params: MoneyGenesisMintParamsV1 = deserialize(&self_.data[1..])?;
 
     // Public inputs for the ZK proofs we have to verify
@@ -73,10 +73,10 @@ pub(crate) fn money_genesis_mint_get_metadata_v1(
 /// `process_instruction` function for `Money::GenesisMintV1`
 pub(crate) fn money_genesis_mint_process_instruction_v1(
     cid: ContractId,
-    call_idx: u8,
+    call_idx: usize,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize].data;
+    let self_ = &calls[call_idx].data;
     let params: MoneyGenesisMintParamsV1 = deserialize(&self_.data[1..])?;
 
     // Verify this contract call is verified against genesis block(0).

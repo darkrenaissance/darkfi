@@ -36,10 +36,10 @@ use crate::{error::DeployError, model::DeployUpdateV1, DeployFunction, DEPLOY_CO
 /// `get_metadata` function for `Deploy::DeployV1`
 pub(crate) fn deploy_get_metadata_v1(
     _cid: ContractId,
-    call_idx: u8,
+    call_idx: usize,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx];
     let params: DeployParamsV1 = deserialize(&self_.data.data[1..])?;
 
     // Public inputs for the ZK proofs we have to verify
@@ -58,10 +58,10 @@ pub(crate) fn deploy_get_metadata_v1(
 /// `process_instruction` function for `Deploy::DeployV1`
 pub(crate) fn deploy_process_instruction_v1(
     cid: ContractId,
-    call_idx: u8,
+    call_idx: usize,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx];
     let params: DeployParamsV1 = deserialize(&self_.data.data[1..])?;
 
     // In this function, we have to check that the contract isn't locked.
