@@ -30,7 +30,7 @@ use crate::{
         proto::{EventPut, ProtocolEventGraph},
         Event, EventGraph,
     },
-    net::{P2p, Settings, SESSION_NET},
+    net::{session::SESSION_DEFAULT, P2p, Settings},
     system::sleep,
 };
 
@@ -98,7 +98,7 @@ async fn spawn_node(
     // Register the P2P protocols
     let registry = p2p.protocol_registry();
     registry
-        .register(SESSION_NET, move |channel, _| {
+        .register(SESSION_DEFAULT, move |channel, _| {
             let event_graph_ = event_graph_.clone();
             async move { ProtocolEventGraph::init(event_graph_, channel).await.unwrap() }
         })

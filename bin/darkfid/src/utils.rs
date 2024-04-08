@@ -23,7 +23,7 @@ use smol::{fs::read_to_string, Executor};
 use structopt_toml::StructOptToml;
 
 use darkfi::{
-    net::{P2p, P2pPtr, Settings, SESSION_NET},
+    net::{session::SESSION_DEFAULT, P2p, P2pPtr, Settings},
     rpc::jsonrpc::JsonSubscriber,
     util::path::get_config_path,
     validator::ValidatorPtr,
@@ -48,7 +48,7 @@ pub async fn spawn_p2p(
 
     let _validator = validator.clone();
     registry
-        .register(SESSION_NET, move |channel, _p2p| {
+        .register(SESSION_DEFAULT, move |channel, _p2p| {
             let validator = _validator.clone();
             async move { ProtocolSync::init(channel, validator).await.unwrap() }
         })
@@ -57,7 +57,7 @@ pub async fn spawn_p2p(
     let _validator = validator.clone();
     let _subscriber = subscribers.get("proposals").unwrap().clone();
     registry
-        .register(SESSION_NET, move |channel, p2p| {
+        .register(SESSION_DEFAULT, move |channel, p2p| {
             let validator = _validator.clone();
             let subscriber = _subscriber.clone();
             async move {
@@ -71,7 +71,7 @@ pub async fn spawn_p2p(
     let _validator = validator.clone();
     let _subscriber = subscribers.get("txs").unwrap().clone();
     registry
-        .register(SESSION_NET, move |channel, p2p| {
+        .register(SESSION_DEFAULT, move |channel, p2p| {
             let validator = _validator.clone();
             let subscriber = _subscriber.clone();
             async move { ProtocolTx::init(channel, validator, p2p, subscriber).await.unwrap() }

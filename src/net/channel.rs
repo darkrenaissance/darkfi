@@ -42,7 +42,7 @@ use super::{
     message::Packet,
     message_subscriber::{MessageSubscription, MessageSubsystem},
     p2p::P2pPtr,
-    session::{Session, SessionBitFlag, SessionWeakPtr, SESSION_NET},
+    session::{Session, SessionBitFlag, SessionWeakPtr, SESSION_ALL, SESSION_REFINE},
     transport::PtStream,
 };
 use crate::{
@@ -188,7 +188,7 @@ impl Channel {
 
         // Catch failure and stop channel, return a net error
         if let Err(e) = self.send_message(message).await {
-            if self.session.upgrade().unwrap().type_id() == SESSION_NET {
+            if self.session.upgrade().unwrap().type_id() & (SESSION_ALL & !SESSION_REFINE) != 0 {
                 error!(
                     target: "net::channel::send()", "[P2P] Channel send error for [{:?}]: {}",
                     self, e
@@ -279,7 +279,10 @@ impl Channel {
                             "[P2P] Channel inbound connection {} disconnected",
                             self.address(),
                         );
-                    } else if self.session.upgrade().unwrap().type_id() == SESSION_NET {
+                    } else if self.session.upgrade().unwrap().type_id() &
+                        (SESSION_ALL & !SESSION_REFINE) !=
+                        0
+                    {
                         error!(
                             target: "net::channel::main_receive_loop()",
                             "[P2P] Read error on channel {}: {}",

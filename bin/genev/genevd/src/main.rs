@@ -21,7 +21,7 @@ use std::sync::{Arc, OnceLock};
 use darkfi::{
     async_daemonize, cli_desc,
     event_graph::{proto::ProtocolEventGraph, EventGraph, EventGraphPtr, NULL_ID},
-    net::{settings::SettingsOpt, P2p, SESSION_NET},
+    net::{session::SESSION_DEFAULT, settings::SettingsOpt, P2p},
     rpc::{
         jsonrpc::JsonSubscriber,
         server::{listen_and_serve, RequestHandler},
@@ -112,7 +112,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
     let event_graph_ = Arc::clone(&event_graph);
     let registry = p2p.protocol_registry();
     registry
-        .register(SESSION_NET, move |channel, _| {
+        .register(SESSION_DEFAULT, move |channel, _| {
             let event_graph_ = event_graph_.clone();
             async move { ProtocolEventGraph::init(event_graph_, channel).await.unwrap() }
         })

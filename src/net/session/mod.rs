@@ -47,10 +47,8 @@ pub const SESSION_MANUAL: SessionBitFlag = 0b00100;
 pub const SESSION_SEED: SessionBitFlag = 0b01000;
 pub const SESSION_REFINE: SessionBitFlag = 0b10000;
 
-// Equivalent to !SESSION_REFINE.
-pub const SESSION_NET: SessionBitFlag = 0b01111;
-// Equivalent to !SESSION_REFINE & !SESSION_SEED.
 pub const SESSION_DEFAULT: SessionBitFlag = 0b00111;
+pub const SESSION_ALL: SessionBitFlag = 0b11111;
 
 pub type SessionWeakPtr = Weak<dyn Session + Send + Sync + 'static>;
 

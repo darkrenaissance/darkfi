@@ -104,7 +104,6 @@ pub use protocol::{
 /// the first time. Implements the `Session` trait which describes the
 /// common functions across all sessions.
 pub mod session;
-pub use session::SESSION_NET;
 
 /// Handles the acceptance of inbound socket connections.
 /// Used to start listening on a local socket, to accept incoming connections,
