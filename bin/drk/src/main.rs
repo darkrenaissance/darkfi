@@ -45,7 +45,7 @@ use darkfi::{
 };
 use darkfi_money_contract::model::{Coin, TokenId};
 use darkfi_sdk::{
-    crypto::{ContractId, FuncId, PublicKey, SecretKey},
+    crypto::{FuncId, PublicKey, SecretKey},
     pasta::{group::ff::PrimeField, pallas},
     tx::TransactionHash,
 };
@@ -78,6 +78,9 @@ use money::BALANCE_BASE10_DECIMALS;
 /// Wallet functionality related to Dao
 mod dao;
 use dao::DaoParams;
+
+/// Wallet functionality related to Deployooor
+mod deploy;
 
 /// Wallet functionality related to transactions history
 mod txs_history;
@@ -615,6 +618,10 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 }
                 if let Err(e) = drk.initialize_dao().await {
                     eprintln!("Failed to initialize DAO: {e:?}");
+                    exit(2);
+                }
+                if let Err(e) = drk.initialize_deployooor().await {
+                    eprintln!("Failed to initialize Deployooor: {e:?}");
                     exit(2);
                 }
                 return Ok(())
@@ -1644,16 +1651,13 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
         Subcmd::Contract { command } => match command {
             ContractSubcmd::GenerateDeploy => {
-                let deploy_authority = SecretKey::random(&mut OsRng);
-                let contract_id = ContractId::derive(deploy_authority);
-                println!(
-                    "Deploy authority: {}",
-                    bs58::encode(deploy_authority.inner().to_repr()).into_string()
-                );
-                println!(
-                    "Contract ID: {}",
-                    bs58::encode(&contract_id.inner().to_repr()).into_string()
-                );
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+
+                if let Err(e) = drk.deploy_auth_keygen().await {
+                    eprintln!("Error creating deploy auth keypair: {:?}", e);
+                    exit(1);
+                }
+
                 Ok(())
             }
         },

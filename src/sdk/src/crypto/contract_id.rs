@@ -35,14 +35,20 @@ lazy_static! {
     pub static ref CONTRACT_ID_PREFIX: pallas::Base = pallas::Base::from(42);
 
     /// Contract ID for the native money contract
+    ///
+    /// `BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o`
     pub static ref MONEY_CONTRACT_ID: ContractId =
         ContractId::from(poseidon_hash([*CONTRACT_ID_PREFIX, pallas::Base::zero(), pallas::Base::from(0)]));
 
     /// Contract ID for the native DAO contract
+    ///
+    /// `Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj`
     pub static ref DAO_CONTRACT_ID: ContractId =
         ContractId::from(poseidon_hash([*CONTRACT_ID_PREFIX, pallas::Base::zero(), pallas::Base::from(1)]));
 
     /// Contract ID for the native Deployooor contract
+    ///
+    /// `EJs7oEjKkvCeEVCmpRsd6fEoTGCFJ7WKUBfmAjwaegN`
     pub static ref DEPLOYOOOR_CONTRACT_ID: ContractId =
         ContractId::from(poseidon_hash([*CONTRACT_ID_PREFIX, pallas::Base::zero(), pallas::Base::from(2)]));
 }

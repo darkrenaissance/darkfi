@@ -27,6 +27,9 @@ $(BIN): $(SRC)
 	cp -f ../../target/$(RUST_TARGET)/release/$@ $@
 	cp -f ../../target/$(RUST_TARGET)/release/$@ ../../$@
 
+clippy: all
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --target=$(RUST_TARGET) --release --package $(BIN) --tests
+
 clean:
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clean --target=$(RUST_TARGET) --release --package $(BIN)
 	rm -f $(BIN) ../../$(BIN)
@@ -39,4 +42,4 @@ install: all
 uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/bin/$(BIN)
 
-.PHONY: all clean install uninstall
+.PHONY: all clippy clean install uninstall
