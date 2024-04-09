@@ -60,9 +60,6 @@ pub struct P2p {
     protocol_registry: ProtocolRegistry,
     /// P2P network settings
     settings: SettingsPtr,
-    /// Boolean lock marking if peer discovery is active
-    pub peer_discovery_running: Mutex<bool>,
-
     /// Reference to configured [`ManualSession`]
     session_manual: ManualSessionPtr,
     /// Reference to configured [`InboundSession`]
@@ -95,8 +92,6 @@ impl P2p {
             hosts: Hosts::new(settings.clone()),
             protocol_registry: ProtocolRegistry::new(),
             settings,
-            peer_discovery_running: Mutex::new(false),
-
             session_manual: ManualSession::new(),
             session_inbound: InboundSession::new(),
             session_outbound: OutboundSession::new(),
