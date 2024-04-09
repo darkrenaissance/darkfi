@@ -39,7 +39,7 @@ use darkfi_sdk::{
     ContractCall,
 };
 use darkfi_serial::{serialize_async, Encodable};
-use log::info;
+use log::{error, info};
 use num_bigint::BigUint;
 use rand::rngs::OsRng;
 use smol::channel::{Receiver, Sender};
@@ -172,7 +172,9 @@ async fn listen_to_network(
 
     // Signal miner to abort mining
     sender.send(()).await?;
-    node.miner_daemon_request("abort", JsonValue::Array(vec![])).await?;
+    if let Err(e) = node.miner_daemon_request("abort", &JsonValue::Array(vec![])).await {
+        error!(target: "darkfid::task::miner_task::listen_to_network", "Failed to execute miner daemon abort request: {}", e);
+    }
 
     Ok(())
 }
@@ -224,7 +226,8 @@ async fn mine_next_block(
     // Execute request to minerd and parse response
     let target = JsonValue::String(next_target.to_string());
     let block = JsonValue::String(base64::encode(&serialize_async(&next_block).await));
-    let response = node.miner_daemon_request("mine", JsonValue::Array(vec![target, block])).await?;
+    let response =
+        node.miner_daemon_request_with_retry("mine", &JsonValue::Array(vec![target, block])).await;
     next_block.header.nonce = *response.get::<f64>().unwrap() as u64;
 
     // Sign the mined block
