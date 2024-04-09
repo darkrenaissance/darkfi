@@ -19,8 +19,10 @@
 use lazy_static::lazy_static;
 use rand::rngs::OsRng;
 
+use darkfi::{Error, Result};
 use darkfi_sdk::crypto::{ContractId, Keypair, DEPLOYOOOR_CONTRACT_ID};
-use darkfi_serial::serialize_async;
+use darkfi_serial::{deserialize_async, serialize_async};
+use rusqlite::types::Value;
 
 use crate::{error::WalletDbResult, Drk};
 
@@ -61,5 +63,33 @@ impl Drk {
         println!("Contract ID: {}", ContractId::derive_public(keypair.public));
 
         Ok(())
+    }
+
+    /// List contract deploy authorities from the wallet
+    pub async fn list_deploy_auth(&self) -> Result<Vec<(ContractId, bool)>> {
+        let rows = match self.wallet.query_multiple(&DEPLOY_AUTH_TABLE, &[], &[]).await {
+            Ok(r) => r,
+            Err(e) => {
+                return Err(Error::RusqliteError(format!(
+                    "[list_deploy_auth] Deploy auth retrieval failed: {e:?}",
+                )))
+            }
+        };
+
+        let mut ret = Vec::with_capacity(rows.len());
+        for row in rows {
+            let Value::Blob(ref auth_bytes) = row[0] else {
+                return Err(Error::ParseFailed("[list_deploy_auth] Failed to parse keypair bytes"))
+            };
+            let deploy_auth: Keypair = deserialize_async(auth_bytes).await?;
+
+            let Value::Integer(frozen) = row[1] else {
+                return Err(Error::ParseFailed("[list_deploy_auth] Failed to parse \"is_frozen\""))
+            };
+
+            ret.push((ContractId::derive_public(deploy_auth.public), frozen != 0))
+        }
+
+        Ok(ret)
     }
 }

@@ -487,6 +487,9 @@ enum TokenSubcmd {
 enum ContractSubcmd {
     /// Generate a new deploy authority
     GenerateDeploy,
+
+    /// List deploy authorities in the wallet
+    List,
     /*
     /// Deploy a smart contract
     Deploy {
@@ -1656,6 +1659,27 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 if let Err(e) = drk.deploy_auth_keygen().await {
                     eprintln!("Error creating deploy auth keypair: {:?}", e);
                     exit(1);
+                }
+
+                Ok(())
+            }
+
+            ContractSubcmd::List => {
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+                let auths = drk.list_deploy_auth().await?;
+
+                let mut table = Table::new();
+                table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+                table.set_titles(row!["Contract ID", "Frozen"]);
+
+                for (contract_id, frozen) in auths {
+                    table.add_row(row![contract_id, frozen]);
+                }
+
+                if table.is_empty() {
+                    eprintln!("No deploy authorities found");
+                } else {
+                    println!("{table}");
                 }
 
                 Ok(())
