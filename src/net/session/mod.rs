@@ -70,7 +70,8 @@ pub async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr, type_id: Sessi
         "Received stop event. Removing channel {}", addr,
     );
 
-    if type_id == SESSION_MANUAL || type_id == SESSION_OUTBOUND {
+    // Downgrade to greylist this is a outbound or manual session.
+    if type_id & (SESSION_MANUAL | SESSION_OUTBOUND) != 0 {
         debug!(
             target: "net::session::remove_sub_on_stop()",
             "Downgrading {}", addr,
@@ -164,8 +165,8 @@ pub trait Session: Sync {
         // Perform handshake
         protocol_version.run(executor.clone()).await?;
 
-        // Upgrade to goldlist if outbound or manual session.
-        if self.type_id() == SESSION_MANUAL || self.type_id() == SESSION_OUTBOUND {
+        // Upgrade to goldlist if this is a outbound or manual session.
+        if self.type_id() & (SESSION_MANUAL | SESSION_OUTBOUND) != 0 {
             debug!(
                 target: "net::session::perform_handshake_protocols()",
                 "Upgrading {}", channel.address(),
