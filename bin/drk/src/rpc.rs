@@ -53,7 +53,7 @@ impl Drk {
         ex: Arc<smol::Executor<'static>>,
     ) -> Result<()> {
         let req = JsonRequest::new("blockchain.last_known_block", JsonValue::Array(vec![]));
-        let rep = self.rpc_client.request(req).await?;
+        let rep = self.rpc_client.as_ref().unwrap().request(req).await?;
         let last_known = *rep.get::<f64>().unwrap() as u32;
         let last_scanned = match self.last_scanned_block().await {
             Ok(l) => l,
@@ -227,7 +227,7 @@ impl Drk {
 
         loop {
             let req = JsonRequest::new("blockchain.last_known_block", JsonValue::Array(vec![]));
-            let rep = match self.rpc_client.request(req).await {
+            let rep = match self.rpc_client.as_ref().unwrap().request(req).await {
                 Ok(r) => r,
                 Err(e) => {
                     eprintln!("[scan_blocks] RPC client request failed: {e:?}");
@@ -274,7 +274,7 @@ impl Drk {
             JsonValue::Array(vec![JsonValue::String(height.to_string())]),
         );
 
-        let params = self.rpc_client.request(req).await?;
+        let params = self.rpc_client.as_ref().unwrap().request(req).await?;
         let param = params.get::<String>().unwrap();
         let bytes = base64::decode(param).unwrap();
         let block = deserialize_async(&bytes).await?;
@@ -289,7 +289,7 @@ impl Drk {
         let params =
             JsonValue::Array(vec![JsonValue::String(base64::encode(&serialize_async(tx).await))]);
         let req = JsonRequest::new("tx.broadcast", params);
-        let rep = self.rpc_client.request(req).await?;
+        let rep = self.rpc_client.as_ref().unwrap().request(req).await?;
 
         let txid = rep.get::<String>().unwrap().clone();
 
@@ -311,7 +311,7 @@ impl Drk {
             JsonValue::Array(vec![JsonValue::String(tx_hash_str)]),
         );
 
-        match self.rpc_client.request(req).await {
+        match self.rpc_client.as_ref().unwrap().request(req).await {
             Ok(param) => {
                 let tx_bytes = base64::decode(param.get::<String>().unwrap()).unwrap();
                 let tx = deserialize_async(&tx_bytes).await?;
@@ -327,7 +327,7 @@ impl Drk {
         let tx_str = base64::encode(&serialize_async(tx).await);
         let req =
             JsonRequest::new("tx.simulate", JsonValue::Array(vec![JsonValue::String(tx_str)]));
-        let rep = self.rpc_client.request(req).await?;
+        let rep = self.rpc_client.as_ref().unwrap().request(req).await?;
 
         let is_valid = *rep.get::<bool>().unwrap();
         Ok(is_valid)
@@ -340,7 +340,7 @@ impl Drk {
         let params = JsonValue::Array(vec![JsonValue::String(format!("{contract_id}"))]);
         let req = JsonRequest::new("blockchain.lookup_zkas", params);
 
-        let rep = self.rpc_client.request(req).await?;
+        let rep = self.rpc_client.as_ref().unwrap().request(req).await?;
         let params = rep.get::<Vec<JsonValue>>().unwrap();
 
         let mut ret = Vec::with_capacity(params.len());
