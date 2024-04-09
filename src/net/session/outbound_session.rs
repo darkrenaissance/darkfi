@@ -141,6 +141,19 @@ impl Session for OutboundSession {
     }
 }
 
+#[repr(u8)]
+#[derive(Clone, Debug)]
+enum SlotPreference {
+    /// Highest preference that corresponds to the `anchor_connect_count` and
+    /// `white_count_count` preferences configured in Settings.
+    First = 0,
+    /// Reduced preference in case we don't have sufficient hosts to satisfy
+    /// our highest preference.
+    Second = 1,
+    /// Lowest preference if we still haven't been able to find a host.
+    Last = 2,
+}
+
 struct Slot {
     slot: u32,
     process: StoppableTaskPtr,
@@ -185,7 +198,7 @@ impl Slot {
     /// the greylist.
     ///
     /// If we didn't find an address with this selection logic, downgrade
-    /// our preferences. Up to anchor_count, select from the whitelist,
+    /// SlotPreference. Up to anchor_count, select from the whitelist,
     /// up until white_count, select from the greylist.
     ///
     /// If we still didn't find an address, select from the greylist. In
@@ -196,7 +209,7 @@ impl Slot {
     unreliable connections. A network that purely favors uptime over
     unreliable connections may be vulnerable to sybil by attackers with
     good uptime.*/
-    async fn fetch_addrs_with_preference(&self, preference: usize) -> Vec<(Url, u64)> {
+    async fn fetch_addrs_with_preference(&self, preference: SlotPreference) -> Vec<(Url, u64)> {
         let slot = self.slot;
         let settings = self.p2p().settings();
         let hosts = &self.p2p().hosts().container;
@@ -208,12 +221,10 @@ impl Slot {
         let transport_mixing = settings.transport_mixing;
 
         debug!(target: "net::outbound_session::fetch_addrs_with_preference()",
-        "slot={}, preference={}", slot, preference);
+        "slot={}, preference={:?}", slot, preference);
 
         match preference {
-            // Highest preference that corresponds to the anchor and white count preference set in
-            // Settings.
-            0 => {
+            SlotPreference::First => {
                 if slot < anchor_count {
                     hosts.fetch(HostColor::Gold, transports, transport_mixing).await
                 } else if slot < white_count {
@@ -222,9 +233,7 @@ impl Slot {
                     hosts.fetch(HostColor::Grey, transports, transport_mixing).await
                 }
             }
-            // Reduced preference in case we don't have sufficient hosts to satisfy our highest
-            // preference.
-            1 => {
+            SlotPreference::Second => {
                 if slot < anchor_count {
                     hosts.fetch(HostColor::White, transports, transport_mixing).await
                 } else if slot < white_count {
@@ -233,16 +242,12 @@ impl Slot {
                     vec![]
                 }
             }
-            // Lowest preference if we still haven't been able to find a host.
-            2 => {
+            SlotPreference::Last => {
                 if slot < anchor_count {
                     hosts.fetch(HostColor::Grey, transports, transport_mixing).await
                 } else {
                     vec![]
                 }
-            }
-            _ => {
-                panic!()
             }
         }
     }
@@ -254,24 +259,21 @@ impl Slot {
 
         // First select an addresses that match our white and anchor requirements configured in
         // Settings.
-        let preference = 0;
-        let addrs = self.fetch_addrs_with_preference(preference).await;
+        let addrs = self.fetch_addrs_with_preference(SlotPreference::First).await;
 
         if !addrs.is_empty() {
             return hosts.check_addrs(addrs).await;
         }
 
         // If no addresses were returned, go for the second best thing (white and grey).
-        let preference = 1;
-        let addrs = self.fetch_addrs_with_preference(preference).await;
+        let addrs = self.fetch_addrs_with_preference(SlotPreference::Second).await;
 
         if !addrs.is_empty() {
             return hosts.check_addrs(addrs).await;
         }
 
         // If we still have no addresses, go for the least favored option.
-        let preference = 2;
-        let addrs = self.fetch_addrs_with_preference(preference).await;
+        let addrs = self.fetch_addrs_with_preference(SlotPreference::Last).await;
 
         if !addrs.is_empty() {
             return hosts.check_addrs(addrs).await;
