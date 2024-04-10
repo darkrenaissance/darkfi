@@ -33,7 +33,7 @@ contract Dao {
 2. Transactions are atomic. If a subsequent contract function call
    fails then the earlier ones are also invalid. The entire tx will be
    rolled back.
-3. `foo_contract::bar_func::validate::state_transition()` is able to
+3. `foo_contract::bar_func::validate::process()` is able to
    access the entire transaction to perform validation on its structure.
    It might need to enforce requirements on the calldata of other
    function calls within the same tx. See `DAO::exec()`.
@@ -202,7 +202,7 @@ And corresponding function calls.
 ```
 
 As we can see the ZK proofs and signatures are separate from the
-actual `call_data` interpreted by `state_transition()`. They are
+actual `call_data` interpreted by `process()`. They are
 both automatically verified by the VM.
 
 However for verification to work, the ZK proofs also need corresponding
