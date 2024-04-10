@@ -75,3 +75,16 @@ log, and compare it with the public values you see in the `witness.json`
 from when the proof was created. This will allow you to pinpoint exactly
 where the error occurs.
 
+## Viewing the ZK Circuit Layout
+
+ZK circuit have a layout. The less empty space, the more efficient is your
+circuit. Usually it just means reducing the `k` value specified. The number of
+rows in your circuit is $2ᵏ$, so reducing the value by 1 will halve the number
+of rows.
+
+To generate an image of the circuit layout, simply run:
+
+```
+./bin/zkrunner/zkrender.py -w src/contract/dao/proof/witness/exec.json src/contract/dao/proof/exec.zk /tmp/layout.png
+```
+
