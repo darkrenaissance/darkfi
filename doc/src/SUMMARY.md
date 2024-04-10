@@ -34,7 +34,6 @@
   - [Anonymous assets](arch/anonymous_assets.md)
   - [Consensus](arch/consensus.md)
   - [Transactions](arch/tx_lifetime.md)
-  - [Smart Contracts](arch/smart_contracts.md)
   - [Bridge](arch/bridge.md)
   - [Tooling](arch/tooling.md)
   - [P2P Network](arch/p2p-network.md)
