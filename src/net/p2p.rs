@@ -16,10 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::sync::Arc;
 
 use futures::{stream::FuturesUnordered, TryFutureExt};
 use log::{debug, error, info, warn};
@@ -43,10 +40,6 @@ use crate::{
     Result,
 };
 
-/// Set of channels that are awaiting connection
-pub type PendingChannels = Mutex<HashSet<Url>>;
-/// Set of connected channels
-pub type ConnectedChannels = Mutex<HashMap<Url, ChannelPtr>>;
 /// Atomic pointer to the p2p interface
 pub type P2pPtr = Arc<P2p>;
 
