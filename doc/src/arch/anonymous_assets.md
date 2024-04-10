@@ -43,12 +43,10 @@ Reveal $C$ and $V$ commitments. Add $C$ to the Merkle tree.
 When we spend the coin, we must ensure that the value of the coin
 cannot be double spent. We call this the *Burn* phase. The process
 relies on a $N$ nullifier, which we create  using the secret key $x$
-for the public key $P$ and the secret serial $\rho$. Nullifiers are unique per coin and prevent
+for the public key $P$ and the coin itself $C$. Nullifiers are unique per coin and prevent
 double spending. $R$ is the Merkle root. $v$ is the coin's value.
 
 Generate a random number $r_V$.
-
-$$ N = H(x, \rho) $$
 
 Check that the secret key corresponds to a public key:
 
@@ -59,6 +57,10 @@ tree $R$:
 
 $$ C = H(P, v, \rho, r_C) $$
 $$ C \in R $$
+
+Derive the nullifier:
+
+$$ N = H(x, C) $$
 
 Check that the value commitment is constructed correctly:
 
