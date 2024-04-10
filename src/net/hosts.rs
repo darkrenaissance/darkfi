@@ -69,7 +69,7 @@ pub type HostsPtr = Arc<Hosts>;
 /// Keeps track of hosts and their current state. Prevents race conditions
 /// where multiple threads are simultaneously trying to change the state of
 /// a given host.
-pub type HostRegistry = RwLock<HashMap<Url, HostState>>;
+pub(in crate::net) type HostRegistry = RwLock<HashMap<Url, HostState>>;
 
 /// HostState is a set of mutually exclusive states that can be Insert,
 /// Refine, Move, Connect, Suspend or Connected. The state is `None` when the
@@ -112,7 +112,7 @@ is likely to have good uptime. We want to insure that users with patchy
 connections or on mobile are still likely to be connected to.*/
 
 #[derive(Clone, Debug)]
-pub enum HostState {
+pub(in crate::net) enum HostState {
     /// Hosts that are currently being inserting into the hostlist.
     Insert,
     /// Hosts that are migrating from the greylist to the whitelist or being
@@ -282,7 +282,7 @@ impl TryFrom<usize> for HostColor {
 // TODO: Verify the performance overhead of using vectors for hostlists.
 // TODO: Check whether anchorlist (Gold) has a max size in Monero.
 pub struct HostContainer {
-    pub hostlists: [RwLock<Vec<(Url, u64)>>; 5],
+    pub(in crate::net) hostlists: [RwLock<Vec<(Url, u64)>>; 5],
 }
 
 impl HostContainer {
@@ -342,7 +342,7 @@ impl HostContainer {
 
     /// Stores an address on a hostlist or updates its last_seen field if
     /// we already have the address.
-    pub async fn store_or_update(&self, color: HostColor, addr: Url, last_seen: u64) {
+    async fn store_or_update(&self, color: HostColor, addr: Url, last_seen: u64) {
         trace!(target: "net::hosts::store_or_update()", "[START]");
         let color_code = color.clone() as usize;
         let mut list = self.hostlists[color_code].write().await;
@@ -386,7 +386,7 @@ impl HostContainer {
     }
 
     /// Update the last_seen field of a peer on a hostlist.
-    pub async fn update_last_seen(
+    pub(in crate::net) async fn update_last_seen(
         &self,
         color: usize,
         addr: &Url,
@@ -426,7 +426,7 @@ impl HostContainer {
     /// Fetch addresses that match the provided transports or acceptable
     /// mixed transports.  Will return an empty Vector if no such addresses
     /// were found.
-    pub async fn fetch(
+    pub(in crate::net) async fn fetch(
         &self,
         color: HostColor,
         transports: &[String],
@@ -551,17 +551,9 @@ impl HostContainer {
         ret
     }
 
-    /// Get a random peer from a hostlist.
-    pub async fn fetch_random(&self, color: HostColor) -> ((Url, u64), usize) {
-        let list = self.hostlists[color as usize].read().await;
-        let position = rand::thread_rng().gen_range(0..list.len());
-        let entry = &list[position];
-        (entry.clone(), position)
-    }
-
     /// Get a random peer from a hostlist that matches the given transport
     /// schemes.
-    pub async fn fetch_random_with_schemes(
+    pub(in crate::net) async fn fetch_random_with_schemes(
         &self,
         color: HostColor,
         schemes: &[String],
@@ -580,7 +572,7 @@ impl HostContainer {
     }
 
     /// Get up to n random peers. Schemes are not taken into account.
-    pub async fn fetch_n_random(&self, color: HostColor, n: u32) -> Vec<(Url, u64)> {
+    pub(in crate::net) async fn fetch_n_random(&self, color: HostColor, n: u32) -> Vec<(Url, u64)> {
         trace!(target: "net::hosts::fetch_n_random()", "[START] {:?}", color);
         let n = n as usize;
         if n == 0 {
@@ -605,7 +597,7 @@ impl HostContainer {
     }
 
     /// Get up to n random peers that match the given transport schemes.
-    pub async fn fetch_n_random_with_schemes(
+    pub(in crate::net) async fn fetch_n_random_with_schemes(
         &self,
         color: HostColor,
         schemes: &[String],
@@ -633,7 +625,7 @@ impl HostContainer {
 
     /// Get up to n random peers that don't match the given transport schemes
     /// from a hostlist.
-    pub async fn fetch_n_random_excluding_schemes(
+    pub(in crate::net) async fn fetch_n_random_excluding_schemes(
         &self,
         color: HostColor,
         schemes: &[String],
@@ -659,15 +651,8 @@ impl HostContainer {
         urls.iter().map(|&url| url.clone()).collect()
     }
 
-    /// Remove an entry from a hostlist.
-    pub async fn remove(&self, color: HostColor, addr: &Url, index: usize) {
-        debug!(target: "net::hosts::remove()", "Removing peer {} from {:?}", addr, color);
-        let mut list = self.hostlists[color as usize].write().await;
-        list.remove(index);
-    }
-
     /// Remove an entry from a hostlist if it exists.
-    pub async fn remove_if_exists(&self, color: HostColor, addr: &Url) {
+    async fn remove_if_exists(&self, color: HostColor, addr: &Url) {
         let color_code = color.clone() as usize;
         let mut list = self.hostlists[color_code].write().await;
         if let Some(position) = list.iter().position(|(u, _)| u == addr) {
@@ -702,7 +687,7 @@ impl HostContainer {
     }
 
     /// Load the hostlists from a file.
-    pub async fn load_all(&self, path: &str) -> Result<()> {
+    pub(in crate::net) async fn load_all(&self, path: &str) -> Result<()> {
         let path = expand_path(path)?;
 
         if !path.exists() {
@@ -761,7 +746,7 @@ impl HostContainer {
     }
 
     /// Save the hostlist to a file.
-    pub async fn save_all(&self, path: &str) -> Result<()> {
+    pub(in crate::net) async fn save_all(&self, path: &str) -> Result<()> {
         let path = expand_path(path)?;
 
         let mut tsv = String::new();
@@ -807,10 +792,10 @@ pub struct Hosts {
     store_subscriber: SubscriberPtr<usize>,
 
     /// Subscriber for notifications of new channels
-    pub channel_subscriber: SubscriberPtr<Result<ChannelPtr>>,
+    pub(in crate::net) channel_subscriber: SubscriberPtr<Result<ChannelPtr>>,
 
     /// Keeps track of the last time a connection was made.
-    pub last_connection: RwLock<Instant>,
+    pub(in crate::net) last_connection: RwLock<Instant>,
 
     /// Pointer to configured P2P settings
     settings: SettingsPtr,
@@ -818,7 +803,7 @@ pub struct Hosts {
 
 impl Hosts {
     /// Create a new hosts list
-    pub fn new(settings: SettingsPtr) -> HostsPtr {
+    pub(in crate::net) fn new(settings: SettingsPtr) -> HostsPtr {
         Arc::new(Self {
             registry: RwLock::new(HashMap::new()),
             container: HostContainer::new(),
@@ -831,7 +816,7 @@ impl Hosts {
 
     /// Safely insert into the HostContainer. Filters the addresses first before storing and
     /// notifies the subscriber. Must be called when first receiving greylist addresses.
-    pub async fn insert(&self, color: HostColor, addrs: &[(Url, u64)]) {
+    pub(in crate::net) async fn insert(&self, color: HostColor, addrs: &[(Url, u64)]) {
         trace!(target: "net::hosts:insert()", "[START]");
 
         // First filter these address to ensure this peer doesn't exist in our black, gold or
@@ -867,7 +852,11 @@ impl Hosts {
 
     /// Try to update the registry. If the host already exists, try to update its state.
     /// Otherwise add the host to the registry along with its state.
-    pub async fn try_register(&self, addr: Url, new_state: HostState) -> Result<HostState> {
+    pub(in crate::net) async fn try_register(
+        &self,
+        addr: Url,
+        new_state: HostState,
+    ) -> Result<HostState> {
         let mut registry = self.registry.write().await;
 
         trace!(target: "net::hosts::try_update_registry()", "Try register addr={}, state={}",
@@ -905,7 +894,7 @@ impl Hosts {
 
     // Loop through hosts selected by Outbound Session and see if any of them are
     // free to connect to.
-    pub async fn check_addrs(&self, hosts: Vec<(Url, u64)>) -> Option<(Url, u64)> {
+    pub(in crate::net) async fn check_addrs(&self, hosts: Vec<(Url, u64)>) -> Option<(Url, u64)> {
         trace!(target: "net::hosts::check_addrs()", "[START]");
         for (host, last_seen) in hosts {
             // Print a warning if we are trying to connect to a seed node in
@@ -938,7 +927,7 @@ impl Hosts {
     /// Misuse of this call is dangerous since it frees up the peer to be used by
     /// the refinery or outbound connect loop, and may result in invalid states. It should
     /// only be called when it is completely safe to do so.
-    pub async fn unregister(&self, addr: &Url) {
+    pub(in crate::net) async fn unregister(&self, addr: &Url) {
         self.registry.write().await.remove(addr);
         debug!(target: "net::hosts::unregister()", "Removed {} from HostRegistry", addr);
     }
@@ -956,8 +945,8 @@ impl Hosts {
         channels
     }
 
-    /// Returns the list of connected channels.
-    pub async fn suspended(&self) -> Vec<Url> {
+    /// Returns the list of suspended channels.
+    pub(in crate::net) async fn suspended(&self) -> Vec<Url> {
         let registry = self.registry.read().await;
         let mut addrs = Vec::new();
 
@@ -977,7 +966,7 @@ impl Hosts {
     }
 
     /// Add a channel to the set of connected channels
-    pub async fn register_channel(&self, channel: ChannelPtr) {
+    pub(in crate::net) async fn register_channel(&self, channel: ChannelPtr) {
         let address = channel.address().clone();
 
         // This will panic if we are already connected to this peer, this peer
@@ -1037,7 +1026,7 @@ impl Hosts {
     }
 
     /// Import blacklisted peers specified in the config file.
-    pub async fn import_blacklist(&self) -> Result<()> {
+    pub(in crate::net) async fn import_blacklist(&self) -> Result<()> {
         for (mut host, ports) in self.settings.blacklist.clone() {
             // If the ports are empty, simply store the host_str. We will use this to
             // blacklist all ports of a given peer in `block_all_ports()`.
@@ -1057,7 +1046,7 @@ impl Hosts {
 
     /// If we have the Host of the Url in the hostlist, and there are no ports stored,
     /// we should block all ports of this peer.
-    pub async fn block_all_ports(&self, addr: String) -> bool {
+    pub(in crate::net) async fn block_all_ports(&self, addr: String) -> bool {
         self.container.hostlists[HostColor::Black as usize]
             .read()
             .await
@@ -1210,7 +1199,7 @@ impl Hosts {
     /// * When the refinery passes successfully: move to white, remove from greylist.
     /// * When we connect to a peer, move to gold, remove from white or grey.
     /// * When we add a peer to the black list: move to black, remove from all other lists.
-    pub async fn move_host(
+    pub(in crate::net) async fn move_host(
         &self,
         addr: &Url,
         last_seen: u64,
@@ -1401,50 +1390,6 @@ mod tests {
 
             let (entry, _position) = hosts.container.fetch_last(HostColor::White).await;
             println!("last entry: {} {}", entry.0, entry.1);
-        });
-    }
-
-    #[test]
-    fn test_remove() {
-        smol::block_on(async {
-            let settings = Settings { ..Default::default() };
-            let hosts = Hosts::new(Arc::new(settings.clone()));
-
-            let url = Url::parse("tcp://dark.renaissance:333").unwrap();
-            let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-
-            hosts.container.store(HostColor::White as usize, url.clone(), last_seen).await;
-
-            sleep(1).await;
-
-            let url = Url::parse("tcp://milady:333").unwrap();
-            let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-
-            hosts.container.store(HostColor::White as usize, url.clone(), last_seen).await;
-
-            sleep(1).await;
-
-            let url = Url::parse("tcp://king-ted:333").unwrap();
-            let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-
-            hosts.container.store(HostColor::White as usize, url.clone(), last_seen).await;
-            for (url, last_seen) in
-                hosts.container.hostlists[HostColor::White as usize].read().await.iter()
-            {
-                println!("{}, {}", url, last_seen);
-            }
-
-            let position = hosts
-                .container
-                .get_index_at_addr(HostColor::White as usize, url.clone())
-                .await
-                .unwrap();
-            hosts.container.remove(HostColor::White, &url, position).await;
-            for (url, last_seen) in
-                hosts.container.hostlists[HostColor::White as usize].read().await.iter()
-            {
-                println!("{}, {}", url, last_seen);
-            }
         });
     }
 }

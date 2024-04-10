@@ -200,13 +200,17 @@ async fn spawn_seed_session(starting_port: usize, ex: Arc<Executor<'static>>) ->
 
 async fn get_random_gold_host(p2p_instances: &[Arc<P2p>], index: usize) -> ((Url, u64), usize) {
     let random_node = &p2p_instances[index];
+    let hosts = random_node.hosts();
     let external_addr = &random_node.settings().external_addrs[0];
 
     info!("========================================================");
     info!("Getting gold addr from node={}", external_addr);
     info!("========================================================");
 
-    random_node.hosts().container.fetch_random(HostColor::Gold).await
+    let list = hosts.container.hostlists[HostColor::Gold as usize].read().await;
+    let position = rand::thread_rng().gen_range(0..list.len());
+    let entry = &list[position];
+    (entry.clone(), position)
 }
 
 async fn check_random_hostlist(p2p_instances: &Vec<Arc<P2p>>, rng: &mut ThreadRng) {
