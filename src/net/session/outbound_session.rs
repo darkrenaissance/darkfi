@@ -460,7 +460,8 @@ impl Slot {
 }
 
 /// Defines a common interface for multiple peer discovery processes.
-/// Currently only one Peer Discovery implementation exists. Making
+///
+/// NOTE: Currently only one Peer Discovery implementation exists. Making
 /// Peer Discovery generic enables us to support network swarming, since
 /// the peer discovery process will differ depending on whether it occurs
 /// on the overlay network or a subnet.
@@ -482,7 +483,9 @@ pub trait PeerDiscoveryBase {
 }
 
 /// Main PeerDiscovery process that loops through connected channels
-/// and sends out a `GetAddrs` when it is active.
+/// and sends out a `GetAddrs` when it is active. If there are no
+/// connected channels after two attempts, connect to our seed nodes
+/// and perform `SeedSyncSession`.
 struct PeerDiscovery {
     process: StoppableTaskPtr,
     wakeup_self: CondVar,
@@ -518,13 +521,20 @@ impl PeerDiscoveryBase for PeerDiscovery {
         self.process.stop().await
     }
 
-    /// Activate peer discovery if not active already. This will loop through all
-    /// connected P2P channels and send out a `GetAddrs` message to request more
-    /// peers. Other parts of the P2P stack will then handle the incoming addresses
-    /// and place them in the hosts list.
-    /// This function will also sleep `Settings::outbound_peer_discovery_attempt_time` seconds
-    /// after broadcasting in order to let the P2P stack receive and work through
-    /// the addresses it is expecting.
+    /// Activate peer discovery if not active already. For the first two
+    /// attempts, this will loop through all connected P2P channels and send
+    /// out a `GetAddrs` message to request more peers. Other parts of the
+    /// P2P stack will then handle the incoming addresses and place them in
+    /// the hosts list.  
+    ///
+    /// On the third attempt, and if we still haven't made any connections,
+    /// this function will then call `p2p.seed()` which triggers a
+    /// `SeedSyncSession` that will connect to configured seeds and request
+    /// peers from them.
+    ///
+    /// This function will also sleep `outbound_peer_discovery_attempt_time`
+    /// seconds after broadcasting in order to let the P2P stack receive and
+    /// work through the addresses it is expecting.
     async fn run(self: Arc<Self>) {
         let mut current_attempt = 0;
         loop {
@@ -648,6 +658,10 @@ impl PeerDiscoveryBase for PeerDiscovery {
         }
     }
 
+    /// Blocks execution until we receive a notification from notify().
+    /// `wakeup_self.wait()` resets the condition variable (`CondVar`) and waits
+    /// for a call from `notify()`. Returns `true` if the function completed
+    /// instantly (i.e. no wait occured). Returns false otherwise.
     async fn wait(&self) -> bool {
         let wakeup_start = Instant::now();
         self.wakeup_self.wait().await;
@@ -657,9 +671,13 @@ impl PeerDiscoveryBase for PeerDiscovery {
         wakeup_end - wakeup_start <= epsilon
     }
 
+    /// Wakeup peer discovery by sending a notification to `wakeup_self`.
+    /// Uses the underlying `CondVar` method `notify()`. Subsequent calls
+    /// to this do nothing until `wait()` is called.
     fn notify(&self) {
         self.wakeup_self.notify()
     }
+
     fn session(&self) -> OutboundSessionPtr {
         self.session.upgrade()
     }
