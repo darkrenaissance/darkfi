@@ -88,13 +88,13 @@ conditions on the transaction's structure or other function calls
 (such as their call data).
 
 ```rust
-{{#include ../../../src/tx/mod.rs:transaction}}
+{{#include ../../../../src/tx/mod.rs:transaction}}
 ```
 
 Function calls represent mutations of the current active state to a new state.
 
 ```rust
-{{#include ../../../src/sdk/src/tx.rs:contractcall}}
+{{#include ../../../../src/sdk/src/tx.rs:contractcall}}
 ```
 
 The `contract_id` corresponds to the top level module for the contract which
@@ -192,13 +192,13 @@ The transaction verification pipeline roughly looks like this:
 Lets review again the format of transactions.
 
 ```rust
-{{#include ../../../src/tx/mod.rs:transaction}}
+{{#include ../../../../src/tx/mod.rs:transaction}}
 ```
 
 And corresponding function calls.
 
 ```rust
-{{#include ../../../src/sdk/src/tx.rs:contractcall}}
+{{#include ../../../../src/sdk/src/tx.rs:contractcall}}
 ```
 
 As we can see the ZK proofs and signatures are separate from the
