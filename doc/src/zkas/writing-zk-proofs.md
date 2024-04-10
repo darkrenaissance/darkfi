@@ -25,6 +25,9 @@ structure with `-e` as well.
 ## Structure of a ZK File
 
 Take a look at existing ZK files in `proof/` directory for examples.
+See also `src/contract/dao/proof/` and `src/contract/money/proof/`.
+In all of those directories is a `witness/` subdirectory containing
+witness JSON files that can be used with the zkrunner and zkrender tools below.
 
 `k = ...` indicates the number of rows which is $2ᵏ$. Bigger values make
 your proof slower, whereas if `k` is too low then the proof generation will
@@ -74,6 +77,9 @@ public values. Use the `msg!()` macro to print them to the program's output
 log, and compare it with the public values you see in the `witness.json`
 from when the proof was created. This will allow you to pinpoint exactly
 where the error occurs.
+
+For example files to try, see the comment in the section above
+[Structure of a ZK File](structure-of-a-zk-file).
 
 ## Viewing the ZK Circuit Layout
 
