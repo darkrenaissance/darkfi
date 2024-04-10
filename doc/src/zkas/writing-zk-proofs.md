@@ -94,3 +94,7 @@ To generate an image of the circuit layout, simply run:
 ./bin/zkrunner/zkrender.py -w src/contract/dao/proof/witness/exec.json src/contract/dao/proof/exec.zk /tmp/layout.png
 ```
 
+You should see something like:
+
+![](../assets/zk-circuit-layout.png)
+

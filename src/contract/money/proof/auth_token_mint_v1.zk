@@ -1,5 +1,5 @@
 # Circuit used to mint arbitrary coins given a mint authority secret.
-k = 13;
+k = 11;
 field = "pallas";
 
 constant "AuthTokenMint_V1" {
