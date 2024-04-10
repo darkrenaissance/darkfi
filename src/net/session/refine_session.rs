@@ -48,9 +48,11 @@ use crate::{
         session::{Session, SessionBitFlag, SESSION_REFINE},
     },
     system::{sleep, timeout::timeout, LazyWeak, StoppableTask, StoppableTaskPtr},
-    Error,
+    Error, Result,
 };
 
+// TODO: Make this configurable
+const WHITELIST_REFINERY_INTERVAL: u64 = 60;
 pub type RefineSessionPtr = Arc<RefineSession>;
 
 pub struct RefineSession {
@@ -328,6 +330,58 @@ impl GreylistRefinery {
 
     fn p2p(&self) -> P2pPtr {
         self.session().p2p()
+    }
+}
+
+/// Periodically ping nodes on the whitelist. If they are still reachable, update their last
+/// seen field. Otherwise, downgrade them to the greylist.
+pub async fn whitelist_refinery(network_name: String, p2p: P2pPtr) -> Result<()> {
+    debug!(target: "net::refinery::whitelist_refinery", "Starting whitelist refinery for \"{}\"",
+           network_name);
+
+    let hosts = p2p.hosts();
+
+    loop {
+        sleep(WHITELIST_REFINERY_INTERVAL).await;
+
+        if hosts.container.is_empty(HostColor::White).await {
+            warn!(target: "net::refinery::whitelist_refinery",
+                      "Whitelist is empty! Cannot start refinery process");
+
+            continue
+        }
+
+        let (entry, position) = hosts.container.fetch_last(HostColor::White).await;
+
+        let url = &entry.0;
+        let last_seen = &entry.1;
+
+        if let Err(e) = hosts.try_register(url.clone(), HostState::Refine).await {
+            debug!(target: "net::refinery::whitelist_refinery", "Unable to refine addr={}, err={}",
+                           url.clone(), e);
+
+            continue
+        }
+
+        if p2p.session_refine().handshake_node(url.clone(), p2p.clone()).await {
+            debug!(target: "net::refinery:::whitelist_refinery",
+                       "Host {} is not responsive. Downgrading from whitelist", url);
+
+            hosts.move_host(url, *last_seen, HostColor::Grey).await?;
+            hosts.unregister(url).await;
+
+            continue
+        }
+
+        debug!(target: "net::refinery::whitelist_refinery",
+                   "Peer {} is responsive. Updating last_seen", url);
+
+        // This node is active. Update the last seen field.
+        let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+        hosts
+            .container
+            .update_last_seen(HostColor::White as usize, url, last_seen, Some(position))
+            .await;
     }
 }
 
