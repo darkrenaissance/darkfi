@@ -935,7 +935,7 @@ impl Hosts {
     /// process fails, or when a channel stops. Prevents hosts from getting trapped in the
     /// HostState logical machinery.
     ///
-    /// NOTE: Misuse of this call is dangerous since it frees up the peer to be used by
+    /// Misuse of this call is dangerous since it frees up the peer to be used by
     /// the refinery or outbound connect loop, and may result in invalid states. It should
     /// only be called when it is completely safe to do so.
     pub async fn unregister(&self, addr: &Url) {
