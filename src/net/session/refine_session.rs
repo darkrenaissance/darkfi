@@ -393,7 +393,7 @@ pub async fn whitelist_refinery(network_name: String, p2p: P2pPtr) -> Result<()>
 ///
 /// On first run, SelfHandshake will immediately conduct a version exchange
 /// with our external addresses, and if successful update the last_seen
-/// field. The process will wait [TODO: self_handshake_interval) before retrying.
+/// field. The process will wait Settings::self_handshake_interval before retrying.
 ///
 /// There are two situations in which this can fail:
 ///
@@ -441,13 +441,13 @@ impl SelfHandshake {
     }
 
     async fn run(self: Arc<Self>) {
-        let external_addrs = self.session().p2p().settings().external_addrs.clone();
+        let settings = self.session().p2p().settings();
+        let external_addrs = settings.external_addrs.clone();
         let mut current_attempt = 0;
 
         loop {
             if current_attempt >= 1 {
-                // TODO: make this a configurable interval
-                sleep(600).await;
+                sleep(settings.self_handshake_interval).await;
             }
 
             // Only proceed if the external address is configured.
