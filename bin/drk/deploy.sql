@@ -2,6 +2,7 @@
 -- Native Contract ID: EJs7oEjKkvCeEVCmpRsd6fEoTGCFJ7WKUBfmAjwaegN
 
 CREATE TABLE IF NOT EXISTS EJs7oEjKkvCeEVCmpRsd6fEoTGCFJ7WKUBfmAjwaegN_deploy_auth (
-	deploy_authority BLOB PRIMARY KEY NOT NULL,
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	deploy_authority BLOB UNIQUE NOT NULL,
 	is_frozen INTEGER NOT NULL
 );

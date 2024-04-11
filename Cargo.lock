@@ -2661,6 +2661,7 @@ dependencies = [
  "darkfi-sdk",
  "darkfi-serial",
  "darkfi_dao_contract",
+ "darkfi_deployooor_contract",
  "darkfi_money_contract",
  "easy-parallel",
  "lazy_static",

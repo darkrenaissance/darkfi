@@ -19,12 +19,19 @@
 use lazy_static::lazy_static;
 use rand::rngs::OsRng;
 
-use darkfi::{Error, Result};
-use darkfi_sdk::crypto::{ContractId, Keypair, DEPLOYOOOR_CONTRACT_ID};
-use darkfi_serial::{deserialize_async, serialize_async};
+use darkfi::{
+    tx::{ContractCallLeaf, Transaction, TransactionBuilder},
+    Error, Result,
+};
+use darkfi_deployooor_contract::{client::deploy_v1::DeployCallBuilder, DeployFunction};
+use darkfi_sdk::{
+    crypto::{ContractId, Keypair, DEPLOYOOOR_CONTRACT_ID},
+    ContractCall,
+};
+use darkfi_serial::{deserialize_async, serialize_async, AsyncEncodable};
 use rusqlite::types::Value;
 
-use crate::{error::WalletDbResult, Drk};
+use crate::{convert_named_params, error::WalletDbResult, Drk};
 
 // Wallet SQL table constant names. These have to represent the `wallet.sql`
 // SQL schema. Table names are prefixed with the contract ID to avoid collisions.
@@ -34,6 +41,7 @@ lazy_static! {
 }
 
 // DEPLOY_AUTH_TABLE
+pub const DEPLOY_AUTH_COL_ID: &str = "id";
 pub const DEPLOY_AUTH_COL_DEPLOY_AUTHORITY: &str = "deploy_authority";
 pub const DEPLOY_AUTH_COL_IS_FROZEN: &str = "is_frozen";
 
@@ -91,5 +99,63 @@ impl Drk {
         }
 
         Ok(ret)
+    }
+
+    /// Retrieve a deploy authority keypair given an index
+    async fn get_deploy_auth(&self, idx: u64) -> Result<Keypair> {
+        // Find the deploy authority keypair
+        let row = match self
+            .wallet
+            .query_single(
+                &DEPLOY_AUTH_TABLE,
+                &[DEPLOY_AUTH_COL_DEPLOY_AUTHORITY],
+                convert_named_params! {(DEPLOY_AUTH_COL_ID, idx)},
+            )
+            .await
+        {
+            Ok(v) => v,
+            Err(e) => {
+                return Err(Error::RusqliteError(format!(
+                    "[deploy_contract] Failed to retrieve deploy authority keypair: {e:?}"
+                )))
+            }
+        };
+
+        let Value::Blob(ref keypair_bytes) = row[0] else {
+            return Err(Error::ParseFailed("[deploy_contract] Failed to parse keypair bytes"))
+        };
+        let keypair: Keypair = deserialize_async(keypair_bytes).await?;
+
+        Ok(keypair)
+    }
+
+    /// Create a contract deployment transaction
+    pub async fn deploy_contract(
+        &self,
+        deploy_auth: u64,
+        wasm_bincode: Vec<u8>,
+        deploy_ix: Vec<u8>,
+    ) -> Result<Transaction> {
+        // Fetch the keypair
+        let deploy_keypair = self.get_deploy_auth(deploy_auth).await?;
+
+        // Create the contract call
+        let deploy_call = DeployCallBuilder { deploy_keypair, wasm_bincode, deploy_ix };
+        let deploy_debris = deploy_call.build()?;
+
+        // Encode the call
+        let mut data = vec![DeployFunction::DeployV1 as u8];
+        deploy_debris.params.encode_async(&mut data).await?;
+        let call = ContractCall { contract_id: *DEPLOYOOOR_CONTRACT_ID, data };
+        let mut tx_builder =
+            TransactionBuilder::new(ContractCallLeaf { call, proofs: vec![] }, vec![])?;
+
+        // TODO: Tx fees
+
+        let mut tx = tx_builder.build()?;
+        let sigs = tx.create_sigs(&[deploy_keypair.secret])?;
+        tx.signatures = vec![sigs];
+
+        Ok(tx)
     }
 }

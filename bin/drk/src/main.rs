@@ -490,16 +490,18 @@ enum ContractSubcmd {
 
     /// List deploy authorities in the wallet
     List,
-    /*
+
     /// Deploy a smart contract
     Deploy {
-        /// Path to deploy authority
+        /// Contract ID (deploy authority)
         deploy_auth: String,
 
         /// Path to contract wasm bincode
         wasm_path: String,
+
+        /// Path to serialized deploy instruction
+        deploy_ix: String,
     },
-    */
 }
 
 /// CLI-util structure
@@ -1692,6 +1694,28 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     println!("{table}");
                 }
 
+                Ok(())
+            }
+
+            ContractSubcmd::Deploy { deploy_auth, wasm_path, deploy_ix } => {
+                // Read the wasm bincode and deploy instruction
+                let wasm_bin = smol::fs::read(expand_path(&wasm_path)?).await?;
+                let deploy_ix = smol::fs::read(expand_path(&deploy_ix)?).await?;
+
+                let drk =
+                    Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
+
+                let deploy_auth = u64::from_str(&deploy_auth)?;
+
+                let tx = match drk.deploy_contract(deploy_auth, wasm_bin, deploy_ix).await {
+                    Ok(v) => v,
+                    Err(e) => {
+                        eprintln!("Error creating contract deployment tx: {}", e);
+                        exit(1);
+                    }
+                };
+
+                println!("{}", base64::encode(&serialize_async(&tx).await));
                 Ok(())
             }
         },
