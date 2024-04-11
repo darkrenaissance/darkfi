@@ -20,10 +20,11 @@ use std::{
     collections::{HashMap, HashSet},
     process::exit,
     sync::Arc,
+    time::UNIX_EPOCH,
 };
 
 use async_trait::async_trait;
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use semver::Version;
 use smol::{
     lock::{Mutex, MutexGuard},
@@ -38,12 +39,12 @@ use url::Url;
 
 use darkfi::{
     async_daemonize, cli_desc,
-    net::{self, hosts::HostColor, session::whitelist_refinery, P2p, P2pPtr},
+    net::{self, hosts::HostColor, P2p, P2pPtr},
     rpc::{
         jsonrpc::*,
         server::{listen_and_serve, RequestHandler},
     },
-    system::{StoppableTask, StoppableTaskPtr},
+    system::{sleep, StoppableTask, StoppableTaskPtr},
     util::path::get_config_path,
     Error, Result,
 };
@@ -70,6 +71,10 @@ struct Args {
     #[structopt(short, parse(from_occurrences))]
     /// Increase verbosity (-vvv supported)
     pub verbose: u8,
+
+    #[structopt(long, default_value = "120")]
+    /// Interval after which to check whitelist peers
+    whitelist_refinery_interval: u64,
 }
 
 /// Struct representing a spawned P2P network
@@ -156,6 +161,70 @@ struct Lilith {
 }
 
 impl Lilith {
+    /// Since `Lilith` does not make outbound connections, if a peer is
+    /// upgraded to whitelist it will remain on the whitelist even if the
+    /// give peer is no longer online.
+    ///
+    /// To protect `Lilith` from sharing potentially offline nodes,
+    /// `whitelist_refinery` periodically ping nodes on the whitelist. If they
+    /// are reachable, we update their last seen field. Otherwise, we downgrade
+    /// them to the greylist.
+    ///
+    /// Note: if `Lilith` loses connectivity this method will delete peers from
+    /// the whitelist, meaning `Lilith` will need to rebuild its hostlist when
+    /// it comes back online.
+    async fn whitelist_refinery(
+        network_name: String,
+        p2p: P2pPtr,
+        refinery_interval: u64,
+    ) -> Result<()> {
+        debug!(target: "net::refinery::whitelist_refinery", "Starting whitelist refinery for \"{}\"",
+           network_name);
+
+        let hosts = p2p.hosts();
+
+        loop {
+            sleep(refinery_interval).await;
+
+            if hosts.container.is_empty(HostColor::White).await {
+                warn!(target: "net::refinery::whitelist_refinery",
+                      "Whitelist is empty! Cannot start refinery process");
+
+                continue
+            }
+
+            let (entry, position) = hosts.container.fetch_last(HostColor::White).await;
+
+            let url = &entry.0;
+            let last_seen = &entry.1;
+
+            if !hosts.refinable(url.clone()).await {
+                debug!(target: "net::refinery::whitelist_refinery", "Addr={} not available!",
+                       url.clone());
+
+                continue
+            }
+
+            if p2p.session_refine().handshake_node(url.clone(), p2p.clone()).await {
+                debug!(target: "net::refinery:::whitelist_refinery",
+                       "Host {} is not responsive. Downgrading from whitelist", url);
+
+                hosts.greylist_host(url, *last_seen).await?;
+
+                continue
+            }
+
+            debug!(target: "net::refinery::whitelist_refinery",
+                   "Peer {} is responsive. Updating last_seen", url);
+
+            // This node is active. Update the last seen field.
+            let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+            hosts
+                .container
+                .update_last_seen(HostColor::White as usize, url, last_seen, Some(position))
+                .await;
+        }
+    }
     // RPCAPI:
     // Returns all spawned networks names with their node addresses.
     // --> {"jsonrpc": "2.0", "method": "spawns", "params": [], "id": 42}
@@ -337,7 +406,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         let name = network.name.clone();
         let task = StoppableTask::new();
         task.clone().start(
-            whitelist_refinery(name.clone(), network.p2p.clone()),
+            Lilith::whitelist_refinery(name.clone(), network.p2p.clone(), args.whitelist_refinery_interval),
             |res| async move {
                 match res {
                     Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }

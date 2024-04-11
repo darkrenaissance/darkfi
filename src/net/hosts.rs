@@ -386,7 +386,7 @@ impl HostContainer {
     }
 
     /// Update the last_seen field of a peer on a hostlist.
-    pub(in crate::net) async fn update_last_seen(
+    pub async fn update_last_seen(
         &self,
         color: usize,
         addr: &Url,
@@ -850,6 +850,12 @@ impl Hosts {
         trace!(target: "net::hosts:insert()", "[END]");
     }
 
+    /// Check whether a peer is available to be refined currently. Returns true
+    /// if available, false otherwise.
+    pub async fn refinable(&self, addr: Url) -> bool {
+        self.try_register(addr.clone(), HostState::Refine).await.is_ok()
+    }
+
     /// Try to update the registry. If the host already exists, try to update its state.
     /// Otherwise add the host to the registry along with its state.
     pub(in crate::net) async fn try_register(
@@ -1190,6 +1196,17 @@ impl Hosts {
         } else {
             None
         }
+    }
+
+    /// Downgrade host to Greylist, remove from Gold or White list.
+    pub async fn greylist_host(&self, addr: &Url, last_seen: u64) -> Result<()> {
+        debug!(target: "net::hosts:greylist_host()", "Downgrading addr={}", addr);
+        self.move_host(addr, last_seen, HostColor::Grey).await?;
+
+        // Free up this addr for future operations.
+        self.unregister(addr).await;
+
+        Ok(())
     }
 
     /// A single atomic function for moving hosts between hostlists. Called on the following occasions:

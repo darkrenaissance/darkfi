@@ -37,7 +37,7 @@ pub use outbound_session::{OutboundSession, OutboundSessionPtr};
 pub mod seedsync_session;
 pub use seedsync_session::{SeedSyncSession, SeedSyncSessionPtr};
 pub mod refine_session;
-pub use refine_session::{whitelist_refinery, RefineSession, RefineSessionPtr};
+pub use refine_session::{RefineSession, RefineSessionPtr};
 
 /// Bitwise selectors for the `protocol_registry`
 pub type SessionBitFlag = u32;
