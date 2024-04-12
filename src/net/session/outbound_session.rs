@@ -616,7 +616,8 @@ impl PeerDiscoveryBase for PeerDiscovery {
                             target: "net::outbound_session::peer_discovery()",
                             "[P2P] Peer discovery waiting for addrs timed out."
                         );
-                        // TODO: Just do seed next time
+                        // Just do seed next time
+                        current_attempt = 3;
                     }
                 }
 
