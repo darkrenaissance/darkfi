@@ -494,13 +494,19 @@ enum ContractSubcmd {
     /// Deploy a smart contract
     Deploy {
         /// Contract ID (deploy authority)
-        deploy_auth: String,
+        deploy_auth: u64,
 
         /// Path to contract wasm bincode
         wasm_path: String,
 
         /// Path to serialized deploy instruction
         deploy_ix: String,
+    },
+
+    /// Lock a smart contract
+    Lock {
+        /// Contract ID (deploy authority)
+        deploy_auth: u64,
     },
 }
 
@@ -1682,10 +1688,10 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
                 let mut table = Table::new();
                 table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
-                table.set_titles(row!["Contract ID", "Frozen"]);
+                table.set_titles(row!["Index", "Contract ID", "Frozen"]);
 
-                for (contract_id, frozen) in auths {
-                    table.add_row(row![contract_id, frozen]);
+                for (idx, contract_id, frozen) in auths {
+                    table.add_row(row![idx, contract_id, frozen]);
                 }
 
                 if table.is_empty() {
@@ -1705,12 +1711,26 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 let drk =
                     Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
 
-                let deploy_auth = u64::from_str(&deploy_auth)?;
-
                 let tx = match drk.deploy_contract(deploy_auth, wasm_bin, deploy_ix).await {
                     Ok(v) => v,
                     Err(e) => {
                         eprintln!("Error creating contract deployment tx: {}", e);
+                        exit(1);
+                    }
+                };
+
+                println!("{}", base64::encode(&serialize_async(&tx).await));
+                Ok(())
+            }
+
+            ContractSubcmd::Lock { deploy_auth } => {
+                let drk =
+                    Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
+
+                let tx = match drk.lock_contract(deploy_auth).await {
+                    Ok(v) => v,
+                    Err(e) => {
+                        eprintln!("Error creating contract lock tx: {}", e);
                         exit(1);
                     }
                 };

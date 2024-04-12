@@ -23,7 +23,10 @@ use darkfi::{
     tx::{ContractCallLeaf, Transaction, TransactionBuilder},
     Error, Result,
 };
-use darkfi_deployooor_contract::{client::deploy_v1::DeployCallBuilder, DeployFunction};
+use darkfi_deployooor_contract::{
+    client::{deploy_v1::DeployCallBuilder, lock_v1::LockCallBuilder},
+    DeployFunction,
+};
 use darkfi_sdk::{
     crypto::{ContractId, Keypair, DEPLOYOOOR_CONTRACT_ID},
     ContractCall,
@@ -74,7 +77,7 @@ impl Drk {
     }
 
     /// List contract deploy authorities from the wallet
-    pub async fn list_deploy_auth(&self) -> Result<Vec<(ContractId, bool)>> {
+    pub async fn list_deploy_auth(&self) -> Result<Vec<(i64, ContractId, bool)>> {
         let rows = match self.wallet.query_multiple(&DEPLOY_AUTH_TABLE, &[], &[]).await {
             Ok(r) => r,
             Err(e) => {
@@ -86,16 +89,20 @@ impl Drk {
 
         let mut ret = Vec::with_capacity(rows.len());
         for row in rows {
-            let Value::Blob(ref auth_bytes) = row[0] else {
+            let Value::Integer(idx) = row[0] else {
+                return Err(Error::ParseFailed("[list_deploy_auth] Failed to parse index"))
+            };
+
+            let Value::Blob(ref auth_bytes) = row[1] else {
                 return Err(Error::ParseFailed("[list_deploy_auth] Failed to parse keypair bytes"))
             };
             let deploy_auth: Keypair = deserialize_async(auth_bytes).await?;
 
-            let Value::Integer(frozen) = row[1] else {
+            let Value::Integer(frozen) = row[2] else {
                 return Err(Error::ParseFailed("[list_deploy_auth] Failed to parse \"is_frozen\""))
             };
 
-            ret.push((ContractId::derive_public(deploy_auth.public), frozen != 0))
+            ret.push((idx, ContractId::derive_public(deploy_auth.public), frozen != 0))
         }
 
         Ok(ret)
@@ -146,6 +153,31 @@ impl Drk {
         // Encode the call
         let mut data = vec![DeployFunction::DeployV1 as u8];
         deploy_debris.params.encode_async(&mut data).await?;
+        let call = ContractCall { contract_id: *DEPLOYOOOR_CONTRACT_ID, data };
+        let mut tx_builder =
+            TransactionBuilder::new(ContractCallLeaf { call, proofs: vec![] }, vec![])?;
+
+        // TODO: Tx fees
+
+        let mut tx = tx_builder.build()?;
+        let sigs = tx.create_sigs(&[deploy_keypair.secret])?;
+        tx.signatures = vec![sigs];
+
+        Ok(tx)
+    }
+
+    /// Create a contract redeployment lock transaction
+    pub async fn lock_contract(&self, deploy_auth: u64) -> Result<Transaction> {
+        // Fetch the keypair
+        let deploy_keypair = self.get_deploy_auth(deploy_auth).await?;
+
+        // Create the contract call
+        let lock_call = LockCallBuilder { deploy_keypair };
+        let lock_debris = lock_call.build()?;
+
+        // Encode the call
+        let mut data = vec![DeployFunction::LockV1 as u8];
+        lock_debris.params.encode_async(&mut data).await?;
         let call = ContractCall { contract_id: *DEPLOYOOOR_CONTRACT_ID, data };
         let mut tx_builder =
             TransactionBuilder::new(ContractCallLeaf { call, proofs: vec![] }, vec![])?;
