@@ -184,8 +184,8 @@ impl ProtocolVersion {
         );
 
         // Receive version message
-        let _version = self.version_sub.receive().await?;
-        // TODO: self.channel.set_remote_node_id(version.node_id.clone()).await;
+        let version = self.version_sub.receive().await?;
+        self.channel.set_version(version).await;
 
         // Send verack
         let verack = VerackMessage { app_version: self.settings.app_version.clone() };

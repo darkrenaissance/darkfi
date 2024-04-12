@@ -39,7 +39,7 @@ use super::{
     dnet::{self, dnetev, DnetEvent},
     hosts::HostColor,
     message,
-    message::Packet,
+    message::{Packet, VersionMessage},
     message_subscriber::{MessageSubscription, MessageSubsystem},
     p2p::P2pPtr,
     session::{Session, SessionBitFlag, SessionWeakPtr, SESSION_ALL, SESSION_REFINE},
@@ -84,6 +84,10 @@ pub struct Channel {
     stopped: AtomicBool,
     /// Weak pointer to respective session
     session: SessionWeakPtr,
+    /// The version message of the node we are connected to.
+    /// Some if the version exchange has already occurred, None
+    /// otherwise.
+    version: Mutex<Option<Arc<VersionMessage>>>,
     /// Channel debug info
     pub info: ChannelInfo,
 }
@@ -105,6 +109,7 @@ impl Channel {
         let message_subsystem = MessageSubsystem::new();
         Self::setup_dispatchers(&message_subsystem).await;
 
+        let version = Mutex::new(None);
         let info = ChannelInfo::new(resolve_addr, connect_addr.clone());
 
         Arc::new(Self {
@@ -115,6 +120,7 @@ impl Channel {
             receive_task: StoppableTask::new(),
             stopped: AtomicBool::new(false),
             session,
+            version,
             info,
         })
     }
@@ -352,6 +358,12 @@ impl Channel {
     /// Return the socket address without transport processing.
     pub fn connect_addr(&self) -> &Url {
         &self.info.connect_addr
+    }
+
+    /// Set the VersionMessage of the node this channel is connected
+    /// to. Called on receiving a version message in `ProtocolVersion`.
+    pub(crate) async fn set_version(&self, version: Arc<VersionMessage>) {
+        *self.version.lock().await = Some(version);
     }
 
     /// Returns the inner [`MessageSubsystem`] reference
