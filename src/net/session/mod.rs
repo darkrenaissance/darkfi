@@ -126,7 +126,6 @@ pub trait Session: Sync {
         channel.clone().start(executor.clone());
 
         // Wait for handshake to finish.
-        // If the handshake returns an error, remove this host from all hostlists.
         match handshake_task.await {
             Ok(()) => {
                 debug!(target: "net::session::register_channel()",
