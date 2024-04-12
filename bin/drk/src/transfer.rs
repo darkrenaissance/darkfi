@@ -32,7 +32,7 @@ use darkfi_sdk::{
     crypto::{contract_id::MONEY_CONTRACT_ID, FuncId, Keypair, PublicKey},
     tx::ContractCall,
 };
-use darkfi_serial::Encodable;
+use darkfi_serial::AsyncEncodable;
 
 use crate::{money::BALANCE_BASE10_DECIMALS, Drk};
 
@@ -110,7 +110,7 @@ impl Drk {
 
         // Encode and sign the transaction
         let mut data = vec![MoneyFunction::TransferV1 as u8];
-        params.encode(&mut data)?;
+        params.encode_async(&mut data).await?;
         let call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
         let mut tx_builder =
             TransactionBuilder::new(ContractCallLeaf { call, proofs: secrets.proofs }, vec![])?;

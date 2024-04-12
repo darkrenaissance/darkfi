@@ -51,7 +51,8 @@ use darkfi_sdk::{
     ContractCall,
 };
 use darkfi_serial::{
-    async_trait, deserialize, serialize, Encodable, SerialDecodable, SerialEncodable,
+    async_trait, deserialize_async, serialize_async, AsyncEncodable, SerialDecodable,
+    SerialEncodable,
 };
 
 use crate::{
@@ -402,7 +403,13 @@ impl Drk {
             *DAO_TREES_TABLE, DAO_TREES_COL_DAOS_TREE, DAO_TREES_COL_PROPOSALS_TREE,
         );
         self.wallet
-            .exec_sql(&query, rusqlite::params![serialize(daos_tree), serialize(proposals_tree)])
+            .exec_sql(
+                &query,
+                rusqlite::params![
+                    serialize_async(daos_tree).await,
+                    serialize_async(proposals_tree).await
+                ],
+            )
             .await
     }
 
@@ -420,12 +427,12 @@ impl Drk {
         let Value::Blob(ref daos_tree_bytes) = row[0] else {
             return Err(Error::ParseFailed("[get_dao_trees] DAO tree bytes parsing failed"))
         };
-        let daos_tree = deserialize(daos_tree_bytes)?;
+        let daos_tree = deserialize_async(daos_tree_bytes).await?;
 
         let Value::Blob(ref proposals_tree_bytes) = row[1] else {
             return Err(Error::ParseFailed("[get_dao_trees] Proposals tree bytes parsing failed"))
         };
-        let proposals_tree = deserialize(proposals_tree_bytes)?;
+        let proposals_tree = deserialize_async(proposals_tree_bytes).await?;
 
         Ok((daos_tree, proposals_tree))
     }
@@ -467,12 +474,12 @@ impl Drk {
             let Value::Blob(ref proposer_limit_bytes) = row[2] else {
                 return Err(Error::ParseFailed("[get_daos] Proposer limit bytes parsing failed"))
             };
-            let proposer_limit = deserialize(proposer_limit_bytes)?;
+            let proposer_limit = deserialize_async(proposer_limit_bytes).await?;
 
             let Value::Blob(ref quorum_bytes) = row[3] else {
                 return Err(Error::ParseFailed("[get_daos] Quorum bytes parsing failed"))
             };
-            let quorum = deserialize(quorum_bytes)?;
+            let quorum = deserialize_async(quorum_bytes).await?;
 
             let Value::Integer(approval_ratio_base) = row[4] else {
                 return Err(Error::ParseFailed("[get_daos] Approval ratio base parsing failed"))
@@ -491,17 +498,17 @@ impl Drk {
             let Value::Blob(ref gov_token_bytes) = row[6] else {
                 return Err(Error::ParseFailed("[get_daos] Gov token bytes parsing failed"))
             };
-            let gov_token_id = deserialize(gov_token_bytes)?;
+            let gov_token_id = deserialize_async(gov_token_bytes).await?;
 
             let Value::Blob(ref secret_bytes) = row[7] else {
                 return Err(Error::ParseFailed("[get_daos] Secret key bytes parsing failed"))
             };
-            let secret_key = deserialize(secret_bytes)?;
+            let secret_key = deserialize_async(secret_bytes).await?;
 
             let Value::Blob(ref bulla_blind_bytes) = row[8] else {
                 return Err(Error::ParseFailed("[get_daos] Bulla blind bytes parsing failed"))
             };
-            let bulla_blind = deserialize(bulla_blind_bytes)?;
+            let bulla_blind = deserialize_async(bulla_blind_bytes).await?;
 
             let Value::Blob(ref leaf_position_bytes) = row[9] else {
                 return Err(Error::ParseFailed("[get_daos] Leaf position bytes parsing failed"))
@@ -509,14 +516,17 @@ impl Drk {
             let leaf_position = if leaf_position_bytes.is_empty() {
                 None
             } else {
-                Some(deserialize(leaf_position_bytes)?)
+                Some(deserialize_async(leaf_position_bytes).await?)
             };
 
             let Value::Blob(ref tx_hash_bytes) = row[10] else {
                 return Err(Error::ParseFailed("[get_daos] Transaction hash bytes parsing failed"))
             };
-            let tx_hash =
-                if tx_hash_bytes.is_empty() { None } else { Some(deserialize(tx_hash_bytes)?) };
+            let tx_hash = if tx_hash_bytes.is_empty() {
+                None
+            } else {
+                Some(deserialize_async(tx_hash_bytes).await?)
+            };
 
             let Value::Integer(call_index) = row[11] else {
                 return Err(Error::ParseFailed("[get_daos] Call index parsing failed"))
@@ -551,7 +561,7 @@ impl Drk {
     }
 
     /// Auxiliary function to parse a proposal record row.
-    fn parse_dao_proposal(&self, dao: &Dao, row: &[Value]) -> Result<DaoProposal> {
+    async fn parse_dao_proposal(&self, dao: &Dao, row: &[Value]) -> Result<DaoProposal> {
         let Value::Integer(id) = row[0] else {
             return Err(Error::ParseFailed("[get_dao_proposals] ID parsing failed"))
         };
@@ -573,22 +583,22 @@ impl Drk {
                 "[get_dao_proposals] Recipient bytes bytes parsing failed",
             ))
         };
-        let recipient = deserialize(recipient_bytes)?;
+        let recipient = deserialize_async(recipient_bytes).await?;
 
         let Value::Blob(ref amount_bytes) = row[3] else {
             return Err(Error::ParseFailed("[get_dao_proposals] Amount bytes parsing failed"))
         };
-        let amount = deserialize(amount_bytes)?;
+        let amount = deserialize_async(amount_bytes).await?;
 
         let Value::Blob(ref token_id_bytes) = row[4] else {
             return Err(Error::ParseFailed("[get_dao_proposals] Token ID bytes parsing failed"))
         };
-        let token_id = deserialize(token_id_bytes)?;
+        let token_id = deserialize_async(token_id_bytes).await?;
 
         let Value::Blob(ref bulla_blind_bytes) = row[5] else {
             return Err(Error::ParseFailed("[get_dao_proposals] Bulla blind bytes parsing failed"))
         };
-        let bulla_blind = deserialize(bulla_blind_bytes)?;
+        let bulla_blind = deserialize_async(bulla_blind_bytes).await?;
 
         let Value::Blob(ref leaf_position_bytes) = row[6] else {
             return Err(Error::ParseFailed("[get_dao_proposals] Leaf position bytes parsing failed"))
@@ -596,7 +606,7 @@ impl Drk {
         let leaf_position = if leaf_position_bytes.is_empty() {
             None
         } else {
-            Some(deserialize(leaf_position_bytes)?)
+            Some(deserialize_async(leaf_position_bytes).await?)
         };
 
         let Value::Blob(ref money_snapshot_tree_bytes) = row[7] else {
@@ -607,7 +617,7 @@ impl Drk {
         let money_snapshot_tree = if money_snapshot_tree_bytes.is_empty() {
             None
         } else {
-            Some(deserialize(money_snapshot_tree_bytes)?)
+            Some(deserialize_async(money_snapshot_tree_bytes).await?)
         };
 
         let Value::Blob(ref tx_hash_bytes) = row[8] else {
@@ -615,8 +625,11 @@ impl Drk {
                 "[get_dao_proposals] Transaction hash bytes parsing failed",
             ))
         };
-        let tx_hash =
-            if tx_hash_bytes.is_empty() { None } else { Some(deserialize(tx_hash_bytes)?) };
+        let tx_hash = if tx_hash_bytes.is_empty() {
+            None
+        } else {
+            Some(deserialize_async(tx_hash_bytes).await?)
+        };
 
         let Value::Integer(call_index) = row[9] else {
             return Err(Error::ParseFailed("[get_dao_proposals] Call index parsing failed"))
@@ -629,8 +642,11 @@ impl Drk {
         let Value::Blob(ref vote_id_bytes) = row[10] else {
             return Err(Error::ParseFailed("[get_dao_proposals] Vote ID bytes parsing failed"))
         };
-        let vote_id =
-            if vote_id_bytes.is_empty() { None } else { Some(deserialize(vote_id_bytes)?) };
+        let vote_id = if vote_id_bytes.is_empty() {
+            None
+        } else {
+            Some(deserialize_async(vote_id_bytes).await?)
+        };
 
         Ok(DaoProposal {
             id,
@@ -675,7 +691,7 @@ impl Drk {
 
         let mut proposals = Vec::with_capacity(rows.len());
         for row in rows {
-            let proposal = self.parse_dao_proposal(dao, &row)?;
+            let proposal = self.parse_dao_proposal(dao, &row).await?;
             proposals.push(proposal);
         }
 
@@ -716,13 +732,13 @@ impl Drk {
         match DaoFunction::try_from(data[0])? {
             DaoFunction::Mint => {
                 println!("[apply_tx_dao_data] Found Dao::Mint call");
-                let params: DaoMintParams = deserialize(&data[1..])?;
+                let params: DaoMintParams = deserialize_async(&data[1..]).await?;
                 let tx_hash = if confirm { Some(tx_hash) } else { None };
                 new_dao_bullas.push((params.dao_bulla, tx_hash, call_idx));
             }
             DaoFunction::Propose => {
                 println!("[apply_tx_dao_data] Found Dao::Propose call");
-                let params: DaoProposeParams = deserialize(&data[1..])?;
+                let params: DaoProposeParams = deserialize_async(&data[1..]).await?;
                 let tx_hash = if confirm { Some(tx_hash) } else { None };
                 // We need to clone the tree here for reproducing the snapshot Merkle root
                 let money_tree = if confirm { Some(self.get_money_tree().await?) } else { None };
@@ -730,7 +746,7 @@ impl Drk {
             }
             DaoFunction::Vote => {
                 println!("[apply_tx_dao_data] Found Dao::Vote call");
-                let params: DaoVoteParams = deserialize(&data[1..])?;
+                let params: DaoVoteParams = deserialize_async(&data[1..]).await?;
                 let tx_hash = if confirm { Some(tx_hash) } else { None };
                 new_dao_votes.push((params, tx_hash, call_idx));
             }
@@ -878,8 +894,8 @@ impl Drk {
                 .exec_sql(
                     &query,
                     rusqlite::params![
-                        serialize(&dao.leaf_position.unwrap()),
-                        serialize(&dao.tx_hash.unwrap()),
+                        serialize_async(&dao.leaf_position.unwrap()).await,
+                        serialize_async(&dao.tx_hash.unwrap()).await,
                         dao.call_index.unwrap()
                     ],
                 )
@@ -940,13 +956,13 @@ impl Drk {
                     &query,
                     rusqlite::params![
                         dao.id,
-                        serialize(&proposal.recipient),
-                        serialize(&proposal.amount),
-                        serialize(&proposal.token_id),
-                        serialize(&proposal.bulla_blind),
-                        serialize(&proposal.leaf_position.unwrap()),
-                        serialize(&proposal.money_snapshot_tree.clone().unwrap()),
-                        serialize(&proposal.tx_hash.unwrap()),
+                        serialize_async(&proposal.recipient).await,
+                        serialize_async(&proposal.amount).await,
+                        serialize_async(&proposal.token_id).await,
+                        serialize_async(&proposal.bulla_blind).await,
+                        serialize_async(&proposal.leaf_position.unwrap()).await,
+                        serialize_async(&proposal.money_snapshot_tree.clone().unwrap()).await,
+                        serialize_async(&proposal.tx_hash.unwrap()).await,
                         proposal.call_index,
                     ],
                 )
@@ -984,10 +1000,10 @@ impl Drk {
                     rusqlite::params![
                         vote.proposal_id,
                         vote.vote_option as u64,
-                        serialize(&vote.yes_vote_blind),
-                        serialize(&vote.all_vote_value),
-                        serialize(&vote.all_vote_blind),
-                        serialize(&vote.tx_hash.unwrap()),
+                        serialize_async(&vote.yes_vote_blind).await,
+                        serialize_async(&vote.all_vote_value).await,
+                        serialize_async(&vote.all_vote_blind).await,
+                        serialize_async(&vote.tx_hash.unwrap()).await,
                         vote.call_index.unwrap(),
                     ],
                 )
@@ -1072,13 +1088,13 @@ impl Drk {
                 &query,
                 rusqlite::params![
                     dao_name,
-                    serialize(&dao_params.proposer_limit),
-                    serialize(&dao_params.quorum),
+                    serialize_async(&dao_params.proposer_limit).await,
+                    serialize_async(&dao_params.quorum).await,
                     dao_params.approval_ratio_base,
                     dao_params.approval_ratio_quot,
-                    serialize(&dao_params.gov_token_id),
-                    serialize(&dao_params.secret_key),
-                    serialize(&dao_params.bulla_blind),
+                    serialize_async(&dao_params.gov_token_id).await,
+                    serialize_async(&dao_params.secret_key).await,
+                    serialize_async(&dao_params.bulla_blind).await,
                 ],
             )
             .await
@@ -1228,7 +1244,7 @@ impl Drk {
         let dao = self.get_dao_by_id(dao_id).await?;
 
         // Parse rest of the record
-        self.parse_dao_proposal(&dao, &row)
+        self.parse_dao_proposal(&dao, &row).await
     }
 
     // Fetch all known DAO proposal votes from the wallet given a proposal ID
@@ -1287,29 +1303,32 @@ impl Drk {
                     "[get_dao_proposal_votes] Yes vote blind bytes parsing failed",
                 ))
             };
-            let yes_vote_blind = deserialize(yes_vote_blind_bytes)?;
+            let yes_vote_blind = deserialize_async(yes_vote_blind_bytes).await?;
 
             let Value::Blob(ref all_vote_value_bytes) = row[4] else {
                 return Err(Error::ParseFailed(
                     "[get_dao_proposal_votes] All vote value bytes parsing failed",
                 ))
             };
-            let all_vote_value = deserialize(all_vote_value_bytes)?;
+            let all_vote_value = deserialize_async(all_vote_value_bytes).await?;
 
             let Value::Blob(ref all_vote_blind_bytes) = row[5] else {
                 return Err(Error::ParseFailed(
                     "[get_dao_proposal_votes] All vote blind bytes parsing failed",
                 ))
             };
-            let all_vote_blind = deserialize(all_vote_blind_bytes)?;
+            let all_vote_blind = deserialize_async(all_vote_blind_bytes).await?;
 
             let Value::Blob(ref tx_hash_bytes) = row[6] else {
                 return Err(Error::ParseFailed(
                     "[get_dao_proposal_votes] Transaction hash bytes parsing failed",
                 ))
             };
-            let tx_hash =
-                if tx_hash_bytes.is_empty() { None } else { Some(deserialize(tx_hash_bytes)?) };
+            let tx_hash = if tx_hash_bytes.is_empty() {
+                None
+            } else {
+                Some(deserialize_async(tx_hash_bytes).await?)
+            };
 
             let Value::Integer(call_index) = row[7] else {
                 return Err(Error::ParseFailed("[get_dao_proposal_votes] Call index parsing failed"))
@@ -1373,7 +1392,7 @@ impl Drk {
             make_mint_call(&dao_info, &dao.secret_key, &dao_mint_zkbin, &dao_mint_pk)?;
 
         let mut data = vec![DaoFunction::Mint as u8];
-        params.encode(&mut data)?;
+        params.encode_async(&mut data).await?;
         let call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
         let mut tx_builder = TransactionBuilder::new(ContractCallLeaf { call, proofs }, vec![])?;
         let mut tx = tx_builder.build()?;
@@ -1525,7 +1544,7 @@ impl Drk {
         }
         */
         let proposal_data = vec![];
-        //proposal_coins.encode(&mut proposal_data).unwrap();
+        //proposal_coins.encode_async(&mut proposal_data).await.unwrap();
 
         let auth_calls = vec![
             DaoAuthCall {
@@ -1585,7 +1604,7 @@ impl Drk {
         )?;
 
         let mut data = vec![DaoFunction::Propose as u8];
-        params.encode(&mut data)?;
+        params.encode_async(&mut data).await?;
         let call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
         let mut tx_builder = TransactionBuilder::new(ContractCallLeaf { call, proofs }, vec![])?;
         let mut tx = tx_builder.build()?;
@@ -1729,7 +1748,7 @@ impl Drk {
         )?;
 
         let mut data = vec![DaoFunction::Vote as u8];
-        params.encode(&mut data)?;
+        params.encode_async(&mut data).await?;
         let call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
         let mut tx_builder = TransactionBuilder::new(ContractCallLeaf { call, proofs }, vec![])?;
         let mut tx = tx_builder.build()?;
