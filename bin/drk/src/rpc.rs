@@ -32,7 +32,10 @@ use darkfi::{
     util::encoding::base64,
     Error, Result,
 };
-use darkfi_sdk::{crypto::ContractId, tx::TransactionHash};
+use darkfi_sdk::{
+    crypto::{ContractId, DAO_CONTRACT_ID, DEPLOYOOOR_CONTRACT_ID, MONEY_CONTRACT_ID},
+    tx::TransactionHash,
+};
 use darkfi_serial::{deserialize_async, serialize_async};
 
 use crate::{
@@ -132,12 +135,11 @@ impl Drk {
                         println!("=======================================");
 
                         println!("Deserialized successfully. Scanning block...");
-                        if let Err(e) = self.scan_block_money(&block_data).await {
+                        if let Err(e) = self.scan_block(&block_data).await {
                             return Err(Error::RusqliteError(format!(
-                                "[subscribe_blocks] Scaning blocks for Money failed: {e:?}"
+                                "[subscribe_blocks] Scanning block failed: {e:?}"
                             )))
                         }
-                        self.scan_block_dao(&block_data).await?;
                         if let Err(e) = self
                             .update_tx_history_records_status(&block_data.txs, "Finalized")
                             .await
@@ -166,15 +168,41 @@ impl Drk {
         Err(e)
     }
 
-    /// `scan_block_money` will go over transactions in a block and fetch the ones dealing
-    /// with the money contract. Then over all of them, try to see if any are related
-    /// to us. If any are found, the metadata is extracted and placed into the wallet
-    /// for future use.
-    async fn scan_block_money(&self, block: &BlockInfo) -> Result<()> {
-        println!("[Money] Iterating over {} transactions", block.txs.len());
-
+    /// `scan_block` will go over over transactions in a block and handle their calls
+    /// based on the called contract. Additionally, will update `last_scanned_block` to
+    /// the probided block height.
+    async fn scan_block(&self, block: &BlockInfo) -> Result<()> {
+        println!("[scan_block] Iterating over {} transactions", block.txs.len());
         for tx in block.txs.iter() {
-            self.apply_tx_money_data(tx, true).await?;
+            println!("[scan_block] Processing transaction: {}", tx.hash());
+            for (i, call) in tx.calls.iter().enumerate() {
+                if call.data.contract_id == *MONEY_CONTRACT_ID {
+                    println!("[scan_block] Found Money contract in call {i}");
+                    self.apply_tx_money_data(&call.data.data).await?;
+                    continue
+                }
+
+                if call.data.contract_id == *DAO_CONTRACT_ID {
+                    println!("[scan_block] Found DAO contract in call {i}");
+                    self.apply_tx_dao_data(
+                        &call.data.data,
+                        TransactionHash::new(*blake3::hash(&serialize_async(tx).await).as_bytes()),
+                        i as u8,
+                        true,
+                    )
+                    .await?;
+                    continue
+                }
+
+                if call.data.contract_id == *DEPLOYOOOR_CONTRACT_ID {
+                    println!("[scan_block] Found DeployoOor contract in call {i}");
+                    // TODO: implement
+                    continue
+                }
+
+                // TODO: For now we skip non-native contract calls
+                println!("[scan_block] Found non-native contract in call {i}, skipping.");
+            }
         }
 
         // Write this block height into `last_scanned_block`
@@ -182,21 +210,8 @@ impl Drk {
             format!("UPDATE {} SET {} = ?1;", *MONEY_INFO_TABLE, MONEY_INFO_COL_LAST_SCANNED_BLOCK);
         if let Err(e) = self.wallet.exec_sql(&query, rusqlite::params![block.header.height]).await {
             return Err(Error::RusqliteError(format!(
-                "[scan_block_money] Update last scanned block failed: {e:?}"
+                "[scan_block] Update last scanned block failed: {e:?}"
             )))
-        }
-
-        Ok(())
-    }
-
-    /// `scan_block_dao` will go over transactions in a block and fetch the ones dealing
-    /// with the dao contract. Then over all of them, try to see if any are related
-    /// to us. If any are found, the metadata is extracted and placed into the wallet
-    /// for future use.
-    async fn scan_block_dao(&self, block: &BlockInfo) -> Result<()> {
-        println!("[DAO] Iterating over {} transactions", block.txs.len());
-        for tx in block.txs.iter() {
-            self.apply_tx_dao_data(tx, true).await?;
         }
 
         Ok(())
@@ -253,12 +268,8 @@ impl Drk {
                         return Err(WalletDbError::GenericError)
                     }
                 };
-                if let Err(e) = self.scan_block_money(&block).await {
-                    eprintln!("[scan_blocks] Scan block Money failed: {e:?}");
-                    return Err(WalletDbError::GenericError)
-                };
-                if let Err(e) = self.scan_block_dao(&block).await {
-                    eprintln!("[scan_blocks] Scan block DAO failed: {e:?}");
+                if let Err(e) = self.scan_block(&block).await {
+                    eprintln!("[scan_blocks] Scan block failed: {e:?}");
                     return Err(WalletDbError::GenericError)
                 };
                 self.update_tx_history_records_status(&block.txs, "Finalized").await?;

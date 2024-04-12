@@ -47,6 +47,7 @@ use darkfi_sdk::{
         SecretKey, DAO_CONTRACT_ID, MONEY_CONTRACT_ID,
     },
     pasta::pallas,
+    tx::TransactionHash,
     ContractCall,
 };
 use darkfi_serial::{
@@ -198,7 +199,7 @@ pub struct Dao {
     /// Leaf position of the DAO in the Merkle tree of DAOs
     pub leaf_position: Option<bridgetree::Position>,
     /// The transaction hash where the DAO was deployed
-    pub tx_hash: Option<blake3::Hash>,
+    pub tx_hash: Option<TransactionHash>,
     /// The call index in the transaction where the DAO was deployed
     pub call_index: Option<u8>,
 }
@@ -283,7 +284,7 @@ pub struct DaoProposal {
     /// Snapshotted Money Merkle tree
     pub money_snapshot_tree: Option<MerkleTree>,
     /// Transaction hash where this proposal was proposed
-    pub tx_hash: Option<blake3::Hash>,
+    pub tx_hash: Option<TransactionHash>,
     /// call index in the transaction where this proposal was proposed
     pub call_index: Option<u8>,
     /// The vote ID we've voted on this proposal
@@ -353,7 +354,7 @@ pub struct DaoVote {
     /// Blinding facfor of all votes
     pub all_vote_blind: ScalarBlind,
     /// Transaction hash where this vote was casted
-    pub tx_hash: Option<blake3::Hash>,
+    pub tx_hash: Option<TransactionHash>,
     /// call index in the transaction where this vote was casted
     pub call_index: Option<u8>,
 }
@@ -686,58 +687,60 @@ impl Drk {
 
     /// Append data related to DAO contract transactions into the wallet database.
     /// Optionally, if `confirm` is true, also append the data in the Merkle trees, etc.
-    pub async fn apply_tx_dao_data(&self, tx: &Transaction, confirm: bool) -> Result<()> {
-        let cid = *DAO_CONTRACT_ID;
+    pub async fn apply_tx_dao_data(
+        &self,
+        data: &[u8],
+        tx_hash: TransactionHash,
+        call_idx: u8,
+        confirm: bool,
+    ) -> Result<()> {
         let mut daos = self.get_daos().await?;
         let mut daos_to_confirm = vec![];
         let (mut daos_tree, mut proposals_tree) = self.get_dao_trees().await?;
 
         // DAOs that have been minted
-        let mut new_dao_bullas: Vec<(DaoBulla, Option<blake3::Hash>, u8)> = vec![];
+        let mut new_dao_bullas: Vec<(DaoBulla, Option<TransactionHash>, u8)> = vec![];
         // DAO proposals that have been minted
         let mut new_dao_proposals: Vec<(
             DaoProposeParams,
             Option<MerkleTree>,
-            Option<blake3::Hash>,
+            Option<TransactionHash>,
             u8,
         )> = vec![];
         let mut our_proposals: Vec<DaoProposal> = vec![];
         // DAO votes that have been seen
-        let mut new_dao_votes: Vec<(DaoVoteParams, Option<blake3::Hash>, u8)> = vec![];
+        let mut new_dao_votes: Vec<(DaoVoteParams, Option<TransactionHash>, u8)> = vec![];
         let mut dao_votes: Vec<DaoVote> = vec![];
 
         // Run through the transaction and see what we got:
-        for (i, call) in tx.calls.iter().enumerate() {
-            if call.data.contract_id == cid && call.data.data[0] == DaoFunction::Mint as u8 {
-                println!("Found Dao::Mint in call {i}");
-                let params: DaoMintParams = deserialize(&call.data.data[1..])?;
-                let tx_hash = if confirm { Some(blake3::hash(&serialize(tx))) } else { None };
-                new_dao_bullas.push((params.dao_bulla, tx_hash, i as u8));
-                continue
+        match DaoFunction::try_from(data[0])? {
+            DaoFunction::Mint => {
+                println!("[apply_tx_dao_data] Found Dao::Mint call");
+                let params: DaoMintParams = deserialize(&data[1..])?;
+                let tx_hash = if confirm { Some(tx_hash) } else { None };
+                new_dao_bullas.push((params.dao_bulla, tx_hash, call_idx));
             }
-
-            if call.data.contract_id == cid && call.data.data[0] == DaoFunction::Propose as u8 {
-                println!("Found Dao::Propose in call {i}");
-                let params: DaoProposeParams = deserialize(&call.data.data[1..])?;
-                let tx_hash = if confirm { Some(blake3::hash(&serialize(tx))) } else { None };
+            DaoFunction::Propose => {
+                println!("[apply_tx_dao_data] Found Dao::Propose call");
+                let params: DaoProposeParams = deserialize(&data[1..])?;
+                let tx_hash = if confirm { Some(tx_hash) } else { None };
                 // We need to clone the tree here for reproducing the snapshot Merkle root
                 let money_tree = if confirm { Some(self.get_money_tree().await?) } else { None };
-                new_dao_proposals.push((params, money_tree, tx_hash, i as u8));
-                continue
+                new_dao_proposals.push((params, money_tree, tx_hash, call_idx));
             }
-
-            if call.data.contract_id == cid && call.data.data[0] == DaoFunction::Vote as u8 {
-                println!("Found Dao::Vote in call {i}");
-                let params: DaoVoteParams = deserialize(&call.data.data[1..])?;
-                let tx_hash = if confirm { Some(blake3::hash(&serialize(tx))) } else { None };
-                new_dao_votes.push((params, tx_hash, i as u8));
-                continue
+            DaoFunction::Vote => {
+                println!("[apply_tx_dao_data] Found Dao::Vote call");
+                let params: DaoVoteParams = deserialize(&data[1..])?;
+                let tx_hash = if confirm { Some(tx_hash) } else { None };
+                new_dao_votes.push((params, tx_hash, call_idx));
             }
-
-            if call.data.contract_id == cid && call.data.data[0] == DaoFunction::Exec as u8 {
-                // This seems to not need any special action
-                println!("Found Dao::Exec in call {i}");
-                continue
+            DaoFunction::Exec => {
+                println!("[apply_tx_dao_data] Found Dao::Exec call");
+                // TODO: implement
+            }
+            DaoFunction::AuthMoneyTransfer => {
+                println!("[apply_tx_dao_data] Found Dao::AuthMoneyTransfer call");
+                // TODO: implement
             }
         }
 
@@ -749,7 +752,7 @@ impl Drk {
                 daos_tree.append(MerkleNode::from(new_bulla.0.inner()));
                 for dao in daos.iter_mut() {
                     if dao.bulla() == new_bulla.0 {
-                        println!("Found minted DAO {}, noting down for wallet update", new_bulla.0);
+                        println!("[apply_tx_dao_data] Found minted DAO {}, noting down for wallet update", new_bulla.0);
                         // We have this DAO imported in our wallet. Add the metadata:
                         dao.leaf_position = daos_tree.mark();
                         dao.tx_hash = new_bulla.1;
@@ -771,7 +774,7 @@ impl Drk {
                         // ID by looking at how many proposals we already have.
                         // We also assume we don't mantain duplicate DAOs in the
                         // wallet.
-                        println!("Managed to decrypt DAO proposal note");
+                        println!("[apply_tx_dao_data] Managed to decrypt DAO proposal note");
                         let daos_proposals = self.get_dao_proposals(dao.id).await?;
                         let our_prop = DaoProposal {
                             // This ID stuff is flaky.
@@ -798,7 +801,7 @@ impl Drk {
                 for dao in &daos {
                     // TODO: we shouldn't decrypt with all DAOs here
                     let note = vote.0.note.decrypt_unsafe(&dao.secret_key)?;
-                    println!("Managed to decrypt DAO proposal vote note");
+                    println!("[apply_tx_dao_data] Managed to decrypt DAO proposal vote note");
                     let daos_proposals = self.get_dao_proposals(dao.id).await?;
                     let mut proposal_id = None;
 
@@ -810,7 +813,7 @@ impl Drk {
                     }
 
                     if proposal_id.is_none() {
-                        println!("Warning: Decrypted DaoVoteNote but did not find proposal");
+                        println!("[apply_tx_dao_data] Warning: Decrypted DaoVoteNote but did not find proposal");
                         break
                     }
 
@@ -835,9 +838,7 @@ impl Drk {
                     dao_votes.push(v);
                 }
             }
-        }
 
-        if confirm {
             if let Err(e) = self.put_dao_trees(&daos_tree, &proposals_tree).await {
                 return Err(Error::RusqliteError(format!(
                     "[apply_tx_dao_data] Put DAO tree failed: {e:?}"

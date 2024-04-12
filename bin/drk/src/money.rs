@@ -22,12 +22,12 @@ use lazy_static::lazy_static;
 use rand::rngs::OsRng;
 use rusqlite::types::Value;
 
-use darkfi::{tx::Transaction, zk::halo2::Field, Error, Result};
+use darkfi::{zk::halo2::Field, Error, Result};
 use darkfi_money_contract::{
     client::{MoneyNote, OwnCoin},
     model::{
-        Coin, MoneyPoWRewardParamsV1, MoneyTokenFreezeParamsV1, MoneyTokenMintParamsV1,
-        MoneyTransferParamsV1, Nullifier, TokenId, DARK_TOKEN_ID,
+        Coin, MoneyGenesisMintParamsV1, MoneyPoWRewardParamsV1, MoneyTokenFreezeParamsV1,
+        MoneyTokenMintParamsV1, MoneyTransferParamsV1, Nullifier, TokenId, DARK_TOKEN_ID,
     },
     MoneyFunction,
 };
@@ -627,30 +627,26 @@ impl Drk {
     }
 
     /// Append data related to Money contract transactions into the wallet database.
-    pub async fn apply_tx_money_data(&self, tx: &Transaction, _confirm: bool) -> Result<()> {
-        let cid = *MONEY_CONTRACT_ID;
-
+    pub async fn apply_tx_money_data(&self, data: &[u8]) -> Result<()> {
         let mut nullifiers: Vec<Nullifier> = vec![];
         let mut coins: Vec<Coin> = vec![];
         let mut notes: Vec<AeadEncryptedNote> = vec![];
         let mut freezes: Vec<TokenId> = vec![];
 
-        for (i, call) in tx.calls.iter().enumerate() {
-            if call.data.contract_id == cid && call.data.data[0] == MoneyFunction::PoWRewardV1 as u8
-            {
-                println!("Found Money::PoWRewardV1 in call {i}");
-                let params: MoneyPoWRewardParamsV1 = deserialize(&call.data.data[1..])?;
-
+        match MoneyFunction::try_from(data[0])? {
+            MoneyFunction::FeeV1 => {
+                println!("[apply_tx_money_data] Found Money::FeeV1 call");
+                // TODO: implement
+            }
+            MoneyFunction::GenesisMintV1 => {
+                println!("[apply_tx_money_data] Found Money::GenesisMintV1 call");
+                let params: MoneyGenesisMintParamsV1 = deserialize(&data[1..])?;
                 coins.push(params.output.coin);
                 notes.push(params.output.note);
-
-                continue
             }
-
-            if call.data.contract_id == cid && call.data.data[0] == MoneyFunction::TransferV1 as u8
-            {
-                println!("Found Money::TransferV1 in call {i}");
-                let params: MoneyTransferParamsV1 = deserialize(&call.data.data[1..])?;
+            MoneyFunction::TransferV1 => {
+                println!("[apply_tx_money_data] Found Money::TransferV1 call");
+                let params: MoneyTransferParamsV1 = deserialize(&data[1..])?;
 
                 for input in params.inputs {
                     nullifiers.push(input.nullifier);
@@ -660,13 +656,10 @@ impl Drk {
                     coins.push(output.coin);
                     notes.push(output.note);
                 }
-
-                continue
             }
-
-            if call.data.contract_id == cid && call.data.data[0] == MoneyFunction::OtcSwapV1 as u8 {
-                println!("Found Money::OtcSwapV1 in call {i}");
-                let params: MoneyTransferParamsV1 = deserialize(&call.data.data[1..])?;
+            MoneyFunction::OtcSwapV1 => {
+                println!("[apply_tx_money_data] Found Money::OtcSwapV1 call");
+                let params: MoneyTransferParamsV1 = deserialize(&data[1..])?;
 
                 for input in params.inputs {
                     nullifiers.push(input.nullifier);
@@ -676,26 +669,29 @@ impl Drk {
                     coins.push(output.coin);
                     notes.push(output.note);
                 }
-
-                continue
             }
-
-            if call.data.contract_id == cid && call.data.data[0] == MoneyFunction::TokenMintV1 as u8
-            {
-                println!("Found Money::MintV1 in call {i}");
-                let params: MoneyTokenMintParamsV1 = deserialize(&call.data.data[1..])?;
+            MoneyFunction::TokenMintV1 => {
+                println!("[apply_tx_money_data] Found Money::TokenMintV1 call");
+                let params: MoneyTokenMintParamsV1 = deserialize(&data[1..])?;
                 coins.push(params.coin);
+                // TODO: why is this commented?
                 //notes.push(output.note);
-                continue
             }
-
-            if call.data.contract_id == cid &&
-                call.data.data[0] == MoneyFunction::TokenFreezeV1 as u8
-            {
-                println!("Found Money::FreezeV1 in call {i}");
-                let params: MoneyTokenFreezeParamsV1 = deserialize(&call.data.data[1..])?;
+            MoneyFunction::TokenFreezeV1 => {
+                println!("[apply_tx_money_data] Found Money::TokenFreezeV1 call");
+                let params: MoneyTokenFreezeParamsV1 = deserialize(&data[1..])?;
                 let token_id = TokenId::derive_public(params.mint_public);
                 freezes.push(token_id);
+            }
+            MoneyFunction::PoWRewardV1 => {
+                println!("[apply_tx_money_data] Found Money::PoWRewardV1 call");
+                let params: MoneyPoWRewardParamsV1 = deserialize(&data[1..])?;
+                coins.push(params.output.coin);
+                notes.push(params.output.note);
+            }
+            MoneyFunction::AuthTokenMintV1 => {
+                println!("[apply_tx_money_data] Found Money::AuthTokenMintV1 call");
+                // TODO: implement
             }
         }
 
@@ -712,8 +708,8 @@ impl Drk {
             // Attempt to decrypt the note
             for secret in secrets.iter().chain(dao_secrets.iter()) {
                 if let Ok(note) = note.decrypt::<MoneyNote>(secret) {
-                    println!("Successfully decrypted a Money Note");
-                    println!("Witnessing coin in Merkle tree");
+                    println!("[apply_tx_money_data] Successfully decrypted a Money Note");
+                    println!("[apply_tx_money_data] Witnessing coin in Merkle tree");
                     let leaf_position = tree.mark().unwrap();
 
                     let owncoin =
