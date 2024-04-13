@@ -621,7 +621,10 @@ impl PeerDiscoveryBase for PeerDiscovery {
                     }
                 }
 
-                // TODO: check every subscribe() call has a corresponding unsubscribe()
+                // NOTE: not every call to subscribe() in net/ has a
+                // corresponding unsubscribe(). To do this we need async
+                // Drop. For now it's sufficient for subscribers to be
+                // de-allocated when the Session completes.
                 store_sub.unsubscribe().await;
             } else {
                 info!(
