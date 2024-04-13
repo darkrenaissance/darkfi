@@ -48,7 +48,6 @@ impl<M: Message> MessageDispatcher<M> {
 
     /// Create a random ID.
     fn random_id() -> MessageSubscriptionId {
-        //let mut rng = rand::thread_rng();
         OsRng.gen()
     }
 
