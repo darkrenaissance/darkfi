@@ -208,6 +208,7 @@ async fn get_random_gold_host(p2p_instances: &[Arc<P2p>], index: usize) -> ((Url
     info!("========================================================");
 
     let list = hosts.container.hostlists[HostColor::Gold as usize].read().await;
+    assert!(!list.is_empty());
     let position = rand::thread_rng().gen_range(0..list.len());
     let entry = &list[position];
     (entry.clone(), position)
