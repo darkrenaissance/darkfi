@@ -32,7 +32,7 @@ use crate::{
 
 // Number of nodes to spawn and number of peers each node connects to
 const N_NODES: usize = 5;
-//const N_CONNS: usize = 5;
+const N_CONNS: usize = 4;
 const SEED: &str = "tcp://127.0.0.1:51505";
 
 fn init_logger() {
@@ -86,7 +86,7 @@ async fn spawn_node(
         external_addrs,
         outbound_connections: 2,
         outbound_peer_discovery_cooloff_time: 2,
-        //outbound_connect_timeout: 2,
+        outbound_connect_timeout: 2,
         inbound_connections: usize::MAX,
         greylist_refinery_interval: 15,
         peers,
@@ -100,7 +100,7 @@ async fn spawn_node(
 }
 
 async fn spawn_seed_session(starting_port: usize, ex: Arc<Executor<'static>>) -> Vec<Arc<P2p>> {
-    let mut p2p_instances = vec![];
+    let mut outbound_instances = vec![];
     let seed_addr = Url::parse(SEED).unwrap();
     info!("========================================================");
     info!("Initializing outbound nodes...");
@@ -115,28 +115,31 @@ async fn spawn_seed_session(starting_port: usize, ex: Arc<Executor<'static>>) ->
             ex.clone(),
         )
         .await;
-        p2p_instances.push(p2p);
+        outbound_instances.push(p2p);
     }
 
     // Start the P2P network
-    for p2p in p2p_instances.iter() {
+    for p2p in outbound_instances.iter() {
         info!("========================================================");
         info!("Starting node={}", p2p.settings().external_addrs[0]);
         info!("========================================================");
         p2p.clone().start().await.unwrap();
     }
 
-    p2p_instances
+    outbound_instances
 }
 
-/*async fn spawn_manual_session(
+async fn spawn_manual_session(
     peer_indexes: &[usize],
     starting_port: usize,
     rng: &mut ThreadRng,
     ex: Arc<Executor<'static>>,
 ) -> Vec<Arc<P2p>> {
-    let mut p2p_instances = vec![];
+    let mut manual_instances = vec![];
 
+    info!("========================================================");
+    info!("Initializing manual nodes...");
+    info!("========================================================");
     // Initialize the nodes
     for i in 0..N_NODES {
         // Everyone will connect to N_CONNS random peers.
@@ -154,52 +157,32 @@ async fn spawn_seed_session(starting_port: usize, ex: Arc<Executor<'static>>) ->
         let p2p = spawn_node(
             vec![Url::parse(&format!("tcp://127.0.0.1:{}", starting_port + i)).unwrap()],
             vec![Url::parse(&format!("tcp://127.0.0.1:{}", starting_port + i)).unwrap()],
-            vec![],
             peers,
+            vec![],
             (starting_port + i).to_string(),
             ex.clone(),
         )
         .await;
 
-        p2p_instances.push(p2p);
+        manual_instances.push(p2p);
     }
 
     // Start the P2P network
-    for p2p in p2p_instances.iter() {
+    for p2p in manual_instances.iter() {
+        info!("========================================================");
+        info!("Starting node={}", p2p.settings().external_addrs[0]);
+        info!("========================================================");
         p2p.clone().start().await.unwrap();
     }
 
-    info!("Waiting 5s until all peers connect");
-    sleep(5).await;
+    manual_instances
+}
 
-    p2p_instances
-}*/
-
-/*async fn assert_hostlist_not_empty(
-    p2p_instances: &Vec<Arc<P2p>>,
-    rng: &mut ThreadRng,
-    color: HostColor,
-) {
-    let random_node = p2p_instances.choose(rng).unwrap();
-    assert!(!random_node.hosts().container.is_empty(color).await);
-}*/
-
-/*async fn assert_entry_exists(
-    p2p_instances: &Vec<Arc<P2p>>,
-    rng: &mut ThreadRng,
-    color: HostColor,
-    entry: &Url,
-) {
-    let mut urls = HashSet::new();
-    let random_node = p2p_instances.choose(rng).unwrap();
-    let external_addr = &random_node.settings().external_addrs[0];
-
-    info!("Checking {} entry exists on {:?} list node={}", entry, color, external_addr);
-    assert!(random_node.hosts().container.contains(color as usize, entry).await);
-}*/
-
-async fn get_random_gold_host(p2p_instances: &[Arc<P2p>], index: usize) -> ((Url, u64), usize) {
-    let random_node = &p2p_instances[index];
+async fn get_random_gold_host(
+    outbound_instances: &[Arc<P2p>],
+    index: usize,
+) -> ((Url, u64), usize) {
+    let random_node = &outbound_instances[index];
     let hosts = random_node.hosts();
     let external_addr = &random_node.settings().external_addrs[0];
 
@@ -208,15 +191,16 @@ async fn get_random_gold_host(p2p_instances: &[Arc<P2p>], index: usize) -> ((Url
     info!("========================================================");
 
     let list = hosts.container.hostlists[HostColor::Gold as usize].read().await;
+    // TODO: This assert fails ~10% of the time. Need to figure out why.
     assert!(!list.is_empty());
     let position = rand::thread_rng().gen_range(0..list.len());
     let entry = &list[position];
     (entry.clone(), position)
 }
 
-async fn check_random_hostlist(p2p_instances: &Vec<Arc<P2p>>, rng: &mut ThreadRng) {
+async fn check_random_hostlist(outbound_instances: &Vec<Arc<P2p>>, rng: &mut ThreadRng) {
     let mut urls = HashSet::new();
-    let random_node = p2p_instances.choose(rng).unwrap();
+    let random_node = outbound_instances.choose(rng).unwrap();
     let external_addr = &random_node.settings().external_addrs[0];
 
     info!("========================================================");
@@ -239,8 +223,8 @@ async fn check_random_hostlist(p2p_instances: &Vec<Arc<P2p>>, rng: &mut ThreadRn
     assert!(!urls.is_empty());
 }
 
-async fn kill_node(p2p_instances: &Vec<Arc<P2p>>, node: Url) {
-    for p2p in p2p_instances {
+async fn kill_node(outbound_instances: &Vec<Arc<P2p>>, node: Url) {
+    for p2p in outbound_instances {
         if p2p.settings().external_addrs[0] == node {
             info!("========================================================");
             info!("Shutting down node: {}", p2p.settings().external_addrs[0]);
@@ -280,7 +264,6 @@ async fn p2p_test_real(ex: Arc<Executor<'static>>) {
     // ============================================================
     // 1. Create a new seed node.
     // ============================================================
-    //let peer_indexes: Vec<usize> = (0..N_NODES).collect();
     let seed_addr = Url::parse(SEED).unwrap();
 
     let settings = Settings {
@@ -305,7 +288,7 @@ async fn p2p_test_real(ex: Arc<Executor<'static>>) {
     // ============================================================
     // 2. Spawn outbound nodes that will connect to the seed node.
     // ============================================================
-    let p2p_instances = spawn_seed_session(43200, ex.clone()).await;
+    let outbound_instances = spawn_seed_session(43200, ex.clone()).await;
 
     info!("========================================================");
     info!("Waiting 10s for all peers to reach the seed node");
@@ -346,7 +329,7 @@ async fn p2p_test_real(ex: Arc<Executor<'static>>) {
     //    empty. This ensures the seed node is sharing whitelisted
     //    nodes around the network.
     // ===========================================================
-    check_random_hostlist(&p2p_instances, &mut rng).await;
+    check_random_hostlist(&outbound_instances, &mut rng).await;
     info!("========================================================");
     info!("Peer successfully received addrs!");
     info!("========================================================");
@@ -359,10 +342,10 @@ async fn p2p_test_real(ex: Arc<Executor<'static>>) {
     info!("Selecting a random gold entry...");
     info!("========================================================");
 
-    let random_node_index = rand::thread_rng().gen_range(0..p2p_instances.len());
-    let ((addr, _), _) = get_random_gold_host(&p2p_instances, random_node_index).await;
+    let random_node_index = rand::thread_rng().gen_range(0..outbound_instances.len());
+    let ((addr, _), _) = get_random_gold_host(&outbound_instances, random_node_index).await;
 
-    kill_node(&p2p_instances, addr.clone()).await;
+    kill_node(&outbound_instances, addr.clone()).await;
 
     info!("========================================================");
     info!("Waiting for greylist downgrade sequence to occur...");
@@ -371,7 +354,7 @@ async fn p2p_test_real(ex: Arc<Executor<'static>>) {
     // ===========================================================
     // 7. Verify the peer has been removed from the Gold list.
     // ===========================================================
-    p2p_instances[random_node_index]
+    outbound_instances[random_node_index]
         .hosts()
         .container
         .contains(HostColor::Grey as usize, &addr)
@@ -380,10 +363,76 @@ async fn p2p_test_real(ex: Arc<Executor<'static>>) {
     info!("Greylist downgrade occured successfully!");
     info!("========================================================");
 
+    info!("========================================================");
+    info!("Seed session successful! Shutting down seed test...");
+    info!("========================================================");
     // ===========================================================
     // 8. Stop the P2P network
     // ===========================================================
-    for p2p in p2p_instances.iter() {
+    for p2p in outbound_instances.iter() {
+        p2p.clone().stop().await;
+    }
+    seed.clone().stop().await;
+
+    info!("========================================================");
+    info!("Seed test shutdown complete! Starting manual test...");
+    info!("========================================================");
+
+    let mut rng = rand::thread_rng();
+    let peer_indexes: Vec<usize> = (0..N_NODES).collect();
+
+    let manual_instances = spawn_manual_session(&peer_indexes, 64200, &mut rng, ex.clone()).await;
+
+    info!("========================================================");
+    info!("Waiting 5s for all manual peers to connect");
+    info!("========================================================");
+    sleep(5).await;
+
+    info!("========================================================");
+    info!("Checking manual nodes connected successfully...");
+    info!("========================================================");
+
+    for p2p in manual_instances.clone() {
+        let goldlist = p2p.hosts().container.fetch_all(HostColor::Gold).await;
+        assert!(goldlist.len() == N_CONNS);
+    }
+
+    info!("========================================================");
+    info!("Manual session connected successfully!");
+    info!("========================================================");
+
+    info!("========================================================");
+    info!("Selecting a random gold entry...");
+    info!("========================================================");
+
+    let random_node_index = rand::thread_rng().gen_range(0..manual_instances.len());
+    let ((addr, _), _) = get_random_gold_host(&manual_instances, random_node_index).await;
+
+    kill_node(&manual_instances, addr.clone()).await;
+
+    info!("========================================================");
+    info!("Waiting for greylist downgrade sequence to occur...");
+    info!("========================================================");
+
+    // ===========================================================
+    // 7. Verify the peer has been removed from the Gold list.
+    // ===========================================================
+    manual_instances[random_node_index]
+        .hosts()
+        .container
+        .contains(HostColor::Grey as usize, &addr)
+        .await;
+    info!("========================================================");
+    info!("Greylist downgrade occured successfully!");
+    info!("========================================================");
+
+    info!("========================================================");
+    info!("Manual session successful! Shutting down manual test...");
+    info!("========================================================");
+    // ===========================================================
+    // 8. Stop the P2P network
+    // ===========================================================
+    for p2p in manual_instances.clone() {
         p2p.clone().stop().await;
     }
 }
