@@ -136,9 +136,9 @@ impl ProtocolVersion {
             connect_recv_addr: self.channel.connect_addr().clone(),
             resolve_recv_addr: self.channel.resolve_addr().clone(),
             ext_send_addr: self.settings.external_addrs.clone(),
-            /* TODO: `features` is a list of enabled features in the
-            format Vec<(service, version)>.  Protocols will add their
-            own data to this field when they are attached.*/
+            /* NOTE: `features` is a list of enabled features in the
+            format Vec<(service, version)>. In the future, Protocols will
+            add their own data to this field when they are attached.*/
             features: vec![],
         };
         self.channel.send(&version).await?;
