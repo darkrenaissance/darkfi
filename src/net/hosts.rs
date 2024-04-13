@@ -279,8 +279,7 @@ impl TryFrom<usize> for HostColor {
 
 /// A Container for managing Grey, White, Gold and Black hostlists. Exposes
 /// a common interface for writing to and querying hostlists.
-// TODO: Verify the performance overhead of using vectors for hostlists.
-// TODO: Check whether anchorlist (Gold) has a max size in Monero.
+// TODO: Benchmark hostlist operations when the hostlist is at max size.
 pub struct HostContainer {
     pub(in crate::net) hostlists: [RwLock<Vec<(Url, u64)>>; 5],
 }
