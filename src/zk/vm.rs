@@ -999,20 +999,18 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     heap.push(HeapVar::Base(root));
                 }
 
-                Opcode::SparseTreeIsMember => {
+                Opcode::SparseMerkleRoot => {
                     trace!(target: "zk::vm", "Executing `SparseTreeIsMember{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
-                    let root = heap[args[0].1].clone().try_into()?;
+                    let pos = heap[args[0].1].clone().try_into()?;
                     let path: Value<[Fp; SMT_FP_DEPTH]> = heap[args[1].1].clone().try_into()?;
                     let leaf = heap[args[2].1].clone().try_into()?;
-                    let pos = heap[args[3].1].clone().try_into()?;
 
-                    let is_member =
-                        smt_chip.check_membership(&mut layouter, root, leaf, pos, path)?;
+                    let root = smt_chip.check_membership(&mut layouter, pos, path, leaf)?;
 
-                    self.tracer.push_base(&is_member);
-                    heap.push(HeapVar::Base(is_member));
+                    self.tracer.push_base(&root);
+                    heap.push(HeapVar::Base(root));
                 }
 
                 Opcode::BaseAdd => {

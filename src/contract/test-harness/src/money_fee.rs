@@ -159,9 +159,15 @@ impl TestHarness {
         holder: &Holder,
         tx: Transaction,
         params: &MoneyFeeParamsV1,
-        block_height: u64,
+        block_height: u32,
     ) -> Result<Vec<OwnCoin>> {
         let wallet = self.holders.get_mut(holder).unwrap();
+
+        let nullifier = params.input.nullifier.inner();
+        wallet
+            .money_null_smt
+            .insert_batch(vec![(nullifier, nullifier)])
+            .expect("smt.insert_batch()");
 
         wallet.add_transaction("money::fee", tx, block_height, self.verify_fees).await?;
         wallet.money_merkle_tree.append(MerkleNode::from(params.output.coin.inner()));
@@ -205,7 +211,7 @@ impl TestHarness {
         &mut self,
         holder: &Holder,
         tx: Transaction,
-        block_height: u64,
+        block_height: u32,
         spent_coins: &[OwnCoin],
     ) -> Result<(ContractCall, Vec<Proof>, Vec<SecretKey>, Vec<OwnCoin>, MoneyFeeParamsV1)> {
         // First we verify the fee-less transaction to see how much gas it uses for execution

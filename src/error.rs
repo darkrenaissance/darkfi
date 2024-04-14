@@ -370,11 +370,11 @@ pub enum Error {
     #[error("Block {0} not found in database")]
     BlockNotFound(String),
 
-    #[error("Block with order number {0} not found in database")]
-    BlockNumberNotFound(u64),
+    #[error("Block with height number {0} not found in database")]
+    BlockHeightNotFound(u32),
 
     #[error("Block difficulty for height number {0} not found in database")]
-    BlockDifficultyNotFound(u64),
+    BlockDifficultyNotFound(u32),
 
     #[error("Block {0} contains 0 transactions")]
     BlockContainsNoTransactions(String),

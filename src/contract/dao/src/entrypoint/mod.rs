@@ -21,10 +21,8 @@ use std::io::Cursor;
 use darkfi_sdk::{
     crypto::{ContractId, MerkleTree},
     dark_tree::DarkLeaf,
-    db::{db_get, db_init, db_lookup, db_set, zkas_db_set},
     error::ContractResult,
-    util::set_return_data,
-    ContractCall,
+    wasm, ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Decodable, Encodable, WriteExt};
 
@@ -70,22 +68,22 @@ darkfi_sdk::define_contract!(
 fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     // The zkas circuits can simply be embedded in the wasm and set up by
     // the initialization.
-    zkas_db_set(&include_bytes!("../../proof/mint.zk.bin")[..])?;
-    zkas_db_set(&include_bytes!("../../proof/propose-input.zk.bin")[..])?;
-    zkas_db_set(&include_bytes!("../../proof/propose-main.zk.bin")[..])?;
-    zkas_db_set(&include_bytes!("../../proof/vote-input.zk.bin")[..])?;
-    zkas_db_set(&include_bytes!("../../proof/vote-main.zk.bin")[..])?;
-    zkas_db_set(&include_bytes!("../../proof/exec.zk.bin")[..])?;
-    zkas_db_set(&include_bytes!("../../proof/auth-money-transfer.zk.bin")[..])?;
+    wasm::db::zkas_db_set(&include_bytes!("../../proof/mint.zk.bin")[..])?;
+    wasm::db::zkas_db_set(&include_bytes!("../../proof/propose-input.zk.bin")[..])?;
+    wasm::db::zkas_db_set(&include_bytes!("../../proof/propose-main.zk.bin")[..])?;
+    wasm::db::zkas_db_set(&include_bytes!("../../proof/vote-input.zk.bin")[..])?;
+    wasm::db::zkas_db_set(&include_bytes!("../../proof/vote-main.zk.bin")[..])?;
+    wasm::db::zkas_db_set(&include_bytes!("../../proof/exec.zk.bin")[..])?;
+    wasm::db::zkas_db_set(&include_bytes!("../../proof/auth-money-transfer.zk.bin")[..])?;
 
     // Set up db for general info
-    let dao_info_db = match db_lookup(cid, DAO_CONTRACT_DB_INFO_TREE) {
+    let dao_info_db = match wasm::db::db_lookup(cid, DAO_CONTRACT_DB_INFO_TREE) {
         Ok(v) => v,
-        Err(_) => db_init(cid, DAO_CONTRACT_DB_INFO_TREE)?,
+        Err(_) => wasm::db::db_init(cid, DAO_CONTRACT_DB_INFO_TREE)?,
     };
 
     // Set up the entries in the header table
-    match db_get(dao_info_db, DAO_CONTRACT_KEY_DAO_MERKLE_TREE)? {
+    match wasm::db::db_get(dao_info_db, DAO_CONTRACT_KEY_DAO_MERKLE_TREE)? {
         Some(bytes) => {
             // We found some bytes, try to deserialize into a tree.
             // For now, if this doesn't work, we bail.
@@ -101,38 +99,42 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
             tree_data.write_u32(0)?;
             tree.encode(&mut tree_data)?;
 
-            db_set(dao_info_db, DAO_CONTRACT_KEY_DAO_MERKLE_TREE, &tree_data)?;
+            wasm::db::db_set(dao_info_db, DAO_CONTRACT_KEY_DAO_MERKLE_TREE, &tree_data)?;
         }
     }
 
     // Set up db to avoid double creating DAOs
-    let _ = match db_lookup(cid, DAO_CONTRACT_DB_DAO_BULLAS) {
+    let _ = match wasm::db::db_lookup(cid, DAO_CONTRACT_DB_DAO_BULLAS) {
         Ok(v) => v,
-        Err(_) => db_init(cid, DAO_CONTRACT_DB_DAO_BULLAS)?,
+        Err(_) => wasm::db::db_init(cid, DAO_CONTRACT_DB_DAO_BULLAS)?,
     };
 
     // Set up db for DAO bulla Merkle roots
-    let _ = match db_lookup(cid, DAO_CONTRACT_DB_DAO_MERKLE_ROOTS) {
+    let _ = match wasm::db::db_lookup(cid, DAO_CONTRACT_DB_DAO_MERKLE_ROOTS) {
         Ok(v) => v,
-        Err(_) => db_init(cid, DAO_CONTRACT_DB_DAO_MERKLE_ROOTS)?,
+        Err(_) => wasm::db::db_init(cid, DAO_CONTRACT_DB_DAO_MERKLE_ROOTS)?,
     };
 
     // Set up db for proposal votes
     // k: ProposalBulla
     // v: (BlindAggregateVote, bool) (the bool marks if the proposal is finished)
-    let _ = match db_lookup(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS) {
+    let _ = match wasm::db::db_lookup(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS) {
         Ok(v) => v,
-        Err(_) => db_init(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS)?,
+        Err(_) => wasm::db::db_init(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS)?,
     };
 
     // TODO: These nullifiers should exist per-proposal
-    let _ = match db_lookup(cid, DAO_CONTRACT_DB_VOTE_NULLIFIERS) {
+    let _ = match wasm::db::db_lookup(cid, DAO_CONTRACT_DB_VOTE_NULLIFIERS) {
         Ok(v) => v,
-        Err(_) => db_init(cid, DAO_CONTRACT_DB_VOTE_NULLIFIERS)?,
+        Err(_) => wasm::db::db_init(cid, DAO_CONTRACT_DB_VOTE_NULLIFIERS)?,
     };
 
     // Update db version
-    db_set(dao_info_db, DAO_CONTRACT_KEY_DB_VERSION, &serialize(&env!("CARGO_PKG_VERSION")))?;
+    wasm::db::db_set(
+        dao_info_db,
+        DAO_CONTRACT_KEY_DB_VERSION,
+        &serialize(&env!("CARGO_PKG_VERSION")),
+    )?;
 
     Ok(())
 }
@@ -141,8 +143,9 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
 /// for verifying signatures and ZK proofs. The payload given here are all the
 /// contract calls in the transaction.
 fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
-    let (call_idx, calls): (u32, Vec<DarkLeaf<ContractCall>>) = deserialize(ix)?;
-    let self_ = &calls[call_idx as usize].data;
+    let call_idx = wasm::util::get_call_index()? as usize;
+    let calls: Vec<DarkLeaf<ContractCall>> = deserialize(ix)?;
+    let self_ = &calls[call_idx].data;
     let func = DaoFunction::try_from(self_.data[0])?;
 
     let metadata = match func {
@@ -153,14 +156,15 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
         DaoFunction::AuthMoneyTransfer => dao_authxfer_get_metadata(cid, call_idx, calls)?,
     };
 
-    set_return_data(&metadata)
+    wasm::util::set_return_data(&metadata)
 }
 
 /// This function verifies a state transition and produces a state update
 /// if everything is successful.
 fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
-    let (call_idx, calls): (u32, Vec<DarkLeaf<ContractCall>>) = deserialize(ix)?;
-    let self_ = &calls[call_idx as usize].data;
+    let call_idx = wasm::util::get_call_index()? as usize;
+    let calls: Vec<DarkLeaf<ContractCall>> = deserialize(ix)?;
+    let self_ = &calls[call_idx].data;
     let func = DaoFunction::try_from(self_.data[0])?;
 
     let update_data = match func {
@@ -171,7 +175,7 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
         DaoFunction::AuthMoneyTransfer => dao_authxfer_process_instruction(cid, call_idx, calls)?,
     };
 
-    set_return_data(&update_data)
+    wasm::util::set_return_data(&update_data)
 }
 
 /// This function attempts to write a given state update provided the previous

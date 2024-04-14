@@ -119,7 +119,7 @@ macro_rules! impl_try_from {
                 match value {
                     HeapVar::$variant(v) => Ok(v),
                     x => {
-                        error!("Invalid TryFrom conversion {:?}", x);
+                        error!("Expected {}, but instead got: {:?}", stringify!($variant), x);
                         Err(plonk::Error::Synthesis)
                     }
                 }

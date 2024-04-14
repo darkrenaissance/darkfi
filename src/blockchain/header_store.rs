@@ -16,7 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::{blockchain::block_version, crypto::MerkleTree};
+use std::fmt;
+
+use darkfi_sdk::{
+    blockchain::block_version,
+    crypto::{MerkleNode, MerkleTree},
+    AsHex,
+};
 
 #[cfg(feature = "async-serial")]
 use darkfi_serial::async_trait;
@@ -26,49 +32,77 @@ use crate::{util::time::Timestamp, Error, Result};
 
 use super::{parse_record, SledDbOverlayPtr};
 
+#[derive(Copy, Clone, Debug, Eq, PartialEq, SerialEncodable, SerialDecodable)]
+// We have to introduce a type rather than using an alias so we can restrict API access
+pub struct HeaderHash(pub [u8; 32]);
+
+impl HeaderHash {
+    pub fn new(data: [u8; 32]) -> Self {
+        Self(data)
+    }
+
+    #[inline]
+    pub fn inner(&self) -> &[u8; 32] {
+        &self.0
+    }
+
+    pub fn as_string(&self) -> String {
+        self.0.hex().to_string()
+    }
+}
+
+impl fmt::Display for HeaderHash {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.0.hex())
+    }
+}
+
 /// This struct represents a tuple of the form (version, previous, height, timestamp, nonce, merkle_tree).
 #[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct Header {
     /// Block version
     pub version: u8,
     /// Previous block hash
-    pub previous: blake3::Hash,
+    pub previous: HeaderHash,
     /// Block height
-    pub height: u64,
+    pub height: u32,
     /// Block creation timestamp
     pub timestamp: Timestamp,
     /// The block's nonce. This value changes arbitrarily with mining.
     pub nonce: u64,
-    /// Merkle tree of the transactions hashes contained in this block
-    pub tree: MerkleTree,
+    /// Merkle tree root of the transactions hashes contained in this block
+    pub root: MerkleNode,
 }
 
 impl Header {
-    pub fn new(previous: blake3::Hash, height: u64, timestamp: Timestamp, nonce: u64) -> Self {
+    pub fn new(previous: HeaderHash, height: u32, timestamp: Timestamp, nonce: u64) -> Self {
         let version = block_version(height);
-        let tree = MerkleTree::new(1);
-        Self { version, previous, height, timestamp, nonce, tree }
+        let root = MerkleTree::new(1).root(0).unwrap();
+        Self { version, previous, height, timestamp, nonce, root }
     }
 
     /// Compute the header's hash
-    pub fn hash(&self) -> Result<blake3::Hash> {
+    pub fn hash(&self) -> HeaderHash {
         let mut hasher = blake3::Hasher::new();
 
-        self.version.encode(&mut hasher)?;
-        self.previous.encode(&mut hasher)?;
-        self.height.encode(&mut hasher)?;
-        self.timestamp.encode(&mut hasher)?;
-        self.nonce.encode(&mut hasher)?;
-        self.tree.root(0).unwrap().encode(&mut hasher)?;
+        // Blake3 hasher .update() method never fails.
+        // This call returns a Result due to how the Write trait is specified.
+        // Calling unwrap() here should be safe.
+        self.encode(&mut hasher).expect("blake3 hasher");
 
-        Ok(hasher.finalize())
+        HeaderHash(hasher.finalize().into())
     }
 }
 
 impl Default for Header {
     /// Represents the genesis header on current timestamp
     fn default() -> Self {
-        Header::new(blake3::hash(b"Let there be dark!"), 0, Timestamp::current_time(), 0)
+        Header::new(
+            HeaderHash::new(blake3::hash(b"Let there be dark!").into()),
+            0u32,
+            Timestamp::current_time(),
+            0u64,
+        )
     }
 }
 
@@ -88,8 +122,8 @@ impl HeaderStore {
     }
 
     /// Insert a slice of [`Header`] into the blockstore.
-    pub fn insert(&self, headers: &[Header]) -> Result<Vec<blake3::Hash>> {
-        let (batch, ret) = self.insert_batch(headers)?;
+    pub fn insert(&self, headers: &[Header]) -> Result<Vec<HeaderHash>> {
+        let (batch, ret) = self.insert_batch(headers);
         self.0.apply_batch(batch)?;
         Ok(ret)
     }
@@ -100,22 +134,22 @@ impl HeaderStore {
     /// while value is the serialized [`Header`] itself.
     /// On success, the function returns the header hashes in the same
     /// order, along with the corresponding operation batch.
-    pub fn insert_batch(&self, headers: &[Header]) -> Result<(sled::Batch, Vec<blake3::Hash>)> {
+    pub fn insert_batch(&self, headers: &[Header]) -> (sled::Batch, Vec<HeaderHash>) {
         let mut ret = Vec::with_capacity(headers.len());
         let mut batch = sled::Batch::default();
 
         for header in headers {
-            let headerhash = header.hash()?;
-            batch.insert(headerhash.as_bytes(), serialize(header));
+            let headerhash = header.hash();
+            batch.insert(headerhash.inner(), serialize(header));
             ret.push(headerhash);
         }
 
-        Ok((batch, ret))
+        (batch, ret)
     }
 
     /// Check if the headerstore contains a given headerhash.
-    pub fn contains(&self, headerhash: &blake3::Hash) -> Result<bool> {
-        Ok(self.0.contains_key(headerhash.as_bytes())?)
+    pub fn contains(&self, headerhash: &HeaderHash) -> Result<bool> {
+        Ok(self.0.contains_key(headerhash.inner())?)
     }
 
     /// Fetch given headerhashes from the headerstore.
@@ -123,20 +157,19 @@ impl HeaderStore {
     /// was found in the headerstore, and otherwise it is `None`, if it has not.
     /// The second parameter is a boolean which tells the function to fail in
     /// case at least one header was not found.
-    pub fn get(&self, headerhashes: &[blake3::Hash], strict: bool) -> Result<Vec<Option<Header>>> {
+    pub fn get(&self, headerhashes: &[HeaderHash], strict: bool) -> Result<Vec<Option<Header>>> {
         let mut ret = Vec::with_capacity(headerhashes.len());
 
         for hash in headerhashes {
-            if let Some(found) = self.0.get(hash.as_bytes())? {
+            if let Some(found) = self.0.get(hash.inner())? {
                 let header = deserialize(&found)?;
                 ret.push(Some(header));
-            } else {
-                if strict {
-                    let s = hash.to_hex().as_str().to_string();
-                    return Err(Error::HeaderNotFound(s))
-                }
-                ret.push(None);
+                continue
             }
+            if strict {
+                return Err(Error::HeaderNotFound(hash.inner().hex()))
+            }
+            ret.push(None);
         }
 
         Ok(ret)
@@ -145,7 +178,7 @@ impl HeaderStore {
     /// Retrieve all headers from the headerstore in the form of a tuple
     /// (`headerhash`, `header`).
     /// Be careful as this will try to load everything in memory.
-    pub fn get_all(&self) -> Result<Vec<(blake3::Hash, Header)>> {
+    pub fn get_all(&self) -> Result<Vec<(HeaderHash, Header)>> {
         let mut headers = vec![];
 
         for header in self.0.iter() {
@@ -169,13 +202,13 @@ impl HeaderStoreOverlay {
     /// The header's hash() function output is used as the key,
     /// while value is the serialized [`Header`] itself.
     /// On success, the function returns the header hashes in the same order.
-    pub fn insert(&self, headers: &[Header]) -> Result<Vec<blake3::Hash>> {
+    pub fn insert(&self, headers: &[Header]) -> Result<Vec<HeaderHash>> {
         let mut ret = Vec::with_capacity(headers.len());
         let mut lock = self.0.lock().unwrap();
 
         for header in headers {
-            let headerhash = header.hash()?;
-            lock.insert(SLED_HEADER_TREE, headerhash.as_bytes(), &serialize(header))?;
+            let headerhash = header.hash();
+            lock.insert(SLED_HEADER_TREE, headerhash.inner(), &serialize(header))?;
             ret.push(headerhash);
         }
 
@@ -187,21 +220,20 @@ impl HeaderStoreOverlay {
     /// was found in the overlay, and otherwise it is `None`, if it has not.
     /// The second parameter is a boolean which tells the function to fail in
     /// case at least one header was not found.
-    pub fn get(&self, headerhashes: &[blake3::Hash], strict: bool) -> Result<Vec<Option<Header>>> {
+    pub fn get(&self, headerhashes: &[HeaderHash], strict: bool) -> Result<Vec<Option<Header>>> {
         let mut ret = Vec::with_capacity(headerhashes.len());
         let lock = self.0.lock().unwrap();
 
         for hash in headerhashes {
-            if let Some(found) = lock.get(SLED_HEADER_TREE, hash.as_bytes())? {
+            if let Some(found) = lock.get(SLED_HEADER_TREE, hash.inner())? {
                 let header = deserialize(&found)?;
                 ret.push(Some(header));
-            } else {
-                if strict {
-                    let s = hash.to_hex().as_str().to_string();
-                    return Err(Error::HeaderNotFound(s))
-                }
-                ret.push(None);
+                continue
             }
+            if strict {
+                return Err(Error::HeaderNotFound(hash.inner().hex()))
+            }
+            ret.push(None);
         }
 
         Ok(ret)

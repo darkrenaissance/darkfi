@@ -113,7 +113,7 @@ impl TestHarness {
 
         // Generate block header
         let header = Header::new(
-            previous.hash()?,
+            previous.hash(),
             previous.header.height + 1,
             timestamp,
             previous.header.nonce,
@@ -123,10 +123,10 @@ impl TestHarness {
         let mut block = BlockInfo::new_empty(header);
 
         // Add producer transaction to the block
-        block.append_txs(vec![tx])?;
+        block.append_txs(vec![tx]);
 
         // Attach signature
-        block.sign(&wallet.keypair.secret)?;
+        block.sign(&wallet.keypair.secret);
 
         // For all holders, append the block
         let mut found_owncoins = vec![];

@@ -35,10 +35,13 @@ use darkfi_dao_contract::model::{DaoBulla, DaoProposalBulla};
 use darkfi_money_contract::client::OwnCoin;
 use darkfi_sdk::{
     bridgetree,
-    crypto::{Keypair, MerkleNode, MerkleTree},
+    crypto::{
+        smt::{MemoryStorageFp, PoseidonFp, SmtMemoryFp, EMPTY_NODES_FP},
+        Keypair, MerkleNode, MerkleTree,
+    },
     pasta::pallas,
 };
-use darkfi_serial::{Encodable, WriteExt};
+use darkfi_serial::Encodable;
 use log::debug;
 use num_bigint::BigUint;
 
@@ -122,6 +125,10 @@ pub struct Wallet {
     pub validator: ValidatorPtr,
     /// Holder's instance of the Merkle tree for the `Money` contract
     pub money_merkle_tree: MerkleTree,
+    /// Holder's instance of the SMT tree for the `Money` contract
+    pub money_null_smt: SmtMemoryFp,
+    /// Holder's instance of the SMT tree for the `Money` contract (snapshotted for DAO::propose())
+    pub money_null_smt_snapshot: Option<SmtMemoryFp>,
     /// Holder's instance of the Merkle tree for the `DAO` contract (holding DAO bullas)
     pub dao_merkle_tree: MerkleTree,
     /// Holder's instance of the Merkle tree for the `DAO` contract (holding DAO proposals)
@@ -170,12 +177,18 @@ impl Wallet {
         money_merkle_tree.append(MerkleNode::from(pallas::Base::ZERO));
         money_merkle_tree.mark().unwrap();
 
+        let hasher = PoseidonFp::new();
+        let store = MemoryStorageFp::new();
+        let money_null_smt = SmtMemoryFp::new(store, hasher.clone(), &EMPTY_NODES_FP);
+
         Ok(Self {
             keypair,
             token_mint_authority,
             contract_deploy_authority,
             validator,
             money_merkle_tree,
+            money_null_smt,
+            money_null_smt_snapshot: None,
             dao_merkle_tree: MerkleTree::new(100),
             dao_proposals_tree: MerkleTree::new(100),
             unspent_money_coins: vec![],
@@ -190,14 +203,23 @@ impl Wallet {
         &mut self,
         callname: &str,
         tx: Transaction,
-        block_height: u64,
+        block_height: u32,
         verify_fees: bool,
     ) -> Result<()> {
         if self.bench_wasm {
             benchmark_wasm_calls(callname, &self.validator, &tx, block_height);
         }
 
-        self.validator.add_transactions(&[tx], block_height, true, verify_fees).await?;
+        self.validator.add_transactions(&[tx.clone()], block_height, true, verify_fees).await?;
+
+        // Write the data
+        {
+            let blockchain = &self.validator.blockchain;
+            let txs = &blockchain.transactions;
+            txs.insert(&[tx.clone()]).expect("insert tx");
+            txs.insert_location(&[tx.hash()], block_height).expect("insert loc");
+        }
+
         Ok(())
     }
 }
@@ -222,7 +244,7 @@ impl TestHarness {
         let mut genesis_block = BlockInfo::default();
         genesis_block.header.timestamp = Timestamp::from_u64(1689772567);
         let producer_tx = genesis_block.txs.pop().unwrap();
-        genesis_block.append_txs(vec![producer_tx])?;
+        genesis_block.append_txs(vec![producer_tx]);
 
         // Deterministic PRNG
         let mut rng = Pcg32::new(42);
@@ -282,18 +304,26 @@ fn benchmark_wasm_calls(
     callname: &str,
     validator: &Validator,
     tx: &Transaction,
-    block_height: u64,
+    block_height: u32,
 ) {
     let mut file = std::fs::OpenOptions::new().create(true).append(true).open("bench.csv").unwrap();
 
     for (idx, call) in tx.calls.iter().enumerate() {
         let overlay = BlockchainOverlay::new(&validator.blockchain).expect("blockchain overlay");
-        let wasm = overlay.lock().unwrap().wasm_bincode.get(call.data.contract_id).unwrap();
-        let mut runtime = Runtime::new(&wasm, overlay.clone(), call.data.contract_id, block_height)
-            .expect("runtime");
+        let wasm = overlay.lock().unwrap().contracts.get(call.data.contract_id).unwrap();
+        let mut runtime = Runtime::new(
+            &wasm,
+            overlay.clone(),
+            call.data.contract_id,
+            block_height,
+            tx.hash(),
+            idx as u8,
+        )
+        .expect("runtime");
+
+        // Write call data
         let mut payload = vec![];
-        payload.write_u32(idx as u32).unwrap(); // Call index
-        tx.calls.encode(&mut payload).unwrap(); // Actual call data
+        tx.calls.encode(&mut payload).unwrap();
 
         let mut times = [0; 3];
         let now = std::time::Instant::now();
@@ -312,7 +342,7 @@ fn benchmark_wasm_calls(
             file,
             "{}, {}, {}, {}, {}, {}",
             callname,
-            tx.hash().unwrap(),
+            tx.hash(),
             idx,
             times[0],
             times[1],

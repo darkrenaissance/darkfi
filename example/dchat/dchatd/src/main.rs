@@ -152,7 +152,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     info!("Registering Dchat protocol");
     let registry = p2p.protocol_registry();
     registry
-        .register(!net::session::SESSION_SEED, move |channel, _p2p| {
+        .register(net::session::SESSION_DEFAULT, move |channel, _p2p| {
             let msgs_ = msgs.clone();
             async move { ProtocolDchat::init(channel, msgs_).await }
         })

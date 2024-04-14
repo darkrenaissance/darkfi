@@ -16,10 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::sync::Arc;
 
 use futures::{stream::FuturesUnordered, TryFutureExt};
 use log::{debug, error, info, warn};
@@ -29,15 +26,12 @@ use url::Url;
 use super::{
     channel::ChannelPtr,
     dnet::DnetEvent,
-    hosts::{
-        refinery::{GreylistRefinery, GreylistRefineryPtr},
-        store::{Hosts, HostsPtr},
-    },
+    hosts::{Hosts, HostsPtr},
     message::Message,
     protocol::{protocol_registry::ProtocolRegistry, register_default_protocols},
     session::{
         InboundSession, InboundSessionPtr, ManualSession, ManualSessionPtr, OutboundSession,
-        OutboundSessionPtr, SeedSyncSession,
+        OutboundSessionPtr, RefineSession, RefineSessionPtr, SeedSyncSession,
     },
     settings::{Settings, SettingsPtr},
 };
@@ -46,10 +40,6 @@ use crate::{
     Result,
 };
 
-/// Set of channels that are awaiting connection
-pub type PendingChannels = Mutex<HashSet<Url>>;
-/// Set of connected channels
-pub type ConnectedChannels = Mutex<HashMap<Url, ChannelPtr>>;
 /// Atomic pointer to the p2p interface
 pub type P2pPtr = Arc<P2p>;
 
@@ -63,23 +53,19 @@ pub struct P2p {
     protocol_registry: ProtocolRegistry,
     /// P2P network settings
     settings: SettingsPtr,
-    /// Boolean lock marking if peer discovery is active
-    pub peer_discovery_running: Mutex<bool>,
-
     /// Reference to configured [`ManualSession`]
     session_manual: ManualSessionPtr,
     /// Reference to configured [`InboundSession`]
     session_inbound: InboundSessionPtr,
     /// Reference to configured [`OutboundSession`]
     session_outbound: OutboundSessionPtr,
+    /// Reference to configured [`RefineSession`]
+    session_refine: RefineSessionPtr,
 
     /// Enable network debugging
     pub dnet_enabled: Mutex<bool>,
     /// The subscriber for which we can give dnet info over
     dnet_subscriber: SubscriberPtr<DnetEvent>,
-
-    /// Greylist refinery process
-    greylist_refinery: Arc<GreylistRefinery>,
 }
 
 impl P2p {
@@ -99,23 +85,20 @@ impl P2p {
             hosts: Hosts::new(settings.clone()),
             protocol_registry: ProtocolRegistry::new(),
             settings,
-            peer_discovery_running: Mutex::new(false),
-
             session_manual: ManualSession::new(),
             session_inbound: InboundSession::new(),
             session_outbound: OutboundSession::new(),
+            session_refine: RefineSession::new(),
 
             dnet_enabled: Mutex::new(false),
             dnet_subscriber: Subscriber::new(),
-
-            greylist_refinery: GreylistRefinery::new(),
         });
 
         self_.session_manual.p2p.init(self_.clone());
         self_.session_inbound.p2p.init(self_.clone());
         self_.session_outbound.p2p.init(self_.clone());
+        self_.session_refine.p2p.init(self_.clone());
 
-        self_.greylist_refinery.p2p.init(self_.clone());
         register_default_protocols(self_.clone()).await;
 
         self_
@@ -138,8 +121,8 @@ impl P2p {
             return Err(err)
         }
 
-        info!(target: "net::p2p::start()", "Starting greylist refinery process");
-        self.greylist_refinery.clone().start().await;
+        // Start the refine session
+        self.session_refine().start().await;
 
         // Start the outbound session
         self.session_outbound().start().await;
@@ -164,13 +147,16 @@ impl P2p {
 
     /// Stop the running P2P subsystem
     pub async fn stop(&self) {
+        // Stop all channels
+        for channel in self.hosts.channels().await {
+            channel.stop().await;
+        }
+
         // Stop the sessions
         self.session_manual().stop().await;
         self.session_inbound().stop().await;
+        self.session_refine().stop().await;
         self.session_outbound().stop().await;
-
-        // Stop greylist refinery process
-        self.greylist_refinery().stop().await;
     }
 
     /// Broadcasts a message concurrently across all active channels.
@@ -255,9 +241,9 @@ impl P2p {
         self.session_outbound.clone()
     }
 
-    /// Get pointer to greylist refinery
-    pub fn greylist_refinery(&self) -> GreylistRefineryPtr {
-        self.greylist_refinery.clone()
+    /// Get pointer to refine session
+    pub fn session_refine(&self) -> RefineSessionPtr {
+        self.session_refine.clone()
     }
 
     /// Enable network debugging

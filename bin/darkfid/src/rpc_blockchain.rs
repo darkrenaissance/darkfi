@@ -18,7 +18,7 @@
 
 use std::{collections::HashMap, str::FromStr};
 
-use darkfi_sdk::crypto::ContractId;
+use darkfi_sdk::{crypto::ContractId, tx::TransactionHash};
 use darkfi_serial::{deserialize_async, serialize_async};
 use log::{debug, error};
 use tinyjson::JsonValue;
@@ -54,7 +54,7 @@ impl Darkfid {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
-        let block_height = match params[0].get::<String>().unwrap().parse::<u64>() {
+        let block_height = match params[0].get::<String>().unwrap().parse::<u32>() {
             Ok(v) => v,
             Err(_) => return JsonError::new(ParseError, None, id).into(),
         };
@@ -95,7 +95,7 @@ impl Darkfid {
         }
 
         let tx_hash = params[0].get::<String>().unwrap();
-        let tx_hash = match blake3::Hash::from_hex(tx_hash) {
+        let tx_hash = match TransactionHash::from_str(tx_hash) {
             Ok(v) => v,
             Err(_) => return JsonError::new(ParseError, None, id).into(),
         };
@@ -274,7 +274,7 @@ impl Darkfid {
         JsonResponse::new(
             JsonValue::Object(HashMap::from([(
                 "chain_id".to_string(),
-                chain_id.to_hex().to_string().into(),
+                chain_id.as_string().into(),
             )])),
             id,
         )

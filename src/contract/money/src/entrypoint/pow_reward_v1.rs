@@ -20,12 +20,10 @@ use darkfi_sdk::{
     blockchain::expected_reward,
     crypto::{pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, ContractId, MerkleNode},
     dark_tree::DarkLeaf,
-    db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
-    merkle_add, msg,
+    msg,
     pasta::pallas,
-    util::{get_last_block_height, get_verifying_block_height},
-    ContractCall,
+    wasm, ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
@@ -34,16 +32,17 @@ use crate::{
     model::{MoneyPoWRewardParamsV1, MoneyPoWRewardUpdateV1, DARK_TOKEN_ID},
     MoneyFunction, MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_MERKLE_TREE,
     MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_INFO_TREE, MONEY_CONTRACT_LATEST_COIN_ROOT,
-    MONEY_CONTRACT_ZKAS_MINT_NS_V1,
+    MONEY_CONTRACT_LATEST_NULLIFIER_ROOT, MONEY_CONTRACT_NULLIFIERS_TREE,
+    MONEY_CONTRACT_NULLIFIER_ROOTS_TREE, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 
 /// `get_metadata` function for `Money::PoWRewardV1`
 pub(crate) fn money_pow_reward_get_metadata_v1(
     _cid: ContractId,
-    call_idx: u32,
+    call_idx: usize,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize].data;
+    let self_ = &calls[call_idx].data;
     let params: MoneyPoWRewardParamsV1 = deserialize(&self_.data[1..])?;
 
     // Public inputs for the ZK proofs we have to verify
@@ -75,25 +74,25 @@ pub(crate) fn money_pow_reward_get_metadata_v1(
 /// `process_instruction` function for `Money::PoWRewardV1`
 pub(crate) fn money_pow_reward_process_instruction_v1(
     cid: ContractId,
-    call_idx: u32,
+    call_idx: usize,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize].data;
+    let self_ = &calls[call_idx].data;
     let params: MoneyPoWRewardParamsV1 = deserialize(&self_.data[1..])?;
 
     // Verify this contract call is not verified against genesis block
-    let verifying_block_height = get_verifying_block_height();
+    let verifying_block_height = wasm::util::get_verifying_block_height()?;
     if verifying_block_height == 0 {
         msg!("[PoWRewardV1] Error: Call is executed for genesis block");
         return Err(MoneyError::PoWRewardCallOnGenesisBlock.into())
     }
 
     // Verify this contract call is verified against next block height
-    let Some(last_block_height) = get_last_block_height()? else {
+    let Some(last_block_height) = wasm::util::get_last_block_height()? else {
         msg!("[PoWRewardV1] Error: Could not receive last block height from db");
         return Err(MoneyError::PoWRewardRetrieveLastBlockHeightError.into())
     };
-    let last_block_height: u64 = deserialize(&last_block_height)?;
+    let last_block_height: u32 = deserialize(&last_block_height)?;
     if verifying_block_height != last_block_height + 1 {
         msg!(
             "[PoWRewardV1] Error: Call is executed for block height {}, not next one: {}",
@@ -123,10 +122,10 @@ pub(crate) fn money_pow_reward_process_instruction_v1(
 
     // Access the necessary databases where there is information to
     // validate this state transition.
-    let coins_db = db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
+    let coins_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
 
     // Check that the coin from the output hasn't existed before.
-    if db_contains_key(coins_db, &serialize(&params.output.coin))? {
+    if wasm::db::db_contains_key(coins_db, &serialize(&params.output.coin))? {
         msg!("[PoWRewardV1] Error: Duplicate coin in output");
         return Err(MoneyError::DuplicateCoin.into())
     }
@@ -163,16 +162,28 @@ pub(crate) fn money_pow_reward_process_update_v1(
     update: MoneyPoWRewardUpdateV1,
 ) -> ContractResult {
     // Grab all db handles we want to work on
-    let info_db = db_lookup(cid, MONEY_CONTRACT_INFO_TREE)?;
-    let coins_db = db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
-    let coin_roots_db = db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
+    let info_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_INFO_TREE)?;
+    let coins_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
+    let nullifiers_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
+    let coin_roots_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
+    let nullifier_roots_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE)?;
+
+    // This will just make a snapshot to match the coins one
+    msg!("[PowRewardV1] Updating nullifiers snapshot");
+    wasm::merkle::sparse_merkle_insert_batch(
+        info_db,
+        nullifiers_db,
+        nullifier_roots_db,
+        MONEY_CONTRACT_LATEST_NULLIFIER_ROOT,
+        &vec![],
+    )?;
 
     msg!("[PoWRewardV1] Adding new coin to the set");
-    db_set(coins_db, &serialize(&update.coin), &[])?;
+    wasm::db::db_set(coins_db, &serialize(&update.coin), &[])?;
 
     msg!("[PoWRewardV1] Adding new coin to the Merkle tree");
     let coins = vec![MerkleNode::from(update.coin.inner())];
-    merkle_add(
+    wasm::merkle::merkle_add(
         info_db,
         coin_roots_db,
         MONEY_CONTRACT_LATEST_COIN_ROOT,

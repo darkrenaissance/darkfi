@@ -32,9 +32,12 @@ use subtle::{Choice, ConditionallySelectable};
 #[cfg(feature = "async")]
 use darkfi_serial::async_trait;
 
-use crate::crypto::constants::{
-    sinsemilla::{i2lebsp_k, L_ORCHARD_MERKLE, MERKLE_CRH_PERSONALIZATION},
-    MERKLE_DEPTH,
+use crate::crypto::{
+    constants::{
+        sinsemilla::{i2lebsp_k, L_ORCHARD_MERKLE, MERKLE_CRH_PERSONALIZATION},
+        MERKLE_DEPTH,
+    },
+    util::FieldElemAsStr,
 };
 
 pub type MerkleTree = BridgeTree<MerkleNode, usize, { MERKLE_DEPTH }>;
@@ -91,7 +94,7 @@ impl From<pallas::Base> for MerkleNode {
 
 impl fmt::Display for MerkleNode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", bs58::encode(self.to_bytes()).into_string())
+        write!(f, "{}", self.0.to_string())
     }
 }
 

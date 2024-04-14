@@ -55,11 +55,8 @@ fn zkvm_smt() -> Result<()> {
     assert!(path.verify(&root, &leaf, &pos));
 
     // Values for the proof
-    let prover_witnesses = vec![
-        Witness::Base(Value::known(root)),
-        Witness::SparseMerklePath(Value::known(path.path)),
-        Witness::Base(Value::known(leaf)),
-    ];
+    let prover_witnesses =
+        vec![Witness::SparseMerklePath(Value::known(path.path)), Witness::Base(Value::known(leaf))];
 
     let public_inputs = vec![root];
 

@@ -18,7 +18,7 @@
 
 use super::{
     p2p::P2pPtr,
-    session::{SESSION_ALL, SESSION_SEED},
+    session::{SESSION_DEFAULT, SESSION_SEED},
 };
 
 /// Manages the tasks for the network protocol. Used by other connection
@@ -75,7 +75,7 @@ pub mod protocol_registry;
 /// Register the default network protocols for a p2p instance.
 pub async fn register_default_protocols(p2p: P2pPtr) {
     let registry = p2p.protocol_registry();
-    registry.register(SESSION_ALL, ProtocolPing::init).await;
-    registry.register(!SESSION_SEED, ProtocolAddress::init).await;
+    registry.register(SESSION_DEFAULT | SESSION_SEED, ProtocolPing::init).await;
+    registry.register(SESSION_DEFAULT, ProtocolAddress::init).await;
     registry.register(SESSION_SEED, ProtocolSeed::init).await;
 }

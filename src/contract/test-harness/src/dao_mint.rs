@@ -48,7 +48,7 @@ impl TestHarness {
         holder: &Holder,
         dao_info: &Dao,
         dao_kp: &Keypair,
-        block_height: u64,
+        block_height: u32,
     ) -> Result<(Transaction, DaoMintParams, Option<MoneyFeeParamsV1>)> {
         let (dao_mint_pk, dao_mint_zkbin) =
             self.proving_keys.get(DAO_CONTRACT_ZKAS_DAO_MINT_NS).unwrap();
@@ -101,7 +101,7 @@ impl TestHarness {
         tx: Transaction,
         params: &DaoMintParams,
         fee_params: &Option<MoneyFeeParamsV1>,
-        block_height: u64,
+        block_height: u32,
         append: bool,
     ) -> Result<Vec<OwnCoin>> {
         let wallet = self.holders.get_mut(holder).unwrap();
@@ -118,6 +118,12 @@ impl TestHarness {
         wallet.dao_leafs.insert(params.dao_bulla, leaf_pos);
 
         if let Some(ref fee_params) = fee_params {
+            let nullifier = fee_params.input.nullifier.inner();
+            wallet
+                .money_null_smt
+                .insert_batch(vec![(nullifier, nullifier)])
+                .expect("smt.insert_batch()");
+
             if let Some(spent_coin) = wallet
                 .unspent_money_coins
                 .iter()

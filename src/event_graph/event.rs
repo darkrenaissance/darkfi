@@ -32,13 +32,13 @@ use super::{
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct Event {
     /// Timestamp of the event
-    pub(super) timestamp: u64,
+    pub(crate) timestamp: u64,
     /// Content of the event
-    pub(super) content: Vec<u8>,
+    pub(crate) content: Vec<u8>,
     /// Parent nodes in the event DAG
-    pub(super) parents: [blake3::Hash; N_EVENT_PARENTS],
+    pub(crate) parents: [blake3::Hash; N_EVENT_PARENTS],
     /// DAG layer index of the event
-    pub(super) layer: u64,
+    pub(crate) layer: u64,
 }
 
 impl Event {

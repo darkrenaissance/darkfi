@@ -43,6 +43,7 @@ use darkfi_money_contract::model::{Coin, TokenId};
 use darkfi_sdk::{
     crypto::{FuncId, PublicKey, SecretKey},
     pasta::{group::ff::PrimeField, pallas},
+    tx::TransactionHash,
 };
 use darkfi_serial::{deserialize_async, serialize_async};
 use drk::{
@@ -225,6 +226,13 @@ enum Subcmd {
         #[structopt(subcommand)]
         /// Sub command to execute
         command: TokenSubcmd,
+    },
+
+    /// Contract functionalities
+    Contract {
+        #[structopt(subcommand)]
+        /// Sub command to execute
+        command: ContractSubcmd,
     },
 }
 
@@ -437,6 +445,33 @@ enum TokenSubcmd {
     },
 }
 
+#[derive(Clone, Debug, Deserialize, StructOpt)]
+enum ContractSubcmd {
+    /// Generate a new deploy authority
+    GenerateDeploy,
+
+    /// List deploy authorities in the wallet
+    List,
+
+    /// Deploy a smart contract
+    Deploy {
+        /// Contract ID (deploy authority)
+        deploy_auth: u64,
+
+        /// Path to contract wasm bincode
+        wasm_path: String,
+
+        /// Path to serialized deploy instruction
+        deploy_ix: String,
+    },
+
+    /// Lock a smart contract
+    Lock {
+        /// Contract ID (deploy authority)
+        deploy_auth: u64,
+    },
+}
+
 async_daemonize!(realmain);
 async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     match args.command {
@@ -446,7 +481,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         }
 
         Subcmd::Ping => {
-            let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+            let drk = Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
             drk.ping().await
         }
 
@@ -480,7 +515,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 exit(2);
             }
 
-            let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+            let drk = Drk::new(args.wallet_path, args.wallet_pass, None, ex).await?;
 
             if initialize {
                 drk.initialize_wallet().await?;
@@ -490,6 +525,10 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 }
                 if let Err(e) = drk.initialize_dao().await {
                     eprintln!("Failed to initialize DAO: {e:?}");
+                    exit(2);
+                }
+                if let Err(e) = drk.initialize_deployooor().await {
+                    eprintln!("Failed to initialize Deployooor: {e:?}");
                     exit(2);
                 }
                 return Ok(())
@@ -712,7 +751,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             };
 
             let coin = Coin::from(elem);
-            let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+            let drk = Drk::new(args.wallet_path, args.wallet_pass, None, ex).await?;
             if let Err(e) = drk.unspend_coin(&coin).await {
                 eprintln!("Failed to mark coin as unspent: {e:?}");
                 exit(2);
@@ -722,7 +761,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         }
 
         Subcmd::Transfer { amount, token, recipient } => {
-            let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+            let drk = Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
 
             if let Err(e) = f64::from_str(&amount) {
                 eprintln!("Invalid amount: {e:?}");
@@ -758,84 +797,86 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             Ok(())
         }
 
-        Subcmd::Otc { command } => {
-            let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+        Subcmd::Otc { command } => match command {
+            OtcSubcmd::Init { value_pair, token_pair } => {
+                let drk =
+                    Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
+                let (vp_send, vp_recv) = parse_value_pair(&value_pair)?;
+                let (tp_send, tp_recv) = parse_token_pair(&drk, &token_pair).await?;
 
-            match command {
-                OtcSubcmd::Init { value_pair, token_pair } => {
-                    let (vp_send, vp_recv) = parse_value_pair(&value_pair)?;
-                    let (tp_send, tp_recv) = parse_token_pair(&drk, &token_pair).await?;
-
-                    let half = match drk.init_swap(vp_send, tp_send, vp_recv, tp_recv).await {
-                        Ok(h) => h,
-                        Err(e) => {
-                            eprintln!("Failed to create swap transaction half: {e:?}");
-                            exit(2);
-                        }
-                    };
-
-                    println!("{}", base64::encode(&serialize_async(&half).await));
-                    Ok(())
-                }
-
-                OtcSubcmd::Join => {
-                    let mut buf = String::new();
-                    stdin().read_to_string(&mut buf)?;
-                    let Some(bytes) = base64::decode(buf.trim()) else {
-                        eprintln!("Failed to decode partial swap data");
+                let half = match drk.init_swap(vp_send, tp_send, vp_recv, tp_recv).await {
+                    Ok(h) => h,
+                    Err(e) => {
+                        eprintln!("Failed to create swap transaction half: {e:?}");
                         exit(2);
-                    };
+                    }
+                };
 
-                    let partial: PartialSwapData = deserialize_async(&bytes).await?;
-
-                    let tx = match drk.join_swap(partial).await {
-                        Ok(tx) => tx,
-                        Err(e) => {
-                            eprintln!("Failed to create a join swap transaction: {e:?}");
-                            exit(2);
-                        }
-                    };
-
-                    println!("{}", base64::encode(&serialize_async(&tx).await));
-                    Ok(())
-                }
-
-                OtcSubcmd::Inspect => {
-                    let mut buf = String::new();
-                    stdin().read_to_string(&mut buf)?;
-                    let Some(bytes) = base64::decode(buf.trim()) else {
-                        eprintln!("Failed to decode swap transaction");
-                        exit(2);
-                    };
-
-                    if let Err(e) = drk.inspect_swap(bytes).await {
-                        eprintln!("Failed to inspect swap: {e:?}");
-                        exit(2);
-                    };
-
-                    Ok(())
-                }
-
-                OtcSubcmd::Sign => {
-                    let mut buf = String::new();
-                    stdin().read_to_string(&mut buf)?;
-                    let Some(bytes) = base64::decode(buf.trim()) else {
-                        eprintln!("Failed to decode swap transaction");
-                        exit(1);
-                    };
-
-                    let mut tx: Transaction = deserialize_async(&bytes).await?;
-
-                    if let Err(e) = drk.sign_swap(&mut tx).await {
-                        eprintln!("Failed to sign joined swap transaction: {e:?}");
-                        exit(2);
-                    };
-
-                    println!("{}", base64::encode(&serialize_async(&tx).await));
-                    Ok(())
-                }
+                println!("{}", base64::encode(&serialize_async(&half).await));
+                Ok(())
             }
-        }
+
+            OtcSubcmd::Join => {
+                let mut buf = String::new();
+                stdin().read_to_string(&mut buf)?;
+                let Some(bytes) = base64::decode(buf.trim()) else {
+                    eprintln!("Failed to decode partial swap data");
+                    exit(2);
+                };
+
+                let partial: PartialSwapData = deserialize_async(&bytes).await?;
+
+                let drk =
+                    Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
+                let tx = match drk.join_swap(partial).await {
+                    Ok(tx) => tx,
+                    Err(e) => {
+                        eprintln!("Failed to create a join swap transaction: {e:?}");
+                        exit(2);
+                    }
+                };
+
+                println!("{}", base64::encode(&serialize_async(&tx).await));
+                Ok(())
+            }
+
+            OtcSubcmd::Inspect => {
+                let mut buf = String::new();
+                stdin().read_to_string(&mut buf)?;
+                let Some(bytes) = base64::decode(buf.trim()) else {
+                    eprintln!("Failed to decode swap transaction");
+                    exit(2);
+                };
+
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, None, ex).await?;
+                if let Err(e) = drk.inspect_swap(bytes).await {
+                    eprintln!("Failed to inspect swap: {e:?}");
+                    exit(2);
+                };
+
+                Ok(())
+            }
+
+            OtcSubcmd::Sign => {
+                let mut buf = String::new();
+                stdin().read_to_string(&mut buf)?;
+                let Some(bytes) = base64::decode(buf.trim()) else {
+                    eprintln!("Failed to decode swap transaction");
+                    exit(1);
+                };
+
+                let mut tx: Transaction = deserialize_async(&bytes).await?;
+
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, None, ex).await?;
+                if let Err(e) = drk.sign_swap(&mut tx).await {
+                    eprintln!("Failed to sign joined swap transaction: {e:?}");
+                    exit(2);
+                };
+
+                println!("{}", base64::encode(&serialize_async(&tx).await));
+                Ok(())
+            }
+        },
 
         Subcmd::Dao { command } => match command {
             DaoSubcmd::Create { proposer_limit, quorum, approval_ratio, gov_token_id } => {
@@ -859,7 +900,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 let approval_ratio_base = 100_u64;
                 let approval_ratio_quot = (approval_ratio * approval_ratio_base as f64) as u64;
 
-                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, None, ex).await?;
                 let gov_token_id = match drk.get_token(gov_token_id).await {
                     Ok(g) => g,
                     Err(e) => {
@@ -903,7 +944,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 let bytes = bs58::decode(&buf.trim()).into_vec()?;
                 let dao_params: DaoParams = deserialize_async(&bytes).await?;
 
-                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, None, ex).await?;
 
                 if let Err(e) = drk.import_dao(dao_name, dao_params).await {
                     eprintln!("Failed to import DAO: {e:?}");
@@ -914,7 +955,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             }
 
             DaoSubcmd::List { dao_alias } => {
-                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, None, ex).await?;
                 // We cannot use .map() since get_dao_id() uses ?
                 let dao_id = match dao_alias {
                     Some(alias) => Some(drk.get_dao_id(&alias).await?),
@@ -930,7 +971,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             }
 
             DaoSubcmd::Balance { dao_alias } => {
-                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, None, ex).await?;
                 let dao_id = drk.get_dao_id(&dao_alias).await?;
 
                 let balmap = match drk.dao_balance(dao_id).await {
@@ -976,7 +1017,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             }
 
             DaoSubcmd::Mint { dao_alias } => {
-                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+                let drk =
+                    Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
                 let dao_id = drk.get_dao_id(&dao_alias).await?;
 
                 let tx = match drk.dao_mint(dao_id).await {
@@ -1004,7 +1046,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     }
                 };
 
-                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+                let drk =
+                    Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
                 let dao_id = drk.get_dao_id(&dao_alias).await?;
                 let token_id = match drk.get_token(token).await {
                     Ok(t) => t,
@@ -1026,7 +1069,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             }
 
             DaoSubcmd::Proposals { dao_alias } => {
-                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, None, ex).await?;
                 let dao_id = drk.get_dao_id(&dao_alias).await?;
 
                 let proposals = drk.get_dao_proposals(dao_id).await?;
@@ -1039,7 +1082,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             }
 
             DaoSubcmd::Proposal { dao_alias, proposal_id } => {
-                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, None, ex).await?;
                 let dao_id = drk.get_dao_id(&dao_alias).await?;
 
                 let proposals = drk.get_dao_proposals(dao_id).await?;
@@ -1061,7 +1104,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             }
 
             DaoSubcmd::Vote { dao_alias, proposal_id, vote, vote_weight } => {
-                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+                let drk =
+                    Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
                 let dao_id = drk.get_dao_id(&dao_alias).await?;
 
                 if let Err(e) = f64::from_str(&vote_weight) {
@@ -1092,7 +1136,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             }
 
             DaoSubcmd::Exec { dao_alias, proposal_id } => {
-                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+                let drk =
+                    Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
                 let dao_id = drk.get_dao_id(&dao_alias).await?;
                 let dao = drk.get_dao_by_id(dao_id).await?;
                 let proposal = drk.get_dao_proposal_by_id(proposal_id).await?;
@@ -1135,7 +1180,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
             let tx = deserialize_async(&bytes).await?;
 
-            let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+            let drk = Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
 
             let txid = match drk.broadcast_tx(&tx).await {
                 Ok(t) => t,
@@ -1151,9 +1196,13 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         }
 
         Subcmd::Subscribe => {
-            let drk =
-                Drk::new(args.wallet_path, args.wallet_pass, args.endpoint.clone(), ex.clone())
-                    .await?;
+            let drk = Drk::new(
+                args.wallet_path,
+                args.wallet_pass,
+                Some(args.endpoint.clone()),
+                ex.clone(),
+            )
+            .await?;
 
             if let Err(e) = drk.subscribe_blocks(args.endpoint, ex).await {
                 eprintln!("Block subscription failed: {e:?}");
@@ -1164,9 +1213,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         }
 
         Subcmd::Scan { reset, list, checkpoint } => {
-            let drk =
-                Drk::new(args.wallet_path, args.wallet_pass, args.endpoint.clone(), ex.clone())
-                    .await?;
+            let drk = Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
 
             if reset {
                 println!("Reset requested.");
@@ -1202,11 +1249,10 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
         Subcmd::Explorer { command } => match command {
             ExplorerSubcmd::FetchTx { tx_hash, full, encode } => {
-                let tx_hash = blake3::Hash::from_hex(&tx_hash)?;
+                let tx_hash = TransactionHash(*blake3::Hash::from_hex(&tx_hash)?.as_bytes());
 
                 let drk =
-                    Drk::new(args.wallet_path, args.wallet_pass, args.endpoint.clone(), ex.clone())
-                        .await?;
+                    Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
 
                 let tx = match drk.get_tx(&tx_hash).await {
                     Ok(tx) => tx,
@@ -1222,7 +1268,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 };
 
                 // Make sure the tx is correct
-                assert_eq!(tx.hash()?, tx_hash);
+                assert_eq!(tx.hash(), tx_hash);
 
                 if encode {
                     println!("{}", base64::encode(&serialize_async(&tx).await));
@@ -1249,8 +1295,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 let tx = deserialize_async(&bytes).await?;
 
                 let drk =
-                    Drk::new(args.wallet_path, args.wallet_pass, args.endpoint.clone(), ex.clone())
-                        .await?;
+                    Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
 
                 let is_valid = match drk.simulate_tx(&tx).await {
                     Ok(b) => b,
@@ -1260,16 +1305,14 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     }
                 };
 
-                println!("Transaction ID: {}", tx.hash()?);
+                println!("Transaction ID: {}", tx.hash());
                 println!("State: {}", if is_valid { "valid" } else { "invalid" });
 
                 Ok(())
             }
 
             ExplorerSubcmd::TxsHistory { tx_hash, encode } => {
-                let drk =
-                    Drk::new(args.wallet_path, args.wallet_pass, args.endpoint.clone(), ex.clone())
-                        .await?;
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, None, ex).await?;
 
                 if let Some(c) = tx_hash {
                     let (tx_hash, status, tx) = drk.get_tx_history_record(&c).await?;
@@ -1327,7 +1370,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     }
                 };
 
-                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, None, ex).await?;
                 if let Err(e) = drk.add_alias(alias, token_id).await {
                     eprintln!("Failed to add alias: {e:?}");
                     exit(2);
@@ -1348,7 +1391,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     None => None,
                 };
 
-                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, None, ex).await?;
                 let map = drk.get_aliases(alias, token_id).await?;
 
                 // Create a prettytable with the new data:
@@ -1369,7 +1412,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             }
 
             AliasSubcmd::Remove { alias } => {
-                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, None, ex).await?;
                 if let Err(e) = drk.remove_alias(alias).await {
                     eprintln!("Failed to remove alias: {e:?}");
                     exit(2);
@@ -1391,7 +1434,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     }
                 };
 
-                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, None, ex).await?;
                 if let Err(e) = drk.import_mint_authority(mint_authority).await {
                     eprintln!("Importing mint authority failed: {e:?}");
                     exit(2);
@@ -1406,7 +1449,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             TokenSubcmd::GenerateMint => {
                 let mint_authority = SecretKey::random(&mut OsRng);
 
-                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, None, ex).await?;
 
                 if let Err(e) = drk.import_mint_authority(mint_authority).await {
                     eprintln!("Importing mint authority failed: {e:?}");
@@ -1421,7 +1464,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             }
 
             TokenSubcmd::List => {
-                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, None, ex).await?;
                 let tokens = drk.list_tokens().await?;
                 let aliases_map = match drk.get_aliases_mapped_by_token().await {
                     Ok(map) => map,
@@ -1455,7 +1498,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
             // TODO: Mint directly into DAO treasury
             TokenSubcmd::Mint { token, amount, recipient } => {
-                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+                let drk =
+                    Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
 
                 if let Err(e) = f64::from_str(&amount) {
                     eprintln!("Invalid amount: {e:?}");
@@ -1493,7 +1537,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             }
 
             TokenSubcmd::Freeze { token } => {
-                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+                let drk =
+                    Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
                 let _token_id = match drk.get_token(token).await {
                     Ok(t) => t,
                     Err(e) => {
@@ -1514,6 +1559,76 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 //println!("{}", base64::encode(&serialize_async(&tx).await));
 
                 //Ok(())
+            }
+        },
+
+        Subcmd::Contract { command } => match command {
+            ContractSubcmd::GenerateDeploy => {
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, None, ex).await?;
+
+                if let Err(e) = drk.deploy_auth_keygen().await {
+                    eprintln!("Error creating deploy auth keypair: {:?}", e);
+                    exit(1);
+                }
+
+                Ok(())
+            }
+
+            ContractSubcmd::List => {
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, None, ex).await?;
+                let auths = drk.list_deploy_auth().await?;
+
+                let mut table = Table::new();
+                table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+                table.set_titles(row!["Index", "Contract ID", "Frozen"]);
+
+                for (idx, contract_id, frozen) in auths {
+                    table.add_row(row![idx, contract_id, frozen]);
+                }
+
+                if table.is_empty() {
+                    eprintln!("No deploy authorities found");
+                } else {
+                    println!("{table}");
+                }
+
+                Ok(())
+            }
+
+            ContractSubcmd::Deploy { deploy_auth, wasm_path, deploy_ix } => {
+                // Read the wasm bincode and deploy instruction
+                let wasm_bin = smol::fs::read(expand_path(&wasm_path)?).await?;
+                let deploy_ix = smol::fs::read(expand_path(&deploy_ix)?).await?;
+
+                let drk =
+                    Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
+
+                let tx = match drk.deploy_contract(deploy_auth, wasm_bin, deploy_ix).await {
+                    Ok(v) => v,
+                    Err(e) => {
+                        eprintln!("Error creating contract deployment tx: {}", e);
+                        exit(1);
+                    }
+                };
+
+                println!("{}", base64::encode(&serialize_async(&tx).await));
+                Ok(())
+            }
+
+            ContractSubcmd::Lock { deploy_auth } => {
+                let drk =
+                    Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
+
+                let tx = match drk.lock_contract(deploy_auth).await {
+                    Ok(v) => v,
+                    Err(e) => {
+                        eprintln!("Error creating contract lock tx: {}", e);
+                        exit(1);
+                    }
+                };
+
+                println!("{}", base64::encode(&serialize_async(&tx).await));
+                Ok(())
             }
         },
     }

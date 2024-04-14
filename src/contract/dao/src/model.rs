@@ -242,11 +242,12 @@ pub struct DaoProposeParams {
 // ANCHOR: dao-propose-params-input
 /// Input for a DAO proposal
 pub struct DaoProposeParamsInput {
-    pub nullifier: Nullifier,
     /// Value commitment for the input
     pub value_commit: pallas::Point,
-    /// Merkle root for the input's inclusion proof
-    pub merkle_root: MerkleNode,
+    /// Merkle root for the input's coin inclusion proof
+    pub merkle_coin_root: MerkleNode,
+    /// SMT root for the input's nullifier exclusion proof
+    pub smt_null_root: pallas::Base,
     /// Public key used for signing
     pub signature_public: PublicKey,
 }
@@ -258,7 +259,9 @@ pub struct DaoProposeUpdate {
     /// Minted proposal bulla
     pub proposal_bulla: DaoProposalBulla,
     /// Snapshotted Merkle root in the Money state
-    pub snapshot_root: MerkleNode,
+    pub snapshot_coins: MerkleNode,
+    /// Snapshotted SMT root in the Money state
+    pub snapshot_nulls: pallas::Base,
 }
 
 /// Metadata for a DAO proposal on the blockchain
@@ -267,7 +270,9 @@ pub struct DaoProposalMetadata {
     /// Vote aggregate
     pub vote_aggregate: DaoBlindAggregateVote,
     /// Snapshotted Merkle root in the Money state
-    pub snapshot_root: MerkleNode,
+    pub snapshot_coins: MerkleNode,
+    /// Snapshotted SMT root in the Money state
+    pub snapshot_nulls: pallas::Base,
 }
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
@@ -291,12 +296,10 @@ pub struct DaoVoteParams {
 // ANCHOR: dao-vote-params-input
 /// Input for a DAO proposal vote
 pub struct DaoVoteParamsInput {
-    /// Revealed nullifier
-    pub nullifier: Nullifier,
     /// Vote commitment
     pub vote_commit: pallas::Point,
-    /// Merkle root for the input's inclusion proof
-    pub merkle_root: MerkleNode,
+    /// Vote nullifier
+    pub vote_nullifier: Nullifier,
     /// Public key used for signing
     pub signature_public: PublicKey,
 }

@@ -51,7 +51,7 @@ use url::Url;
 use super::{
     super::{
         connector::Connector,
-        hosts::store::HostColor,
+        hosts::HostColor,
         p2p::{P2p, P2pPtr},
     },
     Session, SessionBitFlag, SESSION_SEED,

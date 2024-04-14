@@ -21,12 +21,10 @@ use std::{fs::File, io::Write};
 use clap::Parser;
 use darkfi::{
     blockchain::{
-        block_store::{
-            Block, BlockDifficulty, BlockDifficultyStore, BlockOrderStore, BlockRanks, BlockStore,
-        },
-        contract_store::{ContractStateStore, WasmStore},
-        header_store::{Header, HeaderStore},
-        tx_store::{PendingTxOrderStore, PendingTxStore, TxStore},
+        block_store::{Block, BlockDifficulty, BlockRanks, BlockStore},
+        contract_store::ContractStore,
+        header_store::{Header, HeaderHash, HeaderStore},
+        tx_store::TxStore,
         Blockchain,
     },
     cli_desc,
@@ -36,7 +34,8 @@ use darkfi::{
 };
 use darkfi_sdk::{
     blockchain::block_epoch,
-    crypto::{ContractId, MerkleTree},
+    crypto::{ContractId, MerkleNode},
+    tx::TransactionHash,
 };
 use num_bigint::BigUint;
 
@@ -62,17 +61,17 @@ struct Args {
 
 #[derive(Debug)]
 struct HeaderInfo {
-    _hash: blake3::Hash,
+    _hash: HeaderHash,
     _version: u8,
-    _previous: blake3::Hash,
-    _height: u64,
+    _previous: HeaderHash,
+    _height: u32,
     _timestamp: Timestamp,
     _nonce: u64,
-    _tree: MerkleTree,
+    _root: MerkleNode,
 }
 
 impl HeaderInfo {
-    pub fn new(_hash: blake3::Hash, header: &Header) -> HeaderInfo {
+    pub fn new(_hash: HeaderHash, header: &Header) -> HeaderInfo {
         HeaderInfo {
             _hash,
             _version: header.version,
@@ -80,7 +79,7 @@ impl HeaderInfo {
             _height: header.height,
             _timestamp: header.timestamp,
             _nonce: header.nonce,
-            _tree: header.tree.clone(),
+            _root: header.root,
         }
     }
 }
@@ -108,14 +107,14 @@ impl HeaderStoreInfo {
 
 #[derive(Debug)]
 struct BlockInfo {
-    _hash: blake3::Hash,
-    _header: blake3::Hash,
-    _txs: Vec<blake3::Hash>,
+    _hash: HeaderHash,
+    _header: HeaderHash,
+    _txs: Vec<TransactionHash>,
     _signature: String,
 }
 
 impl BlockInfo {
-    pub fn new(_hash: blake3::Hash, block: &Block) -> BlockInfo {
+    pub fn new(_hash: HeaderHash, block: &Block) -> BlockInfo {
         BlockInfo {
             _hash,
             _header: block.header,
@@ -126,56 +125,14 @@ impl BlockInfo {
 }
 
 #[derive(Debug)]
-struct BlockInfoChain {
-    _blocks: Vec<BlockInfo>,
-}
-
-impl BlockInfoChain {
-    pub fn new(blockstore: &BlockStore) -> BlockInfoChain {
-        let mut _blocks = Vec::new();
-        let result = blockstore.get_all();
-        match result {
-            Ok(iter) => {
-                for (hash, block) in iter.iter() {
-                    _blocks.push(BlockInfo::new(*hash, block));
-                }
-            }
-            Err(e) => println!("Error: {:?}", e),
-        }
-        BlockInfoChain { _blocks }
-    }
-}
-
-#[derive(Debug)]
 struct OrderInfo {
-    _height: u64,
-    _hash: blake3::Hash,
+    _height: u32,
+    _hash: HeaderHash,
 }
 
 impl OrderInfo {
-    pub fn new(_height: u64, _hash: blake3::Hash) -> OrderInfo {
+    pub fn new(_height: u32, _hash: HeaderHash) -> OrderInfo {
         OrderInfo { _height, _hash }
-    }
-}
-
-#[derive(Debug)]
-struct BlockOrderStoreInfo {
-    _order: Vec<OrderInfo>,
-}
-
-impl BlockOrderStoreInfo {
-    pub fn new(orderstore: &BlockOrderStore) -> BlockOrderStoreInfo {
-        let mut _order = Vec::new();
-        let result = orderstore.get_all();
-        match result {
-            Ok(iter) => {
-                for (height, hash) in iter.iter() {
-                    _order.push(OrderInfo::new(*height, *hash));
-                }
-            }
-            Err(e) => println!("Error: {:?}", e),
-        }
-        BlockOrderStoreInfo { _order }
     }
 }
 
@@ -200,7 +157,7 @@ impl BlockRanksInfo {
 
 #[derive(Debug)]
 struct BlockDifficultyInfo {
-    _height: u64,
+    _height: u32,
     _timestamp: Timestamp,
     _difficulty: BigUint,
     _cummulative_difficulty: BigUint,
@@ -220,89 +177,26 @@ impl BlockDifficultyInfo {
 }
 
 #[derive(Debug)]
-struct BlockDifficultyStoreInfo {
-    _difficulties: Vec<BlockDifficultyInfo>,
-}
-
-impl BlockDifficultyStoreInfo {
-    pub fn new(difficultiesstore: &BlockDifficultyStore) -> BlockDifficultyStoreInfo {
-        let mut _difficulties = Vec::new();
-        let result = difficultiesstore.get_all();
-        match result {
-            Ok(iter) => {
-                for (_, difficulty) in iter.iter() {
-                    _difficulties.push(BlockDifficultyInfo::new(difficulty));
-                }
-            }
-            Err(e) => println!("Error: {:?}", e),
-        }
-        BlockDifficultyStoreInfo { _difficulties }
-    }
-}
-
-#[derive(Debug)]
-struct TxInfo {
-    _hash: blake3::Hash,
-    _payload: Transaction,
-}
-
-impl TxInfo {
-    pub fn new(_hash: blake3::Hash, tx: &Transaction) -> TxInfo {
-        TxInfo { _hash, _payload: tx.clone() }
-    }
-}
-
-#[derive(Debug)]
-struct TxStoreInfo {
-    _transactions: Vec<TxInfo>,
-}
-
-impl TxStoreInfo {
-    pub fn new(txstore: &TxStore) -> TxStoreInfo {
-        let mut _transactions = Vec::new();
-        let result = txstore.get_all();
-        match result {
-            Ok(iter) => {
-                for (hash, tx) in iter.iter() {
-                    _transactions.push(TxInfo::new(*hash, tx));
-                }
-            }
-            Err(e) => println!("Error: {:?}", e),
-        }
-        TxStoreInfo { _transactions }
-    }
-}
-
-#[derive(Debug)]
-struct PendingTxStoreInfo {
-    _transactions: Vec<TxInfo>,
-}
-
-impl PendingTxStoreInfo {
-    pub fn new(pendingtxstore: &PendingTxStore) -> PendingTxStoreInfo {
-        let mut _transactions = Vec::new();
-        let result = pendingtxstore.get_all();
-        match result {
-            Ok(iter) => {
-                for (hash, tx) in iter.iter() {
-                    _transactions.push(TxInfo::new(*hash, tx));
-                }
-            }
-            Err(e) => println!("Error: {:?}", e),
-        }
-        PendingTxStoreInfo { _transactions }
-    }
-}
-
-#[derive(Debug)]
-struct PendingTxOrderStoreInfo {
+struct BlockStoreInfo {
+    _main: Vec<BlockInfo>,
     _order: Vec<OrderInfo>,
+    _difficulty: Vec<BlockDifficultyInfo>,
 }
 
-impl PendingTxOrderStoreInfo {
-    pub fn new(orderstore: &PendingTxOrderStore) -> PendingTxOrderStoreInfo {
+impl BlockStoreInfo {
+    pub fn new(blockstore: &BlockStore) -> BlockStoreInfo {
+        let mut _main = Vec::new();
+        let result = blockstore.get_all();
+        match result {
+            Ok(iter) => {
+                for (hash, block) in iter.iter() {
+                    _main.push(BlockInfo::new(*hash, block));
+                }
+            }
+            Err(e) => println!("Error: {:?}", e),
+        }
         let mut _order = Vec::new();
-        let result = orderstore.get_all();
+        let result = blockstore.get_all_order();
         match result {
             Ok(iter) => {
                 for (height, hash) in iter.iter() {
@@ -311,7 +205,108 @@ impl PendingTxOrderStoreInfo {
             }
             Err(e) => println!("Error: {:?}", e),
         }
-        PendingTxOrderStoreInfo { _order }
+        let mut _difficulty = Vec::new();
+        let result = blockstore.get_all_difficulty();
+        match result {
+            Ok(iter) => {
+                for (_, difficulty) in iter.iter() {
+                    _difficulty.push(BlockDifficultyInfo::new(difficulty));
+                }
+            }
+            Err(e) => println!("Error: {:?}", e),
+        }
+        BlockStoreInfo { _main, _order, _difficulty }
+    }
+}
+
+#[derive(Debug)]
+struct TxInfo {
+    _hash: TransactionHash,
+    _payload: Transaction,
+}
+
+impl TxInfo {
+    pub fn new(_hash: TransactionHash, tx: &Transaction) -> TxInfo {
+        TxInfo { _hash, _payload: tx.clone() }
+    }
+}
+
+#[derive(Debug)]
+struct TxLocationInfo {
+    _hash: TransactionHash,
+    _block_height: u32,
+    _index: u16,
+}
+
+impl TxLocationInfo {
+    pub fn new(_hash: TransactionHash, _block_height: u32, _index: u16) -> TxLocationInfo {
+        TxLocationInfo { _hash, _block_height, _index }
+    }
+}
+
+#[derive(Debug)]
+struct PendingOrderInfo {
+    _order: u64,
+    _hash: TransactionHash,
+}
+
+impl PendingOrderInfo {
+    pub fn new(_order: u64, _hash: TransactionHash) -> PendingOrderInfo {
+        PendingOrderInfo { _order, _hash }
+    }
+}
+
+#[derive(Debug)]
+struct TxStoreInfo {
+    _main: Vec<TxInfo>,
+    _location: Vec<TxLocationInfo>,
+    _pending: Vec<TxInfo>,
+    _pending_order: Vec<PendingOrderInfo>,
+}
+
+impl TxStoreInfo {
+    pub fn new(txstore: &TxStore) -> TxStoreInfo {
+        let mut _main = Vec::new();
+        let result = txstore.get_all();
+        match result {
+            Ok(iter) => {
+                for (hash, tx) in iter.iter() {
+                    _main.push(TxInfo::new(*hash, tx));
+                }
+            }
+            Err(e) => println!("Error: {:?}", e),
+        }
+        let mut _location = Vec::new();
+        let result = txstore.get_all_location();
+        match result {
+            Ok(iter) => {
+                for (hash, location) in iter.iter() {
+                    _location.push(TxLocationInfo::new(*hash, location.0, location.1));
+                }
+            }
+            Err(e) => println!("Error: {:?}", e),
+        }
+        let mut _pending = Vec::new();
+        let result = txstore.get_all_pending();
+        match result {
+            Ok(iter) => {
+                for (hash, tx) in iter.iter() {
+                    _pending.push(TxInfo::new(*hash, tx));
+                }
+            }
+            Err(e) => println!("Error: {:?}", e),
+        }
+        let mut _pending_order = Vec::new();
+        let result = txstore.get_all_pending_order();
+        match result {
+            Ok(iter) => {
+                for (order, hash) in iter.iter() {
+                    _pending_order.push(PendingOrderInfo::new(*order, *hash));
+                }
+            }
+            Err(e) => println!("Error: {:?}", e),
+        }
+        TxStoreInfo { _main, _location, _pending, _pending_order }
     }
 }
 
@@ -324,27 +319,6 @@ struct ContractStateInfo {
 impl ContractStateInfo {
     pub fn new(_id: ContractId, state_hashes: &[blake3::Hash]) -> ContractStateInfo {
         ContractStateInfo { _id, _state_hashes: state_hashes.to_vec() }
-    }
-}
-
-#[derive(Debug)]
-struct ContractStateStoreInfo {
-    _contracts: Vec<ContractStateInfo>,
-}
-
-impl ContractStateStoreInfo {
-    pub fn new(contractsstore: &ContractStateStore) -> ContractStateStoreInfo {
-        let mut _contracts = Vec::new();
-        let result = contractsstore.get_all();
-        match result {
-            Ok(iter) => {
-                for (id, state_hash) in iter.iter() {
-                    _contracts.push(ContractStateInfo::new(*id, state_hash));
-                }
-            }
-            Err(e) => println!("Error: {:?}", e),
-        }
-        ContractStateStoreInfo { _contracts }
     }
 }
 
@@ -362,51 +336,51 @@ impl WasmInfo {
 }
 
 #[derive(Debug)]
-struct WasmStoreInfo {
-    _wasm_bincodes: Vec<WasmInfo>,
+struct ContractStoreInfo {
+    _state: Vec<ContractStateInfo>,
+    _wasm: Vec<WasmInfo>,
 }
 
-impl WasmStoreInfo {
-    pub fn new(wasmstore: &WasmStore) -> WasmStoreInfo {
-        let mut _wasm_bincodes = Vec::new();
-        let result = wasmstore.get_all();
+impl ContractStoreInfo {
+    pub fn new(contractsstore: &ContractStore) -> ContractStoreInfo {
+        let mut _state = Vec::new();
+        let result = contractsstore.get_all_states();
         match result {
             Ok(iter) => {
-                for (id, bincode) in iter.iter() {
-                    _wasm_bincodes.push(WasmInfo::new(*id, bincode));
+                for (id, state_hash) in iter.iter() {
+                    _state.push(ContractStateInfo::new(*id, state_hash));
                 }
             }
             Err(e) => println!("Error: {:?}", e),
         }
-        WasmStoreInfo { _wasm_bincodes }
+        let mut _wasm = Vec::new();
+        let result = contractsstore.get_all_wasm();
+        match result {
+            Ok(iter) => {
+                for (id, bincode) in iter.iter() {
+                    _wasm.push(WasmInfo::new(*id, bincode));
+                }
+            }
+            Err(e) => println!("Error: {:?}", e),
+        }
+        ContractStoreInfo { _state, _wasm }
     }
 }
-
 #[derive(Debug)]
 struct BlockchainInfo {
     _headers: HeaderStoreInfo,
-    _blocks: BlockInfoChain,
-    _order: BlockOrderStoreInfo,
-    _difficulties: BlockDifficultyStoreInfo,
+    _blocks: BlockStoreInfo,
     _transactions: TxStoreInfo,
-    _pending_txs: PendingTxStoreInfo,
-    _pending_txs_order: PendingTxOrderStoreInfo,
-    _contracts: ContractStateStoreInfo,
-    _wasm_bincode: WasmStoreInfo,
+    _contracts: ContractStoreInfo,
 }
 
 impl BlockchainInfo {
     pub fn new(blockchain: &Blockchain) -> BlockchainInfo {
         BlockchainInfo {
             _headers: HeaderStoreInfo::new(&blockchain.headers),
-            _blocks: BlockInfoChain::new(&blockchain.blocks),
-            _order: BlockOrderStoreInfo::new(&blockchain.order),
-            _difficulties: BlockDifficultyStoreInfo::new(&blockchain.difficulties),
+            _blocks: BlockStoreInfo::new(&blockchain.blocks),
             _transactions: TxStoreInfo::new(&blockchain.transactions),
-            _pending_txs: PendingTxStoreInfo::new(&blockchain.pending_txs),
-            _pending_txs_order: PendingTxOrderStoreInfo::new(&blockchain.pending_txs_order),
-            _contracts: ContractStateStoreInfo::new(&blockchain.contracts),
-            _wasm_bincode: WasmStoreInfo::new(&blockchain.wasm_bincode),
+            _contracts: ContractStoreInfo::new(&blockchain.contracts),
         }
     }
 }

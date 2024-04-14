@@ -43,7 +43,7 @@ impl TestHarness {
         recipient: &Holder,
         owncoins: &[OwnCoin],
         token_id: TokenId,
-        block_height: u64,
+        block_height: u32,
     ) -> Result<(Transaction, (MoneyTransferParamsV1, Option<MoneyFeeParamsV1>), Vec<OwnCoin>)>
     {
         let wallet = self.holders.get(holder).unwrap();
@@ -120,7 +120,7 @@ impl TestHarness {
         tx: Transaction,
         call_params: &MoneyTransferParamsV1,
         fee_params: &Option<MoneyFeeParamsV1>,
-        block_height: u64,
+        block_height: u32,
         append: bool,
     ) -> Result<Vec<OwnCoin>> {
         let wallet = self.holders.get_mut(holder).unwrap();
@@ -134,8 +134,11 @@ impl TestHarness {
             inputs.push(fee_params.input.clone());
         }
 
+        let nullifiers = inputs.iter().map(|i| i.nullifier.inner()).map(|l| (l, l)).collect();
+        wallet.money_null_smt.insert_batch(nullifiers).expect("smt.insert_batch()");
+
         if append {
-            for input in inputs.iter() {
+            for input in &inputs {
                 if let Some(spent_coin) = wallet
                     .unspent_money_coins
                     .iter()
@@ -156,7 +159,7 @@ impl TestHarness {
             outputs.push(fee_params.output.clone());
         }
 
-        for output in outputs.iter() {
+        for output in &outputs {
             if !append {
                 continue
             }

@@ -20,7 +20,7 @@ use std::{collections::HashSet, sync::Arc};
 use darkfi::{
     async_daemonize, cli_desc,
     event_graph::{proto::ProtocolEventGraph, EventGraph, EventGraphPtr},
-    net::{settings::SettingsOpt, P2p, P2pPtr, SESSION_ALL},
+    net::{session::SESSION_DEFAULT, settings::SettingsOpt, P2p, P2pPtr},
     rpc::{
         jsonrpc::JsonSubscriber,
         server::{listen_and_serve, RequestHandler},
@@ -200,7 +200,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     let event_graph_ = Arc::clone(&event_graph);
     let registry = p2p.protocol_registry();
     registry
-        .register(SESSION_ALL, move |channel, _| {
+        .register(SESSION_DEFAULT, move |channel, _| {
             let event_graph_ = event_graph_.clone();
             async move { ProtocolEventGraph::init(event_graph_, channel).await.unwrap() }
         })

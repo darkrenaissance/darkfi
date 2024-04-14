@@ -99,7 +99,7 @@ impl PoWModule {
         let mut timestamps = RingBuffer::<Timestamp, BUF_SIZE>::new();
         let mut difficulties = RingBuffer::<BigUint, BUF_SIZE>::new();
         let mut cummulative_difficulty = BigUint::zero();
-        let last_n = blockchain.difficulties.get_last_n(BUF_SIZE)?;
+        let last_n = blockchain.blocks.get_last_n_difficulties(BUF_SIZE)?;
         for difficulty in last_n {
             timestamps.push(difficulty.timestamp);
             difficulties.push(difficulty.cummulative_difficulty.clone());
@@ -252,13 +252,13 @@ impl PoWModule {
 
         // Setup verifier
         let flags = RandomXFlags::default();
-        let cache = RandomXCache::new(flags, block.header.previous.as_bytes()).unwrap();
+        let cache = RandomXCache::new(flags, block.header.previous.inner()).unwrap();
         let vm = RandomXVM::new(flags, &cache).unwrap();
         debug!(target: "validator::pow::verify_block", "[VERIFIER] Setup time: {:?}", verifier_setup.elapsed());
 
         // Compute the output hash
         let verification_time = Instant::now();
-        let out_hash = vm.hash(block.hash()?.as_bytes());
+        let out_hash = vm.hash(block.hash().inner());
         let out_hash = BigUint::from_bytes_be(&out_hash);
 
         // Verify hash is less than the expected mine target
@@ -285,7 +285,7 @@ impl PoWModule {
         difficulty: BlockDifficulty,
     ) -> Result<()> {
         self.append(difficulty.timestamp, &difficulty.difficulty);
-        overlay.lock().unwrap().difficulties.insert(&[difficulty])
+        overlay.lock().unwrap().blocks.insert_difficulty(&[difficulty])
     }
 
     /// Mine provided block, based on next mine target
@@ -324,10 +324,10 @@ pub fn mine_block(
     debug!(target: "validator::pow::mine_block", "[MINER] Mine target: 0x{:064x}", target);
     // Get the PoW input. The key changes with every mined block.
     let input = miner_block.header.previous;
-    debug!(target: "validator::pow::mine_block", "[MINER] PoW input: {}", input.to_hex());
+    debug!(target: "validator::pow::mine_block", "[MINER] PoW input: {}", input);
     let flags = RandomXFlags::default() | RandomXFlags::FULLMEM;
     debug!(target: "validator::pow::mine_block", "[MINER] Initializing RandomX dataset...");
-    let dataset = Arc::new(RandomXDataset::new(flags, input.as_bytes(), threads).unwrap());
+    let dataset = Arc::new(RandomXDataset::new(flags, input.inner(), threads).unwrap());
     debug!(target: "validator::pow::mine_block", "[MINER] Setup time: {:?}", miner_setup.elapsed());
 
     // Multithreaded mining setup
@@ -361,7 +361,7 @@ pub fn mine_block(
                     break
                 }
 
-                let out_hash = vm.hash(block.hash().unwrap().as_bytes());
+                let out_hash = vm.hash(block.hash().inner());
                 let out_hash = BigUint::from_bytes_be(&out_hash);
                 if out_hash <= target {
                     found_block.store(true, Ordering::SeqCst);
@@ -369,7 +369,7 @@ pub fn mine_block(
                     debug!(target: "validator::pow::mine_block", "[MINER] Thread #{} found block using nonce {}",
                         t, miner_nonce
                     );
-                    debug!(target: "validator::pow::mine_block", "[MINER] Block hash {}", block.hash().unwrap().to_hex());
+                    debug!(target: "validator::pow::mine_block", "[MINER] Block hash {}", block.hash());
                     debug!(target: "validator::pow::mine_block", "[MINER] RandomX output: 0x{:064x}", out_hash);
                     break
                 }
@@ -460,7 +460,7 @@ mod tests {
 
         // Mine next block
         let mut next_block = BlockInfo::default();
-        next_block.header.previous = genesis_block.hash()?;
+        next_block.header.previous = genesis_block.hash();
         module.mine_block(&mut next_block, DEFAULT_TEST_THREADS, &recvr)?;
 
         // Verify it

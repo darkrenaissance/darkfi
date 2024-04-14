@@ -58,6 +58,14 @@
 //!   calculated as `leaf_idx = final_level_start_idx + position`.
 //! * **node** - either the leaf values or parent nodes `hash(left, right)`.
 
+use num_bigint::BigUint;
+use std::collections::HashMap;
+// Only used for the type aliases below
+use pasta_curves::pallas;
+
+use crate::error::ContractResult;
+use util::{FieldElement, FieldHasher};
+
 mod empty;
 pub use empty::EMPTY_NODES_FP;
 
@@ -68,14 +76,6 @@ mod util;
 pub use util::Poseidon;
 
 pub mod wasmdb;
-
-use num_bigint::BigUint;
-use std::collections::HashMap;
-// Only used for the type aliases below
-use pasta_curves::pallas;
-
-use crate::error::{ContractError, ContractResult};
-use util::{FieldElement, FieldHasher};
 
 // Bit size for Fp (and Fq)
 pub const SMT_FP_DEPTH: usize = 255;
@@ -92,16 +92,17 @@ pub type SmtMemoryFp = SparseMerkleTree<
 pub type PathFp = Path<SMT_FP_DEPTH, pallas::Base, PoseidonFp>;
 
 /// Pluggable storage backend for the SMT.
-/// Has a minimal interface to simply put and get objects from the store.
+/// Has a minimal interface to put, get, and delete objects from the store.
 pub trait StorageAdapter {
     type Value;
 
-    fn put(&mut self, key: BigUint, value: Self::Value) -> bool;
+    fn put(&mut self, key: BigUint, value: Self::Value) -> ContractResult;
     fn get(&self, key: &BigUint) -> Option<Self::Value>;
+    fn del(&mut self, key: &BigUint) -> ContractResult;
 }
 
 /// An in-memory storage, useful for unit tests and smaller trees.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct MemoryStorage<F: FieldElement> {
     tree: HashMap<BigUint, F>,
 }
@@ -115,12 +116,18 @@ impl<F: FieldElement> MemoryStorage<F> {
 impl<F: FieldElement> StorageAdapter for MemoryStorage<F> {
     type Value = F;
 
-    fn put(&mut self, key: BigUint, value: F) -> bool {
+    fn put(&mut self, key: BigUint, value: F) -> ContractResult {
         self.tree.insert(key, value);
-        true
+        Ok(())
     }
+
     fn get(&self, key: &BigUint) -> Option<F> {
         self.tree.get(key).copied()
+    }
+
+    fn del(&mut self, key: &BigUint) -> ContractResult {
+        self.tree.remove(key);
+        Ok(())
     }
 }
 
@@ -131,7 +138,7 @@ impl<F: FieldElement> StorageAdapter for MemoryStorage<F> {
 ///
 /// The trait param `N` is the depth of the tree. A tree with a depth of `N`
 /// will have `N + 1` levels.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SparseMerkleTree<
     'a,
     const N: usize,
@@ -167,6 +174,10 @@ impl<
     /// Takes a batch of field elements, inserts these hashes into the tree,
     /// and updates the Merkle root.
     pub fn insert_batch(&mut self, leaves: Vec<(F, F)>) -> ContractResult {
+        if leaves.is_empty() {
+            return Ok(())
+        }
+
         // Nodes that need recalculating
         let mut dirty_idxs = Vec::new();
         for (pos, leaf) in leaves {
@@ -178,37 +189,64 @@ impl<
             dirty_idxs.push(parent_idx);
         }
 
-        // Depth first from the bottom of the tree
-        for _ in 0..N + 1 {
-            let mut new_dirty_idxs = Vec::new();
+        self.recompute_tree(&mut dirty_idxs)?;
 
-            for idx in dirty_idxs {
-                let left_idx = util::left_child(&idx);
-                let right_idx = util::right_child(&idx);
-                let left = self.get_node(&left_idx);
-                let right = self.get_node(&right_idx);
-                // Recalculate the node
-                let node = self.hasher.hash([left, right]);
+        Ok(())
+    }
 
-                self.put_node(idx.clone(), node)?;
-
-                // Add this node's parent to the update list
-                let parent_idx = match util::parent(&idx) {
-                    Some(idx) => idx,
-                    // We are at the root node so no parents exist
-                    None => break,
-                };
-                new_dirty_idxs.push(parent_idx);
-            }
-
-            dirty_idxs = new_dirty_idxs;
+    pub fn remove_leaves(&mut self, leaves: Vec<(F, F)>) -> ContractResult {
+        if leaves.is_empty() {
+            return Ok(())
         }
+
+        let mut dirty_idxs = Vec::new();
+        for (pos, _leaf) in leaves {
+            let idx = util::leaf_pos_to_index::<N, _>(&pos);
+            self.remove_node(&idx)?;
+
+            // Mark node parent as dirty
+            let parent_idx = util::parent(&idx).unwrap();
+            dirty_idxs.push(parent_idx);
+        }
+
+        self.recompute_tree(&mut dirty_idxs)?;
+
         Ok(())
     }
 
     /// Returns the Merkle tree root.
     pub fn root(&self) -> F {
         self.get_node(&BigUint::from(0u32))
+    }
+
+    /// Recomputes the Merkle tree depth first from the bottom of the tree
+    fn recompute_tree(&mut self, dirty_idxs: &mut Vec<BigUint>) -> ContractResult {
+        for _ in 0..N + 1 {
+            let mut new_dirty_idxs = vec![];
+
+            for idx in &mut *dirty_idxs {
+                let left_idx = util::left_child(idx);
+                let right_idx = util::right_child(idx);
+                let left = self.get_node(&left_idx);
+                let right = self.get_node(&right_idx);
+                // Recalclate the node
+                let node = self.hasher.hash([left, right]);
+                self.put_node(idx.clone(), node)?;
+
+                // Add this node's parent to the update list
+                let parent_idx = match util::parent(idx) {
+                    Some(idx) => idx,
+                    // We are at the root node so no parents exist
+                    None => break,
+                };
+
+                new_dirty_idxs.push(parent_idx);
+            }
+
+            *dirty_idxs = new_dirty_idxs;
+        }
+
+        Ok(())
     }
 
     /// Give the path leading from the leaf at `index` up to the root. This is
@@ -245,10 +283,11 @@ impl<
     }
 
     fn put_node(&mut self, key: BigUint, value: F) -> ContractResult {
-        if !self.store.put(key, value) {
-            return Err(ContractError::SmtPutFailed)
-        }
-        Ok(())
+        self.store.put(key, value)
+    }
+
+    fn remove_node(&mut self, key: &BigUint) -> ContractResult {
+        self.store.del(key)
     }
 }
 
@@ -300,8 +339,8 @@ pub fn gen_empty_nodes<const M: usize, F: FieldElement, H: FieldHasher<F, 2>>(
     empty_leaf: F,
 ) -> [F; M] {
     let mut empty_nodes = [F::ZERO; M];
-
     let mut empty_node = empty_leaf;
+
     for item in empty_nodes.iter_mut().rev() {
         *item = empty_node;
         empty_node = hasher.hash([empty_node, empty_node]);

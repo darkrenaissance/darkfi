@@ -16,13 +16,16 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::{Arc, Weak};
+use std::{
+    sync::{Arc, Weak},
+    time::UNIX_EPOCH,
+};
 
 use async_trait::async_trait;
 use log::debug;
 use smol::Executor;
 
-use super::{channel::ChannelPtr, p2p::P2pPtr, protocol::ProtocolVersion};
+use super::{channel::ChannelPtr, hosts::HostColor, p2p::P2pPtr, protocol::ProtocolVersion};
 use crate::Result;
 
 pub mod inbound_session;
@@ -33,21 +36,28 @@ pub mod outbound_session;
 pub use outbound_session::{OutboundSession, OutboundSessionPtr};
 pub mod seedsync_session;
 pub use seedsync_session::{SeedSyncSession, SeedSyncSessionPtr};
+pub mod refine_session;
+pub use refine_session::{RefineSession, RefineSessionPtr};
 
 /// Bitwise selectors for the `protocol_registry`
 pub type SessionBitFlag = u32;
-pub const SESSION_INBOUND: SessionBitFlag = 0b0001;
-pub const SESSION_OUTBOUND: SessionBitFlag = 0b0010;
-pub const SESSION_MANUAL: SessionBitFlag = 0b0100;
-pub const SESSION_SEED: SessionBitFlag = 0b1000;
-pub const SESSION_ALL: SessionBitFlag = 0b1111;
+pub const SESSION_INBOUND: SessionBitFlag = 0b00001;
+pub const SESSION_OUTBOUND: SessionBitFlag = 0b00010;
+pub const SESSION_MANUAL: SessionBitFlag = 0b00100;
+pub const SESSION_SEED: SessionBitFlag = 0b01000;
+pub const SESSION_REFINE: SessionBitFlag = 0b10000;
+
+pub const SESSION_DEFAULT: SessionBitFlag = 0b00111;
+pub const SESSION_ALL: SessionBitFlag = 0b11111;
 
 pub type SessionWeakPtr = Weak<dyn Session + Send + Sync + 'static>;
 
 /// Removes channel from the list of connected channels when a stop signal
 /// is received.
-pub async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr) {
+pub async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr, type_id: SessionBitFlag) {
     debug!(target: "net::session::remove_sub_on_stop()", "[START]");
+    let addr = channel.address();
+
     // Subscribe to stop events
     let stop_sub = channel.clone().subscribe_stop().await;
 
@@ -55,14 +65,25 @@ pub async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr) {
         // Wait for a stop event
         stop_sub.receive().await;
     }
-
     debug!(
         target: "net::session::remove_sub_on_stop()",
-        "Received stop event. Removing channel {}", channel.address(),
+        "Received stop event. Removing channel {}", addr,
     );
 
-    // Remove channel from p2p
+    // Downgrade to greylist this is a outbound or manual session.
+    if type_id & (SESSION_MANUAL | SESSION_OUTBOUND) != 0 {
+        debug!(
+            target: "net::session::remove_sub_on_stop()",
+            "Downgrading {}", addr,
+        );
+
+        let last_seen = p2p.hosts().fetch_last_seen(addr).await.unwrap();
+        p2p.hosts().move_host(addr, last_seen, HostColor::Grey).await.unwrap();
+    }
+
+    // Remove channel from the HostRegistry. Free up this addr for any future operation.
     p2p.hosts().unregister(channel.address()).await;
+
     debug!(target: "net::session::remove_sub_on_stop()", "[END]");
 }
 
@@ -105,7 +126,6 @@ pub trait Session: Sync {
         channel.clone().start(executor.clone());
 
         // Wait for handshake to finish.
-        // If the handshake returns an error, remove this host from all hostlists.
         match handshake_task.await {
             Ok(()) => {
                 debug!(target: "net::session::register_channel()",
@@ -144,11 +164,26 @@ pub trait Session: Sync {
         // Perform handshake
         protocol_version.run(executor.clone()).await?;
 
+        // Upgrade to goldlist if this is a outbound or manual session.
+        if self.type_id() & (SESSION_MANUAL | SESSION_OUTBOUND) != 0 {
+            debug!(
+                target: "net::session::perform_handshake_protocols()",
+                "Upgrading {}", channel.address(),
+            );
+
+            let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+            self.p2p()
+                .hosts()
+                .move_host(channel.address(), last_seen, HostColor::Gold)
+                .await
+                .unwrap();
+        }
+
         // Attempt to add channel to registry
         self.p2p().hosts().register_channel(channel.clone()).await;
 
         // Subscribe to stop, so we can remove from registry
-        executor.spawn(remove_sub_on_stop(self.p2p(), channel)).detach();
+        executor.spawn(remove_sub_on_stop(self.p2p(), channel, self.type_id())).detach();
 
         // Channel is ready for use
         Ok(())

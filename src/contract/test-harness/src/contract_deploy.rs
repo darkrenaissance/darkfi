@@ -43,7 +43,7 @@ impl TestHarness {
         &mut self,
         holder: &Holder,
         wasm_bincode: Vec<u8>,
-        block_height: u64,
+        block_height: u32,
     ) -> Result<(Transaction, DeployParamsV1, Option<MoneyFeeParamsV1>)> {
         let wallet = self.holders.get(holder).unwrap();
         let deploy_keypair = wallet.contract_deploy_authority;
@@ -97,7 +97,7 @@ impl TestHarness {
         tx: Transaction,
         _params: &DeployParamsV1,
         fee_params: &Option<MoneyFeeParamsV1>,
-        block_height: u64,
+        block_height: u32,
         append: bool,
     ) -> Result<Vec<OwnCoin>> {
         let wallet = self.holders.get_mut(holder).unwrap();
@@ -110,6 +110,12 @@ impl TestHarness {
         }
 
         if let Some(ref fee_params) = fee_params {
+            let nullifier = fee_params.input.nullifier.inner();
+            wallet
+                .money_null_smt
+                .insert_batch(vec![(nullifier, nullifier)])
+                .expect("smt.insert_batch()");
+
             if let Some(spent_coin) = wallet
                 .unspent_money_coins
                 .iter()

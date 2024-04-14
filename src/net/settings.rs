@@ -70,6 +70,8 @@ pub struct Settings {
     pub hostlist: String,
     /// Pause interval within greylist refinery process
     pub greylist_refinery_interval: u64,
+    /// Pause interval before redoing a self-handshake
+    pub self_handshake_interval: u64,
     /// Percent of connections to come from the whitelist
     pub white_connect_count: u32,
     /// Number of anchorlist connections
@@ -77,6 +79,9 @@ pub struct Settings {
     /// Number of seconds with no connections after which refinery
     /// process is paused.
     pub time_with_no_connections: u64,
+    /// Nodes to avoid interacting with for the duration of the program,
+    /// in the format ["scheme://host", [port, port]]
+    pub blacklist: Vec<(Url, Vec<u16>)>,
 }
 
 impl Default for Settings {
@@ -104,9 +109,11 @@ impl Default for Settings {
             outbound_peer_discovery_attempt_time: 5,
             hostlist: "/dev/null".to_string(),
             greylist_refinery_interval: 15,
+            self_handshake_interval: 600,
             white_connect_count: 90,
             anchor_connect_count: 2,
             time_with_no_connections: 30,
+            blacklist: vec![],
         }
     }
 }
@@ -201,6 +208,10 @@ pub struct SettingsOpt {
     #[structopt(skip)]
     pub greylist_refinery_interval: Option<u64>,
 
+    /// Pause interval before redoing a self-handshake
+    #[structopt(skip)]
+    pub self_handshake_interval: Option<u64>,
+
     /// Number of whitelist connections
     #[structopt(skip)]
     pub white_connect_count: Option<u32>,
@@ -213,6 +224,12 @@ pub struct SettingsOpt {
     /// process is paused.
     #[structopt(skip)]
     pub time_with_no_connections: Option<u64>,
+
+    /// Nodes to avoid interacting with for the duration of the program,
+    /// in the format ["scheme://host", [port, port]]
+    #[serde(default)]
+    #[structopt(skip)]
+    pub blacklist: Vec<(Url, Vec<u16>)>,
 }
 
 impl From<SettingsOpt> for Settings {
@@ -251,11 +268,15 @@ impl From<SettingsOpt> for Settings {
             greylist_refinery_interval: opt
                 .greylist_refinery_interval
                 .unwrap_or(def.greylist_refinery_interval),
+            self_handshake_interval: opt
+                .self_handshake_interval
+                .unwrap_or(def.self_handshake_interval),
             white_connect_count: opt.white_connect_count.unwrap_or(def.white_connect_count),
             anchor_connect_count: opt.anchor_connect_count.unwrap_or(def.anchor_connect_count),
             time_with_no_connections: opt
                 .time_with_no_connections
                 .unwrap_or(def.time_with_no_connections),
+            blacklist: opt.blacklist,
         }
     }
 }

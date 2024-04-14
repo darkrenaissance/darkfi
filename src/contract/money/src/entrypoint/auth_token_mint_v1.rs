@@ -19,11 +19,10 @@
 use darkfi_sdk::{
     crypto::{pasta_prelude::*, ContractId, PublicKey},
     dark_tree::DarkLeaf,
-    db::{db_contains_key, db_lookup},
     error::{ContractError, ContractResult},
     msg,
     pasta::pallas,
-    ContractCall,
+    wasm, ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
@@ -36,10 +35,10 @@ use crate::{
 /// `get_metadata` function for `Money::AuthTokenMintV1`
 pub(crate) fn money_auth_token_mint_get_metadata_v1(
     _cid: ContractId,
-    call_idx: u32,
+    call_idx: usize,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_node = &calls[call_idx as usize];
+    let self_node = &calls[call_idx];
     let self_data = &self_node.data;
     let self_params: MoneyAuthTokenMintParamsV1 = deserialize(&self_data.data[1..])?;
 
@@ -78,17 +77,17 @@ pub(crate) fn money_auth_token_mint_get_metadata_v1(
 /// `process_instruction` function for `Money::AuthTokenMintV1`
 pub(crate) fn money_auth_token_mint_process_instruction_v1(
     cid: ContractId,
-    call_idx: u32,
+    call_idx: usize,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize].data;
+    let self_ = &calls[call_idx].data;
     let params: MoneyAuthTokenMintParamsV1 = deserialize(&self_.data[1..])?;
 
     // We have to check if the token mint is frozen.
-    let token_freeze_db = db_lookup(cid, MONEY_CONTRACT_TOKEN_FREEZE_TREE)?;
+    let token_freeze_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_TOKEN_FREEZE_TREE)?;
 
     // Check that the mint is not frozen
-    if db_contains_key(token_freeze_db, &serialize(&params.token_id))? {
+    if wasm::db::db_contains_key(token_freeze_db, &serialize(&params.token_id))? {
         msg!("[MintV1] Error: Token mint for {} is frozen", params.token_id);
         return Err(MoneyError::TokenMintFrozen.into())
     }

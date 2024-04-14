@@ -16,14 +16,16 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use num_bigint::BigUint;
+
 use super::{PoseidonFp, SparseMerkleTree, StorageAdapter, SMT_FP_DEPTH};
 use crate::{
     crypto::pasta_prelude::*,
-    db::{db_get, db_set, DbHandle},
+    error::ContractResult,
     msg,
     pasta::pallas,
+    wasm::db::{db_del, db_get, db_set, DbHandle},
 };
-use num_bigint::BigUint;
 
 pub type SmtWasmFp = SparseMerkleTree<
     'static,
@@ -47,8 +49,8 @@ impl SmtWasmDbStorage {
 impl StorageAdapter for SmtWasmDbStorage {
     type Value = pallas::Base;
 
-    fn put(&mut self, key: BigUint, value: pallas::Base) -> bool {
-        db_set(self.db, &key.to_bytes_le(), &value.to_repr()).is_ok()
+    fn put(&mut self, key: BigUint, value: pallas::Base) -> ContractResult {
+        db_set(self.db, &key.to_bytes_le(), &value.to_repr())
     }
 
     fn get(&self, key: &BigUint) -> Option<pallas::Base> {
@@ -61,11 +63,11 @@ impl StorageAdapter for SmtWasmDbStorage {
 
         let mut repr = [0; 32];
         repr.copy_from_slice(&value);
-        let value = pallas::Base::from_repr(repr);
-        if value.is_none().into() {
-            None
-        } else {
-            Some(value.unwrap())
-        }
+
+        pallas::Base::from_repr(repr).into()
+    }
+
+    fn del(&mut self, key: &BigUint) -> ContractResult {
+        db_del(self.db, &key.to_bytes_le())
     }
 }

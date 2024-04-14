@@ -18,10 +18,10 @@
 
 use darkfi_serial::Encodable;
 
-use super::{
+use crate::{
     crypto::ContractId,
     error::{ContractError, GenericResult},
-    util::parse_ret,
+    wasm,
 };
 
 pub type DbHandle = u32;
@@ -78,7 +78,7 @@ pub fn db_get(db_handle: DbHandle, key: &[u8]) -> GenericResult<Option<Vec<u8>>>
     len += key.to_vec().encode(&mut buf)?;
 
     let ret = unsafe { db_get_(buf.as_ptr(), len as u32) };
-    parse_ret(ret)
+    wasm::util::parse_ret(ret)
 }
 
 /// Everyone can call this. Checks if a key is contained in the key-value store.
@@ -123,7 +123,7 @@ pub fn db_set(db_handle: DbHandle, key: &[u8], value: &[u8]) -> GenericResult<()
 
         let ret = db_set_(buf.as_ptr(), len as u32);
 
-        if ret != crate::entrypoint::SUCCESS {
+        if ret != wasm::entrypoint::SUCCESS {
             return Err(ContractError::from(ret))
         }
 
@@ -146,7 +146,7 @@ pub fn db_del(db_handle: DbHandle, key: &[u8]) -> GenericResult<()> {
 
         let ret = db_del_(buf.as_ptr(), len as u32);
 
-        if ret != crate::entrypoint::SUCCESS {
+        if ret != wasm::entrypoint::SUCCESS {
             return Err(ContractError::from(ret))
         }
 
@@ -163,7 +163,7 @@ pub fn zkas_db_set(bincode: &[u8]) -> GenericResult<()> {
 
         let ret = zkas_db_set_(buf.as_ptr(), len as u32);
 
-        if ret != crate::entrypoint::SUCCESS {
+        if ret != wasm::entrypoint::SUCCESS {
             return Err(ContractError::from(ret))
         }
 

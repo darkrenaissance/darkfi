@@ -28,9 +28,7 @@ use darkfi_sdk::{
     deploy::DeployParamsV1,
     pasta::pallas,
 };
-use darkfi_serial::{
-    deserialize_async, serialize_async, AsyncDecodable, AsyncEncodable, AsyncWriteExt, WriteExt,
-};
+use darkfi_serial::{deserialize_async, serialize_async, AsyncDecodable, AsyncEncodable};
 use log::{debug, error, warn};
 use num_bigint::BigUint;
 use smol::io::Cursor;
@@ -53,7 +51,7 @@ use crate::{
 
 /// Verify given genesis [`BlockInfo`], and apply it to the provided overlay
 pub async fn verify_genesis_block(overlay: &BlockchainOverlayPtr, block: &BlockInfo) -> Result<()> {
-    let block_hash = block.hash()?.to_string();
+    let block_hash = block.hash().as_string();
     debug!(target: "validator::verification::verify_genesis_block", "Validating genesis block {}", block_hash);
 
     // Check if block already exists
@@ -96,8 +94,8 @@ pub async fn verify_genesis_block(overlay: &BlockchainOverlayPtr, block: &BlockI
     }
 
     // Append producer transaction to the tree and check tree matches header one
-    append_tx_to_merkle_tree(&mut tree, producer_tx)?;
-    if tree != block.header.tree {
+    append_tx_to_merkle_tree(&mut tree, producer_tx);
+    if tree.root(0).unwrap() != block.header.root {
         error!(target: "validator::verification::verify_genesis_block", "Genesis Merkle tree is invalid");
         return Err(Error::BlockIsInvalid(block_hash))
     }
@@ -119,23 +117,22 @@ pub async fn verify_genesis_block(overlay: &BlockchainOverlayPtr, block: &BlockI
 pub fn validate_block(block: &BlockInfo, previous: &BlockInfo, module: &PoWModule) -> Result<()> {
     // Check block version (1)
     if block.header.version != block_version(block.header.height) {
-        return Err(Error::BlockIsInvalid(block.hash()?.to_string()))
+        return Err(Error::BlockIsInvalid(block.hash().as_string()))
     }
 
     // Check previous hash (2)
-    let previous_hash = previous.hash()?;
-    if block.header.previous != previous_hash {
-        return Err(Error::BlockIsInvalid(block.hash()?.to_string()))
+    if block.header.previous != previous.hash() {
+        return Err(Error::BlockIsInvalid(block.hash().as_string()))
     }
 
     // Check heights are incremental (3)
     if block.header.height != previous.header.height + 1 {
-        return Err(Error::BlockIsInvalid(block.hash()?.to_string()))
+        return Err(Error::BlockIsInvalid(block.hash().as_string()))
     }
 
     // Check timestamp validity (4)
     if !module.verify_timestamp_by_median(block.header.timestamp) {
-        return Err(Error::BlockIsInvalid(block.hash()?.to_string()))
+        return Err(Error::BlockIsInvalid(block.hash().as_string()))
     }
 
     // Check block hash corresponds to next one (5)
@@ -155,7 +152,7 @@ pub fn validate_blockchain(
     // Generate a PoW module
     let mut module = PoWModule::new(blockchain.clone(), pow_target, pow_fixed_difficulty)?;
     // We use block order store here so we have all blocks in order
-    let blocks = blockchain.order.get_all()?;
+    let blocks = blockchain.blocks.get_all_order()?;
     for (index, block) in blocks[1..].iter().enumerate() {
         let full_blocks = blockchain.get_blocks_by_hash(&[blocks[index].1, block.1])?;
         let full_block = &full_blocks[1];
@@ -174,12 +171,12 @@ pub async fn verify_block(
     block: &BlockInfo,
     previous: &BlockInfo,
 ) -> Result<()> {
-    let block_hash = block.hash()?.to_string();
+    let block_hash = block.hash();
     debug!(target: "validator::verification::verify_block", "Validating block {}", block_hash);
 
     // Check if block already exists
     if overlay.lock().unwrap().has_block(block)? {
-        return Err(Error::BlockAlreadyExists(block_hash))
+        return Err(Error::BlockAlreadyExists(block_hash.as_string()))
     }
 
     // Validate block, using its previous
@@ -187,7 +184,7 @@ pub async fn verify_block(
 
     // Verify transactions vector contains at least one(producers) transaction
     if block.txs.is_empty() {
-        return Err(Error::BlockContainsNoTransactions(block_hash))
+        return Err(Error::BlockContainsNoTransactions(block_hash.as_string()))
     }
 
     // Verify transactions, exluding producer(last) one
@@ -211,13 +208,15 @@ pub async fn verify_block(
         &mut tree,
     )
     .await?;
-    verify_producer_signature(block, &public_key)?;
 
-    // Verify tree matches header one
-    if tree != block.header.tree {
-        error!(target: "validator::verification::verify_block", "Block Merkle tree is invalid");
-        return Err(Error::BlockIsInvalid(block_hash))
+    // Verify transactions merkle tree root matches header one
+    if tree.root(0).unwrap() != block.header.root {
+        error!(target: "validator::verification::verify_block", "Block Merkle tree root is invalid");
+        return Err(Error::BlockIsInvalid(block_hash.as_string()))
     }
+
+    // Verify producer signature
+    verify_producer_signature(block, &public_key)?;
 
     // Insert block
     overlay.lock().unwrap().add_block(block)?;
@@ -229,7 +228,7 @@ pub async fn verify_block(
 /// Verify block proposer signature, using the proposal transaction signature as signing key
 /// over blocks header hash.
 pub fn verify_producer_signature(block: &BlockInfo, public_key: &PublicKey) -> Result<()> {
-    if !public_key.verify(&block.header.hash()?.as_bytes()[..], &block.signature) {
+    if !public_key.verify(block.header.hash().inner(), &block.signature) {
         warn!(target: "validator::verification::verify_producer_signature", "Proposer {} signature could not be verified", public_key);
         return Err(Error::InvalidSignature)
     }
@@ -242,11 +241,11 @@ pub fn verify_producer_signature(block: &BlockInfo, public_key: &PublicKey) -> R
 /// Additionally, append its hash to the provided Merkle tree.
 pub async fn verify_producer_transaction(
     overlay: &BlockchainOverlayPtr,
-    verifying_block_height: u64,
+    verifying_block_height: u32,
     tx: &Transaction,
     tree: &mut MerkleTree,
 ) -> Result<PublicKey> {
-    let tx_hash = tx.hash()?;
+    let tx_hash = tx.hash();
     debug!(target: "validator::verification::verify_producer_transaction", "Validating proposal transaction {}", tx_hash);
 
     // Producer transactions must contain a single, non-empty call
@@ -276,14 +275,20 @@ pub async fn verify_producer_transaction(
 
     // Write the actual payload data
     let mut payload = vec![];
-    payload.write_u32_async(0).await?; // Call index
     tx.calls.encode_async(&mut payload).await?; // Actual call data
 
     debug!(target: "validator::verification::verify_producer_transaction", "Instantiating WASM runtime");
-    let wasm = overlay.lock().unwrap().wasm_bincode.get(call.data.contract_id)?;
+    let wasm = overlay.lock().unwrap().contracts.get(call.data.contract_id)?;
 
-    let mut runtime =
-        Runtime::new(&wasm, overlay.clone(), call.data.contract_id, verifying_block_height)?;
+    let mut runtime = Runtime::new(
+        &wasm,
+        overlay.clone(),
+        call.data.contract_id,
+        verifying_block_height,
+        tx_hash,
+        // Call index in producer tx is 0
+        0,
+    )?;
 
     debug!(target: "validator::verification::verify_producer_transaction", "Executing \"metadata\" call");
     let metadata = runtime.metadata(&payload)?;
@@ -360,7 +365,7 @@ pub async fn verify_producer_transaction(
     debug!(target: "validator::verification::verify_producer_transaction", "ZK proof verification successful");
 
     // Append hash to merkle tree
-    append_tx_to_merkle_tree(tree, tx)?;
+    append_tx_to_merkle_tree(tree, tx);
 
     debug!(target: "validator::verification::verify_producer_transaction", "Proposal transaction {} verified successfully", tx_hash);
 
@@ -372,13 +377,13 @@ pub async fn verify_producer_transaction(
 /// provided Merkle tree.
 pub async fn verify_transaction(
     overlay: &BlockchainOverlayPtr,
-    verifying_block_height: u64,
+    verifying_block_height: u32,
     tx: &Transaction,
     tree: &mut MerkleTree,
     verifying_keys: &mut HashMap<[u8; 32], HashMap<String, VerifyingKey>>,
     verify_fee: bool,
 ) -> Result<u64> {
-    let tx_hash = tx.hash()?;
+    let tx_hash = tx.hash();
     debug!(target: "validator::verification::verify_transaction", "Validating transaction {}", tx_hash);
 
     // Gas accumulator
@@ -438,14 +443,19 @@ pub async fn verify_transaction(
 
         // Write the actual payload data
         let mut payload = vec![];
-        payload.write_u32(idx as u32)?; // Call index
-        tx.calls.encode_async(&mut payload).await?; // Actual call data
+        tx.calls.encode_async(&mut payload).await?;
 
         debug!(target: "validator::verification::verify_transaction", "Instantiating WASM runtime");
-        let wasm = overlay.lock().unwrap().wasm_bincode.get(call.data.contract_id)?;
+        let wasm = overlay.lock().unwrap().contracts.get(call.data.contract_id)?;
 
-        let mut runtime =
-            Runtime::new(&wasm, overlay.clone(), call.data.contract_id, verifying_block_height)?;
+        let mut runtime = Runtime::new(
+            &wasm,
+            overlay.clone(),
+            call.data.contract_id,
+            verifying_block_height,
+            tx_hash,
+            idx as u8,
+        )?;
 
         debug!(target: "validator::verification::verify_transaction", "Executing \"metadata\" call");
         let metadata = runtime.metadata(&payload)?;
@@ -518,6 +528,8 @@ pub async fn verify_transaction(
                 overlay.clone(),
                 deploy_cid,
                 verifying_block_height,
+                tx_hash,
+                idx as u8,
             )?;
 
             deploy_runtime.deploy(&deploy_params.ix)?;
@@ -598,7 +610,7 @@ pub async fn verify_transaction(
     debug!(target: "validator::verification::verify_transaction", "ZK proof verification successful");
 
     // Append hash to merkle tree
-    append_tx_to_merkle_tree(tree, tx)?;
+    append_tx_to_merkle_tree(tree, tx);
 
     debug!(target: "validator::verification::verify_transaction", "Transaction {} verified successfully", tx_hash);
     Ok(gas_used)
@@ -610,7 +622,7 @@ pub async fn verify_transaction(
 /// all the transactions. Additionally, their hash is appended to the provided Merkle tree.
 pub async fn verify_transactions(
     overlay: &BlockchainOverlayPtr,
-    verifying_block_height: u64,
+    verifying_block_height: u32,
     txs: &[Transaction],
     tree: &mut MerkleTree,
     verify_fees: bool,
@@ -669,7 +681,7 @@ pub async fn verify_proposal(
     proposal: &Proposal,
 ) -> Result<(Fork, Option<usize>)> {
     // Check if proposal hash matches actual one (1)
-    let proposal_hash = proposal.block.hash()?;
+    let proposal_hash = proposal.block.hash();
     if proposal.hash != proposal_hash {
         warn!(
             target: "validator::verification::verify_pow_proposal", "Received proposal contains mismatched hashes: {} - {}",
@@ -698,7 +710,7 @@ pub async fn verify_proposal(
     if verify_block(&fork.overlay, &fork.module, &proposal.block, &previous).await.is_err() {
         error!(target: "validator::verification::verify_pow_proposal", "Erroneous proposal block found");
         fork.overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
-        return Err(Error::BlockIsInvalid(proposal.hash.to_string()))
+        return Err(Error::BlockIsInvalid(proposal.hash.as_string()))
     };
 
     Ok((fork, index))

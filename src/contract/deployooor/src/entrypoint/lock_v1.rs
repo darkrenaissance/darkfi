@@ -19,11 +19,10 @@
 use darkfi_sdk::{
     crypto::{ContractId, PublicKey},
     dark_tree::DarkLeaf,
-    db::{db_contains_key, db_get, db_lookup, db_set},
     error::{ContractError, ContractResult},
     msg,
     pasta::pallas,
-    ContractCall,
+    wasm, ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
@@ -36,10 +35,10 @@ use crate::{
 /// `get_metadata` function for `Deploy::LockV1`
 pub(crate) fn lock_get_metadata_v1(
     _cid: ContractId,
-    call_idx: u32,
+    call_idx: usize,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx];
     let params: LockParamsV1 = deserialize(&self_.data.data[1..])?;
 
     // Public inputs for the ZK proofs we have to verify
@@ -58,23 +57,23 @@ pub(crate) fn lock_get_metadata_v1(
 /// `process_instruction` function for `Deploy::LockV1`
 pub(crate) fn lock_process_instruction_v1(
     cid: ContractId,
-    call_idx: u32,
+    call_idx: usize,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx];
     let params: LockParamsV1 = deserialize(&self_.data.data[1..])?;
 
     // In this function, we check that the contract exists, and that it isn't
     // already locked.
-    let lock_db = db_lookup(cid, DEPLOY_CONTRACT_LOCK_TREE)?;
+    let lock_db = wasm::db::db_lookup(cid, DEPLOY_CONTRACT_LOCK_TREE)?;
     let contract_id = ContractId::derive_public(params.public_key);
 
-    if !db_contains_key(lock_db, &serialize(&contract_id))? {
+    if !wasm::db::db_contains_key(lock_db, &serialize(&contract_id))? {
         msg!("[LockV1] Error: Contract ID doesn't exist.");
         return Err(DeployError::ContractNonExistent.into())
     }
 
-    let v = db_get(lock_db, &serialize(&contract_id))?.unwrap();
+    let v = wasm::db::db_get(lock_db, &serialize(&contract_id))?.unwrap();
     let locked: bool = deserialize(&v)?;
     if locked {
         msg!("[LockV1] Error: Contract already locked.");
@@ -93,8 +92,8 @@ pub(crate) fn lock_process_instruction_v1(
 pub(crate) fn lock_process_update_v1(cid: ContractId, update: LockUpdateV1) -> ContractResult {
     // We make the contract immutable
     msg!("[LockV1] Making ContractID immutable");
-    let lock_db = db_lookup(cid, DEPLOY_CONTRACT_LOCK_TREE)?;
-    db_set(lock_db, &serialize(&update.contract_id), &serialize(&true))?;
+    let lock_db = wasm::db::db_lookup(cid, DEPLOY_CONTRACT_LOCK_TREE)?;
+    wasm::db::db_set(lock_db, &serialize(&update.contract_id), &serialize(&true))?;
 
     Ok(())
 }

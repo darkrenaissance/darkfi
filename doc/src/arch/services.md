@@ -133,7 +133,7 @@ impl Parent {
             // ...
         });
 
-        self_.child.p2p.init(self_.clone());
+        self_.child.parent.init(self_.clone());
         // ...
         self_
     }

@@ -16,13 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_money_contract::model::{CoinAttributes, Nullifier};
+use darkfi_money_contract::model::CoinAttributes;
 use darkfi_sdk::{
     bridgetree,
     bridgetree::Hashable,
     crypto::{
         note::AeadEncryptedNote, pasta_prelude::*, pedersen::pedersen_commitment_u64,
-        poseidon_hash, Blind, FuncId, MerkleNode, PublicKey, ScalarBlind, SecretKey,
+        poseidon_hash, smt::SmtMemoryFp, Blind, FuncId, MerkleNode, PublicKey, ScalarBlind,
+        SecretKey,
     },
     pasta::pallas,
 };
@@ -36,16 +37,17 @@ use darkfi::{
 
 use crate::model::{Dao, DaoProposal, DaoProposeParams, DaoProposeParamsInput, VecAuthCallCommit};
 
-pub struct DaoProposeStakeInput {
+pub struct DaoProposeStakeInput<'a> {
     pub secret: SecretKey,
     pub note: darkfi_money_contract::client::MoneyNote,
     pub leaf_position: bridgetree::Position,
     pub merkle_path: Vec<MerkleNode>,
+    pub money_null_smt: &'a SmtMemoryFp,
     pub signature_secret: SecretKey,
 }
 
-pub struct DaoProposeCall {
-    pub inputs: Vec<DaoProposeStakeInput>,
+pub struct DaoProposeCall<'a> {
+    pub inputs: Vec<DaoProposeStakeInput<'a>>,
     pub proposal: DaoProposal,
     pub dao: Dao,
     pub dao_leaf_position: bridgetree::Position,
@@ -53,7 +55,7 @@ pub struct DaoProposeCall {
     pub dao_merkle_root: MerkleNode,
 }
 
-impl DaoProposeCall {
+impl<'a> DaoProposeCall<'a> {
     pub fn make(
         self,
         burn_zkbin: &ZkBinary,
@@ -80,6 +82,22 @@ impl DaoProposeCall {
             let note = input.note;
             let leaf_pos: u64 = input.leaf_position.into();
 
+            let public_key = PublicKey::from_secret(input.secret);
+            let coin = CoinAttributes {
+                public_key,
+                value: note.value,
+                token_id: note.token_id,
+                spend_hook: FuncId::none(),
+                user_data: pallas::Base::ZERO,
+                blind: note.coin_blind,
+            }
+            .to_coin();
+            let nullifier = poseidon_hash([input.secret.inner(), coin.inner()]);
+
+            let smt_null_root = input.money_null_smt.root();
+            let smt_null_path = input.money_null_smt.prove_membership(&nullifier);
+            assert!(smt_null_path.verify(&smt_null_root, &pallas::Base::ZERO, &nullifier));
+
             let prover_witnesses = vec![
                 Witness::Base(Value::known(input.secret.inner())),
                 Witness::Base(Value::known(pallas::Base::from(note.value))),
@@ -91,23 +109,13 @@ impl DaoProposeCall {
                 Witness::Base(Value::known(gov_token_blind.inner())),
                 Witness::Uint32(Value::known(leaf_pos.try_into().unwrap())),
                 Witness::MerklePath(Value::known(input.merkle_path.clone().try_into().unwrap())),
+                Witness::SparseMerklePath(Value::known(smt_null_path.path)),
                 Witness::Base(Value::known(input.signature_secret.inner())),
             ];
 
-            let public_key = PublicKey::from_secret(input.secret);
-            let coin = CoinAttributes {
-                public_key,
-                value: note.value,
-                token_id: note.token_id,
-                spend_hook: FuncId::none(),
-                user_data: pallas::Base::ZERO,
-                blind: note.coin_blind,
-            }
-            .to_coin();
-
             // TODO: We need a generic ZkSet widget to avoid doing this all the time
 
-            let merkle_root = {
+            let merkle_coin_root = {
                 let position: u64 = input.leaf_position.into();
                 let mut current = MerkleNode::from(coin.inner());
                 for (level, sibling) in input.merkle_path.iter().enumerate() {
@@ -121,8 +129,6 @@ impl DaoProposeCall {
                 current
             };
 
-            let nullifier: Nullifier = poseidon_hash([input.secret.inner(), coin.inner()]).into();
-
             let token_commit = poseidon_hash([note.token_id.inner(), gov_token_blind.inner()]);
             assert_eq!(self.dao.gov_token_id, note.token_id);
 
@@ -132,11 +138,11 @@ impl DaoProposeCall {
             let (sig_x, sig_y) = signature_public.xy();
 
             let public_inputs = vec![
-                nullifier.inner(),
+                smt_null_root,
                 *value_coords.x(),
                 *value_coords.y(),
                 token_commit,
-                merkle_root.inner(),
+                merkle_coin_root.inner(),
                 sig_x,
                 sig_y,
             ];
@@ -147,8 +153,12 @@ impl DaoProposeCall {
             let input_proof = Proof::create(proving_key, &[circuit], &public_inputs, &mut OsRng)?;
             proofs.push(input_proof);
 
-            let input =
-                DaoProposeParamsInput { nullifier, value_commit, merkle_root, signature_public };
+            let input = DaoProposeParamsInput {
+                value_commit,
+                merkle_coin_root,
+                smt_null_root,
+                signature_public,
+            };
             inputs.push(input);
         }
 

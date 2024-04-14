@@ -23,7 +23,7 @@ use log::{debug, error};
 use smol::Executor;
 
 use darkfi::{
-    blockchain::BlockInfo,
+    blockchain::{BlockInfo, HeaderHash},
     impl_p2p_message,
     net::{
         ChannelPtr, Message, MessageSubscription, ProtocolBase, ProtocolBasePtr,
@@ -35,7 +35,7 @@ use darkfi::{
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 
 // Constant defining how many blocks we send during syncing.
-const BATCH: u64 = 10;
+const BATCH: usize = 10;
 
 /// Auxiliary structure used for blockchain syncing.
 #[derive(Debug, SerialEncodable, SerialDecodable)]
@@ -56,7 +56,7 @@ impl_p2p_message!(IsSyncedResponse, "issyncedresponse");
 #[derive(Debug, SerialEncodable, SerialDecodable)]
 pub struct SyncRequest {
     /// Block height
-    pub height: u64,
+    pub height: u32,
 }
 
 impl_p2p_message!(SyncRequest, "syncrequest");
@@ -74,9 +74,9 @@ impl_p2p_message!(SyncResponse, "syncresponse");
 #[derive(Debug, SerialEncodable, SerialDecodable)]
 pub struct ForkSyncRequest {
     /// Canonical(finalized) tip block hash
-    pub tip: blake3::Hash,
+    pub tip: HeaderHash,
     /// Optional fork tip block hash
-    pub fork_tip: Option<blake3::Hash>,
+    pub fork_tip: Option<HeaderHash>,
 }
 
 impl_p2p_message!(ForkSyncRequest, "forksyncrequest");

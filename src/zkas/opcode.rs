@@ -52,8 +52,8 @@ pub enum Opcode {
     /// Calculate Merkle root, given a position, Merkle path, and an element
     MerkleRoot = 0x20,
 
-    /// Check for leaf membership in sparse merkle tree
-    SparseTreeIsMember = 0x21,
+    /// Calculate sparse Merkle root, given the position, path and a member
+    SparseMerkleRoot = 0x21,
 
     /// Base field element addition
     BaseAdd = 0x30,
@@ -112,7 +112,7 @@ impl Opcode {
             "ec_get_y" => Some(Self::EcGetY),
             "poseidon_hash" => Some(Self::PoseidonHash),
             "merkle_root" => Some(Self::MerkleRoot),
-            "sparse_tree_is_member" => Some(Self::SparseTreeIsMember),
+            "sparse_merkle_root" => Some(Self::SparseMerkleRoot),
             "base_add" => Some(Self::BaseAdd),
             "base_mul" => Some(Self::BaseMul),
             "base_sub" => Some(Self::BaseSub),
@@ -142,7 +142,7 @@ impl Opcode {
             0x09 => Some(Self::EcGetY),
             0x10 => Some(Self::PoseidonHash),
             0x20 => Some(Self::MerkleRoot),
-            0x21 => Some(Self::SparseTreeIsMember),
+            0x21 => Some(Self::SparseMerkleRoot),
             0x30 => Some(Self::BaseAdd),
             0x31 => Some(Self::BaseMul),
             0x32 => Some(Self::BaseSub),
@@ -173,7 +173,7 @@ impl Opcode {
             Self::EcGetY => "ec_get_y",
             Self::PoseidonHash => "poseidon_hash",
             Self::MerkleRoot => "merkle_root",
-            Self::SparseTreeIsMember => "sparse_tree_is_member",
+            Self::SparseMerkleRoot => "sparse_merkle_root",
             Self::BaseAdd => "base_add",
             Self::BaseMul => "base_mul",
             Self::BaseSub => "base_sub",
@@ -223,10 +223,9 @@ impl Opcode {
                 (vec![VarType::Base], vec![VarType::Uint32, VarType::MerklePath, VarType::Base])
             }
 
-            Opcode::SparseTreeIsMember => (
-                vec![VarType::Base],
-                vec![VarType::Base, VarType::SparseMerklePath, VarType::Base, VarType::Base],
-            ),
+            Opcode::SparseMerkleRoot => {
+                (vec![VarType::Base], vec![VarType::Base, VarType::SparseMerklePath, VarType::Base])
+            }
 
             Opcode::BaseAdd => (vec![VarType::Base], vec![VarType::Base, VarType::Base]),
 

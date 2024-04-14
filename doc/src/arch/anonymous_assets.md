@@ -3,7 +3,7 @@
 DarkFi network allows for the issuance and transfer of anonymous assets
 with an arbitrary number of parameters. These tokens are anonymous,
 relying on zero-knowledge proofs to ensure validity without revealing
-any other information.
+any other information. **All transactions over the network are managed by smart contracts.**
 
 New tokens are created and destroyed every time you send an anonymous
 transaction. To send a transaction on DarkFi, you must first issue a
@@ -17,15 +17,15 @@ Through this process, the link between inputs and outputs is broken.
 
 ## Mint
 
-During the **Mint** phase we create a new coin $C$, which is bound
-to the public key $P$. The coin $C$ is publicly revealed on the
+During the **Mint** phase we create a new coin commitment $C$, which is bound
+to the public key $P$. The coin commitment $C$ is publicly revealed on the
 blockchain and added to the merkle tree, which is stored locally on
 the DarkFi wallet.
 
 We do this using the following process:
 
-Let $v$ be the coin's value. Generate random $r_C$, $r_V$ and serial
-$\rho$.
+Let $v$ be the coin's value. Generate random $r_C$, $r_V$ and a secret serial
+$\rho$. The random values ensure the uniqueness and security of the commitment; the serial $\rho$ will be later used to generate the nullifier $N$ of the burn phase and to tie $N$ to $C$.
 
 Create a commitment to these parameters in zero-knowledge:
 
@@ -36,19 +36,17 @@ Check that the value commitment is constructed correctly:
 $$ v > 0 $$
 $$ V = v G_1 + r_V G_2 $$
 
-Reveal $C$ and $V$. Add $C$ to the Merkle tree.
+Reveal $C$ and $V$ commitments. Add $C$ to the Merkle tree.
 
 ## Burn
 
 When we spend the coin, we must ensure that the value of the coin
 cannot be double spent. We call this the *Burn* phase. The process
 relies on a $N$ nullifier, which we create  using the secret key $x$
-for the public key $P$. Nullifiers are unique per coin and prevent
+for the public key $P$ and the coin itself $C$. Nullifiers are unique per coin and prevent
 double spending. $R$ is the Merkle root. $v$ is the coin's value.
 
 Generate a random number $r_V$.
-
-$$ N = H(x, \rho) $$
 
 Check that the secret key corresponds to a public key:
 
@@ -59,6 +57,10 @@ tree $R$:
 
 $$ C = H(P, v, \rho, r_C) $$
 $$ C \in R $$
+
+Derive the nullifier:
+
+$$ N = H(x, C) $$
 
 Check that the value commitment is constructed correctly:
 
@@ -91,3 +93,5 @@ blinding factor for the amounts.
 # Diagram
 
 ![](diagram-dkzk.png)
+
+*Note: In the diagram $s$ correspond to the $\rho$*

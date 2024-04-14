@@ -49,7 +49,7 @@ impl Drk {
             WALLET_TXS_HISTORY_COL_STATUS,
             WALLET_TXS_HISTORY_COL_TX,
         );
-        let Ok(tx_hash) = tx.hash() else { return Err(WalletDbError::QueryPreparationFailed) };
+        let tx_hash = tx.hash();
         self.wallet
             .exec_sql(
                 &query,
@@ -169,7 +169,7 @@ impl Drk {
 
         let mut txs_hashes = Vec::with_capacity(txs.len());
         for tx in txs {
-            let Ok(tx_hash) = tx.hash() else { return Err(WalletDbError::QueryPreparationFailed) };
+            let tx_hash = tx.hash();
             txs_hashes.push(format!("{tx_hash}"));
         }
         let txs_hashes_string = format!("{:?}", txs_hashes).replace('[', "(").replace(']', ")");

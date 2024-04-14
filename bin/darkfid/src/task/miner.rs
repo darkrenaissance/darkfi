@@ -39,7 +39,7 @@ use darkfi_sdk::{
     ContractCall,
 };
 use darkfi_serial::{serialize_async, Encodable};
-use log::info;
+use log::{error, info};
 use num_bigint::BigUint;
 use rand::rngs::OsRng;
 use smol::channel::{Receiver, Sender};
@@ -172,7 +172,9 @@ async fn listen_to_network(
 
     // Signal miner to abort mining
     sender.send(()).await?;
-    node.miner_daemon_request("abort", JsonValue::Array(vec![])).await?;
+    if let Err(e) = node.miner_daemon_request("abort", &JsonValue::Array(vec![])).await {
+        error!(target: "darkfid::task::miner_task::listen_to_network", "Failed to execute miner daemon abort request: {}", e);
+    }
 
     Ok(())
 }
@@ -224,17 +226,18 @@ async fn mine_next_block(
     // Execute request to minerd and parse response
     let target = JsonValue::String(next_target.to_string());
     let block = JsonValue::String(base64::encode(&serialize_async(&next_block).await));
-    let response = node.miner_daemon_request("mine", JsonValue::Array(vec![target, block])).await?;
+    let response =
+        node.miner_daemon_request_with_retry("mine", &JsonValue::Array(vec![target, block])).await;
     next_block.header.nonce = *response.get::<f64>().unwrap() as u64;
 
     // Sign the mined block
-    next_block.sign(secret)?;
+    next_block.sign(secret);
 
     // Verify it
     extended_fork.module.verify_current_block(&next_block)?;
 
     // Append the mined block as a proposal
-    let proposal = Proposal::new(next_block)?;
+    let proposal = Proposal::new(next_block);
     node.validator.append_proposal(&proposal).await?;
 
     // Broadcast proposal to the network
@@ -260,7 +263,7 @@ async fn generate_next_block(
     // Next secret is the poseidon hash of:
     //  [prefix, current(previous) secret, signing(block) height].
     let prefix = pallas::Base::from_raw([4, 0, 0, 0]);
-    let next_secret = poseidon_hash([prefix, secret.inner(), next_block_height.into()]);
+    let next_secret = poseidon_hash([prefix, secret.inner(), (next_block_height as u64).into()]);
     *secret = SecretKey::from(next_secret);
 
     // Generate reward transaction
@@ -275,7 +278,7 @@ async fn generate_next_block(
 
 /// Auxiliary function to generate a Money::PoWReward transaction
 fn generate_transaction(
-    block_height: u64,
+    block_height: u32,
     secret: &SecretKey,
     recipient: &PublicKey,
     zkbin: &ZkBinary,

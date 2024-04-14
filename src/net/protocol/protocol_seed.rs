@@ -25,7 +25,7 @@ use smol::Executor;
 use super::{
     super::{
         channel::ChannelPtr,
-        hosts::store::{HostColor, HostsPtr},
+        hosts::{HostColor, HostsPtr},
         message::{AddrsMessage, GetAddrsMessage},
         message_subscriber::MessageSubscription,
         p2p::P2pPtr,
@@ -78,8 +78,8 @@ impl ProtocolSeed {
         }
 
         let mut addrs = vec![];
-        let inbound = self.p2p.session_inbound();
-        for (addr, last_seen) in inbound.ping_self.addrs.lock().await.iter() {
+        let refinery = self.p2p.session_refine();
+        for (addr, last_seen) in refinery.self_handshake.addrs.lock().await.iter() {
             addrs.push((addr.clone(), *last_seen));
         }
 

@@ -25,7 +25,10 @@ use pasta_curves::{
 use std::io::Cursor;
 use subtle::CtOption;
 
-use crate::error::{ContractError, GenericResult};
+use crate::{
+    error::{ContractError, GenericResult},
+    hex::{decode_hex_arr, hex_from_iter},
+};
 
 #[inline]
 fn hash_to_field_elem<F: FromUniformBytes<64>>(persona: &[u8], vals: &[&[u8]]) -> F {
@@ -90,11 +93,8 @@ pub fn fp_to_u64(value: pallas::Base) -> Option<u64> {
 // Not allowed to implement external traits for external crates
 pub trait FieldElemAsStr: PrimeField<Repr = [u8; 32]> {
     fn to_string(&self) -> String {
-        let mut repr = "0x".to_string();
-        for &b in self.to_repr().iter().rev() {
-            repr += &format!("{:02x}", b);
-        }
-        repr
+        // We reverse repr since it is little endian encoded
+        "0x".to_string() + &hex_from_iter(self.to_repr().iter().cloned().rev())
     }
 
     fn from_str(hex: &str) -> GenericResult<Self> {
@@ -104,19 +104,10 @@ pub trait FieldElemAsStr: PrimeField<Repr = [u8; 32]> {
 
         let hex = hex.strip_prefix("0x").ok_or(ContractError::HexFmtErr)?;
 
-        let mut bytes = [0u8; 32];
-        for i in 0..32 {
-            // Bytes are little endian but str repr is big endian
-            bytes[32 - i - 1] = u8::from_str_radix(&hex[2 * i..2 * i + 2], 16)
-                .map_err(|_| ContractError::HexFmtErr)?;
-        }
+        let mut bytes = decode_hex_arr(hex)?;
+        bytes.reverse();
 
-        let value = Self::from_repr(bytes);
-        if value.is_some().into() {
-            Ok(value.unwrap())
-        } else {
-            Err(ContractError::HexFmtErr)
-        }
+        Option::from(Self::from_repr(bytes)).ok_or(ContractError::HexFmtErr)
     }
 }
 

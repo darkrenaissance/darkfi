@@ -25,6 +25,9 @@ structure with `-e` as well.
 ## Structure of a ZK File
 
 Take a look at existing ZK files in `proof/` directory for examples.
+See also `src/contract/dao/proof/` and `src/contract/money/proof/`.
+In all of those directories is a `witness/` subdirectory containing
+witness JSON files that can be used with the zkrunner and zkrender tools below.
 
 `k = ...` indicates the number of rows which is $2ᵏ$. Bigger values make
 your proof slower, whereas if `k` is too low then the proof generation will
@@ -74,4 +77,24 @@ public values. Use the `msg!()` macro to print them to the program's output
 log, and compare it with the public values you see in the `witness.json`
 from when the proof was created. This will allow you to pinpoint exactly
 where the error occurs.
+
+For example files to try, see the comment in the section above
+[Structure of a ZK File](structure-of-a-zk-file).
+
+## Viewing the ZK Circuit Layout
+
+ZK circuit have a layout. The less empty space, the more efficient is your
+circuit. Usually it just means reducing the `k` value specified. The number of
+rows in your circuit is $2ᵏ$, so reducing the value by 1 will halve the number
+of rows.
+
+To generate an image of the circuit layout, simply run:
+
+```
+./bin/zkrunner/zkrender.py -w src/contract/dao/proof/witness/exec.json src/contract/dao/proof/exec.zk /tmp/layout.png
+```
+
+You should see something like:
+
+![](../assets/zk-circuit-layout.png)
 

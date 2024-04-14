@@ -23,7 +23,7 @@ use url::Url;
 
 use super::{
     channel::{Channel, ChannelPtr},
-    hosts::store::HostColor,
+    hosts::HostColor,
     session::SessionWeakPtr,
     settings::SettingsPtr,
     transport::Dialer,
@@ -46,15 +46,9 @@ impl Connector {
 
     /// Establish an outbound connection
     pub async fn connect(&self, url: &Url) -> Result<(Url, ChannelPtr)> {
-        if self
-            .session
-            .upgrade()
-            .unwrap()
-            .p2p()
-            .hosts()
-            .container
-            .contains(HostColor::Black as usize, url)
-            .await
+        let hosts = self.session.upgrade().unwrap().p2p().hosts();
+        if hosts.container.contains(HostColor::Black as usize, url).await ||
+            hosts.block_all_ports(url.host_str().unwrap().to_string()).await
         {
             warn!(target: "net::connector::connect", "Peer {} is blacklisted", url);
             return Err(Error::ConnectFailed)

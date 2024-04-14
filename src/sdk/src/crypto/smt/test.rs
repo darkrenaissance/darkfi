@@ -16,10 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use super::*;
 use halo2_proofs::arithmetic::Field;
 use pasta_curves::Fp;
 use rand::rngs::OsRng;
+
+use super::*;
 
 #[test]
 fn check_empties() {
@@ -140,6 +141,11 @@ fn poseidon_smt_incl_proof() {
         (Fp::from(1), Fp::random(&mut OsRng)),
         (Fp::from(2), Fp::random(&mut OsRng)),
         (Fp::from(3), Fp::random(&mut OsRng)),
+        /*
+        (Fp::from(1), Fp::from(111)),
+        (Fp::from(2), Fp::from(222)),
+        (Fp::from(3), Fp::from(333)),
+        */
     ];
     smt.insert_batch(leaves.clone()).unwrap();
 
@@ -148,4 +154,7 @@ fn poseidon_smt_incl_proof() {
 
     let path = smt.prove_membership(&pos);
     assert!(path.verify(&smt.root(), &leaf, &pos));
+
+    smt.remove_leaves(vec![(pos, leaf)]).unwrap();
+    assert!(!path.verify(&smt.root(), &leaf, &pos));
 }

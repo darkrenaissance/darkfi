@@ -16,13 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_money_contract::model::{CoinAttributes, Nullifier};
+use darkfi_money_contract::model::CoinAttributes;
 use darkfi_sdk::{
     bridgetree,
     bridgetree::Hashable,
     crypto::{
         note::ElGamalEncryptedNote, pasta_prelude::*, pedersen_commitment_u64, poseidon_hash,
-        util::fv_mod_fp_unsafe, Blind, FuncId, Keypair, MerkleNode, PublicKey, SecretKey,
+        smt::SmtMemoryFp, util::fv_mod_fp_unsafe, Blind, FuncId, Keypair, MerkleNode, PublicKey,
+        SecretKey,
     },
     pasta::pallas,
 };
@@ -46,7 +47,8 @@ pub struct DaoVoteInput {
 }
 
 // Inside ZK proof, check proposal is correct.
-pub struct DaoVoteCall {
+pub struct DaoVoteCall<'a> {
+    pub money_null_smt: &'a SmtMemoryFp,
     pub inputs: Vec<DaoVoteInput>,
     pub vote_option: bool,
     pub proposal: DaoProposal,
@@ -55,7 +57,7 @@ pub struct DaoVoteCall {
     pub current_day: u64,
 }
 
-impl DaoVoteCall {
+impl<'a> DaoVoteCall<'a> {
     pub fn make(
         self,
         burn_zkbin: &ZkBinary,
@@ -64,6 +66,10 @@ impl DaoVoteCall {
         main_pk: &ProvingKey,
     ) -> Result<(DaoVoteParams, Vec<Proof>)> {
         debug!(target: "dao", "build()");
+
+        assert_eq!(self.dao.to_bulla(), self.proposal.dao_bulla);
+        let proposal_bulla = self.proposal.to_bulla();
+
         let mut proofs = vec![];
 
         let gov_token_blind = pallas::Base::random(&mut OsRng);
@@ -105,20 +111,6 @@ impl DaoVoteCall {
             let note = input.note;
             let leaf_pos: u64 = input.leaf_position.into();
 
-            let prover_witnesses = vec![
-                Witness::Base(Value::known(input.secret.inner())),
-                Witness::Base(Value::known(pallas::Base::from(note.value))),
-                Witness::Base(Value::known(note.token_id.inner())),
-                Witness::Base(Value::known(pallas::Base::ZERO)),
-                Witness::Base(Value::known(pallas::Base::ZERO)),
-                Witness::Base(Value::known(note.coin_blind.inner())),
-                Witness::Scalar(Value::known(value_blind)),
-                Witness::Base(Value::known(gov_token_blind)),
-                Witness::Uint32(Value::known(leaf_pos.try_into().unwrap())),
-                Witness::MerklePath(Value::known(input.merkle_path.clone().try_into().unwrap())),
-                Witness::Base(Value::known(input.signature_secret.inner())),
-            ];
-
             let public_key = PublicKey::from_secret(input.secret);
             let coin = CoinAttributes {
                 public_key,
@@ -129,6 +121,27 @@ impl DaoVoteCall {
                 blind: note.coin_blind,
             }
             .to_coin();
+            let nullifier = poseidon_hash([input.secret.inner(), coin.inner()]);
+
+            let smt_null_root = self.money_null_smt.root();
+            let smt_null_path = self.money_null_smt.prove_membership(&nullifier);
+            assert!(smt_null_path.verify(&smt_null_root, &pallas::Base::ZERO, &nullifier));
+
+            let prover_witnesses = vec![
+                Witness::Base(Value::known(input.secret.inner())),
+                Witness::Base(Value::known(pallas::Base::from(note.value))),
+                Witness::Base(Value::known(note.token_id.inner())),
+                Witness::Base(Value::known(pallas::Base::ZERO)),
+                Witness::Base(Value::known(pallas::Base::ZERO)),
+                Witness::Base(Value::known(note.coin_blind.inner())),
+                Witness::Base(Value::known(proposal_bulla.inner())),
+                Witness::Scalar(Value::known(value_blind)),
+                Witness::Base(Value::known(gov_token_blind)),
+                Witness::Uint32(Value::known(leaf_pos.try_into().unwrap())),
+                Witness::MerklePath(Value::known(input.merkle_path.clone().try_into().unwrap())),
+                Witness::SparseMerklePath(Value::known(smt_null_path.path)),
+                Witness::Base(Value::known(input.signature_secret.inner())),
+            ];
 
             let merkle_root = {
                 let position: u64 = input.leaf_position.into();
@@ -147,15 +160,18 @@ impl DaoVoteCall {
             let token_commit = poseidon_hash([note.token_id.inner(), gov_token_blind]);
             assert_eq!(self.dao.gov_token_id, note.token_id);
 
-            let nullifier = poseidon_hash([input.secret.inner(), coin.inner()]);
-
             let vote_commit = pedersen_commitment_u64(note.value, Blind(value_blind));
             let vote_commit_coords = vote_commit.to_affine().coordinates().unwrap();
 
             let (sig_x, sig_y) = signature_public.xy();
 
+            let vote_nullifier =
+                poseidon_hash([nullifier, input.secret.inner(), proposal_bulla.inner()]);
+
             let public_inputs = vec![
-                nullifier,
+                smt_null_root,
+                proposal_bulla.inner(),
+                vote_nullifier,
                 *vote_commit_coords.x(),
                 *vote_commit_coords.y(),
                 token_commit,
@@ -171,9 +187,8 @@ impl DaoVoteCall {
             proofs.push(input_proof);
 
             let input = DaoVoteParamsInput {
-                nullifier: Nullifier::from(nullifier),
                 vote_commit,
-                merkle_root,
+                vote_nullifier: vote_nullifier.into(),
                 signature_public,
             };
             inputs.push(input);
@@ -245,9 +260,6 @@ impl DaoVoteCall {
             // verifiable encryption
             Witness::Base(Value::known(ephem_secret.inner())),
         ];
-
-        assert_eq!(self.dao.to_bulla(), self.proposal.dao_bulla);
-        let proposal_bulla = self.proposal.to_bulla();
 
         let note = [vote_option, yes_vote_blind.inner(), all_vote_value_fp, all_vote_blind.inner()];
         let enc_note =

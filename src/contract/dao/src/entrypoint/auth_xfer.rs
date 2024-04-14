@@ -40,17 +40,17 @@ use crate::{
 /// `get_metdata` function for `Dao::Exec`
 pub(crate) fn dao_authxfer_get_metadata(
     _cid: ContractId,
-    call_idx: u32,
+    call_idx: usize,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx];
     let self_params: DaoAuthMoneyTransferParams = deserialize(&self_.data.data[1..])?;
 
     let sibling_idx = call_idx + 1;
-    let xfer_call = &calls[sibling_idx as usize].data;
+    let xfer_call = &calls[sibling_idx].data;
     let xfer_params: MoneyTransferParamsV1 = deserialize(&xfer_call.data[1..])?;
 
-    let parent_idx = calls[call_idx as usize].parent_index.unwrap();
+    let parent_idx = calls[call_idx].parent_index.unwrap();
     let exec_callnode = &calls[parent_idx];
     let exec_params: DaoExecParams = deserialize(&exec_callnode.data.data[1..])?;
 
@@ -114,12 +114,12 @@ pub(crate) fn dao_authxfer_get_metadata(
 fn find_auth_in_parent(
     exec_callnode: &DarkLeaf<ContractCall>,
     proposal_auth_calls: Vec<DaoAuthCall>,
-    self_call_idx: u32,
+    self_call_idx: usize,
 ) -> Option<DaoAuthCall> {
     for (auth_call, child_idx) in
         proposal_auth_calls.into_iter().zip(exec_callnode.children_indexes.iter())
     {
-        if *child_idx == self_call_idx as usize {
+        if *child_idx == self_call_idx {
             return Some(auth_call)
         }
     }
@@ -129,11 +129,11 @@ fn find_auth_in_parent(
 /// `process_instruction` function for `Dao::Exec`
 pub(crate) fn dao_authxfer_process_instruction(
     _cid: ContractId,
-    call_idx: u32,
+    call_idx: usize,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
     let sibling_idx = call_idx + 1;
-    let xfer_call = &calls[sibling_idx as usize].data;
+    let xfer_call = &calls[sibling_idx].data;
 
     ///////////////////////////////////////////////////
     // 1. Next call should be money transfer
@@ -173,7 +173,7 @@ pub(crate) fn dao_authxfer_process_instruction(
     ///////////////////////////////////////////////////
 
     // Find this auth_call in the parent DAO::exec()
-    let parent_idx = calls[call_idx as usize].parent_index.unwrap();
+    let parent_idx = calls[call_idx].parent_index.unwrap();
     let exec_callnode = &calls[parent_idx];
     let exec_params: DaoExecParams = deserialize(&exec_callnode.data.data[1..])?;
 

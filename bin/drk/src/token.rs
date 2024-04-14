@@ -43,7 +43,7 @@ use darkfi_sdk::{
     pasta::pallas,
     tx::ContractCall,
 };
-use darkfi_serial::{deserialize, serialize, Encodable};
+use darkfi_serial::{deserialize_async, serialize_async, AsyncEncodable};
 
 use crate::{
     error::WalletDbResult,
@@ -71,7 +71,11 @@ impl Drk {
         self.wallet
             .exec_sql(
                 &query,
-                rusqlite::params![serialize(&mint_authority), serialize(&token_id), is_frozen,],
+                rusqlite::params![
+                    serialize_async(&mint_authority).await,
+                    serialize_async(&token_id).await,
+                    is_frozen,
+                ],
             )
             .await
     }
@@ -91,12 +95,12 @@ impl Drk {
             let Value::Blob(ref auth_bytes) = row[0] else {
                 return Err(Error::ParseFailed("[list_tokens] Mint authority bytes parsing failed"))
             };
-            let mint_authority = deserialize(auth_bytes)?;
+            let mint_authority = deserialize_async(auth_bytes).await?;
 
             let Value::Blob(ref token_bytes) = row[1] else {
                 return Err(Error::ParseFailed("[list_tokens] Token ID bytes parsing failed"))
             };
-            let token_id = deserialize(token_bytes)?;
+            let token_id = deserialize_async(token_bytes).await?;
 
             let Value::Integer(frozen) = row[2] else {
                 return Err(Error::ParseFailed("[list_tokens] Is frozen parsing failed"))
@@ -196,7 +200,7 @@ impl Drk {
 
         // Encode and sign the transaction
         let mut data = vec![MoneyFunction::TokenMintV1 as u8];
-        debris.params.encode(&mut data)?;
+        debris.params.encode_async(&mut data).await?;
         let call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
         let mut tx_builder =
             TransactionBuilder::new(ContractCallLeaf { call, proofs: debris.proofs }, vec![])?;
@@ -235,7 +239,7 @@ impl Drk {
         };
         let mint_debris = builder.build()?;
         let mut data = vec![MoneyFunction::TokenMintV1 as u8];
-        mint_debris.params.encode(&mut data)?;
+        mint_debris.params.encode_async(&mut data).await?;
         let mint_call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
 
         let builder = AuthTokenMintCallBuilder {
@@ -247,7 +251,7 @@ impl Drk {
         };
         let auth_debris = builder.build()?;
         let mut data = vec![MoneyFunction::AuthTokenMintV1 as u8];
-        auth_debris.params.encode(&mut data)?;
+        auth_debris.params.encode_async(&mut data).await?;
         let auth_call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
 
         let mut tx = Transaction {
@@ -309,7 +313,7 @@ impl Drk {
 
         // Encode and sign the transaction
         let mut data = vec![MoneyFunction::TokenFreezeV1 as u8];
-        debris.params.encode(&mut data)?;
+        debris.params.encode_async(&mut data).await?;
         let call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
         let mut tx_builder =
             TransactionBuilder::new(ContractCallLeaf { call, proofs: debris.proofs }, vec![])?;

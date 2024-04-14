@@ -19,11 +19,10 @@
 use darkfi_sdk::{
     crypto::{ContractId, MerkleNode, PublicKey},
     dark_tree::DarkLeaf,
-    db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
-    merkle_add, msg,
+    msg,
     pasta::pallas,
-    ContractCall,
+    wasm, ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
@@ -38,10 +37,10 @@ use crate::{
 /// `get_metadata` function for `Dao::Mint`
 pub(crate) fn dao_mint_get_metadata(
     _cid: ContractId,
-    call_idx: u32,
+    call_idx: usize,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize].data;
+    let self_ = &calls[call_idx].data;
     let params: DaoMintParams = deserialize(&self_.data[1..])?;
 
     // Public inputs for the ZK proofs we have to verify
@@ -68,15 +67,15 @@ pub(crate) fn dao_mint_get_metadata(
 /// `process_instruction` function for `Dao::Mint`
 pub(crate) fn dao_mint_process_instruction(
     cid: ContractId,
-    call_idx: u32,
+    call_idx: usize,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize].data;
+    let self_ = &calls[call_idx].data;
     let params: DaoMintParams = deserialize(&self_.data[1..])?;
 
     // Check the DAO bulla doesn't already exist
-    let bulla_db = db_lookup(cid, DAO_CONTRACT_DB_DAO_BULLAS)?;
-    if db_contains_key(bulla_db, &serialize(&params.dao_bulla.inner()))? {
+    let bulla_db = wasm::db::db_lookup(cid, DAO_CONTRACT_DB_DAO_BULLAS)?;
+    if wasm::db::db_contains_key(bulla_db, &serialize(&params.dao_bulla.inner()))? {
         msg!("[DAO::Mint] Error: DAO already exists {}", params.dao_bulla);
         return Err(DaoError::DaoAlreadyExists.into())
     }
@@ -93,14 +92,14 @@ pub(crate) fn dao_mint_process_instruction(
 /// `process_update` function for `Dao::Mint`
 pub(crate) fn dao_mint_process_update(cid: ContractId, update: DaoMintUpdate) -> ContractResult {
     // Grab all db handles we want to work on
-    let info_db = db_lookup(cid, DAO_CONTRACT_DB_INFO_TREE)?;
-    let bulla_db = db_lookup(cid, DAO_CONTRACT_DB_DAO_BULLAS)?;
-    let roots_db = db_lookup(cid, DAO_CONTRACT_DB_DAO_MERKLE_ROOTS)?;
+    let info_db = wasm::db::db_lookup(cid, DAO_CONTRACT_DB_INFO_TREE)?;
+    let bulla_db = wasm::db::db_lookup(cid, DAO_CONTRACT_DB_DAO_BULLAS)?;
+    let roots_db = wasm::db::db_lookup(cid, DAO_CONTRACT_DB_DAO_MERKLE_ROOTS)?;
 
-    db_set(bulla_db, &serialize(&update.dao_bulla), &[])?;
+    wasm::db::db_set(bulla_db, &serialize(&update.dao_bulla), &[])?;
 
     let dao = vec![MerkleNode::from(update.dao_bulla.inner())];
-    merkle_add(
+    wasm::merkle::merkle_add(
         info_db,
         roots_db,
         DAO_CONTRACT_KEY_LATEST_DAO_ROOT,

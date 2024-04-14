@@ -26,7 +26,8 @@ use darkfi_sdk::{
     dark_tree::{dark_forest_leaf_vec_integrity_check, DarkForest, DarkLeaf, DarkTree},
     error::DarkTreeResult,
     pasta::pallas,
-    tx::ContractCall,
+    tx::{ContractCall, TransactionHash},
+    AsHex,
 };
 
 #[cfg(feature = "async-serial")]
@@ -128,7 +129,7 @@ impl Transaction {
 
         debug!(
             target: "tx::verify_sigs",
-            "tx.verify_sigs: data_hash: {:?}", data_hash.as_bytes(),
+            "tx.verify_sigs: data_hash: {}", data_hash.as_bytes().hex(),
         );
 
         assert_eq!(self.signatures.len(), pub_table.len());
@@ -166,7 +167,7 @@ impl Transaction {
 
         debug!(
             target: "tx::create_sigs",
-            "[TX] tx.create_sigs: data_hash: {:?}", data_hash.as_bytes(),
+            "[TX] tx.create_sigs: data_hash: {:?}", data_hash.as_bytes().hex(),
         );
 
         let mut sigs = vec![];
@@ -183,10 +184,13 @@ impl Transaction {
     }
 
     /// Get the transaction hash
-    pub fn hash(&self) -> Result<blake3::Hash> {
+    pub fn hash(&self) -> TransactionHash {
         let mut hasher = blake3::Hasher::new();
-        self.encode(&mut hasher)?;
-        Ok(hasher.finalize())
+        // Blake3 hasher .update() method never fails.
+        // This call returns a Result due to how the Write trait is specified.
+        // Calling unwrap() here should be safe.
+        self.encode(&mut hasher).expect("blake3 hasher");
+        TransactionHash(hasher.finalize().into())
     }
 }
 

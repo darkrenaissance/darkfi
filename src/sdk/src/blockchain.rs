@@ -18,14 +18,14 @@
 
 /// Auxiliary function to calculate provided block height block version.
 /// Currently, a single version(1) exists.
-pub fn block_version(_height: u64) -> u8 {
+pub fn block_version(_height: u32) -> u8 {
     1
 }
 
 /// Auxiliary function to calculate provided block height epoch.
 /// Each epoch is defined by the fixed intervals rewards change.
 /// Genesis block is on epoch 0.
-pub fn block_epoch(height: u64) -> u64 {
+pub fn block_epoch(height: u32) -> u8 {
     match height {
         0 => 0,
         1..=1000 => 1,
@@ -45,7 +45,7 @@ pub fn block_epoch(height: u64) -> u64 {
 /// Auxiliary function to calculate provided block height expected reward value.
 /// Genesis block always returns reward value 0. Rewards are halfed at fixed intervals,
 /// called epochs. After last epoch has started, reward value is based on DARK token-economics.
-pub fn expected_reward(height: u64) -> u64 {
+pub fn expected_reward(height: u32) -> u64 {
     // Grab block height epoch
     let epoch = block_epoch(height);
 

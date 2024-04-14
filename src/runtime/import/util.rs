@@ -16,7 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use log::error;
+use std::io::Cursor;
+
+use darkfi_sdk::wasm;
+use darkfi_serial::Decodable;
+use log::{debug, error};
 use wasmer::{FunctionEnvMut, WasmPtr};
 
 use super::acl::acl_allow;
@@ -51,6 +55,8 @@ pub(crate) fn drk_log(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) 
 ///
 /// Returns `SUCCESS` on success, otherwise returns an error code corresponding
 /// to a [`ContractError`].
+///
+/// Permissions: metadata, exec
 pub(crate) fn set_return_data(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i64 {
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = &env.contract_id;
@@ -77,70 +83,30 @@ pub(crate) fn set_return_data(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, le
     }
     env.contract_return_data.set(Some(return_data));
 
-    darkfi_sdk::entrypoint::SUCCESS
-}
-
-/// Appends a new object to the [`Env`] objects store.
-/// The data for the object is read from `ptr`.
-///
-/// Returns an index corresponding to the new object's index in the objects
-/// store. (This index is equal to the last index in the store.)
-pub(crate) fn put_object_bytes(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i64 {
-    let (env, mut store) = ctx.data_and_store_mut();
-    let cid = env.contract_id;
-
-    // Subtract used gas. Here we count the length read from the memory slice.
-    env.subtract_gas(&mut store, len as u64);
-
-    let memory_view = env.memory_view(&store);
-    //debug!(target: "runtime::util", "diagnostic:");
-    let pages = memory_view.size().0;
-    //debug!(target: "runtime::util", "    pages: {}", pages);
-
-    let Ok(slice) = ptr.slice(&memory_view, len) else {
-        error!(
-            target: "runtime::util::put_object_bytes",
-            "[WASM] [{}] put_object_bytes(): Failed to make slice from ptr", cid,
-        );
-        return darkfi_sdk::error::INTERNAL_ERROR
-    };
-
-    let mut buf = vec![0_u8; len as usize];
-    if let Err(e) = slice.read_slice(&mut buf) {
-        error!(
-            target: "runtime::util::put_object_bytes",
-            "[WASM] [{}] put_object_bytes(): Failed to read from memory slice: {}", cid, e,
-        );
-        return darkfi_sdk::error::INTERNAL_ERROR
-    };
-
-    // There would be a serious problem if this is zero.
-    // The number of pages is calculated as a quantity X + 1 where X >= 0
-    assert!(pages > 0);
-
-    //debug!(target: "runtime::util", "    memory: {:02x?}", &buf[0..32]);
-    //debug!(target: "runtime::util", "            {:x?}", &buf[32..64]);
-    //debug!(target: "runtime::util", "    ptr location: {}", ptr.offset());
-
-    let mut objects = env.objects.borrow_mut();
-    objects.push(buf);
-    let obj_idx = objects.len() - 1;
-
-    if obj_idx > u32::MAX as usize {
-        return darkfi_sdk::error::DATA_TOO_LARGE
-    }
-
-    obj_idx as i64
+    wasm::entrypoint::SUCCESS
 }
 
 /// Retrieve an object from the object store specified by the index `idx`.
 /// The object's data is written to `ptr`.
 ///
 /// Returns `SUCCESS` on success and an error code otherwise.
+///
+/// Permissions: deploy, metadata, exec
 pub(crate) fn get_object_bytes(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, idx: u32) -> i64 {
     // Get the slice, where we will read the size of the buffer
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = env.contract_id;
+
+    // Enforce function ACL
+    if let Err(e) =
+        acl_allow(env, &[ContractSection::Deploy, ContractSection::Metadata, ContractSection::Exec])
+    {
+        error!(
+            target: "runtime::util::get_object_bytes()",
+            "[WASM] [{}] get_object_bytes(): Called in unauthorized section: {}", cid, e,
+        );
+        return darkfi_sdk::error::CALLER_ACCESS_DENIED
+    }
 
     // Get the object from env
     let objects = env.objects.borrow();
@@ -180,15 +146,28 @@ pub(crate) fn get_object_bytes(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, i
         return darkfi_sdk::error::INTERNAL_ERROR
     };
 
-    darkfi_sdk::entrypoint::SUCCESS
+    wasm::entrypoint::SUCCESS
 }
 
 /// Returns the size (number of bytes) of an object in the object store
 /// specified by index `idx`.
+///
+/// Permissions: deploy, metadata, exec
 pub(crate) fn get_object_size(mut ctx: FunctionEnvMut<Env>, idx: u32) -> i64 {
     // Get the slice, where we will read the size of the buffer
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = env.contract_id;
+
+    // Enforce function ACL
+    if let Err(e) =
+        acl_allow(env, &[ContractSection::Deploy, ContractSection::Metadata, ContractSection::Exec])
+    {
+        error!(
+            target: "runtime::util::get_object_size()",
+            "[WASM] [{}] get_object_size(): Called in unauthorized section: {}", cid, e,
+        );
+        return darkfi_sdk::error::CALLER_ACCESS_DENIED
+    }
 
     // Get the object from env
     let objects = env.objects.borrow();
@@ -216,39 +195,104 @@ pub(crate) fn get_object_size(mut ctx: FunctionEnvMut<Env>, idx: u32) -> i64 {
 }
 
 /// Will return current runtime configured verifying block height number
-pub(crate) fn get_verifying_block_height(mut ctx: FunctionEnvMut<Env>) -> u64 {
+///
+/// Permissions: deploy, metadata, exec
+pub(crate) fn get_verifying_block_height(mut ctx: FunctionEnvMut<Env>) -> i64 {
     let (env, mut store) = ctx.data_and_store_mut();
+    let cid = env.contract_id;
+
+    if let Err(e) =
+        acl_allow(env, &[ContractSection::Deploy, ContractSection::Metadata, ContractSection::Exec])
+    {
+        error!(
+            target: "runtime::util::get_verifying_block_height",
+            "[WASM] [{}] get_verifying_block_height(): Called in unauthorized section: {}", cid, e,
+        );
+        return darkfi_sdk::error::CALLER_ACCESS_DENIED
+    }
 
     // Subtract used gas. Here we count the size of the object.
-    // u64 is 8 bytes.
-    env.subtract_gas(&mut store, 8);
+    // u32 is 4 bytes.
+    env.subtract_gas(&mut store, 4);
 
-    env.verifying_block_height
+    env.verifying_block_height as i64
 }
 
-/// Will return current runtime configured verifying block height epoch number
-pub(crate) fn get_verifying_block_height_epoch(mut ctx: FunctionEnvMut<Env>) -> u64 {
+/// Will return current runtime configured transaction hash
+///
+/// Permissions: deploy, metadata, exec
+pub(crate) fn get_tx_hash(mut ctx: FunctionEnvMut<Env>) -> i64 {
     let (env, mut store) = ctx.data_and_store_mut();
+    let cid = env.contract_id;
+
+    if let Err(e) =
+        acl_allow(env, &[ContractSection::Deploy, ContractSection::Metadata, ContractSection::Exec])
+    {
+        error!(
+            target: "runtime::util::get_tx_hash",
+            "[WASM] [{}] get_tx_hash(): Called in unauthorized section: {}", cid, e,
+        );
+        return darkfi_sdk::error::CALLER_ACCESS_DENIED
+    }
 
     // Subtract used gas. Here we count the size of the object.
-    // u64 is 8 bytes.
-    env.subtract_gas(&mut store, 8);
+    env.subtract_gas(&mut store, 32);
 
-    darkfi_sdk::blockchain::block_epoch(env.verifying_block_height)
+    // Return the length of the objects Vector.
+    // This is the location of the data that was retrieved and pushed
+    let mut objects = env.objects.borrow_mut();
+    objects.push(env.tx_hash.inner().to_vec());
+    (objects.len() - 1) as i64
+}
+
+/// Will return current runtime configured verifying block height number
+///
+/// Permissions: deploy, metadata, exec
+pub(crate) fn get_call_index(mut ctx: FunctionEnvMut<Env>) -> i64 {
+    let (env, mut store) = ctx.data_and_store_mut();
+    let cid = env.contract_id;
+
+    if let Err(e) =
+        acl_allow(env, &[ContractSection::Deploy, ContractSection::Metadata, ContractSection::Exec])
+    {
+        error!(
+            target: "runtime::util::get_call_index",
+            "[WASM] [{}] get_call_index(): Called in unauthorized section: {}", cid, e,
+        );
+        return darkfi_sdk::error::CALLER_ACCESS_DENIED
+    }
+
+    // Subtract used gas. Here we count the size of the object.
+    // u8 is 1 byte.
+    env.subtract_gas(&mut store, 1);
+
+    env.call_idx as i64
 }
 
 /// Will return current blockchain timestamp,
 /// defined as the last block's timestamp.
+///
+/// Permissions: deploy, metadata, exec
 pub(crate) fn get_blockchain_time(mut ctx: FunctionEnvMut<Env>) -> i64 {
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = &env.contract_id;
 
+    if let Err(e) =
+        acl_allow(env, &[ContractSection::Deploy, ContractSection::Metadata, ContractSection::Exec])
+    {
+        error!(
+            target: "runtime::util::get_blockchain_time",
+            "[WASM] [{}] get_blockchain_time(): Called in unauthorized section: {}", cid, e,
+        );
+        return darkfi_sdk::error::CALLER_ACCESS_DENIED
+    }
+
     // Grab current last block
-    let block = match env.blockchain.lock().unwrap().last_block() {
+    let timestamp = match env.blockchain.lock().unwrap().last_block_timestamp() {
         Ok(b) => b,
         Err(e) => {
             error!(
-                target: "runtime::db::get_blockchain_time",
+                target: "runtime::util::get_blockchain_time",
                 "[WASM] [{}] get_blockchain_time(): Internal error getting from blocks tree: {}", cid, e,
             );
             return darkfi_sdk::error::DB_GET_FAILED
@@ -261,7 +305,7 @@ pub(crate) fn get_blockchain_time(mut ctx: FunctionEnvMut<Env>) -> i64 {
 
     // Create the return object
     let mut ret = Vec::with_capacity(8);
-    ret.extend_from_slice(&block.header.timestamp.inner().to_be_bytes());
+    ret.extend_from_slice(&timestamp.inner().to_be_bytes());
 
     // Copy Vec<u8> to the VM
     let mut objects = env.objects.borrow_mut();
@@ -278,26 +322,30 @@ pub(crate) fn get_blockchain_time(mut ctx: FunctionEnvMut<Env>) -> i64 {
 ///
 /// On success, returns the index of the new object in the object store.
 /// Otherwise, returns an error code.
+///
+/// Permissions: deploy, metadata, exec
 pub(crate) fn get_last_block_height(mut ctx: FunctionEnvMut<Env>) -> i64 {
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = &env.contract_id;
 
     // Enforce function ACL
-    if let Err(e) = acl_allow(env, &[ContractSection::Exec]) {
+    if let Err(e) =
+        acl_allow(env, &[ContractSection::Deploy, ContractSection::Metadata, ContractSection::Exec])
+    {
         error!(
-            target: "runtime::db::get_last_block_info",
-            "[WASM] [{}] get_last_block_info(): Called in unauthorized section: {}", cid, e,
+            target: "runtime::util::get_last_block_height",
+            "[WASM] [{}] get_last_block_height(): Called in unauthorized section: {}", cid, e,
         );
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
 
-    // Grab current last block
-    let block = match env.blockchain.lock().unwrap().last_block() {
+    // Grab current last block height
+    let height = match env.blockchain.lock().unwrap().last_block_height() {
         Ok(b) => b,
         Err(e) => {
             error!(
-                target: "runtime::db::get_last_block_info",
-                "[WASM] [{}] get_last_block_info(): Internal error getting from blocks tree: {}", cid, e,
+                target: "runtime::util::get_last_block_height",
+                "[WASM] [{}] get_last_block_height(): Internal error getting from blocks tree: {}", cid, e,
             );
             return darkfi_sdk::error::DB_GET_FAILED
         }
@@ -309,7 +357,7 @@ pub(crate) fn get_last_block_height(mut ctx: FunctionEnvMut<Env>) -> i64 {
 
     // Create the return object
     let mut ret = Vec::with_capacity(8);
-    ret.extend_from_slice(&darkfi_serial::serialize(&block.header.height));
+    ret.extend_from_slice(&darkfi_serial::serialize(&height));
 
     // Copy Vec<u8> to the VM
     let mut objects = env.objects.borrow_mut();
@@ -318,5 +366,221 @@ pub(crate) fn get_last_block_height(mut ctx: FunctionEnvMut<Env>) -> i64 {
         return darkfi_sdk::error::DATA_TOO_LARGE
     }
 
+    (objects.len() - 1) as i64
+}
+
+/// Reads a transaction by hash from the transactions store.
+///
+/// This function can be called from the Exec or Metadata [`ContractSection`].
+///
+/// On success, returns the length of the transaction bytes vector in the environment.
+/// Otherwise, returns an error code.
+///
+/// Permissions: deploy, metadata, exec
+pub(crate) fn get_tx(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>) -> i64 {
+    let (env, mut store) = ctx.data_and_store_mut();
+    let cid = env.contract_id;
+
+    if let Err(e) =
+        acl_allow(env, &[ContractSection::Deploy, ContractSection::Metadata, ContractSection::Exec])
+    {
+        error!(
+            target: "runtime::util::get_tx",
+            "[WASM] [{}] get_tx(): Called in unauthorized section: {}", cid, e,
+        );
+        return darkfi_sdk::error::CALLER_ACCESS_DENIED
+    }
+
+    // Subtract used gas. Here we count the length of the looked-up hash.
+    env.subtract_gas(&mut store, blake3::OUT_LEN as u64);
+
+    // Ensure that it is possible to read memory
+    let memory_view = env.memory_view(&store);
+    let Ok(mem_slice) = ptr.slice(&memory_view, blake3::OUT_LEN as u32) else {
+        error!(
+            target: "runtime::util::get_tx",
+            "[WASM] [{}] get_tx(): Failed to make slice from ptr", cid,
+        );
+        return darkfi_sdk::error::DB_GET_FAILED
+    };
+
+    let mut buf = vec![0_u8; blake3::OUT_LEN];
+    if let Err(e) = mem_slice.read_slice(&mut buf) {
+        error!(
+            target: "runtime::util::get_tx",
+            "[WASM] [{}] get_tx(): Failed to read from memory slice: {}", cid, e,
+        );
+        return darkfi_sdk::error::DB_GET_FAILED
+    };
+
+    let mut buf_reader = Cursor::new(buf);
+
+    // Decode hash bytes for transaction that we wish to retrieve
+    let hash: [u8; blake3::OUT_LEN] = match Decodable::decode(&mut buf_reader) {
+        Ok(v) => v,
+        Err(e) => {
+            error!(
+                target: "runtime::util::get_tx",
+                "[WASM] [{}] get_tx(): Failed to decode hash from vec: {}", cid, e,
+            );
+            return darkfi_sdk::error::DB_GET_FAILED
+        }
+    };
+
+    // Make sure there are no trailing bytes in the buffer. This means we've used all data that was
+    // supplied.
+    if buf_reader.position() != blake3::OUT_LEN as u64 {
+        error!(
+            target: "runtime::util::get_tx",
+            "[WASM] [{}] get_tx(): Trailing bytes in argument stream", cid,
+        );
+        return darkfi_sdk::error::DB_GET_FAILED
+    }
+
+    // Retrieve transaction using the `hash`
+    let ret = match env.blockchain.lock().unwrap().transactions.get_raw(&hash) {
+        Ok(v) => v,
+        Err(e) => {
+            error!(
+                target: "runtime::util::get_tx",
+                "[WASM] [{}] get_tx(): Internal error getting from tree: {}", cid, e,
+            );
+            return darkfi_sdk::error::DB_GET_FAILED
+        }
+    };
+
+    // Return special error if the data is empty
+    let Some(return_data) = ret else {
+        debug!(
+            target: "runtime::util::get_tx",
+            "[WASM] [{}] get_tx(): Return data is empty", cid,
+        );
+        return darkfi_sdk::error::DB_GET_EMPTY
+    };
+
+    if return_data.len() > u32::MAX as usize {
+        return darkfi_sdk::error::DATA_TOO_LARGE
+    }
+
+    // Subtract used gas. Here we count the length of the data read from db.
+    env.subtract_gas(&mut store, return_data.len() as u64);
+
+    // Copy the data (Vec<u8>) to the VM by pushing it to the objects Vector.
+    let mut objects = env.objects.borrow_mut();
+    if objects.len() == u32::MAX as usize {
+        return darkfi_sdk::error::DATA_TOO_LARGE
+    }
+
+    // Return the length of the objects Vector.
+    // This is the location of the data that was retrieved and pushed
+    objects.push(return_data.to_vec());
+    (objects.len() - 1) as i64
+}
+
+/// Reads a transaction location by hash from the transactions store.
+///
+/// This function can be called from the Exec or Metadata [`ContractSection`].
+///
+/// On success, returns the length of the transaction location bytes vector in
+/// the environment. Otherwise, returns an error code.
+///
+/// Permissions: deploy, metadata, exec
+pub(crate) fn get_tx_location(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>) -> i64 {
+    let (env, mut store) = ctx.data_and_store_mut();
+    let cid = env.contract_id;
+
+    if let Err(e) =
+        acl_allow(env, &[ContractSection::Deploy, ContractSection::Metadata, ContractSection::Exec])
+    {
+        error!(
+            target: "runtime::util::get_tx_location",
+            "[WASM] [{}] get_tx_location(): Called in unauthorized section: {}", cid, e,
+        );
+        return darkfi_sdk::error::CALLER_ACCESS_DENIED
+    }
+
+    // Subtract used gas. Here we count the length of the looked-up hash.
+    env.subtract_gas(&mut store, blake3::OUT_LEN as u64);
+
+    // Ensure that it is possible to read memory
+    let memory_view = env.memory_view(&store);
+    let Ok(mem_slice) = ptr.slice(&memory_view, blake3::OUT_LEN as u32) else {
+        error!(
+            target: "runtime::util::get_tx_location",
+            "[WASM] [{}] get_tx_location(): Failed to make slice from ptr", cid,
+        );
+        return darkfi_sdk::error::DB_GET_FAILED
+    };
+
+    let mut buf = vec![0_u8; blake3::OUT_LEN];
+    if let Err(e) = mem_slice.read_slice(&mut buf) {
+        error!(
+            target: "runtime::util::get_tx_location",
+            "[WASM] [{}] get_tx_location(): Failed to read from memory slice: {}", cid, e,
+        );
+        return darkfi_sdk::error::DB_GET_FAILED
+    };
+
+    let mut buf_reader = Cursor::new(buf);
+
+    // Decode hash bytes for transaction that we wish to retrieve
+    let hash: [u8; blake3::OUT_LEN] = match Decodable::decode(&mut buf_reader) {
+        Ok(v) => v,
+        Err(e) => {
+            error!(
+                target: "runtime::util::get_tx_location",
+                "[WASM] [{}] get_tx_location(): Failed to decode hash from vec: {}", cid, e,
+            );
+            return darkfi_sdk::error::DB_GET_FAILED
+        }
+    };
+
+    // Make sure there are no trailing bytes in the buffer. This means we've used all data that was
+    // supplied.
+    if buf_reader.position() != blake3::OUT_LEN as u64 {
+        error!(
+            target: "runtime::util::get_tx_location",
+            "[WASM] [{}] get_tx_location(): Trailing bytes in argument stream", cid,
+        );
+        return darkfi_sdk::error::DB_GET_FAILED
+    }
+
+    // Retrieve transaction using the `hash`
+    let ret = match env.blockchain.lock().unwrap().transactions.get_location_raw(&hash) {
+        Ok(v) => v,
+        Err(e) => {
+            error!(
+                target: "runtime::util::get_tx_location",
+                "[WASM] [{}] get_tx_location(): Internal error getting from tree: {}", cid, e,
+            );
+            return darkfi_sdk::error::DB_GET_FAILED
+        }
+    };
+
+    // Return special error if the data is empty
+    let Some(return_data) = ret else {
+        debug!(
+            target: "runtime::util::get_tx_location",
+            "[WASM] [{}] get_tx_location(): Return data is empty", cid,
+        );
+        return darkfi_sdk::error::DB_GET_EMPTY
+    };
+
+    if return_data.len() > u32::MAX as usize {
+        return darkfi_sdk::error::DATA_TOO_LARGE
+    }
+
+    // Subtract used gas. Here we count the length of the data read from db.
+    env.subtract_gas(&mut store, return_data.len() as u64);
+
+    // Copy the data (Vec<u8>) to the VM by pushing it to the objects Vector.
+    let mut objects = env.objects.borrow_mut();
+    if objects.len() == u32::MAX as usize {
+        return darkfi_sdk::error::DATA_TOO_LARGE
+    }
+
+    // Return the length of the objects Vector.
+    // This is the location of the data that was retrieved and pushed
+    objects.push(return_data.to_vec());
     (objects.len() - 1) as i64
 }

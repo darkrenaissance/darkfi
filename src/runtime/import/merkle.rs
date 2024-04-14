@@ -18,9 +18,13 @@
 
 use std::io::Cursor;
 
-use darkfi_sdk::crypto::{MerkleNode, MerkleTree};
+use darkfi_sdk::{
+    crypto::{MerkleNode, MerkleTree},
+    hex::AsHex,
+    wasm,
+};
 use darkfi_serial::{serialize, Decodable, Encodable, WriteExt};
-use log::{debug, error, warn};
+use log::{debug, error};
 use wasmer::{FunctionEnvMut, WasmPtr};
 
 use super::acl::acl_allow;
@@ -31,6 +35,8 @@ use crate::runtime::vm_runtime::{ContractSection, Env};
 /// Returns `0` on success; otherwise, returns an error-code corresponding to a
 /// [`ContractError`] (defined in the SDK).
 /// See also the method `merkle_add` in `sdk/src/merkle.rs`.
+///
+/// Permissions: update
 pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i64 {
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = env.contract_id;
@@ -156,15 +162,6 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
         }
     };
 
-    // Nothing to do so just return here
-    if coins.is_empty() {
-        warn!(
-            target: "runtime::merkle::merkle_add",
-            "[WASM] [{}] merkle_add(): Nothing to add! Returning.", cid,
-        );
-        return darkfi_sdk::entrypoint::SUCCESS
-    }
-
     // Make sure we've read the entire buffer
     if buf_reader.position() != (len as u64) {
         error!(
@@ -204,8 +201,8 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
     );
     debug!(
         target: "runtime::merkle::merkle_add",
-        "                 {:02x?}",
-        return_data
+        "                 {}",
+        return_data.hex()
     );
 
     let mut decoder = Cursor::new(&return_data);
@@ -232,24 +229,14 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
     };
 
     // Here we add the new coins into the tree.
-    let mut new_roots = vec![];
-
-    assert!(!coins.is_empty());
+    let coins_len = coins.len();
     for coin in coins {
         tree.append(coin);
-        let Some(root) = tree.root(0) else {
-            error!(
-                target: "runtime::merkle::merkle_add",
-                "[WASM] [{}] merkle_add(): Unable to read the root of tree", cid,
-            );
-            return darkfi_sdk::error::INTERNAL_ERROR
-        };
-        new_roots.push(root);
     }
 
     // And we serialize the tree back to bytes
     let mut tree_data = Vec::new();
-    if tree_data.write_u32(set_size + new_roots.len() as u32).is_err() ||
+    if tree_data.write_u32(set_size + coins_len as u32).is_err() ||
         tree.encode(&mut tree_data).is_err()
     {
         error!(
@@ -270,19 +257,27 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
 
     // Here we add the Merkle root to our set of roots
     // Since each update to the tree is atomic, we only need to add the last root.
-    assert!(!new_roots.is_empty());
-    let latest_root = new_roots.last().unwrap();
+    let Some(latest_root) = tree.root(0) else {
+        error!(
+            target: "runtime::merkle::merkle_add",
+            "[WASM] [{}] merkle_add(): Unable to read the root of tree", cid,
+        );
+        return darkfi_sdk::error::INTERNAL_ERROR
+    };
 
     debug!(
         target: "runtime::merkle::merkle_add",
         "[WASM] [{}] merkle_add(): Appending Merkle root to db: {:?}", cid, latest_root,
     );
-    let latest_root_data = serialize(latest_root);
+    let latest_root_data = serialize(&latest_root);
     assert_eq!(latest_root_data.len(), 32);
-    let blockheight_data = serialize(&env.verifying_block_height);
-    assert_eq!(blockheight_data.len(), 8);
 
-    if overlay.insert(&db_roots.tree, &latest_root_data, &blockheight_data).is_err() {
+    let mut value_data = Vec::with_capacity(32 + 1);
+    env.tx_hash.inner().encode(&mut value_data).expect("Unable to serialize tx_hash");
+    env.call_idx.encode(&mut value_data).expect("Unable to serialize call_idx");
+    assert_eq!(value_data.len(), 32 + 1);
+
+    if overlay.insert(&db_roots.tree, &latest_root_data, &value_data).is_err() {
         error!(
             target: "runtime::merkle::merkle_add",
             "[WASM] [{}] merkle_add(): Couldn't insert to db_roots tree", cid,
@@ -312,8 +307,8 @@ pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u3
     drop(overlay);
     drop(lock);
     drop(db_handles);
-    let spent_gas = return_data.len() + tree_data.len() + (new_roots.len() * 32);
+    let spent_gas = return_data.len() + tree_data.len() + (coins_len * 32);
     env.subtract_gas(&mut store, spent_gas as u64);
 
-    darkfi_sdk::entrypoint::SUCCESS
+    wasm::entrypoint::SUCCESS
 }

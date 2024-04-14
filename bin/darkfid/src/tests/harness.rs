@@ -70,7 +70,7 @@ impl Harness {
         let producer_tx = genesis_block.txs.pop().unwrap();
 
         // Append it again so its added to the merkle tree
-        genesis_block.append_txs(vec![producer_tx])?;
+        genesis_block.append_txs(vec![producer_tx]);
 
         // Generate validators configuration
         // NOTE: we are not using consensus constants here so we
@@ -143,7 +143,7 @@ impl Harness {
         // We append the block as a proposal to Alice,
         // and then we broadcast it to rest nodes
         for block in blocks {
-            let proposal = Proposal::new(block.clone())?;
+            let proposal = Proposal::new(block.clone());
             self.alice.validator.append_proposal(&proposal).await?;
             let message = ProposalMessage(proposal);
             self.alice.p2p.broadcast(&message).await;
@@ -203,16 +203,16 @@ impl Harness {
         let timestamp = previous.header.timestamp.checked_add(1.into())?;
 
         // Generate header
-        let header = Header::new(previous.hash()?, block_height, timestamp, last_nonce);
+        let header = Header::new(previous.hash(), block_height, timestamp, last_nonce);
 
         // Generate the block
         let mut block = BlockInfo::new_empty(header);
 
         // Add producer transaction to the block
-        block.append_txs(vec![tx])?;
+        block.append_txs(vec![tx]);
 
         // Attach signature
-        block.sign(&keypair.secret)?;
+        block.sign(&keypair.secret);
 
         Ok(block)
     }

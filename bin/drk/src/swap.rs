@@ -39,7 +39,9 @@ use darkfi_sdk::{
     pasta::pallas,
     tx::ContractCall,
 };
-use darkfi_serial::{async_trait, deserialize, Encodable, SerialDecodable, SerialEncodable};
+use darkfi_serial::{
+    async_trait, deserialize_async, AsyncEncodable, SerialDecodable, SerialEncodable,
+};
 
 use super::{money::BALANCE_BASE10_DECIMALS, Drk};
 
@@ -257,7 +259,7 @@ impl Drk {
         ];
 
         let mut data = vec![MoneyFunction::OtcSwapV1 as u8];
-        full_params.encode(&mut data)?;
+        full_params.encode_async(&mut data).await?;
         let call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
         let mut tx_builder =
             TransactionBuilder::new(ContractCallLeaf { call, proofs: full_proofs }, vec![])?;
@@ -277,11 +279,11 @@ impl Drk {
         let mut full: Option<Transaction> = None;
         let mut half: Option<PartialSwapData> = None;
 
-        if let Ok(v) = deserialize(&bytes) {
+        if let Ok(v) = deserialize_async(&bytes).await {
             full = Some(v)
         };
 
-        match deserialize(&bytes) {
+        match deserialize_async(&bytes).await {
             Ok(v) => half = Some(v),
             Err(_) => {
                 if full.is_none() {
@@ -302,7 +304,8 @@ impl Drk {
                 return insection_error
             }
 
-            let params: MoneyTransferParamsV1 = deserialize(&tx.calls[0].data.data[1..])?;
+            let params: MoneyTransferParamsV1 =
+                deserialize_async(&tx.calls[0].data.data[1..]).await?;
             println!("Parameters:\n{:#?}", params);
 
             if params.inputs.len() != 2 {
@@ -326,7 +329,7 @@ impl Drk {
 
                 for secret in &secret_keys {
                     if let Ok(d_note) = output.note.decrypt::<MoneyNote>(secret) {
-                        let s: SecretKey = deserialize(&d_note.memo)?;
+                        let s: SecretKey = deserialize_async(&d_note.memo).await?;
                         skey = Some(s);
                         note = Some(d_note);
                         println!("Successfully decrypted and found an ephemeral secret");
@@ -429,7 +432,7 @@ impl Drk {
     pub async fn sign_swap(&self, tx: &mut Transaction) -> Result<()> {
         // We need our secret keys to try and decrypt the note
         let secret_keys = self.get_money_secrets().await?;
-        let params: MoneyTransferParamsV1 = deserialize(&tx.calls[0].data.data[1..])?;
+        let params: MoneyTransferParamsV1 = deserialize_async(&tx.calls[0].data.data[1..]).await?;
 
         // Our output should be outputs[0] so we try to decrypt that.
         let encrypted_note = &params.outputs[0].note;
@@ -439,7 +442,7 @@ impl Drk {
 
         for secret in &secret_keys {
             if let Ok(note) = encrypted_note.decrypt::<MoneyNote>(secret) {
-                let s: SecretKey = deserialize(&note.memo)?;
+                let s: SecretKey = deserialize_async(&note.memo).await?;
                 println!("Successfully decrypted and found an ephemeral secret");
                 skey = Some(s);
                 break

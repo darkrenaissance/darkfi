@@ -16,23 +16,26 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::marker::PhantomData;
+
 use halo2_gadgets::poseidon::{
     primitives as poseidon,
     primitives::{ConstantLength, P128Pow5T3, Spec},
 };
 use num_bigint::BigUint;
 use pasta_curves::group::ff::{PrimeField, WithSmallOrderMulGroup};
-use std::marker::PhantomData;
 
 pub trait FieldElement: WithSmallOrderMulGroup<3> + Ord + PrimeField {
     fn as_biguint(&self) -> BigUint;
 }
+
 impl FieldElement for pasta_curves::Fp {
     fn as_biguint(&self) -> BigUint {
         let repr = self.to_repr();
         BigUint::from_bytes_le(&repr)
     }
 }
+
 impl FieldElement for pasta_curves::Fq {
     fn as_biguint(&self) -> BigUint {
         let repr = self.to_repr();

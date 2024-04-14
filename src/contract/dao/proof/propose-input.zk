@@ -1,4 +1,4 @@
-k = 13;
+k = 14;
 field = "pallas";
 
 constant "ProposeInput" {
@@ -19,7 +19,9 @@ witness "ProposeInput" {
     Base coin_token_blind,
 
     Uint32 leaf_pos,
-    MerklePath path,
+    MerklePath coin_path,
+
+    SparseMerklePath null_path,
 
     Base signature_secret,
 }
@@ -40,10 +42,15 @@ circuit "ProposeInput" {
     );
 
     # We need this to detect whether the above coin was already spent.
-    # To avoid leaking timing & other info, we can just make a
-    # money::transfer() call within the same tx.
+    # Use a SMT, and show that at this position, the leaf is ZERO
+    ZERO = witness_base(0);
     nullifier = poseidon_hash(coin_secret, coin);
-    constrain_instance(nullifier);
+    null_tree_root = sparse_merkle_root(
+        nullifier,              # Position
+        null_path,              # Path to root
+        ZERO,                   # Leaf value
+    );
+    constrain_instance(null_tree_root);
 
     # Pedersen commitment for coin's coin_value
     vcv = ec_mul_short(coin_value, VALUE_COMMIT_VALUE);
@@ -57,8 +64,8 @@ circuit "ProposeInput" {
     constrain_instance(coin_token_commit);
 
     # Merkle root
-    root = merkle_root(leaf_pos, path, coin);
-    constrain_instance(root);
+    merkle_coin_root = merkle_root(leaf_pos, coin_path, coin);
+    constrain_instance(merkle_coin_root);
 
     # Finally we derive a public key for the signature and constrain
     # its coordinates:

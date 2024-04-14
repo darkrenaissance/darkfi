@@ -106,7 +106,7 @@ nightly version, which was known to work:
 Now we can use that toolchain in `make` directly:
 
 ```shell
-% make CARGO="cargo +nightly-2024-02-01" {target}
+% make CARGO="cargo +nightly-2024-04-05" {target}
 ```
 
 Or, if we are lazy, we can modify the `Makefile` to always use that:

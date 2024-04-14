@@ -17,13 +17,11 @@
  */
 
 use darkfi_sdk::{
-    crypto::{pasta_prelude::Field, ContractId, MerkleNode, MerkleTree},
+    crypto::{pasta_prelude::Field, smt::EMPTY_NODES_FP, ContractId, MerkleNode, MerkleTree},
     dark_tree::DarkLeaf,
-    db::{db_init, db_lookup, db_set, zkas_db_set},
     error::ContractResult,
     pasta::pallas,
-    util::set_return_data,
-    ContractCall,
+    wasm, ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
@@ -33,9 +31,11 @@ use crate::{
         MoneyPoWRewardUpdateV1, MoneyTokenFreezeUpdateV1, MoneyTokenMintUpdateV1,
         MoneyTransferUpdateV1,
     },
-    MoneyFunction, MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_MERKLE_TREE,
-    MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_DB_VERSION, MONEY_CONTRACT_INFO_TREE,
-    MONEY_CONTRACT_NULLIFIERS_TREE, MONEY_CONTRACT_TOKEN_FREEZE_TREE,
+    MoneyFunction, EMPTY_COINS_TREE_ROOT, MONEY_CONTRACT_COINS_TREE,
+    MONEY_CONTRACT_COIN_MERKLE_TREE, MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_DB_VERSION,
+    MONEY_CONTRACT_INFO_TREE, MONEY_CONTRACT_LATEST_COIN_ROOT,
+    MONEY_CONTRACT_LATEST_NULLIFIER_ROOT, MONEY_CONTRACT_NULLIFIERS_TREE,
+    MONEY_CONTRACT_NULLIFIER_ROOTS_TREE, MONEY_CONTRACT_TOKEN_FREEZE_TREE,
     MONEY_CONTRACT_TOTAL_FEES_PAID,
 };
 
@@ -116,42 +116,58 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     let token_mint_v1_bincode = include_bytes!("../proof/token_mint_v1.zk.bin");
     let token_frz_v1_bincode = include_bytes!("../proof/token_freeze_v1.zk.bin");
 
-    // For that, we use `zkas_db_set` and pass in the bincode.
-    zkas_db_set(&fee_v1_bincode[..])?;
-    zkas_db_set(&mint_v1_bincode[..])?;
-    zkas_db_set(&burn_v1_bincode[..])?;
-    zkas_db_set(&token_mint_v1_bincode[..])?;
-    zkas_db_set(&token_frz_v1_bincode[..])?;
+    // For that, we use `wasm::db::zkas_wasm::db::db_set` and pass in the bincode.
+    wasm::db::zkas_db_set(&fee_v1_bincode[..])?;
+    wasm::db::zkas_db_set(&mint_v1_bincode[..])?;
+    wasm::db::zkas_db_set(&burn_v1_bincode[..])?;
+    wasm::db::zkas_db_set(&token_mint_v1_bincode[..])?;
+    wasm::db::zkas_db_set(&token_frz_v1_bincode[..])?;
 
-    // Set up a database tree to hold Merkle roots of all coins
-    // k=MerkleNode, v=[]
-    if db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE).is_err() {
-        db_init(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
+    let tx_hash = wasm::util::get_tx_hash()?;
+    // The max outputs for a tx in BTC is 2501
+    let call_idx = wasm::util::get_call_index()?;
+    let mut roots_value_data = Vec::with_capacity(32 + 1);
+    tx_hash.encode(&mut roots_value_data)?;
+    call_idx.encode(&mut roots_value_data)?;
+    assert_eq!(roots_value_data.len(), 32 + 1);
+
+    // Set up a database tree to hold Merkle roots of all coin trees
+    // k=root_hash:32, v=(tx_hash:32, call_idx: 1)
+    if wasm::db::db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE).is_err() {
+        let db_coin_roots = wasm::db::db_init(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
+        wasm::db::db_set(db_coin_roots, &serialize(&EMPTY_COINS_TREE_ROOT), &roots_value_data)?;
+    }
+
+    // Set up a database tree to hold Merkle roots of all nullifier trees
+    // k=root_hash:32, v=(tx_hash:32, call_idx: 1)
+    if wasm::db::db_lookup(cid, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE).is_err() {
+        let db_null_roots = wasm::db::db_init(cid, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE)?;
+        wasm::db::db_set(db_null_roots, &serialize(&EMPTY_NODES_FP[0]), &roots_value_data)?;
     }
 
     // Set up a database tree to hold all coins ever seen
     // k=Coin, v=[]
-    if db_lookup(cid, MONEY_CONTRACT_COINS_TREE).is_err() {
-        db_init(cid, MONEY_CONTRACT_COINS_TREE)?;
+    if wasm::db::db_lookup(cid, MONEY_CONTRACT_COINS_TREE).is_err() {
+        wasm::db::db_init(cid, MONEY_CONTRACT_COINS_TREE)?;
     }
 
     // Set up a database tree to hold nullifiers of all spent coins
     // k=Nullifier, v=[]
-    if db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE).is_err() {
-        db_init(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
+    if wasm::db::db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE).is_err() {
+        wasm::db::db_init(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
     }
 
     // Set up a database tree to hold the set of frozen token mints
     // k=TokenId, v=[]
-    if db_lookup(cid, MONEY_CONTRACT_TOKEN_FREEZE_TREE).is_err() {
-        db_init(cid, MONEY_CONTRACT_TOKEN_FREEZE_TREE)?;
+    if wasm::db::db_lookup(cid, MONEY_CONTRACT_TOKEN_FREEZE_TREE).is_err() {
+        wasm::db::db_init(cid, MONEY_CONTRACT_TOKEN_FREEZE_TREE)?;
     }
 
     // Set up a database tree for arbitrary data
-    let info_db = match db_lookup(cid, MONEY_CONTRACT_INFO_TREE) {
+    let info_db = match wasm::db::db_lookup(cid, MONEY_CONTRACT_INFO_TREE) {
         Ok(v) => v,
         Err(_) => {
-            let info_db = db_init(cid, MONEY_CONTRACT_INFO_TREE)?;
+            let info_db = wasm::db::db_init(cid, MONEY_CONTRACT_INFO_TREE)?;
 
             // Create the incrementalmerkletree for seen coins and initialize
             // it with a "fake" coin that can be used for dummy inputs.
@@ -160,17 +176,31 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
             let mut coin_tree_data = vec![];
             coin_tree_data.write_u32(0)?;
             coin_tree.encode(&mut coin_tree_data)?;
-            db_set(info_db, MONEY_CONTRACT_COIN_MERKLE_TREE, &coin_tree_data)?;
+            wasm::db::db_set(info_db, MONEY_CONTRACT_COIN_MERKLE_TREE, &coin_tree_data)?;
 
             // Initialize the paid fees accumulator
-            db_set(info_db, MONEY_CONTRACT_TOTAL_FEES_PAID, &serialize(&0_u64))?;
+            wasm::db::db_set(info_db, MONEY_CONTRACT_TOTAL_FEES_PAID, &serialize(&0_u64))?;
+
+            // Initialize coins and nulls latest root field
+            // This will result in exhausted gas so we use a precalculated value:
+            //let root = coin_tree.root(0).unwrap();
+            wasm::db::db_set(
+                info_db,
+                MONEY_CONTRACT_LATEST_COIN_ROOT,
+                &serialize(&EMPTY_COINS_TREE_ROOT),
+            )?;
+            wasm::db::db_set(
+                info_db,
+                MONEY_CONTRACT_LATEST_NULLIFIER_ROOT,
+                &serialize(&EMPTY_NODES_FP[0]),
+            )?;
 
             info_db
         }
     };
 
     // Update db version
-    db_set(info_db, MONEY_CONTRACT_DB_VERSION, &serialize(&env!("CARGO_PKG_VERSION")))?;
+    wasm::db::db_set(info_db, MONEY_CONTRACT_DB_VERSION, &serialize(&env!("CARGO_PKG_VERSION")))?;
 
     Ok(())
 }
@@ -179,8 +209,9 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
 /// for verifying signatures and zk proofs. The payload given here are all the
 /// contract calls in the transaction.
 fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
-    let (call_idx, calls): (u32, Vec<DarkLeaf<ContractCall>>) = deserialize(ix)?;
-    let self_ = &calls[call_idx as usize].data;
+    let call_idx = wasm::util::get_call_index()? as usize;
+    let calls: Vec<DarkLeaf<ContractCall>> = deserialize(ix)?;
+    let self_ = &calls[call_idx].data;
     let func = MoneyFunction::try_from(self_.data[0])?;
 
     let metadata = match func {
@@ -188,7 +219,7 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
         MoneyFunction::TransferV1 => {
             // We pass everything into the correct function, and it will return
             // the metadata for us, which we can then copy into the host with
-            // the `set_return_data` function. On the host, this metadata will
+            // the `wasm::util::set_return_data` function. On the host, this metadata will
             // be used to do external verification (zk proofs, and signatures).
             money_transfer_get_metadata_v1(cid, call_idx, calls)?
         }
@@ -202,15 +233,16 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
         }
     };
 
-    set_return_data(&metadata)
+    wasm::util::set_return_data(&metadata)
 }
 
 /// This function verifies a state transition and produces a state update
 /// if everything is successful. This step should happen **after** the host
 /// has successfully verified the metadata from `get_metadata()`.
 fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
-    let (call_idx, calls): (u32, Vec<DarkLeaf<ContractCall>>) = deserialize(ix)?;
-    let self_ = &calls[call_idx as usize].data;
+    let call_idx = wasm::util::get_call_index()? as usize;
+    let calls: Vec<DarkLeaf<ContractCall>> = deserialize(ix)?;
+    let self_ = &calls[call_idx].data;
     let func = MoneyFunction::try_from(self_.data[0])?;
 
     let update_data = match func {
@@ -218,7 +250,7 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
         MoneyFunction::TransferV1 => {
             // Again, we pass everything into the correct function.
             // If it executes successfully, we'll get a state update
-            // which we can copy into the host using `set_return_data`.
+            // which we can copy into the host using `wasm::util::set_return_data`.
             // This update can then be written with `process_update()`
             // if everything is in order.
             money_transfer_process_instruction_v1(cid, call_idx, calls)?
@@ -241,7 +273,7 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
         }
     };
 
-    set_return_data(&update_data)
+    wasm::util::set_return_data(&update_data)
 }
 
 /// This function attempts to write a given state update provided the previous steps

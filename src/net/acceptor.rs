@@ -30,7 +30,7 @@ use url::Url;
 
 use super::{
     channel::{Channel, ChannelPtr},
-    hosts::store::HostColor,
+    hosts::HostColor,
     session::SessionWeakPtr,
     transport::{Listener, PtListener},
 };
@@ -99,6 +99,7 @@ impl Acceptor {
         // CondVar used to notify the loop to recheck if new connections can
         // be accepted by the listener.
         let cv = Arc::new(CondVar::new());
+        let hosts = self.session.upgrade().unwrap().p2p().hosts();
 
         loop {
             // Refuse new connections if we're up to the connection limit
@@ -118,15 +119,8 @@ impl Acceptor {
             match listener.next().await {
                 Ok((stream, url)) => {
                     // Check if we reject this peer
-                    if self
-                        .session
-                        .upgrade()
-                        .unwrap()
-                        .p2p()
-                        .hosts()
-                        .container
-                        .contains(HostColor::Black as usize, &url)
-                        .await
+                    if hosts.container.contains(HostColor::Black as usize, &url).await ||
+                        hosts.block_all_ports(url.host_str().unwrap().to_string()).await
                     {
                         warn!(target: "net::acceptor::run_accept_loop()", "Peer {} is blacklisted", url);
                         continue

@@ -32,7 +32,10 @@ use darkfi::{
     util::encoding::base64,
     Error, Result,
 };
-use darkfi_sdk::crypto::ContractId;
+use darkfi_sdk::{
+    crypto::{ContractId, DAO_CONTRACT_ID, DEPLOYOOOR_CONTRACT_ID, MONEY_CONTRACT_ID},
+    tx::TransactionHash,
+};
 use darkfi_serial::{deserialize_async, serialize_async};
 
 use crate::{
@@ -53,8 +56,8 @@ impl Drk {
         ex: Arc<smol::Executor<'static>>,
     ) -> Result<()> {
         let req = JsonRequest::new("blockchain.last_known_block", JsonValue::Array(vec![]));
-        let rep = self.rpc_client.request(req).await?;
-        let last_known = *rep.get::<f64>().unwrap() as u64;
+        let rep = self.rpc_client.as_ref().unwrap().request(req).await?;
+        let last_known = *rep.get::<f64>().unwrap() as u32;
         let last_scanned = match self.last_scanned_block().await {
             Ok(l) => l,
             Err(e) => {
@@ -132,12 +135,11 @@ impl Drk {
                         println!("=======================================");
 
                         println!("Deserialized successfully. Scanning block...");
-                        if let Err(e) = self.scan_block_money(&block_data).await {
+                        if let Err(e) = self.scan_block(&block_data).await {
                             return Err(Error::RusqliteError(format!(
-                                "[subscribe_blocks] Scaning blocks for Money failed: {e:?}"
+                                "[subscribe_blocks] Scanning block failed: {e:?}"
                             )))
                         }
-                        self.scan_block_dao(&block_data).await?;
                         if let Err(e) = self
                             .update_tx_history_records_status(&block_data.txs, "Finalized")
                             .await
@@ -166,15 +168,41 @@ impl Drk {
         Err(e)
     }
 
-    /// `scan_block_money` will go over transactions in a block and fetch the ones dealing
-    /// with the money contract. Then over all of them, try to see if any are related
-    /// to us. If any are found, the metadata is extracted and placed into the wallet
-    /// for future use.
-    async fn scan_block_money(&self, block: &BlockInfo) -> Result<()> {
-        println!("[Money] Iterating over {} transactions", block.txs.len());
-
+    /// `scan_block` will go over over transactions in a block and handle their calls
+    /// based on the called contract. Additionally, will update `last_scanned_block` to
+    /// the probided block height.
+    async fn scan_block(&self, block: &BlockInfo) -> Result<()> {
+        println!("[scan_block] Iterating over {} transactions", block.txs.len());
         for tx in block.txs.iter() {
-            self.apply_tx_money_data(tx, true).await?;
+            println!("[scan_block] Processing transaction: {}", tx.hash());
+            for (i, call) in tx.calls.iter().enumerate() {
+                if call.data.contract_id == *MONEY_CONTRACT_ID {
+                    println!("[scan_block] Found Money contract in call {i}");
+                    self.apply_tx_money_data(&call.data.data).await?;
+                    continue
+                }
+
+                if call.data.contract_id == *DAO_CONTRACT_ID {
+                    println!("[scan_block] Found DAO contract in call {i}");
+                    self.apply_tx_dao_data(
+                        &call.data.data,
+                        TransactionHash::new(*blake3::hash(&serialize_async(tx).await).as_bytes()),
+                        i as u8,
+                        true,
+                    )
+                    .await?;
+                    continue
+                }
+
+                if call.data.contract_id == *DEPLOYOOOR_CONTRACT_ID {
+                    println!("[scan_block] Found DeployoOor contract in call {i}");
+                    // TODO: implement
+                    continue
+                }
+
+                // TODO: For now we skip non-native contract calls
+                println!("[scan_block] Found non-native contract in call {i}, skipping.");
+            }
         }
 
         // Write this block height into `last_scanned_block`
@@ -182,21 +210,8 @@ impl Drk {
             format!("UPDATE {} SET {} = ?1;", *MONEY_INFO_TABLE, MONEY_INFO_COL_LAST_SCANNED_BLOCK);
         if let Err(e) = self.wallet.exec_sql(&query, rusqlite::params![block.header.height]).await {
             return Err(Error::RusqliteError(format!(
-                "[scan_block_money] Update last scanned block failed: {e:?}"
+                "[scan_block] Update last scanned block failed: {e:?}"
             )))
-        }
-
-        Ok(())
-    }
-
-    /// `scan_block_dao` will go over transactions in a block and fetch the ones dealing
-    /// with the dao contract. Then over all of them, try to see if any are related
-    /// to us. If any are found, the metadata is extracted and placed into the wallet
-    /// for future use.
-    async fn scan_block_dao(&self, block: &BlockInfo) -> Result<()> {
-        println!("[DAO] Iterating over {} transactions", block.txs.len());
-        for tx in block.txs.iter() {
-            self.apply_tx_dao_data(tx, true).await?;
         }
 
         Ok(())
@@ -227,14 +242,14 @@ impl Drk {
 
         loop {
             let req = JsonRequest::new("blockchain.last_known_block", JsonValue::Array(vec![]));
-            let rep = match self.rpc_client.request(req).await {
+            let rep = match self.rpc_client.as_ref().unwrap().request(req).await {
                 Ok(r) => r,
                 Err(e) => {
                     eprintln!("[scan_blocks] RPC client request failed: {e:?}");
                     return Err(WalletDbError::GenericError)
                 }
             };
-            let last = *rep.get::<f64>().unwrap() as u64;
+            let last = *rep.get::<f64>().unwrap() as u32;
 
             println!("Requested to scan from block number: {height}");
             println!("Last known block number reported by darkfid: {last}");
@@ -253,12 +268,8 @@ impl Drk {
                         return Err(WalletDbError::GenericError)
                     }
                 };
-                if let Err(e) = self.scan_block_money(&block).await {
-                    eprintln!("[scan_blocks] Scan block Money failed: {e:?}");
-                    return Err(WalletDbError::GenericError)
-                };
-                if let Err(e) = self.scan_block_dao(&block).await {
-                    eprintln!("[scan_blocks] Scan block DAO failed: {e:?}");
+                if let Err(e) = self.scan_block(&block).await {
+                    eprintln!("[scan_blocks] Scan block failed: {e:?}");
                     return Err(WalletDbError::GenericError)
                 };
                 self.update_tx_history_records_status(&block.txs, "Finalized").await?;
@@ -268,13 +279,13 @@ impl Drk {
     }
 
     // Queries darkfid for a block with given height
-    async fn get_block_by_height(&self, height: u64) -> Result<BlockInfo> {
+    async fn get_block_by_height(&self, height: u32) -> Result<BlockInfo> {
         let req = JsonRequest::new(
             "blockchain.get_block",
             JsonValue::Array(vec![JsonValue::String(height.to_string())]),
         );
 
-        let params = self.rpc_client.request(req).await?;
+        let params = self.rpc_client.as_ref().unwrap().request(req).await?;
         let param = params.get::<String>().unwrap();
         let bytes = base64::decode(param).unwrap();
         let block = deserialize_async(&bytes).await?;
@@ -289,7 +300,7 @@ impl Drk {
         let params =
             JsonValue::Array(vec![JsonValue::String(base64::encode(&serialize_async(tx).await))]);
         let req = JsonRequest::new("tx.broadcast", params);
-        let rep = self.rpc_client.request(req).await?;
+        let rep = self.rpc_client.as_ref().unwrap().request(req).await?;
 
         let txid = rep.get::<String>().unwrap().clone();
 
@@ -304,14 +315,14 @@ impl Drk {
     }
 
     /// Queries darkfid for a tx with given hash
-    pub async fn get_tx(&self, tx_hash: &blake3::Hash) -> Result<Option<Transaction>> {
-        let tx_hash_str = tx_hash.to_hex().to_string();
+    pub async fn get_tx(&self, tx_hash: &TransactionHash) -> Result<Option<Transaction>> {
+        let tx_hash_str = tx_hash.to_string();
         let req = JsonRequest::new(
             "blockchain.get_tx",
             JsonValue::Array(vec![JsonValue::String(tx_hash_str)]),
         );
 
-        match self.rpc_client.request(req).await {
+        match self.rpc_client.as_ref().unwrap().request(req).await {
             Ok(param) => {
                 let tx_bytes = base64::decode(param.get::<String>().unwrap()).unwrap();
                 let tx = deserialize_async(&tx_bytes).await?;
@@ -327,7 +338,7 @@ impl Drk {
         let tx_str = base64::encode(&serialize_async(tx).await);
         let req =
             JsonRequest::new("tx.simulate", JsonValue::Array(vec![JsonValue::String(tx_str)]));
-        let rep = self.rpc_client.request(req).await?;
+        let rep = self.rpc_client.as_ref().unwrap().request(req).await?;
 
         let is_valid = *rep.get::<bool>().unwrap();
         Ok(is_valid)
@@ -340,7 +351,7 @@ impl Drk {
         let params = JsonValue::Array(vec![JsonValue::String(format!("{contract_id}"))]);
         let req = JsonRequest::new("blockchain.lookup_zkas", params);
 
-        let rep = self.rpc_client.request(req).await?;
+        let rep = self.rpc_client.as_ref().unwrap().request(req).await?;
         let params = rep.get::<Vec<JsonValue>>().unwrap();
 
         let mut ret = Vec::with_capacity(params.len());

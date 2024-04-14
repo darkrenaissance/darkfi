@@ -139,7 +139,7 @@ impl Darkfid {
             return server_error(RpcError::TxBroadcastFail, id, None)
         }
 
-        let tx_hash = tx.hash().unwrap().to_string();
+        let tx_hash = tx.hash().to_string();
         JsonResponse::new(JsonValue::String(tx_hash), id).into()
     }
 
@@ -169,7 +169,7 @@ impl Darkfid {
         };
 
         let pending_txs: Vec<JsonValue> =
-            pending_txs.iter().map(|x| JsonValue::String(x.hash().unwrap().to_string())).collect();
+            pending_txs.iter().map(|x| JsonValue::String(x.hash().to_string())).collect();
 
         JsonResponse::new(JsonValue::Array(pending_txs), id).into()
     }
@@ -205,7 +205,7 @@ impl Darkfid {
         };
 
         let pending_txs: Vec<JsonValue> =
-            pending_txs.iter().map(|x| JsonValue::String(x.hash().unwrap().to_string())).collect();
+            pending_txs.iter().map(|x| JsonValue::String(x.hash().to_string())).collect();
 
         JsonResponse::new(JsonValue::Array(pending_txs), id).into()
     }

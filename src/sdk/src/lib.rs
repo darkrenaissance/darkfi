@@ -24,17 +24,19 @@ pub use pasta_curves as pasta;
 /// Blockchain structures
 pub mod blockchain;
 
-/// Database functions
-pub mod db;
+/// DarkTree structures
+pub mod dark_tree;
 
 /// Contract deployment utilities
 pub mod deploy;
 
-/// Entrypoint used for the wasm binaries
-pub mod entrypoint;
-
 /// Error handling
 pub mod error;
+pub use error::{ContractError, GenericResult};
+
+/// Hex encoding/decoding from bytes
+pub mod hex;
+pub use hex::AsHex;
 
 /// Logging infrastructure
 pub mod log;
@@ -42,16 +44,13 @@ pub mod log;
 /// Crypto-related definitions
 pub mod crypto;
 
-/// Merkle
-pub mod merkle;
-pub use merkle::merkle_add;
-
 /// Transaction structure
 pub mod tx;
 pub use tx::ContractCall;
 
-/// Utility functions
+/// Convenience utilities
 pub mod util;
 
-/// DarkTree structures
-pub mod dark_tree;
+#[macro_use]
+/// WASM API functions
+pub mod wasm;

@@ -148,12 +148,12 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     th.validate_chains(4 + (fork_sequence.len() - 2)).await?;
     let bob = &th.bob.validator;
     let last = alice.blockchain.last()?.1;
-    assert_eq!(last, fork_sequence[fork_sequence.len() - 3].hash()?);
+    assert_eq!(last, fork_sequence[fork_sequence.len() - 3].hash());
     assert_eq!(last, bob.blockchain.last()?.1);
     // Nodes must have one fork with 2 blocks
     th.validate_fork_chains(1, vec![2]).await;
     let last_proposal = alice.consensus.forks.read().await[0].proposals[1];
-    assert_eq!(last_proposal, fork_sequence.last().unwrap().hash()?);
+    assert_eq!(last_proposal, fork_sequence.last().unwrap().hash());
     assert_eq!(last_proposal, bob.consensus.forks.read().await[0].proposals[1]);
 
     // Same for Charlie

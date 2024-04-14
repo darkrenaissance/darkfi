@@ -55,34 +55,35 @@ def load_circuit_witness(circuit, witness_file):
     # circuit and decide the code path for the prover.
     for witness in witness_data["witnesses"]:
         assert len(witness) == 1
-        if value := witness.get("EcPoint"):
+        if (value := witness.get("EcPoint")) is not None:
             circuit.witness_ecpoint(Ep(value))
 
-        elif value := witness.get("EcNiPoint"):
+        elif (value := witness.get("EcNiPoint")) is not None:
             assert len(value) == 2
             xcoord, ycoord = Fp(value[0]), Fp(value[1])
             circuit.witness_ecnipoint(Ep(xcoord, ycoord))
 
-        elif value := witness.get("Base"):
+        elif (value := witness.get("Base")) is not None:
             circuit.witness_base(Fp(value))
 
-        elif value := witness.get("Scalar"):
+        elif (value := witness.get("Scalar")) is not None:
             circuit.witness_scalar(Fq(value))
 
-        elif value := witness.get("MerklePath"):
+        elif (value := witness.get("MerklePath")) is not None:
             path = [Fp(i) for i in value]
             assert len(path) == 32
             circuit.witness_merklepath(path)
 
-        elif value := witness.get("SparseMerklePath"):
+        elif (value := witness.get("SparseMerklePath")) is not None:
             path = [Fp(i) for i in value]
             assert len(path) == 255
             circuit.witness_sparsemerklepath(path)
 
-        elif value := witness.get("Uint32"):
+        elif (value := witness.get("Uint32")) is not None:
+            print("here")
             circuit.witness_uint32(value)
 
-        elif value := witness.get("Uint64"):
+        elif (value := witness.get("Uint64")) is not None:
             circuit.witness_uint64(value)
 
         else:

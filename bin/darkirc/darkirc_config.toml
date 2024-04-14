@@ -30,6 +30,11 @@ autojoin = [
 ## (optional, but once configured, it is required from the IRC client side)
 #password = "CHANGE_ME"
 
+# Log to file. Off by default.
+#log = "/tmp/darkirc.log"
+# Set log level. 1 is info (default), 2 is debug, 3 is trace
+#verbose = 2
+
 # P2P network settings
 [net]
 # Path to a configured hostlist for saving known peers

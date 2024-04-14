@@ -81,6 +81,9 @@ pub enum ContractError {
     #[error("SMT: put failed with storage backend")]
     SmtPutFailed,
 
+    #[error("SMT: rm failed with storage backend")]
+    SmtDelFailed,
+
     #[error("Error retrieving system time")]
     GetSystemTimeFailed,
 
@@ -119,9 +122,10 @@ pub const DB_CONTAINS_KEY_FAILED: i64 = to_builtin!(15);
 pub const INVALID_FUNCTION: i64 = to_builtin!(16);
 pub const DB_DEL_FAILED: i64 = to_builtin!(17);
 pub const SMT_PUT_FAILED: i64 = to_builtin!(18);
-pub const GET_SYSTEM_TIME_FAILED: i64 = to_builtin!(19);
-pub const DATA_TOO_LARGE: i64 = to_builtin!(20);
-pub const HEX_FMT_ERR: i64 = to_builtin!(21);
+pub const SMT_DEL_FAILED: i64 = to_builtin!(19);
+pub const GET_SYSTEM_TIME_FAILED: i64 = to_builtin!(20);
+pub const DATA_TOO_LARGE: i64 = to_builtin!(21);
+pub const HEX_FMT_ERR: i64 = to_builtin!(22);
 
 impl From<ContractError> for i64 {
     fn from(err: ContractError) -> Self {
@@ -143,6 +147,7 @@ impl From<ContractError> for i64 {
             ContractError::InvalidFunction => INVALID_FUNCTION,
             ContractError::DbDelFailed => DB_DEL_FAILED,
             ContractError::SmtPutFailed => SMT_PUT_FAILED,
+            ContractError::SmtDelFailed => SMT_DEL_FAILED,
             ContractError::GetSystemTimeFailed => GET_SYSTEM_TIME_FAILED,
             ContractError::DataTooLarge => DATA_TOO_LARGE,
             ContractError::HexFmtErr => HEX_FMT_ERR,
@@ -178,6 +183,7 @@ impl From<i64> for ContractError {
             INVALID_FUNCTION => Self::InvalidFunction,
             DB_DEL_FAILED => Self::DbDelFailed,
             SMT_PUT_FAILED => Self::SmtPutFailed,
+            SMT_DEL_FAILED => Self::SmtDelFailed,
             GET_SYSTEM_TIME_FAILED => Self::GetSystemTimeFailed,
             DATA_TOO_LARGE => Self::DataTooLarge,
             HEX_FMT_ERR => Self::HexFmtErr,

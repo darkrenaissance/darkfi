@@ -143,6 +143,21 @@ pub struct BlockchainNetwork {
     pub net: SettingsOpt,
 }
 
+/// Structure to hold a JSON-RPC client and its config,
+/// so we can recreate it in case of an error.
+pub struct MinerRpcCLient {
+    endpoint: Url,
+    ex: Arc<smol::Executor<'static>>,
+    client: RpcChadClient,
+}
+
+impl MinerRpcCLient {
+    pub async fn new(endpoint: Url, ex: Arc<smol::Executor<'static>>) -> Result<Self> {
+        let client = RpcChadClient::new(endpoint.clone(), ex.clone()).await?;
+        Ok(Self { endpoint, ex, client })
+    }
+}
+
 /// Daemon structure
 pub struct Darkfid {
     /// P2P network pointer
@@ -156,7 +171,7 @@ pub struct Darkfid {
     /// JSON-RPC connection tracker
     rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
     /// JSON-RPC client to execute requests to the miner daemon
-    rpc_client: Option<RpcChadClient>,
+    rpc_client: Option<Mutex<MinerRpcCLient>>,
 }
 
 impl Darkfid {
@@ -165,7 +180,7 @@ impl Darkfid {
         validator: ValidatorPtr,
         miner: bool,
         subscribers: HashMap<&'static str, JsonSubscriber>,
-        rpc_client: Option<RpcChadClient>,
+        rpc_client: Option<Mutex<MinerRpcCLient>>,
     ) -> Self {
         Self {
             p2p,
@@ -238,12 +253,12 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     // Initialize JSON-RPC client to perform requests to minerd
     let rpc_client = if blockchain_config.miner {
         let Ok(rpc_client) =
-            RpcChadClient::new(blockchain_config.minerd_endpoint, ex.clone()).await
+            MinerRpcCLient::new(blockchain_config.minerd_endpoint, ex.clone()).await
         else {
             error!(target: "darkfid", "Failed to initialize miner daemon rpc client, check if minerd is running");
             return Err(Error::RpcClientStopped)
         };
-        Some(rpc_client)
+        Some(Mutex::new(rpc_client))
     } else {
         None
     };

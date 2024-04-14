@@ -19,7 +19,6 @@
 use std::sync::Arc;
 
 use darkfi_sdk::crypto::MerkleTree;
-use darkfi_serial::serialize_async;
 use log::{debug, error, info, warn};
 use num_bigint::BigUint;
 use smol::lock::RwLock;
@@ -131,15 +130,15 @@ impl Validator {
     /// The node retrieves a transaction, validates its state transition,
     /// and appends it to the pending txs store.
     pub async fn append_tx(&self, tx: &Transaction, write: bool) -> Result<()> {
-        let tx_hash = blake3::hash(&serialize_async(tx).await);
+        let tx_hash = tx.hash();
 
         // Check if we have already seen this tx
         let tx_in_txstore = self.blockchain.transactions.contains(&tx_hash)?;
-        let tx_in_pending_txs_store = self.blockchain.pending_txs.contains(&tx_hash)?;
+        let tx_in_pending_txs_store = self.blockchain.transactions.contains_pending(&tx_hash)?;
 
         if tx_in_txstore || tx_in_pending_txs_store {
             info!(target: "validator::append_tx", "We have already seen this tx");
-            return Err(TxVerifyFailed::AlreadySeenTx(tx_hash.to_string()).into())
+            return Err(TxVerifyFailed::AlreadySeenTx(tx_hash.as_string()).into())
         }
 
         // Verify state transition
@@ -170,7 +169,7 @@ impl Validator {
             .await
             {
                 Ok(_) => {}
-                Err(crate::Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(_))) => continue,
+                Err(Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(_))) => continue,
                 Err(e) => return Err(e),
             }
 
@@ -196,9 +195,7 @@ impl Validator {
         .await
         {
             Ok(_) => valid = true,
-            Err(crate::Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(etx))) => {
-                erroneous_txs = etx
-            }
+            Err(Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(etx))) => erroneous_txs = etx,
             Err(e) => return Err(e),
         }
 
@@ -235,7 +232,7 @@ impl Validator {
 
         let mut removed_txs = vec![];
         for tx in pending_txs {
-            let tx_hash = &blake3::hash(&serialize_async(&tx).await);
+            let tx_hash = tx.hash();
             let tx_vec = [tx.clone()];
             let mut valid = false;
 
@@ -262,12 +259,12 @@ impl Validator {
                         valid = true;
                         continue
                     }
-                    Err(crate::Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(_))) => {}
+                    Err(Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(_))) => {}
                     Err(e) => return Err(e),
                 }
 
                 // Remove erroneous transaction from forks' mempool
-                fork.mempool.retain(|x| x != tx_hash);
+                fork.mempool.retain(|x| *x != tx_hash);
             }
 
             // Verify transaction against canonical state
@@ -283,7 +280,7 @@ impl Validator {
             .await
             {
                 Ok(_) => valid = true,
-                Err(crate::Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(_))) => {}
+                Err(Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(_))) => {}
                 Err(e) => return Err(e),
             }
 
@@ -429,14 +426,14 @@ impl Validator {
             if verify_block(&overlay, &module, block, previous).await.is_err() {
                 error!(target: "validator::add_blocks", "Erroneous block found in set");
                 overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
-                return Err(Error::BlockIsInvalid(block.hash()?.to_string()))
+                return Err(Error::BlockIsInvalid(block.hash().as_string()))
             };
 
             // Grab next mine target and difficulty
             let (next_target, next_difficulty) = module.next_mine_target_and_difficulty()?;
 
             // Calculate block rank
-            let (target_distance_sq, hash_distance_sq) = block_rank(block, &next_target)?;
+            let (target_distance_sq, hash_distance_sq) = block_rank(block, &next_target);
 
             // Update current ranks
             current_targets_rank += target_distance_sq.clone();
@@ -491,7 +488,7 @@ impl Validator {
     pub async fn add_transactions(
         &self,
         txs: &[Transaction],
-        verifying_block_height: u64,
+        verifying_block_height: u32,
         write: bool,
         verify_fees: bool,
     ) -> Result<u64> {
@@ -537,7 +534,7 @@ impl Validator {
     pub async fn add_test_producer_transaction(
         &self,
         tx: &Transaction,
-        verifying_block_height: u64,
+        verifying_block_height: u32,
         write: bool,
     ) -> Result<()> {
         debug!(target: "validator::add_test_producer_transaction", "Instantiating BlockchainOverlay");
@@ -614,7 +611,7 @@ impl Validator {
             if verify_block(&overlay, &module, block, previous).await.is_err() {
                 error!(target: "validator::validate_blockchain", "Erroneous block found in set");
                 overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
-                return Err(Error::BlockIsInvalid(block.hash()?.to_string()))
+                return Err(Error::BlockIsInvalid(block.hash().as_string()))
             };
 
             // Update PoW module

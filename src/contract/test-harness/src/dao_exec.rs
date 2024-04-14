@@ -59,7 +59,7 @@ impl TestHarness {
         all_vote_value: u64,
         yes_vote_blind: ScalarBlind,
         all_vote_blind: ScalarBlind,
-        block_height: u64,
+        block_height: u32,
     ) -> Result<(Transaction, MoneyTransferParamsV1, DaoExecParams, Option<MoneyFeeParamsV1>)> {
         let dao_wallet = self.holders.get(&Holder::Dao).unwrap();
 
@@ -254,7 +254,7 @@ impl TestHarness {
         xfer_params: &MoneyTransferParamsV1,
         _exec_params: &DaoExecParams,
         fee_params: &Option<MoneyFeeParamsV1>,
-        block_height: u64,
+        block_height: u32,
         append: bool,
     ) -> Result<Vec<OwnCoin>> {
         let wallet = self.holders.get_mut(holder).unwrap();
@@ -273,6 +273,9 @@ impl TestHarness {
             inputs.push(fee_params.input.clone());
             outputs.push(fee_params.output.clone());
         }
+
+        let nullifiers = inputs.iter().map(|i| i.nullifier.inner()).map(|l| (l, l)).collect();
+        wallet.money_null_smt.insert_batch(nullifiers).expect("smt.insert_batch()");
 
         for input in inputs {
             if let Some(spent_coin) = wallet

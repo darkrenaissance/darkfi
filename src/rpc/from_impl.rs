@@ -131,6 +131,20 @@ impl From<net::dnet::DnetEvent> for JsonValue {
 }
 
 #[cfg(feature = "event-graph")]
+impl From<event_graph::Event> for JsonValue {
+    fn from(event: event_graph::Event) -> JsonValue {
+        let parents =
+            event.parents.into_iter().map(|id| JsonStr(id.to_string())).collect::<Vec<_>>();
+        json_map([
+            ("timestamp", JsonNum(event.timestamp as f64)),
+            ("content", JsonStr(bs58::encode(event.content()).into_string())),
+            ("parents", JsonArray(parents)),
+            ("layer", JsonNum(event.layer as f64)),
+        ])
+    }
+}
+
+#[cfg(feature = "event-graph")]
 impl From<event_graph::deg::MessageInfo> for JsonValue {
     fn from(info: event_graph::deg::MessageInfo) -> JsonValue {
         json_map([

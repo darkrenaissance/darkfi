@@ -21,7 +21,7 @@ use std::{
     sync::Arc,
 };
 
-use darkfi_sdk::{crypto::ContractId, entrypoint};
+use darkfi_sdk::{crypto::ContractId, tx::TransactionHash, wasm, AsHex};
 use darkfi_serial::serialize;
 use log::{debug, error, info};
 use wasmer::{
@@ -94,8 +94,13 @@ pub struct Env {
     pub memory: Option<Memory>,
     /// Object store for transferring memory from the host to VM
     pub objects: RefCell<Vec<Vec<u8>>>,
-    /// Block height number runtime verifys against
-    pub verifying_block_height: u64,
+    /// Block height number runtime verifies against.
+    /// For unconfirmed txs, this will be the current max height in the chain.
+    pub verifying_block_height: u32,
+    /// The hash for this transaction the runtime is being run against.
+    pub tx_hash: TransactionHash,
+    /// The index for this call in the transaction
+    pub call_idx: u8,
     /// Parent `Instance`
     pub instance: Option<Arc<Instance>>,
 }
@@ -150,7 +155,9 @@ impl Runtime {
         wasm_bytes: &[u8],
         blockchain: BlockchainOverlayPtr,
         contract_id: ContractId,
-        verifying_block_height: u64,
+        verifying_block_height: u32,
+        tx_hash: TransactionHash,
+        call_idx: u8,
     ) -> Result<Self> {
         info!(target: "runtime::vm_runtime", "[WASM] Instantiating a new runtime");
         // This function will be called for each `Operator` encountered during
@@ -192,6 +199,8 @@ impl Runtime {
                 memory: None,
                 objects: RefCell::new(vec![]),
                 verifying_block_height,
+                tx_hash,
+                call_idx,
                 instance: None,
             },
         );
@@ -252,12 +261,6 @@ impl Runtime {
                     import::db::zkas_db_set,
                 ),
 
-                "put_object_bytes_" => Function::new_typed_with_env(
-                    &mut store,
-                    &ctx,
-                    import::util::put_object_bytes,
-                ),
-
                 "get_object_bytes_" => Function::new_typed_with_env(
                     &mut store,
                     &ctx,
@@ -288,10 +291,16 @@ impl Runtime {
                     import::util::get_verifying_block_height,
                 ),
 
-                "get_verifying_block_height_epoch_" => Function::new_typed_with_env(
+                "get_tx_hash_" => Function::new_typed_with_env(
                     &mut store,
                     &ctx,
-                    import::util::get_verifying_block_height_epoch,
+                    import::util::get_tx_hash,
+                ),
+
+                "get_call_index_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::util::get_call_index,
                 ),
 
                 "get_blockchain_time_" => Function::new_typed_with_env(
@@ -304,6 +313,18 @@ impl Runtime {
                     &mut store,
                     &ctx,
                     import::util::get_last_block_height,
+                ),
+
+                "get_tx_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::util::get_tx,
+                ),
+
+                "get_tx_location_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::util::get_tx_location,
                 ),
             }
         };
@@ -378,7 +399,7 @@ impl Runtime {
                 // Return a success value if there is no return value from
                 // the contract.
                 debug!(target: "runtime::vm_runtime", "Contract has no return value (expected)");
-                entrypoint::SUCCESS
+                wasm::entrypoint::SUCCESS
             }
             _ => {
                 match ret[0] {
@@ -397,7 +418,7 @@ impl Runtime {
         // corresponds to a successful contract call; in this case, we return the contract's
         // result data. Otherwise, map the integer return value to a [`ContractError`].
         match retval {
-            entrypoint::SUCCESS => Ok(retdata),
+            wasm::entrypoint::SUCCESS => Ok(retdata),
             _ => {
                 let err = darkfi_sdk::error::ContractError::from(retval);
                 error!(target: "runtime::vm_runtime", "[WASM] Contract returned: {:?}", err);
@@ -441,13 +462,13 @@ impl Runtime {
         //debug!(target: "runtime::vm_runtime", "[WASM] payload: {:?}", payload);
         let _ = self.call(ContractSection::Deploy, payload)?;
 
-        // Update the wasm bincode in the WasmStore if the deploy exec passed successfully.
+        // Update the wasm bincode in the ContractStore wasm tree if the deploy exec passed successfully.
         let env_mut = self.ctx.as_mut(&mut self.store);
         env_mut
             .blockchain
             .lock()
             .unwrap()
-            .wasm_bincode
+            .contracts
             .insert(env_mut.contract_id, &env_mut.contract_bincode)?;
 
         info!(target: "runtime::vm_runtime", "[WASM] Successfully deployed ContractID: {}", cid);
@@ -464,9 +485,9 @@ impl Runtime {
         let cid = self.ctx.as_ref(&self.store).contract_id;
         info!(target: "runtime::vm_runtime", "[WASM] Running metadata() for ContractID: {}", cid);
 
-        debug!(target: "runtime::vm_runtime", "metadata payload: {:?}", payload);
+        debug!(target: "runtime::vm_runtime", "metadata payload: {}", payload.hex());
         let ret = self.call(ContractSection::Metadata, payload)?;
-        debug!(target: "runtime::vm_runtime", "metadata returned: {:?}", ret);
+        debug!(target: "runtime::vm_runtime", "metadata returned: {:?}", ret.hex());
 
         info!(target: "runtime::vm_runtime", "[WASM] Successfully got metadata ContractID: {}", cid);
         Ok(ret)
@@ -481,9 +502,9 @@ impl Runtime {
         let cid = self.ctx.as_ref(&self.store).contract_id;
         info!(target: "runtime::vm_runtime", "[WASM] Running exec() for ContractID: {}", cid);
 
-        debug!(target: "runtime::vm_runtime", "exec payload: {:?}", payload);
+        debug!(target: "runtime::vm_runtime", "exec payload: {}", payload.hex());
         let ret = self.call(ContractSection::Exec, payload)?;
-        debug!(target: "runtime::vm_runtime", "exec returned: {:?}", ret);
+        debug!(target: "runtime::vm_runtime", "exec returned: {:?}", ret.hex());
 
         info!(target: "runtime::vm_runtime", "[WASM] Successfully executed ContractID: {}", cid);
         Ok(ret)
@@ -499,9 +520,9 @@ impl Runtime {
         let cid = self.ctx.as_ref(&self.store).contract_id;
         info!(target: "runtime::vm_runtime", "[WASM] Running apply() for ContractID: {}", cid);
 
-        debug!(target: "runtime::vm_runtime", "apply payload: {:?}", update);
+        debug!(target: "runtime::vm_runtime", "apply payload: {:?}", update.hex());
         let ret = self.call(ContractSection::Update, update)?;
-        debug!(target: "runtime::vm_runtime", "apply returned: {:?}", ret);
+        debug!(target: "runtime::vm_runtime", "apply returned: {:?}", ret.hex());
 
         info!(target: "runtime::vm_runtime", "[WASM] Successfully applied ContractID: {}", cid);
         Ok(())

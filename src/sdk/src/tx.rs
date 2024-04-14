@@ -16,11 +16,57 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::{
+    fmt::{self, Debug},
+    str::FromStr,
+};
+
 #[cfg(feature = "async")]
 use darkfi_serial::async_trait;
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 
-use super::crypto::ContractId;
+use super::{
+    crypto::ContractId,
+    hex::{decode_hex_arr, AsHex},
+    ContractError, GenericResult,
+};
+
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq, SerialEncodable, SerialDecodable)]
+// We have to introduce a type rather than using an alias so we can implement Display
+pub struct TransactionHash(pub [u8; 32]);
+
+impl TransactionHash {
+    pub fn new(data: [u8; 32]) -> Self {
+        Self(data)
+    }
+
+    pub fn none() -> Self {
+        Self([0; 32])
+    }
+
+    #[inline]
+    pub fn inner(&self) -> &[u8; 32] {
+        &self.0
+    }
+
+    pub fn as_string(&self) -> String {
+        self.0.hex().to_string()
+    }
+}
+
+impl FromStr for TransactionHash {
+    type Err = ContractError;
+
+    fn from_str(tx_hash_str: &str) -> GenericResult<Self> {
+        Ok(Self(decode_hex_arr(tx_hash_str)?))
+    }
+}
+
+impl fmt::Display for TransactionHash {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.0.hex())
+    }
+}
 
 // ANCHOR: contractcall
 /// A ContractCall is the part of a transaction that executes a certain
