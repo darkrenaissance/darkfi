@@ -19,7 +19,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use log::{debug, warn};
+use log::debug;
 use smol::Executor;
 
 use super::{
@@ -35,7 +35,7 @@ use super::{
     protocol_base::{ProtocolBase, ProtocolBasePtr},
     protocol_jobs_manager::{ProtocolJobsManager, ProtocolJobsManagerPtr},
 };
-use crate::Result;
+use crate::{Error, Result};
 
 /// Defines address and get-address messages. On receiving GetAddr, nodes
 /// reply an AddrMessage containing nodes from their hostlist.  On receiving
@@ -68,6 +68,12 @@ pub struct ProtocolAddress {
 }
 
 const PROTO_NAME: &str = "ProtocolAddress";
+
+/// A vector of all currently accepted transports and valid transport
+/// combinations.  Should be updated if and when new transports are
+/// added. Creates a upper bound on the number of transports a given peer
+/// can request.
+const TRANSPORT_COMBOS: [&str; 7] = ["tor", "tls", "tcp", "nym", "tor+tls", "nym+tls", "tcp+tls"];
 
 impl ProtocolAddress {
     /// Creates a new address protocol. Makes an address, an external address
@@ -138,17 +144,10 @@ impl ProtocolAddress {
                 "Received GetAddrs({}) message from {}", get_addrs_msg.max, self.channel.address(),
             );
 
-            // Validate transports length
-            // TODO: Verify this limit. It should be the max number of all our allowed transports,
-            //       plus their mixing.
-            if get_addrs_msg.transports.len() > 20 {
-                warn!(target: "net::protocol_address::handle_receive_get_addrs()",
-                "Sending empty Addrs message");
-
-                // TODO: Should this error out, effectively ending the connection?
-                let addrs_msg = AddrsMessage { addrs: vec![] };
-                self.channel.send(&addrs_msg).await?;
-                continue
+            // Check that this peer isn't requesting more transports than we support
+            // (the max number of all transports, plus mixing).
+            if get_addrs_msg.transports.len() > TRANSPORT_COMBOS.len() {
+                return Err(Error::InvalidTransportRequest);
             }
 
             // First we grab address with the requested transports from the gold list
