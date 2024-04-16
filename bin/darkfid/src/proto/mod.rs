@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+// TODO: Protocal functions need to be protected so peers can't spam us.
+
 /// Block proposal broadcast protocol
 mod protocol_proposal;
 pub use protocol_proposal::{ProposalMessage, ProtocolProposal};
@@ -23,8 +25,8 @@ pub use protocol_proposal::{ProposalMessage, ProtocolProposal};
 /// Validator blockchain sync protocol
 mod protocol_sync;
 pub use protocol_sync::{
-    ForkSyncRequest, ForkSyncResponse, IsSyncedRequest, IsSyncedResponse, ProtocolSync,
-    SyncRequest, SyncResponse,
+    ForkSyncRequest, ForkSyncResponse, HeaderSyncRequest, HeaderSyncResponse, IsSyncedRequest,
+    IsSyncedResponse, ProtocolSync, SyncRequest, SyncResponse, TipRequest, TipResponse, BATCH,
 };
 
 /// Transaction broadcast protocol
