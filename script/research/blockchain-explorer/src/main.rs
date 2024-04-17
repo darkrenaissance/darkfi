@@ -86,22 +86,33 @@ impl HeaderInfo {
 
 #[derive(Debug)]
 struct HeaderStoreInfo {
-    _headers: Vec<HeaderInfo>,
+    _main: Vec<HeaderInfo>,
+    _sync: Vec<HeaderInfo>,
 }
 
 impl HeaderStoreInfo {
     pub fn new(headerstore: &HeaderStore) -> HeaderStoreInfo {
-        let mut _headers = Vec::new();
+        let mut _main = Vec::new();
         let result = headerstore.get_all();
         match result {
             Ok(iter) => {
                 for (hash, header) in iter.iter() {
-                    _headers.push(HeaderInfo::new(*hash, header));
+                    _main.push(HeaderInfo::new(*hash, header));
                 }
             }
             Err(e) => println!("Error: {:?}", e),
         }
-        HeaderStoreInfo { _headers }
+        let mut _sync = Vec::new();
+        let result = headerstore.get_all_sync();
+        match result {
+            Ok(iter) => {
+                for (_, header) in iter.iter() {
+                    _sync.push(HeaderInfo::new(header.hash(), header));
+                }
+            }
+            Err(e) => println!("Error: {:?}", e),
+        }
+        HeaderStoreInfo { _main, _sync }
     }
 }
 

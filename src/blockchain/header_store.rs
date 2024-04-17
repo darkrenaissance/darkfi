@@ -30,7 +30,7 @@ use darkfi_serial::{deserialize, serialize, Encodable, SerialDecodable, SerialEn
 
 use crate::{util::time::Timestamp, Error, Result};
 
-use super::{parse_record, SledDbOverlayPtr};
+use super::{parse_record, parse_u32_key_record, SledDbOverlayPtr};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, SerialEncodable, SerialDecodable)]
 // We have to introduce a type rather than using an alias so we can restrict API access
@@ -106,30 +106,46 @@ impl Default for Header {
     }
 }
 
-/// [`Header`] sled tree
 const SLED_HEADER_TREE: &[u8] = b"_headers";
+const SLED_SYNC_HEADER_TREE: &[u8] = b"_sync_headers";
 
-/// The `HeaderStore` is a `sled` tree storing all the blockchain's blocks' headers
-/// where the key is the headers' hash, and value is the serialized header.
+/// The `HeaderStore` is a structure representing all `sled` trees related
+/// to storing the blockchain's blocks's header information.
 #[derive(Clone)]
-pub struct HeaderStore(pub sled::Tree);
+pub struct HeaderStore {
+    /// Main `sled` tree, storing all the blockchain's blocks' headers,
+    /// where the key is the headers' hash, and value is the serialized header.
+    pub main: sled::Tree,
+    /// The `sled` tree storing all the node pending headers while syncing,
+    /// where the key is the height number, and the value is the serialized
+    /// header.
+    pub sync: sled::Tree,
+}
 
 impl HeaderStore {
     /// Opens a new or existing `HeaderStore` on the given sled database.
     pub fn new(db: &sled::Db) -> Result<Self> {
-        let tree = db.open_tree(SLED_HEADER_TREE)?;
-        Ok(Self(tree))
+        let main = db.open_tree(SLED_HEADER_TREE)?;
+        let sync = db.open_tree(SLED_SYNC_HEADER_TREE)?;
+        Ok(Self { main, sync })
     }
 
-    /// Insert a slice of [`Header`] into the blockstore.
+    /// Insert a slice of [`Header`] into the store's main tree.
     pub fn insert(&self, headers: &[Header]) -> Result<Vec<HeaderHash>> {
         let (batch, ret) = self.insert_batch(headers);
-        self.0.apply_batch(batch)?;
+        self.main.apply_batch(batch)?;
         Ok(ret)
     }
 
-    /// Generate the sled batch corresponding to an insert, so caller
-    /// can handle the write operation.
+    /// Insert a slice of [`Header`] into the store's sync tree.
+    pub fn insert_sync(&self, headers: &[Header]) -> Result<()> {
+        let batch = self.insert_batch_sync(headers);
+        self.sync.apply_batch(batch)?;
+        Ok(())
+    }
+
+    /// Generate the sled batch corresponding to an insert to the main
+    /// tree, so caller can handle the write operation.
     /// The header's hash() function output is used as the key,
     /// while value is the serialized [`Header`] itself.
     /// On success, the function returns the header hashes in the same
@@ -147,21 +163,35 @@ impl HeaderStore {
         (batch, ret)
     }
 
-    /// Check if the headerstore contains a given headerhash.
-    pub fn contains(&self, headerhash: &HeaderHash) -> Result<bool> {
-        Ok(self.0.contains_key(headerhash.inner())?)
+    /// Generate the sled batch corresponding to an insert to the sync
+    /// tree, so caller can handle the write operation.
+    /// The header height is used as the key, while value is the serialized
+    /// [`Header`] itself.
+    pub fn insert_batch_sync(&self, headers: &[Header]) -> sled::Batch {
+        let mut batch = sled::Batch::default();
+
+        for header in headers {
+            batch.insert(&header.height.to_be_bytes(), serialize(header));
+        }
+
+        batch
     }
 
-    /// Fetch given headerhashes from the headerstore.
+    /// Check if the store's main tree contains a given header hash.
+    pub fn contains(&self, headerhash: &HeaderHash) -> Result<bool> {
+        Ok(self.main.contains_key(headerhash.inner())?)
+    }
+
+    /// Fetch given header hashes from the store's main tree.
     /// The resulting vector contains `Option`, which is `Some` if the header
-    /// was found in the headerstore, and otherwise it is `None`, if it has not.
-    /// The second parameter is a boolean which tells the function to fail in
-    /// case at least one header was not found.
+    /// was found in the store's main tree, and otherwise it is `None`, if it
+    /// has not. The second parameter is a boolean which tells the function to
+    /// fail in case at least one header was not found.
     pub fn get(&self, headerhashes: &[HeaderHash], strict: bool) -> Result<Vec<Option<Header>>> {
         let mut ret = Vec::with_capacity(headerhashes.len());
 
         for hash in headerhashes {
-            if let Some(found) = self.0.get(hash.inner())? {
+            if let Some(found) = self.main.get(hash.inner())? {
                 let header = deserialize(&found)?;
                 ret.push(Some(header));
                 continue
@@ -175,17 +205,90 @@ impl HeaderStore {
         Ok(ret)
     }
 
-    /// Retrieve all headers from the headerstore in the form of a tuple
+    /// Retrieve all headers from the store's main tree in the form of a tuple
     /// (`headerhash`, `header`).
     /// Be careful as this will try to load everything in memory.
     pub fn get_all(&self) -> Result<Vec<(HeaderHash, Header)>> {
         let mut headers = vec![];
 
-        for header in self.0.iter() {
+        for header in self.main.iter() {
             headers.push(parse_record(header.unwrap())?);
         }
 
         Ok(headers)
+    }
+
+    /// Retrieve all headers from the store's sync tree in the form of a tuple
+    /// (`height`, `header`).
+    /// Be careful as this will try to load everything in memory.
+    pub fn get_all_sync(&self) -> Result<Vec<(u32, Header)>> {
+        let mut headers = vec![];
+
+        for record in self.sync.iter() {
+            headers.push(parse_u32_key_record(record.unwrap())?);
+        }
+
+        Ok(headers)
+    }
+
+    /// Fetch the last header in the store's sync tree, based on the `Ord`
+    /// implementation for `Vec<u8>`.
+    pub fn get_last_sync(&self) -> Result<Option<Header>> {
+        let Some(found) = self.sync.last()? else { return Ok(None) };
+        let (_, header) = parse_u32_key_record(found)?;
+
+        Ok(Some(header))
+    }
+
+    /// Fetch n hashes after given height. In the iteration, if a header
+    /// height is not found, the iteration stops and the function returns what
+    /// it has found so far in the store's sync tree.
+    pub fn get_after_sync(&self, height: u32, n: usize) -> Result<Vec<Header>> {
+        let mut ret = vec![];
+
+        let mut key = height;
+        let mut counter = 0;
+        while counter < n {
+            if let Some(found) = self.sync.get_gt(key.to_be_bytes())? {
+                let (height, hash) = parse_u32_key_record(found)?;
+                key = height;
+                ret.push(hash);
+                counter += 1;
+                continue
+            }
+            break
+        }
+
+        Ok(ret)
+    }
+
+    /// Retrieve store's sync tree records count.
+    pub fn len_sync(&self) -> usize {
+        self.sync.len()
+    }
+
+    /// Check if store's sync tree contains any records.
+    pub fn is_empty_sync(&self) -> bool {
+        self.sync.is_empty()
+    }
+
+    /// Remove a slice of [`u32`] from the store's sync tree.
+    pub fn remove_sync(&self, heights: &[u32]) -> Result<()> {
+        let batch = self.remove_batch_sync(heights);
+        self.sync.apply_batch(batch)?;
+        Ok(())
+    }
+
+    /// Generate the sled batch corresponding to a remove from the store's sync
+    /// tree, so caller can handle the write operation.
+    pub fn remove_batch_sync(&self, heights: &[u32]) -> sled::Batch {
+        let mut batch = sled::Batch::default();
+
+        for height in heights {
+            batch.remove(&height.to_be_bytes());
+        }
+
+        batch
     }
 }
 

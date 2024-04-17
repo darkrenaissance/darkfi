@@ -79,7 +79,7 @@ impl Blockchain {
 
         // Store header
         let (headers_batch, _) = self.headers.insert_batch(&[block.header.clone()]);
-        trees.push(self.headers.0.clone());
+        trees.push(self.headers.main.clone());
         batches.push(headers_batch);
 
         // Store block
