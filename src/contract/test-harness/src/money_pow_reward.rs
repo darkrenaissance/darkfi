@@ -132,7 +132,7 @@ impl TestHarness {
         let mut found_owncoins = vec![];
         for holder in holders {
             let wallet = self.holders.get_mut(holder).unwrap();
-            wallet.validator.add_blocks(&[block.clone()]).await?;
+            wallet.validator.add_test_blocks(&[block.clone()]).await?;
             wallet.money_merkle_tree.append(MerkleNode::from(params.output.coin.inner()));
 
             // Attempt to decrypt the note to see if this is a coin for the holder

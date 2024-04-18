@@ -319,7 +319,7 @@ impl Validator {
 
     /// The node checks if best fork can be finalized.
     /// If proposals can be finalized, node appends them to canonical,
-    /// and rebuilds the best fork.
+    /// and resets the current forks.
     pub async fn finalization(&self) -> Result<Vec<BlockInfo>> {
         // Grab append lock so no new proposals can be appended while
         // we execute finalization
@@ -363,18 +363,20 @@ impl Validator {
 
         // Apply finalized proposals diffs and update PoW module
         let mut module = self.consensus.module.write().await;
+        let mut finalized_txs = vec![];
         info!(target: "validator::finalization", "Finalizing proposals:");
         for (index, proposal) in finalized_proposals.iter().enumerate() {
             info!(target: "validator::finalization", "\t{} - {}", proposal, finalized_blocks[index].header.height);
             fork.overlay.lock().unwrap().overlay.lock().unwrap().apply_diff(&mut diffs[index])?;
             let next_difficulty = module.next_difficulty()?;
             module.append(finalized_blocks[index].header.timestamp, &next_difficulty);
+            finalized_txs.extend_from_slice(&finalized_blocks[index].txs);
         }
         drop(module);
         drop(forks);
 
         // Reset forks starting with the finalized blocks
-        self.consensus.reset_forks(&finalized_proposals, &finalized_fork).await?;
+        self.consensus.reset_forks(&finalized_proposals, &finalized_fork, &finalized_txs).await?;
         info!(target: "validator::finalization", "Finalization completed!");
 
         // Release append lock
@@ -383,20 +385,10 @@ impl Validator {
         Ok(finalized_blocks)
     }
 
-    // ==========================
-    // State transition functions
-    // ==========================
-    // TODO TESTNET: Write down all cases below
-    // State transition checks should be happening in the following cases for a sync node:
-    // 1) When a finalized block is received
-    // 2) When a transaction is being broadcasted to us
-    // State transition checks should be happening in the following cases for a consensus participating node:
-    // 1) When a finalized block is received
-    // 2) When a transaction is being broadcasted to us
-    // ==========================
-
     /// Validate a set of [`BlockInfo`] in sequence and apply them if all are valid.
-    pub async fn add_blocks(&self, blocks: &[BlockInfo]) -> Result<()> {
+    /// Note: this function should only be used in tests when we don't want to
+    /// perform consensus logic.
+    pub async fn add_test_blocks(&self, blocks: &[BlockInfo]) -> Result<()> {
         debug!(target: "validator::add_blocks", "Instantiating BlockchainOverlay");
         let overlay = BlockchainOverlay::new(&self.blockchain)?;
 

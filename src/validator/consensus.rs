@@ -79,10 +79,18 @@ impl Consensus {
     /// Generate a new empty fork.
     pub async fn generate_empty_fork(&self) -> Result<()> {
         debug!(target: "validator::consensus::generate_empty_fork", "Generating new empty fork...");
-        let mut lock = self.forks.write().await;
+        let mut forks = self.forks.write().await;
+        // Check if we already have an empty fork
+        for fork in forks.iter() {
+            if fork.proposals.is_empty() {
+                debug!(target: "validator::consensus::generate_empty_fork", "An empty fork already exists.");
+                drop(forks);
+                return Ok(())
+            }
+        }
         let fork = Fork::new(self.blockchain.clone(), self.module.read().await.clone()).await?;
-        lock.push(fork);
-        drop(lock);
+        forks.push(fork);
+        drop(forks);
         debug!(target: "validator::consensus::generate_empty_fork", "Fork generated!");
         Ok(())
     }
@@ -280,8 +288,28 @@ impl Consensus {
         Ok(vec![])
     }
 
+    /// Auxiliary function to retrieve current best fork last header.
+    /// If no forks exist, grab the last header from canonical.
+    pub async fn best_fork_last_header(&self) -> Result<(u32, HeaderHash)> {
+        // Grab a lock over current forks
+        let forks = self.forks.read().await;
+
+        // Check if node has any forks
+        if forks.is_empty() {
+            drop(forks);
+            return self.blockchain.last()
+        }
+
+        // Grab best fork
+        let fork = &forks[best_fork_index(&forks)?];
+
+        // Grab its last header
+        let last = fork.last_proposal()?;
+        drop(forks);
+        Ok((last.block.header.height, last.hash))
+    }
+
     /// Auxiliary function to retrieve current best fork proposals.
-    /// If multiple best forks exist, grab the proposals of the first one
     /// If provided tip is not the canonical(finalized), or no forks exist,
     /// an empty vector is returned.
     pub async fn get_best_fork_proposals(&self, tip: HeaderHash) -> Result<Vec<Proposal>> {
@@ -314,12 +342,15 @@ impl Consensus {
 
     /// Auxiliary function to purge current forks and reset the ones starting
     /// with the provided prefix, excluding provided finalized fork.
+    /// Additionally, remove finalized transactions from the forks mempools,
+    /// along with the unporposed transactions sled trees.
     /// This function assumes that the prefix blocks have already been appended
     /// to canonical chain from the finalized fork.
     pub async fn reset_forks(
         &self,
         prefix: &[HeaderHash],
         finalized_fork_index: &usize,
+        finalized_txs: &[Transaction],
     ) -> Result<()> {
         // Grab a lock over current forks
         let mut forks = self.forks.write().await;
@@ -335,6 +366,8 @@ impl Consensus {
         let prefix_last = prefix.last().unwrap();
         let mut keep = vec![true; forks.len()];
         let mut referenced_trees = BTreeSet::new();
+        let finalized_txs_hashes: Vec<TransactionHash> =
+            finalized_txs.iter().map(|tx| tx.hash()).collect();
         for (index, fork) in forks.iter_mut().enumerate() {
             if &index == finalized_fork_index {
                 // Store its tree references
@@ -349,6 +382,8 @@ impl Consensus {
                 for tree in &overlay.state.dropped_tree_names {
                     referenced_trees.insert(tree.clone());
                 }
+                // Remove finalized proposals txs from fork's mempool
+                fork.mempool.retain(|tx| !finalized_txs_hashes.contains(tx));
                 drop(overlay);
                 drop(fork_overlay);
                 continue
@@ -361,6 +396,9 @@ impl Consensus {
                 keep[index] = false;
                 continue
             }
+
+            // Remove finalized proposals txs from fork's mempool
+            fork.mempool.retain(|tx| !finalized_txs_hashes.contains(tx));
 
             // Remove the commited differences
             let rest_proposals = fork.proposals.split_off(excess);
@@ -422,6 +460,9 @@ impl Consensus {
         // Drop invalid forks
         let mut iter = keep.iter();
         forks.retain(|_| *iter.next().unwrap());
+
+        // Remove finalized proposals txs from the unporposed txs sled tree
+        self.blockchain.remove_pending_txs(finalized_txs)?;
 
         // Drop forks lock
         drop(forks);

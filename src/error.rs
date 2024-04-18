@@ -382,9 +382,6 @@ pub enum Error {
     #[error("Block {0} contains 0 transactions")]
     BlockContainsNoTransactions(String),
 
-    #[error("Blockchain sync failed")]
-    BlockchainSyncError,
-
     #[error("Contract {0} not found in database")]
     ContractNotFound(String),
 

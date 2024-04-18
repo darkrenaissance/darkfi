@@ -19,10 +19,11 @@
 use std::collections::HashMap;
 
 use darkfi::{
-    blockchain::HeaderHash, net::ChannelPtr, system::sleep, util::encoding::base64, Error, Result,
+    blockchain::HeaderHash, net::ChannelPtr, rpc::jsonrpc::JsonSubscriber, system::sleep,
+    util::encoding::base64, validator::consensus::Proposal, Error, Result,
 };
 use darkfi_serial::serialize_async;
-use log::{debug, error, info, warn};
+use log::{debug, info, warn};
 use rand::{prelude::SliceRandom, rngs::OsRng};
 use tinyjson::JsonValue;
 
@@ -40,27 +41,37 @@ use crate::{
 pub async fn sync_task(node: &Darkfid) -> Result<()> {
     info!(target: "darkfid::task::sync_task", "Starting blockchain sync...");
 
+    // Generate a new fork to be able to extend
+    info!(target: "darkfid::task::sync_task", "Generating new empty fork...");
+    node.validator.consensus.generate_empty_fork().await?;
+
+    // Grab blocks subscriber
+    let block_sub = node.subscribers.get("blocks").unwrap();
+
     // Grab synced peers
     let peers = synced_peers(node).await?;
 
     // TODO: Configure a checkpoint, filter peers that don't have that and start
     // syncing the sequence until that
 
-    // Grab last known block header
-    let mut last = last_header(node)?;
+    // Grab last known block header, including existing pending sync ones
+    let mut last = match node.validator.blockchain.headers.get_last_sync()? {
+        Some(last_sync) => (last_sync.height, last_sync.hash()),
+        None => node.validator.blockchain.last()?,
+    };
     info!(target: "darkfid::task::sync_task", "Last known block: {} - {}", last.0, last.1);
+
+    // Sync headers and blocks
     loop {
         // Grab the most common tip and the corresponding peers
         let (common_tip_height, common_tip_peers) = most_common_tip(&peers, &last.1).await?;
 
-        // Retrieve all the headers backawards until our last known one and verify them.
+        // Retrieve all the headers backwards until our last known one and verify them.
         // We use the next height, in order to also retrieve the peers tip header.
-        retrieve_headers(node, &common_tip_peers, last, common_tip_height + 1).await?;
+        retrieve_headers(node, &common_tip_peers, last.0, common_tip_height + 1).await?;
 
         // Retrieve all the blocks for those headers and apply them to canonical
-        retrieve_blocks(node, &peers).await?;
-
-        let last_received = last_header(node)?;
+        let last_received = retrieve_blocks(node, &peers, last, block_sub).await?;
         info!(target: "darkfid::task::sync_task", "Last received block: {} - {}", last_received.0, last_received.1);
 
         if last == last_received {
@@ -72,6 +83,17 @@ pub async fn sync_task(node: &Darkfid) -> Result<()> {
 
     // Sync best fork
     sync_best_fork(node, &peers, &last.1).await?;
+
+    // Perform finalization
+    let finalized = node.validator.finalization().await?;
+    if !finalized.is_empty() {
+        // Notify subscriber
+        let mut notif_blocks = Vec::with_capacity(finalized.len());
+        for block in finalized {
+            notif_blocks.push(JsonValue::String(base64::encode(&serialize_async(&block).await)));
+        }
+        block_sub.notify(JsonValue::Array(notif_blocks)).await;
+    }
 
     *node.validator.synced.write().await = true;
     info!(target: "darkfid::task::sync_task", "Blockchain synced!");
@@ -120,16 +142,6 @@ async fn synced_peers(node: &Darkfid) -> Result<Vec<ChannelPtr>> {
     Ok(peers)
 }
 
-/// Auxiliary function to retrieve last known block header, including existing pending sync ones.
-fn last_header(node: &Darkfid) -> Result<(u32, HeaderHash)> {
-    // First we check if we have pending sync headers
-    if let Some(last_sync) = node.validator.blockchain.headers.get_last_sync()? {
-        return Ok((last_sync.height, last_sync.hash()))
-    }
-    // Then we grab the last one from the actual canonical chain
-    node.validator.blockchain.last()
-}
-
 /// Auxiliary function to ask all peers for their current tip and find the most common one.
 async fn most_common_tip(
     peers: &[ChannelPtr],
@@ -155,34 +167,31 @@ async fn most_common_tip(
         tip_peers.push(peer.clone());
     }
 
-    // Grab the most common tip peers
-    let mut common_tips = vec![];
-    let mut common_tip_peers = vec![];
+    // Grab the most common highest tip peers
+    let mut common_tip = (0, [0u8; 32], vec![]);
     for (tip, peers) in tips {
-        if peers.len() < common_tip_peers.len() {
+        // Check if tip peers is less than the most common tip peers
+        if peers.len() < common_tip.2.len() {
             continue;
         }
-        if peers.len() == common_tip_peers.len() {
-            common_tips.push(tip);
+        // If peers are the same length, skip if tip height is less than
+        // the most common tip height.
+        if peers.len() == common_tip.2.len() || tip.0 < common_tip.0 {
             continue;
         }
-        common_tips = vec![tip];
-        common_tip_peers = peers;
-    }
-    if common_tips.len() > 1 {
-        error!(target: "darkfid::task::sync::most_common_tip", "Multiple common tips found: {:?}", common_tips);
-        return Err(Error::BlockchainSyncError)
+        // Keep the heighest tip with the most peers
+        common_tip = (tip.0, tip.1, peers);
     }
 
-    info!(target: "darkfid::task::sync::most_common_tip", "Received tip from peers: {} - {}", common_tips[0].0, HeaderHash::new(common_tips[0].1));
-    Ok((common_tips[0].0, common_tip_peers))
+    info!(target: "darkfid::task::sync::most_common_tip", "Received tip from peers: {} - {}", common_tip.0, HeaderHash::new(common_tip.1));
+    Ok((common_tip.0, common_tip.2))
 }
 
 /// Auxiliary function to retrieve headers backwards until our last known one and verify them.
 async fn retrieve_headers(
     node: &Darkfid,
     peers: &[ChannelPtr],
-    last_known: (u32, HeaderHash),
+    last_known: u32,
     tip_height: u32,
 ) -> Result<()> {
     info!(target: "darkfid::task::sync::retrieve_headers", "Retrieving missing headers from peers...");
@@ -193,7 +202,7 @@ async fn retrieve_headers(
     }
 
     // We subtract 1 since tip_height is increased by one
-    let total = tip_height - last_known.0 - 1;
+    let total = tip_height - last_known - 1;
     let mut last_tip_height = tip_height;
     'headers_loop: loop {
         for (index, peer) in peers.iter().enumerate() {
@@ -208,7 +217,7 @@ async fn retrieve_headers(
 
             // Retain only the headers after our last known
             let mut response_headers = response.headers.to_vec();
-            response_headers.retain(|h| h.height > last_known.0);
+            response_headers.retain(|h| h.height > last_known);
 
             if response_headers.is_empty() {
                 break 'headers_loop
@@ -233,9 +242,9 @@ async fn retrieve_headers(
     info!(target: "darkfid::task::sync::retrieve_headers", "Verifying headers sequence...");
     let mut verified_headers = 0;
     let total = node.validator.blockchain.headers.len_sync();
-    // First we verify the first `BATCH` sequence, using the last canonical known one as
-    // the first sync header previous.
-    let last_known = node.validator.blockchain.last()?;
+    // First we verify the first `BATCH` sequence, using the last known header
+    // as the first sync header previous.
+    let last_known = node.validator.consensus.best_fork_last_header().await?;
     let mut headers = node.validator.blockchain.headers.get_after_sync(0, BATCH)?;
     if headers[0].previous != last_known.1 || headers[0].height != last_known.0 + 1 {
         return Err(Error::BlockIsInvalid(headers[0].hash().as_string()))
@@ -276,14 +285,19 @@ async fn retrieve_headers(
 }
 
 /// Auxiliary function to retrieve blocks of provided headers and apply them to canonical.
-async fn retrieve_blocks(node: &Darkfid, peers: &[ChannelPtr]) -> Result<()> {
+async fn retrieve_blocks(
+    node: &Darkfid,
+    peers: &[ChannelPtr],
+    last_known: (u32, HeaderHash),
+    block_sub: &JsonSubscriber,
+) -> Result<(u32, HeaderHash)> {
     info!(target: "darkfid::task::sync::retrieve_blocks", "Retrieving missing blocks from peers...");
+    let mut last_received = last_known;
     // Communication setup
     let mut peer_subs = vec![];
     for peer in peers {
         peer_subs.push(peer.subscribe_msg::<SyncResponse>().await?);
     }
-    let notif_sub = node.subscribers.get("blocks").unwrap();
 
     let mut received_blocks = 0;
     let total = node.validator.blockchain.headers.len_sync();
@@ -306,27 +320,34 @@ async fn retrieve_blocks(node: &Darkfid, peers: &[ChannelPtr]) -> Result<()> {
 
             // Verify and store retrieved blocks
             debug!(target: "darkfid::task::sync::retrieve_blocks", "Processing received blocks");
-            node.validator.add_blocks(&response.blocks).await?;
-
-            // Remove synced headers
-            node.validator.blockchain.headers.remove_sync(
-                &response.blocks.iter().map(|b| b.header.height).collect::<Vec<u32>>(),
-            )?;
-
-            // Notify subscriber
+            received_blocks += response.blocks.len();
+            let mut synced_headers = Vec::with_capacity(response.blocks.len());
             for block in &response.blocks {
-                info!(target: "darkfid::task::sync::retrieve_blocks", "Appended block: {} - {}", block.header.height, block.hash());
-                let encoded_block =
-                    JsonValue::String(base64::encode(&serialize_async(block).await));
-                notif_sub.notify(vec![encoded_block].into()).await;
+                node.validator.append_proposal(&Proposal::new(block.clone())).await?;
+                synced_headers.push(block.header.height);
+                last_received = (block.header.height, block.hash());
             }
 
-            received_blocks += response.blocks.len();
+            // Remove synced headers
+            node.validator.blockchain.headers.remove_sync(&synced_headers)?;
+
+            // Perform finalization for received blocks
+            let finalized = node.validator.finalization().await?;
+            if !finalized.is_empty() {
+                // Notify subscriber
+                let mut notif_blocks = Vec::with_capacity(finalized.len());
+                for block in finalized {
+                    notif_blocks
+                        .push(JsonValue::String(base64::encode(&serialize_async(&block).await)));
+                }
+                block_sub.notify(JsonValue::Array(notif_blocks)).await;
+            }
+
             info!(target: "darkfid::task::sync::retrieve_blocks", "Blocks received: {}/{}", received_blocks, total);
         }
     }
 
-    Ok(())
+    Ok(last_received)
 }
 
 /// Auxiliary function to retrieve best fork state from a random peer.
