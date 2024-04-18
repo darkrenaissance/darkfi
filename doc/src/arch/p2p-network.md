@@ -109,7 +109,7 @@ The main attacks are:
       will try to balance the scores between all available channels.
     * Opening the connection itself has a score with inbound connections assigned more cost than outgoing ones.
 * **Smart ban**. Malicious peers which violate protocols are hard banned. For example sending the wrong data for a chunk.
-    * Add a method `channel.ban()` which immediately disconnects and blacklists the address.
+    * See the method `channel.ban()` which immediately disconnects and blacklists the address.
 * **uTP congestion control**. BitTorrent implements a UDP protocol with its own congestion control. We could do such a similar strategy
   with the addition of removing ordering. This reduces protocol latency mitigating attacks. See [libtorrent.org/utp.html](https://libtorrent.org/utp.html)
   for more info.
@@ -117,7 +117,7 @@ The main attacks are:
 * **White, gray and black lists**. See section 2.2 of [Exploring the Monero P2P Network](https://eprint.iacr.org/2019/411.pdf) for
   details of this algorithm. This aids with network connectivity, avoiding netsplits which could make the network more susceptible to
   eclipse/sybil attacks (large scale MiTM).
-    * For this we would need a function to connect to a host, send a ping, receive a pong and disconnect to test node connectivity.
+    * See: [Refine Session](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/src/net/session/refine_session.rs)
 * **Protocol-level reputation system**. You have a keypair, which accrues more trust from the network. Nodes gossip trust metrics.
     * See [AnonRep: Towards Tracking-Resistant Anonymous Reputation](https://www.usenix.org/system/files/conference/nsdi16/nsdi16-paper-zhai.pdf)
     * Also the discussion in
@@ -155,6 +155,7 @@ Core protocols should be modeled and analyzed with DoS protections added. Below 
 Apps should be able to configure:
 
 * Reject hosts, for example based off current overall resource utilization or the host addr.
+    * Note: we have a configurable setting called `blacklist` which allows us to reject hosts by addr.
 * Accounting abstraction for scoring connections.
 
 ## Swarming
@@ -173,6 +174,8 @@ nodes to bootstrap, but with swarming, we reduce all these networks to a single 
 routing tables is a kind of decentralized lilith which keeps track of all the swarms.
 
 Possibly a post-mainnet feature depending on the scale of architectural changes or new code required in the net submodule.
+
+To faciliate this future upgrade, we have made the peer discovery process a generic trait called `PeerDiscoveryBase`. Currently there is only one imeplementation, `PeerDiscovery`, which implements the peer discovery process in outbound sesssion. In the future `PeerDiscoveryBase` can be implemented to make new forms of peer discovery (i.e. subnets vs overlay peer discovery processes).
 
 ## Scoring Subsystem
 
