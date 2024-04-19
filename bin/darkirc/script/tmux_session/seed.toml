@@ -1,8 +1,8 @@
 ## JSON-RPC listen URL
-# rpc_listen="tcp://127.0.0.1:8888"
+rpc_listen="tcp://127.0.0.1:8888"
 
 ## IRC listen URL
-# irc_listen="tcp://127.0.0.1:22020"
+irc_listen="tcp://127.0.0.1:22020"
 
 ## Sets Datastore Path
 datastore = "/tmp/darkirc_test/darkirc_seed"
