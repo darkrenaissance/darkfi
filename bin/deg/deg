@@ -23,69 +23,12 @@ import urwid as u
 import networkx as nx
 from datetime import datetime
 # import matplotlib.pyplot as plt
+import src.rpc
 import src.util
 
 from os.path import join
 
 resolved = True
-
-class JsonRpc:
-
-    async def start(self, server, port):
-        reader, writer = await asyncio.open_connection(server, port, limit=1024 * 128)
-        self.reader = reader
-        self.writer = writer
-
-    async def stop(self):
-        self.writer.close()
-        await self.writer.wait_closed()
-
-    async def _make_request(self, method, params):
-        ident = random.randint(0, 2**16)
-        #print(ident)
-        request = {
-            "jsonrpc": "2.0",
-            "method": method,
-            "params": params,
-            "id": ident,
-        }
-
-        message = json.dumps(request) + "\n"
-        self.writer.write(message.encode())
-        await self.writer.drain()
-
-        data = await self.reader.readline()
-        message = data.decode().strip()
-        response = json.loads(message)
-        #print(response)
-        return response
-
-    async def _subscribe(self, method, params):
-        ident = random.randint(0, 2**16)
-        request = {
-            "jsonrpc": "2.0",
-            "method": method,
-            "params": params,
-            "id": ident,
-        }
-
-        message = json.dumps(request) + "\n"
-        self.writer.write(message.encode())
-        await self.writer.drain()
-        #print("Subscribed")
-
-    async def ping(self):
-        return await self._make_request("ping", [])
-
-    async def dnet_switch(self, state):
-        return await self._make_request("dnet.switch", [state])
-
-    async def dnet_subscribe_events(self):
-        return await self._subscribe("dnet.subscribe_events", [])
-    
-    async def deg_switch(self, state):
-        return await self._make_request("deg.switch", [state])
-
 
 def check_multi_ev_in_layer(dag_dict, dag):
     gen = list(nx.topological_generations(dag))
@@ -98,8 +41,6 @@ def check_multi_ev_in_layer(dag_dict, dag):
                 return i[0]
             else:
                 return i[1]
-
-
 
 def graph(event, dag, x):
     global resolved
@@ -284,13 +225,14 @@ class App(object):
 async def recreate_dag(config):
     host = config['host']
     port = config['port']
-    rpc = JsonRpc()
+    rpc = src.rpc.JsonRpc()
     while True:
         try:
             await rpc.start(host, port)
             break
         except OSError:
-            pass
+            print(f"Error: Connection Refused to '{host}:{port}', Either because the daemon is down, is currently syncing or wrong url.")
+            sys.exit(-1)
 
     await rpc.deg_switch(True)
     await rpc.deg_switch(False)
