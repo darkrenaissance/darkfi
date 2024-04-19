@@ -149,19 +149,17 @@ class App(object):
         col_rows = u.raw_display.Screen().get_cols_rows()
         h = col_rows[0] - 2
         f1 = u.Filler(self.view_one, valign='top', height=h)
-        c_list = u.LineBox(f1, title="Layers")
+        c_list = u.LineBox(f1, title="Events")
         columns = u.Columns([('weight', 100, c_list)])
         frame1 = u.AttrMap(u.Frame(body=columns, footer=footer), 'bg')
         self.frame1 = frame1
         ############
-        # content = self.content
-        # print(content)
         self.view_two = DetailView()
-        # self.detail_view = DetailView()
         f2 = u.Filler(self.view_two, valign='top')
         c_details = u.LineBox(f2, title="Details")
+        footer = u.AttrWrap(u.Text(" Q to exit, B to main view"), "footer")
         columns = u.Columns([('weight', 100, c_details)])
-        frame2 = u.AttrMap(u.Frame(body=columns), 'bg')
+        frame2 = u.AttrMap(u.Frame(body=columns, footer=footer), 'bg')
         self.frame2 = frame2
         ##########
         self.current_view = self.frame1  # Start with View One
@@ -174,9 +172,6 @@ class App(object):
             ('content',          "",                "black"),
             ("footer",           "white, bold",     "dark red")
         }
-
-    def build_main(self):
-        return self.current_view
     
     async def update_data(self, config):
             self.config = config
@@ -217,7 +212,6 @@ class App(object):
             self.view_one.set_data(l, dag, x)
 
     async def start(self, config):
-        # main_frame = self.build_main()
         await self.update_data(config)
         self.loop = u.MainLoop(self.current_view, self.palette, unhandled_input=self.unhandled_input)
         self.loop.run()
