@@ -21,23 +21,13 @@ import asyncio, random, re, sys, base58, json
 import base58
 import urwid as u
 import networkx as nx
+from datetime import datetime
 # import matplotlib.pyplot as plt
 import src.util
 
 from os.path import join
 
-# # Create a directed graph
-# dag = nx.DiGraph()
-
-# # Add edges to the graph (this also adds nodes)
-# dag.add_edges_from([
-#     ("root", "a"),
-#     ("a", "b"),
-#     ("a", "e"),
-#     ("b", "c"),
-#     ("b", "d"),
-#     ("d", "e")
-# ])
+resolved = True
 
 class JsonRpc:
 
@@ -97,13 +87,62 @@ class JsonRpc:
         return await self._make_request("deg.switch", [state])
 
 
+def check_multi_ev_in_layer(dag_dict, dag):
+    gen = list(nx.topological_generations(dag))
+    for i in gen:
+        # fork
+        if len(i) == 2:
+            event1 = dag_dict[i[0]]
+            event2 = dag_dict[i[1]]
+            if int(event1['timestamp']) > int(event2['timestamp']):
+                return i[0]
+            else:
+                return i[1]
+
+
+
+def graph(event, dag, x):
+    global resolved
+    merge = len(list(dag.predecessors(event['hash']))) > 1
+    fork = len(list(dag.successors(event['hash']))) > 1
+    
+    if merge and not fork:
+        resolved = False
+        return "     M━┑"
+    if fork and not merge:
+        resolved = True
+        return "     o─┘"
+    if merge and fork:
+        return "     M━┪"
+    if not merge and not fork:
+        if event['hash'] == x:
+            return "     │ o"
+        else:
+            if not resolved:
+                return "     o │"
+            else:
+                return "     o  "
+            #  "     │ o"
+            #  "     o │"
+            #  "     o━┪"
+            #  "     o─┴"
+            #  "     o━┯"
+
+
 class ListItem(u.WidgetWrap):
     
-    def __init__ (self, event):
+    def __init__ (self, event, dag, x):
+        g = graph(event, dag, x)
         self.content = event
         layer_num = int(event["layer"])
         layer = "layer " + str(layer_num) if layer_num != 0 else "genesis"
-        t = u.AttrWrap(u.Text(layer), "event", "event_selected")
+        dt = datetime.fromtimestamp(int(event['timestamp']))
+        t = u.AttrMap(u.Text([('word', str(dt)),
+                              ('committer', " " + layer),
+                              ('word', g),
+                              ('cont', event['content'])], wrap="ellipsis"),
+                              {'word':'datetime', 'committer': 'reporter', 'cont': 'content'},
+                              {'word':'event_selected', 'committer': 'event_selected', 'cont': 'event_selected'})
         u.WidgetWrap.__init__(self, t)
 
     def selectable (self):
@@ -124,8 +163,8 @@ class ListView(u.WidgetWrap):
         focus_w, _ = self.walker.get_focus()
         u.emit_signal(self, 'show_details', focus_w.content)
 
-    def set_data(self, events):
-        events_widgets = [ListItem(e) for e in events]
+    def set_data(self, events, dag, x):
+        events_widgets = [ListItem(e, dag, x) for e in events]
         u.disconnect_signal(self.walker, 'modified', self.modified)
 
         while len(self.walker) > 0:
@@ -150,51 +189,55 @@ class App(object):
     def unhandled_input(self, key):
         if key in ('q',):
             raise u.ExitMainLoop()
+        # if key == 'r':
+        #     await self.update_data(self.config)
+        if key == 'enter':
+            self.current_view = self.frame2
+        if key == 'b':
+            self.current_view = self.frame1
 
     def show_details(self, event):
-        self.detail_view.set_event(event)
+        self.view_two.set_event(event)
         
     def __init__(self):
-        self.palette = {
-            ("bg",               "white",       "black"),
-            ("event",            "white",       "black"),
-            ("event_selected",   "white",       "yellow"),
-            ("footer",           "white, bold", "dark red")
-        }
-
-        self.list_view = ListView()
-        self.detail_view = DetailView()
-        u.connect_signal(self.list_view, 'show_details', self.show_details)
-        footer = u.AttrWrap(u.Text(" Q to exit"), "footer") 
+        self.view_one = ListView()
+        u.connect_signal(self.view_one, 'show_details', self.show_details)
+        footer = u.AttrWrap(u.Text(" Q to exit"), "footer")
         col_rows = u.raw_display.Screen().get_cols_rows()
         h = col_rows[0] - 2
-        f1 = u.Filler(self.list_view, valign='top', height=h)
-        f2 = u.Filler(self.detail_view, valign='top')
+        f1 = u.Filler(self.view_one, valign='top', height=h)
         c_list = u.LineBox(f1, title="Layers")
+        columns = u.Columns([('weight', 100, c_list)])
+        frame1 = u.AttrMap(u.Frame(body=columns, footer=footer), 'bg')
+        self.frame1 = frame1
+        ############
+        # content = self.content
+        # print(content)
+        self.view_two = DetailView()
+        # self.detail_view = DetailView()
+        f2 = u.Filler(self.view_two, valign='top')
         c_details = u.LineBox(f2, title="Details")
-        columns = u.Columns([('weight', 15, c_list), ('weight', 85, c_details)])            
-        frame = u.AttrMap(u.Frame(body=columns, footer=footer), 'bg')
-        self.loop = u.MainLoop(frame, self.palette, unhandled_input=self.unhandled_input)
+        columns = u.Columns([('weight', 100, c_details)])
+        frame2 = u.AttrMap(u.Frame(body=columns), 'bg')
+        self.frame2 = frame2
+        ##########
+        self.current_view = self.frame1  # Start with View One
+        self.palette = {
+            ("bg",               "white",           "black"),
+            ("event",            "white",           "black"),
+            ("event_selected",   "white",           "light green"),
+            ('datetime',         "light blue",      "black"),
+            ('reporter',         "dark green",      "black"),
+            ('content',          "",                "black"),
+            ("footer",           "white, bold",     "dark red")
+        }
 
+    def build_main(self):
+        return self.current_view
+    
     async def update_data(self, config):
-        host = config['host']
-        port = config['port']
-        rpc = JsonRpc()
-        while True:
-            try:
-                await rpc.start(host, port)
-                break
-            except OSError:
-                print("Error: Couldn't connent to rpc")
-                exit(-1)
-
-        await rpc.deg_switch(True)
-        await rpc.deg_switch(False)
-
-        json_result = await rpc._make_request("eventgraph.get_info", [])
-        
-        if json_result['result']['eventgraph_info']:
-            dag_dict = json_result['result']['eventgraph_info']['dag']
+            self.config = config
+            dag_dict = await recreate_dag(config)
             dag_list = list(dag_dict.items())
             # sorted_dag = sorted(dag_list, key=lambda x:x[1]['layer'])
 
@@ -216,22 +259,45 @@ class App(object):
             dag.add_edges_from(parent_child_pairs)
             l = []
             topological_order = list(nx.topological_sort(dag))
-            for node in topological_order:
+            for node in reversed(topological_order):
                 event_details = dag_dict.get(node) # details
                 layer = int(event_details['layer'])
                 content = event_details['content'] # event content
-                # print(content)
+                timestamp = event_details['timestamp']
                 pattern = r'\\x[0-9A-Fa-f]{2}'
                 decoded_str = str(base58.b58decode(content))
-                matches = re.split(pattern, decoded_str)
-                children = dag.successors(node)
-                l.append({"layer":f"{layer}", "hash":f"{node}", "children":f"{list(children)}", "content":f"{matches[1:]}"})
-            
-            self.list_view.set_data(l)
+                matches = re.sub(pattern, ' ', decoded_str).replace("b'", "")[:-1]
+                children = list(dag.successors(node))
+                l.append({"layer":f"{layer}", "hash":f"{node}", "children":children, "content":f"{matches}", "timestamp": f"{timestamp}"})
+
+            x = check_multi_ev_in_layer(dag_dict, dag)
+            self.view_one.set_data(l, dag, x)
 
     async def start(self, config):
+        # main_frame = self.build_main()
         await self.update_data(config)
+        self.loop = u.MainLoop(self.current_view, self.palette, unhandled_input=self.unhandled_input)
         self.loop.run()
+
+async def recreate_dag(config):
+    host = config['host']
+    port = config['port']
+    rpc = JsonRpc()
+    while True:
+        try:
+            await rpc.start(host, port)
+            break
+        except OSError:
+            pass
+
+    await rpc.deg_switch(True)
+    await rpc.deg_switch(False)
+
+    json_result = await rpc._make_request("eventgraph.get_info", [])
+    
+    if json_result['result']['eventgraph_info']:
+        return json_result['result']['eventgraph_info']['dag']
+        
 
 async def main(argv):
 
