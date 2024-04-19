@@ -122,7 +122,7 @@ class DetailView(u.WidgetWrap):
         u.WidgetWrap.__init__(self, t)
         
     def set_event(self, c):
-        s = f'Hash: {c["hash"]}\nChildren: {c["children"]}\nContent: {c["content"]}\nLayer: {c["layer"]}'
+        s = f'Hash: {c["hash"]}\nChildren: {c["children"]}\nParents: {c["parents"]}\nContent: {c["content"]}\nLayer: {c["layer"]}'
         self._w.set_text(s)
 
 class App(object):
@@ -202,11 +202,13 @@ class App(object):
                 layer = int(event_details['layer'])
                 content = event_details['content'] # event content
                 timestamp = event_details['timestamp']
+                children = list(dag.successors(node))
+                parents = list(dag.predecessors(node))
                 pattern = r'\\x[0-9A-Fa-f]{2}'
                 decoded_str = str(base58.b58decode(content))
                 matches = re.sub(pattern, ' ', decoded_str).replace("b'", "")[:-1]
-                children = list(dag.successors(node))
-                l.append({"layer":f"{layer}", "hash":f"{node}", "children":children, "content":f"{matches}", "timestamp": f"{timestamp}"})
+                
+                l.append({"layer":f"{layer}", "hash":f"{node}", "children":children, "parents":parents, "content":f"{matches}", "timestamp": f"{timestamp}"})
 
             x = check_multi_ev_in_layer(dag_dict, dag)
             self.view_one.set_data(l, dag, x)
