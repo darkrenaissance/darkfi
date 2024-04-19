@@ -17,15 +17,12 @@
 
 import json
 import random
-import logging
 import asyncio
-
 
 class JsonRpc:
 
-    async def start(self, host, port):
-        logging.info(f"trying to connect to {host}:{port}")
-        reader, writer = await asyncio.open_connection(host, port)
+    async def start(self, server, port):
+        reader, writer = await asyncio.open_connection(server, port, limit=1024 * 128)
         self.reader = reader
         self.writer = writer
 
@@ -35,6 +32,7 @@ class JsonRpc:
 
     async def _make_request(self, method, params):
         ident = random.randint(0, 2**16)
+        #print(ident)
         request = {
             "jsonrpc": "2.0",
             "method": method,
@@ -45,9 +43,11 @@ class JsonRpc:
         message = json.dumps(request) + "\n"
         self.writer.write(message.encode())
         await self.writer.drain()
+
         data = await self.reader.readline()
         message = data.decode().strip()
         response = json.loads(message)
+        #print(response)
         return response
 
     async def _subscribe(self, method, params):
@@ -62,7 +62,7 @@ class JsonRpc:
         message = json.dumps(request) + "\n"
         self.writer.write(message.encode())
         await self.writer.drain()
-        logging.debug("Subscribed")
+        #print("Subscribed")
 
     async def ping(self):
         return await self._make_request("ping", [])

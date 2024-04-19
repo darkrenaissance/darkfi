@@ -193,8 +193,10 @@ class App(object):
         #     await self.update_data(self.config)
         if key == 'enter':
             self.current_view = self.frame2
+            self.loop.widget = self.frame2
         if key == 'b':
             self.current_view = self.frame1
+            self.loop.widget = self.frame1
 
     def show_details(self, event):
         self.view_two.set_event(event)
