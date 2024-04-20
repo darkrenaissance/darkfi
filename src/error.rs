@@ -163,6 +163,9 @@ pub enum Error {
     #[error("Malformed packet")]
     MalformedPacket,
 
+    #[error("Error decoding packet: {0}")]
+    DecodePacket(String),
+
     #[error("Socks proxy error: {0}")]
     SocksError(String),
 
@@ -686,6 +689,12 @@ impl From<()> for Error {
     }
 }
 
+#[cfg(feature = "net")]
+impl From<std::collections::TryReserveError> for Error {
+    fn from(err: std::collections::TryReserveError) -> Self {
+        Self::DecodePacket(err.to_string())
+    }
+}
 #[cfg(feature = "smol")]
 impl<T> From<smol::channel::SendError<T>> for Error {
     fn from(err: smol::channel::SendError<T>) -> Self {
