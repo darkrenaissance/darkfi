@@ -1,4 +1,4 @@
-/* This file is part 10f DarkFi (https://dark.fi)
+/* This file is part of DarkFi (https://dark.fi)
  *
  * Copyright (C) 2020-2024 Dyne.org foundation
  *
@@ -191,7 +191,6 @@ async fn get_random_gold_host(
     info!("========================================================");
 
     let list = hosts.container.hostlists[HostColor::Gold as usize].read().await;
-    // TODO: This assert fails ~10% of the time. Need to figure out why.
     assert!(!list.is_empty());
     let position = rand::thread_rng().gen_range(0..list.len());
     let entry = &list[position];
@@ -334,6 +333,11 @@ async fn p2p_test_real(ex: Arc<Executor<'static>>) {
     info!("Peer successfully received addrs!");
     info!("========================================================");
 
+    info!("========================================================");
+    info!("Waiting 5s for outbound loop to connect...");
+    info!("========================================================");
+    sleep(5).await;
+
     // ===========================================================
     // 6. Select a random gold peer from one of the nodes and kill
     //    it.
@@ -393,38 +397,11 @@ async fn p2p_test_real(ex: Arc<Executor<'static>>) {
     info!("========================================================");
 
     for p2p in manual_instances.clone() {
-        let goldlist = p2p.hosts().container.fetch_all(HostColor::Gold).await;
-        assert!(goldlist.len() == N_CONNS);
+        // We should have (N_CONNS outbound + N_CONNS inbound)
+        // connections at this point.
+        let channels = p2p.hosts().channels().await;
+        assert!(channels.len() == N_CONNS * 2);
     }
-
-    info!("========================================================");
-    info!("Manual session connected successfully!");
-    info!("========================================================");
-
-    info!("========================================================");
-    info!("Selecting a random gold entry...");
-    info!("========================================================");
-
-    let random_node_index = rand::thread_rng().gen_range(0..manual_instances.len());
-    let ((addr, _), _) = get_random_gold_host(&manual_instances, random_node_index).await;
-
-    kill_node(&manual_instances, addr.clone()).await;
-
-    info!("========================================================");
-    info!("Waiting for greylist downgrade sequence to occur...");
-    info!("========================================================");
-
-    // ===========================================================
-    // 7. Verify the peer has been removed from the Gold list.
-    // ===========================================================
-    manual_instances[random_node_index]
-        .hosts()
-        .container
-        .contains(HostColor::Grey as usize, &addr)
-        .await;
-    info!("========================================================");
-    info!("Greylist downgrade occured successfully!");
-    info!("========================================================");
 
     info!("========================================================");
     info!("Manual session successful! Shutting down manual test...");

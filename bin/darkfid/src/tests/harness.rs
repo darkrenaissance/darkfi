@@ -116,6 +116,8 @@ impl Harness {
         let alice_blockchain_len = alice.blockchain.len();
         assert_eq!(alice_blockchain_len, bob.blockchain.len());
         assert_eq!(alice_blockchain_len, total_blocks);
+        assert!(alice.blockchain.headers.is_empty_sync());
+        assert!(bob.blockchain.headers.is_empty_sync());
 
         Ok(())
     }

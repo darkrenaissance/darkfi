@@ -505,16 +505,16 @@ impl BlockStore {
         Ok(block_difficulties)
     }
 
-    /// Fetch n hashes after given height. In the iteration, if an order
+    /// Fetch n hashes before given height. In the iteration, if an order
     /// height is not found, the iteration stops and the function returns what
-    /// it has found so far in the `BlockOrderStore`.
-    pub fn get_after(&self, height: u32, n: usize) -> Result<Vec<HeaderHash>> {
+    /// it has found so far in the store's order tree.
+    pub fn get_before(&self, height: u32, n: usize) -> Result<Vec<HeaderHash>> {
         let mut ret = vec![];
 
         let mut key = height;
         let mut counter = 0;
-        while counter <= n {
-            if let Some(found) = self.order.get_gt(key.to_be_bytes())? {
+        while counter < n {
+            if let Some(found) = self.order.get_lt(key.to_be_bytes())? {
                 let (height, hash) = parse_u32_key_record(found)?;
                 key = height;
                 ret.push(hash);
@@ -524,16 +524,13 @@ impl BlockStore {
             break
         }
 
-        Ok(ret)
+        Ok(ret.iter().rev().copied().collect())
     }
 
     /// Fetch the first block hash in the order tree, based on the `Ord`
     /// implementation for `Vec<u8>`.
     pub fn get_first(&self) -> Result<(u32, HeaderHash)> {
-        let found = match self.order.first()? {
-            Some(s) => s,
-            None => return Err(Error::BlockHeightNotFound(0u32)),
-        };
+        let Some(found) = self.order.first()? else { return Err(Error::BlockHeightNotFound(0u32)) };
         let (height, hash) = parse_u32_key_record(found)?;
 
         Ok((height, hash))
@@ -557,7 +554,7 @@ impl BlockStore {
         Ok(Some(block_difficulty))
     }
 
-    /// Fetch the last N records from the difficulty store, in order.
+    /// Fetch the last N records from the store's difficulty tree, in order.
     pub fn get_last_n_difficulties(&self, n: usize) -> Result<Vec<BlockDifficulty>> {
         // Build an iterator to retrieve last N records
         let records = self.difficulty.iter().rev().take(n);

@@ -95,6 +95,7 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     let charlie = &charlie.validator;
     charlie.validate_blockchain(pow_target, pow_fixed_difficulty.clone()).await?;
     assert_eq!(alice.blockchain.len(), charlie.blockchain.len());
+    assert!(charlie.blockchain.headers.is_empty_sync());
     // Node must have just the best fork
     let forks = alice.consensus.forks.read().await;
     let best_fork = &forks[best_fork_index(&forks)?];
@@ -160,6 +161,7 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     charlie.finalization().await?;
     charlie.validate_blockchain(pow_target, pow_fixed_difficulty).await?;
     assert_eq!(alice.blockchain.len(), charlie.blockchain.len());
+    assert!(charlie.blockchain.headers.is_empty_sync());
     assert_eq!(last, charlie.blockchain.last()?.1);
     let charlie_forks = charlie.consensus.forks.read().await;
     assert_eq!(charlie_forks.len(), 1);

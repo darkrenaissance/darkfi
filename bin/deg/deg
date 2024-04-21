@@ -17,124 +17,246 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import json, urwid, asyncio, logging
+import asyncio, re, sys, base58
+import urwid as u
+import networkx as nx
+from datetime import datetime
+# import matplotlib.pyplot as plt
+import src.rpc
 import src.util
 
 from os.path import join
-from src.model import Model
-from src.rpc import JsonRpc
-from src.view import View
 
-class Degview:
+resolved = True
+
+def check_multi_ev_in_layer(dag_dict, dag):
+    gen = list(nx.topological_generations(dag))
+    for i in gen:
+        # fork
+        if len(i) == 2:
+            event1 = dag_dict[i[0]]
+            event2 = dag_dict[i[1]]
+            if int(event1['timestamp']) > int(event2['timestamp']):
+                return i[0]
+            else:
+                return i[1]
+
+def graph(event, dag, x):
+    global resolved
+    merge = len(list(dag.predecessors(event['hash']))) > 1
+    fork = len(list(dag.successors(event['hash']))) > 1
+    
+    if merge and not fork:
+        resolved = False
+        return "     M━┑"
+    if fork and not merge:
+        resolved = True
+        return "     o─┘"
+    if merge and fork:
+        return "     M━┪"
+    if not merge and not fork:
+        if event['hash'] == x:
+            return "     │ o"
+        else:
+            if not resolved:
+                return "     o │"
+            else:
+                return "     o  "
+            #  "     │ o"
+            #  "     o │"
+            #  "     o━┪"
+            #  "     o─┴"
+            #  "     o━┯"
+
+
+class ListItem(u.WidgetWrap):
+    
+    def __init__ (self, event, dag, x):
+        g = graph(event, dag, x)
+        self.content = event
+        layer_num = int(event["layer"])
+        layer = "layer " + str(layer_num) if layer_num != 0 else "genesis"
+        dt = event['hash'][:10] + " | " + str(datetime.fromtimestamp(int(event['timestamp'])))
+        t = u.AttrMap(u.Text([('word', dt),
+                              ('layer-num', " " + layer),
+                              ('word', g),
+                              ('cont', event['content'])], wrap="ellipsis"),
+                              {'word':'datetime', 'layer-num': 'reporter', 'cont': 'content'},
+                              {'word':'event_selected', 'layer-num': 'event_selected', 'cont': 'event_selected'})
+        u.WidgetWrap.__init__(self, t)
+
+    def selectable (self):
+        return True
+    
+    def keypress(self, size, key):
+        return key
+
+class ListView(u.WidgetWrap):
 
     def __init__(self):
-        self.ev = asyncio.new_event_loop()
-        asyncio.set_event_loop(self.ev)
-        self.queue = asyncio.Queue()
+        u.register_signal(self.__class__, ['show_details'])
+        self.walker = u.SimpleFocusListWalker([])
+        lb = u.ListBox(self.walker)
+        u.WidgetWrap.__init__(self, lb)
 
-        os = src.util.get_os()
-        config_path = src.util.user_config_dir('darkfi', os)
+    def modified(self):
+        focus_w, _ = self.walker.get_focus()
+        u.emit_signal(self, 'show_details', focus_w.content)
 
-        suffix = '.toml'
-        filename = 'deg_config'
-        path = join(config_path, filename + suffix)
-        self.config = src.util.spawn_config(path)
+    def set_data(self, events, dag, x):
+        events_widgets = [ListItem(e, dag, x) for e in events]
+        u.disconnect_signal(self.walker, 'modified', self.modified)
 
-        self.model = Model()
-        self.view = View(self.model)
+        while len(self.walker) > 0:
+            self.walker.pop()
+        
+        self.walker.extend(events_widgets)
+        u.connect_signal(self.walker, "modified", self.modified)
+        self.walker.set_focus(0)
 
-    async def subscribe(self, rpc, node):
-        name = node['name']
-        host = node['host']
-        port = node['port']
-        type = node['type']
-        info = {}
-
-        while True:
-            try:
-                await rpc.start(host, port)
-                logging.debug(f'Started {name} RPC on port {port}')
-                break
-            except Exception as e:
-                info[name] = {}
-                await self.queue.put(info)
-                continue
+class DetailView(u.WidgetWrap):
     
-        if type == 'NORMAL':
-            data = await rpc._make_request('eventgraph.get_info', [])
-            info[name] = data
+    def __init__ (self):
+        t = u.Text("")
+        u.WidgetWrap.__init__(self, t)
+        
+    def set_event(self, c):
+        s = f'Hash: {c["hash"]}\nChildren: {c["children"]}\nParents: {c["parents"]}\nContent: {c["content"]}\nLayer: {c["layer"]}'
+        self._w.set_text(s)
 
-            await self.queue.put(info)
-            await rpc.deg_switch(True)
-            await rpc.deg_subscribe_events()
-            
-            while True:
-                await asyncio.sleep(0.01)
-                data = await rpc.reader.readline()
-                try:
-                    data = json.loads(data)
-                    info[name] = data
-                    await self.queue.put(info)
-                except:
-                    info[name] = {}
-                    await self.queue.put(info)
-
-            await rpc.deg_switch(False)
-
-        await rpc.stop()
-
-    async def start_connect_slots(self, nodes):
-        tasks = []
-        async with asyncio.TaskGroup() as tg:
-            for i, node in enumerate(nodes):
-                rpc = JsonRpc()
-                subscribe = tg.create_task(self.subscribe(
-                            rpc, node))
-                nodes = tg.create_task(self.update_info())
-
-    async def update_info(self):
-        while True:
-            info = await self.queue.get()
-            values = list(info.values())[0]
-
-            if not values:
-                self.model.add_offline(info)
-
-            if 'result' in values:
-                result = values.get('result')
-                if 'eventgraph_info' in result:
-                    self.model.add_eg(info)
-
-            if 'params' in values:
-                self.model.add_event(info)
-
-            self.queue.task_done()
-
-    def main(self):
-        logging.basicConfig(filename='deg.log',
-                            encoding='utf-8',
-                            level=logging.DEBUG)
-        nodes = self.config.get('nodes')
-
-        loop = urwid.MainLoop(self.view.ui, self.view.palette,
-                              unhandled_input=self.unhandled_input,
-                              event_loop=urwid.AsyncioEventLoop(
-                              loop=self.ev))
-
-        self.ev.create_task(self.start_connect_slots(nodes))
-        self.ev.create_task(self.view.update_view(self.ev, loop))
-
-        loop.run()
-
+class App(object):
+    
     def unhandled_input(self, key):
-        if isinstance(key, tuple):
-            return
-        if key in ('q'):
-            for task in asyncio.all_tasks():
-                task.cancel()
-            raise urwid.ExitMainLoop()
+        if key in ('q',):
+            raise u.ExitMainLoop()
+        # if key == 'r':
+        #     await self.update_data(self.config)
+        if key == 'enter':
+            self.current_view = self.frame2
+            self.loop.widget = self.frame2
+        if key == 'b':
+            self.current_view = self.frame1
+            self.loop.widget = self.frame1
+
+    def show_details(self, event):
+        self.view_two.set_event(event)
+        
+    def __init__(self):
+        self.view_one = ListView()
+        u.connect_signal(self.view_one, 'show_details', self.show_details)
+        footer = u.AttrWrap(u.Text(" Q to exit"), "footer")
+        col_rows = u.raw_display.Screen().get_cols_rows()
+        h = col_rows[0] - 2
+        f1 = u.Filler(self.view_one, valign='top', height=h)
+        c_list = u.LineBox(f1, title="Events")
+        columns = u.Columns([('weight', 100, c_list)])
+        frame1 = u.AttrMap(u.Frame(body=columns, footer=footer), 'bg')
+        self.frame1 = frame1
+        ############
+        self.view_two = DetailView()
+        f2 = u.Filler(self.view_two, valign='top')
+        c_details = u.LineBox(f2, title="Details")
+        footer = u.AttrWrap(u.Text(" Q to exit, B to main view"), "footer")
+        columns = u.Columns([('weight', 100, c_details)])
+        frame2 = u.AttrMap(u.Frame(body=columns, footer=footer), 'bg')
+        self.frame2 = frame2
+        ##########
+        self.current_view = self.frame1  # Start with View One
+        self.palette = {
+            ("bg",               "white",           "black"),
+            ("event",            "white",           "black"),
+            ("event_selected",   "white",           "light green"),
+            ('datetime',         "light blue",      "black"),
+            ('reporter',         "dark green",      "black"),
+            ('content',          "",                "black"),
+            ("footer",           "white, bold",     "dark red")
+        }
+    
+    async def update_data(self, config):
+            self.config = config
+            dag_dict = await recreate_dag(config)
+            dag_list = list(dag_dict.items())
+            # sorted_dag = sorted(dag_list, key=lambda x:x[1]['layer'])
+
+            # genesis_hash = sorted_dag[0][0]
+
+            parent_child_pairs = []
+            for item in dag_list:
+                parents = item[1]['parents']
+                child = item[0]
+                for parent in parents:
+                    if parent == '0' * 64:
+                        continue
+                    parent_child_pairs.append((parent, child))
+                    
+            # Create a directed graph
+            dag = nx.DiGraph()
+
+            # Add edges to the graph (this also adds nodes)
+            dag.add_edges_from(parent_child_pairs)
+            l = []
+            topological_order = list(nx.topological_sort(dag))
+            for node in reversed(topological_order):
+                event_details = dag_dict.get(node) # details
+                layer = int(event_details['layer'])
+                content = event_details['content'] # event content
+                timestamp = event_details['timestamp']
+                children = list(dag.successors(node))
+                parents = list(dag.predecessors(node))
+                pattern = r'\\x[0-9A-Fa-f]{2}'
+                decoded_str = str(base58.b58decode(content))
+                matches = re.sub(pattern, ' ', decoded_str).replace("b'", "")[:-1]
+                
+                l.append({"layer":f"{layer}", "hash":f"{node}", "children":children, "parents":parents, "content":f"{matches}", "timestamp": f"{timestamp}"})
+
+            x = check_multi_ev_in_layer(dag_dict, dag)
+            self.view_one.set_data(l, dag, x)
+
+    async def start(self, config):
+        await self.update_data(config)
+        self.loop = u.MainLoop(self.current_view, self.palette, unhandled_input=self.unhandled_input)
+        self.loop.run()
+
+async def recreate_dag(config):
+    host = config['host']
+    port = config['port']
+    rpc = src.rpc.JsonRpc()
+    while True:
+        try:
+            await rpc.start(host, port)
+            break
+        except OSError:
+            print(f"Error: Connection Refused to '{host}:{port}', Either because the daemon is down, is currently syncing or wrong url.")
+            sys.exit(-1)
+
+    await rpc.deg_switch(True)
+    await rpc.deg_switch(False)
+
+    json_result = await rpc._make_request("eventgraph.get_info", [])
+    
+    if json_result['result']['eventgraph_info']:
+        return json_result['result']['eventgraph_info']['dag']
+        
+
+async def main(argv):
+
+    os = src.util.get_os()
+    config_path = src.util.user_config_dir('darkfi', os)
+
+    suffix = '.toml'
+    filename = 'deg_config'
+    path = join(config_path, filename + suffix)
+    config = src.util.spawn_config(path)
+    config = config['nodes'][0]
+
+    if len(argv) > 1:
+        if argv[1] in ['darkirc', 'irc']:
+            config['port'] = 26660
+        elif argv[1] in ['taud', 'tau']:
+            config['port'] = 23330
+
+    app = App()
+    await app.start(config)
     
 
-if __name__ == '__main__':
-    deg = Degview()
-    deg.main()
+asyncio.run(main(sys.argv))

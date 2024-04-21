@@ -52,8 +52,6 @@ pub struct Settings {
     /// Inbound connection slots number, this many active listening connections
     /// will be allowed. (This does not include manual connections)
     pub inbound_connections: usize,
-    /// Manual connections retry limit, 0 for forever looping
-    pub manual_attempt_limit: usize,
     /// Outbound connection timeout (in seconds)
     pub outbound_connect_timeout: u64,
     /// Exchange versions (handshake) timeout (in seconds)
@@ -100,7 +98,6 @@ impl Default for Settings {
             transport_mixing: true,
             outbound_connections: 0,
             inbound_connections: 10,
-            manual_attempt_limit: 0,
             outbound_connect_timeout: 15,
             channel_handshake_timeout: 10,
             channel_heartbeat_interval: 30,
@@ -155,10 +152,6 @@ pub struct SettingsOpt {
     #[serde(default)]
     #[structopt(long)]
     pub seeds: Vec<Url>,
-
-    /// Manual connections retry limit
-    #[structopt(skip)]
-    pub manual_attempt_limit: Option<usize>,
 
     /// Connection establishment timeout in seconds
     #[structopt(skip)]
@@ -247,7 +240,6 @@ impl From<SettingsOpt> for Settings {
             transport_mixing: opt.transport_mixing.unwrap_or(def.transport_mixing),
             outbound_connections: opt.outbound_connections.unwrap_or(def.outbound_connections),
             inbound_connections: opt.inbound_connections.unwrap_or(def.inbound_connections),
-            manual_attempt_limit: opt.manual_attempt_limit.unwrap_or(def.manual_attempt_limit),
             outbound_connect_timeout: opt
                 .outbound_connect_timeout
                 .unwrap_or(def.outbound_connect_timeout),

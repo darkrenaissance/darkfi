@@ -20,7 +20,9 @@
 //! Used to create a manual session and to stop and start the session.
 //!
 //! A manual session is a type of outbound session in which we attempt
-//! connection to a predefined set of peers.
+//! connection to a predefined set of peers. Manual sessions loop forever
+//! continually trying to connect to a given peer, and sleep
+//! `outbound_connect_timeout` times between each attempt.
 //!
 //! Class consists of a weak pointer to the p2p interface and a vector of
 //! outbound connection slots. Using a weak pointer to p2p allows us to
@@ -94,17 +96,13 @@ impl ManualSession {
         let settings = self.p2p().settings();
         let connector = Connector::new(settings.clone(), parent);
 
-        let attempts = settings.manual_attempt_limit;
-        let mut remaining = attempts;
-
-        // Loop forever if attempts==0, otherwise loop attempts number of times.
-        let mut tried_attempts = 0;
+        let mut attempts = 0;
         loop {
-            tried_attempts += 1;
+            attempts += 1;
             info!(
                 target: "net::manual_session",
                 "[P2P] Connecting to manual outbound [{}] (attempt #{})",
-                addr, tried_attempts,
+                addr, attempts
             );
 
             // Do not establish a connection to a host that is also configured as a seed.
@@ -164,15 +162,6 @@ impl ManualSession {
                            outbound [{}]: {}", addr.clone(), e);
                 }
             }
-            // Wait and try again.
-            // TODO: Should we notify about the failure now, or after all attempts
-            // have failed?
-            self.p2p().hosts().channel_subscriber.notify(Err(Error::ConnectFailed)).await;
-
-            remaining = if attempts == 0 { 1 } else { remaining - 1 };
-            if remaining == 0 {
-                break
-            }
 
             info!(
                 target: "net::manual_session",
@@ -181,14 +170,6 @@ impl ManualSession {
             );
             sleep(settings.outbound_connect_timeout).await;
         }
-
-        warn!(
-            target: "net::manual_session",
-            "[P2P] Suspending manual connection to {} after {} failed attempts",
-            addr, attempts,
-        );
-
-        Ok(())
     }
 }
 

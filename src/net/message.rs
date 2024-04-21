@@ -18,7 +18,7 @@
 
 use darkfi_serial::{
     async_trait, AsyncDecodable, AsyncEncodable, Decodable, Encodable, SerialDecodable,
-    SerialEncodable,
+    SerialEncodable, VarInt,
 };
 use log::trace;
 use smol::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
@@ -120,6 +120,9 @@ pub struct Packet {
 
 /// Reads and decodes an inbound payload from the given async stream.
 /// Returns decoded [`Packet`].
+/// We start by extracting the packet length from the stream, then allocate
+/// the precise buffer for this length using stream.take(). This provides
+/// a basic DDOS protection.
 pub async fn read_packet<R: AsyncRead + Unpin + Send + Sized>(stream: &mut R) -> Result<Packet> {
     // Packets should have a 4 byte header of magic digits.
     // This is used for network debugging.
@@ -133,12 +136,27 @@ pub async fn read_packet<R: AsyncRead + Unpin + Send + Sized>(stream: &mut R) ->
         return Err(Error::MalformedPacket)
     }
 
-    // The type of the message.
-    let command = String::decode_async(stream).await?;
-    trace!(target: "net::message", "Read command: {}", command);
+    // First deserialize the command, i.e. the type of the message.
+    let cmd_len = VarInt::decode_async(stream).await?.0;
+    let mut cmd_stream = stream.take(cmd_len);
+    let mut cmd_str = Vec::new();
+    cmd_str.try_reserve(cmd_len as usize)?;
 
-    // The message-dependent data (see message types)
-    let payload = Vec::<u8>::decode_async(stream).await?;
+    for _ in 0..cmd_len {
+        cmd_str.push(AsyncDecodable::decode_async(&mut cmd_stream).await?);
+    }
+    let command = String::from_utf8(cmd_str)?;
+
+    // Then deserialize the message-dependent payload (see: message types)
+    let msg_len = VarInt::decode_async(stream).await?.0;
+    let mut msg_stream = stream.take(msg_len);
+    let mut payload = Vec::new();
+    payload.try_reserve(msg_len as usize)?;
+
+    for _ in 0..msg_len {
+        payload.push(AsyncDecodable::decode_async(&mut msg_stream).await?);
+    }
+
     trace!(target: "net::message", "Read payload {} bytes", payload.len());
 
     Ok(Packet { command, payload })
