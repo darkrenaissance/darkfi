@@ -186,3 +186,77 @@ connection is dropped.
 
 Since the reader in `messages.rs` preallocs buffers, there should be a hard
 limit here, and the raw reads also affects your score too.
+
+### Libp2p resource manager
+
+In libp2p, resource usage is constrained by a `Resource Manager` that
+defines resource usage limits. The `Resource Manager` checks whether
+a given request is within a limit and returns an error if it exceeds
+a limit.
+
+Resources are deliminated by _Resource Management Scopes_. Each scope
+has a corresponding limit that resources cannot exceed.
+
+Limits are calculated by measuring the following resources: 
+
+* Memory 
+
+* File descriptors
+
+* Connections (Inbound connections have stricter limits than outbound
+connections)
+
+* Streams: an object of interaction between nodes (~analogous to
+`Channel`). Streams are not metered directly- rather they are constrained
+within the protocol and service scope (defined below). Inbound streams
+are more tightly controlled than outbound streams.
+
+Resource Management Scopes are hierarchial and downstream resource usage
+is aggregated at higher levels.
+
+ ```
+System
+  +------------> Transient.............+................+
+  |                                    .                .
+  +------------>  Service------------- . ----------+    .
+  |                                    .           |    .
+  +------------->  Protocol----------- . ----------+    .
+  |                                    .           |    .
+  +-------------->* Peer               \/          |    .
+                     +------------> Connection     |    .
+                     |                             \/   \/
+                     +--------------------------->  Stream
+```
+
+* System scope: top level scope. Nests all other scopes and defines
+global hard limits.
+* Transcient scope: scope of resources still being established, e.g. a
+connection prior to a handshake.
+* Service (analogous to `Session`) scopes. Logical groupings of streams
+that implement protocol flow and may additionally consume resources such
+as memory.
+* Protocol scopes. Faciliates backwards compatiability since nodes can
+run multiple protocols (incl. old ones) with constrained resource usage.
+* Peer scopes. Sets a total limit on the resource usage of an individual
+peer.
+* Connection scopes. Constrains resource usage by a single
+connection. Starts monitoring when the connection begins and ends when
+the connection ends.
+* Stream (analogous to `Channel`) scopes. Begins when a stream is created
+and ends when the stream is closed.
+* User transaction scopes. A generic extension to the resource manager
+that can be implemented by a programmer.
+
+There is also:
+
+* Allowlist System scope
+* Allowlist Transcient scope 
+
+These are System and Transcient scopes for the `allowlist`, which is a
+list of honest peer anagolous to our `goldlist`. Allowlist scopes can
+continue to use (and meter) resources while the System scope has already
+reached its limit (to protect against ellipse attack).
+
+Limits have a default setting that can be configured. It's also possible
+to scale limits with a particular config that allows for scaling to
+different machines.
