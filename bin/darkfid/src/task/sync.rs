@@ -29,8 +29,8 @@ use tinyjson::JsonValue;
 
 use crate::{
     proto::{
-        ForkSyncRequest, ForkSyncResponse, HeaderSyncRequest, HeaderSyncResponse, IsSyncedRequest,
-        IsSyncedResponse, SyncRequest, SyncResponse, TipRequest, TipResponse, BATCH, COMMS_TIMEOUT,
+        ForkSyncRequest, ForkSyncResponse, HeaderSyncRequest, HeaderSyncResponse, SyncRequest,
+        SyncResponse, TipRequest, TipResponse, BATCH, COMMS_TIMEOUT,
     },
     Darkfid,
 };
@@ -48,30 +48,39 @@ pub async fn sync_task(node: &Darkfid) -> Result<()> {
     // Grab blocks subscriber
     let block_sub = node.subscribers.get("blocks").unwrap();
 
-    // Grab synced peers
-    let peers = synced_peers(node).await?;
-
     // TODO: Configure a checkpoint, filter peers that don't have that and start
     // syncing the sequence until that
 
     // Grab last known block header, including existing pending sync ones
-    let mut last = match node.validator.blockchain.headers.get_last_sync()? {
-        Some(last_sync) => (last_sync.height, last_sync.hash()),
-        None => node.validator.blockchain.last()?,
-    };
+    let mut last = node.validator.blockchain.last()?;
+    // Check sync headers first record is the next one
+    if let Some(next) = node.validator.blockchain.headers.get_first_sync()? {
+        if next.height == last.0 + 1 {
+            // Grab last sync header to continue syncing from
+            if let Some(last_sync) = node.validator.blockchain.headers.get_last_sync()? {
+                last = (last_sync.height, last_sync.hash());
+            }
+        } else {
+            // Purge headers and start syncing from scratch
+            node.validator.blockchain.headers.remove_all_sync()?;
+        }
+    }
     info!(target: "darkfid::task::sync_task", "Last known block: {} - {}", last.0, last.1);
+
+    // Grab synced peers tips
+    let mut tips = synced_peers(node, &last.1).await?;
+
+    // Grab the most common tip and the corresponding peers
+    let (mut common_tip_height, mut common_tip_peers) = most_common_tip(tips).await?;
 
     // Sync headers and blocks
     loop {
-        // Grab the most common tip and the corresponding peers
-        let (common_tip_height, common_tip_peers) = most_common_tip(&peers, &last.1).await?;
-
         // Retrieve all the headers backwards until our last known one and verify them.
         // We use the next height, in order to also retrieve the peers tip header.
         retrieve_headers(node, &common_tip_peers, last.0, common_tip_height + 1).await?;
 
         // Retrieve all the blocks for those headers and apply them to canonical
-        let last_received = retrieve_blocks(node, &peers, last, block_sub).await?;
+        let last_received = retrieve_blocks(node, &common_tip_peers, last, block_sub).await?;
         info!(target: "darkfid::task::sync_task", "Last received block: {} - {}", last_received.0, last_received.1);
 
         if last == last_received {
@@ -79,10 +88,14 @@ pub async fn sync_task(node: &Darkfid) -> Result<()> {
         }
 
         last = last_received;
+
+        // Grab synced peers most common tip again
+        tips = synced_peers(node, &last.1).await?;
+        (common_tip_height, common_tip_peers) = most_common_tip(tips).await?;
     }
 
     // Sync best fork
-    sync_best_fork(node, &peers, &last.1).await?;
+    sync_best_fork(node, &common_tip_peers, &last.1).await?;
 
     // Perform finalization
     let finalized = node.validator.finalization().await?;
@@ -100,74 +113,64 @@ pub async fn sync_task(node: &Darkfid) -> Result<()> {
     Ok(())
 }
 
-/// Auxiliary function to lock until node is connected to at least one synced peer.
-async fn synced_peers(node: &Darkfid) -> Result<Vec<ChannelPtr>> {
-    let mut peers = vec![];
+/// Auxiliary function to block until node is connected to at least one synced peer,
+/// and retrieve the synced peers tips.
+async fn synced_peers(
+    node: &Darkfid,
+    last_tip: &HeaderHash,
+) -> Result<HashMap<(u32, [u8; 32]), Vec<ChannelPtr>>> {
+    info!(target: "darkfid::task::sync::synced_peers", "Receiving tip from peers...");
+    let mut tips = HashMap::new();
     loop {
         // Grab channels
-        let channels = node.p2p.hosts().channels().await;
+        let peers = node.p2p.hosts().channels().await;
 
         // Check anyone is connected
-        if !channels.is_empty() {
+        if !peers.is_empty() {
             // Ask each peer if they are synced
-            for channel in channels {
+            for peer in peers {
                 // Communication setup
-                let response_sub = channel.subscribe_msg::<IsSyncedResponse>().await?;
+                let response_sub = peer.subscribe_msg::<TipResponse>().await?;
 
-                // Node creates a `IsSyncedRequest` and sends it
-                let request = IsSyncedRequest {};
-                channel.send(&request).await?;
+                // Node creates a `TipRequest` and sends it
+                let request = TipRequest { tip: *last_tip };
+                peer.send(&request).await?;
 
                 // Node waits for response
                 let Ok(response) = response_sub.receive_with_timeout(COMMS_TIMEOUT).await else {
                     continue
                 };
 
-                // Parse response
-                if response.synced {
-                    peers.push(channel)
+                // Handle response
+                if response.synced && response.height.is_some() && response.hash.is_some() {
+                    let tip = (response.height.unwrap(), *response.hash.unwrap().inner());
+                    let Some(tip_peers) = tips.get_mut(&tip) else {
+                        tips.insert(tip, vec![peer.clone()]);
+                        continue
+                    };
+                    tip_peers.push(peer.clone());
                 }
             }
         }
 
-        // Check if we got peers to sync from
-        if !peers.is_empty() {
+        // Check if we got any tips
+        if !tips.is_empty() {
             break
         }
 
-        warn!(target: "darkfid::task::sync_task", "Node is not connected to other nodes, waiting to retry...");
+        warn!(target: "darkfid::task::sync::synced_peers", "Node is not connected to other nodes, waiting to retry...");
         sleep(10).await;
     }
 
-    Ok(peers)
+    Ok(tips)
 }
 
 /// Auxiliary function to ask all peers for their current tip and find the most common one.
 async fn most_common_tip(
-    peers: &[ChannelPtr],
-    last_tip: &HeaderHash,
+    tips: HashMap<(u32, [u8; 32]), Vec<ChannelPtr>>,
 ) -> Result<(u32, Vec<ChannelPtr>)> {
-    info!(target: "darkfid::task::sync::most_common_tip", "Receiving tip from peers...");
-    let mut tips: HashMap<(u32, [u8; 32]), Vec<ChannelPtr>> = HashMap::new();
-    for peer in peers {
-        // Node creates a `TipRequest` and sends it
-        let response_sub = peer.subscribe_msg::<TipResponse>().await?;
-        let request = TipRequest { tip: *last_tip };
-        peer.send(&request).await?;
-
-        // Node waits for response
-        let Ok(response) = response_sub.receive_with_timeout(COMMS_TIMEOUT).await else { continue };
-
-        // Handle response
-        let tip = (response.height, *response.hash.inner());
-        let Some(tip_peers) = tips.get_mut(&tip) else {
-            tips.insert(tip, vec![peer.clone()]);
-            continue
-        };
-        tip_peers.push(peer.clone());
-    }
-
     // Grab the most common highest tip peers
+    info!(target: "darkfid::task::sync::most_common_tip", "Finding most common tip...");
     let mut common_tip = (0, [0u8; 32], vec![]);
     for (tip, peers) in tips {
         // Check if tip peers is less than the most common tip peers
@@ -183,7 +186,7 @@ async fn most_common_tip(
         common_tip = (tip.0, tip.1, peers);
     }
 
-    info!(target: "darkfid::task::sync::most_common_tip", "Received tip from peers: {} - {}", common_tip.0, HeaderHash::new(common_tip.1));
+    info!(target: "darkfid::task::sync::most_common_tip", "Most common tip: {} - {}", common_tip.0, HeaderHash::new(common_tip.1));
     Ok((common_tip.0, common_tip.2))
 }
 
@@ -247,16 +250,19 @@ async fn retrieve_headers(
     let last_known = node.validator.consensus.best_fork_last_header().await?;
     let mut headers = node.validator.blockchain.headers.get_after_sync(0, BATCH)?;
     if headers[0].previous != last_known.1 || headers[0].height != last_known.0 + 1 {
+        node.validator.blockchain.headers.remove_all_sync()?;
         return Err(Error::BlockIsInvalid(headers[0].hash().as_string()))
     }
     verified_headers += 1;
     for (index, header) in headers[1..].iter().enumerate() {
         if header.previous != headers[index].hash() || header.height != headers[index].height + 1 {
+            node.validator.blockchain.headers.remove_all_sync()?;
             return Err(Error::BlockIsInvalid(header.hash().as_string()))
         }
         verified_headers += 1;
     }
     info!(target: "darkfid::task::sync::retrieve_headers", "Headers verified: {}/{}", verified_headers, total);
+
     // Now we verify the rest sequences
     let mut last_checked = headers.last().unwrap().clone();
     headers = node.validator.blockchain.headers.get_after_sync(last_checked.height, BATCH)?;
@@ -264,6 +270,7 @@ async fn retrieve_headers(
         if headers[0].previous != last_checked.hash() ||
             headers[0].height != last_checked.height + 1
         {
+            node.validator.blockchain.headers.remove_all_sync()?;
             return Err(Error::BlockIsInvalid(headers[0].hash().as_string()))
         }
         verified_headers += 1;
@@ -271,6 +278,7 @@ async fn retrieve_headers(
             if header.previous != headers[index].hash() ||
                 header.height != headers[index].height + 1
             {
+                node.validator.blockchain.headers.remove_all_sync()?;
                 return Err(Error::BlockIsInvalid(header.hash().as_string()))
             }
             verified_headers += 1;

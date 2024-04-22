@@ -37,25 +37,9 @@ use darkfi_serial::{SerialDecodable, SerialEncodable};
 // Constant defining how many blocks we send during syncing.
 pub const BATCH: usize = 10;
 
-/// Structure represening a request to ask a node if they are synced.
-#[derive(Debug, SerialEncodable, SerialDecodable)]
-pub struct IsSyncedRequest {}
-
-impl_p2p_message!(IsSyncedRequest, "issyncedrequest");
-
-/// Structure representing the response to `IsSyncedRequest`,
-/// containing a boolean flag to indicate if we are synced.
-#[derive(Debug, SerialEncodable, SerialDecodable)]
-pub struct IsSyncedResponse {
-    /// Flag indicating the node is synced
-    pub synced: bool,
-}
-
-impl_p2p_message!(IsSyncedResponse, "issyncedresponse");
-
 /// Structure represening a request to ask a node for their current
-/// canonical(finalized) tip block hash. We also include our own
-/// tip, so they can verify we follow the same sequence.
+/// canonical(finalized) tip block hash, if they are synced. We also
+/// include our own tip, so they can verify we follow the same sequence.
 #[derive(Debug, SerialEncodable, SerialDecodable)]
 pub struct TipRequest {
     /// Canonical(finalized) tip block hash
@@ -65,13 +49,16 @@ pub struct TipRequest {
 impl_p2p_message!(TipRequest, "tiprequest");
 
 /// Structure representing the response to `TipRequest`,
-/// containing our canonical(finalized) tip block height and hash.
+/// containing a boolean flag to indicate if we are synced,
+/// and our canonical(finalized) tip block height and hash.
 #[derive(Debug, SerialEncodable, SerialDecodable)]
 pub struct TipResponse {
+    /// Flag indicating the node is synced
+    pub synced: bool,
     /// Canonical(finalized) tip block height
-    pub height: u32,
+    pub height: Option<u32>,
     /// Canonical(finalized) tip block hash
-    pub hash: HeaderHash,
+    pub hash: Option<HeaderHash>,
 }
 
 impl_p2p_message!(TipResponse, "tipresponse");
@@ -142,7 +129,6 @@ pub struct ForkSyncResponse {
 impl_p2p_message!(ForkSyncResponse, "forksyncresponse");
 
 pub struct ProtocolSync {
-    is_synced_sub: MessageSubscription<IsSyncedRequest>,
     tip_sub: MessageSubscription<TipRequest>,
     header_sub: MessageSubscription<HeaderSyncRequest>,
     request_sub: MessageSubscription<SyncRequest>,
@@ -159,8 +145,6 @@ impl ProtocolSync {
             "Adding ProtocolSync to the protocol registry"
         );
         let msg_subsystem = channel.message_subsystem();
-        msg_subsystem.add_dispatch::<IsSyncedRequest>().await;
-        msg_subsystem.add_dispatch::<IsSyncedResponse>().await;
         msg_subsystem.add_dispatch::<TipRequest>().await;
         msg_subsystem.add_dispatch::<TipResponse>().await;
         msg_subsystem.add_dispatch::<HeaderSyncRequest>().await;
@@ -170,14 +154,12 @@ impl ProtocolSync {
         msg_subsystem.add_dispatch::<ForkSyncRequest>().await;
         msg_subsystem.add_dispatch::<ForkSyncResponse>().await;
 
-        let is_synced_sub = channel.subscribe_msg::<IsSyncedRequest>().await?;
         let tip_sub = channel.subscribe_msg::<TipRequest>().await?;
         let header_sub = channel.subscribe_msg::<HeaderSyncRequest>().await?;
         let request_sub = channel.subscribe_msg::<SyncRequest>().await?;
         let fork_request_sub = channel.subscribe_msg::<ForkSyncRequest>().await?;
 
         Ok(Arc::new(Self {
-            is_synced_sub,
             tip_sub,
             header_sub,
             request_sub,
@@ -186,30 +168,6 @@ impl ProtocolSync {
             validator,
             channel,
         }))
-    }
-
-    async fn handle_receive_is_synced_request(self: Arc<Self>) -> Result<()> {
-        debug!(target: "darkfid::proto::protocol_sync::handle_receive_is_synced_request", "START");
-        loop {
-            if let Err(e) = self.is_synced_sub.receive().await {
-                debug!(
-                    target: "darkfid::proto::protocol_sync::handle_receive_is_synced_request",
-                    "recv fail: {}",
-                    e
-                );
-                continue
-            };
-
-            // Check if node has finished syncing its blockchain and respond
-            let response = IsSyncedResponse { synced: *self.validator.synced.read().await };
-            if let Err(e) = self.channel.send(&response).await {
-                error!(
-                    target: "darkfid::proto::protocol_sync::handle_receive_is_synced_request",
-                    "channel send fail: {}",
-                    e
-                )
-            };
-        }
     }
 
     async fn handle_receive_tip_request(self: Arc<Self>) -> Result<()> {
@@ -228,49 +186,50 @@ impl ProtocolSync {
             };
 
             // Check if node has finished syncing its blockchain
-            if !*self.validator.synced.read().await {
+            let response = if !*self.validator.synced.read().await {
                 debug!(
                     target: "darkfid::proto::protocol_sync::handle_receive_tip_request",
                     "Node still syncing blockchain, skipping..."
                 );
-                continue
-            }
-
-            // Check we follow the same sequence
-            match self.validator.blockchain.blocks.contains(&request.tip) {
-                Ok(contains) => {
-                    if !contains {
-                        debug!(
+                TipResponse { synced: false, height: None, hash: None }
+            } else {
+                // Check we follow the same sequence
+                match self.validator.blockchain.blocks.contains(&request.tip) {
+                    Ok(contains) => {
+                        if !contains {
+                            debug!(
+                                target: "darkfid::proto::protocol_sync::handle_receive_tip_request",
+                                "Node doesn't follow request sequence"
+                            );
+                            continue
+                        }
+                    }
+                    Err(e) => {
+                        error!(
                             target: "darkfid::proto::protocol_sync::handle_receive_tip_request",
-                            "Node doesn't follow request sequence"
+                            "block_store.contains fail: {}",
+                            e
                         );
                         continue
                     }
                 }
-                Err(e) => {
-                    error!(
-                        target: "darkfid::proto::protocol_sync::handle_receive_tip_request",
-                        "block_store.contains fail: {}",
-                        e
-                    );
-                    continue
-                }
-            }
 
-            // Grab our current tip and return it
-            let tip = match self.validator.blockchain.last() {
-                Ok(v) => v,
-                Err(e) => {
-                    error!(
-                        target: "darkfid::proto::protocol_sync::handle_receive_tip_request",
-                        "blockchain.last fail: {}",
-                        e
-                    );
-                    continue
-                }
+                // Grab our current tip and return it
+                let tip = match self.validator.blockchain.last() {
+                    Ok(v) => v,
+                    Err(e) => {
+                        error!(
+                            target: "darkfid::proto::protocol_sync::handle_receive_tip_request",
+                            "blockchain.last fail: {}",
+                            e
+                        );
+                        continue
+                    }
+                };
+
+                TipResponse { synced: true, height: Some(tip.0), hash: Some(tip.1) }
             };
 
-            let response = TipResponse { height: tip.0, hash: tip.1 };
             if let Err(e) = self.channel.send(&response).await {
                 error!(
                     target: "darkfid::proto::protocol_sync::handle_receive_tip_request",
@@ -449,10 +408,6 @@ impl ProtocolBase for ProtocolSync {
     async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "darkfid::proto::protocol_sync::start", "START");
         self.jobsman.clone().start(executor.clone());
-        self.jobsman
-            .clone()
-            .spawn(self.clone().handle_receive_is_synced_request(), executor.clone())
-            .await;
         self.jobsman
             .clone()
             .spawn(self.clone().handle_receive_tip_request(), executor.clone())
