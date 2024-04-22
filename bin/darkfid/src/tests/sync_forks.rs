@@ -68,7 +68,7 @@ async fn sync_forks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     let bob_url = th.bob.p2p.settings().inbound_addrs[0].clone();
     settings.peers = vec![bob_url];
     let charlie =
-        generate_node(&th.vks, &th.validator_config, &settings, &ex, false, false).await?;
+        generate_node(&th.vks, &th.validator_config, &settings, &ex, false, false, None).await?;
 
     // Verify node synced the best fork
     let forks = th.alice.validator.consensus.forks.read().await;

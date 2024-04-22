@@ -38,7 +38,8 @@ use crate::{
 // TODO: Parallelize independent requests.
 //       We can also make them be like torrents, where we retrieve chunks not in order.
 /// async task used for block syncing.
-pub async fn sync_task(node: &Darkfid) -> Result<()> {
+/// A checkpoint can be provided to ensure node syncs the correct sequence.
+pub async fn sync_task(node: &Darkfid, checkpoint: Option<(u32, HeaderHash)>) -> Result<()> {
     info!(target: "darkfid::task::sync_task", "Starting blockchain sync...");
 
     // Generate a new fork to be able to extend
@@ -47,9 +48,6 @@ pub async fn sync_task(node: &Darkfid) -> Result<()> {
 
     // Grab blocks subscriber
     let block_sub = node.subscribers.get("blocks").unwrap();
-
-    // TODO: Configure a checkpoint, filter peers that don't have that and start
-    // syncing the sequence until that
 
     // Grab last known block header, including existing pending sync ones
     let mut last = node.validator.blockchain.last()?;
@@ -67,11 +65,28 @@ pub async fn sync_task(node: &Darkfid) -> Result<()> {
     }
     info!(target: "darkfid::task::sync_task", "Last known block: {} - {}", last.0, last.1);
 
-    // Grab synced peers tips
-    let mut tips = synced_peers(node, &last.1).await?;
-
     // Grab the most common tip and the corresponding peers
-    let (mut common_tip_height, mut common_tip_peers) = most_common_tip(tips).await?;
+    let (mut common_tip_height, mut common_tip_peers) =
+        most_common_tip(node, &last.1, checkpoint).await?;
+
+    // If last known block header is before the checkpoint, we sync until that first.
+    if let Some(checkpoint) = checkpoint {
+        if checkpoint.0 > last.0 {
+            info!(target: "darkfid::task::sync_task", "Syncing until configured checkpoint: {} - {}", checkpoint.0, checkpoint.1);
+            // Retrieve all the headers backwards until our last known one and verify them.
+            // We use the next height, in order to also retrieve the checkpoint header.
+            retrieve_headers(node, &common_tip_peers, last.0, checkpoint.0 + 1).await?;
+
+            // TODO: Create a more minimal verification so checkpoint blocks can be
+            //       applied directly, skipping the full formal block checks.
+            // Retrieve all the blocks for those headers and apply them to canonical
+            last = retrieve_blocks(node, &common_tip_peers, last, block_sub).await?;
+            info!(target: "darkfid::task::sync_task", "Last received block: {} - {}", last.0, last.1);
+
+            // Grab synced peers most common tip again
+            (common_tip_height, common_tip_peers) = most_common_tip(node, &last.1, None).await?;
+        }
+    }
 
     // Sync headers and blocks
     loop {
@@ -90,8 +105,7 @@ pub async fn sync_task(node: &Darkfid) -> Result<()> {
         last = last_received;
 
         // Grab synced peers most common tip again
-        tips = synced_peers(node, &last.1).await?;
-        (common_tip_height, common_tip_peers) = most_common_tip(tips).await?;
+        (common_tip_height, common_tip_peers) = most_common_tip(node, &last.1, None).await?;
     }
 
     // Sync best fork
@@ -118,6 +132,7 @@ pub async fn sync_task(node: &Darkfid) -> Result<()> {
 async fn synced_peers(
     node: &Darkfid,
     last_tip: &HeaderHash,
+    checkpoint: Option<(u32, HeaderHash)>,
 ) -> Result<HashMap<(u32, [u8; 32]), Vec<ChannelPtr>>> {
     info!(target: "darkfid::task::sync::synced_peers", "Receiving tip from peers...");
     let mut tips = HashMap::new();
@@ -129,6 +144,28 @@ async fn synced_peers(
         if !peers.is_empty() {
             // Ask each peer if they are synced
             for peer in peers {
+                // If a checkpoint was provider, we check that the peer follows that sequence
+                if let Some(c) = checkpoint {
+                    // Communication setup
+                    let response_sub = peer.subscribe_msg::<HeaderSyncResponse>().await?;
+
+                    // Node creates a `HeaderSyncRequest` and sends it
+                    let request = HeaderSyncRequest { height: c.0 + 1 };
+                    peer.send(&request).await?;
+
+                    // Node waits for response
+                    let Ok(response) = response_sub.receive_with_timeout(COMMS_TIMEOUT).await
+                    else {
+                        continue
+                    };
+
+                    // Handle response
+                    if response.headers.is_empty() || response.headers.last().unwrap().hash() != c.1
+                    {
+                        continue
+                    }
+                }
+
                 // Communication setup
                 let response_sub = peer.subscribe_msg::<TipResponse>().await?;
 
@@ -167,8 +204,13 @@ async fn synced_peers(
 
 /// Auxiliary function to ask all peers for their current tip and find the most common one.
 async fn most_common_tip(
-    tips: HashMap<(u32, [u8; 32]), Vec<ChannelPtr>>,
+    node: &Darkfid,
+    last_tip: &HeaderHash,
+    checkpoint: Option<(u32, HeaderHash)>,
 ) -> Result<(u32, Vec<ChannelPtr>)> {
+    // Grab synced peers tips
+    let tips = synced_peers(node, last_tip, checkpoint).await?;
+
     // Grab the most common highest tip peers
     info!(target: "darkfid::task::sync::most_common_tip", "Finding most common tip...");
     let mut common_tip = (0, [0u8; 32], vec![]);

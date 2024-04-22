@@ -16,11 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::fmt;
+use std::{fmt, str::FromStr};
 
 use darkfi_sdk::{
     blockchain::block_version,
     crypto::{MerkleNode, MerkleTree},
+    hex::decode_hex_arr,
     AsHex,
 };
 
@@ -48,6 +49,14 @@ impl HeaderHash {
 
     pub fn as_string(&self) -> String {
         self.0.hex().to_string()
+    }
+}
+
+impl FromStr for HeaderHash {
+    type Err = Error;
+
+    fn from_str(header_hash_str: &str) -> Result<Self> {
+        Ok(Self(decode_hex_arr(header_hash_str)?))
     }
 }
 

@@ -55,7 +55,7 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     let block4 = th.generate_next_block(&block3).await?;
 
     // Add them to nodes
-    th.add_blocks(&vec![block1, block2, block3.clone(), block4.clone()]).await?;
+    th.add_blocks(&vec![block1, block2.clone(), block3.clone(), block4.clone()]).await?;
 
     // Nodes must have one fork with 2 blocks
     th.validate_fork_chains(1, vec![2]).await;
@@ -88,8 +88,16 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     settings.inbound_addrs = vec![charlie_url];
     let bob_url = th.bob.p2p.settings().inbound_addrs[0].clone();
     settings.peers = vec![bob_url];
-    let charlie =
-        generate_node(&th.vks, &th.validator_config, &settings, &ex, false, false).await?;
+    let charlie = generate_node(
+        &th.vks,
+        &th.validator_config,
+        &settings,
+        &ex,
+        false,
+        false,
+        Some((block2.header.height, block2.hash())),
+    )
+    .await?;
     // Verify node synced
     let alice = &th.alice.validator;
     let charlie = &charlie.validator;

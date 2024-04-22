@@ -40,6 +40,12 @@ recipient = "5ZHfYpt4mpJcwBNxfEyxLzeFJUEeoePs5NQ5jVEgHrMf"
 # Skip syncing process and start node right away
 skip_sync = true
 
+# Optional sync checkpoint height
+#checkpoint_height = 0
+
+# Optional sync checkpoint hash
+#checkpoint = ""
+
 ## Localnet P2P network settings
 [network_config."localnet".net]
 # P2P accept addresses the instance listens on for inbound connections
@@ -113,6 +119,12 @@ miner = false
 
 # Skip syncing process and start node right away
 skip_sync = false
+
+# Optional sync checkpoint height
+#checkpoint_height = 0
+
+# Optional sync checkpoint hash
+#checkpoint = ""
 
 ## Testnet P2P network settings
 [network_config."testnet".net]
@@ -197,6 +209,12 @@ miner = false
 
 # Skip syncing process and start node right away
 skip_sync = false
+
+# Optional sync checkpoint height
+#checkpoint_height = 0
+
+# Optional sync checkpoint hash
+#checkpoint = ""
 
 ## Mainnet P2P network settings
 [network_config."mainnet".net]

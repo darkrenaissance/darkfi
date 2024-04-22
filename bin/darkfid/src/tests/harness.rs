@@ -19,7 +19,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use darkfi::{
-    blockchain::{BlockInfo, Header},
+    blockchain::{BlockInfo, Header, HeaderHash},
     net::Settings,
     rpc::jsonrpc::JsonSubscriber,
     system::sleep,
@@ -91,13 +91,13 @@ impl Harness {
         // Alice
         let alice_url = Url::parse("tcp+tls://127.0.0.1:18340")?;
         settings.inbound_addrs = vec![alice_url.clone()];
-        let alice = generate_node(&vks, &validator_config, &settings, ex, true, true).await?;
+        let alice = generate_node(&vks, &validator_config, &settings, ex, true, true, None).await?;
 
         // Bob
         let bob_url = Url::parse("tcp+tls://127.0.0.1:18341")?;
         settings.inbound_addrs = vec![bob_url];
         settings.peers = vec![alice_url];
-        let bob = generate_node(&vks, &validator_config, &settings, ex, true, false).await?;
+        let bob = generate_node(&vks, &validator_config, &settings, ex, true, false, None).await?;
 
         Ok(Self { config, vks, validator_config, alice, bob })
     }
@@ -228,6 +228,7 @@ pub async fn generate_node(
     ex: &Arc<smol::Executor<'static>>,
     miner: bool,
     skip_sync: bool,
+    checkpoint: Option<(u32, HeaderHash)>,
 ) -> Result<Darkfid> {
     let sled_db = sled::Config::new().temporary(true).open()?;
     vks::inject(&sled_db, vks)?;
@@ -245,7 +246,7 @@ pub async fn generate_node(
     p2p.start().await?;
 
     if !skip_sync {
-        sync_task(&node).await?;
+        sync_task(&node, checkpoint).await?;
     } else {
         *node.validator.synced.write().await = true;
     }
