@@ -31,15 +31,17 @@ resolved = True
 
 def check_multi_ev_in_layer(dag_dict, dag):
     gen = list(nx.topological_generations(dag))
+    ss = []
     for i in gen:
         # fork
         if len(i) == 2:
             event1 = dag_dict[i[0]]
             event2 = dag_dict[i[1]]
             if int(event1['timestamp']) > int(event2['timestamp']):
-                return i[0]
+                ss.append(i[0])
             else:
-                return i[1]
+                ss.append(i[1])
+    return ss
 
 def graph(event, dag, x):
     global resolved
@@ -48,26 +50,29 @@ def graph(event, dag, x):
     
     if merge and not fork:
         resolved = False
-        return "     M━┑"
+        return "M━┑"
     if fork and not merge:
         resolved = True
-        return "     o─┘"
+        return "o─┘"
     if merge and fork:
-        return "     M━┪"
+        return "M━┪"
     if not merge and not fork:
-        if event['hash'] == x:
-            return "     │ o"
+        if event['hash'] in x:
+            return "o │"
         else:
             if not resolved:
-                return "     o │"
+                return "│ o"
             else:
-                return "     o  "
-            #  "     │ o"
-            #  "     o │"
-            #  "     o━┪"
-            #  "     o─┴"
-            #  "     o━┯"
+                return "o  "
+            #  "│ o"
+            #  "o │"
+            #  "o━┪"
+            #  "o─┴"
+            #  "o━┯"
 
+# because tab character is broken in urwid texts
+def indent(num):
+    return " " * (8 - len(str(num)))
 
 class ListItem(u.WidgetWrap):
     
@@ -75,7 +80,7 @@ class ListItem(u.WidgetWrap):
         g = graph(event, dag, x)
         self.content = event
         layer_num = int(event["layer"])
-        layer = "layer " + str(layer_num) if layer_num != 0 else "genesis"
+        layer = "layer " + str(layer_num) + indent(layer_num) if layer_num != 0 else "genesis       "
         dt = event['hash'][:10] + " | " + str(datetime.fromtimestamp(int(event['timestamp'])))
         t = u.AttrMap(u.Text([('word', dt),
                               ('layer-num', " " + layer),
