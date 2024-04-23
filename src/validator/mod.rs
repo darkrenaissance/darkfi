@@ -44,8 +44,7 @@ use pow::PoWModule;
 /// Verification functions
 pub mod verification;
 use verification::{
-    verify_block, verify_genesis_block, verify_producer_transaction, verify_proposal,
-    verify_transactions,
+    verify_block, verify_genesis_block, verify_producer_transaction, verify_transactions,
 };
 
 /// Fee calculation helpers

@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::BTreeSet;
+use std::collections::{HashMap, HashSet};
 
 use darkfi_sdk::{
     crypto::{MerkleTree, SecretKey},
@@ -38,8 +38,9 @@ use crate::{
     validator::{
         pow::PoWModule,
         utils::{best_fork_index, block_rank, find_extended_fork_index},
-        verify_proposal, verify_transactions, TxVerifyFailed,
+        verification::{verify_proposal, verify_transaction},
     },
+    zk::VerifyingKey,
     Error, Result,
 };
 
@@ -365,7 +366,8 @@ impl Consensus {
         let prefix_last_index = excess - 1;
         let prefix_last = prefix.last().unwrap();
         let mut keep = vec![true; forks.len()];
-        let mut referenced_trees = BTreeSet::new();
+        let mut referenced_trees = HashSet::new();
+        let mut referenced_txs = HashSet::new();
         let finalized_txs_hashes: Vec<TransactionHash> =
             finalized_txs.iter().map(|tx| tx.hash()).collect();
         for (index, fork) in forks.iter_mut().enumerate() {
@@ -384,6 +386,10 @@ impl Consensus {
                 }
                 // Remove finalized proposals txs from fork's mempool
                 fork.mempool.retain(|tx| !finalized_txs_hashes.contains(tx));
+                // Store its txs references
+                for tx in &fork.mempool {
+                    referenced_txs.insert(*tx);
+                }
                 drop(overlay);
                 drop(fork_overlay);
                 continue
@@ -399,6 +405,10 @@ impl Consensus {
 
             // Remove finalized proposals txs from fork's mempool
             fork.mempool.retain(|tx| !finalized_txs_hashes.contains(tx));
+            // Store its txs references
+            for tx in &fork.mempool {
+                referenced_txs.insert(*tx);
+            }
 
             // Remove the commited differences
             let rest_proposals = fork.proposals.split_off(excess);
@@ -426,11 +436,17 @@ impl Consensus {
             drop(fork_overlay);
         }
 
-        // Find the trees that are no longer referenced by valid forks,
-        let mut dropped_trees = BTreeSet::new();
+        // Find the trees and pending txs that are no longer referenced by valid forks
+        let mut dropped_trees = HashSet::new();
+        let mut dropped_txs = HashSet::new();
         for (index, fork) in forks.iter_mut().enumerate() {
             if keep[index] {
                 continue
+            }
+            for tx in &fork.mempool {
+                if !referenced_txs.contains(tx) {
+                    dropped_txs.insert(*tx);
+                }
             }
             let fork_overlay = fork.overlay.lock().unwrap();
             let overlay = fork_overlay.overlay.lock().unwrap();
@@ -452,7 +468,8 @@ impl Consensus {
             drop(overlay);
             drop(fork_overlay);
         }
-        // and drop them from the database.
+
+        // Drop unreferenced trees from the database
         for tree in dropped_trees {
             self.blockchain.sled_db.drop_tree(tree)?;
         }
@@ -462,7 +479,10 @@ impl Consensus {
         forks.retain(|_| *iter.next().unwrap());
 
         // Remove finalized proposals txs from the unporposed txs sled tree
-        self.blockchain.remove_pending_txs(finalized_txs)?;
+        self.blockchain.transactions.remove_pending(&finalized_txs_hashes)?;
+
+        // Remove unreferenced txs from the unporposed txs sled tree
+        self.blockchain.transactions.remove_pending(&Vec::from_iter(dropped_txs))?;
 
         // Drop forks lock
         drop(forks);
@@ -649,8 +669,20 @@ impl Fork {
             return Ok(vec![])
         }
 
+        // Transactions Merkle tree
+        let mut tree = MerkleTree::new(1);
+
+        // Gas accumulator
+        let mut _gas_used = 0;
+
+        // Map of ZK proof verifying keys for the current transaction batch
+        let mut vks: HashMap<[u8; 32], HashMap<String, VerifyingKey>> = HashMap::new();
+
+        // Clone forks' overlay
+        let overlay = self.overlay.lock().unwrap().full_clone()?;
+
         // Grab all current proposals transactions hashes
-        let proposals_txs = self.overlay.lock().unwrap().get_blocks_txs_hashes(&self.proposals)?;
+        let proposals_txs = overlay.lock().unwrap().get_blocks_txs_hashes(&self.proposals)?;
 
         // Iterate through all pending transactions in the forks' mempool
         let mut unproposed_txs = vec![];
@@ -660,46 +692,43 @@ impl Fork {
                 continue
             }
 
+            // Retrieve the actual unproposed transaction
+            let unproposed_tx =
+                blockchain.transactions.get_pending(&[*tx], true)?[0].clone().unwrap();
+
+            // Update the verifying keys map
+            for call in &unproposed_tx.calls {
+                vks.entry(call.data.contract_id.to_bytes()).or_default();
+            }
+
+            // Verify the transaction against current state
+            overlay.lock().unwrap().checkpoint();
+            // TODO: shouldn't verify fees be true?
+            match verify_transaction(
+                &overlay,
+                verifying_block_height,
+                &unproposed_tx,
+                &mut tree,
+                &mut vks,
+                false,
+            )
+            .await
+            {
+                Ok(gas) => _gas_used += gas,
+                Err(e) => {
+                    debug!(target: "validator::verification::verify_transactions", "Transaction verification failed: {}", e);
+                    overlay.lock().unwrap().revert_to_checkpoint()?;
+                    continue
+                }
+            }
+
             // Push the tx hash into the unproposed transactions vector
-            unproposed_txs.push(*tx);
+            unproposed_txs.push(unproposed_tx);
 
             // Check limit
+            // TODO: here we can use gas instead of the TXS_cap limit
             if unproposed_txs.len() == TXS_CAP {
                 break
-            }
-        }
-
-        // Check if we have any unproposed transactions
-        if unproposed_txs.is_empty() {
-            return Ok(vec![])
-        }
-
-        // Retrieve the actual unproposed transactions
-        let mut unproposed_txs: Vec<Transaction> = blockchain
-            .transactions
-            .get_pending(&unproposed_txs, true)?
-            .iter()
-            .map(|x| x.clone().unwrap())
-            .collect();
-
-        // Clone forks' overlay
-        let overlay = self.overlay.lock().unwrap().full_clone()?;
-
-        // Verify transactions
-        if let Err(e) = verify_transactions(
-            &overlay,
-            verifying_block_height,
-            &unproposed_txs,
-            &mut MerkleTree::new(1),
-            false,
-        )
-        .await
-        {
-            match e {
-                Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(erroneous_txs)) => {
-                    unproposed_txs.retain(|x| !erroneous_txs.contains(x))
-                }
-                _ => return Err(e),
             }
         }
 
