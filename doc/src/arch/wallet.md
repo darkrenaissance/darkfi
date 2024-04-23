@@ -255,6 +255,17 @@ See also the [Blender Human Interface Guidelines: Paradigms](https://developer.b
 
 Steps 3 and 4 can be done in parallel.
 
+## Target Mainnet Functionality
+
+Multi-platform main view with splitting and these editors:
+
+* Money::transfer()
+* Money::swap()
+* DAO
+* Chat
+* Explorer
+* Settings
+
 ## References
 
 * [Veil: Private Browsing Semantics Without Browser-side Assistance](https://mickens.seas.harvard.edu/files/mickens/files/veil.pdf)
