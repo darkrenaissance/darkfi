@@ -325,6 +325,9 @@ pub enum Error {
     #[error("Miner task stopped")]
     MinerTaskStopped,
 
+    #[error("Garbage collection task stopped")]
+    GarbageCollectionTaskStopped,
+
     #[error("Calculated total work is zero")]
     PoWTotalWorkIsZero,
 

@@ -119,7 +119,15 @@ pub async fn miner_task(
 
     // Create channels so threads can signal each other
     let (sender, stop_signal) = smol::channel::bounded(1);
-    let (gc_sender, gc_stop_signal) = smol::channel::bounded(1);
+
+    // Create the garbage collection task using a dummy task
+    let gc_task = StoppableTask::new();
+    gc_task.clone().start(
+        async { Ok(()) },
+        |_| async { /* Do nothing */ },
+        Error::GarbageCollectionTaskStopped,
+        ex.clone(),
+    );
 
     info!(target: "darkfid::task::miner_task", "Miner initialized successfully!");
 
@@ -147,17 +155,17 @@ pub async fn miner_task(
             }
             block_sub.notify(JsonValue::Array(notif_blocks)).await;
 
-            // Invoke detached garbage collection task
-            gc_sender.send(()).await?;
-            StoppableTask::new().start(
-                garbage_collect_task(node.clone(), gc_stop_signal.clone()),
+            // Invoke the detached garbage collection task
+            gc_task.clone().stop().await;
+            gc_task.clone().start(
+                garbage_collect_task(node.clone()),
                 |res| async {
                     match res {
-                        Ok(()) => { /* Do nothing */ }
+                        Ok(()) | Err(Error::GarbageCollectionTaskStopped) => { /* Do nothing */ }
                         Err(e) => error!(target: "darkfid", "Failed starting garbage collection task: {}", e),
                     }
                 },
-                Error::MinerTaskStopped,
+                Error::GarbageCollectionTaskStopped,
                 ex.clone(),
             );
         }

@@ -25,21 +25,15 @@ use darkfi::{
 };
 use darkfi_sdk::crypto::MerkleTree;
 use log::info;
-use smol::channel::Receiver;
 
-use crate::{task::miner::wait_stop_signal, Darkfid};
+use crate::Darkfid;
 
 // TODO: handle all ? so the task don't stop on errors
 
 /// Async task used for purging erroneous pending transactions from the nodes mempool.
-pub async fn garbage_collect_task(node: Arc<Darkfid>, stop_signal: Receiver<()>) -> Result<()> {
-    // Start mempool puring and wait for stop signal
-    smol::future::or(wait_stop_signal(&stop_signal), purge(&node)).await
-}
+pub async fn garbage_collect_task(node: Arc<Darkfid>) -> Result<()> {
+    info!(target: "darkfid::task::garbage_collect_task", "Starting garbage collection task...");
 
-/// Async task to purge erroneous pending transactions from the nodes mempool.
-async fn purge(node: &Darkfid) -> Result<()> {
-    info!(target: "darkfid::task::garbage_collect::purge", "Starting garbage collection task...");
     // Grab all current unproposed transactions.  We verify them in batches,
     // to not load them all in memory.
     let (mut last_checked, mut txs) =
@@ -95,6 +89,6 @@ async fn purge(node: &Darkfid) -> Result<()> {
         (last_checked, txs) =
             node.validator.blockchain.transactions.get_after_pending(last_checked, TXS_CAP)?;
     }
-    info!(target: "darkfid::task::garbage_collect::purge", "Garbage collection finished successfully!");
+    info!(target: "darkfid::task::garbage_collect_task", "Garbage collection finished successfully!");
     Ok(())
 }
