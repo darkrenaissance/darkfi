@@ -16,16 +16,18 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi::{rpc::util::JsonValue, util::encoding::base64, Result};
-use darkfi_serial::serialize_async;
-use log::info;
+use std::sync::Arc;
 
-use crate::Darkfid;
+use darkfi::{rpc::util::JsonValue, system::StoppableTask, util::encoding::base64, Error, Result};
+use darkfi_serial::serialize_async;
+use log::{error, info};
+
+use crate::{task::garbage_collect_task, Darkfid};
 
 // TODO: handle all ? so the task don't stop on errors
 
-/// async task used for listening for new blocks and perform consensus
-pub async fn consensus_task(node: &Darkfid) -> Result<()> {
+/// async task used for listening for new blocks and perform consensus.
+pub async fn consensus_task(node: Arc<Darkfid>, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     info!(target: "darkfid::task::consensus_task", "Starting consensus task...");
 
     // Grab blocks subscriber
@@ -34,6 +36,9 @@ pub async fn consensus_task(node: &Darkfid) -> Result<()> {
     // Grab proposals subscriber and subscribe to it
     let proposals_sub = node.subscribers.get("proposals").unwrap();
     let subscription = proposals_sub.sub.clone().subscribe().await;
+
+    // Create channels so threads can signal each other
+    let (gc_sender, gc_stop_signal) = smol::channel::bounded(1);
 
     loop {
         subscription.receive().await;
@@ -47,6 +52,20 @@ pub async fn consensus_task(node: &Darkfid) -> Result<()> {
                     .push(JsonValue::String(base64::encode(&serialize_async(&block).await)));
             }
             block_sub.notify(JsonValue::Array(notif_blocks)).await;
+
+            // Invoke detached garbage collection task
+            gc_sender.send(()).await?;
+            StoppableTask::new().start(
+                garbage_collect_task(node.clone(), gc_stop_signal.clone()),
+                |res| async {
+                    match res {
+                        Ok(()) => { /* Do nothing */ }
+                        Err(e) => error!(target: "darkfid", "Failed starting garbage collection task: {}", e),
+                    }
+                },
+                Error::MinerTaskStopped,
+                ex.clone(),
+            );
         }
     }
 }

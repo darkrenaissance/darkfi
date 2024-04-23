@@ -332,9 +332,6 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         *darkfid.validator.synced.write().await = true;
     }
 
-    // Clean node pending transactions
-    darkfid.validator.purge_pending_txs().await?;
-
     // Consensus protocol
     info!(target: "darkfid", "Starting consensus protocol task");
     let consensus_task = if blockchain_config.miner {
@@ -349,9 +346,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
         let task = StoppableTask::new();
         task.clone().start(
-            // Weird hack to prevent lifetimes hell
-            async move { miner_task(&darkfid, &recipient, blockchain_config.skip_sync).await },
-            |res| async {
+            miner_task(darkfid, recipient, blockchain_config.skip_sync, ex.clone()),
+            |res| async move {
                 match res {
                     Ok(()) | Err(Error::MinerTaskStopped) => { /* Do nothing */ }
                     Err(e) => error!(target: "darkfid", "Failed starting miner task: {}", e),
@@ -365,9 +361,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     } else {
         let task = StoppableTask::new();
         task.clone().start(
-            // Weird hack to prevent lifetimes hell
-            async move { consensus_task(&darkfid).await },
-            |res| async {
+            consensus_task(darkfid, ex.clone()),
+            |res| async move {
                 match res {
                     Ok(()) | Err(Error::ConsensusTaskStopped) => { /* Do nothing */ }
                     Err(e) => error!(target: "darkfid", "Failed starting consensus task: {}", e),

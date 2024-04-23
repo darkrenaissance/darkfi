@@ -26,3 +26,6 @@ pub use miner::miner_task;
 
 pub mod sync;
 pub use sync::sync_task;
+
+pub mod garbage_collect;
+pub use garbage_collect::garbage_collect_task;

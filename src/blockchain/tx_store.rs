@@ -323,6 +323,34 @@ impl TxStore {
         Ok(txs)
     }
 
+    /// Fetch n transactions after given order. In the iteration, if a transaction
+    /// order is not found, the iteration stops and the function returns what
+    /// it has found so far in the store's pending order tree.
+    pub fn get_after_pending(&self, order: u64, n: usize) -> Result<(u64, Vec<Transaction>)> {
+        let mut hashes = vec![];
+
+        let mut key = order;
+        let mut counter = 0;
+        while counter < n {
+            if let Some(found) = self.pending_order.get_gt(key.to_be_bytes())? {
+                let (order, hash) = parse_u64_key_record(found)?;
+                key = order;
+                hashes.push(hash);
+                counter += 1;
+                continue
+            }
+            break
+        }
+
+        if hashes.is_empty() {
+            return Ok((key, vec![]))
+        }
+
+        let txs = self.get_pending(&hashes, true)?.iter().map(|tx| tx.clone().unwrap()).collect();
+
+        Ok((key, txs))
+    }
+
     /// Retrieve records count of the store's main tree.
     pub fn len(&self) -> usize {
         self.main.len()

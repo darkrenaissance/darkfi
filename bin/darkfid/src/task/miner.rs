@@ -16,10 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::sync::Arc;
+
 use darkfi::{
     blockchain::BlockInfo,
     rpc::{jsonrpc::JsonNotification, util::JsonValue},
-    system::Subscription,
+    system::{StoppableTask, Subscription},
     tx::{ContractCallLeaf, Transaction, TransactionBuilder},
     util::encoding::base64,
     validator::{
@@ -28,7 +30,7 @@ use darkfi::{
     },
     zk::{empty_witnesses, ProvingKey, ZkCircuit},
     zkas::ZkBinary,
-    Result,
+    Error, Result,
 };
 use darkfi_money_contract::{
     client::pow_reward_v1::PoWRewardCallBuilder, MoneyFunction, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
@@ -44,7 +46,7 @@ use num_bigint::BigUint;
 use rand::rngs::OsRng;
 use smol::channel::{Receiver, Sender};
 
-use crate::{proto::ProposalMessage, Darkfid};
+use crate::{proto::ProposalMessage, task::garbage_collect_task, Darkfid};
 
 // TODO: handle all ? so the task don't stop on errors
 
@@ -58,7 +60,12 @@ use crate::{proto::ProposalMessage, Darkfid};
 /// proposals produce a new best ranking fork. If they do, the stop
 /// mining. These two tasks run in parallel, and after one of them
 /// finishes, node triggers finallization check.
-pub async fn miner_task(node: &Darkfid, recipient: &PublicKey, skip_sync: bool) -> Result<()> {
+pub async fn miner_task(
+    node: Arc<Darkfid>,
+    recipient: PublicKey,
+    skip_sync: bool,
+    ex: Arc<smol::Executor<'static>>,
+) -> Result<()> {
     // Initialize miner configuration
     info!(target: "darkfid::task::miner_task", "Starting miner task...");
 
@@ -112,6 +119,7 @@ pub async fn miner_task(node: &Darkfid, recipient: &PublicKey, skip_sync: bool) 
 
     // Create channels so threads can signal each other
     let (sender, stop_signal) = smol::channel::bounded(1);
+    let (gc_sender, gc_stop_signal) = smol::channel::bounded(1);
 
     info!(target: "darkfid::task::miner_task", "Miner initialized successfully!");
 
@@ -124,8 +132,8 @@ pub async fn miner_task(node: &Darkfid, recipient: &PublicKey, skip_sync: bool) 
 
         // Start listenning for network proposals and mining next block for best fork.
         smol::future::or(
-            listen_to_network(node, &extended_fork, &subscription, &sender),
-            mine(node, &extended_fork, &mut secret, recipient, &zkbin, &pk, &stop_signal),
+            listen_to_network(&node, &extended_fork, &subscription, &sender),
+            mine(&node, &extended_fork, &mut secret, &recipient, &zkbin, &pk, &stop_signal),
         )
         .await?;
 
@@ -138,11 +146,25 @@ pub async fn miner_task(node: &Darkfid, recipient: &PublicKey, skip_sync: bool) 
                     .push(JsonValue::String(base64::encode(&serialize_async(&block).await)));
             }
             block_sub.notify(JsonValue::Array(notif_blocks)).await;
+
+            // Invoke detached garbage collection task
+            gc_sender.send(()).await?;
+            StoppableTask::new().start(
+                garbage_collect_task(node.clone(), gc_stop_signal.clone()),
+                |res| async {
+                    match res {
+                        Ok(()) => { /* Do nothing */ }
+                        Err(e) => error!(target: "darkfid", "Failed starting garbage collection task: {}", e),
+                    }
+                },
+                Error::MinerTaskStopped,
+                ex.clone(),
+            );
         }
     }
 }
 
-/// Async task to listen for incoming proposals and check if the best fork has changed
+/// Async task to listen for incoming proposals and check if the best fork has changed.
 async fn listen_to_network(
     node: &Darkfid,
     extended_fork: &Fork,
@@ -180,7 +202,7 @@ async fn listen_to_network(
 }
 
 /// Async task to generate and mine provided fork index next block,
-/// while listening for a stop signal
+/// while listening for a stop signal.
 async fn mine(
     node: &Darkfid,
     extended_fork: &Fork,
@@ -198,7 +220,7 @@ async fn mine(
 }
 
 /// Async task to wait for listener's stop signal.
-async fn wait_stop_signal(stop_signal: &Receiver<()>) -> Result<()> {
+pub async fn wait_stop_signal(stop_signal: &Receiver<()>) -> Result<()> {
     // Clean stop signal channel
     if stop_signal.is_full() {
         stop_signal.recv().await?;
@@ -210,7 +232,7 @@ async fn wait_stop_signal(stop_signal: &Receiver<()>) -> Result<()> {
     Ok(())
 }
 
-/// Async task to generate and mine provided fork index next block
+/// Async task to generate and mine provided fork index next block.
 async fn mine_next_block(
     node: &Darkfid,
     extended_fork: &Fork,
@@ -247,7 +269,7 @@ async fn mine_next_block(
     Ok(())
 }
 
-/// Auxiliary function to generate next block in an atomic manner
+/// Auxiliary function to generate next block in an atomic manner.
 async fn generate_next_block(
     extended_fork: &Fork,
     secret: &mut SecretKey,
@@ -276,7 +298,7 @@ async fn generate_next_block(
     Ok((target, next_block))
 }
 
-/// Auxiliary function to generate a Money::PoWReward transaction
+/// Auxiliary function to generate a Money::PoWReward transaction.
 fn generate_transaction(
     block_height: u32,
     secret: &SecretKey,

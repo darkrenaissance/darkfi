@@ -148,8 +148,7 @@ impl Validator {
         // Grab a lock over current consensus forks state
         let mut forks = self.consensus.forks.write().await;
 
-        // If node participates in consensus and holds any forks, iterate over them
-        // to verify transaction validity in their overlays
+        // Iterate over them to verify transaction validity in their overlays
         for fork in forks.iter_mut() {
             // Clone forks' overlay
             let overlay = fork.overlay.lock().unwrap().full_clone()?;
@@ -180,30 +179,12 @@ impl Validator {
             }
         }
 
-        // Verify transaction against canonical state
-        let overlay = BlockchainOverlay::new(&self.blockchain)?;
-        let next_block_height = self.blockchain.last_block()?.header.height + 1;
-        let mut erroneous_txs = vec![];
-        match verify_transactions(
-            &overlay,
-            next_block_height,
-            &tx_vec,
-            &mut MerkleTree::new(1),
-            false,
-        )
-        .await
-        {
-            Ok(_) => valid = true,
-            Err(Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(etx))) => erroneous_txs = etx,
-            Err(e) => return Err(e),
-        }
-
         // Drop forks lock
         drop(forks);
 
-        // Return error if transaction is not valid for canonical or any fork
+        // Return error if transaction is not valid for any fork
         if !valid {
-            return Err(TxVerifyFailed::ErroneousTxs(erroneous_txs).into())
+            return Err(TxVerifyFailed::ErroneousTxs(tx_vec.to_vec()).into())
         }
 
         // Add transaction to pending txs store
