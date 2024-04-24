@@ -179,13 +179,16 @@ To faciliate this future upgrade, we have made the peer discovery process a gene
 
 ## Scoring Subsystem
 
+From [libp2p2 DoS mitigation](
+https://docs.libp2p.io/concepts/security/dos-mitigation/): "An attack is
+considered viable if it takes fewer resources to execute than the damage
+it does. In other words, if the payoff is higher than the investment it
+is a viable attack and should be mitigated."
+
 Connections should maintain a scoring system. Protocols can increment the score.
 
 The score backs off exponentially. If the watermark is crossed then the
 connection is dropped.
-
-Since the reader in `messages.rs` preallocs buffers, there should be a hard
-limit here, and the raw reads also affects your score too.
 
 ### Libp2p resource manager
 
