@@ -36,6 +36,7 @@ use smol::io::Cursor;
 use crate::{
     blockchain::{
         block_store::append_tx_to_merkle_tree, BlockInfo, Blockchain, BlockchainOverlayPtr,
+        HeaderHash,
     },
     error::TxVerifyFailed,
     runtime::vm_runtime::Runtime,
@@ -49,7 +50,7 @@ use crate::{
     Error, Result,
 };
 
-/// Verify given genesis [`BlockInfo`], and apply it to the provided overlay
+/// Verify given genesis [`BlockInfo`], and apply it to the provided overlay.
 pub async fn verify_genesis_block(overlay: &BlockchainOverlayPtr, block: &BlockInfo) -> Result<()> {
     let block_hash = block.hash().as_string();
     debug!(target: "validator::verification::verify_genesis_block", "Validating genesis block {}", block_hash);
@@ -164,7 +165,7 @@ pub fn validate_blockchain(
     Ok(())
 }
 
-/// Verify given [`BlockInfo`], and apply it to the provided overlay
+/// Verify given [`BlockInfo`], and apply it to the provided overlay.
 pub async fn verify_block(
     overlay: &BlockchainOverlayPtr,
     module: &PoWModule,
@@ -225,7 +226,70 @@ pub async fn verify_block(
     Ok(())
 }
 
-/// Verify block proposer signature, using the proposal transaction signature as signing key
+/// Verify given checkpoint [`BlockInfo`], and apply it to the provided overlay.
+pub async fn verify_checkpoint_block(
+    overlay: &BlockchainOverlayPtr,
+    block: &BlockInfo,
+    header: &HeaderHash,
+) -> Result<()> {
+    let block_hash = block.hash();
+    debug!(target: "validator::verification::verify_checkpoint_block", "Validating block {}", block_hash);
+
+    // Check if block already exists
+    if overlay.lock().unwrap().has_block(block)? {
+        return Err(Error::BlockAlreadyExists(block_hash.as_string()))
+    }
+
+    // Check if block hash matches the expected(provided) one
+    if block_hash != *header {
+        error!(target: "validator::verification::verify_checkpoint_block", "Block hash doesn't match the expected one");
+        return Err(Error::BlockIsInvalid(block_hash.as_string()))
+    }
+
+    // Verify transactions vector contains at least one(producers) transaction
+    if block.txs.is_empty() {
+        return Err(Error::BlockContainsNoTransactions(block_hash.as_string()))
+    }
+
+    // Apply transactions, exluding producer(last) one
+    let mut tree = MerkleTree::new(1);
+    let txs = &block.txs[..block.txs.len() - 1];
+    let e = apply_transactions(overlay, block.header.height, txs, &mut tree).await;
+    if let Err(e) = e {
+        warn!(
+            target: "validator::verification::verify_checkpoint_block",
+            "[VALIDATOR] Erroneous transactions found in set",
+        );
+        overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
+        return Err(e)
+    }
+
+    // Apply producer transaction
+    let public_key = apply_producer_transaction(
+        overlay,
+        block.header.height,
+        block.txs.last().unwrap(),
+        &mut tree,
+    )
+    .await?;
+
+    // Verify transactions merkle tree root matches header one
+    if tree.root(0).unwrap() != block.header.root {
+        error!(target: "validator::verification::verify_checkpoint_block", "Block Merkle tree root is invalid");
+        return Err(Error::BlockIsInvalid(block_hash.as_string()))
+    }
+
+    // Verify producer signature
+    verify_producer_signature(block, &public_key)?;
+
+    // Insert block
+    overlay.lock().unwrap().add_block(block)?;
+
+    debug!(target: "validator::verification::verify_checkpoint_block", "Block {} verified successfully", block_hash);
+    Ok(())
+}
+
+/// Verify block proposer signature, using the producer transaction signature as signing key
 /// over blocks header hash.
 pub fn verify_producer_signature(block: &BlockInfo, public_key: &PublicKey) -> Result<()> {
     if !public_key.verify(block.header.hash().inner(), &block.signature) {
@@ -246,7 +310,7 @@ pub async fn verify_producer_transaction(
     tree: &mut MerkleTree,
 ) -> Result<PublicKey> {
     let tx_hash = tx.hash();
-    debug!(target: "validator::verification::verify_producer_transaction", "Validating proposal transaction {}", tx_hash);
+    debug!(target: "validator::verification::verify_producer_transaction", "Validating producer transaction {}", tx_hash);
 
     // Producer transactions must contain a single, non-empty call
     if tx.calls.len() != 1 || tx.calls[0].data.data.is_empty() {
@@ -303,7 +367,7 @@ pub async fn verify_producer_transaction(
 
     // Check that only one ZK proof and signature public key exist
     if zkp_pub.len() != 1 || sig_pub.len() != 1 {
-        error!(target: "validator::verification::verify_producer_transaction", "Proposal contains multiple ZK proofs or signature public keys");
+        error!(target: "validator::verification::verify_producer_transaction", "Producer transaction contains multiple ZK proofs or signature public keys");
         return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
     }
 
@@ -359,7 +423,7 @@ pub async fn verify_producer_transaction(
 
     debug!(target: "validator::verification::verify_producer_transaction", "Verifying ZK proofs for transaction {}", tx_hash);
     if let Err(e) = tx.verify_zkps(&verifying_keys, zkp_table).await {
-        error!(target: "validator::verification::verify_proposal_transaction", "ZK proof verification for tx {} failed: {}", tx_hash, e);
+        error!(target: "validator::verification::verify_producer_transaction", "ZK proof verification for tx {} failed: {}", tx_hash, e);
         return Err(TxVerifyFailed::InvalidZkProof.into())
     }
     debug!(target: "validator::verification::verify_producer_transaction", "ZK proof verification successful");
@@ -367,7 +431,80 @@ pub async fn verify_producer_transaction(
     // Append hash to merkle tree
     append_tx_to_merkle_tree(tree, tx);
 
-    debug!(target: "validator::verification::verify_producer_transaction", "Proposal transaction {} verified successfully", tx_hash);
+    debug!(target: "validator::verification::verify_producer_transaction", "Producer transaction {} verified successfully", tx_hash);
+
+    Ok(signature_public_key)
+}
+
+/// Apply given producer [`Transaction`] to the provided overlay, without formal verification.
+/// Returns transaction signature public key. Additionally, append its hash to the provided Merkle tree.
+async fn apply_producer_transaction(
+    overlay: &BlockchainOverlayPtr,
+    verifying_block_height: u32,
+    tx: &Transaction,
+    tree: &mut MerkleTree,
+) -> Result<PublicKey> {
+    let tx_hash = tx.hash();
+    debug!(target: "validator::verification::apply_producer_transaction", "Applying producer transaction {}", tx_hash);
+
+    // Producer transactions must contain a single, non-empty call
+    if tx.calls.len() != 1 || tx.calls[0].data.data.is_empty() {
+        return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
+    }
+
+    debug!(target: "validator::verification::apply_producer_transaction", "Executing contract call");
+
+    // Write the actual payload data
+    let mut payload = vec![];
+    tx.calls.encode_async(&mut payload).await?; // Actual call data
+
+    debug!(target: "validator::verification::apply_producer_transaction", "Instantiating WASM runtime");
+    let call = &tx.calls[0];
+    let wasm = overlay.lock().unwrap().contracts.get(call.data.contract_id)?;
+
+    let mut runtime = Runtime::new(
+        &wasm,
+        overlay.clone(),
+        call.data.contract_id,
+        verifying_block_height,
+        tx_hash,
+        // Call index in producer tx is 0
+        0,
+    )?;
+
+    debug!(target: "validator::verification::apply_producer_transaction", "Executing \"metadata\" call");
+    let metadata = runtime.metadata(&payload)?;
+
+    // Decode the metadata retrieved from the execution
+    let mut decoder = Cursor::new(&metadata);
+
+    // The tuple is (zkas_ns, public_inputs)
+    let _: Vec<(String, Vec<pallas::Base>)> = AsyncDecodable::decode_async(&mut decoder).await?;
+    let sig_pub: Vec<PublicKey> = AsyncDecodable::decode_async(&mut decoder).await?;
+
+    // Check that only one ZK proof and signature public key exist
+    if sig_pub.len() != 1 {
+        error!(target: "validator::verification::apply_producer_transaction", "Producer transaction contains multiple ZK proofs or signature public keys");
+        return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
+    }
+
+    let signature_public_key = *sig_pub.last().unwrap();
+
+    // After getting the metadata, we run the "exec" function with the same runtime
+    // and the same payload.
+    debug!(target: "validator::verification::apply_producer_transaction", "Executing \"exec\" call");
+    let state_update = runtime.exec(&payload)?;
+    debug!(target: "validator::verification::apply_producer_transaction", "Successfully executed \"exec\" call");
+
+    // If that was successful, we apply the state update in the ephemeral overlay.
+    debug!(target: "validator::verification::apply_producer_transaction", "Executing \"apply\" call");
+    runtime.apply(&state_update)?;
+    debug!(target: "validator::verification::apply_producer_transaction", "Successfully executed \"apply\" call");
+
+    // Append hash to merkle tree
+    append_tx_to_merkle_tree(tree, tx);
+
+    debug!(target: "validator::verification::apply_producer_transaction", "Pruducer transaction {} executed successfully", tx_hash);
 
     Ok(signature_public_key)
 }
@@ -616,6 +753,77 @@ pub async fn verify_transaction(
     Ok(gas_used)
 }
 
+/// Apply given [`Transaction`] to the provided overlay.
+/// Additionally, append its hash to the provided Merkle tree.
+async fn apply_transaction(
+    overlay: &BlockchainOverlayPtr,
+    verifying_block_height: u32,
+    tx: &Transaction,
+    tree: &mut MerkleTree,
+) -> Result<()> {
+    let tx_hash = tx.hash();
+    debug!(target: "validator::verification::apply_transaction", "Applying transaction {}", tx_hash);
+
+    // Iterate over all calls to get the metadata
+    for (idx, call) in tx.calls.iter().enumerate() {
+        debug!(target: "validator::verification::apply_transaction", "Executing contract call {}", idx);
+
+        // Write the actual payload data
+        let mut payload = vec![];
+        tx.calls.encode_async(&mut payload).await?;
+
+        debug!(target: "validator::verification::apply_transaction", "Instantiating WASM runtime");
+        let wasm = overlay.lock().unwrap().contracts.get(call.data.contract_id)?;
+        let mut runtime = Runtime::new(
+            &wasm,
+            overlay.clone(),
+            call.data.contract_id,
+            verifying_block_height,
+            tx_hash,
+            idx as u8,
+        )?;
+
+        // Run the "exec" function
+        debug!(target: "validator::verification::apply_transaction", "Executing \"exec\" call");
+        let state_update = runtime.exec(&payload)?;
+        debug!(target: "validator::verification::apply_transaction", "Successfully executed \"exec\" call");
+
+        // If that was successful, we apply the state update in the ephemeral overlay
+        debug!(target: "validator::verification::apply_transaction", "Executing \"apply\" call");
+        runtime.apply(&state_update)?;
+        debug!(target: "validator::verification::apply_transaction", "Successfully executed \"apply\" call");
+
+        // If this call is supposed to deploy a new contract, we have to instantiate
+        // a new `Runtime` and run its deploy function.
+        if call.data.contract_id == *DEPLOYOOOR_CONTRACT_ID && call.data.data[0] == 0x00
+        /* DeployV1 */
+        {
+            debug!(target: "validator::verification::apply_transaction", "Deploying new contract");
+            // Deserialize the deployment parameters
+            let deploy_params: DeployParamsV1 = deserialize_async(&call.data.data[1..]).await?;
+            let deploy_cid = ContractId::derive_public(deploy_params.public_key);
+
+            // Instantiate the new deployment runtime
+            let mut deploy_runtime = Runtime::new(
+                &deploy_params.wasm_bincode,
+                overlay.clone(),
+                deploy_cid,
+                verifying_block_height,
+                tx_hash,
+                idx as u8,
+            )?;
+
+            deploy_runtime.deploy(&deploy_params.ix)?;
+        }
+    }
+
+    // Append hash to merkle tree
+    append_tx_to_merkle_tree(tree, tx);
+
+    debug!(target: "validator::verification::apply_transaction", "Transaction {} applied successfully", tx_hash);
+    Ok(())
+}
+
 /// Verify a set of [`Transaction`] in sequence and apply them if all are valid.
 /// In case any of the transactions fail, they will be returned to the caller as an error.
 /// If all transactions are valid, the function will return the accumulated gas used from
@@ -663,11 +871,45 @@ pub async fn verify_transactions(
         }
     }
 
-    if erroneous_txs.is_empty() {
-        Ok(gas_used)
-    } else {
-        Err(TxVerifyFailed::ErroneousTxs(erroneous_txs).into())
+    if !erroneous_txs.is_empty() {
+        return Err(TxVerifyFailed::ErroneousTxs(erroneous_txs).into())
     }
+
+    Ok(gas_used)
+}
+
+/// Apply given set of [`Transaction`] in sequence, without formal verification.
+/// In case any of the transactions fail, they will be returned to the caller as an error.
+/// Additionally, their hash is appended to the provided Merkle tree.
+async fn apply_transactions(
+    overlay: &BlockchainOverlayPtr,
+    verifying_block_height: u32,
+    txs: &[Transaction],
+    tree: &mut MerkleTree,
+) -> Result<()> {
+    debug!(target: "validator::verification::apply_transactions", "Applying {} transactions", txs.len());
+    if txs.is_empty() {
+        return Ok(())
+    }
+
+    // Tracker for failed txs
+    let mut erroneous_txs = vec![];
+
+    // Iterate over transactions and attempt to apply them
+    for tx in txs {
+        overlay.lock().unwrap().checkpoint();
+        if let Err(e) = apply_transaction(overlay, verifying_block_height, tx, tree).await {
+            warn!(target: "validator::verification::apply_transactions", "Transaction apply failed: {}", e);
+            erroneous_txs.push(tx.clone());
+            overlay.lock().unwrap().revert_to_checkpoint()?;
+        };
+    }
+
+    if !erroneous_txs.is_empty() {
+        return Err(TxVerifyFailed::ErroneousTxs(erroneous_txs).into())
+    }
+
+    Ok(())
 }
 
 /// Verify given [`Proposal`] against provided consensus state,

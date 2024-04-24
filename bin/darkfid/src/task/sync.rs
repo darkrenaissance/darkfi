@@ -42,15 +42,19 @@ use crate::{
 pub async fn sync_task(node: &Darkfid, checkpoint: Option<(u32, HeaderHash)>) -> Result<()> {
     info!(target: "darkfid::task::sync_task", "Starting blockchain sync...");
 
-    // Generate a new fork to be able to extend
-    info!(target: "darkfid::task::sync_task", "Generating new empty fork...");
-    node.validator.consensus.generate_empty_fork().await?;
-
     // Grab blocks subscriber
     let block_sub = node.subscribers.get("blocks").unwrap();
 
     // Grab last known block header, including existing pending sync ones
     let mut last = node.validator.blockchain.last()?;
+
+    // If checkpoint is not reached, purge headers and start syncing from scratch
+    if let Some(checkpoint) = checkpoint {
+        if checkpoint.0 > last.0 {
+            node.validator.blockchain.headers.remove_all_sync()?;
+        }
+    }
+
     // Check sync headers first record is the next one
     if let Some(next) = node.validator.blockchain.headers.get_first_sync()? {
         if next.height == last.0 + 1 {
@@ -77,16 +81,18 @@ pub async fn sync_task(node: &Darkfid, checkpoint: Option<(u32, HeaderHash)>) ->
             // We use the next height, in order to also retrieve the checkpoint header.
             retrieve_headers(node, &common_tip_peers, last.0, checkpoint.0 + 1).await?;
 
-            // TODO: Create a more minimal verification so checkpoint blocks can be
-            //       applied directly, skipping the full formal block checks.
             // Retrieve all the blocks for those headers and apply them to canonical
-            last = retrieve_blocks(node, &common_tip_peers, last, block_sub).await?;
+            last = retrieve_blocks(node, &common_tip_peers, last, block_sub, true).await?;
             info!(target: "darkfid::task::sync_task", "Last received block: {} - {}", last.0, last.1);
 
             // Grab synced peers most common tip again
             (common_tip_height, common_tip_peers) = most_common_tip(node, &last.1, None).await?;
         }
     }
+
+    // Generate a new fork to be able to extend
+    info!(target: "darkfid::task::sync_task", "Generating new empty fork...");
+    node.validator.consensus.generate_empty_fork().await?;
 
     // Sync headers and blocks
     loop {
@@ -95,7 +101,8 @@ pub async fn sync_task(node: &Darkfid, checkpoint: Option<(u32, HeaderHash)>) ->
         retrieve_headers(node, &common_tip_peers, last.0, common_tip_height + 1).await?;
 
         // Retrieve all the blocks for those headers and apply them to canonical
-        let last_received = retrieve_blocks(node, &common_tip_peers, last, block_sub).await?;
+        let last_received =
+            retrieve_blocks(node, &common_tip_peers, last, block_sub, false).await?;
         info!(target: "darkfid::task::sync_task", "Last received block: {} - {}", last_received.0, last_received.1);
 
         if last == last_received {
@@ -340,6 +347,7 @@ async fn retrieve_blocks(
     peers: &[ChannelPtr],
     last_known: (u32, HeaderHash),
     block_sub: &JsonSubscriber,
+    checkpoint_blocks: bool,
 ) -> Result<(u32, HeaderHash)> {
     info!(target: "darkfid::task::sync::retrieve_blocks", "Retrieving missing blocks from peers...");
     let mut last_received = last_known;
@@ -358,9 +366,15 @@ async fn retrieve_blocks(
             if headers.is_empty() {
                 break 'blocks_loop
             }
+            let mut headers_hashes = Vec::with_capacity(headers.len());
+            let mut synced_headers = Vec::with_capacity(headers.len());
+            for header in &headers {
+                headers_hashes.push(header.hash());
+                synced_headers.push(header.height);
+            }
 
             // Node creates a `SyncRequest` and sends it
-            let request = SyncRequest { headers: headers.iter().map(|h| h.hash()).collect() };
+            let request = SyncRequest { headers: headers_hashes.clone() };
             peer.send(&request).await?;
 
             // Node waits for response
@@ -371,26 +385,41 @@ async fn retrieve_blocks(
             // Verify and store retrieved blocks
             debug!(target: "darkfid::task::sync::retrieve_blocks", "Processing received blocks");
             received_blocks += response.blocks.len();
-            let mut synced_headers = Vec::with_capacity(response.blocks.len());
-            for block in &response.blocks {
-                node.validator.append_proposal(&Proposal::new(block.clone())).await?;
-                synced_headers.push(block.header.height);
-                last_received = (block.header.height, block.hash());
+            if checkpoint_blocks {
+                node.validator.add_checkpoint_blocks(&response.blocks, &headers_hashes).await?;
+            } else {
+                for block in &response.blocks {
+                    node.validator.append_proposal(&Proposal::new(block.clone())).await?;
+                }
             }
+            last_received = (*synced_headers.last().unwrap(), *headers_hashes.last().unwrap());
 
             // Remove synced headers
             node.validator.blockchain.headers.remove_sync(&synced_headers)?;
 
-            // Perform finalization for received blocks
-            let finalized = node.validator.finalization().await?;
-            if !finalized.is_empty() {
+            if checkpoint_blocks {
                 // Notify subscriber
-                let mut notif_blocks = Vec::with_capacity(finalized.len());
-                for block in finalized {
+                let mut notif_blocks = Vec::with_capacity(response.blocks.len());
+                info!(target: "darkfid::task::sync::retrieve_blocks", "Blocks added:");
+                for (index, block) in response.blocks.iter().enumerate() {
+                    info!(target: "darkfid::task::sync::retrieve_blocks", "\t{} - {}", headers_hashes[index], headers[index].height);
                     notif_blocks
-                        .push(JsonValue::String(base64::encode(&serialize_async(&block).await)));
+                        .push(JsonValue::String(base64::encode(&serialize_async(block).await)));
                 }
                 block_sub.notify(JsonValue::Array(notif_blocks)).await;
+            } else {
+                // Perform finalization for received blocks
+                let finalized = node.validator.finalization().await?;
+                if !finalized.is_empty() {
+                    // Notify subscriber
+                    let mut notif_blocks = Vec::with_capacity(finalized.len());
+                    for block in finalized {
+                        notif_blocks.push(JsonValue::String(base64::encode(
+                            &serialize_async(&block).await,
+                        )));
+                    }
+                    block_sub.notify(JsonValue::Array(notif_blocks)).await;
+                }
             }
 
             info!(target: "darkfid::task::sync::retrieve_blocks", "Blocks received: {}/{}", received_blocks, total);
