@@ -59,12 +59,13 @@ pub type ChannelPtr = Arc<Channel>;
 pub struct ChannelInfo {
     pub resolve_addr: Option<Url>,
     pub connect_addr: Url,
+    pub start_time: u64,
     pub id: u32,
 }
 
 impl ChannelInfo {
-    fn new(resolve_addr: Option<Url>, connect_addr: Url) -> Self {
-        Self { resolve_addr, connect_addr, id: OsRng.gen() }
+    fn new(resolve_addr: Option<Url>, connect_addr: Url, start_time: u64) -> Self {
+        Self { resolve_addr, connect_addr, start_time, id: OsRng.gen() }
     }
 }
 
@@ -110,7 +111,8 @@ impl Channel {
         Self::setup_dispatchers(&message_subsystem).await;
 
         let version = Mutex::new(None);
-        let info = ChannelInfo::new(resolve_addr, connect_addr.clone());
+        let start_time = UNIX_EPOCH.elapsed().unwrap().as_secs();
+        let info = ChannelInfo::new(resolve_addr, connect_addr.clone(), start_time);
 
         Arc::new(Self {
             reader,

@@ -303,5 +303,4 @@ user-defined types.
 
 TODO:
 * implement `ScoringSubsystem`, `AbstractComputer`, and `Controller`.
-* add Channel start time timestamp to ChannelInfo
 
