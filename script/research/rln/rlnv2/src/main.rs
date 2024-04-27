@@ -71,7 +71,7 @@ fn hash_message(msg: &str) -> pallas::Base {
 fn main() {
     // There exists a Merkle tree of identity commitments that serves
     // as the user registry.
-    let mut membership_tree = MerkleTree::new(100);
+    let mut membership_tree = MerkleTree::new(1);
     // Since bridgetree is append-only, we'll maintain a BTreeMap of all the
     // identity commitments in their indexes and whenever some idenity is banned
     // we'll zero out that leaf and rebuild the bridgetree from the BTreeMap.

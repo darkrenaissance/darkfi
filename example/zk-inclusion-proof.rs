@@ -37,7 +37,7 @@ use halo2_proofs::circuit::Value;
 use rand::rngs::OsRng;
 
 fn main() -> Result<()> {
-    let mut tree = MerkleTree::new(100);
+    let mut tree = MerkleTree::new(1);
 
     // Add 10 random things to the tree
     for _ in 0..10 {

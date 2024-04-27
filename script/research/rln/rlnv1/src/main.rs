@@ -77,7 +77,7 @@ fn main() {
     // ============
     // Registration
     // ============
-    let mut membership_tree = MerkleTree::new(100);
+    let mut membership_tree = MerkleTree::new(1);
     let mut identity_roots: Vec<MerkleNode> = vec![];
     let mut banned_roots: Vec<MerkleNode> = vec![];
     let mut identities = HashMap::new();

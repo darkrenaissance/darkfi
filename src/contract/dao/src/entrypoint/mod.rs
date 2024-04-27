@@ -93,7 +93,7 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
         }
         None => {
             // We didn't find a tree, so just make a new one.
-            let tree = MerkleTree::new(100);
+            let tree = MerkleTree::new(1);
 
             let mut tree_data = vec![];
             tree_data.write_u32(0)?;

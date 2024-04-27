@@ -173,7 +173,7 @@ impl Wallet {
 
         // The Merkle tree for the `Money` contract is initialized with a "null"
         // leaf at position 0.
-        let mut money_merkle_tree = MerkleTree::new(100);
+        let mut money_merkle_tree = MerkleTree::new(1);
         money_merkle_tree.append(MerkleNode::from(pallas::Base::ZERO));
         money_merkle_tree.mark().unwrap();
 
@@ -189,8 +189,8 @@ impl Wallet {
             money_merkle_tree,
             money_null_smt,
             money_null_smt_snapshot: None,
-            dao_merkle_tree: MerkleTree::new(100),
-            dao_proposals_tree: MerkleTree::new(100),
+            dao_merkle_tree: MerkleTree::new(1),
+            dao_proposals_tree: MerkleTree::new(1),
             unspent_money_coins: vec![],
             spent_money_coins: vec![],
             dao_leafs: HashMap::new(),

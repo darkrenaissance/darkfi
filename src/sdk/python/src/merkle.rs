@@ -30,7 +30,7 @@ pub struct MerkleTree(merkle_node::MerkleTree);
 impl MerkleTree {
     #[new]
     fn new() -> Self {
-        Self(merkle_node::MerkleTree::new(100))
+        Self(merkle_node::MerkleTree::new(1))
     }
 
     fn append(&mut self, node: &PyCell<Fp>) -> PyResult<bool> {

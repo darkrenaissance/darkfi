@@ -379,7 +379,7 @@ impl Drk {
             .is_err()
         {
             println!("Initializing DAO Merkle trees");
-            let tree = MerkleTree::new(100);
+            let tree = MerkleTree::new(1);
             self.put_dao_trees(&tree, &tree).await?;
             println!("Successfully initialized Merkle trees for the DAO contract");
         }
@@ -1018,7 +1018,7 @@ impl Drk {
     /// Reset the DAO Merkle trees in the wallet.
     pub async fn reset_dao_trees(&self) -> WalletDbResult<()> {
         println!("Resetting DAO Merkle trees");
-        let tree = MerkleTree::new(100);
+        let tree = MerkleTree::new(1);
         self.put_dao_trees(&tree, &tree).await?;
         println!("Successfully reset DAO Merkle trees");
 

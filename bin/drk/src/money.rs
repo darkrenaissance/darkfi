@@ -116,7 +116,7 @@ impl Drk {
         // we should actually check it.
         if self.get_money_tree().await.is_err() {
             println!("Initializing Money Merkle tree");
-            let mut tree = MerkleTree::new(100);
+            let mut tree = MerkleTree::new(1);
             tree.append(MerkleNode::from(pallas::Base::ZERO));
             let _ = tree.mark().unwrap();
             self.put_money_tree(&tree).await?;
@@ -839,7 +839,7 @@ impl Drk {
     /// Reset the Money Merkle tree in the wallet
     pub async fn reset_money_tree(&self) -> WalletDbResult<()> {
         println!("Resetting Money Merkle tree");
-        let mut tree = MerkleTree::new(100);
+        let mut tree = MerkleTree::new(1);
         tree.append(MerkleNode::from(pallas::Base::ZERO));
         let _ = tree.mark().unwrap();
         self.put_money_tree(&tree).await?;

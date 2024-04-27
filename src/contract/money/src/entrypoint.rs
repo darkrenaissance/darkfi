@@ -171,7 +171,7 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
 
             // Create the incrementalmerkletree for seen coins and initialize
             // it with a "fake" coin that can be used for dummy inputs.
-            let mut coin_tree = MerkleTree::new(100);
+            let mut coin_tree = MerkleTree::new(1);
             coin_tree.append(MerkleNode::from(pallas::Base::ZERO));
             let mut coin_tree_data = vec![];
             coin_tree_data.write_u32(0)?;

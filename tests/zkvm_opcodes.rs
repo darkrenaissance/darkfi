@@ -56,7 +56,7 @@ fn zkvm_opcodes() -> Result<()> {
     let a = pallas::Base::from(42);
     let b = pallas::Base::from(69);
 
-    let mut tree = MerkleTree::new(100);
+    let mut tree = MerkleTree::new(1);
     let c0 = pallas::Base::random(&mut OsRng);
     let c1 = pallas::Base::random(&mut OsRng);
     let c3 = pallas::Base::random(&mut OsRng);

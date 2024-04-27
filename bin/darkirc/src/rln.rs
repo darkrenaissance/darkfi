@@ -61,7 +61,7 @@ impl Rln {
 
         if !identities.contains_key(b"identity_tree")? {
             info!("Creating RLN membership tree");
-            let membership_tree = MerkleTree::new(100);
+            let membership_tree = MerkleTree::new(1);
             identities.insert(b"identity_tree", serialize_async(&membership_tree).await)?;
         }
 
