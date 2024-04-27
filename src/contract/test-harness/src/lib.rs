@@ -204,13 +204,14 @@ impl Wallet {
         callname: &str,
         tx: Transaction,
         block_height: u32,
-        verify_fees: bool,
     ) -> Result<()> {
         if self.bench_wasm {
             benchmark_wasm_calls(callname, &self.validator, &tx, block_height);
         }
 
-        self.validator.add_transactions(&[tx.clone()], block_height, true, verify_fees).await?;
+        self.validator
+            .add_test_transactions(&[tx.clone()], block_height, true, self.validator.verify_fees)
+            .await?;
 
         // Write the data
         {

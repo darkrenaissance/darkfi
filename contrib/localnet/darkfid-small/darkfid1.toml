@@ -45,6 +45,9 @@ recipient = "9vw6WznKk7xEFQwwXhJWMMdjUPi3cXL8NrFKQpKifG1U"
 # Skip syncing process and start node right away
 skip_sync = false
 
+# Disable transaction's fee verification, used for testing
+skip_fees = false
+
 # Optional sync checkpoint height
 #checkpoint_height = 0
 

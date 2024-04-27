@@ -186,7 +186,7 @@ impl TestHarness {
         let wallet = self.holders.get_mut(holder).unwrap();
 
         // Execute the transaction
-        wallet.add_transaction("money::otc_swap", tx, block_height, self.verify_fees).await?;
+        wallet.add_transaction("money::otc_swap", tx, block_height).await?;
 
         let mut found_owncoins = vec![];
 

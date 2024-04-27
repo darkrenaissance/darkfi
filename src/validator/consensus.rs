@@ -558,7 +558,11 @@ impl Fork {
     }
 
     /// Generate an unsigned block containing all pending transactions.
-    pub async fn generate_unsigned_block(&self, producer_tx: Transaction) -> Result<BlockInfo> {
+    pub async fn generate_unsigned_block(
+        &self,
+        producer_tx: Transaction,
+        verify_fees: bool,
+    ) -> Result<BlockInfo> {
         // Grab forks' last block proposal(previous)
         let previous = self.last_proposal()?;
 
@@ -566,7 +570,8 @@ impl Fork {
         let next_block_height = previous.block.header.height + 1;
 
         // Grab forks' unproposed transactions
-        let mut unproposed_txs = self.unproposed_txs(&self.blockchain, next_block_height).await?;
+        let mut unproposed_txs =
+            self.unproposed_txs(&self.blockchain, next_block_height, verify_fees).await?;
         unproposed_txs.push(producer_tx);
 
         // Generate the new header
@@ -589,8 +594,9 @@ impl Fork {
         &self,
         producer_tx: Transaction,
         secret_key: &SecretKey,
+        verify_fees: bool,
     ) -> Result<Proposal> {
-        let mut block = self.generate_unsigned_block(producer_tx).await?;
+        let mut block = self.generate_unsigned_block(producer_tx, verify_fees).await?;
 
         // Sign block
         block.sign(secret_key);
@@ -663,6 +669,7 @@ impl Fork {
         &self,
         blockchain: &Blockchain,
         verifying_block_height: u32,
+        verify_fees: bool,
     ) -> Result<Vec<Transaction>> {
         // Check if our mempool is not empty
         if self.mempool.is_empty() {
@@ -703,20 +710,19 @@ impl Fork {
 
             // Verify the transaction against current state
             overlay.lock().unwrap().checkpoint();
-            // TODO: shouldn't verify fees be true?
             match verify_transaction(
                 &overlay,
                 verifying_block_height,
                 &unproposed_tx,
                 &mut tree,
                 &mut vks,
-                false,
+                verify_fees,
             )
             .await
             {
                 Ok(gas) => _gas_used += gas,
                 Err(e) => {
-                    debug!(target: "validator::verification::verify_transactions", "Transaction verification failed: {}", e);
+                    debug!(target: "validator::consensus::unproposed_txs", "Transaction verification failed: {}", e);
                     overlay.lock().unwrap().revert_to_checkpoint()?;
                     continue
                 }

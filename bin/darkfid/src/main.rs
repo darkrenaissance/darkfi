@@ -139,6 +139,10 @@ pub struct BlockchainNetwork {
     pub skip_sync: bool,
 
     #[structopt(long)]
+    /// Disable transaction's fee verification, used for testing
+    pub skip_fees: bool,
+
+    #[structopt(long)]
     /// Optional sync checkpoint height
     pub checkpoint_height: Option<u32>,
 
@@ -243,7 +247,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         pow_target: blockchain_config.pow_target,
         pow_fixed_difficulty,
         genesis_block,
-        verify_fees: false, // TODO: Make configurable
+        verify_fees: !blockchain_config.skip_fees,
     };
 
     // Initialize validator

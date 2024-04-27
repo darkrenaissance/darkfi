@@ -250,8 +250,15 @@ async fn mine_next_block(
     pk: &ProvingKey,
 ) -> Result<()> {
     // Grab next target and block
-    let (next_target, mut next_block) =
-        generate_next_block(extended_fork, secret, recipient, zkbin, pk).await?;
+    let (next_target, mut next_block) = generate_next_block(
+        extended_fork,
+        secret,
+        recipient,
+        zkbin,
+        pk,
+        node.validator.verify_fees,
+    )
+    .await?;
 
     // Execute request to minerd and parse response
     let target = JsonValue::String(next_target.to_string());
@@ -284,6 +291,7 @@ async fn generate_next_block(
     recipient: &PublicKey,
     zkbin: &ZkBinary,
     pk: &ProvingKey,
+    verify_fees: bool,
 ) -> Result<(BigUint, BlockInfo)> {
     // Grab extended fork next block height
     let last_proposal = extended_fork.last_proposal()?;
@@ -301,7 +309,7 @@ async fn generate_next_block(
 
     // Generate next block proposal
     let target = extended_fork.module.next_mine_target()?;
-    let next_block = extended_fork.generate_unsigned_block(tx).await?;
+    let next_block = extended_fork.generate_unsigned_block(tx, verify_fees).await?;
 
     Ok((target, next_block))
 }

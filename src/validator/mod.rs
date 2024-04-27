@@ -163,7 +163,7 @@ impl Validator {
                 next_block_height,
                 &tx_vec,
                 &mut MerkleTree::new(1),
-                false,
+                self.verify_fees,
             )
             .await
             {
@@ -232,7 +232,7 @@ impl Validator {
                     next_block_height,
                     &tx_vec,
                     &mut MerkleTree::new(1),
-                    false,
+                    self.verify_fees,
                 )
                 .await
                 {
@@ -256,7 +256,7 @@ impl Validator {
                 next_block_height,
                 &tx_vec,
                 &mut MerkleTree::new(1),
-                false,
+                self.verify_fees,
             )
             .await
             {
@@ -547,10 +547,12 @@ impl Validator {
     /// Validate a set of [`Transaction`] in sequence and apply them if all are valid.
     /// In case any of the transactions fail, they will be returned to the caller.
     /// The function takes a boolean called `write` which tells it to actually write
-    /// the state transitions to the database.
+    /// the state transitions to the database, and a boolean called `verify_fees` to
+    /// overwrite the nodes configured `verify_fees` flag.
     ///
     /// Returns the total gas used for the given transactions.
-    pub async fn add_transactions(
+    /// Note: this function should only be used in tests.
+    pub async fn add_test_transactions(
         &self,
         txs: &[Transaction],
         verifying_block_height: u32,
