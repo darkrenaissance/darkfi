@@ -135,18 +135,53 @@ pub async fn miner_task(
     loop {
         // Grab best current fork
         let forks = node.validator.consensus.forks.read().await;
-        let extended_fork = forks[best_fork_index(&forks)?].full_clone()?;
+        let index = match best_fork_index(&forks) {
+            Ok(i) => i,
+            Err(e) => {
+                error!(
+                    target: "darkfid::task::miner_task",
+                    "Finding best fork index failed: {e}"
+                );
+                continue
+            }
+        };
+        let extended_fork = match forks[index].full_clone() {
+            Ok(f) => f,
+            Err(e) => {
+                error!(
+                    target: "darkfid::task::miner_task",
+                    "Fork full clone creation failed: {e}"
+                );
+                continue
+            }
+        };
         drop(forks);
 
         // Start listenning for network proposals and mining next block for best fork.
-        smol::future::or(
+        if let Err(e) = smol::future::or(
             listen_to_network(&node, &extended_fork, &subscription, &sender),
             mine(&node, &extended_fork, &mut secret, &recipient, &zkbin, &pk, &stop_signal),
         )
-        .await?;
+        .await
+        {
+            error!(
+                target: "darkfid::task::miner_task",
+                "Error during listen_to_network() or mine(): {e}"
+            );
+            continue
+        };
 
         // Check if we can finalize anything and broadcast them
-        let finalized = node.validator.finalization().await?;
+        let finalized = match node.validator.finalization().await {
+            Ok(f) => f,
+            Err(e) => {
+                error!(
+                    target: "darkfid::task::miner_task",
+                    "Finalization failed: {e}"
+                );
+                continue
+            }
+        };
         if !finalized.is_empty() {
             let mut notif_blocks = Vec::with_capacity(finalized.len());
             for block in finalized {

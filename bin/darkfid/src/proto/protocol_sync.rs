@@ -178,8 +178,7 @@ impl ProtocolSync {
                 Err(e) => {
                     debug!(
                         target: "darkfid::proto::protocol_sync::handle_receive_tip_request",
-                        "recv fail: {}",
-                        e
+                        "recv fail: {e}"
                     );
                     continue
                 }
@@ -207,8 +206,7 @@ impl ProtocolSync {
                     Err(e) => {
                         error!(
                             target: "darkfid::proto::protocol_sync::handle_receive_tip_request",
-                            "block_store.contains fail: {}",
-                            e
+                            "block_store.contains fail: {e}"
                         );
                         continue
                     }
@@ -220,8 +218,7 @@ impl ProtocolSync {
                     Err(e) => {
                         error!(
                             target: "darkfid::proto::protocol_sync::handle_receive_tip_request",
-                            "blockchain.last fail: {}",
-                            e
+                            "blockchain.last fail: {e}"
                         );
                         continue
                     }
@@ -233,8 +230,7 @@ impl ProtocolSync {
             if let Err(e) = self.channel.send(&response).await {
                 error!(
                     target: "darkfid::proto::protocol_sync::handle_receive_tip_request",
-                    "channel send fail: {}",
-                    e
+                    "Channel send fail: {e}"
                 )
             };
         }

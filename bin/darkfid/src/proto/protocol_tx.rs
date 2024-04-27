@@ -84,8 +84,7 @@ impl ProtocolTx {
                 Err(e) => {
                     debug!(
                         target: "darkfid::proto::protocol_tx::handle_receive_tx",
-                        "recv fail: {}",
-                        e
+                        "recv fail: {e}"
                     );
                     continue
                 }
@@ -113,8 +112,7 @@ impl ProtocolTx {
                 Err(e) => {
                     debug!(
                         target: "darkfid::proto::protocol_tx::handle_receive_tx",
-                        "append_tx fail: {}",
-                        e
+                        "append_tx fail: {e}"
                     );
                 }
             }

@@ -24,8 +24,6 @@ use log::{error, info};
 
 use crate::{task::garbage_collect_task, Darkfid};
 
-// TODO: handle all ? so the task don't stop on errors
-
 /// async task used for listening for new blocks and perform consensus.
 pub async fn consensus_task(node: Arc<Darkfid>, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     info!(target: "darkfid::task::consensus_task", "Starting consensus task...");
@@ -50,7 +48,16 @@ pub async fn consensus_task(node: Arc<Darkfid>, ex: Arc<smol::Executor<'static>>
         subscription.receive().await;
 
         // Check if we can finalize anything and broadcast them
-        let finalized = node.validator.finalization().await?;
+        let finalized = match node.validator.finalization().await {
+            Ok(f) => f,
+            Err(e) => {
+                error!(
+                    target: "darkfid::task::consensus_task",
+                    "Finalization failed: {e}"
+                );
+                continue
+            }
+        };
         if !finalized.is_empty() {
             let mut notif_blocks = Vec::with_capacity(finalized.len());
             for block in finalized {

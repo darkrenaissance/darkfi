@@ -16,8 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-// TODO: Handle ? with matches in these files. They should be robust.
-
 pub mod consensus;
 pub use consensus::consensus_task;
 

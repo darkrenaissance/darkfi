@@ -19,7 +19,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use log::debug;
+use log::{debug, error};
 use smol::Executor;
 use tinyjson::JsonValue;
 
@@ -91,8 +91,7 @@ impl ProtocolProposal {
                 Err(e) => {
                     debug!(
                         target: "darkfid::proto::protocol_proposal::handle_receive_proposal",
-                        "recv fail: {}",
-                        e
+                        "recv fail: {e}"
                     );
                     continue
                 }
@@ -120,8 +119,7 @@ impl ProtocolProposal {
                 Err(e) => {
                     debug!(
                         target: "darkfid::proto::protocol_proposal::handle_receive_proposal",
-                        "append_proposal fail: {}",
-                        e
+                        "append_proposal fail: {e}",
                     );
 
                     match e {
@@ -135,12 +133,27 @@ impl ProtocolProposal {
             debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Asking peer for fork sequence");
 
             // Cleanup subscriber
-            self.proposals_response_sub.clean().await?;
+            if let Err(e) = self.proposals_response_sub.clean().await {
+                error!(
+                    target: "darkfid::proto::protocol_proposal::handle_receive_proposal",
+                    "Error during proposals response subscriber cleanup: {e}"
+                );
+                continue
+            };
 
             // Grab last known block to create the request and execute it
-            let last = self.validator.blockchain.last()?;
+            let last = match self.validator.blockchain.last() {
+                Ok(l) => l,
+                Err(e) => {
+                    debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Blockchain last retriaval failed: {e}");
+                    continue
+                }
+            };
             let request = ForkSyncRequest { tip: last.1, fork_tip: Some(proposal_copy.0.hash) };
-            self.channel.send(&request).await?;
+            if let Err(e) = self.channel.send(&request).await {
+                debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Channel send failed: {e}");
+                continue
+            };
 
             // Node waits for response
             let response = match self
@@ -150,7 +163,7 @@ impl ProtocolProposal {
             {
                 Ok(r) => r,
                 Err(e) => {
-                    debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Asking peer for fork sequence failed: {}", e);
+                    debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Asking peer for fork sequence failed: {e}");
                     continue
                 }
             };
@@ -184,7 +197,13 @@ impl ProtocolProposal {
             }
 
             for proposal in &response.proposals {
-                self.validator.append_proposal(proposal).await?;
+                if let Err(e) = self.validator.append_proposal(proposal).await {
+                    error!(
+                        target: "darkfid::proto::protocol_proposal::handle_receive_proposal",
+                        "Error while appending response proposal: {e}"
+                    );
+                    break
+                };
                 let message = ProposalMessage(proposal.clone());
                 self.p2p.broadcast_with_exclude(&message, &exclude_list).await;
                 // Notify subscriber

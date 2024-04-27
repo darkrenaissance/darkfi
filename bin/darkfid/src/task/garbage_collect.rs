@@ -24,11 +24,9 @@ use darkfi::{
     Error, Result,
 };
 use darkfi_sdk::crypto::MerkleTree;
-use log::info;
+use log::{error, info};
 
 use crate::Darkfid;
-
-// TODO: handle all ? so the task don't stop on errors
 
 /// Async task used for purging erroneous pending transactions from the nodes mempool.
 pub async fn garbage_collect_task(node: Arc<Darkfid>) -> Result<()> {
@@ -37,7 +35,16 @@ pub async fn garbage_collect_task(node: Arc<Darkfid>) -> Result<()> {
     // Grab all current unproposed transactions.  We verify them in batches,
     // to not load them all in memory.
     let (mut last_checked, mut txs) =
-        node.validator.blockchain.transactions.get_after_pending(0, TXS_CAP)?;
+        match node.validator.blockchain.transactions.get_after_pending(0, TXS_CAP) {
+            Ok(pair) => pair,
+            Err(e) => {
+                error!(
+                    target: "darkfid::task::garbage_collect_task",
+                    "Uproposed transactions retrieval failed: {e}"
+                );
+                return Ok(())
+            }
+        };
     while !txs.is_empty() {
         // Verify each one against current forks
         for tx in txs {
@@ -50,11 +57,29 @@ pub async fn garbage_collect_task(node: Arc<Darkfid>) -> Result<()> {
             // Iterate over them to verify transaction validity in their overlays
             for fork in forks.iter_mut() {
                 // Clone forks' overlay
-                let overlay = fork.overlay.lock().unwrap().full_clone()?;
+                let overlay = match fork.overlay.lock().unwrap().full_clone() {
+                    Ok(o) => o,
+                    Err(e) => {
+                        error!(
+                            target: "darkfid::task::garbage_collect_task",
+                            "Overlay full clone creation failed: {e}"
+                        );
+                        break
+                    }
+                };
 
                 // Grab all current proposals transactions hashes
                 let proposals_txs =
-                    overlay.lock().unwrap().get_blocks_txs_hashes(&fork.proposals)?;
+                    match overlay.lock().unwrap().get_blocks_txs_hashes(&fork.proposals) {
+                        Ok(txs) => txs,
+                        Err(e) => {
+                            error!(
+                                target: "darkfid::task::garbage_collect_task",
+                                "Proposal transactions retrieval failed: {e}"
+                            );
+                            break
+                        }
+                    };
 
                 // If the hash is contained in the proposals transactions vec, skip it
                 if proposals_txs.contains(&tx_hash) {
@@ -62,7 +87,16 @@ pub async fn garbage_collect_task(node: Arc<Darkfid>) -> Result<()> {
                 }
 
                 // Grab forks' next block height
-                let next_block_height = fork.get_next_block_height()?;
+                let next_block_height = match fork.get_next_block_height() {
+                    Ok(h) => h,
+                    Err(e) => {
+                        error!(
+                            target: "darkfid::task::garbage_collect_task",
+                            "Next fork block height retrieval failed: {e}"
+                        );
+                        break
+                    }
+                };
 
                 // Verify transaction
                 match verify_transactions(
@@ -87,7 +121,16 @@ pub async fn garbage_collect_task(node: Arc<Darkfid>) -> Result<()> {
             drop(forks);
         }
         (last_checked, txs) =
-            node.validator.blockchain.transactions.get_after_pending(last_checked, TXS_CAP)?;
+            match node.validator.blockchain.transactions.get_after_pending(last_checked, TXS_CAP) {
+                Ok(pair) => pair,
+                Err(e) => {
+                    error!(
+                        target: "darkfid::task::garbage_collect_task",
+                        "Uproposed transactions next batch retrieval failed: {e}"
+                    );
+                    break
+                }
+            };
     }
     info!(target: "darkfid::task::garbage_collect_task", "Garbage collection finished successfully!");
     Ok(())
