@@ -26,11 +26,11 @@ And then run the daemon:
 For the CLI part of `tau`, we use `tau-python`, you can run it with:
 ```shell
 % cd bin/tau/tau-python
-% python main.py
+% ./tau
 ```
 Or you can alias it by adding this line to your `bashrc`:
 ```shell
-% alias tau=/path-to-darkfi/bin/tau/tau-python/main.py
+% alias tau=/path-to-darkfi/bin/tau/tau-python/tau
 ```
 
 ## Usage 
