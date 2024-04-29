@@ -27,23 +27,10 @@ import src.util
 
 from os.path import join
 
+# this is counter-intuitive because the dag is reversed
 resolved = True
 
-def check_multi_ev_in_layer(dag_dict, dag):
-    gen = list(nx.topological_generations(dag))
-    ss = []
-    for i in gen:
-        # fork
-        if len(i) == 2:
-            event1 = dag_dict[i[0]]
-            event2 = dag_dict[i[1]]
-            if int(event1['timestamp']) > int(event2['timestamp']):
-                ss.append(i[0])
-            else:
-                ss.append(i[1])
-    return ss
-
-def graph(event, dag, x):
+def graph(event, dag, longest_path):
     global resolved
     merge = len(list(dag.predecessors(event['hash']))) > 1
     fork = len(list(dag.successors(event['hash']))) > 1
@@ -57,13 +44,13 @@ def graph(event, dag, x):
     if merge and fork:
         return "M━┪"
     if not merge and not fork:
-        if event['hash'] in x:
-            return "o │"
-        else:
-            if not resolved:
-                return "│ o"
+        if not resolved:
+            if event['hash'] in longest_path:
+                return "o │"
             else:
-                return "o  "
+                return "│ o"
+        else:
+            return "o  "
             #  "│ o"
             #  "o │"
             #  "o━┪"
@@ -76,12 +63,12 @@ def indent(num):
 
 class ListItem(u.WidgetWrap):
     
-    def __init__ (self, event, dag, x):
-        g = graph(event, dag, x)
+    def __init__ (self, event, dag, longest_path):
+        g = graph(event, dag, longest_path)
         self.content = event
         layer_num = int(event["layer"])
         layer = "layer " + str(layer_num) + indent(layer_num) if layer_num != 0 else "genesis       "
-        dt = event['hash'][:10] + " | " + str(datetime.fromtimestamp(int(event['timestamp'])))
+        dt = event['hash'][:10] + " │ " + str(datetime.fromtimestamp(int(event['timestamp'])))
         t = u.AttrMap(u.Text([('word', dt),
                               ('layer-num', " " + layer),
                               ('word', g),
@@ -108,8 +95,8 @@ class ListView(u.WidgetWrap):
         focus_w, _ = self.walker.get_focus()
         u.emit_signal(self, 'show_details', focus_w.content)
 
-    def set_data(self, events, dag, x):
-        events_widgets = [ListItem(e, dag, x) for e in events]
+    def set_data(self, events, dag, longest_path):
+        events_widgets = [ListItem(e, dag, longest_path) for e in events]
         u.disconnect_signal(self.walker, 'modified', self.modified)
 
         while len(self.walker) > 0:
@@ -214,8 +201,8 @@ class App(object):
                 
                 l.append({"layer":f"{layer}", "hash":f"{node}", "children":children, "parents":parents, "content":f"{matches}", "timestamp": f"{timestamp}"})
 
-            x = check_multi_ev_in_layer(dag_dict, dag)
-            self.view_one.set_data(l, dag, x)
+            longest_path = nx.dag_longest_path(dag)
+            self.view_one.set_data(l, dag, longest_path)
 
     async def start(self, config):
         await self.update_data(config)
