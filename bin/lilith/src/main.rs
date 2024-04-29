@@ -187,7 +187,7 @@ impl Lilith {
             sleep(refinery_interval).await;
 
             if hosts.container.is_empty(HostColor::White).await {
-                warn!(target: "net::refinery::whitelist_refinery",
+                debug!(target: "net::refinery::whitelist_refinery",
                       "Whitelist is empty! Cannot start refinery process");
 
                 continue
