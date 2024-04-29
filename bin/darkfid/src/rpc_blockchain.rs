@@ -244,7 +244,12 @@ impl Darkfid {
                 return JsonError::new(InternalError, None, id).into()
             };
 
-            let zkas_bincode = base64::encode(&zkas_bytes);
+            let (zkbin, _): (Vec<u8>, Vec<u8>) = match deserialize_async(&zkas_bytes).await {
+                Ok(pair) => pair,
+                Err(_) => return JsonError::new(InternalError, None, id).into(),
+            };
+
+            let zkas_bincode = base64::encode(&zkbin);
             ret.push(JsonValue::Array(vec![
                 JsonValue::String(zkas_ns),
                 JsonValue::String(zkas_bincode),

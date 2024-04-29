@@ -45,7 +45,6 @@ impl Drk {
         recipient: PublicKey,
     ) -> Result<Transaction> {
         // First get all unspent OwnCoins to see what our balance is.
-        println!("Fetching OwnCoins");
         let owncoins = self.get_coins(false).await?;
         let mut owncoins: Vec<OwnCoin> = owncoins.iter().map(|x| x.0.clone()).collect();
         // We're only interested in the ones for the token_id we're sending
@@ -98,11 +97,11 @@ impl Drk {
         let mint_circuit = ZkCircuit::new(empty_witnesses(&mint_zkbin)?, &mint_zkbin);
         let burn_circuit = ZkCircuit::new(empty_witnesses(&burn_zkbin)?, &burn_zkbin);
 
-        println!("Creating Mint and Burn circuit proving keys");
+        // Creating Mint and Burn circuit proving keys
         let mint_pk = ProvingKey::build(mint_zkbin.k, &mint_circuit);
         let burn_pk = ProvingKey::build(burn_zkbin.k, &burn_circuit);
 
-        println!("Building transaction parameters");
+        // Building transaction parameters
         let (params, secrets, spent_coins) = make_transfer_call(
             keypair, recipient, amount, token_id, owncoins, tree, mint_zkbin, mint_pk, burn_zkbin,
             burn_pk,

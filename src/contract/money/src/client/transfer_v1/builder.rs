@@ -27,7 +27,7 @@ use darkfi_sdk::{
     },
     pasta::pallas,
 };
-use log::{debug, info};
+use log::debug;
 use rand::rngs::OsRng;
 
 use super::proof::{create_transfer_burn_proof, create_transfer_mint_proof};
@@ -93,7 +93,7 @@ impl TransferCallBuilder {
             let signature_secret = SecretKey::random(&mut OsRng);
             signature_secrets.push(signature_secret);
 
-            info!("Creating transfer burn proof for input {}", i);
+            debug!("Creating transfer burn proof for input {}", i);
             let (proof, public_inputs) = create_transfer_burn_proof(
                 &self.burn_zkbin,
                 &self.burn_pk,
@@ -129,7 +129,7 @@ impl TransferCallBuilder {
 
             output_blinds.push(value_blind);
 
-            info!("Creating transfer mint proof for output {}", i);
+            debug!("Creating transfer mint proof for output {}", i);
             let (proof, public_inputs) = create_transfer_mint_proof(
                 &self.mint_zkbin,
                 &self.mint_pk,

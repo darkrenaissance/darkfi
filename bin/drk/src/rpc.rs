@@ -346,8 +346,6 @@ impl Drk {
 
     /// Try to fetch zkas bincodes for the given `ContractId`.
     pub async fn lookup_zkas(&self, contract_id: &ContractId) -> Result<Vec<(String, Vec<u8>)>> {
-        println!("Querying zkas bincode for {contract_id}");
-
         let params = JsonValue::Array(vec![JsonValue::String(format!("{contract_id}"))]);
         let req = JsonRequest::new("blockchain.lookup_zkas", params);
 
@@ -357,9 +355,8 @@ impl Drk {
         let mut ret = Vec::with_capacity(params.len());
         for param in params {
             let zkas_ns = param[0].get::<String>().unwrap().clone();
-            let zkas_bincode_bytes = base64::decode(param.get::<String>().unwrap()).unwrap();
-            let zkas_bincode = deserialize_async(&zkas_bincode_bytes).await?;
-            ret.push((zkas_ns, zkas_bincode));
+            let zkas_bincode_bytes = base64::decode(param[1].get::<String>().unwrap()).unwrap();
+            ret.push((zkas_ns, zkas_bincode_bytes));
         }
 
         Ok(ret)

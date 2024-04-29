@@ -55,7 +55,7 @@ of the guide can be added for future regressions.
 | 10 | Alias add                 | alias add {ALIAS} {TOKEN}                        | Pass                             |
 | 11 | Aliases retrieval         | alias show                                       | Pass                             |
 | 12 | Mint generation           | token mint {ALIAS} {AMOUNT} {ADDR}               | Failure: disabled                |
-| 13 | Transfer                  | transfer {AMOUNT} {ALIAS} {ADDR}                 | Failure: rpc.rs:360 unwrap fails |
+| 13 | Transfer                  | transfer {AMOUNT} {ALIAS} {ADDR}                 | Failure: fee is missing          |
 | 14 | Coins retrieval           | wallet --coins                                   | Pass                             |
 | 15 | OTC initialization        | otc init -v {AMOUNT}:{AMOUNT} -t {ALIAS}:{ALIAS} | Failure: needs #12               |
 | 16 | OTC join                  | otc join                                         | Failure: needs #15               |
@@ -71,4 +71,8 @@ of the guide can be added for future regressions.
 | 26 | DAO proposal retrieval    | dao proposal {DAO} {PROPOSAL_ID}                 | Failure: needs #24               |
 | 27 | DAO vote                  | dao vote {DAO} {PROPOSAL_ID} {VOTE} {WEIGHT}     | Failure: needs #24               |
 | 28 | DAO proposal execution    | dao exec {DAO} {PROPOSAL_ID}                     | Failure: needs #27               |
+| 29 | Coins unspend             | unspend {COIN}                                   | Pass                             |
+| 30 | Transaction inspect       | inspect                                          | Pass                             |
+| 31 | Transaction simulate      | explorer simulate-tx                             | Pass                             |
+| 31 | Transaction broadcast     | broadcast                                        | Pass                             |
 
