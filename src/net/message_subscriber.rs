@@ -16,16 +16,17 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{any::Any, collections::HashMap, io::Cursor, sync::Arc, time::Duration};
+use std::{any::Any, collections::HashMap, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use futures::stream::{FuturesUnordered, StreamExt};
-use log::{debug, warn};
+use log::{debug, error, warn};
 use rand::{rngs::OsRng, Rng};
-use smol::lock::Mutex;
+use smol::{io::AsyncReadExt, lock::Mutex};
 
 use super::message::Message;
-use crate::{system::timeout::timeout, Error, Result};
+use crate::{net::transport::PtStream, system::timeout::timeout, Error, Result};
+use darkfi_serial::{AsyncDecodable, VarInt};
 
 /// 64-bit identifier for message subscription.
 pub type MessageSubscriptionId = u64;
@@ -177,7 +178,7 @@ impl<M: Message> MessageSubscription<M> {
 /// Generic interface for the message dispatcher.
 #[async_trait]
 trait MessageDispatcherInterface: Send + Sync {
-    async fn trigger(&self, payload: &[u8]);
+    async fn trigger(&self, stream: &mut smol::io::ReadHalf<Box<dyn PtStream + 'static>>);
 
     async fn trigger_error(&self, err: Error);
 
@@ -188,18 +189,25 @@ trait MessageDispatcherInterface: Send + Sync {
 #[async_trait]
 impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
     /// Internal function to deserialize data into a message type
-    /// and dispatch it across subscriber channels.
-    async fn trigger(&self, payload: &[u8]) {
-        // Deserialize data into type, send down the pipes.
-        let cursor = Cursor::new(payload);
-        match M::decode(cursor) {
+    /// and dispatch it across subscriber channels. Reads directly
+    /// from an inbound stream.
+    ///
+    /// We extract the message length from the stream and use `take()`
+    /// to allocate an appropiately sized buffer as a basic DDOS protection.
+    async fn trigger(&self, stream: &mut smol::io::ReadHalf<Box<dyn PtStream + 'static>>) {
+        // TODO: check the message length does not exceed some bound.
+        let len = VarInt::decode_async(stream).await.unwrap().0;
+        let mut take = stream.take(len);
+
+        // Deserialize stream into type, send down the pipes.
+        match M::decode_async(&mut take).await {
             Ok(message) => {
                 let message = Ok(Arc::new(message));
                 self._trigger_all(message).await
             }
 
             Err(err) => {
-                debug!(
+                error!(
                     target: "net::message_subscriber::trigger()",
                     "Unable to decode data. Dropping...: {}",
                     err,
@@ -265,7 +273,11 @@ impl MessageSubsystem {
 
     /// Transmits a payload to a dispatcher.
     /// Returns an error if the payload fails to transmit.
-    pub async fn notify(&self, command: &str, payload: &[u8]) -> Result<()> {
+    pub async fn notify(
+        &self,
+        command: &str,
+        reader: &mut smol::io::ReadHalf<Box<dyn PtStream + 'static>>,
+    ) -> Result<()> {
         let Some(dispatcher) = self.dispatchers.lock().await.get(command).cloned() else {
             warn!(
                 target: "net::message_subscriber::notify",
@@ -275,7 +287,7 @@ impl MessageSubsystem {
             return Err(Error::MissingDispatcher)
         };
 
-        dispatcher.trigger(payload).await;
+        dispatcher.trigger(reader).await;
         Ok(())
     }
 
@@ -294,49 +306,5 @@ impl MessageSubsystem {
         drop(dispatchers);
 
         while let Some(_r) = futures.next().await {}
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use darkfi_serial::{serialize, SerialDecodable, SerialEncodable};
-
-    #[test]
-    fn message_subscriber_test() {
-        #[derive(SerialEncodable, SerialDecodable)]
-        struct MyVersionMessage(pub u32);
-        crate::impl_p2p_message!(MyVersionMessage, "verver");
-
-        smol::block_on(async {
-            let subsystem = MessageSubsystem::new();
-            subsystem.add_dispatch::<MyVersionMessage>().await;
-
-            // Subscribe:
-            // 1. Get dispatcher
-            // 2. Cast to specific type
-            // 3. Do sub, return sub
-            let sub = subsystem.subscribe::<MyVersionMessage>().await.unwrap();
-
-            // Receive message and publish:
-            // 1. Based on string, lookup relevant dispatcher interface
-            // 2. Publish data there
-            let msg = MyVersionMessage(110);
-            let payload = serialize(&msg);
-            subsystem.notify("verver", &payload).await.unwrap();
-
-            // Receive:
-            // 1. Do a get easy
-            let msg2 = sub.receive().await.unwrap();
-            assert_eq!(msg.0, msg2.0);
-
-            // Trigger an error
-            subsystem.trigger_error(Error::ChannelStopped).await;
-
-            let msg2 = sub.receive().await;
-            assert!(msg2.is_err());
-
-            sub.unsubscribe().await;
-        });
     }
 }

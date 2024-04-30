@@ -25,11 +25,13 @@ use std::{
     time::UNIX_EPOCH,
 };
 
-use darkfi_serial::{async_trait, serialize, SerialDecodable, SerialEncodable};
-use log::{debug, error, info};
+use darkfi_serial::{
+    async_trait, AsyncDecodable, AsyncEncodable, SerialDecodable, SerialEncodable, VarInt,
+};
+use log::{debug, error, info, trace};
 use rand::{rngs::OsRng, Rng};
 use smol::{
-    io::{self, ReadHalf, WriteHalf},
+    io::{self, AsyncRead, AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf},
     lock::Mutex,
     Executor,
 };
@@ -39,7 +41,7 @@ use super::{
     dnet::{self, dnetev, DnetEvent},
     hosts::HostColor,
     message,
-    message::{Packet, VersionMessage},
+    message::{VersionMessage, MAGIC_BYTES},
     message_subscriber::{MessageSubscription, MessageSubsystem},
     p2p::P2pPtr,
     session::{Session, SessionBitFlag, SessionWeakPtr, SESSION_ALL, SESSION_REFINE},
@@ -214,23 +216,80 @@ impl Channel {
         Ok(())
     }
 
-    /// Implements send message functionality. Creates a new payload and
-    /// encodes it. Then creates a message packet (the base type of the
-    /// network) and copies the payload into it. Then we send the packet
-    /// over the network stream.
+    /// Sends an outbound Message by writing data to the given async stream.
     async fn send_message<M: message::Message>(&self, message: &M) -> Result<()> {
-        let packet = Packet { command: M::NAME.to_string(), payload: serialize(message) };
+        let command = M::NAME.to_string();
+        assert!(!command.is_empty());
+        assert!(std::mem::size_of::<usize>() <= std::mem::size_of::<u64>());
+
+        let stream = &mut *self.writer.lock().await;
+        let mut name_buffer = Vec::<u8>::new();
+        let mut msg_buffer = Vec::<u8>::new();
+        let mut written: usize = 0;
 
         dnetev!(self, SendMessage, {
             chan: self.info.clone(),
-            cmd: packet.command.clone(),
+            cmd: command,
             time: NanoTimestamp::current_time(),
         });
 
-        let stream = &mut *self.writer.lock().await;
-        let _ = message::send_packet(stream, packet).await?;
+        trace!(target: "net::channel::send_message()", "Sending magic...");
+        written += MAGIC_BYTES.encode_async(stream).await?;
+
+        trace!(target: "net::channel::send_message()", "Sent magic");
+        trace!(target: "net::channel::send_message()", "Sending command...");
+
+        // First encode the name to an intermediate buffer.
+        M::NAME.to_string().encode_async(&mut name_buffer).await?;
+
+        // Then extract the length of the intermediate buffer as a VarInt
+        // and write to the stream. This is the length of the name message.
+        // Then encode the name itself to the stream.
+        written += VarInt(name_buffer.len() as u64).encode_async(stream).await?;
+        written += M::NAME.to_string().encode_async(stream).await?;
+
+        trace!(target: "net::channel::send_message()", "Sent command: {}", M::NAME.to_string());
+        trace!(target: "net::channel::send_message()", "Sending payload...");
+
+        // Do the same proceedure for the Message.
+        message.encode_async(&mut msg_buffer).await?;
+
+        written += VarInt(msg_buffer.len() as u64).encode_async(stream).await?;
+        written += message.encode_async(stream).await?;
+
+        trace!(target: "net::channel::send_message()", "Sent payload {} bytes, total bytes {}",
+            msg_buffer.len(), written);
+
+        stream.flush().await?;
 
         Ok(())
+    }
+
+    /// Returns a decoded Message command.
+    /// We start by extracting the length from the stream, then allocate
+    /// the precise buffer for this length using stream.take(). This provides
+    /// a basic DDOS protection.
+    pub async fn read_command<R: AsyncRead + Unpin + Send + Sized>(
+        &self,
+        stream: &mut R,
+    ) -> Result<String> {
+        // Messages should have a 4 byte header of magic digits.
+        // This is used for network debugging.
+        let mut magic = [0u8; 4];
+        trace!(target: "net::channel::read_command()", "Reading magic...");
+        stream.read_exact(&mut magic).await?;
+
+        trace!(target: "net::channel::read_command()", "Read magic {:?}", magic);
+        if magic != MAGIC_BYTES {
+            error!(target: "net::channel::read_command", "Error: Magic bytes mismatch");
+            return Err(Error::MalformedPacket)
+        }
+
+        let len = VarInt::decode_async(stream).await.unwrap().0;
+        let mut take = stream.take(len);
+        let command = String::decode_async(&mut take).await.unwrap();
+
+        Ok(command)
     }
 
     /// Subscribe to a message on the message subsystem.
@@ -278,8 +337,8 @@ impl Channel {
 
         // Run loop
         loop {
-            let packet = match message::read_packet(reader).await {
-                Ok(packet) => packet,
+            let command = match self.read_command(reader).await {
+                Ok(command) => command,
                 Err(err) => {
                     if Self::is_eof_error(&err) {
                         info!(
@@ -308,12 +367,12 @@ impl Channel {
 
             dnetev!(self, RecvMessage, {
                 chan: self.info.clone(),
-                cmd: packet.command.clone(),
+                cmd: command.clone(),
                 time: NanoTimestamp::current_time(),
             });
 
             // Send result to our subscribers
-            match self.message_subsystem.notify(&packet.command, &packet.payload).await {
+            match self.message_subsystem.notify(&command, reader).await {
                 Ok(()) => {}
                 // If we're getting messages without dispatchers, it's spam.
                 Err(Error::MissingDispatcher) => {
