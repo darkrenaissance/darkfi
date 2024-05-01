@@ -22,7 +22,7 @@ use darkfi::{
 };
 use darkfi_money_contract::{
     client::{transfer_v1::make_transfer_call, MoneyNote, OwnCoin},
-    model::{Input, MoneyFeeParamsV1, MoneyTransferParamsV1, Output, TokenId},
+    model::{MoneyFeeParamsV1, MoneyTransferParamsV1, TokenId},
     MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
@@ -128,17 +128,14 @@ impl TestHarness {
         // Execute the transaction
         wallet.add_transaction("money::transfer", tx, block_height).await?;
 
-        // Iterate over all inputs to mark any spent coins
-        let mut inputs: Vec<Input> = call_params.inputs.to_vec();
-        if let Some(ref fee_params) = fee_params {
-            inputs.push(fee_params.input.clone());
-        }
-
-        let nullifiers = inputs.iter().map(|i| i.nullifier.inner()).map(|l| (l, l)).collect();
+        // Iterate over call inputs to mark any spent coins
+        let nullifiers =
+            call_params.inputs.iter().map(|i| i.nullifier.inner()).map(|l| (l, l)).collect();
         wallet.money_null_smt.insert_batch(nullifiers).expect("smt.insert_batch()");
 
+        let mut found_owncoins = vec![];
         if append {
-            for input in &inputs {
+            for input in &call_params.inputs {
                 if let Some(spent_coin) = wallet
                     .unspent_money_coins
                     .iter()
@@ -150,37 +147,71 @@ impl TestHarness {
                     wallet.spent_money_coins.push(spent_coin.clone());
                 }
             }
-        }
 
-        // Iterate over all outputs to find any new OwnCoins
-        let mut found_owncoins = vec![];
-        let mut outputs: Vec<Output> = call_params.outputs.to_vec();
-        if let Some(ref fee_params) = fee_params {
-            outputs.push(fee_params.output.clone());
-        }
+            // Iterate over call outputs to find any new OwnCoins
+            for output in &call_params.outputs {
+                wallet.money_merkle_tree.append(MerkleNode::from(output.coin.inner()));
 
-        for output in &outputs {
-            if !append {
-                continue
+                // Attempt to decrypt the output note to see if this is a coin for the holder.
+                let Ok(note) = output.note.decrypt::<MoneyNote>(&wallet.keypair.secret) else {
+                    continue
+                };
+
+                let owncoin = OwnCoin {
+                    coin: output.coin,
+                    note: note.clone(),
+                    secret: wallet.keypair.secret,
+                    leaf_position: wallet.money_merkle_tree.mark().unwrap(),
+                };
+
+                debug!("Found new OwnCoin({}) for {:?}", owncoin.coin, holder);
+                wallet.unspent_money_coins.push(owncoin.clone());
+                found_owncoins.push(owncoin);
             }
+        }
 
-            wallet.money_merkle_tree.append(MerkleNode::from(output.coin.inner()));
+        // Handle fee call
+        if let Some(ref fee_params) = fee_params {
+            // Process call input to mark any spent coins
+            let nullifier = fee_params.input.nullifier.inner();
+            wallet
+                .money_null_smt
+                .insert_batch(vec![(nullifier, nullifier)])
+                .expect("smt.insert_batch()");
 
-            // Attempt to decrypt the output note to see if this is a coin for the holder.
-            let Ok(note) = output.note.decrypt::<MoneyNote>(&wallet.keypair.secret) else {
-                continue
-            };
+            if append {
+                if let Some(spent_coin) = wallet
+                    .unspent_money_coins
+                    .iter()
+                    .find(|x| x.nullifier() == fee_params.input.nullifier)
+                    .cloned()
+                {
+                    debug!("Found spent OwnCoin({}) for {:?}", spent_coin.coin, holder);
+                    wallet
+                        .unspent_money_coins
+                        .retain(|x| x.nullifier() != fee_params.input.nullifier);
+                    wallet.spent_money_coins.push(spent_coin.clone());
+                }
 
-            let owncoin = OwnCoin {
-                coin: output.coin,
-                note: note.clone(),
-                secret: wallet.keypair.secret,
-                leaf_position: wallet.money_merkle_tree.mark().unwrap(),
-            };
+                // Process call output to find any new OwnCoins
+                wallet.money_merkle_tree.append(MerkleNode::from(fee_params.output.coin.inner()));
 
-            debug!("Found new OwnCoin({}) for {:?}", owncoin.coin, holder);
-            wallet.unspent_money_coins.push(owncoin.clone());
-            found_owncoins.push(owncoin);
+                // Attempt to decrypt the output note to see if this is a coin for the holder.
+                if let Ok(note) =
+                    fee_params.output.note.decrypt::<MoneyNote>(&wallet.keypair.secret)
+                {
+                    let owncoin = OwnCoin {
+                        coin: fee_params.output.coin,
+                        note: note.clone(),
+                        secret: wallet.keypair.secret,
+                        leaf_position: wallet.money_merkle_tree.mark().unwrap(),
+                    };
+
+                    debug!("Found new OwnCoin({}) for {:?}", owncoin.coin, holder);
+                    wallet.unspent_money_coins.push(owncoin.clone());
+                    found_owncoins.push(owncoin);
+                };
+            }
         }
 
         Ok(found_owncoins)

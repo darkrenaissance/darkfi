@@ -68,7 +68,13 @@ test-token-mint: all
 		--features=no-entrypoint,client \
 		--test token_mint
 
-test: test-integration test-mint-pay-swap test-genesis-mint test-token-mint
+test-delayed-tx: all
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) test --target=$(RUST_TARGET) \
+		--release --package $(PKGNAME) \
+		--features=no-entrypoint,client \
+		--test delayed_tx
+
+test: test-integration test-mint-pay-swap test-genesis-mint test-token-mint test-delayed-tx
 
 clippy: all
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --target=$(WASM_TARGET) \
@@ -84,4 +90,4 @@ clean:
 		--release --package $(PKGNAME)
 	rm -f $(PROOFS_BIN) $(WASM_BIN)
 
-.PHONY: all test-integration test-mint-pay-swap test-genesis-mint test clippy clean
+.PHONY: all test-integration test-mint-pay-swap test-genesis-mint test-delayed-tx test clippy clean
