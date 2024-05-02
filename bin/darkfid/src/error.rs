@@ -23,7 +23,7 @@ use darkfi::rpc::jsonrpc::{ErrorCode::ServerError, JsonError, JsonResult};
 pub enum RpcError {
     // Transaction-related errors
     TxSimulationFail = -32110,
-    TxBroadcastFail = -32111,
+    TxGasCalculationFail = -32111,
 
     // State-related errors,
     NotSynced = -32120,
@@ -43,7 +43,7 @@ fn to_tuple(e: RpcError) -> (i32, String) {
     let msg = match e {
         // Transaction-related errors
         RpcError::TxSimulationFail => "Failed simulating transaction state change",
-        RpcError::TxBroadcastFail => "Failed broadcasting transaction",
+        RpcError::TxGasCalculationFail => "Failed to calculate transaction's gas",
         // State-related errors
         RpcError::NotSynced => "Blockchain is not synced",
         RpcError::UnknownBlockHeight => "Did not find block height",

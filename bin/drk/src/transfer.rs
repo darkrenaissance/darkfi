@@ -24,12 +24,11 @@ use darkfi::{
     Error, Result,
 };
 use darkfi_money_contract::{
-    client::{transfer_v1::make_transfer_call, OwnCoin},
-    model::TokenId,
-    MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
+    client::transfer_v1::make_transfer_call, model::TokenId, MoneyFunction,
+    MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_FEE_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    crypto::{contract_id::MONEY_CONTRACT_ID, FuncId, Keypair, PublicKey},
+    crypto::{contract_id::MONEY_CONTRACT_ID, Keypair, PublicKey},
     tx::ContractCall,
 };
 use darkfi_serial::AsyncEncodable;
@@ -44,13 +43,8 @@ impl Drk {
         token_id: TokenId,
         recipient: PublicKey,
     ) -> Result<Transaction> {
-        // First get all unspent OwnCoins to see what our balance is.
-        let owncoins = self.get_coins(false).await?;
-        let mut owncoins: Vec<OwnCoin> = owncoins.iter().map(|x| x.0.clone()).collect();
-        // We're only interested in the ones for the token_id we're sending
-        // And the ones not owned by some protocol (meaning spend-hook should be 0)
-        owncoins.retain(|x| x.note.token_id == token_id);
-        owncoins.retain(|x| x.note.spend_hook == FuncId::none());
+        // First get all unspent OwnCoins to see what our balance is
+        let owncoins = self.get_token_coins(&token_id).await?;
         if owncoins.is_empty() {
             return Err(Error::Custom(format!("Did not find any coins with token ID: {token_id}")))
         }
@@ -74,12 +68,10 @@ impl Drk {
         let secret = self.default_secret().await?;
         let keypair = Keypair::new(secret);
 
-        let contract_id = *MONEY_CONTRACT_ID;
-
         // Now we need to do a lookup for the zkas proof bincodes, and create
         // the circuit objects and proving keys so we can build the transaction.
         // We also do this through the RPC.
-        let zkas_bins = self.lookup_zkas(&contract_id).await?;
+        let zkas_bins = self.lookup_zkas(&MONEY_CONTRACT_ID).await?;
 
         let Some(mint_zkbin) = zkas_bins.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_MINT_NS_V1)
         else {
@@ -91,38 +83,71 @@ impl Drk {
             return Err(Error::Custom("Burn circuit not found".to_string()))
         };
 
+        let Some(fee_zkbin) = zkas_bins.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_FEE_NS_V1)
+        else {
+            return Err(Error::Custom("Fee circuit not found".to_string()))
+        };
+
         let mint_zkbin = ZkBinary::decode(&mint_zkbin.1)?;
         let burn_zkbin = ZkBinary::decode(&burn_zkbin.1)?;
+        let fee_zkbin = ZkBinary::decode(&fee_zkbin.1)?;
 
         let mint_circuit = ZkCircuit::new(empty_witnesses(&mint_zkbin)?, &mint_zkbin);
         let burn_circuit = ZkCircuit::new(empty_witnesses(&burn_zkbin)?, &burn_zkbin);
+        let fee_circuit = ZkCircuit::new(empty_witnesses(&fee_zkbin)?, &fee_zkbin);
 
-        // Creating Mint and Burn circuit proving keys
+        // Creating Mint, Burn and Fee circuits proving keys
         let mint_pk = ProvingKey::build(mint_zkbin.k, &mint_circuit);
         let burn_pk = ProvingKey::build(burn_zkbin.k, &burn_circuit);
+        let fee_pk = ProvingKey::build(fee_zkbin.k, &fee_circuit);
 
         // Building transaction parameters
         let (params, secrets, spent_coins) = make_transfer_call(
-            keypair, recipient, amount, token_id, owncoins, tree, mint_zkbin, mint_pk, burn_zkbin,
+            keypair,
+            recipient,
+            amount,
+            token_id,
+            owncoins,
+            tree.clone(),
+            mint_zkbin,
+            mint_pk,
+            burn_zkbin,
             burn_pk,
         )?;
 
-        // Encode and sign the transaction
+        // Encode the call
         let mut data = vec![MoneyFunction::TransferV1 as u8];
         params.encode_async(&mut data).await?;
         let call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
+
+        // Create the TransactionBuilder containing the `Transfer` call
         let mut tx_builder =
             TransactionBuilder::new(ContractCallLeaf { call, proofs: secrets.proofs }, vec![])?;
+
+        // We first have to execute the fee-less tx to gather its used gas, and then we feed
+        // it into the fee-creating function.
+        // We also tell it about any spent coins so we don't accidentally reuse them in the
+        // fee call.
+        // TODO: We have to build a proper coin selection algorithm so that we can utilize
+        // the Money::Transfer to merge any coins which would give us a coin with enough
+        // value for paying the transaction fee.
         let mut tx = tx_builder.build()?;
         let sigs = tx.create_sigs(&secrets.signature_secrets)?;
-        tx.signatures = vec![sigs];
+        tx.signatures.push(sigs);
 
-        // We need to mark the coins we've spent in our wallet
-        for spent_coin in spent_coins {
-            if let Err(e) = self.mark_spent_coin(&spent_coin.coin).await {
-                return Err(Error::Custom(format!("Mark spent coin {spent_coin:?} failed: {e:?}")))
-            };
-        }
+        let (fee_call, fee_proofs, fee_secrets) = self
+            .append_fee_call(&tx, keypair.public, &tree, &fee_pk, &fee_zkbin, Some(&spent_coins))
+            .await?;
+
+        // Append the fee call to the transaction
+        tx_builder.append(ContractCallLeaf { call: fee_call, proofs: fee_proofs }, vec![])?;
+
+        // Now build the actual transaction and sign it with all necessary keys.
+        let mut tx = tx_builder.build()?;
+        let sigs = tx.create_sigs(&secrets.signature_secrets)?;
+        tx.signatures.push(sigs);
+        let sigs = tx.create_sigs(&fee_secrets)?;
+        tx.signatures.push(sigs);
 
         Ok(tx)
     }

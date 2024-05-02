@@ -22,12 +22,22 @@ use lazy_static::lazy_static;
 use rand::rngs::OsRng;
 use rusqlite::types::Value;
 
-use darkfi::{zk::halo2::Field, Error, Result};
+use darkfi::{
+    tx::Transaction,
+    zk::{halo2::Field, proof::ProvingKey, Proof},
+    zkas::ZkBinary,
+    Error, Result,
+};
 use darkfi_money_contract::{
-    client::{MoneyNote, OwnCoin},
+    client::{
+        compute_remainder_blind,
+        fee_v1::{create_fee_proof, FeeCallInput, FeeCallOutput, FEE_CALL_GAS},
+        MoneyNote, OwnCoin,
+    },
     model::{
-        Coin, MoneyGenesisMintParamsV1, MoneyPoWRewardParamsV1, MoneyTokenFreezeParamsV1,
-        MoneyTokenMintParamsV1, MoneyTransferParamsV1, Nullifier, TokenId, DARK_TOKEN_ID,
+        Coin, Input, MoneyFeeParamsV1, MoneyGenesisMintParamsV1, MoneyPoWRewardParamsV1,
+        MoneyTokenFreezeParamsV1, MoneyTokenMintParamsV1, MoneyTransferParamsV1, Nullifier, Output,
+        TokenId, DARK_TOKEN_ID,
     },
     MoneyFunction,
 };
@@ -38,8 +48,9 @@ use darkfi_sdk::{
         ScalarBlind, SecretKey, MONEY_CONTRACT_ID,
     },
     pasta::pallas,
+    ContractCall,
 };
-use darkfi_serial::{deserialize_async, serialize_async};
+use darkfi_serial::{deserialize_async, serialize_async, AsyncEncodable};
 
 use crate::{
     convert_named_params,
@@ -401,93 +412,122 @@ impl Drk {
         };
 
         let mut owncoins = Vec::with_capacity(rows.len());
-
         for row in rows {
-            let Value::Blob(ref coin_bytes) = row[0] else {
-                return Err(Error::ParseFailed("[get_coins] Coin bytes parsing failed"))
-            };
-            let coin: Coin = deserialize_async(coin_bytes).await?;
-
-            let Value::Integer(is_spent) = row[1] else {
-                return Err(Error::ParseFailed("[get_coins] Is spent parsing failed"))
-            };
-            let Ok(is_spent) = u64::try_from(is_spent) else {
-                return Err(Error::ParseFailed("[get_coins] Is spent parsing failed"))
-            };
-            let is_spent = is_spent > 0;
-
-            let Value::Blob(ref value_bytes) = row[2] else {
-                return Err(Error::ParseFailed("[get_coins] Value bytes parsing failed"))
-            };
-            let value: u64 = deserialize_async(value_bytes).await?;
-
-            let Value::Blob(ref token_id_bytes) = row[3] else {
-                return Err(Error::ParseFailed("[get_coins] Token ID bytes parsing failed"))
-            };
-            let token_id: TokenId = deserialize_async(token_id_bytes).await?;
-
-            let Value::Blob(ref spend_hook_bytes) = row[4] else {
-                return Err(Error::ParseFailed("[get_coins] Spend hook bytes parsing failed"))
-            };
-            let spend_hook: pallas::Base = deserialize_async(spend_hook_bytes).await?;
-
-            let Value::Blob(ref user_data_bytes) = row[5] else {
-                return Err(Error::ParseFailed("[get_coins] User data bytes parsing failed"))
-            };
-            let user_data: pallas::Base = deserialize_async(user_data_bytes).await?;
-
-            let Value::Blob(ref coin_blind_bytes) = row[6] else {
-                return Err(Error::ParseFailed("[get_coins] Coin blind bytes parsing failed"))
-            };
-            let coin_blind: BaseBlind = deserialize_async(coin_blind_bytes).await?;
-
-            let Value::Blob(ref value_blind_bytes) = row[7] else {
-                return Err(Error::ParseFailed("[get_coins] Value blind bytes parsing failed"))
-            };
-            let value_blind: ScalarBlind = deserialize_async(value_blind_bytes).await?;
-
-            let Value::Blob(ref token_blind_bytes) = row[8] else {
-                return Err(Error::ParseFailed("[get_coins] Token blind bytes parsing failed"))
-            };
-            let token_blind: BaseBlind = deserialize_async(token_blind_bytes).await?;
-
-            let Value::Blob(ref secret_bytes) = row[9] else {
-                return Err(Error::ParseFailed("[get_coins] Secret bytes parsing failed"))
-            };
-            let secret: SecretKey = deserialize_async(secret_bytes).await?;
-
-            // TODO: Remove from SQL store, can be derived ondemand
-            let Value::Blob(ref nullifier_bytes) = row[10] else {
-                return Err(Error::ParseFailed("[get_coins] Nullifier bytes parsing failed"))
-            };
-            let _nullifier: Nullifier = deserialize_async(nullifier_bytes).await?;
-
-            let Value::Blob(ref leaf_position_bytes) = row[11] else {
-                return Err(Error::ParseFailed("[get_coins] Leaf position bytes parsing failed"))
-            };
-            let leaf_position: bridgetree::Position =
-                deserialize_async(leaf_position_bytes).await?;
-
-            let Value::Blob(ref memo) = row[12] else {
-                return Err(Error::ParseFailed("[get_coins] Memo parsing failed"))
-            };
-
-            let note = MoneyNote {
-                value,
-                token_id,
-                spend_hook: spend_hook.into(),
-                user_data,
-                coin_blind,
-                value_blind,
-                token_blind,
-                memo: memo.clone(),
-            };
-            let owncoin = OwnCoin { coin, note, secret, leaf_position };
-
-            owncoins.push((owncoin, is_spent))
+            owncoins.push(self.parse_coin_record(&row).await?)
         }
 
         Ok(owncoins)
+    }
+
+    /// Fetch provided token unspend balances from the wallet.
+    pub async fn get_token_coins(&self, token_id: &TokenId) -> Result<Vec<OwnCoin>> {
+        let query = self.wallet.query_multiple(
+            &MONEY_COINS_TABLE,
+            &[],
+            convert_named_params! {(MONEY_COINS_COL_IS_SPENT, false), (MONEY_TOKENS_COL_TOKEN_ID, serialize_async(token_id).await), (MONEY_COINS_COL_SPEND_HOOK, serialize_async(&FuncId::none()).await)},
+        )
+        .await;
+
+        let rows = match query {
+            Ok(r) => r,
+            Err(e) => {
+                return Err(Error::RusqliteError(format!(
+                    "[get_coins] Coins retrieval failed: {e:?}"
+                )))
+            }
+        };
+
+        let mut owncoins = Vec::with_capacity(rows.len());
+        for row in rows {
+            owncoins.push(self.parse_coin_record(&row).await?.0)
+        }
+
+        Ok(owncoins)
+    }
+
+    /// Auxiliary function to parse a `MONEY_COINS_TABLE` record.
+    /// The boolean in the returned tuple notes if the coin was marked as spent.
+    async fn parse_coin_record(&self, row: &[Value]) -> Result<(OwnCoin, bool)> {
+        let Value::Blob(ref coin_bytes) = row[0] else {
+            return Err(Error::ParseFailed("[parse_coin_record] Coin bytes parsing failed"))
+        };
+        let coin: Coin = deserialize_async(coin_bytes).await?;
+
+        let Value::Integer(is_spent) = row[1] else {
+            return Err(Error::ParseFailed("[parse_coin_record] Is spent parsing failed"))
+        };
+        let Ok(is_spent) = u64::try_from(is_spent) else {
+            return Err(Error::ParseFailed("[parse_coin_record] Is spent parsing failed"))
+        };
+        let is_spent = is_spent > 0;
+
+        let Value::Blob(ref value_bytes) = row[2] else {
+            return Err(Error::ParseFailed("[parse_coin_record] Value bytes parsing failed"))
+        };
+        let value: u64 = deserialize_async(value_bytes).await?;
+
+        let Value::Blob(ref token_id_bytes) = row[3] else {
+            return Err(Error::ParseFailed("[parse_coin_record] Token ID bytes parsing failed"))
+        };
+        let token_id: TokenId = deserialize_async(token_id_bytes).await?;
+
+        let Value::Blob(ref spend_hook_bytes) = row[4] else {
+            return Err(Error::ParseFailed("[parse_coin_record] Spend hook bytes parsing failed"))
+        };
+        let spend_hook: pallas::Base = deserialize_async(spend_hook_bytes).await?;
+
+        let Value::Blob(ref user_data_bytes) = row[5] else {
+            return Err(Error::ParseFailed("[parse_coin_record] User data bytes parsing failed"))
+        };
+        let user_data: pallas::Base = deserialize_async(user_data_bytes).await?;
+
+        let Value::Blob(ref coin_blind_bytes) = row[6] else {
+            return Err(Error::ParseFailed("[parse_coin_record] Coin blind bytes parsing failed"))
+        };
+        let coin_blind: BaseBlind = deserialize_async(coin_blind_bytes).await?;
+
+        let Value::Blob(ref value_blind_bytes) = row[7] else {
+            return Err(Error::ParseFailed("[parse_coin_record] Value blind bytes parsing failed"))
+        };
+        let value_blind: ScalarBlind = deserialize_async(value_blind_bytes).await?;
+
+        let Value::Blob(ref token_blind_bytes) = row[8] else {
+            return Err(Error::ParseFailed("[parse_coin_record] Token blind bytes parsing failed"))
+        };
+        let token_blind: BaseBlind = deserialize_async(token_blind_bytes).await?;
+
+        let Value::Blob(ref secret_bytes) = row[9] else {
+            return Err(Error::ParseFailed("[parse_coin_record] Secret bytes parsing failed"))
+        };
+        let secret: SecretKey = deserialize_async(secret_bytes).await?;
+
+        // TODO: Remove from SQL store, can be derived ondemand
+        let Value::Blob(ref nullifier_bytes) = row[10] else {
+            return Err(Error::ParseFailed("[parse_coin_record] Nullifier bytes parsing failed"))
+        };
+        let _nullifier: Nullifier = deserialize_async(nullifier_bytes).await?;
+
+        let Value::Blob(ref leaf_position_bytes) = row[11] else {
+            return Err(Error::ParseFailed("[parse_coin_record] Leaf position bytes parsing failed"))
+        };
+        let leaf_position: bridgetree::Position = deserialize_async(leaf_position_bytes).await?;
+
+        let Value::Blob(ref memo) = row[12] else {
+            return Err(Error::ParseFailed("[parse_coin_record] Memo parsing failed"))
+        };
+
+        let note = MoneyNote {
+            value,
+            token_id,
+            spend_hook: spend_hook.into(),
+            user_data,
+            coin_blind,
+            value_blind,
+            token_blind,
+            memo: memo.clone(),
+        };
+
+        Ok((OwnCoin { coin, note, secret, leaf_position }, is_spent))
     }
 
     /// Create an alias record for provided Token ID.
@@ -642,7 +682,10 @@ impl Drk {
         match MoneyFunction::try_from(data[0])? {
             MoneyFunction::FeeV1 => {
                 println!("[apply_tx_money_data] Found Money::FeeV1 call");
-                // TODO: implement
+                let params: MoneyFeeParamsV1 = deserialize_async(&data[9..]).await?;
+                nullifiers.push(params.input.nullifier);
+                coins.push(params.output.coin);
+                notes.push(params.output.note);
             }
             MoneyFunction::GenesisMintV1 => {
                 println!("[apply_tx_money_data] Found Money::GenesisMintV1 call");
@@ -870,5 +913,119 @@ impl Drk {
         }
         // Else parse input
         Ok(TokenId::from_str(input.as_str())?)
+    }
+
+    /// Create and append a `Money::Fee` call to a given [`Transaction`].
+    ///
+    /// Optionally takes a set of spent coins in order not to reuse them here.
+    ///
+    /// Returns the `Fee` call, and all necessary data and parameters related.
+    pub async fn append_fee_call(
+        &self,
+        tx: &Transaction,
+        public_key: PublicKey,
+        money_merkle_tree: &MerkleTree,
+        fee_pk: &ProvingKey,
+        fee_zkbin: &ZkBinary,
+        spent_coins: Option<&[OwnCoin]>,
+    ) -> Result<(ContractCall, Vec<Proof>, Vec<SecretKey>)> {
+        // First we verify the fee-less transaction to see how much gas it uses for execution
+        // and verification.
+        let gas_used = FEE_CALL_GAS + self.get_tx_gas(tx, false).await?;
+
+        // Knowing the total gas, we can now find an OwnCoin of enough value
+        // so that we can create a valid Money::Fee call.
+        let mut available_coins = self.get_token_coins(&DARK_TOKEN_ID).await?;
+        available_coins.retain(|x| x.note.value > gas_used);
+        if let Some(spent_coins) = spent_coins {
+            available_coins.retain(|x| !spent_coins.contains(x));
+        }
+        if available_coins.is_empty() {
+            return Err(Error::Custom("Not enough native tokens to pay for fees".to_string()))
+        }
+
+        let coin = &available_coins[0];
+        let change_value = coin.note.value - gas_used;
+
+        // Input and output setup
+        let input = FeeCallInput {
+            coin: coin.clone(),
+            merkle_path: money_merkle_tree.witness(coin.leaf_position, 0).unwrap(),
+            user_data_blind: BaseBlind::random(&mut OsRng),
+        };
+
+        let output = FeeCallOutput {
+            public_key,
+            value: change_value,
+            token_id: coin.note.token_id,
+            blind: BaseBlind::random(&mut OsRng),
+            spend_hook: FuncId::none(),
+            user_data: pallas::Base::ZERO,
+        };
+
+        // Create blinding factors
+        let token_blind = BaseBlind::random(&mut OsRng);
+        let input_value_blind = ScalarBlind::random(&mut OsRng);
+        let fee_value_blind = ScalarBlind::random(&mut OsRng);
+        let output_value_blind = compute_remainder_blind(&[input_value_blind], &[fee_value_blind]);
+
+        // Create an ephemeral signing key
+        let signature_secret = SecretKey::random(&mut OsRng);
+
+        // Create the actual fee proof
+        let (proof, public_inputs) = create_fee_proof(
+            fee_zkbin,
+            fee_pk,
+            &input,
+            input_value_blind,
+            &output,
+            output_value_blind,
+            output.spend_hook,
+            output.user_data,
+            output.blind,
+            token_blind,
+            signature_secret,
+        )?;
+
+        // Encrypted note for the output
+        let note = MoneyNote {
+            coin_blind: output.blind,
+            value: output.value,
+            token_id: output.token_id,
+            spend_hook: output.spend_hook,
+            user_data: output.user_data,
+            value_blind: output_value_blind,
+            token_blind,
+            memo: vec![],
+        };
+
+        let encrypted_note = AeadEncryptedNote::encrypt(&note, &output.public_key, &mut OsRng)?;
+
+        let params = MoneyFeeParamsV1 {
+            input: Input {
+                value_commit: public_inputs.input_value_commit,
+                token_commit: public_inputs.token_commit,
+                nullifier: public_inputs.nullifier,
+                merkle_root: public_inputs.merkle_root,
+                user_data_enc: public_inputs.input_user_data_enc,
+                signature_public: public_inputs.signature_public,
+            },
+            output: Output {
+                value_commit: public_inputs.output_value_commit,
+                token_commit: public_inputs.token_commit,
+                coin: public_inputs.output_coin,
+                note: encrypted_note,
+            },
+            fee_value_blind,
+            token_blind,
+        };
+
+        // Encode the contract call
+        let mut data = vec![MoneyFunction::FeeV1 as u8];
+        gas_used.encode_async(&mut data).await?;
+        params.encode_async(&mut data).await?;
+        let call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
+
+        Ok((call, vec![proof], vec![signature_secret]))
     }
 }

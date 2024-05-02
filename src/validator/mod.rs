@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use darkfi_sdk::crypto::MerkleTree;
 use log::{debug, error, info, warn};
@@ -30,6 +30,7 @@ use crate::{
     },
     error::TxVerifyFailed,
     tx::Transaction,
+    zk::VerifyingKey,
     Error, Result,
 };
 
@@ -45,7 +46,7 @@ use pow::PoWModule;
 pub mod verification;
 use verification::{
     verify_block, verify_checkpoint_block, verify_genesis_block, verify_producer_transaction,
-    verify_transactions,
+    verify_transaction, verify_transactions,
 };
 
 /// Fee calculation helpers
@@ -53,7 +54,7 @@ pub mod fees;
 
 /// Helper utilities
 pub mod utils;
-use utils::{block_rank, deploy_native_contracts};
+use utils::{best_fork_index, block_rank, deploy_native_contracts};
 
 /// Configuration for initializing [`Validator`]
 #[derive(Clone)]
@@ -125,6 +126,41 @@ impl Validator {
 
         info!(target: "validator::new", "Finished initializing validator");
         Ok(state)
+    }
+
+    /// Auxiliary function to compute provided transaction's total gas,
+    /// against current best fork.
+    /// The function takes a boolean called `verify_fee` to overwrite
+    /// the nodes configured `verify_fees` flag.
+    pub async fn calculate_gas(&self, tx: &Transaction, verify_fee: bool) -> Result<u64> {
+        // Grab the best fork to verify against
+        let forks = self.consensus.forks.read().await;
+        let fork = &forks[best_fork_index(&forks)?];
+        let overlay = fork.overlay.lock().unwrap().full_clone()?;
+        let next_block_height = fork.get_next_block_height()?;
+        drop(forks);
+
+        // Map of ZK proof verifying keys for the transaction
+        let mut vks: HashMap<[u8; 32], HashMap<String, VerifyingKey>> = HashMap::new();
+        for call in &tx.calls {
+            vks.insert(call.data.contract_id.to_bytes(), HashMap::new());
+        }
+
+        // Verify transaction to grab the gas used
+        let verify_result = verify_transaction(
+            &overlay,
+            next_block_height,
+            tx,
+            &mut MerkleTree::new(1),
+            &mut vks,
+            verify_fee,
+        )
+        .await;
+
+        // Purge new trees
+        overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
+
+        verify_result
     }
 
     /// The node retrieves a transaction, validates its state transition,

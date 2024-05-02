@@ -1,6 +1,5 @@
 -- Wallet definitions for this contract.
 -- We store data that is needed to be able to receive and send tokens.
--- TODO: The tables should be prefixed with ContractId to prevent collision
 
 -- Arbitrary info that is potentially useful
 CREATE TABLE IF NOT EXISTS BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o_money_info (

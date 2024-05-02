@@ -73,6 +73,7 @@ impl RequestHandler for Darkfid {
             "tx.broadcast" => self.tx_broadcast(req.id, req.params).await,
             "tx.pending" => self.tx_pending(req.id, req.params).await,
             "tx.clean_pending" => self.tx_pending(req.id, req.params).await,
+            "tx.calculate_gas" => self.tx_calculate_gas(req.id, req.params).await,
 
             // ==============
             // Invalid method

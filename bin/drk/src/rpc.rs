@@ -278,7 +278,7 @@ impl Drk {
         }
     }
 
-    // Queries darkfid for a block with given height
+    // Queries darkfid for a block with given height.
     async fn get_block_by_height(&self, height: u32) -> Result<BlockInfo> {
         let req = JsonRequest::new(
             "blockchain.get_block",
@@ -293,7 +293,7 @@ impl Drk {
     }
 
     /// Broadcast a given transaction to darkfid and forward onto the network.
-    /// Returns the transaction ID upon success
+    /// Returns the transaction ID upon success.
     pub async fn broadcast_tx(&self, tx: &Transaction) -> Result<String> {
         println!("Broadcasting transaction...");
 
@@ -314,7 +314,7 @@ impl Drk {
         Ok(txid)
     }
 
-    /// Queries darkfid for a tx with given hash
+    /// Queries darkfid for a tx with given hash.
     pub async fn get_tx(&self, tx_hash: &TransactionHash) -> Result<Option<Transaction>> {
         let tx_hash_str = tx_hash.to_string();
         let req = JsonRequest::new(
@@ -333,7 +333,7 @@ impl Drk {
         }
     }
 
-    /// Simulate the transaction with the state machine
+    /// Simulate the transaction with the state machine.
     pub async fn simulate_tx(&self, tx: &Transaction) -> Result<bool> {
         let tx_str = base64::encode(&serialize_async(tx).await);
         let req =
@@ -360,5 +360,19 @@ impl Drk {
         }
 
         Ok(ret)
+    }
+
+    /// Queries darkfid for given transaction's gas.
+    pub async fn get_tx_gas(&self, tx: &Transaction, include_fee: bool) -> Result<u64> {
+        let params = JsonValue::Array(vec![
+            JsonValue::String(base64::encode(&serialize_async(tx).await)),
+            JsonValue::Boolean(include_fee),
+        ]);
+        let req = JsonRequest::new("tx.calculate_gas", params);
+        let rep = self.rpc_client.as_ref().unwrap().request(req).await?;
+
+        let gas = *rep.get::<f64>().unwrap() as u64;
+
+        Ok(gas)
     }
 }
