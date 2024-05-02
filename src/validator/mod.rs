@@ -160,7 +160,7 @@ impl Validator {
         // Purge new trees
         overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
 
-        verify_result
+        Ok(verify_result?.0)
     }
 
     /// The node retrieves a transaction, validates its state transition,

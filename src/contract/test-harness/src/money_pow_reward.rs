@@ -47,6 +47,7 @@ impl TestHarness {
         holder: &Holder,
         recipient: Option<&Holder>,
         reward: Option<u64>,
+        fees: Option<u64>,
     ) -> Result<(Transaction, MoneyPoWRewardParamsV1)> {
         let wallet = self.holders.get(holder).unwrap();
 
@@ -62,11 +63,15 @@ impl TestHarness {
             wallet.keypair.public
         };
 
+        // If there's fees paid, use them, otherwise set to zero
+        let fees = fees.unwrap_or_default();
+
         // Build the transaction
         let builder = PoWRewardCallBuilder {
             secret: wallet.keypair.secret,
             recipient,
             block_height: last_block.header.height + 1,
+            fees,
             spend_hook: FuncId::none(),
             user_data: pallas::Base::ZERO,
             mint_zkbin: mint_zkbin.clone(),
@@ -102,7 +107,7 @@ impl TestHarness {
     ) -> Result<Vec<OwnCoin>> {
         // Build the POW reward transaction
         info!("Building PoWReward transaction for {:?}", miner);
-        let (tx, params) = self.pow_reward(miner, None, None).await?;
+        let (tx, params) = self.pow_reward(miner, None, None, None).await?;
 
         // Fetch the last block in the blockchain
         let wallet = self.holders.get(miner).unwrap();

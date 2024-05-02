@@ -68,6 +68,8 @@ pub struct PoWRewardCallBuilder {
     pub recipient: PublicKey,
     /// Rewarded block height
     pub block_height: u32,
+    /// Rewarded block transactions paid fees
+    pub fees: u64,
     /// Merkle tree of coins used to create inclusion proofs
     /// Spend hook for the output
     pub spend_hook: FuncId,
@@ -152,13 +154,12 @@ impl PoWRewardCallBuilder {
     }
 
     pub fn build(&self) -> Result<PoWRewardCallDebris> {
-        let reward = expected_reward(self.block_height);
-        assert!(reward != 0);
+        let reward = expected_reward(self.block_height) + self.fees;
         self._build(reward)
     }
 
     /// This function should only be used for testing, as PoW reward values are predefined
     pub fn build_with_custom_reward(&self, reward: u64) -> Result<PoWRewardCallDebris> {
-        self._build(reward)
+        self._build(reward + self.fees)
     }
 }

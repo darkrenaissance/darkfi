@@ -33,10 +33,9 @@ use crate::{
     },
     MoneyFunction, EMPTY_COINS_TREE_ROOT, MONEY_CONTRACT_COINS_TREE,
     MONEY_CONTRACT_COIN_MERKLE_TREE, MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_DB_VERSION,
-    MONEY_CONTRACT_INFO_TREE, MONEY_CONTRACT_LATEST_COIN_ROOT,
+    MONEY_CONTRACT_FEES_TREE, MONEY_CONTRACT_INFO_TREE, MONEY_CONTRACT_LATEST_COIN_ROOT,
     MONEY_CONTRACT_LATEST_NULLIFIER_ROOT, MONEY_CONTRACT_NULLIFIERS_TREE,
     MONEY_CONTRACT_NULLIFIER_ROOTS_TREE, MONEY_CONTRACT_TOKEN_FREEZE_TREE,
-    MONEY_CONTRACT_TOTAL_FEES_PAID,
 };
 
 /// `Money::Fee` functions
@@ -163,6 +162,15 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
         wasm::db::db_init(cid, MONEY_CONTRACT_TOKEN_FREEZE_TREE)?;
     }
 
+    // Set up a database tree to hold the fees paid for each block
+    // k=height_bytes, v=fees_paid_bytes
+    if wasm::db::db_lookup(cid, MONEY_CONTRACT_FEES_TREE).is_err() {
+        let fees_db = wasm::db::db_init(cid, MONEY_CONTRACT_FEES_TREE)?;
+        // Initialize the first two accumulators
+        wasm::db::db_set(fees_db, &serialize(&0_u32), &serialize(&0_u64))?;
+        wasm::db::db_set(fees_db, &serialize(&1_u32), &serialize(&0_u64))?;
+    }
+
     // Set up a database tree for arbitrary data
     let info_db = match wasm::db::db_lookup(cid, MONEY_CONTRACT_INFO_TREE) {
         Ok(v) => v,
@@ -177,9 +185,6 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
             coin_tree_data.write_u32(0)?;
             coin_tree.encode(&mut coin_tree_data)?;
             wasm::db::db_set(info_db, MONEY_CONTRACT_COIN_MERKLE_TREE, &coin_tree_data)?;
-
-            // Initialize the paid fees accumulator
-            wasm::db::db_set(info_db, MONEY_CONTRACT_TOTAL_FEES_PAID, &serialize(&0_u64))?;
 
             // Initialize coins and nulls latest root field
             // This will result in exhausted gas so we use a precalculated value:

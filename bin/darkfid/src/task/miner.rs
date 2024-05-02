@@ -19,11 +19,11 @@
 use std::sync::Arc;
 
 use darkfi::{
-    blockchain::BlockInfo,
+    blockchain::{BlockInfo, Header},
     rpc::{jsonrpc::JsonNotification, util::JsonValue},
     system::{StoppableTask, Subscription},
     tx::{ContractCallLeaf, Transaction, TransactionBuilder},
-    util::encoding::base64,
+    util::{encoding::base64, time::Timestamp},
     validator::{
         consensus::{Fork, Proposal},
         utils::best_fork_index,
@@ -328,9 +328,16 @@ async fn generate_next_block(
     pk: &ProvingKey,
     verify_fees: bool,
 ) -> Result<(BigUint, BlockInfo)> {
-    // Grab extended fork next block height
+    // Grab forks' last block proposal(previous)
     let last_proposal = extended_fork.last_proposal()?;
+
+    // Grab forks' next block height
     let next_block_height = last_proposal.block.header.height + 1;
+
+    // Grab forks' unproposed transactions
+    let (mut txs, fees) = extended_fork
+        .unproposed_txs(&extended_fork.blockchain, next_block_height, verify_fees)
+        .await?;
 
     // We are deriving the next secret key for optimization.
     // Next secret is the poseidon hash of:
@@ -340,11 +347,20 @@ async fn generate_next_block(
     *secret = SecretKey::from(next_secret);
 
     // Generate reward transaction
-    let tx = generate_transaction(next_block_height, secret, recipient, zkbin, pk)?;
+    let tx = generate_transaction(next_block_height, fees, secret, recipient, zkbin, pk)?;
+    txs.push(tx);
 
-    // Generate next block proposal
+    // Generate the new header
+    let header = Header::new(last_proposal.hash, next_block_height, Timestamp::current_time(), 0);
+
+    // Generate the block
+    let mut next_block = BlockInfo::new_empty(header);
+
+    // Add transactions to the block
+    next_block.append_txs(txs);
+
+    // Grab the next mine target
     let target = extended_fork.module.next_mine_target()?;
-    let next_block = extended_fork.generate_unsigned_block(tx, verify_fees).await?;
 
     Ok((target, next_block))
 }
@@ -352,6 +368,7 @@ async fn generate_next_block(
 /// Auxiliary function to generate a Money::PoWReward transaction.
 fn generate_transaction(
     block_height: u32,
+    fees: u64,
     secret: &SecretKey,
     recipient: &PublicKey,
     zkbin: &ZkBinary,
@@ -366,6 +383,7 @@ fn generate_transaction(
         secret: *secret,
         recipient: *recipient,
         block_height,
+        fees,
         spend_hook,
         user_data,
         mint_zkbin: zkbin.clone(),

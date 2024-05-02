@@ -519,12 +519,13 @@ pub async fn verify_transaction(
     tree: &mut MerkleTree,
     verifying_keys: &mut HashMap<[u8; 32], HashMap<String, VerifyingKey>>,
     verify_fee: bool,
-) -> Result<u64> {
+) -> Result<(u64, u64)> {
     let tx_hash = tx.hash();
     debug!(target: "validator::verification::verify_transaction", "Validating transaction {}", tx_hash);
 
     // Gas accumulator
     let mut gas_used = 0;
+    let mut gas_paid = 0;
 
     // Verify calls indexes integrity
     if verify_fee {
@@ -712,6 +713,7 @@ pub async fn verify_transaction(
             );
             return Err(TxVerifyFailed::InsufficientFee.into())
         }
+        gas_paid = fee;
     }
 
     // When we're done looping and executing over the tx's contract calls and
@@ -750,7 +752,7 @@ pub async fn verify_transaction(
     append_tx_to_merkle_tree(tree, tx);
 
     debug!(target: "validator::verification::verify_transaction", "Transaction {} verified successfully", tx_hash);
-    Ok(gas_used)
+    Ok((gas_used, gas_paid))
 }
 
 /// Apply given [`Transaction`] to the provided overlay.
@@ -862,7 +864,7 @@ pub async fn verify_transactions(
         match verify_transaction(overlay, verifying_block_height, tx, tree, &mut vks, verify_fees)
             .await
         {
-            Ok(gas) => gas_used += gas,
+            Ok((gas, _)) => gas_used += gas,
             Err(e) => {
                 warn!(target: "validator::verification::verify_transactions", "Transaction verification failed: {}", e);
                 erroneous_txs.push(tx.clone());

@@ -38,9 +38,9 @@ use crate::{
     error::MoneyError,
     model::{MoneyFeeParamsV1, MoneyFeeUpdateV1, DARK_TOKEN_ID},
     MoneyFunction, MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_MERKLE_TREE,
-    MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_INFO_TREE, MONEY_CONTRACT_LATEST_COIN_ROOT,
-    MONEY_CONTRACT_LATEST_NULLIFIER_ROOT, MONEY_CONTRACT_NULLIFIERS_TREE,
-    MONEY_CONTRACT_NULLIFIER_ROOTS_TREE, MONEY_CONTRACT_TOTAL_FEES_PAID,
+    MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_FEES_TREE, MONEY_CONTRACT_INFO_TREE,
+    MONEY_CONTRACT_LATEST_COIN_ROOT, MONEY_CONTRACT_LATEST_NULLIFIER_ROOT,
+    MONEY_CONTRACT_NULLIFIERS_TREE, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE,
     MONEY_CONTRACT_ZKAS_FEE_NS_V1,
 };
 
@@ -108,10 +108,10 @@ pub(crate) fn money_fee_process_instruction_v1(
 
     // Access the necessary databases where there is information to
     // validate this state transition.
-    let info_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_INFO_TREE)?;
     let coins_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
     let nullifiers_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
     let coin_roots_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
+    let fees_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_FEES_TREE)?;
 
     // Fees can only be paid using the native token, so we'll compare
     // the token commitments with this one:
@@ -177,15 +177,17 @@ pub(crate) fn money_fee_process_instruction_v1(
         return Err(MoneyError::ValueMismatch.into())
     }
 
-    // Accumulate the paid fee
+    // Accumulate the height paid fee
+    let verifying_block_height = wasm::util::get_verifying_block_height()?;
     let mut paid_fee: u64 =
-        deserialize(&wasm::db::db_get(info_db, MONEY_CONTRACT_TOTAL_FEES_PAID)?.unwrap())?;
+        deserialize(&wasm::db::db_get(fees_db, &serialize(&verifying_block_height))?.unwrap())?;
     paid_fee += fee;
 
     // At this point the state transition has passed, so we create a state update.
     let update = MoneyFeeUpdateV1 {
         nullifier: params.input.nullifier,
         coin: params.output.coin,
+        height: verifying_block_height,
         fee: paid_fee,
     };
     let mut update_data = vec![];
@@ -206,8 +208,9 @@ pub(crate) fn money_fee_process_update_v1(
     let nullifiers_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
     let coin_roots_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
     let nullifier_roots_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE)?;
+    let fees_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_FEES_TREE)?;
 
-    wasm::db::db_set(info_db, MONEY_CONTRACT_TOTAL_FEES_PAID, &serialize(&update.fee))?;
+    wasm::db::db_set(fees_db, &serialize(&update.height), &serialize(&update.fee))?;
 
     wasm::merkle::sparse_merkle_insert_batch(
         info_db,

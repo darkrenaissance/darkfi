@@ -186,7 +186,9 @@ pub struct MoneyFeeUpdateV1 {
     pub nullifier: Nullifier,
     /// Minted coin
     pub coin: Coin,
-    /// Fee paid
+    /// Block height the fee was verified against
+    pub height: u32,
+    /// Height accumulated fee paid
     pub fee: u64,
 }
 
@@ -283,4 +285,6 @@ pub struct MoneyPoWRewardParamsV1 {
 pub struct MoneyPoWRewardUpdateV1 {
     /// The newly minted coin
     pub coin: Coin,
+    /// Block height the call was verified against
+    pub height: u32,
 }

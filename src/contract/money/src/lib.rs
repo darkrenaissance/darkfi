@@ -75,13 +75,13 @@ pub const MONEY_CONTRACT_COIN_ROOTS_TREE: &str = "coin_roots";
 pub const MONEY_CONTRACT_NULLIFIERS_TREE: &str = "nullifiers";
 pub const MONEY_CONTRACT_NULLIFIER_ROOTS_TREE: &str = "nullifier_roots";
 pub const MONEY_CONTRACT_TOKEN_FREEZE_TREE: &str = "token_freezes";
+pub const MONEY_CONTRACT_FEES_TREE: &str = "fees";
 
 // These are keys inside the info tree
 pub const MONEY_CONTRACT_DB_VERSION: &[u8] = b"db_version";
 pub const MONEY_CONTRACT_COIN_MERKLE_TREE: &[u8] = b"coins_tree";
 pub const MONEY_CONTRACT_LATEST_COIN_ROOT: &[u8] = b"last_coins_root";
 pub const MONEY_CONTRACT_LATEST_NULLIFIER_ROOT: &[u8] = b"last_nullifiers_root";
-pub const MONEY_CONTRACT_TOTAL_FEES_PAID: &[u8] = b"total_fees_paid";
 
 /// Precalculated root hash for a tree containing only a single Fp::ZERO coin.
 /// Used to save gas.

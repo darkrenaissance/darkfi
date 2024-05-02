@@ -31,9 +31,10 @@ use crate::{
     error::MoneyError,
     model::{MoneyPoWRewardParamsV1, MoneyPoWRewardUpdateV1, DARK_TOKEN_ID},
     MoneyFunction, MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_MERKLE_TREE,
-    MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_INFO_TREE, MONEY_CONTRACT_LATEST_COIN_ROOT,
-    MONEY_CONTRACT_LATEST_NULLIFIER_ROOT, MONEY_CONTRACT_NULLIFIERS_TREE,
-    MONEY_CONTRACT_NULLIFIER_ROOTS_TREE, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
+    MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_FEES_TREE, MONEY_CONTRACT_INFO_TREE,
+    MONEY_CONTRACT_LATEST_COIN_ROOT, MONEY_CONTRACT_LATEST_NULLIFIER_ROOT,
+    MONEY_CONTRACT_NULLIFIERS_TREE, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE,
+    MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 
 /// `get_metadata` function for `Money::PoWRewardV1`
@@ -108,13 +109,18 @@ pub(crate) fn money_pow_reward_process_instruction_v1(
         return Err(MoneyError::TransferClearInputNonNativeToken.into())
     }
 
-    // Verify reward value matches the expected one for this block height
-    let expected_reward = expected_reward(verifying_block_height);
+    // Grab the currect height accumulated fees
+    let fees_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_FEES_TREE)?;
+    let paid_fee: u64 =
+        deserialize(&wasm::db::db_get(fees_db, &serialize(&verifying_block_height))?.unwrap())?;
+
+    // Verify reward value matches the expected one for this block height,
+    // including the paid fees.
+    let expected_reward = expected_reward(verifying_block_height) + paid_fee;
     if params.input.value != expected_reward {
         msg!(
-            "[PoWRewardV1] Error: Reward value({}) is not the block height({}) expected one: {}",
+            "[PoWRewardV1] Error: Reward value({}) is not the expected one: {}",
             params.input.value,
-            verifying_block_height,
             expected_reward
         );
         return Err(MoneyError::ValueMismatch.into())
@@ -148,7 +154,8 @@ pub(crate) fn money_pow_reward_process_instruction_v1(
     }
 
     // Create a state update. We only need the new coin.
-    let update = MoneyPoWRewardUpdateV1 { coin: params.output.coin };
+    let update =
+        MoneyPoWRewardUpdateV1 { coin: params.output.coin, height: verifying_block_height };
     let mut update_data = vec![];
     update_data.write_u8(MoneyFunction::PoWRewardV1 as u8)?;
     update.encode(&mut update_data)?;
@@ -167,6 +174,11 @@ pub(crate) fn money_pow_reward_process_update_v1(
     let nullifiers_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
     let coin_roots_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
     let nullifier_roots_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE)?;
+    let fees_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_FEES_TREE)?;
+
+    // Generate the accumulator for the next height
+    msg!("[PowRewardV1] Creating next height fees acummulator");
+    wasm::db::db_set(fees_db, &serialize(&(update.height + 1)), &serialize(&0_u64))?;
 
     // This will just make a snapshot to match the coins one
     msg!("[PowRewardV1] Updating nullifiers snapshot");

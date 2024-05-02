@@ -184,6 +184,7 @@ impl Harness {
             secret: keypair.secret,
             recipient: keypair.public,
             block_height,
+            fees: 0,
             spend_hook,
             user_data,
             mint_zkbin: zkbin.clone(),
