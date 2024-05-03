@@ -1,4 +1,7 @@
-use std::{thread, sync::{Arc, Mutex}};
+use std::{
+    sync::{Arc, Mutex},
+    thread,
+};
 
 mod error;
 
@@ -9,10 +12,7 @@ mod net;
 use net::ZeroMQAdapter;
 
 mod scene;
-use scene::{
-    SceneGraph,
-    SceneGraphPtr,
-};
+use scene::{SceneGraph, SceneGraphPtr};
 
 mod shader;
 
@@ -34,4 +34,3 @@ fn main() {
     init_zmq(scene_graph.clone());
     init_gui(scene_graph);
 }
-

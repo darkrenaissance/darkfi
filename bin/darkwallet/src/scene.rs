@@ -1,6 +1,6 @@
 use crate::error::{Error, Result};
 use atomic_float::AtomicF32;
-use darkfi_serial::{SerialEncodable, SerialDecodable};
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 use std::{
     fmt,
     str::FromStr,
@@ -79,12 +79,9 @@ impl SceneGraph {
             children: vec![],
             props: vec![],
             sigs: vec![],
-            methods: vec![]
+            methods: vec![],
         };
-        Self {
-            nodes: vec![root],
-            freed: vec![],
-        }
+        Self { nodes: vec![root], freed: vec![] }
     }
 
     pub fn add_node<S: Into<String>>(&mut self, name: S, typ: SceneNodeType) -> &mut SceneNode {
@@ -97,7 +94,7 @@ impl SceneGraph {
             children: vec![],
             props: vec![],
             sigs: vec![],
-            methods: vec![]
+            methods: vec![],
         };
 
         let node_id = if self.freed.is_empty() {
@@ -163,11 +160,8 @@ impl SceneGraph {
         }
 
         let parent = self.get_node(parent_id).unwrap();
-        let parent_inf = SceneNodeInfo {
-            name: parent.name.clone(),
-            id: parent_id,
-            typ: parent.typ,
-        };
+        let parent_inf =
+            SceneNodeInfo { name: parent.name.clone(), id: parent_id, typ: parent.typ };
         let child_name = &self.get_node(child_id).unwrap().name;
         if parent.has_child(child_name) {
             return Err(Error::NodeChildNameConflict);
@@ -178,11 +172,7 @@ impl SceneGraph {
         if child.has_parent(&parent_inf.name) {
             return Err(Error::NodeParentNameConflict);
         }
-        let child_inf = SceneNodeInfo {
-            name: child.name.clone(),
-            id: child_id,
-            typ: child.typ,
-        };
+        let child_inf = SceneNodeInfo { name: child.name.clone(), id: child_id, typ: child.typ };
         assert!(!child.has_parent_id(parent_id));
         child.parents.push(parent_inf);
 
@@ -248,7 +238,11 @@ impl SceneGraph {
         Some(self.get_node_mut(node_id).unwrap())
     }
 
-    pub fn rename_node<S: Into<String>>(&mut self, node_id: SceneNodeId, node_name: S) -> Result<()> {
+    pub fn rename_node<S: Into<String>>(
+        &mut self,
+        node_id: SceneNodeId,
+        node_name: S,
+    ) -> Result<()> {
         let node_name = node_name.into();
         for sibling_inf in self.node_siblings(node_id)? {
             if sibling_inf.name == node_name {
@@ -264,7 +258,12 @@ impl SceneGraph {
         let node = self.get_node(node_id).ok_or(Error::NodeNotFound)?;
         for parent_inf in &node.parents {
             let parent = self.get_node(parent_inf.id).ok_or(Error::ParentNodeNotFound)?;
-            let mut sibling_infs = parent.children.iter().cloned().filter(|child_inf| child_inf.id != node_id).collect();
+            let mut sibling_infs = parent
+                .children
+                .iter()
+                .cloned()
+                .filter(|child_inf| child_inf.id != node_id)
+                .collect();
             siblings.append(&mut sibling_infs);
         }
         Ok(siblings)
@@ -307,7 +306,7 @@ pub struct SceneNode {
     pub children: Vec<SceneNodeInfo>,
     pub props: Vec<Arc<Property>>,
     pub sigs: Vec<Signal>,
-    pub methods: Vec<Method>
+    pub methods: Vec<Method>,
 }
 
 impl SceneNode {
@@ -335,20 +334,12 @@ impl SceneNode {
 
     // Panics if parent is not linked
     fn remove_parent(&mut self, parent_id: SceneNodeId) {
-        let parent_idx = self
-            .parents
-            .iter()
-            .position(|parent| parent.id == parent_id)
-            .unwrap();
+        let parent_idx = self.parents.iter().position(|parent| parent.id == parent_id).unwrap();
         self.parents.swap_remove(parent_idx);
     }
     // Panics if child is not linked
     fn remove_child(&mut self, child_id: SceneNodeId) {
-        let child_idx = self
-            .children
-            .iter()
-            .position(|child| child.id == child_id)
-            .unwrap();
+        let child_idx = self.children.iter().position(|child| child.id == child_id).unwrap();
         self.children.swap_remove(child_idx);
     }
 
@@ -382,10 +373,7 @@ impl SceneNode {
     }
 
     pub fn get_property(&self, name: &str) -> Option<Arc<Property>> {
-        self.props
-            .iter()
-            .find(|prop| prop.name == name)
-            .map(|prop| prop.clone())
+        self.props.iter().find(|prop| prop.name == name).map(|prop| prop.clone())
     }
 
     pub fn add_signal<S: Into<String>>(&mut self, name: S) -> Result<()> {
@@ -393,11 +381,7 @@ impl SceneNode {
         if self.has_signal(&name) {
             return Err(Error::SignalAlreadyExists);
         }
-        self.sigs.push(Signal {
-            name: name.into(),
-            slots: vec![],
-            freed: vec![],
-        });
+        self.sigs.push(Signal { name: name.into(), slots: vec![], freed: vec![] });
         Ok(())
     }
 
@@ -441,14 +425,15 @@ impl SceneNode {
         Ok(())
     }
 
-    pub fn add_method<S: Into<String>>(&mut self, name: S,
-                      args: Vec<(S, PropertyType)>,
-                      result: Vec<(S, PropertyType)>) {
+    pub fn add_method<S: Into<String>>(
+        &mut self,
+        name: S,
+        args: Vec<(S, PropertyType)>,
+        result: Vec<(S, PropertyType)>,
+    ) {
         let args = args.into_iter().map(|(s, p)| (s.into(), p)).collect();
         let result = result.into_iter().map(|(s, p)| (s.into(), p)).collect();
-        self.methods.push(Method {
-            name: name.into(), args, result, queue: vec![]
-        })
+        self.methods.push(Method { name: name.into(), args, result, queue: vec![] })
     }
 
     pub fn get_method(&self, name: &str) -> Option<&Method> {
@@ -458,7 +443,12 @@ impl SceneNode {
         self.methods.iter_mut().find(|method| method.name == name)
     }
 
-    pub fn call_method(&mut self, name: &str, arg_data: Vec<u8>, response_fn: MethodResponseFn) -> Result<()> {
+    pub fn call_method(
+        &mut self,
+        name: &str,
+        arg_data: Vec<u8>,
+        response_fn: MethodResponseFn,
+    ) -> Result<()> {
         let method = self.get_method_mut(name).ok_or(Error::MethodNotFound)?;
         method.queue.push((arg_data, response_fn));
         Ok(())
@@ -680,4 +670,3 @@ pub struct Method {
     pub result: Vec<(String, PropertyType)>,
     pub queue: Vec<(Vec<u8>, MethodResponseFn)>,
 }
-

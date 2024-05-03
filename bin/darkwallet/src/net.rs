@@ -1,15 +1,13 @@
 use darkfi_serial::{deserialize, Decodable, Encodable, SerialDecodable};
 use std::{
     io::Cursor,
-    sync::{atomic::Ordering, mpsc}, thread
+    sync::{atomic::Ordering, mpsc},
+    thread,
 };
 
 use crate::{
     error::{Error, Result},
-    scene::{
-        PropertyType, PropertyValue, SceneNodeId, SceneNodeType, Slot, SlotId,
-        SceneGraphPtr
-    }
+    scene::{PropertyType, PropertyValue, SceneGraphPtr, SceneNodeId, SceneNodeType, Slot, SlotId},
 };
 
 #[derive(Debug, SerialDecodable)]
@@ -58,12 +56,7 @@ impl ZeroMQAdapter {
 
         let (slot_sender, slot_recvr) = mpsc::sync_channel(100);
 
-        Self {
-            req_socket,
-            slot_sender,
-            slot_recvr: Some(slot_recvr),
-            scene_graph
-        }
+        Self { req_socket, slot_sender, slot_recvr: Some(slot_recvr), scene_graph }
     }
 
     pub fn poll(&mut self) {
@@ -101,9 +94,7 @@ impl ZeroMQAdapter {
                 match self.process_request(cmd, payload) {
                     Ok(reply) => {
                         // [errc:1] [reply]
-                        self.req_socket
-                            .send_multipart(&[vec![0], reply], zmq::DONTWAIT)
-                            .unwrap();
+                        self.req_socket.send_multipart(&[vec![0], reply], zmq::DONTWAIT).unwrap();
                     }
                     Err(err) => {
                         let errc = err as u8;
@@ -117,11 +108,7 @@ impl ZeroMQAdapter {
         }
     }
 
-    fn process_request(
-        &self,
-        cmd: Command,
-        payload: Vec<u8>,
-    ) -> Result<Vec<u8>> {
+    fn process_request(&self, cmd: Command, payload: Vec<u8>) -> Result<Vec<u8>> {
         let mut scene_graph = self.scene_graph.lock().unwrap();
         let mut cur = Cursor::new(&payload);
         let mut reply = vec![];
@@ -180,9 +167,7 @@ impl ZeroMQAdapter {
                 debug!(target: "req", "{:?}({}, {})", cmd, node_id, prop_name);
 
                 let node = scene_graph.get_node(node_id).ok_or(Error::NodeNotFound)?;
-                let prop = node
-                    .get_property(&prop_name)
-                    .ok_or(Error::PropertyNotFound)?;
+                let prop = node.get_property(&prop_name).ok_or(Error::PropertyNotFound)?;
                 match &prop.val {
                     PropertyValue::Null => {
                         0u8.encode(&mut reply).unwrap();
@@ -239,9 +224,7 @@ impl ZeroMQAdapter {
             Command::LookupNodeId => {
                 let node_path: String = deserialize(&payload).unwrap();
                 debug!(target: "req", "{:?}({})", cmd, node_path);
-                let node_id = scene_graph
-                    .lookup_node_id(&node_path)
-                    .ok_or(Error::NodeNotFound)?;
+                let node_id = scene_graph.lookup_node_id(&node_path).ok_or(Error::NodeNotFound)?;
                 node_id.encode(&mut reply).unwrap();
             }
             Command::AddProperty => {
@@ -250,9 +233,7 @@ impl ZeroMQAdapter {
                 let prop_type = PropertyType::decode(&mut cur).unwrap();
                 debug!(target: "req", "{:?}({}, {}, {:?})", cmd, node_id, prop_name, prop_type);
 
-                let node = scene_graph
-                    .get_node_mut(node_id)
-                    .ok_or(Error::NodeNotFound)?;
+                let node = scene_graph.get_node_mut(node_id).ok_or(Error::NodeNotFound)?;
                 node.add_property(prop_name, prop_type)?;
             }
             Command::LinkNode => {
@@ -272,12 +253,8 @@ impl ZeroMQAdapter {
                 let prop_name = String::decode(&mut cur).unwrap();
                 debug!(target: "req", "{:?}({}, {})", cmd, node_id, prop_name);
 
-                let node = scene_graph
-                    .get_node_mut(node_id)
-                    .ok_or(Error::NodeNotFound)?;
-                let prop = node
-                    .get_property(&prop_name)
-                    .ok_or(Error::PropertyNotFound)?;
+                let node = scene_graph.get_node_mut(node_id).ok_or(Error::NodeNotFound)?;
+                let prop = node.get_property(&prop_name).ok_or(Error::PropertyNotFound)?;
 
                 match prop.get_type() {
                     PropertyType::Null => {}
@@ -311,9 +288,7 @@ impl ZeroMQAdapter {
                 let node_id = SceneNodeId::decode(&mut cur).unwrap();
                 debug!(target: "req", "{:?}({})", cmd, node_id);
 
-                let node = scene_graph
-                    .get_node_mut(node_id)
-                    .ok_or(Error::NodeNotFound)?;
+                let node = scene_graph.get_node_mut(node_id).ok_or(Error::NodeNotFound)?;
 
                 let mut sigs = vec![];
                 for sig in &node.sigs {
@@ -328,16 +303,14 @@ impl ZeroMQAdapter {
                 let user_data = Vec::<u8>::decode(&mut cur).unwrap();
                 debug!(target: "req", "{:?}({}, {}, {}, {:?})", cmd, node_id, sig_name, slot_name, user_data);
 
-                let node = scene_graph
-                    .get_node_mut(node_id)
-                    .ok_or(Error::NodeNotFound)?;
+                let node = scene_graph.get_node_mut(node_id).ok_or(Error::NodeNotFound)?;
 
                 let sender = self.slot_sender.clone();
                 let slot = Slot {
                     name: slot_name,
                     func: Box::new(move || {
                         sender.send(user_data.clone()).unwrap();
-                    })
+                    }),
                 };
 
                 let slot_id = node.register(&sig_name, slot)?;
@@ -349,9 +322,7 @@ impl ZeroMQAdapter {
                 let slot_id = SlotId::decode(&mut cur).unwrap();
                 debug!(target: "req", "{:?}({}, {}, {})", cmd, node_id, sig_name, slot_id);
 
-                let node = scene_graph
-                    .get_node_mut(node_id)
-                    .ok_or(Error::NodeNotFound)?;
+                let node = scene_graph.get_node_mut(node_id).ok_or(Error::NodeNotFound)?;
                 node.unregister(&sig_name, slot_id)?;
             }
             Command::LookupSlotId => {
@@ -362,9 +333,7 @@ impl ZeroMQAdapter {
 
                 let node = scene_graph.get_node(node_id).ok_or(Error::NodeNotFound)?;
                 let signal = node.get_signal(&sig_name).ok_or(Error::SignalNotFound)?;
-                let slot_id = signal
-                    .lookup_slot_id(&slot_name)
-                    .ok_or(Error::SlotNotFound)?;
+                let slot_id = signal.lookup_slot_id(&slot_name).ok_or(Error::SlotNotFound)?;
                 slot_id.encode(&mut reply).unwrap();
             }
             Command::GetSlots => {

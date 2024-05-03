@@ -1,17 +1,16 @@
-use fontdue::{Font, FontSettings, layout::{CoordinateSystem, Layout, LayoutSettings, TextStyle, GlyphPosition}};
 use darkfi_serial::{Decodable, Encodable, SerialEncodable};
-use std::{fmt, io::Cursor};
+use fontdue::{
+    layout::{CoordinateSystem, GlyphPosition, Layout, LayoutSettings, TextStyle},
+    Font, FontSettings,
+};
 use miniquad::*;
+use std::{fmt, io::Cursor};
 
-use crate::{error::{Error, Result},
-scene::{
-    SceneNode,
-    PropertyType,
-    SceneGraph,
-    SceneGraphPtr,
-    SceneNodeType,
-    SceneNodeId,
-}, shader};
+use crate::{
+    error::{Error, Result},
+    scene::{PropertyType, SceneGraph, SceneGraphPtr, SceneNode, SceneNodeId, SceneNodeType},
+    shader,
+};
 
 trait MouseButtonAsU8 {
     fn to_u8(&self) -> u8;
@@ -58,11 +57,7 @@ struct ResourceManager<T> {
 
 impl<T> ResourceManager<T> {
     fn new() -> Self {
-        Self {
-            resources: vec![],
-            freed: vec![],
-            id_counter: 0
-        }
+        Self { resources: vec![], freed: vec![], id_counter: 0 }
     }
 
     fn alloc(&mut self, rsrc: T) -> ResourceId {
@@ -114,14 +109,8 @@ impl Stage {
         assert_eq!(white_texture_id, Self::WHITE_TEXTURE_ID);
 
         let mut shader_meta: ShaderMeta = shader::meta();
-        shader_meta
-            .uniforms
-            .uniforms
-            .push(UniformDesc::new("Projection", UniformType::Mat4));
-        shader_meta
-            .uniforms
-            .uniforms
-            .push(UniformDesc::new("Model", UniformType::Mat4));
+        shader_meta.uniforms.uniforms.push(UniformDesc::new("Projection", UniformType::Mat4));
+        shader_meta.uniforms.uniforms.push(UniformDesc::new("Model", UniformType::Mat4));
 
         let shader = ctx
             .new_shader(
@@ -130,9 +119,7 @@ impl Stage {
                         vertex: shader::GL_VERTEX,
                         fragment: shader::GL_FRAGMENT,
                     },
-                    Backend::Metal => ShaderSource::Msl {
-                        program: shader::METAL,
-                    },
+                    Backend::Metal => ShaderSource::Msl { program: shader::METAL },
                 },
                 shader_meta,
             )
@@ -176,14 +163,10 @@ impl Stage {
                 .set_f32(line_metrics.new_line_size)
                 .unwrap();
 
-            inter_regular.add_method("create_text",
-                vec![
-                    ("text", PropertyType::Str),
-                    ("font_size", PropertyType::Float32),
-                ],
-                vec![
-                    ("node_id", PropertyType::SceneNodeId)
-                ],
+            inter_regular.add_method(
+                "create_text",
+                vec![("text", PropertyType::Str), ("font_size", PropertyType::Float32)],
+                vec![("node_id", PropertyType::SceneNodeId)],
             );
 
             let inter_regular_id = inter_regular.id;
@@ -191,13 +174,7 @@ impl Stage {
             font
         };
 
-        let mut stage = Stage {
-            ctx,
-            pipeline,
-            scene_graph,
-            textures,
-            font,
-        };
+        let mut stage = Stage { ctx, pipeline, scene_graph, textures, font };
         stage.setup_scene_graph_window();
         stage
     }
@@ -207,25 +184,17 @@ impl Stage {
 
         let window = scene_graph.add_node("window", SceneNodeType::Window);
         let (screen_width, screen_height) = window::screen_size();
-        window
-            .add_property("width", PropertyType::Float32)
-            .unwrap()
-            .set_f32(screen_width)
-            .unwrap();
+        window.add_property("width", PropertyType::Float32).unwrap().set_f32(screen_width).unwrap();
         window
             .add_property("height", PropertyType::Float32)
             .unwrap()
             .set_f32(screen_height)
             .unwrap();
         window.add_signal("resize").unwrap();
-        window.add_method("load_texture",
-            vec![
-                ("node_name", PropertyType::Str),
-                ("path", PropertyType::Str),
-            ],
-            vec![
-                ("node_id", PropertyType::SceneNodeId)
-            ],
+        window.add_method(
+            "load_texture",
+            vec![("node_name", PropertyType::Str), ("path", PropertyType::Str)],
+            vec![("node_id", PropertyType::SceneNodeId)],
         );
         let window_id = window.id;
         scene_graph.link(window_id, SceneGraph::ROOT_ID).unwrap();
@@ -257,120 +226,44 @@ impl Stage {
         scene_graph.link(mouse_id, input_id).unwrap();
 
         let layer1 = scene_graph.add_node("layer1", SceneNodeType::RenderLayer);
-        let is_visible = layer1
-            .add_property("is_visible", PropertyType::Bool)
-            .unwrap();
+        let is_visible = layer1.add_property("is_visible", PropertyType::Bool).unwrap();
         is_visible.set_bool(true).unwrap();
-        layer1
-            .add_property("rect_x", PropertyType::Uint32)
-            .unwrap()
-            .set_u32(0)
-            .unwrap();
-        layer1
-            .add_property("rect_y", PropertyType::Uint32)
-            .unwrap()
-            .set_u32(0)
-            .unwrap();
-        layer1
-            .add_property("rect_w", PropertyType::Uint32)
-            .unwrap()
-            .set_u32(0)
-            .unwrap();
-        layer1
-            .add_property("rect_h", PropertyType::Uint32)
-            .unwrap()
-            .set_u32(0)
-            .unwrap();
+        layer1.add_property("rect_x", PropertyType::Uint32).unwrap().set_u32(0).unwrap();
+        layer1.add_property("rect_y", PropertyType::Uint32).unwrap().set_u32(0).unwrap();
+        layer1.add_property("rect_w", PropertyType::Uint32).unwrap().set_u32(0).unwrap();
+        layer1.add_property("rect_h", PropertyType::Uint32).unwrap().set_u32(0).unwrap();
         let layer1_id = layer1.id;
         scene_graph.link(layer1_id, window_id).unwrap();
 
         let layer2 = scene_graph.add_node("layer2", SceneNodeType::RenderLayer);
-        let is_visible = layer2
-            .add_property("is_visible", PropertyType::Bool)
-            .unwrap();
+        let is_visible = layer2.add_property("is_visible", PropertyType::Bool).unwrap();
         is_visible.set_bool(true).unwrap();
-        layer2
-            .add_property("rect_x", PropertyType::Uint32)
-            .unwrap()
-            .set_u32(0)
-            .unwrap();
-        layer2
-            .add_property("rect_y", PropertyType::Uint32)
-            .unwrap()
-            .set_u32(0)
-            .unwrap();
-        layer2
-            .add_property("rect_w", PropertyType::Uint32)
-            .unwrap()
-            .set_u32(0)
-            .unwrap();
-        layer2
-            .add_property("rect_h", PropertyType::Uint32)
-            .unwrap()
-            .set_u32(0)
-            .unwrap();
+        layer2.add_property("rect_x", PropertyType::Uint32).unwrap().set_u32(0).unwrap();
+        layer2.add_property("rect_y", PropertyType::Uint32).unwrap().set_u32(0).unwrap();
+        layer2.add_property("rect_w", PropertyType::Uint32).unwrap().set_u32(0).unwrap();
+        layer2.add_property("rect_h", PropertyType::Uint32).unwrap().set_u32(0).unwrap();
         let layer2_id = layer2.id;
         scene_graph.link(layer2_id, window_id).unwrap();
 
         let funky_square = scene_graph.add_node("funky_square", SceneNodeType::RenderObject);
-        funky_square
-            .add_property("x", PropertyType::Float32)
-            .unwrap()
-            .set_f32(0.)
-            .unwrap();
-        funky_square
-            .add_property("y", PropertyType::Float32)
-            .unwrap()
-            .set_f32(0.)
-            .unwrap();
-        funky_square
-            .add_property("scale", PropertyType::Float32)
-            .unwrap()
-            .set_f32(0.)
-            .unwrap();
+        funky_square.add_property("x", PropertyType::Float32).unwrap().set_f32(0.).unwrap();
+        funky_square.add_property("y", PropertyType::Float32).unwrap().set_f32(0.).unwrap();
+        funky_square.add_property("scale", PropertyType::Float32).unwrap().set_f32(0.).unwrap();
         let funky_square_id = funky_square.id;
         scene_graph.link(funky_square_id, layer1_id).unwrap();
 
         let funky_mesh = scene_graph.add_node("mesh", SceneNodeType::RenderMesh);
-        let verts = funky_mesh
-            .add_property("verts", PropertyType::Buffer)
-            .unwrap();
-        let faces = funky_mesh
-            .add_property("faces", PropertyType::Buffer)
-            .unwrap();
+        let verts = funky_mesh.add_property("verts", PropertyType::Buffer).unwrap();
+        let faces = funky_mesh.add_property("faces", PropertyType::Buffer).unwrap();
         let mut buf = vec![];
         // top left
-        Vertex {
-            pos: [0., 0.],
-            color: [1., 0., 1., 1.],
-            uv: [0., 0.],
-        }
-        .encode(&mut buf)
-        .unwrap();
+        Vertex { pos: [0., 0.], color: [1., 0., 1., 1.], uv: [0., 0.] }.encode(&mut buf).unwrap();
         // top right
-        Vertex {
-            pos: [0.5, 0.],
-            color: [1., 1., 0., 1.],
-            uv: [1., 0.],
-        }
-        .encode(&mut buf)
-        .unwrap();
+        Vertex { pos: [0.5, 0.], color: [1., 1., 0., 1.], uv: [1., 0.] }.encode(&mut buf).unwrap();
         // bottom left
-        Vertex {
-            pos: [0., 0.5],
-            color: [0., 0., 0.8, 1.],
-            uv: [0., 1.],
-        }
-        .encode(&mut buf)
-        .unwrap();
+        Vertex { pos: [0., 0.5], color: [0., 0., 0.8, 1.], uv: [0., 1.] }.encode(&mut buf).unwrap();
         // bottom right
-        Vertex {
-            pos: [0.5, 0.5],
-            color: [1., 1., 0., 1.],
-            uv: [1., 1.],
-        }
-        .encode(&mut buf)
-        .unwrap();
+        Vertex { pos: [0.5, 0.5], color: [1., 1., 0., 1.], uv: [1., 1.] }.encode(&mut buf).unwrap();
         verts.set_buf(buf).unwrap();
 
         let mut buf = vec![];
@@ -381,13 +274,21 @@ impl Stage {
         scene_graph.link(funky_mesh_id, funky_square_id).unwrap();
     }
 
-    fn draw_glyph(ctx: &mut Box<dyn RenderingBackend>, proj: &glam::Mat4, model: &glam::Mat4, font: &Font, glyph_pos: &GlyphPosition, color: [f32; 4]) {
+    fn draw_glyph(
+        ctx: &mut Box<dyn RenderingBackend>,
+        proj: &glam::Mat4,
+        model: &glam::Mat4,
+        font: &Font,
+        glyph_pos: &GlyphPosition,
+        color: [f32; 4],
+    ) {
         let (screen_width, screen_height) = window::screen_size();
         //let proj =
         //    glam::Mat4::from_translation(glam::Vec3::new(-1., 1., 0.)) *
         //    glam::Mat4::from_scale(glam::Vec3::new(2./screen_width, -2./screen_height, 1.));
         //let model = glam::Mat4::IDENTITY;
-        let model = *model * glam::Mat4::from_scale(glam::Vec3::new(1./screen_width, 1./screen_height, 1.));
+        let model = *model *
+            glam::Mat4::from_scale(glam::Vec3::new(1. / screen_width, 1. / screen_height, 1.));
 
         let mut uniforms_data = [0u8; 128];
         let data: [u8; 64] = unsafe { std::mem::transmute_copy(proj) };
@@ -396,14 +297,11 @@ impl Stage {
         uniforms_data[64..].copy_from_slice(&data);
         assert_eq!(128, 2 * UniformType::Mat4.size());
 
-        ctx
-            .apply_uniforms_from_bytes(uniforms_data.as_ptr(), uniforms_data.len());
+        ctx.apply_uniforms_from_bytes(uniforms_data.as_ptr(), uniforms_data.len());
 
         let (font_metrics, text_bitmap) = font.rasterize(glyph_pos.parent, glyph_pos.key.px);
-        let text_bitmap: Vec<_> = text_bitmap
-            .iter()
-            .flat_map(|coverage| vec![255, 255, 255, *coverage])
-            .collect();
+        let text_bitmap: Vec<_> =
+            text_bitmap.iter().flat_map(|coverage| vec![255, 255, 255, *coverage]).collect();
 
         let (x, y) = (glyph_pos.x, glyph_pos.y);
         let (w, h) = (glyph_pos.width as f32, glyph_pos.height as f32);
@@ -417,33 +315,16 @@ impl Stage {
         //    2             3
         //
         // faces: 021, 123
-        let vertices: [Vertex; 4] = 
-            [
-                // top left
-                Vertex {
-                    pos: [x, y],
-                    color,
-                    uv: [0., 0.],
-                },
-                // top right
-                Vertex {
-                    pos: [x + w, y],
-                    color,
-                    uv: [1., 0.],
-                },
-                // bottom left
-                Vertex {
-                    pos: [x, y + h],
-                    color,
-                    uv: [0., 1.],
-                },
-                // bottom right
-                Vertex {
-                    pos: [x + w, y + h],
-                    color,
-                    uv: [1., 1.],
-                },
-            ];
+        let vertices: [Vertex; 4] = [
+            // top left
+            Vertex { pos: [x, y], color, uv: [0., 0.] },
+            // top right
+            Vertex { pos: [x + w, y], color, uv: [1., 0.] },
+            // bottom left
+            Vertex { pos: [x, y + h], color, uv: [0., 1.] },
+            // bottom right
+            Vertex { pos: [x + w, y + h], color, uv: [1., 1.] },
+        ];
 
         //debug!("screen size: {:?}", window::screen_size());
         let vertex_buffer = ctx.new_buffer(
@@ -459,7 +340,7 @@ impl Stage {
             BufferSource::slice(&indices),
         );
 
-        let texture = 
+        let texture =
             //self.king_texture;
             ctx.new_texture_from_rgba8(
                 font_metrics.width as u16,
@@ -467,59 +348,39 @@ impl Stage {
                 &text_bitmap,
             );
 
-        let bindings = Bindings {
-            vertex_buffers: vec![vertex_buffer],
-            index_buffer: index_buffer,
-            images: vec![texture],
-        };
+        let bindings =
+            Bindings { vertex_buffers: vec![vertex_buffer], index_buffer, images: vec![texture] };
 
         ctx.apply_bindings(&bindings);
         ctx.draw(0, 6, 1);
     }
 
-    fn create_text_node(&self, font_node_id: SceneNodeId, font_name: &str, node_name: String, text: String, font_size: f32) -> Result<SceneNodeId> {
+    fn create_text_node(
+        &self,
+        font_node_id: SceneNodeId,
+        font_name: &str,
+        node_name: String,
+        text: String,
+        font_size: f32,
+    ) -> Result<SceneNodeId> {
         let mut scene_graph = self.scene_graph.lock().unwrap();
         let text_node = scene_graph.add_node(node_name, SceneNodeType::RenderText);
-        text_node
-            .add_property("text", PropertyType::Str)
-            .unwrap()
-            .set_str(text.clone())
-            .unwrap();
+        text_node.add_property("text", PropertyType::Str).unwrap().set_str(text.clone()).unwrap();
         text_node
             .add_property("font_size", PropertyType::Float32)
             .unwrap()
             .set_f32(font_size)
             .unwrap();
-        text_node
-            .add_property("r", PropertyType::Float32)
-            .unwrap()
-            .set_f32(0.)
-            .unwrap();
-        text_node
-            .add_property("g", PropertyType::Float32)
-            .unwrap()
-            .set_f32(0.)
-            .unwrap();
-        text_node
-            .add_property("b", PropertyType::Float32)
-            .unwrap()
-            .set_f32(0.)
-            .unwrap();
-        text_node
-            .add_property("a", PropertyType::Float32)
-            .unwrap()
-            .set_f32(0.)
-            .unwrap();
+        text_node.add_property("r", PropertyType::Float32).unwrap().set_f32(0.).unwrap();
+        text_node.add_property("g", PropertyType::Float32).unwrap().set_f32(0.).unwrap();
+        text_node.add_property("b", PropertyType::Float32).unwrap().set_f32(0.).unwrap();
+        text_node.add_property("a", PropertyType::Float32).unwrap().set_f32(0.).unwrap();
 
         let mut layout = Layout::new(CoordinateSystem::PositiveYDown);
-        layout.reset(&LayoutSettings {
-            ..LayoutSettings::default()
-        });
+        layout.reset(&LayoutSettings { ..LayoutSettings::default() });
         let font = match font_name {
-            "inter-regular" => {
-                &self.font
-            }
-            _ => panic!("unknown font name!")
+            "inter-regular" => &self.font,
+            _ => panic!("unknown font name!"),
         };
         let fonts = [font];
         layout.append(&fonts, &TextStyle::new(&text, font_size, 0));
@@ -533,7 +394,11 @@ impl Stage {
         // Calculate the text width
         // std::cmp::max() not impl for f32
         let max_f32 = |x: f32, y: f32| {
-            if x > y { x } else { y }
+            if x > y {
+                x
+            } else {
+                y
+            }
         };
 
         // TODO: this calc isn't multiline, we should add width property to each line
@@ -604,9 +469,7 @@ impl Stage {
     }
 
     fn load_texture(&mut self, node_name: String, filepath: String) -> Result<SceneNodeId> {
-        let Ok(img) = image::open(filepath) else {
-            return Err(Error::FileNotFound)
-        };
+        let Ok(img) = image::open(filepath) else { return Err(Error::FileNotFound) };
 
         let img = img.to_rgba8();
         let width = img.width();
@@ -615,23 +478,11 @@ impl Stage {
 
         let mut scene_graph = self.scene_graph.lock().unwrap();
         let img_node = scene_graph.add_node(node_name, SceneNodeType::RenderTexture);
-        img_node
-            .add_property("width", PropertyType::Uint32)
-            .unwrap()
-            .set_u32(width)
-            .unwrap();
-        img_node
-            .add_property("height", PropertyType::Uint32)
-            .unwrap()
-            .set_u32(height)
-            .unwrap();
+        img_node.add_property("width", PropertyType::Uint32).unwrap().set_u32(width).unwrap();
+        img_node.add_property("height", PropertyType::Uint32).unwrap().set_u32(height).unwrap();
         let texture = self.ctx.new_texture_from_rgba8(width as u16, height as u16, &bmp);
         let id = self.textures.alloc(texture);
-        img_node
-            .add_property("texture_id", PropertyType::Uint32)
-            .unwrap()
-            .set_u32(id)
-            .unwrap();
+        img_node.add_property("texture_id", PropertyType::Uint32).unwrap().set_u32(id).unwrap();
         Ok(img_node.id)
     }
 }
@@ -645,7 +496,8 @@ fn get_obj_props(obj: &SceneNode) -> Result<(f32, f32, f32)> {
 
 fn get_text_props(render_text: &SceneNode) -> Result<(String, f32, [f32; 4])> {
     let text = render_text.get_property("text").ok_or(Error::PropertyNotFound)?.get_str()?;
-    let font_size = render_text.get_property("font_size").ok_or(Error::PropertyNotFound)?.get_f32()?;
+    let font_size =
+        render_text.get_property("font_size").ok_or(Error::PropertyNotFound)?.get_f32()?;
     let r = render_text.get_property("r").ok_or(Error::PropertyNotFound)?.get_f32()?;
     let g = render_text.get_property("g").ok_or(Error::PropertyNotFound)?.get_f32()?;
     let b = render_text.get_property("b").ok_or(Error::PropertyNotFound)?.get_f32()?;
@@ -659,19 +511,24 @@ impl EventHandler for Stage {
         // check /font:create_text() queue
 
         let mut scene_graph = self.scene_graph.lock().unwrap();
-        let font_root = 
-            scene_graph
-            .lookup_node("/font")
-            .unwrap();
-        let font_ids: Vec<_> = font_root.iter_children(&scene_graph, SceneNodeType::Font).map(|node| node.id).collect();
+        let font_root = scene_graph.lookup_node("/font").unwrap();
+        let font_ids: Vec<_> = font_root
+            .iter_children(&scene_graph, SceneNodeType::Font)
+            .map(|node| node.id)
+            .collect();
 
         let mut calls = vec![];
-        for font_id in font_ids
-        {
+        for font_id in font_ids {
             let font_node = scene_graph.get_node_mut(font_id).unwrap();
             for method in &mut font_node.methods {
                 for (arg_data, response_fn) in std::mem::take(&mut method.queue) {
-                    calls.push((font_node.id, font_node.name.clone(), method.name.clone(), arg_data, response_fn));
+                    calls.push((
+                        font_node.id,
+                        font_node.name.clone(),
+                        method.name.clone(),
+                        arg_data,
+                        response_fn,
+                    ));
                 }
             }
         }
@@ -687,7 +544,8 @@ impl EventHandler for Stage {
             let font_size = f32::decode(&mut cur).unwrap();
             debug!(target: "win", "/font:{}({}, {})", method_name, text, font_size);
 
-            let node_id_result = self.create_text_node(font_node_id, &font_node_name, node_name, text, font_size);
+            let node_id_result =
+                self.create_text_node(font_node_id, &font_node_name, node_name, text, font_size);
             let node_id_result = node_id_result.map(|node_id| {
                 node_id.encode(&mut reply).unwrap();
                 reply
@@ -699,10 +557,7 @@ impl EventHandler for Stage {
 
         let mut scene_graph = self.scene_graph.lock().unwrap();
         let mut calls = vec![];
-        let window = 
-            scene_graph
-            .lookup_node_mut("/window")
-            .unwrap();
+        let window = scene_graph.lookup_node_mut("/window").unwrap();
         for method in &mut window.methods {
             for (arg_data, response_fn) in std::mem::take(&mut method.queue) {
                 calls.push((method.name.clone(), arg_data, response_fn));
@@ -736,8 +591,7 @@ impl EventHandler for Stage {
 
         // This will make the top left (0, 0) and the bottom right (1, 1)
         // Default is (-1, 1) -> (1, -1)
-        let proj =
-            glam::Mat4::from_translation(glam::Vec3::new(-1., 1., 0.)) *
+        let proj = glam::Mat4::from_translation(glam::Vec3::new(-1., 1., 0.)) *
             glam::Mat4::from_scale(glam::Vec3::new(2., -2., 1.));
 
         // Reusable text layout
@@ -745,17 +599,12 @@ impl EventHandler for Stage {
 
         let scene_graph = self.scene_graph.lock().unwrap();
 
-        for layer in 
-            scene_graph
+        for layer in scene_graph
             .lookup_node("/window")
             .expect("no window attached!")
             .iter_children(&scene_graph, SceneNodeType::RenderLayer)
         {
-            let is_visible = layer
-                .get_property("is_visible")
-                .unwrap()
-                .get_bool()
-                .unwrap();
+            let is_visible = layer.get_property("is_visible").unwrap().get_bool().unwrap();
             if !is_visible {
                 continue;
             }
@@ -764,31 +613,13 @@ impl EventHandler for Stage {
             self.ctx.begin_default_pass(PassAction::Nothing);
             self.ctx.apply_pipeline(&self.pipeline);
 
-            let rect_x = layer
-                .get_property("rect_x")
-                .unwrap()
-                .get_u32()
-                .unwrap();
-            let rect_y = layer
-                .get_property("rect_y")
-                .unwrap()
-                .get_u32()
-                .unwrap();
-            let rect_w = layer
-                .get_property("rect_w")
-                .unwrap()
-                .get_u32()
-                .unwrap();
-            let rect_h = layer
-                .get_property("rect_h")
-                .unwrap()
-                .get_u32()
-                .unwrap();
+            let rect_x = layer.get_property("rect_x").unwrap().get_u32().unwrap();
+            let rect_y = layer.get_property("rect_y").unwrap().get_u32().unwrap();
+            let rect_w = layer.get_property("rect_w").unwrap().get_u32().unwrap();
+            let rect_h = layer.get_property("rect_h").unwrap().get_u32().unwrap();
 
-            self.ctx
-                .apply_viewport(rect_x as i32, rect_y as i32, rect_w as i32, rect_h as i32);
-            self.ctx
-                .apply_scissor_rect(rect_x as i32, rect_y as i32, rect_w as i32, rect_h as i32);
+            self.ctx.apply_viewport(rect_x as i32, rect_y as i32, rect_w as i32, rect_h as i32);
+            self.ctx.apply_scissor_rect(rect_x as i32, rect_y as i32, rect_w as i32, rect_h as i32);
 
             'outer: for obj in layer.iter_children(&scene_graph, SceneNodeType::RenderObject) {
                 let Ok((x, y, scale)) = get_obj_props(obj) else {
@@ -796,44 +627,66 @@ impl EventHandler for Stage {
                     continue
                 };
 
-                let model =
-                    glam::Mat4::from_translation(glam::Vec3::new(x, y, 0.)) *
+                let model = glam::Mat4::from_translation(glam::Vec3::new(x, y, 0.)) *
                     glam::Mat4::from_scale(glam::Vec3::new(scale, scale, 1.));
 
                 let texture = 'texture: {
-                    let Some(texture_node) = obj.iter_children(&scene_graph, SceneNodeType::RenderTexture).next() else {
+                    let Some(texture_node) =
+                        obj.iter_children(&scene_graph, SceneNodeType::RenderTexture).next()
+                    else {
                         break 'texture self.textures.get(Self::WHITE_TEXTURE_ID).unwrap()
                     };
 
                     let Some(width_prop) = texture_node.get_property("width") else {
-                        error!("texture '{}':{} missing property width", texture_node.name, texture_node.id);
+                        error!(
+                            "texture '{}':{} missing property width",
+                            texture_node.name, texture_node.id
+                        );
                         continue 'outer
                     };
                     let Ok(width) = width_prop.get_u32() else {
-                        error!("texture '{}':{} width property has wrong type", texture_node.name, texture_node.id);
+                        error!(
+                            "texture '{}':{} width property has wrong type",
+                            texture_node.name, texture_node.id
+                        );
                         continue 'outer
                     };
 
                     let Some(height_prop) = texture_node.get_property("height") else {
-                        error!("texture '{}':{} missing property height", texture_node.name, texture_node.id);
+                        error!(
+                            "texture '{}':{} missing property height",
+                            texture_node.name, texture_node.id
+                        );
                         continue 'outer
                     };
                     let Ok(height) = height_prop.get_u32() else {
-                        error!("texture '{}':{} height property has wrong type", texture_node.name, texture_node.id);
+                        error!(
+                            "texture '{}':{} height property has wrong type",
+                            texture_node.name, texture_node.id
+                        );
                         continue 'outer
                     };
 
                     let Some(id_prop) = texture_node.get_property("texture_id") else {
-                        error!("texture '{}':{} missing property texture_id", texture_node.name, texture_node.id);
+                        error!(
+                            "texture '{}':{} missing property texture_id",
+                            texture_node.name, texture_node.id
+                        );
                         continue 'outer
                     };
                     let Ok(id) = id_prop.get_u32() else {
-                        error!("texture '{}':{} texture_id property has wrong type", texture_node.name, texture_node.id);
+                        error!(
+                            "texture '{}':{} texture_id property has wrong type",
+                            texture_node.name, texture_node.id
+                        );
                         continue 'outer
                     };
 
                     let Some(texture) = self.textures.get(id) else {
-                        error!("texture '{}':{} texture with id {} is missing!", texture_node.name, texture_node.id, id);
+                        error!(
+                            "texture '{}':{} texture with id {} is missing!",
+                            texture_node.name, texture_node.id, id
+                        );
                         continue 'outer
                     };
                     texture
@@ -880,7 +733,7 @@ impl EventHandler for Stage {
 
                     let bindings = Bindings {
                         vertex_buffers: vec![vertex_buffer],
-                        index_buffer: index_buffer,
+                        index_buffer,
                         images: vec![*texture],
                     };
 
@@ -893,33 +746,45 @@ impl EventHandler for Stage {
                     uniforms_data[64..].copy_from_slice(&data);
                     assert_eq!(128, 2 * UniformType::Mat4.size());
 
-                    self.ctx
-                        .apply_uniforms_from_bytes(uniforms_data.as_ptr(), uniforms_data.len());
+                    self.ctx.apply_uniforms_from_bytes(uniforms_data.as_ptr(), uniforms_data.len());
 
                     self.ctx.draw(0, 3 * faces.len() as i32, 1);
                 }
 
                 for render_text in obj.iter_children(&scene_graph, SceneNodeType::RenderText) {
                     let Ok((text, font_size, color)) = get_text_props(render_text) else {
-                        error!("text '{}':{} has a property error", render_text.name, render_text.id);
+                        error!(
+                            "text '{}':{} has a property error",
+                            render_text.name, render_text.id
+                        );
                         continue
                     };
 
-                    let Some(font_node) = render_text.iter_children(&scene_graph, SceneNodeType::Font).next() else {
-                        error!("text '{}':{} missing a font node", render_text.name, render_text.id);
+                    let Some(font_node) =
+                        render_text.iter_children(&scene_graph, SceneNodeType::Font).next()
+                    else {
+                        error!(
+                            "text '{}':{} missing a font node",
+                            render_text.name, render_text.id
+                        );
                         continue
                     };
                     // No other fonts supported yet
                     assert_eq!(font_node.name, "inter-regular");
 
-                    layout.reset(&LayoutSettings {
-                        ..LayoutSettings::default()
-                    });
+                    layout.reset(&LayoutSettings { ..LayoutSettings::default() });
                     let fonts = [&self.font];
                     layout.append(&fonts, &TextStyle::new(&text, font_size, 0));
 
                     for glyph_pos in layout.glyphs() {
-                        Self::draw_glyph(&mut self.ctx, &proj, &model, &self.font, glyph_pos, color);
+                        Self::draw_glyph(
+                            &mut self.ctx,
+                            &proj,
+                            &model,
+                            &self.font,
+                            glyph_pos,
+                            color,
+                        );
                     }
                 }
             }
@@ -931,31 +796,13 @@ impl EventHandler for Stage {
 
     fn key_down_event(&mut self, keycode: KeyCode, modifiers: KeyMods, repeat: bool) {
         let mut scene_graph = self.scene_graph.lock().unwrap();
-        let win = 
-            scene_graph
-            .lookup_node_mut("/window/input/keyboard")
-            .unwrap();
+        let win = scene_graph.lookup_node_mut("/window/input/keyboard").unwrap();
 
-        win.get_property("shift")
-            .unwrap()
-            .set_bool(modifiers.shift)
-            .unwrap();
-        win.get_property("ctrl")
-            .unwrap()
-            .set_bool(modifiers.ctrl)
-            .unwrap();
-        win.get_property("alt")
-            .unwrap()
-            .set_bool(modifiers.alt)
-            .unwrap();
-        win.get_property("logo")
-            .unwrap()
-            .set_bool(modifiers.logo)
-            .unwrap();
-        win.get_property("repeat")
-            .unwrap()
-            .set_bool(repeat)
-            .unwrap();
+        win.get_property("shift").unwrap().set_bool(modifiers.shift).unwrap();
+        win.get_property("ctrl").unwrap().set_bool(modifiers.ctrl).unwrap();
+        win.get_property("alt").unwrap().set_bool(modifiers.alt).unwrap();
+        win.get_property("logo").unwrap().set_bool(modifiers.logo).unwrap();
+        win.get_property("repeat").unwrap().set_bool(repeat).unwrap();
 
         let send_key_down = |key: &str| {
             win.get_property("keycode").unwrap().set_str(key).unwrap();
@@ -1088,50 +935,30 @@ impl EventHandler for Stage {
     }
     fn mouse_motion_event(&mut self, x: f32, y: f32) {
         let mut scene_graph = self.scene_graph.lock().unwrap();
-        let mouse = 
-            scene_graph
-            .lookup_node_mut("/window/input/mouse")
-            .unwrap();
+        let mouse = scene_graph.lookup_node_mut("/window/input/mouse").unwrap();
         mouse.get_property("x").unwrap().set_f32(x).unwrap();
         mouse.get_property("y").unwrap().set_f32(y).unwrap();
         mouse.trigger("move").unwrap();
     }
     fn mouse_wheel_event(&mut self, x: f32, y: f32) {
         let mut scene_graph = self.scene_graph.lock().unwrap();
-        let mouse = 
-            scene_graph
-            .lookup_node_mut("/window/input/mouse")
-            .unwrap();
+        let mouse = scene_graph.lookup_node_mut("/window/input/mouse").unwrap();
         mouse.get_property("x").unwrap().set_f32(x).unwrap();
         mouse.get_property("y").unwrap().set_f32(y).unwrap();
         mouse.trigger("wheel").unwrap();
     }
     fn mouse_button_down_event(&mut self, button: MouseButton, x: f32, y: f32) {
         let mut scene_graph = self.scene_graph.lock().unwrap();
-        let mouse = 
-            scene_graph
-            .lookup_node_mut("/window/input/mouse")
-            .unwrap();
-        mouse
-            .get_property("button")
-            .unwrap()
-            .set_u32(button.to_u8() as u32)
-            .unwrap();
+        let mouse = scene_graph.lookup_node_mut("/window/input/mouse").unwrap();
+        mouse.get_property("button").unwrap().set_u32(button.to_u8() as u32).unwrap();
         mouse.get_property("x").unwrap().set_f32(x).unwrap();
         mouse.get_property("y").unwrap().set_f32(y).unwrap();
         mouse.trigger("button_down").unwrap();
     }
     fn mouse_button_up_event(&mut self, button: MouseButton, x: f32, y: f32) {
         let mut scene_graph = self.scene_graph.lock().unwrap();
-        let mouse = 
-            scene_graph
-            .lookup_node_mut("/window/input/mouse")
-            .unwrap();
-        mouse
-            .get_property("button")
-            .unwrap()
-            .set_u32(button.to_u8() as u32)
-            .unwrap();
+        let mouse = scene_graph.lookup_node_mut("/window/input/mouse").unwrap();
+        mouse.get_property("button").unwrap().set_u32(button.to_u8() as u32).unwrap();
         mouse.get_property("x").unwrap().set_f32(x).unwrap();
         mouse.get_property("y").unwrap().set_f32(y).unwrap();
         mouse.trigger("button_up").unwrap();
@@ -1150,9 +977,7 @@ pub fn init_gui(scene_graph: SceneGraphPtr) {
     #[cfg(target_os = "android")]
     {
         android_logger::init_once(
-            android_logger::Config::default()
-                .with_max_level(LevelFilter::Debug)
-                .with_tag("fagman"),
+            android_logger::Config::default().with_max_level(LevelFilter::Debug).with_tag("fagman"),
         );
     }
 
@@ -1178,12 +1003,8 @@ pub fn init_gui(scene_graph: SceneGraphPtr) {
         ..Default::default()
     };
     let metal = std::env::args().nth(1).as_deref() == Some("metal");
-    conf.platform.apple_gfx_api = if metal {
-        conf::AppleGfxApi::Metal
-    } else {
-        conf::AppleGfxApi::OpenGl
-    };
+    conf.platform.apple_gfx_api =
+        if metal { conf::AppleGfxApi::Metal } else { conf::AppleGfxApi::OpenGl };
 
     miniquad::start(conf, || Box::new(Stage::new(scene_graph)));
 }
-

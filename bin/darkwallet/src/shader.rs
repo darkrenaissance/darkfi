@@ -76,4 +76,3 @@ pub fn meta() -> ShaderMeta {
         uniforms: UniformBlockLayout { uniforms: vec![] },
     }
 }
-
