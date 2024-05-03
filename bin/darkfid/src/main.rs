@@ -276,14 +276,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     };
 
     // Initialize node
-    let darkfid = Darkfid::new(
-        p2p.clone(),
-        validator.clone(),
-        blockchain_config.miner,
-        subscribers,
-        rpc_client,
-    )
-    .await;
+    let darkfid =
+        Darkfid::new(p2p.clone(), validator, blockchain_config.miner, subscribers, rpc_client)
+            .await;
     let darkfid = Arc::new(darkfid);
     info!(target: "darkfid", "Node initialized successfully!");
 

@@ -475,10 +475,10 @@ impl Consensus {
         forks.retain(|_| *iter.next().unwrap());
 
         // Remove finalized proposals txs from the unporposed txs sled tree
-        self.blockchain.transactions.remove_pending(&finalized_txs_hashes)?;
+        self.blockchain.remove_pending_txs_hashes(&finalized_txs_hashes)?;
 
         // Remove unreferenced txs from the unporposed txs sled tree
-        self.blockchain.transactions.remove_pending(&Vec::from_iter(dropped_txs))?;
+        self.blockchain.remove_pending_txs_hashes(&Vec::from_iter(dropped_txs))?;
 
         // Drop forks lock
         drop(forks);
@@ -594,11 +594,10 @@ impl Fork {
 
     /// Auxiliary function to retrieve last proposal.
     pub fn last_proposal(&self) -> Result<Proposal> {
-        let block = if self.proposals.is_empty() {
-            self.overlay.lock().unwrap().last_block()?
+        let block = if let Some(last) = self.proposals.last() {
+            self.overlay.lock().unwrap().get_blocks_by_hash(&[*last])?[0].clone()
         } else {
-            self.overlay.lock().unwrap().get_blocks_by_hash(&[*self.proposals.last().unwrap()])?[0]
-                .clone()
+            self.overlay.lock().unwrap().last_block()?
         };
 
         Ok(Proposal::new(block))

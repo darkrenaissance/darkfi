@@ -135,9 +135,7 @@ impl Validator {
     pub async fn calculate_gas(&self, tx: &Transaction, verify_fee: bool) -> Result<u64> {
         // Grab the best fork to verify against
         let forks = self.consensus.forks.read().await;
-        let fork = &forks[best_fork_index(&forks)?];
-        let overlay = fork.overlay.lock().unwrap().full_clone()?;
-        let next_block_height = fork.get_next_block_height()?;
+        let fork = forks[best_fork_index(&forks)?].full_clone()?;
         drop(forks);
 
         // Map of ZK proof verifying keys for the transaction
@@ -146,9 +144,12 @@ impl Validator {
             vks.insert(call.data.contract_id.to_bytes(), HashMap::new());
         }
 
+        // Grab forks' next block height
+        let next_block_height = fork.get_next_block_height()?;
+
         // Verify transaction to grab the gas used
         let verify_result = verify_transaction(
-            &overlay,
+            &fork.overlay,
             next_block_height,
             tx,
             &mut MerkleTree::new(1),
@@ -158,7 +159,7 @@ impl Validator {
         .await;
 
         // Purge new trees
-        overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
+        fork.overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
 
         Ok(verify_result?.0)
     }
@@ -185,24 +186,29 @@ impl Validator {
         // Grab a lock over current consensus forks state
         let mut forks = self.consensus.forks.write().await;
 
-        // Iterate over them to verify transaction validity in their overlays
+        // Iterate over node forks to verify transaction validity in their overlays
         for fork in forks.iter_mut() {
-            // Clone forks' overlay
-            let overlay = fork.overlay.lock().unwrap().full_clone()?;
+            // Clone fork state
+            let fork_clone = fork.full_clone()?;
 
             // Grab forks' next block height
-            let next_block_height = fork.get_next_block_height()?;
+            let next_block_height = fork_clone.get_next_block_height()?;
 
             // Verify transaction
-            match verify_transactions(
-                &overlay,
+            let verify_result = verify_transactions(
+                &fork_clone.overlay,
                 next_block_height,
                 &tx_vec,
                 &mut MerkleTree::new(1),
                 self.verify_fees,
             )
-            .await
-            {
+            .await;
+
+            // Purge new trees
+            fork_clone.overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
+
+            // Handle response
+            match verify_result {
                 Ok(_) => {}
                 Err(Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(_))) => continue,
                 Err(e) => return Err(e),
@@ -253,25 +259,29 @@ impl Validator {
             let tx_vec = [tx.clone()];
             let mut valid = false;
 
-            // If node participates in consensus and holds any forks, iterate over them
-            // to verify transaction validity in their overlays
+            // Iterate over node forks to verify transaction validity in their overlays
             for fork in forks.iter_mut() {
-                // Clone forks' overlay
-                let overlay = fork.overlay.lock().unwrap().full_clone()?;
+                // Clone fork state
+                let fork_clone = fork.full_clone()?;
 
                 // Grab forks' next block height
-                let next_block_height = fork.get_next_block_height()?;
+                let next_block_height = fork_clone.get_next_block_height()?;
 
                 // Verify transaction
-                match verify_transactions(
-                    &overlay,
+                let verify_result = verify_transactions(
+                    &fork_clone.overlay,
                     next_block_height,
                     &tx_vec,
                     &mut MerkleTree::new(1),
                     self.verify_fees,
                 )
-                .await
-                {
+                .await;
+
+                // Purge new trees
+                fork_clone.overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
+
+                // Handle response
+                match verify_result {
                     Ok(_) => {
                         valid = true;
                         continue
@@ -282,23 +292,6 @@ impl Validator {
 
                 // Remove erroneous transaction from forks' mempool
                 fork.mempool.retain(|x| *x != tx_hash);
-            }
-
-            // Verify transaction against canonical state
-            let overlay = BlockchainOverlay::new(&self.blockchain)?;
-            let next_block_height = self.blockchain.last_block()?.header.height + 1;
-            match verify_transactions(
-                &overlay,
-                next_block_height,
-                &tx_vec,
-                &mut MerkleTree::new(1),
-                self.verify_fees,
-            )
-            .await
-            {
-                Ok(_) => valid = true,
-                Err(Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(_))) => {}
-                Err(e) => return Err(e),
             }
 
             // Remove pending transaction if it's not valid for canonical or any fork
