@@ -48,21 +48,70 @@ impl fmt::Debug for Face {
     }
 }
 
+type ResourceId = u32;
+
+struct ResourceManager<T> {
+    resources: Vec<(ResourceId, Option<T>)>,
+    freed: Vec<usize>,
+    id_counter: ResourceId,
+}
+
+impl<T> ResourceManager<T> {
+    fn new() -> Self {
+        Self {
+            resources: vec![],
+            freed: vec![],
+            id_counter: 0
+        }
+    }
+
+    fn alloc(&mut self, rsrc: T) -> ResourceId {
+        let id = self.id_counter;
+        self.id_counter += 1;
+
+        if self.freed.is_empty() {
+            let idx = self.resources.len();
+            self.resources.push((id, Some(rsrc)));
+        } else {
+            let idx = self.freed.pop().unwrap();
+            let _ = std::mem::replace(&mut self.resources[idx], (id, Some(rsrc)));
+        }
+        id
+    }
+
+    fn get(&self, id: ResourceId) -> Option<&T> {
+        for (idx, (rsrc_id, rsrc)) in self.resources.iter().enumerate() {
+            if self.freed.contains(&idx) {
+                continue
+            }
+            if *rsrc_id == id {
+                return rsrc.as_ref()
+            }
+        }
+        None
+    }
+}
+
 struct Stage {
     ctx: Box<dyn RenderingBackend>,
     pipeline: Pipeline,
 
     scene_graph: SceneGraphPtr,
 
-    white_texture: TextureId,
+    textures: ResourceManager<TextureId>,
     font: Font,
 }
 
 impl Stage {
+    const WHITE_TEXTURE_ID: ResourceId = 0;
+
     pub fn new(scene_graph: SceneGraphPtr) -> Stage {
         let mut ctx: Box<dyn RenderingBackend> = window::new_rendering_backend();
 
         let white_texture = ctx.new_texture_from_rgba8(1, 1, &[255, 255, 255, 255]);
+        let mut textures = ResourceManager::new();
+        let white_texture_id = textures.alloc(white_texture);
+        assert_eq!(white_texture_id, Self::WHITE_TEXTURE_ID);
 
         let mut shader_meta: ShaderMeta = shader::meta();
         shader_meta
@@ -146,7 +195,7 @@ impl Stage {
             ctx,
             pipeline,
             scene_graph,
-            white_texture,
+            textures,
             font,
         };
         stage.setup_scene_graph_window();
@@ -554,7 +603,7 @@ impl Stage {
         Ok(text_node_id)
     }
 
-    fn load_texture(&self, node_name: String, filepath: String) -> Result<SceneNodeId> {
+    fn load_texture(&mut self, node_name: String, filepath: String) -> Result<SceneNodeId> {
         let Ok(img) = image::open(filepath) else {
             return Err(Error::FileNotFound)
         };
@@ -576,12 +625,13 @@ impl Stage {
             .unwrap()
             .set_u32(height)
             .unwrap();
+        let texture = self.ctx.new_texture_from_rgba8(width as u16, height as u16, &bmp);
+        let id = self.textures.alloc(texture);
         img_node
-            .add_property("bmp", PropertyType::Buffer)
+            .add_property("texture_id", PropertyType::Uint32)
             .unwrap()
-            .set_buf(bmp)
+            .set_u32(id)
             .unwrap();
-        //let king_texture = ctx.new_texture_from_rgba8(width, height, &king_bitmap);
         Ok(img_node.id)
     }
 }
@@ -750,9 +800,9 @@ impl EventHandler for Stage {
                     glam::Mat4::from_translation(glam::Vec3::new(x, y, 0.)) *
                     glam::Mat4::from_scale(glam::Vec3::new(scale, scale, 1.));
 
-                let texture_id = 'texture: {
+                let texture = 'texture: {
                     let Some(texture_node) = obj.iter_children(&scene_graph, SceneNodeType::RenderTexture).next() else {
-                        break 'texture self.white_texture
+                        break 'texture self.textures.get(Self::WHITE_TEXTURE_ID).unwrap()
                     };
 
                     let Some(width_prop) = texture_node.get_property("width") else {
@@ -773,17 +823,20 @@ impl EventHandler for Stage {
                         continue 'outer
                     };
 
-                    let Some(bmp_prop) = texture_node.get_property("bmp") else {
-                        error!("texture '{}':{} missing property bmp", texture_node.name, texture_node.id);
+                    let Some(id_prop) = texture_node.get_property("texture_id") else {
+                        error!("texture '{}':{} missing property texture_id", texture_node.name, texture_node.id);
                         continue 'outer
                     };
-                    let Ok(bmp) = bmp_prop.get_buf() else {
-                        error!("texture '{}':{} bmp property has wrong type", texture_node.name, texture_node.id);
+                    let Ok(id) = id_prop.get_u32() else {
+                        error!("texture '{}':{} texture_id property has wrong type", texture_node.name, texture_node.id);
                         continue 'outer
                     };
 
-                    let texture_id = self.ctx.new_texture_from_rgba8(width as u16, height as u16, &bmp);
-                    texture_id
+                    let Some(texture) = self.textures.get(id) else {
+                        error!("texture '{}':{} texture with id {} is missing!", texture_node.name, texture_node.id, id);
+                        continue 'outer
+                    };
+                    texture
                 };
 
                 for mesh in obj.iter_children(&scene_graph, SceneNodeType::RenderMesh) {
@@ -828,7 +881,7 @@ impl EventHandler for Stage {
                     let bindings = Bindings {
                         vertex_buffers: vec![vertex_buffer],
                         index_buffer: index_buffer,
-                        images: vec![texture_id],
+                        images: vec![*texture],
                     };
 
                     self.ctx.apply_bindings(&bindings);
