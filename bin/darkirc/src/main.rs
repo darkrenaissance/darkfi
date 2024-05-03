@@ -192,7 +192,9 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
 
     info!("Instantiating event DAG");
     let sled_db = sled::open(datastore)?;
-    let p2p = P2p::new(args.net.into(), ex.clone()).await;
+    let mut p2p_settings: darkfi::net::Settings = args.net.into();
+    p2p_settings.app_version = semver::Version::parse(env!("CARGO_PKG_VERSION")).unwrap();
+    let p2p = P2p::new(p2p_settings, ex.clone()).await;
     let event_graph =
         EventGraph::new(p2p.clone(), sled_db.clone(), "darkirc_dag", 1, ex.clone()).await?;
 
