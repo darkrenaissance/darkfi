@@ -211,8 +211,11 @@ impl Stage {
 
         let mouse = scene_graph.add_node("mouse", SceneNodeType::Mouse);
         mouse.add_property("button", PropertyType::Uint32).unwrap();
-        mouse.add_property("x", PropertyType::Float32).unwrap();
-        mouse.add_property("y", PropertyType::Float32).unwrap();
+        mouse.add_property("motion_x", PropertyType::Float32).unwrap();
+        mouse.add_property("motion_y", PropertyType::Float32).unwrap();
+        mouse.add_property("wheel_y", PropertyType::Float32).unwrap();
+        mouse.add_property("click_x", PropertyType::Float32).unwrap();
+        mouse.add_property("click_y", PropertyType::Float32).unwrap();
         mouse.add_signal("button_up").unwrap();
         mouse.add_signal("button_down").unwrap();
         mouse.add_signal("wheel").unwrap();
@@ -676,24 +679,24 @@ impl EventHandler for Stage {
         };
 
         match keycode {
-            KeyCode::Space => send_key_down("Space"),
-            KeyCode::Apostrophe => send_key_down("Apostrophe"),
-            KeyCode::Comma => send_key_down("Comma"),
-            KeyCode::Minus => send_key_down("Minus"),
-            KeyCode::Period => send_key_down("Period"),
-            KeyCode::Slash => send_key_down("Slash"),
-            KeyCode::Key0 => send_key_down("Key0"),
-            KeyCode::Key1 => send_key_down("Key1"),
-            KeyCode::Key2 => send_key_down("Key2"),
-            KeyCode::Key3 => send_key_down("Key3"),
-            KeyCode::Key4 => send_key_down("Key4"),
-            KeyCode::Key5 => send_key_down("Key5"),
-            KeyCode::Key6 => send_key_down("Key6"),
-            KeyCode::Key7 => send_key_down("Key7"),
-            KeyCode::Key8 => send_key_down("Key8"),
-            KeyCode::Key9 => send_key_down("Key9"),
-            KeyCode::Semicolon => send_key_down("Semicolon"),
-            KeyCode::Equal => send_key_down("Equal"),
+            KeyCode::Space => send_key_down(" "),
+            KeyCode::Apostrophe => send_key_down("'"),
+            KeyCode::Comma => send_key_down(","),
+            KeyCode::Minus => send_key_down("-"),
+            KeyCode::Period => send_key_down("."),
+            KeyCode::Slash => send_key_down("/"),
+            KeyCode::Key0 => send_key_down("0"),
+            KeyCode::Key1 => send_key_down("1"),
+            KeyCode::Key2 => send_key_down("2"),
+            KeyCode::Key3 => send_key_down("3"),
+            KeyCode::Key4 => send_key_down("4"),
+            KeyCode::Key5 => send_key_down("5"),
+            KeyCode::Key6 => send_key_down("6"),
+            KeyCode::Key7 => send_key_down("7"),
+            KeyCode::Key8 => send_key_down("8"),
+            KeyCode::Key9 => send_key_down("9"),
+            KeyCode::Semicolon => send_key_down(":"),
+            KeyCode::Equal => send_key_down("="),
             KeyCode::A => send_key_down("A"),
             KeyCode::B => send_key_down("B"),
             KeyCode::C => send_key_down("C"),
@@ -720,9 +723,9 @@ impl EventHandler for Stage {
             KeyCode::X => send_key_down("X"),
             KeyCode::Y => send_key_down("Y"),
             KeyCode::Z => send_key_down("Z"),
-            KeyCode::LeftBracket => send_key_down("LeftBracket"),
-            KeyCode::Backslash => send_key_down("Backslash"),
-            KeyCode::RightBracket => send_key_down("RightBracket"),
+            KeyCode::LeftBracket => send_key_down("("),
+            KeyCode::Backslash => send_key_down("\\"),
+            KeyCode::RightBracket => send_key_down(")"),
             KeyCode::GraveAccent => send_key_down("GraveAccent"),
             KeyCode::World1 => send_key_down("World1"),
             KeyCode::World2 => send_key_down("World2"),
@@ -802,31 +805,31 @@ impl EventHandler for Stage {
     fn mouse_motion_event(&mut self, x: f32, y: f32) {
         let mut scene_graph = self.scene_graph.lock().unwrap();
         let mouse = scene_graph.lookup_node_mut("/window/input/mouse").unwrap();
-        mouse.set_property_f32("x", x).unwrap();
-        mouse.set_property_f32("y", y).unwrap();
+        mouse.set_property_f32("motion_x", x).unwrap();
+        mouse.set_property_f32("motion_y", y).unwrap();
         mouse.trigger("move").unwrap();
     }
     fn mouse_wheel_event(&mut self, x: f32, y: f32) {
         let mut scene_graph = self.scene_graph.lock().unwrap();
         let mouse = scene_graph.lookup_node_mut("/window/input/mouse").unwrap();
-        mouse.set_property_f32("x", x).unwrap();
-        mouse.set_property_f32("y", y).unwrap();
+        //mouse.set_property_f32("x", x).unwrap();
+        mouse.set_property_f32("wheel_y", y).unwrap();
         mouse.trigger("wheel").unwrap();
     }
     fn mouse_button_down_event(&mut self, button: MouseButton, x: f32, y: f32) {
         let mut scene_graph = self.scene_graph.lock().unwrap();
         let mouse = scene_graph.lookup_node_mut("/window/input/mouse").unwrap();
         mouse.set_property_u32("button", button.to_u8() as u32).unwrap();
-        mouse.set_property_f32("x", x).unwrap();
-        mouse.set_property_f32("y", y).unwrap();
+        mouse.set_property_f32("click_x", x).unwrap();
+        mouse.set_property_f32("click_y", y).unwrap();
         mouse.trigger("button_down").unwrap();
     }
     fn mouse_button_up_event(&mut self, button: MouseButton, x: f32, y: f32) {
         let mut scene_graph = self.scene_graph.lock().unwrap();
         let mouse = scene_graph.lookup_node_mut("/window/input/mouse").unwrap();
         mouse.set_property_u32("button", button.to_u8() as u32).unwrap();
-        mouse.set_property_f32("x", x).unwrap();
-        mouse.set_property_f32("y", y).unwrap();
+        mouse.set_property_f32("click_x", x).unwrap();
+        mouse.set_property_f32("click_y", y).unwrap();
         mouse.trigger("button_up").unwrap();
     }
 
