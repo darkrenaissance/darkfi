@@ -56,9 +56,12 @@ def resize_box():
 
     mesh_id = api.lookup_node_id("/window/chatbox_layer/outline/box")
 
+    layer_w = get_property("/window/chatbox_layer", "rect_w")
+    layer_h = get_property("/window/chatbox_layer", "rect_h")
+
     # Lets add a poly - must be counterclockwise
-    x, y = 0.25, 0.25
-    w, h = 0.5, 0.5
+    x, y = layer_w * 0.25, layer_h * 0.25
+    w, h = layer_w * 0.50, layer_h * 0.50
     vert1 = vertex(x,     y,     1, 1, 1, 1, 0, 0)
     vert2 = vertex(x + w, y,     1, 1, 1, 1, 1, 0)
     vert3 = vertex(x,     y + h, 1, 1, 1, 1, 0, 1)
@@ -67,16 +70,11 @@ def resize_box():
     api.set_property_buffer(mesh_id, "faces", face(0, 2, 1) + face(1, 2, 3))
 
     # Second mesh
-    w = get_property("/window/chatbox_layer", "rect_w")
-    h = get_property("/window/chatbox_layer", "rect_h")
-    # in pixels
-    border_size = 5
-    bx, by = 5/w, 5/h
-
     mesh_id = api.lookup_node_id("/window/chatbox_layer/outline/inner_box")
 
-    x, y = 0.25 + bx, 0.25 + by
-    w, h = 0.50 - 2*bx, 0.50 - 2*by
+    x, y = x + 5, y + 5
+    w -= 10
+    h -= 10
     vert1 = vertex(x,     y,     0, 0, 0, 1, 0, 0)
     vert2 = vertex(x + w, y,     0, 0, 0, 1, 1, 0)
     vert3 = vertex(x,     y + h, 0, 0, 0, 1, 0, 1)

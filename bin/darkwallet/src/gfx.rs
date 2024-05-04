@@ -232,18 +232,15 @@ impl Stage {
         glyph_pos: &GlyphPosition,
         color: [f32; 4],
     ) {
-        let (screen_width, screen_height) = window::screen_size();
         //let proj =
         //    glam::Mat4::from_translation(glam::Vec3::new(-1., 1., 0.)) *
         //    glam::Mat4::from_scale(glam::Vec3::new(2./screen_width, -2./screen_height, 1.));
         //let model = glam::Mat4::IDENTITY;
-        let model = *model *
-            glam::Mat4::from_scale(glam::Vec3::new(1. / screen_width, 1. / screen_height, 1.));
 
         let mut uniforms_data = [0u8; 128];
         let data: [u8; 64] = unsafe { std::mem::transmute_copy(proj) };
         uniforms_data[0..64].copy_from_slice(&data);
-        let data: [u8; 64] = unsafe { std::mem::transmute_copy(&model) };
+        let data: [u8; 64] = unsafe { std::mem::transmute_copy(model) };
         uniforms_data[64..].copy_from_slice(&data);
         assert_eq!(128, 2 * UniformType::Mat4.size());
 
@@ -496,10 +493,11 @@ impl EventHandler for Stage {
         self.ctx.begin_default_pass(clear);
         self.ctx.end_render_pass();
 
+        let (screen_width, screen_height) = window::screen_size();
         // This will make the top left (0, 0) and the bottom right (1, 1)
         // Default is (-1, 1) -> (1, -1)
         let proj = glam::Mat4::from_translation(glam::Vec3::new(-1., 1., 0.)) *
-            glam::Mat4::from_scale(glam::Vec3::new(2., -2., 1.));
+            glam::Mat4::from_scale(glam::Vec3::new(2./screen_width, -2./screen_height, 1.));
 
         // Reusable text layout
         let mut layout = Layout::new(CoordinateSystem::PositiveYDown);
