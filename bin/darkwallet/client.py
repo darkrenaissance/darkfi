@@ -97,10 +97,18 @@ def remove_node_recursive(node_id):
 
 def clear_layer(layer_path):
     layer_id = api.lookup_node_id("/window/layer2")
+    if layer_id is None:
+        return
+
+    win_id = api.lookup_node_id("/window")
+    api.unlink_node(layer_id, win_id)
+
     for (_, child_id, child_type) in api.get_children(layer_id):
         api.unlink_node(child_id, layer_id)
         if child_type == SceneNodeType.RENDER_OBJECT:
             remove_node_recursive(child_id)
+
+    api.remove_node(layer_id)
 
 def remove_all_slots(node_path, sig):
     node_id = api.lookup_node_id(node_path)
@@ -126,17 +134,23 @@ def set_property(node_path, prop, val):
             api.set_property_u32(node_id, prop, val)
 
 def recalc_areas():
+    print("recalc areas")
     w = get_property("/window", "width")
     h = get_property("/window", "height")
-    set_property("/window/layer1", "rect_w", int(w))
-    set_property("/window/layer1", "rect_h", int(h))
     set_property("/window/layer2", "rect_w", int(w))
     set_property("/window/layer2", "rect_h", int(h))
+
+    print_tree()
+
+def garbage_collect():
+    for node_id in api.scan_dangling():
+        remove_node_recursive(node_id)
 
 api = Api()
 host = HostApi(api)
 print(api.hello())
 
+garbage_collect()
 clear_layer("/window/layer2")
 
 print("Generating scene...")
@@ -146,6 +160,16 @@ register_slot("/window",                "resize",        b"resize")
 register_slot("/window/input/mouse",    "button_down",   b"click")
 register_slot("/window/input/mouse",    "wheel",         b"wheel")
 #register_slot("/window/input/mouse",    "move",          b"mouse")
+
+layer_id = api.add_node("layer2", SceneNodeType.RENDER_LAYER)
+api.add_property(layer_id, "rect_x", PropertyType.UINT32)
+api.add_property(layer_id, "rect_y", PropertyType.UINT32)
+api.add_property(layer_id, "rect_w", PropertyType.UINT32)
+api.add_property(layer_id, "rect_h", PropertyType.UINT32)
+api.add_property(layer_id, "is_visible", PropertyType.BOOL)
+api.set_property_bool(layer_id, "is_visible", True)
+win_id = api.lookup_node_id("/window")
+api.link_node(layer_id, win_id)
 
 if True:
     layer_id = api.lookup_node_id("/window/layer2")
@@ -186,8 +210,6 @@ if True:
     api.link_node(obj_id, layer_id)
 
 if True:
-    set_property("/window/layer1", "is_visible", False)
-
     layer_id = api.lookup_node_id("/window/layer2")
     obj_id = api.add_node("obj", SceneNodeType.RENDER_OBJECT)
     api.add_property(obj_id, "x", PropertyType.FLOAT32)

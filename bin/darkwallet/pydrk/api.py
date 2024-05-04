@@ -6,7 +6,8 @@ class Command:
     HELLO = 0
     ADD_NODE = 1
     REMOVE_NODE = 9
-    RENAME_NODE = 23,
+    RENAME_NODE = 23
+    SCAN_DANGLING = 24
     LOOKUP_NODE_ID = 12
     ADD_PROPERTY = 11
     LINK_NODE = 2
@@ -298,6 +299,15 @@ class Api:
         serial.write_u32(req, node_id)
         serial.encode_str(req, node_name)
         self._make_request(Command.RENAME_NODE, req)
+
+    def scan_dangling(self):
+        cur = self._make_request(Command.SCAN_DANGLING, bytearray())
+        dangling_len = serial.decode_varint(cur)
+        dangling = []
+        for _ in range(dangling_len):
+            node_id = serial.read_u32(cur)
+            dangling.append(node_id)
+        return dangling
 
     def lookup_node_id(self, node_path):
         req = bytearray()

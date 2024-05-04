@@ -219,51 +219,6 @@ impl Stage {
         mouse.add_signal("move").unwrap();
         let mouse_id = mouse.id;
         scene_graph.link(mouse_id, input_id).unwrap();
-
-        let layer1 = scene_graph.add_node("layer1", SceneNodeType::RenderLayer);
-        layer1.add_property_bool("is_visible", true).unwrap();
-        layer1.add_property_u32("rect_x", 0).unwrap();
-        layer1.add_property_u32("rect_y", 0).unwrap();
-        layer1.add_property_u32("rect_w", 0).unwrap();
-        layer1.add_property_u32("rect_h", 0).unwrap();
-        let layer1_id = layer1.id;
-        scene_graph.link(layer1_id, window_id).unwrap();
-
-        let layer2 = scene_graph.add_node("layer2", SceneNodeType::RenderLayer);
-        layer2.add_property_bool("is_visible", true).unwrap();
-        layer2.add_property_u32("rect_x", 0).unwrap();
-        layer2.add_property_u32("rect_y", 0).unwrap();
-        layer2.add_property_u32("rect_w", 0).unwrap();
-        layer2.add_property_u32("rect_h", 0).unwrap();
-        let layer2_id = layer2.id;
-        scene_graph.link(layer2_id, window_id).unwrap();
-
-        let funky_square = scene_graph.add_node("funky_square", SceneNodeType::RenderObject);
-        funky_square.add_property_f32("x", 0.).unwrap();
-        funky_square.add_property_f32("y", 0.).unwrap();
-        funky_square.add_property_f32("scale", 0.).unwrap();
-        let funky_square_id = funky_square.id;
-        scene_graph.link(funky_square_id, layer1_id).unwrap();
-
-        let funky_mesh = scene_graph.add_node("mesh", SceneNodeType::RenderMesh);
-        let mut buf = vec![];
-        // top left
-        Vertex { pos: [0., 0.], color: [1., 0., 1., 1.], uv: [0., 0.] }.encode(&mut buf).unwrap();
-        // top right
-        Vertex { pos: [0.5, 0.], color: [1., 1., 0., 1.], uv: [1., 0.] }.encode(&mut buf).unwrap();
-        // bottom left
-        Vertex { pos: [0., 0.5], color: [0., 0., 0.8, 1.], uv: [0., 1.] }.encode(&mut buf).unwrap();
-        // bottom right
-        Vertex { pos: [0.5, 0.5], color: [1., 1., 0., 1.], uv: [1., 1.] }.encode(&mut buf).unwrap();
-        funky_mesh.add_property_buf("verts", buf).unwrap();
-
-        let mut buf = vec![];
-        Face { idxs: [0, 2, 1] }.encode(&mut buf).unwrap();
-        Face { idxs: [1, 2, 3] }.encode(&mut buf).unwrap();
-        funky_mesh.add_property_buf("faces", buf).unwrap();
-
-        let funky_mesh_id = funky_mesh.id;
-        scene_graph.link(funky_mesh_id, funky_square_id).unwrap();
     }
 
     fn draw_glyph(
@@ -332,19 +287,19 @@ impl Stage {
             BufferSource::slice(&indices),
         );
 
-        let texture =
-            //self.king_texture;
-            ctx.new_texture_from_rgba8(
-                font_metrics.width as u16,
-                font_metrics.height as u16,
-                &text_bitmap,
-            );
+        let texture = ctx.new_texture_from_rgba8(
+            font_metrics.width as u16,
+            font_metrics.height as u16,
+            &text_bitmap,
+        );
 
         let bindings =
             Bindings { vertex_buffers: vec![vertex_buffer], index_buffer, images: vec![texture] };
 
         ctx.apply_bindings(&bindings);
         ctx.draw(0, 6, 1);
+
+        ctx.delete_texture(texture);
     }
 
     fn create_text_node(

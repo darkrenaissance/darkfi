@@ -17,6 +17,7 @@ enum Command {
     AddNode = 1,
     RemoveNode = 9,
     RenameNode = 23,
+    ScanDangling = 24,
     LookupNodeId = 12,
     AddProperty = 11,
     LinkNode = 2,
@@ -220,6 +221,10 @@ impl ZeroMQAdapter {
                 let node_name = String::decode(&mut cur).unwrap();
                 debug!(target: "req", "{:?}({})", cmd, node_id);
                 scene_graph.rename_node(node_id, node_name)?;
+            }
+            Command::ScanDangling => {
+                let dangling = scene_graph.scan_dangling();
+                dangling.encode(&mut reply).unwrap();
             }
             Command::LookupNodeId => {
                 let node_path: String = deserialize(&payload).unwrap();

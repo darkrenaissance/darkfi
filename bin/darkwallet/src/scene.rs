@@ -268,6 +268,22 @@ impl SceneGraph {
         }
         Ok(siblings)
     }
+
+    pub fn scan_dangling(&self) -> Vec<SceneNodeId> {
+        let mut dangling = vec![];
+        for node in &self.nodes {
+            if node.id == Self::ROOT_ID {
+                continue
+            }
+            if self.freed.contains(&node.id) {
+                continue
+            }
+            if node.parents.is_empty() {
+                dangling.push(node.id);
+            }
+        }
+        dangling
+    }
 }
 
 pub type SceneNodeId = u32;
