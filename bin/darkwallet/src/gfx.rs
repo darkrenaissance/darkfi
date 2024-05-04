@@ -394,11 +394,12 @@ impl Stage {
     }
 }
 
-fn get_obj_props(obj: &SceneNode) -> Result<(f32, f32, f32)> {
+fn get_obj_props(obj: &SceneNode) -> Result<(f32, f32, f32, f32)> {
     let x = obj.get_property_f32("x")?;
     let y = obj.get_property_f32("y")?;
-    let scale = obj.get_property_f32("scale")?;
-    Ok((x, y, scale))
+    let scale_x = obj.get_property_f32("scale_x")?;
+    let scale_y = obj.get_property_f32("scale_y")?;
+    Ok((x, y, scale_x, scale_y))
 }
 
 fn get_text_props(render_text: &SceneNode) -> Result<(String, f32, [f32; 4])> {
@@ -528,13 +529,13 @@ impl EventHandler for Stage {
             self.ctx.apply_scissor_rect(rect_x as i32, rect_y as i32, rect_w as i32, rect_h as i32);
 
             'outer: for obj in layer.iter_children(&scene_graph, SceneNodeType::RenderObject) {
-                let Ok((x, y, scale)) = get_obj_props(obj) else {
+                let Ok((x, y, scale_x, scale_y)) = get_obj_props(obj) else {
                     error!("obj '{}':{} has a property error", obj.name, obj.id);
                     continue
                 };
 
                 let model = glam::Mat4::from_translation(glam::Vec3::new(x, y, 0.)) *
-                    glam::Mat4::from_scale(glam::Vec3::new(scale, scale, 1.));
+                    glam::Mat4::from_scale(glam::Vec3::new(scale_x, scale_y, 1.));
 
                 let texture = 'texture: {
                     let Some(texture_node) =

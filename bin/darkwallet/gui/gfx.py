@@ -40,6 +40,7 @@ class Layer:
         obj_id = api.add_node(name, SceneNodeType.RENDER_OBJECT)
         add_property_f32(obj_id, "x")
         add_property_f32(obj_id, "y")
-        add_property_f32(obj_id, "scale", 1.0)
+        add_property_f32(obj_id, "scale_x", 1.0)
+        add_property_f32(obj_id, "scale_y", 1.0)
         link_node(obj_id, self.id)
 
