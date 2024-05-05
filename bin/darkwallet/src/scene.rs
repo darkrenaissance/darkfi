@@ -250,7 +250,34 @@ impl SceneGraph {
             }
         }
         let node = self.get_node_mut(node_id).unwrap();
-        node.name = node_name;
+        node.name = node_name.clone();
+
+        // Now update it for all children and parents too
+        let parent_ids: Vec<_> = node.parents.iter().map(|parent_inf| parent_inf.id).collect();
+        let child_ids: Vec<_> = node.children.iter().map(|child_inf| child_inf.id).collect();
+        drop(node);
+
+        'next_parent: for parent_id in parent_ids {
+            let parent = self.get_node_mut(parent_id).unwrap();
+            for child in &mut parent.children {
+                if child.id == node_id {
+                    child.name = node_name.clone();
+                    continue 'next_parent
+                }
+            }
+            panic!("child {} not found in parent {}!", node_id, parent.id)
+        }
+
+        'next_child: for child_id in child_ids {
+            let child = self.get_node_mut(child_id).unwrap();
+            for parent in &mut child.parents {
+                if parent.id == node_id {
+                    parent.name = node_name.clone();
+                    continue 'next_child
+                }
+            }
+            panic!("parent {} not found in child {}!", node_id, child.id)
+        }
         Ok(())
     }
     fn node_siblings(&self, node_id: SceneNodeId) -> Result<Vec<SceneNodeInfo>> {

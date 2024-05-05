@@ -219,7 +219,7 @@ impl ZeroMQAdapter {
             Command::RenameNode => {
                 let node_id = SceneNodeId::decode(&mut cur).unwrap();
                 let node_name = String::decode(&mut cur).unwrap();
-                debug!(target: "req", "{:?}({})", cmd, node_id);
+                debug!(target: "req", "{:?}({}, {})", cmd, node_id, node_name);
                 scene_graph.rename_node(node_id, node_name)?;
             }
             Command::ScanDangling => {
