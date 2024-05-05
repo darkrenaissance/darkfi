@@ -351,20 +351,23 @@ impl Stage {
 
         let text_node_id = text_node.id;
 
-        for (idx, line) in layout.lines().unwrap().into_iter().enumerate() {
-            let line_node_name = format!("line.{}", idx);
-            let line_node = scene_graph.add_node(line_node_name, SceneNodeType::LinePosition);
-            line_node.add_property_u32("idx", idx as u32).unwrap();
-            line_node.add_property_f32("baseline_y", line.baseline_y).unwrap();
-            line_node.add_property_f32("padding", line.padding).unwrap();
-            line_node.add_property_f32("max_ascent", line.max_ascent).unwrap();
-            line_node.add_property_f32("min_descent", line.min_descent).unwrap();
-            line_node.add_property_f32("max_line_gap", line.max_line_gap).unwrap();
-            line_node.add_property_u32("glyph_start", line.glyph_start as u32).unwrap();
-            line_node.add_property_u32("glyph_end", line.glyph_end as u32).unwrap();
+        let lines = layout.lines();
+        if lines.is_some() {
+            for (idx, line) in lines.unwrap().into_iter().enumerate() {
+                let line_node_name = format!("line.{}", idx);
+                let line_node = scene_graph.add_node(line_node_name, SceneNodeType::LinePosition);
+                line_node.add_property_u32("idx", idx as u32).unwrap();
+                line_node.add_property_f32("baseline_y", line.baseline_y).unwrap();
+                line_node.add_property_f32("padding", line.padding).unwrap();
+                line_node.add_property_f32("max_ascent", line.max_ascent).unwrap();
+                line_node.add_property_f32("min_descent", line.min_descent).unwrap();
+                line_node.add_property_f32("max_line_gap", line.max_line_gap).unwrap();
+                line_node.add_property_u32("glyph_start", line.glyph_start as u32).unwrap();
+                line_node.add_property_u32("glyph_end", line.glyph_end as u32).unwrap();
 
-            let line_node_id = line_node.id;
-            scene_graph.link(line_node_id, text_node_id)?;
+                let line_node_id = line_node.id;
+                scene_graph.link(line_node_id, text_node_id)?;
+            }
         }
 
         scene_graph.link(font_node_id, text_node_id)?;
