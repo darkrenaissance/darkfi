@@ -8,9 +8,10 @@ def join(parent_path, child_name):
 
 def print_tree():
     root_id = api.lookup_node_id("/")
-    print_node_info(root_id)
+    print("/")
+    print_node_info(root_id, indent=1)
 
-def print_node_info(parent_id, indent=0):
+def print_node_info(parent_id, indent):
     ws = " "*4*indent
     for (child_name, child_id, child_type) in api.get_children(parent_id):
         match child_type:

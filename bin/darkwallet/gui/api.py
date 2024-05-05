@@ -13,6 +13,10 @@ def make_sub_socket():
     socket.connect("tcp://localhost:9485")
     return socket
 
+def rename_node(node, name):
+    node_id = lookup_node(node)
+    api.rename_node(node_id, name)
+
 def remove_all_slots(node_path, sig):
     node_id = api.lookup_node_id(node_path)
     for slot_id, slot in api.get_slots(node_id, sig):
@@ -29,17 +33,20 @@ def get_property(node_path, prop):
     return api.get_property(node_id, prop)
 
 def set_property(node_id, prop, val):
-    node_id = _lookup_node(node_id)
+    node_id = lookup_node(node_id)
     match val:
         case float():
             api.set_property_f32(node_id, prop, val)
         case int():
             api.set_property_u32(node_id, prop, val)
+def set_property_bool(node_id, prop, val):
+    node_id = lookup_node(node_id)
+    api.set_property_bool(node_id, prop, val)
 def set_property_f32(node_id, prop, val):
-    node_id = _lookup_node(node_id)
+    node_id = lookup_node(node_id)
     api.set_property_f32(node_id, prop, float(val))
 def set_property_u32(node_id, prop, val):
-    node_id = _lookup_node(node_id)
+    node_id = lookup_node(node_id)
     api.set_property_u32(node_id, prop, int(val))
 
 def add_property_bool(node_id, prop, val=None):
@@ -55,26 +62,34 @@ def add_property_u32(node_id, prop, val=None):
     if val is not None:
         api.set_property_u32(node_id, prop, val)
 
-def _lookup_node(node_id):
+def lookup_node(node_id):
     if isinstance(node_id, str):
         node_id = api.lookup_node_id(node_id)
     return node_id
 
 def link_node(child_id, parent_id):
-    child_id = _lookup_node(child_id)
-    parent_id = _lookup_node(parent_id)
+    child_id = lookup_node(child_id)
+    parent_id = lookup_node(parent_id)
     api.link_node(child_id, parent_id)
 def unlink_node(child_id, parent_id):
-    child_id = _lookup_node(child_id)
-    parent_id = _lookup_node(parent_id)
+    child_id = lookup_node(child_id)
+    parent_id = lookup_node(parent_id)
     api.unlink_node(child_id, parent_id)
 
+def unlink_from_parents(node_id):
+    node_id = lookup_node(node_id)
+    for (_, parent_id, _) in api.get_parents(node_id):
+        api.unlink_node(node_id, parent_id)
+
 def remove_node_recursive(node_id):
+    node_id = lookup_node(node_id)
+
     for (_, child_id, _) in api.get_children(node_id):
         # Unlink the child
         api.unlink_node(child_id, node_id)
         # Remove the node
         remove_node_recursive(child_id)
+
     # Garbage collection
     if not api.get_parents(node_id):
         api.remove_node(node_id)

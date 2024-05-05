@@ -25,6 +25,17 @@ def add_layer(layer_name):
     link_node(layer_id, "/window")
     return layer_id
 
+def add_object(layer_id, obj_name):
+    layer_id = lookup_node(layer_id)
+    obj_id = api.add_node(obj_name, SceneNodeType.RENDER_OBJECT)
+    add_property_f32(obj_id, "x")
+    add_property_f32(obj_id, "y")
+    add_property_f32(obj_id, "scale_x", 1.0)
+    add_property_f32(obj_id, "scale_y", 1.0)
+    add_property_bool(obj_id, "is_visible", True)
+    link_node(obj_id, layer_id)
+    return obj_id
+
 class Layer:
 
     def __init__(self, name):
@@ -37,10 +48,5 @@ class Layer:
         set_property_u32(self.id, "rect_h", h)
 
     def add_obj(self, name):
-        obj_id = api.add_node(name, SceneNodeType.RENDER_OBJECT)
-        add_property_f32(obj_id, "x")
-        add_property_f32(obj_id, "y")
-        add_property_f32(obj_id, "scale_x", 1.0)
-        add_property_f32(obj_id, "scale_y", 1.0)
-        link_node(obj_id, self.id)
+        return add_object(self.id, name)
 
