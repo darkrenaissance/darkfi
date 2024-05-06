@@ -195,21 +195,32 @@ impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
     /// We extract the message length from the stream and use `take()`
     /// to allocate an appropiately sized buffer as a basic DDOS protection.
     async fn trigger(&self, stream: &mut smol::io::ReadHalf<Box<dyn PtStream + 'static>>) {
-        // TODO: check the message length does not exceed some bound.
-        let len = VarInt::decode_async(stream).await.unwrap().0;
-        let mut take = stream.take(len);
+        match VarInt::decode_async(stream).await {
+            Ok(int) => {
+                // TODO: check the message length does not exceed some bound.
+                let len = int.0;
+                let mut take = stream.take(len);
 
-        // Deserialize stream into type, send down the pipes.
-        match M::decode_async(&mut take).await {
-            Ok(message) => {
-                let message = Ok(Arc::new(message));
-                self._trigger_all(message).await
+                // Deserialize stream into type, send down the pipes.
+                match M::decode_async(&mut take).await {
+                    Ok(message) => {
+                        let message = Ok(Arc::new(message));
+                        self._trigger_all(message).await
+                    }
+
+                    Err(err) => {
+                        error!(
+                            target: "net::message_subscriber::trigger()",
+                            "Unable to decode data. Dropping...: {}",
+                            err,
+                        );
+                    }
+                }
             }
-
             Err(err) => {
                 error!(
                     target: "net::message_subscriber::trigger()",
-                    "Unable to decode data. Dropping...: {}",
+                    "Unable to decode VarInt. Dropping...: {}",
                     err,
                 );
             }

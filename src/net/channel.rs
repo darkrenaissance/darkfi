@@ -285,9 +285,9 @@ impl Channel {
             return Err(Error::MalformedPacket)
         }
 
-        let len = VarInt::decode_async(stream).await.unwrap().0;
+        let len = VarInt::decode_async(stream).await?.0;
         let mut take = stream.take(len);
-        let command = String::decode_async(&mut take).await.unwrap();
+        let command = String::decode_async(&mut take).await?;
 
         Ok(command)
     }
