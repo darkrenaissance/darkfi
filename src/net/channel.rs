@@ -217,7 +217,7 @@ impl Channel {
     }
 
     /// Sends an outbound Message by writing data to the given async stream.
-    async fn send_message<M: message::Message>(&self, message: &M) -> Result<()> {
+    async fn send_message<M: message::Message>(&self, payload: &M) -> Result<()> {
         let command = M::NAME.to_string();
         assert!(!command.is_empty());
         assert!(std::mem::size_of::<usize>() <= std::mem::size_of::<u64>());
@@ -234,27 +234,21 @@ impl Channel {
 
         trace!(target: "net::channel::send_message()", "Sending magic...");
         written += MAGIC_BYTES.encode_async(stream).await?;
-
         trace!(target: "net::channel::send_message()", "Sent magic");
-        trace!(target: "net::channel::send_message()", "Sending command...");
 
-        // First encode the command to an intermediate buffer.
-        M::NAME.to_string().encode_async(&mut buffer).await?;
+        trace!(target: "net::channel::send_message()", "Sending command...");
+        written += M::NAME.to_string().encode_async(stream).await?;
+        trace!(target: "net::channel::send_message()", "Sent command: {}", M::NAME.to_string());
+
+        trace!(target: "net::channel::send_message()", "Sending payload...");
+        // First encode the payload to an intermediate buffer.
+        payload.encode_async(&mut buffer).await?;
 
         // Then extract the length of the intermediate buffer as a VarInt
-        // and write to the stream. This is the length of the command message.
-        // Then encode the command itself to the stream.
+        // and write to the stream. This is the length of the payload.
+        // Then encode the payload itself to the stream.
         written += VarInt(buffer.len() as u64).encode_async(stream).await?;
-        written += M::NAME.to_string().encode_async(stream).await?;
-
-        trace!(target: "net::channel::send_message()", "Sent command: {}", M::NAME.to_string());
-        trace!(target: "net::channel::send_message()", "Sending payload...");
-
-        // Do the same proceedure for the Message payload.
-        message.encode_async(&mut buffer).await?;
-
-        written += VarInt(buffer.len() as u64).encode_async(stream).await?;
-        written += message.encode_async(stream).await?;
+        written += payload.encode_async(stream).await?;
 
         trace!(target: "net::channel::send_message()", "Sent payload {} bytes, total bytes {}",
             buffer.len(), written);
@@ -284,9 +278,15 @@ impl Channel {
             return Err(Error::MalformedPacket)
         }
 
-        let len = VarInt::decode_async(stream).await?.0;
-        let mut take = stream.take(len);
-        let command = String::decode_async(&mut take).await?;
+        let cmd_len = VarInt::decode_async(stream).await?.0;
+        let mut take = stream.take(cmd_len);
+
+        let mut bytes = Vec::new();
+        for _ in 0..cmd_len {
+            bytes.push(AsyncDecodable::decode_async(&mut take).await?);
+        }
+
+        let command = String::from_utf8(bytes)?;
 
         Ok(command)
     }
