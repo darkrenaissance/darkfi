@@ -223,8 +223,7 @@ impl Channel {
         assert!(std::mem::size_of::<usize>() <= std::mem::size_of::<u64>());
 
         let stream = &mut *self.writer.lock().await;
-        let mut name_buffer = Vec::<u8>::new();
-        let mut msg_buffer = Vec::<u8>::new();
+        let mut buffer = Vec::<u8>::new();
         let mut written: usize = 0;
 
         dnetev!(self, SendMessage, {
@@ -239,26 +238,26 @@ impl Channel {
         trace!(target: "net::channel::send_message()", "Sent magic");
         trace!(target: "net::channel::send_message()", "Sending command...");
 
-        // First encode the name to an intermediate buffer.
-        M::NAME.to_string().encode_async(&mut name_buffer).await?;
+        // First encode the command to an intermediate buffer.
+        M::NAME.to_string().encode_async(&mut buffer).await?;
 
         // Then extract the length of the intermediate buffer as a VarInt
-        // and write to the stream. This is the length of the name message.
-        // Then encode the name itself to the stream.
-        written += VarInt(name_buffer.len() as u64).encode_async(stream).await?;
+        // and write to the stream. This is the length of the command message.
+        // Then encode the command itself to the stream.
+        written += VarInt(buffer.len() as u64).encode_async(stream).await?;
         written += M::NAME.to_string().encode_async(stream).await?;
 
         trace!(target: "net::channel::send_message()", "Sent command: {}", M::NAME.to_string());
         trace!(target: "net::channel::send_message()", "Sending payload...");
 
-        // Do the same proceedure for the Message.
-        message.encode_async(&mut msg_buffer).await?;
+        // Do the same proceedure for the Message payload.
+        message.encode_async(&mut buffer).await?;
 
-        written += VarInt(msg_buffer.len() as u64).encode_async(stream).await?;
+        written += VarInt(buffer.len() as u64).encode_async(stream).await?;
         written += message.encode_async(stream).await?;
 
         trace!(target: "net::channel::send_message()", "Sent payload {} bytes, total bytes {}",
-            msg_buffer.len(), written);
+            buffer.len(), written);
 
         stream.flush().await?;
 

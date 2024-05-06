@@ -203,8 +203,8 @@ impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
 
                 // Deserialize stream into type, send down the pipes.
                 match M::decode_async(&mut take).await {
-                    Ok(message) => {
-                        let message = Ok(Arc::new(message));
+                    Ok(payload) => {
+                        let message = Ok(Arc::new(payload));
                         self._trigger_all(message).await
                     }
 
