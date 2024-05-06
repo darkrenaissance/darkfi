@@ -1,38 +1,52 @@
-class RequestInvalidScenePath(Exception):
+class InvalidScenePath(Exception):
     pass
-class RequestNodeNotFound(Exception):
+class NodeNotFound(Exception):
     pass
-class RequestChildNodeNotFound(Exception):
+class ChildNodeNotFound(Exception):
     pass
-class RequestParentNodeNotFound(Exception):
+class ParentNodeNotFound(Exception):
     pass
-class RequestPropertyAlreadyExists(Exception):
+class PropertyAlreadyExists(Exception):
     pass
-class RequestPropertyNotFound(Exception):
+class PropertyNotFound(Exception):
     pass
-class RequestPropertyWrongType(Exception):
+class PropertyWrongType(Exception):
     pass
-class RequestSignalAlreadyExists(Exception):
+class PropertyWrongLen(Exception):
     pass
-class RequestSignalNotFound(Exception):
+class PropertyWrongIndex(Exception):
     pass
-class RequestSlotNotFound(Exception):
+class PropertyOutOfRange(Exception):
     pass
-class RequestMethodNotFound(Exception):
+class PropertyNullNotAllowed(Exception):
     pass
-class RequestNodesAreLinked(Exception):
+class PropertyIsBounded(Exception):
     pass
-class RequestNodesNotLinked(Exception):
+class PropertyWrongEnumItem(Exception):
     pass
-class RequestNodeHasParents(Exception):
+class SignalAlreadyExists(Exception):
     pass
-class RequestNodeHasChildren(Exception):
+class SignalNotFound(Exception):
     pass
-class RequestNodeParentNameConflict(Exception):
+class SlotNotFound(Exception):
     pass
-class RequestNodeChildNameConflict(Exception):
+class MethodAlreadyExists(Exception):
     pass
-class RequestNodeSiblingNameConflict(Exception):
+class MethodNotFound(Exception):
     pass
-class RequestFileNotFound(Exception):
+class NodesAreLinked(Exception):
+    pass
+class NodesNotLinked(Exception):
+    pass
+class NodeHasParents(Exception):
+    pass
+class NodeHasChildren(Exception):
+    pass
+class NodeParentNameConflict(Exception):
+    pass
+class NodeChildNameConflict(Exception):
+    pass
+class NodeSiblingNameConflict(Exception):
+    pass
+class FileNotFound(Exception):
     pass

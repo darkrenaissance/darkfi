@@ -4,59 +4,80 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, Copy, Clone, thiserror::Error)]
 pub enum Error {
     #[error("Invalid scene path")]
-    InvalidScenePath = 2,
+    InvalidScenePath = 1,
 
     #[error("Node not found")]
-    NodeNotFound = 3,
+    NodeNotFound = 2,
 
     #[error("Child node not found")]
-    ChildNodeNotFound = 4,
+    ChildNodeNotFound = 3,
 
     #[error("Parent node not found")]
-    ParentNodeNotFound = 5,
+    ParentNodeNotFound = 4,
 
     #[error("Property already exists")]
-    PropertyAlreadyExists = 6,
+    PropertyAlreadyExists = 5,
 
     #[error("Property not found")]
-    PropertyNotFound = 7,
+    PropertyNotFound = 6,
 
     #[error("Property has wrong type")]
-    PropertyWrongType = 8,
+    PropertyWrongType = 7,
+
+    #[error("Property value has the wrong length")]
+    PropertyWrongLen = 8,
+
+    #[error("Property index is wrong")]
+    PropertyWrongIndex = 9,
+
+    #[error("Property out of range")]
+    PropertyOutOfRange = 10,
+
+    #[error("Property null not allowed")]
+    PropertyNullNotAllowed = 11,
+
+    #[error("Property array is bounded length")]
+    PropertyIsBounded = 12,
+
+    #[error("Property enum item is invalid")]
+    PropertyWrongEnumItem = 13,
 
     #[error("Signal already exists")]
-    SignalAlreadyExists = 9,
+    SignalAlreadyExists = 14,
 
     #[error("Signal not found")]
-    SignalNotFound = 10,
+    SignalNotFound = 15,
 
     #[error("Slot not found")]
-    SlotNotFound = 11,
+    SlotNotFound = 16,
+
+    #[error("Signal already exists")]
+    MethodAlreadyExists = 17,
 
     #[error("Method not found")]
-    MethodNotFound = 12,
+    MethodNotFound = 18,
 
     #[error("Nodes are not linked")]
-    NodesAreLinked = 13,
+    NodesAreLinked = 19,
 
     #[error("Nodes are not linked")]
-    NodesNotLinked = 14,
+    NodesNotLinked = 20,
 
     #[error("Node has parents")]
-    NodeHasParents = 15,
+    NodeHasParents = 21,
 
     #[error("Node has children")]
-    NodeHasChildren = 16,
+    NodeHasChildren = 22,
 
     #[error("Node has a parent with this name")]
-    NodeParentNameConflict = 17,
+    NodeParentNameConflict = 23,
 
     #[error("Node has a child with this name")]
-    NodeChildNameConflict = 18,
+    NodeChildNameConflict = 24,
 
     #[error("Node has a sibling with this name")]
-    NodeSiblingNameConflict = 19,
+    NodeSiblingNameConflict = 25,
 
     #[error("File not found")]
-    FileNotFound = 20,
+    FileNotFound = 26,
 }

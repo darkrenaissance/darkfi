@@ -28,6 +28,11 @@ class App(EventLoop):
 
         self.cursor_layer = Layer("cursor_layer")
         self.cursor_layer.add_obj("cursor")
+        self.cursor_layer.resize(w, h)
+
+        self.rounded_box_layer = Layer("rounded_box_layer")
+        self.rounded_box_layer.add_obj("box")
+        self.rounded_box_layer.resize(w, h)
 
         self.user_input = ""
         self.last_keypress_time = 0
@@ -35,7 +40,9 @@ class App(EventLoop):
     def resize_event(self, w, h):
         self.chatbox_layer.resize(w, h)
         self.cursor_layer.resize(w, h)
+        self.rounded_box_layer.resize(w, h)
         resize_box()
+        resize_rounded_box()
         draw_txt(self.user_input)
 
     def mouse_click(self, x, y):
@@ -108,8 +115,19 @@ def draw_txt(user_input):
     rename_node("/window/chatbox_layer/user_input2/txt2", "txt")
     rename_node("/window/chatbox_layer/user_input2",      "user_input")
 
+    reposition_cursor()
+
+def reposition_cursor():
+    layer_h = get_property("/window/chatbox_layer", "rect_h")
+    y = layer_h - 20 - 30
+
     # Move the cursor
-    text_px_w = get_property("/window/chatbox_layer/user_input/txt", "width")
+    text_id = api.lookup_node_id("/window/chatbox_layer/user_input/txt")
+    text_px_w = 0
+    user_input = ""
+    if text_id is not None:
+        text_px_w = get_property(text_id, "width")
+        user_input = get_property(text_id, "text")
     x = text_px_w + 25
     if user_input and user_input[-1] == " ":
         x += 10
@@ -152,7 +170,7 @@ def resize_box():
 
     box_h = 60
     # Inner padding, so box inside will be (box_h - 2*padding) px high
-    padding = 5
+    padding = 10
 
     # Lets add a poly - must be counterclockwise
     x, y = 0, layer_h - box_h
@@ -177,12 +195,102 @@ def resize_box():
     api.set_property_buffer(mesh_id, "verts", vert1 + vert2 + vert3 + vert4)
     api.set_property_buffer(mesh_id, "faces", face(0, 2, 1) + face(1, 2, 3))
 
-def main():
-    garbage_collect()
+def draw_rounded_box():
+    mesh_id = api.add_node("box", SceneNodeType.RENDER_MESH)
+    api.add_property(mesh_id, "verts", PropertyType.BUFFER)
+    api.add_property(mesh_id, "faces", PropertyType.BUFFER)
+    link_node(mesh_id, "/window/rounded_box_layer/box")
 
-    app = App()
-    draw_box()
-    draw_cursor()
+    mesh_id = api.add_node("inner_box", SceneNodeType.RENDER_MESH)
+    api.add_property(mesh_id, "verts", PropertyType.BUFFER)
+    api.add_property(mesh_id, "faces", PropertyType.BUFFER)
+    link_node(mesh_id, "/window/rounded_box_layer/box")
+
+    resize_rounded_box()
+
+def resize_rounded_box():
+    mesh_id = api.lookup_node_id("/window/rounded_box_layer/box/box")
+
+    layer_w = get_property("/window/rounded_box_layer", "rect_w")
+    layer_h = get_property("/window/rounded_box_layer", "rect_h")
+
+    # Inner padding, so box inside will be (box_h - 2*padding) px high
+    padding = 5
+
+    bevel = 20
+
+    # Lets add a poly - must be counterclockwise
+    x, y = layer_w/4, layer_h/4
+    w, h = layer_w/2, layer_h/2
+    y0 = y + bevel
+    h0 = h - 2*bevel
+    verts = (
+        vertex(x,     y0,     1, 1, 1, 1, 0, 0) +
+        vertex(x + w, y0,     1, 1, 1, 1, 1, 0) +
+        vertex(x,     y0 + h0, 1, 1, 1, 1, 0, 1) +
+        vertex(x + w, y0 + h0, 1, 1, 1, 1, 1, 1)
+    )
+    faces = face(0, 2, 1) + face(1, 2, 3)
+    x0 = x + bevel
+    w0 = w - 2*bevel
+    h0 = bevel
+    verts += (
+        vertex(x0,      y,     1, 1, 1, 1, 0, 0) +
+        vertex(x0 + w0, y,     1, 1, 1, 1, 1, 0) +
+        vertex(x0,      y + h0, 1, 1, 1, 1, 0, 1) +
+        vertex(x0 + w0, y + h0, 1, 1, 1, 1, 1, 1)
+    )
+    o = 4
+    faces += face(o + 0, o + 2, o + 1) + face(o + 1, o + 2, o + 3)
+    y0 = y + h - bevel
+    x0 = x + bevel
+    w0 = w - 2*bevel
+    h0 = bevel
+    verts += (
+        vertex(x0,      y0,     1, 1, 1, 1, 0, 0) +
+        vertex(x0 + w0, y0,     1, 1, 1, 1, 1, 0) +
+        vertex(x0,      y0 + h0, 1, 1, 1, 1, 0, 1) +
+        vertex(x0 + w0, y0 + h0, 1, 1, 1, 1, 1, 1)
+    )
+    o = 8
+    faces += face(o + 0, o + 2, o + 1) + face(o + 1, o + 2, o + 3)
+    api.set_property_buffer(mesh_id, "verts", verts)
+    api.set_property_buffer(mesh_id, "faces", faces)
+
+    # Second mesh
+    mesh_id = api.lookup_node_id("/window/rounded_box_layer/box/inner_box")
+
+    x, y = x + padding, y + padding
+    w -= 2*padding
+    h -= 2*padding
+    vert1 = vertex(x,     y,     0, 0, 0, 1, 0, 0)
+    vert2 = vertex(x + w, y,     0, 0, 0, 1, 1, 0)
+    vert3 = vertex(x,     y + h, 0, 0, 0, 1, 0, 1)
+    vert4 = vertex(x + w, y + h, 0.3, 0.3, 0.3, 1, 1, 1)
+    #api.set_property_buffer(mesh_id, "verts", vert1 + vert2 + vert3 + vert4)
+    #api.set_property_buffer(mesh_id, "faces", face(0, 2, 1) + face(1, 2, 3))
+
+def main():
+    node_id = api.add_node("foo", SceneNodeType.WINDOW)
+    prop = Property(
+        "myprop", PropertyType.FLOAT32, PropertySubType.NULL,
+        None,
+        "myprop", "",
+        False, 2, None, None, []
+    )
+    api.add_property(1, prop)
+    api.link_node(node_id, 0)
+    api.set_property_f32(1, "myprop", 0, 4.0)
+    api.set_property_f32(1, "myprop", 1, 110.0)
+    print(api.get_property_value(1, "myprop"))
     print_tree()
-    app.run()
+    #garbage_collect()
+
+    #app = App()
+    #draw_box()
+    #draw_rounded_box()
+    #draw_cursor()
+    #reposition_cursor()
+    ##print_tree()
+    #app.run()
 

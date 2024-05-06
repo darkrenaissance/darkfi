@@ -14,6 +14,8 @@ use net::ZeroMQAdapter;
 mod scene;
 use scene::{SceneGraph, SceneGraphPtr};
 
+mod prop;
+
 mod shader;
 
 #[macro_use]
@@ -31,6 +33,8 @@ fn init_zmq(scene_graph: SceneGraphPtr) {
 
 fn main() {
     let scene_graph = Arc::new(Mutex::new(SceneGraph::new()));
-    init_zmq(scene_graph.clone());
-    init_gui(scene_graph);
+    //init_zmq(scene_graph.clone());
+    //init_gui(scene_graph);
+    let mut zmq_rpc = ZeroMQAdapter::new(scene_graph);
+    zmq_rpc.poll();
 }

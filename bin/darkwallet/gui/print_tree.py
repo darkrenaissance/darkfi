@@ -49,19 +49,19 @@ def print_node_info(parent_id, indent):
 
         print_node_info(child_id, indent+1)
 
-    for prop_name, prop_type in api.get_properties(parent_id):
-        if prop_type == PropertyType.STR:
-            prop_val = api.get_property(parent_id, prop_name)
-            prop_val = f" = \"{prop_val}\""
-        elif prop_type != PropertyType.BUFFER:
-            prop_val = api.get_property(parent_id, prop_name)
-            prop_val = f" = {prop_val}"
-        else:
-            prop_val = ""
+    #for prop_name, prop_type in api.get_properties(parent_id):
+    #    if prop_type == PropertyType.STR:
+    #        prop_val = api.get_property(parent_id, prop_name)
+    #        prop_val = f" = \"{prop_val}\""
+    #    elif prop_type != PropertyType.BUFFER:
+    #        prop_val = api.get_property(parent_id, prop_name)
+    #        prop_val = f" = {prop_val}"
+    #    else:
+    #        prop_val = ""
 
-        prop_type = PropertyType.to_str(prop_type)
+    #    prop_type = PropertyType.to_str(prop_type)
 
-        print(f"{ws}{prop_name}: {prop_type}{prop_val}")
+    #    print(f"{ws}{prop_name}: {prop_type}{prop_val}")
 
     for sig in api.get_signals(parent_id):
         print(f"{ws}~{sig}")

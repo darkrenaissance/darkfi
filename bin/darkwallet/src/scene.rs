@@ -1,4 +1,3 @@
-use crate::error::{Error, Result};
 use atomic_float::AtomicF32;
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use std::{
@@ -8,6 +7,11 @@ use std::{
         atomic::{AtomicBool, AtomicU32, Ordering},
         Arc, Mutex, MutexGuard,
     },
+};
+
+use crate::{
+    error::{Error, Result},
+    prop::{Property, PropertyType},
 };
 
 pub struct ScenePath(Vec<String>);
@@ -397,43 +401,11 @@ impl SceneNode {
             .map(|child_inf| scene_graph.get_node(child_inf.id).unwrap())
     }
 
-    pub fn add_property<S: Into<String>>(
-        &mut self,
-        name: S,
-        typ: PropertyType,
-    ) -> Result<Arc<Property>> {
-        let name = name.into();
-        if self.has_property(&name) {
+    pub fn add_property(&mut self, prop: Property) -> Result<()> {
+        if self.has_property(&prop.name) {
             return Err(Error::PropertyAlreadyExists);
         }
-        let prop = Property::new(name, typ);
-        self.props.push(prop.clone());
-        Ok(prop)
-    }
-
-    // Convenience methods
-    pub fn add_property_buf(&mut self, name: &str, val: Vec<u8>) -> Result<()> {
-        self.add_property(name, PropertyType::Buffer)?.set_buf(val)?;
-        Ok(())
-    }
-    pub fn add_property_bool(&mut self, name: &str, val: bool) -> Result<()> {
-        self.add_property(name, PropertyType::Bool)?.set_bool(val)?;
-        Ok(())
-    }
-    pub fn add_property_u32(&mut self, name: &str, val: u32) -> Result<()> {
-        self.add_property(name, PropertyType::Uint32)?.set_u32(val)?;
-        Ok(())
-    }
-    pub fn add_property_f32(&mut self, name: &str, val: f32) -> Result<()> {
-        self.add_property(name, PropertyType::Float32)?.set_f32(val)?;
-        Ok(())
-    }
-    pub fn add_property_str<S: Into<String>>(&mut self, name: &str, val: S) -> Result<()> {
-        self.add_property(name, PropertyType::Str)?.set_str(val)?;
-        Ok(())
-    }
-    pub fn add_property_node_id(&mut self, name: &str, val: SceneNodeId) -> Result<()> {
-        self.add_property(name, PropertyType::SceneNodeId)?.set_node_id(val)?;
+        self.props.push(Arc::new(prop));
         Ok(())
     }
 
@@ -447,43 +419,51 @@ impl SceneNode {
 
     // Convenience methods
     pub fn get_property_bool(&self, name: &str) -> Result<bool> {
-        self.get_property(name).ok_or(Error::PropertyNotFound)?.get_bool()
+        self.get_property(name).ok_or(Error::PropertyNotFound)?.get_bool(0)
     }
     pub fn get_property_u32(&self, name: &str) -> Result<u32> {
-        self.get_property(name).ok_or(Error::PropertyNotFound)?.get_u32()
+        self.get_property(name).ok_or(Error::PropertyNotFound)?.get_u32(0)
     }
     pub fn get_property_f32(&self, name: &str) -> Result<f32> {
-        self.get_property(name).ok_or(Error::PropertyNotFound)?.get_f32()
+        self.get_property(name).ok_or(Error::PropertyNotFound)?.get_f32(0)
     }
     pub fn get_property_str(&self, name: &str) -> Result<String> {
-        self.get_property(name).ok_or(Error::PropertyNotFound)?.get_str()
+        self.get_property(name).ok_or(Error::PropertyNotFound)?.get_str(0)
     }
     pub fn get_property_node_id(&self, name: &str) -> Result<SceneNodeId> {
-        self.get_property(name).ok_or(Error::PropertyNotFound)?.get_node_id()
+        self.get_property(name).ok_or(Error::PropertyNotFound)?.get_node_id(0)
     }
-    // Setters
-    pub fn set_property_bool(&self, name: &str, val: bool) -> Result<()> {
-        self.get_property(name).ok_or(Error::PropertyNotFound)?.set_bool(val)
-    }
-    pub fn set_property_u32(&self, name: &str, val: u32) -> Result<()> {
-        self.get_property(name).ok_or(Error::PropertyNotFound)?.set_u32(val)
-    }
-    pub fn set_property_f32(&self, name: &str, val: f32) -> Result<()> {
-        self.get_property(name).ok_or(Error::PropertyNotFound)?.set_f32(val)
-    }
-    pub fn set_property_str<S: Into<String>>(&self, name: &str, val: S) -> Result<()> {
-        self.get_property(name).ok_or(Error::PropertyNotFound)?.set_str(val)
-    }
-    pub fn set_property_node_id(&self, name: &str, val: SceneNodeId) -> Result<()> {
-        self.get_property(name).ok_or(Error::PropertyNotFound)?.set_node_id(val)
-    }
+    //// Setters
+    //pub fn set_property_bool(&self, name: &str, val: bool) -> Result<()> {
+    //    self.get_property(name).ok_or(Error::PropertyNotFound)?.set_bool(val)
+    //}
+    //pub fn set_property_u32(&self, name: &str, val: u32) -> Result<()> {
+    //    self.get_property(name).ok_or(Error::PropertyNotFound)?.set_u32(val)
+    //}
+    //pub fn set_property_f32(&self, name: &str, val: f32) -> Result<()> {
+    //    self.get_property(name).ok_or(Error::PropertyNotFound)?.set_f32(val)
+    //}
+    //pub fn set_property_str<S: Into<String>>(&self, name: &str, val: S) -> Result<()> {
+    //    self.get_property(name).ok_or(Error::PropertyNotFound)?.set_str(val)
+    //}
+    //pub fn set_property_node_id(&self, name: &str, val: SceneNodeId) -> Result<()> {
+    //    self.get_property(name).ok_or(Error::PropertyNotFound)?.set_node_id(val)
+    //}
 
-    pub fn add_signal<S: Into<String>>(&mut self, name: S) -> Result<()> {
+    pub fn add_signal<S: Into<String>>(
+        &mut self,
+        name: S,
+        fmt: Vec<(S, S, PropertyType)>,
+    ) -> Result<()> {
         let name = name.into();
         if self.has_signal(&name) {
             return Err(Error::SignalAlreadyExists);
         }
-        self.sigs.push(Signal { name: name.into(), slots: vec![], freed: vec![] });
+        let fmt = fmt
+            .into_iter()
+            .map(|(n, d, t)| CallArg { name: n.into(), desc: d.into(), typ: t })
+            .collect();
+        self.sigs.push(Signal { name: name.into(), fmt, slots: vec![], freed: vec![] });
         Ok(())
     }
 
@@ -530,12 +510,23 @@ impl SceneNode {
     pub fn add_method<S: Into<String>>(
         &mut self,
         name: S,
-        args: Vec<(S, PropertyType)>,
-        result: Vec<(S, PropertyType)>,
-    ) {
-        let args = args.into_iter().map(|(s, p)| (s.into(), p)).collect();
-        let result = result.into_iter().map(|(s, p)| (s.into(), p)).collect();
-        self.methods.push(Method { name: name.into(), args, result, queue: vec![] })
+        args: Vec<(S, S, PropertyType)>,
+        result: Vec<(S, S, PropertyType)>,
+    ) -> Result<()> {
+        let name = name.into();
+        if self.has_signal(&name) {
+            return Err(Error::MethodAlreadyExists);
+        }
+        let args = args
+            .into_iter()
+            .map(|(n, d, t)| CallArg { name: n.into(), desc: d.into(), typ: t })
+            .collect();
+        let result = result
+            .into_iter()
+            .map(|(n, d, t)| CallArg { name: n.into(), desc: d.into(), typ: t })
+            .collect();
+        self.methods.push(Method { name: name.into(), args, result, queue: vec![] });
+        Ok(())
     }
 
     pub fn get_method(&self, name: &str) -> Option<&Method> {
@@ -557,165 +548,11 @@ impl SceneNode {
     }
 }
 
-type BufferGuard<'a> = MutexGuard<'a, Vec<u8>>;
-
-#[derive(Debug, Copy, Clone, PartialEq, SerialEncodable, SerialDecodable)]
-#[repr(u8)]
-pub enum PropertyType {
-    Null = 0,
-    Buffer = 1,
-    Bool = 2,
-    Uint32 = 3,
-    Float32 = 4,
-    Str = 5,
-    SceneNodeId = 6,
-}
-
-pub enum PropertyValue {
-    Null,
-    Buffer(Mutex<Vec<u8>>),
-    Bool(AtomicBool),
-    Uint32(AtomicU32),
-    Float32(AtomicF32),
-    Str(Mutex<String>),
-    SceneNodeId(AtomicU32),
-}
-
-pub struct Property {
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+pub struct CallArg {
     pub name: String,
-    //typ: PropertyType,
-    pub val: PropertyValue,
-}
-
-impl Property {
-    fn new(name: String, typ: PropertyType) -> Arc<Self> {
-        let val = match typ {
-            PropertyType::Null => PropertyValue::Null,
-            PropertyType::Buffer => PropertyValue::Buffer(Mutex::new(Vec::new())),
-            PropertyType::Bool => PropertyValue::Bool(AtomicBool::new(false)),
-            PropertyType::Uint32 => PropertyValue::Uint32(AtomicU32::new(0)),
-            PropertyType::Float32 => PropertyValue::Float32(AtomicF32::new(0.)),
-            PropertyType::Str => PropertyValue::Str(Mutex::new(String::new())),
-            PropertyType::SceneNodeId => PropertyValue::SceneNodeId(AtomicU32::new(0)),
-        };
-        Arc::new(Self { name, val })
-    }
-
-    pub fn get_type(&self) -> PropertyType {
-        match self.val {
-            PropertyValue::Null => PropertyType::Null,
-            PropertyValue::Buffer(_) => PropertyType::Buffer,
-            PropertyValue::Bool(_) => PropertyType::Bool,
-            PropertyValue::Uint32(_) => PropertyType::Uint32,
-            PropertyValue::Float32(_) => PropertyType::Float32,
-            PropertyValue::Str(_) => PropertyType::Str,
-            PropertyValue::SceneNodeId(_) => PropertyType::SceneNodeId,
-        }
-    }
-
-    pub fn get_buf<'a>(&'a self) -> Result<BufferGuard<'a>> {
-        match &self.val {
-            PropertyValue::Buffer(propval) => Ok(propval.lock().unwrap()),
-            _ => Err(Error::PropertyWrongType),
-        }
-    }
-
-    pub fn get_bool(&self) -> Result<bool> {
-        match &self.val {
-            PropertyValue::Bool(propval) => Ok(propval.load(Ordering::SeqCst)),
-            _ => Err(Error::PropertyWrongType),
-        }
-    }
-
-    pub fn get_u32(&self) -> Result<u32> {
-        match &self.val {
-            PropertyValue::Uint32(propval) => Ok(propval.load(Ordering::SeqCst)),
-            _ => Err(Error::PropertyWrongType),
-        }
-    }
-
-    pub fn get_f32(&self) -> Result<f32> {
-        match &self.val {
-            PropertyValue::Float32(propval) => Ok(propval.load(Ordering::SeqCst)),
-            _ => Err(Error::PropertyWrongType),
-        }
-    }
-
-    pub fn get_str(&self) -> Result<String> {
-        match &self.val {
-            PropertyValue::Str(propval) => Ok(propval.lock().unwrap().clone()),
-            _ => Err(Error::PropertyWrongType),
-        }
-    }
-
-    pub fn get_node_id(&self) -> Result<SceneNodeId> {
-        match &self.val {
-            PropertyValue::SceneNodeId(propval) => Ok(propval.load(Ordering::SeqCst)),
-            _ => Err(Error::PropertyWrongType),
-        }
-    }
-
-    pub fn set_buf(&self, val: Vec<u8>) -> Result<()> {
-        match &self.val {
-            PropertyValue::Buffer(propval) => {
-                let mut buf = propval.lock().unwrap();
-                let _ = std::mem::replace(&mut *buf, val);
-                Ok(())
-            }
-            _ => Err(Error::PropertyWrongType),
-        }
-    }
-
-    pub fn set_bool(&self, val: bool) -> Result<()> {
-        match &self.val {
-            PropertyValue::Bool(propval) => {
-                propval.store(val, Ordering::SeqCst);
-                Ok(())
-            }
-            _ => Err(Error::PropertyWrongType),
-        }
-    }
-
-    pub fn set_u32(&self, val: u32) -> Result<()> {
-        match &self.val {
-            PropertyValue::Uint32(propval) => {
-                propval.store(val, Ordering::SeqCst);
-                Ok(())
-            }
-            _ => Err(Error::PropertyWrongType),
-        }
-    }
-
-    pub fn set_f32(&self, val: f32) -> Result<()> {
-        match &self.val {
-            PropertyValue::Float32(propval) => {
-                propval.store(val, Ordering::SeqCst);
-                Ok(())
-            }
-            _ => Err(Error::PropertyWrongType),
-        }
-    }
-
-    pub fn set_str<S: Into<String>>(&self, val: S) -> Result<()> {
-        match &self.val {
-            PropertyValue::Str(propval) => {
-                let mut pv = propval.lock().unwrap();
-                *pv = val.into();
-                Ok(())
-            }
-            _ => Err(Error::PropertyWrongType),
-        }
-    }
-
-    pub fn set_node_id(&self, val: SceneNodeId) -> Result<()> {
-        match &self.val {
-            PropertyValue::SceneNodeId(propval) => {
-                propval.store(val, Ordering::SeqCst);
-                Ok(())
-            }
-            _ => Err(Error::PropertyWrongType),
-        }
-    }
+    pub desc: String,
+    pub typ: PropertyType,
 }
 
 type SlotFn = Box<dyn Fn() + Send>;
@@ -734,6 +571,7 @@ impl Slot {
 
 pub struct Signal {
     pub name: String,
+    pub fmt: Vec<CallArg>,
     slots: Vec<Slot>,
     freed: Vec<SlotId>,
 }
@@ -768,7 +606,7 @@ type MethodResponseFn = Box<dyn Fn(Result<Vec<u8>>) + Send>;
 
 pub struct Method {
     pub name: String,
-    pub args: Vec<(String, PropertyType)>,
-    pub result: Vec<(String, PropertyType)>,
+    pub args: Vec<CallArg>,
+    pub result: Vec<CallArg>,
     pub queue: Vec<(Vec<u8>, MethodResponseFn)>,
 }

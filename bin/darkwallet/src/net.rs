@@ -1,4 +1,4 @@
-use darkfi_serial::{deserialize, Decodable, Encodable, SerialDecodable};
+use darkfi_serial::{deserialize, Decodable, Encodable, SerialDecodable, VarInt};
 use std::{
     io::Cursor,
     sync::{atomic::Ordering, mpsc},
@@ -7,7 +7,8 @@ use std::{
 
 use crate::{
     error::{Error, Result},
-    scene::{PropertyType, PropertyValue, SceneGraphPtr, SceneNodeId, SceneNodeType, Slot, SlotId},
+    prop::{Property, PropertySubType, PropertyType, PropertyValue},
+    scene::{SceneGraphPtr, SceneNodeId, SceneNodeType, Slot, SlotId},
 };
 
 #[derive(Debug, SerialDecodable)]
@@ -26,8 +27,8 @@ enum Command {
     GetChildren = 4,
     GetParents = 5,
     GetProperties = 3,
-    GetProperty = 6,
-    SetProperty = 7,
+    GetPropertyValue = 6,
+    SetPropertyValue = 7,
     GetSignals = 14,
     RegisterSlot = 15,
     UnregisterSlot = 16,
@@ -37,6 +38,14 @@ enum Command {
     GetMethod = 21,
     CallMethod = 22,
 }
+
+// Missing calls todo:
+// GetPropLen
+// UnsetProperty
+// SetPropertyNull
+// PropertyPushNull
+// PropertyPush
+// PropertyIsUnset
 
 pub struct ZeroMQAdapter {
     // req-reply commands
@@ -156,52 +165,103 @@ impl ZeroMQAdapter {
                 debug!(target: "req", "{:?}({})", cmd, node_id);
 
                 let node = scene_graph.get_node(node_id).ok_or(Error::NodeNotFound)?;
-                let mut props = vec![];
+                //let mut props = vec![];
                 for prop in &node.props {
-                    props.push((prop.name.clone(), prop.get_type() as u8));
+                    //props.push((prop.name.clone(), prop.get_type() as u8));
                 }
-                props.encode(&mut reply).unwrap();
+                //props.encode(&mut reply).unwrap();
             }
-            Command::GetProperty => {
+            Command::GetPropertyValue => {
                 let node_id = SceneNodeId::decode(&mut cur).unwrap();
                 let prop_name = String::decode(&mut cur).unwrap();
                 debug!(target: "req", "{:?}({}, {})", cmd, node_id, prop_name);
 
                 let node = scene_graph.get_node(node_id).ok_or(Error::NodeNotFound)?;
                 let prop = node.get_property(&prop_name).ok_or(Error::PropertyNotFound)?;
-                match &prop.val {
-                    PropertyValue::Null => {
-                        0u8.encode(&mut reply).unwrap();
+                prop.typ.encode(&mut reply).unwrap();
+                VarInt(prop.get_len() as u64).encode(&mut reply).unwrap();
+                match prop.typ {
+                    PropertyType::Null => {}
+                    PropertyType::Bool => {
+                        for i in 0..prop.get_len() {
+                            match prop.get_bool_opt(i).unwrap() {
+                                Some(v) => {
+                                    true.encode(&mut reply).unwrap();
+                                    v.encode(&mut reply).unwrap();
+                                }
+                                None => {
+                                    false.encode(&mut reply).unwrap();
+                                }
+                            }
+                        }
                     }
-                    PropertyValue::Buffer(_) => {
-                        1u8.encode(&mut reply).unwrap();
+                    PropertyType::Uint32 => {
+                        for i in 0..prop.get_len() {
+                            match prop.get_u32_opt(i).unwrap() {
+                                Some(v) => {
+                                    true.encode(&mut reply).unwrap();
+                                    v.encode(&mut reply).unwrap();
+                                }
+                                None => {
+                                    false.encode(&mut reply).unwrap();
+                                }
+                            }
+                        }
                     }
-                    PropertyValue::Bool(val) => {
-                        3u8.encode(&mut reply).unwrap();
-                        let val = val.load(Ordering::SeqCst);
-                        val.encode(&mut reply).unwrap();
+                    PropertyType::Float32 => {
+                        for i in 0..prop.get_len() {
+                            match prop.get_f32_opt(i).unwrap() {
+                                Some(v) => {
+                                    true.encode(&mut reply).unwrap();
+                                    v.encode(&mut reply).unwrap();
+                                }
+                                None => {
+                                    false.encode(&mut reply).unwrap();
+                                }
+                            }
+                        }
                     }
-                    PropertyValue::Uint32(val) => {
-                        2u8.encode(&mut reply).unwrap();
-                        let val = val.load(Ordering::SeqCst);
-                        val.encode(&mut reply).unwrap();
+                    PropertyType::Str => {
+                        for i in 0..prop.get_len() {
+                            match prop.get_str_opt(i).unwrap() {
+                                Some(v) => {
+                                    true.encode(&mut reply).unwrap();
+                                    v.encode(&mut reply).unwrap();
+                                }
+                                None => {
+                                    false.encode(&mut reply).unwrap();
+                                }
+                            }
+                        }
                     }
-                    PropertyValue::Float32(val) => {
-                        4u8.encode(&mut reply).unwrap();
-                        let val = val.load(Ordering::SeqCst);
-                        val.encode(&mut reply).unwrap();
+                    PropertyType::Enum => {
+                        for i in 0..prop.get_len() {
+                            match prop.get_enum_opt(i).unwrap() {
+                                Some(v) => {
+                                    true.encode(&mut reply).unwrap();
+                                    v.encode(&mut reply).unwrap();
+                                }
+                                None => {
+                                    false.encode(&mut reply).unwrap();
+                                }
+                            }
+                        }
                     }
-                    PropertyValue::Str(val) => {
-                        5u8.encode(&mut reply).unwrap();
-                        let val = val.lock().unwrap();
-                        val.encode(&mut reply).unwrap();
+                    PropertyType::Buffer => {}
+                    PropertyType::SceneNodeId => {
+                        for i in 0..prop.get_len() {
+                            match prop.get_node_id_opt(i).unwrap() {
+                                Some(v) => {
+                                    true.encode(&mut reply).unwrap();
+                                    v.encode(&mut reply).unwrap();
+                                }
+                                None => {
+                                    false.encode(&mut reply).unwrap();
+                                }
+                            }
+                        }
                     }
-                    PropertyValue::SceneNodeId(val) => {
-                        6u8.encode(&mut reply).unwrap();
-                        let val = val.load(Ordering::SeqCst);
-                        val.encode(&mut reply).unwrap();
-                    }
-                };
+                }
             }
             Command::AddNode => {
                 let node_name = String::decode(&mut cur).unwrap();
@@ -236,10 +296,90 @@ impl ZeroMQAdapter {
                 let node_id = SceneNodeId::decode(&mut cur).unwrap();
                 let prop_name = String::decode(&mut cur).unwrap();
                 let prop_type = PropertyType::decode(&mut cur).unwrap();
-                debug!(target: "req", "{:?}({}, {}, {:?})", cmd, node_id, prop_name, prop_type);
+                let prop_subtype = PropertySubType::decode(&mut cur).unwrap();
+
+                debug!(target: "req", "{:?}({}, {}, {:?}, {:?}, ...)", cmd, node_id, prop_name, prop_type, prop_subtype);
+                let mut prop = Property::new(prop_name, prop_type, prop_subtype);
+
+                let prop_array_len = u32::decode(&mut cur).unwrap();
+                prop.set_array_len(prop_array_len as usize);
+
+                let prop_defaults_is_some = bool::decode(&mut cur).unwrap();
+                if prop_defaults_is_some {
+                    let prop_defaults_len = VarInt::decode(&mut cur).unwrap();
+                    match prop_type {
+                        PropertyType::Uint32 => {
+                            let mut prop_defaults = vec![];
+                            for _ in 0..prop_defaults_len.0 {
+                                prop_defaults.push(u32::decode(&mut cur).unwrap());
+                            }
+                            prop.set_defaults_u32(prop_defaults)?;
+                        }
+                        PropertyType::Float32 => {
+                            let mut prop_defaults = vec![];
+                            for _ in 0..prop_defaults_len.0 {
+                                prop_defaults.push(f32::decode(&mut cur).unwrap());
+                            }
+                            prop.set_defaults_f32(prop_defaults)?;
+                        }
+                        _ => return Err(Error::PropertyWrongType),
+                    }
+                }
+
+                let prop_ui_name = String::decode(&mut cur).unwrap();
+                let prop_desc = String::decode(&mut cur).unwrap();
+                let prop_is_null_allowed = bool::decode(&mut cur).unwrap();
+
+                match prop_type {
+                    PropertyType::Uint32 => {
+                        let min_is_some = bool::decode(&mut cur).unwrap();
+                        let min = if min_is_some {
+                            let min = u32::decode(&mut cur).unwrap();
+                            Some(PropertyValue::Uint32(min))
+                        } else {
+                            None
+                        };
+                        let max_is_some = bool::decode(&mut cur).unwrap();
+                        let max = if max_is_some {
+                            let max = u32::decode(&mut cur).unwrap();
+                            Some(PropertyValue::Uint32(max))
+                        } else {
+                            None
+                        };
+                        prop.min_val = min;
+                        prop.max_val = max;
+                    }
+                    PropertyType::Float32 => {
+                        let min_is_some = bool::decode(&mut cur).unwrap();
+                        let min = if min_is_some {
+                            let min = f32::decode(&mut cur).unwrap();
+                            Some(PropertyValue::Float32(min))
+                        } else {
+                            None
+                        };
+                        let max_is_some = bool::decode(&mut cur).unwrap();
+                        let max = if max_is_some {
+                            let max = f32::decode(&mut cur).unwrap();
+                            Some(PropertyValue::Float32(max))
+                        } else {
+                            None
+                        };
+                        prop.min_val = min;
+                        prop.max_val = max;
+                    }
+                    _ => return Err(Error::PropertyWrongType),
+                }
+
+                let prop_enum_items = Vec::<String>::decode(&mut cur).unwrap();
 
                 let node = scene_graph.get_node_mut(node_id).ok_or(Error::NodeNotFound)?;
-                node.add_property(prop_name, prop_type)?;
+
+                prop.set_ui_text(prop_ui_name, prop_desc);
+                prop.is_null_allowed = prop_is_null_allowed;
+                if !prop_enum_items.is_empty() {
+                    prop.set_enum_items(prop_enum_items)?;
+                }
+                node.add_property(prop)?;
             }
             Command::LinkNode => {
                 let child_id = SceneNodeId::decode(&mut cur).unwrap();
@@ -253,39 +393,40 @@ impl ZeroMQAdapter {
                 debug!(target: "req", "{:?}({}, {})", cmd, child_id, parent_id);
                 scene_graph.unlink(child_id, parent_id)?;
             }
-            Command::SetProperty => {
+            Command::SetPropertyValue => {
                 let node_id = SceneNodeId::decode(&mut cur).unwrap();
                 let prop_name = String::decode(&mut cur).unwrap();
+                let prop_i = u32::decode(&mut cur).unwrap() as usize;
                 debug!(target: "req", "{:?}({}, {})", cmd, node_id, prop_name);
 
                 let node = scene_graph.get_node_mut(node_id).ok_or(Error::NodeNotFound)?;
                 let prop = node.get_property(&prop_name).ok_or(Error::PropertyNotFound)?;
 
-                match prop.get_type() {
+                match prop.typ {
                     PropertyType::Null => {}
-                    PropertyType::Buffer => {
-                        let val = Vec::<u8>::decode(&mut cur).unwrap();
-                        prop.set_buf(val)?;
-                    }
                     PropertyType::Bool => {
                         let val = bool::decode(&mut cur).unwrap();
-                        prop.set_bool(val)?;
+                        prop.set_bool(prop_i, val)?;
                     }
                     PropertyType::Uint32 => {
                         let val = u32::decode(&mut cur).unwrap();
-                        prop.set_u32(val)?;
+                        prop.set_u32(prop_i, val)?;
                     }
                     PropertyType::Float32 => {
                         let val = f32::decode(&mut cur).unwrap();
-                        prop.set_f32(val)?;
+                        prop.set_f32(prop_i, val)?;
                     }
-                    PropertyType::Str => {
+                    PropertyType::Str | PropertyType::Enum => {
                         let val = String::decode(&mut cur).unwrap();
-                        prop.set_str(val)?;
+                        prop.set_str(prop_i, val)?;
+                    }
+                    PropertyType::Buffer => {
+                        let val = Vec::<u8>::decode(&mut cur).unwrap();
+                        prop.set_buf(prop_i, val)?;
                     }
                     PropertyType::SceneNodeId => {
                         let val = SceneNodeId::decode(&mut cur).unwrap();
-                        prop.set_node_id(val)?;
+                        prop.set_node_id(prop_i, val)?;
                     }
                 }
             }

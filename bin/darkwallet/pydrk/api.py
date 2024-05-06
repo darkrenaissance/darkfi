@@ -1,6 +1,21 @@
 import zmq
+from collections import namedtuple
 from . import serial
 from . import exc
+
+Property = namedtuple("Property", [
+    "name",
+    "type",
+    "subtype",
+    "defaults",
+    "ui_name",
+    "desc",
+    "is_null_allowed",
+    "array_len",
+    "min_val",
+    "max_val",
+    "enum_items"
+])
 
 class Command:
     HELLO = 0
@@ -16,8 +31,8 @@ class Command:
     GET_CHILDREN = 4
     GET_PARENTS = 5
     GET_PROPERTIES = 3
-    GET_PROPERTY = 6
-    SET_PROPERTY = 7
+    GET_PROPERTY_VALUE = 6
+    SET_PROPERTY_VALUE = 7
     GET_SIGNALS = 14
     REGISTER_SLOT = 15
     UNREGISTER_SLOT = 16
@@ -45,20 +60,19 @@ class SceneNodeType:
 
 class PropertyType:
     NULL = 0
-    BUFFER = 1
-    BOOL = 2
-    UINT32 = 3
-    FLOAT32 = 4
-    STR = 5
-    SCENE_NODE_ID = 6
+    BOOL = 1
+    UINT32 = 2
+    FLOAT32 = 3
+    STR = 4
+    ENUM = 5
+    BUFFER = 6
+    SCENE_NODE_ID = 7
 
     @staticmethod
     def to_str(prop_type):
         match prop_type:
             case PropertyType.NULL:
                 return "null"
-            case PropertyType.BUFFER:
-                return "buffer"
             case PropertyType.BOOL:
                 return "bool"
             case PropertyType.UINT32:
@@ -67,29 +81,55 @@ class PropertyType:
                 return "float32"
             case PropertyType.STR:
                 return "str"
+            case PropertyType.ENUM:
+                return "enum"
+            case PropertyType.BUFFER:
+                return "buffer"
             case PropertyType.SCENE_NODE_ID:
                 return "scene_node_id"
 
+class PropertySubType:
+    NULL = 0
+    COLOR = 1
+    PIXEL = 2
+
+    @staticmethod
+    def to_str(prop_type):
+        match prop_type:
+            case PropertySubType.NULL:
+                return "null"
+            case PropertySubType.Color:
+                return "color"
+            case PropertySubType.PIXEL:
+                return "pixel"
+
 class ErrorCode:
-    INVALID_SCENE_PATH = 2
-    NODE_NOT_FOUND = 3
-    CHILD_NODE_NOT_FOUND = 4
-    PARENT_NODE_NOT_FOUND = 5
-    PROPERTY_ALREADY_EXISTS = 6
-    PROPERTY_NOT_FOUND = 7
-    PROPERTY_WRONG_TYPE = 8
-    SIGNAL_ALREADY_EXISTS = 9
-    SIGNAL_NOT_FOUND = 10
-    SLOT_NOT_FOUND = 11
-    METHOD_NOT_FOUND = 12
-    NODES_ARE_LINKED = 13
-    NODES_NOT_LINKED = 14
-    NODE_HAS_PARENTS = 15
-    NODE_HAS_CHILDREN = 16
-    NODE_PARENT_NAME_CONFLICT = 17
-    NODE_CHILD_NAME_CONFLICT = 18
-    NODE_SIBLING_NAME_CONFLICT = 19
-    FILE_NOT_FOUND = 20
+    INVALID_SCENE_PATH = 1
+    NODE_NOT_FOUND = 2
+    CHILD_NODE_NOT_FOUND = 3
+    PARENT_NODE_NOT_FOUND = 4
+    PROPERTY_ALREADY_EXISTS = 5
+    PROPERTY_NOT_FOUND = 6
+    PROPERTY_WRONG_TYPE = 7
+    PROPERTY_WRONG_LEN = 8
+    PROPERTY_WRONG_INDEX = 9
+    PROPERTY_OUT_OF_RANGE = 10
+    PROPERTY_NULL_NOT_ALLOWED = 11
+    PROPERTY_IS_BOUNDED = 12
+    PROPERTY_WRONG_ENUM_ITEM = 13
+    SIGNAL_ALREADY_EXISTS = 14
+    SIGNAL_NOT_FOUND = 15
+    SLOT_NOT_FOUND = 16
+    METHOD_ALREADY_EXISTS = 17
+    METHOD_NOT_FOUND = 18
+    NODES_ARE_LINKED = 19
+    NODES_NOT_LINKED = 20
+    NODE_HAS_PARENTS = 21
+    NODE_HAS_CHILDREN = 22
+    NODE_PARENT_NAME_CONFLICT = 23
+    NODE_CHILD_NAME_CONFLICT = 24
+    NODE_SIBLING_NAME_CONFLICT = 25
+    FILE_NOT_FOUND = 26
 
     @staticmethod
     def to_str(errc):
@@ -108,28 +148,42 @@ class ErrorCode:
                 return "property_not_found"
             case ErrorCode.PROPERTY_WRONG_TYPE:
                 return "property_wrong_type"
+            case ErrorCode.PROPERTY_WRONG_LEN:
+                return "property_wrong_len"
+            case ErrorCode.PROPERTY_WRONG_INDEX:
+                return "property_wrong_index"
+            case ErrorCode.PROPERTY_OUT_OF_RANGE:
+                return "property_out_of_range"
+            case ErrorCode.PROPERTY_NULL_NOT_ALLOWED:
+                return "property_null_not_allowed"
+            case ErrorCode.PROPERTY_IS_BOUNDED:
+                return "property_is_bounded"
+            case ErrorCode.PROPERTY_WRONG_ENUM_ITEM:
+                return "property_wrong_enum_item"
             case ErrorCode.SIGNAL_ALREADY_EXISTS:
                 return "signal_already_exists"
             case ErrorCode.SIGNAL_NOT_FOUND:
-                return "signal_not_found "
+                return "signal_not_found"
             case ErrorCode.SLOT_NOT_FOUND:
-                return "slot_not_found "
+                return "slot_not_found"
+            case ErrorCode.METHOD_ALREADY_EXISTS:
+                return "method_already_exists"
             case ErrorCode.METHOD_NOT_FOUND:
-                return "method_not_found "
+                return "method_not_found"
             case ErrorCode.NODES_ARE_LINKED:
-                return "nodes_are_linked "
+                return "nodes_are_linked"
             case ErrorCode.NODES_NOT_LINKED:
-                return "nodes_not_linked "
+                return "nodes_not_linked"
             case ErrorCode.NODE_HAS_PARENTS:
-                return "node_has_parents "
+                return "node_has_parents"
             case ErrorCode.NODE_HAS_CHILDREN:
-                return "node_has_children "
+                return "node_has_children"
             case ErrorCode.NODE_PARENT_NAME_CONFLICT:
-                return "node_parent_name_conflict "
+                return "node_parent_name_conflict"
             case ErrorCode.NODE_CHILD_NAME_CONFLICT:
-                return "node_child_name_conflict "
+                return "node_child_name_conflict"
             case ErrorCode.NODE_SIBLING_NAME_CONFLICT:
-                return "node_sibling_name_conflict "
+                return "node_sibling_name_conflict"
             case ErrorCode.FILE_NOT_FOUND:
                 return "file_not_found"
 
@@ -169,44 +223,58 @@ class Api:
         errc = int.from_bytes(errc, "little")
         cursor = serial.Cursor(reply)
         match errc:
+            case 1:
+                raise exc.InvalidScenePath
             case 2:
-                raise exc.RequestInvalidScenePath
+                raise exc.NodeNotFound
             case 3:
-                raise exc.RequestNodeNotFound
+                raise exc.ChildNodeNotFound
             case 4:
-                raise exc.RequestChildNodeNotFound
+                raise exc.ParentNodeNotFound
             case 5:
-                raise exc.RequestParentNodeNotFound
+                raise exc.PropertyAlreadyExists
             case 6:
-                raise exc.RequestPropertyAlreadyExists
+                raise exc.PropertyNotFound
             case 7:
-                raise exc.RequestPropertyNotFound
+                raise exc.PropertyWrongType
             case 8:
-                raise exc.RequestPropertyWrongType
+                raise exc.PropertyWrongLen
             case 9:
-                raise exc.RequestSignalAlreadyExists
+                raise exc.PropertyWrongIndex
             case 10:
-                raise exc.RequestSignalNotFound
+                raise exc.PropertyOutOfRange
             case 11:
-                raise exc.RequestSlotNotFound
+                raise exc.PropertyNullNotAllowed
             case 12:
-                raise exc.RequestMethodNotFound
+                raise exc.PropertyIsBounded
             case 13:
-                raise exc.RequestNodesAreLinked
+                raise exc.PropertyWrongEnumItem
             case 14:
-                raise exc.RequestNodesNotLinked
+                raise exc.SignalAlreadyExists
             case 15:
-                raise exc.RequestNodeHasParents
+                raise exc.SignalNotFound
             case 16:
-                raise exc.RequestNodeHasChildren
+                raise exc.SlotNotFound
             case 17:
-                raise exc.RequestNodeParentNameConflict
+                raise exc.MethodAlreadyExists
             case 18:
-                raise exc.RequestNodeChildNameConflict
+                raise exc.MethodNotFound
             case 19:
-                raise exc.RequestNodeSiblingNameConflict
+                raise exc.NodesAreLinked
             case 20:
-                raise exc.RequestFileNotFound
+                raise exc.NodesNotLinked
+            case 21:
+                raise exc.NodeHasParents
+            case 22:
+                raise exc.NodeHasChildren
+            case 23:
+                raise exc.NodeParentNameConflict
+            case 24:
+                raise exc.NodeChildNameConflict
+            case 25:
+                raise exc.NodeSiblingNameConflict
+            case 26:
+                raise exc.FileNotFound
         return cursor
 
     def hello(self):
@@ -259,27 +327,43 @@ class Api:
             props.append((prop_name, prop_type))
         return props
 
-    def get_property(self, node_id, prop_name):
+    def get_property_value(self, node_id, prop_name):
         req = bytearray()
         serial.write_u32(req, node_id)
         serial.encode_str(req, prop_name)
-        cur = self._make_request(Command.GET_PROPERTY, req)
+        cur = self._make_request(Command.GET_PROPERTY_VALUE, req)
         prop_type = serial.read_u8(cur)
+        prop_len = serial.decode_varint(cur)
+        vals = []
+
+        def read_array(read_fn):
+            for _ in range(prop_len):
+                is_some = serial.read_u8(cur)
+                if is_some:
+                    val = read_fn()
+                    vals.append(val)
+
         match prop_type:
-            case 0:
+            case PropertyType.NULL:
                 return None
-            case 1:
-                return []
-            case 3:
-                val = serial.read_u8(cur)
-                return bool(val)
-            case 2:
-                return serial.read_u32(cur)
-            case 4:
-                return serial.read_f32(cur)
-            case 5:
-                return serial.decode_str(cur)
-        raise Exception("unknown property type returned")
+            case PropertyType.BOOL:
+                read_array(lambda: bool(serial.read_u8(cur)))
+            case PropertyType.UINT32:
+                read_array(lambda: serial.read_u32(cur))
+            case PropertyType.FLOAT32:
+                read_array(lambda: serial.read_f32(cur))
+            case PropertyType.STR:
+                read_array(lambda: serial.decode_str(cur))
+            case PropertyType.ENUM:
+                read_array(lambda: serial.decode_str(cur))
+            case PropertyType.BUFFER:
+                pass
+            case PropertyType.SCENE_NODE_ID:
+                read_array(lambda: serial.read_u32(cur))
+            case _:
+                raise Exception("unknown property type returned")
+
+        return vals
 
     def add_node(self, node_name, node_type):
         req = bytearray()
@@ -318,11 +402,57 @@ class Api:
             return None
         return serial.read_u32(cur)
 
-    def add_property(self, node_id, prop_name, prop_type):
+    def add_property(self, node_id, prop):
         req = bytearray()
         serial.write_u32(req, node_id)
-        serial.encode_str(req, prop_name)
-        serial.write_u8(req, int(prop_type))
+        serial.encode_str(req, prop.name)
+        serial.write_u8(req, int(prop.type))
+        serial.write_u8(req, int(prop.subtype))
+        serial.write_u32(req, int(prop.array_len))
+        if prop.defaults is None:
+            serial.write_u8(req, 0)
+        else:
+            serial.write_u8(req, 1)
+            defaults_len = len(prop.defaults)
+            serial.encode_varint(req, defaults_len)
+            for default in prop.defaults:
+                match prop.type:
+                    case PropertyType.UINT32:
+                        serial.write_u32(req, default)
+                    case PropertyType.FLOAT32:
+                        serial.write_f32(req, default)
+                    case _:
+                        raise exc.PropertyWrongType
+        serial.encode_str(req, prop.ui_name)
+        serial.encode_str(req, prop.desc)
+        serial.write_u8(req, int(prop.is_null_allowed))
+        if prop.min_val is None:
+            serial.write_u8(req, 0)
+        else:
+            serial.write_u8(req, 1)
+            match prop.type:
+                case PropertyType.UINT32:
+                    serial.write_u32(req, prop.min_val)
+                case PropertyType.FLOAT32:
+                    serial.write_f32(req, prop.min_val)
+                case _:
+                    raise exc.PropertyWrongType
+        if prop.max_val is None:
+            serial.write_u8(req, 0)
+        else:
+            serial.write_u8(req, 1)
+            match prop.type:
+                case PropertyType.UINT32:
+                    serial.write_u32(req, prop.max_val)
+                case PropertyType.FLOAT32:
+                    serial.write_f32(req, prop.max_val)
+                case _:
+                    raise exc.PropertyWrongType
+        serial.encode_varint(req, len(prop.enum_items))
+        for enum_item in prop.enum_items:
+            if prop.type != PropertyType.ENUM:
+                raise exc.PropertyWrongType
+            serial.encode_str(req, enum_item)
         self._make_request(Command.ADD_PROPERTY, req)
 
     def link_node(self, child_id, parent_id):
@@ -342,35 +472,39 @@ class Api:
         serial.write_u32(req, node_id)
         serial.encode_str(req, prop_name)
         serial.write_u8(req, int(val))
-        self._make_request(Command.SET_PROPERTY, req)
+        self._make_request(Command.SET_PROPERTY_VALUE, req)
 
-    def set_property_u32(self, node_id, prop_name, val):
+    def set_property_u32(self, node_id, prop_name, i, val):
         req = bytearray()
         serial.write_u32(req, node_id)
         serial.encode_str(req, prop_name)
+        serial.write_u32(req, i)
         serial.write_u32(req, val)
-        self._make_request(Command.SET_PROPERTY, req)
+        self._make_request(Command.SET_PROPERTY_VALUE, req)
 
-    def set_property_f32(self, node_id, prop_name, val):
+    def set_property_f32(self, node_id, prop_name, i, val):
         req = bytearray()
         serial.write_u32(req, node_id)
         serial.encode_str(req, prop_name)
+        serial.write_u32(req, i)
         serial.write_f32(req, val)
-        self._make_request(Command.SET_PROPERTY, req)
+        self._make_request(Command.SET_PROPERTY_VALUE, req)
 
-    def set_property_buffer(self, node_id, prop_name, buf):
+    def set_property_buffer(self, node_id, prop_name, i, buf):
         req = bytearray()
         serial.write_u32(req, node_id)
         serial.encode_str(req, prop_name)
+        serial.write_u32(req, i)
         serial.encode_buf(req, buf)
-        self._make_request(Command.SET_PROPERTY, req)
+        self._make_request(Command.SET_PROPERTY_VALUE, req)
 
-    def set_property_str(self, node_id, prop_name, val):
+    def set_property_str(self, node_id, prop_name, i, val):
         req = bytearray()
         serial.write_u32(req, node_id)
         serial.encode_str(req, prop_name)
+        serial.write_u32(req, i)
         serial.encode_str(req, val)
-        self._make_request(Command.SET_PROPERTY, req)
+        self._make_request(Command.SET_PROPERTY_VALUE, req)
 
     def get_signals(self, node_id):
         req = bytearray()

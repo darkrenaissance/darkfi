@@ -1,5 +1,5 @@
 from collections import namedtuple
-from pydrk import Api, HostApi, PropertyType
+from pydrk import Api, HostApi, PropertyType, PropertySubType, Property
 import zmq
 
 api = Api()
@@ -28,8 +28,8 @@ def register_slot(node_path, sig, tag):
     node_id = api.lookup_node_id(node_path)
     api.register_slot(node_id, sig, "", tag)
 
-def get_property(node_path, prop):
-    node_id = api.lookup_node_id(node_path)
+def get_property(node_id, prop):
+    node_id = lookup_node(node_id)
     return api.get_property(node_id, prop)
 
 def set_property(node_id, prop, val):

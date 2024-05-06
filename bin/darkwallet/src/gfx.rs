@@ -8,7 +8,8 @@ use std::{fmt, io::Cursor};
 
 use crate::{
     error::{Error, Result},
-    scene::{PropertyType, SceneGraph, SceneGraphPtr, SceneNode, SceneNodeId, SceneNodeType},
+    prop::{Property, PropertySubType, PropertyType},
+    scene::{SceneGraph, SceneGraphPtr, SceneNode, SceneNodeId, SceneNodeType},
     shader,
 };
 
@@ -157,15 +158,15 @@ impl Stage {
             let font = include_bytes!("../Inter-Regular.ttf") as &[u8];
             let font = Font::from_bytes(font, FontSettings::default()).unwrap();
             let line_metrics = font.horizontal_line_metrics(1.).unwrap();
-            inter_regular.add_property_f32("ascent", line_metrics.ascent).unwrap();
-            inter_regular.add_property_f32("descent", line_metrics.descent).unwrap();
-            inter_regular.add_property_f32("line_gap", line_metrics.line_gap).unwrap();
-            inter_regular.add_property_f32("new_line_size", line_metrics.new_line_size).unwrap();
+            //inter_regular.add_property_f32("ascent", line_metrics.ascent).unwrap();
+            //inter_regular.add_property_f32("descent", line_metrics.descent).unwrap();
+            //inter_regular.add_property_f32("line_gap", line_metrics.line_gap).unwrap();
+            //inter_regular.add_property_f32("new_line_size", line_metrics.new_line_size).unwrap();
 
             inter_regular.add_method(
                 "create_text",
-                vec![("text", PropertyType::Str), ("font_size", PropertyType::Float32)],
-                vec![("node_id", PropertyType::SceneNodeId)],
+                vec![("text", "", PropertyType::Str), ("font_size", "", PropertyType::Float32)],
+                vec![("node_id", "", PropertyType::SceneNodeId)],
             );
 
             let inter_regular_id = inter_regular.id;
@@ -183,14 +184,29 @@ impl Stage {
 
         let window = scene_graph.add_node("window", SceneNodeType::Window);
         let (screen_width, screen_height) = window::screen_size();
-        window.add_property_f32("width", screen_width).unwrap();
-        window.add_property_f32("height", screen_height).unwrap();
-        window.add_signal("resize").unwrap();
-        window.add_method(
-            "load_texture",
-            vec![("node_name", PropertyType::Str), ("path", PropertyType::Str)],
-            vec![("node_id", PropertyType::SceneNodeId)],
-        );
+
+        let mut prop = Property::new("screen_size", PropertyType::Float32, PropertySubType::Pixel);
+        prop.set_array_len(2);
+        prop.set_f32(0, screen_width);
+        prop.set_f32(1, screen_height);
+        window.add_property(prop).unwrap();
+
+        window
+            .add_signal(
+                "resize",
+                vec![
+                    ("screen_width", "", PropertyType::Float32),
+                    ("screen_height", "", PropertyType::Float32),
+                ],
+            )
+            .unwrap();
+        window
+            .add_method(
+                "load_texture",
+                vec![("node_name", "", PropertyType::Str), ("path", "", PropertyType::Str)],
+                vec![("node_id", "", PropertyType::SceneNodeId)],
+            )
+            .unwrap();
         let window_id = window.id;
         scene_graph.link(window_id, SceneGraph::ROOT_ID).unwrap();
 
@@ -199,27 +215,54 @@ impl Stage {
         scene_graph.link(input_id, window_id).unwrap();
 
         let keyb = scene_graph.add_node("keyboard", SceneNodeType::Keyboard);
-        keyb.add_property("shift", PropertyType::Bool).unwrap();
-        keyb.add_property("ctrl", PropertyType::Bool).unwrap();
-        keyb.add_property("alt", PropertyType::Bool).unwrap();
-        keyb.add_property("logo", PropertyType::Bool).unwrap();
-        keyb.add_property("repeat", PropertyType::Bool).unwrap();
-        keyb.add_property("keycode", PropertyType::Str).unwrap();
-        keyb.add_signal("key_down").unwrap();
+        keyb.add_signal(
+            "key_down",
+            vec![
+                ("shift", "", PropertyType::Bool),
+                ("ctrl", "", PropertyType::Bool),
+                ("alt", "", PropertyType::Bool),
+                ("logo", "", PropertyType::Bool),
+                ("repeat", "", PropertyType::Bool),
+                ("keycode", "", PropertyType::Enum),
+            ],
+        )
+        .unwrap();
         let keyb_id = keyb.id;
         scene_graph.link(keyb_id, input_id).unwrap();
 
         let mouse = scene_graph.add_node("mouse", SceneNodeType::Mouse);
-        mouse.add_property("button", PropertyType::Uint32).unwrap();
-        mouse.add_property("motion_x", PropertyType::Float32).unwrap();
-        mouse.add_property("motion_y", PropertyType::Float32).unwrap();
-        mouse.add_property("wheel_y", PropertyType::Float32).unwrap();
-        mouse.add_property("click_x", PropertyType::Float32).unwrap();
-        mouse.add_property("click_y", PropertyType::Float32).unwrap();
-        mouse.add_signal("button_up").unwrap();
-        mouse.add_signal("button_down").unwrap();
-        mouse.add_signal("wheel").unwrap();
-        mouse.add_signal("move").unwrap();
+        mouse
+            .add_signal(
+                "button_up",
+                vec![
+                    ("button", "", PropertyType::Enum),
+                    ("x", "", PropertyType::Float32),
+                    ("y", "", PropertyType::Float32),
+                ],
+            )
+            .unwrap();
+        mouse
+            .add_signal(
+                "button_down",
+                vec![
+                    ("button", "", PropertyType::Enum),
+                    ("x", "", PropertyType::Float32),
+                    ("y", "", PropertyType::Float32),
+                ],
+            )
+            .unwrap();
+        mouse
+            .add_signal(
+                "wheel",
+                vec![("x", "", PropertyType::Float32), ("y", "", PropertyType::Float32)],
+            )
+            .unwrap();
+        mouse
+            .add_signal(
+                "move",
+                vec![("x", "", PropertyType::Float32), ("y", "", PropertyType::Float32)],
+            )
+            .unwrap();
         let mouse_id = mouse.id;
         scene_graph.link(mouse_id, input_id).unwrap();
     }
@@ -312,12 +355,16 @@ impl Stage {
     ) -> Result<SceneNodeId> {
         let mut scene_graph = self.scene_graph.lock().unwrap();
         let text_node = scene_graph.add_node(node_name, SceneNodeType::RenderText);
-        text_node.add_property_str("text", text.clone()).unwrap();
-        text_node.add_property_f32("font_size", font_size).unwrap();
-        text_node.add_property_f32("r", 0.).unwrap();
-        text_node.add_property_f32("g", 0.).unwrap();
-        text_node.add_property_f32("b", 0.).unwrap();
-        text_node.add_property_f32("a", 0.).unwrap();
+
+        let mut prop = Property::new("text", PropertyType::Str, PropertySubType::Null);
+        text_node.add_property(prop)?;
+
+        let mut prop = Property::new("font_size", PropertyType::Float32, PropertySubType::Pixel);
+        text_node.add_property(prop)?;
+
+        let mut prop = Property::new("color", PropertyType::Float32, PropertySubType::Color);
+        prop.set_array_len(4);
+        text_node.add_property(prop)?;
 
         let mut layout = Layout::new(CoordinateSystem::PositiveYDown);
         layout.reset(&LayoutSettings { ..LayoutSettings::default() });
@@ -327,8 +374,6 @@ impl Stage {
         };
         let fonts = [font];
         layout.append(&fonts, &TextStyle::new(&text, font_size, 0));
-
-        text_node.add_property_f32("height", layout.height()).unwrap();
 
         // Calculate the text width
         // std::cmp::max() not impl for f32
@@ -347,28 +392,33 @@ impl Stage {
             total_width = max_f32(total_width, right);
         }
 
-        text_node.add_property_f32("width", total_width).unwrap();
+        let mut prop = Property::new("size", PropertyType::Float32, PropertySubType::Pixel);
+        prop.set_array_len(2);
+        prop.set_f32(0, total_width).unwrap();
+        prop.set_f32(1, layout.height()).unwrap();
 
         let text_node_id = text_node.id;
 
+        /*
         let lines = layout.lines();
         if lines.is_some() {
             for (idx, line) in lines.unwrap().into_iter().enumerate() {
                 let line_node_name = format!("line.{}", idx);
                 let line_node = scene_graph.add_node(line_node_name, SceneNodeType::LinePosition);
-                line_node.add_property_u32("idx", idx as u32).unwrap();
-                line_node.add_property_f32("baseline_y", line.baseline_y).unwrap();
-                line_node.add_property_f32("padding", line.padding).unwrap();
-                line_node.add_property_f32("max_ascent", line.max_ascent).unwrap();
-                line_node.add_property_f32("min_descent", line.min_descent).unwrap();
-                line_node.add_property_f32("max_line_gap", line.max_line_gap).unwrap();
-                line_node.add_property_u32("glyph_start", line.glyph_start as u32).unwrap();
-                line_node.add_property_u32("glyph_end", line.glyph_end as u32).unwrap();
+                //line_node.add_property_u32("idx", idx as u32).unwrap();
+                //line_node.add_property_f32("baseline_y", line.baseline_y).unwrap();
+                //line_node.add_property_f32("padding", line.padding).unwrap();
+                //line_node.add_property_f32("max_ascent", line.max_ascent).unwrap();
+                //line_node.add_property_f32("min_descent", line.min_descent).unwrap();
+                //line_node.add_property_f32("max_line_gap", line.max_line_gap).unwrap();
+                //line_node.add_property_u32("glyph_start", line.glyph_start as u32).unwrap();
+                //line_node.add_property_u32("glyph_end", line.glyph_end as u32).unwrap();
 
                 let line_node_id = line_node.id;
                 scene_graph.link(line_node_id, text_node_id)?;
             }
         }
+        */
 
         scene_graph.link(font_node_id, text_node_id)?;
         Ok(text_node_id)
@@ -387,13 +437,25 @@ impl Stage {
 
         let mut scene_graph = self.scene_graph.lock().unwrap();
         let img_node = scene_graph.add_node(node_name, SceneNodeType::RenderTexture);
-        img_node.add_property_u32("width", width).unwrap();
-        img_node.add_property_u32("height", height).unwrap();
-        img_node.add_property_u32("texture_id", id).unwrap();
+        //img_node.add_property_u32("width", width).unwrap();
+        //img_node.add_property_u32("height", height).unwrap();
+        //img_node.add_property_u32("texture_id", id).unwrap();
+
+        let mut prop = Property::new("size", PropertyType::Uint32, PropertySubType::Pixel);
+        prop.set_array_len(2);
+        prop.set_u32(0, width).unwrap();
+        prop.set_u32(1, height).unwrap();
+        img_node.add_property(prop)?;
+
+        let mut prop = Property::new("texture_id", PropertyType::Uint32, PropertySubType::Null);
+        prop.set_u32(0, id).unwrap();
+        img_node.add_property(prop)?;
+
         Ok(img_node.id)
     }
 }
 
+/*
 fn get_obj_props(obj: &SceneNode) -> Result<(f32, f32, f32, f32, bool)> {
     let x = obj.get_property_f32("x")?;
     let y = obj.get_property_f32("y")?;
@@ -413,6 +475,7 @@ fn get_text_props(render_text: &SceneNode) -> Result<(String, f32, [f32; 4])> {
     let color = [r, g, b, a];
     Ok((text, font_size, color))
 }
+*/
 
 impl EventHandler for Stage {
     fn update(&mut self) {
@@ -501,10 +564,10 @@ impl EventHandler for Stage {
         // This will make the top left (0, 0) and the bottom right (1, 1)
         // Default is (-1, 1) -> (1, -1)
         let proj = glam::Mat4::from_translation(glam::Vec3::new(-1., 1., 0.)) *
-            glam::Mat4::from_scale(glam::Vec3::new(2./screen_width, -2./screen_height, 1.));
+            glam::Mat4::from_scale(glam::Vec3::new(2. / screen_width, -2. / screen_height, 1.));
 
         // Reusable text layout
-        let mut layout = Layout::new(CoordinateSystem::PositiveYDown);
+        //let mut layout = Layout::new(CoordinateSystem::PositiveYDown);
 
         let scene_graph = self.scene_graph.lock().unwrap();
 
@@ -522,6 +585,7 @@ impl EventHandler for Stage {
             self.ctx.begin_default_pass(PassAction::Nothing);
             self.ctx.apply_pipeline(&self.pipeline);
 
+            /*
             let rect_x = layer.get_property_u32("rect_x").unwrap();
             let rect_y = layer.get_property_u32("rect_y").unwrap();
             let rect_w = layer.get_property_u32("rect_w").unwrap();
@@ -666,6 +730,7 @@ impl EventHandler for Stage {
             }
 
             self.ctx.end_render_pass();
+            */
         }
         self.ctx.commit_frame();
     }
@@ -674,14 +739,14 @@ impl EventHandler for Stage {
         let mut scene_graph = self.scene_graph.lock().unwrap();
         let win = scene_graph.lookup_node_mut("/window/input/keyboard").unwrap();
 
-        win.set_property_bool("shift", modifiers.shift).unwrap();
-        win.set_property_bool("ctrl", modifiers.ctrl).unwrap();
-        win.set_property_bool("alt", modifiers.alt).unwrap();
-        win.set_property_bool("logo", modifiers.logo).unwrap();
-        win.set_property_bool("repeat", repeat).unwrap();
+        //win.set_property_bool("shift", modifiers.shift).unwrap();
+        //win.set_property_bool("ctrl", modifiers.ctrl).unwrap();
+        //win.set_property_bool("alt", modifiers.alt).unwrap();
+        //win.set_property_bool("logo", modifiers.logo).unwrap();
+        //win.set_property_bool("repeat", repeat).unwrap();
 
         let send_key_down = |key: &str| {
-            win.set_property_str("keycode", key).unwrap();
+            //win.set_property_str("keycode", key).unwrap();
             win.trigger("key_down").unwrap();
         };
 
@@ -812,39 +877,39 @@ impl EventHandler for Stage {
     fn mouse_motion_event(&mut self, x: f32, y: f32) {
         let mut scene_graph = self.scene_graph.lock().unwrap();
         let mouse = scene_graph.lookup_node_mut("/window/input/mouse").unwrap();
-        mouse.set_property_f32("motion_x", x).unwrap();
-        mouse.set_property_f32("motion_y", y).unwrap();
+        //mouse.set_property_f32("motion_x", x).unwrap();
+        //mouse.set_property_f32("motion_y", y).unwrap();
         mouse.trigger("move").unwrap();
     }
     fn mouse_wheel_event(&mut self, x: f32, y: f32) {
         let mut scene_graph = self.scene_graph.lock().unwrap();
         let mouse = scene_graph.lookup_node_mut("/window/input/mouse").unwrap();
         //mouse.set_property_f32("x", x).unwrap();
-        mouse.set_property_f32("wheel_y", y).unwrap();
+        //mouse.set_property_f32("wheel_y", y).unwrap();
         mouse.trigger("wheel").unwrap();
     }
     fn mouse_button_down_event(&mut self, button: MouseButton, x: f32, y: f32) {
         let mut scene_graph = self.scene_graph.lock().unwrap();
         let mouse = scene_graph.lookup_node_mut("/window/input/mouse").unwrap();
-        mouse.set_property_u32("button", button.to_u8() as u32).unwrap();
-        mouse.set_property_f32("click_x", x).unwrap();
-        mouse.set_property_f32("click_y", y).unwrap();
+        //mouse.set_property_u32("button", button.to_u8() as u32).unwrap();
+        //mouse.set_property_f32("click_x", x).unwrap();
+        //mouse.set_property_f32("click_y", y).unwrap();
         mouse.trigger("button_down").unwrap();
     }
     fn mouse_button_up_event(&mut self, button: MouseButton, x: f32, y: f32) {
         let mut scene_graph = self.scene_graph.lock().unwrap();
         let mouse = scene_graph.lookup_node_mut("/window/input/mouse").unwrap();
-        mouse.set_property_u32("button", button.to_u8() as u32).unwrap();
-        mouse.set_property_f32("click_x", x).unwrap();
-        mouse.set_property_f32("click_y", y).unwrap();
+        //mouse.set_property_u32("button", button.to_u8() as u32).unwrap();
+        //mouse.set_property_f32("click_x", x).unwrap();
+        //mouse.set_property_f32("click_y", y).unwrap();
         mouse.trigger("button_up").unwrap();
     }
 
     fn resize_event(&mut self, width: f32, height: f32) {
         let mut scene_graph = self.scene_graph.lock().unwrap();
         let win = scene_graph.lookup_node_mut("/window").unwrap();
-        win.set_property_f32("width", width).unwrap();
-        win.set_property_f32("height", height).unwrap();
+        //win.set_property_f32("width", width).unwrap();
+        //win.set_property_f32("height", height).unwrap();
         win.trigger("resize").unwrap();
     }
 }
