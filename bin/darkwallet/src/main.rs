@@ -1,3 +1,5 @@
+#![feature(deadline_api)]
+
 use std::{
     sync::{Arc, Mutex},
     thread,

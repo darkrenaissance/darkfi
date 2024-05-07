@@ -92,6 +92,7 @@ class PropertySubType:
     NULL = 0
     COLOR = 1
     PIXEL = 2
+    RESOURCE_ID = 3
 
     @staticmethod
     def to_str(prop_type):
@@ -102,6 +103,8 @@ class PropertySubType:
                 return "color"
             case PropertySubType.PIXEL:
                 return "pixel"
+            case PropertySubType.RESOURCE_ID:
+                return "resource_id"
 
 class PropertyStatus:
     OK = 0

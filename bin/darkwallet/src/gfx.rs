@@ -4,12 +4,17 @@ use fontdue::{
     Font, FontSettings,
 };
 use miniquad::*;
-use std::{fmt, io::Cursor};
+use std::{
+    fmt,
+    io::Cursor,
+    sync::mpsc,
+    time::{Duration, Instant},
+};
 
 use crate::{
     error::{Error, Result},
     prop::{Property, PropertySubType, PropertyType},
-    scene::{SceneGraph, SceneGraphPtr, SceneNode, SceneNodeId, SceneNodeType},
+    scene::{MethodResponseFn, SceneGraph, SceneGraphPtr, SceneNode, SceneNodeId, SceneNodeType},
     shader,
 };
 
@@ -88,6 +93,15 @@ impl<T> ResourceManager<T> {
     }
 }
 
+#[derive(Debug)]
+enum GraphicsMethodEvent {
+    CreateText,
+    LoadTexture,
+    CreateMesh,
+    DeleteTexture,
+    DeleteMesh,
+}
+
 struct Stage {
     ctx: Box<dyn RenderingBackend>,
     pipeline: Pipeline,
@@ -96,6 +110,9 @@ struct Stage {
 
     textures: ResourceManager<TextureId>,
     font: Font,
+
+    method_recvr: mpsc::Receiver<(GraphicsMethodEvent, SceneNodeId, Vec<u8>, MethodResponseFn)>,
+    method_sender: mpsc::SyncSender<(GraphicsMethodEvent, SceneNodeId, Vec<u8>, MethodResponseFn)>,
 }
 
 impl Stage {
@@ -146,6 +163,8 @@ impl Stage {
             params,
         );
 
+        let (method_sender, method_recvr) = mpsc::sync_channel(100);
+
         let font = {
             let mut scene_graph = scene_graph.lock().unwrap();
 
@@ -157,24 +176,39 @@ impl Stage {
 
             let font = include_bytes!("../Inter-Regular.ttf") as &[u8];
             let font = Font::from_bytes(font, FontSettings::default()).unwrap();
-            let line_metrics = font.horizontal_line_metrics(1.).unwrap();
+            //let line_metrics = font.horizontal_line_metrics(1.).unwrap();
             //inter_regular.add_property_f32("ascent", line_metrics.ascent).unwrap();
             //inter_regular.add_property_f32("descent", line_metrics.descent).unwrap();
             //inter_regular.add_property_f32("line_gap", line_metrics.line_gap).unwrap();
             //inter_regular.add_property_f32("new_line_size", line_metrics.new_line_size).unwrap();
 
+            let sender = method_sender.clone();
+            let inter_regular_id = inter_regular.id;
+            let method_fn = Box::new(move |arg_data, response_fn| {
+                sender.send((
+                    GraphicsMethodEvent::CreateText,
+                    inter_regular_id,
+                    arg_data,
+                    response_fn,
+                ));
+            });
             inter_regular.add_method(
                 "create_text",
-                vec![("text", "", PropertyType::Str), ("font_size", "", PropertyType::Float32)],
+                vec![
+                    ("node_name", "", PropertyType::Str),
+                    ("text", "", PropertyType::Str),
+                    ("font_size", "", PropertyType::Float32),
+                ],
                 vec![("node_id", "", PropertyType::SceneNodeId)],
+                method_fn,
             );
 
-            let inter_regular_id = inter_regular.id;
             scene_graph.link(inter_regular_id, font_id).unwrap();
             font
         };
 
-        let mut stage = Stage { ctx, pipeline, scene_graph, textures, font };
+        let mut stage =
+            Stage { ctx, pipeline, scene_graph, textures, font, method_recvr, method_sender };
         stage.setup_scene_graph_window();
         stage
     }
@@ -194,20 +228,26 @@ impl Stage {
         window
             .add_signal(
                 "resize",
+                "Screen resize event",
                 vec![
                     ("screen_width", "", PropertyType::Float32),
                     ("screen_height", "", PropertyType::Float32),
                 ],
             )
             .unwrap();
+        let sender = self.method_sender.clone();
+        let window_id = window.id;
+        let method_fn = Box::new(move |arg_data, response_fn| {
+            sender.send((GraphicsMethodEvent::LoadTexture, window_id, arg_data, response_fn));
+        });
         window
             .add_method(
                 "load_texture",
                 vec![("node_name", "", PropertyType::Str), ("path", "", PropertyType::Str)],
                 vec![("node_id", "", PropertyType::SceneNodeId)],
+                method_fn,
             )
             .unwrap();
-        let window_id = window.id;
         scene_graph.link(window_id, SceneGraph::ROOT_ID).unwrap();
 
         let input = scene_graph.add_node("input", SceneNodeType::WindowInput);
@@ -217,6 +257,7 @@ impl Stage {
         let keyb = scene_graph.add_node("keyboard", SceneNodeType::Keyboard);
         keyb.add_signal(
             "key_down",
+            "Key press down event",
             vec![
                 ("shift", "", PropertyType::Bool),
                 ("ctrl", "", PropertyType::Bool),
@@ -234,6 +275,7 @@ impl Stage {
         mouse
             .add_signal(
                 "button_up",
+                "Mouse button up event",
                 vec![
                     ("button", "", PropertyType::Enum),
                     ("x", "", PropertyType::Float32),
@@ -244,6 +286,7 @@ impl Stage {
         mouse
             .add_signal(
                 "button_down",
+                "Mouse button down event",
                 vec![
                     ("button", "", PropertyType::Enum),
                     ("x", "", PropertyType::Float32),
@@ -254,12 +297,14 @@ impl Stage {
         mouse
             .add_signal(
                 "wheel",
+                "Mouse wheel scroll event",
                 vec![("x", "", PropertyType::Float32), ("y", "", PropertyType::Float32)],
             )
             .unwrap();
         mouse
             .add_signal(
                 "move",
+                "Mouse cursor move event",
                 vec![("x", "", PropertyType::Float32), ("y", "", PropertyType::Float32)],
             )
             .unwrap();
@@ -424,7 +469,94 @@ impl Stage {
         Ok(text_node_id)
     }
 
-    fn load_texture(&mut self, node_name: String, filepath: String) -> Result<SceneNodeId> {
+    fn method_create_text(&mut self, node_id: SceneNodeId, arg_data: Vec<u8>) -> Result<Vec<u8>> {
+        let mut cur = Cursor::new(&arg_data);
+        let node_name = String::decode(&mut cur).unwrap();
+        let text = String::decode(&mut cur).unwrap();
+        let font_size = f32::decode(&mut cur).unwrap();
+
+        let mut scene_graph = self.scene_graph.lock().unwrap();
+        let font_node = scene_graph.get_node(node_id).ok_or(Error::NodeNotFound)?;
+        let font_name = font_node.name.clone();
+        let font_node_id = font_node.id;
+        let text_node = scene_graph.add_node(node_name, SceneNodeType::RenderText);
+
+        let mut prop = Property::new("text", PropertyType::Str, PropertySubType::Null);
+        text_node.add_property(prop)?;
+
+        let mut prop = Property::new("font_size", PropertyType::Float32, PropertySubType::Pixel);
+        text_node.add_property(prop)?;
+
+        let mut prop = Property::new("color", PropertyType::Float32, PropertySubType::Color);
+        prop.set_array_len(4);
+        text_node.add_property(prop)?;
+
+        let mut layout = Layout::new(CoordinateSystem::PositiveYDown);
+        layout.reset(&LayoutSettings { ..LayoutSettings::default() });
+        let font = match font_name.as_str() {
+            "inter-regular" => &self.font,
+            _ => panic!("unknown font name!"),
+        };
+        let fonts = [font];
+        layout.append(&fonts, &TextStyle::new(&text, font_size, 0));
+
+        // Calculate the text width
+        // std::cmp::max() not impl for f32
+        let max_f32 = |x: f32, y: f32| {
+            if x > y {
+                x
+            } else {
+                y
+            }
+        };
+
+        // TODO: this calc isn't multiline, we should add width property to each line
+        let mut total_width = 0.;
+        for glyph_pos in layout.glyphs() {
+            let right = glyph_pos.x + glyph_pos.width as f32;
+            total_width = max_f32(total_width, right);
+        }
+
+        let mut prop = Property::new("size", PropertyType::Float32, PropertySubType::Pixel);
+        prop.set_array_len(2);
+        prop.set_f32(0, total_width).unwrap();
+        prop.set_f32(1, layout.height()).unwrap();
+
+        let text_node_id = text_node.id;
+
+        /*
+        let lines = layout.lines();
+        if lines.is_some() {
+            for (idx, line) in lines.unwrap().into_iter().enumerate() {
+                let line_node_name = format!("line.{}", idx);
+                let line_node = scene_graph.add_node(line_node_name, SceneNodeType::LinePosition);
+                //line_node.add_property_u32("idx", idx as u32).unwrap();
+                //line_node.add_property_f32("baseline_y", line.baseline_y).unwrap();
+                //line_node.add_property_f32("padding", line.padding).unwrap();
+                //line_node.add_property_f32("max_ascent", line.max_ascent).unwrap();
+                //line_node.add_property_f32("min_descent", line.min_descent).unwrap();
+                //line_node.add_property_f32("max_line_gap", line.max_line_gap).unwrap();
+                //line_node.add_property_u32("glyph_start", line.glyph_start as u32).unwrap();
+                //line_node.add_property_u32("glyph_end", line.glyph_end as u32).unwrap();
+
+                let line_node_id = line_node.id;
+                scene_graph.link(line_node_id, text_node_id)?;
+            }
+        }
+        */
+
+        scene_graph.link(font_node_id, text_node_id)?;
+
+        let mut reply = vec![];
+        text_node_id.encode(&mut reply).unwrap();
+
+        Ok(reply)
+    }
+    fn method_load_texture(&mut self, node_id: SceneNodeId, arg_data: Vec<u8>) -> Result<Vec<u8>> {
+        let mut cur = Cursor::new(&arg_data);
+        let node_name = String::decode(&mut cur).unwrap();
+        let filepath = String::decode(&mut cur).unwrap();
+
         let Ok(img) = image::open(filepath) else { return Err(Error::FileNotFound) };
 
         let img = img.to_rgba8();
@@ -437,9 +569,6 @@ impl Stage {
 
         let mut scene_graph = self.scene_graph.lock().unwrap();
         let img_node = scene_graph.add_node(node_name, SceneNodeType::RenderTexture);
-        //img_node.add_property_u32("width", width).unwrap();
-        //img_node.add_property_u32("height", height).unwrap();
-        //img_node.add_property_u32("texture_id", id).unwrap();
 
         let mut prop = Property::new("size", PropertyType::Uint32, PropertySubType::Pixel);
         prop.set_array_len(2);
@@ -447,11 +576,28 @@ impl Stage {
         prop.set_u32(1, height).unwrap();
         img_node.add_property(prop)?;
 
-        let mut prop = Property::new("texture_id", PropertyType::Uint32, PropertySubType::Null);
+        let mut prop =
+            Property::new("texture_id", PropertyType::Uint32, PropertySubType::ResourceId);
         prop.set_u32(0, id).unwrap();
         img_node.add_property(prop)?;
 
-        Ok(img_node.id)
+        let mut reply = vec![];
+        img_node.id.encode(&mut reply).unwrap();
+
+        Ok(reply)
+    }
+    fn method_create_mesh(&mut self, node_id: SceneNodeId, arg_data: Vec<u8>) -> Result<Vec<u8>> {
+        Ok(vec![])
+    }
+    fn method_delete_texture(
+        &mut self,
+        node_id: SceneNodeId,
+        arg_data: Vec<u8>,
+    ) -> Result<Vec<u8>> {
+        Ok(vec![])
+    }
+    fn method_delete_mesh(&mut self, node_id: SceneNodeId, arg_data: Vec<u8>) -> Result<Vec<u8>> {
+        Ok(vec![])
     }
 }
 
@@ -479,78 +625,22 @@ fn get_text_props(render_text: &SceneNode) -> Result<(String, f32, [f32; 4])> {
 
 impl EventHandler for Stage {
     fn update(&mut self) {
-        // check /font:create_text() queue
-
-        let mut scene_graph = self.scene_graph.lock().unwrap();
-        let font_root = scene_graph.lookup_node("/font").unwrap();
-        let font_ids: Vec<_> = font_root
-            .iter_children(&scene_graph, SceneNodeType::Font)
-            .map(|node| node.id)
-            .collect();
-
-        let mut calls = vec![];
-        for font_id in font_ids {
-            let font_node = scene_graph.get_node_mut(font_id).unwrap();
-            for method in &mut font_node.methods {
-                for (arg_data, response_fn) in std::mem::take(&mut method.queue) {
-                    calls.push((
-                        font_node.id,
-                        font_node.name.clone(),
-                        method.name.clone(),
-                        arg_data,
-                        response_fn,
-                    ));
-                }
-            }
-        }
-        drop(scene_graph);
-
-        for (font_node_id, font_node_name, method_name, arg_data, response_fn) in calls {
-            assert_eq!(method_name, "create_text");
-
-            let mut cur = Cursor::new(&arg_data);
-            let mut reply = vec![];
-            let node_name = String::decode(&mut cur).unwrap();
-            let text = String::decode(&mut cur).unwrap();
-            let font_size = f32::decode(&mut cur).unwrap();
-            debug!(target: "win", "/font:{}({}, {})", method_name, text, font_size);
-
-            let node_id_result =
-                self.create_text_node(font_node_id, &font_node_name, node_name, text, font_size);
-            let node_id_result = node_id_result.map(|node_id| {
-                node_id.encode(&mut reply).unwrap();
-                reply
-            });
-            response_fn(node_id_result)
-        }
-
-        // check /window:load_texture() queue
-
-        let mut scene_graph = self.scene_graph.lock().unwrap();
-        let mut calls = vec![];
-        let window = scene_graph.lookup_node_mut("/window").unwrap();
-        for method in &mut window.methods {
-            for (arg_data, response_fn) in std::mem::take(&mut method.queue) {
-                calls.push((method.name.clone(), arg_data, response_fn));
-            }
-        }
-        drop(scene_graph);
-
-        for (method_name, arg_data, response_fn) in calls {
-            assert_eq!(method_name, "load_texture");
-
-            let mut cur = Cursor::new(&arg_data);
-            let mut reply = vec![];
-            let node_name = String::decode(&mut cur).unwrap();
-            let filepath = String::decode(&mut cur).unwrap();
-            debug!(target: "win", "/window:{}({}, {})", method_name, node_name, filepath);
-
-            let node_id_result = self.load_texture(node_name, filepath);
-            let node_id_result = node_id_result.map(|node_id| {
-                node_id.encode(&mut reply).unwrap();
-                reply
-            });
-            response_fn(node_id_result)
+        // Only block for 20 ms, process as much as we can during that time
+        let deadline = Instant::now() + Duration::from_millis(400);
+        loop {
+            let Ok((event, node_id, arg_data, response_fn)) =
+                self.method_recvr.recv_deadline(deadline)
+            else {
+                break
+            };
+            let res = match event {
+                GraphicsMethodEvent::CreateText => self.method_create_text(node_id, arg_data),
+                GraphicsMethodEvent::LoadTexture => self.method_load_texture(node_id, arg_data),
+                GraphicsMethodEvent::CreateMesh => self.method_create_mesh(node_id, arg_data),
+                GraphicsMethodEvent::DeleteTexture => self.method_delete_texture(node_id, arg_data),
+                GraphicsMethodEvent::DeleteMesh => self.method_delete_mesh(node_id, arg_data),
+            };
+            response_fn(res);
         }
     }
 
@@ -746,8 +836,9 @@ impl EventHandler for Stage {
         //win.set_property_bool("repeat", repeat).unwrap();
 
         let send_key_down = |key: &str| {
-            //win.set_property_str("keycode", key).unwrap();
-            win.trigger("key_down").unwrap();
+            let mut data = vec![];
+            key.encode(&mut data).unwrap();
+            win.trigger("key_down", data).unwrap();
         };
 
         match keycode {
@@ -876,41 +967,46 @@ impl EventHandler for Stage {
     }
     fn mouse_motion_event(&mut self, x: f32, y: f32) {
         let mut scene_graph = self.scene_graph.lock().unwrap();
+        let mut data = vec![];
+        x.encode(&mut data).unwrap();
+        y.encode(&mut data).unwrap();
         let mouse = scene_graph.lookup_node_mut("/window/input/mouse").unwrap();
-        //mouse.set_property_f32("motion_x", x).unwrap();
-        //mouse.set_property_f32("motion_y", y).unwrap();
-        mouse.trigger("move").unwrap();
+        mouse.trigger("move", data).unwrap();
     }
     fn mouse_wheel_event(&mut self, x: f32, y: f32) {
         let mut scene_graph = self.scene_graph.lock().unwrap();
+        let mut data = vec![];
+        x.encode(&mut data).unwrap();
+        y.encode(&mut data).unwrap();
         let mouse = scene_graph.lookup_node_mut("/window/input/mouse").unwrap();
-        //mouse.set_property_f32("x", x).unwrap();
-        //mouse.set_property_f32("wheel_y", y).unwrap();
-        mouse.trigger("wheel").unwrap();
+        mouse.trigger("wheel", data).unwrap();
     }
     fn mouse_button_down_event(&mut self, button: MouseButton, x: f32, y: f32) {
         let mut scene_graph = self.scene_graph.lock().unwrap();
+        let mut data = vec![];
+        button.to_u8().encode(&mut data).unwrap();
+        x.encode(&mut data).unwrap();
+        y.encode(&mut data).unwrap();
         let mouse = scene_graph.lookup_node_mut("/window/input/mouse").unwrap();
-        //mouse.set_property_u32("button", button.to_u8() as u32).unwrap();
-        //mouse.set_property_f32("click_x", x).unwrap();
-        //mouse.set_property_f32("click_y", y).unwrap();
-        mouse.trigger("button_down").unwrap();
+        mouse.trigger("button_down", data).unwrap();
     }
     fn mouse_button_up_event(&mut self, button: MouseButton, x: f32, y: f32) {
         let mut scene_graph = self.scene_graph.lock().unwrap();
+        let mut data = vec![];
+        button.to_u8().encode(&mut data).unwrap();
+        x.encode(&mut data).unwrap();
+        y.encode(&mut data).unwrap();
         let mouse = scene_graph.lookup_node_mut("/window/input/mouse").unwrap();
-        //mouse.set_property_u32("button", button.to_u8() as u32).unwrap();
-        //mouse.set_property_f32("click_x", x).unwrap();
-        //mouse.set_property_f32("click_y", y).unwrap();
-        mouse.trigger("button_up").unwrap();
+        mouse.trigger("button_up", data).unwrap();
     }
 
     fn resize_event(&mut self, width: f32, height: f32) {
         let mut scene_graph = self.scene_graph.lock().unwrap();
+        let mut data = vec![];
+        width.encode(&mut data).unwrap();
+        height.encode(&mut data).unwrap();
         let win = scene_graph.lookup_node_mut("/window").unwrap();
-        //win.set_property_f32("width", width).unwrap();
-        //win.set_property_f32("height", height).unwrap();
-        win.trigger("resize").unwrap();
+        win.trigger("resize", data).unwrap();
     }
 }
 

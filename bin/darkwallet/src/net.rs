@@ -52,8 +52,8 @@ pub struct ZeroMQAdapter {
     req_socket: zmq::Socket,
     // We cannot share zmq sockets across threads, and we cannot quickly spawn
     // pub sockets due to address reuse errors.
-    slot_sender: mpsc::SyncSender<Vec<u8>>,
-    slot_recvr: Option<mpsc::Receiver<Vec<u8>>>,
+    slot_sender: mpsc::SyncSender<(Vec<u8>, Vec<u8>)>,
+    slot_recvr: Option<mpsc::Receiver<(Vec<u8>, Vec<u8>)>>,
     scene_graph: SceneGraphPtr,
 }
 
@@ -78,8 +78,8 @@ impl ZeroMQAdapter {
             pub_socket.bind("tcp://*:9485").unwrap();
 
             loop {
-                let user_data = rx.recv().unwrap();
-                pub_socket.send(&user_data, 0).unwrap();
+                let (signal_data, user_data) = rx.recv().unwrap();
+                pub_socket.send_multipart(&[signal_data, user_data], zmq::DONTWAIT).unwrap();
             }
         });
 
@@ -394,8 +394,8 @@ impl ZeroMQAdapter {
                 let sender = self.slot_sender.clone();
                 let slot = Slot {
                     name: slot_name,
-                    func: Box::new(move || {
-                        sender.send(user_data.clone()).unwrap();
+                    func: Box::new(move |signal_data| {
+                        sender.send((signal_data, user_data.clone())).unwrap();
                     }),
                 };
 

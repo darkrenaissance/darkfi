@@ -52,6 +52,7 @@ pub enum PropertySubType {
     Color = 1,
     // Size of something in pixels
     Pixel = 2,
+    ResourceId = 3,
 }
 
 #[derive(Debug, Clone)]

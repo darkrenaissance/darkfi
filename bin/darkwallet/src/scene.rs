@@ -453,6 +453,7 @@ impl SceneNode {
     pub fn add_signal<S: Into<String>>(
         &mut self,
         name: S,
+        desc: S,
         fmt: Vec<(S, S, PropertyType)>,
     ) -> Result<()> {
         let name = name.into();
@@ -463,7 +464,13 @@ impl SceneNode {
             .into_iter()
             .map(|(n, d, t)| CallArg { name: n.into(), desc: d.into(), typ: t })
             .collect();
-        self.sigs.push(Signal { name: name.into(), fmt, slots: vec![], freed: vec![] });
+        self.sigs.push(Signal {
+            name: name.into(),
+            desc: desc.into(),
+            fmt,
+            slots: vec![],
+            freed: vec![],
+        });
         Ok(())
     }
 
@@ -498,11 +505,11 @@ impl SceneNode {
         sig.freed.push(slot_id);
         Ok(())
     }
-    pub fn trigger(&self, sig_name: &str) -> Result<()> {
+    pub fn trigger(&self, sig_name: &str, data: Vec<u8>) -> Result<()> {
         let sig = self.get_signal(sig_name).ok_or(Error::SignalNotFound)?;
         for (_, slot) in sig.get_slots() {
             // Trigger the slot
-            slot.call();
+            slot.call(data.clone());
         }
         Ok(())
     }
@@ -512,6 +519,7 @@ impl SceneNode {
         name: S,
         args: Vec<(S, S, PropertyType)>,
         result: Vec<(S, S, PropertyType)>,
+        method_fn: MethodRequestFn,
     ) -> Result<()> {
         let name = name.into();
         if self.has_signal(&name) {
@@ -525,7 +533,7 @@ impl SceneNode {
             .into_iter()
             .map(|(n, d, t)| CallArg { name: n.into(), desc: d.into(), typ: t })
             .collect();
-        self.methods.push(Method { name: name.into(), args, result, queue: vec![] });
+        self.methods.push(Method { name: name.into(), args, result, method_fn });
         Ok(())
     }
 
@@ -542,8 +550,8 @@ impl SceneNode {
         arg_data: Vec<u8>,
         response_fn: MethodResponseFn,
     ) -> Result<()> {
-        let method = self.get_method_mut(name).ok_or(Error::MethodNotFound)?;
-        method.queue.push((arg_data, response_fn));
+        let method = self.get_method(name).ok_or(Error::MethodNotFound)?;
+        (method.method_fn)(arg_data, response_fn);
         Ok(())
     }
 }
@@ -555,7 +563,7 @@ pub struct CallArg {
     pub typ: PropertyType,
 }
 
-type SlotFn = Box<dyn Fn() + Send>;
+type SlotFn = Box<dyn Fn(Vec<u8>) + Send>;
 pub type SlotId = u32;
 
 pub struct Slot {
@@ -564,13 +572,14 @@ pub struct Slot {
 }
 
 impl Slot {
-    fn call(&self) {
-        (self.func)()
+    fn call(&self, data: Vec<u8>) {
+        (self.func)(data)
     }
 }
 
 pub struct Signal {
     pub name: String,
+    pub desc: String,
     pub fmt: Vec<CallArg>,
     slots: Vec<Slot>,
     freed: Vec<SlotId>,
@@ -602,11 +611,12 @@ impl Signal {
     }
 }
 
-type MethodResponseFn = Box<dyn Fn(Result<Vec<u8>>) + Send>;
+type MethodRequestFn = Box<dyn Fn(Vec<u8>, MethodResponseFn) + Send>;
+pub type MethodResponseFn = Box<dyn Fn(Result<Vec<u8>>) + Send>;
 
 pub struct Method {
     pub name: String,
     pub args: Vec<CallArg>,
     pub result: Vec<CallArg>,
-    pub queue: Vec<(Vec<u8>, MethodResponseFn)>,
+    method_fn: MethodRequestFn,
 }
