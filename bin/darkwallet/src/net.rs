@@ -165,11 +165,20 @@ impl ZeroMQAdapter {
                 debug!(target: "req", "{:?}({})", cmd, node_id);
 
                 let node = scene_graph.get_node(node_id).ok_or(Error::NodeNotFound)?;
-                //let mut props = vec![];
+                VarInt(node.props.len() as u64).encode(&mut reply).unwrap();
                 for prop in &node.props {
-                    //props.push((prop.name.clone(), prop.get_type() as u8));
+                    prop.name.encode(&mut reply).unwrap();
+                    prop.typ.encode(&mut reply).unwrap();
+                    prop.subtype.encode(&mut reply).unwrap();
+                    prop.defaults.encode(&mut reply).unwrap();
+                    prop.ui_name.encode(&mut reply).unwrap();
+                    prop.desc.encode(&mut reply).unwrap();
+                    prop.is_null_allowed.encode(&mut reply).unwrap();
+                    (prop.array_len as u32).encode(&mut reply).unwrap();
+                    prop.min_val.encode(&mut reply).unwrap();
+                    prop.max_val.encode(&mut reply).unwrap();
+                    prop.enum_items.encode(&mut reply).unwrap();
                 }
-                //props.encode(&mut reply).unwrap();
             }
             Command::GetPropertyValue => {
                 let node_id = SceneNodeId::decode(&mut cur).unwrap();
@@ -180,86 +189,17 @@ impl ZeroMQAdapter {
                 let prop = node.get_property(&prop_name).ok_or(Error::PropertyNotFound)?;
                 prop.typ.encode(&mut reply).unwrap();
                 VarInt(prop.get_len() as u64).encode(&mut reply).unwrap();
-                match prop.typ {
-                    PropertyType::Null => {}
-                    PropertyType::Bool => {
-                        for i in 0..prop.get_len() {
-                            match prop.get_bool_opt(i).unwrap() {
-                                Some(v) => {
-                                    true.encode(&mut reply).unwrap();
-                                    v.encode(&mut reply).unwrap();
-                                }
-                                None => {
-                                    false.encode(&mut reply).unwrap();
-                                }
-                            }
-                        }
-                    }
-                    PropertyType::Uint32 => {
-                        for i in 0..prop.get_len() {
-                            match prop.get_u32_opt(i).unwrap() {
-                                Some(v) => {
-                                    true.encode(&mut reply).unwrap();
-                                    v.encode(&mut reply).unwrap();
-                                }
-                                None => {
-                                    false.encode(&mut reply).unwrap();
-                                }
-                            }
-                        }
-                    }
-                    PropertyType::Float32 => {
-                        for i in 0..prop.get_len() {
-                            match prop.get_f32_opt(i).unwrap() {
-                                Some(v) => {
-                                    true.encode(&mut reply).unwrap();
-                                    v.encode(&mut reply).unwrap();
-                                }
-                                None => {
-                                    false.encode(&mut reply).unwrap();
-                                }
-                            }
-                        }
-                    }
-                    PropertyType::Str => {
-                        for i in 0..prop.get_len() {
-                            match prop.get_str_opt(i).unwrap() {
-                                Some(v) => {
-                                    true.encode(&mut reply).unwrap();
-                                    v.encode(&mut reply).unwrap();
-                                }
-                                None => {
-                                    false.encode(&mut reply).unwrap();
-                                }
-                            }
-                        }
-                    }
-                    PropertyType::Enum => {
-                        for i in 0..prop.get_len() {
-                            match prop.get_enum_opt(i).unwrap() {
-                                Some(v) => {
-                                    true.encode(&mut reply).unwrap();
-                                    v.encode(&mut reply).unwrap();
-                                }
-                                None => {
-                                    false.encode(&mut reply).unwrap();
-                                }
-                            }
-                        }
-                    }
-                    PropertyType::Buffer => {}
-                    PropertyType::SceneNodeId => {
-                        for i in 0..prop.get_len() {
-                            match prop.get_node_id_opt(i).unwrap() {
-                                Some(v) => {
-                                    true.encode(&mut reply).unwrap();
-                                    v.encode(&mut reply).unwrap();
-                                }
-                                None => {
-                                    false.encode(&mut reply).unwrap();
-                                }
-                            }
-                        }
+                for i in 0..prop.get_len() {
+                    let val = prop.get_raw_value(i)?;
+                    if val.is_unset() {
+                        1u8.encode(&mut reply).unwrap();
+                        let default = &prop.defaults[i];
+                        default.encode(&mut reply).unwrap();
+                    } else if val.is_null() {
+                        2u8.encode(&mut reply).unwrap();
+                    } else {
+                        0u8.encode(&mut reply).unwrap();
+                        val.encode(&mut reply).unwrap();
                     }
                 }
             }

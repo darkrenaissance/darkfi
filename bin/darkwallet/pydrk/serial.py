@@ -109,3 +109,16 @@ def decode_buf(cur):
     size = decode_varint(cur)
     return cur.read(size)
 
+def decode_opt(cur, read_fn):
+    is_some = bool(read_u8(cur))
+    if is_some:
+        return read_fn(cur)
+    else:
+        return None
+
+def decode_arr(cur, read_fn):
+    arr_len = decode_varint(cur)
+    vals = []
+    for _ in range(arr_len):
+        vals.append(read_fn(cur))
+    return vals

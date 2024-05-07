@@ -103,6 +103,11 @@ class PropertySubType:
             case PropertySubType.PIXEL:
                 return "pixel"
 
+class PropertyStatus:
+    OK = 0
+    UNSET = 1
+    NULL = 2
+
 class ErrorCode:
     INVALID_SCENE_PATH = 1
     NODE_NOT_FOUND = 2
@@ -321,11 +326,60 @@ class Api:
         cur = self._make_request(Command.GET_PROPERTIES, req)
         props_len = serial.decode_varint(cur)
         props = []
+
+        prop_read_fn = lambda cur: Api.read_prop_val(cur, prop_type)
+        enum_read_fn = lambda cur: serial.decode_arr(cur, serial.decode_str)
+
         for _ in range(props_len):
             prop_name = serial.decode_str(cur)
+            # We need prop_type below
             prop_type = serial.read_u8(cur)
-            props.append((prop_name, prop_type))
+            prop = Property(
+                prop_name,
+                prop_type,
+                # subtype 
+                serial.read_u8(cur),
+                # defaults 
+                serial.decode_arr(cur, prop_read_fn),
+                # ui_name 
+                serial.decode_str(cur),
+                # desc 
+                serial.decode_str(cur),
+                # is_null_allowed 
+                bool(serial.read_u8(cur)),
+                # array_len 
+                serial.read_u32(cur),
+                # min_val 
+                serial.decode_opt(cur, prop_read_fn),
+                # max_val 
+                serial.decode_opt(cur, prop_read_fn),
+                # enum_items 
+                serial.decode_opt(cur, enum_read_fn)
+            )
+            props.append(prop)
         return props
+
+    @staticmethod
+    def read_prop_val(cur, prop_type):
+        match prop_type:
+            case PropertyType.NULL:
+                return None
+            case PropertyType.BOOL:
+                return bool(serial.read_u8(cur))
+            case PropertyType.UINT32:
+                return serial.read_u32(cur)
+            case PropertyType.FLOAT32:
+                return serial.read_f32(cur)
+            case PropertyType.STR:
+                return serial.decode_str(cur)
+            case PropertyType.ENUM:
+                return serial.decode_str(cur)
+            case PropertyType.BUFFER:
+                pass
+            case PropertyType.SCENE_NODE_ID:
+                return serial.read_u32(cur)
+            case _:
+                raise Exception("unknown property type returned")
 
     def get_property_value(self, node_id, prop_name):
         req = bytearray()
@@ -333,36 +387,16 @@ class Api:
         serial.encode_str(req, prop_name)
         cur = self._make_request(Command.GET_PROPERTY_VALUE, req)
         prop_type = serial.read_u8(cur)
-        prop_len = serial.decode_varint(cur)
-        vals = []
 
-        def read_array(read_fn):
-            for _ in range(prop_len):
-                is_some = serial.read_u8(cur)
-                if is_some:
-                    val = read_fn()
-                    vals.append(val)
+        def prop_read_fn(cur):
+            prop_status = serial.read_u8(cur)
+            match prop_status:
+                case PropertyStatus.NULL:
+                    return None
+                case PropertyStatus.UNSET | PropertyStatus.OK:
+                    return Api.read_prop_val(cur, prop_type)
 
-        match prop_type:
-            case PropertyType.NULL:
-                return None
-            case PropertyType.BOOL:
-                read_array(lambda: bool(serial.read_u8(cur)))
-            case PropertyType.UINT32:
-                read_array(lambda: serial.read_u32(cur))
-            case PropertyType.FLOAT32:
-                read_array(lambda: serial.read_f32(cur))
-            case PropertyType.STR:
-                read_array(lambda: serial.decode_str(cur))
-            case PropertyType.ENUM:
-                read_array(lambda: serial.decode_str(cur))
-            case PropertyType.BUFFER:
-                pass
-            case PropertyType.SCENE_NODE_ID:
-                read_array(lambda: serial.read_u32(cur))
-            case _:
-                raise Exception("unknown property type returned")
-
+        vals = serial.decode_arr(cur, prop_read_fn)
         return vals
 
     def add_node(self, node_name, node_type):

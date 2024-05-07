@@ -1,8 +1,9 @@
 use crate::error::{Error, Result};
 use atomic_float::AtomicF32;
-use darkfi_serial::{SerialDecodable, SerialEncodable};
+use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable, WriteExt};
 use std::{
     fmt,
+    io::Write,
     str::FromStr,
     sync::{
         atomic::{AtomicBool, AtomicU32, Ordering},
@@ -81,14 +82,14 @@ impl PropertyValue {
         }
     }
 
-    fn is_unset(&self) -> bool {
+    pub fn is_unset(&self) -> bool {
         match self {
             Self::Unset => true,
             _ => false,
         }
     }
 
-    fn is_null(&self) -> bool {
+    pub fn is_null(&self) -> bool {
         match self {
             Self::Null => true,
             _ => false,
@@ -135,6 +136,23 @@ impl PropertyValue {
         match self {
             Self::SceneNodeId(v) => Ok(*v),
             _ => Err(Error::PropertyWrongType),
+        }
+    }
+}
+
+impl Encodable for PropertyValue {
+    fn encode<S: Write>(&self, mut s: S) -> std::result::Result<usize, std::io::Error> {
+        match self {
+            Self::Unset | Self::Null | Self::Buffer(_) => {
+                // do nothing
+                Ok(0)
+            }
+            Self::Bool(v) => v.encode(s),
+            Self::Uint32(v) => v.encode(s),
+            Self::Float32(v) => v.encode(s),
+            Self::Str(v) => v.encode(s),
+            Self::Enum(v) => v.encode(s),
+            Self::SceneNodeId(v) => v.encode(s),
         }
     }
 }
@@ -230,19 +248,6 @@ impl Property {
         self.check_defaults_len(defaults.len())?;
         self.defaults = defaults.into_iter().map(|v| PropertyValue::Float32(v)).collect();
         Ok(())
-    }
-
-    pub fn get_len(&self) -> usize {
-        // Avoid locking unless we need to
-        // If array len is nonzero, then vals len should be the same.
-        if !self.is_bounded() {
-            return self.vals.lock().unwrap().len()
-        }
-        self.array_len
-    }
-
-    fn is_bounded(&self) -> bool {
-        self.array_len != 0
     }
 
     /// This will clear all values, resetting them to the default
@@ -390,6 +395,19 @@ impl Property {
     }
 
     // Get
+
+    fn is_bounded(&self) -> bool {
+        self.array_len != 0
+    }
+
+    pub fn get_len(&self) -> usize {
+        // Avoid locking unless we need to
+        // If array len is nonzero, then vals len should be the same.
+        if !self.is_bounded() {
+            return self.vals.lock().unwrap().len()
+        }
+        self.array_len
+    }
 
     pub fn is_unset(&self, i: usize) -> Result<bool> {
         let val = self.get_raw_value(i)?;

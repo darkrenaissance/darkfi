@@ -271,18 +271,33 @@ def resize_rounded_box():
     #api.set_property_buffer(mesh_id, "faces", face(0, 2, 1) + face(1, 2, 3))
 
 def main():
-    node_id = api.add_node("foo", SceneNodeType.WINDOW)
-    prop = Property(
-        "myprop", PropertyType.FLOAT32, PropertySubType.NULL,
-        None,
-        "myprop", "",
-        False, 2, None, None, []
-    )
-    api.add_property(1, prop)
-    api.link_node(node_id, 0)
-    api.set_property_f32(1, "myprop", 0, 4.0)
-    api.set_property_f32(1, "myprop", 1, 110.0)
-    print(api.get_property_value(1, "myprop"))
+    if True:
+        node_id = api.add_node("foo", SceneNodeType.WINDOW)
+        prop = Property(
+            "myprop", PropertyType.FLOAT32, PropertySubType.NULL,
+            None,
+            "myprop", "",
+            False, 2, None, None, []
+        )
+        api.add_property(1, prop)
+        api.link_node(node_id, 0)
+        api.set_property_f32(1, "myprop", 0, 4.0)
+        api.set_property_f32(1, "myprop", 1, 110.0)
+    print("val =", api.get_property_value(1, "myprop"))
+    for prop in api.get_properties(1):
+        print("Property:")
+        print(f"  name = {prop.name}")
+        print(f"  type = {prop.type}")
+        print(f"  subtype = {prop.subtype}")
+        print(f"  defaults = {prop.defaults}")
+        print(f"  ui_name = {prop.ui_name}")
+        print(f"  desc = {prop.desc}")
+        print(f"  is_null_allowed = {prop.is_null_allowed}")
+        print(f"  array_len = {prop.array_len}")
+        print(f"  min_val = {prop.min_val}")
+        print(f"  max_val = {prop.max_val}")
+        print(f"  enum_items = {prop.enum_items}")
+        print()
     print_tree()
     #garbage_collect()
 
