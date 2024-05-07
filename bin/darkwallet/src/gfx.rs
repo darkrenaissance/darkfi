@@ -1,4 +1,4 @@
-use darkfi_serial::{Decodable, Encodable, SerialEncodable};
+use darkfi_serial::{Decodable, Encodable, SerialEncodable, SerialDecodable};
 use fontdue::{
     layout::{CoordinateSystem, GlyphPosition, Layout, LayoutSettings, TextStyle},
     Font, FontSettings,
@@ -33,7 +33,7 @@ impl MouseButtonAsU8 for MouseButton {
     }
 }
 
-#[derive(Debug, SerialEncodable)]
+#[derive(Debug, SerialEncodable, SerialDecodable)]
 #[repr(C)]
 struct Vertex {
     pos: [f32; 2],
@@ -41,7 +41,7 @@ struct Vertex {
     uv: [f32; 2],
 }
 
-#[derive(SerialEncodable)]
+#[derive(SerialEncodable, SerialDecodable)]
 #[repr(C)]
 struct Face {
     idxs: [u32; 3],
@@ -51,6 +51,13 @@ impl fmt::Debug for Face {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self.idxs)
     }
+}
+
+struct Mesh {
+    pub verts: Vec<Vertex>,
+    pub faces: Vec<Face>,
+    pub vertex_buffer: BufferId,
+    pub index_buffer: BufferId,
 }
 
 type ResourceId = u32;
@@ -91,6 +98,20 @@ impl<T> ResourceManager<T> {
         }
         None
     }
+
+    fn free(&mut self, id: ResourceId) -> Result<()> {
+        for (idx, (rsrc_id, rsrc)) in self.resources.iter_mut().enumerate() {
+            if self.freed.contains(&idx) {
+                return Err(Error::ResourceNotFound)
+            }
+            if *rsrc_id == id {
+                *rsrc = None;
+                self.freed.push(idx);
+                return Ok(())
+            }
+        }
+        Err(Error::ResourceNotFound)
+    }
 }
 
 #[derive(Debug)]
@@ -109,6 +130,7 @@ struct Stage {
     scene_graph: SceneGraphPtr,
 
     textures: ResourceManager<TextureId>,
+    meshes: ResourceManager<Mesh>,
     font: Font,
 
     method_recvr: mpsc::Receiver<(GraphicsMethodEvent, SceneNodeId, Vec<u8>, MethodResponseFn)>,
@@ -208,7 +230,7 @@ impl Stage {
         };
 
         let mut stage =
-            Stage { ctx, pipeline, scene_graph, textures, font, method_recvr, method_sender };
+            Stage { ctx, pipeline, scene_graph, textures, meshes: ResourceManager::new(), font, method_recvr, method_sender };
         stage.setup_scene_graph_window();
         stage
     }
@@ -390,85 +412,6 @@ impl Stage {
         ctx.delete_texture(texture);
     }
 
-    fn create_text_node(
-        &self,
-        font_node_id: SceneNodeId,
-        font_name: &str,
-        node_name: String,
-        text: String,
-        font_size: f32,
-    ) -> Result<SceneNodeId> {
-        let mut scene_graph = self.scene_graph.lock().unwrap();
-        let text_node = scene_graph.add_node(node_name, SceneNodeType::RenderText);
-
-        let mut prop = Property::new("text", PropertyType::Str, PropertySubType::Null);
-        text_node.add_property(prop)?;
-
-        let mut prop = Property::new("font_size", PropertyType::Float32, PropertySubType::Pixel);
-        text_node.add_property(prop)?;
-
-        let mut prop = Property::new("color", PropertyType::Float32, PropertySubType::Color);
-        prop.set_array_len(4);
-        text_node.add_property(prop)?;
-
-        let mut layout = Layout::new(CoordinateSystem::PositiveYDown);
-        layout.reset(&LayoutSettings { ..LayoutSettings::default() });
-        let font = match font_name {
-            "inter-regular" => &self.font,
-            _ => panic!("unknown font name!"),
-        };
-        let fonts = [font];
-        layout.append(&fonts, &TextStyle::new(&text, font_size, 0));
-
-        // Calculate the text width
-        // std::cmp::max() not impl for f32
-        let max_f32 = |x: f32, y: f32| {
-            if x > y {
-                x
-            } else {
-                y
-            }
-        };
-
-        // TODO: this calc isn't multiline, we should add width property to each line
-        let mut total_width = 0.;
-        for glyph_pos in layout.glyphs() {
-            let right = glyph_pos.x + glyph_pos.width as f32;
-            total_width = max_f32(total_width, right);
-        }
-
-        let mut prop = Property::new("size", PropertyType::Float32, PropertySubType::Pixel);
-        prop.set_array_len(2);
-        prop.set_f32(0, total_width).unwrap();
-        prop.set_f32(1, layout.height()).unwrap();
-
-        let text_node_id = text_node.id;
-
-        /*
-        let lines = layout.lines();
-        if lines.is_some() {
-            for (idx, line) in lines.unwrap().into_iter().enumerate() {
-                let line_node_name = format!("line.{}", idx);
-                let line_node = scene_graph.add_node(line_node_name, SceneNodeType::LinePosition);
-                //line_node.add_property_u32("idx", idx as u32).unwrap();
-                //line_node.add_property_f32("baseline_y", line.baseline_y).unwrap();
-                //line_node.add_property_f32("padding", line.padding).unwrap();
-                //line_node.add_property_f32("max_ascent", line.max_ascent).unwrap();
-                //line_node.add_property_f32("min_descent", line.min_descent).unwrap();
-                //line_node.add_property_f32("max_line_gap", line.max_line_gap).unwrap();
-                //line_node.add_property_u32("glyph_start", line.glyph_start as u32).unwrap();
-                //line_node.add_property_u32("glyph_end", line.glyph_end as u32).unwrap();
-
-                let line_node_id = line_node.id;
-                scene_graph.link(line_node_id, text_node_id)?;
-            }
-        }
-        */
-
-        scene_graph.link(font_node_id, text_node_id)?;
-        Ok(text_node_id)
-    }
-
     fn method_create_text(&mut self, node_id: SceneNodeId, arg_data: Vec<u8>) -> Result<Vec<u8>> {
         let mut cur = Cursor::new(&arg_data);
         let node_name = String::decode(&mut cur).unwrap();
@@ -587,16 +530,74 @@ impl Stage {
         Ok(reply)
     }
     fn method_create_mesh(&mut self, node_id: SceneNodeId, arg_data: Vec<u8>) -> Result<Vec<u8>> {
-        Ok(vec![])
+        let mut cur = Cursor::new(&arg_data);
+        let node_name = String::decode(&mut cur).unwrap();
+        let verts = Vec::<Vertex>::decode(&mut cur).unwrap();
+        let faces = Vec::<Face>::decode(&mut cur).unwrap();
+
+        let vertex_buffer = self.ctx.new_buffer(
+            BufferType::VertexBuffer,
+            BufferUsage::Immutable,
+            BufferSource::slice(&verts),
+        );
+
+        /*
+        let bufsrc = unsafe {
+            BufferSource::pointer(
+                faces.as_ptr() as _,
+                std::mem::size_of_val(&faces[..]),
+                std::mem::size_of::<u32>(),
+            )
+        };
+        */
+
+        let index_buffer = self.ctx.new_buffer(
+            BufferType::IndexBuffer,
+            BufferUsage::Immutable,
+            BufferSource::slice(&faces),
+        );
+
+        let mesh = Mesh {
+            verts,
+            faces,
+            vertex_buffer,
+            index_buffer
+        };
+
+        let mesh_id = self.meshes.alloc(mesh);
+
+        let mut scene_graph = self.scene_graph.lock().unwrap();
+        let node = scene_graph.add_node(node_name, SceneNodeType::RenderMesh);
+
+        let mut prop =
+            Property::new("mesh_id", PropertyType::Uint32, PropertySubType::ResourceId);
+        prop.set_u32(0, mesh_id).unwrap();
+        node.add_property(prop)?;
+
+        let mut reply = vec![];
+        node.id.encode(&mut reply).unwrap();
+
+        Ok(reply)
     }
     fn method_delete_texture(
         &mut self,
         node_id: SceneNodeId,
         arg_data: Vec<u8>,
     ) -> Result<Vec<u8>> {
+        let mut cur = Cursor::new(&arg_data);
+        let texture_id = ResourceId::decode(&mut cur).unwrap();
+        let texture = self.textures.get(texture_id).ok_or(Error::ResourceNotFound)?;
+        self.ctx.delete_texture(*texture);
+        self.textures.free(texture_id);
         Ok(vec![])
     }
     fn method_delete_mesh(&mut self, node_id: SceneNodeId, arg_data: Vec<u8>) -> Result<Vec<u8>> {
+        let mut cur = Cursor::new(&arg_data);
+        let mesh_id = ResourceId::decode(&mut cur).unwrap();
+        let mesh = self.meshes.get(mesh_id).ok_or(Error::ResourceNotFound)?;
+        self.ctx.delete_buffer(mesh.vertex_buffer);
+        self.ctx.delete_buffer(mesh.index_buffer);
+        self.meshes.free(mesh_id);
         Ok(vec![])
     }
 }
@@ -829,14 +830,13 @@ impl EventHandler for Stage {
         let mut scene_graph = self.scene_graph.lock().unwrap();
         let win = scene_graph.lookup_node_mut("/window/input/keyboard").unwrap();
 
-        //win.set_property_bool("shift", modifiers.shift).unwrap();
-        //win.set_property_bool("ctrl", modifiers.ctrl).unwrap();
-        //win.set_property_bool("alt", modifiers.alt).unwrap();
-        //win.set_property_bool("logo", modifiers.logo).unwrap();
-        //win.set_property_bool("repeat", repeat).unwrap();
-
         let send_key_down = |key: &str| {
             let mut data = vec![];
+            modifiers.shift.encode(&mut data).unwrap();
+            modifiers.ctrl.encode(&mut data).unwrap();
+            modifiers.alt.encode(&mut data).unwrap();
+            modifiers.logo.encode(&mut data).unwrap();
+            repeat.encode(&mut data).unwrap();
             key.encode(&mut data).unwrap();
             win.trigger("key_down", data).unwrap();
         };

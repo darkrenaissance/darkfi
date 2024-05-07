@@ -80,4 +80,7 @@ pub enum Error {
 
     #[error("File not found")]
     FileNotFound = 26,
+
+    #[error("Resource is not found")]
+    ResourceNotFound = 27,
 }

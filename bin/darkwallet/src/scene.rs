@@ -14,6 +14,27 @@ use crate::{
     prop::{Property, PropertyType},
 };
 
+pub type SceneNodeId = u32;
+
+#[derive(Debug, Copy, Clone, PartialEq, SerialEncodable, SerialDecodable)]
+#[repr(u8)]
+pub enum SceneNodeType {
+    Null = 0,
+    Root = 1,
+    Window = 2,
+    WindowInput = 6,
+    Keyboard = 7,
+    Mouse = 8,
+    RenderLayer = 3,
+    RenderObject = 4,
+    RenderMesh = 5,
+    RenderText = 9,
+    RenderTexture = 13,
+    Fonts = 10,
+    Font = 11,
+    LinePosition = 12,
+}
+
 pub struct ScenePath(Vec<String>);
 
 impl<S: Into<String>> From<S> for ScenePath {
@@ -315,27 +336,6 @@ impl SceneGraph {
         }
         dangling
     }
-}
-
-pub type SceneNodeId = u32;
-
-#[derive(Debug, Copy, Clone, PartialEq, SerialEncodable, SerialDecodable)]
-#[repr(u8)]
-pub enum SceneNodeType {
-    Null = 0,
-    Root = 1,
-    Window = 2,
-    WindowInput = 6,
-    Keyboard = 7,
-    Mouse = 8,
-    RenderLayer = 3,
-    RenderObject = 4,
-    RenderMesh = 5,
-    RenderText = 9,
-    RenderTexture = 13,
-    Fonts = 10,
-    Font = 11,
-    LinePosition = 12,
 }
 
 #[derive(Clone)]
