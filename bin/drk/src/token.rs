@@ -37,7 +37,8 @@ use darkfi_money_contract::{
 };
 use darkfi_sdk::{
     crypto::{
-        contract_id::MONEY_CONTRACT_ID, Blind, FuncId, FuncRef, Keypair, PublicKey, SecretKey,
+        contract_id::MONEY_CONTRACT_ID, poseidon_hash, BaseBlind, Blind, FuncId, FuncRef, Keypair,
+        PublicKey, SecretKey,
     },
     dark_tree::DarkLeaf,
     pasta::pallas,
@@ -46,70 +47,118 @@ use darkfi_sdk::{
 use darkfi_serial::{deserialize_async, serialize_async, AsyncEncodable};
 
 use crate::{
-    error::WalletDbResult,
     money::{
         BALANCE_BASE10_DECIMALS, MONEY_TOKENS_COL_IS_FROZEN, MONEY_TOKENS_COL_MINT_AUTHORITY,
-        MONEY_TOKENS_COL_TOKEN_ID, MONEY_TOKENS_TABLE,
+        MONEY_TOKENS_COL_TOKEN_BLIND, MONEY_TOKENS_COL_TOKEN_ID, MONEY_TOKENS_TABLE,
     },
     Drk,
 };
 
 impl Drk {
-    /// Import a token mint authority into the wallet
-    pub async fn import_mint_authority(&self, mint_authority: SecretKey) -> WalletDbResult<()> {
-        let token_id = TokenId::derive(mint_authority);
+    /// Auxiliary function to derive `TokenAttributes` for provided secret key and token blind.
+    fn derive_token_attributes(
+        &self,
+        mint_authority: SecretKey,
+        token_blind: BaseBlind,
+    ) -> TokenAttributes {
+        // Create the Auth FuncID
+        let auth_func_id = FuncRef {
+            contract_id: *MONEY_CONTRACT_ID,
+            func_code: MoneyFunction::AuthTokenMintV1 as u8,
+        }
+        .to_func_id();
+
+        // Grab the mint autority key public coordinates
+        let (mint_auth_x, mint_auth_y) = PublicKey::from_secret(mint_authority).xy();
+
+        // Generate the token attributes
+        TokenAttributes {
+            auth_parent: auth_func_id,
+            user_data: poseidon_hash([mint_auth_x, mint_auth_y]),
+            blind: token_blind,
+        }
+    }
+
+    /// Import a token mint authority into the wallet.
+    pub async fn import_mint_authority(
+        &self,
+        mint_authority: SecretKey,
+        token_blind: BaseBlind,
+    ) -> Result<TokenId> {
+        let token_id = self.derive_token_attributes(mint_authority, token_blind).to_token_id();
         let is_frozen = 0;
 
         let query = format!(
-            "INSERT INTO {} ({}, {}, {}) VALUES (?1, ?2, ?3);",
+            "INSERT INTO {} ({}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4);",
             *MONEY_TOKENS_TABLE,
-            MONEY_TOKENS_COL_MINT_AUTHORITY,
             MONEY_TOKENS_COL_TOKEN_ID,
+            MONEY_TOKENS_COL_MINT_AUTHORITY,
+            MONEY_TOKENS_COL_TOKEN_BLIND,
             MONEY_TOKENS_COL_IS_FROZEN,
         );
 
-        self.wallet
+        if let Err(e) = self
+            .wallet
             .exec_sql(
                 &query,
                 rusqlite::params![
-                    serialize_async(&mint_authority).await,
                     serialize_async(&token_id).await,
+                    serialize_async(&mint_authority).await,
+                    serialize_async(&token_blind).await,
                     is_frozen,
                 ],
             )
             .await
+        {
+            return Err(Error::RusqliteError(format!(
+                "[import_mint_authority] Inserting mint authority failed: {e:?}"
+            )))
+        };
+
+        Ok(token_id)
     }
 
-    pub async fn list_tokens(&self) -> Result<Vec<(TokenId, SecretKey, bool)>> {
+    pub async fn get_mint_authorities(&self) -> Result<Vec<(TokenId, SecretKey, BaseBlind, bool)>> {
         let rows = match self.wallet.query_multiple(&MONEY_TOKENS_TABLE, &[], &[]).await {
             Ok(r) => r,
             Err(e) => {
                 return Err(Error::RusqliteError(format!(
-                    "[list_tokens] Tokens retrieval failed: {e:?}"
+                    "[get_mint_authorities] Tokens retrieval failed: {e:?}"
                 )))
             }
         };
 
         let mut ret = Vec::with_capacity(rows.len());
         for row in rows {
-            let Value::Blob(ref auth_bytes) = row[0] else {
-                return Err(Error::ParseFailed("[list_tokens] Mint authority bytes parsing failed"))
-            };
-            let mint_authority = deserialize_async(auth_bytes).await?;
-
-            let Value::Blob(ref token_bytes) = row[1] else {
-                return Err(Error::ParseFailed("[list_tokens] Token ID bytes parsing failed"))
+            let Value::Blob(ref token_bytes) = row[0] else {
+                return Err(Error::ParseFailed(
+                    "[get_mint_authorities] Token ID bytes parsing failed",
+                ))
             };
             let token_id = deserialize_async(token_bytes).await?;
 
-            let Value::Integer(frozen) = row[2] else {
-                return Err(Error::ParseFailed("[list_tokens] Is frozen parsing failed"))
+            let Value::Blob(ref auth_bytes) = row[1] else {
+                return Err(Error::ParseFailed(
+                    "[get_mint_authorities] Mint authority bytes parsing failed",
+                ))
+            };
+            let mint_authority = deserialize_async(auth_bytes).await?;
+
+            let Value::Blob(ref token_blind_bytes) = row[2] else {
+                return Err(Error::ParseFailed(
+                    "[get_mint_authorities] Token blind bytes parsing failed",
+                ))
+            };
+            let token_blind: BaseBlind = deserialize_async(token_blind_bytes).await?;
+
+            let Value::Integer(frozen) = row[3] else {
+                return Err(Error::ParseFailed("[get_mint_authorities] Is frozen parsing failed"))
             };
             let Ok(frozen) = i32::try_from(frozen) else {
-                return Err(Error::ParseFailed("[list_tokens] Is frozen parsing failed"))
+                return Err(Error::ParseFailed("[get_mint_authorities] Is frozen parsing failed"))
             };
 
-            ret.push((token_id, mint_authority, frozen != 0));
+            ret.push((token_id, mint_authority, token_blind, frozen != 0));
         }
 
         Ok(ret)
@@ -129,7 +178,7 @@ impl Drk {
         let amount = decode_base10(amount, BALANCE_BASE10_DECIMALS, false)?;
         let token_id = token_attrs.to_token_id();
 
-        let mut tokens = self.list_tokens().await?;
+        let mut tokens = self.get_mint_authorities().await?;
         tokens.retain(|x| x.0 == token_id);
         if tokens.is_empty() {
             return Err(Error::Custom(format!(
@@ -140,7 +189,7 @@ impl Drk {
 
         let mint_authority = Keypair::new(tokens[0].1);
 
-        if tokens[0].2 {
+        if tokens[0].3 {
             return Err(Error::Custom(
                 "This token mint is marked as frozen in the wallet".to_string(),
             ))
@@ -272,7 +321,7 @@ impl Drk {
     /// Create a token freeze transaction. Returns the transaction object on success.
     pub async fn freeze_token(&self, token_attrs: TokenAttributes) -> Result<Transaction> {
         let token_id = token_attrs.to_token_id();
-        let mut tokens = self.list_tokens().await?;
+        let mut tokens = self.get_mint_authorities().await?;
         tokens.retain(|x| x.0 == token_id);
         if tokens.is_empty() {
             return Err(Error::Custom(format!(
@@ -283,7 +332,7 @@ impl Drk {
 
         let mint_authority = Keypair::new(tokens[0].1);
 
-        if tokens[0].2 {
+        if tokens[0].3 {
             return Err(Error::Custom(
                 "This token is already marked as frozen in the wallet".to_string(),
             ))

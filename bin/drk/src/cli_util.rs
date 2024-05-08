@@ -372,7 +372,13 @@ pub fn generate_completions(shell: &str) -> Result<()> {
         .subcommands(vec![add, show, remove]);
 
     // Token
-    let import = SubCommand::with_name("import").about("Import a mint authority secret from stdin");
+    let secret_key = Arg::with_name("secret_key").help("Mint authority secret key");
+
+    let token_blind = Arg::with_name("token_blind").help("Mint authority token blind");
+
+    let import = SubCommand::with_name("import")
+        .about("Import a mint authority")
+        .args(&vec![secret_key, token_blind]);
 
     let generate_mint =
         SubCommand::with_name("generate-mint").about("Generate a new mint authority");

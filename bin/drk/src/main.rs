@@ -45,7 +45,7 @@ use darkfi::{
 };
 use darkfi_money_contract::model::{Coin, TokenId};
 use darkfi_sdk::{
-    crypto::{FuncId, PublicKey, SecretKey},
+    crypto::{BaseBlind, FuncId, PublicKey, SecretKey},
     pasta::{group::ff::PrimeField, pallas},
     tx::TransactionHash,
 };
@@ -455,8 +455,14 @@ enum AliasSubcmd {
 
 #[derive(Clone, Debug, Deserialize, StructOpt)]
 enum TokenSubcmd {
-    /// Import a mint authority secret from stdin
-    Import,
+    /// Import a mint authority
+    Import {
+        /// Mint authority secret key
+        secret_key: String,
+
+        /// Mint authority token blind
+        token_blind: String,
+    },
 
     /// Generate a new mint authority
     GenerateMint,
@@ -1531,41 +1537,35 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         },
 
         Subcmd::Token { command } => match command {
-            TokenSubcmd::Import => {
-                let mut buf = String::new();
-                stdin().read_to_string(&mut buf)?;
-                let mint_authority = match SecretKey::from_str(buf.trim()) {
-                    Ok(ma) => ma,
+            TokenSubcmd::Import { secret_key, token_blind } => {
+                let mint_authority = match SecretKey::from_str(&secret_key) {
+                    Ok(r) => r,
                     Err(e) => {
                         eprintln!("Invalid secret key: {e:?}");
                         exit(2);
                     }
                 };
 
-                let drk = Drk::new(args.wallet_path, args.wallet_pass, None, ex).await?;
-                if let Err(e) = drk.import_mint_authority(mint_authority).await {
-                    eprintln!("Importing mint authority failed: {e:?}");
-                    exit(2);
+                let token_blind = match BaseBlind::from_str(&token_blind) {
+                    Ok(r) => r,
+                    Err(e) => {
+                        eprintln!("Invalid recipient: {e:?}");
+                        exit(2);
+                    }
                 };
 
-                let token_id = TokenId::derive(mint_authority);
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, None, ex).await?;
+                let token_id = drk.import_mint_authority(mint_authority, token_blind).await?;
                 println!("Successfully imported mint authority for token ID: {token_id}");
 
                 Ok(())
             }
 
             TokenSubcmd::GenerateMint => {
-                let mint_authority = SecretKey::random(&mut OsRng);
-
                 let drk = Drk::new(args.wallet_path, args.wallet_pass, None, ex).await?;
-
-                if let Err(e) = drk.import_mint_authority(mint_authority).await {
-                    eprintln!("Importing mint authority failed: {e:?}");
-                    exit(2);
-                };
-
-                // TODO: see TokenAttributes struct. I'm not sure how to restructure this rn.
-                let token_id = TokenId::derive(mint_authority);
+                let mint_authority = SecretKey::random(&mut OsRng);
+                let token_blind = BaseBlind::random(&mut OsRng);
+                let token_id = drk.import_mint_authority(mint_authority, token_blind).await?;
                 println!("Successfully imported mint authority for token ID: {token_id}");
 
                 Ok(())
@@ -1573,7 +1573,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
             TokenSubcmd::List => {
                 let drk = Drk::new(args.wallet_path, args.wallet_pass, None, ex).await?;
-                let tokens = drk.list_tokens().await?;
+                let tokens = drk.get_mint_authorities().await?;
                 let aliases_map = match drk.get_aliases_mapped_by_token().await {
                     Ok(map) => map,
                     Err(e) => {
@@ -1584,15 +1584,21 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
                 let mut table = Table::new();
                 table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
-                table.set_titles(row!["Token ID", "Aliases", "Mint Authority", "Frozen"]);
+                table.set_titles(row![
+                    "Token ID",
+                    "Aliases",
+                    "Mint Authority",
+                    "Token Blind",
+                    "Frozen"
+                ]);
 
-                for (token_id, authority, frozen) in tokens {
+                for (token_id, authority, blind, frozen) in tokens {
                     let aliases = match aliases_map.get(&token_id.to_string()) {
                         Some(a) => a,
                         None => "-",
                     };
 
-                    table.add_row(row![token_id, aliases, authority, frozen]);
+                    table.add_row(row![token_id, aliases, authority, blind, frozen]);
                 }
 
                 if table.is_empty() {
@@ -1695,7 +1701,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 }
 
                 if table.is_empty() {
-                    eprintln!("No deploy authorities found");
+                    println!("No deploy authorities found");
                 } else {
                     println!("{table}");
                 }

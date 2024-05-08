@@ -16,12 +16,19 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use core::str::FromStr;
+
 #[cfg(feature = "async")]
 use darkfi_serial::{async_trait, AsyncDecodable, AsyncEncodable};
 use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 
-use pasta_curves::{group::ff::Field, pallas};
+use pasta_curves::{
+    group::ff::{Field, PrimeField},
+    pallas,
+};
 use rand_core::{CryptoRng, RngCore};
+
+use crate::error::ContractError;
 
 #[cfg(feature = "async")]
 pub trait EncDecode: Encodable + Decodable + AsyncEncodable + AsyncDecodable {}
@@ -72,8 +79,62 @@ impl From<u64> for BaseBlind {
     }
 }
 
+impl FromStr for BaseBlind {
+    type Err = ContractError;
+
+    /// Tries to create a `BaseBlind` object from a base58 encoded string.
+    fn from_str(enc: &str) -> Result<Self, Self::Err> {
+        let decoded = bs58::decode(enc).into_vec()?;
+        if decoded.len() != 32 {
+            return Err(Self::Err::IoError(
+                "Failed decoding BaseBlind from bytes, len is not 32".to_string(),
+            ))
+        }
+
+        match pallas::Base::from_repr(decoded.try_into().unwrap()).into() {
+            Some(k) => Ok(Self(k)),
+            None => Err(ContractError::IoError("Could not convert bytes to BaseBlind".to_string())),
+        }
+    }
+}
+
+impl core::fmt::Display for BaseBlind {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        let disp: String = bs58::encode(self.0.to_repr()).into_string();
+        write!(f, "{}", disp)
+    }
+}
+
 impl From<u64> for ScalarBlind {
     fn from(x: u64) -> Self {
         Self(pallas::Scalar::from(x))
+    }
+}
+
+impl FromStr for ScalarBlind {
+    type Err = ContractError;
+
+    /// Tries to create a `ScalarBlind` object from a base58 encoded string.
+    fn from_str(enc: &str) -> Result<Self, Self::Err> {
+        let decoded = bs58::decode(enc).into_vec()?;
+        if decoded.len() != 32 {
+            return Err(Self::Err::IoError(
+                "Failed decoding ScalarBlind from bytes, len is not 32".to_string(),
+            ))
+        }
+
+        match pallas::Scalar::from_repr(decoded.try_into().unwrap()).into() {
+            Some(k) => Ok(Self(k)),
+            None => {
+                Err(ContractError::IoError("Could not convert bytes to ScalarBlind".to_string()))
+            }
+        }
+    }
+}
+
+impl core::fmt::Display for ScalarBlind {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        let disp: String = bs58::encode(self.0.to_repr()).into_string();
+        write!(f, "{}", disp)
     }
 }
