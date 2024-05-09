@@ -193,7 +193,8 @@ impl Client {
             "END" => {
                 // At CAP END, if we have USER and NICK, we can welcome them.
                 self.reg_paused.store(false, SeqCst);
-                if self.registered.load(SeqCst) {
+                if self.registered.load(SeqCst) && !self.is_cap_end.load(SeqCst) {
+                    self.is_cap_end.store(true, SeqCst);
                     return Ok(self.welcome().await)
                 }
 

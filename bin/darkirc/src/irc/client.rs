@@ -78,6 +78,8 @@ pub struct Client {
     pub registered: AtomicBool,
     /// Registration pause marker
     pub reg_paused: AtomicBool,
+    /// CAP END marker
+    pub is_cap_end: AtomicBool,
     /// Client username
     pub username: Arc<RwLock<String>>,
     /// Client nickname
@@ -114,6 +116,7 @@ impl Client {
             penalty: AtomicUsize::new(0),
             registered: AtomicBool::new(false),
             reg_paused: AtomicBool::new(false),
+            is_cap_end: AtomicBool::new(false),
             username: username.clone(),
             nickname: nickname.clone(),
             realname: RwLock::new(String::from("*")),
