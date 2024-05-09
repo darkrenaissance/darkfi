@@ -197,12 +197,10 @@ async fn start_sync_loop(
             task_event = incoming.receive().fuse() => {
                 let event_id = task_event.id();
                 if *last_sent.read().await == event_id {
-                    info!("last seen");
                     continue
                 }
 
                 if seen_events.contains_key(event_id.as_bytes()).unwrap() {
-                    info!("Seen events");
                     continue
                 }
 
