@@ -297,8 +297,9 @@ impl Client {
                         format!("{} JOIN :{}", nick, INVALID_SYNTAX),
                     ))])
                 }
-
-                channels.insert(channel.to_string());
+                if !active_channels.contains(channel) {
+                    channels.insert(channel.to_string());
+                }
             }
         }
 
@@ -323,14 +324,17 @@ impl Client {
 
             // Create the replies
             replies.push(ReplyType::Client((nick.clone(), format!("JOIN :{}", channel))));
-            replies.push(ReplyType::Server((
-                RPL_NAMREPLY,
-                format!("{} = {} :{}", nick, channel, nick),
-            )));
-            replies.push(ReplyType::Server((
-                RPL_ENDOFNAMES,
-                format!("{} {} :End of NAMES list", nick, channel),
-            )));
+
+            ////////////////////
+            // replies.push(ReplyType::Server((
+            //     RPL_NAMREPLY,
+            //     format!("{} = {} :{}", nick, channel, nick),
+            // )));
+            // replies.push(ReplyType::Server((
+            //     RPL_ENDOFNAMES,
+            //     format!("{} {} :End of NAMES list", nick, channel),
+            // )));
+            ////////////////////
 
             if let Some(chan) = server_channels.get(channel) {
                 if !chan.topic.is_empty() {
@@ -347,7 +351,7 @@ impl Client {
         drop(server_channels);
 
         // Potentially extend the replies with channel history
-        replies.append(&mut self.get_history(&channels).await.unwrap());
+        replies.extend(self.get_history(&channels).await.unwrap());
 
         Ok(replies)
     }
@@ -889,43 +893,24 @@ impl Client {
         replies.append(&mut self.handle_cmd_motd("").await.unwrap());
 
         // If we have any configured autojoin channels, let's join the user
-        // and set their topics, if any.
-        let mut config_chans = self.server.channels.write().await;
-        let mut autojoin_chans = HashSet::new();
+        // and set their topics, if any. And request NAMES list.
         for channel in self.server.autojoin.read().await.iter() {
-            autojoin_chans.insert(channel.clone());
-        }
+            replies.extend(self.handle_cmd_join(channel).await.unwrap());
 
-        for channel in autojoin_chans.iter() {
-            replies.push(ReplyType::Client((nick.clone(), format!("JOIN :{}", channel))));
-            replies.push(ReplyType::Server((
-                RPL_NAMREPLY,
-                format!("{} = {} :{}", nick, channel, nick),
-            )));
+            if let Some(chan) = self.server.channels.read().await.get(channel) {
+                let nicks: Vec<String> = chan.nicks.iter().cloned().collect();
+
+                replies.push(ReplyType::Server((
+                    RPL_NAMREPLY,
+                    format!("{} = {} :{}", nick, channel, nicks.join(" ")),
+                )));
+            }
+
             replies.push(ReplyType::Server((
                 RPL_ENDOFNAMES,
                 format!("{} {} :End of NAMES list", nick, channel),
             )));
-
-            if let Some(chan) = config_chans.get_mut(channel) {
-                if !chan.topic.is_empty() {
-                    replies.push(ReplyType::Client((
-                        nick.clone(),
-                        format!("TOPIC {} :{}", channel, chan.topic),
-                    )));
-                }
-
-                // Insert the client into the channel nicklist
-                chan.nicks.insert(nick.clone());
-            }
         }
-
-        // Drop the write lock, it's used in get_history()
-        drop(config_chans);
-
-        // Potentially extend replies with history
-        autojoin_chans.insert(self.nickname.read().await.to_string());
-        replies.append(&mut self.get_history(&autojoin_chans).await.unwrap());
 
         replies
     }
@@ -969,6 +954,11 @@ impl Client {
             // a reply and mark it as seen in the seen_events tree.
             if !channels.contains(&privmsg.channel) {
                 continue
+            }
+
+            // Insert nicks into channels
+            if let Some(chan) = self.server.channels.write().await.get_mut(&privmsg.channel) {
+                chan.nicks.insert(privmsg.nick.clone());
             }
 
             let msg = format!("PRIVMSG {} :{}", privmsg.channel, privmsg.msg);
