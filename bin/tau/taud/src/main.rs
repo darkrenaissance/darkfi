@@ -197,10 +197,12 @@ async fn start_sync_loop(
             task_event = incoming.receive().fuse() => {
                 let event_id = task_event.id();
                 if *last_sent.read().await == event_id {
+                    info!("last seen");
                     continue
                 }
 
                 if seen_events.contains_key(event_id.as_bytes()).unwrap() {
+                    info!("Seen events");
                     continue
                 }
 
@@ -541,13 +543,21 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
     signals_handler.wait_termination(signals_task).await?;
     info!("Caught termination signal, cleaning up and exiting...");
 
+    info!("Stopping P2P network");
+    p2p.stop().await;
+
     info!(target: "taud", "Stopping JSON-RPC server...");
     rpc_task.stop().await;
+    dnet_task.stop().await;
+    deg_task.stop().await;
 
     info!(target: "taud", "Stopping sync loop task...");
     sync_loop_task.stop().await;
 
-    p2p.stop().await;
+    info!("Flushing sled database...");
+    let flushed_bytes = sled_db.flush_async().await?;
+    info!("Flushed {} bytes", flushed_bytes);
 
+    info!("Shut down successfully");
     Ok(())
 }
