@@ -30,11 +30,11 @@ from os.path import join
 # this is counter-intuitive because the dag is reversed
 resolved = True
 
-def graph(event, dag, longest_path):
+def graph(event, longest_path):
     global resolved
-    merge = len(list(dag.predecessors(event['hash']))) > 1
-    fork = len(list(dag.successors(event['hash']))) > 1
-    
+    merge = len(event['parents']) > 1
+    fork = len(event['children']) > 1
+
     if merge and not fork:
         resolved = False
         return "M━┑"
@@ -63,8 +63,8 @@ def indent(num):
 
 class ListItem(u.WidgetWrap):
     
-    def __init__ (self, event, dag, longest_path):
-        g = graph(event, dag, longest_path)
+    def __init__ (self, event, longest_path):
+        g = graph(event, longest_path)
         self.content = event
         layer_num = int(event["layer"])
         layer = "layer " + str(layer_num) + indent(layer_num) if layer_num != 0 else "genesis       "
@@ -95,8 +95,8 @@ class ListView(u.WidgetWrap):
         focus_w, _ = self.walker.get_focus()
         u.emit_signal(self, 'show_details', focus_w.content)
 
-    def set_data(self, events, dag, longest_path):
-        events_widgets = [ListItem(e, dag, longest_path) for e in events]
+    def set_data(self, events, longest_path):
+        events_widgets = [ListItem(e, longest_path) for e in events]
         u.disconnect_signal(self.walker, 'modified', self.modified)
 
         while len(self.walker) > 0:
@@ -202,7 +202,7 @@ class App(object):
                 l.append({"layer":f"{layer}", "hash":f"{node}", "children":children, "parents":parents, "content":f"{matches}", "timestamp": f"{timestamp}"})
 
             longest_path = nx.dag_longest_path(dag)
-            self.view_one.set_data(l, dag, longest_path)
+            self.view_one.set_data(l, longest_path)
 
     async def start(self, config):
         await self.update_data(config)
