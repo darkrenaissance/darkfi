@@ -2,7 +2,7 @@ FROM ubuntu
 ENV DEBIAN_FRONTEND noninteractive
 
 RUN apt update
-RUN apt install -yq openjdk-19-jre-headless openjdk-19-jdk-headless
+RUN apt install -yq openjdk-21-jre-headless openjdk-21-jdk-headless
 RUN apt install -yq wget unzip cmake file
 # For vendored openssl
 RUN apt-get update && apt-get install -y build-essential checkinstall zlib1g-dev
