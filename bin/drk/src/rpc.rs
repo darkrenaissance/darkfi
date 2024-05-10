@@ -140,9 +140,16 @@ impl Drk {
                                 "[subscribe_blocks] Scanning block failed: {e:?}"
                             )))
                         }
-                        if let Err(e) = self
-                            .update_tx_history_records_status(&block_data.txs, "Finalized")
-                            .await
+                        let txs_hashes = match self.insert_tx_history_records(&block_data.txs).await {
+                            Ok(hashes) => hashes,
+                            Err(e) => {
+                                return Err(Error::RusqliteError(format!(
+                                    "[subscribe_blocks] Inserting transaction history records failed: {e:?}"
+                                )))
+                            },
+                        };
+                        if let Err(e) =
+                            self.update_tx_history_records_status(&txs_hashes, "Finalized").await
                         {
                             return Err(Error::RusqliteError(format!(
                                 "[subscribe_blocks] Update transaction history record status failed: {e:?}"
@@ -174,11 +181,12 @@ impl Drk {
     async fn scan_block(&self, block: &BlockInfo) -> Result<()> {
         println!("[scan_block] Iterating over {} transactions", block.txs.len());
         for tx in block.txs.iter() {
-            println!("[scan_block] Processing transaction: {}", tx.hash());
+            let tx_hash = tx.hash().to_string();
+            println!("[scan_block] Processing transaction: {tx_hash}");
             for (i, call) in tx.calls.iter().enumerate() {
                 if call.data.contract_id == *MONEY_CONTRACT_ID {
                     println!("[scan_block] Found Money contract in call {i}");
-                    self.apply_tx_money_data(&call.data.data).await?;
+                    self.apply_tx_money_data(&call.data.data, &tx_hash).await?;
                     continue
                 }
 
@@ -260,7 +268,7 @@ impl Drk {
             }
 
             while height <= last {
-                eprint!("Requesting block {}... ", height);
+                println!("Requesting block {}... ", height);
                 let block = match self.get_block_by_height(height).await {
                     Ok(r) => r,
                     Err(e) => {
@@ -272,7 +280,8 @@ impl Drk {
                     eprintln!("[scan_blocks] Scan block failed: {e:?}");
                     return Err(WalletDbError::GenericError)
                 };
-                self.update_tx_history_records_status(&block.txs, "Finalized").await?;
+                let txs_hashes = self.insert_tx_history_records(&block.txs).await?;
+                self.update_tx_history_records_status(&txs_hashes, "Finalized").await?;
                 height += 1;
             }
         }

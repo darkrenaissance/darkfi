@@ -15,22 +15,46 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-use std::{io::Cursor, process::exit, str::FromStr};
+use std::{
+    io::{stdin, Cursor, Read},
+    process::exit,
+    str::FromStr,
+};
 
 use rodio::{source::Source, Decoder, OutputStream};
 use structopt_toml::clap::{App, Arg, Shell, SubCommand};
 
-use darkfi::{cli_desc, system::sleep, util::parse::decode_base10, Error, Result};
+use darkfi::{
+    cli_desc,
+    system::sleep,
+    tx::Transaction,
+    util::{encoding::base64, parse::decode_base10},
+    Error, Result,
+};
 use darkfi_money_contract::model::TokenId;
+use darkfi_serial::deserialize_async;
 
 use crate::{money::BALANCE_BASE10_DECIMALS, Drk};
+
+/// Auxiliary function to parse a base64 encoded transaction from stdin.
+pub async fn parse_tx_from_stdin() -> Result<Transaction> {
+    println!("Reading transaction from stdin...");
+    let mut buf = String::new();
+    stdin().read_to_string(&mut buf)?;
+    let Some(bytes) = base64::decode(buf.trim()) else {
+        eprintln!("Failed to decode transaction");
+        exit(2);
+    };
+
+    Ok(deserialize_async(&bytes).await?)
+}
 
 /// Auxiliary function to parse provided string into a values pair.
 pub fn parse_value_pair(s: &str) -> Result<(u64, u64)> {
     let v: Vec<&str> = s.split(':').collect();
     if v.len() != 2 {
         eprintln!("Invalid value pair. Use a pair such as 13.37:11.0");
-        exit(1);
+        exit(2);
     }
 
     let val0 = decode_base10(v[0], BALANCE_BASE10_DECIMALS, true);
@@ -38,7 +62,7 @@ pub fn parse_value_pair(s: &str) -> Result<(u64, u64)> {
 
     if val0.is_err() || val1.is_err() {
         eprintln!("Invalid value pair. Use a pair such as 13.37:11.0");
-        exit(1);
+        exit(2);
     }
 
     Ok((val0.unwrap(), val1.unwrap()))
@@ -52,7 +76,7 @@ pub async fn parse_token_pair(drk: &Drk, s: &str) -> Result<(TokenId, TokenId)> 
         eprintln!("WCKD:MLDY");
         eprintln!("or");
         eprintln!("A7f1RKsCUUHrSXA7a9ogmwg8p3bs6F47ggsW826HD4yd:FCuoMii64H5Ee4eVWBjP18WTFS8iLUJmGi16Qti1xFQ2");
-        exit(1);
+        exit(2);
     }
 
     let tok0 = drk.get_token(v[0].to_string()).await;
@@ -63,7 +87,7 @@ pub async fn parse_token_pair(drk: &Drk, s: &str) -> Result<(TokenId, TokenId)> 
         eprintln!("WCKD:MLDY");
         eprintln!("or");
         eprintln!("A7f1RKsCUUHrSXA7a9ogmwg8p3bs6F47ggsW826HD4yd:FCuoMii64H5Ee4eVWBjP18WTFS8iLUJmGi16Qti1xFQ2");
-        exit(1);
+        exit(2);
     }
 
     Ok((tok0.unwrap(), tok1.unwrap()))
@@ -148,6 +172,10 @@ pub fn generate_completions(shell: &str) -> Result<()> {
         tree,
         coins,
     ]);
+
+    // Spend
+    let spend = SubCommand::with_name("spend")
+        .about("Read a transaction from stdin and mark its input coins as spent");
 
     // Unspend
     let coin = Arg::with_name("coin").help("base58-encoded coin to mark as unspent");
@@ -435,6 +463,7 @@ pub fn generate_completions(shell: &str) -> Result<()> {
         ping,
         completions,
         wallet,
+        spend,
         unspend,
         transfer,
         otc,

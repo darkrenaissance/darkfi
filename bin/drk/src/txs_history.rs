@@ -16,11 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use lazy_static::lazy_static;
 use rusqlite::types::Value;
 
-use darkfi::{tx::Transaction, util::encoding::base64, Error, Result};
-use darkfi_sdk::crypto::MONEY_CONTRACT_ID;
+use darkfi::{tx::Transaction, Error, Result};
 use darkfi_serial::{deserialize_async, serialize_async};
 
 use crate::{
@@ -30,36 +28,43 @@ use crate::{
 };
 
 // Wallet SQL table constant names. These have to represent the `wallet.sql`
-// SQL schema. Table names are prefixed with the contract ID to avoid collisions.
-lazy_static! {
-    pub static ref WALLET_TXS_HISTORY_TABLE: String =
-        format!("{}_transactions_history", MONEY_CONTRACT_ID.to_string());
-}
+// SQL schema.
+const WALLET_TXS_HISTORY_TABLE: &str = "transactions_history";
 const WALLET_TXS_HISTORY_COL_TX_HASH: &str = "transaction_hash";
 const WALLET_TXS_HISTORY_COL_STATUS: &str = "status";
 const WALLET_TXS_HISTORY_COL_TX: &str = "tx";
 
 impl Drk {
-    /// Insert a [`Transaction`] history record into the wallet.
-    pub async fn insert_tx_history_record(&self, tx: &Transaction) -> WalletDbResult<()> {
+    /// Insert a `Transaction` history record into the wallet.
+    pub async fn insert_tx_history_record(&self, tx: &Transaction) -> WalletDbResult<String> {
         let query = format!(
-            "INSERT INTO {} ({}, {}, {}) VALUES (?1, ?2, ?3);",
-            *WALLET_TXS_HISTORY_TABLE,
+            "INSERT OR IGNORE INTO {} ({}, {}, {}) VALUES (?1, ?2, ?3);",
+            WALLET_TXS_HISTORY_TABLE,
             WALLET_TXS_HISTORY_COL_TX_HASH,
             WALLET_TXS_HISTORY_COL_STATUS,
             WALLET_TXS_HISTORY_COL_TX,
         );
-        let tx_hash = tx.hash();
+        let tx_hash = tx.hash().to_string();
         self.wallet
             .exec_sql(
                 &query,
-                rusqlite::params![
-                    tx_hash.to_string(),
-                    "Broadcasted",
-                    base64::encode(&serialize_async(tx).await),
-                ],
+                rusqlite::params![tx_hash, "Broadcasted", &serialize_async(tx).await,],
             )
-            .await
+            .await?;
+
+        Ok(tx_hash)
+    }
+
+    /// Insert a slice of [`Transaction`] history records into the wallet.
+    pub async fn insert_tx_history_records(
+        &self,
+        txs: &[Transaction],
+    ) -> WalletDbResult<Vec<String>> {
+        let mut ret = Vec::with_capacity(txs.len());
+        for tx in txs {
+            ret.push(self.insert_tx_history_record(tx).await?);
+        }
+        Ok(ret)
     }
 
     /// Get a transaction history record.
@@ -70,7 +75,7 @@ impl Drk {
         let row = match self
             .wallet
             .query_single(
-                &WALLET_TXS_HISTORY_TABLE,
+                WALLET_TXS_HISTORY_TABLE,
                 &[],
                 convert_named_params! {(WALLET_TXS_HISTORY_COL_TX_HASH, tx_hash)},
             )
@@ -89,28 +94,19 @@ impl Drk {
                 "[get_tx_history_record] Transaction hash parsing failed",
             ))
         };
-        let tx_hash = tx_hash.clone();
 
         let Value::Text(ref status) = row[1] else {
             return Err(Error::ParseFailed("[get_tx_history_record] Status parsing failed"))
         };
-        let status = status.clone();
 
-        let Value::Text(ref tx_encoded) = row[2] else {
+        let Value::Blob(ref bytes) = row[2] else {
             return Err(Error::ParseFailed(
-                "[get_tx_history_record] Encoded transaction parsing failed",
+                "[get_tx_history_record] Transaction bytes parsing failed",
             ))
         };
+        let tx: Transaction = deserialize_async(bytes).await?;
 
-        let Some(tx_bytes) = base64::decode(tx_encoded) else {
-            return Err(Error::ParseFailed(
-                "[get_tx_history_record] Encoded transaction parsing failed",
-            ))
-        };
-
-        let tx: Transaction = deserialize_async(&tx_bytes).await?;
-
-        Ok((tx_hash, status, tx))
+        Ok((tx_hash.clone(), status.clone(), tx))
     }
 
     /// Fetch all transactions history records, excluding bytes column.
@@ -118,7 +114,7 @@ impl Drk {
         let rows = self
             .wallet
             .query_multiple(
-                &WALLET_TXS_HISTORY_TABLE,
+                WALLET_TXS_HISTORY_TABLE,
                 &[WALLET_TXS_HISTORY_COL_TX_HASH, WALLET_TXS_HISTORY_COL_STATUS],
                 &[],
             )
@@ -129,53 +125,31 @@ impl Drk {
             let Value::Text(ref tx_hash) = row[0] else {
                 return Err(WalletDbError::ParseColumnValueError)
             };
-            let tx_hash = tx_hash.clone();
 
             let Value::Text(ref status) = row[1] else {
                 return Err(WalletDbError::ParseColumnValueError)
             };
-            let status = status.clone();
 
-            ret.push((tx_hash, status));
+            ret.push((tx_hash.clone(), status.clone()));
         }
 
         Ok(ret)
     }
 
-    /// Update a transactions history record status to the given one.
-    pub async fn update_tx_history_record_status(
-        &self,
-        tx_hash: &str,
-        status: &str,
-    ) -> WalletDbResult<()> {
-        let query = format!(
-            "UPDATE {} SET {} = ?1 WHERE {} = ?2;",
-            *WALLET_TXS_HISTORY_TABLE,
-            WALLET_TXS_HISTORY_COL_STATUS,
-            WALLET_TXS_HISTORY_COL_TX_HASH,
-        );
-        self.wallet.exec_sql(&query, rusqlite::params![status, tx_hash]).await
-    }
-
     /// Update given transactions history record statuses to the given one.
     pub async fn update_tx_history_records_status(
         &self,
-        txs: &Vec<Transaction>,
+        txs_hashes: &[String],
         status: &str,
     ) -> WalletDbResult<()> {
-        if txs.is_empty() {
+        if txs_hashes.is_empty() {
             return Ok(())
         }
 
-        let mut txs_hashes = Vec::with_capacity(txs.len());
-        for tx in txs {
-            let tx_hash = tx.hash();
-            txs_hashes.push(format!("{tx_hash}"));
-        }
         let txs_hashes_string = format!("{:?}", txs_hashes).replace('[', "(").replace(']', ")");
         let query = format!(
             "UPDATE {} SET {} = ?1 WHERE {} IN {};",
-            *WALLET_TXS_HISTORY_TABLE,
+            WALLET_TXS_HISTORY_TABLE,
             WALLET_TXS_HISTORY_COL_STATUS,
             WALLET_TXS_HISTORY_COL_TX_HASH,
             txs_hashes_string
@@ -188,7 +162,7 @@ impl Drk {
     pub async fn update_all_tx_history_records_status(&self, status: &str) -> WalletDbResult<()> {
         let query = format!(
             "UPDATE {} SET {} = ?1",
-            *WALLET_TXS_HISTORY_TABLE, WALLET_TXS_HISTORY_COL_STATUS,
+            WALLET_TXS_HISTORY_TABLE, WALLET_TXS_HISTORY_COL_STATUS,
         );
         self.wallet.exec_sql(&query, rusqlite::params![status]).await
     }

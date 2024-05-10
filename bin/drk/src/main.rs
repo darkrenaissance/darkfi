@@ -69,7 +69,9 @@ mod token;
 
 /// CLI utility functions
 mod cli_util;
-use cli_util::{generate_completions, kaching, parse_token_pair, parse_value_pair};
+use cli_util::{
+    generate_completions, kaching, parse_token_pair, parse_tx_from_stdin, parse_value_pair,
+};
 
 /// Wallet functionality related to Money
 mod money;
@@ -185,6 +187,9 @@ enum Subcmd {
         /// Print all the coins in the wallet
         coins: bool,
     },
+
+    /// Read a transaction from stdin and mark its input coins as spent
+    Spend,
 
     /// Unspend a coin
     Unspend {
@@ -798,7 +803,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     "Aliases",
                     "Value",
                     "Spend Hook",
-                    "User Data"
+                    "User Data",
+                    "Spent TX"
                 ]);
                 for coin in coins {
                     let aliases = match aliases_map.get(&coin.0.note.token_id.to_string()) {
@@ -835,7 +841,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                             encode_base10(coin.0.note.value, BALANCE_BASE10_DECIMALS)
                         ),
                         spend_hook,
-                        user_data
+                        user_data,
+                        coin.2
                     ]);
                 }
 
@@ -845,6 +852,19 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             }
 
             unreachable!()
+        }
+
+        Subcmd::Spend => {
+            let tx = parse_tx_from_stdin().await?;
+
+            let drk = Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
+
+            if let Err(e) = drk.mark_tx_spend(&tx).await {
+                eprintln!("Failed to mark transaction coins as spent: {e:?}");
+                exit(2);
+            };
+
+            Ok(())
         }
 
         Subcmd::Unspend { coin } => {
@@ -976,7 +996,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 stdin().read_to_string(&mut buf)?;
                 let Some(bytes) = base64::decode(buf.trim()) else {
                     eprintln!("Failed to decode swap transaction");
-                    exit(1);
+                    exit(2);
                 };
 
                 let mut tx: Transaction = deserialize_async(&bytes).await?;
@@ -1271,30 +1291,25 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         },
 
         Subcmd::Inspect => {
-            let mut buf = String::new();
-            stdin().read_to_string(&mut buf)?;
-            let Some(bytes) = base64::decode(buf.trim()) else {
-                eprintln!("Failed to decode transaction");
-                exit(1);
-            };
-
-            let tx: Transaction = deserialize_async(&bytes).await?;
+            let tx = parse_tx_from_stdin().await?;
             println!("{tx:#?}");
             Ok(())
         }
 
         Subcmd::Broadcast => {
-            println!("Reading transaction from stdin...");
-            let mut buf = String::new();
-            stdin().read_to_string(&mut buf)?;
-            let Some(bytes) = base64::decode(buf.trim()) else {
-                eprintln!("Failed to decode transaction");
-                exit(1);
-            };
-
-            let tx = deserialize_async(&bytes).await?;
+            let tx = parse_tx_from_stdin().await?;
 
             let drk = Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
+
+            if let Err(e) = drk.simulate_tx(&tx).await {
+                eprintln!("Failed to simulate tx: {e:?}");
+                exit(2);
+            };
+
+            if let Err(e) = drk.mark_tx_spend(&tx).await {
+                eprintln!("Failed to mark transaction coins as spent: {e:?}");
+                exit(2);
+            };
 
             let txid = match drk.broadcast_tx(&tx).await {
                 Ok(t) => t,
@@ -1398,15 +1413,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             }
 
             ExplorerSubcmd::SimulateTx => {
-                println!("Reading transaction from stdin...");
-                let mut buf = String::new();
-                stdin().read_to_string(&mut buf)?;
-                let Some(bytes) = base64::decode(buf.trim()) else {
-                    eprintln!("Failed to decode transaction");
-                    exit(1);
-                };
-
-                let tx = deserialize_async(&bytes).await?;
+                let tx = parse_tx_from_stdin().await?;
 
                 let drk =
                     Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
@@ -1539,17 +1546,17 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         Subcmd::Token { command } => match command {
             TokenSubcmd::Import { secret_key, token_blind } => {
                 let mint_authority = match SecretKey::from_str(&secret_key) {
-                    Ok(r) => r,
+                    Ok(ma) => ma,
                     Err(e) => {
-                        eprintln!("Invalid secret key: {e:?}");
+                        eprintln!("Invalid mint authority: {e:?}");
                         exit(2);
                     }
                 };
 
                 let token_blind = match BaseBlind::from_str(&token_blind) {
-                    Ok(r) => r,
+                    Ok(tb) => tb,
                     Err(e) => {
-                        eprintln!("Invalid recipient: {e:?}");
+                        eprintln!("Invalid token blind: {e:?}");
                         exit(2);
                     }
                 };
@@ -1682,7 +1689,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
                 if let Err(e) = drk.deploy_auth_keygen().await {
                     eprintln!("Error creating deploy auth keypair: {:?}", e);
-                    exit(1);
+                    exit(2);
                 }
 
                 Ok(())
@@ -1721,7 +1728,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     Ok(v) => v,
                     Err(e) => {
                         eprintln!("Error creating contract deployment tx: {}", e);
-                        exit(1);
+                        exit(2);
                     }
                 };
 
@@ -1737,7 +1744,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     Ok(v) => v,
                     Err(e) => {
                         eprintln!("Error creating contract lock tx: {}", e);
-                        exit(1);
+                        exit(2);
                     }
                 };
 

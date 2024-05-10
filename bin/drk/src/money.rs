@@ -101,6 +101,7 @@ pub const MONEY_COINS_COL_SECRET: &str = "secret";
 pub const MONEY_COINS_COL_NULLIFIER: &str = "nullifier";
 pub const MONEY_COINS_COL_LEAF_POSITION: &str = "leaf_position";
 pub const MONEY_COINS_COL_MEMO: &str = "memo";
+pub const MONEY_COINS_COL_SPENT_TX_HASH: &str = "spent_tx_hash";
 
 // MONEY_TOKENS_TABLE
 pub const MONEY_TOKENS_COL_TOKEN_ID: &str = "token_id";
@@ -390,7 +391,7 @@ impl Drk {
     /// Fetch all coins and their metadata related to the Money contract from the wallet.
     /// Optionally also fetch spent ones.
     /// The boolean in the returned tuple notes if the coin was marked as spent.
-    pub async fn get_coins(&self, fetch_spent: bool) -> Result<Vec<(OwnCoin, bool)>> {
+    pub async fn get_coins(&self, fetch_spent: bool) -> Result<Vec<(OwnCoin, bool, String)>> {
         let query = if fetch_spent {
             self.wallet.query_multiple(&MONEY_COINS_TABLE, &[], &[]).await
         } else {
@@ -448,7 +449,7 @@ impl Drk {
 
     /// Auxiliary function to parse a `MONEY_COINS_TABLE` record.
     /// The boolean in the returned tuple notes if the coin was marked as spent.
-    async fn parse_coin_record(&self, row: &[Value]) -> Result<(OwnCoin, bool)> {
+    async fn parse_coin_record(&self, row: &[Value]) -> Result<(OwnCoin, bool, String)> {
         let Value::Blob(ref coin_bytes) = row[0] else {
             return Err(Error::ParseFailed("[parse_coin_record] Coin bytes parsing failed"))
         };
@@ -517,6 +518,12 @@ impl Drk {
             return Err(Error::ParseFailed("[parse_coin_record] Memo parsing failed"))
         };
 
+        let Value::Text(ref spent_tx_hash) = row[13] else {
+            return Err(Error::ParseFailed(
+                "[parse_coin_record] Spent transaction hash parsing failed",
+            ))
+        };
+
         let note = MoneyNote {
             value,
             token_id,
@@ -528,7 +535,7 @@ impl Drk {
             memo: memo.clone(),
         };
 
-        Ok((OwnCoin { coin, note, secret, leaf_position }, is_spent))
+        Ok((OwnCoin { coin, note, secret, leaf_position }, is_spent, spent_tx_hash.clone()))
     }
 
     /// Create an alias record for provided Token ID.
@@ -618,11 +625,17 @@ impl Drk {
     pub async fn unspend_coin(&self, coin: &Coin) -> WalletDbResult<()> {
         let is_spend = 0;
         let query = format!(
-            "UPDATE {} SET {} = ?1 WHERE {} = ?2",
-            *MONEY_COINS_TABLE, MONEY_COINS_COL_IS_SPENT, MONEY_COINS_COL_COIN,
+            "UPDATE {} SET {} = ?1, {} = ?2 WHERE {} = ?3;",
+            *MONEY_COINS_TABLE,
+            MONEY_COINS_COL_IS_SPENT,
+            MONEY_COINS_COL_SPENT_TX_HASH,
+            MONEY_COINS_COL_COIN
         );
         self.wallet
-            .exec_sql(&query, rusqlite::params![is_spend, serialize_async(&coin.inner()).await])
+            .exec_sql(
+                &query,
+                rusqlite::params![is_spend, "-", serialize_async(&coin.inner()).await],
+            )
             .await
     }
 
@@ -673,8 +686,12 @@ impl Drk {
         Ok(height)
     }
 
-    /// Append data related to Money contract transactions into the wallet database.
-    pub async fn apply_tx_money_data(&self, data: &[u8]) -> Result<()> {
+    /// Auxiliary function to  grab all the nullifiers, coins, notes and freezes from
+    /// transaction data.
+    async fn parse_call_data(
+        &self,
+        data: &[u8],
+    ) -> Result<(Vec<Nullifier>, Vec<Coin>, Vec<AeadEncryptedNote>, Vec<TokenId>)> {
         let mut nullifiers: Vec<Nullifier> = vec![];
         let mut coins: Vec<Coin> = vec![];
         let mut notes: Vec<AeadEncryptedNote> = vec![];
@@ -745,6 +762,12 @@ impl Drk {
             }
         }
 
+        Ok((nullifiers, coins, notes, freezes))
+    }
+
+    /// Append data related to Money contract transactions into the wallet database.
+    pub async fn apply_tx_money_data(&self, data: &[u8], tx_hash: &String) -> Result<()> {
+        let (nullifiers, coins, notes, freezes) = self.parse_call_data(data).await?;
         let secrets = self.get_money_secrets().await?;
         let dao_secrets = self.get_dao_secrets().await?;
         let mut tree = self.get_money_tree().await?;
@@ -775,9 +798,7 @@ impl Drk {
                 "[apply_tx_money_data] Put Money tree failed: {e:?}"
             )))
         }
-        if !nullifiers.is_empty() {
-            self.mark_spent_coins(&nullifiers).await?;
-        }
+        self.mark_spent_coins(&nullifiers, tx_hash).await?;
 
         // This is the SQL query we'll be executing to insert new coins
         // into the wallet
@@ -849,27 +870,54 @@ impl Drk {
         Ok(())
     }
 
+    /// Mark provided transaction input coins as spent.
+    pub async fn mark_tx_spend(&self, tx: &Transaction) -> Result<()> {
+        let tx_hash = tx.hash().to_string();
+        println!("[mark_tx_spend] Processing transaction: {tx_hash}");
+        for (i, call) in tx.calls.iter().enumerate() {
+            if call.data.contract_id != *MONEY_CONTRACT_ID {
+                continue
+            }
+
+            println!("[mark_tx_spend] Found Money contract in call {i}");
+            let (nullifiers, _, _, _) = self.parse_call_data(&call.data.data).await?;
+            self.mark_spent_coins(&nullifiers, &tx_hash).await?;
+        }
+
+        Ok(())
+    }
+
     /// Mark a coin in the wallet as spent
-    pub async fn mark_spent_coin(&self, coin: &Coin) -> WalletDbResult<()> {
+    pub async fn mark_spent_coin(&self, coin: &Coin, spent_tx_hash: &String) -> WalletDbResult<()> {
         let query = format!(
-            "UPDATE {} SET {} = ?1 WHERE {} = ?2;",
-            *MONEY_COINS_TABLE, MONEY_COINS_COL_IS_SPENT, MONEY_COINS_COL_COIN
+            "UPDATE {} SET {} = ?1, {} = ?2 WHERE {} = ?3;",
+            *MONEY_COINS_TABLE,
+            MONEY_COINS_COL_IS_SPENT,
+            MONEY_COINS_COL_SPENT_TX_HASH,
+            MONEY_COINS_COL_COIN
         );
         let is_spent = 1;
         self.wallet
-            .exec_sql(&query, rusqlite::params![is_spent, serialize_async(&coin.inner()).await])
+            .exec_sql(
+                &query,
+                rusqlite::params![is_spent, spent_tx_hash, serialize_async(&coin.inner()).await],
+            )
             .await
     }
 
     /// Marks all coins in the wallet as spent, if their nullifier is in the given set
-    pub async fn mark_spent_coins(&self, nullifiers: &[Nullifier]) -> Result<()> {
+    pub async fn mark_spent_coins(
+        &self,
+        nullifiers: &[Nullifier],
+        spent_tx_hash: &String,
+    ) -> Result<()> {
         if nullifiers.is_empty() {
             return Ok(())
         }
 
-        for (coin, _) in self.get_coins(false).await? {
+        for (coin, _, _) in self.get_coins(false).await? {
             if nullifiers.contains(&coin.nullifier()) {
-                if let Err(e) = self.mark_spent_coin(&coin.coin).await {
+                if let Err(e) = self.mark_spent_coin(&coin.coin, spent_tx_hash).await {
                     return Err(Error::RusqliteError(format!(
                         "[mark_spent_coins] Marking spent coin failed: {e:?}"
                     )))

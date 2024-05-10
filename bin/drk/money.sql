@@ -33,7 +33,8 @@ CREATE TABLE IF NOT EXISTS BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o_money_co
 	secret BLOB NOT NULL,
 	nullifier BLOB NOT NULL,
 	leaf_position BLOB NOT NULL,
-	memo BLOB
+	memo BLOB,
+	spent_tx_hash TEXT DEFAULT '-'
 );
 
 -- Arbitrary tokens
@@ -48,11 +49,4 @@ CREATE TABLE IF NOT EXISTS BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o_money_to
 CREATE TABLE IF NOT EXISTS BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o_money_aliases (
 	alias BLOB PRIMARY KEY NOT NULL,
 	token_id BLOB NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o_transactions_history (
-	id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-	transaction_hash TEXT UNIQUE NOT NULL,
-	status TEXT NOT NULL,
-	tx TEXT UNIQUE NOT NULL
 );
