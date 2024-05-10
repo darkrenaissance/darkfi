@@ -18,28 +18,12 @@
 
 use crate::util::time::NanoTimestamp;
 
-macro_rules! degev {
-      ($self:expr, $event_name:ident, $($code:tt)*) => {
-          {
-              if *$self.event_graph.deg_enabled.read().await {
-                  let event = DegEvent::$event_name(deg::$event_name $($code)*);
-                  $self.event_graph.deg_notify(event).await;
-              }
-          }
-      };
-  }
-pub(crate) use degev;
-
 #[derive(Clone, Debug)]
 pub struct MessageInfo {
     pub info: Vec<String>,
     pub cmd: String,
     pub time: NanoTimestamp,
 }
-
-// Needed by the degev!() macro
-pub type SendMessage = MessageInfo;
-pub type RecvMessage = MessageInfo;
 
 #[derive(Clone, Debug)]
 pub enum DegEvent {

@@ -32,14 +32,7 @@ use log::{debug, error, trace, warn};
 use smol::Executor;
 
 use super::{Event, EventGraphPtr, NULL_ID};
-use crate::{
-    event_graph::{deg, deg::degev, DegEvent},
-    impl_p2p_message,
-    net::*,
-    system::timeout::timeout,
-    util::time::NanoTimestamp,
-    Error, Result,
-};
+use crate::{impl_p2p_message, net::*, system::timeout::timeout, Error, Result};
 
 /// Malicious behaviour threshold. If the threshold is reached, we will
 /// drop the peer from our P2P connection.
@@ -180,12 +173,6 @@ impl ProtocolEventGraph {
                 );
                 continue
             }
-
-            degev!(self, RecvMessage, {
-                info: vec![event_id.to_string()],
-                cmd: "EventPut".to_string(),
-                time: NanoTimestamp::current_time(),
-            });
 
             // We received an event. Check if we already have it in our DAG.
             // Check event is not older that current genesis event timestamp.
@@ -354,12 +341,6 @@ impl ProtocolEventGraph {
                 continue
             }
 
-            degev!(self, SendMessage, {
-                info: vec![event_id.to_string()],
-                cmd: "EventPut".to_string(),
-                time: NanoTimestamp::current_time(),
-            });
-
             // Relay the event to other peers.
             self.event_graph
                 .p2p
@@ -389,14 +370,6 @@ impl ProtocolEventGraph {
                 );
                 continue
             }
-
-            let info = event_ids.clone().into_iter().map(|x| x.to_string()).collect();
-
-            degev!(self, RecvMessage, {
-                info,
-                cmd: "EventReq".to_string(),
-                time: NanoTimestamp::current_time(),
-            });
 
             // We received an event request from somebody.
             // If we do have it, we will send it back to them as `EventRep`.
@@ -469,14 +442,6 @@ impl ProtocolEventGraph {
             //bcast_ids.remove(&event_id);
             drop(bcast_ids);
 
-            let info = event_ids.into_iter().map(|x| x.to_string()).collect();
-
-            degev!(self, SendMessage, {
-                info,
-                cmd: "EventRep".to_string(),
-                time: NanoTimestamp::current_time(),
-            });
-
             // Reply with the event
             self.channel.send(&EventRep(events)).await?;
         }
@@ -488,11 +453,6 @@ impl ProtocolEventGraph {
     async fn handle_tip_req(self: Arc<Self>) -> Result<()> {
         loop {
             self.tip_req_sub.receive().await?;
-            degev!(self, RecvMessage, {
-                info: vec![],
-                cmd: "TipReq".to_string(),
-                time: NanoTimestamp::current_time(),
-            });
             trace!(
                 target: "event_graph::protocol::handle_tip_req()",
                 "Got TipReq [{}]", self.channel.address(),
@@ -519,19 +479,6 @@ impl ProtocolEventGraph {
                 }
             }
             drop(bcast_ids);
-
-            let info = layers
-                .clone()
-                .into_values()
-                .map(|v| v.into_iter().map(|id| id.to_string()).collect::<Vec<_>>())
-                .collect::<Vec<_>>()
-                .concat();
-
-            degev!(self, SendMessage, {
-                info,
-                cmd: "TipRep".to_string(),
-                time: NanoTimestamp::current_time(),
-            });
 
             self.channel.send(&TipRep(layers)).await?;
         }

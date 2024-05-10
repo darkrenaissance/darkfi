@@ -44,7 +44,6 @@ use crate::{
         sleep, timeout::timeout, StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr,
         Subscription,
     },
-    util::time::NanoTimestamp,
     Error, Result,
 };
 
@@ -625,25 +624,6 @@ impl EventGraph {
         drop(unreferenced_tips);
         drop(broadcasted_ids);
 
-        let info = self
-            .unreferenced_tips
-            .read()
-            .await
-            .clone()
-            .into_values()
-            .map(|v| v.into_iter().map(|id| id.to_string()).collect::<Vec<_>>())
-            .collect::<Vec<_>>()
-            .concat();
-
-        if *self.deg_enabled.read().await {
-            let event = DegEvent::SendMessage(deg::SendMessage {
-                info,
-                cmd: "dag_insert".to_string(),
-                time: NanoTimestamp::current_time(),
-            });
-            self.deg_notify(event).await;
-        };
-
         Ok(ids)
     }
 
@@ -855,32 +835,6 @@ impl EventGraph {
             })
             .collect();
         let values = json_map([("dag", JsonValue::Object(json_graph))]);
-
-        // let u_tips = self.unreferenced_tips.read().await.clone();
-        // let u_tips_vals = u_tips
-        //     .into_values()
-        //     .map(|v| v.into_iter().map(|x| JsonValue::String(x.to_string())).collect::<Vec<_>>())
-        //     .collect::<Vec<_>>()
-        //     .concat();
-
-        // let b_ids = self
-        //     .broadcasted_ids
-        //     .read()
-        //     .await
-        //     .clone()
-        //     .into_iter()
-        //     .map(|id| JsonValue::String(id.to_string()))
-        //     .collect::<Vec<_>>();
-
-        // let values = json_map([
-        //     ("unreferenced_tips", JsonValue::Array(u_tips_vals)),
-        //     ("broadcasted_ids", JsonValue::Array(b_ids)),
-        //     ("synced", JsonValue::Boolean(*self.synced.read().await)),
-        //     (
-        //         "current_genesis",
-        //         JsonValue::String(self.current_genesis.read().await.clone().id().to_string()),
-        //     ),
-        // ]);
 
         let result = JsonValue::Object(HashMap::from([("eventgraph_info".to_string(), values)]));
 
