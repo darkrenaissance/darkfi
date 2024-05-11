@@ -2,9 +2,9 @@
 
 A simple tui to explore darkfi's Event Graph state. Displays:
 
-1. Active components of EventGraph.
-2. Live protocol msgs.
-3. Update active components.
+1. List of current events in the DAG.
+2. Minimal graph showing how events are linked.
+3. A view for more details.
 
 ## Run
 
@@ -46,7 +46,7 @@ If you don't require a venv, install the requirements and run `deg` as follows:
 
 ```shell
 % pip install -r requirements.txt
-% python main.py
+% ./deg
 ```
 
 ## Config
@@ -55,21 +55,20 @@ On first run, `deg` will create a config file in the config directory
 specific to your operating system.
 
 To use `deg` you will need to open the config file and modify it. Enter
-the RPC ports of the nodes you want to connect to and title them as you
+the RPC port of the node you want to connect to and title them as you
 see fit. The default config file uses localhost, but you can replace
-this with hostnames or external IP addresses. You must also specify
-whether it is a `NORMAL` or a `LILITH` node.
+this with hostname or external IP address.
+
+If you are using default ports for the daemon you want to debug:
+```shell
+% # darkirc default RPC is localhost:26660
+% ./deg darkirc
+% # tau default RPC is localhost:23330
+% ./deg tau
+```
 
 ## Usage
 
 Navigate up and down using the arrow keys. Scroll the message log using
-`PageUp` and `PageDown`. Type `q` to quit.
-
-## Logging
-
-deg creates a log file in `bin/deg/deg.log`. To see json data and
-other debug info, tail the file like so:
-
-```shell
-tail -f deg.log
-```
+`PageUp` and `PageDown`. Press `enter` to view details about selected event.
+Type `b` to get back to the main view. Type `q` to quit.
