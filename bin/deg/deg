@@ -168,9 +168,9 @@ class App(object):
             ("footer",           "white, bold",     "dark red")
         }
     
-    async def update_data(self, config):
+    async def update_data(self, config, replay_mode):
             self.config = config
-            dag_dict = await recreate_dag(config)
+            dag_dict = await recreate_dag(config, replay_mode)
             dag_list = list(dag_dict.items())
             # sorted_dag = sorted(dag_list, key=lambda x:x[1]['layer'])
 
@@ -192,8 +192,12 @@ class App(object):
             dag.add_edges_from(parent_child_pairs)
             l = []
             topological_order = list(nx.topological_sort(dag))
+            print(topological_order)
             for node in reversed(topological_order):
                 event_details = dag_dict.get(node) # details
+                if event_details is None:
+                    continue
+                print(event_details)
                 layer = int(event_details['layer'])
                 content = event_details['content'] # event content
                 timestamp = event_details['timestamp']
@@ -208,12 +212,12 @@ class App(object):
             longest_path = nx.dag_longest_path(dag)
             self.view_one.set_data(l, longest_path)
 
-    async def start(self, config):
-        await self.update_data(config)
+    async def start(self, config, replay_mode):
+        await self.update_data(config, replay_mode)
         self.loop = u.MainLoop(self.current_view, self.palette, unhandled_input=self.unhandled_input)
         self.loop.run()
 
-async def recreate_dag(config):
+async def recreate_dag(config, replay_mode):
     host = config['host']
     port = config['port']
     rpc = src.rpc.JsonRpc()
@@ -228,8 +232,11 @@ async def recreate_dag(config):
     await rpc.deg_switch(True)
     await rpc.deg_switch(False)
 
-    json_result = await rpc._make_request("eventgraph.get_info", [])
-    
+    if replay_mode:
+        json_result = await rpc._make_request("eventgraph.replay", [])
+    else:
+        json_result = await rpc._make_request("eventgraph.get_info", [])
+
     if json_result['result']['eventgraph_info']:
         return json_result['result']['eventgraph_info']['dag']
         
@@ -245,14 +252,17 @@ async def main(argv):
     config = src.util.spawn_config(path)
     config = config['nodes'][0]
 
+    replay_mode = False
     if len(argv) > 1:
+        if argv[1] == '-r':
+            replay_mode = True
         if argv[1] in ['darkirc', 'irc']:
             config['port'] = 26660
         elif argv[1] in ['taud', 'tau']:
             config['port'] = 23330
 
     app = App()
-    await app.start(config)
+    await app.start(config, replay_mode)
     
 
 asyncio.run(main(sys.argv))
