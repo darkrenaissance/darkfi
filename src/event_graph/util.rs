@@ -16,9 +16,27 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::time::UNIX_EPOCH;
+use std::{
+    collections::HashMap,
+    fs::{File, OpenOptions},
+    io::{BufRead, BufReader, Write},
+    str::FromStr,
+    time::UNIX_EPOCH,
+};
 
-use crate::event_graph::{Event, GENESIS_CONTENTS, INITIAL_GENESIS, NULL_ID, N_EVENT_PARENTS};
+use darkfi_serial::{deserialize, deserialize_async, serialize};
+use log::{error, info};
+use tinyjson::JsonValue;
+
+use crate::{
+    event_graph::{Event, GENESIS_CONTENTS, INITIAL_GENESIS, NULL_ID, N_EVENT_PARENTS},
+    rpc::{
+        self,
+        jsonrpc::{JsonError, JsonResponse, JsonResult},
+        util::json_map,
+    },
+    util::{encoding::base64, path::expand_path},
+};
 
 /// Seconds in a day
 pub(super) const DAY: i64 = 86400;
@@ -112,6 +130,76 @@ pub(super) fn generate_genesis(days_rotation: u64) -> Event {
         parents: [NULL_ID; N_EVENT_PARENTS],
         layer: 0,
     }
+}
+
+pub(super) fn replayer_log(cmd: String, key: blake3::Hash, value: Vec<u8>) {
+    let mut replayer_log_file = expand_path("~/.local/darkfi").unwrap();
+    replayer_log_file.push("replayer_log.log");
+    if !replayer_log_file.exists() {
+        File::create(&replayer_log_file).unwrap();
+    };
+
+    let mut file = OpenOptions::new().append(true).open(&replayer_log_file).unwrap();
+    let v = base64::encode(&value);
+    let f = format!("{cmd} {key} {v}");
+    writeln!(file, "{}", f).unwrap()
+}
+
+pub async fn recreate_from_replayer_log() -> JsonResult {
+    let mut replayer_log_file = expand_path("~/.local/darkfi").unwrap();
+    replayer_log_file.push("replayer_log.log");
+    if !replayer_log_file.exists() {
+        error!("Error loading replaied log");
+        return rpc::jsonrpc::JsonResult::Error(JsonError::new(
+            crate::rpc::jsonrpc::ErrorCode::ParseError,
+            Some("Error loading replaied log".to_string()),
+            1,
+        ))
+    };
+
+    let file = File::open(replayer_log_file).unwrap();
+    let reader = BufReader::new(file);
+
+    let datastore = expand_path("~/.local/darkfi/replayed_db").unwrap();
+    let sled_db = sled::open(datastore).unwrap();
+    let dag = sled_db.open_tree("replayer").unwrap();
+
+    for line in reader.lines() {
+        let x = line.unwrap();
+        let x = x.split(" ").collect::<Vec<&str>>();
+        match x[0] {
+            "insert" => {
+                let h = blake3::Hash::from_str(x[1]).unwrap();
+                let v = base64::decode(x[2]).unwrap();
+                let v: Event = deserialize(&v).unwrap();
+                let v_se = serialize(&v);
+                dag.insert(h.as_bytes(), v_se).unwrap();
+                info!("Hash: {}, event: {:?}", h, v);
+            }
+            _ => {}
+        }
+    }
+
+    let mut graph = HashMap::new();
+    for iter_elem in dag.iter() {
+        let (id, val) = iter_elem.unwrap();
+        let id = blake3::Hash::from_bytes((&id as &[u8]).try_into().unwrap());
+        let val: Event = deserialize_async(&val).await.unwrap();
+        graph.insert(id, val);
+    }
+
+    let json_graph = graph
+        .into_iter()
+        .map(|(k, v)| {
+            let key = k.to_string();
+            let value = JsonValue::from(v);
+            (key, value)
+        })
+        .collect();
+    let values = json_map([("dag", JsonValue::Object(json_graph))]);
+    let result = JsonValue::Object(HashMap::from([("eventgraph_info".to_string(), values)]));
+
+    JsonResponse::new(result, 1).into()
 }
 
 #[cfg(test)]
