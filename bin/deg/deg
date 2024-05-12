@@ -93,7 +93,11 @@ class ListView(u.WidgetWrap):
 
     def modified(self):
         focus_w, _ = self.walker.get_focus()
-        u.emit_signal(self, 'show_details', focus_w.content)
+        if focus_w is not None:
+            u.emit_signal(self, 'show_details', focus_w.content)
+        else:
+            print("DAG is empty!")
+            exit(-1)
 
     def set_data(self, events, longest_path):
         events_widgets = [ListItem(e, longest_path) for e in events]
