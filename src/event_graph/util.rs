@@ -19,23 +19,23 @@
 use std::{
     collections::HashMap,
     fs::{File, OpenOptions},
-    io::{BufRead, BufReader, Write},
+    io::Write,
     str::FromStr,
     time::UNIX_EPOCH,
 };
 
 use darkfi_serial::{deserialize, deserialize_async, serialize};
-use log::{error, info};
+use log::error;
 use tinyjson::JsonValue;
 
 use crate::{
     event_graph::{Event, GENESIS_CONTENTS, INITIAL_GENESIS, NULL_ID, N_EVENT_PARENTS},
     rpc::{
-        self,
-        jsonrpc::{JsonError, JsonResponse, JsonResult},
+        jsonrpc::{ErrorCode, JsonError, JsonResponse, JsonResult},
         util::json_map,
     },
-    util::{encoding::base64, path::expand_path},
+    util::{encoding::base64, file::load_file, path::expand_path},
+    Result,
 };
 
 /// Seconds in a day
@@ -132,51 +132,47 @@ pub(super) fn generate_genesis(days_rotation: u64) -> Event {
     }
 }
 
-pub(super) fn replayer_log(cmd: String, key: blake3::Hash, value: Vec<u8>) {
-    let mut replayer_log_file = expand_path("~/.local/darkfi").unwrap();
+pub(super) fn replayer_log(cmd: String, key: blake3::Hash, value: Vec<u8>) -> Result<()> {
+    let mut replayer_log_file = expand_path("/tmp")?;
     replayer_log_file.push("replayer_log.log");
     if !replayer_log_file.exists() {
-        File::create(&replayer_log_file).unwrap();
+        File::create(&replayer_log_file)?;
     };
 
-    let mut file = OpenOptions::new().append(true).open(&replayer_log_file).unwrap();
+    let mut file = OpenOptions::new().append(true).open(&replayer_log_file)?;
     let v = base64::encode(&value);
     let f = format!("{cmd} {key} {v}");
-    writeln!(file, "{}", f).unwrap()
+    writeln!(file, "{}", f)?;
+
+    Ok(())
 }
 
 pub async fn recreate_from_replayer_log() -> JsonResult {
-    let mut replayer_log_file = expand_path("~/.local/darkfi").unwrap();
+    let mut replayer_log_file = expand_path("/tmp").unwrap();
     replayer_log_file.push("replayer_log.log");
     if !replayer_log_file.exists() {
         error!("Error loading replaied log");
-        return rpc::jsonrpc::JsonResult::Error(JsonError::new(
-            crate::rpc::jsonrpc::ErrorCode::ParseError,
+        return JsonResult::Error(JsonError::new(
+            ErrorCode::ParseError,
             Some("Error loading replaied log".to_string()),
             1,
         ))
     };
 
-    let file = File::open(replayer_log_file).unwrap();
-    let reader = BufReader::new(file);
+    let reader = load_file(&replayer_log_file).unwrap();
 
-    let datastore = expand_path("~/.local/darkfi/replayed_db").unwrap();
+    let datastore = expand_path("/tmp/replayed_db").unwrap();
     let sled_db = sled::open(datastore).unwrap();
     let dag = sled_db.open_tree("replayer").unwrap();
 
     for line in reader.lines() {
-        let x = line.unwrap();
-        let x = x.split(" ").collect::<Vec<&str>>();
-        match x[0] {
-            "insert" => {
-                let h = blake3::Hash::from_str(x[1]).unwrap();
-                let v = base64::decode(x[2]).unwrap();
-                let v: Event = deserialize(&v).unwrap();
-                let v_se = serialize(&v);
-                dag.insert(h.as_bytes(), v_se).unwrap();
-                info!("Hash: {}, event: {:?}", h, v);
-            }
-            _ => {}
+        let line = line.split(' ').collect::<Vec<&str>>();
+        if line[0] == "insert" {
+            let h = blake3::Hash::from_str(line[1]).unwrap();
+            let v = base64::decode(line[2]).unwrap();
+            let v: Event = deserialize(&v).unwrap();
+            let v_se = serialize(&v);
+            dag.insert(h.as_bytes(), v_se).unwrap();
         }
     }
 

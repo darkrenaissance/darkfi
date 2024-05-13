@@ -34,7 +34,7 @@ use smol::{
 use tinyjson::JsonValue::{self};
 
 use crate::{
-    event_graph::util::seconds_until_next_rotation,
+    event_graph::util::{replayer_log, seconds_until_next_rotation},
     net::P2pPtr,
     rpc::{
         jsonrpc::{JsonResponse, JsonResult},
@@ -557,6 +557,8 @@ impl EventGraph {
 
             // Add the event to the overlay
             overlay.insert(event_id.as_bytes(), &event_se)?;
+
+            replayer_log("insert".to_owned(), event_id, event_se).unwrap();
 
             // Note down the event ID to return
             ids.push(event_id);
