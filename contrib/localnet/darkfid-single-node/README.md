@@ -54,7 +54,7 @@ of the guide can be added for future regressions.
 | 9  | Mint auths retrieval      | token list                                       | Pass               |
 | 10 | Alias add                 | alias add {ALIAS} {TOKEN}                        | Pass               |
 | 11 | Aliases retrieval         | alias show                                       | Pass               |
-| 12 | Mint generation           | token mint {ALIAS} {AMOUNT} {ADDR}               | Failure: disabled  |
+| 12 | Mint generation           | token mint {ALIAS} {AMOUNT} {ADDR}               | Pass               |
 | 13 | Transfer                  | transfer {AMOUNT} {ALIAS} {ADDR}                 | Pass               |
 | 14 | Coins retrieval           | wallet --coins                                   | Pass               |
 | 15 | OTC initialization        | otc init -v {AMOUNT}:{AMOUNT} -t {ALIAS}:{ALIAS} | Failure: needs #12 |

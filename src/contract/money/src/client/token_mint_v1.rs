@@ -22,7 +22,7 @@ use darkfi::{
     Result,
 };
 use darkfi_sdk::pasta::pallas;
-use log::info;
+use log::debug;
 use rand::rngs::OsRng;
 
 use crate::model::{CoinAttributes, MoneyTokenMintParamsV1, TokenAttributes};
@@ -45,7 +45,7 @@ pub struct TokenMintCallBuilder {
 
 impl TokenMintCallBuilder {
     pub fn build(&self) -> Result<TokenMintCallDebris> {
-        info!("Building Money::TokenMintV1 contract call");
+        debug!("Building Money::TokenMintV1 contract call");
         let (public_x, public_y) = self.coin_attrs.public_key.xy();
 
         let prover_witnesses = vec![

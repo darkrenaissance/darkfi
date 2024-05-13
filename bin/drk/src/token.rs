@@ -22,7 +22,7 @@ use rusqlite::types::Value;
 use darkfi::{
     tx::{ContractCallLeaf, Transaction, TransactionBuilder},
     util::parse::decode_base10,
-    zk::{proof::ProvingKey, vm::ZkCircuit, vm_heap::empty_witnesses},
+    zk::{halo2::Field, proof::ProvingKey, vm::ZkCircuit, vm_heap::empty_witnesses},
     zkas::ZkBinary,
     Error, Result,
 };
@@ -32,21 +32,22 @@ use darkfi_money_contract::{
         token_mint_v1::TokenMintCallBuilder,
     },
     model::{CoinAttributes, TokenAttributes, TokenId},
-    MoneyFunction, MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1, MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1,
-    MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
+    MoneyFunction, MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1, MONEY_CONTRACT_ZKAS_FEE_NS_V1,
+    MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1, MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{
         contract_id::MONEY_CONTRACT_ID, poseidon_hash, BaseBlind, Blind, FuncId, FuncRef, Keypair,
         PublicKey, SecretKey,
     },
-    dark_tree::DarkLeaf,
+    dark_tree::DarkTree,
     pasta::pallas,
     tx::ContractCall,
 };
 use darkfi_serial::{deserialize_async, serialize_async, AsyncEncodable};
 
 use crate::{
+    convert_named_params,
     money::{
         BALANCE_BASE10_DECIMALS, MONEY_TOKENS_COL_IS_FROZEN, MONEY_TOKENS_COL_MINT_AUTHORITY,
         MONEY_TOKENS_COL_TOKEN_BLIND, MONEY_TOKENS_COL_TOKEN_ID, MONEY_TOKENS_TABLE,
@@ -118,50 +119,86 @@ impl Drk {
         Ok(token_id)
     }
 
+    /// Auxiliary function to parse a `MONEY_TOKENS_TABLE` records.
+    /// The boolean in the returned tuples notes if the token mint authority is frozen.
+    async fn parse_mint_authority_record(
+        &self,
+        row: &[Value],
+    ) -> Result<(TokenId, SecretKey, BaseBlind, bool)> {
+        let Value::Blob(ref token_bytes) = row[0] else {
+            return Err(Error::ParseFailed(
+                "[parse_mint_authority_record] Token ID bytes parsing failed",
+            ))
+        };
+        let token_id = deserialize_async(token_bytes).await?;
+
+        let Value::Blob(ref auth_bytes) = row[1] else {
+            return Err(Error::ParseFailed(
+                "[parse_mint_authority_record] Mint authority bytes parsing failed",
+            ))
+        };
+        let mint_authority = deserialize_async(auth_bytes).await?;
+
+        let Value::Blob(ref token_blind_bytes) = row[2] else {
+            return Err(Error::ParseFailed(
+                "[parse_mint_authority_record] Token blind bytes parsing failed",
+            ))
+        };
+        let token_blind: BaseBlind = deserialize_async(token_blind_bytes).await?;
+
+        let Value::Integer(frozen) = row[3] else {
+            return Err(Error::ParseFailed("[parse_mint_authority_record] Is frozen parsing failed"))
+        };
+        let Ok(frozen) = i32::try_from(frozen) else {
+            return Err(Error::ParseFailed("[parse_mint_authority_record] Is frozen parsing failed"))
+        };
+
+        Ok((token_id, mint_authority, token_blind, frozen != 0))
+    }
+
+    /// Fetch all token mint authorities from the wallet.
     pub async fn get_mint_authorities(&self) -> Result<Vec<(TokenId, SecretKey, BaseBlind, bool)>> {
         let rows = match self.wallet.query_multiple(&MONEY_TOKENS_TABLE, &[], &[]).await {
             Ok(r) => r,
             Err(e) => {
                 return Err(Error::RusqliteError(format!(
-                    "[get_mint_authorities] Tokens retrieval failed: {e:?}"
+                    "[get_mint_authorities] Tokens mint autorities retrieval failed: {e:?}"
                 )))
             }
         };
 
         let mut ret = Vec::with_capacity(rows.len());
         for row in rows {
-            let Value::Blob(ref token_bytes) = row[0] else {
-                return Err(Error::ParseFailed(
-                    "[get_mint_authorities] Token ID bytes parsing failed",
-                ))
-            };
-            let token_id = deserialize_async(token_bytes).await?;
-
-            let Value::Blob(ref auth_bytes) = row[1] else {
-                return Err(Error::ParseFailed(
-                    "[get_mint_authorities] Mint authority bytes parsing failed",
-                ))
-            };
-            let mint_authority = deserialize_async(auth_bytes).await?;
-
-            let Value::Blob(ref token_blind_bytes) = row[2] else {
-                return Err(Error::ParseFailed(
-                    "[get_mint_authorities] Token blind bytes parsing failed",
-                ))
-            };
-            let token_blind: BaseBlind = deserialize_async(token_blind_bytes).await?;
-
-            let Value::Integer(frozen) = row[3] else {
-                return Err(Error::ParseFailed("[get_mint_authorities] Is frozen parsing failed"))
-            };
-            let Ok(frozen) = i32::try_from(frozen) else {
-                return Err(Error::ParseFailed("[get_mint_authorities] Is frozen parsing failed"))
-            };
-
-            ret.push((token_id, mint_authority, token_blind, frozen != 0));
+            ret.push(self.parse_mint_authority_record(&row).await?);
         }
 
         Ok(ret)
+    }
+
+    /// Fetch provided token unfrozen mint authority from the wallet.
+    async fn get_token_mint_authority(
+        &self,
+        token_id: &TokenId,
+    ) -> Result<(TokenId, SecretKey, BaseBlind, bool)> {
+        let row =
+            match self.wallet.query_single(&MONEY_TOKENS_TABLE, &[], convert_named_params! {(MONEY_TOKENS_COL_TOKEN_ID, serialize_async(token_id).await)}).await {
+                Ok(r) => r,
+                Err(e) => {
+                    return Err(Error::RusqliteError(format!(
+                        "[get_token_mint_authority] Token mint autority retrieval failed: {e:?}"
+                    )))
+                }
+            };
+
+        let token = self.parse_mint_authority_record(&row).await?;
+
+        if token.3 {
+            return Err(Error::Custom(
+                "This token mint is marked as frozen in the wallet".to_string(),
+            ))
+        }
+
+        Ok(token)
     }
 
     /// Create a token mint transaction. Returns the transaction object on success.
@@ -169,117 +206,82 @@ impl Drk {
         &self,
         amount: &str,
         recipient: PublicKey,
-        token_attrs: TokenAttributes,
+        token_id: TokenId,
+        spend_hook: Option<FuncId>,
+        user_data: Option<pallas::Base>,
     ) -> Result<Transaction> {
-        // TODO: Mint directly into DAO treasury
-        let spend_hook = FuncId::none();
-        let user_data = pallas::Base::zero();
-
+        // Decode provided amount
         let amount = decode_base10(amount, BALANCE_BASE10_DECIMALS, false)?;
-        let token_id = token_attrs.to_token_id();
 
-        let mut tokens = self.get_mint_authorities().await?;
-        tokens.retain(|x| x.0 == token_id);
-        if tokens.is_empty() {
-            return Err(Error::Custom(format!(
-                "Did not find mint authority for token ID {token_id}"
-            )))
-        }
-        assert!(tokens.len() == 1);
-
-        let mint_authority = Keypair::new(tokens[0].1);
-
-        if tokens[0].3 {
-            return Err(Error::Custom(
-                "This token mint is marked as frozen in the wallet".to_string(),
-            ))
-        }
+        // Grab token ID mint authority
+        let token_mint_authority = self.get_token_mint_authority(&token_id).await?;
+        let mint_authority = Keypair::new(token_mint_authority.1);
 
         // Now we need to do a lookup for the zkas proof bincodes, and create
         // the circuit objects and proving keys so we can build the transaction.
         // We also do this through the RPC.
         let zkas_bins = self.lookup_zkas(&MONEY_CONTRACT_ID).await?;
 
-        let (mint_zkbin, mint_pk) = {
-            let mint_zkas_ns = MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1;
-
-            let Some(token_mint_zkbin) = zkas_bins.iter().find(|x| x.0 == mint_zkas_ns) else {
-                return Err(Error::Custom("Token mint circuit not found".to_string()))
-            };
-
-            let mint_zkbin = ZkBinary::decode(&token_mint_zkbin.1)?;
-            let token_mint_circuit = ZkCircuit::new(empty_witnesses(&mint_zkbin)?, &mint_zkbin);
-
-            println!("Creating token mint circuit proving keys");
-            let mint_pk = ProvingKey::build(mint_zkbin.k, &token_mint_circuit);
-
-            (mint_zkbin, mint_pk)
+        let Some(mint_zkbin) =
+            zkas_bins.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1)
+        else {
+            return Err(Error::Custom("Token mint circuit not found".to_string()))
         };
 
-        let (auth_mint_zkbin, auth_mint_pk) = {
-            let auth_zkas_ns = MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1;
-
-            let Some(token_auth_mint_zkbin) = zkas_bins.iter().find(|x| x.0 == auth_zkas_ns) else {
-                return Err(Error::Custom("Token mint circuit not found".to_string()))
-            };
-
-            let auth_mint_zkbin = ZkBinary::decode(&token_auth_mint_zkbin.1)?;
-            let token_auth_mint_circuit =
-                ZkCircuit::new(empty_witnesses(&auth_mint_zkbin)?, &auth_mint_zkbin);
-
-            println!("Creating token mint circuit proving keys");
-            let auth_mint_pk = ProvingKey::build(auth_mint_zkbin.k, &token_auth_mint_circuit);
-
-            (auth_mint_zkbin, auth_mint_pk)
+        let Some(auth_mint_zkbin) =
+            zkas_bins.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1)
+        else {
+            return Err(Error::Custom("Auth token mint circuit not found".to_string()))
         };
 
-        /*
-        let mint_builder = TokenMintCallBuilder {
-            mint_keypair: mint_authority,
-            recipient,
-            amount,
-            spend_hook,
-            user_data,
-            token_mint_zkbin,
-            token_mint_pk,
+        let Some(fee_zkbin) = zkas_bins.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_FEE_NS_V1)
+        else {
+            return Err(Error::Custom("Fee circuit not found".to_string()))
         };
 
-        println!("Building transaction parameters");
-        let debris = mint_builder.build()?;
+        let mint_zkbin = ZkBinary::decode(&mint_zkbin.1)?;
+        let auth_mint_zkbin = ZkBinary::decode(&auth_mint_zkbin.1)?;
+        let fee_zkbin = ZkBinary::decode(&fee_zkbin.1)?;
 
-        // Encode and sign the transaction
-        let mut data = vec![MoneyFunction::TokenMintV1 as u8];
-        debris.params.encode_async(&mut data).await?;
-        let call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
-        let mut tx_builder =
-            TransactionBuilder::new(ContractCallLeaf { call, proofs: debris.proofs }, vec![])?;
-        let mut tx = tx_builder.build()?;
-        let sigs = tx.create_sigs(&mut OsRng, &[mint_authority.secret])?;
-        tx.signatures = vec![sigs];
-        */
+        let mint_circuit = ZkCircuit::new(empty_witnesses(&mint_zkbin)?, &mint_zkbin);
+        let auth_mint_circuit =
+            ZkCircuit::new(empty_witnesses(&auth_mint_zkbin)?, &auth_mint_zkbin);
+        let fee_circuit = ZkCircuit::new(empty_witnesses(&fee_zkbin)?, &fee_zkbin);
 
-        let _auth_func_id = FuncRef {
+        // Creating TokenMint, AuthTokenMint and Fee circuits proving keys
+        let mint_pk = ProvingKey::build(mint_zkbin.k, &mint_circuit);
+        let auth_mint_pk = ProvingKey::build(auth_mint_zkbin.k, &auth_mint_circuit);
+        let fee_pk = ProvingKey::build(fee_zkbin.k, &fee_circuit);
+
+        // Create the Auth FuncID
+        let auth_func_id = FuncRef {
             contract_id: *MONEY_CONTRACT_ID,
             func_code: MoneyFunction::AuthTokenMintV1 as u8,
         }
         .to_func_id();
 
-        //let token_attrs = TokenAttributes {
-        //    auth_parent: auth_func_id,
-        //    user_data: poseidon_hash([mint_authority.public.x(), mint_authority.public.y()]),
-        //    blind: token_blind,
-        //};
-        //let token_id = token_attrs.to_token_id();
+        let (mint_auth_x, mint_auth_y) = mint_authority.public.xy();
 
+        let token_attrs = TokenAttributes {
+            auth_parent: auth_func_id,
+            user_data: poseidon_hash([mint_auth_x, mint_auth_y]),
+            blind: token_mint_authority.2,
+        };
+
+        // Sanity check
+        assert_eq!(token_id, token_attrs.to_token_id());
+
+        // Build the coin attributes
         let coin_attrs = CoinAttributes {
             public_key: recipient,
             value: amount,
             token_id,
-            spend_hook,
-            user_data,
+            spend_hook: spend_hook.unwrap_or(FuncId::none()),
+            user_data: user_data.unwrap_or(pallas::Base::ZERO),
             blind: Blind::random(&mut OsRng),
         };
 
+        // Create the minting call
         let builder = TokenMintCallBuilder {
             coin_attrs: coin_attrs.clone(),
             token_attrs: token_attrs.clone(),
@@ -291,6 +293,7 @@ impl Drk {
         mint_debris.params.encode_async(&mut data).await?;
         let mint_call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
 
+        // Create the auth call
         let builder = AuthTokenMintCallBuilder {
             coin_attrs,
             token_attrs,
@@ -303,40 +306,51 @@ impl Drk {
         auth_debris.params.encode_async(&mut data).await?;
         let auth_call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
 
-        let mut tx = Transaction {
-            calls: vec![
-                DarkLeaf { data: mint_call, parent_index: Some(1), children_indexes: vec![] },
-                DarkLeaf { data: auth_call, parent_index: None, children_indexes: vec![0] },
-            ],
-            proofs: vec![mint_debris.proofs, auth_debris.proofs],
-            signatures: vec![],
-        };
+        // Create the TransactionBuilder containing above calls
+        let mut tx_builder = TransactionBuilder::new(
+            ContractCallLeaf { call: auth_call, proofs: auth_debris.proofs },
+            vec![DarkTree::new(
+                ContractCallLeaf { call: mint_call, proofs: mint_debris.proofs },
+                vec![],
+                None,
+                None,
+            )],
+        )?;
+
+        // We first have to execute the fee-less tx to gather its used gas, and then we feed
+        // it into the fee-creating function.
+        let mut tx = tx_builder.build()?;
         let mint_sigs = tx.create_sigs(&[])?;
         let auth_sigs = tx.create_sigs(&[mint_authority.secret])?;
         tx.signatures = vec![mint_sigs, auth_sigs];
+
+        let tree = self.get_money_tree().await?;
+        let secret = self.default_secret().await?;
+        let fee_public = PublicKey::from_secret(secret);
+        let (fee_call, fee_proofs, fee_secrets) =
+            self.append_fee_call(&tx, fee_public, &tree, &fee_pk, &fee_zkbin, None).await?;
+
+        // Append the fee call to the transaction
+        tx_builder.append(ContractCallLeaf { call: fee_call, proofs: fee_proofs }, vec![])?;
+
+        // Now build the actual transaction and sign it with all necessary keys.
+        let mut tx = tx_builder.build()?;
+        let sigs = tx.create_sigs(&[])?;
+        tx.signatures.push(sigs);
+        let sigs = tx.create_sigs(&[mint_authority.secret])?;
+        tx.signatures.push(sigs);
+        let sigs = tx.create_sigs(&fee_secrets)?;
+        tx.signatures.push(sigs);
 
         Ok(tx)
     }
 
     /// Create a token freeze transaction. Returns the transaction object on success.
     pub async fn freeze_token(&self, token_attrs: TokenAttributes) -> Result<Transaction> {
-        let token_id = token_attrs.to_token_id();
-        let mut tokens = self.get_mint_authorities().await?;
-        tokens.retain(|x| x.0 == token_id);
-        if tokens.is_empty() {
-            return Err(Error::Custom(format!(
-                "Did not find mint authority for token ID {token_id}"
-            )))
-        }
-        assert!(tokens.len() == 1);
-
-        let mint_authority = Keypair::new(tokens[0].1);
-
-        if tokens[0].3 {
-            return Err(Error::Custom(
-                "This token is already marked as frozen in the wallet".to_string(),
-            ))
-        }
+        // Grab token ID mint authority
+        let token_mint_authority =
+            self.get_token_mint_authority(&token_attrs.to_token_id()).await?;
+        let mint_authority = Keypair::new(token_mint_authority.1);
 
         let zkas_bins = self.lookup_zkas(&MONEY_CONTRACT_ID).await?;
         let zkas_ns = MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1;

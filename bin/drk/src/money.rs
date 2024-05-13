@@ -35,9 +35,9 @@ use darkfi_money_contract::{
         MoneyNote, OwnCoin,
     },
     model::{
-        Coin, Input, MoneyFeeParamsV1, MoneyGenesisMintParamsV1, MoneyPoWRewardParamsV1,
-        MoneyTokenFreezeParamsV1, MoneyTokenMintParamsV1, MoneyTransferParamsV1, Nullifier, Output,
-        TokenId, DARK_TOKEN_ID,
+        Coin, Input, MoneyAuthTokenMintParamsV1, MoneyFeeParamsV1, MoneyGenesisMintParamsV1,
+        MoneyPoWRewardParamsV1, MoneyTokenFreezeParamsV1, MoneyTokenMintParamsV1,
+        MoneyTransferParamsV1, Nullifier, Output, TokenId, DARK_TOKEN_ID,
     },
     MoneyFunction,
 };
@@ -47,6 +47,7 @@ use darkfi_sdk::{
         note::AeadEncryptedNote, BaseBlind, FuncId, Keypair, MerkleNode, MerkleTree, PublicKey,
         ScalarBlind, SecretKey, MONEY_CONTRACT_ID,
     },
+    dark_tree::DarkLeaf,
     pasta::pallas,
     ContractCall,
 };
@@ -426,7 +427,7 @@ impl Drk {
         let query = self.wallet.query_multiple(
             &MONEY_COINS_TABLE,
             &[],
-            convert_named_params! {(MONEY_COINS_COL_IS_SPENT, false), (MONEY_TOKENS_COL_TOKEN_ID, serialize_async(token_id).await), (MONEY_COINS_COL_SPEND_HOOK, serialize_async(&FuncId::none()).await)},
+            convert_named_params! {(MONEY_COINS_COL_IS_SPENT, false), (MONEY_COINS_COL_TOKEN_ID, serialize_async(token_id).await), (MONEY_COINS_COL_SPEND_HOOK, serialize_async(&FuncId::none()).await)},
         )
         .await;
 
@@ -687,32 +688,35 @@ impl Drk {
     }
 
     /// Auxiliary function to  grab all the nullifiers, coins, notes and freezes from
-    /// transaction data.
-    async fn parse_call_data(
+    /// transaction money call.
+    async fn parse_money_call(
         &self,
-        data: &[u8],
+        call_idx: usize,
+        calls: &[DarkLeaf<ContractCall>],
     ) -> Result<(Vec<Nullifier>, Vec<Coin>, Vec<AeadEncryptedNote>, Vec<TokenId>)> {
         let mut nullifiers: Vec<Nullifier> = vec![];
         let mut coins: Vec<Coin> = vec![];
         let mut notes: Vec<AeadEncryptedNote> = vec![];
         let mut freezes: Vec<TokenId> = vec![];
 
+        let call = &calls[call_idx];
+        let data = &call.data.data;
         match MoneyFunction::try_from(data[0])? {
             MoneyFunction::FeeV1 => {
-                println!("[apply_tx_money_data] Found Money::FeeV1 call");
+                println!("[parse_money_call] Found Money::FeeV1 call");
                 let params: MoneyFeeParamsV1 = deserialize_async(&data[9..]).await?;
                 nullifiers.push(params.input.nullifier);
                 coins.push(params.output.coin);
                 notes.push(params.output.note);
             }
             MoneyFunction::GenesisMintV1 => {
-                println!("[apply_tx_money_data] Found Money::GenesisMintV1 call");
+                println!("[parse_money_call] Found Money::GenesisMintV1 call");
                 let params: MoneyGenesisMintParamsV1 = deserialize_async(&data[1..]).await?;
                 coins.push(params.output.coin);
                 notes.push(params.output.note);
             }
             MoneyFunction::TransferV1 => {
-                println!("[apply_tx_money_data] Found Money::TransferV1 call");
+                println!("[parse_money_call] Found Money::TransferV1 call");
                 let params: MoneyTransferParamsV1 = deserialize_async(&data[1..]).await?;
 
                 for input in params.inputs {
@@ -725,7 +729,7 @@ impl Drk {
                 }
             }
             MoneyFunction::OtcSwapV1 => {
-                println!("[apply_tx_money_data] Found Money::OtcSwapV1 call");
+                println!("[parse_money_call] Found Money::OtcSwapV1 call");
                 let params: MoneyTransferParamsV1 = deserialize_async(&data[1..]).await?;
 
                 for input in params.inputs {
@@ -738,27 +742,31 @@ impl Drk {
                 }
             }
             MoneyFunction::TokenMintV1 => {
-                println!("[apply_tx_money_data] Found Money::TokenMintV1 call");
+                println!("[parse_money_call] Found Money::TokenMintV1 call");
                 let params: MoneyTokenMintParamsV1 = deserialize_async(&data[1..]).await?;
                 coins.push(params.coin);
-                // TODO: why is this commented?
-                //notes.push(output.note);
+                // Grab the note from the parent auth call
+                let parent_idx = call.parent_index.unwrap();
+                let parent_call = &calls[parent_idx];
+                let params: MoneyAuthTokenMintParamsV1 =
+                    deserialize_async(&parent_call.data.data[1..]).await?;
+                notes.push(params.enc_note);
             }
             MoneyFunction::TokenFreezeV1 => {
-                println!("[apply_tx_money_data] Found Money::TokenFreezeV1 call");
+                println!("[parse_money_call] Found Money::TokenFreezeV1 call");
                 let params: MoneyTokenFreezeParamsV1 = deserialize_async(&data[1..]).await?;
                 let token_id = TokenId::derive_public(params.mint_public);
                 freezes.push(token_id);
             }
             MoneyFunction::PoWRewardV1 => {
-                println!("[apply_tx_money_data] Found Money::PoWRewardV1 call");
+                println!("[parse_money_call] Found Money::PoWRewardV1 call");
                 let params: MoneyPoWRewardParamsV1 = deserialize_async(&data[1..]).await?;
                 coins.push(params.output.coin);
                 notes.push(params.output.note);
             }
             MoneyFunction::AuthTokenMintV1 => {
-                println!("[apply_tx_money_data] Found Money::AuthTokenMintV1 call");
-                // TODO: implement
+                println!("[parse_money_call] Found Money::AuthTokenMintV1 call");
+                // Handled in TokenMint
             }
         }
 
@@ -766,8 +774,13 @@ impl Drk {
     }
 
     /// Append data related to Money contract transactions into the wallet database.
-    pub async fn apply_tx_money_data(&self, data: &[u8], tx_hash: &String) -> Result<()> {
-        let (nullifiers, coins, notes, freezes) = self.parse_call_data(data).await?;
+    pub async fn apply_tx_money_data(
+        &self,
+        call_idx: usize,
+        calls: &[DarkLeaf<ContractCall>],
+        tx_hash: &String,
+    ) -> Result<()> {
+        let (nullifiers, coins, notes, freezes) = self.parse_money_call(call_idx, calls).await?;
         let secrets = self.get_money_secrets().await?;
         let dao_secrets = self.get_dao_secrets().await?;
         let mut tree = self.get_money_tree().await?;
@@ -880,7 +893,7 @@ impl Drk {
             }
 
             println!("[mark_tx_spend] Found Money contract in call {i}");
-            let (nullifiers, _, _, _) = self.parse_call_data(&call.data.data).await?;
+            let (nullifiers, _, _, _) = self.parse_money_call(i, &tx.calls).await?;
             self.mark_spent_coins(&nullifiers, &tx_hash).await?;
         }
 

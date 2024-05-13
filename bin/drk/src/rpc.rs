@@ -186,7 +186,7 @@ impl Drk {
             for (i, call) in tx.calls.iter().enumerate() {
                 if call.data.contract_id == *MONEY_CONTRACT_ID {
                     println!("[scan_block] Found Money contract in call {i}");
-                    self.apply_tx_money_data(&call.data.data, &tx_hash).await?;
+                    self.apply_tx_money_data(i, &tx.calls, &tx_hash).await?;
                     continue
                 }
 

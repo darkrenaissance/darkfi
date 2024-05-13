@@ -114,6 +114,7 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     let burn_v1_bincode = include_bytes!("../proof/burn_v1.zk.bin");
     let token_mint_v1_bincode = include_bytes!("../proof/token_mint_v1.zk.bin");
     let token_frz_v1_bincode = include_bytes!("../proof/token_freeze_v1.zk.bin");
+    let auth_token_mint_v1_bincode = include_bytes!("../proof/auth_token_mint_v1.zk.bin");
 
     // For that, we use `wasm::db::zkas_wasm::db::db_set` and pass in the bincode.
     wasm::db::zkas_db_set(&fee_v1_bincode[..])?;
@@ -121,6 +122,7 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     wasm::db::zkas_db_set(&burn_v1_bincode[..])?;
     wasm::db::zkas_db_set(&token_mint_v1_bincode[..])?;
     wasm::db::zkas_db_set(&token_frz_v1_bincode[..])?;
+    wasm::db::zkas_db_set(&auth_token_mint_v1_bincode[..])?;
 
     let tx_hash = wasm::util::get_tx_hash()?;
     // The max outputs for a tx in BTC is 2501

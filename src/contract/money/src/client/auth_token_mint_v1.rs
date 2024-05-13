@@ -25,7 +25,7 @@ use darkfi_sdk::{
     crypto::{note::AeadEncryptedNote, pasta_prelude::*, pedersen_commitment_u64, Blind, Keypair},
     pasta::pallas,
 };
-use log::info;
+use log::debug;
 use rand::rngs::OsRng;
 
 use crate::{
@@ -54,7 +54,7 @@ pub struct AuthTokenMintCallBuilder {
 
 impl AuthTokenMintCallBuilder {
     pub fn build(&self) -> Result<AuthTokenMintCallDebris> {
-        info!("Building Money::AuthTokenMintV1 contract call");
+        debug!("Building Money::AuthTokenMintV1 contract call");
 
         let value_blind = Blind::random(&mut OsRng);
         let value_commit = pedersen_commitment_u64(self.coin_attrs.value, value_blind);
