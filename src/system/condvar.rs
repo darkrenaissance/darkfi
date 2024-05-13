@@ -142,6 +142,7 @@ impl<'a> Future for CondVarWait<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use futures::{select, FutureExt};
     use smol::Executor;
     use std::sync::Arc;
 
@@ -195,6 +196,48 @@ mod tests {
                 .detach();
 
             // #2 send signal again
+            cv.notify();
+        }))
+    }
+
+    #[test]
+    fn condvar_double_wait() {
+        let executor = Arc::new(Executor::new());
+        let executor_ = executor.clone();
+        smol::block_on(executor.run(async move {
+            let cv = Arc::new(CondVar::new());
+
+            let cv2 = cv.clone();
+            let cv3 = cv.clone();
+            executor_.spawn(async move { cv2.wait().await }).detach();
+            executor_.spawn(async move { cv3.wait().await }).detach();
+
+            // Allow above code to continue
+            cv.notify();
+        }))
+    }
+
+    #[test]
+    fn condvar_drop() {
+        let executor = Arc::new(Executor::new());
+        let executor_ = executor.clone();
+        smol::block_on(executor.run(async move {
+            let cv = Arc::new(CondVar::new());
+
+            let cv_ = cv.clone();
+            executor_
+                .spawn(async move {
+                    select! {
+                        () = cv_.wait().fuse() => (),
+                        () = (|| async {})().fuse() => ()
+                    }
+
+                    // The above future was dropped and we make a new one
+                    cv_.wait().await
+                })
+                .detach();
+
+            // Allow above code to continue
             cv.notify();
         }))
     }
