@@ -56,7 +56,7 @@ pub mod proto;
 use proto::{EventRep, EventReq, TipRep, TipReq, REPLY_TIMEOUT};
 
 /// Utility functions
-mod util;
+pub mod util;
 use util::{generate_genesis, next_rotation_timestamp};
 
 // Debugging event graph

@@ -19,6 +19,7 @@ use std::collections::HashSet;
 
 use async_trait::async_trait;
 use darkfi::{
+    event_graph::util::recreate_from_replayer_log,
     net::P2pPtr,
     rpc::{
         jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult},
@@ -48,6 +49,7 @@ impl RequestHandler for DarkIrc {
             "deg.switch" => self.deg_switch(req.id, req.params).await,
             "deg.subscribe_events" => self.deg_subscribe_events(req.id, req.params).await,
             "eventgraph.get_info" => self.eg_get_info(req.id, req.params).await,
+            "eventgraph.replay" => self.eg_rep_info(req.id, req.params).await,
 
             _ => JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         }
@@ -151,6 +153,20 @@ impl DarkIrc {
         }
 
         self.event_graph.eventgraph_info(id, params).await
+    }
+
+    // RPCAPI:
+    // Get replayed EVENTGRAPH info.
+    //
+    // --> {"jsonrpc": "2.0", "method": "eventgraph.replay", "params": ..., "id": 42}
+    // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
+    async fn eg_rep_info(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params_ = params.get::<Vec<JsonValue>>().unwrap();
+        if !params_.is_empty() {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        }
+
+        recreate_from_replayer_log().await
     }
 }
 
