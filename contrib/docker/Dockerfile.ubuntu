@@ -1,7 +1,8 @@
-# Use: docker build . --pull --no-cache --shm-size=196m -t darkfi:ubuntu -f ./contrib/docker/Dockerfile.ubuntu --build-arg DONT_EXEC_TESTS=1
+# Use: docker build . --pull --no-cache --shm-size=196m -t darkfi:ubuntu -f ./contrib/docker/Dockerfile.ubuntu
 #   optionally with: --build-arg OS_VER=20.04 --build-arg RUST_VER=nightly
+#   optionally with: --build-arg BINS="darkfid  darkfid2" --build-arg DONT_EXEC_TESTS=1
 
-ARG RUST_VER=nightly-2023-06-21  # stable nightly beta 1.72
+ARG RUST_VER=nightly             # stable nightly beta 1.72
 ARG OS_VER=22.04                 # 20.04
 
 FROM ubuntu:${OS_VER} as rust_builder
@@ -12,7 +13,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get install 
   build-essential cmake jq wget curl \
   pkg-config clang libclang-dev llvm-dev libudev-dev libfreetype6-dev \
   libexpat1-dev curl gcc make libssl-dev fonts-lato libfontconfig-dev \
-  libasound2-dev python3-dev libsqlite3-dev
+  libasound2-dev python3-dev libsqlite3-dev libsqlcipher-dev wabt
 
 RUN curl https://sh.rustup.rs -sSf | bash -s -- -y --default-toolchain "${RUST_VER}"
 
@@ -27,10 +28,15 @@ FROM rust_builder as builder
 
 ARG DONT_EXEC_TESTS
 ARG RUST_VER
+ARG BINS
 
 WORKDIR /opt/darkfi
 
 COPY . /opt/darkfi
+
+RUN  sed -i.bac1 's#let output = Command::new("git")#//let output = Command::new("git")#g' ./src/contract/test-harness/src/vks.rs
+
+RUN  sed -i.bac2 's#let mut path = PathBuf::from(String::from_utf8(output\[\.\.output.len() - 1\].to_vec())?);#let mut path = PathBuf::from("/opt/darkfi");#g' ./src/contract/test-harness/src/vks.rs
 
 RUN cargo update
 
@@ -38,19 +44,20 @@ RUN make clean
 
 RUN rm -rf ./target/ zkas proof/*.bin
 
-RUN bash -c "if [ -z \"$DONT_EXEC_TESTS\" ]; then make -j test; fi"
+RUN bash -c "if [ -z \"$DONT_EXEC_TESTS\" ]; then make test; fi"
 
-RUN bash -c 'make -j all'
+RUN bash -c "make $BINS"
+
+RUN mkdir -p /opt/darkfi/compiled-bins
+
+RUN cp $(find . -maxdepth 1  -type f -executable) /opt/darkfi/compiled-bins
 
 # 3. stage
 FROM ubuntu:${OS_VER}
 
 RUN apt-get -y update && apt-get install -y openssl fonts-lato libout123-0 libmpg123-0 libasound2 libsqlite3-0 \
-  && apt-get clean && rm -rf /var/lib/apt/lists/*
+  sqlcipher && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt/darkfi
 
-COPY --from=builder /opt/darkfi/drk /opt/darkfi/darkfid  \
-   /opt/darkfi/darkirc /opt/darkfi/faucetd \
-   /opt/darkfi/zkas /opt/darkfi/vanityaddr \
-   /opt/darkfi/tau /opt/darkfi/taud  ./
+COPY --from=builder /opt/darkfi/compiled-bins/* ./
