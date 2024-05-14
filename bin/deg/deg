@@ -192,12 +192,10 @@ class App(object):
             dag.add_edges_from(parent_child_pairs)
             l = []
             topological_order = list(nx.topological_sort(dag))
-            print(topological_order)
             for node in reversed(topological_order):
                 event_details = dag_dict.get(node) # details
                 if event_details is None:
                     continue
-                print(event_details)
                 layer = int(event_details['layer'])
                 content = event_details['content'] # event content
                 timestamp = event_details['timestamp']
