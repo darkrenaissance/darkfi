@@ -319,8 +319,8 @@ pub async fn verify_producer_transaction(
 
     // Verify call based on version
     let call = &tx.calls[0];
-    // Block must contain a Money::PoWReward(0x06) call
-    if call.data.contract_id != *MONEY_CONTRACT_ID || call.data.data[0] != 0x06 {
+    // Block must contain a Money::PoWReward(0x02) call
+    if call.data.contract_id != *MONEY_CONTRACT_ID || call.data.data[0] != 0x02 {
         return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
     }
 
@@ -571,8 +571,8 @@ pub async fn verify_transaction(
 
     // Iterate over all calls to get the metadata
     for (idx, call) in tx.calls.iter().enumerate() {
-        // Transaction must not contain a Money::PoWReward(0x06) call
-        if call.data.contract_id == *MONEY_CONTRACT_ID && call.data.data[0] == 0x06 {
+        // Transaction must not contain a Money::PoWReward(0x02) call
+        if call.data.contract_id == *MONEY_CONTRACT_ID && call.data.data[0] == 0x02 {
             error!(target: "validator::verification::verify_transaction", "Reward transaction detected");
             return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
         }

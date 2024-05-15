@@ -27,12 +27,12 @@ use darkfi_sdk::error::ContractError;
 pub enum MoneyFunction {
     FeeV1 = 0x00,
     GenesisMintV1 = 0x01,
-    TransferV1 = 0x02,
-    OtcSwapV1 = 0x03,
-    TokenMintV1 = 0x04,
-    TokenFreezeV1 = 0x05,
-    PoWRewardV1 = 0x06,
-    AuthTokenMintV1 = 0x07,
+    PoWRewardV1 = 0x02,
+    TransferV1 = 0x03,
+    OtcSwapV1 = 0x04,
+    AuthTokenMintV1 = 0x05,
+    TokenFreezeV1 = 0x06,
+    TokenMintV1 = 0x07,
 }
 // ANCHOR_END: money-function
 
@@ -43,12 +43,12 @@ impl TryFrom<u8> for MoneyFunction {
         match b {
             0x00 => Ok(Self::FeeV1),
             0x01 => Ok(Self::GenesisMintV1),
-            0x02 => Ok(Self::TransferV1),
-            0x03 => Ok(Self::OtcSwapV1),
-            0x04 => Ok(Self::TokenMintV1),
-            0x05 => Ok(Self::TokenFreezeV1),
-            0x06 => Ok(Self::PoWRewardV1),
-            0x07 => Ok(Self::AuthTokenMintV1),
+            0x02 => Ok(Self::PoWRewardV1),
+            0x03 => Ok(Self::TransferV1),
+            0x04 => Ok(Self::OtcSwapV1),
+            0x05 => Ok(Self::AuthTokenMintV1),
+            0x06 => Ok(Self::TokenFreezeV1),
+            0x07 => Ok(Self::TokenMintV1),
             _ => Err(ContractError::InvalidFunction),
         }
     }
@@ -96,9 +96,9 @@ pub const MONEY_CONTRACT_ZKAS_FEE_NS_V1: &str = "Fee_V1";
 pub const MONEY_CONTRACT_ZKAS_MINT_NS_V1: &str = "Mint_V1";
 /// zkas burn circuit namespace
 pub const MONEY_CONTRACT_ZKAS_BURN_NS_V1: &str = "Burn_V1";
-/// zkas token mint circuit namespace
-pub const MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1: &str = "TokenMint_V1";
-/// zkas token freeze circuit namespace
-pub const MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1: &str = "TokenFreeze_V1";
 /// zkas token auth mint circuit namespace
 pub const MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1: &str = "AuthTokenMint_V1";
+/// zkas token freeze circuit namespace
+pub const MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1: &str = "TokenFreeze_V1";
+/// zkas token mint circuit namespace
+pub const MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1: &str = "TokenMint_V1";
