@@ -20,12 +20,14 @@ use darkfi_sdk::{
     crypto::{pasta_prelude::Field, smt::EMPTY_NODES_FP, ContractId, MerkleNode, MerkleTree},
     dark_tree::DarkLeaf,
     error::ContractResult,
+    msg,
     pasta::pallas,
     wasm, ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{
+    error::MoneyError,
     model::{
         MoneyAuthTokenMintUpdateV1, MoneyFeeUpdateV1, MoneyGenesisMintUpdateV1,
         MoneyPoWRewardUpdateV1, MoneyTokenFreezeUpdateV1, MoneyTokenMintUpdateV1,
@@ -130,7 +132,13 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     let mut roots_value_data = Vec::with_capacity(32 + 1);
     tx_hash.encode(&mut roots_value_data)?;
     call_idx.encode(&mut roots_value_data)?;
-    assert_eq!(roots_value_data.len(), 32 + 1);
+    if roots_value_data.len() != 32 + 1 {
+        msg!(
+            "[money::init_contract] Error: Roots value data length is not expected(32 + 1): {}",
+            roots_value_data.len()
+        );
+        return Err(MoneyError::RootsValueDataMismatch.into())
+    }
 
     // Set up a database tree to hold Merkle roots of all coin trees
     // k=root_hash:32, v=(tx_hash:32, call_idx: 1)

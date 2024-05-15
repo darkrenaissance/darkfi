@@ -103,6 +103,12 @@ pub enum MoneyError {
     // TODO: This should catch-all (TransferMerkle../SwapMerkle...)
     #[error("Coin merkle root not found")]
     CoinMerkleRootNotFound,
+
+    #[error("Roots value data length missmatch")]
+    RootsValueDataMismatch,
+
+    #[error("Children indexes length missmatch")]
+    ChildrenIndexesLengthMismatch,
 }
 
 impl From<MoneyError> for ContractError {
@@ -110,34 +116,33 @@ impl From<MoneyError> for ContractError {
         match e {
             MoneyError::TransferMissingInputs => Self::Custom(1),
             MoneyError::TransferMissingOutputs => Self::Custom(2),
-            // 3 was removed
-            MoneyError::TransferClearInputNonNativeToken => Self::Custom(4),
-            MoneyError::TransferClearInputUnauthorised => Self::Custom(5),
-            MoneyError::TransferMerkleRootNotFound => Self::Custom(6),
-            MoneyError::DuplicateNullifier => Self::Custom(7),
-            // 8 was removed
-            // 9 was removed
-            MoneyError::DuplicateCoin => Self::Custom(10),
-            MoneyError::ValueMismatch => Self::Custom(11),
-            MoneyError::TokenMismatch => Self::Custom(12),
-            MoneyError::InvalidNumberOfInputs => Self::Custom(13),
-            MoneyError::InvalidNumberOfOutputs => Self::Custom(14),
-            MoneyError::SpendHookNonZero => Self::Custom(15),
-            MoneyError::SwapMerkleRootNotFound => Self::Custom(16),
-            MoneyError::TokenIdDoesNotDeriveFromMint => Self::Custom(17),
-            MoneyError::TokenMintFrozen => Self::Custom(18),
-            MoneyError::ParentCallFunctionMismatch => Self::Custom(19),
-            MoneyError::ParentCallInputMismatch => Self::Custom(20),
-            MoneyError::ChildCallFunctionMismatch => Self::Custom(21),
-            MoneyError::ChildCallInputMismatch => Self::Custom(22),
-            MoneyError::GenesisCallNonGenesisBlock => Self::Custom(23),
-            MoneyError::MissingNullifier => Self::Custom(24),
-            MoneyError::PoWRewardCallOnGenesisBlock => Self::Custom(25),
-            MoneyError::PoWRewardRetrieveLastBlockHeightError => Self::Custom(26),
-            MoneyError::PoWRewardCallNotOnNextBlockHeight => Self::Custom(27),
-            MoneyError::FeeMissingInputs => Self::Custom(28),
-            MoneyError::InsufficientFee => Self::Custom(29),
-            MoneyError::CoinMerkleRootNotFound => Self::Custom(30),
+            MoneyError::TransferClearInputNonNativeToken => Self::Custom(3),
+            MoneyError::TransferClearInputUnauthorised => Self::Custom(4),
+            MoneyError::TransferMerkleRootNotFound => Self::Custom(5),
+            MoneyError::DuplicateNullifier => Self::Custom(6),
+            MoneyError::DuplicateCoin => Self::Custom(7),
+            MoneyError::ValueMismatch => Self::Custom(8),
+            MoneyError::TokenMismatch => Self::Custom(9),
+            MoneyError::InvalidNumberOfInputs => Self::Custom(10),
+            MoneyError::InvalidNumberOfOutputs => Self::Custom(11),
+            MoneyError::SpendHookNonZero => Self::Custom(12),
+            MoneyError::SwapMerkleRootNotFound => Self::Custom(13),
+            MoneyError::TokenIdDoesNotDeriveFromMint => Self::Custom(14),
+            MoneyError::TokenMintFrozen => Self::Custom(15),
+            MoneyError::ParentCallFunctionMismatch => Self::Custom(16),
+            MoneyError::ParentCallInputMismatch => Self::Custom(17),
+            MoneyError::ChildCallFunctionMismatch => Self::Custom(18),
+            MoneyError::ChildCallInputMismatch => Self::Custom(19),
+            MoneyError::GenesisCallNonGenesisBlock => Self::Custom(20),
+            MoneyError::MissingNullifier => Self::Custom(21),
+            MoneyError::PoWRewardCallOnGenesisBlock => Self::Custom(22),
+            MoneyError::PoWRewardRetrieveLastBlockHeightError => Self::Custom(23),
+            MoneyError::PoWRewardCallNotOnNextBlockHeight => Self::Custom(24),
+            MoneyError::FeeMissingInputs => Self::Custom(25),
+            MoneyError::InsufficientFee => Self::Custom(26),
+            MoneyError::CoinMerkleRootNotFound => Self::Custom(27),
+            MoneyError::RootsValueDataMismatch => Self::Custom(28),
+            MoneyError::ChildrenIndexesLengthMismatch => Self::Custom(29),
         }
     }
 }

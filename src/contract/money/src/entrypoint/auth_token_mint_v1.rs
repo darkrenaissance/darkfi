@@ -42,7 +42,13 @@ pub(crate) fn money_auth_token_mint_get_metadata_v1(
     let self_data = &self_node.data;
     let self_params: MoneyAuthTokenMintParamsV1 = deserialize(&self_data.data[1..])?;
 
-    assert_eq!(self_node.children_indexes.len(), 1);
+    if self_node.children_indexes.len() != 1 {
+        msg!(
+            "[MintV1] Error: Children indexes length is not expected(1): {}",
+            self_node.children_indexes.len()
+        );
+        return Err(MoneyError::ChildrenIndexesLengthMismatch.into())
+    }
     let child_idx = self_node.children_indexes[0];
     let child_node = &calls[child_idx];
     let child_data = &child_node.data;
