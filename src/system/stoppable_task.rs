@@ -119,6 +119,13 @@ impl StoppableTask {
         self.barrier.wait().await;
         trace!(target: "system::StoppableTask", "Stopped task {}", self.task_id);
     }
+
+    /// Sends a stop signal and returns immediately. Doesn't guarantee the task
+    /// stopped on completion.
+    pub fn stop_nowait(&self) {
+        trace!(target: "system::StoppableTask", "Stopping task (nowait) {}", self.task_id);
+        self.signal.notify();
+    }
 }
 
 impl std::hash::Hash for StoppableTask {
@@ -137,6 +144,12 @@ impl std::cmp::PartialEq for StoppableTask {
 }
 
 impl std::cmp::Eq for StoppableTask {}
+
+impl Drop for StoppableTask {
+    fn drop(&mut self) {
+        self.stop_nowait()
+    }
+}
 
 #[cfg(test)]
 mod tests {
