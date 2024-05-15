@@ -229,7 +229,7 @@ mod tests {
                 .spawn(async move {
                     select! {
                         () = cv_.wait().fuse() => (),
-                        () = (|| async {})().fuse() => ()
+                        () = (async {}).fuse() => ()
                     }
 
                     // The above future was dropped and we make a new one
