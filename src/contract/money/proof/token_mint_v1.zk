@@ -1,4 +1,4 @@
-# Circuit used to mint arbitrary coins given a mint authority secret.
+# Circuit used to mint arbitrary coins for given token attributes.
 k = 11;
 field = "pallas";
 

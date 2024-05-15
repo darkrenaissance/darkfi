@@ -246,7 +246,6 @@ pub struct MoneyTokenMintUpdateV1 {
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct MoneyAuthTokenMintParamsV1 {
     pub token_id: TokenId,
-    pub value_commit: pallas::Point,
     pub enc_note: AeadEncryptedNote,
     pub mint_pubkey: PublicKey,
 }

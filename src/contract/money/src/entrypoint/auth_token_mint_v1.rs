@@ -17,7 +17,7 @@
  */
 
 use darkfi_sdk::{
-    crypto::{pasta_prelude::*, ContractId, PublicKey},
+    crypto::{ContractId, PublicKey},
     dark_tree::DarkLeaf,
     error::{ContractError, ContractResult},
     msg,
@@ -28,7 +28,7 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{
     error::MoneyError,
-    model::{MoneyAuthTokenMintParamsV1, MoneyAuthTokenMintUpdateV1, MoneyTokenMintParamsV1},
+    model::{MoneyAuthTokenMintParamsV1, MoneyAuthTokenMintUpdateV1},
     MoneyFunction, MONEY_CONTRACT_TOKEN_FREEZE_TREE, MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1,
 };
 
@@ -38,38 +38,25 @@ pub(crate) fn money_auth_token_mint_get_metadata_v1(
     call_idx: usize,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_node = &calls[call_idx];
-    let self_data = &self_node.data;
-    let self_params: MoneyAuthTokenMintParamsV1 = deserialize(&self_data.data[1..])?;
-
-    if self_node.children_indexes.len() != 1 {
+    let self_ = &calls[call_idx];
+    if self_.children_indexes.len() != 1 {
         msg!(
             "[MintV1] Error: Children indexes length is not expected(1): {}",
-            self_node.children_indexes.len()
+            self_.children_indexes.len()
         );
         return Err(MoneyError::ChildrenIndexesLengthMismatch.into())
     }
-    let child_idx = self_node.children_indexes[0];
-    let child_node = &calls[child_idx];
-    let child_data = &child_node.data;
-    let child_params: MoneyTokenMintParamsV1 = deserialize(&child_data.data[1..])?;
+
+    let params: MoneyAuthTokenMintParamsV1 = deserialize(&self_.data.data[1..])?;
 
     // Public inputs for the ZK proofs we have to verify
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
     // Public keys for the transaction signatures we have to verify.
-    let signature_pubkeys: Vec<PublicKey> = vec![self_params.mint_pubkey];
+    let signature_pubkeys: Vec<PublicKey> = vec![params.mint_pubkey];
 
-    let value_commit = self_params.value_commit.to_affine().coordinates().unwrap();
     zk_public_inputs.push((
         MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1.to_string(),
-        vec![
-            self_params.mint_pubkey.x(),
-            self_params.mint_pubkey.y(),
-            self_params.token_id.inner(),
-            child_params.coin.inner(),
-            *value_commit.x(),
-            *value_commit.y(),
-        ],
+        vec![params.mint_pubkey.x(), params.mint_pubkey.y(), params.token_id.inner()],
     ));
 
     // Serialize everything gathered and return it

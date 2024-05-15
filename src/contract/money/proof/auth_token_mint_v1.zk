@@ -1,33 +1,19 @@
-# Circuit used to mint arbitrary coins given a mint authority secret.
+# Circuit used to verify a token mint authority.
 k = 11;
 field = "pallas";
 
 constant "AuthTokenMint_V1" {
-    EcFixedPointShort VALUE_COMMIT_VALUE,
-    EcFixedPoint VALUE_COMMIT_RANDOM,
     EcFixedPointBase NULLIFIER_K,
 }
 
 witness "AuthTokenMint_V1" {
-    # CoinAttributes {
-    Base coin_public_x,
-    Base coin_public_y,
-    Base coin_value,
-    Base coin_spend_hook,
-    Base coin_user_data,
-    Base coin_blind,
-    # }
-
     # TokenAttributes {
     Base token_auth_parent,
     Base token_blind,
     # }
 
-    # Secret key used by mint
+    # Secret key used by the mint authority
     Base mint_secret,
-
-    # Random blinding factor for the value commitment
-    Scalar value_commit_blind,
 }
 
 circuit "AuthTokenMint_V1" {
@@ -42,23 +28,4 @@ circuit "AuthTokenMint_V1" {
     token_user_data = poseidon_hash(mint_x, mint_y);
     token_id = poseidon_hash(token_auth_parent, token_user_data, token_blind);
     constrain_instance(token_id);
-
-    # Poseidon hash of the minted coin
-    coin = poseidon_hash(
-        coin_public_x,
-        coin_public_y,
-        coin_value,
-        token_id,
-        coin_spend_hook,
-        coin_user_data,
-        coin_blind
-    );
-    constrain_instance(coin);
-
-    # Pedersen commitment for the coin's value
-    vcv = ec_mul_short(coin_value, VALUE_COMMIT_VALUE);
-    vcr = ec_mul(value_commit_blind, VALUE_COMMIT_RANDOM);
-    value_commit = ec_add(vcv, vcr);
-    constrain_instance(ec_get_x(value_commit));
-    constrain_instance(ec_get_y(value_commit));
 }
