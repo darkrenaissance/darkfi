@@ -31,7 +31,7 @@ pub enum MoneyFunction {
     TransferV1 = 0x03,
     OtcSwapV1 = 0x04,
     AuthTokenMintV1 = 0x05,
-    TokenFreezeV1 = 0x06,
+    AuthTokenFreezeV1 = 0x06,
     TokenMintV1 = 0x07,
 }
 // ANCHOR_END: money-function
@@ -47,7 +47,7 @@ impl TryFrom<u8> for MoneyFunction {
             0x03 => Ok(Self::TransferV1),
             0x04 => Ok(Self::OtcSwapV1),
             0x05 => Ok(Self::AuthTokenMintV1),
-            0x06 => Ok(Self::TokenFreezeV1),
+            0x06 => Ok(Self::AuthTokenFreezeV1),
             0x07 => Ok(Self::TokenMintV1),
             _ => Err(ContractError::InvalidFunction),
         }
@@ -98,7 +98,5 @@ pub const MONEY_CONTRACT_ZKAS_MINT_NS_V1: &str = "Mint_V1";
 pub const MONEY_CONTRACT_ZKAS_BURN_NS_V1: &str = "Burn_V1";
 /// zkas token auth mint circuit namespace
 pub const MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1: &str = "AuthTokenMint_V1";
-/// zkas token freeze circuit namespace
-pub const MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1: &str = "TokenFreeze_V1";
 /// zkas token mint circuit namespace
 pub const MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1: &str = "TokenMint_V1";

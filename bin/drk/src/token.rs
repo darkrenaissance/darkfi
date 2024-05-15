@@ -28,12 +28,12 @@ use darkfi::{
 };
 use darkfi_money_contract::{
     client::{
-        auth_token_mint_v1::AuthTokenMintCallBuilder, token_freeze_v1::TokenFreezeCallBuilder,
-        token_mint_v1::TokenMintCallBuilder,
+        auth_token_freeze_v1::AuthTokenFreezeCallBuilder,
+        auth_token_mint_v1::AuthTokenMintCallBuilder, token_mint_v1::TokenMintCallBuilder,
     },
     model::{CoinAttributes, TokenAttributes, TokenId},
     MoneyFunction, MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1, MONEY_CONTRACT_ZKAS_FEE_NS_V1,
-    MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1, MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
+    MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{
@@ -353,29 +353,31 @@ impl Drk {
         let mint_authority = Keypair::new(token_mint_authority.1);
 
         let zkas_bins = self.lookup_zkas(&MONEY_CONTRACT_ID).await?;
-        let zkas_ns = MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1;
 
-        let Some(token_freeze_zkbin) = zkas_bins.iter().find(|x| x.0 == zkas_ns) else {
-            return Err(Error::Custom("Token freeze circuit not found".to_string()))
+        let Some(auth_mint_zkbin) =
+            zkas_bins.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1)
+        else {
+            return Err(Error::Custom("Auth token mint circuit not found".to_string()))
         };
 
-        let freeze_zkbin = ZkBinary::decode(&token_freeze_zkbin.1)?;
-        let token_freeze_circuit = ZkCircuit::new(empty_witnesses(&freeze_zkbin)?, &freeze_zkbin);
+        let auth_mint_zkbin = ZkBinary::decode(&auth_mint_zkbin.1)?;
+        let auth_mint_circuit =
+            ZkCircuit::new(empty_witnesses(&auth_mint_zkbin)?, &auth_mint_zkbin);
 
-        println!("Creating token freeze circuit proving keys");
-        let freeze_pk = ProvingKey::build(freeze_zkbin.k, &token_freeze_circuit);
-        let freeze_builder = TokenFreezeCallBuilder {
+        println!("Creating auth token mint circuit proving keys");
+        let auth_mint_pk = ProvingKey::build(auth_mint_zkbin.k, &auth_mint_circuit);
+        let freeze_builder = AuthTokenFreezeCallBuilder {
             mint_keypair: mint_authority,
             token_attrs,
-            freeze_zkbin,
-            freeze_pk,
+            auth_mint_zkbin,
+            auth_mint_pk,
         };
 
         println!("Building transaction parameters");
         let debris = freeze_builder.build()?;
 
         // Encode and sign the transaction
-        let mut data = vec![MoneyFunction::TokenFreezeV1 as u8];
+        let mut data = vec![MoneyFunction::AuthTokenFreezeV1 as u8];
         debris.params.encode_async(&mut data).await?;
         let call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
         let mut tx_builder =

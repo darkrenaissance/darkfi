@@ -39,7 +39,7 @@ use darkfi_dao_contract::{
 use darkfi_money_contract::{
     MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1, MONEY_CONTRACT_ZKAS_BURN_NS_V1,
     MONEY_CONTRACT_ZKAS_FEE_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
-    MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1, MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
+    MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
 };
 use darkfi_sdk::crypto::{DAO_CONTRACT_ID, MONEY_CONTRACT_ID};
 use darkfi_serial::{deserialize, serialize};
@@ -48,8 +48,8 @@ use log::debug;
 
 /// Update these if any circuits are changed.
 /// Delete the existing cachefiles, and enable debug logging, you will see the new hashes.
-const PKS_HASH: &str = "74c32f44649aed0ef51193a64df15f2375fb81482479e49d6b3f53bab7ea102a";
-const VKS_HASH: &str = "ef943017346bc794b8dafa0b494e965d979352bc254e1549b52f5e1df38710bf";
+const PKS_HASH: &str = "e8de97d286a4a31606f96dfd13bb5a6e9dfa49322573b8cd1fe936aee7e33e58";
+const VKS_HASH: &str = "aa59b5e53c10c994c127beb443d6b1b4c21ee7417ce1a4f717c82431b7b8c8d9";
 
 /// Build a `PathBuf` to a cachefile
 fn cache_path(typ: &str) -> Result<PathBuf> {
@@ -125,7 +125,6 @@ pub fn get_cached_pks_and_vks() -> Result<(Pks, Vks)> {
         &include_bytes!("../../money/proof/mint_v1.zk.bin")[..],
         &include_bytes!("../../money/proof/burn_v1.zk.bin")[..],
         &include_bytes!("../../money/proof/token_mint_v1.zk.bin")[..],
-        &include_bytes!("../../money/proof/token_freeze_v1.zk.bin")[..],
         &include_bytes!("../../money/proof/auth_token_mint_v1.zk.bin")[..],
         // DAO
         &include_bytes!("../../dao/proof/mint.zk.bin")[..],
@@ -193,7 +192,6 @@ pub fn inject(sled_db: &sled::Db, vks: &Vks) -> Result<()> {
             MONEY_CONTRACT_ZKAS_MINT_NS_V1 |
             MONEY_CONTRACT_ZKAS_BURN_NS_V1 |
             MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1 |
-            MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1 |
             MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1 => {
                 let key = serialize(&namespace.as_str());
                 let value = serialize(&(bincode.clone(), vk.clone()));

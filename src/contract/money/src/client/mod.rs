@@ -43,26 +43,26 @@ use crate::model::{Coin, Nullifier, TokenId};
 /// `Money::FeeV1` API
 pub mod fee_v1;
 
+/// `Money::GenesisMintV1` API
+pub mod genesis_mint_v1;
+
+/// `Money::PoWRewardV1` API
+pub mod pow_reward_v1;
+
 /// `Money::TransferV1` API
 pub mod transfer_v1;
 
 /// `Money::OtcSwapV1` API
 pub mod swap_v1;
 
-/// `Money::GenesisMintV1` API
-pub mod genesis_mint_v1;
+/// `Money::AuthTokenMintV1` API
+pub mod auth_token_mint_v1;
+
+/// `Money::AuthTokenFreezeV1` API
+pub mod auth_token_freeze_v1;
 
 /// `Money::TokenMintV1` API
 pub mod token_mint_v1;
-
-/// `Money::TokenFreezeV1` API
-pub mod token_freeze_v1;
-
-/// `Money::PoWRewardV1` API
-pub mod pow_reward_v1;
-
-/// `Money::AuthTokenMintV1` API
-pub mod auth_token_mint_v1;
 
 /// `MoneyNote` holds the inner attributes of a `Coin`
 /// It does not store the public key since it's encrypted for that key,

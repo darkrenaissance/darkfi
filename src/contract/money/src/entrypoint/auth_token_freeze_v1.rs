@@ -28,18 +28,18 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{
     error::MoneyError,
-    model::{MoneyTokenFreezeParamsV1, MoneyTokenFreezeUpdateV1},
-    MoneyFunction, MONEY_CONTRACT_TOKEN_FREEZE_TREE, MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1,
+    model::{MoneyAuthTokenFreezeParamsV1, MoneyAuthTokenFreezeUpdateV1},
+    MoneyFunction, MONEY_CONTRACT_TOKEN_FREEZE_TREE, MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1,
 };
 
-/// `get_metadata` function for `Money::TokenFreezeV1`
-pub(crate) fn money_token_freeze_get_metadata_v1(
+/// `get_metadata` function for `Money::AuthTokenFreezeV1`
+pub(crate) fn money_auth_token_freeze_get_metadata_v1(
     _cid: ContractId,
     call_idx: usize,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx].data;
-    let params: MoneyTokenFreezeParamsV1 = deserialize(&self_.data[1..])?;
+    let params: MoneyAuthTokenFreezeParamsV1 = deserialize(&self_.data[1..])?;
 
     // Public inputs for the ZK proofs we have to verify
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
@@ -51,7 +51,7 @@ pub(crate) fn money_token_freeze_get_metadata_v1(
 
     // In ZK we just verify that the token ID is properly derived from the authority.
     zk_public_inputs.push((
-        MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1.to_string(),
+        MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1.to_string(),
         vec![mint_x, mint_y, params.token_id.inner()],
     ));
 
@@ -63,14 +63,14 @@ pub(crate) fn money_token_freeze_get_metadata_v1(
     Ok(metadata)
 }
 
-/// `process_instruction` function for `Money::TokenFreezeV1`
-pub(crate) fn money_token_freeze_process_instruction_v1(
+/// `process_instruction` function for `Money::AuthTokenFreezeV1`
+pub(crate) fn money_auth_token_freeze_process_instruction_v1(
     cid: ContractId,
     call_idx: usize,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx].data;
-    let params: MoneyTokenFreezeParamsV1 = deserialize(&self_.data[1..])?;
+    let params: MoneyAuthTokenFreezeParamsV1 = deserialize(&self_.data[1..])?;
 
     // We just check if the mint was already frozen beforehand
     let token_freeze_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_TOKEN_FREEZE_TREE)?;
@@ -82,18 +82,18 @@ pub(crate) fn money_token_freeze_process_instruction_v1(
     }
 
     // Create a state update. We only need the new coin.
-    let update = MoneyTokenFreezeUpdateV1 { token_id: params.token_id };
+    let update = MoneyAuthTokenFreezeUpdateV1 { token_id: params.token_id };
     let mut update_data = vec![];
-    update_data.write_u8(MoneyFunction::TokenFreezeV1 as u8)?;
+    update_data.write_u8(MoneyFunction::AuthTokenFreezeV1 as u8)?;
     update.encode(&mut update_data)?;
 
     Ok(update_data)
 }
 
-/// `process_update` function for `Money::TokenFreezeV1`
-pub(crate) fn money_token_freeze_process_update_v1(
+/// `process_update` function for `Money::AuthTokenFreezeV1`
+pub(crate) fn money_auth_token_freeze_process_update_v1(
     cid: ContractId,
-    update: MoneyTokenFreezeUpdateV1,
+    update: MoneyAuthTokenFreezeUpdateV1,
 ) -> ContractResult {
     let token_freeze_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_TOKEN_FREEZE_TREE)?;
     msg!("[MintV1] Freezing mint for token {}", update.token_id);

@@ -35,8 +35,8 @@ use darkfi_money_contract::{
         MoneyNote, OwnCoin,
     },
     model::{
-        Coin, Input, MoneyAuthTokenMintParamsV1, MoneyFeeParamsV1, MoneyGenesisMintParamsV1,
-        MoneyPoWRewardParamsV1, MoneyTokenFreezeParamsV1, MoneyTokenMintParamsV1,
+        Coin, Input, MoneyAuthTokenFreezeParamsV1, MoneyAuthTokenMintParamsV1, MoneyFeeParamsV1,
+        MoneyGenesisMintParamsV1, MoneyPoWRewardParamsV1, MoneyTokenMintParamsV1,
         MoneyTransferParamsV1, Nullifier, Output, TokenId, DARK_TOKEN_ID,
     },
     MoneyFunction,
@@ -715,6 +715,12 @@ impl Drk {
                 coins.push(params.output.coin);
                 notes.push(params.output.note);
             }
+            MoneyFunction::PoWRewardV1 => {
+                println!("[parse_money_call] Found Money::PoWRewardV1 call");
+                let params: MoneyPoWRewardParamsV1 = deserialize_async(&data[1..]).await?;
+                coins.push(params.output.coin);
+                notes.push(params.output.note);
+            }
             MoneyFunction::TransferV1 => {
                 println!("[parse_money_call] Found Money::TransferV1 call");
                 let params: MoneyTransferParamsV1 = deserialize_async(&data[1..]).await?;
@@ -741,6 +747,16 @@ impl Drk {
                     notes.push(output.note);
                 }
             }
+            MoneyFunction::AuthTokenMintV1 => {
+                println!("[parse_money_call] Found Money::AuthTokenMintV1 call");
+                // Handled in TokenMint
+            }
+            MoneyFunction::AuthTokenFreezeV1 => {
+                println!("[parse_money_call] Found Money::AuthTokenFreezeV1 call");
+                let params: MoneyAuthTokenFreezeParamsV1 = deserialize_async(&data[1..]).await?;
+                let token_id = TokenId::derive_public(params.mint_public);
+                freezes.push(token_id);
+            }
             MoneyFunction::TokenMintV1 => {
                 println!("[parse_money_call] Found Money::TokenMintV1 call");
                 let params: MoneyTokenMintParamsV1 = deserialize_async(&data[1..]).await?;
@@ -751,22 +767,6 @@ impl Drk {
                 let params: MoneyAuthTokenMintParamsV1 =
                     deserialize_async(&parent_call.data.data[1..]).await?;
                 notes.push(params.enc_note);
-            }
-            MoneyFunction::TokenFreezeV1 => {
-                println!("[parse_money_call] Found Money::TokenFreezeV1 call");
-                let params: MoneyTokenFreezeParamsV1 = deserialize_async(&data[1..]).await?;
-                let token_id = TokenId::derive_public(params.mint_public);
-                freezes.push(token_id);
-            }
-            MoneyFunction::PoWRewardV1 => {
-                println!("[parse_money_call] Found Money::PoWRewardV1 call");
-                let params: MoneyPoWRewardParamsV1 = deserialize_async(&data[1..]).await?;
-                coins.push(params.output.coin);
-                notes.push(params.output.note);
-            }
-            MoneyFunction::AuthTokenMintV1 => {
-                println!("[parse_money_call] Found Money::AuthTokenMintV1 call");
-                // Handled in TokenMint
             }
         }
 

@@ -23,15 +23,15 @@ use darkfi::{
 };
 use darkfi_money_contract::{
     client::{
-        auth_token_mint_v1::AuthTokenMintCallBuilder, token_freeze_v1::TokenFreezeCallBuilder,
-        token_mint_v1::TokenMintCallBuilder, MoneyNote, OwnCoin,
+        auth_token_freeze_v1::AuthTokenFreezeCallBuilder,
+        auth_token_mint_v1::AuthTokenMintCallBuilder, token_mint_v1::TokenMintCallBuilder,
+        MoneyNote, OwnCoin,
     },
     model::{
-        CoinAttributes, MoneyAuthTokenMintParamsV1, MoneyFeeParamsV1, MoneyTokenFreezeParamsV1,
+        CoinAttributes, MoneyAuthTokenFreezeParamsV1, MoneyAuthTokenMintParamsV1, MoneyFeeParamsV1,
         MoneyTokenMintParamsV1, TokenAttributes,
     },
-    MoneyFunction, MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1, MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1,
-    MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
+    MoneyFunction, MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1, MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{poseidon_hash, BaseBlind, Blind, FuncId, FuncRef, MerkleNode, MONEY_CONTRACT_ID},
@@ -251,12 +251,12 @@ impl TestHarness {
         &mut self,
         holder: &Holder,
         block_height: u32,
-    ) -> Result<(Transaction, MoneyTokenFreezeParamsV1, Option<MoneyFeeParamsV1>)> {
+    ) -> Result<(Transaction, MoneyAuthTokenFreezeParamsV1, Option<MoneyFeeParamsV1>)> {
         let wallet = self.holders.get(holder).unwrap();
         let mint_authority = wallet.token_mint_authority;
 
-        let (frz_pk, frz_zkbin) =
-            self.proving_keys.get(MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1).unwrap();
+        let (auth_mint_pk, auth_mint_zkbin) =
+            self.proving_keys.get(MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1).unwrap();
 
         let auth_func_id = FuncRef {
             contract_id: *MONEY_CONTRACT_ID,
@@ -274,14 +274,14 @@ impl TestHarness {
         };
 
         // Create the freeze call
-        let builder = TokenFreezeCallBuilder {
+        let builder = AuthTokenFreezeCallBuilder {
             mint_keypair: mint_authority,
             token_attrs,
-            freeze_zkbin: frz_zkbin.clone(),
-            freeze_pk: frz_pk.clone(),
+            auth_mint_pk: auth_mint_pk.clone(),
+            auth_mint_zkbin: auth_mint_zkbin.clone(),
         };
         let freeze_debris = builder.build()?;
-        let mut data = vec![MoneyFunction::TokenFreezeV1 as u8];
+        let mut data = vec![MoneyFunction::AuthTokenFreezeV1 as u8];
         freeze_debris.params.encode_async(&mut data).await?;
         let freeze_call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
 
@@ -327,7 +327,7 @@ impl TestHarness {
         &mut self,
         holder: &Holder,
         tx: Transaction,
-        _freeze_params: &MoneyTokenFreezeParamsV1,
+        _freeze_params: &MoneyAuthTokenFreezeParamsV1,
         fee_params: &Option<MoneyFeeParamsV1>,
         block_height: u32,
         append: bool,

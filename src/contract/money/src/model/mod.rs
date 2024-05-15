@@ -242,7 +242,7 @@ pub struct MoneyTokenMintUpdateV1 {
     pub coin: Coin,
 }
 
-/// Parameters for `Money::auth_token_mint()`
+/// Parameters for `Money::AuthTokenMint`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct MoneyAuthTokenMintParamsV1 {
     pub token_id: TokenId,
@@ -250,13 +250,13 @@ pub struct MoneyAuthTokenMintParamsV1 {
     pub mint_pubkey: PublicKey,
 }
 
-/// State update for `Money::auth_token_mint()`
+/// State update for `Money::AuthTokenMint`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct MoneyAuthTokenMintUpdateV1 {}
 
-/// Parameters for `Money::TokenFreeze`
+/// Parameters for `Money::AuthTokenFreeze`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
-pub struct MoneyTokenFreezeParamsV1 {
+pub struct MoneyAuthTokenFreezeParamsV1 {
     /// Mint authority public key
     ///
     /// We use this to derive the token ID and verify the signature.
@@ -264,9 +264,9 @@ pub struct MoneyTokenFreezeParamsV1 {
     pub token_id: TokenId,
 }
 
-/// State update for `Money::TokenFreeze`
+/// State update for `Money::AuthTokenFreeze`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
-pub struct MoneyTokenFreezeUpdateV1 {
+pub struct MoneyAuthTokenFreezeUpdateV1 {
     pub token_id: TokenId,
 }
 

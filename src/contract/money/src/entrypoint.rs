@@ -29,8 +29,8 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 use crate::{
     error::MoneyError,
     model::{
-        MoneyAuthTokenMintUpdateV1, MoneyFeeUpdateV1, MoneyGenesisMintUpdateV1,
-        MoneyPoWRewardUpdateV1, MoneyTokenFreezeUpdateV1, MoneyTokenMintUpdateV1,
+        MoneyAuthTokenFreezeUpdateV1, MoneyAuthTokenMintUpdateV1, MoneyFeeUpdateV1,
+        MoneyGenesisMintUpdateV1, MoneyPoWRewardUpdateV1, MoneyTokenMintUpdateV1,
         MoneyTransferUpdateV1,
     },
     MoneyFunction, EMPTY_COINS_TREE_ROOT, MONEY_CONTRACT_COINS_TREE,
@@ -44,6 +44,20 @@ use crate::{
 mod fee_v1;
 use fee_v1::{
     money_fee_get_metadata_v1, money_fee_process_instruction_v1, money_fee_process_update_v1,
+};
+
+/// `Money::GenesisMint` functions
+mod genesis_mint_v1;
+use genesis_mint_v1::{
+    money_genesis_mint_get_metadata_v1, money_genesis_mint_process_instruction_v1,
+    money_genesis_mint_process_update_v1,
+};
+
+/// `Money::PoWReward` functions
+mod pow_reward_v1;
+use pow_reward_v1::{
+    money_pow_reward_get_metadata_v1, money_pow_reward_process_instruction_v1,
+    money_pow_reward_process_update_v1,
 };
 
 /// `Money::Transfer` functions
@@ -60,11 +74,18 @@ use swap_v1::{
     money_otcswap_process_update_v1,
 };
 
-/// `Money::GenesisMint` functions
-mod genesis_mint_v1;
-use genesis_mint_v1::{
-    money_genesis_mint_get_metadata_v1, money_genesis_mint_process_instruction_v1,
-    money_genesis_mint_process_update_v1,
+/// `Money::AuthTokenMint` functions
+mod auth_token_mint_v1;
+use auth_token_mint_v1::{
+    money_auth_token_mint_get_metadata_v1, money_auth_token_mint_process_instruction_v1,
+    money_auth_token_mint_process_update_v1,
+};
+
+/// `Money::AuthTokenFreeze` functions
+mod auth_token_freeze_v1;
+use auth_token_freeze_v1::{
+    money_auth_token_freeze_get_metadata_v1, money_auth_token_freeze_process_instruction_v1,
+    money_auth_token_freeze_process_update_v1,
 };
 
 /// `Money::TokenMint` functions
@@ -72,27 +93,6 @@ mod token_mint_v1;
 use token_mint_v1::{
     money_token_mint_get_metadata_v1, money_token_mint_process_instruction_v1,
     money_token_mint_process_update_v1,
-};
-
-/// `Money::TokenFreeze` functions
-mod token_freeze_v1;
-use token_freeze_v1::{
-    money_token_freeze_get_metadata_v1, money_token_freeze_process_instruction_v1,
-    money_token_freeze_process_update_v1,
-};
-
-/// `Money::PoWReward` functions
-mod pow_reward_v1;
-use pow_reward_v1::{
-    money_pow_reward_get_metadata_v1, money_pow_reward_process_instruction_v1,
-    money_pow_reward_process_update_v1,
-};
-
-/// `Money::AuthTokenMint` functions
-mod auth_token_mint_v1;
-use auth_token_mint_v1::{
-    money_auth_token_mint_get_metadata_v1, money_auth_token_mint_process_instruction_v1,
-    money_auth_token_mint_process_update_v1,
 };
 
 darkfi_sdk::define_contract!(
@@ -115,7 +115,6 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     let mint_v1_bincode = include_bytes!("../proof/mint_v1.zk.bin");
     let burn_v1_bincode = include_bytes!("../proof/burn_v1.zk.bin");
     let token_mint_v1_bincode = include_bytes!("../proof/token_mint_v1.zk.bin");
-    let token_frz_v1_bincode = include_bytes!("../proof/token_freeze_v1.zk.bin");
     let auth_token_mint_v1_bincode = include_bytes!("../proof/auth_token_mint_v1.zk.bin");
 
     // For that, we use `wasm::db::zkas_wasm::db::db_set` and pass in the bincode.
@@ -123,7 +122,6 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     wasm::db::zkas_db_set(&mint_v1_bincode[..])?;
     wasm::db::zkas_db_set(&burn_v1_bincode[..])?;
     wasm::db::zkas_db_set(&token_mint_v1_bincode[..])?;
-    wasm::db::zkas_db_set(&token_frz_v1_bincode[..])?;
     wasm::db::zkas_db_set(&auth_token_mint_v1_bincode[..])?;
 
     let tx_hash = wasm::util::get_tx_hash()?;
@@ -230,22 +228,24 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
     let func = MoneyFunction::try_from(self_.data[0])?;
 
     let metadata = match func {
-        MoneyFunction::FeeV1 => money_fee_get_metadata_v1(cid, call_idx, calls)?,
-        MoneyFunction::TransferV1 => {
+        MoneyFunction::FeeV1 => {
             // We pass everything into the correct function, and it will return
             // the metadata for us, which we can then copy into the host with
             // the `wasm::util::set_return_data` function. On the host, this metadata will
             // be used to do external verification (zk proofs, and signatures).
-            money_transfer_get_metadata_v1(cid, call_idx, calls)?
+            money_fee_get_metadata_v1(cid, call_idx, calls)?
         }
-        MoneyFunction::OtcSwapV1 => money_otcswap_get_metadata_v1(cid, call_idx, calls)?,
         MoneyFunction::GenesisMintV1 => money_genesis_mint_get_metadata_v1(cid, call_idx, calls)?,
-        MoneyFunction::TokenMintV1 => money_token_mint_get_metadata_v1(cid, call_idx, calls)?,
-        MoneyFunction::TokenFreezeV1 => money_token_freeze_get_metadata_v1(cid, call_idx, calls)?,
         MoneyFunction::PoWRewardV1 => money_pow_reward_get_metadata_v1(cid, call_idx, calls)?,
+        MoneyFunction::TransferV1 => money_transfer_get_metadata_v1(cid, call_idx, calls)?,
+        MoneyFunction::OtcSwapV1 => money_otcswap_get_metadata_v1(cid, call_idx, calls)?,
         MoneyFunction::AuthTokenMintV1 => {
             money_auth_token_mint_get_metadata_v1(cid, call_idx, calls)?
         }
+        MoneyFunction::AuthTokenFreezeV1 => {
+            money_auth_token_freeze_get_metadata_v1(cid, call_idx, calls)?
+        }
+        MoneyFunction::TokenMintV1 => money_token_mint_get_metadata_v1(cid, call_idx, calls)?,
     };
 
     wasm::util::set_return_data(&metadata)
@@ -261,30 +261,30 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
     let func = MoneyFunction::try_from(self_.data[0])?;
 
     let update_data = match func {
-        MoneyFunction::FeeV1 => money_fee_process_instruction_v1(cid, call_idx, calls)?,
-        MoneyFunction::TransferV1 => {
+        MoneyFunction::FeeV1 => {
             // Again, we pass everything into the correct function.
             // If it executes successfully, we'll get a state update
             // which we can copy into the host using `wasm::util::set_return_data`.
             // This update can then be written with `process_update()`
             // if everything is in order.
-            money_transfer_process_instruction_v1(cid, call_idx, calls)?
+            money_fee_process_instruction_v1(cid, call_idx, calls)?
         }
-        MoneyFunction::OtcSwapV1 => money_otcswap_process_instruction_v1(cid, call_idx, calls)?,
         MoneyFunction::GenesisMintV1 => {
             money_genesis_mint_process_instruction_v1(cid, call_idx, calls)?
-        }
-        MoneyFunction::TokenMintV1 => {
-            money_token_mint_process_instruction_v1(cid, call_idx, calls)?
-        }
-        MoneyFunction::TokenFreezeV1 => {
-            money_token_freeze_process_instruction_v1(cid, call_idx, calls)?
         }
         MoneyFunction::PoWRewardV1 => {
             money_pow_reward_process_instruction_v1(cid, call_idx, calls)?
         }
+        MoneyFunction::TransferV1 => money_transfer_process_instruction_v1(cid, call_idx, calls)?,
+        MoneyFunction::OtcSwapV1 => money_otcswap_process_instruction_v1(cid, call_idx, calls)?,
         MoneyFunction::AuthTokenMintV1 => {
             money_auth_token_mint_process_instruction_v1(cid, call_idx, calls)?
+        }
+        MoneyFunction::AuthTokenFreezeV1 => {
+            money_auth_token_freeze_process_instruction_v1(cid, call_idx, calls)?
+        }
+        MoneyFunction::TokenMintV1 => {
+            money_token_mint_process_instruction_v1(cid, call_idx, calls)?
         }
     };
 
@@ -302,6 +302,16 @@ fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
             Ok(money_fee_process_update_v1(cid, update)?)
         }
 
+        MoneyFunction::GenesisMintV1 => {
+            let update: MoneyGenesisMintUpdateV1 = deserialize(&update_data[1..])?;
+            Ok(money_genesis_mint_process_update_v1(cid, update)?)
+        }
+
+        MoneyFunction::PoWRewardV1 => {
+            let update: MoneyPoWRewardUpdateV1 = deserialize(&update_data[1..])?;
+            Ok(money_pow_reward_process_update_v1(cid, update)?)
+        }
+
         MoneyFunction::TransferV1 => {
             let update: MoneyTransferUpdateV1 = deserialize(&update_data[1..])?;
             Ok(money_transfer_process_update_v1(cid, update)?)
@@ -314,29 +324,19 @@ fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
             Ok(money_otcswap_process_update_v1(cid, update)?)
         }
 
-        MoneyFunction::GenesisMintV1 => {
-            let update: MoneyGenesisMintUpdateV1 = deserialize(&update_data[1..])?;
-            Ok(money_genesis_mint_process_update_v1(cid, update)?)
+        MoneyFunction::AuthTokenMintV1 => {
+            let update: MoneyAuthTokenMintUpdateV1 = deserialize(&update_data[1..])?;
+            Ok(money_auth_token_mint_process_update_v1(cid, update)?)
+        }
+
+        MoneyFunction::AuthTokenFreezeV1 => {
+            let update: MoneyAuthTokenFreezeUpdateV1 = deserialize(&update_data[1..])?;
+            Ok(money_auth_token_freeze_process_update_v1(cid, update)?)
         }
 
         MoneyFunction::TokenMintV1 => {
             let update: MoneyTokenMintUpdateV1 = deserialize(&update_data[1..])?;
             Ok(money_token_mint_process_update_v1(cid, update)?)
-        }
-
-        MoneyFunction::TokenFreezeV1 => {
-            let update: MoneyTokenFreezeUpdateV1 = deserialize(&update_data[1..])?;
-            Ok(money_token_freeze_process_update_v1(cid, update)?)
-        }
-
-        MoneyFunction::PoWRewardV1 => {
-            let update: MoneyPoWRewardUpdateV1 = deserialize(&update_data[1..])?;
-            Ok(money_pow_reward_process_update_v1(cid, update)?)
-        }
-
-        MoneyFunction::AuthTokenMintV1 => {
-            let update: MoneyAuthTokenMintUpdateV1 = deserialize(&update_data[1..])?;
-            Ok(money_auth_token_mint_process_update_v1(cid, update)?)
         }
     }
 }
