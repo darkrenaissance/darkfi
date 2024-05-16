@@ -281,22 +281,10 @@ impl Drk {
             blind: Blind::random(&mut OsRng),
         };
 
-        // Create the minting call
-        let builder = TokenMintCallBuilder {
-            coin_attrs: coin_attrs.clone(),
-            token_attrs: token_attrs.clone(),
-            mint_zkbin,
-            mint_pk,
-        };
-        let mint_debris = builder.build()?;
-        let mut data = vec![MoneyFunction::TokenMintV1 as u8];
-        mint_debris.params.encode_async(&mut data).await?;
-        let mint_call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
-
         // Create the auth call
         let builder = AuthTokenMintCallBuilder {
-            coin_attrs,
-            token_attrs,
+            coin_attrs: coin_attrs.clone(),
+            token_attrs: token_attrs.clone(),
             mint_keypair: mint_authority,
             auth_mint_zkbin,
             auth_mint_pk,
@@ -306,11 +294,18 @@ impl Drk {
         auth_debris.params.encode_async(&mut data).await?;
         let auth_call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
 
+        // Create the minting call
+        let builder = TokenMintCallBuilder { coin_attrs, token_attrs, mint_zkbin, mint_pk };
+        let mint_debris = builder.build()?;
+        let mut data = vec![MoneyFunction::TokenMintV1 as u8];
+        mint_debris.params.encode_async(&mut data).await?;
+        let mint_call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
+
         // Create the TransactionBuilder containing above calls
         let mut tx_builder = TransactionBuilder::new(
-            ContractCallLeaf { call: auth_call, proofs: auth_debris.proofs },
+            ContractCallLeaf { call: mint_call, proofs: mint_debris.proofs },
             vec![DarkTree::new(
-                ContractCallLeaf { call: mint_call, proofs: mint_debris.proofs },
+                ContractCallLeaf { call: auth_call, proofs: auth_debris.proofs },
                 vec![],
                 None,
                 None,
@@ -320,9 +315,9 @@ impl Drk {
         // We first have to execute the fee-less tx to gather its used gas, and then we feed
         // it into the fee-creating function.
         let mut tx = tx_builder.build()?;
-        let mint_sigs = tx.create_sigs(&[])?;
         let auth_sigs = tx.create_sigs(&[mint_authority.secret])?;
-        tx.signatures = vec![mint_sigs, auth_sigs];
+        let mint_sigs = tx.create_sigs(&[])?;
+        tx.signatures = vec![auth_sigs, mint_sigs];
 
         let tree = self.get_money_tree().await?;
         let secret = self.default_secret().await?;
@@ -335,9 +330,9 @@ impl Drk {
 
         // Now build the actual transaction and sign it with all necessary keys.
         let mut tx = tx_builder.build()?;
-        let sigs = tx.create_sigs(&[])?;
-        tx.signatures.push(sigs);
         let sigs = tx.create_sigs(&[mint_authority.secret])?;
+        tx.signatures.push(sigs);
+        let sigs = tx.create_sigs(&[])?;
         tx.signatures.push(sigs);
         let sigs = tx.create_sigs(&fee_secrets)?;
         tx.signatures.push(sigs);

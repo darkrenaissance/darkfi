@@ -41,25 +41,34 @@ pub(crate) fn money_token_mint_get_metadata_v1(
     call_idx: usize,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx].data;
-    let params: MoneyTokenMintParamsV1 = deserialize(&self_.data[1..])?;
+    let self_ = &calls[call_idx];
 
-    let parent_idx = calls[call_idx as usize].parent_index.unwrap();
-    let parent_call = &calls[parent_idx].data;
-    let parent_contract_id = parent_call.contract_id;
-    let parent_func_code = parent_call.data[0];
+    // Grab the auth call info
+    if self_.children_indexes.len() != 1 {
+        msg!(
+            "[MintV1] Error: Children indexes length is not expected(1): {}",
+            self_.children_indexes.len()
+        );
+        return Err(MoneyError::ChildrenIndexesLengthMismatch.into())
+    }
+    let child_idx = self_.children_indexes[0];
+    let child_call = &calls[child_idx].data;
+    let child_contract_id = child_call.contract_id;
+    let child_func_code = child_call.data[0];
+
+    let params: MoneyTokenMintParamsV1 = deserialize(&self_.data.data[1..])?;
 
     // Public inputs for the ZK proofs we have to verify
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
     // Public keys for the transaction signatures we have to verify.
     let signature_pubkeys: Vec<PublicKey> = vec![];
 
-    let parent_func_id =
-        FuncRef { contract_id: parent_contract_id, func_code: parent_func_code }.to_func_id();
+    let child_func_id =
+        FuncRef { contract_id: child_contract_id, func_code: child_func_code }.to_func_id();
 
     zk_public_inputs.push((
         MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1.to_string(),
-        vec![parent_func_id.inner(), params.coin.inner()],
+        vec![child_func_id.inner(), params.coin.inner()],
     ));
 
     // Serialize everything gathered and return it

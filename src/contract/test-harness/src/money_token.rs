@@ -99,22 +99,10 @@ impl TestHarness {
             blind: Blind::random(&mut OsRng),
         };
 
-        // Create the minting call
-        let builder = TokenMintCallBuilder {
-            coin_attrs: coin_attrs.clone(),
-            token_attrs: token_attrs.clone(),
-            mint_zkbin: token_mint_zkbin.clone(),
-            mint_pk: token_mint_pk.clone(),
-        };
-        let mint_debris = builder.build()?;
-        let mut data = vec![MoneyFunction::TokenMintV1 as u8];
-        mint_debris.params.encode_async(&mut data).await?;
-        let mint_call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
-
         // Create the auth call
         let builder = AuthTokenMintCallBuilder {
-            coin_attrs,
-            token_attrs,
+            coin_attrs: coin_attrs.clone(),
+            token_attrs: token_attrs.clone(),
             mint_keypair: mint_authority,
             auth_mint_zkbin: auth_mint_zkbin.clone(),
             auth_mint_pk: auth_mint_pk.clone(),
@@ -124,11 +112,23 @@ impl TestHarness {
         auth_debris.params.encode_async(&mut data).await?;
         let auth_call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
 
+        // Create the minting call
+        let builder = TokenMintCallBuilder {
+            coin_attrs,
+            token_attrs,
+            mint_zkbin: token_mint_zkbin.clone(),
+            mint_pk: token_mint_pk.clone(),
+        };
+        let mint_debris = builder.build()?;
+        let mut data = vec![MoneyFunction::TokenMintV1 as u8];
+        mint_debris.params.encode_async(&mut data).await?;
+        let mint_call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
+
         // Create the TransactionBuilder containing above calls
         let mut tx_builder = TransactionBuilder::new(
-            ContractCallLeaf { call: auth_call, proofs: auth_debris.proofs },
+            ContractCallLeaf { call: mint_call, proofs: mint_debris.proofs },
             vec![DarkTree::new(
-                ContractCallLeaf { call: mint_call, proofs: mint_debris.proofs },
+                ContractCallLeaf { call: auth_call, proofs: auth_debris.proofs },
                 vec![],
                 None,
                 None,
@@ -140,9 +140,9 @@ impl TestHarness {
         let mut fee_signature_secrets = None;
         if self.verify_fees {
             let mut tx = tx_builder.build()?;
-            let mint_sigs = tx.create_sigs(&[])?;
             let auth_sigs = tx.create_sigs(&[mint_authority.secret])?;
-            tx.signatures = vec![mint_sigs, auth_sigs];
+            let mint_sigs = tx.create_sigs(&[])?;
+            tx.signatures = vec![auth_sigs, mint_sigs];
 
             let (fee_call, fee_proofs, fee_secrets, _spent_fee_coins, fee_call_params) =
                 self.append_fee_call(holder, tx, block_height, &[]).await?;
@@ -155,9 +155,9 @@ impl TestHarness {
 
         // Now build the actual transaction and sign it with necessary keys.
         let mut tx = tx_builder.build()?;
-        let mint_sigs = tx.create_sigs(&[])?;
         let auth_sigs = tx.create_sigs(&[mint_authority.secret])?;
-        tx.signatures = vec![mint_sigs, auth_sigs];
+        let mint_sigs = tx.create_sigs(&[])?;
+        tx.signatures = vec![auth_sigs, mint_sigs];
         if let Some(fee_signature_secrets) = fee_signature_secrets {
             let sigs = tx.create_sigs(&fee_signature_secrets)?;
             tx.signatures.push(sigs);

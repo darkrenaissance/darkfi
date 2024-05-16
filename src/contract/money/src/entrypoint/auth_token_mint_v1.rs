@@ -38,16 +38,7 @@ pub(crate) fn money_auth_token_mint_get_metadata_v1(
     call_idx: usize,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx];
-    if self_.children_indexes.len() != 1 {
-        msg!(
-            "[MintV1] Error: Children indexes length is not expected(1): {}",
-            self_.children_indexes.len()
-        );
-        return Err(MoneyError::ChildrenIndexesLengthMismatch.into())
-    }
-
-    let params: MoneyAuthTokenMintParamsV1 = deserialize(&self_.data.data[1..])?;
+    let params: MoneyAuthTokenMintParamsV1 = deserialize(&calls[call_idx].data.data[1..])?;
 
     // Public inputs for the ZK proofs we have to verify
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
@@ -81,7 +72,7 @@ pub(crate) fn money_auth_token_mint_process_instruction_v1(
 
     // Check that the mint is not frozen
     if wasm::db::db_contains_key(token_freeze_db, &serialize(&params.token_id))? {
-        msg!("[MintV1] Error: Token mint for {} is frozen", params.token_id);
+        msg!("[AuthTokenMintV1] Error: Token mint for {} is frozen", params.token_id);
         return Err(MoneyError::TokenMintFrozen.into())
     }
 
