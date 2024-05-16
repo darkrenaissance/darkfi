@@ -31,7 +31,7 @@ use super::{
     protocol::{protocol_registry::ProtocolRegistry, register_default_protocols},
     session::{
         InboundSession, InboundSessionPtr, ManualSession, ManualSessionPtr, OutboundSession,
-        OutboundSessionPtr, RefineSession, RefineSessionPtr, SeedSyncSession,
+        OutboundSessionPtr, RefineSession, RefineSessionPtr, SeedSyncSession, SeedSyncSessionPtr,
     },
     settings::{Settings, SettingsPtr},
 };
@@ -61,7 +61,8 @@ pub struct P2p {
     session_outbound: OutboundSessionPtr,
     /// Reference to configured [`RefineSession`]
     session_refine: RefineSessionPtr,
-
+    /// Reference to configured [`SeedSyncSession`]
+    session_seedsync: SeedSyncSessionPtr,
     /// Enable network debugging
     pub dnet_enabled: Mutex<bool>,
     /// The subscriber for which we can give dnet info over
@@ -89,6 +90,7 @@ impl P2p {
             session_inbound: InboundSession::new(),
             session_outbound: OutboundSession::new(),
             session_refine: RefineSession::new(),
+            session_seedsync: SeedSyncSession::new(),
 
             dnet_enabled: Mutex::new(false),
             dnet_subscriber: Subscriber::new(),
@@ -98,6 +100,7 @@ impl P2p {
         self_.session_inbound.p2p.init(self_.clone());
         self_.session_outbound.p2p.init(self_.clone());
         self_.session_refine.p2p.init(self_.clone());
+        self_.session_seedsync.p2p.init(self_.clone());
 
         register_default_protocols(self_.clone()).await;
 
@@ -124,6 +127,10 @@ impl P2p {
         // Start the refine session
         self.session_refine().start().await;
 
+        // Start the seedsync session. Seed connections will not
+        // activate yet- they wait for a call to notify().
+        self.session_seedsync().start().await;
+
         // Start the outbound session
         self.session_outbound().start().await;
 
@@ -132,17 +139,14 @@ impl P2p {
     }
 
     /// Reseed the P2P network.
-    pub async fn seed(self: Arc<Self>) -> Result<()> {
+    pub async fn seed(self: Arc<Self>) {
         debug!(target: "net::p2p::seed()", "P2P::seed() [BEGIN]");
         info!(target: "net::p2p::seed()", "[P2P] Seeding P2P subsystem");
 
-        // Start seed session
-        let seed = SeedSyncSession::new(Arc::downgrade(&self));
-        // This will block until all seed queries have finished
-        seed.start().await?;
+        // Activate the seed session.
+        self.session_seedsync().notify().await;
 
         debug!(target: "net::p2p::seed()", "P2P::seed() [END]");
-        Ok(())
     }
 
     /// Stop the running P2P subsystem
@@ -157,6 +161,7 @@ impl P2p {
         self.session_inbound().stop().await;
         self.session_refine().stop().await;
         self.session_outbound().stop().await;
+        self.session_seedsync().stop().await;
     }
 
     /// Broadcasts a message concurrently across all active channels.
@@ -244,6 +249,11 @@ impl P2p {
     /// Get pointer to refine session
     pub fn session_refine(&self) -> RefineSessionPtr {
         self.session_refine.clone()
+    }
+
+    /// Get pointer to seedsync session
+    pub fn session_seedsync(&self) -> SeedSyncSessionPtr {
+        self.session_seedsync.clone()
     }
 
     /// Enable network debugging

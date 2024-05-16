@@ -651,19 +651,13 @@ impl PeerDiscoveryBase for PeerDiscovery {
                     state: "seed",
                 });
 
-                match p2p.clone().seed().await {
-                    Ok(()) => {
-                        info!(
-                            target: "net::outbound_session::peer_discovery()",
-                            "[P2P] Seeding hosts successful."
-                        );
-                    }
-                    Err(err) => {
-                        error!(
-                            target: "net::outbound_session::peer_discovery()",
-                            "[P2P] Network reseed failed: {}", err,
-                        );
-                    }
+                p2p.clone().seed().await;
+
+                if p2p.clone().session_seedsync().failed().await {
+                    error!(
+                        target: "net::outbound_session::peer_discovery()",
+                        "[P2P] Network reseed failed!"
+                    );
                 }
             }
 
