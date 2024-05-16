@@ -115,14 +115,6 @@ pub(crate) fn money_otcswap_process_instruction_v1(
 
     msg!("[OtcSwapV1] Iterating over anonymous inputs");
     for (i, input) in params.inputs.iter().enumerate() {
-        // For now, make sure that the inputs' spend hooks are zero.
-        // This should however be allowed to some extent, e.g. if we
-        // want a DAO to be able to do an atomic swap.
-        if calls[call_idx as usize].parent_index.is_some() {
-            msg!("[OtcSwapV1] Error: Unable to swap coins with spend_hook != 0 (input {})", i);
-            return Err(MoneyError::SpendHookNonZero.into())
-        }
-
         // The Merkle root is used to know whether this coin
         // has existed in a previous state.
         if !wasm::db::db_contains_key(coin_roots_db, &serialize(&input.merkle_root))? {

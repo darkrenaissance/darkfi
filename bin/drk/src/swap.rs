@@ -74,28 +74,35 @@ impl Drk {
     /// Initialize the first half of an atomic swap
     pub async fn init_swap(
         &self,
-        value_send: u64,
-        token_send: TokenId,
-        value_recv: u64,
-        token_recv: TokenId,
+        value_pair: (u64, u64),
+        token_pair: (TokenId, TokenId),
+        user_data_blind_send: Option<BaseBlind>,
+        spend_hook_recv: Option<FuncId>,
+        user_data_recv: Option<pallas::Base>,
     ) -> Result<PartialSwapData> {
-        // First we'll fetch all of our unspent coins from the wallet.
-        let mut owncoins = self.get_coins(false).await?;
-        // Then we see if we have one that we can send.
-        owncoins.retain(|x| {
-            x.0.note.value == value_send &&
-                x.0.note.token_id == token_send &&
-                x.0.note.spend_hook == FuncId::none()
-        });
-
+        // First get all unspent OwnCoins to see what our balance is
+        let owncoins = self.get_token_coins(&token_pair.0).await?;
         if owncoins.is_empty() {
             return Err(Error::Custom(format!(
-                "Did not find any unspent coins of value {value_send} and token_id {token_send}",
+                "Did not find any unspent coins with token ID: {}",
+                token_pair.0
             )))
         }
 
-        // If there are any, we'll just spend the first one we see.
-        let burn_coin = owncoins[0].0.clone();
+        // Find one with the correct value
+        let mut burn_coin = None;
+        for coin in owncoins {
+            if coin.note.value == value_pair.0 {
+                burn_coin = Some(coin);
+                break
+            }
+        }
+        let Some(burn_coin) = burn_coin else {
+            return Err(Error::Custom(format!(
+                "Did not find any unspent coins of value {} and token_id {}",
+                value_pair.0, token_pair.0,
+            )))
+        };
 
         // Fetch our default address
         let address = self.default_address().await?;
@@ -103,12 +110,10 @@ impl Drk {
         // We'll also need our Merkle tree
         let tree = self.get_money_tree().await?;
 
-        let contract_id = *MONEY_CONTRACT_ID;
-
         // Now we need to do a lookup for the zkas proof bincodes, and create
         // the circuit objects and proving keys so we can build the transaction.
         // We also do this through the RPC.
-        let zkas_bins = self.lookup_zkas(&contract_id).await?;
+        let zkas_bins = self.lookup_zkas(&MONEY_CONTRACT_ID).await?;
 
         let Some(mint_zkbin) = zkas_bins.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_MINT_NS_V1)
         else {
@@ -126,23 +131,24 @@ impl Drk {
         let mint_circuit = ZkCircuit::new(empty_witnesses(&mint_zkbin)?, &mint_zkbin);
         let burn_circuit = ZkCircuit::new(empty_witnesses(&burn_zkbin)?, &burn_zkbin);
 
+        // Creating Mint and Burn circuits proving keys
+        let mint_pk = ProvingKey::build(mint_zkbin.k, &mint_circuit);
+        let burn_pk = ProvingKey::build(burn_zkbin.k, &burn_circuit);
+
         // Since we're creating the first half, we generate the blinds.
         let value_blinds = [Blind::random(&mut OsRng), Blind::random(&mut OsRng)];
         let token_blinds = [Blind::random(&mut OsRng), Blind::random(&mut OsRng)];
 
         // Now we should have everything we need to build the swap half
-        println!("Creating Mint and Burn circuit proving keys");
-        let mint_pk = ProvingKey::build(mint_zkbin.k, &mint_circuit);
-        let burn_pk = ProvingKey::build(burn_zkbin.k, &burn_circuit);
         let builder = SwapCallBuilder {
             pubkey: address,
-            value_send,
-            token_id_send: token_send,
-            value_recv,
-            token_id_recv: token_recv,
-            user_data_blind_send: Blind::random(&mut OsRng), // <-- FIXME: Perhaps should be passed in
-            spend_hook_recv: FuncId::none(),                 // <-- FIXME: Should be passed in
-            user_data_recv: pallas::Base::ZERO,              // <-- FIXME: Should be passed in
+            value_send: value_pair.0,
+            token_id_send: token_pair.0,
+            value_recv: value_pair.1,
+            token_id_recv: token_pair.1,
+            user_data_blind_send: user_data_blind_send.unwrap_or(Blind::random(&mut OsRng)),
+            spend_hook_recv: spend_hook_recv.unwrap_or(FuncId::none()),
+            user_data_recv: user_data_recv.unwrap_or(pallas::Base::ZERO),
             value_blinds,
             token_blinds,
             coin: burn_coin,
@@ -152,16 +158,14 @@ impl Drk {
             burn_zkbin,
             burn_pk,
         };
-
-        println!("Building first half of the swap transaction");
         let debris = builder.build()?;
 
         // Now we have the half, so we can build `PartialSwapData` and return it.
         let ret = PartialSwapData {
             params: debris.params,
             proofs: debris.proofs,
-            value_pair: (value_send, value_recv),
-            token_pair: (token_send, token_recv),
+            value_pair,
+            token_pair,
             value_blinds: value_blinds.to_vec(),
             token_blinds: token_blinds.to_vec(),
         };
@@ -171,23 +175,37 @@ impl Drk {
 
     /// Create a full transaction by inspecting and verifying given partial swap data,
     /// making the other half, and joining all this into a `Transaction` object.
-    pub async fn join_swap(&self, partial: PartialSwapData) -> Result<Transaction> {
+    pub async fn join_swap(
+        &self,
+        partial: PartialSwapData,
+        user_data_blind_send: Option<BaseBlind>,
+        spend_hook_recv: Option<FuncId>,
+        user_data_recv: Option<pallas::Base>,
+    ) -> Result<Transaction> {
         // Our side of the tx in the pairs is the second half, so we try to find
         // an unspent coin like that in our wallet.
-        let mut owncoins = self.get_coins(false).await?;
-        owncoins.retain(|x| {
-            x.0.note.value == partial.value_pair.1 && x.0.note.token_id == partial.token_pair.1
-        });
-
+        let owncoins = self.get_token_coins(&partial.token_pair.1).await?;
         if owncoins.is_empty() {
             return Err(Error::Custom(format!(
-                "Did not find any unspent coins of value {} and token_id {}",
-                partial.value_pair.1, partial.token_pair.1
+                "Did not find any unspent coins with token ID: {}",
+                partial.token_pair.1
             )))
         }
 
-        // If there are any, we'll just spend the first one we see.
-        let burn_coin = owncoins[0].0.clone();
+        // Find one with the correct value
+        let mut burn_coin = None;
+        for coin in owncoins {
+            if coin.note.value == partial.value_pair.1 {
+                burn_coin = Some(coin);
+                break
+            }
+        }
+        let Some(burn_coin) = burn_coin else {
+            return Err(Error::Custom(format!(
+                "Did not find any unspent coins of value {} and token_id {}",
+                partial.value_pair.1, partial.token_pair.1,
+            )))
+        };
 
         // Fetch our default address
         let address = self.default_address().await?;
@@ -195,12 +213,10 @@ impl Drk {
         // We'll also need our Merkle tree
         let tree = self.get_money_tree().await?;
 
-        let contract_id = *MONEY_CONTRACT_ID;
-
         // Now we need to do a lookup for the zkas proof bincodes, and create
         // the circuit objects and proving keys so we can build the transaction.
         // We also do this through the RPC.
-        let zkas_bins = self.lookup_zkas(&contract_id).await?;
+        let zkas_bins = self.lookup_zkas(&MONEY_CONTRACT_ID).await?;
 
         let Some(mint_zkbin) = zkas_bins.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_MINT_NS_V1)
         else {
@@ -218,21 +234,20 @@ impl Drk {
         let mint_circuit = ZkCircuit::new(empty_witnesses(&mint_zkbin)?, &mint_zkbin);
         let burn_circuit = ZkCircuit::new(empty_witnesses(&burn_zkbin)?, &burn_zkbin);
 
-        // TODO: Maybe some kind of verification at this point
-
-        // Now we should have everything we need to build the swap half
-        println!("Creating Mint and Burn circuit proving keys");
+        // Creating Mint and Burn circuits proving keys
         let mint_pk = ProvingKey::build(mint_zkbin.k, &mint_circuit);
         let burn_pk = ProvingKey::build(burn_zkbin.k, &burn_circuit);
+
+        // Now we should have everything we need to build the swap half
         let builder = SwapCallBuilder {
             pubkey: address,
             value_send: partial.value_pair.1,
             token_id_send: partial.token_pair.1,
             value_recv: partial.value_pair.0,
             token_id_recv: partial.token_pair.0,
-            user_data_blind_send: Blind::random(&mut OsRng), // <-- FIXME: Perhaps should be passed in
-            spend_hook_recv: FuncId::none(),                 // <-- FIXME: Should be passed in
-            user_data_recv: pallas::Base::ZERO,              // <-- FIXME: Should be passed in
+            user_data_blind_send: user_data_blind_send.unwrap_or(Blind::random(&mut OsRng)),
+            spend_hook_recv: spend_hook_recv.unwrap_or(FuncId::none()),
+            user_data_recv: user_data_recv.unwrap_or(pallas::Base::ZERO),
             value_blinds: [partial.value_blinds[1], partial.value_blinds[0]],
             token_blinds: [partial.token_blinds[1], partial.token_blinds[0]],
             coin: burn_coin,
@@ -242,10 +257,9 @@ impl Drk {
             burn_zkbin,
             burn_pk,
         };
-
-        println!("Building second half of the swap transaction");
         let debris = builder.build()?;
 
+        // Build the full transaction
         let full_params = MoneyTransferParamsV1 {
             inputs: vec![partial.params.inputs[0].clone(), debris.params.inputs[0].clone()],
             outputs: vec![partial.params.outputs[0].clone(), debris.params.outputs[0].clone()],
@@ -264,7 +278,8 @@ impl Drk {
         let mut tx_builder =
             TransactionBuilder::new(ContractCallLeaf { call, proofs: full_proofs }, vec![])?;
         let mut tx = tx_builder.build()?;
-        println!("Signing swap transaction");
+
+        // Sign the transaction and return it
         let sigs = tx.create_sigs(&[debris.signature_secret])?;
         tx.signatures = vec![sigs];
 
@@ -273,156 +288,137 @@ impl Drk {
 
     /// Inspect and verify a given swap (half or full) transaction
     pub async fn inspect_swap(&self, bytes: Vec<u8>) -> Result<()> {
-        // Default error to return in case insection fails
-        let insection_error = Err(Error::Custom("Inspection failed".to_string()));
-
-        let mut full: Option<Transaction> = None;
-        let mut half: Option<PartialSwapData> = None;
-
-        if let Ok(v) = deserialize_async(&bytes).await {
-            full = Some(v)
-        };
-
-        match deserialize_async(&bytes).await {
-            Ok(v) => half = Some(v),
-            Err(_) => {
-                if full.is_none() {
-                    return Err(Error::Custom(
-                        "Failed to deserialize to Transaction or PartialSwapData".to_string(),
-                    ))
-                }
-            }
-        }
-
-        if let Some(tx) = full {
-            // We're inspecting a full transaction
-            if tx.calls.len() != 1 {
-                eprintln!(
-                    "Found {} contract calls in the transaction, there should be 1",
-                    tx.calls.len()
-                );
-                return insection_error
-            }
-
-            let params: MoneyTransferParamsV1 =
-                deserialize_async(&tx.calls[0].data.data[1..]).await?;
-            println!("Parameters:\n{:#?}", params);
-
-            if params.inputs.len() != 2 {
-                eprintln!("Found {} inputs, there should be 2", params.inputs.len());
-                return insection_error
-            }
-
-            if params.outputs.len() != 2 {
-                eprintln!("Found {} outputs, there should be 2", params.outputs.len());
-                return insection_error
-            }
-
-            // Try to decrypt one of the outputs.
-            let secret_keys = self.get_money_secrets().await?;
-            let mut skey: Option<SecretKey> = None;
-            let mut note: Option<MoneyNote> = None;
-            let mut output_idx = 0;
-
-            for output in &params.outputs {
-                println!("Trying to decrypt note in output {output_idx}");
-
-                for secret in &secret_keys {
-                    if let Ok(d_note) = output.note.decrypt::<MoneyNote>(secret) {
-                        let s: SecretKey = deserialize_async(&d_note.memo).await?;
-                        skey = Some(s);
-                        note = Some(d_note);
-                        println!("Successfully decrypted and found an ephemeral secret");
-                        break
-                    }
-                }
-
-                if note.is_some() {
-                    break
-                }
-
-                output_idx += 1;
-            }
-
-            let Some(note) = note else {
-                eprintln!("Error: Could not decrypt notes of either output");
-                return insection_error
-            };
-
-            println!(
-                "Output[{output_idx}] value: {} ({})",
-                note.value,
-                encode_base10(note.value, BALANCE_BASE10_DECIMALS)
-            );
-            println!("Output[{output_idx}] token ID: {}", note.token_id);
-
-            let skey = skey.unwrap();
-            let (pub_x, pub_y) = PublicKey::from_secret(skey).xy();
-            let coin = Coin::from(poseidon_hash([
-                pub_x,
-                pub_y,
-                pallas::Base::from(note.value),
-                note.token_id.inner(),
-                note.coin_blind.inner(),
-            ]));
-
-            if coin == params.outputs[output_idx].coin {
-                println!("Output[{output_idx}] coin matches decrypted note metadata");
-            } else {
-                eprintln!("Error: Output[{output_idx}] coin does not match note metadata");
-                return insection_error
-            }
-
-            let valcom = pedersen_commitment_u64(note.value, note.value_blind);
-            let tokcom = poseidon_hash([note.token_id.inner(), note.token_blind.inner()]);
-
-            if valcom != params.outputs[output_idx].value_commit {
-                eprintln!(
-                    "Error: Output[{output_idx}] value commitment does not match note metadata"
-                );
-                return insection_error
-            }
-
-            if tokcom != params.outputs[output_idx].token_commit {
-                eprintln!(
-                    "Error: Output[{output_idx}] token commitment does not match note metadata"
-                );
-                return insection_error
-            }
-
-            println!("Value and token commitments match decrypted note metadata");
-
-            // Verify that the output commitments match the other input commitments
-            match output_idx {
-                0 => {
-                    if valcom != params.inputs[1].value_commit ||
-                        tokcom != params.inputs[1].token_commit
-                    {
-                        eprintln!("Error: Value/Token commits of output[0] do not match input[1]");
-                        return insection_error
-                    }
-                }
-                1 => {
-                    if valcom != params.inputs[0].value_commit ||
-                        tokcom != params.inputs[0].token_commit
-                    {
-                        eprintln!("Error: Value/Token commits of output[1] do not match input[0]");
-                        return insection_error
-                    }
-                }
-                _ => unreachable!(),
-            }
-
-            println!("Found matching pedersen commitments for outputs and inputs");
-
-            // TODO: Verify signature
-            // TODO: Verify ZK proofs
+        // First we check if its a partial swap
+        if let Ok(partial) = deserialize_async::<PartialSwapData>(&bytes).await {
+            // Inspect the PartialSwapData
+            println!("{partial}");
             return Ok(())
         }
 
-        // Inspect PartialSwapData
-        let partial = half.unwrap();
-        println!("{partial}");
+        // Try to deserialize a full swap transaction
+        let Ok(tx) = deserialize_async::<Transaction>(&bytes).await else {
+            return Err(Error::Custom(
+                "Failed to deserialize to Transaction or PartialSwapData".to_string(),
+            ))
+        };
+
+        // Default error to return in case insection fails
+        let insection_error = Err(Error::Custom("Inspection failed".to_string()));
+
+        // We're inspecting a full transaction
+        if tx.calls.len() != 1 {
+            eprintln!(
+                "Found {} contract calls in the transaction, there should be 1",
+                tx.calls.len()
+            );
+            return insection_error
+        }
+
+        let params: MoneyTransferParamsV1 = deserialize_async(&tx.calls[0].data.data[1..]).await?;
+        println!("Parameters:\n{:#?}", params);
+
+        if params.inputs.len() != 2 {
+            eprintln!("Found {} inputs, there should be 2", params.inputs.len());
+            return insection_error
+        }
+
+        if params.outputs.len() != 2 {
+            eprintln!("Found {} outputs, there should be 2", params.outputs.len());
+            return insection_error
+        }
+
+        // Try to decrypt one of the outputs.
+        let secret_keys = self.get_money_secrets().await?;
+        let mut skey: Option<SecretKey> = None;
+        let mut note: Option<MoneyNote> = None;
+        let mut output_idx = 0;
+
+        for output in &params.outputs {
+            println!("Trying to decrypt note in output {output_idx}");
+
+            for secret in &secret_keys {
+                if let Ok(d_note) = output.note.decrypt::<MoneyNote>(secret) {
+                    let s: SecretKey = deserialize_async(&d_note.memo).await?;
+                    skey = Some(s);
+                    note = Some(d_note);
+                    println!("Successfully decrypted and found an ephemeral secret");
+                    break
+                }
+            }
+
+            if note.is_some() {
+                break
+            }
+
+            output_idx += 1;
+        }
+
+        let Some(note) = note else {
+            eprintln!("Error: Could not decrypt notes of either output");
+            return insection_error
+        };
+
+        println!(
+            "Output[{output_idx}] value: {} ({})",
+            note.value,
+            encode_base10(note.value, BALANCE_BASE10_DECIMALS)
+        );
+        println!("Output[{output_idx}] token ID: {}", note.token_id);
+
+        let skey = skey.unwrap();
+        let (pub_x, pub_y) = PublicKey::from_secret(skey).xy();
+        let coin = Coin::from(poseidon_hash([
+            pub_x,
+            pub_y,
+            pallas::Base::from(note.value),
+            note.token_id.inner(),
+            note.coin_blind.inner(),
+        ]));
+
+        if coin == params.outputs[output_idx].coin {
+            println!("Output[{output_idx}] coin matches decrypted note metadata");
+        } else {
+            eprintln!("Error: Output[{output_idx}] coin does not match note metadata");
+            return insection_error
+        }
+
+        let valcom = pedersen_commitment_u64(note.value, note.value_blind);
+        let tokcom = poseidon_hash([note.token_id.inner(), note.token_blind.inner()]);
+
+        if valcom != params.outputs[output_idx].value_commit {
+            eprintln!("Error: Output[{output_idx}] value commitment does not match note metadata");
+            return insection_error
+        }
+
+        if tokcom != params.outputs[output_idx].token_commit {
+            eprintln!("Error: Output[{output_idx}] token commitment does not match note metadata");
+            return insection_error
+        }
+
+        println!("Value and token commitments match decrypted note metadata");
+
+        // Verify that the output commitments match the other input commitments
+        match output_idx {
+            0 => {
+                if valcom != params.inputs[1].value_commit ||
+                    tokcom != params.inputs[1].token_commit
+                {
+                    eprintln!("Error: Value/Token commits of output[0] do not match input[1]");
+                    return insection_error
+                }
+            }
+            1 => {
+                if valcom != params.inputs[0].value_commit ||
+                    tokcom != params.inputs[0].token_commit
+                {
+                    eprintln!("Error: Value/Token commits of output[1] do not match input[0]");
+                    return insection_error
+                }
+            }
+            _ => unreachable!(),
+        }
+
+        println!("Found matching pedersen commitments for outputs and inputs");
 
         Ok(())
     }

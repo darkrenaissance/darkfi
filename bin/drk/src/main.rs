@@ -935,10 +935,10 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             OtcSubcmd::Init { value_pair, token_pair } => {
                 let drk =
                     Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
-                let (vp_send, vp_recv) = parse_value_pair(&value_pair)?;
-                let (tp_send, tp_recv) = parse_token_pair(&drk, &token_pair).await?;
+                let value_pair = parse_value_pair(&value_pair)?;
+                let token_pair = parse_token_pair(&drk, &token_pair).await?;
 
-                let half = match drk.init_swap(vp_send, tp_send, vp_recv, tp_recv).await {
+                let half = match drk.init_swap(value_pair, token_pair, None, None, None).await {
                     Ok(h) => h,
                     Err(e) => {
                         eprintln!("Failed to create swap transaction half: {e:?}");
@@ -962,7 +962,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
                 let drk =
                     Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
-                let tx = match drk.join_swap(partial).await {
+                let tx = match drk.join_swap(partial, None, None, None).await {
                     Ok(tx) => tx,
                     Err(e) => {
                         eprintln!("Failed to create a join swap transaction: {e:?}");

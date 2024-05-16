@@ -46,7 +46,9 @@ impl Drk {
         // First get all unspent OwnCoins to see what our balance is
         let owncoins = self.get_token_coins(&token_id).await?;
         if owncoins.is_empty() {
-            return Err(Error::Custom(format!("Did not find any coins with token ID: {token_id}")))
+            return Err(Error::Custom(format!(
+                "Did not find any unspent coins with token ID: {token_id}"
+            )))
         }
 
         let amount = decode_base10(amount, BALANCE_BASE10_DECIMALS, false)?;
@@ -62,11 +64,12 @@ impl Drk {
             )))
         }
 
-        // We'll also need our Merkle tree
-        let tree = self.get_money_tree().await?;
-
+        // Fetch our default secret
         let secret = self.default_secret().await?;
         let keypair = Keypair::new(secret);
+
+        // We'll also need our Merkle tree
+        let tree = self.get_money_tree().await?;
 
         // Now we need to do a lookup for the zkas proof bincodes, and create
         // the circuit objects and proving keys so we can build the transaction.
