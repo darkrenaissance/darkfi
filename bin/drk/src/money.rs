@@ -754,8 +754,7 @@ impl Drk {
             MoneyFunction::AuthTokenFreezeV1 => {
                 println!("[parse_money_call] Found Money::AuthTokenFreezeV1 call");
                 let params: MoneyAuthTokenFreezeParamsV1 = deserialize_async(&data[1..]).await?;
-                let token_id = TokenId::derive_public(params.mint_public);
-                freezes.push(token_id);
+                freezes.push(params.token_id);
             }
             MoneyFunction::TokenMintV1 => {
                 println!("[parse_money_call] Found Money::TokenMintV1 call");

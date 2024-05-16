@@ -213,9 +213,14 @@ impl Drk {
         // Decode provided amount
         let amount = decode_base10(amount, BALANCE_BASE10_DECIMALS, false)?;
 
-        // Grab token ID mint authority
+        // Grab token ID mint authority and attribtes
         let token_mint_authority = self.get_token_mint_authority(&token_id).await?;
+        let token_attrs =
+            self.derive_token_attributes(token_mint_authority.1, token_mint_authority.2);
         let mint_authority = Keypair::new(token_mint_authority.1);
+
+        // Sanity check
+        assert_eq!(token_id, token_attrs.to_token_id());
 
         // Now we need to do a lookup for the zkas proof bincodes, and create
         // the circuit objects and proving keys so we can build the transaction.
@@ -252,24 +257,6 @@ impl Drk {
         let mint_pk = ProvingKey::build(mint_zkbin.k, &mint_circuit);
         let auth_mint_pk = ProvingKey::build(auth_mint_zkbin.k, &auth_mint_circuit);
         let fee_pk = ProvingKey::build(fee_zkbin.k, &fee_circuit);
-
-        // Create the Auth FuncID
-        let auth_func_id = FuncRef {
-            contract_id: *MONEY_CONTRACT_ID,
-            func_code: MoneyFunction::AuthTokenMintV1 as u8,
-        }
-        .to_func_id();
-
-        let (mint_auth_x, mint_auth_y) = mint_authority.public.xy();
-
-        let token_attrs = TokenAttributes {
-            auth_parent: auth_func_id,
-            user_data: poseidon_hash([mint_auth_x, mint_auth_y]),
-            blind: token_mint_authority.2,
-        };
-
-        // Sanity check
-        assert_eq!(token_id, token_attrs.to_token_id());
 
         // Build the coin attributes
         let coin_attrs = CoinAttributes {
@@ -341,12 +328,19 @@ impl Drk {
     }
 
     /// Create a token freeze transaction. Returns the transaction object on success.
-    pub async fn freeze_token(&self, token_attrs: TokenAttributes) -> Result<Transaction> {
-        // Grab token ID mint authority
-        let token_mint_authority =
-            self.get_token_mint_authority(&token_attrs.to_token_id()).await?;
+    pub async fn freeze_token(&self, token_id: TokenId) -> Result<Transaction> {
+        // Grab token ID mint authority and attribtes
+        let token_mint_authority = self.get_token_mint_authority(&token_id).await?;
+        let token_attrs =
+            self.derive_token_attributes(token_mint_authority.1, token_mint_authority.2);
         let mint_authority = Keypair::new(token_mint_authority.1);
 
+        // Sanity check
+        assert_eq!(token_id, token_attrs.to_token_id());
+
+        // Now we need to do a lookup for the zkas proof bincodes, and create
+        // the circuit objects and proving keys so we can build the transaction.
+        // We also do this through the RPC.
         let zkas_bins = self.lookup_zkas(&MONEY_CONTRACT_ID).await?;
 
         let Some(auth_mint_zkbin) =
@@ -355,31 +349,61 @@ impl Drk {
             return Err(Error::Custom("Auth token mint circuit not found".to_string()))
         };
 
+        let Some(fee_zkbin) = zkas_bins.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_FEE_NS_V1)
+        else {
+            return Err(Error::Custom("Fee circuit not found".to_string()))
+        };
+
         let auth_mint_zkbin = ZkBinary::decode(&auth_mint_zkbin.1)?;
+        let fee_zkbin = ZkBinary::decode(&fee_zkbin.1)?;
+
         let auth_mint_circuit =
             ZkCircuit::new(empty_witnesses(&auth_mint_zkbin)?, &auth_mint_zkbin);
+        let fee_circuit = ZkCircuit::new(empty_witnesses(&fee_zkbin)?, &fee_zkbin);
 
-        println!("Creating auth token mint circuit proving keys");
+        // Creating AuthTokenMint and Fee circuits proving keys
         let auth_mint_pk = ProvingKey::build(auth_mint_zkbin.k, &auth_mint_circuit);
-        let freeze_builder = AuthTokenFreezeCallBuilder {
+        let fee_pk = ProvingKey::build(fee_zkbin.k, &fee_circuit);
+
+        // Create the freeze call
+        let builder = AuthTokenFreezeCallBuilder {
             mint_keypair: mint_authority,
             token_attrs,
             auth_mint_zkbin,
             auth_mint_pk,
         };
-
-        println!("Building transaction parameters");
-        let debris = freeze_builder.build()?;
-
-        // Encode and sign the transaction
+        let freeze_debris = builder.build()?;
         let mut data = vec![MoneyFunction::AuthTokenFreezeV1 as u8];
-        debris.params.encode_async(&mut data).await?;
-        let call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
-        let mut tx_builder =
-            TransactionBuilder::new(ContractCallLeaf { call, proofs: debris.proofs }, vec![])?;
+        freeze_debris.params.encode_async(&mut data).await?;
+        let freeze_call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
+
+        // Create the TransactionBuilder containing above call
+        let mut tx_builder = TransactionBuilder::new(
+            ContractCallLeaf { call: freeze_call, proofs: freeze_debris.proofs },
+            vec![],
+        )?;
+
+        // We first have to execute the fee-less tx to gather its used gas, and then we feed
+        // it into the fee-creating function.
         let mut tx = tx_builder.build()?;
         let sigs = tx.create_sigs(&[mint_authority.secret])?;
-        tx.signatures = vec![sigs];
+        tx.signatures.push(sigs);
+
+        let tree = self.get_money_tree().await?;
+        let secret = self.default_secret().await?;
+        let fee_public = PublicKey::from_secret(secret);
+        let (fee_call, fee_proofs, fee_secrets) =
+            self.append_fee_call(&tx, fee_public, &tree, &fee_pk, &fee_zkbin, None).await?;
+
+        // Append the fee call to the transaction
+        tx_builder.append(ContractCallLeaf { call: fee_call, proofs: fee_proofs }, vec![])?;
+
+        // Now build the actual transaction and sign it with all necessary keys.
+        let mut tx = tx_builder.build()?;
+        let sigs = tx.create_sigs(&[mint_authority.secret])?;
+        tx.signatures.push(sigs);
+        let sigs = tx.create_sigs(&fee_secrets)?;
+        tx.signatures.push(sigs);
 
         Ok(tx)
     }

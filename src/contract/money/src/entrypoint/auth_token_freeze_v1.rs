@@ -77,7 +77,7 @@ pub(crate) fn money_auth_token_freeze_process_instruction_v1(
 
     // Check that the mint is not frozen
     if wasm::db::db_contains_key(token_freeze_db, &serialize(&params.token_id))? {
-        msg!("[MintV1] Error: Token mint for {} is frozen", params.token_id);
+        msg!("[AuthTokenFreezeV1] Error: Token mint for {} is frozen", params.token_id);
         return Err(MoneyError::TokenMintFrozen.into())
     }
 
@@ -96,7 +96,7 @@ pub(crate) fn money_auth_token_freeze_process_update_v1(
     update: MoneyAuthTokenFreezeUpdateV1,
 ) -> ContractResult {
     let token_freeze_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_TOKEN_FREEZE_TREE)?;
-    msg!("[MintV1] Freezing mint for token {}", update.token_id);
+    msg!("[AuthTokenFreezeV1] Freezing mint for token {}", update.token_id);
     wasm::db::db_set(token_freeze_db, &serialize(&update.token_id), &[])?;
 
     Ok(())

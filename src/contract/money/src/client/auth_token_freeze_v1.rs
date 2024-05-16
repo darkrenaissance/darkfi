@@ -22,7 +22,7 @@ use darkfi::{
     Result,
 };
 use darkfi_sdk::crypto::Keypair;
-use log::info;
+use log::debug;
 use rand::rngs::OsRng;
 
 use crate::model::{MoneyAuthTokenFreezeParamsV1, TokenAttributes};
@@ -45,7 +45,7 @@ pub struct AuthTokenFreezeCallBuilder {
 
 impl AuthTokenFreezeCallBuilder {
     pub fn build(&self) -> Result<AuthTokenFreezeCallDebris> {
-        info!("Building Money::AuthTokenFreezeV1 contract call");
+        debug!("Building Money::AuthTokenFreezeV1 contract call");
 
         // For the AuthTokenFreeze call, we just need to produce a valid signature,
         // and enforce the correct derivation inside ZK.

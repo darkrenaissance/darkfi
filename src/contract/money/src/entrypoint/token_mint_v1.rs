@@ -46,7 +46,7 @@ pub(crate) fn money_token_mint_get_metadata_v1(
     // Grab the auth call info
     if self_.children_indexes.len() != 1 {
         msg!(
-            "[MintV1] Error: Children indexes length is not expected(1): {}",
+            "[TokenMintV1] Error: Children indexes length is not expected(1): {}",
             self_.children_indexes.len()
         );
         return Err(MoneyError::ChildrenIndexesLengthMismatch.into())
@@ -94,7 +94,7 @@ pub(crate) fn money_token_mint_process_instruction_v1(
 
     // Check that the coin from the output hasn't existed before
     if wasm::db::db_contains_key(coins_db, &serialize(&params.coin))? {
-        msg!("[MintV1] Error: Duplicate coin in output");
+        msg!("[TokenMintV1] Error: Duplicate coin in output");
         return Err(MoneyError::DuplicateCoin.into())
     }
 
@@ -120,7 +120,7 @@ pub(crate) fn money_token_mint_process_update_v1(
     let nullifier_roots_db = wasm::db::db_lookup(cid, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE)?;
 
     // This will just make a snapshot to match the coins one
-    msg!("[MintV1] Updating nullifiers snapshot");
+    msg!("[TokenMintV1] Updating nullifiers snapshot");
     wasm::merkle::sparse_merkle_insert_batch(
         info_db,
         nullifiers_db,
@@ -129,10 +129,10 @@ pub(crate) fn money_token_mint_process_update_v1(
         &vec![],
     )?;
 
-    msg!("[MintV1] Adding new coin to the set");
+    msg!("[TokenMintV1] Adding new coin to the set");
     wasm::db::db_set(coins_db, &serialize(&update.coin), &[])?;
 
-    msg!("[MintV1] Adding new coin to the Merkle tree");
+    msg!("[TokenMintV1] Adding new coin to the Merkle tree");
     let coins = vec![MerkleNode::from(update.coin.inner())];
     wasm::merkle::merkle_add(
         info_db,

@@ -1659,7 +1659,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             TokenSubcmd::Freeze { token } => {
                 let drk =
                     Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
-                let _token_id = match drk.get_token(token).await {
+                let token_id = match drk.get_token(token).await {
                     Ok(t) => t,
                     Err(e) => {
                         eprintln!("Invalid Token ID: {e:?}");
@@ -1667,18 +1667,17 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     }
                 };
 
-                panic!("temporarily disabled due to change of API for drk.mint_token() fn");
-                //let tx = match drk.freeze_token(token_id).await {
-                //    Ok(tx) => tx,
-                //    Err(e) => {
-                //        eprintln!("Failed to create token freeze transaction: {e:?}");
-                //        exit(2);
-                //    }
-                //};
+                let tx = match drk.freeze_token(token_id).await {
+                    Ok(tx) => tx,
+                    Err(e) => {
+                        eprintln!("Failed to create token freeze transaction: {e:?}");
+                        exit(2);
+                    }
+                };
 
-                //println!("{}", base64::encode(&serialize_async(&tx).await));
+                println!("{}", base64::encode(&serialize_async(&tx).await));
 
-                //Ok(())
+                Ok(())
             }
         },
 
