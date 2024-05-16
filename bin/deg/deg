@@ -28,7 +28,7 @@ import src.util
 from os.path import join
 
 # this is counter-intuitive because the dag is reversed
-resolved = True
+resolved = [True, True]
 
 def graph(event, longest_path):
     global resolved
@@ -36,15 +36,25 @@ def graph(event, longest_path):
     fork = len(event['children']) > 1
 
     if merge and not fork:
-        resolved = False
+        if not resolved[0]:
+            resolved[1] = False
+        if resolved[0]:
+            resolved[0] = False
+    
         return "M━┑"
+
     if fork and not merge:
-        resolved = True
+        if resolved[1]:
+            resolved[0] = True
+        if not resolved[1]:
+            resolved[1] = True
+
         return "o─┘"
+
     if merge and fork:
         return "M━┪"
     if not merge and not fork:
-        if not resolved:
+        if not resolved[0]:
             if event['hash'] in longest_path:
                 return "o │"
             else:
