@@ -270,42 +270,141 @@ def resize_rounded_box():
     #api.set_property_buffer(mesh_id, "verts", vert1 + vert2 + vert3 + vert4)
     #api.set_property_buffer(mesh_id, "faces", face(0, 2, 1) + face(1, 2, 3))
 
-def main():
-    if True:
-        node_id = api.add_node("foo", SceneNodeType.WINDOW)
-        prop = Property(
-            "myprop", PropertyType.FLOAT32, PropertySubType.NULL,
-            None,
-            "myprop", "",
-            False, 2, None, None, []
-        )
-        api.add_property(1, prop)
-        api.link_node(node_id, 0)
-        api.set_property_f32(1, "myprop", 0, 4.0)
-        api.set_property_f32(1, "myprop", 1, 110.0)
-    print("val =", api.get_property_value(1, "myprop"))
-    for prop in api.get_properties(1):
-        print("Property:")
-        print(f"  name = {prop.name}")
-        print(f"  type = {prop.type}")
-        print(f"  subtype = {prop.subtype}")
-        print(f"  defaults = {prop.defaults}")
-        print(f"  ui_name = {prop.ui_name}")
-        print(f"  desc = {prop.desc}")
-        print(f"  is_null_allowed = {prop.is_null_allowed}")
-        print(f"  array_len = {prop.array_len}")
-        print(f"  min_val = {prop.min_val}")
-        print(f"  max_val = {prop.max_val}")
-        print(f"  enum_items = {prop.enum_items}")
-        print()
-    print_tree()
-    #garbage_collect()
+def draw():
+    win_id = api.lookup_node_id("/window")
 
-    #app = App()
-    #draw_box()
-    #draw_rounded_box()
-    #draw_cursor()
-    #reposition_cursor()
-    ##print_tree()
-    #app.run()
+    # Add foo layer
+
+    layer_id = api.add_node("foo", SceneNodeType.RENDER_LAYER)
+
+    prop = Property(
+        "is_visible", PropertyType.BOOL, PropertySubType.NULL,
+        None,
+        "is_visible", "Visibility of the layer",
+        False, 1, None, None, []
+    )
+    api.add_property(layer_id, prop)
+    api.set_property_bool(layer_id, "is_visible", 0, True)
+
+    #prop = Property(
+    #    "rect", PropertyType.UINT32, PropertySubType.PIXEL,
+    #    None,
+    #    "layer_rect", "(x, y, w, h) viewport rectangle for current layer",
+    #    False, 4, None, None, []
+    #)
+    prop = Property(
+        "rect", PropertyType.STR, PropertySubType.PY_EXPR,
+        ["0", "0", "0", "0"],
+        "mesh_rect", "The position and size within the layer",
+        False, 4, None, None, []
+    )
+    api.add_property(layer_id, prop)
+    ## x
+    #api.set_property_u32(layer_id, "rect", 0, 0)
+    ## y
+    #api.set_property_u32(layer_id, "rect", 1, 0)
+    ## w
+    #api.set_property_u32(layer_id, "rect", 2, int(3838/2))
+    ## h
+    #api.set_property_u32(layer_id, "rect", 3, int(2158/2))
+    # x
+    api.set_property_str(layer_id, "rect", 0, "0")
+    # y
+    api.set_property_str(layer_id, "rect", 1, "0")
+    # w
+    api.set_property_str(layer_id, "rect", 2, "sw/2")
+    # h
+    api.set_property_str(layer_id, "rect", 3, "sh")
+
+    api.link_node(layer_id, win_id)
+
+    # Add a mesh to our layer
+
+    mesh_id = api.add_node("meshie", SceneNodeType.RENDER_MESH)
+
+    prop = Property(
+        "data", PropertyType.BUFFER, PropertySubType.NULL,
+        None,
+        "mesh_data", "The face and vertex data for the mesh",
+        False, 2, None, None, []
+    )
+    api.add_property(mesh_id, prop)
+
+    #x, y = 0.1, 0.1
+    #w, h = 0.1, 0.1
+    x, y, w, h = 0, 0, 1, 1
+    #x, y, w, h = -1, 1, 2, -2
+    vert1 = vertex(x,     y,     1, 0, 0, 1, 0, 0)
+    vert2 = vertex(x + w, y,     0, 1, 0, 1, 1, 0)
+    vert3 = vertex(x,     y + h, 0, 0, 1, 1, 0, 1)
+    vert4 = vertex(x + w, y + h, 1, 1, 1, 1, 1, 1)
+
+    verts = vert1 + vert2 + vert3 + vert4
+    faces = face(0, 2, 1) + face(1, 2, 3)
+
+    api.set_property_buf(mesh_id, "data", 0, verts)
+    api.set_property_buf(mesh_id, "data", 1, faces)
+
+    prop = Property(
+        "rect", PropertyType.STR, PropertySubType.PY_EXPR,
+        ["0", "0", "0", "0"],
+        "mesh_rect", "The position and size within the layer",
+        False, 4, None, None, []
+    )
+    api.add_property(mesh_id, prop)
+    # x
+    api.set_property_str(mesh_id, "rect", 0, "10")
+    # y
+    api.set_property_str(mesh_id, "rect", 1, "10")
+    # w
+    api.set_property_str(mesh_id, "rect", 2, "lw - 10")
+    # h
+    api.set_property_str(mesh_id, "rect", 3, "lh - 10")
+
+    api.link_node(mesh_id, layer_id)
+
+def main():
+    draw()
+
+    # DEBUG
+    print_tree()
+
+#def main():
+#    if True:
+#        node_id = api.add_node("foo", SceneNodeType.WINDOW)
+#        prop = Property(
+#            "myprop", PropertyType.FLOAT32, PropertySubType.NULL,
+#            None,
+#            "myprop", "",
+#            False, 2, None, None, []
+#        )
+#        api.add_property(1, prop)
+#        api.link_node(node_id, 0)
+#        api.set_property_f32(1, "myprop", 0, 4.0)
+#        api.set_property_f32(1, "myprop", 1, 110.0)
+#    print("val =", api.get_property_value(1, "myprop"))
+#    for prop in api.get_properties(1):
+#        print("Property:")
+#        print(f"  name = {prop.name}")
+#        print(f"  type = {prop.type}")
+#        print(f"  subtype = {prop.subtype}")
+#        print(f"  defaults = {prop.defaults}")
+#        print(f"  ui_name = {prop.ui_name}")
+#        print(f"  desc = {prop.desc}")
+#        print(f"  is_null_allowed = {prop.is_null_allowed}")
+#        print(f"  array_len = {prop.array_len}")
+#        print(f"  min_val = {prop.min_val}")
+#        print(f"  max_val = {prop.max_val}")
+#        print(f"  enum_items = {prop.enum_items}")
+#        print()
+#    print_tree()
+#    #garbage_collect()
+#
+#    #app = App()
+#    #draw_box()
+#    #draw_rounded_box()
+#    #draw_cursor()
+#    #reposition_cursor()
+#    ##print_tree()
+#    #app.run()
 

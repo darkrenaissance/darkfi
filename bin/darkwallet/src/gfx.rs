@@ -5,11 +5,13 @@ use fontdue::{
 };
 use miniquad::*;
 use std::{
+    array::IntoIter,
     fmt,
     io::Cursor,
-    sync::mpsc,
+    sync::{mpsc, MutexGuard, Arc},
     time::{Duration, Instant},
 };
+use pyo3::{prelude::*, types::{PyDict, IntoPyDict}, PyClass, py_run};
 
 use crate::{
     error::{Error, Result},
@@ -58,6 +60,26 @@ struct Mesh {
     pub faces: Vec<Face>,
     pub vertex_buffer: BufferId,
     pub index_buffer: BufferId,
+}
+
+#[derive(Debug)]
+struct Rectangle<T> {
+    x: T,
+    y: T,
+    w: T,
+    h: T,
+}
+
+impl<T> Rectangle<T> {
+    fn from_array(arr: [T; 4]) -> Self {
+        let mut iter = IntoIter::new(arr);
+        Self {
+            x: iter.next().unwrap(),
+            y: iter.next().unwrap(),
+            w: iter.next().unwrap(),
+            h: iter.next().unwrap(),
+        }
+    }
 }
 
 type ResourceId = u32;
@@ -602,6 +624,264 @@ impl Stage {
     }
 }
 
+struct RenderContext<'a> {
+    scene_graph: MutexGuard<'a, SceneGraph>,
+    ctx: &'a mut Box<dyn RenderingBackend>,
+    pipeline: &'a Pipeline,
+    proj: glam::Mat4,
+    textures: &'a ResourceManager<TextureId>,
+}
+
+impl<'a> RenderContext<'a> {
+    fn render_window(&mut self) {
+        for layer in self.scene_graph
+            .lookup_node("/window")
+            .expect("no window attached!")
+            .get_children(&[SceneNodeType::RenderLayer])
+        {
+            if let Err(err) = self.render_layer(layer.id) {
+                error!("error rendering layer '{}': {}", layer.name, err)
+            }
+        }
+    }
+
+    fn get_rect(layer: &SceneNode) -> Result<Rectangle<i32>> {
+        let prop = layer.get_property("rect").ok_or(Error::PropertyNotFound)?;
+        if prop.array_len != 4 {
+            return Err(Error::PropertyWrongLen)
+        }
+        match prop.typ {
+            PropertyType::Uint32 => {
+                if prop.subtype != PropertySubType::Null {
+                    return Err(Error::PropertyWrongSubType)
+                }
+                Ok(Rectangle {
+                    x: prop.get_u32(0)? as i32,
+                    y: prop.get_u32(1)? as i32,
+                    w: prop.get_u32(2)? as i32,
+                    h: prop.get_u32(3)? as i32,
+                })
+            }
+            PropertyType::Str => {
+                if prop.subtype != PropertySubType::PyExpr {
+                    return Err(Error::PropertyWrongSubType)
+                }
+
+                let (screen_width, screen_height) = window::screen_size();
+
+                let locals = Python::with_gil(|py| {
+                    let locals = PyDict::new_bound(py);
+                    locals.set_item("sw", screen_width).expect("set item sw");
+                    locals.set_item("sh", screen_height).expect("set item sh");
+                    locals.unbind()
+                });
+
+                let mut rect = [0; 4];
+                for i in 0..4 {
+                    let code = prop.get_str(i)?;
+                    match eval_py_str(&code, locals.clone()) {
+                        Ok(v) => rect[i] = v as i32,
+                        Err(err) => {
+                            error!("layer '{}': python running `{}` encountered err: {}", layer.name, code, err);
+                            return Err(Error::PyEvalErr)
+                        }
+                    }
+                }
+
+                Ok(Rectangle::from_array(rect))
+            }
+            _ => {
+                Err(Error::PropertyWrongType)
+            }
+        }
+    }
+
+    fn render_layer(&mut self, layer_id: SceneNodeId,
+                    // parent rect
+                    ) -> Result<()> {
+        let layer = self.scene_graph.get_node(layer_id).unwrap();
+
+        if !layer.get_property_bool("is_visible")? {
+            return Ok(())
+        }
+
+        self.ctx.begin_default_pass(PassAction::Nothing);
+        self.ctx.apply_pipeline(&self.pipeline);
+
+        let (_, screen_height) = window::screen_size();
+
+        let mut rect = Self::get_rect(&layer)?;
+        rect.y = screen_height as i32 - (rect.y + rect.h);
+
+        self.ctx.apply_viewport(rect.x, rect.y, rect.w, rect.h);
+        self.ctx.apply_scissor_rect(rect.x, rect.y, rect.w, rect.h);
+
+        // get the rectangle
+        // make sure it's inside the parent's rect
+        for child in layer.get_children(&[SceneNodeType::RenderMesh]) {
+            // x, y, w, h as pixels
+
+            // note that (x, y) is offset by layer rect so it is the pos within layer
+            // layer coords are (0, 0) -> (1, 1)
+
+            // optionally evaluated using python
+
+            // mesh data is (0, 0) to (1, 1)
+            // so scale by (w, h)
+
+            match child.typ {
+                SceneNodeType::RenderMesh => {
+                    if let Err(err) = self.render_mesh(child.id, &rect) {
+                        error!("error rendering mesh '{}': {}", child.name, err);
+                    }
+                },
+                _ => panic!("render_layer(): unknown type")
+            }
+        }
+
+        self.ctx.end_render_pass();
+
+        Ok(())
+    }
+
+    fn get_dim(mesh: &SceneNode, layer_rect: &Rectangle<i32>) -> Result<Rectangle<f32>> {
+        let prop = mesh.get_property("rect").ok_or(Error::PropertyNotFound)?;
+        if prop.array_len != 4 {
+            return Err(Error::PropertyWrongLen)
+        }
+        match prop.typ {
+            PropertyType::Float32 => {
+                if prop.subtype != PropertySubType::Null {
+                    return Err(Error::PropertyWrongSubType)
+                }
+                Ok(Rectangle {
+                    x: prop.get_f32(0)?,
+                    y: prop.get_f32(1)?,
+                    w: prop.get_f32(2)?,
+                    h: prop.get_f32(3)?,
+                })
+            }
+            PropertyType::Str => {
+                if prop.subtype != PropertySubType::PyExpr {
+                    return Err(Error::PropertyWrongSubType)
+                }
+
+                let locals = Python::with_gil(|py| {
+                    let locals = PyDict::new_bound(py);
+                    locals.set_item("lw", layer_rect.w as f32).expect("set item lw");
+                    locals.set_item("lh", layer_rect.h as f32).expect("set item lh");
+                    locals.unbind()
+                });
+
+                let mut rect = [0.; 4];
+                for i in 0..4 {
+                    let code = prop.get_str(i)?;
+                    match eval_py_str(&code, locals.clone()) {
+                        Ok(v) => rect[i] = v,
+                        Err(err) => {
+                            error!("mesh '{}': python running `{}` encountered err: {}", mesh.name, code, err);
+                            return Err(Error::PyEvalErr)
+                        }
+                    }
+                }
+
+                Ok(Rectangle::from_array(rect))
+            }
+            _ => {
+                Err(Error::PropertyWrongType)
+            }
+        }
+    }
+
+    fn render_mesh(&mut self, mesh_id: SceneNodeId, layer_rect: &Rectangle<i32>) -> Result<()> {
+        let mesh = self.scene_graph.get_node(mesh_id).unwrap();
+
+        let data = mesh.get_property("data").ok_or(Error::PropertyNotFound)?;
+        let verts = data.get_buf(0)?;
+        let faces = data.get_buf(1)?;
+
+        let vertex_buffer = self.ctx.new_buffer(
+            BufferType::VertexBuffer,
+            BufferUsage::Immutable,
+            BufferSource::slice(&verts),
+        );
+
+        let bufsrc = unsafe {
+            BufferSource::pointer(
+                faces.as_ptr() as _,
+                std::mem::size_of_val(&faces[..]),
+                std::mem::size_of::<u32>(),
+            )
+        };
+
+        let index_buffer = self.ctx.new_buffer(
+            BufferType::IndexBuffer,
+            BufferUsage::Immutable,
+            bufsrc,
+        );
+
+        // temp
+        let texture = self.textures.get(Stage::WHITE_TEXTURE_ID).unwrap();
+
+        let bindings = Bindings {
+            vertex_buffers: vec![vertex_buffer],
+            index_buffer,
+            images: vec![*texture],
+        };
+
+        self.ctx.apply_bindings(&bindings);
+
+        let rect = Self::get_dim(mesh, layer_rect)?;
+        //debug!("mesh rect: {:?}", rect);
+
+        let layer_w = layer_rect.w as f32;
+        let layer_h = layer_rect.h as f32;
+        let off_x = rect.x / layer_w;
+        let off_y = rect.y / layer_h;
+        let scale_x = rect.w / layer_w;
+        let scale_y = rect.h / layer_h;
+        //let model = glam::Mat4::IDENTITY;
+        let model = glam::Mat4::from_translation(glam::Vec3::new(off_x, off_y, 0.)) *
+            glam::Mat4::from_scale(glam::Vec3::new(scale_x, scale_y, 1.));
+
+        let mut uniforms_data = [0u8; 128];
+        let data: [u8; 64] = unsafe { std::mem::transmute_copy(&self.proj) };
+        uniforms_data[0..64].copy_from_slice(&data);
+        let data: [u8; 64] = unsafe { std::mem::transmute_copy(&model) };
+        uniforms_data[64..].copy_from_slice(&data);
+        assert_eq!(128, 2 * UniformType::Mat4.size());
+
+        self.ctx.apply_uniforms_from_bytes(uniforms_data.as_ptr(), uniforms_data.len());
+
+        self.ctx.draw(0, 3 * faces.len() as i32, 1);
+
+        self.ctx.delete_buffer(index_buffer);
+        self.ctx.delete_buffer(vertex_buffer);
+
+        Ok(())
+    }
+}
+
+fn eval_py_str<'py>(code: &str, locals: Py<PyDict>) -> PyResult<f32> {
+    Python::with_gil(|py| {
+        let null = ();
+        // https://stackoverflow.com/questions/35804961/python-eval-is-it-still-dangerous-if-i-disable-builtins-and-attribute-access
+        // See safe_eval() by tardyp and astrun
+        // We don't care about resource usage, just accessing system resources.
+        // Can also use restrictedpython lib to eval the code.
+        // Also PyPy sandboxing
+        // and starlark / starlark-rust
+        py_run!(py, null, r#"
+__builtins__.__dict__['__import__'] = None
+__builtins__.__dict__['open'] = None
+        "#);
+
+        let locals = locals.bind(py);
+        let result: f32 = py.eval_bound(code, None, Some(locals))?.extract()?;
+        Ok(result)
+    })
+}
+
 /*
 fn get_obj_props(obj: &SceneNode) -> Result<(f32, f32, f32, f32, bool)> {
     let x = obj.get_property_f32("x")?;
@@ -655,13 +935,29 @@ impl EventHandler for Stage {
         // This will make the top left (0, 0) and the bottom right (1, 1)
         // Default is (-1, 1) -> (1, -1)
         let proj = glam::Mat4::from_translation(glam::Vec3::new(-1., 1., 0.)) *
-            glam::Mat4::from_scale(glam::Vec3::new(2. / screen_width, -2. / screen_height, 1.));
+            glam::Mat4::from_scale(glam::Vec3::new(2., -2., 1.));
+        //let proj = glam::Mat4::IDENTITY;
 
         // Reusable text layout
         //let mut layout = Layout::new(CoordinateSystem::PositiveYDown);
 
         let scene_graph = self.scene_graph.lock().unwrap();
+        let window_id = scene_graph.lookup_node_id("/window").expect("no window attached");
 
+        // We need this because scene_graph must remain locked for the duration of the rendering
+        let mut render_context = RenderContext {
+            scene_graph,
+            ctx: &mut self.ctx,
+            pipeline: &self.pipeline,
+            proj,
+            textures: &self.textures,
+        };
+
+        render_context.render_window();
+
+        drop(render_context);
+
+        /*
         for layer in scene_graph
             .lookup_node("/window")
             .expect("no window attached!")
@@ -823,6 +1119,7 @@ impl EventHandler for Stage {
             self.ctx.end_render_pass();
             */
         }
+        */
         self.ctx.commit_frame();
     }
 
@@ -1001,11 +1298,15 @@ impl EventHandler for Stage {
     }
 
     fn resize_event(&mut self, width: f32, height: f32) {
-        let mut scene_graph = self.scene_graph.lock().unwrap();
         let mut data = vec![];
         width.encode(&mut data).unwrap();
         height.encode(&mut data).unwrap();
+
+        let mut scene_graph = self.scene_graph.lock().unwrap();
         let win = scene_graph.lookup_node_mut("/window").unwrap();
+        let prop = win.get_property("screen_size").unwrap();
+        prop.set_f32(0, width).unwrap();
+        prop.set_f32(1, height).unwrap();
         win.trigger("resize", data).unwrap();
     }
 }

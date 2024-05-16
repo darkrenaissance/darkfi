@@ -262,6 +262,13 @@ impl ZeroMQAdapter {
                             }
                             prop.set_defaults_f32(prop_defaults)?;
                         }
+                        PropertyType::Str => {
+                            let mut prop_defaults = vec![];
+                            for _ in 0..prop_defaults_len.0 {
+                                prop_defaults.push(String::decode(&mut cur).unwrap());
+                            }
+                            prop.set_defaults_str(prop_defaults)?;
+                        }
                         _ => return Err(Error::PropertyWrongType),
                     }
                 }
@@ -307,7 +314,16 @@ impl ZeroMQAdapter {
                         prop.min_val = min;
                         prop.max_val = max;
                     }
-                    _ => return Err(Error::PropertyWrongType),
+                    _ => {
+                        let min_is_some = bool::decode(&mut cur).unwrap();
+                        if min_is_some {
+                            return Err(Error::PropertyWrongType)
+                        }
+                        let max_is_some = bool::decode(&mut cur).unwrap();
+                        if max_is_some {
+                            return Err(Error::PropertyWrongType)
+                        }
+                    },
                 }
 
                 let prop_enum_items = Vec::<String>::decode(&mut cur).unwrap();

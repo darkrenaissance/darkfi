@@ -390,15 +390,15 @@ impl SceneNode {
         self.children.swap_remove(child_idx);
     }
 
-    pub fn iter_children<'a>(
-        &'a self,
-        scene_graph: &'a SceneGraph,
-        typ: SceneNodeType,
-    ) -> impl Iterator<Item = &'a Self> + 'a {
+    pub fn get_children(
+        &self,
+        allowed_types: &[SceneNodeType],
+    ) -> Vec<SceneNodeInfo> {
         self.children
             .iter()
-            .filter(move |child_inf| child_inf.typ == typ)
-            .map(|child_inf| scene_graph.get_node(child_inf.id).unwrap())
+            .cloned()
+            .filter(move |child_inf| allowed_types.contains(&child_inf.typ))
+            .collect()
     }
 
     pub fn add_property(&mut self, prop: Property) -> Result<()> {

@@ -13,8 +13,6 @@ use std::{
 
 use crate::scene::SceneNodeId;
 
-type BufferGuard<'a> = MutexGuard<'a, Vec<u8>>;
-
 type Buffer = Arc<Vec<u8>>;
 
 #[derive(Debug, Copy, Clone, PartialEq, SerialEncodable, SerialDecodable)]
@@ -53,6 +51,7 @@ pub enum PropertySubType {
     // Size of something in pixels
     Pixel = 2,
     ResourceId = 3,
+    PyExpr = 4,
 }
 
 #[derive(Debug, Clone)]
@@ -248,6 +247,11 @@ impl Property {
     pub fn set_defaults_f32(&mut self, defaults: Vec<f32>) -> Result<()> {
         self.check_defaults_len(defaults.len())?;
         self.defaults = defaults.into_iter().map(|v| PropertyValue::Float32(v)).collect();
+        Ok(())
+    }
+    pub fn set_defaults_str(&mut self, defaults: Vec<String>) -> Result<()> {
+        self.check_defaults_len(defaults.len())?;
+        self.defaults = defaults.into_iter().map(|v| PropertyValue::Str(v)).collect();
         Ok(())
     }
 

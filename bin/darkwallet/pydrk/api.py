@@ -93,6 +93,7 @@ class PropertySubType:
     COLOR = 1
     PIXEL = 2
     RESOURCE_ID = 3
+    PY_EXPR = 4
 
     @staticmethod
     def to_str(prop_type):
@@ -105,6 +106,8 @@ class PropertySubType:
                 return "pixel"
             case PropertySubType.RESOURCE_ID:
                 return "resource_id"
+            case PropertySubType.PY_EXPR:
+                return "py_expr"
 
 class PropertyStatus:
     OK = 0
@@ -119,25 +122,28 @@ class ErrorCode:
     PROPERTY_ALREADY_EXISTS = 5
     PROPERTY_NOT_FOUND = 6
     PROPERTY_WRONG_TYPE = 7
-    PROPERTY_WRONG_LEN = 8
-    PROPERTY_WRONG_INDEX = 9
-    PROPERTY_OUT_OF_RANGE = 10
-    PROPERTY_NULL_NOT_ALLOWED = 11
-    PROPERTY_IS_BOUNDED = 12
-    PROPERTY_WRONG_ENUM_ITEM = 13
-    SIGNAL_ALREADY_EXISTS = 14
-    SIGNAL_NOT_FOUND = 15
-    SLOT_NOT_FOUND = 16
-    METHOD_ALREADY_EXISTS = 17
-    METHOD_NOT_FOUND = 18
-    NODES_ARE_LINKED = 19
-    NODES_NOT_LINKED = 20
-    NODE_HAS_PARENTS = 21
-    NODE_HAS_CHILDREN = 22
-    NODE_PARENT_NAME_CONFLICT = 23
-    NODE_CHILD_NAME_CONFLICT = 24
-    NODE_SIBLING_NAME_CONFLICT = 25
-    FILE_NOT_FOUND = 26
+    PROPERTY_WRONG_SUB_TYPE = 8
+    PROPERTY_WRONG_LEN = 9
+    PROPERTY_WRONG_INDEX = 10
+    PROPERTY_OUT_OF_RANGE = 11
+    PROPERTY_NULL_NOT_ALLOWED = 12
+    PROPERTY_IS_BOUNDED = 13
+    PROPERTY_WRONG_ENUM_ITEM = 14
+    SIGNAL_ALREADY_EXISTS = 15
+    SIGNAL_NOT_FOUND = 16
+    SLOT_NOT_FOUND = 17
+    METHOD_ALREADY_EXISTS = 18
+    METHOD_NOT_FOUND = 19
+    NODES_ARE_LINKED = 20
+    NODES_NOT_LINKED = 21
+    NODE_HAS_PARENTS = 22
+    NODE_HAS_CHILDREN = 23
+    NODE_PARENT_NAME_CONFLICT = 24
+    NODE_CHILD_NAME_CONFLICT = 25
+    NODE_SIBLING_NAME_CONFLICT = 26
+    FILE_NOT_FOUND = 27
+    RESOURCE_NOT_FOUND = 28
+    PY_EVAL_ERR = 29
 
     @staticmethod
     def to_str(errc):
@@ -194,6 +200,10 @@ class ErrorCode:
                 return "node_sibling_name_conflict"
             case ErrorCode.FILE_NOT_FOUND:
                 return "file_not_found"
+            case ErrorCode.RESOURCE_NOT_FOUND:
+                return "resource_not_found"
+            case ErrorCode.PY_EVAL_ERR:
+                return "py_eval_err"
 
 def vertex(x, y, r, g, b, a, u, v):
     buf = bytearray()
@@ -246,43 +256,49 @@ class Api:
             case 7:
                 raise exc.PropertyWrongType
             case 8:
-                raise exc.PropertyWrongLen
+                raise exc.PropertyWrongSubType
             case 9:
-                raise exc.PropertyWrongIndex
+                raise exc.PropertyWrongLen
             case 10:
-                raise exc.PropertyOutOfRange
+                raise exc.PropertyWrongIndex
             case 11:
-                raise exc.PropertyNullNotAllowed
+                raise exc.PropertyOutOfRange
             case 12:
-                raise exc.PropertyIsBounded
+                raise exc.PropertyNullNotAllowed
             case 13:
-                raise exc.PropertyWrongEnumItem
+                raise exc.PropertyIsBounded
             case 14:
-                raise exc.SignalAlreadyExists
+                raise exc.PropertyWrongEnumItem
             case 15:
-                raise exc.SignalNotFound
+                raise exc.SignalAlreadyExists
             case 16:
-                raise exc.SlotNotFound
+                raise exc.SignalNotFound
             case 17:
-                raise exc.MethodAlreadyExists
+                raise exc.SlotNotFound
             case 18:
-                raise exc.MethodNotFound
+                raise exc.MethodAlreadyExists
             case 19:
-                raise exc.NodesAreLinked
+                raise exc.MethodNotFound
             case 20:
-                raise exc.NodesNotLinked
+                raise exc.NodesAreLinked
             case 21:
-                raise exc.NodeHasParents
+                raise exc.NodesNotLinked
             case 22:
-                raise exc.NodeHasChildren
+                raise exc.NodeHasParents
             case 23:
-                raise exc.NodeParentNameConflict
+                raise exc.NodeHasChildren
             case 24:
-                raise exc.NodeChildNameConflict
+                raise exc.NodeParentNameConflict
             case 25:
-                raise exc.NodeSiblingNameConflict
+                raise exc.NodeChildNameConflict
             case 26:
+                raise exc.NodeSiblingNameConflict
+            case 27:
                 raise exc.FileNotFound
+            case 28:
+                raise exc.ResourceNotFound
+            case 29:
+                raise exc.PyEvalErr
         return cursor
 
     def hello(self):
@@ -446,10 +462,9 @@ class Api:
         serial.write_u8(req, int(prop.type))
         serial.write_u8(req, int(prop.subtype))
         serial.write_u32(req, int(prop.array_len))
-        if prop.defaults is None:
-            serial.write_u8(req, 0)
-        else:
-            serial.write_u8(req, 1)
+
+        def write_defaults(by):
+            assert prop.defaults is not None
             defaults_len = len(prop.defaults)
             serial.encode_varint(req, defaults_len)
             for default in prop.defaults:
@@ -458,15 +473,19 @@ class Api:
                         serial.write_u32(req, default)
                     case PropertyType.FLOAT32:
                         serial.write_f32(req, default)
+                    case PropertyType.STR:
+                        serial.encode_str(req, default)
                     case _:
                         raise exc.PropertyWrongType
+
+        serial.encode_opt(req, prop.defaults, write_defaults)
+
         serial.encode_str(req, prop.ui_name)
         serial.encode_str(req, prop.desc)
         serial.write_u8(req, int(prop.is_null_allowed))
-        if prop.min_val is None:
-            serial.write_u8(req, 0)
-        else:
-            serial.write_u8(req, 1)
+
+        def write_mxx(v, by):
+            assert v is not None
             match prop.type:
                 case PropertyType.UINT32:
                     serial.write_u32(req, prop.min_val)
@@ -474,17 +493,13 @@ class Api:
                     serial.write_f32(req, prop.min_val)
                 case _:
                     raise exc.PropertyWrongType
-        if prop.max_val is None:
-            serial.write_u8(req, 0)
-        else:
-            serial.write_u8(req, 1)
-            match prop.type:
-                case PropertyType.UINT32:
-                    serial.write_u32(req, prop.max_val)
-                case PropertyType.FLOAT32:
-                    serial.write_f32(req, prop.max_val)
-                case _:
-                    raise exc.PropertyWrongType
+
+        write_min = lambda by: write_mxx(prop.min_val, by)
+        write_max = lambda by: write_mxx(prop.max_val, by)
+
+        serial.encode_opt(req, prop.min_val, write_min)
+        serial.encode_opt(req, prop.max_val, write_max)
+
         serial.encode_varint(req, len(prop.enum_items))
         for enum_item in prop.enum_items:
             if prop.type != PropertyType.ENUM:
@@ -504,10 +519,11 @@ class Api:
         serial.write_u32(req, parent_id)
         self._make_request(Command.UNLINK_NODE, req)
 
-    def set_property_bool(self, node_id, prop_name, val):
+    def set_property_bool(self, node_id, prop_name, i, val):
         req = bytearray()
         serial.write_u32(req, node_id)
         serial.encode_str(req, prop_name)
+        serial.write_u32(req, i)
         serial.write_u8(req, int(val))
         self._make_request(Command.SET_PROPERTY_VALUE, req)
 
@@ -527,7 +543,7 @@ class Api:
         serial.write_f32(req, val)
         self._make_request(Command.SET_PROPERTY_VALUE, req)
 
-    def set_property_buffer(self, node_id, prop_name, i, buf):
+    def set_property_buf(self, node_id, prop_name, i, buf):
         req = bytearray()
         serial.write_u32(req, node_id)
         serial.encode_str(req, prop_name)
@@ -587,23 +603,25 @@ class Api:
         serial.write_u32(req, node_id)
         serial.encode_str(req, sig_name)
         cur = self._make_request(Command.GET_SLOTS, req)
-        slots_len = serial.decode_varint(cur)
-        slots = []
-        for _ in range(slots_len):
+
+        def read_slot(cur):
             slot_name = serial.decode_str(cur)
             slot_id = serial.read_u32(cur)
-            slots.append((slot_id, slot_name))
+            return (slot_name, slot_id)
+
+        slots = serial.decode_arr(cur, read_slot)
         return slots
 
     def get_methods(self, node_id):
         req = bytearray()
         serial.write_u32(req, node_id)
         cur = self._make_request(Command.GET_METHODS, req)
-        methods_len = serial.decode_varint(cur)
-        methods = []
-        for _ in range(methods_len):
+
+        def read_method(cur):
             method_name = serial.decode_str(cur)
-            methods.append(method_name)
+            return method_name
+
+        methods = serial.decode_arr(cur, read_method)
         return methods
 
     def get_method(self, node_id, method_name):
@@ -611,18 +629,16 @@ class Api:
         serial.write_u32(req, node_id)
         serial.encode_str(req, method_name)
         cur = self._make_request(Command.GET_METHOD, req)
-        args_len = serial.decode_varint(cur)
-        args = []
-        for _ in range(args_len):
+
+        def read_arg(cur):
             arg_name = serial.decode_str(cur)
+            arg_desc = serial.decode_str(cur)
             arg_type = serial.read_u8(cur)
-            args.append((arg_name, arg_type))
-        results_len = serial.decode_varint(cur)
-        results = []
-        for _ in range(results_len):
-            result_name = serial.decode_str(cur)
-            result_type = serial.read_u8(cur)
-            results.append((result_name, result_type))
+            return (arg_name, arg_desc, arg_type)
+
+        args = serial.decode_arr(cur, read_arg)
+        results = serial.decode_arr(cur, read_arg)
+
         return (args, results)
 
     def call_method(self, node_id, method_name, arg_data):

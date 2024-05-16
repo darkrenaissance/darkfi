@@ -12,6 +12,8 @@ class PropertyNotFound(Exception):
     pass
 class PropertyWrongType(Exception):
     pass
+class PropertyWrongSubType(Exception):
+    pass
 class PropertyWrongLen(Exception):
     pass
 class PropertyWrongIndex(Exception):
@@ -49,4 +51,6 @@ class NodeChildNameConflict(Exception):
 class NodeSiblingNameConflict(Exception):
     pass
 class FileNotFound(Exception):
+    pass
+class PyEvalErr(Exception):
     pass

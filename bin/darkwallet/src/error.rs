@@ -24,63 +24,69 @@ pub enum Error {
     #[error("Property has wrong type")]
     PropertyWrongType = 7,
 
+    #[error("Property has wrong subtype")]
+    PropertyWrongSubType = 8,
+
     #[error("Property value has the wrong length")]
-    PropertyWrongLen = 8,
+    PropertyWrongLen = 9,
 
     #[error("Property index is wrong")]
-    PropertyWrongIndex = 9,
+    PropertyWrongIndex = 10,
 
     #[error("Property out of range")]
-    PropertyOutOfRange = 10,
+    PropertyOutOfRange = 11,
 
     #[error("Property null not allowed")]
-    PropertyNullNotAllowed = 11,
+    PropertyNullNotAllowed = 12,
 
     #[error("Property array is bounded length")]
-    PropertyIsBounded = 12,
+    PropertyIsBounded = 13,
 
     #[error("Property enum item is invalid")]
-    PropertyWrongEnumItem = 13,
+    PropertyWrongEnumItem = 14,
 
     #[error("Signal already exists")]
-    SignalAlreadyExists = 14,
+    SignalAlreadyExists = 15,
 
     #[error("Signal not found")]
-    SignalNotFound = 15,
+    SignalNotFound = 16,
 
     #[error("Slot not found")]
-    SlotNotFound = 16,
+    SlotNotFound = 17,
 
     #[error("Signal already exists")]
-    MethodAlreadyExists = 17,
+    MethodAlreadyExists = 18,
 
     #[error("Method not found")]
-    MethodNotFound = 18,
+    MethodNotFound = 19,
 
     #[error("Nodes are not linked")]
-    NodesAreLinked = 19,
+    NodesAreLinked = 20,
 
     #[error("Nodes are not linked")]
-    NodesNotLinked = 20,
+    NodesNotLinked = 21,
 
     #[error("Node has parents")]
-    NodeHasParents = 21,
+    NodeHasParents = 22,
 
     #[error("Node has children")]
-    NodeHasChildren = 22,
+    NodeHasChildren = 23,
 
     #[error("Node has a parent with this name")]
-    NodeParentNameConflict = 23,
+    NodeParentNameConflict = 24,
 
     #[error("Node has a child with this name")]
-    NodeChildNameConflict = 24,
+    NodeChildNameConflict = 25,
 
     #[error("Node has a sibling with this name")]
-    NodeSiblingNameConflict = 25,
+    NodeSiblingNameConflict = 26,
 
     #[error("File not found")]
-    FileNotFound = 26,
+    FileNotFound = 27,
 
     #[error("Resource is not found")]
-    ResourceNotFound = 27,
+    ResourceNotFound = 28,
+
+    #[error("Python expr eval error")]
+    PyEvalErr = 29,
 }

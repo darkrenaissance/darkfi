@@ -51,6 +51,14 @@ def encode_buf(by, buf):
     by += buf
     return l
 
+def encode_opt(by, val, write_fn):
+    l = 0
+    if val is None:
+        write_u8(by, 0)
+    else:
+        write_u8(by, 1)
+        write_fn(by)
+
 # Cursor for bytearray type
 class Cursor:
 

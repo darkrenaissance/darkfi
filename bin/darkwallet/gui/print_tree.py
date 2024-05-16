@@ -49,19 +49,19 @@ def print_node_info(parent_id, indent):
 
         print_node_info(child_id, indent+1)
 
-    #for prop_name, prop_type in api.get_properties(parent_id):
-    #    if prop_type == PropertyType.STR:
-    #        prop_val = api.get_property(parent_id, prop_name)
-    #        prop_val = f" = \"{prop_val}\""
-    #    elif prop_type != PropertyType.BUFFER:
-    #        prop_val = api.get_property(parent_id, prop_name)
-    #        prop_val = f" = {prop_val}"
-    #    else:
-    #        prop_val = ""
+    for prop in api.get_properties(parent_id):
+        if prop.type == PropertyType.STR:
+            prop_val = api.get_property_value(parent_id, prop.name)
+            prop_val = f" = \"{prop_val}\""
+        elif prop.type != PropertyType.BUFFER:
+            prop_val = api.get_property_value(parent_id, prop.name)
+            prop_val = f" = {prop_val}"
+        else:
+            prop_val = ""
 
-    #    prop_type = PropertyType.to_str(prop_type)
+        prop_type = PropertyType.to_str(prop.type)
 
-    #    print(f"{ws}{prop_name}: {prop_type}{prop_val}")
+        print(f"{ws}{prop.name}: {prop_type}{prop_val}")
 
     for sig in api.get_signals(parent_id):
         print(f"{ws}~{sig}")
@@ -71,8 +71,8 @@ def print_node_info(parent_id, indent):
     for method_name in api.get_methods(parent_id):
         args, results = api.get_method(parent_id, method_name)
 
-        args = [f"{name}: " + PropertyType.to_str(typ) for (name, typ) in args]
-        results = [f"{name}: " + PropertyType.to_str(typ) for (name, typ) in results]
+        args = [f"{name}: " + PropertyType.to_str(typ) for (name, _, typ) in args]
+        results = [f"{name}: " + PropertyType.to_str(typ) for (name, _, typ) in results]
 
         method_str = f"{method_name}(" + ", ".join(args) + ") -> (" + ", ".join(results) + ")"
         print(f"{ws}{method_str}")
