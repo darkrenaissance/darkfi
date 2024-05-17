@@ -34,7 +34,6 @@ use url::Url;
 use darkfi::{
     async_daemonize, cli_desc,
     rpc::{client::RpcClient, jsonrpc::JsonRequest, util::JsonValue},
-    tx::Transaction,
     util::{
         encoding::base64,
         parse::{decode_base10, encode_base10},
@@ -215,6 +214,9 @@ enum Subcmd {
         /// Sub command to execute
         command: OtcSubcmd,
     },
+
+    /// Attach the fee call to a transaction given from stdin
+    AttachFee,
 
     /// Inspect a transaction from stdin
     Inspect,
@@ -992,14 +994,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             }
 
             OtcSubcmd::Sign => {
-                let mut buf = String::new();
-                stdin().read_to_string(&mut buf)?;
-                let Some(bytes) = base64::decode(buf.trim()) else {
-                    eprintln!("Failed to decode swap transaction");
-                    exit(2);
-                };
-
-                let mut tx: Transaction = deserialize_async(&bytes).await?;
+                let mut tx = parse_tx_from_stdin().await?;
 
                 let drk = Drk::new(args.wallet_path, args.wallet_pass, None, ex).await?;
                 if let Err(e) = drk.sign_swap(&mut tx).await {
@@ -1289,6 +1284,19 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 Ok(())
             }
         },
+
+        Subcmd::AttachFee => {
+            let mut tx = parse_tx_from_stdin().await?;
+
+            let drk = Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
+            if let Err(e) = drk.attach_fee(&mut tx).await {
+                eprintln!("Failed to attach the fee call to the transaction: {e:?}");
+                exit(2);
+            };
+
+            println!("{}", base64::encode(&serialize_async(&tx).await));
+            Ok(())
+        }
 
         Subcmd::Inspect => {
             let tx = parse_tx_from_stdin().await?;

@@ -423,38 +423,63 @@ impl Drk {
         Ok(())
     }
 
-    /// Sign a given transaction by retrieving the secret key from the encrypted
+    /// Sign given swap transaction by retrieving the secret key from the encrypted
     /// note and prepending it to the transaction's signatures.
     pub async fn sign_swap(&self, tx: &mut Transaction) -> Result<()> {
-        // We need our secret keys to try and decrypt the note
+        // We need our secret keys to try and decrypt the notes
         let secret_keys = self.get_money_secrets().await?;
         let params: MoneyTransferParamsV1 = deserialize_async(&tx.calls[0].data.data[1..]).await?;
 
-        // Our output should be outputs[0] so we try to decrypt that.
-        let encrypted_note = &params.outputs[0].note;
+        // We wil try to decrypt each note separately,
+        // since we might us the same key in both of them.
+        let mut found = false;
 
-        println!("Trying to decrypt note in outputs[0]");
-        let mut skey = None;
-
+        // Try to decrypt the first note
         for secret in &secret_keys {
-            if let Ok(note) = encrypted_note.decrypt::<MoneyNote>(secret) {
-                let s: SecretKey = deserialize_async(&note.memo).await?;
-                println!("Successfully decrypted and found an ephemeral secret");
-                skey = Some(s);
-                break
+            let Ok(note) = &params.outputs[0].note.decrypt::<MoneyNote>(secret) else { continue };
+
+            // Sign the swap transaction
+            let skey: SecretKey = deserialize_async(&note.memo).await?;
+            let sigs = tx.create_sigs(&[skey])?;
+
+            // If transaction contains both signatures, replace the first one,
+            // otherwise insert signature on first position.
+            if tx.signatures[0].len() == 2 {
+                tx.signatures[0][0] = sigs[0];
+            } else {
+                tx.signatures[0].insert(0, sigs[0]);
             }
+
+            found = true;
+            break
         }
 
-        let Some(skey) = skey else {
+        // Try to decrypt the second note
+        for secret in &secret_keys {
+            let Ok(note) = &params.outputs[1].note.decrypt::<MoneyNote>(secret) else { continue };
+
+            // Sign the swap transaction
+            let skey: SecretKey = deserialize_async(&note.memo).await?;
+            let sigs = tx.create_sigs(&[skey])?;
+
+            // If transaction contains both signatures, replace the second one,
+            // otherwise replace the first one.
+            if tx.signatures[0].len() == 2 {
+                tx.signatures[0][1] = sigs[0];
+            } else {
+                tx.signatures[0][0] = sigs[0];
+            }
+
+            found = true;
+            break
+        }
+
+        if !found {
             eprintln!("Error: Failed to decrypt note with any of our secret keys");
             return Err(Error::Custom(
                 "Failed to decrypt note with any of our secret keys".to_string(),
             ))
         };
-
-        println!("Signing swap transaction");
-        let sigs = tx.create_sigs(&[skey])?;
-        tx.signatures[0].insert(0, sigs[0]);
 
         Ok(())
     }

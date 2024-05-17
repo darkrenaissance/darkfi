@@ -55,24 +55,26 @@ of the guide can be added for future regressions.
 | 10 | Alias add                 | alias add {ALIAS} {TOKEN}                        | Pass               |
 | 11 | Aliases retrieval         | alias show                                       | Pass               |
 | 12 | Mint generation           | token mint {ALIAS} {AMOUNT} {ADDR}               | Pass               |
-| 13 | Transfer                  | transfer {AMOUNT} {ALIAS} {ADDR}                 | Pass               |
-| 14 | Coins retrieval           | wallet --coins                                   | Pass               |
-| 15 | OTC initialization        | otc init -v {AMOUNT}:{AMOUNT} -t {ALIAS}:{ALIAS} | Failure: needs #12 |
-| 16 | OTC join                  | otc join                                         | Failure: needs #15 |
-| 17 | OTC sign                  | otc sign                                         | Failure: needs #16 |
-| 18 | DAO create                | dao create {LIMIT} {QUORUM} {RATIO} {TOKEN}      | Failure: needs #12 |
-| 19 | DAO view                  | dao view                                         | Failure: needs #18 |
-| 20 | DAO import                | dao import                                       | Failure: needs #18 |
-| 21 | DAO list                  | dao sign                                         | Failure: needs #18 |
-| 22 | DAO mint                  | dao mint {DAO}                                   | Failure: needs #18 |
-| 23 | DAO balance               | dao balance {DAO}                                | Failure: needs #18 |
-| 24 | DAO propose               | dao propose {DAO} {ADDR} {AMOUNT} {TOKEN}        | Failure: needs #18 |
-| 25 | DAO proposals retrieval   | dao proposals {DAO}                              | Failure: needs #24 |
-| 26 | DAO proposal retrieval    | dao proposal {DAO} {PROPOSAL_ID}                 | Failure: needs #24 |
-| 27 | DAO vote                  | dao vote {DAO} {PROPOSAL_ID} {VOTE} {WEIGHT}     | Failure: needs #24 |
-| 28 | DAO proposal execution    | dao exec {DAO} {PROPOSAL_ID}                     | Failure: needs #27 |
-| 29 | Coins unspend             | unspend {COIN}                                   | Pass               |
-| 30 | Transaction inspect       | inspect                                          | Pass               |
-| 31 | Transaction simulate      | explorer simulate-tx                             | Pass               |
-| 31 | Transaction broadcast     | broadcast                                        | Pass               |
+| 13 | Token freeze              | token freeze {ALIAS}                             | Pass               |
+| 14 | Transfer                  | transfer {AMOUNT} {ALIAS} {ADDR}                 | Pass               |
+| 15 | Coins retrieval           | wallet --coins                                   | Pass               |
+| 16 | OTC initialization        | otc init -v {AMOUNT}:{AMOUNT} -t {ALIAS}:{ALIAS} | Pass               |
+| 17 | OTC join                  | otc join                                         | Pass               |
+| 18 | OTC sign                  | otc sign                                         | Pass               |
+| 19 | DAO create                | dao create {LIMIT} {QUORUM} {RATIO} {TOKEN}      | Failure: needs #12 |
+| 20 | DAO view                  | dao view                                         | Failure: needs #18 |
+| 21 | DAO import                | dao import                                       | Failure: needs #18 |
+| 22 | DAO list                  | dao sign                                         | Failure: needs #18 |
+| 23 | DAO mint                  | dao mint {DAO}                                   | Failure: needs #18 |
+| 24 | DAO balance               | dao balance {DAO}                                | Failure: needs #18 |
+| 25 | DAO propose               | dao propose {DAO} {ADDR} {AMOUNT} {TOKEN}        | Failure: needs #18 |
+| 26 | DAO proposals retrieval   | dao proposals {DAO}                              | Failure: needs #24 |
+| 27 | DAO proposal retrieval    | dao proposal {DAO} {PROPOSAL_ID}                 | Failure: needs #24 |
+| 28 | DAO vote                  | dao vote {DAO} {PROPOSAL_ID} {VOTE} {WEIGHT}     | Failure: needs #24 |
+| 29 | DAO proposal execution    | dao exec {DAO} {PROPOSAL_ID}                     | Failure: needs #27 |
+| 30 | Coins unspend             | unspend {COIN}                                   | Pass               |
+| 31 | Transaction inspect       | inspect                                          | Pass               |
+| 32 | Transaction simulate      | explorer simulate-tx                             | Pass               |
+| 33 | Transaction broadcast     | broadcast                                        | Pass               |
+| 34 | Transaction attach fee    | attach-fee                                       | Pass               |
 

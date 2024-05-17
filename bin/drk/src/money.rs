@@ -24,7 +24,7 @@ use rusqlite::types::Value;
 
 use darkfi::{
     tx::Transaction,
-    zk::{halo2::Field, proof::ProvingKey, Proof},
+    zk::{halo2::Field, proof::ProvingKey, vm::ZkCircuit, vm_heap::empty_witnesses, Proof},
     zkas::ZkBinary,
     Error, Result,
 };
@@ -39,7 +39,7 @@ use darkfi_money_contract::{
         MoneyGenesisMintParamsV1, MoneyPoWRewardParamsV1, MoneyTokenMintParamsV1,
         MoneyTransferParamsV1, Nullifier, Output, TokenId, DARK_TOKEN_ID,
     },
-    MoneyFunction,
+    MoneyFunction, MONEY_CONTRACT_ZKAS_FEE_NS_V1,
 };
 use darkfi_sdk::{
     bridgetree,
@@ -687,8 +687,8 @@ impl Drk {
         Ok(height)
     }
 
-    /// Auxiliary function to  grab all the nullifiers, coins, notes and freezes from
-    /// transaction money call.
+    /// Auxiliary function to grab all the nullifiers, coins, notes and freezes from
+    /// a transaction money call.
     async fn parse_money_call(
         &self,
         call_idx: usize,
@@ -760,11 +760,11 @@ impl Drk {
                 println!("[parse_money_call] Found Money::TokenMintV1 call");
                 let params: MoneyTokenMintParamsV1 = deserialize_async(&data[1..]).await?;
                 coins.push(params.coin);
-                // Grab the note from the parent auth call
-                let parent_idx = call.parent_index.unwrap();
-                let parent_call = &calls[parent_idx];
+                // Grab the note from the child auth call
+                let child_idx = call.children_indexes[0];
+                let child_call = &calls[child_idx];
                 let params: MoneyAuthTokenMintParamsV1 =
-                    deserialize_async(&parent_call.data.data[1..]).await?;
+                    deserialize_async(&child_call.data.data[1..]).await?;
                 notes.push(params.enc_note);
             }
         }
@@ -882,6 +882,36 @@ impl Drk {
         Ok(())
     }
 
+    /// Auxiliary function to  grab all the nullifiers from a transaction money call.
+    async fn money_call_nullifiers(&self, call: &DarkLeaf<ContractCall>) -> Result<Vec<Nullifier>> {
+        let mut nullifiers: Vec<Nullifier> = vec![];
+
+        let data = &call.data.data;
+        match MoneyFunction::try_from(data[0])? {
+            MoneyFunction::FeeV1 => {
+                let params: MoneyFeeParamsV1 = deserialize_async(&data[9..]).await?;
+                nullifiers.push(params.input.nullifier);
+            }
+            MoneyFunction::TransferV1 => {
+                let params: MoneyTransferParamsV1 = deserialize_async(&data[1..]).await?;
+
+                for input in params.inputs {
+                    nullifiers.push(input.nullifier);
+                }
+            }
+            MoneyFunction::OtcSwapV1 => {
+                let params: MoneyTransferParamsV1 = deserialize_async(&data[1..]).await?;
+
+                for input in params.inputs {
+                    nullifiers.push(input.nullifier);
+                }
+            }
+            _ => { /* Do nothing */ }
+        }
+
+        Ok(nullifiers)
+    }
+
     /// Mark provided transaction input coins as spent.
     pub async fn mark_tx_spend(&self, tx: &Transaction) -> Result<()> {
         let tx_hash = tx.hash().to_string();
@@ -892,7 +922,7 @@ impl Drk {
             }
 
             println!("[mark_tx_spend] Found Money contract in call {i}");
-            let (nullifiers, _, _, _) = self.parse_money_call(i, &tx.calls).await?;
+            let nullifiers = self.money_call_nullifiers(call).await?;
             self.mark_spent_coins(&nullifiers, &tx_hash).await?;
         }
 
@@ -1088,5 +1118,69 @@ impl Drk {
         let call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
 
         Ok((call, vec![proof], vec![signature_secret]))
+    }
+
+    /// Create and attach the fee call to given transaction.
+    pub async fn attach_fee(&self, tx: &mut Transaction) -> Result<()> {
+        // Grab spent coins nullifiers of the transactions and check no other fee call exists
+        let mut tx_nullifiers = vec![];
+        for call in &tx.calls {
+            if call.data.contract_id != *MONEY_CONTRACT_ID {
+                continue
+            }
+
+            match MoneyFunction::try_from(call.data.data[0])? {
+                MoneyFunction::FeeV1 => {
+                    return Err(Error::Custom("Fee call already exists".to_string()))
+                }
+                _ => { /* Do nothing */ }
+            }
+
+            let nullifiers = self.money_call_nullifiers(call).await?;
+            tx_nullifiers.extend_from_slice(&nullifiers);
+        }
+
+        // Grab all native owncoins to check if any is spent
+        let mut spent_coins = vec![];
+        let available_coins = self.get_token_coins(&DARK_TOKEN_ID).await?;
+        for coin in available_coins {
+            if tx_nullifiers.contains(&coin.nullifier()) {
+                spent_coins.push(coin);
+            }
+        }
+
+        // Now we need to do a lookup for the zkas proof bincodes, and create
+        // the circuit objects and proving keys so we can build the transaction.
+        // We also do this through the RPC.
+        let zkas_bins = self.lookup_zkas(&MONEY_CONTRACT_ID).await?;
+
+        let Some(fee_zkbin) = zkas_bins.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_FEE_NS_V1)
+        else {
+            return Err(Error::Custom("Fee circuit not found".to_string()))
+        };
+
+        let fee_zkbin = ZkBinary::decode(&fee_zkbin.1)?;
+
+        let fee_circuit = ZkCircuit::new(empty_witnesses(&fee_zkbin)?, &fee_zkbin);
+
+        // Creating Fee circuits proving keys
+        let fee_pk = ProvingKey::build(fee_zkbin.k, &fee_circuit);
+
+        // We first have to execute the fee-less tx to gather its used gas, and then we feed
+        // it into the fee-creating function.
+        let tree = self.get_money_tree().await?;
+        let secret = self.default_secret().await?;
+        let fee_public = PublicKey::from_secret(secret);
+        let (fee_call, fee_proofs, fee_secrets) = self
+            .append_fee_call(tx, fee_public, &tree, &fee_pk, &fee_zkbin, Some(&spent_coins))
+            .await?;
+
+        // Append the fee call to the transaction
+        tx.calls.push(DarkLeaf { data: fee_call, parent_index: None, children_indexes: vec![] });
+        tx.proofs.push(fee_proofs);
+        let sigs = tx.create_sigs(&fee_secrets)?;
+        tx.signatures.push(sigs);
+
+        Ok(())
     }
 }

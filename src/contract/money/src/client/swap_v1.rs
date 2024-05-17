@@ -31,7 +31,7 @@ use darkfi_sdk::{
     pasta::pallas,
 };
 use darkfi_serial::serialize;
-use log::{debug, info};
+use log::debug;
 use rand::rngs::OsRng;
 
 use crate::{
@@ -130,7 +130,7 @@ impl SwapCallBuilder {
         let signature_secret = SecretKey::random(&mut OsRng);
 
         let mut proofs = vec![];
-        info!("Creating burn proof for input");
+        debug!("Creating burn proof for input");
         let (proof, public_inputs) = create_transfer_burn_proof(
             &self.burn_zkbin,
             &self.burn_pk,
@@ -154,7 +154,7 @@ impl SwapCallBuilder {
         // For the output, we create a new coin blind
         let coin_blind = Blind::random(&mut OsRng);
 
-        info!("Creating mint proof for output");
+        debug!("Creating mint proof for output");
         let (proof, public_inputs) = create_transfer_mint_proof(
             &self.mint_zkbin,
             &self.mint_pk,

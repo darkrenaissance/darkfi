@@ -38,7 +38,6 @@ use crate::{money::BALANCE_BASE10_DECIMALS, Drk};
 
 /// Auxiliary function to parse a base64 encoded transaction from stdin.
 pub async fn parse_tx_from_stdin() -> Result<Transaction> {
-    println!("Reading transaction from stdin...");
     let mut buf = String::new();
     stdin().read_to_string(&mut buf)?;
     let Some(bytes) = base64::decode(buf.trim()) else {
@@ -222,6 +221,10 @@ pub fn generate_completions(shell: &str) -> Result<()> {
     let otc = SubCommand::with_name("otc")
         .about("OTC atomic swap")
         .subcommands(vec![init, join, inspect, sign]);
+
+    // AttachFee
+    let attach_fee = SubCommand::with_name("attach-fee")
+        .about("Attach the fee call to a transaction given from stdin");
 
     // Inspect
     let inspect = SubCommand::with_name("inspect").about("Inspect a transaction from stdin");
@@ -467,6 +470,7 @@ pub fn generate_completions(shell: &str) -> Result<()> {
         unspend,
         transfer,
         otc,
+        attach_fee,
         inspect,
         broadcast,
         subscribe,
