@@ -37,7 +37,7 @@ use pasta_curves::{
 use crate::{Decodable, Encodable, ReadExt, WriteExt};
 
 impl Encodable for Fp {
-    fn encode<S: Write>(&self, mut s: S) -> Result<usize> {
+    fn encode<S: Write>(&self, s: &mut S) -> Result<usize> {
         s.write_slice(&self.to_repr())?;
         Ok(32)
     }
@@ -53,7 +53,7 @@ impl AsyncEncodable for Fp {
 }
 
 impl Decodable for Fp {
-    fn decode<D: Read>(mut d: D) -> Result<Self> {
+    fn decode<D: Read>(d: &mut D) -> Result<Self> {
         let mut bytes = [0u8; 32];
         d.read_slice(&mut bytes)?;
         match Self::from_repr(bytes).into() {
@@ -76,7 +76,7 @@ impl AsyncDecodable for Fp {
 }
 
 impl Encodable for Fq {
-    fn encode<S: Write>(&self, mut s: S) -> Result<usize> {
+    fn encode<S: Write>(&self, s: &mut S) -> Result<usize> {
         s.write_slice(&self.to_repr())?;
         Ok(32)
     }
@@ -92,7 +92,7 @@ impl AsyncEncodable for Fq {
 }
 
 impl Decodable for Fq {
-    fn decode<D: Read>(mut d: D) -> Result<Self> {
+    fn decode<D: Read>(d: &mut D) -> Result<Self> {
         let mut bytes = [0u8; 32];
         d.read_slice(&mut bytes)?;
         match Self::from_repr(bytes).into() {
@@ -116,7 +116,7 @@ impl AsyncDecodable for Fq {
 }
 
 impl Encodable for Ep {
-    fn encode<S: Write>(&self, mut s: S) -> Result<usize> {
+    fn encode<S: Write>(&self, s: &mut S) -> Result<usize> {
         s.write_slice(&self.to_bytes())?;
         Ok(32)
     }
@@ -132,7 +132,7 @@ impl AsyncEncodable for Ep {
 }
 
 impl Decodable for Ep {
-    fn decode<D: Read>(mut d: D) -> Result<Self> {
+    fn decode<D: Read>(d: &mut D) -> Result<Self> {
         let mut bytes = [0u8; 32];
         d.read_slice(&mut bytes)?;
         match Self::from_bytes(&bytes).into() {
@@ -156,7 +156,7 @@ impl AsyncDecodable for Ep {
 }
 
 impl Encodable for Eq {
-    fn encode<S: Write>(&self, mut s: S) -> Result<usize> {
+    fn encode<S: Write>(&self, s: &mut S) -> Result<usize> {
         s.write_slice(&self.to_bytes())?;
         Ok(32)
     }
@@ -172,7 +172,7 @@ impl AsyncEncodable for Eq {
 }
 
 impl Decodable for Eq {
-    fn decode<D: Read>(mut d: D) -> Result<Self> {
+    fn decode<D: Read>(d: &mut D) -> Result<Self> {
         let mut bytes = [0u8; 32];
         d.read_slice(&mut bytes)?;
         match Self::from_bytes(&bytes).into() {

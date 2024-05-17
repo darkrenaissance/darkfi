@@ -178,7 +178,7 @@ pub fn get_tx_location(hash: &TransactionHash) -> GenericResult<(u32, u16)> {
     let ret = unsafe { get_tx_location_(buf.as_ptr()) };
     let loc_data = parse_ret(ret)?.ok_or(ContractError::DbGetFailed)?;
     let mut cursor = Cursor::new(loc_data);
-    Ok((Decodable::decode(&mut cursor)?, Decodable::decode(cursor)?))
+    Ok((Decodable::decode(&mut cursor)?, Decodable::decode(&mut cursor)?))
 }
 
 extern "C" {

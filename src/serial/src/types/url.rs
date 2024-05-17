@@ -29,7 +29,7 @@ use futures_lite::{AsyncRead, AsyncWrite};
 use crate::{Decodable, Encodable};
 
 impl Encodable for Url {
-    fn encode<S: Write>(&self, s: S) -> Result<usize> {
+    fn encode<S: Write>(&self, s: &mut S) -> Result<usize> {
         self.as_str().encode(s)
     }
 }
@@ -43,8 +43,8 @@ impl AsyncEncodable for Url {
 }
 
 impl Decodable for Url {
-    fn decode<D: Read>(mut d: D) -> Result<Self> {
-        let s: String = Decodable::decode(&mut d)?;
+    fn decode<D: Read>(d: &mut D) -> Result<Self> {
+        let s: String = Decodable::decode(d)?;
         match Url::parse(&s) {
             Ok(v) => Ok(v),
             Err(e) => Err(Error::new(ErrorKind::Other, e)),

@@ -41,12 +41,12 @@ pub trait Encodable {
     /// Encode an object with a well-defined format.
     /// Should only ever error if the underlying `Write` errors.
     /// Returns the number of bytes written on success.
-    fn encode<W: Write>(&self, e: W) -> Result<usize, Error>;
+    fn encode<W: Write>(&self, e: &mut W) -> Result<usize, Error>;
 }
 
 /// Data which can be decoded in a consensus-consistent way.
 pub trait Decodable: Sized {
-    fn decode<D: Read>(d: D) -> Result<Self, Error>;
+    fn decode<D: Read>(d: &mut D) -> Result<Self, Error>;
 }
 
 /// Encode an object into a vector.
@@ -241,14 +241,14 @@ macro_rules! impl_int_encodable {
     ($ty:ident, $meth_dec:ident, $meth_enc:ident) => {
         impl Decodable for $ty {
             #[inline]
-            fn decode<D: Read>(mut d: D) -> Result<Self, Error> {
-                ReadExt::$meth_dec(&mut d).map($ty::from_le)
+            fn decode<D: Read>(d: &mut D) -> Result<Self, Error> {
+                ReadExt::$meth_dec(d).map($ty::from_le)
             }
         }
 
         impl Encodable for $ty {
             #[inline]
-            fn encode<S: WriteExt>(&self, mut s: S) -> Result<usize, Error> {
+            fn encode<S: WriteExt>(&self, s: &mut S) -> Result<usize, Error> {
                 s.$meth_enc(self.to_le())?;
                 Ok(core::mem::size_of::<$ty>())
             }
@@ -304,7 +304,7 @@ impl VarInt {
 
 impl Encodable for VarInt {
     #[inline]
-    fn encode<S: Write>(&self, mut s: S) -> Result<usize, Error> {
+    fn encode<S: Write>(&self, s: &mut S) -> Result<usize, Error> {
         match self.0 {
             0..=0xFC => {
                 (self.0 as u8).encode(s)?;
@@ -334,11 +334,11 @@ impl Encodable for VarInt {
 
 impl Decodable for VarInt {
     #[inline]
-    fn decode<D: Read>(mut d: D) -> Result<Self, Error> {
-        let n = ReadExt::read_u8(&mut d)?;
+    fn decode<D: Read>(d: &mut D) -> Result<Self, Error> {
+        let n = ReadExt::read_u8(d)?;
         match n {
             0xFF => {
-                let x = ReadExt::read_u64(&mut d)?;
+                let x = ReadExt::read_u64(d)?;
                 if x < 0x100000000 {
                     return Err(Error::new(ErrorKind::Other, "Non-minimal VarInt"))
                 }
@@ -346,7 +346,7 @@ impl Decodable for VarInt {
             }
 
             0xFE => {
-                let x = ReadExt::read_u32(&mut d)?;
+                let x = ReadExt::read_u32(d)?;
                 if x < 0x10000 {
                     return Err(Error::new(ErrorKind::Other, "Non-minimal VarInt"))
                 }
@@ -354,7 +354,7 @@ impl Decodable for VarInt {
             }
 
             0xFD => {
-                let x = ReadExt::read_u16(&mut d)?;
+                let x = ReadExt::read_u16(d)?;
                 if x < 0xFD {
                     return Err(Error::new(ErrorKind::Other, "Non-minimal VarInt"))
                 }
@@ -371,10 +371,10 @@ macro_rules! tuple_encode {
         impl<$($x: Encodable),*> Encodable for ($($x),*) {
             #[inline]
             #[allow(non_snake_case)]
-            fn encode<S: Write>(&self, mut s: S) -> Result<usize, Error> {
+            fn encode<S: Write>(&self, s: &mut S) -> Result<usize, Error> {
                 let &($(ref $x),*) = self;
                 let mut len = 0;
-                $(len += $x.encode(&mut s)?;)*
+                $(len += $x.encode(s)?;)*
                 Ok(len)
             }
         }
@@ -382,8 +382,8 @@ macro_rules! tuple_encode {
         impl<$($x: Decodable),*> Decodable for ($($x),*) {
             #[inline]
             #[allow(non_snake_case)]
-            fn decode<D: Read>(mut d: D) -> Result<Self, Error> {
-                Ok(($({let $x = Decodable::decode(&mut d)?; $x }),*))
+            fn decode<D: Read>(d: &mut D) -> Result<Self, Error> {
+                Ok(($({let $x = Decodable::decode(d)?; $x }),*))
             }
         }
     )
@@ -406,7 +406,7 @@ macro_rules! encode_payload {
 // Implementations for some primitive types.
 impl Encodable for usize {
     #[inline]
-    fn encode<S: WriteExt>(&self, mut s: S) -> Result<usize, Error> {
+    fn encode<S: WriteExt>(&self, s: &mut S) -> Result<usize, Error> {
         s.write_u64(*self as u64)?;
         Ok(8)
     }
@@ -414,14 +414,14 @@ impl Encodable for usize {
 
 impl Decodable for usize {
     #[inline]
-    fn decode<D: Read>(mut d: D) -> Result<Self, Error> {
-        Ok(ReadExt::read_u64(&mut d)? as usize)
+    fn decode<D: Read>(d: &mut D) -> Result<Self, Error> {
+        Ok(ReadExt::read_u64(d)? as usize)
     }
 }
 
 impl Encodable for f64 {
     #[inline]
-    fn encode<S: WriteExt>(&self, mut s: S) -> Result<usize, Error> {
+    fn encode<S: WriteExt>(&self, s: &mut S) -> Result<usize, Error> {
         s.write_f64(*self)?;
         Ok(core::mem::size_of::<f64>())
     }
@@ -429,14 +429,14 @@ impl Encodable for f64 {
 
 impl Decodable for f64 {
     #[inline]
-    fn decode<D: Read>(mut d: D) -> Result<Self, Error> {
-        ReadExt::read_f64(&mut d)
+    fn decode<D: Read>(d: &mut D) -> Result<Self, Error> {
+        ReadExt::read_f64(d)
     }
 }
 
 impl Encodable for f32 {
     #[inline]
-    fn encode<S: WriteExt>(&self, mut s: S) -> Result<usize, Error> {
+    fn encode<S: WriteExt>(&self, s: &mut S) -> Result<usize, Error> {
         s.write_f32(*self)?;
         Ok(core::mem::size_of::<f32>())
     }
@@ -444,14 +444,14 @@ impl Encodable for f32 {
 
 impl Decodable for f32 {
     #[inline]
-    fn decode<D: Read>(mut d: D) -> Result<Self, Error> {
-        ReadExt::read_f32(&mut d)
+    fn decode<D: Read>(d: &mut D) -> Result<Self, Error> {
+        ReadExt::read_f32(d)
     }
 }
 
 impl Encodable for bool {
     #[inline]
-    fn encode<S: WriteExt>(&self, mut s: S) -> Result<usize, Error> {
+    fn encode<S: WriteExt>(&self, s: &mut S) -> Result<usize, Error> {
         s.write_bool(*self)?;
         Ok(1)
     }
@@ -459,18 +459,18 @@ impl Encodable for bool {
 
 impl Decodable for bool {
     #[inline]
-    fn decode<D: Read>(mut d: D) -> Result<Self, Error> {
-        ReadExt::read_bool(&mut d)
+    fn decode<D: Read>(d: &mut D) -> Result<Self, Error> {
+        ReadExt::read_bool(d)
     }
 }
 
 impl<T: Encodable> Encodable for Vec<T> {
     #[inline]
-    fn encode<S: Write>(&self, mut s: S) -> Result<usize, Error> {
+    fn encode<S: Write>(&self, s: &mut S) -> Result<usize, Error> {
         let mut len = 0;
-        len += VarInt(self.len() as u64).encode(&mut s)?;
+        len += VarInt(self.len() as u64).encode(s)?;
         for val in self {
-            len += val.encode(&mut s)?;
+            len += val.encode(s)?;
         }
         Ok(len)
     }
@@ -478,12 +478,12 @@ impl<T: Encodable> Encodable for Vec<T> {
 
 impl<T: Decodable> Decodable for Vec<T> {
     #[inline]
-    fn decode<D: Read>(mut d: D) -> Result<Self, Error> {
-        let len = VarInt::decode(&mut d)?.0;
+    fn decode<D: Read>(d: &mut D) -> Result<Self, Error> {
+        let len = VarInt::decode(d)?.0;
         let mut ret = Vec::new();
         ret.try_reserve(len as usize).map_err(|_| std::io::ErrorKind::InvalidData)?;
         for _ in 0..len {
-            ret.push(Decodable::decode(&mut d)?);
+            ret.push(Decodable::decode(d)?);
         }
         Ok(ret)
     }
@@ -491,11 +491,11 @@ impl<T: Decodable> Decodable for Vec<T> {
 
 impl<T: Encodable> Encodable for VecDeque<T> {
     #[inline]
-    fn encode<S: Write>(&self, mut s: S) -> Result<usize, Error> {
+    fn encode<S: Write>(&self, s: &mut S) -> Result<usize, Error> {
         let mut len = 0;
-        len += VarInt(self.len() as u64).encode(&mut s)?;
+        len += VarInt(self.len() as u64).encode(s)?;
         for val in self {
-            len += val.encode(&mut s)?;
+            len += val.encode(s)?;
         }
         Ok(len)
     }
@@ -503,34 +503,34 @@ impl<T: Encodable> Encodable for VecDeque<T> {
 
 impl<T: Decodable> Decodable for VecDeque<T> {
     #[inline]
-    fn decode<D: Read>(mut d: D) -> Result<Self, Error> {
-        let len = VarInt::decode(&mut d)?.0;
+    fn decode<D: Read>(d: &mut D) -> Result<Self, Error> {
+        let len = VarInt::decode(d)?.0;
         let mut ret = VecDeque::new();
         ret.try_reserve(len as usize).map_err(|_| std::io::ErrorKind::InvalidData)?;
         for _ in 0..len {
-            ret.push_back(Decodable::decode(&mut d)?);
+            ret.push_back(Decodable::decode(d)?);
         }
         Ok(ret)
     }
 }
 
 impl<T: Encodable> Encodable for Option<T> {
-    fn encode<S: Write>(&self, mut s: S) -> Result<usize, Error> {
+    fn encode<S: Write>(&self, s: &mut S) -> Result<usize, Error> {
         let mut len = 0;
         if let Some(v) = self {
-            len += true.encode(&mut s)?;
-            len += v.encode(&mut s)?;
+            len += true.encode(s)?;
+            len += v.encode(s)?;
         } else {
-            len += false.encode(&mut s)?;
+            len += false.encode(s)?;
         }
         Ok(len)
     }
 }
 
 impl<T: Decodable> Decodable for Option<T> {
-    fn decode<D: Read>(mut d: D) -> Result<Self, Error> {
-        let valid: bool = Decodable::decode(&mut d)?;
-        let val = if valid { Some(Decodable::decode(&mut d)?) } else { None };
+    fn decode<D: Read>(d: &mut D) -> Result<Self, Error> {
+        let valid: bool = Decodable::decode(d)?;
+        let val = if valid { Some(Decodable::decode(d)?) } else { None };
         Ok(val)
     }
 }
@@ -540,10 +540,10 @@ where
     T: Encodable,
 {
     #[inline]
-    fn encode<S: Write>(&self, mut s: S) -> Result<usize, Error> {
+    fn encode<S: Write>(&self, s: &mut S) -> Result<usize, Error> {
         let mut len = 0;
         for elem in self.iter() {
-            len += elem.encode(&mut s)?;
+            len += elem.encode(s)?;
         }
         Ok(len)
     }
@@ -554,10 +554,10 @@ where
     T: Decodable + core::fmt::Debug,
 {
     #[inline]
-    fn decode<D: Read>(mut d: D) -> Result<Self, Error> {
+    fn decode<D: Read>(d: &mut D) -> Result<Self, Error> {
         let mut ret = vec![];
         for _ in 0..N {
-            ret.push(Decodable::decode(&mut d)?);
+            ret.push(Decodable::decode(d)?);
         }
 
         Ok(ret.try_into().unwrap())
@@ -566,10 +566,10 @@ where
 
 impl Encodable for String {
     #[inline]
-    fn encode<S: Write>(&self, mut s: S) -> Result<usize, Error> {
+    fn encode<S: Write>(&self, s: &mut S) -> Result<usize, Error> {
         let b = self.as_bytes();
         let b_len = b.len();
-        let vi_len = VarInt(b_len as u64).encode(&mut s)?;
+        let vi_len = VarInt(b_len as u64).encode(s)?;
         s.write_slice(b)?;
         Ok(vi_len + b_len)
     }
@@ -577,10 +577,10 @@ impl Encodable for String {
 
 impl Encodable for &str {
     #[inline]
-    fn encode<S: Write>(&self, mut s: S) -> Result<usize, Error> {
+    fn encode<S: Write>(&self, s: &mut S) -> Result<usize, Error> {
         let b = self.as_bytes();
         let b_len = b.len();
-        let vi_len = VarInt(b_len as u64).encode(&mut s)?;
+        let vi_len = VarInt(b_len as u64).encode(s)?;
         s.write_slice(b)?;
         Ok(vi_len + b_len)
     }
@@ -588,7 +588,7 @@ impl Encodable for &str {
 
 impl Decodable for String {
     #[inline]
-    fn decode<D: Read>(d: D) -> Result<String, Error> {
+    fn decode<D: Read>(d: &mut D) -> Result<String, Error> {
         match String::from_utf8(Decodable::decode(d)?) {
             Ok(v) => Ok(v),
             Err(_) => Err(Error::new(ErrorKind::Other, "Invalid UTF-8 for string")),

@@ -28,8 +28,8 @@ use futures_lite::{AsyncRead, AsyncWrite};
 use crate::{Decodable, Encodable};
 
 impl Encodable for semver::Prerelease {
-    fn encode<S: Write>(&self, mut s: S) -> Result<usize> {
-        self.as_str().encode(&mut s)
+    fn encode<S: Write>(&self, s: &mut S) -> Result<usize> {
+        self.as_str().encode(s)
     }
 }
 
@@ -42,8 +42,8 @@ impl AsyncEncodable for semver::Prerelease {
 }
 
 impl Decodable for semver::Prerelease {
-    fn decode<D: Read>(mut d: D) -> Result<Self> {
-        let s: String = Decodable::decode(&mut d)?;
+    fn decode<D: Read>(d: &mut D) -> Result<Self> {
+        let s: String = Decodable::decode(d)?;
 
         match Self::new(&s) {
             Ok(v) => Ok(v),
@@ -66,8 +66,8 @@ impl AsyncDecodable for semver::Prerelease {
 }
 
 impl Encodable for semver::BuildMetadata {
-    fn encode<S: Write>(&self, mut s: S) -> Result<usize> {
-        self.as_str().encode(&mut s)
+    fn encode<S: Write>(&self, s: &mut S) -> Result<usize> {
+        self.as_str().encode(s)
     }
 }
 
@@ -80,8 +80,8 @@ impl AsyncEncodable for semver::BuildMetadata {
 }
 
 impl Decodable for semver::BuildMetadata {
-    fn decode<D: Read>(mut d: D) -> Result<Self> {
-        let s: String = Decodable::decode(&mut d)?;
+    fn decode<D: Read>(d: &mut D) -> Result<Self> {
+        let s: String = Decodable::decode(d)?;
 
         match Self::new(&s) {
             Ok(v) => Ok(v),
@@ -108,13 +108,13 @@ impl AsyncDecodable for semver::BuildMetadata {
 }
 
 impl Encodable for semver::Version {
-    fn encode<S: Write>(&self, mut s: S) -> Result<usize> {
+    fn encode<S: Write>(&self, s: &mut S) -> Result<usize> {
         let mut len = 0;
-        len += self.major.encode(&mut s)?;
-        len += self.minor.encode(&mut s)?;
-        len += self.patch.encode(&mut s)?;
-        len += self.pre.encode(&mut s)?;
-        len += self.build.encode(&mut s)?;
+        len += self.major.encode(s)?;
+        len += self.minor.encode(s)?;
+        len += self.patch.encode(s)?;
+        len += self.pre.encode(s)?;
+        len += self.build.encode(s)?;
         Ok(len)
     }
 }
@@ -134,12 +134,12 @@ impl AsyncEncodable for semver::Version {
 }
 
 impl Decodable for semver::Version {
-    fn decode<D: Read>(mut d: D) -> Result<Self> {
-        let major: u64 = Decodable::decode(&mut d)?;
-        let minor: u64 = Decodable::decode(&mut d)?;
-        let patch: u64 = Decodable::decode(&mut d)?;
-        let pre: semver::Prerelease = Decodable::decode(&mut d)?;
-        let build: semver::BuildMetadata = Decodable::decode(&mut d)?;
+    fn decode<D: Read>(d: &mut D) -> Result<Self> {
+        let major: u64 = Decodable::decode(d)?;
+        let minor: u64 = Decodable::decode(d)?;
+        let patch: u64 = Decodable::decode(d)?;
+        let pre: semver::Prerelease = Decodable::decode(d)?;
+        let build: semver::BuildMetadata = Decodable::decode(d)?;
         Ok(Self { major, minor, patch, pre, build })
     }
 }

@@ -28,7 +28,7 @@ use crate::{Decodable, Encodable, ReadExt, WriteExt};
 
 #[cfg(feature = "blake3")]
 impl Encodable for blake3::Hash {
-    fn encode<S: Write>(&self, mut s: S) -> Result<usize> {
+    fn encode<S: Write>(&self, s: &mut S) -> Result<usize> {
         s.write_slice(self.as_bytes())?;
         Ok(blake3::OUT_LEN)
     }
@@ -45,7 +45,7 @@ impl AsyncEncodable for blake3::Hash {
 
 #[cfg(feature = "blake3")]
 impl Decodable for blake3::Hash {
-    fn decode<D: Read>(mut d: D) -> Result<Self> {
+    fn decode<D: Read>(d: &mut D) -> Result<Self> {
         let mut bytes = [0u8; blake3::OUT_LEN];
         d.read_slice(&mut bytes)?;
         Ok(bytes.into())

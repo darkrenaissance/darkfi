@@ -190,25 +190,25 @@ impl BlockRanks {
 // Note: Doing all the imports here as this might get obselete if
 // we implemented Encodable/Decodable for num_bigint::BigUint.
 impl darkfi_serial::Encodable for BlockRanks {
-    fn encode<S: std::io::Write>(&self, mut s: S) -> std::io::Result<usize> {
+    fn encode<S: std::io::Write>(&self, s: &mut S) -> std::io::Result<usize> {
         let mut len = 0;
-        len += self.target_rank.to_bytes_be().encode(&mut s)?;
-        len += self.targets_rank.to_bytes_be().encode(&mut s)?;
-        len += self.hash_rank.to_bytes_be().encode(&mut s)?;
-        len += self.hashes_rank.to_bytes_be().encode(&mut s)?;
+        len += self.target_rank.to_bytes_be().encode(s)?;
+        len += self.targets_rank.to_bytes_be().encode(s)?;
+        len += self.hash_rank.to_bytes_be().encode(s)?;
+        len += self.hashes_rank.to_bytes_be().encode(s)?;
         Ok(len)
     }
 }
 
 impl darkfi_serial::Decodable for BlockRanks {
-    fn decode<D: std::io::Read>(mut d: D) -> std::io::Result<Self> {
-        let bytes: Vec<u8> = darkfi_serial::Decodable::decode(&mut d)?;
+    fn decode<D: std::io::Read>(d: &mut D) -> std::io::Result<Self> {
+        let bytes: Vec<u8> = darkfi_serial::Decodable::decode(d)?;
         let target_rank: BigUint = BigUint::from_bytes_be(&bytes);
-        let bytes: Vec<u8> = darkfi_serial::Decodable::decode(&mut d)?;
+        let bytes: Vec<u8> = darkfi_serial::Decodable::decode(d)?;
         let targets_rank: BigUint = BigUint::from_bytes_be(&bytes);
-        let bytes: Vec<u8> = darkfi_serial::Decodable::decode(&mut d)?;
+        let bytes: Vec<u8> = darkfi_serial::Decodable::decode(d)?;
         let hash_rank: BigUint = BigUint::from_bytes_be(&bytes);
-        let bytes: Vec<u8> = darkfi_serial::Decodable::decode(&mut d)?;
+        let bytes: Vec<u8> = darkfi_serial::Decodable::decode(d)?;
         let hashes_rank: BigUint = BigUint::from_bytes_be(&bytes);
         let ret = Self { target_rank, targets_rank, hash_rank, hashes_rank };
         Ok(ret)
@@ -259,26 +259,26 @@ impl BlockDifficulty {
 // Note: Doing all the imports here as this might get obselete if
 // we implemented Encodable/Decodable for num_bigint::BigUint.
 impl darkfi_serial::Encodable for BlockDifficulty {
-    fn encode<S: std::io::Write>(&self, mut s: S) -> std::io::Result<usize> {
+    fn encode<S: std::io::Write>(&self, s: &mut S) -> std::io::Result<usize> {
         let mut len = 0;
-        len += self.height.encode(&mut s)?;
-        len += self.timestamp.encode(&mut s)?;
-        len += self.difficulty.to_bytes_be().encode(&mut s)?;
-        len += self.cummulative_difficulty.to_bytes_be().encode(&mut s)?;
-        len += self.ranks.encode(&mut s)?;
+        len += self.height.encode(s)?;
+        len += self.timestamp.encode(s)?;
+        len += self.difficulty.to_bytes_be().encode(s)?;
+        len += self.cummulative_difficulty.to_bytes_be().encode(s)?;
+        len += self.ranks.encode(s)?;
         Ok(len)
     }
 }
 
 impl darkfi_serial::Decodable for BlockDifficulty {
-    fn decode<D: std::io::Read>(mut d: D) -> std::io::Result<Self> {
-        let height: u32 = darkfi_serial::Decodable::decode(&mut d)?;
-        let timestamp: Timestamp = darkfi_serial::Decodable::decode(&mut d)?;
-        let bytes: Vec<u8> = darkfi_serial::Decodable::decode(&mut d)?;
+    fn decode<D: std::io::Read>(d: &mut D) -> std::io::Result<Self> {
+        let height: u32 = darkfi_serial::Decodable::decode(d)?;
+        let timestamp: Timestamp = darkfi_serial::Decodable::decode(d)?;
+        let bytes: Vec<u8> = darkfi_serial::Decodable::decode(d)?;
         let difficulty: BigUint = BigUint::from_bytes_be(&bytes);
-        let bytes: Vec<u8> = darkfi_serial::Decodable::decode(&mut d)?;
+        let bytes: Vec<u8> = darkfi_serial::Decodable::decode(d)?;
         let cummulative_difficulty: BigUint = BigUint::from_bytes_be(&bytes);
-        let ranks: BlockRanks = darkfi_serial::Decodable::decode(&mut d)?;
+        let ranks: BlockRanks = darkfi_serial::Decodable::decode(d)?;
         let ret = Self { height, timestamp, difficulty, cummulative_difficulty, ranks };
         Ok(ret)
     }

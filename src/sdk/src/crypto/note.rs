@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::io::Cursor;
+
 use chacha20poly1305::{AeadInPlace, ChaCha20Poly1305, KeyInit};
 use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 use pasta_curves::{group::ff::Field, pallas};
@@ -75,7 +77,10 @@ impl AeadEncryptedNote {
             &[],
             &mut plaintext,
         ) {
-            Ok(()) => Ok(D::decode(&plaintext[..ct_len - AEAD_TAG_SIZE])?),
+            Ok(()) => {
+                let mut cursor = Cursor::new(&plaintext[..ct_len - AEAD_TAG_SIZE]);
+                Ok(D::decode(&mut cursor)?)
+            }
             Err(e) => Err(ContractError::IoError(format!("Note decrypt failed: {}", e))),
         }
     }

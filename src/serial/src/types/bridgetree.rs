@@ -29,8 +29,8 @@ use futures_lite::{AsyncRead, AsyncWrite};
 use crate::{Decodable, Encodable};
 
 impl Encodable for bridgetree::Position {
-    fn encode<S: Write>(&self, mut s: S) -> Result<usize> {
-        u64::from(*self).encode(&mut s)
+    fn encode<S: Write>(&self, s: &mut S) -> Result<usize> {
+        u64::from(*self).encode(s)
     }
 }
 
@@ -43,8 +43,8 @@ impl AsyncEncodable for bridgetree::Position {
 }
 
 impl Decodable for bridgetree::Position {
-    fn decode<D: Read>(mut d: D) -> Result<Self> {
-        let dec: u64 = Decodable::decode(&mut d)?;
+    fn decode<D: Read>(d: &mut D) -> Result<Self> {
+        let dec: u64 = Decodable::decode(d)?;
         Ok(Self::from(dec))
     }
 }
@@ -59,10 +59,10 @@ impl AsyncDecodable for bridgetree::Position {
 }
 
 impl Encodable for bridgetree::Address {
-    fn encode<S: Write>(&self, mut s: S) -> Result<usize> {
+    fn encode<S: Write>(&self, s: &mut S) -> Result<usize> {
         let mut len = 0;
-        len += u8::from(self.level()).encode(&mut s)?;
-        len += self.index().encode(&mut s)?;
+        len += u8::from(self.level()).encode(s)?;
+        len += self.index().encode(s)?;
         Ok(len)
     }
 }
@@ -79,9 +79,9 @@ impl AsyncEncodable for bridgetree::Address {
 }
 
 impl Decodable for bridgetree::Address {
-    fn decode<D: Read>(mut d: D) -> Result<Self> {
-        let level: u8 = Decodable::decode(&mut d)?;
-        let index = Decodable::decode(&mut d)?;
+    fn decode<D: Read>(d: &mut D) -> Result<Self> {
+        let level: u8 = Decodable::decode(d)?;
+        let index = Decodable::decode(d)?;
         Ok(Self::from_parts(level.into(), index))
     }
 }
@@ -97,11 +97,11 @@ impl AsyncDecodable for bridgetree::Address {
 }
 
 impl<H: Encodable + Ord + Clone> Encodable for bridgetree::NonEmptyFrontier<H> {
-    fn encode<S: Write>(&self, mut s: S) -> Result<usize> {
+    fn encode<S: Write>(&self, s: &mut S) -> Result<usize> {
         let mut len = 0;
-        len += self.position().encode(&mut s)?;
-        len += self.leaf().encode(&mut s)?;
-        len += self.ommers().to_vec().encode(&mut s)?;
+        len += self.position().encode(s)?;
+        len += self.leaf().encode(s)?;
+        len += self.ommers().to_vec().encode(s)?;
         Ok(len)
     }
 }
@@ -121,10 +121,10 @@ impl<H: AsyncEncodable + Sync + Send + Ord + Clone> AsyncEncodable
 }
 
 impl<H: Decodable + Ord + Clone> Decodable for bridgetree::NonEmptyFrontier<H> {
-    fn decode<D: Read>(mut d: D) -> Result<Self> {
-        let position = Decodable::decode(&mut d)?;
-        let leaf = Decodable::decode(&mut d)?;
-        let ommers = Decodable::decode(&mut d)?;
+    fn decode<D: Read>(d: &mut D) -> Result<Self> {
+        let position = Decodable::decode(d)?;
+        let leaf = Decodable::decode(d)?;
+        let ommers = Decodable::decode(d)?;
 
         match Self::from_parts(position, leaf, ommers) {
             Ok(v) => Ok(v),
@@ -149,12 +149,12 @@ impl<H: AsyncDecodable + Send + Ord + Clone> AsyncDecodable for bridgetree::NonE
 }
 
 impl<H: Encodable + Ord + Clone> Encodable for bridgetree::MerkleBridge<H> {
-    fn encode<S: Write>(&self, mut s: S) -> Result<usize> {
+    fn encode<S: Write>(&self, s: &mut S) -> Result<usize> {
         let mut len = 0;
-        len += self.prior_position().encode(&mut s)?;
-        len += self.tracking().encode(&mut s)?;
-        len += self.ommers().encode(&mut s)?;
-        len += self.frontier().encode(&mut s)?;
+        len += self.prior_position().encode(s)?;
+        len += self.tracking().encode(s)?;
+        len += self.ommers().encode(s)?;
+        len += self.frontier().encode(s)?;
         Ok(len)
     }
 }
@@ -173,11 +173,11 @@ impl<H: AsyncEncodable + Sync + Send + Ord + Clone> AsyncEncodable for bridgetre
 }
 
 impl<H: Decodable + Ord + Clone> Decodable for bridgetree::MerkleBridge<H> {
-    fn decode<D: Read>(mut d: D) -> Result<Self> {
-        let prior_position = Decodable::decode(&mut d)?;
-        let tracking = Decodable::decode(&mut d)?;
-        let ommers = Decodable::decode(&mut d)?;
-        let frontier = Decodable::decode(&mut d)?;
+    fn decode<D: Read>(d: &mut D) -> Result<Self> {
+        let prior_position = Decodable::decode(d)?;
+        let tracking = Decodable::decode(d)?;
+        let ommers = Decodable::decode(d)?;
+        let frontier = Decodable::decode(d)?;
         Ok(Self::from_parts(prior_position, tracking, ommers, frontier))
     }
 }
@@ -195,12 +195,12 @@ impl<H: AsyncDecodable + Send + Ord + Clone> AsyncDecodable for bridgetree::Merk
 }
 
 impl<C: Encodable> Encodable for bridgetree::Checkpoint<C> {
-    fn encode<S: Write>(&self, mut s: S) -> Result<usize> {
+    fn encode<S: Write>(&self, s: &mut S) -> Result<usize> {
         let mut len = 0;
-        len += self.id().encode(&mut s)?;
-        len += self.bridges_len().encode(&mut s)?;
-        len += self.marked().encode(&mut s)?;
-        len += self.forgotten().encode(&mut s)?;
+        len += self.id().encode(s)?;
+        len += self.bridges_len().encode(s)?;
+        len += self.marked().encode(s)?;
+        len += self.forgotten().encode(s)?;
         Ok(len)
     }
 }
@@ -219,11 +219,11 @@ impl<C: AsyncEncodable + Sync> AsyncEncodable for bridgetree::Checkpoint<C> {
 }
 
 impl<C: Decodable> Decodable for bridgetree::Checkpoint<C> {
-    fn decode<D: Read>(mut d: D) -> Result<Self> {
-        let id = Decodable::decode(&mut d)?;
-        let bridges_len = Decodable::decode(&mut d)?;
-        let marked = Decodable::decode(&mut d)?;
-        let forgotten = Decodable::decode(&mut d)?;
+    fn decode<D: Read>(d: &mut D) -> Result<Self> {
+        let id = Decodable::decode(d)?;
+        let bridges_len = Decodable::decode(d)?;
+        let marked = Decodable::decode(d)?;
+        let forgotten = Decodable::decode(d)?;
         Ok(Self::from_parts(id, bridges_len, marked, forgotten))
     }
 }
@@ -243,13 +243,13 @@ impl<C: AsyncDecodable + Send> AsyncDecodable for bridgetree::Checkpoint<C> {
 impl<H: Encodable + Ord + Clone, C: Encodable + Debug, const DEPTH: u8> Encodable
     for bridgetree::BridgeTree<H, C, DEPTH>
 {
-    fn encode<S: Write>(&self, mut s: S) -> Result<usize> {
+    fn encode<S: Write>(&self, s: &mut S) -> Result<usize> {
         let mut len = 0;
-        len += self.prior_bridges().to_vec().encode(&mut s)?;
-        len += self.current_bridge().encode(&mut s)?;
-        len += self.marked_indices().encode(&mut s)?;
-        len += self.checkpoints().encode(&mut s)?;
-        len += self.max_checkpoints().encode(&mut s)?;
+        len += self.prior_bridges().to_vec().encode(s)?;
+        len += self.current_bridge().encode(s)?;
+        len += self.marked_indices().encode(s)?;
+        len += self.checkpoints().encode(s)?;
+        len += self.max_checkpoints().encode(s)?;
         Ok(len)
     }
 }
@@ -279,12 +279,12 @@ impl<
         const DEPTH: u8,
     > Decodable for bridgetree::BridgeTree<H, C, DEPTH>
 {
-    fn decode<D: Read>(mut d: D) -> Result<Self> {
-        let prior_bridges = Decodable::decode(&mut d)?;
-        let current_bridge = Decodable::decode(&mut d)?;
-        let saved = Decodable::decode(&mut d)?;
-        let checkpoints = Decodable::decode(&mut d)?;
-        let max_checkpoints = Decodable::decode(&mut d)?;
+    fn decode<D: Read>(d: &mut D) -> Result<Self> {
+        let prior_bridges = Decodable::decode(d)?;
+        let current_bridge = Decodable::decode(d)?;
+        let saved = Decodable::decode(d)?;
+        let checkpoints = Decodable::decode(d)?;
+        let max_checkpoints = Decodable::decode(d)?;
         match Self::from_parts(prior_bridges, current_bridge, saved, checkpoints, max_checkpoints) {
             Ok(v) => Ok(v),
             Err(_) => Err(Error::new(ErrorKind::Other, "BridgeTreeError")),

@@ -51,7 +51,7 @@ fn named_fields(
             );
 
             variant_body.extend(quote! {
-                len += #field_ident.encode(&mut s)?;
+                len += #field_ident.encode(s)?;
             })
         }
     }
@@ -94,7 +94,7 @@ fn unnamed_fields(
             );
 
             variant_body.extend(quote! {
-                len += #field_ident.encode(&mut s)?;
+                len += #field_ident.encode(s)?;
             })
         }
     }
@@ -156,7 +156,7 @@ pub fn enum_ser(input: &ItemEnum, cratename: Ident) -> syn::Result<TokenStream> 
 
     Ok(quote! {
         impl #impl_generics #cratename::Encodable for #enum_ident #ty_generics #where_clause {
-            fn encode<S: std::io::Write>(&self, mut s: S) -> ::core::result::Result<usize, std::io::Error> {
+            fn encode<S: std::io::Write>(&self, s: &mut S) -> ::core::result::Result<usize, std::io::Error> {
                 let variant_idx: u8 = match self {
                     #all_variants_idx_body
                 };
@@ -210,7 +210,7 @@ pub fn enum_de(input: &ItemEnum, cratename: Ident) -> syn::Result<TokenStream> {
                         );
 
                         variant_header.extend(quote! {
-                            #field_name: #cratename::Decodable::decode(&mut d)?,
+                            #field_name: #cratename::Decodable::decode(d)?,
                         });
                     }
                 }
@@ -230,7 +230,7 @@ pub fn enum_de(input: &ItemEnum, cratename: Ident) -> syn::Result<TokenStream> {
                         );
 
                         variant_header.extend(quote! {
-                            #cratename::Decodable::decode(&mut d)?,
+                            #cratename::Decodable::decode(d)?,
                         });
                     }
                 }
@@ -253,8 +253,8 @@ pub fn enum_de(input: &ItemEnum, cratename: Ident) -> syn::Result<TokenStream> {
 
     Ok(quote! {
     impl #impl_generics #cratename::Decodable for #name #ty_generics #where_clause {
-        fn decode<D: std::io::Read>(mut d: D) -> ::core::result::Result<Self, std::io::Error> {
-            let variant_tag: u8 = #cratename::Decodable::decode(&mut d)?;
+        fn decode<D: std::io::Read>(d: &mut D) -> ::core::result::Result<Self, std::io::Error> {
+            let variant_tag: u8 = #cratename::Decodable::decode(d)?;
 
             let mut return_value =
                 #variant_arms {
@@ -289,7 +289,7 @@ pub fn struct_ser(input: &ItemStruct, cratename: Ident) -> syn::Result<TokenStre
 
                 let field_name = field.ident.as_ref().unwrap();
                 let delta = quote! {
-                    len += self.#field_name.encode(&mut s)?;
+                    len += self.#field_name.encode(s)?;
                 };
                 body.extend(delta);
 
@@ -309,7 +309,7 @@ pub fn struct_ser(input: &ItemStruct, cratename: Ident) -> syn::Result<TokenStre
                     span: Span::call_site(),
                 };
                 let delta = quote! {
-                    len += self.#field_idx.encode(&mut s)?;
+                    len += self.#field_idx.encode(s)?;
                 };
                 body.extend(delta);
             }
@@ -319,7 +319,7 @@ pub fn struct_ser(input: &ItemStruct, cratename: Ident) -> syn::Result<TokenStre
 
     Ok(quote! {
         impl #impl_generics #cratename::Encodable for #name #ty_generics #where_clause {
-            fn encode<S: std::io::Write>(&self, mut s: S) -> ::core::result::Result<usize, std::io::Error> {
+            fn encode<S: std::io::Write>(&self, s: &mut S) -> ::core::result::Result<usize, std::io::Error> {
                 let mut len = 0;
                 #body
                 Ok(len)
@@ -357,7 +357,7 @@ pub fn struct_de(input: &ItemStruct, cratename: Ident) -> syn::Result<TokenStrea
                     );
 
                     quote! {
-                        #field_name: #cratename::Decodable::decode(&mut d)?,
+                        #field_name: #cratename::Decodable::decode(d)?,
                     }
                 };
                 body.extend(delta);
@@ -370,7 +370,7 @@ pub fn struct_de(input: &ItemStruct, cratename: Ident) -> syn::Result<TokenStrea
             let mut body = TokenStream::new();
             for _ in 0..fields.unnamed.len() {
                 let delta = quote! {
-                    #cratename::Decodable::decode(&mut d)?,
+                    #cratename::Decodable::decode(d)?,
                 };
                 body.extend(delta);
             }
@@ -388,7 +388,7 @@ pub fn struct_de(input: &ItemStruct, cratename: Ident) -> syn::Result<TokenStrea
     if let Some(method_ident) = init_method {
         Ok(quote! {
         impl #impl_generics #cratename::Decodable for #name #ty_generics #where_clause {
-            fn decode<D: std::io::Read>(mut d: D) -> ::core::result::Result<Self, std::io::Error> {
+            fn decode<D: std::io::Read>(d: &mut D) -> ::core::result::Result<Self, std::io::Error> {
                 let mut return_value = #return_value;
                 return_value.#method_ident();
                 Ok(return_value)
@@ -398,7 +398,7 @@ pub fn struct_de(input: &ItemStruct, cratename: Ident) -> syn::Result<TokenStrea
     } else {
         Ok(quote! {
             impl #impl_generics #cratename::Decodable for #name #ty_generics #where_clause {
-                fn decode<D: std::io::Read>(mut d: D) -> ::core::result::Result<Self, std::io::Error> {
+                fn decode<D: std::io::Read>(d: &mut D) -> ::core::result::Result<Self, std::io::Error> {
                     Ok(#return_value)
                 }
             }
