@@ -213,7 +213,7 @@ impl Drk {
         // Decode provided amount
         let amount = decode_base10(amount, BALANCE_BASE10_DECIMALS, false)?;
 
-        // Grab token ID mint authority and attribtes
+        // Grab token ID mint authority and attributes
         let token_mint_authority = self.get_token_mint_authority(&token_id).await?;
         let token_attrs =
             self.derive_token_attributes(token_mint_authority.1, token_mint_authority.2);
@@ -329,7 +329,7 @@ impl Drk {
 
     /// Create a token freeze transaction. Returns the transaction object on success.
     pub async fn freeze_token(&self, token_id: TokenId) -> Result<Transaction> {
-        // Grab token ID mint authority and attribtes
+        // Grab token ID mint authority and attributes
         let token_mint_authority = self.get_token_mint_authority(&token_id).await?;
         let token_attrs =
             self.derive_token_attributes(token_mint_authority.1, token_mint_authority.2);

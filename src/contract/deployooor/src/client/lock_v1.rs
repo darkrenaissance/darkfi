@@ -18,7 +18,7 @@
 
 use darkfi::Result;
 use darkfi_sdk::crypto::Keypair;
-use log::info;
+use log::debug;
 
 use crate::model::LockParamsV1;
 
@@ -34,7 +34,7 @@ pub struct LockCallBuilder {
 
 impl LockCallBuilder {
     pub fn build(&self) -> Result<LockCallDebris> {
-        info!("Building Deployooor::LockV1 contract call");
+        debug!("Building Deployooor::LockV1 contract call");
 
         let params = LockParamsV1 { public_key: self.deploy_keypair.public };
         let debris = LockCallDebris { params };

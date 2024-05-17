@@ -1295,12 +1295,15 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             };
 
             println!("{}", base64::encode(&serialize_async(&tx).await));
+
             Ok(())
         }
 
         Subcmd::Inspect => {
             let tx = parse_tx_from_stdin().await?;
+
             println!("{tx:#?}");
+
             Ok(())
         }
 
@@ -1730,7 +1733,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 let drk =
                     Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
 
-                let tx = match drk.deploy_contract(deploy_auth, wasm_bin, deploy_ix).await {
+                let mut tx = match drk.deploy_contract(deploy_auth, wasm_bin, deploy_ix).await {
                     Ok(v) => v,
                     Err(e) => {
                         eprintln!("Error creating contract deployment tx: {}", e);
@@ -1738,7 +1741,13 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     }
                 };
 
+                if let Err(e) = drk.attach_fee(&mut tx).await {
+                    eprintln!("Failed to attach the fee call to the transaction: {e:?}");
+                    exit(2);
+                };
+
                 println!("{}", base64::encode(&serialize_async(&tx).await));
+
                 Ok(())
             }
 
@@ -1746,7 +1755,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 let drk =
                     Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
 
-                let tx = match drk.lock_contract(deploy_auth).await {
+                let mut tx = match drk.lock_contract(deploy_auth).await {
                     Ok(v) => v,
                     Err(e) => {
                         eprintln!("Error creating contract lock tx: {}", e);
@@ -1754,7 +1763,13 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     }
                 };
 
+                if let Err(e) = drk.attach_fee(&mut tx).await {
+                    eprintln!("Failed to attach the fee call to the transaction: {e:?}");
+                    exit(2);
+                };
+
                 println!("{}", base64::encode(&serialize_async(&tx).await));
+
                 Ok(())
             }
         },

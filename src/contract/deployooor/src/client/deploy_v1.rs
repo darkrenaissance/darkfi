@@ -18,7 +18,7 @@
 
 use darkfi::Result;
 use darkfi_sdk::{crypto::Keypair, deploy::DeployParamsV1};
-use log::info;
+use log::debug;
 
 pub struct DeployCallDebris {
     pub params: DeployParamsV1,
@@ -36,7 +36,7 @@ pub struct DeployCallBuilder {
 
 impl DeployCallBuilder {
     pub fn build(&self) -> Result<DeployCallDebris> {
-        info!("Building Deployooor::DeployV1 contract call");
+        debug!("Building Deployooor::DeployV1 contract call");
         assert!(!self.wasm_bincode.is_empty());
 
         let params = DeployParamsV1 {

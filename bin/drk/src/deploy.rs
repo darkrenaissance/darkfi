@@ -136,7 +136,7 @@ impl Drk {
         Ok(keypair)
     }
 
-    /// Create a contract deployment transaction
+    /// Create a feeless contract deployment transaction.
     pub async fn deploy_contract(
         &self,
         deploy_auth: u64,
@@ -157,8 +157,6 @@ impl Drk {
         let mut tx_builder =
             TransactionBuilder::new(ContractCallLeaf { call, proofs: vec![] }, vec![])?;
 
-        // TODO: Tx fees
-
         let mut tx = tx_builder.build()?;
         let sigs = tx.create_sigs(&[deploy_keypair.secret])?;
         tx.signatures = vec![sigs];
@@ -166,7 +164,7 @@ impl Drk {
         Ok(tx)
     }
 
-    /// Create a contract redeployment lock transaction
+    /// Create a feeless contract redeployment lock transaction.
     pub async fn lock_contract(&self, deploy_auth: u64) -> Result<Transaction> {
         // Fetch the keypair
         let deploy_keypair = self.get_deploy_auth(deploy_auth).await?;
@@ -181,8 +179,6 @@ impl Drk {
         let call = ContractCall { contract_id: *DEPLOYOOOR_CONTRACT_ID, data };
         let mut tx_builder =
             TransactionBuilder::new(ContractCallLeaf { call, proofs: vec![] }, vec![])?;
-
-        // TODO: Tx fees
 
         let mut tx = tx_builder.build()?;
         let sigs = tx.create_sigs(&[deploy_keypair.secret])?;
