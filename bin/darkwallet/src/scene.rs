@@ -390,10 +390,7 @@ impl SceneNode {
         self.children.swap_remove(child_idx);
     }
 
-    pub fn get_children(
-        &self,
-        allowed_types: &[SceneNodeType],
-    ) -> Vec<SceneNodeInfo> {
+    pub fn get_children(&self, allowed_types: &[SceneNodeType]) -> Vec<SceneNodeInfo> {
         self.children
             .iter()
             .cloned()

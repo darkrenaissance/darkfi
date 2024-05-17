@@ -11,7 +11,7 @@ use std::{
     },
 };
 
-use crate::scene::SceneNodeId;
+use crate::{scene::SceneNodeId, expr::SExprCode};
 
 type Buffer = Arc<Vec<u8>>;
 
@@ -26,6 +26,7 @@ pub enum PropertyType {
     Enum = 5,
     Buffer = 6,
     SceneNodeId = 7,
+    SExpr = 8,
 }
 
 impl PropertyType {
@@ -39,6 +40,7 @@ impl PropertyType {
             Self::Enum => PropertyValue::Enum(String::new()),
             Self::Buffer => PropertyValue::Buffer(Arc::new(vec![])),
             Self::SceneNodeId => PropertyValue::SceneNodeId(0),
+            Self::SExpr => PropertyValue::SExpr(Arc::new(vec![])),
         }
     }
 }
@@ -51,7 +53,6 @@ pub enum PropertySubType {
     // Size of something in pixels
     Pixel = 2,
     ResourceId = 3,
-    PyExpr = 4,
 }
 
 #[derive(Debug, Clone)]
@@ -65,6 +66,7 @@ pub enum PropertyValue {
     Enum(String),
     Buffer(Arc<Vec<u8>>),
     SceneNodeId(SceneNodeId),
+    SExpr(Arc<SExprCode>),
 }
 
 impl PropertyValue {
@@ -79,6 +81,7 @@ impl PropertyValue {
             Self::Enum(_) => PropertyType::Enum,
             Self::Buffer(_) => PropertyType::Buffer,
             Self::SceneNodeId(_) => PropertyType::SceneNodeId,
+            Self::SExpr(_) => PropertyType::SExpr,
         }
     }
 
@@ -92,6 +95,13 @@ impl PropertyValue {
     pub fn is_null(&self) -> bool {
         match self {
             Self::Null => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_expr(&self) -> bool {
+        match self {
+            Self::SExpr(_) => true,
             _ => false,
         }
     }
@@ -138,10 +148,16 @@ impl PropertyValue {
             _ => Err(Error::PropertyWrongType),
         }
     }
+    fn as_sexpr(&self) -> Result<Arc<SExprCode>> {
+        match self {
+            Self::SExpr(v) => Ok(v.clone()),
+            _ => Err(Error::PropertyWrongType),
+        }
+    }
 }
 
 impl Encodable for PropertyValue {
-    fn encode<S: Write>(&self, mut s: S) -> std::result::Result<usize, std::io::Error> {
+    fn encode<S: Write>(&self, s: &mut S) -> std::result::Result<usize, std::io::Error> {
         match self {
             Self::Unset | Self::Null | Self::Buffer(_) => {
                 // do nothing
@@ -153,6 +169,7 @@ impl Encodable for PropertyValue {
             Self::Str(v) => v.encode(s),
             Self::Enum(v) => v.encode(s),
             Self::SceneNodeId(v) => v.encode(s),
+            Self::SExpr(v) => v.encode(s),
         }
     }
 }
@@ -168,6 +185,8 @@ pub struct Property {
     pub desc: String,
 
     pub is_null_allowed: bool,
+    pub is_expr_allowed: bool,
+
     // Use 0 for unbounded length
     pub array_len: usize,
     pub min_val: Option<PropertyValue>,
@@ -191,6 +210,8 @@ impl Property {
             desc: String::new(),
 
             is_null_allowed: false,
+            is_expr_allowed: false,
+
             array_len: 1,
             min_val: None,
             max_val: None,
@@ -231,6 +252,10 @@ impl Property {
 
     pub fn allow_null_values(&mut self) {
         self.is_null_allowed = true;
+    }
+
+    pub fn allow_exprs(&mut self) {
+        self.is_expr_allowed = true;
     }
 
     fn check_defaults_len(&self, defaults_len: usize) -> Result<()> {
@@ -350,6 +375,17 @@ impl Property {
     pub fn set_node_id(&self, i: usize, val: SceneNodeId) -> Result<()> {
         self.set_raw_value(i, PropertyValue::SceneNodeId(val))
     }
+    pub fn set_expr(&self, i: usize, val: SExprCode) -> Result<()> {
+        if !self.is_expr_allowed {
+            return Err(Error::PropertySExprNotAllowed)
+        }
+        let vals = &mut self.vals.lock().unwrap();
+        if i >= vals.len() {
+            return Err(Error::PropertyWrongIndex)
+        }
+        vals[i] = PropertyValue::SExpr(Arc::new(val));
+        Ok(())
+    }
 
     // Push
 
@@ -417,6 +453,14 @@ impl Property {
     pub fn is_unset(&self, i: usize) -> Result<bool> {
         let val = self.get_raw_value(i)?;
         Ok(val.is_unset())
+    }
+
+    pub fn is_expr(&self, i: usize) -> Result<bool> {
+        if !self.is_expr_allowed {
+            return Ok(false)
+        }
+        let val = self.get_raw_value(i)?;
+        Ok(val.is_expr())
     }
 
     pub fn get_raw_value(&self, i: usize) -> Result<PropertyValue> {
@@ -507,6 +551,10 @@ impl Property {
             return Ok(None)
         }
         Ok(Some(val.as_node_id()?))
+    }
+
+    pub fn get_expr(&self, i: usize) -> Result<Arc<SExprCode>> {
+        self.get_value(i)?.as_sexpr()
     }
 }
 

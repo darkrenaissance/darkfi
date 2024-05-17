@@ -7,6 +7,7 @@ use std::{
 
 use crate::{
     error::{Error, Result},
+    expr::SExprCode,
     prop::{Property, PropertySubType, PropertyType, PropertyValue},
     scene::{SceneGraphPtr, SceneNodeId, SceneNodeType, Slot, SlotId},
 };
@@ -174,6 +175,7 @@ impl ZeroMQAdapter {
                     prop.ui_name.encode(&mut reply).unwrap();
                     prop.desc.encode(&mut reply).unwrap();
                     prop.is_null_allowed.encode(&mut reply).unwrap();
+                    prop.is_expr_allowed.encode(&mut reply).unwrap();
                     (prop.array_len as u32).encode(&mut reply).unwrap();
                     prop.min_val.encode(&mut reply).unwrap();
                     prop.max_val.encode(&mut reply).unwrap();
@@ -276,6 +278,7 @@ impl ZeroMQAdapter {
                 let prop_ui_name = String::decode(&mut cur).unwrap();
                 let prop_desc = String::decode(&mut cur).unwrap();
                 let prop_is_null_allowed = bool::decode(&mut cur).unwrap();
+                let prop_is_expr_allowed = bool::decode(&mut cur).unwrap();
 
                 match prop_type {
                     PropertyType::Uint32 => {
@@ -323,7 +326,7 @@ impl ZeroMQAdapter {
                         if max_is_some {
                             return Err(Error::PropertyWrongType)
                         }
-                    },
+                    }
                 }
 
                 let prop_enum_items = Vec::<String>::decode(&mut cur).unwrap();
@@ -332,6 +335,7 @@ impl ZeroMQAdapter {
 
                 prop.set_ui_text(prop_ui_name, prop_desc);
                 prop.is_null_allowed = prop_is_null_allowed;
+                prop.is_expr_allowed = prop_is_expr_allowed;
                 if !prop_enum_items.is_empty() {
                     prop.set_enum_items(prop_enum_items)?;
                 }
@@ -353,12 +357,13 @@ impl ZeroMQAdapter {
                 let node_id = SceneNodeId::decode(&mut cur).unwrap();
                 let prop_name = String::decode(&mut cur).unwrap();
                 let prop_i = u32::decode(&mut cur).unwrap() as usize;
-                debug!(target: "req", "{:?}({}, {})", cmd, node_id, prop_name);
+                let prop_type = PropertyType::decode(&mut cur).unwrap();
+                debug!(target: "req", "{:?}({}, {}, {}, {:?})", cmd, node_id, prop_name, prop_i, prop_type);
 
                 let node = scene_graph.get_node_mut(node_id).ok_or(Error::NodeNotFound)?;
                 let prop = node.get_property(&prop_name).ok_or(Error::PropertyNotFound)?;
 
-                match prop.typ {
+                match prop_type {
                     PropertyType::Null => {}
                     PropertyType::Bool => {
                         let val = bool::decode(&mut cur).unwrap();
@@ -372,9 +377,13 @@ impl ZeroMQAdapter {
                         let val = f32::decode(&mut cur).unwrap();
                         prop.set_f32(prop_i, val)?;
                     }
-                    PropertyType::Str | PropertyType::Enum => {
+                    PropertyType::Str => {
                         let val = String::decode(&mut cur).unwrap();
                         prop.set_str(prop_i, val)?;
+                    }
+                    PropertyType::Enum => {
+                        let val = String::decode(&mut cur).unwrap();
+                        prop.set_enum(prop_i, val)?;
                     }
                     PropertyType::Buffer => {
                         let val = Vec::<u8>::decode(&mut cur).unwrap();
@@ -383,6 +392,11 @@ impl ZeroMQAdapter {
                     PropertyType::SceneNodeId => {
                         let val = SceneNodeId::decode(&mut cur).unwrap();
                         prop.set_node_id(prop_i, val)?;
+                    }
+                    PropertyType::SExpr => {
+                        let val = SExprCode::decode(&mut cur).unwrap();
+                        debug!(target: "req", "  received code {:?}", val);
+                        prop.set_expr(prop_i, val)?;
                     }
                 }
             }

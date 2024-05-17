@@ -1,7 +1,6 @@
 import zmq
 from collections import namedtuple
-from . import serial
-from . import exc
+from . import serial, exc, expr
 
 Property = namedtuple("Property", [
     "name",
@@ -11,6 +10,7 @@ Property = namedtuple("Property", [
     "ui_name",
     "desc",
     "is_null_allowed",
+    "is_expr_allowed",
     "array_len",
     "min_val",
     "max_val",
@@ -67,6 +67,7 @@ class PropertyType:
     ENUM = 5
     BUFFER = 6
     SCENE_NODE_ID = 7
+    SEXPR = 8
 
     @staticmethod
     def to_str(prop_type):
@@ -87,13 +88,14 @@ class PropertyType:
                 return "buffer"
             case PropertyType.SCENE_NODE_ID:
                 return "scene_node_id"
+            case PropertyType.SEXPR:
+                return "sexpr"
 
 class PropertySubType:
     NULL = 0
     COLOR = 1
     PIXEL = 2
     RESOURCE_ID = 3
-    PY_EXPR = 4
 
     @staticmethod
     def to_str(prop_type):
@@ -106,8 +108,6 @@ class PropertySubType:
                 return "pixel"
             case PropertySubType.RESOURCE_ID:
                 return "resource_id"
-            case PropertySubType.PY_EXPR:
-                return "py_expr"
 
 class PropertyStatus:
     OK = 0
@@ -127,23 +127,26 @@ class ErrorCode:
     PROPERTY_WRONG_INDEX = 10
     PROPERTY_OUT_OF_RANGE = 11
     PROPERTY_NULL_NOT_ALLOWED = 12
-    PROPERTY_IS_BOUNDED = 13
-    PROPERTY_WRONG_ENUM_ITEM = 14
-    SIGNAL_ALREADY_EXISTS = 15
-    SIGNAL_NOT_FOUND = 16
-    SLOT_NOT_FOUND = 17
-    METHOD_ALREADY_EXISTS = 18
-    METHOD_NOT_FOUND = 19
-    NODES_ARE_LINKED = 20
-    NODES_NOT_LINKED = 21
-    NODE_HAS_PARENTS = 22
-    NODE_HAS_CHILDREN = 23
-    NODE_PARENT_NAME_CONFLICT = 24
-    NODE_CHILD_NAME_CONFLICT = 25
-    NODE_SIBLING_NAME_CONFLICT = 26
-    FILE_NOT_FOUND = 27
-    RESOURCE_NOT_FOUND = 28
-    PY_EVAL_ERR = 29
+    PROPERTY_SEXPR_NOT_ALLOWED = 13
+    PROPERTY_IS_BOUNDED = 14
+    PROPERTY_WRONG_ENUM_ITEM = 15
+    SIGNAL_ALREADY_EXISTS = 16
+    SIGNAL_NOT_FOUND = 17
+    SLOT_NOT_FOUND = 18
+    METHOD_ALREADY_EXISTS = 19
+    METHOD_NOT_FOUND = 20
+    NODES_ARE_LINKED = 21
+    NODES_NOT_LINKED = 22
+    NODE_HAS_PARENTS = 23
+    NODE_HAS_CHILDREN = 24
+    NODE_PARENT_NAME_CONFLICT = 25
+    NODE_CHILD_NAME_CONFLICT = 26
+    NODE_SIBLING_NAME_CONFLICT = 27
+    FILE_NOT_FOUND = 28
+    RESOURCE_NOT_FOUND = 29
+    PY_EVAL_ERR = 30
+    SEXPR_EMPTY = 31
+    SEXPR_GLOBAL_NOT_FOUND = 32
 
     @staticmethod
     def to_str(errc):
@@ -170,6 +173,8 @@ class ErrorCode:
                 return "property_out_of_range"
             case ErrorCode.PROPERTY_NULL_NOT_ALLOWED:
                 return "property_null_not_allowed"
+            case ErrorCode.PROPERTY_SEXPR_NOT_ALLOWED:
+                return "property_sexpr_not_allowed"
             case ErrorCode.PROPERTY_IS_BOUNDED:
                 return "property_is_bounded"
             case ErrorCode.PROPERTY_WRONG_ENUM_ITEM:
@@ -204,6 +209,10 @@ class ErrorCode:
                 return "resource_not_found"
             case ErrorCode.PY_EVAL_ERR:
                 return "py_eval_err"
+            case ErrorCode.SEXPR_EMPTY:
+                return "sexpr_empty"
+            case ErrorCode.SEXPR_GLOBAL_NOT_FOUND:
+                return "sexpr_global_not_found"
 
 def vertex(x, y, r, g, b, a, u, v):
     buf = bytearray()
@@ -265,40 +274,46 @@ class Api:
                 raise exc.PropertyOutOfRange
             case 12:
                 raise exc.PropertyNullNotAllowed
-            case 13:
-                raise exc.PropertyIsBounded
+            case 12:
+                raise exc.PropertySExprNotAllowed
             case 14:
-                raise exc.PropertyWrongEnumItem
+                raise exc.PropertyIsBounded
             case 15:
-                raise exc.SignalAlreadyExists
+                raise exc.PropertyWrongEnumItem
             case 16:
-                raise exc.SignalNotFound
+                raise exc.SignalAlreadyExists
             case 17:
-                raise exc.SlotNotFound
+                raise exc.SignalNotFound
             case 18:
-                raise exc.MethodAlreadyExists
+                raise exc.SlotNotFound
             case 19:
-                raise exc.MethodNotFound
+                raise exc.MethodAlreadyExists
             case 20:
-                raise exc.NodesAreLinked
+                raise exc.MethodNotFound
             case 21:
-                raise exc.NodesNotLinked
+                raise exc.NodesAreLinked
             case 22:
-                raise exc.NodeHasParents
+                raise exc.NodesNotLinked
             case 23:
-                raise exc.NodeHasChildren
+                raise exc.NodeHasParents
             case 24:
-                raise exc.NodeParentNameConflict
+                raise exc.NodeHasChildren
             case 25:
-                raise exc.NodeChildNameConflict
+                raise exc.NodeParentNameConflict
             case 26:
-                raise exc.NodeSiblingNameConflict
+                raise exc.NodeChildNameConflict
             case 27:
-                raise exc.FileNotFound
+                raise exc.NodeSiblingNameConflict
             case 28:
-                raise exc.ResourceNotFound
+                raise exc.FileNotFound
             case 29:
+                raise exc.ResourceNotFound
+            case 30:
                 raise exc.PyEvalErr
+            case 31:
+                raise exc.SExprEmpty
+            case 32:
+                raise exc.SExprGlobalNotFound
         return cursor
 
     def hello(self):
@@ -365,6 +380,8 @@ class Api:
                 # desc 
                 serial.decode_str(cur),
                 # is_null_allowed 
+                bool(serial.read_u8(cur)),
+                # is_expr_allowed 
                 bool(serial.read_u8(cur)),
                 # array_len 
                 serial.read_u32(cur),
@@ -483,6 +500,7 @@ class Api:
         serial.encode_str(req, prop.ui_name)
         serial.encode_str(req, prop.desc)
         serial.write_u8(req, int(prop.is_null_allowed))
+        serial.write_u8(req, int(prop.is_expr_allowed))
 
         def write_mxx(v, by):
             assert v is not None
@@ -524,6 +542,7 @@ class Api:
         serial.write_u32(req, node_id)
         serial.encode_str(req, prop_name)
         serial.write_u32(req, i)
+        serial.write_u8(req, PropertyType.BOOL)
         serial.write_u8(req, int(val))
         self._make_request(Command.SET_PROPERTY_VALUE, req)
 
@@ -532,6 +551,7 @@ class Api:
         serial.write_u32(req, node_id)
         serial.encode_str(req, prop_name)
         serial.write_u32(req, i)
+        serial.write_u8(req, PropertyType.UINT32)
         serial.write_u32(req, val)
         self._make_request(Command.SET_PROPERTY_VALUE, req)
 
@@ -540,15 +560,8 @@ class Api:
         serial.write_u32(req, node_id)
         serial.encode_str(req, prop_name)
         serial.write_u32(req, i)
+        serial.write_u8(req, PropertyType.FLOAT32)
         serial.write_f32(req, val)
-        self._make_request(Command.SET_PROPERTY_VALUE, req)
-
-    def set_property_buf(self, node_id, prop_name, i, buf):
-        req = bytearray()
-        serial.write_u32(req, node_id)
-        serial.encode_str(req, prop_name)
-        serial.write_u32(req, i)
-        serial.encode_buf(req, buf)
         self._make_request(Command.SET_PROPERTY_VALUE, req)
 
     def set_property_str(self, node_id, prop_name, i, val):
@@ -556,7 +569,28 @@ class Api:
         serial.write_u32(req, node_id)
         serial.encode_str(req, prop_name)
         serial.write_u32(req, i)
+        serial.write_u8(req, PropertyType.STR)
         serial.encode_str(req, val)
+        self._make_request(Command.SET_PROPERTY_VALUE, req)
+
+    def set_property_buf(self, node_id, prop_name, i, buf):
+        req = bytearray()
+        serial.write_u32(req, node_id)
+        serial.encode_str(req, prop_name)
+        serial.write_u32(req, i)
+        serial.write_u8(req, PropertyType.BUFFER)
+        serial.encode_buf(req, buf)
+        self._make_request(Command.SET_PROPERTY_VALUE, req)
+
+    def set_property_expr(self, node_id, prop_name, i, code):
+        req = bytearray()
+        serial.write_u32(req, node_id)
+        serial.encode_str(req, prop_name)
+        serial.write_u32(req, i)
+        serial.write_u8(req, PropertyType.SEXPR)
+        serial.encode_varint(req, len(code))
+        for sexpr in code:
+            expr.encode_expr(req, sexpr)
         self._make_request(Command.SET_PROPERTY_VALUE, req)
 
     def get_signals(self, node_id):

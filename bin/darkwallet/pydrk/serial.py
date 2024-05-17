@@ -22,37 +22,26 @@ def write_f32(by, v):
 def encode_varint(by, v):
     if v <= 0xfc:
         write_u8(by, v)
-        return 1
     elif v <= 0xffff:
         write_u8(by, 0xfd)
         write_u16(by, v)
-        return 3
     elif v <= 0xffffffff:
         write_u8(by, 0xfe)
         write_u32(by, v)
-        return 5
     else:
         write_u8(by, 0xff)
         write_u64(by, v)
-        return 9
 
 def encode_str(by, s):
-    l = 0
-    l += encode_varint(by, len(s))
+    encode_varint(by, len(s))
     s_by = s.encode("utf-8")
-    l += len(s_by)
     by += s_by
-    return l
 
 def encode_buf(by, buf):
-    l = 0
-    l += encode_varint(by, len(buf))
-    l += len(buf)
+    encode_varint(by, len(buf))
     by += buf
-    return l
 
 def encode_opt(by, val, write_fn):
-    l = 0
     if val is None:
         write_u8(by, 0)
     else:

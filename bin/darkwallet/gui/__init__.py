@@ -281,40 +281,28 @@ def draw():
         "is_visible", PropertyType.BOOL, PropertySubType.NULL,
         None,
         "is_visible", "Visibility of the layer",
-        False, 1, None, None, []
+        False, False, 1, None, None, []
     )
     api.add_property(layer_id, prop)
     api.set_property_bool(layer_id, "is_visible", 0, True)
 
-    #prop = Property(
-    #    "rect", PropertyType.UINT32, PropertySubType.PIXEL,
-    #    None,
-    #    "layer_rect", "(x, y, w, h) viewport rectangle for current layer",
-    #    False, 4, None, None, []
-    #)
     prop = Property(
-        "rect", PropertyType.STR, PropertySubType.PY_EXPR,
-        ["0", "0", "0", "0"],
+        "rect", PropertyType.UINT32, PropertySubType.PIXEL,
+        None,
         "mesh_rect", "The position and size within the layer",
-        False, 4, None, None, []
+        False, True, 4, None, None, []
     )
     api.add_property(layer_id, prop)
-    ## x
-    #api.set_property_u32(layer_id, "rect", 0, 0)
-    ## y
-    #api.set_property_u32(layer_id, "rect", 1, 0)
-    ## w
-    #api.set_property_u32(layer_id, "rect", 2, int(3838/2))
-    ## h
-    #api.set_property_u32(layer_id, "rect", 3, int(2158/2))
     # x
-    api.set_property_str(layer_id, "rect", 0, "0")
+    api.set_property_u32(layer_id, "rect", 0, 0)
     # y
-    api.set_property_str(layer_id, "rect", 1, "0")
+    api.set_property_u32(layer_id, "rect", 1, 0)
     # w
-    api.set_property_str(layer_id, "rect", 2, "sw/2")
+    #api.set_property_u32(layer_id, "rect", 2, int(3838/2))
+    code = [["as_u32", ["/", ["load", "sw"], ["u32", 2]]]]
+    api.set_property_expr(layer_id, "rect", 2, code)
     # h
-    api.set_property_str(layer_id, "rect", 3, "sh")
+    api.set_property_u32(layer_id, "rect", 3, int(2158/2))
 
     api.link_node(layer_id, win_id)
 
@@ -326,7 +314,7 @@ def draw():
         "data", PropertyType.BUFFER, PropertySubType.NULL,
         None,
         "mesh_data", "The face and vertex data for the mesh",
-        False, 2, None, None, []
+        False, False, 2, None, None, []
     )
     api.add_property(mesh_id, prop)
 
@@ -346,20 +334,24 @@ def draw():
     api.set_property_buf(mesh_id, "data", 1, faces)
 
     prop = Property(
-        "rect", PropertyType.STR, PropertySubType.PY_EXPR,
-        ["0", "0", "0", "0"],
+        "rect", PropertyType.FLOAT32, PropertySubType.PIXEL,
+        None,
         "mesh_rect", "The position and size within the layer",
-        False, 4, None, None, []
+        False, True, 4, None, None, []
     )
     api.add_property(mesh_id, prop)
     # x
-    api.set_property_str(mesh_id, "rect", 0, "10")
+    api.set_property_f32(mesh_id, "rect", 0, 10)
     # y
-    api.set_property_str(mesh_id, "rect", 1, "10")
+    api.set_property_f32(mesh_id, "rect", 1, 10)
     # w
-    api.set_property_str(mesh_id, "rect", 2, "lw - 10")
+    #api.set_property_f32(mesh_id, "rect", 2, 20)
+    code = [["-", ["load", "lw"], ["f32", 10]]]
+    api.set_property_expr(mesh_id, "rect", 2, code)
     # h
-    api.set_property_str(mesh_id, "rect", 3, "lh - 10")
+    #api.set_property_str(mesh_id, "rect", 3, "lh - 10")
+    code = [["-", ["load", "lh"], ["f32", 10]]]
+    api.set_property_f32(mesh_id, "rect", 3, 20)
 
     api.link_node(mesh_id, layer_id)
 

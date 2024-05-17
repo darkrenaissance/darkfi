@@ -39,54 +39,63 @@ pub enum Error {
     #[error("Property null not allowed")]
     PropertyNullNotAllowed = 12,
 
+    #[error("Property S-exprs not allowed")]
+    PropertySExprNotAllowed = 13,
+
     #[error("Property array is bounded length")]
-    PropertyIsBounded = 13,
+    PropertyIsBounded = 14,
 
     #[error("Property enum item is invalid")]
-    PropertyWrongEnumItem = 14,
+    PropertyWrongEnumItem = 15,
 
     #[error("Signal already exists")]
-    SignalAlreadyExists = 15,
+    SignalAlreadyExists = 16,
 
     #[error("Signal not found")]
-    SignalNotFound = 16,
+    SignalNotFound = 17,
 
     #[error("Slot not found")]
-    SlotNotFound = 17,
+    SlotNotFound = 18,
 
     #[error("Signal already exists")]
-    MethodAlreadyExists = 18,
+    MethodAlreadyExists = 19,
 
     #[error("Method not found")]
-    MethodNotFound = 19,
+    MethodNotFound = 20,
 
     #[error("Nodes are not linked")]
-    NodesAreLinked = 20,
+    NodesAreLinked = 21,
 
     #[error("Nodes are not linked")]
-    NodesNotLinked = 21,
+    NodesNotLinked = 22,
 
     #[error("Node has parents")]
-    NodeHasParents = 22,
+    NodeHasParents = 23,
 
     #[error("Node has children")]
-    NodeHasChildren = 23,
+    NodeHasChildren = 24,
 
     #[error("Node has a parent with this name")]
-    NodeParentNameConflict = 24,
+    NodeParentNameConflict = 25,
 
     #[error("Node has a child with this name")]
-    NodeChildNameConflict = 25,
+    NodeChildNameConflict = 26,
 
     #[error("Node has a sibling with this name")]
-    NodeSiblingNameConflict = 26,
+    NodeSiblingNameConflict = 27,
 
     #[error("File not found")]
-    FileNotFound = 27,
+    FileNotFound = 28,
 
     #[error("Resource is not found")]
-    ResourceNotFound = 28,
+    ResourceNotFound = 29,
 
     #[error("Python expr eval error")]
-    PyEvalErr = 29,
+    PyEvalErr = 30,
+
+    #[error("Empty S-expr")]
+    SExprEmpty = 31,
+
+    #[error("S-expr global not found")]
+    SExprGlobalNotFound = 32,
 }

@@ -21,6 +21,8 @@ thiserror = "1.0.57"
 smol = "1.3.0"
 atomic_float = "0.1.0"
 
+starlark = "0.12.0"
+
 [dependencies.pyo3]
 version = "0.21.2"
 features = ["auto-initialize"]

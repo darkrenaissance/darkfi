@@ -1,20 +1,26 @@
-use darkfi_serial::{Decodable, Encodable, SerialEncodable, SerialDecodable};
+use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 use fontdue::{
     layout::{CoordinateSystem, GlyphPosition, Layout, LayoutSettings, TextStyle},
     Font, FontSettings,
 };
 use miniquad::*;
+use pyo3::{
+    prelude::*,
+    py_run,
+    types::{IntoPyDict, PyDict},
+    PyClass,
+};
 use std::{
     array::IntoIter,
     fmt,
     io::Cursor,
-    sync::{mpsc, MutexGuard, Arc},
+    sync::{mpsc, Arc, MutexGuard},
     time::{Duration, Instant},
 };
-use pyo3::{prelude::*, types::{PyDict, IntoPyDict}, PyClass, py_run};
 
 use crate::{
     error::{Error, Result},
+    expr::{SExprVal, SExprMachine},
     prop::{Property, PropertySubType, PropertyType},
     scene::{MethodResponseFn, SceneGraph, SceneGraphPtr, SceneNode, SceneNodeId, SceneNodeType},
     shader,
@@ -251,8 +257,16 @@ impl Stage {
             font
         };
 
-        let mut stage =
-            Stage { ctx, pipeline, scene_graph, textures, meshes: ResourceManager::new(), font, method_recvr, method_sender };
+        let mut stage = Stage {
+            ctx,
+            pipeline,
+            scene_graph,
+            textures,
+            meshes: ResourceManager::new(),
+            font,
+            method_recvr,
+            method_sender,
+        };
         stage.setup_scene_graph_window();
         stage
     }
@@ -579,20 +593,14 @@ impl Stage {
             BufferSource::slice(&faces),
         );
 
-        let mesh = Mesh {
-            verts,
-            faces,
-            vertex_buffer,
-            index_buffer
-        };
+        let mesh = Mesh { verts, faces, vertex_buffer, index_buffer };
 
         let mesh_id = self.meshes.alloc(mesh);
 
         let mut scene_graph = self.scene_graph.lock().unwrap();
         let node = scene_graph.add_node(node_name, SceneNodeType::RenderMesh);
 
-        let mut prop =
-            Property::new("mesh_id", PropertyType::Uint32, PropertySubType::ResourceId);
+        let mut prop = Property::new("mesh_id", PropertyType::Uint32, PropertySubType::ResourceId);
         prop.set_u32(0, mesh_id).unwrap();
         node.add_property(prop)?;
 
@@ -634,7 +642,8 @@ struct RenderContext<'a> {
 
 impl<'a> RenderContext<'a> {
     fn render_window(&mut self) {
-        for layer in self.scene_graph
+        for layer in self
+            .scene_graph
             .lookup_node("/window")
             .expect("no window attached!")
             .get_children(&[SceneNodeType::RenderLayer])
@@ -650,55 +659,35 @@ impl<'a> RenderContext<'a> {
         if prop.array_len != 4 {
             return Err(Error::PropertyWrongLen)
         }
-        match prop.typ {
-            PropertyType::Uint32 => {
-                if prop.subtype != PropertySubType::Null {
-                    return Err(Error::PropertyWrongSubType)
-                }
-                Ok(Rectangle {
-                    x: prop.get_u32(0)? as i32,
-                    y: prop.get_u32(1)? as i32,
-                    w: prop.get_u32(2)? as i32,
-                    h: prop.get_u32(3)? as i32,
-                })
-            }
-            PropertyType::Str => {
-                if prop.subtype != PropertySubType::PyExpr {
-                    return Err(Error::PropertyWrongSubType)
-                }
 
+        let mut rect = [0; 4];
+        for i in 0..4 {
+            if prop.is_expr(i)? {
                 let (screen_width, screen_height) = window::screen_size();
 
-                let locals = Python::with_gil(|py| {
-                    let locals = PyDict::new_bound(py);
-                    locals.set_item("sw", screen_width).expect("set item sw");
-                    locals.set_item("sh", screen_height).expect("set item sh");
-                    locals.unbind()
-                });
+                let expr = prop.get_expr(i).unwrap();
 
-                let mut rect = [0; 4];
-                for i in 0..4 {
-                    let code = prop.get_str(i)?;
-                    match eval_py_str(&code, locals.clone()) {
-                        Ok(v) => rect[i] = v as i32,
-                        Err(err) => {
-                            error!("layer '{}': python running `{}` encountered err: {}", layer.name, code, err);
-                            return Err(Error::PyEvalErr)
-                        }
-                    }
-                }
+                let machine = SExprMachine {
+                    globals: vec![
+                        ("sw".to_string(), SExprVal::Float32(screen_width)),
+                        ("sh".to_string(), SExprVal::Float32(screen_height)),
+                    ],
+                    stmts: &expr
+                };
 
-                Ok(Rectangle::from_array(rect))
-            }
-            _ => {
-                Err(Error::PropertyWrongType)
+                rect[i] = machine.call()?.as_u32()? as i32;
+            } else {
+                rect[i] = prop.get_u32(i)? as i32;
             }
         }
+        Ok(Rectangle::from_array(rect))
     }
 
-    fn render_layer(&mut self, layer_id: SceneNodeId,
-                    // parent rect
-                    ) -> Result<()> {
+    fn render_layer(
+        &mut self,
+        layer_id: SceneNodeId,
+        // parent rect
+    ) -> Result<()> {
         let layer = self.scene_graph.get_node(layer_id).unwrap();
 
         if !layer.get_property_bool("is_visible")? {
@@ -734,8 +723,8 @@ impl<'a> RenderContext<'a> {
                     if let Err(err) = self.render_mesh(child.id, &rect) {
                         error!("error rendering mesh '{}': {}", child.name, err);
                     }
-                },
-                _ => panic!("render_layer(): unknown type")
+                }
+                _ => panic!("render_layer(): unknown type"),
             }
         }
 
@@ -749,48 +738,26 @@ impl<'a> RenderContext<'a> {
         if prop.array_len != 4 {
             return Err(Error::PropertyWrongLen)
         }
-        match prop.typ {
-            PropertyType::Float32 => {
-                if prop.subtype != PropertySubType::Null {
-                    return Err(Error::PropertyWrongSubType)
-                }
-                Ok(Rectangle {
-                    x: prop.get_f32(0)?,
-                    y: prop.get_f32(1)?,
-                    w: prop.get_f32(2)?,
-                    h: prop.get_f32(3)?,
-                })
-            }
-            PropertyType::Str => {
-                if prop.subtype != PropertySubType::PyExpr {
-                    return Err(Error::PropertyWrongSubType)
-                }
 
-                let locals = Python::with_gil(|py| {
-                    let locals = PyDict::new_bound(py);
-                    locals.set_item("lw", layer_rect.w as f32).expect("set item lw");
-                    locals.set_item("lh", layer_rect.h as f32).expect("set item lh");
-                    locals.unbind()
-                });
+        let mut rect = [0.; 4];
+        for i in 0..4 {
+            if prop.is_expr(i)? {
+                let expr = prop.get_expr(i).unwrap();
 
-                let mut rect = [0.; 4];
-                for i in 0..4 {
-                    let code = prop.get_str(i)?;
-                    match eval_py_str(&code, locals.clone()) {
-                        Ok(v) => rect[i] = v,
-                        Err(err) => {
-                            error!("mesh '{}': python running `{}` encountered err: {}", mesh.name, code, err);
-                            return Err(Error::PyEvalErr)
-                        }
-                    }
-                }
+                let machine = SExprMachine {
+                    globals: vec![
+                        ("lw".to_string(), SExprVal::Uint32(layer_rect.w as u32)),
+                        ("lh".to_string(), SExprVal::Uint32(layer_rect.h as u32)),
+                    ],
+                    stmts: &expr
+                };
 
-                Ok(Rectangle::from_array(rect))
-            }
-            _ => {
-                Err(Error::PropertyWrongType)
+                rect[i] = machine.call()?.coerce_f32()?;
+            } else {
+                rect[i] = prop.get_f32(i)?;
             }
         }
+        Ok(Rectangle::from_array(rect))
     }
 
     fn render_mesh(&mut self, mesh_id: SceneNodeId, layer_rect: &Rectangle<i32>) -> Result<()> {
@@ -814,20 +781,14 @@ impl<'a> RenderContext<'a> {
             )
         };
 
-        let index_buffer = self.ctx.new_buffer(
-            BufferType::IndexBuffer,
-            BufferUsage::Immutable,
-            bufsrc,
-        );
+        let index_buffer =
+            self.ctx.new_buffer(BufferType::IndexBuffer, BufferUsage::Immutable, bufsrc);
 
         // temp
         let texture = self.textures.get(Stage::WHITE_TEXTURE_ID).unwrap();
 
-        let bindings = Bindings {
-            vertex_buffers: vec![vertex_buffer],
-            index_buffer,
-            images: vec![*texture],
-        };
+        let bindings =
+            Bindings { vertex_buffers: vec![vertex_buffer], index_buffer, images: vec![*texture] };
 
         self.ctx.apply_bindings(&bindings);
 
@@ -871,10 +832,14 @@ fn eval_py_str<'py>(code: &str, locals: Py<PyDict>) -> PyResult<f32> {
         // Can also use restrictedpython lib to eval the code.
         // Also PyPy sandboxing
         // and starlark / starlark-rust
-        py_run!(py, null, r#"
+        py_run!(
+            py,
+            null,
+            r#"
 __builtins__.__dict__['__import__'] = None
 __builtins__.__dict__['open'] = None
-        "#);
+        "#
+        );
 
         let locals = locals.bind(py);
         let result: f32 = py.eval_bound(code, None, Some(locals))?.extract()?;

@@ -7,6 +7,8 @@ use std::{
 
 mod error;
 
+mod expr;
+
 mod gfx;
 use gfx::init_gui;
 

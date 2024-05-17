@@ -22,6 +22,8 @@ class PropertyOutOfRange(Exception):
     pass
 class PropertyNullNotAllowed(Exception):
     pass
+class PropertySExprNotAllowed(Exception):
+    pass
 class PropertyIsBounded(Exception):
     pass
 class PropertyWrongEnumItem(Exception):
@@ -54,3 +56,8 @@ class FileNotFound(Exception):
     pass
 class PyEvalErr(Exception):
     pass
+class SExprEmpty(Exception):
+    pass
+class SExprGlobalNotFound(Exception):
+    pass
+
