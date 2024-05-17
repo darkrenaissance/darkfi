@@ -302,7 +302,8 @@ def draw():
     code = [["as_u32", ["/", ["load", "sw"], ["u32", 2]]]]
     api.set_property_expr(layer_id, "rect", 2, code)
     # h
-    api.set_property_u32(layer_id, "rect", 3, int(2158/2))
+    code = [["as_u32", ["/", ["load", "sh"], ["u32", 2]]]]
+    api.set_property_expr(layer_id, "rect", 3, code)
 
     api.link_node(layer_id, win_id)
 
@@ -351,7 +352,7 @@ def draw():
     # h
     #api.set_property_str(mesh_id, "rect", 3, "lh - 10")
     code = [["-", ["load", "lh"], ["f32", 10]]]
-    api.set_property_f32(mesh_id, "rect", 3, 20)
+    api.set_property_expr(mesh_id, "rect", 3, code)
 
     api.link_node(mesh_id, layer_id)
 

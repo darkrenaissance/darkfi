@@ -4,12 +4,6 @@ use fontdue::{
     Font, FontSettings,
 };
 use miniquad::*;
-use pyo3::{
-    prelude::*,
-    py_run,
-    types::{IntoPyDict, PyDict},
-    PyClass,
-};
 use std::{
     array::IntoIter,
     fmt,
@@ -825,30 +819,6 @@ impl<'a> RenderContext<'a> {
 
         Ok(())
     }
-}
-
-fn eval_py_str<'py>(code: &str, locals: Py<PyDict>) -> PyResult<f32> {
-    Python::with_gil(|py| {
-        let null = ();
-        // https://stackoverflow.com/questions/35804961/python-eval-is-it-still-dangerous-if-i-disable-builtins-and-attribute-access
-        // See safe_eval() by tardyp and astrun
-        // We don't care about resource usage, just accessing system resources.
-        // Can also use restrictedpython lib to eval the code.
-        // Also PyPy sandboxing
-        // and starlark / starlark-rust
-        py_run!(
-            py,
-            null,
-            r#"
-__builtins__.__dict__['__import__'] = None
-__builtins__.__dict__['open'] = None
-        "#
-        );
-
-        let locals = locals.bind(py);
-        let result: f32 = py.eval_bound(code, None, Some(locals))?.extract()?;
-        Ok(result)
-    })
 }
 
 /*

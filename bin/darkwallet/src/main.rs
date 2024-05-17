@@ -37,36 +37,42 @@ fn init_zmq(scene_graph: SceneGraphPtr) {
 
 fn main() {
     let scene_graph = Arc::new(Mutex::new(SceneGraph::new()));
-    //init_zmq(scene_graph.clone());
+    init_zmq(scene_graph.clone());
     run_gui(scene_graph);
 }
 
 /*
-use pyo3::{prelude::*, types::{PyDict, IntoPyDict}, py_run};
+use rustpython_vm::{self as pyvm, convert::ToPyObject};
 
-fn main() -> PyResult<()> {
-    Python::with_gil(|py| {
-        let null = ();
-        // https://stackoverflow.com/questions/35804961/python-eval-is-it-still-dangerous-if-i-disable-builtins-and-attribute-access
-        // See safe_eval() by tardyp and astrun
-        // We don't care about resource usage, just accessing system resources.
-        // Can also use restrictedpython lib to eval the code.
-        // Also PyPy sandboxing
-        // and starlark / starlark-rust
-        py_run!(py, null, r#"
-__builtins__.__dict__['__import__'] = None
-__builtins__.__dict__['open'] = None
-        "#);
+fn main() {
+    let code_obj = pyvm::Interpreter::without_stdlib(Default::default()).enter(|vm| {
+        let source = r#"
+max(1 + lw/3, 4*10) + foo(2, True)"#;
+        let code_obj = vm
+            .compile(source, pyvm::compiler::Mode::Eval, "<embedded>".to_owned())
+            .map_err(|err| vm.new_syntax_error(&err, Some(source))).unwrap();
+        code_obj
+    });
 
-        let locals = PyDict::new_bound(py);
-        locals.set_item("lw", 110)?;
-        locals.set_item("lh", 4)?;
+    fn foo(x: u32, y: bool) -> u32 {
+        if y {
+            2 * x
+        } else {
+            x
+        }
+    }
 
-        let code = "min(1 + lw/3, 4*10)";
-        let user: f32 = py.eval_bound(code, None, Some(&locals))?.extract()?;
+    let res = pyvm::Interpreter::without_stdlib(Default::default()).enter(|vm| {
+        let globals = vm.ctx.new_dict();
+        globals.set_item("lw", vm.ctx.new_int(110).to_pyobject(vm), vm).unwrap();
+        globals.set_item("lh", vm.ctx.new_int(4).to_pyobject(vm), vm).unwrap();
+        globals.set_item("foo", vm.new_function("foo", foo).into(), vm).unwrap();
 
-        println!("{}", user);
-        Ok(())
-    })
+        let scope = pyvm::scope::Scope::new(None, globals);
+
+        vm.run_code_obj(code_obj, scope).unwrap()
+    });
+    println!("{:?}", res);
 }
 */
+
