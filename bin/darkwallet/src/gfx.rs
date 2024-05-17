@@ -163,6 +163,8 @@ struct Stage {
 
     method_recvr: mpsc::Receiver<(GraphicsMethodEvent, SceneNodeId, Vec<u8>, MethodResponseFn)>,
     method_sender: mpsc::SyncSender<(GraphicsMethodEvent, SceneNodeId, Vec<u8>, MethodResponseFn)>,
+
+    last_draw_time: Option<Instant>,
 }
 
 impl Stage {
@@ -266,8 +268,10 @@ impl Stage {
             font,
             method_recvr,
             method_sender,
+            last_draw_time: None
         };
         stage.setup_scene_graph_window();
+        debug!("Finished loading GUI");
         stage
     }
 
@@ -871,8 +875,17 @@ fn get_text_props(render_text: &SceneNode) -> Result<(String, f32, [f32; 4])> {
 
 impl EventHandler for Stage {
     fn update(&mut self) {
-        // Only block for 20 ms, process as much as we can during that time
-        let deadline = Instant::now() + Duration::from_millis(400);
+        if self.last_draw_time.is_none() {
+            return
+        }
+        // Only allow 20 ms, process as much as we can during that time
+        let elapsed_since_draw = self.last_draw_time.unwrap().elapsed();
+        if elapsed_since_draw > Duration::from_millis(20) {
+            return
+        }
+        let allowed_time = Duration::from_millis(20) - elapsed_since_draw;
+        let deadline = Instant::now() + allowed_time;
+
         loop {
             let Ok((event, node_id, arg_data, response_fn)) =
                 self.method_recvr.recv_deadline(deadline)
@@ -892,6 +905,8 @@ impl EventHandler for Stage {
 
     // Only do drawing here. Apps might not call this when minimized.
     fn draw(&mut self) {
+        self.last_draw_time = Some(Instant::now());
+
         let clear = PassAction::clear_color(0., 0., 0., 1.);
         self.ctx.begin_default_pass(clear);
         self.ctx.end_render_pass();
@@ -1276,7 +1291,7 @@ impl EventHandler for Stage {
     }
 }
 
-pub fn init_gui(scene_graph: SceneGraphPtr) {
+pub fn run_gui(scene_graph: SceneGraphPtr) {
     #[cfg(target_os = "android")]
     {
         android_logger::init_once(

@@ -10,7 +10,7 @@ mod error;
 mod expr;
 
 mod gfx;
-use gfx::init_gui;
+use gfx::run_gui;
 
 mod net;
 use net::ZeroMQAdapter;
@@ -37,8 +37,8 @@ fn init_zmq(scene_graph: SceneGraphPtr) {
 
 fn main() {
     let scene_graph = Arc::new(Mutex::new(SceneGraph::new()));
-    init_zmq(scene_graph.clone());
-    init_gui(scene_graph);
+    //init_zmq(scene_graph.clone());
+    run_gui(scene_graph);
 }
 
 /*
