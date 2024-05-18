@@ -23,7 +23,6 @@ import networkx as nx
 from datetime import datetime
 # import matplotlib.pyplot as plt
 import src.rpc
-import src.util
 
 from os.path import join
 
@@ -61,11 +60,6 @@ def graph(event, longest_path):
                 return "│ o"
         else:
             return "o  "
-            #  "│ o"
-            #  "o │"
-            #  "o━┪"
-            #  "o─┴"
-            #  "o━┯"
 
 # because tab character is broken in urwid texts
 def indent(num):
@@ -133,14 +127,14 @@ class DetailView(u.WidgetWrap):
 class App(object):
     
     def unhandled_input(self, key):
-        if key in ('q',):
+        if key in ('q', 'Q'):
             raise u.ExitMainLoop()
         # if key == 'r':
         #     await self.update_data(self.config)
         if key == 'enter':
             self.current_view = self.frame2
             self.loop.widget = self.frame2
-        if key == 'b':
+        if key in ('b', 'B'):
             self.current_view = self.frame1
             self.loop.widget = self.frame1
 
@@ -182,10 +176,6 @@ class App(object):
             self.config = config
             dag_dict = await recreate_dag(config, replay_mode)
             dag_list = list(dag_dict.items())
-            # sorted_dag = sorted(dag_list, key=lambda x:x[1]['layer'])
-
-            # genesis_hash = sorted_dag[0][0]
-
             parent_child_pairs = []
             for item in dag_list:
                 parents = item[1]['parents']
@@ -250,15 +240,21 @@ async def recreate_dag(config, replay_mode):
         
 
 async def main(argv):
-
-    os = src.util.get_os()
-    config_path = src.util.user_config_dir('darkfi', os)
-
-    suffix = '.toml'
-    filename = 'deg_config'
-    path = join(config_path, filename + suffix)
-    config = src.util.spawn_config(path)
-    config = config['nodes'][0]
+    val = str('127.0.0.1:26660')
+    for i in range(1, len(sys.argv)):
+        if sys.argv[i] == "-e":
+            try:
+                val = sys.argv[i+1]
+            except IndexError:
+                print("Please provide a value for \'-e\'")
+                exit(-1)
+            break
+    config = {}
+    try:
+        config['host'], config['port'] = val.split(':')
+    except ValueError:
+        print("Please provide a port as in: 127.0.0.1:26660")
+        exit(-1)
 
     replay_mode = False
     if len(argv) > 1:
