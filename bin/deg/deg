@@ -262,11 +262,11 @@ async def main(argv):
 
     replay_mode = False
     if len(argv) > 1:
-        if argv[1] == '-r':
+        if '-r' in argv:
             replay_mode = True
-        if argv[1] in ['darkirc', 'irc']:
+        if set(argv) & set(['darkirc', 'irc']):
             config['port'] = 26660
-        elif argv[1] in ['taud', 'tau']:
+        elif set(argv) & set(['taud', 'tau']):
             config['port'] = 23330
 
     app = App()
