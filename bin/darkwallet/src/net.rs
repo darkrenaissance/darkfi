@@ -70,7 +70,7 @@ impl ZeroMQAdapter {
         Self { req_socket, slot_sender, slot_recvr: Some(slot_recvr), scene_graph }
     }
 
-    pub fn poll(&mut self) {
+    pub fn run(&mut self) {
         let rx = std::mem::take(&mut self.slot_recvr).unwrap();
         let _ = thread::spawn(move || {
             let zmq_ctx = zmq::Context::new();
@@ -199,6 +199,8 @@ impl ZeroMQAdapter {
                         default.encode(&mut reply).unwrap();
                     } else if val.is_null() {
                         2u8.encode(&mut reply).unwrap();
+                    } else if val.is_expr() {
+                        3u8.encode(&mut reply).unwrap();
                     } else {
                         0u8.encode(&mut reply).unwrap();
                         val.encode(&mut reply).unwrap();

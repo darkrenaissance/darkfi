@@ -27,17 +27,17 @@ extern crate log;
 #[allow(unused_imports)]
 use log::LevelFilter;
 
-fn init_zmq(scene_graph: SceneGraphPtr) {
+fn start_zmq(scene_graph: SceneGraphPtr) {
     // detach thread
     let _ = thread::spawn(move || {
         let mut zmq_rpc = ZeroMQAdapter::new(scene_graph);
-        zmq_rpc.poll();
+        zmq_rpc.run();
     });
 }
 
 fn main() {
     let scene_graph = Arc::new(Mutex::new(SceneGraph::new()));
-    init_zmq(scene_graph.clone());
+    start_zmq(scene_graph.clone());
     run_gui(scene_graph);
 }
 
@@ -45,13 +45,18 @@ fn main() {
 use rustpython_vm::{self as pyvm, convert::ToPyObject};
 
 fn main() {
-    let code_obj = pyvm::Interpreter::without_stdlib(Default::default()).enter(|vm| {
+    let module = pyvm::Interpreter::without_stdlib(Default::default()).enter(|vm| {
         let source = r#"
-max(1 + lw/3, 4*10) + foo(2, True)"#;
-        let code_obj = vm
-            .compile(source, pyvm::compiler::Mode::Eval, "<embedded>".to_owned())
-            .map_err(|err| vm.new_syntax_error(&err, Some(source))).unwrap();
-        code_obj
+def foo():
+    open("hihi", "w")
+    return 110
+#max(1 + lw/3, 4*10) + foo(2, True)
+"#;
+        //let code_obj = vm
+        //    .compile(source, pyvm::compiler::Mode::Exec, "<embedded>".to_owned())
+        //    .map_err(|err| vm.new_syntax_error(&err, Some(source))).unwrap();
+        //code_obj
+        pyvm::import::import_source(vm, "lain", source).unwrap()
     });
 
     fn foo(x: u32, y: bool) -> u32 {
@@ -70,7 +75,10 @@ max(1 + lw/3, 4*10) + foo(2, True)"#;
 
         let scope = pyvm::scope::Scope::new(None, globals);
 
-        vm.run_code_obj(code_obj, scope).unwrap()
+        let foo_fn = module.get_attr("foo", vm).unwrap();
+        foo_fn.call((), vm).unwrap()
+
+        //vm.run_code_obj(code_obj, scope).unwrap()
     });
     println!("{:?}", res);
 }

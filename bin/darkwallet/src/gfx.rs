@@ -848,11 +848,15 @@ impl EventHandler for Stage {
         if self.last_draw_time.is_none() {
             return
         }
+
         // Only allow 20 ms, process as much as we can during that time
         let elapsed_since_draw = self.last_draw_time.unwrap().elapsed();
+        // We're long overdue a redraw. Exit for now
         if elapsed_since_draw > Duration::from_millis(20) {
             return
         }
+        // The next redraw must happen 20ms since its last one.
+        // Calculate how much time is remaining until then.
         let allowed_time = Duration::from_millis(20) - elapsed_since_draw;
         let deadline = Instant::now() + allowed_time;
 

@@ -113,6 +113,7 @@ class PropertyStatus:
     OK = 0
     UNSET = 1
     NULL = 2
+    EXPR = 3
 
 class ErrorCode:
     INVALID_SCENE_PATH = 1
@@ -428,6 +429,8 @@ class Api:
             prop_status = serial.read_u8(cur)
             match prop_status:
                 case PropertyStatus.NULL:
+                    return None
+                case PropertyStatus.EXPR:
                     return None
                 case PropertyStatus.UNSET | PropertyStatus.OK:
                     return Api.read_prop_val(cur, prop_type)
