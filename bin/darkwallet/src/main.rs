@@ -18,6 +18,8 @@ use net::ZeroMQAdapter;
 mod scene;
 use scene::{SceneGraph, SceneGraphPtr};
 
+mod plugin;
+
 mod prop;
 
 mod shader;
@@ -35,9 +37,19 @@ fn start_zmq(scene_graph: SceneGraphPtr) {
     });
 }
 
+fn start_sentinel(scene_graph: SceneGraphPtr) {
+    // detach thread
+    // Sentinel should cleanly close when sent a stop signal.
+    let _ = thread::spawn(move || {
+        let mut sentinel = plugin::Sentinel::new(scene_graph);
+        sentinel.run();
+    });
+}
+
 fn main() {
     let scene_graph = Arc::new(Mutex::new(SceneGraph::new()));
     start_zmq(scene_graph.clone());
+    start_sentinel(scene_graph.clone());
     run_gui(scene_graph);
 }
 
