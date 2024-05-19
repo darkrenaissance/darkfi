@@ -22,7 +22,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use log::debug;
+use log::{debug, trace};
 use smol::Executor;
 
 use super::{channel::ChannelPtr, hosts::HostColor, p2p::P2pPtr, protocol::ProtocolVersion};
@@ -105,7 +105,7 @@ pub trait Session: Sync {
         channel: ChannelPtr,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
-        debug!(target: "net::session::register_channel()", "[START]");
+        trace!(target: "net::session::register_channel()", "[START]");
 
         // Protocols should all be initialized but not started.
         // We do this so that the protocols can begin receiving and buffering
@@ -147,7 +147,7 @@ pub trait Session: Sync {
             protocol.start(executor.clone()).await?;
         }
 
-        debug!(target: "net::session::register_channel()", "[END]");
+        trace!(target: "net::session::register_channel()", "[END]");
 
         Ok(())
     }
