@@ -72,3 +72,17 @@ And then finally it should work. Make sure you use `git push -u codeb master`
 to update your main source to codeberg over Tor. You don't want to accidentally
 git push to github and dox yourself.
 
+## Git Config
+
+Lastly you can still be identified by your machine's Git config, if pushing
+to external repos on clearnet.
+However we can set per project settings, so inside the darkfi repo, run
+these commands:
+
+```
+git config user.name darkfi
+git config user.email darkfi@darkfi
+```
+
+Verify it has been set with `cat .git/config`.
+
