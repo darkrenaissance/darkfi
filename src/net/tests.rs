@@ -197,7 +197,7 @@ async fn get_random_gold_host(
     (entry.clone(), position)
 }
 
-async fn check_random_hostlist(outbound_instances: &Vec<Arc<P2p>>, rng: &mut ThreadRng) {
+async fn _check_random_hostlist(outbound_instances: &Vec<Arc<P2p>>, rng: &mut ThreadRng) {
     let mut urls = HashSet::new();
     let random_node = outbound_instances.choose(rng).unwrap();
     let external_addr = &random_node.settings().external_addrs[0];
@@ -222,6 +222,30 @@ async fn check_random_hostlist(outbound_instances: &Vec<Arc<P2p>>, rng: &mut Thr
     assert!(!urls.is_empty());
 }
 
+async fn check_all_hostlist(outbound_instances: &Vec<Arc<P2p>>) {
+    for node in outbound_instances {
+        let external_addr = &node.settings().external_addrs[0];
+        info!("========================================================");
+        info!("Checking node={}", external_addr);
+        info!("========================================================");
+
+        let mut urls = HashSet::new();
+        let greylist = node.hosts().container.fetch_all(HostColor::Grey).await;
+        let whitelist = node.hosts().container.fetch_all(HostColor::White).await;
+        let goldlist = node.hosts().container.fetch_all(HostColor::Gold).await;
+
+        for (url, _) in greylist {
+            assert!(urls.insert(url));
+        }
+        for (url, _) in whitelist {
+            assert!(urls.insert(url));
+        }
+        for (url, _) in goldlist {
+            assert!(urls.insert(url));
+        }
+        assert!(!urls.is_empty());
+    }
+}
 async fn kill_node(outbound_instances: &Vec<Arc<P2p>>, node: Url) {
     for p2p in outbound_instances {
         if p2p.settings().external_addrs[0] == node {
@@ -259,7 +283,6 @@ fn p2p_test() {
 }
 
 async fn p2p_test_real(ex: Arc<Executor<'static>>) {
-    let mut rng = rand::thread_rng();
     // ============================================================
     // 1. Create a new seed node.
     // ============================================================
@@ -314,23 +337,49 @@ async fn p2p_test_real(ex: Arc<Executor<'static>>) {
     //    indicating that the refinery process is happening correctly.
     // ===========================================================
     assert!(!seed.hosts().container.is_empty(HostColor::White).await);
+
+    info!("========================================================");
+    info!("Checking seed={}", seed.settings().inbound_addrs[0]);
+    info!("========================================================");
+
+    let mut urls = HashSet::new();
+    let greylist = seed.hosts().container.fetch_all(HostColor::Grey).await;
+    let whitelist = seed.hosts().container.fetch_all(HostColor::White).await;
+    let goldlist = seed.hosts().container.fetch_all(HostColor::Gold).await;
+
+    for (url, _) in greylist {
+        info!("Found grey url: {}", url);
+        assert!(urls.insert(url));
+    }
+    for (url, _) in whitelist {
+        info!("Found white url: {}", url);
+        assert!(urls.insert(url));
+    }
+    for (url, _) in goldlist {
+        info!("Found gold url: {}", url);
+        assert!(urls.insert(url));
+    }
+    assert!(!urls.is_empty());
+
     info!("========================================================");
     info!("Seed node refinery operating successfully!");
     info!("========================================================");
 
     info!("========================================================");
-    info!("Waiting 5s for peers to propagate...");
+    info!("Waiting 10s for seed refinery...");
     info!("========================================================");
-    sleep(5).await;
+    sleep(10).await;
 
+    let whitelist = seed.hosts().container.fetch_all(HostColor::White).await;
+    assert!(whitelist.len() >= 2);
     // ===========================================================
     // 5. Select a random peer and ensure that its hostlist is not
     //    empty. This ensures the seed node is sharing whitelisted
     //    nodes around the network.
     // ===========================================================
-    check_random_hostlist(&outbound_instances, &mut rng).await;
+    check_all_hostlist(&outbound_instances).await;
     info!("========================================================");
-    info!("Peer successfully received addrs!");
+    info!("Peers successfully received addrs!");
     info!("========================================================");
 
     info!("========================================================");
