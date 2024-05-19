@@ -11,7 +11,7 @@ use std::{
     },
 };
 
-use crate::{scene::SceneNodeId, expr::SExprCode};
+use crate::{expr::SExprCode, scene::SceneNodeId};
 
 type Buffer = Arc<Vec<u8>>;
 

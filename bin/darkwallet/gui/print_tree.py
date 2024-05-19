@@ -50,11 +50,15 @@ def print_node_info(parent_id, indent):
         print_node_info(child_id, indent+1)
 
     for prop in api.get_properties(parent_id):
-        if prop.type == PropertyType.STR:
+        if prop.type != PropertyType.BUFFER:
             prop_val = api.get_property_value(parent_id, prop.name)
-            prop_val = f" = \"{prop_val}\""
-        elif prop.type != PropertyType.BUFFER:
-            prop_val = api.get_property_value(parent_id, prop.name)
+
+            if prop.type == PropertyType.STR:
+                prop_val = [f"\"{pv}\"" for pv in prop_val]
+
+            if len(prop_val) == 1:
+                prop_val = prop_val[0]
+
             prop_val = f" = {prop_val}"
         else:
             prop_val = ""

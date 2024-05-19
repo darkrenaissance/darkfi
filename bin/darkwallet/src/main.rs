@@ -22,6 +22,10 @@ mod plugin;
 
 mod prop;
 
+mod py;
+
+mod res;
+
 mod shader;
 
 #[macro_use]
@@ -95,4 +99,3 @@ def foo():
     println!("{:?}", res);
 }
 */
-

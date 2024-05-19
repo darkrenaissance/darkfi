@@ -33,6 +33,8 @@ pub enum SceneNodeType {
     Fonts = 10,
     Font = 11,
     LinePosition = 12,
+    Plugins = 14,
+    Plugin = 15,
 }
 
 pub struct ScenePath(Vec<String>);
@@ -430,10 +432,10 @@ impl SceneNode {
     pub fn get_property_node_id(&self, name: &str) -> Result<SceneNodeId> {
         self.get_property(name).ok_or(Error::PropertyNotFound)?.get_node_id(0)
     }
-    //// Setters
-    //pub fn set_property_bool(&self, name: &str, val: bool) -> Result<()> {
-    //    self.get_property(name).ok_or(Error::PropertyNotFound)?.set_bool(val)
-    //}
+    // Setters
+    pub fn set_property_bool(&self, name: &str, val: bool) -> Result<()> {
+        self.get_property(name).ok_or(Error::PropertyNotFound)?.set_bool(0, val)
+    }
     //pub fn set_property_u32(&self, name: &str, val: u32) -> Result<()> {
     //    self.get_property(name).ok_or(Error::PropertyNotFound)?.set_u32(val)
     //}

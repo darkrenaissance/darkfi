@@ -14,8 +14,9 @@ use std::{
 
 use crate::{
     error::{Error, Result},
-    expr::{SExprVal, SExprMachine},
+    expr::{SExprMachine, SExprVal},
     prop::{Property, PropertySubType, PropertyType},
+    res::{ResourceId, ResourceManager},
     scene::{MethodResponseFn, SceneGraph, SceneGraphPtr, SceneNode, SceneNodeId, SceneNodeType},
     shader,
 };
@@ -79,60 +80,6 @@ impl<T> Rectangle<T> {
             w: iter.next().unwrap(),
             h: iter.next().unwrap(),
         }
-    }
-}
-
-type ResourceId = u32;
-
-struct ResourceManager<T> {
-    resources: Vec<(ResourceId, Option<T>)>,
-    freed: Vec<usize>,
-    id_counter: ResourceId,
-}
-
-impl<T> ResourceManager<T> {
-    fn new() -> Self {
-        Self { resources: vec![], freed: vec![], id_counter: 0 }
-    }
-
-    fn alloc(&mut self, rsrc: T) -> ResourceId {
-        let id = self.id_counter;
-        self.id_counter += 1;
-
-        if self.freed.is_empty() {
-            let idx = self.resources.len();
-            self.resources.push((id, Some(rsrc)));
-        } else {
-            let idx = self.freed.pop().unwrap();
-            let _ = std::mem::replace(&mut self.resources[idx], (id, Some(rsrc)));
-        }
-        id
-    }
-
-    fn get(&self, id: ResourceId) -> Option<&T> {
-        for (idx, (rsrc_id, rsrc)) in self.resources.iter().enumerate() {
-            if self.freed.contains(&idx) {
-                continue
-            }
-            if *rsrc_id == id {
-                return rsrc.as_ref()
-            }
-        }
-        None
-    }
-
-    fn free(&mut self, id: ResourceId) -> Result<()> {
-        for (idx, (rsrc_id, rsrc)) in self.resources.iter_mut().enumerate() {
-            if self.freed.contains(&idx) {
-                return Err(Error::ResourceNotFound)
-            }
-            if *rsrc_id == id {
-                *rsrc = None;
-                self.freed.push(idx);
-                return Ok(())
-            }
-        }
-        Err(Error::ResourceNotFound)
     }
 }
 
@@ -262,7 +209,7 @@ impl Stage {
             font,
             method_recvr,
             method_sender,
-            last_draw_time: None
+            last_draw_time: None,
         };
         stage.setup_scene_graph_window();
         debug!("Finished loading GUI");
@@ -554,7 +501,7 @@ impl Stage {
         img_node.add_property(prop)?;
 
         let mut prop =
-            Property::new("texture_id", PropertyType::Uint32, PropertySubType::ResourceId);
+            Property::new("texture_rid", PropertyType::Uint32, PropertySubType::ResourceId);
         prop.set_u32(0, id).unwrap();
         img_node.add_property(prop)?;
 
@@ -630,12 +577,22 @@ impl Stage {
     }
 }
 
+struct DeferredDraw {
+    z_index: u32,
+    vertex_buffer: BufferId,
+    index_buffer: BufferId,
+    texture: TextureId,
+    uniforms_data: [u8; 128],
+    faces_len: usize,
+}
+
 struct RenderContext<'a> {
     scene_graph: MutexGuard<'a, SceneGraph>,
     ctx: &'a mut Box<dyn RenderingBackend>,
     pipeline: &'a Pipeline,
     proj: glam::Mat4,
     textures: &'a ResourceManager<TextureId>,
+    draw_calls: Vec<DeferredDraw>,
 }
 
 impl<'a> RenderContext<'a> {
@@ -646,10 +603,14 @@ impl<'a> RenderContext<'a> {
             .expect("no window attached!")
             .get_children(&[SceneNodeType::RenderLayer])
         {
+            self.draw_calls.clear();
+
             if let Err(err) = self.render_layer(layer.id) {
                 error!("error rendering layer '{}': {}", layer.name, err)
             }
         }
+
+        self.ctx.commit_frame();
     }
 
     fn get_rect(layer: &SceneNode) -> Result<Rectangle<i32>> {
@@ -670,7 +631,7 @@ impl<'a> RenderContext<'a> {
                         ("sw".to_string(), SExprVal::Float32(screen_width)),
                         ("sh".to_string(), SExprVal::Float32(screen_height)),
                     ],
-                    stmts: &expr
+                    stmts: &expr,
                 };
 
                 rect[i] = machine.call()?.as_u32()? as i32;
@@ -711,7 +672,7 @@ impl<'a> RenderContext<'a> {
             // note that (x, y) is offset by layer rect so it is the pos within layer
             // layer coords are (0, 0) -> (1, 1)
 
-            // optionally evaluated using python
+            // optionally evaluated using sexpr
 
             // mesh data is (0, 0) to (1, 1)
             // so scale by (w, h)
@@ -724,6 +685,28 @@ impl<'a> RenderContext<'a> {
                 }
                 _ => panic!("render_layer(): unknown type"),
             }
+        }
+
+        // Order draw calls by z-index
+        self.draw_calls.sort_unstable_by_key(|dc| dc.z_index);
+        for draw_call in std::mem::take(&mut self.draw_calls) {
+            let bindings = Bindings {
+                vertex_buffers: vec![draw_call.vertex_buffer],
+                index_buffer: draw_call.index_buffer,
+                images: vec![draw_call.texture],
+            };
+
+            self.ctx.apply_bindings(&bindings);
+
+            self.ctx.apply_uniforms_from_bytes(
+                draw_call.uniforms_data.as_ptr(),
+                draw_call.uniforms_data.len(),
+            );
+
+            self.ctx.draw(0, 3 * draw_call.faces_len as i32, 1);
+
+            self.ctx.delete_buffer(draw_call.index_buffer);
+            self.ctx.delete_buffer(draw_call.vertex_buffer);
         }
 
         self.ctx.end_render_pass();
@@ -747,7 +730,7 @@ impl<'a> RenderContext<'a> {
                         ("lw".to_string(), SExprVal::Uint32(layer_rect.w as u32)),
                         ("lh".to_string(), SExprVal::Uint32(layer_rect.h as u32)),
                     ],
-                    stmts: &expr
+                    stmts: &expr,
                 };
 
                 rect[i] = machine.call()?.coerce_f32()?;
@@ -760,6 +743,8 @@ impl<'a> RenderContext<'a> {
 
     fn render_mesh(&mut self, mesh_id: SceneNodeId, layer_rect: &Rectangle<i32>) -> Result<()> {
         let mesh = self.scene_graph.get_node(mesh_id).unwrap();
+
+        let z_index = mesh.get_property_u32("z_index")?;
 
         let data = mesh.get_property("data").ok_or(Error::PropertyNotFound)?;
         let verts = data.get_buf(0)?;
@@ -785,11 +770,6 @@ impl<'a> RenderContext<'a> {
         // temp
         let texture = self.textures.get(Stage::WHITE_TEXTURE_ID).unwrap();
 
-        let bindings =
-            Bindings { vertex_buffers: vec![vertex_buffer], index_buffer, images: vec![*texture] };
-
-        self.ctx.apply_bindings(&bindings);
-
         let rect = Self::get_dim(mesh, layer_rect)?;
         //debug!("mesh rect: {:?}", rect);
 
@@ -809,6 +789,24 @@ impl<'a> RenderContext<'a> {
         let data: [u8; 64] = unsafe { std::mem::transmute_copy(&model) };
         uniforms_data[64..].copy_from_slice(&data);
         assert_eq!(128, 2 * UniformType::Mat4.size());
+
+        if z_index > 0 {
+            let draw_call = DeferredDraw {
+                z_index,
+                vertex_buffer,
+                index_buffer,
+                texture: *texture,
+                uniforms_data,
+                faces_len: faces.len(),
+            };
+            self.draw_calls.push(draw_call);
+            return Ok(())
+        }
+
+        let bindings =
+            Bindings { vertex_buffers: vec![vertex_buffer], index_buffer, images: vec![*texture] };
+
+        self.ctx.apply_bindings(&bindings);
 
         self.ctx.apply_uniforms_from_bytes(uniforms_data.as_ptr(), uniforms_data.len());
 
@@ -881,9 +879,9 @@ impl EventHandler for Stage {
     fn draw(&mut self) {
         self.last_draw_time = Some(Instant::now());
 
-        let clear = PassAction::clear_color(0., 0., 0., 1.);
-        self.ctx.begin_default_pass(clear);
-        self.ctx.end_render_pass();
+        //let clear = PassAction::clear_color(0., 0., 0., 1.);
+        //self.ctx.begin_default_pass(clear);
+        //self.ctx.end_render_pass();
 
         let (screen_width, screen_height) = window::screen_size();
         // This will make the top left (0, 0) and the bottom right (1, 1)
@@ -896,7 +894,6 @@ impl EventHandler for Stage {
         //let mut layout = Layout::new(CoordinateSystem::PositiveYDown);
 
         let scene_graph = self.scene_graph.lock().unwrap();
-        let window_id = scene_graph.lookup_node_id("/window").expect("no window attached");
 
         // We need this because scene_graph must remain locked for the duration of the rendering
         let mut render_context = RenderContext {
@@ -905,6 +902,7 @@ impl EventHandler for Stage {
             pipeline: &self.pipeline,
             proj,
             textures: &self.textures,
+            draw_calls: vec![],
         };
 
         render_context.render_window();
@@ -1074,7 +1072,6 @@ impl EventHandler for Stage {
             */
         }
         */
-        self.ctx.commit_frame();
     }
 
     fn key_down_event(&mut self, keycode: KeyCode, modifiers: KeyMods, repeat: bool) {

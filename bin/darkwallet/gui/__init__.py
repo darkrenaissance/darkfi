@@ -286,6 +286,15 @@ def draw():
     api.add_property(layer_id, prop)
     api.set_property_bool(layer_id, "is_visible", 0, True)
 
+    #prop = Property(
+    #    "redraw", PropertyType.BOOL, PropertySubType.NULL,
+    #    None,
+    #    "redraw", "Redraw this layer",
+    #    False, False, 1, None, None, []
+    #)
+    #api.add_property(layer_id, prop)
+    #api.set_property_bool(layer_id, "redraw", 0, True)
+
     prop = Property(
         "rect", PropertyType.UINT32, PropertySubType.PIXEL,
         None,
@@ -353,6 +362,60 @@ def draw():
     #api.set_property_str(mesh_id, "rect", 3, "lh - 10")
     code = [["-", ["load", "lh"], ["f32", 10]]]
     api.set_property_expr(mesh_id, "rect", 3, code)
+
+    prop = Property(
+        "z_index", PropertyType.UINT32, PropertySubType.NULL,
+        None,
+        "z-index", "Z-index: values greater than zero are deferred draws",
+        False, False, 1, None, None, []
+    )
+    api.add_property(mesh_id, prop)
+
+    api.link_node(mesh_id, layer_id)
+
+    # Add a second mesh to our layer
+
+    mesh_id = api.add_node("meshie2", SceneNodeType.RENDER_MESH)
+
+    prop = Property(
+        "data", PropertyType.BUFFER, PropertySubType.NULL,
+        None,
+        "mesh_data", "The face and vertex data for the mesh",
+        False, False, 2, None, None, []
+    )
+    api.add_property(mesh_id, prop)
+
+    x, y, w, h = 0, 0, 1, 1
+    vert1 = vertex(x,     y,     1, 0, 1, 1, 0, 0)
+    vert2 = vertex(x + w, y,     0.5, 0, 1, 1, 1, 0)
+    vert3 = vertex(x,     y + h, 1, 0, 0.5, 1, 0, 1)
+    vert4 = vertex(x + w, y + h, 0.5, 1, 0.5, 1, 1, 1)
+
+    verts = vert1 + vert2 + vert3 + vert4
+    faces = face(0, 2, 1) + face(1, 2, 3)
+
+    api.set_property_buf(mesh_id, "data", 0, verts)
+    api.set_property_buf(mesh_id, "data", 1, faces)
+
+    prop = Property(
+        "rect", PropertyType.FLOAT32, PropertySubType.PIXEL,
+        None,
+        "mesh_rect", "The position and size within the layer",
+        False, True, 4, None, None, []
+    )
+    api.add_property(mesh_id, prop)
+    api.set_property_f32(mesh_id, "rect", 0, 10)
+    api.set_property_f32(mesh_id, "rect", 1, 10)
+    api.set_property_f32(mesh_id, "rect", 2, 60)
+    api.set_property_f32(mesh_id, "rect", 3, 60)
+
+    prop = Property(
+        "z_index", PropertyType.UINT32, PropertySubType.NULL,
+        None,
+        "z-index", "Z-index: values greater than zero are deferred draws",
+        False, False, 1, None, None, []
+    )
+    api.add_property(mesh_id, prop)
 
     api.link_node(mesh_id, layer_id)
 

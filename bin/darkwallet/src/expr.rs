@@ -2,8 +2,13 @@ use crate::{
     error::{Error, Result},
     //prop::{Property, PropertySubType, PropertyType, PropertySExprValue},
 };
-use darkfi_serial::{Decodable, Encodable, ReadExt, SerialDecodable, SerialEncodable, WriteExt, serialize};
-use std::{io::{Read, Write}, sync::Arc};
+use darkfi_serial::{
+    serialize, Decodable, Encodable, ReadExt, SerialDecodable, SerialEncodable, WriteExt,
+};
+use std::{
+    io::{Read, Write},
+    sync::Arc,
+};
 
 #[derive(Clone, Debug, PartialEq, SerialEncodable, SerialDecodable)]
 pub enum SExprVal {
@@ -113,7 +118,7 @@ pub enum Op {
     Max((Box<Op>, Box<Op>)),
     IsEqual((Box<Op>, Box<Op>)),
     LessThan((Box<Op>, Box<Op>)),
-    Float32ToUint32(Box<Op>)
+    Float32ToUint32(Box<Op>),
 }
 
 impl<'a> SExprMachine<'a> {
@@ -384,7 +389,7 @@ impl Decodable for Op {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use darkfi_serial::{serialize, deserialize};
+    use darkfi_serial::{deserialize, serialize};
 
     #[test]
     fn seval() {
