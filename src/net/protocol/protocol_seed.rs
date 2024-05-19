@@ -119,11 +119,14 @@ impl ProtocolBase for ProtocolSeed {
             target: "net::protocol_seed::start()",
             "Received {} addrs from {}", addrs_msg.addrs.len(), self.channel.address(),
         );
-        debug!(
-            target: "net::protocol_seed::start()",
-            "Appending to greylist...",
-        );
-        self.hosts.insert(HostColor::Grey, &addrs_msg.addrs).await;
+
+        if !addrs_msg.addrs.is_empty() {
+            debug!(
+                target: "net::protocol_seed::start()",
+                "Appending to greylist...",
+            );
+            self.hosts.insert(HostColor::Grey, &addrs_msg.addrs).await;
+        }
 
         debug!(target: "net::protocol_seed::start()", "END => address={}", self.channel.address());
         Ok(())
