@@ -28,10 +28,12 @@ Fuzzing benefits from running as many tests as possible, so optimizing our time
 and throughput is very important. The number of jobs used by the computer
 can be increased by passing the following argument:
 
+#### Threads
 ```sh
 --jobs $(nproc)
 ```
 
+#### Disabling Address Sanitizer
 The Address Sanitizer can be disabled for any Rust code that does not use `unsafe`:
 
 ```sh
@@ -43,10 +45,17 @@ by default.
 
 In the case of DarkFi, we also want to supply `--all-features`.
 
-In summary, a more efficient way to fuzz safe Rust code is the following:
+#### Using dictionaries
+
+Generating a dictionary for a file format can be helpful.
+
+We store dictionaries in the `dictionaries/` directory.
+
+#### Summary
+A more efficient way to fuzz safe Rust code is the following:
 
 ```sh
-cargo fuzz run --jobs $(nproc) -s none --all-features TARGET 
+cargo fuzz run --jobs $(nproc) -s none --all-features TARGET -- -dict=dictionaries/SOMEDICT.dict
 ```
 
 ## Fuzzing Corpora 
@@ -97,7 +106,6 @@ Periodically you may encounter a crash with text like the following:
 ```
 AddressSanitizer: requested allocation size 0xFOO (0xBAR after adjustments for alignment, red zones etc.) exceeds maximum supported size of 0x10000000000
 ```
-
 This indicates that Rust is trying to allocate a large amount of memory in a way that crashes libFuzzer. 
 It likely indicates a memory-intensive part of the codebase but does not indicate a crash in DarkFi code,
 per se. Instead, libFuzzer itself is crashing. 
@@ -106,6 +114,10 @@ In this case, **do not add the crash artifact to the corpora**. Try to
 simplify the fuzz harness instead to reduce its code coverage. If the
 harness is targeting a high-level function, try isolating the problem
 and fuzzing a lower-level function instead.
+
+### Disabled Address Sanitizer
+
+If not already done, use the `--s none` flag described in the Optimization section
 
 ### Increasing allowed memory usage
 It is possible to increase the amount of memory libFuzzer is allowed to use by passing an argument
@@ -171,4 +183,3 @@ llvm-cov show target/x86_64-unknown-linux-gnu/coverage/x86_64-unknown-linux-gnu/
 ```
 
 You can now open `zkas-compile-report.html` in a browser and view the code coverage.
-
