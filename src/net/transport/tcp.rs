@@ -19,14 +19,21 @@
 use std::{io, time::Duration};
 
 use async_trait::async_trait;
+use futures::{
+    future::{select, Either},
+    pin_mut,
+};
 use futures_rustls::{TlsAcceptor, TlsStream};
 use log::debug;
-use smol::net::{SocketAddr, TcpListener as SmolTcpListener, TcpStream};
+use smol::{
+    net::{SocketAddr, TcpListener as SmolTcpListener, TcpStream},
+    Async, Timer,
+};
 use socket2::{Domain, Socket, TcpKeepalive, Type};
 use url::Url;
 
 use super::{PtListener, PtStream};
-use crate::Result;
+use crate::{Error, Result};
 
 /// TCP Dialer implementation
 #[derive(Debug, Clone)]
@@ -71,26 +78,72 @@ impl TcpDialer {
         debug!(target: "net::tcp::do_dial", "Dialing {} with TCP...", socket_addr);
         let socket = self.create_socket(socket_addr).await?;
 
-        let connection = if let Some(timeout) = timeout {
-            socket.connect_timeout(&socket_addr.into(), timeout)
-        } else {
-            socket.connect(&socket_addr.into())
-        };
+        socket.set_nonblocking(true)?;
 
-        match connection {
+        // Sync start socket connect. A WouldBlock error means this
+        // connection is in progress.
+        match socket.connect(&socket_addr.into()) {
             Ok(()) => {}
             Err(err) if err.raw_os_error() == Some(libc::EINPROGRESS) => {}
             Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
             Err(err) => return Err(err.into()),
+        };
+
+        // Wrap socket in an Async wrapper.
+        let async_socket = Async::new(socket)?;
+
+        // Wait until the async object becomes writable.
+        let connect = async {
+            match async_socket.get_ref().take_error()? {
+                Some(err) => Err(Error::Io(err.kind())),
+                None => Ok(()),
+            }
+        };
+
+        // If a timeout is configured, run both the connect and timeout
+        // futures and return whatever finishes first. Otherwise wait on
+        // the connect future.
+        match timeout {
+            Some(t) => {
+                let timeout = Timer::after(t);
+                pin_mut!(timeout);
+                pin_mut!(connect);
+
+                match select(connect, timeout).await {
+                    Either::Left((Ok(_), _)) => {
+                        debug!(target: "net::tcp::do_dial", "Connection successful!");
+                        let stream = {
+                            let socket = async_socket.into_inner()?;
+                            std::net::TcpStream::from(socket)
+                        };
+                        let stream = Async::<std::net::TcpStream>::try_from(stream)?;
+                        let stream = TcpStream::from(stream);
+
+                        Ok(stream)
+                    }
+                    Either::Left((Err(e), _)) => {
+                        debug!(target: "net::tcp::do_dial", "Connection error: {}", e);
+                        return Err(e.into());
+                    }
+
+                    Either::Right((_, _)) => {
+                        debug!(target: "net::tcp::do_dial", "Connection timeed out!");
+                        return Err(Error::ConnectTimeout)
+                    }
+                }
+            }
+            None => {
+                connect.await?;
+                let stream = {
+                    let socket = async_socket.into_inner()?;
+                    std::net::TcpStream::from(socket)
+                };
+                let stream = Async::<std::net::TcpStream>::try_from(stream)?;
+                let stream = TcpStream::from(stream);
+
+                Ok(stream)
+            }
         }
-
-        socket.set_nonblocking(true)?;
-
-        let stream = std::net::TcpStream::from(socket);
-        let stream = smol::Async::<std::net::TcpStream>::try_from(stream)?;
-        let stream = TcpStream::from(stream);
-
-        Ok(stream)
     }
 }
 
