@@ -113,9 +113,7 @@ impl P2p {
         info!(target: "net::p2p::start()", "[P2P] Starting P2P subsystem");
 
         // First attempt any set manual connections
-        for peer in &self.settings.peers {
-            self.session_manual().connect(peer.clone()).await;
-        }
+        self.session_manual().start().await;
 
         // Start the inbound session
         if let Err(err) = self.session_inbound().start().await {

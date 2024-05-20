@@ -104,9 +104,7 @@ impl OutboundSession {
 
     /// Stops the outbound session.
     pub(crate) async fn stop(&self) {
-        debug!(target: "net::outbound_session", "Stopping outbound session");
         let slots = &*self.slots.lock().await;
-
         let mut futures = FuturesUnordered::new();
 
         for slot in slots {
@@ -115,10 +113,6 @@ impl OutboundSession {
 
         while (futures.next().await).is_some() {}
 
-        // TODO/ FIXME: Shutting down the slots triggers a seed sync in peer discovery
-        // (see outbound_session.rs:633).
-        // We should implement an Atomic Bool called stopped()
-        // (see channel.rs).
         self.peer_discovery.clone().stop().await;
     }
 
@@ -172,17 +166,20 @@ struct Slot {
     process: StoppableTaskPtr,
     wakeup_self: CondVar,
     session: Weak<OutboundSession>,
+    connector: Connector,
     // For debugging
     channel_id: AtomicU32,
 }
 
 impl Slot {
     fn new(session: Weak<OutboundSession>, slot: u32) -> Arc<Self> {
+        let settings = session.upgrade().unwrap().p2p().settings();
         Arc::new(Self {
             slot,
             process: StoppableTask::new(),
             wakeup_self: CondVar::new(),
-            session,
+            session: session.clone(),
+            connector: Connector::new(settings, session),
             channel_id: AtomicU32::new(0),
         })
     }
@@ -191,18 +188,20 @@ impl Slot {
         let ex = self.p2p().executor();
 
         self.process.clone().start(
-            async move {
-                self.run().await;
-                unreachable!();
+            self.run(),
+            |res| async {
+                match res {
+                    Ok(()) | Err(Error::NetworkServiceStopped) => {}
+                    Err(e) => error!("net::outbound_session {}", e),
+                }
             },
-            // Ignore stop handler
-            |_| async {},
             Error::NetworkServiceStopped,
             ex,
         );
     }
     async fn stop(self: Arc<Self>) {
-        self.process.stop().await
+        self.connector.stop();
+        self.process.stop().await;
     }
 
     /// Address selection algorithm that works as follows: up to
@@ -300,7 +299,7 @@ impl Slot {
     // We first try to make connections to the addresses on our anchor list. We then find some
     // whitelist connections according to the whitelist percent default. Finally, any remaining
     // connections we make from the greylist.
-    async fn run(self: Arc<Self>) {
+    async fn run(self: Arc<Self>) -> Result<()> {
         let hosts = self.p2p().hosts();
 
         loop {
@@ -378,6 +377,7 @@ impl Slot {
                     });
 
                     self.channel_id.store(0, Ordering::Relaxed);
+
                     continue
                 }
             };
@@ -433,10 +433,7 @@ impl Slot {
     /// channel. In case of any failures, a network error is returned and the
     /// main connect loop (parent of this function) will iterate again.
     async fn try_connect(&self, addr: Url, last_seen: u64) -> Result<(Url, ChannelPtr)> {
-        let parent = Arc::downgrade(&self.session());
-        let connector = Connector::new(self.p2p().settings(), parent);
-
-        match connector.connect(&addr).await {
+        match self.connector.connect(&addr).await {
             Ok((addr_final, channel)) => Ok((addr_final, channel)),
 
             Err(e) => {
@@ -531,7 +528,7 @@ impl PeerDiscoveryBase for PeerDiscovery {
         );
     }
     async fn stop(self: Arc<Self>) {
-        self.process.stop().await
+        self.process.stop().await;
     }
 
     /// Activate peer discovery if not active already. For the first two

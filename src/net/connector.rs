@@ -87,23 +87,20 @@ impl Connector {
         pin_mut!(stop_fut);
         pin_mut!(dial_fut);
 
-        let result = {
-            match select(dial_fut, stop_fut).await {
-                Either::Left((Ok(ptstream), _)) => {
-                    let channel = Channel::new(
-                        ptstream,
-                        Some(endpoint.clone()),
-                        url.clone(),
-                        self.session.clone(),
-                    )
-                    .await;
-                    Ok((endpoint, channel))
-                }
-                Either::Left((Err(e), _)) => Err(e.into()),
-                Either::Right((_, _)) => return Err(Error::ConnectorStopped),
+        match select(dial_fut, stop_fut).await {
+            Either::Left((Ok(ptstream), _)) => {
+                let channel = Channel::new(
+                    ptstream,
+                    Some(endpoint.clone()),
+                    url.clone(),
+                    self.session.clone(),
+                )
+                .await;
+                Ok((endpoint, channel))
             }
-        };
-        result
+            Either::Left((Err(e), _)) => Err(e),
+            Either::Right((_, _)) => Err(Error::ConnectorStopped),
+        }
     }
 
     pub(crate) fn stop(&self) {

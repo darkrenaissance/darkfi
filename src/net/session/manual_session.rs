@@ -31,9 +31,10 @@
 //! and insures that no other part of the program uses the slots at the
 //! same time.
 
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use async_trait::async_trait;
+use futures::stream::{FuturesUnordered, StreamExt};
 use log::{debug, error, info, warn};
 use smol::lock::Mutex;
 use url::Url;
@@ -46,7 +47,7 @@ use super::{
     Session, SessionBitFlag, SESSION_MANUAL,
 };
 use crate::{
-    net::hosts::HostState,
+    net::{hosts::HostState, settings::SettingsPtr},
     system::{sleep, LazyWeak, StoppableTask, StoppableTaskPtr},
     Error, Result,
 };
@@ -56,66 +57,116 @@ pub type ManualSessionPtr = Arc<ManualSession>;
 /// Defines manual connections session.
 pub struct ManualSession {
     pub(in crate::net) p2p: LazyWeak<P2p>,
-    connect_slots: Mutex<Vec<StoppableTaskPtr>>,
+    slots: Mutex<Vec<Arc<Slot>>>,
 }
 
 impl ManualSession {
     /// Create a new manual session.
     pub fn new() -> ManualSessionPtr {
-        Arc::new(Self { p2p: LazyWeak::new(), connect_slots: Mutex::new(Vec::new()) })
+        Arc::new(Self { p2p: LazyWeak::new(), slots: Mutex::new(Vec::new()) })
+    }
+
+    pub(crate) async fn start(self: Arc<Self>) {
+        // Activate mutex lock on connection slots.
+        let mut slots = self.slots.lock().await;
+
+        let mut futures = FuturesUnordered::new();
+
+        let self_ = Arc::downgrade(&self);
+
+        // Initialize a slot for each configured peer.
+        // Connections will be started by not yet activated.
+        for peer in &self.p2p().settings().peers {
+            let slot = Slot::new(self_.clone(), peer.clone(), self.p2p().settings());
+            futures.push(slot.clone().start());
+            slots.push(slot);
+        }
+
+        while (futures.next().await).is_some() {}
     }
 
     /// Stops the manual session.
     pub async fn stop(&self) {
-        let connect_slots = &*self.connect_slots.lock().await;
+        let slots = &*self.slots.lock().await;
+        let mut futures = FuturesUnordered::new();
 
-        for slot in connect_slots {
-            slot.stop().await;
+        for slot in slots {
+            futures.push(slot.stop());
         }
+
+        while (futures.next().await).is_some() {}
+    }
+}
+
+#[async_trait]
+impl Session for ManualSession {
+    fn p2p(&self) -> P2pPtr {
+        self.p2p.upgrade()
     }
 
-    /// Connect the manual session to the given address
-    pub async fn connect(self: Arc<Self>, addr: Url) {
-        let ex = self.p2p().executor();
-        let task = StoppableTask::new();
-        self.connect_slots.lock().await.push(task.clone());
+    fn type_id(&self) -> SessionBitFlag {
+        SESSION_MANUAL
+    }
+}
 
-        task.start(
-            self.clone().channel_connect_loop(addr),
-            // Ignore stop handler
-            |_| async {},
+struct Slot {
+    addr: Url,
+    process: StoppableTaskPtr,
+    session: Weak<ManualSession>,
+    connector: Connector,
+}
+
+impl Slot {
+    fn new(session: Weak<ManualSession>, addr: Url, settings: SettingsPtr) -> Arc<Self> {
+        Arc::new(Self {
+            addr,
+            process: StoppableTask::new(),
+            session: session.clone(),
+            connector: Connector::new(settings, session),
+        })
+    }
+
+    async fn start(self: Arc<Self>) {
+        let ex = self.p2p().executor();
+
+        self.process.clone().start(
+            self.run(),
+            |res| async {
+                match res {
+                    Ok(()) | Err(Error::NetworkServiceStopped) => {}
+                    Err(e) => error!("net::manual_session {}", e),
+                }
+            },
             Error::NetworkServiceStopped,
             ex,
         );
     }
 
-    /// Creates a connector object and tries to connect using it
-    pub async fn channel_connect_loop(self: Arc<Self>, addr: Url) -> Result<()> {
+    /// Attempts a connection on the associated Connector object.
+    async fn run(self: Arc<Self>) -> Result<()> {
         let ex = self.p2p().executor();
-        let parent = Arc::downgrade(&self);
-        let settings = self.p2p().settings();
-        let connector = Connector::new(settings.clone(), parent);
 
         let mut attempts = 0;
         loop {
             attempts += 1;
+
             info!(
                 target: "net::manual_session",
                 "[P2P] Connecting to manual outbound [{}] (attempt #{})",
-                addr, attempts
+                self.addr, attempts
             );
 
             // Do not establish a connection to a host that is also configured as a seed.
             // This indicates a user misconfiguration.
-            if settings.seeds.contains(&addr) {
+            if self.p2p().settings().seeds.contains(&self.addr) {
                 error!(target: "net::manual_session", 
-                       "[P2P] Suspending manual connection to seed [{}]", addr.clone());
+                       "[P2P] Suspending manual connection to seed [{}]", self.addr.clone());
                 return Ok(())
             }
 
-            match self.p2p().hosts().try_register(addr.clone(), HostState::Connect).await {
+            match self.p2p().hosts().try_register(self.addr.clone(), HostState::Connect).await {
                 Ok(_) => {
-                    match connector.connect(&addr).await {
+                    match self.connector.connect(&self.addr).await {
                         Ok((url, channel)) => {
                             info!(
                                 target: "net::manual_session",
@@ -130,7 +181,7 @@ impl ManualSession {
                             // Channel is now connected but not yet setup
 
                             // Register the new channel
-                            self.register_channel(channel.clone(), ex.clone()).await?;
+                            self.session().register_channel(channel.clone(), ex.clone()).await?;
 
                             // Wait for channel to close
                             stop_sub.receive().await;
@@ -147,39 +198,41 @@ impl ManualSession {
                             warn!(
                                 target: "net::manual_session",
                                 "[P2P] Unable to connect to manual outbound [{}]: {}",
-                                addr, e,
+                                self.addr, e,
                             );
 
                             // Stop tracking this peer, to avoid it getting stuck in the Connect
                             // state. This is safe since we have failed to connect at this point.
-                            self.p2p().hosts().unregister(&addr).await;
+                            self.p2p().hosts().unregister(&self.addr).await;
                         }
                     }
                 }
                 // This address is currently unavailable.
                 Err(e) => {
                     debug!(target: "net::manual_session", "[P2P] Unable to connect to manual
-                           outbound [{}]: {}", addr.clone(), e);
+                           outbound [{}]: {}", self.addr.clone(), e);
                 }
             }
 
             info!(
                 target: "net::manual_session",
                 "[P2P] Waiting {} seconds until next manual outbound connection attempt [{}]",
-                settings.outbound_connect_timeout, addr,
+                self.p2p().settings().outbound_connect_timeout, self.addr,
             );
-            sleep(settings.outbound_connect_timeout).await;
+            sleep(self.p2p().settings().outbound_connect_timeout).await;
         }
     }
-}
 
-#[async_trait]
-impl Session for ManualSession {
-    fn p2p(&self) -> P2pPtr {
-        self.p2p.upgrade()
+    fn session(&self) -> ManualSessionPtr {
+        self.session.upgrade().unwrap()
     }
 
-    fn type_id(&self) -> SessionBitFlag {
-        SESSION_MANUAL
+    fn p2p(&self) -> P2pPtr {
+        self.session().p2p()
+    }
+
+    async fn stop(&self) {
+        self.connector.stop();
+        self.process.stop().await;
     }
 }

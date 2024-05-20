@@ -111,7 +111,6 @@ impl TcpDialer {
 
                 match select(connect, timeout).await {
                     Either::Left((Ok(_), _)) => {
-                        debug!(target: "net::tcp::do_dial", "Connection successful!");
                         let stream = {
                             let socket = async_socket.into_inner()?;
                             std::net::TcpStream::from(socket)
@@ -121,15 +120,9 @@ impl TcpDialer {
 
                         Ok(stream)
                     }
-                    Either::Left((Err(e), _)) => {
-                        debug!(target: "net::tcp::do_dial", "Connection error: {}", e);
-                        return Err(e.into());
-                    }
+                    Either::Left((Err(e), _)) => Err(e),
 
-                    Either::Right((_, _)) => {
-                        debug!(target: "net::tcp::do_dial", "Connection timeed out!");
-                        return Err(Error::ConnectTimeout)
-                    }
+                    Either::Right((_, _)) => Err(Error::ConnectTimeout),
                 }
             }
             None => {

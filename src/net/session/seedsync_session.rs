@@ -42,15 +42,14 @@
 //! function. This runs the version exchange protocol, stores the channel in the
 //! p2p list of channels, and subscribes to a stop signal.
 
-use std::sync::{
-    atomic::{AtomicBool, Ordering::SeqCst},
-    Arc, Weak,
-};
-
 use async_trait::async_trait;
 use futures::stream::{FuturesUnordered, StreamExt};
 use log::{debug, info, warn};
 use smol::lock::Mutex;
+use std::sync::{
+    atomic::{AtomicBool, Ordering::SeqCst},
+    Arc, Weak,
+};
 use url::Url;
 
 use super::{
@@ -106,6 +105,7 @@ impl SeedSyncSession {
     /// Called in `p2p.seed()`.
     pub(crate) async fn notify(&self) {
         let slots = &*self.slots.lock().await;
+
         for slot in slots {
             slot.notify();
         }
@@ -264,6 +264,7 @@ impl Slot {
     fn p2p(&self) -> P2pPtr {
         self.session().p2p()
     }
+
     async fn wait(&self) {
         self.wakeup_self.wait().await;
     }
@@ -277,6 +278,7 @@ impl Slot {
     }
 
     async fn stop(self: Arc<Self>) {
-        self.process.stop().await
+        self.connector.stop();
+        self.process.stop().await;
     }
 }
