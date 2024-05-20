@@ -16,9 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi::Result;
+use darkfi::{ClientFailed, Result};
 use darkfi_sdk::{crypto::Keypair, deploy::DeployParamsV1};
-use log::debug;
+use log::{debug, error};
+
+use crate::error::DeployError;
 
 pub struct DeployCallDebris {
     pub params: DeployParamsV1,
@@ -36,8 +38,11 @@ pub struct DeployCallBuilder {
 
 impl DeployCallBuilder {
     pub fn build(&self) -> Result<DeployCallDebris> {
-        debug!("Building Deployooor::DeployV1 contract call");
-        assert!(!self.wasm_bincode.is_empty());
+        debug!(target: "contract::deployooor::client::deploy", "Building Deployooor::DeployV1 contract call");
+        if self.wasm_bincode.is_empty() {
+            error!(target: "contract::deployooor::client::deploy", "Provided WASM bincode is empty");
+            return Err(ClientFailed::VerifyError(DeployError::WasmBincodeInvalid.to_string()).into())
+        }
 
         let params = DeployParamsV1 {
             wasm_bincode: self.wasm_bincode.clone(),

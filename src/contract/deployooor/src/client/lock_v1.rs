@@ -34,7 +34,7 @@ pub struct LockCallBuilder {
 
 impl LockCallBuilder {
     pub fn build(&self) -> Result<LockCallDebris> {
-        debug!("Building Deployooor::LockV1 contract call");
+        debug!(target: "contract::deployooor::client::lock", "Building Deployooor::LockV1 contract call");
 
         let params = LockParamsV1 { public_key: self.deploy_keypair.public };
         let debris = LockCallDebris { params };
