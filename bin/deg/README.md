@@ -49,16 +49,6 @@ If you don't require a venv, install the requirements and run `deg` as follows:
 % ./deg
 ```
 
-## Config
-
-On first run, `deg` will create a config file in the config directory
-specific to your operating system.
-
-To use `deg` you will need to open the config file and modify it. Enter
-the RPC port of the node you want to connect to and title them as you
-see fit. The default config file uses localhost, but you can replace
-this with hostname or external IP address.
-
 If you are using default ports for the daemon you want to debug:
 ```shell
 % # darkirc default RPC is localhost:26660
@@ -67,8 +57,31 @@ If you are using default ports for the daemon you want to debug:
 % ./deg tau
 ```
 
+To use `deg` with non-default host and port you will need to provide 
+them from args like so `host:port`:
+
+```shell
+% ./deg -e 127.0.0.1:2625
+```
+
+## Replay mode
+
+A tool embeded in `deg` to replay someone else's eventgraph.
+Since daemons like `darkirc` log the database instructions, one can 
+share thier db logs in `/tmp/replayer_log` with us, running in replay
+mode we can browse the eventgraph from their point of view and find 
+which event is missing or other issues they face.
+
+Running in replay mode is as simple as adding `-r` when running deg:
+
+```shell
+% ./deg -r darkirc
+% # Or
+% ./deg -r -e 127.0.0.1:2625
+```
+
 ## Usage
 
 Navigate up and down using the arrow keys. Scroll the message log using
 `PageUp` and `PageDown`. Press `enter` to view details about selected event.
-Type `b` to get back to the main view. Type `q` to quit.
+Press `b` to get back to the main view. Press `q` to quit.
