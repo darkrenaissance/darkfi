@@ -15,10 +15,11 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
 use darkfi::{
     zk::{Proof, ProvingKey},
     zkas::ZkBinary,
-    Result,
+    ClientFailed, Result,
 };
 use darkfi_sdk::{
     crypto::{
@@ -33,6 +34,7 @@ use rand::rngs::OsRng;
 use super::proof::{create_transfer_burn_proof, create_transfer_mint_proof};
 use crate::{
     client::{compute_remainder_blind, MoneyNote, OwnCoin, TokenId},
+    error::MoneyError,
     model::{CoinAttributes, Input, MoneyTransferParamsV1, Output},
 };
 
@@ -74,8 +76,12 @@ pub type TransferCallOutput = CoinAttributes;
 
 impl TransferCallBuilder {
     pub fn build(self) -> Result<(MoneyTransferParamsV1, TransferCallSecrets)> {
-        debug!("Building Money::TransferV1 contract call");
-        assert!(self.clear_inputs.len() + self.inputs.len() > 0);
+        debug!(target: "contract::money::client::transfer::build", "Building Money::TransferV1 contract call");
+        if self.clear_inputs.is_empty() && self.inputs.is_empty() {
+            return Err(
+                ClientFailed::VerifyError(MoneyError::TransferMissingInputs.to_string()).into()
+            )
+        }
 
         let mut params = MoneyTransferParamsV1 { inputs: vec![], outputs: vec![] };
         let mut signature_secrets = vec![];
@@ -85,7 +91,7 @@ impl TransferCallBuilder {
         let mut input_blinds = vec![];
         let mut output_blinds = vec![];
 
-        debug!("Building anonymous inputs");
+        debug!(target: "contract::money::client::transfer::build", "Building anonymous inputs");
         for (i, input) in self.inputs.iter().enumerate() {
             let value_blind = Blind::random(&mut OsRng);
             input_blinds.push(value_blind);
@@ -93,7 +99,7 @@ impl TransferCallBuilder {
             let signature_secret = SecretKey::random(&mut OsRng);
             signature_secrets.push(signature_secret);
 
-            debug!("Creating transfer burn proof for input {}", i);
+            debug!(target: "contract::money::client::transfer::build", "Creating transfer burn proof for input {}", i);
             let (proof, public_inputs) = create_transfer_burn_proof(
                 &self.burn_zkbin,
                 &self.burn_pk,
@@ -116,7 +122,11 @@ impl TransferCallBuilder {
         }
 
         // This value_blind calc assumes there will always be at least a single output
-        assert!(!self.outputs.is_empty());
+        if self.outputs.is_empty() {
+            return Err(
+                ClientFailed::VerifyError(MoneyError::TransferMissingOutputs.to_string()).into()
+            )
+        }
 
         let mut output_notes = vec![];
 
@@ -129,7 +139,7 @@ impl TransferCallBuilder {
 
             output_blinds.push(value_blind);
 
-            debug!("Creating transfer mint proof for output {}", i);
+            debug!(target: "contract::money::client::transfer::build", "Creating transfer mint proof for output {}", i);
             let (proof, public_inputs) = create_transfer_mint_proof(
                 &self.mint_zkbin,
                 &self.mint_pk,

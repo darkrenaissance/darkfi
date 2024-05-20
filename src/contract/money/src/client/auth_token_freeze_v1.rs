@@ -45,7 +45,7 @@ pub struct AuthTokenFreezeCallBuilder {
 
 impl AuthTokenFreezeCallBuilder {
     pub fn build(&self) -> Result<AuthTokenFreezeCallDebris> {
-        debug!("Building Money::AuthTokenFreezeV1 contract call");
+        debug!(target: "contract::money::client::auth_token_freeze", "Building Money::AuthTokenFreezeV1 contract call");
 
         // For the AuthTokenFreeze call, we just need to produce a valid signature,
         // and enforce the correct derivation inside ZK.

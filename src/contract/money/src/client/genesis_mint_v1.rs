@@ -19,13 +19,13 @@
 use darkfi::{
     zk::{Proof, ProvingKey},
     zkas::ZkBinary,
-    Result,
+    ClientFailed, Result,
 };
 use darkfi_sdk::{
     crypto::{note::AeadEncryptedNote, pasta_prelude::*, Blind, FuncId, Keypair, PublicKey},
     pasta::pallas,
 };
-use log::{debug, info};
+use log::debug;
 use rand::rngs::OsRng;
 
 use crate::{
@@ -77,8 +77,10 @@ pub struct GenesisMintCallBuilder {
 
 impl GenesisMintCallBuilder {
     pub fn build(&self) -> Result<GenesisMintCallDebris> {
-        debug!("Building Money::MintV1 contract call");
-        assert!(self.amount != 0);
+        debug!(target: "contract::money::client::genesis_mint", "Building Money::MintV1 contract call");
+        if self.amount == 0 {
+            return Err(ClientFailed::InvalidAmount(self.amount).into())
+        }
 
         // In this call, we will build one clear input and one anonymous output.
         // Only DARK_TOKEN_ID can be minted on genesis block.
@@ -115,7 +117,7 @@ impl GenesisMintCallBuilder {
 
         let coin_blind = Blind::random(&mut OsRng);
 
-        info!("Creating token mint proof for output");
+        debug!(target: "contract::money::client::genesis_mint", "Creating token mint proof for output");
         let (proof, public_inputs) = create_transfer_mint_proof(
             &self.mint_zkbin,
             &self.mint_pk,

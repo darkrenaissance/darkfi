@@ -26,7 +26,7 @@ use darkfi_sdk::{
     crypto::{note::AeadEncryptedNote, pasta_prelude::*, Blind, FuncId, PublicKey, SecretKey},
     pasta::pallas,
 };
-use log::{debug, info};
+use log::debug;
 use rand::rngs::OsRng;
 
 use crate::{
@@ -83,7 +83,7 @@ pub struct PoWRewardCallBuilder {
 
 impl PoWRewardCallBuilder {
     fn _build(&self, value: u64) -> Result<PoWRewardCallDebris> {
-        debug!("Building Money::MintV1 contract call");
+        debug!(target: "contract::money::client::pow_reward", "Building Money::PowRewardV1 contract call");
 
         // In this call, we will build one clear input and one anonymous output.
         // Only DARK_TOKEN_ID can be minted as PoW reward.
@@ -116,7 +116,7 @@ impl PoWRewardCallBuilder {
 
         let coin_blind = Blind::random(&mut OsRng);
 
-        info!("Creating token mint proof for output");
+        debug!(target: "contract::money::client::pow_reward", "Creating token mint proof for output");
         let (proof, public_inputs) = create_transfer_mint_proof(
             &self.mint_zkbin,
             &self.mint_pk,

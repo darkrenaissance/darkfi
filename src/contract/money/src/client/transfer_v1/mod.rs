@@ -15,6 +15,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
 use darkfi::{zk::ProvingKey, zkas::ZkBinary, ClientFailed, Result};
 use darkfi_sdk::{
     crypto::{pasta_prelude::*, Blind, FuncId, Keypair, MerkleTree, PublicKey},
@@ -25,6 +26,7 @@ use rand::rngs::OsRng;
 
 use crate::{
     client::OwnCoin,
+    error::MoneyError,
     model::{MoneyTransferParamsV1, TokenId},
 };
 
@@ -53,7 +55,7 @@ pub fn select_coins(coins: Vec<OwnCoin>, min_value: u64) -> Result<(Vec<OwnCoin>
     }
 
     if total_value < min_value {
-        error!("Not enough value to build tx inputs");
+        error!(target: "contract::money::client::transfer::select_coins", "Not enough value to build tx inputs");
         return Err(ClientFailed::NotEnoughValue(total_value).into())
     }
 
@@ -93,15 +95,25 @@ pub fn make_transfer_call(
     burn_zkbin: ZkBinary,
     burn_pk: ProvingKey,
 ) -> Result<(MoneyTransferParamsV1, TransferCallSecrets, Vec<OwnCoin>)> {
-    debug!("Building Money::TransferV1 contract call");
-    assert_ne!(value, 0);
-    assert_ne!(token_id.inner(), pallas::Base::ZERO);
-    assert!(!coins.is_empty());
+    debug!(target: "contract::money::client::transfer", "Building Money::TransferV1 contract call");
+    if value == 0 {
+        return Err(ClientFailed::InvalidAmount(value).into())
+    }
+
+    if token_id.inner() == pallas::Base::ZERO {
+        return Err(ClientFailed::InvalidTokenId(token_id.to_string()).into())
+    }
+
+    if coins.is_empty() {
+        return Err(ClientFailed::VerifyError(MoneyError::TransferMissingInputs.to_string()).into())
+    }
 
     // Ensure the coins given to us are all of the same token ID.
     // The money contract base transfer doesn't allow conversions.
     for coin in &coins {
-        assert_eq!(token_id, coin.note.token_id);
+        if coin.note.token_id != token_id {
+            return Err(ClientFailed::InvalidTokenId(coin.note.token_id.to_string()).into())
+        }
     }
 
     let mut inputs = vec![];
@@ -118,7 +130,6 @@ pub fn make_transfer_call(
 
         inputs.push(input);
     }
-    debug!("Selected inputs");
 
     outputs.push(TransferCallOutput {
         public_key: recipient,
@@ -140,7 +151,10 @@ pub fn make_transfer_call(
         });
     }
 
-    assert!(!inputs.is_empty());
+    if inputs.is_empty() {
+        error!(target: "contract::money::client::transfer", "Error: No inputs selected");
+        return Err(ClientFailed::VerifyError(MoneyError::TransferMissingInputs.to_string()).into())
+    }
 
     let xfer_builder = TransferCallBuilder {
         clear_inputs: vec![],

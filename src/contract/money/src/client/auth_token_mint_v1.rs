@@ -51,7 +51,7 @@ pub struct AuthTokenMintCallBuilder {
 
 impl AuthTokenMintCallBuilder {
     pub fn build(&self) -> Result<AuthTokenMintCallDebris> {
-        debug!("Building Money::AuthTokenMintV1 contract call");
+        debug!(target: "contract::money::client::auth_token_mint", "Building Money::AuthTokenMintV1 contract call");
 
         // Create the proof
         let prover_witnesses = vec![

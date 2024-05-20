@@ -31,7 +31,7 @@ use darkfi_sdk::{
     pasta::pallas,
 };
 use darkfi_serial::serialize;
-use log::debug;
+use log::{debug, error};
 use rand::rngs::OsRng;
 
 use crate::{
@@ -94,11 +94,26 @@ pub struct SwapCallBuilder {
 
 impl SwapCallBuilder {
     pub fn build(&self) -> Result<SwapCallDebris> {
-        debug!("Building half of Money::OtcSwapV1 contract call");
-        assert!(self.value_send != 0);
-        assert!(self.value_recv != 0);
-        assert!(self.token_id_send.inner() != pallas::Base::zero());
-        assert!(self.token_id_recv.inner() != pallas::Base::zero());
+        debug!(target: "contract::money::client::swap", "Building half of Money::OtcSwapV1 contract call");
+        if self.value_send == 0 {
+            error!(target: "contract::money::client::swap", "Error: Value send is 0");
+            return Err(ClientFailed::InvalidAmount(self.value_send).into())
+        }
+
+        if self.value_recv == 0 {
+            error!(target: "contract::money::client::swap", "Error: Value receive is 0");
+            return Err(ClientFailed::InvalidAmount(self.value_recv).into())
+        }
+
+        if self.token_id_send.inner() == pallas::Base::ZERO {
+            error!(target: "contract::money::client::swap", "Error: Token send is ZERO");
+            return Err(ClientFailed::InvalidTokenId(self.token_id_send.to_string()).into())
+        }
+
+        if self.token_id_recv.inner() == pallas::Base::ZERO {
+            error!(target: "contract::money::client::swap", "Error: Token receive is ZERO");
+            return Err(ClientFailed::InvalidTokenId(self.token_id_recv.to_string()).into())
+        }
 
         if self.coin.note.value != self.value_send {
             return Err(ClientFailed::InvalidAmount(self.coin.note.value).into())
@@ -130,7 +145,7 @@ impl SwapCallBuilder {
         let signature_secret = SecretKey::random(&mut OsRng);
 
         let mut proofs = vec![];
-        debug!("Creating burn proof for input");
+        debug!(target: "contract::money::client::swap", "Creating burn proof for input");
         let (proof, public_inputs) = create_transfer_burn_proof(
             &self.burn_zkbin,
             &self.burn_pk,
@@ -154,7 +169,7 @@ impl SwapCallBuilder {
         // For the output, we create a new coin blind
         let coin_blind = Blind::random(&mut OsRng);
 
-        debug!("Creating mint proof for output");
+        debug!(target: "contract::money::client::swap", "Creating mint proof for output");
         let (proof, public_inputs) = create_transfer_mint_proof(
             &self.mint_zkbin,
             &self.mint_pk,

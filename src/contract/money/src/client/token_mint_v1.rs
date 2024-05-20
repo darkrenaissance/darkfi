@@ -45,7 +45,7 @@ pub struct TokenMintCallBuilder {
 
 impl TokenMintCallBuilder {
     pub fn build(&self) -> Result<TokenMintCallDebris> {
-        debug!("Building Money::TokenMintV1 contract call");
+        debug!(target: "contract::money::client::token_mint", "Building Money::TokenMintV1 contract call");
         let (public_x, public_y) = self.coin_attrs.public_key.xy();
 
         let prover_witnesses = vec![
