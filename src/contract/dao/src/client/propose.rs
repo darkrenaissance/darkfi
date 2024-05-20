@@ -32,10 +32,13 @@ use rand::rngs::OsRng;
 use darkfi::{
     zk::{halo2::Value, Proof, ProvingKey, Witness, ZkCircuit},
     zkas::ZkBinary,
-    Result,
+    ClientFailed, Result,
 };
 
-use crate::model::{Dao, DaoProposal, DaoProposeParams, DaoProposeParamsInput, VecAuthCallCommit};
+use crate::{
+    error::DaoError,
+    model::{Dao, DaoProposal, DaoProposeParams, DaoProposeParamsInput, VecAuthCallCommit},
+};
 
 pub struct DaoProposeStakeInput<'a> {
     pub secret: SecretKey,
@@ -96,7 +99,11 @@ impl<'a> DaoProposeCall<'a> {
 
             let smt_null_root = input.money_null_smt.root();
             let smt_null_path = input.money_null_smt.prove_membership(&nullifier);
-            assert!(smt_null_path.verify(&smt_null_root, &pallas::Base::ZERO, &nullifier));
+            if !smt_null_path.verify(&smt_null_root, &pallas::Base::ZERO, &nullifier) {
+                return Err(
+                    ClientFailed::VerifyError(DaoError::InvalidInputMerkleRoot.to_string()).into()
+                )
+            }
 
             let prover_witnesses = vec![
                 Witness::Base(Value::known(input.secret.inner())),
@@ -130,7 +137,9 @@ impl<'a> DaoProposeCall<'a> {
             };
 
             let token_commit = poseidon_hash([note.token_id.inner(), gov_token_blind.inner()]);
-            assert_eq!(self.dao.gov_token_id, note.token_id);
+            if note.token_id != self.dao.gov_token_id {
+                return Err(ClientFailed::InvalidTokenId(note.token_id.to_string()).into())
+            }
 
             let value_commit = pedersen_commitment_u64(note.value, funds_blind);
             let value_coords = value_commit.to_affine().coordinates().unwrap();
@@ -176,7 +185,9 @@ impl<'a> DaoProposeCall<'a> {
 
         let dao_leaf_position: u64 = self.dao_leaf_position.into();
 
-        assert_eq!(self.dao.to_bulla(), self.proposal.dao_bulla);
+        if self.dao.to_bulla() != self.proposal.dao_bulla {
+            return Err(ClientFailed::VerifyError(DaoError::InvalidCalls.to_string()).into())
+        }
         let proposal_bulla = self.proposal.to_bulla();
 
         let prover_witnesses = vec![

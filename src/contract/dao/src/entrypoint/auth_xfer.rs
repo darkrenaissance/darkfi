@@ -17,6 +17,7 @@
  */
 
 use darkfi_money_contract::{
+    error::MoneyError,
     model::{Coin, MoneyTransferParamsV1},
     MoneyFunction,
 };
@@ -54,8 +55,15 @@ pub(crate) fn dao_authxfer_get_metadata(
     let exec_callnode = &calls[parent_idx];
     let exec_params: DaoExecParams = deserialize(&exec_callnode.data.data[1..])?;
 
-    assert!(!xfer_params.inputs.is_empty());
-    assert!(!xfer_params.outputs.is_empty());
+    if xfer_params.inputs.is_empty() {
+        msg!("[Dao::AuthXfer] Error: Transfer inputs are missing");
+        return Err(MoneyError::TransferMissingInputs.into())
+    }
+
+    if xfer_params.outputs.len() <= 1 {
+        msg!("[Dao::AuthXfer] Error: Transfer outputs are missing");
+        return Err(MoneyError::TransferMissingOutputs.into())
+    }
 
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
     let signature_pubkeys: Vec<PublicKey> = vec![];
@@ -153,9 +161,16 @@ pub(crate) fn dao_authxfer_process_instruction(
     ///////////////////////////////////////////////////
 
     let xfer_params: MoneyTransferParamsV1 = deserialize(&xfer_call.data[1..])?;
-    assert!(!xfer_params.inputs.is_empty());
+    if xfer_params.inputs.is_empty() {
+        msg!("[Dao::AuthXfer] Error: Transfer inputs are missing");
+        return Err(MoneyError::TransferMissingInputs.into())
+    }
+
     // We need the last output to be the change
-    assert!(xfer_params.outputs.len() > 1);
+    if xfer_params.outputs.len() <= 1 {
+        msg!("[Dao::AuthXfer] Error: Transfer outputs are missing");
+        return Err(MoneyError::TransferMissingOutputs.into())
+    }
 
     // MoneyTransfer should all have the same user_data set.
     // We check this by ensuring that user_data_enc is also the same for all inputs.

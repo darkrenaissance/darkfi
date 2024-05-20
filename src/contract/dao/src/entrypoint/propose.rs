@@ -17,8 +17,9 @@
  */
 
 use darkfi_money_contract::{
-    MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_INFO_TREE, MONEY_CONTRACT_LATEST_COIN_ROOT,
-    MONEY_CONTRACT_LATEST_NULLIFIER_ROOT, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE,
+    error::MoneyError, MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_INFO_TREE,
+    MONEY_CONTRACT_LATEST_COIN_ROOT, MONEY_CONTRACT_LATEST_NULLIFIER_ROOT,
+    MONEY_CONTRACT_NULLIFIER_ROOTS_TREE,
 };
 use darkfi_sdk::{
     crypto::{contract_id::MONEY_CONTRACT_ID, pasta_prelude::*, ContractId, MerkleNode, PublicKey},
@@ -149,7 +150,14 @@ pub(crate) fn dao_propose_process_instruction(
             return Err(DaoError::NonMatchingSnapshotRoots.into())
         }
 
-        assert_eq!(coin_root_data.len(), 32 + 1);
+        if coin_root_data.len() != 32 + 1 {
+            msg!(
+                "[Dao::Propose] Error: Coin roots data length is not expected(32 + 1): {}",
+                coin_root_data.len()
+            );
+            return Err(MoneyError::RootsValueDataMismatch.into())
+        }
+
         let tx_hash_data: [u8; 32] = coin_root_data[0..32].try_into().unwrap();
         let tx_hash = TransactionHash(tx_hash_data);
         // Get block_height where tx_hash was confirmed

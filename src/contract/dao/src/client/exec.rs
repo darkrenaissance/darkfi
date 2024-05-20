@@ -29,10 +29,13 @@ use rand::rngs::OsRng;
 use darkfi::{
     zk::{halo2::Value, Proof, ProvingKey, Witness, ZkCircuit},
     zkas::ZkBinary,
-    Result,
+    ClientFailed, Result,
 };
 
-use crate::model::{Dao, DaoBlindAggregateVote, DaoExecParams, DaoProposal, VecAuthCallCommit};
+use crate::{
+    error::DaoError,
+    model::{Dao, DaoBlindAggregateVote, DaoExecParams, DaoProposal, VecAuthCallCommit},
+};
 
 pub struct DaoExecCall {
     pub proposal: DaoProposal,
@@ -54,7 +57,7 @@ impl DaoExecCall {
         exec_zkbin: &ZkBinary,
         exec_pk: &ProvingKey,
     ) -> Result<(DaoExecParams, Vec<Proof>)> {
-        debug!(target: "dao", "build()");
+        debug!(target: "contract::dao::client::exec", "build()");
         let mut proofs = vec![];
 
         let dao_proposer_limit = pallas::Base::from(self.dao.proposer_limit);
@@ -65,7 +68,9 @@ impl DaoExecCall {
         let (dao_pub_x, dao_pub_y) = self.dao.public_key.xy();
 
         let dao_bulla = self.dao.to_bulla();
-        assert_eq!(dao_bulla, self.proposal.dao_bulla);
+        if dao_bulla != self.proposal.dao_bulla {
+            return Err(ClientFailed::VerifyError(DaoError::InvalidCalls.to_string()).into())
+        }
         let proposal_bulla = self.proposal.to_bulla();
 
         let yes_vote_commit = pedersen_commitment_u64(self.yes_vote_value, self.yes_vote_blind);
@@ -103,7 +108,7 @@ impl DaoExecCall {
             Witness::Base(Value::known(self.signature_secret.inner())),
         ];
 
-        debug!(target: "dao", "proposal_bulla: {:?}", proposal_bulla);
+        debug!(target: "contract::dao::client::exec", "proposal_bulla: {:?}", proposal_bulla);
         let public_inputs = vec![
             proposal_bulla.inner(),
             proposal_auth_calls_commit,

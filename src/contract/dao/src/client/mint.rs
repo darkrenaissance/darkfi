@@ -49,7 +49,7 @@ pub fn make_mint_call(
     dao_mint_zkbin: &ZkBinary,
     dao_mint_pk: &ProvingKey,
 ) -> Result<(DaoMintParams, Vec<Proof>)> {
-    debug!(target: "dao", "Building DAO contract mint transaction");
+    debug!(target: "contract::dao::client::mint", "Building DAO contract mint transaction");
 
     let dao_proposer_limit = pallas::Base::from(dao.proposer_limit);
     let dao_quorum = pallas::Base::from(dao.quorum);

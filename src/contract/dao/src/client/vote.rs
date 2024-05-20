@@ -33,10 +33,13 @@ use rand::rngs::OsRng;
 use darkfi::{
     zk::{halo2::Value, Proof, ProvingKey, Witness, ZkCircuit},
     zkas::ZkBinary,
-    Result,
+    ClientFailed, Result,
 };
 
-use crate::model::{Dao, DaoProposal, DaoVoteParams, DaoVoteParamsInput, VecAuthCallCommit};
+use crate::{
+    error::DaoError,
+    model::{Dao, DaoProposal, DaoVoteParams, DaoVoteParamsInput, VecAuthCallCommit},
+};
 
 pub struct DaoVoteInput {
     pub secret: SecretKey,
@@ -65,9 +68,11 @@ impl<'a> DaoVoteCall<'a> {
         main_zkbin: &ZkBinary,
         main_pk: &ProvingKey,
     ) -> Result<(DaoVoteParams, Vec<Proof>)> {
-        debug!(target: "dao", "build()");
+        debug!(target: "contract::dao::client::vote", "build()");
 
-        assert_eq!(self.dao.to_bulla(), self.proposal.dao_bulla);
+        if self.dao.to_bulla() != self.proposal.dao_bulla {
+            return Err(ClientFailed::VerifyError(DaoError::InvalidCalls.to_string()).into())
+        }
         let proposal_bulla = self.proposal.to_bulla();
 
         let mut proofs = vec![];
@@ -125,7 +130,11 @@ impl<'a> DaoVoteCall<'a> {
 
             let smt_null_root = self.money_null_smt.root();
             let smt_null_path = self.money_null_smt.prove_membership(&nullifier);
-            assert!(smt_null_path.verify(&smt_null_root, &pallas::Base::ZERO, &nullifier));
+            if !smt_null_path.verify(&smt_null_root, &pallas::Base::ZERO, &nullifier) {
+                return Err(
+                    ClientFailed::VerifyError(DaoError::InvalidInputMerkleRoot.to_string()).into()
+                )
+            }
 
             let prover_witnesses = vec![
                 Witness::Base(Value::known(input.secret.inner())),
@@ -158,7 +167,9 @@ impl<'a> DaoVoteCall<'a> {
             };
 
             let token_commit = poseidon_hash([note.token_id.inner(), gov_token_blind]);
-            assert_eq!(self.dao.gov_token_id, note.token_id);
+            if note.token_id != self.dao.gov_token_id {
+                return Err(ClientFailed::InvalidTokenId(note.token_id.to_string()).into())
+            }
 
             let vote_commit = pedersen_commitment_u64(note.value, Blind(value_blind));
             let vote_commit_coords = vote_commit.to_affine().coordinates().unwrap();
@@ -203,7 +214,9 @@ impl<'a> DaoVoteCall<'a> {
         let dao_public_key = self.dao.public_key.inner();
 
         let vote_option = self.vote_option as u64;
-        assert!(vote_option == 0 || vote_option == 1);
+        if vote_option != 0 && vote_option != 1 {
+            return Err(ClientFailed::VerifyError(DaoError::VoteInputsEmpty.to_string()).into())
+        }
 
         // Create a random blind b ∈ 𝔽ᵥ, such that b ∈ 𝔽ₚ
         let yes_vote_blind = loop {
@@ -217,7 +230,9 @@ impl<'a> DaoVoteCall<'a> {
         let yes_vote_commit_coords = yes_vote_commit.to_affine().coordinates().unwrap();
 
         let all_vote_commit = pedersen_commitment_u64(all_vote_value, Blind(all_vote_blind));
-        assert_eq!(all_vote_commit, inputs.iter().map(|i| i.vote_commit).sum());
+        if all_vote_commit != inputs.iter().map(|i| i.vote_commit).sum() {
+            return Err(ClientFailed::VerifyError(DaoError::VoteCommitMismatch.to_string()).into())
+        }
         let all_vote_commit_coords = all_vote_commit.to_affine().coordinates().unwrap();
 
         // Convert blinds to 𝔽ₚ, which should work fine since we selected them
