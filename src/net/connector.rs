@@ -18,6 +18,10 @@
 
 use std::time::Duration;
 
+use futures::{
+    future::{select, Either},
+    pin_mut,
+};
 use log::warn;
 use url::Url;
 
@@ -28,7 +32,7 @@ use super::{
     settings::SettingsPtr,
     transport::Dialer,
 };
-use crate::{Error, Result};
+use crate::{system::CondVar, Error, Result};
 
 /// Create outbound socket connections
 pub struct Connector {
@@ -36,12 +40,14 @@ pub struct Connector {
     settings: SettingsPtr,
     /// Weak pointer to the session
     pub session: SessionWeakPtr,
+    /// Stop signal that aborts the connector if received.
+    stop_signal: CondVar,
 }
 
 impl Connector {
     /// Create a new connector with given network settings
     pub fn new(settings: SettingsPtr, session: SessionWeakPtr) -> Self {
-        Self { settings, session }
+        Self { settings, session, stop_signal: CondVar::new() }
     }
 
     /// Establish an outbound connection
@@ -72,10 +78,35 @@ impl Connector {
 
         let dialer = Dialer::new(endpoint.clone()).await?;
         let timeout = Duration::from_secs(self.settings.outbound_connect_timeout);
-        let ptstream = dialer.dial(Some(timeout)).await?;
 
-        let channel =
-            Channel::new(ptstream, Some(endpoint.clone()), url.clone(), self.session.clone()).await;
-        Ok((endpoint, channel))
+        let stop_fut = async {
+            self.stop_signal.wait().await;
+        };
+        let dial_fut = async { dialer.dial(Some(timeout)).await };
+
+        pin_mut!(stop_fut);
+        pin_mut!(dial_fut);
+
+        let result = {
+            match select(dial_fut, stop_fut).await {
+                Either::Left((Ok(ptstream), _)) => {
+                    let channel = Channel::new(
+                        ptstream,
+                        Some(endpoint.clone()),
+                        url.clone(),
+                        self.session.clone(),
+                    )
+                    .await;
+                    Ok((endpoint, channel))
+                }
+                Either::Left((Err(e), _)) => Err(e.into()),
+                Either::Right((_, _)) => return Err(Error::ConnectorStopped),
+            }
+        };
+        result
+    }
+
+    pub(crate) fn stop(&self) {
+        self.stop_signal.notify()
     }
 }

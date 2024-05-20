@@ -150,6 +150,9 @@ pub enum Error {
     #[error("Accept a new tls connection from the listener {0} failed")]
     AcceptTlsConnectionFailed(String),
 
+    #[error("Connector stopped")]
+    ConnectorStopped,
+
     #[error("Network operation failed")]
     NetworkOperationFailed,
 
