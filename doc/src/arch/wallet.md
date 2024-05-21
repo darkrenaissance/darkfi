@@ -266,6 +266,89 @@ Multi-platform main view with splitting and these editors:
 * Explorer
 * Settings
 
+## Specifics
+
+### Story
+
+The story goes like this. There's a node running of some kind. This could be
+darkfid or darkirc.
+
+In the case of darkfid, there's additional per wallet processing that's done
+such as scanning transactions. Currently this is the role played by drk scan.
+
+Regardless of whether there's one node with functionality existing as pluggable
+modules, we assume now there are nodes running which the wallet/UI must
+communicate with.
+
+Inside the user wallet, there are multiple plugins. A plugin might need to
+query the blockchain, spawn a p2p network (to exchange data for OTC or
+coordinate DAO activity as examples). They do this by connecting to the nodes.
+
+### Key Concepts
+
+We now give an overview of the current iteration of the scene graph:
+
+* Nodes have a type. Each node can have multiple children.
+* It is a graph not a tree. A node can have multiple parents.
+* Each node has several properties which have types such as f32, u32, str, enum.
+  Properties can also be an array or vec of these types.
+  See `bin/darkwallet/pydrk/api.py:5` for the fields in a property.
+* Nodes have signals such as `mouse_clicked`. Multiple slots can be
+  registered for a signal. Think of this like notifications.
+* Nodes have methods such as `create_foo()` which is like request-reply.
+
+### Plugins
+
+Each app has a separate plugin. Plugins have their own private internal data.
+Any data they wish to expose can be done by providing properties or methods in
+their node in the scene graph.
+
+The scene graph then applies access restrictions depending on the ownership
+semantics of properties and methods (think like UNIX users and groups).
+
+Plugins provide `init()` and `update(event)` functions. `init()` is called when
+a new *plugin instance* is created. Plugins can have multiple instances.
+
+Using the scene graph, this is scriptable from any language, introspectable and
+with permissions - using a data structure inspised by UNIX and plan9.
+
+#### Example
+
+When a plugin is opened, the UI creates
+
+```
+    /plugin/dao/instance1
+```
+and gives it a layer to draw in, which is simultaneously linked into both
+```
+    /window/dao_instance1_layer
+    /plugin/dao/instance1/dao_instance1_layer
+```
+
+The plugin can then speak with modules by calling methods or subscribing to
+signals on `/mod/darkfid`. Methods and signals are automatically proxied from
+the node.
+
+### Running a New Node per Function
+
+Lets say we wish to do OTC swaps and utilize the event graph. Are users then
+required to run a new node per app?
+
+At least in this case, there should be a way to spin up an event graph.
+
+For scanning transactions, is this done at startup incurring an initialization
+cost when opening the wallet? I guess so to maintain independence of keys from
+the darkfid node.
+
+Another example is the task manager and darkirc chat. Do these remain separate
+daemons? When we add swarming support to p2p, it might be possible to merge all
+p2p functionality across apps into a unified subsystem, reducing complexity.
+In which case there should be a simple way to utilize this subsystem.
+
+The more nodes users are required to run, the more difficult it will become to
+have a decentralized network, so we should find a way to reduce the burden for
+users to setup our infra.
+
 ## References
 
 * [Veil: Private Browsing Semantics Without Browser-side Assistance](https://mickens.seas.harvard.edu/files/mickens/files/veil.pdf)
