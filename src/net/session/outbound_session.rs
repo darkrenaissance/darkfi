@@ -151,7 +151,7 @@ impl Session for OutboundSession {
 #[repr(u8)]
 #[derive(Clone, Debug)]
 enum SlotPreference {
-    /// Highest preference that corresponds to the `anchor_connect_count` and
+    /// Highest preference that corresponds to the `gold_connect_count` and
     /// `white_count_count` preferences configured in Settings.
     First = 0,
     /// Reduced preference in case we don't have sufficient hosts to satisfy
@@ -205,12 +205,12 @@ impl Slot {
     }
 
     /// Address selection algorithm that works as follows: up to
-    /// anchor_count, select from the anchorlist. Up to white_count,
+    /// gold_count, select from the goldlist. Up to white_count,
     /// select from the whitelist. For all other slots, select from
     /// the greylist (this is SlotPreference::First).
     ///
     /// If we didn't find an address with this selection logic, downgrade
-    /// SlotPreference to Second. Up to anchor_count, select from the
+    /// SlotPreference to Second. Up to gold_count, select from the
     /// whitelist, up until white_count, select from the greylist.
     ///
     /// If we still didn't find an address, downgrade SlotPreference to Last
@@ -228,7 +228,7 @@ impl Slot {
         let hosts = &self.p2p().hosts().container;
 
         let white_count = settings.white_connect_count;
-        let anchor_count = settings.anchor_connect_count;
+        let gold_count = settings.gold_connect_count;
 
         let transports = &settings.allowed_transports;
         let transport_mixing = settings.transport_mixing;
@@ -238,7 +238,7 @@ impl Slot {
 
         match preference {
             SlotPreference::First => {
-                if slot < anchor_count {
+                if slot < gold_count {
                     hosts.fetch(HostColor::Gold, transports, transport_mixing).await
                 } else if slot < white_count {
                     hosts.fetch(HostColor::White, transports, transport_mixing).await
@@ -247,7 +247,7 @@ impl Slot {
                 }
             }
             SlotPreference::Second => {
-                if slot < anchor_count {
+                if slot < gold_count {
                     hosts.fetch(HostColor::White, transports, transport_mixing).await
                 } else if slot < white_count {
                     hosts.fetch(HostColor::Grey, transports, transport_mixing).await
@@ -256,7 +256,7 @@ impl Slot {
                 }
             }
             SlotPreference::Last => {
-                if slot < anchor_count {
+                if slot < gold_count {
                     hosts.fetch(HostColor::Grey, transports, transport_mixing).await
                 } else {
                     vec![]
@@ -265,12 +265,12 @@ impl Slot {
         }
     }
 
-    // Fetch an address we can connect to acccording to the white and anchor connection counts
+    // Fetch an address we can connect to acccording to the white and gold connection counts
     // configured in Settings.
     async fn fetch_addrs(&self) -> Option<(Url, u64)> {
         let hosts = self.p2p().hosts();
 
-        // First select an addresses that match our white and anchor requirements configured in
+        // First select an addresses that match our white and gold requirements configured in
         // Settings.
         let addrs = self.fetch_addrs_with_preference(SlotPreference::First).await;
 
@@ -296,7 +296,7 @@ impl Slot {
         None
     }
 
-    // We first try to make connections to the addresses on our anchor list. We then find some
+    // We first try to make connections to the addresses on our gold list. We then find some
     // whitelist connections according to the whitelist percent default. Finally, any remaining
     // connections we make from the greylist.
     async fn run(self: Arc<Self>) -> Result<()> {

@@ -72,8 +72,8 @@ pub struct Settings {
     pub self_handshake_interval: u64,
     /// Percent of connections to come from the whitelist
     pub white_connect_count: u32,
-    /// Number of anchorlist connections
-    pub anchor_connect_count: u32,
+    /// Number of goldlist connections
+    pub gold_connect_count: u32,
     /// Number of seconds with no connections after which refinery
     /// process is paused.
     pub time_with_no_connections: u64,
@@ -108,7 +108,7 @@ impl Default for Settings {
             greylist_refinery_interval: 15,
             self_handshake_interval: 600,
             white_connect_count: 90,
-            anchor_connect_count: 2,
+            gold_connect_count: 2,
             time_with_no_connections: 30,
             blacklist: vec![],
         }
@@ -209,9 +209,9 @@ pub struct SettingsOpt {
     #[structopt(skip)]
     pub white_connect_count: Option<u32>,
 
-    /// Number of anchorlist connections
+    /// Number of goldlist connections
     #[structopt(skip)]
-    pub anchor_connect_count: Option<u32>,
+    pub gold_connect_count: Option<u32>,
 
     /// Number of seconds with no connections after which refinery
     /// process is paused.
@@ -264,7 +264,7 @@ impl From<SettingsOpt> for Settings {
                 .self_handshake_interval
                 .unwrap_or(def.self_handshake_interval),
             white_connect_count: opt.white_connect_count.unwrap_or(def.white_connect_count),
-            anchor_connect_count: opt.anchor_connect_count.unwrap_or(def.anchor_connect_count),
+            gold_connect_count: opt.gold_connect_count.unwrap_or(def.gold_connect_count),
             time_with_no_connections: opt
                 .time_with_no_connections
                 .unwrap_or(def.time_with_no_connections),
