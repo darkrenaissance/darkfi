@@ -16,26 +16,22 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-//! `RefineSession` manages two processes, the `GreylistRefinery`, which
-//! periodically pings entries on the greylist and updates them to whitelist
-//! if active, and `SelfHandshake`, which periodically pings our own external
-//! addresses to ensure they are active before broadcasting to the network.
+//! `RefineSession` manages the `GreylistRefinery`, which randomly selects
+//! entries on the greylist and updates them to whitelist if active,
 //!
-//! Both processes make use of a `RefineSession` method called
+//! `GreylistRefinery` makes use of a `RefineSession` method called
 //! `handshake_node()`, which uses a `Connector` to establish a `Channel` with
 //! a provided address, and then does a version exchange across the channel
 //! (`perform_handshake_protocols`). `handshake_node()` can either succeed,
 //! fail, or timeout.
 
 use std::{
-    collections::HashMap,
     sync::Arc,
     time::{Duration, Instant, UNIX_EPOCH},
 };
 
 use async_trait::async_trait;
 use log::{debug, warn};
-use smol::lock::Mutex;
 use url::Url;
 
 use super::super::p2p::{P2p, P2pPtr};
@@ -59,28 +55,17 @@ pub struct RefineSession {
 
     /// Task that periodically checks entries in the greylist.
     pub(in crate::net) refinery: Arc<GreylistRefinery>,
-
-    /// Task that periodically checks our external addresses.
-    pub(in crate::net) self_handshake: Arc<SelfHandshake>,
 }
 
 impl RefineSession {
     pub fn new() -> RefineSessionPtr {
-        let self_ = Arc::new(Self {
-            p2p: LazyWeak::new(),
-            refinery: GreylistRefinery::new(),
-            self_handshake: SelfHandshake::new(),
-        });
-        self_.self_handshake.session.init(self_.clone());
+        let self_ = Arc::new(Self { p2p: LazyWeak::new(), refinery: GreylistRefinery::new() });
         self_.refinery.session.init(self_.clone());
         self_
     }
 
     /// Start the refinery and self handshake processes.
     pub(crate) async fn start(self: Arc<Self>) {
-        debug!(target: "net::refine_session", "Starting self handshake process");
-        self.self_handshake.clone().start().await;
-
         match self.p2p().hosts().container.load_all(&self.p2p().settings().hostlist).await {
             Ok(()) => {
                 debug!(target: "net::refine_session::start()", "Load hosts successful!");
@@ -105,9 +90,6 @@ impl RefineSession {
 
     /// Stop the refinery and self handshake processes.
     pub(crate) async fn stop(&self) {
-        debug!(target: "net::refine_session", "Stopping self handshake process");
-        self.self_handshake.clone().stop().await;
-
         debug!(target: "net::refine_session", "Stopping refinery process");
         self.refinery.clone().stop().await;
 
@@ -327,107 +309,5 @@ impl GreylistRefinery {
 
     fn p2p(&self) -> P2pPtr {
         self.session().p2p()
-    }
-}
-
-/// Periodically try to do a version exchange with our own external
-/// addresses. If the version exchange is successful, take a timestamp and
-/// save it along with the external addresses. Each address along with its
-/// timestamp (the `last_seen` data field) is sent in to other nodes in
-/// ProtocolAddr and ProtocolSeed.
-///
-/// On first run, SelfHandshake will immediately conduct a version exchange
-/// with our external addresses, and if successful update the last_seen
-/// field. The process will wait Settings::self_handshake_interval before retrying.
-///
-/// There are two situations in which this can fail:
-///
-///     1. If our external address is misconfigured
-///     2. If we have reached our inbound connection limit.
-///
-/// If our external address is misconfigured, doing a version exchange
-/// with ourselves will not work and so the external addresses will not
-/// be shared with other nodes.
-///
-/// If we have reached our inbound connection limit, the external address
-/// will continue to be broadcast with an older `last_seen` (from before
-/// our inbound connection was reached).
-pub struct SelfHandshake {
-    process: StoppableTaskPtr,
-    session: LazyWeak<RefineSession>,
-    pub(in crate::net) addrs: Mutex<HashMap<Url, u64>>,
-}
-
-impl SelfHandshake {
-    fn new() -> Arc<Self> {
-        Arc::new(Self {
-            process: StoppableTask::new(),
-            session: LazyWeak::new(),
-            addrs: Mutex::new(HashMap::new()),
-        })
-    }
-
-    async fn start(self: Arc<Self>) {
-        let ex = self.session().p2p().executor();
-        self.process.clone().start(
-            async move {
-                self.run().await;
-                unreachable!();
-            },
-            // Ignore stop handler
-            |_| async {},
-            Error::NetworkServiceStopped,
-            ex,
-        );
-    }
-
-    async fn stop(self: Arc<Self>) {
-        self.process.stop().await
-    }
-
-    async fn run(self: Arc<Self>) {
-        let settings = self.session().p2p().settings();
-        let external_addrs = settings.external_addrs.clone();
-        let mut current_attempt = 0;
-
-        loop {
-            if current_attempt >= 1 {
-                sleep(settings.self_handshake_interval).await;
-            }
-
-            // Only proceed if the external address is configured.
-            if external_addrs.is_empty() {
-                current_attempt += 1;
-                continue
-            }
-
-            for addr in external_addrs.iter() {
-                debug!(target: "net::refine_session::self_handshake",
-                "Attempting a version exchange addr={}", addr);
-
-                if self.session().handshake_node(addr.clone(), self.session().p2p()).await {
-                    debug!(target: "net::refine_session::self_handshake",
-                    "Version exchange successful! Updating last seen addr={}", addr);
-                    let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-                    let mut addrs = self.addrs.lock().await;
-
-                    if addrs.contains_key(addr) {
-                        let val = addrs.get_mut(addr).unwrap();
-                        *val = last_seen;
-                    }
-                    addrs.insert(addr.clone(), last_seen);
-                } else {
-                    // Either our external addr is invalid or our max inbound
-                    // connection count has been reached.
-                    warn!(target: "net::refine_session::self_handshake",
-                    "Version exchange failed! addr={}", addr);
-                }
-            }
-            current_attempt += 1;
-        }
-    }
-
-    fn session(&self) -> RefineSessionPtr {
-        self.session.upgrade()
     }
 }

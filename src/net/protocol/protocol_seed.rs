@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::Arc;
+use std::{sync::Arc, time::UNIX_EPOCH};
 
 use async_trait::async_trait;
 use log::debug;
@@ -41,7 +41,6 @@ pub struct ProtocolSeed {
     hosts: HostsPtr,
     settings: SettingsPtr,
     addr_sub: MessageSubscription<AddrsMessage>,
-    p2p: P2pPtr,
 }
 
 const PROTO_NAME: &str = "ProtocolSeed";
@@ -56,17 +55,11 @@ impl ProtocolSeed {
         let addr_sub =
             channel.subscribe_msg::<AddrsMessage>().await.expect("Missing addr dispatcher!");
 
-        Arc::new(Self { channel, hosts, settings, addr_sub, p2p })
+        Arc::new(Self { channel, hosts, settings, addr_sub })
     }
 
-    /// Send our own external addresses over a channel. Get the latest
-    /// last_seen field from InboundSession, and send it along with our
-    /// external address.
-    ///
-    /// If our external address is misconfigured, send an empty vector.
-    /// If we have reached our inbound connection limit, send our external
-    /// address with a `last_seen` field that corresponds to the last time
-    /// we could receive inbound connections.
+    /// Send our own external addresses over a channel. Set the
+    /// last_seen field to now.
     pub async fn send_my_addrs(&self) -> Result<()> {
         debug!(target: "net::protocol_seed::send_my_addrs()",
         "[START] channel address={}", self.channel.address());
@@ -78,9 +71,10 @@ impl ProtocolSeed {
         }
 
         let mut addrs = vec![];
-        let refinery = self.p2p.session_refine();
-        for (addr, last_seen) in refinery.self_handshake.addrs.lock().await.iter() {
-            addrs.push((addr.clone(), *last_seen));
+
+        for addr in self.settings.external_addrs.clone() {
+            let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+            addrs.push((addr, last_seen));
         }
 
         debug!(target: "net::protocol_seed::send_my_addrs()",

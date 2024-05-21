@@ -68,8 +68,6 @@ pub struct Settings {
     pub hostlist: String,
     /// Pause interval within greylist refinery process
     pub greylist_refinery_interval: u64,
-    /// Pause interval before redoing a self-handshake
-    pub self_handshake_interval: u64,
     /// Percent of connections to come from the whitelist
     pub white_connect_count: u32,
     /// Number of goldlist connections
@@ -106,7 +104,6 @@ impl Default for Settings {
             outbound_peer_discovery_attempt_time: 5,
             hostlist: "/dev/null".to_string(),
             greylist_refinery_interval: 15,
-            self_handshake_interval: 600,
             white_connect_count: 90,
             gold_connect_count: 2,
             time_with_no_connections: 30,
@@ -201,10 +198,6 @@ pub struct SettingsOpt {
     #[structopt(skip)]
     pub greylist_refinery_interval: Option<u64>,
 
-    /// Pause interval before redoing a self-handshake
-    #[structopt(skip)]
-    pub self_handshake_interval: Option<u64>,
-
     /// Number of whitelist connections
     #[structopt(skip)]
     pub white_connect_count: Option<u32>,
@@ -260,9 +253,6 @@ impl From<SettingsOpt> for Settings {
             greylist_refinery_interval: opt
                 .greylist_refinery_interval
                 .unwrap_or(def.greylist_refinery_interval),
-            self_handshake_interval: opt
-                .self_handshake_interval
-                .unwrap_or(def.self_handshake_interval),
             white_connect_count: opt.white_connect_count.unwrap_or(def.white_connect_count),
             gold_connect_count: opt.gold_connect_count.unwrap_or(def.gold_connect_count),
             time_with_no_connections: opt
