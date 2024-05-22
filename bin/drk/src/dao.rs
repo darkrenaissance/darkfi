@@ -1068,16 +1068,16 @@ impl Drk {
     }
 
     /// Import given DAO params into the wallet with a given name.
-    pub async fn import_dao(&self, dao_name: &str, dao_params: DaoParams) -> Result<()> {
+    pub async fn import_dao(&self, name: &str, params: DaoParams) -> Result<()> {
         // First let's check if we've imported this DAO with the given name before.
-        if let Ok(dao) = self.get_dao_by_alias(dao_name).await {
+        if let Ok(dao) = self.get_dao_by_name(name).await {
             return Err(Error::RusqliteError(format!(
                 "[import_dao] This DAO has already been imported with ID {}",
                 dao.id
             )))
         }
 
-        println!("Importing \"{dao_name}\" DAO into the wallet");
+        println!("Importing \"{name}\" DAO into the wallet");
 
         let query = format!(
             "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8);",
@@ -1096,14 +1096,14 @@ impl Drk {
             .exec_sql(
                 &query,
                 rusqlite::params![
-                    dao_name,
-                    serialize_async(&dao_params.proposer_limit).await,
-                    serialize_async(&dao_params.quorum).await,
-                    dao_params.approval_ratio_base,
-                    dao_params.approval_ratio_quot,
-                    serialize_async(&dao_params.gov_token_id).await,
-                    serialize_async(&dao_params.secret_key).await,
-                    serialize_async(&dao_params.bulla_blind).await,
+                    name,
+                    serialize_async(&params.proposer_limit).await,
+                    serialize_async(&params.quorum).await,
+                    params.approval_ratio_base,
+                    params.approval_ratio_quot,
+                    serialize_async(&params.gov_token_id).await,
+                    serialize_async(&params.secret_key).await,
+                    serialize_async(&params.bulla_blind).await,
                 ],
             )
             .await
@@ -1165,21 +1165,17 @@ impl Drk {
         Ok(dao.clone())
     }
 
-    /// Fetch a DAO given its name alias.
-    pub async fn get_dao_by_alias(&self, alias_filter: &str) -> Result<Dao> {
+    /// Fetch a DAO given its name.
+    pub async fn get_dao_by_name(&self, name: &str) -> Result<Dao> {
         let row = match self
             .wallet
-            .query_single(
-                &DAO_DAOS_TABLE,
-                &[],
-                convert_named_params! {(DAO_DAOS_COL_NAME, alias_filter)},
-            )
+            .query_single(&DAO_DAOS_TABLE, &[], convert_named_params! {(DAO_DAOS_COL_NAME, name)})
             .await
         {
             Ok(r) => r,
             Err(e) => {
                 return Err(Error::RusqliteError(format!(
-                    "[get_dao_by_alias] DAO retrieval failed: {e:?}"
+                    "[get_dao_by_name] DAO retrieval failed: {e:?}"
                 )))
             }
         };
@@ -1187,11 +1183,11 @@ impl Drk {
         self.parse_dao_record(&row).await
     }
 
-    /// List DAO(s) imported in the wallet. If a name aliasis given, just print the
+    /// List DAO(s) imported in the wallet. If a name is given, just print the
     /// metadata for that specific one, if found.
-    pub async fn dao_list(&self, alias_filter: &Option<String>) -> Result<()> {
-        if let Some(alias) = alias_filter {
-            let dao = self.get_dao_by_alias(alias).await?;
+    pub async fn dao_list(&self, name: &Option<String>) -> Result<()> {
+        if let Some(name) = name {
+            let dao = self.get_dao_by_name(name).await?;
             println!("{dao}");
             return Ok(());
         }

@@ -262,16 +262,16 @@ pub fn generate_completions(shell: &str) -> Result<()> {
 
     let view = SubCommand::with_name("view").about("View DAO data from stdin");
 
-    let dao_name = Arg::with_name("dao-name").help("Named identifier for the DAO");
+    let name = Arg::with_name("name").help("Name identifier for the DAO");
 
     let import =
-        SubCommand::with_name("import").about("Import DAO data from stdin").args(&vec![dao_name]);
+        SubCommand::with_name("import").about("Import DAO data from stdin").args(&vec![name]);
 
-    let dao_alias = Arg::with_name("dao-alias").help("Numeric identifier for the DAO (optional)");
+    let name = Arg::with_name("dao-alias").help("Name identifier for the DAO (optional)");
 
     let list = SubCommand::with_name("list")
         .about("List imported DAOs (or info about a specific one)")
-        .args(&vec![dao_alias]);
+        .args(&vec![name]);
 
     let dao_alias = Arg::with_name("dao-alias").help("Name or numeric identifier for the DAO");
 

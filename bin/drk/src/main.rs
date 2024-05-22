@@ -323,14 +323,14 @@ enum DaoSubcmd {
 
     /// Import DAO data from stdin
     Import {
-        /// Named identifier for the DAO
-        dao_name: String,
+        /// Name identifier for the DAO
+        name: String,
     },
 
     /// List imported DAOs (or info about a specific one)
     List {
-        /// Numeric identifier for the DAO (optional)
-        dao_alias: Option<String>,
+        /// Name identifier for the DAO (optional)
+        name: Option<String>,
     },
 
     /// Show the balance of a DAO
@@ -1041,7 +1041,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 let secret_key = SecretKey::random(&mut OsRng);
                 let bulla_blind = pallas::Base::random(&mut OsRng);
 
-                let dao_params = DaoParams {
+                let params = DaoParams {
                     proposer_limit,
                     quorum,
                     approval_ratio_base,
@@ -1051,7 +1051,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     bulla_blind,
                 };
 
-                let encoded = bs58::encode(&serialize_async(&dao_params).await).into_string();
+                let encoded = bs58::encode(&serialize_async(&params).await).into_string();
                 println!("{encoded}");
 
                 Ok(())
@@ -1067,15 +1067,15 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 Ok(())
             }
 
-            DaoSubcmd::Import { dao_name } => {
+            DaoSubcmd::Import { name } => {
                 let mut buf = String::new();
                 stdin().read_to_string(&mut buf)?;
                 let bytes = bs58::decode(&buf.trim()).into_vec()?;
-                let dao_params: DaoParams = deserialize_async(&bytes).await?;
+                let params: DaoParams = deserialize_async(&bytes).await?;
 
                 let drk = Drk::new(args.wallet_path, args.wallet_pass, None, ex).await?;
 
-                if let Err(e) = drk.import_dao(&dao_name, dao_params).await {
+                if let Err(e) = drk.import_dao(&name, params).await {
                     eprintln!("Failed to import DAO: {e:?}");
                     exit(2);
                 }
@@ -1083,9 +1083,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 Ok(())
             }
 
-            DaoSubcmd::List { dao_alias } => {
+            DaoSubcmd::List { name } => {
                 let drk = Drk::new(args.wallet_path, args.wallet_pass, None, ex).await?;
-                if let Err(e) = drk.dao_list(&dao_alias).await {
+                if let Err(e) = drk.dao_list(&name).await {
                     eprintln!("Failed to list DAO: {e:?}");
                     exit(2);
                 }
