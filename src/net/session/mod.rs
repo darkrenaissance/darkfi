@@ -134,6 +134,8 @@ pub trait Session: Sync {
             Err(e) => {
                 debug!(target: "net::session::register_channel()",
                 "Handshake error {} {}", e, channel.clone().address());
+
+                return Err(e)
             }
         }
 
@@ -162,31 +164,34 @@ pub trait Session: Sync {
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
         // Perform handshake
-        protocol_version.run(executor.clone()).await?;
+        match protocol_version.run(executor.clone()).await {
+            Ok(()) => {
+                // Upgrade to goldlist if this is a outbound session.
+                if self.type_id() & SESSION_OUTBOUND != 0 {
+                    debug!(
+                        target: "net::session::perform_handshake_protocols()",
+                        "Upgrading {}", channel.address(),
+                    );
 
-        // Upgrade to goldlist if this is a outbound session.
-        if self.type_id() & SESSION_OUTBOUND != 0 {
-            debug!(
-                target: "net::session::perform_handshake_protocols()",
-                "Upgrading {}", channel.address(),
-            );
+                    let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+                    self.p2p()
+                        .hosts()
+                        .move_host(channel.address(), last_seen, HostColor::Gold)
+                        .await
+                        .unwrap();
+                }
 
-            let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-            self.p2p()
-                .hosts()
-                .move_host(channel.address(), last_seen, HostColor::Gold)
-                .await
-                .unwrap();
+                // Attempt to add channel to registry
+                self.p2p().hosts().register_channel(channel.clone()).await;
+
+                // Subscribe to stop, so we can remove from registry
+                executor.spawn(remove_sub_on_stop(self.p2p(), channel, self.type_id())).detach();
+
+                // Channel is ready for use
+                Ok(())
+            }
+            Err(e) => return Err(e),
         }
-
-        // Attempt to add channel to registry
-        self.p2p().hosts().register_channel(channel.clone()).await;
-
-        // Subscribe to stop, so we can remove from registry
-        executor.spawn(remove_sub_on_stop(self.p2p(), channel, self.type_id())).detach();
-
-        // Channel is ready for use
-        Ok(())
     }
 
     /// Returns a pointer to the p2p network interface

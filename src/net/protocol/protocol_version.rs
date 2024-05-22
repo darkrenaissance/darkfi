@@ -21,9 +21,12 @@ use std::{
     time::{Duration, UNIX_EPOCH},
 };
 
-use futures::future::join_all;
+use futures::{
+    future::{join_all, select, Either},
+    pin_mut,
+};
 use log::{debug, error};
-use smol::Executor;
+use smol::{Executor, Timer};
 
 use super::super::{
     channel::ChannelPtr,
@@ -31,7 +34,7 @@ use super::super::{
     message_subscriber::MessageSubscription,
     settings::SettingsPtr,
 };
-use crate::{system::timeout::timeout, Error, Result};
+use crate::{Error, Result};
 
 /// Implements the protocol version handshake sent out by nodes at
 /// the beginning of a connection.
@@ -62,29 +65,44 @@ impl ProtocolVersion {
     /// version ack.
     pub async fn run(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "net::protocol_version::run()", "START => address={}", self.channel.address());
-        // Start timer
-        // Send version, wait for verack
-        // Wait for version, send verack
-        // Fin.
-        let result = timeout(
-            Duration::from_secs(self.settings.channel_handshake_timeout),
-            self.clone().exchange_versions(executor),
-        )
-        .await;
+        let timeout = Timer::after(Duration::from_secs(self.settings.channel_handshake_timeout));
+        let version = self.clone().exchange_versions(executor);
 
-        if let Err(e) = result {
-            error!(
-                target: "net::protocol_version::run()",
-                "[P2P] Version Exchange failed [{}]: {}",
-                self.channel.address(), e,
-            );
+        pin_mut!(timeout);
+        pin_mut!(version);
 
-            self.channel.stop().await;
-            return Err(Error::ChannelTimeout)
+        // Run timer and version exchange at the same time. Either deal
+        // with the success or failure of the version exchange or
+        // time out.
+        match select(version, timeout).await {
+            Either::Left((Ok(_), _)) => {
+                debug!(target: "net::protocol_version::run()", "END => address={}",
+                self.channel.address());
+
+                Ok(())
+            }
+            Either::Left((Err(e), _)) => {
+                error!(
+                    target: "net::protocol_version::run()",
+                    "[P2P] Version Exchange failed [{}]: {}",
+                    self.channel.address(), e,
+                );
+
+                self.channel.stop().await;
+                Err(e)
+            }
+
+            Either::Right((_, _)) => {
+                error!(
+                    target: "net::protocol_version::run()",
+                    "[P2P] Version Exchange timed out [{}]",
+                    self.channel.address(),
+                );
+
+                self.channel.stop().await;
+                Err(Error::ChannelTimeout)
+            }
         }
-
-        debug!(target: "net::protocol_version::run()", "END => address={}", self.channel.address());
-        Ok(())
     }
 
     /// Send and receive version information
