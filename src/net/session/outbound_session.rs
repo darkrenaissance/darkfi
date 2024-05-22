@@ -450,14 +450,11 @@ impl Slot {
                     self.slot, addr, err
                 );
 
-                match err {
-                    // Immediately return if the Connector has stopped.
-                    // This indicates a shutdown of the P2P network and
-                    // should not result in hostlist modifications.
-                    Error::ConnectorStopped => {
-                        return Err(Error::ConnectFailed);
-                    }
-                    _ => {}
+                // Immediately return if the Connector has stopped.
+                // This indicates a shutdown of the P2P network and
+                // should not result in hostlist modifications.
+                if let Error::ConnectorStopped = err {
+                    return Err(Error::ConnectFailed);
                 }
 
                 // At this point we failed to connect. We'll downgrade this peer now.
