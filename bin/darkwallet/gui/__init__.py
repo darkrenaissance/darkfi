@@ -317,8 +317,6 @@ def draw():
     api.link_node(layer_id, win_id)
 
     # Add a mesh to our layer
-    """
-
     node_id = api.add_node("meshie", SceneNodeType.RENDER_MESH)
 
     prop = Property(
@@ -419,7 +417,6 @@ def draw():
     api.add_property(node_id, prop)
 
     api.link_node(node_id, layer_id)
-    """
 
     # Add some text
 
@@ -453,7 +450,20 @@ def draw():
         False, False, 1, None, None, []
     )
     api.add_property(node_id, prop)
+    #api.set_property_str(node_id, "text", 0, "hello! jelly 🍆")
     api.set_property_str(node_id, "text", 0, "hello! jelly")
+
+    prop = Property(
+        "color", PropertyType.FLOAT32, PropertySubType.COLOR,
+        None,
+        "Color", "Color of the text",
+        False, False, 4, 0, 1, []
+    )
+    api.add_property(node_id, prop)
+    api.set_property_f32(node_id, "color", 0, 1)
+    api.set_property_f32(node_id, "color", 1, 1)
+    api.set_property_f32(node_id, "color", 2, 1)
+    api.set_property_f32(node_id, "color", 3, 1)
 
     prop = Property(
         "overflow", PropertyType.ENUM, PropertySubType.NULL,

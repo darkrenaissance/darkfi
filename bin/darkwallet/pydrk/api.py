@@ -509,9 +509,9 @@ class Api:
             assert v is not None
             match prop.type:
                 case PropertyType.UINT32:
-                    serial.write_u32(req, prop.min_val)
+                    serial.write_u32(req, v)
                 case PropertyType.FLOAT32:
-                    serial.write_f32(req, prop.min_val)
+                    serial.write_f32(req, v)
                 case _:
                     raise exc.PropertyWrongType
 

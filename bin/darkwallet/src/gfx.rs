@@ -1,38 +1,10 @@
 use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
-use fontdue::{
-    layout::{CoordinateSystem, GlyphPosition, Layout, LayoutSettings, TextStyle},
-    Font, FontSettings,
-};
 use freetype as ft;
 use miniquad::{
-    MouseButton,
-    RenderingBackend,
-    TextureId,
-    BufferId,
-    window,
-    UniformType,
-    UniformDesc,
-    ShaderMeta,
-    Pipeline,
-    PipelineParams,
-    Backend,
-    ShaderSource,
-    Equation,
-    BufferLayout,
-    BlendValue,
-    VertexFormat,
-    VertexAttribute,
-    BlendState,
-    BlendFactor,
-    BufferType,
-    BufferUsage,
-    BufferSource,
-    Bindings,
-    PassAction,
-    EventHandler,
-    KeyCode,
-    KeyMods,
-    conf,
+    conf, window, Backend, Bindings, BlendFactor, BlendState, BlendValue, BufferId, BufferLayout,
+    BufferSource, BufferType, BufferUsage, Equation, EventHandler, KeyCode, KeyMods, MouseButton,
+    PassAction, Pipeline, PipelineParams, RenderingBackend, ShaderMeta, ShaderSource, TextureId,
+    UniformDesc, UniformType, VertexAttribute, VertexFormat,
 };
 use std::{
     array::IntoIter,
@@ -47,7 +19,10 @@ use crate::{
     expr::{SExprMachine, SExprVal},
     prop::{Property, PropertySubType, PropertyType},
     res::{ResourceId, ResourceManager},
-    scene::{MethodResponseFn, SceneGraph, SceneGraphPtr, SceneNode, SceneNodeId, SceneNodeType},
+    scene::{
+        MethodResponseFn, SceneGraph, SceneGraphPtr, SceneNode, SceneNodeId, SceneNodeInfo,
+        SceneNodeType,
+    },
     shader,
 };
 
@@ -70,6 +45,7 @@ type Color = [f32; 4];
 
 const COLOR_RED: Color = [1., 0., 0., 1.];
 const COLOR_BLUE: Color = [0., 0., 1., 1.];
+const COLOR_WHITE: Color = [1., 1., 1., 1.];
 
 #[derive(Debug, SerialEncodable, SerialDecodable)]
 #[repr(C)]
@@ -120,11 +96,8 @@ impl<T> Rectangle<T> {
 
 #[derive(Debug)]
 enum GraphicsMethodEvent {
-    CreateText,
     LoadTexture,
-    CreateMesh,
     DeleteTexture,
-    DeleteMesh,
 }
 
 struct Stage<'a> {
@@ -134,8 +107,6 @@ struct Stage<'a> {
     scene_graph: SceneGraphPtr,
 
     textures: ResourceManager<TextureId>,
-    meshes: ResourceManager<Mesh>,
-    font: Font,
     ft_face: ft::Face<&'a [u8]>,
 
     method_recvr: mpsc::Receiver<(GraphicsMethodEvent, SceneNodeId, Vec<u8>, MethodResponseFn)>,
@@ -194,68 +165,15 @@ impl<'a> Stage<'a> {
 
         let (method_sender, method_recvr) = mpsc::sync_channel(100);
 
-        //let font = {
-            /*
-            let mut scene_graph = scene_graph.lock().unwrap();
-
-            let font = scene_graph.add_node("font", SceneNodeType::Fonts);
-            let font_id = font.id;
-            scene_graph.link(font_id, SceneGraph::ROOT_ID).unwrap();
-
-            let inter_regular = scene_graph.add_node("inter-regular", SceneNodeType::Font);
-            */
-
-            let font_data = include_bytes!("../Inter-Regular.otf") as &[u8];
-            let font = Font::from_bytes(font_data, FontSettings::default()).unwrap();
-            //let line_metrics = font.horizontal_line_metrics(1.).unwrap();
-            //inter_regular.add_property_f32("ascent", line_metrics.ascent).unwrap();
-            //inter_regular.add_property_f32("descent", line_metrics.descent).unwrap();
-            //inter_regular.add_property_f32("line_gap", line_metrics.line_gap).unwrap();
-            //inter_regular.add_property_f32("new_line_size", line_metrics.new_line_size).unwrap();
-
-            let face = harfbuzz_rs::Face::from_bytes(font_data, 0);
-            //unsafe {
-            //    let raw_font = hb_font_create(face.as_raw());
-            //    let hb = harfbuzz_rs::Owned::from_raw(raw_font);
-            //}
-
-            let ftlib = ft::Library::init().unwrap();
-            let ft_face = ftlib.new_memory_face2(font_data, 0).unwrap();
-
-            /*
-            let sender = method_sender.clone();
-            let inter_regular_id = inter_regular.id;
-            let method_fn = Box::new(move |arg_data, response_fn| {
-                sender.send((
-                    GraphicsMethodEvent::CreateText,
-                    inter_regular_id,
-                    arg_data,
-                    response_fn,
-                ));
-            });
-            inter_regular.add_method(
-                "create_text",
-                vec![
-                    ("node_name", "", PropertyType::Str),
-                    ("text", "", PropertyType::Str),
-                    ("font_size", "", PropertyType::Float32),
-                ],
-                vec![("node_id", "", PropertyType::SceneNodeId)],
-                method_fn,
-            );
-
-            scene_graph.link(inter_regular_id, font_id).unwrap();
-            font
-        };
-            */
+        let font_data = include_bytes!("../Inter-Regular.otf") as &[u8];
+        let ftlib = ft::Library::init().unwrap();
+        let ft_face = ftlib.new_memory_face2(font_data, 0).unwrap();
 
         let mut stage = Stage {
             ctx,
             pipeline,
             scene_graph,
             textures,
-            meshes: ResourceManager::new(),
-            font,
             ft_face,
             method_recvr,
             method_sender,
@@ -365,167 +283,6 @@ impl<'a> Stage<'a> {
         scene_graph.link(mouse_id, input_id).unwrap();
     }
 
-    fn draw_glyph(
-        ctx: &mut Box<dyn RenderingBackend>,
-        proj: &glam::Mat4,
-        model: &glam::Mat4,
-        font: &Font,
-        glyph_pos: &GlyphPosition,
-        color: [f32; 4],
-    ) {
-        //let proj =
-        //    glam::Mat4::from_translation(glam::Vec3::new(-1., 1., 0.)) *
-        //    glam::Mat4::from_scale(glam::Vec3::new(2./screen_width, -2./screen_height, 1.));
-        //let model = glam::Mat4::IDENTITY;
-
-        let mut uniforms_data = [0u8; 128];
-        let data: [u8; 64] = unsafe { std::mem::transmute_copy(proj) };
-        uniforms_data[0..64].copy_from_slice(&data);
-        let data: [u8; 64] = unsafe { std::mem::transmute_copy(model) };
-        uniforms_data[64..].copy_from_slice(&data);
-        assert_eq!(128, 2 * UniformType::Mat4.size());
-
-        ctx.apply_uniforms_from_bytes(uniforms_data.as_ptr(), uniforms_data.len());
-
-        let (font_metrics, text_bitmap) = font.rasterize(glyph_pos.parent, glyph_pos.key.px);
-        let text_bitmap: Vec<_> =
-            text_bitmap.iter().flat_map(|coverage| vec![255, 255, 255, *coverage]).collect();
-
-        let (x, y) = (glyph_pos.x, glyph_pos.y);
-        let (w, h) = (glyph_pos.width as f32, glyph_pos.height as f32);
-        //    0             1
-        // (-1, 1) ----- (1, 1)
-        //    |          /  |
-        //    |        /    |
-        //    |      /      |
-        //    |    /        |
-        // (-1, -1) ---- (1, -1)
-        //    2             3
-        //
-        // faces: 021, 123
-        let vertices: [Vertex; 4] = [
-            // top left
-            Vertex { pos: [x, y], color, uv: [0., 0.] },
-            // top right
-            Vertex { pos: [x + w, y], color, uv: [1., 0.] },
-            // bottom left
-            Vertex { pos: [x, y + h], color, uv: [0., 1.] },
-            // bottom right
-            Vertex { pos: [x + w, y + h], color, uv: [1., 1.] },
-        ];
-
-        //debug!("screen size: {:?}", window::screen_size());
-        let vertex_buffer = ctx.new_buffer(
-            BufferType::VertexBuffer,
-            BufferUsage::Immutable,
-            BufferSource::slice(&vertices),
-        );
-
-        let indices: [u16; 6] = [0, 2, 1, 1, 2, 3];
-        let index_buffer = ctx.new_buffer(
-            BufferType::IndexBuffer,
-            BufferUsage::Immutable,
-            BufferSource::slice(&indices),
-        );
-
-        let texture = ctx.new_texture_from_rgba8(
-            font_metrics.width as u16,
-            font_metrics.height as u16,
-            &text_bitmap,
-        );
-
-        let bindings =
-            Bindings { vertex_buffers: vec![vertex_buffer], index_buffer, images: vec![texture] };
-
-        ctx.apply_bindings(&bindings);
-        ctx.draw(0, 6, 1);
-
-        ctx.delete_texture(texture);
-    }
-
-    fn method_create_text(&mut self, node_id: SceneNodeId, arg_data: Vec<u8>) -> Result<Vec<u8>> {
-        let mut cur = Cursor::new(&arg_data);
-        let node_name = String::decode(&mut cur).unwrap();
-        let text = String::decode(&mut cur).unwrap();
-        let font_size = f32::decode(&mut cur).unwrap();
-
-        let mut scene_graph = self.scene_graph.lock().unwrap();
-        let font_node = scene_graph.get_node(node_id).ok_or(Error::NodeNotFound)?;
-        let font_name = font_node.name.clone();
-        let font_node_id = font_node.id;
-        let text_node = scene_graph.add_node(node_name, SceneNodeType::RenderText);
-
-        let mut prop = Property::new("text", PropertyType::Str, PropertySubType::Null);
-        text_node.add_property(prop)?;
-
-        let mut prop = Property::new("font_size", PropertyType::Float32, PropertySubType::Pixel);
-        text_node.add_property(prop)?;
-
-        let mut prop = Property::new("color", PropertyType::Float32, PropertySubType::Color);
-        prop.set_array_len(4);
-        text_node.add_property(prop)?;
-
-        let mut layout = Layout::new(CoordinateSystem::PositiveYDown);
-        layout.reset(&LayoutSettings { ..LayoutSettings::default() });
-        let font = match font_name.as_str() {
-            "inter-regular" => &self.font,
-            _ => panic!("unknown font name!"),
-        };
-        let fonts = [font];
-        layout.append(&fonts, &TextStyle::new(&text, font_size, 0));
-
-        // Calculate the text width
-        // std::cmp::max() not impl for f32
-        let max_f32 = |x: f32, y: f32| {
-            if x > y {
-                x
-            } else {
-                y
-            }
-        };
-
-        // TODO: this calc isn't multiline, we should add width property to each line
-        let mut total_width = 0.;
-        for glyph_pos in layout.glyphs() {
-            let right = glyph_pos.x + glyph_pos.width as f32;
-            total_width = max_f32(total_width, right);
-        }
-
-        let mut prop = Property::new("size", PropertyType::Float32, PropertySubType::Pixel);
-        prop.set_array_len(2);
-        prop.set_f32(0, total_width).unwrap();
-        prop.set_f32(1, layout.height()).unwrap();
-
-        let text_node_id = text_node.id;
-
-        /*
-        let lines = layout.lines();
-        if lines.is_some() {
-            for (idx, line) in lines.unwrap().into_iter().enumerate() {
-                let line_node_name = format!("line.{}", idx);
-                let line_node = scene_graph.add_node(line_node_name, SceneNodeType::LinePosition);
-                //line_node.add_property_u32("idx", idx as u32).unwrap();
-                //line_node.add_property_f32("baseline_y", line.baseline_y).unwrap();
-                //line_node.add_property_f32("padding", line.padding).unwrap();
-                //line_node.add_property_f32("max_ascent", line.max_ascent).unwrap();
-                //line_node.add_property_f32("min_descent", line.min_descent).unwrap();
-                //line_node.add_property_f32("max_line_gap", line.max_line_gap).unwrap();
-                //line_node.add_property_u32("glyph_start", line.glyph_start as u32).unwrap();
-                //line_node.add_property_u32("glyph_end", line.glyph_end as u32).unwrap();
-
-                let line_node_id = line_node.id;
-                scene_graph.link(line_node_id, text_node_id)?;
-            }
-        }
-        */
-
-        scene_graph.link(font_node_id, text_node_id)?;
-
-        let mut reply = vec![];
-        text_node_id.encode(&mut reply).unwrap();
-
-        Ok(reply)
-    }
     fn method_load_texture(&mut self, node_id: SceneNodeId, arg_data: Vec<u8>) -> Result<Vec<u8>> {
         let mut cur = Cursor::new(&arg_data);
         let node_name = String::decode(&mut cur).unwrap();
@@ -560,50 +317,6 @@ impl<'a> Stage<'a> {
 
         Ok(reply)
     }
-    fn method_create_mesh(&mut self, node_id: SceneNodeId, arg_data: Vec<u8>) -> Result<Vec<u8>> {
-        let mut cur = Cursor::new(&arg_data);
-        let node_name = String::decode(&mut cur).unwrap();
-        let verts = Vec::<Vertex>::decode(&mut cur).unwrap();
-        let faces = Vec::<Face>::decode(&mut cur).unwrap();
-
-        let vertex_buffer = self.ctx.new_buffer(
-            BufferType::VertexBuffer,
-            BufferUsage::Immutable,
-            BufferSource::slice(&verts),
-        );
-
-        /*
-        let bufsrc = unsafe {
-            BufferSource::pointer(
-                faces.as_ptr() as _,
-                std::mem::size_of_val(&faces[..]),
-                std::mem::size_of::<u32>(),
-            )
-        };
-        */
-
-        let index_buffer = self.ctx.new_buffer(
-            BufferType::IndexBuffer,
-            BufferUsage::Immutable,
-            BufferSource::slice(&faces),
-        );
-
-        let mesh = Mesh { verts, faces, vertex_buffer, index_buffer };
-
-        let mesh_id = self.meshes.alloc(mesh);
-
-        let mut scene_graph = self.scene_graph.lock().unwrap();
-        let node = scene_graph.add_node(node_name, SceneNodeType::RenderMesh);
-
-        let mut prop = Property::new("mesh_id", PropertyType::Uint32, PropertySubType::ResourceId);
-        prop.set_u32(0, mesh_id).unwrap();
-        node.add_property(prop)?;
-
-        let mut reply = vec![];
-        node.id.encode(&mut reply).unwrap();
-
-        Ok(reply)
-    }
     fn method_delete_texture(
         &mut self,
         node_id: SceneNodeId,
@@ -616,24 +329,6 @@ impl<'a> Stage<'a> {
         self.textures.free(texture_id);
         Ok(vec![])
     }
-    fn method_delete_mesh(&mut self, node_id: SceneNodeId, arg_data: Vec<u8>) -> Result<Vec<u8>> {
-        let mut cur = Cursor::new(&arg_data);
-        let mesh_id = ResourceId::decode(&mut cur).unwrap();
-        let mesh = self.meshes.get(mesh_id).ok_or(Error::ResourceNotFound)?;
-        self.ctx.delete_buffer(mesh.vertex_buffer);
-        self.ctx.delete_buffer(mesh.index_buffer);
-        self.meshes.free(mesh_id);
-        Ok(vec![])
-    }
-}
-
-struct DeferredDraw {
-    z_index: u32,
-    vertex_buffer: BufferId,
-    index_buffer: BufferId,
-    texture: TextureId,
-    uniforms_data: [u8; 128],
-    faces_len: usize,
 }
 
 struct RenderContext<'a> {
@@ -642,8 +337,6 @@ struct RenderContext<'a> {
     pipeline: &'a Pipeline,
     proj: glam::Mat4,
     textures: &'a ResourceManager<TextureId>,
-    draw_calls: Vec<DeferredDraw>,
-    font: &'a Font,
     ft_face: &'a ft::Face<&'a [u8]>,
 }
 
@@ -655,8 +348,6 @@ impl<'a> RenderContext<'a> {
             .expect("no window attached!")
             .get_children(&[SceneNodeType::RenderLayer])
         {
-            self.draw_calls.clear();
-
             if let Err(err) = self.render_layer(layer.id) {
                 error!("error rendering layer '{}': {}", layer.name, err)
             }
@@ -716,9 +407,13 @@ impl<'a> RenderContext<'a> {
         self.ctx.apply_viewport(rect.x, rect.y, rect.w, rect.h);
         self.ctx.apply_scissor_rect(rect.x, rect.y, rect.w, rect.h);
 
+        let layer_children =
+            layer.get_children(&[SceneNodeType::RenderMesh, SceneNodeType::RenderText]);
+        let layer_children = self.order_by_z_index(layer_children);
+
         // get the rectangle
         // make sure it's inside the parent's rect
-        for child in layer.get_children(&[SceneNodeType::RenderMesh, SceneNodeType::RenderText]) {
+        for child in layer_children {
             // x, y, w, h as pixels
 
             // note that (x, y) is offset by layer rect so it is the pos within layer
@@ -744,31 +439,20 @@ impl<'a> RenderContext<'a> {
             }
         }
 
-        // Order draw calls by z-index
-        self.draw_calls.sort_unstable_by_key(|dc| dc.z_index);
-        for draw_call in std::mem::take(&mut self.draw_calls) {
-            let bindings = Bindings {
-                vertex_buffers: vec![draw_call.vertex_buffer],
-                index_buffer: draw_call.index_buffer,
-                images: vec![draw_call.texture],
-            };
-
-            self.ctx.apply_bindings(&bindings);
-
-            self.ctx.apply_uniforms_from_bytes(
-                draw_call.uniforms_data.as_ptr(),
-                draw_call.uniforms_data.len(),
-            );
-
-            self.ctx.draw(0, 3 * draw_call.faces_len as i32, 1);
-
-            self.ctx.delete_buffer(draw_call.index_buffer);
-            self.ctx.delete_buffer(draw_call.vertex_buffer);
-        }
-
-        self.ctx.end_render_pass();
-
         Ok(())
+    }
+
+    fn order_by_z_index(&self, nodes: Vec<SceneNodeInfo>) -> Vec<SceneNodeInfo> {
+        let mut nodes: Vec<_> = nodes
+            .into_iter()
+            .filter_map(|node_inf| {
+                let node = self.scene_graph.get_node(node_inf.id).unwrap();
+                let z_index = node.get_property_u32("z_index").ok()?;
+                Some((z_index, node_inf))
+            })
+            .collect();
+        nodes.sort_unstable_by_key(|(z_index, node_inf)| *z_index);
+        nodes.into_iter().map(|(z_index, node_inf)| node_inf).collect()
     }
 
     fn get_dim(mesh: &SceneNode, layer_rect: &Rectangle<i32>) -> Result<Rectangle<f32>> {
@@ -847,19 +531,6 @@ impl<'a> RenderContext<'a> {
         uniforms_data[64..].copy_from_slice(&data);
         assert_eq!(128, 2 * UniformType::Mat4.size());
 
-        if z_index > 0 {
-            let draw_call = DeferredDraw {
-                z_index,
-                vertex_buffer,
-                index_buffer,
-                texture: *texture,
-                uniforms_data,
-                faces_len: faces.len(),
-            };
-            self.draw_calls.push(draw_call);
-            return Ok(())
-        }
-
         let bindings =
             Bindings { vertex_buffers: vec![vertex_buffer], index_buffer, images: vec![*texture] };
 
@@ -875,7 +546,15 @@ impl<'a> RenderContext<'a> {
         Ok(())
     }
 
-    fn render_box_with_texture(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, color: Color, texture: TextureId) {
+    fn render_box_with_texture(
+        &mut self,
+        x1: f32,
+        y1: f32,
+        x2: f32,
+        y2: f32,
+        color: Color,
+        texture: TextureId,
+    ) {
         let vertices: [Vertex; 4] = [
             // top left
             Vertex { pos: [x1, y1], color, uv: [0., 0.] },
@@ -914,11 +593,11 @@ impl<'a> RenderContext<'a> {
     }
 
     fn hline(&mut self, min_x: f32, max_x: f32, y: f32, color: Color, w: f32) {
-        self.render_box(min_x, y - w/2., max_x, y + w/2., color)
+        self.render_box(min_x, y - w / 2., max_x, y + w / 2., color)
     }
 
     fn vline(&mut self, x: f32, min_y: f32, max_y: f32, color: Color, w: f32) {
-        self.render_box(x - w/2., min_y, x + w/2., max_y, color)
+        self.render_box(x - w / 2., min_y, x + w / 2., max_y, color)
     }
 
     fn outline(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, color: Color, w: f32) {
@@ -941,6 +620,12 @@ impl<'a> RenderContext<'a> {
         let font_size = node.get_property_f32("font_size")?;
         let debug = node.get_property_bool("debug")?;
         let rect = Self::get_dim(node, layer_rect)?;
+
+        let color_prop = node.get_property("color").ok_or(Error::PropertyNotFound)?;
+        let color_r = color_prop.get_f32(0)?;
+        let color_g = color_prop.get_f32(1)?;
+        let color_b = color_prop.get_f32(2)?;
+        let color_a = color_prop.get_f32(3)?;
 
         let layer_w = layer_rect.w as f32;
         let layer_h = layer_rect.h as f32;
@@ -976,9 +661,6 @@ impl<'a> RenderContext<'a> {
         for (position, info) in positions.iter().zip(infos) {
             let gid = info.codepoint;
 
-            //let x = current_x + position.x_offset as f32 / 64.;
-            //let y = current_y + position.y_offset as f32 / 64.;
-
             self.ft_face.load_glyph(gid, ft::face::LoadFlag::COLOR).unwrap();
 
             let glyph = self.ft_face.glyph();
@@ -995,22 +677,6 @@ impl<'a> RenderContext<'a> {
             //assert_eq!(bmp.pixel_mode().unwrap(), ft::bitmap::PixelMode::Lcd);
             assert_eq!(bmp.pixel_mode().unwrap(), ft::bitmap::PixelMode::Gray);
 
-            //let twidth = 2_usize.pow((width as f32).log2().ceil() as u32);
-            //let theight = 2_usize.pow((height as f32).log2().ceil() as u32);
-            //assert!(twidth >= width as usize);
-            //assert!(theight >= height as usize);
-            //assert_eq!(buffer.len(), (4 * width * height) as usize);
-
-            //let mut tdata = vec![];
-            //tdata.resize(twidth * theight * 4, 0u8);
-            //for iy in 0..height as usize {
-            //    let src_start = 4 * iy * width as usize;
-            //    let src_end = src_start + 4 * width as usize;
-            //    let dest_start = 4 * iy * twidth;
-            //    let dest_end = dest_start + 4 * width as usize;
-            //    let src = &buffer[src_start..src_end];
-            //    tdata[dest_start..dest_end].clone_from_slice(src);
-            //}
             //// Convert from BGRA to RGBA
             //for i in 0..(twidth*theight) {
             //    let idx = i*4;
@@ -1021,19 +687,16 @@ impl<'a> RenderContext<'a> {
             //}
             // Add an alpha channel
             // Convert from greyscale to RGBA8
-            let tdata: Vec<_> =
-                buffer.iter().flat_map(|coverage| {
-                    let α = *coverage;
-                    vec![α, α, α, α]
-                }).collect();
-
-            // UV coords
-            let s0 = 0.;
-            let t0 = 0.;
-            let s1 = 1.;
-            let t1 = 1.;
-            //let s1 = width as f32 / twidth as f32;
-            //let t1 = height as f32 / theight as f32;
+            let tdata: Vec<_> = buffer
+                .iter()
+                .flat_map(|coverage| {
+                    let r = (255. * color_r) as u8;
+                    let g = (255. * color_g) as u8;
+                    let b = (255. * color_b) as u8;
+                    let α = ((*coverage as f32) * color_a) as u8;
+                    vec![r, g, b, α]
+                })
+                .collect();
 
             let off_x = position.x_offset as f32 / 64.;
             let off_y = position.y_offset as f32 / 64.;
@@ -1042,9 +705,6 @@ impl<'a> RenderContext<'a> {
             let y1 = current_y - off_y - bearing_y;
             let x2 = x1 + width as f32;
             let y2 = y1 + height as f32;
-
-            // Flip the axis
-            //let y0 = y1 - height as f32;
 
             let x_advance = position.x_advance as f32 / 64.;
             let y_advance = position.y_advance as f32 / 64.;
@@ -1058,47 +718,8 @@ impl<'a> RenderContext<'a> {
             //println!("(x1, y1) = ({}, {}),  (x2, y2) = ({}, {})", x1, y1, x2, y2);
             //println!();
 
-            //    self.render_glyph(gid, font_size, x as f32, y as f32)?;
-            let color = [1., 1., 1., 1.];
-            // faces: 021, 123
-            let vertices: [Vertex; 4] = [
-                // top left
-                Vertex { pos: [x1, y1], color, uv: [0., 0.] },
-                // top right
-                Vertex { pos: [x2, y1], color, uv: [1., 0.] },
-                // bottom left
-                Vertex { pos: [x1, y2], color, uv: [0., 1.] },
-                // bottom right
-                Vertex { pos: [x2, y2], color, uv: [1., 1.] },
-            ];
-
-            //debug!("screen size: {:?}", window::screen_size());
-            let vertex_buffer = self.ctx.new_buffer(
-                BufferType::VertexBuffer,
-                BufferUsage::Immutable,
-                BufferSource::slice(&vertices),
-            );
-
-           // let indices: [u16; 6] = [0, 1, 2, 0, 2, 3];
-            let indices: [u16; 6] = [0, 2, 1, 1, 2, 3];
-            let index_buffer = self.ctx.new_buffer(
-                BufferType::IndexBuffer,
-                BufferUsage::Immutable,
-                BufferSource::slice(&indices),
-            );
-
-            let texture = self.ctx.new_texture_from_rgba8(
-                width as u16,
-                height as u16,
-                &tdata,
-            );
-
-            let bindings =
-                Bindings { vertex_buffers: vec![vertex_buffer], index_buffer, images: vec![texture] };
-
-            self.ctx.apply_bindings(&bindings);
-            self.ctx.draw(0, 6, 1);
-
+            let texture = self.ctx.new_texture_from_rgba8(width as u16, height as u16, &tdata);
+            self.render_box_with_texture(x1, y1, x2, y2, COLOR_WHITE, texture);
             self.ctx.delete_texture(texture);
 
             if debug {
@@ -1109,175 +730,13 @@ impl<'a> RenderContext<'a> {
             self.hline(0., current_x, 0., COLOR_RED, 1.);
         }
 
-        /*
-        let vertex_buffer = self.ctx.new_buffer(
-            BufferType::VertexBuffer,
-            BufferUsage::Immutable,
-            BufferSource::slice(&verts),
-        );
-
-        let bufsrc = unsafe {
-            BufferSource::pointer(
-                faces.as_ptr() as _,
-                std::mem::size_of_val(&faces[..]),
-                std::mem::size_of::<u32>(),
-            )
-        };
-
-        let index_buffer =
-            self.ctx.new_buffer(BufferType::IndexBuffer, BufferUsage::Immutable, bufsrc);
-
-        // temp
-        let texture = self.textures.get(Stage::WHITE_TEXTURE_ID).unwrap();
-
-        let rect = Self::get_dim(mesh, layer_rect)?;
-        //debug!("mesh rect: {:?}", rect);
-
-        let layer_w = layer_rect.w as f32;
-        let layer_h = layer_rect.h as f32;
-        let off_x = rect.x / layer_w;
-        let off_y = rect.y / layer_h;
-        let scale_x = rect.w / layer_w;
-        let scale_y = rect.h / layer_h;
-        //let model = glam::Mat4::IDENTITY;
-        let model = glam::Mat4::from_translation(glam::Vec3::new(off_x, off_y, 0.)) *
-            glam::Mat4::from_scale(glam::Vec3::new(scale_x, scale_y, 1.));
-
-        let mut uniforms_data = [0u8; 128];
-        let data: [u8; 64] = unsafe { std::mem::transmute_copy(&self.proj) };
-        uniforms_data[0..64].copy_from_slice(&data);
-        let data: [u8; 64] = unsafe { std::mem::transmute_copy(&model) };
-        uniforms_data[64..].copy_from_slice(&data);
-        assert_eq!(128, 2 * UniformType::Mat4.size());
-
-        if z_index > 0 {
-            let draw_call = DeferredDraw {
-                z_index,
-                vertex_buffer,
-                index_buffer,
-                texture: *texture,
-                uniforms_data,
-                faces_len: faces.len(),
-            };
-            self.draw_calls.push(draw_call);
-            return Ok(())
-        }
-
-        let bindings =
-            Bindings { vertex_buffers: vec![vertex_buffer], index_buffer, images: vec![*texture] };
-
-        self.ctx.apply_bindings(&bindings);
-
-        self.ctx.apply_uniforms_from_bytes(uniforms_data.as_ptr(), uniforms_data.len());
-
-        self.ctx.draw(0, 3 * faces.len() as i32, 1);
-
-        self.ctx.delete_buffer(index_buffer);
-        self.ctx.delete_buffer(vertex_buffer);
-        */
-
         Ok(())
     }
 
     fn render_glyph(&mut self, glyph_id: u32, font_size: f32, x: f32, y: f32) -> Result<()> {
-
-        let (metrics, text_bitmap) = self.font.rasterize_indexed_subpixel(glyph_id as u16, font_size);
-        assert!(text_bitmap.len() % 3 == 0);
-        let bmp_len = text_bitmap.len() / 3;
-        let mut bmp = Vec::<u8>::with_capacity(4 * bmp_len);
-        for i in 0..bmp_len {
-            let r = text_bitmap[3*i];
-            let g = text_bitmap[3*i + 1];
-            let b = text_bitmap[3*i + 2];
-
-            let α = if r == 0 && g == 0 && b == 0 {
-                0
-            } else {
-                255
-            };
-
-            bmp.push(r);
-            bmp.push(g);
-            bmp.push(b);
-            bmp.push(α);
-        }
-        drop(text_bitmap);
-
-        let (w, h) = (metrics.width as f32, metrics.height as f32);
-        let color = [1., 1., 1., 1.];
-        //    0             1
-        // (-1, 1) ----- (1, 1)
-        //    |          /  |
-        //    |        /    |
-        //    |      /      |
-        //    |    /        |
-        // (-1, -1) ---- (1, -1)
-        //    2             3
-        //
-        // faces: 021, 123
-        let vertices: [Vertex; 4] = [
-            // top left
-            Vertex { pos: [x, y - h], color, uv: [0., 0.] },
-            // top right
-            Vertex { pos: [x + w, y - h], color, uv: [1., 0.] },
-            // bottom left
-            Vertex { pos: [x, y], color, uv: [0., 1.] },
-            // bottom right
-            Vertex { pos: [x + w, y], color, uv: [1., 1.] },
-        ];
-
-        //debug!("screen size: {:?}", window::screen_size());
-        let vertex_buffer = self.ctx.new_buffer(
-            BufferType::VertexBuffer,
-            BufferUsage::Immutable,
-            BufferSource::slice(&vertices),
-        );
-
-        let indices: [u16; 6] = [0, 2, 1, 1, 2, 3];
-        let index_buffer = self.ctx.new_buffer(
-            BufferType::IndexBuffer,
-            BufferUsage::Immutable,
-            BufferSource::slice(&indices),
-        );
-
-        let texture = self.ctx.new_texture_from_rgba8(
-            metrics.width as u16,
-            metrics.height as u16,
-            &bmp,
-        );
-
-        let bindings =
-            Bindings { vertex_buffers: vec![vertex_buffer], index_buffer, images: vec![texture] };
-
-        self.ctx.apply_bindings(&bindings);
-        self.ctx.draw(0, 6, 1);
-
-        self.ctx.delete_texture(texture);
         Ok(())
     }
 }
-
-/*
-fn get_obj_props(obj: &SceneNode) -> Result<(f32, f32, f32, f32, bool)> {
-    let x = obj.get_property_f32("x")?;
-    let y = obj.get_property_f32("y")?;
-    let scale_x = obj.get_property_f32("scale_x")?;
-    let scale_y = obj.get_property_f32("scale_y")?;
-    let is_visible = obj.get_property_bool("is_visible")?;
-    Ok((x, y, scale_x, scale_y, is_visible))
-}
-
-fn get_text_props(render_text: &SceneNode) -> Result<(String, f32, [f32; 4])> {
-    let text = render_text.get_property_str("text")?;
-    let font_size = render_text.get_property_f32("font_size")?;
-    let r = render_text.get_property_f32("r")?;
-    let g = render_text.get_property_f32("g")?;
-    let b = render_text.get_property_f32("b")?;
-    let a = render_text.get_property_f32("a")?;
-    let color = [r, g, b, a];
-    Ok((text, font_size, color))
-}
-*/
 
 impl<'a> EventHandler for Stage<'a> {
     fn update(&mut self) {
@@ -1303,11 +762,8 @@ impl<'a> EventHandler for Stage<'a> {
                 break
             };
             let res = match event {
-                GraphicsMethodEvent::CreateText => self.method_create_text(node_id, arg_data),
                 GraphicsMethodEvent::LoadTexture => self.method_load_texture(node_id, arg_data),
-                GraphicsMethodEvent::CreateMesh => self.method_create_mesh(node_id, arg_data),
                 GraphicsMethodEvent::DeleteTexture => self.method_delete_texture(node_id, arg_data),
-                GraphicsMethodEvent::DeleteMesh => self.method_delete_mesh(node_id, arg_data),
             };
             response_fn(res);
         }
@@ -1317,19 +773,12 @@ impl<'a> EventHandler for Stage<'a> {
     fn draw(&mut self) {
         self.last_draw_time = Some(Instant::now());
 
-        //let clear = PassAction::clear_color(0., 0., 0., 1.);
-        //self.ctx.begin_default_pass(clear);
-        //self.ctx.end_render_pass();
-
         let (screen_width, screen_height) = window::screen_size();
         // This will make the top left (0, 0) and the bottom right (1, 1)
         // Default is (-1, 1) -> (1, -1)
         let proj = glam::Mat4::from_translation(glam::Vec3::new(-1., 1., 0.)) *
             glam::Mat4::from_scale(glam::Vec3::new(2., -2., 1.));
         //let proj = glam::Mat4::IDENTITY;
-
-        // Reusable text layout
-        //let mut layout = Layout::new(CoordinateSystem::PositiveYDown);
 
         let scene_graph = self.scene_graph.lock().unwrap();
 
@@ -1340,178 +789,12 @@ impl<'a> EventHandler for Stage<'a> {
             pipeline: &self.pipeline,
             proj,
             textures: &self.textures,
-            draw_calls: vec![],
-            font: &self.font,
             ft_face: &self.ft_face,
         };
 
         render_context.render_window();
 
         drop(render_context);
-
-        /*
-        for layer in scene_graph
-            .lookup_node("/window")
-            .expect("no window attached!")
-            .iter_children(&scene_graph, SceneNodeType::RenderLayer)
-        {
-            let is_visible = layer.get_property_bool("is_visible").unwrap();
-            if !is_visible {
-                continue;
-            }
-
-            //self.ctx.begin_default_pass(Default::default());
-            self.ctx.begin_default_pass(PassAction::Nothing);
-            self.ctx.apply_pipeline(&self.pipeline);
-
-            /*
-            let rect_x = layer.get_property_u32("rect_x").unwrap();
-            let rect_y = layer.get_property_u32("rect_y").unwrap();
-            let rect_w = layer.get_property_u32("rect_w").unwrap();
-            let rect_h = layer.get_property_u32("rect_h").unwrap();
-
-            self.ctx.apply_viewport(rect_x as i32, rect_y as i32, rect_w as i32, rect_h as i32);
-            self.ctx.apply_scissor_rect(rect_x as i32, rect_y as i32, rect_w as i32, rect_h as i32);
-
-            'outer: for obj in layer.iter_children(&scene_graph, SceneNodeType::RenderObject) {
-                let Ok((x, y, scale_x, scale_y, is_visible)) = get_obj_props(obj) else {
-                    error!("obj '{}':{} has a property error", obj.name, obj.id);
-                    continue
-                };
-
-                if !is_visible {
-                    continue
-                }
-
-                let model = glam::Mat4::from_translation(glam::Vec3::new(x, y, 0.)) *
-                    glam::Mat4::from_scale(glam::Vec3::new(scale_x, scale_y, 1.));
-
-                let texture = 'texture: {
-                    let Some(texture_node) =
-                        obj.iter_children(&scene_graph, SceneNodeType::RenderTexture).next()
-                    else {
-                        break 'texture self.textures.get(Self::WHITE_TEXTURE_ID).unwrap()
-                    };
-
-                    let Ok(id) = texture_node.get_property_u32("texture_id") else {
-                        error!(
-                            "texture '{}':{} missing property texture_id",
-                            texture_node.name, texture_node.id
-                        );
-                        continue 'outer
-                    };
-
-                    let Some(texture) = self.textures.get(id) else {
-                        error!(
-                            "texture '{}':{} texture with id {} is missing!",
-                            texture_node.name, texture_node.id, id
-                        );
-                        continue 'outer
-                    };
-                    texture
-                };
-
-                for mesh in obj.iter_children(&scene_graph, SceneNodeType::RenderMesh) {
-                    let Some(verts_prop) = mesh.get_property("verts") else {
-                        error!("mesh '{}':{} missing property verts", mesh.name, mesh.id);
-                        continue
-                    };
-                    let Ok(verts) = verts_prop.get_buf() else {
-                        error!("mesh '{}':{} verts property has wrong type", mesh.name, mesh.id);
-                        continue
-                    };
-
-                    let Some(faces_prop) = mesh.get_property("faces") else {
-                        error!("mesh '{}':{} missing property faces", mesh.name, mesh.id);
-                        continue
-                    };
-                    let Ok(faces) = faces_prop.get_buf() else {
-                        error!("mesh '{}':{} faces property has wrong type", mesh.name, mesh.id);
-                        continue
-                    };
-
-                    let vertex_buffer = self.ctx.new_buffer(
-                        BufferType::VertexBuffer,
-                        BufferUsage::Immutable,
-                        BufferSource::slice(&verts),
-                    );
-
-                    let bufsrc = unsafe {
-                        BufferSource::pointer(
-                            faces.as_ptr() as _,
-                            std::mem::size_of_val(&faces[..]),
-                            std::mem::size_of::<u32>(),
-                        )
-                    };
-
-                    let index_buffer = self.ctx.new_buffer(
-                        BufferType::IndexBuffer,
-                        BufferUsage::Immutable,
-                        bufsrc,
-                    );
-
-                    let bindings = Bindings {
-                        vertex_buffers: vec![vertex_buffer],
-                        index_buffer,
-                        images: vec![*texture],
-                    };
-
-                    self.ctx.apply_bindings(&bindings);
-
-                    let mut uniforms_data = [0u8; 128];
-                    let data: [u8; 64] = unsafe { std::mem::transmute_copy(&proj) };
-                    uniforms_data[0..64].copy_from_slice(&data);
-                    let data: [u8; 64] = unsafe { std::mem::transmute_copy(&model) };
-                    uniforms_data[64..].copy_from_slice(&data);
-                    assert_eq!(128, 2 * UniformType::Mat4.size());
-
-                    self.ctx.apply_uniforms_from_bytes(uniforms_data.as_ptr(), uniforms_data.len());
-
-                    self.ctx.draw(0, 3 * faces.len() as i32, 1);
-                }
-
-                for render_text in obj.iter_children(&scene_graph, SceneNodeType::RenderText) {
-                    let Ok((text, font_size, color)) = get_text_props(render_text) else {
-                        error!(
-                            "text '{}':{} has a property error",
-                            render_text.name, render_text.id
-                        );
-                        continue
-                    };
-
-                    let Some(font_node) =
-                        render_text.iter_children(&scene_graph, SceneNodeType::Font).next()
-                    else {
-                        error!(
-                            "text '{}':{} missing a font node",
-                            render_text.name, render_text.id
-                        );
-                        continue
-                    };
-                    // No other fonts supported yet
-                    assert_eq!(font_node.name, "inter-regular");
-
-                    layout.reset(&LayoutSettings { ..LayoutSettings::default() });
-                    let fonts = [&self.font];
-                    layout.append(&fonts, &TextStyle::new(&text, font_size, 0));
-
-                    for glyph_pos in layout.glyphs() {
-                        Self::draw_glyph(
-                            &mut self.ctx,
-                            &proj,
-                            &model,
-                            &self.font,
-                            glyph_pos,
-                            color,
-                        );
-                    }
-                }
-            }
-
-            self.ctx.end_render_pass();
-            */
-        }
-        */
     }
 
     fn key_down_event(&mut self, keycode: KeyCode, modifiers: KeyMods, repeat: bool) {

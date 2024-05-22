@@ -10,7 +10,6 @@ edition = "2021"
 [dependencies]
 #miniquad = "0.4.0-alpha"
 miniquad = { git = "https://github.com/not-fl3/miniquad" }
-fontdue = "0.7"
 #harfbuzz_rs = "2.0.1"
 harfbuzz_rs = { git = "https://github.com/narodnik/harfbuzz_rs.git", features = ["freetype"] }
 freetype-rs = "0.36.0"
