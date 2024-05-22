@@ -15,12 +15,16 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
+use std::str::FromStr;
+
 #[cfg(feature = "async")]
 use darkfi_serial::async_trait;
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use pasta_curves::pallas;
 
 use super::{pasta_prelude::*, poseidon_hash, ContractId};
+use crate::{fp_from_bs58, fp_to_bs58, ty_from_fp, ContractError};
 
 pub type FunctionCode = u8;
 
@@ -49,10 +53,24 @@ impl FuncId {
     pub fn inner(&self) -> pallas::Base {
         self.0
     }
-}
 
-impl From<pallas::Base> for FuncId {
-    fn from(func_id: pallas::Base) -> Self {
-        Self(func_id)
+    /// Create a `FuncId` object from given bytes, erroring if the
+    /// input bytes are noncanonical.
+    pub fn from_bytes(x: [u8; 32]) -> Result<Self, ContractError> {
+        match pallas::Base::from_repr(x).into() {
+            Some(v) => Ok(Self(v)),
+            None => {
+                Err(ContractError::IoError("Failed to instantiate FuncId from bytes".to_string()))
+            }
+        }
+    }
+
+    /// Convert the `FuncId` type into 32 raw bytes
+    pub fn to_bytes(&self) -> [u8; 32] {
+        self.0.to_repr()
     }
 }
+
+fp_from_bs58!(FuncId);
+fp_to_bs58!(FuncId);
+ty_from_fp!(FuncId);

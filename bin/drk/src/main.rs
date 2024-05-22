@@ -42,9 +42,10 @@ use darkfi::{
     zk::halo2::Field,
     Result,
 };
+use darkfi_dao_contract::DaoFunction;
 use darkfi_money_contract::model::{Coin, TokenId};
 use darkfi_sdk::{
-    crypto::{BaseBlind, FuncId, PublicKey, SecretKey},
+    crypto::{BaseBlind, FuncId, FuncRef, PublicKey, SecretKey, DAO_CONTRACT_ID},
     pasta::{group::ff::PrimeField, pallas},
     tx::TransactionHash,
 };
@@ -206,6 +207,12 @@ enum Subcmd {
 
         /// Recipient address
         recipient: String,
+
+        /// Optional contract spend hook to use
+        spend_hook: Option<String>,
+
+        /// Optional user data to use
+        user_data: Option<String>,
     },
 
     /// OTC atomic swap
@@ -398,6 +405,9 @@ enum DaoSubcmd {
         /// Numeric identifier for the proposal
         proposal_id: u64,
     },
+
+    /// Print the DAO contract base58-encoded spend hook
+    SpendHook,
 }
 
 #[derive(Clone, Debug, Deserialize, StructOpt)]
@@ -487,6 +497,12 @@ enum TokenSubcmd {
 
         /// Recipient of the minted tokens
         recipient: String,
+
+        /// Optional contract spend hook to use
+        spend_hook: Option<String>,
+
+        /// Optional user data to use
+        user_data: Option<String>,
     },
 
     /// Freeze a token mint
@@ -815,9 +831,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     };
 
                     let spend_hook = if coin.0.note.spend_hook != FuncId::none() {
-                        bs58::encode(&serialize_async(&coin.0.note.spend_hook.inner()).await)
-                            .into_string()
-                            .to_string()
+                        format!("{}", coin.0.note.spend_hook)
                     } else {
                         String::from("-")
                     };
@@ -896,7 +910,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             Ok(())
         }
 
-        Subcmd::Transfer { amount, token, recipient } => {
+        Subcmd::Transfer { amount, token, recipient, spend_hook, user_data } => {
             let drk = Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
 
             if let Err(e) = f64::from_str(&amount) {
@@ -920,7 +934,39 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 }
             };
 
-            let tx = match drk.transfer(&amount, token_id, rcpt).await {
+            let spend_hook = match spend_hook {
+                Some(s) => match FuncId::from_str(&s) {
+                    Ok(s) => Some(s),
+                    Err(e) => {
+                        eprintln!("Invalid spend hook: {e:?}");
+                        exit(2);
+                    }
+                },
+                None => None,
+            };
+
+            let user_data = match user_data {
+                Some(u) => {
+                    let bytes: [u8; 32] = match bs58::decode(&u).into_vec()?.try_into() {
+                        Ok(b) => b,
+                        Err(e) => {
+                            eprintln!("Invalid user data: {e:?}");
+                            exit(2);
+                        }
+                    };
+
+                    match pallas::Base::from_repr(bytes).into() {
+                        Some(v) => Some(v),
+                        None => {
+                            eprintln!("Invalid user data");
+                            exit(2);
+                        }
+                    }
+                }
+                None => None,
+            };
+
+            let tx = match drk.transfer(&amount, token_id, rcpt, spend_hook, user_data).await {
                 Ok(t) => t,
                 Err(e) => {
                     eprintln!("Failed to create payment transaction: {e:?}");
@@ -1262,6 +1308,15 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     }
                 };
                 println!("{}", base64::encode(&serialize_async(&tx).await));
+
+                Ok(())
+            }
+
+            DaoSubcmd::SpendHook => {
+                let spend_hook =
+                    FuncRef { contract_id: *DAO_CONTRACT_ID, func_code: DaoFunction::Exec as u8 }
+                        .to_func_id();
+                println!("{spend_hook}");
 
                 Ok(())
             }
@@ -1610,8 +1665,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 Ok(())
             }
 
-            // TODO: Mint directly into DAO treasury
-            TokenSubcmd::Mint { token, amount, recipient } => {
+            TokenSubcmd::Mint { token, amount, recipient, spend_hook, user_data } => {
                 let drk =
                     Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
 
@@ -1636,7 +1690,40 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     }
                 };
 
-                let tx = match drk.mint_token(&amount, rcpt, token_id, None, None).await {
+                let spend_hook = match spend_hook {
+                    Some(s) => match FuncId::from_str(&s) {
+                        Ok(s) => Some(s),
+                        Err(e) => {
+                            eprintln!("Invalid spend hook: {e:?}");
+                            exit(2);
+                        }
+                    },
+                    None => None,
+                };
+
+                let user_data = match user_data {
+                    Some(u) => {
+                        let bytes: [u8; 32] = match bs58::decode(&u).into_vec()?.try_into() {
+                            Ok(b) => b,
+                            Err(e) => {
+                                eprintln!("Invalid user data: {e:?}");
+                                exit(2);
+                            }
+                        };
+
+                        match pallas::Base::from_repr(bytes).into() {
+                            Some(v) => Some(v),
+                            None => {
+                                eprintln!("Invalid user data");
+                                exit(2);
+                            }
+                        }
+                    }
+                    None => None,
+                };
+
+                let tx = match drk.mint_token(&amount, rcpt, token_id, spend_hook, user_data).await
+                {
                     Ok(tx) => tx,
                     Err(e) => {
                         eprintln!("Failed to create token mint transaction: {e:?}");

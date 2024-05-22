@@ -66,7 +66,7 @@ of the guide can be added for future regressions.
 | 21 | DAO import                | dao import                                       | Pass               |
 | 22 | DAO list                  | dao list                                         | Pass               |
 | 23 | DAO mint                  | dao mint {DAO}                                   | Pass               |
-| 24 | DAO balance               | dao balance {DAO}                                | Failure: needs #19 |
+| 24 | DAO balance               | dao balance {DAO}                                | Pass               |
 | 25 | DAO propose               | dao propose {DAO} {ADDR} {AMOUNT} {TOKEN}        | Failure: needs #19 |
 | 26 | DAO proposals retrieval   | dao proposals {DAO}                              | Failure: needs #25 |
 | 27 | DAO proposal retrieval    | dao proposal {DAO} {PROPOSAL_ID}                 | Failure: needs #25 |

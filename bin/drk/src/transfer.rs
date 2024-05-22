@@ -28,7 +28,8 @@ use darkfi_money_contract::{
     MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_FEE_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    crypto::{contract_id::MONEY_CONTRACT_ID, Keypair, PublicKey},
+    crypto::{contract_id::MONEY_CONTRACT_ID, FuncId, Keypair, PublicKey},
+    pasta::pallas,
     tx::ContractCall,
 };
 use darkfi_serial::AsyncEncodable;
@@ -42,6 +43,8 @@ impl Drk {
         amount: &str,
         token_id: TokenId,
         recipient: PublicKey,
+        spend_hook: Option<FuncId>,
+        user_data: Option<pallas::Base>,
     ) -> Result<Transaction> {
         // First get all unspent OwnCoins to see what our balance is
         let owncoins = self.get_token_coins(&token_id).await?;
@@ -112,6 +115,8 @@ impl Drk {
             token_id,
             owncoins,
             tree.clone(),
+            spend_hook,
+            user_data,
             mint_zkbin,
             mint_pk,
             burn_zkbin,

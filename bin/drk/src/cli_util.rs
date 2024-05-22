@@ -188,9 +188,13 @@ pub fn generate_completions(shell: &str) -> Result<()> {
 
     let recipient = Arg::with_name("recipient").help("Recipient address");
 
+    let spend_hook = Arg::with_name("spend-hook").help("Optional contract spend hook to use");
+
+    let user_data = Arg::with_name("user-data").help("Optional user data to use");
+
     let transfer = SubCommand::with_name("transfer")
         .about("Create a payment transaction")
-        .args(&vec![amount, token, recipient]);
+        .args(&vec![amount, token, recipient, spend_hook.clone(), user_data.clone()]);
 
     // Otc
     let value_pair = Arg::with_name("value-pair")
@@ -318,8 +322,22 @@ pub fn generate_completions(shell: &str) -> Result<()> {
         .about("Execute a DAO proposal")
         .args(&vec![name, proposal_id]);
 
+    let spend_hook_cmd = SubCommand::with_name("spend-hook")
+        .about("Print the DAO contract base58-encoded spend hook");
+
     let dao = SubCommand::with_name("dao").about("DAO functionalities").subcommands(vec![
-        create, view, import, list, balance, mint, propose, proposals, proposal, vote, exec,
+        create,
+        view,
+        import,
+        list,
+        balance,
+        mint,
+        propose,
+        proposals,
+        proposal,
+        vote,
+        exec,
+        spend_hook_cmd,
     ]);
 
     // Scan
@@ -401,9 +419,9 @@ pub fn generate_completions(shell: &str) -> Result<()> {
         .subcommands(vec![add, show, remove]);
 
     // Token
-    let secret_key = Arg::with_name("secret_key").help("Mint authority secret key");
+    let secret_key = Arg::with_name("secret-key").help("Mint authority secret key");
 
-    let token_blind = Arg::with_name("token_blind").help("Mint authority token blind");
+    let token_blind = Arg::with_name("token-blind").help("Mint authority token blind");
 
     let import = SubCommand::with_name("import")
         .about("Import a mint authority")
@@ -421,8 +439,9 @@ pub fn generate_completions(shell: &str) -> Result<()> {
 
     let recipient = Arg::with_name("recipient").help("Recipient of the minted tokens");
 
-    let mint =
-        SubCommand::with_name("mint").about("Mint tokens").args(&vec![token, amount, recipient]);
+    let mint = SubCommand::with_name("mint")
+        .about("Mint tokens")
+        .args(&vec![token, amount, recipient, spend_hook, user_data]);
 
     let token = Arg::with_name("token").help("Token ID to freeze");
 

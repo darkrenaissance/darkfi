@@ -60,6 +60,8 @@ impl TestHarness {
             token_id,
             owncoins.to_owned(),
             wallet.money_merkle_tree.clone(),
+            None,
+            None,
             mint_zkbin.clone(),
             mint_pk.clone(),
             burn_zkbin.clone(),

@@ -92,6 +92,8 @@ fn delayed_tx() -> Result<()> {
             alice_coins[0].note.token_id,
             alice_coins.to_owned(),
             money_merkle_tree.clone(),
+            None,
+            None,
             mint_zkbin.clone(),
             mint_pk.clone(),
             burn_zkbin.clone(),

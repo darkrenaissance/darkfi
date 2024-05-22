@@ -72,6 +72,10 @@ pub fn select_coins(coins: Vec<OwnCoin>, min_value: u64) -> Result<(Vec<OwnCoin>
 /// * `token_id`: Token ID that we want to send to the recipient
 /// * `coins`: Set of `OwnCoin` we're given to use in this builder
 /// * `tree`: Merkle tree of coins used to create inclusion proofs
+/// * `output_spend_hook: Optional contract spend hook to use in
+///    the output, not applicable to the change
+/// * `output_user_data: Optional user data to use in the output,
+///    not applicable to the change
 /// * `mint_zkbin`: `Mint_V1` zkas circuit ZkBinary
 /// * `mint_pk`: Proving key for the `Mint_V1` zk circuit
 /// * `burn_zkbin`: `Burn_V1` zkas circuit ZkBinary
@@ -90,6 +94,8 @@ pub fn make_transfer_call(
     token_id: TokenId,
     coins: Vec<OwnCoin>,
     tree: MerkleTree,
+    output_spend_hook: Option<FuncId>,
+    output_user_data: Option<pallas::Base>,
     mint_zkbin: ZkBinary,
     mint_pk: ProvingKey,
     burn_zkbin: ZkBinary,
@@ -135,8 +141,8 @@ pub fn make_transfer_call(
         public_key: recipient,
         value,
         token_id,
-        spend_hook: FuncId::none(),
-        user_data: pallas::Base::ZERO,
+        spend_hook: output_spend_hook.unwrap_or(FuncId::none()),
+        user_data: output_user_data.unwrap_or(pallas::Base::ZERO),
         blind: Blind::random(&mut OsRng),
     });
 
