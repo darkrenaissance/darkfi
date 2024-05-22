@@ -25,6 +25,11 @@
 //! (`perform_handshake_protocols`). `handshake_node()` can either succeed,
 //! fail, or timeout.
 
+use futures::{
+    future::{select, Either},
+    pin_mut,
+};
+use smol::Timer;
 use std::{
     sync::Arc,
     time::{Duration, Instant, UNIX_EPOCH},
@@ -43,7 +48,7 @@ use crate::{
         protocol::ProtocolVersion,
         session::{Session, SessionBitFlag, SESSION_REFINE},
     },
-    system::{sleep, timeout::timeout, LazyWeak, StoppableTask, StoppableTaskPtr},
+    system::{sleep, LazyWeak, StoppableTask, StoppableTaskPtr},
     Error,
 };
 
@@ -119,7 +124,7 @@ impl RefineSession {
 
                 debug!(target: "net::refinery::handshake_node()", "Performing handshake protocols with {}", url);
                 // Then run the version exchange, store the channel and subscribe to a stop signal.
-                let handshake_task =
+                let handshake =
                     self.perform_handshake_protocols(proto_ver, channel.clone(), p2p.executor());
 
                 debug!(target: "net::refinery::handshake_node()", "Starting channel {}", url);
@@ -128,21 +133,30 @@ impl RefineSession {
                 // Ensure the channel gets stopped by adding a timeout to the handshake. Otherwise if
                 // the handshake does not finish channel.stop() will never get called, resulting in
                 // zombie processes.
-                let result = timeout(Duration::from_secs(5), handshake_task).await;
+                let timeout = Timer::after(Duration::from_secs(5));
+
+                pin_mut!(timeout);
+                pin_mut!(handshake);
+
+                let result = match select(handshake, timeout).await {
+                    Either::Left((Ok(_), _)) => {
+                        debug!(target: "net::refinery::handshake_node()", "Handshake success!");
+                        true
+                    }
+                    Either::Left((Err(e), _)) => {
+                        debug!(target: "net::refinery::handshake_node()", "Handshake error={}", e);
+                        false
+                    }
+                    Either::Right((_, _)) => {
+                        debug!(target: "net::refinery::handshake_node()", "Handshake timed out");
+                        false
+                    }
+                };
 
                 debug!(target: "net::refinery::handshake_node()", "Stopping channel {}", url);
                 channel.stop().await;
 
-                match result {
-                    Ok(_) => {
-                        debug!(target: "net::refinery::handshake_node()", "Handshake success!");
-                        true
-                    }
-                    Err(e) => {
-                        debug!(target: "net::refinery::handshake_node()", "Handshake err: {}", e);
-                        false
-                    }
-                }
+                result
             }
 
             Err(e) => {
@@ -263,7 +277,7 @@ impl GreylistRefinery {
 
                         debug!(
                             target: "net::refinery",
-                            "Peer {} is non-responsive. Removed from greylist", url,
+                            "Peer {} handshake failed. Removed from greylist", url,
                         );
 
                         // Remove this entry from HostRegistry to avoid this host getting
@@ -280,7 +294,7 @@ impl GreylistRefinery {
 
                     debug!(
                         target: "net::refinery",
-                        "Peer {} is responsive. Adding to whitelist", url,
+                        "Peer {} handshake successful. Adding to whitelist", url,
                     );
                     let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
 
