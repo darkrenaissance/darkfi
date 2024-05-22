@@ -228,7 +228,7 @@ impl HostState {
         match self {
             HostState::Insert => Err(Error::HostStateBlocked(start, end)),
             HostState::Refine => Err(Error::HostStateBlocked(start, end)),
-            HostState::Connect => Err(Error::HostStateBlocked(start, end)),
+            HostState::Connect => Ok(HostState::Suspend),
             HostState::Suspend => Err(Error::HostStateBlocked(start, end)),
             HostState::Connected(_) => Err(Error::HostStateBlocked(start, end)),
             HostState::Move => Ok(HostState::Suspend),

@@ -420,6 +420,16 @@ impl Slot {
                 });
 
                 self.channel_id.store(0, Ordering::Relaxed);
+
+                warn!(
+                    target: "net::outbound_session::try_connect()",
+                    "[P2P] Suspending addr= [{}] slot #{}",
+                    addr, slot
+                );
+
+                // Mark its state as Suspend, which sends this node to the Refinery for processing.
+                self.p2p().hosts().try_register(addr.clone(), HostState::Suspend).await.unwrap();
+
                 continue
             }
 
