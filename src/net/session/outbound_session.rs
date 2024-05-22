@@ -104,6 +104,7 @@ impl OutboundSession {
 
     /// Stops the outbound session.
     pub(crate) async fn stop(&self) {
+        debug!(target: "net::outbound_session", "Stopping outbound session..");
         let slots = &*self.slots.lock().await;
         let mut futures = FuturesUnordered::new();
 
@@ -114,6 +115,7 @@ impl OutboundSession {
         while (futures.next().await).is_some() {}
 
         self.peer_discovery.clone().stop().await;
+        debug!(target: "net::outbound_session", "Outbound session stopped!");
     }
 
     pub async fn slot_info(&self) -> Vec<u32> {
@@ -236,6 +238,10 @@ impl Slot {
         debug!(target: "net::outbound_session::fetch_addrs_with_preference()",
         "slot={}, preference={:?}", slot, preference);
 
+        // TODO: FIXME
+        // This address selection algorithm needs more thought.
+        // If we only have a white and gold list, and the slot number is 9,
+        // slot 9 will never find a host to connect to.
         match preference {
             SlotPreference::First => {
                 if slot < gold_count {
@@ -330,7 +336,8 @@ impl Slot {
             }
 
             let addr = if let Some(addr) = self.fetch_addrs().await {
-                debug!(target: "net::outbound_session::run()", "Fetched address: {:?}", addr);
+                debug!(target: "net::outbound_session::run()", "Fetched addr={}, slot #{}", addr.0,
+                self.slot);
                 addr
             } else {
                 debug!(target: "net::outbound_session::run()", "No address found! Activating peer discovery...");
@@ -436,12 +443,22 @@ impl Slot {
         match self.connector.connect(&addr).await {
             Ok((addr_final, channel)) => Ok((addr_final, channel)),
 
-            Err(e) => {
+            Err(err) => {
                 debug!(
                     target: "net::outbound_session::try_connect()",
                     "[P2P] Unable to connect outbound slot #{} [{}]: {}",
-                    self.slot, addr, e
+                    self.slot, addr, err
                 );
+
+                match err {
+                    // Immediately return if the Connector has stopped.
+                    // This indicates a shutdown of the P2P network and
+                    // should not result in hostlist modifications.
+                    Error::ConnectorStopped => {
+                        return Err(Error::ConnectFailed);
+                    }
+                    _ => {}
+                }
 
                 // At this point we failed to connect. We'll downgrade this peer now.
                 self.p2p().hosts().move_host(&addr, last_seen, HostColor::Grey).await?;

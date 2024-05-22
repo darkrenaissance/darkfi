@@ -199,7 +199,6 @@ impl GreylistRefinery {
     }
 
     pub async fn stop(self: Arc<Self>) {
-        debug!(target: "net::refinery", "Stopping refinery");
         self.process.stop().await;
     }
 

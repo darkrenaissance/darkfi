@@ -494,7 +494,7 @@ impl HostContainer {
                 limit -= 1;
                 if limit == 0 {
                     debug!(target: "net::hosts::fetch_with_schemes()",
-                           "Found matching {:?} scheme, returning {} addresses",
+                           "Found matching addr on list={:?}, returning {} addresses",
                            HostColor::try_from(color).unwrap(), ret.len());
                     return ret
                 }
@@ -503,7 +503,7 @@ impl HostContainer {
 
         if ret.is_empty() {
             debug!(target: "net::hosts::fetch_with_schemes()",
-                   "No such {:?} schemes found!", HostColor::try_from(color).unwrap())
+                   "No matching schemes found on list={:?}!", HostColor::try_from(color).unwrap())
         }
 
         ret
@@ -1221,8 +1221,8 @@ impl Hosts {
         last_seen: u64,
         destination: HostColor,
     ) -> Result<()> {
-        debug!(target: "net::hosts::move_host()", "Trying to move addr={} node={} destination={:?}",
-               addr, self.settings.node_id, destination);
+        debug!(target: "net::hosts::move_host()", "Trying to move addr={} destination={:?}",
+               addr, destination);
 
         // This should never panic. Failure indicates a misuse of the HostState API.
         self.try_register(addr.clone(), HostState::Move).await.unwrap();

@@ -113,6 +113,7 @@ impl SeedSyncSession {
 
     /// Stop the seedsync session.
     pub(crate) async fn stop(&self) {
+        debug!(target: "net::seedsync_session", "Stopping seed sync session...");
         let slots = &*self.slots.lock().await;
         let mut futures = FuturesUnordered::new();
 
@@ -121,6 +122,7 @@ impl SeedSyncSession {
         }
 
         while (futures.next().await).is_some() {}
+        debug!(target: "net::seedsync_session", "Seed sync session stopped!");
     }
 
     pub(crate) async fn failed(&self) -> bool {
