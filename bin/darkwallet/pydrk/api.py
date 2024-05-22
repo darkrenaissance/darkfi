@@ -576,6 +576,15 @@ class Api:
         serial.encode_str(req, val)
         self._make_request(Command.SET_PROPERTY_VALUE, req)
 
+    def set_property_enum(self, node_id, prop_name, i, val):
+        req = bytearray()
+        serial.write_u32(req, node_id)
+        serial.encode_str(req, prop_name)
+        serial.write_u32(req, i)
+        serial.write_u8(req, PropertyType.ENUM)
+        serial.encode_str(req, val)
+        self._make_request(Command.SET_PROPERTY_VALUE, req)
+
     def set_property_buf(self, node_id, prop_name, i, buf):
         req = bytearray()
         serial.write_u32(req, node_id)

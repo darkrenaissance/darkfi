@@ -429,6 +429,9 @@ impl SceneNode {
     pub fn get_property_str(&self, name: &str) -> Result<String> {
         self.get_property(name).ok_or(Error::PropertyNotFound)?.get_str(0)
     }
+    pub fn get_property_enum(&self, name: &str) -> Result<String> {
+        self.get_property(name).ok_or(Error::PropertyNotFound)?.get_enum(0)
+    }
     pub fn get_property_node_id(&self, name: &str) -> Result<SceneNodeId> {
         self.get_property(name).ok_or(Error::PropertyNotFound)?.get_node_id(0)
     }

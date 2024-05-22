@@ -135,10 +135,10 @@ def reposition_cursor():
     set_property_f32("/window/cursor_layer/cursor", "y", y)
 
 def draw_cursor():
-    mesh_id = api.add_node("cursor_box", SceneNodeType.RENDER_MESH)
-    api.add_property(mesh_id, "verts", PropertyType.BUFFER)
-    api.add_property(mesh_id, "faces", PropertyType.BUFFER)
-    link_node(mesh_id, "/window/cursor_layer/cursor")
+    node_id = api.add_node("cursor_box", SceneNodeType.RENDER_MESH)
+    api.add_property(node_id, "verts", PropertyType.BUFFER)
+    api.add_property(node_id, "faces", PropertyType.BUFFER)
+    link_node(node_id, "/window/cursor_layer/cursor")
 
     x, y = 0, 0
     w, h = 20, 40
@@ -146,24 +146,24 @@ def draw_cursor():
     vert2 = vertex(x + w, y,     1, 1, 1, 1, 1, 0)
     vert3 = vertex(x,     y + h, 1, 1, 1, 1, 0, 1)
     vert4 = vertex(x + w, y + h, 1, 1, 1, 1, 1, 1)
-    api.set_property_buffer(mesh_id, "verts", vert1 + vert2 + vert3 + vert4)
-    api.set_property_buffer(mesh_id, "faces", face(0, 2, 1) + face(1, 2, 3))
+    api.set_property_buffer(node_id, "verts", vert1 + vert2 + vert3 + vert4)
+    api.set_property_buffer(node_id, "faces", face(0, 2, 1) + face(1, 2, 3))
 
 def draw_box():
-    mesh_id = api.add_node("box", SceneNodeType.RENDER_MESH)
-    api.add_property(mesh_id, "verts", PropertyType.BUFFER)
-    api.add_property(mesh_id, "faces", PropertyType.BUFFER)
-    link_node(mesh_id, "/window/chatbox_layer/outline")
+    node_id = api.add_node("box", SceneNodeType.RENDER_MESH)
+    api.add_property(node_id, "verts", PropertyType.BUFFER)
+    api.add_property(node_id, "faces", PropertyType.BUFFER)
+    link_node(node_id, "/window/chatbox_layer/outline")
 
-    mesh_id = api.add_node("inner_box", SceneNodeType.RENDER_MESH)
-    api.add_property(mesh_id, "verts", PropertyType.BUFFER)
-    api.add_property(mesh_id, "faces", PropertyType.BUFFER)
-    link_node(mesh_id, "/window/chatbox_layer/outline")
+    node_id = api.add_node("inner_box", SceneNodeType.RENDER_MESH)
+    api.add_property(node_id, "verts", PropertyType.BUFFER)
+    api.add_property(node_id, "faces", PropertyType.BUFFER)
+    link_node(node_id, "/window/chatbox_layer/outline")
 
     resize_box()
 
 def resize_box():
-    mesh_id = api.lookup_node_id("/window/chatbox_layer/outline/box")
+    node_id = api.lookup_node_id("/window/chatbox_layer/outline/box")
 
     layer_w = get_property("/window/chatbox_layer", "rect_w")
     layer_h = get_property("/window/chatbox_layer", "rect_h")
@@ -179,11 +179,11 @@ def resize_box():
     vert2 = vertex(x + w, y,     1, 1, 1, 1, 1, 0)
     vert3 = vertex(x,     y + h, 1, 1, 1, 1, 0, 1)
     vert4 = vertex(x + w, y + h, 1, 1, 1, 1, 1, 1)
-    api.set_property_buffer(mesh_id, "verts", vert1 + vert2 + vert3 + vert4)
-    api.set_property_buffer(mesh_id, "faces", face(0, 2, 1) + face(1, 2, 3))
+    api.set_property_buffer(node_id, "verts", vert1 + vert2 + vert3 + vert4)
+    api.set_property_buffer(node_id, "faces", face(0, 2, 1) + face(1, 2, 3))
 
     # Second mesh
-    mesh_id = api.lookup_node_id("/window/chatbox_layer/outline/inner_box")
+    node_id = api.lookup_node_id("/window/chatbox_layer/outline/inner_box")
 
     x, y = x + padding, y + padding
     w -= 2*padding
@@ -192,24 +192,24 @@ def resize_box():
     vert2 = vertex(x + w, y,     0, 0, 0, 1, 1, 0)
     vert3 = vertex(x,     y + h, 0, 0, 0, 1, 0, 1)
     vert4 = vertex(x + w, y + h, 0.3, 0.3, 0.3, 1, 1, 1)
-    api.set_property_buffer(mesh_id, "verts", vert1 + vert2 + vert3 + vert4)
-    api.set_property_buffer(mesh_id, "faces", face(0, 2, 1) + face(1, 2, 3))
+    api.set_property_buffer(node_id, "verts", vert1 + vert2 + vert3 + vert4)
+    api.set_property_buffer(node_id, "faces", face(0, 2, 1) + face(1, 2, 3))
 
 def draw_rounded_box():
-    mesh_id = api.add_node("box", SceneNodeType.RENDER_MESH)
-    api.add_property(mesh_id, "verts", PropertyType.BUFFER)
-    api.add_property(mesh_id, "faces", PropertyType.BUFFER)
-    link_node(mesh_id, "/window/rounded_box_layer/box")
+    node_id = api.add_node("box", SceneNodeType.RENDER_MESH)
+    api.add_property(node_id, "verts", PropertyType.BUFFER)
+    api.add_property(node_id, "faces", PropertyType.BUFFER)
+    link_node(node_id, "/window/rounded_box_layer/box")
 
-    mesh_id = api.add_node("inner_box", SceneNodeType.RENDER_MESH)
-    api.add_property(mesh_id, "verts", PropertyType.BUFFER)
-    api.add_property(mesh_id, "faces", PropertyType.BUFFER)
-    link_node(mesh_id, "/window/rounded_box_layer/box")
+    node_id = api.add_node("inner_box", SceneNodeType.RENDER_MESH)
+    api.add_property(node_id, "verts", PropertyType.BUFFER)
+    api.add_property(node_id, "faces", PropertyType.BUFFER)
+    link_node(node_id, "/window/rounded_box_layer/box")
 
     resize_rounded_box()
 
 def resize_rounded_box():
-    mesh_id = api.lookup_node_id("/window/rounded_box_layer/box/box")
+    node_id = api.lookup_node_id("/window/rounded_box_layer/box/box")
 
     layer_w = get_property("/window/rounded_box_layer", "rect_w")
     layer_h = get_property("/window/rounded_box_layer", "rect_h")
@@ -254,11 +254,11 @@ def resize_rounded_box():
     )
     o = 8
     faces += face(o + 0, o + 2, o + 1) + face(o + 1, o + 2, o + 3)
-    api.set_property_buffer(mesh_id, "verts", verts)
-    api.set_property_buffer(mesh_id, "faces", faces)
+    api.set_property_buffer(node_id, "verts", verts)
+    api.set_property_buffer(node_id, "faces", faces)
 
     # Second mesh
-    mesh_id = api.lookup_node_id("/window/rounded_box_layer/box/inner_box")
+    node_id = api.lookup_node_id("/window/rounded_box_layer/box/inner_box")
 
     x, y = x + padding, y + padding
     w -= 2*padding
@@ -267,8 +267,8 @@ def resize_rounded_box():
     vert2 = vertex(x + w, y,     0, 0, 0, 1, 1, 0)
     vert3 = vertex(x,     y + h, 0, 0, 0, 1, 0, 1)
     vert4 = vertex(x + w, y + h, 0.3, 0.3, 0.3, 1, 1, 1)
-    #api.set_property_buffer(mesh_id, "verts", vert1 + vert2 + vert3 + vert4)
-    #api.set_property_buffer(mesh_id, "faces", face(0, 2, 1) + face(1, 2, 3))
+    #api.set_property_buffer(node_id, "verts", vert1 + vert2 + vert3 + vert4)
+    #api.set_property_buffer(node_id, "faces", face(0, 2, 1) + face(1, 2, 3))
 
 def draw():
     win_id = api.lookup_node_id("/window")
@@ -280,7 +280,7 @@ def draw():
     prop = Property(
         "is_visible", PropertyType.BOOL, PropertySubType.NULL,
         None,
-        "is_visible", "Visibility of the layer",
+        "Is Visible", "Visibility of the layer",
         False, False, 1, None, None, []
     )
     api.add_property(layer_id, prop)
@@ -298,7 +298,7 @@ def draw():
     prop = Property(
         "rect", PropertyType.UINT32, PropertySubType.PIXEL,
         None,
-        "mesh_rect", "The position and size within the layer",
+        "Rectangle", "The position and size within the layer",
         False, True, 4, None, None, []
     )
     api.add_property(layer_id, prop)
@@ -317,16 +317,17 @@ def draw():
     api.link_node(layer_id, win_id)
 
     # Add a mesh to our layer
+    """
 
-    mesh_id = api.add_node("meshie", SceneNodeType.RENDER_MESH)
+    node_id = api.add_node("meshie", SceneNodeType.RENDER_MESH)
 
     prop = Property(
         "data", PropertyType.BUFFER, PropertySubType.NULL,
         None,
-        "mesh_data", "The face and vertex data for the mesh",
+        "Mesh Data", "The face and vertex data for the mesh",
         False, False, 2, None, None, []
     )
-    api.add_property(mesh_id, prop)
+    api.add_property(node_id, prop)
 
     #x, y = 0.1, 0.1
     #w, h = 0.1, 0.1
@@ -340,50 +341,50 @@ def draw():
     verts = vert1 + vert2 + vert3 + vert4
     faces = face(0, 2, 1) + face(1, 2, 3)
 
-    api.set_property_buf(mesh_id, "data", 0, verts)
-    api.set_property_buf(mesh_id, "data", 1, faces)
+    api.set_property_buf(node_id, "data", 0, verts)
+    api.set_property_buf(node_id, "data", 1, faces)
 
     prop = Property(
         "rect", PropertyType.FLOAT32, PropertySubType.PIXEL,
         None,
-        "mesh_rect", "The position and size within the layer",
+        "Rectangle", "The position and size within the layer",
         False, True, 4, None, None, []
     )
-    api.add_property(mesh_id, prop)
+    api.add_property(node_id, prop)
     # x
-    api.set_property_f32(mesh_id, "rect", 0, 10)
+    api.set_property_f32(node_id, "rect", 0, 10)
     # y
-    api.set_property_f32(mesh_id, "rect", 1, 10)
+    api.set_property_f32(node_id, "rect", 1, 10)
     # w
-    #api.set_property_f32(mesh_id, "rect", 2, 20)
+    #api.set_property_f32(node_id, "rect", 2, 20)
     code = [["-", ["load", "lw"], ["f32", 10]]]
-    api.set_property_expr(mesh_id, "rect", 2, code)
+    api.set_property_expr(node_id, "rect", 2, code)
     # h
-    #api.set_property_str(mesh_id, "rect", 3, "lh - 10")
+    #api.set_property_str(node_id, "rect", 3, "lh - 10")
     code = [["-", ["load", "lh"], ["f32", 10]]]
-    api.set_property_expr(mesh_id, "rect", 3, code)
+    api.set_property_expr(node_id, "rect", 3, code)
 
     prop = Property(
         "z_index", PropertyType.UINT32, PropertySubType.NULL,
         None,
-        "z-index", "Z-index: values greater than zero are deferred draws",
+        "Z-index", "Z-index: values greater than zero are deferred draws",
         False, False, 1, None, None, []
     )
-    api.add_property(mesh_id, prop)
+    api.add_property(node_id, prop)
 
-    api.link_node(mesh_id, layer_id)
+    api.link_node(node_id, layer_id)
 
     # Add a second mesh to our layer
 
-    mesh_id = api.add_node("meshie2", SceneNodeType.RENDER_MESH)
+    node_id = api.add_node("meshie2", SceneNodeType.RENDER_MESH)
 
     prop = Property(
         "data", PropertyType.BUFFER, PropertySubType.NULL,
         None,
-        "mesh_data", "The face and vertex data for the mesh",
+        "Mesh Data", "The face and vertex data for the mesh",
         False, False, 2, None, None, []
     )
-    api.add_property(mesh_id, prop)
+    api.add_property(node_id, prop)
 
     x, y, w, h = 0, 0, 1, 1
     vert1 = vertex(x,     y,     1, 0, 1, 1, 0, 0)
@@ -394,30 +395,95 @@ def draw():
     verts = vert1 + vert2 + vert3 + vert4
     faces = face(0, 2, 1) + face(1, 2, 3)
 
-    api.set_property_buf(mesh_id, "data", 0, verts)
-    api.set_property_buf(mesh_id, "data", 1, faces)
+    api.set_property_buf(node_id, "data", 0, verts)
+    api.set_property_buf(node_id, "data", 1, faces)
 
     prop = Property(
         "rect", PropertyType.FLOAT32, PropertySubType.PIXEL,
         None,
-        "mesh_rect", "The position and size within the layer",
+        "Rectangle", "The position and size within the layer",
         False, True, 4, None, None, []
     )
-    api.add_property(mesh_id, prop)
-    api.set_property_f32(mesh_id, "rect", 0, 10)
-    api.set_property_f32(mesh_id, "rect", 1, 10)
-    api.set_property_f32(mesh_id, "rect", 2, 60)
-    api.set_property_f32(mesh_id, "rect", 3, 60)
+    api.add_property(node_id, prop)
+    api.set_property_f32(node_id, "rect", 0, 10)
+    api.set_property_f32(node_id, "rect", 1, 10)
+    api.set_property_f32(node_id, "rect", 2, 60)
+    api.set_property_f32(node_id, "rect", 3, 60)
 
     prop = Property(
         "z_index", PropertyType.UINT32, PropertySubType.NULL,
         None,
-        "z-index", "Z-index: values greater than zero are deferred draws",
+        "Z-index", "Z-index: values greater than zero are deferred draws",
         False, False, 1, None, None, []
     )
-    api.add_property(mesh_id, prop)
+    api.add_property(node_id, prop)
 
-    api.link_node(mesh_id, layer_id)
+    api.link_node(node_id, layer_id)
+    """
+
+    # Add some text
+
+    node_id = api.add_node("hellowurld", SceneNodeType.RENDER_TEXT)
+
+    prop = Property(
+        "rect", PropertyType.FLOAT32, PropertySubType.PIXEL,
+        None,
+        "Rectangle", "The position and size within the layer",
+        False, True, 4, None, None, []
+    )
+    api.add_property(node_id, prop)
+    api.set_property_f32(node_id, "rect", 0, 10)
+    api.set_property_f32(node_id, "rect", 1, 100)
+    api.set_property_f32(node_id, "rect", 2, 60)
+    api.set_property_f32(node_id, "rect", 3, 60)
+
+    prop = Property(
+        "font_size", PropertyType.FLOAT32, PropertySubType.PIXEL,
+        None,
+        "Font Size", "Font Size",
+        False, True, 1, 0.0, None, []
+    )
+    api.add_property(node_id, prop)
+    api.set_property_f32(node_id, "font_size", 0, 80)
+
+    prop = Property(
+        "text", PropertyType.STR, PropertySubType.NULL,
+        None,
+        "Text", "Text",
+        False, False, 1, None, None, []
+    )
+    api.add_property(node_id, prop)
+    api.set_property_str(node_id, "text", 0, "hello! jelly")
+
+    prop = Property(
+        "overflow", PropertyType.ENUM, PropertySubType.NULL,
+        None,
+        "Overflow Behaviour", "Behaviour when text exceeds bounding box",
+        False, True, 1, None, None, [
+            "ScrollRight",
+            "OverflowRight"
+        ]
+    )
+    api.add_property(node_id, prop)
+    api.set_property_enum(node_id, "overflow", 0, "ScrollRight")
+
+    prop = Property(
+        "z_index", PropertyType.UINT32, PropertySubType.NULL,
+        None,
+        "Z-index", "Z-index: values greater than zero are deferred draws",
+        False, False, 1, None, None, []
+    )
+    api.add_property(node_id, prop)
+
+    prop = Property(
+        "debug", PropertyType.BOOL, PropertySubType.NULL,
+        None,
+        "Debug", "Draw debug outlines",
+        False, False, 1, None, None, []
+    )
+    api.add_property(node_id, prop)
+
+    api.link_node(node_id, layer_id)
 
 def main():
     draw()
