@@ -166,6 +166,7 @@ impl<'a> Stage<'a> {
         let (method_sender, method_recvr) = mpsc::sync_channel(100);
 
         let font_data = include_bytes!("../Inter-Regular.otf") as &[u8];
+        //let font_data = include_bytes!("../NotoColorEmoji.ttf") as &[u8];
         let ftlib = ft::Library::init().unwrap();
         let ft_face = ftlib.new_memory_face2(font_data, 0).unwrap();
 
@@ -648,6 +649,8 @@ impl<'a> RenderContext<'a> {
         self.ctx.apply_uniforms_from_bytes(uniforms_data.as_ptr(), uniforms_data.len());
 
         self.ft_face.set_char_size(font_size as isize * 64, 0, 72, 72).unwrap();
+        // emojis required a fixed size
+        //self.ft_face.set_char_size(109 * 64, 0, 72, 72).unwrap();
 
         let hb_font = harfbuzz_rs::Font::from_freetype_face(self.ft_face.clone());
         let buffer = harfbuzz_rs::UnicodeBuffer::new().add_str(&text);
@@ -666,6 +669,8 @@ impl<'a> RenderContext<'a> {
             let glyph = self.ft_face.glyph();
             glyph.render_glyph(ft::RenderMode::Normal).unwrap();
 
+            // https://gist.github.com/jokertarot/7583938?permalink_comment_id=3327566#gistcomment-3327566
+
             let bmp = glyph.bitmap();
             let buffer = bmp.buffer();
             let width = bmp.width();
@@ -675,28 +680,43 @@ impl<'a> RenderContext<'a> {
 
             //assert_eq!(bmp.pixel_mode().unwrap(), ft::bitmap::PixelMode::Bgra);
             //assert_eq!(bmp.pixel_mode().unwrap(), ft::bitmap::PixelMode::Lcd);
-            assert_eq!(bmp.pixel_mode().unwrap(), ft::bitmap::PixelMode::Gray);
+            //assert_eq!(bmp.pixel_mode().unwrap(), ft::bitmap::PixelMode::Gray);
 
-            //// Convert from BGRA to RGBA
-            //for i in 0..(twidth*theight) {
-            //    let idx = i*4;
-            //    let b = tdata[idx];
-            //    let r = tdata[idx + 2];
-            //    tdata[idx] = r;
-            //    tdata[idx + 2] = b;
-            //}
-            // Add an alpha channel
-            // Convert from greyscale to RGBA8
-            let tdata: Vec<_> = buffer
-                .iter()
-                .flat_map(|coverage| {
-                    let r = (255. * color_r) as u8;
-                    let g = (255. * color_g) as u8;
-                    let b = (255. * color_b) as u8;
-                    let α = ((*coverage as f32) * color_a) as u8;
-                    vec![r, g, b, α]
-                })
-                .collect();
+            let pixel_mode = bmp.pixel_mode().unwrap();
+            let tdata = match pixel_mode {
+                ft::bitmap::PixelMode::Bgra => {
+                    let mut tdata = vec![];
+                    tdata.resize((4 * width * height) as usize, 0);
+                    // Convert from BGRA to RGBA
+                    for i in 0..(width*height) as usize {
+                        let idx = i*4;
+                        let b = buffer[idx];
+                        let g = buffer[idx + 1];
+                        let r = buffer[idx + 2];
+                        let a = buffer[idx + 3];
+                        tdata[idx] = r;
+                        tdata[idx + 1] = g;
+                        tdata[idx + 2] = b;
+                        tdata[idx + 3] = a;
+                    }
+                    tdata
+                }
+                ft::bitmap::PixelMode::Gray => {
+                    // Convert from greyscale to RGBA8
+                    let tdata: Vec<_> = buffer
+                        .iter()
+                        .flat_map(|coverage| {
+                            let r = (255. * color_r) as u8;
+                            let g = (255. * color_g) as u8;
+                            let b = (255. * color_b) as u8;
+                            let α = ((*coverage as f32) * color_a) as u8;
+                            vec![r, g, b, α]
+                        })
+                        .collect();
+                    tdata
+                }
+                _ => panic!("unsupport pixel mode: {:?}", pixel_mode)
+            };
 
             let off_x = position.x_offset as f32 / 64.;
             let off_y = position.y_offset as f32 / 64.;

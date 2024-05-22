@@ -33,9 +33,8 @@ def encode_varint(by, v):
         write_u64(by, v)
 
 def encode_str(by, s):
-    encode_varint(by, len(s))
-    s_by = s.encode("utf-8")
-    by += s_by
+    data = s.encode("utf-8")
+    encode_buf(by, data)
 
 def encode_buf(by, buf):
     encode_varint(by, len(buf))

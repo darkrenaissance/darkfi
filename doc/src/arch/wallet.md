@@ -349,6 +349,16 @@ The more nodes users are required to run, the more difficult it will become to
 have a decentralized network, so we should find a way to reduce the burden for
 users to setup our infra.
 
+### Usage Patterns
+
+Wallets are clients talking to the node (remote).
+
+* There's persistent nodes running some process to sync data from the network (darkfid downloading/verifying blockchain, event graph, ...)
+* There's scanning done by wallets on startup (check for recv'd payments, decrypt DMs, .etc)
+  * Scanning downloads the updates from persistent nodes
+* Wallets can interact with nodes to push data to the network, or communicate with other nodes .etc
+* Wallet apps can talk with each other.
+
 ## References
 
 * [Veil: Private Browsing Semantics Without Browser-side Assistance](https://mickens.seas.harvard.edu/files/mickens/files/veil.pdf)
