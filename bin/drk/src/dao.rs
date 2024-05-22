@@ -448,6 +448,110 @@ impl Drk {
         Ok(ret)
     }
 
+    /// Auxiliary function to parse a `DAO_DAOS_TABLE` record.
+    async fn parse_dao_record(&self, row: &[Value]) -> Result<Dao> {
+        let Value::Integer(id) = row[0] else {
+            return Err(Error::ParseFailed("[parse_dao_record] ID parsing failed"))
+        };
+        let Ok(id) = u64::try_from(id) else {
+            return Err(Error::ParseFailed("[parse_dao_record] ID parsing failed"))
+        };
+
+        let Value::Text(ref name) = row[1] else {
+            return Err(Error::ParseFailed("[parse_dao_record] Name parsing failed"))
+        };
+        let name = name.clone();
+
+        let Value::Blob(ref proposer_limit_bytes) = row[2] else {
+            return Err(Error::ParseFailed("[parse_dao_record] Proposer limit bytes parsing failed"))
+        };
+        let proposer_limit = deserialize_async(proposer_limit_bytes).await?;
+
+        let Value::Blob(ref quorum_bytes) = row[3] else {
+            return Err(Error::ParseFailed("[parse_dao_record] Quorum bytes parsing failed"))
+        };
+        let quorum = deserialize_async(quorum_bytes).await?;
+
+        let Value::Integer(approval_ratio_base) = row[4] else {
+            return Err(Error::ParseFailed("[parse_dao_record] Approval ratio base parsing failed"))
+        };
+        let Ok(approval_ratio_base) = u64::try_from(approval_ratio_base) else {
+            return Err(Error::ParseFailed("[parse_dao_record] Approval ratio base parsing failed"))
+        };
+
+        let Value::Integer(approval_ratio_quot) = row[5] else {
+            return Err(Error::ParseFailed("[parse_dao_record] Approval ratio quot parsing failed"))
+        };
+        let Ok(approval_ratio_quot) = u64::try_from(approval_ratio_quot) else {
+            return Err(Error::ParseFailed("[parse_dao_record] Approval ratio quot parsing failed"))
+        };
+
+        let Value::Blob(ref gov_token_bytes) = row[6] else {
+            return Err(Error::ParseFailed("[parse_dao_record] Gov token bytes parsing failed"))
+        };
+        let gov_token_id = deserialize_async(gov_token_bytes).await?;
+
+        let Value::Blob(ref secret_bytes) = row[7] else {
+            return Err(Error::ParseFailed("[parse_dao_record] Secret key bytes parsing failed"))
+        };
+        let secret_key = deserialize_async(secret_bytes).await?;
+
+        let Value::Blob(ref bulla_blind_bytes) = row[8] else {
+            return Err(Error::ParseFailed("[parse_dao_record] Bulla blind bytes parsing failed"))
+        };
+        let bulla_blind = deserialize_async(bulla_blind_bytes).await?;
+
+        let leaf_position = match row[9] {
+            Value::Blob(ref leaf_position_bytes) => {
+                Some(deserialize_async(leaf_position_bytes).await?)
+            }
+            Value::Null => None,
+            _ => {
+                return Err(Error::ParseFailed(
+                    "[parse_dao_record] Leaf position bytes parsing failed",
+                ))
+            }
+        };
+
+        let tx_hash = match row[10] {
+            Value::Blob(ref tx_hash_bytes) => Some(deserialize_async(tx_hash_bytes).await?),
+            Value::Null => None,
+            _ => {
+                return Err(Error::ParseFailed(
+                    "[parse_dao_record] Transaction hash bytes parsing failed",
+                ))
+            }
+        };
+
+        let call_index = match row[11] {
+            Value::Integer(call_index) => {
+                let Ok(call_index) = u8::try_from(call_index) else {
+                    return Err(Error::ParseFailed("[parse_dao_record] Call index parsing failed"))
+                };
+                Some(call_index)
+            }
+            Value::Null => None,
+            _ => return Err(Error::ParseFailed("[parse_dao_record] Call index parsing failed")),
+        };
+
+        let dao = Dao {
+            id,
+            name,
+            proposer_limit,
+            quorum,
+            approval_ratio_base,
+            approval_ratio_quot,
+            gov_token_id,
+            secret_key,
+            bulla_blind,
+            leaf_position,
+            tx_hash,
+            call_index,
+        };
+
+        Ok(dao)
+    }
+
     /// Fetch all known DAOs from the wallet.
     pub async fn get_daos(&self) -> Result<Vec<Dao>> {
         let rows = match self.wallet.query_multiple(&DAO_DAOS_TABLE, &[], &[]).await {
@@ -459,99 +563,7 @@ impl Drk {
 
         let mut daos = Vec::with_capacity(rows.len());
         for row in rows {
-            let Value::Integer(id) = row[0] else {
-                return Err(Error::ParseFailed("[get_daos] ID parsing failed"))
-            };
-            let Ok(id) = u64::try_from(id) else {
-                return Err(Error::ParseFailed("[get_daos] ID parsing failed"))
-            };
-
-            let Value::Text(ref name) = row[1] else {
-                return Err(Error::ParseFailed("[get_daos] Name parsing failed"))
-            };
-            let name = name.clone();
-
-            let Value::Blob(ref proposer_limit_bytes) = row[2] else {
-                return Err(Error::ParseFailed("[get_daos] Proposer limit bytes parsing failed"))
-            };
-            let proposer_limit = deserialize_async(proposer_limit_bytes).await?;
-
-            let Value::Blob(ref quorum_bytes) = row[3] else {
-                return Err(Error::ParseFailed("[get_daos] Quorum bytes parsing failed"))
-            };
-            let quorum = deserialize_async(quorum_bytes).await?;
-
-            let Value::Integer(approval_ratio_base) = row[4] else {
-                return Err(Error::ParseFailed("[get_daos] Approval ratio base parsing failed"))
-            };
-            let Ok(approval_ratio_base) = u64::try_from(approval_ratio_base) else {
-                return Err(Error::ParseFailed("[get_daos] Approval ratio base parsing failed"))
-            };
-
-            let Value::Integer(approval_ratio_quot) = row[5] else {
-                return Err(Error::ParseFailed("[get_daos] Approval ratio quot parsing failed"))
-            };
-            let Ok(approval_ratio_quot) = u64::try_from(approval_ratio_quot) else {
-                return Err(Error::ParseFailed("[get_daos] Approval ratio quot parsing failed"))
-            };
-
-            let Value::Blob(ref gov_token_bytes) = row[6] else {
-                return Err(Error::ParseFailed("[get_daos] Gov token bytes parsing failed"))
-            };
-            let gov_token_id = deserialize_async(gov_token_bytes).await?;
-
-            let Value::Blob(ref secret_bytes) = row[7] else {
-                return Err(Error::ParseFailed("[get_daos] Secret key bytes parsing failed"))
-            };
-            let secret_key = deserialize_async(secret_bytes).await?;
-
-            let Value::Blob(ref bulla_blind_bytes) = row[8] else {
-                return Err(Error::ParseFailed("[get_daos] Bulla blind bytes parsing failed"))
-            };
-            let bulla_blind = deserialize_async(bulla_blind_bytes).await?;
-
-            let Value::Blob(ref leaf_position_bytes) = row[9] else {
-                return Err(Error::ParseFailed("[get_daos] Leaf position bytes parsing failed"))
-            };
-            let leaf_position = if leaf_position_bytes.is_empty() {
-                None
-            } else {
-                Some(deserialize_async(leaf_position_bytes).await?)
-            };
-
-            let Value::Blob(ref tx_hash_bytes) = row[10] else {
-                return Err(Error::ParseFailed("[get_daos] Transaction hash bytes parsing failed"))
-            };
-            let tx_hash = if tx_hash_bytes.is_empty() {
-                None
-            } else {
-                Some(deserialize_async(tx_hash_bytes).await?)
-            };
-
-            let Value::Integer(call_index) = row[11] else {
-                return Err(Error::ParseFailed("[get_daos] Call index parsing failed"))
-            };
-            let Ok(call_index) = u8::try_from(call_index) else {
-                return Err(Error::ParseFailed("[get_daos] Call index parsing failed"))
-            };
-            let call_index = Some(call_index);
-
-            let dao = Dao {
-                id,
-                name,
-                proposer_limit,
-                quorum,
-                approval_ratio_base,
-                approval_ratio_quot,
-                gov_token_id,
-                secret_key,
-                bulla_blind,
-                leaf_position,
-                tx_hash,
-                call_index,
-            };
-
-            daos.push(dao);
+            daos.push(self.parse_dao_record(&row).await?);
         }
 
         // Here we sort the vec by ID. The SQL SELECT statement does not guarantee
@@ -1056,16 +1068,13 @@ impl Drk {
     }
 
     /// Import given DAO params into the wallet with a given name.
-    pub async fn import_dao(&self, dao_name: String, dao_params: DaoParams) -> Result<()> {
+    pub async fn import_dao(&self, dao_name: &str, dao_params: DaoParams) -> Result<()> {
         // First let's check if we've imported this DAO with the given name before.
-        // TODO: instead of getting all DAOs and filtering in rust,
-        // we can use the DB api directly to query for the record
-        // and return the error if it exists
-        let daos = self.get_daos().await?;
-        if daos.iter().any(|x| x.name == dao_name) {
-            return Err(Error::RusqliteError(
-                "[import_dao] This DAO has already been imported".to_string(),
-            ))
+        if let Ok(dao) = self.get_dao_by_alias(dao_name).await {
+            return Err(Error::RusqliteError(format!(
+                "[import_dao] This DAO has already been imported with ID {}",
+                dao.id
+            )))
         }
 
         println!("Importing \"{dao_name}\" DAO into the wallet");
@@ -1156,26 +1165,41 @@ impl Drk {
         Ok(dao.clone())
     }
 
-    /// List DAO(s) imported in the wallet. If an ID is given, just print the
+    /// Fetch a DAO given its name alias.
+    pub async fn get_dao_by_alias(&self, alias_filter: &str) -> Result<Dao> {
+        let row = match self
+            .wallet
+            .query_single(
+                &DAO_DAOS_TABLE,
+                &[],
+                convert_named_params! {(DAO_DAOS_COL_NAME, alias_filter)},
+            )
+            .await
+        {
+            Ok(r) => r,
+            Err(e) => {
+                return Err(Error::RusqliteError(format!(
+                    "[get_dao_by_alias] DAO retrieval failed: {e:?}"
+                )))
+            }
+        };
+
+        self.parse_dao_record(&row).await
+    }
+
+    /// List DAO(s) imported in the wallet. If a name aliasis given, just print the
     /// metadata for that specific one, if found.
-    pub async fn dao_list(&self, dao_id: Option<u64>) -> Result<()> {
-        if let Some(dao_id) = dao_id {
-            return self.dao_list_single(dao_id).await
+    pub async fn dao_list(&self, alias_filter: &Option<String>) -> Result<()> {
+        if let Some(alias) = alias_filter {
+            let dao = self.get_dao_by_alias(alias).await?;
+            println!("{dao}");
+            return Ok(());
         }
 
         let daos = self.get_daos().await?;
         for dao in daos {
             println!("[{}] {}", dao.id, dao.name);
         }
-
-        Ok(())
-    }
-
-    /// Retrieve DAO for provided ID and print its metadata.
-    async fn dao_list_single(&self, dao_id: u64) -> Result<()> {
-        let dao = self.get_dao_by_id(dao_id).await?;
-
-        println!("{dao}");
 
         Ok(())
     }

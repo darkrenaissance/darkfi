@@ -61,17 +61,17 @@ of the guide can be added for future regressions.
 | 16 | OTC initialization        | otc init -v {AMOUNT}:{AMOUNT} -t {ALIAS}:{ALIAS} | Pass               |
 | 17 | OTC join                  | otc join                                         | Pass               |
 | 18 | OTC sign                  | otc sign                                         | Pass               |
-| 19 | DAO create                | dao create {LIMIT} {QUORUM} {RATIO} {TOKEN}      | Failure: needs #12 |
-| 20 | DAO view                  | dao view                                         | Failure: needs #18 |
-| 21 | DAO import                | dao import                                       | Failure: needs #18 |
-| 22 | DAO list                  | dao sign                                         | Failure: needs #18 |
-| 23 | DAO mint                  | dao mint {DAO}                                   | Failure: needs #18 |
-| 24 | DAO balance               | dao balance {DAO}                                | Failure: needs #18 |
-| 25 | DAO propose               | dao propose {DAO} {ADDR} {AMOUNT} {TOKEN}        | Failure: needs #18 |
-| 26 | DAO proposals retrieval   | dao proposals {DAO}                              | Failure: needs #24 |
-| 27 | DAO proposal retrieval    | dao proposal {DAO} {PROPOSAL_ID}                 | Failure: needs #24 |
-| 28 | DAO vote                  | dao vote {DAO} {PROPOSAL_ID} {VOTE} {WEIGHT}     | Failure: needs #24 |
-| 29 | DAO proposal execution    | dao exec {DAO} {PROPOSAL_ID}                     | Failure: needs #27 |
+| 19 | DAO create                | dao create {LIMIT} {QUORUM} {RATIO} {TOKEN}      | Pass               |
+| 20 | DAO view                  | dao view                                         | Pass               |
+| 21 | DAO import                | dao import                                       | Pass               |
+| 22 | DAO list                  | dao list                                         | Pass               |
+| 23 | DAO mint                  | dao mint {DAO}                                   | Failure: needs #19 |
+| 24 | DAO balance               | dao balance {DAO}                                | Failure: needs #19 |
+| 25 | DAO propose               | dao propose {DAO} {ADDR} {AMOUNT} {TOKEN}        | Failure: needs #19 |
+| 26 | DAO proposals retrieval   | dao proposals {DAO}                              | Failure: needs #25 |
+| 27 | DAO proposal retrieval    | dao proposal {DAO} {PROPOSAL_ID}                 | Failure: needs #25 |
+| 28 | DAO vote                  | dao vote {DAO} {PROPOSAL_ID} {VOTE} {WEIGHT}     | Failure: needs #25 |
+| 29 | DAO proposal execution    | dao exec {DAO} {PROPOSAL_ID}                     | Failure: needs #28 |
 | 30 | Coins unspend             | unspend {COIN}                                   | Pass               |
 | 31 | Transaction inspect       | inspect                                          | Pass               |
 | 32 | Transaction simulate      | explorer simulate-tx                             | Pass               |

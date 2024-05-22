@@ -1075,7 +1075,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
                 let drk = Drk::new(args.wallet_path, args.wallet_pass, None, ex).await?;
 
-                if let Err(e) = drk.import_dao(dao_name, dao_params).await {
+                if let Err(e) = drk.import_dao(&dao_name, dao_params).await {
                     eprintln!("Failed to import DAO: {e:?}");
                     exit(2);
                 }
@@ -1085,13 +1085,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
             DaoSubcmd::List { dao_alias } => {
                 let drk = Drk::new(args.wallet_path, args.wallet_pass, None, ex).await?;
-                // We cannot use .map() since get_dao_id() uses ?
-                let dao_id = match dao_alias {
-                    Some(alias) => Some(drk.get_dao_id(&alias).await?),
-                    None => None,
-                };
-
-                if let Err(e) = drk.dao_list(dao_id).await {
+                if let Err(e) = drk.dao_list(&dao_alias).await {
                     eprintln!("Failed to list DAO: {e:?}");
                     exit(2);
                 }
