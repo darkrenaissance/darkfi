@@ -122,15 +122,15 @@ impl P2p {
             return Err(err)
         }
 
-        // Start the refine session
-        self.session_refine().start().await;
-
         // Start the seedsync session. Seed connections will not
         // activate yet- they wait for a call to notify().
         self.session_seedsync().start().await;
 
         // Start the outbound session
         self.session_outbound().start().await;
+
+        // Start the refine session
+        self.session_refine().start().await;
 
         info!(target: "net::p2p::start()", "[P2P] P2P subsystem started");
         Ok(())
@@ -157,9 +157,9 @@ impl P2p {
         // Stop the sessions
         self.session_manual().stop().await;
         self.session_inbound().stop().await;
-        self.session_refine().stop().await;
-        self.session_outbound().stop().await;
         self.session_seedsync().stop().await;
+        self.session_outbound().stop().await;
+        self.session_refine().stop().await;
     }
 
     /// Broadcasts a message concurrently across all active channels.
