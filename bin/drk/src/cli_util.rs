@@ -264,24 +264,23 @@ pub fn generate_completions(shell: &str) -> Result<()> {
 
     let name = Arg::with_name("name").help("Name identifier for the DAO");
 
-    let import =
-        SubCommand::with_name("import").about("Import DAO data from stdin").args(&vec![name]);
+    let import = SubCommand::with_name("import")
+        .about("Import DAO data from stdin")
+        .args(&vec![name.clone()]);
 
-    let name = Arg::with_name("dao-alias").help("Name identifier for the DAO (optional)");
+    let opt_name = Arg::with_name("dao-alias").help("Name identifier for the DAO (optional)");
 
     let list = SubCommand::with_name("list")
         .about("List imported DAOs (or info about a specific one)")
-        .args(&vec![name]);
-
-    let dao_alias = Arg::with_name("dao-alias").help("Name or numeric identifier for the DAO");
+        .args(&vec![opt_name]);
 
     let balance = SubCommand::with_name("balance")
         .about("Show the balance of a DAO")
-        .args(&vec![dao_alias.clone()]);
+        .args(&vec![name.clone()]);
 
     let mint = SubCommand::with_name("mint")
         .about("Mint an imported DAO on-chain")
-        .args(&vec![dao_alias.clone()]);
+        .args(&vec![name.clone()]);
 
     let recipient =
         Arg::with_name("recipient").help("Pubkey to send tokens to with proposal success");
@@ -292,17 +291,16 @@ pub fn generate_completions(shell: &str) -> Result<()> {
 
     let propose = SubCommand::with_name("propose")
         .about("Create a proposal for a DAO")
-        .args(&vec![dao_alias.clone(), recipient, amount, token]);
+        .args(&vec![name.clone(), recipient, amount, token]);
 
-    let proposals = SubCommand::with_name("proposals")
-        .about("List DAO proposals")
-        .args(&vec![dao_alias.clone()]);
+    let proposals =
+        SubCommand::with_name("proposals").about("List DAO proposals").args(&vec![name.clone()]);
 
     let proposal_id = Arg::with_name("proposal-id").help("Numeric identifier for the proposal");
 
     let proposal = SubCommand::with_name("proposal")
         .about("View a DAO proposal data")
-        .args(&vec![dao_alias.clone(), proposal_id.clone()]);
+        .args(&vec![name.clone(), proposal_id.clone()]);
 
     let vote = Arg::with_name("vote").help("Vote (0 for NO, 1 for YES)");
 
@@ -310,7 +308,7 @@ pub fn generate_completions(shell: &str) -> Result<()> {
         Arg::with_name("vote-weight").help("Vote weight (amount of governance tokens)");
 
     let vote = SubCommand::with_name("vote").about("Vote on a given proposal").args(&vec![
-        dao_alias.clone(),
+        name.clone(),
         proposal_id.clone(),
         vote,
         vote_weight,
@@ -318,7 +316,7 @@ pub fn generate_completions(shell: &str) -> Result<()> {
 
     let exec = SubCommand::with_name("exec")
         .about("Execute a DAO proposal")
-        .args(&vec![dao_alias, proposal_id]);
+        .args(&vec![name, proposal_id]);
 
     let dao = SubCommand::with_name("dao").about("DAO functionalities").subcommands(vec![
         create, view, import, list, balance, mint, propose, proposals, proposal, vote, exec,

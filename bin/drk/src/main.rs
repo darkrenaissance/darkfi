@@ -335,20 +335,20 @@ enum DaoSubcmd {
 
     /// Show the balance of a DAO
     Balance {
-        /// Name or numeric identifier for the DAO
-        dao_alias: String,
+        /// Name identifier for the DAO
+        name: String,
     },
 
     /// Mint an imported DAO on-chain
     Mint {
-        /// Name or numeric identifier for the DAO
-        dao_alias: String,
+        /// Name identifier for the DAO
+        name: String,
     },
 
     /// Create a proposal for a DAO
     Propose {
-        /// Name or numeric identifier for the DAO
-        dao_alias: String,
+        /// Name identifier for the DAO
+        name: String,
 
         /// Pubkey to send tokens to with proposal success
         recipient: String,
@@ -362,14 +362,14 @@ enum DaoSubcmd {
 
     /// List DAO proposals
     Proposals {
-        /// Name or numeric identifier for the DAO
-        dao_alias: String,
+        /// Name identifier for the DAO
+        name: String,
     },
 
     /// View a DAO proposal data
     Proposal {
-        /// Name or numeric identifier for the DAO
-        dao_alias: String,
+        /// Name identifier for the DAO
+        name: String,
 
         /// Numeric identifier for the proposal
         proposal_id: u64,
@@ -377,8 +377,8 @@ enum DaoSubcmd {
 
     /// Vote on a given proposal
     Vote {
-        /// Name or numeric identifier for the DAO
-        dao_alias: String,
+        /// Name identifier for the DAO
+        name: String,
 
         /// Numeric identifier for the proposal
         proposal_id: u64,
@@ -392,8 +392,8 @@ enum DaoSubcmd {
 
     /// Execute a DAO proposal
     Exec {
-        /// Name or numeric identifier for the DAO
-        dao_alias: String,
+        /// Name identifier for the DAO
+        name: String,
 
         /// Numeric identifier for the proposal
         proposal_id: u64,
@@ -1039,9 +1039,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 };
 
                 let secret_key = SecretKey::random(&mut OsRng);
-                let bulla_blind = pallas::Base::random(&mut OsRng);
+                let bulla_blind = BaseBlind::random(&mut OsRng);
 
-                let params = DaoParams {
+                let params = DaoParams::new(
                     proposer_limit,
                     quorum,
                     approval_ratio_base,
@@ -1049,7 +1049,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     gov_token_id,
                     secret_key,
                     bulla_blind,
-                };
+                );
 
                 let encoded = bs58::encode(&serialize_async(&params).await).into_string();
                 println!("{encoded}");
@@ -1074,7 +1074,6 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 let params: DaoParams = deserialize_async(&bytes).await?;
 
                 let drk = Drk::new(args.wallet_path, args.wallet_pass, None, ex).await?;
-
                 if let Err(e) = drk.import_dao(&name, params).await {
                     eprintln!("Failed to import DAO: {e:?}");
                     exit(2);
@@ -1093,11 +1092,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 Ok(())
             }
 
-            DaoSubcmd::Balance { dao_alias } => {
+            DaoSubcmd::Balance { name } => {
                 let drk = Drk::new(args.wallet_path, args.wallet_pass, None, ex).await?;
-                let dao_id = drk.get_dao_id(&dao_alias).await?;
-
-                let balmap = match drk.dao_balance(dao_id).await {
+                let balmap = match drk.dao_balance(&name).await {
                     Ok(b) => b,
                     Err(e) => {
                         eprintln!("Failed to fetch DAO balance: {e:?}");
@@ -1139,23 +1136,22 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 Ok(())
             }
 
-            DaoSubcmd::Mint { dao_alias } => {
+            DaoSubcmd::Mint { name } => {
                 let drk =
                     Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
-                let dao_id = drk.get_dao_id(&dao_alias).await?;
-
-                let tx = match drk.dao_mint(dao_id).await {
+                let tx = match drk.dao_mint(&name).await {
                     Ok(tx) => tx,
                     Err(e) => {
                         eprintln!("Failed to mint DAO: {e:?}");
                         exit(2);
                     }
                 };
+
                 println!("{}", base64::encode(&serialize_async(&tx).await));
                 Ok(())
             }
 
-            DaoSubcmd::Propose { dao_alias, recipient, amount, token } => {
+            DaoSubcmd::Propose { name, recipient, amount, token } => {
                 if let Err(e) = f64::from_str(&amount) {
                     eprintln!("Invalid amount: {e:?}");
                     exit(2);
@@ -1171,7 +1167,6 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
                 let drk =
                     Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
-                let dao_id = drk.get_dao_id(&dao_alias).await?;
                 let token_id = match drk.get_token(token).await {
                     Ok(t) => t,
                     Err(e) => {
@@ -1180,7 +1175,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     }
                 };
 
-                let tx = match drk.dao_propose(dao_id, rcpt, amount, token_id).await {
+                let tx = match drk.dao_propose(&name, rcpt, amount, token_id).await {
                     Ok(tx) => tx,
                     Err(e) => {
                         eprintln!("Failed to create DAO proposal: {e:?}");
@@ -1191,11 +1186,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 Ok(())
             }
 
-            DaoSubcmd::Proposals { dao_alias } => {
+            DaoSubcmd::Proposals { name } => {
                 let drk = Drk::new(args.wallet_path, args.wallet_pass, None, ex).await?;
-                let dao_id = drk.get_dao_id(&dao_alias).await?;
-
-                let proposals = drk.get_dao_proposals(dao_id).await?;
+                let proposals = drk.get_dao_proposals(&name).await?;
 
                 for proposal in proposals {
                     println!("[{}] {:?}", proposal.id, proposal.bulla());
@@ -1204,11 +1197,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 Ok(())
             }
 
-            DaoSubcmd::Proposal { dao_alias, proposal_id } => {
+            DaoSubcmd::Proposal { name, proposal_id } => {
                 let drk = Drk::new(args.wallet_path, args.wallet_pass, None, ex).await?;
-                let dao_id = drk.get_dao_id(&dao_alias).await?;
-
-                let proposals = drk.get_dao_proposals(dao_id).await?;
+                let proposals = drk.get_dao_proposals(&name).await?;
                 let Some(proposal) = proposals.iter().find(|x| x.id == proposal_id) else {
                     eprintln!("No such DAO proposal found");
                     exit(2);
@@ -1226,11 +1217,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 Ok(())
             }
 
-            DaoSubcmd::Vote { dao_alias, proposal_id, vote, vote_weight } => {
-                let drk =
-                    Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
-                let dao_id = drk.get_dao_id(&dao_alias).await?;
-
+            DaoSubcmd::Vote { name, proposal_id, vote, vote_weight } => {
                 if let Err(e) = f64::from_str(&vote_weight) {
                     eprintln!("Invalid vote weight: {e:?}");
                     exit(2);
@@ -1243,7 +1230,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 }
                 let vote = vote != 0;
 
-                let tx = match drk.dao_vote(dao_id, proposal_id, vote, weight).await {
+                let drk =
+                    Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
+                let tx = match drk.dao_vote(&name, proposal_id, vote, weight).await {
                     Ok(tx) => tx,
                     Err(e) => {
                         eprintln!("Failed to create DAO Vote transaction: {e:?}");
@@ -1258,11 +1247,10 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 Ok(())
             }
 
-            DaoSubcmd::Exec { dao_alias, proposal_id } => {
+            DaoSubcmd::Exec { name, proposal_id } => {
                 let drk =
                     Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
-                let dao_id = drk.get_dao_id(&dao_alias).await?;
-                let dao = drk.get_dao_by_id(dao_id).await?;
+                let dao = drk.get_dao_by_name(&name).await?;
                 let proposal = drk.get_dao_proposal_by_id(proposal_id).await?;
                 assert!(proposal.dao_bulla == dao.bulla());
 

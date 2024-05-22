@@ -37,12 +37,18 @@ use darkfi_serial::async_trait;
 // ANCHOR: dao
 /// DAOs are represented on chain as a commitment to this object
 pub struct Dao {
+    /// The minimum amount of governance tokens needed to open a proposal
     pub proposer_limit: u64,
+    /// Minimal threshold of participating total tokens needed for a proposal to pass
     pub quorum: u64,
+    /// The ratio of winning/total votes needed for a proposal to pass
     pub approval_ratio_quot: u64,
     pub approval_ratio_base: u64,
+    /// DAO's governance token ID
     pub gov_token_id: TokenId,
+    /// Public key of the DAO
     pub public_key: PublicKey,
+    /// DAO bulla blind
     pub bulla_blind: BaseBlind,
 }
 // ANCHOR_END: dao

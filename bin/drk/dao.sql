@@ -25,7 +25,7 @@
 --   $ drk dao import_dao DAO_NAME < dao.dat
 --   Imported DAO ccb8XXX8af6
 --
--- Where ccb8XXX8af6 is the DAO's bulla.
+-- Where ccb8XXX8af6 is the DAO's name.
 --
 -- Next one person will mint it on chain
 --
@@ -104,22 +104,16 @@
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_daos (
-	dao_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-    name BLOB UNIQUE NOT NULL,
-    proposer_limit BLOB NOT NULL,
-    -- minimum threshold for total number of votes for proposal to pass.
-    -- If there's too little activity then it cannot pass.
-    quorum BLOB NOT NULL,
-    -- Needed ratio of yes/total for proposal to pass.
-    -- approval_ratio = approval_ratio_quot / approval_ratio_base
-    approval_ratio_base INTEGER NOT NULL,
-    approval_ratio_quot INTEGER NOT NULL,
-	gov_token_id BLOB NOT NULL,
-	secret BLOB NOT NULL,
-	bulla_blind BLOB NOT NULL,
-    -- these values are NULL until the DAO is minted on chain and received
-	leaf_position BLOB,
+    -- Name identifier of the DAO
+    name TEXT PRIMARY KEY UNIQUE NOT NULL,
+    -- DAO parameters
+    params BLOB NOT NULL,
+    -- These values are NULL until the DAO is minted on chain and received
+    -- Leaf position of the DAO in the Merkle tree of DAOs
+    leaf_position BLOB,
+    -- The transaction hash where the DAO was deployed
     tx_hash BLOB,
+    -- The call index in the transaction where the DAO was deployed
     call_index INTEGER
 );
 
@@ -131,7 +125,7 @@ CREATE TABLE IF NOT EXISTS Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_tree
 
 CREATE TABLE IF NOT EXISTS Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_proposals (
     proposal_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-    dao_id INTEGER NOT NULL,
+    dao_name TEXT NOT NULL,
     -- Public key of person that would receive the funds
     recv_public BLOB NOT NULL,
     -- Amount of funds that would be sent
@@ -141,15 +135,15 @@ CREATE TABLE IF NOT EXISTS Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_prop
     bulla_blind BLOB NOT NULL,
     -- these values are NULL until the proposal is minted on chain
     -- and received by the DAO
-	leaf_position BLOB,
-	money_snapshot_tree BLOB,
+    leaf_position BLOB,
+    money_snapshot_tree BLOB,
     tx_hash BLOB,
     call_index INTEGER,
     -- this is NULL until we have voted on this proposal
     our_vote_id INTEGER UNIQUE,
 
     FOREIGN KEY(our_vote_id) REFERENCES Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_votes(vote_id) ON DELETE CASCADE ON UPDATE CASCADE,
-    FOREIGN KEY(dao_id) REFERENCES Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_daos(dao_id) ON DELETE CASCADE ON UPDATE CASCADE
+    FOREIGN KEY(dao_name) REFERENCES Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_daos(name) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_votes (
