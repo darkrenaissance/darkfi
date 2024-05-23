@@ -225,11 +225,11 @@ impl Slot {
     /// connections. A network that purely favors uptime over unreliable
     /// connections may be vulnerable to sybil by attackers with good uptime.
     async fn fetch_addrs_with_preference(&self, preference: SlotPreference) -> Vec<(Url, u64)> {
-        let slot = self.slot;
+        let slot = self.slot as usize;
         let settings = self.p2p().settings();
         let hosts = &self.p2p().hosts().container;
 
-        let white_count = settings.white_connect_count;
+        let white_count = (settings.white_connect_percent * settings.outbound_connections) / 100;
         let gold_count = settings.gold_connect_count;
 
         let transports = &settings.allowed_transports;

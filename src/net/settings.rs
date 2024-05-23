@@ -69,9 +69,9 @@ pub struct Settings {
     /// Pause interval within greylist refinery process
     pub greylist_refinery_interval: u64,
     /// Percent of connections to come from the whitelist
-    pub white_connect_count: u32,
+    pub white_connect_percent: usize,
     /// Number of goldlist connections
-    pub gold_connect_count: u32,
+    pub gold_connect_count: usize,
     /// Number of seconds with no connections after which refinery
     /// process is paused.
     pub time_with_no_connections: u64,
@@ -104,7 +104,7 @@ impl Default for Settings {
             outbound_peer_discovery_attempt_time: 5,
             hostlist: "/dev/null".to_string(),
             greylist_refinery_interval: 15,
-            white_connect_count: 90,
+            white_connect_percent: 90,
             gold_connect_count: 2,
             time_with_no_connections: 30,
             blacklist: vec![],
@@ -200,11 +200,11 @@ pub struct SettingsOpt {
 
     /// Number of whitelist connections
     #[structopt(skip)]
-    pub white_connect_count: Option<u32>,
+    pub white_connect_percent: Option<usize>,
 
     /// Number of goldlist connections
     #[structopt(skip)]
-    pub gold_connect_count: Option<u32>,
+    pub gold_connect_count: Option<usize>,
 
     /// Number of seconds with no connections after which refinery
     /// process is paused.
@@ -253,7 +253,7 @@ impl From<SettingsOpt> for Settings {
             greylist_refinery_interval: opt
                 .greylist_refinery_interval
                 .unwrap_or(def.greylist_refinery_interval),
-            white_connect_count: opt.white_connect_count.unwrap_or(def.white_connect_count),
+            white_connect_percent: opt.white_connect_percent.unwrap_or(def.white_connect_percent),
             gold_connect_count: opt.gold_connect_count.unwrap_or(def.gold_connect_count),
             time_with_no_connections: opt
                 .time_with_no_connections
