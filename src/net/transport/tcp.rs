@@ -33,7 +33,6 @@ use socket2::{Domain, Socket, TcpKeepalive, Type};
 use url::Url;
 
 use super::{PtListener, PtStream};
-use crate::{Error, Result};
 
 /// TCP Dialer implementation
 #[derive(Debug, Clone)]
@@ -44,7 +43,7 @@ pub struct TcpDialer {
 
 impl TcpDialer {
     /// Instantiate a new [`TcpDialer`] with optional TTL.
-    pub(crate) async fn new(ttl: Option<u32>) -> Result<Self> {
+    pub(crate) async fn new(ttl: Option<u32>) -> io::Result<Self> {
         Ok(Self { ttl })
     }
 
@@ -74,7 +73,7 @@ impl TcpDialer {
         &self,
         socket_addr: SocketAddr,
         timeout: Option<Duration>,
-    ) -> Result<TcpStream> {
+    ) -> io::Result<TcpStream> {
         debug!(target: "net::tcp::do_dial", "Dialing {} with TCP...", socket_addr);
         let socket = self.create_socket(socket_addr).await?;
 
@@ -86,7 +85,7 @@ impl TcpDialer {
             Ok(()) => {}
             Err(err) if err.raw_os_error() == Some(libc::EINPROGRESS) => {}
             Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
-            Err(err) => return Err(err.into()),
+            Err(err) => return Err(err),
         };
 
         // Wrap socket in an Async wrapper.
@@ -95,7 +94,7 @@ impl TcpDialer {
         // Wait until the async object becomes writable.
         let connect = async {
             match async_socket.get_ref().take_error()? {
-                Some(err) => Err(Error::Io(err.kind())),
+                Some(err) => Err(err),
                 None => Ok(()),
             }
         };
@@ -122,7 +121,7 @@ impl TcpDialer {
                     }
                     Either::Left((Err(e), _)) => Err(e),
 
-                    Either::Right((_, _)) => Err(Error::ConnectTimeout),
+                    Either::Right((_, _)) => Err(io::ErrorKind::TimedOut.into()),
                 }
             }
             None => {
@@ -149,7 +148,7 @@ pub struct TcpListener {
 
 impl TcpListener {
     /// Instantiate a new [`TcpListener`] with given backlog size.
-    pub async fn new(backlog: i32) -> Result<Self> {
+    pub async fn new(backlog: i32) -> io::Result<Self> {
         Ok(Self { backlog })
     }
 
@@ -171,7 +170,7 @@ impl TcpListener {
     }
 
     /// Internal listen function
-    pub(crate) async fn do_listen(&self, socket_addr: SocketAddr) -> Result<SmolTcpListener> {
+    pub(crate) async fn do_listen(&self, socket_addr: SocketAddr) -> io::Result<SmolTcpListener> {
         let socket = self.create_socket(socket_addr).await?;
         socket.bind(&socket_addr.into())?;
         socket.listen(self.backlog)?;
@@ -186,7 +185,7 @@ impl TcpListener {
 
 #[async_trait]
 impl PtListener for SmolTcpListener {
-    async fn next(&self) -> std::io::Result<(Box<dyn PtStream>, Url)> {
+    async fn next(&self) -> io::Result<(Box<dyn PtStream>, Url)> {
         let (stream, peer_addr) = match self.accept().await {
             Ok((s, a)) => (s, a),
             Err(e) => return Err(e),
@@ -199,7 +198,7 @@ impl PtListener for SmolTcpListener {
 
 #[async_trait]
 impl PtListener for (TlsAcceptor, SmolTcpListener) {
-    async fn next(&self) -> std::io::Result<(Box<dyn PtStream>, Url)> {
+    async fn next(&self) -> io::Result<(Box<dyn PtStream>, Url)> {
         let (stream, peer_addr) = match self.1.accept().await {
             Ok((s, a)) => (s, a),
             Err(e) => return Err(e),

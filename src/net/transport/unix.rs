@@ -16,7 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::path::{Path, PathBuf};
+use std::{
+    io,
+    path::{Path, PathBuf},
+};
 
 use async_trait::async_trait;
 use log::debug;
@@ -27,7 +30,6 @@ use smol::{
 use url::Url;
 
 use super::{PtListener, PtStream};
-use crate::Result;
 
 /// Unix Dialer implementation
 #[derive(Debug, Clone)]
@@ -35,7 +37,7 @@ pub struct UnixDialer;
 
 impl UnixDialer {
     /// Instantiate a new [`UnixDialer`] object
-    pub(crate) async fn new() -> Result<Self> {
+    pub(crate) async fn new() -> io::Result<Self> {
         Ok(Self {})
     }
 
@@ -43,7 +45,7 @@ impl UnixDialer {
     pub(crate) async fn do_dial(
         &self,
         path: impl AsRef<Path> + core::fmt::Debug,
-    ) -> Result<UnixStream> {
+    ) -> io::Result<UnixStream> {
         debug!(target: "net::unix::do_dial", "Dialing {:?} Unix socket...", path);
         let stream = UnixStream::connect(path).await?;
         Ok(stream)
@@ -56,12 +58,12 @@ pub struct UnixListener;
 
 impl UnixListener {
     /// Instantiate a new [`UnixListener`] object
-    pub(crate) async fn new() -> Result<Self> {
+    pub(crate) async fn new() -> io::Result<Self> {
         Ok(Self {})
     }
 
     /// Internal listen function
-    pub(crate) async fn do_listen(&self, path: &PathBuf) -> Result<SmolUnixListener> {
+    pub(crate) async fn do_listen(&self, path: &PathBuf) -> io::Result<SmolUnixListener> {
         // This rm is a bit aggressive, but c'est la vie.
         let _ = fs::remove_file(path).await;
         let listener = SmolUnixListener::bind(path)?;
@@ -71,7 +73,7 @@ impl UnixListener {
 
 #[async_trait]
 impl PtListener for SmolUnixListener {
-    async fn next(&self) -> std::io::Result<(Box<dyn PtStream>, Url)> {
+    async fn next(&self) -> io::Result<(Box<dyn PtStream>, Url)> {
         let (stream, _peer_addr) = match self.accept().await {
             Ok((s, a)) => (s, a),
             Err(e) => return Err(e),

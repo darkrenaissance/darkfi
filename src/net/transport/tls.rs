@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::Arc;
+use std::{io, sync::Arc};
 
 use futures_rustls::{
     rustls::{
@@ -35,8 +35,6 @@ use x509_parser::{
     parse_x509_certificate,
     prelude::{GeneralName, ParsedExtension, X509Certificate},
 };
-
-use crate::Result;
 
 /// Validate certificate DNSName.
 fn validate_dnsname(cert: &X509Certificate) -> std::result::Result<(), rustls::Error> {
@@ -296,7 +294,7 @@ impl TlsUpgrade {
         Self { server_config, client_config }
     }
 
-    pub async fn upgrade_dialer_tls<IO>(self, stream: IO) -> Result<TlsStream<IO>>
+    pub async fn upgrade_dialer_tls<IO>(self, stream: IO) -> io::Result<TlsStream<IO>>
     where
         IO: super::PtStream,
     {
@@ -312,7 +310,7 @@ impl TlsUpgrade {
     pub async fn upgrade_listener_tcp_tls(
         self,
         listener: smol::net::TcpListener,
-    ) -> Result<(TlsAcceptor, smol::net::TcpListener)> {
+    ) -> io::Result<(TlsAcceptor, smol::net::TcpListener)> {
         Ok((TlsAcceptor::from(self.server_config), listener))
     }
 }

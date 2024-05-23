@@ -16,14 +16,20 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::time::Duration;
+use std::{
+    io::{self, ErrorKind},
+    time::Duration,
+};
 
 use arti_client::{config::BoolOrAuto, DataStream, StreamPrefs, TorClient};
-use log::debug;
-use smol::lock::OnceCell;
+use futures::{
+    future::{select, Either},
+    pin_mut,
+};
+use log::{debug, warn};
+use smol::{lock::OnceCell, Timer};
+use tor_error::ErrorReport;
 use tor_rtcompat::PreferredRuntime;
-
-use crate::{system::timeout::timeout, Result};
 
 /// A static for `TorClient` reusability
 static TOR_CLIENT: OnceCell<TorClient<PreferredRuntime>> = OnceCell::new();
@@ -34,7 +40,7 @@ pub struct TorDialer;
 
 impl TorDialer {
     /// Instantiate a new [`TorDialer`] object
-    pub(crate) async fn new() -> Result<Self> {
+    pub(crate) async fn new() -> io::Result<Self> {
         Ok(Self {})
     }
 
@@ -44,27 +50,72 @@ impl TorDialer {
         host: &str,
         port: u16,
         conn_timeout: Option<Duration>,
-    ) -> Result<DataStream> {
+    ) -> io::Result<DataStream> {
         debug!(target: "net::tor::do_dial", "Dialing {}:{} with Tor...", host, port);
 
         // Initialize or fetch the static TOR_CLIENT that should be reused in
         // the Tor dialer
-        let client = TOR_CLIENT
+        let client = match TOR_CLIENT
             .get_or_try_init(|| async {
                 debug!(target: "net::tor::do_dial", "Bootstrapping...");
                 TorClient::builder().create_bootstrapped().await
             })
-            .await?;
+            .await
+        {
+            Ok(client) => client,
+            Err(e) => {
+                warn!("{}", e.report());
+                return Err(io::Error::new(
+                    ErrorKind::Other,
+                    "Internal Tor error, see logged warning",
+                ))
+            }
+        };
 
         let mut stream_prefs = StreamPrefs::new();
         stream_prefs.connect_to_onion_services(BoolOrAuto::Explicit(true));
 
-        let stream = if let Some(conn_timeout) = conn_timeout {
-            timeout(conn_timeout, client.connect_with_prefs((host, port), &stream_prefs)).await?
-        } else {
-            Ok(client.connect_with_prefs((host, port), &stream_prefs).await?)
-        };
+        // If a timeout is configured, run both the connect and timeout futures
+        // and return whatever finishes first. Otherwise, wait on the connect future.
+        let connect = client.connect_with_prefs((host, port), &stream_prefs);
 
-        Ok(stream?)
+        match conn_timeout {
+            Some(t) => {
+                let timeout = Timer::after(t);
+                pin_mut!(timeout);
+                pin_mut!(connect);
+
+                match select(connect, timeout).await {
+                    Either::Left((Ok(stream), _)) => Ok(stream),
+
+                    Either::Left((Err(e), _)) => {
+                        warn!("{}", e.report());
+                        Err(io::Error::new(
+                            ErrorKind::Other,
+                            "Internal Tor error, see logged warning",
+                        ))
+                    }
+
+                    Either::Right((_, _)) => Err(io::ErrorKind::TimedOut.into()),
+                }
+            }
+
+            None => {
+                match connect.await {
+                    Ok(stream) => Ok(stream),
+                    Err(e) => {
+                        // Extract error reports (i.e. very detailed debugging)
+                        // from arti-client in order to help debug Tor connections.
+                        // https://docs.rs/arti-client/latest/arti_client/#reporting-arti-errors
+                        // https://gitlab.torproject.org/tpo/core/arti/-/issues/1086
+                        warn!("{}", e.report());
+                        Err(io::Error::new(
+                            ErrorKind::Other,
+                            "Internal Tor error, see logged warning",
+                        ))
+                    }
+                }
+            }
+        }
     }
 }
