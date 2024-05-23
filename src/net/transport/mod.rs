@@ -16,13 +16,15 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::time::Duration;
+use std::{
+    io::{self, ErrorKind},
+    time::Duration,
+};
 
 use async_trait::async_trait;
+use log::error;
 use smol::io::{AsyncRead, AsyncWrite};
 use url::Url;
-
-use crate::{Error, Result};
 
 /// TLS upgrade mechanism
 pub(crate) mod tls;
@@ -102,7 +104,7 @@ pub struct Dialer {
 macro_rules! enforce_hostport {
     ($endpoint:ident) => {
         if $endpoint.host_str().is_none() || $endpoint.port().is_none() {
-            return Err(Error::InvalidDialerScheme)
+            return Err(io::Error::from_raw_os_error(libc::ENETUNREACH))
         }
     };
 }
@@ -110,18 +112,18 @@ macro_rules! enforce_hostport {
 macro_rules! enforce_abspath {
     ($endpoint:ident) => {
         if $endpoint.host_str().is_some() || $endpoint.port().is_some() {
-            return Err(Error::InvalidDialerScheme)
+            return Err(io::Error::from_raw_os_error(libc::ENETUNREACH))
         }
 
         if $endpoint.to_file_path().is_err() {
-            return Err(Error::InvalidDialerScheme)
+            return Err(io::Error::from_raw_os_error(libc::ENETUNREACH))
         }
     };
 }
 
 impl Dialer {
     /// Instantiate a new [`Dialer`] with the given [`Url`].
-    pub async fn new(endpoint: Url) -> Result<Self> {
+    pub async fn new(endpoint: Url) -> io::Result<Self> {
         match endpoint.scheme().to_lowercase().as_str() {
             #[cfg(feature = "p2p-tcp")]
             "tcp" => {
@@ -186,7 +188,10 @@ impl Dialer {
                 Ok(Self { endpoint, variant })
             }
 
-            x => Err(Error::UnsupportedTransport(x.to_string())),
+            x => {
+                error!("[P2P] Requested unsupported transport: {}", x);
+                Err(io::Error::from_raw_os_error(libc::ENETUNREACH))
+            }
         }
     }
 
@@ -196,7 +201,7 @@ impl Dialer {
     /// for hosts and ports in other parts of the codebase. A panic occurring here
     /// likely indicates a configuration issue on the part of the user. It is preferable
     /// in this case that the user is alerted to this problem via a panic.
-    pub async fn dial(&self, timeout: Option<Duration>) -> Result<Box<dyn PtStream>> {
+    pub async fn dial(&self, timeout: Option<Duration>) -> io::Result<Box<dyn PtStream>> {
         match &self.variant {
             #[cfg(feature = "p2p-tcp")]
             DialerVariant::Tcp(dialer) => {
@@ -245,7 +250,10 @@ impl Dialer {
 
             #[cfg(feature = "p2p-unix")]
             DialerVariant::Unix(dialer) => {
-                let path = self.endpoint.to_file_path()?;
+                let path = match self.endpoint.to_file_path() {
+                    Ok(v) => v,
+                    Err(_) => return Err(io::Error::new(ErrorKind::Unsupported, "Invalid path")),
+                };
                 let stream = dialer.do_dial(path).await?;
                 Ok(Box::new(stream))
             }
@@ -277,7 +285,7 @@ pub struct Listener {
 impl Listener {
     /// Instantiate a new [`Listener`] with the given [`Url`].
     /// Must contain a scheme, host string, and a port.
-    pub async fn new(endpoint: Url) -> Result<Self> {
+    pub async fn new(endpoint: Url) -> io::Result<Self> {
         match endpoint.scheme().to_lowercase().as_str() {
             #[cfg(feature = "p2p-tcp")]
             "tcp" => {
@@ -305,13 +313,16 @@ impl Listener {
                 Ok(Self { endpoint, variant })
             }
 
-            x => Err(Error::UnsupportedTransport(x.to_string())),
+            x => {
+                error!("[P2P] Requested unsupported transport: {}", x);
+                Err(io::Error::from_raw_os_error(libc::ENETUNREACH))
+            }
         }
     }
 
     /// Listen on an instantiated [`Listener`].
     /// This will open a socket and return the listener.
-    pub async fn listen(&self) -> Result<Box<dyn PtListener>> {
+    pub async fn listen(&self) -> io::Result<Box<dyn PtListener>> {
         match &self.variant {
             #[cfg(feature = "p2p-tcp")]
             ListenerVariant::Tcp(listener) => {
@@ -331,7 +342,10 @@ impl Listener {
 
             #[cfg(feature = "p2p-unix")]
             ListenerVariant::Unix(listener) => {
-                let path = self.endpoint.to_file_path()?;
+                let path = match self.endpoint.to_file_path() {
+                    Ok(v) => v,
+                    Err(_) => return Err(io::Error::new(ErrorKind::Unsupported, "Invalid path")),
+                };
                 let l = listener.do_listen(&path).await?;
                 Ok(Box::new(l))
             }
@@ -367,5 +381,5 @@ impl PtStream for smol::net::unix::UnixStream {}
 /// Wrapper trait for async listeners
 #[async_trait]
 pub trait PtListener: Send + Sync + Unpin {
-    async fn next(&self) -> std::io::Result<(Box<dyn PtStream>, Url)>;
+    async fn next(&self) -> io::Result<(Box<dyn PtStream>, Url)>;
 }

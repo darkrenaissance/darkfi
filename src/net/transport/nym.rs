@@ -16,12 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::time::Duration;
+use std::{io, time::Duration};
 
 use rand::{rngs::OsRng, RngCore};
 use url::Url;
 
-use crate::{util::encoding::base32, Result};
+use crate::util::encoding::base32;
 
 /// Unique, randomly-generated per-connection ID that's used to
 /// identify which connection a message belongs to.
@@ -56,7 +56,7 @@ pub struct NymDialer;
 
 impl NymDialer {
     /// Instantiate a new [`NymDialer`] object
-    pub(crate) async fn new() -> Result<Self> {
+    pub(crate) async fn new() -> io::Result<Self> {
         Ok(Self {})
     }
 
@@ -64,7 +64,7 @@ impl NymDialer {
         &self,
         _endpoint: Url, // Recipient
         _timeout: Option<Duration>,
-    ) -> Result<()> {
+    ) -> io::Result<()> {
         let _id = ConnectionId::_generate();
 
         Ok(())
