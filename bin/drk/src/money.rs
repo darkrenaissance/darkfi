@@ -504,22 +504,16 @@ impl Drk {
         };
         let secret: SecretKey = deserialize_async(secret_bytes).await?;
 
-        // TODO: Remove from SQL store, can be derived ondemand
-        let Value::Blob(ref nullifier_bytes) = row[10] else {
-            return Err(Error::ParseFailed("[parse_coin_record] Nullifier bytes parsing failed"))
-        };
-        let _nullifier: Nullifier = deserialize_async(nullifier_bytes).await?;
-
-        let Value::Blob(ref leaf_position_bytes) = row[11] else {
+        let Value::Blob(ref leaf_position_bytes) = row[10] else {
             return Err(Error::ParseFailed("[parse_coin_record] Leaf position bytes parsing failed"))
         };
         let leaf_position: bridgetree::Position = deserialize_async(leaf_position_bytes).await?;
 
-        let Value::Blob(ref memo) = row[12] else {
+        let Value::Blob(ref memo) = row[11] else {
             return Err(Error::ParseFailed("[parse_coin_record] Memo parsing failed"))
         };
 
-        let Value::Text(ref spent_tx_hash) = row[13] else {
+        let Value::Text(ref spent_tx_hash) = row[12] else {
             return Err(Error::ParseFailed(
                 "[parse_coin_record] Spent transaction hash parsing failed",
             ))

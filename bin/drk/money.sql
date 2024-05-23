@@ -31,7 +31,6 @@ CREATE TABLE IF NOT EXISTS BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o_money_co
 	value_blind BLOB NOT NULL,
 	token_blind BLOB NOT NULL,
 	secret BLOB NOT NULL,
-	nullifier BLOB NOT NULL,
 	leaf_position BLOB NOT NULL,
 	memo BLOB,
 	spent_tx_hash TEXT DEFAULT '-'
