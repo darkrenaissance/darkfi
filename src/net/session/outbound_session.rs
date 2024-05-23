@@ -423,9 +423,12 @@ impl Slot {
 
                 warn!(
                     target: "net::outbound_session::try_connect()",
-                    "[P2P] Suspending addr= [{}] slot #{}",
+                    "[P2P] Suspending addr=[{}] slot #{}",
                     addr, slot
                 );
+
+                // At this point we failed to connect. We'll downgrade this peer now.
+                self.p2p().hosts().move_host(&addr, last_seen, HostColor::Grey).await?;
 
                 // Mark its state as Suspend, which sends this node to the Refinery for processing.
                 self.p2p().hosts().try_register(addr.clone(), HostState::Suspend).await.unwrap();
