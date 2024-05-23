@@ -435,7 +435,7 @@ impl Drk {
             Ok(r) => r,
             Err(e) => {
                 return Err(Error::RusqliteError(format!(
-                    "[get_coins] Coins retrieval failed: {e:?}"
+                    "[get_token_coins] Coins retrieval failed: {e:?}"
                 )))
             }
         };
@@ -1014,7 +1014,6 @@ impl Drk {
     pub async fn append_fee_call(
         &self,
         tx: &Transaction,
-        public_key: PublicKey,
         money_merkle_tree: &MerkleTree,
         fee_pk: &ProvingKey,
         fee_zkbin: &ZkBinary,
@@ -1046,7 +1045,7 @@ impl Drk {
         };
 
         let output = FeeCallOutput {
-            public_key,
+            public_key: PublicKey::from_secret(coin.secret),
             value: change_value,
             token_id: coin.note.token_id,
             blind: BaseBlind::random(&mut OsRng),
@@ -1169,11 +1168,8 @@ impl Drk {
         // We first have to execute the fee-less tx to gather its used gas, and then we feed
         // it into the fee-creating function.
         let tree = self.get_money_tree().await?;
-        let secret = self.default_secret().await?;
-        let fee_public = PublicKey::from_secret(secret);
-        let (fee_call, fee_proofs, fee_secrets) = self
-            .append_fee_call(tx, fee_public, &tree, &fee_pk, &fee_zkbin, Some(&spent_coins))
-            .await?;
+        let (fee_call, fee_proofs, fee_secrets) =
+            self.append_fee_call(tx, &tree, &fee_pk, &fee_zkbin, Some(&spent_coins)).await?;
 
         // Append the fee call to the transaction
         tx.calls.push(DarkLeaf { data: fee_call, parent_index: None, children_indexes: vec![] });

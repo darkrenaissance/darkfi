@@ -307,10 +307,8 @@ impl Drk {
         tx.signatures = vec![auth_sigs, mint_sigs];
 
         let tree = self.get_money_tree().await?;
-        let secret = self.default_secret().await?;
-        let fee_public = PublicKey::from_secret(secret);
         let (fee_call, fee_proofs, fee_secrets) =
-            self.append_fee_call(&tx, fee_public, &tree, &fee_pk, &fee_zkbin, None).await?;
+            self.append_fee_call(&tx, &tree, &fee_pk, &fee_zkbin, None).await?;
 
         // Append the fee call to the transaction
         tx_builder.append(ContractCallLeaf { call: fee_call, proofs: fee_proofs }, vec![])?;
@@ -390,10 +388,8 @@ impl Drk {
         tx.signatures.push(sigs);
 
         let tree = self.get_money_tree().await?;
-        let secret = self.default_secret().await?;
-        let fee_public = PublicKey::from_secret(secret);
         let (fee_call, fee_proofs, fee_secrets) =
-            self.append_fee_call(&tx, fee_public, &tree, &fee_pk, &fee_zkbin, None).await?;
+            self.append_fee_call(&tx, &tree, &fee_pk, &fee_zkbin, None).await?;
 
         // Append the fee call to the transaction
         tx_builder.append(ContractCallLeaf { call: fee_call, proofs: fee_proofs }, vec![])?;

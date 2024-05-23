@@ -143,9 +143,8 @@ impl Drk {
         let sigs = tx.create_sigs(&secrets.signature_secrets)?;
         tx.signatures.push(sigs);
 
-        let (fee_call, fee_proofs, fee_secrets) = self
-            .append_fee_call(&tx, keypair.public, &tree, &fee_pk, &fee_zkbin, Some(&spent_coins))
-            .await?;
+        let (fee_call, fee_proofs, fee_secrets) =
+            self.append_fee_call(&tx, &tree, &fee_pk, &fee_zkbin, Some(&spent_coins)).await?;
 
         // Append the fee call to the transaction
         tx_builder.append(ContractCallLeaf { call: fee_call, proofs: fee_proofs }, vec![])?;
