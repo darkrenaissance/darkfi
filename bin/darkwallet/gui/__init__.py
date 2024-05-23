@@ -441,7 +441,7 @@ def draw():
         False, True, 1, 0.0, None, []
     )
     api.add_property(node_id, prop)
-    api.set_property_f32(node_id, "font_size", 0, 80)
+    api.set_property_f32(node_id, "font_size", 0, 30)
 
     prop = Property(
         "text", PropertyType.STR, PropertySubType.NULL,
@@ -450,9 +450,7 @@ def draw():
         False, False, 1, None, None, []
     )
     api.add_property(node_id, prop)
-    api.set_property_str(node_id, "text", 0, "hihi 😁")
-    #api.set_property_str(node_id, "text", 0, "hello! jelly 🍆")
-    #api.set_property_str(node_id, "text", 0, "hello! jelly")
+    api.set_property_str(node_id, "text", 0, "hello!😁jelly 🍆1234")
 
     prop = Property(
         "color", PropertyType.FLOAT32, PropertySubType.COLOR,

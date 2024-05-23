@@ -107,7 +107,7 @@ struct Stage<'a> {
     scene_graph: SceneGraphPtr,
 
     textures: ResourceManager<TextureId>,
-    ft_face: ft::Face<&'a [u8]>,
+    font_faces: Vec<ft::Face<&'a [u8]>>,
 
     method_recvr: mpsc::Receiver<(GraphicsMethodEvent, SceneNodeId, Vec<u8>, MethodResponseFn)>,
     method_sender: mpsc::SyncSender<(GraphicsMethodEvent, SceneNodeId, Vec<u8>, MethodResponseFn)>,
@@ -165,17 +165,23 @@ impl<'a> Stage<'a> {
 
         let (method_sender, method_recvr) = mpsc::sync_channel(100);
 
-        let font_data = include_bytes!("../Inter-Regular.otf") as &[u8];
-        //let font_data = include_bytes!("../NotoColorEmoji.ttf") as &[u8];
         let ftlib = ft::Library::init().unwrap();
+        let mut font_faces = vec![];
+
+        let font_data = include_bytes!("../Inter-Regular.otf") as &[u8];
         let ft_face = ftlib.new_memory_face2(font_data, 0).unwrap();
+        font_faces.push(ft_face);
+
+        let font_data = include_bytes!("../NotoColorEmoji.ttf") as &[u8];
+        let ft_face = ftlib.new_memory_face2(font_data, 0).unwrap();
+        font_faces.push(ft_face);
 
         let mut stage = Stage {
             ctx,
             pipeline,
             scene_graph,
             textures,
-            ft_face,
+            font_faces,
             method_recvr,
             method_sender,
             last_draw_time: None,
@@ -338,7 +344,7 @@ struct RenderContext<'a> {
     pipeline: &'a Pipeline,
     proj: glam::Mat4,
     textures: &'a ResourceManager<TextureId>,
-    ft_face: &'a ft::Face<&'a [u8]>,
+    font_faces: &'a Vec<ft::Face<&'a [u8]>>,
 }
 
 impl<'a> RenderContext<'a> {
@@ -648,106 +654,172 @@ impl<'a> RenderContext<'a> {
 
         self.ctx.apply_uniforms_from_bytes(uniforms_data.as_ptr(), uniforms_data.len());
 
-        self.ft_face.set_char_size(font_size as isize * 64, 0, 72, 72).unwrap();
-        // emojis required a fixed size
-        //self.ft_face.set_char_size(109 * 64, 0, 72, 72).unwrap();
+        //let mut strings = vec![];
+        //let mut current_str = String::new();
+        //let mut current_idx = 0;
+        //for chr in text.chars() {
+        //    let ft_face = self.font_faces[current_idx];
+        //    if ft_face.get_char_index(chr as usize).is_some() {
+        //    }
+        //}
 
-        let hb_font = harfbuzz_rs::Font::from_freetype_face(self.ft_face.clone());
-        let buffer = harfbuzz_rs::UnicodeBuffer::new().add_str(&text);
-        let output = harfbuzz_rs::shape(&hb_font, buffer, &[]);
+        let mut current_idx = 0;
+        let mut current_str = String::new();
+        let mut substrs = vec![];
+        'next_char: for chr in text.chars() {
+            let idx = 'get_idx: {
+                for i in 0..self.font_faces.len() {
+                    let ft_face = &self.font_faces[i];
+                    if ft_face.get_char_index(chr as usize).is_some() {
+                        break 'get_idx i
+                    }
+                }
 
-        let positions = output.get_glyph_positions();
-        let infos = output.get_glyph_infos();
+                warn!("no font fallback for char: {}", chr);
+                // Skip this char
+                continue 'next_char
+            };
+            if current_idx != idx {
+                if !current_str.is_empty() {
+                    // Push
+                    substrs.push((current_idx, current_str.clone()));
+                }
+
+                current_str.clear();
+                current_idx = idx;
+            }
+            current_str.push(chr);
+        }
+        if !current_str.is_empty() {
+            // Push
+            substrs.push((current_idx, current_str));
+        }
 
         let mut current_x = 0.;
         let mut current_y = 0.;
-        for (position, info) in positions.iter().zip(infos) {
-            let gid = info.codepoint;
 
-            self.ft_face.load_glyph(gid, ft::face::LoadFlag::COLOR).unwrap();
-
-            let glyph = self.ft_face.glyph();
-            glyph.render_glyph(ft::RenderMode::Normal).unwrap();
-
-            // https://gist.github.com/jokertarot/7583938?permalink_comment_id=3327566#gistcomment-3327566
-
-            let bmp = glyph.bitmap();
-            let buffer = bmp.buffer();
-            let width = bmp.width();
-            let height = bmp.rows();
-            let bearing_x = glyph.bitmap_left() as f32;
-            let bearing_y = glyph.bitmap_top() as f32;
-
-            //assert_eq!(bmp.pixel_mode().unwrap(), ft::bitmap::PixelMode::Bgra);
-            //assert_eq!(bmp.pixel_mode().unwrap(), ft::bitmap::PixelMode::Lcd);
-            //assert_eq!(bmp.pixel_mode().unwrap(), ft::bitmap::PixelMode::Gray);
-
-            let pixel_mode = bmp.pixel_mode().unwrap();
-            let tdata = match pixel_mode {
-                ft::bitmap::PixelMode::Bgra => {
-                    let mut tdata = vec![];
-                    tdata.resize((4 * width * height) as usize, 0);
-                    // Convert from BGRA to RGBA
-                    for i in 0..(width*height) as usize {
-                        let idx = i*4;
-                        let b = buffer[idx];
-                        let g = buffer[idx + 1];
-                        let r = buffer[idx + 2];
-                        let a = buffer[idx + 3];
-                        tdata[idx] = r;
-                        tdata[idx + 1] = g;
-                        tdata[idx + 2] = b;
-                        tdata[idx + 3] = a;
-                    }
-                    tdata
-                }
-                ft::bitmap::PixelMode::Gray => {
-                    // Convert from greyscale to RGBA8
-                    let tdata: Vec<_> = buffer
-                        .iter()
-                        .flat_map(|coverage| {
-                            let r = (255. * color_r) as u8;
-                            let g = (255. * color_g) as u8;
-                            let b = (255. * color_b) as u8;
-                            let α = ((*coverage as f32) * color_a) as u8;
-                            vec![r, g, b, α]
-                        })
-                        .collect();
-                    tdata
-                }
-                _ => panic!("unsupport pixel mode: {:?}", pixel_mode)
-            };
-
-            let off_x = position.x_offset as f32 / 64.;
-            let off_y = position.y_offset as f32 / 64.;
-
-            let x1 = current_x + off_x + bearing_x;
-            let y1 = current_y - off_y - bearing_y;
-            let x2 = x1 + width as f32;
-            let y2 = y1 + height as f32;
-
-            let x_advance = position.x_advance as f32 / 64.;
-            let y_advance = position.y_advance as f32 / 64.;
-            current_x += x_advance;
-            current_y += y_advance;
-
-            //println!("(s0, t0) = ({}, {}),  (s1, t1) = ({}, {})", s0, t0, s1, t1);
-            //println!("(xa, ya) = ({}, {}),  (xo, yo) = ({}, {})", x_advance, y_advance, off_x, off_y);
-            //println!("(bx, by) = ({}, {})", bearing_x, bearing_y);
-            //println!("(w, h)   = ({}, {})", width, height);
-            //println!("(x1, y1) = ({}, {}),  (x2, y2) = ({}, {})", x1, y1, x2, y2);
-            //println!();
-
-            let texture = self.ctx.new_texture_from_rgba8(width as u16, height as u16, &tdata);
-            self.render_box_with_texture(x1, y1, x2, y2, COLOR_WHITE, texture);
-            self.ctx.delete_texture(texture);
-
-            if debug {
-                self.outline(x1, y1, x2, y2, COLOR_BLUE, 1.);
+        for (face_idx, text) in substrs {
+            let face = &self.font_faces[face_idx];
+            if face.has_fixed_sizes() {
+                // emojis required a fixed size
+                //face.set_char_size(109 * 64, 0, 72, 72).unwrap();
+                face.select_size(0).unwrap();
+            } else {
+                face.set_char_size(font_size as isize * 64, 0, 72, 72).unwrap();
             }
-        }
-        if debug {
-            self.hline(0., current_x, 0., COLOR_RED, 1.);
+
+            let hb_font = harfbuzz_rs::Font::from_freetype_face(face.clone());
+            let buffer = harfbuzz_rs::UnicodeBuffer::new().add_str(&text);
+            let output = harfbuzz_rs::shape(&hb_font, buffer, &[]);
+
+            let positions = output.get_glyph_positions();
+            let infos = output.get_glyph_infos();
+
+            for (position, info) in positions.iter().zip(infos) {
+                let gid = info.codepoint;
+
+                let mut flags = ft::face::LoadFlag::DEFAULT;
+                if face.has_color() {
+                    flags |= ft::face::LoadFlag::COLOR;
+                }
+                face.load_glyph(gid, flags).unwrap();
+
+                let glyph = face.glyph();
+                glyph.render_glyph(ft::RenderMode::Normal).unwrap();
+
+                // https://gist.github.com/jokertarot/7583938?permalink_comment_id=3327566#gistcomment-3327566
+
+                let bmp = glyph.bitmap();
+                let buffer = bmp.buffer();
+                let bmp_width = bmp.width() as usize;
+                let bmp_height = bmp.rows() as usize;
+                let bearing_x = glyph.bitmap_left() as f32;
+                let bearing_y = glyph.bitmap_top() as f32;
+
+                //assert_eq!(bmp.pixel_mode().unwrap(), ft::bitmap::PixelMode::Bgra);
+                //assert_eq!(bmp.pixel_mode().unwrap(), ft::bitmap::PixelMode::Lcd);
+                //assert_eq!(bmp.pixel_mode().unwrap(), ft::bitmap::PixelMode::Gray);
+
+                let pixel_mode = bmp.pixel_mode().unwrap();
+                let tdata = match pixel_mode {
+                    ft::bitmap::PixelMode::Bgra => {
+                        let mut tdata = vec![];
+                        tdata.resize(4 * bmp_width * bmp_height, 0);
+                        // Convert from BGRA to RGBA
+                        for i in 0..bmp_width*bmp_height as usize {
+                            let idx = i*4;
+                            let b = buffer[idx];
+                            let g = buffer[idx + 1];
+                            let r = buffer[idx + 2];
+                            let a = buffer[idx + 3];
+                            tdata[idx] = r;
+                            tdata[idx + 1] = g;
+                            tdata[idx + 2] = b;
+                            tdata[idx + 3] = a;
+                        }
+                        tdata
+                    }
+                    ft::bitmap::PixelMode::Gray => {
+                        // Convert from greyscale to RGBA8
+                        let tdata: Vec<_> = buffer
+                            .iter()
+                            .flat_map(|coverage| {
+                                let r = (255. * color_r) as u8;
+                                let g = (255. * color_g) as u8;
+                                let b = (255. * color_b) as u8;
+                                let α = ((*coverage as f32) * color_a) as u8;
+                                vec![r, g, b, α]
+                            })
+                            .collect();
+                        tdata
+                    }
+                    _ => panic!("unsupport pixel mode: {:?}", pixel_mode)
+                };
+
+                let (x1, y1, x2, y2) = if face.has_fixed_sizes() {
+                    // Downscale by height
+                    let width = (bmp_width as f32 * font_size) / bmp_height as f32;
+                    let height = font_size;
+
+                    let x1 = current_x;
+                    let y1 = current_y - height;
+
+                    let x2 = current_x + width;
+                    let y2 = current_y;
+
+                    current_x += width;
+
+                    (x1, y1, x2, y2)
+                } else {
+                    let (width, height) = (bmp_width as f32, bmp_height as f32);
+
+                    let off_x = position.x_offset as f32 / 64.;
+                    let off_y = position.y_offset as f32 / 64.;
+
+                    let x1 = current_x + off_x + bearing_x;
+                    let y1 = current_y - off_y - bearing_y;
+                    let x2 = x1 + width as f32;
+                    let y2 = y1 + height as f32;
+
+                    let x_advance = position.x_advance as f32 / 64.;
+                    let y_advance = position.y_advance as f32 / 64.;
+                    current_x += x_advance;
+                    current_y += y_advance;
+
+                    (x1, y1, x2, y2)
+                };
+
+                let texture = self.ctx.new_texture_from_rgba8(bmp_width as u16, bmp_height as u16, &tdata);
+                self.render_box_with_texture(x1, y1, x2, y2, COLOR_WHITE, texture);
+                self.ctx.delete_texture(texture);
+
+                if debug {
+                    self.outline(x1, y1, x2, y2, COLOR_BLUE, 1.);
+                }
+            }
+            if debug {
+                self.hline(0., current_x, 0., COLOR_RED, 1.);
+            }
         }
 
         Ok(())
@@ -809,7 +881,7 @@ impl<'a> EventHandler for Stage<'a> {
             pipeline: &self.pipeline,
             proj,
             textures: &self.textures,
-            ft_face: &self.ft_face,
+            font_faces: &self.font_faces,
         };
 
         render_context.render_window();

@@ -10,9 +10,10 @@ edition = "2021"
 [dependencies]
 #miniquad = "0.4.0-alpha"
 miniquad = { git = "https://github.com/not-fl3/miniquad" }
-#harfbuzz_rs = "2.0.1"
 harfbuzz_rs = { git = "https://github.com/narodnik/harfbuzz_rs.git", features = ["freetype"] }
-freetype-rs = "0.36.0"
+freetype-rs = { git = "https://github.com/narodnik/freetype-rs.git" }
+#harfbuzz_rs = "2.0.1"
+#freetype-rs = "0.36.0"
 freetype-sys = "0.20.1"
 image = "0.24"
 log = "0.4.19"
@@ -25,6 +26,12 @@ smol = "1.3.0"
 atomic_float = "0.1.0"
 
 rustpython-vm = "0.3.1"
+
+#[patch."https://github.com/narodnik/harfbuzz_rs.git"]
+#freetype-rs = { path = "/tmp/freetype-rs/" }
+
+[patch.crates-io]
+freetype-rs = { git = "https://github.com/narodnik/freetype-rs.git" }
 
 [target.'cfg(target_os = "android")'.dependencies]
 android_logger = "0.13"
