@@ -85,6 +85,8 @@ async fn spawn_node(
         inbound_addrs,
         external_addrs,
         outbound_connections: 2,
+        gold_connect_count: 0,
+        white_connect_percent: 0,
         outbound_peer_discovery_cooloff_time: 2,
         outbound_connect_timeout: 2,
         inbound_connections: usize::MAX,
