@@ -20,7 +20,7 @@ use std::{collections::HashMap, fmt, fs, fs::File, sync::Arc, time::Instant};
 
 use log::{debug, error, info, trace, warn};
 use rand::{prelude::IteratorRandom, rngs::OsRng, Rng};
-use smol::lock::RwLock;
+use smol::lock::{Mutex, RwLock};
 use url::Url;
 
 use super::{settings::SettingsPtr, ChannelPtr};
@@ -796,6 +796,9 @@ pub struct Hosts {
     /// Keeps track of the last time a connection was made.
     pub(in crate::net) last_connection: RwLock<Instant>,
 
+    /// Marker for IPv6 availability
+    pub(in crate::net) ipv6_available: Mutex<bool>,
+
     /// Pointer to configured P2P settings
     settings: SettingsPtr,
 }
@@ -809,6 +812,7 @@ impl Hosts {
             store_subscriber: Subscriber::new(),
             channel_subscriber: Subscriber::new(),
             last_connection: RwLock::new(Instant::now()),
+            ipv6_available: Mutex::new(true),
             settings,
         })
     }
@@ -1030,6 +1034,22 @@ impl Hosts {
         false
     }
 
+    /// Check whether a URL is IPV6
+    pub async fn is_ipv6(&self, url: Url) -> bool {
+        // Reject Urls without host strings.
+        if url.host_str().is_none() {
+            return false
+        }
+
+        // We do this hack in order to parse IPs properly.
+        // https://github.com/whatwg/url/issues/749
+        let addr = Url::parse(&url.as_str().replace(url.scheme(), "http")).unwrap();
+        if let url::Host::Ipv6(_) = addr.host().unwrap() {
+            return true
+        }
+        false
+    }
+
     /// Import blacklisted peers specified in the config file.
     pub(in crate::net) async fn import_blacklist(&self) -> Result<()> {
         for (mut host, ports) in self.settings.blacklist.clone() {
@@ -1060,7 +1080,7 @@ impl Hosts {
     }
 
     /// Filter given addresses based on certain rulesets and validity. Strictly called only on
-    /// the first time learning of a new peer.
+    /// the first time learning of new peers.
     async fn filter_addresses(
         &self,
         settings: SettingsPtr,
@@ -1069,6 +1089,7 @@ impl Hosts {
         debug!(target: "net::hosts::filter_addresses()", "Filtering addrs: {:?}", addrs);
         let mut ret = vec![];
         let localnet = self.settings.localnet;
+        let ipv6_available = *self.ipv6_available.lock().await;
 
         'addr_loop: for (addr_, last_seen) in addrs {
             // Validate that the format is `scheme://host_str:port`
@@ -1157,10 +1178,13 @@ impl Hosts {
                 _ => continue,
             }
 
-            // Store this peer on Dark list if we do not support this transport.
+            // Store this peer on Dark list if we do not support this transport
+            // or if this peer is IPV6 and we do not support IPV6.
             // We will personally ignore this peer but still send it to others in
             // Protocol Addr to ensure all transports get propagated.
-            if !settings.allowed_transports.contains(&addr_.scheme().to_string()) {
+            if !settings.allowed_transports.contains(&addr_.scheme().to_string()) ||
+                (!ipv6_available && self.is_ipv6(addr_.clone()).await)
+            {
                 self.container.store_or_update(HostColor::Dark, addr_.clone(), *last_seen).await;
 
                 continue
@@ -1313,6 +1337,34 @@ mod tests {
             ];
             for host in remote_hosts {
                 assert!(!hosts.is_local_host(host).await)
+            }
+        });
+    }
+
+    #[test]
+    fn test_is_ipv6() {
+        smol::block_on(async {
+            let settings = Settings { ..Default::default() };
+            let hosts = Hosts::new(Arc::new(settings.clone()));
+
+            let ipv6_hosts: Vec<Url> = vec![
+                Url::parse("tcp+tls://[::1]").unwrap(),
+                Url::parse("tcp://[2001:0000:130F:0000:0000:09C0:876A:130B]").unwrap(),
+                Url::parse("tcp://[2345:0425:2CA1:0000:0000:0567:5673:23b5]").unwrap(),
+            ];
+
+            let ipv4_hosts: Vec<Url> = vec![
+                Url::parse("tcp://192.168.10.65").unwrap(),
+                Url::parse("https://dyne.org").unwrap(),
+                Url::parse("tcp+tls://agorism.xyz").unwrap(),
+            ];
+
+            for host in ipv6_hosts {
+                assert!(hosts.is_ipv6(host).await)
+            }
+
+            for host in ipv4_hosts {
+                assert!(!hosts.is_ipv6(host).await)
             }
         });
     }

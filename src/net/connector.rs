@@ -102,9 +102,9 @@ impl Connector {
             Either::Left((Err(e), _)) => {
                 // If we get ENETUNREACH, we don't have IPv6 connectivity so note it down.
                 if e.raw_os_error() == Some(libc::ENETUNREACH) {
-                    *self.session.upgrade().unwrap().p2p().ipv6_available.lock().await = false;
+                    *self.session.upgrade().unwrap().p2p().hosts().ipv6_available.lock().await =
+                        false;
                 }
-
                 Err(e.into())
             }
 

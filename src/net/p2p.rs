@@ -63,8 +63,6 @@ pub struct P2p {
     session_refine: RefineSessionPtr,
     /// Reference to configured [`SeedSyncSession`]
     session_seedsync: SeedSyncSessionPtr,
-    /// Marker for IPv6 availability
-    pub(in crate::net) ipv6_available: Mutex<bool>,
     /// Enable network debugging
     pub dnet_enabled: Mutex<bool>,
     /// The subscriber for which we can give dnet info over
@@ -94,7 +92,6 @@ impl P2p {
             session_refine: RefineSession::new(),
             session_seedsync: SeedSyncSession::new(),
 
-            ipv6_available: Mutex::new(true),
             dnet_enabled: Mutex::new(false),
             dnet_subscriber: Subscriber::new(),
         });
