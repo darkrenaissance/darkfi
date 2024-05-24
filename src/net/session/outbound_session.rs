@@ -150,19 +150,6 @@ impl Session for OutboundSession {
     }
 }
 
-#[repr(u8)]
-#[derive(Clone, Debug)]
-enum SlotPreference {
-    /// Highest preference that corresponds to the `gold_connect_count` and
-    /// `white_count_count` preferences configured in Settings.
-    First = 0,
-    /// Reduced preference in case we don't have sufficient hosts to satisfy
-    /// our highest preference.
-    Second = 1,
-    /// Lowest preference if we still haven't been able to find a host.
-    Last = 2,
-}
-
 struct Slot {
     slot: u32,
     process: StoppableTaskPtr,
@@ -209,25 +196,18 @@ impl Slot {
     /// Address selection algorithm that works as follows: up to
     /// gold_count, select from the goldlist. Up to white_count,
     /// select from the whitelist. For all other slots, select from
-    /// the greylist (this is SlotPreference::First).
-    ///
-    /// If we didn't find an address with this selection logic, downgrade
-    /// SlotPreference to Second. Up to gold_count, select from the
-    /// whitelist, up until white_count, select from the greylist.
-    ///
-    /// If we still didn't find an address, downgrade SlotPreference to Last
-    /// and select from the greylist. In all other cases, return an empty
-    /// vector. This will trigger fetch_addrs() to return None and initiate
+    /// the greylist. If none of these preferences are satisfied, do
     /// peer discovery.
     ///
     /// Selecting from the greylist for some % of the slots is necessary
     /// and healthy since we require the network retains some unreliable
     /// connections. A network that purely favors uptime over unreliable
     /// connections may be vulnerable to sybil by attackers with good uptime.
-    async fn fetch_addrs_with_preference(&self, preference: SlotPreference) -> Vec<(Url, u64)> {
+    async fn fetch_addrs(&self) -> Option<(Url, u64)> {
+        let hosts = self.p2p().hosts();
         let slot = self.slot as usize;
         let settings = self.p2p().settings();
-        let hosts = &self.p2p().hosts().container;
+        let container = &self.p2p().hosts().container;
 
         let white_count = (settings.white_connect_percent * settings.outbound_connections) / 100;
         let gold_count = settings.gold_connect_count;
@@ -235,71 +215,14 @@ impl Slot {
         let transports = &settings.allowed_transports;
         let transport_mixing = settings.transport_mixing;
 
-        debug!(target: "net::outbound_session::fetch_addrs_with_preference()",
-        "slot={}, preference={:?}", slot, preference);
-
-        // TODO: FIXME
-        // This address selection algorithm needs more thought.
-        // If we only have a white and gold list, and the slot number is 9,
-        // slot 9 will never find a host to connect to.
-        match preference {
-            SlotPreference::First => {
-                if slot < gold_count {
-                    hosts.fetch(HostColor::Gold, transports, transport_mixing).await
-                } else if slot < white_count {
-                    hosts.fetch(HostColor::White, transports, transport_mixing).await
-                } else {
-                    hosts.fetch(HostColor::Grey, transports, transport_mixing).await
-                }
-            }
-            SlotPreference::Second => {
-                if slot < gold_count {
-                    hosts.fetch(HostColor::White, transports, transport_mixing).await
-                } else if slot < white_count {
-                    hosts.fetch(HostColor::Grey, transports, transport_mixing).await
-                } else {
-                    vec![]
-                }
-            }
-            SlotPreference::Last => {
-                if slot < gold_count {
-                    hosts.fetch(HostColor::Grey, transports, transport_mixing).await
-                } else {
-                    vec![]
-                }
-            }
-        }
-    }
-
-    // Fetch an address we can connect to acccording to the white and gold connection counts
-    // configured in Settings.
-    async fn fetch_addrs(&self) -> Option<(Url, u64)> {
-        let hosts = self.p2p().hosts();
-
-        // First select an addresses that match our white and gold requirements configured in
-        // Settings.
-        let addrs = self.fetch_addrs_with_preference(SlotPreference::First).await;
-
-        if !addrs.is_empty() {
-            return hosts.check_addrs(addrs).await;
-        }
-
-        // If no addresses were returned, go for the second best thing (white and grey).
-        let addrs = self.fetch_addrs_with_preference(SlotPreference::Second).await;
-
-        if !addrs.is_empty() {
-            return hosts.check_addrs(addrs).await;
-        }
-
-        // If we still have no addresses, go for the least favored option.
-        let addrs = self.fetch_addrs_with_preference(SlotPreference::Last).await;
-
-        if !addrs.is_empty() {
-            return hosts.check_addrs(addrs).await;
-        }
-
-        // If we still don't have an address, return None and do peer discovery.
-        None
+        let addrs = if slot < gold_count {
+            container.fetch(HostColor::Gold, transports, transport_mixing).await
+        } else if slot < white_count {
+            container.fetch(HostColor::White, transports, transport_mixing).await
+        } else {
+            container.fetch(HostColor::Grey, transports, transport_mixing).await
+        };
+        return hosts.check_addrs(addrs).await
     }
 
     // We first try to make connections to the addresses on our gold list. We then find some
