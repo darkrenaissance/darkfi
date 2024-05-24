@@ -222,7 +222,7 @@ impl Slot {
         } else {
             container.fetch(HostColor::Grey, transports, transport_mixing).await
         };
-        return hosts.check_addrs(addrs).await
+        hosts.check_addrs(addrs).await
     }
 
     // We first try to make connections to the addresses on our gold list. We then find some
