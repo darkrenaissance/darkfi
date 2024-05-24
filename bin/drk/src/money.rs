@@ -99,7 +99,6 @@ pub const MONEY_COINS_COL_COIN_BLIND: &str = "coin_blind";
 pub const MONEY_COINS_COL_VALUE_BLIND: &str = "value_blind";
 pub const MONEY_COINS_COL_TOKEN_BLIND: &str = "token_blind";
 pub const MONEY_COINS_COL_SECRET: &str = "secret";
-pub const MONEY_COINS_COL_NULLIFIER: &str = "nullifier";
 pub const MONEY_COINS_COL_LEAF_POSITION: &str = "leaf_position";
 pub const MONEY_COINS_COL_MEMO: &str = "memo";
 pub const MONEY_COINS_COL_SPENT_TX_HASH: &str = "spent_tx_hash";
@@ -809,7 +808,7 @@ impl Drk {
         // This is the SQL query we'll be executing to insert new coins
         // into the wallet
         let query = format!(
-            "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13);",
+            "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12);",
             *MONEY_COINS_TABLE,
             MONEY_COINS_COL_COIN,
             MONEY_COINS_COL_IS_SPENT,
@@ -821,7 +820,6 @@ impl Drk {
             MONEY_COINS_COL_VALUE_BLIND,
             MONEY_COINS_COL_TOKEN_BLIND,
             MONEY_COINS_COL_SECRET,
-            MONEY_COINS_COL_NULLIFIER,
             MONEY_COINS_COL_LEAF_POSITION,
             MONEY_COINS_COL_MEMO,
         );
@@ -840,7 +838,6 @@ impl Drk {
                 serialize_async(&owncoin.note.value_blind).await,
                 serialize_async(&owncoin.note.token_blind).await,
                 serialize_async(&owncoin.secret).await,
-                serialize_async(&owncoin.nullifier()).await,
                 serialize_async(&owncoin.leaf_position).await,
                 serialize_async(&owncoin.note.memo).await,
             ];
