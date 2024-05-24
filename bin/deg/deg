@@ -203,7 +203,11 @@ class App(object):
                 parents = list(dag.predecessors(node))
                 pattern = r'\\x[0-9A-Fa-f]{2}'
                 decoded_str = str(base58.b58decode(content))
-                matches = re.sub(pattern, ' ', decoded_str).replace("b'", "")[:-1]
+                y = re.sub(pattern, ' ', decoded_str)
+                if y.startswith("b'"):
+                    matches = y.replace("b'", "")[:-1]
+                elif y.startswith('b"'):
+                    matches = y.replace('b"', "")[:-1]
                 
                 l.append({"layer":f"{layer}", "hash":f"{node}", "children":children, "parents":parents, "content":f"{matches}", "timestamp": f"{timestamp}"})
 
