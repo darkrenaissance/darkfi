@@ -349,8 +349,9 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     info!("Stopping IRC server");
     irc_task.stop().await;
 
-    info!("Flushing sled");
-    sled_db.flush_async().await?;
+    info!("Flushing sled database...");
+    let flushed_bytes = sled_db.flush_async().await?;
+    info!("Flushed {} bytes", flushed_bytes);
 
     info!("Shut down successfully");
     Ok(())
