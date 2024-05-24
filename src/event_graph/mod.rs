@@ -558,7 +558,7 @@ impl EventGraph {
             // Add the event to the overlay
             overlay.insert(event_id.as_bytes(), &event_se)?;
 
-            replayer_log("insert".to_owned(), event_id, event_se).unwrap();
+            replayer_log("insert".to_owned(), event_se).unwrap();
 
             // Note down the event ID to return
             ids.push(event_id);

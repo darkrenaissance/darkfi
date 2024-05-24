@@ -20,7 +20,6 @@ use std::{
     collections::HashMap,
     fs::{File, OpenOptions},
     io::Write,
-    str::FromStr,
     time::UNIX_EPOCH,
 };
 
@@ -132,16 +131,16 @@ pub(super) fn generate_genesis(days_rotation: u64) -> Event {
     }
 }
 
-pub(super) fn replayer_log(cmd: String, key: blake3::Hash, value: Vec<u8>) -> Result<()> {
+pub(super) fn replayer_log(cmd: String, value: Vec<u8>) -> Result<()> {
     let mut replayer_log_file = expand_path("/tmp")?;
-    replayer_log_file.push("replayer_log.log");
+    replayer_log_file.push("replayer.log");
     if !replayer_log_file.exists() {
         File::create(&replayer_log_file)?;
     };
 
     let mut file = OpenOptions::new().append(true).open(&replayer_log_file)?;
     let v = base64::encode(&value);
-    let f = format!("{cmd} {key} {v}");
+    let f = format!("{cmd} {v}");
     writeln!(file, "{}", f)?;
 
     Ok(())
@@ -149,7 +148,7 @@ pub(super) fn replayer_log(cmd: String, key: blake3::Hash, value: Vec<u8>) -> Re
 
 pub async fn recreate_from_replayer_log() -> JsonResult {
     let mut replayer_log_file = expand_path("/tmp").unwrap();
-    replayer_log_file.push("replayer_log.log");
+    replayer_log_file.push("replayer.log");
     if !replayer_log_file.exists() {
         error!("Error loading replaied log");
         return JsonResult::Error(JsonError::new(
@@ -168,11 +167,10 @@ pub async fn recreate_from_replayer_log() -> JsonResult {
     for line in reader.lines() {
         let line = line.split(' ').collect::<Vec<&str>>();
         if line[0] == "insert" {
-            let h = blake3::Hash::from_str(line[1]).unwrap();
-            let v = base64::decode(line[2]).unwrap();
+            let v = base64::decode(line[1]).unwrap();
             let v: Event = deserialize(&v).unwrap();
             let v_se = serialize(&v);
-            dag.insert(h.as_bytes(), v_se).unwrap();
+            dag.insert(v.id().as_bytes(), v_se).unwrap();
         }
     }
 
