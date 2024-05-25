@@ -223,8 +223,8 @@ macro_rules! async_daemonize {
             term_rx: smol::channel::Receiver<()>,
             /// Signals handle
             handle: signal_hook_async_std::Handle,
-            /// SIGHUP subscriber to retrieve new configuration,
-            sighup_sub: darkfi::system::SubscriberPtr<Args>,
+            /// SIGHUP publisher to retrieve new configuration,
+            sighup_pub: darkfi::system::PublisherPtr<Args>,
         }
 
         impl SignalHandler {
@@ -239,10 +239,10 @@ macro_rules! async_daemonize {
                     signal_hook::consts::SIGQUIT,
                 ])?;
                 let handle = signals.handle();
-                let sighup_sub = darkfi::system::Subscriber::new();
-                let signals_task = ex.spawn(handle_signals(signals, term_tx, sighup_sub.clone()));
+                let sighup_pub = darkfi::system::Publisher::new();
+                let signals_task = ex.spawn(handle_signals(signals, term_tx, sighup_pub.clone()));
 
-                Ok((Self { term_rx, handle, sighup_sub }, signals_task))
+                Ok((Self { term_rx, handle, sighup_pub }, signals_task))
             }
 
             /// Handler waits for termination signal
@@ -260,7 +260,7 @@ macro_rules! async_daemonize {
         async fn handle_signals(
             mut signals: signal_hook_async_std::Signals,
             term_tx: smol::channel::Sender<()>,
-            subscriber: darkfi::system::SubscriberPtr<Args>,
+            publisher: darkfi::system::PublisherPtr<Args>,
         ) -> Result<()> {
             while let Some(signal) = signals.next().await {
                 match signal {
@@ -277,7 +277,7 @@ macro_rules! async_daemonize {
                             println!("handle_signals():: Error parsing the config file");
                             continue
                         }
-                        subscriber.notify(args.unwrap()).await;
+                        publisher.notify(args.unwrap()).await;
                     }
                     signal_hook::consts::SIGTERM |
                     signal_hook::consts::SIGINT |

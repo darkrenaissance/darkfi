@@ -24,7 +24,7 @@ use tinyjson::JsonValue;
 
 use crate::{
     error::RpcError,
-    system::{Subscriber, SubscriberPtr},
+    system::{Publisher, PublisherPtr},
     Result,
 };
 
@@ -501,19 +501,19 @@ impl TryFrom<&JsonValue> for JsonError {
 pub struct JsonSubscriber {
     /// Notification method
     pub method: &'static str,
-    /// Notification subscriber
-    pub sub: SubscriberPtr<JsonNotification>,
+    /// Notification publisher
+    pub publisher: PublisherPtr<JsonNotification>,
 }
 
 impl JsonSubscriber {
     pub fn new(method: &'static str) -> Self {
-        let sub = Subscriber::new();
-        Self { method, sub }
+        let publisher = Publisher::new();
+        Self { method, publisher }
     }
 
-    /// Send a notification to the subscriber with the given JSON object
+    /// Send a notification to the publisher with the given JSON object
     pub async fn notify(&self, params: JsonValue) {
         let notification = JsonNotification::new(self.method, params);
-        self.sub.notify(notification).await;
+        self.publisher.notify(notification).await;
     }
 }

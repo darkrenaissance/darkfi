@@ -37,7 +37,7 @@ use super::{
     settings::{Settings, SettingsPtr},
 };
 use crate::{
-    system::{ExecutorPtr, Subscriber, SubscriberPtr, Subscription},
+    system::{ExecutorPtr, Publisher, PublisherPtr, Subscription},
     Result,
 };
 
@@ -66,8 +66,8 @@ pub struct P2p {
     session_seedsync: SeedSyncSessionPtr,
     /// Enable network debugging
     pub dnet_enabled: Mutex<bool>,
-    /// The subscriber for which we can give dnet info over
-    dnet_subscriber: SubscriberPtr<DnetEvent>,
+    /// The publisher for which we can give dnet info over
+    dnet_publisher: PublisherPtr<DnetEvent>,
 }
 
 impl P2p {
@@ -97,7 +97,7 @@ impl P2p {
             session_seedsync: SeedSyncSession::new(),
 
             dnet_enabled: Mutex::new(false),
-            dnet_subscriber: Subscriber::new(),
+            dnet_publisher: Publisher::new(),
         });
 
         self_.session_manual.p2p.init(self_.clone());
@@ -267,11 +267,11 @@ impl P2p {
 
     /// Subscribe to dnet events
     pub async fn dnet_subscribe(&self) -> Subscription<DnetEvent> {
-        self.dnet_subscriber.clone().subscribe().await
+        self.dnet_publisher.clone().subscribe().await
     }
 
-    /// Send a dnet notification over the subscriber
+    /// Send a dnet notification over the publisher
     pub(super) async fn dnet_notify(&self, event: DnetEvent) {
-        self.dnet_subscriber.notify(event).await;
+        self.dnet_publisher.notify(event).await;
     }
 }

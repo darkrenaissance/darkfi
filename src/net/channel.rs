@@ -42,13 +42,13 @@ use super::{
     hosts::HostColor,
     message,
     message::{VersionMessage, MAGIC_BYTES},
-    message_subscriber::{MessageSubscription, MessageSubsystem},
+    message_publisher::{MessageSubscription, MessageSubsystem},
     p2p::P2pPtr,
     session::{Session, SessionBitFlag, SessionWeakPtr, SESSION_ALL, SESSION_REFINE},
     transport::PtStream,
 };
 use crate::{
-    system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription},
+    system::{Publisher, PublisherPtr, StoppableTask, StoppableTaskPtr, Subscription},
     util::time::NanoTimestamp,
     Error, Result,
 };
@@ -79,8 +79,8 @@ pub struct Channel {
     writer: Mutex<WriteHalf<Box<dyn PtStream>>>,
     /// The message subsystem instance for this channel
     message_subsystem: MessageSubsystem,
-    /// Subscriber listening for stop signal for closing this channel
-    stop_subscriber: SubscriberPtr<Error>,
+    /// Publisher listening for stop signal for closing this channel
+    stop_publisher: PublisherPtr<Error>,
     /// Task that is listening for the stop signal
     receive_task: StoppableTaskPtr,
     /// A boolean marking if this channel is stopped
@@ -97,7 +97,7 @@ pub struct Channel {
 
 impl Channel {
     /// Sets up a new channel. Creates a reader and writer [`PtStream`] and
-    /// the message subscriber subsystem. Performs a network handshake on the
+    /// the message publisher subsystem. Performs a network handshake on the
     /// subsystem dispatchers.
     pub async fn new(
         stream: Box<dyn PtStream>,
@@ -120,7 +120,7 @@ impl Channel {
             reader,
             writer,
             message_subsystem,
-            stop_subscriber: Subscriber::new(),
+            stop_publisher: Publisher::new(),
             receive_task: StoppableTask::new(),
             stopped: AtomicBool::new(false),
             session,
@@ -156,7 +156,7 @@ impl Channel {
     }
 
     /// Stops the channel.
-    /// Notifies all subscribers that the channel has been closed in `handle_stop()`.
+    /// Notifies all publishers that the channel has been closed in `handle_stop()`.
     pub async fn stop(&self) {
         debug!(target: "net::channel::stop()", "START {:?}", self);
         self.receive_task.stop().await;
@@ -172,7 +172,7 @@ impl Channel {
             return Err(Error::ChannelStopped)
         }
 
-        let sub = self.stop_subscriber.clone().subscribe().await;
+        let sub = self.stop_publisher.clone().subscribe().await;
 
         debug!(target: "net::channel::subscribe_stop()", "END {:?}", self);
 
@@ -319,7 +319,7 @@ impl Channel {
             Ok(()) => panic!("Channel task should never complete without error status"),
             // Send this error to all channel subscribers
             Err(e) => {
-                self.stop_subscriber.notify(Error::ChannelStopped).await;
+                self.stop_publisher.notify(Error::ChannelStopped).await;
                 self.message_subsystem.trigger_error(e).await;
             }
         }
@@ -370,7 +370,7 @@ impl Channel {
                 time: NanoTimestamp::current_time(),
             });
 
-            // Send result to our subscribers
+            // Send result to our publishers
             match self.message_subsystem.notify(&command, reader).await {
                 Ok(()) => {}
                 // If we're getting messages without dispatchers, it's spam.

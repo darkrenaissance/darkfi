@@ -43,7 +43,7 @@ use crate::{
         util::json_map,
     },
     system::{
-        sleep, timeout::timeout, StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr,
+        sleep, timeout::timeout, Publisher, PublisherPtr, StoppableTask, StoppableTaskPtr,
         Subscription,
     },
     Error, Result,
@@ -104,9 +104,9 @@ pub struct EventGraph {
     broadcasted_ids: RwLock<HashSet<blake3::Hash>>,
     /// DAG Pruning Task
     prune_task: OnceCell<StoppableTaskPtr>,
-    /// Event subscriber, this notifies whenever an event is
+    /// Event publisher, this notifies whenever an event is
     /// inserted into the DAG
-    pub event_sub: SubscriberPtr<Event>,
+    pub event_pub: PublisherPtr<Event>,
     /// Current genesis event
     current_genesis: RwLock<Event>,
     /// Currently configured DAG rotation, in days
@@ -115,8 +115,8 @@ pub struct EventGraph {
     pub synced: RwLock<bool>,
     /// Enable graph debugging
     pub deg_enabled: RwLock<bool>,
-    /// The subscriber for which we can give deg info over
-    deg_subscriber: SubscriberPtr<DegEvent>,
+    /// The publisher for which we can give deg info over
+    deg_publisher: PublisherPtr<DegEvent>,
 }
 
 impl EventGraph {
@@ -134,7 +134,7 @@ impl EventGraph {
         let dag = sled_db.open_tree(dag_tree_name)?;
         let unreferenced_tips = RwLock::new(BTreeMap::new());
         let broadcasted_ids = RwLock::new(HashSet::new());
-        let event_sub = Subscriber::new();
+        let event_pub = Publisher::new();
 
         // Create the current genesis event based on the `days_rotation`
         let current_genesis = generate_genesis(days_rotation);
@@ -146,12 +146,12 @@ impl EventGraph {
             unreferenced_tips,
             broadcasted_ids,
             prune_task: OnceCell::new(),
-            event_sub,
+            event_pub,
             current_genesis: RwLock::new(current_genesis.clone()),
             days_rotation,
             synced: RwLock::new(false),
             deg_enabled: RwLock::new(false),
-            deg_subscriber: Subscriber::new(),
+            deg_publisher: Publisher::new(),
         });
 
         // Check if we have it in our DAG.
@@ -640,7 +640,7 @@ impl EventGraph {
             }
 
             // Send out notifications about the new event
-            self.event_sub.notify(event.clone()).await;
+            self.event_pub.notify(event.clone()).await;
         }
 
         // Drop the exclusive locks
@@ -832,12 +832,12 @@ impl EventGraph {
 
     /// Subscribe to deg events
     pub async fn deg_subscribe(&self) -> Subscription<DegEvent> {
-        self.deg_subscriber.clone().subscribe().await
+        self.deg_publisher.clone().subscribe().await
     }
 
-    /// Send a deg notification over the subscriber
+    /// Send a deg notification over the publisher
     pub async fn deg_notify(&self, event: DegEvent) {
-        self.deg_subscriber.notify(event).await;
+        self.deg_publisher.notify(event).await;
     }
 
     pub async fn eventgraph_info(&self, id: u16, _params: JsonValue) -> JsonResult {

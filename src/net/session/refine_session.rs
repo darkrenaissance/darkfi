@@ -119,7 +119,7 @@ impl RefineSession {
         match connector.connect(&addr).await {
             Ok((url, channel)) => {
                 debug!(target: "net::refinery::handshake_node()", "Successfully created a channel with {}", url);
-                // First initialize the version protocol and its Version, Verack subscribers.
+                // First initialize the version protocol and its Version, Verack subscriptions.
                 let proto_ver = ProtocolVersion::new(channel.clone(), p2p.settings()).await;
 
                 debug!(target: "net::refinery::handshake_node()", "Performing handshake protocols with {}", url);

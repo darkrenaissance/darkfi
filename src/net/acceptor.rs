@@ -35,7 +35,7 @@ use super::{
     transport::{Listener, PtListener},
 };
 use crate::{
-    system::{CondVar, StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription},
+    system::{CondVar, Publisher, PublisherPtr, StoppableTask, StoppableTaskPtr, Subscription},
     Error, Result,
 };
 
@@ -44,7 +44,7 @@ pub type AcceptorPtr = Arc<Acceptor>;
 
 /// Create inbound socket connections
 pub struct Acceptor {
-    channel_subscriber: SubscriberPtr<Result<ChannelPtr>>,
+    channel_publisher: PublisherPtr<Result<ChannelPtr>>,
     task: StoppableTaskPtr,
     session: SessionWeakPtr,
     conn_count: AtomicUsize,
@@ -54,7 +54,7 @@ impl Acceptor {
     /// Create new Acceptor object.
     pub fn new(session: SessionWeakPtr) -> AcceptorPtr {
         Arc::new(Self {
-            channel_subscriber: Subscriber::new(),
+            channel_publisher: Publisher::new(),
             task: StoppableTask::new(),
             session,
             conn_count: AtomicUsize::new(0),
@@ -76,7 +76,7 @@ impl Acceptor {
 
     /// Start receiving network messages.
     pub async fn subscribe(self: Arc<Self>) -> Subscription<Result<ChannelPtr>> {
-        self.channel_subscriber.clone().subscribe().await
+        self.channel_publisher.clone().subscribe().await
     }
 
     /// Run the accept loop in a new thread and error if a connection problem occurs
@@ -147,8 +147,8 @@ impl Acceptor {
                     })
                     .detach();
 
-                    // Finally, notify any subscribers about the new channel.
-                    self.channel_subscriber.notify(Ok(channel)).await;
+                    // Finally, notify any publishers about the new channel.
+                    self.channel_publisher.notify(Ok(channel)).await;
                 }
 
                 // As per accept(2) recommendation:
@@ -223,11 +223,11 @@ impl Acceptor {
     }
 
     /// Handles network errors. Panics if errors pass silently, otherwise broadcasts it
-    /// to all channel subscribers.
+    /// to all channel publishers.
     async fn handle_stop(self: Arc<Self>, result: Result<()>) {
         match result {
             Ok(()) => panic!("Acceptor task should never complete without error status"),
-            Err(err) => self.channel_subscriber.notify(Err(err)).await,
+            Err(err) => self.channel_publisher.notify(Err(err)).await,
         }
     }
 }

@@ -25,7 +25,7 @@ use url::Url;
 
 use super::{settings::SettingsPtr, ChannelPtr};
 use crate::{
-    system::{Subscriber, SubscriberPtr, Subscription},
+    system::{Publisher, PublisherPtr, Subscription},
     util::{
         file::{load_file, save_file},
         path::expand_path,
@@ -777,7 +777,7 @@ impl HostContainer {
 /// Main parent class for the management and manipulation of
 /// hostlists. Keeps track of hosts and their current state via the
 /// HostRegistry, and stores hostlists and associated methods in the
-/// HostContainer. Also operates two subscribers to notify other parts
+/// HostContainer. Also operates two publishers to notify other parts
 /// of the code base when new channels have been created or new hosts
 /// have been added to the hostlist.
 pub struct Hosts {
@@ -787,11 +787,11 @@ pub struct Hosts {
     /// Hostlists and associated methods.
     pub container: HostContainer,
 
-    /// Subscriber listening for store updates
-    store_subscriber: SubscriberPtr<usize>,
+    /// Publisher listening for store updates
+    store_publisher: PublisherPtr<usize>,
 
-    /// Subscriber for notifications of new channels
-    pub(in crate::net) channel_subscriber: SubscriberPtr<Result<ChannelPtr>>,
+    /// Publisher for notifications of new channels
+    pub(in crate::net) channel_publisher: PublisherPtr<Result<ChannelPtr>>,
 
     /// Keeps track of the last time a connection was made.
     pub(in crate::net) last_connection: RwLock<Instant>,
@@ -809,8 +809,8 @@ impl Hosts {
         Arc::new(Self {
             registry: RwLock::new(HashMap::new()),
             container: HostContainer::new(),
-            store_subscriber: Subscriber::new(),
-            channel_subscriber: Subscriber::new(),
+            store_publisher: Publisher::new(),
+            channel_publisher: Publisher::new(),
             last_connection: RwLock::new(Instant::now()),
             ipv6_available: Mutex::new(true),
             settings,
@@ -818,7 +818,7 @@ impl Hosts {
     }
 
     /// Safely insert into the HostContainer. Filters the addresses first before storing and
-    /// notifies the subscriber. Must be called when first receiving greylist addresses.
+    /// notifies the publisher. Must be called when first receiving greylist addresses.
     pub(in crate::net) async fn insert(&self, color: HostColor, addrs: &[(Url, u64)]) {
         trace!(target: "net::hosts:insert()", "[START]");
 
@@ -849,7 +849,7 @@ impl Hosts {
             self.unregister(addr).await;
         }
 
-        self.store_subscriber.notify(addrs_len).await;
+        self.store_publisher.notify(addrs_len).await;
         trace!(target: "net::hosts:insert()", "[END]");
     }
 
@@ -984,18 +984,18 @@ impl Hosts {
         self.try_register(address.clone(), HostState::Connected(channel.clone())).await.unwrap();
 
         // Notify that channel processing was successful
-        self.channel_subscriber.notify(Ok(channel.clone())).await;
+        self.channel_publisher.notify(Ok(channel.clone())).await;
 
         let mut last_online = self.last_connection.write().await;
         *last_online = Instant::now();
     }
 
     pub async fn subscribe_store(&self) -> Subscription<usize> {
-        self.store_subscriber.clone().subscribe().await
+        self.store_publisher.clone().subscribe().await
     }
 
     pub async fn subscribe_channel(&self) -> Subscription<Result<ChannelPtr>> {
-        self.channel_subscriber.clone().subscribe().await
+        self.channel_publisher.clone().subscribe().await
     }
 
     // Verify whether a URL is local.

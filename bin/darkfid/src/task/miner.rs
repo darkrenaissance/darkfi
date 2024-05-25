@@ -93,7 +93,7 @@ pub async fn miner_task(
 
     // Grab proposals subscriber and subscribe to it
     let proposals_sub = node.subscribers.get("proposals").unwrap();
-    let subscription = proposals_sub.sub.clone().subscribe().await;
+    let subscription = proposals_sub.publisher.clone().subscribe().await;
 
     // Listen for blocks until next finalization, for optimal conditions
     if !skip_sync {

@@ -27,7 +27,7 @@ use super::{
         channel::ChannelPtr,
         hosts::{HostColor, HostsPtr},
         message::{AddrsMessage, GetAddrsMessage},
-        message_subscriber::MessageSubscription,
+        message_publisher::MessageSubscription,
         p2p::P2pPtr,
         session::SESSION_OUTBOUND,
         settings::SettingsPtr,

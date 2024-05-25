@@ -29,7 +29,7 @@ use super::{
 };
 use crate::{
     net::transport::{Dialer, PtStream},
-    system::{io_timeout, StoppableTask, StoppableTaskPtr, SubscriberPtr},
+    system::{io_timeout, PublisherPtr, StoppableTask, StoppableTaskPtr},
     Error, Result,
 };
 
@@ -204,7 +204,11 @@ impl RpcClient {
 
     /// Listen instantiated client for notifications.
     /// NOTE: Subscriber listeners must perform response handling.
-    pub async fn subscribe(&self, req: JsonRequest, sub: SubscriberPtr<JsonResult>) -> Result<()> {
+    pub async fn subscribe(
+        &self,
+        req: JsonRequest,
+        publisher: PublisherPtr<JsonResult>,
+    ) -> Result<()> {
         // Perform initial request
         debug!(target: "rpc::client", "--> {}", req.stringify()?);
         let req_id = req.id;
@@ -224,7 +228,7 @@ impl RpcClient {
                 JsonResult::Notification(ref n) => {
                     debug!(target: "rpc::client", "<-- {}", n.stringify()?);
                     self.req_skip_send.send(()).await?;
-                    sub.notify(notification.clone()).await;
+                    publisher.notify(notification.clone()).await;
                     continue
                 }
 

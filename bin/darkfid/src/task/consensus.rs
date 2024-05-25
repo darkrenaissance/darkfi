@@ -107,7 +107,7 @@ pub async fn replicator_task(node: Arc<Darkfid>, ex: Arc<smol::Executor<'static>
 
     // Grab proposals subscriber and subscribe to it
     let proposals_sub = node.subscribers.get("proposals").unwrap();
-    let subscription = proposals_sub.sub.clone().subscribe().await;
+    let subscription = proposals_sub.publisher.clone().subscribe().await;
 
     // Create the garbage collection task using a dummy task
     let gc_task = StoppableTask::new();

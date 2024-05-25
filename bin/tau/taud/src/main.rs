@@ -155,7 +155,7 @@ async fn start_sync_loop(
     last_sent: RwLock<blake3::Hash>,
     seen: OnceLock<sled::Tree>,
 ) -> TaudResult<()> {
-    let incoming = event_graph.event_sub.clone().subscribe().await;
+    let incoming = event_graph.event_pub.clone().subscribe().await;
     let seen_events = seen.get().unwrap();
 
     loop {

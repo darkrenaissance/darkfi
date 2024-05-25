@@ -30,7 +30,7 @@ use super::{
     super::{
         channel::ChannelPtr,
         message::{PingMessage, PongMessage},
-        message_subscriber::MessageSubscription,
+        message_publisher::MessageSubscription,
         p2p::P2pPtr,
         settings::SettingsPtr,
     },

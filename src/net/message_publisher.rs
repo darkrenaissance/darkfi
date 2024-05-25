@@ -33,8 +33,8 @@ pub type MessageSubscriptionId = u64;
 type MessageResult<M> = Result<Arc<M>>;
 
 /// A dispatcher that is unique to every [`Message`].
-/// Maintains a list of subscribers that are subscribed to that
-/// unique Message type and handles sending messages across these
+/// Maintains a list of subscriptions to a unique Message
+/// type and handles sending messages across these
 /// subscriptions.
 #[derive(Debug)]
 struct MessageDispatcher<M: Message> {
@@ -53,7 +53,7 @@ impl<M: Message> MessageDispatcher<M> {
     }
 
     /// Subscribe to a channel.
-    /// Assigns a new ID and adds it to the list of subscribers.
+    /// Assigns a new ID and adds it to the list of subscriptions.
     pub async fn subscribe(self: Arc<Self>) -> MessageSubscription<M> {
         let (sender, recv_queue) = smol::channel::unbounded();
         // Guard against overwriting
@@ -85,7 +85,7 @@ impl<M: Message> MessageDispatcher<M> {
         let mut subs = self.subs.lock().await;
 
         debug!(
-            target: "net::message_subscriber::_trigger_all()", "START msg={}({}), subs={}",
+            target: "net::message_publisher::_trigger_all()", "START msg={}({}), subs={}",
             if message.is_ok() { "Ok" } else {"Err"},
             M::NAME, subs.len(),
         );
@@ -119,7 +119,7 @@ impl<M: Message> MessageDispatcher<M> {
         }
 
         debug!(
-            target: "net::message_subscriber::_trigger_all()", "END msg={}({}), subs={}",
+            target: "net::message_publisher::_trigger_all()", "END msg={}({}), subs={}",
             if message.is_ok() { "Ok" } else { "Err" },
             M::NAME, subs.len(),
         );
@@ -210,7 +210,7 @@ impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
 
                     Err(err) => {
                         error!(
-                            target: "net::message_subscriber::trigger()",
+                            target: "net::message_publisher::trigger()",
                             "Unable to decode data. Dropping...: {}",
                             err,
                         );
@@ -219,7 +219,7 @@ impl<M: Message> MessageDispatcherInterface for MessageDispatcher<M> {
             }
             Err(err) => {
                 error!(
-                    target: "net::message_subscriber::trigger()",
+                    target: "net::message_publisher::trigger()",
                     "Unable to decode VarInt. Dropping...: {}",
                     err,
                 );
@@ -291,8 +291,8 @@ impl MessageSubsystem {
     ) -> Result<()> {
         let Some(dispatcher) = self.dispatchers.lock().await.get(command).cloned() else {
             warn!(
-                target: "net::message_subscriber::notify",
-                "message_subscriber::notify: Command '{}' did not find a dispatcher",
+                target: "net::message_publisher::notify",
+                "message_publisher::notify: Command '{}' did not find a dispatcher",
                 command,
             );
             return Err(Error::MissingDispatcher)

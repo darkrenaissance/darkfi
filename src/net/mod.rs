@@ -31,23 +31,23 @@ pub use message::Message;
 /// Generic publish/subscribe class that can dispatch any kind of message
 /// to a subscribed list of dispatchers. Dispatchers subscribe to a single
 /// message format of any type. This is a generalized version of the simple
-/// publish-subscribe class in system::Subscriber.
+/// publish-subscribe class in system::Publisher.
 ///
 /// Message Subsystem also enables the creation of new message subsystems,
 /// adding new dispatchers and clearing inactive channels.
 ///
 /// Message Subsystem maintains a list of dispatchers, which is a generalized
-/// version of a subscriber. Pub-sub is called on dispatchers through the
-/// functions `subscribe` and `notify`. Whereas system::Subscriber only allows
+/// version of a publisher. Pub-sub is called on dispatchers through the
+/// functions `subscribe` and `notify`. Whereas system::Publisher only allows
 /// messages of a single type, dispatchers can handle any kind of message. This
 /// generic message is called a payload and is processed and decoded by the
 /// Message Dispatcher.
 ///
-/// The Message Dispatcher is a class of subscribers that implement a generic
+/// The Message Dispatcher is a class of publishers that implement a generic
 /// trait called Message Dispatcher Interface, which allows us to process any
 /// kind of payload as a message.
-pub mod message_subscriber;
-pub use message_subscriber::MessageSubscription;
+pub mod message_publisher;
+pub use message_publisher::MessageSubscription;
 
 /// Network transports, holds implementations of pluggable transports.
 /// Exposes agnostic dialers and agnostic listeners.

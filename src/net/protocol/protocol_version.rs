@@ -31,7 +31,7 @@ use smol::{Executor, Timer};
 use super::super::{
     channel::ChannelPtr,
     message::{VerackMessage, VersionMessage},
-    message_subscriber::MessageSubscription,
+    message_publisher::MessageSubscription,
     settings::SettingsPtr,
 };
 use crate::{Error, Result};

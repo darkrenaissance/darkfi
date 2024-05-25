@@ -159,7 +159,7 @@ pub async fn accept(
                 task.clone().start(
                     async move {
                         // Subscribe to the inner method subscriber
-                        let subscription = subscriber.sub.subscribe().await;
+                        let subscription = subscriber.publisher.subscribe().await;
                         loop {
                             // Listen for notifications
                             let notification = subscription.receive().await;
@@ -209,7 +209,7 @@ pub async fn accept(
                 task.clone().start(
                     async move {
                         // Start the subscriber loop
-                        let subscription = subscriber.sub.subscribe().await;
+                        let subscription = subscriber.publisher.subscribe().await;
                         loop {
                             // Listen for notifications
                             let notification = subscription.receive().await;

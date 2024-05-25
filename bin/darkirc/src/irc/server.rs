@@ -202,7 +202,7 @@ impl IrcServer {
                     };
 
                     // Subscribe to incoming events and set up the connection.
-                    let incoming = self.darkirc.event_graph.event_sub.clone().subscribe().await;
+                    let incoming = self.darkirc.event_graph.event_pub.clone().subscribe().await;
                     if let Err(e) = self
                         .clone()
                         .process_connection(stream, peer_addr, incoming, ex.clone())
@@ -216,7 +216,7 @@ impl IrcServer {
                 // Expecting plain TCP connection
                 None => {
                     // Subscribe to incoming events and set up the connection.
-                    let incoming = self.darkirc.event_graph.event_sub.clone().subscribe().await;
+                    let incoming = self.darkirc.event_graph.event_pub.clone().subscribe().await;
                     if let Err(e) = self
                         .clone()
                         .process_connection(stream, peer_addr, incoming, ex.clone())

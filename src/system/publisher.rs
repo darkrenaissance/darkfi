@@ -22,15 +22,15 @@ use log::warn;
 use rand::{rngs::OsRng, Rng};
 use smol::lock::Mutex;
 
-pub type SubscriberPtr<T> = Arc<Subscriber<T>>;
+pub type PublisherPtr<T> = Arc<Publisher<T>>;
 pub type SubscriptionId = usize;
 
 #[derive(Debug)]
-/// Subscription to the Subscriber. Created using `subscriber.subscribe().await`.
+/// Subscription to the Publisher. Created using `publisher.subscribe().await`.
 pub struct Subscription<T> {
     id: SubscriptionId,
     recv_queue: smol::channel::Receiver<T>,
-    parent: Arc<Subscriber<T>>,
+    parent: Arc<Publisher<T>>,
 }
 
 impl<T: Clone> Subscription<T> {
@@ -58,12 +58,12 @@ impl<T: Clone> Subscription<T> {
 
 /// Simple broadcast (publish-subscribe) class.
 #[derive(Debug)]
-pub struct Subscriber<T> {
+pub struct Publisher<T> {
     subs: Mutex<HashMap<SubscriptionId, smol::channel::Sender<T>>>,
 }
 
-impl<T: Clone> Subscriber<T> {
-    /// Construct a new subscriber.
+impl<T: Clone> Publisher<T> {
+    /// Construct a new publisher.
     pub fn new() -> Arc<Self> {
         Arc::new(Self { subs: Mutex::new(HashMap::new()) })
     }
@@ -109,8 +109,8 @@ impl<T: Clone> Subscriber<T> {
 
             if let Err(e) = sub.send(message_result.clone()).await {
                 warn!(
-                    target: "system::subscriber",
-                    "[system::subscriber] Error returned sending message in notify_with_exclude() call! {}", e,
+                    target: "system::publisher",
+                    "[system::publisher] Error returned sending message in notify_with_exclude() call! {}", e,
                 );
             }
         }

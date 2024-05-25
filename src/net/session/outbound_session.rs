@@ -409,7 +409,7 @@ impl Slot {
                 self.p2p().hosts().try_register(addr.clone(), HostState::Suspend).await.unwrap();
 
                 // Notify that channel processing failed
-                self.p2p().hosts().channel_subscriber.notify(Err(Error::ConnectFailed)).await;
+                self.p2p().hosts().channel_publisher.notify(Err(Error::ConnectFailed)).await;
 
                 Err(Error::ConnectFailed)
             }
@@ -592,7 +592,7 @@ impl PeerDiscoveryBase for PeerDiscovery {
 
                 // NOTE: not every call to subscribe() in net/ has a
                 // corresponding unsubscribe(). To do this we need async
-                // Drop. For now it's sufficient for subscribers to be
+                // Drop. For now it's sufficient for publishers to be
                 // de-allocated when the Session completes.
                 store_sub.unsubscribe().await;
             } else {

@@ -27,7 +27,7 @@ use darkfi::{
         jsonrpc::{JsonRequest, JsonResult},
         util::JsonValue,
     },
-    system::{StoppableTask, Subscriber},
+    system::{Publisher, StoppableTask},
     tx::Transaction,
     util::encoding::base64,
     Error, Result,
@@ -76,8 +76,8 @@ impl Drk {
         }
 
         println!("Subscribing to receive notifications of incoming blocks");
-        let subscriber = Subscriber::new();
-        let subscription = subscriber.clone().subscribe().await;
+        let publisher = Publisher::new();
+        let subscription = publisher.clone().subscribe().await;
         let _ex = ex.clone();
         StoppableTask::new().start(
             // Weird hack to prevent lifetimes hell
@@ -85,7 +85,7 @@ impl Drk {
                 let ex = _ex.clone();
                 let rpc_client = RpcClient::new(endpoint, ex).await?;
                 let req = JsonRequest::new("blockchain.subscribe_blocks", JsonValue::Array(vec![]));
-                rpc_client.subscribe(req, subscriber).await
+                rpc_client.subscribe(req, publisher).await
             },
             |res| async move {
                 match res {
