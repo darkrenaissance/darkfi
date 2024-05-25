@@ -721,4 +721,14 @@ impl Validator {
 
         Ok(())
     }
+
+    /// Auxiliary function to retrieve current best fork next block height.
+    pub async fn best_fork_next_block_height(&self) -> Result<u32> {
+        let forks = self.consensus.forks.read().await;
+        let fork = &forks[best_fork_index(&forks)?];
+        let next_block_height = fork.get_next_block_height()?;
+        drop(forks);
+
+        Ok(next_block_height)
+    }
 }

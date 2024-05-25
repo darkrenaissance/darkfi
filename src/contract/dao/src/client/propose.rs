@@ -21,9 +21,12 @@ use darkfi_sdk::{
     bridgetree,
     bridgetree::Hashable,
     crypto::{
-        note::AeadEncryptedNote, pasta_prelude::*, pedersen::pedersen_commitment_u64,
-        poseidon_hash, smt::SmtMemoryFp, Blind, FuncId, MerkleNode, PublicKey, ScalarBlind,
-        SecretKey,
+        note::AeadEncryptedNote,
+        pasta_prelude::*,
+        pedersen::pedersen_commitment_u64,
+        poseidon_hash,
+        smt::{PoseidonFp, SparseMerkleTree, StorageAdapter, SMT_FP_DEPTH},
+        Blind, FuncId, MerkleNode, PublicKey, ScalarBlind, SecretKey,
     },
     pasta::pallas,
 };
@@ -40,25 +43,26 @@ use crate::{
     model::{Dao, DaoProposal, DaoProposeParams, DaoProposeParamsInput, VecAuthCallCommit},
 };
 
-pub struct DaoProposeStakeInput<'a> {
+pub struct DaoProposeStakeInput {
     pub secret: SecretKey,
     pub note: darkfi_money_contract::client::MoneyNote,
     pub leaf_position: bridgetree::Position,
     pub merkle_path: Vec<MerkleNode>,
-    pub money_null_smt: &'a SmtMemoryFp,
-    pub signature_secret: SecretKey,
 }
 
-pub struct DaoProposeCall<'a> {
-    pub inputs: Vec<DaoProposeStakeInput<'a>>,
+pub struct DaoProposeCall<'a, T: StorageAdapter<Value = pallas::Base>> {
+    pub money_null_smt:
+        &'a SparseMerkleTree<'a, SMT_FP_DEPTH, { SMT_FP_DEPTH + 1 }, pallas::Base, PoseidonFp, T>,
+    pub inputs: Vec<DaoProposeStakeInput>,
     pub proposal: DaoProposal,
     pub dao: Dao,
     pub dao_leaf_position: bridgetree::Position,
     pub dao_merkle_path: Vec<MerkleNode>,
     pub dao_merkle_root: MerkleNode,
+    pub signature_secret: SecretKey,
 }
 
-impl<'a> DaoProposeCall<'a> {
+impl<'a, T: StorageAdapter<Value = pallas::Base>> DaoProposeCall<'a, T> {
     pub fn make(
         self,
         burn_zkbin: &ZkBinary,
@@ -70,6 +74,10 @@ impl<'a> DaoProposeCall<'a> {
 
         let gov_token_blind = Blind::random(&mut OsRng);
 
+        let smt_null_root = self.money_null_smt.root();
+        let signature_public = PublicKey::from_secret(self.signature_secret);
+        let (sig_x, sig_y) = signature_public.xy();
+
         let mut inputs = vec![];
         let mut total_funds = 0;
         let mut total_funds_blinds = ScalarBlind::ZERO;
@@ -78,8 +86,6 @@ impl<'a> DaoProposeCall<'a> {
             let funds_blind = Blind::random(&mut OsRng);
             total_funds += input.note.value;
             total_funds_blinds += funds_blind;
-
-            let signature_public = PublicKey::from_secret(input.signature_secret);
 
             // Note from the previous output
             let note = input.note;
@@ -97,8 +103,7 @@ impl<'a> DaoProposeCall<'a> {
             .to_coin();
             let nullifier = poseidon_hash([input.secret.inner(), coin.inner()]);
 
-            let smt_null_root = input.money_null_smt.root();
-            let smt_null_path = input.money_null_smt.prove_membership(&nullifier);
+            let smt_null_path = self.money_null_smt.prove_membership(&nullifier);
             if !smt_null_path.verify(&smt_null_root, &pallas::Base::ZERO, &nullifier) {
                 return Err(
                     ClientFailed::VerifyError(DaoError::InvalidInputMerkleRoot.to_string()).into()
@@ -117,7 +122,7 @@ impl<'a> DaoProposeCall<'a> {
                 Witness::Uint32(Value::known(leaf_pos.try_into().unwrap())),
                 Witness::MerklePath(Value::known(input.merkle_path.clone().try_into().unwrap())),
                 Witness::SparseMerklePath(Value::known(smt_null_path.path)),
-                Witness::Base(Value::known(input.signature_secret.inner())),
+                Witness::Base(Value::known(self.signature_secret.inner())),
             ];
 
             // TODO: We need a generic ZkSet widget to avoid doing this all the time
@@ -143,8 +148,6 @@ impl<'a> DaoProposeCall<'a> {
 
             let value_commit = pedersen_commitment_u64(note.value, funds_blind);
             let value_coords = value_commit.to_affine().coordinates().unwrap();
-
-            let (sig_x, sig_y) = signature_public.xy();
 
             let public_inputs = vec![
                 smt_null_root,

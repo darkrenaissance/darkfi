@@ -71,8 +71,6 @@ impl TestHarness {
             .unwrap()
             .clone();
 
-        let signature_secret = SecretKey::random(&mut OsRng);
-
         // Useful code snippet to dump a sled contract DB
         /*{
             let blockchain = &wallet.validator.blockchain;
@@ -95,8 +93,6 @@ impl TestHarness {
                 .money_merkle_tree
                 .witness(propose_owncoin.leaf_position, 0)
                 .unwrap(),
-            money_null_smt: &wallet.money_null_smt,
-            signature_secret,
         };
 
         // Convert coin_params to actual coins
@@ -131,7 +127,10 @@ impl TestHarness {
             blind: Blind::random(&mut OsRng),
         };
 
+        let signature_secret = SecretKey::random(&mut OsRng);
+
         let call = DaoProposeCall {
+            money_null_smt: &wallet.money_null_smt,
             inputs: vec![input],
             proposal: proposal.clone(),
             dao: dao.clone(),
@@ -141,6 +140,7 @@ impl TestHarness {
                 .witness(*wallet.dao_leafs.get(dao_bulla).unwrap(), 0)
                 .unwrap(),
             dao_merkle_root: wallet.dao_merkle_tree.root(0).unwrap(),
+            signature_secret,
         };
 
         let (params, proofs) = call.make(

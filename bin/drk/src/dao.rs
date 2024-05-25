@@ -24,12 +24,13 @@ use rusqlite::types::Value;
 
 use darkfi::{
     tx::{ContractCallLeaf, Transaction, TransactionBuilder},
-    util::parse::encode_base10,
+    util::parse::{decode_base10, encode_base10},
     zk::{empty_witnesses, halo2::Field, ProvingKey, ZkCircuit},
     zkas::ZkBinary,
     Error, Result,
 };
 use darkfi_dao_contract::{
+    blockwindow,
     client::{make_mint_call, DaoProposeCall, DaoProposeStakeInput, DaoVoteCall, DaoVoteInput},
     model::{Dao, DaoAuthCall, DaoBulla, DaoMintParams, DaoProposeParams, DaoVoteParams},
     DaoFunction, DAO_CONTRACT_ZKAS_DAO_MINT_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS,
@@ -37,7 +38,9 @@ use darkfi_dao_contract::{
     DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS,
 };
 use darkfi_money_contract::{
-    client::OwnCoin, model::TokenId, MoneyFunction, MONEY_CONTRACT_ZKAS_FEE_NS_V1,
+    client::OwnCoin,
+    model::{CoinAttributes, TokenId},
+    MoneyFunction, MONEY_CONTRACT_ZKAS_FEE_NS_V1,
 };
 use darkfi_sdk::{
     bridgetree,
@@ -60,7 +63,8 @@ use darkfi_serial::{
 use crate::{
     convert_named_params,
     error::{WalletDbError, WalletDbResult},
-    money::BALANCE_BASE10_DECIMALS,
+    money::{BALANCE_BASE10_DECIMALS, MONEY_SMT_COL_KEY, MONEY_SMT_COL_VALUE, MONEY_SMT_TABLE},
+    walletdb::{WalletSmt, WalletStorage},
     Drk,
 };
 
@@ -372,19 +376,14 @@ impl Drk {
     pub async fn initialize_dao(&self) -> WalletDbResult<()> {
         // Initialize DAO wallet schema
         let wallet_schema = include_str!("../dao.sql");
-        self.wallet.exec_batch_sql(wallet_schema).await?;
+        self.wallet.exec_batch_sql(wallet_schema)?;
 
         // Check if we have to initialize the Merkle trees.
         // We check if one exists, but we actually create two. This should be written
         // a bit better and safer.
         // For now, on success, we don't care what's returned, but in the future
         // we should actually check it.
-        if self
-            .wallet
-            .query_single(&DAO_TREES_TABLE, &[DAO_TREES_COL_DAOS_TREE], &[])
-            .await
-            .is_err()
-        {
+        if self.wallet.query_single(&DAO_TREES_TABLE, &[DAO_TREES_COL_DAOS_TREE], &[]).is_err() {
             println!("Initializing DAO Merkle trees");
             let tree = MerkleTree::new(1);
             self.put_dao_trees(&tree, &tree).await?;
@@ -402,27 +401,25 @@ impl Drk {
     ) -> WalletDbResult<()> {
         // First we remove old records
         let query = format!("DELETE FROM {};", *DAO_TREES_TABLE);
-        self.wallet.exec_sql(&query, &[]).await?;
+        self.wallet.exec_sql(&query, &[])?;
 
         // then we insert the new one
         let query = format!(
             "INSERT INTO {} ({}, {}) VALUES (?1, ?2);",
             *DAO_TREES_TABLE, DAO_TREES_COL_DAOS_TREE, DAO_TREES_COL_PROPOSALS_TREE,
         );
-        self.wallet
-            .exec_sql(
-                &query,
-                rusqlite::params![
-                    serialize_async(daos_tree).await,
-                    serialize_async(proposals_tree).await
-                ],
-            )
-            .await
+        self.wallet.exec_sql(
+            &query,
+            rusqlite::params![
+                serialize_async(daos_tree).await,
+                serialize_async(proposals_tree).await
+            ],
+        )
     }
 
     /// Fetch DAO Merkle trees from the wallet.
     pub async fn get_dao_trees(&self) -> Result<(MerkleTree, MerkleTree)> {
-        let row = match self.wallet.query_single(&DAO_TREES_TABLE, &[], &[]).await {
+        let row = match self.wallet.query_single(&DAO_TREES_TABLE, &[], &[]) {
             Ok(r) => r,
             Err(e) => {
                 return Err(Error::RusqliteError(format!(
@@ -507,7 +504,7 @@ impl Drk {
 
     /// Fetch all known DAOs from the wallet.
     pub async fn get_daos(&self) -> Result<Vec<DaoRecord>> {
-        let rows = match self.wallet.query_multiple(&DAO_DAOS_TABLE, &[], &[]).await {
+        let rows = match self.wallet.query_multiple(&DAO_DAOS_TABLE, &[], &[]) {
             Ok(r) => r,
             Err(e) => {
                 return Err(Error::RusqliteError(format!("[get_daos] DAOs retrieval failed: {e:?}")))
@@ -630,15 +627,11 @@ impl Drk {
             )))
         };
 
-        let rows = match self
-            .wallet
-            .query_multiple(
-                &DAO_PROPOSALS_TABLE,
-                &[],
-                convert_named_params! {(DAO_PROPOSALS_COL_DAO_NAME, name)},
-            )
-            .await
-        {
+        let rows = match self.wallet.query_multiple(
+            &DAO_PROPOSALS_TABLE,
+            &[],
+            convert_named_params! {(DAO_PROPOSALS_COL_DAO_NAME, name)},
+        ) {
             Ok(r) => r,
             Err(e) => {
                 return Err(Error::RusqliteError(format!(
@@ -854,23 +847,21 @@ impl Drk {
                 DAO_DAOS_COL_NAME,
                 dao.name,
             );
-            self.wallet
-                .exec_sql(
-                    &query,
-                    rusqlite::params![
-                        serialize_async(&dao.leaf_position.unwrap()).await,
-                        serialize_async(&dao.tx_hash.unwrap()).await,
-                        dao.call_index.unwrap()
-                    ],
-                )
-                .await?;
+            self.wallet.exec_sql(
+                &query,
+                rusqlite::params![
+                    serialize_async(&dao.leaf_position.unwrap()).await,
+                    serialize_async(&dao.tx_hash.unwrap()).await,
+                    dao.call_index.unwrap()
+                ],
+            )?;
         }
 
         Ok(())
     }
 
     /// Unconfirm imported DAOs by removing the leaf position, txid, and call index.
-    pub async fn unconfirm_daos(&self, daos: &[DaoRecord]) -> WalletDbResult<()> {
+    pub fn unconfirm_daos(&self, daos: &[DaoRecord]) -> WalletDbResult<()> {
         for dao in daos {
             let query = format!(
                 "UPDATE {} SET {} = ?1, {} = ?2, {} = ?3 WHERE {} = \'{}\';",
@@ -881,9 +872,10 @@ impl Drk {
                 DAO_DAOS_COL_NAME,
                 dao.name,
             );
-            self.wallet
-                .exec_sql(&query, rusqlite::params![None::<Vec<u8>>, None::<Vec<u8>>, None::<u64>,])
-                .await?;
+            self.wallet.exec_sql(
+                &query,
+                rusqlite::params![None::<Vec<u8>>, None::<Vec<u8>>, None::<u64>,],
+            )?;
         }
 
         Ok(())
@@ -914,24 +906,20 @@ impl Drk {
                 DAO_PROPOSALS_COL_CALL_INDEX,
             );
 
-            if let Err(e) = self
-                .wallet
-                .exec_sql(
-                    &query,
-                    rusqlite::params![
-                        dao.name,
-                        serialize_async(&proposal.recipient).await,
-                        serialize_async(&proposal.amount).await,
-                        serialize_async(&proposal.token_id).await,
-                        serialize_async(&proposal.bulla_blind).await,
-                        serialize_async(&proposal.leaf_position.unwrap()).await,
-                        serialize_async(&proposal.money_snapshot_tree.clone().unwrap()).await,
-                        serialize_async(&proposal.tx_hash.unwrap()).await,
-                        proposal.call_index,
-                    ],
-                )
-                .await
-            {
+            if let Err(e) = self.wallet.exec_sql(
+                &query,
+                rusqlite::params![
+                    dao.name,
+                    serialize_async(&proposal.recipient).await,
+                    serialize_async(&proposal.amount).await,
+                    serialize_async(&proposal.token_id).await,
+                    serialize_async(&proposal.bulla_blind).await,
+                    serialize_async(&proposal.leaf_position.unwrap()).await,
+                    serialize_async(&proposal.money_snapshot_tree.clone().unwrap()).await,
+                    serialize_async(&proposal.tx_hash.unwrap()).await,
+                    proposal.call_index,
+                ],
+            ) {
                 return Err(Error::RusqliteError(format!(
                     "[put_dao_proposals] Proposal insert failed: {e:?}"
                 )))
@@ -958,20 +946,18 @@ impl Drk {
                 DAO_VOTES_COL_CALL_INDEX,
             );
 
-            self.wallet
-                .exec_sql(
-                    &query,
-                    rusqlite::params![
-                        vote.proposal_id,
-                        vote.vote_option as u64,
-                        serialize_async(&vote.yes_vote_blind).await,
-                        serialize_async(&vote.all_vote_value).await,
-                        serialize_async(&vote.all_vote_blind).await,
-                        serialize_async(&vote.tx_hash.unwrap()).await,
-                        vote.call_index.unwrap(),
-                    ],
-                )
-                .await?;
+            self.wallet.exec_sql(
+                &query,
+                rusqlite::params![
+                    vote.proposal_id,
+                    vote.vote_option as u64,
+                    serialize_async(&vote.yes_vote_blind).await,
+                    serialize_async(&vote.all_vote_value).await,
+                    serialize_async(&vote.all_vote_blind).await,
+                    serialize_async(&vote.tx_hash.unwrap()).await,
+                    vote.call_index.unwrap(),
+                ],
+            )?;
 
             println!("DAO vote added to wallet");
         }
@@ -999,24 +985,24 @@ impl Drk {
                 return Err(WalletDbError::GenericError);
             }
         };
-        self.unconfirm_daos(&daos).await?;
+        self.unconfirm_daos(&daos)?;
         println!("Successfully unconfirmed DAOs");
 
         Ok(())
     }
 
     /// Reset all DAO proposals in the wallet.
-    pub async fn reset_dao_proposals(&self) -> WalletDbResult<()> {
+    pub fn reset_dao_proposals(&self) -> WalletDbResult<()> {
         println!("Resetting DAO proposals");
         let query = format!("DELETE FROM {};", *DAO_PROPOSALS_TABLE);
-        self.wallet.exec_sql(&query, &[]).await
+        self.wallet.exec_sql(&query, &[])
     }
 
     /// Reset all DAO votes in the wallet.
-    pub async fn reset_dao_votes(&self) -> WalletDbResult<()> {
+    pub fn reset_dao_votes(&self) -> WalletDbResult<()> {
         println!("Resetting DAO votes");
         let query = format!("DELETE FROM {};", *DAO_VOTES_TABLE);
-        self.wallet.exec_sql(&query, &[]).await
+        self.wallet.exec_sql(&query, &[])
     }
 
     /// Import given DAO params into the wallet with a given name.
@@ -1034,10 +1020,8 @@ impl Drk {
             "INSERT INTO {} ({}, {}) VALUES (?1, ?2);",
             *DAO_DAOS_TABLE, DAO_DAOS_COL_NAME, DAO_DAOS_COL_PARAMS,
         );
-        if let Err(e) = self
-            .wallet
-            .exec_sql(&query, rusqlite::params![name, serialize_async(&params).await,])
-            .await
+        if let Err(e) =
+            self.wallet.exec_sql(&query, rusqlite::params![name, serialize_async(&params).await,])
         {
             return Err(Error::RusqliteError(format!("[import_dao] DAO insert failed: {e:?}")))
         };
@@ -1047,11 +1031,11 @@ impl Drk {
 
     /// Fetch a DAO given its name.
     pub async fn get_dao_by_name(&self, name: &str) -> Result<DaoRecord> {
-        let row = match self
-            .wallet
-            .query_single(&DAO_DAOS_TABLE, &[], convert_named_params! {(DAO_DAOS_COL_NAME, name)})
-            .await
-        {
+        let row = match self.wallet.query_single(
+            &DAO_DAOS_TABLE,
+            &[],
+            convert_named_params! {(DAO_DAOS_COL_NAME, name)},
+        ) {
             Ok(r) => r,
             Err(e) => {
                 return Err(Error::RusqliteError(format!(
@@ -1111,15 +1095,11 @@ impl Drk {
     /// Fetch a DAO proposal by its ID
     pub async fn get_dao_proposal_by_id(&self, proposal_id: u64) -> Result<DaoProposal> {
         // Grab the proposal record
-        let row = match self
-            .wallet
-            .query_single(
-                &DAO_PROPOSALS_TABLE,
-                &[],
-                convert_named_params! {(DAO_PROPOSALS_COL_PROPOSAL_ID, proposal_id)},
-            )
-            .await
-        {
+        let row = match self.wallet.query_single(
+            &DAO_PROPOSALS_TABLE,
+            &[],
+            convert_named_params! {(DAO_PROPOSALS_COL_PROPOSAL_ID, proposal_id)},
+        ) {
             Ok(r) => r,
             Err(e) => {
                 return Err(Error::RusqliteError(format!(
@@ -1140,15 +1120,11 @@ impl Drk {
 
     // Fetch all known DAO proposal votes from the wallet given a proposal ID
     pub async fn get_dao_proposal_votes(&self, proposal_id: u64) -> Result<Vec<DaoVote>> {
-        let rows = match self
-            .wallet
-            .query_multiple(
-                &DAO_VOTES_TABLE,
-                &[],
-                convert_named_params! {(DAO_VOTES_COL_PROPOSAL_ID, proposal_id)},
-            )
-            .await
-        {
+        let rows = match self.wallet.query_multiple(
+            &DAO_VOTES_TABLE,
+            &[],
+            convert_named_params! {(DAO_VOTES_COL_PROPOSAL_ID, proposal_id)},
+        ) {
             Ok(r) => r,
             Err(e) => {
                 return Err(Error::RusqliteError(format!(
@@ -1323,89 +1299,120 @@ impl Drk {
         Ok(tx)
     }
 
-    /// Create a DAO proposal
-    pub async fn dao_propose(
+    /// Create a DAO transfer proposal.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn dao_propose_transfer(
         &self,
         name: &str,
-        _recipient: PublicKey,
-        amount: u64,
+        duration_days: u64,
+        amount: &str,
         token_id: TokenId,
+        recipient: PublicKey,
+        spend_hook: Option<FuncId>,
+        user_data: Option<pallas::Base>,
     ) -> Result<Transaction> {
+        // Fetch DAO and check its deployed
         let dao = self.get_dao_by_name(name).await?;
         if dao.leaf_position.is_none() || dao.tx_hash.is_none() {
             return Err(Error::Custom(
-                "[dao_propose] DAO seems to not have been deployed yet".to_string(),
+                "[dao_propose_transfer] DAO seems to not have been deployed yet".to_string(),
             ))
         }
 
-        let bulla = dao.bulla();
-        let owncoins = self.get_coins(false).await?;
-
+        // Fetch DAO unspent OwnCoins to see what its balance is
         let dao_spend_hook =
             FuncRef { contract_id: *DAO_CONTRACT_ID, func_code: DaoFunction::Exec as u8 }
                 .to_func_id();
-
-        let mut dao_owncoins: Vec<OwnCoin> = owncoins.iter().map(|x| x.0.clone()).collect();
-        dao_owncoins.retain(|x| {
-            x.note.token_id == token_id &&
-                x.note.spend_hook == dao_spend_hook &&
-                x.note.user_data == bulla.inner()
-        });
-
-        let mut gov_owncoins: Vec<OwnCoin> = owncoins.iter().map(|x| x.0.clone()).collect();
-        gov_owncoins.retain(|x| x.note.token_id == dao.params.dao.gov_token_id);
-
+        let dao_bulla = dao.bulla();
+        let dao_owncoins =
+            self.get_contract_token_coins(&token_id, &dao_spend_hook, &dao_bulla.inner()).await?;
         if dao_owncoins.is_empty() {
             return Err(Error::Custom(format!(
-                "[dao_propose] Did not find any {token_id} coins owned by this DAO"
+                "[dao_propose_transfer] Did not find any {token_id} unspent coins owned by this DAO"
             )))
         }
 
-        if gov_owncoins.is_empty() {
-            return Err(Error::Custom(format!(
-                "[dao_propose] Did not find any governance {} coins in wallet",
-                dao.params.dao.gov_token_id
-            )))
-        }
-
+        // Check DAO balance is sufficient
+        let amount = decode_base10(amount, BALANCE_BASE10_DECIMALS, false)?;
         if dao_owncoins.iter().map(|x| x.note.value).sum::<u64>() < amount {
             return Err(Error::Custom(format!(
-                "[dao_propose] Not enough DAO balance for token ID: {}",
-                token_id
+                "[dao_propose_transfer] Not enough DAO balance for token ID: {token_id}",
             )))
         }
 
-        if gov_owncoins.iter().map(|x| x.note.value).sum::<u64>() < dao.params.dao.proposer_limit {
+        // Fetch our own governance OwnCoins to see what our balance is
+        let gov_owncoins = self.get_token_coins(&dao.params.dao.gov_token_id).await?;
+        if gov_owncoins.is_empty() {
             return Err(Error::Custom(format!(
-                "[dao_propose] Not enough gov token {} balance to propose",
+                "[dao_propose_transfer] Did not find any governance {} coins in wallet",
                 dao.params.dao.gov_token_id
             )))
         }
 
-        // FIXME: Here we're looking for a coin == proposer_limit but this shouldn't have to
-        // be the case {
-        let Some(gov_coin) =
-            gov_owncoins.iter().find(|x| x.note.value == dao.params.dao.proposer_limit)
-        else {
-            return Err(Error::Custom(format!(
-                "[dao_propose] Did not find a single gov coin of value {}",
-                dao.params.dao.proposer_limit
-            )))
-        };
-        // }
+        // Find which governance coins we can use
+        let mut total_value = 0;
+        let mut gov_owncoins_to_use = vec![];
+        for gov_owncoin in gov_owncoins {
+            if total_value >= amount {
+                break
+            }
 
-        // Lookup the zkas bins
+            total_value += gov_owncoin.note.value;
+            gov_owncoins_to_use.push(gov_owncoin);
+        }
+
+        // Check our governance coins balance is sufficient
+        if total_value < amount {
+            return Err(Error::Custom(format!(
+                "[dao_propose_transfer] Not enough gov token {} balance to propose",
+                dao.params.dao.gov_token_id
+            )))
+        }
+
+        // Generate proposal coin attributes
+        let proposal_coinattrs = vec![CoinAttributes {
+            public_key: recipient,
+            value: amount,
+            token_id,
+            spend_hook: spend_hook.unwrap_or(FuncId::none()),
+            user_data: user_data.unwrap_or(pallas::Base::ZERO),
+            blind: Blind::random(&mut OsRng),
+        }];
+
+        // Now we need to do a lookup for the zkas proof bincodes, and create
+        // the circuit objects and proving keys so we can build the transaction.
+        // We also do this through the RPC. First we grab the fee call from money.
+        let zkas_bins = self.lookup_zkas(&MONEY_CONTRACT_ID).await?;
+
+        let Some(fee_zkbin) = zkas_bins.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_FEE_NS_V1)
+        else {
+            return Err(Error::Custom("[dao_propose_transfer] Fee circuit not found".to_string()))
+        };
+
+        let fee_zkbin = ZkBinary::decode(&fee_zkbin.1)?;
+
+        let fee_circuit = ZkCircuit::new(empty_witnesses(&fee_zkbin)?, &fee_zkbin);
+
+        // Creating Fee circuit proving key
+        let fee_pk = ProvingKey::build(fee_zkbin.k, &fee_circuit);
+
+        // Now we grab the DAO bins
         let zkas_bins = self.lookup_zkas(&DAO_CONTRACT_ID).await?;
+
         let Some(propose_burn_zkbin) =
             zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS)
         else {
-            return Err(Error::Custom("[dao_propose] Propose Burn circuit not found".to_string()))
+            return Err(Error::Custom(
+                "[dao_propose_transfer] Propose Burn circuit not found".to_string(),
+            ))
         };
 
         let Some(propose_main_zkbin) =
             zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS)
         else {
-            return Err(Error::Custom("[dao_propose] Propose Main circuit not found".to_string()))
+            return Err(Error::Custom(
+                "[dao_propose_transfer] Propose Main circuit not found".to_string(),
+            ))
         };
 
         let propose_burn_zkbin = ZkBinary::decode(&propose_burn_zkbin.1)?;
@@ -1416,55 +1423,36 @@ impl Drk {
         let propose_main_circuit =
             ZkCircuit::new(empty_witnesses(&propose_main_zkbin)?, &propose_main_zkbin);
 
-        println!("Creating Propose Burn circuit proving key");
+        // Creating DAO ProposeBurn and ProposeMain circuits proving keys
         let propose_burn_pk = ProvingKey::build(propose_burn_zkbin.k, &propose_burn_circuit);
-        println!("Creating Propose Main circuit proving key");
         let propose_main_pk = ProvingKey::build(propose_main_zkbin.k, &propose_main_circuit);
 
-        // Now create the parameters for the proposal tx
-        let signature_secret = SecretKey::random(&mut OsRng);
-
-        // Get the Merkle path for the gov coin in the money tree
+        // Fetch our money Merkle tree
         let money_merkle_tree = self.get_money_tree().await?;
-        let gov_coin_merkle_path = money_merkle_tree.witness(gov_coin.leaf_position, 0).unwrap();
 
-        // Fetch the daos Merkle tree
-        let (daos_tree, _) = self.get_dao_trees().await?;
+        // Now we can create the proposal transaction parameters.
+        // We first generate the `DaoProposeStakeInput` inputs,
+        // using our governance OwnCoins.
+        let mut inputs = Vec::with_capacity(gov_owncoins_to_use.len());
+        for gov_owncoin in gov_owncoins_to_use {
+            let input = DaoProposeStakeInput {
+                secret: gov_owncoin.secret,
+                note: gov_owncoin.note.clone(),
+                leaf_position: gov_owncoin.leaf_position,
+                merkle_path: money_merkle_tree.witness(gov_owncoin.leaf_position, 0).unwrap(),
+            };
+            inputs.push(input);
+        }
 
-        // This is complete wrong and needs to be fixed later
-        // Non-trivial to fix, so we just make a workaround for now
-
-        let hasher = PoseidonFp::new();
-        let store = MemoryStorageFp::new();
-        let money_null_smt = SmtMemoryFp::new(store, hasher.clone(), &EMPTY_NODES_FP);
-
-        let input = DaoProposeStakeInput {
-            secret: gov_coin.secret, // <-- TODO: Is this correct?
-            note: gov_coin.note.clone(),
-            leaf_position: gov_coin.leaf_position,
-            merkle_path: gov_coin_merkle_path,
-            money_null_smt: &money_null_smt,
-            signature_secret,
-        };
-
-        let (dao_merkle_path, dao_merkle_root) = {
-            let root = daos_tree.root(0).unwrap();
-            let leaf_pos = dao.leaf_position.unwrap();
-            let dao_merkle_path = daos_tree.witness(leaf_pos, 0).unwrap();
-            (dao_merkle_path, root)
-        };
-
-        // TODO:
-        /*
         // Convert coin_params to actual coins
         let mut proposal_coins = vec![];
         for coin_params in proposal_coinattrs {
             proposal_coins.push(coin_params.to_coin());
         }
-        */
-        let proposal_data = vec![];
-        //proposal_coins.encode_async(&mut proposal_data).await.unwrap();
+        let mut proposal_data = vec![];
+        proposal_coins.encode_async(&mut proposal_data).await?;
 
+        // Create Auth calls
         let auth_calls = vec![
             DaoAuthCall {
                 contract_id: *DAO_CONTRACT_ID,
@@ -1478,31 +1466,55 @@ impl Drk {
             },
         ];
 
-        // TODO: get current height to calculate day
-        // Also contract must check we don't mint a proposal that its creation day is
-        // less than current height
+        // Retrieve current block height and compute current day
+        let current_block_height = self.get_next_block_height().await?;
+        let creation_day = blockwindow(current_block_height);
 
+        // Create the actual proposal
         // TODO: Simplify this model struct import once
         // we use the structs from contract everwhere
         let proposal = darkfi_dao_contract::model::DaoProposal {
             auth_calls,
-            creation_day: 0,
-            duration_days: 30,
-            user_data: pallas::Base::ZERO,
-            dao_bulla: dao.bulla(),
+            creation_day,
+            duration_days,
+            user_data: user_data.unwrap_or(pallas::Base::ZERO),
+            dao_bulla,
             blind: Blind::random(&mut OsRng),
         };
 
+        // Now create the parameters for the proposal tx
+        let signature_secret = SecretKey::random(&mut OsRng);
+
+        // Fetch the daos Merkle tree to compute the DAO Merkle path and root
+        let (daos_tree, _) = self.get_dao_trees().await?;
+        let (dao_merkle_path, dao_merkle_root) = {
+            let root = daos_tree.root(0).unwrap();
+            let leaf_pos = dao.leaf_position.unwrap();
+            let dao_merkle_path = daos_tree.witness(leaf_pos, 0).unwrap();
+            (dao_merkle_path, root)
+        };
+
+        // Generate the Money nullifiers Sparse Merkle Tree
+        let store = WalletStorage::new(
+            &self.wallet,
+            &MONEY_SMT_TABLE,
+            MONEY_SMT_COL_KEY,
+            MONEY_SMT_COL_VALUE,
+        );
+        let money_null_smt = WalletSmt::new(store, PoseidonFp::new(), &EMPTY_NODES_FP);
+
+        // Create the proposal call
         let call = DaoProposeCall {
-            inputs: vec![input],
+            money_null_smt: &money_null_smt,
+            inputs,
             proposal,
             dao: dao.params.dao,
             dao_leaf_position: dao.leaf_position.unwrap(),
             dao_merkle_path,
             dao_merkle_root,
+            signature_secret,
         };
 
-        println!("Creating ZK proofs...");
         let (params, proofs) = call.make(
             &propose_burn_zkbin,
             &propose_burn_pk,
@@ -1510,13 +1522,33 @@ impl Drk {
             &propose_main_pk,
         )?;
 
+        // Encode the call
         let mut data = vec![DaoFunction::Propose as u8];
         params.encode_async(&mut data).await?;
         let call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
+
+        // Create the TransactionBuilder containing above call
         let mut tx_builder = TransactionBuilder::new(ContractCallLeaf { call, proofs }, vec![])?;
+
+        // We first have to execute the fee-less tx to gather its used gas, and then we feed
+        // it into the fee-creating function.
         let mut tx = tx_builder.build()?;
         let sigs = tx.create_sigs(&[signature_secret])?;
         tx.signatures = vec![sigs];
+
+        let tree = self.get_money_tree().await?;
+        let (fee_call, fee_proofs, fee_secrets) =
+            self.append_fee_call(&tx, &tree, &fee_pk, &fee_zkbin, None).await?;
+
+        // Append the fee call to the transaction
+        tx_builder.append(ContractCallLeaf { call: fee_call, proofs: fee_proofs }, vec![])?;
+
+        // Now build the actual transaction and sign it with all necessary keys.
+        let mut tx = tx_builder.build()?;
+        let sigs = tx.create_sigs(&[signature_secret])?;
+        tx.signatures.push(sigs);
+        let sigs = tx.create_sigs(&fee_secrets)?;
+        tx.signatures.push(sigs);
 
         Ok(tx)
     }

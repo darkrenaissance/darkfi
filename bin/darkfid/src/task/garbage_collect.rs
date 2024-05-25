@@ -24,7 +24,7 @@ use darkfi::{
     Error, Result,
 };
 use darkfi_sdk::crypto::MerkleTree;
-use log::{error, info};
+use log::{debug, error, info};
 
 use crate::Darkfid;
 
@@ -50,6 +50,7 @@ pub async fn garbage_collect_task(node: Arc<Darkfid>) -> Result<()> {
         for tx in txs {
             let tx_hash = tx.hash();
             let tx_vec = [tx.clone()];
+            let mut valid = false;
 
             // Grab a lock over current consensus forks state
             let mut forks = node.validator.consensus.forks.write().await;
@@ -108,13 +109,30 @@ pub async fn garbage_collect_task(node: Arc<Darkfid>) -> Result<()> {
                 )
                 .await
                 {
-                    Ok(_) => {}
+                    Ok(_) => valid = true,
                     Err(Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(_))) => {
                         // Remove transaction from fork's mempool
                         fork.mempool.retain(|tx| *tx != tx_hash);
                     }
-                    Err(e) => return Err(e),
+                    Err(e) => {
+                        error!(
+                            target: "darkfid::task::garbage_collect_task",
+                            "Verifying transaction {tx_hash} failed: {e}"
+                        );
+                        return Err(e)
+                    }
                 }
+            }
+
+            // Remove transaction if its invalid for all the forks
+            if !valid {
+                debug!(target: "darkfid::task::garbage_collect_task", "Removing invalid transaction: {tx_hash}");
+                if let Err(e) = node.validator.blockchain.remove_pending_txs_hashes(&[tx_hash]) {
+                    error!(
+                        target: "darkfid::task::garbage_collect_task",
+                        "Removing invalid transaction {tx_hash} failed: {e}"
+                    );
+                };
             }
 
             // Drop forks lock

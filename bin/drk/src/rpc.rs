@@ -58,7 +58,7 @@ impl Drk {
         let req = JsonRequest::new("blockchain.last_known_block", JsonValue::Array(vec![]));
         let rep = self.rpc_client.as_ref().unwrap().request(req).await?;
         let last_known = *rep.get::<f64>().unwrap() as u32;
-        let last_scanned = match self.last_scanned_block().await {
+        let last_scanned = match self.last_scanned_block() {
             Ok(l) => l,
             Err(e) => {
                 return Err(Error::RusqliteError(format!(
@@ -149,7 +149,7 @@ impl Drk {
                             },
                         };
                         if let Err(e) =
-                            self.update_tx_history_records_status(&txs_hashes, "Finalized").await
+                            self.update_tx_history_records_status(&txs_hashes, "Finalized")
                         {
                             return Err(Error::RusqliteError(format!(
                                 "[subscribe_blocks] Update transaction history record status failed: {e:?}"
@@ -216,7 +216,7 @@ impl Drk {
         // Write this block height into `last_scanned_block`
         let query =
             format!("UPDATE {} SET {} = ?1;", *MONEY_INFO_TABLE, MONEY_INFO_COL_LAST_SCANNED_BLOCK);
-        if let Err(e) = self.wallet.exec_sql(&query, rusqlite::params![block.header.height]).await {
+        if let Err(e) = self.wallet.exec_sql(&query, rusqlite::params![block.header.height]) {
             return Err(Error::RusqliteError(format!(
                 "[scan_block] Update last scanned block failed: {e:?}"
             )))
@@ -231,18 +231,19 @@ impl Drk {
     /// it looks for a checkpoint in the wallet to reset and start scanning from.
     pub async fn scan_blocks(&self, reset: bool) -> WalletDbResult<()> {
         // Grab last scanned block height
-        let mut height = self.last_scanned_block().await?;
+        let mut height = self.last_scanned_block()?;
         // If last scanned block is genesis (0) or reset flag
         // has been provided we reset, otherwise continue with
         // the next block height
         if height == 0 || reset {
             self.reset_money_tree().await?;
-            self.reset_money_coins().await?;
+            self.reset_money_smt()?;
+            self.reset_money_coins()?;
             self.reset_dao_trees().await?;
             self.reset_daos().await?;
-            self.reset_dao_proposals().await?;
-            self.reset_dao_votes().await?;
-            self.update_all_tx_history_records_status("Rejected").await?;
+            self.reset_dao_proposals()?;
+            self.reset_dao_votes()?;
+            self.update_all_tx_history_records_status("Rejected")?;
             height = 0;
         } else {
             height += 1;
@@ -281,7 +282,7 @@ impl Drk {
                     return Err(WalletDbError::GenericError)
                 };
                 let txs_hashes = self.insert_tx_history_records(&block.txs).await?;
-                self.update_tx_history_records_status(&txs_hashes, "Finalized").await?;
+                self.update_tx_history_records_status(&txs_hashes, "Finalized")?;
                 height += 1;
             }
         }
@@ -383,5 +384,16 @@ impl Drk {
         let gas = *rep.get::<f64>().unwrap() as u64;
 
         Ok(gas)
+    }
+
+    /// Queries darkfid for current best fork next height.
+    pub async fn get_next_block_height(&self) -> Result<u32> {
+        let req =
+            JsonRequest::new("blockchain.best_fork_next_block_height", JsonValue::Array(vec![]));
+        let rep = self.rpc_client.as_ref().unwrap().request(req).await?;
+
+        let next_height = *rep.get::<f64>().unwrap() as u32;
+
+        Ok(next_height)
     }
 }

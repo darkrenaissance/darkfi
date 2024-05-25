@@ -25,6 +25,7 @@ pub type WalletDbResult<T> = std::result::Result<T, WalletDbError>;
 pub enum WalletDbError {
     // Connection related errors
     ConnectionFailed = -32100,
+    FailedToAquireLock = -32101,
 
     // Configuration related errors
     PragmaUpdateError = -32110,

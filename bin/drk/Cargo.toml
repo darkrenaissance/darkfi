@@ -22,6 +22,7 @@ blake3 = "1.5.0"
 bs58 = "0.5.0"
 lazy_static = "1.4.0"
 log = "0.4.21"
+num-bigint = "0.4.4"
 prettytable-rs = "0.10.0"
 rand = "0.8.5"
 rodio = {version = "0.17.3", default-features = false, features = ["minimp3"]}

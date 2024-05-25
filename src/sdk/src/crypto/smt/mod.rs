@@ -72,7 +72,7 @@ pub use empty::EMPTY_NODES_FP;
 #[cfg(test)]
 mod test;
 
-mod util;
+pub mod util;
 pub use util::Poseidon;
 
 pub mod wasmdb;

@@ -117,16 +117,16 @@ impl Darkfid {
     }
 
     // RPCAPI:
-    // Queries the blockchain database to find the last known block
+    // Queries the blockchain database to find the last known block.
     //
     // **Params:**
     // * `None`
     //
     // **Returns:**
-    // * `u64` Height of the last known block, as string
+    // * `f64` Height of the last known block
     //
     // --> {"jsonrpc": "2.0", "method": "blockchain.last_known_block", "params": [], "id": 1}
-    // <-- {"jsonrpc": "2.0", "result": "1234", "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": 1234, "id": 1}
     pub async fn blockchain_last_known_block(&self, id: u16, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if !params.is_empty() {
@@ -139,6 +139,34 @@ impl Darkfid {
         };
 
         JsonResponse::new(JsonValue::Number(last_block_height.0 as f64), id).into()
+    }
+
+    // RPCAPI:
+    // Queries the validator to find the current best fork next block height.
+    //
+    // **Params:**
+    // * `None`
+    //
+    // **Returns:**
+    // * `f64` Height of the last known block
+    //
+    // --> {"jsonrpc": "2.0", "method": "blockchain.best_fork_next_block_height", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": 1234, "id": 1}
+    pub async fn blockchain_best_fork_next_block_height(
+        &self,
+        id: u16,
+        params: JsonValue,
+    ) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
+        if !params.is_empty() {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        let Ok(next_block_height) = self.validator.best_fork_next_block_height().await else {
+            return JsonError::new(InternalError, None, id).into()
+        };
+
+        JsonResponse::new(JsonValue::Number(next_block_height as f64), id).into()
     }
 
     // RPCAPI:

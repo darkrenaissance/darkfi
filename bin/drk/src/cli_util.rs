@@ -192,9 +192,14 @@ pub fn generate_completions(shell: &str) -> Result<()> {
 
     let user_data = Arg::with_name("user-data").help("Optional user data to use");
 
-    let transfer = SubCommand::with_name("transfer")
-        .about("Create a payment transaction")
-        .args(&vec![amount, token, recipient, spend_hook.clone(), user_data.clone()]);
+    let transfer =
+        SubCommand::with_name("transfer").about("Create a payment transaction").args(&vec![
+            amount.clone(),
+            token.clone(),
+            recipient.clone(),
+            spend_hook.clone(),
+            user_data.clone(),
+        ]);
 
     // Otc
     let value_pair = Arg::with_name("value-pair")
@@ -286,16 +291,19 @@ pub fn generate_completions(shell: &str) -> Result<()> {
         .about("Mint an imported DAO on-chain")
         .args(&vec![name.clone()]);
 
-    let recipient =
-        Arg::with_name("recipient").help("Pubkey to send tokens to with proposal success");
+    let duration = Arg::with_name("duration").help("Duration of the proposal, in days");
 
-    let amount = Arg::with_name("amount").help("Amount to send from DAO with proposal success");
-
-    let token = Arg::with_name("token").help("Token ID to send from DAO with proposal success");
-
-    let propose = SubCommand::with_name("propose")
-        .about("Create a proposal for a DAO")
-        .args(&vec![name.clone(), recipient, amount, token]);
+    let propose_transfer = SubCommand::with_name("propose-transfer")
+        .about("Create a transfer proposal for a DAO")
+        .args(&vec![
+            name.clone(),
+            duration,
+            amount,
+            token,
+            recipient,
+            spend_hook.clone(),
+            user_data.clone(),
+        ]);
 
     let proposals =
         SubCommand::with_name("proposals").about("List DAO proposals").args(&vec![name.clone()]);
@@ -332,7 +340,7 @@ pub fn generate_completions(shell: &str) -> Result<()> {
         list,
         balance,
         mint,
-        propose,
+        propose_transfer,
         proposals,
         proposal,
         vote,

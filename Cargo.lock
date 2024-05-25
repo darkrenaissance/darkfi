@@ -2667,6 +2667,7 @@ dependencies = [
  "easy-parallel",
  "lazy_static",
  "log",
+ "num-bigint",
  "prettytable-rs",
  "rand 0.8.5",
  "rodio",

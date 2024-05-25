@@ -179,7 +179,7 @@ impl Wallet {
 
         let hasher = PoseidonFp::new();
         let store = MemoryStorageFp::new();
-        let money_null_smt = SmtMemoryFp::new(store, hasher.clone(), &EMPTY_NODES_FP);
+        let money_null_smt = SmtMemoryFp::new(store, hasher, &EMPTY_NODES_FP);
 
         Ok(Self {
             keypair,

@@ -50,10 +50,10 @@ pub const DEPLOY_AUTH_COL_IS_FROZEN: &str = "is_frozen";
 
 impl Drk {
     /// Initialize wallet with tables for the Deployooor contract.
-    pub async fn initialize_deployooor(&self) -> WalletDbResult<()> {
+    pub fn initialize_deployooor(&self) -> WalletDbResult<()> {
         // Initialize Deployooor wallet schema
         let wallet_schema = include_str!("../deploy.sql");
-        self.wallet.exec_batch_sql(wallet_schema).await?;
+        self.wallet.exec_batch_sql(wallet_schema)?;
 
         Ok(())
     }
@@ -68,7 +68,7 @@ impl Drk {
             "INSERT INTO {} ({}, {}) VALUES (?1, ?2);",
             *DEPLOY_AUTH_TABLE, DEPLOY_AUTH_COL_DEPLOY_AUTHORITY, DEPLOY_AUTH_COL_IS_FROZEN,
         );
-        self.wallet.exec_sql(&query, rusqlite::params![serialize_async(&keypair).await, 0]).await?;
+        self.wallet.exec_sql(&query, rusqlite::params![serialize_async(&keypair).await, 0])?;
 
         eprintln!("Created new contract deploy authority");
         println!("Contract ID: {}", ContractId::derive_public(keypair.public));
@@ -78,7 +78,7 @@ impl Drk {
 
     /// List contract deploy authorities from the wallet
     pub async fn list_deploy_auth(&self) -> Result<Vec<(i64, ContractId, bool)>> {
-        let rows = match self.wallet.query_multiple(&DEPLOY_AUTH_TABLE, &[], &[]).await {
+        let rows = match self.wallet.query_multiple(&DEPLOY_AUTH_TABLE, &[], &[]) {
             Ok(r) => r,
             Err(e) => {
                 return Err(Error::RusqliteError(format!(
@@ -111,15 +111,11 @@ impl Drk {
     /// Retrieve a deploy authority keypair given an index
     async fn get_deploy_auth(&self, idx: u64) -> Result<Keypair> {
         // Find the deploy authority keypair
-        let row = match self
-            .wallet
-            .query_single(
-                &DEPLOY_AUTH_TABLE,
-                &[DEPLOY_AUTH_COL_DEPLOY_AUTHORITY],
-                convert_named_params! {(DEPLOY_AUTH_COL_ID, idx)},
-            )
-            .await
-        {
+        let row = match self.wallet.query_single(
+            &DEPLOY_AUTH_TABLE,
+            &[DEPLOY_AUTH_COL_DEPLOY_AUTHORITY],
+            convert_named_params! {(DEPLOY_AUTH_COL_ID, idx)},
+        ) {
             Ok(v) => v,
             Err(e) => {
                 return Err(Error::RusqliteError(format!(

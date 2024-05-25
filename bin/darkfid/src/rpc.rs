@@ -60,6 +60,7 @@ impl RequestHandler for Darkfid {
             "blockchain.get_block" => self.blockchain_get_block(req.id, req.params).await,
             "blockchain.get_tx" => self.blockchain_get_tx(req.id, req.params).await,
             "blockchain.last_known_block" => self.blockchain_last_known_block(req.id, req.params).await,
+            "blockchain.best_fork_next_block_height" => self.blockchain_best_fork_next_block_height(req.id, req.params).await,
             "blockchain.lookup_zkas" => self.blockchain_lookup_zkas(req.id, req.params).await,
             "blockchain.subscribe_blocks" => self.blockchain_subscribe_blocks(req.id, req.params).await,
             "blockchain.subscribe_txs" =>  self.blockchain_subscribe_txs(req.id, req.params).await,

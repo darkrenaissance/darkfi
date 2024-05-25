@@ -352,19 +352,28 @@ enum DaoSubcmd {
         name: String,
     },
 
-    /// Create a proposal for a DAO
-    Propose {
+    /// Create a transfer proposal for a DAO
+    ProposeTransfer {
         /// Name identifier for the DAO
         name: String,
 
-        /// Pubkey to send tokens to with proposal success
-        recipient: String,
+        /// Duration of the proposal, in days
+        duration: u64,
 
-        /// Amount to send from DAO with proposal success
+        /// Amount to send
         amount: String,
 
-        /// Token ID to send from DAO with proposal success
+        /// Token ID to send
         token: String,
+
+        /// Recipient address
+        recipient: String,
+
+        /// Optional contract spend hook to use
+        spend_hook: Option<String>,
+
+        /// Optional user data to use
+        user_data: Option<String>,
     },
 
     /// List DAO proposals
@@ -586,9 +595,9 @@ impl Drk {
     }
 
     /// Initialize wallet with tables for drk
-    async fn initialize_wallet(&self) -> Result<()> {
+    fn initialize_wallet(&self) -> Result<()> {
         let wallet_schema = include_str!("../wallet.sql");
-        if let Err(e) = self.wallet.exec_batch_sql(wallet_schema).await {
+        if let Err(e) = self.wallet.exec_batch_sql(wallet_schema) {
             eprintln!("Error initializing wallet: {e:?}");
             exit(2);
         }
@@ -655,7 +664,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             let drk = Drk::new(args.wallet_path, args.wallet_pass, None, ex).await?;
 
             if initialize {
-                drk.initialize_wallet().await?;
+                drk.initialize_wallet()?;
                 if let Err(e) = drk.initialize_money().await {
                     eprintln!("Failed to initialize Money: {e:?}");
                     exit(2);
@@ -664,7 +673,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     eprintln!("Failed to initialize DAO: {e:?}");
                     exit(2);
                 }
-                if let Err(e) = drk.initialize_deployooor().await {
+                if let Err(e) = drk.initialize_deployooor() {
                     eprintln!("Failed to initialize Deployooor: {e:?}");
                     exit(2);
                 }
@@ -749,7 +758,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             }
 
             if let Some(idx) = default_address {
-                if let Err(e) = drk.set_default_address(idx).await {
+                if let Err(e) = drk.set_default_address(idx) {
                     eprintln!("Failed to set default address: {e:?}");
                     exit(2);
                 }
@@ -1197,12 +1206,23 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 Ok(())
             }
 
-            DaoSubcmd::Propose { name, recipient, amount, token } => {
+            DaoSubcmd::ProposeTransfer {
+                name,
+                duration,
+                amount,
+                token,
+                recipient,
+                spend_hook,
+                user_data,
+            } => {
+                let drk =
+                    Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
+
                 if let Err(e) = f64::from_str(&amount) {
                     eprintln!("Invalid amount: {e:?}");
                     exit(2);
                 }
-                let amount = decode_base10(&amount, BALANCE_BASE10_DECIMALS, true)?;
+
                 let rcpt = match PublicKey::from_str(&recipient) {
                     Ok(r) => r,
                     Err(e) => {
@@ -1211,8 +1231,6 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     }
                 };
 
-                let drk =
-                    Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
                 let token_id = match drk.get_token(token).await {
                     Ok(t) => t,
                     Err(e) => {
@@ -1221,13 +1239,51 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     }
                 };
 
-                let tx = match drk.dao_propose(&name, rcpt, amount, token_id).await {
+                let spend_hook = match spend_hook {
+                    Some(s) => match FuncId::from_str(&s) {
+                        Ok(s) => Some(s),
+                        Err(e) => {
+                            eprintln!("Invalid spend hook: {e:?}");
+                            exit(2);
+                        }
+                    },
+                    None => None,
+                };
+
+                let user_data = match user_data {
+                    Some(u) => {
+                        let bytes: [u8; 32] = match bs58::decode(&u).into_vec()?.try_into() {
+                            Ok(b) => b,
+                            Err(e) => {
+                                eprintln!("Invalid user data: {e:?}");
+                                exit(2);
+                            }
+                        };
+
+                        match pallas::Base::from_repr(bytes).into() {
+                            Some(v) => Some(v),
+                            None => {
+                                eprintln!("Invalid user data");
+                                exit(2);
+                            }
+                        }
+                    }
+                    None => None,
+                };
+
+                let tx = match drk
+                    .dao_propose_transfer(
+                        &name, duration, &amount, token_id, rcpt, spend_hook, user_data,
+                    )
+                    .await
+                {
                     Ok(tx) => tx,
                     Err(e) => {
-                        eprintln!("Failed to create DAO proposal: {e:?}");
+                        eprintln!("Failed to create DAO transfer proposal: {e:?}");
                         exit(2);
                     }
                 };
+
                 println!("{}", base64::encode(&serialize_async(&tx).await));
                 Ok(())
             }
@@ -1498,7 +1554,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     return Ok(())
                 }
 
-                let map = match drk.get_txs_history().await {
+                let map = match drk.get_txs_history() {
                     Ok(m) => m,
                     Err(e) => {
                         eprintln!("Failed to retrieve transactions history records: {e:?}");

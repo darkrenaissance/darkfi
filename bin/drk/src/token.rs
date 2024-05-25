@@ -98,19 +98,15 @@ impl Drk {
             MONEY_TOKENS_COL_IS_FROZEN,
         );
 
-        if let Err(e) = self
-            .wallet
-            .exec_sql(
-                &query,
-                rusqlite::params![
-                    serialize_async(&token_id).await,
-                    serialize_async(&mint_authority).await,
-                    serialize_async(&token_blind).await,
-                    is_frozen,
-                ],
-            )
-            .await
-        {
+        if let Err(e) = self.wallet.exec_sql(
+            &query,
+            rusqlite::params![
+                serialize_async(&token_id).await,
+                serialize_async(&mint_authority).await,
+                serialize_async(&token_blind).await,
+                is_frozen,
+            ],
+        ) {
             return Err(Error::RusqliteError(format!(
                 "[import_mint_authority] Inserting mint authority failed: {e:?}"
             )))
@@ -158,7 +154,7 @@ impl Drk {
 
     /// Fetch all token mint authorities from the wallet.
     pub async fn get_mint_authorities(&self) -> Result<Vec<(TokenId, SecretKey, BaseBlind, bool)>> {
-        let rows = match self.wallet.query_multiple(&MONEY_TOKENS_TABLE, &[], &[]).await {
+        let rows = match self.wallet.query_multiple(&MONEY_TOKENS_TABLE, &[], &[]) {
             Ok(r) => r,
             Err(e) => {
                 return Err(Error::RusqliteError(format!(
@@ -180,15 +176,18 @@ impl Drk {
         &self,
         token_id: &TokenId,
     ) -> Result<(TokenId, SecretKey, BaseBlind, bool)> {
-        let row =
-            match self.wallet.query_single(&MONEY_TOKENS_TABLE, &[], convert_named_params! {(MONEY_TOKENS_COL_TOKEN_ID, serialize_async(token_id).await)}).await {
-                Ok(r) => r,
-                Err(e) => {
-                    return Err(Error::RusqliteError(format!(
-                        "[get_token_mint_authority] Token mint autority retrieval failed: {e:?}"
-                    )))
-                }
-            };
+        let row = match self.wallet.query_single(
+            &MONEY_TOKENS_TABLE,
+            &[],
+            convert_named_params! {(MONEY_TOKENS_COL_TOKEN_ID, serialize_async(token_id).await)},
+        ) {
+            Ok(r) => r,
+            Err(e) => {
+                return Err(Error::RusqliteError(format!(
+                    "[get_token_mint_authority] Token mint autority retrieval failed: {e:?}"
+                )))
+            }
+        };
 
         let token = self.parse_mint_authority_record(&row).await?;
 
