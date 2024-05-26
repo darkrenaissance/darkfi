@@ -21,7 +21,7 @@ class IRC:
         self.irc.send(bytes("CAP REQ :no-history\n", "UTF-8"))
         self.irc.send(bytes("NICK " + botnick + "\n", "UTF-8"))
         self.irc.send(bytes("USER " + botnick + " 0 * :" + botnick + "\n", "UTF-8"))
-        
+        self.irc.send(bytes("CAP END\n", "UTF-8"))
 
         # join the channel
         for chan in channels:
@@ -33,6 +33,7 @@ class IRC:
         msg = resp.split(':')[-1]
  
         if resp.find('PING') != -1:                      
-            self.irc.send(bytes('PONG ' + msg + '\r\n', "UTF-8")) 
+            self.irc.send(bytes('PONG ' + msg + '\r\n', "UTF-8"))
+            return
  
         return resp.strip()
