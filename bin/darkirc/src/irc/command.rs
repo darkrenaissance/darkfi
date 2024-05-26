@@ -894,22 +894,24 @@ impl Client {
 
         // If we have any configured autojoin channels, let's join the user
         // and set their topics, if any. And request NAMES list.
-        for channel in self.server.autojoin.read().await.iter() {
-            replies.extend(self.handle_cmd_join(channel).await.unwrap());
+        if !*self.caps.read().await.get("no-autojoin").unwrap() {
+            for channel in self.server.autojoin.read().await.iter() {
+                replies.extend(self.handle_cmd_join(channel).await.unwrap());
 
-            if let Some(chan) = self.server.channels.read().await.get(channel) {
-                let nicks: Vec<String> = chan.nicks.iter().cloned().collect();
+                if let Some(chan) = self.server.channels.read().await.get(channel) {
+                    let nicks: Vec<String> = chan.nicks.iter().cloned().collect();
+
+                    replies.push(ReplyType::Server((
+                        RPL_NAMREPLY,
+                        format!("{} = {} :{}", nick, channel, nicks.join(" ")),
+                    )));
+                }
 
                 replies.push(ReplyType::Server((
-                    RPL_NAMREPLY,
-                    format!("{} = {} :{}", nick, channel, nicks.join(" ")),
+                    RPL_ENDOFNAMES,
+                    format!("{} {} :End of NAMES list", nick, channel),
                 )));
             }
-
-            replies.push(ReplyType::Server((
-                RPL_ENDOFNAMES,
-                format!("{} {} :End of NAMES list", nick, channel),
-            )));
         }
 
         replies

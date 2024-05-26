@@ -61,6 +61,11 @@ async def main(debug=False):
         writer.write(msg.encode("utf-8"))
         await writer.drain()
 
+        logging.debug("--> %s/%d: CAP REQ :no-autojoin", host, port)
+        msg = "CAP REQ :no-autojoin\r\n"
+        writer.write(msg.encode("utf-8"))
+        await writer.drain()
+
         msg = await reader.readline()
         msg = msg.decode("utf-8")
         logging.debug("<-- %s/%d: %s", host, port, msg)

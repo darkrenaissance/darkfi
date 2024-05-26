@@ -102,7 +102,8 @@ impl Client {
         incoming: Subscription<Event>,
         addr: SocketAddr,
     ) -> Result<Self> {
-        let caps = HashMap::from([("no-history".to_string(), false)]);
+        let caps =
+            HashMap::from([("no-history".to_string(), false), ("no-autojoin".to_string(), false)]);
 
         let username = Arc::new(RwLock::new(String::from("*")));
         let nickname = Arc::new(RwLock::new(String::from("*")));
