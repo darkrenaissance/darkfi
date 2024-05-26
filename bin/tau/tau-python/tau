@@ -547,8 +547,8 @@ Examples:
     tau show +dev project:zk    # list tasks with 'dev' tag project 'zk'
     tau switch darkfi           # switch to configured 'darkfi' workspace
     tau archive                 # current month's completed tasks
-    tau archive 1122            # completed tasks in Nov. 2022
-    tau archive 1 1122          # show info of task completed in Nov. 2022
+    tau archive 1122            # completed tasks of Nov. 2022
+    tau archive 1122 1          # show info of task completed in Nov. 2022
 ''')
         return 0
     elif sys.argv[1] == "add":
@@ -559,11 +559,11 @@ Examples:
         return 0
     elif sys.argv[1] == "archive":
         if len(sys.argv) == 4:
-            if len(sys.argv[3]) == 4:
-                month = sys.argv[3]
+            if len(sys.argv[2]) == 4:
+                month = sys.argv[2]
                 month_ts = lib.util.month_to_unix(month)
             else:
-                print("error: month must be of format MMYY")
+                print("error: usage format is: tau archive [MONTH] [ID]")
                 return -1
                 
             archive_refids = await api.get_archive_ref_ids(month_ts, server_name, port)
@@ -575,9 +575,9 @@ Examples:
 
             adata = map_ids(afree_ids, archive_refids)
 
-            if len(sys.argv[2]) < 4:
+            if len(sys.argv[3]) < 4:
                 try:
-                    tid = int(sys.argv[2])
+                    tid = int(sys.argv[3])
                     arefid = adata[tid]
                 except (ValueError, KeyError):
                     print("error: invalid ID", file=sys.stderr)
@@ -615,7 +615,7 @@ Examples:
                 if (errc := await show_archive_task(arefid, month_ts, server_name, port)) < 0:
                     return errc
             else:
-                print("error: usage format is: tau archive [ID] [MONTH]")
+                print("error: month must be of format MMYY")
                 return -1
         else:
             month_ts = lib.util.month_to_unix()

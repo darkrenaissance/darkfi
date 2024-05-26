@@ -11,11 +11,16 @@ def now():
     return datetime_to_unix(datetime.now(tz=UTC))
 
 def month_to_unix(month=None):
-    month_year = month if month is not None else datetime.utcnow().strftime("%m%y")
-    return datetime.strptime(month_year,"%m%y").timestamp()
+    month_year = month if month is not None else datetime.now(UTC).strftime("%m%y")
+    try:
+        unix = int(datetime.strptime(month_year,"%m%y").timestamp())
+    except ValueError:
+        print("Error parsing date!")
+        exit(-1)
+    return unix
 
 def unix_to_datetime(timestamp):
-    return datetime.utcfromtimestamp(int(timestamp))
+    return datetime.fromtimestamp(int(timestamp), UTC)
 
 task_template = {
     "workspace": str,
