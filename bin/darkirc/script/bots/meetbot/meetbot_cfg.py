@@ -7,17 +7,14 @@ config = {
 
     # IRC nickname
     "nick": "meetbot",
+
+    # Channels to join
     "channels": [
         {
-            "name": "#foo",
-            "secret": None,
+            "name": "#dev",
         },
         {
-            "name": "#secret_channel",
-            # TODO: This is useless right now, but it would be nice
-            # to add a CAP in ircd to give all incoming PRIVMSG to be
-            # able to check them.
-            "secret": "HNEKcUmwsspdaL9b8sFn45b8Rf3bzv1LdYS1JVNvkPGL",
+            "name": "#philosophy",
         },
     ],
 }

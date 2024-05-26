@@ -4,9 +4,6 @@ import logging
 import pickle
 from time import time
 
-from base58 import b58decode
-from nacl.public import PrivateKey, Box
-
 from meetbot_cfg import config
 
 # Initialized channels from the configuration
@@ -14,216 +11,6 @@ CHANS = {}
 
 # Pickle DB
 PICKLE_DB = "meetbot.pickle"
-
-
-# TODO: while this is nice to support, it would perhaps be better to do it
-# all over the same connection rather than opening a socket for each channel.
-async def channel_listen(host, port, nick, chan):
-    try:
-        logging.info("%s: Connecting to %s:%s", chan, host, port)
-        reader, writer = await asyncio.open_connection(host, port)
-
-        logging.debug("%s: Send CAP msg", chan)
-        msg = "CAP REQ : no-history\r\n"
-        writer.write(msg.encode("utf-8"))
-        await writer.drain()
-
-        logging.debug("%s: Send NICK msg", chan)
-        msg = f"NICK {nick}\r\n"
-        writer.write(msg.encode("utf-8"))
-        await writer.drain()
-
-        logging.debug("%s: Send CAP END msg", chan)
-        msg = "CAP END\r\n"
-        writer.write(msg.encode("utf-8"))
-        await writer.drain()
-
-        logging.debug("%s: Send JOIN msg", chan)
-        msg = f"JOIN {chan}\r\n"
-        writer.write(msg.encode("utf-8"))
-        await writer.drain()
-
-        elapsed=0
-
-        logging.info("%s: Listening to channel", chan)
-        while True:
-            msg = await reader.readline()
-            msg = msg.decode("utf8")
-            if not msg:
-                continue
-
-            split_msg = msg.split(" ")
-            command = split_msg[1]
-            nick_c = split_msg[0][1:].rsplit("!", 1)[0]
-            logging.debug("%s: Recv: %s", chan, msg.rstrip())
-
-            if command == "PRIVMSG":
-                msg_title = msg.split(" ")[3][1:].rstrip()
-                if not msg_title:
-                    logging.info("%s: Recv empty PRIVMSG, ignoring", chan)
-                    continue
-
-                if msg_title == "!start":
-                    logging.info("%s: Got !start", chan)
-                    topics = CHANS[chan]["topics"]
-                    reply = f"PRIVMSG {chan} :Meeting started"
-                    logging.info("%s: Send: %s", chan, reply)
-                    writer.write((reply + "\r\n").encode("utf-8"))
-                    await writer.drain()
-
-                    if len(topics) == 0:
-                        reply = f"PRIVMSG {chan} :No topics"
-                        logging.info("%s: Send: %s", chan, reply)
-                        writer.write((reply + "\r\n").encode("utf-8"))
-                        await writer.drain()
-                        continue
-
-                    reply = f"PRIVMSG {chan} :Topics:"
-                    logging.info("%s: Send: %s", chan, reply)
-                    writer.write((reply + "\r\n").encode("utf-8"))
-                    await writer.drain()
-
-                    for i, topic in enumerate(topics):
-                        reply = f"PRIVMSG {chan} :{i+1}. {topic}"
-                        logging.info("%s: Send: %s", chan, reply)
-                        writer.write((reply + "\r\n").encode("utf-8"))
-                        await writer.drain()
-
-                    cur_topic = topics.pop(0)
-                    reply = f"PRIVMSG {chan} :Current topic: {cur_topic}\r\n"
-                    CHANS[chan]["topics"] = topics
-                    writer.write(reply.encode("utf-8"))
-                    await writer.drain()
-                    elapsed=time()
-                    continue
-
-                if msg_title == "!end":
-                    logging.info("%s: Got !end", chan)
-                    reply = f"PRIVMSG {chan} :Elapsed time: {round((time() - elapsed)/60, 1)} min"
-                    elapsed=0
-                    logging.info("%s: Send: %s", chan, reply)
-                    writer.write((reply + "\r\n").encode("utf-8"))
-                    await writer.drain()
-                    reply = f"PRIVMSG {chan} :Meeting ended"
-                    logging.info("%s: Send: %s", chan, reply)
-                    writer.write((reply + "\r\n").encode("utf-8"))
-                    await writer.drain()
-                    continue
-
-                if msg_title == "!topic":
-                    logging.info("%s: Got !topic", chan)
-                    topic = msg.split(" ", 4)
-
-                    if len(topic) != 5:
-                        logging.debug("%s: Topic msg len not 5, skipping",
-                                      chan)
-                        continue
-
-                    topic = topic[4].rstrip() + f" (by {nick_c})"
-
-                    if topic == "":
-                        logging.debug("%s: Topic message empty, skipping",
-                                      chan)
-                        continue
-
-                    topics = CHANS[chan]["topics"]
-                    if topic not in topics:
-                        topics.append(topic)
-                        CHANS[chan]["topics"] = topics
-                        logging.debug("%s: Appended topic to channel topics",
-                                      chan)
-                        reply = f"PRIVMSG {chan} :Added topic: {topic}"
-                        logging.info("%s: Send: %s", chan, reply)
-                    else:
-                        logging.debug("%s: Topic already in list of topics",
-                                      chan)
-                        reply = f"PRIVMSG {chan} :Topic already in list"
-                        logging.info("%s: Send: %s", chan, reply)
-
-                    writer.write((reply + "\r\n").encode("utf-8"))
-                    await writer.drain()
-                    continue
-
-                if msg_title == "!deltopic":
-                    logging.info("%s: Got !deltopic", chan)
-                    topics = CHANS[chan]["topics"]
-                    if len(topics) == 0:
-                        reply = f"PRIVMSG {chan} :No topics"
-                        logging.info("%s: Send: %s", chan, reply)
-                        writer.write((reply + "\r\n").encode("utf-8"))
-                        await writer.drain()
-                        continue
-
-                    try:
-                        topic = msg.split(" ", 4)
-                        topic = int(topic[4].rstrip())
-                        del topics[topic-1]
-                        CHANS[chan]["topics"] = topics
-                        reply = f"PRIVMSG {chan} :Removed topic {topic}"
-                        logging.info("%s: Send: %s", chan, reply)
-                        writer.write((reply + "\r\n").encode("utf-8"))
-                        await writer.drain()
-                    except:
-                        reply = f"PRIVMSG {chan} :Topic not found"
-                        logging.info("%s: Send: %s", chan, reply)
-                        writer.write((reply + "\r\n").encode("utf-8"))
-                        await writer.drain()
-
-                    continue
-
-                if msg_title == "!list":
-                    logging.info("%s: Got !list", chan)
-                    topics = CHANS[chan]["topics"]
-                    if len(topics) == 0:
-                        reply = f"PRIVMSG {chan} :No topics"
-                    else:
-                        reply = f"PRIVMSG {chan} :Topics:"
-
-                    logging.info("%s: Send: %s", chan, reply)
-                    writer.write((reply + "\r\n").encode("utf-8"))
-                    await writer.drain()
-
-                    for i, topic in enumerate(topics):
-                        reply = f"PRIVMSG {chan} :{i+1}. {topic}"
-                        logging.info("%s: Send: %s", chan, reply)
-                        writer.write((reply + "\r\n").encode("utf-8"))
-                        await writer.drain()
-
-                    continue
-
-                if msg_title == "!next":
-                    logging.info("%s: Got !next", chan)
-                    topics = CHANS[chan]["topics"]
-
-                    reply = f"PRIVMSG {chan} :Elapsed time: {round((time() - elapsed)/60, 1)} min"
-                    logging.info("%s: Send: %s", chan, reply)
-                    writer.write((reply + "\r\n").encode("utf-8"))
-                    await writer.drain()
-                    elapsed=time()
-
-                    if len(topics) == 0:
-                        reply = f"PRIVMSG {chan} :No further topics"
-                    else:
-                        cur_topic = topics.pop(0)
-                        CHANS[chan]["topics"] = topics
-                        reply = f"PRIVMSG {chan} :Current topic: {cur_topic}"
-
-                    logging.info("%s: Send: %s", chan, reply)
-                    writer.write((reply + "\r\n").encode("utf-8"))
-                    await writer.drain()
-                    continue
-
-    except KeyboardInterrupt:
-        return
-    except ConnectionRefusedError:
-        logging.warning("%s: Connection refused, trying again in 3s...", chan)
-        await asyncio.sleep(3)
-        await channel_listen(host, port, nick, chan)
-    except Exception as e:
-        logging.error("EXCEPTION: %s", e)
-        logging.warn("%s: Connection interrupted. Reconnecting in 3s...", chan)
-        await asyncio.sleep(3)
-        await channel_listen(host, port, nick, chan)
 
 
 async def main(debug=False):
@@ -240,51 +27,248 @@ async def main(debug=False):
             CHANS = pickle.load(pickle_fd)
         logging.info("Loaded pickle database")
     except:
-        logging.info("Did not find pickle database")
+        logging.info("Did not find existing pickle database")
 
-    for i in config["channels"]:
-        name = i["name"]
-        logging.info("Found config for channel %s", name)
+    host = config["host"]
+    port = config["port"]
+    nick = config["nick"]
 
-        # TODO: This will be useful when ircd has a CAP that tells it to
-        # give **all** messages to the connected client, no matter if ircd
-        # itself has a configured secret or not.
-        # This way the ircd itself doesn't have to keep channel secrets, but
-        # they can rather only be held by this bot. In turn this means the bot
-        # can be deployed with any ircd.
-        if i["secret"]:
-            logging.info("Instantiating NaCl box for %s", name)
-            secret = b58decode(i["secret"].encode("utf-8"))
-            secret = PrivateKey(secret)
-            public = secret.public_key
-            box = Box(secret, public)
-        else:
-            box = None
+    try:
+        logging.info("Connecting to %s/%d", host, port)
+        reader, writer = await asyncio.open_connection(host, port)
 
-        if not CHANS.get(name):
-            CHANS[name] = {}
+        logging.debug("--> %s/%d: CAP LS 302", host, port)
+        msg = "CAP LS 302\r\n"
+        writer.write(msg.encode("utf-8"))
+        await writer.drain()
 
-        if not CHANS[name].get("topics"):
-            CHANS[name]["topics"] = []
+        logging.debug("--> %s/%d: NICK %s", host, port, nick)
+        msg = f"NICK {nick}\r\n"
+        writer.write(msg.encode("utf-8"))
+        await writer.drain()
 
-        CHANS[name]["box"] = box
+        logging.debug("--> %s/%d: USER %s * 0 %s", host, port, nick, nick)
+        msg = f"USER {nick} * 0 :{nick}\r\n"
+        writer.write(msg.encode("utf-8"))
+        await writer.drain()
 
-    coroutines = []
-    for i in CHANS.keys():
-        logging.debug("Creating async task for %s", i)
-        task = asyncio.create_task(
-            channel_listen(config["host"], config["port"], config["nick"], i))
-        coroutines.append(task)
+        msg = await reader.readline()
+        msg = msg.decode("utf-8")
+        logging.debug("<-- %s/%d: %s", host, port, msg)
 
-    await asyncio.gather(*coroutines)
+        logging.debug("--> %s/%d: CAP REQ :no-history", host, port)
+        msg = "CAP REQ :no-history\r\n"
+        writer.write(msg.encode("utf-8"))
+        await writer.drain()
+
+        msg = await reader.readline()
+        msg = msg.decode("utf-8")
+        logging.debug("<-- %s/%d: %s", host, port, msg)
+
+        logging.debug("--> %s/%d: CAP END", host, port)
+        msg = "CAP END\r\n"
+        writer.write(msg.encode("utf-8"))
+        await writer.drain()
+
+        msg = await reader.readline()
+        msg = msg.decode("utf-8")
+        logging.debug("<-- %s/%d: %s", host, port, msg)
+
+        for chan in config["channels"]:
+            chan = chan["name"]
+            logging.debug("--> %s/%d: JOIN %s", host, port, chan)
+            msg = f"JOIN {chan}\r\n"
+            writer.write(msg.encode("utf-8"))
+            await writer.drain()
+
+        channels = [chan["name"] for chan in config["channels"]]
+        logging.info("%s/%d: Listening to channels: %s", host, port, channels)
+
+        elapsed = 0
+
+        while True:
+            msg = await reader.readline()
+            msg = msg.decode("utf-8")
+            if not msg:
+                continue
+
+            split_msg = msg.split(" ")
+            command = split_msg[1]
+            chan = split_msg[2]
+            nick_c = split_msg[0][1:].rsplit("!", 1)[0]
+            logging.debug("<-- %s/%d: %s", host, port, msg.rstrip())
+
+            if command == "PRIVMSG":
+                msg_title = msg.split(" ")[3][1:].rstrip()
+                if not msg_title:
+                    continue
+
+                if msg_title == "!start":
+                    logging.info("%s: Got !start", chan)
+
+                    if not CHANS.get(chan):
+                        CHANS[chan] = {}
+                        CHANS[chan]["topics"] = {}
+
+                    topics = CHANS[chan]["topics"]
+
+                    reply = f"PRIVMSG {chan} :Meeting started\r\n"
+                    writer.write(reply.encode("utf-8"))
+                    await writer.drain()
+
+                    if len(topics) == 0:
+                        reply = f"PRIVMSG {chan} :No topics\r\n"
+                        writer.write(reply.encode("utf-8"))
+                        await writer.drain()
+                        continue
+
+                    reply = f"PRIVMSG {chan} :Topics:\r\n"
+                    writer.write(reply.encode("utf-8"))
+                    await writer.drain()
+
+                    for i, topic in enumerate(topics):
+                        reply = f"PRIVMSG {chan} :{i+1}. {topic}\e\n"
+                        writer.write(reply.encode("utf-8"))
+                        await writer.drain()
+
+                    cur_topic = topics.pop(0)
+                    reply = f"PRIVMSG {chan} :Current topic: {cur_topic}\r\n"
+                    CHANS[chan]["topics"] = topics
+                    writer.write(reply.encode("utf-8"))
+                    await writer.drain()
+                    elapsed = time()
+                    continue
+
+                if msg_title == "!end":
+                    logging.info("%s: Got !end", chan)
+                    reply = f"PRIVMSG {chan} :Elapsed time: {round((time() - elapsed)/60, 1)} min\r\n"
+                    elapsed = 0
+                    writer.write(reply.encode("utf-8"))
+                    await writer.drain()
+                    reply = f"PRIVMSG {chan} :Meeting ended\r\n"
+                    writer.write(reply.encode("utf-8"))
+                    await writer.drain()
+                    continue
+
+                if msg_title == "!topic":
+                    logging.info("%s: Got !topic", chan)
+                    topic = msg.split(" ", 4)
+
+                    if len(topic) != 5:
+                        continue
+
+                    topic = topic[4].rstrip() + f" (by {nick_c})"
+
+                    if topic == "":
+                        continue
+
+                    if not CHANS.get(chan):
+                        CHANS[chan] = {}
+                        CHANS[chan]["topics"] = {}
+
+                    topics = CHANS[chan]["topics"]
+                    if topic not in topics:
+                        topics.append(topic)
+                        CHANS[chan]["topics"] = topics
+                        reply = f"PRIVMSG {chan} :Added topic: {topic}\r\n"
+                    else:
+                        reply = f"PRIVMSG {chan} :Topic already in list\r\n"
+
+                    writer.write(reply.encode("utf-8"))
+                    await writer.drain()
+                    continue
+
+                if msg_title == "!deltopic":
+                    logging.info("%s: Got !deltopic", chan)
+
+                    if not CHANS.get(chan):
+                        CHANS[chan] = {}
+                        CHANS[chan]["topics"] = {}
+
+                    topics = CHANS[chan]["topics"]
+
+                    if len(topics) == 0:
+                        reply = f"PRIVMSG {chan} :No topics\r\n"
+                        writer.write(reply.encode("utf-8"))
+                        await writer.drain()
+                        continue
+
+                    try:
+                        topic = msg.split(" ", 4)
+                        topic = int(topic[4].rstrip())
+                        del topics[topic-1]
+                        CHANS[chan]["topics"] = topics
+                        reply = f"PRIVMSG {chan} :Removed topic {topic}\r\n"
+                        writer.write(reply.encode("utf-8"))
+                        await writer.drain()
+                    except:
+                        reply = f"PRIVMSG {chan} :Topic not found\r\n"
+                        writer.write(reply.encode("utf-8"))
+                        await writer.drain()
+
+                    continue
+
+                if msg_title == "!list":
+                    logging.info("%s: Got !list", chan)
+
+                    if not CHANS.get(chan):
+                        CHANS[chan] = {}
+                        CHANS[chan]["topics"] = []
+
+                    topics = CHANS[chan]["topics"]
+                    if len(topics) == 0:
+                        reply = f"PRIVMSG {chan} :No topics\r\n"
+                    else:
+                        reply = f"PRIVMSG {chan} :Topics:\r\n"
+
+                    writer.write(reply.encode("utf-8"))
+                    await writer.drain()
+
+                    for i, topic in enumerate(topics):
+                        reply = f"PRIVMSG {chan} :{i+1}. {topic}\r\n"
+                        writer.write(reply.encode("utf-8"))
+                        await writer.drain()
+
+                    continue
+
+                if msg_title == "!next":
+                    logging.info("%s: Got !next", chan)
+
+                    if not CHANS.get(chan):
+                        CHANS[chan] = {}
+                        CHANS[chan]["topics"] = []
+
+                    topics = CHANS[chan]["topics"]
+
+                    reply = f"PRIVMSG {chan} :Elapsed time: {round((time() - elapsed)/60, 1)}, min\r\n"
+                    writer.write(reply.encode("utf-8"))
+                    await writer.drain()
+                    elapsed = time()
+
+                    if len(topics) == 0:
+                        reply = f"PRIVMSG {chan} :No further topics\r\n"
+                    else:
+                        cur_topic = topics.pop(0)
+                        CHANS[chan]["topics"] = topics
+                        reply = f"PRIVMSG {chan} :Current topic: {cur_topic}\r\n"
+
+                    writer.write(reply.encode("utf-8"))
+                    await writer.drain()
+                    continue
+
+    except KeyboardInterrupt:
+        return
+    except ConnectionRefusedError:
+        logging.error("%s/%d: Connection refused", host, port)
+        return
 
 
 if __name__ == "__main__":
     from sys import argv
-    DBG = bool(len(argv) == 2 and argv[1] == "-v")
+    debug = "-v" in argv
 
     try:
-        asyncio.run(main(debug=DBG))
+        asyncio.run(main(debug=debug))
     except KeyboardInterrupt:
         print("\rCaught ^C, saving pickle and exiting")
 
