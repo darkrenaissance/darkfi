@@ -218,6 +218,24 @@ mod tests {
     }
 
     #[test]
+    fn condvar_wait_after_notify() {
+        let executor = Arc::new(Executor::new());
+        let executor_ = executor.clone();
+        smol::block_on(executor.run(async move {
+            let cv = Arc::new(CondVar::new());
+
+            let cv2 = cv.clone();
+            executor_.spawn(async move { cv2.wait().await }).detach();
+
+            cv.notify();
+
+            // Should complete immediately
+            let cv2 = cv.clone();
+            executor_.spawn(async move { cv2.wait().await }).detach();
+        }))
+    }
+
+    #[test]
     fn condvar_drop() {
         let executor = Arc::new(Executor::new());
         let executor_ = executor.clone();
