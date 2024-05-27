@@ -115,8 +115,8 @@ impl Default for Header {
     }
 }
 
-const SLED_HEADER_TREE: &[u8] = b"_headers";
-const SLED_SYNC_HEADER_TREE: &[u8] = b"_sync_headers";
+pub const SLED_HEADER_TREE: &[u8] = b"_headers";
+pub const SLED_SYNC_HEADER_TREE: &[u8] = b"_sync_headers";
 
 /// The `HeaderStore` is a structure representing all `sled` trees related
 /// to storing the blockchain's blocks's header information.
@@ -324,7 +324,7 @@ pub struct HeaderStoreOverlay(SledDbOverlayPtr);
 
 impl HeaderStoreOverlay {
     pub fn new(overlay: &SledDbOverlayPtr) -> Result<Self> {
-        overlay.lock().unwrap().open_tree(SLED_HEADER_TREE)?;
+        overlay.lock().unwrap().open_tree(SLED_HEADER_TREE, true)?;
         Ok(Self(overlay.clone()))
     }
 

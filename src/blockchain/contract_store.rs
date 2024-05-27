@@ -30,8 +30,8 @@ use crate::{
 
 use super::{parse_record, SledDbOverlayPtr};
 
-const SLED_CONTRACTS_TREE: &[u8] = b"_contracts";
-const SLED_BINCODE_TREE: &[u8] = b"_wasm_bincode";
+pub const SLED_CONTRACTS_TREE: &[u8] = b"_contracts";
+pub const SLED_BINCODE_TREE: &[u8] = b"_wasm_bincode";
 
 /// The hardcoded db name for the zkas circuits database tree
 pub const SMART_CONTRACT_ZKAS_DB_NAME: &str = "_zkas";
@@ -215,8 +215,8 @@ pub struct ContractStoreOverlay(SledDbOverlayPtr);
 
 impl ContractStoreOverlay {
     pub fn new(overlay: &SledDbOverlayPtr) -> Result<Self> {
-        overlay.lock().unwrap().open_tree(SLED_BINCODE_TREE)?;
-        overlay.lock().unwrap().open_tree(SLED_CONTRACTS_TREE)?;
+        overlay.lock().unwrap().open_tree(SLED_BINCODE_TREE, true)?;
+        overlay.lock().unwrap().open_tree(SLED_CONTRACTS_TREE, true)?;
         Ok(Self(overlay.clone()))
     }
 
@@ -280,7 +280,7 @@ impl ContractStoreOverlay {
         // Now we add it so it's marked as initialized and create its tree.
         state_pointers.push(ptr);
         lock.insert(SLED_CONTRACTS_TREE, &contract_id_bytes, &serialize(&state_pointers))?;
-        lock.open_tree(&ptr)?;
+        lock.open_tree(&ptr, false)?;
 
         Ok(ptr)
     }
@@ -311,7 +311,7 @@ impl ContractStoreOverlay {
         }
 
         // We open the tree and return its handle
-        lock.open_tree(&ptr)?;
+        lock.open_tree(&ptr, false)?;
         Ok(ptr)
     }
 

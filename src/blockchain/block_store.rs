@@ -284,9 +284,9 @@ impl darkfi_serial::Decodable for BlockDifficulty {
     }
 }
 
-const SLED_BLOCK_TREE: &[u8] = b"_blocks";
-const SLED_BLOCK_ORDER_TREE: &[u8] = b"_block_order";
-const SLED_BLOCK_DIFFICULTY_TREE: &[u8] = b"_block_difficulty";
+pub const SLED_BLOCK_TREE: &[u8] = b"_blocks";
+pub const SLED_BLOCK_ORDER_TREE: &[u8] = b"_block_order";
+pub const SLED_BLOCK_DIFFICULTY_TREE: &[u8] = b"_block_difficulty";
 
 /// The `BlockStore` is a structure representing all `sled` trees related
 /// to storing the blockchain's blocks information.
@@ -584,9 +584,9 @@ pub struct BlockStoreOverlay(SledDbOverlayPtr);
 
 impl BlockStoreOverlay {
     pub fn new(overlay: &SledDbOverlayPtr) -> Result<Self> {
-        overlay.lock().unwrap().open_tree(SLED_BLOCK_TREE)?;
-        overlay.lock().unwrap().open_tree(SLED_BLOCK_ORDER_TREE)?;
-        overlay.lock().unwrap().open_tree(SLED_BLOCK_DIFFICULTY_TREE)?;
+        overlay.lock().unwrap().open_tree(SLED_BLOCK_TREE, true)?;
+        overlay.lock().unwrap().open_tree(SLED_BLOCK_ORDER_TREE, true)?;
+        overlay.lock().unwrap().open_tree(SLED_BLOCK_DIFFICULTY_TREE, true)?;
         Ok(Self(overlay.clone()))
     }
 

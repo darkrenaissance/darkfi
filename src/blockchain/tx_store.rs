@@ -25,10 +25,10 @@ use crate::{tx::Transaction, Error, Result};
 
 use super::{parse_record, parse_u64_key_record, SledDbOverlayPtr};
 
-const SLED_TX_TREE: &[u8] = b"_transactions";
-const SLED_TX_LOCATION_TREE: &[u8] = b"_transaction_location";
-const SLED_PENDING_TX_TREE: &[u8] = b"_pending_transactions";
-const SLED_PENDING_TX_ORDER_TREE: &[u8] = b"_pending_transactions_order";
+pub const SLED_TX_TREE: &[u8] = b"_transactions";
+pub const SLED_TX_LOCATION_TREE: &[u8] = b"_transaction_location";
+pub const SLED_PENDING_TX_TREE: &[u8] = b"_pending_transactions";
+pub const SLED_PENDING_TX_ORDER_TREE: &[u8] = b"_pending_transactions_order";
 
 /// The `TxStore` is a structure representing all `sled` trees related
 /// to storing the blockchain's transactions information.
@@ -323,12 +323,19 @@ impl TxStore {
         Ok(txs)
     }
 
-    /// Fetch n transactions after given order. In the iteration, if a transaction
-    /// order is not found, the iteration stops and the function returns what
-    /// it has found so far in the store's pending order tree.
+    /// Fetch n transactions after given order([order..order+n)). In the iteration,
+    /// if a transaction order is not found, the iteration stops and the function
+    /// returns what it has found so far in the store's pending order tree.
     pub fn get_after_pending(&self, order: u64, n: usize) -> Result<(u64, Vec<Transaction>)> {
         let mut hashes = vec![];
 
+        // First we grab the order itself
+        if let Some(found) = self.pending_order.get(order.to_be_bytes())? {
+            let hash = deserialize(&found)?;
+            hashes.push(hash);
+        }
+
+        // Then whatever comes after it
         let mut key = order;
         let mut counter = 0;
         while counter < n {
@@ -405,8 +412,8 @@ pub struct TxStoreOverlay(SledDbOverlayPtr);
 
 impl TxStoreOverlay {
     pub fn new(overlay: &SledDbOverlayPtr) -> Result<Self> {
-        overlay.lock().unwrap().open_tree(SLED_TX_TREE)?;
-        overlay.lock().unwrap().open_tree(SLED_TX_LOCATION_TREE)?;
+        overlay.lock().unwrap().open_tree(SLED_TX_TREE, true)?;
+        overlay.lock().unwrap().open_tree(SLED_TX_LOCATION_TREE, true)?;
         Ok(Self(overlay.clone()))
     }
 

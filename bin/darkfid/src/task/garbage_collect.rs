@@ -65,7 +65,7 @@ pub async fn garbage_collect_task(node: Arc<Darkfid>) -> Result<()> {
                             target: "darkfid::task::garbage_collect_task",
                             "Overlay full clone creation failed: {e}"
                         );
-                        break
+                        return Err(e)
                     }
                 };
 
@@ -78,7 +78,7 @@ pub async fn garbage_collect_task(node: Arc<Darkfid>) -> Result<()> {
                                 target: "darkfid::task::garbage_collect_task",
                                 "Proposal transactions retrieval failed: {e}"
                             );
-                            break
+                            return Err(e)
                         }
                     };
 
@@ -95,7 +95,7 @@ pub async fn garbage_collect_task(node: Arc<Darkfid>) -> Result<()> {
                             target: "darkfid::task::garbage_collect_task",
                             "Next fork block height retrieval failed: {e}"
                         );
-                        break
+                        return Err(e)
                     }
                 };
 
@@ -124,6 +124,9 @@ pub async fn garbage_collect_task(node: Arc<Darkfid>) -> Result<()> {
                 }
             }
 
+            // Drop forks lock
+            drop(forks);
+
             // Remove transaction if its invalid for all the forks
             if !valid {
                 debug!(target: "darkfid::task::garbage_collect_task", "Removing invalid transaction: {tx_hash}");
@@ -134,9 +137,6 @@ pub async fn garbage_collect_task(node: Arc<Darkfid>) -> Result<()> {
                     );
                 };
             }
-
-            // Drop forks lock
-            drop(forks);
         }
         (last_checked, txs) =
             match node.validator.blockchain.transactions.get_after_pending(last_checked, TXS_CAP) {
