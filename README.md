@@ -99,8 +99,8 @@ to happen from time to time. As a workaround, we can configure an older
 nightly version, which was known to work:
 
 ```shell
-% rustup toolchain install nightly-2024-02-01
-% rustup target add wasm32-unknown-unknown --toolchain nightly-2024-02-01
+% rustup toolchain install nightly-2024-04-05
+% rustup target add wasm32-unknown-unknown --toolchain nightly-2024-04-05
 ```
 
 Now we can use that toolchain in `make` directly:

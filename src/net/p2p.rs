@@ -19,6 +19,7 @@
 use std::sync::Arc;
 
 use futures::{stream::FuturesUnordered, TryFutureExt};
+use futures_rustls::rustls::crypto::{ring, CryptoProvider};
 use log::{debug, error, info, warn};
 use smol::{lock::Mutex, stream::StreamExt};
 use url::Url;
@@ -80,6 +81,9 @@ impl P2p {
     /// p2p parent class.
     pub async fn new(settings: Settings, executor: ExecutorPtr) -> P2pPtr {
         let settings = Arc::new(settings);
+
+        // Register a CryptoProvider for rustls
+        CryptoProvider::install_default(ring::default_provider()).unwrap();
 
         let self_ = Arc::new(Self {
             executor,
