@@ -35,3 +35,6 @@ mod url;
 
 #[cfg(feature = "semver")]
 mod semver;
+
+#[cfg(feature = "num-bigint")]
+mod bigint;
