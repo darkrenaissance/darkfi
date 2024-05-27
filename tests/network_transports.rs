@@ -51,6 +51,10 @@ fn tcp_transport() {
 
 #[test]
 fn tcp_tls_transport() {
+    // Register a CryptoProvider for rustls
+    use futures_rustls::rustls::crypto::{ring, CryptoProvider};
+    let _ = CryptoProvider::install_default(ring::default_provider());
+
     let executor = LocalExecutor::new();
     let url = Url::parse("tcp+tls://127.0.0.1:5433").unwrap();
 
