@@ -10,11 +10,11 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 blake2b_simd = "1.0.2"
-bs58 = "0.5.0"
+bs58 = "0.5.1"
 darkfi-sdk = { path = "../../sdk" }
 darkfi-serial = { path = "../../serial", features = ["derive", "crypto"] }
 darkfi_money_contract = { path = "../money", features = ["no-entrypoint"] }
-thiserror = "1.0.57"
+thiserror = "1.0.61"
 
 # The following dependencies are used for the client API and
 # probably shouldn't be in WASM
@@ -26,7 +26,7 @@ rand = { version = "0.8.5", optional = true }
 
 # These are used just for the integration tests
 [dev-dependencies]
-smol = "1.3.0"
+smol = "2.0.0"
 darkfi = {path = "../../../", features = ["tx", "blockchain"]}
 darkfi_money_contract = {path = "../money", features = ["client", "no-entrypoint"]}
 simplelog = "0.12.2"

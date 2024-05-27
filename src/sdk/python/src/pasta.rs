@@ -102,7 +102,7 @@ macro_rules! impl_elem {
             }
 
             fn __repr__(slf: &PyCell<Self>) -> PyResult<String> {
-                let class_name: &str = slf.get_type().name()?;
+                let class_name: &str = &slf.get_type().name()?;
                 Ok(format!("{}({:?})", class_name, slf.borrow().0))
             }
 
@@ -169,7 +169,7 @@ macro_rules! impl_affine {
             }
 
             fn __repr__(slf: &PyCell<Self>) -> PyResult<String> {
-                let class_name: &str = slf.get_type().name()?;
+                let class_name: &str = &slf.get_type().name()?;
                 Ok(format!("{}({:?})", class_name, slf.borrow().0))
             }
         }
@@ -213,7 +213,7 @@ macro_rules! impl_point {
             }
 
             fn __repr__(slf: &PyCell<Self>) -> PyResult<String> {
-                let class_name: &str = slf.get_type().name()?;
+                let class_name: &str = &slf.get_type().name()?;
                 Ok(format!("{}({:?})", class_name, slf.borrow().0))
             }
 

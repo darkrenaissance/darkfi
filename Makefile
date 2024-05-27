@@ -19,8 +19,8 @@ PROOFS_BIN = $(PROOFS_SRC:=.bin)
 BINS = \
 	zkas \
 	darkfid \
-	minerd \
 	darkfi-mmproxy \
+	minerd \
 	darkirc \
 	genev \
 	genevd \

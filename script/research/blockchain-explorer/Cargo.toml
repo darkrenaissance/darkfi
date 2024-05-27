@@ -10,11 +10,11 @@ edition = "2021"
 [workspace]
 
 [dependencies]
-blake3 = "1.5.0"
-clap = {version = "4.5.2", features = ["derive"]}
+blake3 = "1.5.1"
+clap = {version = "4.4.11", features = ["derive"]}
 darkfi = {path = "../../../", features = ["blockchain"]}
 darkfi-sdk = {path = "../../../src/sdk"}
-num-bigint = "0.4.4"
+num-bigint = "0.4.5"
 sled = "0.34.7"
 
 [patch.crates-io]

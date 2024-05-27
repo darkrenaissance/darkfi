@@ -164,7 +164,7 @@ impl MiningProxy {
         // Create the Merge Mining data
         // TODO: This is where we're gonna include the necessary DarkFi data
         // that has to end up in Monero blocks.
-        let mm_tag = MergeMining(Some(monero::VarInt(32)), monero::Hash([0_u8; 32]));
+        let mm_tag = MergeMining(monero::VarInt(32), monero::Hash([0_u8; 32]));
 
         // Construct `tx_extra` from all the extra fields we have to add to
         // the coinbase transaction in the block we're mining.

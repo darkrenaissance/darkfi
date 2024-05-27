@@ -13,7 +13,7 @@ darkfi = {path = "../../../", features = ["util", "async-serial"]}
 
 rand = "0.8.5"
 blake2b_simd = "1.0.2"
-num-bigint = "0.4.4"
+num-bigint = "0.4.5"
 lazy_static = "1.4.0"
 
 [patch.crates-io]

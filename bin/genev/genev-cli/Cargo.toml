@@ -14,8 +14,8 @@ genevd = {path = "../genevd"}
 darkfi = {path = "../../../", features = ["event-graph", "rpc", "bs58"]}
 darkfi-serial = {path = "../../../src/serial"}
 
-smol = "1.3.0"
-clap = {version = "4.5.2", features = ["derive"]}
+smol = "2.0.0"
+clap = {version = "4.4.11", features = ["derive"]}
 log = "0.4.21"
 simplelog = "0.12.2"
 tinyjson = "2.5.1"

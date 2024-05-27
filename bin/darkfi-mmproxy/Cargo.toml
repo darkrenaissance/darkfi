@@ -16,7 +16,7 @@ darkfi-serial = {path = "../../src/serial", features = ["async"]}
 log = "0.4.21"
 
 # Monero
-monero = {version = "0.20.0", features = ["full"]}
+monero = {version = "0.21.0", features = ["full"]}
 
 # HTTP RPC
 surf = "2.3.2"
@@ -31,9 +31,9 @@ easy-parallel = "3.3.1"
 signal-hook-async-std = "0.2.2"
 signal-hook = "0.3.17"
 simplelog = "0.12.2"
-smol = "1.3.0"
+smol = "2.0.0"
 
 # Argument parsing
-serde = {version = "1.0.197", features = ["derive"]}
+serde = {version = "1.0.203", features = ["derive"]}
 structopt = "0.3.26"
 structopt-toml = "0.5.1"

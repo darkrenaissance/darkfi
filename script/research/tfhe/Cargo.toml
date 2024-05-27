@@ -8,5 +8,5 @@ edition = "2021"
 [workspace]
 
 [dependencies]
-tfhe = {version = "0.5.3", features = ["boolean", "shortint", "integer", "x86_64-unix", "internal-keycache"]}
-rayon = "1.9.0"
+tfhe = {version = "0.5.4", features = ["boolean", "shortint", "integer", "x86_64-unix", "internal-keycache"]}
+rayon = "1.10.0"
