@@ -83,7 +83,7 @@ impl P2p {
         let settings = Arc::new(settings);
 
         // Register a CryptoProvider for rustls
-        CryptoProvider::install_default(ring::default_provider()).unwrap();
+        let _ = CryptoProvider::install_default(ring::default_provider());
 
         let self_ = Arc::new(Self {
             executor,
