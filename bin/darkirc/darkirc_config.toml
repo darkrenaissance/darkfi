@@ -44,10 +44,16 @@ hostlist = "~/.local/darkfi/darkirc/hostlist.tsv"
 #inbound = ["tcp+tls://0.0.0.0:26661", "tcp+tls://[::]:26661"]
 
 ## Outbound connection slots
-outbound_connections = 8
+# outbound_connections = 8
 
 ## Inbound connection slots
-#inbound_connections = 0
+#inbound_connections = 8
+
+## White connection percent
+# gold_connect_count = 2
+
+## White connection percent
+# white_connect_percent = 70
 
 ## Addresses we want to advertise to peers (optional)
 ## These should be reachable externally
