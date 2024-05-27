@@ -100,8 +100,17 @@ struct Args {
     #[structopt(long)]
     get_chacha_pubkey: Option<String>,
 
+    /// Flag to skip syncing the DAG (no history).
     #[structopt(long)]
     skip_dag_sync: bool,
+
+    /// Number of attempts to sync the DAG.
+    #[structopt(long, default_value = "5")]
+    sync_attempts: u8,
+
+    /// Number of seconds to wait before trying again if sync fails.
+    #[structopt(long, default_value = "10")]
+    sync_timeout: u8,
 
     /// P2P network settings
     #[structopt(flatten)]
@@ -309,22 +318,22 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     info!("Waiting for some P2P connections...");
     sleep(5).await;
 
-    // We'll attempt to sync 5 times
+    // We'll attempt to sync {sync_attempts} times
     if !args.skip_dag_sync {
-        for i in 1..=6 {
+        for i in 1..=args.sync_attempts {
             info!("Syncing event DAG (attempt #{})", i);
             match event_graph.dag_sync().await {
                 Ok(()) => break,
                 Err(e) => {
-                    if i == 6 {
+                    if i == args.sync_attempts {
                         error!("Failed syncing DAG. Exiting.");
                         p2p.stop().await;
                         return Err(Error::DagSyncFailed)
                     } else {
                         // TODO: Maybe at this point we should prune or something?
                         // TODO: Or maybe just tell the user to delete the DAG from FS.
-                        error!("Failed syncing DAG ({}), retrying in 10s...", e);
-                        sleep(10).await;
+                        error!("Failed syncing DAG ({}), retrying in {}s...", e, args.sync_timeout);
+                        sleep(args.sync_timeout.into()).await;
                     }
                 }
             }
