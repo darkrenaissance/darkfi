@@ -154,6 +154,7 @@ blockchain = [
 
     "async-sdk",
     "async-serial",
+    "darkfi-serial/num-bigint",
     "tx",
     "util",
     "zk",
