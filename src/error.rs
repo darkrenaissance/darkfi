@@ -78,10 +78,6 @@ pub enum Error {
     #[error(transparent)]
     StrUtf8Error(#[from] std::str::Utf8Error),
 
-    #[cfg(feature = "serde_json")]
-    #[error("serde_json error: {0}")]
-    SerdeJsonError(String),
-
     #[cfg(feature = "tinyjson")]
     #[error("JSON parse error: {0}")]
     JsonParseError(String),
@@ -178,10 +174,6 @@ pub enum Error {
     #[error("No URL found")]
     NoUrlFound,
 
-    #[cfg(feature = "async-tungstenite")]
-    #[error("tungstenite error: {0}")]
-    TungsteniteError(String),
-
     #[error("Tor error: {0}")]
     TorError(String),
 
@@ -239,14 +231,6 @@ pub enum Error {
 
     #[error("Invalid DarkFi address")]
     InvalidAddress,
-
-    #[cfg(feature = "async-rustls")]
-    #[error(transparent)]
-    RustlsError(#[from] async_rustls::rustls::Error),
-
-    #[cfg(feature = "async-rustls")]
-    #[error("Invalid DNS Name {0}")]
-    RustlsInvalidDns(String),
 
     #[error("unable to decrypt rcpt")]
     TxRcptDecryptionError,
@@ -742,36 +726,6 @@ impl From<semver::Error> for Error {
     }
 }
 
-/*
-#[cfg(feature = "tungstenite")]
-impl From<tungstenite::Error> for Error {
-    fn from(err: tungstenite::Error) -> Self {
-        Self::TungsteniteError(err.to_string())
-    }
-}
-*/
-
-#[cfg(feature = "async-tungstenite")]
-impl From<async_tungstenite::tungstenite::Error> for Error {
-    fn from(err: async_tungstenite::tungstenite::Error) -> Self {
-        Self::TungsteniteError(err.to_string())
-    }
-}
-
-#[cfg(feature = "async-rustls")]
-impl From<async_rustls::rustls::client::InvalidDnsNameError> for Error {
-    fn from(err: async_rustls::rustls::client::InvalidDnsNameError) -> Self {
-        Self::RustlsInvalidDns(err.to_string())
-    }
-}
-
-#[cfg(feature = "serde_json")]
-impl From<serde_json::Error> for Error {
-    fn from(err: serde_json::Error) -> Self {
-        Self::SerdeJsonError(err.to_string())
-    }
-}
-
 #[cfg(feature = "tinyjson")]
 impl From<tinyjson::JsonParseError> for Error {
     fn from(err: tinyjson::JsonParseError) -> Self {
@@ -783,13 +737,6 @@ impl From<tinyjson::JsonParseError> for Error {
 impl From<tinyjson::JsonGenerateError> for Error {
     fn from(err: tinyjson::JsonGenerateError) -> Self {
         Self::JsonGenerateError(err.to_string())
-    }
-}
-
-#[cfg(feature = "fast-socks5")]
-impl From<fast_socks5::SocksError> for Error {
-    fn from(err: fast_socks5::SocksError) -> Self {
-        Self::SocksError(err.to_string())
     }
 }
 
