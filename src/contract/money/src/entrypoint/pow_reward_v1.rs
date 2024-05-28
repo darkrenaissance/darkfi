@@ -187,7 +187,7 @@ pub(crate) fn money_pow_reward_process_update_v1(
         nullifiers_db,
         nullifier_roots_db,
         MONEY_CONTRACT_LATEST_NULLIFIER_ROOT,
-        &vec![],
+        &[],
     )?;
 
     msg!("[PoWRewardV1] Adding new coin to the set");

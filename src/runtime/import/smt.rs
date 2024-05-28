@@ -26,7 +26,7 @@ use darkfi_sdk::{
     error::{ContractError, ContractResult},
     wasm,
 };
-use darkfi_serial::{serialize, Decodable, Encodable};
+use darkfi_serial::{deserialize, serialize, Decodable, Encodable};
 use halo2_proofs::pasta::pallas;
 use log::{debug, error};
 use num_bigint::BigUint;
@@ -237,15 +237,11 @@ pub(crate) fn sparse_merkle_insert_batch(
         return darkfi_sdk::error::INTERNAL_ERROR
     }
 
+    // Generate the SledStorage SMT
     let hasher = PoseidonFp::new();
-    let leaves: Vec<_> = nullifiers.into_iter().map(|x| (x, x)).collect();
-    // Used in gas calc
-    let leaves_len = leaves.len();
-
     let lock = env.blockchain.lock().unwrap();
     let mut overlay = lock.overlay.lock().unwrap();
     let smt_store = SledStorage { overlay: &mut overlay, tree_key: &db_smt.tree };
-
     let mut smt = SparseMerkleTree::<
         SMT_FP_DEPTH,
         { SMT_FP_DEPTH + 1 },
@@ -253,6 +249,12 @@ pub(crate) fn sparse_merkle_insert_batch(
         PoseidonFp,
         SledStorage,
     >::new(smt_store, hasher, &EMPTY_NODES_FP);
+
+    // Count the nullifiers for gas calculation
+    let inserted_nullifiers = nullifiers.len() * 32;
+
+    // Insert the new nullifiers
+    let leaves: Vec<_> = nullifiers.iter().map(|x| (*x, *x)).collect();
     if let Err(e) = smt.insert_batch(leaves) {
         error!(
             target: "runtime::smt::sparse_merkle_insert_batch",
@@ -261,23 +263,87 @@ pub(crate) fn sparse_merkle_insert_batch(
         return darkfi_sdk::error::INTERNAL_ERROR
     };
 
-    // Here we add the SMT root to our set of roots
+    // Grab the current SMT root to add in our set of roots.
     // Since each update to the tree is atomic, we only need to add the last root.
     let latest_root = smt.root();
 
+    // Validate latest root data, to ensure their integrity
+    let latest_root_data = serialize(&latest_root);
+    if latest_root_data.len() != 32 {
+        error!(
+            target: "runtime::smt::sparse_merkle_insert_batch",
+            "[WASM] [{}] sparse_merkle_insert_batch(): Latest root data length missmatch: {}", cid, latest_root_data.len(),
+        );
+        return darkfi_sdk::error::INTERNAL_ERROR
+    }
+
+    // Validate the new value data, to ensure their integrity
+    let mut new_value_data = Vec::with_capacity(32 + 1);
+    if let Err(e) = env.tx_hash.inner().encode(&mut new_value_data) {
+        error!(
+            target: "runtime::smt::sparse_merkle_insert_batch",
+            "[WASM] [{}] sparse_merkle_insert_batch(): Failed to serialize transaction hash: {}", cid, e,
+        );
+        return darkfi_sdk::error::INTERNAL_ERROR
+    };
+    if let Err(e) = env.call_idx.encode(&mut new_value_data) {
+        error!(
+            target: "runtime::smt::sparse_merkle_insert_batch",
+            "[WASM] [{}] sparse_merkle_insert_batch(): Failed to serialize call index: {}", cid, e,
+        );
+        return darkfi_sdk::error::INTERNAL_ERROR
+    };
+    if new_value_data.len() != 32 + 1 {
+        error!(
+            target: "runtime::smt::sparse_merkle_insert_batch",
+            "[WASM] [{}] sparse_merkle_insert_batch(): New value data length missmatch: {}", cid, new_value_data.len(),
+        );
+        return darkfi_sdk::error::INTERNAL_ERROR
+    }
+
+    // Retrieve snapshot root data set
+    let root_value_data_set = match overlay.get(&db_roots.tree, &latest_root_data) {
+        Ok(data) => data,
+        Err(e) => {
+            error!(
+                target: "runtime::smt::sparse_merkle_insert_batch",
+                "[WASM] [{}] sparse_merkle_insert_batch(): SMT failed to retrieve current root snapshot: {}", cid, e,
+            );
+            return darkfi_sdk::error::INTERNAL_ERROR
+        }
+    };
+
+    // If the record exists, append the new value data,
+    // otherwise create a new set with it.
+    let root_value_data_set = match root_value_data_set {
+        Some(value_data_set) => {
+            let mut value_data_set: Vec<Vec<u8>> = match deserialize(&value_data_set) {
+                Ok(set) => set,
+                Err(e) => {
+                    error!(
+                        target: "runtime::smt::sparse_merkle_insert_batch",
+                        "[WASM] [{}] sparse_merkle_insert_batch(): Failed to deserialize current root snapshot: {}", cid, e,
+                    );
+                    return darkfi_sdk::error::INTERNAL_ERROR
+                }
+            };
+
+            if !value_data_set.contains(&new_value_data) {
+                value_data_set.push(new_value_data);
+            }
+
+            value_data_set
+        }
+        None => vec![new_value_data],
+    };
+
+    // Write the latest root snapshot
     debug!(
         target: "runtime::smt::sparse_merkle_insert_batch",
         "[WASM] [{}] sparse_merkle_insert_batch(): Appending SMT root to db: {:?}", cid, latest_root,
     );
-    let latest_root_data = serialize(&latest_root);
-    assert_eq!(latest_root_data.len(), 32);
-
-    let mut value_data = Vec::with_capacity(32 + 1);
-    env.tx_hash.inner().encode(&mut value_data).expect("Unable to serialize tx_hash");
-    env.call_idx.encode(&mut value_data).expect("Unable to serialize call_idx");
-    assert_eq!(value_data.len(), 32 + 1);
-
-    if overlay.insert(&db_roots.tree, &latest_root_data, &value_data).is_err() {
+    if overlay.insert(&db_roots.tree, &latest_root_data, &serialize(&root_value_data_set)).is_err()
+    {
         error!(
             target: "runtime::smt::sparse_merkle_insert_batch",
             "[WASM] [{}] sparse_merkle_insert_batch(): Couldn't insert to db_roots tree", cid,
@@ -285,12 +351,11 @@ pub(crate) fn sparse_merkle_insert_batch(
         return darkfi_sdk::error::INTERNAL_ERROR
     }
 
-    // Write a pointer to the latest known root
+    // Update the pointer to the latest known root
     debug!(
         target: "runtime::smt::sparse_merkle_insert_batch",
         "[WASM] [{}] sparse_merkle_insert_batch(): Replacing latest SMT root pointer", cid,
     );
-
     if overlay.insert(&db_info.tree, &root_key, &latest_root_data).is_err() {
         error!(
             target: "runtime::smt::sparse_merkle_insert_batch",
@@ -305,8 +370,7 @@ pub(crate) fn sparse_merkle_insert_batch(
     drop(overlay);
     drop(lock);
     drop(db_handles);
-    let spent_gas = leaves_len * 32;
-    env.subtract_gas(&mut store, spent_gas as u64);
+    env.subtract_gas(&mut store, inserted_nullifiers as u64);
 
     wasm::entrypoint::SUCCESS
 }

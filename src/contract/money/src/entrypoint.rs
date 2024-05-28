@@ -146,10 +146,14 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     }
 
     // Set up a database tree to hold Merkle roots of all nullifier trees
-    // k=root_hash:32, v=(tx_hash:32, call_idx: 1)
+    // k=root_hash:32, v=[(tx_hash:32, call_idx: 1)]
     if wasm::db::db_lookup(cid, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE).is_err() {
         let db_null_roots = wasm::db::db_init(cid, MONEY_CONTRACT_NULLIFIER_ROOTS_TREE)?;
-        wasm::db::db_set(db_null_roots, &serialize(&EMPTY_NODES_FP[0]), &roots_value_data)?;
+        wasm::db::db_set(
+            db_null_roots,
+            &serialize(&EMPTY_NODES_FP[0]),
+            &serialize(&vec![roots_value_data]),
+        )?;
     }
 
     // Set up a database tree to hold all coins ever seen

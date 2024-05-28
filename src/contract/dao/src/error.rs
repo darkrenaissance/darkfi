@@ -38,6 +38,9 @@ pub enum DaoError {
     #[error("Snapshoot is past the cutoff limit")]
     SnapshotTooOld,
 
+    #[error("Failed to deserialize snapshot")]
+    SnapshotDeserializationError,
+
     #[error("Invalid DAO Merkle root")]
     InvalidDaoMerkleRoot,
 
@@ -102,24 +105,25 @@ impl From<DaoError> for ContractError {
             DaoError::InvalidInputMerkleRoot => Self::Custom(4),
             DaoError::NonMatchingSnapshotRoots => Self::Custom(5),
             DaoError::SnapshotTooOld => Self::Custom(6),
-            DaoError::InvalidDaoMerkleRoot => Self::Custom(7),
-            DaoError::ProposalAlreadyExists => Self::Custom(8),
-            DaoError::VoteInputsEmpty => Self::Custom(9),
-            DaoError::ProposalNonexistent => Self::Custom(10),
-            DaoError::ProposalEnded => Self::Custom(11),
-            DaoError::CoinAlreadySpent => Self::Custom(12),
-            DaoError::DoubleVote => Self::Custom(13),
-            DaoError::ExecCallWrongChildCallsLen => Self::Custom(14),
-            DaoError::ExecCallWrongChildCall => Self::Custom(15),
-            DaoError::ExecCallInvalidFormat => Self::Custom(16),
-            DaoError::ExecCallValueMismatch => Self::Custom(17),
-            DaoError::VoteCommitMismatch => Self::Custom(18),
-            DaoError::AuthXferSiblingWrongContractId => Self::Custom(19),
-            DaoError::AuthXferSiblingWrongFunctionCode => Self::Custom(20),
-            DaoError::AuthXferNonMatchingEncInputUserData => Self::Custom(21),
-            DaoError::AuthXferCallNotFoundInParent => Self::Custom(22),
-            DaoError::AuthXferWrongNumberOutputs => Self::Custom(23),
-            DaoError::AuthXferWrongOutputCoin => Self::Custom(24),
+            DaoError::SnapshotDeserializationError => Self::Custom(7),
+            DaoError::InvalidDaoMerkleRoot => Self::Custom(8),
+            DaoError::ProposalAlreadyExists => Self::Custom(9),
+            DaoError::VoteInputsEmpty => Self::Custom(10),
+            DaoError::ProposalNonexistent => Self::Custom(11),
+            DaoError::ProposalEnded => Self::Custom(12),
+            DaoError::CoinAlreadySpent => Self::Custom(13),
+            DaoError::DoubleVote => Self::Custom(14),
+            DaoError::ExecCallWrongChildCallsLen => Self::Custom(15),
+            DaoError::ExecCallWrongChildCall => Self::Custom(16),
+            DaoError::ExecCallInvalidFormat => Self::Custom(17),
+            DaoError::ExecCallValueMismatch => Self::Custom(18),
+            DaoError::VoteCommitMismatch => Self::Custom(19),
+            DaoError::AuthXferSiblingWrongContractId => Self::Custom(20),
+            DaoError::AuthXferSiblingWrongFunctionCode => Self::Custom(21),
+            DaoError::AuthXferNonMatchingEncInputUserData => Self::Custom(22),
+            DaoError::AuthXferCallNotFoundInParent => Self::Custom(23),
+            DaoError::AuthXferWrongNumberOutputs => Self::Custom(24),
+            DaoError::AuthXferWrongOutputCoin => Self::Custom(25),
         }
     }
 }

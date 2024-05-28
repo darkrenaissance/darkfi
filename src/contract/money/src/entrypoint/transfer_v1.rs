@@ -58,7 +58,7 @@ pub(crate) fn money_transfer_get_metadata_v1(
     let mut signature_pubkeys: Vec<PublicKey> = vec![];
 
     // Calculate the spend hook
-    let spend_hook = match calls[call_idx as usize].parent_index {
+    let spend_hook = match calls[call_idx].parent_index {
         Some(parent_idx) => {
             let parent_call = &calls[parent_idx].data;
             let contract_id = parent_call.contract_id;
