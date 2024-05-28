@@ -56,7 +56,9 @@ class SceneNodeType:
     RENDER_TEXTURE = 13
     FONTS = 10
     FONT = 11
-    LINE_POSITION = 12
+    PLUGINS = 14
+    PLUGIN = 15
+    EDIT_BOX = 16
 
 class PropertyType:
     NULL = 0

@@ -11,6 +11,7 @@ use std::{
 
 use crate::{
     error::{Error, Result},
+    editbox,
     prop::{Property, PropertyType},
 };
 
@@ -32,9 +33,9 @@ pub enum SceneNodeType {
     RenderTexture = 13,
     Fonts = 10,
     Font = 11,
-    LinePosition = 12,
     Plugins = 14,
     Plugin = 15,
+    EditBox = 16,
 }
 
 pub struct ScenePath(Vec<String>);
@@ -107,6 +108,7 @@ impl SceneGraph {
             props: vec![],
             sigs: vec![],
             methods: vec![],
+            pimpl: Pimpl::Null,
         };
         Self { nodes: vec![root], freed: vec![] }
     }
@@ -122,6 +124,7 @@ impl SceneGraph {
             props: vec![],
             sigs: vec![],
             methods: vec![],
+            pimpl: Pimpl::Null,
         };
 
         let node_id = if self.freed.is_empty() {
@@ -356,6 +359,7 @@ pub struct SceneNode {
     pub props: Vec<Arc<Property>>,
     pub sigs: Vec<Signal>,
     pub methods: Vec<Method>,
+    pub pimpl: Pimpl
 }
 
 impl SceneNode {
@@ -622,3 +626,9 @@ pub struct Method {
     pub result: Vec<CallArg>,
     method_fn: MethodRequestFn,
 }
+
+pub enum Pimpl {
+    Null,
+    EditBox(editbox::EditBoxPtr),
+}
+

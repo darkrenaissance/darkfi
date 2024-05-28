@@ -5,6 +5,8 @@ use std::{
     thread,
 };
 
+mod editbox;
+
 mod error;
 
 mod expr;
@@ -27,6 +29,8 @@ mod py;
 mod res;
 
 mod shader;
+
+mod text;
 
 #[macro_use]
 extern crate log;

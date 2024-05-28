@@ -1,4 +1,4 @@
-from pydrk import SceneNodeType, PropertyType, vertex, face
+from pydrk import SceneNodeType, PropertyType, vertex, face, serial
 from .print_tree import print_tree
 from .api import *
 from .gfx import Layer, add_object
@@ -331,10 +331,10 @@ def draw():
     #w, h = 0.1, 0.1
     x, y, w, h = 0, 0, 1, 1
     #x, y, w, h = -1, 1, 2, -2
-    vert1 = vertex(x,     y,     1, 0, 0, 1, 0, 0)
-    vert2 = vertex(x + w, y,     0, 1, 0, 1, 1, 0)
-    vert3 = vertex(x,     y + h, 0, 0, 1, 1, 0, 1)
-    vert4 = vertex(x + w, y + h, 1, 1, 1, 1, 1, 1)
+    vert1 = vertex(x,     y,     0, 0, 0, 1, 0, 0)
+    vert2 = vertex(x + w, y,     0, 0, 0, 1, 1, 0)
+    vert3 = vertex(x,     y + h, 0, 0, 0, 1, 0, 1)
+    vert4 = vertex(x + w, y + h, 0, 0, 0, 1, 1, 1)
 
     verts = vert1 + vert2 + vert3 + vert4
     faces = face(0, 2, 1) + face(1, 2, 3)
@@ -435,6 +435,15 @@ def draw():
     api.set_property_f32(node_id, "rect", 3, 60)
 
     prop = Property(
+        "baseline", PropertyType.FLOAT32, PropertySubType.PIXEL,
+        None,
+        "Baseline", "Y offset of baseline inside rect",
+        False, True, 1, None, None, []
+    )
+    api.add_property(node_id, prop)
+    api.set_property_f32(node_id, "baseline", 0, 50)
+
+    prop = Property(
         "font_size", PropertyType.FLOAT32, PropertySubType.PIXEL,
         None,
         "Font Size", "Font Size",
@@ -464,17 +473,17 @@ def draw():
     api.set_property_f32(node_id, "color", 2, 1)
     api.set_property_f32(node_id, "color", 3, 1)
 
-    prop = Property(
-        "overflow", PropertyType.ENUM, PropertySubType.NULL,
-        None,
-        "Overflow Behaviour", "Behaviour when text exceeds bounding box",
-        False, True, 1, None, None, [
-            "ScrollRight",
-            "OverflowRight"
-        ]
-    )
-    api.add_property(node_id, prop)
-    api.set_property_enum(node_id, "overflow", 0, "ScrollRight")
+    #prop = Property(
+    #    "overflow", PropertyType.ENUM, PropertySubType.NULL,
+    #    None,
+    #    "Overflow Behaviour", "Behaviour when text exceeds bounding box",
+    #    False, True, 1, None, None, [
+    #        "ScrollRight",
+    #        "OverflowRight"
+    #    ]
+    #)
+    #api.add_property(node_id, prop)
+    #api.set_property_enum(node_id, "overflow", 0, "ScrollRight")
 
     prop = Property(
         "z_index", PropertyType.UINT32, PropertySubType.NULL,
@@ -491,6 +500,101 @@ def draw():
         False, False, 1, None, None, []
     )
     api.add_property(node_id, prop)
+
+    api.link_node(node_id, layer_id)
+
+    # EditBox
+
+    node_id = api.add_node("editz", SceneNodeType.EDIT_BOX)
+
+    prop = Property(
+        "rect", PropertyType.FLOAT32, PropertySubType.PIXEL,
+        None,
+        "Rectangle", "The position and size within the layer",
+        False, True, 4, None, None, []
+    )
+    api.add_property(node_id, prop)
+    api.set_property_f32(node_id, "rect", 0, 10)
+    api.set_property_f32(node_id, "rect", 1, 200)
+    api.set_property_f32(node_id, "rect", 2, 300)
+    api.set_property_f32(node_id, "rect", 3, 60)
+
+    prop = Property(
+        "baseline", PropertyType.FLOAT32, PropertySubType.PIXEL,
+        None,
+        "Baseline", "Y offset of baseline inside rect",
+        False, True, 1, None, None, []
+    )
+    api.add_property(node_id, prop)
+    api.set_property_f32(node_id, "baseline", 0, 50)
+
+    prop = Property(
+        "scroll", PropertyType.FLOAT32, PropertySubType.NULL,
+        None,
+        "Scroll", "Current scroll",
+        False, False, 1, None, None, []
+    )
+    api.add_property(node_id, prop)
+
+    prop = Property(
+        "cursor_pos", PropertyType.UINT32, PropertySubType.NULL,
+        None,
+        "Cursor Position", "Cursor position within the text",
+        False, False, 1, None, None, []
+    )
+    api.add_property(node_id, prop)
+
+    prop = Property(
+        "font_size", PropertyType.FLOAT32, PropertySubType.PIXEL,
+        None,
+        "Font Size", "Font Size",
+        False, True, 1, 0.0, None, []
+    )
+    api.add_property(node_id, prop)
+    api.set_property_f32(node_id, "font_size", 0, 50)
+
+    prop = Property(
+        "text", PropertyType.STR, PropertySubType.NULL,
+        None,
+        "Text", "Text",
+        False, False, 1, None, None, []
+    )
+    api.add_property(node_id, prop)
+    api.set_property_str(node_id, "text", 0, "hello!😁jelly 🍆1234")
+
+    prop = Property(
+        "color", PropertyType.FLOAT32, PropertySubType.COLOR,
+        None,
+        "Color", "Color of the text",
+        False, False, 4, 0, 1, []
+    )
+    api.add_property(node_id, prop)
+    api.set_property_f32(node_id, "color", 0, 1)
+    api.set_property_f32(node_id, "color", 1, 1)
+    api.set_property_f32(node_id, "color", 2, 1)
+    api.set_property_f32(node_id, "color", 3, 1)
+
+    prop = Property(
+        "z_index", PropertyType.UINT32, PropertySubType.NULL,
+        None,
+        "Z-index", "Z-index: values greater than zero are deferred draws",
+        False, False, 1, None, None, []
+    )
+    api.add_property(node_id, prop)
+    api.set_property_u32(node_id, "z_index", 0, 4)
+
+    prop = Property(
+        "debug", PropertyType.BOOL, PropertySubType.NULL,
+        None,
+        "Debug", "Draw debug outlines",
+        False, False, 1, None, None, []
+    )
+    api.add_property(node_id, prop)
+    api.set_property_bool(node_id, "debug", 0, True)
+
+    arg_data = bytearray()
+    serial.write_u32(arg_data, node_id)
+    api.call_method(win_id, "create_edit_box", arg_data)
 
     api.link_node(node_id, layer_id)
 

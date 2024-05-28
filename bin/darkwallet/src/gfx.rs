@@ -16,12 +16,13 @@ use std::{
 
 use crate::{
     error::{Error, Result},
+    editbox,
     expr::{SExprMachine, SExprVal},
     prop::{Property, PropertySubType, PropertyType},
     res::{ResourceId, ResourceManager},
     scene::{
         MethodResponseFn, SceneGraph, SceneGraphPtr, SceneNode, SceneNodeId, SceneNodeInfo,
-        SceneNodeType,
+        SceneNodeType, Pimpl
     },
     shader,
 };
@@ -43,9 +44,10 @@ impl MouseButtonAsU8 for MouseButton {
 
 type Color = [f32; 4];
 
-const COLOR_RED: Color = [1., 0., 0., 1.];
-const COLOR_BLUE: Color = [0., 0., 1., 1.];
-const COLOR_WHITE: Color = [1., 1., 1., 1.];
+pub const COLOR_RED: Color = [1., 0., 0., 1.];
+pub const COLOR_GREEN: Color = [0., 1., 0., 1.];
+pub const COLOR_BLUE: Color = [0., 0., 1., 1.];
+pub const COLOR_WHITE: Color = [1., 1., 1., 1.];
 
 #[derive(Debug, SerialEncodable, SerialDecodable)]
 #[repr(C)]
@@ -74,15 +76,15 @@ struct Mesh {
     pub index_buffer: BufferId,
 }
 
-#[derive(Debug)]
-struct Rectangle<T> {
-    x: T,
-    y: T,
-    w: T,
-    h: T,
+#[derive(Debug, Clone)]
+pub struct Rectangle<T: Copy + std::ops::Add<Output=T> + std::ops::Sub<Output=T> + std::cmp::PartialOrd> {
+    pub x: T,
+    pub y: T,
+    pub w: T,
+    pub h: T,
 }
 
-impl<T> Rectangle<T> {
+impl<T: Copy + std::ops::Add<Output=T> + std::ops::Sub<Output=T> + std::cmp::PartialOrd> Rectangle<T> {
     fn from_array(arr: [T; 4]) -> Self {
         let mut iter = IntoIter::new(arr);
         Self {
@@ -92,12 +94,38 @@ impl<T> Rectangle<T> {
             h: iter.next().unwrap(),
         }
     }
+
+    fn clip(&self, other: &Rectangle<T>) -> Option<Rectangle<T>> {
+        if other.x + other.w < self.x ||
+            other.x > self.x + self.w ||
+            other.y + other.h < self.y ||
+            other.y > self.y + self.h
+        {
+            return None
+        }
+
+        let mut clipped = other.clone();
+        if clipped.x < self.x {
+            clipped.x = self.x;
+        }
+        if clipped.y < self.y {
+            clipped.y = self.y;
+        }
+        if clipped.x + clipped.w > self.x + self.w {
+            clipped.w = self.x + self.w - clipped.x;
+        }
+        if clipped.y + clipped.h > self.y + self.h {
+            clipped.h = self.y + self.h - clipped.y;
+        }
+        Some(clipped)
+    }
 }
 
 #[derive(Debug)]
 enum GraphicsMethodEvent {
     LoadTexture,
     DeleteTexture,
+    CreateEditBox,
 }
 
 struct Stage<'a> {
@@ -213,8 +241,10 @@ impl<'a> Stage<'a> {
                 ],
             )
             .unwrap();
-        let sender = self.method_sender.clone();
+
         let window_id = window.id;
+
+        let sender = self.method_sender.clone();
         let method_fn = Box::new(move |arg_data, response_fn| {
             sender.send((GraphicsMethodEvent::LoadTexture, window_id, arg_data, response_fn));
         });
@@ -226,6 +256,20 @@ impl<'a> Stage<'a> {
                 method_fn,
             )
             .unwrap();
+
+        let sender = self.method_sender.clone();
+        let method_fn = Box::new(move |arg_data, response_fn| {
+            sender.send((GraphicsMethodEvent::CreateEditBox, window_id, arg_data, response_fn));
+        });
+        window
+            .add_method(
+                "create_edit_box",
+                vec![("node_id", "", PropertyType::SceneNodeId)],
+                vec![],
+                method_fn,
+            )
+            .unwrap();
+
         scene_graph.link(window_id, SceneGraph::ROOT_ID).unwrap();
 
         let input = scene_graph.add_node("input", SceneNodeType::WindowInput);
@@ -336,15 +380,33 @@ impl<'a> Stage<'a> {
         self.textures.free(texture_id);
         Ok(vec![])
     }
+
+    fn method_create_editbox(
+        &mut self,
+        _: SceneNodeId,
+        arg_data: Vec<u8>,
+    ) -> Result<Vec<u8>> {
+        let mut cur = Cursor::new(&arg_data);
+        let node_id = SceneNodeId::decode(&mut cur).unwrap();
+
+        let mut scene_graph = self.scene_graph.lock().unwrap();
+        let editbox = editbox::EditBox::new(&mut scene_graph, node_id)?;
+
+        let node = scene_graph.get_node_mut(node_id).ok_or(Error::NodeNotFound)?;
+        node.pimpl = editbox;
+
+        let mut reply = vec![];
+        Ok(reply)
+    }
 }
 
-struct RenderContext<'a> {
-    scene_graph: MutexGuard<'a, SceneGraph>,
-    ctx: &'a mut Box<dyn RenderingBackend>,
-    pipeline: &'a Pipeline,
-    proj: glam::Mat4,
-    textures: &'a ResourceManager<TextureId>,
-    font_faces: &'a Vec<ft::Face<&'a [u8]>>,
+pub struct RenderContext<'a> {
+    pub scene_graph: MutexGuard<'a, SceneGraph>,
+    pub ctx: &'a mut Box<dyn RenderingBackend>,
+    pub pipeline: &'a Pipeline,
+    pub proj: glam::Mat4,
+    pub textures: &'a ResourceManager<TextureId>,
+    pub font_faces: &'a Vec<ft::Face<&'a [u8]>>,
 }
 
 impl<'a> RenderContext<'a> {
@@ -415,7 +477,7 @@ impl<'a> RenderContext<'a> {
         self.ctx.apply_scissor_rect(rect.x, rect.y, rect.w, rect.h);
 
         let layer_children =
-            layer.get_children(&[SceneNodeType::RenderMesh, SceneNodeType::RenderText]);
+            layer.get_children(&[SceneNodeType::RenderMesh, SceneNodeType::RenderText, SceneNodeType::EditBox]);
         let layer_children = self.order_by_z_index(layer_children);
 
         // get the rectangle
@@ -442,6 +504,16 @@ impl<'a> RenderContext<'a> {
                         error!("error rendering text '{}': {}", child.name, err);
                     }
                 }
+                SceneNodeType::EditBox => {
+                    let node = self.scene_graph.get_node(child.id).unwrap();
+                    let editbox = match &node.pimpl {
+                        Pimpl::EditBox(e) => e.clone(),
+                        _ => panic!("wrong pimpl for editbox")
+                    };
+                    if let Err(err) = editbox.render(self, child.id, &rect) {
+                        error!("error rendering editbox '{}': {}", child.name, err);
+                    }
+                }
                 _ => panic!("render_layer(): unknown type"),
             }
         }
@@ -462,7 +534,7 @@ impl<'a> RenderContext<'a> {
         nodes.into_iter().map(|(z_index, node_inf)| node_inf).collect()
     }
 
-    fn get_dim(mesh: &SceneNode, layer_rect: &Rectangle<i32>) -> Result<Rectangle<f32>> {
+    pub fn get_dim(mesh: &SceneNode, layer_rect: &Rectangle<i32>) -> Result<Rectangle<f32>> {
         let prop = mesh.get_property("rect").ok_or(Error::PropertyNotFound)?;
         if prop.array_len != 4 {
             return Err(Error::PropertyWrongLen)
@@ -553,7 +625,69 @@ impl<'a> RenderContext<'a> {
         Ok(())
     }
 
-    fn render_box_with_texture(
+    pub fn render_clipped_box_with_texture(
+        &mut self,
+        bound_rect: &Rectangle<f32>,
+        x1: f32,
+        y1: f32,
+        x2: f32,
+        y2: f32,
+        color: Color,
+        texture: TextureId,
+    ) {
+        let obj = Rectangle {
+            x: x1,
+            y: y1,
+            w: x2 - x1,
+            h: y2 - y1
+        };
+        let Some(clipped) = bound_rect.clip(&obj) else {
+            return
+        };
+
+        let x1 = clipped.x;
+        let y1 = clipped.y;
+        let x2 = clipped.x + clipped.w;
+        let y2 = clipped.y + clipped.h;
+
+        let u1 = (clipped.x - obj.x) / obj.w;
+        let u2 = (clipped.x + clipped.w - obj.x) / obj.w + u1;
+        let v1 = (clipped.y - obj.y) / obj.h;
+        let v2 = (clipped.y + clipped.h - obj.y) / obj.h + v1;
+
+        let vertices: [Vertex; 4] = [
+            // top left
+            Vertex { pos: [x1, y1], color, uv: [u1, v1] },
+            // top right
+            Vertex { pos: [x2, y1], color, uv: [u2, v1] },
+            // bottom left
+            Vertex { pos: [x1, y2], color, uv: [u1, v2] },
+            // bottom right
+            Vertex { pos: [x2, y2], color, uv: [u2, v2] },
+        ];
+
+        //debug!("screen size: {:?}", window::screen_size());
+        let vertex_buffer = self.ctx.new_buffer(
+            BufferType::VertexBuffer,
+            BufferUsage::Immutable,
+            BufferSource::slice(&vertices),
+        );
+
+        let indices: [u16; 6] = [0, 2, 1, 1, 2, 3];
+        let index_buffer = self.ctx.new_buffer(
+            BufferType::IndexBuffer,
+            BufferUsage::Immutable,
+            BufferSource::slice(&indices),
+        );
+
+        let bindings =
+            Bindings { vertex_buffers: vec![vertex_buffer], index_buffer, images: vec![texture] };
+
+        self.ctx.apply_bindings(&bindings);
+        self.ctx.draw(0, 6, 1);
+    }
+
+    pub fn render_box_with_texture(
         &mut self,
         x1: f32,
         y1: f32,
@@ -594,20 +728,20 @@ impl<'a> RenderContext<'a> {
         self.ctx.draw(0, 6, 1);
     }
 
-    fn render_box(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, color: Color) {
+    pub fn render_box(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, color: Color) {
         let texture = self.textures.get(Stage::WHITE_TEXTURE_ID).unwrap();
         self.render_box_with_texture(x1, y1, x2, y2, color, *texture)
     }
 
-    fn hline(&mut self, min_x: f32, max_x: f32, y: f32, color: Color, w: f32) {
+    pub fn hline(&mut self, min_x: f32, max_x: f32, y: f32, color: Color, w: f32) {
         self.render_box(min_x, y - w / 2., max_x, y + w / 2., color)
     }
 
-    fn vline(&mut self, x: f32, min_y: f32, max_y: f32, color: Color, w: f32) {
+    pub fn vline(&mut self, x: f32, min_y: f32, max_y: f32, color: Color, w: f32) {
         self.render_box(x - w / 2., min_y, x + w / 2., max_y, color)
     }
 
-    fn outline(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, color: Color, w: f32) {
+    pub fn outline(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, color: Color, w: f32) {
         // top
         self.render_box(x1, y1, x2, y1 + w, color);
         // left
@@ -618,15 +752,14 @@ impl<'a> RenderContext<'a> {
         self.render_box(x1, y2 - w, x2, y2, color);
     }
 
-    fn render_text(&mut self, mesh_id: SceneNodeId, layer_rect: &Rectangle<i32>) -> Result<()> {
-        let node = self.scene_graph.get_node(mesh_id).unwrap();
+    fn render_text(&mut self, node_id: SceneNodeId, layer_rect: &Rectangle<i32>) -> Result<()> {
+        let node = self.scene_graph.get_node(node_id).unwrap();
 
-        let z_index = node.get_property_u32("z_index")?;
         let text = node.get_property_str("text")?;
-        let overflow = node.get_property_enum("overflow")?;
         let font_size = node.get_property_f32("font_size")?;
         let debug = node.get_property_bool("debug")?;
         let rect = Self::get_dim(node, layer_rect)?;
+        let baseline = node.get_property_f32("baseline")?;
 
         let color_prop = node.get_property("color").ok_or(Error::PropertyNotFound)?;
         let color_r = color_prop.get_f32(0)?;
@@ -696,7 +829,7 @@ impl<'a> RenderContext<'a> {
         }
 
         let mut current_x = 0.;
-        let mut current_y = 0.;
+        let mut current_y = baseline;
 
         for (face_idx, text) in substrs {
             let face = &self.font_faces[face_idx];
@@ -717,6 +850,8 @@ impl<'a> RenderContext<'a> {
 
             for (position, info) in positions.iter().zip(infos) {
                 let gid = info.codepoint;
+                // Index within this substr
+                // let cluster = info.cluster;
 
                 let mut flags = ft::face::LoadFlag::DEFAULT;
                 if face.has_color() {
@@ -856,6 +991,7 @@ impl<'a> EventHandler for Stage<'a> {
             let res = match event {
                 GraphicsMethodEvent::LoadTexture => self.method_load_texture(node_id, arg_data),
                 GraphicsMethodEvent::DeleteTexture => self.method_delete_texture(node_id, arg_data),
+                GraphicsMethodEvent::CreateEditBox => self.method_create_editbox(node_id, arg_data),
             };
             response_fn(res);
         }

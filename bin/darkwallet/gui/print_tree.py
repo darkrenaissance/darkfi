@@ -39,8 +39,8 @@ def print_node_info(parent_id, indent):
                 child_type = "fonts"
             case SceneNodeType.FONT:
                 child_type = "font"
-            case SceneNodeType.LINE_POSITION:
-                child_type = "line_position"
+            case SceneNodeType.EDIT_BOX:
+                child_type = "edit_box"
 
         desc = f"{ws}{child_name}:{child_id}/"
         desc += " "*(50 - len(desc))
