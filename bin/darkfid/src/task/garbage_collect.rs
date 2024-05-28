@@ -45,6 +45,7 @@ pub async fn garbage_collect_task(node: Arc<Darkfid>) -> Result<()> {
                 return Ok(())
             }
         };
+
     while !txs.is_empty() {
         // Verify each one against current forks
         for tx in txs {
@@ -138,18 +139,25 @@ pub async fn garbage_collect_task(node: Arc<Darkfid>) -> Result<()> {
                 };
             }
         }
-        (last_checked, txs) =
-            match node.validator.blockchain.transactions.get_after_pending(last_checked, TXS_CAP) {
-                Ok(pair) => pair,
-                Err(e) => {
-                    error!(
-                        target: "darkfid::task::garbage_collect_task",
-                        "Uproposed transactions next batch retrieval failed: {e}"
-                    );
-                    break
-                }
-            };
+
+        // Grab next batch
+        (last_checked, txs) = match node
+            .validator
+            .blockchain
+            .transactions
+            .get_after_pending(last_checked + TXS_CAP as u64, TXS_CAP)
+        {
+            Ok(pair) => pair,
+            Err(e) => {
+                error!(
+                    target: "darkfid::task::garbage_collect_task",
+                    "Uproposed transactions next batch retrieval failed: {e}"
+                );
+                break
+            }
+        };
     }
+
     info!(target: "darkfid::task::garbage_collect_task", "Garbage collection finished successfully!");
     Ok(())
 }
