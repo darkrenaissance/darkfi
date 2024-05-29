@@ -459,7 +459,7 @@ def draw():
         False, False, 1, None, None, []
     )
     api.add_property(node_id, prop)
-    api.set_property_str(node_id, "text", 0, "hello!😁jelly 🍆1234")
+    api.set_property_str(node_id, "text", 0, "hello!😁🍆jelly 🍆1234")
 
     prop = Property(
         "color", PropertyType.FLOAT32, PropertySubType.COLOR,
@@ -560,7 +560,7 @@ def draw():
         False, False, 1, None, None, []
     )
     api.add_property(node_id, prop)
-    api.set_property_str(node_id, "text", 0, "hello!😁jelly 🍆1234")
+    api.set_property_str(node_id, "text", 0, "hello king!😁🍆jelly 🍆1234")
 
     prop = Property(
         "color", PropertyType.FLOAT32, PropertySubType.COLOR,

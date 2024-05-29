@@ -121,6 +121,8 @@ impl<T: Copy + std::ops::Add<Output=T> + std::ops::Sub<Output=T> + std::cmp::Par
     }
 }
 
+pub type FreetypeFace = ft::Face<&'static [u8]>;
+
 #[derive(Debug)]
 enum GraphicsMethodEvent {
     LoadTexture,
@@ -128,14 +130,14 @@ enum GraphicsMethodEvent {
     CreateEditBox,
 }
 
-struct Stage<'a> {
+struct Stage {
     ctx: Box<dyn RenderingBackend>,
     pipeline: Pipeline,
 
     scene_graph: SceneGraphPtr,
 
     textures: ResourceManager<TextureId>,
-    font_faces: Vec<ft::Face<&'a [u8]>>,
+    font_faces: Vec<FreetypeFace>,
 
     method_recvr: mpsc::Receiver<(GraphicsMethodEvent, SceneNodeId, Vec<u8>, MethodResponseFn)>,
     method_sender: mpsc::SyncSender<(GraphicsMethodEvent, SceneNodeId, Vec<u8>, MethodResponseFn)>,
@@ -143,10 +145,10 @@ struct Stage<'a> {
     last_draw_time: Option<Instant>,
 }
 
-impl<'a> Stage<'a> {
+impl Stage {
     const WHITE_TEXTURE_ID: ResourceId = 0;
 
-    pub fn new(scene_graph: SceneGraphPtr) -> Stage<'a> {
+    pub fn new(scene_graph: SceneGraphPtr) -> Self {
         let mut ctx: Box<dyn RenderingBackend> = window::new_rendering_backend();
 
         let white_texture = ctx.new_texture_from_rgba8(1, 1, &[255, 255, 255, 255]);
@@ -390,7 +392,7 @@ impl<'a> Stage<'a> {
         let node_id = SceneNodeId::decode(&mut cur).unwrap();
 
         let mut scene_graph = self.scene_graph.lock().unwrap();
-        let editbox = editbox::EditBox::new(&mut scene_graph, node_id)?;
+        let editbox = editbox::EditBox::new(&mut scene_graph, node_id, self.font_faces.clone())?;
 
         let node = scene_graph.get_node_mut(node_id).ok_or(Error::NodeNotFound)?;
         node.pimpl = editbox;
@@ -406,7 +408,7 @@ pub struct RenderContext<'a> {
     pub pipeline: &'a Pipeline,
     pub proj: glam::Mat4,
     pub textures: &'a ResourceManager<TextureId>,
-    pub font_faces: &'a Vec<ft::Face<&'a [u8]>>,
+    pub font_faces: &'a Vec<FreetypeFace>,
 }
 
 impl<'a> RenderContext<'a> {
@@ -965,7 +967,7 @@ impl<'a> RenderContext<'a> {
     }
 }
 
-impl<'a> EventHandler for Stage<'a> {
+impl EventHandler for Stage {
     fn update(&mut self) {
         if self.last_draw_time.is_none() {
             return

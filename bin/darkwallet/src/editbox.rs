@@ -1,24 +1,48 @@
 use miniquad::{KeyMods, UniformType};
-use std::{io::Cursor, sync::Arc};
+use std::{io::Cursor, sync::{Arc, Mutex}};
 use darkfi_serial::Decodable;
 use freetype as ft;
 
-use crate::{error::{Error, Result}, prop::Property, scene::{SceneGraph, SceneNodeId, Pimpl, Slot}, gfx::{Rectangle, RenderContext, COLOR_WHITE, COLOR_BLUE, COLOR_RED, COLOR_GREEN}, text::TextShaper};
+use crate::{error::{Error, Result}, prop::Property, scene::{SceneGraph, SceneNodeId, Pimpl, Slot}, gfx::{Rectangle, RenderContext, COLOR_WHITE, COLOR_BLUE, COLOR_RED, COLOR_GREEN, FreetypeFace}, text::{Glyph, TextShaper}};
 
 pub type EditBoxPtr = Arc<EditBox>;
 
 pub struct EditBox {
     scroll: Arc<Property>,
+    cursor_pos: Arc<Property>,
+    text: Arc<Property>,
+    font_size: Arc<Property>,
+    color: Arc<Property>,
+    glyphs: Mutex<Vec<Glyph>>,
+    text_shaper: TextShaper,
 }
 
 impl EditBox {
-    pub fn new(scene_graph: &mut SceneGraph, node_id: SceneNodeId) -> Result<Pimpl> {
+    pub fn new(scene_graph: &mut SceneGraph, node_id: SceneNodeId, font_faces: Vec<FreetypeFace>) -> Result<Pimpl> {
         let node = scene_graph.get_node(node_id).unwrap();
         let scroll = node.get_property("scroll").ok_or(Error::PropertyNotFound)?;
+        let cursor_pos = node.get_property("cursor_pos").ok_or(Error::PropertyNotFound)?;
+        let text = node.get_property("text").ok_or(Error::PropertyNotFound)?;
+        let font_size = node.get_property("font_size").ok_or(Error::PropertyNotFound)?;
+        let color = node.get_property("color").ok_or(Error::PropertyNotFound)?;
+
+        let text_shaper = TextShaper {
+            font_faces
+        };
+
+        let glyphs = text_shaper.shape(text.get_str(0)?, font_size.get_f32(0)?, 
+                [color.get_f32(0)?, color.get_f32(1)?,
+                 color.get_f32(2)?, color.get_f32(3)?]);
 
         println!("EditBox::new()");
         let self_ = Arc::new(Self{
-            scroll
+            scroll,
+            cursor_pos,
+            text,
+            font_size,
+            color,
+            glyphs: Mutex::new(glyphs),
+            text_shaper,
         });
         let weak_self = Arc::downgrade(&self_);
 
@@ -91,13 +115,13 @@ impl EditBox {
         render.ctx.apply_uniforms_from_bytes(uniforms_data.as_ptr(), uniforms_data.len());
 
         let shaper = TextShaper {
-            font_faces: render.font_faces
+            font_faces: render.font_faces.clone()
         };
 
         let mut glyph_idx = 0;
         let mut rhs = 0.;
 
-        for glyph in shaper.shape(text, font_size, text_color) {
+        for glyph in &*self.glyphs.lock().unwrap() {
             let texture = render.ctx.new_texture_from_rgba8(glyph.bmp_width, glyph.bmp_height, &glyph.bmp);
 
             let x1 = glyph.pos.x + scroll;
@@ -140,17 +164,76 @@ impl EditBox {
         Ok(())
     }
 
+    fn regen_glyphs(&self) -> Result<()> {
+        let glyphs = self.text_shaper.shape(self.text.get_str(0)?, self.font_size.get_f32(0)?, 
+                [self.color.get_f32(0)?, self.color.get_f32(1)?,
+                 self.color.get_f32(2)?, self.color.get_f32(3)?]);
+        *self.glyphs.lock().unwrap() = glyphs;
+        Ok(())
+    }
+
     fn key_press(self: Arc<Self>, key: String, mods: KeyMods, repeat: bool) {
         if repeat {
             return;
         }
-        if key == "PageUp" {
-            println!("pageup!");
+        match key.as_str() {
+            "PageUp" => {
+                println!("pageup!");
+            }
+            "PageDown" => {
+                println!("pagedown!");
+            }
+            "Left" => {
+                let cursor_pos = self.cursor_pos.get_u32(0).unwrap();
+                if cursor_pos > 0 {
+                    self.cursor_pos.set_u32(0, cursor_pos - 1).unwrap();
+                }
+            }
+            "Right" => {
+                let cursor_pos = self.cursor_pos.get_u32(0).unwrap();
+                let glyphs_len = self.glyphs.lock().unwrap().len() as u32;
+                if cursor_pos < glyphs_len {
+                    self.cursor_pos.set_u32(0, cursor_pos + 1).unwrap();
+                }
+            }
+            "Delete" => {
+                let cursor_pos = self.cursor_pos.get_u32(0).unwrap();
+                if cursor_pos == 0 {
+                    return;
+                }
+                let mut text = String::new();
+                for (i, glyph) in self.glyphs.lock().unwrap().iter().enumerate() {
+                    let mut substr = glyph.substr.clone();
+                    if cursor_pos as usize == i {
+                        // Lmk if anyone knows a better way to do substr.pop_front()
+                        let mut chars = substr.chars();
+                        chars.next();
+                        substr = chars.as_str().to_string();
+                    }
+                    text.push_str(&substr);
+                }
+                self.text.set_str(0, text).unwrap();
+                self.regen_glyphs().unwrap();
+            }
+            "Backspace" => {
+                let cursor_pos = self.cursor_pos.get_u32(0).unwrap();
+                if cursor_pos == 0 {
+                    return;
+                }
+                let mut text = String::new();
+                for (i, glyph) in self.glyphs.lock().unwrap().iter().enumerate() {
+                    let mut substr = glyph.substr.clone();
+                    if cursor_pos as usize - 1 == i {
+                        substr.pop().unwrap();
+                    }
+                    text.push_str(&substr);
+                }
+                self.cursor_pos.set_u32(0, cursor_pos - 1).unwrap();
+                self.text.set_str(0, text).unwrap();
+                self.regen_glyphs().unwrap();
+            }
+            _ => {}
         }
-        else if key == "PageDown" {
-            println!("pagedown!");
-        }
-        // Ability to move cursor
     }
 }
 

@@ -1,6 +1,6 @@
 use freetype as ft;
 
-use crate::gfx::Rectangle;
+use crate::gfx::{Rectangle, FreetypeFace};
 
 pub struct Glyph {
     // Substring this glyph corresponds to
@@ -14,11 +14,14 @@ pub struct Glyph {
     pub pos: Rectangle<f32>,
 }
 
-pub struct TextShaper<'a> {
-    pub font_faces: &'a Vec<ft::Face<&'a [u8]>>,
+pub struct TextShaper {
+    pub font_faces: Vec<FreetypeFace>,
 }
 
-impl<'a> TextShaper<'a> {
+unsafe impl Send for TextShaper {}
+unsafe impl Sync for TextShaper {}
+
+impl TextShaper {
     fn split_into_substrs(&self, text: String) -> Vec<(usize, String)> {
         let mut current_idx = 0;
         let mut current_str = String::new();
@@ -57,7 +60,7 @@ impl<'a> TextShaper<'a> {
     pub fn shape(&self, text: String, font_size: f32, text_color: [f32; 4]) -> Vec<Glyph> {
         let substrs = self.split_into_substrs(text.clone());
 
-        let mut glyphs = vec![];
+        let mut glyphs: Vec<Glyph> = vec![];
 
         let mut current_x = 0.;
         let mut current_y = 0.;
@@ -73,16 +76,28 @@ impl<'a> TextShaper<'a> {
             }
 
             let hb_font = harfbuzz_rs::Font::from_freetype_face(face.clone());
-            let buffer = harfbuzz_rs::UnicodeBuffer::new().add_str(&text);
+            let buffer = harfbuzz_rs::UnicodeBuffer::new()
+                .set_cluster_level(harfbuzz_rs::ClusterLevel::MonotoneCharacters)
+                .add_str(&text);
             let output = harfbuzz_rs::shape(&hb_font, buffer, &[]);
 
             let positions = output.get_glyph_positions();
             let infos = output.get_glyph_infos();
 
-            for (position, info) in positions.iter().zip(infos) {
+            let mut prev_cluster = 0;
+
+            for (i, (position, info)) in positions.iter().zip(infos).enumerate() {
                 let gid = info.codepoint;
                 // Index within this substr
-                // let cluster = info.cluster;
+                let curr_cluster = info.cluster as usize;
+
+                // Skip first time
+                if i != 0 {
+                    let substr = text[prev_cluster..curr_cluster].to_string();
+                    glyphs.last_mut().unwrap().substr = substr;
+                }
+
+                prev_cluster = curr_cluster;
 
                 let mut flags = ft::face::LoadFlag::DEFAULT;
                 if face.has_color() {
@@ -168,10 +183,8 @@ impl<'a> TextShaper<'a> {
                     }
                 };
 
-                let substr = "hello".to_string();
-
                 let glyph = Glyph {
-                    substr,
+                    substr: String::new(),
                     bmp,
                     bmp_width: bmp_width as u16,
                     bmp_height: bmp_height as u16,
@@ -180,6 +193,9 @@ impl<'a> TextShaper<'a> {
 
                 glyphs.push(glyph);
             }
+
+            let substr = text[prev_cluster..].to_string();
+            glyphs.last_mut().unwrap().substr = substr;
         }
 
         glyphs
