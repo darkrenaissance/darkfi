@@ -241,7 +241,7 @@ impl Drk {
             self.reset_money_coins()?;
             self.reset_dao_trees().await?;
             self.reset_daos().await?;
-            self.reset_dao_proposals()?;
+            self.reset_dao_proposals().await?;
             self.reset_dao_votes()?;
             self.update_all_tx_history_records_status("Rejected")?;
             height = 0;

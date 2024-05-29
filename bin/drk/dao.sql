@@ -1,3 +1,4 @@
+-- TODO: Update these once finished
 -- # DAO::mint()
 -- 
 -- First one person will create the DAO
@@ -104,8 +105,10 @@
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_daos (
-    -- Name identifier of the DAO
-    name TEXT PRIMARY KEY UNIQUE NOT NULL,
+    -- Bulla identifier of the DAO
+    bulla BLOB PRIMARY KEY NOT NULL,
+    -- Unique name identifier of the DAO
+    name TEXT UNIQUE NOT NULL,
     -- DAO parameters
     params BLOB NOT NULL,
     -- These values are NULL until the DAO is minted on chain and received
@@ -124,31 +127,30 @@ CREATE TABLE IF NOT EXISTS Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_tree
 );
 
 CREATE TABLE IF NOT EXISTS Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_proposals (
-    proposal_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-    dao_name TEXT NOT NULL,
-    -- Public key of person that would receive the funds
-    recv_public BLOB NOT NULL,
-    -- Amount of funds that would be sent
-    amount BLOB NOT NULL,
-    -- Token ID we propose to send
-    sendcoin_token_id BLOB NOT NULL,
-    bulla_blind BLOB NOT NULL,
-    -- these values are NULL until the proposal is minted on chain
-    -- and received by the DAO
+    -- Bulla identifier of the proposal
+    bulla BLOB PRIMARY KEY NOT NULL,
+    -- Bulla identifier of the DAO this proposal is for
+    dao_bulla BLOB NOT NULL,
+    -- The on chain representation of the proposal
+    proposal BLOB NOT NULL,
+    -- Plaintext proposal call data the members share between them
+    data BLOB,
+    -- These values are NULL until the proposal is minted on chain and received
+    -- Leaf position of the proposal in the Merkle tree of proposals
     leaf_position BLOB,
+    -- Money merkle tree snapshot for reproducing the snapshot Merkle root
     money_snapshot_tree BLOB,
+    -- The transaction hash where the proposal was deployed
     tx_hash BLOB,
+    -- The call index in the transaction where the proposal was deployed
     call_index INTEGER,
-    -- this is NULL until we have voted on this proposal
-    our_vote_id INTEGER UNIQUE,
 
-    FOREIGN KEY(our_vote_id) REFERENCES Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_votes(vote_id) ON DELETE CASCADE ON UPDATE CASCADE,
-    FOREIGN KEY(dao_name) REFERENCES Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_daos(name) ON DELETE CASCADE ON UPDATE CASCADE
+    FOREIGN KEY(dao_bulla) REFERENCES Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_daos(bulla) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_votes (
     vote_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-    proposal_id INTEGER NOT NULL,
+    proposal_bulla BLOB NOT NULL,
     vote_option INTEGER NOT NULL,
     yes_vote_blind BLOB NOT NULL,
     all_vote_value BLOB NOT NULL,
@@ -159,5 +161,5 @@ CREATE TABLE IF NOT EXISTS Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_vote
     call_index INTEGER,
     -- My code has votes merkle tree and position for votes, but
     -- that might be a mistake...
-    FOREIGN KEY(proposal_id) REFERENCES Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_proposals(proposal_id) ON DELETE CASCADE ON UPDATE CASCADE
+    FOREIGN KEY(proposal_bulla) REFERENCES Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_proposals(bulla) ON DELETE CASCADE ON UPDATE CASCADE
 );

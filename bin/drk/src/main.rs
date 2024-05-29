@@ -42,10 +42,12 @@ use darkfi::{
     zk::halo2::Field,
     Result,
 };
-use darkfi_dao_contract::DaoFunction;
-use darkfi_money_contract::model::{Coin, TokenId};
+use darkfi_dao_contract::{model::DaoProposalBulla, DaoFunction};
+use darkfi_money_contract::model::{Coin, CoinAttributes, TokenId};
 use darkfi_sdk::{
-    crypto::{BaseBlind, FuncId, FuncRef, PublicKey, SecretKey, DAO_CONTRACT_ID},
+    crypto::{
+        note::AeadEncryptedNote, BaseBlind, FuncId, FuncRef, PublicKey, SecretKey, DAO_CONTRACT_ID,
+    },
     pasta::{group::ff::PrimeField, pallas},
     tx::TransactionHash,
 };
@@ -79,7 +81,7 @@ use money::BALANCE_BASE10_DECIMALS;
 
 /// Wallet functionality related to Dao
 mod dao;
-use dao::DaoParams;
+use dao::{DaoParams, ProposalRecord};
 
 /// Wallet functionality related to Deployooor
 mod deploy;
@@ -384,20 +386,25 @@ enum DaoSubcmd {
 
     /// View a DAO proposal data
     Proposal {
-        /// Name identifier for the DAO
-        name: String,
+        /// Bulla identifier for the proposal
+        bulla: String,
 
-        /// Numeric identifier for the proposal
-        proposal_id: u64,
+        #[structopt(long)]
+        /// Encrypt the proposal and encode it to base64
+        export: bool,
+
+        #[structopt(long)]
+        /// Create the proposal transaction
+        mint_proposal: bool,
     },
+
+    /// Import a base64 encoded and encrypted proposal from stdin
+    ProposalImport,
 
     /// Vote on a given proposal
     Vote {
-        /// Name identifier for the DAO
-        name: String,
-
-        /// Numeric identifier for the proposal
-        proposal_id: u64,
+        /// Bulla identifier for the proposal
+        bulla: String,
 
         /// Vote (0 for NO, 1 for YES)
         vote: u8,
@@ -408,11 +415,8 @@ enum DaoSubcmd {
 
     /// Execute a DAO proposal
     Exec {
-        /// Name identifier for the DAO
-        name: String,
-
-        /// Numeric identifier for the proposal
-        proposal_id: u64,
+        /// Bulla identifier for the proposal
+        bulla: String,
     },
 
     /// Print the DAO contract base58-encoded spend hook
@@ -1271,20 +1275,21 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     None => None,
                 };
 
-                let tx = match drk
+                let proposal = match drk
                     .dao_propose_transfer(
                         &name, duration, &amount, token_id, rcpt, spend_hook, user_data,
                     )
                     .await
                 {
-                    Ok(tx) => tx,
+                    Ok(p) => p,
                     Err(e) => {
                         eprintln!("Failed to create DAO transfer proposal: {e:?}");
                         exit(2);
                     }
                 };
 
-                println!("{}", base64::encode(&serialize_async(&tx).await));
+                println!("Generated proposal: {}", proposal.bulla());
+
                 Ok(())
             }
 
@@ -1292,34 +1297,171 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 let drk = Drk::new(args.wallet_path, args.wallet_pass, None, ex).await?;
                 let proposals = drk.get_dao_proposals(&name).await?;
 
-                for proposal in proposals {
-                    println!("[{}] {:?}", proposal.id, proposal.bulla());
+                for (i, proposal) in proposals.iter().enumerate() {
+                    println!("{i}. {}", proposal.bulla());
                 }
 
                 Ok(())
             }
 
-            DaoSubcmd::Proposal { name, proposal_id } => {
-                let drk = Drk::new(args.wallet_path, args.wallet_pass, None, ex).await?;
-                let proposals = drk.get_dao_proposals(&name).await?;
-                let Some(proposal) = proposals.iter().find(|x| x.id == proposal_id) else {
-                    eprintln!("No such DAO proposal found");
-                    exit(2);
+            DaoSubcmd::Proposal { bulla, export, mint_proposal } => {
+                let bulla = match DaoProposalBulla::from_str(&bulla) {
+                    Ok(b) => b,
+                    Err(e) => {
+                        eprintln!("Invalid spend hook: {e:?}");
+                        exit(2);
+                    }
                 };
+
+                let drk =
+                    Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
+                let proposal = drk.get_dao_proposal_by_bulla(&bulla).await?;
+
+                if export {
+                    // Retrieve the DAO
+                    let dao = drk.get_dao_by_bulla(&proposal.proposal.dao_bulla).await?;
+
+                    // Encypt the proposal
+                    let enc_note = AeadEncryptedNote::encrypt(
+                        &proposal,
+                        &dao.params.dao.public_key,
+                        &mut OsRng,
+                    )
+                    .unwrap();
+
+                    // Export it to base64
+                    println!("{}", base64::encode(&serialize_async(&enc_note).await));
+                    return Ok(())
+                }
+
+                if mint_proposal {
+                    for call in &proposal.proposal.auth_calls {
+                        if call.function_code == DaoFunction::AuthMoneyTransfer as u8 {
+                            let tx = match drk.dao_transfer_proposal_tx(&proposal).await {
+                                Ok(tx) => tx,
+                                Err(e) => {
+                                    eprintln!("Failed to create DAO transfer proposal: {e:?}");
+                                    exit(2);
+                                }
+                            };
+
+                            println!("{}", base64::encode(&serialize_async(&tx).await));
+                            return Ok(())
+                        }
+                    }
+
+                    eprintln!("Unsuported DAO proposal");
+                    exit(2);
+                }
 
                 println!("{proposal}");
 
-                let votes = drk.get_dao_proposal_votes(proposal_id).await?;
-                println!("votes:");
+                let mut contract_calls = "\nInvoked contracts:\n".to_string();
+                for call in proposal.proposal.auth_calls {
+                    contract_calls.push_str(&format!(
+                        "\tContract: {}\n\tFunction: {}\n\tData: ",
+                        call.contract_id, call.function_code
+                    ));
+
+                    if call.auth_data.is_empty() {
+                        contract_calls.push_str("-\n");
+                        continue;
+                    }
+
+                    if call.function_code == DaoFunction::AuthMoneyTransfer as u8 {
+                        // We know that the plaintext data live in the data plaintext vec
+                        if proposal.data.is_none() {
+                            contract_calls.push_str("-\n");
+                            continue;
+                        }
+                        let proposal_coinattrs: Vec<CoinAttributes> =
+                            deserialize_async(proposal.data.as_ref().unwrap()).await?;
+                        for coin in proposal_coinattrs {
+                            let spend_hook = if coin.spend_hook == FuncId::none() {
+                                "-".to_string()
+                            } else {
+                                format!("{}", coin.spend_hook)
+                            };
+
+                            let user_data = if coin.user_data == pallas::Base::ZERO {
+                                "-".to_string()
+                            } else {
+                                format!("{:?}", coin.user_data)
+                            };
+
+                            contract_calls.push_str(&format!("\n\t\t{}: {}\n\t\t{}: {} ({})\n\t\t{}: {}\n\t\t{}: {}\n\t\t{}: {}\n\t\t{}: {}\n\n",
+                            "Recipient",
+                            coin.public_key,
+                            "Amount",
+                            coin.value,
+                            encode_base10(coin.value, BALANCE_BASE10_DECIMALS),
+                            "Token",
+                            coin.token_id,
+                            "Spend hook",
+                            spend_hook,
+                            "User data",
+                            user_data,
+                            "Blind",
+                            coin.blind));
+                        }
+                    }
+                }
+                println!("{contract_calls}");
+
+                let votes = drk.get_dao_proposal_votes(&bulla).await?;
+                println!("Votes:");
                 for vote in votes {
                     let option = if vote.vote_option { "yes" } else { "no " };
-                    eprintln!("  {option} {}", vote.all_vote_value);
+                    println!("  {option} {}", vote.all_vote_value);
                 }
 
                 Ok(())
             }
 
-            DaoSubcmd::Vote { name, proposal_id, vote, vote_weight } => {
+            DaoSubcmd::ProposalImport {} => {
+                let mut buf = String::new();
+                stdin().read_to_string(&mut buf)?;
+                let Some(bytes) = base64::decode(buf.trim()) else {
+                    eprintln!("Failed to decode encrypted proposal data");
+                    exit(2);
+                };
+                let encrypted_proposal: AeadEncryptedNote = deserialize_async(&bytes).await?;
+
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, None, ex).await?;
+
+                // Retrieve all DAOs to try to decrypt the proposal
+                let daos = drk.get_daos().await?;
+                for dao in &daos {
+                    if let Ok(proposal) =
+                        encrypted_proposal.decrypt::<ProposalRecord>(&dao.params.secret_key)
+                    {
+                        let proposal = match drk.get_dao_proposal_by_bulla(&proposal.bulla()).await
+                        {
+                            Ok(p) => {
+                                let mut our_proposal = p;
+                                our_proposal.data = proposal.data;
+                                our_proposal
+                            }
+                            Err(_) => proposal,
+                        };
+
+                        return drk.put_dao_proposals(&[proposal]).await
+                    }
+                }
+
+                eprintln!("Couldn't decrypt the proposal with out DAO keys");
+                exit(2);
+            }
+
+            DaoSubcmd::Vote { bulla, vote, vote_weight } => {
+                let bulla = match DaoProposalBulla::from_str(&bulla) {
+                    Ok(b) => b,
+                    Err(e) => {
+                        eprintln!("Invalid spend hook: {e:?}");
+                        exit(2);
+                    }
+                };
+
                 if let Err(e) = f64::from_str(&vote_weight) {
                     eprintln!("Invalid vote weight: {e:?}");
                     exit(2);
@@ -1334,7 +1476,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
                 let drk =
                     Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
-                let tx = match drk.dao_vote(&name, proposal_id, vote, weight).await {
+                let tx = match drk.dao_vote(&bulla, vote, weight).await {
                     Ok(tx) => tx,
                     Err(e) => {
                         eprintln!("Failed to create DAO Vote transaction: {e:?}");
@@ -1345,26 +1487,29 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 // TODO: Write our_vote in the proposal sql.
 
                 println!("{}", bs58::encode(&serialize_async(&tx).await).into_string());
-
                 Ok(())
             }
 
-            DaoSubcmd::Exec { name, proposal_id } => {
+            DaoSubcmd::Exec { bulla } => {
+                let bulla = match DaoProposalBulla::from_str(&bulla) {
+                    Ok(b) => b,
+                    Err(e) => {
+                        eprintln!("Invalid spend hook: {e:?}");
+                        exit(2);
+                    }
+                };
+
                 let drk =
                     Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
-                let dao = drk.get_dao_by_name(&name).await?;
-                let proposal = drk.get_dao_proposal_by_id(proposal_id).await?;
-                assert!(proposal.dao_bulla == dao.bulla());
-
-                let tx = match drk.dao_exec(dao, proposal).await {
+                let tx = match drk.dao_exec(&bulla).await {
                     Ok(tx) => tx,
                     Err(e) => {
                         eprintln!("Failed to execute DAO proposal: {e:?}");
                         exit(2);
                     }
                 };
-                println!("{}", base64::encode(&serialize_async(&tx).await));
 
+                println!("{}", base64::encode(&serialize_async(&tx).await));
                 Ok(())
             }
 
@@ -1372,6 +1517,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 let spend_hook =
                     FuncRef { contract_id: *DAO_CONTRACT_ID, func_code: DaoFunction::Exec as u8 }
                         .to_func_id();
+
                 println!("{spend_hook}");
 
                 Ok(())

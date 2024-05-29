@@ -306,13 +306,22 @@ pub fn generate_completions(shell: &str) -> Result<()> {
         ]);
 
     let proposals =
-        SubCommand::with_name("proposals").about("List DAO proposals").args(&vec![name.clone()]);
+        SubCommand::with_name("proposals").about("List DAO proposals").args(&vec![name]);
 
-    let proposal_id = Arg::with_name("proposal-id").help("Numeric identifier for the proposal");
+    let bulla = Arg::with_name("bulla").help("Bulla identifier for the proposal");
 
-    let proposal = SubCommand::with_name("proposal")
-        .about("View a DAO proposal data")
-        .args(&vec![name.clone(), proposal_id.clone()]);
+    let export = Arg::with_name("export").help("Encrypt the proposal and encode it to base64");
+
+    let mint_proposal = Arg::with_name("mint-proposal").help("Create the proposal transaction");
+
+    let proposal = SubCommand::with_name("proposal").about("View a DAO proposal data").args(&vec![
+        bulla.clone(),
+        export,
+        mint_proposal,
+    ]);
+
+    let proposal_import = SubCommand::with_name("proposal-import")
+        .about("Import a base64 encoded and encrypted proposal from stdin");
 
     let vote = Arg::with_name("vote").help("Vote (0 for NO, 1 for YES)");
 
@@ -320,15 +329,12 @@ pub fn generate_completions(shell: &str) -> Result<()> {
         Arg::with_name("vote-weight").help("Vote weight (amount of governance tokens)");
 
     let vote = SubCommand::with_name("vote").about("Vote on a given proposal").args(&vec![
-        name.clone(),
-        proposal_id.clone(),
+        bulla.clone(),
         vote,
         vote_weight,
     ]);
 
-    let exec = SubCommand::with_name("exec")
-        .about("Execute a DAO proposal")
-        .args(&vec![name, proposal_id]);
+    let exec = SubCommand::with_name("exec").about("Execute a DAO proposal").args(&vec![bulla]);
 
     let spend_hook_cmd = SubCommand::with_name("spend-hook")
         .about("Print the DAO contract base58-encoded spend hook");
@@ -343,6 +349,7 @@ pub fn generate_completions(shell: &str) -> Result<()> {
         propose_transfer,
         proposals,
         proposal,
+        proposal_import,
         vote,
         exec,
         spend_hook_cmd,
