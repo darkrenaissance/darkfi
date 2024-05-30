@@ -44,19 +44,19 @@ use crate::{Error, Result};
 /// The node selection logic for creating an AddrMessage is as follows:
 ///
 /// 1. First select nodes matching the requested transports from the
-/// anchorlist. These nodes have the highest guarantee of being reachable, so we
-/// prioritize them first.
+///    anchorlist. These nodes have the highest guarantee of being reachable,
+///    so we prioritize them first.
 ///
 /// 2. Then select nodes matching the requested transports from the
-/// whitelist.
+///    whitelist.
 ///
 /// 3. Next select whitelist nodes that don't match our transports. We do
-/// this so that nodes share and propagate nodes of different transports,
-/// even if they can't connect to them themselves.
+///    this so that nodes share and propagate nodes of different transports,
+///    even if they can't connect to them themselves.
 ///
 /// 4. Finally, if there's still space available, fill the remaining vector
-/// space with darklist entries. This is necessary to propagate transports
-/// that neither this node nor the receiving node support.
+///    space with darklist entries. This is necessary to propagate transports
+///    that neither this node nor the receiving node support.
 pub struct ProtocolAddress {
     channel: ChannelPtr,
     addrs_sub: MessageSubscription<AddrsMessage>,

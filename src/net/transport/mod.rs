@@ -88,6 +88,10 @@ pub enum ListenerVariant {
     /// TCP with TLS
     TcpTls(tcp::TcpListener),
 
+    #[cfg(feature = "p2p-tor")]
+    /// Tor
+    Tor(tor::TorListener),
+
     #[cfg(feature = "p2p-unix")]
     /// Unix socket
     Unix(unix::UnixListener),
@@ -305,6 +309,15 @@ impl Listener {
                 Ok(Self { endpoint, variant })
             }
 
+            #[cfg(feature = "p2p-tor")]
+            "tor" => {
+                // Build a Tor Hidden Service listener
+                enforce_hostport!(endpoint);
+                let variant = tor::TorListener::new().await?;
+                let variant = ListenerVariant::Tor(variant);
+                Ok(Self { endpoint, variant })
+            }
+
             #[cfg(feature = "p2p-unix")]
             "unix" => {
                 enforce_abspath!(endpoint);
@@ -337,6 +350,13 @@ impl Listener {
                 let l = listener.do_listen(sockaddr[0]).await?;
                 let tlsupgrade = tls::TlsUpgrade::new().await;
                 let l = tlsupgrade.upgrade_listener_tcp_tls(l).await?;
+                Ok(Box::new(l))
+            }
+
+            #[cfg(feature = "p2p-tor")]
+            ListenerVariant::Tor(listener) => {
+                let port = self.endpoint.port().unwrap();
+                let l = listener.do_listen(port).await?;
                 Ok(Box::new(l))
             }
 
@@ -380,6 +400,6 @@ impl PtStream for smol::net::unix::UnixStream {}
 
 /// Wrapper trait for async listeners
 #[async_trait]
-pub trait PtListener: Send + Sync + Unpin {
+pub trait PtListener: Send + Unpin {
     async fn next(&self) -> io::Result<(Box<dyn PtStream>, Url)>;
 }

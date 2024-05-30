@@ -221,6 +221,7 @@ impl Consensus {
     /// - If the current best fork has reached greater length than the security threshold,
     ///   and no other fork exist with same rank, first proposal(s) in that fork can be
     ///   appended to canonical blockchain (finalize).
+    ///
     /// When best fork can be finalized, first block(s) should be appended to canonical,
     /// and forks should be rebuilt.
     pub async fn finalization(&self) -> Result<Option<usize>> {

@@ -72,6 +72,9 @@ arti-client = {version = "0.18.0", default-features = false, features = ["async-
 tor-error = {version = "0.18.0", optional = true}
 tor-rtcompat = {version = "0.18.0", features = ["async-std", "rustls"], optional = true}
 tor-hscrypto = {version = "0.18.0", optional = true}
+tor-hsservice = {version = "0.18.0", optional = true}
+tor-proto = {version = "0.18.0", optional = true}
+tor-cell = {version = "0.18.0", optional = true}
 
 # TLS cert utilities
 ed25519-compact = {version = "2.1.1", optional = true}
@@ -216,9 +219,21 @@ event-graph = [
 ]
 
 p2p-unix = []
-p2p-tcp = ["socket2"]
-p2p-tor = ["arti-client", "tor-hscrypto", "tor-error", "tor-rtcompat", "libsqlite3-sys"]
+
 p2p-nym = []
+
+p2p-tcp = ["socket2"]
+
+p2p-tor = [
+    "arti-client",
+    "tor-hsservice",
+    "tor-hscrypto",
+    "tor-error",
+    "tor-rtcompat",
+    "tor-proto",
+    "tor-cell",
+    "libsqlite3-sys",
+]
 
 net = [
     "async-trait",
