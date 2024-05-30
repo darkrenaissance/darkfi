@@ -8,7 +8,7 @@ use freetype as ft;
 
 use crate::{error::{Error, Result}, prop::{
     PropertyBool, PropertyFloat32, PropertyUint32, PropertyStr, PropertyColor,
-    Property}, scene::{SceneGraph, SceneNode, SceneNodeId, Pimpl, Slot}, gfx::{Rectangle, RenderContext, COLOR_WHITE, COLOR_BLUE, COLOR_RED, COLOR_GREEN, FreetypeFace, Point}, text::{Glyph, TextShaper}, keysym::{MouseButtonAsU8, KeyCodeAsU16}};
+    Property}, scene::{SceneGraph, SceneNode, SceneNodeId, Pimpl, Slot}, gfx::{Rectangle, RenderContext, COLOR_WHITE, COLOR_BLUE, COLOR_RED, COLOR_GREEN, FreetypeFace, COLOR_DARKGREY, Point}, text::{Glyph, TextShaper}, keysym::{MouseButtonAsU8, KeyCodeAsU16}};
 
 const CURSOR_WIDTH: f32 = 4.;
 
@@ -308,9 +308,10 @@ impl EditBox {
             //render.render_box_with_texture(x1, y1, x2, y2, COLOR_WHITE, texture);
             render.ctx.delete_texture(texture);
 
-            if debug {
-                render.outline(x1, y1, x2, y2, COLOR_BLUE, 1.);
-            }
+            // Glyph outlines
+            //if debug {
+            //    render.outline(x1, y1, x2, y2, COLOR_BLUE, 1.);
+            //}
 
             if cursor_pos != 0 && cursor_pos == glyph_idx {
                 render.render_box(x1 - CURSOR_WIDTH, 0., x1, rect.h, cursor_color);
@@ -326,8 +327,14 @@ impl EditBox {
         }
 
         if debug {
-            render.hline(0., rhs, 0., COLOR_RED, 1.);
-            render.outline(0., 0., rect.w, rect.h, COLOR_GREEN, 1.);
+            let outline_color = if self.is_active.get() {
+                COLOR_GREEN
+            } else {
+                COLOR_DARKGREY
+            };
+            // Baseline
+            //render.hline(0., rhs, 0., COLOR_RED, 1.);
+            render.outline(0., 0., rect.w, rect.h, outline_color, 1.);
         }
 
         Ok(())
@@ -567,7 +574,38 @@ impl EditBox {
                 // Send signal
             }
 
+            let scroll = self.scroll.get();
+
+            let mouse_x = x - rect.x;
+            let mut cpos = 0;
+            let lhs = 0.;
+            let mut last_d = (lhs - mouse_x).abs();
+
+            let glyphs = &*self.glyphs.lock().unwrap();
+            for (i, glyph) in glyphs.iter().skip(1).enumerate() {
+                // Because we skip the first item
+                let glyph_idx = (i + 1) as u32;
+
+                let x1 = glyph.pos.x + scroll;
+                let curr_d = (x1 - mouse_x).abs();
+                if curr_d < last_d {
+                    last_d = curr_d;
+                    cpos = glyph_idx;
+                }
+            }
+            // also check the right hand side
+            let rhs = {
+                let glyph = &glyphs.last().unwrap();
+                glyph.pos.x + scroll + glyph.pos.w
+            };
+            let curr_d = (rhs - mouse_x).abs();
+            if curr_d < last_d {
+                //last_d = curr_d;
+                cpos = glyphs.len() as u32;
+            }
             // set cursor pos
+            self.cursor_pos.set(cpos);
+
             // begin selection
         }
         // click outside the box will:
