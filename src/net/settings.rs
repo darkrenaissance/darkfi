@@ -72,6 +72,10 @@ pub struct Settings {
     pub white_connect_percent: usize,
     /// Number of goldlist connections
     pub gold_connect_count: usize,
+    /// If this is true, strictly follow the gold_connect_count and
+    /// white_connect_percent settings. Otherwise, connect to greylist
+    /// entries if we have no white or gold connections.
+    pub slot_preference_strict: bool,
     /// Number of seconds with no connections after which refinery
     /// process is paused.
     pub time_with_no_connections: u64,
@@ -106,6 +110,7 @@ impl Default for Settings {
             greylist_refinery_interval: 15,
             white_connect_percent: 70,
             gold_connect_count: 2,
+            slot_preference_strict: false,
             time_with_no_connections: 30,
             blacklist: vec![],
         }
@@ -176,7 +181,9 @@ pub struct SettingsOpt {
     #[structopt(long)]
     pub transport_mixing: Option<bool>,
 
-    /// Allow localnet hosts
+    /// If this is true, strictly follow the gold_connect_count and
+    /// white_connect_percent settings. Otherwise, connect to greylist
+    /// entries if we have no white or gold connections.
     #[serde(default)]
     #[structopt(long)]
     pub localnet: bool,
@@ -205,6 +212,11 @@ pub struct SettingsOpt {
     /// Number of goldlist connections
     #[structopt(skip)]
     pub gold_connect_count: Option<usize>,
+
+    /// Allow localnet hosts
+    #[serde(default)]
+    #[structopt(long)]
+    pub slot_preference_strict: bool,
 
     /// Number of seconds with no connections after which refinery
     /// process is paused.
@@ -255,6 +267,7 @@ impl From<SettingsOpt> for Settings {
                 .unwrap_or(def.greylist_refinery_interval),
             white_connect_percent: opt.white_connect_percent.unwrap_or(def.white_connect_percent),
             gold_connect_count: opt.gold_connect_count.unwrap_or(def.gold_connect_count),
+            slot_preference_strict: opt.slot_preference_strict,
             time_with_no_connections: opt
                 .time_with_no_connections
                 .unwrap_or(def.time_with_no_connections),

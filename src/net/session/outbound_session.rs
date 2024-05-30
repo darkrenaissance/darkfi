@@ -214,8 +214,17 @@ impl Slot {
 
         let transports = &settings.allowed_transports;
         let transport_mixing = settings.transport_mixing;
+        let preference_strict = &settings.slot_preference_strict;
 
-        let addrs = if slot < gold_count {
+        let grey_only = hosts.container.is_empty(HostColor::White).await &&
+            hosts.container.is_empty(HostColor::Gold).await &&
+            !hosts.container.is_empty(HostColor::Grey).await;
+
+        // If we only have grey entries, select from the greylist. Otherwise,
+        // use the preference defined in settings.
+        let addrs = if grey_only && !preference_strict {
+            container.fetch(HostColor::Grey, transports, transport_mixing).await
+        } else if slot < gold_count {
             container.fetch(HostColor::Gold, transports, transport_mixing).await
         } else if slot < white_count {
             container.fetch(HostColor::White, transports, transport_mixing).await
