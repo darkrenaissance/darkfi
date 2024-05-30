@@ -74,7 +74,7 @@ of the guide can be added for future regressions.
 | 29 | DAO proposal export       | dao proposal {PROPOSAL_BULLA} --export                   | Pass               |
 | 30 | DAO proposal import       | dao proposal-import                                      | Pass               |
 | 31 | DAO proposal mint         | dao proposal {PROPOSAL_BULLA} --mint-proposal            | Pass               |
-| 32 | DAO vote                  | dao vote {PROPOSAL_BULLA} {VOTE} {WEIGHT}                | Failure: needs #31 |
+| 32 | DAO vote                  | dao vote {PROPOSAL_BULLA} {VOTE} {WEIGHT}                | Pass               |
 | 33 | DAO proposal execution    | dao exec {PROPOSAL_BULLA}                                | Failure: needs #32 |
 | 34 | Coins unspend             | unspend {COIN}                                           | Pass               |
 | 35 | Transaction inspect       | inspect                                                  | Pass               |

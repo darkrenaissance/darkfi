@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o_money_tr
 
 -- The Sparse Merkle tree containing coins nullifiers
 CREATE TABLE IF NOT EXISTS BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o_money_smt (
-	smt_key BLOB INTEGER PRIMARY KEY NOT NULL,
+	smt_key BLOB PRIMARY KEY NOT NULL,
 	smt_value BLOB NOT NULL
 );
 

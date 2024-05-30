@@ -104,7 +104,7 @@ pub trait StorageAdapter {
 /// An in-memory storage, useful for unit tests and smaller trees.
 #[derive(Default, Clone)]
 pub struct MemoryStorage<F: FieldElement> {
-    tree: HashMap<BigUint, F>,
+    pub tree: HashMap<BigUint, F>,
 }
 
 impl<F: FieldElement> MemoryStorage<F> {

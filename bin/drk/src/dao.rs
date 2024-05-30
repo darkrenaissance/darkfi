@@ -19,6 +19,7 @@
 use std::{collections::HashMap, fmt};
 
 use lazy_static::lazy_static;
+use num_bigint::BigUint;
 use rand::rngs::OsRng;
 use rusqlite::types::Value;
 
@@ -47,7 +48,7 @@ use darkfi_money_contract::{
 use darkfi_sdk::{
     bridgetree,
     crypto::{
-        smt::{PoseidonFp, EMPTY_NODES_FP},
+        smt::{MemoryStorageFp, PoseidonFp, SmtMemoryFp, EMPTY_NODES_FP},
         util::{fp_mod_fv, fp_to_u64},
         BaseBlind, Blind, FuncId, FuncRef, Keypair, MerkleNode, MerkleTree, PublicKey, ScalarBlind,
         SecretKey, DAO_CONTRACT_ID, MONEY_CONTRACT_ID,
@@ -92,10 +93,6 @@ pub const DAO_DAOS_COL_CALL_INDEX: &str = "call_index";
 pub const DAO_TREES_COL_DAOS_TREE: &str = "daos_tree";
 pub const DAO_TREES_COL_PROPOSALS_TREE: &str = "proposals_tree";
 
-// DAO_COINS_TABLE
-pub const _DAO_COINS_COL_COIN_ID: &str = "coin_id";
-pub const _DAO_COINS_COL_DAO_ID: &str = "dao_id";
-
 // DAO_PROPOSALS_TABLE
 pub const DAO_PROPOSALS_COL_BULLA: &str = "bulla";
 pub const DAO_PROPOSALS_COL_DAO_BULLA: &str = "dao_bulla";
@@ -103,11 +100,11 @@ pub const DAO_PROPOSALS_COL_PROPOSAL: &str = "proposal";
 pub const DAO_PROPOSALS_COL_DATA: &str = "data";
 pub const DAO_PROPOSALS_COL_LEAF_POSITION: &str = "leaf_position";
 pub const DAO_PROPOSALS_COL_MONEY_SNAPSHOT_TREE: &str = "money_snapshot_tree";
+pub const DAO_PROPOSALS_COL_NULLIFIERS_SMT_SNAPSHOT: &str = "nullifiers_smt_snapshot";
 pub const DAO_PROPOSALS_COL_TX_HASH: &str = "tx_hash";
 pub const DAO_PROPOSALS_COL_CALL_INDEX: &str = "call_index";
 
 // DAO_VOTES_TABLE
-pub const _DAO_VOTES_COL_VOTE_ID: &str = "vote_id";
 pub const DAO_VOTES_COL_PROPOSAL_BULLA: &str = "proposal_bulla";
 pub const DAO_VOTES_COL_VOTE_OPTION: &str = "vote_option";
 pub const DAO_VOTES_COL_YES_VOTE_BLIND: &str = "yes_vote_blind";
@@ -273,6 +270,8 @@ pub struct ProposalRecord {
     pub leaf_position: Option<bridgetree::Position>,
     /// Money merkle tree snapshot for reproducing the snapshot Merkle root
     pub money_snapshot_tree: Option<MerkleTree>,
+    /// Money nullifiers SMT snapshot for reproducing the snapshot Merkle root
+    pub nullifiers_smt_snapshot: Option<HashMap<BigUint, pallas::Base>>,
     /// The transaction hash where the proposal was deployed
     pub tx_hash: Option<TransactionHash>,
     /// The call index in the transaction where the proposal was deployed
@@ -318,6 +317,21 @@ impl fmt::Display for ProposalRecord {
 
         write!(f, "{}", s)
     }
+}
+
+/// Auxiliary structure representing a parsed proposal information from
+/// a transaction call data.
+pub struct ParsedProposal {
+    /// Proposal parameters
+    pub params: DaoProposeParams,
+    /// Money merkle tree snapshot
+    pub money_tree: MerkleTree,
+    /// Money nullifiers SMT snapshot
+    pub nullifiers_smt: HashMap<BigUint, pallas::Base>,
+    /// The transaction hash where the proposal was found
+    pub tx_hash: TransactionHash,
+    /// The call index in the transaction where the proposal was found
+    pub call_idx: u8,
 }
 
 #[derive(Debug, Clone)]
@@ -528,7 +542,19 @@ impl Drk {
             }
         };
 
-        let tx_hash = match row[6] {
+        let nullifiers_smt_snapshot = match row[6] {
+            Value::Blob(ref nullifiers_smt_snapshot_bytes) => {
+                Some(deserialize_async(nullifiers_smt_snapshot_bytes).await?)
+            }
+            Value::Null => None,
+            _ => {
+                return Err(Error::ParseFailed(
+                    "[get_dao_proposals] Nullifiers SMT snapshot bytes parsing failed",
+                ))
+            }
+        };
+
+        let tx_hash = match row[7] {
             Value::Blob(ref tx_hash_bytes) => Some(deserialize_async(tx_hash_bytes).await?),
             Value::Null => None,
             _ => {
@@ -538,7 +564,7 @@ impl Drk {
             }
         };
 
-        let call_index = match row[7] {
+        let call_index = match row[8] {
             Value::Integer(call_index) => {
                 let Ok(call_index) = u8::try_from(call_index) else {
                     return Err(Error::ParseFailed("[get_dao_proposals] Call index parsing failed"))
@@ -554,6 +580,7 @@ impl Drk {
             data,
             leaf_position,
             money_snapshot_tree,
+            nullifiers_smt_snapshot,
             tx_hash,
             call_index,
         })
@@ -599,13 +626,13 @@ impl Drk {
         // DAOs that have been minted
         let mut new_dao_bullas: Vec<(DaoBulla, TransactionHash, u8)> = vec![];
         // DAO proposals that have been minted
-        let mut new_dao_proposals: Vec<(DaoProposeParams, MerkleTree, TransactionHash, u8)> =
-            vec![];
+        let mut new_dao_proposals: Vec<ParsedProposal> = vec![];
         // DAO votes that have been seen
         let mut new_dao_votes: Vec<(DaoVoteParams, TransactionHash, u8)> = vec![];
 
-        // We need to clone the tree here for reproducing the snapshot Merkle root
+        // We need to clone the trees here for reproducing the snapshot Merkle roots
         let money_tree = self.get_money_tree().await?;
+        let nullifiers_smt = self.get_nullifiers_smt().await?;
 
         // Run through the transaction and see what we got:
         match DaoFunction::try_from(data[0])? {
@@ -617,7 +644,13 @@ impl Drk {
             DaoFunction::Propose => {
                 println!("[apply_tx_dao_data] Found Dao::Propose call");
                 let params: DaoProposeParams = deserialize_async(&data[1..]).await?;
-                new_dao_proposals.push((params, money_tree.clone(), tx_hash, call_idx));
+                new_dao_proposals.push(ParsedProposal {
+                    params,
+                    money_tree: money_tree.clone(),
+                    nullifiers_smt: nullifiers_smt.clone(),
+                    tx_hash,
+                    call_idx,
+                });
             }
             DaoFunction::Vote => {
                 println!("[apply_tx_dao_data] Found Dao::Vote call");
@@ -657,35 +690,41 @@ impl Drk {
 
         let mut our_proposals: Vec<ProposalRecord> = vec![];
         for proposal in new_dao_proposals {
-            proposals_tree.append(MerkleNode::from(proposal.0.proposal_bulla.inner()));
+            proposals_tree.append(MerkleNode::from(proposal.params.proposal_bulla.inner()));
 
             // If we're able to decrypt this note, that's the way to link it
             // to a specific DAO.
             for dao in &daos {
-                if let Ok(note) = proposal.0.note.decrypt::<DaoProposal>(&dao.params.secret_key) {
+                if let Ok(note) =
+                    proposal.params.note.decrypt::<DaoProposal>(&dao.params.secret_key)
+                {
                     // We managed to decrypt it. Let's place this in a proper ProposalRecord object
                     println!("[apply_tx_dao_data] Managed to decrypt DAO proposal note");
 
                     // Check if we already got the record
-                    let our_proposal =
-                        match self.get_dao_proposal_by_bulla(&proposal.0.proposal_bulla).await {
-                            Ok(p) => {
-                                let mut our_proposal = p;
-                                our_proposal.leaf_position = proposals_tree.mark();
-                                our_proposal.money_snapshot_tree = Some(proposal.1);
-                                our_proposal.tx_hash = Some(proposal.2);
-                                our_proposal.call_index = Some(proposal.3);
-                                our_proposal
-                            }
-                            Err(_) => ProposalRecord {
-                                proposal: note,
-                                data: None,
-                                leaf_position: proposals_tree.mark(),
-                                money_snapshot_tree: Some(proposal.1),
-                                tx_hash: Some(proposal.2),
-                                call_index: Some(proposal.3),
-                            },
-                        };
+                    let our_proposal = match self
+                        .get_dao_proposal_by_bulla(&proposal.params.proposal_bulla)
+                        .await
+                    {
+                        Ok(p) => {
+                            let mut our_proposal = p;
+                            our_proposal.leaf_position = proposals_tree.mark();
+                            our_proposal.money_snapshot_tree = Some(proposal.money_tree);
+                            our_proposal.nullifiers_smt_snapshot = Some(proposal.nullifiers_smt);
+                            our_proposal.tx_hash = Some(proposal.tx_hash);
+                            our_proposal.call_index = Some(proposal.call_idx);
+                            our_proposal
+                        }
+                        Err(_) => ProposalRecord {
+                            proposal: note,
+                            data: None,
+                            leaf_position: proposals_tree.mark(),
+                            money_snapshot_tree: Some(proposal.money_tree),
+                            nullifiers_smt_snapshot: Some(proposal.nullifiers_smt),
+                            tx_hash: Some(proposal.tx_hash),
+                            call_index: Some(proposal.call_idx),
+                        },
+                    };
 
                     our_proposals.push(our_proposal);
                     break
@@ -851,7 +890,7 @@ impl Drk {
             }
 
             let query = format!(
-                "INSERT OR REPLACE INTO {} ({}, {}, {}, {}, {}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8);",
+                "INSERT OR REPLACE INTO {} ({}, {}, {}, {}, {}, {}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9);",
                 *DAO_PROPOSALS_TABLE,
                 DAO_PROPOSALS_COL_BULLA,
                 DAO_PROPOSALS_COL_DAO_BULLA,
@@ -859,6 +898,7 @@ impl Drk {
                 DAO_PROPOSALS_COL_DATA,
                 DAO_PROPOSALS_COL_LEAF_POSITION,
                 DAO_PROPOSALS_COL_MONEY_SNAPSHOT_TREE,
+                DAO_PROPOSALS_COL_NULLIFIERS_SMT_SNAPSHOT,
                 DAO_PROPOSALS_COL_TX_HASH,
                 DAO_PROPOSALS_COL_CALL_INDEX,
             );
@@ -878,6 +918,13 @@ impl Drk {
                 None => None,
             };
 
+            let nullifiers_smt_snapshot = match &proposal.nullifiers_smt_snapshot {
+                Some(nullifiers_smt_snapshot) => {
+                    Some(serialize_async(nullifiers_smt_snapshot).await)
+                }
+                None => None,
+            };
+
             let tx_hash = match &proposal.tx_hash {
                 Some(tx_hash) => Some(serialize_async(tx_hash).await),
                 None => None,
@@ -892,6 +939,7 @@ impl Drk {
                     data,
                     leaf_position,
                     money_snapshot_tree,
+                    nullifiers_smt_snapshot,
                     tx_hash,
                     proposal.call_index,
                 ],
@@ -909,10 +957,11 @@ impl Drk {
     pub async fn unconfirm_proposals(&self, proposals: &[ProposalRecord]) -> WalletDbResult<()> {
         for proposal in proposals {
             let query = format!(
-                "UPDATE {} SET {} = ?1, {} = ?2, {} = ?3 , {} = ?4 WHERE {} = ?5;",
+                "UPDATE {} SET {} = ?1, {} = ?2, {} = ?3, {} = ?4, {} = ?5 WHERE {} = ?6;",
                 *DAO_PROPOSALS_TABLE,
                 DAO_PROPOSALS_COL_LEAF_POSITION,
                 DAO_PROPOSALS_COL_MONEY_SNAPSHOT_TREE,
+                DAO_PROPOSALS_COL_NULLIFIERS_SMT_SNAPSHOT,
                 DAO_PROPOSALS_COL_TX_HASH,
                 DAO_PROPOSALS_COL_CALL_INDEX,
                 DAO_PROPOSALS_COL_BULLA
@@ -920,6 +969,7 @@ impl Drk {
             self.wallet.exec_sql(
                 &query,
                 rusqlite::params![
+                    None::<Vec<u8>>,
                     None::<Vec<u8>>,
                     None::<Vec<u8>>,
                     None::<Vec<u8>>,
@@ -1000,7 +1050,7 @@ impl Drk {
         let proposals = match self.get_proposals().await {
             Ok(p) => p,
             Err(e) => {
-                println!("[reset_dao_proposals] DAO proposalss retrieval failed: {e:?}");
+                println!("[reset_dao_proposals] DAO proposals retrieval failed: {e:?}");
                 return Err(WalletDbError::GenericError);
             }
         };
@@ -1436,6 +1486,7 @@ impl Drk {
             data: Some(serialize_async(&proposal_coinattrs).await),
             leaf_position: None,
             money_snapshot_tree: None,
+            nullifiers_smt_snapshot: None,
             tx_hash: None,
             call_index: None,
         };
@@ -1680,9 +1731,10 @@ impl Drk {
             return Err(Error::Custom(format!("[dao_vote] Proposal {} was not found", proposal)))
         };
         if proposal.leaf_position.is_none() ||
+            proposal.money_snapshot_tree.is_none() ||
+            proposal.nullifiers_smt_snapshot.is_none() ||
             proposal.tx_hash.is_none() ||
-            proposal.call_index.is_none() ||
-            proposal.money_snapshot_tree.is_none()
+            proposal.call_index.is_none()
         {
             return Err(Error::Custom(
                 "[dao_vote] Proposal seems to not have been deployed yet".to_string(),
@@ -1797,13 +1849,8 @@ impl Drk {
         let current_day = blockwindow(current_block_height);
 
         // Generate the Money nullifiers Sparse Merkle Tree
-        let store = WalletStorage::new(
-            &self.wallet,
-            &MONEY_SMT_TABLE,
-            MONEY_SMT_COL_KEY,
-            MONEY_SMT_COL_VALUE,
-        );
-        let money_null_smt = WalletSmt::new(store, PoseidonFp::new(), &EMPTY_NODES_FP);
+        let store = MemoryStorageFp { tree: proposal.nullifiers_smt_snapshot.unwrap() };
+        let money_null_smt = SmtMemoryFp::new(store, PoseidonFp::new(), &EMPTY_NODES_FP);
 
         // Create the vote call
         let call = DaoVoteCall {

@@ -19,6 +19,7 @@
 use std::{collections::HashMap, str::FromStr};
 
 use lazy_static::lazy_static;
+use num_bigint::BigUint;
 use rand::rngs::OsRng;
 use rusqlite::types::Value;
 
@@ -45,6 +46,7 @@ use darkfi_sdk::{
     bridgetree,
     crypto::{
         note::AeadEncryptedNote,
+        pasta_prelude::PrimeField,
         smt::{PoseidonFp, EMPTY_NODES_FP},
         BaseBlind, FuncId, Keypair, MerkleNode, MerkleTree, PublicKey, ScalarBlind, SecretKey,
         MONEY_CONTRACT_ID,
@@ -680,6 +682,39 @@ impl Drk {
         };
         let tree = deserialize_async(tree_bytes).await?;
         Ok(tree)
+    }
+
+    /// Fetch the Money nullifiers SMT from the wallet, as a map.
+    pub async fn get_nullifiers_smt(&self) -> Result<HashMap<BigUint, pallas::Base>> {
+        let rows = match self.wallet.query_multiple(&MONEY_SMT_TABLE, &[], &[]) {
+            Ok(r) => r,
+            Err(e) => {
+                return Err(Error::RusqliteError(format!(
+                    "[get_nullifiers_smt] SMT records retrieval failed: {e:?}"
+                )))
+            }
+        };
+
+        let mut smt = HashMap::new();
+        for row in rows {
+            let Value::Blob(ref key_bytes) = row[0] else {
+                return Err(Error::ParseFailed("[get_nullifiers_smt] Key bytes parsing failed"))
+            };
+            let key = BigUint::from_bytes_be(key_bytes);
+
+            let Value::Blob(ref value_bytes) = row[1] else {
+                return Err(Error::ParseFailed("[get_nullifiers_smt] Value bytes parsing failed"))
+            };
+            let mut repr = [0; 32];
+            repr.copy_from_slice(value_bytes);
+            let Some(value) = pallas::Base::from_repr(repr).into() else {
+                return Err(Error::ParseFailed("[get_nullifiers_smt] Value conversion failed"))
+            };
+
+            smt.insert(key, value);
+        }
+
+        Ok(smt)
     }
 
     /// Get the last scanned block height from the wallet.

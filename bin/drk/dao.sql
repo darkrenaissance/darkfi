@@ -140,6 +140,8 @@ CREATE TABLE IF NOT EXISTS Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_prop
     leaf_position BLOB,
     -- Money merkle tree snapshot for reproducing the snapshot Merkle root
     money_snapshot_tree BLOB,
+    -- Money nullifiers SMT snapshot for reproducing the snapshot Merkle root
+    nullifiers_smt_snapshot BLOB,
     -- The transaction hash where the proposal was deployed
     tx_hash BLOB,
     -- The call index in the transaction where the proposal was deployed
