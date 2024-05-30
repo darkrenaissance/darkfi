@@ -508,6 +508,15 @@ def draw():
     node_id = api.add_node("editz", SceneNodeType.EDIT_BOX)
 
     prop = Property(
+        "is_active", PropertyType.BOOL, PropertySubType.NULL,
+        None,
+        "Is Active", "Whether the editbox is active",
+        False, True, 1, None, None, []
+    )
+    api.add_property(node_id, prop)
+    api.set_property_bool(node_id, "is_active", 0, True)
+
+    prop = Property(
         "rect", PropertyType.FLOAT32, PropertySubType.PIXEL,
         None,
         "Rectangle", "The position and size within the layer",
@@ -563,16 +572,38 @@ def draw():
     api.set_property_str(node_id, "text", 0, "hello king!😁🍆jelly 🍆1234")
 
     prop = Property(
-        "color", PropertyType.FLOAT32, PropertySubType.COLOR,
+        "text_color", PropertyType.FLOAT32, PropertySubType.COLOR,
         None,
-        "Color", "Color of the text",
+        "Text Color", "Color of the text",
         False, False, 4, 0, 1, []
     )
     api.add_property(node_id, prop)
-    api.set_property_f32(node_id, "color", 0, 1)
-    api.set_property_f32(node_id, "color", 1, 1)
-    api.set_property_f32(node_id, "color", 2, 1)
-    api.set_property_f32(node_id, "color", 3, 1)
+    api.set_property_f32(node_id, "text_color", 0, 1)
+    api.set_property_f32(node_id, "text_color", 1, 1)
+    api.set_property_f32(node_id, "text_color", 2, 1)
+    api.set_property_f32(node_id, "text_color", 3, 1)
+
+    prop = Property(
+        "hi_bg_color", PropertyType.FLOAT32, PropertySubType.COLOR,
+        None,
+        "Highlight Bg Color", "Background color for highlighted text",
+        False, False, 4, 0, 1, []
+    )
+    api.add_property(node_id, prop)
+    api.set_property_f32(node_id, "hi_bg_color", 0, 1)
+    api.set_property_f32(node_id, "hi_bg_color", 1, 1)
+    api.set_property_f32(node_id, "hi_bg_color", 2, 1)
+    api.set_property_f32(node_id, "hi_bg_color", 3, 0.5)
+
+    prop = Property(
+        "selected", PropertyType.UINT32, PropertySubType.NULL,
+        None,
+        "Selected", "Selected range",
+        True, False, 2, 0, None, []
+    )
+    api.add_property(node_id, prop)
+    api.set_property_u32(node_id, "selected", 0, 1)
+    api.set_property_u32(node_id, "selected", 1, 4)
 
     prop = Property(
         "z_index", PropertyType.UINT32, PropertySubType.NULL,

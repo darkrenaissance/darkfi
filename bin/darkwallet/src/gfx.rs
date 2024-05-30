@@ -18,6 +18,7 @@ use crate::{
     error::{Error, Result},
     editbox,
     expr::{SExprMachine, SExprVal},
+    keysym::MouseButtonAsU8,
     prop::{Property, PropertySubType, PropertyType},
     res::{ResourceId, ResourceManager},
     scene::{
@@ -26,21 +27,6 @@ use crate::{
     },
     shader,
 };
-
-trait MouseButtonAsU8 {
-    fn to_u8(&self) -> u8;
-}
-
-impl MouseButtonAsU8 for MouseButton {
-    fn to_u8(&self) -> u8 {
-        match self {
-            MouseButton::Left => 0,
-            MouseButton::Middle => 1,
-            MouseButton::Right => 2,
-            MouseButton::Unknown => 3,
-        }
-    }
-}
 
 type Color = [f32; 4];
 
@@ -76,6 +62,11 @@ struct Mesh {
     pub index_buffer: BufferId,
 }
 
+pub struct Point<T> {
+    pub x: T,
+    pub y: T,
+}
+
 #[derive(Debug, Clone)]
 pub struct Rectangle<T: Copy + std::ops::Add<Output=T> + std::ops::Sub<Output=T> + std::cmp::PartialOrd> {
     pub x: T,
@@ -84,7 +75,7 @@ pub struct Rectangle<T: Copy + std::ops::Add<Output=T> + std::ops::Sub<Output=T>
     pub h: T,
 }
 
-impl<T: Copy + std::ops::Add<Output=T> + std::ops::Sub<Output=T> + std::cmp::PartialOrd> Rectangle<T> {
+impl<T: Copy + std::ops::Add<Output=T> + std::ops::Sub<Output=T> + std::ops::AddAssign + std::cmp::PartialOrd> Rectangle<T> {
     fn from_array(arr: [T; 4]) -> Self {
         let mut iter = IntoIter::new(arr);
         Self {
@@ -95,7 +86,7 @@ impl<T: Copy + std::ops::Add<Output=T> + std::ops::Sub<Output=T> + std::cmp::Par
         }
     }
 
-    fn clip(&self, other: &Rectangle<T>) -> Option<Rectangle<T>> {
+    pub fn clip(&self, other: &Self) -> Option<Self> {
         if other.x + other.w < self.x ||
             other.x > self.x + self.w ||
             other.y + other.h < self.y ||
@@ -118,6 +109,11 @@ impl<T: Copy + std::ops::Add<Output=T> + std::ops::Sub<Output=T> + std::cmp::Par
             clipped.h = self.y + self.h - clipped.y;
         }
         Some(clipped)
+    }
+
+    pub fn contains(&self, point: &Point<T>) -> bool {
+        self.x < point.x && point.x < self.x + self.w &&
+            self.y < point.y && point.y < self.y + self.h
     }
 }
 
@@ -472,11 +468,19 @@ impl<'a> RenderContext<'a> {
 
         let (_, screen_height) = window::screen_size();
 
-        let mut rect = Self::get_rect(&layer)?;
-        rect.y = screen_height as i32 - (rect.y + rect.h);
+        let rect = Self::get_rect(&layer)?;
 
-        self.ctx.apply_viewport(rect.x, rect.y, rect.w, rect.h);
-        self.ctx.apply_scissor_rect(rect.x, rect.y, rect.w, rect.h);
+        let mut view = rect.clone();
+        view.y = screen_height as i32 - (rect.y + rect.h);
+        self.ctx.apply_viewport(view.x, view.y, view.w, view.h);
+        self.ctx.apply_scissor_rect(view.x, view.y, view.w, view.h);
+
+        let rect = Rectangle {
+            x: rect.x as f32,
+            y: rect.y as f32,
+            w: rect.w as f32,
+            h: rect.h as f32,
+        };
 
         let layer_children =
             layer.get_children(&[SceneNodeType::RenderMesh, SceneNodeType::RenderText, SceneNodeType::EditBox]);
@@ -536,7 +540,7 @@ impl<'a> RenderContext<'a> {
         nodes.into_iter().map(|(z_index, node_inf)| node_inf).collect()
     }
 
-    pub fn get_dim(mesh: &SceneNode, layer_rect: &Rectangle<i32>) -> Result<Rectangle<f32>> {
+    pub fn get_dim(mesh: &SceneNode, layer_rect: &Rectangle<f32>) -> Result<Rectangle<f32>> {
         let prop = mesh.get_property("rect").ok_or(Error::PropertyNotFound)?;
         if prop.array_len != 4 {
             return Err(Error::PropertyWrongLen)
@@ -563,7 +567,7 @@ impl<'a> RenderContext<'a> {
         Ok(Rectangle::from_array(rect))
     }
 
-    fn render_mesh(&mut self, node_id: SceneNodeId, layer_rect: &Rectangle<i32>) -> Result<()> {
+    fn render_mesh(&mut self, node_id: SceneNodeId, layer_rect: &Rectangle<f32>) -> Result<()> {
         let mesh = self.scene_graph.get_node(node_id).unwrap();
 
         let z_index = mesh.get_property_u32("z_index")?;
@@ -754,7 +758,7 @@ impl<'a> RenderContext<'a> {
         self.render_box(x1, y2 - w, x2, y2, color);
     }
 
-    fn render_text(&mut self, node_id: SceneNodeId, layer_rect: &Rectangle<i32>) -> Result<()> {
+    fn render_text(&mut self, node_id: SceneNodeId, layer_rect: &Rectangle<f32>) -> Result<()> {
         let node = self.scene_graph.get_node(node_id).unwrap();
 
         let text = node.get_property_str("text")?;

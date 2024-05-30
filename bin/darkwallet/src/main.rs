@@ -14,6 +14,8 @@ mod expr;
 mod gfx;
 use gfx::run_gui;
 
+mod keysym;
+
 mod net;
 use net::ZeroMQAdapter;
 

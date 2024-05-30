@@ -13,6 +13,11 @@ use std::{
 
 use crate::{expr::SExprCode, scene::SceneNodeId};
 
+mod wrap;
+pub use wrap::{
+    PropertyBool, PropertyFloat32, PropertyUint32, PropertyStr, PropertyColor,
+};
+
 type Buffer = Arc<Vec<u8>>;
 
 #[derive(Debug, Copy, Clone, PartialEq, SerialEncodable, SerialDecodable)]
@@ -437,7 +442,7 @@ impl Property {
 
     // Get
 
-    fn is_bounded(&self) -> bool {
+    pub fn is_bounded(&self) -> bool {
         self.array_len != 0
     }
 
@@ -453,6 +458,10 @@ impl Property {
     pub fn is_unset(&self, i: usize) -> Result<bool> {
         let val = self.get_raw_value(i)?;
         Ok(val.is_unset())
+    }
+    pub fn is_null(&self, i: usize) -> Result<bool> {
+        let val = self.get_raw_value(i)?;
+        Ok(val.is_null())
     }
 
     pub fn is_expr(&self, i: usize) -> Result<bool> {

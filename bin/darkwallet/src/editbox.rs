@@ -1,20 +1,29 @@
-use miniquad::{KeyMods, UniformType};
+use miniquad::{KeyMods, UniformType, MouseButton};
 use std::{io::Cursor, sync::{Arc, Mutex}};
 use darkfi_serial::Decodable;
 use freetype as ft;
 
-use crate::{error::{Error, Result}, prop::Property, scene::{SceneGraph, SceneNodeId, Pimpl, Slot}, gfx::{Rectangle, RenderContext, COLOR_WHITE, COLOR_BLUE, COLOR_RED, COLOR_GREEN, FreetypeFace}, text::{Glyph, TextShaper}};
+use crate::{error::{Error, Result}, prop::{
+    PropertyBool, PropertyFloat32, PropertyUint32, PropertyStr, PropertyColor,
+    Property}, scene::{SceneGraph, SceneNode, SceneNodeId, Pimpl, Slot}, gfx::{Rectangle, RenderContext, COLOR_WHITE, COLOR_BLUE, COLOR_RED, COLOR_GREEN, FreetypeFace, Point}, text::{Glyph, TextShaper}, keysym::{MouseButtonAsU8, KeyCodeAsU16}};
 
 const CURSOR_WIDTH: f32 = 4.;
 
 pub type EditBoxPtr = Arc<EditBox>;
 
 pub struct EditBox {
-    scroll: Arc<Property>,
-    cursor_pos: Arc<Property>,
-    text: Arc<Property>,
-    font_size: Arc<Property>,
-    color: Arc<Property>,
+    is_active: PropertyBool,
+    debug: PropertyBool,
+    baseline: PropertyFloat32,
+    scroll: PropertyFloat32,
+    cursor_pos: PropertyUint32,
+    selected: Arc<Property>,
+    text: PropertyStr,
+    font_size: PropertyFloat32,
+    text_color: PropertyColor,
+    hi_bg_color: PropertyColor,
+    // Used for mouse clicks
+    world_rect: Mutex<Rectangle<f32>>,
     glyphs: Mutex<Vec<Glyph>>,
     text_shaper: TextShaper,
 }
@@ -22,32 +31,40 @@ pub struct EditBox {
 impl EditBox {
     pub fn new(scene_graph: &mut SceneGraph, node_id: SceneNodeId, font_faces: Vec<FreetypeFace>) -> Result<Pimpl> {
         let node = scene_graph.get_node(node_id).unwrap();
-        let scroll = node.get_property("scroll").ok_or(Error::PropertyNotFound)?;
-        let cursor_pos = node.get_property("cursor_pos").ok_or(Error::PropertyNotFound)?;
-        let text = node.get_property("text").ok_or(Error::PropertyNotFound)?;
-        let font_size = node.get_property("font_size").ok_or(Error::PropertyNotFound)?;
-        let color = node.get_property("color").ok_or(Error::PropertyNotFound)?;
+        let is_active = PropertyBool::wrap(node, "is_active", 0)?;
+        let debug = PropertyBool::wrap(node, "debug", 0)?;
+        let baseline = PropertyFloat32::wrap(node, "baseline", 0)?;
+        let scroll = PropertyFloat32::wrap(node, "scroll", 0)?;
+        let cursor_pos = PropertyUint32::wrap(node, "cursor_pos", 0)?;
+        let selected = node.get_property("selected").ok_or(Error::PropertyNotFound)?;
+        let text = PropertyStr::wrap(node, "text", 0)?;
+        let font_size = PropertyFloat32::wrap(node, "font_size", 0)?;
+        let text_color = PropertyColor::wrap(node, "text_color")?;
+        let hi_bg_color = PropertyColor::wrap(node, "hi_bg_color")?;
 
         let text_shaper = TextShaper {
             font_faces
         };
 
-        let glyphs = text_shaper.shape(text.get_str(0)?, font_size.get_f32(0)?, 
-                [color.get_f32(0)?, color.get_f32(1)?,
-                 color.get_f32(2)?, color.get_f32(3)?]);
-
         println!("EditBox::new()");
         let self_ = Arc::new(Self{
+            is_active,
+            debug,
+            baseline,
             scroll,
             cursor_pos,
+            selected,
             text,
             font_size,
-            color,
-            glyphs: Mutex::new(glyphs),
+            text_color,
+            hi_bg_color,
+            world_rect: Mutex::new(Rectangle { x: 0., y: 0., w: 0., h: 0. }),
+            glyphs: Mutex::new(vec![]),
             text_shaper,
         });
-        let weak_self = Arc::downgrade(&self_);
+        self_.regen_glyphs().unwrap();
 
+        let weak_self = Arc::downgrade(&self_);
         let slot = Slot {
             name: "editbox::key_down".to_string(),
             func: Box::new(move |data| {
@@ -74,14 +91,75 @@ impl EditBox {
             .expect("no keyboard attached!");
         keyb_node.register("key_down", slot);
 
+        let weak_self = Arc::downgrade(&self_);
+        let slot_btn_down = Slot {
+            name: "editbox::mouse_button_down".to_string(),
+            func: Box::new(move |data| {
+                let mut cur = Cursor::new(&data);
+                let button = MouseButton::from_u8(u8::decode(&mut cur).unwrap());
+                let x = f32::decode(&mut cur).unwrap();
+                let y = f32::decode(&mut cur).unwrap();
+
+                let self_ = weak_self.upgrade();
+                if let Some(self_) = self_ {
+                    self_.mouse_button_down(button, x, y);
+                }
+            }),
+        };
+
+        let weak_self = Arc::downgrade(&self_);
+        let slot_btn_up = Slot {
+            name: "editbox::mouse_button_up".to_string(),
+            func: Box::new(move |data| {
+                let mut cur = Cursor::new(&data);
+                let button = MouseButton::from_u8(u8::decode(&mut cur).unwrap());
+                let x = f32::decode(&mut cur).unwrap();
+                let y = f32::decode(&mut cur).unwrap();
+
+                let self_ = weak_self.upgrade();
+                if let Some(self_) = self_ {
+                    self_.mouse_button_up(button, x, y);
+                }
+            }),
+        };
+
+        let weak_self = Arc::downgrade(&self_);
+        let slot_move = Slot {
+            name: "editbox::mouse_move".to_string(),
+            func: Box::new(move |data| {
+                let mut cur = Cursor::new(&data);
+                let x = f32::decode(&mut cur).unwrap();
+                let y = f32::decode(&mut cur).unwrap();
+
+                let self_ = weak_self.upgrade();
+                if let Some(self_) = self_ {
+                    self_.mouse_move(x, y);
+                }
+            }),
+        };
+
+        let mouse_node = 
+            scene_graph
+            .lookup_node_mut("/window/input/mouse")
+            .expect("no mouse attached!");
+        mouse_node.register("button_down", slot_btn_down);
+        mouse_node.register("button_up", slot_btn_up);
+        mouse_node.register("move", slot_move);
+
         // Save any properties we use
         Ok(Pimpl::EditBox(self_))
     }
 
-    pub fn render<'a>(&self, render: &mut RenderContext<'a>, node_id: SceneNodeId, layer_rect: &Rectangle<i32>) -> Result<()> {
+    pub fn render<'a>(&self, render: &mut RenderContext<'a>, node_id: SceneNodeId, layer_rect: &Rectangle<f32>) -> Result<()> {
         let node = render.scene_graph.get_node(node_id).unwrap();
 
         let rect = RenderContext::get_dim(node, layer_rect)?;
+
+        // Used for detecting mouse clicks
+        let mut world_rect = rect.clone();
+        world_rect.x += layer_rect.x as f32;
+        world_rect.y += layer_rect.y as f32;
+        *self.world_rect.lock().unwrap() = world_rect;
 
         let layer_w = layer_rect.w as f32;
         let layer_h = layer_rect.h as f32;
@@ -106,24 +184,20 @@ impl EditBox {
         self.apply_cursor_scrolling(&rect);
 
         let node = render.scene_graph.get_node(node_id).unwrap();
-        let text = node.get_property_str("text")?;
-        let font_size = node.get_property_f32("font_size")?;
-        let debug = node.get_property_bool("debug")?;
-        let baseline = node.get_property_f32("baseline")?;
-        let scroll = node.get_property_f32("scroll")?;
-        let cursor_pos = node.get_property_u32("cursor_pos")?;
+        let debug = self.debug.get();
+        let baseline = self.baseline.get();
+        let scroll = self.scroll.get();
+        let cursor_pos = self.cursor_pos.get() as usize;
 
-        let color_prop = node.get_property("color").ok_or(Error::PropertyNotFound)?;
-        let color_r = color_prop.get_f32(0)?;
-        let color_g = color_prop.get_f32(1)?;
-        let color_b = color_prop.get_f32(2)?;
-        let color_a = color_prop.get_f32(3)?;
-        let text_color = [color_r, color_g, color_b, color_a];
+        let color = node.get_property("text_color").ok_or(Error::PropertyNotFound)?;
+        let text_color = self.text_color.get();
 
-        let mut glyph_idx = 0;
+        if !self.selected.is_null(0)? && !self.selected.is_null(1)? {
+            self.render_selected(render, &rect)?;
+        }
+
         let mut rhs = 0.;
-
-        for glyph in &*self.glyphs.lock().unwrap() {
+        for (glyph_idx, glyph) in self.glyphs.lock().unwrap().iter().enumerate() {
             let texture = render.ctx.new_texture_from_rgba8(glyph.bmp_width, glyph.bmp_height, &glyph.bmp);
 
             let x1 = glyph.pos.x + scroll;
@@ -150,8 +224,6 @@ impl EditBox {
                 render.render_box(x2, 0., x2 + CURSOR_WIDTH, rect.h, cursor_color);
             }
 
-            glyph_idx += 1;
-
             rhs = x2;
         }
 
@@ -168,9 +240,35 @@ impl EditBox {
         Ok(())
     }
 
-    fn apply_cursor_scrolling(&self, rect: &Rectangle<f32>) -> Result<()> {
-        let cursor_pos = self.cursor_pos.get_u32(0)? as usize;
-        let mut scroll = self.scroll.get_f32(0)?;
+    pub fn render_selected<'a>(&self, render: &mut RenderContext<'a>, rect: &Rectangle<f32>) -> Result<()> {
+        let sel_start = self.selected.get_u32(0)? as usize;
+        let sel_end = self.selected.get_u32(1)? as usize;
+        assert!(sel_start <= sel_end);
+        let scroll = self.scroll.get();
+        let hi_bg_color = self.hi_bg_color.get();
+
+        let mut start_x = 0.;
+        let mut end_x = 0.;
+
+        for (glyph_idx, glyph) in self.glyphs.lock().unwrap().iter().enumerate() {
+            let x1 = glyph.pos.x + scroll;
+            let x2 = x1 + glyph.pos.w;
+
+            if glyph_idx == sel_start {
+                start_x = x1;
+            }
+            if glyph_idx == sel_end {
+                end_x = x2;
+            }
+        }
+
+        render.render_box(start_x, 0., end_x, rect.h, hi_bg_color);
+        Ok(())
+    }
+
+    fn apply_cursor_scrolling(&self, rect: &Rectangle<f32>) {
+        let cursor_pos = self.cursor_pos.get() as usize;
+        let mut scroll = self.scroll.get();
 
         let cursor_x = {
             let glyphs = &*self.glyphs.lock().unwrap();
@@ -189,13 +287,12 @@ impl EditBox {
             scroll = -cursor_x;
         }
 
-        self.scroll.set_f32(0, scroll)
+        self.scroll.set(scroll);
     }
 
     fn regen_glyphs(&self) -> Result<()> {
-        let glyphs = self.text_shaper.shape(self.text.get_str(0)?, self.font_size.get_f32(0)?, 
-                [self.color.get_f32(0)?, self.color.get_f32(1)?,
-                 self.color.get_f32(2)?, self.color.get_f32(3)?]);
+        let glyphs = self.text_shaper.shape(self.text.get(), self.font_size.get(), 
+                self.text_color.get());
         *self.glyphs.lock().unwrap() = glyphs;
         Ok(())
     }
@@ -203,6 +300,9 @@ impl EditBox {
     fn key_press(self: Arc<Self>, key: String, mods: KeyMods, repeat: bool) {
         if repeat {
             return;
+        }
+        if !self.is_active.get() {
+            return
         }
         match key.as_str() {
             "PageUp" => {
@@ -212,20 +312,44 @@ impl EditBox {
                 println!("pagedown!");
             }
             "Left" => {
-                let cursor_pos = self.cursor_pos.get_u32(0).unwrap();
+                let mut cursor_pos = self.cursor_pos.get();
                 if cursor_pos > 0 {
-                    self.cursor_pos.set_u32(0, cursor_pos - 1).unwrap();
+                    cursor_pos -= 1;
+                    self.cursor_pos.set(cursor_pos);
+                }
+
+                if !mods.shift {
+                    self.selected.set_null(0).unwrap();
+                    self.selected.set_null(1).unwrap();
+                } else {
+                    if self.selected.is_null(0).unwrap() {
+                        assert!(self.selected.is_null(1).unwrap());
+                        self.selected.set_u32(0, cursor_pos).unwrap();
+                    }
+                    self.selected.set_u32(1, cursor_pos).unwrap();
                 }
             }
             "Right" => {
-                let cursor_pos = self.cursor_pos.get_u32(0).unwrap();
+                let mut cursor_pos = self.cursor_pos.get();
                 let glyphs_len = self.glyphs.lock().unwrap().len() as u32;
                 if cursor_pos < glyphs_len {
-                    self.cursor_pos.set_u32(0, cursor_pos + 1).unwrap();
+                    cursor_pos += 1;
+                    self.cursor_pos.set(cursor_pos);
+                }
+
+                if !mods.shift {
+                    self.selected.set_null(0).unwrap();
+                    self.selected.set_null(1).unwrap();
+                } else {
+                    if self.selected.is_null(0).unwrap() {
+                        assert!(self.selected.is_null(1).unwrap());
+                        self.selected.set_u32(1, cursor_pos).unwrap();
+                    }
+                    self.selected.set_u32(1, cursor_pos).unwrap();
                 }
             }
             "Delete" => {
-                let cursor_pos = self.cursor_pos.get_u32(0).unwrap();
+                let cursor_pos = self.cursor_pos.get();
                 if cursor_pos == 0 {
                     return;
                 }
@@ -240,11 +364,11 @@ impl EditBox {
                     }
                     text.push_str(&substr);
                 }
-                self.text.set_str(0, text).unwrap();
+                self.text.set(text);
                 self.regen_glyphs().unwrap();
             }
             "Backspace" => {
-                let cursor_pos = self.cursor_pos.get_u32(0).unwrap();
+                let cursor_pos = self.cursor_pos.get();
                 if cursor_pos == 0 {
                     return;
                 }
@@ -256,12 +380,49 @@ impl EditBox {
                     }
                     text.push_str(&substr);
                 }
-                self.cursor_pos.set_u32(0, cursor_pos - 1).unwrap();
-                self.text.set_str(0, text).unwrap();
+                self.cursor_pos.set(cursor_pos - 1);
+                self.text.set(text);
                 self.regen_glyphs().unwrap();
             }
             _ => {}
         }
+    }
+
+    fn mouse_button_down(self: Arc<Self>, button: MouseButton, x: f32, y: f32) {
+        let mouse_pos = Point { x, y };
+        let rect = self.world_rect.lock().unwrap();
+
+        // clicking inside box will:
+        // 1. make it active
+        // 2. begin selection
+        if rect.contains(&mouse_pos) {
+            if !self.is_active.get() {
+                self.is_active.set(true);
+                println!("inside!");
+                // Send signal
+            }
+
+            // set cursor pos
+            // begin selection
+        }
+        // click outside the box will:
+        // 1. make it inactive
+        else {
+            if self.is_active.get() {
+                self.is_active.set(false);
+                // Send signal
+            }
+        }
+    }
+    fn mouse_button_up(self: Arc<Self>, button: MouseButton, x: f32, y: f32) {
+        // releasing mouse button will:
+        // 1. end selection
+    }
+    fn mouse_move(self: Arc<Self>, x: f32, y: f32) {
+        // if active and selection_active, then use x to modify the selection.
+        // also implement scrolling when cursor is to the left or right
+        // just scroll to the end
+        // also set cursor_pos too
     }
 }
 
