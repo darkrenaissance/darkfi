@@ -5,6 +5,8 @@ use freetype as ft;
 
 use crate::{error::{Error, Result}, prop::Property, scene::{SceneGraph, SceneNodeId, Pimpl, Slot}, gfx::{Rectangle, RenderContext, COLOR_WHITE, COLOR_BLUE, COLOR_RED, COLOR_GREEN, FreetypeFace}, text::{Glyph, TextShaper}};
 
+const CURSOR_WIDTH: f32 = 4.;
+
 pub type EditBoxPtr = Arc<EditBox>;
 
 pub struct EditBox {
@@ -79,20 +81,7 @@ impl EditBox {
     pub fn render<'a>(&self, render: &mut RenderContext<'a>, node_id: SceneNodeId, layer_rect: &Rectangle<i32>) -> Result<()> {
         let node = render.scene_graph.get_node(node_id).unwrap();
 
-        let text = node.get_property_str("text")?;
-        let font_size = node.get_property_f32("font_size")?;
-        let debug = node.get_property_bool("debug")?;
         let rect = RenderContext::get_dim(node, layer_rect)?;
-        let baseline = node.get_property_f32("baseline")?;
-        let scroll = node.get_property_f32("scroll")?;
-        let cursor_pos = node.get_property_u32("cursor_pos")?;
-
-        let color_prop = node.get_property("color").ok_or(Error::PropertyNotFound)?;
-        let color_r = color_prop.get_f32(0)?;
-        let color_g = color_prop.get_f32(1)?;
-        let color_b = color_prop.get_f32(2)?;
-        let color_a = color_prop.get_f32(3)?;
-        let text_color = [color_r, color_g, color_b, color_a];
 
         let layer_w = layer_rect.w as f32;
         let layer_h = layer_rect.h as f32;
@@ -114,9 +103,22 @@ impl EditBox {
 
         render.ctx.apply_uniforms_from_bytes(uniforms_data.as_ptr(), uniforms_data.len());
 
-        let shaper = TextShaper {
-            font_faces: render.font_faces.clone()
-        };
+        self.apply_cursor_scrolling(&rect);
+
+        let node = render.scene_graph.get_node(node_id).unwrap();
+        let text = node.get_property_str("text")?;
+        let font_size = node.get_property_f32("font_size")?;
+        let debug = node.get_property_bool("debug")?;
+        let baseline = node.get_property_f32("baseline")?;
+        let scroll = node.get_property_f32("scroll")?;
+        let cursor_pos = node.get_property_u32("cursor_pos")?;
+
+        let color_prop = node.get_property("color").ok_or(Error::PropertyNotFound)?;
+        let color_r = color_prop.get_f32(0)?;
+        let color_g = color_prop.get_f32(1)?;
+        let color_b = color_prop.get_f32(2)?;
+        let color_a = color_prop.get_f32(3)?;
+        let text_color = [color_r, color_g, color_b, color_a];
 
         let mut glyph_idx = 0;
         let mut rhs = 0.;
@@ -143,25 +145,51 @@ impl EditBox {
                 render.outline(x1, y1, x2, y2, COLOR_BLUE, 1.);
             }
 
-            if cursor_pos == 0 {
+            if cursor_pos == glyph_idx + 1 {
                 let cursor_color = [1., 0.5, 0.5, 1.];
-                render.render_box(0., 0., 4., rect.h, cursor_color);
-            }
-            else if cursor_pos == glyph_idx + 1 {
-                let cursor_color = [1., 0.5, 0.5, 1.];
-                render.render_box(x2, 0., x2 + 4., rect.h, cursor_color);
+                render.render_box(x2, 0., x2 + CURSOR_WIDTH, rect.h, cursor_color);
             }
 
             glyph_idx += 1;
 
             rhs = x2;
         }
+
+        if cursor_pos == 0 {
+            let cursor_color = [1., 0.5, 0.5, 1.];
+            render.render_box(0., 0., CURSOR_WIDTH, rect.h, cursor_color);
+        }
+
         if debug {
             render.hline(0., rhs, 0., COLOR_RED, 1.);
             render.outline(0., 0., rect.w, rect.h, COLOR_GREEN, 1.);
         }
 
         Ok(())
+    }
+
+    fn apply_cursor_scrolling(&self, rect: &Rectangle<f32>) -> Result<()> {
+        let cursor_pos = self.cursor_pos.get_u32(0)? as usize;
+        let mut scroll = self.scroll.get_f32(0)?;
+
+        let cursor_x = {
+            let glyphs = &*self.glyphs.lock().unwrap();
+            if cursor_pos == 0 {
+                0.
+            } else {
+                assert!(cursor_pos < glyphs.len() + 1);
+                let glyph = &glyphs[cursor_pos - 1];
+                glyph.pos.x + glyph.pos.w
+            }
+        };
+
+        if cursor_x + CURSOR_WIDTH + scroll > rect.w {
+            scroll = rect.w - cursor_x - CURSOR_WIDTH;
+        } else if cursor_x + scroll < 0. {
+            scroll = -cursor_x;
+        }
+
+        self.scroll.set_f32(0, scroll)
     }
 
     fn regen_glyphs(&self) -> Result<()> {

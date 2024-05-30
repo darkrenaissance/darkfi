@@ -514,7 +514,7 @@ def draw():
         False, True, 4, None, None, []
     )
     api.add_property(node_id, prop)
-    api.set_property_f32(node_id, "rect", 0, 10)
+    api.set_property_f32(node_id, "rect", 0, 60)
     api.set_property_f32(node_id, "rect", 1, 200)
     api.set_property_f32(node_id, "rect", 2, 300)
     api.set_property_f32(node_id, "rect", 3, 60)
