@@ -206,17 +206,7 @@ impl TorListener {
     }
 }
 
-/*
 /// Internal Tor Listener implementation, used with `PtListener`
-pub struct TorListenerIntern<'a> {
-    port: u16,
-    _onion_service: Arc<RunningOnionService>,
-    rendreq_stream: Mutex<BoxStream<'a, RendRequest>>,
-}
-
-unsafe impl Sync for TorListenerIntern<'_> {}
-*/
-
 pub struct TorListenerIntern {
     port: u16,
     _onion_service: Arc<RunningOnionService>,
