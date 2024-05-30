@@ -21,6 +21,7 @@ pub struct EditBox {
     text: PropertyStr,
     font_size: PropertyFloat32,
     text_color: PropertyColor,
+    cursor_color: PropertyColor,
     hi_bg_color: PropertyColor,
     // Used for mouse clicks
     world_rect: Mutex<Rectangle<f32>>,
@@ -40,6 +41,7 @@ impl EditBox {
         let text = PropertyStr::wrap(node, "text", 0)?;
         let font_size = PropertyFloat32::wrap(node, "font_size", 0)?;
         let text_color = PropertyColor::wrap(node, "text_color")?;
+        let cursor_color = PropertyColor::wrap(node, "cursor_color")?;
         let hi_bg_color = PropertyColor::wrap(node, "hi_bg_color")?;
 
         let text_shaper = TextShaper {
@@ -57,6 +59,7 @@ impl EditBox {
             text,
             font_size,
             text_color,
+            cursor_color,
             hi_bg_color,
             world_rect: Mutex::new(Rectangle { x: 0., y: 0., w: 0., h: 0. }),
             glyphs: Mutex::new(vec![]),
@@ -188,8 +191,7 @@ impl EditBox {
         let baseline = self.baseline.get();
         let scroll = self.scroll.get();
         let cursor_pos = self.cursor_pos.get() as usize;
-
-        let color = node.get_property("text_color").ok_or(Error::PropertyNotFound)?;
+        let cursor_color = self.cursor_color.get();
         let text_color = self.text_color.get();
 
         if !self.selected.is_null(0)? && !self.selected.is_null(1)? {
@@ -197,7 +199,8 @@ impl EditBox {
         }
 
         let mut rhs = 0.;
-        for (glyph_idx, glyph) in self.glyphs.lock().unwrap().iter().enumerate() {
+        let glyphs = &*self.glyphs.lock().unwrap();
+        for (glyph_idx, glyph) in glyphs.iter().enumerate() {
             let texture = render.ctx.new_texture_from_rgba8(glyph.bmp_width, glyph.bmp_height, &glyph.bmp);
 
             let x1 = glyph.pos.x + scroll;
@@ -219,17 +222,17 @@ impl EditBox {
                 render.outline(x1, y1, x2, y2, COLOR_BLUE, 1.);
             }
 
-            if cursor_pos == glyph_idx + 1 {
-                let cursor_color = [1., 0.5, 0.5, 1.];
-                render.render_box(x2, 0., x2 + CURSOR_WIDTH, rect.h, cursor_color);
+            if cursor_pos != 0 && cursor_pos == glyph_idx {
+                render.render_box(x1 - CURSOR_WIDTH, 0., x1, rect.h, cursor_color);
             }
 
             rhs = x2;
         }
 
         if cursor_pos == 0 {
-            let cursor_color = [1., 0.5, 0.5, 1.];
             render.render_box(0., 0., CURSOR_WIDTH, rect.h, cursor_color);
+        } else if cursor_pos == glyphs.len() {
+            render.render_box(rhs - CURSOR_WIDTH, 0., rhs, rect.h, cursor_color);
         }
 
         if debug {
@@ -241,9 +244,12 @@ impl EditBox {
     }
 
     pub fn render_selected<'a>(&self, render: &mut RenderContext<'a>, rect: &Rectangle<f32>) -> Result<()> {
-        let sel_start = self.selected.get_u32(0)? as usize;
-        let sel_end = self.selected.get_u32(1)? as usize;
-        assert!(sel_start <= sel_end);
+        let start = self.selected.get_u32(0)? as usize;
+        let end = self.selected.get_u32(1)? as usize;
+
+        let sel_start = std::cmp::min(start, end);
+        let sel_end = std::cmp::max(start, end);
+
         let scroll = self.scroll.get();
         let hi_bg_color = self.hi_bg_color.get();
 
@@ -258,7 +264,7 @@ impl EditBox {
                 start_x = x1;
             }
             if glyph_idx == sel_end {
-                end_x = x2;
+                end_x = x1;
             }
         }
 
@@ -274,17 +280,23 @@ impl EditBox {
             let glyphs = &*self.glyphs.lock().unwrap();
             if cursor_pos == 0 {
                 0.
-            } else {
-                assert!(cursor_pos < glyphs.len() + 1);
-                let glyph = &glyphs[cursor_pos - 1];
+            } else if cursor_pos == glyphs.len() {
+                let glyph = &glyphs.last().unwrap();
                 glyph.pos.x + glyph.pos.w
+            }else {
+                assert!(cursor_pos < glyphs.len());
+                let glyph = &glyphs[cursor_pos];
+                glyph.pos.x
             }
         };
 
-        if cursor_x + CURSOR_WIDTH + scroll > rect.w {
-            scroll = rect.w - cursor_x - CURSOR_WIDTH;
-        } else if cursor_x + scroll < 0. {
-            scroll = -cursor_x;
+        let cursor_lhs = cursor_x + scroll;
+        let cursor_rhs = cursor_lhs + CURSOR_WIDTH;
+
+        if cursor_rhs > rect.w {
+            scroll = rect.w - cursor_x;
+        } else if cursor_lhs < 0. {
+            scroll = -cursor_x + CURSOR_WIDTH;
         }
 
         self.scroll.set(scroll);
@@ -343,7 +355,7 @@ impl EditBox {
                 } else {
                     if self.selected.is_null(0).unwrap() {
                         assert!(self.selected.is_null(1).unwrap());
-                        self.selected.set_u32(1, cursor_pos).unwrap();
+                        self.selected.set_u32(0, cursor_pos).unwrap();
                     }
                     self.selected.set_u32(1, cursor_pos).unwrap();
                 }

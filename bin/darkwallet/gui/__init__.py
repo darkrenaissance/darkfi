@@ -584,6 +584,18 @@ def draw():
     api.set_property_f32(node_id, "text_color", 3, 1)
 
     prop = Property(
+        "cursor_color", PropertyType.FLOAT32, PropertySubType.COLOR,
+        None,
+        "Cursor Color", "Color of the cursor",
+        False, False, 4, 0, 1, []
+    )
+    api.add_property(node_id, prop)
+    api.set_property_f32(node_id, "cursor_color", 0, 1)
+    api.set_property_f32(node_id, "cursor_color", 1, 0.5)
+    api.set_property_f32(node_id, "cursor_color", 2, 0.5)
+    api.set_property_f32(node_id, "cursor_color", 3, 1)
+
+    prop = Property(
         "hi_bg_color", PropertyType.FLOAT32, PropertySubType.COLOR,
         None,
         "Highlight Bg Color", "Background color for highlighted text",
