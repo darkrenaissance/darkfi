@@ -225,6 +225,8 @@ impl PtListener for TorListenerIntern {
             return Err(io::Error::new(ErrorKind::ConnectionAborted, "Connection Aborted"))
         };
 
+        drop(rendreq_stream);
+
         let mut streamreq_stream = match rendrequest.accept().await {
             Ok(v) => v,
             Err(e) => {
