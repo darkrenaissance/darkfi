@@ -196,7 +196,6 @@ impl Drk {
                         &call.data.data,
                         TransactionHash::new(*blake3::hash(&serialize_async(tx).await).as_bytes()),
                         i as u8,
-                        true,
                     )
                     .await?;
                     continue

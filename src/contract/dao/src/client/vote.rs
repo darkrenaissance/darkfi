@@ -21,9 +21,12 @@ use darkfi_sdk::{
     bridgetree,
     bridgetree::Hashable,
     crypto::{
-        note::ElGamalEncryptedNote, pasta_prelude::*, pedersen_commitment_u64, poseidon_hash,
-        smt::SmtMemoryFp, util::fv_mod_fp_unsafe, Blind, FuncId, Keypair, MerkleNode, PublicKey,
-        SecretKey,
+        note::ElGamalEncryptedNote,
+        pasta_prelude::*,
+        pedersen_commitment_u64, poseidon_hash,
+        smt::{PoseidonFp, SparseMerkleTree, StorageAdapter, SMT_FP_DEPTH},
+        util::fv_mod_fp_unsafe,
+        Blind, FuncId, Keypair, MerkleNode, PublicKey, SecretKey,
     },
     pasta::pallas,
 };
@@ -50,8 +53,9 @@ pub struct DaoVoteInput {
 }
 
 // Inside ZK proof, check proposal is correct.
-pub struct DaoVoteCall<'a> {
-    pub money_null_smt: &'a SmtMemoryFp,
+pub struct DaoVoteCall<'a, T: StorageAdapter<Value = pallas::Base>> {
+    pub money_null_smt:
+        &'a SparseMerkleTree<'a, SMT_FP_DEPTH, { SMT_FP_DEPTH + 1 }, pallas::Base, PoseidonFp, T>,
     pub inputs: Vec<DaoVoteInput>,
     pub vote_option: bool,
     pub proposal: DaoProposal,
@@ -60,7 +64,7 @@ pub struct DaoVoteCall<'a> {
     pub current_day: u64,
 }
 
-impl<'a> DaoVoteCall<'a> {
+impl<'a, T: StorageAdapter<Value = pallas::Base>> DaoVoteCall<'a, T> {
     pub fn make(
         self,
         burn_zkbin: &ZkBinary,

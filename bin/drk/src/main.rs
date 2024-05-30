@@ -251,14 +251,6 @@ enum Subcmd {
         #[structopt(long)]
         /// Reset Merkle tree and start scanning from first block
         reset: bool,
-
-        #[structopt(long)]
-        /// List all available checkpoints
-        list: bool,
-
-        #[structopt(long)]
-        /// Reset Merkle tree to checkpoint index and start scanning
-        checkpoint: Option<u64>,
     },
 
     /// Explorer related subcommands
@@ -409,8 +401,8 @@ enum DaoSubcmd {
         /// Vote (0 for NO, 1 for YES)
         vote: u8,
 
-        /// Vote weight (amount of governance tokens)
-        vote_weight: String,
+        /// Optional vote weight (amount of governance tokens)
+        vote_weight: Option<String>,
     },
 
     /// Execute a DAO proposal
@@ -1308,7 +1300,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 let bulla = match DaoProposalBulla::from_str(&bulla) {
                     Ok(b) => b,
                     Err(e) => {
-                        eprintln!("Invalid spend hook: {e:?}");
+                        eprintln!("Invalid proposal bulla: {e:?}");
                         exit(2);
                     }
                 };
@@ -1457,22 +1449,27 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 let bulla = match DaoProposalBulla::from_str(&bulla) {
                     Ok(b) => b,
                     Err(e) => {
-                        eprintln!("Invalid spend hook: {e:?}");
+                        eprintln!("Invalid proposal bulla: {e:?}");
                         exit(2);
                     }
                 };
-
-                if let Err(e) = f64::from_str(&vote_weight) {
-                    eprintln!("Invalid vote weight: {e:?}");
-                    exit(2);
-                }
-                let weight = decode_base10(&vote_weight, BALANCE_BASE10_DECIMALS, true)?;
 
                 if vote > 1 {
                     eprintln!("Vote can be either 0 (NO) or 1 (YES)");
                     exit(2);
                 }
                 let vote = vote != 0;
+
+                let weight = match vote_weight {
+                    Some(w) => {
+                        if let Err(e) = f64::from_str(&w) {
+                            eprintln!("Invalid vote weight: {e:?}");
+                            exit(2);
+                        }
+                        Some(decode_base10(&w, BALANCE_BASE10_DECIMALS, true)?)
+                    }
+                    None => None,
+                };
 
                 let drk =
                     Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
@@ -1484,8 +1481,6 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     }
                 };
 
-                // TODO: Write our_vote in the proposal sql.
-
                 println!("{}", bs58::encode(&serialize_async(&tx).await).into_string());
                 Ok(())
             }
@@ -1494,7 +1489,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 let bulla = match DaoProposalBulla::from_str(&bulla) {
                     Ok(b) => b,
                     Err(e) => {
-                        eprintln!("Invalid spend hook: {e:?}");
+                        eprintln!("Invalid proposal bulla: {e:?}");
                         exit(2);
                     }
                 };
@@ -1591,7 +1586,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             Ok(())
         }
 
-        Subcmd::Scan { reset, list, checkpoint } => {
+        Subcmd::Scan { reset } => {
             let drk = Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
 
             if reset {
@@ -1603,18 +1598,6 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 println!("Finished scanning blockchain");
 
                 return Ok(())
-            }
-
-            if list {
-                println!("List requested.");
-                // TODO: implement
-                unimplemented!()
-            }
-
-            if let Some(c) = checkpoint {
-                println!("Checkpoint requested: {c}");
-                // TODO: implement
-                unimplemented!()
             }
 
             if let Err(e) = drk.scan_blocks(false).await {

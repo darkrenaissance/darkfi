@@ -326,7 +326,7 @@ pub fn generate_completions(shell: &str) -> Result<()> {
     let vote = Arg::with_name("vote").help("Vote (0 for NO, 1 for YES)");
 
     let vote_weight =
-        Arg::with_name("vote-weight").help("Vote weight (amount of governance tokens)");
+        Arg::with_name("vote-weight").help("Optional vote weight (amount of governance tokens)");
 
     let vote = SubCommand::with_name("vote").about("Vote on a given proposal").args(&vec![
         bulla.clone(),
@@ -360,16 +360,9 @@ pub fn generate_completions(shell: &str) -> Result<()> {
         .long("reset")
         .help("Reset Merkle tree and start scanning from first block");
 
-    let list = Arg::with_name("list").long("list").help("List all available checkpoints");
-
-    let checkpoint = Arg::with_name("checkpoint")
-        .long("checkpoint")
-        .takes_value(true)
-        .help("Reset Merkle tree to checkpoint index and start scanning");
-
     let scan = SubCommand::with_name("scan")
         .about("Scan the blockchain and parse relevant transactions")
-        .args(&vec![reset, list, checkpoint]);
+        .args(&vec![reset]);
 
     // Explorer
     let tx_hash = Arg::with_name("tx-hash").help("Transaction hash");

@@ -149,17 +149,22 @@ CREATE TABLE IF NOT EXISTS Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_prop
 );
 
 CREATE TABLE IF NOT EXISTS Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_votes (
+    -- Numeric identifier of the vote
     vote_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    -- Bulla identifier of the proposal this vote is for
     proposal_bulla BLOB NOT NULL,
+    -- The vote
     vote_option INTEGER NOT NULL,
+    -- Blinding factor for the yes vote
     yes_vote_blind BLOB NOT NULL,
+    -- Value of all votes
     all_vote_value BLOB NOT NULL,
+    -- Blinding facfor of all votes
     all_vote_blind BLOB NOT NULL,
-    -- these values are NULL until the vote is minted on chain
-    -- and received by the DAO
-    tx_hash BLOB,
-    call_index INTEGER,
-    -- My code has votes merkle tree and position for votes, but
-    -- that might be a mistake...
+    -- Transaction hash where this vote was casted
+    tx_hash BLOB NOT NULL,
+    -- call index in the transaction where this vote was casted
+    call_index INTEGER NOT NULL,
+
     FOREIGN KEY(proposal_bulla) REFERENCES Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_proposals(bulla) ON DELETE CASCADE ON UPDATE CASCADE
 );
