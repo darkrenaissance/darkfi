@@ -232,7 +232,7 @@ impl PtListener for TorListenerIntern {
         let mut rendreq_stream = self.rendreq_stream.lock().await;
 
         let Some(rendrequest) = rendreq_stream.next().await else {
-            todo!();
+            return Err(io::Error::new(ErrorKind::ConnectionAborted, "Connection Aborted"))
         };
 
         let mut streamreq_stream = match rendrequest.accept().await {
@@ -242,11 +242,13 @@ impl PtListener for TorListenerIntern {
                     target: "net::tor::PtListener::next",
                     "[P2P] Failed accepting Tor RendRequest: {}", e,
                 );
-                return Err(io::Error::new(ErrorKind::Other, "Internal Tor error"))
+                return Err(io::Error::new(ErrorKind::ConnectionAborted, "Connection Aborted"))
             }
         };
 
-        let Some(streamrequest) = streamreq_stream.next().await else { todo!() };
+        let Some(streamrequest) = streamreq_stream.next().await else {
+            return Err(io::Error::new(ErrorKind::ConnectionAborted, "Connection Aborted"))
+        };
 
         // Validate port correctness
         match streamrequest.request() {
