@@ -18,7 +18,7 @@ use crate::{
     error::{Error, Result},
     editbox,
     expr::{SExprMachine, SExprVal},
-    keysym::MouseButtonAsU8,
+    keysym::{KeyCodeAsStr, MouseButtonAsU8},
     prop::{Property, PropertySubType, PropertyType},
     res::{ResourceId, ResourceManager},
     scene::{
@@ -278,6 +278,19 @@ impl Stage {
         keyb.add_signal(
             "key_down",
             "Key press down event",
+            vec![
+                ("shift", "", PropertyType::Bool),
+                ("ctrl", "", PropertyType::Bool),
+                ("alt", "", PropertyType::Bool),
+                ("logo", "", PropertyType::Bool),
+                ("repeat", "", PropertyType::Bool),
+                ("keycode", "", PropertyType::Enum),
+            ],
+        )
+        .unwrap();
+        keyb.add_signal(
+            "key_up",
+            "Key press up event",
             vec![
                 ("shift", "", PropertyType::Bool),
                 ("ctrl", "", PropertyType::Bool),
@@ -1035,140 +1048,30 @@ impl EventHandler for Stage {
         let mut scene_graph = self.scene_graph.lock().unwrap();
         let win = scene_graph.lookup_node_mut("/window/input/keyboard").unwrap();
 
-        let send_key_down = |key: &str| {
-            let mut data = vec![];
-            modifiers.shift.encode(&mut data).unwrap();
-            modifiers.ctrl.encode(&mut data).unwrap();
-            modifiers.alt.encode(&mut data).unwrap();
-            modifiers.logo.encode(&mut data).unwrap();
-            repeat.encode(&mut data).unwrap();
-            key.encode(&mut data).unwrap();
-            win.trigger("key_down", data).unwrap();
-        };
+        let key = keycode.to_str();
 
-        match keycode {
-            KeyCode::Space => send_key_down(" "),
-            KeyCode::Apostrophe => send_key_down("'"),
-            KeyCode::Comma => send_key_down(","),
-            KeyCode::Minus => send_key_down("-"),
-            KeyCode::Period => send_key_down("."),
-            KeyCode::Slash => send_key_down("/"),
-            KeyCode::Key0 => send_key_down("0"),
-            KeyCode::Key1 => send_key_down("1"),
-            KeyCode::Key2 => send_key_down("2"),
-            KeyCode::Key3 => send_key_down("3"),
-            KeyCode::Key4 => send_key_down("4"),
-            KeyCode::Key5 => send_key_down("5"),
-            KeyCode::Key6 => send_key_down("6"),
-            KeyCode::Key7 => send_key_down("7"),
-            KeyCode::Key8 => send_key_down("8"),
-            KeyCode::Key9 => send_key_down("9"),
-            KeyCode::Semicolon => send_key_down(":"),
-            KeyCode::Equal => send_key_down("="),
-            KeyCode::A => send_key_down("A"),
-            KeyCode::B => send_key_down("B"),
-            KeyCode::C => send_key_down("C"),
-            KeyCode::D => send_key_down("D"),
-            KeyCode::E => send_key_down("E"),
-            KeyCode::F => send_key_down("F"),
-            KeyCode::G => send_key_down("G"),
-            KeyCode::H => send_key_down("H"),
-            KeyCode::I => send_key_down("I"),
-            KeyCode::J => send_key_down("J"),
-            KeyCode::K => send_key_down("K"),
-            KeyCode::L => send_key_down("L"),
-            KeyCode::M => send_key_down("M"),
-            KeyCode::N => send_key_down("N"),
-            KeyCode::O => send_key_down("O"),
-            KeyCode::P => send_key_down("P"),
-            KeyCode::Q => send_key_down("Q"),
-            KeyCode::R => send_key_down("R"),
-            KeyCode::S => send_key_down("S"),
-            KeyCode::T => send_key_down("T"),
-            KeyCode::U => send_key_down("U"),
-            KeyCode::V => send_key_down("V"),
-            KeyCode::W => send_key_down("W"),
-            KeyCode::X => send_key_down("X"),
-            KeyCode::Y => send_key_down("Y"),
-            KeyCode::Z => send_key_down("Z"),
-            KeyCode::LeftBracket => send_key_down("("),
-            KeyCode::Backslash => send_key_down("\\"),
-            KeyCode::RightBracket => send_key_down(")"),
-            KeyCode::GraveAccent => send_key_down("GraveAccent"),
-            KeyCode::World1 => send_key_down("World1"),
-            KeyCode::World2 => send_key_down("World2"),
-            KeyCode::Escape => send_key_down("Escape"),
-            KeyCode::Enter => send_key_down("Enter"),
-            KeyCode::Tab => send_key_down("Tab"),
-            KeyCode::Backspace => send_key_down("Backspace"),
-            KeyCode::Insert => send_key_down("Insert"),
-            KeyCode::Delete => send_key_down("Delete"),
-            KeyCode::Right => send_key_down("Right"),
-            KeyCode::Left => send_key_down("Left"),
-            KeyCode::Down => send_key_down("Down"),
-            KeyCode::Up => send_key_down("Up"),
-            KeyCode::PageUp => send_key_down("PageUp"),
-            KeyCode::PageDown => send_key_down("PageDown"),
-            KeyCode::Home => send_key_down("Home"),
-            KeyCode::End => send_key_down("End"),
-            KeyCode::CapsLock => send_key_down("CapsLock"),
-            KeyCode::ScrollLock => send_key_down("ScrollLock"),
-            KeyCode::NumLock => send_key_down("NumLock"),
-            KeyCode::PrintScreen => send_key_down("PrintScreen"),
-            KeyCode::Pause => send_key_down("Pause"),
-            KeyCode::F1 => send_key_down("F1"),
-            KeyCode::F2 => send_key_down("F2"),
-            KeyCode::F3 => send_key_down("F3"),
-            KeyCode::F4 => send_key_down("F4"),
-            KeyCode::F5 => send_key_down("F5"),
-            KeyCode::F6 => send_key_down("F6"),
-            KeyCode::F7 => send_key_down("F7"),
-            KeyCode::F8 => send_key_down("F8"),
-            KeyCode::F9 => send_key_down("F9"),
-            KeyCode::F10 => send_key_down("F10"),
-            KeyCode::F11 => send_key_down("F11"),
-            KeyCode::F12 => send_key_down("F12"),
-            KeyCode::F13 => send_key_down("F13"),
-            KeyCode::F14 => send_key_down("F14"),
-            KeyCode::F15 => send_key_down("F15"),
-            KeyCode::F16 => send_key_down("F16"),
-            KeyCode::F17 => send_key_down("F17"),
-            KeyCode::F18 => send_key_down("F18"),
-            KeyCode::F19 => send_key_down("F19"),
-            KeyCode::F20 => send_key_down("F20"),
-            KeyCode::F21 => send_key_down("F21"),
-            KeyCode::F22 => send_key_down("F22"),
-            KeyCode::F23 => send_key_down("F23"),
-            KeyCode::F24 => send_key_down("F24"),
-            KeyCode::F25 => send_key_down("F25"),
-            KeyCode::Kp0 => send_key_down("Kp0"),
-            KeyCode::Kp1 => send_key_down("Kp1"),
-            KeyCode::Kp2 => send_key_down("Kp2"),
-            KeyCode::Kp3 => send_key_down("Kp3"),
-            KeyCode::Kp4 => send_key_down("Kp4"),
-            KeyCode::Kp5 => send_key_down("Kp5"),
-            KeyCode::Kp6 => send_key_down("Kp6"),
-            KeyCode::Kp7 => send_key_down("Kp7"),
-            KeyCode::Kp8 => send_key_down("Kp8"),
-            KeyCode::Kp9 => send_key_down("Kp9"),
-            KeyCode::KpDecimal => send_key_down("KpDecimal"),
-            KeyCode::KpDivide => send_key_down("KpDivide"),
-            KeyCode::KpMultiply => send_key_down("KpMultiply"),
-            KeyCode::KpSubtract => send_key_down("KpSubtract"),
-            KeyCode::KpAdd => send_key_down("KpAdd"),
-            KeyCode::KpEnter => send_key_down("KpEnter"),
-            KeyCode::KpEqual => send_key_down("KpEqual"),
-            KeyCode::LeftShift => send_key_down("LeftShift"),
-            KeyCode::LeftControl => send_key_down("LeftControl"),
-            KeyCode::LeftAlt => send_key_down("LeftAlt"),
-            KeyCode::LeftSuper => send_key_down("LeftSuper"),
-            KeyCode::RightShift => send_key_down("RightShift"),
-            KeyCode::RightControl => send_key_down("RightControl"),
-            KeyCode::RightAlt => send_key_down("RightAlt"),
-            KeyCode::RightSuper => send_key_down("RightSuper"),
-            KeyCode::Menu => send_key_down("Menu"),
-            KeyCode::Unknown => send_key_down("Unknown"),
-        }
+        let mut data = vec![];
+        modifiers.shift.encode(&mut data).unwrap();
+        modifiers.ctrl.encode(&mut data).unwrap();
+        modifiers.alt.encode(&mut data).unwrap();
+        modifiers.logo.encode(&mut data).unwrap();
+        repeat.encode(&mut data).unwrap();
+        key.encode(&mut data).unwrap();
+        win.trigger("key_down", data).unwrap();
+    }
+    fn key_up_event(&mut self, keycode: KeyCode, modifiers: KeyMods) {
+        let mut scene_graph = self.scene_graph.lock().unwrap();
+        let win = scene_graph.lookup_node_mut("/window/input/keyboard").unwrap();
+
+        let key = keycode.to_str();
+
+        let mut data = vec![];
+        modifiers.shift.encode(&mut data).unwrap();
+        modifiers.ctrl.encode(&mut data).unwrap();
+        modifiers.alt.encode(&mut data).unwrap();
+        modifiers.logo.encode(&mut data).unwrap();
+        key.encode(&mut data).unwrap();
+        win.trigger("key_up", data).unwrap();
     }
     fn mouse_motion_event(&mut self, x: f32, y: f32) {
         let mut scene_graph = self.scene_graph.lock().unwrap();

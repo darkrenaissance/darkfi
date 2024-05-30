@@ -1,6 +1,8 @@
 use miniquad::{KeyMods, UniformType, MouseButton, window};
 use log::info;
-use std::{io::Cursor, sync::{Arc, Mutex}};
+use std::{
+    collections::HashMap,
+    io::Cursor, sync::{Arc, Mutex}, time::{Instant, Duration}};
 use darkfi_serial::Decodable;
 use freetype as ft;
 
@@ -9,6 +11,69 @@ use crate::{error::{Error, Result}, prop::{
     Property}, scene::{SceneGraph, SceneNode, SceneNodeId, Pimpl, Slot}, gfx::{Rectangle, RenderContext, COLOR_WHITE, COLOR_BLUE, COLOR_RED, COLOR_GREEN, FreetypeFace, Point}, text::{Glyph, TextShaper}, keysym::{MouseButtonAsU8, KeyCodeAsU16}};
 
 const CURSOR_WIDTH: f32 = 4.;
+
+struct PressedKeysSmoothRepeat {
+    /// When holding keys, we track from start and last sent time.
+    /// This is useful for initial delay and smooth scrolling.
+    pressed_keys: HashMap<String, RepeatingKeyTimer>,
+    /// Initial delay before allowing keys
+    start_delay: u32,
+    /// Minimum time between repeated keys
+    step_time: u32,
+}
+
+impl PressedKeysSmoothRepeat {
+    fn new(start_delay: u32, step_time: u32) -> Self {
+        Self {
+            pressed_keys: HashMap::new(),
+            start_delay,
+            step_time
+        }
+    }
+
+    fn key_down(&mut self, key: &str, repeat: bool) -> u32 {
+        if !repeat {
+            return 1;
+        }
+
+        // Insert key if not exists
+        if !self.pressed_keys.contains_key(key) {
+            self.pressed_keys.insert(key.to_string(), RepeatingKeyTimer::new());
+        }
+
+        let repeater = self.pressed_keys.get_mut(key).expect("repeat map");
+        repeater.update(self.start_delay, self.step_time)
+    }
+
+    fn key_up(&mut self, key: &str) {
+        self.pressed_keys.remove(key);
+    }
+}
+
+struct RepeatingKeyTimer {
+    start: Instant,
+    actions: u32,
+}
+
+impl RepeatingKeyTimer {
+    fn new() -> Self {
+        Self {
+            start: Instant::now(),
+            actions: 0
+        }
+    }
+
+    fn update(&mut self, start_delay: u32, step_time: u32) -> u32 {
+        let elapsed = self.start.elapsed().as_millis();
+        if elapsed < start_delay as u128 {
+            return 0
+        }
+        let total_actions = ((elapsed - start_delay as u128) / step_time as u128) as u32;
+        let remaining_actions = total_actions - self.actions;
+        self.actions = total_actions;
+        remaining_actions
+    }
+}
 
 pub type EditBoxPtr = Arc<EditBox>;
 
@@ -28,11 +93,13 @@ pub struct EditBox {
     world_rect: Mutex<Rectangle<f32>>,
     glyphs: Mutex<Vec<Glyph>>,
     text_shaper: TextShaper,
+    key_repeat: Mutex<PressedKeysSmoothRepeat>,
 }
 
 impl EditBox {
     pub fn new(scene_graph: &mut SceneGraph, node_id: SceneNodeId, font_faces: Vec<FreetypeFace>) -> Result<Pimpl> {
         let node = scene_graph.get_node(node_id).unwrap();
+        let node_name = node.name.clone();
         let is_active = PropertyBool::wrap(node, "is_active", 0)?;
         let debug = PropertyBool::wrap(node, "debug", 0)?;
         let baseline = PropertyFloat32::wrap(node, "baseline", 0)?;
@@ -65,12 +132,13 @@ impl EditBox {
             world_rect: Mutex::new(Rectangle { x: 0., y: 0., w: 0., h: 0. }),
             glyphs: Mutex::new(vec![]),
             text_shaper,
+            key_repeat: Mutex::new(PressedKeysSmoothRepeat::new(400, 50)),
         });
         self_.regen_glyphs().unwrap();
 
         let weak_self = Arc::downgrade(&self_);
-        let slot = Slot {
-            name: "editbox::key_down".to_string(),
+        let slot_key_down = Slot {
+            name: format!("{}::key_down", node_name),
             func: Box::new(move |data| {
                 let mut cur = Cursor::new(&data);
                 let keymods = KeyMods {
@@ -84,7 +152,26 @@ impl EditBox {
 
                 let self_ = weak_self.upgrade();
                 if let Some(self_) = self_ {
-                    self_.key_press(key, keymods, repeat);
+                    self_.key_down(key, keymods, repeat);
+                }
+            }),
+        };
+        let weak_self = Arc::downgrade(&self_);
+        let slot_key_up = Slot {
+            name: format!("{}::key_up", node_name),
+            func: Box::new(move |data| {
+                let mut cur = Cursor::new(&data);
+                let keymods = KeyMods {
+                    shift: Decodable::decode(&mut cur).unwrap(),
+                    ctrl: Decodable::decode(&mut cur).unwrap(),
+                    alt: Decodable::decode(&mut cur).unwrap(),
+                    logo: Decodable::decode(&mut cur).unwrap(),
+                };
+                let key = String::decode(&mut cur).unwrap();
+
+                let self_ = weak_self.upgrade();
+                if let Some(self_) = self_ {
+                    self_.key_up(key, keymods);
                 }
             }),
         };
@@ -93,11 +180,12 @@ impl EditBox {
             scene_graph
             .lookup_node_mut("/window/input/keyboard")
             .expect("no keyboard attached!");
-        keyb_node.register("key_down", slot);
+        keyb_node.register("key_down", slot_key_down);
+        keyb_node.register("key_up", slot_key_up);
 
         let weak_self = Arc::downgrade(&self_);
         let slot_btn_down = Slot {
-            name: "editbox::mouse_button_down".to_string(),
+            name: format!("{}::mouse_button_down", node_name),
             func: Box::new(move |data| {
                 let mut cur = Cursor::new(&data);
                 let button = MouseButton::from_u8(u8::decode(&mut cur).unwrap());
@@ -113,7 +201,7 @@ impl EditBox {
 
         let weak_self = Arc::downgrade(&self_);
         let slot_btn_up = Slot {
-            name: "editbox::mouse_button_up".to_string(),
+            name: format!("{}::mouse_button_up", node_name),
             func: Box::new(move |data| {
                 let mut cur = Cursor::new(&data);
                 let button = MouseButton::from_u8(u8::decode(&mut cur).unwrap());
@@ -129,7 +217,7 @@ impl EditBox {
 
         let weak_self = Arc::downgrade(&self_);
         let slot_move = Slot {
-            name: "editbox::mouse_move".to_string(),
+            name: format!("{}::mouse_move", node_name),
             func: Box::new(move |data| {
                 let mut cur = Cursor::new(&data);
                 let x = f32::decode(&mut cur).unwrap();
@@ -325,14 +413,21 @@ impl EditBox {
         Ok(())
     }
 
-    fn key_press(self: Arc<Self>, key: String, mods: KeyMods, repeat: bool) {
-        if repeat {
-            return;
-        }
+    fn key_down(self: Arc<Self>, key: String, mods: KeyMods, repeat: bool) {
         if !self.is_active.get() {
             return
         }
-        match key.as_str() {
+        let actions = {
+            let mut repeater = self.key_repeat.lock().unwrap();
+            repeater.key_down(&key, repeat)
+        };
+        for _ in 0..actions {
+            self.do_key_down(&key, &mods)
+        }
+    }
+
+    fn do_key_down(&self, key: &str, mods: &KeyMods) {
+        match key {
             "PageUp" => {
                 println!("pageup!");
             }
@@ -429,6 +524,9 @@ impl EditBox {
         }
     }
 
+    fn insert_char(key: String) {
+    }
+
     fn copy_highlighted_text(&self) -> Result<()> {
         let start = self.selected.get_u32(0)? as usize;
         let end = self.selected.get_u32(1)? as usize;
@@ -448,6 +546,11 @@ impl EditBox {
         info!("Copied '{}'", text);
         window::clipboard_set(&text);
         Ok(())
+    }
+
+    fn key_up(self: Arc<Self>, key: String, mods: KeyMods) {
+        let mut repeater = self.key_repeat.lock().unwrap();
+        repeater.key_up(&key);
     }
 
     fn mouse_button_down(self: Arc<Self>, button: MouseButton, x: f32, y: f32) {
