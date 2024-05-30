@@ -1,4 +1,5 @@
-use miniquad::{KeyMods, UniformType, MouseButton};
+use miniquad::{KeyMods, UniformType, MouseButton, window};
+use log::info;
 use std::{io::Cursor, sync::{Arc, Mutex}};
 use darkfi_serial::Decodable;
 use freetype as ft;
@@ -194,12 +195,13 @@ impl EditBox {
         let cursor_color = self.cursor_color.get();
         let text_color = self.text_color.get();
 
+        let glyphs = &*self.glyphs.lock().unwrap();
+
         if !self.selected.is_null(0)? && !self.selected.is_null(1)? {
-            self.render_selected(render, &rect)?;
+            self.render_selected(render, &rect, glyphs)?;
         }
 
         let mut rhs = 0.;
-        let glyphs = &*self.glyphs.lock().unwrap();
         for (glyph_idx, glyph) in glyphs.iter().enumerate() {
             let texture = render.ctx.new_texture_from_rgba8(glyph.bmp_width, glyph.bmp_height, &glyph.bmp);
 
@@ -243,7 +245,7 @@ impl EditBox {
         Ok(())
     }
 
-    pub fn render_selected<'a>(&self, render: &mut RenderContext<'a>, rect: &Rectangle<f32>) -> Result<()> {
+    pub fn render_selected<'a>(&self, render: &mut RenderContext<'a>, rect: &Rectangle<f32>, glyphs: &Vec<Glyph>) -> Result<()> {
         let start = self.selected.get_u32(0)? as usize;
         let end = self.selected.get_u32(1)? as usize;
 
@@ -256,9 +258,8 @@ impl EditBox {
         let mut start_x = 0.;
         let mut end_x = 0.;
 
-        for (glyph_idx, glyph) in self.glyphs.lock().unwrap().iter().enumerate() {
+        for (glyph_idx, glyph) in glyphs.iter().enumerate() {
             let x1 = glyph.pos.x + scroll;
-            let x2 = x1 + glyph.pos.w;
 
             if glyph_idx == sel_start {
                 start_x = x1;
@@ -267,7 +268,22 @@ impl EditBox {
                 end_x = x1;
             }
         }
+        if sel_start == 0 {
+            start_x = scroll;
+        }
+        if sel_end == glyphs.len() {
+            let glyph = &glyphs.last().unwrap();
+            let x2 = glyph.pos.x + scroll + glyph.pos.w;
+            end_x = x2;
+        }
 
+        // Apply clipping
+        if start_x < 0. {
+            start_x = 0.;
+        }
+        if end_x > rect.w {
+            end_x = rect.w;
+        }
         render.render_box(start_x, 0., end_x, rect.h, hi_bg_color);
         Ok(())
     }
@@ -325,38 +341,46 @@ impl EditBox {
             }
             "Left" => {
                 let mut cursor_pos = self.cursor_pos.get();
+
+                // Start selection if shift is held
+                if !mods.shift {
+                    self.selected.set_null(0).unwrap();
+                    self.selected.set_null(1).unwrap();
+                } else if self.selected.is_null(0).unwrap() {
+                    assert!(self.selected.is_null(1).unwrap());
+                    self.selected.set_u32(0, cursor_pos).unwrap();
+                }
+
                 if cursor_pos > 0 {
                     cursor_pos -= 1;
                     self.cursor_pos.set(cursor_pos);
                 }
 
-                if !mods.shift {
-                    self.selected.set_null(0).unwrap();
-                    self.selected.set_null(1).unwrap();
-                } else {
-                    if self.selected.is_null(0).unwrap() {
-                        assert!(self.selected.is_null(1).unwrap());
-                        self.selected.set_u32(0, cursor_pos).unwrap();
-                    }
+                // Update selection
+                if mods.shift {
                     self.selected.set_u32(1, cursor_pos).unwrap();
                 }
             }
             "Right" => {
                 let mut cursor_pos = self.cursor_pos.get();
+
+                // Start selection if shift is held
+                if !mods.shift {
+                    self.selected.set_null(0).unwrap();
+                    self.selected.set_null(1).unwrap();
+                } else if self.selected.is_null(0).unwrap() {
+                    assert!(self.selected.is_null(1).unwrap());
+                    self.selected.set_u32(0, cursor_pos).unwrap();
+                }
+
                 let glyphs_len = self.glyphs.lock().unwrap().len() as u32;
                 if cursor_pos < glyphs_len {
                     cursor_pos += 1;
                     self.cursor_pos.set(cursor_pos);
                 }
 
-                if !mods.shift {
-                    self.selected.set_null(0).unwrap();
-                    self.selected.set_null(1).unwrap();
-                } else {
-                    if self.selected.is_null(0).unwrap() {
-                        assert!(self.selected.is_null(1).unwrap());
-                        self.selected.set_u32(0, cursor_pos).unwrap();
-                    }
+                // Update selection
+                if mods.shift {
                     self.selected.set_u32(1, cursor_pos).unwrap();
                 }
             }
@@ -396,8 +420,34 @@ impl EditBox {
                 self.text.set(text);
                 self.regen_glyphs().unwrap();
             }
+            "C" => {
+                if mods.ctrl {
+                    self.copy_highlighted_text().unwrap();
+                }
+            }
             _ => {}
         }
+    }
+
+    fn copy_highlighted_text(&self) -> Result<()> {
+        let start = self.selected.get_u32(0)? as usize;
+        let end = self.selected.get_u32(1)? as usize;
+
+        let sel_start = std::cmp::min(start, end);
+        let sel_end = std::cmp::max(start, end);
+
+        let mut text = String::new();
+
+        let glyphs = &*self.glyphs.lock().unwrap();
+        for (glyph_idx, glyph) in glyphs.iter().enumerate() {
+            if sel_start <= glyph_idx && glyph_idx < sel_end {
+                text.push_str(&glyph.substr);
+            }
+        }
+
+        info!("Copied '{}'", text);
+        window::clipboard_set(&text);
+        Ok(())
     }
 
     fn mouse_button_down(self: Arc<Self>, button: MouseButton, x: f32, y: f32) {
