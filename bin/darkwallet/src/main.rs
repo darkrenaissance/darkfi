@@ -5,6 +5,8 @@ use std::{
     thread,
 };
 
+mod chatview;
+
 mod editbox;
 
 mod error;

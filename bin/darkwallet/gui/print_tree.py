@@ -39,6 +39,8 @@ def print_node_info(parent_id, indent):
                 child_type = "fonts"
             case SceneNodeType.FONT:
                 child_type = "font"
+            case SceneNodeType.CHAT_VIEW:
+                child_type = "chat_view"
             case SceneNodeType.EDIT_BOX:
                 child_type = "edit_box"
 

@@ -309,15 +309,17 @@ def draw():
     # w
     #api.set_property_u32(layer_id, "rect", 2, int(3838/2))
     code = [["as_u32", ["/", ["load", "sw"], ["u32", 2]]]]
+    code = [["as_u32", ["load", "sw"]]]
     api.set_property_expr(layer_id, "rect", 2, code)
     # h
     code = [["as_u32", ["/", ["load", "sh"], ["u32", 2]]]]
+    code = [["as_u32", ["load", "sh"]]]
     api.set_property_expr(layer_id, "rect", 3, code)
 
     api.link_node(layer_id, win_id)
 
-    # Add a mesh to our layer
-    node_id = api.add_node("meshie", SceneNodeType.RENDER_MESH)
+    # Add a bg box to our layer
+    node_id = api.add_node("bg", SceneNodeType.RENDER_MESH)
 
     prop = Property(
         "data", PropertyType.BUFFER, PropertySubType.NULL,
@@ -331,10 +333,10 @@ def draw():
     #w, h = 0.1, 0.1
     x, y, w, h = 0, 0, 1, 1
     #x, y, w, h = -1, 1, 2, -2
-    vert1 = vertex(x,     y,     0, 0, 0, 1, 0, 0)
-    vert2 = vertex(x + w, y,     0, 0, 0, 1, 1, 0)
-    vert3 = vertex(x,     y + h, 0, 0, 0, 1, 0, 1)
-    vert4 = vertex(x + w, y + h, 0, 0, 0, 1, 1, 1)
+    vert1 = vertex(x,     y,     0, 0.1, 0, 1, 0, 0)
+    vert2 = vertex(x + w, y,     0.1, 0, 0, 1, 1, 0)
+    vert3 = vertex(x,     y + h, 0.1, 0, 0, 1, 0, 1)
+    vert4 = vertex(x + w, y + h, 0.1, 0, 0, 1, 1, 1)
 
     verts = vert1 + vert2 + vert3 + vert4
     faces = face(0, 2, 1) + face(1, 2, 3)
@@ -350,16 +352,16 @@ def draw():
     )
     api.add_property(node_id, prop)
     # x
-    api.set_property_f32(node_id, "rect", 0, 10)
+    api.set_property_f32(node_id, "rect", 0, 0)
     # y
-    api.set_property_f32(node_id, "rect", 1, 10)
+    api.set_property_f32(node_id, "rect", 1, 0)
     # w
     #api.set_property_f32(node_id, "rect", 2, 20)
-    code = [["-", ["load", "lw"], ["f32", 10]]]
+    code = [["-", ["load", "lw"], ["f32", 0]]]
     api.set_property_expr(node_id, "rect", 2, code)
     # h
     #api.set_property_str(node_id, "rect", 3, "lh - 10")
-    code = [["-", ["load", "lh"], ["f32", 10]]]
+    code = [["-", ["load", "lh"], ["f32", 0]]]
     api.set_property_expr(node_id, "rect", 3, code)
 
     prop = Property(
@@ -638,6 +640,47 @@ def draw():
     arg_data = bytearray()
     serial.write_u32(arg_data, node_id)
     api.call_method(win_id, "create_edit_box", arg_data)
+
+    api.link_node(node_id, layer_id)
+
+    # ChatView
+
+    node_id = api.add_node("chatty", SceneNodeType.CHAT_VIEW)
+
+    prop = Property(
+        "rect", PropertyType.FLOAT32, PropertySubType.PIXEL,
+        None,
+        "Rectangle", "The position and size within the layer",
+        False, True, 4, None, None, []
+    )
+    api.add_property(node_id, prop)
+    api.set_property_f32(node_id, "rect", 0, 50)
+    api.set_property_f32(node_id, "rect", 1, 260)
+    code = [["-", ["load", "lw"], ["f32", 100]]]
+    api.set_property_expr(node_id, "rect", 2, code)
+    code = [["-", ["load", "lh"], ["f32", 260]]]
+    api.set_property_expr(node_id, "rect", 3, code)
+
+    prop = Property(
+        "debug", PropertyType.BOOL, PropertySubType.NULL,
+        None,
+        "Debug", "Draw debug outlines",
+        False, False, 1, None, None, []
+    )
+    api.add_property(node_id, prop)
+    api.set_property_bool(node_id, "debug", 0, True)
+
+    prop = Property(
+        "z_index", PropertyType.UINT32, PropertySubType.NULL,
+        None,
+        "Z-index", "Z-index: values greater than zero are deferred draws",
+        False, False, 1, None, None, []
+    )
+    api.add_property(node_id, prop)
+
+    arg_data = bytearray()
+    serial.write_u32(arg_data, node_id)
+    api.call_method(win_id, "create_chat_view", arg_data)
 
     api.link_node(node_id, layer_id)
 

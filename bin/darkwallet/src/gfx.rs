@@ -16,6 +16,7 @@ use std::{
 
 use crate::{
     error::{Error, Result},
+    chatview,
     editbox,
     expr::{SExprMachine, SExprVal},
     keysym::{KeyCodeAsStr, MouseButtonAsU8},
@@ -124,6 +125,7 @@ pub type FreetypeFace = ft::Face<&'static [u8]>;
 enum GraphicsMethodEvent {
     LoadTexture,
     DeleteTexture,
+    CreateChatView,
     CreateEditBox,
 }
 
@@ -252,6 +254,19 @@ impl Stage {
                 "load_texture",
                 vec![("node_name", "", PropertyType::Str), ("path", "", PropertyType::Str)],
                 vec![("node_id", "", PropertyType::SceneNodeId)],
+                method_fn,
+            )
+            .unwrap();
+
+        let sender = self.method_sender.clone();
+        let method_fn = Box::new(move |arg_data, response_fn| {
+            sender.send((GraphicsMethodEvent::CreateChatView, window_id, arg_data, response_fn));
+        });
+        window
+            .add_method(
+                "create_chat_view",
+                vec![("node_id", "", PropertyType::SceneNodeId)],
+                vec![],
                 method_fn,
             )
             .unwrap();
@@ -393,6 +408,24 @@ impl Stage {
         Ok(vec![])
     }
 
+    fn method_create_chatview(
+        &mut self,
+        _: SceneNodeId,
+        arg_data: Vec<u8>,
+    ) -> Result<Vec<u8>> {
+        let mut cur = Cursor::new(&arg_data);
+        let node_id = SceneNodeId::decode(&mut cur).unwrap();
+
+        let mut scene_graph = self.scene_graph.lock().unwrap();
+        let editbox = chatview::ChatView::new(&mut scene_graph, node_id, self.font_faces.clone())?;
+
+        let node = scene_graph.get_node_mut(node_id).ok_or(Error::NodeNotFound)?;
+        node.pimpl = editbox;
+
+        let mut reply = vec![];
+        Ok(reply)
+    }
+
     fn method_create_editbox(
         &mut self,
         _: SceneNodeId,
@@ -497,7 +530,7 @@ impl<'a> RenderContext<'a> {
         };
 
         let layer_children =
-            layer.get_children(&[SceneNodeType::RenderMesh, SceneNodeType::RenderText, SceneNodeType::EditBox]);
+            layer.get_children(&[SceneNodeType::RenderMesh, SceneNodeType::RenderText, SceneNodeType::EditBox, SceneNodeType::ChatView]);
         let layer_children = self.order_by_z_index(layer_children);
 
         // get the rectangle
@@ -522,6 +555,16 @@ impl<'a> RenderContext<'a> {
                 SceneNodeType::RenderText => {
                     if let Err(err) = self.render_text(child.id, &rect) {
                         error!("error rendering text '{}': {}", child.name, err);
+                    }
+                }
+                SceneNodeType::ChatView => {
+                    let node = self.scene_graph.get_node(child.id).unwrap();
+                    let chatview = match &node.pimpl {
+                        Pimpl::ChatView(e) => e.clone(),
+                        _ => panic!("wrong pimpl for editbox")
+                    };
+                    if let Err(err) = chatview.render(self, child.id, &rect) {
+                        error!("error rendering chatview '{}': {}", child.name, err);
                     }
                 }
                 SceneNodeType::EditBox => {
@@ -1011,6 +1054,7 @@ impl EventHandler for Stage {
             let res = match event {
                 GraphicsMethodEvent::LoadTexture => self.method_load_texture(node_id, arg_data),
                 GraphicsMethodEvent::DeleteTexture => self.method_delete_texture(node_id, arg_data),
+                GraphicsMethodEvent::CreateChatView => self.method_create_chatview(node_id, arg_data),
                 GraphicsMethodEvent::CreateEditBox => self.method_create_editbox(node_id, arg_data),
             };
             response_fn(res);

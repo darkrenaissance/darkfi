@@ -1,5 +1,5 @@
 use miniquad::{KeyMods, UniformType, MouseButton, window};
-use log::info;
+use log::{debug, info};
 use std::{
     collections::HashMap,
     io::Cursor, sync::{Arc, atomic::{AtomicBool, Ordering}, Mutex}, time::{Instant, Duration}};
@@ -78,6 +78,7 @@ impl RepeatingKeyTimer {
 pub type EditBoxPtr = Arc<EditBox>;
 
 pub struct EditBox {
+    node_name: String,
     is_active: PropertyBool,
     debug: PropertyBool,
     baseline: PropertyFloat32,
@@ -117,8 +118,8 @@ impl EditBox {
             font_faces
         };
 
-        println!("EditBox::new()");
         let self_ = Arc::new(Self{
+            node_name: node_name.clone(),
             is_active,
             debug,
             baseline,
@@ -291,21 +292,21 @@ impl EditBox {
             self.render_selected(render, &rect, glyphs)?;
         }
 
+        let bound = Rectangle {
+            x: 0.,
+            y: 0.,
+            w: rect.w,
+            h: rect.h,
+        };
+
         let mut rhs = 0.;
         for (glyph_idx, glyph) in glyphs.iter().enumerate() {
-            let texture = render.ctx.new_texture_from_rgba8(glyph.bmp_width, glyph.bmp_height, &glyph.bmp);
-
             let x1 = glyph.pos.x + scroll;
             let y1 = glyph.pos.y + baseline;
             let x2 = x1 + glyph.pos.w;
             let y2 = y1 + glyph.pos.h;
 
-            let bound = Rectangle {
-                x: 0.,
-                y: 0.,
-                w: rect.w,
-                h: rect.h,
-            };
+            let texture = render.ctx.new_texture_from_rgba8(glyph.bmp_width, glyph.bmp_height, &glyph.bmp);
             render.render_clipped_box_with_texture(&bound, x1, y1, x2, y2, COLOR_WHITE, texture);
             //render.render_box_with_texture(x1, y1, x2, y2, COLOR_WHITE, texture);
             render.ctx.delete_texture(texture);
@@ -406,6 +407,8 @@ impl EditBox {
             }
             text.push_str(&substr);
         }
+        debug!("EditBox(\"{}\")::delete_highlighted() text=\"{}\", cursor_pos={}",
+               self.node_name, text, sel_start);
         self.text.set(text);
 
         self.selected.set_null(0).unwrap();
@@ -468,12 +471,6 @@ impl EditBox {
 
     fn do_key_down(&self, key: &str, mods: &KeyMods) {
         match key {
-            "PageUp" => {
-                println!("pageup!");
-            }
-            "PageDown" => {
-                println!("pagedown!");
-            }
             "Left" => {
                 let mut cursor_pos = self.cursor_pos.get();
 
@@ -488,6 +485,8 @@ impl EditBox {
 
                 if cursor_pos > 0 {
                     cursor_pos -= 1;
+                    debug!("EditBox(\"{}\")::key_down(Left) cursor_pos={}",
+                           self.node_name, cursor_pos);
                     self.cursor_pos.set(cursor_pos);
                 }
 
@@ -511,6 +510,8 @@ impl EditBox {
                 let glyphs_len = self.glyphs.lock().unwrap().len() as u32;
                 if cursor_pos < glyphs_len {
                     cursor_pos += 1;
+                    debug!("EditBox(\"{}\")::key_down(Right) cursor_pos={}",
+                           self.node_name, cursor_pos);
                     self.cursor_pos.set(cursor_pos);
                 }
 
@@ -568,11 +569,9 @@ impl EditBox {
                         text.push_str(&substr);
                     }
                     self.text.set(text);
+                    self.cursor_pos.set(cursor_pos - 1);
                 };
-                self.cursor_pos.set(cursor_pos - 1);
                 self.regen_glyphs().unwrap();
-
-                // TODO: delete highlighted text
             }
             "C" => {
                 if mods.ctrl {
@@ -597,6 +596,7 @@ impl EditBox {
     }
 
     fn insert_char(&self, key: &str, mods: &KeyMods) {
+        // First filter for only single digit keys
         let allowed_keys =
         ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
          " ", ":", ";", "'", "-", ".", "/", "=", "(", "\\", ")", "`",
@@ -604,6 +604,11 @@ impl EditBox {
         if !allowed_keys.contains(&key) {
             return
         }
+
+        // If we want to only allow specific chars in a String here
+        //let ch = key.chars().next().unwrap();
+        // if !self.allowed_chars.chars().any(|c| c == ch) { return }
+
         let key = if mods.shift {
             key.to_string()
         } else {

@@ -2,6 +2,7 @@ use freetype as ft;
 
 use crate::gfx::{Rectangle, FreetypeFace};
 
+#[derive(Clone)]
 pub struct Glyph {
     // Substring this glyph corresponds to
     pub substr: String,
@@ -27,6 +28,11 @@ impl TextShaper {
         let mut current_str = String::new();
         let mut substrs = vec![];
         'next_char: for chr in text.chars() {
+            // Replace tabs with spaces
+            let chr = if chr == '\t' {
+                ' '
+            } else { chr };
+
             let idx = 'get_idx: {
                 for i in 0..self.font_faces.len() {
                     let ft_face = &self.font_faces[i];
@@ -35,7 +41,7 @@ impl TextShaper {
                     }
                 }
 
-                warn!("no font fallback for char: {}", chr);
+                warn!("no font fallback for char: '{}'", chr);
                 // Skip this char
                 continue 'next_char
             };

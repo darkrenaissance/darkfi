@@ -58,7 +58,8 @@ class SceneNodeType:
     FONT = 11
     PLUGINS = 14
     PLUGIN = 15
-    EDIT_BOX = 16
+    CHAT_VIEW = 16
+    EDIT_BOX = 17
 
 class PropertyType:
     NULL = 0

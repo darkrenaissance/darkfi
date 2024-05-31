@@ -11,6 +11,7 @@ use std::{
 
 use crate::{
     error::{Error, Result},
+    chatview,
     editbox,
     prop::{Property, PropertyType},
 };
@@ -35,7 +36,8 @@ pub enum SceneNodeType {
     Font = 11,
     Plugins = 14,
     Plugin = 15,
-    EditBox = 16,
+    ChatView = 16,
+    EditBox = 17,
 }
 
 pub struct ScenePath(Vec<String>);
@@ -630,5 +632,6 @@ pub struct Method {
 pub enum Pimpl {
     Null,
     EditBox(editbox::EditBoxPtr),
+    ChatView(chatview::ChatViewPtr),
 }
 
