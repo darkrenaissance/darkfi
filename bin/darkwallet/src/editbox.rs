@@ -2,7 +2,7 @@ use miniquad::{KeyMods, UniformType, MouseButton, window};
 use log::info;
 use std::{
     collections::HashMap,
-    io::Cursor, sync::{Arc, Mutex}, time::{Instant, Duration}};
+    io::Cursor, sync::{Arc, atomic::{AtomicBool, Ordering}, Mutex}, time::{Instant, Duration}};
 use darkfi_serial::Decodable;
 use freetype as ft;
 
@@ -94,6 +94,7 @@ pub struct EditBox {
     glyphs: Mutex<Vec<Glyph>>,
     text_shaper: TextShaper,
     key_repeat: Mutex<PressedKeysSmoothRepeat>,
+    mouse_btn_held: AtomicBool,
 }
 
 impl EditBox {
@@ -133,6 +134,7 @@ impl EditBox {
             glyphs: Mutex::new(vec![]),
             text_shaper,
             key_repeat: Mutex::new(PressedKeysSmoothRepeat::new(400, 50)),
+            mouse_btn_held: AtomicBool::new(false),
         });
         self_.regen_glyphs().unwrap();
 
@@ -504,6 +506,8 @@ impl EditBox {
                 }
                 self.text.set(text);
                 self.regen_glyphs().unwrap();
+
+                // TODO: delete highlighted text
             }
             "Backspace" => {
                 let cursor_pos = self.cursor_pos.get();
@@ -521,6 +525,8 @@ impl EditBox {
                 self.cursor_pos.set(cursor_pos - 1);
                 self.text.set(text);
                 self.regen_glyphs().unwrap();
+
+                // TODO: delete highlighted text
             }
             "C" => {
                 if mods.ctrl {
@@ -562,7 +568,7 @@ impl EditBox {
 
     fn mouse_button_down(self: Arc<Self>, button: MouseButton, x: f32, y: f32) {
         let mouse_pos = Point { x, y };
-        let rect = self.world_rect.lock().unwrap();
+        let rect = self.world_rect.lock().unwrap().clone();
 
         // clicking inside box will:
         // 1. make it active
@@ -574,39 +580,18 @@ impl EditBox {
                 // Send signal
             }
 
-            let scroll = self.scroll.get();
-
-            let mouse_x = x - rect.x;
-            let mut cpos = 0;
-            let lhs = 0.;
-            let mut last_d = (lhs - mouse_x).abs();
-
-            let glyphs = &*self.glyphs.lock().unwrap();
-            for (i, glyph) in glyphs.iter().skip(1).enumerate() {
-                // Because we skip the first item
-                let glyph_idx = (i + 1) as u32;
-
-                let x1 = glyph.pos.x + scroll;
-                let curr_d = (x1 - mouse_x).abs();
-                if curr_d < last_d {
-                    last_d = curr_d;
-                    cpos = glyph_idx;
-                }
-            }
-            // also check the right hand side
-            let rhs = {
-                let glyph = &glyphs.last().unwrap();
-                glyph.pos.x + scroll + glyph.pos.w
+            let cpos = match self.find_closest_glyph_idx(x) {
+                MouseClickGlyph::Pos(cpos) => cpos,
+                _ => panic!("shouldn't be possible to reach here!")
             };
-            let curr_d = (rhs - mouse_x).abs();
-            if curr_d < last_d {
-                //last_d = curr_d;
-                cpos = glyphs.len() as u32;
-            }
+
             // set cursor pos
             self.cursor_pos.set(cpos);
 
             // begin selection
+            self.selected.set_u32(0, cpos).unwrap();
+            self.selected.set_u32(1, cpos).unwrap();
+            self.mouse_btn_held.store(true, Ordering::Relaxed);
         }
         // click outside the box will:
         // 1. make it inactive
@@ -620,12 +605,80 @@ impl EditBox {
     fn mouse_button_up(self: Arc<Self>, button: MouseButton, x: f32, y: f32) {
         // releasing mouse button will:
         // 1. end selection
+        self.mouse_btn_held.store(false, Ordering::Relaxed);
     }
     fn mouse_move(self: Arc<Self>, x: f32, y: f32) {
+        if !self.mouse_btn_held.load(Ordering::Relaxed) {
+            return;
+        }
+
         // if active and selection_active, then use x to modify the selection.
         // also implement scrolling when cursor is to the left or right
         // just scroll to the end
         // also set cursor_pos too
+
+        let cpos = match self.find_closest_glyph_idx(x) {
+            MouseClickGlyph::Lhs => 0,
+            MouseClickGlyph::Pos(cpos) => cpos,
+            MouseClickGlyph::Rhs(cpos) => cpos,
+        };
+
+        self.cursor_pos.set(cpos);
+        self.selected.set_u32(1, cpos).unwrap();
     }
+
+    // Uses screen x pos
+    fn find_closest_glyph_idx(&self, x: f32) -> MouseClickGlyph {
+        let rect = self.world_rect.lock().unwrap().clone();
+        let glyphs = &*self.glyphs.lock().unwrap();
+
+        let mouse_x = x - rect.x;
+
+        if mouse_x > rect.w {
+            // Highlight to the end
+            let cpos = glyphs.len() as u32;
+            return MouseClickGlyph::Rhs(cpos);
+            // Scroll to the right handled in render
+        } else if mouse_x < 0. {
+            return MouseClickGlyph::Lhs;
+        }
+
+        let scroll = self.scroll.get();
+
+        let mouse_x = x - rect.x;
+        let mut cpos = 0;
+        let lhs = 0.;
+        let mut last_d = (lhs - mouse_x).abs();
+
+        for (i, glyph) in glyphs.iter().skip(1).enumerate() {
+            // Because we skip the first item
+            let glyph_idx = (i + 1) as u32;
+
+            let x1 = glyph.pos.x + scroll;
+            let curr_d = (x1 - mouse_x).abs();
+            if curr_d < last_d {
+                last_d = curr_d;
+                cpos = glyph_idx;
+            }
+        }
+        // also check the right hand side
+        let rhs = {
+            let glyph = &glyphs.last().unwrap();
+            glyph.pos.x + scroll + glyph.pos.w
+        };
+        let curr_d = (rhs - mouse_x).abs();
+        if curr_d < last_d {
+            //last_d = curr_d;
+            cpos = glyphs.len() as u32;
+        }
+
+        MouseClickGlyph::Pos(cpos)
+    }
+}
+
+enum MouseClickGlyph {
+    Lhs,
+    Pos(u32),
+    Rhs(u32)
 }
 
