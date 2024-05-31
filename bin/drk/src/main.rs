@@ -42,7 +42,7 @@ use darkfi::{
     zk::halo2::Field,
     Result,
 };
-use darkfi_dao_contract::{model::DaoProposalBulla, DaoFunction};
+use darkfi_dao_contract::{blockwindow, model::DaoProposalBulla, DaoFunction};
 use darkfi_money_contract::model::{Coin, CoinAttributes, TokenId};
 use darkfi_sdk::{
     crypto::{
@@ -1398,14 +1398,84 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                         }
                     }
                 }
+
                 println!("{contract_calls}");
 
                 let votes = drk.get_dao_proposal_votes(&bulla).await?;
-                println!("Votes:");
+                let mut total_yes_vote_value = 0;
+                let mut total_no_vote_value = 0;
+                let mut total_all_vote_value = 0;
+                let mut table = Table::new();
+                table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+                table.set_titles(row!["Transaction", "Tokens", "Vote"]);
                 for vote in votes {
-                    let option = if vote.vote_option { "yes" } else { "no " };
-                    println!("  {option} {}", vote.all_vote_value);
+                    let vote_option = if vote.vote_option {
+                        total_yes_vote_value += vote.all_vote_value;
+                        "Yes"
+                    } else {
+                        total_no_vote_value += vote.all_vote_value;
+                        "No"
+                    };
+                    total_all_vote_value += vote.all_vote_value;
+
+                    table.add_row(row![
+                        vote.tx_hash,
+                        encode_base10(vote.all_vote_value, BALANCE_BASE10_DECIMALS),
+                        vote_option
+                    ]);
                 }
+
+                let outcome = if table.is_empty() {
+                    println!("Votes: No votes found");
+                    "Rejected"
+                } else {
+                    println!("Votes:");
+                    println!("{table}");
+                    println!(
+                        "Total tokens votes: {}",
+                        encode_base10(total_all_vote_value, BALANCE_BASE10_DECIMALS)
+                    );
+                    let approval_ratio =
+                        (total_yes_vote_value as f64 * 100.0) / total_all_vote_value as f64;
+                    println!(
+                        "Total tokens Yes votes: {} ({approval_ratio:.2}%)",
+                        encode_base10(total_yes_vote_value, BALANCE_BASE10_DECIMALS)
+                    );
+                    println!(
+                        "Total tokens No votes: {} ({:.2}%)",
+                        encode_base10(total_no_vote_value, BALANCE_BASE10_DECIMALS),
+                        (total_no_vote_value as f64 * 100.0) / total_all_vote_value as f64
+                    );
+
+                    let dao = drk.get_dao_by_bulla(&proposal.proposal.dao_bulla).await?;
+                    if total_all_vote_value > dao.params.dao.quorum &&
+                        approval_ratio >=
+                            (dao.params.dao.approval_ratio_quot /
+                                dao.params.dao.approval_ratio_base)
+                                as f64
+                    {
+                        "Approved"
+                    } else {
+                        "Rejected"
+                    }
+                };
+
+                if let Some(exec_tx_hash) = proposal.exec_tx_hash {
+                    println!("Proposal was executed on transaction: {exec_tx_hash}");
+                    return Ok(())
+                }
+
+                // Retrieve current block height and compute current window
+                let current_block_height = drk.get_next_block_height().await?;
+                let current_window = blockwindow(current_block_height);
+                let end_time = proposal.proposal.creation_day + proposal.proposal.duration_days;
+                let (voting_status, proposal_status_message) = if current_window < end_time {
+                    ("Ongoing", format!("Current proposal outcome: {outcome}"))
+                } else {
+                    ("Concluded", format!("Proposal outcome: {outcome}"))
+                };
+                println!("Voting status: {voting_status}");
+                println!("{proposal_status_message}");
 
                 Ok(())
             }

@@ -146,6 +146,8 @@ CREATE TABLE IF NOT EXISTS Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_prop
     tx_hash BLOB,
     -- The call index in the transaction where the proposal was deployed
     call_index INTEGER,
+    -- These value is NULL until the proposal is executed on chain and received
+    exec_tx_hash BLOB,
 
     FOREIGN KEY(dao_bulla) REFERENCES Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_daos(bulla) ON DELETE CASCADE ON UPDATE CASCADE
 );

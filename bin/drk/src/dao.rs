@@ -103,6 +103,7 @@ pub const DAO_PROPOSALS_COL_MONEY_SNAPSHOT_TREE: &str = "money_snapshot_tree";
 pub const DAO_PROPOSALS_COL_NULLIFIERS_SMT_SNAPSHOT: &str = "nullifiers_smt_snapshot";
 pub const DAO_PROPOSALS_COL_TX_HASH: &str = "tx_hash";
 pub const DAO_PROPOSALS_COL_CALL_INDEX: &str = "call_index";
+pub const DAO_PROPOSALS_COL_EXEC_TX_HASH: &str = "exec_tx_hash";
 
 // DAO_VOTES_TABLE
 pub const DAO_VOTES_COL_PROPOSAL_BULLA: &str = "proposal_bulla";
@@ -249,9 +250,9 @@ impl fmt::Display for DaoRecord {
             self.params.dao.bulla_blind,
             "Leaf position",
             leaf_position,
-            "Tx hash",
+            "Transaction hash",
             tx_hash,
-            "Call idx",
+            "Call index",
             call_index,
         );
 
@@ -276,6 +277,8 @@ pub struct ProposalRecord {
     pub tx_hash: Option<TransactionHash>,
     /// The call index in the transaction where the proposal was deployed
     pub call_index: Option<u8>,
+    /// The transaction hash where the proposal was executed
+    pub exec_tx_hash: Option<TransactionHash>,
 }
 
 impl ProposalRecord {
@@ -300,7 +303,7 @@ impl fmt::Display for ProposalRecord {
         };
 
         let s = format!(
-            "{}\n{}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}",
+            "{}\n{}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {} ({})",
             "Proposal parameters",
             "===================",
             "Bulla",
@@ -309,10 +312,15 @@ impl fmt::Display for ProposalRecord {
             self.proposal.dao_bulla,
             "Proposal leaf position",
             leaf_position,
-            "Proposal tx hash",
+            "Proposal transaction hash",
             tx_hash,
             "Proposal call index",
             call_index,
+            "Creation block window",
+            self.proposal.creation_day,
+            "Duration",
+            self.proposal.duration_days,
+            "Block windows"
         );
 
         write!(f, "{}", s)
@@ -335,8 +343,8 @@ pub struct ParsedProposal {
 }
 
 #[derive(Debug, Clone)]
-/// Parameters representing a vote we've made on a DAO proposal
-pub struct DaoVote {
+/// Structure representing a `DAO_VOTES_TABLE` record.
+pub struct VoteRecord {
     /// Numeric identifier for the vote
     pub id: u64,
     /// Bulla identifier of the proposal this vote is for
@@ -575,6 +583,18 @@ impl Drk {
             _ => return Err(Error::ParseFailed("[get_dao_proposals] Call index parsing failed")),
         };
 
+        let exec_tx_hash = match row[9] {
+            Value::Blob(ref exec_tx_hash_bytes) => {
+                Some(deserialize_async(exec_tx_hash_bytes).await?)
+            }
+            Value::Null => None,
+            _ => {
+                return Err(Error::ParseFailed(
+                    "[get_dao_proposals] Execution transaction hash bytes parsing failed",
+                ))
+            }
+        };
+
         Ok(ProposalRecord {
             proposal,
             data,
@@ -583,6 +603,7 @@ impl Drk {
             nullifiers_smt_snapshot,
             tx_hash,
             call_index,
+            exec_tx_hash,
         })
     }
 
@@ -723,6 +744,7 @@ impl Drk {
                             nullifiers_smt_snapshot: Some(proposal.nullifiers_smt),
                             tx_hash: Some(proposal.tx_hash),
                             call_index: Some(proposal.call_idx),
+                            exec_tx_hash: None,
                         },
                     };
 
@@ -732,7 +754,7 @@ impl Drk {
             }
         }
 
-        let mut dao_votes: Vec<DaoVote> = vec![];
+        let mut dao_votes: Vec<VoteRecord> = vec![];
         for vote in new_dao_votes {
             // Check if we got the corresponding proposal
             let mut proposal = None;
@@ -788,7 +810,7 @@ impl Drk {
             let all_vote_value = fp_to_u64(note[2]).unwrap();
             let all_vote_blind = Blind(fp_mod_fv(note[3]));
 
-            let v = DaoVote {
+            let v = VoteRecord {
                 id: 0,
                 proposal: vote.0.proposal_bulla,
                 vote_option,
@@ -890,7 +912,7 @@ impl Drk {
             }
 
             let query = format!(
-                "INSERT OR REPLACE INTO {} ({}, {}, {}, {}, {}, {}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9);",
+                "INSERT OR REPLACE INTO {} ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10);",
                 *DAO_PROPOSALS_TABLE,
                 DAO_PROPOSALS_COL_BULLA,
                 DAO_PROPOSALS_COL_DAO_BULLA,
@@ -901,6 +923,7 @@ impl Drk {
                 DAO_PROPOSALS_COL_NULLIFIERS_SMT_SNAPSHOT,
                 DAO_PROPOSALS_COL_TX_HASH,
                 DAO_PROPOSALS_COL_CALL_INDEX,
+                DAO_PROPOSALS_COL_EXEC_TX_HASH,
             );
 
             let data = match &proposal.data {
@@ -930,6 +953,11 @@ impl Drk {
                 None => None,
             };
 
+            let exec_tx_hash = match &proposal.exec_tx_hash {
+                Some(exec_tx_hash) => Some(serialize_async(exec_tx_hash).await),
+                None => None,
+            };
+
             if let Err(e) = self.wallet.exec_sql(
                 &query,
                 rusqlite::params![
@@ -942,6 +970,7 @@ impl Drk {
                     nullifiers_smt_snapshot,
                     tx_hash,
                     proposal.call_index,
+                    exec_tx_hash,
                 ],
             ) {
                 return Err(Error::RusqliteError(format!(
@@ -957,13 +986,14 @@ impl Drk {
     pub async fn unconfirm_proposals(&self, proposals: &[ProposalRecord]) -> WalletDbResult<()> {
         for proposal in proposals {
             let query = format!(
-                "UPDATE {} SET {} = ?1, {} = ?2, {} = ?3, {} = ?4, {} = ?5 WHERE {} = ?6;",
+                "UPDATE {} SET {} = ?1, {} = ?2, {} = ?3, {} = ?4, {} = ?5, {} = ?6 WHERE {} = ?7;",
                 *DAO_PROPOSALS_TABLE,
                 DAO_PROPOSALS_COL_LEAF_POSITION,
                 DAO_PROPOSALS_COL_MONEY_SNAPSHOT_TREE,
                 DAO_PROPOSALS_COL_NULLIFIERS_SMT_SNAPSHOT,
                 DAO_PROPOSALS_COL_TX_HASH,
                 DAO_PROPOSALS_COL_CALL_INDEX,
+                DAO_PROPOSALS_COL_EXEC_TX_HASH,
                 DAO_PROPOSALS_COL_BULLA
             );
             self.wallet.exec_sql(
@@ -974,6 +1004,7 @@ impl Drk {
                     None::<Vec<u8>>,
                     None::<Vec<u8>>,
                     None::<u64>,
+                    None::<Vec<u8>>,
                     serialize_async(&proposal.bulla()).await
                 ],
             )?;
@@ -983,7 +1014,7 @@ impl Drk {
     }
 
     /// Import given DAO votes into the wallet.
-    pub async fn put_dao_votes(&self, votes: &[DaoVote]) -> WalletDbResult<()> {
+    pub async fn put_dao_votes(&self, votes: &[VoteRecord]) -> WalletDbResult<()> {
         for vote in votes {
             eprintln!("Importing DAO vote into wallet");
 
@@ -1223,7 +1254,7 @@ impl Drk {
     pub async fn get_dao_proposal_votes(
         &self,
         proposal: &DaoProposalBulla,
-    ) -> Result<Vec<DaoVote>> {
+    ) -> Result<Vec<VoteRecord>> {
         let rows = match self.wallet.query_multiple(
             &DAO_VOTES_TABLE,
             &[],
@@ -1300,7 +1331,7 @@ impl Drk {
                 return Err(Error::ParseFailed("[get_dao_proposal_votes] Call index parsing failed"))
             };
 
-            let vote = DaoVote {
+            let vote = VoteRecord {
                 id,
                 proposal,
                 vote_option,
@@ -1489,6 +1520,7 @@ impl Drk {
             nullifiers_smt_snapshot: None,
             tx_hash: None,
             call_index: None,
+            exec_tx_hash: None,
         };
 
         if let Err(e) = self.put_dao_proposals(&[proposal_record.clone()]).await {
@@ -1844,7 +1876,7 @@ impl Drk {
             inputs.push(input);
         }
 
-        // Retrieve current block height and compute current day
+        // Retrieve current block height and compute current window
         let current_block_height = self.get_next_block_height().await?;
         let current_day = blockwindow(current_block_height);
 
