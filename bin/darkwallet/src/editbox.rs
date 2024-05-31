@@ -385,6 +385,34 @@ impl EditBox {
         Ok(())
     }
 
+    fn delete_highlighted(&self) {
+        assert!(!self.selected.is_null(0).unwrap());
+        assert!(!self.selected.is_null(1).unwrap());
+
+        let start = self.selected.get_u32(0).unwrap() as usize;
+        let end = self.selected.get_u32(1).unwrap() as usize;
+
+        let sel_start = std::cmp::min(start, end);
+        let sel_end = std::cmp::max(start, end);
+
+        let glyphs = &*self.glyphs.lock().unwrap();
+
+        // Regen text
+        let mut text = String::new();
+        for (i, glyph) in glyphs.iter().enumerate() {
+            let mut substr = glyph.substr.clone();
+            if sel_start <= i && i < sel_end {
+                continue
+            }
+            text.push_str(&substr);
+        }
+        self.text.set(text);
+
+        self.selected.set_null(0).unwrap();
+        self.selected.set_null(1).unwrap();
+        self.cursor_pos.set(sel_start as u32);
+    }
+
     fn apply_cursor_scrolling(&self, rect: &Rectangle<f32>) {
         let cursor_pos = self.cursor_pos.get() as usize;
         let mut scroll = self.scroll.get();
@@ -396,7 +424,7 @@ impl EditBox {
             } else if cursor_pos == glyphs.len() {
                 let glyph = &glyphs.last().unwrap();
                 glyph.pos.x + glyph.pos.w
-            }else {
+            } else {
                 assert!(cursor_pos < glyphs.len());
                 let glyph = &glyphs[cursor_pos];
                 glyph.pos.x
@@ -418,6 +446,9 @@ impl EditBox {
     fn regen_glyphs(&self) -> Result<()> {
         let glyphs = self.text_shaper.shape(self.text.get(), self.font_size.get(), 
                 self.text_color.get());
+        if self.cursor_pos.get() > glyphs.len() as u32 {
+            self.cursor_pos.set(glyphs.len() as u32);
+        }
         *self.glyphs.lock().unwrap() = glyphs;
         Ok(())
     }
@@ -490,40 +521,55 @@ impl EditBox {
             }
             "Delete" => {
                 let cursor_pos = self.cursor_pos.get();
-                if cursor_pos == 0 {
-                    return;
-                }
-                let mut text = String::new();
-                for (i, glyph) in self.glyphs.lock().unwrap().iter().enumerate() {
-                    let mut substr = glyph.substr.clone();
-                    if cursor_pos as usize == i {
-                        // Lmk if anyone knows a better way to do substr.pop_front()
-                        let mut chars = substr.chars();
-                        chars.next();
-                        substr = chars.as_str().to_string();
-                    }
-                    text.push_str(&substr);
-                }
-                self.text.set(text);
-                self.regen_glyphs().unwrap();
 
-                // TODO: delete highlighted text
+                let text = if !self.selected.is_null(0).unwrap() {
+                    self.delete_highlighted();
+                } else {
+                    let glyphs = &*self.glyphs.lock().unwrap();
+
+                    if cursor_pos == glyphs.len() as u32 {
+                        return;
+                    }
+
+                    // Regen text
+                    let mut text = String::new();
+                    for (i, glyph) in glyphs.iter().enumerate() {
+                        let mut substr = glyph.substr.clone();
+                        if cursor_pos as usize == i {
+                            // Lmk if anyone knows a better way to do substr.pop_front()
+                            let mut chars = substr.chars();
+                            chars.next();
+                            substr = chars.as_str().to_string();
+                        }
+                        text.push_str(&substr);
+                    }
+                    self.text.set(text);
+                };
+                self.regen_glyphs().unwrap();
             }
             "Backspace" => {
                 let cursor_pos = self.cursor_pos.get();
-                if cursor_pos == 0 {
-                    return;
-                }
-                let mut text = String::new();
-                for (i, glyph) in self.glyphs.lock().unwrap().iter().enumerate() {
-                    let mut substr = glyph.substr.clone();
-                    if cursor_pos as usize - 1 == i {
-                        substr.pop().unwrap();
+
+                let text = if !self.selected.is_null(0).unwrap() {
+                    self.delete_highlighted();
+                } else {
+                    if cursor_pos == 0 {
+                        return;
                     }
-                    text.push_str(&substr);
-                }
+
+                    let glyphs = &*self.glyphs.lock().unwrap();
+
+                    let mut text = String::new();
+                    for (i, glyph) in glyphs.iter().enumerate() {
+                        let mut substr = glyph.substr.clone();
+                        if cursor_pos as usize - 1 == i {
+                            substr.pop().unwrap();
+                        }
+                        text.push_str(&substr);
+                    }
+                    self.text.set(text);
+                };
                 self.cursor_pos.set(cursor_pos - 1);
-                self.text.set(text);
                 self.regen_glyphs().unwrap();
 
                 // TODO: delete highlighted text
@@ -531,13 +577,62 @@ impl EditBox {
             "C" => {
                 if mods.ctrl {
                     self.copy_highlighted_text().unwrap();
+                } else {
+                    self.insert_char(key, mods);
                 }
             }
-            _ => {}
+            "V" => {
+                if mods.ctrl {
+                    if let Some(text) = window::clipboard_get() {
+                        self.insert_text(text);
+                    }
+                } else {
+                    self.insert_char(key, mods);
+                }
+            }
+            _ => {
+                self.insert_char(key, mods);
+            }
         }
     }
 
-    fn insert_char(key: String) {
+    fn insert_char(&self, key: &str, mods: &KeyMods) {
+        let allowed_keys =
+        ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
+         " ", ":", ";", "'", "-", ".", "/", "=", "(", "\\", ")", "`",
+         "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", ];
+        if !allowed_keys.contains(&key) {
+            return
+        }
+        let key = if mods.shift {
+            key.to_string()
+        } else {
+            key.to_lowercase()
+        };
+
+        self.insert_text(key);
+    }
+
+    fn insert_text(&self, key: String) {
+        let mut text = String::new();
+
+        let cursor_pos = self.cursor_pos.get();
+
+        if cursor_pos == 0 {
+            text = key;
+        } else {
+            let glyphs = &*self.glyphs.lock().unwrap();
+            for (glyph_idx, glyph) in glyphs.iter().enumerate() {
+                text.push_str(&glyph.substr);
+                if cursor_pos == glyph_idx as u32 + 1 {
+                    text.push_str(&key);
+                }
+            }
+        }
+        self.text.set(text);
+        // Not always true lol
+        self.cursor_pos.set(cursor_pos + 1);
+        self.regen_glyphs().unwrap();
     }
 
     fn copy_highlighted_text(&self) -> Result<()> {
