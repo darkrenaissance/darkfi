@@ -75,6 +75,7 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     wasm::db::zkas_db_set(&include_bytes!("../../proof/vote-main.zk.bin")[..])?;
     wasm::db::zkas_db_set(&include_bytes!("../../proof/exec.zk.bin")[..])?;
     wasm::db::zkas_db_set(&include_bytes!("../../proof/auth-money-transfer.zk.bin")[..])?;
+    wasm::db::zkas_db_set(&include_bytes!("../../proof/auth-money-transfer-enc-coin.zk.bin")[..])?;
 
     // Set up db for general info
     let dao_info_db = match wasm::db::db_lookup(cid, DAO_CONTRACT_DB_INFO_TREE) {

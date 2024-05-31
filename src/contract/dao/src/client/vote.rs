@@ -26,7 +26,7 @@ use darkfi_sdk::{
         pedersen_commitment_u64, poseidon_hash,
         smt::{PoseidonFp, SparseMerkleTree, StorageAdapter, SMT_FP_DEPTH},
         util::fv_mod_fp_unsafe,
-        Blind, FuncId, Keypair, MerkleNode, PublicKey, SecretKey,
+        Blind, Keypair, MerkleNode, PublicKey, SecretKey,
     },
     pasta::pallas,
 };
@@ -125,8 +125,8 @@ impl<'a, T: StorageAdapter<Value = pallas::Base>> DaoVoteCall<'a, T> {
                 public_key,
                 value: note.value,
                 token_id: note.token_id,
-                spend_hook: FuncId::none(),
-                user_data: pallas::Base::ZERO,
+                spend_hook: note.spend_hook,
+                user_data: note.user_data,
                 blind: note.coin_blind,
             }
             .to_coin();

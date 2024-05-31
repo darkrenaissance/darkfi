@@ -700,7 +700,7 @@ impl Drk {
             let Value::Blob(ref key_bytes) = row[0] else {
                 return Err(Error::ParseFailed("[get_nullifiers_smt] Key bytes parsing failed"))
             };
-            let key = BigUint::from_bytes_be(key_bytes);
+            let key = BigUint::from_bytes_le(key_bytes);
 
             let Value::Blob(ref value_bytes) = row[1] else {
                 return Err(Error::ParseFailed("[get_nullifiers_smt] Value bytes parsing failed"))

@@ -1366,36 +1366,34 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                             contract_calls.push_str("-\n");
                             continue;
                         }
-                        let proposal_coinattrs: Vec<CoinAttributes> =
+                        let coin: CoinAttributes =
                             deserialize_async(proposal.data.as_ref().unwrap()).await?;
-                        for coin in proposal_coinattrs {
-                            let spend_hook = if coin.spend_hook == FuncId::none() {
-                                "-".to_string()
-                            } else {
-                                format!("{}", coin.spend_hook)
-                            };
+                        let spend_hook = if coin.spend_hook == FuncId::none() {
+                            "-".to_string()
+                        } else {
+                            format!("{}", coin.spend_hook)
+                        };
 
-                            let user_data = if coin.user_data == pallas::Base::ZERO {
-                                "-".to_string()
-                            } else {
-                                format!("{:?}", coin.user_data)
-                            };
+                        let user_data = if coin.user_data == pallas::Base::ZERO {
+                            "-".to_string()
+                        } else {
+                            format!("{:?}", coin.user_data)
+                        };
 
-                            contract_calls.push_str(&format!("\n\t\t{}: {}\n\t\t{}: {} ({})\n\t\t{}: {}\n\t\t{}: {}\n\t\t{}: {}\n\t\t{}: {}\n\n",
-                            "Recipient",
-                            coin.public_key,
-                            "Amount",
-                            coin.value,
-                            encode_base10(coin.value, BALANCE_BASE10_DECIMALS),
-                            "Token",
-                            coin.token_id,
-                            "Spend hook",
-                            spend_hook,
-                            "User data",
-                            user_data,
-                            "Blind",
-                            coin.blind));
-                        }
+                        contract_calls.push_str(&format!("\n\t\t{}: {}\n\t\t{}: {} ({})\n\t\t{}: {}\n\t\t{}: {}\n\t\t{}: {}\n\t\t{}: {}\n\n",
+                        "Recipient",
+                        coin.public_key,
+                        "Amount",
+                        coin.value,
+                        encode_base10(coin.value, BALANCE_BASE10_DECIMALS),
+                        "Token",
+                        coin.token_id,
+                        "Spend hook",
+                        spend_hook,
+                        "User data",
+                        user_data,
+                        "Blind",
+                        coin.blind));
                     }
                 }
 
@@ -1448,7 +1446,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     );
 
                     let dao = drk.get_dao_by_bulla(&proposal.proposal.dao_bulla).await?;
-                    if total_all_vote_value > dao.params.dao.quorum &&
+                    if total_all_vote_value >= dao.params.dao.quorum &&
                         approval_ratio >=
                             (dao.params.dao.approval_ratio_quot /
                                 dao.params.dao.approval_ratio_base)
@@ -1507,7 +1505,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                             Err(_) => proposal,
                         };
 
-                        return drk.put_dao_proposals(&[proposal]).await
+                        return drk.put_dao_proposal(&proposal).await
                     }
                 }
 
@@ -1566,16 +1564,25 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
                 let drk =
                     Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
-                let tx = match drk.dao_exec(&bulla).await {
-                    Ok(tx) => tx,
-                    Err(e) => {
-                        eprintln!("Failed to execute DAO proposal: {e:?}");
-                        exit(2);
-                    }
-                };
+                let proposal = drk.get_dao_proposal_by_bulla(&bulla).await?;
 
-                println!("{}", base64::encode(&serialize_async(&tx).await));
-                Ok(())
+                for call in &proposal.proposal.auth_calls {
+                    if call.function_code == DaoFunction::AuthMoneyTransfer as u8 {
+                        let tx = match drk.dao_exec_transfer(&proposal).await {
+                            Ok(tx) => tx,
+                            Err(e) => {
+                                eprintln!("Failed to execute DAO transfer proposal: {e:?}");
+                                exit(2);
+                            }
+                        };
+
+                        println!("{}", base64::encode(&serialize_async(&tx).await));
+                        return Ok(())
+                    }
+                }
+
+                eprintln!("Unsuported DAO proposal");
+                exit(2);
             }
 
             DaoSubcmd::SpendHook => {
