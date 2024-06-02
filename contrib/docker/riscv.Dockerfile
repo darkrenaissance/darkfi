@@ -1,8 +1,5 @@
-# This script uses QEMU emulation, therefore requires the following dependencies:
-# 1. binfmt-support
-# 2. qemu
-# 3. qemu-user-static
-# After installation, register them to docker:
+# This script uses QEMU emulation, so before execution pull the corresponding
+# images:
 #   docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
 
 # Usage(on repo root folder):
