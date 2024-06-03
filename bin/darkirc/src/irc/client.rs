@@ -334,7 +334,7 @@ impl Client {
             "ADMIN" => self.handle_cmd_admin(&args).await?,
             "CAP" => self.handle_cmd_cap(&args).await?,
             "INFO" => self.handle_cmd_info(&args).await?,
-            "JOIN" => self.handle_cmd_join(&args).await?,
+            "JOIN" => self.handle_cmd_join(&args, true).await?,
             "LIST" => self.handle_cmd_list(&args).await?,
             "MODE" => self.handle_cmd_mode(&args).await?,
             "MOTD" => self.handle_cmd_motd(&args).await?,

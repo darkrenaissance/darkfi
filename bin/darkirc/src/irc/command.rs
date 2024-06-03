@@ -243,7 +243,7 @@ impl Client {
     /// Makes the client join the channels in the list `<channels>`.
     /// Passwords can be used in the list `<keys>`. If the channels do not
     /// exist, they will be created.
-    pub async fn handle_cmd_join(&self, args: &str) -> Result<Vec<ReplyType>> {
+    pub async fn handle_cmd_join(&self, args: &str, hist: bool) -> Result<Vec<ReplyType>> {
         if !self.registered.load(SeqCst) {
             self.penalty.fetch_add(1, SeqCst);
             return Ok(vec![ReplyType::Server((
@@ -325,17 +325,6 @@ impl Client {
             // Create the replies
             replies.push(ReplyType::Client((nick.clone(), format!("JOIN :{}", channel))));
 
-            ////////////////////
-            // replies.push(ReplyType::Server((
-            //     RPL_NAMREPLY,
-            //     format!("{} = {} :{}", nick, channel, nick),
-            // )));
-            // replies.push(ReplyType::Server((
-            //     RPL_ENDOFNAMES,
-            //     format!("{} {} :End of NAMES list", nick, channel),
-            // )));
-            ////////////////////
-
             if let Some(chan) = server_channels.get(channel) {
                 if !chan.topic.is_empty() {
                     replies.push(ReplyType::Client((
@@ -350,8 +339,10 @@ impl Client {
         drop(active_channels);
         drop(server_channels);
 
-        // Potentially extend the replies with channel history
-        replies.extend(self.get_history(&channels).await.unwrap());
+        if hist {
+            // Potentially extend the replies with channel history
+            replies.extend(self.get_history(&channels).await.unwrap());
+        }
 
         Ok(replies)
     }
@@ -892,11 +883,13 @@ impl Client {
         // Append the MOTD
         replies.append(&mut self.handle_cmd_motd("").await.unwrap());
 
+        let mut channels = HashSet::new();
+
         // If we have any configured autojoin channels, let's join the user
         // and set their topics, if any. And request NAMES list.
         if !*self.caps.read().await.get("no-autojoin").unwrap() {
             for channel in self.server.autojoin.read().await.iter() {
-                replies.extend(self.handle_cmd_join(channel).await.unwrap());
+                replies.extend(self.handle_cmd_join(channel, false).await.unwrap());
 
                 if let Some(chan) = self.server.channels.read().await.get(channel) {
                     let nicks: Vec<String> = chan.nicks.iter().cloned().collect();
@@ -911,8 +904,12 @@ impl Client {
                     RPL_ENDOFNAMES,
                     format!("{} {} :End of NAMES list", nick, channel),
                 )));
+                channels.insert(channel.to_string());
             }
         }
+
+        // Potentially extend the replies with channel history
+        replies.extend(self.get_history(&channels).await.unwrap());
 
         replies
     }
