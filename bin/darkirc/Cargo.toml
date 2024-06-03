@@ -29,7 +29,7 @@ sled = "0.34.7"
 # TLS
 async-trait = "0.1.80"
 futures = "0.3.30"
-futures-rustls = "0.26.0"
+futures-rustls = {version = "0.26.0", default-features = false, features = ["logging", "tls12", "ring"]}
 rustls-pemfile = "2.1.2"
 
 # Crypto
