@@ -1,26 +1,17 @@
-# Airdrops
+# Native token
 
-Now you have your wallet set up. Let's proceed with getting some
-tokens from the faucet. The testnet has a running faucet which is
-able to airdrop native network tokens. 
+Now that you have your wallet set up, you will need some native `DRK`
+tokens in order to be able to perform transactions, since that token
+is used to pay the transaction fees. You can obtain `DRK` either by
+successfully mining a block that gets finalized or by asking for some
+by the community on `darkirc` and/or your comrades.
 
-So let's airdrop some of these into our wallet:
-
-```
-$ ./drk airdrop 42.69
-```
-
-There is a limit of 100 for testnet airdrops currently.
-
-Note: you have to wait some minutes between airdrops since they're
-rate-limited.
-
-On success, you should see a transaction ID. If successful,
-the airdrop transactions will now be in the consensus' mempool,
-waiting for inclusion in the next block. Depending on the network,
-finalization of the blocks could take some time. You'll have to wait
-for this to happen.  If your `drk subscribe blocks` is running, then after
-some time your balance should be in your wallet.
+After you request some `DRK` and the other party submitted a transaction
+to the network, it should be in the consensus' mempool, waiting for
+inclusion in the next block(s). Depending on the network, finalization
+of the blocks could take some time. You'll have to wait for this to happen.
+If your `drk subscribe` is running, then after some time your new balance
+should be in your wallet.
 
 ![pablo-waiting0](pablo0.jpg)
 
@@ -42,14 +33,8 @@ Example addition:
 $ ./drk alias add {ALIAS} {TOKEN}
 ```
 
-So let's add the native token as `DARK` by executing:
-
-```
-$ ./drk alias add DARK 12ea8e3KVuBhmSnr29iV34Zd2RsD1MEeGk9xJhcipUqx
-```
-
-From now on, we can use `DARK` to refer to the native token when
-executing transactions using it.
+The native token alias `DRK` should already exist, and we can use that
+to refer to the native token when executing transactions using it.
 
 We can also list all our aliases using:
 
@@ -101,6 +86,6 @@ $ ./drk broadcast < mint_tx
 ```
 
 Now the transaction should be published to the network. If you have
-an active block subscription (which you can do with `drk subscribe blocks`),
+an active block subscription (which you can do with `drk subscribe`),
 then when the transaction is finalized, your wallet should have your
 new tokens listed when you request to see the balance.

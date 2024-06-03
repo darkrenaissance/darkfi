@@ -301,7 +301,7 @@ enum OtcSubcmd {
     /// Inspect a swap half or the full swap tx from stdin
     Inspect,
 
-    /// Sign a transaction given from stdin as the first-half
+    /// Sign a swap transaction given from stdin
     Sign,
 }
 

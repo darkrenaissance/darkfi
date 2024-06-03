@@ -224,8 +224,7 @@ pub fn generate_completions(shell: &str) -> Result<()> {
     let inspect = SubCommand::with_name("inspect")
         .about("Inspect a swap half or the full swap tx from stdin");
 
-    let sign = SubCommand::with_name("sign")
-        .about("Sign a transaction given from stdin as the first-half");
+    let sign = SubCommand::with_name("sign").about("Sign a swap transaction given from stdin");
 
     let otc = SubCommand::with_name("otc")
         .about("OTC atomic swap")

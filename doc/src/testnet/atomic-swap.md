@@ -30,12 +30,38 @@ $ ./drk otc join < half_swap > full_swap
 ```
 
 They will sign the full_swap file and send it back to you. Finally,
-to make the swap transaction valid, you need to sign it as well,
-and broadcast it:
+to make the swap transaction valid, you need to sign it as well
 
 ```
 $ ./drk otc sign < full_swap > signed_swap
-$ ./drk broadcast < signed_swap
+```
+
+Now that the swap is signed, one of the parties (or a third one)
+must attach the corresponding fee:
+
+```
+$ ./drk attach-fee < signed_swap > full_swap_with_fee
+```
+
+Since a new call has been added to the transaction, both parties
+must re-sign the full_swap_with_fee file, one by one.
+
+Party A:
+
+```
+$ ./drk otc sign < full_swap_with_fee > signed_full_swap_with_fee
+```
+
+Party B:
+
+```
+$ ./drk otc sign < signed_full_swap_with_fee > swap_tx
+```
+
+Now the complete swap transaction can be broadcasted:
+
+```
+$ ./drk broadcast < swap_tx
 ```
 
 On success, you should see a transaction ID. This transaction will now

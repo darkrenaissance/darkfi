@@ -11,7 +11,7 @@
 # User Guide
 
 - [Running a Node](testnet/node.md)
-- [Airdrops](testnet/airdrop.md)
+- [Tokens](testnet/token.md)
 - [Payments](testnet/payment.md)
 - [Atomic Swap](testnet/atomic-swap.md)
 - [DAO](testnet/dao.md)
