@@ -41,3 +41,7 @@ client = [
     "log",
     "rand",
 ]
+
+[lints]
+workspace = true
+

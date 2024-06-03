@@ -20,3 +20,7 @@ log = "0.4.21"
 rand = "0.8.5"
 simplelog = "0.12.2"
 sled = "0.34.7"
+
+[lints]
+workspace = true
+

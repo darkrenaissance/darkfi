@@ -21,3 +21,7 @@ halo2_gadgets = "0.3.0"
 plotters = "0.3.6"
 pyo3 = {version = "0.21.2", features = ["gil-refs"]}
 rand = "0.8.5"
+
+[lints]
+workspace = true
+

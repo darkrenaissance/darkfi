@@ -51,3 +51,7 @@ client = [
     "log",
     "halo2_proofs",
 ]
+
+[lints]
+workspace = true
+

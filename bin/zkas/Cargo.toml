@@ -11,3 +11,7 @@ edition = "2021"
 [dependencies]
 arg = {git = "https://github.com/parazyd/arg"}
 darkfi = {path = "../../", features = ["zkas"]}
+
+[lints]
+workspace = true
+

@@ -18,3 +18,7 @@ lazy_static = "1.4.0"
 
 [patch.crates-io]
 blake2b_simd = {git = "https://github.com/parazyd/blake2_simd", branch = "impl-common"}
+
+[lints]
+workspace = true
+

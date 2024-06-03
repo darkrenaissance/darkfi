@@ -345,3 +345,20 @@ path = "bench/zk_from_json.rs"
 name = "sled"
 harness = false
 path = "bench/sled.rs"
+
+# Top-level lints. Enabled optionally on a crate-level in their respective Cargo.toml files.
+[workspace.lints.clippy]
+#arithmetic_side_effects = "warn"
+#eq_op = "warn"
+#float_cmp = "warn"
+# integer_division = "warn"
+#large_futures = "warn"
+#large_stack_arrays = "warn"
+#large_stack_frames = "warn"
+#lossy_float_literal = "warn"
+#manual_slice_size_calculation = "warn"
+#modulo_one = "warn"
+#out_of_bounds_indexing = "warn"
+#overflow_check_conditional = "warn"
+#recursive_format_impl = "warn"
+#unchecked_duration_subtraction = "warn"

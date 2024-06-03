@@ -30,3 +30,7 @@ async = ["futures-lite", "async-trait", "darkfi-derive/async"]
 collections = []
 crypto = ["collections", "hash", "bridgetree", "pasta_curves"]
 hash = ["blake3"]
+
+[lints]
+workspace = true
+

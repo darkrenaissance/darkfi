@@ -46,3 +46,7 @@ simplelog = "0.12.1"
 [package.metadata.android.activity_attributes]
 "android:exported" = "true"
 "android:windowSoftInputMode" = "adjustResize"
+
+[lints]
+workspace = true
+

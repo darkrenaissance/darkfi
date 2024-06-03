@@ -14,3 +14,7 @@ darkfi = {path = "../../../", features = ["blockchain"]}
 darkfi-sdk = {path = "../../../src/sdk"}
 rand = "0.8.5"
 sled = "0.34.7"
+
+[lints]
+workspace = true
+

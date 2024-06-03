@@ -28,3 +28,7 @@ url = "2.5.0"
 clap = {version = "4.4.11", features = ["derive"]}
 serde = {version = "1.0.203", features = ["derive"]}
 tinyjson = "2.5.1"
+
+[lints]
+workspace = true
+

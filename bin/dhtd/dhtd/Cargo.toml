@@ -19,3 +19,7 @@ rand = "0.8.5"
 simplelog = "0.12.2"
 smol = "2.0.0"
 url = "2.5.0"
+
+[lints]
+workspace = true
+

@@ -17,3 +17,7 @@ hex = "0.4.3"
 
 [patch.crates-io]
 halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v3"}
+
+[lints]
+workspace = true
+

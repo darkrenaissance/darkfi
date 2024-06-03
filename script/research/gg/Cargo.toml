@@ -30,3 +30,7 @@ sled = "0.34.7"
 halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v4"}
 halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v4"}
 blake2b_simd = {git="https://github.com/parazyd/blake2_simd", branch="impl-common"}
+
+[lints]
+workspace = true
+
