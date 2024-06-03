@@ -20,6 +20,7 @@ use std::{
     cmp::Ordering,
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
     sync::Arc,
+    time::Duration,
 };
 
 use async_recursion::async_recursion;
@@ -53,7 +54,7 @@ pub use event::Event;
 
 /// P2P protocol implementation for the Event Graph
 pub mod proto;
-use proto::{EventRep, EventReq, TipRep, TipReq, REPLY_TIMEOUT};
+use proto::{EventRep, EventReq, TipRep, TipReq};
 
 /// Utility functions
 pub mod util;
@@ -240,7 +241,12 @@ impl EventGraph {
                 continue
             };
 
-            let peer_tips = match timeout(REPLY_TIMEOUT, tip_rep_sub.receive()).await {
+            let peer_tips = match timeout(
+                Duration::from_secs(self.p2p.settings().outbound_connect_timeout),
+                tip_rep_sub.receive(),
+            )
+            .await
+            {
                 Ok(peer_tips) => peer_tips?,
                 Err(_) => {
                     error!(
@@ -317,7 +323,7 @@ impl EventGraph {
                     "Requesting {:?} from {}...", missing_parents, url,
                 );
 
-                let multi_ev_rep_sub = match channel.subscribe_msg::<EventRep>().await {
+                let ev_rep_sub = match channel.subscribe_msg::<EventRep>().await {
                     Ok(v) => v,
                     Err(e) => {
                         error!(
@@ -333,13 +339,18 @@ impl EventGraph {
                 if let Err(e) = channel.send(&EventReq(request_missing_events)).await {
                     error!(
                         target: "event_graph::dag_sync()",
-                        "[EVENTGRAPH] Sync: Failed communicating MultiEventReq({:?}) to {}: {}",
+                        "[EVENTGRAPH] Sync: Failed communicating EventReq({:?}) to {}: {}",
                         missing_parents, url, e,
                     );
                     continue
                 }
 
-                let parent = match timeout(REPLY_TIMEOUT, multi_ev_rep_sub.receive()).await {
+                let parent = match timeout(
+                    Duration::from_secs(self.p2p.settings().outbound_connect_timeout),
+                    ev_rep_sub.receive(),
+                )
+                .await
+                {
                     Ok(parent) => parent,
                     Err(_) => {
                         error!(

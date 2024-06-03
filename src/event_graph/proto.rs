@@ -37,8 +37,6 @@ use crate::{impl_p2p_message, net::*, system::timeout::timeout, Error, Result};
 /// Malicious behaviour threshold. If the threshold is reached, we will
 /// drop the peer from our P2P connection.
 const MALICIOUS_THRESHOLD: usize = 5;
-/// Time to wait for a parent ID reply
-pub(super) const REPLY_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// P2P protocol implementation for the Event Graph.
 pub struct ProtocolEventGraph {
@@ -250,7 +248,15 @@ impl ProtocolEventGraph {
                     self.channel
                         .send(&EventReq(missing_parents.clone().into_iter().collect()))
                         .await?;
-                    let parents = match timeout(REPLY_TIMEOUT, self.ev_rep_sub.receive()).await {
+
+                    let parents = match timeout(
+                        Duration::from_secs(
+                            self.event_graph.p2p.settings().outbound_connect_timeout,
+                        ),
+                        self.ev_rep_sub.receive(),
+                    )
+                    .await
+                    {
                         Ok(parent) => parent?,
                         Err(_) => {
                             error!(
