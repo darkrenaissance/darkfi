@@ -684,11 +684,31 @@ def draw():
 
     api.link_node(node_id, layer_id)
 
+class App2(EventLoop):
+
+    def key_down(self, keycode, keymods, repeat):
+        if repeat:
+            return
+
+        win_id = api.lookup_node_id("/window")
+        scale = api.get_property_value(win_id, "scale")[0]
+
+        if keymods.ctrl and keycode == "=":
+            scale *= 1.01
+        elif keymods.ctrl and keycode == "-":
+            scale *= 0.99
+
+        print(scale)
+        api.set_property_f32(win_id, "scale", 0, scale)
+
 def main():
     draw()
 
     # DEBUG
     print_tree()
+
+    app = App2()
+    app.run()
 
 #def main():
 #    if True:

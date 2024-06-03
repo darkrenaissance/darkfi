@@ -13,8 +13,12 @@ use crate::{error::{Error, Result}, prop::{
 
 fn read_lines<P>(filename: P) -> Vec<String>
 where P: AsRef<Path>, {
-    let file = File::open(filename).unwrap();
-    BufReader::new(file).lines().map(|l| l.unwrap()).collect()
+    //let file = File::open(filename).unwrap();
+    //BufReader::new(file).lines().map(|l| l.unwrap()).collect()
+    // Just so we can package for android easily
+    // Later this will be all replaced anyway
+    let file = include_bytes!("../chat.txt");
+    BufReader::new(&file[..]).lines().map(|l| l.unwrap()).collect()
 }
 
 pub type ChatViewPtr = Arc<ChatView>;
@@ -130,6 +134,14 @@ impl ChatView {
 
         render.ctx.apply_uniforms_from_bytes(uniforms_data.as_ptr(), uniforms_data.len());
 
+        // Used for scaling the font size
+        let window = render
+            .scene_graph
+            .lookup_node("/window")
+            .expect("no window attached!");
+        let window_scale = window.get_property_f32("scale")?;
+        let font_size = window_scale * 20.;
+
         let bound = Rectangle {
             x: 0.,
             y: 0.,
@@ -159,16 +171,16 @@ impl ChatView {
             };
 
             if glyph_line.is_empty() {
-                *glyph_line = self.text_shaper.shape(line.to_string(), 20., COLOR_WHITE);
+                *glyph_line = self.text_shaper.shape(line.to_string(), font_size, COLOR_WHITE);
             }
-            let linespacing = 30.;
+            let linespacing = window_scale*30.;
             let off_y = linespacing * i as f32 + scroll;
             if off_y + linespacing < 0. || off_y - linespacing > rect.h {
                 continue;
             }
 
             let times_color = [0.4, 0.4, 0.4, 1.];
-            let glyphs_time = self.text_shaper.shape(time.to_string(), 20., times_color);
+            let glyphs_time = self.text_shaper.shape(time.to_string(), font_size, times_color);
             let mut rhs = 0.;
             for glyph in glyphs_time {
                 let mut pos = glyph.pos.clone();
@@ -194,8 +206,8 @@ impl ChatView {
             ];
 
             let nick_color = nick_colors[nick.len() % nick_colors.len()];
-            let glyphs_nick = self.text_shaper.shape(nick.to_string(), 20., nick_color);
-            let off_x = rhs + 20.;
+            let glyphs_nick = self.text_shaper.shape(nick.to_string(), font_size, nick_color);
+            let off_x = rhs + window_scale*20.;
             for glyph in glyphs_nick {
                 let mut pos = glyph.pos.clone();
                 pos.x += off_x;
@@ -207,7 +219,7 @@ impl ChatView {
                 render.ctx.delete_texture(texture);
             }
 
-            let off_x = rhs + 20.;
+            let off_x = rhs + window_scale*20.;
             for glyph in glyph_line {
                 let mut pos = glyph.pos.clone();
                 pos.x += off_x;

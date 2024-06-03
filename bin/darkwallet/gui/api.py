@@ -1,5 +1,5 @@
 from collections import namedtuple
-from pydrk import Api, HostApi, PropertyType, PropertySubType, Property
+from pydrk import Api, HostApi, PropertyType, PropertySubType, Property, serial
 import zmq
 
 api = Api()
@@ -24,13 +24,13 @@ def remove_all_slots(node_path, sig):
         api.unregister_slot(node_id, sig, slot_id)
 
 def register_slot(node_path, sig, tag):
-    remove_all_slots(node_path, sig)
+    #remove_all_slots(node_path, sig)
     node_id = api.lookup_node_id(node_path)
     api.register_slot(node_id, sig, "", tag)
 
 def get_property(node_id, prop):
     node_id = lookup_node(node_id)
-    return api.get_property(node_id, prop)
+    return api.get_property_value(node_id, prop)
 
 def set_property(node_id, prop, val):
     node_id = lookup_node(node_id)
@@ -106,36 +106,37 @@ class EventLoop:
 
     def __init__(self):
         self.subsock = make_sub_socket()
-        register_slot("/window",                "resize",        b"rs")
-        register_slot("/window/input/mouse",    "button_down",   b"ck")
-        register_slot("/window/input/mouse",    "wheel",         b"wh")
-        register_slot("/window/input/mouse",    "move",          b"mm")
+        #register_slot("/window",                "resize",        b"rs")
+        #register_slot("/window/input/mouse",    "button_down",   b"ck")
+        #register_slot("/window/input/mouse",    "wheel",         b"wh")
+        #register_slot("/window/input/mouse",    "move",          b"mm")
         register_slot("/window/input/keyboard", "key_down",      b"kd")
 
     def run(self):
         while True:
-            data = self.subsock.recv()
-            match data:
-                case b"rs":
-                    w = get_property("/window", "width")
-                    h = get_property("/window", "height")
-                    self.resize_event(w, h)
-                case b"ck":
-                    x = get_property("/window/input/mouse", "click_x")
-                    y = get_property("/window/input/mouse", "click_y")
-                    self.mouse_click(x, y)
-                case b"wh":
-                    y = get_property("/window/input/mouse", "wheel_y")
-                    self.mouse_wheel(y)
-                case b"mm":
-                    pass
+            signal_data, user_data = self.subsock.recv_multipart()
+            cur = serial.Cursor(signal_data)
+            match user_data:
+                #case b"rs":
+                #    w = get_property("/window", "width")
+                #    h = get_property("/window", "height")
+                #    self.resize_event(w, h)
+                #case b"ck":
+                #    x = get_property("/window/input/mouse", "click_x")
+                #    y = get_property("/window/input/mouse", "click_y")
+                #    self.mouse_click(x, y)
+                #case b"wh":
+                #    y = get_property("/window/input/mouse", "wheel_y")
+                #    self.mouse_wheel(y)
+                #case b"mm":
+                #    pass
                 case b"kd":
-                    shift =   get_property("/window/input/keyboard", "shift")
-                    ctrl =    get_property("/window/input/keyboard", "ctrl")
-                    alt =     get_property("/window/input/keyboard", "alt")
-                    logo =    get_property("/window/input/keyboard", "logo")
-                    keycode = get_property("/window/input/keyboard", "keycode")
-                    repeat =  get_property("/window/input/keyboard", "repeat")
+                    shift = bool(serial.read_u8(cur))
+                    ctrl = bool(serial.read_u8(cur))
+                    alt = bool(serial.read_u8(cur))
+                    logo = bool(serial.read_u8(cur))
+                    repeat = bool(serial.read_u8(cur))
+                    keycode = serial.decode_str(cur)
 
                     keymods = KeyMods(shift, ctrl, alt, logo)
                     # Sometimes these get stuck when exiting the window.

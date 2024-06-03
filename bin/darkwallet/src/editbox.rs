@@ -96,6 +96,7 @@ pub struct EditBox {
     text_shaper: TextShaper,
     key_repeat: Mutex<PressedKeysSmoothRepeat>,
     mouse_btn_held: AtomicBool,
+    window_scale: f32,
 }
 
 impl EditBox {
@@ -118,6 +119,14 @@ impl EditBox {
             font_faces
         };
 
+        // TODO: catch window resize event and regen glyphs
+        // Used for scaling the font size
+        let window = 
+            scene_graph
+            .lookup_node("/window")
+            .expect("no window attached!");
+        let window_scale = window.get_property_f32("scale")?;
+
         let self_ = Arc::new(Self{
             node_name: node_name.clone(),
             is_active,
@@ -136,6 +145,7 @@ impl EditBox {
             text_shaper,
             key_repeat: Mutex::new(PressedKeysSmoothRepeat::new(400, 50)),
             mouse_btn_held: AtomicBool::new(false),
+            window_scale,
         });
         self_.regen_glyphs().unwrap();
 
@@ -447,7 +457,9 @@ impl EditBox {
     }
 
     fn regen_glyphs(&self) -> Result<()> {
-        let glyphs = self.text_shaper.shape(self.text.get(), self.font_size.get(), 
+        let font_size = self.window_scale * self.font_size.get();
+
+        let glyphs = self.text_shaper.shape(self.text.get(), font_size,
                 self.text_color.get());
         if self.cursor_pos.get() > glyphs.len() as u32 {
             self.cursor_pos.set(glyphs.len() as u32);

@@ -234,6 +234,10 @@ impl Stage {
         prop.set_f32(1, screen_height);
         window.add_property(prop).unwrap();
 
+        let mut prop = Property::new("scale", PropertyType::Float32, PropertySubType::Pixel);
+        prop.set_defaults_f32(vec![1.]).unwrap();
+        window.add_property(prop).unwrap();
+
         window
             .add_signal(
                 "resize",
@@ -524,11 +528,17 @@ impl<'a> RenderContext<'a> {
         self.ctx.apply_viewport(view.x, view.y, view.w, view.h);
         self.ctx.apply_scissor_rect(view.x, view.y, view.w, view.h);
 
+        let window = self
+            .scene_graph
+            .lookup_node("/window")
+            .expect("no window attached!");
+        let window_scale = window.get_property_f32("scale")?;
+
         let rect = Rectangle {
-            x: rect.x as f32,
-            y: rect.y as f32,
-            w: rect.w as f32,
-            h: rect.h as f32,
+            x: (rect.x as f32) / window_scale,
+            y: (rect.y as f32) / window_scale,
+            w: (rect.w as f32) / window_scale,
+            h: (rect.h as f32) / window_scale,
         };
 
         let layer_children =
@@ -725,7 +735,6 @@ impl<'a> RenderContext<'a> {
             Vertex { pos: [x2, y2], color, uv: [u2, v2] },
         ];
 
-        //debug!("screen size: {:?}", window::screen_size());
         let vertex_buffer = self.ctx.new_buffer(
             BufferType::VertexBuffer,
             BufferUsage::Immutable,
@@ -790,7 +799,6 @@ impl<'a> RenderContext<'a> {
             Vertex { pos: [x2, y2], color, uv: [u2, v2] },
         ];
 
-        //debug!("screen size: {:?}", window::screen_size());
         let vertex_buffer = self.ctx.new_buffer(
             BufferType::VertexBuffer,
             BufferUsage::Immutable,
@@ -831,7 +839,6 @@ impl<'a> RenderContext<'a> {
             Vertex { pos: [x2, y2], color, uv: [1., 1.] },
         ];
 
-        //debug!("screen size: {:?}", window::screen_size());
         let vertex_buffer = self.ctx.new_buffer(
             BufferType::VertexBuffer,
             BufferUsage::Immutable,
@@ -910,6 +917,14 @@ impl<'a> RenderContext<'a> {
         assert_eq!(128, 2 * UniformType::Mat4.size());
 
         self.ctx.apply_uniforms_from_bytes(uniforms_data.as_ptr(), uniforms_data.len());
+
+        // Used for scaling the font size
+        let window = self
+            .scene_graph
+            .lookup_node("/window")
+            .expect("no window attached!");
+        let window_scale = window.get_property_f32("scale")?;
+        let font_size = window_scale * font_size;
 
         //let mut strings = vec![];
         //let mut current_str = String::new();
@@ -1126,7 +1141,6 @@ impl EventHandler for Stage {
     fn draw(&mut self) {
         self.last_draw_time = Some(Instant::now());
 
-        let (screen_width, screen_height) = window::screen_size();
         // This will make the top left (0, 0) and the bottom right (1, 1)
         // Default is (-1, 1) -> (1, -1)
         let proj = glam::Mat4::from_translation(glam::Vec3::new(-1., 1., 0.)) *
