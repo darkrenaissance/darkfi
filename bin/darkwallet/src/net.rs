@@ -366,7 +366,9 @@ impl ZeroMQAdapter {
                 let prop = node.get_property(&prop_name).ok_or(Error::PropertyNotFound)?;
 
                 match prop_type {
-                    PropertyType::Null => {}
+                    PropertyType::Null => {
+                        prop.set_null(prop_i)?;
+                    }
                     PropertyType::Bool => {
                         let val = bool::decode(&mut cur).unwrap();
                         prop.set_bool(prop_i, val)?;

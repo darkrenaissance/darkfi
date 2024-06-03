@@ -100,9 +100,11 @@ impl<T: Copy + std::ops::Add<Output=T> + std::ops::Sub<Output=T> + std::ops::Add
         let mut clipped = other.clone();
         if clipped.x < self.x {
             clipped.x = self.x;
+            clipped.w = other.x + other.w - clipped.x;
         }
         if clipped.y < self.y {
             clipped.y = self.y;
+            clipped.h = other.y + other.h - clipped.y;
         }
         if clipped.x + clipped.w > self.x + self.w {
             clipped.w = self.x + self.w - clipped.x;
@@ -197,7 +199,7 @@ impl Stage {
         let ftlib = ft::Library::init().unwrap();
         let mut font_faces = vec![];
 
-        let font_data = include_bytes!("../Inter-Regular.otf") as &[u8];
+        let font_data = include_bytes!("../ibm-plex-mono-light.otf") as &[u8];
         let ft_face = ftlib.new_memory_face2(font_data, 0).unwrap();
         font_faces.push(ft_face);
 
@@ -589,6 +591,9 @@ impl<'a> RenderContext<'a> {
             .into_iter()
             .filter_map(|node_inf| {
                 let node = self.scene_graph.get_node(node_inf.id).unwrap();
+                //if !node.get_property_bool("is_visible").ok()? {
+                //    return None
+                //}
                 let z_index = node.get_property_u32("z_index").ok()?;
                 Some((z_index, node_inf))
             })
@@ -688,6 +693,59 @@ impl<'a> RenderContext<'a> {
         Ok(())
     }
 
+    pub fn render_clipped_box_with_texture2(
+        &mut self,
+        bound: &Rectangle<f32>,
+        obj: &Rectangle<f32>,
+        color: Color,
+        texture: TextureId,
+    ) {
+        let Some(clipped) = bound.clip(&obj) else {
+            return
+        };
+
+        let x1 = clipped.x;
+        let y1 = clipped.y;
+        let x2 = clipped.x + clipped.w;
+        let y2 = clipped.y + clipped.h;
+
+        let u1 = (clipped.x - obj.x) / obj.w;
+        let u2 = (clipped.x + clipped.w - obj.x) / obj.w;
+        let v1 = (clipped.y - obj.y) / obj.h;
+        let v2 = (clipped.y + clipped.h - obj.y) / obj.h;
+
+        let vertices: [Vertex; 4] = [
+            // top left
+            Vertex { pos: [x1, y1], color, uv: [u1, v1] },
+            // top right
+            Vertex { pos: [x2, y1], color, uv: [u2, v1] },
+            // bottom left
+            Vertex { pos: [x1, y2], color, uv: [u1, v2] },
+            // bottom right
+            Vertex { pos: [x2, y2], color, uv: [u2, v2] },
+        ];
+
+        //debug!("screen size: {:?}", window::screen_size());
+        let vertex_buffer = self.ctx.new_buffer(
+            BufferType::VertexBuffer,
+            BufferUsage::Immutable,
+            BufferSource::slice(&vertices),
+        );
+
+        let indices: [u16; 6] = [0, 2, 1, 1, 2, 3];
+        let index_buffer = self.ctx.new_buffer(
+            BufferType::IndexBuffer,
+            BufferUsage::Immutable,
+            BufferSource::slice(&indices),
+        );
+
+        let bindings =
+            Bindings { vertex_buffers: vec![vertex_buffer], index_buffer, images: vec![texture] };
+
+        self.ctx.apply_bindings(&bindings);
+        self.ctx.draw(0, 6, 1);
+    }
+
     pub fn render_clipped_box_with_texture(
         &mut self,
         bound_rect: &Rectangle<f32>,
@@ -704,6 +762,9 @@ impl<'a> RenderContext<'a> {
             w: x2 - x1,
             h: y2 - y1
         };
+        if obj.w == 0. || obj.h == 0. {
+            return
+        }
         let Some(clipped) = bound_rect.clip(&obj) else {
             return
         };
@@ -714,9 +775,9 @@ impl<'a> RenderContext<'a> {
         let y2 = clipped.y + clipped.h;
 
         let u1 = (clipped.x - obj.x) / obj.w;
-        let u2 = (clipped.x + clipped.w - obj.x) / obj.w + u1;
+        let u2 = (clipped.x + clipped.w - obj.x) / obj.w;
         let v1 = (clipped.y - obj.y) / obj.h;
-        let v2 = (clipped.y + clipped.h - obj.y) / obj.h + v1;
+        let v2 = (clipped.y + clipped.h - obj.y) / obj.h;
 
         let vertices: [Vertex; 4] = [
             // top left

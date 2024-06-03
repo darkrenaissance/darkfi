@@ -543,6 +543,14 @@ class Api:
         serial.write_u32(req, parent_id)
         self._make_request(Command.UNLINK_NODE, req)
 
+    def set_property_null(self, node_id, prop_name, i):
+        req = bytearray()
+        serial.write_u32(req, node_id)
+        serial.encode_str(req, prop_name)
+        serial.write_u32(req, i)
+        serial.write_u8(req, PropertyType.NULL)
+        self._make_request(Command.SET_PROPERTY_VALUE, req)
+
     def set_property_bool(self, node_id, prop_name, i, val):
         req = bytearray()
         serial.write_u32(req, node_id)

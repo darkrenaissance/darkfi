@@ -1,332 +1,332 @@
-2024-02-07 21:21:25	somiaj	Z-module: am I messing up the logic now...grr
-2024-02-07 21:22:10	somiaj	rex: If a is a free variable, then you need a universe, though I guess if you already know something about a you don't, thanks for pointing that out.
-2024-02-07 21:22:37	rex	no I mean things like -1 \not\in ℕ
-2024-02-07 21:22:41	rex	why do I need a universe here?
-2024-02-07 21:23:19	somiaj	yea, that is what I was stating, if you knew something about the object, it wasn't a free variable, then you are correct, a universal set isn't needed
-2024-02-07 21:23:33	rex	that's what you meant. I see
-2024-02-07 21:23:44	somiaj	I was (maybe incorrectly) assuming that x and y were free variables here (vs already in some other set or something is known about them, like yoru example)
-2024-02-07 21:24:15	somiaj	so yea, I guess there are contexts in which you can use not in A, but A^c may not be welldefined
-2024-02-07 21:28:21	rex	with free variables you mean, that it is implicit to what universe they belong?
-2024-02-07 21:43:04	mh_le	Z-module: can I get you to take a look at a solution?
-2024-02-07 21:57:48	mahboubine	I've got a function and I calculated it's derivative to determine whether the function is increasing or decreasing at different intervals.
-2024-02-07 21:59:16	mahboubine	but the exercise correction also found the points from which the curve stars descending or ascending, for instance f(x) decends from 0 to -1/4 and back up until 0 and so on
-2024-02-07 21:59:26	mahboubine	I am wondering how to find those points as well
-2024-02-07 22:01:14	blackfield	well you're looking for points c such that f'(c)=0, or undefined..
-2024-02-07 22:04:14	blackfield	then you can test f''(c)>0 (then the point is a local minimum), or if f''(c)<0 it's a local maximum
-2024-02-07 22:08:32	mahboubine	I came to that conclusion as well
-2024-02-07 22:08:39	mahboubine	pretty easy now that I see it.
-2024-02-07 22:08:45	mahboubine	thanks, blackfield
-2024-02-07 22:08:51	blackfield	:)
-2024-02-07 23:51:00	biberao	hi
-2024-02-08 00:53:39	bouma	would you call within a 75% CI weak evidence ? i would call it no evidence
-2024-02-08 01:00:28	somiaj	bouma: I would just call it a 75% CI, so 1 and 4 chance you are wrong.
-2024-02-08 01:00:49	somiaj	I don't think a p value of 0.25 is that common, most prefer 0.05 or smaller
-2024-02-08 01:34:20	PlanckWalk	Ci width has little to do with evidence strength.
-2024-02-08 02:19:35	KZ-Spectra	hello
-2024-02-08 02:34:19	KZ-Spectra	originally, the indices n+m and n-m do not coincide.
-2024-02-08 02:34:39	KZ-Spectra	so when impose periodicity, then I want that also to be the case
-2024-02-08 02:35:15	KZ-Spectra	anyway, here is a fun problem
-2024-02-08 02:35:43	KZ-Spectra	"Find the remainder when 9 x 99 x 999  x ... x 99....9 (999 9s) is divided by 1000"
-2024-02-08 02:35:49	KZ-Spectra	Z-module: ^
-2024-02-08 02:43:44	Z-module	so the last factor there is 10^999 - 1 ?
-2024-02-08 03:01:14	KZ-Spectra	yeah
-2024-02-08 03:02:30	KZ-Spectra	it's the flavor of mod arithmetic since that's what we have been doing :)
-2024-02-08 03:08:00	KZ-Spectra	Z-module:  I'll give you the end answer: 109
-2024-02-08 03:09:22	KZ-Spectra	Z-module: https://i.imgur.com/vTstSUO.png can we just do this?
-2024-02-08 03:13:43	PlanckWalk	yeah, 9*99*999^997 = 891*(-1) = 109 (mod 1000)
-2024-02-08 03:15:15	PlanckWalk	KZ-Spectra: Are you assuming that u_{n+m} = u_{n-m} in general?
-2024-02-08 03:15:30	KZ-Spectra	oh no
-2024-02-08 03:19:04	PlanckWalk	Oh, I had trouble seeing the subscripts.  After I zoomed in so I could see Z^+, yeah that's fine.
-2024-02-08 03:19:16	PlanckWalk	Err, superscripts
-2024-02-08 03:20:09	KZ-Spectra	PlanckWalk:  were you comparing with the mathbin link from earlier? https://mathb.in/77541 Equation 1
-2024-02-08 03:20:24	PlanckWalk	No
-2024-02-08 03:21:14	PlanckWalk	It looks like it stands alone
-2024-02-08 03:22:22	PlanckWalk	There are possible questions of conditional convergence, though.
-2024-02-08 03:23:48	KZ-Spectra	those u's are complex
-2024-02-08 03:23:49	PlanckWalk	Defining a sum over Z usually requires absolute convergence, but the LHS doesn't.
-2024-02-08 03:23:54	PlanckWalk	Doesn't matter
-2024-02-08 03:24:38	PlanckWalk	So *if* the RHS is defined, it is equal to the LHS.
-2024-02-08 03:25:34	KZ-Spectra	do I even need to go to Z to do my mod arithmetic argument?
-2024-02-08 03:25:52	PlanckWalk	No idea, I haven't read through the mathbin at all.
-2024-02-08 03:26:03	PlanckWalk	(and probably won't since I'm just in a tea break at work)
-2024-02-08 06:12:54	Hasdiel	Does anyone know of a good self-hosted open source alternative to wolfram alpha?
-2024-02-08 07:18:54	Pelleplutt	Hello everyone. Our boss have given us a math problem for fun. If we solve it we will get a cake apparently. None of us here are able to solve it since it seems pretty complex so i thought i just put it out here if someone wants to take a chance :)
-2024-02-08 07:18:56	Pelleplutt	In a fictive world. Tell me how one human male and ten human females would repopulate an deserted island in the fastest way. How many years would it take for the population to reach 1 million with unlimited food supply, pre-build shelters and enough space. Take in to calculation that a human female cannot reproduce until 13 years old on average and
-2024-02-08 07:18:57	Pelleplutt	will only have 1.1 child per year, The maternal mortality rate will be 0,3 %. Please show the calculation for the population reaching 1 million. Take also into calculation that 3,4 % of the the island population die before 40 due to accident and diseases.
-2024-02-08 07:36:27	greenbagels	Pelleplutt: interesting problem for a boss to give their employees lol
-2024-02-08 07:37:11	Pelleplutt	greenbagels indeed :) He has been playing around with AI but i do not know why this question came from that
-2024-02-08 07:43:22	isekaijin	Pelleplutt: Is your boss a weeb or what? What the hell is with that plot?
-2024-02-08 07:43:41	greenbagels	isekaijin: lol it is a very male-centric plot
-2024-02-08 07:43:50	greenbagels	Pelleplutt: how old are the original people?
-2024-02-08 07:44:08	Pelleplutt	I think he is about 43 or something
-2024-02-08 07:44:15	greenbagels	no i mean in the problem
-2024-02-08 07:44:55	Pelleplutt	oh, good question. We can assume they are above 13 and below 40
-2024-02-08 08:00:15	Pelleplutt	I guess we have to assume that its 50% males and 50% females that is born aswell
-2024-02-08 08:15:37	PlanckWalk	Looks like something you could just plug into a spreadsheet.
-2024-02-08 08:15:47	PlanckWalk	With lots of simplifying assumptions, of course.
-2024-02-08 08:16:33	PlanckWalk	Proabbly the most annoying relevant one would be reduced fertility with age.
-2024-02-08 08:18:02	PlanckWalk	Inbreeding would be definitely a concern, but make a lot less difference than pretty much any other assumptions.
-2024-02-08 08:19:11	PlanckWalk	But basically the boss will either give you a cake or not, on his whims.  There isn't a true "correct answer" to this.
-2024-02-08 08:19:26	PlanckWalk	(and it's not a math problem anyway)
-2024-02-08 08:25:12	PlanckWalk	(If only 3.4% die before 40 on this isolated island with no pre-existing civilization then it's a fucking miracle)
-2024-02-08 08:25:29	PlanckWalk	(Even with food and shelter)
-2024-02-08 08:29:51	PlanckWalk	Anyway, maybe try asking on worldbuilding.stackexchange.com or something :-p
-2024-02-08 08:30:15	PlanckWalk	Because it sounds like the premise for some crappy harem litrpg.
-2024-02-08 08:33:28	Pelleplutt	PlanckWalk haha yeah i guess :)
-2024-02-08 08:33:40	Pelleplutt	Assumtion is that there is no inbreeding problem aswell :P
-2024-02-08 09:30:44	PlanckWalk	Pelleplutt: Then eh, if you take off every sane limit like that then you could probably do it in just over a century.
-2024-02-08 09:32:12	PlanckWalk	(The stated mortality rates are irrelevant, and shouldn't even have been mentioned)
-2024-02-08 10:03:19	mh_le	morning all
-2024-02-08 10:03:46	mahboubine	mornin' mh_le
-2024-02-08 10:06:00	biberao	hi
-2024-02-08 10:29:29	sigma1	is T := { {}, {{}} } transitive?
-2024-02-08 10:30:09	Inline	vertically not, horizontally maybe
-2024-02-08 10:33:55	mh_le	sigma1: what is the definition of "transitive" in this sense?
-2024-02-08 10:34:25	sigma1	is each element of the set is a subset of the set
-2024-02-08 10:34:28	sigma1	*If
-2024-02-08 10:35:17	mh_le	if would help if you were a bit more precise
-2024-02-08 10:36:25	sigma1	A set H is transitive if every one of its elements is a subset.
-2024-02-08 10:37:21	mh_le	then yes
-2024-02-08 10:40:39	sigma1	and T := { {}, {{}}, {{{}}} } ?
-2024-02-08 10:41:27	lericson	we went through this, sigma1
-2024-02-08 10:41:38	lericson	can you check for yourself?
-2024-02-08 10:47:55	biberao	math time
-2024-02-08 10:48:11	mh_le	which kind?
-2024-02-08 10:50:13	biberao	mh_le: i did some trig and sequences yesterday night
-2024-02-08 10:50:25	mh_le	great
-2024-02-08 10:51:52	machinewhore	Is there a collection of urn problems/solutions somewhere that I can use for practice?
-2024-02-08 10:52:17	mh_le	urn?
-2024-02-08 10:52:36	mh_le	you mean counting/probability problems?
-2024-02-08 10:52:43	machinewhore	yeah
-2024-02-08 10:53:07	machinewhore	eg, 50 red balls and 50 black balls randomly distributed between 2 urns, yada yada
-2024-02-08 10:53:32	mh_le	https://www.google.com/search?q=counting+and+probability+problems&oq=counting+and+probability&gs_lcrp=EgZjaHJvbWUqCAgCEAAYFhgeMgYIABBFGDkyBwgBEAAYgAQyCAgCEAAYFhgeMggIAxAAGBYYHjIICAQQABgWGB4yCAgFEAAYFhgeMggIBhAAGBYYHjIICAcQABgWGB4yCAgIEAAYFhgeMggICRAAGBYYHtIBCDcwNTJqMGo3qAIAsAIA&sourceid=chrome&ie=UTF-8
-2024-02-08 10:58:45	sigma1	I'm not sure whether these are transitive T: = {∅, {{∅}} and S:= {∅, {{∅}}, {∅}} I get confused with the ∅
-2024-02-08 10:59:49	machinewhore	S is transitive iff each element of S is a subset of S.
-2024-02-08 11:01:00	machinewhore	Is ∅ a subset of T? Is {{∅}} a subset of T?
-2024-02-08 11:01:08	sigma1	it'd be T: = {∅, {{∅}} btw
-2024-02-08 11:01:20	machinewhore	Still missing a bracket.
-2024-02-08 11:01:35	sigma1	T: = {∅, {{∅}}}
-2024-02-08 11:02:01	machinewhore	If you answer those two questions I asked, then you will know if T is transitive or not.
-2024-02-08 11:02:19	biberao	immibis: mh_le going to do it in latex
-2024-02-08 11:02:22	biberao	sorry
-2024-02-08 11:02:26	biberao	i meant mh_le
-2024-02-08 11:02:28	sigma1	since the elements of ∅(i.e. none) are contained in T
-2024-02-08 11:03:07	mh_le	biberao: ah cool
-2024-02-08 11:07:43	machinewhore	sigma1: Figure it out?
-2024-02-08 11:12:46	sigma1	machinewhore the set {{∅}} is a subset of T, because its element is part of T
-2024-02-08 11:13:05	PlanckWalk	Its element is {∅}
-2024-02-08 11:14:31	PlanckWalk	The elements of T are ∅ and {{∅}}
-2024-02-08 11:16:32	machinewhore	Yup, those are the elements of T.
-2024-02-08 11:16:41	biberao	mh_le: i might need help  structuring :D
-2024-02-08 11:23:36	mh_le	biberao: is a solution to an assignment you are typesetting?
-2024-02-08 11:24:42	biberao	yes
-2024-02-08 11:25:19	mh_le	ok, I don't know spanish so I'm not sure I will be able to help
-2024-02-08 11:25:52	biberao	mh_le: its not even spanish
-2024-02-08 11:25:54	biberao	:\
-2024-02-08 11:26:05	biberao	but the issue is structuring i wanted to make it similar
-2024-02-08 11:26:27	mh_le	biberao: I'm not sure what you mean by that
-2024-02-08 11:27:15	biberao	mh_le: i want to be able to have like exercice 1 and so on
-2024-02-08 11:27:18	biberao	good alignment
-2024-02-08 11:27:37	mh_le	biberao: let's go to #latex
-2024-02-08 11:27:55	biberao	ok
-2024-02-08 11:31:52	sigma1	PlanckWalk so T is transitive as ∅ is a subset of T
-2024-02-08 11:33:02	sigma1	and the members of {{ø}} is only {ø}, and {ø} is a subset of A
-2024-02-08 11:35:03	PlanckWalk	That's not the test for transitivity
-2024-02-08 11:35:17	machinewhore	sigma: What are the members of T?
-2024-02-08 11:35:35	sigma1	ø, {{ø}}
-2024-02-08 11:35:48	machinewhore	Correct.
-2024-02-08 11:35:57	machinewhore	Is ø a subset of T?
-2024-02-08 11:36:10	sigma1	yes
-2024-02-08 11:36:13	machinewhore	Correct.
-2024-02-08 11:36:16	machinewhore	Is {{ø}} a subset of T?
-2024-02-08 11:36:42	sigma1	yes
-2024-02-08 11:37:04	machinewhore	What is the definition of "subset'?
-2024-02-08 11:38:12	sigma1	If B is a set whose elements are included in a set A we say that B is included in A or that B subset of A
-2024-02-08 11:38:28	PlanckWalk	Let's not use the word "included".
-2024-02-08 11:38:53	PlanckWalk	Sometimes people use it to mean "element of", sometimes they use it to mean "subset of".
-2024-02-08 11:39:15	PlanckWalk	As you did!
-2024-02-08 11:39:25	machinewhore	!^
-2024-02-08 11:39:38	PlanckWalk	As in, you use it both ways.
-2024-02-08 11:39:41	PlanckWalk	used* it
-2024-02-08 11:40:45	PlanckWalk	So try again without using the word "included".
-2024-02-08 11:41:49	sigma1	'part of a set A' instead of that
-2024-02-08 11:44:04	PlanckWalk	No, let's not.
-2024-02-08 11:44:17	PlanckWalk	Try looking up a definition.
-2024-02-08 11:45:00	PlanckWalk	The one you're using is broken.
-2024-02-08 11:48:05	machinewhore42	sigma1: Are you a native English speaker?
-2024-02-08 11:50:42	sigma1	A is a subset of B, if and only if every element of A is an element of B
-2024-02-08 11:51:00	PlanckWalk	That one looks better
-2024-02-08 11:51:36	PlanckWalk	I severy element of {{ø}} an element of T?
-2024-02-08 11:53:35	sigma1	it seems so
-2024-02-08 11:53:49	PlanckWalk	What are the elements of {{ø}}?
-2024-02-08 11:54:50	sigma1	the set {ø}
-2024-02-08 11:54:58	PlanckWalk	What are the elements of T?
-2024-02-08 11:55:32	sigma1	the set {ø}  and ø
-2024-02-08 11:55:39	 *	PlanckWalk scrolls up.
-2024-02-08 11:55:42	PlanckWalk	Are you sure?
-2024-02-08 11:57:43	sigma1	err the other should be {{ø}}
-2024-02-08 11:58:36	PlanckWalk	Which other?
-2024-02-08 11:59:00	sigma1	{{ø}} and ø
-2024-02-08 11:59:19	PlanckWalk	Okay.  Is {ø} an element of T?
-2024-02-08 11:59:35	sigma1	no
-2024-02-08 12:00:06	PlanckWalk	Right, so now you can answer whether T is transitive.
-2024-02-08 12:00:34	PlanckWalk	You've checked its elements, and found one that's not a subset.
-2024-02-08 12:01:33	mh_le	Let B - i -> B' - p -> B'' be an exact sequence of left R-modules, and let A be a right R-module and consider the maps id_A (X) i and id_A (X) p then (id_A (X) p) \circ (id_A (X) i) = id_A (X) 0, but why is this the zero map?
-2024-02-08 12:01:47	mh_le	R is a ring
-2024-02-08 12:06:00	mh_le	here 0 must be the map b \mapsto i(b)\mapto p(i(b))=0 for all b in B, but the Id_A is not zero
-2024-02-08 12:06:13	mh_le	the map*
-2024-02-08 12:07:52	mh_le	wait
-2024-02-08 12:11:47	sigma1	is U\T transitive?
-2024-02-08 12:12:43	mh_le	r( a (X) b) = (ar (x) b) = (a (x) rb). so ( a (x) 0) = 0
-2024-02-08 12:13:03	mh_le	that's not right
-2024-02-08 12:20:22	--	Mode ##math [+o int-e] by ChanServ
-2024-02-08 12:20:25	--	Mode ##math [+b-o *!*@2a02:810b:4b40:2998:* int-e] by int-e
-2024-02-08 12:28:39	mh_le	so it was pretty obvious that a (x) 0 = 0
-2024-02-08 13:56:52	sigma1	the text asks me whether U \ T is transitive
-2024-02-08 13:58:57	int-e	Cool. What are U and T?
-2024-02-08 14:21:39	biberao	Z-module: ?
-2024-02-08 14:22:29	brass_	Can the sine function be achieved using finite combination of the basic operations?
-2024-02-08 14:24:34	dTal	No, sine is transcendental
-2024-02-08 14:25:40	dTal	Why do you ask?
-2024-02-08 15:33:56	paulo	https://www.wolframalpha.com/input?i=y%5E2%3D%28x%28x-9%29%28x%2B16%29%29%2C+y+%3D+3
-2024-02-08 15:34:27	paulo	why are solutions shown as complex when the line clearly intersects the graph in real space?
-2024-02-08 16:12:14	brass_	dTal Can I message you privately, I can't respond here.
-2024-02-08 16:12:50	dTal	You can't?
-2024-02-08 16:12:54	dTal	Erm, I guess...
-2024-02-08 16:13:24	brass_	?Yup ok, it's just that what I might say may sound too dumb on an elementary level.
-2024-02-08 16:27:14	ecraven	hello ;) I'm looking for a function that does the following: I know N (the number of items) and i (the index of the current pick). I'd like to go from i=0..N-1, and get back a "random" ordering (so not 0, 1, 2, ... but 5, 7, 23, 1, ...) where each number from 0 to N-1 occurs exactly once for i=0..N-1.
-2024-02-08 16:27:34	ecraven	I've tried i*K mod N with K being a coprime to N, but that .. doesn't seem to be correct.
-2024-02-08 16:30:27	Z-module	paulo: putting y = 3 in that and working with the resulting equation  x^3 + 7x^2 - 144x - 9,  I get (if I haven't made an error) the discriminant to be 13133457, which (being positive) means there are three distinct real roots. *Somehow* the particular numbers are fouling up the floating-point solvers. Notice how very minuscule all those imaginary parts are.
-2024-02-08 16:32:08	mh_le	hey all
-2024-02-08 16:34:55	ecraven	and it works fine, I just implemented it wrong ;)
-2024-02-08 17:05:51	biberao	Z-module: tell me what you think https://github.com/gitmapd/gitmapd.github.io/blob/master/limites%20nova%20ficha.pdf <- finished exercise 2 and 3
-2024-02-08 17:14:49	Z-module	Looks good, biberao
-2024-02-08 17:16:41	biberao	Z-module: ive added another thing to prove bounded for 3-2n
-2024-02-08 17:16:49	biberao	if you do f5 should have updated
-2024-02-08 17:19:43	Z-module	I think you mean 3 - 2/n
-2024-02-08 17:19:50	biberao	no
-2024-02-08 17:19:50	Z-module	(here in irc)
-2024-02-08 17:19:52	biberao	3-2n
-2024-02-08 17:19:58	Z-module	the sequence  3 - 2n   is not bounded
-2024-02-08 17:20:09	biberao	thats what i said
-2024-02-08 17:20:14	biberao	i meant to say
-2024-02-08 17:20:20	biberao	how do i prove its not bounded
-2024-02-08 17:20:39	biberao	i did lim n (3-2n) = -inf
-2024-02-08 17:20:48	biberao	thats what i meant to say
-2024-02-08 17:20:53	biberao	mawk: thanks :D
-2024-02-08 17:22:22	Z-module	Take any real r (of any sign).  Then  3 - 2n < r   iff   (3 - r)/2 < n     , so for all n > (3 - r)/2, that holds.  This is the meaning of  lim (3 - 2n) = -infty
-2024-02-08 17:23:46	biberao	ah
-2024-02-08 17:23:56	biberao	maybe i should use the delta epsilon?
-2024-02-08 17:27:48	Z-module	That's what this is, but in the form used for sequences
-2024-02-08 17:28:50	Z-module	A sequence {b_n} goes to +infty if:  Forall r   exists M   forall n > M    b_n > r         Change that last > to < and you get the form for -> -infty
-2024-02-08 17:31:04	mh_le	hi Z-module
-2024-02-08 17:33:27	Z-module	This reminds me of a very neat thing. Let g_n mean (the (n+1)st prime) - (the nth prime), the nth prime gap. It turns out we don't need really heavy analytic number theory for the following: merely the pretty basic (easier-to-prove than you might think) Chebyshev bounds suffice, and I think only one side of it is even enough:  Infinitely many n exist with  g_n < g_(n+1) > g_(n+2),  also infinitely many with  g_n > g_(n+1) < g_(n+2).
-2024-02-08 17:52:49	biberao	back
-2024-02-08 17:52:51	biberao	sorry
-2024-02-08 17:53:27	biberao	Z-module: thank you
-2024-02-08 17:56:29	theseb	Can someone tell me how they got the "observed power" on this A/B test calculator? https://abtestguide.com/calc/
-2024-02-08 17:57:02	theseb	"two proportions hypothesis testing"
-2024-02-08 18:05:45	biberao	Z-module: so for example if an = 3-2n was a monotonic increasing i could do  an > M
-2024-02-08 18:05:59	biberao	ok
-2024-02-08 18:06:01	biberao	i guess that works
-2024-02-08 18:06:03	biberao	thank you
-2024-02-08 18:06:47	Z-module	by the way, a sequence can -> +infty without being monotonic or eventually monotonic. For example: 1, 2, 3, 2, 3, 4, 3, 4, 5, 4, 5, 6 ...
-2024-02-08 18:07:09	biberao	i see
-2024-02-08 18:07:20	biberao	for this case is this right to say 1 < 3-2n < -inf
-2024-02-08 18:07:22	biberao	?
-2024-02-08 18:07:32	biberao	i dont know if its a good notation
-2024-02-08 18:07:42	Z-module	However, that prime gaps sequence {g_n}, while unbounded, does not -> infty, as we've only known with proof for around a decade.
-2024-02-08 18:08:05	Z-module	nothing is < -infty
-2024-02-08 18:08:13	Z-module	so don't write that
-2024-02-08 18:08:14	biberao	ok
-2024-02-08 18:08:20	biberao	but you understood what i meant
-2024-02-08 18:08:25	biberao	ok
-2024-02-08 18:08:28	Z-module	I didn't, nor would anyone else
-2024-02-08 18:08:29	biberao	i meant to say
-2024-02-08 18:08:32	biberao	sorry
-2024-02-08 18:08:34	biberao	i meant to say
-2024-02-08 18:08:44	biberao	-inf < 3-2n < 1
-2024-02-08 18:09:14	greenbagels	<= 1
-2024-02-08 18:09:21	Z-module	okay but  -infty < any reals you like,  so there's no point writing that. Finitely many innequalities have nothing to do with -> -infty
-2024-02-08 18:09:34	biberao	greenbagels: thank you
-2024-02-08 18:09:51	biberao	like now i understood what you taught me today
-2024-02-08 18:18:11	biberao	check my updated
-2024-02-08 18:18:17	biberao	Exercise 2 d)
-2024-02-08 18:18:19	biberao	please
-2024-02-08 18:26:08	Z-module	I don't think you need to check or mention that 1 > every a_n at all. Simply the fact that eventually all a_n are < any pre-selected number is enough to get that the sequence is not bounded. Also you shouldn't write  lim a_n = -infty    at the top like that: only write it after showing it to be true.
-2024-02-08 18:27:06	biberao	what if for example
-2024-02-08 18:27:17	Z-module	the  1 > all a_n   would be relevant if you were dealing with "unbounded only on one side" as a separate / special case of "unbounded".
-2024-02-08 18:27:21	Z-module	but you're not
-2024-02-08 18:27:40	biberao	ah so with a_n >M or a_n < M
-2024-02-08 18:27:42	biberao	works for both sides?
-2024-02-08 18:37:35	Z-module	{b_n} is "bounded" iff some positive r exists with |b_n| < r  (same as:  -r < b_n < r )   for all n.  Equivalent to saying some reals r < s exist with  r < b_n < s  for all n.      The negation of this, {b_n} unbounded, is:  EITHER:   for every r, for infinitely many n,  r < b_n   (that's unbounded above),  OR:   for every r, for infinitely many n,  r > b_n   (unbounded below).  Or both.
-2024-02-08 18:39:07	Z-module	But unbounded above is weaker than {b_n} -> +infty ; unbounded below is weaker than {b_n} -> -infty.  The sequence 0, 1, 0, 2, 0, 3, 0, 4, ...  is unbounded above, but does not -> +infty.
-2024-02-08 18:44:05	biberao	Z-module: so thats the way we did earlier then
-2024-02-08 18:44:20	biberao	b_n < M or b_n > M
-2024-02-08 18:47:45	biberao	ok gtg
-2024-02-08 18:47:47	biberao	thank you
-2024-02-08 18:48:27	greenbagels	another happy customer
-2024-02-08 19:11:13	mh_le	hi
-2024-02-08 19:11:27	mh_le	hey greenbagels
-2024-02-08 19:11:37	greenbagels	hi
-2024-02-08 19:12:17	mh_le	any progres on Wald?
-2024-02-08 19:12:37	greenbagels	realistically i dont know if i have the time for it tbh
-2024-02-08 19:12:55	mh_le	ok no problem :)
-2024-02-08 19:39:08	Simplar	I'm having issues with elementary problem. I want to find out how to prove that even divided by odd is always even if the divisor divides dividend. I know that even number has 2 among the multiples, while odd number never does, so the two won't go anywhere.
-2024-02-08 19:39:15	Simplar	But how to prove the same with subtractions?
-2024-02-08 19:57:50	Z-module	Simplar:  2m - (2n + 1) = 2(m - n) - 1 = 2(m - n - 1) + 1   and this last is odd.
-2024-02-08 20:09:22	Simplar	Z-module: I meant (2m) / (2n+1)
-2024-02-08 20:09:39	Simplar	How can we guarantee that the quotient will always be even?
-2024-02-08 20:10:06	Simplar	2m = (2n+1)q + r
-2024-02-08 20:13:59	Guest5398	Hello, sorry, If you have 7 Characters and every 1 day Chance of Birth is 1%, how can i create a function that will Tell me the amount of Characters after n days?
-2024-02-08 20:24:46	Z-module	Simplar: The question presupposes that the numerator n = 2m is an integer multiple of the denominator d where d is odd. So 2m = kd  for some k. So  2m/d = k,  and k can't be odd because then d, also being odd, would mean  kd  is also odd, not true since kd = 2m.
-2024-02-08 20:25:06	Z-module	also, note taht "difference" referes to the - operator, not the / operator
-2024-02-08 20:28:06	Z-module	Simplar: another way to put that.  2m = kd  and prime factoriation is unique (up to order), so 2 appears somewhere in the prime factorization of kd.  But it's not in d, so it must be in k. So  2m/d = k  is even.
-2024-02-08 20:33:50	Guest5398	Its Like having seven dollars and getting 1% interest? Having 7 Characters having a Baby at 1% Chance . That should be IT.
-2024-02-08 20:35:17	pavonia	Guest5398: What is the relation between characters and birth here?
-2024-02-08 20:36:21	pavonia	Or is it like characters in a game?
-2024-02-08 20:36:40	Guest5398	I mean Characters can increase by 1 at a 1% Chance per one Character per day
-2024-02-08 20:36:46	Guest5398	Yes. Sorry.
-2024-02-08 20:42:24	mahboubine	basic question: I've calculated the derivative of some function f, then I was asked to calculate f'(x) at some point c. I did this and the result was an undetermined form (5/0) where do I move from there?
-2024-02-08 20:42:49	mahboubine	I am used to facing undetermined forms in limits but I don't know how to deal with them in this case
-2024-02-08 20:43:36	pavonia	Guest5398: I guess it's a matter of definition if the chance after N days is 0.01*N or (1.01)^N
-2024-02-08 20:43:43	pavonia	...
-2024-02-08 20:46:19	serveee	why is topology so hard to understand
-2024-02-08 20:46:26	serveee	set topology that is
-2024-02-08 20:46:37	mh_le	is it?
-2024-02-08 20:46:49	serveee	maybe im just not understanding it right
-2024-02-08 20:47:02	Galois	it's a lot easier if you know real analysis well
-2024-02-08 20:47:26	serveee	how so
-2024-02-08 20:47:47	Galois	in real analysis you (are supposed to) learn about open and closed sets arising from metric spaces
-2024-02-08 20:47:52	mh_le	serveee: topology is the study of continuity
-2024-02-08 20:48:12	serveee	i should go back some steps then
-2024-02-08 20:48:23	Galois	metric spaces are already an abstraction of Euclidean space, and one which is useful in many ways, but abstracting to open and closed sets is a perfectly natural next step, and that gives you topology
-2024-02-08 20:48:32	serveee	frustrating but this isnt something im not familiar with
-2024-02-08 20:48:45	mh_le	serveee: you are welcome to ask if there is something specific that's not clear to you
-2024-02-08 21:17:11	Z-module	mahboubine: what's your f, and your c ?  f might not actually be differentiable at c
-2024-02-08 21:20:53	mh_le	Z-module: pm?
-2024-02-08 21:33:28	mahboubine	Z-module: oh forgot about this, as you said f turned out not differentiable at c
-2024-02-08 21:33:35	mahboubine	I was overthinking the whole thing
-2024-02-08 22:27:54	adder	I'm trying to do IDWDS on a three table game, but I'm not sure how. Can someone help? |  | Ann | Bob | Carla |
-2024-02-08 22:27:54	adder	| ---- | ---- | ---- | ---- |
-2024-02-08 22:27:54	adder	| Ann | (2, 0, 1) | (2, 0, 1) | (2, 0, 1) |
-2024-02-08 22:27:54	adder	| Bob | (2, 0, 1) | (0, 1, 2) | (0, 1, 2) |
-2024-02-08 22:27:54	adder	| Carla | (2, 0, 1) | (1, 2, 0) | (1, 2, 0) |
-2024-02-08 22:27:55	adder	 
-2024-02-08 22:27:55	adder	Carla votes Ann
-2024-02-08 22:27:56	adder	 
-2024-02-08 22:27:56	adder	|  | Ann | Bob | Carla |
-2024-02-08 22:27:57	adder	| ---- | ---- | ---- | ---- |
-2024-02-08 22:27:57	adder	| Ann | (2, 0, 1) | (0, 1, 2) | (2, 0, 1) |
-2024-02-08 22:27:58	adder	| Bob | (0, 1, 2) | (0, 1, 2) | (0, 1, 2) |
-2024-02-08 22:28:20	adder	Sorry.
-2024-02-08 22:28:28	b0nn	adder: FTR a paste site would have been more appropriate than posting into the channel
-2024-02-08 22:29:00	adder	I know, I just mispasted the screenshot url. I meant to paste: https://imgur.com/AM8lJ0J.png
-2024-02-08 22:29:36	adder	So what I don't get is how a three-table game reduced to a single table.
-2024-02-08 22:29:48	adder	That is, I'm not following what the text says.
-2024-02-08 22:35:18	int-e	Hmm. the label on the 2nd (or is that 4th) figure should be "Anna votes for A".
-2024-02-08 22:36:03	adder	Ah, that makes sense.
-2024-02-08 22:36:25	int-e	adder: But that seems to be the only thing wrong with it... what are you having trouble with?
-2024-02-08 22:39:10	adder	Nothing, it checks out now.
-2024-02-08 22:39:13	adder	Thanks, int-e.
-2024-02-08 22:39:20	int-e	Cool, np.
+21:21 somiaj Z-module: am I messing up the logic now...grr
+21:22 somiaj rex: If a is a free variable, then you need a universe, though I guess if you already know something about a you don't, thanks for pointing that out.
+21:22 rex no I mean things like -1 \not\in ℕ
+21:22 rex why do I need a universe here?
+21:23 somiaj yea, that is what I was stating, if you knew something about the object, it wasn't a free variable, then you are correct, a universal set isn't needed
+21:23 rex that's what you meant. I see
+21:23 somiaj I was (maybe incorrectly) assuming that x and y were free variables here (vs already in some other set or something is known about them, like yoru example)
+21:24 somiaj so yea, I guess there are contexts in which you can use not in A, but A^c may not be welldefined
+21:28 rex with free variables you mean, that it is implicit to what universe they belong?
+21:43 mh_le Z-module: can I get you to take a look at a solution?
+21:57 mahboubine I've got a function and I calculated it's derivative to determine whether the function is increasing or decreasing at different intervals.
+21:59 mahboubine but the exercise correction also found the points from which the curve stars descending or ascending, for instance f(x) decends from 0 to -1/4 and back up until 0 and so on
+21:59 mahboubine I am wondering how to find those points as well
+22:01 blackfield well you're looking for points c such that f'(c)=0, or undefined..
+22:04 blackfield then you can test f''(c)>0 (then the point is a local minimum), or if f''(c)<0 it's a local maximum
+22:08 mahboubine I came to that conclusion as well
+22:08 mahboubine pretty easy now that I see it.
+22:08 mahboubine thanks, blackfield
+22:08 blackfield :)
+23:51 biberao hi
+00:53 bouma would you call within a 75% CI weak evidence ? i would call it no evidence
+01:00 somiaj bouma: I would just call it a 75% CI, so 1 and 4 chance you are wrong.
+01:00 somiaj I don't think a p value of 0.25 is that common, most prefer 0.05 or smaller
+01:34 PlanckWalk Ci width has little to do with evidence strength.
+02:19 KZ-Spectra hello
+02:34 KZ-Spectra originally, the indices n+m and n-m do not coincide.
+02:34 KZ-Spectra so when impose periodicity, then I want that also to be the case
+02:35 KZ-Spectra anyway, here is a fun problem
+02:35 KZ-Spectra "Find the remainder when 9 x 99 x 999  x ... x 99....9 (999 9s) is divided by 1000"
+02:35 KZ-Spectra Z-module: ^
+02:43 Z-module so the last factor there is 10^999 - 1 ?
+03:01 KZ-Spectra yeah
+03:02 KZ-Spectra it's the flavor of mod arithmetic since that's what we have been doing :)
+03:08 KZ-Spectra Z-module:  I'll give you the end answer: 109
+03:09 KZ-Spectra Z-module: https://i.imgur.com/vTstSUO.png can we just do this?
+03:13 PlanckWalk yeah, 9*99*999^997 = 891*(-1) = 109 (mod 1000)
+03:15 PlanckWalk KZ-Spectra: Are you assuming that u_{n+m} = u_{n-m} in general?
+03:15 KZ-Spectra oh no
+03:19 PlanckWalk Oh, I had trouble seeing the subscripts.  After I zoomed in so I could see Z^+, yeah that's fine.
+03:19 PlanckWalk Err, superscripts
+03:20 KZ-Spectra PlanckWalk:  were you comparing with the mathbin link from earlier? https://mathb.in/77541 Equation 1
+03:20 PlanckWalk No
+03:21 PlanckWalk It looks like it stands alone
+03:22 PlanckWalk There are possible questions of conditional convergence, though.
+03:23 KZ-Spectra those u's are complex
+03:23 PlanckWalk Defining a sum over Z usually requires absolute convergence, but the LHS doesn't.
+03:23 PlanckWalk Doesn't matter
+03:24 PlanckWalk So *if* the RHS is defined, it is equal to the LHS.
+03:25 KZ-Spectra do I even need to go to Z to do my mod arithmetic argument?
+03:25 PlanckWalk No idea, I haven't read through the mathbin at all.
+03:26 PlanckWalk (and probably won't since I'm just in a tea break at work)
+06:12 Hasdiel Does anyone know of a good self-hosted open source alternative to wolfram alpha?
+07:18 Pelleplutt Hello everyone. Our boss have given us a math problem for fun. If we solve it we will get a cake apparently. None of us here are able to solve it since it seems pretty complex so i thought i just put it out here if someone wants to take a chance :)
+07:18 Pelleplutt In a fictive world. Tell me how one human male and ten human females would repopulate an deserted island in the fastest way. How many years would it take for the population to reach 1 million with unlimited food supply, pre-build shelters and enough space. Take in to calculation that a human female cannot reproduce until 13 years old on average and
+07:18 Pelleplutt will only have 1.1 child per year, The maternal mortality rate will be 0,3 %. Please show the calculation for the population reaching 1 million. Take also into calculation that 3,4 % of the the island population die before 40 due to accident and diseases.
+07:36 greenbagels Pelleplutt: interesting problem for a boss to give their employees lol
+07:37 Pelleplutt greenbagels indeed :) He has been playing around with AI but i do not know why this question came from that
+07:43 isekaijin Pelleplutt: Is your boss a weeb or what? What the hell is with that plot?
+07:43 greenbagels isekaijin: lol it is a very male-centric plot
+07:43 greenbagels Pelleplutt: how old are the original people?
+07:44 Pelleplutt I think he is about 43 or something
+07:44 greenbagels no i mean in the problem
+07:44 Pelleplutt oh, good question. We can assume they are above 13 and below 40
+08:00 Pelleplutt I guess we have to assume that its 50% males and 50% females that is born aswell
+08:15 PlanckWalk Looks like something you could just plug into a spreadsheet.
+08:15 PlanckWalk With lots of simplifying assumptions, of course.
+08:16 PlanckWalk Proabbly the most annoying relevant one would be reduced fertility with age.
+08:18 PlanckWalk Inbreeding would be definitely a concern, but make a lot less difference than pretty much any other assumptions.
+08:19 PlanckWalk But basically the boss will either give you a cake or not, on his whims.  There isn't a true "correct answer" to this.
+08:19 PlanckWalk (and it's not a math problem anyway)
+08:25 PlanckWalk (If only 3.4% die before 40 on this isolated island with no pre-existing civilization then it's a fucking miracle)
+08:25 PlanckWalk (Even with food and shelter)
+08:29 PlanckWalk Anyway, maybe try asking on worldbuilding.stackexchange.com or something :-p
+08:30 PlanckWalk Because it sounds like the premise for some crappy harem litrpg.
+08:33 Pelleplutt PlanckWalk haha yeah i guess :)
+08:33 Pelleplutt Assumtion is that there is no inbreeding problem aswell :P
+09:30 PlanckWalk Pelleplutt: Then eh, if you take off every sane limit like that then you could probably do it in just over a century.
+09:32 PlanckWalk (The stated mortality rates are irrelevant, and shouldn't even have been mentioned)
+10:03 mh_le morning all
+10:03 mahboubine mornin' mh_le
+10:06 biberao hi
+10:29 sigma1 is T := { {}, {{}} } transitive?
+10:30 Inline vertically not, horizontally maybe
+10:33 mh_le sigma1: what is the definition of "transitive" in this sense?
+10:34 sigma1 is each element of the set is a subset of the set
+10:34 sigma1 *If
+10:35 mh_le if would help if you were a bit more precise
+10:36 sigma1 A set H is transitive if every one of its elements is a subset.
+10:37 mh_le then yes
+10:40 sigma1 and T := { {}, {{}}, {{{}}} } ?
+10:41 lericson we went through this, sigma1
+10:41 lericson can you check for yourself?
+10:47 biberao math time
+10:48 mh_le which kind?
+10:50 biberao mh_le: i did some trig and sequences yesterday night
+10:50 mh_le great
+10:51 machinewhore Is there a collection of urn problems/solutions somewhere that I can use for practice?
+10:52 mh_le urn?
+10:52 mh_le you mean counting/probability problems?
+10:52 machinewhore yeah
+10:53 machinewhore eg, 50 red balls and 50 black balls randomly distributed between 2 urns, yada yada
+10:53 mh_le https://www.google.com/search?q=counting+and+probability+problems&oq=counting+and+probability&gs_lcrp=EgZjaHJvbWUqCAgCEAAYFhgeMgYIABBFGDkyBwgBEAAYgAQyCAgCEAAYFhgeMggIAxAAGBYYHjIICAQQABgWGB4yCAgFEAAYFhgeMggIBhAAGBYYHjIICAcQABgWGB4yCAgIEAAYFhgeMggICRAAGBYYHtIBCDcwNTJqMGo3qAIAsAIA&sourceid=chrome&ie=UTF-8
+10:58 sigma1 I'm not sure whether these are transitive T: = {∅, {{∅}} and S:= {∅, {{∅}}, {∅}} I get confused with the ∅
+10:59 machinewhore S is transitive iff each element of S is a subset of S.
+11:01 machinewhore Is ∅ a subset of T? Is {{∅}} a subset of T?
+11:01 sigma1 it'd be T: = {∅, {{∅}} btw
+11:01 machinewhore Still missing a bracket.
+11:01 sigma1 T: = {∅, {{∅}}}
+11:02 machinewhore If you answer those two questions I asked, then you will know if T is transitive or not.
+11:02 biberao immibis: mh_le going to do it in latex
+11:02 biberao sorry
+11:02 biberao i meant mh_le
+11:02 sigma1 since the elements of ∅(i.e. none) are contained in T
+11:03 mh_le biberao: ah cool
+11:07 machinewhore sigma1: Figure it out?
+11:12 sigma1 machinewhore the set {{∅}} is a subset of T, because its element is part of T
+11:13 PlanckWalk Its element is {∅}
+11:14 PlanckWalk The elements of T are ∅ and {{∅}}
+11:16 machinewhore Yup, those are the elements of T.
+11:16 biberao mh_le: i might need help  structuring :D
+11:23 mh_le biberao: is a solution to an assignment you are typesetting?
+11:24 biberao yes
+11:25 mh_le ok, I don't know spanish so I'm not sure I will be able to help
+11:25 biberao mh_le: its not even spanish
+11:25 biberao :\
+11:26 biberao but the issue is structuring i wanted to make it similar
+11:26 mh_le biberao: I'm not sure what you mean by that
+11:27 biberao mh_le: i want to be able to have like exercice 1 and so on
+11:27 biberao good alignment
+11:27 mh_le biberao: let's go to #latex
+11:27 biberao ok
+11:31 sigma1 PlanckWalk so T is transitive as ∅ is a subset of T
+11:33 sigma1 and the members of {{ø}} is only {ø}, and {ø} is a subset of A
+11:35 PlanckWalk That's not the test for transitivity
+11:35 machinewhore sigma: What are the members of T?
+11:35 sigma1 ø, {{ø}}
+11:35 machinewhore Correct.
+11:35 machinewhore Is ø a subset of T?
+11:36 sigma1 yes
+11:36 machinewhore Correct.
+11:36 machinewhore Is {{ø}} a subset of T?
+11:36 sigma1 yes
+11:37 machinewhore What is the definition of "subset'?
+11:38 sigma1 If B is a set whose elements are included in a set A we say that B is included in A or that B subset of A
+11:38 PlanckWalk Let's not use the word "included".
+11:38 PlanckWalk Sometimes people use it to mean "element of", sometimes they use it to mean "subset of".
+11:39 PlanckWalk As you did!
+11:39 machinewhore !^
+11:39 PlanckWalk As in, you use it both ways.
+11:39 PlanckWalk used* it
+11:40 PlanckWalk So try again without using the word "included".
+11:41 sigma1 'part of a set A' instead of that
+11:44 PlanckWalk No, let's not.
+11:44 PlanckWalk Try looking up a definition.
+11:45 PlanckWalk The one you're using is broken.
+11:48 machinewhore42 sigma1: Are you a native English speaker?
+11:50 sigma1 A is a subset of B, if and only if every element of A is an element of B
+11:51 PlanckWalk That one looks better
+11:51 PlanckWalk I severy element of {{ø}} an element of T?
+11:53 sigma1 it seems so
+11:53 PlanckWalk What are the elements of {{ø}}?
+11:54 sigma1 the set {ø}
+11:54 PlanckWalk What are the elements of T?
+11:55 sigma1 the set {ø}  and ø
+11:55  * PlanckWalk scrolls up.
+11:55 PlanckWalk Are you sure?
+11:57 sigma1 err the other should be {{ø}}
+11:58 PlanckWalk Which other?
+11:59 sigma1 {{ø}} and ø
+11:59 PlanckWalk Okay.  Is {ø} an element of T?
+11:59 sigma1 no
+12:00 PlanckWalk Right, so now you can answer whether T is transitive.
+12:00 PlanckWalk You've checked its elements, and found one that's not a subset.
+12:01 mh_le Let B - i -> B' - p -> B'' be an exact sequence of left R-modules, and let A be a right R-module and consider the maps id_A (X) i and id_A (X) p then (id_A (X) p) \circ (id_A (X) i) = id_A (X) 0, but why is this the zero map?
+12:01 mh_le R is a ring
+12:06 mh_le here 0 must be the map b \mapsto i(b)\mapto p(i(b))=0 for all b in B, but the Id_A is not zero
+12:06 mh_le the map*
+12:07 mh_le wait
+12:11 sigma1 is U\T transitive?
+12:12 mh_le r( a (X) b) = (ar (x) b) = (a (x) rb). so ( a (x) 0) = 0
+12:13 mh_le that's not right
+12:20 -- Mode ##math [+o int-e] by ChanServ
+12:20 -- Mode ##math [+b-o *!*@2a02:810b:4b40:2998:* int-e] by int-e
+12:28 mh_le so it was pretty obvious that a (x) 0 = 0
+13:56 sigma1 the text asks me whether U \ T is transitive
+13:58 int-e Cool. What are U and T?
+14:21 biberao Z-module: ?
+14:22 brass_ Can the sine function be achieved using finite combination of the basic operations?
+14:24 dTal No, sine is transcendental
+14:25 dTal Why do you ask?
+15:33 paulo https://www.wolframalpha.com/input?i=y%5E2%3D%28x%28x-9%29%28x%2B16%29%29%2C+y+%3D+3
+15:34 paulo why are solutions shown as complex when the line clearly intersects the graph in real space?
+16:12 brass_ dTal Can I message you privately, I can't respond here.
+16:12 dTal You can't?
+16:12 dTal Erm, I guess...
+16:13 brass_ ?Yup ok, it's just that what I might say may sound too dumb on an elementary level.
+16:27 ecraven hello ;) I'm looking for a function that does the following: I know N (the number of items) and i (the index of the current pick). I'd like to go from i=0..N-1, and get back a "random" ordering (so not 0, 1, 2, ... but 5, 7, 23, 1, ...) where each number from 0 to N-1 occurs exactly once for i=0..N-1.
+16:27 ecraven I've tried i*K mod N with K being a coprime to N, but that .. doesn't seem to be correct.
+16:30 Z-module paulo: putting y = 3 in that and working with the resulting equation  x^3 + 7x^2 - 144x - 9,  I get (if I haven't made an error) the discriminant to be 13133457, which (being positive) means there are three distinct real roots. *Somehow* the particular numbers are fouling up the floating-point solvers. Notice how very minuscule all those imaginary parts are.
+16:32 mh_le hey all
+16:34 ecraven and it works fine, I just implemented it wrong ;)
+17:05 biberao Z-module: tell me what you think https://github.com/gitmapd/gitmapd.github.io/blob/master/limites%20nova%20ficha.pdf <- finished exercise 2 and 3
+17:14 Z-module Looks good, biberao
+17:16 biberao Z-module: ive added another thing to prove bounded for 3-2n
+17:16 biberao if you do f5 should have updated
+17:19 Z-module I think you mean 3 - 2/n
+17:19 biberao no
+17:19 Z-module (here in irc)
+17:19 biberao 3-2n
+17:19 Z-module the sequence  3 - 2n   is not bounded
+17:20 biberao thats what i said
+17:20 biberao i meant to say
+17:20 biberao how do i prove its not bounded
+17:20 biberao i did lim n (3-2n) = -inf
+17:20 biberao thats what i meant to say
+17:20 biberao mawk: thanks :D
+17:22 Z-module Take any real r (of any sign).  Then  3 - 2n < r   iff   (3 - r)/2 < n     , so for all n > (3 - r)/2, that holds.  This is the meaning of  lim (3 - 2n) = -infty
+17:23 biberao ah
+17:23 biberao maybe i should use the delta epsilon?
+17:27 Z-module That's what this is, but in the form used for sequences
+17:28 Z-module A sequence {b_n} goes to +infty if:  Forall r   exists M   forall n > M    b_n > r         Change that last > to < and you get the form for -> -infty
+17:31 mh_le hi Z-module
+17:33 Z-module This reminds me of a very neat thing. Let g_n mean (the (n+1)st prime) - (the nth prime), the nth prime gap. It turns out we don't need really heavy analytic number theory for the following: merely the pretty basic (easier-to-prove than you might think) Chebyshev bounds suffice, and I think only one side of it is even enough:  Infinitely many n exist with  g_n < g_(n+1) > g_(n+2),  also infinitely many with  g_n > g_(n+1) < g_(n+2).
+17:52 biberao back
+17:52 biberao sorry
+17:53 biberao Z-module: thank you
+17:56 theseb Can someone tell me how they got the "observed power" on this A/B test calculator? https://abtestguide.com/calc/
+17:57 theseb "two proportions hypothesis testing"
+18:05 biberao Z-module: so for example if an = 3-2n was a monotonic increasing i could do  an > M
+18:05 biberao ok
+18:06 biberao i guess that works
+18:06 biberao thank you
+18:06 Z-module by the way, a sequence can -> +infty without being monotonic or eventually monotonic. For example: 1, 2, 3, 2, 3, 4, 3, 4, 5, 4, 5, 6 ...
+18:07 biberao i see
+18:07 biberao for this case is this right to say 1 < 3-2n < -inf
+18:07 biberao ?
+18:07 biberao i dont know if its a good notation
+18:07 Z-module However, that prime gaps sequence {g_n}, while unbounded, does not -> infty, as we've only known with proof for around a decade.
+18:08 Z-module nothing is < -infty
+18:08 Z-module so don't write that
+18:08 biberao ok
+18:08 biberao but you understood what i meant
+18:08 biberao ok
+18:08 Z-module I didn't, nor would anyone else
+18:08 biberao i meant to say
+18:08 biberao sorry
+18:08 biberao i meant to say
+18:08 biberao -inf < 3-2n < 1
+18:09 greenbagels <= 1
+18:09 Z-module okay but  -infty < any reals you like,  so there's no point writing that. Finitely many innequalities have nothing to do with -> -infty
+18:09 biberao greenbagels: thank you
+18:09 biberao like now i understood what you taught me today
+18:18 biberao check my updated
+18:18 biberao Exercise 2 d)
+18:18 biberao please
+18:26 Z-module I don't think you need to check or mention that 1 > every a_n at all. Simply the fact that eventually all a_n are < any pre-selected number is enough to get that the sequence is not bounded. Also you shouldn't write  lim a_n = -infty    at the top like that: only write it after showing it to be true.
+18:27 biberao what if for example
+18:27 Z-module the  1 > all a_n   would be relevant if you were dealing with "unbounded only on one side" as a separate / special case of "unbounded".
+18:27 Z-module but you're not
+18:27 biberao ah so with a_n >M or a_n < M
+18:27 biberao works for both sides?
+18:37 Z-module {b_n} is "bounded" iff some positive r exists with |b_n| < r  (same as:  -r < b_n < r )   for all n.  Equivalent to saying some reals r < s exist with  r < b_n < s  for all n.      The negation of this, {b_n} unbounded, is:  EITHER:   for every r, for infinitely many n,  r < b_n   (that's unbounded above),  OR:   for every r, for infinitely many n,  r > b_n   (unbounded below).  Or both.
+18:39 Z-module But unbounded above is weaker than {b_n} -> +infty ; unbounded below is weaker than {b_n} -> -infty.  The sequence 0, 1, 0, 2, 0, 3, 0, 4, ...  is unbounded above, but does not -> +infty.
+18:44 biberao Z-module: so thats the way we did earlier then
+18:44 biberao b_n < M or b_n > M
+18:47 biberao ok gtg
+18:47 biberao thank you
+18:48 greenbagels another happy customer
+19:11 mh_le hi
+19:11 mh_le hey greenbagels
+19:11 greenbagels hi
+19:12 mh_le any progres on Wald?
+19:12 greenbagels realistically i dont know if i have the time for it tbh
+19:12 mh_le ok no problem :)
+19:39 Simplar I'm having issues with elementary problem. I want to find out how to prove that even divided by odd is always even if the divisor divides dividend. I know that even number has 2 among the multiples, while odd number never does, so the two won't go anywhere.
+19:39 Simplar But how to prove the same with subtractions?
+19:57 Z-module Simplar:  2m - (2n + 1) = 2(m - n) - 1 = 2(m - n - 1) + 1   and this last is odd.
+20:09 Simplar Z-module: I meant (2m) / (2n+1)
+20:09 Simplar How can we guarantee that the quotient will always be even?
+20:10 Simplar 2m = (2n+1)q + r
+20:13 Guest5398 Hello, sorry, If you have 7 Characters and every 1 day Chance of Birth is 1%, how can i create a function that will Tell me the amount of Characters after n days?
+20:24 Z-module Simplar: The question presupposes that the numerator n = 2m is an integer multiple of the denominator d where d is odd. So 2m = kd  for some k. So  2m/d = k,  and k can't be odd because then d, also being odd, would mean  kd  is also odd, not true since kd = 2m.
+20:25 Z-module also, note taht "difference" referes to the - operator, not the / operator
+20:28 Z-module Simplar: another way to put that.  2m = kd  and prime factoriation is unique (up to order), so 2 appears somewhere in the prime factorization of kd.  But it's not in d, so it must be in k. So  2m/d = k  is even.
+20:33 Guest5398 Its Like having seven dollars and getting 1% interest? Having 7 Characters having a Baby at 1% Chance . That should be IT.
+20:35 pavonia Guest5398: What is the relation between characters and birth here?
+20:36 pavonia Or is it like characters in a game?
+20:36 Guest5398 I mean Characters can increase by 1 at a 1% Chance per one Character per day
+20:36 Guest5398 Yes. Sorry.
+20:42 mahboubine basic question: I've calculated the derivative of some function f, then I was asked to calculate f'(x) at some point c. I did this and the result was an undetermined form (5/0) where do I move from there?
+20:42 mahboubine I am used to facing undetermined forms in limits but I don't know how to deal with them in this case
+20:43 pavonia Guest5398: I guess it's a matter of definition if the chance after N days is 0.01*N or (1.01)^N
+20:43 pavonia ...
+20:46 serveee why is topology so hard to understand
+20:46 serveee set topology that is
+20:46 mh_le is it?
+20:46 serveee maybe im just not understanding it right
+20:47 Galois it's a lot easier if you know real analysis well
+20:47 serveee how so
+20:47 Galois in real analysis you (are supposed to) learn about open and closed sets arising from metric spaces
+20:47 mh_le serveee: topology is the study of continuity
+20:48 serveee i should go back some steps then
+20:48 Galois metric spaces are already an abstraction of Euclidean space, and one which is useful in many ways, but abstracting to open and closed sets is a perfectly natural next step, and that gives you topology
+20:48 serveee frustrating but this isnt something im not familiar with
+20:48 mh_le serveee: you are welcome to ask if there is something specific that's not clear to you
+21:17 Z-module mahboubine: what's your f, and your c ?  f might not actually be differentiable at c
+21:20 mh_le Z-module: pm?
+21:33 mahboubine Z-module: oh forgot about this, as you said f turned out not differentiable at c
+21:33 mahboubine I was overthinking the whole thing
+22:27 adder I'm trying to do IDWDS on a three table game, but I'm not sure how. Can someone help? |  | Ann | Bob | Carla |
+22:27 adder | ---- | ---- | ---- | ---- |
+22:27 adder | Ann | (2, 0, 1) | (2, 0, 1) | (2, 0, 1) |
+22:27 adder | Bob | (2, 0, 1) | (0, 1, 2) | (0, 1, 2) |
+22:27 adder | Carla | (2, 0, 1) | (1, 2, 0) | (1, 2, 0) |
+22:27 adder 
+22:27 adder Carla votes Ann
+22:27 adder 
+22:27 adder |  | Ann | Bob | Carla |
+22:27 adder | ---- | ---- | ---- | ---- |
+22:27 adder | Ann | (2, 0, 1) | (0, 1, 2) | (2, 0, 1) |
+22:27 adder | Bob | (0, 1, 2) | (0, 1, 2) | (0, 1, 2) |
+22:28 adder Sorry.
+22:28 b0nn adder: FTR a paste site would have been more appropriate than posting into the channel
+22:29 adder I know, I just mispasted the screenshot url. I meant to paste: https://imgur.com/AM8lJ0J.png
+22:29 adder So what I don't get is how a three-table game reduced to a single table.
+22:29 adder That is, I'm not following what the text says.
+22:35 int-e Hmm. the label on the 2nd (or is that 4th) figure should be "Anna votes for A".
+22:36 adder Ah, that makes sense.
+22:36 int-e adder: But that seems to be the only thing wrong with it... what are you having trouble with?
+22:39 adder Nothing, it checks out now.
+22:39 adder Thanks, int-e.
+22:39 int-e Cool, np.

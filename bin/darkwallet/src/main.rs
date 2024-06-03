@@ -1,4 +1,5 @@
 #![feature(deadline_api)]
+#![feature(str_split_whitespace_remainder)]
 
 use std::{
     sync::{Arc, Mutex},

@@ -141,22 +141,80 @@ impl ChatView {
 
         let scroll = self.scroll.load(Ordering::Relaxed);
         for (i, (line, glyph_line)) in self.lines.iter().zip(glyph_lines.iter_mut()).enumerate() {
-            //println!("line: {}", line);
+            let line = line.replace("\t", "    ");
+
+            // Split time and nick from the line
+            let mut iter = line.split_whitespace();
+            let Some(time) = iter.next() else {
+                error!("line missing time");
+                continue
+            };
+            let Some(nick) = iter.next() else {
+                error!("line missing nick");
+                continue
+            };
+            let Some(line) = iter.remainder() else {
+                error!("line missing remainder");
+                continue
+            };
+
             if glyph_line.is_empty() {
-                *glyph_line = self.text_shaper.shape(line.clone(), 30., COLOR_WHITE);
+                *glyph_line = self.text_shaper.shape(line.to_string(), 20., COLOR_WHITE);
             }
-            let off_y = 50. * i as f32 + scroll;
-            if off_y + 50. < 0. || off_y - 50. > rect.h {
+            let linespacing = 30.;
+            let off_y = linespacing * i as f32 + scroll;
+            if off_y + linespacing < 0. || off_y - linespacing > rect.h {
                 continue;
             }
-            for glyph in glyph_line {
-                let x1 = glyph.pos.x;
-                let y1 = glyph.pos.y + off_y;
-                let x2 = x1 + glyph.pos.w;
-                let y2 = y1 + glyph.pos.h;
+
+            let times_color = [0.4, 0.4, 0.4, 1.];
+            let glyphs_time = self.text_shaper.shape(time.to_string(), 20., times_color);
+            let mut rhs = 0.;
+            for glyph in glyphs_time {
+                let mut pos = glyph.pos.clone();
+                pos.y += off_y;
+                rhs = pos.x + pos.w;
 
                 let texture = render.ctx.new_texture_from_rgba8(glyph.bmp_width, glyph.bmp_height, &glyph.bmp);
-                render.render_clipped_box_with_texture(&bound, x1, y1, x2, y2, COLOR_WHITE, texture);
+                render.render_clipped_box_with_texture2(&bound, &pos, COLOR_WHITE, texture);
+                render.ctx.delete_texture(texture);
+            }
+
+            let nick_colors = [
+                [0.00, 0.94, 1.00, 1.],
+                [0.36, 1.00, 0.69, 1.],
+                [0.29, 1.00, 0.45, 1.],
+                [0.00, 0.73, 0.38, 1.],
+                [0.21, 0.67, 0.67, 1.],
+                [0.56, 0.61, 1.00, 1.],
+                [0.84, 0.48, 1.00, 1.],
+                [1.00, 0.61, 0.94, 1.],
+                [1.00, 0.36, 0.48, 1.],
+                [1.00, 0.30, 0.00, 1.]
+            ];
+
+            let nick_color = nick_colors[nick.len() % nick_colors.len()];
+            let glyphs_nick = self.text_shaper.shape(nick.to_string(), 20., nick_color);
+            let off_x = rhs + 20.;
+            for glyph in glyphs_nick {
+                let mut pos = glyph.pos.clone();
+                pos.x += off_x;
+                pos.y += off_y;
+                rhs = pos.x + pos.w;
+
+                let texture = render.ctx.new_texture_from_rgba8(glyph.bmp_width, glyph.bmp_height, &glyph.bmp);
+                render.render_clipped_box_with_texture2(&bound, &pos, COLOR_WHITE, texture);
+                render.ctx.delete_texture(texture);
+            }
+
+            let off_x = rhs + 20.;
+            for glyph in glyph_line {
+                let mut pos = glyph.pos.clone();
+                pos.x += off_x;
+                pos.y += off_y;
+
+                let texture = render.ctx.new_texture_from_rgba8(glyph.bmp_width, glyph.bmp_height, &glyph.bmp);
+                render.render_clipped_box_with_texture2(&bound, &pos, COLOR_WHITE, texture);
                 render.ctx.delete_texture(texture);
             }
         }

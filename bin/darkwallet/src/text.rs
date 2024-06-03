@@ -28,11 +28,6 @@ impl TextShaper {
         let mut current_str = String::new();
         let mut substrs = vec![];
         'next_char: for chr in text.chars() {
-            // Replace tabs with spaces
-            let chr = if chr == '\t' {
-                ' '
-            } else { chr };
-
             let idx = 'get_idx: {
                 for i in 0..self.font_faces.len() {
                     let ft_face = &self.font_faces[i];

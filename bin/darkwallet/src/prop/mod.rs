@@ -232,7 +232,10 @@ impl Property {
     pub fn set_array_len(&mut self, len: usize) {
         self.array_len = len;
         self.defaults.resize(len, self.typ.default_value());
-        self.vals.lock().unwrap().resize(len, PropertyValue::Unset);
+        self.defaults.shrink_to_fit();
+        let vals = &mut *self.vals.lock().unwrap();
+        vals.resize(len, PropertyValue::Unset);
+        vals.shrink_to_fit();
     }
     pub fn set_unbounded(&mut self) {
         self.set_array_len(0);
