@@ -345,7 +345,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
         let task = StoppableTask::new();
         task.clone().start(
-            miner_task(darkfid, recipient, blockchain_config.skip_sync, ex.clone()),
+            miner_task(darkfid.clone(), recipient, blockchain_config.skip_sync, ex.clone()),
             |res| async move {
                 match res {
                     Ok(()) | Err(Error::MinerTaskStopped) => { /* Do nothing */ }
@@ -360,7 +360,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     } else {
         let task = StoppableTask::new();
         task.clone().start(
-            consensus_task(darkfid, ex.clone()),
+            consensus_task(darkfid.clone(), ex.clone()),
             |res| async move {
                 match res {
                     Ok(()) | Err(Error::ConsensusTaskStopped) => { /* Do nothing */ }
@@ -391,6 +391,11 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     info!(target: "darkfid", "Flushing sled database...");
     let flushed_bytes = sled_db.flush_async().await?;
     info!(target: "darkfid", "Flushed {} bytes", flushed_bytes);
+
+    if let Some(ref rpc_client) = darkfid.rpc_client {
+        info!(target: "darkfid", "Stopping JSON-RPC client...");
+        rpc_client.lock().await.client.stop().await;
+    };
 
     Ok(())
 }
