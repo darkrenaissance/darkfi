@@ -1,4 +1,3 @@
--- TODO: Update these once finished
 -- # DAO::mint()
 -- 
 -- First one person will create the DAO
@@ -18,24 +17,24 @@
 --
 -- We can view the data like so:
 --
---   $ drk dao view_dao < dao.dat
+--   $ drk dao view < dao.dat
 --
 -- Now everyone inside the DAO exchanges dao.dat out of band will import
 -- it into their wallets.
 --
---   $ drk dao import_dao DAO_NAME < dao.dat
+--   $ drk dao import DAO_NAME < dao.dat
 --   Imported DAO ccb8XXX8af6
 --
 -- Where ccb8XXX8af6 is the DAO's name.
 --
 -- Next one person will mint it on chain
 --
---   $ drk dao mint DAO_NAME
---   Broadcasted DAO ccb8XXX8af6
+--   $ drk dao mint DAO_NAME > dao_mint_tx
+--   $ drk broadcast < dao_mint_tx
 --
 -- And then the others will receive confirmation that the DAO they imported
 -- into their wallet has also been accepted on chain.
-
+--
 -- # Minting and Receiving Coin
 --
 -- Assume that the governance tokens have been created and distributed
@@ -44,63 +43,86 @@
 -- Now the DAO can receive coins into its treasury. These coins simply
 -- have both the coin's spend_hook and user_data fields set correctly
 -- otherwise they are rejected as invalid/malformed.
-
+--
 -- # DAO::propose()
 --
--- Create a proposal for the DAO
+-- Create a transfer proposal for the DAO
 --
---   $ drk dao propose \
+--   $ drk dao propose-transfer \
 --       DAO_NAME \
---       RECV_PUBKEY \
+--       DURATION \
 --       AMOUNT \
---       SERIAL \
---       SENDCOIN_TOKEN_ID
+--       SENDCOIN_TOKEN_ID \
+--       RECV_PUBKEY
 --
 -- If we don't have enough tokens to meet the proposer_limit threshold
 -- then this call will simply fail with an error message. Nothing will
 -- be added to the database or sent to the network.
 --
--- The other participants should automatically receive the proposal
--- ready to vote on it.
-
+-- Once a proposal has been generated, it can be exported and shared
+-- to other participants.
+--
+--  $ drk dao proposal PROPOSAL_BULLA --export > dao_transfer_proposal.dat
+--  $ drk dao proposal-import < dao_transfer_proposal.dat
+--
+-- We can now mint the proposal on-chain
+--
+--  $ drk dao proposal PROPOSAL_BULLA --mint-proposal > dao_proposal_tx
+--  $ drk broadcast < dao_proposal_tx
+--
 -- # DAO::vote()
 --
 -- You have received a proposal which is active. You can now vote on it.
 --
 --   $ drk dao proposals DAO_NAME
---   [0] f6cae63ced53d02b372206a8d3ed5ac03fde18da306a520285fd56e8d031f6cf
---   [1] 1372622f4a38be6eb1c90fa67864474c6603d9f8d4228106e20e2d0d04f2395e
---   [2] 88b18cbc38dbd3af8d25237af3903e985f70ea06d1e25966bf98e3f08e23c992
+--   0. f6cae63ced53d02b372206a8d3ed5ac03fde18da306a520285fd56e8d031f6cf
+--   1. 1372622f4a38be6eb1c90fa67864474c6603d9f8d4228106e20e2d0d04f2395e
+--   2. 88b18cbc38dbd3af8d25237af3903e985f70ea06d1e25966bf98e3f08e23c992
 --
---   $ drk dao show_proposal 1
---   Proposal: 1372622f4a38be6eb1c90fa67864474c6603d9f8d4228106e20e2d0d04f2395e
---     destination: ...
---     amount: ...
---     token_id: ...
---     dao_name: DAO_NAME
---     dao_bulla: ...
---   Current yes votes: X
---   Current no votes: Y
---   Total votes: X + Y
---   [================                    ] 45.56%
---   DAO quorum threshold: Z
---   DAO approval ratio: 60%
+--   $ drk dao show_proposal f6cae...1f6cf
+--    Proposal parameters
+--    ===================
+--    Bulla: f6cae...1f6cf
+--    DAO Bulla: 2Wmyc...zQeke
+--    Proposal leaf position: Position(1)
+--    Proposal transaction hash: 07148...52f96
+--    Proposal call index: 0
+--    Creation block window: 0
+--    Duration: 30 (Block windows)
 --
---   $ drk dao vote 1 yes
-
+--    Invoked contracts:
+--      Contract: Fd8kf...z7iXj
+--      Function: 4
+--      Data:
+--        Recipient: DQeQR...q31Fz
+--        Amount: 690000000 (6.9)
+--        Token: GY8xX...xY8Qu
+--        Spend hook: 6iW9n...2GLuT
+--        User data: 0x35431...e3678
+--        Blind: 13EHb...xR6ng
+--
+--      Contract: BZHKG...4yf4o
+--      Function: 3
+--      Data: -
+--
+--    Votes:
+--      ...
+--    Total tokens votes: X + Y
+--    Total tokens Yes votes: X (60%)
+--    Total tokens No votes: Y
+--    Voting status: Ongoing
+--    Current proposal outcome: Rejected
+--
+--   $ drk dao vote f6cae...1f6cf 1 > dao_vote_tx
+--   $ drk broadcast < dao_vote_tx
+--
 -- # DAO::exec()
 --
 -- Once there are enough yes votes to satisfy the quorum and approval ratio,
--- then any DAO member can execute the payment out of the treasury.
+-- then any DAO member can execute the proposal.
 --
---   $ drk dao exec 1
---
--- FUTURE NOTE: We have to assume that 2 people could try to exec at once.
---              So if our exec fails, then the tx fee we pay should be returned
---              to our wallet.
---              We should design our tables for exec accordingly.
---              For now I didn't put anything, but we should keep this minor
---              point in mind and ruminate on it for later.
+--   $ drk dao exec f6cae...1f6cf > dao_exec_tx
+--   $ drk broadcast < dao_exec_tx
 
 PRAGMA foreign_keys = ON;
 
