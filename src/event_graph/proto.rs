@@ -162,6 +162,15 @@ impl ProtocolEventGraph {
                  "Got EventPut: {} [{}]", event.id(), self.channel.address(),
             );
 
+            // Check if node has finished syncing its DAG
+            if !*self.event_graph.synced.read().await {
+                debug!(
+                    target: "event_graph::protocol::handle_event_put",
+                    "DAG is still syncing, skipping..."
+                );
+                continue
+            }
+
             // If we have already seen the event, we'll stay quiet.
             let event_id = event.id();
             if self.event_graph.dag.contains_key(event_id.as_bytes()).unwrap() {
@@ -371,7 +380,7 @@ impl ProtocolEventGraph {
             // Check if node has finished syncing its DAG
             if !*self.event_graph.synced.read().await {
                 debug!(
-                    target: "event_graph::protocol::handle_event_put",
+                    target: "event_graph::protocol::handle_event_req()",
                     "DAG is still syncing, skipping..."
                 );
                 continue
@@ -467,7 +476,7 @@ impl ProtocolEventGraph {
             // Check if node has finished syncing its DAG
             if !*self.event_graph.synced.read().await {
                 debug!(
-                    target: "event_graph::protocol::handle_event_put",
+                    target: "event_graph::protocol::handle_tip_req()",
                     "DAG is still syncing, skipping..."
                 );
                 continue
