@@ -80,6 +80,8 @@ pub fn select_coins(coins: Vec<OwnCoin>, min_value: u64) -> Result<(Vec<OwnCoin>
 /// * `mint_pk`: Proving key for the `Mint_V1` zk circuit
 /// * `burn_zkbin`: `Burn_V1` zkas circuit ZkBinary
 /// * `burn_pk`: Proving key for the `Burn_V1` zk circuit
+/// * `half_split`: Flag indicating to split the output coin into
+///    two equal halves.
 ///
 /// Returns a tuple of:
 ///
@@ -100,6 +102,7 @@ pub fn make_transfer_call(
     mint_pk: ProvingKey,
     burn_zkbin: ZkBinary,
     burn_pk: ProvingKey,
+    half_split: bool,
 ) -> Result<(MoneyTransferParamsV1, TransferCallSecrets, Vec<OwnCoin>)> {
     debug!(target: "contract::money::client::transfer", "Building Money::TransferV1 contract call");
     if value == 0 {
@@ -137,14 +140,35 @@ pub fn make_transfer_call(
         inputs.push(input);
     }
 
-    outputs.push(TransferCallOutput {
-        public_key: recipient,
-        value,
-        token_id,
-        spend_hook: output_spend_hook.unwrap_or(FuncId::none()),
-        user_data: output_user_data.unwrap_or(pallas::Base::ZERO),
-        blind: Blind::random(&mut OsRng),
-    });
+    // Check if we should split the output into two equal halves
+    if half_split {
+        let value = value / 2;
+        outputs.push(TransferCallOutput {
+            public_key: recipient,
+            value,
+            token_id,
+            spend_hook: output_spend_hook.unwrap_or(FuncId::none()),
+            user_data: output_user_data.unwrap_or(pallas::Base::ZERO),
+            blind: Blind::random(&mut OsRng),
+        });
+        outputs.push(TransferCallOutput {
+            public_key: recipient,
+            value,
+            token_id,
+            spend_hook: output_spend_hook.unwrap_or(FuncId::none()),
+            user_data: output_user_data.unwrap_or(pallas::Base::ZERO),
+            blind: Blind::random(&mut OsRng),
+        });
+    } else {
+        outputs.push(TransferCallOutput {
+            public_key: recipient,
+            value,
+            token_id,
+            spend_hook: output_spend_hook.unwrap_or(FuncId::none()),
+            user_data: output_user_data.unwrap_or(pallas::Base::ZERO),
+            blind: Blind::random(&mut OsRng),
+        });
+    }
 
     if change_value > 0 {
         outputs.push(TransferCallOutput {

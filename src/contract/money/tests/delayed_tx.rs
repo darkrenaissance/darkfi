@@ -98,6 +98,7 @@ fn delayed_tx() -> Result<()> {
             mint_pk.clone(),
             burn_zkbin.clone(),
             burn_pk.clone(),
+            false,
         )?;
 
         let mut output_coins = vec![];
@@ -243,6 +244,7 @@ fn delayed_tx() -> Result<()> {
                 &[bob_coins[0].clone()],
                 bob_coins[0].note.token_id,
                 current_block_height,
+                false,
             )
             .await?;
 

@@ -60,6 +60,7 @@ fn money_integration() -> Result<()> {
                 &[alice_coins[0].clone()],
                 alice_coins[0].note.token_id,
                 current_block_height,
+                false,
             )
             .await?;
 

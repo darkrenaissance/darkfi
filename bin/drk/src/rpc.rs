@@ -263,7 +263,7 @@ impl Drk {
             println!("Last known block number reported by darkfid: {last}");
 
             // Already scanned last known block
-            if height >= last {
+            if height > last {
                 return Ok(())
             }
 

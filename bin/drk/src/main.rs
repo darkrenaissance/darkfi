@@ -215,6 +215,10 @@ enum Subcmd {
 
         /// Optional user data to use
         user_data: Option<String>,
+
+        #[structopt(long)]
+        /// Split the output coin into two equal halves
+        half_split: bool,
     },
 
     /// OTC atomic swap
@@ -915,7 +919,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             Ok(())
         }
 
-        Subcmd::Transfer { amount, token, recipient, spend_hook, user_data } => {
+        Subcmd::Transfer { amount, token, recipient, spend_hook, user_data, half_split } => {
             let drk = Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
 
             if let Err(e) = f64::from_str(&amount) {
@@ -971,7 +975,10 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 None => None,
             };
 
-            let tx = match drk.transfer(&amount, token_id, rcpt, spend_hook, user_data).await {
+            let tx = match drk
+                .transfer(&amount, token_id, rcpt, spend_hook, user_data, half_split)
+                .await
+            {
                 Ok(t) => t,
                 Err(e) => {
                     eprintln!("Failed to create payment transaction: {e:?}");

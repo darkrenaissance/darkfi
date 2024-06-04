@@ -45,6 +45,7 @@ impl Drk {
         recipient: PublicKey,
         spend_hook: Option<FuncId>,
         user_data: Option<pallas::Base>,
+        half_split: bool,
     ) -> Result<Transaction> {
         // First get all unspent OwnCoins to see what our balance is
         let owncoins = self.get_token_coins(&token_id).await?;
@@ -121,6 +122,7 @@ impl Drk {
             mint_pk,
             burn_zkbin,
             burn_pk,
+            half_split,
         )?;
 
         // Encode the call

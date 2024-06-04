@@ -192,6 +192,10 @@ pub fn generate_completions(shell: &str) -> Result<()> {
 
     let user_data = Arg::with_name("user-data").help("Optional user data to use");
 
+    let half_split = Arg::with_name("half-split")
+        .long("half-split")
+        .help("Split the output coin into two equal halves");
+
     let transfer =
         SubCommand::with_name("transfer").about("Create a payment transaction").args(&vec![
             amount.clone(),
@@ -199,6 +203,7 @@ pub fn generate_completions(shell: &str) -> Result<()> {
             recipient.clone(),
             spend_hook.clone(),
             user_data.clone(),
+            half_split,
         ]);
 
     // Otc

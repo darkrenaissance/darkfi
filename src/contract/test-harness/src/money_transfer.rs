@@ -36,6 +36,7 @@ use super::{Holder, TestHarness};
 
 impl TestHarness {
     /// Create a `Money::Transfer` transaction.
+    #[allow(clippy::too_many_arguments)]
     pub async fn transfer(
         &mut self,
         amount: u64,
@@ -44,6 +45,7 @@ impl TestHarness {
         owncoins: &[OwnCoin],
         token_id: TokenId,
         block_height: u32,
+        half_split: bool,
     ) -> Result<(Transaction, (MoneyTransferParamsV1, Option<MoneyFeeParamsV1>), Vec<OwnCoin>)>
     {
         let wallet = self.holders.get(holder).unwrap();
@@ -66,6 +68,7 @@ impl TestHarness {
             mint_pk.clone(),
             burn_zkbin.clone(),
             burn_pk.clone(),
+            half_split,
         )?;
 
         // Encode the call

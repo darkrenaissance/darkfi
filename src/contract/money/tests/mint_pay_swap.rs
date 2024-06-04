@@ -142,6 +142,7 @@ fn mint_pay_swap() -> Result<()> {
                 &alice_owncoins,
                 alice_token_id,
                 current_block_height,
+                false,
             )
             .await?;
 
@@ -191,6 +192,7 @@ fn mint_pay_swap() -> Result<()> {
                 &bob_owncoins_tmp,
                 bob_token_id,
                 current_block_height,
+                false,
             )
             .await?;
 
@@ -296,6 +298,7 @@ fn mint_pay_swap() -> Result<()> {
                 &alice_owncoins,
                 alice_token_id,
                 current_block_height,
+                false,
             )
             .await?;
 
@@ -341,6 +344,7 @@ fn mint_pay_swap() -> Result<()> {
                 &bob_owncoins,
                 bob_token_id,
                 current_block_height,
+                false,
             )
             .await?;
 

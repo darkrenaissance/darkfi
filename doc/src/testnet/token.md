@@ -4,7 +4,9 @@ Now that you have your wallet set up, you will need some native `DRK`
 tokens in order to be able to perform transactions, since that token
 is used to pay the transaction fees. You can obtain `DRK` either by
 successfully mining a block that gets finalized or by asking for some
-by the community on `darkirc` and/or your comrades.
+by the community on `darkirc` and/or your comrades. Don't forget to
+tell them to add the `--half-split` flag when they create the transfer
+transaction, so you get more than one coins to play with.
 
 After you request some `DRK` and the other party submitted a transaction
 to the network, it should be in the consensus' mempool, waiting for
