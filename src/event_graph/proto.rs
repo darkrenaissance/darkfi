@@ -16,8 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-// TODO: FIXME: Some of the protocols should block operations until DAG is synced.
-
 use std::{
     collections::{BTreeMap, HashSet},
     sync::{
