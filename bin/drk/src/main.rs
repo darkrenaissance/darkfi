@@ -610,10 +610,18 @@ impl Drk {
         println!("Executing ping request to darkfid...");
         let latency = Instant::now();
         let req = JsonRequest::new("ping", JsonValue::Array(vec![]));
-        let rep = self.rpc_client.as_ref().unwrap().oneshot_request(req).await?;
+        let rep = self.rpc_client.as_ref().unwrap().request(req).await?;
         let latency = latency.elapsed();
         println!("Got reply: {rep:?}");
         println!("Latency: {latency:?}");
+        Ok(())
+    }
+
+    /// Auxiliary function to stop current JSON-RPC client, if its initialized.
+    async fn stop_rpc_client(&self) -> Result<()> {
+        if let Some(ref rpc_client) = self.rpc_client {
+            rpc_client.stop().await;
+        };
         Ok(())
     }
 }
@@ -628,7 +636,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
         Subcmd::Ping => {
             let drk = Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
-            drk.ping().await
+            drk.ping().await?;
+            drk.stop_rpc_client().await
         }
 
         Subcmd::Completions { shell } => generate_completions(&shell),
@@ -882,7 +891,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         Subcmd::Spend => {
             let tx = parse_tx_from_stdin().await?;
 
-            let drk = Drk::new(args.wallet_path, args.wallet_pass, Some(args.endpoint), ex).await?;
+            let drk = Drk::new(args.wallet_path, args.wallet_pass, None, ex).await?;
 
             if let Err(e) = drk.mark_tx_spend(&tx).await {
                 eprintln!("Failed to mark transaction coins as spent: {e:?}");
@@ -988,7 +997,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
             println!("{}", base64::encode(&serialize_async(&tx).await));
 
-            Ok(())
+            drk.stop_rpc_client().await
         }
 
         Subcmd::Otc { command } => match command {
@@ -1007,7 +1016,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 };
 
                 println!("{}", base64::encode(&serialize_async(&half).await));
-                Ok(())
+                drk.stop_rpc_client().await
             }
 
             OtcSubcmd::Join => {
@@ -1031,7 +1040,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 };
 
                 println!("{}", base64::encode(&serialize_async(&tx).await));
-                Ok(())
+                drk.stop_rpc_client().await
             }
 
             OtcSubcmd::Inspect => {
@@ -1206,7 +1215,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 };
 
                 println!("{}", base64::encode(&serialize_async(&tx).await));
-                Ok(())
+                drk.stop_rpc_client().await
             }
 
             DaoSubcmd::ProposeTransfer {
@@ -1289,7 +1298,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
                 println!("Generated proposal: {}", proposal.bulla());
 
-                Ok(())
+                drk.stop_rpc_client().await
             }
 
             DaoSubcmd::Proposals { name } => {
@@ -1330,7 +1339,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
                     // Export it to base64
                     println!("{}", base64::encode(&serialize_async(&enc_note).await));
-                    return Ok(())
+                    return drk.stop_rpc_client().await
                 }
 
                 if mint_proposal {
@@ -1345,7 +1354,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                             };
 
                             println!("{}", base64::encode(&serialize_async(&tx).await));
-                            return Ok(())
+                            return drk.stop_rpc_client().await
                         }
                     }
 
@@ -1467,7 +1476,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
                 if let Some(exec_tx_hash) = proposal.exec_tx_hash {
                     println!("Proposal was executed on transaction: {exec_tx_hash}");
-                    return Ok(())
+                    return drk.stop_rpc_client().await
                 }
 
                 // Retrieve current block height and compute current window
@@ -1482,7 +1491,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 println!("Voting status: {voting_status}");
                 println!("{proposal_status_message}");
 
-                Ok(())
+                drk.stop_rpc_client().await
             }
 
             DaoSubcmd::ProposalImport {} => {
@@ -1557,7 +1566,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 };
 
                 println!("{}", base64::encode(&serialize_async(&tx).await));
-                Ok(())
+                drk.stop_rpc_client().await
             }
 
             DaoSubcmd::Exec { bulla } => {
@@ -1584,7 +1593,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                         };
 
                         println!("{}", base64::encode(&serialize_async(&tx).await));
-                        return Ok(())
+                        return drk.stop_rpc_client().await
                     }
                 }
 
@@ -1614,7 +1623,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
             println!("{}", base64::encode(&serialize_async(&tx).await));
 
-            Ok(())
+            drk.stop_rpc_client().await
         }
 
         Subcmd::Inspect => {
@@ -1650,7 +1659,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
             println!("Transaction ID: {txid}");
 
-            Ok(())
+            drk.stop_rpc_client().await
         }
 
         Subcmd::Subscribe => {
@@ -1667,7 +1676,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 exit(2);
             }
 
-            Ok(())
+            drk.stop_rpc_client().await
         }
 
         Subcmd::Scan { reset } => {
@@ -1681,7 +1690,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 }
                 println!("Finished scanning blockchain");
 
-                return Ok(())
+                return drk.stop_rpc_client().await
             }
 
             if let Err(e) = drk.scan_blocks(false).await {
@@ -1690,7 +1699,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             }
             println!("Finished scanning blockchain");
 
-            Ok(())
+            drk.stop_rpc_client().await
         }
 
         Subcmd::Explorer { command } => match command {
@@ -1726,7 +1735,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     println!("{tx:?}");
                 }
 
-                Ok(())
+                drk.stop_rpc_client().await
             }
 
             ExplorerSubcmd::SimulateTx => {
@@ -1746,7 +1755,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 println!("Transaction ID: {}", tx.hash());
                 println!("State: {}", if is_valid { "valid" } else { "invalid" });
 
-                Ok(())
+                drk.stop_rpc_client().await
             }
 
             ExplorerSubcmd::TxsHistory { tx_hash, encode } => {
@@ -2002,7 +2011,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
                 println!("{}", base64::encode(&serialize_async(&tx).await));
 
-                Ok(())
+                drk.stop_rpc_client().await
             }
 
             TokenSubcmd::Freeze { token } => {
@@ -2026,7 +2035,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
                 println!("{}", base64::encode(&serialize_async(&tx).await));
 
-                Ok(())
+                drk.stop_rpc_client().await
             }
         },
 
@@ -2086,7 +2095,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
                 println!("{}", base64::encode(&serialize_async(&tx).await));
 
-                Ok(())
+                drk.stop_rpc_client().await
             }
 
             ContractSubcmd::Lock { deploy_auth } => {
@@ -2108,7 +2117,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
                 println!("{}", base64::encode(&serialize_async(&tx).await));
 
-                Ok(())
+                drk.stop_rpc_client().await
             }
         },
     }
