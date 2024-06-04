@@ -22,7 +22,7 @@ log = "0.4.21"
 num-bigint = "0.4.5"
 rand = "0.8.5"
 sled = "0.34.7"
-toml = "0.8.13"
+toml = "0.8.14"
 
 # JSON-RPC
 async-trait = "0.1.80"

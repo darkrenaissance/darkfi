@@ -43,7 +43,7 @@ url = "2.5.0"
 
 # Encoding and parsing
 bs58 = "0.5.1"
-toml = "0.8.13"
+toml = "0.8.14"
 semver = "1.0.23"
 
 # Daemon

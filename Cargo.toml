@@ -89,7 +89,7 @@ tinyjson = {version = "2.5.1", optional = true}
 semver = {version = "1.0.23", optional = true}
 structopt = {version= "0.3.26", optional = true}
 structopt-toml = {version= "0.5.1", optional = true}
-toml = {version = "0.8.13", optional = true}
+toml = {version = "0.8.14", optional = true}
 
 # Utilities
 # TODO: check chrono usage and impl our own

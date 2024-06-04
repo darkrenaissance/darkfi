@@ -13,7 +13,7 @@ proc-macro = true
 
 [dependencies]
 proc-macro-crate = "3.0.0"
-proc-macro2 = "1.0.84"
+proc-macro2 = "1.0.85"
 quote = "1.0.36"
 syn = {version = "2.0.66", features = ["full", "fold"]}
 

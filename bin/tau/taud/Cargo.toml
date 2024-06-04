@@ -36,7 +36,7 @@ rand = "0.8.5"
 # Encoding and parsing
 bs58 = "0.5.1"
 hex = "0.4.3"
-toml = "0.8.13"
+toml = "0.8.14"
 
 # Misc
 async-trait = "0.1.80"
