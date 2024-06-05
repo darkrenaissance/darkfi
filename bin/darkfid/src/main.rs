@@ -120,7 +120,7 @@ pub struct BlockchainNetwork {
 
     #[structopt(long, default_value = "10")]
     /// PoW block production target, in seconds
-    pub pow_target: usize,
+    pub pow_target: u32,
 
     #[structopt(long)]
     /// Optional fixed PoW difficulty, used for testing

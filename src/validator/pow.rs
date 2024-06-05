@@ -75,7 +75,7 @@ const BLOCK_FUTURE_TIME_LIMIT: Timestamp = Timestamp::from_u64(60 * 60 * 2);
 #[derive(Clone)]
 pub struct PoWModule {
     /// Target block time, in seconds
-    pub target: usize,
+    pub target: u32,
     /// Optional fixed difficulty
     pub fixed_difficulty: Option<BigUint>,
     /// Latest block timestamps ringbuffer
@@ -92,7 +92,7 @@ pub struct PoWModule {
 impl PoWModule {
     pub fn new(
         blockchain: Blockchain,
-        target: usize,
+        target: u32,
         fixed_difficulty: Option<BigUint>,
     ) -> Result<Self> {
         // Retrieving last BUF_SIZE difficulties from blockchain to build the buffers
@@ -415,7 +415,7 @@ mod tests {
     use super::PoWModule;
 
     const DEFAULT_TEST_THREADS: usize = 2;
-    const DEFAULT_TEST_DIFFICULTY_TARGET: usize = 120;
+    const DEFAULT_TEST_DIFFICULTY_TARGET: u32 = 120;
 
     #[test]
     fn test_wide_difficulty() -> Result<()> {

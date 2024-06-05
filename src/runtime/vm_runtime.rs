@@ -97,6 +97,8 @@ pub struct Env {
     /// Block height number runtime verifies against.
     /// For unconfirmed txs, this will be the current max height in the chain.
     pub verifying_block_height: u32,
+    /// Currently configured block time target, in seconds
+    pub block_target: u32,
     /// The hash for this transaction the runtime is being run against.
     pub tx_hash: TransactionHash,
     /// The index for this call in the transaction
@@ -156,6 +158,7 @@ impl Runtime {
         blockchain: BlockchainOverlayPtr,
         contract_id: ContractId,
         verifying_block_height: u32,
+        block_target: u32,
         tx_hash: TransactionHash,
         call_idx: u8,
     ) -> Result<Self> {
@@ -199,6 +202,7 @@ impl Runtime {
                 memory: None,
                 objects: RefCell::new(vec![]),
                 verifying_block_height,
+                block_target,
                 tx_hash,
                 call_idx,
                 instance: None,
@@ -289,6 +293,12 @@ impl Runtime {
                     &mut store,
                     &ctx,
                     import::util::get_verifying_block_height,
+                ),
+
+                "get_block_target_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::util::get_block_target,
                 ),
 
                 "get_tx_hash_" => Function::new_typed_with_env(

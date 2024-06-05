@@ -104,6 +104,7 @@ pub async fn garbage_collect_task(node: Arc<Darkfid>) -> Result<()> {
                 match verify_transactions(
                     &overlay,
                     next_block_height,
+                    node.validator.consensus.module.read().await.target,
                     &tx_vec,
                     &mut MerkleTree::new(1),
                     false,

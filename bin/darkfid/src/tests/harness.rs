@@ -44,7 +44,7 @@ use url::Url;
 use crate::{proto::ProposalMessage, task::sync::sync_task, utils::spawn_p2p, Darkfid};
 
 pub struct HarnessConfig {
-    pub pow_target: usize,
+    pub pow_target: u32,
     pub pow_fixed_difficulty: Option<BigUint>,
     pub finalization_threshold: usize,
 }

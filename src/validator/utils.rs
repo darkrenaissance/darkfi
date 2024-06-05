@@ -41,7 +41,10 @@ use crate::{
 /// touch anything, or just potentially update the db schemas or whatever
 /// is necessary. This logic should be handled in the init function of
 /// the actual contract, so make sure the native contracts handle this well.
-pub async fn deploy_native_contracts(overlay: &BlockchainOverlayPtr) -> Result<()> {
+pub async fn deploy_native_contracts(
+    overlay: &BlockchainOverlayPtr,
+    block_target: u32,
+) -> Result<()> {
     info!(target: "validator::utils::deploy_native_contracts", "Deploying native WASM contracts");
 
     // The Money contract uses an empty payload to deploy itself.
@@ -89,6 +92,7 @@ pub async fn deploy_native_contracts(overlay: &BlockchainOverlayPtr) -> Result<(
             overlay.clone(),
             nc.1,
             verifying_block_height,
+            block_target,
             TransactionHash::none(),
             call_idx as u8,
         )?;

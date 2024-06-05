@@ -63,7 +63,7 @@ impl Consensus {
     pub fn new(
         blockchain: Blockchain,
         finalization_threshold: usize,
-        pow_target: usize,
+        pow_target: u32,
         pow_fixed_difficulty: Option<BigUint>,
     ) -> Result<Self> {
         let forks = RwLock::new(vec![]);
@@ -616,6 +616,7 @@ impl Fork {
         &self,
         blockchain: &Blockchain,
         verifying_block_height: u32,
+        block_target: u32,
         verify_fees: bool,
     ) -> Result<(Vec<Transaction>, u64)> {
         // Check if our mempool is not empty
@@ -660,6 +661,7 @@ impl Fork {
             match verify_transaction(
                 &overlay,
                 verifying_block_height,
+                block_target,
                 &unproposed_tx,
                 &mut tree,
                 &mut vks,

@@ -206,11 +206,17 @@ impl Wallet {
         block_height: u32,
     ) -> Result<()> {
         if self.bench_wasm {
-            benchmark_wasm_calls(callname, &self.validator, &tx, block_height);
+            benchmark_wasm_calls(callname, &self.validator, &tx, block_height).await;
         }
 
         self.validator
-            .add_test_transactions(&[tx.clone()], block_height, true, self.validator.verify_fees)
+            .add_test_transactions(
+                &[tx.clone()],
+                block_height,
+                self.validator.consensus.module.read().await.target,
+                true,
+                self.validator.verify_fees,
+            )
             .await?;
 
         // Write the data
@@ -301,7 +307,7 @@ impl TestHarness {
     }
 }
 
-fn benchmark_wasm_calls(
+async fn benchmark_wasm_calls(
     callname: &str,
     validator: &Validator,
     tx: &Transaction,
@@ -317,6 +323,7 @@ fn benchmark_wasm_calls(
             overlay.clone(),
             call.data.contract_id,
             block_height,
+            validator.consensus.module.read().await.target,
             tx.hash(),
             idx as u8,
         )

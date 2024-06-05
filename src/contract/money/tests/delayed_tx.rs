@@ -138,7 +138,13 @@ fn delayed_tx() -> Result<()> {
         let mut gas_used = FEE_CALL_GAS;
         gas_used += wallet
             .validator
-            .add_test_transactions(&[tx], current_block_height, false, false)
+            .add_test_transactions(
+                &[tx],
+                current_block_height,
+                wallet.validator.consensus.module.read().await.target,
+                false,
+                false,
+            )
             .await?;
 
         let coin = &output_coins[0];

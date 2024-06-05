@@ -51,7 +51,11 @@ use crate::{
 };
 
 /// Verify given genesis [`BlockInfo`], and apply it to the provided overlay.
-pub async fn verify_genesis_block(overlay: &BlockchainOverlayPtr, block: &BlockInfo) -> Result<()> {
+pub async fn verify_genesis_block(
+    overlay: &BlockchainOverlayPtr,
+    block: &BlockInfo,
+    block_target: u32,
+) -> Result<()> {
     let block_hash = block.hash().as_string();
     debug!(target: "validator::verification::verify_genesis_block", "Validating genesis block {}", block_hash);
 
@@ -85,7 +89,9 @@ pub async fn verify_genesis_block(overlay: &BlockchainOverlayPtr, block: &BlockI
     // Verify transactions, exluding producer(last) one
     let mut tree = MerkleTree::new(1);
     let txs = &block.txs[..block.txs.len() - 1];
-    if let Err(e) = verify_transactions(overlay, block.header.height, txs, &mut tree, false).await {
+    if let Err(e) =
+        verify_transactions(overlay, block.header.height, block_target, txs, &mut tree, false).await
+    {
         warn!(
             target: "validator::verification::verify_genesis_block",
             "[VALIDATOR] Erroneous transactions found in set",
@@ -147,7 +153,7 @@ pub fn validate_block(block: &BlockInfo, previous: &BlockInfo, module: &PoWModul
 /// Be careful as this will try to load everything in memory.
 pub fn validate_blockchain(
     blockchain: &Blockchain,
-    pow_target: usize,
+    pow_target: u32,
     pow_fixed_difficulty: Option<BigUint>,
 ) -> Result<()> {
     // Generate a PoW module
@@ -191,7 +197,8 @@ pub async fn verify_block(
     // Verify transactions, exluding producer(last) one
     let mut tree = MerkleTree::new(1);
     let txs = &block.txs[..block.txs.len() - 1];
-    let e = verify_transactions(overlay, block.header.height, txs, &mut tree, false).await;
+    let e = verify_transactions(overlay, block.header.height, module.target, txs, &mut tree, false)
+        .await;
     if let Err(e) = e {
         warn!(
             target: "validator::verification::verify_block",
@@ -205,6 +212,7 @@ pub async fn verify_block(
     let public_key = verify_producer_transaction(
         overlay,
         block.header.height,
+        module.target,
         block.txs.last().unwrap(),
         &mut tree,
     )
@@ -231,6 +239,7 @@ pub async fn verify_checkpoint_block(
     overlay: &BlockchainOverlayPtr,
     block: &BlockInfo,
     header: &HeaderHash,
+    block_target: u32,
 ) -> Result<()> {
     let block_hash = block.hash();
     debug!(target: "validator::verification::verify_checkpoint_block", "Validating block {}", block_hash);
@@ -254,7 +263,7 @@ pub async fn verify_checkpoint_block(
     // Apply transactions, exluding producer(last) one
     let mut tree = MerkleTree::new(1);
     let txs = &block.txs[..block.txs.len() - 1];
-    let e = apply_transactions(overlay, block.header.height, txs, &mut tree).await;
+    let e = apply_transactions(overlay, block.header.height, block_target, txs, &mut tree).await;
     if let Err(e) = e {
         warn!(
             target: "validator::verification::verify_checkpoint_block",
@@ -268,6 +277,7 @@ pub async fn verify_checkpoint_block(
     let public_key = apply_producer_transaction(
         overlay,
         block.header.height,
+        block_target,
         block.txs.last().unwrap(),
         &mut tree,
     )
@@ -306,6 +316,7 @@ pub fn verify_producer_signature(block: &BlockInfo, public_key: &PublicKey) -> R
 pub async fn verify_producer_transaction(
     overlay: &BlockchainOverlayPtr,
     verifying_block_height: u32,
+    block_target: u32,
     tx: &Transaction,
     tree: &mut MerkleTree,
 ) -> Result<PublicKey> {
@@ -349,6 +360,7 @@ pub async fn verify_producer_transaction(
         overlay.clone(),
         call.data.contract_id,
         verifying_block_height,
+        block_target,
         tx_hash,
         // Call index in producer tx is 0
         0,
@@ -441,6 +453,7 @@ pub async fn verify_producer_transaction(
 async fn apply_producer_transaction(
     overlay: &BlockchainOverlayPtr,
     verifying_block_height: u32,
+    block_target: u32,
     tx: &Transaction,
     tree: &mut MerkleTree,
 ) -> Result<PublicKey> {
@@ -467,6 +480,7 @@ async fn apply_producer_transaction(
         overlay.clone(),
         call.data.contract_id,
         verifying_block_height,
+        block_target,
         tx_hash,
         // Call index in producer tx is 0
         0,
@@ -515,6 +529,7 @@ async fn apply_producer_transaction(
 pub async fn verify_transaction(
     overlay: &BlockchainOverlayPtr,
     verifying_block_height: u32,
+    block_target: u32,
     tx: &Transaction,
     tree: &mut MerkleTree,
     verifying_keys: &mut HashMap<[u8; 32], HashMap<String, VerifyingKey>>,
@@ -591,6 +606,7 @@ pub async fn verify_transaction(
             overlay.clone(),
             call.data.contract_id,
             verifying_block_height,
+            block_target,
             tx_hash,
             idx as u8,
         )?;
@@ -666,6 +682,7 @@ pub async fn verify_transaction(
                 overlay.clone(),
                 deploy_cid,
                 verifying_block_height,
+                block_target,
                 tx_hash,
                 idx as u8,
             )?;
@@ -760,6 +777,7 @@ pub async fn verify_transaction(
 async fn apply_transaction(
     overlay: &BlockchainOverlayPtr,
     verifying_block_height: u32,
+    block_target: u32,
     tx: &Transaction,
     tree: &mut MerkleTree,
 ) -> Result<()> {
@@ -781,6 +799,7 @@ async fn apply_transaction(
             overlay.clone(),
             call.data.contract_id,
             verifying_block_height,
+            block_target,
             tx_hash,
             idx as u8,
         )?;
@@ -811,6 +830,7 @@ async fn apply_transaction(
                 overlay.clone(),
                 deploy_cid,
                 verifying_block_height,
+                block_target,
                 tx_hash,
                 idx as u8,
             )?;
@@ -833,6 +853,7 @@ async fn apply_transaction(
 pub async fn verify_transactions(
     overlay: &BlockchainOverlayPtr,
     verifying_block_height: u32,
+    block_target: u32,
     txs: &[Transaction],
     tree: &mut MerkleTree,
     verify_fees: bool,
@@ -861,8 +882,16 @@ pub async fn verify_transactions(
     // Iterate over transactions and attempt to verify them
     for tx in txs {
         overlay.lock().unwrap().checkpoint();
-        match verify_transaction(overlay, verifying_block_height, tx, tree, &mut vks, verify_fees)
-            .await
+        match verify_transaction(
+            overlay,
+            verifying_block_height,
+            block_target,
+            tx,
+            tree,
+            &mut vks,
+            verify_fees,
+        )
+        .await
         {
             Ok((gas, _)) => gas_used += gas,
             Err(e) => {
@@ -886,6 +915,7 @@ pub async fn verify_transactions(
 async fn apply_transactions(
     overlay: &BlockchainOverlayPtr,
     verifying_block_height: u32,
+    block_target: u32,
     txs: &[Transaction],
     tree: &mut MerkleTree,
 ) -> Result<()> {
@@ -900,7 +930,9 @@ async fn apply_transactions(
     // Iterate over transactions and attempt to apply them
     for tx in txs {
         overlay.lock().unwrap().checkpoint();
-        if let Err(e) = apply_transaction(overlay, verifying_block_height, tx, tree).await {
+        if let Err(e) =
+            apply_transaction(overlay, verifying_block_height, block_target, tx, tree).await
+        {
             warn!(target: "validator::verification::apply_transactions", "Transaction apply failed: {}", e);
             erroneous_txs.push(tx.clone());
             overlay.lock().unwrap().revert_to_checkpoint()?;

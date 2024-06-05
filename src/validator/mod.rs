@@ -62,7 +62,7 @@ pub struct ValidatorConfig {
     /// Currently configured finalization security threshold
     pub finalization_threshold: usize,
     /// Currently configured PoW target
-    pub pow_target: usize,
+    pub pow_target: u32,
     /// Optional fixed difficulty, for testing purposes
     pub pow_fixed_difficulty: Option<BigUint>,
     /// Genesis block
@@ -97,12 +97,12 @@ impl Validator {
         let overlay = BlockchainOverlay::new(&blockchain)?;
 
         // Deploy native wasm contracts
-        deploy_native_contracts(&overlay).await?;
+        deploy_native_contracts(&overlay, config.pow_target).await?;
 
         // Add genesis block if blockchain is empty
         if blockchain.genesis().is_err() {
             info!(target: "validator::new", "Appending genesis block");
-            verify_genesis_block(&overlay, &config.genesis_block).await?;
+            verify_genesis_block(&overlay, &config.genesis_block, config.pow_target).await?;
         };
 
         // Write the changes to the actual chain db
@@ -151,6 +151,7 @@ impl Validator {
         let verify_result = verify_transaction(
             &fork.overlay,
             next_block_height,
+            self.consensus.module.read().await.target,
             tx,
             &mut MerkleTree::new(1),
             &mut vks,
@@ -198,6 +199,7 @@ impl Validator {
             let verify_result = verify_transactions(
                 &fork_clone.overlay,
                 next_block_height,
+                self.consensus.module.read().await.target,
                 &tx_vec,
                 &mut MerkleTree::new(1),
                 self.verify_fees,
@@ -271,6 +273,7 @@ impl Validator {
                 let verify_result = verify_transactions(
                     &fork_clone.overlay,
                     next_block_height,
+                    self.consensus.module.read().await.target,
                     &tx_vec,
                     &mut MerkleTree::new(1),
                     self.verify_fees,
@@ -428,7 +431,7 @@ impl Validator {
         // Validate and insert each block
         for (index, block) in blocks.iter().enumerate() {
             // Verify block
-            match verify_checkpoint_block(&overlay, block, &headers[index]).await {
+            match verify_checkpoint_block(&overlay, block, &headers[index], module.target).await {
                 Ok(()) => { /* Do nothing */ }
                 // Skip already existing block
                 Err(Error::BlockAlreadyExists(_)) => continue,
@@ -585,6 +588,7 @@ impl Validator {
         &self,
         txs: &[Transaction],
         verifying_block_height: u32,
+        block_target: u32,
         write: bool,
         verify_fees: bool,
     ) -> Result<u64> {
@@ -595,6 +599,7 @@ impl Validator {
         let verify_result = verify_transactions(
             &overlay,
             verifying_block_height,
+            block_target,
             txs,
             &mut MerkleTree::new(1),
             verify_fees,
@@ -631,6 +636,7 @@ impl Validator {
         &self,
         tx: &Transaction,
         verifying_block_height: u32,
+        block_target: u32,
         write: bool,
     ) -> Result<()> {
         debug!(target: "validator::add_test_producer_transaction", "Instantiating BlockchainOverlay");
@@ -641,6 +647,7 @@ impl Validator {
         if let Err(e) = verify_producer_transaction(
             &overlay,
             verifying_block_height,
+            block_target,
             tx,
             &mut MerkleTree::new(1),
         )
@@ -674,7 +681,7 @@ impl Validator {
     /// Be careful as this will try to load everything in memory.
     pub async fn validate_blockchain(
         &self,
-        pow_target: usize,
+        pow_target: u32,
         pow_fixed_difficulty: Option<BigUint>,
     ) -> Result<()> {
         let blocks = self.blockchain.get_all()?;
@@ -696,10 +703,10 @@ impl Validator {
         let mut module = PoWModule::new(blockchain.clone(), pow_target, pow_fixed_difficulty)?;
 
         // Deploy native wasm contracts
-        deploy_native_contracts(&overlay).await?;
+        deploy_native_contracts(&overlay, pow_target).await?;
 
         // Validate genesis block
-        verify_genesis_block(&overlay, previous).await?;
+        verify_genesis_block(&overlay, previous, pow_target).await?;
 
         // Validate and insert each block
         for block in &blocks[1..] {

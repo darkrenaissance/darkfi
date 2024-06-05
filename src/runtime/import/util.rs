@@ -218,6 +218,30 @@ pub(crate) fn get_verifying_block_height(mut ctx: FunctionEnvMut<Env>) -> i64 {
     env.verifying_block_height as i64
 }
 
+/// Will return currently configured block time target, in seconds
+///
+/// Permissions: deploy, metadata, exec
+pub(crate) fn get_block_target(mut ctx: FunctionEnvMut<Env>) -> i64 {
+    let (env, mut store) = ctx.data_and_store_mut();
+    let cid = env.contract_id;
+
+    if let Err(e) =
+        acl_allow(env, &[ContractSection::Deploy, ContractSection::Metadata, ContractSection::Exec])
+    {
+        error!(
+            target: "runtime::util::get_block_target",
+            "[WASM] [{}] get_block_target(): Called in unauthorized section: {}", cid, e,
+        );
+        return darkfi_sdk::error::CALLER_ACCESS_DENIED
+    }
+
+    // Subtract used gas. Here we count the size of the object.
+    // u32 is 4 bytes.
+    env.subtract_gas(&mut store, 4);
+
+    env.block_target as i64
+}
+
 /// Will return current runtime configured transaction hash
 ///
 /// Permissions: deploy, metadata, exec

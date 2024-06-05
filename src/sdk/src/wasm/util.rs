@@ -98,6 +98,17 @@ pub fn get_verifying_block_height() -> GenericResult<u32> {
     parse_retval_u32(ret)
 }
 
+/// Everyone can call this. Will return runtime configured
+/// block target.
+///
+/// ```
+/// block_target = get_block_target();
+/// ```
+pub fn get_block_target() -> GenericResult<u32> {
+    let ret = unsafe { get_block_target_() };
+    parse_retval_u32(ret)
+}
+
 /// Only deploy(), metadata() and exec() can call this. Will return runtime configured
 /// transaction hash.
 ///
@@ -187,6 +198,7 @@ extern "C" {
     fn get_object_size_(len: u32) -> i64;
 
     fn get_verifying_block_height_() -> i64;
+    fn get_block_target_() -> i64;
     fn get_tx_hash_() -> i64;
     fn get_call_index_() -> i64;
     fn get_blockchain_time_() -> i64;

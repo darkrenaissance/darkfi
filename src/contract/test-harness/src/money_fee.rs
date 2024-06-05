@@ -218,8 +218,16 @@ impl TestHarness {
         // and verification.
         let wallet = self.holders.get(holder).unwrap();
         let mut gas_used = FEE_CALL_GAS;
-        gas_used +=
-            wallet.validator.add_test_transactions(&[tx], block_height, false, false).await?;
+        gas_used += wallet
+            .validator
+            .add_test_transactions(
+                &[tx],
+                block_height,
+                wallet.validator.consensus.module.read().await.target,
+                false,
+                false,
+            )
+            .await?;
 
         // Knowing the total gas, we can now find an OwnCoin of enough value
         // so that we can create a valid Money::Fee call.

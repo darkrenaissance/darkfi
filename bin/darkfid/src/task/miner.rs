@@ -291,6 +291,7 @@ async fn mine_next_block(
         recipient,
         zkbin,
         pk,
+        node.validator.consensus.module.read().await.target,
         node.validator.verify_fees,
     )
     .await?;
@@ -326,6 +327,7 @@ async fn generate_next_block(
     recipient: &PublicKey,
     zkbin: &ZkBinary,
     pk: &ProvingKey,
+    block_target: u32,
     verify_fees: bool,
 ) -> Result<(BigUint, BlockInfo)> {
     // Grab forks' last block proposal(previous)
@@ -336,7 +338,7 @@ async fn generate_next_block(
 
     // Grab forks' unproposed transactions
     let (mut txs, fees) = extended_fork
-        .unproposed_txs(&extended_fork.blockchain, next_block_height, verify_fees)
+        .unproposed_txs(&extended_fork.blockchain, next_block_height, block_target, verify_fees)
         .await?;
 
     // We are deriving the next secret key for optimization.
