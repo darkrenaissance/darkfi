@@ -1516,9 +1516,11 @@ impl Drk {
             },
         ];
 
-        // Retrieve current block height and compute current day
-        let current_block_height = self.get_next_block_height().await?;
-        let creation_day = blockwindow(current_block_height);
+        // Retrieve next block height and current block time target,
+        // to compute their window.
+        let next_block_height = self.get_next_block_height().await?;
+        let block_target = self.get_block_target().await?;
+        let creation_day = blockwindow(next_block_height, block_target);
 
         // Create the actual proposal
         let proposal = DaoProposal {
@@ -1917,9 +1919,11 @@ impl Drk {
             inputs.push(input);
         }
 
-        // Retrieve current block height and compute current window
-        let current_block_height = self.get_next_block_height().await?;
-        let current_day = blockwindow(current_block_height);
+        // Retrieve next block height and current block time target,
+        // to compute their window.
+        let next_block_height = self.get_next_block_height().await?;
+        let block_target = self.get_block_target().await?;
+        let current_day = blockwindow(next_block_height, block_target);
 
         // Generate the Money nullifiers Sparse Merkle Tree
         let store = MemoryStorageFp { tree: proposal.nullifiers_smt_snapshot.unwrap() };

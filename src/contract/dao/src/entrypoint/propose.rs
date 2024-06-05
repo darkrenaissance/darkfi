@@ -86,7 +86,8 @@ pub(crate) fn dao_propose_get_metadata(
     }
 
     // ANCHOR: dao-blockwindow-example-usage
-    let current_day = blockwindow(wasm::util::get_verifying_block_height()?);
+    let current_day =
+        blockwindow(wasm::util::get_verifying_block_height()?, wasm::util::get_block_target()?);
     // ANCHOR_END: dao-blockwindow-example-usage
 
     let total_funds_coords = total_funds_commit.to_affine().coordinates().unwrap();

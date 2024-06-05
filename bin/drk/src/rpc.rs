@@ -395,4 +395,14 @@ impl Drk {
 
         Ok(next_height)
     }
+
+    /// Queries darkfid for currently configured block target time.
+    pub async fn get_block_target(&self) -> Result<u32> {
+        let req = JsonRequest::new("blockchain.block_target", JsonValue::Array(vec![]));
+        let rep = self.rpc_client.as_ref().unwrap().request(req).await?;
+
+        let next_height = *rep.get::<f64>().unwrap() as u32;
+
+        Ok(next_height)
+    }
 }

@@ -170,6 +170,28 @@ impl Darkfid {
     }
 
     // RPCAPI:
+    // Queries the validator to get the currently configured block target time.
+    //
+    // **Params:**
+    // * `None`
+    //
+    // **Returns:**
+    // * `f64` Height of the last known block
+    //
+    // --> {"jsonrpc": "2.0", "method": "blockchain.block_target", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": 1234, "id": 1}
+    pub async fn blockchain_block_target(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
+        if !params.is_empty() {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        let block_target = self.validator.consensus.module.read().await.target;
+
+        JsonResponse::new(JsonValue::Number(block_target as f64), id).into()
+    }
+
+    // RPCAPI:
     // Initializes a subscription to new incoming blocks.
     // Once a subscription is established, `darkfid` will send JSON-RPC notifications of
     // new incoming blocks to the subscriber.

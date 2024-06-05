@@ -89,7 +89,8 @@ pub(crate) fn dao_vote_get_metadata(
         ));
     }
 
-    let current_day = blockwindow(wasm::util::get_verifying_block_height()?);
+    let current_day =
+        blockwindow(wasm::util::get_verifying_block_height()?, wasm::util::get_block_target()?);
 
     let yes_vote_commit_coords = params.yes_vote_commit.to_affine().coordinates().unwrap();
     let all_vote_commit_coords = all_vote_commit.to_affine().coordinates().unwrap();

@@ -1479,9 +1479,11 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     return drk.stop_rpc_client().await
                 }
 
-                // Retrieve current block height and compute current window
-                let current_block_height = drk.get_next_block_height().await?;
-                let current_window = blockwindow(current_block_height);
+                // Retrieve next block height and current block time target,
+                // to compute their window.
+                let next_block_height = drk.get_next_block_height().await?;
+                let block_target = drk.get_block_target().await?;
+                let current_window = blockwindow(next_block_height, block_target);
                 let end_time = proposal.proposal.creation_day + proposal.proposal.duration_days;
                 let (voting_status, proposal_status_message) = if current_window < end_time {
                     ("Ongoing", format!("Current proposal outcome: {outcome}"))

@@ -93,13 +93,12 @@ pub const DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS: &str = "AuthMon
 pub const PROPOSAL_SNAPSHOT_CUTOFF_LIMIT: u32 = 100;
 
 // ANCHOR: dao-blockwindow
-const BLOCK_TIME: u64 = 90;
 const SECS_IN_HOUR: u64 = 60 * 60;
 const WINDOW_TIME_HR: u64 = 4;
 
-/// Blockwindow from blockheight. Used for time limit on DAO proposals.
-pub fn blockwindow(height: u32) -> u64 {
-    let timestamp_secs = height as u64 * BLOCK_TIME;
+/// Blockwindow from block height and target time. Used for time limit on DAO proposals.
+pub fn blockwindow(height: u32, target: u32) -> u64 {
+    let timestamp_secs = (height * target) as u64;
     timestamp_secs / (WINDOW_TIME_HR * SECS_IN_HOUR)
 }
 // ANCHOR_END: dao-blockwindow
