@@ -11,8 +11,8 @@ constant "VoteMain" {
 witness "VoteMain" {
     # Proposal parameters
     Base proposal_auth_calls_commit,
-    Base proposal_current_day,
-    Base proposal_duration_days,
+    Base proposal_creation_blockwindow,
+    Base proposal_duration_blockwindows,
     Base proposal_user_data,
     Base proposal_blind,
 
@@ -37,7 +37,7 @@ witness "VoteMain" {
     Base gov_token_blind,
 
     # Check whether the proposal has expired or not
-    Base current_day,
+    Base current_blockwindow,
 
     Base ephem_secret,
 }
@@ -66,8 +66,8 @@ circuit "VoteMain" {
 
     proposal_bulla = poseidon_hash(
         proposal_auth_calls_commit,
-        proposal_current_day,
-        proposal_duration_days,
+        proposal_creation_blockwindow,
+        proposal_duration_blockwindows,
         proposal_user_data,
         dao_bulla,
         proposal_blind,
@@ -94,9 +94,9 @@ circuit "VoteMain" {
     bool_check(vote_option);
 
     # Enforce that the proposal has not expired
-    end_time = base_add(proposal_current_day, proposal_duration_days);
-    less_than_strict(current_day, end_time);
-    constrain_instance(current_day);
+    end_time = base_add(proposal_creation_blockwindow, proposal_duration_blockwindows);
+    less_than_strict(current_blockwindow, end_time);
+    constrain_instance(current_blockwindow);
 
     # Verifiable encryption
     ephem_public = ec_mul_base(ephem_secret, NULLIFIER_K);

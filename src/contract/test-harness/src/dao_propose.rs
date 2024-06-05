@@ -118,11 +118,11 @@ impl TestHarness {
         ];
 
         let block_target = wallet.validator.consensus.module.read().await.target;
-        let creation_day = blockwindow(block_height, block_target);
+        let creation_blockwindow = blockwindow(block_height, block_target);
         let proposal = DaoProposal {
             auth_calls,
-            creation_day,
-            duration_days: 30,
+            creation_blockwindow,
+            duration_blockwindows: 30,
             user_data,
             dao_bulla: dao.to_bulla(),
             blind: Blind::random(&mut OsRng),

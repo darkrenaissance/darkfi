@@ -295,7 +295,7 @@ pub fn generate_completions(shell: &str) -> Result<()> {
         .about("Mint an imported DAO on-chain")
         .args(&vec![name.clone()]);
 
-    let duration = Arg::with_name("duration").help("Duration of the proposal, in days");
+    let duration = Arg::with_name("duration").help("Duration of the proposal, in block windows");
 
     let propose_transfer = SubCommand::with_name("propose-transfer")
         .about("Create a transfer proposal for a DAO")

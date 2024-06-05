@@ -86,8 +86,8 @@ impl DaoExecCall {
         let prover_witnesses = vec![
             // proposal params
             Witness::Base(Value::known(proposal_auth_calls_commit)),
-            Witness::Base(Value::known(pallas::Base::from(self.proposal.creation_day))),
-            Witness::Base(Value::known(pallas::Base::from(self.proposal.duration_days))),
+            Witness::Base(Value::known(pallas::Base::from(self.proposal.creation_blockwindow))),
+            Witness::Base(Value::known(pallas::Base::from(self.proposal.duration_blockwindows))),
             Witness::Base(Value::known(self.proposal.user_data)),
             Witness::Base(Value::known(self.proposal.blind.inner())),
             // DAO params

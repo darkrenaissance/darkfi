@@ -82,7 +82,7 @@ impl TestHarness {
         };
 
         let block_target = wallet.validator.consensus.module.read().await.target;
-        let current_day = blockwindow(block_height, block_target);
+        let current_blockwindow = blockwindow(block_height, block_target);
         let call = DaoVoteCall {
             money_null_smt: wallet.money_null_smt_snapshot.as_ref().unwrap(),
             inputs: vec![input],
@@ -90,7 +90,7 @@ impl TestHarness {
             proposal: proposal.clone(),
             dao: dao.clone(),
             dao_keypair: *dao_keypair,
-            current_day,
+            current_blockwindow,
         };
 
         let (params, proofs) = call.make(

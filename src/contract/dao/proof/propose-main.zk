@@ -16,8 +16,8 @@ witness "ProposeMain" {
 
     # Proposal parameters
     Base proposal_auth_calls_commit,
-    Base proposal_current_day,
-    Base proposal_duration_days,
+    Base proposal_creation_blockwindow,
+    Base proposal_duration_blockwindows,
     Base proposal_user_data,
     Base proposal_blind,
 
@@ -56,14 +56,14 @@ circuit "ProposeMain" {
 
     proposal_bulla = poseidon_hash(
         proposal_auth_calls_commit,
-        proposal_current_day,
-        proposal_duration_days,
+        proposal_creation_blockwindow,
+        proposal_duration_blockwindows,
         proposal_user_data,
         dao_bulla,
         proposal_blind,
     );
     constrain_instance(proposal_bulla);
-    constrain_instance(proposal_current_day);
+    constrain_instance(proposal_creation_blockwindow);
 
     # This is the main check
     # We check that dao_proposer_limit <= total_funds

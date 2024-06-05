@@ -355,7 +355,7 @@ enum DaoSubcmd {
         /// Name identifier for the DAO
         name: String,
 
-        /// Duration of the proposal, in days
+        /// Duration of the proposal, in block windows
         duration: u64,
 
         /// Amount to send
@@ -1484,7 +1484,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 let next_block_height = drk.get_next_block_height().await?;
                 let block_target = drk.get_block_target().await?;
                 let current_window = blockwindow(next_block_height, block_target);
-                let end_time = proposal.proposal.creation_day + proposal.proposal.duration_days;
+                let end_time = proposal.proposal.creation_blockwindow +
+                    proposal.proposal.duration_blockwindows;
                 let (voting_status, proposal_status_message) = if current_window < end_time {
                     ("Ongoing", format!("Current proposal outcome: {outcome}"))
                 } else {

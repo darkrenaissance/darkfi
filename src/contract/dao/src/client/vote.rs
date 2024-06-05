@@ -61,7 +61,7 @@ pub struct DaoVoteCall<'a, T: StorageAdapter<Value = pallas::Base>> {
     pub proposal: DaoProposal,
     pub dao: Dao,
     pub dao_keypair: Keypair,
-    pub current_day: u64,
+    pub current_blockwindow: u64,
 }
 
 impl<'a, T: StorageAdapter<Value = pallas::Base>> DaoVoteCall<'a, T> {
@@ -250,12 +250,12 @@ impl<'a, T: StorageAdapter<Value = pallas::Base>> DaoVoteCall<'a, T> {
         let ephem_pubkey = PublicKey::from_secret(ephem_secret);
         let (ephem_x, ephem_y) = ephem_pubkey.xy();
 
-        let current_day = pallas::Base::from(self.current_day);
+        let current_blockwindow = pallas::Base::from(self.current_blockwindow);
         let prover_witnesses = vec![
             // proposal params
             Witness::Base(Value::known(self.proposal.auth_calls.commit())),
-            Witness::Base(Value::known(pallas::Base::from(self.proposal.creation_day))),
-            Witness::Base(Value::known(pallas::Base::from(self.proposal.duration_days))),
+            Witness::Base(Value::known(pallas::Base::from(self.proposal.creation_blockwindow))),
+            Witness::Base(Value::known(pallas::Base::from(self.proposal.duration_blockwindows))),
             Witness::Base(Value::known(self.proposal.user_data)),
             Witness::Base(Value::known(self.proposal.blind.inner())),
             // DAO params
@@ -275,7 +275,7 @@ impl<'a, T: StorageAdapter<Value = pallas::Base>> DaoVoteCall<'a, T> {
             // gov token
             Witness::Base(Value::known(gov_token_blind)),
             // time checks
-            Witness::Base(Value::known(current_day)),
+            Witness::Base(Value::known(current_blockwindow)),
             // verifiable encryption
             Witness::Base(Value::known(ephem_secret.inner())),
         ];
@@ -291,7 +291,7 @@ impl<'a, T: StorageAdapter<Value = pallas::Base>> DaoVoteCall<'a, T> {
             *yes_vote_commit_coords.y(),
             *all_vote_commit_coords.x(),
             *all_vote_commit_coords.y(),
-            current_day,
+            current_blockwindow,
             ephem_x,
             ephem_y,
             enc_note.encrypted_values[0],

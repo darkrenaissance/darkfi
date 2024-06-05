@@ -86,7 +86,7 @@ pub(crate) fn dao_propose_get_metadata(
     }
 
     // ANCHOR: dao-blockwindow-example-usage
-    let current_day =
+    let current_blockwindow =
         blockwindow(wasm::util::get_verifying_block_height()?, wasm::util::get_block_target()?);
     // ANCHOR_END: dao-blockwindow-example-usage
 
@@ -97,7 +97,7 @@ pub(crate) fn dao_propose_get_metadata(
             params.token_commit,
             params.dao_merkle_root.inner(),
             params.proposal_bulla.inner(),
-            pallas::Base::from(current_day),
+            pallas::Base::from(current_blockwindow),
             *total_funds_coords.x(),
             *total_funds_coords.y(),
         ],

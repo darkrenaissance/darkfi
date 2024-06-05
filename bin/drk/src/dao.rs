@@ -327,9 +327,9 @@ impl fmt::Display for ProposalRecord {
             "Proposal call index",
             call_index,
             "Creation block window",
-            self.proposal.creation_day,
+            self.proposal.creation_blockwindow,
             "Duration",
-            self.proposal.duration_days,
+            self.proposal.duration_blockwindows,
             "Block windows"
         );
 
@@ -1451,7 +1451,7 @@ impl Drk {
     pub async fn dao_propose_transfer(
         &self,
         name: &str,
-        duration_days: u64,
+        duration_blockwindows: u64,
         amount: &str,
         token_id: TokenId,
         recipient: PublicKey,
@@ -1520,13 +1520,13 @@ impl Drk {
         // to compute their window.
         let next_block_height = self.get_next_block_height().await?;
         let block_target = self.get_block_target().await?;
-        let creation_day = blockwindow(next_block_height, block_target);
+        let creation_blockwindow = blockwindow(next_block_height, block_target);
 
         // Create the actual proposal
         let proposal = DaoProposal {
             auth_calls,
-            creation_day,
-            duration_days,
+            creation_blockwindow,
+            duration_blockwindows,
             user_data: user_data.unwrap_or(pallas::Base::ZERO),
             dao_bulla,
             blind: Blind::random(&mut OsRng),
@@ -1923,7 +1923,7 @@ impl Drk {
         // to compute their window.
         let next_block_height = self.get_next_block_height().await?;
         let block_target = self.get_block_target().await?;
-        let current_day = blockwindow(next_block_height, block_target);
+        let current_blockwindow = blockwindow(next_block_height, block_target);
 
         // Generate the Money nullifiers Sparse Merkle Tree
         let store = MemoryStorageFp { tree: proposal.nullifiers_smt_snapshot.unwrap() };
@@ -1937,7 +1937,7 @@ impl Drk {
             proposal: proposal.proposal.clone(),
             dao: dao.params.dao.clone(),
             dao_keypair: dao.keypair(),
-            current_day,
+            current_blockwindow,
         };
 
         let (params, proofs) = call.make(

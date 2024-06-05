@@ -89,7 +89,7 @@ pub(crate) fn dao_vote_get_metadata(
         ));
     }
 
-    let current_day =
+    let current_blockwindow =
         blockwindow(wasm::util::get_verifying_block_height()?, wasm::util::get_block_target()?);
 
     let yes_vote_commit_coords = params.yes_vote_commit.to_affine().coordinates().unwrap();
@@ -105,7 +105,7 @@ pub(crate) fn dao_vote_get_metadata(
             *yes_vote_commit_coords.y(),
             *all_vote_commit_coords.x(),
             *all_vote_commit_coords.y(),
-            pallas::Base::from(current_day),
+            pallas::Base::from(current_blockwindow),
             ephem_x,
             ephem_y,
             params.note.encrypted_values[0],
