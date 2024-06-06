@@ -17,7 +17,7 @@
  */
 
 pub mod consensus;
-pub use consensus::consensus_task;
+pub use consensus::consensus_init_task;
 
 pub mod miner;
 pub use miner::miner_task;

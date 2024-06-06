@@ -16,16 +16,90 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 
-use darkfi::{rpc::util::JsonValue, system::StoppableTask, util::encoding::base64, Error, Result};
+use darkfi::{
+    blockchain::HeaderHash, rpc::util::JsonValue, system::StoppableTask, util::encoding::base64,
+    Error, Result,
+};
+use darkfi_sdk::crypto::PublicKey;
 use darkfi_serial::serialize_async;
 use log::{error, info};
 
-use crate::{task::garbage_collect_task, Darkfid};
+use crate::{
+    task::{garbage_collect_task, miner_task, sync_task},
+    Darkfid,
+};
+
+/// Sync the node consensus state and start the corresponding task, based on node type.
+pub async fn consensus_init_task(
+    node: Arc<Darkfid>,
+    skip_sync: bool,
+    checkpoint_height: Option<u32>,
+    checkpoint: Option<String>,
+    miner: bool,
+    recipient: Option<String>,
+    ex: Arc<smol::Executor<'static>>,
+) -> Result<()> {
+    // Sync blockchain
+    let checkpoint = if !skip_sync {
+        // Parse configured checkpoint
+        if checkpoint_height.is_some() && checkpoint.is_none() {
+            return Err(Error::ParseFailed("Blockchain configured checkpoint hash missing"))
+        }
+
+        let checkpoint = if let Some(height) = checkpoint_height {
+            Some((height, HeaderHash::from_str(checkpoint.as_ref().unwrap())?))
+        } else {
+            None
+        };
+
+        sync_task(&node, checkpoint).await?;
+        checkpoint
+    } else {
+        *node.validator.synced.write().await = true;
+        None
+    };
+
+    // Grab rewards recipient public key(address) if node is a miner
+    let recipient = if miner {
+        if recipient.is_none() {
+            return Err(Error::ParseFailed("Recipient address missing"))
+        }
+        match PublicKey::from_str(recipient.as_ref().unwrap()) {
+            Ok(address) => Some(address),
+            Err(_) => return Err(Error::InvalidAddress),
+        }
+    } else {
+        None
+    };
+
+    // Gracefully handle network disconnections
+    loop {
+        let result = if miner {
+            miner_task(node.clone(), recipient.unwrap(), skip_sync, ex.clone()).await
+        } else {
+            replicator_task(node.clone(), ex.clone()).await
+        };
+
+        match result {
+            Ok(_) => return Ok(()),
+            Err(Error::NetworkOperationFailed) => {
+                // Sync node again
+                *node.validator.synced.write().await = false;
+                if !skip_sync {
+                    sync_task(&node, checkpoint).await?;
+                } else {
+                    *node.validator.synced.write().await = true;
+                }
+            }
+            Err(e) => return Err(e),
+        }
+    }
+}
 
 /// async task used for listening for new blocks and perform consensus.
-pub async fn consensus_task(node: Arc<Darkfid>, ex: Arc<smol::Executor<'static>>) -> Result<()> {
+pub async fn replicator_task(node: Arc<Darkfid>, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     info!(target: "darkfid::task::consensus_task", "Starting consensus task...");
 
     // Grab blocks subscriber

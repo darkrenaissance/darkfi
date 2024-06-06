@@ -204,7 +204,7 @@ async fn synced_peers(
         }
 
         warn!(target: "darkfid::task::sync::synced_peers", "Node is not connected to other nodes, waiting to retry...");
-        sleep(10).await;
+        sleep(node.p2p.settings().outbound_connect_timeout).await;
     }
 
     Ok(tips)

@@ -48,8 +48,6 @@ use smol::channel::{Receiver, Sender};
 
 use crate::{proto::ProposalMessage, task::garbage_collect_task, Darkfid};
 
-// TODO: handle all ? so the task don't stop on errors
-
 /// Async task used for participating in the PoW block production.
 /// Miner initializes their setup and waits for next finalization,
 /// by listenning for new proposals from the network, for optimal
@@ -158,18 +156,35 @@ pub async fn miner_task(
         drop(forks);
 
         // Start listenning for network proposals and mining next block for best fork.
-        if let Err(e) = smol::future::or(
+        match smol::future::or(
             listen_to_network(&node, &extended_fork, &subscription, &sender),
-            mine(&node, &extended_fork, &mut secret, &recipient, &zkbin, &pk, &stop_signal),
+            mine(
+                &node,
+                &extended_fork,
+                &mut secret,
+                &recipient,
+                &zkbin,
+                &pk,
+                &stop_signal,
+                skip_sync,
+            ),
         )
         .await
         {
-            error!(
-                target: "darkfid::task::miner_task",
-                "Error during listen_to_network() or mine(): {e}"
-            );
-            continue
-        };
+            Ok(_) => { /* Do nothing */ }
+            Err(Error::NetworkOperationFailed) => {
+                error!(target: "darkfid::task::miner_task", "Node disconnected from the network");
+                subscription.unsubscribe().await;
+                return Err(Error::NetworkOperationFailed)
+            }
+            Err(e) => {
+                error!(
+                    target: "darkfid::task::miner_task",
+                    "Error during listen_to_network() or mine(): {e}"
+                );
+                continue
+            }
+        }
 
         // Check if we can finalize anything and broadcast them
         let finalized = match node.validator.finalization().await {
@@ -238,7 +253,7 @@ async fn listen_to_network(
     // Signal miner to abort mining
     sender.send(()).await?;
     if let Err(e) = node.miner_daemon_request("abort", &JsonValue::Array(vec![])).await {
-        error!(target: "darkfid::task::miner_task::listen_to_network", "Failed to execute miner daemon abort request: {}", e);
+        error!(target: "darkfid::task::miner::listen_to_network", "Failed to execute miner daemon abort request: {}", e);
     }
 
     Ok(())
@@ -246,6 +261,7 @@ async fn listen_to_network(
 
 /// Async task to generate and mine provided fork index next block,
 /// while listening for a stop signal.
+#[allow(clippy::too_many_arguments)]
 async fn mine(
     node: &Darkfid,
     extended_fork: &Fork,
@@ -254,10 +270,11 @@ async fn mine(
     zkbin: &ZkBinary,
     pk: &ProvingKey,
     stop_signal: &Receiver<()>,
+    skip_sync: bool,
 ) -> Result<()> {
     smol::future::or(
         wait_stop_signal(stop_signal),
-        mine_next_block(node, extended_fork, secret, recipient, zkbin, pk),
+        mine_next_block(node, extended_fork, secret, recipient, zkbin, pk, skip_sync),
     )
     .await
 }
@@ -283,6 +300,7 @@ async fn mine_next_block(
     recipient: &PublicKey,
     zkbin: &ZkBinary,
     pk: &ProvingKey,
+    skip_sync: bool,
 ) -> Result<()> {
     // Grab next target and block
     let (next_target, mut next_block) = generate_next_block(
@@ -308,6 +326,11 @@ async fn mine_next_block(
 
     // Verify it
     extended_fork.module.verify_current_block(&next_block)?;
+
+    // Check if we are connected to the network
+    if !skip_sync && node.p2p.hosts().channels().await.is_empty() {
+        return Err(Error::NetworkOperationFailed)
+    }
 
     // Append the mined block as a proposal
     let proposal = Proposal::new(next_block);

@@ -18,7 +18,6 @@
 
 use std::{
     collections::{HashMap, HashSet},
-    str::FromStr,
     sync::Arc,
 };
 
@@ -29,7 +28,7 @@ use url::Url;
 
 use darkfi::{
     async_daemonize,
-    blockchain::{BlockInfo, HeaderHash},
+    blockchain::BlockInfo,
     cli_desc,
     net::{settings::SettingsOpt, P2pPtr},
     rpc::{
@@ -42,7 +41,6 @@ use darkfi::{
     validator::{Validator, ValidatorConfig, ValidatorPtr},
     Error, Result,
 };
-use darkfi_sdk::crypto::PublicKey;
 use darkfi_serial::deserialize_async;
 
 #[cfg(test)]
@@ -58,7 +56,7 @@ mod rpc_tx;
 
 /// Validator async tasks
 mod task;
-use task::{consensus_task, miner_task, sync_task};
+use task::consensus_init_task;
 
 /// P2P net protocols
 mod proto;
@@ -313,66 +311,27 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     info!(target: "darkfid", "Starting P2P network");
     p2p.clone().start().await?;
 
-    // Sync blockchain
-    if !blockchain_config.skip_sync {
-        // Parse configured checkpoint
-        if blockchain_config.checkpoint_height.is_some() && blockchain_config.checkpoint.is_none() {
-            return Err(Error::ParseFailed("Blockchain configured checkpoint hash missing"))
-        }
-
-        let checkpoint = if let Some(height) = blockchain_config.checkpoint_height {
-            Some((height, HeaderHash::from_str(&blockchain_config.checkpoint.unwrap())?))
-        } else {
-            None
-        };
-
-        sync_task(&darkfid, checkpoint).await?;
-    } else {
-        *darkfid.validator.synced.write().await = true;
-    }
-
     // Consensus protocol
     info!(target: "darkfid", "Starting consensus protocol task");
-    let consensus_task = if blockchain_config.miner {
-        // Grab rewards recipient public key(address)
-        if blockchain_config.recipient.is_none() {
-            return Err(Error::ParseFailed("Recipient address missing"))
-        }
-        let recipient = match PublicKey::from_str(&blockchain_config.recipient.unwrap()) {
-            Ok(address) => address,
-            Err(_) => return Err(Error::InvalidAddress),
-        };
-
-        let task = StoppableTask::new();
-        task.clone().start(
-            miner_task(darkfid.clone(), recipient, blockchain_config.skip_sync, ex.clone()),
-            |res| async move {
-                match res {
-                    Ok(()) | Err(Error::MinerTaskStopped) => { /* Do nothing */ }
-                    Err(e) => error!(target: "darkfid", "Failed starting miner task: {}", e),
-                }
-            },
-            Error::MinerTaskStopped,
+    let consensus_task = StoppableTask::new();
+    consensus_task.clone().start(
+        consensus_init_task(
+            darkfid.clone(),
+            blockchain_config.skip_sync,
+            blockchain_config.checkpoint_height,
+            blockchain_config.checkpoint, blockchain_config.miner,
+            blockchain_config.recipient,
             ex.clone(),
-        );
-
-        task
-    } else {
-        let task = StoppableTask::new();
-        task.clone().start(
-            consensus_task(darkfid.clone(), ex.clone()),
-            |res| async move {
-                match res {
-                    Ok(()) | Err(Error::ConsensusTaskStopped) => { /* Do nothing */ }
-                    Err(e) => error!(target: "darkfid", "Failed starting consensus task: {}", e),
-                }
-            },
-            Error::ConsensusTaskStopped,
-            ex.clone(),
-        );
-
-        task
-    };
+        ),
+        |res| async move {
+            match res {
+                Ok(()) | Err(Error::ConsensusTaskStopped) | Err(Error::MinerTaskStopped) => { /* Do nothing */ }
+                Err(e) => error!(target: "darkfid", "Failed starting consensus initialization task: {}", e),
+            }
+        },
+        Error::ConsensusTaskStopped,
+        ex.clone(),
+    );
 
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new(ex)?;
