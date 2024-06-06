@@ -16,6 +16,8 @@ Enable USB debugging in developer options and run the following commands:
 
 ```
 adb install -r target/android-artifacts/debug/apk/darkwallet.apk
+# Clear the log
+adb logcat -c
 adb logcat -s darkfi
 ```
 

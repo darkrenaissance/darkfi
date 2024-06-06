@@ -9,9 +9,10 @@ use miniquad::{
 };
 use std::{
     array::IntoIter,
+    collections::HashMap,
     fmt,
     io::Cursor,
-    sync::{mpsc, Arc, MutexGuard},
+    sync::{mpsc, Arc, Mutex, MutexGuard},
     time::{Duration, Instant},
 };
 
@@ -145,6 +146,7 @@ struct Stage {
     method_sender: mpsc::SyncSender<(GraphicsMethodEvent, SceneNodeId, Vec<u8>, MethodResponseFn)>,
 
     last_draw_time: Option<Instant>,
+    atlas: Mutex<HashMap<(u32, [u8; 4]), TextureId>>,
 }
 
 impl Stage {
@@ -217,6 +219,7 @@ impl Stage {
             method_recvr,
             method_sender,
             last_draw_time: None,
+            atlas: Mutex::new(HashMap::new())
         };
         stage.setup_scene_graph_window();
 
@@ -469,6 +472,7 @@ pub struct RenderContext<'a> {
     pub proj: glam::Mat4,
     pub textures: &'a ResourceManager<TextureId>,
     pub font_faces: &'a Vec<FreetypeFace>,
+    pub atlas: &'a mut HashMap<(u32, [u8; 4]), TextureId>,
 }
 
 impl<'a> RenderContext<'a> {
@@ -772,6 +776,8 @@ impl<'a> RenderContext<'a> {
 
         self.ctx.apply_bindings(&bindings);
         self.ctx.draw(0, 6, 1);
+        self.ctx.delete_buffer(vertex_buffer);
+        self.ctx.delete_buffer(index_buffer);
     }
 
     pub fn render_clipped_box_with_texture(
@@ -836,6 +842,8 @@ impl<'a> RenderContext<'a> {
 
         self.ctx.apply_bindings(&bindings);
         self.ctx.draw(0, 6, 1);
+        self.ctx.delete_buffer(vertex_buffer);
+        self.ctx.delete_buffer(index_buffer);
     }
 
     pub fn render_box_with_texture(
@@ -876,6 +884,8 @@ impl<'a> RenderContext<'a> {
 
         self.ctx.apply_bindings(&bindings);
         self.ctx.draw(0, 6, 1);
+        self.ctx.delete_buffer(vertex_buffer);
+        self.ctx.delete_buffer(index_buffer);
     }
 
     pub fn render_box(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, color: Color) {
@@ -1102,9 +1112,23 @@ impl<'a> RenderContext<'a> {
                     (x1, y1, x2, y2)
                 };
 
-                let texture = self.ctx.new_texture_from_rgba8(bmp_width as u16, bmp_height as u16, &tdata);
+                let key = (gid, [
+                    (255. * color_r) as u8,
+                    (255. * color_g) as u8,
+                    (255. * color_b) as u8,
+                    (255. * color_a) as u8,
+                ]);
+                let texture = if self.atlas.contains_key(&key) {
+                    *self.atlas.get(&key).unwrap()
+                } else {
+                    let texture = self.ctx.new_texture_from_rgba8(bmp_width as u16, bmp_height as u16, &tdata);
+                    self.atlas.insert(key, texture);
+                    texture
+                };
+
+                //let texture = self.ctx.new_texture_from_rgba8(bmp_width as u16, bmp_height as u16, &tdata);
                 self.render_box_with_texture(x1, y1, x2, y2, COLOR_WHITE, texture);
-                self.ctx.delete_texture(texture);
+                //self.ctx.delete_texture(texture);
 
                 if debug {
                     self.outline(x1, y1, x2, y2, COLOR_BLUE, 1.);
@@ -1167,6 +1191,7 @@ impl EventHandler for Stage {
         //let proj = glam::Mat4::IDENTITY;
 
         let scene_graph = self.scene_graph.lock().unwrap();
+        let atlas = &mut self.atlas.lock().unwrap();
 
         // We need this because scene_graph must remain locked for the duration of the rendering
         let mut render_context = RenderContext {
@@ -1176,6 +1201,7 @@ impl EventHandler for Stage {
             proj,
             textures: &self.textures,
             font_faces: &self.font_faces,
+            atlas
         };
 
         render_context.render_window();

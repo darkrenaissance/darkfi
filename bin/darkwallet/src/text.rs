@@ -5,6 +5,7 @@ use crate::gfx::{Rectangle, FreetypeFace};
 
 #[derive(Clone)]
 pub struct Glyph {
+    pub id: u32,
     // Substring this glyph corresponds to
     pub substr: String,
 
@@ -191,6 +192,7 @@ impl TextShaper {
                 };
 
                 let glyph = Glyph {
+                    id: gid,
                     substr: String::new(),
                     bmp,
                     bmp_width: bmp_width as u16,

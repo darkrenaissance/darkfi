@@ -1,4 +1,4 @@
-use miniquad::{KeyMods, UniformType, MouseButton, window};
+use miniquad::{KeyMods, UniformType, MouseButton, window, TextureId};
 use log::{debug, info};
 use std::{
     collections::HashMap,
@@ -98,6 +98,7 @@ pub struct EditBox {
     mouse_btn_held: AtomicBool,
     window_scale: f32,
     screen_size: Arc<Property>,
+    atlas: Mutex<HashMap<u32, TextureId>>,
 }
 
 impl EditBox {
@@ -149,6 +150,7 @@ impl EditBox {
             mouse_btn_held: AtomicBool::new(false),
             window_scale,
             screen_size,
+            atlas: Mutex::new(HashMap::new()),
         });
         self_.regen_glyphs().unwrap();
 
@@ -325,6 +327,7 @@ impl EditBox {
         let text_color = self.text_color.get();
 
         let glyphs = &*self.glyphs.lock().unwrap();
+        let atlas = &mut self.atlas.lock().unwrap();
 
         if !self.selected.is_null(0)? && !self.selected.is_null(1)? {
             self.render_selected(render, &rect, glyphs)?;
@@ -344,10 +347,17 @@ impl EditBox {
             let x2 = x1 + glyph.pos.w;
             let y2 = y1 + glyph.pos.h;
 
-            let texture = render.ctx.new_texture_from_rgba8(glyph.bmp_width, glyph.bmp_height, &glyph.bmp);
+                let texture = if atlas.contains_key(&glyph.id) {
+                    *atlas.get(&glyph.id).unwrap()
+                } else {
+                    let texture = render.ctx.new_texture_from_rgba8(glyph.bmp_width, glyph.bmp_height, &glyph.bmp);
+                    atlas.insert(glyph.id, texture);
+                    texture
+                };
+            //let texture = render.ctx.new_texture_from_rgba8(glyph.bmp_width, glyph.bmp_height, &glyph.bmp);
             render.render_clipped_box_with_texture(&bound, x1, y1, x2, y2, COLOR_WHITE, texture);
             //render.render_box_with_texture(x1, y1, x2, y2, COLOR_WHITE, texture);
-            render.ctx.delete_texture(texture);
+            //render.ctx.delete_texture(texture);
 
             // Glyph outlines
             //if debug {

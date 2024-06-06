@@ -1,5 +1,5 @@
 use atomic_float::AtomicF32;
-use miniquad::{KeyMods, UniformType, MouseButton, window};
+use miniquad::{KeyMods, UniformType, MouseButton, window, TextureId};
 use log::debug;
 use std::{
     collections::HashMap,
@@ -34,6 +34,7 @@ pub struct ChatView {
     scroll: AtomicF32,
     lines: Vec<String>,
     glyph_lines: Mutex<Vec<Vec<Glyph>>>,
+    atlas: Mutex<HashMap<(u32, [u8; 4]), TextureId>>,
 }
 
 impl ChatView {
@@ -59,6 +60,7 @@ impl ChatView {
             scroll: AtomicF32::new(0.),
             lines,
             glyph_lines: Mutex::new(glyph_lines),
+            atlas: Mutex::new(HashMap::new()),
         });
 
         let weak_self = Arc::downgrade(&self_);
@@ -151,6 +153,7 @@ impl ChatView {
         };
 
         let glyph_lines = &mut self.glyph_lines.lock().unwrap();
+        let atlas = &mut self.atlas.lock().unwrap();
 
         let scroll = self.scroll.load(Ordering::Relaxed);
         for (i, (line, glyph_line)) in self.lines.iter().zip(glyph_lines.iter_mut()).enumerate() {
@@ -171,16 +174,18 @@ impl ChatView {
                 continue
             };
 
-            if glyph_line.is_empty() {
-                *glyph_line = self.text_shaper.shape(line.to_string(), font_size, COLOR_WHITE);
-            }
             let linespacing = window_scale*30.;
             let off_y = linespacing * i as f32 + scroll;
             if off_y + linespacing < 0. || off_y - linespacing > rect.h {
                 continue;
             }
 
+            if glyph_line.is_empty() {
+                *glyph_line = self.text_shaper.shape(line.to_string(), font_size, COLOR_WHITE);
+            }
+
             let times_color = [0.4, 0.4, 0.4, 1.];
+            let times_color_u8 = [(255. * 0.4) as u8, (255. * 0.4) as u8, (255. * 0.4) as u8, (255. * 1.) as u8];
             let glyphs_time = self.text_shaper.shape(time.to_string(), font_size, times_color);
             let mut rhs = 0.;
             for glyph in glyphs_time {
@@ -190,9 +195,15 @@ impl ChatView {
 
                 assert_eq!(glyph.bmp.len() as u16, glyph.bmp_width*glyph.bmp_height*4);
                 //debug!("gly {} {}", glyph.substr, glyph.bmp.len());
-                let texture = render.ctx.new_texture_from_rgba8(glyph.bmp_width, glyph.bmp_height, &glyph.bmp);
+                let texture = if atlas.contains_key(&(glyph.id, times_color_u8.clone())) {
+                    *atlas.get(&(glyph.id, times_color_u8.clone())).unwrap()
+                } else {
+                    let texture = render.ctx.new_texture_from_rgba8(glyph.bmp_width, glyph.bmp_height, &glyph.bmp);
+                    atlas.insert((glyph.id, times_color_u8.clone()), texture);
+                    texture
+                };
                 render.render_clipped_box_with_texture2(&bound, &pos, COLOR_WHITE, texture);
-                render.ctx.delete_texture(texture);
+                //render.ctx.delete_texture(texture);
             }
 
             let nick_colors = [
@@ -207,8 +218,21 @@ impl ChatView {
                 [1.00, 0.36, 0.48, 1.],
                 [1.00, 0.30, 0.00, 1.]
             ];
+            let nick_colors_u8 = [
+                [(255. * 0.00) as u8, (255. * 0.94) as u8, (255. * 1.00) as u8, (255. * 1.) as u8],
+                [(255. * 0.36) as u8, (255. * 1.00) as u8, (255. * 0.69) as u8, (255. * 1.) as u8],
+                [(255. * 0.29) as u8, (255. * 1.00) as u8, (255. * 0.45) as u8, (255. * 1. ) as u8],
+                [(255. * 0.00) as u8, (255. * 0.73) as u8, (255. * 0.38) as u8, (255. * 1. ) as u8],
+                [(255. * 0.21) as u8, (255. * 0.67) as u8, (255. * 0.67) as u8, (255. * 1. ) as u8],
+                [(255. * 0.56) as u8, (255. * 0.61) as u8, (255. * 1.00) as u8, (255. * 1. ) as u8],
+                [(255. * 0.84) as u8, (255. * 0.48) as u8, (255. * 1.00) as u8, (255. * 1. ) as u8],
+                [(255. * 1.00) as u8, (255. * 0.61) as u8, (255. * 0.94) as u8, (255. * 1. ) as u8],
+                [(255. * 1.00) as u8, (255. * 0.36) as u8, (255. * 0.48) as u8, (255. * 1. ) as u8],
+                [(255. * 1.00) as u8, (255. * 0.30) as u8, (255. * 0.00) as u8, (255. * 1. ) as u8]
+            ];
 
             let nick_color = nick_colors[nick.len() % nick_colors.len()];
+            let nick_color_u8 = nick_colors_u8[nick.len() % nick_colors.len()];
             let glyphs_nick = self.text_shaper.shape(nick.to_string(), font_size, nick_color);
             let off_x = rhs + window_scale*20.;
             for glyph in glyphs_nick {
@@ -219,9 +243,16 @@ impl ChatView {
 
                 assert_eq!(glyph.bmp.len() as u16, glyph.bmp_width*glyph.bmp_height*4);
                 //debug!("gly {} {}", glyph.substr, glyph.bmp.len());
-                let texture = render.ctx.new_texture_from_rgba8(glyph.bmp_width, glyph.bmp_height, &glyph.bmp);
+                //let texture = render.ctx.new_texture_from_rgba8(glyph.bmp_width, glyph.bmp_height, &glyph.bmp);
+                let texture = if atlas.contains_key(&(glyph.id, nick_color_u8.clone())) {
+                    *atlas.get(&(glyph.id, nick_color_u8.clone())).unwrap()
+                } else {
+                    let texture = render.ctx.new_texture_from_rgba8(glyph.bmp_width, glyph.bmp_height, &glyph.bmp);
+                    atlas.insert((glyph.id, nick_color_u8.clone()), texture);
+                    texture
+                };
                 render.render_clipped_box_with_texture2(&bound, &pos, COLOR_WHITE, texture);
-                render.ctx.delete_texture(texture);
+                //render.ctx.delete_texture(texture);
             }
 
             let off_x = rhs + window_scale*20.;
@@ -232,9 +263,16 @@ impl ChatView {
 
                 assert_eq!(glyph.bmp.len() as u16, glyph.bmp_width*glyph.bmp_height*4);
                 //debug!("gly {} {}", glyph.substr, glyph.bmp.len());
-                let texture = render.ctx.new_texture_from_rgba8(glyph.bmp_width, glyph.bmp_height, &glyph.bmp);
+                //let texture = render.ctx.new_texture_from_rgba8(glyph.bmp_width, glyph.bmp_height, &glyph.bmp);
+                let texture = if atlas.contains_key(&(glyph.id, [255, 255, 255, 255])) {
+                    *atlas.get(&(glyph.id, [255, 255, 255, 255])).unwrap()
+                } else {
+                    let texture = render.ctx.new_texture_from_rgba8(glyph.bmp_width, glyph.bmp_height, &glyph.bmp);
+                    atlas.insert((glyph.id, [255, 255, 255, 255]), texture);
+                    texture
+                };
                 render.render_clipped_box_with_texture2(&bound, &pos, COLOR_WHITE, texture);
-                render.ctx.delete_texture(texture);
+                //render.ctx.delete_texture(texture);
             }
         }
 
