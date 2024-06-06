@@ -20,6 +20,7 @@ use std::{
     collections::HashMap,
     fs::{File, OpenOptions},
     io::Write,
+    path::PathBuf,
     time::UNIX_EPOCH,
 };
 
@@ -33,7 +34,7 @@ use crate::{
         jsonrpc::{ErrorCode, JsonError, JsonResponse, JsonResult},
         util::json_map,
     },
-    util::{encoding::base64, file::load_file, path::expand_path},
+    util::{encoding::base64, file::load_file},
     Result,
 };
 
@@ -131,14 +132,13 @@ pub(super) fn generate_genesis(days_rotation: u64) -> Event {
     }
 }
 
-pub(super) fn replayer_log(cmd: String, value: Vec<u8>) -> Result<()> {
-    let mut replayer_log_file = expand_path("/tmp")?;
-    replayer_log_file.push("replayer.log");
-    if !replayer_log_file.exists() {
-        File::create(&replayer_log_file)?;
+pub(super) fn replayer_log(datastore: &PathBuf, cmd: String, value: Vec<u8>) -> Result<()> {
+    let datastore = datastore.join("replayer.log");
+    if !datastore.exists() {
+        File::create(&datastore)?;
     };
 
-    let mut file = OpenOptions::new().append(true).open(&replayer_log_file)?;
+    let mut file = OpenOptions::new().append(true).open(&datastore)?;
     let v = base64::encode(&value);
     let f = format!("{cmd} {v}");
     writeln!(file, "{}", f)?;
@@ -146,22 +146,22 @@ pub(super) fn replayer_log(cmd: String, value: Vec<u8>) -> Result<()> {
     Ok(())
 }
 
-pub async fn recreate_from_replayer_log() -> JsonResult {
-    let mut replayer_log_file = expand_path("/tmp").unwrap();
-    replayer_log_file.push("replayer.log");
-    if !replayer_log_file.exists() {
-        error!("Error loading replaied log");
+pub async fn recreate_from_replayer_log(datastore: &PathBuf) -> JsonResult {
+    let log_path = datastore.join("replayer.log");
+    if !log_path.exists() {
+        error!("Error loading replayed log");
         return JsonResult::Error(JsonError::new(
             ErrorCode::ParseError,
-            Some("Error loading replaied log".to_string()),
+            Some("Error loading replayed log".to_string()),
             1,
         ))
     };
 
-    let reader = load_file(&replayer_log_file).unwrap();
+    let reader = load_file(&log_path).unwrap();
 
-    let datastore = expand_path("/tmp/replayed_db").unwrap();
-    let sled_db = sled::open(datastore).unwrap();
+    let db_datastore = datastore.join("replayed_db");
+
+    let sled_db = sled::open(db_datastore).unwrap();
     let dag = sled_db.open_tree("replayer").unwrap();
 
     for line in reader.lines() {

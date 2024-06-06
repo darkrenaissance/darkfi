@@ -91,7 +91,10 @@ async fn spawn_node(
 
     let p2p = P2p::new(settings, ex.clone()).await;
     let sled_db = sled::Config::new().temporary(true).open().unwrap();
-    let event_graph = EventGraph::new(p2p.clone(), sled_db, "dag", 1, ex.clone()).await.unwrap();
+    let event_graph =
+        EventGraph::new(p2p.clone(), sled_db, "/tmp".into(), false, "dag", 1, ex.clone())
+            .await
+            .unwrap();
     *event_graph.synced.write().await = true;
     let event_graph_ = event_graph.clone();
 

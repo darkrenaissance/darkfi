@@ -19,6 +19,7 @@
 use std::{
     cmp::Ordering,
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
+    path::PathBuf,
     sync::Arc,
     time::Duration,
 };
@@ -89,6 +90,10 @@ pub struct EventGraph {
     p2p: P2pPtr,
     /// Sled tree containing the DAG
     dag: sled::Tree,
+
+    datastore: PathBuf,
+
+    replay_mode: bool,
     /// The set of unreferenced DAG tips
     unreferenced_tips: RwLock<BTreeMap<u64, HashSet<blake3::Hash>>>,
     /// A `HashSet` containg event IDs and their 1-level parents.
@@ -120,6 +125,8 @@ impl EventGraph {
     pub async fn new(
         p2p: P2pPtr,
         sled_db: sled::Db,
+        datastore: PathBuf,
+        replay_mode: bool,
         dag_tree_name: &str,
         days_rotation: u64,
         ex: Arc<Executor<'_>>,
@@ -134,6 +141,8 @@ impl EventGraph {
         let self_ = Arc::new(Self {
             p2p,
             dag: dag.clone(),
+            datastore,
+            replay_mode,
             unreferenced_tips,
             broadcasted_ids,
             prune_task: OnceCell::new(),
@@ -569,8 +578,9 @@ impl EventGraph {
             // Add the event to the overlay
             overlay.insert(event_id.as_bytes(), &event_se)?;
 
-            replayer_log("insert".to_owned(), event_se).unwrap();
-
+            if self.replay_mode {
+                replayer_log(&self.datastore, "insert".to_owned(), event_se)?;
+            }
             // Note down the event ID to return
             ids.push(event_id);
         }
