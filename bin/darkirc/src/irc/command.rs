@@ -32,7 +32,6 @@
 //! * `KILL`
 //! * `NOTICE`
 //! * `OPER`
-//! * `PASS`
 //! * `RESTART`
 //! * `SERVICE`
 //! * `SERVLIST`
@@ -62,6 +61,7 @@ use super::{
     server::MAX_NICK_LEN,
     IrcChannel, SERVER_NAME,
 };
+use crate::crypto::bcrypt::bcrypt_hash_password;
 
 impl Client {
     /// `ADMIN [<server>]`
@@ -622,7 +622,7 @@ impl Client {
             ))])
         };
 
-        if self.server.password == password.to_string() {
+        if self.server.password == bcrypt_hash_password(password) {
             self.is_pass_set.store(true, SeqCst);
         } else {
             error!("[IRC CLIENT] Password is not correct!");

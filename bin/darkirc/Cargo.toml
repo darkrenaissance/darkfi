@@ -34,6 +34,7 @@ rustls-pemfile = "2.1.2"
 
 # Crypto
 blake3 = "1.5.1"
+bcrypt = "0.15.1"
 crypto_box = {version = "0.9.1", features = ["std", "chacha20"]}
 rand = "0.8.5"
 

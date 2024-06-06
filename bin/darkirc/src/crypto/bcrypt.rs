@@ -16,10 +16,16 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-//! Cryptographic implementations
+use bcrypt::DEFAULT_COST;
 
-/// ChaCha box, used for channel encryption, and optionally DM encryption.
-pub mod saltbox;
+/// Salt used for the IRC server connection password
+pub const BCRYPT_PASSWORD_SALT: [u8; 16] = [
+    0x22, 0x23, 0xff, 0x41, 0x57, 0x47, 0x48, 0xfe, 0xde, 0xca, 0x1c, 0xd1, 0x94, 0xef, 0xcc, 0xaa,
+];
 
-/// bcrypt utilities
-pub mod bcrypt;
+/// Encrypt the given password with bcrypt-2b
+pub fn bcrypt_hash_password<P: AsRef<[u8]>>(password: P) -> String {
+    bcrypt::hash_with_salt(password, DEFAULT_COST, BCRYPT_PASSWORD_SALT)
+        .unwrap()
+        .format_for_version(bcrypt::Version::TwoB)
+}

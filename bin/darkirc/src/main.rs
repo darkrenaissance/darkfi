@@ -15,7 +15,8 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-use std::{collections::HashSet, path::PathBuf, sync::Arc};
+
+use std::{collections::HashSet, io::Write, path::PathBuf, sync::Arc};
 
 use darkfi::{
     async_daemonize, cli_desc,
@@ -44,6 +45,7 @@ use irc::server::IrcServer;
 
 /// Cryptography utilities
 mod crypto;
+use crypto::bcrypt::bcrypt_hash_password;
 
 // RLN
 //mod rln;
@@ -116,9 +118,13 @@ struct Args {
     #[structopt(long, default_value = "10")]
     sync_timeout: u8,
 
-    /// IRC Password
+    /// IRC Password (Encrypted with bcrypt-2b)
     #[structopt(long)]
     pub password: Option<String>,
+
+    /// Encrypt a given password for the IRC server connection
+    #[structopt(long)]
+    encrypt_password: bool,
 
     /// replay_mode
     #[structopt(long)]
@@ -206,6 +212,26 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         let secret: [u8; 32] = bytes.try_into().unwrap();
         let secret = crypto_box::SecretKey::from(secret);
         println!("{}", bs58::encode(secret.public_key().to_bytes()).into_string());
+        return Ok(())
+    }
+
+    if args.encrypt_password {
+        let mut pw = String::new();
+
+        print!("Enter password: ");
+        std::io::stdout().flush()?;
+        std::io::stdin().read_line(&mut pw)?;
+
+        if let Some('\n') = pw.chars().next_back() {
+            pw.pop();
+        }
+        if let Some('\r') = pw.chars().next_back() {
+            pw.pop();
+        }
+
+        println!("{}", bcrypt_hash_password(pw));
+        std::io::stdout().flush()?;
+
         return Ok(())
     }
 
