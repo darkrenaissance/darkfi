@@ -42,6 +42,14 @@ pub struct Args {
     #[structopt(long, default_value = "~/.local/darkfi/taud_db")]
     pub datastore: String,
 
+    #[structopt(long, default_value = "~/.local/darkfi/replayed_taud_db")]
+    /// Replay logs (DB) path
+    pub replay_datastore: String,
+
+    /// replay_mode
+    #[structopt(long)]
+    pub replay_mode: bool,
+
     #[structopt(flatten)]
     pub net: SettingsOpt,
 

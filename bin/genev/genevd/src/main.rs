@@ -31,7 +31,7 @@ use darkfi::{
     Error, Result,
 };
 use log::{debug, error, info};
-use smol::{lock::RwLock, stream::StreamExt};
+use smol::{fs, lock::RwLock, stream::StreamExt};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;
 
@@ -59,6 +59,14 @@ struct Args {
     /// Sets Datastore Path
     #[structopt(long, default_value = "~/.local/darkfi/genev_db")]
     pub datastore: String,
+
+    #[structopt(short, long, default_value = "~/.local/darkfi/replayed_genev_db")]
+    /// Replay logs (DB) path
+    replay_datastore: String,
+
+    /// replay_mode
+    #[structopt(long)]
+    replay_mode: bool,
 
     #[structopt(short, long)]
     /// Set log file to ouput into
@@ -102,11 +110,25 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
     info!("Instantiating event DAG");
     // Create datastore path if not there already.
     let datastore_path = expand_path(&settings.datastore)?;
+    fs::create_dir_all(&datastore_path).await?;
+
+    let replay_datastore = expand_path(&settings.replay_datastore)?;
+    fs::create_dir_all(&replay_datastore).await?;
+
+    let replay_mode = settings.replay_mode;
 
     let sled_db = sled::open(datastore_path.clone())?;
     let p2p = P2p::new(settings.net.into(), executor.clone()).await;
-    let event_graph =
-        EventGraph::new(p2p.clone(), sled_db.clone(), "genevd_dag", 1, executor.clone()).await?;
+    let event_graph = EventGraph::new(
+        p2p.clone(),
+        sled_db.clone(),
+        replay_datastore,
+        replay_mode,
+        "genevd_dag",
+        1,
+        executor.clone(),
+    )
+    .await?;
 
     info!("Registering EventGraph P2P protocol");
     let event_graph_ = Arc::clone(&event_graph);

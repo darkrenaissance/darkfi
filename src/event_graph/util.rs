@@ -20,7 +20,7 @@ use std::{
     collections::HashMap,
     fs::{File, OpenOptions},
     io::Write,
-    path::PathBuf,
+    path::Path,
     time::UNIX_EPOCH,
 };
 
@@ -132,7 +132,7 @@ pub(super) fn generate_genesis(days_rotation: u64) -> Event {
     }
 }
 
-pub(super) fn replayer_log(datastore: &PathBuf, cmd: String, value: Vec<u8>) -> Result<()> {
+pub(super) fn replayer_log(datastore: &Path, cmd: String, value: Vec<u8>) -> Result<()> {
     let datastore = datastore.join("replayer.log");
     if !datastore.exists() {
         File::create(&datastore)?;
@@ -146,7 +146,7 @@ pub(super) fn replayer_log(datastore: &PathBuf, cmd: String, value: Vec<u8>) -> 
     Ok(())
 }
 
-pub async fn recreate_from_replayer_log(datastore: &PathBuf) -> JsonResult {
+pub async fn recreate_from_replayer_log(datastore: &Path) -> JsonResult {
     let log_path = datastore.join("replayer.log");
     if !log_path.exists() {
         error!("Error loading replayed log");

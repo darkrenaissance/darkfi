@@ -352,11 +352,24 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
     let datastore = expand_path(&settings.datastore)?;
     fs::create_dir_all(&datastore).await?;
 
+    let replay_datastore = expand_path(&settings.replay_datastore)?;
+    fs::create_dir_all(&replay_datastore).await?;
+
+    let replay_mode = settings.replay_mode;
+
     info!("Instantiating event DAG");
     let sled_db = sled::open(datastore)?;
     let p2p = P2p::new(settings.net.into(), executor.clone()).await;
-    let event_graph =
-        EventGraph::new(p2p.clone(), sled_db.clone(), "taud_dag", 0, executor.clone()).await?;
+    let event_graph = EventGraph::new(
+        p2p.clone(),
+        sled_db.clone(),
+        replay_datastore,
+        replay_mode,
+        "taud_dag",
+        0,
+        executor.clone(),
+    )
+    .await?;
 
     info!("Registering EventGraph P2P protocol");
     let event_graph_ = Arc::clone(&event_graph);
