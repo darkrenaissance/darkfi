@@ -36,7 +36,7 @@ use darkfi::{
 };
 use darkfi_serial::{serialize_async, SerialDecodable, SerialEncodable};
 
-use crate::proto::{ForkSyncRequest, ForkSyncResponse, COMMS_TIMEOUT};
+use crate::proto::{ForkSyncRequest, ForkSyncResponse};
 
 /// Auxiliary [`Proposal`] wrapper structure used for messaging.
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
@@ -158,7 +158,7 @@ impl ProtocolProposal {
             // Node waits for response
             let response = match self
                 .proposals_response_sub
-                .receive_with_timeout(COMMS_TIMEOUT)
+                .receive_with_timeout(self.p2p.settings().outbound_connect_timeout)
                 .await
             {
                 Ok(r) => r,

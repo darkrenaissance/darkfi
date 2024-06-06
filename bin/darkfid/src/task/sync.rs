@@ -30,7 +30,7 @@ use tinyjson::JsonValue;
 use crate::{
     proto::{
         ForkSyncRequest, ForkSyncResponse, HeaderSyncRequest, HeaderSyncResponse, SyncRequest,
-        SyncResponse, TipRequest, TipResponse, BATCH, COMMS_TIMEOUT,
+        SyncResponse, TipRequest, TipResponse, BATCH,
     },
     Darkfid,
 };
@@ -142,6 +142,7 @@ async fn synced_peers(
     checkpoint: Option<(u32, HeaderHash)>,
 ) -> Result<HashMap<(u32, [u8; 32]), Vec<ChannelPtr>>> {
     info!(target: "darkfid::task::sync::synced_peers", "Receiving tip from peers...");
+    let comms_timeout = node.p2p.settings().outbound_connect_timeout;
     let mut tips = HashMap::new();
     loop {
         // Grab channels
@@ -161,7 +162,7 @@ async fn synced_peers(
                     peer.send(&request).await?;
 
                     // Node waits for response
-                    let Ok(response) = response_sub.receive_with_timeout(COMMS_TIMEOUT).await
+                    let Ok(response) = response_sub.receive_with_timeout(comms_timeout).await
                     else {
                         continue
                     };
@@ -181,7 +182,7 @@ async fn synced_peers(
                 peer.send(&request).await?;
 
                 // Node waits for response
-                let Ok(response) = response_sub.receive_with_timeout(COMMS_TIMEOUT).await else {
+                let Ok(response) = response_sub.receive_with_timeout(comms_timeout).await else {
                     continue
                 };
 
@@ -252,6 +253,7 @@ async fn retrieve_headers(
     for peer in peers {
         peer_subs.push(peer.subscribe_msg::<HeaderSyncResponse>().await?);
     }
+    let comms_timeout = node.p2p.settings().outbound_connect_timeout;
 
     // We subtract 1 since tip_height is increased by one
     let total = tip_height - last_known - 1;
@@ -263,7 +265,7 @@ async fn retrieve_headers(
             peer.send(&request).await?;
 
             // Node waits for response
-            let Ok(response) = peer_subs[index].receive_with_timeout(COMMS_TIMEOUT).await else {
+            let Ok(response) = peer_subs[index].receive_with_timeout(comms_timeout).await else {
                 continue
             };
 
@@ -356,6 +358,7 @@ async fn retrieve_blocks(
     for peer in peers {
         peer_subs.push(peer.subscribe_msg::<SyncResponse>().await?);
     }
+    let comms_timeout = node.p2p.settings().outbound_connect_timeout;
 
     let mut received_blocks = 0;
     let total = node.validator.blockchain.headers.len_sync();
@@ -378,7 +381,7 @@ async fn retrieve_blocks(
             peer.send(&request).await?;
 
             // Node waits for response
-            let Ok(response) = peer_subs[index].receive_with_timeout(COMMS_TIMEOUT).await else {
+            let Ok(response) = peer_subs[index].receive_with_timeout(comms_timeout).await else {
                 continue
             };
 
@@ -444,7 +447,8 @@ async fn sync_best_fork(node: &Darkfid, peers: &[ChannelPtr], last_tip: &HeaderH
     channel.send(&request).await?;
 
     // Node waits for response
-    let response = response_sub.receive_with_timeout(COMMS_TIMEOUT).await?;
+    let response =
+        response_sub.receive_with_timeout(node.p2p.settings().outbound_connect_timeout).await?;
 
     // Verify and store retrieved proposals
     debug!(target: "darkfid::task::sync_task", "Processing received proposals");
