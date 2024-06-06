@@ -1265,7 +1265,7 @@ pub fn run_gui(scene_graph: SceneGraphPtr) {
     #[cfg(target_os = "android")]
     {
         android_logger::init_once(
-            android_logger::Config::default().with_max_level(LevelFilter::Debug).with_tag("fagman"),
+            android_logger::Config::default().with_max_level(LevelFilter::Debug).with_tag("darkfi"),
         );
     }
 
