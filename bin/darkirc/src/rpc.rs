@@ -166,7 +166,7 @@ impl DarkIrc {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         }
 
-        recreate_from_replayer_log().await
+        recreate_from_replayer_log(&self.replay_datastore).await
     }
 }
 

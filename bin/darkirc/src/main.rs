@@ -15,7 +15,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-use std::{collections::HashSet, sync::Arc};
+use std::{collections::HashSet, path::PathBuf, sync::Arc};
 
 use darkfi::{
     async_daemonize, cli_desc,
@@ -88,6 +88,10 @@ struct Args {
     /// Datastore (DB) path
     datastore: String,
 
+    #[structopt(short, long, default_value = "~/.local/darkfi/replayed_darkirc_db")]
+    /// Replay logs (DB) path
+    replay_datastore: String,
+
     /// Generate a new NaCl keypair and exit
     #[structopt(long)]
     gen_chacha_keypair: bool,
@@ -116,6 +120,10 @@ struct Args {
     #[structopt(long)]
     pub password: Option<String>,
 
+    /// replay_mode
+    #[structopt(long)]
+    replay_mode: bool,
+
     /// P2P network settings
     #[structopt(flatten)]
     net: SettingsOpt,
@@ -134,6 +142,8 @@ pub struct DarkIrc {
     dnet_sub: JsonSubscriber,
     /// deg JSON-RPC subscriber
     deg_sub: JsonSubscriber,
+    /// Replay logs (DB) path
+    replay_datastore: PathBuf,
 }
 
 impl DarkIrc {
@@ -143,6 +153,7 @@ impl DarkIrc {
         event_graph: EventGraphPtr,
         dnet_sub: JsonSubscriber,
         deg_sub: JsonSubscriber,
+        replay_datastore: PathBuf,
     ) -> Self {
         Self {
             p2p,
@@ -151,6 +162,7 @@ impl DarkIrc {
             rpc_connections: Mutex::new(HashSet::new()),
             dnet_sub,
             deg_sub,
+            replay_datastore,
         }
     }
 }
@@ -197,19 +209,32 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         return Ok(())
     }
 
+    let replay_mode = args.replay_mode;
+
     info!("Initializing DarkIRC node");
 
     // Create datastore path if not there already.
     let datastore = expand_path(&args.datastore)?;
     fs::create_dir_all(&datastore).await?;
 
+    let replay_datastore = expand_path(&args.replay_datastore)?;
+    fs::create_dir_all(&replay_datastore).await?;
+
     info!("Instantiating event DAG");
     let sled_db = sled::open(datastore)?;
     let mut p2p_settings: darkfi::net::Settings = args.net.into();
     p2p_settings.app_version = semver::Version::parse(env!("CARGO_PKG_VERSION")).unwrap();
     let p2p = P2p::new(p2p_settings, ex.clone()).await;
-    let event_graph =
-        EventGraph::new(p2p.clone(), sled_db.clone(), "darkirc_dag", 1, ex.clone()).await?;
+    let event_graph = EventGraph::new(
+        p2p.clone(),
+        sled_db.clone(),
+        replay_datastore.clone(),
+        replay_mode,
+        "darkirc_dag",
+        1,
+        ex.clone(),
+    )
+    .await?;
 
     info!("Registering EventGraph P2P protocol");
     let event_graph_ = Arc::clone(&event_graph);
@@ -276,6 +301,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         event_graph.clone(),
         dnet_sub,
         deg_sub,
+        replay_datastore.clone(),
     ));
     let darkirc_ = Arc::clone(&darkirc);
     let rpc_task = StoppableTask::new();
