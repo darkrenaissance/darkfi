@@ -539,7 +539,10 @@ impl Client {
         *self.nickname.write().await = nickname.to_string();
 
         // If the username is set, we can complete the registration
-        if *self.username.read().await != "*" && !self.registered.load(SeqCst) {
+        if *self.username.read().await != "*" &&
+            !self.registered.load(SeqCst) &&
+            self.is_pass_set.load(SeqCst)
+        {
             self.registered.store(true, SeqCst);
             if self.reg_paused.load(SeqCst) {
                 return Ok(vec![])
@@ -602,6 +605,34 @@ impl Client {
         let replies = vec![ReplyType::Client((nick, format!("PART {} :Bye", channel)))];
 
         Ok(replies)
+    }
+
+    /// `PASS <password>`
+    ///
+    /// Used to set a ‘connection password’. If set, the password must
+    /// be set before USER/NICK commands.
+    pub async fn handle_cmd_pass(&self, args: &str) -> Result<Vec<ReplyType>> {
+        let mut tokens = args.split_ascii_whitespace();
+        let nick = self.nickname.read().await.to_string();
+        let Some(password) = tokens.next() else {
+            // self.penalty.fetch_add(1, SeqCst);
+            return Ok(vec![ReplyType::Server((
+                ERR_NEEDMOREPARAMS,
+                format!("{} PASS :{}", nick, INVALID_SYNTAX),
+            ))])
+        };
+
+        if self.server.password == password.to_string() {
+            self.is_pass_set.store(true, SeqCst);
+        } else {
+            error!("[IRC CLIENT] Password is not correct!");
+            return Ok(vec![ReplyType::Server((
+                ERR_PASSWDMISMATCH,
+                format!("{} PASS :{}", nick, PASSWORD_MISMATCH),
+            ))])
+        }
+
+        Ok(vec![])
     }
 
     /// `PING <server1>`
@@ -775,6 +806,11 @@ impl Client {
             ))])
         }
 
+        // If password is not set register user normally
+        if self.server.password.is_empty() {
+            self.is_pass_set.store(true, SeqCst);
+        }
+
         // Parse the line
         let nick = self.nickname.read().await.to_string();
         let mut tokens = args.split_ascii_whitespace();
@@ -827,6 +863,12 @@ impl Client {
 
         // If the nickname is set, we can complete the registration
         if nick != "*" {
+            if !self.is_pass_set.load(SeqCst) {
+                return Ok(vec![ReplyType::Server((
+                    ERR_PASSWDMISMATCH,
+                    format!("{} PASS :{}", nick, PASSWORD_MISMATCH),
+                ))])
+            }
             self.registered.store(true, SeqCst);
             if self.reg_paused.load(SeqCst) {
                 return Ok(vec![])

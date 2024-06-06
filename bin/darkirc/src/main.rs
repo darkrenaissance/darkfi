@@ -112,6 +112,10 @@ struct Args {
     #[structopt(long, default_value = "10")]
     sync_timeout: u8,
 
+    /// IRC Password
+    #[structopt(long)]
+    pub password: Option<String>,
+
     /// P2P network settings
     #[structopt(flatten)]
     net: SettingsOpt,
@@ -288,6 +292,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     );
 
     info!("Starting IRC server");
+    let password = args.password.unwrap_or_default();
     let config_path = get_config_path(args.config, CONFIG_FILE)?;
     let irc_server = IrcServer::new(
         darkirc.clone(),
@@ -295,6 +300,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         args.irc_tls_cert,
         args.irc_tls_secret,
         config_path,
+        password,
     )
     .await?;
 

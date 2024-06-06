@@ -24,6 +24,8 @@ pub const WELCOME: &str = "Welcome to the DarkIRC network";
 pub const NOT_REGISTERED: &str = "You have not registered";
 /// The message sent to the client when they are already registered
 pub const ALREADY_REGISTERED: &str = "You may not reregister";
+/// The message sent to the client when they enter wrong or no password
+pub const PASSWORD_MISMATCH: &str = "Password incorrect";
 /// The message sent to the client when command params could not parse
 pub const INVALID_SYNTAX: &str = "Syntax error";
 
@@ -197,6 +199,12 @@ pub const ERR_NEEDMOREPARAMS: u16 = 461;
 /// Returned when a client tries to change a detail that can only be
 /// set during registration.
 pub const ERR_ALREADYREGISTERED: u16 = 462;
+
+/// `<client> :Password incorrect`
+///
+/// Returned to indicate that the connection could not be registered
+/// as the password was either incorrect or not supplied.
+pub const ERR_PASSWDMISMATCH: u16 = 464;
 
 /// `<client> :Cant change mode for other users`
 ///

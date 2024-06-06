@@ -66,6 +66,8 @@ pub struct IrcServer {
     pub contacts: RwLock<HashMap<String, IrcContact>>,
     /// Active client connections
     clients: Mutex<HashMap<u16, StoppableTaskPtr>>,
+    /// IRC server Password
+    pub password: String,
 }
 
 impl IrcServer {
@@ -78,6 +80,7 @@ impl IrcServer {
         tls_cert: Option<String>,
         tls_secret: Option<String>,
         config_path: PathBuf,
+        password: String,
     ) -> Result<Arc<Self>> {
         let scheme = listen.scheme();
         if scheme != "tcp" && scheme != "tcp+tls" {
@@ -128,6 +131,7 @@ impl IrcServer {
             channels: RwLock::new(HashMap::new()),
             contacts: RwLock::new(HashMap::new()),
             clients: Mutex::new(HashMap::new()),
+            password,
         });
 
         // Load any channel/contact configuration.

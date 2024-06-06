@@ -80,6 +80,8 @@ pub struct Client {
     pub reg_paused: AtomicBool,
     /// CAP END marker
     pub is_cap_end: AtomicBool,
+    /// Password setup marker
+    pub is_pass_set: AtomicBool,
     /// Client username
     pub username: Arc<RwLock<String>>,
     /// Client nickname
@@ -118,6 +120,7 @@ impl Client {
             registered: AtomicBool::new(false),
             reg_paused: AtomicBool::new(false),
             is_cap_end: AtomicBool::new(false),
+            is_pass_set: AtomicBool::new(false),
             username: username.clone(),
             nickname: nickname.clone(),
             realname: RwLock::new(String::from("*")),
@@ -341,6 +344,7 @@ impl Client {
             "NAMES" => self.handle_cmd_names(&args).await?,
             "NICK" => self.handle_cmd_nick(&args).await?,
             "PART" => self.handle_cmd_part(&args).await?,
+            "PASS" => self.handle_cmd_pass(&args).await?,
             "PING" => self.handle_cmd_ping(&args).await?,
             "PRIVMSG" => self.handle_cmd_privmsg(&args).await?,
             "REHASH" => self.handle_cmd_rehash(&args).await?,
