@@ -335,7 +335,7 @@ impl Slot {
 
             // At this point we've managed to connect.
 
-            let stop_sub = channel.subscribe_stop().await.expect("Channel should not be stopped");
+            let stop_sub = channel.subscribe_stop().await?;
             // Setup new channel
             if let Err(err) =
                 self.session().register_channel(channel.clone(), self.p2p().executor()).await

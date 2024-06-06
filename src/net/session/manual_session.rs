@@ -173,10 +173,7 @@ impl Slot {
                                 "[P2P] Manual outbound connected [{}]", url,
                             );
 
-                            let stop_sub = channel
-                                .subscribe_stop()
-                                .await
-                                .expect("Channel should not be stopped");
+                            let stop_sub = channel.subscribe_stop().await?;
 
                             // Channel is now connected but not yet setup
 
