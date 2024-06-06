@@ -445,18 +445,18 @@ impl SceneNode {
     pub fn set_property_bool(&self, name: &str, val: bool) -> Result<()> {
         self.get_property(name).ok_or(Error::PropertyNotFound)?.set_bool(0, val)
     }
-    //pub fn set_property_u32(&self, name: &str, val: u32) -> Result<()> {
-    //    self.get_property(name).ok_or(Error::PropertyNotFound)?.set_u32(val)
-    //}
-    //pub fn set_property_f32(&self, name: &str, val: f32) -> Result<()> {
-    //    self.get_property(name).ok_or(Error::PropertyNotFound)?.set_f32(val)
-    //}
-    //pub fn set_property_str<S: Into<String>>(&self, name: &str, val: S) -> Result<()> {
-    //    self.get_property(name).ok_or(Error::PropertyNotFound)?.set_str(val)
-    //}
-    //pub fn set_property_node_id(&self, name: &str, val: SceneNodeId) -> Result<()> {
-    //    self.get_property(name).ok_or(Error::PropertyNotFound)?.set_node_id(val)
-    //}
+    pub fn set_property_u32(&self, name: &str, val: u32) -> Result<()> {
+        self.get_property(name).ok_or(Error::PropertyNotFound)?.set_u32(0, val)
+    }
+    pub fn set_property_f32(&self, name: &str, val: f32) -> Result<()> {
+        self.get_property(name).ok_or(Error::PropertyNotFound)?.set_f32(0, val)
+    }
+    pub fn set_property_str<S: Into<String>>(&self, name: &str, val: S) -> Result<()> {
+        self.get_property(name).ok_or(Error::PropertyNotFound)?.set_str(0, val)
+    }
+    pub fn set_property_node_id(&self, name: &str, val: SceneNodeId) -> Result<()> {
+        self.get_property(name).ok_or(Error::PropertyNotFound)?.set_node_id(0, val)
+    }
 
     pub fn add_signal<S: Into<String>>(
         &mut self,

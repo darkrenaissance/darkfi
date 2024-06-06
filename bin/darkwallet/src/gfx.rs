@@ -1,5 +1,6 @@
 use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 use freetype as ft;
+use log::LevelFilter;
 use miniquad::{
     conf, window, Backend, Bindings, BlendFactor, BlendState, BlendValue, BufferId, BufferLayout,
     BufferSource, BufferType, BufferUsage, Equation, EventHandler, KeyCode, KeyMods, MouseButton,
@@ -218,6 +219,9 @@ impl Stage {
             last_draw_time: None,
         };
         stage.setup_scene_graph_window();
+
+        stage.setup_scene();
+
         debug!("Finished loading GUI");
         stage
     }
@@ -419,6 +423,7 @@ impl Stage {
         _: SceneNodeId,
         arg_data: Vec<u8>,
     ) -> Result<Vec<u8>> {
+        debug!("gfx::create_chatview()");
         let mut cur = Cursor::new(&arg_data);
         let node_id = SceneNodeId::decode(&mut cur).unwrap();
 
@@ -437,6 +442,7 @@ impl Stage {
         _: SceneNodeId,
         arg_data: Vec<u8>,
     ) -> Result<Vec<u8>> {
+        debug!("gfx::create_editbox()");
         let mut cur = Cursor::new(&arg_data);
         let node_id = SceneNodeId::decode(&mut cur).unwrap();
 
@@ -448,6 +454,11 @@ impl Stage {
 
         let mut reply = vec![];
         Ok(reply)
+    }
+
+    fn setup_scene(&mut self) {
+        let mut sg = self.scene_graph.lock().unwrap();
+        crate::chatapp::setup(&mut sg);
     }
 }
 
@@ -572,6 +583,10 @@ impl<'a> RenderContext<'a> {
                 SceneNodeType::ChatView => {
                     let node = self.scene_graph.get_node(child.id).unwrap();
                     let chatview = match &node.pimpl {
+                        Pimpl::Null => {
+                            // Maybe the chatview isn't initialized fully yet
+                            continue;
+                        }
                         Pimpl::ChatView(e) => e.clone(),
                         _ => panic!("wrong pimpl for editbox")
                     };
@@ -582,6 +597,10 @@ impl<'a> RenderContext<'a> {
                 SceneNodeType::EditBox => {
                     let node = self.scene_graph.get_node(child.id).unwrap();
                     let editbox = match &node.pimpl {
+                        Pimpl::Null => {
+                            // Maybe the editbox isn't initialized fully yet
+                            continue;
+                        }
                         Pimpl::EditBox(e) => e.clone(),
                         _ => panic!("wrong pimpl for editbox")
                     };

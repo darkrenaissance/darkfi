@@ -9,9 +9,12 @@ edition = "2021"
 
 [dependencies]
 #miniquad = "0.4.0-alpha"
-miniquad = { git = "https://github.com/not-fl3/miniquad" }
-harfbuzz_rs = { git = "https://github.com/narodnik/harfbuzz_rs.git", features = ["freetype"] }
+#miniquad = { git = "https://github.com/not-fl3/miniquad" }
+miniquad = { path = "/tmp/miniquad" }
+#harfbuzz_rs = { git = "https://github.com/narodnik/harfbuzz_rs.git", features = ["freetype"] }
+harfbuzz_rs = { path = "/tmp/harfbuzz_rs", features = ["freetype"] }
 freetype-rs = { git = "https://github.com/narodnik/freetype-rs.git" }
+#harfbuzz = { version = "0.6.0", features = ["bundled"] }
 #harfbuzz_rs = "2.0.1"
 #freetype-rs = "0.36.0"
 freetype-sys = "0.20.1"
@@ -19,13 +22,14 @@ image = "0.25.1"
 log = "0.4.21"
 glam = "0.27.0"
 zmq = "0.10.0"
-darkfi-serial = { path = "../../src/serial" }
+#darkfi-serial = { path = "../../src/serial" }
+darkfi-serial = { git = "https://codeberg.org/darkrenaissance/darkfi.git" }
 thiserror = "1.0.61"
 # Only for async Mutex
 smol = "2.0.0"
 atomic_float = "1.0.0"
 
-rustpython-vm = "0.3.1"
+#rustpython-vm = "0.3.1"
 
 #[patch."https://github.com/narodnik/harfbuzz_rs.git"]
 #freetype-rs = { path = "/tmp/freetype-rs/" }

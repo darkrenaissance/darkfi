@@ -1,4 +1,5 @@
 use freetype as ft;
+use log::debug;
 
 use crate::gfx::{Rectangle, FreetypeFace};
 
@@ -67,6 +68,7 @@ impl TextShaper {
         let mut current_y = 0.;
 
         for (face_idx, text) in substrs {
+            //debug!("substr {}", text);
             let face = &self.font_faces[face_idx];
             if face.has_fixed_sizes() {
                 // emojis required a fixed size
@@ -104,7 +106,11 @@ impl TextShaper {
                 if face.has_color() {
                     flags |= ft::face::LoadFlag::COLOR;
                 }
+                // FIXME: glyph 884 hangs on android
+                // For now just avoid using emojis on android
+                //debug!("load_glyph {}", gid);
                 face.load_glyph(gid, flags).unwrap();
+                //debug!("load_glyph {} [done]", gid);
 
                 let glyph = face.glyph();
                 glyph.render_glyph(ft::RenderMode::Normal).unwrap();

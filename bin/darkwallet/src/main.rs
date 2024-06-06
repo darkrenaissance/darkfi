@@ -6,6 +6,8 @@ use std::{
     thread,
 };
 
+mod chatapp;
+
 mod chatview;
 
 mod editbox;
@@ -61,6 +63,7 @@ fn start_sentinel(scene_graph: SceneGraphPtr) {
 
 fn main() {
     let scene_graph = Arc::new(Mutex::new(SceneGraph::new()));
+
     start_zmq(scene_graph.clone());
     start_sentinel(scene_graph.clone());
     run_gui(scene_graph);

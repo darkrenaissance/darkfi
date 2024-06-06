@@ -1,5 +1,6 @@
 use atomic_float::AtomicF32;
 use miniquad::{KeyMods, UniformType, MouseButton, window};
+use log::debug;
 use std::{
     collections::HashMap,
     path::Path,
@@ -187,6 +188,8 @@ impl ChatView {
                 pos.y += off_y;
                 rhs = pos.x + pos.w;
 
+                assert_eq!(glyph.bmp.len() as u16, glyph.bmp_width*glyph.bmp_height*4);
+                //debug!("gly {} {}", glyph.substr, glyph.bmp.len());
                 let texture = render.ctx.new_texture_from_rgba8(glyph.bmp_width, glyph.bmp_height, &glyph.bmp);
                 render.render_clipped_box_with_texture2(&bound, &pos, COLOR_WHITE, texture);
                 render.ctx.delete_texture(texture);
@@ -214,6 +217,8 @@ impl ChatView {
                 pos.y += off_y;
                 rhs = pos.x + pos.w;
 
+                assert_eq!(glyph.bmp.len() as u16, glyph.bmp_width*glyph.bmp_height*4);
+                //debug!("gly {} {}", glyph.substr, glyph.bmp.len());
                 let texture = render.ctx.new_texture_from_rgba8(glyph.bmp_width, glyph.bmp_height, &glyph.bmp);
                 render.render_clipped_box_with_texture2(&bound, &pos, COLOR_WHITE, texture);
                 render.ctx.delete_texture(texture);
@@ -225,6 +230,8 @@ impl ChatView {
                 pos.x += off_x;
                 pos.y += off_y;
 
+                assert_eq!(glyph.bmp.len() as u16, glyph.bmp_width*glyph.bmp_height*4);
+                //debug!("gly {} {}", glyph.substr, glyph.bmp.len());
                 let texture = render.ctx.new_texture_from_rgba8(glyph.bmp_width, glyph.bmp_height, &glyph.bmp);
                 render.render_clipped_box_with_texture2(&bound, &pos, COLOR_WHITE, texture);
                 render.ctx.delete_texture(texture);

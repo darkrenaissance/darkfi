@@ -97,6 +97,7 @@ pub struct EditBox {
     key_repeat: Mutex<PressedKeysSmoothRepeat>,
     mouse_btn_held: AtomicBool,
     window_scale: f32,
+    screen_size: Arc<Property>,
 }
 
 impl EditBox {
@@ -121,11 +122,12 @@ impl EditBox {
 
         // TODO: catch window resize event and regen glyphs
         // Used for scaling the font size
-        let window = 
+        let window_node = 
             scene_graph
             .lookup_node("/window")
             .expect("no window attached!");
-        let window_scale = window.get_property_f32("scale")?;
+        let window_scale = window_node.get_property_f32("scale")?;
+        let screen_size = window_node.get_property("screen_size").ok_or(Error::PropertyNotFound)?;
 
         let self_ = Arc::new(Self{
             node_name: node_name.clone(),
@@ -146,6 +148,7 @@ impl EditBox {
             key_repeat: Mutex::new(PressedKeysSmoothRepeat::new(400, 50)),
             mouse_btn_held: AtomicBool::new(false),
             window_scale,
+            screen_size,
         });
         self_.regen_glyphs().unwrap();
 
@@ -193,8 +196,8 @@ impl EditBox {
             scene_graph
             .lookup_node_mut("/window/input/keyboard")
             .expect("no keyboard attached!");
-        keyb_node.register("key_down", slot_key_down);
-        keyb_node.register("key_up", slot_key_up);
+        keyb_node.register("key_down", slot_key_down).unwrap();
+        keyb_node.register("key_up", slot_key_up).unwrap();
 
         let weak_self = Arc::downgrade(&self_);
         let slot_btn_down = Slot {
@@ -247,9 +250,30 @@ impl EditBox {
             scene_graph
             .lookup_node_mut("/window/input/mouse")
             .expect("no mouse attached!");
-        mouse_node.register("button_down", slot_btn_down);
-        mouse_node.register("button_up", slot_btn_up);
-        mouse_node.register("move", slot_move);
+        mouse_node.register("button_down", slot_btn_down).unwrap();
+        mouse_node.register("button_up", slot_btn_up).unwrap();
+        mouse_node.register("move", slot_move).unwrap();
+
+        let weak_self = Arc::downgrade(&self_);
+        let slot_resize = Slot {
+            name: format!("{}::window_resize", node_name),
+            func: Box::new(move |data| {
+                let mut cur = Cursor::new(&data);
+                let w = f32::decode(&mut cur).unwrap();
+                let h = f32::decode(&mut cur).unwrap();
+
+                let self_ = weak_self.upgrade();
+                if let Some(self_) = self_ {
+                    self_.window_resize(w, h);
+                }
+            }),
+        };
+
+        let window_node = 
+            scene_graph
+            .lookup_node_mut("/window")
+            .expect("no window attached!");
+        window_node.register("resize", slot_resize).unwrap();
 
         // Save any properties we use
         Ok(Pimpl::EditBox(self_))
@@ -264,6 +288,10 @@ impl EditBox {
         let mut world_rect = rect.clone();
         world_rect.x += layer_rect.x as f32;
         world_rect.y += layer_rect.y as f32;
+        world_rect.x *= self.window_scale;
+        world_rect.y *= self.window_scale;
+        world_rect.w *= self.window_scale;
+        world_rect.h *= self.window_scale;
         *self.world_rect.lock().unwrap() = world_rect;
 
         let layer_w = layer_rect.w as f32;
@@ -459,8 +487,10 @@ impl EditBox {
     fn regen_glyphs(&self) -> Result<()> {
         let font_size = self.window_scale * self.font_size.get();
 
+        debug!("shape start");
         let glyphs = self.text_shaper.shape(self.text.get(), font_size,
                 self.text_color.get());
+        debug!("shape end");
         if self.cursor_pos.get() > glyphs.len() as u32 {
             self.cursor_pos.set(glyphs.len() as u32);
         }
@@ -681,11 +711,14 @@ impl EditBox {
     fn mouse_button_down(self: Arc<Self>, button: MouseButton, x: f32, y: f32) {
         let mouse_pos = Point { x, y };
         let rect = self.world_rect.lock().unwrap().clone();
+        debug!("mouse down event {} {} {} {} {} {}", x, y, rect.x, rect.y, rect.w, rect.h);
 
         // clicking inside box will:
         // 1. make it active
         // 2. begin selection
         if rect.contains(&mouse_pos) {
+            debug!("showkeyb!");
+            window::show_keyboard(true);
             if !self.is_active.get() {
                 self.is_active.set(true);
                 println!("inside!");
@@ -785,6 +818,9 @@ impl EditBox {
         }
 
         MouseClickGlyph::Pos(cpos)
+    }
+
+    fn window_resize(self: Arc<Self>, w: f32, h: f32) {
     }
 }
 
