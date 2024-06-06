@@ -17,7 +17,7 @@
 #datastore = "~/.local/darkfi/darkirc_db"
 
 ## Sets DB logs replay datastore path
-#datastore = "~/.local/darkfi/replayed_darkirc_db"
+#replay_datastore = "~/.local/darkfi/replayed_darkirc_db"
 
 ## List of channels to autojoin for new client connections
 autojoin = [
