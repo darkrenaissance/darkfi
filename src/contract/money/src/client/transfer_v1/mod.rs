@@ -109,6 +109,12 @@ pub fn make_transfer_call(
         return Err(ClientFailed::InvalidAmount(value).into())
     }
 
+    // Using integer division via `half_split` causes the evaluation of `1 / 2` which is equal to
+    // 0. This would cause us to send two outputs of 0 value which is not what we want.
+    if half_split && value == 1 {
+        return Err(ClientFailed::InvalidAmount(value).into())
+    }
+
     if token_id.inner() == pallas::Base::ZERO {
         return Err(ClientFailed::InvalidTokenId(token_id.to_string()).into())
     }
@@ -142,18 +148,30 @@ pub fn make_transfer_call(
 
     // Check if we should split the output into two equal halves
     if half_split {
-        let value = value / 2;
+        // Integer division is safe here as we are dividing by a constant.
+        #[allow(clippy::integer_division)]
+        let mut half = value / 2;
+
+        // Add the first half
         outputs.push(TransferCallOutput {
             public_key: recipient,
-            value,
+            value: half,
             token_id,
             spend_hook: output_spend_hook.unwrap_or(FuncId::none()),
             user_data: output_user_data.unwrap_or(pallas::Base::ZERO),
             blind: Blind::random(&mut OsRng),
         });
+
+        // Handle the case where value is odd. If so, division by 2 will truncate the amount.
+        // e.g. in integer division, 3 / 2 == 1.
+        // Arithmetic side effects are safe here: no risk of overflow or panic.
+        #[allow(clippy::arithmetic_side_effects)]
+        if value % 2 != 0 {
+            half += 1;
+        }
         outputs.push(TransferCallOutput {
             public_key: recipient,
-            value,
+            value: half,
             token_id,
             spend_hook: output_spend_hook.unwrap_or(FuncId::none()),
             user_data: output_user_data.unwrap_or(pallas::Base::ZERO),
