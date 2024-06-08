@@ -928,11 +928,20 @@ impl Client {
         let mut channels = HashSet::new();
 
         // If we have any configured autojoin channels, let's join the user
-        // and set their topics, if any. And request NAMES list.
+        // and set their topics, if any.
         if !*self.caps.read().await.get("no-autojoin").unwrap() {
             for channel in self.server.autojoin.read().await.iter() {
                 replies.extend(self.handle_cmd_join(channel, false).await.unwrap());
+                channels.insert(channel.to_string());
+            }
+        }
 
+        // Potentially extend the replies with channel history
+        replies.extend(self.get_history(&channels).await.unwrap());
+
+        // And request NAMES list.
+        if !*self.caps.read().await.get("no-autojoin").unwrap() {
+            for channel in self.server.autojoin.read().await.iter() {
                 if let Some(chan) = self.server.channels.read().await.get(channel) {
                     let nicks: Vec<String> = chan.nicks.iter().cloned().collect();
 
@@ -946,12 +955,8 @@ impl Client {
                     RPL_ENDOFNAMES,
                     format!("{} {} :End of NAMES list", nick, channel),
                 )));
-                channels.insert(channel.to_string());
             }
         }
-
-        // Potentially extend the replies with channel history
-        replies.extend(self.get_history(&channels).await.unwrap());
 
         replies
     }
