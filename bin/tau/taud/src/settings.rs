@@ -42,11 +42,11 @@ pub struct Args {
     #[structopt(long, default_value = "~/.local/darkfi/taud_db")]
     pub datastore: String,
 
-    #[structopt(long, default_value = "~/.local/darkfi/replayed_taud_db")]
     /// Replay logs (DB) path
+    #[structopt(long, default_value = "~/.local/darkfi/replayed_taud_db")]
     pub replay_datastore: String,
 
-    /// replay_mode
+    /// Flag to store Sled DB instructions
     #[structopt(long)]
     pub replay_mode: bool,
 

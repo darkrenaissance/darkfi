@@ -60,11 +60,11 @@ struct Args {
     #[structopt(long, default_value = "~/.local/darkfi/genev_db")]
     pub datastore: String,
 
-    #[structopt(short, long, default_value = "~/.local/darkfi/replayed_genev_db")]
     /// Replay logs (DB) path
+    #[structopt(short, long, default_value = "~/.local/darkfi/replayed_genev_db")]
     replay_datastore: String,
 
-    /// replay_mode
+    /// Flag to store Sled DB instructions
     #[structopt(long)]
     replay_mode: bool,
 
@@ -113,8 +113,6 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
     fs::create_dir_all(&datastore_path).await?;
 
     let replay_datastore = expand_path(&settings.replay_datastore)?;
-    fs::create_dir_all(&replay_datastore).await?;
-
     let replay_mode = settings.replay_mode;
 
     let sled_db = sled::open(datastore_path.clone())?;

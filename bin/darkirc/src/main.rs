@@ -94,6 +94,10 @@ struct Args {
     /// Replay logs (DB) path
     replay_datastore: String,
 
+    /// Flag to store Sled DB instructions
+    #[structopt(long)]
+    replay_mode: bool,
+
     /// Generate a new NaCl keypair and exit
     #[structopt(long)]
     gen_chacha_keypair: bool,
@@ -125,10 +129,6 @@ struct Args {
     /// Encrypt a given password for the IRC server connection
     #[structopt(long)]
     encrypt_password: bool,
-
-    /// replay_mode
-    #[structopt(long)]
-    replay_mode: bool,
 
     /// P2P network settings
     #[structopt(flatten)]
@@ -235,8 +235,6 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         return Ok(())
     }
 
-    let replay_mode = args.replay_mode;
-
     info!("Initializing DarkIRC node");
 
     // Create datastore path if not there already.
@@ -244,7 +242,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     fs::create_dir_all(&datastore).await?;
 
     let replay_datastore = expand_path(&args.replay_datastore)?;
-    fs::create_dir_all(&replay_datastore).await?;
+    let replay_mode = args.replay_mode;
 
     info!("Instantiating event DAG");
     let sled_db = sled::open(datastore)?;

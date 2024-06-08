@@ -18,7 +18,7 @@
 
 use std::{
     collections::HashMap,
-    fs::{File, OpenOptions},
+    fs::{self, File, OpenOptions},
     io::Write,
     path::Path,
     time::UNIX_EPOCH,
@@ -133,6 +133,7 @@ pub(super) fn generate_genesis(days_rotation: u64) -> Event {
 }
 
 pub(super) fn replayer_log(datastore: &Path, cmd: String, value: Vec<u8>) -> Result<()> {
+    fs::create_dir_all(datastore)?;
     let datastore = datastore.join("replayer.log");
     if !datastore.exists() {
         File::create(&datastore)?;

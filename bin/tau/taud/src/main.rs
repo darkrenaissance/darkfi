@@ -353,8 +353,6 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
     fs::create_dir_all(&datastore).await?;
 
     let replay_datastore = expand_path(&settings.replay_datastore)?;
-    fs::create_dir_all(&replay_datastore).await?;
-
     let replay_mode = settings.replay_mode;
 
     info!("Instantiating event DAG");
