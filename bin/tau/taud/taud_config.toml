@@ -7,6 +7,13 @@
 ## Datastore Path
 #datastore = "~/.local/darkfi/taud_db"
 
+## Sets DB logs replay datastore path
+#replay_datastore = "~/.local/darkfi/replayed_darkirc_db"
+
+## Run in replay mode to store Sled DB instructions
+## (for eventgraph debugging tool)
+#replay_mode = false
+
 ## Current display name
 #nickname = "NICKNAME"
 

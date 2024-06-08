@@ -19,6 +19,10 @@
 ## Sets DB logs replay datastore path
 #replay_datastore = "~/.local/darkfi/replayed_darkirc_db"
 
+## Run in replay mode to store Sled DB instructions
+## (for eventgraph debugging tool)
+#replay_mode = false
+
 ## List of channels to autojoin for new client connections
 autojoin = [
     "#dev",
