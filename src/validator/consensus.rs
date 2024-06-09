@@ -20,7 +20,7 @@ use std::collections::{HashMap, HashSet};
 
 use darkfi_sdk::{crypto::MerkleTree, tx::TransactionHash};
 use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
-use log::{debug, info};
+use log::{debug, info, warn};
 use num_bigint::BigUint;
 use sled_overlay::database::SledDbOverlayState;
 use smol::lock::RwLock;
@@ -43,6 +43,15 @@ use crate::{
 // Consensus configuration
 /// Block/proposal maximum transactions, exluding producer transaction
 pub const TXS_CAP: usize = 50;
+
+/// Average amount of gas consumed during transaction execution, derived by the Gas Analyzer
+const GAS_TX_AVG: u64 = 23_822_290;
+
+/// Multiplier used to calculate the gas limit for unproposed transactions
+const GAS_LIMIT_MULTIPLIER_UNPROPOSED_TXS: u64 = 50;
+
+/// Gas limit for unproposed transactions
+pub const GAS_LIMIT_UNPROPOSED_TXS: u64 = GAS_TX_AVG * GAS_LIMIT_MULTIPLIER_UNPROPOSED_TXS;
 
 /// This struct represents the information required by the consensus algorithm
 pub struct Consensus {
@@ -611,24 +620,25 @@ impl Fork {
     }
 
     /// Auxiliary function to retrieve unproposed valid transactions,
-    /// along with their total paid fees.
+    /// along with their total paid fees and total gas used.
     pub async fn unproposed_txs(
         &self,
         blockchain: &Blockchain,
         verifying_block_height: u32,
         block_target: u32,
         verify_fees: bool,
-    ) -> Result<(Vec<Transaction>, u64)> {
+    ) -> Result<(Vec<Transaction>, u64, u64)> {
         // Check if our mempool is not empty
         if self.mempool.is_empty() {
-            return Ok((vec![], 0))
+            return Ok((vec![], 0, 0))
         }
 
         // Transactions Merkle tree
         let mut tree = MerkleTree::new(1);
 
-        // Gas accumulator
-        let mut gas_paid = 0;
+        // Total gas accumulators
+        let mut total_gas_paid = 0;
+        let mut total_gas_used = 0;
 
         // Map of ZK proof verifying keys for the current transaction batch
         let mut vks: HashMap<[u8; 32], HashMap<String, VerifyingKey>> = HashMap::new();
@@ -658,7 +668,7 @@ impl Fork {
 
             // Verify the transaction against current state
             overlay.lock().unwrap().checkpoint();
-            match verify_transaction(
+            let (tx_gas_used, tx_gas_paid) = match verify_transaction(
                 &overlay,
                 verifying_block_height,
                 block_target,
@@ -669,25 +679,32 @@ impl Fork {
             )
             .await
             {
-                Ok((_, gas)) => gas_paid += gas,
+                Ok(gas_values) => gas_values,
                 Err(e) => {
                     debug!(target: "validator::consensus::unproposed_txs", "Transaction verification failed: {}", e);
                     overlay.lock().unwrap().revert_to_checkpoint()?;
                     continue
                 }
+            };
+
+            // Calculate current accumulated gas usage
+            let accumulated_gas_usage = total_gas_used + tx_gas_used;
+
+            // Check gas limit - if accumulated gas used exceeds it, break out of loop
+            if accumulated_gas_usage > GAS_LIMIT_UNPROPOSED_TXS {
+                warn!(target: "validator::consensus::unproposed_txs", "Retrieving transaction {} would exceed configured unproposed transaction gas limit: {} - {}", tx, accumulated_gas_usage, GAS_LIMIT_UNPROPOSED_TXS);
+                break
             }
+
+            // Update accumulated total gas
+            total_gas_paid += tx_gas_paid;
+            total_gas_used += tx_gas_used;
 
             // Push the tx hash into the unproposed transactions vector
             unproposed_txs.push(unproposed_tx);
-
-            // Check limit
-            // TODO: here we can use gas instead of the TXS_cap limit
-            if unproposed_txs.len() == TXS_CAP {
-                break
-            }
         }
 
-        Ok((unproposed_txs, gas_paid))
+        Ok((unproposed_txs, total_gas_paid, total_gas_used))
     }
 
     /// Auxiliary function to create a full clone using BlockchainOverlay::full_clone.

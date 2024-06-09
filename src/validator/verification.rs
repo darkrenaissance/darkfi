@@ -518,7 +518,7 @@ async fn apply_producer_transaction(
     // Append hash to merkle tree
     append_tx_to_merkle_tree(tree, tx);
 
-    debug!(target: "validator::verification::apply_producer_transaction", "Pruducer transaction {} executed successfully", tx_hash);
+    debug!(target: "validator::verification::apply_producer_transaction", "Producer transaction {} executed successfully", tx_hash);
 
     Ok(signature_public_key)
 }
@@ -689,22 +689,37 @@ pub async fn verify_transaction(
 
             deploy_runtime.deploy(&deploy_params.ix)?;
 
-            // Append the used gas
-            gas_used += deploy_runtime.gas_used();
+            let deploy_gas_used = deploy_runtime.gas_used();
+            debug!(target: "validator::verification::verify_transaction", "The gas used for deployment call {:?} of transaction {}: {}", call, tx_hash, deploy_gas_used);
+
+            // Append the used deployment gas
+            gas_used += deploy_gas_used;
         }
 
         // At this point we're done with the call and move on to the next one.
         // Accumulate the WASM gas used.
-        gas_used += runtime.gas_used();
+        let wasm_gas_used = runtime.gas_used();
+        debug!(target: "validator::verification::verify_transaction", "The gas used for WASM call {:?} of transaction {}: {}", call, tx_hash, wasm_gas_used);
+
+        // Append the used wasm gas
+        gas_used += wasm_gas_used;
     }
 
     // The signature fee is tx_size + fixed_sig_fee * n_signatures
-    gas_used += (PALLAS_SCHNORR_SIGNATURE_FEE * tx.signatures.len() as u64) +
+    let signature_fee = (PALLAS_SCHNORR_SIGNATURE_FEE * tx.signatures.len() as u64) +
         serialize_async(tx).await.len() as u64;
+    debug!(target: "validator::verification::verify_transaction", "The gas used for signature of transaction {}: {}", tx_hash, signature_fee);
+
+    // Append the used signature gas
+    gas_used += signature_fee;
 
     // The ZK circuit fee is calculated using a function in validator/fees.rs
     for zkbin in circuits_to_verify.iter() {
-        gas_used += circuit_gas_use(zkbin);
+        let zk_circuit_gas_used = circuit_gas_use(zkbin);
+        debug!(target: "validator::verification::verify_transaction", "The gas used for ZK circuit in namespace {} of transaction {}: {}", zkbin.namespace, tx_hash, zk_circuit_gas_used);
+
+        // Append the used zk circuit gas
+        gas_used += zk_circuit_gas_used;
     }
 
     if verify_fee {
@@ -730,6 +745,9 @@ pub async fn verify_transaction(
             );
             return Err(TxVerifyFailed::InsufficientFee.into())
         }
+        debug!(target: "validator::verification::verify_transaction", "The gas paid for transaction {}: {}", tx_hash, gas_paid);
+
+        // Store paid fee
         gas_paid = fee;
     }
 
@@ -768,6 +786,7 @@ pub async fn verify_transaction(
     // Append hash to merkle tree
     append_tx_to_merkle_tree(tree, tx);
 
+    debug!(target: "validator::verification::verify_transaction", "The total gas used for transaction {}: {}", tx_hash, gas_used);
     debug!(target: "validator::verification::verify_transaction", "Transaction {} verified successfully", tx_hash);
     Ok((gas_used, gas_paid))
 }
