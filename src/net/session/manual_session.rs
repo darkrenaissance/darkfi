@@ -187,9 +187,6 @@ impl Slot {
                                 target: "net::manual_session",
                                 "[P2P] Manual outbound disconnected [{}]", url,
                             );
-
-                            // DEV NOTE: Here we can choose to attempt reconnection again
-                            return Ok(())
                         }
                         Err(e) => {
                             warn!(
