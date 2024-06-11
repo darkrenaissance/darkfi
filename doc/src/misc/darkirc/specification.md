@@ -1,9 +1,9 @@
 
-# ircd Specification
+# darkirc Specification
 
 ## PrivMsgEvent
 
-This is the main message type inside `ircd`. The `PrivMsgEvent` is an
+This is the main message type inside `darkirc`. The `PrivMsgEvent` is an
 [event action](https://darkrenaissance.github.io/darkfi/misc/event_graph/network_protocol.html#event).
 
 

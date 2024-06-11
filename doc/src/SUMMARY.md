@@ -15,9 +15,8 @@
 - [Payments](testnet/payment.md)
 - [Atomic Swap](testnet/atomic-swap.md)
 - [DAO](testnet/dao.md)
-- [ircd](misc/ircd/ircd.md)
-	- [Private Message](misc/ircd/private_message.md)
-	- [Local Deployment](misc/ircd/local_deploy.md)
+- [DarkIRC](misc/darkirc/darkirc.md)
+	- [Private Message](misc/darkirc/private_message.md)
 
 # Developer Doc
 
@@ -118,7 +117,7 @@
 
 - [tor-darkirc](misc/tor-darkirc.md)
 - [vanityaddr](misc/vanityaddr.md)
-- [IRCd Specification](misc/ircd/specification.md)
+- [darkIRC Specification](misc/darkirc/specification.md)
 - [tau](misc/tau.md)
 - [event_graph](misc/event_graph/event_graph.md)
   - [Network Protocol](misc/event_graph/network_protocol.md)
