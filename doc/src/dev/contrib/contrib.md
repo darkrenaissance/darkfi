@@ -254,3 +254,17 @@ $ sh contrib/dependency_setup.sh
 Check `README.md` for instructions.
 
 * When running a `cargo` command, use the flag `--all-features`.
+
+## Security Disclosure
+
+Join our DarkIRC chat and ask to speak with the core team.
+
+Usually the best time would be our weekly Monday meetings at 16:00 CET.
+
+If it's sensitive and time critical, then we will get in touch over DM,
+and we will post a message on dark.fi to confirm our identity once we're in
+contact over DM.
+
+We haven't yet clarified our bug bounty program (stay tuned), but for legit bug
+reports we will pay out fairly.
+
