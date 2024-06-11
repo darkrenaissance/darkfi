@@ -84,10 +84,6 @@ pub async fn miner_task(
     info!(target: "darkfid::task::miner_task", "Generating signing key...");
     let mut secret = SecretKey::random(&mut OsRng);
 
-    // Generate a new fork to be able to extend
-    info!(target: "darkfid::task::miner_task", "Generating new empty fork...");
-    node.validator.consensus.generate_empty_fork().await?;
-
     // Grab blocks subscriber
     let block_sub = node.subscribers.get("blocks").unwrap();
 

@@ -90,10 +90,6 @@ pub async fn sync_task(node: &Darkfid, checkpoint: Option<(u32, HeaderHash)>) ->
         }
     }
 
-    // Generate a new fork to be able to extend
-    info!(target: "darkfid::task::sync_task", "Generating new empty fork...");
-    node.validator.consensus.generate_empty_fork().await?;
-
     // Sync headers and blocks
     loop {
         // Retrieve all the headers backwards until our last known one and verify them.

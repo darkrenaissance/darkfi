@@ -41,6 +41,10 @@ pub async fn consensus_init_task(
     recipient: Option<String>,
     ex: Arc<smol::Executor<'static>>,
 ) -> Result<()> {
+    // Generate a new fork to be able to extend
+    info!(target: "darkfid::task::consensus_init_task", "Generating new empty fork...");
+    node.validator.consensus.generate_empty_fork().await?;
+
     // Sync blockchain
     let checkpoint = if !skip_sync {
         // Parse configured checkpoint
