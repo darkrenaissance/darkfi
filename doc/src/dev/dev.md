@@ -68,9 +68,9 @@ This allows us to coordinate more effectively.
 | brb     | be right back      | If you are in a meeting and need to leave for a few mins. For example, maybe you need to grab a book. |
 | one sec | one second         | You need to search something on the web, or you are just doing the task (example: opening the file).  |
 
-\* once we have proper syncing implemented in ircd, these will become less relevant and not needed.
+\* once we have proper syncing implemented in darkirc, these will become less relevant and not needed.
 
-Another option is to run your ircd inside a persistent tmux session, and never miss messages.
+Another option is to run your darkirc inside a persistent tmux session, and never miss messages.
 
 ## Code coverage
 
