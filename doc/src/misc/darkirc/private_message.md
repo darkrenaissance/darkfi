@@ -1,39 +1,39 @@
 
 # Configuring a Private chat between users
 
-Any two users on the `ircd` server can establish a fully encrypted 
+Any two users on the `darkirc` server can establish a fully encrypted 
 communication medium between each other using a basic keypair setup.
 
-## Configuring ircd_config.toml
+## Configuring darkirc_config.toml
 
-`ircd_config.toml` should be created by default in `~/.config/darkfi/`
-when you first run `ircd`.
+`darkirc_config.toml` should be created by default in `~/.config/darkfi/`
+when you first run `darkirc`.
 
 Generate a keypair using the following command: 
 
 ```shell
-% ircd --gen-keypair
+% darkirc --gen-keypair
 ```
 This will generate a Public Key and a Private Key.
 
-Save the Private key safely & add it to the `ircd_config.toml` file as shown below.
+Save the Private key safely & add it to the `darkirc_config.toml` file as shown below.
 
 ```toml
 [private_key.”your_private_key_goes_here”]
 ```
 
-To share your Public Key with a user over `ircd` you can use one of the 
+To share your Public Key with a user over `darkirc` you can use one of the 
 public channels or via an external app like Signal, as plaintext DMs 
-are disabled in `ircd`.
+are disabled in `darkirc`.
 
-<u><b>Note</b></u>: If you use the `ircd`'s public channel, your 
+<u><b>Note</b></u>: If you use the `darkirc`'s public channel, your 
 message will be publically visible on the IRC chat.
 
-See the [example ircd_config.toml](https://github.com/darkrenaissance/darkfi/blob/v0.4.1/bin/ircd/ircd_config.toml) for more details
+See the [example darkirc_config.toml](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/bin/darkirc/darkirc_config.toml) for more details
 
 ## Example
 Lets start by configuring our contacts list in the generated 
-`ircd_config.toml` file (you can also refer to the examples written 
+`darkirc_config.toml` file (you can also refer to the examples written 
 in the comments of the toml file), let's assume alice and bob want to
 privately chat after they have each other's public keys:
 
@@ -82,8 +82,8 @@ be anything you want, and you should use it when DMing.
 
 <u><b>Note</b></u>: It's always a good idea to save your keys somewhere safe, but in 
 case you lost your Public Key and you still have your Private key in 
-`ircd_config.toml` file, you recover the Public Key like so:
+`darkirc_config.toml` file, you recover the Public Key like so:
 ```shell
-% ircd --recover-pubkey {your_private_key}
+% darkirc --recover-pubkey {your_private_key}
 ```
 

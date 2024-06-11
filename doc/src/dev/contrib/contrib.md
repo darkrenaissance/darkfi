@@ -7,7 +7,7 @@
    tooling, Python bindings, p2p apps like the DHT.
 
 Every monday 16:00 CET, there is our main dev meeting on
-[our chat](https://darkrenaissance.github.io/darkfi/misc/ircd/ircd.html).
+[our chat](https://darkrenaissance.github.io/darkfi/misc/darkirc/darkirc.html).
 Feel free to join and discuss with other darkfi devs.
 
 In general, the best way to get started is to explore the codebase thoroughly and
@@ -43,7 +43,7 @@ more than minor cosmetic changes. It also is useful to have online repositories
 containing your work. We don't care about degrees or qualifications -
 many of the best coders don't have any.
 
-Secondly you need to get on [our online chat](misc/ircd/ircd.md) and
+Secondly you need to get on [our online chat](misc/darkirc/darkirc.md) and
 make yourself known. We are not spending time on social media or proprietary
 chats like Telegram because we're very busy.
 

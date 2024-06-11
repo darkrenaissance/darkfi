@@ -94,9 +94,9 @@ can connect to peers manually, or through seed.
 peers and the seed itself.
 
 
-## 4. **Setup `ircd`**
+## 4. **Setup `darkirc`**
 
-After compiling `ircd`, run it once to spawn the config file. Then
+After compiling `darkirc`, run it once to spawn the config file. Then
 edit it to contain the following:
 
 ```toml
@@ -117,7 +117,7 @@ outbound_transports = ["nym"]
 
 > The most important part that could easily be forgotten is: ```outbound_transports = ["nym"]```
 
-Now when you start `ircd`, you will be able to discover or connect 
+Now when you start `darkirc`, you will be able to discover or connect 
 directly to peers and your traffic will be routed through the mixnet.
 
 These instructions are also applicable to other nodes in the DarkFi

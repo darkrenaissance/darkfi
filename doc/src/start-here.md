@@ -37,7 +37,7 @@ which has support for Nym and Tor.
 
 Every Monday at 16:00 CET in #dev we have our main project meeting.
 
-See the guide on [darkirc](misc/ircd/ircd.md) for instructions on joining.
+See the guide on [darkirc](misc/darkirc/darkirc.md) for instructions on joining.
 
 ## Contributing as a Dev
 

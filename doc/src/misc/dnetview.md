@@ -1,6 +1,6 @@
 # Dnetview
 
-A simple tui to explore darkfi ircd network topology.
+A simple tui to explore darkfi darkirc network topology.
 
 dnetview displays: 
 

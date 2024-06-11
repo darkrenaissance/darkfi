@@ -18,7 +18,7 @@ blockchain. All contract execution is done locally on the DarkFi wallet.
 **P2P Network:** The DarkFi ecosystem runs as a network of P2P nodes,
 where these nodes interact with each other over specific protocols (see
 [node overview](dna.md)). Nodes communicate on a peer-to-peer network,
-which is also home to tools such as our P2P [irc](../misc/ircd.md)
+which is also home to tools such as our P2P [irc](../misc/darkirc.md)
 and P2P task manager [tau](../misc/tau.md).
 
 **ZK smart contracts:** Anonymous applications on DarkFi run on proofs

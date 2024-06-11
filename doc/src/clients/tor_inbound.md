@@ -20,11 +20,11 @@ on an `apt` based system we can run:
 ```
 
 This will install it. Now in `/etc/tor/torrc` we can set up the hidden
-service. For hosting an anonymous `ircd` node, set up the following
+service. For hosting an anonymous `darkirc` node, set up the following
 lines in the file:
 
 ```
-HiddenServiceDir /var/lib/tor/darkfi_ircd
+HiddenServiceDir /var/lib/tor/darkfi_darkirc
 HiddenServicePort 25551 127.0.0.1:25551
 ```
 
@@ -37,15 +37,15 @@ Then restart Tor:
 You can grab the hostname of your hidden service from the directory:
 
 ```
-# cat /var/lib/tor/darkfi_ircd/hostname
+# cat /var/lib/tor/darkfi_darkirc/hostname
 ```
 
 For example purposes, let's assume it's
 `jamie3vkiwibfiwucd6vxijskbhpjdyajmzeor4mc4i7yopvpo4p7cyd.onion`.
 
-## 2. **Setup `ircd`**
+## 2. **Setup `darkirc`**
 
-After compiling `ircd`, run it once to spawn the config file. Then
+After compiling `darkirc`, run it once to spawn the config file. Then
 edit it to contain the following:
 
 ```toml
@@ -53,7 +53,7 @@ inbound = ["tcp://127.0.0.1:25551"]
 external_addr = ["tor://jamie3vkiwibfiwucd6vxijskbhpjdyajmzeor4mc4i7yopvpo4p7cyd.onion:25551"]
 ```
 
-Now when you start `ircd`, the hidden service will be announced as
+Now when you start `darkirc`, the hidden service will be announced as
 a peer and people will be able to connect to it when they discover
 you as a peer.
 

@@ -30,7 +30,7 @@ hosts_file="lilith_hosts.tsv"
 #localnet = true
 #channel_log = true
 
-#[network."ircd"]
+#[network."darkirc"]
 #port = 25551
 #seeds = []
 #peers = []
