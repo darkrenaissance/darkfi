@@ -107,8 +107,8 @@ struct Args {
     gen_channel_secret: bool,
 
     /// Recover NaCl public key from a secret key
-    #[structopt(long)]
-    get_chacha_pubkey: Option<String>,
+    #[structopt(long = "get-chacha-pubkey")]
+    chacha_secret: Option<String>,
 
     /// Flag to skip syncing the DAG (no history).
     #[structopt(long)]
@@ -196,7 +196,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         return Ok(())
     }
 
-    if let Some(chacha_secret) = args.get_chacha_pubkey {
+    if let Some(chacha_secret) = args.chacha_secret {
         let bytes = match bs58::decode(chacha_secret).into_vec() {
             Ok(v) => v,
             Err(e) => {
