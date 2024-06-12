@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, BatchSize};
 use easy_parallel::Parallel;
 use std::{collections::HashMap, sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}}};
 use rand::{rngs::OsRng, Rng};
@@ -49,14 +49,18 @@ fn crossbeam(c: &mut Criterion) {
         });
 
         group.bench_with_input(BenchmarkId::from_parameter(k), &k, |b, &_| {
-            b.iter(|| {
-                // Do 10k inserts
-                for _ in 0..10_000 {
+            b.iter_batched(
+                || {
                     let key: usize = OsRng.gen();
                     let val: usize = OsRng.gen();
+                    (key, val)
+                },
+                |(key, val)| {
+                    // Do 10k inserts
                     map.insert(key, val);
-                }
-            })
+                },
+                BatchSize::SmallInput
+            )
         });
 
         stopped.store(true, Ordering::Relaxed);
@@ -94,14 +98,18 @@ fn crossbeam(c: &mut Criterion) {
         });
 
         group.bench_with_input(BenchmarkId::from_parameter(k), &k, |b, &_| {
-            b.iter(|| {
-                // Do 10k inserts
-                for _ in 0..10_000 {
+            b.iter_batched(
+                || {
                     let key: usize = OsRng.gen();
                     let val: usize = OsRng.gen();
+                    (key, val)
+                },
+                |(key, val)| {
+                    // Do 10k inserts
                     map.lock().unwrap().insert(key, val);
-                }
-            })
+                },
+                BatchSize::SmallInput
+            )
         });
 
         stopped.store(true, Ordering::Relaxed);
