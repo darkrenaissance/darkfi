@@ -1,6 +1,5 @@
-use crossbeam_skiplist::SkipMap;
 use rand::{rngs::OsRng, Rng};
-use std::sync::Arc;
+use std::{collections::HashMap, sync::{Arc, Mutex}};
 
 pub type SubscriptionId = usize;
 
@@ -37,12 +36,12 @@ impl<T: Clone + Send + 'static> Subscription<T> {
 
 #[derive(Debug)]
 pub struct Publisher<T> {
-    subs: SkipMap<SubscriptionId, smol::channel::Sender<T>>
+    subs: Mutex<HashMap<SubscriptionId, smol::channel::Sender<T>>>
 }
 
 impl<T: Clone + Send + 'static> Publisher<T> {
     pub fn new() -> Arc<Self> {
-        Arc::new(Self { subs: SkipMap::new() })
+        Arc::new(Self { subs: Mutex::new(HashMap::new()) })
     }
 
     pub fn subscribe(self: Arc<Self>) -> Subscription<T> {
@@ -50,13 +49,13 @@ impl<T: Clone + Send + 'static> Publisher<T> {
         let sub_id = OsRng.gen();
         // Optional to check whether this ID already exists.
         // It is nearly impossible to ever happen.
-        self.subs.insert(sub_id, sendr);
+        self.subs.lock().unwrap().insert(sub_id, sendr);
 
         Subscription { id: sub_id, recv_queue: recvr, parent: self.clone() }
     }
 
     fn unsubscribe(self: Arc<Self>, sub_id: SubscriptionId) {
-        self.subs.remove(&sub_id);
+        self.subs.lock().unwrap().remove(&sub_id);
     }
 
     /// Publish a message to all listening subscriptions.
@@ -67,10 +66,7 @@ impl<T: Clone + Send + 'static> Publisher<T> {
     /// Publish a message to all listening subscriptions but exclude some subset.
     /// Sync version.
     pub fn notify_with_exclude_sync(&self, message_result: T, exclude_list: &[SubscriptionId]) {
-        for entry in self.subs.iter() {
-            let id = entry.key();
-            let sub = entry.value();
-
+        for (id, sub) in self.subs.lock().unwrap().iter() {
             if exclude_list.contains(id) {
                 continue
             }
