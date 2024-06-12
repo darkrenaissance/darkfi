@@ -154,6 +154,7 @@ impl EditBox {
         });
         self_.regen_glyphs().unwrap();
 
+        /*
         let weak_self = Arc::downgrade(&self_);
         let slot_key_down = Slot {
             name: format!("{}::key_down", node_name),
@@ -270,12 +271,13 @@ impl EditBox {
                 }
             }),
         };
+        */
 
         let window_node = 
             scene_graph
             .lookup_node_mut("/window")
             .expect("no window attached!");
-        window_node.register("resize", slot_resize).unwrap();
+        //window_node.register("resize", slot_resize).unwrap();
 
         // Save any properties we use
         Ok(Pimpl::EditBox(self_))

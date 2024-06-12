@@ -239,10 +239,10 @@ def face(idx1, idx2, idx3):
 
 class Api:
 
-    def __init__(self, addr="[::1]", port=9484):
+    def __init__(self, addr="127.0.0.1", port=9484):
         context = zmq.Context()
         self.socket = context.socket(zmq.REQ)
-        self.socket.setsockopt(zmq.IPV6, True)
+        #self.socket.setsockopt(zmq.IPV6, True)
         self.socket.connect(f"tcp://{addr}:{port}")
 
     def _make_request(self, cmd, payload):

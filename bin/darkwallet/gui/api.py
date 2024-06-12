@@ -2,7 +2,7 @@ from collections import namedtuple
 from pydrk import Api, HostApi, PropertyType, PropertySubType, Property, serial
 import zmq
 
-api = Api(addr="[2a02:aa13:8342:1400:81b3:9662:6650:690d]")
+api = Api()
 host = HostApi(api)
 print("Node status:", api.hello())
 

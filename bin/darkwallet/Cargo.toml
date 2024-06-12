@@ -21,7 +21,9 @@ freetype-sys = "0.20.1"
 image = "0.25.1"
 log = "0.4.21"
 glam = "0.27.0"
-zmq = "0.10.0"
+#zmq = "0.10.0"
+#async_zmq = "0.4.0"
+zeromq = { version = "*", default-features = false, features = ["async-std-runtime", "all-transport"] }
 #darkfi-serial = { path = "../../src/serial" }
 darkfi-serial = { git = "https://codeberg.org/darkrenaissance/darkfi.git" }
 thiserror = "1.0.61"
@@ -31,6 +33,8 @@ atomic_float = "1.0.0"
 async-channel = "2.3.1"
 easy-parallel = "3.3.1"
 rand = "0.8.5"
+async-lock = "3.4.0"
+futures = "0.3.30"
 
 #rustpython-vm = "0.3.1"
 

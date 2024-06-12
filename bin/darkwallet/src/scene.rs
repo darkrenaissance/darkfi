@@ -1,11 +1,14 @@
 use atomic_float::AtomicF32;
 use darkfi_serial::{SerialDecodable, SerialEncodable};
+use async_lock::Mutex;
+use async_channel::Sender;
+use futures::{stream::FuturesUnordered, StreamExt};
 use std::{
     fmt,
     str::FromStr,
     sync::{
         atomic::{AtomicBool, AtomicU32, Ordering},
-        Arc, Mutex, MutexGuard,
+        Arc
     },
 };
 
@@ -89,7 +92,8 @@ impl FromStr for ScenePath {
     }
 }
 
-pub type SceneGraphPtr = Arc<Mutex<SceneGraph>>;
+pub type SceneGraphPtr = Arc<std::sync::Mutex<SceneGraph>>;
+pub type SceneGraphPtr2 = Arc<Mutex<SceneGraph>>;
 
 pub struct SceneGraph {
     // Node 0 is always the root
@@ -513,12 +517,16 @@ impl SceneNode {
         sig.freed.push(slot_id);
         Ok(())
     }
-    pub fn trigger(&self, sig_name: &str, data: Vec<u8>) -> Result<()> {
+    pub async fn trigger(&self, sig_name: &str, data: Vec<u8>) -> Result<()> {
         let sig = self.get_signal(sig_name).ok_or(Error::SignalNotFound)?;
+        let mut futures = FuturesUnordered::new();
         for (_, slot) in sig.get_slots() {
             // Trigger the slot
-            slot.call(data.clone());
+            futures.push(async {
+                slot.notify.send(data.clone()).await;
+            });
         }
+        let _: Vec<_> = futures.collect().await;
         Ok(())
     }
 
@@ -576,13 +584,7 @@ pub type SlotId = u32;
 
 pub struct Slot {
     pub name: String,
-    pub func: SlotFn,
-}
-
-impl Slot {
-    fn call(&self, data: Vec<u8>) {
-        (self.func)(data)
-    }
+    pub notify: Sender<Vec<u8>>
 }
 
 pub struct Signal {

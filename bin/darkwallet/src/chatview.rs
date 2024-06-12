@@ -63,6 +63,7 @@ impl ChatView {
             atlas: Mutex::new(HashMap::new()),
         });
 
+        /*
         let weak_self = Arc::downgrade(&self_);
         let slot_move = Slot {
             name: format!("{}::mouse_move", node_name),
@@ -94,13 +95,14 @@ impl ChatView {
                 }
             }),
         };
+        */
 
         let mouse_node = 
             scene_graph
             .lookup_node_mut("/window/input/mouse")
             .expect("no mouse attached!");
-        mouse_node.register("wheel", slot_wheel);
-        mouse_node.register("move", slot_move);
+        //mouse_node.register("wheel", slot_wheel);
+        //mouse_node.register("move", slot_move);
 
         // Save any properties we use
         Ok(Pimpl::ChatView(self_))

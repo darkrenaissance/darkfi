@@ -1,15 +1,17 @@
 use darkfi_serial::{deserialize, Decodable, Encodable, SerialDecodable, VarInt};
+use async_lock::Mutex;
 use std::{
     io::Cursor,
-    sync::{atomic::Ordering, mpsc},
+    sync::{Arc, atomic::Ordering, mpsc},
     thread,
 };
+use zeromq::{Socket, SocketSend, SocketRecv};
 
 use crate::{
     error::{Error, Result},
     expr::SExprCode,
     prop::{Property, PropertySubType, PropertyType, PropertyValue},
-    scene::{SceneGraphPtr, SceneNodeId, SceneNodeType, Slot, SlotId},
+    scene::{SceneGraphPtr2, SceneNodeId, SceneNodeType, Slot, SlotId},
 };
 
 #[derive(Debug, SerialDecodable)]
@@ -49,78 +51,75 @@ enum Command {
 // PropertyIsUnset
 
 pub struct ZeroMQAdapter {
+    /*
     // req-reply commands
     req_socket: zmq::Socket,
     // We cannot share zmq sockets across threads, and we cannot quickly spawn
     // pub sockets due to address reuse errors.
     slot_sender: mpsc::SyncSender<(Vec<u8>, Vec<u8>)>,
     slot_recvr: Option<mpsc::Receiver<(Vec<u8>, Vec<u8>)>>,
-    scene_graph: SceneGraphPtr,
+    */
+    scene_graph: SceneGraphPtr2,
+    ex: Arc<smol::Executor<'static>>,
+
+    zmq_rep: Mutex<zeromq::RepSocket>,
+    zmq_pub: Mutex<zeromq::PubSocket>,
 }
 
 impl ZeroMQAdapter {
-    pub fn new(scene_graph: SceneGraphPtr) -> Self {
-        let zmq_ctx = zmq::Context::new();
-        let req_socket = zmq_ctx.socket(zmq::REP).unwrap();
-        req_socket.set_ipv6(true).unwrap();
-        req_socket.bind("tcp://*:9484").unwrap();
+    pub async fn new(scene_graph: SceneGraphPtr2,
+    ex: Arc<smol::Executor<'static>>,
+        ) -> Arc<Self> {
+        let mut zmq_rep = zeromq::RepSocket::new();
+        zmq_rep.bind("tcp://127.0.0.1:9484").await.unwrap();
 
-        let (slot_sender, slot_recvr) = mpsc::sync_channel(100);
+        let mut zmq_pub = zeromq::PubSocket::new();
+        zmq_pub.bind("tcp://127.0.0.1:9485").await.unwrap();
 
-        Self { req_socket, slot_sender, slot_recvr: Some(slot_recvr), scene_graph }
+        Arc::new(Self {
+            scene_graph,
+            ex,
+            zmq_rep: Mutex::new(zmq_rep),
+            zmq_pub: Mutex::new(zmq_pub),
+        })
     }
 
-    pub fn run(&mut self) {
-        let rx = std::mem::take(&mut self.slot_recvr).unwrap();
-        let _ = thread::spawn(move || {
-            let zmq_ctx = zmq::Context::new();
-            let pub_socket = zmq_ctx.socket(zmq::PUB).unwrap();
-            pub_socket.set_ipv6(true).unwrap();
-            pub_socket.bind("tcp://*:9485").unwrap();
-
-            loop {
-                let (signal_data, user_data) = rx.recv().unwrap();
-                pub_socket.send_multipart(&[signal_data, user_data], zmq::DONTWAIT).unwrap();
-            }
-        });
-
+    pub async fn run(self: Arc<Self>) {
         loop {
-            // https://github.com/johnliu55tw/rust-zmq-poller/blob/master/src/main.rs
-            let mut items = [self.req_socket.as_poll_item(zmq::POLLIN)];
-            // Poll forever
-            let _rc = zmq::poll(&mut items, -1).unwrap();
+            let req = self.zmq_rep.lock().await.recv().await.unwrap();
+            assert_eq!(req.len(), 2);
+            let cmd = req.get(0).unwrap().to_vec();
+            assert_eq!(cmd.len(), 1);
+            let payload = req.get(1).unwrap().to_vec();
 
-            // Rust borrow checker things
-            let is_item0_readable = items[0].is_readable();
-            drop(items);
+            let cmd = deserialize(&cmd).unwrap();
+            debug!(target: "req", "zmq: {:?} {:?}", cmd, payload);
 
-            if is_item0_readable {
-                let req = self.req_socket.recv_multipart(zmq::DONTWAIT).unwrap();
+            let self2 = self.clone();
+            match self2.process_request(cmd, payload).await {
+                Ok(reply) => {
+                    let mut m = zeromq::ZmqMessage::from(vec![0u8]);
+                    m.push_back(reply.into());
 
-                assert_eq!(req[0].len(), 1);
-                assert_eq!(req.len(), 2);
-                let cmd = deserialize(&req[0]).unwrap();
-                let payload = req[1].clone();
+                    // [errc:1] [reply]
+                    self.zmq_rep.lock().await.send(m).await.unwrap();
+                }
+                Err(err) => {
+                    let errc = err as u8;
+                    warn!(target: "req", "errc {}: {}", errc, err);
 
-                match self.process_request(cmd, payload) {
-                    Ok(reply) => {
-                        // [errc:1] [reply]
-                        self.req_socket.send_multipart(&[vec![0], reply], zmq::DONTWAIT).unwrap();
-                    }
-                    Err(err) => {
-                        let errc = err as u8;
-                        warn!(target: "req", "errc {}: {}", errc, err);
-                        self.req_socket
-                            .send_multipart(&[vec![errc], vec![]], zmq::DONTWAIT)
-                            .unwrap();
-                    }
+                    let mut m = zeromq::ZmqMessage::from(vec![errc]);
+                    m.push_back(vec![].into());
+
+                    // [errc:1] [reply]
+                    self.zmq_rep.lock().await.send(m).await.unwrap();
                 }
             }
         }
     }
 
-    fn process_request(&self, cmd: Command, payload: Vec<u8>) -> Result<Vec<u8>> {
-        let mut scene_graph = self.scene_graph.lock().unwrap();
+    async fn process_request(self: Arc<Self>, cmd: Command, payload: Vec<u8>) -> Result<Vec<u8>> {
+        let mut scene_graph = self.scene_graph.lock().await;
         let mut cur = Cursor::new(&payload);
         let mut reply = vec![];
         match cmd {
@@ -425,13 +424,27 @@ impl ZeroMQAdapter {
 
                 let node = scene_graph.get_node_mut(node_id).ok_or(Error::NodeNotFound)?;
 
-                let sender = self.slot_sender.clone();
+                let (sendr, recvr) = async_channel::unbounded();
                 let slot = Slot {
                     name: slot_name,
-                    func: Box::new(move |signal_data| {
-                        sender.send((signal_data, user_data.clone())).unwrap();
-                    }),
+                    notify: sendr
                 };
+
+                // This task will auto-die when the slot is unregistered
+                let self2 = self.clone();
+                self.ex.spawn(async move {
+                    loop {
+                        let Ok(signal_data) = recvr.recv().await else {
+                            // Die
+                            break;
+                        };
+
+                        let mut m = zeromq::ZmqMessage::from(signal_data);
+                        m.push_back(user_data.clone().into());
+
+                        self2.zmq_pub.lock().await.send(m).await.unwrap();
+                    }
+                }).detach();
 
                 let slot_id = node.register(&sig_name, slot)?;
                 slot_id.encode(&mut reply).unwrap();

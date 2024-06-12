@@ -1222,7 +1222,7 @@ impl EventHandler for Stage {
         modifiers.logo.encode(&mut data).unwrap();
         repeat.encode(&mut data).unwrap();
         key.encode(&mut data).unwrap();
-        win.trigger("key_down", data).unwrap();
+        //win.trigger("key_down", data).unwrap();
     }
     fn key_up_event(&mut self, keycode: KeyCode, modifiers: KeyMods) {
         let mut scene_graph = self.scene_graph.lock().unwrap();
@@ -1236,7 +1236,7 @@ impl EventHandler for Stage {
         modifiers.alt.encode(&mut data).unwrap();
         modifiers.logo.encode(&mut data).unwrap();
         key.encode(&mut data).unwrap();
-        win.trigger("key_up", data).unwrap();
+        //win.trigger("key_up", data).unwrap();
     }
     fn mouse_motion_event(&mut self, x: f32, y: f32) {
         let mut scene_graph = self.scene_graph.lock().unwrap();
@@ -1244,7 +1244,7 @@ impl EventHandler for Stage {
         x.encode(&mut data).unwrap();
         y.encode(&mut data).unwrap();
         let mouse = scene_graph.lookup_node_mut("/window/input/mouse").unwrap();
-        mouse.trigger("move", data).unwrap();
+        //mouse.trigger("move", data).unwrap();
     }
     fn mouse_wheel_event(&mut self, x: f32, y: f32) {
         let mut scene_graph = self.scene_graph.lock().unwrap();
@@ -1252,7 +1252,7 @@ impl EventHandler for Stage {
         x.encode(&mut data).unwrap();
         y.encode(&mut data).unwrap();
         let mouse = scene_graph.lookup_node_mut("/window/input/mouse").unwrap();
-        mouse.trigger("wheel", data).unwrap();
+        //mouse.trigger("wheel", data).unwrap();
     }
     fn mouse_button_down_event(&mut self, button: MouseButton, x: f32, y: f32) {
         let mut scene_graph = self.scene_graph.lock().unwrap();
@@ -1261,7 +1261,7 @@ impl EventHandler for Stage {
         x.encode(&mut data).unwrap();
         y.encode(&mut data).unwrap();
         let mouse = scene_graph.lookup_node_mut("/window/input/mouse").unwrap();
-        mouse.trigger("button_down", data).unwrap();
+        //mouse.trigger("button_down", data).unwrap();
     }
     fn mouse_button_up_event(&mut self, button: MouseButton, x: f32, y: f32) {
         let mut scene_graph = self.scene_graph.lock().unwrap();
@@ -1270,7 +1270,7 @@ impl EventHandler for Stage {
         x.encode(&mut data).unwrap();
         y.encode(&mut data).unwrap();
         let mouse = scene_graph.lookup_node_mut("/window/input/mouse").unwrap();
-        mouse.trigger("button_up", data).unwrap();
+        //mouse.trigger("button_up", data).unwrap();
     }
 
     fn resize_event(&mut self, width: f32, height: f32) {
@@ -1283,7 +1283,7 @@ impl EventHandler for Stage {
         let prop = win.get_property("screen_size").unwrap();
         prop.set_f32(0, width).unwrap();
         prop.set_f32(1, height).unwrap();
-        win.trigger("resize", data).unwrap();
+        //win.trigger("resize", data).unwrap();
     }
 }
 

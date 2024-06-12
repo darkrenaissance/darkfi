@@ -1,8 +1,9 @@
 #![feature(deadline_api)]
 #![feature(str_split_whitespace_remainder)]
 
+use async_lock::Mutex;
 use std::{
-    sync::{Arc, Mutex, mpsc},
+    sync::{Arc, mpsc},
     thread,
 };
 
@@ -52,10 +53,6 @@ use log::LevelFilter;
 
 fn start_zmq(scene_graph: SceneGraphPtr) {
     // detach thread
-    let _ = thread::spawn(move || {
-        let mut zmq_rpc = ZeroMQAdapter::new(scene_graph);
-        zmq_rpc.run();
-    });
 }
 
 fn start_sentinel(scene_graph: SceneGraphPtr) {
@@ -67,16 +64,8 @@ fn start_sentinel(scene_graph: SceneGraphPtr) {
     });
 }
 
-async fn amain(ex: Arc<smol::Executor<'static>>, render_api: Arc<gfx2::RenderApi>,
-    event_sub: pubsub::Subscription<gfx2::GraphicsEvent>
-    ) {
-    let task = ex.spawn(async move {
-        loop {
-            let ev = event_sub.receive().await;
-            debug!("ev: {:?}", ev);
-        }
-    });
-
+/*
+async fn greensq(render_api: Arc<gfx2::RenderApi>) -> (miniquad::BufferId, miniquad::BufferId) {
     let x1 = 0.1;
     let x2 = 0.6;
     let y1 = 0.1;
@@ -127,6 +116,20 @@ async fn amain(ex: Arc<smol::Executor<'static>>, render_api: Arc<gfx2::RenderApi
         ]
     };
     render_api.replace_draw_call(vec![], dc).await;
+    (vertex_buffer, index_buffer)
+}
+
+async fn amain(ex: Arc<smol::Executor<'static>>, render_api: Arc<gfx2::RenderApi>,
+    event_sub: pubsub::Subscription<gfx2::GraphicsEvent>
+    ) {
+
+    let task = ex.spawn(async move {
+        let (vert_buffer, idx_buffer) = greensq(render_api).await;
+        loop {
+            let ev = event_sub.receive().await;
+            debug!("ev: {:?}", ev);
+        }
+    });
 
     smol::Timer::after(std::time::Duration::from_secs(2)).await;
 
@@ -157,13 +160,22 @@ async fn amain(ex: Arc<smol::Executor<'static>>, render_api: Arc<gfx2::RenderApi
         dcs: vec![]
     };
     render_api.replace_draw_call(vec![0], dc).await;
-    render_api.delete_buffer(vertex_buffer);
+    //render_api.delete_buffer(vertex_buffer);
 
     println!("hello!");
 }
+*/
 
 fn main() {
+    let ex = std::sync::Arc::new(smol::Executor::new());
     let scene_graph = Arc::new(Mutex::new(SceneGraph::new()));
+
+    let scene_graph2 = scene_graph.clone();
+    let ex2 = ex.clone();
+    let zmq_task = ex.spawn(async {
+        let mut zmq_rpc = ZeroMQAdapter::new(scene_graph2, ex2).await;
+        zmq_rpc.run().await;
+    });
 
     let (method_sender, method_recvr) = mpsc::channel();
     let render_api = gfx2::RenderApi::new(method_sender);
@@ -176,7 +188,6 @@ fn main() {
     });
 
     let n_threads = std::thread::available_parallelism().unwrap().get();
-    let ex = std::sync::Arc::new(smol::Executor::new());
     let (signal, shutdown) = smol::channel::unbounded::<()>();
     easy_parallel::Parallel::new()
         // Executor threads
@@ -184,17 +195,22 @@ fn main() {
         // Run the main future on this thread
         .finish(|| {
             smol::future::block_on(async {
-                amain(ex.clone(), render_api, event_sub).await;
+                //amain(ex.clone(), render_api, event_sub).await;
+
+                // Need to figure out how closing the window works
+                // Some time to allow processes to clean up
+                // But a time limit whereby we just close
+                loop {
+                    smol::Timer::after(std::time::Duration::from_secs(2)).await;
+                }
                 drop(signal);
+
+                zmq_task.cancel().await;
                 Ok::<(), Error>(())
             });
         });
 
     gfx_handle.join();
-
-    //start_zmq(scene_graph.clone());
-    //start_sentinel(scene_graph.clone());
-    //run_gui(scene_graph);
 }
 
 /*
