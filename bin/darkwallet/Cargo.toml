@@ -28,6 +28,10 @@ thiserror = "1.0.61"
 # Only for async Mutex
 smol = "2.0.0"
 atomic_float = "1.0.0"
+async-channel = "2.3.1"
+easy-parallel = "3.3.1"
+crossbeam-skiplist = "0.1"
+rand = "0.8.5"
 
 #rustpython-vm = "0.3.1"
 
@@ -49,4 +53,6 @@ simplelog = "0.12.1"
 
 [lints]
 workspace = true
+
+[workspace.lints.clippy]
 

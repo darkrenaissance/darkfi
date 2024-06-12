@@ -98,4 +98,7 @@ pub enum Error {
 
     #[error("S-expr global not found")]
     SExprGlobalNotFound = 32,
+
+    #[error("Graphics window closed")]
+    GfxWindowClosed = 33,
 }
