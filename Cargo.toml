@@ -136,8 +136,6 @@ easy-parallel = "3.3.1"
 prettytable-rs = "0.10.0"
 # Used for benchmarks
 criterion = { version = "0.5.1", features = ["html_reports"] }
-crossbeam-skiplist = "0.1.3"
-rand = "0.8.5"
 
 # -----BEGIN LIBRARY FEATURES-----
 [features]
@@ -347,10 +345,15 @@ path = "bench/zk_from_json.rs"
 name = "sled"
 harness = false
 path = "bench/sled.rs"
-[[bench]]
-name = "crossbeam"
-harness = false
-path = "bench/crossbeam.rs"
+
+# Crossbeam SkipMap vs Mutex protected HashMap.
+# Uncomment to enable, and add the following to dev-dependencies:
+#   crossbeam-skiplist = "0.1.3"
+#   rand = "0.8.5"
+#[[bench]]
+#name = "crossbeam"
+#harness = false
+#path = "bench/crossbeam.rs"
 
 # Top-level lints. Enabled optionally on a crate-level in their respective Cargo.toml files.
 [workspace.lints.clippy]
