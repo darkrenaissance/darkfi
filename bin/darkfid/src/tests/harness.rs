@@ -246,6 +246,8 @@ pub async fn generate_node(
 
     p2p.start().await?;
 
+    node.validator.consensus.generate_empty_fork().await?;
+
     if !skip_sync {
         sync_task(&node, checkpoint).await?;
     } else {
