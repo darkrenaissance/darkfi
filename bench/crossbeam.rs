@@ -16,11 +16,17 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, BatchSize};
-use easy_parallel::Parallel;
-use std::{collections::HashMap, sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}}};
-use rand::{rngs::OsRng, Rng};
+use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
 use crossbeam_skiplist::SkipMap;
+use easy_parallel::Parallel;
+use rand::{rngs::OsRng, Rng};
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
+};
 
 fn crossbeam(c: &mut Criterion) {
     let mut group = c.benchmark_group("crossbeam");
@@ -59,7 +65,7 @@ fn crossbeam(c: &mut Criterion) {
                     // Do 10k inserts
                     map.insert(key, val);
                 },
-                BatchSize::SmallInput
+                BatchSize::SmallInput,
             )
         });
 
@@ -108,7 +114,7 @@ fn crossbeam(c: &mut Criterion) {
                     // Do 10k inserts
                     map.lock().unwrap().insert(key, val);
                 },
-                BatchSize::SmallInput
+                BatchSize::SmallInput,
             )
         });
 
