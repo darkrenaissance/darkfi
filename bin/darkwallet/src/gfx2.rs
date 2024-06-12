@@ -24,6 +24,7 @@ use crate::{
     gfx::Rectangle,
     keysym::{KeyCodeAsStr, MouseButtonAsU8},
     prop::{Property, PropertySubType, PropertyType},
+    pubsub::Publisher,
     res::{ResourceId, ResourceManager},
     scene::{
         MethodResponseFn, SceneGraph, SceneGraphPtr, SceneNode, SceneNodeId, SceneNodeInfo,
@@ -188,6 +189,12 @@ pub enum GraphicsMethod {
     ReplaceDrawCall((Vec<usize>, DrawCall)),
 }
 
+#[derive(Debug, Clone)]
+pub enum GraphicsEvent {
+    KeyDown((KeyCode, KeyMods, bool)),
+    Resize((f32, f32)),
+}
+
 struct Stage {
     ctx: Box<dyn RenderingBackend>,
     pipeline: Pipeline,
@@ -196,11 +203,13 @@ struct Stage {
     last_draw_time: Option<Instant>,
 
     method_recvr: mpsc::Receiver<GraphicsMethod>,
+    event_pub: Arc<Publisher<GraphicsEvent>>,
 }
 
 impl Stage {
     pub fn new(
     method_recvr: mpsc::Receiver<GraphicsMethod>,
+    event_pub: Arc<Publisher<GraphicsEvent>>,
         ) -> Self {
         let mut ctx: Box<dyn RenderingBackend> = window::new_rendering_backend();
 
@@ -252,7 +261,8 @@ impl Stage {
                 dcs: vec![]
             },
             last_draw_time: None,
-            method_recvr
+            method_recvr,
+            event_pub,
         }
     }
 
@@ -362,10 +372,20 @@ impl EventHandler for Stage {
 
         self.ctx.commit_frame();
     }
+
+    fn key_down_event(&mut self, keycode: KeyCode, mods: KeyMods, repeat: bool) {
+        let event = GraphicsEvent::KeyDown((keycode, mods, repeat));
+        self.event_pub.notify_sync(event);
+    }
+    fn resize_event(&mut self, width: f32, height: f32) {
+        let event = GraphicsEvent::Resize((width, height));
+        self.event_pub.notify_sync(event);
+    }
 }
 
 pub fn run_gui(
     method_recvr: mpsc::Receiver<GraphicsMethod>,
+    event_pub: Arc<Publisher<GraphicsEvent>>,
     ) {
     #[cfg(target_os = "android")]
     {
@@ -399,6 +419,6 @@ pub fn run_gui(
     conf.platform.apple_gfx_api =
         if metal { conf::AppleGfxApi::Metal } else { conf::AppleGfxApi::OpenGl };
 
-    miniquad::start(conf, || Box::new(Stage::new(method_recvr)));
+    miniquad::start(conf, || Box::new(Stage::new(method_recvr, event_pub)));
 }
 

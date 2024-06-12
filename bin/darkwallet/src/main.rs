@@ -67,7 +67,16 @@ fn start_sentinel(scene_graph: SceneGraphPtr) {
     });
 }
 
-async fn amain(ex: Arc<smol::Executor<'static>>, render_api: Arc<gfx2::RenderApi>) {
+async fn amain(ex: Arc<smol::Executor<'static>>, render_api: Arc<gfx2::RenderApi>,
+    event_sub: pubsub::Subscription<gfx2::GraphicsEvent>
+    ) {
+    let task = ex.spawn(async move {
+        loop {
+            let ev = event_sub.receive().await;
+            debug!("ev: {:?}", ev);
+        }
+    });
+
     let x1 = 0.1;
     let x2 = 0.6;
     let y1 = 0.1;
@@ -159,8 +168,11 @@ fn main() {
     let (method_sender, method_recvr) = mpsc::channel();
     let render_api = gfx2::RenderApi::new(method_sender);
 
+    let event_pub = pubsub::Publisher::new();
+    let event_sub = event_pub.clone().subscribe();
+
     let gfx_handle = thread::spawn(move || {
-        //gfx2::run_gui(method_recvr);
+        gfx2::run_gui(method_recvr, event_pub);
     });
 
     let n_threads = std::thread::available_parallelism().unwrap().get();
@@ -172,7 +184,7 @@ fn main() {
         // Run the main future on this thread
         .finish(|| {
             smol::future::block_on(async {
-                amain(ex.clone(), render_api).await;
+                amain(ex.clone(), render_api, event_sub).await;
                 drop(signal);
                 Ok::<(), Error>(())
             });

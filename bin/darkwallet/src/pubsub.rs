@@ -45,7 +45,7 @@ impl<T: Clone + Send + 'static> Publisher<T> {
         Arc::new(Self { subs: SkipMap::new() })
     }
 
-    pub async fn subscribe(self: Arc<Self>) -> Subscription<T> {
+    pub fn subscribe(self: Arc<Self>) -> Subscription<T> {
         let (sendr, recvr) = smol::channel::unbounded();
         let sub_id = OsRng.gen();
         // Optional to check whether this ID already exists.
@@ -78,7 +78,7 @@ impl<T: Clone + Send + 'static> Publisher<T> {
             if let Err(e) = sub.try_send(message_result.clone()) {
                 warn!(
                     target: "system::publisher",
-                    "[system::publisher] Error returned sending message in notify_with_exclude() call! {}", e,
+                    "[system::publisher] Error returned sending message in notify_with_exclude_sync() call! {}", e,
                 );
             }
         }
