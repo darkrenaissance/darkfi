@@ -52,7 +52,6 @@
   - [darkfid JSON-RPC API](clients/darkfid_jsonrpc.md)
   - [Anonymous Nodes](clients/anonymous_nodes.md)
     - [Tor Inbound Node](clients/tor_inbound.md)
-    - [Nym Outbound Node](clients/nym_outbound.md)
 
 # Crypto
 

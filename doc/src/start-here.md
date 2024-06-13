@@ -33,7 +33,8 @@ Then proceed to the [Running a Node](testnet/node.md) guide.
 
 Although we have a Telegram, we don't believe in centralized proprietary apps,
 and our core community organizes through our own fully anonymous p2p chat system
-which has support for Nym and Tor.
+which has support for Tor (and Nym waiting for 
+[this feature request](https://github.com/nymtech/nym/issues/3610)).
 
 Every Monday at 16:00 CET in #dev we have our main project meeting.
 
