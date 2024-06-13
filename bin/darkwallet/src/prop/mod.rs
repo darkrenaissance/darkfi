@@ -14,9 +14,7 @@ use std::{
 use crate::{expr::SExprCode, scene::SceneNodeId};
 
 mod wrap;
-pub use wrap::{
-    PropertyBool, PropertyFloat32, PropertyUint32, PropertyStr, PropertyColor,
-};
+pub use wrap::{PropertyBool, PropertyColor, PropertyFloat32, PropertyStr, PropertyUint32};
 
 type Buffer = Arc<Vec<u8>>;
 

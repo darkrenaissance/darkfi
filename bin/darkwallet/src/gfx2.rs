@@ -17,9 +17,8 @@ use std::{
 };
 
 use crate::{
+    chatview, editbox,
     error::{Error, Result},
-    chatview,
-    editbox,
     expr::{SExprMachine, SExprVal},
     gfx::Rectangle,
     keysym::{KeyCodeAsStr, MouseButtonAsU8},
@@ -27,8 +26,8 @@ use crate::{
     pubsub::Publisher,
     res::{ResourceId, ResourceManager},
     scene::{
-        MethodResponseFn, SceneGraph, SceneGraphPtr, SceneNode, SceneNodeId, SceneNodeInfo,
-        SceneNodeType, Pimpl
+        MethodResponseFn, Pimpl, SceneGraph, SceneGraphPtr, SceneNode, SceneNodeId, SceneNodeInfo,
+        SceneNodeType,
     },
     shader,
 };
@@ -46,9 +45,7 @@ pub struct RenderApi {
 }
 
 impl RenderApi {
-    pub fn new(
-    method_sendr: mpsc::Sender<GraphicsMethod>,
-    ) -> Arc<Self> {
+    pub fn new(method_sendr: mpsc::Sender<GraphicsMethod>) -> Arc<Self> {
         Arc::new(Self { method_sendr })
     }
 
@@ -125,14 +122,14 @@ pub enum DrawInstruction {
 #[derive(Debug)]
 pub struct DrawCall {
     pub instrs: Vec<DrawInstruction>,
-    pub dcs: Vec<DrawCall>
+    pub dcs: Vec<DrawCall>,
 }
 
 struct RenderContext<'a> {
     ctx: &'a mut Box<dyn RenderingBackend>,
     root_dc: &'a DrawCall,
     uniforms_data: [u8; 128],
-    white_texture: TextureId
+    white_texture: TextureId,
 }
 
 impl<'a> RenderContext<'a> {
@@ -157,16 +154,22 @@ impl<'a> RenderContext<'a> {
                     //debug!("apply_matrix({:?})", model);
                     let data: [u8; 64] = unsafe { std::mem::transmute_copy(model) };
                     self.uniforms_data[64..].copy_from_slice(&data);
-                    self.ctx.apply_uniforms_from_bytes(self.uniforms_data.as_ptr(), self.uniforms_data.len());
+                    self.ctx.apply_uniforms_from_bytes(
+                        self.uniforms_data.as_ptr(),
+                        self.uniforms_data.len(),
+                    );
                 }
                 DrawInstruction::Draw(mesh) => {
                     //debug!("draw(mesh)");
                     let texture = match mesh.texture {
                         Some(texture) => texture,
-                        None => self.white_texture
+                        None => self.white_texture,
                     };
-                    let bindings =
-                        Bindings { vertex_buffers: vec![mesh.vertex_buffer], index_buffer: mesh.index_buffer, images: vec![texture] };
+                    let bindings = Bindings {
+                        vertex_buffers: vec![mesh.vertex_buffer],
+                        index_buffer: mesh.index_buffer,
+                        images: vec![texture],
+                    };
                     self.ctx.apply_bindings(&bindings);
                     self.ctx.draw(0, mesh.num_elements, 1);
                 }
@@ -203,14 +206,14 @@ struct Stage {
     last_draw_time: Option<Instant>,
 
     method_recvr: mpsc::Receiver<GraphicsMethod>,
-    event_pub: Arc<Publisher<GraphicsEvent>>,
+    event_pub: async_channel::Sender<GraphicsEvent>,
 }
 
 impl Stage {
     pub fn new(
-    method_recvr: mpsc::Receiver<GraphicsMethod>,
-    event_pub: Arc<Publisher<GraphicsEvent>>,
-        ) -> Self {
+        method_recvr: mpsc::Receiver<GraphicsMethod>,
+        event_pub: async_channel::Sender<GraphicsEvent>,
+    ) -> Self {
         let mut ctx: Box<dyn RenderingBackend> = window::new_rendering_backend();
 
         let white_texture = ctx.new_texture_from_rgba8(1, 1, &[255, 255, 255, 255]);
@@ -256,28 +259,31 @@ impl Stage {
             ctx,
             pipeline,
             white_texture,
-            root_dc: DrawCall {
-                instrs: vec![],
-                dcs: vec![]
-            },
+            root_dc: DrawCall { instrs: vec![], dcs: vec![] },
             last_draw_time: None,
             method_recvr,
             event_pub,
         }
     }
 
-    fn method_new_texture(&mut self, width: u16, height: u16, data: Vec<u8>,
-        sendr: async_channel::Sender<TextureId>
-        ) {
+    fn method_new_texture(
+        &mut self,
+        width: u16,
+        height: u16,
+        data: Vec<u8>,
+        sendr: async_channel::Sender<TextureId>,
+    ) {
         let texture = self.ctx.new_texture_from_rgba8(width, height, &data);
         sendr.try_send(texture).unwrap();
     }
     fn method_delete_texture(&mut self, texture: TextureId) {
         self.ctx.delete_texture(texture);
     }
-    fn method_new_vertex_buffer(&mut self, verts: Vec<Vertex>,
-        sendr: async_channel::Sender<BufferId>
-        ) {
+    fn method_new_vertex_buffer(
+        &mut self,
+        verts: Vec<Vertex>,
+        sendr: async_channel::Sender<BufferId>,
+    ) {
         let buffer = self.ctx.new_buffer(
             BufferType::VertexBuffer,
             BufferUsage::Immutable,
@@ -285,9 +291,11 @@ impl Stage {
         );
         sendr.try_send(buffer).unwrap();
     }
-    fn method_new_index_buffer(&mut self, indices: Vec<u16>,
-        sendr: async_channel::Sender<BufferId>
-        ) {
+    fn method_new_index_buffer(
+        &mut self,
+        indices: Vec<u16>,
+        sendr: async_channel::Sender<BufferId>,
+    ) {
         let buffer = self.ctx.new_buffer(
             BufferType::IndexBuffer,
             BufferUsage::Immutable,
@@ -328,18 +336,22 @@ impl EventHandler for Stage {
         let deadline = Instant::now() + allowed_time;
 
         loop {
-            let Ok(method) =
-                self.method_recvr.recv_deadline(deadline)
-            else {
-                break
-            };
+            let Ok(method) = self.method_recvr.recv_deadline(deadline) else { break };
             match method {
-                GraphicsMethod::NewTexture((width, height, data, sendr)) => self.method_new_texture(width, height, data, sendr),
+                GraphicsMethod::NewTexture((width, height, data, sendr)) => {
+                    self.method_new_texture(width, height, data, sendr)
+                }
                 GraphicsMethod::DeleteTexture(texture) => self.method_delete_texture(texture),
-                GraphicsMethod::NewVertexBuffer((verts, sendr)) => self.method_new_vertex_buffer(verts, sendr),
-                GraphicsMethod::NewIndexBuffer((indices, sendr)) => self.method_new_index_buffer(indices, sendr),
+                GraphicsMethod::NewVertexBuffer((verts, sendr)) => {
+                    self.method_new_vertex_buffer(verts, sendr)
+                }
+                GraphicsMethod::NewIndexBuffer((indices, sendr)) => {
+                    self.method_new_index_buffer(indices, sendr)
+                }
                 GraphicsMethod::DeleteBuffer(buffer) => self.method_delete_buffer(buffer),
-                GraphicsMethod::ReplaceDrawCall((loc, dc)) => self.method_replace_draw_call(loc, dc),
+                GraphicsMethod::ReplaceDrawCall((loc, dc)) => {
+                    self.method_replace_draw_call(loc, dc)
+                }
             };
         }
     }
@@ -375,18 +387,18 @@ impl EventHandler for Stage {
 
     fn key_down_event(&mut self, keycode: KeyCode, mods: KeyMods, repeat: bool) {
         let event = GraphicsEvent::KeyDown((keycode, mods, repeat));
-        self.event_pub.notify_sync(event);
+        self.event_pub.try_send(event).unwrap();
     }
     fn resize_event(&mut self, width: f32, height: f32) {
         let event = GraphicsEvent::Resize((width, height));
-        self.event_pub.notify_sync(event);
+        self.event_pub.try_send(event).unwrap();
     }
 }
 
 pub fn run_gui(
     method_recvr: mpsc::Receiver<GraphicsMethod>,
-    event_pub: Arc<Publisher<GraphicsEvent>>,
-    ) {
+    event_pub: async_channel::Sender<GraphicsEvent>,
+) {
     #[cfg(target_os = "android")]
     {
         android_logger::init_once(
@@ -421,4 +433,3 @@ pub fn run_gui(
 
     miniquad::start(conf, || Box::new(Stage::new(method_recvr, event_pub)));
 }
-

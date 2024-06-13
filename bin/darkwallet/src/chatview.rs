@@ -1,19 +1,35 @@
 use atomic_float::AtomicF32;
-use miniquad::{KeyMods, UniformType, MouseButton, window, TextureId};
+use darkfi_serial::Decodable;
 use log::debug;
+use miniquad::{window, KeyMods, MouseButton, TextureId, UniformType};
 use std::{
     collections::HashMap,
-    path::Path,
     fs::File,
-    io::{BufRead, BufReader, Cursor}, sync::{Arc, atomic::{AtomicBool, Ordering}, Mutex}, time::{Instant, Duration}};
-use darkfi_serial::Decodable;
+    io::{BufRead, BufReader, Cursor},
+    path::Path,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
+    time::{Duration, Instant},
+};
 
-use crate::{error::{Error, Result}, prop::{
-    PropertyBool, PropertyFloat32, PropertyUint32, PropertyStr, PropertyColor,
-    Property}, scene::{SceneGraph, SceneNode, SceneNodeId, Pimpl, Slot}, gfx::{Rectangle, RenderContext, COLOR_WHITE, COLOR_BLUE, COLOR_RED, COLOR_GREEN, FreetypeFace, COLOR_DARKGREY, Point}, text::{Glyph, TextShaper}, keysym::{MouseButtonAsU8, KeyCodeAsU16}};
+use crate::{
+    error::{Error, Result},
+    gfx::{
+        FreetypeFace, Point, Rectangle, RenderContext, COLOR_BLUE, COLOR_DARKGREY, COLOR_GREEN,
+        COLOR_RED, COLOR_WHITE,
+    },
+    keysym::{KeyCodeAsU16, MouseButtonAsU8},
+    prop::{Property, PropertyBool, PropertyColor, PropertyFloat32, PropertyStr, PropertyUint32},
+    scene::{Pimpl, SceneGraph, SceneNode, SceneNodeId, Slot},
+    text::{Glyph, TextShaper},
+};
 
 fn read_lines<P>(filename: P) -> Vec<String>
-where P: AsRef<Path>, {
+where
+    P: AsRef<Path>,
+{
     //let file = File::open(filename).unwrap();
     //BufReader::new(file).lines().map(|l| l.unwrap()).collect()
     // Just so we can package for android easily
@@ -38,20 +54,22 @@ pub struct ChatView {
 }
 
 impl ChatView {
-    pub fn new(scene_graph: &mut SceneGraph, node_id: SceneNodeId, font_faces: Vec<FreetypeFace>) -> Result<Pimpl> {
+    pub fn new(
+        scene_graph: &mut SceneGraph,
+        node_id: SceneNodeId,
+        font_faces: Vec<FreetypeFace>,
+    ) -> Result<Pimpl> {
         let node = scene_graph.get_node(node_id).unwrap();
         let node_name = node.name.clone();
         let debug = PropertyBool::wrap(node, "debug", 0)?;
 
-        let text_shaper = TextShaper {
-            font_faces
-        };
-        
+        let text_shaper = TextShaper { font_faces };
+
         let lines = read_lines("chat.txt");
         let mut glyph_lines = vec![];
         glyph_lines.resize(lines.len(), vec![]);
 
-        let self_ = Arc::new(Self{
+        let self_ = Arc::new(Self {
             node_name: node_name.clone(),
             debug,
             world_rect: Mutex::new(Rectangle { x: 0., y: 0., w: 0., h: 0. }),
@@ -97,10 +115,8 @@ impl ChatView {
         };
         */
 
-        let mouse_node = 
-            scene_graph
-            .lookup_node_mut("/window/input/mouse")
-            .expect("no mouse attached!");
+        let mouse_node =
+            scene_graph.lookup_node_mut("/window/input/mouse").expect("no mouse attached!");
         //mouse_node.register("wheel", slot_wheel);
         //mouse_node.register("move", slot_move);
 
@@ -108,7 +124,12 @@ impl ChatView {
         Ok(Pimpl::ChatView(self_))
     }
 
-    pub fn render<'a>(&self, render: &mut RenderContext<'a>, node_id: SceneNodeId, layer_rect: &Rectangle<f32>) -> Result<()> {
+    pub fn render<'a>(
+        &self,
+        render: &mut RenderContext<'a>,
+        node_id: SceneNodeId,
+        layer_rect: &Rectangle<f32>,
+    ) -> Result<()> {
         let debug = self.debug.get();
 
         let node = render.scene_graph.get_node(node_id).unwrap();
@@ -140,19 +161,11 @@ impl ChatView {
         render.ctx.apply_uniforms_from_bytes(uniforms_data.as_ptr(), uniforms_data.len());
 
         // Used for scaling the font size
-        let window = render
-            .scene_graph
-            .lookup_node("/window")
-            .expect("no window attached!");
+        let window = render.scene_graph.lookup_node("/window").expect("no window attached!");
         let window_scale = window.get_property_f32("scale")?;
         let font_size = window_scale * 20.;
 
-        let bound = Rectangle {
-            x: 0.,
-            y: 0.,
-            w: rect.w,
-            h: rect.h,
-        };
+        let bound = Rectangle { x: 0., y: 0., w: rect.w, h: rect.h };
 
         let glyph_lines = &mut self.glyph_lines.lock().unwrap();
         let atlas = &mut self.atlas.lock().unwrap();
@@ -176,7 +189,7 @@ impl ChatView {
                 continue
             };
 
-            let linespacing = window_scale*30.;
+            let linespacing = window_scale * 30.;
             let off_y = linespacing * i as f32 + scroll;
             if off_y + linespacing < 0. || off_y - linespacing > rect.h {
                 continue;
@@ -187,7 +200,8 @@ impl ChatView {
             }
 
             let times_color = [0.4, 0.4, 0.4, 1.];
-            let times_color_u8 = [(255. * 0.4) as u8, (255. * 0.4) as u8, (255. * 0.4) as u8, (255. * 1.) as u8];
+            let times_color_u8 =
+                [(255. * 0.4) as u8, (255. * 0.4) as u8, (255. * 0.4) as u8, (255. * 1.) as u8];
             let glyphs_time = self.text_shaper.shape(time.to_string(), font_size, times_color);
             let mut rhs = 0.;
             for glyph in glyphs_time {
@@ -195,12 +209,16 @@ impl ChatView {
                 pos.y += off_y;
                 rhs = pos.x + pos.w;
 
-                assert_eq!(glyph.bmp.len() as u16, glyph.bmp_width*glyph.bmp_height*4);
+                assert_eq!(glyph.bmp.len() as u16, glyph.bmp_width * glyph.bmp_height * 4);
                 //debug!("gly {} {}", glyph.substr, glyph.bmp.len());
                 let texture = if atlas.contains_key(&(glyph.id, times_color_u8.clone())) {
                     *atlas.get(&(glyph.id, times_color_u8.clone())).unwrap()
                 } else {
-                    let texture = render.ctx.new_texture_from_rgba8(glyph.bmp_width, glyph.bmp_height, &glyph.bmp);
+                    let texture = render.ctx.new_texture_from_rgba8(
+                        glyph.bmp_width,
+                        glyph.bmp_height,
+                        &glyph.bmp,
+                    );
                     atlas.insert((glyph.id, times_color_u8.clone()), texture);
                     texture
                 };
@@ -218,38 +236,42 @@ impl ChatView {
                 [0.84, 0.48, 1.00, 1.],
                 [1.00, 0.61, 0.94, 1.],
                 [1.00, 0.36, 0.48, 1.],
-                [1.00, 0.30, 0.00, 1.]
+                [1.00, 0.30, 0.00, 1.],
             ];
             let nick_colors_u8 = [
                 [(255. * 0.00) as u8, (255. * 0.94) as u8, (255. * 1.00) as u8, (255. * 1.) as u8],
                 [(255. * 0.36) as u8, (255. * 1.00) as u8, (255. * 0.69) as u8, (255. * 1.) as u8],
-                [(255. * 0.29) as u8, (255. * 1.00) as u8, (255. * 0.45) as u8, (255. * 1. ) as u8],
-                [(255. * 0.00) as u8, (255. * 0.73) as u8, (255. * 0.38) as u8, (255. * 1. ) as u8],
-                [(255. * 0.21) as u8, (255. * 0.67) as u8, (255. * 0.67) as u8, (255. * 1. ) as u8],
-                [(255. * 0.56) as u8, (255. * 0.61) as u8, (255. * 1.00) as u8, (255. * 1. ) as u8],
-                [(255. * 0.84) as u8, (255. * 0.48) as u8, (255. * 1.00) as u8, (255. * 1. ) as u8],
-                [(255. * 1.00) as u8, (255. * 0.61) as u8, (255. * 0.94) as u8, (255. * 1. ) as u8],
-                [(255. * 1.00) as u8, (255. * 0.36) as u8, (255. * 0.48) as u8, (255. * 1. ) as u8],
-                [(255. * 1.00) as u8, (255. * 0.30) as u8, (255. * 0.00) as u8, (255. * 1. ) as u8]
+                [(255. * 0.29) as u8, (255. * 1.00) as u8, (255. * 0.45) as u8, (255. * 1.) as u8],
+                [(255. * 0.00) as u8, (255. * 0.73) as u8, (255. * 0.38) as u8, (255. * 1.) as u8],
+                [(255. * 0.21) as u8, (255. * 0.67) as u8, (255. * 0.67) as u8, (255. * 1.) as u8],
+                [(255. * 0.56) as u8, (255. * 0.61) as u8, (255. * 1.00) as u8, (255. * 1.) as u8],
+                [(255. * 0.84) as u8, (255. * 0.48) as u8, (255. * 1.00) as u8, (255. * 1.) as u8],
+                [(255. * 1.00) as u8, (255. * 0.61) as u8, (255. * 0.94) as u8, (255. * 1.) as u8],
+                [(255. * 1.00) as u8, (255. * 0.36) as u8, (255. * 0.48) as u8, (255. * 1.) as u8],
+                [(255. * 1.00) as u8, (255. * 0.30) as u8, (255. * 0.00) as u8, (255. * 1.) as u8],
             ];
 
             let nick_color = nick_colors[nick.len() % nick_colors.len()];
             let nick_color_u8 = nick_colors_u8[nick.len() % nick_colors.len()];
             let glyphs_nick = self.text_shaper.shape(nick.to_string(), font_size, nick_color);
-            let off_x = rhs + window_scale*20.;
+            let off_x = rhs + window_scale * 20.;
             for glyph in glyphs_nick {
                 let mut pos = glyph.pos.clone();
                 pos.x += off_x;
                 pos.y += off_y;
                 rhs = pos.x + pos.w;
 
-                assert_eq!(glyph.bmp.len() as u16, glyph.bmp_width*glyph.bmp_height*4);
+                assert_eq!(glyph.bmp.len() as u16, glyph.bmp_width * glyph.bmp_height * 4);
                 //debug!("gly {} {}", glyph.substr, glyph.bmp.len());
                 //let texture = render.ctx.new_texture_from_rgba8(glyph.bmp_width, glyph.bmp_height, &glyph.bmp);
                 let texture = if atlas.contains_key(&(glyph.id, nick_color_u8.clone())) {
                     *atlas.get(&(glyph.id, nick_color_u8.clone())).unwrap()
                 } else {
-                    let texture = render.ctx.new_texture_from_rgba8(glyph.bmp_width, glyph.bmp_height, &glyph.bmp);
+                    let texture = render.ctx.new_texture_from_rgba8(
+                        glyph.bmp_width,
+                        glyph.bmp_height,
+                        &glyph.bmp,
+                    );
                     atlas.insert((glyph.id, nick_color_u8.clone()), texture);
                     texture
                 };
@@ -257,19 +279,23 @@ impl ChatView {
                 //render.ctx.delete_texture(texture);
             }
 
-            let off_x = rhs + window_scale*20.;
+            let off_x = rhs + window_scale * 20.;
             for glyph in glyph_line {
                 let mut pos = glyph.pos.clone();
                 pos.x += off_x;
                 pos.y += off_y;
 
-                assert_eq!(glyph.bmp.len() as u16, glyph.bmp_width*glyph.bmp_height*4);
+                assert_eq!(glyph.bmp.len() as u16, glyph.bmp_width * glyph.bmp_height * 4);
                 //debug!("gly {} {}", glyph.substr, glyph.bmp.len());
                 //let texture = render.ctx.new_texture_from_rgba8(glyph.bmp_width, glyph.bmp_height, &glyph.bmp);
                 let texture = if atlas.contains_key(&(glyph.id, [255, 255, 255, 255])) {
                     *atlas.get(&(glyph.id, [255, 255, 255, 255])).unwrap()
                 } else {
-                    let texture = render.ctx.new_texture_from_rgba8(glyph.bmp_width, glyph.bmp_height, &glyph.bmp);
+                    let texture = render.ctx.new_texture_from_rgba8(
+                        glyph.bmp_width,
+                        glyph.bmp_height,
+                        &glyph.bmp,
+                    );
                     atlas.insert((glyph.id, [255, 255, 255, 255]), texture);
                     texture
                 };
@@ -298,4 +324,3 @@ impl ChatView {
         //println!("{}", y);
     }
 }
-

@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
-use crate::{scene::SceneNode, error::{Error, Result}};
 use super::Property;
+use crate::{
+    error::{Error, Result},
+    scene::SceneNode,
+};
 
 pub struct PropertyBool {
     prop: Arc<Property>,
@@ -118,10 +121,12 @@ impl PropertyColor {
     }
 
     pub fn get(&self) -> [f32; 4] {
-        [self.prop.get_f32(0).unwrap(),
-        self.prop.get_f32(1).unwrap(),
-        self.prop.get_f32(2).unwrap(),
-        self.prop.get_f32(3).unwrap()]
+        [
+            self.prop.get_f32(0).unwrap(),
+            self.prop.get_f32(1).unwrap(),
+            self.prop.get_f32(2).unwrap(),
+            self.prop.get_f32(3).unwrap(),
+        ]
     }
 
     pub fn set(&self, val: [f32; 4]) {
@@ -131,4 +136,3 @@ impl PropertyColor {
         self.prop.set_f32(3, val[3]).unwrap();
     }
 }
-

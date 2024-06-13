@@ -1,6 +1,4 @@
-use miniquad::{
-    KeyCode, MouseButton
-};
+use miniquad::{KeyCode, MouseButton};
 
 pub trait KeyCodeAsStr {
     fn to_str(&self) -> &str;
@@ -416,4 +414,3 @@ impl MouseButtonAsU8 for MouseButton {
         }
     }
 }
-

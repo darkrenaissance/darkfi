@@ -1,21 +1,20 @@
+use async_channel::Sender;
+use async_lock::Mutex;
 use atomic_float::AtomicF32;
 use darkfi_serial::{SerialDecodable, SerialEncodable};
-use async_lock::Mutex;
-use async_channel::Sender;
 use futures::{stream::FuturesUnordered, StreamExt};
 use std::{
     fmt,
     str::FromStr,
     sync::{
         atomic::{AtomicBool, AtomicU32, Ordering},
-        Arc
+        Arc,
     },
 };
 
 use crate::{
+    chatview, editbox,
     error::{Error, Result},
-    chatview,
-    editbox,
     prop::{Property, PropertyType},
 };
 
@@ -365,7 +364,7 @@ pub struct SceneNode {
     pub props: Vec<Arc<Property>>,
     pub sigs: Vec<Signal>,
     pub methods: Vec<Method>,
-    pub pimpl: Pimpl
+    pub pimpl: Pimpl,
 }
 
 impl SceneNode {
@@ -584,7 +583,7 @@ pub type SlotId = u32;
 
 pub struct Slot {
     pub name: String,
-    pub notify: Sender<Vec<u8>>
+    pub notify: Sender<Vec<u8>>,
 }
 
 pub struct Signal {
@@ -636,4 +635,3 @@ pub enum Pimpl {
     EditBox(editbox::EditBoxPtr),
     ChatView(chatview::ChatViewPtr),
 }
-

@@ -17,16 +17,15 @@ use std::{
 };
 
 use crate::{
+    chatview, editbox,
     error::{Error, Result},
-    chatview,
-    editbox,
     expr::{SExprMachine, SExprVal},
     keysym::{KeyCodeAsStr, MouseButtonAsU8},
     prop::{Property, PropertySubType, PropertyType},
     res::{ResourceId, ResourceManager},
     scene::{
-        MethodResponseFn, SceneGraph, SceneGraphPtr, SceneNode, SceneNodeId, SceneNodeInfo,
-        SceneNodeType, Pimpl
+        MethodResponseFn, Pimpl, SceneGraph, SceneGraphPtr, SceneNode, SceneNodeId, SceneNodeInfo,
+        SceneNodeType,
     },
     shader,
 };
@@ -72,14 +71,23 @@ pub struct Point<T> {
 }
 
 #[derive(Debug, Clone)]
-pub struct Rectangle<T: Copy + std::ops::Add<Output=T> + std::ops::Sub<Output=T> + std::cmp::PartialOrd> {
+pub struct Rectangle<
+    T: Copy + std::ops::Add<Output = T> + std::ops::Sub<Output = T> + std::cmp::PartialOrd,
+> {
     pub x: T,
     pub y: T,
     pub w: T,
     pub h: T,
 }
 
-impl<T: Copy + std::ops::Add<Output=T> + std::ops::Sub<Output=T> + std::ops::AddAssign + std::cmp::PartialOrd> Rectangle<T> {
+impl<
+        T: Copy
+            + std::ops::Add<Output = T>
+            + std::ops::Sub<Output = T>
+            + std::ops::AddAssign
+            + std::cmp::PartialOrd,
+    > Rectangle<T>
+{
     fn from_array(arr: [T; 4]) -> Self {
         let mut iter = IntoIter::new(arr);
         Self {
@@ -118,8 +126,10 @@ impl<T: Copy + std::ops::Add<Output=T> + std::ops::Sub<Output=T> + std::ops::Add
     }
 
     pub fn contains(&self, point: &Point<T>) -> bool {
-        self.x < point.x && point.x < self.x + self.w &&
-            self.y < point.y && point.y < self.y + self.h
+        self.x < point.x &&
+            point.x < self.x + self.w &&
+            self.y < point.y &&
+            point.y < self.y + self.h
     }
 }
 
@@ -219,7 +229,7 @@ impl Stage {
             method_recvr,
             method_sender,
             last_draw_time: None,
-            atlas: Mutex::new(HashMap::new())
+            atlas: Mutex::new(HashMap::new()),
         };
         stage.setup_scene_graph_window();
 
@@ -421,11 +431,7 @@ impl Stage {
         Ok(vec![])
     }
 
-    fn method_create_chatview(
-        &mut self,
-        _: SceneNodeId,
-        arg_data: Vec<u8>,
-    ) -> Result<Vec<u8>> {
+    fn method_create_chatview(&mut self, _: SceneNodeId, arg_data: Vec<u8>) -> Result<Vec<u8>> {
         debug!("gfx::create_chatview()");
         let mut cur = Cursor::new(&arg_data);
         let node_id = SceneNodeId::decode(&mut cur).unwrap();
@@ -440,11 +446,7 @@ impl Stage {
         Ok(reply)
     }
 
-    fn method_create_editbox(
-        &mut self,
-        _: SceneNodeId,
-        arg_data: Vec<u8>,
-    ) -> Result<Vec<u8>> {
+    fn method_create_editbox(&mut self, _: SceneNodeId, arg_data: Vec<u8>) -> Result<Vec<u8>> {
         debug!("gfx::create_editbox()");
         let mut cur = Cursor::new(&arg_data);
         let node_id = SceneNodeId::decode(&mut cur).unwrap();
@@ -543,10 +545,7 @@ impl<'a> RenderContext<'a> {
         self.ctx.apply_viewport(view.x, view.y, view.w, view.h);
         self.ctx.apply_scissor_rect(view.x, view.y, view.w, view.h);
 
-        let window = self
-            .scene_graph
-            .lookup_node("/window")
-            .expect("no window attached!");
+        let window = self.scene_graph.lookup_node("/window").expect("no window attached!");
         let window_scale = window.get_property_f32("scale")?;
 
         let rect = Rectangle {
@@ -556,8 +555,12 @@ impl<'a> RenderContext<'a> {
             h: (rect.h as f32) / window_scale,
         };
 
-        let layer_children =
-            layer.get_children(&[SceneNodeType::RenderMesh, SceneNodeType::RenderText, SceneNodeType::EditBox, SceneNodeType::ChatView]);
+        let layer_children = layer.get_children(&[
+            SceneNodeType::RenderMesh,
+            SceneNodeType::RenderText,
+            SceneNodeType::EditBox,
+            SceneNodeType::ChatView,
+        ]);
         let layer_children = self.order_by_z_index(layer_children);
 
         // get the rectangle
@@ -592,7 +595,7 @@ impl<'a> RenderContext<'a> {
                             continue;
                         }
                         Pimpl::ChatView(e) => e.clone(),
-                        _ => panic!("wrong pimpl for editbox")
+                        _ => panic!("wrong pimpl for editbox"),
                     };
                     if let Err(err) = chatview.render(self, child.id, &rect) {
                         error!("error rendering chatview '{}': {}", child.name, err);
@@ -606,7 +609,7 @@ impl<'a> RenderContext<'a> {
                             continue;
                         }
                         Pimpl::EditBox(e) => e.clone(),
-                        _ => panic!("wrong pimpl for editbox")
+                        _ => panic!("wrong pimpl for editbox"),
                     };
                     if let Err(err) = editbox.render(self, child.id, &rect) {
                         error!("error rendering editbox '{}': {}", child.name, err);
@@ -733,9 +736,7 @@ impl<'a> RenderContext<'a> {
         color: Color,
         texture: TextureId,
     ) {
-        let Some(clipped) = bound.clip(&obj) else {
-            return
-        };
+        let Some(clipped) = bound.clip(&obj) else { return };
 
         let x1 = clipped.x;
         let y1 = clipped.y;
@@ -790,18 +791,11 @@ impl<'a> RenderContext<'a> {
         color: Color,
         texture: TextureId,
     ) {
-        let obj = Rectangle {
-            x: x1,
-            y: y1,
-            w: x2 - x1,
-            h: y2 - y1
-        };
+        let obj = Rectangle { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
         if obj.w == 0. || obj.h == 0. {
             return
         }
-        let Some(clipped) = bound_rect.clip(&obj) else {
-            return
-        };
+        let Some(clipped) = bound_rect.clip(&obj) else { return };
 
         let x1 = clipped.x;
         let y1 = clipped.y;
@@ -948,10 +942,7 @@ impl<'a> RenderContext<'a> {
         self.ctx.apply_uniforms_from_bytes(uniforms_data.as_ptr(), uniforms_data.len());
 
         // Used for scaling the font size
-        let window = self
-            .scene_graph
-            .lookup_node("/window")
-            .expect("no window attached!");
+        let window = self.scene_graph.lookup_node("/window").expect("no window attached!");
         let window_scale = window.get_property_f32("scale")?;
         let font_size = window_scale * font_size;
 
@@ -1049,8 +1040,8 @@ impl<'a> RenderContext<'a> {
                         let mut tdata = vec![];
                         tdata.resize(4 * bmp_width * bmp_height, 0);
                         // Convert from BGRA to RGBA
-                        for i in 0..bmp_width*bmp_height as usize {
-                            let idx = i*4;
+                        for i in 0..bmp_width * bmp_height as usize {
+                            let idx = i * 4;
                             let b = buffer[idx];
                             let g = buffer[idx + 1];
                             let r = buffer[idx + 2];
@@ -1076,7 +1067,7 @@ impl<'a> RenderContext<'a> {
                             .collect();
                         tdata
                     }
-                    _ => panic!("unsupport pixel mode: {:?}", pixel_mode)
+                    _ => panic!("unsupport pixel mode: {:?}", pixel_mode),
                 };
 
                 let (x1, y1, x2, y2) = if face.has_fixed_sizes() {
@@ -1112,16 +1103,23 @@ impl<'a> RenderContext<'a> {
                     (x1, y1, x2, y2)
                 };
 
-                let key = (gid, [
-                    (255. * color_r) as u8,
-                    (255. * color_g) as u8,
-                    (255. * color_b) as u8,
-                    (255. * color_a) as u8,
-                ]);
+                let key = (
+                    gid,
+                    [
+                        (255. * color_r) as u8,
+                        (255. * color_g) as u8,
+                        (255. * color_b) as u8,
+                        (255. * color_a) as u8,
+                    ],
+                );
                 let texture = if self.atlas.contains_key(&key) {
                     *self.atlas.get(&key).unwrap()
                 } else {
-                    let texture = self.ctx.new_texture_from_rgba8(bmp_width as u16, bmp_height as u16, &tdata);
+                    let texture = self.ctx.new_texture_from_rgba8(
+                        bmp_width as u16,
+                        bmp_height as u16,
+                        &tdata,
+                    );
                     self.atlas.insert(key, texture);
                     texture
                 };
@@ -1173,7 +1171,9 @@ impl EventHandler for Stage {
             let res = match event {
                 GraphicsMethodEvent::LoadTexture => self.method_load_texture(node_id, arg_data),
                 GraphicsMethodEvent::DeleteTexture => self.method_delete_texture(node_id, arg_data),
-                GraphicsMethodEvent::CreateChatView => self.method_create_chatview(node_id, arg_data),
+                GraphicsMethodEvent::CreateChatView => {
+                    self.method_create_chatview(node_id, arg_data)
+                }
                 GraphicsMethodEvent::CreateEditBox => self.method_create_editbox(node_id, arg_data),
             };
             response_fn(res);
@@ -1201,7 +1201,7 @@ impl EventHandler for Stage {
             proj,
             textures: &self.textures,
             font_faces: &self.font_faces,
-            atlas
+            atlas,
         };
 
         render_context.render_window();

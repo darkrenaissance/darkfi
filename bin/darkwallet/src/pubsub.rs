@@ -1,5 +1,8 @@
 use rand::{rngs::OsRng, Rng};
-use std::{collections::HashMap, sync::{Arc, Mutex}};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 pub type SubscriptionId = usize;
 
@@ -36,7 +39,7 @@ impl<T: Clone + Send + 'static> Subscription<T> {
 
 #[derive(Debug)]
 pub struct Publisher<T> {
-    subs: Mutex<HashMap<SubscriptionId, smol::channel::Sender<T>>>
+    subs: Mutex<HashMap<SubscriptionId, smol::channel::Sender<T>>>,
 }
 
 impl<T: Clone + Send + 'static> Publisher<T> {
@@ -80,4 +83,3 @@ impl<T: Clone + Send + 'static> Publisher<T> {
         }
     }
 }
-

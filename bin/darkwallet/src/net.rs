@@ -1,11 +1,11 @@
-use darkfi_serial::{deserialize, Decodable, Encodable, SerialDecodable, VarInt};
 use async_lock::Mutex;
+use darkfi_serial::{deserialize, Decodable, Encodable, SerialDecodable, VarInt};
 use std::{
     io::Cursor,
-    sync::{Arc, atomic::Ordering, mpsc},
+    sync::{atomic::Ordering, mpsc, Arc},
     thread,
 };
-use zeromq::{Socket, SocketSend, SocketRecv};
+use zeromq::{Socket, SocketRecv, SocketSend};
 
 use crate::{
     error::{Error, Result},
@@ -67,9 +67,7 @@ pub struct ZeroMQAdapter {
 }
 
 impl ZeroMQAdapter {
-    pub async fn new(scene_graph: SceneGraphPtr2,
-    ex: Arc<smol::Executor<'static>>,
-        ) -> Arc<Self> {
+    pub async fn new(scene_graph: SceneGraphPtr2, ex: Arc<smol::Executor<'static>>) -> Arc<Self> {
         let mut zmq_rep = zeromq::RepSocket::new();
         zmq_rep.bind("tcp://127.0.0.1:9484").await.unwrap();
 
@@ -425,26 +423,25 @@ impl ZeroMQAdapter {
                 let node = scene_graph.get_node_mut(node_id).ok_or(Error::NodeNotFound)?;
 
                 let (sendr, recvr) = async_channel::unbounded();
-                let slot = Slot {
-                    name: slot_name,
-                    notify: sendr
-                };
+                let slot = Slot { name: slot_name, notify: sendr };
 
                 // This task will auto-die when the slot is unregistered
                 let self2 = self.clone();
-                self.ex.spawn(async move {
-                    loop {
-                        let Ok(signal_data) = recvr.recv().await else {
-                            // Die
-                            break;
-                        };
+                self.ex
+                    .spawn(async move {
+                        loop {
+                            let Ok(signal_data) = recvr.recv().await else {
+                                // Die
+                                break;
+                            };
 
-                        let mut m = zeromq::ZmqMessage::from(signal_data);
-                        m.push_back(user_data.clone().into());
+                            let mut m = zeromq::ZmqMessage::from(signal_data);
+                            m.push_back(user_data.clone().into());
 
-                        self2.zmq_pub.lock().await.send(m).await.unwrap();
-                    }
-                }).detach();
+                            self2.zmq_pub.lock().await.send(m).await.unwrap();
+                        }
+                    })
+                    .detach();
 
                 let slot_id = node.register(&sig_name, slot)?;
                 slot_id.encode(&mut reply).unwrap();

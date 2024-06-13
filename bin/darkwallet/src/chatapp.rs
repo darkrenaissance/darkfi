@@ -1,29 +1,27 @@
 use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 use std::sync::mpsc;
 
-use crate::{expr::Op,
-error::Result,
-gfx::Rectangle,
+use crate::{
+    error::Result,
+    expr::Op,
+    gfx::Rectangle,
     prop::{Property, PropertySubType, PropertyType},
     res::{ResourceId, ResourceManager},
     scene::{
-        MethodResponseFn, SceneGraph, SceneGraphPtr, SceneNode, SceneNodeId, SceneNodeInfo,
-        SceneNodeType, Pimpl
-    }};
+        MethodResponseFn, Pimpl, SceneGraph, SceneGraphPtr, SceneNode, SceneNodeId, SceneNodeInfo,
+        SceneNodeType,
+    },
+};
 
 struct Buffer {
     verts: Vec<u8>,
     faces: Vec<u8>,
-    verts_len: u32
+    verts_len: u32,
 }
 
 impl Buffer {
     pub fn new() -> Self {
-        Self {
-            verts: vec![],
-            faces: vec![],
-            verts_len: 0
-        }
+        Self { verts: vec![], faces: vec![], verts_len: 0 }
     }
 
     fn vertex(&mut self, x: f32, y: f32, r: f32, g: f32, b: f32, a: f32, u: f32, v: f32) {
@@ -58,18 +56,25 @@ impl Buffer {
         let b = color[2];
         let a = color[3];
 
-        self.vertex(x,     y,     r, g, b, a, 0., 0.);
-        self.vertex(x + w, y,     r, g, b, a, 1., 0.);
-        self.vertex(x,     y + h, r, g, b, a, 0., 1.);
+        self.vertex(x, y, r, g, b, a, 0., 0.);
+        self.vertex(x + w, y, r, g, b, a, 1., 0.);
+        self.vertex(x, y + h, r, g, b, a, 0., 1.);
         self.vertex(x + w, y + h, r, g, b, a, 1., 1.);
 
         self.face(k, k + 2, k + 1);
         self.face(k + 1, k + 2, k + 3);
     }
 
-    pub fn draw_outline(&mut self, rect: Rectangle<f32>, color: [f32; 4], pad: f32, layer_w: f32, layer_h: f32) {
-        let pad_x = pad/layer_w;
-        let pad_y = pad/layer_h;
+    pub fn draw_outline(
+        &mut self,
+        rect: Rectangle<f32>,
+        color: [f32; 4],
+        pad: f32,
+        layer_w: f32,
+        layer_h: f32,
+    ) {
+        let pad_x = pad / layer_w;
+        let pad_y = pad / layer_h;
 
         let x = rect.x;
         let y = rect.y;
@@ -77,23 +82,15 @@ impl Buffer {
         let h = rect.h;
 
         // left
-        self.draw_box(Rectangle {
-            x, y, w: pad_x, h
-        }, color);
+        self.draw_box(Rectangle { x, y, w: pad_x, h }, color);
         // top
-        self.draw_box(Rectangle {
-            x, y, w, h: pad_y
-        }, color);
+        self.draw_box(Rectangle { x, y, w, h: pad_y }, color);
         // right
         let rhs = x + w;
-        self.draw_box(Rectangle {
-            x: rhs - pad_x, y, w: pad_x, h
-        }, color);
+        self.draw_box(Rectangle { x: rhs - pad_x, y, w: pad_x, h }, color);
         // bottom
         let bhs = y + h;
-        self.draw_box(Rectangle {
-            x, y: bhs - pad_y, w, h: pad_y
-        }, color);
+        self.draw_box(Rectangle { x, y: bhs - pad_y, w, h: pad_y }, color);
     }
 }
 
@@ -259,15 +256,9 @@ pub fn setup(sg: &mut SceneGraph) {
     let prop = node.get_property("rect").unwrap();
     prop.set_u32(0, 0).unwrap();
     prop.set_u32(1, 0).unwrap();
-    let code = vec![Op::Float32ToUint32((
-            Box::new(Op::LoadVar("sw".to_string()))
-            ))
-        ];
+    let code = vec![Op::Float32ToUint32((Box::new(Op::LoadVar("sw".to_string()))))];
     prop.set_expr(2, code).unwrap();
-    let code = vec![Op::Float32ToUint32((
-            Box::new(Op::LoadVar("sh".to_string()))
-            ))
-        ];
+    let code = vec![Op::Float32ToUint32((Box::new(Op::LoadVar("sh".to_string()))))];
     prop.set_expr(3, code).unwrap();
 
     // Make the black background
@@ -278,13 +269,9 @@ pub fn setup(sg: &mut SceneGraph) {
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(0, 0.).unwrap();
     prop.set_f32(1, 0.).unwrap();
-    let code = vec![
-            Op::LoadVar("lw".to_string())
-        ];
+    let code = vec![Op::LoadVar("lw".to_string())];
     prop.set_expr(2, code).unwrap();
-    let code = vec![
-            Op::LoadVar("lh".to_string())
-        ];
+    let code = vec![Op::LoadVar("lh".to_string())];
     prop.set_expr(3, code).unwrap();
 
     let prop = node.get_property("data").unwrap();
@@ -301,23 +288,11 @@ pub fn setup(sg: &mut SceneGraph) {
 
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(0, 140.).unwrap();
-    let code = vec![
-        Op::Sub((
-            Box::new(Op::LoadVar("lh".to_string())),
-            Box::new(
-                Op::ConstFloat32(60.)
-            )
-        ))
-    ];
+    let code =
+        vec![Op::Sub((Box::new(Op::LoadVar("lh".to_string())), Box::new(Op::ConstFloat32(60.))))];
     prop.set_expr(1, code).unwrap();
-    let code = vec![
-        Op::Sub((
-            Box::new(Op::LoadVar("lw".to_string())),
-            Box::new(
-                Op::ConstFloat32(140.)
-            )
-        ))
-    ];
+    let code =
+        vec![Op::Sub((Box::new(Op::LoadVar("lw".to_string())), Box::new(Op::ConstFloat32(140.))))];
     prop.set_expr(2, code).unwrap();
     prop.set_f32(3, 60.).unwrap();
 
@@ -328,8 +303,12 @@ pub fn setup(sg: &mut SceneGraph) {
     // FIXME: layer dim is passed here manually!
     // we should just use separate objs
     buff.draw_outline(
-        Rectangle { x: 0., y: 0., w: 1., h: 1. }, [0.22, 0.22, 0.22, 1.],
-        1., 1000., 50.);
+        Rectangle { x: 0., y: 0., w: 1., h: 1. },
+        [0.22, 0.22, 0.22, 1.],
+        1.,
+        1000.,
+        50.,
+    );
     prop.set_buf(0, buff.verts).unwrap();
     prop.set_buf(1, buff.faces).unwrap();
 
@@ -338,14 +317,8 @@ pub fn setup(sg: &mut SceneGraph) {
     let node = sg.get_node(node_id).unwrap();
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(0, 0.).unwrap();
-    let code = vec![
-        Op::Sub((
-            Box::new(Op::LoadVar("lh".to_string())),
-            Box::new(
-                Op::ConstFloat32(60.)
-            )
-        ))
-    ];
+    let code =
+        vec![Op::Sub((Box::new(Op::LoadVar("lh".to_string())), Box::new(Op::ConstFloat32(60.))))];
     prop.set_expr(1, code).unwrap();
     prop.set_f32(2, 130.).unwrap();
     prop.set_f32(3, 60.).unwrap();
@@ -356,8 +329,12 @@ pub fn setup(sg: &mut SceneGraph) {
     // FIXME: layer dim is passed here manually!
     // we should just use separate objs
     buff.draw_outline(
-        Rectangle { x: 0., y: 0., w: 1., h: 1. }, [0., 0.13, 0.08, 1.],
-        1., 1000., 50.);
+        Rectangle { x: 0., y: 0., w: 1., h: 1. },
+        [0., 0.13, 0.08, 1.],
+        1.,
+        1000.,
+        50.,
+    );
     prop.set_buf(0, buff.verts).unwrap();
     prop.set_buf(1, buff.faces).unwrap();
 
@@ -366,14 +343,8 @@ pub fn setup(sg: &mut SceneGraph) {
     let node = sg.get_node(node_id).unwrap();
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(0, 20.).unwrap();
-    let code = vec![
-        Op::Sub((
-            Box::new(Op::LoadVar("lh".to_string())),
-            Box::new(
-                Op::ConstFloat32(60.)
-            )
-        ))
-    ];
+    let code =
+        vec![Op::Sub((Box::new(Op::LoadVar("lh".to_string())), Box::new(Op::ConstFloat32(60.))))];
     prop.set_expr(1, code).unwrap();
     prop.set_f32(2, 120.).unwrap();
     prop.set_f32(3, 60.).unwrap();
@@ -393,23 +364,11 @@ pub fn setup(sg: &mut SceneGraph) {
     node.set_property_bool("is_active", true).unwrap();
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(0, 150.).unwrap();
-    let code = vec![
-        Op::Sub((
-            Box::new(Op::LoadVar("lh".to_string())),
-            Box::new(
-                Op::ConstFloat32(60.)
-            )
-        ))
-    ];
+    let code =
+        vec![Op::Sub((Box::new(Op::LoadVar("lh".to_string())), Box::new(Op::ConstFloat32(60.))))];
     prop.set_expr(1, code).unwrap();
-    let code = vec![
-        Op::Sub((
-            Box::new(Op::LoadVar("lw".to_string())),
-            Box::new(
-                Op::ConstFloat32(120.)
-            )
-        ))
-    ];
+    let code =
+        vec![Op::Sub((Box::new(Op::LoadVar("lw".to_string())), Box::new(Op::ConstFloat32(120.))))];
     prop.set_expr(2, code).unwrap();
     prop.set_f32(3, 60.).unwrap();
     node.set_property_f32("baseline", 40.).unwrap();
@@ -453,18 +412,10 @@ pub fn setup(sg: &mut SceneGraph) {
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(0, 0.).unwrap();
     prop.set_f32(1, 0.).unwrap();
-    let code = vec![
-        Op::LoadVar("lw".to_string())
-    ];
+    let code = vec![Op::LoadVar("lw".to_string())];
     prop.set_expr(2, code).unwrap();
-    let code = vec![
-        Op::Sub((
-            Box::new(Op::LoadVar("lh".to_string())),
-            Box::new(
-                Op::ConstFloat32(50.)
-            )
-        ))
-    ];
+    let code =
+        vec![Op::Sub((Box::new(Op::LoadVar("lh".to_string())), Box::new(Op::ConstFloat32(50.))))];
     prop.set_expr(3, code).unwrap();
     node.set_property_u32("z_index", 1).unwrap();
 
@@ -475,4 +426,3 @@ pub fn setup(sg: &mut SceneGraph) {
     let layer_node = sg.get_node(layer_node_id).unwrap();
     layer_node.set_property_bool("is_visible", true).unwrap();
 }
-

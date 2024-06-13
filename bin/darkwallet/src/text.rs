@@ -1,7 +1,7 @@
 use freetype as ft;
 use log::debug;
 
-use crate::gfx::{Rectangle, FreetypeFace};
+use crate::gfx::{FreetypeFace, Rectangle};
 
 #[derive(Clone)]
 pub struct Glyph {
@@ -129,8 +129,8 @@ impl TextShaper {
                         let mut tdata = vec![];
                         tdata.resize(4 * bmp_width * bmp_height, 0);
                         // Convert from BGRA to RGBA
-                        for i in 0..bmp_width*bmp_height {
-                            let idx = i*4;
+                        for i in 0..bmp_width * bmp_height {
+                            let idx = i * 4;
                             let b = buffer[idx];
                             let g = buffer[idx + 1];
                             let r = buffer[idx + 2];
@@ -156,7 +156,7 @@ impl TextShaper {
                             .collect();
                         tdata
                     }
-                    _ => panic!("unsupport pixel mode: {:?}", pixel_mode)
+                    _ => panic!("unsupport pixel mode: {:?}", pixel_mode),
                 };
 
                 let pos = if face.has_fixed_sizes() {
@@ -169,9 +169,7 @@ impl TextShaper {
 
                     current_x += w;
 
-                    Rectangle {
-                        x, y, w, h
-                    }
+                    Rectangle { x, y, w, h }
                 } else {
                     let (w, h) = (bmp_width as f32, bmp_height as f32);
 
@@ -186,9 +184,7 @@ impl TextShaper {
                     current_x += x_advance;
                     current_y += y_advance;
 
-                    Rectangle {
-                        x, y, w, h
-                    }
+                    Rectangle { x, y, w, h }
                 };
 
                 let glyph = Glyph {
@@ -197,7 +193,7 @@ impl TextShaper {
                     bmp,
                     bmp_width: bmp_width as u16,
                     bmp_height: bmp_height as u16,
-                    pos
+                    pos,
                 };
 
                 glyphs.push(glyph);
@@ -210,4 +206,3 @@ impl TextShaper {
         glyphs
     }
 }
-

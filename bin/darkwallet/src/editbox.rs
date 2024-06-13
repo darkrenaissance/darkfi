@@ -1,14 +1,28 @@
-use miniquad::{KeyMods, UniformType, MouseButton, window, TextureId};
-use log::{debug, info};
-use std::{
-    collections::HashMap,
-    io::Cursor, sync::{Arc, atomic::{AtomicBool, Ordering}, Mutex}, time::{Instant, Duration}};
 use darkfi_serial::Decodable;
 use freetype as ft;
+use log::{debug, info};
+use miniquad::{window, KeyMods, MouseButton, TextureId, UniformType};
+use std::{
+    collections::HashMap,
+    io::Cursor,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
+    time::{Duration, Instant},
+};
 
-use crate::{error::{Error, Result}, prop::{
-    PropertyBool, PropertyFloat32, PropertyUint32, PropertyStr, PropertyColor,
-    Property}, scene::{SceneGraph, SceneNode, SceneNodeId, Pimpl, Slot}, gfx::{Rectangle, RenderContext, COLOR_WHITE, COLOR_BLUE, COLOR_RED, COLOR_GREEN, FreetypeFace, COLOR_DARKGREY, Point}, text::{Glyph, TextShaper}, keysym::{MouseButtonAsU8, KeyCodeAsU16}};
+use crate::{
+    error::{Error, Result},
+    gfx::{
+        FreetypeFace, Point, Rectangle, RenderContext, COLOR_BLUE, COLOR_DARKGREY, COLOR_GREEN,
+        COLOR_RED, COLOR_WHITE,
+    },
+    keysym::{KeyCodeAsU16, MouseButtonAsU8},
+    prop::{Property, PropertyBool, PropertyColor, PropertyFloat32, PropertyStr, PropertyUint32},
+    scene::{Pimpl, SceneGraph, SceneNode, SceneNodeId, Slot},
+    text::{Glyph, TextShaper},
+};
 
 const CURSOR_WIDTH: f32 = 4.;
 
@@ -24,11 +38,7 @@ struct PressedKeysSmoothRepeat {
 
 impl PressedKeysSmoothRepeat {
     fn new(start_delay: u32, step_time: u32) -> Self {
-        Self {
-            pressed_keys: HashMap::new(),
-            start_delay,
-            step_time
-        }
+        Self { pressed_keys: HashMap::new(), start_delay, step_time }
     }
 
     fn key_down(&mut self, key: &str, repeat: bool) -> u32 {
@@ -57,10 +67,7 @@ struct RepeatingKeyTimer {
 
 impl RepeatingKeyTimer {
     fn new() -> Self {
-        Self {
-            start: Instant::now(),
-            actions: 0
-        }
+        Self { start: Instant::now(), actions: 0 }
     }
 
     fn update(&mut self, start_delay: u32, step_time: u32) -> u32 {
@@ -102,7 +109,11 @@ pub struct EditBox {
 }
 
 impl EditBox {
-    pub fn new(scene_graph: &mut SceneGraph, node_id: SceneNodeId, font_faces: Vec<FreetypeFace>) -> Result<Pimpl> {
+    pub fn new(
+        scene_graph: &mut SceneGraph,
+        node_id: SceneNodeId,
+        font_faces: Vec<FreetypeFace>,
+    ) -> Result<Pimpl> {
         let node = scene_graph.get_node(node_id).unwrap();
         let node_name = node.name.clone();
         let is_active = PropertyBool::wrap(node, "is_active", 0)?;
@@ -117,20 +128,15 @@ impl EditBox {
         let cursor_color = PropertyColor::wrap(node, "cursor_color")?;
         let hi_bg_color = PropertyColor::wrap(node, "hi_bg_color")?;
 
-        let text_shaper = TextShaper {
-            font_faces
-        };
+        let text_shaper = TextShaper { font_faces };
 
         // TODO: catch window resize event and regen glyphs
         // Used for scaling the font size
-        let window_node = 
-            scene_graph
-            .lookup_node("/window")
-            .expect("no window attached!");
+        let window_node = scene_graph.lookup_node("/window").expect("no window attached!");
         let window_scale = window_node.get_property_f32("scale")?;
         let screen_size = window_node.get_property("screen_size").ok_or(Error::PropertyNotFound)?;
 
-        let self_ = Arc::new(Self{
+        let self_ = Arc::new(Self {
             node_name: node_name.clone(),
             is_active,
             debug,
@@ -195,7 +201,7 @@ impl EditBox {
             }),
         };
 
-        let keyb_node = 
+        let keyb_node =
             scene_graph
             .lookup_node_mut("/window/input/keyboard")
             .expect("no keyboard attached!");
@@ -249,7 +255,7 @@ impl EditBox {
             }),
         };
 
-        let mouse_node = 
+        let mouse_node =
             scene_graph
             .lookup_node_mut("/window/input/mouse")
             .expect("no mouse attached!");
@@ -273,17 +279,19 @@ impl EditBox {
         };
         */
 
-        let window_node = 
-            scene_graph
-            .lookup_node_mut("/window")
-            .expect("no window attached!");
+        let window_node = scene_graph.lookup_node_mut("/window").expect("no window attached!");
         //window_node.register("resize", slot_resize).unwrap();
 
         // Save any properties we use
         Ok(Pimpl::EditBox(self_))
     }
 
-    pub fn render<'a>(&self, render: &mut RenderContext<'a>, node_id: SceneNodeId, layer_rect: &Rectangle<f32>) -> Result<()> {
+    pub fn render<'a>(
+        &self,
+        render: &mut RenderContext<'a>,
+        node_id: SceneNodeId,
+        layer_rect: &Rectangle<f32>,
+    ) -> Result<()> {
         let node = render.scene_graph.get_node(node_id).unwrap();
 
         let rect = RenderContext::get_dim(node, layer_rect)?;
@@ -335,12 +343,7 @@ impl EditBox {
             self.render_selected(render, &rect, glyphs)?;
         }
 
-        let bound = Rectangle {
-            x: 0.,
-            y: 0.,
-            w: rect.w,
-            h: rect.h,
-        };
+        let bound = Rectangle { x: 0., y: 0., w: rect.w, h: rect.h };
 
         let mut rhs = 0.;
         for (glyph_idx, glyph) in glyphs.iter().enumerate() {
@@ -349,13 +352,17 @@ impl EditBox {
             let x2 = x1 + glyph.pos.w;
             let y2 = y1 + glyph.pos.h;
 
-                let texture = if atlas.contains_key(&glyph.id) {
-                    *atlas.get(&glyph.id).unwrap()
-                } else {
-                    let texture = render.ctx.new_texture_from_rgba8(glyph.bmp_width, glyph.bmp_height, &glyph.bmp);
-                    atlas.insert(glyph.id, texture);
-                    texture
-                };
+            let texture = if atlas.contains_key(&glyph.id) {
+                *atlas.get(&glyph.id).unwrap()
+            } else {
+                let texture = render.ctx.new_texture_from_rgba8(
+                    glyph.bmp_width,
+                    glyph.bmp_height,
+                    &glyph.bmp,
+                );
+                atlas.insert(glyph.id, texture);
+                texture
+            };
             //let texture = render.ctx.new_texture_from_rgba8(glyph.bmp_width, glyph.bmp_height, &glyph.bmp);
             render.render_clipped_box_with_texture(&bound, x1, y1, x2, y2, COLOR_WHITE, texture);
             //render.render_box_with_texture(x1, y1, x2, y2, COLOR_WHITE, texture);
@@ -380,11 +387,7 @@ impl EditBox {
         }
 
         if debug {
-            let outline_color = if self.is_active.get() {
-                COLOR_GREEN
-            } else {
-                COLOR_DARKGREY
-            };
+            let outline_color = if self.is_active.get() { COLOR_GREEN } else { COLOR_DARKGREY };
             // Baseline
             //render.hline(0., rhs, 0., COLOR_RED, 1.);
             render.outline(0., 0., rect.w, rect.h, outline_color, 1.);
@@ -393,7 +396,12 @@ impl EditBox {
         Ok(())
     }
 
-    pub fn render_selected<'a>(&self, render: &mut RenderContext<'a>, rect: &Rectangle<f32>, glyphs: &Vec<Glyph>) -> Result<()> {
+    pub fn render_selected<'a>(
+        &self,
+        render: &mut RenderContext<'a>,
+        rect: &Rectangle<f32>,
+        glyphs: &Vec<Glyph>,
+    ) -> Result<()> {
         let start = self.selected.get_u32(0)? as usize;
         let end = self.selected.get_u32(1)? as usize;
 
@@ -457,8 +465,10 @@ impl EditBox {
             }
             text.push_str(&substr);
         }
-        debug!("EditBox(\"{}\")::delete_highlighted() text=\"{}\", cursor_pos={}",
-               self.node_name, text, sel_start);
+        debug!(
+            "EditBox(\"{}\")::delete_highlighted() text=\"{}\", cursor_pos={}",
+            self.node_name, text, sel_start
+        );
         self.text.set(text);
 
         self.selected.set_null(0).unwrap();
@@ -500,8 +510,7 @@ impl EditBox {
         let font_size = self.window_scale * self.font_size.get();
 
         debug!("shape start");
-        let glyphs = self.text_shaper.shape(self.text.get(), font_size,
-                self.text_color.get());
+        let glyphs = self.text_shaper.shape(self.text.get(), font_size, self.text_color.get());
         debug!("shape end");
         if self.cursor_pos.get() > glyphs.len() as u32 {
             self.cursor_pos.set(glyphs.len() as u32);
@@ -539,8 +548,10 @@ impl EditBox {
 
                 if cursor_pos > 0 {
                     cursor_pos -= 1;
-                    debug!("EditBox(\"{}\")::key_down(Left) cursor_pos={}",
-                           self.node_name, cursor_pos);
+                    debug!(
+                        "EditBox(\"{}\")::key_down(Left) cursor_pos={}",
+                        self.node_name, cursor_pos
+                    );
                     self.cursor_pos.set(cursor_pos);
                 }
 
@@ -564,8 +575,10 @@ impl EditBox {
                 let glyphs_len = self.glyphs.lock().unwrap().len() as u32;
                 if cursor_pos < glyphs_len {
                     cursor_pos += 1;
-                    debug!("EditBox(\"{}\")::key_down(Right) cursor_pos={}",
-                           self.node_name, cursor_pos);
+                    debug!(
+                        "EditBox(\"{}\")::key_down(Right) cursor_pos={}",
+                        self.node_name, cursor_pos
+                    );
                     self.cursor_pos.set(cursor_pos);
                 }
 
@@ -651,10 +664,11 @@ impl EditBox {
 
     fn insert_char(&self, key: &str, mods: &KeyMods) {
         // First filter for only single digit keys
-        let allowed_keys =
-        ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
-         " ", ":", ";", "'", "-", ".", "/", "=", "(", "\\", ")", "`",
-         "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", ];
+        let allowed_keys = [
+            "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q",
+            "R", "S", "T", "U", "V", "W", "X", "Y", "Z", " ", ":", ";", "'", "-", ".", "/", "=",
+            "(", "\\", ")", "`", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+        ];
         if !allowed_keys.contains(&key) {
             return
         }
@@ -663,11 +677,7 @@ impl EditBox {
         //let ch = key.chars().next().unwrap();
         // if !self.allowed_chars.chars().any(|c| c == ch) { return }
 
-        let key = if mods.shift {
-            key.to_string()
-        } else {
-            key.to_lowercase()
-        };
+        let key = if mods.shift { key.to_string() } else { key.to_lowercase() };
 
         self.insert_text(key);
     }
@@ -739,7 +749,7 @@ impl EditBox {
 
             let cpos = match self.find_closest_glyph_idx(x) {
                 MouseClickGlyph::Pos(cpos) => cpos,
-                _ => panic!("shouldn't be possible to reach here!")
+                _ => panic!("shouldn't be possible to reach here!"),
             };
 
             // set cursor pos
@@ -832,13 +842,11 @@ impl EditBox {
         MouseClickGlyph::Pos(cpos)
     }
 
-    fn window_resize(self: Arc<Self>, w: f32, h: f32) {
-    }
+    fn window_resize(self: Arc<Self>, w: f32, h: f32) {}
 }
 
 enum MouseClickGlyph {
     Lhs,
     Pos(u32),
-    Rhs(u32)
+    Rhs(u32),
 }
-

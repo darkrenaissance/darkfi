@@ -3,7 +3,7 @@
 
 use async_lock::Mutex;
 use std::{
-    sync::{Arc, mpsc},
+    sync::{mpsc, Arc},
     thread,
 };
 
@@ -44,7 +44,7 @@ mod shader;
 
 mod text;
 
-use crate::error::{Result, Error};
+use crate::error::{Error, Result};
 
 #[macro_use]
 extern crate log;
@@ -180,37 +180,42 @@ fn main() {
     let (method_sender, method_recvr) = mpsc::channel();
     let render_api = gfx2::RenderApi::new(method_sender);
 
-    let event_pub = pubsub::Publisher::new();
-    let event_sub = event_pub.clone().subscribe();
+    let (event_pub, event_sub) = async_channel::unbounded();
 
-    let gfx_handle = thread::spawn(move || {
-        gfx2::run_gui(method_recvr, event_pub);
+    let ev_relay_task = ex.spawn(async move {
+        loop {
+            let Ok(ev) = event_sub.recv().await else {
+                debug!("Event relayer closed");
+                break
+            };
+            debug!("event: {:?}", ev);
+        }
     });
 
     let n_threads = std::thread::available_parallelism().unwrap().get();
     let (signal, shutdown) = smol::channel::unbounded::<()>();
-    easy_parallel::Parallel::new()
-        // Executor threads
-        .each(1..n_threads, |_| smol::future::block_on(ex.run(shutdown.recv())))
-        // Run the main future on this thread
-        .finish(|| {
-            smol::future::block_on(async {
-                //amain(ex.clone(), render_api, event_sub).await;
+    let exec_threadpool = thread::spawn(move || {
+        easy_parallel::Parallel::new()
+            // Executor threads
+            .each(1..n_threads, |_| smol::future::block_on(ex.run(shutdown.recv())))
+            // Run the main future on this thread
+            .finish(|| smol::future::block_on(ex.run(shutdown.recv())));
+    });
 
-                // Need to figure out how closing the window works
-                // Some time to allow processes to clean up
-                // But a time limit whereby we just close
-                loop {
-                    smol::Timer::after(std::time::Duration::from_secs(2)).await;
-                }
-                drop(signal);
+    gfx2::run_gui(method_recvr, event_pub);
 
-                zmq_task.cancel().await;
-                Ok::<(), Error>(())
-            });
-        });
+    // Close all tasks
+    smol::future::block_on(async {
+        // Perform cleanup code
+        // If not finished in certain amount of time, then just exit
 
-    gfx_handle.join();
+        zmq_task.cancel().await;
+        ev_relay_task.cancel().await;
+    });
+
+    drop(signal);
+    exec_threadpool.join();
+    debug!("Application closed");
 }
 
 /*
