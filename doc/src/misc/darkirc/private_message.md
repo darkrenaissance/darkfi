@@ -28,6 +28,11 @@ To share your Public Key with a user over `darkirc` you can use one of the
 public channels or via an external app like Signal, as plaintext DMs 
 are disabled in `darkirc`.
 
+<u><b>Note</b></u>: When sharing/receiving public keys 
+(i.e modifying `darkirc_config.toml`), we don't have to restart the 
+daemon for the new changes to take effect, we simply send `/rehash`
+command from IRC client (or `/quote rehash`)
+
 <u><b>Note</b></u>: If you use the `darkirc`'s public channel, your 
 message will be publically visible on the IRC chat.
 
