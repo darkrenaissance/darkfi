@@ -35,6 +35,32 @@ you have all the necessary dependencies.
 % # sudo make install darkirc 
 ```
 
+## Installation (Android)
+
+This is for Android 64 bit (which is most phones).
+
+1. Setup Docker on your machine which may look like:
+    1. Install docker and docker-buildx packages.
+    2. Enable the docker daemon service.
+    3. Add your user to the docker group and refresh the session
+       (either with `su -c $USER` or logout/login).
+2. Run `cd bin/darkirc/ && make docker-android`. The resulting file will be
+   called `darkirc.aarch64-android`. Copy this to your phone.
+3. Install Termux and RevolutionIRC on F-Droid.
+4. You can access the phone storage from `/sdcard/` and copy the file
+   into the Termux home.
+5. Run `termux-wake-lock`. This stops Android suspending the daemon.
+6. Run the daemon. You can open new Termux sessions by swiping from
+   the left to bring up the sidebar.
+7. Connect the RevolutionIRC frontend.
+
+## Logs
+
+The public channels have [logs available](https://agorism.dev/log/), and
+additionally there is a mirror on telegram @darkfi_darkirc channel.
+You can also message @darkirc_bot with "sub" to avoid doxxing your username.
+Use "unsub" to unsubscribe.
+
 ## Usage (DarkFi Network)
 
 Upon compiling `darkirc` as described above, the preconfigured defaults
@@ -118,7 +144,7 @@ config, you just need to send a `rehash` command from IRC client for
 the changes to reflect, like so:
 
 ```
-/qoute rehash
+/quote rehash
 ```
 Or:
 ```
@@ -238,3 +264,11 @@ Copy [this script](https://github.com/narodnik/weechat-global-buffer/blob/main/b
 to `~/.weechat/python/autoload/`, and you will create a single buffer 
 which aggregates messages from all channels. It's useful to monitor 
 activity from all channels without needing to flick through them.
+
+## Emojis
+
+Install the `noto` fonts to have the full unicode set. Popular Linux distros
+should have packages for them.
+
+Once installed you can view all the emojis in your terminal. Note, you may need
+to regenerate your font cache (or just restart) after installing them.
