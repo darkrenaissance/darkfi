@@ -37,6 +37,8 @@ async fn sync_forks_real(ex: Arc<Executor<'static>>) -> Result<()> {
         pow_target,
         pow_fixed_difficulty: pow_fixed_difficulty.clone(),
         finalization_threshold: 6,
+        alice_url: "tcp+tls://127.0.0.1:18440".to_string(),
+        bob_url: "tcp+tls://127.0.0.1:18441".to_string(),
     };
     let th = Harness::new(config, true, &ex).await?;
 
@@ -63,7 +65,7 @@ async fn sync_forks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     // We are going to create a third node and try to sync from Bob
     let mut settings = Settings { localnet: true, inbound_connections: 3, ..Default::default() };
 
-    let charlie_url = Url::parse("tcp+tls://127.0.0.1:18342")?;
+    let charlie_url = Url::parse("tcp+tls://127.0.0.1:18442")?;
     settings.inbound_addrs = vec![charlie_url];
     let bob_url = th.bob.p2p.settings().inbound_addrs[0].clone();
     settings.peers = vec![bob_url];

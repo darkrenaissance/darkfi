@@ -41,7 +41,12 @@ use smol::Executor;
 
 /// Simulates the processing of a specified number of unproposed transactions, returning
 /// the total number of unproposed transactions and gas used.
-async fn simulate_unproposed_txs(num_txs: u64, ex: Arc<Executor<'static>>) -> Result<(u64, u64)> {
+async fn simulate_unproposed_txs(
+    num_txs: u64,
+    alice_url: String,
+    bob_url: String,
+    ex: Arc<Executor<'static>>,
+) -> Result<(u64, u64)> {
     init_logger();
 
     // Set current block height used to create and retrieve unproposed transactions
@@ -54,6 +59,8 @@ async fn simulate_unproposed_txs(num_txs: u64, ex: Arc<Executor<'static>>) -> Re
         pow_target,
         pow_fixed_difficulty: pow_fixed_difficulty.clone(),
         finalization_threshold: 6,
+        alice_url,
+        bob_url,
     };
 
     // Create chain test harness using created configuration
@@ -113,7 +120,14 @@ fn test_unproposed_txs_within_gas_limit() -> Result<()> {
         || {
             smol::block_on(async {
                 // Receive number of unproposed txs within gas limit
-                let (num_unproposed_txs, _) = simulate_unproposed_txs(5, ex.clone()).await.unwrap();
+                let (num_unproposed_txs, _) = simulate_unproposed_txs(
+                    5,
+                    "tcp+tls://127.0.0.1:18540".to_string(),
+                    "tcp+tls://127.0.0.1:18541".to_string(),
+                    ex.clone(),
+                )
+                .await
+                .unwrap();
 
                 // Shutdown spawned nodes
                 signal.send(()).await.unwrap();
@@ -142,8 +156,14 @@ fn test_unproposed_txs_exceeding_gas_limit() -> Result<()> {
         || {
             smol::block_on(async {
                 // Receive total gas used by simulating a number of transactions that will exceed gas limit
-                let (num_unproposed_txs, total_gas_used) =
-                    simulate_unproposed_txs(135, ex.clone()).await.unwrap();
+                let (num_unproposed_txs, total_gas_used) = simulate_unproposed_txs(
+                    135,
+                    "tcp+tls://127.0.0.1:18640".to_string(),
+                    "tcp+tls://127.0.0.1:18641".to_string(),
+                    ex.clone(),
+                )
+                .await
+                .unwrap();
 
                 // Shutdown spawned nodes
                 signal.send(()).await.unwrap();

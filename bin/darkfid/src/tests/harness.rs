@@ -47,6 +47,8 @@ pub struct HarnessConfig {
     pub pow_target: u32,
     pub pow_fixed_difficulty: Option<BigUint>,
     pub finalization_threshold: usize,
+    pub alice_url: String,
+    pub bob_url: String,
 }
 
 pub struct Harness {
@@ -89,12 +91,12 @@ impl Harness {
             Settings { localnet: true, inbound_connections: 3, ..Default::default() };
 
         // Alice
-        let alice_url = Url::parse("tcp+tls://127.0.0.1:18340")?;
+        let alice_url = Url::parse(&config.alice_url)?;
         settings.inbound_addrs = vec![alice_url.clone()];
         let alice = generate_node(&vks, &validator_config, &settings, ex, true, true, None).await?;
 
         // Bob
-        let bob_url = Url::parse("tcp+tls://127.0.0.1:18341")?;
+        let bob_url = Url::parse(&config.bob_url)?;
         settings.inbound_addrs = vec![bob_url];
         settings.peers = vec![alice_url];
         let bob = generate_node(&vks, &validator_config, &settings, ex, true, false, None).await?;

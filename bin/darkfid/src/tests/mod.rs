@@ -44,6 +44,8 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
         pow_target,
         pow_fixed_difficulty: pow_fixed_difficulty.clone(),
         finalization_threshold: 3,
+        alice_url: "tcp+tls://127.0.0.1:18340".to_string(),
+        bob_url: "tcp+tls://127.0.0.1:18341".to_string(),
     };
     let th = Harness::new(config, true, &ex).await?;
 
