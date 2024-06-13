@@ -77,12 +77,12 @@ and install dependencies accordingly. In case it does not find your
 package manager, please consider adding support for it into the script
 and sending a patch.
 
-To build the necessary binaries, we can just clone the repo, checkout
-to the latest tag, and use the provided Makefile to build the project:
+To build the necessary binaries, we can just clone the repo, and use 
+the provided Makefile to build the project:
 
 ```shell
 % git clone https://github.com/darkrenaissance/darkfi
-% cd darkfi && git checkout v0.4.1
+% cd darkfi
 % make
 ```
 
