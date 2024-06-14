@@ -40,3 +40,27 @@ pub enum WalletDbError {
     // Generic error
     GenericError = -32130,
 }
+
+impl std::fmt::Display for WalletDbError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            WalletDbError::ConnectionFailed => write!(f, "WalletDbError::ConnectionFailed"),
+            WalletDbError::FailedToAquireLock => write!(f, "WalletDbError::FailedToAquireLock"),
+            WalletDbError::PragmaUpdateError => write!(f, "WalletDbError::PragmaUpdateError"),
+            WalletDbError::QueryPreparationFailed => {
+                write!(f, "WalletDbError::QueryPreparationFailed")
+            }
+            WalletDbError::QueryExecutionFailed => write!(f, "WalletDbError::QueryExecutionFailed"),
+            WalletDbError::QueryFinalizationFailed => {
+                write!(f, "WalletDbError::QueryFinalizationFailed")
+            }
+            WalletDbError::ParseColumnValueError => {
+                write!(f, "WalletDbError::ParseColumnValueError")
+            }
+            WalletDbError::RowNotFound => write!(f, "WalletDbError::RowNotFound"),
+            WalletDbError::GenericError => write!(f, "WalletDbError::GenericError"),
+        }
+    }
+}
+
+impl std::error::Error for WalletDbError {}
