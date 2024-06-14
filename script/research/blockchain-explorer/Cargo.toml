@@ -1,7 +1,7 @@
 [package]
 name = "blockchain-explorer"
 version = "0.4.1"
-description = "Command-line client to display statistics or export blockchain sled database contents"
+description = "Daemon to listen for new blocks from darkfid and store them in an easily accessible format for further usage."
 authors = ["Dyne.org foundation <foundation@dyne.org>"]
 repository = "https://github.com/darkrenaissance/darkfi"
 license = "AGPL-3.0-only"
@@ -10,17 +10,33 @@ edition = "2021"
 [workspace]
 
 [dependencies]
-blake3 = "1.5.1"
-clap = {version = "4.4.11", features = ["derive"]}
-darkfi = {path = "../../../", features = ["blockchain"]}
+# Darkfi
+darkfi = {path = "../../../", features = ["async-daemonize", "validator", "rusqlite"]}
 darkfi-sdk = {path = "../../../src/sdk"}
-num-bigint = "0.4.5"
-sled = "0.34.7"
+darkfi-serial = {path = "../../../src/serial"}
+drk = {path = "../../../bin/drk"}
+
+# Misc
+log = "0.4.21"
+rusqlite = {version = "0.31.0", features = ["sqlcipher"]}
+
+# JSON-RPC
+async-trait = "0.1.80"
+tinyjson = "2.5.1"
+url = "2.5.0"
+
+# Daemon
+easy-parallel = "3.3.1"
+signal-hook-async-std = "0.2.2"
+signal-hook = "0.3.17"
+simplelog = "0.12.2"
+smol = "2.0.0"
+
+# Argument parsing
+serde = {version = "1.0.203", features = ["derive"]}
+structopt = "0.3.26"
+structopt-toml = "0.5.1"
 
 [patch.crates-io]
 halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v4"}
 halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v4"}
-
-[lints]
-workspace = true
-

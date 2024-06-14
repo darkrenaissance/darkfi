@@ -16,451 +16,218 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{fs::File, io::Write};
+use std::{
+    collections::HashSet,
+    fs,
+    io::{stdin, stdout, Write},
+    sync::Arc,
+};
 
-use clap::Parser;
+use log::{error, info};
+use smol::{lock::Mutex, stream::StreamExt};
+use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
+use url::Url;
+
 use darkfi::{
-    blockchain::{
-        block_store::{Block, BlockDifficulty, BlockRanks, BlockStore},
-        contract_store::ContractStore,
-        header_store::{Header, HeaderHash, HeaderStore},
-        tx_store::TxStore,
-        Blockchain,
+    async_daemonize, cli_desc,
+    rpc::{
+        client::RpcClient,
+        server::{listen_and_serve, RequestHandler},
     },
-    cli_desc,
-    tx::Transaction,
-    util::{path::expand_path, time::Timestamp},
-    Result,
+    system::{StoppableTask, StoppableTaskPtr},
+    util::path::expand_path,
+    Error, Result,
 };
-use darkfi_sdk::{
-    blockchain::block_epoch,
-    crypto::{ContractId, MerkleNode},
-    tx::TransactionHash,
-};
-use num_bigint::BigUint;
+use drk::walletdb::{WalletDb, WalletPtr};
 
-#[derive(Parser)]
-#[command(about = cli_desc!())]
+/// Crate errors
+mod error;
+
+/// JSON-RPC requests handler and methods
+mod rpc;
+use rpc::subscribe_blocks;
+
+/// Database functionality related to blocks
+mod blocks;
+
+const CONFIG_FILE: &str = "blockchain_explorer_config.toml";
+const CONFIG_FILE_CONTENTS: &str = include_str!("../blockchain_explorer_config.toml");
+
+#[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
+#[serde(default)]
+#[structopt(name = "blockcahin-explorer", about = cli_desc!())]
 struct Args {
-    #[arg(short, long, default_value = "../../../contrib/localnet/darkfid-single-node/")]
-    /// Path containing the node folders
-    path: String,
+    #[structopt(short, long)]
+    /// Configuration file to use
+    config: Option<String>,
 
-    #[arg(short, long, default_values = ["darkfid"])]
-    /// Node folder name (supports multiple values)
-    node: Vec<String>,
+    #[structopt(short, long, default_value = "tcp://127.0.0.1:14567")]
+    /// JSON-RPC listen URL
+    rpc_listen: Url,
 
-    #[arg(short, long, default_value = "")]
-    /// Node blockchain folder
-    blockchain: String,
+    #[structopt(long, default_value = "~/.local/darkfi/blockchain-explorer/daemon.db")]
+    /// Path to daemon database
+    db_path: String,
 
-    #[arg(short, long)]
-    /// Export all contents into a JSON file
-    export: bool,
+    #[structopt(long)]
+    /// Password for the daemon database.
+    /// If it's not present, daemon will prompt the user for it.
+    db_pass: Option<String>,
+
+    #[structopt(long)]
+    /// Reset the databae and start syncing from first block
+    reset: bool,
+
+    #[structopt(short, long, default_value = "tcp://127.0.0.1:8340")]
+    /// darkfid JSON-RPC endpoint
+    endpoint: Url,
+
+    #[structopt(short, long)]
+    /// Set log file to ouput into
+    log: Option<String>,
+
+    #[structopt(short, parse(from_occurrences))]
+    /// Increase verbosity (-vvv supported)
+    verbose: u8,
 }
 
-#[derive(Debug)]
-struct HeaderInfo {
-    _hash: HeaderHash,
-    _version: u8,
-    _previous: HeaderHash,
-    _height: u32,
-    _timestamp: Timestamp,
-    _nonce: u64,
-    _root: MerkleNode,
+/// Daemon structure
+pub struct BlockchainExplorer {
+    /// Daemon database operations handler
+    pub database: WalletPtr,
+    /// JSON-RPC connection tracker
+    pub rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
+    /// JSON-RPC client to execute requests to darkfid daemon
+    pub rpc_client: RpcClient,
 }
 
-impl HeaderInfo {
-    pub fn new(_hash: HeaderHash, header: &Header) -> HeaderInfo {
-        HeaderInfo {
-            _hash,
-            _version: header.version,
-            _previous: header.previous,
-            _height: header.height,
-            _timestamp: header.timestamp,
-            _nonce: header.nonce,
-            _root: header.root,
-        }
-    }
-}
-
-#[derive(Debug)]
-struct HeaderStoreInfo {
-    _main: Vec<HeaderInfo>,
-    _sync: Vec<HeaderInfo>,
-}
-
-impl HeaderStoreInfo {
-    pub fn new(headerstore: &HeaderStore) -> HeaderStoreInfo {
-        let mut _main = Vec::new();
-        let result = headerstore.get_all();
-        match result {
-            Ok(iter) => {
-                for (hash, header) in iter.iter() {
-                    _main.push(HeaderInfo::new(*hash, header));
+impl BlockchainExplorer {
+    async fn new(
+        db_path: String,
+        db_pass: Option<String>,
+        endpoint: Url,
+        ex: Arc<smol::Executor<'static>>,
+    ) -> Result<Self> {
+        // Grab password
+        let db_pass = match db_pass {
+            Some(pass) => pass,
+            None => {
+                let mut pass = String::new();
+                while pass.trim().is_empty() {
+                    info!(target: "blockchain-explorer", "Provide database passsword:");
+                    stdout().flush()?;
+                    stdin().read_line(&mut pass).unwrap_or(0);
                 }
+                pass.trim().to_string()
             }
-            Err(e) => println!("Error: {:?}", e),
+        };
+
+        // Script kiddies protection
+        if db_pass == "changeme" {
+            error!(target: "blockchain-explorer", "Please don't use default database password...");
+            return Err(Error::ParseFailed("Default database password usage"))
         }
-        let mut _sync = Vec::new();
-        let result = headerstore.get_all_sync();
-        match result {
-            Ok(iter) => {
-                for (_, header) in iter.iter() {
-                    _sync.push(HeaderInfo::new(header.hash(), header));
-                }
+
+        // Initialize database
+        let db_path = expand_path(&db_path)?;
+        if !db_path.exists() {
+            if let Some(parent) = db_path.parent() {
+                fs::create_dir_all(parent)?;
             }
-            Err(e) => println!("Error: {:?}", e),
         }
-        HeaderStoreInfo { _main, _sync }
-    }
-}
-
-#[derive(Debug)]
-struct BlockInfo {
-    _hash: HeaderHash,
-    _header: HeaderHash,
-    _txs: Vec<TransactionHash>,
-    _signature: String,
-}
-
-impl BlockInfo {
-    pub fn new(_hash: HeaderHash, block: &Block) -> BlockInfo {
-        BlockInfo {
-            _hash,
-            _header: block.header,
-            _txs: block.txs.clone(),
-            _signature: format!("{:?}", block.signature),
-        }
-    }
-}
-
-#[derive(Debug)]
-struct OrderInfo {
-    _height: u32,
-    _hash: HeaderHash,
-}
-
-impl OrderInfo {
-    pub fn new(_height: u32, _hash: HeaderHash) -> OrderInfo {
-        OrderInfo { _height, _hash }
-    }
-}
-
-#[derive(Debug)]
-struct BlockRanksInfo {
-    _target_rank: BigUint,
-    _targets_rank: BigUint,
-    _hash_rank: BigUint,
-    _hashes_rank: BigUint,
-}
-
-impl BlockRanksInfo {
-    pub fn new(ranks: &BlockRanks) -> BlockRanksInfo {
-        BlockRanksInfo {
-            _target_rank: ranks.target_rank.clone(),
-            _targets_rank: ranks.targets_rank.clone(),
-            _hash_rank: ranks.hash_rank.clone(),
-            _hashes_rank: ranks.hashes_rank.clone(),
-        }
-    }
-}
-
-#[derive(Debug)]
-struct BlockDifficultyInfo {
-    _height: u32,
-    _timestamp: Timestamp,
-    _difficulty: BigUint,
-    _cummulative_difficulty: BigUint,
-    _ranks: BlockRanksInfo,
-}
-
-impl BlockDifficultyInfo {
-    pub fn new(difficulty: &BlockDifficulty) -> BlockDifficultyInfo {
-        BlockDifficultyInfo {
-            _height: difficulty.height,
-            _timestamp: difficulty.timestamp,
-            _difficulty: difficulty.difficulty.clone(),
-            _cummulative_difficulty: difficulty.cummulative_difficulty.clone(),
-            _ranks: BlockRanksInfo::new(&difficulty.ranks),
-        }
-    }
-}
-
-#[derive(Debug)]
-struct BlockStoreInfo {
-    _main: Vec<BlockInfo>,
-    _order: Vec<OrderInfo>,
-    _difficulty: Vec<BlockDifficultyInfo>,
-}
-
-impl BlockStoreInfo {
-    pub fn new(blockstore: &BlockStore) -> BlockStoreInfo {
-        let mut _main = Vec::new();
-        let result = blockstore.get_all();
-        match result {
-            Ok(iter) => {
-                for (hash, block) in iter.iter() {
-                    _main.push(BlockInfo::new(*hash, block));
-                }
+        let database = match WalletDb::new(Some(db_path), Some(&db_pass)) {
+            Ok(w) => w,
+            Err(e) => {
+                let err = format!("{e:?}");
+                error!(target: "blockchain-explorer", "Error initializing database: {err}");
+                return Err(Error::RusqliteError(err))
             }
-            Err(e) => println!("Error: {:?}", e),
+        };
+
+        // Initialize rpc client
+        let rpc_client = RpcClient::new(endpoint, ex).await?;
+
+        let explorer = Self { database, rpc_connections: Mutex::new(HashSet::new()), rpc_client };
+
+        // Initialize all the database tables
+        if let Err(e) = explorer.initialize_blocks().await {
+            let err = format!("{e:?}");
+            error!(target: "blockchain-explorer", "Error initializing database tables: {err}");
+            return Err(Error::RusqliteError(err))
         }
-        let mut _order = Vec::new();
-        let result = blockstore.get_all_order();
-        match result {
-            Ok(iter) => {
-                for (height, hash) in iter.iter() {
-                    _order.push(OrderInfo::new(*height, *hash));
-                }
+        // TODO: map transaction structure to their corresponding files with sql table and retrieval methods
+
+        Ok(explorer)
+    }
+}
+
+async_daemonize!(realmain);
+async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
+    info!(target: "blockchain-explorer", "Initializing DarkFi blockchain explorer node...");
+    let explorer =
+        BlockchainExplorer::new(args.db_path, args.db_pass, args.endpoint.clone(), ex.clone())
+            .await?;
+    let explorer = Arc::new(explorer);
+    info!(target: "blockchain-explorer", "Node initialized successfully!");
+
+    // JSON-RPC server
+    info!(target: "blockchain-explorer", "Starting JSON-RPC server");
+    // Here we create a task variable so we can manually close the
+    // task later.
+    let rpc_task = StoppableTask::new();
+    let explorer_ = explorer.clone();
+    rpc_task.clone().start(
+        listen_and_serve(args.rpc_listen, explorer.clone(), None, ex.clone()),
+        |res| async move {
+            match res {
+                Ok(()) | Err(Error::RpcServerStopped) => explorer_.stop_connections().await,
+                Err(e) => error!(target: "blockchain-explorer", "Failed starting sync JSON-RPC server: {}", e),
             }
-            Err(e) => println!("Error: {:?}", e),
-        }
-        let mut _difficulty = Vec::new();
-        let result = blockstore.get_all_difficulty();
-        match result {
-            Ok(iter) => {
-                for (_, difficulty) in iter.iter() {
-                    _difficulty.push(BlockDifficultyInfo::new(difficulty));
-                }
-            }
-            Err(e) => println!("Error: {:?}", e),
-        }
-        BlockStoreInfo { _main, _order, _difficulty }
+        },
+        Error::RpcServerStopped,
+        ex.clone(),
+    );
+
+    // Sync blocks
+    info!(target: "blockchain-explorer", "Syncing blocks from darkfid...");
+    if let Err(e) = explorer.sync_blocks(args.reset).await {
+        let err = format!("{e:?}");
+        error!(target: "blockchain-explorer", "Error syncing blocks: {err}");
+        return Err(Error::RusqliteError(err))
     }
-}
 
-#[derive(Debug)]
-struct TxInfo {
-    _hash: TransactionHash,
-    _payload: Transaction,
-}
-
-impl TxInfo {
-    pub fn new(_hash: TransactionHash, tx: &Transaction) -> TxInfo {
-        TxInfo { _hash, _payload: tx.clone() }
-    }
-}
-
-#[derive(Debug)]
-struct TxLocationInfo {
-    _hash: TransactionHash,
-    _block_height: u32,
-    _index: u16,
-}
-
-impl TxLocationInfo {
-    pub fn new(_hash: TransactionHash, _block_height: u32, _index: u16) -> TxLocationInfo {
-        TxLocationInfo { _hash, _block_height, _index }
-    }
-}
-
-#[derive(Debug)]
-struct PendingOrderInfo {
-    _order: u64,
-    _hash: TransactionHash,
-}
-
-impl PendingOrderInfo {
-    pub fn new(_order: u64, _hash: TransactionHash) -> PendingOrderInfo {
-        PendingOrderInfo { _order, _hash }
-    }
-}
-
-#[derive(Debug)]
-struct TxStoreInfo {
-    _main: Vec<TxInfo>,
-    _location: Vec<TxLocationInfo>,
-    _pending: Vec<TxInfo>,
-    _pending_order: Vec<PendingOrderInfo>,
-}
-
-impl TxStoreInfo {
-    pub fn new(txstore: &TxStore) -> TxStoreInfo {
-        let mut _main = Vec::new();
-        let result = txstore.get_all();
-        match result {
-            Ok(iter) => {
-                for (hash, tx) in iter.iter() {
-                    _main.push(TxInfo::new(*hash, tx));
-                }
-            }
-            Err(e) => println!("Error: {:?}", e),
+    info!(target: "blockchain-explorer", "Subscribing to new blocks...");
+    let (subscriber_task, listener_task) = match subscribe_blocks(
+        explorer.clone(),
+        args.endpoint,
+        ex.clone(),
+    )
+    .await
+    {
+        Ok(pair) => pair,
+        Err(e) => {
+            let err = format!("{e:?}");
+            error!(target: "blockchain-explorer", "Error while setting up blocks subscriber: {err}");
+            return Err(Error::RusqliteError(err))
         }
-        let mut _location = Vec::new();
-        let result = txstore.get_all_location();
-        match result {
-            Ok(iter) => {
-                for (hash, location) in iter.iter() {
-                    _location.push(TxLocationInfo::new(*hash, location.0, location.1));
-                }
-            }
-            Err(e) => println!("Error: {:?}", e),
-        }
-        let mut _pending = Vec::new();
-        let result = txstore.get_all_pending();
-        match result {
-            Ok(iter) => {
-                for (hash, tx) in iter.iter() {
-                    _pending.push(TxInfo::new(*hash, tx));
-                }
-            }
-            Err(e) => println!("Error: {:?}", e),
-        }
-        let mut _pending_order = Vec::new();
-        let result = txstore.get_all_pending_order();
-        match result {
-            Ok(iter) => {
-                for (order, hash) in iter.iter() {
-                    _pending_order.push(PendingOrderInfo::new(*order, *hash));
-                }
-            }
-            Err(e) => println!("Error: {:?}", e),
-        }
-        TxStoreInfo { _main, _location, _pending, _pending_order }
-    }
-}
+    };
 
-#[derive(Debug)]
-struct ContractStateInfo {
-    _id: ContractId,
-    _state_hashes: Vec<blake3::Hash>,
-}
+    // Signal handling for graceful termination.
+    let (signals_handler, signals_task) = SignalHandler::new(ex)?;
+    signals_handler.wait_termination(signals_task).await?;
+    info!(target: "blockchain-explorer", "Caught termination signal, cleaning up and exiting...");
 
-impl ContractStateInfo {
-    pub fn new(_id: ContractId, state_hashes: &[blake3::Hash]) -> ContractStateInfo {
-        ContractStateInfo { _id, _state_hashes: state_hashes.to_vec() }
-    }
-}
+    info!(target: "blockchain-explorer", "Stopping JSON-RPC server...");
+    rpc_task.stop().await;
 
-#[derive(Debug)]
-struct WasmInfo {
-    _id: ContractId,
-    _bincode_hash: blake3::Hash,
-}
+    info!(target: "blockchain-explorer", "Stopping darkfid listener...");
+    listener_task.stop().await;
 
-impl WasmInfo {
-    pub fn new(_id: ContractId, bincode: &[u8]) -> WasmInfo {
-        let _bincode_hash = blake3::hash(bincode);
-        WasmInfo { _id, _bincode_hash }
-    }
-}
+    info!(target: "blockchain-explorer", "Stopping darkfid subscriber...");
+    subscriber_task.stop().await;
 
-#[derive(Debug)]
-struct ContractStoreInfo {
-    _state: Vec<ContractStateInfo>,
-    _wasm: Vec<WasmInfo>,
-}
-
-impl ContractStoreInfo {
-    pub fn new(contractsstore: &ContractStore) -> ContractStoreInfo {
-        let mut _state = Vec::new();
-        let result = contractsstore.get_all_states();
-        match result {
-            Ok(iter) => {
-                for (id, state_hash) in iter.iter() {
-                    _state.push(ContractStateInfo::new(*id, state_hash));
-                }
-            }
-            Err(e) => println!("Error: {:?}", e),
-        }
-        let mut _wasm = Vec::new();
-        let result = contractsstore.get_all_wasm();
-        match result {
-            Ok(iter) => {
-                for (id, bincode) in iter.iter() {
-                    _wasm.push(WasmInfo::new(*id, bincode));
-                }
-            }
-            Err(e) => println!("Error: {:?}", e),
-        }
-        ContractStoreInfo { _state, _wasm }
-    }
-}
-#[derive(Debug)]
-struct BlockchainInfo {
-    _headers: HeaderStoreInfo,
-    _blocks: BlockStoreInfo,
-    _transactions: TxStoreInfo,
-    _contracts: ContractStoreInfo,
-}
-
-impl BlockchainInfo {
-    pub fn new(blockchain: &Blockchain) -> BlockchainInfo {
-        BlockchainInfo {
-            _headers: HeaderStoreInfo::new(&blockchain.headers),
-            _blocks: BlockStoreInfo::new(&blockchain.blocks),
-            _transactions: TxStoreInfo::new(&blockchain.transactions),
-            _contracts: ContractStoreInfo::new(&blockchain.contracts),
-        }
-    }
-}
-
-fn statistics(folder: &str, node: &str, blockchain: &str) -> Result<()> {
-    println!("Retrieving blockchain statistics for {node}...");
-
-    // Node folder
-    let folder = folder.to_owned() + node;
-
-    // Initialize or load sled database
-    let path = folder.to_owned() + blockchain;
-    let db_path = expand_path(&path).unwrap();
-    let sled_db = sled::open(db_path)?;
-
-    // Retrieve statistics
-    let blockchain = Blockchain::new(&sled_db)?;
-    let (height, block) = blockchain.last()?;
-    let epoch = block_epoch(height);
-    let blocks = blockchain.len();
-    let txs = blockchain.txs_len();
-    drop(sled_db);
-
-    // Print statistics
-    println!("Latest height: {height}");
-    println!("Epoch: {epoch}");
-    println!("Latest block: {block}");
-    println!("Total blocks: {blocks}");
-    println!("Total transactions: {txs}");
-
-    Ok(())
-}
-
-fn export(folder: &str, node: &str, blockchain: &str) -> Result<()> {
-    println!("Exporting data for {node}...");
-
-    // Node folder
-    let folder = folder.to_owned() + node;
-
-    // Initialize or load sled database
-    let path = folder.to_owned() + blockchain;
-    let db_path = expand_path(&path).unwrap();
-    let sled_db = sled::open(db_path)?;
-
-    // Data export
-    let blockchain = Blockchain::new(&sled_db)?;
-    let info = BlockchainInfo::new(&blockchain);
-    let info_string = format!("{:#?}", info);
-    let file_name = node.to_owned() + "_db";
-    let mut file = File::create(file_name.clone())?;
-    file.write_all(info_string.as_bytes())?;
-    drop(sled_db);
-    println!("Data exported to file: {file_name}");
-
-    Ok(())
-}
-
-fn main() -> Result<()> {
-    // Parse arguments
-    let args = Args::parse();
-    println!("Node folder path: {}", args.path);
-    // Export data for each node
-    for node in args.node {
-        if args.export {
-            export(&args.path, &node, &args.blockchain)?;
-            continue
-        }
-        statistics(&args.path, &node, &args.blockchain)?;
-    }
+    info!(target: "blockchain-explorer", "Stopping JSON-RPC client...");
+    explorer.rpc_client.stop().await;
 
     Ok(())
 }
