@@ -47,9 +47,13 @@ mod error;
 mod rpc;
 mod rpc_blocks;
 use rpc_blocks::subscribe_blocks;
+mod rpc_transactions;
 
 /// Database functionality related to blocks
 mod blocks;
+
+/// Database functionality related to transactions
+mod transactions;
 
 const CONFIG_FILE: &str = "blockchain_explorer_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../blockchain_explorer_config.toml");
@@ -153,10 +157,15 @@ impl BlockchainExplorer {
         // Initialize all the database tables
         if let Err(e) = explorer.initialize_blocks().await {
             let err = format!("{e:?}");
-            error!(target: "blockchain-explorer", "Error initializing database tables: {err}");
+            error!(target: "blockchain-explorer", "Error initializing blocks database table: {err}");
             return Err(Error::RusqliteError(err))
         }
-        // TODO: map transaction structure to their corresponding files with sql table and retrieval methods
+        if let Err(e) = explorer.initialize_transactions().await {
+            let err = format!("{e:?}");
+            error!(target: "blockchain-explorer", "Error initializing transactions database table: {err}");
+            return Err(Error::RusqliteError(err))
+        }
+        // TODO: Map deployed contracts to their corresponding files with sql table and retrieval methods
 
         Ok(explorer)
     }

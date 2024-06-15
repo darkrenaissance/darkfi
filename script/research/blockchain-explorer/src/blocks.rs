@@ -30,7 +30,7 @@ use drk::{
 
 use crate::BlockchainExplorer;
 
-// Dtabase SQL table constant names. These have to represent the `block.sql`
+// Database SQL table constant names. These have to represent the `blocks.sql`
 // SQL schema.
 pub const BLOCKS_TABLE: &str = "blocks";
 
@@ -81,8 +81,8 @@ impl BlockRecord {
     }
 }
 
-impl From<BlockInfo> for BlockRecord {
-    fn from(block: BlockInfo) -> Self {
+impl From<&BlockInfo> for BlockRecord {
+    fn from(block: &BlockInfo) -> Self {
         Self {
             header_hash: block.hash().to_string(),
             version: block.header.version,

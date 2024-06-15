@@ -56,11 +56,11 @@ impl BlockchainExplorer {
     }
 
     /// Syncs the blockchain starting from the last synced block.
-    /// If reset flag is provided, all tables are reset, and start scanning from beginning.
+    /// If reset flag is provided, all tables are reset, and start syncing from beginning.
     pub async fn sync_blocks(&self, reset: bool) -> WalletDbResult<()> {
-        // Grab last scanned block height
+        // Grab last synced block height
         let mut height = self.last_block().await?;
-        // If last scanned block is genesis (0) or reset flag
+        // If last synced block is genesis (0) or reset flag
         // has been provided we reset, otherwise continue with
         // the next block height
         if height == 0 || reset {
@@ -83,10 +83,10 @@ impl BlockchainExplorer {
             };
             let last = *rep.get::<f64>().unwrap() as u32;
 
-            info!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "Requested to scan from block number: {height}");
+            info!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "Requested to sync from block number: {height}");
             info!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "Last known block number reported by darkfid: {last}");
 
-            // Already scanned last known block
+            // Already synced last known block
             if height > last {
                 return Ok(())
             }
@@ -102,10 +102,19 @@ impl BlockchainExplorer {
                     }
                 };
 
-                if let Err(e) = self.put_block(&block.into()).await {
-                    error!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "[sync_blocks] Scan block failed: {e:?}");
+                if let Err(e) = self.put_block(&(&block).into()).await {
+                    error!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "[sync_blocks] Insert block failed: {e:?}");
                     return Err(WalletDbError::GenericError)
                 };
+
+                let block_hash = block.hash().to_string();
+                for transaction in block.txs {
+                    if let Err(e) = self.put_transaction(&(&block_hash, &transaction).into()).await
+                    {
+                        error!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "[sync_blocks] Insert block transaction failed: {e:?}");
+                        return Err(WalletDbError::GenericError)
+                    };
+                }
 
                 height += 1;
             }
@@ -244,20 +253,20 @@ pub async fn subscribe_blocks(
         .darkfid_daemon_request("blockchain.last_known_block", &JsonValue::Array(vec![]))
         .await?;
     let last_known = *rep.get::<f64>().unwrap() as u32;
-    let last_scanned = match explorer.last_block().await {
+    let last_synced = match explorer.last_block().await {
         Ok(l) => l,
         Err(e) => {
             return Err(Error::RusqliteError(format!(
-                "[subscribe_blocks] Retrieving last scanned block failed: {e:?}"
+                "[subscribe_blocks] Retrieving last synced block failed: {e:?}"
             )))
         }
     };
 
-    if last_known != last_scanned {
-        warn!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "Warning: Last scanned block is not the last known block.");
-        warn!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "You should first fully scan the blockchain, and then subscribe");
+    if last_known != last_synced {
+        warn!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "Warning: Last synced block is not the last known block.");
+        warn!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "You should first fully sync the blockchain, and then subscribe");
         return Err(Error::RusqliteError(
-            "[subscribe_blocks] Blockchain not fully scanned".to_string(),
+            "[subscribe_blocks] Blockchain not fully synced".to_string(),
         ))
     }
 
@@ -332,10 +341,19 @@ pub async fn subscribe_blocks(
                             info!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "=======================================");
 
                             info!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "Deserialized successfully. Storring block...");
-                            if let Err(e) = explorer.put_block(&block_data.into()).await {
+                            if let Err(e) = explorer.put_block(&(&block_data).into()).await {
                                 return Err(Error::RusqliteError(format!(
-                                    "[subscribe_blocks] Scanning block failed: {e:?}"
+                                    "[subscribe_blocks] Insert block failed: {e:?}"
                                 )))
+                            }
+
+                            let block_hash = block_data.hash().to_string();
+                            for transaction in block_data.txs {
+                                if let Err(e) = explorer.put_transaction(&(&block_hash, &transaction).into()).await {
+                                    return Err(Error::RusqliteError(format!(
+                                        "[subscribe_blocks] Insert block transaction failed: {e:?}"
+                                    )))
+                                };
                             }
                         }
                     }

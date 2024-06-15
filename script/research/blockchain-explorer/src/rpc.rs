@@ -49,18 +49,26 @@ impl RequestHandler for BlockchainExplorer {
             "ping" => self.pong(req.id, req.params).await,
             "ping_darkfid" => self.ping_darkfid(req.id, req.params).await,
 
-            // ==================
+            // =====================
             // Blocks methods
-            // ==================
+            // =====================
             "blocks.get_last_n_blocks" => self.blocks_get_last_n_blocks(req.id, req.params).await,
             "blocks.get_blocks_in_heights_range" => {
                 self.blocks_get_blocks_in_heights_range(req.id, req.params).await
             }
             "blocks.get_block_by_hash" => self.blocks_get_block_by_hash(req.id, req.params).await,
 
+            // =====================
+            // Transactions methods
+            // =====================
+            "transactions.get_transactions_by_header_hash" => {
+                self.transactions_get_transactions_by_header_hash(req.id, req.params).await
+            }
+            "transactions.get_transaction_by_hash" => {
+                self.transactions_get_transaction_by_hash(req.id, req.params).await
+            }
+
             // TODO: add statistics retrieval method
-            // TODO: add transactions retrieval method by their block hash
-            // TODO: add transaction retrieval method by its hash
             // TODO: add any other usefull method
 
             // ==============

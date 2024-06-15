@@ -1,4 +1,4 @@
--- Database block table definition.
+-- Database blocks table definition.
 -- We store data in a usable format.
 CREATE TABLE IF NOT EXISTS blocks (
     -- Header hash identifier of the block
