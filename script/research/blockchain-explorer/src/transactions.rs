@@ -50,11 +50,11 @@ pub struct TransactionRecord {
 impl TransactionRecord {
     /// Auxiliary function to convert a `TransactionRecord` into a `JsonValue` array.
     pub fn to_json_array(&self) -> JsonValue {
-        let mut ret = vec![];
-        ret.push(JsonValue::String(self.transaction_hash.clone()));
-        ret.push(JsonValue::String(self.header_hash.clone()));
-        ret.push(JsonValue::String(format!("{:?}", self.payload)));
-        JsonValue::Array(ret)
+        JsonValue::Array(vec![
+            JsonValue::String(self.transaction_hash.clone()),
+            JsonValue::String(self.header_hash.clone()),
+            JsonValue::String(format!("{:?}", self.payload)),
+        ])
     }
 }
 

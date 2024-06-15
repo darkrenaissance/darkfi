@@ -47,6 +47,7 @@ mod error;
 mod rpc;
 mod rpc_blocks;
 use rpc_blocks::subscribe_blocks;
+mod rpc_statistics;
 mod rpc_transactions;
 
 /// Database functionality related to blocks
@@ -54,6 +55,9 @@ mod blocks;
 
 /// Database functionality related to transactions
 mod transactions;
+
+/// Database functionality related to statistics
+mod statistics;
 
 const CONFIG_FILE: &str = "blockchain_explorer_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../blockchain_explorer_config.toml");

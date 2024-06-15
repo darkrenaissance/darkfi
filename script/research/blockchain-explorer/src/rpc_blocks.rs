@@ -59,7 +59,7 @@ impl BlockchainExplorer {
     /// If reset flag is provided, all tables are reset, and start syncing from beginning.
     pub async fn sync_blocks(&self, reset: bool) -> WalletDbResult<()> {
         // Grab last synced block height
-        let mut height = self.last_block().await?;
+        let (mut height, _) = self.last_block().await?;
         // If last synced block is genesis (0) or reset flag
         // has been provided we reset, otherwise continue with
         // the next block height
@@ -253,7 +253,7 @@ pub async fn subscribe_blocks(
         .darkfid_daemon_request("blockchain.last_known_block", &JsonValue::Array(vec![]))
         .await?;
     let last_known = *rep.get::<f64>().unwrap() as u32;
-    let last_synced = match explorer.last_block().await {
+    let (last_synced, _) = match explorer.last_block().await {
         Ok(l) => l,
         Err(e) => {
             return Err(Error::RusqliteError(format!(

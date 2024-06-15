@@ -68,8 +68,14 @@ impl RequestHandler for BlockchainExplorer {
                 self.transactions_get_transaction_by_hash(req.id, req.params).await
             }
 
-            // TODO: add statistics retrieval method
-            // TODO: add any other usefull method
+            // =====================
+            // Statistics methods
+            // =====================
+            "statistics.get_basic_statistics" => {
+                self.statistics_get_basic_statistics(req.id, req.params).await
+            }
+
+            // TODO: add any other usefull methods
 
             // ==============
             // Invalid method

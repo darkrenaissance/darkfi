@@ -68,16 +68,16 @@ pub struct BlockRecord {
 impl BlockRecord {
     /// Auxiliary function to convert a `BlockRecord` into a `JsonValue` array.
     pub fn to_json_array(&self) -> JsonValue {
-        let mut ret = vec![];
-        ret.push(JsonValue::String(self.header_hash.clone()));
-        ret.push(JsonValue::Number(self.version as f64));
-        ret.push(JsonValue::String(self.previous.clone()));
-        ret.push(JsonValue::Number(self.height as f64));
-        ret.push(JsonValue::Number(self.timestamp as f64));
-        ret.push(JsonValue::Number(self.nonce as f64));
-        ret.push(JsonValue::String(self.root.clone()));
-        ret.push(JsonValue::String(format!("{:?}", self.signature)));
-        JsonValue::Array(ret)
+        JsonValue::Array(vec![
+            JsonValue::String(self.header_hash.clone()),
+            JsonValue::Number(self.version as f64),
+            JsonValue::String(self.previous.clone()),
+            JsonValue::Number(self.height as f64),
+            JsonValue::Number(self.timestamp as f64),
+            JsonValue::Number(self.nonce as f64),
+            JsonValue::String(self.root.clone()),
+            JsonValue::String(format!("{:?}", self.signature)),
+        ])
     }
 }
 
@@ -248,12 +248,12 @@ impl BlockchainExplorer {
         self.parse_block_record(&row)
     }
 
-    /// Fetch last block from the database.
-    pub async fn last_block(&self) -> WalletDbResult<u32> {
+    /// Fetch last block height from the database.
+    pub async fn last_block(&self) -> WalletDbResult<(u32, String)> {
         // First we prepare the query
         let query = format!(
-            "SELECT {} FROM {} ORDER BY {} DESC LIMIT 1;",
-            BLOCKS_COL_HEIGHT, BLOCKS_TABLE, BLOCKS_COL_HEIGHT
+            "SELECT {}, {} FROM {} ORDER BY {} DESC LIMIT 1;",
+            BLOCKS_COL_HEADER_HASH, BLOCKS_COL_HEIGHT, BLOCKS_TABLE, BLOCKS_COL_HEIGHT
         );
         let Ok(conn) = self.database.conn.lock() else {
             return Err(WalletDbError::FailedToAquireLock)
@@ -269,11 +269,17 @@ impl BlockchainExplorer {
         let Ok(next) = rows.next() else { return Err(WalletDbError::QueryExecutionFailed) };
         let row = match next {
             Some(row_result) => row_result,
-            None => return Ok(0_u32),
+            None => return Ok((0_u32, "".to_string())),
         };
 
-        // Parse returned value
+        // Parse returned values
         let Ok(value) = row.get(0) else { return Err(WalletDbError::ParseColumnValueError) };
+        let Value::Text(ref header_hash) = value else {
+            return Err(WalletDbError::ParseColumnValueError)
+        };
+        let header_hash = header_hash.clone();
+
+        let Ok(value) = row.get(1) else { return Err(WalletDbError::ParseColumnValueError) };
         let Value::Integer(height) = value else {
             return Err(WalletDbError::ParseColumnValueError)
         };
@@ -281,7 +287,7 @@ impl BlockchainExplorer {
             return Err(WalletDbError::ParseColumnValueError)
         };
 
-        Ok(height)
+        Ok((height, header_hash))
     }
 
     /// Auxiliary function to parse a `BLOCKS_TABLE` query rows into block records.
