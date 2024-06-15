@@ -98,8 +98,8 @@ impl RenderApi {
         let _ = self.method_req.send(method);
     }
 
-    pub async fn replace_draw_call(&self, loc: Vec<usize>, draw_call: DrawCall) {
-        let method = GraphicsMethod::ReplaceDrawCall((loc, draw_call));
+    pub async fn replace_draw_calls(&self, dcs: Vec<(u64, DrawCall)>) {
+        let method = GraphicsMethod::ReplaceDrawCalls(dcs);
 
         // Ignore any error
         let _ = self.method_req.send(method);
@@ -116,7 +116,7 @@ pub struct DrawMesh {
 
 #[derive(Debug)]
 pub enum DrawInstruction {
-    ApplyViewport(Rectangle<i32>),
+    ApplyViewport(Rectangle<f32>),
     ApplyMatrix(glam::Mat4),
     Draw(DrawMesh),
 }
@@ -124,36 +124,42 @@ pub enum DrawInstruction {
 #[derive(Debug)]
 pub struct DrawCall {
     pub instrs: Vec<DrawInstruction>,
-    pub dcs: Vec<DrawCall>,
+    pub dcs: Vec<u64>,
 }
 
 struct RenderContext<'a> {
     ctx: &'a mut Box<dyn RenderingBackend>,
-    root_dc: &'a DrawCall,
+    draw_calls: &'a HashMap<u64, DrawCall>,
     uniforms_data: [u8; 128],
     white_texture: TextureId,
 }
 
 impl<'a> RenderContext<'a> {
     fn draw(&mut self) {
-        self.draw_call(self.root_dc);
+        debug!(target: "gfx", "RenderContext::draw()");
+        self.draw_call(&self.draw_calls[&0], 0);
     }
 
-    fn draw_call(&mut self, draw_call: &DrawCall) {
+    fn draw_call(&mut self, draw_call: &DrawCall, indent: u32) {
+        let ws = " ".repeat(indent as usize * 4);
         for instr in &draw_call.instrs {
             match instr {
                 DrawInstruction::ApplyViewport(view) => {
+                    debug!(target: "gfx", "{}apply_viewport({:?})", ws, view);
+
                     let (_, screen_height) = window::screen_size();
 
-                    let mut view = view.clone();
-                    view.y = screen_height as i32 - (view.y + view.h);
+                    let view_x = view.x.round() as i32;
+                    let view_y = screen_height - (view.y + view.h);
+                    let view_y = view_y.round() as i32;
+                    let view_w = view.w.round() as i32;
+                    let view_h = view.h.round() as i32;
 
-                    //debug!("apply_viewport({:?})", view);
-                    self.ctx.apply_viewport(view.x, view.y, view.w, view.h);
-                    self.ctx.apply_scissor_rect(view.x, view.y, view.w, view.h);
+                    self.ctx.apply_viewport(view_x, view_y, view_w, view_h);
+                    self.ctx.apply_scissor_rect(view_x, view_y, view_w, view_h);
                 }
                 DrawInstruction::ApplyMatrix(model) => {
-                    //debug!("apply_matrix({:?})", model);
+                    debug!(target: "gfx", "{}apply_matrix({:?})", ws, model);
                     let data: [u8; 64] = unsafe { std::mem::transmute_copy(model) };
                     self.uniforms_data[64..].copy_from_slice(&data);
                     self.ctx.apply_uniforms_from_bytes(
@@ -162,7 +168,7 @@ impl<'a> RenderContext<'a> {
                     );
                 }
                 DrawInstruction::Draw(mesh) => {
-                    //debug!("draw(mesh)");
+                    debug!(target: "gfx", "{}draw(mesh)", ws);
                     let texture = match mesh.texture {
                         Some(texture) => texture,
                         None => self.white_texture,
@@ -178,8 +184,9 @@ impl<'a> RenderContext<'a> {
             }
         }
 
-        for dc in &draw_call.dcs {
-            self.draw_call(dc);
+        for dc_key in &draw_call.dcs {
+            let dc = &self.draw_calls[dc_key];
+            self.draw_call(dc, indent + 1);
         }
     }
 }
@@ -191,7 +198,7 @@ pub enum GraphicsMethod {
     NewVertexBuffer((Vec<Vertex>, async_channel::Sender<BufferId>)),
     NewIndexBuffer((Vec<u16>, async_channel::Sender<BufferId>)),
     DeleteBuffer(BufferId),
-    ReplaceDrawCall((Vec<usize>, DrawCall)),
+    ReplaceDrawCalls(Vec<(u64, DrawCall)>),
 }
 
 #[derive(Debug, Clone)]
@@ -204,7 +211,7 @@ struct Stage {
     ctx: Box<dyn RenderingBackend>,
     pipeline: Pipeline,
     white_texture: TextureId,
-    root_dc: DrawCall,
+    draw_calls: HashMap<u64, DrawCall>,
     last_draw_time: Option<Instant>,
 
     method_rep: mpsc::Receiver<GraphicsMethod>,
@@ -261,7 +268,7 @@ impl Stage {
             ctx,
             pipeline,
             white_texture,
-            root_dc: DrawCall { instrs: vec![], dcs: vec![] },
+            draw_calls: HashMap::from([(0, DrawCall { instrs: vec![], dcs: vec![] })]),
             last_draw_time: None,
             method_rep,
             event_pub,
@@ -308,15 +315,10 @@ impl Stage {
     fn method_delete_buffer(&mut self, buffer: BufferId) {
         self.ctx.delete_buffer(buffer);
     }
-    fn method_replace_draw_call(&mut self, mut loc: Vec<usize>, new_dc: DrawCall) {
-        loc.reverse();
-        let mut dc = &mut self.root_dc;
-
-        while let Some(i) = loc.pop() {
-            dc = &mut dc.dcs[i];
+    fn method_replace_draw_calls(&mut self, dcs: Vec<(u64, DrawCall)>) {
+        for (key, val) in dcs {
+            self.draw_calls.insert(key, val);
         }
-
-        std::mem::replace(dc, new_dc);
     }
 }
 
@@ -351,9 +353,7 @@ impl EventHandler for Stage {
                     self.method_new_index_buffer(indices, sendr)
                 }
                 GraphicsMethod::DeleteBuffer(buffer) => self.method_delete_buffer(buffer),
-                GraphicsMethod::ReplaceDrawCall((loc, dc)) => {
-                    self.method_replace_draw_call(loc, dc)
-                }
+                GraphicsMethod::ReplaceDrawCalls(dcs) => self.method_replace_draw_calls(dcs),
             };
         }
     }
@@ -378,7 +378,7 @@ impl EventHandler for Stage {
 
         let mut render_ctx = RenderContext {
             ctx: &mut self.ctx,
-            root_dc: &self.root_dc,
+            draw_calls: &self.draw_calls,
             uniforms_data,
             white_texture: self.white_texture,
         };

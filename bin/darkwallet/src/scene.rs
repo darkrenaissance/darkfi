@@ -623,8 +623,8 @@ impl Signal {
     }
 }
 
-type MethodRequestFn = Box<dyn Fn(Vec<u8>, MethodResponseFn) + Send>;
-pub type MethodResponseFn = Box<dyn Fn(Result<Vec<u8>>) + Send>;
+type MethodRequestFn = Box<dyn Fn(Vec<u8>, MethodResponseFn) + Send + Sync>;
+pub type MethodResponseFn = Box<dyn Fn(Result<Vec<u8>>) + Send + Sync>;
 
 pub struct Method {
     pub name: String,
@@ -639,4 +639,5 @@ pub enum Pimpl {
     ChatView(chatview::ChatViewPtr),
     Window(app::WindowPtr),
     RenderLayer(app::RenderLayerPtr),
+    Mesh(app::Mesh),
 }

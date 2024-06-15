@@ -101,7 +101,7 @@ pub fn create_layer(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
     let mut prop = Property::new("is_visible", PropertyType::Bool, PropertySubType::Null);
     node.add_property(prop).unwrap();
 
-    let mut prop = Property::new("rect", PropertyType::Uint32, PropertySubType::Pixel);
+    let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
     prop.set_array_len(4);
     prop.allow_exprs();
     node.add_property(prop).unwrap();
@@ -109,11 +109,8 @@ pub fn create_layer(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
     node.id
 }
 
-fn create_mesh(sg: &mut SceneGraph, name: &str, layer_node_id: SceneNodeId) -> SceneNodeId {
+pub fn create_mesh(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
     let node = sg.add_node(name, SceneNodeType::RenderMesh);
-    let mut prop = Property::new("data", PropertyType::Buffer, PropertySubType::Null);
-    prop.set_array_len(2);
-    node.add_property(prop).unwrap();
 
     let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
     prop.set_array_len(4);
@@ -123,9 +120,7 @@ fn create_mesh(sg: &mut SceneGraph, name: &str, layer_node_id: SceneNodeId) -> S
     let mut prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);
     node.add_property(prop).unwrap();
 
-    let node_id = node.id;
-    sg.link(node_id, layer_node_id).unwrap();
-    node_id
+    node.id
 }
 
 fn create_text(sg: &mut SceneGraph, name: &str, layer_node_id: SceneNodeId) -> SceneNodeId {
@@ -261,7 +256,7 @@ pub fn setup(sg: &mut SceneGraph) {
 
     // Make the black background
     // Maybe we should use a RenderPass for this instead
-    let node_id = create_mesh(sg, "bg", layer_node_id);
+    let node_id = create_mesh(sg, "bg");
     let node = sg.get_node(node_id).unwrap();
 
     let prop = node.get_property("rect").unwrap();
@@ -280,7 +275,7 @@ pub fn setup(sg: &mut SceneGraph) {
     prop.set_buf(1, buff.faces).unwrap();
 
     // Make the chatedit bg
-    let node_id = create_mesh(sg, "chateditbg", layer_node_id);
+    let node_id = create_mesh(sg, "chateditbg");
     let node = sg.get_node(node_id).unwrap();
     let prop = node.get_property("rect").unwrap();
 
@@ -311,7 +306,7 @@ pub fn setup(sg: &mut SceneGraph) {
     prop.set_buf(1, buff.faces).unwrap();
 
     // Make the nicktext border
-    let node_id = create_mesh(sg, "nickbg", layer_node_id);
+    let node_id = create_mesh(sg, "nickbg");
     let node = sg.get_node(node_id).unwrap();
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(0, 0.).unwrap();

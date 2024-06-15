@@ -182,6 +182,12 @@ fn main() {
                 debug!("Event relayer closed");
                 break
             };
+            // Ignore keys which get stuck
+            match &ev {
+                gfx2::GraphicsEvent::KeyDown((miniquad::KeyCode::LeftShift, _, _)) |
+                gfx2::GraphicsEvent::KeyDown((miniquad::KeyCode::LeftSuper, _, _)) => continue,
+                _ => {}
+            }
             debug!("event: {:?}", ev);
         }
     });

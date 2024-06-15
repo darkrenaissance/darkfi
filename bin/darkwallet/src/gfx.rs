@@ -88,7 +88,7 @@ impl<
             + std::cmp::PartialOrd,
     > Rectangle<T>
 {
-    fn from_array(arr: [T; 4]) -> Self {
+    pub fn from_array(arr: [T; 4]) -> Self {
         let mut iter = IntoIter::new(arr);
         Self {
             x: iter.next().unwrap(),
@@ -126,10 +126,21 @@ impl<
     }
 
     pub fn contains(&self, point: &Point<T>) -> bool {
-        self.x < point.x &&
-            point.x < self.x + self.w &&
-            self.y < point.y &&
-            point.y < self.y + self.h
+        self.x <= point.x &&
+            point.x <= self.x + self.w &&
+            self.y <= point.y &&
+            point.y <= self.y + self.h
+    }
+
+    pub fn top_left(&self) -> Point<T> {
+        Point { x: self.x, y: self.y }
+    }
+    pub fn bottom_right(&self) -> Point<T> {
+        Point { x: self.x + self.w, y: self.y + self.h }
+    }
+
+    pub fn includes(&self, child: &Self) -> bool {
+        self.contains(&child.top_left()) && self.contains(&child.bottom_right())
     }
 }
 

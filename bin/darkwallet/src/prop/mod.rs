@@ -188,6 +188,8 @@ pub enum ModifyAction {
     Push,
 }
 
+pub type PropertyPtr = Arc<Property>;
+
 pub struct Property {
     pub name: String,
     pub typ: PropertyType,
