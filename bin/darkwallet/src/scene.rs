@@ -13,7 +13,7 @@ use std::{
 };
 
 use crate::{
-    chatview, editbox,
+    app, chatview, editbox,
     error::{Error, Result},
     prop::{Property, PropertyType},
 };
@@ -408,6 +408,9 @@ impl SceneNode {
             .filter(move |child_inf| allowed_types.contains(&child_inf.typ))
             .collect()
     }
+    pub fn get_children2(&self) -> Vec<SceneNodeInfo> {
+        self.children.iter().cloned().collect()
+    }
 
     pub fn add_property(&mut self, prop: Property) -> Result<()> {
         if self.has_property(&prop.name) {
@@ -634,4 +637,6 @@ pub enum Pimpl {
     Null,
     EditBox(editbox::EditBoxPtr),
     ChatView(chatview::ChatViewPtr),
+    Window(app::WindowPtr),
+    RenderLayer(app::RenderLayerPtr),
 }

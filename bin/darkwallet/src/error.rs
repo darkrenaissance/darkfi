@@ -101,4 +101,7 @@ pub enum Error {
 
     #[error("Graphics window closed")]
     GfxWindowClosed = 33,
+
+    #[error("Publisher was destroyed")]
+    PublisherDestroyed = 34,
 }

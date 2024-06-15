@@ -4,45 +4,48 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use crate::error::{Error, Result};
+
 pub type SubscriptionId = usize;
+
+// Waiting for trait aliases
+trait Piped: Clone + Send + 'static {}
+impl<T> Piped for T where T: Clone + Send + 'static {}
 
 #[derive(Debug)]
 /// Subscription to the Publisher. Created using `publisher.subscribe().await`.
-pub struct Subscription<T> {
+pub struct Subscription<T: Piped> {
     id: SubscriptionId,
     recv_queue: smol::channel::Receiver<T>,
     parent: Arc<Publisher<T>>,
 }
 
-impl<T: Clone + Send + 'static> Subscription<T> {
+impl<T: Piped> Subscription<T> {
     pub fn get_id(&self) -> SubscriptionId {
         self.id
     }
 
     /// Receive message.
-    pub async fn receive(&self) -> T {
-        let message_result = self.recv_queue.recv().await;
-
-        match message_result {
-            Ok(message_result) => message_result,
-            Err(err) => {
-                panic!("Subscription::receive() recv_queue failed! {}", err);
-            }
-        }
-    }
-
-    /// Must be called manually since async Drop is not possible in Rust
-    pub fn unsubscribe(&self) {
-        self.parent.clone().unsubscribe(self.id)
+    pub async fn receive(&self) -> Result<T> {
+        let msg_result = self.recv_queue.recv().await;
+        msg_result.or(Err(Error::PublisherDestroyed))
     }
 }
+
+impl<T: Piped> Drop for Subscription<T> {
+    fn drop(&mut self) {
+        self.parent.unsubscribe(self.id)
+    }
+}
+
+pub type PublisherPtr<T> = Arc<Publisher<T>>;
 
 #[derive(Debug)]
 pub struct Publisher<T> {
     subs: Mutex<HashMap<SubscriptionId, smol::channel::Sender<T>>>,
 }
 
-impl<T: Clone + Send + 'static> Publisher<T> {
+impl<T: Piped> Publisher<T> {
     pub fn new() -> Arc<Self> {
         Arc::new(Self { subs: Mutex::new(HashMap::new()) })
     }
@@ -57,28 +60,16 @@ impl<T: Clone + Send + 'static> Publisher<T> {
         Subscription { id: sub_id, recv_queue: recvr, parent: self.clone() }
     }
 
-    fn unsubscribe(self: Arc<Self>, sub_id: SubscriptionId) {
+    fn unsubscribe(&self, sub_id: SubscriptionId) {
         self.subs.lock().unwrap().remove(&sub_id);
     }
 
     /// Publish a message to all listening subscriptions.
-    pub fn notify_sync(&self, message_result: T) {
-        self.notify_with_exclude_sync(message_result, &[])
-    }
-
-    /// Publish a message to all listening subscriptions but exclude some subset.
-    /// Sync version.
-    pub fn notify_with_exclude_sync(&self, message_result: T, exclude_list: &[SubscriptionId]) {
+    pub fn notify(&self, msg: T) {
         for (id, sub) in self.subs.lock().unwrap().iter() {
-            if exclude_list.contains(id) {
-                continue
-            }
-
-            if let Err(e) = sub.try_send(message_result.clone()) {
-                warn!(
-                    target: "system::publisher",
-                    "[system::publisher] Error returned sending message in notify_with_exclude_sync() call! {}", e,
-                );
+            if let Err(e) = sub.try_send(msg.clone()) {
+                // This should never happen since Drop calls unsubscribe()
+                panic!("Error in notify() call for sub={}! {}", id, e);
             }
         }
     }

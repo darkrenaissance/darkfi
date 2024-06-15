@@ -23,7 +23,7 @@ use crate::{
     gfx::Rectangle,
     keysym::{KeyCodeAsStr, MouseButtonAsU8},
     prop::{Property, PropertySubType, PropertyType},
-    pubsub::Publisher,
+    pubsub::PublisherPtr,
     res::{ResourceId, ResourceManager},
     scene::{
         MethodResponseFn, Pimpl, SceneGraph, SceneGraphPtr, SceneNode, SceneNodeId, SceneNodeInfo,
@@ -40,13 +40,15 @@ pub struct Vertex {
     pub uv: [f32; 2],
 }
 
+pub type RenderApiPtr = Arc<RenderApi>;
+
 pub struct RenderApi {
-    method_sendr: mpsc::Sender<GraphicsMethod>,
+    method_req: mpsc::Sender<GraphicsMethod>,
 }
 
 impl RenderApi {
-    pub fn new(method_sendr: mpsc::Sender<GraphicsMethod>) -> Arc<Self> {
-        Arc::new(Self { method_sendr })
+    pub fn new(method_req: mpsc::Sender<GraphicsMethod>) -> Arc<Self> {
+        Arc::new(Self { method_req })
     }
 
     async fn new_texture(&self, width: u16, height: u16, data: Vec<u8>) -> Result<TextureId> {
@@ -54,7 +56,7 @@ impl RenderApi {
 
         let method = GraphicsMethod::NewTexture((width, height, data, sendr));
 
-        self.method_sendr.send(method).map_err(|_| Error::GfxWindowClosed)?;
+        self.method_req.send(method).map_err(|_| Error::GfxWindowClosed)?;
 
         let texture_id = recvr.recv().await.map_err(|_| Error::GfxWindowClosed)?;
         Ok(texture_id)
@@ -64,7 +66,7 @@ impl RenderApi {
         let method = GraphicsMethod::DeleteTexture(texture);
 
         // Ignore any error
-        let _ = self.method_sendr.send(method);
+        let _ = self.method_req.send(method);
     }
 
     pub async fn new_vertex_buffer(&self, verts: Vec<Vertex>) -> Result<BufferId> {
@@ -72,7 +74,7 @@ impl RenderApi {
 
         let method = GraphicsMethod::NewVertexBuffer((verts, sendr));
 
-        self.method_sendr.send(method).map_err(|_| Error::GfxWindowClosed)?;
+        self.method_req.send(method).map_err(|_| Error::GfxWindowClosed)?;
 
         let buffer = recvr.recv().await.map_err(|_| Error::GfxWindowClosed)?;
         Ok(buffer)
@@ -83,7 +85,7 @@ impl RenderApi {
 
         let method = GraphicsMethod::NewIndexBuffer((indices, sendr));
 
-        self.method_sendr.send(method).map_err(|_| Error::GfxWindowClosed)?;
+        self.method_req.send(method).map_err(|_| Error::GfxWindowClosed)?;
 
         let buffer = recvr.recv().await.map_err(|_| Error::GfxWindowClosed)?;
         Ok(buffer)
@@ -93,14 +95,14 @@ impl RenderApi {
         let method = GraphicsMethod::DeleteBuffer(buffer);
 
         // Ignore any error
-        let _ = self.method_sendr.send(method);
+        let _ = self.method_req.send(method);
     }
 
     pub async fn replace_draw_call(&self, loc: Vec<usize>, draw_call: DrawCall) {
         let method = GraphicsMethod::ReplaceDrawCall((loc, draw_call));
 
         // Ignore any error
-        let _ = self.method_sendr.send(method);
+        let _ = self.method_req.send(method);
     }
 }
 
@@ -205,14 +207,14 @@ struct Stage {
     root_dc: DrawCall,
     last_draw_time: Option<Instant>,
 
-    method_recvr: mpsc::Receiver<GraphicsMethod>,
-    event_pub: async_channel::Sender<GraphicsEvent>,
+    method_rep: mpsc::Receiver<GraphicsMethod>,
+    event_pub: PublisherPtr<GraphicsEvent>,
 }
 
 impl Stage {
     pub fn new(
-        method_recvr: mpsc::Receiver<GraphicsMethod>,
-        event_pub: async_channel::Sender<GraphicsEvent>,
+        method_rep: mpsc::Receiver<GraphicsMethod>,
+        event_pub: PublisherPtr<GraphicsEvent>,
     ) -> Self {
         let mut ctx: Box<dyn RenderingBackend> = window::new_rendering_backend();
 
@@ -261,7 +263,7 @@ impl Stage {
             white_texture,
             root_dc: DrawCall { instrs: vec![], dcs: vec![] },
             last_draw_time: None,
-            method_recvr,
+            method_rep,
             event_pub,
         }
     }
@@ -336,7 +338,7 @@ impl EventHandler for Stage {
         let deadline = Instant::now() + allowed_time;
 
         loop {
-            let Ok(method) = self.method_recvr.recv_deadline(deadline) else { break };
+            let Ok(method) = self.method_rep.recv_deadline(deadline) else { break };
             match method {
                 GraphicsMethod::NewTexture((width, height, data, sendr)) => {
                     self.method_new_texture(width, height, data, sendr)
@@ -387,18 +389,15 @@ impl EventHandler for Stage {
 
     fn key_down_event(&mut self, keycode: KeyCode, mods: KeyMods, repeat: bool) {
         let event = GraphicsEvent::KeyDown((keycode, mods, repeat));
-        self.event_pub.try_send(event).unwrap();
+        self.event_pub.notify(event);
     }
     fn resize_event(&mut self, width: f32, height: f32) {
         let event = GraphicsEvent::Resize((width, height));
-        self.event_pub.try_send(event).unwrap();
+        self.event_pub.notify(event);
     }
 }
 
-pub fn run_gui(
-    method_recvr: mpsc::Receiver<GraphicsMethod>,
-    event_pub: async_channel::Sender<GraphicsEvent>,
-) {
+pub fn run_gui(method_rep: mpsc::Receiver<GraphicsMethod>, event_pub: PublisherPtr<GraphicsEvent>) {
     #[cfg(target_os = "android")]
     {
         android_logger::init_once(
@@ -431,5 +430,5 @@ pub fn run_gui(
     conf.platform.apple_gfx_api =
         if metal { conf::AppleGfxApi::Metal } else { conf::AppleGfxApi::OpenGl };
 
-    miniquad::start(conf, || Box::new(Stage::new(method_recvr, event_pub)));
+    miniquad::start(conf, || Box::new(Stage::new(method_rep, event_pub)));
 }

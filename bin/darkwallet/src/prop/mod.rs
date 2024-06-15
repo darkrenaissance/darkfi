@@ -11,7 +11,11 @@ use std::{
     },
 };
 
-use crate::{expr::SExprCode, scene::SceneNodeId};
+use crate::{
+    expr::SExprCode,
+    pubsub::{Publisher, PublisherPtr, Subscription},
+    scene::SceneNodeId,
+};
 
 mod wrap;
 pub use wrap::{PropertyBool, PropertyColor, PropertyFloat32, PropertyStr, PropertyUint32};
@@ -177,6 +181,13 @@ impl Encodable for PropertyValue {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum ModifyAction {
+    Clear,
+    Set(usize),
+    Push,
+}
+
 pub struct Property {
     pub name: String,
     pub typ: PropertyType,
@@ -197,6 +208,8 @@ pub struct Property {
 
     // PropertyType must be Enum
     pub enum_items: Option<Vec<String>>,
+
+    on_modify: PublisherPtr<ModifyAction>,
 }
 
 impl Property {
@@ -219,6 +232,8 @@ impl Property {
             min_val: None,
             max_val: None,
             enum_items: None,
+
+            on_modify: Publisher::new(),
         }
     }
 
@@ -286,14 +301,15 @@ impl Property {
         Ok(())
     }
 
+    // Set
+
     /// This will clear all values, resetting them to the default
     pub fn clear_values(&self) {
         let vals = &mut self.vals.lock().unwrap();
         vals.clear();
         vals.resize(self.array_len, PropertyValue::Unset);
+        self.on_modify.notify(ModifyAction::Clear);
     }
-
-    // Set
 
     fn set_raw_value(&self, i: usize, val: PropertyValue) -> Result<()> {
         if self.typ != val.as_type() {
@@ -305,6 +321,7 @@ impl Property {
             return Err(Error::PropertyWrongIndex)
         }
         vals[i] = val;
+        self.on_modify.notify(ModifyAction::Set(i));
         Ok(())
     }
 
@@ -314,6 +331,7 @@ impl Property {
             return Err(Error::PropertyWrongIndex)
         }
         vals[i] = PropertyValue::Unset;
+        self.on_modify.notify(ModifyAction::Set(i));
         Ok(())
     }
 
@@ -326,6 +344,7 @@ impl Property {
             return Err(Error::PropertyWrongIndex)
         }
         vals[i] = PropertyValue::Null;
+        self.on_modify.notify(ModifyAction::Set(i));
         Ok(())
     }
 
@@ -390,6 +409,7 @@ impl Property {
             return Err(Error::PropertyWrongIndex)
         }
         vals[i] = PropertyValue::SExpr(Arc::new(val));
+        self.on_modify.notify(ModifyAction::Set(i));
         Ok(())
     }
 
@@ -402,6 +422,7 @@ impl Property {
         let vals = &mut self.vals.lock().unwrap();
         let i = vals.len();
         vals.push(PropertyValue::Null);
+        self.on_modify.notify(ModifyAction::Push);
         Ok(i)
     }
 
@@ -565,6 +586,12 @@ impl Property {
 
     pub fn get_expr(&self, i: usize) -> Result<Arc<SExprCode>> {
         self.get_value(i)?.as_sexpr()
+    }
+
+    // Subs
+
+    pub fn subscribe_modify(&self) -> Subscription<ModifyAction> {
+        self.on_modify.clone().subscribe()
     }
 }
 

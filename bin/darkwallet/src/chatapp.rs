@@ -94,7 +94,7 @@ impl Buffer {
     }
 }
 
-fn create_layer(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
+pub fn create_layer(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
     let win_id = sg.lookup_node("/window").unwrap().id;
 
     let node = sg.add_node(name, SceneNodeType::RenderLayer);
@@ -106,9 +106,7 @@ fn create_layer(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
     prop.allow_exprs();
     node.add_property(prop).unwrap();
 
-    let node_id = node.id;
-    sg.link(node_id, win_id).unwrap();
-    node_id
+    node.id
 }
 
 fn create_mesh(sg: &mut SceneGraph, name: &str, layer_node_id: SceneNodeId) -> SceneNodeId {

@@ -2,54 +2,41 @@
 #![feature(str_split_whitespace_remainder)]
 
 use async_lock::Mutex;
+use futures::{stream::FuturesUnordered, StreamExt};
 use std::{
     sync::{mpsc, Arc},
     thread,
 };
 
-mod chatapp;
-
-mod chatview;
-
-mod editbox;
-
-mod error;
-
-mod expr;
-
-mod gfx;
-use gfx::run_gui;
-
-mod gfx2;
-
-mod keysym;
-
-mod net;
-use net::ZeroMQAdapter;
-
-mod scene;
-use scene::{SceneGraph, SceneGraphPtr};
-
-mod plugin;
-
-mod prop;
-
-mod pubsub;
-
-mod py;
-
-mod res;
-
-mod shader;
-
-mod text;
-
-use crate::error::{Error, Result};
-
 #[macro_use]
 extern crate log;
 #[allow(unused_imports)]
 use log::LevelFilter;
+
+mod app;
+mod chatapp;
+mod chatview;
+mod editbox;
+mod error;
+mod expr;
+mod gfx;
+mod gfx2;
+mod keysym;
+mod net;
+mod plugin;
+mod prop;
+mod pubsub;
+mod py;
+mod res;
+mod scene;
+mod shader;
+mod text;
+
+use crate::{
+    error::{Error, Result},
+    net::ZeroMQAdapter,
+    scene::{SceneGraph, SceneGraphPtr},
+};
 
 fn start_zmq(scene_graph: SceneGraphPtr) {
     // detach thread
@@ -167,50 +154,62 @@ async fn amain(ex: Arc<smol::Executor<'static>>, render_api: Arc<gfx2::RenderApi
 */
 
 fn main() {
-    let ex = std::sync::Arc::new(smol::Executor::new());
-    let scene_graph = Arc::new(Mutex::new(SceneGraph::new()));
+    // [x] event pub should be a Publisher
+    // [ ] properties should have post-modify hook used to redraw widgets
 
-    let scene_graph2 = scene_graph.clone();
+    let ex = Arc::new(smol::Executor::new());
+    let sg = Arc::new(Mutex::new(SceneGraph::new()));
+
+    let sg2 = sg.clone();
     let ex2 = ex.clone();
     let zmq_task = ex.spawn(async {
-        let mut zmq_rpc = ZeroMQAdapter::new(scene_graph2, ex2).await;
+        let mut zmq_rpc = ZeroMQAdapter::new(sg2, ex2).await;
         zmq_rpc.run().await;
     });
 
-    let (method_sender, method_recvr) = mpsc::channel();
-    let render_api = gfx2::RenderApi::new(method_sender);
+    let (method_req, method_rep) = mpsc::channel();
+    let render_api = gfx2::RenderApi::new(method_req);
+    let event_pub = pubsub::Publisher::new();
 
-    let (event_pub, event_sub) = async_channel::unbounded();
+    let app = app::App::new(sg.clone(), ex.clone(), render_api.clone(), event_pub.clone());
+    let app_task = ex.spawn(app.clone().start());
 
+    // Nice to see which events exist
+    let ev_sub = event_pub.clone().subscribe();
     let ev_relay_task = ex.spawn(async move {
         loop {
-            let Ok(ev) = event_sub.recv().await else {
+            let Ok(ev) = ev_sub.receive().await else {
                 debug!("Event relayer closed");
                 break
             };
             debug!("event: {:?}", ev);
         }
     });
+    // End debug code
 
     let n_threads = std::thread::available_parallelism().unwrap().get();
     let (signal, shutdown) = smol::channel::unbounded::<()>();
     let exec_threadpool = thread::spawn(move || {
         easy_parallel::Parallel::new()
-            // Executor threads
-            .each(1..n_threads, |_| smol::future::block_on(ex.run(shutdown.recv())))
-            // Run the main future on this thread
-            .finish(|| smol::future::block_on(ex.run(shutdown.recv())));
+            // N executor threads
+            .each(0..n_threads, |_| smol::future::block_on(ex.run(shutdown.recv())))
+            .run();
     });
 
-    gfx2::run_gui(method_recvr, event_pub);
+    gfx2::run_gui(method_rep, event_pub);
 
     // Close all tasks
     smol::future::block_on(async {
         // Perform cleanup code
         // If not finished in certain amount of time, then just exit
 
-        zmq_task.cancel().await;
-        ev_relay_task.cancel().await;
+        let mut futures = FuturesUnordered::new();
+        futures.push(zmq_task.cancel());
+        futures.push(ev_relay_task.cancel());
+        futures.push(app_task.cancel());
+        let _: Vec<_> = futures.collect().await;
+
+        app.stop().await;
     });
 
     drop(signal);
