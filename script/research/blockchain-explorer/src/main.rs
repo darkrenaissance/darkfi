@@ -45,7 +45,8 @@ mod error;
 
 /// JSON-RPC requests handler and methods
 mod rpc;
-use rpc::subscribe_blocks;
+mod rpc_blocks;
+use rpc_blocks::subscribe_blocks;
 
 /// Database functionality related to blocks
 mod blocks;

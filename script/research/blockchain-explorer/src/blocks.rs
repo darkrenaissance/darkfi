@@ -18,10 +18,11 @@
 
 use log::info;
 use rusqlite::types::Value;
+use tinyjson::JsonValue;
 
-use darkfi::{Error, Result};
+use darkfi::{blockchain::BlockInfo, Error, Result};
 use darkfi_sdk::crypto::schnorr::Signature;
-use darkfi_serial::{deserialize_async, serialize};
+use darkfi_serial::{deserialize, serialize};
 use drk::{
     convert_named_params,
     error::{WalletDbError, WalletDbResult},
@@ -62,6 +63,37 @@ pub struct BlockRecord {
     pub root: String,
     /// Block producer signature
     pub signature: Signature,
+}
+
+impl BlockRecord {
+    /// Auxiliary function to convert a `BlockRecord` into a `JsonValue` array.
+    pub fn to_json_array(&self) -> JsonValue {
+        let mut ret = vec![];
+        ret.push(JsonValue::String(self.header_hash.clone()));
+        ret.push(JsonValue::Number(self.version as f64));
+        ret.push(JsonValue::String(self.previous.clone()));
+        ret.push(JsonValue::Number(self.height as f64));
+        ret.push(JsonValue::Number(self.timestamp as f64));
+        ret.push(JsonValue::Number(self.nonce as f64));
+        ret.push(JsonValue::String(self.root.clone()));
+        ret.push(JsonValue::String(format!("{:?}", self.signature)));
+        JsonValue::Array(ret)
+    }
+}
+
+impl From<BlockInfo> for BlockRecord {
+    fn from(block: BlockInfo) -> Self {
+        Self {
+            header_hash: block.hash().to_string(),
+            version: block.header.version,
+            previous: block.header.previous.to_string(),
+            height: block.header.height,
+            timestamp: block.header.timestamp.inner(),
+            nonce: block.header.nonce,
+            root: block.header.root.to_string(),
+            signature: block.signature,
+        }
+    }
 }
 
 impl BlockchainExplorer {
@@ -116,7 +148,7 @@ impl BlockchainExplorer {
     }
 
     /// Auxiliary function to parse a `BLOCKS_TABLE` record.
-    async fn parse_block_record(&self, row: &[Value]) -> Result<BlockRecord> {
+    fn parse_block_record(&self, row: &[Value]) -> Result<BlockRecord> {
         let Value::Text(ref header_hash) = row[0] else {
             return Err(Error::ParseFailed("[parse_block_record] Header hash parsing failed"))
         };
@@ -165,7 +197,7 @@ impl BlockchainExplorer {
                 "[parse_block_record] Signature bytes bytes parsing failed",
             ))
         };
-        let signature = deserialize_async(signature_bytes).await?;
+        let signature = deserialize(signature_bytes)?;
 
         Ok(BlockRecord {
             header_hash,
@@ -180,7 +212,7 @@ impl BlockchainExplorer {
     }
 
     /// Fetch all known blocks from the database.
-    pub async fn get_blocks(&self) -> Result<Vec<BlockRecord>> {
+    pub fn get_blocks(&self) -> Result<Vec<BlockRecord>> {
         let rows = match self.database.query_multiple(BLOCKS_TABLE, &[], &[]) {
             Ok(r) => r,
             Err(e) => {
@@ -192,14 +224,14 @@ impl BlockchainExplorer {
 
         let mut blocks = Vec::with_capacity(rows.len());
         for row in rows {
-            blocks.push(self.parse_block_record(&row).await?);
+            blocks.push(self.parse_block_record(&row)?);
         }
 
         Ok(blocks)
     }
 
     /// Fetch a block given its header hash.
-    pub async fn get_block_by_hash(&self, header_hash: &str) -> Result<BlockRecord> {
+    pub fn get_block_by_hash(&self, header_hash: &str) -> Result<BlockRecord> {
         let row = match self.database.query_single(
             BLOCKS_TABLE,
             &[],
@@ -213,7 +245,7 @@ impl BlockchainExplorer {
             }
         };
 
-        self.parse_block_record(&row).await
+        self.parse_block_record(&row)
     }
 
     /// Fetch last block from the database.
@@ -250,5 +282,109 @@ impl BlockchainExplorer {
         };
 
         Ok(height)
+    }
+
+    /// Auxiliary function to parse a `BLOCKS_TABLE` query rows into block records.
+    fn parse_blocks_query_rows(&self, rows: &mut rusqlite::Rows) -> Result<Vec<BlockRecord>> {
+        // Loop over returned rows and parse them
+        let mut records = vec![];
+        loop {
+            // Check if an error occured
+            let row = match rows.next() {
+                Ok(r) => r,
+                Err(_) => {
+                    return Err(Error::RusqliteError(format!(
+                        "[get_last_n_blocks] {}",
+                        WalletDbError::QueryExecutionFailed
+                    )))
+                }
+            };
+
+            // Check if no row was returned
+            let row = match row {
+                Some(r) => r,
+                None => break,
+            };
+
+            // Grab row returned values
+            let mut row_values = vec![];
+            let mut idx = 0;
+            loop {
+                let Ok(value) = row.get(idx) else { break };
+                row_values.push(value);
+                idx += 1;
+            }
+            records.push(row_values);
+        }
+
+        // Parse the records into blocks
+        let mut blocks = Vec::with_capacity(records.len());
+        for record in records {
+            blocks.push(self.parse_block_record(&record)?);
+        }
+
+        Ok(blocks)
+    }
+
+    /// Fetch last N blocks from the database.
+    pub fn get_last_n_blocks(&self, n: u16) -> Result<Vec<BlockRecord>> {
+        // First we prepare the query
+        let query = format!(
+            "SELECT * FROM {} ORDER BY {} DESC LIMIT {};",
+            BLOCKS_TABLE, BLOCKS_COL_HEIGHT, n
+        );
+        let Ok(conn) = self.database.conn.lock() else {
+            return Err(Error::RusqliteError(format!(
+                "[get_last_n_blocks] {}",
+                WalletDbError::FailedToAquireLock
+            )))
+        };
+        let Ok(mut stmt) = conn.prepare(&query) else {
+            return Err(Error::RusqliteError(format!(
+                "[get_last_n_blocks] {}",
+                WalletDbError::QueryPreparationFailed
+            )))
+        };
+
+        // Execute the query using provided params
+        let Ok(mut rows) = stmt.query([]) else {
+            return Err(Error::RusqliteError(format!(
+                "[get_last_n_blocks] {}",
+                WalletDbError::QueryExecutionFailed
+            )))
+        };
+
+        self.parse_blocks_query_rows(&mut rows)
+    }
+
+    /// Fetch last N blocks from the database.
+    pub fn get_blocks_in_heights_range(&self, start: u32, end: u32) -> Result<Vec<BlockRecord>> {
+        // First we prepare the query
+        let query = format!(
+            "SELECT * FROM {} WHERE {} >= {} AND {} <= {} ORDER BY {} ASC;",
+            BLOCKS_TABLE, BLOCKS_COL_HEIGHT, start, BLOCKS_COL_HEIGHT, end, BLOCKS_COL_HEIGHT
+        );
+        let Ok(conn) = self.database.conn.lock() else {
+            return Err(Error::RusqliteError(format!(
+                "[get_blocks_in_height_range] {}",
+                WalletDbError::FailedToAquireLock
+            )))
+        };
+        let Ok(mut stmt) = conn.prepare(&query) else {
+            return Err(Error::RusqliteError(format!(
+                "[get_blocks_in_height_range] {}",
+                WalletDbError::QueryPreparationFailed
+            )))
+        };
+
+        // Execute the query using provided params
+        let Ok(mut rows) = stmt.query([]) else {
+            return Err(Error::RusqliteError(format!(
+                "[get_blocks_in_height_range] {}",
+                WalletDbError::QueryExecutionFailed
+            )))
+        };
+
+        self.parse_blocks_query_rows(&mut rows)
     }
 }
