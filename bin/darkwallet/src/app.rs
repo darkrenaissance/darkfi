@@ -12,7 +12,7 @@ use crate::{
     error::{Error, Result},
     expr::{Op, SExprMachine, SExprVal},
     gfx::Rectangle,
-    gfx2::{DrawCall, DrawInstruction, DrawMesh, GraphicsEvent, RenderApiPtr, Vertex},
+    gfx2::{self, DrawCall, DrawInstruction, DrawMesh, GraphicsEvent, RenderApiPtr, Vertex},
     prop::{
         Property, PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyStr,
         PropertySubType, PropertyType, PropertyUint32,
@@ -25,8 +25,79 @@ use crate::{
 };
 
 trait Stoppable {
-    async fn stop(self);
+    async fn stop(&self);
 }
+
+pub type AsyncRuntimePtr = Arc<AsyncRuntime>;
+
+pub struct AsyncRuntime {
+    signal: smol::channel::Sender<()>,
+    shutdown: smol::channel::Receiver<()>,
+    exec_threadpool: std::sync::Mutex<Option<thread::JoinHandle<()>>>,
+    ex: Arc<smol::Executor<'static>>,
+    tasks: std::sync::Mutex<Vec<smol::Task<()>>>,
+}
+
+impl AsyncRuntime {
+    pub fn new(ex: Arc<smol::Executor<'static>>) -> Self {
+        let (signal, shutdown) = smol::channel::unbounded::<()>();
+
+        Self {
+            signal,
+            shutdown,
+            exec_threadpool: std::sync::Mutex::new(None),
+            ex,
+            tasks: std::sync::Mutex::new(vec![]),
+        }
+    }
+
+    pub fn start(&self) {
+        let n_threads = std::thread::available_parallelism().unwrap().get();
+        let shutdown = self.shutdown.clone();
+        let ex = self.ex.clone();
+        let exec_threadpool = thread::spawn(move || {
+            easy_parallel::Parallel::new()
+                // N executor threads
+                .each(0..n_threads, |_| smol::future::block_on(ex.run(shutdown.recv())))
+                .run();
+        });
+        *self.exec_threadpool.lock().unwrap() = Some(exec_threadpool);
+        debug!(target: "async_runtime", "Started runtime");
+    }
+
+    pub fn push_task(&self, task: smol::Task<()>) {
+        self.tasks.lock().unwrap().push(task);
+    }
+
+    pub fn stop(&self) {
+        // Go through event graph and call stop on everything
+        // Depth first
+        debug!(target: "app", "Stopping app...");
+
+        let tasks = std::mem::take(&mut *self.tasks.lock().unwrap());
+        // Close all tasks
+        smol::future::block_on(async {
+            // Perform cleanup code
+            // If not finished in certain amount of time, then just exit
+
+            let mut futures = FuturesUnordered::new();
+            for task in tasks {
+                futures.push(task.cancel());
+            }
+            let _: Vec<_> = futures.collect().await;
+        });
+
+        if !self.signal.close() {
+            error!(target: "app", "exec threadpool was already shutdown");
+        }
+        let exec_threadpool = std::mem::replace(&mut *self.exec_threadpool.lock().unwrap(), None);
+        let exec_threadpool = exec_threadpool.expect("threadpool wasnt started");
+        exec_threadpool.join();
+        debug!(target: "app", "Stopped app");
+    }
+}
+
+pub type AppPtr = Arc<App>;
 
 pub struct App {
     sg: SceneGraphPtr2,
@@ -42,7 +113,6 @@ impl App {
         render_api: RenderApiPtr,
         event_pub: PublisherPtr<GraphicsEvent>,
     ) -> Arc<Self> {
-        debug!("App::new()");
         Arc::new(Self { sg, ex, render_api, event_pub })
     }
 
@@ -95,6 +165,25 @@ impl App {
 
         // Access drawable in window node and call draw()
         self.trigger_redraw().await;
+    }
+
+    pub async fn stop(&self) {
+        let sg = self.sg.lock().await;
+        let window_id = sg.lookup_node("/window").unwrap().id;
+        self.stop_node(&sg, window_id).await;
+    }
+
+    async fn stop_node(&self, sg: &SceneGraph, node_id: SceneNodeId) {
+        let node = sg.get_node(node_id).unwrap();
+        for child_inf in node.get_children2() {
+            self.stop_node(sg, child_inf.id);
+        }
+        match &node.pimpl {
+            Pimpl::Window(win) => win.stop().await,
+            Pimpl::RenderLayer(layer) => layer.stop().await,
+            Pimpl::Mesh(mesh) => mesh.stop().await,
+            _ => panic!("unhandled pimpl type"),
+        };
     }
 
     async fn make_me_a_schema_plox(&self) {
@@ -169,12 +258,6 @@ impl App {
             _ => panic!("wrong pimpl"),
         }
     }
-
-    pub async fn stop(&self) {
-        // Go through event graph and call stop on everything
-        // Depth first
-        debug!("Stopping app...");
-    }
 }
 
 fn print_type_of<T>(_: &T) {
@@ -199,34 +282,13 @@ impl Window {
         render_api: RenderApiPtr,
         event_pub: PublisherPtr<GraphicsEvent>,
     ) -> Pimpl {
-        debug!("Window::new()");
+        debug!(target: "app", "Window::new()");
 
         let screen_size_prop = {
             let sg = sg.lock().await;
             let node = sg.get_node(node_id).unwrap();
             node.get_property("screen_size").unwrap()
         };
-
-        // Start a task monitoring for window resize events
-        // which updates screen_size
-        let ev_sub = event_pub.subscribe();
-        let screen_size_prop2 = screen_size_prop.clone();
-        let resize_task = ex.spawn(async move {
-            loop {
-                let Ok(ev) = ev_sub.receive().await else {
-                    debug!("Event relayer closed");
-                    break
-                };
-                let (w, h) = match ev {
-                    GraphicsEvent::Resize((w, h)) => (w, h),
-                    _ => continue,
-                };
-
-                // Now update the properties
-                screen_size_prop2.set_f32(0, w);
-                screen_size_prop2.set_f32(1, h);
-            }
-        });
 
         // Monitor for changes to screen_size or scale properties
         // If so then trigger draw
@@ -236,31 +298,55 @@ impl Window {
             let prop = node.get_property("scale").unwrap();
             prop.subscribe_modify()
         };
-        let screen_size_sub = screen_size_prop.subscribe_modify();
 
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
+            // Start a task monitoring for window resize events
+            // which updates screen_size
+            let ev_sub = event_pub.subscribe();
+            let screen_size_prop2 = screen_size_prop.clone();
+            let me2 = me.clone();
+            let sg2 = sg.clone();
+            let resize_task = ex.spawn(async move {
+                loop {
+                    let Ok(ev) = ev_sub.receive().await else {
+                        debug!(target: "app", "Event relayer closed");
+                        break
+                    };
+                    let (w, h) = match ev {
+                        GraphicsEvent::Resize((w, h)) => (w, h),
+                        _ => continue,
+                    };
+
+                    debug!(target: "app", "Window resized ({w}, {h})");
+                    // Now update the properties
+                    screen_size_prop2.set_f32(0, w);
+                    screen_size_prop2.set_f32(1, h);
+
+                    let Some(self_) = me2.upgrade() else {
+                        // Should not happen
+                        panic!("self destroyed before modify_task was stopped!");
+                    };
+
+                    let sg = sg2.lock().await;
+                    self_.draw(&sg).await;
+                }
+            });
+
             // Modify task needs a Weak<Self>
             let me2 = me.clone();
             let modify_task = ex.spawn(async move {
                 loop {
-                    let mut futures = FuturesUnordered::new();
-                    futures.push(scale_sub.receive());
-                    futures.push(screen_size_sub.receive());
+                    let _ = scale_sub.receive().await;
+                    debug!(target: "app", "Window scale modified");
 
-                    while let Some(ev) = futures.next().await {
-                        let Ok(_) = ev else {
-                            debug!("prop sub closed");
-                            break
-                        };
+                    let Some(self_) = me2.upgrade() else {
+                        // Should not happen
+                        panic!("self destroyed before modify_task was stopped!");
+                    };
 
-                        let Some(self_) = me2.upgrade() else {
-                            // Should not happen
-                            panic!("self destroyed before modify_task was stopped!");
-                        };
-
-                        let sg = sg.lock().await;
-                        self_.draw(&sg).await;
-                    }
+                    debug!(target: "app", "window property modified");
+                    let sg = sg.lock().await;
+                    self_.draw(&sg).await;
                 }
             });
 
@@ -271,7 +357,7 @@ impl Window {
     }
 
     async fn draw(&self, sg: &SceneGraph) {
-        debug!("Window::draw()");
+        debug!(target: "app", "Window::draw()");
         // SceneGraph should remain locked for the entire draw
         let self_node = sg.get_node(self.node_id).unwrap();
 
@@ -284,12 +370,12 @@ impl Window {
         let mut child_calls = vec![];
         for child_inf in self_node.get_children2() {
             let node = sg.get_node(child_inf.id).unwrap();
-            debug!("Window::draw() calling draw() for node '{}':{}", node.name, node.id);
+            debug!(target: "app", "Window::draw() calling draw() for node '{}':{}", node.name, node.id);
 
             let dcs = match &node.pimpl {
                 Pimpl::RenderLayer(layer) => layer.draw(sg, &parent_rect).await,
                 _ => {
-                    error!("unhandled pimpl type");
+                    error!(target: "app", "unhandled pimpl type");
                     continue
                 }
             };
@@ -300,7 +386,7 @@ impl Window {
 
         let root_dc = DrawCall { instrs: vec![], dcs: child_calls };
         draw_calls.push((0, root_dc));
-        println!("{:?}", draw_calls);
+        //debug!("  => {:?}", draw_calls);
 
         self.render_api.replace_draw_calls(draw_calls).await;
         debug!("Window::draw() - replaced draw call");
@@ -309,9 +395,7 @@ impl Window {
 
 // Nodes should be stopped before being removed
 impl Stoppable for Window {
-    async fn stop(self) {
-        self.resize_task.cancel().await;
-    }
+    async fn stop(&self) {}
 }
 
 pub type RenderLayerPtr = Arc<RenderLayer>;
@@ -324,6 +408,8 @@ pub struct RenderLayer {
 
     is_visible: PropertyBool,
     rect: PropertyPtr,
+
+    parent_rect: Mutex<Rectangle<f32>>,
 }
 
 impl RenderLayer {
@@ -336,7 +422,38 @@ impl RenderLayer {
             PropertyBool::wrap(node, "is_visible", 0).expect("RenderLayer::is_visible");
         let rect = node.get_property("rect").expect("RenderLayer::rect");
 
-        let self_ = Arc::new(Self { sg: sg_ptr, node_id, dc_key: OsRng.gen(), is_visible, rect });
+        // Monitor for changes to screen_size or scale properties
+        // If so then trigger draw
+        let rect_sub = rect.subscribe_modify();
+
+        let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
+            // Modify task needs a Weak<Self>
+            let modify_task = ex.spawn(async move {
+                loop {
+                    let _ = rect_sub.receive().await;
+                    debug!(target: "app", "Layer rect modified");
+
+                    let Some(self_) = me.upgrade() else {
+                        // Should not happen
+                        panic!("self destroyed before modify_task was stopped!");
+                    };
+
+                    debug!(target: "app", "layer rect property modified");
+                    let sg = sg.lock().await;
+                    // read parent's rect
+                    //self_.draw(&sg).await;
+                }
+            });
+
+            Self {
+                sg: sg_ptr,
+                node_id,
+                dc_key: OsRng.gen(),
+                is_visible,
+                rect,
+                parent_rect: Mutex::new(Rectangle { x: 0., y: 0., w: 0., h: 0. }),
+            }
+        });
 
         Pimpl::RenderLayer(self_)
     }
@@ -373,25 +490,32 @@ impl RenderLayer {
         sg: &SceneGraph,
         parent_rect: &Rectangle<f32>,
     ) -> Option<(u64, Vec<(u64, DrawCall)>)> {
-        debug!("RenderLayer::draw()");
+        debug!(target: "app", "RenderLayer::draw()");
         let node = sg.get_node(self.node_id).unwrap();
 
         if !self.is_visible.get() {
-            debug!("invisible layer node '{}':{}", node.name, node.id);
+            debug!(target: "app", "invisible layer node '{}':{}", node.name, node.id);
             return None
         }
 
-        let Ok(rect) = self.get_rect(parent_rect) else {
+        let Ok(mut rect) = self.get_rect(parent_rect) else {
             panic!("malformed rect property for node '{}':{}", node.name, node.id)
         };
 
+        rect.x += parent_rect.x;
+        rect.y += parent_rect.x;
+
         if !parent_rect.includes(&rect) {
             error!(
+                target: "app",
                 "layer '{}':{} rect {:?} is not inside parent {:?}",
                 node.name, node.id, rect, parent_rect
             );
             return None
         }
+
+        debug!(target: "app", "Parent rect: {:?}", parent_rect);
+        debug!(target: "app", "Viewport rect: {:?}", rect);
 
         // Apply viewport
 
@@ -404,7 +528,7 @@ impl RenderLayer {
                 Pimpl::RenderLayer(layer) => layer.draw(&sg, &rect).await,
                 Pimpl::Mesh(mesh) => mesh.draw(&sg, &rect),
                 _ => {
-                    error!("unhandled pimpl type");
+                    error!(target: "app", "unhandled pimpl type");
                     continue
                 }
             };
@@ -417,6 +541,10 @@ impl RenderLayer {
         draw_calls.push((self.dc_key, dc));
         Some((self.dc_key, draw_calls))
     }
+}
+
+impl Stoppable for RenderLayer {
+    async fn stop(&self) {}
 }
 
 pub struct Mesh {
@@ -491,6 +619,7 @@ impl Mesh {
         sg: &SceneGraph,
         parent_rect: &Rectangle<f32>,
     ) -> Option<(u64, Vec<(u64, DrawCall)>)> {
+        debug!(target: "app", "Mesh::draw()");
         // Only used for debug messages
         let node = sg.get_node(self.node_id).unwrap();
 
@@ -501,11 +630,13 @@ impl Mesh {
             num_elements: self.num_elements,
         };
 
-        let Ok(rect) = self.get_rect(parent_rect) else {
+        let Ok(mut rect) = self.get_rect(parent_rect) else {
             panic!("malformed rect property for node '{}':{}", node.name, node.id)
         };
 
-        // FIXME: all these rects must be aggregated down the tree
+        rect.x += parent_rect.x;
+        rect.y += parent_rect.x;
+
         let scale_x = rect.w / parent_rect.w;
         let scale_y = rect.h / parent_rect.h;
         let model = glam::Mat4::from_translation(glam::Vec3::new(rect.x, rect.y, 0.)) *
@@ -528,7 +659,7 @@ impl Mesh {
 }
 
 impl Stoppable for Mesh {
-    async fn stop(self) {
+    async fn stop(&self) {
         // TODO: Delete own draw call
 
         // Free buffers

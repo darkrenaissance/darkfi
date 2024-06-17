@@ -38,124 +38,32 @@ use crate::{
     scene::{SceneGraph, SceneGraphPtr},
 };
 
-fn start_zmq(scene_graph: SceneGraphPtr) {
-    // detach thread
+#[cfg(target_os = "android")]
+fn panic_hook(panic_info: &std::panic::PanicInfo) {
+    error!("panic occurred: {panic_info}");
+    //error!("panic: {}", std::backtrace::Backtrace::force_capture().to_string());
 }
-
-fn start_sentinel(scene_graph: SceneGraphPtr) {
-    // detach thread
-    // Sentinel should cleanly close when sent a stop signal.
-    let _ = thread::spawn(move || {
-        let mut sentinel = plugin::Sentinel::new(scene_graph);
-        sentinel.run();
-    });
-}
-
-/*
-async fn greensq(render_api: Arc<gfx2::RenderApi>) -> (miniquad::BufferId, miniquad::BufferId) {
-    let x1 = 0.1;
-    let x2 = 0.6;
-    let y1 = 0.1;
-    let y2 = 0.6;
-    let color = [1., 0., 0., 1.];
-
-    let verts = vec![
-        gfx2::Vertex { pos: [x1, y1], color, uv: [0., 0.] },
-        gfx2::Vertex { pos: [x2, y1], color, uv: [1., 0.] },
-        gfx2::Vertex { pos: [x1, y2], color, uv: [0., 1.] },
-        gfx2::Vertex { pos: [x2, y2], color, uv: [1., 1.] },
-    ];
-    let vertex_buffer = render_api.new_vertex_buffer(verts).await.unwrap();
-
-    let indices = vec![0, 2, 1, 1, 2, 3];
-    let index_buffer = render_api.new_index_buffer(indices).await.unwrap();
-
-    let (off_x, off_y) = (0., 0.);
-    let (screen_width, screen_height) = miniquad::window::screen_size();
-    let (scale_x, scale_y) = (1./screen_width, 1./screen_height);
-    let model = glam::Mat4::from_translation(glam::Vec3::new(off_x, off_y, 0.)) *
-        glam::Mat4::from_scale(glam::Vec3::new(scale_x, scale_y, 1.));
-    let model = glam::Mat4::IDENTITY;
-
-    // We have to handle window resizing for viewport and matrix
-
-    let dc = gfx2::DrawCall {
-        instrs: vec![
-            //gfx2::DrawInstruction::ApplyViewport(gfx::Rectangle {
-            //    x: 0, y: 0,
-            //    w: screen_width as i32,
-            //    h: screen_height as i32,
-            //}),
-        ],
-        dcs: vec![
-            gfx2::DrawCall {
-                instrs: vec![
-                    gfx2::DrawInstruction::ApplyMatrix(model),
-                    gfx2::DrawInstruction::Draw(gfx2::DrawMesh {
-                        vertex_buffer,
-                        index_buffer,
-                        texture: None,
-                        num_elements: 6
-                    })
-                ],
-                dcs: vec![]
-            }
-        ]
-    };
-    render_api.replace_draw_call(vec![], dc).await;
-    (vertex_buffer, index_buffer)
-}
-
-async fn amain(ex: Arc<smol::Executor<'static>>, render_api: Arc<gfx2::RenderApi>,
-    event_sub: pubsub::Subscription<gfx2::GraphicsEvent>
-    ) {
-
-    let task = ex.spawn(async move {
-        let (vert_buffer, idx_buffer) = greensq(render_api).await;
-        loop {
-            let ev = event_sub.receive().await;
-            debug!("ev: {:?}", ev);
-        }
-    });
-
-    smol::Timer::after(std::time::Duration::from_secs(2)).await;
-
-    let x1 = 0.1;
-    let x2 = 0.95;
-    let y1 = 0.1;
-    let y2 = 0.95;
-    let color = [0., 1., 0., 1.];
-
-    let verts = vec![
-        gfx2::Vertex { pos: [x1, y1], color, uv: [0., 0.] },
-        gfx2::Vertex { pos: [x2, y1], color, uv: [1., 0.] },
-        gfx2::Vertex { pos: [x1, y2], color, uv: [0., 1.] },
-        gfx2::Vertex { pos: [x2, y2], color, uv: [1., 1.] },
-    ];
-    let vertex_buffer2 = render_api.new_vertex_buffer(verts).await.unwrap();
-
-    let dc = gfx2::DrawCall {
-        instrs: vec![
-            gfx2::DrawInstruction::ApplyMatrix(model),
-            gfx2::DrawInstruction::Draw(gfx2::DrawMesh {
-                vertex_buffer: vertex_buffer2,
-                index_buffer,
-                texture: None,
-                num_elements: 6
-            })
-        ],
-        dcs: vec![]
-    };
-    render_api.replace_draw_call(vec![0], dc).await;
-    //render_api.delete_buffer(vertex_buffer);
-
-    println!("hello!");
-}
-*/
 
 fn main() {
-    // [x] event pub should be a Publisher
-    // [ ] properties should have post-modify hook used to redraw widgets
+    #[cfg(target_os = "android")]
+    {
+        android_logger::init_once(
+            android_logger::Config::default().with_max_level(LevelFilter::Debug).with_tag("darkfi"),
+        );
+
+        std::panic::set_hook(Box::new(panic_hook));
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let term_logger = simplelog::TermLogger::new(
+            simplelog::LevelFilter::Debug,
+            simplelog::Config::default(),
+            simplelog::TerminalMode::Mixed,
+            simplelog::ColorChoice::Auto,
+        );
+        simplelog::CombinedLogger::init(vec![term_logger]).expect("logger");
+    }
 
     let ex = Arc::new(smol::Executor::new());
     let sg = Arc::new(Mutex::new(SceneGraph::new()));
@@ -168,18 +76,26 @@ fn main() {
     });
 
     let (method_req, method_rep) = mpsc::channel();
+    // The UI actually needs to be running for this to reply back.
+    // Otherwise calls will just hang.
     let render_api = gfx2::RenderApi::new(method_req);
     let event_pub = pubsub::Publisher::new();
 
+    let async_runtime = app::AsyncRuntime::new(ex.clone());
+    async_runtime.start();
+
     let app = app::App::new(sg.clone(), ex.clone(), render_api.clone(), event_pub.clone());
-    let app_task = ex.spawn(app.clone().start());
+    let app_task = ex.spawn(app.start());
+    async_runtime.push_task(app_task);
+    //app.clone().start();
 
     // Nice to see which events exist
     let ev_sub = event_pub.clone().subscribe();
     let ev_relay_task = ex.spawn(async move {
+        debug!(target: "main", "event relayer started");
         loop {
             let Ok(ev) = ev_sub.receive().await else {
-                debug!("Event relayer closed");
+                debug!(target: "main", "Event relayer closed");
                 break
             };
             // Ignore keys which get stuck
@@ -188,39 +104,14 @@ fn main() {
                 gfx2::GraphicsEvent::KeyDown((miniquad::KeyCode::LeftSuper, _, _)) => continue,
                 _ => {}
             }
-            debug!("event: {:?}", ev);
+            debug!(target: "main", "event: {:?}", ev);
         }
     });
-    // End debug code
+    async_runtime.push_task(ev_relay_task);
 
-    let n_threads = std::thread::available_parallelism().unwrap().get();
-    let (signal, shutdown) = smol::channel::unbounded::<()>();
-    let exec_threadpool = thread::spawn(move || {
-        easy_parallel::Parallel::new()
-            // N executor threads
-            .each(0..n_threads, |_| smol::future::block_on(ex.run(shutdown.recv())))
-            .run();
-    });
-
-    gfx2::run_gui(method_rep, event_pub);
-
-    // Close all tasks
-    smol::future::block_on(async {
-        // Perform cleanup code
-        // If not finished in certain amount of time, then just exit
-
-        let mut futures = FuturesUnordered::new();
-        futures.push(zmq_task.cancel());
-        futures.push(ev_relay_task.cancel());
-        futures.push(app_task.cancel());
-        let _: Vec<_> = futures.collect().await;
-
-        app.stop().await;
-    });
-
-    drop(signal);
-    exec_threadpool.join();
-    debug!("Application closed");
+    //let stage = gfx2::Stage::new(method_rep, event_pub);
+    gfx2::run_gui(async_runtime, method_rep, event_pub);
+    debug!(target: "main", "Started GFX backend");
 }
 
 /*

@@ -17,6 +17,7 @@ use std::{
 };
 
 use crate::{
+    app::AsyncRuntime,
     chatview, editbox,
     error::{Error, Result},
     expr::{SExprMachine, SExprVal},
@@ -136,8 +137,9 @@ struct RenderContext<'a> {
 
 impl<'a> RenderContext<'a> {
     fn draw(&mut self) {
-        debug!(target: "gfx", "RenderContext::draw()");
+        //debug!(target: "gfx", "RenderContext::draw()");
         self.draw_call(&self.draw_calls[&0], 0);
+        //debug!(target: "gfx", "RenderContext::draw() [DONE]");
     }
 
     fn draw_call(&mut self, draw_call: &DrawCall, indent: u32) {
@@ -145,8 +147,7 @@ impl<'a> RenderContext<'a> {
         for instr in &draw_call.instrs {
             match instr {
                 DrawInstruction::ApplyViewport(view) => {
-                    debug!(target: "gfx", "{}apply_viewport({:?})", ws, view);
-
+                    //debug!(target: "gfx", "{}apply_viewport({:?})", ws, view);
                     let (_, screen_height) = window::screen_size();
 
                     let view_x = view.x.round() as i32;
@@ -155,11 +156,11 @@ impl<'a> RenderContext<'a> {
                     let view_w = view.w.round() as i32;
                     let view_h = view.h.round() as i32;
 
-                    self.ctx.apply_viewport(view_x, view_y, view_w, view_h);
-                    self.ctx.apply_scissor_rect(view_x, view_y, view_w, view_h);
+                    //self.ctx.apply_viewport(view_x, view_y, view_w, view_h);
+                    //self.ctx.apply_scissor_rect(view_x, view_y, view_w, view_h);
                 }
                 DrawInstruction::ApplyMatrix(model) => {
-                    debug!(target: "gfx", "{}apply_matrix({:?})", ws, model);
+                    //debug!(target: "gfx", "{}apply_matrix({:?})", ws, model);
                     let data: [u8; 64] = unsafe { std::mem::transmute_copy(model) };
                     self.uniforms_data[64..].copy_from_slice(&data);
                     self.ctx.apply_uniforms_from_bytes(
@@ -168,7 +169,7 @@ impl<'a> RenderContext<'a> {
                     );
                 }
                 DrawInstruction::Draw(mesh) => {
-                    debug!(target: "gfx", "{}draw(mesh)", ws);
+                    //debug!(target: "gfx", "{}draw({:?})", ws, mesh);
                     let texture = match mesh.texture {
                         Some(texture) => texture,
                         None => self.white_texture,
@@ -208,6 +209,8 @@ pub enum GraphicsEvent {
 }
 
 struct Stage {
+    async_runtime: AsyncRuntime,
+
     ctx: Box<dyn RenderingBackend>,
     pipeline: Pipeline,
     white_texture: TextureId,
@@ -220,10 +223,20 @@ struct Stage {
 
 impl Stage {
     pub fn new(
+        async_runtime: AsyncRuntime,
         method_rep: mpsc::Receiver<GraphicsMethod>,
         event_pub: PublisherPtr<GraphicsEvent>,
     ) -> Self {
         let mut ctx: Box<dyn RenderingBackend> = window::new_rendering_backend();
+
+        // Maybe should be patched upstream since inconsistent behaviour
+        // Needs testing on other platforms too.
+        #[cfg(target_os = "android")]
+        {
+            let (screen_width, screen_height) = window::screen_size();
+            let event = GraphicsEvent::Resize((screen_width, screen_height));
+            event_pub.notify(event);
+        }
 
         let white_texture = ctx.new_texture_from_rgba8(1, 1, &[255, 255, 255, 255]);
 
@@ -265,6 +278,7 @@ impl Stage {
         );
 
         Stage {
+            async_runtime,
             ctx,
             pipeline,
             white_texture,
@@ -341,6 +355,7 @@ impl EventHandler for Stage {
 
         loop {
             let Ok(method) = self.method_rep.recv_deadline(deadline) else { break };
+            debug!(target: "gfx", "Received method: {:?}", method);
             match method {
                 GraphicsMethod::NewTexture((width, height, data, sendr)) => {
                     self.method_new_texture(width, height, data, sendr)
@@ -395,27 +410,17 @@ impl EventHandler for Stage {
         let event = GraphicsEvent::Resize((width, height));
         self.event_pub.notify(event);
     }
+
+    fn quit_requested_event(&mut self) {
+        self.async_runtime.stop();
+    }
 }
 
-pub fn run_gui(method_rep: mpsc::Receiver<GraphicsMethod>, event_pub: PublisherPtr<GraphicsEvent>) {
-    #[cfg(target_os = "android")]
-    {
-        android_logger::init_once(
-            android_logger::Config::default().with_max_level(LevelFilter::Debug).with_tag("darkfi"),
-        );
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        let term_logger = simplelog::TermLogger::new(
-            simplelog::LevelFilter::Debug,
-            simplelog::Config::default(),
-            simplelog::TerminalMode::Mixed,
-            simplelog::ColorChoice::Auto,
-        );
-        simplelog::CombinedLogger::init(vec![term_logger]).expect("logger");
-    }
-
+pub fn run_gui(
+    async_runtime: AsyncRuntime,
+    method_rep: mpsc::Receiver<GraphicsMethod>,
+    event_pub: PublisherPtr<GraphicsEvent>,
+) {
     let mut conf = miniquad::conf::Conf {
         high_dpi: true,
         window_resizable: true,
@@ -430,5 +435,5 @@ pub fn run_gui(method_rep: mpsc::Receiver<GraphicsMethod>, event_pub: PublisherP
     conf.platform.apple_gfx_api =
         if metal { conf::AppleGfxApi::Metal } else { conf::AppleGfxApi::OpenGl };
 
-    miniquad::start(conf, || Box::new(Stage::new(method_rep, event_pub)));
+    miniquad::start(conf, || Box::new(Stage::new(async_runtime, method_rep, event_pub)));
 }

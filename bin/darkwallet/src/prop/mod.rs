@@ -196,7 +196,8 @@ pub struct Property {
     pub subtype: PropertySubType,
     pub defaults: Vec<PropertyValue>,
     pub vals: Mutex<Vec<PropertyValue>>,
-
+    // either a value or an expr must be set
+    //pub exprs: Mutex<Vec<Option<SExprCode>>>,
     pub ui_name: String,
     pub desc: String,
 
