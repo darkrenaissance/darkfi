@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Explorer{% endblock %}
+
+{% block content %}
+    <div class="container-fluid pl-5 pb-5 pr-5 title-block" style="margin-top:90px;">
+	    <h1 class="display-4 text-white border-l3" style="font-family:'Weissrundgotisch';line-height:.9em;">Explorer</h1>
+	</div>
+
+    <div class="row m-0 border-secondary border-top"/>
+    <div class="col-md-7 text-white mb-0 border-right border-bottom border-secondary lead-text">
+        <h2 class="display-8 text-white border-l3" style="font-family:'Weissrundgotisch';line-height:.9em;">Latest Blocks</h2>
+	    <table>
+            <tr style="text-align: center;">
+                <th>Height</th>
+                <th>Hash</th>
+                <th>timestamp</th>
+            </tr>
+            {% for block in blocks %}
+                <tr>
+                    <td>{{ block[3] }}</td>
+                    <td>{{ block[0] }}</td>
+                    <td>{{ block[4] }}</td>
+                </tr>
+            {% endfor %}
+        </table>
+    </div>
+    <div class="col-md-5 text-white m-0 border-secondary border-bottom lead-text">
+        <h2 class="display-8 text-white border-l3" style="font-family:'Weissrundgotisch';line-height:.9em;">Statistics</h2>
+        <ul>
+            <li>Height: {{ stats[0] }}</li>
+            <li>Epoch: {{ stats[1] }}</li>
+            <li>Last block: {{ stats[2] }}</li>
+            <li>Total blocks: {{ stats[3] }}</li>
+            <li>Total transactions: {{ stats[4] }}</li>
+        </ul>
+    </div>
+    
+{% endblock %}
+
