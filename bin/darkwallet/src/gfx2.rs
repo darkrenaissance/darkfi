@@ -156,8 +156,8 @@ impl<'a> RenderContext<'a> {
                     let view_w = view.w.round() as i32;
                     let view_h = view.h.round() as i32;
 
-                    //self.ctx.apply_viewport(view_x, view_y, view_w, view_h);
-                    //self.ctx.apply_scissor_rect(view_x, view_y, view_w, view_h);
+                    self.ctx.apply_viewport(view_x, view_y, view_w, view_h);
+                    self.ctx.apply_scissor_rect(view_x, view_y, view_w, view_h);
                 }
                 DrawInstruction::ApplyMatrix(model) => {
                     //debug!(target: "gfx", "{}apply_matrix({:?})", ws, model);

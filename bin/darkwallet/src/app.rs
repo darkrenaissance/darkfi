@@ -205,7 +205,9 @@ impl App {
         // Setup the pimpl
         let node_id = node.id;
         drop(sg);
-        let pimpl = RenderLayer::new(self.sg.clone(), node_id).await;
+        let pimpl =
+            RenderLayer::new(self.sg.clone(), node_id, self.ex.clone(), self.render_api.clone())
+                .await;
         let mut sg = self.sg.lock().await;
         let node = sg.get_node_mut(node_id).unwrap();
         node.pimpl = pimpl;
@@ -403,6 +405,8 @@ pub type RenderLayerPtr = Arc<RenderLayer>;
 pub struct RenderLayer {
     sg: SceneGraphPtr2,
     node_id: SceneNodeId,
+    modify_task: smol::Task<()>,
+    render_api: RenderApiPtr,
 
     dc_key: u64,
 
@@ -413,41 +417,47 @@ pub struct RenderLayer {
 }
 
 impl RenderLayer {
-    pub async fn new(sg_ptr: SceneGraphPtr2, node_id: SceneNodeId) -> Pimpl {
-        let sg_ptr2 = sg_ptr.clone();
-        let sg = sg_ptr2.lock().await;
+    pub async fn new(
+        sg_ptr: SceneGraphPtr2,
+        node_id: SceneNodeId,
+        ex: Arc<smol::Executor<'static>>,
+        render_api: RenderApiPtr,
+    ) -> Pimpl {
+        let sg = sg_ptr.lock().await;
         let node = sg.get_node(node_id).unwrap();
 
         let is_visible =
             PropertyBool::wrap(node, "is_visible", 0).expect("RenderLayer::is_visible");
         let rect = node.get_property("rect").expect("RenderLayer::rect");
+        drop(sg);
 
         // Monitor for changes to screen_size or scale properties
         // If so then trigger draw
         let rect_sub = rect.subscribe_modify();
 
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
+            let me2 = me.clone();
             // Modify task needs a Weak<Self>
             let modify_task = ex.spawn(async move {
                 loop {
                     let _ = rect_sub.receive().await;
                     debug!(target: "app", "Layer rect modified");
 
-                    let Some(self_) = me.upgrade() else {
+                    let Some(self_) = me2.upgrade() else {
                         // Should not happen
                         panic!("self destroyed before modify_task was stopped!");
                     };
 
                     debug!(target: "app", "layer rect property modified");
-                    let sg = sg.lock().await;
-                    // read parent's rect
-                    //self_.draw(&sg).await;
+                    self_.redraw().await;
                 }
             });
 
             Self {
                 sg: sg_ptr,
                 node_id,
+                modify_task,
+                render_api,
                 dc_key: OsRng.gen(),
                 is_visible,
                 rect,
@@ -456,6 +466,86 @@ impl RenderLayer {
         });
 
         Pimpl::RenderLayer(self_)
+    }
+
+    async fn redraw(&self) {
+        let sg = self.sg.lock().await;
+        // read our parent
+        let node = sg.get_node(self.node_id).unwrap();
+        if node.parents.is_empty() {
+            info!("RenderLayer {:?} has no parents so skipping", node);
+            return
+        }
+        if node.parents.len() != 1 {
+            error!("RenderLayer {:?} has too many parents so skipping", node);
+            return
+        }
+        let parent_id = node.parents[0].id;
+        let parent_node = sg.get_node(parent_id).unwrap();
+        let parent_rect = match parent_node.typ {
+            SceneNodeType::Window => {
+                let Some(screen_size_prop) = parent_node.get_property("screen_size") else {
+                    error!(
+                        "RenderLayer {:?} parent node {:?} missing screen_size property",
+                        node, parent_node
+                    );
+                    return
+                };
+                let screen_width = screen_size_prop.get_f32(0).unwrap();
+                let screen_height = screen_size_prop.get_f32(1).unwrap();
+
+                let parent_rect = Rectangle { x: 0., y: 0., w: screen_width, h: screen_height };
+                parent_rect
+            }
+            SceneNodeType::RenderLayer => {
+                // get their rect property
+                let Some(parent_rect) = parent_node.get_property("rect") else {
+                    error!(
+                        "RenderLayer {:?} parent node {:?} missing rect property",
+                        node, parent_node
+                    );
+                    return
+                };
+                // read parent's rect
+                let Ok(parent_rect) = Self::read_rect(parent_rect) else {
+                    error!(
+                        "RenderLayer {:?} parent node {:?} malformed rect property",
+                        node, parent_node
+                    );
+                    return
+                };
+                parent_rect
+            }
+            _ => {
+                error!(
+                    "RenderLayer {:?} parent node {:?} wrong type {:?}",
+                    node, parent_node, parent_node.typ
+                );
+                return
+            }
+        };
+        let Some((_, dcs)) = self.draw(&sg, &parent_rect).await else {
+            error!("RenderLayer {:?} failed to draw", node);
+            return;
+        };
+        self.render_api.replace_draw_calls(dcs).await;
+        debug!("replace draw calls done");
+    }
+
+    fn read_rect(rect_prop: PropertyPtr) -> Result<Rectangle<f32>> {
+        if rect_prop.array_len != 4 {
+            return Err(Error::PropertyWrongLen)
+        }
+
+        let mut rect = [0.; 4];
+        for i in 0..4 {
+            if rect_prop.is_expr(i)? {
+                rect[i] = rect_prop.get_cached(i)?.as_f32()?;
+            } else {
+                rect[i] = rect_prop.get_f32(i)?;
+            }
+        }
+        Ok(Rectangle::from_array(rect))
     }
 
     fn get_rect(&self, parent_rect: &Rectangle<f32>) -> Result<Rectangle<f32>> {
@@ -476,7 +566,9 @@ impl RenderLayer {
                     stmts: &expr,
                 };
 
-                rect[i] = machine.call()?.as_f32()?;
+                let v = machine.call()?.as_f32()?;
+                self.rect.set_cache_f32(i, v).unwrap();
+                rect[i] = v;
             } else {
                 rect[i] = self.rect.get_f32(i)?;
             }
@@ -606,7 +698,9 @@ impl Mesh {
                     stmts: &expr,
                 };
 
-                rect[i] = machine.call()?.as_f32()?;
+                let v = machine.call()?.as_f32()?;
+                self.rect.set_cache_f32(i, v).unwrap();
+                rect[i] = v;
             } else {
                 rect[i] = self.rect.get_f32(i)?;
             }

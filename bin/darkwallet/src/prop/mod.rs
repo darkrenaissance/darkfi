@@ -113,49 +113,49 @@ impl PropertyValue {
         }
     }
 
-    fn as_bool(&self) -> Result<bool> {
+    pub fn as_bool(&self) -> Result<bool> {
         match self {
             Self::Bool(v) => Ok(*v),
             _ => Err(Error::PropertyWrongType),
         }
     }
-    fn as_u32(&self) -> Result<u32> {
+    pub fn as_u32(&self) -> Result<u32> {
         match self {
             Self::Uint32(v) => Ok(*v),
             _ => Err(Error::PropertyWrongType),
         }
     }
-    fn as_f32(&self) -> Result<f32> {
+    pub fn as_f32(&self) -> Result<f32> {
         match self {
             Self::Float32(v) => Ok(*v),
             _ => Err(Error::PropertyWrongType),
         }
     }
-    fn as_str(&self) -> Result<String> {
+    pub fn as_str(&self) -> Result<String> {
         match self {
             Self::Str(v) => Ok(v.clone()),
             _ => Err(Error::PropertyWrongType),
         }
     }
-    fn as_enum(&self) -> Result<String> {
+    pub fn as_enum(&self) -> Result<String> {
         match self {
             Self::Enum(v) => Ok(v.clone()),
             _ => Err(Error::PropertyWrongType),
         }
     }
-    fn as_buf(&self) -> Result<Buffer> {
+    pub fn as_buf(&self) -> Result<Buffer> {
         match self {
             Self::Buffer(v) => Ok(v.clone()),
             _ => Err(Error::PropertyWrongType),
         }
     }
-    fn as_node_id(&self) -> Result<SceneNodeId> {
+    pub fn as_node_id(&self) -> Result<SceneNodeId> {
         match self {
             Self::SceneNodeId(v) => Ok(*v),
             _ => Err(Error::PropertyWrongType),
         }
     }
-    fn as_sexpr(&self) -> Result<Arc<SExprCode>> {
+    pub fn as_sexpr(&self) -> Result<Arc<SExprCode>> {
         match self {
             Self::SExpr(v) => Ok(v.clone()),
             _ => Err(Error::PropertyWrongType),
@@ -195,9 +195,11 @@ pub struct Property {
     pub typ: PropertyType,
     pub subtype: PropertySubType,
     pub defaults: Vec<PropertyValue>,
-    pub vals: Mutex<Vec<PropertyValue>>,
     // either a value or an expr must be set
-    //pub exprs: Mutex<Vec<Option<SExprCode>>>,
+    pub vals: Mutex<Vec<PropertyValue>>,
+    // only used valid when PropertyValue is an expr
+    // caches the last calculated value
+    pub cache: Mutex<Vec<PropertyValue>>,
     pub ui_name: String,
     pub desc: String,
 
@@ -224,6 +226,7 @@ impl Property {
 
             defaults: vec![typ.default_value()],
             vals: Mutex::new(vec![PropertyValue::Unset]),
+            cache: Mutex::new(vec![PropertyValue::Null]),
 
             ui_name: String::new(),
             desc: String::new(),
@@ -249,9 +252,14 @@ impl Property {
         self.array_len = len;
         self.defaults.resize(len, self.typ.default_value());
         self.defaults.shrink_to_fit();
+
         let vals = &mut *self.vals.lock().unwrap();
         vals.resize(len, PropertyValue::Unset);
         vals.shrink_to_fit();
+
+        let cache = &mut *self.cache.lock().unwrap();
+        cache.resize(len, PropertyValue::Null);
+        cache.shrink_to_fit();
     }
     pub fn set_unbounded(&mut self) {
         self.set_array_len(0);
@@ -414,6 +422,25 @@ impl Property {
         vals[i] = PropertyValue::SExpr(Arc::new(val));
         self.on_modify.notify(ModifyAction::Set(i));
         Ok(())
+    }
+
+    fn set_cache(&self, i: usize, val: PropertyValue) -> Result<()> {
+        if self.typ != val.as_type() {
+            return Err(Error::PropertyWrongType)
+        }
+
+        let cache = &mut self.cache.lock().unwrap();
+        if i >= cache.len() {
+            return Err(Error::PropertyWrongIndex)
+        }
+        cache[i] = val;
+        Ok(())
+    }
+    pub fn set_cache_f32(&self, i: usize, val: f32) -> Result<()> {
+        self.set_cache(i, PropertyValue::Float32(val))
+    }
+    pub fn set_cache_u32(&self, i: usize, val: u32) -> Result<()> {
+        self.set_cache(i, PropertyValue::Uint32(val))
     }
 
     // Push
@@ -591,6 +618,17 @@ impl Property {
         self.get_value(i)?.as_sexpr()
     }
 
+    pub fn get_cached(&self, i: usize) -> Result<PropertyValue> {
+        let cache = &self.cache.lock().unwrap();
+        if self.is_bounded() {
+            assert_eq!(cache.len(), self.array_len);
+        }
+        if i >= cache.len() {
+            return Err(Error::PropertyWrongIndex)
+        }
+        Ok(cache[i].clone())
+    }
+
     // Subs
 
     pub fn subscribe_modify(&self) -> Subscription<ModifyAction> {
@@ -601,6 +639,7 @@ impl Property {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::expr::Op;
 
     #[test]
     fn test_getset() {
@@ -681,5 +720,19 @@ mod tests {
         prop.set_enum_items(vec!["ABC", "XYZ", "FOO"]).unwrap();
         assert!(prop.set_enum(0, "ABC").is_ok());
         assert!(prop.set_enum(0, "BAR").is_err());
+    }
+
+    #[test]
+    fn test_expr() {
+        let mut prop = Property::new("foo", PropertyType::Float32, PropertySubType::Null);
+        prop.allow_exprs();
+        assert_eq!(prop.get_f32(0).unwrap(), 0.);
+        let code = vec![Op::ConstFloat32(4.)];
+        prop.set_expr(0, code).unwrap();
+        let val = prop.get_cached(0).unwrap();
+        assert!(val.is_null());
+        prop.set_cache_f32(0, 4.).unwrap();
+        let val = prop.get_cached(0).unwrap();
+        assert_eq!(val.as_f32().unwrap(), 4.);
     }
 }

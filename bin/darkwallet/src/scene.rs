@@ -15,7 +15,7 @@ use std::{
 use crate::{
     app, chatview, editbox,
     error::{Error, Result},
-    prop::{Property, PropertyType},
+    prop::{Property, PropertyPtr, PropertyType},
 };
 
 pub type SceneNodeId = u32;
@@ -361,7 +361,7 @@ pub struct SceneNode {
     pub typ: SceneNodeType,
     pub parents: Vec<SceneNodeInfo>,
     pub children: Vec<SceneNodeInfo>,
-    pub props: Vec<Arc<Property>>,
+    pub props: Vec<PropertyPtr>,
     pub sigs: Vec<Signal>,
     pub methods: Vec<Method>,
     pub pimpl: Pimpl,
@@ -424,7 +424,7 @@ impl SceneNode {
         self.props.iter().any(|prop| prop.name == name)
     }
 
-    pub fn get_property(&self, name: &str) -> Option<Arc<Property>> {
+    pub fn get_property(&self, name: &str) -> Option<PropertyPtr> {
         self.props.iter().find(|prop| prop.name == name).map(|prop| prop.clone())
     }
 
@@ -640,4 +640,10 @@ pub enum Pimpl {
     Window(app::WindowPtr),
     RenderLayer(app::RenderLayerPtr),
     Mesh(app::Mesh),
+}
+
+impl std::fmt::Debug for SceneNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "'{}':{}", self.name, self.id)
+    }
 }
