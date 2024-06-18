@@ -44,15 +44,22 @@ This is for Android 64 bit (which is most phones).
     2. Enable the docker daemon service.
     3. Add your user to the docker group and refresh the session
        (either with `su -c $USER` or logout/login).
-2. Run `cd bin/darkirc/ && make docker-android`. The resulting file will be
-   called `darkirc.aarch64-android`. Copy this to your phone.
+2. Run `cd bin/darkirc/ && make docker-android`. The resulting file 
+    will be called `darkirc.aarch64-android` (it might be needed to 
+    make the file executable `chmod +x darkirc.aarch64-android`). 
+    Copy this to your phone.
 3. Install Termux and RevolutionIRC on F-Droid.
 4. You can access the phone storage from `/sdcard/` and copy the file
    into the Termux home.
 5. Run `termux-wake-lock`. This stops Android suspending the daemon.
 6. Run the daemon. You can open new Termux sessions by swiping from
    the left to bring up the sidebar.
-7. Connect the RevolutionIRC frontend.
+7. Connect the RevolutionIRC frontend by adding a new server:
+    1. Write a name for the server (i.g `darkirc`).
+    2. Set the server address and port (if using default config these 
+        should be 127.0.0.1:6667).
+    3. Untick `Use SSL/TLS` option.
+    4. Save and connect.
 
 ## Logs
 
