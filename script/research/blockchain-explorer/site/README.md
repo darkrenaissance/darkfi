@@ -18,7 +18,8 @@ First we start a `darkfid` localnet:
 
 It is advised to shutdown the `minerd` daemon after couple of blocks, to not waste resources.
 
-Now we start a `blockchain-explorer` daemon:
+Update the `blockchain-explorer` configuration to the localnet `darkfid` JSON-RPC endpoint
+and start a the daemon:
 
 ```
 % cd script/research/blockchain-explorer

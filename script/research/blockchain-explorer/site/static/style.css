@@ -828,3 +828,17 @@ h5 a:hover{
   display: none;
 }
 
+/* Container holding an image with text on top */
+.background-container {
+  position: relative;
+  text-align: center;
+  color: white;
+}
+
+/* Top centered text inside a background-container */
+.top-centered {
+  position: absolute;
+  top: 25%;
+  left: 50%;
+  transform: translate(-50%, -25%);
+}
