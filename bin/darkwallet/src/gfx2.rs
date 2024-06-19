@@ -33,6 +33,8 @@ use crate::{
     shader,
 };
 
+const DEBUG_RENDER: bool = false;
+
 #[derive(Debug, SerialEncodable, SerialDecodable)]
 #[repr(C)]
 pub struct Vertex {
@@ -137,9 +139,13 @@ struct RenderContext<'a> {
 
 impl<'a> RenderContext<'a> {
     fn draw(&mut self) {
-        //debug!(target: "gfx", "RenderContext::draw()");
+        if DEBUG_RENDER {
+            debug!(target: "gfx", "RenderContext::draw()");
+        }
         self.draw_call(&self.draw_calls[&0], 0);
-        //debug!(target: "gfx", "RenderContext::draw() [DONE]");
+        if DEBUG_RENDER {
+            debug!(target: "gfx", "RenderContext::draw() [DONE]");
+        }
     }
 
     fn draw_call(&mut self, draw_call: &DrawCall, indent: u32) {
@@ -147,7 +153,9 @@ impl<'a> RenderContext<'a> {
         for instr in &draw_call.instrs {
             match instr {
                 DrawInstruction::ApplyViewport(view) => {
-                    //debug!(target: "gfx", "{}apply_viewport({:?})", ws, view);
+                    if DEBUG_RENDER {
+                        debug!(target: "gfx", "{}apply_viewport({:?})", ws, view);
+                    }
                     let (_, screen_height) = window::screen_size();
 
                     let view_x = view.x.round() as i32;
@@ -160,7 +168,14 @@ impl<'a> RenderContext<'a> {
                     self.ctx.apply_scissor_rect(view_x, view_y, view_w, view_h);
                 }
                 DrawInstruction::ApplyMatrix(model) => {
-                    //debug!(target: "gfx", "{}apply_matrix({:?})", ws, model);
+                    if DEBUG_RENDER {
+                        debug!(target: "gfx", "{}apply_matrix(", ws);
+                        debug!(target: "gfx", "{}    {:?}", ws, model.row(0).to_array());
+                        debug!(target: "gfx", "{}    {:?}", ws, model.row(1).to_array());
+                        debug!(target: "gfx", "{}    {:?}", ws, model.row(2).to_array());
+                        debug!(target: "gfx", "{}    {:?}", ws, model.row(3).to_array());
+                        debug!(target: "gfx", "{})", ws);
+                    }
                     let data: [u8; 64] = unsafe { std::mem::transmute_copy(model) };
                     self.uniforms_data[64..].copy_from_slice(&data);
                     self.ctx.apply_uniforms_from_bytes(
@@ -169,7 +184,9 @@ impl<'a> RenderContext<'a> {
                     );
                 }
                 DrawInstruction::Draw(mesh) => {
-                    //debug!(target: "gfx", "{}draw({:?})", ws, mesh);
+                    if DEBUG_RENDER {
+                        debug!(target: "gfx", "{}draw({:?})", ws, mesh);
+                    }
                     let texture = match mesh.texture {
                         Some(texture) => texture,
                         None => self.white_texture,

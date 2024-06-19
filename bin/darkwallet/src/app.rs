@@ -215,7 +215,7 @@ impl App {
         let window_id = sg.lookup_node("/window").unwrap().id;
         sg.link(node_id, window_id).unwrap();
 
-        // Create a mesh
+        // Create a bg mesh
         let node_id = chatapp::create_mesh(&mut sg, "bg");
 
         let node = sg.get_node_mut(node_id).unwrap();
@@ -226,6 +226,40 @@ impl App {
         prop.set_expr(2, code).unwrap();
         let code = vec![Op::LoadVar("lh".to_string())];
         prop.set_expr(3, code).unwrap();
+
+        // Setup the pimpl
+        let node_id = node.id;
+        let (x1, y1) = (0., 0.);
+        let (x2, y2) = (1., 1.);
+        let verts = vec![
+            // top left
+            Vertex { pos: [x1, y1], color: [0., 0., 0., 1.], uv: [0., 0.] },
+            // top right
+            Vertex { pos: [x2, y1], color: [0., 0., 0., 1.], uv: [1., 0.] },
+            // bottom left
+            Vertex { pos: [x1, y2], color: [0., 0., 0., 1.], uv: [0., 1.] },
+            // bottom right
+            Vertex { pos: [x2, y2], color: [0., 0., 0., 1.], uv: [1., 1.] },
+        ];
+        let indices = vec![0, 2, 1, 1, 2, 3];
+        drop(sg);
+        let pimpl =
+            Mesh::new(self.sg.clone(), node_id, self.render_api.clone(), verts, indices).await;
+        let mut sg = self.sg.lock().await;
+        let node = sg.get_node_mut(node_id).unwrap();
+        node.pimpl = pimpl;
+
+        sg.link(node_id, layer_node_id).unwrap();
+
+        // Create another mesh
+        let node_id = chatapp::create_mesh(&mut sg, "box");
+
+        let node = sg.get_node_mut(node_id).unwrap();
+        let prop = node.get_property("rect").unwrap();
+        prop.set_f32(0, 10.).unwrap();
+        prop.set_f32(1, 10.).unwrap();
+        prop.set_f32(2, 60.).unwrap();
+        prop.set_f32(3, 60.).unwrap();
 
         // Setup the pimpl
         let node_id = node.id;
@@ -731,9 +765,11 @@ impl Mesh {
         rect.x += parent_rect.x;
         rect.y += parent_rect.x;
 
+        let off_x = rect.x / parent_rect.w;
+        let off_y = rect.y / parent_rect.h;
         let scale_x = rect.w / parent_rect.w;
         let scale_y = rect.h / parent_rect.h;
-        let model = glam::Mat4::from_translation(glam::Vec3::new(rect.x, rect.y, 0.)) *
+        let model = glam::Mat4::from_translation(glam::Vec3::new(off_x, off_y, 0.)) *
             glam::Mat4::from_scale(glam::Vec3::new(scale_x, scale_y, 1.));
 
         Some((
@@ -742,7 +778,7 @@ impl Mesh {
                 self.dc_key,
                 DrawCall {
                     instrs: vec![
-                        DrawInstruction::ApplyMatrix(glam::Mat4::IDENTITY),
+                        DrawInstruction::ApplyMatrix(model),
                         DrawInstruction::Draw(mesh),
                     ],
                     dcs: vec![],
