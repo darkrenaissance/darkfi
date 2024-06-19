@@ -996,9 +996,14 @@ impl Client {
             // Potentially decrypt the privmsg
             self.server.try_decrypt(&mut privmsg).await;
 
-            // If the privmsg is intented for any of the given channels, add it as
-            // a reply and mark it as seen in the seen_events tree.
-            if !channels.contains(&privmsg.channel) {
+            // If the privmsg is intented for any of the given
+            // channels, contacts or oursleves, add it as a reply and
+            // mark it as seen in the seen_events tree.
+            let contacts = self.server.contacts.read().await;
+            if !channels.contains(&privmsg.channel) &&
+                !contacts.contains_key(&privmsg.channel) &&
+                !contacts.contains_key(&privmsg.nick)
+            {
                 continue
             }
 
