@@ -22,7 +22,7 @@ use darkfi::{
     ClientFailed, Result,
 };
 use darkfi_sdk::{
-    crypto::{note::AeadEncryptedNote, pasta_prelude::*, Blind, FuncId, Keypair, PublicKey},
+    crypto::{note::AeadEncryptedNote, pasta_prelude::*, Blind, FuncId, Keypair},
     pasta::pallas,
 };
 use log::debug;
@@ -30,9 +30,7 @@ use rand::rngs::OsRng;
 
 use crate::{
     client::{
-        transfer_v1::{
-            proof::create_transfer_mint_proof, TransferCallClearInput, TransferCallOutput,
-        },
+        transfer_v1::{proof::create_transfer_mint_proof, TransferCallOutput},
         MoneyNote,
     },
     model::{ClearInput, Coin, MoneyGenesisMintParamsV1, Output, DARK_TOKEN_ID},
@@ -65,10 +63,10 @@ pub struct GenesisMintCallBuilder {
     pub keypair: Keypair,
     /// Amount of tokens we want to mint
     pub amount: u64,
-    /// Spend hook for the output
-    pub spend_hook: FuncId,
-    /// User data for the output
-    pub user_data: pallas::Base,
+    /// Optional contract spend hook to use in the output
+    pub spend_hook: Option<FuncId>,
+    /// Optional user data to use in the output
+    pub user_data: Option<pallas::Base>,
     /// `Mint_V1` zkas circuit ZkBinary
     pub mint_zkbin: ZkBinary,
     /// Proving key for the `Mint_V1` zk circuit
@@ -86,36 +84,31 @@ impl GenesisMintCallBuilder {
         // Only DARK_TOKEN_ID can be minted on genesis block.
         let token_id = *DARK_TOKEN_ID;
 
-        let input = TransferCallClearInput {
+        // Building the clear input using random blinds
+        let value_blind = Blind::random(&mut OsRng);
+        let token_blind = Blind::random(&mut OsRng);
+        let coin_blind = Blind::random(&mut OsRng);
+        let c_input = ClearInput {
             value: self.amount,
             token_id,
-            signature_secret: self.keypair.secret,
+            value_blind,
+            token_blind,
+            signature_public: self.keypair.public,
         };
 
+        // Grab the spend hook and user data to use in the output
+        let spend_hook = self.spend_hook.unwrap_or(FuncId::none());
+        let user_data = self.user_data.unwrap_or(pallas::Base::ZERO);
+
+        // Building the anonymous output
         let output = TransferCallOutput {
             public_key: self.keypair.public,
             value: self.amount,
             token_id,
-            spend_hook: FuncId::none(),
-            user_data: pallas::Base::ZERO,
+            spend_hook,
+            user_data,
             blind: Blind::random(&mut OsRng),
         };
-
-        // We just create the commitment blinds here. We simply encofce
-        // that the clear input and the anon output have the same commitments.
-        // Not sure if this can be avoided, but also is it really necessary to avoid?
-        let value_blind = Blind::random(&mut OsRng);
-        let token_blind = Blind::random(&mut OsRng);
-
-        let c_input = ClearInput {
-            value: input.value,
-            token_id: input.token_id,
-            value_blind,
-            token_blind,
-            signature_public: PublicKey::from_secret(input.signature_secret),
-        };
-
-        let coin_blind = Blind::random(&mut OsRng);
 
         debug!(target: "contract::money::client::genesis_mint", "Creating token mint proof for output");
         let (proof, public_inputs) = create_transfer_mint_proof(
@@ -124,16 +117,16 @@ impl GenesisMintCallBuilder {
             &output,
             value_blind,
             token_blind,
-            self.spend_hook,
-            self.user_data,
+            spend_hook,
+            user_data,
             coin_blind,
         )?;
 
         let note = MoneyNote {
             value: output.value,
             token_id: output.token_id,
-            spend_hook: self.spend_hook,
-            user_data: self.user_data,
+            spend_hook,
+            user_data,
             coin_blind,
             value_blind,
             token_blind,
