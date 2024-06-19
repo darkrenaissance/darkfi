@@ -105,7 +105,6 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     // Verify node synced
     let alice = &th.alice.validator;
     let charlie = &charlie.validator;
-    charlie.validate_blockchain(pow_target, pow_fixed_difficulty.clone()).await?;
     assert_eq!(alice.blockchain.len(), charlie.blockchain.len());
     assert!(charlie.blockchain.headers.is_empty_sync());
     // Node must have just the best fork

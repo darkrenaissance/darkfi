@@ -112,7 +112,6 @@ async fn sync_forks_real(ex: Arc<Executor<'static>>) -> Result<()> {
 }
 
 #[test]
-#[ignore]
 fn sync_forks() -> Result<()> {
     let ex = Arc::new(Executor::new());
     let (signal, shutdown) = smol::channel::unbounded::<()>();

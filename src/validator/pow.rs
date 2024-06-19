@@ -74,6 +74,8 @@ const BLOCK_FUTURE_TIME_LIMIT: Timestamp = Timestamp::from_u64(60 * 60 * 2);
 /// This struct represents the information required by the PoW algorithm
 #[derive(Clone)]
 pub struct PoWModule {
+    /// Genesis block timestamp
+    pub genesis: Timestamp,
     /// Target block time, in seconds
     pub target: u32,
     /// Optional fixed difficulty
@@ -95,6 +97,9 @@ impl PoWModule {
         target: u32,
         fixed_difficulty: Option<BigUint>,
     ) -> Result<Self> {
+        // Retrieve genesis block timestamp
+        let genesis = blockchain.genesis_block()?.header.timestamp;
+
         // Retrieving last BUF_SIZE difficulties from blockchain to build the buffers
         let mut timestamps = RingBuffer::<Timestamp, BUF_SIZE>::new();
         let mut difficulties = RingBuffer::<BigUint, BUF_SIZE>::new();
@@ -111,7 +116,14 @@ impl PoWModule {
             assert!(diff > &BigUint::zero());
         }
 
-        Ok(Self { target, fixed_difficulty, timestamps, difficulties, cummulative_difficulty })
+        Ok(Self {
+            genesis,
+            target,
+            fixed_difficulty,
+            timestamps,
+            difficulties,
+            cummulative_difficulty,
+        })
     }
 
     /// Compute the next mining difficulty, based on current ring buffers.
@@ -214,6 +226,11 @@ impl PoWModule {
 
     /// Verify provided block timestamp is valid and matches certain criteria
     pub fn verify_timestamp_by_median(&self, timestamp: Timestamp) -> bool {
+        // Check timestamp is after genesis one
+        if timestamp <= self.genesis {
+            return false
+        }
+
         // If not enough blocks, no proper median yet, return true
         if self.timestamps.len() < BLOCKCHAIN_TIMESTAMP_CHECK_WINDOW {
             return true
@@ -421,6 +438,8 @@ mod tests {
     fn test_wide_difficulty() -> Result<()> {
         let sled_db = sled::Config::new().temporary(true).open()?;
         let blockchain = Blockchain::new(&sled_db)?;
+        let genesis_block = BlockInfo::default();
+        blockchain.add_block(&genesis_block)?;
         let mut module = PoWModule::new(blockchain, DEFAULT_TEST_DIFFICULTY_TARGET, None)?;
 
         let output = Command::new("./script/research/pow/gen_wide_data.py").output().unwrap();
@@ -454,9 +473,11 @@ mod tests {
         // Default setup
         let sled_db = sled::Config::new().temporary(true).open()?;
         let blockchain = Blockchain::new(&sled_db)?;
+        let mut genesis_block = BlockInfo::default();
+        genesis_block.header.timestamp = 0.into();
+        blockchain.add_block(&genesis_block)?;
         let module = PoWModule::new(blockchain, DEFAULT_TEST_DIFFICULTY_TARGET, None)?;
         let (_, recvr) = smol::channel::bounded(1);
-        let genesis_block = BlockInfo::default();
 
         // Mine next block
         let mut next_block = BlockInfo::default();

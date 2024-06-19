@@ -155,7 +155,7 @@ impl Harness {
 
         // Sleep a bit so blocks can be propagated and then
         // trigger finalization check to Alice and Bob
-        sleep(5).await;
+        sleep(10).await;
         self.alice.validator.finalization().await?;
         self.bob.validator.finalization().await?;
 

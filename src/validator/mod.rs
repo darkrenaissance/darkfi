@@ -699,14 +699,17 @@ impl Validator {
         // Set previous
         let mut previous = &blocks[0];
 
-        // Create a time keeper and a PoW module to validate each block
-        let mut module = PoWModule::new(blockchain.clone(), pow_target, pow_fixed_difficulty)?;
-
         // Deploy native wasm contracts
         deploy_native_contracts(&overlay, pow_target).await?;
 
         // Validate genesis block
         verify_genesis_block(&overlay, previous, pow_target).await?;
+
+        // Write the changes to the in memory db
+        overlay.lock().unwrap().overlay.lock().unwrap().apply()?;
+
+        // Create a PoW module to validate each block
+        let mut module = PoWModule::new(blockchain, pow_target, pow_fixed_difficulty)?;
 
         // Validate and insert each block
         for block in &blocks[1..] {
@@ -718,9 +721,7 @@ impl Validator {
             };
 
             // Update PoW module
-            if block.header.version == 1 {
-                module.append(block.header.timestamp, &module.next_difficulty()?);
-            }
+            module.append(block.header.timestamp, &module.next_difficulty()?);
 
             // Use last inserted block as next iteration previous
             previous = block;

@@ -29,14 +29,16 @@ fn forks() -> Result<()> {
         let record1 = HeaderHash::new(blake3::hash(b"Let there be dark!").into());
         let record2 = HeaderHash::new(blake3::hash(b"Never skip brain day.").into());
 
-        // Create a temporary blockchain and a PoW module
+        // Create a temporary blockchain
         let blockchain = Blockchain::new(&sled::Config::new().temporary(true).open()?)?;
-        let module = PoWModule::new(blockchain.clone(), 90, None)?;
 
         // Generate and insert default genesis block
         let genesis_block = BlockInfo::default();
         blockchain.add_block(&genesis_block)?;
         let genesis_block_hash = genesis_block.hash();
+
+        // Generate the PoW module
+        let module = PoWModule::new(blockchain.clone(), 90, None)?;
 
         // Create a fork
         let fork = Fork::new(blockchain.clone(), module).await?;
