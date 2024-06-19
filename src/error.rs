@@ -291,9 +291,6 @@ pub enum Error {
     #[error("Proposal contains missmatched headers")]
     ProposalHeadersMissmatchError,
 
-    #[error("Proposal contains more transactions than configured cap")]
-    ProposalTxsExceedCapError,
-
     #[error("Unable to verify transfer transaction")]
     TransferTxVerification,
 

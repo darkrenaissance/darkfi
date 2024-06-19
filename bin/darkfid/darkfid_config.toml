@@ -12,6 +12,9 @@ rpc_listen = "tcp://127.0.0.1:8340"
 # Blockchain network to use
 network = "testnet"
 
+# Garbage collection task transactions batch size
+txs_batch_size = 50
+
 # Localnet blockchain network configuration
 [network_config."localnet"]
 # Path to the blockchain database directory

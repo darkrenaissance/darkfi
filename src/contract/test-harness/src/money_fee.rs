@@ -227,7 +227,8 @@ impl TestHarness {
                 false,
                 false,
             )
-            .await?;
+            .await?
+            .0;
 
         // Knowing the total gas, we can now find an OwnCoin of enough value
         // so that we can create a valid Money::Fee call.

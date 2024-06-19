@@ -42,7 +42,7 @@ use crate::{
     runtime::vm_runtime::Runtime,
     tx::{Transaction, MAX_TX_CALLS, MIN_TX_CALLS},
     validator::{
-        consensus::{Consensus, Fork, Proposal, TXS_CAP},
+        consensus::{Consensus, Fork, Proposal, GAS_LIMIT_UNPROPOSED_TXS},
         fees::{circuit_gas_use, PALLAS_SCHNORR_SIGNATURE_FEE},
         pow::PoWModule,
     },
@@ -86,7 +86,8 @@ pub async fn verify_genesis_block(
         return Err(TxVerifyFailed::ErroneousTxs(vec![producer_tx.clone()]).into())
     }
 
-    // Verify transactions, exluding producer(last) one
+    // Verify transactions, exluding producer(last) one/
+    // Genesis block doesn't check for fees
     let mut tree = MerkleTree::new(1);
     let txs = &block.txs[..block.txs.len() - 1];
     if let Err(e) =
@@ -177,6 +178,7 @@ pub async fn verify_block(
     module: &PoWModule,
     block: &BlockInfo,
     previous: &BlockInfo,
+    verify_fees: bool,
 ) -> Result<()> {
     let block_hash = block.hash();
     debug!(target: "validator::verification::verify_block", "Validating block {}", block_hash);
@@ -197,8 +199,15 @@ pub async fn verify_block(
     // Verify transactions, exluding producer(last) one
     let mut tree = MerkleTree::new(1);
     let txs = &block.txs[..block.txs.len() - 1];
-    let e = verify_transactions(overlay, block.header.height, module.target, txs, &mut tree, false)
-        .await;
+    let e = verify_transactions(
+        overlay,
+        block.header.height,
+        module.target,
+        txs,
+        &mut tree,
+        verify_fees,
+    )
+    .await;
     if let Err(e) = e {
         warn!(
             target: "validator::verification::verify_block",
@@ -867,8 +876,9 @@ async fn apply_transaction(
 
 /// Verify a set of [`Transaction`] in sequence and apply them if all are valid.
 /// In case any of the transactions fail, they will be returned to the caller as an error.
-/// If all transactions are valid, the function will return the accumulated gas used from
-/// all the transactions. Additionally, their hash is appended to the provided Merkle tree.
+/// If all transactions are valid, the function will return the total gas used and total
+/// paid fees from all the transactions. Additionally, their hash is appended to the provided
+/// Merkle tree.
 pub async fn verify_transactions(
     overlay: &BlockchainOverlayPtr,
     verifying_block_height: u32,
@@ -876,17 +886,18 @@ pub async fn verify_transactions(
     txs: &[Transaction],
     tree: &mut MerkleTree,
     verify_fees: bool,
-) -> Result<u64> {
+) -> Result<(u64, u64)> {
     debug!(target: "validator::verification::verify_transactions", "Verifying {} transactions", txs.len());
     if txs.is_empty() {
-        return Ok(0)
+        return Ok((0, 0))
     }
 
     // Tracker for failed txs
     let mut erroneous_txs = vec![];
 
-    // Gas accumulator
-    let mut gas_used = 0;
+    // Total gas accumulators
+    let mut total_gas_used = 0;
+    let mut total_gas_paid = 0;
 
     // Map of ZK proof verifying keys for the current transaction batch
     let mut vks: HashMap<[u8; 32], HashMap<String, VerifyingKey>> = HashMap::new();
@@ -901,7 +912,7 @@ pub async fn verify_transactions(
     // Iterate over transactions and attempt to verify them
     for tx in txs {
         overlay.lock().unwrap().checkpoint();
-        match verify_transaction(
+        let (tx_gas_used, tx_gas_paid) = match verify_transaction(
             overlay,
             verifying_block_height,
             block_target,
@@ -912,20 +923,36 @@ pub async fn verify_transactions(
         )
         .await
         {
-            Ok((gas, _)) => gas_used += gas,
+            Ok(gas_values) => gas_values,
             Err(e) => {
                 warn!(target: "validator::verification::verify_transactions", "Transaction verification failed: {}", e);
                 erroneous_txs.push(tx.clone());
                 overlay.lock().unwrap().revert_to_checkpoint()?;
+                continue
             }
+        };
+
+        // Calculate current accumulated gas usage
+        let accumulated_gas_usage = total_gas_used + tx_gas_used;
+
+        // Check gas limit - if accumulated gas used exceeds it, break out of loop
+        if accumulated_gas_usage > GAS_LIMIT_UNPROPOSED_TXS {
+            warn!(target: "validator::verification::verify_transactions", "Transaction {} exceeds configured transaction gas limit: {} - {}", tx.hash(), accumulated_gas_usage, GAS_LIMIT_UNPROPOSED_TXS);
+            erroneous_txs.push(tx.clone());
+            overlay.lock().unwrap().revert_to_checkpoint()?;
+            break
         }
+
+        // Update accumulated total gas
+        total_gas_used += tx_gas_used;
+        total_gas_paid += tx_gas_paid;
     }
 
     if !erroneous_txs.is_empty() {
         return Err(TxVerifyFailed::ErroneousTxs(erroneous_txs).into())
     }
 
-    Ok(gas_used)
+    Ok((total_gas_used, total_gas_paid))
 }
 
 /// Apply given set of [`Transaction`] in sequence, without formal verification.
@@ -974,6 +1001,7 @@ async fn apply_transactions(
 pub async fn verify_proposal(
     consensus: &Consensus,
     proposal: &Proposal,
+    verify_fees: bool,
 ) -> Result<(Fork, Option<usize>)> {
     // Check if proposal hash matches actual one (1)
     let proposal_hash = proposal.block.hash();
@@ -985,16 +1013,6 @@ pub async fn verify_proposal(
         return Err(Error::ProposalHashesMissmatchError)
     }
 
-    // Check that proposal transactions don't exceed limit (2)
-    if proposal.block.txs.len() > TXS_CAP + 1 {
-        warn!(
-            target: "validator::verification::verify_pow_proposal", "Received proposal transactions exceed configured cap: {} - {}",
-            proposal.block.txs.len(),
-            TXS_CAP
-        );
-        return Err(Error::ProposalTxsExceedCapError)
-    }
-
     // Check if proposal extends any existing forks
     let (fork, index) = consensus.find_extended_fork(proposal).await?;
 
@@ -1002,7 +1020,10 @@ pub async fn verify_proposal(
     let previous = fork.overlay.lock().unwrap().last_block()?;
 
     // Verify proposal block (3)
-    if verify_block(&fork.overlay, &fork.module, &proposal.block, &previous).await.is_err() {
+    if verify_block(&fork.overlay, &fork.module, &proposal.block, &previous, verify_fees)
+        .await
+        .is_err()
+    {
         error!(target: "validator::verification::verify_pow_proposal", "Erroneous proposal block found");
         fork.overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
         return Err(Error::BlockIsInvalid(proposal.hash.as_string()))

@@ -322,7 +322,7 @@ impl Validator {
         let append_lock = self.consensus.append_lock.write().await;
 
         // Execute append
-        let result = self.consensus.append_proposal(proposal).await;
+        let result = self.consensus.append_proposal(proposal, self.verify_fees).await;
 
         // Release append lock
         drop(append_lock);
@@ -512,7 +512,7 @@ impl Validator {
         // Validate and insert each block
         for block in blocks {
             // Verify block
-            match verify_block(&overlay, &module, block, previous).await {
+            match verify_block(&overlay, &module, block, previous, self.verify_fees).await {
                 Ok(()) => { /* Do nothing */ }
                 // Skip already existing block
                 Err(Error::BlockAlreadyExists(_)) => {
@@ -582,7 +582,7 @@ impl Validator {
     /// the state transitions to the database, and a boolean called `verify_fees` to
     /// overwrite the nodes configured `verify_fees` flag.
     ///
-    /// Returns the total gas used for the given transactions.
+    /// Returns the total gas used and total paid fees for the given transactions.
     /// Note: this function should only be used in tests.
     pub async fn add_test_transactions(
         &self,
@@ -591,7 +591,7 @@ impl Validator {
         block_target: u32,
         write: bool,
         verify_fees: bool,
-    ) -> Result<u64> {
+    ) -> Result<(u64, u64)> {
         debug!(target: "validator::add_transactions", "Instantiating BlockchainOverlay");
         let overlay = BlockchainOverlay::new(&self.blockchain)?;
 
@@ -614,17 +614,17 @@ impl Validator {
             return Err(e)
         }
 
-        let gas_used = verify_result.unwrap();
+        let gas_values = verify_result.unwrap();
 
         if !write {
             debug!(target: "validator::add_transactions", "Skipping apply of state updates because write=false");
             overlay.purge_new_trees()?;
-            return Ok(gas_used)
+            return Ok(gas_values)
         }
 
         debug!(target: "validator::add_transactions", "Applying overlay changes");
         overlay.apply()?;
-        Ok(gas_used)
+        Ok(gas_values)
     }
 
     /// Validate a producer `Transaction` and apply it if valid.
@@ -711,7 +711,7 @@ impl Validator {
         // Validate and insert each block
         for block in &blocks[1..] {
             // Verify block
-            if verify_block(&overlay, &module, block, previous).await.is_err() {
+            if verify_block(&overlay, &module, block, previous, self.verify_fees).await.is_err() {
                 error!(target: "validator::validate_blockchain", "Erroneous block found in set");
                 overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
                 return Err(Error::BlockIsInvalid(block.hash().as_string()))

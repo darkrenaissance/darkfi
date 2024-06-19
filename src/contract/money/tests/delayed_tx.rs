@@ -145,7 +145,8 @@ fn delayed_tx() -> Result<()> {
                 false,
                 false,
             )
-            .await?;
+            .await?
+            .0;
 
         let coin = &output_coins[0];
         let change_value = coin.note.value - gas_used;

@@ -41,9 +41,6 @@ use crate::{
 };
 
 // Consensus configuration
-/// Block/proposal maximum transactions, exluding producer transaction
-pub const TXS_CAP: usize = 50;
-
 /// Average amount of gas consumed during transaction execution, derived by the Gas Analyzer
 const GAS_TX_AVG: u64 = 23_822_290;
 
@@ -103,7 +100,7 @@ impl Consensus {
 
     /// Given a proposal, the node verifys it and finds which fork it extends.
     /// If the proposal extends the canonical blockchain, a new fork chain is created.
-    pub async fn append_proposal(&self, proposal: &Proposal) -> Result<()> {
+    pub async fn append_proposal(&self, proposal: &Proposal, verify_fees: bool) -> Result<()> {
         debug!(target: "validator::consensus::append_proposal", "Appending proposal {}", proposal.hash);
 
         // Check if proposal already exists
@@ -120,7 +117,7 @@ impl Consensus {
         drop(lock);
 
         // Verify proposal and grab corresponding fork
-        let (mut fork, index) = verify_proposal(self, proposal).await?;
+        let (mut fork, index) = verify_proposal(self, proposal, verify_fees).await?;
 
         // Append proposal to the fork
         fork.append_proposal(proposal).await?;
@@ -620,7 +617,7 @@ impl Fork {
     }
 
     /// Auxiliary function to retrieve unproposed valid transactions,
-    /// along with their total paid fees and total gas used.
+    /// along with their total gas used and total paid fees.
     pub async fn unproposed_txs(
         &self,
         blockchain: &Blockchain,
@@ -637,8 +634,8 @@ impl Fork {
         let mut tree = MerkleTree::new(1);
 
         // Total gas accumulators
-        let mut total_gas_paid = 0;
         let mut total_gas_used = 0;
+        let mut total_gas_paid = 0;
 
         // Map of ZK proof verifying keys for the current transaction batch
         let mut vks: HashMap<[u8; 32], HashMap<String, VerifyingKey>> = HashMap::new();
@@ -697,14 +694,14 @@ impl Fork {
             }
 
             // Update accumulated total gas
-            total_gas_paid += tx_gas_paid;
             total_gas_used += tx_gas_used;
+            total_gas_paid += tx_gas_paid;
 
             // Push the tx hash into the unproposed transactions vector
             unproposed_txs.push(unproposed_tx);
         }
 
-        Ok((unproposed_txs, total_gas_paid, total_gas_used))
+        Ok((unproposed_txs, total_gas_used, total_gas_paid))
     }
 
     /// Auxiliary function to create a full clone using BlockchainOverlay::full_clone.

@@ -18,11 +18,7 @@
 
 use std::sync::Arc;
 
-use darkfi::{
-    error::TxVerifyFailed,
-    validator::{consensus::TXS_CAP, verification::verify_transactions},
-    Error, Result,
-};
+use darkfi::{error::TxVerifyFailed, validator::verification::verify_transactions, Error, Result};
 use darkfi_sdk::crypto::MerkleTree;
 use log::{debug, error, info};
 
@@ -35,7 +31,7 @@ pub async fn garbage_collect_task(node: Arc<Darkfid>) -> Result<()> {
     // Grab all current unproposed transactions.  We verify them in batches,
     // to not load them all in memory.
     let (mut last_checked, mut txs) =
-        match node.validator.blockchain.transactions.get_after_pending(0, TXS_CAP) {
+        match node.validator.blockchain.transactions.get_after_pending(0, node.txs_batch_size) {
             Ok(pair) => pair,
             Err(e) => {
                 error!(
@@ -146,7 +142,7 @@ pub async fn garbage_collect_task(node: Arc<Darkfid>) -> Result<()> {
             .validator
             .blockchain
             .transactions
-            .get_after_pending(last_checked + TXS_CAP as u64, TXS_CAP)
+            .get_after_pending(last_checked + node.txs_batch_size as u64, node.txs_batch_size)
         {
             Ok(pair) => pair,
             Err(e) => {

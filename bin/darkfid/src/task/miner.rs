@@ -356,7 +356,7 @@ async fn generate_next_block(
     let next_block_height = last_proposal.block.header.height + 1;
 
     // Grab forks' unproposed transactions
-    let (mut txs, fees, _) = extended_fork
+    let (mut txs, _, fees) = extended_fork
         .unproposed_txs(&extended_fork.blockchain, next_block_height, block_target, verify_fees)
         .await?;
 

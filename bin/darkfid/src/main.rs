@@ -90,6 +90,10 @@ struct Args {
     /// Blockchain network to use
     network: String,
 
+    #[structopt(long, default_value = "50")]
+    /// Garbage collection task transactions batch size
+    txs_batch_size: usize,
+
     #[structopt(short, long)]
     /// Set log file to ouput into
     log: Option<String>,
@@ -176,6 +180,8 @@ pub struct Darkfid {
     validator: ValidatorPtr,
     /// Flag to specify node is a miner
     miner: bool,
+    /// Garbage collection task transactions batch size
+    txs_batch_size: usize,
     /// A map of various subscribers exporting live info from the blockchain
     subscribers: HashMap<&'static str, JsonSubscriber>,
     /// JSON-RPC connection tracker
@@ -189,6 +195,7 @@ impl Darkfid {
         p2p: P2pPtr,
         validator: ValidatorPtr,
         miner: bool,
+        txs_batch_size: usize,
         subscribers: HashMap<&'static str, JsonSubscriber>,
         rpc_client: Option<Mutex<MinerRpcCLient>>,
     ) -> Self {
@@ -196,6 +203,7 @@ impl Darkfid {
             p2p,
             validator,
             miner,
+            txs_batch_size,
             subscribers,
             rpc_connections: Mutex::new(HashSet::new()),
             rpc_client,
@@ -274,9 +282,15 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     };
 
     // Initialize node
-    let darkfid =
-        Darkfid::new(p2p.clone(), validator, blockchain_config.miner, subscribers, rpc_client)
-            .await;
+    let darkfid = Darkfid::new(
+        p2p.clone(),
+        validator,
+        blockchain_config.miner,
+        args.txs_batch_size,
+        subscribers,
+        rpc_client,
+    )
+    .await;
     let darkfid = Arc::new(darkfid);
     info!(target: "darkfid", "Node initialized successfully!");
 

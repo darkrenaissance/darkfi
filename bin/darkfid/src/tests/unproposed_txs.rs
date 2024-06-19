@@ -95,7 +95,7 @@ async fn simulate_unproposed_txs(
     let best_fork = &forks[best_fork_index(&forks)?];
 
     // Retrieve unproposed transactions
-    let (tx, _, total_gas_used) = best_fork
+    let (tx, total_gas_used, _) = best_fork
         .unproposed_txs(
             &best_fork.clone().blockchain,
             current_block_height,
