@@ -18,9 +18,9 @@
 
 // cargo +nightly test --release --features=net --lib p2p -- --include-ignored
 
-use std::{collections::HashSet, sync::Arc};
+use std::{collections::HashSet, net::TcpListener, panic, sync::Arc};
 
-use log::{info, warn};
+use log::{error, info, warn};
 use rand::{prelude::SliceRandom, rngs::ThreadRng, Rng};
 use smol::{channel, future, Executor};
 use url::Url;
@@ -33,7 +33,6 @@ use crate::{
 // Number of nodes to spawn and number of peers each node connects to
 const N_NODES: usize = 5;
 const N_CONNS: usize = 4;
-const SEED: &str = "tcp://127.0.0.1:51505";
 
 fn init_logger() {
     let mut cfg = simplelog::ConfigBuilder::new();
@@ -72,109 +71,97 @@ fn init_logger() {
     }
 }
 
-async fn spawn_node(
-    inbound_addrs: Vec<Url>,
-    external_addrs: Vec<Url>,
-    peers: Vec<Url>,
-    seeds: Vec<Url>,
-    node_id: String,
-    ex: Arc<Executor<'static>>,
-) -> Arc<P2p> {
-    let settings = Settings {
-        localnet: true,
-        inbound_addrs,
-        external_addrs,
-        outbound_connections: 2,
-        outbound_peer_discovery_cooloff_time: 2,
-        outbound_connect_timeout: 2,
-        inbound_connections: usize::MAX,
-        greylist_refinery_interval: 15,
-        peers,
-        seeds,
-        node_id,
-        allowed_transports: vec!["tcp".to_string()],
-        ..Default::default()
-    };
-
-    P2p::new(settings, ex.clone()).await
+fn get_random_available_port() -> usize {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    drop(listener);
+    info!("Found port: {}", port);
+    port.into()
 }
 
-async fn spawn_seed_session(starting_port: usize, ex: Arc<Executor<'static>>) -> Vec<Arc<P2p>> {
+async fn spawn_seed_session(seed_addr: Url, ex: Arc<Executor<'static>>) -> Vec<Arc<P2p>> {
     let mut outbound_instances = vec![];
-    let seed_addr = Url::parse(SEED).unwrap();
     info!("========================================================");
     info!("Initializing outbound nodes...");
     info!("========================================================");
-    for i in 0..N_NODES {
-        let p2p = spawn_node(
-            vec![Url::parse(&format!("tcp://127.0.0.1:{}", starting_port + i)).unwrap()],
-            vec![Url::parse(&format!("tcp://127.0.0.1:{}", starting_port + i)).unwrap()],
-            vec![],
-            vec![seed_addr.clone()],
-            (starting_port + i).to_string(),
-            ex.clone(),
-        )
-        .await;
-        outbound_instances.push(p2p);
-    }
+    for _ in 0..N_NODES {
+        let inbound_port = get_random_available_port();
+        let settings = Settings {
+            localnet: true,
+            inbound_addrs: vec![Url::parse(&format!("tcp://127.0.0.1:{}", inbound_port)).unwrap()],
+            external_addrs: vec![Url::parse(&format!("tcp://127.0.0.1:{}", inbound_port)).unwrap()],
+            outbound_connections: 2,
+            outbound_peer_discovery_cooloff_time: 2,
+            outbound_connect_timeout: 2,
+            inbound_connections: usize::MAX,
+            greylist_refinery_interval: 15,
+            peers: vec![],
+            seeds: vec![seed_addr.clone()],
+            node_id: (inbound_port).to_string(),
+            allowed_transports: vec!["tcp".to_string()],
+            ..Default::default()
+        };
 
-    // Start the P2P network
-    for p2p in outbound_instances.iter() {
+        let p2p = P2p::new(settings, ex.clone()).await;
         info!("========================================================");
         info!("Starting node={}", p2p.settings().external_addrs[0]);
         info!("========================================================");
         p2p.clone().start().await.unwrap();
+
+        outbound_instances.push(p2p);
     }
 
     outbound_instances
 }
 
-async fn spawn_manual_session(
-    peer_indexes: &[usize],
-    starting_port: usize,
-    rng: &mut ThreadRng,
-    ex: Arc<Executor<'static>>,
-) -> Vec<Arc<P2p>> {
+async fn spawn_manual_session(ex: Arc<Executor<'static>>) -> Vec<Arc<P2p>> {
     let mut manual_instances = vec![];
+    let mut rng = rand::thread_rng();
+    let mut ports = vec![];
 
     info!("========================================================");
     info!("Initializing manual nodes...");
     info!("========================================================");
-    // Initialize the nodes
+    for _ in 0..N_NODES {
+        ports.push(get_random_available_port());
+    }
+
     for i in 0..N_NODES {
-        // Everyone will connect to N_CONNS random peers.
-        let mut peer_indexes_copy = peer_indexes.to_owned();
+        let mut peer_indexes_copy: Vec<usize> = (0..N_NODES).collect();
         peer_indexes_copy.remove(i);
         let peer_indexes_to_connect: Vec<_> =
-            peer_indexes_copy.choose_multiple(rng, N_CONNS).collect();
+            peer_indexes_copy.choose_multiple(&mut rng, N_CONNS).collect();
 
         let mut peers = vec![];
-        for peer_index in peer_indexes_to_connect {
-            let port = starting_port + peer_index;
+        for &peer_index in peer_indexes_to_connect {
+            let port = ports[peer_index];
             peers.push(Url::parse(&format!("tcp://127.0.0.1:{}", port)).unwrap());
         }
 
-        let p2p = spawn_node(
-            vec![Url::parse(&format!("tcp://127.0.0.1:{}", starting_port + i)).unwrap()],
-            vec![Url::parse(&format!("tcp://127.0.0.1:{}", starting_port + i)).unwrap()],
+        let inbound_port = ports[i];
+        let settings = Settings {
+            localnet: true,
+            inbound_addrs: vec![Url::parse(&format!("tcp://127.0.0.1:{}", inbound_port)).unwrap()],
+            external_addrs: vec![Url::parse(&format!("tcp://127.0.0.1:{}", inbound_port)).unwrap()],
+            outbound_connections: 2,
+            outbound_peer_discovery_cooloff_time: 2,
+            outbound_connect_timeout: 2,
+            inbound_connections: usize::MAX,
+            greylist_refinery_interval: 15,
             peers,
-            vec![],
-            (starting_port + i).to_string(),
-            ex.clone(),
-        )
-        .await;
+            seeds: vec![],
+            node_id: inbound_port.to_string(),
+            allowed_transports: vec!["tcp".to_string()],
+            ..Default::default()
+        };
 
-        manual_instances.push(p2p);
-    }
-
-    // Start the P2P network
-    for p2p in manual_instances.iter() {
+        let p2p = P2p::new(settings, ex.clone()).await;
         info!("========================================================");
         info!("Starting node={}", p2p.settings().external_addrs[0]);
         info!("========================================================");
         p2p.clone().start().await.unwrap();
+        manual_instances.push(p2p);
     }
-
     manual_instances
 }
 
@@ -265,14 +252,26 @@ macro_rules! test_body {
         let ex_ = ex.clone();
         let (signal, shutdown) = channel::unbounded::<()>();
 
+        panic::set_hook(Box::new(|panic_info| {
+            error!("Panic occurred: {:?}", panic_info);
+        }));
+
         // Run a thread for each node.
         easy_parallel::Parallel::new()
-            .each(0..N_NODES, |_| future::block_on(ex.run(shutdown.recv())))
+            .each(0..N_NODES, |_| {
+                let result = std::panic::catch_unwind(|| {
+                    let res = future::block_on(ex.run(shutdown.recv()));
+                    res
+                });
+                if let Err(err) = result {
+                    error!("Thread panicked: {:?}", err);
+                }
+            })
             .finish(|| {
                 future::block_on(async {
                     $real_call(ex_).await;
                     drop(signal);
-                })
+                });
             });
     };
 }
@@ -286,7 +285,8 @@ async fn p2p_test_real(ex: Arc<Executor<'static>>) {
     // ============================================================
     // 1. Create a new seed node.
     // ============================================================
-    let seed_addr = Url::parse(SEED).unwrap();
+    let seed_port = get_random_available_port();
+    let seed_addr = Url::parse(&format!("tcp://127.0.0.1:{}", seed_port)).unwrap();
 
     let settings = Settings {
         localnet: true,
@@ -303,14 +303,14 @@ async fn p2p_test_real(ex: Arc<Executor<'static>>) {
 
     let seed = P2p::new(settings, ex.clone()).await;
     info!("========================================================");
-    info!("Starting seed node on {}", SEED);
+    info!("Starting seed node on {}", seed_addr);
     info!("========================================================");
     seed.clone().start().await.unwrap();
 
     // ============================================================
     // 2. Spawn outbound nodes that will connect to the seed node.
     // ============================================================
-    let outbound_instances = spawn_seed_session(43200, ex.clone()).await;
+    let outbound_instances = spawn_seed_session(seed_addr, ex.clone()).await;
 
     info!("========================================================");
     info!("Waiting 10s for all peers to reach the seed node");
@@ -431,10 +431,7 @@ async fn p2p_test_real(ex: Arc<Executor<'static>>) {
     info!("Seed test shutdown complete! Starting manual test...");
     info!("========================================================");
 
-    let mut rng = rand::thread_rng();
-    let peer_indexes: Vec<usize> = (0..N_NODES).collect();
-
-    let manual_instances = spawn_manual_session(&peer_indexes, 64200, &mut rng, ex.clone()).await;
+    let manual_instances = spawn_manual_session(ex.clone()).await;
 
     info!("========================================================");
     info!("Waiting 5s for all manual peers to connect");
