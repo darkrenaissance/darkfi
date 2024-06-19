@@ -30,7 +30,7 @@ use darkfi::{
     tx::{ContractCallLeaf, Transaction, TransactionBuilder},
     util::{encoding::base64, parse::decode_base10, path::expand_path, time::Timestamp},
     validator::{utils::deploy_native_contracts, verification::verify_genesis_block},
-    zk::{empty_witnesses, halo2::Field, ProvingKey, ZkCircuit},
+    zk::{empty_witnesses, ProvingKey, ZkCircuit},
     zkas::ZkBinary,
     Result,
 };
@@ -40,7 +40,7 @@ use darkfi_money_contract::{
 };
 use darkfi_sdk::{
     crypto::{contract_id::MONEY_CONTRACT_ID, FuncId, Keypair, SecretKey},
-    pasta::pallas,
+    pasta::{group::ff::PrimeField, pallas},
     ContractCall,
 };
 use darkfi_serial::{deserialize_async, serialize_async, AsyncEncodable};
@@ -76,6 +76,12 @@ enum Subcmd {
     GenerateTx {
         /// Amount to mint for this genesis transaction
         amount: String,
+
+        /// Optional contract spend hook to use
+        spend_hook: Option<String>,
+
+        /// Optional user data to use
+        user_data: Option<String>,
     },
 }
 
@@ -98,7 +104,8 @@ async fn main() -> Result<()> {
     match args.command {
         Subcmd::Display => {
             let genesis_block = read_block().await;
-            println!("{genesis_block:#?}");
+            // TODO: display in more details
+            println!("{genesis_block:?}");
         }
 
         Subcmd::Generate { txs_folder, genesis_timestamp } => {
@@ -148,28 +155,56 @@ async fn main() -> Result<()> {
             // Create an overlay over whole blockchain
             let blockchain = Blockchain::new(&sled_db)?;
             let overlay = BlockchainOverlay::new(&blockchain)?;
-            deploy_native_contracts(&overlay).await?;
+            deploy_native_contracts(&overlay, 0).await?;
 
-            verify_genesis_block(&overlay, &genesis_block).await?;
+            verify_genesis_block(&overlay, &genesis_block, 0).await?;
 
             println!("Genesis block {hash} verified successfully!");
         }
 
-        Subcmd::GenerateTx { amount } => {
+        Subcmd::GenerateTx { amount, spend_hook, user_data } => {
             let mut buf = String::new();
             stdin().read_to_string(&mut buf)?;
-            let Ok(bytes) = bs58::decode(&buf.trim()).into_vec() else {
-                eprintln!("Error: Failed to decode stdin buffer");
-                exit(2);
-            };
-            let secret = deserialize_async::<SecretKey>(&bytes).await?;
+            let secret = SecretKey::from_str(buf.trim())?;
             let keypair = Keypair::new(secret);
 
             if let Err(e) = f64::from_str(&amount) {
                 eprintln!("Invalid amount: {e:?}");
                 exit(2);
             }
-            let amount = decode_base10(&amount, 8, false)?;
+            let amount = decode_base10(&amount, 8, true)?;
+
+            let spend_hook = match spend_hook {
+                Some(s) => match FuncId::from_str(&s) {
+                    Ok(s) => Some(s),
+                    Err(e) => {
+                        eprintln!("Invalid spend hook: {e:?}");
+                        exit(2);
+                    }
+                },
+                None => None,
+            };
+
+            let user_data = match user_data {
+                Some(u) => {
+                    let bytes: [u8; 32] = match bs58::decode(&u).into_vec()?.try_into() {
+                        Ok(b) => b,
+                        Err(e) => {
+                            eprintln!("Invalid user data: {e:?}");
+                            exit(2);
+                        }
+                    };
+
+                    match pallas::Base::from_repr(bytes).into() {
+                        Some(v) => Some(v),
+                        None => {
+                            eprintln!("Invalid user data");
+                            exit(2);
+                        }
+                    }
+                }
+                None => None,
+            };
 
             // Grab mint proving keys and zkbin
             let (pks, _) = vks::get_cached_pks_and_vks()?;
@@ -193,8 +228,8 @@ async fn main() -> Result<()> {
             let builder = GenesisMintCallBuilder {
                 keypair,
                 amount,
-                spend_hook: FuncId::none(),
-                user_data: pallas::Base::ZERO,
+                spend_hook,
+                user_data,
                 mint_zkbin,
                 mint_pk,
             };
