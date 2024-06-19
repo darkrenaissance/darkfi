@@ -19,7 +19,10 @@
 use std::{str::FromStr, sync::Arc};
 
 use darkfi::{
-    blockchain::HeaderHash, rpc::util::JsonValue, system::StoppableTask, util::encoding::base64,
+    blockchain::HeaderHash,
+    rpc::util::JsonValue,
+    system::{sleep, StoppableTask},
+    util::{encoding::base64, time::Timestamp},
     Error, Result,
 };
 use darkfi_sdk::crypto::PublicKey;
@@ -31,29 +34,58 @@ use crate::{
     Darkfid,
 };
 
-/// Sync the node consensus state and start the corresponding task, based on node type.
-pub async fn consensus_init_task(
-    node: Arc<Darkfid>,
+/// Auxiliary structure representing node consesus init task configuration
+pub struct ConsensusInitTaskConfig {
     skip_sync: bool,
     checkpoint_height: Option<u32>,
     checkpoint: Option<String>,
     miner: bool,
     recipient: Option<String>,
+    bootstrap: u64,
+}
+
+impl ConsensusInitTaskConfig {
+    pub fn new(
+        skip_sync: bool,
+        checkpoint_height: Option<u32>,
+        checkpoint: Option<String>,
+        miner: bool,
+        recipient: Option<String>,
+        bootstrap: u64,
+    ) -> Self {
+        Self { skip_sync, checkpoint_height, checkpoint, miner, recipient, bootstrap }
+    }
+}
+
+/// Sync the node consensus state and start the corresponding task, based on node type.
+pub async fn consensus_init_task(
+    node: Arc<Darkfid>,
+    config: ConsensusInitTaskConfig,
     ex: Arc<smol::Executor<'static>>,
 ) -> Result<()> {
+    // Check if network is configured to start in the future.
+    // NOTE: Always configure the network to start in the future when bootstrapping
+    // or restarting it.
+    let current = Timestamp::current_time().inner();
+    if current < config.bootstrap {
+        let diff = config.bootstrap - current;
+        info!(target: "darkfid::task::consensus_init_task", "Waiting for network bootstrap: {diff} seconds");
+        sleep(diff).await;
+    }
+
     // Generate a new fork to be able to extend
     info!(target: "darkfid::task::consensus_init_task", "Generating new empty fork...");
     node.validator.consensus.generate_empty_fork().await?;
 
     // Sync blockchain
-    let checkpoint = if !skip_sync {
+    let checkpoint = if !config.skip_sync {
         // Parse configured checkpoint
-        if checkpoint_height.is_some() && checkpoint.is_none() {
+        if config.checkpoint_height.is_some() && config.checkpoint.is_none() {
             return Err(Error::ParseFailed("Blockchain configured checkpoint hash missing"))
         }
 
-        let checkpoint = if let Some(height) = checkpoint_height {
-            Some((height, HeaderHash::from_str(checkpoint.as_ref().unwrap())?))
+        let checkpoint = if let Some(height) = config.checkpoint_height {
+            Some((height, HeaderHash::from_str(config.checkpoint.as_ref().unwrap())?))
         } else {
             None
         };
@@ -66,11 +98,11 @@ pub async fn consensus_init_task(
     };
 
     // Grab rewards recipient public key(address) if node is a miner
-    let recipient = if miner {
-        if recipient.is_none() {
+    let recipient = if config.miner {
+        if config.recipient.is_none() {
             return Err(Error::ParseFailed("Recipient address missing"))
         }
-        match PublicKey::from_str(recipient.as_ref().unwrap()) {
+        match PublicKey::from_str(config.recipient.as_ref().unwrap()) {
             Ok(address) => Some(address),
             Err(_) => return Err(Error::InvalidAddress),
         }
@@ -80,8 +112,8 @@ pub async fn consensus_init_task(
 
     // Gracefully handle network disconnections
     loop {
-        let result = if miner {
-            miner_task(node.clone(), recipient.unwrap(), skip_sync, ex.clone()).await
+        let result = if config.miner {
+            miner_task(node.clone(), recipient.unwrap(), config.skip_sync, ex.clone()).await
         } else {
             replicator_task(node.clone(), ex.clone()).await
         };
@@ -91,7 +123,7 @@ pub async fn consensus_init_task(
             Err(Error::NetworkOperationFailed) => {
                 // Sync node again
                 *node.validator.synced.write().await = false;
-                if !skip_sync {
+                if !config.skip_sync {
                     sync_task(&node, checkpoint).await?;
                 } else {
                     *node.validator.synced.write().await = true;

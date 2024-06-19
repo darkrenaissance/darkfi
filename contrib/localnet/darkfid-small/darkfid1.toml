@@ -54,6 +54,9 @@ skip_fees = false
 # Optional sync checkpoint hash
 #checkpoint = ""
 
+# Optional bootstrap timestamp
+#bootstrap = 1712581283
+
 ## Localnet P2P network settings
 [network_config."localnet".net]
 # P2P accept addresses the instance listens on for inbound connections
