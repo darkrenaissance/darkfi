@@ -93,7 +93,7 @@ To build the necessary binaries, we can just clone the repo, and use
 the provided Makefile to build the project:
 
 ```shell
-% git clone https://github.com/darkrenaissance/darkfi
+% git clone https://codeberg.org/darkrenaissance/darkfi
 % cd darkfi
 % make
 ```

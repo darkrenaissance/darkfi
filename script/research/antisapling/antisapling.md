@@ -20,7 +20,7 @@
 
 - Reward and value:
     HE is already used to validate minted_coin_value = burnt_coin_value + reward using their value commitments, so no need to constrain it.
-    Code block: https://github.com/darkrenaissance/darkfi/blob/master/src/contract/consensus/src/entrypoint/proposal_reward_v1.rs#L135-L143
+    Code block: https://codeberg.org/darkrenaissance/darkfi/src/branch/master/src/contract/consensus/src/entrypoint/proposal_reward_v1.rs#L135-L143
 
 - Headstart:
     Constrain headstart in reward proof and validators calculate it ad-hoc to verify it.
@@ -30,5 +30,5 @@
 
 - Lottery seed:
     Minted coin serial to be derived from burnt coin serial: minted_serial = poseidon_hash(NONCE_PREFIX, secret_key, burnt_coin_serial, ZERRO).
-    Deterministic function code block: https://github.com/darkrenaissance/darkfi/blob/master/src/consensus/lead_coin.rs#L231-L240
+    Deterministic function code block: https://codeberg.org/darkrenaissance/darkfi/src/branch/master/src/consensus/lead_coin.rs#L231-L240
     Use burnt coin serial to calculate lottery seed in proof: seed = poseidon_hash(SEED_PREFIX, burnt_serial, ZERO);

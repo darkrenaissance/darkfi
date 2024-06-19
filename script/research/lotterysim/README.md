@@ -16,17 +16,17 @@ with $k_1 = k_p + K_i + K_d$,  $k_2 = -K_p -2K_d$,  $k_3 = K_d$, and e is the er
 # simulation criterion
 find $K_p$, $k_i$, $K_d$ for highest accuracy running the simulation on N trials, of random number of nodes, starting with random airdrop (that all sum to total network stake), running for random runing time.
 
-![alt text](https://github.com/darkrenaissance/darkfi/blob/master/script/research/lotterysim/img/heuristics.png?raw=true)
+![alt text](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/script/research/lotterysim/img/heuristics.png?raw=true)
 
 notice that best parameters are spread out in the search space, picking the highest of which, and running the simulation, running for 600 slots, result in with >36% accuracy
 
-![alt text](https://github.com/darkrenaissance/darkfi/blob/master/script/research/lotterysim/img/f_history_processed.png?raw=true)
+![alt text](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/script/research/lotterysim/img/f_history_processed.png?raw=true)
 
 # comparing range of target values between
 
 notice below that both y,T in the pallas field, and simulation have same range.
 
-![alt text](https://github.com/darkrenaissance/darkfi/blob/master/script/research/lotterysim/img/lottery_dist.png?raw=true)
+![alt text](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/script/research/lotterysim/img/lottery_dist.png?raw=true)
 
 # conclusion
 

@@ -3,7 +3,7 @@ name = "blockchain-explorer"
 version = "0.4.1"
 description = "Daemon to listen for new blocks from darkfid and store them in an easily accessible format for further usage."
 authors = ["Dyne.org foundation <foundation@dyne.org>"]
-repository = "https://github.com/darkrenaissance/darkfi"
+repository = "https://codeberg.org/darkrenaissance/darkfi"
 license = "AGPL-3.0-only"
 edition = "2021"
 

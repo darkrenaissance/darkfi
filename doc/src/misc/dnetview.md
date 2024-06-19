@@ -11,7 +11,7 @@ dnetview displays:
 ## Install 
 
 ```shell
-% git clone https://github.com/darkrenaissance/darkfi 
+% git clone https://codeberg.org/darkrenaissance/darkfi
 % cd darkfi
 % make BINS=dnetview
 ```

@@ -99,7 +99,7 @@ and calls `stop` on them, safely closing each `JSON-RPC` connection.
 Notice that when we start the `StoppableTask` using
 `rpc.task.clone().start`, we also pass a method called `listen_and_serve`.
 `listen_and_serve` is a method defined in DarkFi's [rpc
-module](https://github.com/darkrenaissance/darkfi/tree/master/src/rpc/server.rs).
+module](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/src/rpc/server.rs).
 It starts a JSON-RPC server that is bound to the provided accept address
 and uses our previously implemented `RequestHandler` to handle incoming
 requests.

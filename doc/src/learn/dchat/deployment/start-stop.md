@@ -50,7 +50,7 @@ Let's take a quick look at the underlying p2p methods we're using here.
 
 ## Start
 
-This is [start](https://github.com/darkrenaissance/darkfi/blob/master/src/net/p2p.rs#L126):
+This is [start](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/src/net/p2p.rs#L126):
 
 ```rust
 /// Starts inbound, outbound, and manual sessions.
@@ -105,7 +105,7 @@ have any connected channels, `run` performs a `SeedSync`.
 
 ## Stop
 
-This is [stop](https://github.com/darkrenaissance/darkfi/blob/master/src/net/p2p.rs#L164).
+This is [stop](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/src/net/p2p.rs#L164).
 
 ```rust
 /// Stop the running P2P subsystem

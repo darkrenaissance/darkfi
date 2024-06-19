@@ -28,7 +28,7 @@ excluding use of floats, and division, only +,-,* are allowed.
 
 # comparison of original target to approximation
 
-![approximation comparison to orignal](https://github.com/darkrenaissance/darkfi/blob/master/script/research/crypsinous/linearindependence/target.png?raw=true)
+![approximation comparison to orignal](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/script/research/crypsinous/linearindependence/target.png?raw=true)
 
 # consequences
 

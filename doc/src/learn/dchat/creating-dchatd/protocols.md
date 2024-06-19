@@ -8,20 +8,20 @@ are automatically activated when nodes connect to eachother on the
 p2p network. Here are examples of two protocols that every node runs
 continuously in the background:
 
-* [ProtocolPing](https://github.com/darkrenaissance/darkfi/blob/master/src/net/protocol/protocol_ping.rs):
+* [ProtocolPing](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/src/net/protocol/protocol_ping.rs):
 sends `ping`, receives `pong`
-* [ProtocolAddress](https://github.com/darkrenaissance/darkfi/blob/master/src/net/protocol/protocol_address.rs):
+* [ProtocolAddress](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/src/net/protocol/protocol_address.rs):
 receives a `get_address` message, sends an `address` message
 
 Under the hood, these protocols have a few similarities:
 
 * They create a subscription to a message type, such as `ping` and `pong`.
-* They implement [ProtocolBase](https://github.com/darkrenaissance/darkfi/blob/master/src/net/protocol/protocol_base.rs),
+* They implement [ProtocolBase](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/src/net/protocol/protocol_base.rs),
 DarkFi's generic protocol trait.
 * They run asynchronously using the
-[ProtocolJobsManager](https://github.com/darkrenaissance/darkfi/blob/master/src/net/protocol/protocol_jobs_manager.rs).
-* They hold a pointer to [Channel](https://github.com/darkrenaissance/darkfi/blob/master/src/net/channel.rs) which
-invokes the [MessageSubsystem](https://github.com/darkrenaissance/darkfi/blob/master/src/net/message_subscriber.rs#L170).
+[ProtocolJobsManager](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/src/net/protocol/protocol_jobs_manager.rs).
+* They hold a pointer to [Channel](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/src/net/channel.rs) which
+invokes the [MessageSubsystem](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/src/net/message_subscriber.rs#L170).
 
 This introduces several generic interfaces that we must use to build
 our custom protocol. In particular:

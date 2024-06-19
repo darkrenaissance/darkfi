@@ -5,7 +5,7 @@ run the p2p network, we'll need to implement our own daemon.  So we'll
 start building `dchat` by creating a daemon that we call `dchatd`.
 
 To do this, we'll make use of a DarkFi macro called
-[async_daemonize](https://github.com/darkrenaissance/darkfi/blob/0aba4e7864d459301a6c5afd8bda6a3d9f240b86/src/util/cli.rs).
+[async_daemonize](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/src/util/cli.rs).
 
 `async_daemonize`is the standard way of daemonizing darkfi binaries. It
 implements TOML config file configuration, argument parsing and a

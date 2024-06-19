@@ -79,7 +79,7 @@ or need to be maintained:
     * Also document zkrunner and other tools.
 * **Tests:** Throughout the project there are either broken or commented out unit tests, they need to be fixed.
 * **Cleanup:** General code cleanup. for example flattening headers and improving things like in 
-  [this commit](https://github.com/darkrenaissance/darkfi/commit/9cd9c3113eed1b5f0bcad2ee449ef926d0908d55).
+  [this commit](https://codeberg.org/darkrenaissance/darkfi/commit/9cd9c3113eed1b5f0bcad2ee449ef926d0908d55).
 * **Python bindings:** Help ensure wider coverage and cleanup the Python bindings in `src/sdk/python/`.
     * The event graph could have Python bindings but involves some tricky part integrating Python and Rust async.
     * Bindings for txs, calls and so on. Make a tool in Python for working with various contract params.
@@ -222,7 +222,7 @@ This process will run infinitely until a crash occurs or until it is cancelled b
 
 If you are able to trigger a crash, get in touch with the DarkFi team via irc.
 
-Further information on fuzzing in DarkFi is available [here](https://github.com/darkrenaissance/darkfi/blob/master/fuzz/README.md).
+Further information on fuzzing in DarkFi is available [here](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/fuzz/README.md).
 
 ## Troubleshooting
 

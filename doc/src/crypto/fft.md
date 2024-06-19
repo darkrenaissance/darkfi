@@ -2,11 +2,11 @@
 
 Available code files:
 
-* [fft2.sage](https://github.com/darkrenaissance/darkfi/blob/master/script/research/zk/fft/fft2.sage):
+* [fft2.sage](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/script/research/zk/fft/fft2.sage):
   implementation using vandermonde matrices illustrating the theory section below.
-* [fft3.sage](https://github.com/darkrenaissance/darkfi/blob/master/script/research/zk/fft/fft3.sage):
+* [fft3.sage](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/script/research/zk/fft/fft3.sage):
   simple example with $n = 4$ showing 3 steps of the algorithm.
-* [fft4.sage](https://github.com/darkrenaissance/darkfi/blob/master/script/research/zk/fft/fft4.sage):
+* [fft4.sage](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/script/research/zk/fft/fft4.sage):
   illustrates the full working algorithm.
 
 ## Theory
@@ -98,7 +98,7 @@ $$
 
 ### Algorithm
 
-Implementation of this algorithm is available in [fft4.sage](https://github.com/darkrenaissance/darkfi/blob/master/script/research/zk/fft/fft4.sage).
+Implementation of this algorithm is available in [fft4.sage](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/script/research/zk/fft/fft4.sage).
 Particularly the function called `calc_dft()`.
 
 **function** DFT($n = 2^d, f(X)$)<br>

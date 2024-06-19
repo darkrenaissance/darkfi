@@ -4,7 +4,7 @@ version = "0.4.1"
 homepage = "https://dark.fi"
 description = "Darkfi mining daemon"
 authors = ["Dyne.org foundation <foundation@dyne.org>"]
-repository = "https://github.com/darkrenaissance/darkfi"
+repository = "https://codeberg.org/darkrenaissance/darkfi"
 license = "AGPL-3.0-only"
 edition = "2021"
 

@@ -49,7 +49,7 @@ def main(path):
         print(f"### `{i[0]}`\n")
         print(f"{i[1]}")
         ghlink = "%s%s%s%d" % (
-            "https://github.com/darkrenaissance/darkfi/blob/master/",
+            "https://codeberg.org/darkrenaissance/darkfi/src/branch/master/",
             path.replace("../", ""),
             "#L",
             i[4],

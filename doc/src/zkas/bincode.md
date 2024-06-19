@@ -41,7 +41,7 @@ TBD
 ```
 
 Integers in the binary are encoded using variable-integer encoding.
-See the [`serial`](https://github.com/darkrenaissance/darkfi/blob/master/src/serial/src/lib.rs)
+See the [`serial`](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/src/serial/src/lib.rs)
 crate and module for our Rust implementation.
 
 ## Sections
@@ -210,5 +210,5 @@ TBD
 ## Decoding the bincode
 
 An example decoder implementation can be found in zkas'
-[`decoder.rs`](https://github.com/darkrenaissance/darkfi/blob/master/src/zkas/decoder.rs)
+[`decoder.rs`](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/src/zkas/decoder.rs)
 module.

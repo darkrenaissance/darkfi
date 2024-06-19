@@ -24,7 +24,7 @@ DarkFi broadly follows the standardized unix directory structure.
 ## Using DarkFi
 
 Refer to the main
-[README](https://github.com/darkrenaissance/darkfi/blob/master/README.md)
+[README](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/README.md)
 file for instructions on how to install Rust and necessary deps.
 
 Then proceed to the [Running a Node](testnet/node.md) guide.

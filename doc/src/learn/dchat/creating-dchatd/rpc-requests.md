@@ -1,7 +1,7 @@
 # Handling RPC requests
 
 Let's connect `dchatd` up to `JSON-RPC` using DarkFi's [rpc
-module](https://github.com/darkrenaissance/darkfi/tree/master/src/rpc).
+module](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/src/rpc).
 
 We'll need to implement a trait called `RequestHandler` for our `Dchat`
 struct. `RequestHandler` is an async trait implementing a handler for
@@ -14,7 +14,7 @@ handle for processing incoming JSON-RPC requests that takes a
 `JsonRequest` and returns a `JsonResult`. `JsonRequest` is a
 `JSON-RPC` request object, and `JsonResult` is an enum that wraps
 around a given `JSON-RPC` object type. These types are defined inside
-[jsonrpc.rs](https://github.com/darkrenaissance/darkfi/blob/master/src/rpc/jsonrpc.rs).
+[jsonrpc.rs](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/src/rpc/jsonrpc.rs).
 
 We'll use `handle_request` to run a match statement on
 `JsonRequest.method`.

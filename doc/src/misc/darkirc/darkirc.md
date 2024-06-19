@@ -27,7 +27,7 @@ Follow the instructions in the
 you have all the necessary dependencies.
 
 ```shell
-% git clone https://github.com/darkrenaissance/darkfi 
+% git clone https://codeberg.org/darkrenaissance/darkfi
 % cd darkfi 
 % make darkirc
 % # install system wide only if you can make sure there would be no

@@ -121,7 +121,7 @@ nightly, and we also have to compile `sqlcipher` on our own.
 And now we should be able to build a statically linked binary:
 
 ```
-# git clone https://github.com/darkrenaissance/darkfi -b master --depth 1
+# git clone https://codeberg.org/darkrenaissance/darkfi -b master --depth 1
 # cd darkfi
 ## Uncomment RUSTFLAGS in the main Makefile
 # sed -e 's,^#RUSTFLAGS ,RUSTFLAGS ,' -i Makefile

@@ -183,6 +183,6 @@ in `Burn_V1`.
 For `MoneyFunction::TransferV1`, we have the following functions, in
 order:
 
-* [`money_transfer_get_metadata_v1`](https://github.com/darkrenaissance/darkfi/blob/master/src/contract/money/src/entrypoint/transfer_v1.rs#L42)
-* [`money_transfer_process_instruction_v1`](https://github.com/darkrenaissance/darkfi/blob/master/src/contract/money/src/entrypoint/transfer_v1.rs#L106)
-* [`money_transfer_process_update_v1`](https://github.com/darkrenaissance/darkfi/blob/master/src/contract/money/src/entrypoint/transfer_v1.rs#L258)
+* [`money_transfer_get_metadata_v1`](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/src/contract/money/src/entrypoint/transfer_v1.rs#L42)
+* [`money_transfer_process_instruction_v1`](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/src/contract/money/src/entrypoint/transfer_v1.rs#L106)
+* [`money_transfer_process_update_v1`](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/src/contract/money/src/entrypoint/transfer_v1.rs#L258)

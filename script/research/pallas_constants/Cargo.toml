@@ -3,7 +3,7 @@ name = "pallas_constants"
 version = "0.4.1"
 description = "Command-line tool to generate pallas::Base constants"
 authors = ["Dyne.org foundation <foundation@dyne.org>"]
-repository = "https://github.com/darkrenaissance/darkfi"
+repository = "https://codeberg.org/darkrenaissance/darkfi"
 license = "AGPL-3.0-only"
 edition = "2021"
 

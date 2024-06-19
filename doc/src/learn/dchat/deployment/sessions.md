@@ -6,7 +6,7 @@ network. An inbound node receives connections. An outbound node makes
 connections.
 
 The behavior of these nodes is defined in what is called a
-[Session](https://github.com/darkrenaissance/darkfi/blob/master/src/net/session/mod.rs#L111).
+[Session](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/src/net/session/mod.rs#L111).
 There are four types of sessions: `Manual`, `Inbound`, `Outbound` and `SeedSync`.
 
 There behavior is as follows: 

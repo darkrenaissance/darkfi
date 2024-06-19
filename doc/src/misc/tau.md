@@ -1,6 +1,6 @@
 # Tau
 
-Encrypted tasks management app using peer-to-peer network.  
+Encrypted tasks management app using peer-to-peer network.
 Multiple users can collaborate by working on the same tasks, 
 and all users will have synced tasks.
 
@@ -8,7 +8,7 @@ and all users will have synced tasks.
 ## Install 
 
 ```shell
-% git clone https://github.com/darkrenaissance/darkfi 
+% git clone https://codeberg.org/darkrenaissance/darkfi
 % cd darkfi
 % make BINS="taud"
 ```

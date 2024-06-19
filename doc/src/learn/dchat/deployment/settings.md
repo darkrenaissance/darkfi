@@ -2,7 +2,7 @@
 
 To create an inbound and outbound node, we
 will need to configure them using `net` type called
-[Settings](https://github.com/darkrenaissance/darkfi/blob/master/src/net/settings.rs).
+[Settings](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/src/net/settings.rs).
 This type consists of several settings that allow you to configure nodes
 in different ways.
 

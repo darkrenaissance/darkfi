@@ -39,5 +39,5 @@
 [^9]: https://arxiv.org/pdf/2112.04581.pdf
 [^10]: https://eprint.iacr.org/2021/1530
 [^11]: https://github.com/renegade-fi/mpc-bulletproof/pull/14
-[^12]: https://github.com/darkrenaissance/darkfi/tree/master/script/research/mpc
-[^13]: https://github.com/darkrenaissance/darkfi/tree/master/script/research/bulletproof-mpc
+[^12]: https://codeberg.org/darkrenaissance/darkfi/src/branch/master/script/research/mpc
+[^13]: https://codeberg.org/darkrenaissance/darkfi/src/branch/master/script/research/bulletproof-mpc

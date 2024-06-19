@@ -10,7 +10,7 @@ To run darkfi, we must first install the software. Do this by cloning
 the darkfi repo:
 
 ```
-% git clone https://github.com/darkrenaissance/darkfi
+% git clone https://codeberg.org/darkrenaissance/darkfi
 ```
 
 ## Build
