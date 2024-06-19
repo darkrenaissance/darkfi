@@ -5,10 +5,10 @@
 [![Manifesto - unsystem](https://img.shields.io/badge/Manifesto-unsystem-informational?logo=minutemailer&logoColor=white&style=flat-square)](https://dark.fi/manifesto.html)
 [![Book - mdbook](https://img.shields.io/badge/Book-mdbook-orange?logo=gitbook&logoColor=white&style=flat-square)](https://darkrenaissance.github.io/darkfi)
 
-We aim to proliferate
-[anonymous digital markets](https://dark.fi/manifesto.html)
-by means of strong cryptography and p2p resistant to the surveillance state
-creating an online zone of freedom.
+We aim to proliferate [anonymous digital
+markets](https://dark.fi/manifesto.html) by means of strong cryptography
+and peer-to-peer networks. We are establishing an online zone of freedom
+that is resistant to the surveillance state.
 
 > Unfortunately, the law hasn’t kept pace with technology, and this disconnect
 > has created a significant public safety problem. We call it "Going Dark".
