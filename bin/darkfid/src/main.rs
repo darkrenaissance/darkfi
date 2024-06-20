@@ -160,9 +160,9 @@ pub struct BlockchainNetwork {
     /// Optional bootstrap timestamp
     pub bootstrap: Option<u64>,
 
-    #[structopt(long, default_value = "50")]
+    #[structopt(long)]
     /// Garbage collection task transactions batch size
-    pub txs_batch_size: usize,
+    pub txs_batch_size: Option<usize>,
 
     /// P2P network settings
     #[structopt(flatten)]
@@ -298,13 +298,25 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     } else {
         None
     };
+    
+    // Grab blockchain network configured transactions batch size for garbage collection
+    let txs_batch_size = match blockchain_config.txs_batch_size {
+        Some(b) => {
+            if b > 0 {
+                b
+            } else {
+                50
+            }
+        },
+        None => 50,
+    };
 
     // Initialize node
     let darkfid = Darkfid::new(
         p2p.clone(),
         validator,
         blockchain_config.miner,
-        blockchain_config.txs_batch_size,
+        txs_batch_size,
         subscribers,
         rpc_client,
     )
