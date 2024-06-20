@@ -33,6 +33,7 @@ use crate::{
     shader,
 };
 
+// This is very noisy so suppress output by default
 const DEBUG_RENDER: bool = false;
 
 #[derive(Debug, SerialEncodable, SerialDecodable)]
@@ -149,7 +150,8 @@ impl<'a> RenderContext<'a> {
     }
 
     fn draw_call(&mut self, draw_call: &DrawCall, indent: u32) {
-        let ws = " ".repeat(indent as usize * 4);
+        let ws = if DEBUG_RENDER { " ".repeat(indent as usize * 4) } else { String::new() };
+
         for instr in &draw_call.instrs {
             match instr {
                 DrawInstruction::ApplyViewport(view) => {

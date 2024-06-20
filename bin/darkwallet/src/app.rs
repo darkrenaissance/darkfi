@@ -196,9 +196,9 @@ impl App {
         let prop = node.get_property("rect").unwrap();
         prop.set_f32(0, 0.).unwrap();
         prop.set_f32(1, 0.).unwrap();
-        let code = vec![Op::LoadVar("sw".to_string())];
+        let code = vec![Op::LoadVar("w".to_string())];
         prop.set_expr(2, code).unwrap();
-        let code = vec![Op::LoadVar("sh".to_string())];
+        let code = vec![Op::LoadVar("h".to_string())];
         prop.set_expr(3, code).unwrap();
         node.set_property_bool("is_visible", true).unwrap();
 
@@ -222,9 +222,9 @@ impl App {
         let prop = node.get_property("rect").unwrap();
         prop.set_f32(0, 0.).unwrap();
         prop.set_f32(1, 0.).unwrap();
-        let code = vec![Op::LoadVar("lw".to_string())];
+        let code = vec![Op::LoadVar("w".to_string())];
         prop.set_expr(2, code).unwrap();
-        let code = vec![Op::LoadVar("lh".to_string())];
+        let code = vec![Op::LoadVar("h".to_string())];
         prop.set_expr(3, code).unwrap();
 
         // Setup the pimpl
@@ -300,12 +300,163 @@ fn print_type_of<T>(_: &T) {
     println!("{}", std::any::type_name::<T>())
 }
 
+struct OnModify<T> {
+    ex: Arc<smol::Executor<'static>>,
+    node_name: String,
+    node_id: SceneNodeId,
+    me: Weak<T>,
+    tasks: Vec<smol::Task<()>>,
+}
+
+impl<T: Send + Sync + 'static> OnModify<T> {
+    fn new(
+        ex: Arc<smol::Executor<'static>>,
+        node_name: String,
+        node_id: SceneNodeId,
+        me: Weak<T>,
+    ) -> Self {
+        Self { ex, node_name, node_id, me, tasks: vec![] }
+    }
+
+    fn when_change<F>(&mut self, prop: PropertyPtr, f: impl Fn(Arc<T>) -> F + Send + 'static)
+    where
+        F: std::future::Future<Output = ()> + Send + 'static,
+    {
+        let node_name = self.node_name.clone();
+        let node_id = self.node_id;
+        let on_modify_sub = prop.subscribe_modify();
+        let prop_name = prop.name.clone();
+        let me = self.me.clone();
+        let task = self.ex.spawn(async move {
+            loop {
+                let _ = on_modify_sub.receive().await;
+                debug!(target: "app", "Property '{}':{}/'{}' modified", node_name, node_id, prop_name);
+
+                let Some(self_) = me.upgrade() else {
+                    // Should not happen
+                    panic!(
+                        "'{}':{}/'{}' self destroyed before modify_task was stopped!",
+                        node_name, node_id, prop_name
+                    );
+                };
+
+                debug!(target: "app", "property modified");
+                f(self_).await;
+            }
+        });
+        self.tasks.push(task);
+    }
+}
+
+fn eval_rect(rect: PropertyPtr, parent_rect: &Rectangle<f32>) -> Result<()> {
+    if rect.array_len != 4 {
+        return Err(Error::PropertyWrongLen)
+    }
+
+    for i in 0..4 {
+        if !rect.is_expr(i)? {
+            continue
+        }
+
+        let expr = rect.get_expr(i).unwrap();
+
+        let machine = SExprMachine {
+            globals: vec![
+                ("w".to_string(), SExprVal::Float32(parent_rect.w)),
+                ("h".to_string(), SExprVal::Float32(parent_rect.h)),
+            ],
+            stmts: &expr,
+        };
+
+        let v = machine.call()?.as_f32()?;
+        rect.set_cache_f32(i, v).unwrap();
+    }
+    Ok(())
+}
+
+fn read_rect(rect_prop: PropertyPtr) -> Result<Rectangle<f32>> {
+    if rect_prop.array_len != 4 {
+        return Err(Error::PropertyWrongLen)
+    }
+
+    let mut rect = [0.; 4];
+    for i in 0..4 {
+        if rect_prop.is_expr(i)? {
+            rect[i] = rect_prop.get_cached(i)?.as_f32()?;
+        } else {
+            rect[i] = rect_prop.get_f32(i)?;
+        }
+    }
+    Ok(Rectangle::from_array(rect))
+}
+
+fn get_parent_rect(sg: &SceneGraph, node: &SceneNode) -> Option<Rectangle<f32>> {
+    // read our parent
+    if node.parents.is_empty() {
+        info!("RenderLayer {:?} has no parents so skipping", node);
+        return None
+    }
+    if node.parents.len() != 1 {
+        error!("RenderLayer {:?} has too many parents so skipping", node);
+        return None
+    }
+    let parent_id = node.parents[0].id;
+    let parent_node = sg.get_node(parent_id).unwrap();
+    let parent_rect = match parent_node.typ {
+        SceneNodeType::Window => {
+            let Some(screen_size_prop) = parent_node.get_property("screen_size") else {
+                error!(
+                    "RenderLayer {:?} parent node {:?} missing screen_size property",
+                    node, parent_node
+                );
+                return None
+            };
+            let screen_width = screen_size_prop.get_f32(0).unwrap();
+            let screen_height = screen_size_prop.get_f32(1).unwrap();
+
+            let parent_rect = Rectangle { x: 0., y: 0., w: screen_width, h: screen_height };
+            parent_rect
+        }
+        SceneNodeType::RenderLayer => {
+            // get their rect property
+            let Some(parent_rect) = parent_node.get_property("rect") else {
+                error!(
+                    "RenderLayer {:?} parent node {:?} missing rect property",
+                    node, parent_node
+                );
+                return None
+            };
+            // read parent's rect
+            let Ok(parent_rect) = read_rect(parent_rect) else {
+                error!(
+                    "RenderLayer {:?} parent node {:?} malformed rect property",
+                    node, parent_node
+                );
+                return None
+            };
+            parent_rect
+        }
+        _ => {
+            error!(
+                "RenderLayer {:?} parent node {:?} wrong type {:?}",
+                node, parent_node, parent_node.typ
+            );
+            return None
+        }
+    };
+    Some(parent_rect)
+}
+
+struct DrawUpdate {
+    key: u64,
+    draw_calls: Vec<(u64, DrawCall)>,
+}
+
 pub type WindowPtr = Arc<Window>;
 
 pub struct Window {
     node_id: SceneNodeId,
-    resize_task: smol::Task<()>,
-    modify_task: smol::Task<()>,
+    tasks: Vec<smol::Task<()>>,
     screen_size_prop: PropertyPtr,
     render_api: RenderApiPtr,
 }
@@ -320,20 +471,12 @@ impl Window {
     ) -> Pimpl {
         debug!(target: "app", "Window::new()");
 
-        let screen_size_prop = {
-            let sg = sg.lock().await;
-            let node = sg.get_node(node_id).unwrap();
-            node.get_property("screen_size").unwrap()
-        };
-
-        // Monitor for changes to screen_size or scale properties
-        // If so then trigger draw
-        let scale_sub = {
-            let sg = sg.lock().await;
-            let node = sg.get_node(node_id).unwrap();
-            let prop = node.get_property("scale").unwrap();
-            prop.subscribe_modify()
-        };
+        let scene_graph = sg.lock().await;
+        let node = scene_graph.get_node(node_id).unwrap();
+        let node_name = node.name.clone();
+        let screen_size_prop = node.get_property("screen_size").unwrap();
+        let scale_prop = node.get_property("scale").unwrap();
+        drop(scene_graph);
 
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
             // Start a task monitoring for window resize events
@@ -368,25 +511,22 @@ impl Window {
                 }
             });
 
-            // Modify task needs a Weak<Self>
-            let me2 = me.clone();
-            let modify_task = ex.spawn(async move {
-                loop {
-                    let _ = scale_sub.receive().await;
-                    debug!(target: "app", "Window scale modified");
-
-                    let Some(self_) = me2.upgrade() else {
-                        // Should not happen
-                        panic!("self destroyed before modify_task was stopped!");
-                    };
-
-                    debug!(target: "app", "window property modified");
+            let sg2 = sg.clone();
+            let redraw_fn = move |self_: Arc<Self>| {
+                let sg = sg2.clone();
+                async move {
                     let sg = sg.lock().await;
                     self_.draw(&sg).await;
                 }
-            });
+            };
 
-            Self { node_id, resize_task, modify_task, screen_size_prop, render_api }
+            let mut on_modify = OnModify::new(ex.clone(), node_name, node_id, me.clone());
+            on_modify.when_change(scale_prop, redraw_fn);
+
+            let mut tasks = on_modify.tasks;
+            tasks.push(resize_task);
+
+            Self { node_id, tasks, screen_size_prop, render_api }
         });
 
         Pimpl::Window(self_)
@@ -415,9 +555,9 @@ impl Window {
                     continue
                 }
             };
-            let Some((dc_key, mut dcs)) = dcs else { continue };
-            draw_calls.append(&mut dcs);
-            child_calls.push(dc_key);
+            let Some(mut draw_update) = dcs else { continue };
+            draw_calls.append(&mut draw_update.draw_calls);
+            child_calls.push(draw_update.key);
         }
 
         let root_dc = DrawCall { instrs: vec![], dcs: child_calls };
@@ -439,7 +579,7 @@ pub type RenderLayerPtr = Arc<RenderLayer>;
 pub struct RenderLayer {
     sg: SceneGraphPtr2,
     node_id: SceneNodeId,
-    modify_task: smol::Task<()>,
+    tasks: Vec<smol::Task<()>>,
     render_api: RenderApiPtr,
 
     dc_key: u64,
@@ -459,6 +599,7 @@ impl RenderLayer {
     ) -> Pimpl {
         let sg = sg_ptr.lock().await;
         let node = sg.get_node(node_id).unwrap();
+        let node_name = node.name.clone();
 
         let is_visible =
             PropertyBool::wrap(node, "is_visible", 0).expect("RenderLayer::is_visible");
@@ -470,27 +611,13 @@ impl RenderLayer {
         let rect_sub = rect.subscribe_modify();
 
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
-            let me2 = me.clone();
-            // Modify task needs a Weak<Self>
-            let modify_task = ex.spawn(async move {
-                loop {
-                    let _ = rect_sub.receive().await;
-                    debug!(target: "app", "Layer rect modified");
-
-                    let Some(self_) = me2.upgrade() else {
-                        // Should not happen
-                        panic!("self destroyed before modify_task was stopped!");
-                    };
-
-                    debug!(target: "app", "layer rect property modified");
-                    self_.redraw().await;
-                }
-            });
+            let mut on_modify = OnModify::new(ex.clone(), node_name, node_id, me.clone());
+            on_modify.when_change(rect.clone(), Self::redraw);
 
             Self {
                 sg: sg_ptr,
                 node_id,
-                modify_task,
+                tasks: on_modify.tasks,
                 render_api,
                 dc_key: OsRng.gen(),
                 is_visible,
@@ -502,120 +629,24 @@ impl RenderLayer {
         Pimpl::RenderLayer(self_)
     }
 
-    async fn redraw(&self) {
+    async fn redraw(self: Arc<Self>) {
         let sg = self.sg.lock().await;
-        // read our parent
         let node = sg.get_node(self.node_id).unwrap();
-        if node.parents.is_empty() {
-            info!("RenderLayer {:?} has no parents so skipping", node);
-            return
-        }
-        if node.parents.len() != 1 {
-            error!("RenderLayer {:?} has too many parents so skipping", node);
-            return
-        }
-        let parent_id = node.parents[0].id;
-        let parent_node = sg.get_node(parent_id).unwrap();
-        let parent_rect = match parent_node.typ {
-            SceneNodeType::Window => {
-                let Some(screen_size_prop) = parent_node.get_property("screen_size") else {
-                    error!(
-                        "RenderLayer {:?} parent node {:?} missing screen_size property",
-                        node, parent_node
-                    );
-                    return
-                };
-                let screen_width = screen_size_prop.get_f32(0).unwrap();
-                let screen_height = screen_size_prop.get_f32(1).unwrap();
 
-                let parent_rect = Rectangle { x: 0., y: 0., w: screen_width, h: screen_height };
-                parent_rect
-            }
-            SceneNodeType::RenderLayer => {
-                // get their rect property
-                let Some(parent_rect) = parent_node.get_property("rect") else {
-                    error!(
-                        "RenderLayer {:?} parent node {:?} missing rect property",
-                        node, parent_node
-                    );
-                    return
-                };
-                // read parent's rect
-                let Ok(parent_rect) = Self::read_rect(parent_rect) else {
-                    error!(
-                        "RenderLayer {:?} parent node {:?} malformed rect property",
-                        node, parent_node
-                    );
-                    return
-                };
-                parent_rect
-            }
-            _ => {
-                error!(
-                    "RenderLayer {:?} parent node {:?} wrong type {:?}",
-                    node, parent_node, parent_node.typ
-                );
-                return
-            }
+        let Some(parent_rect) = get_parent_rect(&sg, node) else {
+            return;
         };
-        let Some((_, dcs)) = self.draw(&sg, &parent_rect).await else {
+
+        let Some(draw_update) = self.draw(&sg, &parent_rect).await else {
             error!("RenderLayer {:?} failed to draw", node);
             return;
         };
-        self.render_api.replace_draw_calls(dcs).await;
+        self.render_api.replace_draw_calls(draw_update.draw_calls).await;
         debug!("replace draw calls done");
     }
 
-    fn read_rect(rect_prop: PropertyPtr) -> Result<Rectangle<f32>> {
-        if rect_prop.array_len != 4 {
-            return Err(Error::PropertyWrongLen)
-        }
-
-        let mut rect = [0.; 4];
-        for i in 0..4 {
-            if rect_prop.is_expr(i)? {
-                rect[i] = rect_prop.get_cached(i)?.as_f32()?;
-            } else {
-                rect[i] = rect_prop.get_f32(i)?;
-            }
-        }
-        Ok(Rectangle::from_array(rect))
-    }
-
-    fn get_rect(&self, parent_rect: &Rectangle<f32>) -> Result<Rectangle<f32>> {
-        if self.rect.array_len != 4 {
-            return Err(Error::PropertyWrongLen)
-        }
-
-        let mut rect = [0.; 4];
-        for i in 0..4 {
-            if self.rect.is_expr(i)? {
-                let expr = self.rect.get_expr(i).unwrap();
-
-                let machine = SExprMachine {
-                    globals: vec![
-                        ("sw".to_string(), SExprVal::Float32(parent_rect.w)),
-                        ("sh".to_string(), SExprVal::Float32(parent_rect.h)),
-                    ],
-                    stmts: &expr,
-                };
-
-                let v = machine.call()?.as_f32()?;
-                self.rect.set_cache_f32(i, v).unwrap();
-                rect[i] = v;
-            } else {
-                rect[i] = self.rect.get_f32(i)?;
-            }
-        }
-        Ok(Rectangle::from_array(rect))
-    }
-
     #[async_recursion]
-    pub async fn draw(
-        &self,
-        sg: &SceneGraph,
-        parent_rect: &Rectangle<f32>,
-    ) -> Option<(u64, Vec<(u64, DrawCall)>)> {
+    pub async fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle<f32>) -> Option<DrawUpdate> {
         debug!(target: "app", "RenderLayer::draw()");
         let node = sg.get_node(self.node_id).unwrap();
 
@@ -624,8 +655,12 @@ impl RenderLayer {
             return None
         }
 
-        let Ok(mut rect) = self.get_rect(parent_rect) else {
-            panic!("malformed rect property for node '{}':{}", node.name, node.id)
+        if let Err(err) = eval_rect(self.rect.clone(), parent_rect) {
+            panic!("Node {:?} bad rect property: {}", node, err);
+        }
+
+        let Ok(mut rect) = read_rect(self.rect.clone()) else {
+            panic!("Node {:?} bad rect property", node);
         };
 
         rect.x += parent_rect.x;
@@ -658,14 +693,14 @@ impl RenderLayer {
                     continue
                 }
             };
-            let Some((dc_key, mut dcs)) = dcs else { continue };
-            draw_calls.append(&mut dcs);
-            child_calls.push(dc_key);
+            let Some(mut draw_update) = dcs else { continue };
+            draw_calls.append(&mut draw_update.draw_calls);
+            child_calls.push(draw_update.key);
         }
 
         let dc = DrawCall { instrs: vec![DrawInstruction::ApplyViewport(rect)], dcs: child_calls };
         draw_calls.push((self.dc_key, dc));
-        Some((self.dc_key, draw_calls))
+        Some(DrawUpdate { key: self.dc_key, draw_calls })
     }
 }
 
@@ -713,40 +748,7 @@ impl Mesh {
         })
     }
 
-    // Merge with RenderLayer::get_rect()
-    fn get_rect(&self, parent_rect: &Rectangle<f32>) -> Result<Rectangle<f32>> {
-        if self.rect.array_len != 4 {
-            return Err(Error::PropertyWrongLen)
-        }
-
-        let mut rect = [0.; 4];
-        for i in 0..4 {
-            if self.rect.is_expr(i)? {
-                let expr = self.rect.get_expr(i).unwrap();
-
-                let machine = SExprMachine {
-                    globals: vec![
-                        ("lw".to_string(), SExprVal::Float32(parent_rect.w)),
-                        ("lh".to_string(), SExprVal::Float32(parent_rect.h)),
-                    ],
-                    stmts: &expr,
-                };
-
-                let v = machine.call()?.as_f32()?;
-                self.rect.set_cache_f32(i, v).unwrap();
-                rect[i] = v;
-            } else {
-                rect[i] = self.rect.get_f32(i)?;
-            }
-        }
-        Ok(Rectangle::from_array(rect))
-    }
-
-    pub fn draw(
-        &self,
-        sg: &SceneGraph,
-        parent_rect: &Rectangle<f32>,
-    ) -> Option<(u64, Vec<(u64, DrawCall)>)> {
+    pub fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle<f32>) -> Option<DrawUpdate> {
         debug!(target: "app", "Mesh::draw()");
         // Only used for debug messages
         let node = sg.get_node(self.node_id).unwrap();
@@ -758,8 +760,12 @@ impl Mesh {
             num_elements: self.num_elements,
         };
 
-        let Ok(mut rect) = self.get_rect(parent_rect) else {
-            panic!("malformed rect property for node '{}':{}", node.name, node.id)
+        if let Err(err) = eval_rect(self.rect.clone(), parent_rect) {
+            panic!("Node {:?} bad rect property: {}", node, err);
+        }
+
+        let Ok(mut rect) = read_rect(self.rect.clone()) else {
+            panic!("Node {:?} bad rect property", node);
         };
 
         rect.x += parent_rect.x;
@@ -772,19 +778,16 @@ impl Mesh {
         let model = glam::Mat4::from_translation(glam::Vec3::new(off_x, off_y, 0.)) *
             glam::Mat4::from_scale(glam::Vec3::new(scale_x, scale_y, 1.));
 
-        Some((
-            self.dc_key,
-            vec![(
+        Some(DrawUpdate {
+            key: self.dc_key,
+            draw_calls: vec![(
                 self.dc_key,
                 DrawCall {
-                    instrs: vec![
-                        DrawInstruction::ApplyMatrix(model),
-                        DrawInstruction::Draw(mesh),
-                    ],
+                    instrs: vec![DrawInstruction::ApplyMatrix(model), DrawInstruction::Draw(mesh)],
                     dcs: vec![],
                 },
             )],
-        ))
+        })
     }
 }
 
