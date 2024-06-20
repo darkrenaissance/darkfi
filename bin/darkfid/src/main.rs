@@ -298,7 +298,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     } else {
         None
     };
-    
+
     // Grab blockchain network configured transactions batch size for garbage collection
     let txs_batch_size = match blockchain_config.txs_batch_size {
         Some(b) => {
@@ -307,7 +307,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             } else {
                 50
             }
-        },
+        }
         None => 50,
     };
 
