@@ -24,7 +24,7 @@ use crate::{
     gfx::Rectangle,
     keysym::{KeyCodeAsStr, MouseButtonAsU8},
     prop::{Property, PropertySubType, PropertyType},
-    pubsub::PublisherPtr,
+    pubsub::{Publisher, PublisherPtr, Subscription},
     res::{ResourceId, ResourceManager},
     scene::{
         MethodResponseFn, Pimpl, SceneGraph, SceneGraphPtr, SceneNode, SceneNodeId, SceneNodeInfo,
@@ -221,10 +221,34 @@ pub enum GraphicsMethod {
     ReplaceDrawCalls(Vec<(u64, DrawCall)>),
 }
 
-#[derive(Debug, Clone)]
-pub enum GraphicsEvent {
-    KeyDown((KeyCode, KeyMods, bool)),
-    Resize((f32, f32)),
+pub type GraphicsEventPublisherPtr = Arc<GraphicsEventPublisher>;
+
+pub struct GraphicsEventPublisher {
+    key_down: PublisherPtr<(KeyCode, KeyMods, bool)>,
+    resize: PublisherPtr<(f32, f32)>,
+}
+
+impl GraphicsEventPublisher {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self {
+            key_down: Publisher::new(),
+            resize: Publisher::new(),
+        })
+    }
+
+    fn notify_key_down(&self, key: KeyCode, mods: KeyMods, repeat: bool) {
+        self.key_down.notify((key, mods, repeat));
+    }
+    fn notify_resize(&self, w: f32, h: f32) {
+        self.resize.notify((w, h));
+    }
+
+    pub fn subscribe_key_down(&self) -> Subscription<(KeyCode, KeyMods, bool)> {
+        self.key_down.clone().subscribe()
+    }
+    pub fn subscribe_resize(&self) -> Subscription<(f32, f32)> {
+        self.resize.clone().subscribe()
+    }
 }
 
 struct Stage {
@@ -237,14 +261,14 @@ struct Stage {
     last_draw_time: Option<Instant>,
 
     method_rep: mpsc::Receiver<GraphicsMethod>,
-    event_pub: PublisherPtr<GraphicsEvent>,
+    event_pub: GraphicsEventPublisherPtr,
 }
 
 impl Stage {
     pub fn new(
         async_runtime: AsyncRuntime,
         method_rep: mpsc::Receiver<GraphicsMethod>,
-        event_pub: PublisherPtr<GraphicsEvent>,
+        event_pub: GraphicsEventPublisherPtr,
     ) -> Self {
         let mut ctx: Box<dyn RenderingBackend> = window::new_rendering_backend();
 
@@ -253,8 +277,7 @@ impl Stage {
         #[cfg(target_os = "android")]
         {
             let (screen_width, screen_height) = window::screen_size();
-            let event = GraphicsEvent::Resize((screen_width, screen_height));
-            event_pub.notify(event);
+            event_pub.notify_resize(screen_width, screen_height);
         }
 
         let white_texture = ctx.new_texture_from_rgba8(1, 1, &[255, 255, 255, 255]);
@@ -422,12 +445,10 @@ impl EventHandler for Stage {
     }
 
     fn key_down_event(&mut self, keycode: KeyCode, mods: KeyMods, repeat: bool) {
-        let event = GraphicsEvent::KeyDown((keycode, mods, repeat));
-        self.event_pub.notify(event);
+        self.event_pub.notify_key_down(keycode, mods, repeat);
     }
     fn resize_event(&mut self, width: f32, height: f32) {
-        let event = GraphicsEvent::Resize((width, height));
-        self.event_pub.notify(event);
+        self.event_pub.notify_resize(width, height);
     }
 
     fn quit_requested_event(&mut self) {
@@ -438,7 +459,7 @@ impl EventHandler for Stage {
 pub fn run_gui(
     async_runtime: AsyncRuntime,
     method_rep: mpsc::Receiver<GraphicsMethod>,
-    event_pub: PublisherPtr<GraphicsEvent>,
+    event_pub: GraphicsEventPublisherPtr,
 ) {
     let mut conf = miniquad::conf::Conf {
         high_dpi: true,

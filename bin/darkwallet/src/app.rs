@@ -12,7 +12,7 @@ use crate::{
     error::{Error, Result},
     expr::{Op, SExprMachine, SExprVal},
     gfx::Rectangle,
-    gfx2::{self, DrawCall, DrawInstruction, DrawMesh, GraphicsEvent, RenderApiPtr, Vertex},
+    gfx2::{self, DrawCall, DrawInstruction, DrawMesh, GraphicsEventPublisherPtr, RenderApiPtr, Vertex},
     prop::{
         Property, PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyStr,
         PropertySubType, PropertyType, PropertyUint32,
@@ -103,7 +103,7 @@ pub struct App {
     sg: SceneGraphPtr2,
     ex: Arc<smol::Executor<'static>>,
     render_api: RenderApiPtr,
-    event_pub: PublisherPtr<GraphicsEvent>,
+    event_pub: GraphicsEventPublisherPtr,
 }
 
 impl App {
@@ -111,7 +111,7 @@ impl App {
         sg: SceneGraphPtr2,
         ex: Arc<smol::Executor<'static>>,
         render_api: RenderApiPtr,
-        event_pub: PublisherPtr<GraphicsEvent>,
+        event_pub: GraphicsEventPublisherPtr,
     ) -> Arc<Self> {
         Arc::new(Self { sg, ex, render_api, event_pub })
     }
@@ -467,7 +467,7 @@ impl Window {
         node_id: SceneNodeId,
         ex: Arc<smol::Executor<'static>>,
         render_api: RenderApiPtr,
-        event_pub: PublisherPtr<GraphicsEvent>,
+        event_pub: GraphicsEventPublisherPtr,
     ) -> Pimpl {
         debug!(target: "app", "Window::new()");
 
@@ -481,19 +481,15 @@ impl Window {
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
             // Start a task monitoring for window resize events
             // which updates screen_size
-            let ev_sub = event_pub.subscribe();
+            let ev_sub = event_pub.subscribe_resize();
             let screen_size_prop2 = screen_size_prop.clone();
             let me2 = me.clone();
             let sg2 = sg.clone();
             let resize_task = ex.spawn(async move {
                 loop {
-                    let Ok(ev) = ev_sub.receive().await else {
+                    let Ok((w, h)) = ev_sub.receive().await else {
                         debug!(target: "app", "Event relayer closed");
                         break
-                    };
-                    let (w, h) = match ev {
-                        GraphicsEvent::Resize((w, h)) => (w, h),
-                        _ => continue,
                     };
 
                     debug!(target: "app", "Window resized ({w}, {h})");

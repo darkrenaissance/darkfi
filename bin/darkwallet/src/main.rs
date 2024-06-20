@@ -79,7 +79,7 @@ fn main() {
     // The UI actually needs to be running for this to reply back.
     // Otherwise calls will just hang.
     let render_api = gfx2::RenderApi::new(method_req);
-    let event_pub = pubsub::Publisher::new();
+    let event_pub = gfx2::GraphicsEventPublisher::new();
 
     let async_runtime = app::AsyncRuntime::new(ex.clone());
     async_runtime.start();
@@ -90,21 +90,20 @@ fn main() {
     //app.clone().start();
 
     // Nice to see which events exist
-    let ev_sub = event_pub.clone().subscribe();
+    let ev_sub = event_pub.subscribe_key_down();
     let ev_relay_task = ex.spawn(async move {
         debug!(target: "main", "event relayer started");
         loop {
-            let Ok(ev) = ev_sub.receive().await else {
+            let Ok((key, mods, repeat)) = ev_sub.receive().await else {
                 debug!(target: "main", "Event relayer closed");
                 break
             };
-            // Ignore keys which get stuck
-            match &ev {
-                gfx2::GraphicsEvent::KeyDown((miniquad::KeyCode::LeftShift, _, _)) |
-                gfx2::GraphicsEvent::KeyDown((miniquad::KeyCode::LeftSuper, _, _)) => continue,
+            // Ignore keys which get stuck repeating when switching windows
+            match key {
+                miniquad::KeyCode::LeftShift | miniquad::KeyCode::LeftSuper => continue,
                 _ => {}
             }
-            debug!(target: "main", "event: {:?}", ev);
+            debug!(target: "main", "key_down event: {:?} {:?} {}", key, mods, repeat);
         }
     });
     async_runtime.push_task(ev_relay_task);
