@@ -36,7 +36,7 @@ use darkfi_money_contract::{
     client::pow_reward_v1::PoWRewardCallBuilder, MoneyFunction, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    crypto::{poseidon_hash, PublicKey, SecretKey, MONEY_CONTRACT_ID},
+    crypto::{poseidon_hash, FuncId, PublicKey, SecretKey, MONEY_CONTRACT_ID},
     pasta::pallas,
     ContractCall,
 };
@@ -47,6 +47,13 @@ use rand::rngs::OsRng;
 use smol::channel::{Receiver, Sender};
 
 use crate::{proto::ProposalMessage, task::garbage_collect_task, Darkfid};
+
+/// Auxiliary structure representing node miner rewards recipient configuration
+pub struct MinerRewardsRecipientConfig {
+    pub recipient: PublicKey,
+    pub spend_hook: Option<FuncId>,
+    pub user_data: Option<pallas::Base>,
+}
 
 /// Async task used for participating in the PoW block production.
 /// Miner initializes their setup and waits for next finalization,
@@ -60,7 +67,7 @@ use crate::{proto::ProposalMessage, task::garbage_collect_task, Darkfid};
 /// finishes, node triggers finallization check.
 pub async fn miner_task(
     node: Arc<Darkfid>,
-    recipient: PublicKey,
+    recipient_config: &MinerRewardsRecipientConfig,
     skip_sync: bool,
     ex: Arc<smol::Executor<'static>>,
 ) -> Result<()> {
@@ -158,7 +165,7 @@ pub async fn miner_task(
                 &node,
                 &extended_fork,
                 &mut secret,
-                &recipient,
+                recipient_config,
                 &zkbin,
                 &pk,
                 &stop_signal,
@@ -262,7 +269,7 @@ async fn mine(
     node: &Darkfid,
     extended_fork: &Fork,
     secret: &mut SecretKey,
-    recipient: &PublicKey,
+    recipient_config: &MinerRewardsRecipientConfig,
     zkbin: &ZkBinary,
     pk: &ProvingKey,
     stop_signal: &Receiver<()>,
@@ -270,7 +277,7 @@ async fn mine(
 ) -> Result<()> {
     smol::future::or(
         wait_stop_signal(stop_signal),
-        mine_next_block(node, extended_fork, secret, recipient, zkbin, pk, skip_sync),
+        mine_next_block(node, extended_fork, secret, recipient_config, zkbin, pk, skip_sync),
     )
     .await
 }
@@ -293,7 +300,7 @@ async fn mine_next_block(
     node: &Darkfid,
     extended_fork: &Fork,
     secret: &mut SecretKey,
-    recipient: &PublicKey,
+    recipient_config: &MinerRewardsRecipientConfig,
     zkbin: &ZkBinary,
     pk: &ProvingKey,
     skip_sync: bool,
@@ -302,7 +309,7 @@ async fn mine_next_block(
     let (next_target, mut next_block) = generate_next_block(
         extended_fork,
         secret,
-        recipient,
+        recipient_config,
         zkbin,
         pk,
         node.validator.consensus.module.read().await.target,
@@ -343,7 +350,7 @@ async fn mine_next_block(
 async fn generate_next_block(
     extended_fork: &Fork,
     secret: &mut SecretKey,
-    recipient: &PublicKey,
+    recipient_config: &MinerRewardsRecipientConfig,
     zkbin: &ZkBinary,
     pk: &ProvingKey,
     block_target: u32,
@@ -368,7 +375,7 @@ async fn generate_next_block(
     *secret = SecretKey::from(next_secret);
 
     // Generate reward transaction
-    let tx = generate_transaction(next_block_height, fees, secret, recipient, zkbin, pk)?;
+    let tx = generate_transaction(next_block_height, fees, secret, recipient_config, zkbin, pk)?;
     txs.push(tx);
 
     // Generate the new header
@@ -391,7 +398,7 @@ fn generate_transaction(
     block_height: u32,
     fees: u64,
     secret: &SecretKey,
-    recipient: &PublicKey,
+    recipient_config: &MinerRewardsRecipientConfig,
     zkbin: &ZkBinary,
     pk: &ProvingKey,
 ) -> Result<Transaction> {
@@ -400,9 +407,9 @@ fn generate_transaction(
         signature_public: PublicKey::from_secret(*secret),
         block_height,
         fees,
-        recipient: Some(*recipient),
-        spend_hook: None,
-        user_data: None,
+        recipient: Some(recipient_config.recipient),
+        spend_hook: recipient_config.spend_hook,
+        user_data: recipient_config.user_data,
         mint_zkbin: zkbin.clone(),
         mint_pk: pk.clone(),
     }

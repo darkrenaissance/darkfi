@@ -37,6 +37,12 @@ miner = true
 # replace with your own one.
 recipient = "9vw6WznKk7xEFQwwXhJWMMdjUPi3cXL8NrFKQpKifG1U"
 
+# Optional contract spend hook to use in the mining reward
+#spend_hook = "6iW9nywZYvyhcM7P1iLwYkh92rvYtREDsC8hgqf2GLuT"
+
+# Optional user data to use in the mining reward
+#user_data = "YOUR_USER_DATA_HERE"
+
 # Skip syncing process and start node right away
 skip_sync = true
 

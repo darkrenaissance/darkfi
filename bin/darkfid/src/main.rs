@@ -137,6 +137,14 @@ pub struct BlockchainNetwork {
     pub recipient: Option<String>,
 
     #[structopt(long)]
+    /// Optional contract spend hook to use in the mining reward
+    pub spend_hook: Option<String>,
+
+    #[structopt(long)]
+    /// Optional user data to use in the mining reward
+    pub user_data: Option<String>,
+
+    #[structopt(long)]
     /// Skip syncing process and start node right away
     pub skip_sync: bool,
 
@@ -341,13 +349,16 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     consensus_task.clone().start(
         consensus_init_task(
             darkfid.clone(),
-            ConsensusInitTaskConfig::new(
-                blockchain_config.skip_sync,
-                blockchain_config.checkpoint_height,
-                blockchain_config.checkpoint, blockchain_config.miner,
-                blockchain_config.recipient,
+            ConsensusInitTaskConfig {
+                skip_sync: blockchain_config.skip_sync,
+                checkpoint_height: blockchain_config.checkpoint_height,
+                checkpoint: blockchain_config.checkpoint,
+                miner: blockchain_config.miner,
+                recipient: blockchain_config.recipient,
+                spend_hook: blockchain_config.spend_hook,
+                user_data: blockchain_config.user_data,
                 bootstrap,
-            ),
+            },
             ex.clone(),
         ),
         |res| async move {

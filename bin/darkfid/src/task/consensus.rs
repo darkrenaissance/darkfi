@@ -25,36 +25,28 @@ use darkfi::{
     util::{encoding::base64, time::Timestamp},
     Error, Result,
 };
-use darkfi_sdk::crypto::PublicKey;
+use darkfi_sdk::{
+    crypto::{FuncId, PublicKey},
+    pasta::{group::ff::PrimeField, pallas},
+};
 use darkfi_serial::serialize_async;
 use log::{error, info};
 
 use crate::{
-    task::{garbage_collect_task, miner_task, sync_task},
+    task::{garbage_collect_task, miner::MinerRewardsRecipientConfig, miner_task, sync_task},
     Darkfid,
 };
 
-/// Auxiliary structure representing node consesus init task configuration
+/// Auxiliary structure representing node consensus init task configuration
 pub struct ConsensusInitTaskConfig {
-    skip_sync: bool,
-    checkpoint_height: Option<u32>,
-    checkpoint: Option<String>,
-    miner: bool,
-    recipient: Option<String>,
-    bootstrap: u64,
-}
-
-impl ConsensusInitTaskConfig {
-    pub fn new(
-        skip_sync: bool,
-        checkpoint_height: Option<u32>,
-        checkpoint: Option<String>,
-        miner: bool,
-        recipient: Option<String>,
-        bootstrap: u64,
-    ) -> Self {
-        Self { skip_sync, checkpoint_height, checkpoint, miner, recipient, bootstrap }
-    }
+    pub skip_sync: bool,
+    pub checkpoint_height: Option<u32>,
+    pub checkpoint: Option<String>,
+    pub miner: bool,
+    pub recipient: Option<String>,
+    pub spend_hook: Option<String>,
+    pub user_data: Option<String>,
+    pub bootstrap: u64,
 }
 
 /// Sync the node consensus state and start the corresponding task, based on node type.
@@ -97,15 +89,41 @@ pub async fn consensus_init_task(
         None
     };
 
-    // Grab rewards recipient public key(address) if node is a miner
-    let recipient = if config.miner {
+    // Grab rewards recipient public key(address) if node is a miner,
+    // along with configured spend hook and user data.
+    let recipient_config = if config.miner {
         if config.recipient.is_none() {
             return Err(Error::ParseFailed("Recipient address missing"))
         }
-        match PublicKey::from_str(config.recipient.as_ref().unwrap()) {
-            Ok(address) => Some(address),
+        let recipient = match PublicKey::from_str(config.recipient.as_ref().unwrap()) {
+            Ok(address) => address,
             Err(_) => return Err(Error::InvalidAddress),
-        }
+        };
+
+        let spend_hook = match config.spend_hook {
+            Some(s) => match FuncId::from_str(&s) {
+                Ok(s) => Some(s),
+                Err(_) => return Err(Error::ParseFailed("Invalid spend hook")),
+            },
+            None => None,
+        };
+
+        let user_data = match config.user_data {
+            Some(u) => {
+                let bytes: [u8; 32] = match bs58::decode(&u).into_vec()?.try_into() {
+                    Ok(b) => b,
+                    Err(_) => return Err(Error::ParseFailed("Invalid user data")),
+                };
+
+                match pallas::Base::from_repr(bytes).into() {
+                    Some(v) => Some(v),
+                    None => return Err(Error::ParseFailed("Invalid user data")),
+                }
+            }
+            None => None,
+        };
+
+        Some(MinerRewardsRecipientConfig { recipient, spend_hook, user_data })
     } else {
         None
     };
@@ -113,7 +131,13 @@ pub async fn consensus_init_task(
     // Gracefully handle network disconnections
     loop {
         let result = if config.miner {
-            miner_task(node.clone(), recipient.unwrap(), config.skip_sync, ex.clone()).await
+            miner_task(
+                node.clone(),
+                recipient_config.as_ref().unwrap(),
+                config.skip_sync,
+                ex.clone(),
+            )
+            .await
         } else {
             replicator_task(node.clone(), ex.clone()).await
         };

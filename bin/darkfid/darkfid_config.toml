@@ -40,6 +40,12 @@ miner = true
 # replace with your own one.
 recipient = "5ZHfYpt4mpJcwBNxfEyxLzeFJUEeoePs5NQ5jVEgHrMf"
 
+# Optional contract spend hook to use in the mining reward
+#spend_hook = "YOUR_SPEND_HOOK_HERE"
+
+# Optional user data to use in the mining reward
+#user_data = "YOUR_USER_DATA_HERE"
+
 # Skip syncing process and start node right away
 skip_sync = true
 
@@ -131,6 +137,12 @@ miner = false
 
 # Wallet address to receive mining rewards.
 #recipient = "YOUR_WALLET_ADDRESS_HERE"
+
+# Optional contract spend hook to use in the mining reward
+#spend_hook = "YOUR_SPEND_HOOK_HERE"
+
+# Optional user data to use in the mining reward
+#user_data = "YOUR_USER_DATA_HERE"
 
 # Skip syncing process and start node right away
 skip_sync = false
@@ -227,6 +239,12 @@ miner = false
 
 # Wallet address to receive mining rewards.
 #recipient = "YOUR_WALLET_ADDRESS_HERE"
+
+# Optional contract spend hook to use in the mining reward
+#spend_hook = "YOUR_SPEND_HOOK_HERE"
+
+# Optional user data to use in the mining reward
+#user_data = "YOUR_USER_DATA_HERE"
 
 # Skip syncing process and start node right away
 skip_sync = false
