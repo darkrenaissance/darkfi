@@ -34,7 +34,6 @@ use darkfi_money_contract::{
 };
 use darkfi_sdk::{
     crypto::{Keypair, MONEY_CONTRACT_ID},
-    pasta::pallas,
     ContractCall,
 };
 use darkfi_serial::Encodable;
@@ -177,18 +176,14 @@ impl Harness {
         let circuit = ZkCircuit::new(empty_witnesses(&zkbin)?, &zkbin);
         let pk = ProvingKey::build(zkbin.k, &circuit);
 
-        // We're just going to be using a zero spend-hook and user-data
-        let spend_hook = pallas::Base::zero().into();
-        let user_data = pallas::Base::zero();
-
         // Build the transaction debris
         let debris = PoWRewardCallBuilder {
-            secret: keypair.secret,
-            recipient: keypair.public,
+            signature_public: keypair.public,
             block_height,
             fees: 0,
-            spend_hook,
-            user_data,
+            recipient: None,
+            spend_hook: None,
+            user_data: None,
             mint_zkbin: zkbin.clone(),
             mint_pk: pk.clone(),
         }

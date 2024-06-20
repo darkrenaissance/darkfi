@@ -19,7 +19,6 @@
 use darkfi::{
     blockchain::{BlockInfo, Header},
     tx::{ContractCallLeaf, Transaction, TransactionBuilder},
-    zk::halo2::Field,
     Result,
 };
 use darkfi_money_contract::{
@@ -28,8 +27,7 @@ use darkfi_money_contract::{
     MoneyFunction, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    crypto::{contract_id::MONEY_CONTRACT_ID, FuncId, MerkleNode},
-    pasta::pallas,
+    crypto::{contract_id::MONEY_CONTRACT_ID, MerkleNode},
     ContractCall,
 };
 use darkfi_serial::AsyncEncodable;
@@ -58,9 +56,9 @@ impl TestHarness {
 
         // If there's a set reward recipient, use it, otherwise reward the holder
         let recipient = if let Some(holder) = recipient {
-            self.holders.get(holder).unwrap().keypair.public
+            Some(self.holders.get(holder).unwrap().keypair.public)
         } else {
-            wallet.keypair.public
+            None
         };
 
         // If there's fees paid, use them, otherwise set to zero
@@ -68,12 +66,12 @@ impl TestHarness {
 
         // Build the transaction
         let builder = PoWRewardCallBuilder {
-            secret: wallet.keypair.secret,
-            recipient,
+            signature_public: wallet.keypair.public,
             block_height: last_block.header.height + 1,
             fees,
-            spend_hook: FuncId::none(),
-            user_data: pallas::Base::ZERO,
+            recipient,
+            spend_hook: None,
+            user_data: None,
             mint_zkbin: mint_zkbin.clone(),
             mint_pk: mint_pk.clone(),
         };

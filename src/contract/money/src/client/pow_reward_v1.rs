@@ -23,7 +23,7 @@ use darkfi::{
 };
 use darkfi_sdk::{
     blockchain::expected_reward,
-    crypto::{note::AeadEncryptedNote, pasta_prelude::*, Blind, FuncId, PublicKey, SecretKey},
+    crypto::{note::AeadEncryptedNote, pasta_prelude::*, Blind, FuncId, PublicKey},
     pasta::pallas,
 };
 use log::debug;
@@ -31,9 +31,7 @@ use rand::rngs::OsRng;
 
 use crate::{
     client::{
-        transfer_v1::{
-            proof::create_transfer_mint_proof, TransferCallClearInput, TransferCallOutput,
-        },
+        transfer_v1::{proof::create_transfer_mint_proof, TransferCallOutput},
         MoneyNote,
     },
     model::{ClearInput, Coin, MoneyPoWRewardParamsV1, Output, DARK_TOKEN_ID},
@@ -62,19 +60,18 @@ impl PoWRewardRevealed {
 
 /// Struct holding necessary information to build a `Money::PoWRewardV1` contract call.
 pub struct PoWRewardCallBuilder {
-    /// Caller's secret key, used for signing
-    pub secret: SecretKey,
-    /// Reward recipient's public key
-    pub recipient: PublicKey,
+    /// Caller's public key, corresponding to the one used in the signature
+    pub signature_public: PublicKey,
     /// Rewarded block height
     pub block_height: u32,
     /// Rewarded block transactions paid fees
     pub fees: u64,
-    /// Merkle tree of coins used to create inclusion proofs
-    /// Spend hook for the output
-    pub spend_hook: FuncId,
-    /// User data for the output
-    pub user_data: pallas::Base,
+    /// Optional recipient's public key, in case we want to mint to a different address
+    pub recipient: Option<PublicKey>,
+    /// Optional contract spend hook to use in the output
+    pub spend_hook: Option<FuncId>,
+    /// Optional user data to use in the output
+    pub user_data: Option<pallas::Base>,
     /// `Mint_V1` zkas circuit ZkBinary
     pub mint_zkbin: ZkBinary,
     /// Proving key for the `Mint_V1` zk circuit
@@ -89,32 +86,31 @@ impl PoWRewardCallBuilder {
         // Only DARK_TOKEN_ID can be minted as PoW reward.
         let token_id = *DARK_TOKEN_ID;
 
-        let input = TransferCallClearInput { value, token_id, signature_secret: self.secret };
-
-        let output = TransferCallOutput {
-            public_key: self.recipient,
-            value,
-            token_id,
-            spend_hook: FuncId::none(),
-            user_data: pallas::Base::ZERO,
-            blind: Blind::random(&mut OsRng),
-        };
-
-        // We just create the commitment blinds here. We simply encofce
-        // that the clear input and the anon output have the same commitments.
-        // Not sure if this can be avoided, but also is it really necessary to avoid?
+        // Building the clear input using random blinds
         let value_blind = Blind::random(&mut OsRng);
         let token_blind = Blind::random(&mut OsRng);
-
+        let coin_blind = Blind::random(&mut OsRng);
         let c_input = ClearInput {
-            value: input.value,
-            token_id: input.token_id,
+            value,
+            token_id,
             value_blind,
             token_blind,
-            signature_public: PublicKey::from_secret(input.signature_secret),
+            signature_public: self.signature_public,
         };
 
-        let coin_blind = Blind::random(&mut OsRng);
+        // Grab the spend hook and user data to use in the output
+        let spend_hook = self.spend_hook.unwrap_or(FuncId::none());
+        let user_data = self.user_data.unwrap_or(pallas::Base::ZERO);
+
+        // Building the anonymous output
+        let output = TransferCallOutput {
+            public_key: self.recipient.unwrap_or(self.signature_public),
+            value,
+            token_id,
+            spend_hook,
+            user_data,
+            blind: Blind::random(&mut OsRng),
+        };
 
         debug!(target: "contract::money::client::pow_reward", "Creating token mint proof for output");
         let (proof, public_inputs) = create_transfer_mint_proof(
@@ -123,16 +119,16 @@ impl PoWRewardCallBuilder {
             &output,
             value_blind,
             token_blind,
-            self.spend_hook,
-            self.user_data,
+            spend_hook,
+            user_data,
             coin_blind,
         )?;
 
         let note = MoneyNote {
             value: output.value,
             token_id: output.token_id,
-            spend_hook: self.spend_hook,
-            user_data: self.user_data,
+            spend_hook,
+            user_data,
             coin_blind,
             value_blind,
             token_blind,

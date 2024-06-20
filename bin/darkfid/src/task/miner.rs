@@ -395,18 +395,14 @@ fn generate_transaction(
     zkbin: &ZkBinary,
     pk: &ProvingKey,
 ) -> Result<Transaction> {
-    // We're just going to be using a zero spend-hook and user-data
-    let spend_hook = pallas::Base::zero().into();
-    let user_data = pallas::Base::zero();
-
     // Build the transaction debris
     let debris = PoWRewardCallBuilder {
-        secret: *secret,
-        recipient: *recipient,
+        signature_public: PublicKey::from_secret(*secret),
         block_height,
         fees,
-        spend_hook,
-        user_data,
+        recipient: Some(*recipient),
+        spend_hook: None,
+        user_data: None,
         mint_zkbin: zkbin.clone(),
         mint_pk: pk.clone(),
     }
