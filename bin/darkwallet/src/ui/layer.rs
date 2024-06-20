@@ -128,7 +128,11 @@ impl RenderLayer {
             child_calls.push(draw_update.key);
         }
 
-        let dc = DrawCall { instrs: vec![DrawInstruction::ApplyViewport(rect)], dcs: child_calls };
+        let dc = DrawCall {
+            instrs: vec![DrawInstruction::ApplyViewport(rect)],
+            dcs: child_calls,
+            z_index: 0,
+        };
         draw_calls.push((self.dc_key, dc));
         Some(DrawUpdate { key: self.dc_key, draw_calls })
     }

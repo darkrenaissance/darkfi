@@ -114,7 +114,7 @@ impl Window {
             child_calls.push(draw_update.key);
         }
 
-        let root_dc = DrawCall { instrs: vec![], dcs: child_calls };
+        let root_dc = DrawCall { instrs: vec![], dcs: child_calls, z_index: 0 };
         draw_calls.push((0, root_dc));
         //debug!("  => {:?}", draw_calls);
 

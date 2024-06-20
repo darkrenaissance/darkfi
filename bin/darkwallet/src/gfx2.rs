@@ -183,6 +183,7 @@ pub enum DrawInstruction {
 pub struct DrawCall {
     pub instrs: Vec<DrawInstruction>,
     pub dcs: Vec<u64>,
+    pub z_index: u32,
 }
 
 struct RenderContext<'a> {
@@ -258,8 +259,11 @@ impl<'a> RenderContext<'a> {
             }
         }
 
-        for dc_key in &draw_call.dcs {
-            let dc = &self.draw_calls[dc_key];
+        let mut draw_calls: Vec<_> =
+            draw_call.dcs.iter().map(|key| &self.draw_calls[key]).collect();
+        draw_calls.sort_unstable_by_key(|dc| dc.z_index);
+
+        for dc in draw_calls {
             self.draw_call(dc, indent + 1);
         }
     }
@@ -375,7 +379,7 @@ impl Stage {
             ctx,
             pipeline,
             white_texture,
-            draw_calls: HashMap::from([(0, DrawCall { instrs: vec![], dcs: vec![] })]),
+            draw_calls: HashMap::from([(0, DrawCall { instrs: vec![], dcs: vec![], z_index: 0 })]),
             last_draw_time: None,
             method_rep,
             event_pub,

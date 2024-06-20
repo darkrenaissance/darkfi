@@ -3,7 +3,7 @@ use std::sync::{Arc, Weak};
 
 use crate::{
     gfx2::{DrawCall, DrawInstruction, DrawMesh, Rectangle, RenderApiPtr, Vertex},
-    prop::PropertyPtr,
+    prop::{PropertyPtr, PropertyUint32},
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
 };
 
@@ -25,6 +25,7 @@ pub struct Mesh {
 
     node_id: SceneNodeId,
     rect: PropertyPtr,
+    z_index: PropertyUint32,
 }
 
 impl Mesh {
@@ -44,11 +45,14 @@ impl Mesh {
         let node = scene_graph.get_node(node_id).unwrap();
         let node_name = node.name.clone();
         let rect = node.get_property("rect").expect("RenderLayer::rect");
+        let z_index_prop = node.get_property("z_index").expect("RenderLayer::z_index");
+        let z_index = PropertyUint32::from(z_index_prop.clone(), 0).unwrap();
         drop(scene_graph);
 
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
             let mut on_modify = OnModify::new(ex, node_name, node_id, me.clone());
             on_modify.when_change(rect.clone(), Self::redraw);
+            on_modify.when_change(z_index_prop, Self::redraw);
 
             Self {
                 sg,
@@ -60,6 +64,7 @@ impl Mesh {
                 dc_key: OsRng.gen(),
                 node_id,
                 rect,
+                z_index,
             }
         });
 
@@ -119,6 +124,7 @@ impl Mesh {
                 DrawCall {
                     instrs: vec![DrawInstruction::ApplyMatrix(model), DrawInstruction::Draw(mesh)],
                     dcs: vec![],
+                    z_index: self.z_index.get(),
                 },
             )],
         })

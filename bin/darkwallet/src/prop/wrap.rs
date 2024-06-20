@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use super::Property;
+use super::{Property, PropertyPtr};
 use crate::{
     error::{Error, Result},
     scene::SceneNode,
@@ -36,6 +36,13 @@ pub struct PropertyUint32 {
 }
 
 impl PropertyUint32 {
+    pub fn from(prop: PropertyPtr, idx: usize) -> Result<Self> {
+        // Test if it works
+        let _ = prop.get_u32(idx)?;
+
+        Ok(Self { prop, idx })
+    }
+
     pub fn wrap(node: &SceneNode, prop_name: &str, idx: usize) -> Result<Self> {
         let prop = node.get_property(prop_name).ok_or(Error::PropertyNotFound)?;
 
