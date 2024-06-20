@@ -631,7 +631,7 @@ pub enum Pimpl {
     //ChatView(chatview::ChatViewPtr),
     Window(ui::WindowPtr),
     RenderLayer(ui::RenderLayerPtr),
-    Mesh(ui::Mesh),
+    Mesh(ui::MeshPtr),
 }
 
 impl std::fmt::Debug for SceneNode {

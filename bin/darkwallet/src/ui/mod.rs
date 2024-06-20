@@ -9,7 +9,7 @@ use crate::{
 };
 
 mod mesh;
-pub use mesh::Mesh;
+pub use mesh::{Mesh, MeshPtr};
 mod layer;
 pub use layer::{RenderLayer, RenderLayerPtr};
 mod win;

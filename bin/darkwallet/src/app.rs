@@ -122,9 +122,9 @@ impl App {
         // Window::new(window, weak sg)
         drop(sg);
         let pimpl = Window::new(
+            self.ex.clone(),
             self.sg.clone(),
             window_id,
-            self.ex.clone(),
             self.render_api.clone(),
             self.event_pub.clone(),
         )
@@ -189,7 +189,7 @@ impl App {
         let node_id = node.id;
         drop(sg);
         let pimpl =
-            RenderLayer::new(self.sg.clone(), node_id, self.ex.clone(), self.render_api.clone())
+            RenderLayer::new(self.ex.clone(), self.sg.clone(), node_id, self.render_api.clone())
                 .await;
         let mut sg = self.sg.lock().await;
         let node = sg.get_node_mut(node_id).unwrap();
@@ -226,8 +226,15 @@ impl App {
         ];
         let indices = vec![0, 2, 1, 1, 2, 3];
         drop(sg);
-        let pimpl =
-            Mesh::new(self.sg.clone(), node_id, self.render_api.clone(), verts, indices).await;
+        let pimpl = Mesh::new(
+            self.ex.clone(),
+            self.sg.clone(),
+            node_id,
+            self.render_api.clone(),
+            verts,
+            indices,
+        )
+        .await;
         let mut sg = self.sg.lock().await;
         let node = sg.get_node_mut(node_id).unwrap();
         node.pimpl = pimpl;
@@ -260,8 +267,15 @@ impl App {
         ];
         let indices = vec![0, 2, 1, 1, 2, 3];
         drop(sg);
-        let pimpl =
-            Mesh::new(self.sg.clone(), node_id, self.render_api.clone(), verts, indices).await;
+        let pimpl = Mesh::new(
+            self.ex.clone(),
+            self.sg.clone(),
+            node_id,
+            self.render_api.clone(),
+            verts,
+            indices,
+        )
+        .await;
         let mut sg = self.sg.lock().await;
         let node = sg.get_node_mut(node_id).unwrap();
         node.pimpl = pimpl;

@@ -1,4 +1,5 @@
 use rand::{rngs::OsRng, Rng};
+use std::sync::{Arc, Weak};
 
 use crate::{
     gfx2::{DrawCall, DrawInstruction, DrawMesh, Rectangle, RenderApiPtr, Vertex},
@@ -6,9 +7,12 @@ use crate::{
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
 };
 
-use super::{eval_rect, read_rect, DrawUpdate, Stoppable};
+use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify, Stoppable};
+
+pub type MeshPtr = Arc<Mesh>;
 
 pub struct Mesh {
+    sg: SceneGraphPtr2,
     render_api: RenderApiPtr,
     vertex_buffer: miniquad::BufferId,
     index_buffer: miniquad::BufferId,
@@ -23,6 +27,7 @@ pub struct Mesh {
 
 impl Mesh {
     pub async fn new(
+        ex: Arc<smol::Executor<'static>>,
         sg: SceneGraphPtr2,
         node_id: SceneNodeId,
         render_api: RenderApiPtr,
@@ -33,19 +38,45 @@ impl Mesh {
         let vertex_buffer = render_api.new_vertex_buffer(verts).await.unwrap();
         let index_buffer = render_api.new_index_buffer(indices).await.unwrap();
 
-        let mut sg = sg.lock().await;
-        let node = sg.get_node_mut(node_id).unwrap();
+        let scene_graph = sg.lock().await;
+        let node = scene_graph.get_node(node_id).unwrap();
+        let node_name = node.name.clone();
         let rect = node.get_property("rect").expect("RenderLayer::rect");
+        drop(scene_graph);
 
-        Pimpl::Mesh(Self {
-            render_api,
-            vertex_buffer,
-            index_buffer,
-            num_elements,
-            dc_key: OsRng.gen(),
-            node_id,
-            rect,
-        })
+        let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
+            let mut on_modify = OnModify::new(ex, node_name, node_id, me.clone());
+            on_modify.when_change(rect.clone(), Self::redraw);
+
+            Self {
+                sg,
+                render_api,
+                vertex_buffer,
+                index_buffer,
+                num_elements,
+                dc_key: OsRng.gen(),
+                node_id,
+                rect,
+            }
+        });
+
+        Pimpl::Mesh(self_)
+    }
+
+    async fn redraw(self: Arc<Self>) {
+        let sg = self.sg.lock().await;
+        let node = sg.get_node(self.node_id).unwrap();
+
+        let Some(parent_rect) = get_parent_rect(&sg, node) else {
+            return;
+        };
+
+        let Some(draw_update) = self.draw(&sg, &parent_rect) else {
+            error!("Mesh {:?} failed to draw", node);
+            return;
+        };
+        self.render_api.replace_draw_calls(draw_update.draw_calls).await;
+        debug!("replace draw calls done");
     }
 
     pub fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {

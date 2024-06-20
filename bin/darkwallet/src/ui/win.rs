@@ -21,9 +21,9 @@ pub struct Window {
 
 impl Window {
     pub async fn new(
+        ex: Arc<smol::Executor<'static>>,
         sg: SceneGraphPtr2,
         node_id: SceneNodeId,
-        ex: Arc<smol::Executor<'static>>,
         render_api: RenderApiPtr,
         event_pub: GraphicsEventPublisherPtr,
     ) -> Pimpl {
@@ -103,7 +103,7 @@ impl Window {
             debug!(target: "app", "Window::draw() calling draw() for node '{}':{}", node.name, node.id);
 
             let dcs = match &node.pimpl {
-                Pimpl::RenderLayer(layer) => layer.draw(sg, &parent_rect).await,
+                Pimpl::RenderLayer(layer) => layer.draw(sg, &parent_rect),
                 _ => {
                     error!(target: "app", "unhandled pimpl type");
                     continue

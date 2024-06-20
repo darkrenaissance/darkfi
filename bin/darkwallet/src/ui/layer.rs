@@ -28,9 +28,9 @@ pub struct RenderLayer {
 
 impl RenderLayer {
     pub async fn new(
+        ex: Arc<smol::Executor<'static>>,
         sg_ptr: SceneGraphPtr2,
         node_id: SceneNodeId,
-        ex: Arc<smol::Executor<'static>>,
         render_api: RenderApiPtr,
     ) -> Pimpl {
         let sg = sg_ptr.lock().await;
@@ -68,7 +68,7 @@ impl RenderLayer {
             return;
         };
 
-        let Some(draw_update) = self.draw(&sg, &parent_rect).await else {
+        let Some(draw_update) = self.draw(&sg, &parent_rect) else {
             error!("RenderLayer {:?} failed to draw", node);
             return;
         };
@@ -76,8 +76,7 @@ impl RenderLayer {
         debug!("replace draw calls done");
     }
 
-    #[async_recursion]
-    pub async fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
+    pub fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
         debug!(target: "app", "RenderLayer::draw()");
         let node = sg.get_node(self.node_id).unwrap();
 
@@ -117,7 +116,7 @@ impl RenderLayer {
             let node = sg.get_node(child_inf.id).unwrap();
 
             let dcs = match &node.pimpl {
-                Pimpl::RenderLayer(layer) => layer.draw(&sg, &rect).await,
+                Pimpl::RenderLayer(layer) => layer.draw(&sg, &rect),
                 Pimpl::Mesh(mesh) => mesh.draw(&sg, &rect),
                 _ => {
                     error!(target: "app", "unhandled pimpl type");
