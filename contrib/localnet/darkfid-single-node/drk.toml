@@ -6,6 +6,11 @@
 ## The default values are left commented. They can be overridden either by
 ## uncommenting, or by using the command-line.
 
+# Blockchain network to use
+network = "localnet"
+
+# Localnet blockchain network configuration
+[network_config."localnet"]
 # Path to wallet database
 wallet_path = "drk/wallet.db"
 

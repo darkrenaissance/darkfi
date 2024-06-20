@@ -474,21 +474,10 @@ pub fn generate_completions(shell: &str) -> Result<()> {
         .takes_value(true)
         .help("Configuration file to use");
 
-    let wallet_path = Arg::with_name("wallet_path")
-        .long("wallet-path")
+    let network = Arg::with_name("network")
+        .long("network")
         .takes_value(true)
-        .help("Path to wallet database");
-
-    let wallet_pass = Arg::with_name("wallet_pass")
-        .long("wallet-pass")
-        .takes_value(true)
-        .help("Password for the wallet database");
-
-    let endpoint = Arg::with_name("endpoint")
-        .short("e")
-        .long("endpoint")
-        .takes_value(true)
-        .help("darkfid JSON-RPC endpoint");
+        .help("Blockchain network to use");
 
     let command = vec![
         kaching,
@@ -523,7 +512,7 @@ pub fn generate_completions(shell: &str) -> Result<()> {
 
     let mut app = App::new("drk")
         .about(cli_desc!())
-        .args(&vec![config, wallet_path, wallet_pass, endpoint, log, verbose])
+        .args(&vec![config, network, log, verbose])
         .subcommands(command);
 
     let shell = match Shell::from_str(shell) {

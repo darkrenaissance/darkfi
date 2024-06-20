@@ -2752,6 +2752,7 @@ dependencies = [
  "smol",
  "structopt",
  "structopt-toml",
+ "toml 0.8.14",
  "url",
 ]
 

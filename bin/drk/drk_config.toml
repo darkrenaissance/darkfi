@@ -6,11 +6,38 @@
 ## The default values are left commented. They can be overridden either by
 ## uncommenting, or by using the command-line.
 
+# Blockchain network to use
+network = "testnet"
+
+# Localnet blockchain network configuration
+[network_config."localnet"]
 # Path to wallet database
-wallet_path = "~/.local/darkfi/drk/wallet.db"
+wallet_path = "~/.local/darkfi/drk/localnet/wallet.db"
 
 # Password for the wallet database
 wallet_pass = "changeme"
 
 # darkfid JSON-RPC endpoint
 endpoint = "tcp://127.0.0.1:8240"
+
+# Testnet blockchain network configuration
+[network_config."testnet"]
+# Path to wallet database
+wallet_path = "~/.local/darkfi/drk/testnet/wallet.db"
+
+# Password for the wallet database
+wallet_pass = "changeme"
+
+# darkfid JSON-RPC endpoint
+endpoint = "tcp://127.0.0.1:8340"
+
+# Mainnet blockchain network configuration
+[network_config."mainnet"]
+# Path to wallet database
+wallet_path = "~/.local/darkfi/drk/mainnet/wallet.db"
+
+# Password for the wallet database
+wallet_pass = "changeme"
+
+# darkfid JSON-RPC endpoint
+endpoint = "tcp://127.0.0.1:8440"
