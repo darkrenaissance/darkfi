@@ -81,7 +81,7 @@ struct Args {
     /// Password for the wallet database
     wallet_pass: String,
 
-    #[structopt(short, long, default_value = "tcp://127.0.0.1:8340")]
+    #[structopt(short, long, default_value = "tcp://127.0.0.1:8240")]
     /// darkfid JSON-RPC endpoint
     endpoint: Url,
 

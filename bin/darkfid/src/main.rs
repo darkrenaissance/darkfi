@@ -82,17 +82,9 @@ struct Args {
     /// Configuration file to use
     config: Option<String>,
 
-    #[structopt(short, long, default_value = "tcp://127.0.0.1:8340")]
-    /// JSON-RPC listen URL
-    rpc_listen: Url,
-
     #[structopt(short, long, default_value = "testnet")]
     /// Blockchain network to use
     network: String,
-
-    #[structopt(long, default_value = "50")]
-    /// Garbage collection task transactions batch size
-    txs_batch_size: usize,
 
     #[structopt(short, long)]
     /// Set log file to ouput into
@@ -108,7 +100,11 @@ struct Args {
 #[derive(Clone, Debug, serde::Deserialize, structopt::StructOpt, structopt_toml::StructOptToml)]
 #[structopt()]
 pub struct BlockchainNetwork {
-    #[structopt(long, default_value = "~/.local/darkfi/darkfid_blockchain_localnet")]
+    #[structopt(short, long, default_value = "tcp://127.0.0.1:8240")]
+    /// JSON-RPC listen URL
+    pub rpc_listen: Url,
+
+    #[structopt(long, default_value = "~/.local/darkfi/darkfid/localnet")]
     /// Path to blockchain database
     pub database: String,
 
@@ -163,6 +159,10 @@ pub struct BlockchainNetwork {
     #[structopt(long)]
     /// Optional bootstrap timestamp
     pub bootstrap: Option<u64>,
+
+    #[structopt(long, default_value = "50")]
+    /// Garbage collection task transactions batch size
+    pub txs_batch_size: usize,
 
     /// P2P network settings
     #[structopt(flatten)]
@@ -304,7 +304,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         p2p.clone(),
         validator,
         blockchain_config.miner,
-        args.txs_batch_size,
+        blockchain_config.txs_batch_size,
         subscribers,
         rpc_client,
     )
@@ -329,7 +329,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     let rpc_task = StoppableTask::new();
     let darkfid_ = darkfid.clone();
     rpc_task.clone().start(
-        listen_and_serve(args.rpc_listen, darkfid.clone(), None, ex.clone()),
+        listen_and_serve(blockchain_config.rpc_listen, darkfid.clone(), None, ex.clone()),
         |res| async move {
             match res {
                 Ok(()) | Err(Error::RpcServerStopped) => darkfid_.stop_connections().await,

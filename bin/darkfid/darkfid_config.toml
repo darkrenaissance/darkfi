@@ -6,19 +6,16 @@
 ## The default values are left commented. They can be overridden either by
 ## uncommenting, or by using the command-line.
 
-# JSON-RPC listen URL
-rpc_listen = "tcp://127.0.0.1:8340"
-
 # Blockchain network to use
 network = "testnet"
 
-# Garbage collection task transactions batch size
-txs_batch_size = 50
-
 # Localnet blockchain network configuration
 [network_config."localnet"]
+# JSON-RPC listen URL
+rpc_listen = "tcp://127.0.0.1:8240"
+
 # Path to the blockchain database directory
-database = "~/.local/darkfi/darkfid_blockchain_localnet"
+database = "~/.local/darkfi/darkfid/localnet"
 
 # Finalization threshold, denominated by number of blocks
 threshold = 3
@@ -60,6 +57,9 @@ skip_fees = false
 
 # Optional bootstrap timestamp
 #bootstrap = 1712581283
+
+# Garbage collection task transactions batch size
+txs_batch_size = 50
 
 ## Localnet P2P network settings
 [network_config."localnet".net]
@@ -120,8 +120,11 @@ localnet = true
 
 # Testnet blockchain network configuration
 [network_config."testnet"]
+# JSON-RPC listen URL
+rpc_listen = "tcp://127.0.0.1:8340"
+
 # Path to the blockchain database directory
-database = "~/.local/darkfi/darkfid_blockchain_testnet"
+database = "~/.local/darkfi/darkfid/testnet"
 
 # Finalization threshold, denominated by number of blocks
 threshold = 6
@@ -158,6 +161,9 @@ skip_fees = false
 
 # Optional bootstrap timestamp
 #bootstrap = 1712581283
+
+# Garbage collection task transactions batch size
+txs_batch_size = 50
 
 ## Testnet P2P network settings
 [network_config."testnet".net]
@@ -222,8 +228,11 @@ localnet = false
 
 # Mainnet blockchain network configuration
 [network_config."mainnet"]
+# JSON-RPC listen URL
+rpc_listen = "tcp://127.0.0.1:8440"
+
 # Path to the blockchain database directory
-database = "~/.local/darkfi/darkfid_blockchain_mainnet"
+database = "~/.local/darkfi/darkfid/mainnet"
 
 # Finalization threshold, denominated by number of blocks
 threshold = 11
@@ -260,6 +269,9 @@ skip_fees = false
 
 # Optional bootstrap timestamp
 #bootstrap = 1712581283
+
+# Garbage collection task transactions batch size
+txs_batch_size = 50
 
 ## Mainnet P2P network settings
 [network_config."mainnet".net]

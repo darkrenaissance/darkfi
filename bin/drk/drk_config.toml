@@ -13,4 +13,4 @@ wallet_path = "~/.local/darkfi/drk/wallet.db"
 wallet_pass = "changeme"
 
 # darkfid JSON-RPC endpoint
-endpoint = "tcp://127.0.0.1:8340"
+endpoint = "tcp://127.0.0.1:8240"
