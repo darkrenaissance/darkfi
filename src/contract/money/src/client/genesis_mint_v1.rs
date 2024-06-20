@@ -22,7 +22,7 @@ use darkfi::{
     ClientFailed, Result,
 };
 use darkfi_sdk::{
-    crypto::{note::AeadEncryptedNote, pasta_prelude::*, Blind, FuncId, Keypair},
+    crypto::{note::AeadEncryptedNote, pasta_prelude::*, Blind, FuncId, PublicKey},
     pasta::pallas,
 };
 use log::debug;
@@ -59,10 +59,12 @@ impl GenesisMintRevealed {
 
 /// Struct holding necessary information to build a `Money::GenesisMintV1` contract call.
 pub struct GenesisMintCallBuilder {
-    /// Caller's keypair
-    pub keypair: Keypair,
+    /// Caller's public key, corresponding to the one used in the signature
+    pub signature_public: PublicKey,
     /// Amount of tokens we want to mint
     pub amount: u64,
+    /// Optional recipient's public key, in case we want to mint to a different address
+    pub recipient: Option<PublicKey>,
     /// Optional contract spend hook to use in the output
     pub spend_hook: Option<FuncId>,
     /// Optional user data to use in the output
@@ -93,7 +95,7 @@ impl GenesisMintCallBuilder {
             token_id,
             value_blind,
             token_blind,
-            signature_public: self.keypair.public,
+            signature_public: self.signature_public,
         };
 
         // Grab the spend hook and user data to use in the output
@@ -102,7 +104,7 @@ impl GenesisMintCallBuilder {
 
         // Building the anonymous output
         let output = TransferCallOutput {
-            public_key: self.keypair.public,
+            public_key: self.recipient.unwrap_or(self.signature_public),
             value: self.amount,
             token_id,
             spend_hook,

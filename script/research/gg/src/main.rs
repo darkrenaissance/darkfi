@@ -39,7 +39,7 @@ use darkfi_money_contract::{
     client::genesis_mint_v1::GenesisMintCallBuilder, MoneyFunction, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    crypto::{contract_id::MONEY_CONTRACT_ID, FuncId, Keypair, SecretKey},
+    crypto::{contract_id::MONEY_CONTRACT_ID, FuncId, PublicKey, SecretKey},
     pasta::{group::ff::PrimeField, pallas},
     ContractCall,
 };
@@ -77,9 +77,15 @@ enum Subcmd {
         /// Amount to mint for this genesis transaction
         amount: String,
 
+        #[arg(short, long)]
+        /// Optional recipient's public key, in case we want to mint to a different address
+        recipient: Option<String>,
+
+        #[arg(short, long)]
         /// Optional contract spend hook to use
         spend_hook: Option<String>,
 
+        #[arg(short, long)]
         /// Optional user data to use
         user_data: Option<String>,
     },
@@ -162,17 +168,27 @@ async fn main() -> Result<()> {
             println!("Genesis block {hash} verified successfully!");
         }
 
-        Subcmd::GenerateTx { amount, spend_hook, user_data } => {
+        Subcmd::GenerateTx { amount, recipient, spend_hook, user_data } => {
             let mut buf = String::new();
             stdin().read_to_string(&mut buf)?;
-            let secret = SecretKey::from_str(buf.trim())?;
-            let keypair = Keypair::new(secret);
+            let signature_secret = SecretKey::from_str(buf.trim())?;
 
             if let Err(e) = f64::from_str(&amount) {
                 eprintln!("Invalid amount: {e:?}");
                 exit(2);
             }
             let amount = decode_base10(&amount, 8, true)?;
+
+            let recipient = match recipient {
+                Some(r) => match PublicKey::from_str(&r) {
+                    Ok(r) => Some(r),
+                    Err(e) => {
+                        eprintln!("Invalid recipient: {e:?}");
+                        exit(2);
+                    }
+                },
+                None => None,
+            };
 
             let spend_hook = match spend_hook {
                 Some(s) => match FuncId::from_str(&s) {
@@ -226,8 +242,9 @@ async fn main() -> Result<()> {
 
             // Build the contract call
             let builder = GenesisMintCallBuilder {
-                keypair,
+                signature_public: PublicKey::from_secret(signature_secret),
                 amount,
+                recipient,
                 spend_hook,
                 user_data,
                 mint_zkbin,
@@ -243,7 +260,7 @@ async fn main() -> Result<()> {
             let mut tx_builder =
                 TransactionBuilder::new(ContractCallLeaf { call, proofs: debris.proofs }, vec![])?;
             let mut tx = tx_builder.build()?;
-            let sigs = tx.create_sigs(&[keypair.secret])?;
+            let sigs = tx.create_sigs(&[signature_secret])?;
             tx.signatures = vec![sigs];
 
             println!("{}", base64::encode(&serialize_async(&tx).await));

@@ -52,8 +52,9 @@ impl TestHarness {
 
         // Build the contract call
         let builder = GenesisMintCallBuilder {
-            keypair: wallet.keypair,
+            signature_public: wallet.keypair.public,
             amount,
+            recipient: None,
             spend_hook,
             user_data,
             mint_zkbin: mint_zkbin.clone(),
