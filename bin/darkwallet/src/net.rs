@@ -68,10 +68,10 @@ pub struct ZeroMQAdapter {
 impl ZeroMQAdapter {
     pub async fn new(scene_graph: SceneGraphPtr2, ex: Arc<smol::Executor<'static>>) -> Arc<Self> {
         let mut zmq_rep = zeromq::RepSocket::new();
-        zmq_rep.bind("tcp://127.0.0.1:9484").await.unwrap();
+        zmq_rep.bind("tcp://0.0.0.0:9484").await.unwrap();
 
         let mut zmq_pub = zeromq::PubSocket::new();
-        zmq_pub.bind("tcp://127.0.0.1:9485").await.unwrap();
+        zmq_pub.bind("tcp://0.0.0.0:9485").await.unwrap();
 
         Arc::new(Self {
             scene_graph,

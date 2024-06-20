@@ -60,3 +60,12 @@ workspace = true
 
 [workspace.lints.clippy]
 
+[package.metadata.android]
+package_name = "darkfi.darkwallet"
+label = "DarkWallet"
+
+[[package.metadata.android.permission]]
+name = "android.permission.INTERNET"
+[[package.metadata.android.permission]]
+name = "android.permission.ACCESS_NETWORK_STATE"
+
