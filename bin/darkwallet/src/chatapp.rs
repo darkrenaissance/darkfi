@@ -232,7 +232,7 @@ fn create_chatview(sg: &mut SceneGraph, name: &str, layer_node_id: SceneNodeId) 
     let mut arg_data = vec![];
     node_id.encode(&mut arg_data).unwrap();
     //let (tx, rx) = mpsc::sync_channel::<Result<Vec<u8>>>(0);
-    let response_fn = Box::new(move |result| {
+    let response_fn = Box::new(move |_result| {
         //tx.send(result).unwrap();
     });
     let win_node = sg.lookup_node_mut("/window").unwrap();

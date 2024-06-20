@@ -590,7 +590,7 @@ impl EditBox {
             "Delete" => {
                 let cursor_pos = self.cursor_pos.get();
 
-                let text = if !self.selected.is_null(0).unwrap() {
+                let _text = if !self.selected.is_null(0).unwrap() {
                     self.delete_highlighted();
                 } else {
                     let glyphs = &*self.glyphs.lock().unwrap();
@@ -618,7 +618,7 @@ impl EditBox {
             "Backspace" => {
                 let cursor_pos = self.cursor_pos.get();
 
-                let text = if !self.selected.is_null(0).unwrap() {
+                let _text = if !self.selected.is_null(0).unwrap() {
                     self.delete_highlighted();
                 } else {
                     if cursor_pos == 0 {

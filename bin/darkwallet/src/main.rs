@@ -1,6 +1,10 @@
 #![feature(deadline_api)]
 #![feature(str_split_whitespace_remainder)]
 
+// Use these to incrementally fix warnings with cargo fix
+//#![allow(warnings, unused)]
+//#![deny(unused_imports)]
+
 use async_lock::Mutex;
 use futures::{stream::FuturesUnordered, StreamExt};
 use std::{
@@ -31,6 +35,7 @@ mod res;
 mod scene;
 mod shader;
 mod text;
+mod ui;
 
 use crate::{
     error::{Error, Result},

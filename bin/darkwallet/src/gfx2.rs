@@ -230,10 +230,7 @@ pub struct GraphicsEventPublisher {
 
 impl GraphicsEventPublisher {
     pub fn new() -> Arc<Self> {
-        Arc::new(Self {
-            key_down: Publisher::new(),
-            resize: Publisher::new(),
-        })
+        Arc::new(Self { key_down: Publisher::new(), resize: Publisher::new() })
     }
 
     fn notify_key_down(&self, key: KeyCode, mods: KeyMods, repeat: bool) {

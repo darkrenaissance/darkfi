@@ -16,6 +16,7 @@ use crate::{
     app, chatview, editbox,
     error::{Error, Result},
     prop::{Property, PropertyPtr, PropertyType},
+    ui,
 };
 
 pub type SceneNodeId = u32;
@@ -637,9 +638,9 @@ pub enum Pimpl {
     Null,
     EditBox(editbox::EditBoxPtr),
     ChatView(chatview::ChatViewPtr),
-    Window(app::WindowPtr),
-    RenderLayer(app::RenderLayerPtr),
-    Mesh(app::Mesh),
+    Window(ui::WindowPtr),
+    RenderLayer(ui::RenderLayerPtr),
+    Mesh(ui::Mesh),
 }
 
 impl std::fmt::Debug for SceneNode {
