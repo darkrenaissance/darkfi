@@ -14,6 +14,8 @@ pub type MeshPtr = Arc<Mesh>;
 pub struct Mesh {
     sg: SceneGraphPtr2,
     render_api: RenderApiPtr,
+    tasks: Vec<smol::Task<()>>,
+
     vertex_buffer: miniquad::BufferId,
     index_buffer: miniquad::BufferId,
     // Texture
@@ -51,6 +53,7 @@ impl Mesh {
             Self {
                 sg,
                 render_api,
+                tasks: on_modify.tasks,
                 vertex_buffer,
                 index_buffer,
                 num_elements,
