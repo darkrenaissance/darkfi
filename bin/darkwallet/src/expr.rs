@@ -2,13 +2,8 @@ use crate::{
     error::{Error, Result},
     //prop::{Property, PropertySubType, PropertyType, PropertySExprValue},
 };
-use darkfi_serial::{
-    serialize, Decodable, Encodable, ReadExt, SerialDecodable, SerialEncodable, WriteExt,
-};
-use std::{
-    io::{Read, Write},
-    sync::Arc,
-};
+use darkfi_serial::{Decodable, Encodable, ReadExt, SerialDecodable, SerialEncodable};
+use std::io::{Read, Write};
 
 #[derive(Clone, Debug, PartialEq, SerialEncodable, SerialDecodable)]
 pub enum SExprVal {
@@ -29,28 +24,28 @@ impl SExprVal {
 
     fn is_bool(&self) -> bool {
         match self {
-            Self::Bool(v) => true,
+            Self::Bool(_) => true,
             _ => false,
         }
     }
 
     fn is_u32(&self) -> bool {
         match self {
-            Self::Uint32(v) => true,
+            Self::Uint32(_) => true,
             _ => false,
         }
     }
 
     fn is_f32(&self) -> bool {
         match self {
-            Self::Float32(v) => true,
+            Self::Float32(_) => true,
             _ => false,
         }
     }
 
     fn is_str(&self) -> bool {
         match self {
-            Self::Str(v) => true,
+            Self::Str(_) => true,
             _ => false,
         }
     }

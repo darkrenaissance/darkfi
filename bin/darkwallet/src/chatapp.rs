@@ -1,14 +1,11 @@
-use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
-use std::sync::mpsc;
+use darkfi_serial::Encodable;
 
 use crate::{
-    error::Result,
     expr::Op,
     gfx::Rectangle,
     prop::{Property, PropertySubType, PropertyType},
-    res::{ResourceId, ResourceManager},
     scene::{
-        MethodResponseFn, Pimpl, SceneGraph, SceneGraphPtr, SceneNode, SceneNodeId, SceneNodeInfo,
+        SceneGraph, SceneNodeId,
         SceneNodeType,
     },
 };

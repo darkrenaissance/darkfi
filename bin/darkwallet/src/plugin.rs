@@ -1,4 +1,4 @@
-use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
+use darkfi_serial::{Decodable, Encodable};
 use std::{
     io::Cursor,
     sync::{mpsc, Arc, Mutex},
@@ -7,7 +7,7 @@ use std::{
 };
 
 use crate::{
-    error::{Error, Result},
+    error::Result,
     prop::{Property, PropertySubType, PropertyType},
     py::PythonPlugin,
     res::{ResourceId, ResourceManager},

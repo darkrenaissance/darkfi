@@ -1,35 +1,21 @@
-use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
-use freetype as ft;
-use log::{debug, LevelFilter};
+use darkfi_serial::{SerialDecodable, SerialEncodable};
+use log::debug;
 use miniquad::{
     conf, window, Backend, Bindings, BlendFactor, BlendState, BlendValue, BufferId, BufferLayout,
-    BufferSource, BufferType, BufferUsage, Equation, EventHandler, KeyCode, KeyMods, MouseButton,
-    PassAction, Pipeline, PipelineParams, RenderingBackend, ShaderMeta, ShaderSource, TextureId,
-    UniformDesc, UniformType, VertexAttribute, VertexFormat,
+    BufferSource, BufferType, BufferUsage, Equation, EventHandler, KeyCode, KeyMods, PassAction,
+    Pipeline, PipelineParams, RenderingBackend, ShaderMeta, ShaderSource, TextureId, UniformDesc,
+    UniformType, VertexAttribute, VertexFormat,
 };
 use std::{
-    array::IntoIter,
     collections::HashMap,
-    fmt,
-    io::Cursor,
-    sync::{mpsc, Arc, Mutex, MutexGuard},
+    sync::{mpsc, Arc},
     time::{Duration, Instant},
 };
 
 use crate::{
     app::AsyncRuntime,
-    chatview, editbox,
     error::{Error, Result},
-    expr::{SExprMachine, SExprVal},
-    gfx::Rectangle,
-    keysym::{KeyCodeAsStr, MouseButtonAsU8},
-    prop::{Property, PropertySubType, PropertyType},
     pubsub::{Publisher, PublisherPtr, Subscription},
-    res::{ResourceId, ResourceManager},
-    scene::{
-        MethodResponseFn, Pimpl, SceneGraph, SceneGraphPtr, SceneNode, SceneNodeId, SceneNodeInfo,
-        SceneNodeType,
-    },
     shader,
 };
 
@@ -42,6 +28,74 @@ pub struct Vertex {
     pub pos: [f32; 2],
     pub color: [f32; 4],
     pub uv: [f32; 2],
+}
+
+pub struct Point {
+    pub x: f32,
+    pub y: f32,
+}
+
+#[derive(Debug, Clone)]
+pub struct Rectangle {
+    pub x: f32,
+    pub y: f32,
+    pub w: f32,
+    pub h: f32,
+}
+
+impl Rectangle {
+    pub fn zero() -> Self {
+        Self { x: 0., y: 0., w: 0., h: 0. }
+    }
+
+    pub fn from_array(arr: [f32; 4]) -> Self {
+        Self { x: arr[0], y: arr[1], w: arr[2], h: arr[3] }
+    }
+
+    pub fn clip(&self, other: &Self) -> Option<Self> {
+        if other.x + other.w < self.x ||
+            other.x > self.x + self.w ||
+            other.y + other.h < self.y ||
+            other.y > self.y + self.h
+        {
+            return None
+        }
+
+        let mut clipped = other.clone();
+        if clipped.x < self.x {
+            clipped.x = self.x;
+            clipped.w = other.x + other.w - clipped.x;
+        }
+        if clipped.y < self.y {
+            clipped.y = self.y;
+            clipped.h = other.y + other.h - clipped.y;
+        }
+        if clipped.x + clipped.w > self.x + self.w {
+            clipped.w = self.x + self.w - clipped.x;
+        }
+        if clipped.y + clipped.h > self.y + self.h {
+            clipped.h = self.y + self.h - clipped.y;
+        }
+        Some(clipped)
+    }
+
+    pub fn contains(&self, point: &Point) -> bool {
+        self.x <= point.x &&
+            point.x <= self.x + self.w &&
+            self.y <= point.y &&
+            point.y <= self.y + self.h
+    }
+
+    pub fn top_left(&self) -> Point {
+        Point { x: self.x, y: self.y }
+    }
+    pub fn bottom_right(&self) -> Point {
+        Point { x: self.x + self.w, y: self.y + self.h }
+    }
+
+    pub fn includes(&self, child: &Self) -> bool {
+        self.contains(&child.top_left()) && self.contains(&child.bottom_right())
+    }
 }
 
 pub type RenderApiPtr = Arc<RenderApi>;
@@ -120,7 +174,7 @@ pub struct DrawMesh {
 
 #[derive(Debug)]
 pub enum DrawInstruction {
-    ApplyViewport(Rectangle<f32>),
+    ApplyViewport(Rectangle),
     ApplyMatrix(glam::Mat4),
     Draw(DrawMesh),
 }

@@ -1,6 +1,5 @@
 use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 use freetype as ft;
-use log::LevelFilter;
 use miniquad::{
     conf, window, Backend, Bindings, BlendFactor, BlendState, BlendValue, BufferId, BufferLayout,
     BufferSource, BufferType, BufferUsage, Equation, EventHandler, KeyCode, KeyMods, MouseButton,
@@ -12,7 +11,7 @@ use std::{
     collections::HashMap,
     fmt,
     io::Cursor,
-    sync::{mpsc, Arc, Mutex, MutexGuard},
+    sync::{mpsc, Mutex, MutexGuard},
     time::{Duration, Instant},
 };
 
@@ -1072,8 +1071,8 @@ impl<'a> RenderContext<'a> {
                                 let r = (255. * color_r) as u8;
                                 let g = (255. * color_g) as u8;
                                 let b = (255. * color_b) as u8;
-                                let α = ((*coverage as f32) * color_a) as u8;
-                                vec![r, g, b, α]
+                                let a = ((*coverage as f32) * color_a) as u8;
+                                vec![r, g, b, a]
                             })
                             .collect();
                         tdata

@@ -1,37 +1,19 @@
-use async_lock::Mutex;
-use async_recursion::async_recursion;
-use futures::{stream::FuturesUnordered, StreamExt};
-use rand::{rngs::OsRng, Rng};
-use std::{
-    sync::{mpsc, Arc, Weak},
-    thread,
-};
+use std::sync::{Arc, Weak};
 
 use crate::{
-    chatapp,
-    error::{Error, Result},
-    expr::{Op, SExprMachine, SExprVal},
-    gfx::Rectangle,
-    gfx2::{
-        self, DrawCall, DrawInstruction, DrawMesh, GraphicsEventPublisherPtr, RenderApiPtr, Vertex,
-    },
-    prop::{
-        Property, PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyStr,
-        PropertySubType, PropertyType, PropertyUint32,
-    },
-    pubsub::PublisherPtr,
-    scene::{
-        MethodResponseFn, Pimpl, SceneGraph, SceneGraphPtr2, SceneNode, SceneNodeId, SceneNodeInfo,
-        SceneNodeType,
-    },
+    gfx2::{DrawCall, GraphicsEventPublisherPtr, Rectangle, RenderApiPtr},
+    prop::PropertyPtr,
+    scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
 };
 
-use super::{eval_rect, read_rect, DrawUpdate, OnModify, Stoppable};
+use super::{OnModify, Stoppable};
 
 pub type WindowPtr = Arc<Window>;
 
 pub struct Window {
     node_id: SceneNodeId,
+    // Task is dropped at the end of the scope for Window, hence ending it
+    #[allow(dead_code)]
     tasks: Vec<smol::Task<()>>,
     screen_size_prop: PropertyPtr,
     render_api: RenderApiPtr,
@@ -70,8 +52,8 @@ impl Window {
 
                     debug!(target: "app", "Window resized ({w}, {h})");
                     // Now update the properties
-                    screen_size_prop2.set_f32(0, w);
-                    screen_size_prop2.set_f32(1, h);
+                    screen_size_prop2.set_f32(0, w).unwrap();
+                    screen_size_prop2.set_f32(1, h).unwrap();
 
                     let Some(self_) = me2.upgrade() else {
                         // Should not happen
@@ -112,7 +94,7 @@ impl Window {
         let screen_width = self.screen_size_prop.get_f32(0).unwrap();
         let screen_height = self.screen_size_prop.get_f32(1).unwrap();
 
-        let parent_rect = Rectangle { x: 0., y: 0., w: screen_width, h: screen_height };
+        let parent_rect = Rectangle::from_array([0., 0., screen_width, screen_height]);
 
         let mut draw_calls = vec![];
         let mut child_calls = vec![];

@@ -1,19 +1,10 @@
 use async_channel::Sender;
 use async_lock::Mutex;
-use atomic_float::AtomicF32;
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use futures::{stream::FuturesUnordered, StreamExt};
-use std::{
-    fmt,
-    str::FromStr,
-    sync::{
-        atomic::{AtomicBool, AtomicU32, Ordering},
-        Arc,
-    },
-};
+use std::{fmt, str::FromStr, sync::Arc};
 
 use crate::{
-    app, chatview, editbox,
     error::{Error, Result},
     prop::{Property, PropertyPtr, PropertyType},
     ui,
@@ -291,7 +282,6 @@ impl SceneGraph {
         // Now update it for all children and parents too
         let parent_ids: Vec<_> = node.parents.iter().map(|parent_inf| parent_inf.id).collect();
         let child_ids: Vec<_> = node.children.iter().map(|child_inf| child_inf.id).collect();
-        drop(node);
 
         'next_parent: for parent_id in parent_ids {
             let parent = self.get_node_mut(parent_id).unwrap();
@@ -522,11 +512,12 @@ impl SceneNode {
     }
     pub async fn trigger(&self, sig_name: &str, data: Vec<u8>) -> Result<()> {
         let sig = self.get_signal(sig_name).ok_or(Error::SignalNotFound)?;
-        let mut futures = FuturesUnordered::new();
+        let futures = FuturesUnordered::new();
         for (_, slot) in sig.get_slots() {
             // Trigger the slot
             futures.push(async {
-                slot.notify.send(data.clone()).await;
+                // Ignore the result
+                let _ = slot.notify.send(data.clone()).await;
             });
         }
         let _: Vec<_> = futures.collect().await;
@@ -636,8 +627,8 @@ pub struct Method {
 
 pub enum Pimpl {
     Null,
-    EditBox(editbox::EditBoxPtr),
-    ChatView(chatview::ChatViewPtr),
+    //EditBox(editbox::EditBoxPtr),
+    //ChatView(chatview::ChatViewPtr),
     Window(ui::WindowPtr),
     RenderLayer(ui::RenderLayerPtr),
     Mesh(ui::Mesh),

@@ -1,29 +1,9 @@
-use async_lock::Mutex;
-use async_recursion::async_recursion;
-use futures::{stream::FuturesUnordered, StreamExt};
 use rand::{rngs::OsRng, Rng};
-use std::{
-    sync::{mpsc, Arc, Weak},
-    thread,
-};
 
 use crate::{
-    chatapp,
-    error::{Error, Result},
-    expr::{Op, SExprMachine, SExprVal},
-    gfx::Rectangle,
-    gfx2::{
-        self, DrawCall, DrawInstruction, DrawMesh, GraphicsEventPublisherPtr, RenderApiPtr, Vertex,
-    },
-    prop::{
-        Property, PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyStr,
-        PropertySubType, PropertyType, PropertyUint32,
-    },
-    pubsub::PublisherPtr,
-    scene::{
-        MethodResponseFn, Pimpl, SceneGraph, SceneGraphPtr2, SceneNode, SceneNodeId, SceneNodeInfo,
-        SceneNodeType,
-    },
+    gfx2::{DrawCall, DrawInstruction, DrawMesh, Rectangle, RenderApiPtr, Vertex},
+    prop::PropertyPtr,
+    scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
 };
 
 use super::{eval_rect, read_rect, DrawUpdate, Stoppable};
@@ -68,7 +48,7 @@ impl Mesh {
         })
     }
 
-    pub fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle<f32>) -> Option<DrawUpdate> {
+    pub fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
         debug!(target: "app", "Mesh::draw()");
         // Only used for debug messages
         let node = sg.get_node(self.node_id).unwrap();

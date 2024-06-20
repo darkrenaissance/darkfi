@@ -1,15 +1,12 @@
-use std::{
-    sync::{Arc, Mutex},
-    thread,
-};
+use std::sync::{Arc, Mutex};
 
 use crate::{
-    error::{Error, Result},
+    error::Result,
     plugin::{
         Category, Plugin, PluginEvent, PluginInstance, PluginInstancePtr, PluginMetadata, SemVer,
         SubCategory,
     },
-    scene::{MethodResponseFn, SceneGraph, SceneGraphPtr, SceneNodeId, SceneNodeType},
+    scene::SceneGraphPtr,
 };
 
 pub struct PythonPlugin {

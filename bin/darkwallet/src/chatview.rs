@@ -1,28 +1,23 @@
 use atomic_float::AtomicF32;
-use darkfi_serial::Decodable;
-use log::debug;
-use miniquad::{window, KeyMods, MouseButton, TextureId, UniformType};
+use miniquad::{TextureId, UniformType};
 use std::{
     collections::HashMap,
-    fs::File,
-    io::{BufRead, BufReader, Cursor},
+    io::{BufRead, BufReader},
     path::Path,
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::Ordering,
         Arc, Mutex,
     },
-    time::{Duration, Instant},
 };
 
 use crate::{
-    error::{Error, Result},
+    error::Result,
     gfx::{
-        FreetypeFace, Point, Rectangle, RenderContext, COLOR_BLUE, COLOR_DARKGREY, COLOR_GREEN,
+        FreetypeFace, Point, Rectangle, RenderContext,
         COLOR_RED, COLOR_WHITE,
     },
-    keysym::{KeyCodeAsU16, MouseButtonAsU8},
-    prop::{Property, PropertyBool, PropertyColor, PropertyFloat32, PropertyStr, PropertyUint32},
-    scene::{Pimpl, SceneGraph, SceneNode, SceneNodeId, Slot},
+    prop::PropertyBool,
+    scene::{Pimpl, SceneGraph, SceneNodeId},
     text::{Glyph, TextShaper},
 };
 

@@ -6,11 +6,7 @@
 //#![deny(unused_imports)]
 
 use async_lock::Mutex;
-use futures::{stream::FuturesUnordered, StreamExt};
-use std::{
-    sync::{mpsc, Arc},
-    thread,
-};
+use std::sync::{mpsc, Arc};
 
 #[macro_use]
 extern crate log;
@@ -18,30 +14,26 @@ extern crate log;
 use log::LevelFilter;
 
 mod app;
-mod chatapp;
-mod chatview;
-mod editbox;
+//mod chatapp;
+//mod chatview;
+//mod editbox;
 mod error;
 mod expr;
-mod gfx;
+//mod gfx;
 mod gfx2;
 mod keysym;
 mod net;
-mod plugin;
+//mod plugin;
 mod prop;
 mod pubsub;
-mod py;
-mod res;
+//mod py;
+//mod res;
 mod scene;
 mod shader;
-mod text;
+//mod text;
 mod ui;
 
-use crate::{
-    error::{Error, Result},
-    net::ZeroMQAdapter,
-    scene::{SceneGraph, SceneGraphPtr},
-};
+use crate::{net::ZeroMQAdapter, scene::SceneGraph};
 
 #[cfg(target_os = "android")]
 fn panic_hook(panic_info: &std::panic::PanicInfo) {
@@ -73,21 +65,22 @@ fn main() {
     let ex = Arc::new(smol::Executor::new());
     let sg = Arc::new(Mutex::new(SceneGraph::new()));
 
+    let async_runtime = app::AsyncRuntime::new(ex.clone());
+    async_runtime.start();
+
     let sg2 = sg.clone();
     let ex2 = ex.clone();
     let zmq_task = ex.spawn(async {
-        let mut zmq_rpc = ZeroMQAdapter::new(sg2, ex2).await;
+        let zmq_rpc = ZeroMQAdapter::new(sg2, ex2).await;
         zmq_rpc.run().await;
     });
+    async_runtime.push_task(zmq_task);
 
     let (method_req, method_rep) = mpsc::channel();
     // The UI actually needs to be running for this to reply back.
     // Otherwise calls will just hang.
     let render_api = gfx2::RenderApi::new(method_req);
     let event_pub = gfx2::GraphicsEventPublisher::new();
-
-    let async_runtime = app::AsyncRuntime::new(ex.clone());
-    async_runtime.start();
 
     let app = app::App::new(sg.clone(), ex.clone(), render_api.clone(), event_pub.clone());
     let app_task = ex.spawn(app.start());

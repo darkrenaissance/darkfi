@@ -2,8 +2,7 @@ use async_lock::Mutex;
 use darkfi_serial::{deserialize, Decodable, Encodable, SerialDecodable, VarInt};
 use std::{
     io::Cursor,
-    sync::{atomic::Ordering, mpsc, Arc},
-    thread,
+    sync::{mpsc, Arc},
 };
 use zeromq::{Socket, SocketRecv, SocketSend};
 

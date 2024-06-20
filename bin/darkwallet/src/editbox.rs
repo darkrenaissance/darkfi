@@ -1,26 +1,21 @@
-use darkfi_serial::Decodable;
-use freetype as ft;
 use log::{debug, info};
 use miniquad::{window, KeyMods, MouseButton, TextureId, UniformType};
 use std::{
     collections::HashMap,
-    io::Cursor,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc, Mutex,
     },
-    time::{Duration, Instant},
+    time::Instant,
 };
 
 use crate::{
     error::{Error, Result},
     gfx::{
-        FreetypeFace, Point, Rectangle, RenderContext, COLOR_BLUE, COLOR_DARKGREY, COLOR_GREEN,
-        COLOR_RED, COLOR_WHITE,
+        FreetypeFace, Point, Rectangle, RenderContext, COLOR_DARKGREY, COLOR_GREEN, COLOR_WHITE,
     },
-    keysym::{KeyCodeAsU16, MouseButtonAsU8},
     prop::{Property, PropertyBool, PropertyColor, PropertyFloat32, PropertyStr, PropertyUint32},
-    scene::{Pimpl, SceneGraph, SceneNode, SceneNodeId, Slot},
+    scene::{Pimpl, SceneGraph, SceneNodeId},
     text::{Glyph, TextShaper},
 };
 

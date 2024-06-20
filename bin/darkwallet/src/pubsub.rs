@@ -9,7 +9,7 @@ use crate::error::{Error, Result};
 pub type SubscriptionId = usize;
 
 // Waiting for trait aliases
-trait Piped: Clone + Send + 'static {}
+pub trait Piped: Clone + Send + 'static {}
 impl<T> Piped for T where T: Clone + Send + 'static {}
 
 #[derive(Debug)]

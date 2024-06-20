@@ -1,14 +1,8 @@
 use crate::error::{Error, Result};
-use atomic_float::AtomicF32;
-use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable, WriteExt};
+use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
 use std::{
-    fmt,
     io::Write,
-    str::FromStr,
-    sync::{
-        atomic::{AtomicBool, AtomicU32, Ordering},
-        Arc, Mutex, MutexGuard,
-    },
+    sync::{Arc, Mutex},
 };
 
 use crate::{

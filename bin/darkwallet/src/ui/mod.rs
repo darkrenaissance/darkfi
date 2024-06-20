@@ -1,29 +1,11 @@
-use async_lock::Mutex;
-use async_recursion::async_recursion;
-use futures::{stream::FuturesUnordered, StreamExt};
-use rand::{rngs::OsRng, Rng};
-use std::{
-    sync::{mpsc, Arc, Weak},
-    thread,
-};
+use std::sync::{Arc, Weak};
 
 use crate::{
-    chatapp,
     error::{Error, Result},
-    expr::{Op, SExprMachine, SExprVal},
-    gfx::Rectangle,
-    gfx2::{
-        self, DrawCall, DrawInstruction, DrawMesh, GraphicsEventPublisherPtr, RenderApiPtr, Vertex,
-    },
-    prop::{
-        Property, PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyStr,
-        PropertySubType, PropertyType, PropertyUint32,
-    },
-    pubsub::PublisherPtr,
-    scene::{
-        MethodResponseFn, Pimpl, SceneGraph, SceneGraphPtr2, SceneNode, SceneNodeId, SceneNodeInfo,
-        SceneNodeType,
-    },
+    expr::{SExprMachine, SExprVal},
+    gfx2::{DrawCall, Rectangle},
+    prop::PropertyPtr,
+    scene::{SceneGraph, SceneNode, SceneNodeId, SceneNodeType},
 };
 
 mod mesh;
@@ -90,7 +72,7 @@ impl<T: Send + Sync + 'static> OnModify<T> {
     }
 }
 
-pub fn eval_rect(rect: PropertyPtr, parent_rect: &Rectangle<f32>) -> Result<()> {
+pub fn eval_rect(rect: PropertyPtr, parent_rect: &Rectangle) -> Result<()> {
     if rect.array_len != 4 {
         return Err(Error::PropertyWrongLen)
     }
@@ -116,7 +98,7 @@ pub fn eval_rect(rect: PropertyPtr, parent_rect: &Rectangle<f32>) -> Result<()> 
     Ok(())
 }
 
-pub fn read_rect(rect_prop: PropertyPtr) -> Result<Rectangle<f32>> {
+pub fn read_rect(rect_prop: PropertyPtr) -> Result<Rectangle> {
     if rect_prop.array_len != 4 {
         return Err(Error::PropertyWrongLen)
     }
@@ -132,7 +114,7 @@ pub fn read_rect(rect_prop: PropertyPtr) -> Result<Rectangle<f32>> {
     Ok(Rectangle::from_array(rect))
 }
 
-pub fn get_parent_rect(sg: &SceneGraph, node: &SceneNode) -> Option<Rectangle<f32>> {
+pub fn get_parent_rect(sg: &SceneGraph, node: &SceneNode) -> Option<Rectangle> {
     // read our parent
     if node.parents.is_empty() {
         info!("RenderLayer {:?} has no parents so skipping", node);
@@ -156,7 +138,7 @@ pub fn get_parent_rect(sg: &SceneGraph, node: &SceneNode) -> Option<Rectangle<f3
             let screen_width = screen_size_prop.get_f32(0).unwrap();
             let screen_height = screen_size_prop.get_f32(1).unwrap();
 
-            let parent_rect = Rectangle { x: 0., y: 0., w: screen_width, h: screen_height };
+            let parent_rect = Rectangle::from_array([0., 0., screen_width, screen_height]);
             parent_rect
         }
         SceneNodeType::RenderLayer => {

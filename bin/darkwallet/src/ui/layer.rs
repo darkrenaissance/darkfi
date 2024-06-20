@@ -1,29 +1,11 @@
-use async_lock::Mutex;
 use async_recursion::async_recursion;
-use futures::{stream::FuturesUnordered, StreamExt};
 use rand::{rngs::OsRng, Rng};
-use std::{
-    sync::{mpsc, Arc, Weak},
-    thread,
-};
+use std::sync::{Arc, Weak};
 
 use crate::{
-    chatapp,
-    error::{Error, Result},
-    expr::{Op, SExprMachine, SExprVal},
-    gfx::Rectangle,
-    gfx2::{
-        self, DrawCall, DrawInstruction, DrawMesh, GraphicsEventPublisherPtr, RenderApiPtr, Vertex,
-    },
-    prop::{
-        Property, PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyStr,
-        PropertySubType, PropertyType, PropertyUint32,
-    },
-    pubsub::PublisherPtr,
-    scene::{
-        MethodResponseFn, Pimpl, SceneGraph, SceneGraphPtr2, SceneNode, SceneNodeId, SceneNodeInfo,
-        SceneNodeType,
-    },
+    gfx2::{DrawCall, DrawInstruction, Rectangle, RenderApiPtr},
+    prop::{PropertyBool, PropertyPtr},
+    scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
 };
 
 use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify, Stoppable};
@@ -33,6 +15,8 @@ pub type RenderLayerPtr = Arc<RenderLayer>;
 pub struct RenderLayer {
     sg: SceneGraphPtr2,
     node_id: SceneNodeId,
+    // Task is dropped at the end of the scope for RenderLayer, hence ending it
+    #[allow(dead_code)]
     tasks: Vec<smol::Task<()>>,
     render_api: RenderApiPtr,
 
@@ -40,8 +24,6 @@ pub struct RenderLayer {
 
     is_visible: PropertyBool,
     rect: PropertyPtr,
-
-    parent_rect: Mutex<Rectangle<f32>>,
 }
 
 impl RenderLayer {
@@ -60,10 +42,6 @@ impl RenderLayer {
         let rect = node.get_property("rect").expect("RenderLayer::rect");
         drop(sg);
 
-        // Monitor for changes to screen_size or scale properties
-        // If so then trigger draw
-        let rect_sub = rect.subscribe_modify();
-
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
             let mut on_modify = OnModify::new(ex.clone(), node_name, node_id, me.clone());
             on_modify.when_change(rect.clone(), Self::redraw);
@@ -76,7 +54,6 @@ impl RenderLayer {
                 dc_key: OsRng.gen(),
                 is_visible,
                 rect,
-                parent_rect: Mutex::new(Rectangle { x: 0., y: 0., w: 0., h: 0. }),
             }
         });
 
@@ -100,7 +77,7 @@ impl RenderLayer {
     }
 
     #[async_recursion]
-    pub async fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle<f32>) -> Option<DrawUpdate> {
+    pub async fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
         debug!(target: "app", "RenderLayer::draw()");
         let node = sg.get_node(self.node_id).unwrap();
 

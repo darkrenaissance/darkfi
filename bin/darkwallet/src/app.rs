@@ -1,36 +1,18 @@
-use async_lock::Mutex;
 use async_recursion::async_recursion;
 use futures::{stream::FuturesUnordered, StreamExt};
-use rand::{rngs::OsRng, Rng};
-use std::{
-    sync::{mpsc, Arc, Weak},
-    thread,
-};
+use std::{sync::Arc, thread};
 
 use crate::{
-    chatapp,
-    error::{Error, Result},
-    expr::{Op, SExprMachine, SExprVal},
-    gfx::Rectangle,
-    gfx2::{
-        self, DrawCall, DrawInstruction, DrawMesh, GraphicsEventPublisherPtr, RenderApiPtr, Vertex,
-    },
-    prop::{
-        Property, PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyStr,
-        PropertySubType, PropertyType, PropertyUint32,
-    },
-    pubsub::PublisherPtr,
-    scene::{
-        MethodResponseFn, Pimpl, SceneGraph, SceneGraphPtr2, SceneNode, SceneNodeId, SceneNodeInfo,
-        SceneNodeType,
-    },
-    ui::{
-        eval_rect, get_parent_rect, read_rect, DrawUpdate, Mesh, OnModify, RenderLayer,
-        RenderLayerPtr, Stoppable, Window, WindowPtr,
-    },
+    expr::Op,
+    gfx2::{GraphicsEventPublisherPtr, RenderApiPtr, Vertex},
+    prop::{Property, PropertySubType, PropertyType},
+    scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId, SceneNodeType},
+    ui::{Mesh, RenderLayer, Stoppable, Window},
 };
 
-pub type AsyncRuntimePtr = Arc<AsyncRuntime>;
+//fn print_type_of<T>(_: &T) {
+//    println!("{}", std::any::type_name::<T>())
+//}
 
 pub struct AsyncRuntime {
     signal: smol::channel::Sender<()>,
@@ -82,7 +64,7 @@ impl AsyncRuntime {
             // Perform cleanup code
             // If not finished in certain amount of time, then just exit
 
-            let mut futures = FuturesUnordered::new();
+            let futures = FuturesUnordered::new();
             for task in tasks {
                 futures.push(task.cancel());
             }
@@ -94,12 +76,10 @@ impl AsyncRuntime {
         }
         let exec_threadpool = std::mem::replace(&mut *self.exec_threadpool.lock().unwrap(), None);
         let exec_threadpool = exec_threadpool.expect("threadpool wasnt started");
-        exec_threadpool.join();
+        exec_threadpool.join().unwrap();
         debug!(target: "app", "Stopped app");
     }
 }
-
-pub type AppPtr = Arc<App>;
 
 pub struct App {
     sg: SceneGraphPtr2,
@@ -175,10 +155,11 @@ impl App {
         self.stop_node(&sg, window_id).await;
     }
 
+    #[async_recursion]
     async fn stop_node(&self, sg: &SceneGraph, node_id: SceneNodeId) {
         let node = sg.get_node(node_id).unwrap();
         for child_inf in node.get_children2() {
-            self.stop_node(sg, child_inf.id);
+            self.stop_node(sg, child_inf.id).await;
         }
         match &node.pimpl {
             Pimpl::Window(win) => win.stop().await,
@@ -191,7 +172,7 @@ impl App {
     async fn make_me_a_schema_plox(&self) {
         // Create a layer called view
         let mut sg = self.sg.lock().await;
-        let layer_node_id = chatapp::create_layer(&mut sg, "view");
+        let layer_node_id = create_layer(&mut sg, "view");
 
         // Customize our layer
         let node = sg.get_node(layer_node_id).unwrap();
@@ -218,7 +199,7 @@ impl App {
         sg.link(node_id, window_id).unwrap();
 
         // Create a bg mesh
-        let node_id = chatapp::create_mesh(&mut sg, "bg");
+        let node_id = create_mesh(&mut sg, "bg");
 
         let node = sg.get_node_mut(node_id).unwrap();
         let prop = node.get_property("rect").unwrap();
@@ -254,7 +235,7 @@ impl App {
         sg.link(node_id, layer_node_id).unwrap();
 
         // Create another mesh
-        let node_id = chatapp::create_mesh(&mut sg, "box");
+        let node_id = create_mesh(&mut sg, "box");
 
         let node = sg.get_node_mut(node_id).unwrap();
         let prop = node.get_property("rect").unwrap();
@@ -298,6 +279,29 @@ impl App {
     }
 }
 
-fn print_type_of<T>(_: &T) {
-    println!("{}", std::any::type_name::<T>())
+pub fn create_layer(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
+    let node = sg.add_node(name, SceneNodeType::RenderLayer);
+    let prop = Property::new("is_visible", PropertyType::Bool, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_array_len(4);
+    prop.allow_exprs();
+    node.add_property(prop).unwrap();
+
+    node.id
+}
+
+pub fn create_mesh(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
+    let node = sg.add_node(name, SceneNodeType::RenderMesh);
+
+    let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_array_len(4);
+    prop.allow_exprs();
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
+    node.id
 }

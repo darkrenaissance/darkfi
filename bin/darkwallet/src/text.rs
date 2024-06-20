@@ -1,5 +1,4 @@
 use freetype as ft;
-use log::debug;
 
 use crate::gfx::{FreetypeFace, Rectangle};
 
