@@ -108,9 +108,10 @@ def prompt_comment_text():
     ])
 
 def set_task_attr(task, attr, val):
-    # templ = lib.util.task_template
-    assert attr in ["desc", "rank", "due", "project"]
-    # assert templ[attr] != list
+    if attr not in ["desc", "rank", "due", "project"]:
+        print(f"Error: invalid attribute: {attr} {val}")
+        print("Task is not added")
+        exit(-1)
 
     if val.lower() == "none":
         task[attr] = None
