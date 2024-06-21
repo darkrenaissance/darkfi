@@ -43,7 +43,7 @@ fn init_logger() {
     cfg.add_filter_ignore("net::session".to_string());
     cfg.add_filter_ignore("net::outbound_session".to_string());
     cfg.add_filter_ignore("net::inbound_session".to_string());
-    cfg.add_filter_ignore("net::message_subscriber".to_string());
+    cfg.add_filter_ignore("net::message_publisher".to_string());
     cfg.add_filter_ignore("net::protocol_address".to_string());
     cfg.add_filter_ignore("net::protocol_version".to_string());
     cfg.add_filter_ignore("net::protocol_registry".to_string());
@@ -75,21 +75,32 @@ fn get_random_available_port() -> usize {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
     drop(listener);
-    info!("Found port: {}", port);
     port.into()
 }
 
+fn get_unique_ports() -> Vec<usize> {
+    let mut ports = HashSet::new();
+
+    while ports.len() < N_NODES {
+        ports.insert(get_random_available_port());
+    }
+
+    ports.into_iter().collect()
+}
+
 async fn spawn_seed_session(seed_addr: Url, ex: Arc<Executor<'static>>) -> Vec<Arc<P2p>> {
-    let mut outbound_instances = vec![];
     info!("========================================================");
     info!("Initializing outbound nodes...");
     info!("========================================================");
-    for _ in 0..N_NODES {
-        let inbound_port = get_random_available_port();
+
+    let mut outbound_instances = vec![];
+    let ports = get_unique_ports();
+
+    for port in ports {
         let settings = Settings {
             localnet: true,
-            inbound_addrs: vec![Url::parse(&format!("tcp://127.0.0.1:{}", inbound_port)).unwrap()],
-            external_addrs: vec![Url::parse(&format!("tcp://127.0.0.1:{}", inbound_port)).unwrap()],
+            inbound_addrs: vec![Url::parse(&format!("tcp://127.0.0.1:{}", port)).unwrap()],
+            external_addrs: vec![Url::parse(&format!("tcp://127.0.0.1:{}", port)).unwrap()],
             outbound_connections: 2,
             outbound_peer_discovery_cooloff_time: 2,
             outbound_connect_timeout: 2,
@@ -97,7 +108,7 @@ async fn spawn_seed_session(seed_addr: Url, ex: Arc<Executor<'static>>) -> Vec<A
             greylist_refinery_interval: 15,
             peers: vec![],
             seeds: vec![seed_addr.clone()],
-            node_id: (inbound_port).to_string(),
+            node_id: (port).to_string(),
             allowed_transports: vec!["tcp".to_string()],
             ..Default::default()
         };
@@ -115,16 +126,12 @@ async fn spawn_seed_session(seed_addr: Url, ex: Arc<Executor<'static>>) -> Vec<A
 }
 
 async fn spawn_manual_session(ex: Arc<Executor<'static>>) -> Vec<Arc<P2p>> {
-    let mut manual_instances = vec![];
-    let mut rng = rand::thread_rng();
-    let mut ports = vec![];
-
     info!("========================================================");
     info!("Initializing manual nodes...");
     info!("========================================================");
-    for _ in 0..N_NODES {
-        ports.push(get_random_available_port());
-    }
+    let mut manual_instances = vec![];
+    let mut rng = rand::thread_rng();
+    let ports = get_unique_ports();
 
     for i in 0..N_NODES {
         let mut peer_indexes_copy: Vec<usize> = (0..N_NODES).collect();
@@ -445,6 +452,9 @@ async fn p2p_test_real(ex: Arc<Executor<'static>>) {
     for p2p in manual_instances.clone() {
         // We should have (N_CONNS outbound + N_CONNS inbound)
         // connections at this point.
+        info!("========================================================");
+        info!("Checking manual node={}", p2p.settings().node_id);
+        info!("========================================================");
         let channels = p2p.hosts().channels().await;
         assert!(channels.len() == N_CONNS * 2);
     }
