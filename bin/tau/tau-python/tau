@@ -7,6 +7,8 @@ from colorama import Fore, Style
 
 import api, lib.util
 
+known_attrs = ["desc", "rank", "due", "project"]
+
 async def add_task(task_args, server_name, port):
     task = {
         "title": None,
@@ -35,7 +37,7 @@ async def add_task(task_args, server_name, port):
                 print(f"error: duplicate assign {assign} in task", file=sys.stderr)
                 sys.exit(-1)
             task["assign"].append(assign)
-        elif ":" in arg:
+        elif ":" in arg and arg.split(":")[0] in known_attrs:
             attr, val = arg.split(":", 1)
             set_task_attr(task, attr, val)
         else:
@@ -108,7 +110,7 @@ def prompt_comment_text():
     ])
 
 def set_task_attr(task, attr, val):
-    if attr not in ["desc", "rank", "due", "project"]:
+    if attr not in known_attrs:
         print(f"Error: invalid attribute: {attr} {val}")
         print("Task is not added")
         exit(-1)
