@@ -140,10 +140,11 @@ impl Acceptor {
                     let channel_ = channel.clone();
                     let cv_ = cv.clone();
                     ex.spawn(async move {
-                        let stop_sub = channel_.subscribe_stop().await.unwrap();
+                        let stop_sub = channel_.subscribe_stop().await?;
                         stop_sub.receive().await;
                         self_.conn_count.fetch_sub(1, SeqCst);
                         cv_.notify();
+                        Ok::<(), crate::Error>(())
                     })
                     .detach();
 
