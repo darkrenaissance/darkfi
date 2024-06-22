@@ -2,6 +2,31 @@ use freetype as ft;
 
 use crate::gfx::{FreetypeFace, Rectangle};
 
+// From https://sourceforge.net/projects/freetype/files/freetype2/2.6/
+//
+// * An `FT_Face' object can only be safely used from one thread at
+//   a time.
+//
+// * An `FT_Library'  object can  now be used  without modification
+//   from multiple threads at the same time.
+//
+// * `FT_Face' creation and destruction  with the same `FT_Library'
+//   object can only be done from one thread at a time.
+//
+// One can use a single  `FT_Library' object across threads as long
+// as a mutex lock is used around `FT_New_Face' and `FT_Done_Face'.
+// Any calls to `FT_Load_Glyph' and similar API are safe and do not
+// need the lock  to be held as  long as the same  `FT_Face' is not
+// used from multiple threads at the same time.
+
+// Harfbuzz is threadsafe.
+
+// Notes:
+// * All ft init and face creation should happen at startup.
+// * FT faces protected behind an async Mutex
+// * Glyph cache. Key is (glyph_id, font_size)
+// * Glyph texture cache: (glyph_id, font_size, color)
+
 #[derive(Clone)]
 pub struct Glyph {
     pub id: u32,
@@ -163,6 +188,7 @@ impl TextShaper {
                     let w = (bmp_width as f32 * font_size) / bmp_height as f32;
                     let h = font_size;
 
+                    // Shouldn't this use the bearing?
                     let x = current_x;
                     let y = current_y - h;
 

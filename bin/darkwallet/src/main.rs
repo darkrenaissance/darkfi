@@ -30,10 +30,11 @@ mod pubsub;
 //mod res;
 mod scene;
 mod shader;
-//mod text;
+mod text2;
 mod ui;
+mod util;
 
-use crate::{net::ZeroMQAdapter, scene::SceneGraph};
+use crate::{net::ZeroMQAdapter, scene::SceneGraph, text2::TextShaper};
 
 #[cfg(target_os = "android")]
 fn panic_hook(panic_info: &std::panic::PanicInfo) {
@@ -53,6 +54,9 @@ fn main() {
 
     #[cfg(target_os = "linux")]
     {
+        // For ANSI colors in the terminal
+        colored::control::set_override(true);
+
         let term_logger = simplelog::TermLogger::new(
             simplelog::LevelFilter::Debug,
             simplelog::Config::default(),
@@ -82,7 +86,10 @@ fn main() {
     let render_api = gfx2::RenderApi::new(method_req);
     let event_pub = gfx2::GraphicsEventPublisher::new();
 
-    let app = app::App::new(sg.clone(), ex.clone(), render_api.clone(), event_pub.clone());
+    let text_shaper = TextShaper::new();
+
+    let app =
+        app::App::new(sg.clone(), ex.clone(), render_api.clone(), event_pub.clone(), text_shaper);
     let app_task = ex.spawn(app.start());
     async_runtime.push_task(app_task);
     //app.clone().start();

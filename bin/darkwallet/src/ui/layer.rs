@@ -68,20 +68,21 @@ impl RenderLayer {
             return;
         };
 
-        let Some(draw_update) = self.draw(&sg, &parent_rect) else {
-            error!("RenderLayer {:?} failed to draw", node);
+        let Some(draw_update) = self.draw(&sg, &parent_rect).await else {
+            error!(target: "ui::layer", "RenderLayer {:?} failed to draw", node);
             return;
         };
         self.render_api.replace_draw_calls(draw_update.draw_calls).await;
-        debug!("replace draw calls done");
+        debug!(target: "ui::layer", "replace draw calls done");
     }
 
-    pub fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
-        debug!(target: "app", "RenderLayer::draw()");
+    #[async_recursion]
+    pub async fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
+        debug!(target: "ui::layer", "RenderLayer::draw()");
         let node = sg.get_node(self.node_id).unwrap();
 
         if !self.is_visible.get() {
-            debug!(target: "app", "invisible layer node '{}':{}", node.name, node.id);
+            debug!(target: "ui::layer", "invisible layer node '{}':{}", node.name, node.id);
             return None
         }
 
@@ -98,15 +99,15 @@ impl RenderLayer {
 
         if !parent_rect.includes(&rect) {
             error!(
-                target: "app",
+                target: "ui::layer",
                 "layer '{}':{} rect {:?} is not inside parent {:?}",
                 node.name, node.id, rect, parent_rect
             );
             return None
         }
 
-        debug!(target: "app", "Parent rect: {:?}", parent_rect);
-        debug!(target: "app", "Viewport rect: {:?}", rect);
+        debug!(target: "ui::layer", "Parent rect: {:?}", parent_rect);
+        debug!(target: "ui::layer", "Viewport rect: {:?}", rect);
 
         // Apply viewport
 
@@ -116,10 +117,11 @@ impl RenderLayer {
             let node = sg.get_node(child_inf.id).unwrap();
 
             let dcs = match &node.pimpl {
-                Pimpl::RenderLayer(layer) => layer.draw(&sg, &rect),
+                Pimpl::RenderLayer(layer) => layer.draw(&sg, &rect).await,
                 Pimpl::Mesh(mesh) => mesh.draw(&sg, &rect),
+                Pimpl::Text(txt) => txt.draw(&sg, &rect).await,
                 _ => {
-                    error!(target: "app", "unhandled pimpl type");
+                    error!(target: "ui::layer", "unhandled pimpl type");
                     continue
                 }
             };

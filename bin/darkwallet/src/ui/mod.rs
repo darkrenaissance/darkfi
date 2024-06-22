@@ -12,6 +12,8 @@ mod mesh;
 pub use mesh::{Mesh, MeshPtr};
 mod layer;
 pub use layer::{RenderLayer, RenderLayerPtr};
+mod text;
+pub use text::{Text, TextPtr};
 mod win;
 pub use win::{Window, WindowPtr};
 

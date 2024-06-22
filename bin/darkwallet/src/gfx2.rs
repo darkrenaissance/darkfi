@@ -17,6 +17,7 @@ use crate::{
     error::{Error, Result},
     pubsub::{Publisher, PublisherPtr, Subscription},
     shader,
+    util::ansi_texture,
 };
 
 // This is very noisy so suppress output by default
@@ -109,7 +110,7 @@ impl RenderApi {
         Arc::new(Self { method_req })
     }
 
-    async fn new_texture(&self, width: u16, height: u16, data: Vec<u8>) -> Result<TextureId> {
+    pub async fn new_texture(&self, width: u16, height: u16, data: Vec<u8>) -> Result<TextureId> {
         let (sendr, recvr) = async_channel::bounded(1);
 
         let method = GraphicsMethod::NewTexture((width, height, data, sendr));
@@ -120,7 +121,7 @@ impl RenderApi {
         Ok(texture_id)
     }
 
-    fn delete_texture(&self, texture: TextureId) {
+    pub fn delete_texture(&self, texture: TextureId) {
         let method = GraphicsMethod::DeleteTexture(texture);
 
         // Ignore any error
@@ -394,9 +395,13 @@ impl Stage {
         sendr: async_channel::Sender<TextureId>,
     ) {
         let texture = self.ctx.new_texture_from_rgba8(width, height, &data);
+        debug!(target: "gfx2", "Invoked method: new_texture({}, {}, ...) -> {:?}\n{}",
+               width, height, texture,
+               ansi_texture(width as usize, height as usize, &data));
         sendr.try_send(texture).unwrap();
     }
     fn method_delete_texture(&mut self, texture: TextureId) {
+        debug!(target: "gfx2", "Invoked method: delete_texture({:?})", texture);
         self.ctx.delete_texture(texture);
     }
     fn method_new_vertex_buffer(
@@ -409,6 +414,7 @@ impl Stage {
             BufferUsage::Immutable,
             BufferSource::slice(&verts),
         );
+        debug!(target: "gfx2", "Invoked method: new_vertex_buffer({:?}) -> {:?}", verts, buffer);
         sendr.try_send(buffer).unwrap();
     }
     fn method_new_index_buffer(
@@ -421,12 +427,15 @@ impl Stage {
             BufferUsage::Immutable,
             BufferSource::slice(&indices),
         );
+        debug!(target: "gfx2", "Invoked method: new_index_buffer({:?}) -> {:?}", indices, buffer);
         sendr.try_send(buffer).unwrap();
     }
     fn method_delete_buffer(&mut self, buffer: BufferId) {
+        debug!(target: "gfx2", "Invoked method: delete_buffer({:?})", buffer);
         self.ctx.delete_buffer(buffer);
     }
     fn method_replace_draw_calls(&mut self, dcs: Vec<(u64, DrawCall)>) {
+        debug!(target: "gfx2", "Invoked method: replace_draw_calls({:?})", dcs);
         for (key, val) in dcs {
             self.draw_calls.insert(key, val);
         }
@@ -452,7 +461,7 @@ impl EventHandler for Stage {
 
         loop {
             let Ok(method) = self.method_rep.recv_deadline(deadline) else { break };
-            debug!(target: "gfx", "Received method: {:?}", method);
+            //debug!(target: "gfx", "Received method: {:?}", method);
             match method {
                 GraphicsMethod::NewTexture((width, height, data, sendr)) => {
                     self.method_new_texture(width, height, data, sendr)

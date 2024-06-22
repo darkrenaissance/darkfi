@@ -7,7 +7,8 @@ use crate::{
     gfx2::{GraphicsEventPublisherPtr, RenderApiPtr, Vertex},
     prop::{Property, PropertySubType, PropertyType},
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId, SceneNodeType},
-    ui::{Mesh, RenderLayer, Stoppable, Window},
+    text2::TextShaperPtr,
+    ui::{Mesh, RenderLayer, Stoppable, Text, Window},
 };
 
 //fn print_type_of<T>(_: &T) {
@@ -86,6 +87,7 @@ pub struct App {
     ex: Arc<smol::Executor<'static>>,
     render_api: RenderApiPtr,
     event_pub: GraphicsEventPublisherPtr,
+    text_shaper: TextShaperPtr,
 }
 
 impl App {
@@ -94,12 +96,13 @@ impl App {
         ex: Arc<smol::Executor<'static>>,
         render_api: RenderApiPtr,
         event_pub: GraphicsEventPublisherPtr,
+        text_shaper: TextShaperPtr,
     ) -> Arc<Self> {
-        Arc::new(Self { sg, ex, render_api, event_pub })
+        Arc::new(Self { sg, ex, render_api, event_pub, text_shaper })
     }
 
     pub async fn start(self: Arc<Self>) {
-        debug!("App::start()");
+        debug!(target: "app", "App::start()");
         // Setup UI
         let mut sg = self.sg.lock().await;
 
@@ -252,7 +255,6 @@ impl App {
         prop.set_f32(3, 60.).unwrap();
 
         // Setup the pimpl
-        let node_id = node.id;
         let (x1, y1) = (0., 0.);
         let (x2, y2) = (1., 1.);
         let verts = vec![
@@ -274,6 +276,40 @@ impl App {
             self.render_api.clone(),
             verts,
             indices,
+        )
+        .await;
+        let mut sg = self.sg.lock().await;
+        let node = sg.get_node_mut(node_id).unwrap();
+        node.pimpl = pimpl;
+
+        sg.link(node_id, layer_node_id).unwrap();
+
+        // Create some text
+        let node_id = create_text(&mut sg, "label");
+
+        let node = sg.get_node_mut(node_id).unwrap();
+        let prop = node.get_property("rect").unwrap();
+        prop.set_f32(0, 100.).unwrap();
+        prop.set_f32(1, 100.).unwrap();
+        prop.set_f32(2, 800.).unwrap();
+        prop.set_f32(3, 200.).unwrap();
+        node.set_property_f32("baseline", 40.).unwrap();
+        node.set_property_f32("font_size", 20.).unwrap();
+        //node.set_property_str("text", "anon1🍆").unwrap();
+        node.set_property_str("text", "anon1").unwrap();
+        let prop = node.get_property("color").unwrap();
+        prop.set_f32(0, 0.).unwrap();
+        prop.set_f32(1, 1.).unwrap();
+        prop.set_f32(2, 0.).unwrap();
+        prop.set_f32(3, 1.).unwrap();
+
+        drop(sg);
+        let pimpl = Text::new(
+            self.ex.clone(),
+            self.sg.clone(),
+            node_id,
+            self.render_api.clone(),
+            self.text_shaper.clone(),
         )
         .await;
         let mut sg = self.sg.lock().await;
@@ -315,6 +351,37 @@ pub fn create_mesh(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
     node.add_property(prop).unwrap();
 
     let prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
+    node.id
+}
+
+fn create_text(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
+    let node = sg.add_node(name, SceneNodeType::RenderText);
+
+    let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_array_len(4);
+    prop.allow_exprs();
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("baseline", PropertyType::Float32, PropertySubType::Pixel);
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("font_size", PropertyType::Float32, PropertySubType::Pixel);
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("text", PropertyType::Str, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("color", PropertyType::Float32, PropertySubType::Color);
+    prop.set_array_len(4);
+    prop.set_range_f32(0., 1.);
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("debug", PropertyType::Bool, PropertySubType::Null);
     node.add_property(prop).unwrap();
 
     node.id

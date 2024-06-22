@@ -36,6 +36,7 @@ rand = "0.8.5"
 async-lock = "3.4.0"
 futures = "0.3.30"
 async-recursion = "1.1.1"
+colored = "2.1.0"
 
 #rustpython-vm = "0.3.1"
 

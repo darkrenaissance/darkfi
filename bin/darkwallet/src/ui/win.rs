@@ -27,7 +27,7 @@ impl Window {
         render_api: RenderApiPtr,
         event_pub: GraphicsEventPublisherPtr,
     ) -> Pimpl {
-        debug!(target: "app", "Window::new()");
+        debug!(target: "ui::win", "Window::new()");
 
         let scene_graph = sg.lock().await;
         let node = scene_graph.get_node(node_id).unwrap();
@@ -46,11 +46,11 @@ impl Window {
             let resize_task = ex.spawn(async move {
                 loop {
                     let Ok((w, h)) = ev_sub.receive().await else {
-                        debug!(target: "app", "Event relayer closed");
+                        debug!(target: "ui::win", "Event relayer closed");
                         break
                     };
 
-                    debug!(target: "app", "Window resized ({w}, {h})");
+                    debug!(target: "ui::win", "Window resized ({w}, {h})");
                     // Now update the properties
                     screen_size_prop2.set_f32(0, w).unwrap();
                     screen_size_prop2.set_f32(1, h).unwrap();
@@ -87,7 +87,7 @@ impl Window {
     }
 
     pub async fn draw(&self, sg: &SceneGraph) {
-        debug!(target: "app", "Window::draw()");
+        debug!(target: "ui::win", "Window::draw()");
         // SceneGraph should remain locked for the entire draw
         let self_node = sg.get_node(self.node_id).unwrap();
 
@@ -100,12 +100,12 @@ impl Window {
         let mut child_calls = vec![];
         for child_inf in self_node.get_children2() {
             let node = sg.get_node(child_inf.id).unwrap();
-            debug!(target: "app", "Window::draw() calling draw() for node '{}':{}", node.name, node.id);
+            debug!(target: "ui::win", "Window::draw() calling draw() for node '{}':{}", node.name, node.id);
 
             let dcs = match &node.pimpl {
-                Pimpl::RenderLayer(layer) => layer.draw(sg, &parent_rect),
+                Pimpl::RenderLayer(layer) => layer.draw(sg, &parent_rect).await,
                 _ => {
-                    error!(target: "app", "unhandled pimpl type");
+                    error!(target: "ui::win", "unhandled pimpl type");
                     continue
                 }
             };
@@ -116,10 +116,10 @@ impl Window {
 
         let root_dc = DrawCall { instrs: vec![], dcs: child_calls, z_index: 0 };
         draw_calls.push((0, root_dc));
-        //debug!("  => {:?}", draw_calls);
+        //debug!(target: "ui::win", "  => {:?}", draw_calls);
 
         self.render_api.replace_draw_calls(draw_calls).await;
-        debug!("Window::draw() - replaced draw call");
+        debug!(target: "ui::win", "Window::draw() - replaced draw call");
     }
 }
 

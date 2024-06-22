@@ -1,3 +1,4 @@
+use async_lock::Mutex;
 use rand::{rngs::OsRng, Rng};
 use std::sync::{Arc, Weak};
 
@@ -5,22 +6,24 @@ use crate::{
     gfx2::{DrawCall, DrawInstruction, DrawMesh, Rectangle, RenderApiPtr, Vertex},
     prop::{PropertyPtr, PropertyUint32},
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
+    text2::{self, Glyph, RenderedAtlas, TextShaperPtr},
 };
 
 use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify, Stoppable};
 
-pub type MeshPtr = Arc<Mesh>;
+pub type TextPtr = Arc<Text>;
 
-pub struct Mesh {
+pub struct Text {
     sg: SceneGraphPtr2,
     render_api: RenderApiPtr,
+    text_shaper: TextShaperPtr,
     tasks: Vec<smol::Task<()>>,
+
+    glyphs: Mutex<(Vec<Glyph>, RenderedAtlas)>,
 
     vertex_buffer: miniquad::BufferId,
     index_buffer: miniquad::BufferId,
-    // Texture
     num_elements: i32,
-
     dc_key: u64,
 
     node_id: SceneNodeId,
@@ -28,36 +31,68 @@ pub struct Mesh {
     z_index: PropertyUint32,
 }
 
-impl Mesh {
+impl Text {
     pub async fn new(
         ex: Arc<smol::Executor<'static>>,
         sg: SceneGraphPtr2,
         node_id: SceneNodeId,
         render_api: RenderApiPtr,
-        verts: Vec<Vertex>,
-        indices: Vec<u16>,
+        text_shaper: TextShaperPtr,
     ) -> Pimpl {
-        let num_elements = indices.len() as i32;
-        let vertex_buffer = render_api.new_vertex_buffer(verts).await.unwrap();
-        let index_buffer = render_api.new_index_buffer(indices).await.unwrap();
-
         let scene_graph = sg.lock().await;
         let node = scene_graph.get_node(node_id).unwrap();
         let node_name = node.name.clone();
-        let rect = node.get_property("rect").expect("Mesh::rect");
-        let z_index_prop = node.get_property("z_index").expect("Mesh::z_index");
+        let rect = node.get_property("rect").expect("Text::rect");
+        let z_index_prop = node.get_property("z_index").expect("Text::z_index");
         let z_index = PropertyUint32::from(z_index_prop.clone(), 0).unwrap();
+        let text = node.get_property("text").expect("Text::text");
+        let font_size = node.get_property("font_size").expect("Text::font_size");
+        let color = node.get_property("color").expect("Text::color");
+        let debug = node.get_property("debug").expect("Text::debug");
+        let baseline = node.get_property("baseline").expect("Text::baseline");
         drop(scene_graph);
+
+        let text_str = text.get_str(0).unwrap();
+        let font_size_val = font_size.get_f32(0).unwrap();
+        debug!(target: "ui::text", "Rendering label '{}'", text_str);
+        let glyphs = text_shaper.shape(text_str, font_size_val).await;
+        let atlas =
+            text2::make_texture_atlas(render_api.clone(), font_size_val, &glyphs).await.unwrap();
+
+        let (x1, y1) = (0., 0.);
+        let (x2, y2) = (1., 1.);
+        let verts = vec![
+            // top left
+            Vertex { pos: [x1, y1], color: [1., 0., 0., 1.], uv: [0., 0.] },
+            // top right
+            Vertex { pos: [x2, y1], color: [1., 0., 1., 1.], uv: [1., 0.] },
+            // bottom left
+            Vertex { pos: [x1, y2], color: [0., 0., 1., 1.], uv: [0., 1.] },
+            // bottom right
+            Vertex { pos: [x2, y2], color: [1., 1., 0., 1.], uv: [1., 1.] },
+        ];
+        let indices = vec![0, 2, 1, 1, 2, 3];
+
+        let num_elements = indices.len() as i32;
+        let vertex_buffer = render_api.new_vertex_buffer(verts).await.unwrap();
+        let index_buffer = render_api.new_index_buffer(indices).await.unwrap();
 
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
             let mut on_modify = OnModify::new(ex, node_name, node_id, me.clone());
             on_modify.when_change(rect.clone(), Self::redraw);
             on_modify.when_change(z_index_prop, Self::redraw);
+            on_modify.when_change(text, Self::redraw);
+            on_modify.when_change(font_size, Self::redraw);
+            on_modify.when_change(color, Self::redraw);
+            on_modify.when_change(debug, Self::redraw);
+            on_modify.when_change(baseline, Self::redraw);
 
             Self {
                 sg,
                 render_api,
+                text_shaper,
                 tasks: on_modify.tasks,
+                glyphs: Mutex::new((glyphs, atlas)),
                 vertex_buffer,
                 index_buffer,
                 num_elements,
@@ -68,7 +103,7 @@ impl Mesh {
             }
         });
 
-        Pimpl::Mesh(self_)
+        Pimpl::Text(self_)
     }
 
     async fn redraw(self: Arc<Self>) {
@@ -79,23 +114,23 @@ impl Mesh {
             return;
         };
 
-        let Some(draw_update) = self.draw(&sg, &parent_rect) else {
-            error!(target: "ui::mesh", "Mesh {:?} failed to draw", node);
+        let Some(draw_update) = self.draw(&sg, &parent_rect).await else {
+            error!(target: "ui::text", "Text {:?} failed to draw", node);
             return;
         };
         self.render_api.replace_draw_calls(draw_update.draw_calls).await;
-        debug!(target: "ui::mesh", "replace draw calls done");
+        debug!(target: "ui::text", "replace draw calls done");
     }
 
-    pub fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
-        debug!(target: "ui::mesh", "Mesh::draw()");
+    pub async fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
+        debug!(target: "ui::text", "Text::draw()");
         // Only used for debug messages
         let node = sg.get_node(self.node_id).unwrap();
 
         let mesh = DrawMesh {
             vertex_buffer: self.vertex_buffer,
             index_buffer: self.index_buffer,
-            texture: None,
+            texture: Some(self.glyphs.lock().await.1.texture_id),
             num_elements: self.num_elements,
         };
 
@@ -131,13 +166,13 @@ impl Mesh {
     }
 }
 
-impl Stoppable for Mesh {
+impl Stoppable for Text {
     async fn stop(&self) {
         // TODO: Delete own draw call
 
         // Free buffers
         // Should this be in drop?
-        self.render_api.delete_buffer(self.vertex_buffer);
-        self.render_api.delete_buffer(self.index_buffer);
+        //self.render_api.delete_buffer(self.vertex_buffer);
+        //self.render_api.delete_buffer(self.index_buffer);
     }
 }
