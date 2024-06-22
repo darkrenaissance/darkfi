@@ -5,8 +5,7 @@ from pydrk import serial
 context = zmq.Context()
 socket = context.socket(zmq.REQ)
 #self.socket.setsockopt(zmq.IPV6, True)
-#socket.connect(f"tcp://127.0.0.1:9484")
-socket.connect(f"tcp://192.168.1.20:9484")
+socket.connect(f"tcp://127.0.0.1:9484")
 
 req_cmd = bytearray()
 serial.write_u8(req_cmd, 0)

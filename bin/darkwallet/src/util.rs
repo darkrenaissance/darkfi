@@ -20,12 +20,24 @@ pub fn ansi_texture(width: usize, height: usize, data: &Vec<u8>) -> String {
             let b = (data[idx + 2] as f32) / 255.;
             let a = (data[idx + 3] as f32) / 255.;
 
-            let r = (a * r * 255.) as u8;
-            let g = (a * g * 255.) as u8;
-            let b = (a * b * 255.) as u8;
+            #[cfg(target_os = "android")]
+            {
+                if a > 0. {
+                    out.push('█');
+                } else {
+                    out.push(' ');
+                }
+            }
 
-            let val = "█".truecolor(r, g, b).to_string();
-            out.push_str(&val);
+            #[cfg(target_os = "linux")]
+            {
+                let r = (a * r * 255.) as u8;
+                let g = (a * g * 255.) as u8;
+                let b = (a * b * 255.) as u8;
+
+                let val = "█".truecolor(r, g, b).to_string();
+                out.push_str(&val);
+            }
         }
         out.push('│');
         out.push('\n');
