@@ -49,11 +49,22 @@ pub async fn make_texture_atlas(
     font_size: f32,
     glyphs: &Vec<Glyph>,
 ) -> Result<RenderedAtlas> {
+    // First compute total size of the atlas
     let mut total_width = ATLAS_GAP;
     let mut total_height = ATLAS_GAP;
-    for glyph in glyphs {
+
+    // Glyph IDs already rendered so we don't do it twice
+    let mut rendered = vec![];
+
+    for (idx, glyph) in glyphs.iter().enumerate() {
         let sprite = &glyph.sprite;
         assert_eq!(sprite.bmp.len(), 4 * sprite.bmp_width * sprite.bmp_height);
+
+        // Already done this one so skip
+        if rendered.contains(&glyph.glyph_id) {
+            continue
+        }
+        rendered.push(glyph.glyph_id);
 
         total_width += sprite.bmp_width + ATLAS_GAP;
         total_height = std::cmp::max(total_height, sprite.bmp_height);
@@ -61,42 +72,132 @@ pub async fn make_texture_atlas(
     total_width += ATLAS_GAP;
     total_height += 2 * ATLAS_GAP;
 
+    // Allocate the big texture now
     let mut atlas_bmp = vec![0; 4 * total_width * total_height];
+    // For debug lines we want a single white pixel.
+    atlas_bmp[0] = 255;
+    atlas_bmp[1] = 255;
+    atlas_bmp[2] = 255;
+    atlas_bmp[3] = 255;
 
     // Calculate dimensions of final product first
     let mut current_x = ATLAS_GAP;
-    let mut uv_rects = vec![];
+    let mut rendered_glyphs: Vec<u32> = vec![];
+    let mut uv_rects: Vec<Rectangle> = vec![];
 
-    for glyph in glyphs {
+    for (idx, glyph) in glyphs.iter().enumerate() {
         let sprite = &glyph.sprite;
 
-        for i in 0..sprite.bmp_height {
-            for j in 0..sprite.bmp_width {
-                let off_dest = 4 * ((i + ATLAS_GAP) * total_width + j + current_x + ATLAS_GAP);
-                let off_src = 4 * (i * sprite.bmp_width + j);
-                atlas_bmp[off_dest] = sprite.bmp[off_src];
-                atlas_bmp[off_dest + 1] = sprite.bmp[off_src + 1];
-                atlas_bmp[off_dest + 2] = sprite.bmp[off_src + 2];
-                atlas_bmp[off_dest + 3] = sprite.bmp[off_src + 3];
+        // Did we already rendered this glyph?
+        // If so just copy the UV rect from before.
+        let mut uv_rect = None;
+        for (rendered_glyph_id, rendered_uv_rect) in rendered_glyphs.iter().zip(uv_rects.iter()) {
+            if *rendered_glyph_id == glyph.glyph_id {
+                uv_rect = Some(rendered_uv_rect.clone());
             }
         }
 
-        // Compute UV coords
-        let uv_rect = Rectangle {
-            x: current_x as f32 / total_width as f32,
-            y: 0.,
-            w: sprite.bmp_width as f32 / total_width as f32,
-            h: sprite.bmp_height as f32 / total_height as f32,
-        };
-        uv_rects.push(uv_rect);
+        let uv_rect = match uv_rect {
+            Some(uv_rect) => uv_rect,
+            // Allocating a new glyph sprite in the atlas
+            None => {
+                copy_image(sprite, &mut atlas_bmp, total_width, current_x);
 
-        current_x += sprite.bmp_width + ATLAS_GAP;
+                // Compute UV coords
+                let uv_rect = Rectangle {
+                    x: current_x as f32 / total_width as f32,
+                    y: 0.,
+                    w: sprite.bmp_width as f32 / total_width as f32,
+                    h: sprite.bmp_height as f32 / total_height as f32,
+                };
+
+                current_x += sprite.bmp_width + ATLAS_GAP;
+
+                uv_rect
+            }
+        };
+
+        rendered_glyphs.push(glyph.glyph_id);
+        uv_rects.push(uv_rect);
     }
 
+    // Finally allocate the texture
     let texture_id =
         render_api.new_texture(total_width as u16, total_height as u16, atlas_bmp).await?;
 
     Ok(RenderedAtlas { uv_rects, texture_id })
+}
+
+fn copy_image(sprite: &Sprite, atlas_bmp: &mut Vec<u8>, total_width: usize, current_x: usize) {
+    for i in 0..sprite.bmp_height {
+        for j in 0..sprite.bmp_width {
+            let off_dest = 4 * ((i + ATLAS_GAP) * total_width + j + current_x + ATLAS_GAP);
+            let off_src = 4 * (i * sprite.bmp_width + j);
+            atlas_bmp[off_dest] = sprite.bmp[off_src];
+            atlas_bmp[off_dest + 1] = sprite.bmp[off_src + 1];
+            atlas_bmp[off_dest + 2] = sprite.bmp[off_src + 2];
+            atlas_bmp[off_dest + 3] = sprite.bmp[off_src + 3];
+        }
+    }
+}
+
+pub struct GlyphPositionIter<'a> {
+    font_size: f32,
+    glyphs: &'a Vec<Glyph>,
+    current_x: f32,
+    current_y: f32,
+    i: usize,
+}
+
+impl<'a> GlyphPositionIter<'a> {
+    pub fn new(font_size: f32, glyphs: &'a Vec<Glyph>, baseline_y: f32) -> Self {
+        Self { font_size, glyphs, current_x: 0., current_y: baseline_y, i: 0 }
+    }
+}
+
+impl<'a> Iterator for GlyphPositionIter<'a> {
+    type Item = Rectangle;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        assert!(self.i <= self.glyphs.len());
+        if self.i == self.glyphs.len() {
+            return None;
+        }
+
+        let glyph = &self.glyphs[self.i];
+        let sprite = &glyph.sprite;
+
+        let rect = if sprite.has_fixed_sizes {
+            // Downscale by height
+            let w = (sprite.bmp_width as f32 * self.font_size) / sprite.bmp_height as f32;
+            let h = self.font_size;
+
+            let x = self.current_x;
+            let y = self.current_y - h;
+
+            self.current_x += w;
+
+            Rectangle { x, y, w, h }
+        } else {
+            let (w, h) = (sprite.bmp_width as f32, sprite.bmp_height as f32);
+
+            let off_x = glyph.x_offset as f32 / 64.;
+            let off_y = glyph.y_offset as f32 / 64.;
+
+            let x = self.current_x + off_x + sprite.bearing_x;
+            let y = self.current_y - off_y - sprite.bearing_y;
+
+            let x_advance = glyph.x_advance;
+            let y_advance = glyph.y_advance;
+            self.current_x += x_advance;
+            self.current_y += y_advance;
+
+            Rectangle { x, y, w, h }
+        };
+
+        self.i += 1;
+        Some(rect)
+    }
 }
 
 pub struct TextShaper {
@@ -434,16 +535,16 @@ struct CacheKey {
     face_idx: usize,
 }
 
-type SpritePtr = Arc<Sprite>;
+pub type SpritePtr = Arc<Sprite>;
 
-struct Sprite {
+pub struct Sprite {
     bmp: Vec<u8>,
-    bmp_width: usize,
-    bmp_height: usize,
+    pub bmp_width: usize,
+    pub bmp_height: usize,
 
-    bearing_x: f32,
-    bearing_y: f32,
-    has_fixed_sizes: bool,
+    pub bearing_x: f32,
+    pub bearing_y: f32,
+    pub has_fixed_sizes: bool,
 }
 
 pub struct Glyph {

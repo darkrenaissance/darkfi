@@ -36,6 +36,20 @@ pub struct Point {
     pub y: f32,
 }
 
+impl Point {
+    pub fn unpack(&self) -> (f32, f32) {
+        (self.x, self.y)
+    }
+
+    pub fn offset(&self, off_x: f32, off_y: f32) -> Self {
+        Self { x: self.x + off_x, y: self.y + off_y }
+    }
+
+    pub fn to_rect(&self, w: f32, h: f32) -> Rectangle {
+        Rectangle { x: self.x, y: self.y, w, h }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Rectangle {
     pub x: f32,
@@ -45,6 +59,10 @@ pub struct Rectangle {
 }
 
 impl Rectangle {
+    pub fn new(x: f32, y: f32, w: f32, h: f32) -> Self {
+        Self { x, y, w, h }
+    }
+
     pub fn zero() -> Self {
         Self { x: 0., y: 0., w: 0., h: 0. }
     }

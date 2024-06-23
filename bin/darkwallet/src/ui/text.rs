@@ -1,12 +1,14 @@
 use async_lock::Mutex;
+use miniquad::{BufferId, TextureId};
 use rand::{rngs::OsRng, Rng};
 use std::sync::{Arc, Weak};
 
 use crate::{
     gfx2::{DrawCall, DrawInstruction, DrawMesh, Rectangle, RenderApiPtr, Vertex},
+    mesh::{MeshBuilder, COLOR_BLUE, COLOR_WHITE},
     prop::{PropertyPtr, PropertyUint32},
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
-    text2::{self, Glyph, RenderedAtlas, TextShaperPtr},
+    text2::{self, Glyph, GlyphPositionIter, RenderedAtlas, SpritePtr, TextShaperPtr},
 };
 
 use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify, Stoppable};
@@ -19,10 +21,11 @@ pub struct Text {
     text_shaper: TextShaperPtr,
     tasks: Vec<smol::Task<()>>,
 
-    glyphs: Mutex<(Vec<Glyph>, RenderedAtlas)>,
+    glyph_sprites: Mutex<Vec<SpritePtr>>,
 
-    vertex_buffer: miniquad::BufferId,
-    index_buffer: miniquad::BufferId,
+    texture_id: TextureId,
+    vertex_buffer: BufferId,
+    index_buffer: BufferId,
     num_elements: i32,
     dc_key: u64,
 
@@ -72,10 +75,21 @@ impl Text {
             Vertex { pos: [x2, y2], color: [1., 1., 0., 1.], uv: [1., 1.] },
         ];
         let indices = vec![0, 2, 1, 1, 2, 3];
+        assert_eq!(atlas.uv_rects.len(), glyphs.len());
 
-        let num_elements = indices.len() as i32;
-        let vertex_buffer = render_api.new_vertex_buffer(verts).await.unwrap();
-        let index_buffer = render_api.new_index_buffer(indices).await.unwrap();
+        let baseline_y = baseline.get_f32(0).unwrap();
+
+        let mut mesh = MeshBuilder::new();
+        let mut glyph_pos_iter = GlyphPositionIter::new(font_size_val, &glyphs, baseline_y);
+        for (uv_rect, glyph_rect) in atlas.uv_rects.into_iter().zip(glyph_pos_iter) {
+            mesh.draw_box(&glyph_rect, COLOR_WHITE, &uv_rect);
+            //mesh.draw_outline(&rect, COLOR_BLUE, 2.);
+        }
+
+        let num_elements = mesh.num_elements();
+        let (vertex_buffer, index_buffer) = mesh.alloc(&render_api).await.unwrap();
+
+        let sprites = glyphs.into_iter().map(|glyph| glyph.sprite).collect();
 
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
             let mut on_modify = OnModify::new(ex, node_name, node_id, me.clone());
@@ -92,7 +106,9 @@ impl Text {
                 render_api,
                 text_shaper,
                 tasks: on_modify.tasks,
-                glyphs: Mutex::new((glyphs, atlas)),
+                //glyphs: Mutex::new((glyphs, atlas)),
+                glyph_sprites: Mutex::new(sprites),
+                texture_id: atlas.texture_id,
                 vertex_buffer,
                 index_buffer,
                 num_elements,
@@ -130,7 +146,7 @@ impl Text {
         let mesh = DrawMesh {
             vertex_buffer: self.vertex_buffer,
             index_buffer: self.index_buffer,
-            texture: Some(self.glyphs.lock().await.1.texture_id),
+            texture: Some(self.texture_id),
             num_elements: self.num_elements,
         };
 
@@ -147,8 +163,8 @@ impl Text {
 
         let off_x = rect.x / parent_rect.w;
         let off_y = rect.y / parent_rect.h;
-        let scale_x = rect.w / parent_rect.w;
-        let scale_y = rect.h / parent_rect.h;
+        let scale_x = 1. / parent_rect.w;
+        let scale_y = 1. / parent_rect.h;
         let model = glam::Mat4::from_translation(glam::Vec3::new(off_x, off_y, 0.)) *
             glam::Mat4::from_scale(glam::Vec3::new(scale_x, scale_y, 1.));
 

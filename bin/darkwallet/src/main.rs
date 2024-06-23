@@ -22,6 +22,7 @@ mod expr;
 //mod gfx;
 mod gfx2;
 mod keysym;
+mod mesh;
 mod net;
 //mod plugin;
 mod prop;
