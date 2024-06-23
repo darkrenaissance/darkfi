@@ -73,10 +73,10 @@ impl MeshBuilder {
     }
 
     pub async fn alloc(self, render_api: &RenderApi) -> Result<(BufferId, BufferId)> {
-        debug!(target: "mesh", "allocating {} verts:", self.verts.len());
-        for vert in &self.verts {
-            debug!(target: "mesh", "  {:?}", vert);
-        }
+        //debug!(target: "mesh", "allocating {} verts:", self.verts.len());
+        //for vert in &self.verts {
+        //    debug!(target: "mesh", "  {:?}", vert);
+        //}
         let vertex_buffer = render_api.new_vertex_buffer(self.verts).await?;
         let index_buffer = render_api.new_index_buffer(self.indices).await?;
         Ok((vertex_buffer, index_buffer))

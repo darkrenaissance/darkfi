@@ -15,15 +15,21 @@ pub fn ansi_texture(width: usize, height: usize, data: &Vec<u8>) -> String {
         for j in 0..width {
             let idx = 4 * (i * width + j);
 
-            let r = (data[idx] as f32) / 255.;
-            let g = (data[idx + 1] as f32) / 255.;
-            let b = (data[idx + 2] as f32) / 255.;
-            let a = (data[idx + 3] as f32) / 255.;
+            let r = data[idx];
+            let g = data[idx + 1];
+            let b = data[idx + 2];
+            let a = data[idx + 3];
 
             #[cfg(target_os = "android")]
             {
-                if a > 0. {
+                if a > 204 {
                     out.push('█');
+                } else if a > 153 {
+                    out.push('▓');
+                } else if a > 102 {
+                    out.push('▒');
+                } else if a > 51 {
+                    out.push('░');
                 } else {
                     out.push(' ');
                 }
@@ -31,9 +37,9 @@ pub fn ansi_texture(width: usize, height: usize, data: &Vec<u8>) -> String {
 
             #[cfg(target_os = "linux")]
             {
-                let r = (a * r * 255.) as u8;
-                let g = (a * g * 255.) as u8;
-                let b = (a * b * 255.) as u8;
+                let r = ((a as f32 * r as f32) / 255.) as u8;
+                let g = ((a as f32 * g as f32) / 255.) as u8;
+                let b = ((a as f32 * b as f32) / 255.) as u8;
 
                 let val = "█".truecolor(r, g, b).to_string();
                 out.push_str(&val);
