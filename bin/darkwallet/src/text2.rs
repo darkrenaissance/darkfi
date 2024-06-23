@@ -42,7 +42,7 @@ pub struct RenderedAtlas {
     pub texture_id: TextureId,
 }
 
-const ATLAS_GAP: usize = 1;
+const ATLAS_GAP: usize = 2;
 
 pub async fn make_texture_atlas(
     render_api: RenderApiPtr,
@@ -105,8 +105,8 @@ pub async fn make_texture_atlas(
 
                 // Compute UV coords
                 let uv_rect = Rectangle {
-                    x: current_x as f32 / total_width as f32,
-                    y: 0.,
+                    x: (ATLAS_GAP + current_x) as f32 / total_width as f32,
+                    y: ATLAS_GAP as f32 / total_height as f32,
                     w: sprite.bmp_width as f32 / total_width as f32,
                     h: sprite.bmp_height as f32 / total_height as f32,
                 };
@@ -261,84 +261,6 @@ impl TextShaper {
         substrs
     }
 
-    /*
-    pub async fn shape(&self, text: String, font_size: f32) -> Result<Vec<Glyph>> {
-        let preglyphs = self.preshape(text, font_size).await;
-
-        let mut glyphs = vec![];
-        for preglyph in preglyphs {
-            let texture = match preglyph.texture {
-                PreGlyphTexture::Cached(texture) => texture,
-                PreGlyphTexture::Uncached(raw_texture) => self.cache_texture(preglyph.glyph_id, font_size, preglyph.face_idx, raw_texture).await?,
-            };
-
-            let glyph = Glyph {
-                glyph_id: preglyph.glyph_id,
-                substr: preglyph.substr,
-                texture,
-                x_offset: preglyph.x_offset,
-                y_offset: preglyph.y_offset,
-                x_advance: preglyph.x_advance,
-                y_advance: preglyph.y_advance,
-            };
-
-            glyphs.push(glyph);
-        }
-        Ok(glyphs)
-    }
-        */
-
-    /*
-    async fn cache_texture(&self, glyph_id: u32, font_size: f32, face_idx: usize, raw_texture: RawTextureData) -> Result<ManagedTexturePtr> {
-        let cache_key = CacheKey {
-            glyph_id,
-            font_size: if raw_texture.has_fixed_sizes {
-                FontSize::Fixed
-            } else {
-                FontSize::from(font_size)
-            },
-            face_idx,
-        };
-
-        // Not an issue to lock this intermittently preshape will request a glyph
-        // to be cached. The worst that can happen is we double cache a glyph which
-        // is no big deal.
-        // Ofc we should benchmark this to see how well it performs in practice.
-        let mut cache = self.cache.lock().await;
-
-        // If we're shaping the a string like "anon1", then n will be cached twice
-        // So lets check again if it exists first.
-        if let Some(texture) = cache.get(&cache_key) {
-            if let Some(texture) = texture.upgrade() {
-                return Ok(texture)
-            }
-        }
-
-        let texture_id = self
-            .render_api
-            .new_texture(
-                raw_texture.bmp_width as u16,
-                raw_texture.bmp_height as u16,
-                raw_texture.bmp,
-            )
-            .await?;
-
-        let texture = Arc::new(ManagedTexture {
-            texture_id,
-            render_api: self.render_api.clone(),
-            bmp_width: raw_texture.bmp_width,
-            bmp_height: raw_texture.bmp_height,
-            bearing_x: raw_texture.bearing_x,
-            bearing_y: raw_texture.bearing_y,
-            has_fixed_sizes: raw_texture.has_fixed_sizes,
-        });
-
-        cache.insert(cache_key, Arc::downgrade(&texture));
-
-        Ok(texture)
-    }
-    */
-
     pub async fn shape(&self, text: String, font_size: f32) -> Vec<Glyph> {
         // Lock font faces
         // Freetype faces are not threadsafe
@@ -360,7 +282,7 @@ impl TextShaper {
                 //face.set_char_size(109 * 64, 0, 72, 72).unwrap();
                 face.select_size(0).unwrap();
             } else {
-                face.set_char_size(font_size as isize * 64, 0, 72, 72).unwrap();
+                face.set_char_size(font_size as isize * 64, 0, 96, 96).unwrap();
             }
 
             let hb_font = harfbuzz_rs::Font::from_freetype_face(face.clone());
@@ -436,6 +358,8 @@ impl TextShaper {
                 face.load_glyph(glyph_id, flags).unwrap();
                 //debug!("load_glyph {} [done]", gid);
 
+                // https://gist.github.com/jokertarot/7583938?permalink_comment_id=3327566#gistcomment-3327566
+
                 let glyph = face.glyph();
                 glyph.render_glyph(ft::RenderMode::Normal).unwrap();
 
@@ -470,13 +394,7 @@ impl TextShaper {
                         // Convert from greyscale to RGBA8
                         let tdata: Vec<_> = buffer
                             .iter()
-                            .flat_map(|coverage| {
-                                let r = 255;
-                                let g = 255;
-                                let b = 255;
-                                let α = ((*coverage as f32) * 255.) as u8;
-                                vec![r, g, b, α]
-                            })
+                            .flat_map(|coverage| vec![255, 255, 255, *coverage])
                             .collect();
                         tdata
                     }
