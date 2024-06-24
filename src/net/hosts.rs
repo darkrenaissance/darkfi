@@ -16,12 +16,17 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashMap, fmt, fs, fs::File, sync::Arc, time::Instant};
+use std::{
+    collections::HashMap,
+    fmt, fs,
+    fs::File,
+    sync::{Arc, Mutex},
+    time::Instant,
+};
 
 use log::{debug, error, info, trace, warn};
 use rand::{prelude::IteratorRandom, rngs::OsRng, Rng};
 use smol::lock::RwLock;
-use std::sync::Mutex;
 use url::Url;
 
 use super::{settings::SettingsPtr, ChannelPtr};
