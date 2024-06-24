@@ -158,8 +158,26 @@ pub async fn consensus_init_task(
     }
 }
 
-/// async task used for listening for new blocks and perform consensus.
-pub async fn replicator_task(node: Arc<Darkfid>, ex: Arc<smol::Executor<'static>>) -> Result<()> {
+/// Async task to start the consensus task, while monitoring for a network disconnections.
+async fn replicator_task(node: Arc<Darkfid>, ex: Arc<smol::Executor<'static>>) -> Result<()> {
+    smol::future::or(monitor_network(node.clone()), consensus_task(node, ex)).await
+}
+
+/// Async task to monitor network disconnections.
+async fn monitor_network(node: Arc<Darkfid>) -> Result<()> {
+    loop {
+        // Check if we are connected to the network
+        if node.p2p.hosts().channels().await.is_empty() {
+            error!(target: "darkfid::task::consensus::monitor_network", "Node disconnected from the network");
+            return Err(Error::NetworkOperationFailed)
+        }
+
+        sleep(node.p2p.settings().outbound_connect_timeout).await;
+    }
+}
+
+/// Async task used for listening for new blocks and perform consensus.
+async fn consensus_task(node: Arc<Darkfid>, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     info!(target: "darkfid::task::consensus_task", "Starting consensus task...");
 
     // Grab blocks subscriber
