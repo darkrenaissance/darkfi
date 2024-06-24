@@ -82,6 +82,7 @@
   - [Money](spec/contract/money/money.md)
     - [Model](spec/contract/money/model.md)
     - [Scheme](spec/contract/money/scheme.md)
+  - [Vesting](spec/contract/vesting/vesting.md)
 
 # P2P API Tutorial
 
