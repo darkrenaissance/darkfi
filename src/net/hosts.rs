@@ -20,7 +20,8 @@ use std::{collections::HashMap, fmt, fs, fs::File, sync::Arc, time::Instant};
 
 use log::{debug, error, info, trace, warn};
 use rand::{prelude::IteratorRandom, rngs::OsRng, Rng};
-use smol::lock::{Mutex, RwLock};
+use smol::lock::RwLock;
+use std::sync::Mutex;
 use url::Url;
 
 use super::{settings::SettingsPtr, ChannelPtr};
@@ -1089,7 +1090,7 @@ impl Hosts {
         debug!(target: "net::hosts::filter_addresses()", "Filtering addrs: {:?}", addrs);
         let mut ret = vec![];
         let localnet = self.settings.localnet;
-        let ipv6_available = *self.ipv6_available.lock().await;
+        let ipv6_available: bool = { *self.ipv6_available.lock().unwrap() };
 
         'addr_loop: for (addr_, last_seen) in addrs {
             // Validate that the format is `scheme://host_str:port`
