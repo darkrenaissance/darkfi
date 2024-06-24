@@ -795,7 +795,7 @@ pub struct Hosts {
     pub(in crate::net) channel_publisher: PublisherPtr<Result<ChannelPtr>>,
 
     /// Keeps track of the last time a connection was made.
-    pub(in crate::net) last_connection: RwLock<Instant>,
+    pub(in crate::net) last_connection: Mutex<Instant>,
 
     /// Marker for IPv6 availability
     pub(in crate::net) ipv6_available: Mutex<bool>,
@@ -812,7 +812,7 @@ impl Hosts {
             container: HostContainer::new(),
             store_publisher: Publisher::new(),
             channel_publisher: Publisher::new(),
-            last_connection: RwLock::new(Instant::now()),
+            last_connection: Mutex::new(Instant::now()),
             ipv6_available: Mutex::new(true),
             settings,
         })
@@ -987,7 +987,7 @@ impl Hosts {
         // Notify that channel processing was successful
         self.channel_publisher.notify(Ok(channel.clone())).await;
 
-        let mut last_online = self.last_connection.write().await;
+        let mut last_online = self.last_connection.lock().unwrap();
         *last_online = Instant::now();
     }
 

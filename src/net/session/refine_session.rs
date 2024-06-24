@@ -234,7 +234,9 @@ impl GreylistRefinery {
             // Pause the refinery if we've had zero connections for longer than the configured
             // limit.
             let offline_limit = Duration::from_secs(settings.time_with_no_connections);
-            let offline_timer = Instant::now().duration_since(*hosts.last_connection.read().await);
+
+            let offline_timer =
+                { Instant::now().duration_since(*hosts.last_connection.lock().unwrap()) };
 
             if hosts.channels().await.is_empty() && offline_timer >= offline_limit {
                 warn!(target: "net::refinery", "No connections for {}s. GreylistRefinery paused.",
