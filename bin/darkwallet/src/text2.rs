@@ -1,8 +1,18 @@
 use async_lock::Mutex;
 use freetype as ft;
+/*
+use harfbuzz_sys::{
+    freetype::hb_ft_font_create_referenced, hb_buffer_add_utf8, hb_buffer_create,
+    hb_buffer_destroy, hb_buffer_get_glyph_infos, hb_buffer_get_glyph_positions,
+    hb_buffer_guess_segment_properties, hb_buffer_set_cluster_level, hb_buffer_set_content_type,
+    hb_feature_t, hb_font_destroy, hb_glyph_info_t, hb_glyph_position_t, hb_shape,
+    HB_BUFFER_CLUSTER_LEVEL_MONOTONE_CHARACTERS, HB_BUFFER_CONTENT_TYPE_UNICODE,
+};
+*/
 use miniquad::TextureId;
 use std::{
     collections::HashMap,
+    os,
     sync::{Arc, Weak},
 };
 
@@ -264,7 +274,7 @@ impl TextShaper {
     pub async fn shape(&self, text: String, font_size: f32) -> Vec<Glyph> {
         // Lock font faces
         // Freetype faces are not threadsafe
-        let faces = self.font_faces.lock().await;
+        let mut faces = self.font_faces.lock().await;
         let mut cache = self.cache.lock().await;
 
         let substrs = Self::split_into_substrs(&faces.0, text.clone());
@@ -294,10 +304,43 @@ impl TextShaper {
             let positions = output.get_glyph_positions();
             let infos = output.get_glyph_infos();
 
+            /*
+            let utf8_ptr = text.as_ptr() as *const _;
+            // https://harfbuzz.github.io/a-simple-shaping-example.html
+            let (hb_font, buf, glyph_infos, glyph_pos, glyph_infos_iter, glyph_pos_iter) = unsafe {
+                let ft_face_ptr: freetype::freetype_sys::FT_Face = face.raw_mut();
+                let hb_font = hb_ft_font_create_referenced(ft_face_ptr);
+                let buf = hb_buffer_create();
+                hb_buffer_set_content_type(buf, HB_BUFFER_CONTENT_TYPE_UNICODE);
+                hb_buffer_set_cluster_level(buf, HB_BUFFER_CLUSTER_LEVEL_MONOTONE_CHARACTERS);
+                hb_buffer_add_utf8(
+                    buf,
+                    utf8_ptr,
+                    text.len() as os::raw::c_int,
+                    0 as os::raw::c_uint,
+                    text.len() as os::raw::c_int,
+                );
+                hb_buffer_guess_segment_properties(buf);
+                hb_shape(hb_font, buf, std::ptr::null(), 0 as os::raw::c_uint);
+
+                let mut length: u32 = 0;
+                let glyph_infos = hb_buffer_get_glyph_infos(buf, &mut length as *mut u32);
+                let glyph_infos_iter: &[hb_glyph_info_t] =
+                    std::slice::from_raw_parts(glyph_infos as *const _, length as usize);
+
+                let glyph_pos = hb_buffer_get_glyph_positions(buf, &mut length as *mut u32);
+                let glyph_pos_iter: &[hb_glyph_position_t] =
+                    std::slice::from_raw_parts(glyph_pos as *const _, length as usize);
+
+                (hb_font, buf, glyph_infos, glyph_pos, glyph_infos_iter, glyph_pos_iter)
+            };
+            */
+
             let mut prev_cluster = 0;
 
             for (i, (position, info)) in positions.iter().zip(infos).enumerate() {
-                let glyph_id = info.codepoint;
+                //for (i, (position, info)) in glyph_pos_iter.iter().zip(glyph_infos_iter.iter()).enumerate() {
+                let glyph_id = info.codepoint as u32;
                 // Index within this substr
                 let curr_cluster = info.cluster as usize;
 
@@ -352,11 +395,12 @@ impl TextShaper {
                     flags |= ft::face::LoadFlag::COLOR;
                 }
 
-                // FIXME: glyph 884 hangs on android
-                // For now just avoid using emojis on android
-                //debug!("load_glyph {}", gid);
-                face.load_glyph(glyph_id, flags).unwrap();
-                //debug!("load_glyph {} [done]", gid);
+                //debug!("load_glyph {}", glyph_id);
+                if let Err(err) = face.load_glyph(glyph_id, flags) {
+                    error!(target: "text", "error loading glyph: {}", glyph_id);
+                    continue
+                }
+                //debug!("load_glyph {} [done]", glyph_id);
 
                 // https://gist.github.com/jokertarot/7583938?permalink_comment_id=3327566#gistcomment-3327566
 
@@ -427,6 +471,13 @@ impl TextShaper {
 
             let substr = text[prev_cluster..].to_string();
             glyphs.last_mut().unwrap().substr = substr;
+
+            /*
+            unsafe {
+                hb_buffer_destroy(buf);
+                hb_font_destroy(hb_font);
+            }
+            */
         }
 
         glyphs

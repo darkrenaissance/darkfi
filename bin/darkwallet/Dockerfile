@@ -1,15 +1,19 @@
 FROM archlinux
 
 RUN pacman -Syu --noconfirm
-RUN pacman -S --noconfirm jdk8-openjdk unzip wget cmake rustup openssl pkgconf gcc git
+RUN pacman -S --noconfirm jdk8-openjdk unzip wget cmake openssl pkgconf gcc git
 
 # github override HOME, so here we are
 ENV RUSTUP_HOME=/usr/local/rustup \
     CARGO_HOME=/usr/local/cargo \
     PATH=/usr/local/cargo/bin:$PATH 
 
-RUN rustup toolchain install nightly
-RUN rustup default nightly
+RUN curl -o rustup.sh --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs
+RUN chmod +x rustup.sh
+RUN ./rustup.sh -y --default-toolchain nightly
+
+#RUN rustup toolchain install nightly
+#RUN rustup default nightly
 RUN rustc --version
 
 RUN rustup target add armv7-linux-androideabi
@@ -42,6 +46,15 @@ ENV NDK_HOME /usr/local/android-ndk-r25
 # Copy contents to container. Should only use this on a clean directory
 WORKDIR /root/
 RUN git clone https://github.com/not-fl3/cargo-quad-apk cargo-apk
+#RUN git clone https://github.com/narodnik/cargo-quad-apk cargo-apk
+
+# ArmV7a
+#ENV CC ${NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi31-clang
+#ENV CXX ${NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi31-clang++
+#ENV AR ${NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
+#ENV CXXSTDLIB c++
+# Arm64V8a
+# X86
 
 # Install binary
 RUN cargo install --path /root/cargo-apk
