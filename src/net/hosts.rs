@@ -672,7 +672,7 @@ impl HostContainer {
     }
 
     /// Get the index for a given addr on a hostlist.
-    async fn get_index_at_addr(&self, color: usize, addr: Url) -> Option<usize> {
+    pub async fn get_index_at_addr(&self, color: usize, addr: Url) -> Option<usize> {
         self.hostlists[color].read().await.iter().position(|a| a.0 == addr)
     }
 

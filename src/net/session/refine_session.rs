@@ -260,7 +260,7 @@ impl GreylistRefinery {
                 .fetch_random_with_schemes(HostColor::Grey, &settings.allowed_transports)
                 .await
             {
-                Some((entry, position)) => {
+                Some((entry, _)) => {
                     let url = &entry.0;
 
                     if let Err(e) = hosts.try_register(url.clone(), HostState::Refine).await {
@@ -269,13 +269,19 @@ impl GreylistRefinery {
                         continue
                     }
 
-                    // Freeze the greylist in this state. Necessary since the greylist
-                    // can be modified by `hosts::move_host()` or `hosts::store()`.
-                    let mut greylist =
-                        hosts.container.hostlists[HostColor::Grey as usize].write().await;
-
                     if !self.session().handshake_node(url.clone(), self.p2p().clone()).await {
-                        greylist.remove(position);
+                        {
+                            let mut greylist =
+                                hosts.container.hostlists[HostColor::Grey as usize].write().await;
+
+                            let position = hosts
+                                .container
+                                .get_index_at_addr(HostColor::Grey as usize, url.clone())
+                                .await
+                                .unwrap();
+
+                            greylist.remove(position);
+                        }
 
                         debug!(
                             target: "net::refinery",
@@ -287,13 +293,8 @@ impl GreylistRefinery {
                         // modification is now complete.
                         hosts.unregister(url).await;
 
-                        drop(greylist);
-
                         continue
                     }
-
-                    drop(greylist);
-
                     debug!(
                         target: "net::refinery",
                         "Peer {} handshake successful. Adding to whitelist", url,
