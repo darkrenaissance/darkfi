@@ -82,7 +82,7 @@ impl Text {
         let mut mesh = MeshBuilder::new();
         let mut glyph_pos_iter = GlyphPositionIter::new(font_size_val, &glyphs, baseline_y);
         for (uv_rect, glyph_rect) in atlas.uv_rects.into_iter().zip(glyph_pos_iter) {
-            mesh.draw_outline(&glyph_rect, COLOR_BLUE, 2.);
+            //mesh.draw_outline(&glyph_rect, COLOR_BLUE, 2.);
             mesh.draw_box(&glyph_rect, COLOR_WHITE, &uv_rect);
         }
 

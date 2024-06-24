@@ -295,8 +295,8 @@ impl App {
         prop.set_f32(3, 200.).unwrap();
         node.set_property_f32("baseline", 40.).unwrap();
         node.set_property_f32("font_size", 60.).unwrap();
-        //node.set_property_str("text", "anon1🍆").unwrap();
-        node.set_property_str("text", "anon1").unwrap();
+        node.set_property_str("text", "anon1🍆").unwrap();
+        //node.set_property_str("text", "anon1").unwrap();
         let prop = node.get_property("color").unwrap();
         prop.set_f32(0, 0.).unwrap();
         prop.set_f32(1, 1.).unwrap();

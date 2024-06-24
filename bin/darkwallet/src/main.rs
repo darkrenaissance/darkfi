@@ -67,6 +67,28 @@ fn main() {
         simplelog::CombinedLogger::init(vec![term_logger]).expect("logger");
     }
 
+    {
+        use freetype as ft;
+
+        let ftlib = ft::Library::init().unwrap();
+        let font_data = include_bytes!("../NotoColorEmoji.ttf") as &[u8];
+        let face = ftlib.new_memory_face2(font_data, 0).unwrap();
+        assert!(face.has_fixed_sizes());
+        face.select_size(0).unwrap();
+
+        let mut flags = ft::face::LoadFlag::DEFAULT;
+        if face.has_color() {
+            flags |= ft::face::LoadFlag::COLOR;
+        }
+
+        let glyph_id = 657;
+        // FIXME: glyph 884 hangs on android
+        // For now just avoid using emojis on android
+        debug!("load_glyph {}", glyph_id);
+        face.load_glyph(glyph_id, flags).unwrap();
+        debug!("load_glyph {} [done]", glyph_id);
+    }
+
     let ex = Arc::new(smol::Executor::new());
     let sg = Arc::new(Mutex::new(SceneGraph::new()));
 

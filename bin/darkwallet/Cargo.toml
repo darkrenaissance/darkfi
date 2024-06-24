@@ -8,26 +8,18 @@ edition = "2021"
 [workspace]
 
 [dependencies]
-#miniquad = "0.4.0-alpha"
-#miniquad = { git = "https://github.com/not-fl3/miniquad" }
-miniquad = { git = "https://github.com/narodnik/miniquad.git" }
-#harfbuzz_rs = { git = "https://github.com/narodnik/harfbuzz_rs.git", features = ["freetype"] }
+miniquad = { git = "https://github.com/not-fl3/miniquad" }
+#harfbuzz = "0.6.0"
 harfbuzz_rs = { git = "https://github.com/narodnik/hbrs2.git", features = ["freetype"] }
-freetype-rs = { git = "https://github.com/narodnik/freetype-rs.git" }
-#harfbuzz = { version = "0.6.0", features = ["bundled"] }
-#harfbuzz_rs = "2.0.1"
-#freetype-rs = "0.36.0"
-freetype-sys = "0.20.1"
+freetype-rs = { version = "0.37", features = ["bundled"] }
 image = "0.25.1"
 log = "0.4.21"
 glam = "0.27.0"
 #zmq = "0.10.0"
 #async_zmq = "0.4.0"
 zeromq = { version = "*", default-features = false, features = ["async-std-runtime", "all-transport"] }
-#darkfi-serial = { path = "../../src/serial" }
-darkfi-serial = { git = "https://codeberg.org/darkrenaissance/darkfi.git" }
+darkfi-serial = { git = "https://codeberg.org/darkrenaissance/darkfi" }
 thiserror = "1.0.61"
-# Only for async Mutex
 smol = "2.0.0"
 atomic_float = "1.0.0"
 async-channel = "2.3.1"
@@ -37,14 +29,11 @@ async-lock = "3.4.0"
 futures = "0.3.30"
 async-recursion = "1.1.1"
 colored = "2.1.0"
-
 #rustpython-vm = "0.3.1"
 
-#[patch."https://github.com/narodnik/harfbuzz_rs.git"]
-#freetype-rs = { path = "/tmp/freetype-rs/" }
-
 [patch.crates-io]
-freetype-rs = { git = "https://github.com/narodnik/freetype-rs.git" }
+freetype-rs = { git = "https://github.com/narodnik/freetype-rs" }
+freetype-sys = { git = "https://github.com/narodnik/freetype-sys" }
 
 [target.'cfg(target_os = "android")'.dependencies]
 android_logger = "0.13.3"
@@ -64,6 +53,8 @@ workspace = true
 [package.metadata.android]
 package_name = "darkfi.darkwallet"
 label = "DarkWallet"
+res = "res"
+icon = "@mipmap/ic_launcher"
 
 [[package.metadata.android.permission]]
 name = "android.permission.INTERNET"
