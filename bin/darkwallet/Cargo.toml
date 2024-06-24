@@ -11,9 +11,10 @@ edition = "2021"
 miniquad = { git = "https://github.com/not-fl3/miniquad" }
 # Currently latest version links to freetype-sys 0.19 but we use 0.21
 #harfbuzz-sys = "0.6"
-#harfbuzz-sys = { git = "https://github.com/servo/rust-harfbuzz" }
-# Until we get cargo-quad ported, we are stuck with my shitty hack of unmaintained harfbuzz wrapper rather than the servo FFI
-harfbuzz_rs = { git = "https://github.com/narodnik/hbrs2.git", features = ["freetype"] }
+#harfbuzz-sys = { git = "https://github.com/servo/rust-harfbuzz", features = ["bundled"] }
+harfbuzz-sys = { git = "https://github.com/narodnik/rust-harfbuzz", features = ["bundled"] }
+# Old and crap
+#harfbuzz_rs = { git = "https://github.com/narodnik/hbrs2.git", features = ["freetype"] }
 freetype-rs = { version = "0.37", features = ["bundled"] }
 image = "0.25.1"
 log = "0.4.21"

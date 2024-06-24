@@ -1,6 +1,5 @@
 use async_lock::Mutex;
 use freetype as ft;
-/*
 use harfbuzz_sys::{
     freetype::hb_ft_font_create_referenced, hb_buffer_add_utf8, hb_buffer_create,
     hb_buffer_destroy, hb_buffer_get_glyph_infos, hb_buffer_get_glyph_positions,
@@ -8,7 +7,6 @@ use harfbuzz_sys::{
     hb_feature_t, hb_font_destroy, hb_glyph_info_t, hb_glyph_position_t, hb_shape,
     HB_BUFFER_CLUSTER_LEVEL_MONOTONE_CHARACTERS, HB_BUFFER_CONTENT_TYPE_UNICODE,
 };
-*/
 use miniquad::TextureId;
 use std::{
     collections::HashMap,
@@ -286,7 +284,7 @@ impl TextShaper {
 
         for (face_idx, text) in substrs {
             //debug!("substr {}", text);
-            let face = &faces.0[face_idx];
+            let face = &mut faces.0[face_idx];
             if face.has_fixed_sizes() {
                 // emojis required a fixed size
                 //face.set_char_size(109 * 64, 0, 72, 72).unwrap();
@@ -295,6 +293,7 @@ impl TextShaper {
                 face.set_char_size(font_size as isize * 64, 0, 96, 96).unwrap();
             }
 
+            /*
             let hb_font = harfbuzz_rs::Font::from_freetype_face(face.clone());
             let buffer = harfbuzz_rs::UnicodeBuffer::new()
                 .set_cluster_level(harfbuzz_rs::ClusterLevel::MonotoneCharacters)
@@ -303,8 +302,8 @@ impl TextShaper {
 
             let positions = output.get_glyph_positions();
             let infos = output.get_glyph_infos();
+            */
 
-            /*
             let utf8_ptr = text.as_ptr() as *const _;
             // https://harfbuzz.github.io/a-simple-shaping-example.html
             let (hb_font, buf, glyph_infos, glyph_pos, glyph_infos_iter, glyph_pos_iter) = unsafe {
@@ -334,12 +333,11 @@ impl TextShaper {
 
                 (hb_font, buf, glyph_infos, glyph_pos, glyph_infos_iter, glyph_pos_iter)
             };
-            */
 
             let mut prev_cluster = 0;
 
-            for (i, (position, info)) in positions.iter().zip(infos).enumerate() {
-                //for (i, (position, info)) in glyph_pos_iter.iter().zip(glyph_infos_iter.iter()).enumerate() {
+            //for (i, (position, info)) in positions.iter().zip(infos).enumerate() {
+            for (i, (position, info)) in glyph_pos_iter.iter().zip(glyph_infos_iter.iter()).enumerate() {
                 let glyph_id = info.codepoint as u32;
                 // Index within this substr
                 let curr_cluster = info.cluster as usize;
@@ -472,12 +470,10 @@ impl TextShaper {
             let substr = text[prev_cluster..].to_string();
             glyphs.last_mut().unwrap().substr = substr;
 
-            /*
             unsafe {
                 hb_buffer_destroy(buf);
                 hb_font_destroy(hb_font);
             }
-            */
         }
 
         glyphs
