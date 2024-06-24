@@ -20,8 +20,8 @@ use std::{str::FromStr, sync::Arc};
 
 use darkfi::{
     blockchain::HeaderHash,
-    rpc::util::JsonValue,
-    system::{sleep, StoppableTask},
+    rpc::{jsonrpc::JsonNotification, util::JsonValue},
+    system::{sleep, StoppableTask, Subscription},
     util::{encoding::base64, time::Timestamp},
     Error, Result,
 };
@@ -160,15 +160,27 @@ pub async fn consensus_init_task(
 
 /// Async task to start the consensus task, while monitoring for a network disconnections.
 async fn replicator_task(node: Arc<Darkfid>, ex: Arc<smol::Executor<'static>>) -> Result<()> {
-    smol::future::or(monitor_network(node.clone()), consensus_task(node, ex)).await
+    // Grab proposals subscriber and subscribe to it
+    let proposals_sub = node.subscribers.get("proposals").unwrap();
+    let subscription = proposals_sub.publisher.clone().subscribe().await;
+
+    smol::future::or(
+        monitor_network(node.clone(), &subscription),
+        consensus_task(node, &subscription, ex),
+    )
+    .await
 }
 
 /// Async task to monitor network disconnections.
-async fn monitor_network(node: Arc<Darkfid>) -> Result<()> {
+async fn monitor_network(
+    node: Arc<Darkfid>,
+    subscription: &Subscription<JsonNotification>,
+) -> Result<()> {
     loop {
         // Check if we are connected to the network
         if node.p2p.hosts().channels().await.is_empty() {
             error!(target: "darkfid::task::consensus::monitor_network", "Node disconnected from the network");
+            subscription.unsubscribe().await;
             return Err(Error::NetworkOperationFailed)
         }
 
@@ -177,15 +189,15 @@ async fn monitor_network(node: Arc<Darkfid>) -> Result<()> {
 }
 
 /// Async task used for listening for new blocks and perform consensus.
-async fn consensus_task(node: Arc<Darkfid>, ex: Arc<smol::Executor<'static>>) -> Result<()> {
+async fn consensus_task(
+    node: Arc<Darkfid>,
+    subscription: &Subscription<JsonNotification>,
+    ex: Arc<smol::Executor<'static>>,
+) -> Result<()> {
     info!(target: "darkfid::task::consensus_task", "Starting consensus task...");
 
     // Grab blocks subscriber
     let block_sub = node.subscribers.get("blocks").unwrap();
-
-    // Grab proposals subscriber and subscribe to it
-    let proposals_sub = node.subscribers.get("proposals").unwrap();
-    let subscription = proposals_sub.publisher.clone().subscribe().await;
 
     // Create the garbage collection task using a dummy task
     let gc_task = StoppableTask::new();
