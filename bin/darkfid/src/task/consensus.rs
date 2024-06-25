@@ -147,6 +147,7 @@ pub async fn consensus_init_task(
             Err(Error::NetworkNotConnected) => {
                 // Sync node again
                 *node.validator.synced.write().await = false;
+                node.validator.consensus.purge_forks().await?;
                 if !config.skip_sync {
                     sync_task(&node, checkpoint).await?;
                 } else {

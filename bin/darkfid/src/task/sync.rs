@@ -204,8 +204,8 @@ async fn synced_peers(
         let _ = subscription.receive().await;
         subscription.unsubscribe().await;
 
-        info!(target: "darkfid::task::sync::synced_peers", "Sleeping a bit to allow for more nodes to connect...");
-        sleep(node.p2p.settings().outbound_connect_timeout).await;
+        info!(target: "darkfid::task::sync::synced_peers", "Sleeping for {comms_timeout} to allow for more nodes to connect...");
+        sleep(comms_timeout).await;
     }
 
     Ok(tips)

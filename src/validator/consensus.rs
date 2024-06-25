@@ -492,6 +492,16 @@ impl Consensus {
 
         Ok(())
     }
+
+    /// Auxiliary function to fully purge current forks and leave only a new empty fork.
+    pub async fn purge_forks(&self) -> Result<()> {
+        debug!(target: "validator::consensus::purge_forks", "Purging current forks...");
+        let mut forks = self.forks.write().await;
+        *forks = vec![Fork::new(self.blockchain.clone(), self.module.read().await.clone()).await?];
+        drop(forks);
+        debug!(target: "validator::consensus::purge_forks", "Forks purged!");
+        Ok(())
+    }
 }
 
 /// This struct represents a block proposal, used for consensus.
