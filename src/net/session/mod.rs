@@ -56,6 +56,7 @@ pub type SessionWeakPtr = Weak<dyn Session + Send + Sync + 'static>;
 /// is received.
 pub async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr, type_id: SessionBitFlag) {
     debug!(target: "net::session::remove_sub_on_stop()", "[START]");
+    let hosts = p2p.hosts();
     let addr = channel.address();
 
     // Subscribe to stop events
@@ -77,13 +78,16 @@ pub async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr, type_id: Sessi
             "Downgrading {}", addr,
         );
 
-        let last_seen = p2p.hosts().fetch_last_seen(addr).await.unwrap();
-        p2p.hosts().move_host(addr, last_seen, HostColor::Grey).await.unwrap();
+        let last_seen = hosts.fetch_last_seen(addr).await.unwrap();
+        hosts.move_host(addr, last_seen, HostColor::Grey).await.unwrap();
     }
 
     // Remove channel from the HostRegistry. Free up this addr for any future operation.
-    p2p.hosts().unregister(channel.address()).await;
+    hosts.unregister(channel.address()).await;
 
+    if hosts.channels().await.is_empty() {
+        hosts.disconnect_publisher.notify(true).await;
+    }
     debug!(target: "net::session::remove_sub_on_stop()", "[END]");
 }
 

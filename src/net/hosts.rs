@@ -799,6 +799,9 @@ pub struct Hosts {
     /// Publisher for notifications of new channels
     pub(in crate::net) channel_publisher: PublisherPtr<Result<ChannelPtr>>,
 
+    /// Publisher listening for network disconnects
+    pub(in crate::net) disconnect_publisher: PublisherPtr<bool>,
+
     /// Keeps track of the last time a connection was made.
     pub(in crate::net) last_connection: Mutex<Instant>,
 
@@ -817,6 +820,7 @@ impl Hosts {
             container: HostContainer::new(),
             store_publisher: Publisher::new(),
             channel_publisher: Publisher::new(),
+            disconnect_publisher: Publisher::new(),
             last_connection: Mutex::new(Instant::now()),
             ipv6_available: Mutex::new(true),
             settings,
@@ -996,12 +1000,19 @@ impl Hosts {
         *last_online = Instant::now();
     }
 
+    /// Get notified when new hosts have been inserted into a hostlist.
     pub async fn subscribe_store(&self) -> Subscription<usize> {
         self.store_publisher.clone().subscribe().await
     }
 
+    /// Get notified when a new channel has been created
     pub async fn subscribe_channel(&self) -> Subscription<Result<ChannelPtr>> {
         self.channel_publisher.clone().subscribe().await
+    }
+
+    /// Get notified when a node has no active connections (is disconnected)
+    pub async fn subscribe_disconnect(&self) -> Subscription<bool> {
+        self.disconnect_publisher.clone().subscribe().await
     }
 
     // Verify whether a URL is local.
