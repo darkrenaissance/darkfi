@@ -134,7 +134,7 @@ impl Darkfid {
         };
 
         self.p2p.broadcast(&tx).await;
-        if self.p2p.hosts().channels().await.is_empty() {
+        if self.p2p.hosts().channels().is_empty() {
             warn!(target: "darkfid::rpc::tx_broadcast", "No connected channels to broadcast tx");
         }
 

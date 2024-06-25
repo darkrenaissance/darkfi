@@ -164,7 +164,7 @@ impl Slot {
                 return Ok(())
             }
 
-            match self.p2p().hosts().try_register(self.addr.clone(), HostState::Connect).await {
+            match self.p2p().hosts().try_register(self.addr.clone(), HostState::Connect) {
                 Ok(_) => {
                     match self.connector.connect(&self.addr).await {
                         Ok((url, channel)) => {
@@ -197,7 +197,7 @@ impl Slot {
 
                             // Stop tracking this peer, to avoid it getting stuck in the Connect
                             // state. This is safe since we have failed to connect at this point.
-                            self.p2p().hosts().unregister(&self.addr).await;
+                            self.p2p().hosts().unregister(&self.addr);
                         }
                     }
                 }

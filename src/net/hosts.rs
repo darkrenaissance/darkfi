@@ -844,7 +844,7 @@ impl Hosts {
 
         // Then ensure we aren't currently trying to add this peer to the hostlist.
         for (i, (addr, last_seen)) in filtered_addrs.iter().enumerate() {
-            if let Err(e) = self.try_register(addr.clone(), HostState::Insert).await {
+            if let Err(e) = self.try_register(addr.clone(), HostState::Insert) {
                 debug!(target: "net::hosts::store_or_update", "Cannot insert addr={}, err={}",
                        addr.clone(), e);
 
@@ -856,7 +856,7 @@ impl Hosts {
 
             // Free up this peer for usage by other parts of the code base.
             // This is a safe since the hostlist modification is now complete.
-            self.unregister(addr).await;
+            self.unregister(addr);
         }
 
         self.store_publisher.notify(addrs_len).await;
@@ -865,13 +865,13 @@ impl Hosts {
 
     /// Check whether a peer is available to be refined currently. Returns true
     /// if available, false otherwise.
-    pub async fn refinable(&self, addr: Url) -> bool {
-        self.try_register(addr.clone(), HostState::Refine).await.is_ok()
+    pub fn refinable(&self, addr: Url) -> bool {
+        self.try_register(addr.clone(), HostState::Refine).is_ok()
     }
 
     /// Try to update the registry. If the host already exists, try to update its state.
     /// Otherwise add the host to the registry along with its state.
-    pub(in crate::net) async fn try_register(
+    pub(in crate::net) fn try_register(
         &self,
         addr: Url,
         new_state: HostState,
@@ -926,7 +926,7 @@ impl Hosts {
                 continue
             }
 
-            if let Err(e) = self.try_register(host.clone(), HostState::Connect).await {
+            if let Err(e) = self.try_register(host.clone(), HostState::Connect) {
                 trace!(target: "net::hosts::check_addrs", "Skipping addr={}, err={}",
                        host.clone(), e);
                 continue
@@ -946,13 +946,13 @@ impl Hosts {
     /// Misuse of this call is dangerous since it frees up the peer to be used by
     /// the refinery or outbound connect loop, and may result in invalid states. It should
     /// only be called when it is completely safe to do so.
-    pub(in crate::net) async fn unregister(&self, addr: &Url) {
+    pub(in crate::net) fn unregister(&self, addr: &Url) {
         self.registry.lock().unwrap().remove(addr);
         debug!(target: "net::hosts::unregister()", "Removed {} from HostRegistry", addr);
     }
 
     /// Returns the list of connected channels.
-    pub async fn channels(&self) -> Vec<ChannelPtr> {
+    pub fn channels(&self) -> Vec<ChannelPtr> {
         let registry = self.registry.lock().unwrap();
         let mut channels = Vec::new();
 
@@ -965,7 +965,7 @@ impl Hosts {
     }
 
     /// Returns the list of suspended channels.
-    pub(in crate::net) async fn suspended(&self) -> Vec<Url> {
+    pub(in crate::net) fn suspended(&self) -> Vec<Url> {
         let registry = self.registry.lock().unwrap();
         let mut addrs = Vec::new();
 
@@ -978,8 +978,8 @@ impl Hosts {
     }
 
     /// Retrieve a random connected channel
-    pub async fn random_channel(&self) -> ChannelPtr {
-        let channels = self.channels().await;
+    pub fn random_channel(&self) -> ChannelPtr {
+        let channels = self.channels();
         let position = rand::thread_rng().gen_range(0..channels.len());
         channels[position].clone()
     }
@@ -991,7 +991,7 @@ impl Hosts {
         // This will panic if we are already connected to this peer, this peer
         // is suspended, or this peer is currently being inserted into the hostlist.
         // None of these scenarios should ever happen.
-        self.try_register(address.clone(), HostState::Connected(channel.clone())).await.unwrap();
+        self.try_register(address.clone(), HostState::Connected(channel.clone())).unwrap();
 
         // Notify that channel processing was successful
         self.channel_publisher.notify(Ok(channel.clone())).await;
@@ -1244,7 +1244,7 @@ impl Hosts {
         self.move_host(addr, last_seen, HostColor::Grey).await?;
 
         // Free up this addr for future operations.
-        self.unregister(addr).await;
+        self.unregister(addr);
 
         Ok(())
     }
@@ -1266,7 +1266,7 @@ impl Hosts {
                addr, destination);
 
         // This should never panic. Failure indicates a misuse of the HostState API.
-        self.try_register(addr.clone(), HostState::Move).await.unwrap();
+        self.try_register(addr.clone(), HostState::Move).unwrap();
 
         match destination {
             // Downgrade to grey. Remove from white and gold.

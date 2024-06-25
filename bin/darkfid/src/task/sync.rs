@@ -142,7 +142,7 @@ async fn synced_peers(
     let mut tips = HashMap::new();
     loop {
         // Grab channels
-        let peers = node.p2p.hosts().channels().await;
+        let peers = node.p2p.hosts().channels();
 
         // Check anyone is connected
         if !peers.is_empty() {

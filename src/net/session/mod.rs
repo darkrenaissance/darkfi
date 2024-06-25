@@ -83,9 +83,9 @@ pub async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr, type_id: Sessi
     }
 
     // Remove channel from the HostRegistry. Free up this addr for any future operation.
-    hosts.unregister(channel.address()).await;
+    hosts.unregister(channel.address());
 
-    if hosts.channels().await.is_empty() {
+    if hosts.channels().is_empty() {
         hosts.disconnect_publisher.notify(Error::NetworkNotConnected).await;
     }
     debug!(target: "net::session::remove_sub_on_stop()", "[END]");

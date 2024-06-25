@@ -363,7 +363,7 @@ impl Slot {
                 self.p2p().hosts().move_host(&addr, last_seen, HostColor::Grey).await?;
 
                 // Mark its state as Suspend, which sends this node to the Refinery for processing.
-                self.p2p().hosts().try_register(addr.clone(), HostState::Suspend).await.unwrap();
+                self.p2p().hosts().try_register(addr.clone(), HostState::Suspend).unwrap();
 
                 continue
             }
@@ -406,7 +406,7 @@ impl Slot {
                 self.p2p().hosts().move_host(&addr, last_seen, HostColor::Grey).await?;
 
                 // Mark its state as Suspend, which sends it to the Refinery for processing.
-                self.p2p().hosts().try_register(addr.clone(), HostState::Suspend).await.unwrap();
+                self.p2p().hosts().try_register(addr.clone(), HostState::Suspend).unwrap();
 
                 // Notify that channel processing failed
                 self.p2p().hosts().channel_publisher.notify(Err(Error::ConnectFailed)).await;
@@ -543,7 +543,7 @@ impl PeerDiscoveryBase for PeerDiscovery {
 
             // First 2 times try sending GetAddr to the network.
             // 3rd time do a seed sync.
-            if p2p.is_connected().await && current_attempt <= 2 {
+            if p2p.is_connected() && current_attempt <= 2 {
                 // Broadcast the GetAddrs message to all active channels.
                 // If we have no active channels, we will perform a SeedSyncSession instead.
 

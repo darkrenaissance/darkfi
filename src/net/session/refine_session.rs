@@ -238,7 +238,7 @@ impl GreylistRefinery {
             let offline_timer =
                 { Instant::now().duration_since(*hosts.last_connection.lock().unwrap()) };
 
-            if hosts.channels().await.is_empty() && offline_timer >= offline_limit {
+            if hosts.channels().is_empty() && offline_timer >= offline_limit {
                 warn!(target: "net::refinery", "No connections for {}s. GreylistRefinery paused.",
                           offline_timer.as_secs());
 
@@ -246,9 +246,9 @@ impl GreylistRefinery {
                 // hosts cannot be connected to in Outbound Session. Failure to do this could
                 // result in the refinery being paused forver (since connections could never be
                 // made).
-                let suspended_hosts = hosts.suspended().await;
+                let suspended_hosts = hosts.suspended();
                 for host in suspended_hosts {
-                    hosts.unregister(&host).await;
+                    hosts.unregister(&host);
                 }
 
                 continue
@@ -263,7 +263,7 @@ impl GreylistRefinery {
                 Some((entry, _)) => {
                     let url = &entry.0;
 
-                    if let Err(e) = hosts.try_register(url.clone(), HostState::Refine).await {
+                    if let Err(e) = hosts.try_register(url.clone(), HostState::Refine) {
                         debug!(target: "net::refinery", "Unable to refine addr={}, err={}",
                                url.clone(), e);
                         continue
@@ -291,7 +291,7 @@ impl GreylistRefinery {
                         // Remove this entry from HostRegistry to avoid this host getting
                         // stuck in the Refining state. This is a safe since the hostlist
                         // modification is now complete.
-                        hosts.unregister(url).await;
+                        hosts.unregister(url);
 
                         continue
                     }
@@ -305,7 +305,7 @@ impl GreylistRefinery {
                     hosts.move_host(url, last_seen, HostColor::White).await.unwrap();
 
                     // When move is complete we can safely stop tracking this peer.
-                    hosts.unregister(url).await;
+                    hosts.unregister(url);
 
                     debug!(target: "net::refinery", "GreylistRefinery complete!");
                     continue

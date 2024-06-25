@@ -170,7 +170,7 @@ impl P2p {
     /// the ones provided in `exclude_list`.
     pub async fn broadcast_with_exclude<M: Message>(&self, message: &M, exclude_list: &[Url]) {
         let mut channels = Vec::new();
-        for channel in self.hosts().channels().await {
+        for channel in self.hosts().channels() {
             if exclude_list.contains(channel.address()) {
                 continue
             }
@@ -204,8 +204,8 @@ impl P2p {
         let _results: Vec<_> = futures.collect().await;
     }
 
-    pub async fn is_connected(&self) -> bool {
-        !self.hosts().channels().await.is_empty()
+    pub fn is_connected(&self) -> bool {
+        !self.hosts().channels().is_empty()
     }
 
     /// Return an atomic pointer to the set network settings

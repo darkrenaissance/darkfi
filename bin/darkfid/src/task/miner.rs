@@ -331,7 +331,7 @@ async fn mine_next_block(
     extended_fork.module.verify_current_block(&next_block)?;
 
     // Check if we are connected to the network
-    if !skip_sync && node.p2p.hosts().channels().await.is_empty() {
+    if !skip_sync && node.p2p.hosts().channels().is_empty() {
         return Err(Error::NetworkNotConnected)
     }
 

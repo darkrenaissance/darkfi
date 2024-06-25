@@ -455,7 +455,7 @@ async fn p2p_test_real(ex: Arc<Executor<'static>>) {
         info!("========================================================");
         info!("Checking manual node={}", p2p.settings().node_id);
         info!("========================================================");
-        let channels = p2p.hosts().channels().await;
+        let channels = p2p.hosts().channels();
         assert!(channels.len() == N_CONNS * 2);
     }
 
