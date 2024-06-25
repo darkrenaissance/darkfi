@@ -144,7 +144,7 @@ pub async fn consensus_init_task(
 
         match result {
             Ok(_) => return Ok(()),
-            Err(Error::NetworkOperationFailed) => {
+            Err(Error::NetworkNotConnected) => {
                 // Sync node again
                 *node.validator.synced.write().await = false;
                 if !config.skip_sync {
@@ -162,30 +162,27 @@ pub async fn consensus_init_task(
 async fn replicator_task(node: Arc<Darkfid>, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     // Grab proposals subscriber and subscribe to it
     let proposals_sub = node.subscribers.get("proposals").unwrap();
-    let subscription = proposals_sub.publisher.clone().subscribe().await;
+    let prop_subscription = proposals_sub.publisher.clone().subscribe().await;
 
-    smol::future::or(
-        monitor_network(node.clone(), &subscription),
-        consensus_task(node, &subscription, ex),
+    // Subscribe to the network disconnect subscriber
+    let net_subscription = node.p2p.hosts().subscribe_disconnect().await;
+
+    let result = smol::future::or(
+        monitor_network(&net_subscription),
+        consensus_task(node, &prop_subscription, ex),
     )
-    .await
+    .await;
+
+    // Terminate the subscriptions
+    prop_subscription.unsubscribe().await;
+    net_subscription.unsubscribe().await;
+
+    result
 }
 
 /// Async task to monitor network disconnections.
-async fn monitor_network(
-    node: Arc<Darkfid>,
-    subscription: &Subscription<JsonNotification>,
-) -> Result<()> {
-    loop {
-        // Check if we are connected to the network
-        if node.p2p.hosts().channels().await.is_empty() {
-            error!(target: "darkfid::task::consensus::monitor_network", "Node disconnected from the network");
-            subscription.unsubscribe().await;
-            return Err(Error::NetworkOperationFailed)
-        }
-
-        sleep(node.p2p.settings().outbound_connect_timeout).await;
-    }
+async fn monitor_network(subscription: &Subscription<Error>) -> Result<()> {
+    Err(subscription.receive().await)
 }
 
 /// Async task used for listening for new blocks and perform consensus.

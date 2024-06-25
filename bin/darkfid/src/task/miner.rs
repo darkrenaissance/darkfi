@@ -175,10 +175,10 @@ pub async fn miner_task(
         .await
         {
             Ok(_) => { /* Do nothing */ }
-            Err(Error::NetworkOperationFailed) => {
+            Err(Error::NetworkNotConnected) => {
                 error!(target: "darkfid::task::miner_task", "Node disconnected from the network");
                 subscription.unsubscribe().await;
-                return Err(Error::NetworkOperationFailed)
+                return Err(Error::NetworkNotConnected)
             }
             Err(e) => {
                 error!(
@@ -332,7 +332,7 @@ async fn mine_next_block(
 
     // Check if we are connected to the network
     if !skip_sync && node.p2p.hosts().channels().await.is_empty() {
-        return Err(Error::NetworkOperationFailed)
+        return Err(Error::NetworkNotConnected)
     }
 
     // Append the mined block as a proposal

@@ -200,6 +200,11 @@ async fn synced_peers(
         }
 
         warn!(target: "darkfid::task::sync::synced_peers", "Node is not connected to other nodes, waiting to retry...");
+        let subscription = node.p2p.hosts().subscribe_channel().await;
+        let _ = subscription.receive().await;
+        subscription.unsubscribe().await;
+
+        info!(target: "darkfid::task::sync::synced_peers", "Sleeping a bit to allow for more nodes to connect...");
         sleep(node.p2p.settings().outbound_connect_timeout).await;
     }
 
