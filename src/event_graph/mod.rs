@@ -618,7 +618,7 @@ impl EventGraph {
                     // tips will be few.
                     for (layer, tips) in unreferenced_tips.iter_mut() {
                         if layer >= &event.layer {
-                            break
+                            continue
                         }
                         tips.remove(parent_id);
                     }
