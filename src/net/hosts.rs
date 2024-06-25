@@ -26,7 +26,7 @@ use std::{
 
 use log::{debug, error, info, trace, warn};
 use rand::{prelude::IteratorRandom, rngs::OsRng, Rng};
-use smol::lock::{Mutex as AsyncMutex, RwLock};
+use smol::lock::RwLock;
 use url::Url;
 
 use super::{settings::SettingsPtr, ChannelPtr};
@@ -75,7 +75,7 @@ pub type HostsPtr = Arc<Hosts>;
 /// Keeps track of hosts and their current state. Prevents race conditions
 /// where multiple threads are simultaneously trying to change the state of
 /// a given host.
-pub(in crate::net) type HostRegistry = AsyncMutex<HashMap<Url, HostState>>;
+pub(in crate::net) type HostRegistry = Mutex<HashMap<Url, HostState>>;
 
 /// HostState is a set of mutually exclusive states that can be Insert,
 /// Refine, Move, Connect, Suspend or Connected. The state is `None` when the
@@ -816,7 +816,7 @@ impl Hosts {
     /// Create a new hosts list
     pub(in crate::net) fn new(settings: SettingsPtr) -> HostsPtr {
         Arc::new(Self {
-            registry: AsyncMutex::new(HashMap::new()),
+            registry: Mutex::new(HashMap::new()),
             container: HostContainer::new(),
             store_publisher: Publisher::new(),
             channel_publisher: Publisher::new(),
@@ -876,7 +876,7 @@ impl Hosts {
         addr: Url,
         new_state: HostState,
     ) -> Result<HostState> {
-        let mut registry = self.registry.lock().await;
+        let mut registry = self.registry.lock().unwrap();
 
         trace!(target: "net::hosts::try_update_registry()", "Try register addr={}, state={}",
                addr, &new_state);
@@ -947,13 +947,13 @@ impl Hosts {
     /// the refinery or outbound connect loop, and may result in invalid states. It should
     /// only be called when it is completely safe to do so.
     pub(in crate::net) async fn unregister(&self, addr: &Url) {
-        self.registry.lock().await.remove(addr);
+        self.registry.lock().unwrap().remove(addr);
         debug!(target: "net::hosts::unregister()", "Removed {} from HostRegistry", addr);
     }
 
     /// Returns the list of connected channels.
     pub async fn channels(&self) -> Vec<ChannelPtr> {
-        let registry = self.registry.lock().await;
+        let registry = self.registry.lock().unwrap();
         let mut channels = Vec::new();
 
         for (_, state) in registry.iter() {
@@ -966,7 +966,7 @@ impl Hosts {
 
     /// Returns the list of suspended channels.
     pub(in crate::net) async fn suspended(&self) -> Vec<Url> {
-        let registry = self.registry.lock().await;
+        let registry = self.registry.lock().unwrap();
         let mut addrs = Vec::new();
 
         for (url, state) in registry.iter() {
