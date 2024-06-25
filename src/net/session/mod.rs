@@ -26,7 +26,7 @@ use log::{debug, trace};
 use smol::Executor;
 
 use super::{channel::ChannelPtr, hosts::HostColor, p2p::P2pPtr, protocol::ProtocolVersion};
-use crate::Result;
+use crate::{Error, Result};
 
 pub mod inbound_session;
 pub use inbound_session::{InboundSession, InboundSessionPtr};
@@ -86,7 +86,7 @@ pub async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr, type_id: Sessi
     hosts.unregister(channel.address()).await;
 
     if hosts.channels().await.is_empty() {
-        hosts.disconnect_publisher.notify(true).await;
+        hosts.disconnect_publisher.notify(Error::NetworkNotConnected).await;
     }
     debug!(target: "net::session::remove_sub_on_stop()", "[END]");
 }

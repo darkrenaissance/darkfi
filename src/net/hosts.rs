@@ -800,7 +800,7 @@ pub struct Hosts {
     pub(in crate::net) channel_publisher: PublisherPtr<Result<ChannelPtr>>,
 
     /// Publisher listening for network disconnects
-    pub(in crate::net) disconnect_publisher: PublisherPtr<bool>,
+    pub(in crate::net) disconnect_publisher: PublisherPtr<Error>,
 
     /// Keeps track of the last time a connection was made.
     pub(in crate::net) last_connection: Mutex<Instant>,
@@ -1011,7 +1011,7 @@ impl Hosts {
     }
 
     /// Get notified when a node has no active connections (is disconnected)
-    pub async fn subscribe_disconnect(&self) -> Subscription<bool> {
+    pub async fn subscribe_disconnect(&self) -> Subscription<Error> {
         self.disconnect_publisher.clone().subscribe().await
     }
 
