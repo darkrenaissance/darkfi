@@ -175,6 +175,7 @@ impl Client {
                             // If the DAG is not synced yet, queue client lines
                             // Once synced, send queued lines and continue as normal
                             if !*self.server.darkirc.event_graph.synced.read().await{
+                                debug!("DAG is still syncing, queuing and skipping...");
                                 event_queue.push_back(event);
                                 continue
                             }
