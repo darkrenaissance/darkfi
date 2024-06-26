@@ -219,8 +219,9 @@ impl GreylistRefinery {
     // Randomly select a peer on the greylist and probe it. This method will remove from the
     // greylist and store on the whitelist providing the peer is responsive.
     async fn run(self: Arc<Self>) {
-        let settings = self.p2p().settings();
-        let hosts = self.p2p().hosts();
+        let p2p = self.p2p();
+        let hosts = p2p.hosts();
+        let settings = p2p.settings();
         loop {
             sleep(settings.greylist_refinery_interval).await;
 
@@ -238,7 +239,7 @@ impl GreylistRefinery {
             let offline_timer =
                 { Instant::now().duration_since(*hosts.last_connection.lock().unwrap()) };
 
-            if hosts.channels().is_empty() && offline_timer >= offline_limit {
+            if !p2p.is_connected() && offline_timer >= offline_limit {
                 warn!(target: "net::refinery", "No connections for {}s. GreylistRefinery paused.",
                           offline_timer.as_secs());
 
@@ -269,7 +270,7 @@ impl GreylistRefinery {
                         continue
                     }
 
-                    if !self.session().handshake_node(url.clone(), self.p2p().clone()).await {
+                    if !self.session().handshake_node(url.clone(), p2p.clone()).await {
                         {
                             let mut greylist =
                                 hosts.container.hostlists[HostColor::Grey as usize].write().await;
