@@ -193,7 +193,7 @@ impl Lilith {
                 continue
             }
 
-            let (entry, position) = hosts.container.fetch_last(HostColor::White).await;
+            let (entry, _) = hosts.container.fetch_last(HostColor::White).await;
 
             let url = &entry.0;
             let last_seen = &entry.1;
@@ -221,7 +221,7 @@ impl Lilith {
             let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
             hosts
                 .container
-                .update_last_seen(HostColor::White as usize, url, last_seen, Some(position))
+                .update_last_seen(HostColor::White as usize, url.clone(), last_seen)
                 .await;
         }
     }

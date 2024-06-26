@@ -391,26 +391,16 @@ impl HostContainer {
     }
 
     /// Update the last_seen field of a peer on a hostlist.
-    pub async fn update_last_seen(
-        &self,
-        color: usize,
-        addr: &Url,
-        last_seen: u64,
-        position: Option<usize>,
-    ) {
+    pub async fn update_last_seen(&self, color: usize, addr: Url, last_seen: u64) {
         trace!(target: "net::hosts::update_last_seen()", "[START] list={:?}",
         HostColor::try_from(color).unwrap());
 
-        let i = match position {
-            Some(i) => i,
-            None => self.get_index_at_addr(color, addr.clone()).await.unwrap(),
-        };
-
         let mut list = self.hostlists[color].write().await;
-        list[i] = (addr.clone(), last_seen);
-        list.sort_by_key(|entry| entry.1);
-        list.reverse();
-
+        if let Some(entry) = list.iter_mut().find(|(u, _)| *u == addr) {
+            entry.1 = last_seen;
+            list.sort_by_key(|entry| entry.1);
+            list.reverse();
+        }
         trace!(target: "net::hosts::update_last_seen()", "[END] list={:?}",
                HostColor::try_from(color).unwrap());
     }
