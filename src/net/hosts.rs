@@ -351,8 +351,8 @@ impl HostContainer {
         trace!(target: "net::hosts::store_or_update()", "[START]");
         let color_code = color.clone() as usize;
         let mut list = self.hostlists[color_code].write().await;
-        if let Some(position) = list.iter().position(|(u, _)| u == &addr) {
-            list[position] = (addr.clone(), last_seen);
+        if let Some(entry) = list.iter_mut().find(|(u, _)| *u == addr) {
+            entry.1 = last_seen;
             debug!(target: "net::hosts::store_or_update()", "Updated [{}] entry on {:?} list",
                 addr, color.clone());
         } else {
