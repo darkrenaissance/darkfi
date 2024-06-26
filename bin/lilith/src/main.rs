@@ -186,43 +186,44 @@ impl Lilith {
         loop {
             sleep(refinery_interval).await;
 
-            if hosts.container.is_empty(HostColor::White).await {
-                debug!(target: "net::refinery::whitelist_refinery",
-                      "Whitelist is empty! Cannot start refinery process");
+            match hosts.container.fetch_last(HostColor::White).await {
+                Some(entry) => {
+                    let url = &entry.0;
+                    let last_seen = &entry.1;
 
-                continue
-            }
-
-            let (entry, _) = hosts.container.fetch_last(HostColor::White).await;
-
-            let url = &entry.0;
-            let last_seen = &entry.1;
-
-            if !hosts.refinable(url.clone()) {
-                debug!(target: "net::refinery::whitelist_refinery", "Addr={} not available!",
+                    if !hosts.refinable(url.clone()) {
+                        debug!(target: "net::refinery::whitelist_refinery", "Addr={} not available!",
                        url.clone());
 
-                continue
-            }
+                        continue
+                    }
 
-            if p2p.session_refine().handshake_node(url.clone(), p2p.clone()).await {
-                debug!(target: "net::refinery:::whitelist_refinery",
+                    if p2p.session_refine().handshake_node(url.clone(), p2p.clone()).await {
+                        debug!(target: "net::refinery:::whitelist_refinery",
                        "Host {} is not responsive. Downgrading from whitelist", url);
 
-                hosts.greylist_host(url, *last_seen).await?;
+                        hosts.greylist_host(url, *last_seen).await?;
 
-                continue
-            }
+                        continue
+                    }
 
-            debug!(target: "net::refinery::whitelist_refinery",
+                    debug!(target: "net::refinery::whitelist_refinery",
                    "Peer {} is responsive. Updating last_seen", url);
 
-            // This node is active. Update the last seen field.
-            let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-            hosts
-                .container
-                .update_last_seen(HostColor::White as usize, url.clone(), last_seen)
-                .await;
+                    // This node is active. Update the last seen field.
+                    let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+                    hosts
+                        .container
+                        .update_last_seen(HostColor::White as usize, url.clone(), last_seen)
+                        .await;
+                }
+                None => {
+                    debug!(target: "net::refinery::whitelist_refinery",
+                              "Whitelist is empty! Cannot start refinery process");
+
+                    continue
+                }
+            }
         }
     }
     // RPCAPI:

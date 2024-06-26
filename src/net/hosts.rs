@@ -411,11 +411,9 @@ impl HostContainer {
     }
 
     /// Get the oldest entry from a hostlist.
-    pub async fn fetch_last(&self, color: HostColor) -> ((Url, u64), usize) {
+    pub async fn fetch_last(&self, color: HostColor) -> Option<(Url, u64)> {
         let list = self.hostlists[color as usize].read().await;
-        let position = list.len() - 1;
-        let entry = &list[position];
-        (entry.clone(), position)
+        list.last().cloned()
     }
 
     /// Fetch addresses that match the provided transports or acceptable
@@ -1463,7 +1461,7 @@ mod tests {
                 println!("{} {}", url, last_seen);
             }
 
-            let (entry, _position) = hosts.container.fetch_last(HostColor::White).await;
+            let entry = hosts.container.fetch_last(HostColor::White).await.unwrap();
             println!("last entry: {} {}", entry.0, entry.1);
         });
     }
