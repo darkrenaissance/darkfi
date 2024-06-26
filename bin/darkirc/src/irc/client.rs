@@ -17,7 +17,7 @@
  */
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst},
         Arc,
@@ -146,6 +146,8 @@ impl Client {
         // Our buffer for the client line
         let mut line = String::new();
 
+        let mut event_queue: VecDeque<_> = VecDeque::new();
+
         loop {
             futures::select! {
                 // Process message from the IRC client
@@ -170,6 +172,36 @@ impl Client {
                         // This means we add it to our DAG, and the DAG will
                         // handle the rest of the propagation.
                         Ok(Some(event)) => {
+                            // If the DAG is not synced yet, queue client lines
+                            // Once synced, send queued lines and continue as normal
+                            if !*self.server.darkirc.event_graph.synced.read().await{
+                                event_queue.push_back(event);
+                                continue
+                            }
+
+                            if !event_queue.is_empty(){
+                                for _ in 0..event_queue.len(){
+                                    let ev = event_queue.pop_front().unwrap();
+                                    let event_id = ev.id();
+                                    *self.last_sent.write().await = event_id;
+
+                                    // If it fails for some reason, for now, we just note it
+                                    // and pass.
+                                    if let Err(e) = self.server.darkirc.event_graph.dag_insert(&[ev.clone()]).await {
+                                        error!("[IRC CLIENT] Failed inserting new event to DAG: {}", e);
+                                    } else {
+                                        // We sent this, so it should be considered seen.
+                                        if let Err(e) = self.mark_seen(&event_id).await {
+                                            error!("[IRC CLIENT] (multiplex_connection) self.mark_seen({}) failed: {}", event_id, e);
+                                            return Err(e)
+                                        }
+
+                                        // Otherwise, broadcast it
+                                        self.server.darkirc.p2p.broadcast(&EventPut(ev)).await;
+                                    }
+                                }
+                            }
+
                             // Update the last sent event.
                             let event_id = event.id();
                             *self.last_sent.write().await = event_id;
