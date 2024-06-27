@@ -184,7 +184,7 @@ async fn get_random_gold_host(
     info!("Getting gold addr from node={}", external_addr);
     info!("========================================================");
 
-    let list = hosts.container.hostlists[HostColor::Gold as usize].read().await;
+    let list = hosts.container.hostlists[HostColor::Gold as usize].read().unwrap();
     assert!(!list.is_empty());
     let position = rand::thread_rng().gen_range(0..list.len());
     let entry = &list[position];
@@ -200,9 +200,9 @@ async fn _check_random_hostlist(outbound_instances: &Vec<Arc<P2p>>, rng: &mut Th
     info!("Checking node={}", external_addr);
     info!("========================================================");
 
-    let greylist = random_node.hosts().container.fetch_all(HostColor::Grey).await;
-    let whitelist = random_node.hosts().container.fetch_all(HostColor::White).await;
-    let goldlist = random_node.hosts().container.fetch_all(HostColor::Gold).await;
+    let greylist = random_node.hosts().container.fetch_all(HostColor::Grey);
+    let whitelist = random_node.hosts().container.fetch_all(HostColor::White);
+    let goldlist = random_node.hosts().container.fetch_all(HostColor::Gold);
 
     for (url, _) in greylist {
         assert!(urls.insert(url));
@@ -224,9 +224,9 @@ async fn check_all_hostlist(outbound_instances: &Vec<Arc<P2p>>) {
         info!("========================================================");
 
         let mut urls = HashSet::new();
-        let greylist = node.hosts().container.fetch_all(HostColor::Grey).await;
-        let whitelist = node.hosts().container.fetch_all(HostColor::White).await;
-        let goldlist = node.hosts().container.fetch_all(HostColor::Gold).await;
+        let greylist = node.hosts().container.fetch_all(HostColor::Grey);
+        let whitelist = node.hosts().container.fetch_all(HostColor::White);
+        let goldlist = node.hosts().container.fetch_all(HostColor::Gold);
 
         for (url, _) in greylist {
             assert!(urls.insert(url));
@@ -328,7 +328,7 @@ async fn p2p_test_real(ex: Arc<Executor<'static>>) {
     // 3. Assert that all nodes have shared their external addr
     //    with the seed node.
     // ===========================================================
-    let greylist = seed.hosts().container.fetch_all(HostColor::Grey).await;
+    let greylist = seed.hosts().container.fetch_all(HostColor::Grey);
     assert!(greylist.len() == N_NODES);
     info!("========================================================");
     info!("Seedsync session successful!");
@@ -343,16 +343,16 @@ async fn p2p_test_real(ex: Arc<Executor<'static>>) {
     // 4. Assert that seed node has at least one whitelist entry,
     //    indicating that the refinery process is happening correctly.
     // ===========================================================
-    assert!(!seed.hosts().container.is_empty(HostColor::White).await);
+    assert!(!seed.hosts().container.is_empty(HostColor::White));
 
     info!("========================================================");
     info!("Checking seed={}", seed.settings().inbound_addrs[0]);
     info!("========================================================");
 
     let mut urls = HashSet::new();
-    let greylist = seed.hosts().container.fetch_all(HostColor::Grey).await;
-    let whitelist = seed.hosts().container.fetch_all(HostColor::White).await;
-    let goldlist = seed.hosts().container.fetch_all(HostColor::Gold).await;
+    let greylist = seed.hosts().container.fetch_all(HostColor::Grey);
+    let whitelist = seed.hosts().container.fetch_all(HostColor::White);
+    let goldlist = seed.hosts().container.fetch_all(HostColor::Gold);
 
     for (url, _) in greylist {
         info!("Found grey url: {}", url);
@@ -377,7 +377,7 @@ async fn p2p_test_real(ex: Arc<Executor<'static>>) {
     info!("========================================================");
     sleep(10).await;
 
-    let whitelist = seed.hosts().container.fetch_all(HostColor::White).await;
+    let whitelist = seed.hosts().container.fetch_all(HostColor::White);
     assert!(whitelist.len() >= 2);
     // ===========================================================
     // 5. Select a random peer and ensure that its hostlist is not
@@ -417,8 +417,7 @@ async fn p2p_test_real(ex: Arc<Executor<'static>>) {
     outbound_instances[random_node_index]
         .hosts()
         .container
-        .contains(HostColor::Grey as usize, &addr)
-        .await;
+        .contains(HostColor::Grey as usize, &addr);
     info!("========================================================");
     info!("Greylist downgrade occured successfully!");
     info!("========================================================");

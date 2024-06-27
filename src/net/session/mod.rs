@@ -78,8 +78,8 @@ pub async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr, type_id: Sessi
             "Downgrading {}", addr,
         );
 
-        let last_seen = hosts.fetch_last_seen(addr).await.unwrap();
-        hosts.move_host(addr, last_seen, HostColor::Grey).await.unwrap();
+        let last_seen = hosts.fetch_last_seen(addr).unwrap();
+        hosts.move_host(addr, last_seen, HostColor::Grey).unwrap();
     }
 
     // Remove channel from the HostRegistry. Free up this addr for any future operation.
@@ -181,7 +181,6 @@ pub trait Session: Sync {
                     self.p2p()
                         .hosts()
                         .move_host(channel.address(), last_seen, HostColor::Gold)
-                        .await
                         .unwrap();
                 }
 

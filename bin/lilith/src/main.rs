@@ -91,7 +91,6 @@ impl Spawn {
             .hosts()
             .container
             .fetch_all(HostColor::White)
-            .await
             .iter()
             .map(|(addr, _url)| JsonValue::String(addr.to_string()))
             .collect()
@@ -102,7 +101,6 @@ impl Spawn {
             .hosts()
             .container
             .fetch_all(HostColor::Grey)
-            .await
             .iter()
             .map(|(addr, _url)| JsonValue::String(addr.to_string()))
             .collect()
@@ -113,7 +111,6 @@ impl Spawn {
             .hosts()
             .container
             .fetch_all(HostColor::Gold)
-            .await
             .iter()
             .map(|(addr, _url)| JsonValue::String(addr.to_string()))
             .collect()
@@ -186,7 +183,7 @@ impl Lilith {
         loop {
             sleep(refinery_interval).await;
 
-            match hosts.container.fetch_last(HostColor::White).await {
+            match hosts.container.fetch_last(HostColor::White) {
                 Some(entry) => {
                     let url = &entry.0;
                     let last_seen = &entry.1;
@@ -202,7 +199,7 @@ impl Lilith {
                         debug!(target: "net::refinery:::whitelist_refinery",
                        "Host {} is not responsive. Downgrading from whitelist", url);
 
-                        hosts.greylist_host(url, *last_seen).await?;
+                        hosts.greylist_host(url, *last_seen)?;
 
                         continue
                     }
@@ -212,10 +209,11 @@ impl Lilith {
 
                     // This node is active. Update the last seen field.
                     let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-                    hosts
-                        .container
-                        .update_last_seen(HostColor::White as usize, url.clone(), last_seen)
-                        .await;
+                    hosts.container.update_last_seen(
+                        HostColor::White as usize,
+                        url.clone(),
+                        last_seen,
+                    );
                 }
                 None => {
                     debug!(target: "net::refinery::whitelist_refinery",

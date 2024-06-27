@@ -240,7 +240,7 @@ impl Slot {
             }
 
             // Seed process complete
-            if self.p2p().hosts().container.is_empty(HostColor::Grey).await {
+            if self.p2p().hosts().container.is_empty(HostColor::Grey) {
                 warn!(target: "net::session::seedsync_session()",
                 "[P2P] Greylist empty after seeding");
             }

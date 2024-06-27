@@ -71,7 +71,7 @@ impl RefineSession {
 
     /// Start the refinery and self handshake processes.
     pub(crate) async fn start(self: Arc<Self>) {
-        match self.p2p().hosts().container.load_all(&self.p2p().settings().hostlist).await {
+        match self.p2p().hosts().container.load_all(&self.p2p().settings().hostlist) {
             Ok(()) => {
                 debug!(target: "net::refine_session::start()", "Load hosts successful!");
             }
@@ -79,7 +79,7 @@ impl RefineSession {
                 warn!(target: "net::refine_session::start()", "Error loading hosts {}", e);
             }
         }
-        match self.p2p().hosts().import_blacklist().await {
+        match self.p2p().hosts().import_blacklist() {
             Ok(()) => {
                 debug!(target: "net::refine_session::start()", "Import blacklist successful!");
             }
@@ -98,7 +98,7 @@ impl RefineSession {
         debug!(target: "net::refine_session", "Stopping refinery process");
         self.refinery.clone().stop().await;
 
-        match self.p2p().hosts().container.save_all(&self.p2p().settings().hostlist).await {
+        match self.p2p().hosts().container.save_all(&self.p2p().settings().hostlist) {
             Ok(()) => {
                 debug!(target: "net::refine_session::stop()", "Save hosts successful!");
             }
@@ -225,7 +225,7 @@ impl GreylistRefinery {
         loop {
             sleep(settings.greylist_refinery_interval).await;
 
-            if hosts.container.is_empty(HostColor::Grey).await {
+            if hosts.container.is_empty(HostColor::Grey) {
                 debug!(target: "net::refinery",
                 "Greylist is empty! Cannot start refinery process");
 
@@ -259,7 +259,6 @@ impl GreylistRefinery {
             match hosts
                 .container
                 .fetch_random_with_schemes(HostColor::Grey, &settings.allowed_transports)
-                .await
             {
                 Some((entry, _)) => {
                     let url = &entry.0;
@@ -271,7 +270,7 @@ impl GreylistRefinery {
                     }
 
                     if !self.session().handshake_node(url.clone(), p2p.clone()).await {
-                        hosts.container.remove_if_exists(HostColor::Grey, url).await;
+                        hosts.container.remove_if_exists(HostColor::Grey, url);
 
                         debug!(
                             target: "net::refinery",
@@ -292,7 +291,7 @@ impl GreylistRefinery {
                     let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
 
                     // Add to the whitelist and remove from the greylist.
-                    hosts.move_host(url, last_seen, HostColor::White).await.unwrap();
+                    hosts.move_host(url, last_seen, HostColor::White).unwrap();
 
                     // When move is complete we can safely stop tracking this peer.
                     hosts.unregister(url);

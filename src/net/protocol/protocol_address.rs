@@ -151,30 +151,20 @@ impl ProtocolAddress {
             // First we grab address with the requested transports from the gold list
             debug!(target: "net::protocol_address::handle_receive_get_addrs()",
             "Fetching gold entries with schemes");
-            let mut addrs = self
-                .hosts
-                .container
-                .fetch_n_random_with_schemes(
-                    HostColor::Gold,
-                    &get_addrs_msg.transports,
-                    get_addrs_msg.max,
-                )
-                .await;
+            let mut addrs = self.hosts.container.fetch_n_random_with_schemes(
+                HostColor::Gold,
+                &get_addrs_msg.transports,
+                get_addrs_msg.max,
+            );
 
             // Then we grab address with the requested transports from the whitelist
             debug!(target: "net::protocol_address::handle_receive_get_addrs()",
             "Fetching whitelist entries with schemes");
-            addrs.append(
-                &mut self
-                    .hosts
-                    .container
-                    .fetch_n_random_with_schemes(
-                        HostColor::White,
-                        &get_addrs_msg.transports,
-                        get_addrs_msg.max,
-                    )
-                    .await,
-            );
+            addrs.append(&mut self.hosts.container.fetch_n_random_with_schemes(
+                HostColor::White,
+                &get_addrs_msg.transports,
+                get_addrs_msg.max,
+            ));
 
             // Next we grab addresses without the requested transports
             // to fill a 2 * max length vector.
@@ -183,33 +173,21 @@ impl ProtocolAddress {
             debug!(target: "net::protocol_address::handle_receive_get_addrs()",
             "Fetching gold entries without schemes");
             let remain = 2 * get_addrs_msg.max - addrs.len() as u32;
-            addrs.append(
-                &mut self
-                    .hosts
-                    .container
-                    .fetch_n_random_excluding_schemes(
-                        HostColor::Gold,
-                        &get_addrs_msg.transports,
-                        remain,
-                    )
-                    .await,
-            );
+            addrs.append(&mut self.hosts.container.fetch_n_random_excluding_schemes(
+                HostColor::Gold,
+                &get_addrs_msg.transports,
+                remain,
+            ));
 
             // Then we grab address without the requested transports from the white list
             debug!(target: "net::protocol_address::handle_receive_get_addrs()",
             "Fetching white entries without schemes");
             let remain = 2 * get_addrs_msg.max - addrs.len() as u32;
-            addrs.append(
-                &mut self
-                    .hosts
-                    .container
-                    .fetch_n_random_excluding_schemes(
-                        HostColor::White,
-                        &get_addrs_msg.transports,
-                        remain,
-                    )
-                    .await,
-            );
+            addrs.append(&mut self.hosts.container.fetch_n_random_excluding_schemes(
+                HostColor::White,
+                &get_addrs_msg.transports,
+                remain,
+            ));
 
             // If there's still space available, take from the Dark list.
 
@@ -221,7 +199,7 @@ impl ProtocolAddress {
             debug!(target: "net::protocol_address::handle_receive_get_addrs()",
             "Fetching dark entries");
             let remain = 2 * get_addrs_msg.max - addrs.len() as u32;
-            addrs.append(&mut self.hosts.container.fetch_n_random(HostColor::Dark, remain).await);
+            addrs.append(&mut self.hosts.container.fetch_n_random(HostColor::Dark, remain));
 
             debug!(
                 target: "net::protocol_address::handle_receive_get_addrs()",

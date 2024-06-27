@@ -203,7 +203,7 @@ impl Slot {
     /// and healthy since we require the network retains some unreliable
     /// connections. A network that purely favors uptime over unreliable
     /// connections may be vulnerable to sybil by attackers with good uptime.
-    async fn fetch_addrs(&self) -> Option<(Url, u64)> {
+    fn fetch_addrs(&self) -> Option<(Url, u64)> {
         let hosts = self.p2p().hosts();
         let slot = self.slot as usize;
         let settings = self.p2p().settings();
@@ -216,22 +216,22 @@ impl Slot {
         let transport_mixing = settings.transport_mixing;
         let preference_strict = &settings.slot_preference_strict;
 
-        let grey_only = hosts.container.is_empty(HostColor::White).await &&
-            hosts.container.is_empty(HostColor::Gold).await &&
-            !hosts.container.is_empty(HostColor::Grey).await;
+        let grey_only = hosts.container.is_empty(HostColor::White) &&
+            hosts.container.is_empty(HostColor::Gold) &&
+            !hosts.container.is_empty(HostColor::Grey);
 
         // If we only have grey entries, select from the greylist. Otherwise,
         // use the preference defined in settings.
         let addrs = if grey_only && !preference_strict {
-            container.fetch(HostColor::Grey, transports, transport_mixing).await
+            container.fetch(HostColor::Grey, transports, transport_mixing)
         } else if slot < gold_count {
-            container.fetch(HostColor::Gold, transports, transport_mixing).await
+            container.fetch(HostColor::Gold, transports, transport_mixing)
         } else if slot < white_count {
-            container.fetch(HostColor::White, transports, transport_mixing).await
+            container.fetch(HostColor::White, transports, transport_mixing)
         } else {
-            container.fetch(HostColor::Grey, transports, transport_mixing).await
+            container.fetch(HostColor::Grey, transports, transport_mixing)
         };
-        hosts.check_addrs(addrs).await
+        hosts.check_addrs(addrs)
     }
 
     // We first try to make connections to the addresses on our gold list. We then find some
@@ -250,9 +250,9 @@ impl Slot {
 
             // Do peer discovery if we don't have any peers on the Grey, White or Gold list
             // (first time connecting to the network).
-            if hosts.container.is_empty(HostColor::Grey).await &&
-                hosts.container.is_empty(HostColor::White).await &&
-                hosts.container.is_empty(HostColor::Gold).await
+            if hosts.container.is_empty(HostColor::Grey) &&
+                hosts.container.is_empty(HostColor::White) &&
+                hosts.container.is_empty(HostColor::Gold)
             {
                 dnetev!(self, OutboundSlotSleeping, {
                     slot: self.slot,
@@ -267,7 +267,7 @@ impl Slot {
                 continue
             }
 
-            let addr = if let Some(addr) = self.fetch_addrs().await {
+            let addr = if let Some(addr) = self.fetch_addrs() {
                 debug!(target: "net::outbound_session::run()", "Fetched addr={}, slot #{}", addr.0,
                 self.slot);
                 addr
@@ -360,7 +360,7 @@ impl Slot {
                 );
 
                 // At this point we failed to connect. We'll downgrade this peer now.
-                self.p2p().hosts().move_host(&addr, last_seen, HostColor::Grey).await?;
+                self.p2p().hosts().move_host(&addr, last_seen, HostColor::Grey)?;
 
                 // Mark its state as Suspend, which sends this node to the Refinery for processing.
                 self.p2p().hosts().try_register(addr.clone(), HostState::Suspend).unwrap();
@@ -403,7 +403,7 @@ impl Slot {
                 }
 
                 // At this point we failed to connect. We'll downgrade this peer now.
-                self.p2p().hosts().move_host(&addr, last_seen, HostColor::Grey).await?;
+                self.p2p().hosts().move_host(&addr, last_seen, HostColor::Grey)?;
 
                 // Mark its state as Suspend, which sends it to the Refinery for processing.
                 self.p2p().hosts().try_register(addr.clone(), HostState::Suspend).unwrap();
