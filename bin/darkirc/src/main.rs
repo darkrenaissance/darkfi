@@ -341,33 +341,6 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         ex.clone(),
     );
 
-    info!("Starting IRC server");
-    let password = args.password.unwrap_or_default();
-    let config_path = get_config_path(args.config, CONFIG_FILE)?;
-    let irc_server = IrcServer::new(
-        darkirc.clone(),
-        args.irc_listen,
-        args.irc_tls_cert,
-        args.irc_tls_secret,
-        config_path,
-        password,
-    )
-    .await?;
-
-    let irc_task = StoppableTask::new();
-    let ex_ = ex.clone();
-    irc_task.clone().start(
-        irc_server.clone().listen(ex_),
-        |res| async move {
-            match res {
-                Ok(()) | Err(Error::DetachedTaskStopped) => { /* TODO: */ }
-                Err(e) => error!("Failed stopping IRC server: {}", e),
-            }
-        },
-        Error::DetachedTaskStopped,
-        ex.clone(),
-    );
-
     info!("Starting P2P network");
     p2p.clone().start().await?;
 
@@ -397,6 +370,33 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     } else {
         *event_graph.synced.write().await = true;
     }
+
+    info!("Starting IRC server");
+    let password = args.password.unwrap_or_default();
+    let config_path = get_config_path(args.config, CONFIG_FILE)?;
+    let irc_server = IrcServer::new(
+        darkirc.clone(),
+        args.irc_listen,
+        args.irc_tls_cert,
+        args.irc_tls_secret,
+        config_path,
+        password,
+    )
+    .await?;
+
+    let irc_task = StoppableTask::new();
+    let ex_ = ex.clone();
+    irc_task.clone().start(
+        irc_server.clone().listen(ex_),
+        |res| async move {
+            match res {
+                Ok(()) | Err(Error::DetachedTaskStopped) => { /* TODO: */ }
+                Err(e) => error!("Failed stopping IRC server: {}", e),
+            }
+        },
+        Error::DetachedTaskStopped,
+        ex.clone(),
+    );
 
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new(ex)?;
