@@ -271,18 +271,7 @@ impl GreylistRefinery {
                     }
 
                     if !self.session().handshake_node(url.clone(), p2p.clone()).await {
-                        {
-                            let mut greylist =
-                                hosts.container.hostlists[HostColor::Grey as usize].write().await;
-
-                            let position = hosts
-                                .container
-                                .get_index_at_addr(HostColor::Grey as usize, url.clone())
-                                .await
-                                .unwrap();
-
-                            greylist.remove(position);
-                        }
+                        hosts.container.remove_if_exists(HostColor::Grey, url).await;
 
                         debug!(
                             target: "net::refinery",

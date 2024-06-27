@@ -645,7 +645,7 @@ impl HostContainer {
     }
 
     /// Remove an entry from a hostlist if it exists.
-    async fn remove_if_exists(&self, color: HostColor, addr: &Url) {
+    pub async fn remove_if_exists(&self, color: HostColor, addr: &Url) {
         let color_code = color.clone() as usize;
         let mut list = self.hostlists[color_code].write().await;
         if let Some(position) = list.iter().position(|(u, _)| u == addr) {
