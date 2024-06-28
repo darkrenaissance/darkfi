@@ -312,34 +312,6 @@ impl HostContainer {
         debug!(target: "net::hosts::store()", "Added [{}] to {:?} list",
                addr, HostColor::try_from(color).unwrap());
 
-        if color == 0 && list.len() == GREYLIST_MAX_LEN {
-            let last_entry = list.pop().unwrap();
-            debug!(
-                target: "net::hosts::store()",
-                "Greylist reached max size. Removed {:?}", last_entry,
-            );
-        }
-
-        if color == 1 && list.len() == WHITELIST_MAX_LEN {
-            let last_entry = list.pop().unwrap();
-            debug!(
-                target: "net::hosts::store()",
-                "Whitelist reached max size. Removed {:?}", last_entry,
-            );
-        }
-
-        if color == 4 && list.len() == DARKLIST_MAX_LEN {
-            let last_entry = list.pop().unwrap();
-            debug!(
-                target: "net::hosts::store()",
-                "Darklist reached max size. Removed {:?}", last_entry,
-            );
-        }
-
-        // Sort the list by last_seen.
-        list.sort_by_key(|entry| entry.1);
-        list.reverse();
-
         trace!(target: "net::hosts::store()", "[END] list={:?}",
                HostColor::try_from(color).unwrap());
     }
@@ -357,34 +329,6 @@ impl HostContainer {
         } else {
             list.push((addr.clone(), last_seen));
             debug!(target: "net::hosts::store_or_update()", "Added [{}] to {:?} list", addr, color);
-
-            if color_code == 0 && list.len() == GREYLIST_MAX_LEN {
-                let last_entry = list.pop().unwrap();
-                debug!(
-                    target: "net::hosts::store_or_update()",
-                    "Greylist reached max size. Removed {:?}", last_entry,
-                );
-            }
-
-            if color_code == 1 && list.len() == WHITELIST_MAX_LEN {
-                let last_entry = list.pop().unwrap();
-                debug!(
-                    target: "net::hosts::store_or_update()",
-                    "Whitelist reached max size. Removed {:?}", last_entry,
-                );
-            }
-
-            if color_code == 4 && list.len() == DARKLIST_MAX_LEN {
-                let last_entry = list.pop().unwrap();
-                debug!(
-                    target: "net::hosts::store_or_update()",
-                    "Darklist reached max size. Removed {:?}", last_entry,
-                );
-            }
-
-            // Sort the list by last_seen.
-            list.sort_by_key(|entry| entry.1);
-            list.reverse();
         }
         trace!(target: "net::hosts::store_or_update()", "[STOP]");
     }
@@ -397,8 +341,6 @@ impl HostContainer {
         let mut list = self.hostlists[color].write().unwrap();
         if let Some(entry) = list.iter_mut().find(|(u, _)| *u == addr) {
             entry.1 = last_seen;
-            list.sort_by_key(|entry| entry.1);
-            list.reverse();
         }
         trace!(target: "net::hosts::update_last_seen()", "[END] list={:?}",
                HostColor::try_from(color).unwrap());
@@ -678,6 +620,46 @@ impl HostContainer {
             .map(|(_, last_seen)| *last_seen)
     }
 
+    /// Sort a hostlist by last_seen.
+    fn sort_by_last_seen(&self, color: usize) {
+        let mut list = self.hostlists[color].write().unwrap();
+        list.sort_by_key(|entry| entry.1);
+        list.reverse();
+    }
+
+    /// Remove the last item on a hostlist if it reaches max size.
+    fn resize(&self, color: HostColor) {
+        let list = self.hostlists[color.clone() as usize].read().unwrap();
+        let size = list.len();
+
+        // Immediately drop the read lock.
+        drop(list);
+
+        match color {
+            HostColor::Grey | HostColor::White | HostColor::Dark => {
+                let max_size = match color {
+                    HostColor::Grey => GREYLIST_MAX_LEN,
+                    HostColor::White => WHITELIST_MAX_LEN,
+                    HostColor::Dark => DARKLIST_MAX_LEN,
+                    _ => {
+                        unreachable!()
+                    }
+                };
+                if size == max_size {
+                    let mut list = self.hostlists[color.clone() as usize].write().unwrap();
+                    let last_entry = list.pop().unwrap();
+
+                    debug!(
+                        target: "net::hosts::resize()",
+                        "{:?}list reached max size. Removed {:?}", color, last_entry,
+                    );
+                }
+            }
+            // Gold and Black list do not have a max size.
+            HostColor::Gold | HostColor::Black => (),
+        }
+    }
+
     /// Load the hostlists from a file.
     pub(in crate::net) fn load_all(&self, path: &str) -> Result<()> {
         let path = expand_path(path)?;
@@ -718,15 +700,22 @@ impl HostContainer {
             match data[0] {
                 "gold" => {
                     self.store(HostColor::Gold as usize, url, last_seen);
+                    self.sort_by_last_seen(HostColor::Gold as usize);
                 }
                 "white" => {
                     self.store(HostColor::White as usize, url, last_seen);
+                    self.sort_by_last_seen(HostColor::White as usize);
+                    self.resize(HostColor::White);
                 }
                 "grey" => {
                     self.store(HostColor::Grey as usize, url, last_seen);
+                    self.sort_by_last_seen(HostColor::Grey as usize);
+                    self.resize(HostColor::Grey);
                 }
                 "dark" => {
                     self.store(HostColor::Dark as usize, url, last_seen);
+                    self.sort_by_last_seen(HostColor::Dark as usize);
+                    self.resize(HostColor::Dark);
                 }
                 _ => {
                     debug!(target: "net::hosts::load_hosts()", "Malformed list name...");
@@ -839,7 +828,10 @@ impl Hosts {
             }
 
             addrs_len += i + 1;
+
             self.container.store_or_update(color.clone(), addr.clone(), *last_seen);
+            self.container.sort_by_last_seen(color.clone() as usize);
+            self.container.resize(color.clone());
 
             // Free up this peer for usage by other parts of the code base.
             // This is a safe since the hostlist modification is now complete.
@@ -1186,6 +1178,8 @@ impl Hosts {
                 (!ipv6_available && self.is_ipv6(addr_.clone()))
             {
                 self.container.store_or_update(HostColor::Dark, addr_.clone(), *last_seen);
+                self.container.sort_by_last_seen(HostColor::Dark as usize);
+                self.container.resize(HostColor::Dark);
 
                 continue
             }
@@ -1256,20 +1250,28 @@ impl Hosts {
             HostColor::Grey => {
                 self.container.remove_if_exists(HostColor::Gold, addr);
                 self.container.remove_if_exists(HostColor::White, addr);
+
                 self.container.store_or_update(HostColor::Grey, addr.clone(), last_seen);
+                self.container.sort_by_last_seen(HostColor::Grey as usize);
+                self.container.resize(HostColor::Grey);
             }
 
             // Remove from Greylist, add to Whitelist. Called by the Refinery.
             HostColor::White => {
                 self.container.remove_if_exists(HostColor::Grey, addr);
+
                 self.container.store_or_update(HostColor::White, addr.clone(), last_seen);
+                self.container.sort_by_last_seen(HostColor::White as usize);
+                self.container.resize(HostColor::White);
             }
 
             // Upgrade to gold. Remove from white or grey.
             HostColor::Gold => {
                 self.container.remove_if_exists(HostColor::Grey, addr);
                 self.container.remove_if_exists(HostColor::White, addr);
+
                 self.container.store_or_update(HostColor::Gold, addr.clone(), last_seen);
+                self.container.sort_by_last_seen(HostColor::Gold as usize);
             }
 
             // Move to black. Remove from all other lists.
@@ -1286,6 +1288,7 @@ impl Hosts {
                     self.container.remove_if_exists(HostColor::Grey, addr);
                     self.container.remove_if_exists(HostColor::White, addr);
                     self.container.remove_if_exists(HostColor::Gold, addr);
+
                     self.container.store_or_update(HostColor::Black, addr.clone(), last_seen);
                 }
             }
