@@ -232,13 +232,14 @@ pub async fn generate_node(
     vks::inject(&sled_db, vks)?;
 
     let validator = Validator::new(&sled_db, config.clone()).await?;
-    // We initialize a dnet subscriber but do not activate it.
-    let dnet_sub = JsonSubscriber::new("dnet.subscribe_events");
 
     let mut subscribers = HashMap::new();
     subscribers.insert("blocks", JsonSubscriber::new("blockchain.subscribe_blocks"));
     subscribers.insert("txs", JsonSubscriber::new("blockchain.subscribe_txs"));
     subscribers.insert("proposals", JsonSubscriber::new("blockchain.subscribe_proposals"));
+
+    // We initialize a dnet subscriber but do not activate it.
+    let dnet_sub = JsonSubscriber::new("dnet.subscribe_events");
 
     let p2p = spawn_p2p(settings, &validator, &subscribers, ex.clone()).await;
     let node = Darkfid::new(p2p.clone(), validator, miner, 50, subscribers, None, dnet_sub).await;

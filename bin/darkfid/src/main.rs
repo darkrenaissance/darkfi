@@ -315,7 +315,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         None => 50,
     };
 
-    info!("Starting dnet subs task");
+    info!(target: "darkfid", "Starting dnet subs task");
     let dnet_sub = JsonSubscriber::new("dnet.subscribe_events");
     let dnet_sub_ = dnet_sub.clone();
     let p2p_ = p2p.clone();
@@ -325,19 +325,20 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             let dnet_sub = p2p_.dnet_subscribe().await;
             loop {
                 let event = dnet_sub.receive().await;
-                debug!("Got dnet event: {:?}", event);
+                debug!(target: "darkfid", "Got dnet event: {:?}", event);
                 dnet_sub_.notify(vec![event.into()].into()).await;
             }
         },
         |res| async {
             match res {
                 Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                Err(e) => panic!("{}", e),
+                Err(e) => error!(target: "darkfid", "Failed starting dnet subs task: {}", e),
             }
         },
         Error::DetachedTaskStopped,
         ex.clone(),
     );
+
     // Initialize node
     let darkfid = Darkfid::new(
         p2p.clone(),
@@ -415,6 +416,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     let (signals_handler, signals_task) = SignalHandler::new(ex)?;
     signals_handler.wait_termination(signals_task).await?;
     info!(target: "darkfid", "Caught termination signal, cleaning up and exiting...");
+
+    info!(target: "darkfid", "Stopping dnet subs task...");
+    dnet_task.stop().await;
 
     info!(target: "darkfid", "Stopping JSON-RPC server...");
     rpc_task.stop().await;
