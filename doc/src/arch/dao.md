@@ -301,3 +301,45 @@ reconstructed and can create the desired inclusion or exclusion proofs.
 Q: should this be 2 databases or one? If we use 2 then we can remove the type
 byte. Maybe more conceptually clearer?
 
+## OpenZeppelin Governance
+
+https://docs.openzeppelin.com/contracts/4.x/governance
+
+It uses modules when the code is deployed to customize functionality. This
+includes:
+
+* Timelock, users can exit if they disagree before decision is executed.
+* Votes module which changes how voting power is determined
+* Quorum module for how the quorum is defined. The options are GovernorVotes and
+  ERC721Votes.
+* What options people have when casting a vote, and how those votes are counted.
+    * GovernorCountingSimple offers For, Against and Abstain. Only For and
+      Abstain are counted towards quorum.
+* AccessControl
+* Clock management, whether to use block index or timestamps.
+
+The Governor (which in DarkFi is the DAO params) has these params:
+
+* Voting delay. How long after a proposal is created should voting power be
+  fixed. A large voting delay gives users time to unstake tokens if needed.
+    * In DarkFi users will just pre-announce proposals.
+* Voting period, typically 1 week
+
+These params are specified in the unit defined in the token's clock.
+This is the blockwindow in DarkFi. So the 'unit' should be a public DAO param too.
+
+AccessControl has several roles:
+
+* Proposer, usually delegated to the Governor instance
+* Executor. Can be assigned to the special zero address so anyone can execute.
+* Admin role which can be renounced.
+
+OpenZeppelin is moving to timestamps instead of block index because:
+
+> It is sometimes difficult to deal with durations expressed in number of
+> blocks because of inconsistent or unpredictable time between blocks.
+> This is particularly true of some L2 networks where blocks are produced based
+> on blockchain usage. Using number of blocks can also lead to the governance
+> rules being affected by network upgrades that modify the expected time
+> between blocks.
+
