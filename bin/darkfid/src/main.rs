@@ -21,7 +21,7 @@ use std::{
     sync::Arc,
 };
 
-use log::{error, info};
+use log::{debug, error, info};
 use smol::{lock::Mutex, stream::StreamExt};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;
@@ -200,6 +200,8 @@ pub struct Darkfid {
     rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
     /// JSON-RPC client to execute requests to the miner daemon
     rpc_client: Option<Mutex<MinerRpcCLient>>,
+    /// dnet JSON-RPC subscriber
+    dnet_sub: JsonSubscriber,
 }
 
 impl Darkfid {
@@ -210,6 +212,7 @@ impl Darkfid {
         txs_batch_size: usize,
         subscribers: HashMap<&'static str, JsonSubscriber>,
         rpc_client: Option<Mutex<MinerRpcCLient>>,
+        dnet_sub: JsonSubscriber,
     ) -> Self {
         Self {
             p2p,
@@ -219,6 +222,7 @@ impl Darkfid {
             subscribers,
             rpc_connections: Mutex::new(HashSet::new()),
             rpc_client,
+            dnet_sub,
         }
     }
 }
@@ -311,6 +315,29 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         None => 50,
     };
 
+    info!("Starting dnet subs task");
+    let dnet_sub = JsonSubscriber::new("dnet.subscribe_events");
+    let dnet_sub_ = dnet_sub.clone();
+    let p2p_ = p2p.clone();
+    let dnet_task = StoppableTask::new();
+    dnet_task.clone().start(
+        async move {
+            let dnet_sub = p2p_.dnet_subscribe().await;
+            loop {
+                let event = dnet_sub.receive().await;
+                debug!("Got dnet event: {:?}", event);
+                dnet_sub_.notify(vec![event.into()].into()).await;
+            }
+        },
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                Err(e) => panic!("{}", e),
+            }
+        },
+        Error::DetachedTaskStopped,
+        ex.clone(),
+    );
     // Initialize node
     let darkfid = Darkfid::new(
         p2p.clone(),
@@ -319,6 +346,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         txs_batch_size,
         subscribers,
         rpc_client,
+        dnet_sub,
     )
     .await;
     let darkfid = Arc::new(darkfid);

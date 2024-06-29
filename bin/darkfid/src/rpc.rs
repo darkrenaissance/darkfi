@@ -24,9 +24,11 @@ use smol::lock::MutexGuard;
 use tinyjson::JsonValue;
 
 use darkfi::{
+    net::P2pPtr,
     rpc::{
         client::RpcChadClient,
         jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult},
+        p2p_method::HandlerP2p,
         server::RequestHandler,
     },
     system::{sleep, StoppableTaskPtr},
@@ -51,8 +53,11 @@ impl RequestHandler for Darkfid {
             // =====================
             "ping" => self.pong(req.id, req.params).await,
             "clock" => self.clock(req.id, req.params).await,
-            "dnet_switch" => self.dnet_switch(req.id, req.params).await,
             "ping_miner" => self.ping_miner(req.id, req.params).await,
+            "dnet.switch" => self.dnet_switch(req.id, req.params).await,
+            "dnet.subscribe_events" => self.dnet_subscribe_events(req.id, req.params).await,
+            // TODO: Make this optional
+            "p2p.get_info" => self.p2p_get_info(req.id, req.params).await,
 
             // ==================
             // Blockchain methods
@@ -122,6 +127,22 @@ impl Darkfid {
         }
 
         JsonResponse::new(JsonValue::Boolean(true), id).into()
+    }
+
+    // RPCAPI:
+    // Initializes a subscription to p2p dnet events.
+    // Once a subscription is established, `darkirc` will send JSON-RPC notifications of
+    // new network events to the subscriber.
+    //
+    // --> {"jsonrpc": "2.0", "method": "dnet.subscribe_events", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "method": "dnet.subscribe_events", "params": [`event`]}
+    pub async fn dnet_subscribe_events(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
+        if !params.is_empty() {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        }
+
+        self.dnet_sub.clone().into()
     }
 
     // RPCAPI:
@@ -198,5 +219,11 @@ impl Darkfid {
                 break;
             }
         }
+    }
+}
+
+impl HandlerP2p for Darkfid {
+    fn p2p(&self) -> P2pPtr {
+        self.p2p.clone()
     }
 }
