@@ -363,3 +363,31 @@ Delegation is a good feature to increase participation.
 
 Early execution means that if the proposal meets the requirements then it can
 be executed early. We should add this option to DarkFi DAO params.
+
+## Suggested Changes
+
+DAO params:
+
+* Voting period (currently called duration) should be moved from proposals to
+  DAO params.
+* Window (currently set at 4 hours of blocks) should be customizable. We need a
+  terminology for the unit of time. Maybe `time_units`.
+    * This should be switched from block index to using timestamps.
+      See the quoted paragraph in the OpenZeppelin section above for the
+      reasoning.
+* Early execution bool flag. If true, then passed proposals can be `exec()`uted
+  asap, otherwise the entire voting period must pass.
+
+No changes to proposals, except moving duration to DAO params.
+
+Currently the DAO public key is used for:
+
+* Encrypting votes.
+* Calling exec.
+
+We should introduce a new key:
+
+* Proposer role, which is needed to make proposals. This can be shared openly
+  amongst DAO members if they wish to remove the restriction on who can make
+  proposals.
+
