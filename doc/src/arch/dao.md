@@ -343,3 +343,23 @@ OpenZeppelin is moving to timestamps instead of block index because:
 > rules being affected by network upgrades that modify the expected time
 > between blocks.
 
+## Aragon
+
+https://aragon.org/how-to/governance-ii-setting-dao-governance-thresholds
+
+* Minimum participation, sometimes called quorum.
+  With large whales, you want a higher threshold.
+  Usual value is 5%.
+* Support threshold, sometimes called pass rate. In DarkFi this is called
+  the approval ratio. The most typical value is 50%.
+* Voting period. Most common is 7 days.
+    * Speed. You want a short period if DAO needs to make fast decisions.
+    * Participation. Longer period for higher participation.
+    * Safety. Too low can be a risk.
+
+Params can also be set then changed later to adjust.
+
+Delegation is a good feature to increase participation.
+
+Early execution means that if the proposal meets the requirements then it can
+be executed early. We should add this option to DarkFi DAO params.
