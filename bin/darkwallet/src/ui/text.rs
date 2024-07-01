@@ -59,8 +59,8 @@ impl Text {
         let text = PropertyStr::wrap(node, "text", 0).unwrap();
         let font_size = PropertyFloat32::wrap(node, "font_size", 0).unwrap();
         let color = PropertyColor::wrap(node, "color").unwrap();
-        let debug = PropertyBool::wrap(node, "debug", 0).unwrap();
         let baseline = PropertyFloat32::wrap(node, "baseline", 0).unwrap();
+        let debug = PropertyBool::wrap(node, "debug", 0).unwrap();
         drop(scene_graph);
 
         let render_info = Self::regen_mesh(
@@ -70,6 +70,7 @@ impl Text {
             font_size.get(),
             color.get(),
             baseline.get(),
+            debug.get(),
         )
         .await;
 
@@ -111,6 +112,7 @@ impl Text {
         font_size: f32,
         text_color: Color,
         baseline: f32,
+        debug: bool,
     ) -> TextRenderInfo {
         debug!(target: "ui::text", "Rendering label '{}'", text);
         let glyphs = text_shaper.shape(text, font_size).await;
@@ -137,6 +139,8 @@ impl Text {
     }
 
     async fn redraw(self: Arc<Self>) {
+        let old = self.render_info.lock().unwrap().clone();
+
         let render_info = Self::regen_mesh(
             &self.render_api,
             &self.text_shaper,
@@ -144,9 +148,14 @@ impl Text {
             self.font_size.get(),
             self.color.get(),
             self.baseline.get(),
+            self.debug.get(),
         )
         .await;
         *self.render_info.lock().unwrap() = render_info;
+
+        self.render_api.delete_buffer(old.mesh.vertex_buffer);
+        self.render_api.delete_buffer(old.mesh.index_buffer);
+        self.render_api.delete_texture(old.texture_id);
 
         let sg = self.sg.lock().await;
         let node = sg.get_node(self.node_id).unwrap();
