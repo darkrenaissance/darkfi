@@ -96,7 +96,7 @@ pub const PROPOSAL_SNAPSHOT_CUTOFF_LIMIT: u32 = 100;
 const _SECS_IN_HOUR: u64 = 60 * 60;
 const _WINDOW_TIME_HR: u64 = 4;
 // Precalculating the const for better performance
-// WINDOW_ = WINDOW_TIME_HR * SECS_IN_HOUR
+// WINDOW_TIME = WINDOW_TIME_HR * SECS_IN_HOUR
 const WINDOW_TIME: u64 = 14400;
 
 /// Blockwindow from block height and target time. Used for time limit on DAO proposals.
