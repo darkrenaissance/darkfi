@@ -390,4 +390,11 @@ We should introduce a new key:
 * Proposer role, which is needed to make proposals. This can be shared openly
   amongst DAO members if they wish to remove the restriction on who can make
   proposals.
+    * OZ does this with a canceller role that has the ability to cancel
+      proposals.
+
+Optional: many DAOs these days implement Abstain, which increases the quorum
+without voting yes. This is for when you want to weak support a measure,
+allowing it to reach quorum faster. This could be implemented in DarkFi, by
+allowing the vote yes to optionally be 0.
 
