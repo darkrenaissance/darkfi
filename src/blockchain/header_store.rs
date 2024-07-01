@@ -115,6 +115,31 @@ impl Default for Header {
     }
 }
 
+impl fmt::Display for Header {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s = format!(
+            "{} {{\n\t{}: {}\n\t{}: {}\n\t{}: {}\n\t{}: {}\n\t{}: {}\n\t{}: {}\n\t{}: {}\n}}",
+            "Header",
+            "Hash",
+            self.hash(),
+            "Version",
+            self.version,
+            "Previous",
+            self.previous,
+            "Height",
+            self.height,
+            "Timestamp",
+            self.timestamp,
+            "Nonce",
+            self.nonce,
+            "Root",
+            self.root,
+        );
+
+        write!(f, "{}", s)
+    }
+}
+
 pub const SLED_HEADER_TREE: &[u8] = b"_headers";
 pub const SLED_SYNC_HEADER_TREE: &[u8] = b"_sync_headers";
 

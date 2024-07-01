@@ -16,15 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{fs, process::exit, sync::Arc, time::Instant};
+use std::{fs, process::exit, sync::Arc};
 
 use url::Url;
 
-use darkfi::{
-    rpc::{client::RpcClient, jsonrpc::JsonRequest, util::JsonValue},
-    util::path::expand_path,
-    Result,
-};
+use darkfi::{rpc::client::RpcClient, util::path::expand_path, Result};
 
 use crate::walletdb::{WalletDb, WalletPtr};
 
@@ -82,26 +78,6 @@ impl Drk {
             exit(2);
         }
 
-        Ok(())
-    }
-
-    /// Auxiliary function to ping configured darkfid daemon for liveness.
-    pub async fn ping(&self) -> Result<()> {
-        println!("Executing ping request to darkfid...");
-        let latency = Instant::now();
-        let req = JsonRequest::new("ping", JsonValue::Array(vec![]));
-        let rep = self.rpc_client.as_ref().unwrap().request(req).await?;
-        let latency = latency.elapsed();
-        println!("Got reply: {rep:?}");
-        println!("Latency: {latency:?}");
-        Ok(())
-    }
-
-    /// Auxiliary function to stop current JSON-RPC client, if its initialized.
-    pub async fn stop_rpc_client(&self) -> Result<()> {
-        if let Some(ref rpc_client) = self.rpc_client {
-            rpc_client.stop().await;
-        };
         Ok(())
     }
 }
