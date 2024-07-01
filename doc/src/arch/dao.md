@@ -370,11 +370,14 @@ DAO params:
 
 * Voting period (currently called duration) should be moved from proposals to
   DAO params.
+    * upgrayedd: we should just have minimum allowed period in the DAO, but keep
+      this param in the proposal.
 * Window (currently set at 4 hours of blocks) should be customizable. We need a
   terminology for the unit of time. Maybe `time_units`.
     * This should be switched from block index to using timestamps.
       See the quoted paragraph in the OpenZeppelin section above for the
       reasoning.
+    * upgrayedd: stick with block index.
 * Early execution bool flag. If true, then passed proposals can be `exec()`uted
   asap, otherwise the entire voting period must pass.
 
@@ -391,6 +394,8 @@ We should introduce a new key:
   amongst DAO members if they wish to remove the restriction on who can make
   proposals.
     * OZ does this with a canceller role that has the ability to cancel
+      proposals.
+    * In the future allow multiple keys for this so you can see who makes
       proposals.
 
 Optional: many DAOs these days implement Abstain, which increases the quorum
