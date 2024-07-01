@@ -37,20 +37,21 @@ mod util;
 
 use crate::{net::ZeroMQAdapter, scene::SceneGraph, text2::TextShaper};
 
-#[cfg(target_os = "android")]
 fn panic_hook(panic_info: &std::panic::PanicInfo) {
     error!("panic occurred: {panic_info}");
     //error!("panic: {}", std::backtrace::Backtrace::force_capture().to_string());
+    std::process::exit(1);
 }
 
 fn main() {
+    // Exit the application on panic right away
+    std::panic::set_hook(Box::new(panic_hook));
+
     #[cfg(target_os = "android")]
     {
         android_logger::init_once(
             android_logger::Config::default().with_max_level(LevelFilter::Debug).with_tag("darkfi"),
         );
-
-        std::panic::set_hook(Box::new(panic_hook));
     }
 
     #[cfg(target_os = "linux")]

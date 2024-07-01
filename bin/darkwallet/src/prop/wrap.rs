@@ -7,7 +7,7 @@ use crate::{
 };
 
 pub struct PropertyBool {
-    prop: Arc<Property>,
+    prop: PropertyPtr,
     idx: usize,
 }
 
@@ -28,10 +28,14 @@ impl PropertyBool {
     pub fn set(&self, val: bool) {
         self.prop.set_bool(self.idx, val).unwrap()
     }
+
+    pub fn prop(&self) -> PropertyPtr {
+        self.prop.clone()
+    }
 }
 
 pub struct PropertyUint32 {
-    prop: Arc<Property>,
+    prop: PropertyPtr,
     idx: usize,
 }
 
@@ -59,10 +63,14 @@ impl PropertyUint32 {
     pub fn set(&self, val: u32) {
         self.prop.set_u32(self.idx, val).unwrap()
     }
+
+    pub fn prop(&self) -> PropertyPtr {
+        self.prop.clone()
+    }
 }
 
 pub struct PropertyFloat32 {
-    prop: Arc<Property>,
+    prop: PropertyPtr,
     idx: usize,
 }
 
@@ -83,10 +91,14 @@ impl PropertyFloat32 {
     pub fn set(&self, val: f32) {
         self.prop.set_f32(self.idx, val).unwrap()
     }
+
+    pub fn prop(&self) -> PropertyPtr {
+        self.prop.clone()
+    }
 }
 
 pub struct PropertyStr {
-    prop: Arc<Property>,
+    prop: PropertyPtr,
     idx: usize,
 }
 
@@ -107,10 +119,14 @@ impl PropertyStr {
     pub fn set<S: Into<String>>(&self, val: S) {
         self.prop.set_str(self.idx, val.into()).unwrap()
     }
+
+    pub fn prop(&self) -> PropertyPtr {
+        self.prop.clone()
+    }
 }
 
 pub struct PropertyColor {
-    prop: Arc<Property>,
+    prop: PropertyPtr,
 }
 
 impl PropertyColor {
@@ -141,5 +157,9 @@ impl PropertyColor {
         self.prop.set_f32(1, val[1]).unwrap();
         self.prop.set_f32(2, val[2]).unwrap();
         self.prop.set_f32(3, val[3]).unwrap();
+    }
+
+    pub fn prop(&self) -> PropertyPtr {
+        self.prop.clone()
     }
 }

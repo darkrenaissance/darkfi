@@ -1,19 +1,28 @@
-use async_lock::Mutex;
+//use async_lock::Mutex;
 use miniquad::{BufferId, TextureId};
 use rand::{rngs::OsRng, Rng};
-use std::sync::{Arc, Weak};
+use std::sync::{Arc, Mutex, Weak};
 
 use crate::{
-    gfx2::{DrawCall, DrawInstruction, DrawMesh, Rectangle, RenderApiPtr, Vertex},
-    mesh::{MeshBuilder, COLOR_BLUE, COLOR_WHITE},
-    prop::{PropertyPtr, PropertyUint32},
+    gfx2::{DrawCall, DrawInstruction, DrawMesh, Rectangle, RenderApi, RenderApiPtr, Vertex},
+    mesh::{Color, MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_WHITE},
+    prop::{
+        PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyStr, PropertyUint32,
+    },
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
-    text2::{self, Glyph, GlyphPositionIter, RenderedAtlas, SpritePtr, TextShaperPtr},
+    text2::{self, Glyph, GlyphPositionIter, RenderedAtlas, SpritePtr, TextShaper, TextShaperPtr},
 };
 
 use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify, Stoppable};
 
 pub type TextPtr = Arc<Text>;
+
+#[derive(Clone)]
+struct TextRenderInfo {
+    glyph_sprites: Vec<SpritePtr>,
+    mesh: MeshInfo,
+    texture_id: TextureId,
+}
 
 pub struct Text {
     sg: SceneGraphPtr2,
@@ -21,17 +30,17 @@ pub struct Text {
     text_shaper: TextShaperPtr,
     tasks: Vec<smol::Task<()>>,
 
-    glyph_sprites: Mutex<Vec<SpritePtr>>,
-
-    texture_id: TextureId,
-    vertex_buffer: BufferId,
-    index_buffer: BufferId,
-    num_elements: i32,
+    render_info: Mutex<TextRenderInfo>,
     dc_key: u64,
 
     node_id: SceneNodeId,
     rect: PropertyPtr,
     z_index: PropertyUint32,
+    text: PropertyStr,
+    font_size: PropertyFloat32,
+    color: PropertyColor,
+    baseline: PropertyFloat32,
+    debug: PropertyBool,
 }
 
 impl Text {
@@ -46,83 +55,99 @@ impl Text {
         let node = scene_graph.get_node(node_id).unwrap();
         let node_name = node.name.clone();
         let rect = node.get_property("rect").expect("Text::rect");
-        let z_index_prop = node.get_property("z_index").expect("Text::z_index");
-        let z_index = PropertyUint32::from(z_index_prop.clone(), 0).unwrap();
-        let text = node.get_property("text").expect("Text::text");
-        let font_size = node.get_property("font_size").expect("Text::font_size");
-        let color = node.get_property("color").expect("Text::color");
-        let debug = node.get_property("debug").expect("Text::debug");
-        let baseline = node.get_property("baseline").expect("Text::baseline");
+        let z_index = PropertyUint32::wrap(node, "z_index", 0).unwrap();
+        let text = PropertyStr::wrap(node, "text", 0).unwrap();
+        let font_size = PropertyFloat32::wrap(node, "font_size", 0).unwrap();
+        let color = PropertyColor::wrap(node, "color").unwrap();
+        let debug = PropertyBool::wrap(node, "debug", 0).unwrap();
+        let baseline = PropertyFloat32::wrap(node, "baseline", 0).unwrap();
         drop(scene_graph);
 
-        let text_str = text.get_str(0).unwrap();
-        let font_size_val = font_size.get_f32(0).unwrap();
-        debug!(target: "ui::text", "Rendering label '{}'", text_str);
-        let glyphs = text_shaper.shape(text_str, font_size_val).await;
-        let atlas =
-            text2::make_texture_atlas(render_api.clone(), font_size_val, &glyphs).await.unwrap();
-
-        let (x1, y1) = (0., 0.);
-        let (x2, y2) = (1., 1.);
-        let verts = vec![
-            // top left
-            Vertex { pos: [x1, y1], color: [1., 0., 0., 1.], uv: [0., 0.] },
-            // top right
-            Vertex { pos: [x2, y1], color: [1., 0., 1., 1.], uv: [1., 0.] },
-            // bottom left
-            Vertex { pos: [x1, y2], color: [0., 0., 1., 1.], uv: [0., 1.] },
-            // bottom right
-            Vertex { pos: [x2, y2], color: [1., 1., 0., 1.], uv: [1., 1.] },
-        ];
-        let indices = vec![0, 2, 1, 1, 2, 3];
-        assert_eq!(atlas.uv_rects.len(), glyphs.len());
-
-        let baseline_y = baseline.get_f32(0).unwrap();
-
-        let mut mesh = MeshBuilder::new();
-        let mut glyph_pos_iter = GlyphPositionIter::new(font_size_val, &glyphs, baseline_y);
-        for (uv_rect, glyph_rect) in atlas.uv_rects.into_iter().zip(glyph_pos_iter) {
-            //mesh.draw_outline(&glyph_rect, COLOR_BLUE, 2.);
-            mesh.draw_box(&glyph_rect, COLOR_WHITE, &uv_rect);
-        }
-
-        let num_elements = mesh.num_elements();
-        let (vertex_buffer, index_buffer) = mesh.alloc(&render_api).await.unwrap();
-
-        let sprites = glyphs.into_iter().map(|glyph| glyph.sprite).collect();
+        let render_info = Self::regen_mesh(
+            &render_api,
+            &text_shaper,
+            text.get(),
+            font_size.get(),
+            color.get(),
+            baseline.get(),
+        )
+        .await;
 
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
             let mut on_modify = OnModify::new(ex, node_name, node_id, me.clone());
             on_modify.when_change(rect.clone(), Self::redraw);
-            on_modify.when_change(z_index_prop, Self::redraw);
-            on_modify.when_change(text, Self::redraw);
-            on_modify.when_change(font_size, Self::redraw);
-            on_modify.when_change(color, Self::redraw);
-            on_modify.when_change(debug, Self::redraw);
-            on_modify.when_change(baseline, Self::redraw);
+            on_modify.when_change(z_index.prop(), Self::redraw);
+            on_modify.when_change(text.prop(), Self::redraw);
+            on_modify.when_change(font_size.prop(), Self::redraw);
+            on_modify.when_change(color.prop(), Self::redraw);
+            on_modify.when_change(debug.prop(), Self::redraw);
+            on_modify.when_change(baseline.prop(), Self::redraw);
 
             Self {
                 sg,
                 render_api,
                 text_shaper,
                 tasks: on_modify.tasks,
-                //glyphs: Mutex::new((glyphs, atlas)),
-                glyph_sprites: Mutex::new(sprites),
-                texture_id: atlas.texture_id,
-                vertex_buffer,
-                index_buffer,
-                num_elements,
+                render_info: Mutex::new(render_info),
                 dc_key: OsRng.gen(),
                 node_id,
                 rect,
                 z_index,
+                text,
+                font_size,
+                color,
+                baseline,
+                debug,
             }
         });
 
         Pimpl::Text(self_)
     }
 
+    async fn regen_mesh(
+        render_api: &RenderApi,
+        text_shaper: &TextShaper,
+        text: String,
+        font_size: f32,
+        text_color: Color,
+        baseline: f32,
+    ) -> TextRenderInfo {
+        debug!(target: "ui::text", "Rendering label '{}'", text);
+        let glyphs = text_shaper.shape(text, font_size).await;
+        let atlas = text2::make_texture_atlas(render_api, font_size, &glyphs).await.unwrap();
+
+        let mut mesh = MeshBuilder::new();
+        let mut glyph_pos_iter = GlyphPositionIter::new(font_size, &glyphs, baseline);
+        for ((uv_rect, glyph_rect), glyph) in
+            atlas.uv_rects.into_iter().zip(glyph_pos_iter).zip(glyphs.iter())
+        {
+            //mesh.draw_outline(&glyph_rect, COLOR_BLUE, 2.);
+            let mut color = text_color.clone();
+            if glyph.sprite.has_color {
+                color = COLOR_WHITE;
+            }
+            mesh.draw_box(&glyph_rect, color, &uv_rect);
+        }
+
+        let mesh = mesh.alloc(&render_api).await.unwrap();
+
+        let glyph_sprites = glyphs.into_iter().map(|glyph| glyph.sprite).collect();
+
+        TextRenderInfo { glyph_sprites, mesh, texture_id: atlas.texture_id }
+    }
+
     async fn redraw(self: Arc<Self>) {
+        let render_info = Self::regen_mesh(
+            &self.render_api,
+            &self.text_shaper,
+            self.text.get(),
+            self.font_size.get(),
+            self.color.get(),
+            self.baseline.get(),
+        )
+        .await;
+        *self.render_info.lock().unwrap() = render_info;
+
         let sg = self.sg.lock().await;
         let node = sg.get_node(self.node_id).unwrap();
 
@@ -143,11 +168,13 @@ impl Text {
         // Only used for debug messages
         let node = sg.get_node(self.node_id).unwrap();
 
+        let render_info = self.render_info.lock().unwrap().clone();
+
         let mesh = DrawMesh {
-            vertex_buffer: self.vertex_buffer,
-            index_buffer: self.index_buffer,
-            texture: Some(self.texture_id),
-            num_elements: self.num_elements,
+            vertex_buffer: render_info.mesh.vertex_buffer,
+            index_buffer: render_info.mesh.index_buffer,
+            texture: Some(render_info.texture_id),
+            num_elements: render_info.mesh.num_elements,
         };
 
         if let Err(err) = eval_rect(self.rect.clone(), parent_rect) {

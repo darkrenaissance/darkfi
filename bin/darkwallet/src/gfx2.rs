@@ -413,9 +413,11 @@ impl Stage {
         sendr: async_channel::Sender<TextureId>,
     ) {
         let texture = self.ctx.new_texture_from_rgba8(width, height, &data);
-        debug!(target: "gfx2", "Invoked method: new_texture({}, {}, ...) -> {:?}\n{}",
-               width, height, texture,
-               ansi_texture(width as usize, height as usize, &data));
+        debug!(target: "gfx2", "Invoked method: new_texture({}, {}, ...) -> {:?}",
+               width, height, texture);
+        //debug!(target: "gfx2", "Invoked method: new_texture({}, {}, ...) -> {:?}\n{}",
+        //       width, height, texture,
+        //       ansi_texture(width as usize, height as usize, &data));
         sendr.try_send(texture).unwrap();
     }
     fn method_delete_texture(&mut self, texture: TextureId) {

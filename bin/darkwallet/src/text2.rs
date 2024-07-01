@@ -16,7 +16,7 @@ use std::{
 
 use crate::{
     error::Result,
-    gfx2::{Rectangle, RenderApiPtr},
+    gfx2::{Rectangle, RenderApi, RenderApiPtr},
     util::ansi_texture,
 };
 
@@ -53,7 +53,7 @@ pub struct RenderedAtlas {
 const ATLAS_GAP: usize = 2;
 
 pub async fn make_texture_atlas(
-    render_api: RenderApiPtr,
+    render_api: &RenderApi,
     font_size: f32,
     glyphs: &Vec<Glyph>,
 ) -> Result<RenderedAtlas> {
@@ -337,7 +337,9 @@ impl TextShaper {
             let mut prev_cluster = 0;
 
             //for (i, (position, info)) in positions.iter().zip(infos).enumerate() {
-            for (i, (position, info)) in glyph_pos_iter.iter().zip(glyph_infos_iter.iter()).enumerate() {
+            for (i, (position, info)) in
+                glyph_pos_iter.iter().zip(glyph_infos_iter.iter()).enumerate()
+            {
                 let glyph_id = info.codepoint as u32;
                 // Index within this substr
                 let curr_cluster = info.cluster as usize;
@@ -450,6 +452,7 @@ impl TextShaper {
                     bearing_x,
                     bearing_y,
                     has_fixed_sizes,
+                    has_color: face.has_color(),
                 });
 
                 cache.insert(cache_key, Arc::downgrade(&sprite));
@@ -510,6 +513,7 @@ pub struct Sprite {
     pub bearing_x: f32,
     pub bearing_y: f32,
     pub has_fixed_sizes: bool,
+    pub has_color: bool,
 }
 
 pub struct Glyph {

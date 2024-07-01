@@ -12,6 +12,13 @@ pub const COLOR_GREEN: Color = [0., 1., 0., 1.];
 pub const COLOR_BLUE: Color = [0., 0., 1., 1.];
 pub const COLOR_WHITE: Color = [1., 1., 1., 1.];
 
+#[derive(Clone)]
+pub struct MeshInfo {
+    pub vertex_buffer: BufferId,
+    pub index_buffer: BufferId,
+    pub num_elements: i32,
+}
+
 pub struct MeshBuilder {
     verts: Vec<Vertex>,
     indices: Vec<u16>,
@@ -67,18 +74,14 @@ impl MeshBuilder {
         self.draw_box(&Rectangle::new(x1, y2 - thickness, dist_x, thickness), color, &uv);
     }
 
-    // Needed by OpenGL
-    pub fn num_elements(&self) -> i32 {
-        self.indices.len() as i32
-    }
-
-    pub async fn alloc(self, render_api: &RenderApi) -> Result<(BufferId, BufferId)> {
+    pub async fn alloc(self, render_api: &RenderApi) -> Result<MeshInfo> {
         //debug!(target: "mesh", "allocating {} verts:", self.verts.len());
         //for vert in &self.verts {
         //    debug!(target: "mesh", "  {:?}", vert);
         //}
+        let num_elements = self.indices.len() as i32;
         let vertex_buffer = render_api.new_vertex_buffer(self.verts).await?;
         let index_buffer = render_api.new_index_buffer(self.indices).await?;
-        Ok((vertex_buffer, index_buffer))
+        Ok(MeshInfo { vertex_buffer, index_buffer, num_elements })
     }
 }
