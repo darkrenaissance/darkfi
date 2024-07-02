@@ -370,6 +370,7 @@ impl RpcChadClient {
 
                     // Check if the IDs match
                     if req_id != rep.id {
+                        debug!(target: "rpc::chad_client", "Skipping response for request {} as its not our latest({})", rep.id, req_id);
                         continue
                     }
 
@@ -378,6 +379,13 @@ impl RpcChadClient {
 
                 JsonResult::Error(e) => {
                     debug!(target: "rpc::chad_client", "<-- {}", e.stringify()?);
+
+                    // Check if the IDs match
+                    if req_id != e.id {
+                        debug!(target: "rpc::chad_client", "Skipping response for request {} as its not our latest({})", e.id, req_id);
+                        continue
+                    }
+
                     return Err(Error::JsonRpcError((e.error.code, e.error.message)))
                 }
 

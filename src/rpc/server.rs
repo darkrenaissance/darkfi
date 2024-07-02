@@ -73,6 +73,135 @@ pub trait RequestHandler: Sync + Send {
     }
 }
 
+/// Auxiliary function to handle a request in the background.
+async fn handle_request(
+    writer: Arc<Mutex<WriteHalf<Box<dyn PtStream>>>>,
+    addr: Url,
+    rh: Arc<impl RequestHandler + 'static>,
+    ex: Arc<smol::Executor<'_>>,
+    tasks: Arc<Mutex<HashSet<Arc<StoppableTask>>>>,
+    req: JsonRequest,
+) -> Result<()> {
+    let rep = rh.handle_request(req).await;
+    match rep {
+        JsonResult::Subscriber(subscriber) => {
+            let task = StoppableTask::new();
+
+            // Clone what needs to go in the background
+            let task_ = task.clone();
+            let addr_ = addr.clone();
+            let tasks_ = tasks.clone();
+            let writer_ = writer.clone();
+
+            // Detach the subscriber so we can multiplex further requests
+            task.clone().start(
+                async move {
+                    // Subscribe to the inner method subscriber
+                    let subscription = subscriber.publisher.subscribe().await;
+                    loop {
+                        // Listen for notifications
+                        let notification = subscription.receive().await;
+
+                        // Push notification
+                        debug!(target: "rpc::server", "{} <-- {}", addr_, notification.stringify().unwrap());
+                        let notification = JsonResult::Notification(notification);
+
+                        let mut writer_lock = writer_.lock().await;
+                        if let Err(e) = write_to_stream(&mut writer_lock, &notification).await {
+                            subscription.unsubscribe().await;
+                            return Err(e.into())
+                        }
+                        drop(writer_lock);
+                    }
+                },
+                move |_| async move {
+                    debug!(
+                        target: "rpc::server",
+                        "Removing background task {} from map", task_.task_id,
+                    );
+                    tasks_.lock().await.remove(&task_);
+                },
+                Error::DetachedTaskStopped,
+                ex.clone(),
+            );
+
+            debug!(target: "rpc::server", "Adding background task {} to map", task.task_id);
+            tasks.lock().await.insert(task);
+        }
+
+        JsonResult::SubscriberWithReply(subscriber, reply) => {
+            // Write the response
+            debug!(target: "rpc::server", "{} <-- {}", addr, reply.stringify()?);
+            let mut writer_lock = writer.lock().await;
+            write_to_stream(&mut writer_lock, &reply.into()).await?;
+            drop(writer_lock);
+
+            let task = StoppableTask::new();
+            // Clone what needs to go in the background
+            let task_ = task.clone();
+            let addr_ = addr.clone();
+            let tasks_ = tasks.clone();
+            let writer_ = writer.clone();
+
+            // Detach the subscriber so we can multiplex further requests
+            task.clone().start(
+                async move {
+                    // Start the subscriber loop
+                    let subscription = subscriber.publisher.subscribe().await;
+                    loop {
+                        // Listen for notifications
+                        let notification = subscription.receive().await;
+
+                        // Push notification
+                        debug!(target: "rpc::server", "{} <-- {}", addr_, notification.stringify().unwrap());
+                        let notification = JsonResult::Notification(notification);
+
+                        let mut writer_lock = writer_.lock().await;
+                        if let Err(e) = write_to_stream(&mut writer_lock, &notification).await {
+                            subscription.unsubscribe().await;
+                            drop(writer_lock);
+                            return Err(e.into())
+                        }
+                        drop(writer_lock);
+                    }
+                },
+                move |_| async move {
+                    debug!(
+                        target: "rpc::server",
+                        "Removing background task {} from map", task_.task_id,
+                    );
+                    tasks_.lock().await.remove(&task_);
+                },
+                Error::DetachedTaskStopped,
+                ex.clone(),
+            );
+
+            debug!(target: "rpc::server", "Adding background task {} to map", task.task_id);
+            tasks.lock().await.insert(task);
+        }
+
+        JsonResult::Request(_) | JsonResult::Notification(_) => {
+            unreachable!("Should never happen")
+        }
+
+        JsonResult::Response(ref v) => {
+            debug!(target: "rpc::server", "{} <-- {}", addr, v.stringify()?);
+            let mut writer_lock = writer.lock().await;
+            write_to_stream(&mut writer_lock, &rep).await?;
+            drop(writer_lock);
+        }
+
+        JsonResult::Error(ref v) => {
+            debug!(target: "rpc::server", "{} <-- {}", addr, v.stringify()?);
+            let mut writer_lock = writer.lock().await;
+            write_to_stream(&mut writer_lock, &rep).await?;
+            drop(writer_lock);
+        }
+    }
+
+    Ok(())
+}
+
 /// Accept function that should run inside a loop for accepting incoming
 /// JSON-RPC requests and passing them to the [`RequestHandler`].
 #[allow(clippy::type_complexity)]
@@ -143,123 +272,36 @@ pub async fn accept(
 
         debug!(target: "rpc::server", "{} --> {}", addr, val.stringify()?);
 
-        let rep = rh.handle_request(req).await;
+        // Create a new task to handle request in the background
+        let task = StoppableTask::new();
 
-        match rep {
-            JsonResult::Subscriber(subscriber) => {
-                let task = StoppableTask::new();
+        // Clone what needs to go in the background
+        let task_ = task.clone();
+        let tasks_ = tasks.clone();
 
-                // Clone what needs to go in the background
-                let task_ = task.clone();
-                let addr_ = addr.clone();
-                let tasks_ = tasks.clone();
-                let writer_ = writer.clone();
-
-                // Detach the subscriber so we can multiplex further requests
-                task.clone().start(
-                    async move {
-                        // Subscribe to the inner method subscriber
-                        let subscription = subscriber.publisher.subscribe().await;
-                        loop {
-                            // Listen for notifications
-                            let notification = subscription.receive().await;
-
-                            // Push notification
-                            debug!(target: "rpc::server", "{} <-- {}", addr_, notification.stringify().unwrap());
-                            let notification = JsonResult::Notification(notification);
-
-                            let mut writer_lock = writer_.lock().await;
-                            if let Err(e) = write_to_stream(&mut writer_lock, &notification).await {
-                                subscription.unsubscribe().await;
-                                return Err(e.into())
-                            }
-                            drop(writer_lock);
-                        }
-                    },
-                    move |_| async move {
-                        debug!(
-                            target: "rpc::server",
-                            "Removing background task {} from map", task_.task_id,
-                        );
-                        tasks_.lock().await.remove(&task_);
-                    },
-                    Error::DetachedTaskStopped,
-                    ex.clone(),
+        // Detach the task
+        task.clone().start(
+            handle_request(
+                writer.clone(),
+                addr.clone(),
+                rh.clone(),
+                ex.clone(),
+                tasks.clone(),
+                req,
+            ),
+            move |_| async move {
+                debug!(
+                    target: "rpc::server",
+                    "Removing background task {} from map", task_.task_id,
                 );
+                tasks_.lock().await.remove(&task_);
+            },
+            Error::DetachedTaskStopped,
+            ex.clone(),
+        );
 
-                debug!(target: "rpc::server", "Adding background task {} to map", task.task_id);
-                tasks.lock().await.insert(task.clone());
-            }
-
-            JsonResult::SubscriberWithReply(subscriber, reply) => {
-                // Write the response
-                debug!(target: "rpc::server", "{} <-- {}", addr, reply.stringify()?);
-                let mut writer_lock = writer.lock().await;
-                write_to_stream(&mut writer_lock, &reply.into()).await?;
-                drop(writer_lock);
-
-                let task = StoppableTask::new();
-                // Clone what needs to go in the background
-                let task_ = task.clone();
-                let addr_ = addr.clone();
-                let tasks_ = tasks.clone();
-                let writer_ = writer.clone();
-
-                // Detach the subscriber so we can multiplex further requests
-                task.clone().start(
-                    async move {
-                        // Start the subscriber loop
-                        let subscription = subscriber.publisher.subscribe().await;
-                        loop {
-                            // Listen for notifications
-                            let notification = subscription.receive().await;
-
-                            // Push notification
-                            debug!(target: "rpc::server", "{} <-- {}", addr_, notification.stringify().unwrap());
-                            let notification = JsonResult::Notification(notification);
-
-                            let mut writer_lock = writer_.lock().await;
-                            if let Err(e) = write_to_stream(&mut writer_lock, &notification).await {
-                                subscription.unsubscribe().await;
-                                drop(writer_lock);
-                                return Err(e.into())
-                            }
-                            drop(writer_lock);
-                        }
-                    },
-                    move |_| async move {
-                        debug!(
-                            target: "rpc::server",
-                            "Removing background task {} from map", task_.task_id,
-                        );
-                        tasks_.lock().await.remove(&task_);
-                    },
-                    Error::DetachedTaskStopped,
-                    ex.clone(),
-                );
-
-                debug!(target: "rpc::server", "Adding background task {} to map", task.task_id);
-                tasks.lock().await.insert(task.clone());
-            }
-
-            JsonResult::Request(_) | JsonResult::Notification(_) => {
-                unreachable!("Should never happen")
-            }
-
-            JsonResult::Response(ref v) => {
-                debug!(target: "rpc::server", "{} <-- {}", addr, v.stringify()?);
-                let mut writer_lock = writer.lock().await;
-                write_to_stream(&mut writer_lock, &rep).await?;
-                drop(writer_lock);
-            }
-
-            JsonResult::Error(ref v) => {
-                debug!(target: "rpc::server", "{} <-- {}", addr, v.stringify()?);
-                let mut writer_lock = writer.lock().await;
-                write_to_stream(&mut writer_lock, &rep).await?;
-                drop(writer_lock);
-            }
-        }
+        debug!(target: "rpc::server", "Adding background task {} to map", task.task_id);
+        tasks.lock().await.insert(task);
     }
 }
 
