@@ -106,15 +106,18 @@ pub async fn miner_task(
 
             // Check if we can finalize anything and broadcast them
             let finalized = node.validator.finalization().await?;
-            if !finalized.is_empty() {
-                let mut notif_blocks = Vec::with_capacity(finalized.len());
-                for block in finalized {
-                    notif_blocks
-                        .push(JsonValue::String(base64::encode(&serialize_async(&block).await)));
-                }
-                block_sub.notify(JsonValue::Array(notif_blocks)).await;
-                break;
+
+            if finalized.is_empty() {
+                continue
             }
+
+            let mut notif_blocks = Vec::with_capacity(finalized.len());
+            for block in finalized {
+                notif_blocks
+                    .push(JsonValue::String(base64::encode(&serialize_async(&block).await)));
+            }
+            block_sub.notify(JsonValue::Array(notif_blocks)).await;
+            break;
         }
     }
 
@@ -200,28 +203,32 @@ pub async fn miner_task(
                 continue
             }
         };
-        if !finalized.is_empty() {
-            let mut notif_blocks = Vec::with_capacity(finalized.len());
-            for block in finalized {
-                notif_blocks
-                    .push(JsonValue::String(base64::encode(&serialize_async(&block).await)));
-            }
-            block_sub.notify(JsonValue::Array(notif_blocks)).await;
 
-            // Invoke the detached garbage collection task
-            gc_task.clone().stop().await;
-            gc_task.clone().start(
-                garbage_collect_task(node.clone()),
-                |res| async {
-                    match res {
-                        Ok(()) | Err(Error::GarbageCollectionTaskStopped) => { /* Do nothing */ }
-                        Err(e) => error!(target: "darkfid", "Failed starting garbage collection task: {}", e),
-                    }
-                },
-                Error::GarbageCollectionTaskStopped,
-                ex.clone(),
-            );
+        if finalized.is_empty() {
+            continue
         }
+
+        let mut notif_blocks = Vec::with_capacity(finalized.len());
+        for block in finalized {
+            notif_blocks.push(JsonValue::String(base64::encode(&serialize_async(&block).await)));
+        }
+        block_sub.notify(JsonValue::Array(notif_blocks)).await;
+
+        // Invoke the detached garbage collection task
+        gc_task.clone().stop().await;
+        gc_task.clone().start(
+            garbage_collect_task(node.clone()),
+            |res| async {
+                match res {
+                    Ok(()) | Err(Error::GarbageCollectionTaskStopped) => { /* Do nothing */ }
+                    Err(e) => {
+                        error!(target: "darkfid", "Failed starting garbage collection task: {}", e)
+                    }
+                }
+            },
+            Error::GarbageCollectionTaskStopped,
+            ex.clone(),
+        );
     }
 }
 
@@ -331,7 +338,7 @@ async fn mine_next_block(
     extended_fork.module.verify_current_block(&next_block)?;
 
     // Check if we are connected to the network
-    if !skip_sync && node.p2p.hosts().channels().is_empty() {
+    if !skip_sync && !node.p2p.is_connected() {
         return Err(Error::NetworkNotConnected)
     }
 

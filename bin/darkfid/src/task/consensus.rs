@@ -220,27 +220,31 @@ async fn consensus_task(
                 continue
             }
         };
-        if !finalized.is_empty() {
-            let mut notif_blocks = Vec::with_capacity(finalized.len());
-            for block in finalized {
-                notif_blocks
-                    .push(JsonValue::String(base64::encode(&serialize_async(&block).await)));
-            }
-            block_sub.notify(JsonValue::Array(notif_blocks)).await;
 
-            // Invoke the detached garbage collection task
-            gc_task.clone().stop().await;
-            gc_task.clone().start(
-                garbage_collect_task(node.clone()),
-                |res| async {
-                    match res {
-                        Ok(()) | Err(Error::GarbageCollectionTaskStopped) => { /* Do nothing */ }
-                        Err(e) => error!(target: "darkfid", "Failed starting garbage collection task: {}", e),
-                    }
-                },
-                Error::GarbageCollectionTaskStopped,
-                ex.clone(),
-            );
+        if finalized.is_empty() {
+            continue
         }
+
+        let mut notif_blocks = Vec::with_capacity(finalized.len());
+        for block in finalized {
+            notif_blocks.push(JsonValue::String(base64::encode(&serialize_async(&block).await)));
+        }
+        block_sub.notify(JsonValue::Array(notif_blocks)).await;
+
+        // Invoke the detached garbage collection task
+        gc_task.clone().stop().await;
+        gc_task.clone().start(
+            garbage_collect_task(node.clone()),
+            |res| async {
+                match res {
+                    Ok(()) | Err(Error::GarbageCollectionTaskStopped) => { /* Do nothing */ }
+                    Err(e) => {
+                        error!(target: "darkfid", "Failed starting garbage collection task: {}", e)
+                    }
+                }
+            },
+            Error::GarbageCollectionTaskStopped,
+            ex.clone(),
+        );
     }
 }

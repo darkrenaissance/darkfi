@@ -144,37 +144,15 @@ async fn synced_peers(
         // Grab channels
         let peers = node.p2p.hosts().channels();
 
-        // Check anyone is connected
-        if !peers.is_empty() {
-            // Ask each peer if they are synced
-            for peer in peers {
-                // If a checkpoint was provider, we check that the peer follows that sequence
-                if let Some(c) = checkpoint {
-                    // Communication setup
-                    let response_sub = peer.subscribe_msg::<HeaderSyncResponse>().await?;
-
-                    // Node creates a `HeaderSyncRequest` and sends it
-                    let request = HeaderSyncRequest { height: c.0 + 1 };
-                    peer.send(&request).await?;
-
-                    // Node waits for response
-                    let Ok(response) = response_sub.receive_with_timeout(comms_timeout).await
-                    else {
-                        continue
-                    };
-
-                    // Handle response
-                    if response.headers.is_empty() || response.headers.last().unwrap().hash() != c.1
-                    {
-                        continue
-                    }
-                }
-
+        // Ask each peer(if we got any) if they are synced
+        for peer in peers {
+            // If a checkpoint was provider, we check that the peer follows that sequence
+            if let Some(c) = checkpoint {
                 // Communication setup
-                let response_sub = peer.subscribe_msg::<TipResponse>().await?;
+                let response_sub = peer.subscribe_msg::<HeaderSyncResponse>().await?;
 
-                // Node creates a `TipRequest` and sends it
-                let request = TipRequest { tip: *last_tip };
+                // Node creates a `HeaderSyncRequest` and sends it
+                let request = HeaderSyncRequest { height: c.0 + 1 };
                 peer.send(&request).await?;
 
                 // Node waits for response
@@ -183,14 +161,31 @@ async fn synced_peers(
                 };
 
                 // Handle response
-                if response.synced && response.height.is_some() && response.hash.is_some() {
-                    let tip = (response.height.unwrap(), *response.hash.unwrap().inner());
-                    let Some(tip_peers) = tips.get_mut(&tip) else {
-                        tips.insert(tip, vec![peer.clone()]);
-                        continue
-                    };
-                    tip_peers.push(peer.clone());
+                if response.headers.is_empty() || response.headers.last().unwrap().hash() != c.1 {
+                    continue
                 }
+            }
+
+            // Communication setup
+            let response_sub = peer.subscribe_msg::<TipResponse>().await?;
+
+            // Node creates a `TipRequest` and sends it
+            let request = TipRequest { tip: *last_tip };
+            peer.send(&request).await?;
+
+            // Node waits for response
+            let Ok(response) = response_sub.receive_with_timeout(comms_timeout).await else {
+                continue
+            };
+
+            // Handle response
+            if response.synced && response.height.is_some() && response.hash.is_some() {
+                let tip = (response.height.unwrap(), *response.hash.unwrap().inner());
+                let Some(tip_peers) = tips.get_mut(&tip) else {
+                    tips.insert(tip, vec![peer.clone()]);
+                    continue
+                };
+                tip_peers.push(peer.clone());
             }
         }
 
@@ -199,7 +194,7 @@ async fn synced_peers(
             break
         }
 
-        warn!(target: "darkfid::task::sync::synced_peers", "Node is not connected to other nodes, waiting to retry...");
+        warn!(target: "darkfid::task::sync::synced_peers", "Node is not connected to other synced nodes, waiting to retry...");
         let subscription = node.p2p.hosts().subscribe_channel().await;
         let _ = subscription.receive().await;
         subscription.unsubscribe().await;
