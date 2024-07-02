@@ -58,7 +58,7 @@ impl RpcClient {
 
         // Instantiate Dialer and dial the server
         // TODO: Could add a timeout here
-        let dialer = Dialer::new(endpoint).await?;
+        let dialer = Dialer::new(endpoint, None).await?;
         let stream = dialer.dial(None).await?;
 
         // Create the StoppableTask running the request-reply loop.
@@ -282,7 +282,7 @@ impl RpcChadClient {
 
         // Instantiate Dialer and dial the server
         // TODO: Could add a timeout here
-        let dialer = Dialer::new(endpoint).await?;
+        let dialer = Dialer::new(endpoint, None).await?;
         let stream = dialer.dial(None).await?;
 
         // Create the StoppableTask running the request-reply loop.

@@ -28,7 +28,7 @@ fn tcp_transport() {
     let url = Url::parse("tcp://127.0.0.1:5432").unwrap();
 
     smol::block_on(executor.run(async {
-        let listener = Listener::new(url.clone()).await.unwrap().listen().await.unwrap();
+        let listener = Listener::new(url.clone(), None).await.unwrap().listen().await.unwrap();
         executor
             .spawn(async move {
                 let (stream, _) = listener.next().await.unwrap();
@@ -39,7 +39,7 @@ fn tcp_transport() {
 
         let payload = "ohai tcp";
 
-        let dialer = Dialer::new(url).await.unwrap();
+        let dialer = Dialer::new(url, None).await.unwrap();
         let mut client = dialer.dial(None).await.unwrap();
         payload.encode_async(&mut client).await.unwrap();
 
@@ -59,7 +59,7 @@ fn tcp_tls_transport() {
     let url = Url::parse("tcp+tls://127.0.0.1:5433").unwrap();
 
     smol::block_on(executor.run(async {
-        let listener = Listener::new(url.clone()).await.unwrap().listen().await.unwrap();
+        let listener = Listener::new(url.clone(), None).await.unwrap().listen().await.unwrap();
         executor
             .spawn(async move {
                 let (stream, _) = listener.next().await.unwrap();
@@ -70,7 +70,7 @@ fn tcp_tls_transport() {
 
         let payload = "ohai tls";
 
-        let dialer = Dialer::new(url).await.unwrap();
+        let dialer = Dialer::new(url, None).await.unwrap();
         let mut client = dialer.dial(None).await.unwrap();
         payload.encode_async(&mut client).await.unwrap();
 
@@ -92,7 +92,7 @@ fn unix_transport() {
     .unwrap();
 
     smol::block_on(executor.run(async {
-        let listener = Listener::new(url.clone()).await.unwrap().listen().await.unwrap();
+        let listener = Listener::new(url.clone(), None).await.unwrap().listen().await.unwrap();
         executor
             .spawn(async move {
                 let (stream, _) = listener.next().await.unwrap();
@@ -103,7 +103,7 @@ fn unix_transport() {
 
         let payload = "ohai unix";
 
-        let dialer = Dialer::new(url).await.unwrap();
+        let dialer = Dialer::new(url, None).await.unwrap();
         let mut client = dialer.dial(None).await.unwrap();
         payload.encode_async(&mut client).await.unwrap();
 

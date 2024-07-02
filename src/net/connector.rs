@@ -76,7 +76,7 @@ impl Connector {
             }
         }
 
-        let dialer = Dialer::new(endpoint.clone()).await?;
+        let dialer = Dialer::new(endpoint.clone(), self.settings.datastore.clone()).await?;
         let timeout = Duration::from_secs(self.settings.outbound_connect_timeout);
 
         let stop_fut = async {

@@ -24,7 +24,7 @@ use std::{
 };
 
 use arti_client::{
-    config::{onion_service::OnionServiceConfigBuilder, BoolOrAuto},
+    config::{onion_service::OnionServiceConfigBuilder, BoolOrAuto, TorClientConfigBuilder},
     DataStream, StreamPrefs, TorClient,
 };
 use async_trait::async_trait;
@@ -47,18 +47,21 @@ use tor_rtcompat::PreferredRuntime;
 use url::Url;
 
 use super::{PtListener, PtStream};
+use crate::util::path::expand_path;
 
 /// A static for `TorClient` reusability
 static TOR_CLIENT: OnceCell<TorClient<PreferredRuntime>> = OnceCell::new();
 
 /// Tor Dialer implementation
 #[derive(Debug, Clone)]
-pub struct TorDialer;
+pub struct TorDialer {
+    datastore: Option<String>,
+}
 
 impl TorDialer {
     /// Instantiate a new [`TorDialer`] object
-    pub(crate) async fn new() -> io::Result<Self> {
-        Ok(Self {})
+    pub(crate) async fn new(datastore: Option<String>) -> io::Result<Self> {
+        Ok(Self { datastore })
     }
 
     /// Internal dial function
@@ -75,7 +78,17 @@ impl TorDialer {
         let client = match TOR_CLIENT
             .get_or_try_init(|| async {
                 debug!(target: "net::tor::do_dial", "Bootstrapping...");
-                TorClient::builder().create_bootstrapped().await
+                if let Some(datadir) = &self.datastore {
+                    let datadir = expand_path(datadir).unwrap();
+
+                    let config = TorClientConfigBuilder::from_directories(datadir.clone(), datadir)
+                        .build()
+                        .unwrap();
+
+                    TorClient::create_bootstrapped(config).await
+                } else {
+                    TorClient::builder().create_bootstrapped().await
+                }
             })
             .await
         {
@@ -139,12 +152,14 @@ impl TorDialer {
 
 /// Tor Listener implementation
 #[derive(Clone, Debug)]
-pub struct TorListener;
+pub struct TorListener {
+    datastore: Option<String>,
+}
 
 impl TorListener {
     /// Instantiate a new [`TorListener`]
-    pub async fn new() -> io::Result<Self> {
-        Ok(Self {})
+    pub async fn new(datastore: Option<String>) -> io::Result<Self> {
+        Ok(Self { datastore })
     }
 
     /// Internal listen function
@@ -154,7 +169,17 @@ impl TorListener {
         let client = match TOR_CLIENT
             .get_or_try_init(|| async {
                 debug!(target: "net::tor::do_dial", "Bootstrapping...");
-                TorClient::builder().create_bootstrapped().await
+                if let Some(datadir) = &self.datastore {
+                    let datadir = expand_path(datadir).unwrap();
+
+                    let config = TorClientConfigBuilder::from_directories(datadir.clone(), datadir)
+                        .build()
+                        .unwrap();
+
+                    TorClient::create_bootstrapped(config).await
+                } else {
+                    TorClient::builder().create_bootstrapped().await
+                }
             })
             .await
         {

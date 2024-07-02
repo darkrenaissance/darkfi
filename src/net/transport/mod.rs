@@ -126,8 +126,8 @@ macro_rules! enforce_abspath {
 }
 
 impl Dialer {
-    /// Instantiate a new [`Dialer`] with the given [`Url`].
-    pub async fn new(endpoint: Url) -> io::Result<Self> {
+    /// Instantiate a new [`Dialer`] with the given [`Url`] and datastore path.
+    pub async fn new(endpoint: Url, datastore: Option<String>) -> io::Result<Self> {
         match endpoint.scheme().to_lowercase().as_str() {
             #[cfg(feature = "p2p-tcp")]
             "tcp" => {
@@ -151,7 +151,7 @@ impl Dialer {
             "tor" => {
                 // Build a Tor dialer
                 enforce_hostport!(endpoint);
-                let variant = tor::TorDialer::new().await?;
+                let variant = tor::TorDialer::new(datastore).await?;
                 let variant = DialerVariant::Tor(variant);
                 Ok(Self { endpoint, variant })
             }
@@ -160,7 +160,7 @@ impl Dialer {
             "tor+tls" => {
                 // Build a Tor dialer wrapped with TLS
                 enforce_hostport!(endpoint);
-                let variant = tor::TorDialer::new().await?;
+                let variant = tor::TorDialer::new(datastore).await?;
                 let variant = DialerVariant::TorTls(variant);
                 Ok(Self { endpoint, variant })
             }
@@ -287,9 +287,9 @@ pub struct Listener {
 }
 
 impl Listener {
-    /// Instantiate a new [`Listener`] with the given [`Url`].
+    /// Instantiate a new [`Listener`] with the given [`Url`] and datastore path.
     /// Must contain a scheme, host string, and a port.
-    pub async fn new(endpoint: Url) -> io::Result<Self> {
+    pub async fn new(endpoint: Url, datastore: Option<String>) -> io::Result<Self> {
         match endpoint.scheme().to_lowercase().as_str() {
             #[cfg(feature = "p2p-tcp")]
             "tcp" => {
@@ -313,7 +313,7 @@ impl Listener {
             "tor" => {
                 // Build a Tor Hidden Service listener
                 enforce_hostport!(endpoint);
-                let variant = tor::TorListener::new().await?;
+                let variant = tor::TorListener::new(datastore).await?;
                 let variant = ListenerVariant::Tor(variant);
                 Ok(Self { endpoint, variant })
             }

@@ -340,7 +340,7 @@ pub async fn listen_and_serve(
     conn_limit: Option<usize>,
     ex: Arc<smol::Executor<'_>>,
 ) -> Result<()> {
-    let listener = Listener::new(accept_url).await?.listen().await?;
+    let listener = Listener::new(accept_url, None).await?.listen().await?;
     run_accept_loop(listener, rh, conn_limit, ex.clone()).await
 }
 
