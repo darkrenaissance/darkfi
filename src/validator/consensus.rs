@@ -252,44 +252,82 @@ impl Consensus {
         Ok(Some(index))
     }
 
-    /// Auxiliary function to retrieve a fork proposals.
-    /// If provided tip is not the canonical(finalized), or fork doesn't exists,
-    /// an empty vector is returned.
+    /// Auxiliary function to retrieve a fork proposals, starting from provided tip.
+    /// If provided tip is too far behind, or fork doesn't exists, an empty vector is returned.
     pub async fn get_fork_proposals(
         &self,
         tip: HeaderHash,
         fork_tip: HeaderHash,
+        limit: u32,
     ) -> Result<Vec<Proposal>> {
-        // Tip must be canonical(finalized) blockchain last
-        if self.blockchain.last()?.1 != tip {
-            return Ok(vec![])
-        }
-
         // Grab a lock over current forks
         let forks = self.forks.read().await;
 
-        // Check if node has any forks
-        if forks.is_empty() {
-            drop(forks);
-            return Ok(vec![])
-        }
+        // Retrieve our current canonical tip height
+        let last_block_height = self.blockchain.last()?.0;
 
-        // Find fork by its tip
-        for fork in forks.iter() {
-            if fork.proposals.last() == Some(&fork_tip) {
-                // Grab its proposals
-                let blocks = fork.overlay.lock().unwrap().get_blocks_by_hash(&fork.proposals)?;
-                let mut ret = Vec::with_capacity(blocks.len());
-                for block in blocks {
-                    ret.push(Proposal::new(block));
-                }
+        // Check if request tip is canonical
+        let mut canonical_blocks = vec![];
+        if let Ok(existing_tip) = self.blockchain.get_blocks_by_hash(&[tip]) {
+            // Check tip is not far behind
+            if last_block_height - existing_tip[0].header.height >= limit {
                 drop(forks);
-                return Ok(ret)
+                return Ok(canonical_blocks)
+            }
+
+            // Retrieve all tips after requested one
+            let headers = self.blockchain.blocks.get_all_after(existing_tip[0].header.height)?;
+            let blocks = self.blockchain.get_blocks_by_hash(&headers)?;
+
+            // Add everything to the return vec
+            for block in blocks {
+                canonical_blocks.push(Proposal::new(block));
             }
         }
 
-        // Fork was not found
-        Ok(vec![])
+        // Find the fork containing the requested tip and grab its sequence
+        let mut proposals = vec![];
+        for fork in forks.iter() {
+            let mut found = false;
+            for p in fork.proposals.iter().rev() {
+                if p != &fork_tip {
+                    continue
+                }
+                found = true;
+                break
+            }
+
+            if !found {
+                continue
+            }
+
+            let mut headers = vec![];
+            for p in &fork.proposals {
+                headers.push(*p);
+                if p == &fork_tip {
+                    break
+                }
+            }
+
+            let blocks = fork.overlay.lock().unwrap().get_blocks_by_hash(&headers)?;
+            for block in blocks {
+                proposals.push(Proposal::new(block));
+            }
+        }
+
+        // Check if we found anything.
+        // Even if we found canonical blocks, if the
+        // request doesn't correspond to a known fork
+        // we return an empty vector.
+        if proposals.is_empty() {
+            drop(forks);
+            return Ok(proposals)
+        }
+
+        // Join the two vectors and return them
+        canonical_blocks.append(&mut proposals);
+        drop(forks);
+        Ok(canonical_blocks)
     }
 
     /// Auxiliary function to retrieve current best fork last header.
@@ -313,15 +351,13 @@ impl Consensus {
         Ok((last.block.header.height, last.hash))
     }
 
-    /// Auxiliary function to retrieve current best fork proposals.
-    /// If provided tip is not the canonical(finalized), or no forks exist,
-    /// an empty vector is returned.
-    pub async fn get_best_fork_proposals(&self, tip: HeaderHash) -> Result<Vec<Proposal>> {
-        // Tip must be canonical(finalized) blockchain last
-        if self.blockchain.last()?.1 != tip {
-            return Ok(vec![])
-        }
-
+    /// Auxiliary function to retrieve current best fork proposals, starting from provided tip.
+    /// If provided tip is too far behind, or fork doesn't exists, an empty vector is returned.
+    pub async fn get_best_fork_proposals(
+        &self,
+        tip: HeaderHash,
+        limit: u32,
+    ) -> Result<Vec<Proposal>> {
         // Grab a lock over current forks
         let forks = self.forks.read().await;
 
@@ -331,17 +367,42 @@ impl Consensus {
             return Ok(vec![])
         }
 
+        // Retrieve our current canonical tip height
+        let last_block_height = self.blockchain.last()?.0;
+
+        // Check if request tip is canonical
+        let mut canonical_blocks = vec![];
+        if let Ok(existing_tip) = self.blockchain.get_blocks_by_hash(&[tip]) {
+            // Check tip is not far behind
+            if last_block_height - existing_tip[0].header.height >= limit {
+                drop(forks);
+                return Ok(canonical_blocks)
+            }
+
+            // Retrieve all tips after requested one
+            let headers = self.blockchain.blocks.get_all_after(existing_tip[0].header.height)?;
+            let blocks = self.blockchain.get_blocks_by_hash(&headers)?;
+
+            // Add everything to the return vec
+            for block in blocks {
+                canonical_blocks.push(Proposal::new(block));
+            }
+        }
+
         // Grab best fork
         let fork = &forks[best_fork_index(&forks)?];
 
         // Grab its proposals
         let blocks = fork.overlay.lock().unwrap().get_blocks_by_hash(&fork.proposals)?;
-        let mut ret = Vec::with_capacity(blocks.len());
+        let mut proposals = Vec::with_capacity(blocks.len());
         for block in blocks {
-            ret.push(Proposal::new(block));
+            proposals.push(Proposal::new(block));
         }
 
-        Ok(ret)
+        // Join the two vectors and return them
+        canonical_blocks.append(&mut proposals);
+        drop(forks);
+        Ok(canonical_blocks)
     }
 
     /// Auxiliary function to purge current forks and reset the ones starting

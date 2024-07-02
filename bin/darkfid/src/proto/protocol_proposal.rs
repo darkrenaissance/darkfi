@@ -19,7 +19,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use log::{debug, error};
+use log::{debug, error, warn};
 use smol::Executor;
 use tinyjson::JsonValue;
 
@@ -174,7 +174,7 @@ impl ProtocolProposal {
 
             // Response should not be empty
             if response.proposals.is_empty() {
-                debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Peer responded with empty sequence");
+                warn!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Peer responded with empty sequence, node might be out of sync!");
                 continue
             }
 
@@ -197,12 +197,16 @@ impl ProtocolProposal {
             }
 
             for proposal in &response.proposals {
-                if let Err(e) = self.validator.append_proposal(proposal).await {
-                    error!(
-                        target: "darkfid::proto::protocol_proposal::handle_receive_proposal",
-                        "Error while appending response proposal: {e}"
-                    );
-                    break
+                match self.validator.append_proposal(proposal).await {
+                    Ok(()) => { /* Do nothing */ }
+                    // Skip already existing proposals
+                    Err(Error::ProposalAlreadyExists) => continue,
+                    Err(e) => {
+                        error!(
+                            target: "darkfid::proto::protocol_proposal::handle_receive_proposal",
+                            "Error while appending response proposal: {e}"
+                        );
+                    }
                 };
                 let message = ProposalMessage(proposal.clone());
                 self.p2p.broadcast_with_exclude(&message, &exclude_list).await;

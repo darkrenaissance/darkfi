@@ -35,7 +35,7 @@ use darkfi::{
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 
 // Constant defining how many blocks we send during syncing.
-pub const BATCH: usize = 10;
+pub const BATCH: usize = 20;
 
 /// Structure represening a request to ask a node for their current
 /// canonical(finalized) tip block hash, if they are synced. We also
@@ -370,9 +370,17 @@ impl ProtocolSync {
             // Otherwise, grab best fork proposals sequence.
             let proposals = match request.fork_tip {
                 Some(fork_tip) => {
-                    self.validator.consensus.get_fork_proposals(request.tip, fork_tip).await
+                    self.validator
+                        .consensus
+                        .get_fork_proposals(request.tip, fork_tip, BATCH as u32)
+                        .await
                 }
-                None => self.validator.consensus.get_best_fork_proposals(request.tip).await,
+                None => {
+                    self.validator
+                        .consensus
+                        .get_best_fork_proposals(request.tip, BATCH as u32)
+                        .await
+                }
             };
             let proposals = match proposals {
                 Ok(p) => p,

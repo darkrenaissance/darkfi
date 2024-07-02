@@ -471,6 +471,22 @@ impl BlockStore {
         Ok(ret.iter().rev().copied().collect())
     }
 
+    /// Fetch all hashes after given height. In the iteration, if an order
+    /// height is not found, the iteration stops and the function returns what
+    /// it has found so far in the store's order tree.
+    pub fn get_all_after(&self, height: u32) -> Result<Vec<HeaderHash>> {
+        let mut ret = vec![];
+
+        let mut key = height;
+        while let Some(found) = self.order.get_gt(key.to_be_bytes())? {
+            let (height, hash) = parse_u32_key_record(found)?;
+            key = height;
+            ret.push(hash);
+        }
+
+        Ok(ret)
+    }
+
     /// Fetch the first block hash in the order tree, based on the `Ord`
     /// implementation for `Vec<u8>`.
     pub fn get_first(&self) -> Result<(u32, HeaderHash)> {

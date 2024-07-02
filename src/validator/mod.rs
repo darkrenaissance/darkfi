@@ -36,7 +36,7 @@ use crate::{
 
 /// DarkFi consensus module
 pub mod consensus;
-use consensus::{Consensus, Proposal};
+use consensus::{Consensus, Fork, Proposal};
 
 /// DarkFi PoW module
 pub mod pow;
@@ -403,7 +403,8 @@ impl Validator {
     /// block hash matches the expected header one.
     /// Note: this function should only be used for blocks received using a
     /// checkpoint, since in that case we enforce the node to follow the sequence,
-    /// assuming they all its blocks are valid.
+    /// assuming they all its blocks are valid. Additionally, it will update
+    /// any forks to a single empty one, holding the updated module.
     pub async fn add_checkpoint_blocks(
         &self,
         blocks: &[BlockInfo],
@@ -483,7 +484,11 @@ impl Validator {
         self.blockchain.remove_pending_txs(&removed_txs)?;
 
         // Update PoW module
-        *self.consensus.module.write().await = module;
+        *self.consensus.module.write().await = module.clone();
+
+        // Update forks
+        *self.consensus.forks.write().await =
+            vec![Fork::new(self.blockchain.clone(), module).await?];
 
         Ok(())
     }
