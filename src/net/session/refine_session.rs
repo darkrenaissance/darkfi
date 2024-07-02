@@ -297,6 +297,7 @@ impl GreylistRefinery {
 
                     // Add to the whitelist and remove from the greylist.
                     hosts.move_host(url, last_seen, HostColor::White).unwrap();
+                    hosts.unregister(url);
 
                     debug!(target: "net::refinery", "GreylistRefinery complete!");
 

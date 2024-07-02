@@ -1233,6 +1233,14 @@ impl Hosts {
     /// * When the refinery passes successfully: move to white, remove from greylist.
     /// * When we connect to a peer, move to gold, remove from white or grey.
     /// * When we add a peer to the black list: move to black, remove from all other lists.
+    ///
+    /// Note that this method puts a given Url into the "Move" state but does not reset the
+    /// state afterwards. This is because the next state will differ depending on its usage.
+    /// The state transition from `Move` to `Connected` or `Suspend` are both valid operations.
+    /// In some cases, `unregister()` can be called after `move_host()` but it must be done with
+    /// care due to the potential for race conditions.
+    ///
+    /// TODO: replace unregister() with a tombstone() call.
     pub(in crate::net) fn move_host(
         &self,
         addr: &Url,

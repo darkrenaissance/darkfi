@@ -71,7 +71,7 @@ pub async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr, type_id: Sessi
         "Received stop event. Removing channel {}", addr,
     );
 
-    // Downgrade to greylist this is a outbound or manual session.
+    // Downgrade to greylist if this is a outbound session.
     if type_id & SESSION_OUTBOUND != 0 {
         debug!(
             target: "net::session::remove_sub_on_stop()",
@@ -82,8 +82,13 @@ pub async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr, type_id: Sessi
         hosts.move_host(addr, last_seen, HostColor::Grey).unwrap();
     }
 
-    // Remove channel from the HostRegistry. Free up this addr for any future operation.
-    hosts.unregister(channel.address());
+    // For all sessions that are not refine sessions, remove this channel
+    // from the HostRegistry. `unregister()` frees up this addr for any
+    // future operation. We don't call this on refine sessions since the
+    // unregister() call happens in the refinery directly.
+    if type_id & SESSION_REFINE == 0 {
+        hosts.unregister(channel.address());
+    }
 
     if !p2p.is_connected() {
         hosts.disconnect_publisher.notify(Error::NetworkNotConnected).await;
