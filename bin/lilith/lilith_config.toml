@@ -16,7 +16,8 @@
 #peers = []
 #version = "0.4.1"
 #localnet = false
-#hostlist ="~/.local/darkfi/lilith/darkfid_sync_hostlist.tsv"
+#hostlist ="~/.local/darkfi/lilith/darkfid_sync/hostlist.tsv"
+#datastore = "~/.local/darkfi/lilith/darkfid_sync"
 
 #[network."darkfid_consensus_v4"]
 #accept_addrs = ["tcp+tls://0.0.0.0:33023"]
@@ -24,7 +25,8 @@
 #peers = []
 #version = "0.4.1"
 #localnet = false
-#hostlist ="~/.local/darkfi/lilith/darkfid_consensus_hostlist.tsv"
+#datastore = "~/.local/darkfi/lilith/darkfid_consensus"
+#hostlist ="~/.local/darkfi/lilith/darkfid_consensus/hostlist.tsv"
 
 #[network."darkirc_v4"]
 #accept_addrs = ["tcp+tls://0.0.0.0:25551"]
@@ -32,7 +34,8 @@
 #peers = []
 #version = "0.4.1"
 #localnet = false
-#hostlist ="~/.local/darkfi/lilith/darkirc_hostlist.tsv"
+#datastore = "~/.local/darkfi/lilith/darkirc"
+#hostlist ="~/.local/darkfi/lilith/darkirc/hostlist.tsv"
 
 #[network."taud_v4"]
 #accept_addrs = ["tcp+tls://0.0.0.0:23331"]
@@ -40,4 +43,5 @@
 #peers = []
 #version = "0.4.1"
 #localnet = false
-#hostlist ="~/.local/darkfi/lilith/taud_hostlist.tsv"
+#datastore = "~/.local/darkfi/lilith/taud"
+#hostlist ="~/.local/darkfi/lilith/taud/hostlist.tsv"

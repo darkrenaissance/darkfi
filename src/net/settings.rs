@@ -64,6 +64,8 @@ pub struct Settings {
     pub outbound_peer_discovery_cooloff_time: u64,
     /// Time between peer discovery attempts
     pub outbound_peer_discovery_attempt_time: u64,
+    /// P2P datastore path
+    pub datastore: Option<String>,
     /// Hostlist storage path
     pub hostlist: Option<String>,
     /// Pause interval within greylist refinery process
@@ -106,6 +108,7 @@ impl Default for Settings {
             localnet: false,
             outbound_peer_discovery_cooloff_time: 30,
             outbound_peer_discovery_attempt_time: 5,
+            datastore: None,
             hostlist: None,
             greylist_refinery_interval: 15,
             white_connect_percent: 70,
@@ -196,6 +199,11 @@ pub struct SettingsOpt {
     #[structopt(skip)]
     pub outbound_peer_discovery_attempt_time: Option<u64>,
 
+    /// P2P datastore path
+    #[serde(default)]
+    #[structopt(long)]
+    pub datastore: Option<String>,
+
     /// Hosts .tsv file to use
     #[serde(default)]
     #[structopt(long)]
@@ -261,6 +269,7 @@ impl From<SettingsOpt> for Settings {
             outbound_peer_discovery_attempt_time: opt
                 .outbound_peer_discovery_attempt_time
                 .unwrap_or(def.outbound_peer_discovery_attempt_time),
+            datastore: opt.datastore,
             hostlist: opt.hostlist,
             greylist_refinery_interval: opt
                 .greylist_refinery_interval

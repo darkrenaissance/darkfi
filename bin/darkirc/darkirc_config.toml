@@ -50,6 +50,9 @@ autojoin = [
 
 # P2P network settings
 [net]
+# Path to the P2P datastore
+datastore = "~/.local/darkifi/darkirc"
+
 # Path to a configured hostlist for saving known peers
 hostlist = "~/.local/darkfi/darkirc/hostlist.tsv"
 
