@@ -1,0 +1,1 @@
+searchState.loadedDescShard("darkfi_derive_internal", 0, "Derive (de)serialization for enums and structs, see …\nDerive (de)serialization for enums and structs, see …\nCalculates the discriminant that will be assigned by the …\nReturns the argument unchanged.\nCalls <code>U::from(self)</code>.\nDerive (de)serialization for enums and structs, see …")

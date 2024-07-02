@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["enum_de","enum_ser","named_fields","struct_de","struct_ser","unnamed_fields"]};

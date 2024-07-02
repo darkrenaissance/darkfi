@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["BATCH"],"struct":["ForkSyncRequest","ForkSyncResponse","HeaderSyncRequest","HeaderSyncResponse","ProtocolSync","SyncRequest","SyncResponse","TipRequest","TipResponse"]};
