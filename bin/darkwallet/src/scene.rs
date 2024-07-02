@@ -633,6 +633,7 @@ pub enum Pimpl {
     RenderLayer(ui::RenderLayerPtr),
     Mesh(ui::MeshPtr),
     Text(ui::TextPtr),
+    EditBox(ui::EditBoxPtr),
 }
 
 impl std::fmt::Debug for SceneNode {

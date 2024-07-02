@@ -64,9 +64,27 @@ impl<T: Piped> Publisher<T> {
         self.subs.lock().unwrap().remove(&sub_id);
     }
 
+    /// Publish a message to subscriptions in the include list
+    pub async fn notify_with_include(&self, message_result: T, include_list: &[SubscriptionId]) {
+        // Maybe we should just provide a method to get all IDs
+        // Then people can call notify_with_exclude() instead.
+        // TODO: just collect and clone directly into a Vec
+        let subs = self.subs.lock().unwrap().clone();
+        for (id, sub) in subs.into_iter() {
+            if !include_list.contains(&id) {
+                continue
+            }
+
+            if let Err(e) = sub.send(message_result.clone()).await {
+                panic!("[system::publisher] Error returned sending message in notify_with_include() call! {}", e);
+            }
+        }
+    }
+
     /// Publish a message to all listening subscriptions.
     pub fn notify(&self, msg: T) {
-        for (id, sub) in self.subs.lock().unwrap().iter() {
+        let subs = self.subs.lock().unwrap().clone();
+        for (id, sub) in subs {
             if let Err(e) = sub.try_send(msg.clone()) {
                 // This should never happen since Drop calls unsubscribe()
                 panic!("Error in notify() call for sub={}! {}", id, e);

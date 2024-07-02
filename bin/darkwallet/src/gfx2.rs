@@ -8,14 +8,14 @@ use miniquad::{
 };
 use std::{
     collections::HashMap,
-    sync::{mpsc, Arc},
+    sync::{mpsc, Arc, Mutex as SyncMutex},
     time::{Duration, Instant},
 };
 
 use crate::{
     app::AsyncRuntime,
     error::{Error, Result},
-    pubsub::{Publisher, PublisherPtr, Subscription},
+    pubsub::{Publisher, PublisherPtr, Subscription, SubscriptionId},
     shader,
     util::ansi_texture,
 };
@@ -301,17 +301,36 @@ pub enum GraphicsMethod {
 pub type GraphicsEventPublisherPtr = Arc<GraphicsEventPublisher>;
 
 pub struct GraphicsEventPublisher {
+    lock_key_down: SyncMutex<Option<SubscriptionId>>,
     key_down: PublisherPtr<(KeyCode, KeyMods, bool)>,
+
     resize: PublisherPtr<(f32, f32)>,
 }
 
 impl GraphicsEventPublisher {
     pub fn new() -> Arc<Self> {
-        Arc::new(Self { key_down: Publisher::new(), resize: Publisher::new() })
+        Arc::new(Self {
+            lock_key_down: SyncMutex::new(None),
+            key_down: Publisher::new(),
+            resize: Publisher::new() })
+    }
+
+    fn lock_key_down(&self, sub_id: SubscriptionId) {
+        *self.lock_key_down.lock().unwrap() = Some(sub_id);
+    }
+    fn unlock_key_down(&self) {
+        *self.lock_key_down.lock().unwrap() = None;
     }
 
     fn notify_key_down(&self, key: KeyCode, mods: KeyMods, repeat: bool) {
-        self.key_down.notify((key, mods, repeat));
+        let ev = (key, mods, repeat);
+
+        let locked = self.lock_key_down.lock().unwrap().clone();
+        if let Some(locked) = locked {
+            self.key_down.notify_with_include(ev, &[locked]);
+        } else {
+            self.key_down.notify(ev);
+        }
     }
     fn notify_resize(&self, w: f32, h: f32) {
         self.resize.notify((w, h));

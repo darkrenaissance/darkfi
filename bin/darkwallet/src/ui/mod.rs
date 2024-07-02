@@ -8,6 +8,8 @@ use crate::{
     scene::{SceneGraph, SceneNode, SceneNodeId, SceneNodeType},
 };
 
+mod editbox;
+pub use editbox::{EditBox, EditBoxPtr};
 mod mesh;
 pub use mesh::{Mesh, MeshPtr};
 mod layer;

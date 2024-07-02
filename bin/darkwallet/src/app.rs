@@ -8,7 +8,7 @@ use crate::{
     prop::{Property, PropertySubType, PropertyType},
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId, SceneNodeType},
     text2::TextShaperPtr,
-    ui::{Mesh, RenderLayer, Stoppable, Text, Window},
+    ui::{EditBox, Mesh, RenderLayer, Stoppable, Text, Window},
 };
 
 //fn print_type_of<T>(_: &T) {
@@ -317,6 +317,57 @@ impl App {
         node.pimpl = pimpl;
 
         sg.link(node_id, layer_node_id).unwrap();
+
+        // Text edit
+        let node_id = create_editbox(&mut sg, "editz");
+        let node = sg.get_node(node_id).unwrap();
+        node.set_property_bool("is_active", true).unwrap();
+        let prop = node.get_property("rect").unwrap();
+        prop.set_f32(0, 150.).unwrap();
+        let code =
+            vec![Op::Sub((Box::new(Op::LoadVar("lh".to_string())), Box::new(Op::ConstFloat32(60.))))];
+        prop.set_expr(1, code).unwrap();
+        let code =
+            vec![Op::Sub((Box::new(Op::LoadVar("lw".to_string())), Box::new(Op::ConstFloat32(120.))))];
+        prop.set_expr(2, code).unwrap();
+        prop.set_f32(3, 60.).unwrap();
+        node.set_property_f32("baseline", 40.).unwrap();
+        node.set_property_f32("font_size", 20.).unwrap();
+        node.set_property_str("text", "hello king!😁🍆jelly 🍆1234").unwrap();
+        let prop = node.get_property("text_color").unwrap();
+        prop.set_f32(0, 1.).unwrap();
+        prop.set_f32(1, 1.).unwrap();
+        prop.set_f32(2, 1.).unwrap();
+        prop.set_f32(3, 1.).unwrap();
+        let prop = node.get_property("cursor_color").unwrap();
+        prop.set_f32(0, 1.).unwrap();
+        prop.set_f32(1, 0.5).unwrap();
+        prop.set_f32(2, 0.5).unwrap();
+        prop.set_f32(3, 1.).unwrap();
+        let prop = node.get_property("hi_bg_color").unwrap();
+        prop.set_f32(0, 1.).unwrap();
+        prop.set_f32(1, 1.).unwrap();
+        prop.set_f32(2, 1.).unwrap();
+        prop.set_f32(3, 0.5).unwrap();
+        let prop = node.get_property("selected").unwrap();
+        prop.set_null(0).unwrap();
+        prop.set_null(1).unwrap();
+        node.set_property_u32("z_index", 1).unwrap();
+
+        drop(sg);
+        let pimpl = EditBox::new(
+            //self.ex.clone(),
+            //self.sg.clone(),
+            //node_id,
+            //self.render_api.clone(),
+            //self.text_shaper.clone(),
+        )
+        .await;
+        let mut sg = self.sg.lock().await;
+        let node = sg.get_node_mut(node_id).unwrap();
+        node.pimpl = pimpl;
+
+        sg.link(node_id, layer_node_id).unwrap();
     }
 
     async fn trigger_redraw(&self) {
@@ -382,6 +433,61 @@ fn create_text(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
     node.add_property(prop).unwrap();
 
     let prop = Property::new("debug", PropertyType::Bool, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
+    node.id
+}
+
+fn create_editbox(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
+    let node = sg.add_node(name, SceneNodeType::EditBox);
+
+    let mut prop = Property::new("is_active", PropertyType::Bool, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_array_len(4);
+    prop.allow_exprs();
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("baseline", PropertyType::Float32, PropertySubType::Pixel);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("scroll", PropertyType::Float32, PropertySubType::Pixel);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("cursor_pos", PropertyType::Uint32, PropertySubType::Pixel);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("font_size", PropertyType::Float32, PropertySubType::Pixel);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("text", PropertyType::Str, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("text_color", PropertyType::Float32, PropertySubType::Color);
+    prop.set_array_len(4);
+    prop.set_range_f32(0., 1.);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("cursor_color", PropertyType::Float32, PropertySubType::Color);
+    prop.set_array_len(4);
+    prop.set_range_f32(0., 1.);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("hi_bg_color", PropertyType::Float32, PropertySubType::Color);
+    prop.set_array_len(4);
+    prop.set_range_f32(0., 1.);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("selected", PropertyType::Uint32, PropertySubType::Color);
+    prop.set_array_len(2);
+    prop.allow_null_values();
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("debug", PropertyType::Bool, PropertySubType::Null);
     node.add_property(prop).unwrap();
 
     node.id
