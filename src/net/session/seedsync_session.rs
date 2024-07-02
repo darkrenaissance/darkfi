@@ -62,6 +62,7 @@ use super::{
     Session, SessionBitFlag, SESSION_SEED,
 };
 use crate::{
+    net::hosts::HostState,
     system::{CondVar, LazyWeak, StoppableTask, StoppableTaskPtr},
     Error,
 };
@@ -184,6 +185,7 @@ impl Slot {
     /// `notify()` is called again.
     async fn run(self: Arc<Self>) {
         let ex = self.p2p().executor();
+        let hosts = self.p2p().hosts();
 
         loop {
             // Wait for a signal from notify() before proceeding with the seedsync.
@@ -192,6 +194,16 @@ impl Slot {
             debug!(
                 target: "net::session::seedsync_session", "SeedSyncSession::start_seed() [START]",
             );
+
+            if let Err(e) = hosts.try_register(self.addr.clone(), HostState::Connect) {
+                debug!(target: "net::session::seedsync_session",
+                    "Cannot connect to seed={}, err={}", &self.addr, e);
+
+                // Reset the CondVar for future use.
+                self.reset();
+
+                continue
+            }
 
             match self.connector.connect(&self.addr).await {
                 Ok((url, ch)) => {
@@ -240,7 +252,7 @@ impl Slot {
             }
 
             // Seed process complete
-            if self.p2p().hosts().container.is_empty(HostColor::Grey) {
+            if hosts.container.is_empty(HostColor::Grey) {
                 warn!(target: "net::session::seedsync_session()",
                 "[P2P] Greylist empty after seeding");
             }
