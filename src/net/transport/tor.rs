@@ -154,12 +154,13 @@ impl TorDialer {
 #[derive(Clone, Debug)]
 pub struct TorListener {
     datastore: Option<String>,
+    pub endpoint: Arc<Mutex<Option<Url>>>,
 }
 
 impl TorListener {
     /// Instantiate a new [`TorListener`]
     pub async fn new(datastore: Option<String>) -> io::Result<Self> {
-        Ok(Self { datastore })
+        Ok(Self { datastore, endpoint: Arc::new(Mutex::new(None)) })
     }
 
     /// Internal listen function
@@ -221,6 +222,10 @@ impl TorListener {
             target: "net::tor::do_listen",
             "[P2P] Established Tor listener on tor://{}:{}",
             onion_service.onion_name().unwrap(), port,
+        );
+
+        *self.endpoint.lock().await = Some(
+            Url::parse(&format!("tor://{}:{}", onion_service.onion_name().unwrap(), port)).unwrap(),
         );
 
         Ok(TorListenerIntern {

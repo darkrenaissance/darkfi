@@ -375,8 +375,12 @@ impl Listener {
         }
     }
 
-    pub fn endpoint(&self) -> &Url {
-        &self.endpoint
+    pub async fn endpoint(&self) -> Url {
+        match &self.variant {
+            #[cfg(feature = "p2p-tor")]
+            ListenerVariant::Tor(listener) => listener.endpoint.lock().await.clone().unwrap(),
+            _ => self.endpoint.clone(),
+        }
     }
 }
 
