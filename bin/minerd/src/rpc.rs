@@ -101,6 +101,8 @@ impl Minerd {
             error!(target: "minerd::rpc", "Failed to parse block");
             return server_error(RpcError::BlockParseError, id, None)
         };
+        let block_hash = block.hash();
+        info!(target: "minerd::rpc", "Received request to mine block {} for target: {}", block_hash, target);
 
         // Check if another request is being processed
         if let Some(e) = self.abort_pending(id).await {
@@ -108,7 +110,6 @@ impl Minerd {
         };
 
         // Mine provided block
-        let block_hash = block.hash();
         info!(target: "minerd::rpc", "Mining block {} for target: {}", block_hash, target);
         if let Err(e) = mine_block(&target, &mut block, self.threads, &self.stop_signal.clone()) {
             error!(target: "minerd::rpc", "Failed mining block {} with error: {}", block_hash, e);
@@ -122,7 +123,9 @@ impl Minerd {
     /// Auxiliary function to abort pending request.
     async fn abort_pending(&self, id: u16) -> Option<JsonResult> {
         // Check if a pending request is being processed
+        info!(target: "minerd::rpc", "Checking if a pending request is being processed...");
         if self.stop_signal.receiver_count() == 0 {
+            info!(target: "minerd::rpc", "No pending requests!");
             return None
         }
 
