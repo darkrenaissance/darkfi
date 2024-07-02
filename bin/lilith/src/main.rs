@@ -351,7 +351,7 @@ async fn spawn_net(name: String, info: &NetInfo, ex: Arc<Executor<'static>>) -> 
         inbound_connections: 512,
         app_version: info.version.clone(),
         localnet: info.localnet,
-        hostlist: info.hostlist.clone(),
+        hostlist: Some(info.hostlist.clone()),
         allowed_transports: vec![
             "tcp".to_string(),
             "tcp+tls".to_string(),

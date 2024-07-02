@@ -71,20 +71,23 @@ impl RefineSession {
 
     /// Start the refinery and self handshake processes.
     pub(crate) async fn start(self: Arc<Self>) {
-        match self.p2p().hosts().container.load_all(&self.p2p().settings().hostlist) {
-            Ok(()) => {
-                debug!(target: "net::refine_session::start()", "Load hosts successful!");
-            }
-            Err(e) => {
-                warn!(target: "net::refine_session::start()", "Error loading hosts {}", e);
+        if let Some(ref hostlist) = self.p2p().settings().hostlist {
+            match self.p2p().hosts().container.load_all(hostlist) {
+                Ok(()) => {
+                    debug!(target: "net::refine_session::start", "Load hosts successful!");
+                }
+                Err(e) => {
+                    warn!(target: "net::refine_session::start", "Error loading hosts {}", e);
+                }
             }
         }
+
         match self.p2p().hosts().import_blacklist() {
             Ok(()) => {
-                debug!(target: "net::refine_session::start()", "Import blacklist successful!");
+                debug!(target: "net::refine_session::start", "Import blacklist successful!");
             }
             Err(e) => {
-                warn!(target: "net::refine_session::start()",
+                warn!(target: "net::refine_session::start",
                     "Error importing blacklist from config file {}", e);
             }
         }
@@ -98,12 +101,14 @@ impl RefineSession {
         debug!(target: "net::refine_session", "Stopping refinery process");
         self.refinery.clone().stop().await;
 
-        match self.p2p().hosts().container.save_all(&self.p2p().settings().hostlist) {
-            Ok(()) => {
-                debug!(target: "net::refine_session::stop()", "Save hosts successful!");
-            }
-            Err(e) => {
-                warn!(target: "net::refine_session::stop()", "Error saving hosts {}", e);
+        if let Some(ref hostlist) = self.p2p().settings().hostlist {
+            match self.p2p().hosts().container.save_all(hostlist) {
+                Ok(()) => {
+                    debug!(target: "net::refine_session::stop()", "Save hosts successful!");
+                }
+                Err(e) => {
+                    warn!(target: "net::refine_session::stop()", "Error saving hosts {}", e);
+                }
             }
         }
     }

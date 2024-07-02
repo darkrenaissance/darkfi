@@ -65,7 +65,7 @@ pub struct Settings {
     /// Time between peer discovery attempts
     pub outbound_peer_discovery_attempt_time: u64,
     /// Hostlist storage path
-    pub hostlist: String,
+    pub hostlist: Option<String>,
     /// Pause interval within greylist refinery process
     pub greylist_refinery_interval: u64,
     /// Percent of connections to come from the whitelist
@@ -106,7 +106,7 @@ impl Default for Settings {
             localnet: false,
             outbound_peer_discovery_cooloff_time: 30,
             outbound_peer_discovery_attempt_time: 5,
-            hostlist: "/dev/null".to_string(),
+            hostlist: None,
             greylist_refinery_interval: 15,
             white_connect_percent: 70,
             gold_connect_count: 2,
@@ -261,7 +261,7 @@ impl From<SettingsOpt> for Settings {
             outbound_peer_discovery_attempt_time: opt
                 .outbound_peer_discovery_attempt_time
                 .unwrap_or(def.outbound_peer_discovery_attempt_time),
-            hostlist: opt.hostlist.unwrap_or(def.hostlist),
+            hostlist: opt.hostlist,
             greylist_refinery_interval: opt
                 .greylist_refinery_interval
                 .unwrap_or(def.greylist_refinery_interval),
