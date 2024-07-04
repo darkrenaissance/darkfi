@@ -33,7 +33,7 @@ const CURSOR_WIDTH: f32 = 4.;
 struct PressedKeysSmoothRepeat {
     /// When holding keys, we track from start and last sent time.
     /// This is useful for initial delay and smooth scrolling.
-    pressed_keys: HashMap<KeyCode, RepeatingKeyTimer>,
+    pressed_keys: HashMap<char, RepeatingKeyTimer>,
     /// Initial delay before allowing keys
     start_delay: u32,
     /// Minimum time between repeated keys
@@ -45,7 +45,7 @@ impl PressedKeysSmoothRepeat {
         Self { pressed_keys: HashMap::new(), start_delay, step_time }
     }
 
-    fn key_down(&mut self, key: KeyCode, repeat: bool) -> u32 {
+    fn key_down(&mut self, key: char, repeat: bool) -> u32 {
         debug!(target: "PressedKeysSmoothRepeat", "key_up({:?}, {})", key, repeat);
         if !repeat {
             self.pressed_keys.remove(&key);
@@ -62,7 +62,7 @@ impl PressedKeysSmoothRepeat {
         repeater.update(self.start_delay, self.step_time)
     }
 
-    fn key_up(&mut self, key: &KeyCode) {
+    fn key_up(&mut self, key: &char) {
         debug!(target: "PressedKeysSmoothRepeat", "key_up({:?})", key);
         assert!(self.pressed_keys.contains_key(key));
         self.pressed_keys.remove(key);
@@ -172,9 +172,9 @@ impl EditBox {
 
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
             // Start a task monitoring for key down events
-            let ev_sub = event_pub.subscribe_key_down();
+            let ev_sub = event_pub.subscribe_char();
             let me2 = me.clone();
-            let key_down_task = ex.spawn(async move {
+            let char_task = ex.spawn(async move {
                 loop {
                     let Ok((key, mods, repeat)) = ev_sub.receive().await else {
                         debug!(target: "ui::editbox", "Event relayer closed");
@@ -183,7 +183,7 @@ impl EditBox {
 
                     let Some(self_) = me2.upgrade() else {
                         // Should not happen
-                        panic!("self destroyed before key_down_task was stopped!");
+                        panic!("self destroyed before char_task was stopped!");
                     };
 
                     let actions = {
@@ -192,11 +192,12 @@ impl EditBox {
                     };
                     debug!(target: "ui::editbox", "Key {:?} has {} actions", key, actions);
                     for _ in 0..actions {
-                        self_.do_key_action(&key, &mods).await;
+                        self_.insert_char(key, &mods).await;
                     }
                 }
             });
 
+            /*
             let ev_sub = event_pub.subscribe_key_up();
             let me2 = me.clone();
             let key_up_task = ex.spawn(async move {
@@ -215,9 +216,10 @@ impl EditBox {
                     repeater.key_up(&key);
                 }
             });
+            */
 
             // on modify tasks too
-            let tasks = vec![key_down_task, key_up_task];
+            let tasks = vec![char_task];
 
             Self {
                 node_id,
@@ -283,39 +285,34 @@ impl EditBox {
         TextRenderInfo { glyphs, mesh, texture_id: atlas.texture_id }
     }
 
-    async fn do_key_action(&self, key: &KeyCode, mods: &KeyMods) {
+    async fn do_key_action(&self, key: char, mods: &KeyMods) {
         match key {
-            KeyCode::Left => {}
+            //KeyCode::Left => {}
             _ => self.insert_char(key, mods).await,
         }
     }
 
-    async fn insert_char(&self, key: &KeyCode, mods: &KeyMods) {
-        // we could use a char but fuck the law
-        let Some(key) = keycode_to_string(key) else {
-            return;
-        };
-
+    async fn insert_char(&self, key: char, mods: &KeyMods) {
         // First filter for only single digit keys
         let allowed_keys = [
-            "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q",
-            "R", "S", "T", "U", "V", "W", "X", "Y", "Z", " ", ":", ";", "'", "-", ".", "/", "=",
-            "(", "\\", ")", "`", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+            'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q',
+            'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', ' ', ':', ';', '\'', '-', '.', '/', '=',
+            '(', '\\', ')', '`', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
         ];
-        if !allowed_keys.contains(&key.as_str()) {
-            return
-        }
+        //if !allowed_keys.contains(&key) && !allowed_keys.contains(&key.to_uppercase().next().unwrap()) {
+        //    return
+        //}
 
         // If we want to only allow specific chars in a String here
         //let ch = key.chars().next().unwrap();
         // if !self.allowed_chars.chars().any(|c| c == ch) { return }
 
-        let key = if mods.shift { key.to_string() } else { key.to_lowercase() };
+        //let key = if mods.shift { key.to_string() } else { key.to_lowercase() };
 
         self.insert_text(key).await;
     }
 
-    async fn insert_text(&self, key: String) {
+    async fn insert_text(&self, key: char) {
         let mut text = String::new();
 
         let cursor_pos = self.cursor_pos.get();
@@ -330,13 +327,13 @@ impl EditBox {
         // themselves.
         for (i, glyph) in glyphs.iter().enumerate() {
             if cursor_pos == i as u32 {
-                text.push_str(&key);
+                text.push(key);
             }
             text.push_str(&glyph.substr);
         }
         // Append to the end
         if cursor_pos == glyphs.len() as u32 {
-            text.push_str(&key);
+            text.push(key);
         }
 
         self.text.set(text);
