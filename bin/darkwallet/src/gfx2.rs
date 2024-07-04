@@ -304,6 +304,10 @@ pub struct GraphicsEventPublisher {
     lock_key_down: SyncMutex<Option<SubscriptionId>>,
     key_down: PublisherPtr<(KeyCode, KeyMods, bool)>,
 
+    lock_key_up: SyncMutex<Option<SubscriptionId>>,
+    key_up: PublisherPtr<(KeyCode, KeyMods)>,
+
+    lock_resize: SyncMutex<Option<SubscriptionId>>,
     resize: PublisherPtr<(f32, f32)>,
 }
 
@@ -312,7 +316,11 @@ impl GraphicsEventPublisher {
         Arc::new(Self {
             lock_key_down: SyncMutex::new(None),
             key_down: Publisher::new(),
-            resize: Publisher::new() })
+            lock_key_up: SyncMutex::new(None),
+            key_up: Publisher::new(),
+            lock_resize: SyncMutex::new(None),
+            resize: Publisher::new(),
+        })
     }
 
     fn lock_key_down(&self, sub_id: SubscriptionId) {
@@ -320,6 +328,20 @@ impl GraphicsEventPublisher {
     }
     fn unlock_key_down(&self) {
         *self.lock_key_down.lock().unwrap() = None;
+    }
+
+    fn lock_key_up(&self, sub_id: SubscriptionId) {
+        *self.lock_key_up.lock().unwrap() = Some(sub_id);
+    }
+    fn unlock_key_up(&self) {
+        *self.lock_key_up.lock().unwrap() = None;
+    }
+
+    fn lock_resize(&self, sub_id: SubscriptionId) {
+        *self.lock_resize.lock().unwrap() = Some(sub_id);
+    }
+    fn unlock_resize(&self) {
+        *self.lock_resize.lock().unwrap() = None;
     }
 
     fn notify_key_down(&self, key: KeyCode, mods: KeyMods, repeat: bool) {
@@ -332,12 +354,32 @@ impl GraphicsEventPublisher {
             self.key_down.notify(ev);
         }
     }
+    fn notify_key_up(&self, key: KeyCode, mods: KeyMods) {
+        let ev = (key, mods);
+
+        let locked = self.lock_key_up.lock().unwrap().clone();
+        if let Some(locked) = locked {
+            self.key_up.notify_with_include(ev, &[locked]);
+        } else {
+            self.key_up.notify(ev);
+        }
+    }
     fn notify_resize(&self, w: f32, h: f32) {
-        self.resize.notify((w, h));
+        let ev = (w, h);
+
+        let locked = self.lock_resize.lock().unwrap().clone();
+        if let Some(locked) = locked {
+            self.resize.notify_with_include(ev, &[locked]);
+        } else {
+            self.resize.notify(ev);
+        }
     }
 
     pub fn subscribe_key_down(&self) -> Subscription<(KeyCode, KeyMods, bool)> {
         self.key_down.clone().subscribe()
+    }
+    pub fn subscribe_key_up(&self) -> Subscription<(KeyCode, KeyMods)> {
+        self.key_up.clone().subscribe()
     }
     pub fn subscribe_resize(&self) -> Subscription<(f32, f32)> {
         self.resize.clone().subscribe()
@@ -432,15 +474,15 @@ impl Stage {
         sendr: async_channel::Sender<TextureId>,
     ) {
         let texture = self.ctx.new_texture_from_rgba8(width, height, &data);
-        debug!(target: "gfx2", "Invoked method: new_texture({}, {}, ...) -> {:?}",
-               width, height, texture);
+        //debug!(target: "gfx2", "Invoked method: new_texture({}, {}, ...) -> {:?}",
+        //       width, height, texture);
         //debug!(target: "gfx2", "Invoked method: new_texture({}, {}, ...) -> {:?}\n{}",
         //       width, height, texture,
         //       ansi_texture(width as usize, height as usize, &data));
         sendr.try_send(texture).unwrap();
     }
     fn method_delete_texture(&mut self, texture: TextureId) {
-        debug!(target: "gfx2", "Invoked method: delete_texture({:?})", texture);
+        //debug!(target: "gfx2", "Invoked method: delete_texture({:?})", texture);
         self.ctx.delete_texture(texture);
     }
     fn method_new_vertex_buffer(
@@ -453,7 +495,7 @@ impl Stage {
             BufferUsage::Immutable,
             BufferSource::slice(&verts),
         );
-        debug!(target: "gfx2", "Invoked method: new_vertex_buffer({:?}) -> {:?}", verts, buffer);
+        //debug!(target: "gfx2", "Invoked method: new_vertex_buffer({:?}) -> {:?}", verts, buffer);
         sendr.try_send(buffer).unwrap();
     }
     fn method_new_index_buffer(
@@ -466,15 +508,15 @@ impl Stage {
             BufferUsage::Immutable,
             BufferSource::slice(&indices),
         );
-        debug!(target: "gfx2", "Invoked method: new_index_buffer({:?}) -> {:?}", indices, buffer);
+        //debug!(target: "gfx2", "Invoked method: new_index_buffer({:?}) -> {:?}", indices, buffer);
         sendr.try_send(buffer).unwrap();
     }
     fn method_delete_buffer(&mut self, buffer: BufferId) {
-        debug!(target: "gfx2", "Invoked method: delete_buffer({:?})", buffer);
+        //debug!(target: "gfx2", "Invoked method: delete_buffer({:?})", buffer);
         self.ctx.delete_buffer(buffer);
     }
     fn method_replace_draw_calls(&mut self, dcs: Vec<(u64, DrawCall)>) {
-        debug!(target: "gfx2", "Invoked method: replace_draw_calls({:?})", dcs);
+        //debug!(target: "gfx2", "Invoked method: replace_draw_calls({:?})", dcs);
         for (key, val) in dcs {
             self.draw_calls.insert(key, val);
         }
@@ -550,12 +592,19 @@ impl EventHandler for Stage {
     fn key_down_event(&mut self, keycode: KeyCode, mods: KeyMods, repeat: bool) {
         self.event_pub.notify_key_down(keycode, mods, repeat);
     }
+    fn key_up_event(&mut self, keycode: KeyCode, mods: KeyMods) {
+        self.event_pub.notify_key_up(keycode, mods);
+    }
     fn resize_event(&mut self, width: f32, height: f32) {
         self.event_pub.notify_resize(width, height);
     }
 
     fn quit_requested_event(&mut self) {
         self.async_runtime.stop();
+    }
+
+    fn char_event(&mut self, chr: char, mods: KeyMods, repeat: bool) {
+        //debug!("chr: {chr}, mods: {:?} repeat: {repeat}", mods);
     }
 }
 

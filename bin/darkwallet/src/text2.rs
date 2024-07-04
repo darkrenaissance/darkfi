@@ -516,6 +516,7 @@ pub struct Sprite {
     pub has_color: bool,
 }
 
+#[derive(Clone)]
 pub struct Glyph {
     pub glyph_id: u32,
     // Substring this glyph corresponds to

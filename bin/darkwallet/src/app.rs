@@ -297,7 +297,7 @@ impl App {
         node.set_property_f32("font_size", 60.).unwrap();
         node.set_property_str("text", "anon1🍆").unwrap();
         //node.set_property_str("text", "anon1").unwrap();
-        let prop = node.get_property("color").unwrap();
+        let prop = node.get_property("text_color").unwrap();
         prop.set_f32(0, 0.).unwrap();
         prop.set_f32(1, 1.).unwrap();
         prop.set_f32(2, 0.).unwrap();
@@ -324,11 +324,15 @@ impl App {
         node.set_property_bool("is_active", true).unwrap();
         let prop = node.get_property("rect").unwrap();
         prop.set_f32(0, 150.).unwrap();
-        let code =
-            vec![Op::Sub((Box::new(Op::LoadVar("lh".to_string())), Box::new(Op::ConstFloat32(60.))))];
+        let code = vec![Op::Sub((
+            Box::new(Op::LoadVar("h".to_string())),
+            Box::new(Op::ConstFloat32(60.)),
+        ))];
         prop.set_expr(1, code).unwrap();
-        let code =
-            vec![Op::Sub((Box::new(Op::LoadVar("lw".to_string())), Box::new(Op::ConstFloat32(120.))))];
+        let code = vec![Op::Sub((
+            Box::new(Op::LoadVar("w".to_string())),
+            Box::new(Op::ConstFloat32(120.)),
+        ))];
         prop.set_expr(2, code).unwrap();
         prop.set_f32(3, 60.).unwrap();
         node.set_property_f32("baseline", 40.).unwrap();
@@ -356,11 +360,12 @@ impl App {
 
         drop(sg);
         let pimpl = EditBox::new(
-            //self.ex.clone(),
-            //self.sg.clone(),
-            //node_id,
-            //self.render_api.clone(),
-            //self.text_shaper.clone(),
+            self.ex.clone(),
+            self.sg.clone(),
+            node_id,
+            self.render_api.clone(),
+            self.event_pub.clone(),
+            self.text_shaper.clone(),
         )
         .await;
         let mut sg = self.sg.lock().await;
@@ -424,7 +429,7 @@ fn create_text(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
     let prop = Property::new("text", PropertyType::Str, PropertySubType::Null);
     node.add_property(prop).unwrap();
 
-    let mut prop = Property::new("color", PropertyType::Float32, PropertySubType::Color);
+    let mut prop = Property::new("text_color", PropertyType::Float32, PropertySubType::Color);
     prop.set_array_len(4);
     prop.set_range_f32(0., 1.);
     node.add_property(prop).unwrap();

@@ -1,7 +1,7 @@
 //use async_lock::Mutex;
 use miniquad::{BufferId, TextureId};
 use rand::{rngs::OsRng, Rng};
-use std::sync::{Arc, Mutex, Weak};
+use std::sync::{Arc, Mutex as SyncMutex, Weak};
 
 use crate::{
     gfx2::{DrawCall, DrawInstruction, DrawMesh, Rectangle, RenderApi, RenderApiPtr, Vertex},
@@ -30,7 +30,7 @@ pub struct Text {
     text_shaper: TextShaperPtr,
     tasks: Vec<smol::Task<()>>,
 
-    render_info: Mutex<TextRenderInfo>,
+    render_info: SyncMutex<TextRenderInfo>,
     dc_key: u64,
 
     node_id: SceneNodeId,
@@ -38,7 +38,7 @@ pub struct Text {
     z_index: PropertyUint32,
     text: PropertyStr,
     font_size: PropertyFloat32,
-    color: PropertyColor,
+    text_color: PropertyColor,
     baseline: PropertyFloat32,
     debug: PropertyBool,
 }
@@ -58,7 +58,7 @@ impl Text {
         let z_index = PropertyUint32::wrap(node, "z_index", 0).unwrap();
         let text = PropertyStr::wrap(node, "text", 0).unwrap();
         let font_size = PropertyFloat32::wrap(node, "font_size", 0).unwrap();
-        let color = PropertyColor::wrap(node, "color").unwrap();
+        let text_color = PropertyColor::wrap(node, "text_color").unwrap();
         let baseline = PropertyFloat32::wrap(node, "baseline", 0).unwrap();
         let debug = PropertyBool::wrap(node, "debug", 0).unwrap();
         drop(scene_graph);
@@ -68,7 +68,7 @@ impl Text {
             &text_shaper,
             text.get(),
             font_size.get(),
-            color.get(),
+            text_color.get(),
             baseline.get(),
             debug.get(),
         )
@@ -80,7 +80,7 @@ impl Text {
             on_modify.when_change(z_index.prop(), Self::redraw);
             on_modify.when_change(text.prop(), Self::redraw);
             on_modify.when_change(font_size.prop(), Self::redraw);
-            on_modify.when_change(color.prop(), Self::redraw);
+            on_modify.when_change(text_color.prop(), Self::redraw);
             on_modify.when_change(debug.prop(), Self::redraw);
             on_modify.when_change(baseline.prop(), Self::redraw);
 
@@ -89,14 +89,14 @@ impl Text {
                 render_api,
                 text_shaper,
                 tasks: on_modify.tasks,
-                render_info: Mutex::new(render_info),
+                render_info: SyncMutex::new(render_info),
                 dc_key: OsRng.gen(),
                 node_id,
                 rect,
                 z_index,
                 text,
                 font_size,
-                color,
+                text_color,
                 baseline,
                 debug,
             }
@@ -146,16 +146,12 @@ impl Text {
             &self.text_shaper,
             self.text.get(),
             self.font_size.get(),
-            self.color.get(),
+            self.text_color.get(),
             self.baseline.get(),
             self.debug.get(),
         )
         .await;
         *self.render_info.lock().unwrap() = render_info;
-
-        self.render_api.delete_buffer(old.mesh.vertex_buffer);
-        self.render_api.delete_buffer(old.mesh.index_buffer);
-        self.render_api.delete_texture(old.texture_id);
 
         let sg = self.sg.lock().await;
         let node = sg.get_node(self.node_id).unwrap();
@@ -170,6 +166,11 @@ impl Text {
         };
         self.render_api.replace_draw_calls(draw_update.draw_calls).await;
         debug!(target: "ui::text", "replace draw calls done");
+
+        // We're finished with these so clean up.
+        self.render_api.delete_buffer(old.mesh.vertex_buffer);
+        self.render_api.delete_buffer(old.mesh.index_buffer);
+        self.render_api.delete_texture(old.texture_id);
     }
 
     pub async fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
@@ -224,7 +225,12 @@ impl Stoppable for Text {
 
         // Free buffers
         // Should this be in drop?
-        //self.render_api.delete_buffer(self.vertex_buffer);
-        //self.render_api.delete_buffer(self.index_buffer);
+        let render_info = self.render_info.lock().unwrap().clone();
+        let vertex_buffer = render_info.mesh.vertex_buffer;
+        let index_buffer = render_info.mesh.index_buffer;
+        let texture_id = render_info.texture_id;
+        self.render_api.delete_buffer(vertex_buffer);
+        self.render_api.delete_buffer(index_buffer);
+        self.render_api.delete_texture(texture_id);
     }
 }

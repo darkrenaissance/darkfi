@@ -114,6 +114,23 @@ fn main() {
         }
     });
     async_runtime.push_task(ev_relay_task);
+    let ev_sub = event_pub.subscribe_key_up();
+    let ev_relay_task = ex.spawn(async move {
+        debug!(target: "main", "event relayer started");
+        loop {
+            let Ok((key, mods)) = ev_sub.receive().await else {
+                debug!(target: "main", "Event relayer closed");
+                break
+            };
+            // Ignore keys which get stuck repeating when switching windows
+            match key {
+                miniquad::KeyCode::LeftShift | miniquad::KeyCode::LeftSuper => continue,
+                _ => {}
+            }
+            debug!(target: "main", "key_up event: {:?} {:?}", key, mods);
+        }
+    });
+    async_runtime.push_task(ev_relay_task);
 
     //let stage = gfx2::Stage::new(method_rep, event_pub);
     gfx2::run_gui(async_runtime, method_rep, event_pub);
