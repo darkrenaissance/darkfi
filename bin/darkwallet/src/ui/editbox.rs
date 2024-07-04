@@ -1,4 +1,4 @@
-use miniquad::{BufferId, KeyCode, KeyMods, TextureId};
+use miniquad::{window, BufferId, KeyCode, KeyMods, TextureId};
 use rand::{rngs::OsRng, Rng};
 use std::{
     collections::HashMap,
@@ -46,12 +46,15 @@ impl PressedKeysSmoothRepeat {
     }
 
     fn key_down(&mut self, key: KeyCode, repeat: bool) -> u32 {
+        debug!(target: "PressedKeysSmoothRepeat", "key_up({:?}, {})", key, repeat);
         if !repeat {
+            self.pressed_keys.remove(&key);
             return 1;
         }
 
         // Insert key if not exists
         if !self.pressed_keys.contains_key(&key) {
+            debug!(target: "PressedKeysSmoothRepeat", "insert key {:?}", key);
             self.pressed_keys.insert(key, RepeatingKeyTimer::new());
         }
 
@@ -60,6 +63,8 @@ impl PressedKeysSmoothRepeat {
     }
 
     fn key_up(&mut self, key: &KeyCode) {
+        debug!(target: "PressedKeysSmoothRepeat", "key_up({:?})", key);
+        assert!(self.pressed_keys.contains_key(key));
         self.pressed_keys.remove(key);
     }
 }
@@ -76,6 +81,8 @@ impl RepeatingKeyTimer {
 
     fn update(&mut self, start_delay: u32, step_time: u32) -> u32 {
         let elapsed = self.start.elapsed().as_millis();
+        debug!(target: "RepeatingKeyTimer", "update() elapsed={}, actions={}",
+               elapsed, self.actions);
         if elapsed < start_delay as u128 {
             return 0
         }
@@ -160,6 +167,9 @@ impl EditBox {
         )
         .await;
 
+        // testing
+        //window::show_keyboard(true);
+
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
             // Start a task monitoring for key down events
             let ev_sub = event_pub.subscribe_key_down();
@@ -180,6 +190,7 @@ impl EditBox {
                         let mut repeater = self_.key_repeat.lock().unwrap();
                         repeater.key_down(key, repeat)
                     };
+                    debug!(target: "ui::editbox", "Key {:?} has {} actions", key, actions);
                     for _ in 0..actions {
                         self_.do_key_action(&key, &mods).await;
                     }
@@ -200,10 +211,8 @@ impl EditBox {
                         panic!("self destroyed before key_up_task was stopped!");
                     };
 
-                    let actions = {
-                        let mut repeater = self_.key_repeat.lock().unwrap();
-                        repeater.key_up(&key)
-                    };
+                    let mut repeater = self_.key_repeat.lock().unwrap();
+                    repeater.key_up(&key);
                 }
             });
 
@@ -457,6 +466,7 @@ fn keycode_to_string(key: &KeyCode) -> Option<String> {
         KeyCode::O => Some("O".to_string()),
         KeyCode::P => Some("P".to_string()),
         KeyCode::Q => Some("Q".to_string()),
+        KeyCode::R => Some("R".to_string()),
         KeyCode::S => Some("S".to_string()),
         KeyCode::T => Some("T".to_string()),
         KeyCode::U => Some("U".to_string()),

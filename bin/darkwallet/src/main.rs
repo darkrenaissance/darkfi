@@ -110,7 +110,9 @@ fn main() {
                 miniquad::KeyCode::LeftShift | miniquad::KeyCode::LeftSuper => continue,
                 _ => {}
             }
-            debug!(target: "main", "key_down event: {:?} {:?} {}", key, mods, repeat);
+            if !repeat {
+                debug!(target: "main", "key_down event: {:?} {:?} {}", key, mods, repeat);
+            }
         }
     });
     async_runtime.push_task(ev_relay_task);

@@ -309,6 +309,9 @@ pub struct GraphicsEventPublisher {
 
     lock_resize: SyncMutex<Option<SubscriptionId>>,
     resize: PublisherPtr<(f32, f32)>,
+
+    lock_char: SyncMutex<Option<SubscriptionId>>,
+    chr: PublisherPtr<(char, KeyMods, bool)>,
 }
 
 impl GraphicsEventPublisher {
@@ -320,6 +323,8 @@ impl GraphicsEventPublisher {
             key_up: Publisher::new(),
             lock_resize: SyncMutex::new(None),
             resize: Publisher::new(),
+            lock_char: SyncMutex::new(None),
+            chr: Publisher::new(),
         })
     }
 
@@ -342,6 +347,13 @@ impl GraphicsEventPublisher {
     }
     fn unlock_resize(&self) {
         *self.lock_resize.lock().unwrap() = None;
+    }
+
+    fn lock_char(&self, sub_id: SubscriptionId) {
+        *self.lock_char.lock().unwrap() = Some(sub_id);
+    }
+    fn unlock_char(&self) {
+        *self.lock_char.lock().unwrap() = None;
     }
 
     fn notify_key_down(&self, key: KeyCode, mods: KeyMods, repeat: bool) {
@@ -374,6 +386,16 @@ impl GraphicsEventPublisher {
             self.resize.notify(ev);
         }
     }
+    fn notify_char(&self, chr: char, mods: KeyMods, repeat: bool) {
+        let ev = (chr, mods, repeat);
+
+        let locked = self.lock_char.lock().unwrap().clone();
+        if let Some(locked) = locked {
+            self.chr.notify_with_include(ev, &[locked]);
+        } else {
+            self.chr.notify(ev);
+        }
+    }
 
     pub fn subscribe_key_down(&self) -> Subscription<(KeyCode, KeyMods, bool)> {
         self.key_down.clone().subscribe()
@@ -383,6 +405,9 @@ impl GraphicsEventPublisher {
     }
     pub fn subscribe_resize(&self) -> Subscription<(f32, f32)> {
         self.resize.clone().subscribe()
+    }
+    pub fn subscribe_char(&self) -> Subscription<(char, KeyMods, bool)> {
+        self.chr.clone().subscribe()
     }
 }
 
@@ -604,7 +629,7 @@ impl EventHandler for Stage {
     }
 
     fn char_event(&mut self, chr: char, mods: KeyMods, repeat: bool) {
-        //debug!("chr: {chr}, mods: {:?} repeat: {repeat}", mods);
+        self.event_pub.notify_char(chr, mods, repeat);
     }
 }
 
