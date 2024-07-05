@@ -133,6 +133,18 @@ fn main() {
         }
     });
     async_runtime.push_task(ev_relay_task);
+    let ev_sub = event_pub.subscribe_char();
+    let ev_relay_task = ex.spawn(async move {
+        debug!(target: "main", "event relayer started");
+        loop {
+            let Ok((key, mods, repeat)) = ev_sub.receive().await else {
+                debug!(target: "main", "Event relayer closed");
+                break
+            };
+            debug!(target: "main", "char event: {:?} {:?} {}", key, mods, repeat);
+        }
+    });
+    async_runtime.push_task(ev_relay_task);
 
     //let stage = gfx2::Stage::new(method_rep, event_pub);
     gfx2::run_gui(async_runtime, method_rep, event_pub);

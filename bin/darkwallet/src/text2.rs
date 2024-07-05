@@ -270,6 +270,7 @@ impl TextShaper {
     }
 
     pub async fn shape(&self, text: String, font_size: f32) -> Vec<Glyph> {
+        //debug!(target: "text", "shape('{}', {})", text, font_size);
         // Lock font faces
         // Freetype faces are not threadsafe
         let mut faces = self.font_faces.lock().await;
@@ -337,7 +338,7 @@ impl TextShaper {
             let mut prev_cluster = 0;
 
             //for (i, (position, info)) in positions.iter().zip(infos).enumerate() {
-            for (i, (position, info)) in
+            'iter_glyphs: for (i, (position, info)) in
                 glyph_pos_iter.iter().zip(glyph_infos_iter.iter()).enumerate()
             {
                 let glyph_id = info.codepoint as u32;
@@ -373,21 +374,26 @@ impl TextShaper {
                     face_idx,
                 };
                 //debug!(target: "text", "cache_key: {:?}", cache_key);
-                if let Some(sprite) = cache.get(&cache_key) {
-                    let Some(sprite) = sprite.upgrade() else { break };
+                'load_sprite: {
+                    if let Some(sprite) = cache.get(&cache_key) {
+                        let Some(sprite) = sprite.upgrade() else {
+                            break 'load_sprite;
+                        };
 
-                    let glyph = Glyph {
-                        glyph_id,
-                        substr: String::new(),
-                        sprite,
-                        x_offset,
-                        y_offset,
-                        x_advance,
-                        y_advance,
-                    };
+                        //debug!(target: "text", "found glyph!");
+                        let glyph = Glyph {
+                            glyph_id,
+                            substr: String::new(),
+                            sprite,
+                            x_offset,
+                            y_offset,
+                            x_advance,
+                            y_advance,
+                        };
 
-                    glyphs.push(glyph);
-                    continue
+                        glyphs.push(glyph);
+                        continue 'iter_glyphs;
+                    }
                 }
 
                 let mut flags = ft::face::LoadFlag::DEFAULT;
@@ -467,6 +473,7 @@ impl TextShaper {
                     y_advance,
                 };
 
+                //debug!(target: "text", "pushing glyph...");
                 glyphs.push(glyph);
             }
 

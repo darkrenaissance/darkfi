@@ -22,13 +22,6 @@ use crate::{
 
 use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify, Stoppable};
 
-// First refactor the event system
-// Each event should have its own unique pipe
-// Advantages:
-// - less overhead when publishing msgs to ppl who dont need them
-// - more advanced locking of streams when widgets capture input
-// also add capturing and make use of it with editbox.
-
 const CURSOR_WIDTH: f32 = 4.;
 
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
@@ -37,6 +30,10 @@ enum PressedKey {
     Key(KeyCode),
 }
 
+/// On key press (repeat=false), we immediately process the event.
+/// Then there's a delay (repeat=true) and then for every step time
+/// while key press events are being sent, we allow an event.
+/// This ensures smooth typing in the editbox.
 struct PressedKeysSmoothRepeat {
     /// When holding keys, we track from start and last sent time.
     /// This is useful for initial delay and smooth scrolling.
@@ -179,7 +176,7 @@ impl EditBox {
         .await;
 
         // testing
-        //window::show_keyboard(true);
+        window::show_keyboard(true);
 
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
             // Start a task monitoring for key down events
@@ -302,7 +299,7 @@ impl EditBox {
         };
 
         // First filter for only single digit keys
-        let disallowed_keys = ['\r', '\u{8}', '\u{7f}', '\t'];
+        let disallowed_keys = ['\r', '\u{8}', '\u{7f}', '\t', '\n'];
         if disallowed_keys.contains(&key) {
             return
         }
@@ -384,6 +381,27 @@ impl EditBox {
 
     async fn handle_key(&self, key: &KeyCode, mods: &KeyMods) {
         debug!(target: "ui::editbox", "handle_key({:?}, {:?})", key, mods);
+        match key {
+            //KeyCode::Left,
+            //KeyCode::Right,
+            //KeyCode::Up,
+            //KeyCode::Down,
+            //KeyCode::Enter,
+            KeyCode::Kp0 => self.insert_char('0').await,
+            KeyCode::Kp1 => self.insert_char('1').await,
+            KeyCode::Kp2 => self.insert_char('2').await,
+            KeyCode::Kp3 => self.insert_char('3').await,
+            KeyCode::Kp4 => self.insert_char('4').await,
+            KeyCode::Kp5 => self.insert_char('5').await,
+            KeyCode::Kp6 => self.insert_char('6').await,
+            KeyCode::Kp7 => self.insert_char('7').await,
+            KeyCode::Kp8 => self.insert_char('8').await,
+            KeyCode::Kp9 => self.insert_char('9').await,
+            KeyCode::KpDecimal => self.insert_char('.').await,
+            KeyCode::Enter | KeyCode::KpEnter => self.send_event().await,
+            //KeyCode::Backspace,
+            _ => {}
+        }
     }
 
     async fn redraw(&self) {
@@ -465,6 +483,16 @@ impl EditBox {
             )],
         })
     }
+
+    async fn send_event(&self) {
+        let text = self.text.get();
+        debug!(target: "ui::editbox", "sending text {}", text);
+
+        // This should probably be unset instead
+        self.text.set(String::new());
+        self.cursor_pos.set(0);
+        self.redraw().await;
+    }
 }
 
 impl Stoppable for EditBox {
@@ -496,4 +524,5 @@ static ALLOWED_KEYCODES: &'static [KeyCode] = &[
     KeyCode::Kp9,
     KeyCode::KpDecimal,
     KeyCode::KpEnter,
+    KeyCode::Backspace,
 ];
