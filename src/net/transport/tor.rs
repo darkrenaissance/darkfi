@@ -169,7 +169,7 @@ impl TorListener {
         // the Tor dialer
         let client = match TOR_CLIENT
             .get_or_try_init(|| async {
-                debug!(target: "net::tor::do_dial", "Bootstrapping...");
+                debug!(target: "net::tor::do_listen", "Bootstrapping...");
                 if let Some(datadir) = &self.datastore {
                     let datadir = expand_path(datadir).unwrap();
 

@@ -21,7 +21,11 @@ use std::sync::Arc;
 use futures::{stream::FuturesUnordered, TryFutureExt};
 use futures_rustls::rustls::crypto::{ring, CryptoProvider};
 use log::{debug, error, info, warn};
-use smol::{lock::Mutex, stream::StreamExt};
+use smol::{
+    fs::{self, unix::PermissionsExt},
+    lock::Mutex,
+    stream::StreamExt,
+};
 use url::Url;
 
 use super::{
@@ -38,6 +42,7 @@ use super::{
 };
 use crate::{
     system::{ExecutorPtr, Publisher, PublisherPtr, Subscription},
+    util::path::expand_path,
     Result,
 };
 
@@ -79,8 +84,15 @@ impl P2p {
     ///
     /// Creates a weak pointer to self that is used by all sessions to access the
     /// p2p parent class.
-    pub async fn new(settings: Settings, executor: ExecutorPtr) -> P2pPtr {
+    pub async fn new(settings: Settings, executor: ExecutorPtr) -> Result<P2pPtr> {
         let settings = Arc::new(settings);
+
+        // Create the datastore
+        if let Some(ref datastore) = settings.datastore {
+            let datastore = expand_path(datastore)?;
+            fs::create_dir_all(&datastore).await?;
+            fs::set_permissions(&datastore, PermissionsExt::from_mode(0o700)).await?;
+        }
 
         // Register a CryptoProvider for rustls
         let _ = CryptoProvider::install_default(ring::default_provider());
@@ -108,7 +120,7 @@ impl P2p {
 
         register_default_protocols(self_.clone()).await;
 
-        self_
+        Ok(self_)
     }
 
     /// Starts inbound, outbound, and manual sessions.

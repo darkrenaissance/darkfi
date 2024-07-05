@@ -248,7 +248,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     let sled_db = sled::open(datastore)?;
     let mut p2p_settings: darkfi::net::Settings = args.net.into();
     p2p_settings.app_version = semver::Version::parse(env!("CARGO_PKG_VERSION")).unwrap();
-    let p2p = P2p::new(p2p_settings, ex.clone()).await;
+    let p2p = P2p::new(p2p_settings, ex.clone()).await?;
     let event_graph = EventGraph::new(
         p2p.clone(),
         sled_db.clone(),

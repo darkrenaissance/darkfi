@@ -241,7 +241,7 @@ pub async fn generate_node(
     // We initialize a dnet subscriber but do not activate it.
     let dnet_sub = JsonSubscriber::new("dnet.subscribe_events");
 
-    let p2p = spawn_p2p(settings, &validator, &subscribers, ex.clone()).await;
+    let p2p = spawn_p2p(settings, &validator, &subscribers, ex.clone()).await?;
     let node = Darkfid::new(p2p.clone(), validator, miner, 50, subscribers, None, dnet_sub).await;
 
     p2p.start().await?;

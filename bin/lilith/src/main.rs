@@ -145,6 +145,8 @@ struct NetInfo {
     pub version: Version,
     /// Enable localnet hosts
     pub localnet: bool,
+    /// Path to P2P datastore
+    pub datastore: String,
     /// Path to hostlist
     pub hostlist: String,
 }
@@ -322,9 +324,12 @@ fn parse_configured_networks(data: &str) -> Result<HashMap<String, NetInfo>> {
                     semver::Version::parse(option_env!("CARGO_PKG_VERSION").unwrap_or("0.0.0"))?
                 };
 
+                let datastore: String = table["datastore"].as_str().unwrap().to_string();
+
                 let hostlist: String = table["hostlist"].as_str().unwrap().to_string();
 
-                let net_info = NetInfo { accept_addrs, seeds, peers, version, localnet, hostlist };
+                let net_info =
+                    NetInfo { accept_addrs, seeds, peers, version, localnet, datastore, hostlist };
                 ret.insert(name, net_info);
             }
         }
@@ -351,6 +356,7 @@ async fn spawn_net(name: String, info: &NetInfo, ex: Arc<Executor<'static>>) -> 
         inbound_connections: 512,
         app_version: info.version.clone(),
         localnet: info.localnet,
+        datastore: Some(info.datastore.clone()),
         hostlist: Some(info.hostlist.clone()),
         allowed_transports: vec![
             "tcp".to_string(),
@@ -364,7 +370,7 @@ async fn spawn_net(name: String, info: &NetInfo, ex: Arc<Executor<'static>>) -> 
     };
 
     // Create P2P instance
-    let p2p = P2p::new(settings, ex.clone()).await;
+    let p2p = P2p::new(settings, ex.clone()).await?;
 
     let addrs_str: Vec<&str> = listen_urls.iter().map(|x| x.as_str()).collect();
     info!(target: "lilith", "Starting seed network node for \"{}\" on {:?}", name, addrs_str);

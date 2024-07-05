@@ -214,7 +214,7 @@ mod tests {
 
     async fn make_event_graph() -> Result<EventGraphPtr> {
         let ex = Arc::new(Executor::new());
-        let p2p = P2p::new(Settings::default(), ex.clone()).await;
+        let p2p = P2p::new(Settings::default(), ex.clone()).await?;
         let sled_db = sled::Config::new().temporary(true).open().unwrap();
         EventGraph::new(p2p, sled_db, "/tmp".into(), false, "dag", 1, ex).await
     }

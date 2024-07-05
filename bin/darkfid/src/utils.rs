@@ -41,9 +41,9 @@ pub async fn spawn_p2p(
     validator: &ValidatorPtr,
     subscribers: &HashMap<&'static str, JsonSubscriber>,
     executor: Arc<Executor<'static>>,
-) -> P2pPtr {
+) -> Result<P2pPtr> {
     info!(target: "darkfid", "Registering sync network P2P protocols...");
-    let p2p = P2p::new(settings.clone(), executor.clone()).await;
+    let p2p = P2p::new(settings.clone(), executor.clone()).await?;
     let registry = p2p.protocol_registry();
 
     let _validator = validator.clone();
@@ -78,7 +78,7 @@ pub async fn spawn_p2p(
         })
         .await;
 
-    p2p
+    Ok(p2p)
 }
 
 /// Auxiliary function to parse darkfid configuration file and extract requested

@@ -113,7 +113,7 @@ async fn spawn_seed_session(seed_addr: Url, ex: Arc<Executor<'static>>) -> Vec<A
             ..Default::default()
         };
 
-        let p2p = P2p::new(settings, ex.clone()).await;
+        let p2p = P2p::new(settings, ex.clone()).await.unwrap();
         info!("========================================================");
         info!("Starting node={}", p2p.settings().external_addrs[0]);
         info!("========================================================");
@@ -162,7 +162,7 @@ async fn spawn_manual_session(ex: Arc<Executor<'static>>) -> Vec<Arc<P2p>> {
             ..Default::default()
         };
 
-        let p2p = P2p::new(settings, ex.clone()).await;
+        let p2p = P2p::new(settings, ex.clone()).await.unwrap();
         info!("========================================================");
         info!("Starting node={}", p2p.settings().external_addrs[0]);
         info!("========================================================");
@@ -308,7 +308,7 @@ async fn p2p_test_real(ex: Arc<Executor<'static>>) {
         ..Default::default()
     };
 
-    let seed = P2p::new(settings, ex.clone()).await;
+    let seed = P2p::new(settings, ex.clone()).await.unwrap();
     info!("========================================================");
     info!("Starting seed node on {}", seed_addr);
     info!("========================================================");

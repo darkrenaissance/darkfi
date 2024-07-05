@@ -357,7 +357,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
 
     info!("Instantiating event DAG");
     let sled_db = sled::open(datastore)?;
-    let p2p = P2p::new(settings.net.into(), executor.clone()).await;
+    let p2p = P2p::new(settings.net.into(), executor.clone()).await?;
     let event_graph = EventGraph::new(
         p2p.clone(),
         sled_db.clone(),
