@@ -8,7 +8,8 @@ edition = "2021"
 [workspace]
 
 [dependencies]
-miniquad = { git = "https://github.com/not-fl3/miniquad" }
+#miniquad = { git = "https://github.com/not-fl3/miniquad" }
+miniquad = { git = "https://github.com/narodnik/miniquad" }
 # Currently latest version links to freetype-sys 0.19 but we use 0.21
 #harfbuzz-sys = "0.6"
 #harfbuzz-sys = { git = "https://github.com/servo/rust-harfbuzz", features = ["bundled"] }

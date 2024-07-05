@@ -15,6 +15,7 @@ use crate::{
     prop::{
         PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyStr, PropertyUint32,
     },
+    pubsub::Subscription,
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
     text2::{self, Glyph, GlyphPositionIter, RenderedAtlas, SpritePtr, TextShaper, TextShaperPtr},
 };
@@ -30,10 +31,16 @@ use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify, Stoppab
 
 const CURSOR_WIDTH: f32 = 4.;
 
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
+enum PressedKey {
+    Char(char),
+    Key(KeyCode),
+}
+
 struct PressedKeysSmoothRepeat {
     /// When holding keys, we track from start and last sent time.
     /// This is useful for initial delay and smooth scrolling.
-    pressed_keys: HashMap<char, RepeatingKeyTimer>,
+    pressed_keys: HashMap<PressedKey, RepeatingKeyTimer>,
     /// Initial delay before allowing keys
     start_delay: u32,
     /// Minimum time between repeated keys
@@ -45,8 +52,9 @@ impl PressedKeysSmoothRepeat {
         Self { pressed_keys: HashMap::new(), start_delay, step_time }
     }
 
-    fn key_down(&mut self, key: char, repeat: bool) -> u32 {
-        debug!(target: "PressedKeysSmoothRepeat", "key_up({:?}, {})", key, repeat);
+    fn key_down(&mut self, key: PressedKey, repeat: bool) -> u32 {
+        //debug!(target: "PressedKeysSmoothRepeat", "key_down({:?}, {})", key, repeat);
+
         if !repeat {
             self.pressed_keys.remove(&key);
             return 1;
@@ -54,19 +62,22 @@ impl PressedKeysSmoothRepeat {
 
         // Insert key if not exists
         if !self.pressed_keys.contains_key(&key) {
-            debug!(target: "PressedKeysSmoothRepeat", "insert key {:?}", key);
-            self.pressed_keys.insert(key, RepeatingKeyTimer::new());
+            //debug!(target: "PressedKeysSmoothRepeat", "insert key {:?}", key);
+            self.pressed_keys.insert(key.clone(), RepeatingKeyTimer::new());
         }
 
         let repeater = self.pressed_keys.get_mut(&key).expect("repeat map");
         repeater.update(self.start_delay, self.step_time)
     }
 
-    fn key_up(&mut self, key: &char) {
-        debug!(target: "PressedKeysSmoothRepeat", "key_up({:?})", key);
+    /*
+    fn key_up(&mut self, key: &PressedKey) {
+        //debug!(target: "PressedKeysSmoothRepeat", "key_up({:?})", key);
+        println!("{:?}", self.pressed_keys.keys());
         assert!(self.pressed_keys.contains_key(key));
-        self.pressed_keys.remove(key);
+        self.pressed_keys.remove(key).expect("key was pressed");
     }
+    */
 }
 
 struct RepeatingKeyTimer {
@@ -81,8 +92,8 @@ impl RepeatingKeyTimer {
 
     fn update(&mut self, start_delay: u32, step_time: u32) -> u32 {
         let elapsed = self.start.elapsed().as_millis();
-        debug!(target: "RepeatingKeyTimer", "update() elapsed={}, actions={}",
-               elapsed, self.actions);
+        //debug!(target: "RepeatingKeyTimer", "update() elapsed={}, actions={}",
+        //       elapsed, self.actions);
         if elapsed < start_delay as u128 {
             return 0
         }
@@ -176,24 +187,15 @@ impl EditBox {
             let me2 = me.clone();
             let char_task = ex.spawn(async move {
                 loop {
-                    let Ok((key, mods, repeat)) = ev_sub.receive().await else {
-                        debug!(target: "ui::editbox", "Event relayer closed");
-                        break
-                    };
+                    Self::process_char(&me2, &ev_sub).await;
+                }
+            });
 
-                    let Some(self_) = me2.upgrade() else {
-                        // Should not happen
-                        panic!("self destroyed before char_task was stopped!");
-                    };
-
-                    let actions = {
-                        let mut repeater = self_.key_repeat.lock().unwrap();
-                        repeater.key_down(key, repeat)
-                    };
-                    debug!(target: "ui::editbox", "Key {:?} has {} actions", key, actions);
-                    for _ in 0..actions {
-                        self_.insert_char(key, &mods).await;
-                    }
+            let ev_sub = event_pub.subscribe_key_down();
+            let me2 = me.clone();
+            let key_down_task = ex.spawn(async move {
+                loop {
+                    Self::process_key_down(&me2, &ev_sub).await;
                 }
             });
 
@@ -212,6 +214,7 @@ impl EditBox {
                         panic!("self destroyed before key_up_task was stopped!");
                     };
 
+                    let key = PressedKey::Key(key);
                     let mut repeater = self_.key_repeat.lock().unwrap();
                     repeater.key_up(&key);
                 }
@@ -219,7 +222,7 @@ impl EditBox {
             */
 
             // on modify tasks too
-            let tasks = vec![char_task];
+            let tasks = vec![char_task, key_down_task];
 
             Self {
                 node_id,
@@ -288,31 +291,65 @@ impl EditBox {
     async fn do_key_action(&self, key: char, mods: &KeyMods) {
         match key {
             //KeyCode::Left => {}
-            _ => self.insert_char(key, mods).await,
+            _ => self.insert_char(key).await,
         }
     }
 
-    async fn insert_char(&self, key: char, mods: &KeyMods) {
+    async fn process_char(me: &Weak<Self>, ev_sub: &Subscription<(char, KeyMods, bool)>) {
+        let Ok((key, mods, repeat)) = ev_sub.receive().await else {
+            debug!(target: "ui::editbox", "Event relayer closed");
+            return
+        };
+
         // First filter for only single digit keys
-        let allowed_keys = [
-            'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q',
-            'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', ' ', ':', ';', '\'', '-', '.', '/', '=',
-            '(', '\\', ')', '`', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-        ];
-        //if !allowed_keys.contains(&key) && !allowed_keys.contains(&key.to_uppercase().next().unwrap()) {
-        //    return
-        //}
+        let disallowed_keys = ['\r', '\u{8}', '\u{7f}', '\t'];
+        if disallowed_keys.contains(&key) {
+            return
+        }
 
-        // If we want to only allow specific chars in a String here
-        //let ch = key.chars().next().unwrap();
-        // if !self.allowed_chars.chars().any(|c| c == ch) { return }
+        let Some(self_) = me.upgrade() else {
+            // Should not happen
+            panic!("self destroyed before char_task was stopped!");
+        };
 
-        //let key = if mods.shift { key.to_string() } else { key.to_lowercase() };
-
-        self.insert_text(key).await;
+        let actions = {
+            let mut repeater = self_.key_repeat.lock().unwrap();
+            repeater.key_down(PressedKey::Char(key), repeat)
+        };
+        debug!(target: "ui::editbox", "Key {:?} has {} actions", key, actions);
+        for _ in 0..actions {
+            self_.insert_char(key).await;
+        }
     }
 
-    async fn insert_text(&self, key: char) {
+    async fn process_key_down(me: &Weak<Self>, ev_sub: &Subscription<(KeyCode, KeyMods, bool)>) {
+        let Ok((key, mods, repeat)) = ev_sub.receive().await else {
+            debug!(target: "ui::editbox", "Event relayer closed");
+            return
+        };
+
+        // First filter for only single digit keys
+        // Avoid processing events handled by insert_char()
+        if !ALLOWED_KEYCODES.contains(&key) {
+            return
+        }
+
+        let Some(self_) = me.upgrade() else {
+            // Should not happen
+            panic!("self destroyed before char_task was stopped!");
+        };
+
+        let actions = {
+            let mut repeater = self_.key_repeat.lock().unwrap();
+            repeater.key_down(PressedKey::Key(key), repeat)
+        };
+        debug!(target: "ui::editbox", "Key {:?} has {} actions", key, actions);
+        for _ in 0..actions {
+            self_.handle_key(&key, &mods).await;
+        }
+    }
+
+    async fn insert_char(&self, key: char) {
         let mut text = String::new();
 
         let cursor_pos = self.cursor_pos.get();
@@ -343,6 +380,10 @@ impl EditBox {
         self.cursor_pos.set(cursor_pos + 1);
 
         self.redraw().await;
+    }
+
+    async fn handle_key(&self, key: &KeyCode, mods: &KeyMods) {
+        debug!(target: "ui::editbox", "handle_key({:?}, {:?})", key, mods);
     }
 
     async fn redraw(&self) {
@@ -426,73 +467,6 @@ impl EditBox {
     }
 }
 
-fn keycode_to_string(key: &KeyCode) -> Option<String> {
-    match key {
-        KeyCode::Space => Some(" ".to_string()),
-        KeyCode::Apostrophe => Some("'".to_string()),
-        KeyCode::Comma => Some(",".to_string()),
-        KeyCode::Minus => Some("-".to_string()),
-        KeyCode::Period => Some(".".to_string()),
-        KeyCode::Slash => Some("/".to_string()),
-        KeyCode::Key0 => Some("0".to_string()),
-        KeyCode::Key1 => Some("1".to_string()),
-        KeyCode::Key2 => Some("2".to_string()),
-        KeyCode::Key3 => Some("3".to_string()),
-        KeyCode::Key4 => Some("4".to_string()),
-        KeyCode::Key5 => Some("5".to_string()),
-        KeyCode::Key6 => Some("6".to_string()),
-        KeyCode::Key7 => Some("7".to_string()),
-        KeyCode::Key8 => Some("8".to_string()),
-        KeyCode::Key9 => Some("9".to_string()),
-        KeyCode::Semicolon => Some(";".to_string()),
-        KeyCode::Equal => Some("=".to_string()),
-        KeyCode::A => Some("A".to_string()),
-        KeyCode::B => Some("B".to_string()),
-        KeyCode::C => Some("C".to_string()),
-        KeyCode::D => Some("D".to_string()),
-        KeyCode::E => Some("E".to_string()),
-        KeyCode::F => Some("F".to_string()),
-        KeyCode::G => Some("G".to_string()),
-        KeyCode::H => Some("H".to_string()),
-        KeyCode::I => Some("I".to_string()),
-        KeyCode::J => Some("J".to_string()),
-        KeyCode::K => Some("K".to_string()),
-        KeyCode::L => Some("L".to_string()),
-        KeyCode::M => Some("M".to_string()),
-        KeyCode::N => Some("N".to_string()),
-        KeyCode::O => Some("O".to_string()),
-        KeyCode::P => Some("P".to_string()),
-        KeyCode::Q => Some("Q".to_string()),
-        KeyCode::R => Some("R".to_string()),
-        KeyCode::S => Some("S".to_string()),
-        KeyCode::T => Some("T".to_string()),
-        KeyCode::U => Some("U".to_string()),
-        KeyCode::V => Some("V".to_string()),
-        KeyCode::W => Some("W".to_string()),
-        KeyCode::X => Some("X".to_string()),
-        KeyCode::Y => Some("Y".to_string()),
-        KeyCode::Z => Some("Z".to_string()),
-        KeyCode::LeftBracket => Some("(".to_string()),
-        KeyCode::Backslash => Some("\\".to_string()),
-        KeyCode::RightBracket => Some(")".to_string()),
-        KeyCode::Kp0 => Some("0".to_string()),
-        KeyCode::Kp1 => Some("1".to_string()),
-        KeyCode::Kp2 => Some("2".to_string()),
-        KeyCode::Kp3 => Some("3".to_string()),
-        KeyCode::Kp4 => Some("4".to_string()),
-        KeyCode::Kp5 => Some("5".to_string()),
-        KeyCode::Kp6 => Some("6".to_string()),
-        KeyCode::Kp7 => Some("7".to_string()),
-        KeyCode::Kp8 => Some("8".to_string()),
-        KeyCode::Kp9 => Some("9".to_string()),
-        KeyCode::KpDecimal => Some(".".to_string()),
-        KeyCode::KpDivide => Some("/".to_string()),
-        KeyCode::KpMultiply => Some("*".to_string()),
-        KeyCode::KpSubtract => Some("-".to_string()),
-        _ => None,
-    }
-}
-
 impl Stoppable for EditBox {
     async fn stop(&self) {
         // TODO: Delete own draw call
@@ -503,3 +477,23 @@ impl Stoppable for EditBox {
         //self.render_api.delete_buffer(self.index_buffer);
     }
 }
+
+static ALLOWED_KEYCODES: &'static [KeyCode] = &[
+    KeyCode::Left,
+    KeyCode::Right,
+    KeyCode::Up,
+    KeyCode::Down,
+    KeyCode::Enter,
+    KeyCode::Kp0,
+    KeyCode::Kp1,
+    KeyCode::Kp2,
+    KeyCode::Kp3,
+    KeyCode::Kp4,
+    KeyCode::Kp5,
+    KeyCode::Kp6,
+    KeyCode::Kp7,
+    KeyCode::Kp8,
+    KeyCode::Kp9,
+    KeyCode::KpDecimal,
+    KeyCode::KpEnter,
+];
