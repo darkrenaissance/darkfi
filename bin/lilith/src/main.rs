@@ -211,11 +211,8 @@ impl Lilith {
 
                     // This node is active. Update the last seen field.
                     let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-                    hosts.container.update_last_seen(
-                        HostColor::White as usize,
-                        url.clone(),
-                        last_seen,
-                    );
+
+                    hosts.whitelist_host(url, last_seen)?;
                 }
                 None => {
                     debug!(target: "net::refinery::whitelist_refinery",

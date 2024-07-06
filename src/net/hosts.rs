@@ -1226,6 +1226,16 @@ impl Hosts {
         Ok(())
     }
 
+    pub fn whitelist_host(&self, addr: &Url, last_seen: u64) -> Result<()> {
+        debug!(target: "net::hosts:whitelist_host()", "Upgrading addr={}", addr);
+        self.move_host(addr, last_seen, HostColor::White)?;
+
+        // Free up this addr for future operations.
+        self.unregister(addr);
+
+        Ok(())
+    }
+
     /// A single atomic function for moving hosts between hostlists. Called on the following occasions:
     ///
     /// * When we cannot connect to a peer: move to grey, remove from white and gold.

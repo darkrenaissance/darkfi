@@ -267,6 +267,7 @@ impl GreylistRefinery {
             {
                 Some((entry, _)) => {
                     let url = &entry.0;
+                    let last_seen = &entry.1;
 
                     if let Err(e) = hosts.try_register(url.clone(), HostState::Refine) {
                         debug!(target: "net::refinery", "Unable to refine addr={}, err={}",
@@ -275,17 +276,12 @@ impl GreylistRefinery {
                     }
 
                     if !self.session().handshake_node(url.clone(), p2p.clone()).await {
-                        hosts.container.remove_if_exists(HostColor::Grey, url);
-
                         debug!(
                             target: "net::refinery",
                             "Peer {} handshake failed. Removed from greylist", url,
                         );
 
-                        // Remove this entry from HostRegistry to avoid this host getting
-                        // stuck in the Refining state. This is a safe since the hostlist
-                        // modification is now complete.
-                        hosts.unregister(url);
+                        hosts.greylist_host(url, *last_seen).unwrap();
 
                         continue
                     }
@@ -295,9 +291,7 @@ impl GreylistRefinery {
                     );
                     let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
 
-                    // Add to the whitelist and remove from the greylist.
-                    hosts.move_host(url, last_seen, HostColor::White).unwrap();
-                    hosts.unregister(url);
+                    hosts.whitelist_host(url, last_seen).unwrap();
 
                     debug!(target: "net::refinery", "GreylistRefinery complete!");
 
