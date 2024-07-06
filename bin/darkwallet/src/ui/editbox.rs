@@ -18,6 +18,7 @@ use crate::{
     pubsub::Subscription,
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
     text2::{self, Glyph, GlyphPositionIter, RenderedAtlas, SpritePtr, TextShaper, TextShaperPtr},
+    util::zip3,
 };
 
 use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify, Stoppable};
@@ -262,8 +263,8 @@ impl EditBox {
 
         let mut mesh = MeshBuilder::with_clip(clip.clone());
         let mut glyph_pos_iter = GlyphPositionIter::new(font_size, &glyphs, baseline);
-        for ((uv_rect, glyph_rect), glyph) in
-            atlas.uv_rects.into_iter().zip(glyph_pos_iter).zip(glyphs.iter())
+        for (glyph_idx, uv_rect, glyph_rect, glyph) in
+            zip3(atlas.uv_rects.into_iter(), glyph_pos_iter, glyphs.iter())
         {
             //mesh.draw_outline(&glyph_rect, COLOR_BLUE, 2.);
             let mut color = text_color.clone();

@@ -58,3 +58,39 @@ pub fn ansi_texture(width: usize, height: usize, data: &Vec<u8>) -> String {
 
     out
 }
+
+pub struct TupleIterStruct3<I1, I2, I3> {
+    idx: usize,
+    i1: I1,
+    i2: I2,
+    i3: I3,
+}
+
+impl<I1, I2, I3> Iterator for TupleIterStruct3<I1, I2, I3>
+where
+    I1: Iterator,
+    I2: Iterator,
+    I3: Iterator,
+{
+    type Item = (usize, I1::Item, I2::Item, I3::Item);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let Some(x1) = self.i1.next() else { return None };
+        let Some(x2) = self.i2.next() else { return None };
+        let Some(x3) = self.i3.next() else { return None };
+
+        let res = (self.idx, x1, x2, x3);
+        self.idx += 1;
+
+        Some(res)
+    }
+}
+
+pub fn zip3<X1, X2, X3, I1, I2, I3>(i1: I1, i2: I2, i3: I3) -> TupleIterStruct3<I1, I2, I3>
+where
+    I1: Iterator<Item = X1>,
+    I2: Iterator<Item = X2>,
+    I3: Iterator<Item = X3>,
+{
+    TupleIterStruct3 { idx: 0, i1, i2, i3 }
+}

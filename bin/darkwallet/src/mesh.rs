@@ -61,16 +61,16 @@ impl MeshBuilder {
         assert!(obj.h >= clipped.h);
 
         let i = (clipped.x - obj.x) / obj.w;
-        let clip_u1 = u1 + i*(u2 - u1);
+        let clip_u1 = u1 + i * (u2 - u1);
 
         let i = (clipped.rhs() - obj.x) / obj.w;
-        let clip_u2 = u1 + i*(u2 - u1);
+        let clip_u2 = u1 + i * (u2 - u1);
 
         let i = (clipped.y - obj.y) / obj.h;
-        let clip_v1 = v1 + i*(v2 - v1);
+        let clip_v1 = v1 + i * (v2 - v1);
 
         let i = (clipped.bhs() - obj.y) / obj.h;
-        let clip_v2 = v1 + i*(v2 - v1);
+        let clip_v2 = v1 + i * (v2 - v1);
 
         let (u1, u2) = (clip_u1, clip_u2);
         let (v1, v2) = (clip_v1, clip_v2);
