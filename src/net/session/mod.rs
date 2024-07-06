@@ -26,7 +26,7 @@ use log::{debug, trace};
 use smol::Executor;
 
 use super::{channel::ChannelPtr, hosts::HostColor, p2p::P2pPtr, protocol::ProtocolVersion};
-use crate::{Error, Result};
+use crate::{system::Subscription, Error, Result};
 
 pub mod inbound_session;
 pub use inbound_session::{InboundSession, InboundSessionPtr};
@@ -54,13 +54,15 @@ pub type SessionWeakPtr = Weak<dyn Session + Send + Sync + 'static>;
 
 /// Removes channel from the list of connected channels when a stop signal
 /// is received.
-pub async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr, type_id: SessionBitFlag) {
+pub async fn remove_sub_on_stop(
+    p2p: P2pPtr,
+    channel: ChannelPtr,
+    type_id: SessionBitFlag,
+    stop_sub: Result<Subscription<Error>>,
+) {
     debug!(target: "net::session::remove_sub_on_stop()", "[START]");
     let hosts = p2p.hosts();
     let addr = channel.address();
-
-    // Subscribe to stop events
-    let stop_sub = channel.clone().subscribe_stop().await;
 
     if let Ok(stop_sub) = stop_sub {
         // Wait for a stop event
@@ -172,6 +174,9 @@ pub trait Session: Sync {
         channel: ChannelPtr,
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
+        // Subscribe to stop events
+        let stop_sub = channel.clone().subscribe_stop().await;
+
         // Perform handshake
         match protocol_version.run(executor.clone()).await {
             Ok(()) => {
@@ -193,7 +198,9 @@ pub trait Session: Sync {
                 self.p2p().hosts().register_channel(channel.clone()).await;
 
                 // Subscribe to stop, so we can remove from registry
-                executor.spawn(remove_sub_on_stop(self.p2p(), channel, self.type_id())).detach();
+                executor
+                    .spawn(remove_sub_on_stop(self.p2p(), channel, self.type_id(), stop_sub))
+                    .detach();
 
                 // Channel is ready for use
                 Ok(())
