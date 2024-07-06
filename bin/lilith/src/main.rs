@@ -197,7 +197,7 @@ impl Lilith {
                         continue
                     }
 
-                    if p2p.session_refine().handshake_node(url.clone(), p2p.clone()).await {
+                    if !p2p.session_refine().handshake_node(url.clone(), p2p.clone()).await {
                         debug!(target: "net::refinery:::whitelist_refinery",
                        "Host {} is not responsive. Downgrading from whitelist", url);
 
