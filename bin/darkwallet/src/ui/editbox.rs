@@ -533,9 +533,96 @@ impl EditBox {
             KeyCode::Kp9 => self.insert_char('9').await,
             KeyCode::KpDecimal => self.insert_char('.').await,
             KeyCode::Enter | KeyCode::KpEnter => self.send_event().await,
-            //KeyCode::Backspace,
+            KeyCode::Delete => {
+                if !self.selected.is_null(0).unwrap() {
+                    self.delete_highlighted();
+                } else {
+                    let glyphs = self.glyphs.lock().unwrap().clone();
+
+                    let cursor_pos = self.cursor_pos.get();
+                    if cursor_pos == glyphs.len() as u32 {
+                        return;
+                    }
+
+                    // Regen text
+                    let mut text = String::new();
+                    for (i, glyph) in glyphs.iter().enumerate() {
+                        let mut substr = glyph.substr.clone();
+                        if cursor_pos as usize == i {
+                            // Lmk if anyone knows a better way to do substr.pop_front()
+                            let mut chars = substr.chars();
+                            chars.next();
+                            substr = chars.as_str().to_string();
+                        }
+                        text.push_str(&substr);
+                    }
+                    self.text.set(text);
+                };
+
+                self.apply_cursor_scrolling();
+                self.redraw().await;
+            }
+            KeyCode::Backspace => {
+                if !self.selected.is_null(0).unwrap() {
+                    self.delete_highlighted();
+                } else {
+                    let glyphs = self.glyphs.lock().unwrap().clone();
+
+                    let cursor_pos = self.cursor_pos.get();
+                    if cursor_pos == 0 {
+                        return;
+                    }
+
+                    let mut text = String::new();
+                    for (i, glyph) in glyphs.iter().enumerate() {
+                        let mut substr = glyph.substr.clone();
+                        if cursor_pos as usize - 1 == i {
+                            substr.pop().unwrap();
+                        }
+                        text.push_str(&substr);
+                    }
+                    self.text.set(text);
+                    self.cursor_pos.set(cursor_pos - 1);
+                };
+
+                self.apply_cursor_scrolling();
+                self.redraw().await;
+            }
             _ => {}
         }
+    }
+
+    fn delete_highlighted(&self) {
+        assert!(!self.selected.is_null(0).unwrap());
+        assert!(!self.selected.is_null(1).unwrap());
+
+        let start = self.selected.get_u32(0).unwrap() as usize;
+        let end = self.selected.get_u32(1).unwrap() as usize;
+
+        let sel_start = std::cmp::min(start, end);
+        let sel_end = std::cmp::max(start, end);
+
+        let mut text = String::new();
+        let glyphs = self.glyphs.lock().unwrap().clone();
+
+        // Regen text
+        for (i, glyph) in glyphs.iter().enumerate() {
+            if sel_start <= i && i < sel_end {
+                continue
+            }
+            text.push_str(&glyph.substr);
+        }
+
+        debug!(
+            target: "ui::editbox",
+            "delete_highlighted() text=\"{}\", cursor_pos={}",
+            text, sel_start
+        );
+        self.text.set(text);
+
+        self.selected.set_null(0).unwrap();
+        self.selected.set_null(1).unwrap();
+        self.cursor_pos.set(sel_start as u32);
     }
 
     /// Beware of this method. Here be dragons.
@@ -547,6 +634,8 @@ impl EditBox {
         rect
     }
 
+    /// Whenever the cursor property is modified this MUST be called
+    /// to recalculate the scroll x property.
     fn apply_cursor_scrolling(&self) {
         // This may need updating but yolo rite
         let rect = self.cached_rect();
@@ -709,5 +798,6 @@ static ALLOWED_KEYCODES: &'static [KeyCode] = &[
     KeyCode::Kp9,
     KeyCode::KpDecimal,
     KeyCode::KpEnter,
+    KeyCode::Delete,
     KeyCode::Backspace,
 ];
