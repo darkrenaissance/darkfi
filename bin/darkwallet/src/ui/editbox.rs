@@ -7,6 +7,7 @@ use std::{
 };
 
 use crate::{
+    error::Result,
     gfx2::{
         DrawCall, DrawInstruction, DrawMesh, GraphicsEventPublisherPtr, Rectangle, RenderApi,
         RenderApiPtr, Vertex,
@@ -265,6 +266,8 @@ impl EditBox {
         let atlas = text2::make_texture_atlas(&self.render_api, font_size, &glyphs).await.unwrap();
 
         let mut mesh = MeshBuilder::with_clip(clip.clone());
+        self.draw_selected(&mut mesh, &glyphs, clip.h).unwrap();
+
         let mut glyph_pos_iter = GlyphPositionIter::new(font_size, &glyphs, baseline);
         // Used for drawing the cursor when it's at the end of the line.
         let mut rhs = 0.;
@@ -306,6 +309,60 @@ impl EditBox {
         let mesh = mesh.alloc(&self.render_api).await.unwrap();
 
         TextRenderInfo { mesh, texture_id: atlas.texture_id }
+    }
+
+    fn draw_selected(&self, mesh: &mut MeshBuilder, glyphs: &Vec<Glyph>, clip_h: f32) -> Result<()> {
+        if self.selected.is_null(0)? || self.selected.is_null(1)? {
+            // Nothing selected so do nothing
+            return Ok(())
+        }
+        let start = self.selected.get_u32(0)? as usize;
+        let end = self.selected.get_u32(1)? as usize;
+
+        let sel_start = std::cmp::min(start, end);
+        let sel_end = std::cmp::max(start, end);
+
+        let font_size = self.font_size.get();
+        let baseline = self.baseline.get();
+        let scroll = self.scroll.get();
+        let hi_bg_color = self.hi_bg_color.get();
+        let mut glyph_pos_iter = GlyphPositionIter::new(font_size, &glyphs, baseline);
+
+        let mut start_x = 0.;
+        let mut end_x = 0.;
+        // When cursor lands at the end of the line
+        let mut rhs = 0.;
+
+        for (glyph_idx, mut glyph_rect) in glyph_pos_iter.enumerate() {
+            glyph_rect.x += scroll;
+
+            if glyph_idx == sel_start {
+                start_x = glyph_rect.x;
+            }
+            if glyph_idx == sel_end {
+                end_x = glyph_rect.x;
+            }
+
+            rhs = glyph_rect.rhs();
+        }
+
+        if sel_start == 0 {
+            start_x = scroll;
+        }
+
+        if sel_end == glyphs.len() {
+            end_x = rhs;
+        }
+
+        // We don't need to do manual clipping since MeshBuilder should do that
+        let select_rect = Rectangle {
+            x: start_x,
+            y: 0.,
+            w: end_x - start_x,
+            h: clip_h
+        };
+        mesh.draw_box(&select_rect, hi_bg_color, &Rectangle::zero());
+        Ok(())
     }
 
     async fn do_key_action(&self, key: char, mods: &KeyMods) {
@@ -412,7 +469,6 @@ impl EditBox {
                 let mut cursor_pos = self.cursor_pos.get();
 
                 // Start selection if shift is held
-                /*
                 if !mods.shift {
                     self.selected.set_null(0).unwrap();
                     self.selected.set_null(1).unwrap();
@@ -420,7 +476,6 @@ impl EditBox {
                     assert!(self.selected.is_null(1).unwrap());
                     self.selected.set_u32(0, cursor_pos).unwrap();
                 }
-                */
 
                 if cursor_pos > 0 {
                     cursor_pos -= 1;
@@ -429,11 +484,9 @@ impl EditBox {
                 }
 
                 // Update selection
-                /*
                 if mods.shift {
                     self.selected.set_u32(1, cursor_pos).unwrap();
                 }
-                */
 
                 self.apply_cursor_scrolling();
                 self.redraw().await;
@@ -442,7 +495,6 @@ impl EditBox {
                 let mut cursor_pos = self.cursor_pos.get();
 
                 // Start selection if shift is held
-                /*
                 if !mods.shift {
                     self.selected.set_null(0).unwrap();
                     self.selected.set_null(1).unwrap();
@@ -450,7 +502,6 @@ impl EditBox {
                     assert!(self.selected.is_null(1).unwrap());
                     self.selected.set_u32(0, cursor_pos).unwrap();
                 }
-                */
 
                 let glyphs_len = self.glyphs.lock().unwrap().len() as u32;
                 if cursor_pos < glyphs_len {
@@ -460,11 +511,9 @@ impl EditBox {
                 }
 
                 // Update selection
-                /*
                 if mods.shift {
                     self.selected.set_u32(1, cursor_pos).unwrap();
                 }
-                */
 
                 self.apply_cursor_scrolling();
                 self.redraw().await;
