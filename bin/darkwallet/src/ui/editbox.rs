@@ -103,7 +103,6 @@ impl RepeatingKeyTimer {
 
 #[derive(Clone)]
 struct TextRenderInfo {
-    glyphs: Vec<Glyph>,
     mesh: MeshInfo,
     texture_id: TextureId,
 }
@@ -120,7 +119,8 @@ pub struct EditBox {
     text_shaper: TextShaperPtr,
     key_repeat: SyncMutex<PressedKeysSmoothRepeat>,
 
-    render_info: SyncMutex<TextRenderInfo>,
+    render_info: SyncMutex<Option<TextRenderInfo>>,
+    glyphs: SyncMutex<Vec<Glyph>>,
     dc_key: u64,
 
     is_active: PropertyBool,
@@ -164,19 +164,10 @@ impl EditBox {
         let debug = PropertyBool::wrap(node, "debug", 0).unwrap();
         drop(scene_graph);
 
-        let render_info = Self::regen_mesh(
-            &render_api,
-            &text_shaper,
-            text.get(),
-            font_size.get(),
-            text_color.get(),
-            baseline.get(),
-            debug.get(),
-        )
-        .await;
-
         // testing
         window::show_keyboard(true);
+
+        let glyphs = text_shaper.shape(text.get(), font_size.get()).await;
 
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
             // Start a task monitoring for key down events
@@ -230,7 +221,8 @@ impl EditBox {
                 text_shaper,
                 key_repeat: SyncMutex::new(PressedKeysSmoothRepeat::new(400, 50)),
 
-                render_info: SyncMutex::new(render_info),
+                render_info: SyncMutex::new(None),
+                glyphs: SyncMutex::new(glyphs),
                 dc_key: OsRng.gen(),
 
                 is_active,
@@ -254,18 +246,16 @@ impl EditBox {
 
     /// Called whenever the text or any text property changes.
     /// Not related to cursor, text highlighting or bounding (clip) rects.
-    async fn regen_mesh(
-        render_api: &RenderApi,
-        text_shaper: &TextShaper,
-        text: String,
-        font_size: f32,
-        text_color: Color,
-        baseline: f32,
-        debug: bool,
-    ) -> TextRenderInfo {
+    async fn regen_mesh(&self, clip: &Rectangle) -> TextRenderInfo {
+        let text = self.text.get();
+        let font_size = self.font_size.get();
+        let text_color = self.text_color.get();
+        let baseline = self.baseline.get();
+        let debug = self.debug.get();
         debug!(target: "ui::editbox", "Rendering text '{}'", text);
-        let glyphs = text_shaper.shape(text, font_size).await;
-        let atlas = text2::make_texture_atlas(render_api, font_size, &glyphs).await.unwrap();
+
+        let glyphs = self.glyphs.lock().unwrap().clone();
+        let atlas = text2::make_texture_atlas(&self.render_api, font_size, &glyphs).await.unwrap();
 
         let mut mesh = MeshBuilder::new();
         let mut glyph_pos_iter = GlyphPositionIter::new(font_size, &glyphs, baseline);
@@ -280,9 +270,9 @@ impl EditBox {
             mesh.draw_box(&glyph_rect, color, &uv_rect);
         }
 
-        let mesh = mesh.alloc(&render_api).await.unwrap();
+        let mesh = mesh.alloc(&self.render_api).await.unwrap();
 
-        TextRenderInfo { glyphs, mesh, texture_id: atlas.texture_id }
+        TextRenderInfo { mesh, texture_id: atlas.texture_id }
     }
 
     async fn do_key_action(&self, key: char, mods: &KeyMods) {
@@ -351,7 +341,7 @@ impl EditBox {
 
         let cursor_pos = self.cursor_pos.get();
 
-        let glyphs = self.render_info.lock().unwrap().glyphs.clone();
+        let glyphs = self.glyphs.lock().unwrap().clone();
 
         // We rebuild the string but insert our substr at cursor_pos.
         // The substr is inserted before cursor_pos, and appending to the end
@@ -407,17 +397,11 @@ impl EditBox {
     async fn redraw(&self) {
         let old = self.render_info.lock().unwrap().clone();
 
-        let render_info = Self::regen_mesh(
-            &self.render_api,
-            &self.text_shaper,
-            self.text.get(),
-            self.font_size.get(),
-            self.text_color.get(),
-            self.baseline.get(),
-            self.debug.get(),
-        )
-        .await;
-        *self.render_info.lock().unwrap() = render_info;
+        let glyphs = self.text_shaper.shape(self.text.get(), self.font_size.get()).await;
+        *self.glyphs.lock().unwrap() = glyphs;
+
+        // draw will recalc this when it's None
+        *self.render_info.lock().unwrap() = None;
 
         let sg = self.sg.lock().await;
         let node = sg.get_node(self.node_id).unwrap();
@@ -434,9 +418,11 @@ impl EditBox {
         debug!(target: "ui::editbox", "replace draw calls done");
 
         // We're finished with these so clean up.
-        self.render_api.delete_buffer(old.mesh.vertex_buffer);
-        self.render_api.delete_buffer(old.mesh.index_buffer);
-        self.render_api.delete_texture(old.texture_id);
+        if let Some(old) = old {
+            self.render_api.delete_buffer(old.mesh.vertex_buffer);
+            self.render_api.delete_buffer(old.mesh.index_buffer);
+            self.render_api.delete_texture(old.texture_id);
+        }
     }
 
     pub async fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
@@ -444,21 +430,29 @@ impl EditBox {
         // Only used for debug messages
         let node = sg.get_node(self.node_id).unwrap();
 
-        let render_info = self.render_info.lock().unwrap().clone();
-
-        let mesh = DrawMesh {
-            vertex_buffer: render_info.mesh.vertex_buffer,
-            index_buffer: render_info.mesh.index_buffer,
-            texture: Some(render_info.texture_id),
-            num_elements: render_info.mesh.num_elements,
-        };
-
         if let Err(err) = eval_rect(self.rect.clone(), parent_rect) {
             panic!("Node {:?} bad rect property: {}", node, err);
         }
 
         let Ok(mut rect) = read_rect(self.rect.clone()) else {
             panic!("Node {:?} bad rect property", node);
+        };
+
+        let render_info = self.render_info.lock().unwrap().clone();
+        let render_info = match render_info {
+            Some(render_info) => render_info,
+            None => {
+                let render_info = self.regen_mesh(&rect).await;
+                *self.render_info.lock().unwrap() = Some(render_info.clone());
+                render_info
+            }
+        };
+
+        let mesh = DrawMesh {
+            vertex_buffer: render_info.mesh.vertex_buffer,
+            index_buffer: render_info.mesh.index_buffer,
+            texture: Some(render_info.texture_id),
+            num_elements: render_info.mesh.num_elements,
         };
 
         rect.x += parent_rect.x;

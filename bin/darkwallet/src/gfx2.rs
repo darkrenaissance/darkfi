@@ -31,6 +31,15 @@ pub struct Vertex {
     pub uv: [f32; 2],
 }
 
+impl Vertex {
+    pub fn pos(&self) -> Point {
+        self.pos.into()
+    }
+    pub fn set_pos(&mut self, pos: &Point) {
+        self.pos = pos.as_arr();
+    }
+}
+
 pub struct Point {
     pub x: f32,
     pub y: f32,
@@ -41,12 +50,22 @@ impl Point {
         (self.x, self.y)
     }
 
+    pub fn as_arr(&self) -> [f32; 2] {
+        [self.x, self.y]
+    }
+
     pub fn offset(&self, off_x: f32, off_y: f32) -> Self {
         Self { x: self.x + off_x, y: self.y + off_y }
     }
 
     pub fn to_rect(&self, w: f32, h: f32) -> Rectangle {
         Rectangle { x: self.x, y: self.y, w, h }
+    }
+}
+
+impl From<[f32; 2]> for Point {
+    fn from(pos: [f32; 2]) -> Self {
+        Self { x: pos[0], y: pos[1] }
     }
 }
 
@@ -96,6 +115,21 @@ impl Rectangle {
             clipped.h = self.y + self.h - clipped.y;
         }
         Some(clipped)
+    }
+
+    pub fn clip_point(&self, point: &mut Point) {
+        if point.x < self.x {
+            point.x = self.x;
+        }
+        if point.y < self.y {
+            point.y = self.y;
+        }
+        if point.x > self.x + self.w {
+            point.x = self.x + self.w;
+        }
+        if point.y > self.y + self.h {
+            point.y = self.y + self.h;
+        }
     }
 
     pub fn contains(&self, point: &Point) -> bool {

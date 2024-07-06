@@ -22,14 +22,26 @@ pub struct MeshInfo {
 pub struct MeshBuilder {
     verts: Vec<Vertex>,
     indices: Vec<u16>,
+    clipper: Option<Rectangle>,
 }
 
 impl MeshBuilder {
     pub fn new() -> Self {
-        Self { verts: vec![], indices: vec![] }
+        Self { verts: vec![], indices: vec![], clipper: None }
+    }
+    pub fn with_clip(clipper: Rectangle) -> Self {
+        Self { verts: vec![], indices: vec![], clipper: Some(clipper) }
     }
 
     pub fn append(&mut self, mut verts: Vec<Vertex>, indices: Vec<u16>) {
+        if let Some(clipper) = &self.clipper {
+            for vert in &mut verts {
+                let mut vpos = vert.pos();
+                clipper.clip_point(&mut vpos);
+                vert.set_pos(&vpos);
+            }
+        }
+
         let mut indices = indices.into_iter().map(|i| i + self.verts.len() as u16).collect();
         self.verts.append(&mut verts);
         self.indices.append(&mut indices);
