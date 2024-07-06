@@ -255,6 +255,9 @@ impl EditBox {
         let font_size = self.font_size.get();
         let text_color = self.text_color.get();
         let baseline = self.baseline.get();
+        let scroll = self.scroll.get();
+        let cursor_pos = self.cursor_pos.get() as usize;
+        let cursor_color = self.cursor_color.get();
         let debug = self.debug.get();
         debug!(target: "ui::editbox", "Rendering text '{}' clip={:?}", text, clip);
 
@@ -263,15 +266,37 @@ impl EditBox {
 
         let mut mesh = MeshBuilder::with_clip(clip.clone());
         let mut glyph_pos_iter = GlyphPositionIter::new(font_size, &glyphs, baseline);
-        for (glyph_idx, uv_rect, glyph_rect, glyph) in
+        // Used for drawing the cursor when it's at the end of the line.
+        let mut rhs = 0.;
+
+        for (glyph_idx, uv_rect, mut glyph_rect, glyph) in
             zip3(atlas.uv_rects.into_iter(), glyph_pos_iter, glyphs.iter())
         {
+            glyph_rect.x += scroll;
+
             //mesh.draw_outline(&glyph_rect, COLOR_BLUE, 2.);
             let mut color = text_color.clone();
             if glyph.sprite.has_color {
                 color = COLOR_WHITE;
             }
             mesh.draw_box(&glyph_rect, color, &uv_rect);
+
+            if cursor_pos != 0 && cursor_pos == glyph_idx {
+                let cursor_rect =
+                    Rectangle { x: glyph_rect.x - CURSOR_WIDTH, y: 0., w: CURSOR_WIDTH, h: clip.h };
+                mesh.draw_box(&cursor_rect, cursor_color, &Rectangle::zero());
+            }
+
+            rhs = glyph_rect.rhs();
+        }
+
+        if cursor_pos == 0 {
+            let cursor_rect = Rectangle { x: 0., y: 0., w: CURSOR_WIDTH, h: clip.h };
+            mesh.draw_box(&cursor_rect, cursor_color, &Rectangle::zero());
+        } else if cursor_pos == glyphs.len() {
+            let cursor_rect =
+                Rectangle { x: rhs - CURSOR_WIDTH, y: 0., w: CURSOR_WIDTH, h: clip.h };
+            mesh.draw_box(&cursor_rect, cursor_color, &Rectangle::zero());
         }
 
         if debug {
@@ -338,7 +363,10 @@ impl EditBox {
             let mut repeater = self_.key_repeat.lock().unwrap();
             repeater.key_down(PressedKey::Key(key), repeat)
         };
-        debug!(target: "ui::editbox", "Key {:?} has {} actions", key, actions);
+        // Suppress noisy message
+        if actions > 0 {
+            debug!(target: "ui::editbox", "Key {:?} has {} actions", key, actions);
+        }
         for _ in 0..actions {
             self_.handle_key(&key, &mods).await;
         }
@@ -380,8 +408,67 @@ impl EditBox {
     async fn handle_key(&self, key: &KeyCode, mods: &KeyMods) {
         debug!(target: "ui::editbox", "handle_key({:?}, {:?})", key, mods);
         match key {
-            //KeyCode::Left,
-            //KeyCode::Right,
+            KeyCode::Left => {
+                let mut cursor_pos = self.cursor_pos.get();
+
+                // Start selection if shift is held
+                /*
+                if !mods.shift {
+                    self.selected.set_null(0).unwrap();
+                    self.selected.set_null(1).unwrap();
+                } else if self.selected.is_null(0).unwrap() {
+                    assert!(self.selected.is_null(1).unwrap());
+                    self.selected.set_u32(0, cursor_pos).unwrap();
+                }
+                */
+
+                if cursor_pos > 0 {
+                    cursor_pos -= 1;
+                    debug!(target: "ui::editbox", "Left cursor_pos={}", cursor_pos);
+                    self.cursor_pos.set(cursor_pos);
+                }
+
+                // Update selection
+                /*
+                if mods.shift {
+                    self.selected.set_u32(1, cursor_pos).unwrap();
+                }
+                */
+
+                self.apply_cursor_scrolling();
+                self.redraw().await;
+            }
+            KeyCode::Right => {
+                let mut cursor_pos = self.cursor_pos.get();
+
+                // Start selection if shift is held
+                /*
+                if !mods.shift {
+                    self.selected.set_null(0).unwrap();
+                    self.selected.set_null(1).unwrap();
+                } else if self.selected.is_null(0).unwrap() {
+                    assert!(self.selected.is_null(1).unwrap());
+                    self.selected.set_u32(0, cursor_pos).unwrap();
+                }
+                */
+
+                let glyphs_len = self.glyphs.lock().unwrap().len() as u32;
+                if cursor_pos < glyphs_len {
+                    cursor_pos += 1;
+                    debug!(target: "ui::editbox", "Right cursor_pos={}", cursor_pos);
+                    self.cursor_pos.set(cursor_pos);
+                }
+
+                // Update selection
+                /*
+                if mods.shift {
+                    self.selected.set_u32(1, cursor_pos).unwrap();
+                }
+                */
+
+                self.apply_cursor_scrolling();
+                self.redraw().await;
+            }
             //KeyCode::Up,
             //KeyCode::Down,
             //KeyCode::Enter,
@@ -400,6 +487,53 @@ impl EditBox {
             //KeyCode::Backspace,
             _ => {}
         }
+    }
+
+    /// Beware of this method. Here be dragons.
+    /// Possibly racy so we limit it just to cursor scrolling.
+    fn cached_rect(&self) -> Rectangle {
+        let Ok(rect) = read_rect(self.rect.clone()) else {
+            panic!("Node bad rect property");
+        };
+        rect
+    }
+
+    fn apply_cursor_scrolling(&self) {
+        // This may need updating but yolo rite
+        let rect = self.cached_rect();
+
+        let cursor_pos = self.cursor_pos.get() as usize;
+        let mut scroll = self.scroll.get();
+
+        let cursor_x = {
+            let font_size = self.font_size.get();
+            let baseline = self.baseline.get();
+            let glyphs = &*self.glyphs.lock().unwrap();
+
+            let mut glyph_pos_iter = GlyphPositionIter::new(font_size, &glyphs, baseline);
+
+            if cursor_pos == 0 {
+                0.
+            } else if cursor_pos == glyphs.len() {
+                let glyph_pos = glyph_pos_iter.last().unwrap();
+                glyph_pos.rhs()
+            } else {
+                assert!(cursor_pos < glyphs.len());
+                let glyph_pos = glyph_pos_iter.nth(cursor_pos).expect("glyph pos mismatch glyphs");
+                glyph_pos.x
+            }
+        };
+
+        let cursor_lhs = cursor_x + scroll;
+        let cursor_rhs = cursor_lhs + CURSOR_WIDTH;
+
+        if cursor_rhs > rect.w {
+            scroll = rect.w - cursor_x;
+        } else if cursor_lhs < 0. {
+            scroll = -cursor_x + CURSOR_WIDTH;
+        }
+
+        self.scroll.set(scroll);
     }
 
     async fn redraw(&self) {
