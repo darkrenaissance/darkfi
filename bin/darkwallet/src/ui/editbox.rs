@@ -246,18 +246,21 @@ impl EditBox {
 
     /// Called whenever the text or any text property changes.
     /// Not related to cursor, text highlighting or bounding (clip) rects.
-    async fn regen_mesh(&self, clip: &Rectangle) -> TextRenderInfo {
+    async fn regen_mesh(&self, mut clip: Rectangle) -> TextRenderInfo {
+        clip.x = 0.;
+        clip.y = 0.;
+
         let text = self.text.get();
         let font_size = self.font_size.get();
         let text_color = self.text_color.get();
         let baseline = self.baseline.get();
         let debug = self.debug.get();
-        debug!(target: "ui::editbox", "Rendering text '{}'", text);
+        debug!(target: "ui::editbox", "Rendering text '{}' clip={:?}", text, clip);
 
         let glyphs = self.glyphs.lock().unwrap().clone();
         let atlas = text2::make_texture_atlas(&self.render_api, font_size, &glyphs).await.unwrap();
 
-        let mut mesh = MeshBuilder::new();
+        let mut mesh = MeshBuilder::with_clip(clip.clone());
         let mut glyph_pos_iter = GlyphPositionIter::new(font_size, &glyphs, baseline);
         for ((uv_rect, glyph_rect), glyph) in
             atlas.uv_rects.into_iter().zip(glyph_pos_iter).zip(glyphs.iter())
@@ -268,6 +271,10 @@ impl EditBox {
                 color = COLOR_WHITE;
             }
             mesh.draw_box(&glyph_rect, color, &uv_rect);
+        }
+
+        if debug {
+            mesh.draw_outline(&clip, COLOR_BLUE, 1.);
         }
 
         let mesh = mesh.alloc(&self.render_api).await.unwrap();
@@ -438,11 +445,14 @@ impl EditBox {
             panic!("Node {:?} bad rect property", node);
         };
 
+        rect.x += parent_rect.x;
+        rect.y += parent_rect.y;
+
         let render_info = self.render_info.lock().unwrap().clone();
         let render_info = match render_info {
             Some(render_info) => render_info,
             None => {
-                let render_info = self.regen_mesh(&rect).await;
+                let render_info = self.regen_mesh(rect.clone()).await;
                 *self.render_info.lock().unwrap() = Some(render_info.clone());
                 render_info
             }
@@ -454,9 +464,6 @@ impl EditBox {
             texture: Some(render_info.texture_id),
             num_elements: render_info.mesh.num_elements,
         };
-
-        rect.x += parent_rect.x;
-        rect.y += parent_rect.x;
 
         let off_x = rect.x / parent_rect.w;
         let off_y = rect.y / parent_rect.h;

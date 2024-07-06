@@ -324,19 +324,22 @@ impl App {
         node.set_property_bool("is_active", true).unwrap();
         let prop = node.get_property("rect").unwrap();
         prop.set_f32(0, 150.).unwrap();
-        let code = vec![Op::Sub((
-            Box::new(Op::LoadVar("h".to_string())),
-            Box::new(Op::ConstFloat32(60.)),
-        ))];
-        prop.set_expr(1, code).unwrap();
-        let code = vec![Op::Sub((
-            Box::new(Op::LoadVar("w".to_string())),
-            Box::new(Op::ConstFloat32(120.)),
-        ))];
-        prop.set_expr(2, code).unwrap();
+        prop.set_f32(1, 150.).unwrap();
+        prop.set_f32(2, 380.).unwrap();
+        //let code = vec![Op::Sub((
+        //    Box::new(Op::LoadVar("h".to_string())),
+        //    Box::new(Op::ConstFloat32(60.)),
+        //))];
+        //prop.set_expr(1, code).unwrap();
+        //let code = vec![Op::Sub((
+        //    Box::new(Op::LoadVar("w".to_string())),
+        //    Box::new(Op::ConstFloat32(120.)),
+        //))];
+        //prop.set_expr(2, code).unwrap();
         prop.set_f32(3, 60.).unwrap();
         node.set_property_f32("baseline", 40.).unwrap();
         node.set_property_f32("font_size", 20.).unwrap();
+        node.set_property_f32("font_size", 40.).unwrap();
         node.set_property_str("text", "hello king!😁🍆jelly 🍆1234").unwrap();
         let prop = node.get_property("text_color").unwrap();
         prop.set_f32(0, 1.).unwrap();
@@ -357,6 +360,7 @@ impl App {
         prop.set_null(0).unwrap();
         prop.set_null(1).unwrap();
         node.set_property_u32("z_index", 1).unwrap();
+        node.set_property_bool("debug", true).unwrap();
 
         drop(sg);
         let pimpl = EditBox::new(

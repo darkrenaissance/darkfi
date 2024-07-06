@@ -139,6 +139,13 @@ impl Rectangle {
             point.y <= self.y + self.h
     }
 
+    pub fn rhs(&self) -> f32 {
+        self.x + self.w
+    }
+    pub fn bhs(&self) -> f32 {
+        self.y + self.h
+    }
+
     pub fn top_left(&self) -> Point {
         Point { x: self.x, y: self.y }
     }
