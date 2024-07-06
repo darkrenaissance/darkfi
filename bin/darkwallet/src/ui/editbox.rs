@@ -311,7 +311,12 @@ impl EditBox {
         TextRenderInfo { mesh, texture_id: atlas.texture_id }
     }
 
-    fn draw_selected(&self, mesh: &mut MeshBuilder, glyphs: &Vec<Glyph>, clip_h: f32) -> Result<()> {
+    fn draw_selected(
+        &self,
+        mesh: &mut MeshBuilder,
+        glyphs: &Vec<Glyph>,
+        clip_h: f32,
+    ) -> Result<()> {
         if self.selected.is_null(0)? || self.selected.is_null(1)? {
             // Nothing selected so do nothing
             return Ok(())
@@ -355,12 +360,7 @@ impl EditBox {
         }
 
         // We don't need to do manual clipping since MeshBuilder should do that
-        let select_rect = Rectangle {
-            x: start_x,
-            y: 0.,
-            w: end_x - start_x,
-            h: clip_h
-        };
+        let select_rect = Rectangle { x: start_x, y: 0., w: end_x - start_x, h: clip_h };
         mesh.draw_box(&select_rect, hi_bg_color, &Rectangle::zero());
         Ok(())
     }
@@ -379,8 +379,7 @@ impl EditBox {
         };
 
         // First filter for only single digit keys
-        let disallowed_keys = ['\r', '\u{8}', '\u{7f}', '\t', '\n'];
-        if disallowed_keys.contains(&key) {
+        if DISALLOWED_CHARS.contains(&key) {
             return
         }
 
@@ -388,6 +387,14 @@ impl EditBox {
             // Should not happen
             panic!("self destroyed before char_task was stopped!");
         };
+
+        if mods.ctrl || mods.alt {
+            if repeat {
+                return
+            }
+            self_.handle_shortcut(key, &mods).await;
+            return
+        }
 
         let actions = {
             let mut repeater = self_.key_repeat.lock().unwrap();
@@ -460,6 +467,26 @@ impl EditBox {
         self.cursor_pos.set(cursor_pos + 1);
 
         self.redraw().await;
+    }
+
+    async fn handle_shortcut(&self, key: char, mods: &KeyMods) {
+        debug!(target: "ui::editbox", "handle_shortcut({:?}, {:?})", key, mods);
+
+        match key {
+            'c' => {
+                if mods.ctrl {
+                    self.copy_highlighted().unwrap();
+                }
+            }
+            'v' => {
+                if mods.ctrl {
+                    if let Some(text) = window::clipboard_get() {
+                        self.paste_text(text).await;
+                    }
+                }
+            }
+            _ => {}
+        }
     }
 
     async fn handle_key(&self, key: &KeyCode, mods: &KeyMods) {
@@ -625,6 +652,52 @@ impl EditBox {
         self.cursor_pos.set(sel_start as u32);
     }
 
+    fn copy_highlighted(&self) -> Result<()> {
+        let start = self.selected.get_u32(0)? as usize;
+        let end = self.selected.get_u32(1)? as usize;
+
+        let sel_start = std::cmp::min(start, end);
+        let sel_end = std::cmp::max(start, end);
+
+        let mut text = String::new();
+
+        let glyphs = self.glyphs.lock().unwrap().clone();
+        for (glyph_idx, glyph) in glyphs.iter().enumerate() {
+            if sel_start <= glyph_idx && glyph_idx < sel_end {
+                text.push_str(&glyph.substr);
+            }
+        }
+
+        info!(target: "ui::editbox", "Copied '{}'", text);
+        window::clipboard_set(&text);
+        Ok(())
+    }
+
+    async fn paste_text(&self, key: String) {
+        let mut text = String::new();
+
+        let cursor_pos = self.cursor_pos.get();
+
+        if cursor_pos == 0 {
+            text = key.clone();
+        }
+
+        let glyphs = self.glyphs.lock().unwrap().clone();
+        for (glyph_idx, glyph) in glyphs.iter().enumerate() {
+            text.push_str(&glyph.substr);
+            if cursor_pos == glyph_idx as u32 + 1 {
+                text.push_str(&key);
+            }
+        }
+
+        self.text.set(text);
+        // Not always true lol
+        self.cursor_pos.set(cursor_pos + 1);
+
+        self.apply_cursor_scrolling();
+        self.redraw().await;
+    }
+
     /// Beware of this method. Here be dragons.
     /// Possibly racy so we limit it just to cursor scrolling.
     fn cached_rect(&self) -> Rectangle {
@@ -780,6 +853,13 @@ impl Stoppable for EditBox {
     }
 }
 
+/// Filter these char events from being handled since we handle them
+/// using the key_up/key_down events.
+/// Avoids duplicate processing of keyboard input events.
+static DISALLOWED_CHARS: &'static [char] = &['\r', '\u{8}', '\u{7f}', '\t', '\n'];
+
+/// These keycodes are handled via normal key_up/key_down events.
+/// Anything in this list must be disallowed char events.
 static ALLOWED_KEYCODES: &'static [KeyCode] = &[
     KeyCode::Left,
     KeyCode::Right,
