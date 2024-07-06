@@ -114,11 +114,6 @@ async fn spawn_seed_session(seed_addr: Url, ex: Arc<Executor<'static>>) -> Vec<A
         };
 
         let p2p = P2p::new(settings, ex.clone()).await.unwrap();
-        info!("========================================================");
-        info!("Starting node={}", p2p.settings().external_addrs[0]);
-        info!("========================================================");
-        p2p.clone().start().await.unwrap();
-
         outbound_instances.push(p2p);
     }
 
@@ -163,10 +158,6 @@ async fn spawn_manual_session(ex: Arc<Executor<'static>>) -> Vec<Arc<P2p>> {
         };
 
         let p2p = P2p::new(settings, ex.clone()).await.unwrap();
-        info!("========================================================");
-        info!("Starting node={}", p2p.settings().external_addrs[0]);
-        info!("========================================================");
-        p2p.clone().start().await.unwrap();
         manual_instances.push(p2p);
     }
     manual_instances
@@ -319,6 +310,13 @@ async fn p2p_test_real(ex: Arc<Executor<'static>>) {
     // ============================================================
     let outbound_instances = spawn_seed_session(seed_addr, ex.clone()).await;
 
+    for p2p in &outbound_instances {
+        info!("========================================================");
+        info!("Starting node={}", p2p.settings().external_addrs[0]);
+        info!("========================================================");
+        p2p.clone().start().await.unwrap();
+    }
+
     info!("========================================================");
     info!("Waiting 10s for all peers to reach the seed node");
     info!("========================================================");
@@ -438,6 +436,13 @@ async fn p2p_test_real(ex: Arc<Executor<'static>>) {
     info!("========================================================");
 
     let manual_instances = spawn_manual_session(ex.clone()).await;
+
+    for p2p in &manual_instances {
+        info!("========================================================");
+        info!("Starting node={}", p2p.settings().external_addrs[0]);
+        info!("========================================================");
+        p2p.clone().start().await.unwrap();
+    }
 
     info!("========================================================");
     info!("Waiting 5s for all manual peers to connect");
