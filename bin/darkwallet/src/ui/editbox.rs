@@ -437,6 +437,12 @@ impl EditBox {
     }
 
     async fn insert_char(&self, key: char) {
+        if !self.selected.is_null(0).unwrap() {
+            self.delete_highlighted();
+            // This is inefficient but we don't give a shit here
+            self.redraw().await;
+        };
+
         let mut text = String::new();
 
         let cursor_pos = self.cursor_pos.get();
@@ -466,6 +472,7 @@ impl EditBox {
         // meh lets pretend it doesn't exist for now.
         self.cursor_pos.set(cursor_pos + 1);
 
+        self.apply_cursor_scrolling();
         self.redraw().await;
     }
 
