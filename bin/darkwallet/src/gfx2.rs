@@ -2,9 +2,9 @@ use darkfi_serial::{SerialDecodable, SerialEncodable};
 use log::debug;
 use miniquad::{
     conf, window, Backend, Bindings, BlendFactor, BlendState, BlendValue, BufferId, BufferLayout,
-    BufferSource, BufferType, BufferUsage, Equation, EventHandler, KeyCode, KeyMods, PassAction,
-    Pipeline, PipelineParams, RenderingBackend, ShaderMeta, ShaderSource, TextureId, UniformDesc,
-    UniformType, VertexAttribute, VertexFormat,
+    BufferSource, BufferType, BufferUsage, Equation, EventHandler, KeyCode, KeyMods, MouseButton,
+    PassAction, Pipeline, PipelineParams, RenderingBackend, ShaderMeta, ShaderSource, TextureId,
+    TouchPhase, UniformDesc, UniformType, VertexAttribute, VertexFormat,
 };
 use std::{
     collections::HashMap,
@@ -348,6 +348,18 @@ pub struct GraphicsEventPublisher {
     lock_key_up: SyncMutex<Option<SubscriptionId>>,
     key_up: PublisherPtr<(KeyCode, KeyMods)>,
 
+    lock_mouse_motion: SyncMutex<Option<SubscriptionId>>,
+    mouse_motion: PublisherPtr<(f32, f32)>,
+
+    lock_mouse_wheel: SyncMutex<Option<SubscriptionId>>,
+    mouse_wheel: PublisherPtr<(f32, f32)>,
+
+    lock_mouse_btn_down: SyncMutex<Option<SubscriptionId>>,
+    mouse_btn_down: PublisherPtr<(MouseButton, f32, f32)>,
+
+    lock_mouse_btn_up: SyncMutex<Option<SubscriptionId>>,
+    mouse_btn_up: PublisherPtr<(MouseButton, f32, f32)>,
+
     lock_resize: SyncMutex<Option<SubscriptionId>>,
     resize: PublisherPtr<(f32, f32)>,
 
@@ -360,10 +372,25 @@ impl GraphicsEventPublisher {
         Arc::new(Self {
             lock_key_down: SyncMutex::new(None),
             key_down: Publisher::new(),
+
             lock_key_up: SyncMutex::new(None),
             key_up: Publisher::new(),
+
+            lock_mouse_motion: SyncMutex::new(None),
+            mouse_motion: Publisher::new(),
+
+            lock_mouse_wheel: SyncMutex::new(None),
+            mouse_wheel: Publisher::new(),
+
+            lock_mouse_btn_down: SyncMutex::new(None),
+            mouse_btn_down: Publisher::new(),
+
+            lock_mouse_btn_up: SyncMutex::new(None),
+            mouse_btn_up: Publisher::new(),
+
             lock_resize: SyncMutex::new(None),
             resize: Publisher::new(),
+
             lock_char: SyncMutex::new(None),
             chr: Publisher::new(),
         })
@@ -381,6 +408,34 @@ impl GraphicsEventPublisher {
     }
     fn unlock_key_up(&self) {
         *self.lock_key_up.lock().unwrap() = None;
+    }
+
+    fn lock_mouse_motion(&self, sub_id: SubscriptionId) {
+        *self.lock_mouse_motion.lock().unwrap() = Some(sub_id);
+    }
+    fn unlock_mouse_motion(&self) {
+        *self.lock_mouse_motion.lock().unwrap() = None;
+    }
+
+    fn lock_mouse_wheel(&self, sub_id: SubscriptionId) {
+        *self.lock_mouse_wheel.lock().unwrap() = Some(sub_id);
+    }
+    fn unlock_mouse_wheel(&self) {
+        *self.lock_mouse_wheel.lock().unwrap() = None;
+    }
+
+    fn lock_mouse_btn_down(&self, sub_id: SubscriptionId) {
+        *self.lock_mouse_btn_down.lock().unwrap() = Some(sub_id);
+    }
+    fn unlock_mouse_btn_down(&self) {
+        *self.lock_mouse_btn_down.lock().unwrap() = None;
+    }
+
+    fn lock_mouse_btn_up(&self, sub_id: SubscriptionId) {
+        *self.lock_mouse_btn_up.lock().unwrap() = Some(sub_id);
+    }
+    fn unlock_mouse_btn_up(&self) {
+        *self.lock_mouse_btn_up.lock().unwrap() = None;
     }
 
     fn lock_resize(&self, sub_id: SubscriptionId) {
@@ -417,6 +472,51 @@ impl GraphicsEventPublisher {
             self.key_up.notify(ev);
         }
     }
+
+    fn notify_mouse_motion(&self, x: f32, y: f32) {
+        let ev = (x, y);
+
+        let locked = self.lock_mouse_motion.lock().unwrap().clone();
+        if let Some(locked) = locked {
+            self.mouse_motion.notify_with_include(ev, &[locked]);
+        } else {
+            self.mouse_motion.notify(ev);
+        }
+    }
+
+    fn notify_mouse_wheel(&self, x: f32, y: f32) {
+        let ev = (x, y);
+
+        let locked = self.lock_mouse_wheel.lock().unwrap().clone();
+        if let Some(locked) = locked {
+            self.mouse_wheel.notify_with_include(ev, &[locked]);
+        } else {
+            self.mouse_wheel.notify(ev);
+        }
+    }
+
+    fn notify_mouse_btn_down(&self, button: MouseButton, x: f32, y: f32) {
+        let ev = (button, x, y);
+
+        let locked = self.lock_mouse_btn_down.lock().unwrap().clone();
+        if let Some(locked) = locked {
+            self.mouse_btn_down.notify_with_include(ev, &[locked]);
+        } else {
+            self.mouse_btn_down.notify(ev);
+        }
+    }
+
+    fn notify_mouse_btn_up(&self, button: MouseButton, x: f32, y: f32) {
+        let ev = (button, x, y);
+
+        let locked = self.lock_mouse_btn_up.lock().unwrap().clone();
+        if let Some(locked) = locked {
+            self.mouse_btn_up.notify_with_include(ev, &[locked]);
+        } else {
+            self.mouse_btn_up.notify(ev);
+        }
+    }
+
     fn notify_resize(&self, w: f32, h: f32) {
         let ev = (w, h);
 
@@ -443,6 +543,18 @@ impl GraphicsEventPublisher {
     }
     pub fn subscribe_key_up(&self) -> Subscription<(KeyCode, KeyMods)> {
         self.key_up.clone().subscribe()
+    }
+    pub fn subscribe_mouse_motion(&self) -> Subscription<(f32, f32)> {
+        self.mouse_motion.clone().subscribe()
+    }
+    pub fn subscribe_mouse_wheel(&self) -> Subscription<(f32, f32)> {
+        self.mouse_wheel.clone().subscribe()
+    }
+    pub fn subscribe_mouse_btn_down(&self) -> Subscription<(MouseButton, f32, f32)> {
+        self.mouse_btn_down.clone().subscribe()
+    }
+    pub fn subscribe_mouse_btn_up(&self) -> Subscription<(MouseButton, f32, f32)> {
+        self.mouse_btn_up.clone().subscribe()
     }
     pub fn subscribe_resize(&self) -> Subscription<(f32, f32)> {
         self.resize.clone().subscribe()
@@ -655,22 +767,40 @@ impl EventHandler for Stage {
         self.ctx.commit_frame();
     }
 
+    fn resize_event(&mut self, width: f32, height: f32) {
+        self.event_pub.notify_resize(width, height);
+    }
+
+    fn mouse_motion_event(&mut self, x: f32, y: f32) {
+        self.event_pub.notify_mouse_motion(x, y);
+    }
+    fn mouse_wheel_event(&mut self, x: f32, y: f32) {
+        self.event_pub.notify_mouse_wheel(x, y);
+    }
+    fn mouse_button_down_event(&mut self, button: MouseButton, x: f32, y: f32) {
+        self.event_pub.notify_mouse_btn_down(button, x, y);
+    }
+    fn mouse_button_up_event(&mut self, button: MouseButton, x: f32, y: f32) {
+        self.event_pub.notify_mouse_btn_up(button, x, y);
+    }
+
+    fn char_event(&mut self, chr: char, mods: KeyMods, repeat: bool) {
+        self.event_pub.notify_char(chr, mods, repeat);
+    }
+
     fn key_down_event(&mut self, keycode: KeyCode, mods: KeyMods, repeat: bool) {
         self.event_pub.notify_key_down(keycode, mods, repeat);
     }
     fn key_up_event(&mut self, keycode: KeyCode, mods: KeyMods) {
         self.event_pub.notify_key_up(keycode, mods);
     }
-    fn resize_event(&mut self, width: f32, height: f32) {
-        self.event_pub.notify_resize(width, height);
+
+    fn touch_event(&mut self, phase: TouchPhase, id: u64, x: f32, y: f32) {
+        debug!(target: "gfx", "touch_event({:?}, {}, {}, {})", phase, id, x, y);
     }
 
     fn quit_requested_event(&mut self) {
         self.async_runtime.stop();
-    }
-
-    fn char_event(&mut self, chr: char, mods: KeyMods, repeat: bool) {
-        self.event_pub.notify_char(chr, mods, repeat);
     }
 }
 

@@ -451,6 +451,11 @@ fn create_editbox(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
     let node = sg.add_node(name, SceneNodeType::EditBox);
 
     let mut prop = Property::new("is_active", PropertyType::Bool, PropertySubType::Null);
+    prop.set_ui_text("Is Active", "An active EditBox can be focused");
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("is_focused", PropertyType::Bool, PropertySubType::Null);
+    prop.set_ui_text("Is Focused", "A focused EditBox receives input");
     node.add_property(prop).unwrap();
 
     let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);

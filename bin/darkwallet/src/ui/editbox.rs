@@ -1,4 +1,4 @@
-use miniquad::{window, BufferId, KeyCode, KeyMods, TextureId};
+use miniquad::{window, BufferId, KeyCode, KeyMods, MouseButton, TextureId};
 use rand::{rngs::OsRng, Rng};
 use std::{
     collections::HashMap,
@@ -9,8 +9,8 @@ use std::{
 use crate::{
     error::Result,
     gfx2::{
-        DrawCall, DrawInstruction, DrawMesh, GraphicsEventPublisherPtr, Rectangle, RenderApi,
-        RenderApiPtr, Vertex,
+        DrawCall, DrawInstruction, DrawMesh, GraphicsEventPublisherPtr, Point, Rectangle,
+        RenderApi, RenderApiPtr, Vertex,
     },
     mesh::{Color, MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_WHITE},
     prop::{
@@ -126,6 +126,7 @@ pub struct EditBox {
     dc_key: u64,
 
     is_active: PropertyBool,
+    is_focused: PropertyBool,
     rect: PropertyPtr,
     baseline: PropertyFloat32,
     scroll: PropertyFloat32,
@@ -151,7 +152,10 @@ impl EditBox {
     ) -> Pimpl {
         let scene_graph = sg.lock().await;
         let node = scene_graph.get_node(node_id).unwrap();
+        let node_name = node.name.clone();
+
         let is_active = PropertyBool::wrap(node, "is_active", 0).unwrap();
+        let is_focused = PropertyBool::wrap(node, "is_focused", 0).unwrap();
         let rect = node.get_property("rect").expect("EditBox::rect");
         let baseline = PropertyFloat32::wrap(node, "baseline", 0).unwrap();
         let scroll = PropertyFloat32::wrap(node, "scroll", 0).unwrap();
@@ -164,6 +168,7 @@ impl EditBox {
         let selected = node.get_property("selected").unwrap();
         let z_index = PropertyUint32::wrap(node, "z_index", 0).unwrap();
         let debug = PropertyBool::wrap(node, "debug", 0).unwrap();
+
         drop(scene_graph);
 
         // testing
@@ -211,8 +216,19 @@ impl EditBox {
             });
             */
 
+            let ev_sub = event_pub.subscribe_mouse_btn_down();
+            let me2 = me.clone();
+            let mouse_btn_down_task = ex.spawn(async move {
+                loop {
+                    Self::process_mouse_btn_down(&me2, &ev_sub).await;
+                }
+            });
+
+            let mut on_modify = OnModify::new(ex, node_name, node_id, me.clone());
+            on_modify.when_change(is_focused.prop(), Self::change_focus);
+
             // on modify tasks too
-            let tasks = vec![char_task, key_down_task];
+            let tasks = vec![char_task, key_down_task, mouse_btn_down_task];
 
             Self {
                 node_id,
@@ -228,6 +244,7 @@ impl EditBox {
                 dc_key: OsRng.gen(),
 
                 is_active,
+                is_focused,
                 rect,
                 baseline,
                 scroll,
@@ -388,6 +405,10 @@ impl EditBox {
             panic!("self destroyed before char_task was stopped!");
         };
 
+        if !self_.is_focused.get() {
+            return
+        }
+
         if mods.ctrl || mods.alt {
             if repeat {
                 return
@@ -423,6 +444,10 @@ impl EditBox {
             panic!("self destroyed before char_task was stopped!");
         };
 
+        if !self_.is_focused.get() {
+            return
+        }
+
         let actions = {
             let mut repeater = self_.key_repeat.lock().unwrap();
             repeater.key_down(PressedKey::Key(key), repeat)
@@ -433,6 +458,72 @@ impl EditBox {
         }
         for _ in 0..actions {
             self_.handle_key(&key, &mods).await;
+        }
+    }
+
+    async fn process_mouse_btn_down(
+        me: &Weak<Self>,
+        ev_sub: &Subscription<(MouseButton, f32, f32)>,
+    ) {
+        let Ok((btn, mouse_x, mouse_y)) = ev_sub.receive().await else {
+            debug!(target: "ui::editbox", "Event relayer closed");
+            return
+        };
+
+        let Some(self_) = me.upgrade() else {
+            // Should not happen
+            panic!("self destroyed before char_task was stopped!");
+        };
+
+        if !self_.is_active.get() {
+            return
+        }
+
+        self_.handle_mouse_btn_down(btn, mouse_x, mouse_y).await;
+    }
+
+    async fn change_focus(self: Arc<Self>) {
+        if !self.is_active.get() {
+            return
+        }
+
+        let is_focused = self.is_focused.get();
+    }
+
+    async fn handle_mouse_btn_down(&self, btn: MouseButton, mouse_x: f32, mouse_y: f32) {
+        if btn != MouseButton::Left {
+            return
+        }
+
+        // NBD if it's slightly wrong
+        let mut rect = self.cached_rect();
+
+        // If layers can be nested and we use offsets for (x, y)
+        // then this will be incorrect for nested layers.
+        // For now we don't allow nesting of layers.
+        let sg = self.sg.lock().await;
+        let node = sg.get_node(self.node_id).unwrap();
+        let Some(parent_rect) = get_parent_rect(&sg, node) else {
+            return;
+        };
+        drop(sg);
+
+        // Offset rect which is now in world coords
+        rect.x += parent_rect.x;
+        rect.y += parent_rect.y;
+
+        let mouse_pos = Point::from([mouse_x, mouse_y]);
+
+        if rect.contains(&mouse_pos) {
+            if self.is_focused.get() {
+                debug!(target: "ui::editbox", "EditBox clicked");
+            } else {
+                debug!(target: "ui::editbox", "EditBox focused");
+                self.is_focused.set(true);
+            }
+        } else if self.is_focused.get() {
+            debug!(target: "ui::editbox", "EditBox unfocused");
+            self.is_focused.set(false);
         }
     }
 
