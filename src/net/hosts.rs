@@ -214,7 +214,7 @@ impl HostState {
             HostState::Suspend => Err(Error::HostStateBlocked(start, end)),
             HostState::Connected(_) => Err(Error::HostStateBlocked(start, end)),
             HostState::Move => Ok(HostState::Connected(channel)),
-            HostState::Free(_) => Err(Error::HostStateBlocked(start, end)),
+            HostState::Free(_) => Ok(HostState::Connected(channel)),
         }
     }
 
@@ -231,7 +231,7 @@ impl HostState {
             HostState::Suspend => Err(Error::HostStateBlocked(start, end)),
             HostState::Connected(_) => Ok(HostState::Move),
             HostState::Move => Err(Error::HostStateBlocked(start, end)),
-            HostState::Free(_) => Err(Error::HostStateBlocked(start, end)),
+            HostState::Free(_) => Ok(HostState::Move),
         }
     }
 
