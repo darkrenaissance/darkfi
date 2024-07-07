@@ -226,7 +226,7 @@ impl HostState {
         let end = HostState::Move.to_string();
         match self {
             HostState::Insert => Err(Error::HostStateBlocked(start, end)),
-            HostState::Refine => Err(Error::HostStateBlocked(start, end)),
+            HostState::Refine => Ok(HostState::Move),
             HostState::Connect => Ok(HostState::Move),
             HostState::Suspend => Err(Error::HostStateBlocked(start, end)),
             HostState::Connected(_) => Ok(HostState::Move),
