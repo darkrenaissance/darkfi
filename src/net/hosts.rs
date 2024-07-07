@@ -21,7 +21,7 @@ use std::{
     fmt, fs,
     fs::File,
     sync::{Arc, Mutex, RwLock},
-    time::Instant,
+    time::{Instant, UNIX_EPOCH},
 };
 
 use log::{debug, error, info, trace, warn};
@@ -60,6 +60,10 @@ use crate::{
 /// `HostState`: a set of mutually exclusive states that can be Insert, Refine, Connect, Suspend
 ///  or Connected. The state is `None` when the corresponding host has been removed from the
 ///  HostRegistry.
+///
+///  TODO: clean up documentation surrounding the use of HostState::Free and unregister().
+///  TODO: Use HostState::Free `age` variable to implement a pruning logic that deletes peers from
+///  the registry once they have bypassed a certain age threshold.
 
 // An array containing all possible local host strings
 // TODO: This could perhaps be more exhaustive?
@@ -140,6 +144,9 @@ pub(in crate::net) enum HostState {
     /// Host that are moving between hostlists, implemented in
     /// store::move_host().
     Move,
+
+    /// Free up a peer for any future operation.
+    Free(u64),
 }
 
 impl HostState {
@@ -155,6 +162,7 @@ impl HostState {
             HostState::Suspend => Err(Error::HostStateBlocked(start, end)),
             HostState::Connected(_) => Err(Error::HostStateBlocked(start, end)),
             HostState::Move => Err(Error::HostStateBlocked(start, end)),
+            HostState::Free(_) => Ok(HostState::Insert),
         }
     }
 
@@ -171,6 +179,7 @@ impl HostState {
             HostState::Suspend => Ok(HostState::Refine),
             HostState::Connected(_) => Err(Error::HostStateBlocked(start, end)),
             HostState::Move => Err(Error::HostStateBlocked(start, end)),
+            HostState::Free(_) => Ok(HostState::Refine),
         }
     }
 
@@ -186,6 +195,7 @@ impl HostState {
             HostState::Suspend => Err(Error::HostStateBlocked(start, end)),
             HostState::Connected(_) => Err(Error::HostStateBlocked(start, end)),
             HostState::Move => Err(Error::HostStateBlocked(start, end)),
+            HostState::Free(_) => Ok(HostState::Connect),
         }
     }
 
@@ -204,6 +214,7 @@ impl HostState {
             HostState::Suspend => Err(Error::HostStateBlocked(start, end)),
             HostState::Connected(_) => Err(Error::HostStateBlocked(start, end)),
             HostState::Move => Ok(HostState::Connected(channel)),
+            HostState::Free(_) => Err(Error::HostStateBlocked(start, end)),
         }
     }
 
@@ -220,6 +231,7 @@ impl HostState {
             HostState::Suspend => Err(Error::HostStateBlocked(start, end)),
             HostState::Connected(_) => Ok(HostState::Move),
             HostState::Move => Err(Error::HostStateBlocked(start, end)),
+            HostState::Free(_) => Err(Error::HostStateBlocked(start, end)),
         }
     }
 
@@ -237,6 +249,19 @@ impl HostState {
             HostState::Suspend => Err(Error::HostStateBlocked(start, end)),
             HostState::Connected(_) => Err(Error::HostStateBlocked(start, end)),
             HostState::Move => Ok(HostState::Suspend),
+            HostState::Free(_) => Err(Error::HostStateBlocked(start, end)),
+        }
+    }
+
+    fn try_free(&self, age: u64) -> Result<Self> {
+        match self {
+            HostState::Insert => Ok(HostState::Free(age)),
+            HostState::Refine => Ok(HostState::Free(age)),
+            HostState::Connect => Ok(HostState::Free(age)),
+            HostState::Suspend => Ok(HostState::Free(age)),
+            HostState::Connected(_) => Ok(HostState::Free(age)),
+            HostState::Move => Ok(HostState::Free(age)),
+            HostState::Free(age) => Ok(HostState::Free(*age)),
         }
     }
 }
@@ -870,6 +895,7 @@ impl Hosts {
                 HostState::Suspend => current_state.try_suspend(),
                 HostState::Connected(c) => current_state.try_connected(c),
                 HostState::Move => current_state.try_move(),
+                HostState::Free(a) => current_state.try_free(a),
             };
 
             if let Ok(state) = &result {
@@ -921,13 +947,9 @@ impl Hosts {
     /// Remove a host from the HostRegistry. Must be called after move(), when the refinery
     /// process fails, or when a channel stops. Prevents hosts from getting trapped in the
     /// HostState logical machinery.
-    ///
-    /// Misuse of this call is dangerous since it frees up the peer to be used by
-    /// the refinery or outbound connect loop, and may result in invalid states. It should
-    /// only be called when it is completely safe to do so.
     pub(in crate::net) fn unregister(&self, addr: &Url) {
-        self.registry.lock().unwrap().remove(addr);
-        debug!(target: "net::hosts::unregister()", "Removed {} from HostRegistry", addr);
+        let age = UNIX_EPOCH.elapsed().unwrap().as_secs();
+        self.try_register(addr.clone(), HostState::Free(age)).unwrap();
     }
 
     /// Returns the list of connected channels.
