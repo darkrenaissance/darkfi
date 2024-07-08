@@ -360,7 +360,7 @@ impl App {
         prop.set_null(0).unwrap();
         prop.set_null(1).unwrap();
         node.set_property_u32("z_index", 1).unwrap();
-        node.set_property_bool("debug", true).unwrap();
+        //node.set_property_bool("debug", true).unwrap();
 
         drop(sg);
         let pimpl = EditBox::new(

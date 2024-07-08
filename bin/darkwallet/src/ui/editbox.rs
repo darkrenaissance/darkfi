@@ -381,6 +381,11 @@ impl EditBox {
         let start = self.selected.get_u32(0)? as usize;
         let end = self.selected.get_u32(1)? as usize;
 
+        // Selection started but nothing selected yet so do nothing
+        if start == end {
+            return Ok(())
+        }
+
         let sel_start = std::cmp::min(start, end);
         let sel_end = std::cmp::max(start, end);
 
@@ -627,6 +632,8 @@ impl EditBox {
         } else if self.is_focused.get() {
             debug!(target: "ui::editbox", "EditBox unfocused");
             self.is_focused.set(false);
+            self.selected.set_null(0).unwrap();
+            self.selected.set_null(1).unwrap();
             focus_changed = true;
         }
 
