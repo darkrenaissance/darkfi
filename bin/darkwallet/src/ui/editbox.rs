@@ -256,6 +256,22 @@ impl EditBox {
             let mut on_modify = OnModify::new(ex, node_name, node_id, me.clone());
             on_modify.when_change(is_focused.prop(), Self::change_focus);
 
+            async fn redraw(self_: Arc<EditBox>) {
+                self_.redraw().await;
+            }
+            on_modify.when_change(rect.clone(), redraw);
+            on_modify.when_change(baseline.prop(), redraw);
+            on_modify.when_change(scroll.prop(), redraw);
+            on_modify.when_change(cursor_pos.prop(), redraw);
+            on_modify.when_change(font_size.prop(), redraw);
+            on_modify.when_change(text.prop(), redraw);
+            on_modify.when_change(text_color.prop(), redraw);
+            on_modify.when_change(cursor_color.prop(), redraw);
+            on_modify.when_change(hi_bg_color.prop(), redraw);
+            on_modify.when_change(selected.clone(), redraw);
+            on_modify.when_change(z_index.prop(), redraw);
+            on_modify.when_change(debug.prop(), redraw);
+
             // on modify tasks too
             let mut tasks = vec![
                 char_task,
