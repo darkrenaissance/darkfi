@@ -2,7 +2,10 @@ use miniquad::{window, BufferId, KeyCode, KeyMods, MouseButton, TextureId};
 use rand::{rngs::OsRng, Rng};
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex as SyncMutex, Weak},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex as SyncMutex, Weak,
+    },
     time::Instant,
 };
 
@@ -139,6 +142,8 @@ pub struct EditBox {
     selected: PropertyPtr,
     z_index: PropertyUint32,
     debug: PropertyBool,
+
+    mouse_btn_held: AtomicBool,
 }
 
 impl EditBox {
@@ -224,11 +229,34 @@ impl EditBox {
                 }
             });
 
+            let ev_sub = event_pub.subscribe_mouse_btn_up();
+            let me2 = me.clone();
+            let mouse_btn_up_task = ex.spawn(async move {
+                loop {
+                    Self::process_mouse_btn_up(&me2, &ev_sub).await;
+                }
+            });
+
+            let ev_sub = event_pub.subscribe_mouse_move();
+            let me2 = me.clone();
+            let mouse_move_task = ex.spawn(async move {
+                loop {
+                    Self::process_mouse_move(&me2, &ev_sub).await;
+                }
+            });
+
             let mut on_modify = OnModify::new(ex, node_name, node_id, me.clone());
             on_modify.when_change(is_focused.prop(), Self::change_focus);
 
             // on modify tasks too
-            let tasks = vec![char_task, key_down_task, mouse_btn_down_task];
+            let mut tasks = vec![
+                char_task,
+                key_down_task,
+                mouse_btn_down_task,
+                mouse_btn_up_task,
+                mouse_move_task,
+            ];
+            tasks.append(&mut on_modify.tasks);
 
             Self {
                 node_id,
@@ -257,6 +285,8 @@ impl EditBox {
                 selected,
                 z_index,
                 debug,
+
+                mouse_btn_held: AtomicBool::new(false),
             }
         });
 
@@ -269,6 +299,7 @@ impl EditBox {
         clip.x = 0.;
         clip.y = 0.;
 
+        let is_focused = self.is_focused.get();
         let text = self.text.get();
         let font_size = self.font_size.get();
         let text_color = self.text_color.get();
@@ -301,7 +332,7 @@ impl EditBox {
             }
             mesh.draw_box(&glyph_rect, color, &uv_rect);
 
-            if cursor_pos != 0 && cursor_pos == glyph_idx {
+            if is_focused && cursor_pos != 0 && cursor_pos == glyph_idx {
                 let cursor_rect =
                     Rectangle { x: glyph_rect.x - CURSOR_WIDTH, y: 0., w: CURSOR_WIDTH, h: clip.h };
                 mesh.draw_box(&cursor_rect, cursor_color, &Rectangle::zero());
@@ -310,10 +341,10 @@ impl EditBox {
             rhs = glyph_rect.rhs();
         }
 
-        if cursor_pos == 0 {
+        if is_focused && cursor_pos == 0 {
             let cursor_rect = Rectangle { x: 0., y: 0., w: CURSOR_WIDTH, h: clip.h };
             mesh.draw_box(&cursor_rect, cursor_color, &Rectangle::zero());
-        } else if cursor_pos == glyphs.len() {
+        } else if is_focused && cursor_pos == glyphs.len() {
             let cursor_rect =
                 Rectangle { x: rhs - CURSOR_WIDTH, y: 0., w: CURSOR_WIDTH, h: clip.h };
             mesh.draw_box(&cursor_rect, cursor_color, &Rectangle::zero());
@@ -472,7 +503,7 @@ impl EditBox {
 
         let Some(self_) = me.upgrade() else {
             // Should not happen
-            panic!("self destroyed before char_task was stopped!");
+            panic!("self destroyed before mouse_btn_down_task was stopped!");
         };
 
         if !self_.is_active.get() {
@@ -482,12 +513,52 @@ impl EditBox {
         self_.handle_mouse_btn_down(btn, mouse_x, mouse_y).await;
     }
 
+    async fn process_mouse_btn_up(me: &Weak<Self>, ev_sub: &Subscription<(MouseButton, f32, f32)>) {
+        let Ok((btn, mouse_x, mouse_y)) = ev_sub.receive().await else {
+            debug!(target: "ui::editbox", "Event relayer closed");
+            return
+        };
+
+        let Some(self_) = me.upgrade() else {
+            // Should not happen
+            panic!("self destroyed before mouse_btn_up_task was stopped!");
+        };
+
+        if !self_.is_active.get() {
+            return
+        }
+
+        self_.handle_mouse_btn_up(btn, mouse_x, mouse_y);
+    }
+
+    async fn process_mouse_move(me: &Weak<Self>, ev_sub: &Subscription<(f32, f32)>) {
+        let Ok((mouse_x, mouse_y)) = ev_sub.receive().await else {
+            debug!(target: "ui::editbox", "Event relayer closed");
+            return
+        };
+
+        let Some(self_) = me.upgrade() else {
+            // Should not happen
+            panic!("self destroyed before mouse_move_task was stopped!");
+        };
+
+        if !self_.is_active.get() {
+            return
+        }
+
+        self_.handle_mouse_move(mouse_x, mouse_y).await;
+    }
+
     async fn change_focus(self: Arc<Self>) {
         if !self.is_active.get() {
             return
         }
+        debug!(target: "ui::editbox", "Focus changed");
 
         let is_focused = self.is_focused.get();
+
+        // Cursor visibility will change so just redraw everything lol
+        self.redraw().await;
     }
 
     async fn handle_mouse_btn_down(&self, btn: MouseButton, mouse_x: f32, mouse_y: f32) {
@@ -495,36 +566,126 @@ impl EditBox {
             return
         }
 
-        // NBD if it's slightly wrong
-        let mut rect = self.cached_rect();
-
-        // If layers can be nested and we use offsets for (x, y)
-        // then this will be incorrect for nested layers.
-        // For now we don't allow nesting of layers.
-        let sg = self.sg.lock().await;
-        let node = sg.get_node(self.node_id).unwrap();
-        let Some(parent_rect) = get_parent_rect(&sg, node) else {
-            return;
-        };
-        drop(sg);
-
-        // Offset rect which is now in world coords
-        rect.x += parent_rect.x;
-        rect.y += parent_rect.y;
-
         let mouse_pos = Point::from([mouse_x, mouse_y]);
 
+        let mut focus_changed = false;
+
+        let Some(rect) = self.get_cached_world_rect().await else { return };
+        // clicking inside box will:
+        // 1. make it active
+        // 2. begin selection
         if rect.contains(&mouse_pos) {
+            window::show_keyboard(true);
+
             if self.is_focused.get() {
                 debug!(target: "ui::editbox", "EditBox clicked");
             } else {
                 debug!(target: "ui::editbox", "EditBox focused");
                 self.is_focused.set(true);
+                focus_changed = true;
             }
+
+            let cpos = self.find_closest_glyph_idx(mouse_x, &rect);
+
+            // set cursor pos
+            self.cursor_pos.set(cpos);
+            self.apply_cursor_scrolling();
+
+            // begin selection
+            self.selected.set_u32(0, cpos).unwrap();
+            self.selected.set_u32(1, cpos).unwrap();
+
+            self.mouse_btn_held.store(true, Ordering::Relaxed);
+        // click outside the box will make it unfocused
         } else if self.is_focused.get() {
             debug!(target: "ui::editbox", "EditBox unfocused");
             self.is_focused.set(false);
+            focus_changed = true;
         }
+
+        // Further on_focus logic change is handled by property modified callback
+        // which calls Self::change_focus()
+        // We still need to redraw if cursor is changed though, but we want to avoid redrawing
+        // twice, so we do this check:
+        if !focus_changed {
+            self.redraw().await;
+        }
+    }
+    fn handle_mouse_btn_up(&self, button: MouseButton, x: f32, y: f32) {
+        // releasing mouse button will end selection
+        self.mouse_btn_held.store(false, Ordering::Relaxed);
+    }
+    async fn handle_mouse_move(&self, mouse_x: f32, mouse_y: f32) {
+        if !self.mouse_btn_held.load(Ordering::Relaxed) {
+            return;
+        }
+
+        // if active and selection_active, then use x to modify the selection.
+        // also implement scrolling when cursor is to the left or right
+        // just scroll to the end
+        // also set cursor_pos too
+
+        let Some(rect) = self.get_cached_world_rect().await else { return };
+        let cpos = self.find_closest_glyph_idx(mouse_x, &rect);
+
+        self.cursor_pos.set(cpos);
+        self.selected.set_u32(1, cpos).unwrap();
+
+        self.apply_cursor_scrolling();
+        self.redraw().await;
+    }
+
+    /// Used when clicking the text. Given the x coord of the mouse, it finds the index
+    /// of the closest glyph to that x coord.
+    fn find_closest_glyph_idx(&self, x: f32, rect: &Rectangle) -> u32 {
+        let font_size = self.font_size.get();
+        let baseline = self.baseline.get();
+        let glyphs = self.glyphs.lock().unwrap().clone();
+
+        let mouse_x = x - rect.x;
+
+        if mouse_x > rect.w {
+            // Highlight to the end
+            let cpos = glyphs.len() as u32;
+            return cpos;
+            // Scroll to the right handled in render
+        } else if mouse_x < 0. {
+            return 0;
+        }
+
+        let scroll = self.scroll.get();
+
+        let mut cpos = 0;
+        let lhs = 0.;
+        let mut last_d = (lhs - mouse_x).abs();
+
+        let mut glyph_pos_iter = GlyphPositionIter::new(font_size, &glyphs, baseline);
+        let mut rhs = 0.;
+
+        for (i, glyph_rect) in glyph_pos_iter.skip(1).enumerate() {
+            // Because we skip the first item
+            let glyph_idx = (i + 1) as u32;
+
+            let x1 = glyph_rect.x + scroll;
+
+            // I don't know what this is doing but it works so I won't touch it for now.
+            let curr_d = (x1 - mouse_x).abs();
+            if curr_d < last_d {
+                last_d = curr_d;
+                cpos = glyph_idx;
+            }
+
+            rhs = glyph_rect.rhs();
+        }
+
+        // also check the right hand side
+        let curr_d = (rhs - mouse_x).abs();
+        if curr_d < last_d {
+            //last_d = curr_d;
+            cpos = glyphs.len() as u32;
+        }
+
+        cpos
     }
 
     async fn insert_char(&self, key: char) {
@@ -804,6 +965,30 @@ impl EditBox {
         };
         rect
     }
+    async fn get_parent_rect(&self) -> Option<Rectangle> {
+        let sg = self.sg.lock().await;
+        let node = sg.get_node(self.node_id).unwrap();
+        let Some(parent_rect) = get_parent_rect(&sg, node) else {
+            return None;
+        };
+        drop(sg);
+        Some(parent_rect)
+    }
+    async fn get_cached_world_rect(&self) -> Option<Rectangle> {
+        // NBD if it's slightly wrong
+        let mut rect = self.cached_rect();
+
+        // If layers can be nested and we use offsets for (x, y)
+        // then this will be incorrect for nested layers.
+        // For now we don't allow nesting of layers.
+        let parent_rect = self.get_parent_rect().await?;
+
+        // Offset rect which is now in world coords
+        rect.x += parent_rect.x;
+        rect.y += parent_rect.y;
+
+        Some(rect)
+    }
 
     /// Whenever the cursor property is modified this MUST be called
     /// to recalculate the scroll x property.
@@ -817,7 +1002,7 @@ impl EditBox {
         let cursor_x = {
             let font_size = self.font_size.get();
             let baseline = self.baseline.get();
-            let glyphs = &*self.glyphs.lock().unwrap();
+            let glyphs = self.glyphs.lock().unwrap().clone();
 
             let mut glyph_pos_iter = GlyphPositionIter::new(font_size, &glyphs, baseline);
 

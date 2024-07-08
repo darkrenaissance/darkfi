@@ -348,8 +348,8 @@ pub struct GraphicsEventPublisher {
     lock_key_up: SyncMutex<Option<SubscriptionId>>,
     key_up: PublisherPtr<(KeyCode, KeyMods)>,
 
-    lock_mouse_motion: SyncMutex<Option<SubscriptionId>>,
-    mouse_motion: PublisherPtr<(f32, f32)>,
+    lock_mouse_move: SyncMutex<Option<SubscriptionId>>,
+    mouse_move: PublisherPtr<(f32, f32)>,
 
     lock_mouse_wheel: SyncMutex<Option<SubscriptionId>>,
     mouse_wheel: PublisherPtr<(f32, f32)>,
@@ -376,8 +376,8 @@ impl GraphicsEventPublisher {
             lock_key_up: SyncMutex::new(None),
             key_up: Publisher::new(),
 
-            lock_mouse_motion: SyncMutex::new(None),
-            mouse_motion: Publisher::new(),
+            lock_mouse_move: SyncMutex::new(None),
+            mouse_move: Publisher::new(),
 
             lock_mouse_wheel: SyncMutex::new(None),
             mouse_wheel: Publisher::new(),
@@ -410,11 +410,11 @@ impl GraphicsEventPublisher {
         *self.lock_key_up.lock().unwrap() = None;
     }
 
-    fn lock_mouse_motion(&self, sub_id: SubscriptionId) {
-        *self.lock_mouse_motion.lock().unwrap() = Some(sub_id);
+    fn lock_mouse_move(&self, sub_id: SubscriptionId) {
+        *self.lock_mouse_move.lock().unwrap() = Some(sub_id);
     }
-    fn unlock_mouse_motion(&self) {
-        *self.lock_mouse_motion.lock().unwrap() = None;
+    fn unlock_mouse_move(&self) {
+        *self.lock_mouse_move.lock().unwrap() = None;
     }
 
     fn lock_mouse_wheel(&self, sub_id: SubscriptionId) {
@@ -473,14 +473,14 @@ impl GraphicsEventPublisher {
         }
     }
 
-    fn notify_mouse_motion(&self, x: f32, y: f32) {
+    fn notify_mouse_move(&self, x: f32, y: f32) {
         let ev = (x, y);
 
-        let locked = self.lock_mouse_motion.lock().unwrap().clone();
+        let locked = self.lock_mouse_move.lock().unwrap().clone();
         if let Some(locked) = locked {
-            self.mouse_motion.notify_with_include(ev, &[locked]);
+            self.mouse_move.notify_with_include(ev, &[locked]);
         } else {
-            self.mouse_motion.notify(ev);
+            self.mouse_move.notify(ev);
         }
     }
 
@@ -544,8 +544,8 @@ impl GraphicsEventPublisher {
     pub fn subscribe_key_up(&self) -> Subscription<(KeyCode, KeyMods)> {
         self.key_up.clone().subscribe()
     }
-    pub fn subscribe_mouse_motion(&self) -> Subscription<(f32, f32)> {
-        self.mouse_motion.clone().subscribe()
+    pub fn subscribe_mouse_move(&self) -> Subscription<(f32, f32)> {
+        self.mouse_move.clone().subscribe()
     }
     pub fn subscribe_mouse_wheel(&self) -> Subscription<(f32, f32)> {
         self.mouse_wheel.clone().subscribe()
@@ -772,7 +772,7 @@ impl EventHandler for Stage {
     }
 
     fn mouse_motion_event(&mut self, x: f32, y: f32) {
-        self.event_pub.notify_mouse_motion(x, y);
+        self.event_pub.notify_mouse_move(x, y);
     }
     fn mouse_wheel_event(&mut self, x: f32, y: f32) {
         self.event_pub.notify_mouse_wheel(x, y);
