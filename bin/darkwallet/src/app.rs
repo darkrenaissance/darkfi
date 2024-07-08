@@ -8,7 +8,7 @@ use crate::{
     prop::{Property, PropertySubType, PropertyType},
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId, SceneNodeType},
     text2::TextShaperPtr,
-    ui::{EditBox, Mesh, RenderLayer, Stoppable, Text, Window},
+    ui::{ChatView, EditBox, Mesh, RenderLayer, Stoppable, Text, Window},
 };
 
 //fn print_type_of<T>(_: &T) {
@@ -377,6 +377,36 @@ impl App {
         node.pimpl = pimpl;
 
         sg.link(node_id, layer_node_id).unwrap();
+
+        // ChatView
+        let node_id = create_chatview(&mut sg, "chatty");
+        let node = sg.get_node(node_id).unwrap();
+        let prop = node.get_property("rect").unwrap();
+        prop.set_f32(0, 0.).unwrap();
+        prop.set_f32(1, 0.).unwrap();
+        let code = vec![Op::LoadVar("lw".to_string())];
+        prop.set_expr(2, code).unwrap();
+        let code = vec![Op::Sub((
+            Box::new(Op::LoadVar("lh".to_string())),
+            Box::new(Op::ConstFloat32(50.)),
+        ))];
+        prop.set_expr(3, code).unwrap();
+        node.set_property_u32("z_index", 1).unwrap();
+
+        drop(sg);
+        let pimpl = ChatView::new().await;
+        let mut sg = self.sg.lock().await;
+        let node = sg.get_node_mut(node_id).unwrap();
+        node.pimpl = pimpl;
+
+        sg.link(node_id, layer_node_id).unwrap();
+
+        // On android lets scale the UI up
+        // TODO: add support for fractional scaling
+        // This also affects mouse/touch input since coords need to be accurately translated
+        // Also we need to think about nesting of layers.
+        //let window_node = sg.get_node_mut(window_id).unwrap();
+        //win_node.set_property_f32("scale", 1.6).unwrap();
     }
 
     async fn trigger_redraw(&self) {
@@ -496,6 +526,23 @@ fn create_editbox(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
     let mut prop = Property::new("selected", PropertyType::Uint32, PropertySubType::Color);
     prop.set_array_len(2);
     prop.allow_null_values();
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("debug", PropertyType::Bool, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
+    node.id
+}
+
+fn create_chatview(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
+    let node = sg.add_node(name, SceneNodeType::ChatView);
+
+    let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_array_len(4);
+    prop.allow_exprs();
     node.add_property(prop).unwrap();
 
     let mut prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);

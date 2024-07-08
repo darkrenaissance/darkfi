@@ -627,13 +627,12 @@ pub struct Method {
 
 pub enum Pimpl {
     Null,
-    //EditBox(editbox::EditBoxPtr),
-    //ChatView(chatview::ChatViewPtr),
     Window(ui::WindowPtr),
     RenderLayer(ui::RenderLayerPtr),
     Mesh(ui::MeshPtr),
     Text(ui::TextPtr),
     EditBox(ui::EditBoxPtr),
+    ChatView(ui::ChatViewPtr),
 }
 
 impl std::fmt::Debug for SceneNode {

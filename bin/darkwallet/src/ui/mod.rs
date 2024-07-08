@@ -8,6 +8,8 @@ use crate::{
     scene::{SceneGraph, SceneNode, SceneNodeId, SceneNodeType},
 };
 
+mod chatview;
+pub use chatview::{ChatView, ChatViewPtr};
 mod editbox;
 pub use editbox::{EditBox, EditBoxPtr};
 mod mesh;

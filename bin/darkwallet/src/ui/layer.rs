@@ -121,6 +121,7 @@ impl RenderLayer {
                 Pimpl::Mesh(mesh) => mesh.draw(&sg, &rect),
                 Pimpl::Text(txt) => txt.draw(&sg, &rect).await,
                 Pimpl::EditBox(editb) => editb.draw(&sg, &rect).await,
+                Pimpl::ChatView(chat) => chat.draw(&sg, &rect).await,
                 _ => {
                     error!(target: "ui::layer", "unhandled pimpl type");
                     continue
