@@ -84,10 +84,10 @@ pub async fn remove_sub_on_stop(
         hosts.move_host(addr, last_seen, HostColor::Grey).unwrap();
     }
 
-    // For all sessions that are not refine sessions, remove this channel
-    // from the HostRegistry. `unregister()` frees up this addr for any
-    // future operation. We don't call this on refine sessions since the
-    // unregister() call happens in the refinery directly.
+    // For all sessions that are not refine sessions, mark this addr as
+    // Free. `unregister()` frees up this addr for any future operation. We
+    // don't call this on refine sessions since the unregister() call
+    // happens in the refinery directly.
     if type_id & SESSION_REFINE == 0 {
         hosts.unregister(channel.address());
     }

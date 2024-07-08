@@ -61,7 +61,6 @@ use crate::{
 ///  or Connected. The state is `None` when the corresponding host has been removed from the
 ///  HostRegistry.
 ///
-///  TODO: clean up documentation surrounding the use of HostState::Free and unregister().
 ///  TODO: Use HostState::Free `age` variable to implement a pruning logic that deletes peers from
 ///  the registry once they have bypassed a certain age threshold.
 
@@ -81,30 +80,31 @@ pub type HostsPtr = Arc<Hosts>;
 pub(in crate::net) type HostRegistry = Mutex<HashMap<Url, HostState>>;
 
 /// HostState is a set of mutually exclusive states that can be Insert,
-/// Refine, Move, Connect, Suspend or Connected. The state is `None` when the
-/// corresponding host has been removed from the HostRegistry.
+/// Refine, Move, Connect, Suspend or Connected or Free.
 /// ```
 ///                +------+
-///                | None |
+///                | free |
 ///                +------+
 ///                   ^
 ///                   |
+///                   v
 ///                +------+      +---------+
 ///       +------> | move | ---> | suspend |
 ///       |        +------+      +---------+
-///       |           |               |
-///       |           |               v        +--------+
-///  +---------+      |          +--------+    | insert |
-///  | connect |      |          | refine |    +--------+
+///       |           |               |        +--------+
+///       |           |               v        | insert |
+///  +---------+      |          +--------+    +--------+
+///  | connect |      |          | refine |        ^
 ///  +---------+      |          +--------+        |
 ///       |           v               |            v
 ///       |     +-----------+         |         +------+
-///       +---> | connected | <-------+-------> | None |
+///       +---> | connected | <-------+-------> | free |
 ///             +-----------+                   +------+
+///                   ^
 ///                   |
 ///                   v
 ///                +------+
-///                | None |
+///                | free |
 ///                +------+
 ///
 /// ```
@@ -151,7 +151,8 @@ pub(in crate::net) enum HostState {
 
 impl HostState {
     // Try to change state to Insert. Only possible if we are not yet
-    // tracking this host in the HostRegistry.
+    // tracking this host in the HostRegistry, or if this host is marked
+    // as Free.
     fn try_insert(&self) -> Result<Self> {
         let start = self.to_string();
         let end = HostState::Insert.to_string();
@@ -166,9 +167,8 @@ impl HostState {
         }
     }
 
-    // Try to change state to Refine. Only possible if we are not yet
-    // tracking this host in the HostRegistry or if the host is marked as
-    // Suspend i.e. we have failed to connect to it.
+    // Try to change state to Refine. Only possible if the peer is marked
+    // as Free, or Suspend i.e. we have failed to connect to it.
     fn try_refine(&self) -> Result<Self> {
         let start = self.to_string();
         let end = HostState::Refine.to_string();
@@ -183,8 +183,8 @@ impl HostState {
         }
     }
 
-    // Try to change state to Connect. Only possible if we are not yet
-    // tracking this host in the HostRegistry.
+    // Try to change state to Connect. Only possible if this peer is marked
+    // as Free.
     fn try_connect(&self) -> Result<Self> {
         let start = self.to_string();
         let end = HostState::Connect.to_string();
@@ -200,10 +200,11 @@ impl HostState {
     }
 
     // Try to change state to Connected. Possible if this peer's state
-    // is currently Connect or Refine, or Move. Refine is necessary since the
+    // is currently Connect, Refine, Move, or Free. Refine is necessary since the
     // refinery process requires us to establish a connection to a peer.
     // Move is necessary due to the upgrade to Gold sequence in
-    // `session::perform_handshake_protocols`.
+    // `session::perform_handshake_protocols`. Free is necessary since
+    // this could be a peer we previously recognize from inbound sessions.
     fn try_connected(&self, channel: ChannelPtr) -> Result<Self> {
         let start = self.to_string();
         let end = HostState::Connected(channel.clone()).to_string();
@@ -219,8 +220,10 @@ impl HostState {
     }
 
     // Try to change state to Move. Possibly if this host is currently
-    // Connect i.e. it is being connected to, or if we are currently Connected
-    // to this peer (due to host Downgrade sequence in `session::remove_sub_on_stop`)
+    // Connect i.e. it is being connected to, if we are currently Connected
+    // to this peer (due to host Downgrade sequence in `session::remove_sub_on_stop`),
+    // or if this node is Free (since we might recognize this peer from a previous
+    // inbound session).
     fn try_move(&self) -> Result<Self> {
         let start = self.to_string();
         let end = HostState::Move.to_string();
@@ -253,6 +256,12 @@ impl HostState {
         }
     }
 
+    // Free up this host to be used by the HostRegistry. The most permissive
+    // state that allows every state transition with the exception of Suspend
+    // since Suspend is specific to outbound session and has a strict state of
+    // transitions associated with it.
+    // This is preferable to simply deleting hosts from the HostRegistry since
+    // it is less likely to result in race conditions.
     fn try_free(&self, age: u64) -> Result<Self> {
         match self {
             HostState::Insert => Ok(HostState::Free(age)),
@@ -858,8 +867,6 @@ impl Hosts {
             self.container.sort_by_last_seen(color.clone() as usize);
             self.container.resize(color.clone());
 
-            // Free up this peer for usage by other parts of the code base.
-            // This is a safe since the hostlist modification is now complete.
             self.unregister(addr);
         }
 
@@ -944,12 +951,11 @@ impl Hosts {
         None
     }
 
-    /// Remove a host from the HostRegistry. Must be called after move(), when the refinery
-    /// process fails, or when a channel stops. Prevents hosts from getting trapped in the
-    /// HostState logical machinery.
+    /// Mark as host as Free which frees it up for most future operations.
     pub(in crate::net) fn unregister(&self, addr: &Url) {
         let age = UNIX_EPOCH.elapsed().unwrap().as_secs();
         self.try_register(addr.clone(), HostState::Free(age)).unwrap();
+        debug!(target: "net::hosts::unregister()", "Unregistered: {}", &addr);
     }
 
     /// Returns the list of connected channels.
@@ -1269,10 +1275,8 @@ impl Hosts {
     /// Note that this method puts a given Url into the "Move" state but does not reset the
     /// state afterwards. This is because the next state will differ depending on its usage.
     /// The state transition from `Move` to `Connected` or `Suspend` are both valid operations.
-    /// In some cases, `unregister()` can be called after `move_host()` but it must be done with
-    /// care due to the potential for race conditions.
-    ///
-    /// TODO: replace unregister() with a tombstone() call.
+    /// In some cases, `unregister()` can be called after `move_host()` to explicitly mark
+    /// the host state as `Free`.
     pub(in crate::net) fn move_host(
         &self,
         addr: &Url,

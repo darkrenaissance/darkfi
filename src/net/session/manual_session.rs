@@ -195,8 +195,7 @@ impl Slot {
                                 self.addr, e,
                             );
 
-                            // Stop tracking this peer, to avoid it getting stuck in the Connect
-                            // state. This is safe since we have failed to connect at this point.
+                            // Free up this addr for future operations.
                             self.p2p().hosts().unregister(&self.addr);
                         }
                     }

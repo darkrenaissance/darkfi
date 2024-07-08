@@ -248,7 +248,7 @@ impl GreylistRefinery {
                 warn!(target: "net::refinery", "No connections for {}s. GreylistRefinery paused.",
                           offline_timer.as_secs());
 
-                // It is neccessary to clear suspended hosts at this point, otherwise these
+                // It is neccessary to Free suspended hosts at this point, otherwise these
                 // hosts cannot be connected to in Outbound Session. Failure to do this could
                 // result in the refinery being paused forver (since connections could never be
                 // made).
