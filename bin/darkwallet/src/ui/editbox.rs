@@ -1,4 +1,4 @@
-use miniquad::{window, BufferId, KeyCode, KeyMods, MouseButton, TextureId};
+use miniquad::{window, BufferId, KeyCode, KeyMods, MouseButton, TextureId, TouchPhase};
 use rand::{rngs::OsRng, Rng};
 use std::{
     collections::HashMap,
@@ -245,6 +245,14 @@ impl EditBox {
                 }
             });
 
+            let ev_sub = event_pub.subscribe_touch();
+            let me2 = me.clone();
+            let touch_task = ex.spawn(async move {
+                loop {
+                    Self::process_touch(&me2, &ev_sub).await;
+                }
+            });
+
             let mut on_modify = OnModify::new(ex, node_name, node_id, me.clone());
             on_modify.when_change(is_focused.prop(), Self::change_focus);
 
@@ -255,6 +263,7 @@ impl EditBox {
                 mouse_btn_down_task,
                 mouse_btn_up_task,
                 mouse_move_task,
+                touch_task,
             ];
             tasks.append(&mut on_modify.tasks);
 
@@ -549,6 +558,24 @@ impl EditBox {
         self_.handle_mouse_move(mouse_x, mouse_y).await;
     }
 
+    async fn process_touch(me: &Weak<Self>, ev_sub: &Subscription<(TouchPhase, u64, f32, f32)>) {
+        let Ok((phase, id, touch_x, touch_y)) = ev_sub.receive().await else {
+            debug!(target: "ui::editbox", "Event relayer closed");
+            return
+        };
+
+        let Some(self_) = me.upgrade() else {
+            // Should not happen
+            panic!("self destroyed before touch_task was stopped!");
+        };
+
+        if !self_.is_active.get() {
+            return
+        }
+
+        self_.handle_touch(phase, id, touch_x, touch_y).await;
+    }
+
     async fn change_focus(self: Arc<Self>) {
         if !self.is_active.get() {
             return
@@ -611,7 +638,11 @@ impl EditBox {
             self.redraw().await;
         }
     }
-    fn handle_mouse_btn_up(&self, button: MouseButton, x: f32, y: f32) {
+    fn handle_mouse_btn_up(&self, btn: MouseButton, x: f32, y: f32) {
+        if btn != MouseButton::Left {
+            return
+        }
+
         // releasing mouse button will end selection
         self.mouse_btn_held.store(false, Ordering::Relaxed);
     }
@@ -633,6 +664,22 @@ impl EditBox {
 
         self.apply_cursor_scrolling();
         self.redraw().await;
+    }
+
+    async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_x: f32, touch_y: f32) {
+        // Ignore multi-touch
+        if id != 0 {
+            return
+        }
+        // Simulate mouse events
+        match phase {
+            TouchPhase::Started => {
+                self.handle_mouse_btn_down(MouseButton::Left, touch_x, touch_y).await
+            }
+            TouchPhase::Moved => self.handle_mouse_move(touch_x, touch_y).await,
+            TouchPhase::Ended => self.handle_mouse_btn_up(MouseButton::Left, touch_x, touch_y),
+            TouchPhase::Cancelled => {}
+        }
     }
 
     /// Used when clicking the text. Given the x coord of the mouse, it finds the index
