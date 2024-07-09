@@ -50,7 +50,7 @@ use std::sync::{
 use async_trait::async_trait;
 use futures::stream::{FuturesUnordered, StreamExt};
 use log::{debug, info, warn};
-use smol::lock::Mutex;
+use smol::lock::{Mutex as AsyncMutex, RwLock as AsyncRwLock};
 use url::Url;
 
 use super::{
@@ -73,13 +73,13 @@ pub type SeedSyncSessionPtr = Arc<SeedSyncSession>;
 /// Defines seed connections session
 pub struct SeedSyncSession {
     pub(in crate::net) p2p: LazyWeak<P2p>,
-    slots: Mutex<Vec<Arc<Slot>>>,
+    slots: AsyncMutex<Vec<Arc<Slot>>>,
 }
 
 impl SeedSyncSession {
     /// Create a new seed sync session instance
     pub(crate) fn new() -> SeedSyncSessionPtr {
-        Arc::new(Self { p2p: LazyWeak::new(), slots: Mutex::new(Vec::new()) })
+        Arc::new(Self { p2p: LazyWeak::new(), slots: AsyncMutex::new(Vec::new()) })
     }
 
     /// Initialize the seedsync session. Each slot is suspended while it waits
@@ -94,7 +94,7 @@ impl SeedSyncSession {
 
         // Initialize a slot for each configured seed.
         // Connections will be started by not yet activated.
-        for seed in &self.p2p().settings().seeds {
+        for seed in &self.p2p().settings().read().await.seeds {
             let slot = Slot::new(self_.clone(), seed.clone(), self.p2p().settings());
             futures.push(slot.clone().start());
             slots.push(slot);
@@ -154,7 +154,11 @@ struct Slot {
 }
 
 impl Slot {
-    fn new(session: Weak<SeedSyncSession>, addr: Url, settings: Arc<Settings>) -> Arc<Self> {
+    fn new(
+        session: Weak<SeedSyncSession>,
+        addr: Url,
+        settings: Arc<AsyncRwLock<Settings>>,
+    ) -> Arc<Self> {
         Arc::new(Self {
             addr,
             process: StoppableTask::new(),

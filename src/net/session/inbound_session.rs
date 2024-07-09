@@ -67,7 +67,9 @@ impl InboundSession {
     /// if the addresses are not configured. Then runs the channel subscription
     /// loop.
     pub async fn start(self: Arc<Self>) -> Result<()> {
-        if self.p2p().settings().inbound_addrs.is_empty() {
+        let inbound_addrs = self.p2p().settings().read().await.inbound_addrs.clone();
+
+        if inbound_addrs.is_empty() {
             info!(target: "net::inbound_session", "[P2P] Not configured for inbound connections.");
             return Ok(())
         }
@@ -77,7 +79,7 @@ impl InboundSession {
         // Activate mutex lock on accept tasks.
         let mut accept_tasks = self.accept_tasks.lock().await;
 
-        for (index, accept_addr) in self.p2p().settings().inbound_addrs.iter().enumerate() {
+        for (index, accept_addr) in inbound_addrs.iter().enumerate() {
             // First initialize an Acceptor and its Subscriber.
             let parent = Arc::downgrade(&self);
             let acceptor = Acceptor::new(parent);
@@ -111,8 +113,8 @@ impl InboundSession {
 
     /// Stops the inbound session.
     pub async fn stop(&self) {
-        if self.p2p().settings().inbound_addrs.is_empty() {
-            info!(target: "net::inbound_session", "[P2P] Not configured for inbound connections.");
+        if self.p2p().settings().read().await.inbound_addrs.is_empty() {
+            info!(target: "net::inbound_session", "[P2P] Stopping inbound session.");
             return
         }
 

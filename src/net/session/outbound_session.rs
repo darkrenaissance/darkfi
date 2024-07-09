@@ -82,8 +82,9 @@ impl OutboundSession {
 
     /// Start the outbound session. Runs the channel connect loop.
     pub(crate) async fn start(self: Arc<Self>) {
-        let n_slots = self.p2p().settings().outbound_connections;
+        let n_slots = self.p2p().settings().read().await.outbound_connections;
         info!(target: "net::outbound_session", "[P2P] Starting {} outbound connection slots.", n_slots);
+
         // Activate mutex lock on connection slots.
         let mut slots = self.slots.lock().await;
 
@@ -163,6 +164,7 @@ struct Slot {
 impl Slot {
     fn new(session: Weak<OutboundSession>, slot: u32) -> Arc<Self> {
         let settings = session.upgrade().unwrap().p2p().settings();
+
         Arc::new(Self {
             slot,
             process: StoppableTask::new(),
@@ -188,6 +190,7 @@ impl Slot {
             ex,
         );
     }
+
     async fn stop(self: Arc<Self>) {
         self.connector.stop();
         self.process.stop().await;
@@ -203,18 +206,23 @@ impl Slot {
     /// and healthy since we require the network retains some unreliable
     /// connections. A network that purely favors uptime over unreliable
     /// connections may be vulnerable to sybil by attackers with good uptime.
-    fn fetch_addrs(&self) -> Option<(Url, u64)> {
+    async fn fetch_addrs(&self) -> Option<(Url, u64)> {
         let hosts = self.p2p().hosts();
         let slot = self.slot as usize;
-        let settings = self.p2p().settings();
         let container = &self.p2p().hosts().container;
+
+        // Acquire Settings read lock
+        let settings = self.p2p().settings().read_arc().await;
 
         let white_count = (settings.white_connect_percent * settings.outbound_connections) / 100;
         let gold_count = settings.gold_connect_count;
 
-        let transports = &settings.allowed_transports;
+        let transports = settings.allowed_transports.clone();
         let transport_mixing = settings.transport_mixing;
-        let preference_strict = &settings.slot_preference_strict;
+        let preference_strict = settings.slot_preference_strict;
+
+        // Drop Settings read lock
+        drop(settings);
 
         let grey_only = hosts.container.is_empty(HostColor::White) &&
             hosts.container.is_empty(HostColor::Gold) &&
@@ -223,15 +231,16 @@ impl Slot {
         // If we only have grey entries, select from the greylist. Otherwise,
         // use the preference defined in settings.
         let addrs = if grey_only && !preference_strict {
-            container.fetch(HostColor::Grey, transports, transport_mixing)
+            container.fetch(HostColor::Grey, &transports, transport_mixing)
         } else if slot < gold_count {
-            container.fetch(HostColor::Gold, transports, transport_mixing)
+            container.fetch(HostColor::Gold, &transports, transport_mixing)
         } else if slot < white_count {
-            container.fetch(HostColor::White, transports, transport_mixing)
+            container.fetch(HostColor::White, &transports, transport_mixing)
         } else {
-            container.fetch(HostColor::Grey, transports, transport_mixing)
+            container.fetch(HostColor::Grey, &transports, transport_mixing)
         };
-        hosts.check_addrs(addrs)
+
+        hosts.check_addrs(addrs).await
     }
 
     // We first try to make connections to the addresses on our gold list. We then find some
@@ -267,7 +276,7 @@ impl Slot {
                 continue
             }
 
-            let addr = if let Some(addr) = self.fetch_addrs() {
+            let addr = if let Some(addr) = self.fetch_addrs().await {
                 debug!(target: "net::outbound_session::run()", "Fetched addr={}, slot #{}", addr.0,
                 self.slot);
                 addr
@@ -515,7 +524,15 @@ impl PeerDiscoveryBase for PeerDiscovery {
             // wait to be woken up by notify()
             let sleep_was_instant = self.wait().await;
 
-            let p2p = self.p2p();
+            // Read the current P2P settings
+            let settings = self.p2p().settings().read_arc().await;
+            let outbound_peer_discovery_cooloff_time =
+                settings.outbound_peer_discovery_cooloff_time;
+            let outbound_peer_discovery_attempt_time =
+                settings.outbound_peer_discovery_attempt_time;
+            let outbound_connections = settings.outbound_connections;
+            let allowed_transports = settings.allowed_transports.clone();
+            drop(settings);
 
             if sleep_was_instant {
                 // Try again
@@ -537,13 +554,13 @@ impl PeerDiscoveryBase for PeerDiscovery {
                     state: "sleep",
                 });
 
-                sleep(p2p.settings().outbound_peer_discovery_cooloff_time).await;
+                sleep(outbound_peer_discovery_cooloff_time).await;
                 current_attempt = 1;
             }
 
             // First 2 times try sending GetAddr to the network.
             // 3rd time do a seed sync.
-            if p2p.is_connected() && current_attempt <= 2 {
+            if self.p2p().is_connected() && current_attempt <= 2 {
                 // Broadcast the GetAddrs message to all active channels.
                 // If we have no active channels, we will perform a SeedSyncSession instead.
 
@@ -559,16 +576,17 @@ impl PeerDiscoveryBase for PeerDiscovery {
                 });
 
                 let get_addrs = GetAddrsMessage {
-                    max: p2p.settings().outbound_connections as u32,
-                    transports: p2p.settings().allowed_transports.clone(),
+                    max: outbound_connections as u32,
+                    transports: allowed_transports,
                 };
-                p2p.broadcast(&get_addrs).await;
+
+                self.p2p().broadcast(&get_addrs).await;
 
                 // Wait for a hosts store update event
                 let store_sub = self.p2p().hosts().subscribe_store().await;
 
                 let result = timeout(
-                    Duration::from_secs(p2p.settings().outbound_peer_discovery_attempt_time),
+                    Duration::from_secs(outbound_peer_discovery_attempt_time),
                     store_sub.receive(),
                 )
                 .await;
@@ -607,9 +625,9 @@ impl PeerDiscoveryBase for PeerDiscovery {
                     state: "seed",
                 });
 
-                p2p.clone().seed().await;
+                self.p2p().seed().await;
 
-                if p2p.clone().session_seedsync().failed().await {
+                if self.p2p().session_seedsync().failed().await {
                     error!(
                         target: "net::outbound_session::peer_discovery()",
                         "[P2P] Network reseed failed!"
@@ -621,7 +639,7 @@ impl PeerDiscoveryBase for PeerDiscovery {
             self.session().wakeup_slots().await;
 
             // Give some time for new connections to be established
-            sleep(p2p.settings().outbound_peer_discovery_attempt_time).await;
+            sleep(outbound_peer_discovery_attempt_time).await;
         }
     }
 

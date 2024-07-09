@@ -90,7 +90,7 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
 
     let charlie_url = Url::parse("tcp+tls://127.0.0.1:18342")?;
     settings.inbound_addrs = vec![charlie_url];
-    let bob_url = th.bob.p2p.settings().inbound_addrs[0].clone();
+    let bob_url = th.bob.p2p.settings().read().await.inbound_addrs[0].clone();
     settings.peers = vec![bob_url];
     let charlie = generate_node(
         &th.vks,

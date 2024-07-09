@@ -20,12 +20,16 @@ use std::{
     collections::HashMap,
     fmt, fs,
     fs::File,
-    sync::{Arc, Mutex, RwLock},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex, RwLock,
+    },
     time::{Instant, UNIX_EPOCH},
 };
 
 use log::{debug, error, info, trace, warn};
 use rand::{prelude::IteratorRandom, rngs::OsRng, Rng};
+use smol::lock::RwLock as AsyncRwLock;
 use url::Url;
 
 use super::{settings::Settings, ChannelPtr};
@@ -814,15 +818,15 @@ pub struct Hosts {
     pub(in crate::net) last_connection: Mutex<Instant>,
 
     /// Marker for IPv6 availability
-    pub(in crate::net) ipv6_available: Mutex<bool>,
+    pub(in crate::net) ipv6_available: AtomicBool,
 
     /// Pointer to configured P2P settings
-    settings: Arc<Settings>,
+    settings: Arc<AsyncRwLock<Settings>>,
 }
 
 impl Hosts {
     /// Create a new hosts list
-    pub(in crate::net) fn new(settings: Arc<Settings>) -> HostsPtr {
+    pub(in crate::net) fn new(settings: Arc<AsyncRwLock<Settings>>) -> HostsPtr {
         Arc::new(Self {
             registry: Mutex::new(HashMap::new()),
             container: HostContainer::new(),
@@ -830,7 +834,7 @@ impl Hosts {
             channel_publisher: Publisher::new(),
             disconnect_publisher: Publisher::new(),
             last_connection: Mutex::new(Instant::now()),
-            ipv6_available: Mutex::new(true),
+            ipv6_available: AtomicBool::new(true),
             settings,
         })
     }
@@ -843,7 +847,7 @@ impl Hosts {
         // First filter these address to ensure this peer doesn't exist in our black, gold or
         // whitelist and apply transport filtering. If we don't support this transport,
         // store the peer on our dark list to broadcast to other nodes.
-        let filtered_addrs = self.filter_addresses(self.settings.clone(), addrs);
+        let filtered_addrs = self.filter_addresses(addrs).await;
         let mut addrs_len = 0;
 
         if filtered_addrs.is_empty() {
@@ -923,22 +927,28 @@ impl Hosts {
 
     // Loop through hosts selected by Outbound Session and see if any of them are
     // free to connect to.
-    pub(in crate::net) fn check_addrs(&self, hosts: Vec<(Url, u64)>) -> Option<(Url, u64)> {
+    pub(in crate::net) async fn check_addrs(&self, hosts: Vec<(Url, u64)>) -> Option<(Url, u64)> {
         trace!(target: "net::hosts::check_addrs()", "[START]");
+
+        let seeds = self.settings.read().await.seeds.clone();
+
         for (host, last_seen) in hosts {
             // Print a warning if we are trying to connect to a seed node in
             // Outbound session. This shouldn't happen as we reject configured
             // seed nodes from entering our hostlist in filter_addrs().
-            if self.settings.seeds.contains(&host) {
-                warn!(target: "net::hosts::check_addrs",
-                      "Seed addr={} has entered the hostlist! Skipping",
-                      host.clone());
+            if seeds.contains(&host) {
+                warn!(
+                    target: "net::hosts::check_addrs",
+                    "Seed addr={} has entered the hostlist! Skipping", host.clone(),
+                );
                 continue
             }
 
             if let Err(e) = self.try_register(host.clone(), HostState::Connect) {
-                trace!(target: "net::hosts::check_addrs", "Skipping addr={}, err={}",
-                       host.clone(), e);
+                trace!(
+                    target: "net::hosts::check_addrs",
+                    "Skipping addr={}, err={}", host.clone(), e,
+                );
                 continue
             }
 
@@ -1073,8 +1083,8 @@ impl Hosts {
     }
 
     /// Import blacklisted peers specified in the config file.
-    pub(in crate::net) fn import_blacklist(&self) -> Result<()> {
-        for (mut host, ports) in self.settings.blacklist.clone() {
+    pub(in crate::net) async fn import_blacklist(&self) -> Result<()> {
+        for (mut host, ports) in self.settings.read().await.blacklist.clone() {
             // If the ports are empty, simply store the host_str. We will use this to
             // blacklist all ports of a given peer in `block_all_ports()`.
             if ports.is_empty() {
@@ -1105,11 +1115,12 @@ impl Hosts {
 
     /// Filter given addresses based on certain rulesets and validity. Strictly called only on
     /// the first time learning of new peers.
-    fn filter_addresses(&self, settings: Arc<Settings>, addrs: &[(Url, u64)]) -> Vec<(Url, u64)> {
-        debug!(target: "net::hosts::filter_addresses()", "Filtering addrs: {:?}", addrs);
+    async fn filter_addresses(&self, addrs: &[(Url, u64)]) -> Vec<(Url, u64)> {
+        debug!(target: "net::hosts::filter_addresses", "Filtering addrs: {:?}", addrs);
         let mut ret = vec![];
-        let localnet = self.settings.localnet;
-        let ipv6_available: bool = { *self.ipv6_available.lock().unwrap() };
+
+        // Acquire read lock on P2P settings. Dropped when this function finishes.
+        let settings = self.settings.read().await;
 
         'addr_loop: for (addr_, last_seen) in addrs {
             // Validate that the format is `scheme://host_str:port`
@@ -1118,15 +1129,19 @@ impl Hosts {
                 addr_.cannot_be_a_base() ||
                 addr_.path_segments().is_some()
             {
-                debug!(target: "net::hosts::filter_addresses()",
-                       "[{}] has invalid addr format. Skipping", addr_);
+                debug!(
+                    target: "net::hosts::filter_addresses",
+                    "[{}] has invalid addr format. Skipping", addr_,
+                );
                 continue
             }
 
             // Configured seeds should never enter the hostlist.
-            if self.settings.seeds.contains(addr_) {
-                debug!(target: "net::hosts::filter_addresses()",
-                       "[{}] is a configured seed. Skipping", addr_);
+            if settings.seeds.contains(addr_) {
+                debug!(
+                    target: "net::hosts::filter_addresses",
+                    "[{}] is a configured seed. Skipping", addr_,
+                );
                 continue
             }
 
@@ -1134,19 +1149,23 @@ impl Hosts {
             if self.container.contains(HostColor::Black as usize, addr_) ||
                 self.block_all_ports(addr_.host_str().unwrap().to_string())
             {
-                warn!(target: "net::hosts::filter_addresses()",
-                      "[{}] is blacklisted", addr_);
+                warn!(
+                    target: "net::hosts::filter_addresses",
+                    "[{}] is blacklisted", addr_,
+                );
                 continue
             }
 
             let host_str = addr_.host_str().unwrap();
 
-            if !localnet {
+            if !settings.localnet {
                 // Our own external addresses should never enter the hosts set.
                 for ext in &settings.external_addrs {
                     if host_str == ext.host_str().unwrap() {
-                        debug!(target: "net::hosts::filter_addresses()",
-                               "[{}] is our own external addr. Skipping", addr_);
+                        debug!(
+                            target: "net::hosts::filter_addresses",
+                            "[{}] is our own external addr. Skipping", addr_,
+                        );
                         continue 'addr_loop
                     }
                 }
@@ -1154,8 +1173,10 @@ impl Hosts {
                 // On localnet, make sure ours ports don't enter the host set.
                 for ext in &settings.external_addrs {
                     if addr_.port() == ext.port() {
-                        debug!(target: "net::hosts::filter_addresses()",
-                               "[{}] is our own localnet port. Skipping", addr_);
+                        debug!(
+                            target: "net::hosts::filter_addresses",
+                            "[{}] is our own localnet port. Skipping", addr_,
+                        );
                         continue 'addr_loop
                     }
                 }
@@ -1168,9 +1189,11 @@ impl Hosts {
             // Filter non-global ranges if we're not allowing localnet.
             // Should never be allowed in production, so we don't really care
             // about some of them (e.g. 0.0.0.0, or broadcast, etc.).
-            if !localnet && self.is_local_host(addr) {
-                debug!(target: "net::hosts::filter_addresses()",
-                       "[{}] Filtering non-global ranges", addr_);
+            if !settings.localnet && self.is_local_host(addr) {
+                debug!(
+                    target: "net::hosts::filter_addresses",
+                    "[{}] Filtering non-global ranges", addr_,
+                );
                 continue
             }
 
@@ -1182,8 +1205,10 @@ impl Hosts {
                     if tor_hscrypto::pk::HsId::from_str(host_str).is_err() {
                         continue
                     }
-                    trace!(target: "net::hosts::filter_addresses()",
-                           "[Tor] Valid: {}", host_str);
+                    trace!(
+                        target: "net::hosts::filter_addresses",
+                        "[Tor] Valid: {}", host_str,
+                    );
                 }
 
                 #[cfg(feature = "p2p-nym")]
@@ -1191,8 +1216,10 @@ impl Hosts {
 
                 #[cfg(feature = "p2p-tcp")]
                 "tcp" | "tcp+tls" => {
-                    trace!(target: "net::hosts::filter_addresses()",
-                           "[TCP] Valid: {}", host_str);
+                    trace!(
+                        target: "net::hosts::filter_addresses",
+                        "[TCP] Valid: {}", host_str,
+                    );
                 }
 
                 _ => continue,
@@ -1203,7 +1230,7 @@ impl Hosts {
             // We will personally ignore this peer but still send it to others in
             // Protocol Addr to ensure all transports get propagated.
             if !settings.allowed_transports.contains(&addr_.scheme().to_string()) ||
-                (!ipv6_available && self.is_ipv6(addr_.clone()))
+                (!self.ipv6_available.load(Ordering::SeqCst) && self.is_ipv6(addr_.clone()))
             {
                 self.container.store_or_update(HostColor::Dark, addr_.clone(), *last_seen);
                 self.container.sort_by_last_seen(HostColor::Dark as usize);
@@ -1219,7 +1246,7 @@ impl Hosts {
                 self.container.contains(HostColor::White as usize, addr_) ||
                 self.container.contains(HostColor::Grey as usize, addr_)
             {
-                debug!(target: "net::hosts::filter_addresses()", "[{}] exists! Skipping", addr_);
+                debug!(target: "net::hosts::filter_addresses", "[{}] exists! Skipping", addr_);
                 continue
             }
 
@@ -1346,9 +1373,7 @@ impl Hosts {
 
 #[cfg(test)]
 mod tests {
-    use std::time::UNIX_EPOCH;
-
-    use super::{super::settings::Settings, *};
+    use super::*;
     use crate::system::sleep;
 
     #[test]
@@ -1361,7 +1386,7 @@ mod tests {
             ],
             ..Default::default()
         };
-        let hosts = Hosts::new(Arc::new(settings.clone()));
+        let hosts = Hosts::new(Arc::new(AsyncRwLock::new(settings)));
 
         let local_hosts: Vec<Url> = vec![
             Url::parse("tcp://localhost").unwrap(),
@@ -1389,7 +1414,7 @@ mod tests {
     #[test]
     fn test_is_ipv6() {
         let settings = Settings { ..Default::default() };
-        let hosts = Hosts::new(Arc::new(settings.clone()));
+        let hosts = Hosts::new(Arc::new(AsyncRwLock::new(settings)));
 
         let ipv6_hosts: Vec<Url> = vec![
             Url::parse("tcp+tls://[::1]").unwrap(),
@@ -1415,8 +1440,8 @@ mod tests {
     #[test]
     fn test_block_all_ports() {
         let settings = Settings { ..Default::default() };
+        let hosts = Hosts::new(Arc::new(AsyncRwLock::new(settings)));
 
-        let hosts = Hosts::new(Arc::new(settings.clone()));
         let blacklist1 = Url::parse("tcp+tls://nietzsche.king:333").unwrap();
         let blacklist2 = Url::parse("tcp+tls://agorism.xyz").unwrap();
 
@@ -1432,8 +1457,8 @@ mod tests {
         let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
 
         let settings = Settings { ..Default::default() };
+        let hosts = Hosts::new(Arc::new(AsyncRwLock::new(settings)));
 
-        let hosts = Hosts::new(Arc::new(settings.clone()));
         let grey_hosts = vec![
             Url::parse("tcp://localhost:3921").unwrap(),
             Url::parse("tor://[::1]:21481").unwrap(),
@@ -1479,7 +1504,7 @@ mod tests {
     fn test_get_last() {
         smol::block_on(async {
             let settings = Settings { ..Default::default() };
-            let hosts = Hosts::new(Arc::new(settings.clone()));
+            let hosts = Hosts::new(Arc::new(AsyncRwLock::new(settings)));
 
             // Build up a hostlist
             for i in 0..10 {

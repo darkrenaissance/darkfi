@@ -118,7 +118,7 @@ impl Spawn {
 
     async fn info(&self) -> JsonValue {
         let mut addr_vec = vec![];
-        for addr in &self.p2p.settings().inbound_addrs {
+        for addr in &self.p2p.settings().read().await.inbound_addrs {
             addr_vec.push(JsonValue::String(addr.as_ref().to_string()));
         }
 

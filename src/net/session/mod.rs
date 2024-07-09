@@ -128,8 +128,11 @@ pub trait Session: Sync {
 
         // Perform the handshake protocol
         let protocol_version = ProtocolVersion::new(channel.clone(), p2p.settings().clone()).await;
-        debug!(target: "net::session::register_channel()",
-        "Performing handshake protocols {}", channel.clone().address());
+        debug!(
+            target: "net::session::register_channel()",
+            "Performing handshake protocols {}", channel.clone().address(),
+        );
+
         let handshake_task =
             self.perform_handshake_protocols(protocol_version, channel.clone(), executor.clone());
 

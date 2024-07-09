@@ -258,7 +258,7 @@ impl ProtocolEventGraph {
 
                     let parents = match timeout(
                         Duration::from_secs(
-                            self.event_graph.p2p.settings().outbound_connect_timeout,
+                            self.event_graph.p2p.settings().read().await.outbound_connect_timeout,
                         ),
                         self.ev_rep_sub.receive(),
                     )

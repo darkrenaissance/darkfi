@@ -16,13 +16,17 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{atomic::Ordering, Arc},
+    time::Duration,
+};
 
 use futures::{
     future::{select, Either},
     pin_mut,
 };
 use log::warn;
+use smol::lock::RwLock as AsyncRwLock;
 use url::Url;
 
 use super::{
@@ -37,7 +41,7 @@ use crate::{system::CondVar, Error, Result};
 /// Create outbound socket connections
 pub struct Connector {
     /// P2P settings
-    settings: Arc<Settings>,
+    settings: Arc<AsyncRwLock<Settings>>,
     /// Weak pointer to the session
     pub session: SessionWeakPtr,
     /// Stop signal that aborts the connector if received.
@@ -46,7 +50,7 @@ pub struct Connector {
 
 impl Connector {
     /// Create a new connector with given network settings
-    pub fn new(settings: Arc<Settings>, session: SessionWeakPtr) -> Self {
+    pub fn new(settings: Arc<AsyncRwLock<Settings>>, session: SessionWeakPtr) -> Self {
         Self { settings, session, stop_signal: CondVar::new() }
     }
 
@@ -60,11 +64,17 @@ impl Connector {
             return Err(Error::ConnectFailed)
         }
 
-        let mut endpoint = url.clone();
+        let settings = self.settings.read().await;
+        let transports = settings.allowed_transports.clone();
+        let transport_mixing = settings.transport_mixing;
+        let datastore = settings.datastore.clone();
+        let outbound_connect_timeout = settings.outbound_connect_timeout;
+        drop(settings);
 
-        let transports = &self.settings.allowed_transports;
+        let mut endpoint = url.clone();
         let scheme = endpoint.scheme();
-        if !transports.contains(&scheme.to_string()) && self.settings.transport_mixing {
+
+        if !transports.contains(&scheme.to_string()) && transport_mixing {
             if transports.contains(&"tor".to_string()) && scheme == "tcp" {
                 endpoint.set_scheme("tor")?;
             } else if transports.contains(&"tor+tls".to_string()) && scheme == "tcp+tls" {
@@ -76,8 +86,8 @@ impl Connector {
             }
         }
 
-        let dialer = Dialer::new(endpoint.clone(), self.settings.datastore.clone()).await?;
-        let timeout = Duration::from_secs(self.settings.outbound_connect_timeout);
+        let dialer = Dialer::new(endpoint.clone(), datastore).await?;
+        let timeout = Duration::from_secs(outbound_connect_timeout);
 
         let stop_fut = async {
             self.stop_signal.wait().await;
@@ -102,8 +112,13 @@ impl Connector {
             Either::Left((Err(e), _)) => {
                 // If we get ENETUNREACH, we don't have IPv6 connectivity so note it down.
                 if e.raw_os_error() == Some(libc::ENETUNREACH) {
-                    *self.session.upgrade().unwrap().p2p().hosts().ipv6_available.lock().unwrap() =
-                        false;
+                    self.session
+                        .upgrade()
+                        .unwrap()
+                        .p2p()
+                        .hosts()
+                        .ipv6_available
+                        .store(false, Ordering::SeqCst);
                 }
                 Err(e.into())
             }

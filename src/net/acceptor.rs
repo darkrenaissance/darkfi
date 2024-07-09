@@ -63,13 +63,10 @@ impl Acceptor {
 
     /// Start accepting inbound socket connections
     pub async fn start(self: Arc<Self>, endpoint: Url, ex: Arc<Executor<'_>>) -> Result<()> {
-        let listener = Listener::new(
-            endpoint,
-            self.session.upgrade().unwrap().p2p().settings().datastore.clone(),
-        )
-        .await?
-        .listen()
-        .await?;
+        let datastore =
+            self.session.upgrade().unwrap().p2p().settings().read().await.datastore.clone();
+
+        let listener = Listener::new(endpoint, datastore).await?.listen().await?;
 
         self.accept(listener, ex);
         Ok(())
@@ -110,7 +107,9 @@ impl Acceptor {
 
         loop {
             // Refuse new connections if we're up to the connection limit
-            let limit = self.session.upgrade().unwrap().p2p().settings().inbound_connections;
+            let limit =
+                self.session.upgrade().unwrap().p2p().settings().read().await.inbound_connections;
+
             if self.clone().conn_count.load(SeqCst) >= limit {
                 // This will get notified every time an inbound channel is stopped.
                 // These channels are the channels spawned below on listener.next().is_ok().

@@ -26,7 +26,7 @@ use futures::{
     pin_mut,
 };
 use log::{debug, error};
-use smol::{Executor, Timer};
+use smol::{lock::RwLock as AsyncRwLock, Executor, Timer};
 
 use super::super::{
     channel::ChannelPtr,
@@ -42,13 +42,15 @@ pub struct ProtocolVersion {
     channel: ChannelPtr,
     version_sub: MessageSubscription<VersionMessage>,
     verack_sub: MessageSubscription<VerackMessage>,
-    settings: Arc<Settings>,
+    settings: Arc<AsyncRwLock<Settings>>,
 }
 
 impl ProtocolVersion {
     /// Create a new version protocol. Makes a version and version ack
     /// subscription, then adds them to a version protocol instance.
-    pub async fn new(channel: ChannelPtr, settings: Arc<Settings>) -> Arc<Self> {
+    // TODO: This function takes settings as a param, however, it is also reachable through Channel.
+    //       Maybe we want to navigate towards Settings through channel->session->p2p->settings
+    pub async fn new(channel: ChannelPtr, settings: Arc<AsyncRwLock<Settings>>) -> Arc<Self> {
         // Creates a version subscription
         let version_sub =
             channel.subscribe_msg::<VersionMessage>().await.expect("Missing version dispatcher!");
@@ -65,7 +67,8 @@ impl ProtocolVersion {
     /// version ack.
     pub async fn run(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "net::protocol_version::run()", "START => address={}", self.channel.address());
-        let timeout = Timer::after(Duration::from_secs(self.settings.channel_handshake_timeout));
+        let timeout =
+            Timer::after(Duration::from_secs(self.settings.read().await.channel_handshake_timeout));
         let version = self.clone().exchange_versions(executor);
 
         pin_mut!(timeout);
@@ -147,13 +150,19 @@ impl ProtocolVersion {
             "START => address={}", self.channel.address(),
         );
 
+        let settings = self.settings.read().await;
+        let node_id = settings.node_id.clone();
+        let app_version = settings.app_version.clone();
+        let external_addrs = settings.external_addrs.clone();
+        drop(settings);
+
         let version = VersionMessage {
-            node_id: self.settings.node_id.clone(),
-            version: self.settings.app_version.clone(),
+            node_id,
+            version: app_version.clone(),
             timestamp: UNIX_EPOCH.elapsed().unwrap().as_secs(),
             connect_recv_addr: self.channel.connect_addr().clone(),
             resolve_recv_addr: self.channel.resolve_addr().clone(),
-            ext_send_addr: self.settings.external_addrs.clone(),
+            ext_send_addr: external_addrs,
             /* NOTE: `features` is a list of enabled features in the
             format Vec<(service, version)>. In the future, Protocols will
             add their own data to this field when they are attached.*/
@@ -168,12 +177,12 @@ impl ProtocolVersion {
         debug!(
             target: "net::protocol_version::send_version()",
             "App version: {}, Recv version: {}",
-            self.settings.app_version, verack_msg.app_version,
+            app_version, verack_msg.app_version,
         );
 
         // MAJOR and MINOR should be the same.
-        if self.settings.app_version.major != verack_msg.app_version.major ||
-            self.settings.app_version.minor != verack_msg.app_version.minor
+        if app_version.major != verack_msg.app_version.major ||
+            app_version.minor != verack_msg.app_version.minor
         {
             error!(
                 target: "net::protocol_version::send_version()",
@@ -206,7 +215,7 @@ impl ProtocolVersion {
         self.channel.set_version(version).await;
 
         // Send verack
-        let verack = VerackMessage { app_version: self.settings.app_version.clone() };
+        let verack = VerackMessage { app_version: self.settings.read().await.app_version.clone() };
         self.channel.send(&verack).await?;
 
         debug!(

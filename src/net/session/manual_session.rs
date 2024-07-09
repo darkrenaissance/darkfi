@@ -36,7 +36,7 @@ use std::sync::{Arc, Weak};
 use async_trait::async_trait;
 use futures::stream::{FuturesUnordered, StreamExt};
 use log::{debug, error, info, warn};
-use smol::lock::Mutex;
+use smol::lock::{Mutex as AsyncMutex, RwLock as AsyncRwLock};
 use url::Url;
 
 use super::{
@@ -57,13 +57,13 @@ pub type ManualSessionPtr = Arc<ManualSession>;
 /// Defines manual connections session.
 pub struct ManualSession {
     pub(in crate::net) p2p: LazyWeak<P2p>,
-    slots: Mutex<Vec<Arc<Slot>>>,
+    slots: AsyncMutex<Vec<Arc<Slot>>>,
 }
 
 impl ManualSession {
     /// Create a new manual session.
     pub fn new() -> ManualSessionPtr {
-        Arc::new(Self { p2p: LazyWeak::new(), slots: Mutex::new(Vec::new()) })
+        Arc::new(Self { p2p: LazyWeak::new(), slots: AsyncMutex::new(Vec::new()) })
     }
 
     pub(crate) async fn start(self: Arc<Self>) {
@@ -76,7 +76,7 @@ impl ManualSession {
 
         // Initialize a slot for each configured peer.
         // Connections will be started by not yet activated.
-        for peer in &self.p2p().settings().peers {
+        for peer in &self.p2p().settings().read().await.peers {
             let slot = Slot::new(self_.clone(), peer.clone(), self.p2p().settings());
             futures.push(slot.clone().start());
             slots.push(slot);
@@ -117,7 +117,11 @@ struct Slot {
 }
 
 impl Slot {
-    fn new(session: Weak<ManualSession>, addr: Url, settings: Arc<Settings>) -> Arc<Self> {
+    fn new(
+        session: Weak<ManualSession>,
+        addr: Url,
+        settings: Arc<AsyncRwLock<Settings>>,
+    ) -> Arc<Self> {
         Arc::new(Self {
             addr,
             process: StoppableTask::new(),
@@ -156,11 +160,18 @@ impl Slot {
                 self.addr, attempts
             );
 
+            let settings = self.p2p().settings().read_arc().await;
+            let seeds = settings.seeds.clone();
+            let outbound_connect_timeout = settings.outbound_connect_timeout;
+            drop(settings);
+
             // Do not establish a connection to a host that is also configured as a seed.
             // This indicates a user misconfiguration.
-            if self.p2p().settings().seeds.contains(&self.addr) {
-                error!(target: "net::manual_session", 
-                       "[P2P] Suspending manual connection to seed [{}]", self.addr.clone());
+            if seeds.contains(&self.addr) {
+                error!(
+                    target: "net::manual_session",
+                    "[P2P] Suspending manual connection to seed [{}]", self.addr.clone(),
+                );
                 return Ok(())
             }
 
@@ -210,9 +221,9 @@ impl Slot {
             info!(
                 target: "net::manual_session",
                 "[P2P] Waiting {} seconds until next manual outbound connection attempt [{}]",
-                self.p2p().settings().outbound_connect_timeout, self.addr,
+                outbound_connect_timeout, self.addr,
             );
-            sleep(self.p2p().settings().outbound_connect_timeout).await;
+            sleep(outbound_connect_timeout).await;
         }
     }
 

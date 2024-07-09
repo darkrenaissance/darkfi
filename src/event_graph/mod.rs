@@ -251,7 +251,7 @@ impl EventGraph {
             };
 
             let peer_tips = match timeout(
-                Duration::from_secs(self.p2p.settings().outbound_connect_timeout),
+                Duration::from_secs(self.p2p.settings().read().await.outbound_connect_timeout),
                 tip_rep_sub.receive(),
             )
             .await
@@ -355,7 +355,7 @@ impl EventGraph {
                 }
 
                 let parent = match timeout(
-                    Duration::from_secs(self.p2p.settings().outbound_connect_timeout),
+                    Duration::from_secs(self.p2p.settings().read().await.outbound_connect_timeout),
                     ev_rep_sub.receive(),
                 )
                 .await

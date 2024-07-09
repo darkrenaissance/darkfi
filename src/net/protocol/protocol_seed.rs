@@ -20,7 +20,7 @@ use std::{sync::Arc, time::UNIX_EPOCH};
 
 use async_trait::async_trait;
 use log::debug;
-use smol::Executor;
+use smol::{lock::RwLock as AsyncRwLock, Executor};
 
 use super::{
     super::{
@@ -39,7 +39,7 @@ use crate::Result;
 pub struct ProtocolSeed {
     channel: ChannelPtr,
     hosts: HostsPtr,
-    settings: Arc<Settings>,
+    settings: Arc<AsyncRwLock<Settings>>,
     addr_sub: MessageSubscription<AddrsMessage>,
 }
 
@@ -48,41 +48,50 @@ const PROTO_NAME: &str = "ProtocolSeed";
 impl ProtocolSeed {
     /// Create a new seed protocol.
     pub async fn init(channel: ChannelPtr, p2p: P2pPtr) -> ProtocolBasePtr {
-        let hosts = p2p.hosts();
-        let settings = p2p.settings();
-
         // Create a subscription to address message
         let addr_sub =
             channel.subscribe_msg::<AddrsMessage>().await.expect("Missing addr dispatcher!");
 
-        Arc::new(Self { channel, hosts, settings, addr_sub })
+        Arc::new(Self { channel, hosts: p2p.hosts(), settings: p2p.settings(), addr_sub })
     }
 
     /// Send our own external addresses over a channel. Set the
     /// last_seen field to now.
     pub async fn send_my_addrs(&self) -> Result<()> {
-        debug!(target: "net::protocol_seed::send_my_addrs()",
-        "[START] channel address={}", self.channel.address());
+        debug!(
+            target: "net::protocol_seed::send_my_addrs",
+            "[START] channel address={}", self.channel.address(),
+        );
 
-        if self.settings.external_addrs.is_empty() {
-            debug!(target: "net::protocol_seed::send_my_addrs()",
-            "External address is not configured. Stopping");
+        let external_addrs = self.settings.read().await.external_addrs.clone();
+
+        if external_addrs.is_empty() {
+            debug!(
+                target: "net::protocol_seed::send_my_addrs",
+                "External address is not configured. Stopping",
+            );
             return Ok(())
         }
 
         let mut addrs = vec![];
 
-        for addr in self.settings.external_addrs.clone() {
+        for addr in external_addrs {
             let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
             addrs.push((addr, last_seen));
         }
 
-        debug!(target: "net::protocol_seed::send_my_addrs()",
-        "Broadcasting {} addresses", addrs.len());
+        debug!(
+            target: "net::protocol_seed::send_my_addrs",
+            "Broadcasting {} addresses", addrs.len(),
+        );
+
         let ext_addr_msg = AddrsMessage { addrs };
         self.channel.send(&ext_addr_msg).await?;
-        debug!(target: "net::protocol_seed::send_my_addrs()",
-        "[END] channel address={}", self.channel.address());
+
+        debug!(
+            target: "net::protocol_seed::send_my_addrs",
+            "[END] channel address={}", self.channel.address(),
+        );
 
         Ok(())
     }
@@ -100,11 +109,14 @@ impl ProtocolBase for ProtocolSeed {
         // Send own address to the seed server
         self.send_my_addrs().await?;
 
+        let settings = self.settings.read().await;
+        let outbound_connections = settings.outbound_connections;
+        let allowed_transports = settings.allowed_transports.clone();
+        drop(settings);
+
         // Send get address message
-        let get_addr = GetAddrsMessage {
-            max: self.settings.outbound_connections as u32,
-            transports: self.settings.allowed_transports.clone(),
-        };
+        let get_addr =
+            GetAddrsMessage { max: outbound_connections as u32, transports: allowed_transports };
         self.channel.send(&get_addr).await?;
 
         // Receive addresses

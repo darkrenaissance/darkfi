@@ -158,7 +158,7 @@ impl ProtocolProposal {
             // Node waits for response
             let response = match self
                 .proposals_response_sub
-                .receive_with_timeout(self.p2p.settings().outbound_connect_timeout)
+                .receive_with_timeout(self.p2p.settings().read().await.outbound_connect_timeout)
                 .await
             {
                 Ok(r) => r,

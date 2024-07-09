@@ -71,7 +71,7 @@ impl RefineSession {
 
     /// Start the refinery and self handshake processes.
     pub(crate) async fn start(self: Arc<Self>) {
-        if let Some(ref hostlist) = self.p2p().settings().hostlist {
+        if let Some(ref hostlist) = self.p2p().settings().read().await.hostlist {
             match self.p2p().hosts().container.load_all(hostlist) {
                 Ok(()) => {
                     debug!(target: "net::refine_session::start", "Load hosts successful!");
@@ -82,7 +82,7 @@ impl RefineSession {
             }
         }
 
-        match self.p2p().hosts().import_blacklist() {
+        match self.p2p().hosts().import_blacklist().await {
             Ok(()) => {
                 debug!(target: "net::refine_session::start", "Import blacklist successful!");
             }
@@ -101,7 +101,7 @@ impl RefineSession {
         debug!(target: "net::refine_session", "Stopping refinery process");
         self.refinery.clone().stop().await;
 
-        if let Some(ref hostlist) = self.p2p().settings().hostlist {
+        if let Some(ref hostlist) = self.p2p().settings().read().await.hostlist {
             match self.p2p().hosts().container.save_all(hostlist) {
                 Ok(()) => {
                     debug!(target: "net::refine_session::stop()", "Save hosts successful!");
@@ -224,11 +224,17 @@ impl GreylistRefinery {
     // Randomly select a peer on the greylist and probe it. This method will remove from the
     // greylist and store on the whitelist providing the peer is responsive.
     async fn run(self: Arc<Self>) {
-        let p2p = self.p2p();
-        let hosts = p2p.hosts();
-        let settings = p2p.settings();
+        let hosts = self.p2p().hosts();
+
         loop {
-            sleep(settings.greylist_refinery_interval).await;
+            // Acquire read lock on P2P settings and load necessary settings
+            let settings = self.p2p().settings().read_arc().await;
+            let greylist_refinery_interval = settings.greylist_refinery_interval;
+            let time_with_no_connections = settings.time_with_no_connections;
+            let allowed_transports = settings.allowed_transports.clone();
+            drop(settings);
+
+            sleep(greylist_refinery_interval).await;
 
             if hosts.container.is_empty(HostColor::Grey) {
                 debug!(target: "net::refinery",
@@ -239,12 +245,12 @@ impl GreylistRefinery {
 
             // Pause the refinery if we've had zero connections for longer than the configured
             // limit.
-            let offline_limit = Duration::from_secs(settings.time_with_no_connections);
+            let offline_limit = Duration::from_secs(time_with_no_connections);
 
             let offline_timer =
                 { Instant::now().duration_since(*hosts.last_connection.lock().unwrap()) };
 
-            if !p2p.is_connected() && offline_timer >= offline_limit {
+            if !self.p2p().is_connected() && offline_timer >= offline_limit {
                 warn!(target: "net::refinery", "No connections for {}s. GreylistRefinery paused.",
                           offline_timer.as_secs());
 
@@ -261,10 +267,7 @@ impl GreylistRefinery {
             }
 
             // Only attempt to refine peers that match our transports.
-            match hosts
-                .container
-                .fetch_random_with_schemes(HostColor::Grey, &settings.allowed_transports)
-            {
+            match hosts.container.fetch_random_with_schemes(HostColor::Grey, &allowed_transports) {
                 Some((entry, _)) => {
                     let url = &entry.0;
                     let last_seen = &entry.1;
@@ -275,7 +278,7 @@ impl GreylistRefinery {
                         continue
                     }
 
-                    if !self.session().handshake_node(url.clone(), p2p.clone()).await {
+                    if !self.session().handshake_node(url.clone(), self.p2p().clone()).await {
                         debug!(
                             target: "net::refinery",
                             "Peer {} handshake failed. Removed from greylist", url,

@@ -169,7 +169,7 @@ async fn get_random_gold_host(
 ) -> ((Url, u64), usize) {
     let random_node = &outbound_instances[index];
     let hosts = random_node.hosts();
-    let external_addr = &random_node.settings().external_addrs[0];
+    let external_addr = random_node.settings().read().await.external_addrs[0].clone();
 
     info!("========================================================");
     info!("Getting gold addr from node={}", external_addr);
@@ -185,7 +185,7 @@ async fn get_random_gold_host(
 async fn _check_random_hostlist(outbound_instances: &Vec<Arc<P2p>>, rng: &mut ThreadRng) {
     let mut urls = HashSet::new();
     let random_node = outbound_instances.choose(rng).unwrap();
-    let external_addr = &random_node.settings().external_addrs[0];
+    let external_addr = random_node.settings().read().await.external_addrs[0].clone();
 
     info!("========================================================");
     info!("Checking node={}", external_addr);
@@ -209,7 +209,7 @@ async fn _check_random_hostlist(outbound_instances: &Vec<Arc<P2p>>, rng: &mut Th
 
 async fn check_all_hostlist(outbound_instances: &Vec<Arc<P2p>>) {
     for node in outbound_instances {
-        let external_addr = &node.settings().external_addrs[0];
+        let external_addr = &node.settings().read().await.external_addrs[0].clone();
         info!("========================================================");
         info!("Checking node={}", external_addr);
         info!("========================================================");
@@ -233,9 +233,9 @@ async fn check_all_hostlist(outbound_instances: &Vec<Arc<P2p>>) {
 }
 async fn kill_node(outbound_instances: &Vec<Arc<P2p>>, node: Url) {
     for p2p in outbound_instances {
-        if p2p.settings().external_addrs[0] == node {
+        if p2p.settings().read().await.external_addrs[0] == node {
             info!("========================================================");
-            info!("Shutting down node: {}", p2p.settings().external_addrs[0]);
+            info!("Shutting down node: {}", p2p.settings().read().await.external_addrs[0]);
             info!("========================================================");
             p2p.stop().await;
         }
@@ -312,7 +312,7 @@ async fn p2p_test_real(ex: Arc<Executor<'static>>) {
 
     for p2p in &outbound_instances {
         info!("========================================================");
-        info!("Starting node={}", p2p.settings().external_addrs[0]);
+        info!("Starting node={}", p2p.settings().read().await.external_addrs[0]);
         info!("========================================================");
         p2p.clone().start().await.unwrap();
     }
@@ -344,7 +344,7 @@ async fn p2p_test_real(ex: Arc<Executor<'static>>) {
     assert!(!seed.hosts().container.is_empty(HostColor::White));
 
     info!("========================================================");
-    info!("Checking seed={}", seed.settings().inbound_addrs[0]);
+    info!("Checking seed={}", seed.settings().read().await.inbound_addrs[0]);
     info!("========================================================");
 
     let mut urls = HashSet::new();
@@ -439,7 +439,7 @@ async fn p2p_test_real(ex: Arc<Executor<'static>>) {
 
     for p2p in &manual_instances {
         info!("========================================================");
-        info!("Starting node={}", p2p.settings().external_addrs[0]);
+        info!("Starting node={}", p2p.settings().read().await.external_addrs[0]);
         info!("========================================================");
         p2p.clone().start().await.unwrap();
     }
@@ -457,7 +457,7 @@ async fn p2p_test_real(ex: Arc<Executor<'static>>) {
         // We should have (N_CONNS outbound + N_CONNS inbound)
         // connections at this point.
         info!("========================================================");
-        info!("Checking manual node={}", p2p.settings().node_id);
+        info!("Checking manual node={}", p2p.settings().read().await.node_id);
         info!("========================================================");
         let channels = p2p.hosts().channels();
         assert!(channels.len() == N_CONNS * 2);

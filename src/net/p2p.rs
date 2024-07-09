@@ -26,6 +26,7 @@ use futures_rustls::rustls::crypto::{ring, CryptoProvider};
 use log::{debug, error, info, warn};
 use smol::{
     fs::{self, unix::PermissionsExt},
+    lock::RwLock as AsyncRwLock,
     stream::StreamExt,
 };
 use url::Url;
@@ -60,7 +61,7 @@ pub struct P2p {
     /// Protocol registry
     protocol_registry: ProtocolRegistry,
     /// P2P network settings
-    settings: Arc<Settings>,
+    settings: Arc<AsyncRwLock<Settings>>,
     /// Reference to configured [`ManualSession`]
     session_manual: ManualSessionPtr,
     /// Reference to configured [`InboundSession`]
@@ -87,8 +88,6 @@ impl P2p {
     /// Creates a weak pointer to self that is used by all sessions to access the
     /// p2p parent class.
     pub async fn new(settings: Settings, executor: ExecutorPtr) -> Result<P2pPtr> {
-        let settings = Arc::new(settings);
-
         // Create the datastore
         if let Some(ref datastore) = settings.datastore {
             let datastore = expand_path(datastore)?;
@@ -99,9 +98,12 @@ impl P2p {
         // Register a CryptoProvider for rustls
         let _ = CryptoProvider::install_default(ring::default_provider());
 
+        // Wrap the Settings into an Arc<RwLock>
+        let settings = Arc::new(AsyncRwLock::new(settings));
+
         let self_ = Arc::new(Self {
             executor,
-            hosts: Hosts::new(settings.clone()),
+            hosts: Hosts::new(Arc::clone(&settings)),
             protocol_registry: ProtocolRegistry::new(),
             settings,
             session_manual: ManualSession::new(),
@@ -114,11 +116,11 @@ impl P2p {
             dnet_publisher: Publisher::new(),
         });
 
-        self_.session_manual.p2p.init(self_.clone());
         self_.session_inbound.p2p.init(self_.clone());
+        self_.session_manual.p2p.init(self_.clone());
+        self_.session_seedsync.p2p.init(self_.clone());
         self_.session_outbound.p2p.init(self_.clone());
         self_.session_refine.p2p.init(self_.clone());
-        self_.session_seedsync.p2p.init(self_.clone());
 
         register_default_protocols(self_.clone()).await;
 
@@ -127,18 +129,17 @@ impl P2p {
 
     /// Starts inbound, outbound, and manual sessions.
     pub async fn start(self: Arc<Self>) -> Result<()> {
-        debug!(target: "net::p2p::start()", "P2P::start() [BEGIN]");
-        info!(target: "net::p2p::start()", "[P2P] Starting P2P subsystem");
-
-        // First attempt any set manual connections
-        self.session_manual().start().await;
+        debug!(target: "net::p2p::start", "P2P::start() [BEGIN]");
+        info!(target: "net::p2p::start", "[P2P] Starting P2P subsystem");
 
         // Start the inbound session
         if let Err(err) = self.session_inbound().start().await {
-            error!(target: "net::p2p::start()", "Failed to start inbound session!: {}", err);
-            self.session_manual().stop().await;
+            error!(target: "net::p2p::start", "Failed to start inbound session!: {}", err);
             return Err(err)
         }
+
+        // Start the manual session
+        self.session_manual().start().await;
 
         // Start the seedsync session. Seed connections will not
         // activate yet- they wait for a call to notify().
@@ -150,7 +151,7 @@ impl P2p {
         // Start the refine session
         self.session_refine().start().await;
 
-        info!(target: "net::p2p::start()", "[P2P] P2P subsystem started");
+        info!(target: "net::p2p::start", "[P2P] P2P subsystem started");
         Ok(())
     }
 
@@ -223,8 +224,8 @@ impl P2p {
     }
 
     /// Return an atomic pointer to the set network settings
-    pub fn settings(&self) -> Arc<Settings> {
-        self.settings.clone()
+    pub fn settings(&self) -> Arc<AsyncRwLock<Settings>> {
+        Arc::clone(&self.settings)
     }
 
     /// Return an atomic pointer to the list of hosts

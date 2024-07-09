@@ -24,7 +24,7 @@ use std::{
 use async_trait::async_trait;
 use log::{debug, error, warn};
 use rand::{rngs::OsRng, Rng};
-use smol::Executor;
+use smol::{lock::RwLock as AsyncRwLock, Executor};
 
 use super::{
     super::{
@@ -47,7 +47,7 @@ pub struct ProtocolPing {
     channel: ChannelPtr,
     ping_sub: MessageSubscription<PingMessage>,
     pong_sub: MessageSubscription<PongMessage>,
-    settings: Arc<Settings>,
+    settings: Arc<AsyncRwLock<Settings>>,
     jobsman: ProtocolJobsManagerPtr,
 }
 
@@ -56,8 +56,6 @@ const PROTO_NAME: &str = "ProtocolPing";
 impl ProtocolPing {
     /// Create a new ping-pong protocol.
     pub async fn init(channel: ChannelPtr, p2p: P2pPtr) -> ProtocolBasePtr {
-        let settings = p2p.settings();
-
         // Creates a subscription to ping message
         let ping_sub =
             channel.subscribe_msg::<PingMessage>().await.expect("Missing ping dispatcher!");
@@ -70,7 +68,7 @@ impl ProtocolPing {
             channel: channel.clone(),
             ping_sub,
             pong_sub,
-            settings,
+            settings: p2p.settings(),
             jobsman: ProtocolJobsManager::new(PROTO_NAME, channel),
         })
     }
@@ -86,6 +84,11 @@ impl ProtocolPing {
         );
 
         loop {
+            let settings = self.settings.read().await;
+            let outbound_connect_timeout = settings.outbound_connect_timeout;
+            let channel_heartbeat_interval = settings.channel_heartbeat_interval;
+            drop(settings);
+
             // Create a random nonce.
             let nonce = Self::random_nonce();
 
@@ -98,7 +101,7 @@ impl ProtocolPing {
 
             // Wait for pong, check nonce matches.
             let pong_msg = match timeout(
-                Duration::from_secs(self.settings.outbound_connect_timeout),
+                Duration::from_secs(outbound_connect_timeout),
                 self.pong_sub.receive(),
             )
             .await
@@ -138,7 +141,7 @@ impl ProtocolPing {
             );
 
             // Sleep until next heartbeat
-            sleep(self.settings.channel_heartbeat_interval).await;
+            sleep(channel_heartbeat_interval).await;
         }
     }
 

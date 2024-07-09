@@ -20,7 +20,7 @@ use std::{sync::Arc, time::UNIX_EPOCH};
 
 use async_trait::async_trait;
 use log::debug;
-use smol::Executor;
+use smol::{lock::RwLock as AsyncRwLock, Executor};
 
 use super::{
     super::{
@@ -62,7 +62,7 @@ pub struct ProtocolAddress {
     addrs_sub: MessageSubscription<AddrsMessage>,
     get_addrs_sub: MessageSubscription<GetAddrsMessage>,
     hosts: HostsPtr,
-    settings: Arc<Settings>,
+    settings: Arc<AsyncRwLock<Settings>>,
     jobsman: ProtocolJobsManagerPtr,
 }
 
@@ -79,9 +79,6 @@ impl ProtocolAddress {
     /// and a get-address subscription and adds them to the address protocol
     /// instance.
     pub async fn init(channel: ChannelPtr, p2p: P2pPtr) -> ProtocolBasePtr {
-        let settings = p2p.settings();
-        let hosts = p2p.hosts();
-
         // Creates a subscription to address message
         let addrs_sub =
             channel.subscribe_msg::<AddrsMessage>().await.expect("Missing addrs dispatcher!");
@@ -94,9 +91,9 @@ impl ProtocolAddress {
             channel: channel.clone(),
             addrs_sub,
             get_addrs_sub,
-            hosts,
+            hosts: p2p.hosts(),
             jobsman: ProtocolJobsManager::new(PROTO_NAME, channel),
-            settings,
+            settings: p2p.settings(),
         })
     }
 
@@ -215,35 +212,48 @@ impl ProtocolAddress {
     /// last_seen field to now.
     async fn send_my_addrs(self: Arc<Self>) -> Result<()> {
         debug!(
-            target: "net::protocol_address::send_my_addrs()",
+            target: "net::protocol_address::send_my_addrs",
             "[START] channel address={}", self.channel.address(),
         );
 
         let type_id = self.channel.session_type_id();
         if type_id != SESSION_OUTBOUND {
-            debug!(target: "net::protocol_address::send_my_addrs()",
-            "Not an outbound session. Stopping");
+            debug!(
+                target: "net::protocol_address::send_my_addrs",
+                "Not an outbound session. Stopping",
+            );
             return Ok(())
         }
 
-        if self.settings.external_addrs.is_empty() {
-            debug!(target: "net::protocol_address::send_my_addrs()",
-            "External addr not configured. Stopping");
+        let external_addrs = self.settings.read().await.external_addrs.clone();
+
+        if external_addrs.is_empty() {
+            debug!(
+                target: "net::protocol_address::send_my_addrs",
+                "External addr not configured. Stopping",
+            );
             return Ok(())
         }
 
         let mut addrs = vec![];
 
-        for addr in self.settings.external_addrs.clone() {
+        for addr in external_addrs {
             let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
             addrs.push((addr, last_seen));
         }
-        debug!(target: "net::protocol_address::send_my_addrs()",
-        "Broadcasting {} addresses", addrs.len());
+
+        debug!(
+            target: "net::protocol_address::send_my_addrs",
+            "Broadcasting {} addresses", addrs.len(),
+        );
+
         let ext_addr_msg = AddrsMessage { addrs };
         self.channel.send(&ext_addr_msg).await?;
-        debug!(target: "net::protocol_address::send_my_addrs()",
-        "[END] channel address={}", self.channel.address());
+
+        debug!(
+            target: "net::protocol_address::send_my_addrs",
+            "[END] channel address={}", self.channel.address(),
+        );
 
         Ok(())
     }
@@ -256,8 +266,15 @@ impl ProtocolBase for ProtocolAddress {
     /// and get address protocols on the protocol task manager. Then send
     /// get-address msg.
     async fn start(self: Arc<Self>, ex: Arc<Executor<'_>>) -> Result<()> {
-        debug!(target: "net::protocol_address::start()",
-        "START => address={}", self.channel.address());
+        debug!(
+            target: "net::protocol_address::start()",
+            "START => address={}", self.channel.address(),
+        );
+
+        let settings = self.settings.read().await;
+        let outbound_connections = settings.outbound_connections;
+        let allowed_transports = settings.allowed_transports.clone();
+        drop(settings);
 
         self.jobsman.clone().start(ex.clone());
 
@@ -268,14 +285,14 @@ impl ProtocolBase for ProtocolAddress {
         self.jobsman.spawn(self.clone().handle_receive_get_addrs(), ex).await;
 
         // Send get_address message.
-        let get_addrs = GetAddrsMessage {
-            max: self.settings.outbound_connections as u32,
-            transports: self.settings.allowed_transports.clone(),
-        };
+        let get_addrs =
+            GetAddrsMessage { max: outbound_connections as u32, transports: allowed_transports };
         self.channel.send(&get_addrs).await?;
 
-        debug!(target: "net::protocol_address::start()",
-        "END => address={}", self.channel.address());
+        debug!(
+            target: "net::protocol_address::start()",
+            "END => address={}", self.channel.address(),
+        );
 
         Ok(())
     }
