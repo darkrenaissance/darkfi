@@ -44,7 +44,9 @@ use super::{
     message::{VersionMessage, MAGIC_BYTES},
     message_publisher::{MessageSubscription, MessageSubsystem},
     p2p::P2pPtr,
-    session::{Session, SessionBitFlag, SessionWeakPtr, SESSION_ALL, SESSION_REFINE},
+    session::{
+        Session, SessionBitFlag, SessionWeakPtr, SESSION_ALL, SESSION_INBOUND, SESSION_REFINE,
+    },
     transport::PtStream,
 };
 use crate::{
@@ -390,9 +392,19 @@ impl Channel {
     /// Ban a malicious peer and stop the channel.
     pub async fn ban(&self, peer: &Url) {
         debug!(target: "net::channel::ban()", "START {:?}", self);
+
+        // Just store the hostname if this is an inbound session.
+        // This will block all ports from this peer by setting
+        // `hosts.block_all_ports()` to true.
+        let peer = {
+            if self.session_type_id() & SESSION_INBOUND != 0 {
+                &Url::parse(peer.host_str().unwrap()).unwrap()
+            } else {
+                peer
+            }
+        };
         let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
         self.p2p().hosts().move_host(peer, last_seen, HostColor::Black).unwrap();
-
         self.stop().await;
         debug!(target: "net::channel::ban()", "STOP {:?}", self);
     }
