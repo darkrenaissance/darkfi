@@ -24,7 +24,7 @@ use std::{
     },
 };
 
-use log::{error, warn};
+use log::{error, info, warn};
 use smol::Executor;
 use url::Url;
 
@@ -66,9 +66,28 @@ impl Acceptor {
         let datastore =
             self.session.upgrade().unwrap().p2p().settings().read().await.datastore.clone();
 
-        let listener = Listener::new(endpoint, datastore).await?.listen().await?;
+        // Initialize listener
+        let listener = Listener::new(endpoint.clone(), datastore).await?;
 
-        self.accept(listener, ex);
+        // Open socket
+        let ptlistener = listener.listen().await?;
+
+        #[cfg(feature = "p2p-tor")]
+        if endpoint.scheme() == "tor" {
+            let onion_addr = listener.endpoint().await;
+            info!("[P2P] Adding {} to external_addrs", onion_addr);
+            self.session
+                .upgrade()
+                .unwrap()
+                .p2p()
+                .settings()
+                .write()
+                .await
+                .external_addrs
+                .push(onion_addr);
+        }
+
+        self.accept(ptlistener, ex);
         Ok(())
     }
 
