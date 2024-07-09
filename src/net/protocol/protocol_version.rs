@@ -32,7 +32,7 @@ use super::super::{
     channel::ChannelPtr,
     message::{VerackMessage, VersionMessage},
     message_publisher::MessageSubscription,
-    settings::SettingsPtr,
+    settings::Settings,
 };
 use crate::{Error, Result};
 
@@ -42,13 +42,13 @@ pub struct ProtocolVersion {
     channel: ChannelPtr,
     version_sub: MessageSubscription<VersionMessage>,
     verack_sub: MessageSubscription<VerackMessage>,
-    settings: SettingsPtr,
+    settings: Arc<Settings>,
 }
 
 impl ProtocolVersion {
     /// Create a new version protocol. Makes a version and version ack
     /// subscription, then adds them to a version protocol instance.
-    pub async fn new(channel: ChannelPtr, settings: SettingsPtr) -> Arc<Self> {
+    pub async fn new(channel: ChannelPtr, settings: Arc<Settings>) -> Arc<Self> {
         // Creates a version subscription
         let version_sub =
             channel.subscribe_msg::<VersionMessage>().await.expect("Missing version dispatcher!");

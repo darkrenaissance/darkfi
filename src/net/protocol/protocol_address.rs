@@ -30,7 +30,7 @@ use super::{
         message_publisher::MessageSubscription,
         p2p::P2pPtr,
         session::SESSION_OUTBOUND,
-        settings::SettingsPtr,
+        settings::Settings,
     },
     protocol_base::{ProtocolBase, ProtocolBasePtr},
     protocol_jobs_manager::{ProtocolJobsManager, ProtocolJobsManagerPtr},
@@ -62,7 +62,7 @@ pub struct ProtocolAddress {
     addrs_sub: MessageSubscription<AddrsMessage>,
     get_addrs_sub: MessageSubscription<GetAddrsMessage>,
     hosts: HostsPtr,
-    settings: SettingsPtr,
+    settings: Arc<Settings>,
     jobsman: ProtocolJobsManagerPtr,
 }
 

@@ -40,7 +40,7 @@ use super::{
         InboundSession, InboundSessionPtr, ManualSession, ManualSessionPtr, OutboundSession,
         OutboundSessionPtr, RefineSession, RefineSessionPtr, SeedSyncSession, SeedSyncSessionPtr,
     },
-    settings::{Settings, SettingsPtr},
+    settings::Settings,
 };
 use crate::{
     system::{ExecutorPtr, Publisher, PublisherPtr, Subscription},
@@ -60,7 +60,7 @@ pub struct P2p {
     /// Protocol registry
     protocol_registry: ProtocolRegistry,
     /// P2P network settings
-    settings: SettingsPtr,
+    settings: Arc<Settings>,
     /// Reference to configured [`ManualSession`]
     session_manual: ManualSessionPtr,
     /// Reference to configured [`InboundSession`]
@@ -223,7 +223,7 @@ impl P2p {
     }
 
     /// Return an atomic pointer to the set network settings
-    pub fn settings(&self) -> SettingsPtr {
+    pub fn settings(&self) -> Arc<Settings> {
         self.settings.clone()
     }
 

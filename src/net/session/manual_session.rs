@@ -47,7 +47,7 @@ use super::{
     Session, SessionBitFlag, SESSION_MANUAL,
 };
 use crate::{
-    net::{hosts::HostState, settings::SettingsPtr},
+    net::{hosts::HostState, settings::Settings},
     system::{sleep, LazyWeak, StoppableTask, StoppableTaskPtr},
     Error, Result,
 };
@@ -117,7 +117,7 @@ struct Slot {
 }
 
 impl Slot {
-    fn new(session: Weak<ManualSession>, addr: Url, settings: SettingsPtr) -> Arc<Self> {
+    fn new(session: Weak<ManualSession>, addr: Url, settings: Arc<Settings>) -> Arc<Self> {
         Arc::new(Self {
             addr,
             process: StoppableTask::new(),

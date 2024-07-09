@@ -32,7 +32,7 @@ use super::{
         message::{PingMessage, PongMessage},
         message_publisher::MessageSubscription,
         p2p::P2pPtr,
-        settings::SettingsPtr,
+        settings::Settings,
     },
     protocol_base::{ProtocolBase, ProtocolBasePtr},
     protocol_jobs_manager::{ProtocolJobsManager, ProtocolJobsManagerPtr},
@@ -47,7 +47,7 @@ pub struct ProtocolPing {
     channel: ChannelPtr,
     ping_sub: MessageSubscription<PingMessage>,
     pong_sub: MessageSubscription<PongMessage>,
-    settings: SettingsPtr,
+    settings: Arc<Settings>,
     jobsman: ProtocolJobsManagerPtr,
 }
 

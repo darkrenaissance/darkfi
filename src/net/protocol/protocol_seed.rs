@@ -29,7 +29,7 @@ use super::{
         message::{AddrsMessage, GetAddrsMessage},
         message_publisher::MessageSubscription,
         p2p::P2pPtr,
-        settings::SettingsPtr,
+        settings::Settings,
     },
     protocol_base::{ProtocolBase, ProtocolBasePtr},
 };
@@ -39,7 +39,7 @@ use crate::Result;
 pub struct ProtocolSeed {
     channel: ChannelPtr,
     hosts: HostsPtr,
-    settings: SettingsPtr,
+    settings: Arc<Settings>,
     addr_sub: MessageSubscription<AddrsMessage>,
 }
 

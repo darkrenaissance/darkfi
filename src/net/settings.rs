@@ -16,13 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::Arc;
-
 use structopt::StructOpt;
 use url::Url;
-
-/// Atomic pointer to network settings
-pub type SettingsPtr = Arc<Settings>;
 
 /// P2P network settings. The scope of this is a P2P network instance
 /// configured by the library user.

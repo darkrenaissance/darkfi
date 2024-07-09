@@ -42,14 +42,15 @@
 //! function. This runs the version exchange protocol, stores the channel in the
 //! p2p list of channels, and subscribes to a stop signal.
 
-use async_trait::async_trait;
-use futures::stream::{FuturesUnordered, StreamExt};
-use log::{debug, info, warn};
-use smol::lock::Mutex;
 use std::sync::{
     atomic::{AtomicBool, Ordering::SeqCst},
     Arc, Weak,
 };
+
+use async_trait::async_trait;
+use futures::stream::{FuturesUnordered, StreamExt};
+use log::{debug, info, warn};
+use smol::lock::Mutex;
 use url::Url;
 
 use super::{
@@ -57,7 +58,7 @@ use super::{
         connector::Connector,
         hosts::HostColor,
         p2p::{P2p, P2pPtr},
-        settings::SettingsPtr,
+        settings::Settings,
     },
     Session, SessionBitFlag, SESSION_SEED,
 };
@@ -153,7 +154,7 @@ struct Slot {
 }
 
 impl Slot {
-    fn new(session: Weak<SeedSyncSession>, addr: Url, settings: SettingsPtr) -> Arc<Self> {
+    fn new(session: Weak<SeedSyncSession>, addr: Url, settings: Arc<Settings>) -> Arc<Self> {
         Arc::new(Self {
             addr,
             process: StoppableTask::new(),

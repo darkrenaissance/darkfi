@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use futures::{
     future::{select, Either},
@@ -29,7 +29,7 @@ use super::{
     channel::{Channel, ChannelPtr},
     hosts::HostColor,
     session::SessionWeakPtr,
-    settings::SettingsPtr,
+    settings::Settings,
     transport::Dialer,
 };
 use crate::{system::CondVar, Error, Result};
@@ -37,7 +37,7 @@ use crate::{system::CondVar, Error, Result};
 /// Create outbound socket connections
 pub struct Connector {
     /// P2P settings
-    settings: SettingsPtr,
+    settings: Arc<Settings>,
     /// Weak pointer to the session
     pub session: SessionWeakPtr,
     /// Stop signal that aborts the connector if received.
@@ -46,7 +46,7 @@ pub struct Connector {
 
 impl Connector {
     /// Create a new connector with given network settings
-    pub fn new(settings: SettingsPtr, session: SessionWeakPtr) -> Self {
+    pub fn new(settings: Arc<Settings>, session: SessionWeakPtr) -> Self {
         Self { settings, session, stop_signal: CondVar::new() }
     }
 

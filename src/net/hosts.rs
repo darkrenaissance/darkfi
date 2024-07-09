@@ -28,7 +28,7 @@ use log::{debug, error, info, trace, warn};
 use rand::{prelude::IteratorRandom, rngs::OsRng, Rng};
 use url::Url;
 
-use super::{settings::SettingsPtr, ChannelPtr};
+use super::{settings::Settings, ChannelPtr};
 use crate::{
     system::{Publisher, PublisherPtr, Subscription},
     util::{
@@ -817,12 +817,12 @@ pub struct Hosts {
     pub(in crate::net) ipv6_available: Mutex<bool>,
 
     /// Pointer to configured P2P settings
-    settings: SettingsPtr,
+    settings: Arc<Settings>,
 }
 
 impl Hosts {
     /// Create a new hosts list
-    pub(in crate::net) fn new(settings: SettingsPtr) -> HostsPtr {
+    pub(in crate::net) fn new(settings: Arc<Settings>) -> HostsPtr {
         Arc::new(Self {
             registry: Mutex::new(HashMap::new()),
             container: HostContainer::new(),
@@ -1105,7 +1105,7 @@ impl Hosts {
 
     /// Filter given addresses based on certain rulesets and validity. Strictly called only on
     /// the first time learning of new peers.
-    fn filter_addresses(&self, settings: SettingsPtr, addrs: &[(Url, u64)]) -> Vec<(Url, u64)> {
+    fn filter_addresses(&self, settings: Arc<Settings>, addrs: &[(Url, u64)]) -> Vec<(Url, u64)> {
         debug!(target: "net::hosts::filter_addresses()", "Filtering addrs: {:?}", addrs);
         let mut ret = vec![];
         let localnet = self.settings.localnet;
