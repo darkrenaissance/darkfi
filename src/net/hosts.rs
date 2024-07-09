@@ -257,9 +257,7 @@ impl HostState {
     }
 
     // Free up this host to be used by the HostRegistry. The most permissive
-    // state that allows every state transition with the exception of Suspend
-    // since Suspend is specific to outbound session and has a strict state of
-    // transitions associated with it.
+    // state that allows every state transition.
     // This is preferable to simply deleting hosts from the HostRegistry since
     // it is less likely to result in race conditions.
     fn try_free(&self, age: u64) -> Result<Self> {
@@ -1093,8 +1091,10 @@ impl Hosts {
         Ok(())
     }
 
-    /// If we have the Host of the Url in the hostlist, and there are no ports stored,
-    /// we should block all ports of this peer.
+    /// To block a peer trying to access by all ports, simply store its
+    /// hostname in the blacklist. This method will check if a host is
+    /// stored in the blacklist without a port, and if so, it will return
+    /// true.
     pub(in crate::net) fn block_all_ports(&self, addr: String) -> bool {
         self.container.hostlists[HostColor::Black as usize]
             .read()
