@@ -77,9 +77,9 @@ impl DarkIrc {
         let switch = params[0].get::<bool>().unwrap();
 
         if *switch {
-            self.p2p.dnet_enable().await;
+            self.p2p.dnet_enable();
         } else {
-            self.p2p.dnet_disable().await;
+            self.p2p.dnet_disable();
         }
 
         JsonResponse::new(JsonValue::Boolean(true), id).into()

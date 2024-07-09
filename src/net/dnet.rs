@@ -24,7 +24,7 @@ use crate::util::time::NanoTimestamp;
 macro_rules! dnetev {
     ($self:expr, $event_name:ident, $($code:tt)*) => {
         {
-            if *$self.p2p().dnet_enabled.lock().await {
+            if $self.p2p().dnet_enabled.load(std::sync::atomic::Ordering::SeqCst) {
                 let event = DnetEvent::$event_name(dnet::$event_name $($code)*);
                 $self.p2p().dnet_notify(event).await;
             }

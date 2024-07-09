@@ -16,14 +16,16 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 
 use futures::{stream::FuturesUnordered, TryFutureExt};
 use futures_rustls::rustls::crypto::{ring, CryptoProvider};
 use log::{debug, error, info, warn};
 use smol::{
     fs::{self, unix::PermissionsExt},
-    lock::Mutex,
     stream::StreamExt,
 };
 use url::Url;
@@ -70,7 +72,7 @@ pub struct P2p {
     /// Reference to configured [`SeedSyncSession`]
     session_seedsync: SeedSyncSessionPtr,
     /// Enable network debugging
-    pub dnet_enabled: Mutex<bool>,
+    pub dnet_enabled: AtomicBool,
     /// The publisher for which we can give dnet info over
     dnet_publisher: PublisherPtr<DnetEvent>,
 }
@@ -108,7 +110,7 @@ impl P2p {
             session_refine: RefineSession::new(),
             session_seedsync: SeedSyncSession::new(),
 
-            dnet_enabled: Mutex::new(false),
+            dnet_enabled: AtomicBool::new(false),
             dnet_publisher: Publisher::new(),
         });
 
@@ -266,14 +268,14 @@ impl P2p {
     }
 
     /// Enable network debugging
-    pub async fn dnet_enable(&self) {
-        *self.dnet_enabled.lock().await = true;
+    pub fn dnet_enable(&self) {
+        self.dnet_enabled.store(true, Ordering::SeqCst);
         warn!("[P2P] Network debugging enabled!");
     }
 
     /// Disable network debugging
-    pub async fn dnet_disable(&self) {
-        *self.dnet_enabled.lock().await = false;
+    pub fn dnet_disable(&self) {
+        self.dnet_enabled.store(false, Ordering::SeqCst);
         warn!("[P2P] Network debugging disabled!");
     }
 
