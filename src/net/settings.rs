@@ -19,6 +19,8 @@
 use structopt::StructOpt;
 use url::Url;
 
+type BlacklistEntry = (String, Vec<String>, Vec<u16>);
+
 /// P2P network settings. The scope of this is a P2P network instance
 /// configured by the library user.
 #[derive(Debug, Clone)]
@@ -77,8 +79,10 @@ pub struct Settings {
     /// process is paused.
     pub time_with_no_connections: u64,
     /// Nodes to avoid interacting with for the duration of the program,
-    /// in the format ["scheme://host", [port, port]]
-    pub blacklist: Vec<(Url, Vec<u16>)>,
+    /// in the format ["host", ["scheme", "scheme"], [port, port]]
+    /// If scheme is left empty it will default to "tcp+tls".
+    /// If ports are left empty all ports from this peer will be blocked.
+    pub blacklist: Vec<BlacklistEntry>,
 }
 
 impl Default for Settings {
@@ -227,10 +231,12 @@ pub struct SettingsOpt {
     pub time_with_no_connections: Option<u64>,
 
     /// Nodes to avoid interacting with for the duration of the program,
-    /// in the format ["scheme://host", [port, port]]
+    /// in the format ["host", ["scheme", "scheme"], [port, port]]
+    /// If scheme is left empty it will default to "tcp+tls".
+    /// If ports are left empty all ports from this peer will be blocked.
     #[serde(default)]
     #[structopt(skip)]
-    pub blacklist: Vec<(Url, Vec<u16>)>,
+    pub blacklist: Vec<BlacklistEntry>,
 }
 
 impl From<SettingsOpt> for Settings {

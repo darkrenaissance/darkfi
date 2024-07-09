@@ -1086,17 +1086,24 @@ impl Hosts {
 
     /// Import blacklisted peers specified in the config file.
     pub(in crate::net) async fn import_blacklist(&self) -> Result<()> {
-        for (mut host, ports) in self.settings.read().await.blacklist.clone() {
-            // If the ports are empty, simply store the host_str. We will use this to
-            // blacklist all ports of a given peer in `block_all_ports()`.
-            if ports.is_empty() {
-                self.container.store(HostColor::Black as usize, host.clone(), 0);
-            }
-            // Otherwise, store all the specified ports.
-            else {
-                for port in ports {
-                    host.set_port(Some(port))?;
-                    self.container.store(HostColor::Black as usize, host.clone(), 0);
+        for (hostname, schemes, ports) in self.settings.read().await.blacklist.clone() {
+            // If schemes are not set use default tcp+tls.
+            let schemes = if schemes.is_empty() { vec!["tcp+tls".to_string()] } else { schemes };
+
+            // If ports are not set block all ports.
+            let ports = if ports.is_empty() { vec![0] } else { ports };
+
+            for scheme in schemes {
+                for &port in &ports {
+                    let url_string = if port == 0 {
+                        format!("{}://{}", scheme, hostname)
+                    } else {
+                        format!("{}://{}:{}", scheme, hostname, port)
+                    };
+
+                    if let Ok(url) = Url::parse(&url_string) {
+                        self.container.store(HostColor::Black as usize, url, 0);
+                    }
                 }
             }
         }
