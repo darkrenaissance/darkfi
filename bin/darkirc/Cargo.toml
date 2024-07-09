@@ -27,7 +27,7 @@ libc = "0.2.155"
 sled = "0.34.7"
 
 # TLS
-async-trait = "0.1.80"
+async-trait = "0.1.81"
 futures = "0.3.30"
 futures-rustls = {version = "0.26.0", default-features = false, features = ["logging", "tls12", "ring"]}
 rustls-pemfile = "2.1.2"
@@ -39,8 +39,8 @@ crypto_box = {version = "0.9.1", features = ["std", "chacha20"]}
 rand = "0.8.5"
 
 # Misc
-log = "0.4.21"
-url = "2.5.0"
+log = "0.4.22"
+url = "2.5.2"
 
 # Encoding and parsing
 bs58 = "0.5.1"
@@ -55,7 +55,7 @@ simplelog = "0.12.2"
 smol = "2.0.0"
 
 # Argument parsing
-serde = {version = "1.0.203", features = ["derive"]}
+serde = {version = "1.0.204", features = ["derive"]}
 structopt = "0.3.26"
 structopt-toml = "0.5.1"
 

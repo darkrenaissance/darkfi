@@ -17,13 +17,13 @@ darkfi-serial = {path = "../../../src/serial"}
 drk = {path = "../../../bin/drk"}
 
 # Misc
-log = "0.4.21"
+log = "0.4.22"
 rusqlite = {version = "0.31.0", features = ["sqlcipher"]}
 
 # JSON-RPC
-async-trait = "0.1.80"
+async-trait = "0.1.81"
 tinyjson = "2.5.1"
-url = "2.5.0"
+url = "2.5.2"
 
 # Daemon
 easy-parallel = "3.3.1"
@@ -33,7 +33,7 @@ simplelog = "0.12.2"
 smol = "2.0.0"
 
 # Argument parsing
-serde = {version = "1.0.203", features = ["derive"]}
+serde = {version = "1.0.204", features = ["derive"]}
 structopt = "0.3.26"
 structopt-toml = "0.5.1"
 

@@ -39,14 +39,14 @@ hex = "0.4.3"
 toml = "0.8.14"
 
 # Misc
-async-trait = "0.1.80"
+async-trait = "0.1.81"
 chrono = "0.4.38"
 futures = "0.3.30"
 libc = "0.2.155"
-log = "0.4.21"
+log = "0.4.22"
 thiserror = "1.0.61"
 tinyjson = "2.5.1"
-url = "2.5.0"
+url = "2.5.2"
 
 # Daemon
 easy-parallel = "3.3.1"
@@ -56,7 +56,7 @@ simplelog = "0.12.2"
 smol = "2.0.0"
 
 # Argument parsing
-serde = { version = "1.0.203", features = ["derive"] }
+serde = { version = "1.0.204", features = ["derive"] }
 structopt = "0.3.26"
 structopt-toml = "0.5.1"
 

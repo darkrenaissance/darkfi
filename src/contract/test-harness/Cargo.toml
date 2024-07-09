@@ -14,9 +14,9 @@ darkfi_dao_contract = {path = "../dao", features = ["client", "no-entrypoint"]}
 darkfi_money_contract = {path = "../money", features = ["client", "no-entrypoint"]}
 darkfi_deployooor_contract = {path = "../deployooor", features = ["client", "no-entrypoint"]}
 
-num-bigint = "0.4.5"
+num-bigint = "0.4.6"
 blake3 = "1.5.1"
-log = "0.4.21"
+log = "0.4.22"
 rand = "0.8.5"
 simplelog = "0.12.2"
 sled = "0.34.7"

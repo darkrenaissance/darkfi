@@ -12,7 +12,7 @@ darkfi = {path = "../../../", features = ["util"]}
 darkfi-serial = {path = "../../../src/serial"}
 
 blake3 = "1.5.1"
-num-bigint = "0.4.5"
+num-bigint = "0.4.6"
 rand = "0.8.5"
 
 [lints]

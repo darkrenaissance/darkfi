@@ -32,14 +32,14 @@ blake3 = "1.5.1"
 chacha20poly1305 = "0.10.1"
 halo2_gadgets = "0.3.0"
 bridgetree = "0.4.0"
-num-bigint = "0.4.5"
+num-bigint = "0.4.6"
 num-traits = "0.2.19"
 pasta_curves = "0.5.1"
 rand_core = "0.6.4"
 
 # Misc
-lazy_static = "1.4.0"
-subtle = "2.5.0"
+lazy_static = "1.5.0"
+subtle = "2.6.1"
 
 [dev-dependencies]
 halo2_proofs = {version = "0.3.0", features = ["dev-graph", "sanity-checks"]}

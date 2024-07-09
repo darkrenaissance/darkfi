@@ -11,18 +11,18 @@ edition = "2021"
 #miniquad = { git = "https://github.com/not-fl3/miniquad" }
 miniquad = { git = "https://github.com/narodnik/miniquad" }
 # Currently latest version links to freetype-sys 0.19 but we use 0.21
-#harfbuzz-sys = "0.6"
+#harfbuzz-sys = "0.6.1"
 #harfbuzz-sys = { git = "https://github.com/servo/rust-harfbuzz", features = ["bundled"] }
 harfbuzz-sys = { git = "https://github.com/narodnik/rust-harfbuzz", features = ["bundled"] }
 # Old and crap
 #harfbuzz_rs = { git = "https://github.com/narodnik/hbrs2.git", features = ["freetype"] }
-freetype-rs = { version = "0.37", features = ["bundled"] }
+freetype-rs = { version = "0.37.0", features = ["bundled"] }
 image = "0.25.1"
-log = "0.4.21"
-glam = "0.27.0"
+log = "0.4.22"
+glam = "0.28.0"
 #zmq = "0.10.0"
 #async_zmq = "0.4.0"
-zeromq = { version = "*", default-features = false, features = ["async-std-runtime", "all-transport"] }
+zeromq = { version = "0.4.0", default-features = false, features = ["async-std-runtime", "all-transport"] }
 darkfi-serial = { git = "https://codeberg.org/darkrenaissance/darkfi" }
 thiserror = "1.0.61"
 smol = "2.0.0"
@@ -65,4 +65,3 @@ icon = "@mipmap/ic_launcher"
 name = "android.permission.INTERNET"
 [[package.metadata.android.permission]]
 name = "android.permission.ACCESS_NETWORK_STATE"
-

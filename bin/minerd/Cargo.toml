@@ -15,12 +15,12 @@ darkfi-sdk = {path = "../../src/sdk"}
 darkfi-serial = {path = "../../src/serial", features = ["async"]}
 
 # Misc
-log = "0.4.21"
-num-bigint = "0.4.5"
+log = "0.4.22"
+num-bigint = "0.4.6"
 
 # JSON-RPC
 tinyjson = "2.5.1"
-url = "2.5.0"
+url = "2.5.2"
 
 # Daemon
 easy-parallel = "3.3.1"
@@ -30,7 +30,7 @@ simplelog = "0.12.2"
 smol = "2.0.0"
 
 # Argument parsing
-serde = {version = "1.0.203", features = ["derive"]}
+serde = {version = "1.0.204", features = ["derive"]}
 structopt = "0.3.26"
 structopt-toml = "0.5.1"
 

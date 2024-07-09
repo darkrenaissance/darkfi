@@ -16,10 +16,10 @@ darkfi-serial = {path = "../../../src/serial"}
 
 smol = "2.0.0"
 clap = {version = "4.4.11", features = ["derive"]}
-log = "0.4.21"
+log = "0.4.22"
 simplelog = "0.12.2"
 tinyjson = "2.5.1"
-url = "2.5.0"
+url = "2.5.2"
 
 [lints]
 workspace = true

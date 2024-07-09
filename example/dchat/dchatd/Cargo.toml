@@ -23,14 +23,14 @@ simplelog = "0.12.2"
 smol = "2.0.0"
 
 # arg parsing
-serde = {version = "1.0.203", features = ["derive"]}
+serde = {version = "1.0.204", features = ["derive"]}
 structopt = "0.3.26"
 structopt-toml = "0.5.1"
 
 # misc
-async-trait = "0.1.80"
-log = "0.4.21"
-url = "2.5.0"
+async-trait = "0.1.81"
+log = "0.4.22"
+url = "2.5.2"
 # ANCHOR_END: dependencies
 
 [lints]

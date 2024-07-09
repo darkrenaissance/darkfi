@@ -60,7 +60,3 @@ name = "zkas-compile"
 path = "fuzz_targets/zkas_compile.rs"
 test = false
 doc = false
-
-[lints]
-workspace = true
-

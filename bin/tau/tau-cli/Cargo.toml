@@ -16,17 +16,17 @@ taud = {path = "../taud"}
 # Misc
 chrono = "0.4.38"
 colored = "2.1.0"
-log = "0.4.21"
+log = "0.4.22"
 prettytable-rs = "0.10.0"
 simplelog = "0.12.2"
 smol = "2.0.0"
 term_grid = { git = "https://github.com/Dastan-glitch/rust-term-grid.git" }
 textwrap = "0.16.1"
-url = "2.5.0"
+url = "2.5.2"
 
 # Encoding and parsing
 clap = {version = "4.4.11", features = ["derive"]}
-serde = {version = "1.0.203", features = ["derive"]}
+serde = {version = "1.0.204", features = ["derive"]}
 tinyjson = "2.5.1"
 
 [lints]
