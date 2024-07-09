@@ -95,6 +95,12 @@ allowed_transports = ["tcp+tls"]
 # By default this is not allowed.
 transport_mixing = false
 
+# Nodes to avoid interacting with for the duration of the program, in the
+# format ["host", ["scheme", "scheme"], [port, port]].
+# If scheme is left empty it will default to "tcp+tls". 
+# If ports are left empty all ports from this peer will be blocked.
+#blacklist = [["example.com", ["tcp"], [8551, 23331]]]
+
 ## ====================
 ## IRC channel settings
 ## ====================
