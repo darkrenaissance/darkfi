@@ -404,7 +404,17 @@ impl Channel {
                     return
                 }
 
-                match Url::parse(peer.host_str().unwrap()) {
+                // An inbound Tor connection can't really be banned :)
+                #[cfg(feature = "p2p-tor")]
+                if peer.scheme() == "tor" && self.p2p().hosts().is_local_host(peer) {
+                    return
+                }
+
+                // We do this hack in order to parse IPs properly.
+                // https://github.com/whatwg/url/issues/749
+                let addr = Url::parse(&format!("http://{}", peer.host_str().unwrap())).unwrap();
+
+                match Url::parse(&addr.as_str().replace("http", peer.scheme())) {
                     Ok(v) => v,
                     Err(e) => {
                         error!("[P2P] ban() failed to parse {:?}: {}", peer, e);

@@ -1036,7 +1036,7 @@ impl Hosts {
     // to move this function to a more appropriate location
     // in the codebase.
     /// Check whether a URL is local host
-    pub fn is_local_host(&self, url: Url) -> bool {
+    pub fn is_local_host(&self, url: &Url) -> bool {
         // Reject Urls without host strings.
         if url.host_str().is_none() {
             return false
@@ -1045,6 +1045,7 @@ impl Hosts {
         // We do this hack in order to parse IPs properly.
         // https://github.com/whatwg/url/issues/749
         let addr = Url::parse(&url.as_str().replace(url.scheme(), "http")).unwrap();
+
         // Filter private IP ranges
         match addr.host().unwrap() {
             url::Host::Ipv4(ip) => {
@@ -1067,7 +1068,7 @@ impl Hosts {
     }
 
     /// Check whether a URL is IPV6
-    pub fn is_ipv6(&self, url: Url) -> bool {
+    pub fn is_ipv6(&self, url: &Url) -> bool {
         // Reject Urls without host strings.
         if url.host_str().is_none() {
             return false
@@ -1076,6 +1077,7 @@ impl Hosts {
         // We do this hack in order to parse IPs properly.
         // https://github.com/whatwg/url/issues/749
         let addr = Url::parse(&url.as_str().replace(url.scheme(), "http")).unwrap();
+
         if let url::Host::Ipv6(_) = addr.host().unwrap() {
             return true
         }
@@ -1189,7 +1191,7 @@ impl Hosts {
             // Filter non-global ranges if we're not allowing localnet.
             // Should never be allowed in production, so we don't really care
             // about some of them (e.g. 0.0.0.0, or broadcast, etc.).
-            if !settings.localnet && self.is_local_host(addr) {
+            if !settings.localnet && self.is_local_host(&addr) {
                 debug!(
                     target: "net::hosts::filter_addresses",
                     "[{}] Filtering non-global ranges", addr_,
@@ -1230,7 +1232,7 @@ impl Hosts {
             // We will personally ignore this peer but still send it to others in
             // Protocol Addr to ensure all transports get propagated.
             if !settings.allowed_transports.contains(&addr_.scheme().to_string()) ||
-                (!self.ipv6_available.load(Ordering::SeqCst) && self.is_ipv6(addr_.clone()))
+                (!self.ipv6_available.load(Ordering::SeqCst) && self.is_ipv6(addr_))
             {
                 self.container.store_or_update(HostColor::Dark, addr_.clone(), *last_seen);
                 self.container.sort_by_last_seen(HostColor::Dark as usize);
@@ -1352,7 +1354,7 @@ impl Hosts {
                 if addr.host_str().is_some() {
                     // Localhost connections should never enter the blacklist
                     // This however allows any Tor and Nym connections.
-                    if self.is_local_host(addr.clone()) {
+                    if self.is_local_host(addr) {
                         return Ok(());
                     }
 
@@ -1397,7 +1399,7 @@ mod tests {
         ];
         for host in local_hosts {
             eprintln!("{}", host);
-            assert!(hosts.is_local_host(host));
+            assert!(hosts.is_local_host(&host));
         }
         let remote_hosts: Vec<Url> = vec![
             Url::parse("https://dyne.org").unwrap(),
@@ -1407,7 +1409,7 @@ mod tests {
                 .unwrap(),
         ];
         for host in remote_hosts {
-            assert!(!hosts.is_local_host(host))
+            assert!(!hosts.is_local_host(&host))
         }
     }
 
@@ -1429,11 +1431,11 @@ mod tests {
         ];
 
         for host in ipv6_hosts {
-            assert!(hosts.is_ipv6(host))
+            assert!(hosts.is_ipv6(&host))
         }
 
         for host in ipv4_hosts {
-            assert!(!hosts.is_ipv6(host))
+            assert!(!hosts.is_ipv6(&host))
         }
     }
 
