@@ -197,6 +197,7 @@ impl EditBox {
         // testing
         window::show_keyboard(true);
 
+        // Must do this whenever the text changes
         let glyphs = text_shaper.shape(text.get(), font_size.get()).await;
 
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
@@ -285,7 +286,8 @@ impl EditBox {
             //on_modify.when_change(scroll.prop(), redraw);
             //on_modify.when_change(cursor_pos.prop(), redraw);
             on_modify.when_change(font_size.prop(), redraw);
-            on_modify.when_change(text.prop(), redraw);
+            // We must also reshape text
+            //on_modify.when_change(text.prop(), redraw);
             on_modify.when_change(text_color.prop(), redraw);
             on_modify.when_change(cursor_color.prop(), redraw);
             on_modify.when_change(hi_bg_color.prop(), redraw);
@@ -337,6 +339,12 @@ impl EditBox {
         });
 
         Pimpl::EditBox(self_)
+    }
+
+    /// This MUST be called whenever the text property is changed.
+    async fn regen_glyphs(&self) {
+        let glyphs = self.text_shaper.shape(self.text.get(), self.font_size.get()).await;
+        *self.glyphs.lock().unwrap() = glyphs;
     }
 
     /// Called whenever the text or any text property changes.
@@ -640,6 +648,7 @@ impl EditBox {
         let mut focus_changed = false;
 
         let Some(rect) = self.get_cached_world_rect().await else { return };
+
         // clicking inside box will:
         // 1. make it active
         // 2. begin selection
@@ -815,6 +824,7 @@ impl EditBox {
         // meh lets pretend it doesn't exist for now.
         self.cursor_pos.set(cursor_pos + 1);
 
+        self.regen_glyphs().await;
         self.apply_cursor_scrolling();
         self.redraw().await;
     }
@@ -936,6 +946,7 @@ impl EditBox {
                     self.text.set(text);
                 };
 
+                self.regen_glyphs().await;
                 self.apply_cursor_scrolling();
                 self.redraw().await;
             }
@@ -962,17 +973,50 @@ impl EditBox {
                     self.cursor_pos.set(cursor_pos - 1);
                 };
 
+                self.regen_glyphs().await;
                 self.apply_cursor_scrolling();
                 self.redraw().await;
             }
             KeyCode::Home => {
+                let cursor_pos = self.cursor_pos.get();
+
+                if !mods.shift {
+                    self.selected.set_null(0).unwrap();
+                    self.selected.set_null(1).unwrap();
+                } else if self.selected.is_null(0).unwrap() {
+                    assert!(self.selected.is_null(1).unwrap());
+                    self.selected.set_u32(0, cursor_pos).unwrap();
+                }
+
                 self.cursor_pos.set(0);
+
+                // Update selection
+                if mods.shift {
+                    self.selected.set_u32(1, cursor_pos).unwrap();
+                }
+
                 self.apply_cursor_scrolling();
                 self.redraw().await;
             }
             KeyCode::End => {
+                let cursor_pos = self.cursor_pos.get();
+
+                if !mods.shift {
+                    self.selected.set_null(0).unwrap();
+                    self.selected.set_null(1).unwrap();
+                } else if self.selected.is_null(0).unwrap() {
+                    assert!(self.selected.is_null(1).unwrap());
+                    self.selected.set_u32(0, cursor_pos).unwrap();
+                }
+
                 let glyphs_len = self.glyphs.lock().unwrap().len();
                 self.cursor_pos.set(glyphs_len as u32);
+
+                // Update selection
+                if mods.shift {
+                    self.selected.set_u32(1, cursor_pos).unwrap();
+                }
+
                 self.apply_cursor_scrolling();
                 self.redraw().await;
             }
@@ -1135,9 +1179,6 @@ impl EditBox {
     async fn redraw(&self) {
         // draw will recalc this when it's None
         let old = std::mem::replace(&mut *self.render_info.lock().unwrap(), None);
-
-        let glyphs = self.text_shaper.shape(self.text.get(), self.font_size.get()).await;
-        *self.glyphs.lock().unwrap() = glyphs;
 
         let sg = self.sg.lock().await;
         let node = sg.get_node(self.node_id).unwrap();
