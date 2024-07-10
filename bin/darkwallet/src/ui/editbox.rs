@@ -965,6 +965,17 @@ impl EditBox {
                 self.apply_cursor_scrolling();
                 self.redraw().await;
             }
+            KeyCode::Home => {
+                self.cursor_pos.set(0);
+                self.apply_cursor_scrolling();
+                self.redraw().await;
+            }
+            KeyCode::End => {
+                let glyphs_len = self.glyphs.lock().unwrap().len();
+                self.cursor_pos.set(glyphs_len as u32);
+                self.apply_cursor_scrolling();
+                self.redraw().await;
+            }
             _ => {}
         }
     }
@@ -1252,4 +1263,6 @@ static ALLOWED_KEYCODES: &'static [KeyCode] = &[
     KeyCode::KpEnter,
     KeyCode::Delete,
     KeyCode::Backspace,
+    KeyCode::Home,
+    KeyCode::End,
 ];
