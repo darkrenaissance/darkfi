@@ -402,10 +402,10 @@ impl App {
         let prop = node.get_property("rect").unwrap();
         prop.set_f32(0, 0.).unwrap();
         prop.set_f32(1, 0.).unwrap();
-        let code = vec![Op::LoadVar("lw".to_string())];
+        let code = vec![Op::LoadVar("w".to_string())];
         prop.set_expr(2, code).unwrap();
         let code = vec![Op::Sub((
-            Box::new(Op::LoadVar("lh".to_string())),
+            Box::new(Op::LoadVar("h".to_string())),
             Box::new(Op::ConstFloat32(50.)),
         ))];
         prop.set_expr(3, code).unwrap();

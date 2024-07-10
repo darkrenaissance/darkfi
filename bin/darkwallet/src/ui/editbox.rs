@@ -279,14 +279,17 @@ impl EditBox {
             }
             on_modify.when_change(rect.clone(), redraw);
             on_modify.when_change(baseline.prop(), redraw);
-            on_modify.when_change(scroll.prop(), redraw);
-            on_modify.when_change(cursor_pos.prop(), redraw);
+            // The commented properties are modified on input events
+            // So then redraw() will get repeatedly triggered when these properties
+            // are changed. We should find a solution. For now the hooks are disabled.
+            //on_modify.when_change(scroll.prop(), redraw);
+            //on_modify.when_change(cursor_pos.prop(), redraw);
             on_modify.when_change(font_size.prop(), redraw);
             on_modify.when_change(text.prop(), redraw);
             on_modify.when_change(text_color.prop(), redraw);
             on_modify.when_change(cursor_color.prop(), redraw);
             on_modify.when_change(hi_bg_color.prop(), redraw);
-            on_modify.when_change(selected.clone(), redraw);
+            //on_modify.when_change(selected.clone(), redraw);
             on_modify.when_change(z_index.prop(), redraw);
             on_modify.when_change(debug.prop(), redraw);
 
@@ -1119,13 +1122,11 @@ impl EditBox {
     }
 
     async fn redraw(&self) {
-        let old = self.render_info.lock().unwrap().clone();
+        // draw will recalc this when it's None
+        let old = std::mem::replace(&mut *self.render_info.lock().unwrap(), None);
 
         let glyphs = self.text_shaper.shape(self.text.get(), self.font_size.get()).await;
         *self.glyphs.lock().unwrap() = glyphs;
-
-        // draw will recalc this when it's None
-        *self.render_info.lock().unwrap() = None;
 
         let sg = self.sg.lock().await;
         let node = sg.get_node(self.node_id).unwrap();
