@@ -1042,12 +1042,8 @@ impl Hosts {
             return false
         }
 
-        // We do this hack in order to parse IPs properly.
-        // https://github.com/whatwg/url/issues/749
-        let addr = Url::parse(&url.as_str().replace(url.scheme(), "http")).unwrap();
-
         // Filter private IP ranges
-        match addr.host().unwrap() {
+        match url.host().unwrap() {
             url::Host::Ipv4(ip) => {
                 if !ip.is_global() {
                     return true
@@ -1074,11 +1070,7 @@ impl Hosts {
             return false
         }
 
-        // We do this hack in order to parse IPs properly.
-        // https://github.com/whatwg/url/issues/749
-        let addr = Url::parse(&url.as_str().replace(url.scheme(), "http")).unwrap();
-
-        if let url::Host::Ipv6(_) = addr.host().unwrap() {
+        if let url::Host::Ipv6(_) = url.host().unwrap() {
             return true
         }
         false
@@ -1133,11 +1125,7 @@ impl Hosts {
 
         'addr_loop: for (addr_, last_seen) in addrs {
             // Validate that the format is `scheme://host_str:port`
-            if addr_.host_str().is_none() ||
-                addr_.port().is_none() ||
-                addr_.cannot_be_a_base() ||
-                addr_.path_segments().is_some()
-            {
+            if addr_.host_str().is_none() || addr_.port().is_none() || addr_.cannot_be_a_base() {
                 debug!(
                     target: "net::hosts::filter_addresses",
                     "[{}] has invalid addr format. Skipping", addr_,
@@ -1191,14 +1179,10 @@ impl Hosts {
                 }
             }
 
-            // We do this hack in order to parse IPs properly.
-            // https://github.com/whatwg/url/issues/749
-            let addr = Url::parse(&addr_.as_str().replace(addr_.scheme(), "http")).unwrap();
-
             // Filter non-global ranges if we're not allowing localnet.
             // Should never be allowed in production, so we don't really care
             // about some of them (e.g. 0.0.0.0, or broadcast, etc.).
-            if !settings.localnet && self.is_local_host(&addr) {
+            if !settings.localnet && self.is_local_host(addr_) {
                 debug!(
                     target: "net::hosts::filter_addresses",
                     "[{}] Filtering non-global ranges", addr_,

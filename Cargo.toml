@@ -102,6 +102,7 @@ url = {version = "2.5.2", features = ["serde"], optional = true}
 
 # Misc
 simplelog = {version = "0.12.2", optional = true}
+regex = {version = "1.10.5", optional = true}
 
 # Crypto
 rand = {version = "0.8.5", optional = true}
@@ -242,6 +243,7 @@ net = [
     "futures-rustls",
     "rand",
     "rcgen",
+    "regex",
     "rustls-pemfile",
     "semver",
     "smol",
@@ -332,6 +334,8 @@ halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v4"}
 halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v4"}
 # Temp smol-2.0 fix
 async-lock = {git="https://github.com/smol-rs/async-lock", rev="542831132f2c707aae1c380edd43452053433814"}
+# Forked "url" crate with added P2P schemas
+url = {git="https://github.com/darkrenaissance/rust-url", branch="main"}
 
 [[bench]]
 name = "zk_arith"
