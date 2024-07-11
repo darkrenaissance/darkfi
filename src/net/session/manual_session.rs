@@ -179,6 +179,8 @@ impl Slot {
                 debug!(target: "net::manual_session",
                     "Cannot connect to manual={}, err={}", &self.addr, e);
 
+                sleep(outbound_connect_timeout).await;
+
                 continue
             }
 
@@ -210,12 +212,6 @@ impl Slot {
                     }
                 }
                 Err(e) => {
-                    warn!(
-                        target: "net::manual_session",
-                        "[P2P] Unable to connect to manual outbound [{}]: {}",
-                        self.addr, e,
-                    );
-
                     self.handle_failure(e, &self.addr);
                 }
             }
@@ -225,6 +221,7 @@ impl Slot {
                 "[P2P] Waiting {} seconds until next manual outbound connection attempt [{}]",
                 outbound_connect_timeout, self.addr,
             );
+
             sleep(outbound_connect_timeout).await;
         }
     }
