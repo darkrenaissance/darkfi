@@ -791,8 +791,7 @@ impl EditBox {
     async fn insert_char(&self, key: char) {
         if !self.selected.is_null(0).unwrap() {
             self.delete_highlighted();
-            // This is inefficient but we don't give a shit here
-            self.redraw().await;
+            self.regen_glyphs().await;
         };
 
         let mut text = String::new();
