@@ -118,7 +118,7 @@ stop_sub.unsubscribe().await;
 
 In the async context we are forced to use `Arc<Self>`, but often times we want a parent-child
 relationship where if both parties contain an Arc reference to the other it creates a
-circular loop. For this case, there is a handy helper called `LazyWeak`.
+circular loop. For this case, we can use `std::sync::Weak` and `std::sync::Arc::new_cyclic()`.
 
 ```rust
 pub struct Parent {
@@ -128,14 +128,10 @@ pub struct Parent {
 
 impl Parent {
     pub async fn new(/* ... */) -> Arc<Self> {
-        let self_ = Arc::new(Self {
-            child: Child::new(),
+        Arc::new_cyclic(|parent| Self {
+            child: Child::new(parent.clone())
             // ...
         });
-
-        self_.child.parent.init(self_.clone());
-        // ...
-        self_
     }
 
     // ...
@@ -143,14 +139,14 @@ impl Parent {
 
 
 pub struct Child {
-    pub parent: LazyWeak<Parent>,
+    pub parent: Weak<Parent>,
     // ...
 }
 
 impl Child {
-    pub fn new() -> Arc<Self> {
+    pub fn new(parent: Weak<Parent>) -> Arc<Self> {
         Arc::new(Self {
-            parent: LazyWeak::new(),
+            parent: Weak::new(),
             // ...
         })
     }

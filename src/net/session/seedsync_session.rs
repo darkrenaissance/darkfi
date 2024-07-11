@@ -64,7 +64,7 @@ use super::{
 };
 use crate::{
     net::hosts::HostState,
-    system::{CondVar, LazyWeak, StoppableTask, StoppableTaskPtr},
+    system::{CondVar, StoppableTask, StoppableTaskPtr},
     Error,
 };
 
@@ -72,14 +72,14 @@ pub type SeedSyncSessionPtr = Arc<SeedSyncSession>;
 
 /// Defines seed connections session
 pub struct SeedSyncSession {
-    pub(in crate::net) p2p: LazyWeak<P2p>,
+    pub(in crate::net) p2p: Weak<P2p>,
     slots: AsyncMutex<Vec<Arc<Slot>>>,
 }
 
 impl SeedSyncSession {
     /// Create a new seed sync session instance
-    pub(crate) fn new() -> SeedSyncSessionPtr {
-        Arc::new(Self { p2p: LazyWeak::new(), slots: AsyncMutex::new(Vec::new()) })
+    pub(crate) fn new(p2p: Weak<P2p>) -> SeedSyncSessionPtr {
+        Arc::new(Self { p2p, slots: AsyncMutex::new(Vec::new()) })
     }
 
     /// Initialize the seedsync session. Each slot is suspended while it waits
@@ -136,7 +136,7 @@ impl SeedSyncSession {
 #[async_trait]
 impl Session for SeedSyncSession {
     fn p2p(&self) -> P2pPtr {
-        self.p2p.upgrade()
+        self.p2p.upgrade().unwrap()
     }
 
     fn type_id(&self) -> SessionBitFlag {

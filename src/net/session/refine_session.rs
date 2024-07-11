@@ -31,7 +31,7 @@ use futures::{
 };
 use smol::Timer;
 use std::{
-    sync::Arc,
+    sync::{Arc, Weak},
     time::{Duration, Instant, UNIX_EPOCH},
 };
 
@@ -48,7 +48,7 @@ use crate::{
         protocol::ProtocolVersion,
         session::{Session, SessionBitFlag, SESSION_REFINE},
     },
-    system::{sleep, LazyWeak, StoppableTask, StoppableTaskPtr},
+    system::{sleep, StoppableTask, StoppableTaskPtr},
     Error,
 };
 
@@ -56,17 +56,15 @@ pub type RefineSessionPtr = Arc<RefineSession>;
 
 pub struct RefineSession {
     /// Weak pointer to parent p2p object
-    pub(in crate::net) p2p: LazyWeak<P2p>,
+    pub(in crate::net) p2p: Weak<P2p>,
 
     /// Task that periodically checks entries in the greylist.
     pub(in crate::net) refinery: Arc<GreylistRefinery>,
 }
 
 impl RefineSession {
-    pub fn new() -> RefineSessionPtr {
-        let self_ = Arc::new(Self { p2p: LazyWeak::new(), refinery: GreylistRefinery::new() });
-        self_.refinery.session.init(self_.clone());
-        self_
+    pub fn new(p2p: Weak<P2p>) -> RefineSessionPtr {
+        Arc::new_cyclic(|session| Self { p2p, refinery: GreylistRefinery::new(session.clone()) })
     }
 
     /// Start the refinery and self handshake processes.
@@ -175,7 +173,7 @@ impl RefineSession {
 #[async_trait]
 impl Session for RefineSession {
     fn p2p(&self) -> P2pPtr {
-        self.p2p.upgrade()
+        self.p2p.upgrade().unwrap()
     }
 
     fn type_id(&self) -> SessionBitFlag {
@@ -194,13 +192,13 @@ impl Session for RefineSession {
 /// entry is removed from the greylist.
 pub struct GreylistRefinery {
     /// Weak pointer to parent object
-    session: LazyWeak<RefineSession>,
+    session: Weak<RefineSession>,
     process: StoppableTaskPtr,
 }
 
 impl GreylistRefinery {
-    pub fn new() -> Arc<Self> {
-        Arc::new(Self { session: LazyWeak::new(), process: StoppableTask::new() })
+    pub fn new(session: Weak<RefineSession>) -> Arc<Self> {
+        Arc::new(Self { session, process: StoppableTask::new() })
     }
 
     pub async fn start(self: Arc<Self>) {
@@ -310,7 +308,7 @@ impl GreylistRefinery {
     }
 
     fn session(&self) -> RefineSessionPtr {
-        self.session.upgrade()
+        self.session.upgrade().unwrap()
     }
 
     fn p2p(&self) -> P2pPtr {

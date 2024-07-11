@@ -23,7 +23,7 @@
 //! an acceptor pointer, and a stoppable task pointer. Using a weak pointer
 //! to P2P allows us to avoid circular dependencies.
 
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use async_trait::async_trait;
 use log::{debug, error, info};
@@ -40,7 +40,7 @@ use super::{
     Session, SessionBitFlag, SESSION_INBOUND,
 };
 use crate::{
-    system::{LazyWeak, StoppableTask, StoppableTaskPtr, Subscription},
+    system::{StoppableTask, StoppableTaskPtr, Subscription},
     Error, Result,
 };
 
@@ -48,16 +48,16 @@ pub type InboundSessionPtr = Arc<InboundSession>;
 
 /// Defines inbound connections session
 pub struct InboundSession {
-    pub(in crate::net) p2p: LazyWeak<P2p>,
+    pub(in crate::net) p2p: Weak<P2p>,
     acceptors: Mutex<Vec<AcceptorPtr>>,
     accept_tasks: Mutex<Vec<StoppableTaskPtr>>,
 }
 
 impl InboundSession {
     /// Create a new inbound session
-    pub fn new() -> InboundSessionPtr {
+    pub fn new(p2p: Weak<P2p>) -> InboundSessionPtr {
         Arc::new(Self {
-            p2p: LazyWeak::new(),
+            p2p,
             acceptors: Mutex::new(Vec::new()),
             accept_tasks: Mutex::new(Vec::new()),
         })
@@ -206,7 +206,7 @@ impl InboundSession {
 #[async_trait]
 impl Session for InboundSession {
     fn p2p(&self) -> P2pPtr {
-        self.p2p.upgrade()
+        self.p2p.upgrade().unwrap()
     }
 
     fn type_id(&self) -> SessionBitFlag {

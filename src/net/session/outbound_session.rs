@@ -52,7 +52,7 @@ use super::{
     Session, SessionBitFlag, SESSION_OUTBOUND,
 };
 use crate::{
-    system::{sleep, timeout::timeout, CondVar, LazyWeak, StoppableTask, StoppableTaskPtr},
+    system::{sleep, timeout::timeout, CondVar, StoppableTask, StoppableTaskPtr},
     Error, Result,
 };
 
@@ -61,7 +61,7 @@ pub type OutboundSessionPtr = Arc<OutboundSession>;
 /// Defines outbound connections session.
 pub struct OutboundSession {
     /// Weak pointer to parent p2p object
-    pub(in crate::net) p2p: LazyWeak<P2p>,
+    pub(in crate::net) p2p: Weak<P2p>,
     /// Outbound connection slots
     slots: Mutex<Vec<Arc<Slot>>>,
     /// Peer discovery task
@@ -70,14 +70,12 @@ pub struct OutboundSession {
 
 impl OutboundSession {
     /// Create a new outbound session.
-    pub(crate) fn new() -> OutboundSessionPtr {
-        let self_ = Arc::new(Self {
-            p2p: LazyWeak::new(),
+    pub(crate) fn new(p2p: Weak<P2p>) -> OutboundSessionPtr {
+        Arc::new_cyclic(|session| Self {
+            p2p,
             slots: Mutex::new(Vec::new()),
-            peer_discovery: PeerDiscovery::new(),
-        });
-        self_.peer_discovery.session.init(self_.clone());
-        self_
+            peer_discovery: PeerDiscovery::new(session.clone()),
+        })
     }
 
     /// Start the outbound session. Runs the channel connect loop.
@@ -143,7 +141,7 @@ impl OutboundSession {
 #[async_trait]
 impl Session for OutboundSession {
     fn p2p(&self) -> P2pPtr {
-        self.p2p.upgrade()
+        self.p2p.upgrade().unwrap()
     }
 
     fn type_id(&self) -> SessionBitFlag {
@@ -467,16 +465,12 @@ pub trait PeerDiscoveryBase {
 struct PeerDiscovery {
     process: StoppableTaskPtr,
     wakeup_self: CondVar,
-    session: LazyWeak<OutboundSession>,
+    session: Weak<OutboundSession>,
 }
 
 impl PeerDiscovery {
-    fn new() -> Arc<Self> {
-        Arc::new(Self {
-            process: StoppableTask::new(),
-            wakeup_self: CondVar::new(),
-            session: LazyWeak::new(),
-        })
+    fn new(session: Weak<OutboundSession>) -> Arc<Self> {
+        Arc::new(Self { process: StoppableTask::new(), wakeup_self: CondVar::new(), session })
     }
 }
 
@@ -664,7 +658,7 @@ impl PeerDiscoveryBase for PeerDiscovery {
     }
 
     fn session(&self) -> OutboundSessionPtr {
-        self.session.upgrade()
+        self.session.upgrade().unwrap()
     }
 
     fn p2p(&self) -> P2pPtr {

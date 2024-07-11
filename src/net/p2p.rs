@@ -101,26 +101,19 @@ impl P2p {
         // Wrap the Settings into an Arc<RwLock>
         let settings = Arc::new(AsyncRwLock::new(settings));
 
-        let self_ = Arc::new(Self {
+        let self_ = Arc::new_cyclic(|p2p| Self {
             executor,
             hosts: Hosts::new(Arc::clone(&settings)),
             protocol_registry: ProtocolRegistry::new(),
             settings,
-            session_manual: ManualSession::new(),
-            session_inbound: InboundSession::new(),
-            session_outbound: OutboundSession::new(),
-            session_refine: RefineSession::new(),
-            session_seedsync: SeedSyncSession::new(),
-
+            session_manual: ManualSession::new(p2p.clone()),
+            session_inbound: InboundSession::new(p2p.clone()),
+            session_outbound: OutboundSession::new(p2p.clone()),
+            session_refine: RefineSession::new(p2p.clone()),
+            session_seedsync: SeedSyncSession::new(p2p.clone()),
             dnet_enabled: AtomicBool::new(false),
             dnet_publisher: Publisher::new(),
         });
-
-        self_.session_inbound.p2p.init(self_.clone());
-        self_.session_manual.p2p.init(self_.clone());
-        self_.session_seedsync.p2p.init(self_.clone());
-        self_.session_outbound.p2p.init(self_.clone());
-        self_.session_refine.p2p.init(self_.clone());
 
         register_default_protocols(self_.clone()).await;
 

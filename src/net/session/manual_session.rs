@@ -48,7 +48,7 @@ use super::{
 };
 use crate::{
     net::{hosts::HostState, settings::Settings},
-    system::{sleep, LazyWeak, StoppableTask, StoppableTaskPtr},
+    system::{sleep, StoppableTask, StoppableTaskPtr},
     Error, Result,
 };
 
@@ -56,14 +56,14 @@ pub type ManualSessionPtr = Arc<ManualSession>;
 
 /// Defines manual connections session.
 pub struct ManualSession {
-    pub(in crate::net) p2p: LazyWeak<P2p>,
+    pub(in crate::net) p2p: Weak<P2p>,
     slots: AsyncMutex<Vec<Arc<Slot>>>,
 }
 
 impl ManualSession {
     /// Create a new manual session.
-    pub fn new() -> ManualSessionPtr {
-        Arc::new(Self { p2p: LazyWeak::new(), slots: AsyncMutex::new(Vec::new()) })
+    pub fn new(p2p: Weak<P2p>) -> ManualSessionPtr {
+        Arc::new(Self { p2p, slots: AsyncMutex::new(Vec::new()) })
     }
 
     pub(crate) async fn start(self: Arc<Self>) {
@@ -101,7 +101,7 @@ impl ManualSession {
 #[async_trait]
 impl Session for ManualSession {
     fn p2p(&self) -> P2pPtr {
-        self.p2p.upgrade()
+        self.p2p.upgrade().unwrap()
     }
 
     fn type_id(&self) -> SessionBitFlag {

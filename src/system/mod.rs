@@ -24,10 +24,6 @@ use smol::{future::Future, Executor, Timer};
 pub mod condvar;
 pub use condvar::CondVar;
 
-/// Convenient late initialization of `Weak<Foo>`
-pub mod lazy_weak;
-pub use lazy_weak::LazyWeak;
-
 /// Implementation of async background task spawning which are stoppable
 /// using channel signalling.
 pub mod stoppable_task;
