@@ -249,6 +249,9 @@ impl Slot {
 
                     self.failed.store(true, SeqCst);
 
+                    // Free up this addr for future operations.
+                    self.p2p().hosts().unregister(&self.addr);
+
                     // Reset the CondVar for future use.
                     self.reset();
 
