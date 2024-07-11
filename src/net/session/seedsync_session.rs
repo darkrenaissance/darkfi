@@ -220,59 +220,59 @@ impl Slot {
                     match self.session().register_channel(ch.clone(), ex.clone()).await {
                         Ok(()) => {
                             self.failed.store(false, SeqCst);
+
+                            info!(
+                                target: "net::session::seedsync_session",
+                                "[P2P] Disconnecting from seed [{}]",
+                                url,
+                            );
+                            ch.stop().await;
+
+                            // Seed process complete
+                            if hosts.container.is_empty(HostColor::Grey) {
+                                warn!(target: "net::session::seedsync_session()",
+                                "[P2P] Greylist empty after seeding");
+                            }
+
+                            // Reset the CondVar for future use.
+                            self.reset();
                         }
 
                         Err(e) => {
-                            warn!(
-                                target: "net::session::seedsync_session",
-                                "[P2P] Failure during sync seed session [{}]: {}",
-                                url, e,
-                            );
-                            self.failed.store(true, SeqCst);
+                            self.handle_failure(e, &url);
+
+                            continue
                         }
                     }
-
-                    info!(
-                        target: "net::session::seedsync_session",
-                        "[P2P] Disconnecting from seed [{}]",
-                        url,
-                    );
-                    ch.stop().await;
                 }
 
                 Err(e) => {
-                    warn!(
-                        target: "net::session:seedsync_session",
-                        "[P2P] Failure contacting seed [{}]: {}",
-                        self.addr, e
-                    );
-
-                    self.failed.store(true, SeqCst);
-
-                    // Free up this addr for future operations.
-                    self.p2p().hosts().unregister(&self.addr);
-
-                    // Reset the CondVar for future use.
-                    self.reset();
+                    self.handle_failure(e, &self.addr);
 
                     continue
                 }
             }
-
-            // Seed process complete
-            if hosts.container.is_empty(HostColor::Grey) {
-                warn!(target: "net::session::seedsync_session()",
-                "[P2P] Greylist empty after seeding");
-            }
-
-            // Reset the CondVar for future use.
-            self.reset();
-
             debug!(
                 target: "net::session::seedsync_session",
                 "SeedSyncSession::start_seed() [END]",
             );
         }
+    }
+
+    fn handle_failure(&self, error: Error, addr: &Url) {
+        warn!(
+            target: "net::session::seedsync_session",
+            "[P2P] Unable to connect to manual outbound [{}]: {}",
+            self.addr, error,
+        );
+
+        self.failed.store(true, SeqCst);
+
+        // Free up this addr for future operations.
+        self.p2p().hosts().unregister(addr);
+
+        // Reset the CondVar for future use.
+        self.reset();
     }
 
     pub fn failed(&self) -> bool {

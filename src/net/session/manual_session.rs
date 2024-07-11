@@ -175,22 +175,27 @@ impl Slot {
                 return Ok(())
             }
 
-            match self.p2p().hosts().try_register(self.addr.clone(), HostState::Connect) {
-                Ok(_) => {
-                    match self.connector.connect(&self.addr).await {
-                        Ok((url, channel)) => {
-                            info!(
-                                target: "net::manual_session",
-                                "[P2P] Manual outbound connected [{}]", url,
-                            );
+            if let Err(e) = self.p2p().hosts().try_register(self.addr.clone(), HostState::Connect) {
+                debug!(target: "net::manual_session",
+                    "Cannot connect to manual={}, err={}", &self.addr, e);
 
-                            let stop_sub = channel.subscribe_stop().await?;
+                continue
+            }
 
-                            // Channel is now connected but not yet setup
+            match self.connector.connect(&self.addr).await {
+                Ok((url, channel)) => {
+                    info!(
+                        target: "net::manual_session",
+                        "[P2P] Manual outbound connected [{}]", url,
+                    );
 
-                            // Register the new channel
-                            self.session().register_channel(channel.clone(), ex.clone()).await?;
+                    let stop_sub = channel.subscribe_stop().await?;
 
+                    // Channel is now connected but not yet setup
+
+                    // Register the new channel
+                    match self.session().register_channel(channel.clone(), ex.clone()).await {
+                        Ok(()) => {
                             // Wait for channel to close
                             stop_sub.receive().await;
 
@@ -200,21 +205,18 @@ impl Slot {
                             );
                         }
                         Err(e) => {
-                            warn!(
-                                target: "net::manual_session",
-                                "[P2P] Unable to connect to manual outbound [{}]: {}",
-                                self.addr, e,
-                            );
-
-                            // Free up this addr for future operations.
-                            self.p2p().hosts().unregister(&self.addr);
+                            self.handle_failure(e, &url);
                         }
                     }
                 }
-                // This address is currently unavailable.
                 Err(e) => {
-                    debug!(target: "net::manual_session", "[P2P] Unable to connect to manual
-                           outbound [{}]: {}", self.addr.clone(), e);
+                    warn!(
+                        target: "net::manual_session",
+                        "[P2P] Unable to connect to manual outbound [{}]: {}",
+                        self.addr, e,
+                    );
+
+                    self.handle_failure(e, &self.addr);
                 }
             }
 
@@ -225,6 +227,17 @@ impl Slot {
             );
             sleep(outbound_connect_timeout).await;
         }
+    }
+
+    fn handle_failure(&self, error: Error, addr: &Url) {
+        warn!(
+            target: "net::manual_session",
+            "[P2P] Unable to connect to manual outbound [{}]: {}",
+            self.addr, error,
+        );
+
+        // Free up this addr for future operations.
+        self.p2p().hosts().unregister(addr);
     }
 
     fn session(&self) -> ManualSessionPtr {
