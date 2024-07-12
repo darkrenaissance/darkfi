@@ -24,7 +24,6 @@ use std::{
     time::Duration,
 };
 
-use async_recursion::async_recursion;
 use darkfi_serial::{deserialize_async, serialize_async};
 use log::{debug, error, info, warn};
 use num_bigint::BigUint;
@@ -755,52 +754,58 @@ impl EventGraph {
             }
         }
 
-        ordered_events.make_contiguous().to_vec()
+        let mut ordered_events = ordered_events.make_contiguous().to_vec();
+        ordered_events.reverse();
+        ordered_events
     }
 
-    /// We do a DFS (<https://en.wikipedia.org/wiki/Depth-first_search>), and
-    /// additionally we consider the timestamps.
-    #[async_recursion]
+    /// We do a non-recursive DFS (<https://en.wikipedia.org/wiki/Depth-first_search>),
+    /// and additionally we consider the timestamps.
     async fn dfs_topological_sort(
         &self,
         event: Event,
         visited: &mut HashSet<blake3::Hash>,
         ordered_events: &mut VecDeque<blake3::Hash>,
     ) {
+        let mut stack = VecDeque::new();
         let event_id = event.id();
-        visited.insert(event_id);
+        stack.push_back(event_id);
 
-        for parent_id in event.parents.iter() {
-            if !visited.contains(parent_id) && parent_id != &NULL_ID {
-                let p_event = self.dag_get(parent_id).await.unwrap().unwrap();
-                self.dfs_topological_sort(p_event, visited, ordered_events).await;
-            }
-        }
+        while let Some(event_id) = stack.pop_front() {
+            if !visited.contains(&event_id) && event_id != NULL_ID {
+                visited.insert(event_id);
+                if let Some(event) = self.dag_get(&event_id).await.unwrap() {
+                    for parent in event.parents.iter() {
+                        stack.push_back(*parent);
+                    }
 
-        // Before inserting, check timestamps to determine the correct position.
-        let mut pos = ordered_events.len();
-        for (idx, existing_id) in ordered_events.iter().enumerate().rev() {
-            assert!(existing_id != &NULL_ID);
-            if self.share_same_parents(&event_id, existing_id).await {
-                let existing_event = self.dag_get(existing_id).await.unwrap().unwrap();
+                    // Before inserting, check timestamps to determine the correct position.
+                    let mut pos = ordered_events.len();
+                    for (idx, existing_id) in ordered_events.iter().enumerate() {
+                        assert!(existing_id != &NULL_ID);
+                        if self.share_same_parents(&event_id, existing_id).await {
+                            let existing_event = self.dag_get(existing_id).await.unwrap().unwrap();
 
-                // Sort by timestamp
-                match event.timestamp.cmp(&existing_event.timestamp) {
-                    Ordering::Less => pos = idx,
-                    Ordering::Equal => {
-                        // In case of a tie-breaker, use the event ID
-                        let a = BigUint::from_bytes_be(event_id.as_bytes());
-                        let b = BigUint::from_bytes_be(existing_id.as_bytes());
-                        if a < b {
-                            pos = idx;
+                            // Sort by timestamp
+                            match event.timestamp.cmp(&existing_event.timestamp) {
+                                Ordering::Less => pos = idx,
+                                Ordering::Equal => {
+                                    // In case of a tie-breaker, use the event ID
+                                    let a = BigUint::from_bytes_be(event_id.as_bytes());
+                                    let b = BigUint::from_bytes_be(existing_id.as_bytes());
+                                    if a < b {
+                                        pos = idx;
+                                    }
+                                }
+                                _ => {}
+                            }
                         }
                     }
-                    _ => {}
+
+                    ordered_events.insert(pos, event_id);
                 }
             }
         }
-
-        ordered_events.insert(pos, event_id);
     }
 
     /// Check if two events have the same parents
