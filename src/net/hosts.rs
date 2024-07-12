@@ -1142,6 +1142,15 @@ impl Hosts {
                 continue
             }
 
+            // Configured peers should not enter the hostlist.
+            if settings.peers.contains(addr_) {
+                debug!(
+                    target: "net::hosts::filter_addresses",
+                    "[{}] is a configured peer. Skipping", addr_,
+                );
+                continue
+            }
+
             // Blacklist peers should never enter the hostlist.
             if self.container.contains(HostColor::Black as usize, addr_) ||
                 self.block_all_ports(addr_.host_str().unwrap().to_string())
