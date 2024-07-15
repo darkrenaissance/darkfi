@@ -38,6 +38,9 @@ use crate::{
 pub mod consensus;
 use consensus::{Consensus, Fork, Proposal};
 
+/// Monero Merge-mining PoW module
+mod xmr;
+
 /// DarkFi PoW module
 pub mod pow;
 use pow::PoWModule;

@@ -505,6 +505,10 @@ pub enum Error {
     #[error(transparent)]
     TxVerifyFailed(#[from] TxVerifyFailed),
 
+    #[cfg(feature = "validator")]
+    #[error(transparent)]
+    MergeMineError(#[from] MergeMineError),
+
     //=============
     // clock
     //=============
@@ -554,6 +558,16 @@ impl Error {
 
         Err(self.clone())
     }
+}
+
+#[cfg(feature = "validator")]
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum MergeMineError {
+    #[error("Hashing error: {0}")]
+    HashingError(String),
+
+    #[error("Validation error: {0}")]
+    ValidationError(String),
 }
 
 #[cfg(feature = "tx")]
