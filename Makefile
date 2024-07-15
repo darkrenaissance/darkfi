@@ -19,7 +19,6 @@ PROOFS_BIN = $(PROOFS_SRC:=.bin)
 BINS = \
 	zkas \
 	darkfid \
-	darkfi-mmproxy \
 	minerd \
 	darkirc \
 	genev \
@@ -53,13 +52,6 @@ darkfid: contracts
 		RUSTFLAGS="$(RUSTFLAGS)"
 
 minerd: contracts
-	$(MAKE) -C bin/$@ \
-		PREFIX="$(PREFIX)" \
-		CARGO="$(CARGO)" \
-		RUST_TARGET="$(RUST_TARGET)" \
-		RUSTFLAGS="$(RUSTFLAGS)"
-
-darkfi-mmproxy:
 	$(MAKE) -C bin/$@ \
 		PREFIX="$(PREFIX)" \
 		CARGO="$(CARGO)" \
@@ -164,7 +156,6 @@ clean:
 	$(MAKE) -C bin/zkas clean
 	$(MAKE) -C bin/darkfid clean
 	$(MAKE) -C bin/minerd clean
-	$(MAKE) -C bin/darkfi-mmproxy clean
 	$(MAKE) -C bin/darkirc clean
 	$(MAKE) -C bin/genev/genev-cli clean
 	$(MAKE) -C bin/genev/genevd clean
