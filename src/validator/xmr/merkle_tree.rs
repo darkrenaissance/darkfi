@@ -38,6 +38,33 @@ impl MerkleProof {
 
         Some(Self { branch, path_bitmap })
     }
+
+    /// The coinbase must be the first transaction in the block, so that you can't
+    /// have multiple coinbases in a block. That means the coinbase is always the
+    /// leftmost branch in the Merkle tree.
+    ///
+    /// This tests if the given proof is for the leftmost branch in the Merkle tree.
+    pub fn check_coinbase_path(&self) -> bool {
+        self.path_bitmap == 0b00000000
+    }
+
+    pub fn calculate_root(&self, hash: &monero::Hash) -> monero::Hash {
+        if self.branch.is_empty() {
+            return *hash
+        }
+
+        let mut root = *hash;
+        let depth = self.branch.len();
+        for d in 0..depth {
+            if (self.path_bitmap >> (depth - d - 1)) & 1 > 0 {
+                root = cn_fast_hash2(&self.branch[d], &root);
+            } else {
+                root = cn_fast_hash2(&root, &self.branch[d]);
+            }
+        }
+
+        root
+    }
 }
 
 /// Returns the Keccak 256 hash of the byte input
