@@ -199,7 +199,6 @@ geode = [
 
 event-graph = [
     "async-trait",
-    "async-recursion",
     "blake3",
     "num-bigint",
     "rand",
