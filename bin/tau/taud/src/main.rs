@@ -425,14 +425,12 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
     let dag_events = event_graph.order_events().await;
     let seen_events = seen.get().unwrap();
 
-    for event_id in dag_events.iter() {
+    for event in dag_events.iter() {
+        let event_id = event.id();
         // If it was seen, skip
         if seen_events.contains_key(event_id.as_bytes()).unwrap() {
             continue
         }
-
-        // Get the event from the DAG
-        let event = event_graph.dag_get(event_id).await.unwrap().unwrap();
 
         // Try to deserialize it. (Here we skip errors)
         let Ok((enc_task, _)) = deserialize_async_partial(event.content()).await else { continue };

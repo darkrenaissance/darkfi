@@ -742,7 +742,7 @@ impl EventGraph {
     }
 
     /// Perform a topological sort of the DAG.
-    pub async fn order_events(&self) -> Vec<blake3::Hash> {
+    pub async fn order_events(&self) -> Vec<Event> {
         let mut ordered_events = VecDeque::new();
         let mut visited = HashSet::new();
 
@@ -758,7 +758,7 @@ impl EventGraph {
         ord_events_vec
             .sort_unstable_by(|a, b| a.0.cmp(&b.0).then(b.1.timestamp.cmp(&a.1.timestamp)));
 
-        ord_events_vec.iter().map(|a| a.1.id()).collect::<Vec<blake3::Hash>>()
+        ord_events_vec.iter().map(|a| a.1.clone()).collect::<Vec<Event>>()
     }
 
     /// We do a non-recursive DFS (<https://en.wikipedia.org/wiki/Depth-first_search>),

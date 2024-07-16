@@ -228,10 +228,8 @@ impl JsonRpcInterface {
         let mut seen_events = vec![];
         let dag_events = self.event_graph.order_events().await;
 
-        for event_id in dag_events.iter() {
-            // Get the event from the DAG
-            let event = self.event_graph.dag_get(event_id).await.unwrap().unwrap();
-
+        for event in dag_events.iter() {
+            let event_id = event.id();
             // Try to deserialize it. (Here we skip errors)
             let genevent: GenEvent = match deserialize_async_partial(event.content()).await {
                 Ok((v, _)) => v,

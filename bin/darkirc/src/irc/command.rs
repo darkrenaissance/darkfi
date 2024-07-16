@@ -974,9 +974,10 @@ impl Client {
         // Here we'll hold the events in order we'll push to the client
         let mut replies = vec![];
 
-        for event_id in dag_events.iter() {
+        for event in dag_events.iter() {
+            let event_id = event.id();
             // If it was seen, skip
-            match self.is_seen(event_id).await {
+            match self.is_seen(&event_id).await {
                 Ok(true) => continue,
                 Ok(false) => {}
                 Err(e) => {
@@ -984,9 +985,6 @@ impl Client {
                     return Err(e)
                 }
             }
-
-            // Get the event from the DAG
-            let event = self.server.darkirc.event_graph.dag_get(event_id).await.unwrap().unwrap();
 
             // Try to deserialize it. (Here we skip errors)
             let Ok((mut privmsg, _)) = deserialize_async_partial(event.content()).await else {
@@ -1014,7 +1012,7 @@ impl Client {
 
             let msg = format!("PRIVMSG {} :{}", privmsg.channel, privmsg.msg);
             replies.push(ReplyType::Client((privmsg.nick, msg)));
-            if let Err(e) = self.mark_seen(event_id).await {
+            if let Err(e) = self.mark_seen(&event_id).await {
                 error!("[IRC CLIENT] (get_history) self.mark_seen({}) failed: {}", event_id, e);
                 return Err(e)
             }
