@@ -17,7 +17,6 @@
  */
 
 use std::{
-    cmp::Ordering,
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
     path::PathBuf,
     sync::Arc,
@@ -750,13 +749,16 @@ impl EventGraph {
         for tip in self.get_unreferenced_tips_sorted().await {
             if !visited.contains(&tip) && tip != NULL_ID {
                 let tip = self.dag_get(&tip).await.unwrap().unwrap();
-                self.dfs_topological_sort(tip, &mut visited, &mut ordered_events).await;
+                ordered_events.extend(self.dfs_topological_sort(tip, &mut visited).await);
             }
         }
 
-        let mut ordered_events = ordered_events.make_contiguous().to_vec();
-        ordered_events.reverse();
-        ordered_events
+        let mut ord_events_vec = ordered_events.make_contiguous().to_vec();
+        // Order events based on thier layer numbers, or based on timestamp if they are equal
+        ord_events_vec
+            .sort_unstable_by(|a, b| a.0.cmp(&b.0).then(b.1.timestamp.cmp(&a.1.timestamp)));
+
+        ord_events_vec.iter().map(|a| a.1.id()).collect::<Vec<blake3::Hash>>()
     }
 
     /// We do a non-recursive DFS (<https://en.wikipedia.org/wiki/Depth-first_search>),
@@ -765,8 +767,8 @@ impl EventGraph {
         &self,
         event: Event,
         visited: &mut HashSet<blake3::Hash>,
-        ordered_events: &mut VecDeque<blake3::Hash>,
-    ) {
+    ) -> VecDeque<(u64, Event)> {
+        let mut ordered_events = VecDeque::new();
         let mut stack = VecDeque::new();
         let event_id = event.id();
         stack.push_back(event_id);
@@ -779,48 +781,12 @@ impl EventGraph {
                         stack.push_back(*parent);
                     }
 
-                    // Before inserting, check timestamps to determine the correct position.
-                    let mut pos = ordered_events.len();
-                    for (idx, existing_id) in ordered_events.iter().enumerate() {
-                        assert!(existing_id != &NULL_ID);
-                        if self.share_same_parents(&event_id, existing_id).await {
-                            let existing_event = self.dag_get(existing_id).await.unwrap().unwrap();
-
-                            // Sort by timestamp
-                            match event.timestamp.cmp(&existing_event.timestamp) {
-                                Ordering::Less => pos = idx,
-                                Ordering::Equal => {
-                                    // In case of a tie-breaker, use the event ID
-                                    let a = BigUint::from_bytes_be(event_id.as_bytes());
-                                    let b = BigUint::from_bytes_be(existing_id.as_bytes());
-                                    if a < b {
-                                        pos = idx;
-                                    }
-                                }
-                                _ => {}
-                            }
-                        }
-                    }
-
-                    ordered_events.insert(pos, event_id);
+                    ordered_events.push_back((event.layer, event))
                 }
             }
         }
-    }
 
-    /// Check if two events have the same parents
-    async fn share_same_parents(&self, event_id1: &blake3::Hash, event_id2: &blake3::Hash) -> bool {
-        let event1 = self.dag_get(event_id1).await.unwrap().unwrap();
-        let mut parents1: Vec<_> =
-            event1.parents.iter().map(|x| BigUint::from_bytes_be(x.as_bytes())).collect();
-        parents1.sort_unstable();
-
-        let event2 = self.dag_get(event_id2).await.unwrap().unwrap();
-        let mut parents2: Vec<_> =
-            event2.parents.iter().map(|x| BigUint::from_bytes_be(x.as_bytes())).collect();
-        parents2.sort_unstable();
-
-        parents1 == parents2
+        ordered_events
     }
 
     /// Enable graph debugging
