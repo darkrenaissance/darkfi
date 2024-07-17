@@ -31,6 +31,7 @@ autojoin = [
     "#markets",
     "#math",
     "#random",
+    "#lunardao",
 ]
 
 ## IRC server specific password
@@ -131,6 +132,9 @@ topic = "Philosophy Discussions"
 
 [channel."#random"]
 topic = "/b/"
+
+[channel."#lunardao"]
+topic = "LunarDAO talk"
 
 ## ================
 ## Contact settings
