@@ -266,7 +266,7 @@ async def show_archive_task(ref_id, month_ts, server_name, port):
 
 def tabulate_task(task, prompt):
     tags = " ".join(f"+{tag}" for tag in task["tags"])
-    assign = " ".join(f"@{assign}" for assign in task["assign"])
+    assign = " ".join(f"{assign}" for assign in task["assign"])
     project = " ".join(f"{project}" for project in task["project"])
     rank = round(task["rank"], 4) if task["rank"] is not None else ""
     if task["due"] is None:
