@@ -28,29 +28,13 @@ type BlacklistEntry = (String, Vec<String>, Vec<u16>);
 ///
 /// TODO: this will be deprecated when we introduce the p2p resource
 /// mananger.
-#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum BanPolicy {
     Strict,
+
+    #[default]
     Relaxed,
-}
-
-impl std::str::FromStr for BanPolicy {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            "strict" => Ok(BanPolicy::Strict),
-            "relaxed" => Ok(BanPolicy::Relaxed),
-            _ => Err(format!("Invalid ban policy: {}", s)),
-        }
-    }
-}
-
-impl Default for BanPolicy {
-    fn default() -> Self {
-        BanPolicy::Strict
-    }
 }
 
 /// P2P network settings. The scope of this is a P2P network instance
