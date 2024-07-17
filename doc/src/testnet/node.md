@@ -36,8 +36,7 @@ The defaults are already preset for using the testnet network.
 $ ./darkfid
 Config file created in "~/.config/darkfi/darkfid_config.toml". Please review it and try again.
 $ ./drk
-drk 0.4.1
-...
+Config file created in "~/.config/darkfi/drk_config.toml". Please review it and try again.
 ```
 
 ## Running
