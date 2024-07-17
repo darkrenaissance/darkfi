@@ -167,7 +167,7 @@ class Model:
             urls = spawn['urls']
             whitelist = spawn['whitelist']
             greylist = spawn['greylist']
-            anchorlist = spawn['greylist']
+            anchorlist = spawn['anchorlist']
 
             spawn = self.liliths[key]['spawns'][name] = {}
             spawn['urls'] = urls
