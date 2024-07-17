@@ -47,6 +47,12 @@ impl std::str::FromStr for BanPolicy {
     }
 }
 
+impl Default for BanPolicy {
+    fn default() -> Self {
+        BanPolicy::Strict
+    }
+}
+
 /// P2P network settings. The scope of this is a P2P network instance
 /// configured by the library user.
 #[derive(Debug, Clone)]
@@ -270,6 +276,8 @@ pub struct SettingsOpt {
 
     /// Do not ban nodes that send messages without dispatchers if set
     /// to `Relaxed`. For most uses, should be set to `Strict`.
+    #[serde(default)]
+    #[structopt(skip)]
     pub ban_policy: BanPolicy,
 }
 
