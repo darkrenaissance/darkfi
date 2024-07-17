@@ -23,7 +23,7 @@ workspaces = ["darkfi-dev:2bCqQTd8BJgeUzH7JQELZxjQuWS8aCmXZ9C6w7ktNS1v"]
 # P2P network settings
 [net]
 # Path to a configured hostlist for saving known peers
-hostlist = "~/.local/darkfi/darkirc/hostlist.tsv"
+hostlist = "~/.local/darkfi/taud/hostlist.tsv"
 
 ## P2P accept addresses
 #inbound = ["tcp+tls://0.0.0.0:23331", "tcp+tls://[::]:23331"]
