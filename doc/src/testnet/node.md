@@ -178,7 +178,7 @@ folder, and `./drk` command to be replaced by `../../../drk -c drk.toml`
 To run a node in full debug mode:
 
 ```
-$ LOG_TARGETS="\!sled,\!net" ./darkfid -vv | tee /tmp/darkfid.log
+$ LOG_TARGETS='!sled,!rustls,!net' ./darkfid -vv | tee /tmp/darkfid.log
 ```
 
 The `sled` and `net` targets are very noisy and slow down the node so
