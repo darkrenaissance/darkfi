@@ -106,7 +106,7 @@ impl Spawn {
             .collect()
     }
 
-    async fn get_anchorlist(&self) -> Vec<JsonValue> {
+    async fn get_goldlist(&self) -> Vec<JsonValue> {
         self.p2p
             .hosts()
             .container
@@ -127,7 +127,7 @@ impl Spawn {
             ("urls".to_string(), JsonValue::Array(addr_vec)),
             ("whitelist".to_string(), JsonValue::Array(self.get_whitelist().await)),
             ("greylist".to_string(), JsonValue::Array(self.get_greylist().await)),
-            ("anchorlist".to_string(), JsonValue::Array(self.get_anchorlist().await)),
+            ("goldlist".to_string(), JsonValue::Array(self.get_goldlist().await)),
         ]))
     }
 }

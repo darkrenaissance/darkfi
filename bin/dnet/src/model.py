@@ -167,13 +167,13 @@ class Model:
             urls = spawn['urls']
             whitelist = spawn['whitelist']
             greylist = spawn['greylist']
-            anchorlist = spawn['anchorlist']
+            goldlist = spawn['goldlist']
 
             spawn = self.liliths[key]['spawns'][name] = {}
             spawn['urls'] = urls
             spawn['whitelist'] = whitelist
             spawn['greylist'] = greylist
-            spawn['anchorlist'] = anchorlist
+            spawn['goldlist'] = goldlist
 
         #logging.debug(f'added lilith {self.liliths}')
 

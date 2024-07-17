@@ -234,12 +234,12 @@ class View():
                         f"  {host}"),
                         self.pile.options()))
 
-            if info['anchorlist']:
-                anchorlist = info['anchorlist']
+            if info['goldlist']:
+                goldlist = info['goldlist']
                 self.pile.contents.append((urwid.Text(
-                    f"Anchorlist:"),
+                    f"Goldlist:"),
                     self.pile.options()))
-                for host in anchorlist:
+                for host in goldlist:
                     self.pile.contents.append((urwid.Text(
                         f"  {host}"),
                         self.pile.options()))
@@ -317,12 +317,12 @@ class View():
                         f"  {host}"),
                         self.pile.options()))
 
-            if info['anchorlist']:
-                anchorlist = info['anchorlist']
+            if info['goldlist']:
+                goldlist = info['goldlist']
                 self.pile.contents.append((urwid.Text(
-                    f"Anchorlist:"),
+                    f"Goldlist:"),
                     self.pile.options()))
-                for host in anchorlist:
+                for host in goldlist:
                     self.pile.contents.append((urwid.Text(
                         f"  {host}"),
                         self.pile.options()))
