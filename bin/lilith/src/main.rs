@@ -39,7 +39,7 @@ use url::Url;
 
 use darkfi::{
     async_daemonize, cli_desc,
-    net::{self, hosts::HostColor, P2p, P2pPtr},
+    net::{self, hosts::HostColor, settings::BanPolicy, P2p, P2pPtr},
     rpc::{
         jsonrpc::*,
         server::{listen_and_serve, RequestHandler},
@@ -363,6 +363,7 @@ async fn spawn_net(name: String, info: &NetInfo, ex: Arc<Executor<'static>>) -> 
             "nym".to_string(),
             "nym+tls".to_string(),
         ],
+        ban_policy: BanPolicy::Relaxed,
         ..Default::default()
     };
 

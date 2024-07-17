@@ -21,6 +21,32 @@ use url::Url;
 
 type BlacklistEntry = (String, Vec<String>, Vec<u16>);
 
+/// Ban policy which if set to `Relaxed` will not ban peers if the case
+/// they send a message without a corresponding MessageDispatcher.
+/// This is useful for nodes that may not be subscribed to protocols,
+/// such as Lilith. For most uses this should be set to `Strict`.
+///
+/// TODO: this will be deprecated when we introduce the p2p resource
+/// mananger.
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BanPolicy {
+    Strict,
+    Relaxed,
+}
+
+impl std::str::FromStr for BanPolicy {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "strict" => Ok(BanPolicy::Strict),
+            "relaxed" => Ok(BanPolicy::Relaxed),
+            _ => Err(format!("Invalid ban policy: {}", s)),
+        }
+    }
+}
+
 /// P2P network settings. The scope of this is a P2P network instance
 /// configured by the library user.
 #[derive(Debug, Clone)]
@@ -83,6 +109,9 @@ pub struct Settings {
     /// If scheme is left empty it will default to "tcp+tls".
     /// If ports are left empty all ports from this peer will be blocked.
     pub blacklist: Vec<BlacklistEntry>,
+    /// Do not ban nodes that send messages without dispatchers if set
+    /// to `Relaxed`. For most uses, should be set to `Strict`.
+    pub ban_policy: BanPolicy,
 }
 
 impl Default for Settings {
@@ -115,6 +144,7 @@ impl Default for Settings {
             slot_preference_strict: false,
             time_with_no_connections: 30,
             blacklist: vec![],
+            ban_policy: BanPolicy::Strict,
         }
     }
 }
@@ -237,6 +267,10 @@ pub struct SettingsOpt {
     #[serde(default)]
     #[structopt(skip)]
     pub blacklist: Vec<BlacklistEntry>,
+
+    /// Do not ban nodes that send messages without dispatchers if set
+    /// to `Relaxed`. For most uses, should be set to `Strict`.
+    pub ban_policy: BanPolicy,
 }
 
 impl From<SettingsOpt> for Settings {
@@ -282,6 +316,7 @@ impl From<SettingsOpt> for Settings {
                 .time_with_no_connections
                 .unwrap_or(def.time_with_no_connections),
             blacklist: opt.blacklist,
+            ban_policy: opt.ban_policy,
         }
     }
 }

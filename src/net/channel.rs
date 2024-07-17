@@ -50,6 +50,7 @@ use super::{
     transport::PtStream,
 };
 use crate::{
+    net::BanPolicy,
     system::{Publisher, PublisherPtr, StoppableTask, StoppableTaskPtr, Subscription},
     util::time::NanoTimestamp,
     Error, Result,
@@ -378,9 +379,9 @@ impl Channel {
                 // If we're getting messages without dispatchers, it's spam.
                 Err(Error::MissingDispatcher) => {
                     debug!(target: "net::channel::main_receive_loop()", "Stopping channel {:?}", self);
-
-                    // We will reject further connections from this peer
-                    self.ban(self.address()).await;
+                    if let BanPolicy::Strict = self.p2p().settings().read().await.ban_policy {
+                        self.ban(self.address()).await;
+                    }
 
                     return Err(Error::ChannelStopped)
                 }

@@ -117,7 +117,7 @@ pub mod connector;
 /// Network configuration settings. This holds the configured P2P instance
 /// behaviour and is controlled by clients of this API.
 pub mod settings;
-pub use settings::Settings;
+pub use settings::{BanPolicy, Settings};
 
 /// Optional events based debug-notify subsystem. Off by default. Enabled in P2P instance,
 /// and then call `p2p.dnet_sub()` to start receiving events.
