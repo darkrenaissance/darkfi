@@ -262,7 +262,7 @@ impl Slot {
     fn handle_failure(&self, error: Error, addr: &Url) {
         warn!(
             target: "net::session::seedsync_session",
-            "[P2P] Unable to connect to manual outbound [{}]: {}",
+            "[P2P] Unable to connect to seed [{}]: {}",
             self.addr, error,
         );
 
