@@ -191,7 +191,8 @@ impl InboundSession {
 
         debug!(
             target: "net::inbound_session::setup_channel()",
-            "Received stop_sub, channel removed from P2P",
+            "Received stop_sub, channel {:?} removed from P2P",
+            channel
         );
 
         dnetev!(self, InboundDisconnected, {
