@@ -100,9 +100,13 @@ struct Args {
 #[derive(Clone, Debug, serde::Deserialize, structopt::StructOpt, structopt_toml::StructOptToml)]
 #[structopt()]
 pub struct BlockchainNetwork {
-    #[structopt(short, long, default_value = "tcp://127.0.0.1:8240")]
+    #[structopt(long, default_value = "tcp://127.0.0.1:8240")]
     /// JSON-RPC listen URL
     pub rpc_listen: Url,
+
+    #[structopt(long, default_value = "tcp://127.0.0.1:8241")]
+    /// Merge Mining JSON-RPC listen URL
+    pub mm_rpc_listen: Url,
 
     #[structopt(long, default_value = "~/.local/darkfi/darkfid/localnet")]
     /// Path to blockchain database

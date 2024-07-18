@@ -14,6 +14,9 @@ network = "testnet"
 # JSON-RPC listen URL
 rpc_listen = "tcp://127.0.0.1:8240"
 
+# Merge mining JSON-RPC listen URL
+mm_rpc_listen = "http://127.0.0.1:8241"
+
 # Path to the blockchain database directory
 database = "~/.local/darkfi/darkfid/localnet"
 
@@ -123,6 +126,9 @@ localnet = true
 # JSON-RPC listen URL
 rpc_listen = "tcp://127.0.0.1:8340"
 
+# Merge mining JSON-RPC listen URL
+mm_rpc_listen = "http://127.0.0.1:8341"
+
 # Path to the blockchain database directory
 database = "~/.local/darkfi/darkfid/testnet"
 
@@ -230,6 +236,9 @@ localnet = false
 [network_config."mainnet"]
 # JSON-RPC listen URL
 rpc_listen = "tcp://127.0.0.1:8440"
+
+# Merge mining JSON-RPC listen URL
+mm_rpc_listen = "http://127.0.0.1:8441"
 
 # Path to the blockchain database directory
 database = "~/.local/darkfi/darkfid/mainnet"
