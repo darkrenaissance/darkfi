@@ -26,7 +26,7 @@
 use std::sync::{Arc, Weak};
 
 use async_trait::async_trait;
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use smol::{lock::Mutex, Executor};
 use url::Url;
 
@@ -159,6 +159,7 @@ impl InboundSession {
     ) -> Result<()> {
         loop {
             let channel = channel_sub.receive().await?;
+
             // Spawn a detached task to process the channel.
             // This will just perform the channel setup then exit.
             ex.spawn(self.clone().setup_channel(index, channel, ex.clone())).detach();
@@ -172,10 +173,10 @@ impl InboundSession {
         index: usize,
         channel: ChannelPtr,
         ex: Arc<Executor<'_>>,
-    ) -> Result<()> {
+    ) {
         info!(
-            target: "net::inbound_session::setup_channel",
-            "[P2P] Connected Inbound #{} [{}]", index, channel.address(),
+             target: "net::inbound_session::setup_channel",
+             "[P2P] Connected Inbound #{} [{}]", index, channel.address(),
         );
 
         dnetev!(self, InboundConnected, {
@@ -183,24 +184,32 @@ impl InboundSession {
             channel_id: channel.info.id,
         });
 
-        let stop_sub = channel.subscribe_stop().await?;
+        let stop_sub = channel.subscribe_stop().await;
 
-        self.register_channel(channel.clone(), ex.clone()).await?;
+        match self.register_channel(channel.clone(), ex.clone()).await {
+            Ok(()) => {
+                if let Ok(stop_sub) = stop_sub {
+                    // Wait for a stop signal, then cleanup.
+                    stop_sub.receive().await;
 
-        stop_sub.receive().await;
-
-        debug!(
-            target: "net::inbound_session::setup_channel()",
-            "Received stop_sub, channel {:?} removed from P2P",
-            channel
-        );
+                    debug!(
+                        target: "net::inbound_session::setup_channel()",
+                        "Received stop_sub, channel removed from P2P",
+                    );
+                }
+            }
+            Err(e) => {
+                warn!(
+                    target: "net::inbound_session::setup_channel()",
+                    "Channel setup failed! Err={}", e
+                );
+            }
+        }
 
         dnetev!(self, InboundDisconnected, {
             addr: channel.info.connect_addr.clone(),
             channel_id: channel.info.id,
         });
-
-        Ok(())
     }
 }
 
