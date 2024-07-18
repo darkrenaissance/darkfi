@@ -52,6 +52,7 @@ use error::{server_error, RpcError};
 /// JSON-RPC requests handler and methods
 mod rpc;
 mod rpc_blockchain;
+mod rpc_mm;
 mod rpc_tx;
 
 /// Validator async tasks
@@ -367,7 +368,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     }
 
     // JSON-RPC server
-    info!(target: "darkfid", "Starting JSON-RPC server");
+    info!(target: "darkfid", "Starting JSON-RPC server on {}", blockchain_config.rpc_listen);
     // Here we create a task variable so we can manually close the
     // task later. P2P tasks don't need this since it has its own
     // stop() function to shut down, also terminating the task we
@@ -380,6 +381,40 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             match res {
                 Ok(()) | Err(Error::RpcServerStopped) => darkfid_.stop_connections().await,
                 Err(e) => error!(target: "darkfid", "Failed starting sync JSON-RPC server: {}", e),
+            }
+        },
+        Error::RpcServerStopped,
+        ex.clone(),
+    );
+
+    // Merge mining JSON-RPC server
+    info!(target: "darkfid", "Starting Merge mining server on {}", blockchain_config.mm_rpc_listen);
+    let darkfid_ = darkfid.clone();
+    let darkfid__ = darkfid.clone();
+    let mm_rpc_task = StoppableTask::new();
+    let mut mm_rpc = tide::new();
+    mm_rpc.at("/json_rpc").post(move |req| {
+        let darkfid__ = darkfid__.clone();
+        async move { darkfid__.handle_mm_rpc_request(req).await }
+    });
+
+    mm_rpc_task.clone().start(
+        async move {
+            mm_rpc
+                .listen(&format!(
+                    "{}:{}",
+                    blockchain_config.mm_rpc_listen.host_str().unwrap(),
+                    blockchain_config.mm_rpc_listen.port().unwrap()
+                ))
+                .await?;
+            Ok(())
+        },
+        |res| async move {
+            match res {
+                Ok(()) | Err(Error::RpcServerStopped) => darkfid_.stop_connections().await,
+                Err(e) => {
+                    error!(target: "darkfid", "Failed starting merge-mining server: {}", e)
+                }
             }
         },
         Error::RpcServerStopped,
@@ -427,6 +462,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
     info!(target: "darkfid", "Stopping JSON-RPC server...");
     rpc_task.stop().await;
+
+    info!(target: "darkfid", "Stopping Merge mining server...");
+    mm_rpc_task.stop().await;
 
     info!(target: "darkfid", "Stopping P2P network...");
     p2p.stop().await;

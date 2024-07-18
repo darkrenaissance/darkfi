@@ -71,7 +71,6 @@ impl RequestHandler for Darkfid {
             "blockchain.subscribe_blocks" => self.blockchain_subscribe_blocks(req.id, req.params).await,
             "blockchain.subscribe_txs" =>  self.blockchain_subscribe_txs(req.id, req.params).await,
             "blockchain.subscribe_proposals" => self.blockchain_subscribe_proposals(req.id, req.params).await,
-            "merge_mining_get_chain_id" => self.merge_mining_get_chain_id(req.id, req.params).await,
 
             // ===================
             // Transaction methods

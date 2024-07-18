@@ -27,6 +27,7 @@ toml = "0.8.14"
 
 # JSON-RPC
 async-trait = "0.1.81"
+tide = "0.16.0"
 tinyjson = "2.5.1"
 url = "2.5.2"
 

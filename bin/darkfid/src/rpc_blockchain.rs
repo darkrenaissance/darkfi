@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashMap, str::FromStr};
+use std::str::FromStr;
 
 use darkfi_sdk::{crypto::ContractId, tx::TransactionHash};
 use darkfi_serial::{deserialize_async, serialize_async};
@@ -307,32 +307,5 @@ impl Darkfid {
         }
 
         JsonResponse::new(JsonValue::Array(ret), id).into()
-    }
-
-    // RPCAPI:
-    // Returns the `chain_id` used for merge mining. A 32-byte hash of the genesis block.
-    //
-    // --> {"jsonrpc": "2.0", "method": "merge_mining_get_chain_id", "params": [], "id": 0}
-    // <-- {"jsonrpc": "2.0", "result": {"chain_id": 02f8...7863"}, "id": 0}
-    pub async fn merge_mining_get_chain_id(&self, id: u16, _params: JsonValue) -> JsonResult {
-        let chain_id = match self.validator.blockchain.genesis() {
-            Ok((_, v)) => v,
-            Err(e) => {
-                error!(
-                    target: "darkfid::rpc::merge_mining_get_chain_id",
-                    "[RPC] Error looking up genesis block: {}", e,
-                );
-                return JsonError::new(InternalError, None, id).into()
-            }
-        };
-
-        JsonResponse::new(
-            JsonValue::Object(HashMap::from([(
-                "chain_id".to_string(),
-                chain_id.as_string().into(),
-            )])),
-            id,
-        )
-        .into()
     }
 }
