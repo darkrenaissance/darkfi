@@ -35,7 +35,7 @@ The defaults are already preset for using the testnet network.
 ```
 $ ./darkfid
 Config file created in "~/.config/darkfi/darkfid_config.toml". Please review it and try again.
-$ ./drk
+$ ./drk wallet --address
 Config file created in "~/.config/darkfi/drk_config.toml". Please review it and try again.
 ```
 
@@ -96,6 +96,13 @@ option under the network configuration you will operate on (for testnet
 it is `[network_config."testnet"]`). Uncomment it by removing the `#`
 character at the start of line, and replace the `YOUR_WALLET_ADDRESS_HERE`
 string with your wallet address.
+
+```
+# Enable this to mine
+miner = true
+# Put the address from `drk wallet --address` here
+recipient = "..."
+```
 
 
 ### Darkfid
