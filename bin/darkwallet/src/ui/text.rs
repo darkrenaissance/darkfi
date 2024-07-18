@@ -28,7 +28,7 @@ use crate::{
         PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyStr, PropertyUint32,
     },
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
-    text2::{self, Glyph, GlyphPositionIter, RenderedAtlas, SpritePtr, TextShaper, TextShaperPtr},
+    text2::{self, Glyph, GlyphPositionIter, SpritePtr, TextShaper, TextShaperPtr},
     util::zip3,
 };
 
@@ -135,19 +135,19 @@ impl Text {
     ) -> TextRenderInfo {
         debug!(target: "ui::text", "Rendering label '{}'", text);
         let glyphs = text_shaper.shape(text, font_size).await;
-        let atlas = text2::make_texture_atlas(render_api, font_size, &glyphs).await.unwrap();
+        let atlas = text2::make_texture_atlas(render_api, &glyphs).await.unwrap();
 
         let mut mesh = MeshBuilder::new();
         let mut glyph_pos_iter = GlyphPositionIter::new(font_size, &glyphs, baseline);
-        for (_, uv_rect, glyph_rect, glyph) in
-            zip3(atlas.uv_rects.into_iter(), glyph_pos_iter, glyphs.iter())
-        {
+        for (glyph_rect, glyph) in glyph_pos_iter.zip(glyphs.iter()) {
+            let uv_rect = atlas.fetch_uv(glyph.glyph_id).expect("missing glyph UV rect");
+
             //mesh.draw_outline(&glyph_rect, COLOR_BLUE, 2.);
             let mut color = text_color.clone();
             if glyph.sprite.has_color {
                 color = COLOR_WHITE;
             }
-            mesh.draw_box(&glyph_rect, color, &uv_rect);
+            mesh.draw_box(&glyph_rect, color, uv_rect);
         }
 
         let mesh = mesh.alloc(&render_api).await.unwrap();

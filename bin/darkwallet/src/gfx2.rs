@@ -251,7 +251,7 @@ pub struct DrawMesh {
     pub num_elements: i32,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum DrawInstruction {
     ApplyViewport(Rectangle),
     ApplyMatrix(glam::Mat4),

@@ -17,6 +17,7 @@
  */
 
 use async_recursion::async_recursion;
+use darkfi_serial::Encodable;
 use futures::{stream::FuturesUnordered, StreamExt};
 use std::{sync::Arc, thread};
 
@@ -26,7 +27,7 @@ use crate::{
     prop::{Property, PropertySubType, PropertyType},
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId, SceneNodeType},
     text2::TextShaperPtr,
-    ui::{ChatView, EditBox, Mesh, RenderLayer, Stoppable, Text, Window},
+    ui::{chatview, ChatView, EditBox, Mesh, RenderLayer, Stoppable, Text, Window},
 };
 
 //fn print_type_of<T>(_: &T) {
@@ -401,18 +402,30 @@ impl App {
         let node = sg.get_node(node_id).unwrap();
         let prop = node.get_property("rect").unwrap();
         prop.set_f32(0, 0.).unwrap();
-        prop.set_f32(1, 0.).unwrap();
+        prop.set_f32(1, 200.).unwrap();
         let code = vec![Op::LoadVar("w".to_string())];
         prop.set_expr(2, code).unwrap();
         let code = vec![Op::Sub((
             Box::new(Op::LoadVar("h".to_string())),
-            Box::new(Op::ConstFloat32(50.)),
+            Box::new(Op::ConstFloat32(200.)),
         ))];
         prop.set_expr(3, code).unwrap();
+        node.set_property_f32("font_size", 20.).unwrap();
+        node.set_property_f32("line_height", 30.).unwrap();
         node.set_property_u32("z_index", 1).unwrap();
 
         drop(sg);
-        let pimpl = ChatView::new().await;
+        let db = sled::open("chatdb").expect("cannot open sleddb");
+        let chat_tree = db.open_tree(b"chat").unwrap();
+        //populate_tree(&chat_tree);
+        let pimpl = ChatView::new(
+            self.sg.clone(),
+            node_id,
+            self.render_api.clone(),
+            self.text_shaper.clone(),
+            chat_tree,
+        )
+        .await;
         let mut sg = self.sg.lock().await;
         let node = sg.get_node_mut(node_id).unwrap();
         node.pimpl = pimpl;
@@ -434,6 +447,28 @@ impl App {
             Pimpl::Window(win) => win.draw(&sg).await,
             _ => panic!("wrong pimpl"),
         }
+    }
+}
+
+// Just for testing
+fn populate_tree(tree: &sled::Tree) {
+    let chat_txt = include_str!("../chat.txt");
+    for line in chat_txt.lines() {
+        let parts: Vec<&str> = line.splitn(3, ' ').collect();
+        assert_eq!(parts.len(), 3);
+        let timest = parts[0].replace(':', "").parse::<u32>().unwrap();
+        let nick = parts[1].to_string();
+        let text = parts[2].to_string();
+
+        // serial order is important here
+        let key = timest.to_be_bytes();
+        //timest.encode(&mut key).unwrap();
+
+        let line = chatview::ChatLine { nick, text };
+        let mut val = vec![];
+        line.encode(&mut val).unwrap();
+
+        tree.insert(&key, val).unwrap();
     }
 }
 
@@ -561,6 +596,16 @@ fn create_chatview(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
     let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
     prop.set_array_len(4);
     prop.allow_exprs();
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("scroll", PropertyType::Float32, PropertySubType::Null);
+    prop.set_ui_text("Scroll", "Scroll up from the bottom");
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("font_size", PropertyType::Float32, PropertySubType::Pixel);
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("line_height", PropertyType::Float32, PropertySubType::Pixel);
     node.add_property(prop).unwrap();
 
     let mut prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);

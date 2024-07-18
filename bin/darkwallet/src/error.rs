@@ -122,4 +122,7 @@ pub enum Error {
 
     #[error("Publisher was destroyed")]
     PublisherDestroyed = 34,
+
+    #[error("Empty atlas")]
+    AtlasIsEmpty = 35,
 }

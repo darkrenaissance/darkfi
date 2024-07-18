@@ -1,23 +1,3 @@
-21:21 somiaj Z-module: am I messing up the logic now...grr
-21:22 somiaj rex: If a is a free variable, then you need a universe, though I guess if you already know something about a you don't, thanks for pointing that out.
-21:22 rex no I mean things like -1 \not\in ℕ
-21:22 rex why do I need a universe here?
-21:23 somiaj yea, that is what I was stating, if you knew something about the object, it wasn't a free variable, then you are correct, a universal set isn't needed
-21:23 rex that's what you meant. I see
-21:23 somiaj I was (maybe incorrectly) assuming that x and y were free variables here (vs already in some other set or something is known about them, like yoru example)
-21:24 somiaj so yea, I guess there are contexts in which you can use not in A, but A^c may not be welldefined
-21:28 rex with free variables you mean, that it is implicit to what universe they belong?
-21:43 mh_le Z-module: can I get you to take a look at a solution?
-21:57 mahboubine I've got a function and I calculated it's derivative to determine whether the function is increasing or decreasing at different intervals.
-21:59 mahboubine but the exercise correction also found the points from which the curve stars descending or ascending, for instance f(x) decends from 0 to -1/4 and back up until 0 and so on
-21:59 mahboubine I am wondering how to find those points as well
-22:01 blackfield well you're looking for points c such that f'(c)=0, or undefined..
-22:04 blackfield then you can test f''(c)>0 (then the point is a local minimum), or if f''(c)<0 it's a local maximum
-22:08 mahboubine I came to that conclusion as well
-22:08 mahboubine pretty easy now that I see it.
-22:08 mahboubine thanks, blackfield
-22:08 blackfield :)
-23:51 biberao hi
 00:53 bouma would you call within a 75% CI weak evidence ? i would call it no evidence
 01:00 somiaj bouma: I would just call it a 75% CI, so 1 and 4 chance you are wrong.
 01:00 somiaj I don't think a p value of 0.25 is that common, most prefer 0.05 or smaller

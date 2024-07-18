@@ -39,7 +39,7 @@ use crate::{
     },
     pubsub::Subscription,
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
-    text2::{self, Glyph, GlyphPositionIter, RenderedAtlas, SpritePtr, TextShaper, TextShaperPtr},
+    text2::{self, Glyph, GlyphPositionIter, SpritePtr, TextShaper, TextShaperPtr},
     util::zip3,
 };
 
@@ -365,7 +365,7 @@ impl EditBox {
         debug!(target: "ui::editbox", "Rendering text '{}' clip={:?}", text, clip);
 
         let glyphs = self.glyphs.lock().unwrap().clone();
-        let atlas = text2::make_texture_atlas(&self.render_api, font_size, &glyphs).await.unwrap();
+        let atlas = text2::make_texture_atlas(&self.render_api, &glyphs).await.unwrap();
 
         let mut mesh = MeshBuilder::with_clip(clip.clone());
         self.draw_selected(&mut mesh, &glyphs, clip.h).unwrap();
@@ -374,9 +374,9 @@ impl EditBox {
         // Used for drawing the cursor when it's at the end of the line.
         let mut rhs = 0.;
 
-        for (glyph_idx, uv_rect, mut glyph_rect, glyph) in
-            zip3(atlas.uv_rects.into_iter(), glyph_pos_iter, glyphs.iter())
-        {
+        for (glyph_idx, (mut glyph_rect, glyph)) in glyph_pos_iter.zip(glyphs.iter()).enumerate() {
+            let uv_rect = atlas.fetch_uv(glyph.glyph_id).expect("missing glyph UV rect");
+
             glyph_rect.x += scroll;
 
             //mesh.draw_outline(&glyph_rect, COLOR_BLUE, 2.);
@@ -384,7 +384,7 @@ impl EditBox {
             if glyph.sprite.has_color {
                 color = COLOR_WHITE;
             }
-            mesh.draw_box(&glyph_rect, color, &uv_rect);
+            mesh.draw_box(&glyph_rect, color, uv_rect);
 
             if is_focused && cursor_pos != 0 && cursor_pos == glyph_idx {
                 let cursor_rect =
@@ -1217,6 +1217,12 @@ impl EditBox {
         rect.x += parent_rect.x;
         rect.y += parent_rect.y;
 
+        // We do this here because that's when we finally have the accurate rect
+        // For drawing we want the rect to be correct.
+        // TODO: parent rect changing should update this cache
+        //       do we have to subscribe to parent rect and set this None? meh
+        //       or is it better that parent can invalidate child somehow and force redraw?
+        // TODO: store drawcalls directly
         let render_info = self.render_info.lock().unwrap().clone();
         let render_info = match render_info {
             Some(render_info) => render_info,
