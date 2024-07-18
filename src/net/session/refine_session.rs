@@ -268,7 +268,6 @@ impl GreylistRefinery {
             match hosts.container.fetch_random_with_schemes(HostColor::Grey, &allowed_transports) {
                 Some((entry, _)) => {
                     let url = &entry.0;
-                    let last_seen = &entry.1;
 
                     if let Err(e) = hosts.try_register(url.clone(), HostState::Refine) {
                         debug!(target: "net::refinery", "Unable to refine addr={}, err={}",
@@ -277,12 +276,15 @@ impl GreylistRefinery {
                     }
 
                     if !self.session().handshake_node(url.clone(), self.p2p().clone()).await {
+                        hosts.container.remove_if_exists(HostColor::Grey, url);
+
                         debug!(
                             target: "net::refinery",
                             "Peer {} handshake failed. Removed from greylist", url,
                         );
 
-                        hosts.greylist_host(url, *last_seen).unwrap();
+                        // Free up this addr for future operations.
+                        hosts.unregister(url);
 
                         continue
                     }
