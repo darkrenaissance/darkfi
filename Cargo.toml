@@ -34,6 +34,7 @@ members = [
     #"bin/tau/tau-cli",
     "bin/vanityaddr",
     "bin/lilith",
+    "bin/ping",
 
     "src/sdk",
     "src/sdk/python",
