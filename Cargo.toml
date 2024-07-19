@@ -34,7 +34,6 @@ members = [
     #"bin/tau/tau-cli",
     "bin/vanityaddr",
     "bin/lilith",
-    "bin/ping",
 
     "src/sdk",
     "src/sdk/python",
@@ -49,6 +48,9 @@ members = [
     "src/contract/deployooor",
 
     "example/dchat/dchatd",
+
+    # Utils
+    "script/ping",
 ]
 
 [dependencies]

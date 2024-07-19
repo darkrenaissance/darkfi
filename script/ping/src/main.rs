@@ -16,13 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 use darkfi::net;
-use darkfi_serial::{
-    async_trait, AsyncDecodable, AsyncEncodable, SerialDecodable, SerialEncodable, VarInt,
-};
-use smol::{
-    io::{self, AsyncRead, AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf},
-    lock::RwLock as AsyncRwLock,
-};
+use darkfi_serial::{AsyncDecodable, VarInt};
+use smol::io::AsyncReadExt;
 use std::sync::Arc;
 use url::Url;
 
@@ -59,7 +54,7 @@ fn main() {
     let (signal, shutdown) = smol::channel::unbounded::<()>();
 
     let ex = Arc::new(smol::Executor::new());
-    let task = ex.spawn(async {
+    let _task = ex.spawn(async {
         ping().await;
         let _ = signal.send(()).await;
     });
