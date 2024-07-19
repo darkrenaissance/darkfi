@@ -1,4 +1,4 @@
 jniLibs
 sqlcipher
 openssl
-darkirc.android64
+darkirc.aarch64-android
