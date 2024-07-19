@@ -48,9 +48,6 @@ members = [
     "src/contract/deployooor",
 
     "example/dchat/dchatd",
-
-    # Utils
-    "script/ping",
 ]
 
 [dependencies]
