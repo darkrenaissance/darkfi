@@ -1176,9 +1176,6 @@ impl EditBox {
     }
 
     async fn redraw(&self) {
-        // draw will recalc this when it's None
-        let old = std::mem::replace(&mut *self.render_info.lock().unwrap(), None);
-
         let sg = self.sg.lock().await;
         let node = sg.get_node(self.node_id).unwrap();
 
@@ -1192,13 +1189,6 @@ impl EditBox {
         };
         self.render_api.replace_draw_calls(draw_update.draw_calls).await;
         debug!(target: "ui::editbox", "replace draw calls done");
-
-        // We're finished with these so clean up.
-        if let Some(old) = old {
-            self.render_api.delete_buffer(old.mesh.vertex_buffer);
-            self.render_api.delete_buffer(old.mesh.index_buffer);
-            self.render_api.delete_texture(old.texture_id);
-        }
     }
 
     pub async fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
@@ -1217,21 +1207,16 @@ impl EditBox {
         rect.x += parent_rect.x;
         rect.y += parent_rect.y;
 
-        // We do this here because that's when we finally have the accurate rect
-        // For drawing we want the rect to be correct.
-        // TODO: parent rect changing should update this cache
-        //       do we have to subscribe to parent rect and set this None? meh
-        //       or is it better that parent can invalidate child somehow and force redraw?
-        // TODO: store drawcalls directly
-        let render_info = self.render_info.lock().unwrap().clone();
-        let render_info = match render_info {
-            Some(render_info) => render_info,
-            None => {
-                let render_info = self.regen_mesh(rect.clone()).await;
-                *self.render_info.lock().unwrap() = Some(render_info.clone());
-                render_info
-            }
-        };
+        // draw will recalc this when it's None
+        let render_info = self.regen_mesh(rect.clone()).await;
+        let old_render_info =
+            std::mem::replace(&mut *self.render_info.lock().unwrap(), Some(render_info.clone()));
+        // We're finished with these so clean up.
+        if let Some(old) = old_render_info {
+            self.render_api.delete_buffer(old.mesh.vertex_buffer);
+            self.render_api.delete_buffer(old.mesh.index_buffer);
+            self.render_api.delete_texture(old.texture_id);
+        }
 
         let mesh = DrawMesh {
             vertex_buffer: render_info.mesh.vertex_buffer,
@@ -1268,6 +1253,18 @@ impl EditBox {
         self.text.set(String::new());
         self.cursor_pos.set(0);
         self.redraw().await;
+    }
+}
+
+impl Drop for EditBox {
+    fn drop(&mut self) {
+        let render_info = std::mem::replace(&mut *self.render_info.lock().unwrap(), None);
+        // We're finished with these so clean up.
+        if let Some(old) = render_info {
+            self.render_api.delete_buffer(old.mesh.vertex_buffer);
+            self.render_api.delete_buffer(old.mesh.index_buffer);
+            self.render_api.delete_texture(old.texture_id);
+        }
     }
 }
 
