@@ -270,6 +270,8 @@ struct RenderContext<'a> {
     draw_calls: &'a HashMap<u64, DrawCall>,
     uniforms_data: [u8; 128],
     white_texture: TextureId,
+    // Used for implementing a push/pop for viewport
+    current_view: Rectangle,
 }
 
 impl<'a> RenderContext<'a> {
@@ -283,8 +285,23 @@ impl<'a> RenderContext<'a> {
         }
     }
 
+    fn apply_view(&mut self, view: &Rectangle) {
+        let (_, screen_height) = window::screen_size();
+
+        let view_x = view.x.round() as i32;
+        let view_y = screen_height - (view.y + view.h);
+        let view_y = view_y.round() as i32;
+        let view_w = view.w.round() as i32;
+        let view_h = view.h.round() as i32;
+
+        self.ctx.apply_viewport(view_x, view_y, view_w, view_h);
+        self.ctx.apply_scissor_rect(view_x, view_y, view_w, view_h);
+    }
+
     fn draw_call(&mut self, draw_call: &DrawCall, indent: u32) {
         let ws = if DEBUG_RENDER { " ".repeat(indent as usize * 4) } else { String::new() };
+
+        let mut prev_view = None;
 
         for instr in &draw_call.instrs {
             match instr {
@@ -292,16 +309,9 @@ impl<'a> RenderContext<'a> {
                     if DEBUG_RENDER {
                         debug!(target: "gfx", "{}apply_viewport({:?})", ws, view);
                     }
-                    let (_, screen_height) = window::screen_size();
-
-                    let view_x = view.x.round() as i32;
-                    let view_y = screen_height - (view.y + view.h);
-                    let view_y = view_y.round() as i32;
-                    let view_w = view.w.round() as i32;
-                    let view_h = view.h.round() as i32;
-
-                    self.ctx.apply_viewport(view_x, view_y, view_w, view_h);
-                    self.ctx.apply_scissor_rect(view_x, view_y, view_w, view_h);
+                    prev_view = Some(view.clone());
+                    self.current_view = view.clone();
+                    self.apply_view(view);
                 }
                 DrawInstruction::ApplyMatrix(model) => {
                     if DEBUG_RENDER {
@@ -344,6 +354,12 @@ impl<'a> RenderContext<'a> {
 
         for dc in draw_calls {
             self.draw_call(dc, indent + 1);
+        }
+
+        // Reset view back again
+        if let Some(view) = prev_view {
+            self.apply_view(&view);
+            self.current_view = view;
         }
     }
 }
@@ -800,11 +816,15 @@ impl EventHandler for Stage {
         //uniforms_data[64..].copy_from_slice(&data);
         assert_eq!(128, 2 * UniformType::Mat4.size());
 
+        let (screen_width, screen_height) = window::screen_size();
+        let default_view = Rectangle { x: 0., y: 0., w: screen_width, h: screen_height };
+
         let mut render_ctx = RenderContext {
             ctx: &mut self.ctx,
             draw_calls: &self.draw_calls,
             uniforms_data,
             white_texture: self.white_texture,
+            current_view: default_view,
         };
         render_ctx.draw();
 
