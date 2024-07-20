@@ -1,3 +1,4 @@
+#!/usr/bin/python
 # This file is part of DarkFi (https://dark.fi)
 #
 # Copyright (C) 2020-2024 Dyne.org foundation
@@ -15,7 +16,6 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import asyncio, json, random, sys, time
-
 
 class JsonRpc:
 
@@ -71,7 +71,6 @@ class JsonRpc:
     async def dnet_subscribe_events(self):
         return await self._subscribe("dnet.subscribe_events", [])
 
-
 async def main(argv):
     rpc = JsonRpc()
     while True:
@@ -120,6 +119,5 @@ async def main(argv):
         print(f"  {url}")
 
     await rpc.stop()
-
 
 asyncio.run(main(sys.argv))
