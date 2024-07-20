@@ -50,7 +50,7 @@ edit it to contain the following:
 
 ```toml
 inbound = ["tcp://127.0.0.1:25551"]
-external_addr = ["tor://jamie3vkiwibfiwucd6vxijskbhpjdyajmzeor4mc4i7yopvpo4p7cyd.onion:25551"]
+external_addrs = ["tor://jamie3vkiwibfiwucd6vxijskbhpjdyajmzeor4mc4i7yopvpo4p7cyd.onion:25551"]
 ```
 
 Now when you start `darkirc`, the hidden service will be announced as
