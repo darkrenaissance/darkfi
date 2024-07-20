@@ -23,9 +23,13 @@ use url::Url;
 
 const ENDPOINT: &str = "tcp+tls://lilith1.dark.fi:5262";
 
-async fn ping() {
-    println!("Pinging {ENDPOINT}");
-    let endpoint = Url::parse(ENDPOINT).unwrap();
+async fn ping(endpoint: &str) {
+    let Ok(endpoint) = Url::parse(endpoint) else {
+        println!("Invalid endpoint {endpoint}");
+        return
+    };
+    println!("Pinging {endpoint}");
+
     let dialer = net::transport::Dialer::new(endpoint, None).await.unwrap();
     let timeout = std::time::Duration::from_secs(5);
 
@@ -51,11 +55,14 @@ async fn ping() {
 }
 
 fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    let endpoint = if args.len() == 1 { ENDPOINT } else { &args[1] };
+
     let (signal, shutdown) = smol::channel::unbounded::<()>();
 
     let ex = Arc::new(smol::Executor::new());
     let _task = ex.spawn(async {
-        ping().await;
+        ping(endpoint).await;
         let _ = signal.send(()).await;
     });
 
