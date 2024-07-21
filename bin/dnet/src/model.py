@@ -74,10 +74,13 @@ class Model:
             url = channel['url']
             self.nodes[name]['manual'][f'{id}'] = url
     
-    def add_offline(self, node):
+    def add_offline(self, node, is_lilith: bool):
         name = list(node.keys())[0]
         values = list(node.values())[0]
-        self.nodes[name] = values
+        if is_lilith:
+            self.liliths[name] = values
+        else:
+            self.nodes[name] = values
 
     def add_event(self, event):
         name = list(event.keys())[0]
@@ -153,7 +156,6 @@ class Model:
 
 
     def add_lilith(self, lilith):
-        #logging.debug(f'adding lilith {lilith}')
         key = list(lilith.keys())[0]
         values = list(lilith.values())[0]
         info = values['result']

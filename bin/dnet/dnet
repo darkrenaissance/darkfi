@@ -26,6 +26,8 @@ from src.model import Model
 from src.rpc import JsonRpc
 from src.view import View
 
+# TODO: update to latest urwid version.
+
 class Dnetview:
 
     def __init__(self):
@@ -51,43 +53,66 @@ class Dnetview:
         type = node['type']
         info = {}
 
-        while True:
-            try:
-                await rpc.start(host, port)
-                logging.debug(f'Started {name} RPC on port {port}')
-                break
-            except Exception as e:
-                info[name] = {}
-                await self.queue.put(info)
-                continue
-    
-        if type == 'NORMAL':
-            data = await rpc._make_request('p2p.get_info', [])
-            info[name] = data
+        await self.connect_loop(rpc, node, info)
 
-            await self.queue.put(info)
-            await rpc.dnet_switch(True)
-            await rpc.dnet_subscribe_events()
-            
+        if type == 'NORMAL':
+            await self.get_info(rpc, node, info)
             while True:
                 await asyncio.sleep(0.01)
                 data = await rpc.reader.readline()
                 try:
                     data = json.loads(data)
-                    info[name] = data
+                    info[name] = (type, data)
                     await self.queue.put(info)
                 except:
-                    info[name] = {}
-                    await self.queue.put(info)
+                    logging.debug(f'{name} RPC on port {port} disconnected')
+                    # Attempt reconnection
+                    await self.connect_loop(rpc, node, info)
+                    await self.get_info(rpc, node, info)
 
             await rpc.dnet_switch(False)
     
         if type == 'LILITH':
             data = await rpc._make_request('spawns', [])
-            info[name] = data
+            info[name] = (type, data)
             await self.queue.put(info)
 
         await rpc.stop()
+
+    async def get_info(self, rpc, node, info):
+        name = node['name']
+        host = node['host']
+        port = node['port']
+        type = node['type']
+
+        logging.debug(f"get_info START")
+        data = await rpc._make_request('p2p.get_info', [])
+        logging.debug(f"sent rpc request")
+        info[name] = (type, data)
+
+        await self.queue.put(info)
+        await rpc.dnet_switch(True)
+        await rpc.dnet_subscribe_events()
+            
+    async def connect_loop(self, rpc, node, info):
+        name = node['name']
+        host = node['host']
+        port = node['port']
+        type = node['type']
+
+        while True:
+            try:
+                await rpc.start(host, port)
+                logging.debug(f'Started {host} RPC on port {port}')
+                break
+            except Exception as e:
+                logging.debug(f'Cannot connect to {host} RPC on port {port}')
+                info[name] = (type, {})
+                await self.queue.put(info)
+
+                # Sleep for 2s before trying again
+                await asyncio.sleep(2)
+                continue
 
     async def start_connect_slots(self, nodes):
         tasks = []
@@ -100,11 +125,22 @@ class Dnetview:
 
     async def update_info(self):
         while True:
-            info = await self.queue.get()
-            values = list(info.values())[0]
+            info = {}
+            data = await self.queue.get()
 
-            if not values:
-                self.model.add_offline(info)
+            #logging.debug(f"update_info(): Raw data {data}")
+            # We parse in this manner so we can differentiate between
+            # normal nodes and lilith nodes when they are offline.
+            type = list(data.values())[0][0]
+            values = list(data.values())[0][1]
+            key = list(data.keys())[0]
+            info[key] = values
+            #logging.debug(f"update_info(): Parsed data {type} {info}")
+
+            if not values and type == 'LILITH':
+                self.model.add_offline(info, True)
+            if not values and type == 'NORMAL':
+                self.model.add_offline(info, False)
 
             if 'result' in values:
                 result = values.get('result')
