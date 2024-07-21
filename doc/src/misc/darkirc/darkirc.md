@@ -38,8 +38,10 @@ you have all the necessary dependencies.
 ## Installation (Android)
 
 This is for Android 64 bit (which is most phones).
+You will compile darkirc on your computer then copy it to your phone
+and run it in Termux (a command-line terminal for Android).
 
-1. Setup Docker on your machine which may look like:
+1. Setup Docker on your computer which may look like:
     1. Install docker and docker-buildx packages.
     2. Enable the docker daemon service.
     3. Add your user to the docker group and refresh the session
