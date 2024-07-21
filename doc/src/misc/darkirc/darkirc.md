@@ -48,7 +48,9 @@ Podman is a drop in replacement.
 
 1. Setup podman on your computer which may look like:
     1. Install podman package
-    2. Enable the podman daemon service.
+    2. Run the podman daemon service under your local user
+        1. Use the command `podman system service`.
+        2. For Docker it's more complicated, see [rootless mode](https://docs.docker.com/engine/security/rootless/).
 2. Run `cd bin/darkirc/ && make podman-android`. The resulting file 
     will be called `darkirc.aarch64-android` (it might be needed to 
     make the file executable `chmod +x darkirc.aarch64-android`). 
