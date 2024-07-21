@@ -53,11 +53,12 @@ $(BIN).android64:
 #	cp -f ../../target/armv7-linux-androideabi/release/$(BIN) $(BIN).$@
 
 # This target doesn't require installing any packages from Android Studio
-docker-android:
-	docker build -t test:latest . --file android.Dockerfile
+podman-android:
+	# s/podman/docker/ if you are using docker instead
+	podman build -t test:latest . --file android.Dockerfile
 	# Use this command to get an interactive terminal inside docker:
 	#docker run -v $(shell pwd)/../../:/root/src -it test:latest /bin/bash
-	docker run --rm -v $(shell pwd)/../../:/root/src -t test:latest make _aarch64-android
+	podman run --rm -v $(shell pwd)/../../:/root/src -t test:latest make _aarch64-android
 	cp -f ../../target/aarch64-linux-android/release/darkirc darkirc.aarch64-android
 # Invoked inside docker by the command above
 # We need to mount this directory as a volume using -v so docker can access it

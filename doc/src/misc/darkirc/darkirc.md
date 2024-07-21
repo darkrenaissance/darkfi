@@ -41,12 +41,15 @@ This is for Android 64 bit (which is most phones).
 You will compile darkirc on your computer then copy it to your phone
 and run it in Termux (a command-line terminal for Android).
 
-1. Setup Docker on your computer which may look like:
-    1. Install docker and docker-buildx packages.
-    2. Enable the docker daemon service.
-    3. Add your user to the docker group and refresh the session
-       (either with `su -c $USER` or logout/login).
-2. Run `cd bin/darkirc/ && make docker-android`. The resulting file 
+We will use podman which is a secure replacement for docker. However if you
+prefer to use docker just be aware of
+[the security risks](https://docs.docker.com/engine/security/#docker-daemon-attack-surface).
+Podman is a drop in replacement.
+
+1. Setup podman on your computer which may look like:
+    1. Install podman package
+    2. Enable the podman daemon service.
+2. Run `cd bin/darkirc/ && make podman-android`. The resulting file 
     will be called `darkirc.aarch64-android` (it might be needed to 
     make the file executable `chmod +x darkirc.aarch64-android`). 
     Copy this to your phone.
