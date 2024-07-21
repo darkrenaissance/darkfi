@@ -23,11 +23,13 @@ import datetime as dt
 from src.scroll import ScrollBar, Scrollable
 from src.model import Model
 
-
+# TODO: re-implement offline nodes comes online, online node goes offline
+# handling.
+# TODO: update to latest urwid version.
 class DnetWidget(urwid.WidgetWrap):
-    def __init__(self, node_name, session):
-        self.node_name = node_name
-        self.session = session
+    def __init__(self, name, kind):
+        self.name = name
+        self.kind = kind
 
     def selectable(self):
         return True
@@ -44,37 +46,35 @@ class DnetWidget(urwid.WidgetWrap):
 class Node(DnetWidget):
     def set_txt(self, is_empty: bool):
         if is_empty:
-            txt = urwid.Text(f"{self.node_name} (offline)")
+            txt = urwid.Text(f"{self.name} (offline)")
             super().update(txt)
         else:
-            txt = urwid.Text(f"{self.node_name}")
+            txt = urwid.Text(f"{self.name}")
             super().update(txt)
 
 
 class Session(DnetWidget):
     def set_txt(self):
-        txt = urwid.Text(f"  {self.session}")
+        txt = urwid.Text(f"  {self.kind}")
         super().update(txt)
-
 
 class Slot(DnetWidget):
     def set_txt(self, i, addr):
         self.i = i
-        if self.session == "outbound-slot":
-            self.addr = addr[0]
-            self.id = addr[1]
-            txt = urwid.Text(f"    {self.i}: {self.addr}")
-
-        if self.session == "spawn-slot":
-            self.id = addr
-            txt = urwid.Text(f"    {addr}")
-
-        if (self.session == "manual-slot"
-            or self.session == "seed-slot"
-            or self.session == "inbound-slot"):
-            self.addr = addr
-            txt = urwid.Text(f"    {self.addr}")
-        super().update(txt)
+        match self.kind:
+            case "outbound-slot":
+                self.addr = addr[0]
+                self.id = addr[1]
+                txt = urwid.Text(f"    {self.i}: {self.addr}")
+                super().update(txt)
+            case "spawn-slot":
+                self.id = addr
+                txt = urwid.Text(f"    {addr}")
+                super().update(txt)
+            case "manual-slot" | "seed-slot" | "inbound-slot":
+                self.addr = addr
+                txt = urwid.Text(f"    {self.addr}")
+                super().update(txt)
     
 
 class View():
@@ -85,355 +85,248 @@ class View():
 
     def __init__(self, model):
         self.model = model
-        info_text = urwid.Text("")
-        self.pile = urwid.Pile([info_text])
+        self.pile = urwid.Pile([urwid.Text("")])
         scroll = ScrollBar(Scrollable(self.pile))
         rightbox = urwid.LineBox(scroll)
-        self.listbox_content = []
-        self.listwalker = urwid.SimpleListWalker(self.listbox_content)
-        self.listw = self.listwalker.contents
+        self.listwalker = urwid.SimpleListWalker([])
         self.list = urwid.ListBox(self.listwalker)
         leftbox = urwid.LineBox(self.list)
         columns = urwid.Columns([leftbox, rightbox], focus_column=0)
         self.ui = urwid.Frame(urwid.AttrWrap( columns, 'body' ))
-        self.known_outbound = []
-        self.known_inbound = []
-        self.known_nodes = []
-        self.live_nodes = []
-        self.dead_nodes = []
-        self.refresh = False
+        self.active_sessions = set()
+        self.active_nodes = set()
+        self.refresh_needed = False
 
-    #-----------------------------------------------------------------
-    # Render dnet.get_info() RPC call
-    #-----------------------------------------------------------------
-    def draw_info(self, node_name, info):
-        #logging.debug('draw_info() [START]')
-        if 'spawns' in info:
-            #logging.debug(f'drawing lilith name={node_name} info={info}')
-            self.draw_lilith(node_name, info)
-
+    def add_node(self, name, info):
+        logging.debug("add_node() [START]")
+        node = Node(name, "node")
+        if not info:
+            node.set_txt(True)
         else:
-            #logging.debug(f'drawing node name={node_name} info={info}')
-            node = Node(node_name, "node")
             node.set_txt(False)
-            self.listw.append(node)
-            
-            if 'outbound' in info and info['outbound']:
-                session = Session(node_name, "outbound")
-                session.set_txt()
-                self.listw.append(session)
-                for i, addr in info['outbound'].items():
-                    slot = Slot(node_name, "outbound-slot")
-                    slot.set_txt(i, addr)
-                    self.listw.append(slot)
+        self.listwalker.append(node)
+        self.active_nodes.add(name)
 
-            if 'inbound' in info and info['inbound']:
-                if any(info['inbound'].values()):
-                    session = Session(node_name, "inbound")
-                    session.set_txt()
-                    self.listw.append(session)
-                    for i, addr in info['inbound'].items():
-                        if bool(addr):
-                            slot = Slot(node_name, "inbound-slot")
-                            slot.set_txt(i, addr)
-                            self.listw.append(slot)
+        self.add_sessions(name, info)
 
-            if 'manual' in info and info['manual']:
-                session = Session(node_name, "manual")
-                session.set_txt()
-                self.listw.append(session)
-                for i, addr in info['manual'].items():
-                    slot = Slot(node_name, "manual-slot")
-                    slot.set_txt(i, addr)
-                    self.listw.append(slot)
+    def add_sessions(self, name, info):
+        for session in ['outbound', 'inbound', 'manual', 'seed']:
+            if session in info and info[session]:
+                session_widget = Session(name, session)
+                session_widget.set_txt()
+                self.listwalker.append(session_widget)
+                self.add_slots(name, session, info[session])
 
-            if 'seed' in info and info['seed']:
-                session = Session(node_name, "seed")
-                session.set_txt()
-                self.listw.append(session)
-                for i, info in info['seed'].items():
-                    slot = Slot(node_name, "seed-slot")
-                    slot.set_txt(i, addr)
-                    self.listw.append(slot)
+    def add_slots(self, name, session, slots):
+        for i, addr in slots.items():
+            slot = Slot(name, f"{session}-slot")
+            slot.set_txt(i, addr)
+            self.listwalker.append(slot)
+            match session:
+                case "outbound":
+                    if addr[1] > 0:
+                        self.active_sessions.add(addr[1])
+                case "inbound" | "manual " | "seed":
+                    self.active_sessions.add(i)
 
-    def draw_lilith(self, node_name, info):
-        node = Node(node_name, "lilith-node")
-        node.set_txt(False)
-        self.listw.append(node)
+    def add_lilith(self, name, info):
+        node = Node(name, "lilith-node")
+        node.set_txt()
+        self.listwalker.append(node)
+        self.active_nodes.add(name)
         for (i, key) in enumerate(info['spawns'].keys()):
-            slot = Slot(node_name, "spawn-slot")
+            slot = Slot(name, "spawn-slot")
             slot.set_txt(i, key)
-            self.listw.append(slot)
+            self.listwalker.append(slot)
 
-    def draw_empty(self, node_name, info):
-        node = Node(node_name, "node")
-        node.set_txt(True)
-        self.listw.append(node)
+    def update_node(self, name, info):
+        for index, widget in enumerate(self.listwalker):
+            if isinstance(widget, Node) and widget.name == name:
+                if not info:
+                    widget.set_txt(True)
+                else:
+                    widget.set_txt(False)
+                return index + 1
+        return None
+
+    def update_slots(self, name, info):
+        if info is None:
+            return
+        for session in ['outbound', 'inbound', 'manual', 'seed']:
+            if session in info and info[session]:
+                for i, addr in info[session].items():
+                    self.update_slot(name, session, i, addr)
+
+    def update_slot(self, name, session, i, addr):
+        for index, widget in enumerate(self.listwalker):
+            if isinstance(widget, Slot) and \
+                    widget.name == name and \
+                    widget.kind == f"{session}-slot" and \
+                    widget.i == i:
+                widget.set_txt(i, addr)
+                break
 
     #-----------------------------------------------------------------
     # Render dnet.subscribe_events() RPC call 
     # Left hand panel only
     #-----------------------------------------------------------------
-    def fill_left_box(self):
-        live_inbound = []
-        new_inbound= {}
-        for index, item in enumerate(self.listw):
+    def update_left_box(self):
+        for index, item in enumerate(self.listwalker):
             # Update outbound slot info
-            if item.session == "outbound-slot":
-                key = (f"{item.node_name}", f"{item.i}")
-                if key in self.model.nodes[item.node_name]['event']:
-                    info = self.model.nodes[item.node_name]['event'].get(key)
-                    slot = Slot(item.node_name, item.session)
+            if item.kind == "outbound-slot":
+                key = (f"{item.name}", f"{item.i}")
+                if key in self.model.nodes[item.name]['event']:
+                    info = self.model.nodes[item.name]['event'].get(key)
+                    slot = Slot(item.name, item.kind)
                     slot.set_txt(item.i, info)
-                    self.listw[index] = slot
-
-    #-----------------------------------------------------------------
-    # Render lilith.spawns() RPC call 
-    # Right hand panel only
-    #-----------------------------------------------------------------
-    def fill_lilith_right_box(self):
-        self.pile.contents.clear()
-        focus_w = self.list.get_focus()
-        if focus_w[0] is None:
-            return
-        session = focus_w[0].session
-        if session == "spawn-slot":
-            node_name = focus_w[0].node_name
-            spawn_name = focus_w[0].id
-            lilith = self.model.liliths.get(node_name)
-            spawns = lilith.get('spawns')
-            info = spawns.get(spawn_name)
-
-            if info['urls']:
-                urls = info['urls']
-                self.pile.contents.append((urwid.Text(
-                    f"Accept addrs:"),
-                    self.pile.options()))
-                for url in urls:
-                    self.pile.contents.append((urwid.Text(
-                        f"  {url}"),
-                        self.pile.options()))
-
-            if info['whitelist']:
-                whitelist = info['whitelist']
-                self.pile.contents.append((urwid.Text(
-                    f"Whitelist:"),
-                    self.pile.options()))
-                for host in whitelist:
-                    self.pile.contents.append((urwid.Text(
-                        f"  {host}"),
-                        self.pile.options()))
-
-            if info['greylist']:
-                greylist = info['greylist']
-                self.pile.contents.append((urwid.Text(
-                    f"Greylist:"),
-                    self.pile.options()))
-                for host in greylist:
-                    self.pile.contents.append((urwid.Text(
-                        f"  {host}"),
-                        self.pile.options()))
-
-            if info['goldlist']:
-                goldlist = info['goldlist']
-                self.pile.contents.append((urwid.Text(
-                    f"Goldlist:"),
-                    self.pile.options()))
-                for host in goldlist:
-                    self.pile.contents.append((urwid.Text(
-                        f"  {host}"),
-                        self.pile.options()))
+                    self.listwalker[index] = slot
 
     #-----------------------------------------------------------------
     # Render dnet.subscribe_events() RPC call
     # Right hand menu only
     #-----------------------------------------------------------------
-    def fill_right_box(self):
+    def update_right_box(self):
         self.pile.contents.clear()
         focus_w = self.list.get_focus()
         if focus_w[0] is None:
             return
-        session = focus_w[0].session
+        kind = focus_w[0].kind
 
-        if session == "outbound":
-            key = (focus_w[0].node_name, "outbound")
-            info = self.model.nodes.get(focus_w[0].node_name)
-            if key in info['event']:
-                ev = info['event'].get(key)
-                self.pile.contents.append((
-                    urwid.Text(f" {ev}"),
-                    self.pile.options()))
+        match kind:
+            case "outbound":
+                key = (focus_w[0].name, "outbound")
+                info = self.model.nodes.get(focus_w[0].name)
+                if key in info['event']:
+                    ev = info['event'].get(key)
+                    self.pile.contents.append((
+                        urwid.Text(f" {ev}"),
+                        self.pile.options()))
+            case "outbound-slot" | "inbound-slot" | \
+                    "manual-slot" | "seed-slot":
+                addr = focus_w[0].addr
+                name = focus_w[0].name
+                info = self.model.nodes.get(name)
 
-        if (session == "outbound-slot" or session == "inbound-slot"
-                or session == "manual-slot" or session == "seed-slot"):
-            addr = focus_w[0].addr
-            node_name = focus_w[0].node_name
-            info = self.model.nodes.get(node_name)
+                if addr in info['msgs']:
+                    msg = info['msgs'].get(addr)
+                    for m in msg:
+                        time = m[0]
+                        event = m[1]
+                        msg = m[2]
+                        self.pile.contents.append((urwid.Text(
+                                f"{time}: {event}: {msg}"),
+                                self.pile.options()))
+            case "spawn-slot":
+                if session == "spawn-slot":
+                    name = focus_w[0].name
+                    spawn_name = focus_w[0].id
+                    lilith = self.model.liliths.get(name)
+                    spawns = lilith.get('spawns')
+                    info = spawns.get(spawn_name)
 
-            if addr in info['msgs']:
-                msg = info['msgs'].get(addr)
-                for m in msg:
-                    time = m[0]
-                    event = m[1]
-                    msg = m[2]
-                    self.pile.contents.append((urwid.Text(
-                            f"{time}: {event}: {msg}"),
+                    if info['urls']:
+                        urls = info['urls']
+                        self.pile.contents.append((urwid.Text(
+                            f"Accept addrs:"),
                             self.pile.options()))
+                        for url in urls:
+                            self.pile.contents.append((urwid.Text(
+                                f"  {url}"),
+                                self.pile.options()))
 
-        if session == "spawn-slot":
-            node_name = focus_w[0].node_name
-            spawn_name = focus_w[0].id
-            lilith = self.model.liliths.get(node_name)
-            spawns = lilith.get('spawns')
-            info = spawns.get(spawn_name)
+                    if info['whitelist']:
+                        whitelist = info['whitelist']
+                        self.pile.contents.append((urwid.Text(
+                            f"Whitelist:"),
+                            self.pile.options()))
+                        for host in whitelist:
+                            self.pile.contents.append((urwid.Text(
+                                f"  {host}"),
+                                self.pile.options()))
 
-            if info['urls']:
-                urls = info['urls']
-                self.pile.contents.append((urwid.Text(
-                    f"Accept addrs:"),
-                    self.pile.options()))
-                for url in urls:
-                    self.pile.contents.append((urwid.Text(
-                        f"  {url}"),
-                        self.pile.options()))
+                    if info['greylist']:
+                        greylist = info['greylist']
+                        self.pile.contents.append((urwid.Text(
+                            f"Greylist:"),
+                            self.pile.options()))
+                        for host in greylist:
+                            self.pile.contents.append((urwid.Text(
+                                f"  {host}"),
+                                self.pile.options()))
 
-            if info['whitelist']:
-                whitelist = info['whitelist']
-                self.pile.contents.append((urwid.Text(
-                    f"Whitelist:"),
-                    self.pile.options()))
-                for host in whitelist:
-                    self.pile.contents.append((urwid.Text(
-                        f"  {host}"),
-                        self.pile.options()))
+                    if info['goldlist']:
+                        goldlist = info['goldlist']
+                        self.pile.contents.append((urwid.Text(
+                            f"Goldlist:"),
+                            self.pile.options()))
+                        for host in goldlist:
+                            self.pile.contents.append((urwid.Text(
+                                f"  {host}"),
+                                self.pile.options()))
 
-            if info['greylist']:
-                greylist = info['greylist']
-                self.pile.contents.append((urwid.Text(
-                    f"Greylist:"),
-                    self.pile.options()))
-                for host in greylist:
-                    self.pile.contents.append((urwid.Text(
-                        f"  {host}"),
-                        self.pile.options()))
+    def refresh(self):
+        logging.debug("Refresh initiated.")
+        self.listwalker.clear()
+        self.active_nodes.clear()
+        self.active_sessions.clear()
 
-            if info['goldlist']:
-                goldlist = info['goldlist']
-                self.pile.contents.append((urwid.Text(
-                    f"Goldlist:"),
-                    self.pile.options()))
-                for host in goldlist:
-                    self.pile.contents.append((urwid.Text(
-                        f"  {host}"),
-                        self.pile.options()))
+        # Repopulate
+        for name, info in self.model.nodes.items():
+            logging.debug(f"refresh(): {name}, {info}")
+            self.add_node(name, info)
+        for name, info in self.model.liliths.items():
+            self.add_lilith(name, info)
 
-    #-----------------------------------------------------------------
-    # Sort through node info, checking whether we are already 
-    # tracking this node or if the node's state has changed.
-    #-----------------------------------------------------------------
-    def sort(self, nodes):
-        for name, info in nodes:
-            if bool(info) and name not in self.live_nodes:
-                self.live_nodes.append(name)
-            if not bool(info) and name not in self.dead_nodes:
-                self.dead_nodes.append(name)
-            if bool(info) and name in self.dead_nodes:
-                logging.debug("Refresh: dead node online.")
-                self.refresh = True
-            if not bool(info) and name in self.live_nodes:
-                logging.debug("Refresh: online node offline.")
-                self.refresh = True
+        logging.debug("Refresh complete.")
 
-    #-----------------------------------------------------------------
-    # Checks whether we are already displaying this node, and draw
-    # it if not. 
-    #-----------------------------------------------------------------
-    async def display(self, nodes):
-        for name, info in nodes:
-            if name in self.live_nodes and name not in self.known_nodes:
-                self.draw_info(name, info)
-            if name in self.dead_nodes and name not in self.known_nodes:
-                self.draw_empty(name, info)
-            if self.refresh:
-                logging.debug("Refresh initiated.")
-                await asyncio.sleep(0.1)
-                self.known_outbound.clear()
-                self.known_inbound.clear()
-                self.known_nodes.clear()
-                self.live_nodes.clear()
-                self.dead_nodes.clear()
-                self.refresh = False
-                self.listw.clear()
-                logging.debug("Refresh complete.")
-    #-----------------------------------------------------------------
-    # Handle events.
-    #-----------------------------------------------------------------
-    def draw_events(self, nodes):
-        for name, info in nodes:
-            if bool(info) and name in self.known_nodes:
-                self.fill_left_box()
-                self.fill_right_box()
-
-                if 'inbound' in info:
-                    # New inbound online.
-                    for key in info['inbound'].keys():
-                        if key not in self.known_inbound:
-                            addr = info['inbound'].get(key)
-                            if not bool(addr) or not addr == None:
-                                continue
-                            logging.debug(f"Refresh: inbound {key} online")
-                            self.refresh = True
-
-                    # Known inbound offline.
-                    for key in self.known_inbound:
-                        addr = info['inbound'].get(key)
-                        if bool(addr) or addr == None:
-                            continue
-                        logging.debug(f"Refresh: inbound {key} offline")
-                        self.refresh = True
-
-                # New outbound online.
-                if 'outbound' in info:
-                    for i, info in info['outbound'].items():
-                        addr = info[0]
-                        id = info[1]
-                        if id == 0:
-                            continue
-                        if id in self.known_outbound:
-                            continue
-                        logging.debug(f"Outbound {i}, {addr} came online.")
-                        self.refresh = True
-    
     async def update_view(self, evloop: asyncio.AbstractEventLoop,
                           loop: urwid.MainLoop):
         while True:
             await asyncio.sleep(0.1)
 
-            nodes = self.model.nodes.items()
-            liliths = self.model.liliths.items()
+            if self.refresh_needed:
+                self.refresh()
+                self.refresh_needed = False
+            else:
+                for name, info in self.model.nodes.items():
+                    if info is None:
+                        continue
+
+                    # Check for new nodes or update existing slots.
+                    if name not in self.active_nodes:
+                        self.add_node(name, info)
+                    else:
+                        start_index = self.update_node(name, info)
+                        if start_index is not None:
+                            self.update_slots(name, info)
+
+                    for name, info in self.model.liliths.items():
+                        if name not in self.active_nodes:
+                            self.add_lilith(name, info)
+
+                    # Check for outbound or inbound connections coming
+                    # online or going offline, which requires a redraw.
+                    if 'outbound' in info:
+                        for i, (addr, id) in info['outbound'].items():
+                            if id > 0 and id not in self.active_sessions:
+                                logging.debug(f"Outbound {id}, {addr} came online.")
+                                self.refresh_needed = True
+                                break
+
+                    if 'inbound' in info:
+                        for key, addr in info['inbound'].items():
+                            if key in self.active_sessions and not addr:
+                                logging.debug(f"Inbound {key} went offline.")
+                                # Delete this key from the model.
+                                del(info['inbound'][f'{key}'])
+                                self.refresh_needed = True     
+                                break
+                            if key not in self.active_sessions:
+                                logging.debug(f"Inbound {key}, {addr} came online.")
+                                self.refresh_needed = True
+                                break
+
+            self.update_left_box()
+            self.update_right_box()
+
             evloop.call_soon(loop.draw_screen)
-
-            # We first ensure that we are keeping track
-            # of all the displayed widgets.
-            for index, item in enumerate(self.listw):
-                # Keep track of known nodes.
-                if item.node_name not in self.known_nodes:
-                    self.known_nodes.append(item.node_name)
-                # Keep track of known inbounds.
-                if (item.session == "inbound-slot"
-                        and item.i not in self.known_inbound):
-                    self.known_inbound.append(item.i)
-                # Keep track of known outbounds.
-                if (item.session == "outbound-slot"
-                        and item.id not in self.known_outbound
-                        and not item.id == 0):
-                    self.known_outbound.append(item.id)
-
-            self.sort(nodes)
-            self.sort(liliths)
-            
-            await self.display(nodes)
-            await self.display(liliths)
-
-            self.fill_lilith_right_box()
-            self.draw_events(nodes)
