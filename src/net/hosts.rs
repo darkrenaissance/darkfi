@@ -1136,12 +1136,13 @@ impl Hosts {
     /// hostname in the blacklist. This method will check if a host is
     /// stored in the blacklist without a port, and if so, it will return
     /// true.
-    pub(in crate::net) fn block_all_ports(&self, addr: String) -> bool {
+    pub(in crate::net) fn block_all_ports(&self, url: Url) -> bool {
+        let host = url.host().unwrap();
         self.container.hostlists[HostColor::Black as usize]
             .read()
             .unwrap()
             .iter()
-            .any(|(u, _t)| u.host_str().unwrap() == addr && u.port().is_none())
+            .any(|(u, _t)| u.host().unwrap() == host && u.port().is_none())
     }
 
     /// Filter given addresses based on certain rulesets and validity. Strictly called only on
@@ -1183,7 +1184,7 @@ impl Hosts {
 
             // Blacklist peers should never enter the hostlist.
             if self.container.contains(HostColor::Black as usize, addr_) ||
-                self.block_all_ports(addr_.host_str().unwrap().to_string())
+                self.block_all_ports(addr_.clone())
             {
                 warn!(
                     target: "net::hosts::filter_addresses",
@@ -1481,8 +1482,8 @@ mod tests {
         hosts.container.store(HostColor::Black as usize, blacklist1.clone(), 0);
         hosts.container.store(HostColor::Black as usize, blacklist2.clone(), 0);
 
-        assert!(hosts.block_all_ports(blacklist2.host_str().unwrap().to_string()));
-        assert!(!hosts.block_all_ports(blacklist1.host_str().unwrap().to_string()));
+        assert!(hosts.block_all_ports(blacklist2));
+        assert!(!hosts.block_all_ports(blacklist1));
     }
 
     #[test]

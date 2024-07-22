@@ -89,7 +89,7 @@ pub struct Channel {
     /// A boolean marking if this channel is stopped
     stopped: AtomicBool,
     /// Weak pointer to respective session
-    session: SessionWeakPtr,
+    pub(in crate::net) session: SessionWeakPtr,
     /// The version message of the node we are connected to.
     /// Some if the version exchange has already occurred, None
     /// otherwise.
@@ -281,7 +281,9 @@ impl Channel {
             return Err(Error::MalformedPacket)
         }
 
+        // First extract the length from the stream
         let cmd_len = VarInt::decode_async(stream).await?.0;
+        // Then extract precisely `cmd_len` items from the stream.
         let mut take = stream.take(cmd_len);
 
         let mut bytes = Vec::new();
@@ -403,7 +405,7 @@ impl Channel {
         // `hosts.block_all_ports()` to true.
         let peer = {
             if self.session_type_id() & SESSION_INBOUND != 0 {
-                if peer.host_str().is_none() {
+                if peer.host().is_none() {
                     error!("[P2P] ban() caught Url without host: {:?}", peer);
                     return
                 }
