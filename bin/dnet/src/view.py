@@ -21,7 +21,6 @@ import asyncio
 import datetime as dt
 from enum import Enum
 
-from src.scroll import ScrollBar, Scrollable
 from src.model import Model
 
 class DnetWidget(urwid.WidgetWrap):
@@ -90,13 +89,14 @@ class View():
     def __init__(self, model):
         self.model = model
         self.pile = urwid.Pile([urwid.Text("")])
-        scroll = ScrollBar(Scrollable(self.pile))
+        scroll = urwid.ScrollBar(urwid.Scrollable(self.pile))
         rightbox = urwid.LineBox(scroll)
+        leftbox = urwid.LineBox(scroll)
         self.listwalker = urwid.SimpleListWalker([])
         self.list = urwid.ListBox(self.listwalker)
         leftbox = urwid.LineBox(self.list)
         columns = urwid.Columns([leftbox, rightbox], focus_column=0)
-        self.ui = urwid.Frame(urwid.AttrWrap( columns, 'body' ))
+        self.ui = urwid.Frame(urwid.AttrWrap(columns, 'body'))
         self.sessions = set()
         self.nodes = set()
         self.refresh_needed = False
