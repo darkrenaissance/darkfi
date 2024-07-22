@@ -32,7 +32,11 @@ use rand::{prelude::IteratorRandom, rngs::OsRng, Rng};
 use smol::lock::RwLock as AsyncRwLock;
 use url::Url;
 
-use super::{session::SESSION_SEED, settings::Settings, ChannelPtr};
+use super::{
+    session::{SESSION_REFINE, SESSION_SEED},
+    settings::Settings,
+    ChannelPtr,
+};
 use crate::{
     system::{Publisher, PublisherPtr, Subscription},
     util::{
@@ -986,9 +990,11 @@ impl Hosts {
 
         for (_, state) in registry.iter() {
             if let HostState::Connected(c) = state {
-                if c.session_type_id() & SESSION_SEED == 0 {
-                    channels.push(c.clone());
+                // Skip this channel is it's a seed or refine session.
+                if c.session_type_id() & (SESSION_SEED | SESSION_REFINE) != 0 {
+                    continue
                 }
+                channels.push(c.clone());
             }
         }
         channels
