@@ -935,6 +935,7 @@ impl Hosts {
         trace!(target: "net::hosts::check_addrs()", "[START]");
 
         let seeds = self.settings.read().await.seeds.clone();
+        let external_addrs = self.settings.read().await.external_addrs.clone();
 
         for (host, last_seen) in hosts {
             // Print a warning if we are trying to connect to a seed node in
@@ -944,6 +945,14 @@ impl Hosts {
                 warn!(
                     target: "net::hosts::check_addrs",
                     "Seed addr={} has entered the hostlist! Skipping", host.clone(),
+                );
+                continue
+            }
+
+            if external_addrs.contains(&host) {
+                warn!(
+                    target: "net::hosts::check_addrs",
+                    "External addr={} has entered the hostlist! Skipping", host.clone(),
                 );
                 continue
             }
@@ -1183,12 +1192,13 @@ impl Hosts {
                 continue
             }
 
+            let host = addr_.host().unwrap();
             let host_str = addr_.host_str().unwrap();
 
             if !settings.localnet {
                 // Our own external addresses should never enter the hosts set.
                 for ext in &settings.external_addrs {
-                    if host_str == ext.host_str().unwrap() {
+                    if host == ext.host().unwrap() {
                         debug!(
                             target: "net::hosts::filter_addresses",
                             "[{}] is our own external addr. Skipping", addr_,
