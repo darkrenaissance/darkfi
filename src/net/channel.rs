@@ -41,7 +41,7 @@ use super::{
     dnet::{self, dnetev, DnetEvent},
     hosts::HostColor,
     message,
-    message::{VersionMessage, MAGIC_BYTES},
+    message::{SerializedMessage, VersionMessage, MAGIC_BYTES},
     message_publisher::{MessageSubscription, MessageSubsystem},
     p2p::P2pPtr,
     session::{
@@ -186,13 +186,20 @@ impl Channel {
         self.stopped.load(SeqCst)
     }
 
-    /// Sends a message across a channel. Calls `send_message` that creates
-    /// a new payload and sends it over the network transport as a packet.
+    /// Sends a message across a channel. First it converts the message
+    /// into a `SerializedMessage` and then calls `send_serialized` to send it.
     /// Returns an error if something goes wrong.
     pub async fn send<M: message::Message>(&self, message: &M) -> Result<()> {
+        self.send_serialized(&SerializedMessage::new(message).await).await
+    }
+
+    /// Sends the encoded payload of provided `SerializedMessage` across the channel.
+    /// Calls `send_message` that creates a new payload and sends it over the
+    /// network transport as a packet. Returns an error if something goes wrong.
+    pub async fn send_serialized(&self, message: &SerializedMessage) -> Result<()> {
         debug!(
              target: "net::channel::send()", "[START] command={} {:?}",
-             M::NAME, self,
+             message.command, self,
         );
 
         if self.is_stopped() {
@@ -213,25 +220,23 @@ impl Channel {
 
         debug!(
             target: "net::channel::send()", "[END] command={} {:?}",
-            M::NAME, self
+            message.command, self
         );
 
         Ok(())
     }
 
-    /// Sends an outbound Message by writing data to the given async stream.
-    async fn send_message<M: message::Message>(&self, payload: &M) -> Result<()> {
-        let command = M::NAME.to_string();
-        assert!(!command.is_empty());
-        assert!(std::mem::size_of::<usize>() <= std::mem::size_of::<u64>());
+    /// Sends the encoded payload of provided `SerializedMessage` by writing
+    /// the data to the channel async stream.
+    async fn send_message(&self, message: &SerializedMessage) -> Result<()> {
+        assert!(!message.command.is_empty());
 
         let stream = &mut *self.writer.lock().await;
-        let mut buffer = Vec::<u8>::new();
         let mut written: usize = 0;
 
         dnetev!(self, SendMessage, {
             chan: self.info.clone(),
-            cmd: command,
+            cmd: message.command.clone(),
             time: NanoTimestamp::current_time(),
         });
 
@@ -240,21 +245,18 @@ impl Channel {
         trace!(target: "net::channel::send_message()", "Sent magic");
 
         trace!(target: "net::channel::send_message()", "Sending command...");
-        written += M::NAME.to_string().encode_async(stream).await?;
-        trace!(target: "net::channel::send_message()", "Sent command: {}", M::NAME.to_string());
+        written += message.command.encode_async(stream).await?;
+        trace!(target: "net::channel::send_message()", "Sent command: {}", message.command);
 
         trace!(target: "net::channel::send_message()", "Sending payload...");
-        // First encode the payload to an intermediate buffer.
-        payload.encode_async(&mut buffer).await?;
-
-        // Then extract the length of the intermediate buffer as a VarInt
-        // and write to the stream. This is the length of the payload.
-        // Then encode the payload itself to the stream.
-        written += VarInt(buffer.len() as u64).encode_async(stream).await?;
-        written += payload.encode_async(stream).await?;
+        // First extract the length of the payload as a VarInt and write it to the stream.
+        written += VarInt(message.payload.len() as u64).encode_async(stream).await?;
+        // Then write the encoded payload itself to the stream.
+        stream.write_all(&message.payload).await?;
+        written += message.payload.len();
 
         trace!(target: "net::channel::send_message()", "Sent payload {} bytes, total bytes {}",
-            buffer.len(), written);
+            message.payload.len(), written);
 
         stream.flush().await?;
 

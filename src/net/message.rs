@@ -17,7 +17,7 @@
  */
 
 use darkfi_serial::{
-    async_trait, AsyncDecodable, AsyncEncodable, SerialDecodable, SerialEncodable,
+    async_trait, serialize_async, AsyncDecodable, AsyncEncodable, SerialDecodable, SerialEncodable,
 };
 use url::Url;
 
@@ -26,6 +26,18 @@ pub(in crate::net) const MAGIC_BYTES: [u8; 4] = [0xd9, 0xef, 0xb6, 0x7d];
 /// Generic message template.
 pub trait Message: 'static + Send + Sync + AsyncDecodable + AsyncEncodable {
     const NAME: &'static str;
+}
+
+/// Generic serialized message template.
+pub struct SerializedMessage {
+    pub command: String,
+    pub payload: Vec<u8>,
+}
+
+impl SerializedMessage {
+    pub async fn new<M: Message>(message: &M) -> Self {
+        Self { command: M::NAME.to_string(), payload: serialize_async(message).await }
+    }
 }
 
 #[macro_export]

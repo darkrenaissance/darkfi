@@ -35,7 +35,7 @@ use super::{
     channel::ChannelPtr,
     dnet::DnetEvent,
     hosts::{Hosts, HostsPtr},
-    message::Message,
+    message::{Message, SerializedMessage},
     protocol::{protocol_registry::ProtocolRegistry, register_default_protocols},
     session::{
         InboundSession, InboundSessionPtr, ManualSession, ManualSessionPtr, OutboundSession,
@@ -194,10 +194,11 @@ impl P2p {
             return
         }
 
+        let message = SerializedMessage::new(message).await;
         let futures = FuturesUnordered::new();
 
         for channel in channel_list {
-            futures.push(channel.send(message).map_err(|e| {
+            futures.push(channel.send_serialized(&message).map_err(|e| {
                 error!(
                     target: "net::p2p::broadcast()",
                     "[P2P] Broadcasting message to {} failed: {}",
