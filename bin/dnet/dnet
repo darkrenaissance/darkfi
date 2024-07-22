@@ -64,8 +64,8 @@ class Dnetview:
                     data = json.loads(data)
                     info[name] = (type, data)
                     await self.queue.put(info)
-                except:
-                    logging.debug(f'{name} RPC on port {port} disconnected')
+                except Exception as e:
+                    logging.debug(f'{name} RPC on port {port} disconnected {e}')
                     # Attempt reconnection
                     await self.connect_loop(rpc, node, info)
                     await self.get_info(rpc, node, info)
@@ -73,11 +73,25 @@ class Dnetview:
             await rpc.dnet_switch(False)
     
         if type == 'LILITH':
-            data = await rpc._make_request('spawns', [])
-            info[name] = (type, data)
-            await self.queue.put(info)
+            while True:
+                await asyncio.sleep(1)
+                try:
+                    await self.lilith_spawns(rpc, node, info)
+                except Exception as e:
+                    logging.debug(f'{name} RPC on port {port} disconnected {e}')
+                    await self.connect_loop(rpc, node, info)
 
         await rpc.stop()
+
+    async def lilith_spawns(self, rpc, node, info):
+        name = node['name']
+        host = node['host']
+        port = node['port']
+        type = node['type']
+
+        data = await rpc._make_request('spawns', [])
+        info[name] = (type, data)
+        await self.queue.put(info)
 
     async def get_info(self, rpc, node, info):
         name = node['name']
@@ -85,9 +99,7 @@ class Dnetview:
         port = node['port']
         type = node['type']
 
-        logging.debug(f"get_info START")
         data = await rpc._make_request('p2p.get_info', [])
-        logging.debug(f"sent rpc request")
         info[name] = (type, data)
 
         await self.queue.put(info)
@@ -128,14 +140,12 @@ class Dnetview:
             info = {}
             data = await self.queue.get()
 
-            #logging.debug(f"update_info(): Raw data {data}")
             # We parse in this manner so we can differentiate between
             # normal nodes and lilith nodes when they are offline.
             type = list(data.values())[0][0]
             values = list(data.values())[0][1]
             key = list(data.keys())[0]
             info[key] = values
-            #logging.debug(f"update_info(): Parsed data {type} {info}")
 
             if not values and type == 'LILITH':
                 self.model.add_offline(info, True)
