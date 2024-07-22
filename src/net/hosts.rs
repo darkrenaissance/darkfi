@@ -32,7 +32,7 @@ use rand::{prelude::IteratorRandom, rngs::OsRng, Rng};
 use smol::lock::RwLock as AsyncRwLock;
 use url::Url;
 
-use super::{settings::Settings, ChannelPtr};
+use super::{session::SESSION_SEED, settings::Settings, ChannelPtr};
 use crate::{
     system::{Publisher, PublisherPtr, Subscription},
     util::{
@@ -974,6 +974,21 @@ impl Hosts {
         for (_, state) in registry.iter() {
             if let HostState::Connected(c) = state {
                 channels.push(c.clone());
+            }
+        }
+        channels
+    }
+
+    /// Returns the list of connected channels, excluding seed connections.
+    pub fn peers(&self) -> Vec<ChannelPtr> {
+        let registry = self.registry.lock().unwrap();
+        let mut channels = Vec::new();
+
+        for (_, state) in registry.iter() {
+            if let HostState::Connected(c) = state {
+                if c.session_type_id() & SESSION_SEED == 0 {
+                    channels.push(c.clone());
+                }
             }
         }
         channels
