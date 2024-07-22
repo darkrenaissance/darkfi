@@ -464,7 +464,7 @@ fn populate_tree(tree: &sled::Tree) {
         let key = timest.to_be_bytes();
         //timest.encode(&mut key).unwrap();
 
-        let line = chatview::ChatLine { nick, text };
+        let msg = chatview::ChatMsg { nick, text };
         let mut val = vec![];
         line.encode(&mut val).unwrap();
 

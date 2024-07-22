@@ -41,18 +41,28 @@ use crate::{
 
 use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify, Stoppable};
 
-#[derive(Debug, SerialEncodable, SerialDecodable)]
-pub struct ChatLine {
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct ChatMsg {
     pub nick: String,
     pub text: String,
 }
 
 type Timestamp = u32;
 
-struct RenderLine {
+#[derive(Clone)]
+struct Message {
     timest: Timestamp,
-    chatline: ChatLine,
+    chatmsg: ChatMsg,
     glyphs: Vec<Glyph>,
+}
+
+const LINES_PER_PAGE: usize = 10;
+const PRELOAD_PAGES: usize = 200;
+
+#[derive(Clone)]
+struct Page {
+    msgs: Vec<Message>,
+    atlas: text2::RenderedAtlas,
 }
 
 pub type ChatViewPtr = Arc<ChatView>;
@@ -63,8 +73,7 @@ pub struct ChatView {
     text_shaper: TextShaperPtr,
     tree: sled::Tree,
 
-    lines: SyncMutex<Vec<RenderLine>>,
-    drawcalls: SyncMutex<Option<Vec<DrawInstruction>>>,
+    pages: SyncMutex<Vec<Page>>,
     dc_key: u64,
 
     rect: PropertyPtr,
@@ -99,8 +108,7 @@ impl ChatView {
             text_shaper,
             tree,
 
-            lines: SyncMutex::new(Vec::new()),
-            drawcalls: SyncMutex::new(None),
+            pages: SyncMutex::new(Vec::new()),
             dc_key: OsRng.gen(),
 
             rect,
@@ -116,33 +124,101 @@ impl ChatView {
     }
 
     async fn populate(&self) {
-        let mut lines = vec![];
+        let mut pages = vec![];
+        let mut msgs = vec![];
 
         for entry in self.tree.iter().rev() {
             let Ok((k, v)) = entry else { break };
             assert_eq!(k.len(), 4);
             let key_bytes: [u8; 4] = k.as_ref().try_into().unwrap();
             let timest = Timestamp::from_be_bytes(key_bytes);
-            let chatline: ChatLine = deserialize(&v).unwrap();
-            //println!("{k:?} {chatline:?}");
+            let chatmsg: ChatMsg = deserialize(&v).unwrap();
+            //println!("{k:?} {chatmsg:?}");
 
             let timestr = timest.to_string();
             // left pad with zeros
             let mut timestr = format!("{:0>4}", timestr);
             timestr.insert(2, ':');
 
-            let text = format!("{} {} {}", timestr, chatline.nick, chatline.text);
+            let text = format!("{} {} {}", timestr, chatmsg.nick, chatmsg.text);
             let glyphs = self.text_shaper.shape(text, self.font_size.get()).await;
 
-            lines.push(RenderLine { timest, chatline, glyphs });
+            msgs.push(Message { timest, chatmsg, glyphs });
+
+            if msgs.len() >= LINES_PER_PAGE {
+                let mut atlas = text2::Atlas::new(&self.render_api);
+                for msg in &msgs {
+                    atlas.push(&msg.glyphs);
+                }
+                let Ok(atlas) = atlas.make().await else {
+                    // what else should I do here?
+                    panic!("unable to make atlas!");
+                };
+
+                let page = Page { msgs: std::mem::take(&mut msgs), atlas };
+                pages.push(page);
+
+                if pages.len() >= PRELOAD_PAGES {
+                    break
+                }
+            }
         }
-        *self.lines.lock().unwrap() = lines;
+        debug!(target: "ui::chatview", "populated {} pages", pages.len());
+        *self.pages.lock().unwrap() = pages;
     }
 
     async fn regen_mesh(&self, mut clip: Rectangle) -> Vec<DrawInstruction> {
+        let font_size = self.font_size.get();
+        let line_height = self.line_height.get();
         // Draw time and nick, then go over each word. If word crosses end of line
         // then apply a line break before the word and continue.
-        vec![]
+        let pages = self.pages.lock().unwrap().clone();
+
+        let mut draws = vec![];
+        let color = COLOR_WHITE;
+
+        // Pages start at the bottom.
+        let mut height = 0;
+        'pageloop: for page in pages {
+            let mut mesh = MeshBuilder::new();
+
+            for msg in page.msgs {
+                let glyphs = msg.glyphs;
+
+                let mut lines = text2::wrap(clip.w, font_size, &glyphs);
+                // We are drawing bottom up but line wrap gives us lines in normal order
+                lines.reverse();
+                for line in lines {
+                    let px_height = height as f32 * line_height;
+
+                    if px_height > clip.h {
+                        break 'pageloop;
+                    }
+
+                    // Render line
+                    let mut glyph_pos_iter =
+                        GlyphPositionIter::new(font_size, &line, clip.h - px_height);
+                    for (mut glyph_rect, glyph) in glyph_pos_iter.zip(line.iter()) {
+                        let uv_rect =
+                            page.atlas.fetch_uv(glyph.glyph_id).expect("missing glyph UV rect");
+                        mesh.draw_box(&glyph_rect, color, uv_rect);
+                    }
+
+                    height += 1;
+                }
+            }
+
+            let mesh = mesh.alloc(&self.render_api).await.unwrap();
+
+            draws.push(DrawInstruction::Draw(DrawMesh {
+                vertex_buffer: mesh.vertex_buffer,
+                index_buffer: mesh.index_buffer,
+                texture: Some(page.atlas.texture_id),
+                num_elements: mesh.num_elements,
+            }));
+        }
+
+        draws
     }
 
     pub async fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
@@ -161,16 +237,11 @@ impl ChatView {
         rect.x += parent_rect.x;
         rect.y += parent_rect.y;
 
-        let drawcalls = self.drawcalls.lock().unwrap().clone();
-        let mut drawcalls = match drawcalls {
-            Some(drawcalls) => drawcalls,
-            None => {
-                let drawcalls = self.regen_mesh(rect.clone()).await;
-                *self.drawcalls.lock().unwrap() = Some(drawcalls.clone());
-                drawcalls
-            }
-        };
+        let mut drawcalls = self.regen_mesh(rect.clone()).await;
+        // TODO: delete old buffers
 
+        // Apply scroll and scissor
+        // We use the scissor for scrolling
         let off_x = rect.x / parent_rect.w;
         let off_y = rect.y / parent_rect.h;
         let scale_x = 1. / parent_rect.w;

@@ -39,10 +39,13 @@ use crate::{
 };
 
 mod atlas;
-pub use atlas::{make_texture_atlas, Atlas};
+pub use atlas::{make_texture_atlas, Atlas, RenderedAtlas};
 
 //mod old_atlas;
 //pub use old_atlas::{make_texture_atlas, RenderedAtlas};
+
+mod wrap;
+pub use wrap::wrap;
 
 // From https://sourceforge.net/projects/freetype/files/freetype2/2.6/
 //

@@ -173,6 +173,7 @@ fn copy_image(sprite: &Sprite, x: usize, y: usize, atlas: &mut Vec<u8>, atlas_wi
 }
 
 /// Final result computed from `Atlas::make()`.
+#[derive(Clone)]
 pub struct RenderedAtlas {
     glyph_ids: Vec<u32>,
     /// UV rectangle within the texture.
