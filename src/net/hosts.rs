@@ -59,11 +59,23 @@ use crate::{
 ///  which can be Grey, White, Gold or Black. Exposes a common interface for hostlist queries and
 ///  utilities.
 ///
-/// `HostColor`: White hosts have been seen recently. Gold hosts we have been able to establish
-///  a connection to. Grey hosts are recently received hosts that are periodically refreshed
-///  using the greylist refinery. Black hosts are considered hostile and are strictly avoided
-///  for the duration of the program. Dark hosts are hosts that do not match our transports, but
-///  that we continue to share with other peers. They are otherwise ignored.
+/// `HostColor`:
+///     White: Hosts that have passed the `GreylistRefinery` successfully.
+///
+///     Gold: Hosts we have been able to establish a connection to in `OutboundSession`.
+///
+///     Grey: Recently received hosts that are checked by the `GreylistRefinery` and
+///           upgraded to the whitelist if valid. If they're inaccessible by the Refinery
+///           they will be deleted.
+///
+///     Black: hostile hosts that are strictly avoided for the duration of the program.
+///
+///     Dark: hosts that do not match our transports, but that we continue
+///           to share with other peers. Once a day (every 86400 seconds) the darklist
+///           is cleared of all entries. This is to avoid peers propagating nodes that
+///           may be faulty. We assume that within the one day period, the nodes will
+///           be picked up by peers that accept the transports and can refine them to
+///           remove inactive peers. Dark list hosts are otherwise ignored.
 ///
 /// `HostState`: a set of mutually exclusive states that can be Insert, Refine, Connect, Suspend
 ///  or Connected. The state is `None` when the corresponding host has been removed from the
@@ -304,6 +316,7 @@ pub enum HostColor {
     /// Peers that do not match our accepted transports. We are blind
     /// to these nodes (we do not use them) but we send them around
     /// the network anyway to ensure all transports are propagated.
+    /// Cleared once daily.
     Dark = 4,
 }
 
