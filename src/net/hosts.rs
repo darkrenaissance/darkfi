@@ -979,7 +979,8 @@ impl Hosts {
         debug!(target: "net::hosts::unregister()", "Unregistered: {}", &addr);
     }
 
-    /// Returns the list of connected channels.
+    /// Return the list of all connected channels, including seed and
+    /// refinery connections.
     pub fn channels(&self) -> Vec<ChannelPtr> {
         let registry = self.registry.lock().unwrap();
         let mut channels = Vec::new();
@@ -992,7 +993,8 @@ impl Hosts {
         channels
     }
 
-    /// Returns the list of connected channels, excluding seed connections.
+    /// Return the list of connected peers. Seed and refinery connections
+    /// are not taken into account.
     pub fn peers(&self) -> Vec<ChannelPtr> {
         let registry = self.registry.lock().unwrap();
         let mut channels = Vec::new();

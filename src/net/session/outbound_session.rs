@@ -458,9 +458,9 @@ pub trait PeerDiscoveryBase {
     fn p2p(&self) -> P2pPtr;
 }
 
-/// Main PeerDiscovery process that loops through connected channels
+/// Main PeerDiscovery process that loops through connected peers
 /// and sends out a `GetAddrs` when it is active. If there are no
-/// connected channels after two attempts, connect to our seed nodes
+/// connected peers after two attempts, connect to our seed nodes
 /// and perform `SeedSyncSession`.
 struct PeerDiscovery {
     process: StoppableTaskPtr,
@@ -494,7 +494,7 @@ impl PeerDiscoveryBase for PeerDiscovery {
     }
 
     /// Activate peer discovery if not active already. For the first two
-    /// attempts, this will loop through all connected P2P channels and send
+    /// attempts, this will loop through all connected P2P peers and send
     /// out a `GetAddrs` message to request more peers. Other parts of the
     /// P2P stack will then handle the incoming addresses and place them in
     /// the hosts list.  
@@ -555,12 +555,12 @@ impl PeerDiscoveryBase for PeerDiscovery {
             // First 2 times try sending GetAddr to the network.
             // 3rd time do a seed sync.
             if self.p2p().is_connected() && current_attempt <= 2 {
-                // Broadcast the GetAddrs message to all active channels.
-                // If we have no active channels, we will perform a SeedSyncSession instead.
+                // Broadcast the GetAddrs message to all active peers.
+                // If we have no active peers, we will perform a SeedSyncSession instead.
 
                 info!(
                     target: "net::outbound_session::peer_discovery()",
-                    "[P2P] Requesting addrs from active channels. Attempt: {}",
+                    "[P2P] Requesting addrs from active peers. Attempt: {}",
                     current_attempt
                 );
 

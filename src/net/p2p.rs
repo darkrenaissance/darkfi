@@ -169,16 +169,16 @@ impl P2p {
         self.session_refine().stop().await;
     }
 
-    /// Broadcasts a message concurrently across all active channels.
+    /// Broadcasts a message concurrently across all active peers.
     pub async fn broadcast<M: Message>(&self, message: &M) {
         self.broadcast_with_exclude(message, &[]).await
     }
 
-    /// Broadcasts a message concurrently across active channels, excluding
+    /// Broadcasts a message concurrently across active peers, excluding
     /// the ones provided in `exclude_list`.
     pub async fn broadcast_with_exclude<M: Message>(&self, message: &M, exclude_list: &[Url]) {
         let mut channels = Vec::new();
-        for channel in self.hosts().channels() {
+        for channel in self.hosts().peers() {
             if exclude_list.contains(channel.address()) {
                 continue
             }
@@ -213,8 +213,10 @@ impl P2p {
         let _results: Vec<_> = futures.collect().await;
     }
 
+    /// Check whether this node has connections to any peers. This method will
+    /// not report seedsync or refinery connections.
     pub fn is_connected(&self) -> bool {
-        !self.hosts().channels().is_empty()
+        !self.hosts().peers().is_empty()
     }
 
     /// Return an atomic pointer to the set network settings
