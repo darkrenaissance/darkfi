@@ -131,6 +131,9 @@ impl RenderLayer {
 
         let mut draw_calls = vec![];
         let mut child_calls = vec![];
+        let mut freed_textures = vec![];
+        let mut freed_buffers = vec![];
+
         for child_inf in node.get_children2() {
             let node = sg.get_node(child_inf.id).unwrap();
 
@@ -148,6 +151,8 @@ impl RenderLayer {
             let Some(mut draw_update) = dcs else { continue };
             draw_calls.append(&mut draw_update.draw_calls);
             child_calls.push(draw_update.key);
+            freed_textures.append(&mut draw_update.freed_textures);
+            freed_buffers.append(&mut draw_update.freed_buffers);
         }
 
         let dc = DrawCall {
@@ -156,7 +161,7 @@ impl RenderLayer {
             z_index: 0,
         };
         draw_calls.push((self.dc_key, dc));
-        Some(DrawUpdate { key: self.dc_key, draw_calls })
+        Some(DrawUpdate { key: self.dc_key, draw_calls, freed_textures, freed_buffers })
     }
 }
 

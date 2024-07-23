@@ -239,6 +239,8 @@ impl ChatView {
 
         let mut drawcalls = self.regen_mesh(rect.clone()).await;
         // TODO: delete old buffers
+        let mut freed_textures = vec![];
+        let mut freed_buffers = vec![];
 
         // Apply scroll and scissor
         // We use the scissor for scrolling
@@ -258,6 +260,8 @@ impl ChatView {
                 self.dc_key,
                 DrawCall { instrs, dcs: vec![], z_index: self.z_index.get() },
             )],
+            freed_textures,
+            freed_buffers,
         })
     }
 }

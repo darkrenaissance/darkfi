@@ -358,6 +358,9 @@ impl<'a> RenderContext<'a> {
 
         // Reset view back again
         if let Some(view) = prev_view {
+            if DEBUG_RENDER {
+                debug!(target: "gfx", "{}reset viewport to {:?}", ws, view);
+            }
             self.apply_view(&view);
             self.current_view = view;
         }

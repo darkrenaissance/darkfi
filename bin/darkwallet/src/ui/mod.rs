@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use miniquad::{BufferId, TextureId};
 use std::sync::{Arc, Weak};
 
 use crate::{
@@ -46,6 +47,8 @@ pub trait Stoppable {
 pub struct DrawUpdate {
     pub key: u64,
     pub draw_calls: Vec<(u64, DrawCall)>,
+    pub freed_textures: Vec<TextureId>,
+    pub freed_buffers: Vec<BufferId>,
 }
 
 pub struct OnModify<T> {

@@ -234,6 +234,8 @@ impl Text {
                     z_index: self.z_index.get(),
                 },
             )],
+            freed_textures: vec![],
+            freed_buffers: vec![],
         })
     }
 }

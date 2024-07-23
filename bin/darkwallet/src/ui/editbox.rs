@@ -1189,6 +1189,12 @@ impl EditBox {
         };
         self.render_api.replace_draw_calls(draw_update.draw_calls).await;
         debug!(target: "ui::editbox", "replace draw calls done");
+        for buffer_id in draw_update.freed_buffers {
+            self.render_api.delete_buffer(buffer_id);
+        }
+        for texture_id in draw_update.freed_textures {
+            self.render_api.delete_texture(texture_id);
+        }
     }
 
     pub async fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
@@ -1211,11 +1217,14 @@ impl EditBox {
         let render_info = self.regen_mesh(rect.clone()).await;
         let old_render_info =
             std::mem::replace(&mut *self.render_info.lock().unwrap(), Some(render_info.clone()));
+
         // We're finished with these so clean up.
+        let mut freed_textures = vec![];
+        let mut freed_buffers = vec![];
         if let Some(old) = old_render_info {
-            self.render_api.delete_buffer(old.mesh.vertex_buffer);
-            self.render_api.delete_buffer(old.mesh.index_buffer);
-            self.render_api.delete_texture(old.texture_id);
+            freed_textures.push(old.texture_id);
+            freed_buffers.push(old.mesh.vertex_buffer);
+            freed_buffers.push(old.mesh.index_buffer);
         }
 
         let mesh = DrawMesh {
@@ -1242,6 +1251,8 @@ impl EditBox {
                     z_index: self.z_index.get(),
                 },
             )],
+            freed_textures,
+            freed_buffers,
         })
     }
 
