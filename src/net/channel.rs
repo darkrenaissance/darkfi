@@ -264,9 +264,9 @@ impl Channel {
     }
 
     /// Returns a decoded Message command. We start by extracting the length
-    /// from the stream, then allocate the precise buffer for this length 
+    /// from the stream, then allocate the precise buffer for this length
     /// using stream.take(). This manual deserialization provides a basic
-    /// DDOS protection, since it prevents nodes from sending an arbitarily 
+    /// DDOS protection, since it prevents nodes from sending an arbitarily
     /// large payload.
     pub async fn read_command<R: AsyncRead + Unpin + Send + Sized>(
         &self,
@@ -289,10 +289,9 @@ impl Channel {
 
         // Then extract precisely `cmd_len` items from the stream.
         let mut take = stream.take(cmd_len);
-        let mut bytes = Vec::new();
 
         // Deserialize into a vector of `cmd_len` size.
-        bytes.resize(cmd_len.try_into().unwrap(), 0);
+        let mut bytes = vec![0; cmd_len.try_into().unwrap()];
         take.read_exact(&mut bytes).await?;
 
         let command = String::from_utf8(bytes)?;
