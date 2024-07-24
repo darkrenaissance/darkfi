@@ -31,7 +31,7 @@ use futures::{
 };
 use smol::Timer;
 use std::{
-    sync::{Arc, Mutex, Weak},
+    sync::{Arc, Weak},
     time::{Duration, Instant, UNIX_EPOCH},
 };
 
@@ -60,18 +60,11 @@ pub struct RefineSession {
 
     /// Task that periodically checks entries in the greylist.
     pub(in crate::net) refinery: Arc<GreylistRefinery>,
-
-    /// Task that clears the darklist once daily.
-    darklist_clear_task: Mutex<Option<smol::Task<()>>>,
 }
 
 impl RefineSession {
     pub fn new(p2p: Weak<P2p>) -> RefineSessionPtr {
-        Arc::new_cyclic(|session| Self {
-            p2p,
-            refinery: GreylistRefinery::new(session.clone()),
-            darklist_clear_task: Mutex::new(None),
-        })
+        Arc::new_cyclic(|session| Self { p2p, refinery: GreylistRefinery::new(session.clone()) })
     }
 
     /// Start the refinery and self handshake processes.
@@ -99,39 +92,12 @@ impl RefineSession {
 
         debug!(target: "net::refine_session", "Starting greylist refinery process");
         self.refinery.clone().start().await;
-
-        // Clear the darklist every 86400 seconds, i.e. once a day.
-        debug!(target: "net::refine_session", "Starting darklist clear task");
-        let one_day = 86400;
-        *self.darklist_clear_task.lock().unwrap() =
-            Some(self.p2p().executor().spawn(self.clone().clear_darklist(one_day)));
-    }
-
-    /// Sleep for a specified time period, then delete all entries from the darklist.
-    async fn clear_darklist(self: Arc<Self>, clear_period: u64) {
-        let hosts = &self.p2p().hosts().container;
-        loop {
-            sleep(clear_period).await;
-            debug!(target: "net::refine_session::clear_darklist",
-                "{} seconds has passed, clearing darklist...", clear_period);
-
-            let mut darklist = hosts.hostlists[HostColor::Dark as usize].write().unwrap();
-            darklist.clear();
-
-            drop(darklist);
-        }
     }
 
     /// Stop the refinery and self handshake processes.
     pub(crate) async fn stop(&self) {
         debug!(target: "net::refine_session", "Stopping refinery process");
         self.refinery.clone().stop().await;
-
-        debug!(target: "net::refine_session", "Stopping darklist clear process");
-        let task = std::mem::take(&mut *self.darklist_clear_task.lock().unwrap());
-        if task.is_some() {
-            task.unwrap().cancel().await;
-        }
 
         if let Some(ref hostlist) = self.p2p().settings().read().await.hostlist {
             match self.p2p().hosts().container.save_all(hostlist) {
