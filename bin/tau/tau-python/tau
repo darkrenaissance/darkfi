@@ -432,6 +432,10 @@ async def comment(refid, args, server_name, port):
     else:
         comment = " ".join(args)
 
+    if comment.strip() == '':
+        print("Abort adding comment due to empty content.")
+        exit(-1)
+
     if not await api.add_task_comment(refid, comment, server_name, port):
         return -1
 
