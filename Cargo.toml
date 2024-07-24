@@ -31,7 +31,6 @@ members = [
     "bin/genev/genev-cli",
     "bin/darkirc",
     "bin/tau/taud",
-    #"bin/tau/tau-cli",
     "bin/vanityaddr",
     "bin/lilith",
 
