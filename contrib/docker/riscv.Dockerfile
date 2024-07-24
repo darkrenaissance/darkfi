@@ -43,8 +43,7 @@ COPY . /opt/darkfi
 # Cleanup existing binaries
 RUN rm -rf zkas bin/zkas/zkas darkfid bin/darkfid/darkfid \
     darkirc bin/darkirc/darkirc lilith bin/lilith/lilith \
-    tau-cli bin/tau/tau-cli/tau-cli taud bin/tau/taud/taud \
-    vanityaddr bin/vanityaddr/vanityaddr
+    taud bin/tau/taud/taud vanityaddr bin/vanityaddr/vanityaddr
 
 # Risc-V support is highly experimental so we have to add some hack patches
 # at Cargo.toml where [patch.crates-io] exists.
@@ -64,7 +63,6 @@ RUN make CARGO="cargo +${RUST_VER}" ${BINS} && \
     (if [ -e darkfid ]; then cp -a darkfid compiled-bins/; fi;) && \
     (if [ -e darkirc ]; then cp -a darkirc compiled-bins/; fi;) && \
     (if [ -e lilith ]; then cp -a lilith compiled-bins/; fi;) && \
-    (if [ -e "tau-cli" ]; then cp -a tau-cli compiled-bins/; fi;) && \
     (if [ -e taud ]; then cp -a taud compiled-bins/; fi;) && \
     (if [ -e vanityaddr ]; then cp -a vanityaddr compiled-bins/; fi;)
 

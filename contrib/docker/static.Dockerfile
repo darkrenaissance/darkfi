@@ -53,7 +53,6 @@ RUN make clean && make ${BINS} &&  mkdir compiled-bins && \
     (if [ -e "genev-cli" ]; then cp -a genev-cli compiled-bins/; fi;) && \
     (if [ -e genevd ]; then cp -a genevd compiled-bins/; fi;) && \
     (if [ -e lilith ]; then cp -a lilith compiled-bins/; fi;) && \
-    (if [ -e "tau-cli" ]; then cp -a tau-cli compiled-bins/; fi;) && \
     (if [ -e taud ]; then cp -a taud compiled-bins/; fi;) && \
     (if [ -e vanityaddr ]; then cp -a vanityaddr compiled-bins/; fi;)
 
