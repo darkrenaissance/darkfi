@@ -70,12 +70,12 @@ use crate::{
 ///
 ///     Black: hostile hosts that are strictly avoided for the duration of the program.
 ///
-///     Dark: hosts that do not match our transports, but that we continue
-///           to share with other peers. Once a day (every 86400 seconds) the darklist
-///           is cleared of all entries. This is to avoid peers propagating nodes that
-///           may be faulty. We assume that within the one day period, the nodes will
-///           be picked up by peers that accept the transports and can refine them to
-///           remove inactive peers. Dark list hosts are otherwise ignored.
+///     Dark: hosts that do not match our transports, but that we continue to share with
+///           other peers. We do not keep darklist entries that are older than one day.
+///           This is to avoid peers propagating nodes that may be faulty. We assume that
+///           within the one day period, the nodes will be picked up by peers that accept
+///           the transports and can refine them to remove inactive peers. Dark list hosts
+///           are otherwise ignored.
 ///
 /// `HostState`: a set of mutually exclusive states that can be Insert, Refine, Connect, Suspend
 ///  or Connected. The state is `None` when the corresponding host has been removed from the
@@ -713,6 +713,25 @@ impl HostContainer {
         }
     }
 
+    /// Delete items from a hostlist that are older than a specified maximum.
+    /// Maximum should be specified in seconds.
+    fn refresh(&self, color: HostColor, max_age: u64) {
+        let now = UNIX_EPOCH.elapsed().unwrap().as_secs();
+        let mut old_items = vec![];
+
+        let darklist = self.fetch_all(HostColor::Dark);
+        for (addr, last_seen) in darklist {
+            if (now - last_seen) > max_age {
+                old_items.push(addr);
+            }
+        }
+
+        for item in old_items {
+            debug!(target: "net::hosts::refresh()", "Removing {:?}", item);
+            self.remove_if_exists(color.clone(), &item);
+        }
+    }
+
     /// Load the hostlists from a file.
     pub(in crate::net) fn load_all(&self, path: &str) -> Result<()> {
         let path = expand_path(path)?;
@@ -769,6 +788,10 @@ impl HostContainer {
                     self.store(HostColor::Dark as usize, url, last_seen);
                     self.sort_by_last_seen(HostColor::Dark as usize);
                     self.resize(HostColor::Dark);
+
+                    // Delete darklist entries that are older than one day.
+                    let day = 86400;
+                    self.refresh(HostColor::Dark, day);
                 }
                 _ => {
                     debug!(target: "net::hosts::load_hosts()", "Malformed list name...");
@@ -1285,6 +1308,10 @@ impl Hosts {
                 self.container.sort_by_last_seen(HostColor::Dark as usize);
                 self.container.resize(HostColor::Dark);
 
+                // Delete darklist entries that are older than one day.
+                let day = 86400;
+                self.container.refresh(HostColor::Dark, day);
+
                 continue
             }
 
@@ -1547,6 +1574,40 @@ mod tests {
         assert!(hosts.container.contains(HostColor::Grey as usize, &grey_hosts[0]));
         assert!(hosts.container.contains(HostColor::White as usize, &white_hosts[1]));
         assert!(hosts.container.contains(HostColor::Gold as usize, &gold_hosts[2]));
+    }
+
+    #[test]
+    fn test_refresh() {
+        smol::block_on(async {
+            let settings = Settings { ..Default::default() };
+            let hosts = Hosts::new(Arc::new(AsyncRwLock::new(settings)));
+            let old_timestamp = 1720000000;
+
+            // Insert 5 items into the darklist with an old timestamp.
+            for i in 0..5 {
+                let last_seen = old_timestamp + i;
+                let url = Url::parse(&format!("tcp://old_darklist{}:123", i)).unwrap();
+                hosts.container.store(HostColor::Dark as usize, url.clone(), last_seen);
+            }
+
+            // Insert another 5 items into the darklist with a recent timestamp.
+            for i in 0..5 {
+                let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+                let url = Url::parse(&format!("tcp://new_darklist{}:123", i)).unwrap();
+                hosts.container.store(HostColor::Dark as usize, url.clone(), last_seen);
+            }
+
+            // Delete all items that are older than a day.
+            let day = 86400;
+            hosts.container.refresh(HostColor::Dark, day);
+
+            let darklist = hosts.container.hostlists[HostColor::Dark as usize].read().unwrap();
+            assert!(darklist.len() == 5);
+
+            for (_, last_seen) in darklist.iter() {
+                assert!(*last_seen > old_timestamp);
+            }
+        });
     }
 
     #[test]
