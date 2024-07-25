@@ -40,7 +40,7 @@ use smol::{
 };
 
 use super::{
-    server::{IrcServer, MAX_NICK_LEN},
+    server::{IrcServer, MAX_MSG_LEN, MAX_NICK_LEN},
     NickServ, Privmsg, SERVER_NAME,
 };
 
@@ -413,6 +413,9 @@ impl Client {
         let channel = args.split_ascii_whitespace().next().unwrap().to_string();
         let msg_offset = args.find(':').unwrap() + 1;
         let (_, msg) = args.split_at(msg_offset);
+
+        // Truncate messages longer than MAX_MSG_LEN
+        let msg = if msg.len() > MAX_MSG_LEN { msg.split_at(MAX_MSG_LEN).0 } else { msg };
         let mut privmsg =
             Privmsg { channel, nick: self.nickname.read().await.to_string(), msg: msg.to_string() };
 

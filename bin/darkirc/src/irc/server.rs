@@ -48,6 +48,9 @@ use crate::{
 /// Max channel/nick length
 pub const MAX_NICK_LEN: usize = 24;
 
+/// Max message length
+pub const MAX_MSG_LEN: usize = 512;
+
 /// IRC server instance
 pub struct IrcServer {
     /// DarkIrc instance
