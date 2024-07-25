@@ -49,6 +49,8 @@ use taud::{
     util::{check_write_access, set_event},
 };
 
+const DEFAULT_WORKSPACE: &str = "darkfi-dev";
+
 pub struct JsonRpcInterface {
     dataset_path: PathBuf,
     notify_queue_sender: smol::channel::Sender<TaskInfo>,
@@ -123,7 +125,7 @@ impl JsonRpcInterface {
         dnet_sub: JsonSubscriber,
         deg_sub: JsonSubscriber,
     ) -> Self {
-        let workspace = Mutex::new(workspaces.iter().last().unwrap().0.clone());
+        let workspace = Mutex::new(DEFAULT_WORKSPACE.to_string());
         Self {
             dataset_path,
             nickname,
