@@ -466,7 +466,7 @@ fn populate_tree(tree: &sled::Tree) {
 
         let msg = chatview::ChatMsg { nick, text };
         let mut val = vec![];
-        line.encode(&mut val).unwrap();
+        msg.encode(&mut val).unwrap();
 
         tree.insert(&key, val).unwrap();
     }
