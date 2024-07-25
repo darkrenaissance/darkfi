@@ -109,6 +109,13 @@ def prompt_comment_text():
         "# These lines will be removed"
     ])
 
+def prompt_description_edit(text):
+    return prompt_text([
+        f"{text}"
+        "# Edit the task description above this line",
+        "# These lines will be removed"
+    ])
+
 def set_task_attr(task, attr, val):
     if attr not in known_attrs:
         print(f"Error: invalid attribute: {attr} {val}")
@@ -389,6 +396,14 @@ async def modify_task(refid, args, server_name, port):
         elif arg.startswith("+") or arg.startswith("-"):
             changes["tags"] = []
             changes["tags"].append(arg)
+        elif arg.lower() in ["desc", "description"]:
+            task = await api.fetch_task(refid, server_name, port)
+            desc = task["desc"]
+            new_desc = prompt_description_edit(desc).lstrip()
+            if desc == new_desc:
+                print("Abort due to unchanged description")
+                exit(-1)
+            changes["desc"] = new_desc
         elif ":" in arg:
             attr, val = arg.split(":", 1)
             if val.lower() == "none":
