@@ -41,6 +41,8 @@ use crate::{
 
 use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify, Stoppable};
 
+const DEBUG_RENDER: bool = false;
+
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct ChatMsg {
     pub nick: String,
@@ -80,6 +82,7 @@ pub struct ChatView {
     scroll: PropertyFloat32,
     font_size: PropertyFloat32,
     line_height: PropertyFloat32,
+    baseline: PropertyFloat32,
     z_index: PropertyUint32,
 }
 
@@ -98,6 +101,7 @@ impl ChatView {
         let scroll = PropertyFloat32::wrap(node, "scroll", 0).unwrap();
         let font_size = PropertyFloat32::wrap(node, "font_size", 0).unwrap();
         let line_height = PropertyFloat32::wrap(node, "line_height", 0).unwrap();
+        let baseline = PropertyFloat32::wrap(node, "line_height", 0).unwrap();
         let z_index = PropertyUint32::wrap(node, "z_index", 0).unwrap();
 
         drop(scene_graph);
@@ -115,6 +119,7 @@ impl ChatView {
             scroll,
             font_size,
             line_height,
+            baseline,
             z_index,
         });
 
@@ -170,6 +175,7 @@ impl ChatView {
     async fn regen_mesh(&self, mut clip: Rectangle) -> Vec<DrawInstruction> {
         let font_size = self.font_size.get();
         let line_height = self.line_height.get();
+        let baseline = self.baseline.get();
         // Draw time and nick, then go over each word. If word crosses end of line
         // then apply a line break before the word and continue.
         let pages = self.pages.lock().unwrap().clone();
@@ -177,8 +183,12 @@ impl ChatView {
         let mut draws = vec![];
         let color = COLOR_WHITE;
 
+        // This is a little hack to nudge the bottom line up slightly, otherwise
+        // chars like p will cross the bottom.
+        let descent = line_height / 2.;
+
         // Pages start at the bottom.
-        let mut height = 0;
+        let mut current_idx = 1;
         'pageloop: for page in pages {
             let mut mesh = MeshBuilder::new();
 
@@ -189,22 +199,22 @@ impl ChatView {
                 // We are drawing bottom up but line wrap gives us lines in normal order
                 lines.reverse();
                 for line in lines {
-                    let px_height = height as f32 * line_height;
+                    let off_y = descent + current_idx as f32 * line_height;
 
-                    if px_height > clip.h {
-                        break 'pageloop;
-                    }
+                    //if px_height > clip.h {
+                    //    break 'pageloop;
+                    //}
 
                     // Render line
-                    let mut glyph_pos_iter =
-                        GlyphPositionIter::new(font_size, &line, clip.h - px_height);
+                    let mut glyph_pos_iter = GlyphPositionIter::new(font_size, &line, baseline);
                     for (mut glyph_rect, glyph) in glyph_pos_iter.zip(line.iter()) {
                         let uv_rect =
                             page.atlas.fetch_uv(glyph.glyph_id).expect("missing glyph UV rect");
+                        glyph_rect.y -= off_y;
                         mesh.draw_box(&glyph_rect, color, uv_rect);
                     }
 
-                    height += 1;
+                    current_idx += 1;
                 }
             }
 
@@ -214,6 +224,22 @@ impl ChatView {
                 vertex_buffer: mesh.vertex_buffer,
                 index_buffer: mesh.index_buffer,
                 texture: Some(page.atlas.texture_id),
+                num_elements: mesh.num_elements,
+            }));
+        }
+
+        if DEBUG_RENDER {
+            let mut debug_mesh = MeshBuilder::new();
+            debug_mesh.draw_outline(
+                &Rectangle { x: 0., y: -clip.h, w: clip.w, h: clip.h },
+                COLOR_BLUE,
+                2.,
+            );
+            let mesh = debug_mesh.alloc(&self.render_api).await.unwrap();
+            draws.push(DrawInstruction::Draw(DrawMesh {
+                vertex_buffer: mesh.vertex_buffer,
+                index_buffer: mesh.index_buffer,
+                texture: None,
                 num_elements: mesh.num_elements,
             }));
         }
@@ -239,19 +265,25 @@ impl ChatView {
 
         let mut drawcalls = self.regen_mesh(rect.clone()).await;
         // TODO: delete old buffers
+        // we need to save the buffers for that
         let mut freed_textures = vec![];
         let mut freed_buffers = vec![];
 
+        debug!(target: "ui::chatview", "chatview rect = {:?}", rect);
+
         // Apply scroll and scissor
         // We use the scissor for scrolling
-        let off_x = rect.x / parent_rect.w;
-        let off_y = rect.y / parent_rect.h;
-        let scale_x = 1. / parent_rect.w;
-        let scale_y = 1. / parent_rect.h;
+        // Because we use the scissor, our actual rect is now rect instead of parent_rect
+        let off_x = 0.;
+        let off_y = self.scroll.get() + rect.h / rect.h;
+        let scale_x = 1. / rect.w;
+        let scale_y = 1. / rect.h;
         let model = glam::Mat4::from_translation(glam::Vec3::new(off_x, off_y, 0.)) *
             glam::Mat4::from_scale(glam::Vec3::new(scale_x, scale_y, 1.));
 
-        let mut instrs = vec![DrawInstruction::ApplyMatrix(model)];
+        let mut instrs =
+            vec![DrawInstruction::ApplyViewport(rect), DrawInstruction::ApplyMatrix(model)];
+        //let mut instrs = vec![DrawInstruction::ApplyMatrix(model)];
         instrs.append(&mut drawcalls);
 
         Some(DrawUpdate {

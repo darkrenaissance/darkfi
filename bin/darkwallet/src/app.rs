@@ -402,16 +402,22 @@ impl App {
         let node = sg.get_node(node_id).unwrap();
         let prop = node.get_property("rect").unwrap();
         prop.set_f32(0, 0.).unwrap();
-        prop.set_f32(1, 200.).unwrap();
+        let code =
+            vec![Op::Div((Box::new(Op::LoadVar("h".to_string())), Box::new(Op::ConstFloat32(2.))))];
+        prop.set_expr(1, code).unwrap();
         let code = vec![Op::LoadVar("w".to_string())];
         prop.set_expr(2, code).unwrap();
         let code = vec![Op::Sub((
-            Box::new(Op::LoadVar("h".to_string())),
+            Box::new(Op::Div((
+                Box::new(Op::LoadVar("h".to_string())),
+                Box::new(Op::ConstFloat32(2.)),
+            ))),
             Box::new(Op::ConstFloat32(200.)),
         ))];
         prop.set_expr(3, code).unwrap();
         node.set_property_f32("font_size", 20.).unwrap();
         node.set_property_f32("line_height", 30.).unwrap();
+        node.set_property_f32("baseline", 10.).unwrap();
         node.set_property_u32("z_index", 1).unwrap();
 
         drop(sg);
@@ -606,6 +612,9 @@ fn create_chatview(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
     node.add_property(prop).unwrap();
 
     let prop = Property::new("line_height", PropertyType::Float32, PropertySubType::Pixel);
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("baseline", PropertyType::Float32, PropertySubType::Pixel);
     node.add_property(prop).unwrap();
 
     let mut prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);
