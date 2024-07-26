@@ -303,6 +303,51 @@ impl App {
 
         sg.link(node_id, layer_node_id).unwrap();
 
+        // Debugging tool
+        let node_id = create_mesh(&mut sg, "debugtool");
+
+        let node = sg.get_node_mut(node_id).unwrap();
+        let prop = node.get_property("rect").unwrap();
+        prop.set_f32(0, 0.).unwrap();
+        let code =
+            vec![Op::Div((Box::new(Op::LoadVar("h".to_string())), Box::new(Op::ConstFloat32(2.))))];
+        prop.set_expr(1, code).unwrap();
+        let code = vec![Op::LoadVar("w".to_string())];
+        prop.set_expr(2, code).unwrap();
+        prop.set_f32(3, 5.).unwrap();
+
+        node.set_property_u32("z_index", 2).unwrap();
+
+        // Setup the pimpl
+        let (x1, y1) = (0., 0.);
+        let (x2, y2) = (1., 1.);
+        let verts = vec![
+            // top left
+            Vertex { pos: [x1, y1], color: [0., 1., 0., 1.], uv: [0., 0.] },
+            // top right
+            Vertex { pos: [x2, y1], color: [0., 1., 0., 1.], uv: [1., 0.] },
+            // bottom left
+            Vertex { pos: [x1, y2], color: [0., 1., 0., 1.], uv: [0., 1.] },
+            // bottom right
+            Vertex { pos: [x2, y2], color: [0., 1., 0., 1.], uv: [1., 1.] },
+        ];
+        let indices = vec![0, 2, 1, 1, 2, 3];
+        drop(sg);
+        let pimpl = Mesh::new(
+            self.ex.clone(),
+            self.sg.clone(),
+            node_id,
+            self.render_api.clone(),
+            verts,
+            indices,
+        )
+        .await;
+        let mut sg = self.sg.lock().await;
+        let node = sg.get_node_mut(node_id).unwrap();
+        node.pimpl = pimpl;
+
+        sg.link(node_id, layer_node_id).unwrap();
+
         // Create KING GNU!
         let node_id = create_image(&mut sg, "king");
 

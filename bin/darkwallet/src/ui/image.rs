@@ -152,9 +152,6 @@ impl Image {
             panic!("Node {:?} bad rect property", node);
         };
 
-        rect.x += parent_rect.x;
-        rect.y += parent_rect.x;
-
         // draw will recalc this when it's None
         let mesh = self.regen_mesh(rect.clone()).await;
         let old_mesh = std::mem::replace(&mut *self.mesh.lock().unwrap(), Some(mesh.clone()));

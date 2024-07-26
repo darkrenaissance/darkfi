@@ -1210,9 +1210,6 @@ impl EditBox {
             panic!("Node {:?} bad rect property", node);
         };
 
-        rect.x += parent_rect.x;
-        rect.y += parent_rect.y;
-
         // draw will recalc this when it's None
         let render_info = self.regen_mesh(rect.clone()).await;
         let old_render_info =

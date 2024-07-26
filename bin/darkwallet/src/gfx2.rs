@@ -270,8 +270,6 @@ struct RenderContext<'a> {
     draw_calls: &'a HashMap<u64, DrawCall>,
     uniforms_data: [u8; 128],
     white_texture: TextureId,
-    // Used for implementing a push/pop for viewport
-    current_view: Rectangle,
 }
 
 impl<'a> RenderContext<'a> {
@@ -310,7 +308,6 @@ impl<'a> RenderContext<'a> {
                         debug!(target: "gfx", "{}apply_viewport({:?})", ws, view);
                     }
                     prev_view = Some(view.clone());
-                    self.current_view = view.clone();
                     self.apply_view(view);
                 }
                 DrawInstruction::ApplyMatrix(model) => {
@@ -354,15 +351,14 @@ impl<'a> RenderContext<'a> {
 
         for dc in draw_calls {
             self.draw_call(dc, indent + 1);
-        }
 
-        // Reset view back again
-        if let Some(view) = prev_view {
-            if DEBUG_RENDER {
-                debug!(target: "gfx", "{}reset viewport to {:?}", ws, view);
+            // Reset view back again in case the draw call changed it
+            if let Some(view) = &prev_view {
+                if DEBUG_RENDER {
+                    debug!(target: "gfx", "{}reset viewport to {:?}", ws, view);
+                }
+                self.apply_view(view);
             }
-            self.apply_view(&view);
-            self.current_view = view;
         }
     }
 }
@@ -827,7 +823,6 @@ impl EventHandler for Stage {
             draw_calls: &self.draw_calls,
             uniforms_data,
             white_texture: self.white_texture,
-            current_view: default_view,
         };
         render_ctx.draw();
 

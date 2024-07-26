@@ -215,9 +215,6 @@ impl Text {
             panic!("Node {:?} bad rect property", node);
         };
 
-        rect.x += parent_rect.x;
-        rect.y += parent_rect.x;
-
         let off_x = rect.x / parent_rect.w;
         let off_y = rect.y / parent_rect.h;
         let scale_x = 1. / parent_rect.w;
