@@ -27,7 +27,7 @@ use crate::{
     prop::{Property, PropertySubType, PropertyType},
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId, SceneNodeType},
     text2::TextShaperPtr,
-    ui::{chatview, ChatView, EditBox, Mesh, RenderLayer, Stoppable, Text, Window},
+    ui::{chatview, ChatView, EditBox, Image, Mesh, RenderLayer, Stoppable, Text, Window},
 };
 
 //fn print_type_of<T>(_: &T) {
@@ -303,6 +303,28 @@ impl App {
 
         sg.link(node_id, layer_node_id).unwrap();
 
+        // Create KING GNU!
+        let node_id = create_image(&mut sg, "king");
+
+        let node = sg.get_node_mut(node_id).unwrap();
+        let prop = node.get_property("rect").unwrap();
+        prop.set_f32(0, 80.).unwrap();
+        prop.set_f32(1, 10.).unwrap();
+        prop.set_f32(2, 60.).unwrap();
+        prop.set_f32(3, 60.).unwrap();
+
+        node.set_property_str("path", "../../king.png").unwrap();
+
+        // Setup the pimpl
+        drop(sg);
+        let pimpl =
+            Image::new(self.ex.clone(), self.sg.clone(), node_id, self.render_api.clone()).await;
+        let mut sg = self.sg.lock().await;
+        let node = sg.get_node_mut(node_id).unwrap();
+        node.pimpl = pimpl;
+
+        sg.link(node_id, layer_node_id).unwrap();
+
         // Create some text
         let node_id = create_text(&mut sg, "label");
 
@@ -500,6 +522,23 @@ pub fn create_mesh(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
     node.add_property(prop).unwrap();
 
     let prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
+    node.id
+}
+
+pub fn create_image(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
+    let node = sg.add_node(name, SceneNodeType::RenderMesh);
+
+    let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_array_len(4);
+    prop.allow_exprs();
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("path", PropertyType::Str, PropertySubType::Null);
     node.add_property(prop).unwrap();
 
     node.id

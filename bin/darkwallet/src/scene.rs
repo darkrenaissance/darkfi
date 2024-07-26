@@ -50,6 +50,7 @@ pub enum SceneNodeType {
     Plugin = 15,
     ChatView = 16,
     EditBox = 17,
+    Image = 18,
 }
 
 pub struct ScenePath(Vec<String>);
@@ -651,6 +652,7 @@ pub enum Pimpl {
     Text(ui::TextPtr),
     EditBox(ui::EditBoxPtr),
     ChatView(ui::ChatViewPtr),
+    Image(ui::ImagePtr),
 }
 
 impl std::fmt::Debug for SceneNode {

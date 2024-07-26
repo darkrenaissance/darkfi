@@ -34,145 +34,87 @@ use crate::{
 
 use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify, Stoppable};
 
-pub type TextPtr = Arc<Text>;
+pub type ImagePtr = Arc<Image>;
 
-#[derive(Clone)]
-struct TextRenderInfo {
-    glyph_sprites: Vec<SpritePtr>,
-    mesh: MeshInfo,
-    texture_id: TextureId,
-}
-
-pub struct Text {
+pub struct Image {
     sg: SceneGraphPtr2,
     render_api: RenderApiPtr,
-    text_shaper: TextShaperPtr,
     tasks: Vec<smol::Task<()>>,
 
-    render_info: SyncMutex<TextRenderInfo>,
+    mesh: SyncMutex<Option<MeshInfo>>,
+    texture: SyncMutex<Option<TextureId>>,
     dc_key: u64,
 
     node_id: SceneNodeId,
     rect: PropertyPtr,
     z_index: PropertyUint32,
-    text: PropertyStr,
-    font_size: PropertyFloat32,
-    text_color: PropertyColor,
-    baseline: PropertyFloat32,
-    debug: PropertyBool,
+    path: PropertyStr,
 }
 
-impl Text {
+impl Image {
     pub async fn new(
         ex: Arc<smol::Executor<'static>>,
         sg: SceneGraphPtr2,
         node_id: SceneNodeId,
         render_api: RenderApiPtr,
-        text_shaper: TextShaperPtr,
     ) -> Pimpl {
         let scene_graph = sg.lock().await;
         let node = scene_graph.get_node(node_id).unwrap();
         let node_name = node.name.clone();
         let rect = node.get_property("rect").expect("Text::rect");
         let z_index = PropertyUint32::wrap(node, "z_index", 0).unwrap();
-        let text = PropertyStr::wrap(node, "text", 0).unwrap();
-        let font_size = PropertyFloat32::wrap(node, "font_size", 0).unwrap();
-        let text_color = PropertyColor::wrap(node, "text_color").unwrap();
-        let baseline = PropertyFloat32::wrap(node, "baseline", 0).unwrap();
-        let debug = PropertyBool::wrap(node, "debug", 0).unwrap();
+        let path = PropertyStr::wrap(node, "path", 0).unwrap();
         drop(scene_graph);
-
-        let render_info = Self::regen_mesh(
-            &render_api,
-            &text_shaper,
-            text.get(),
-            font_size.get(),
-            text_color.get(),
-            baseline.get(),
-            debug.get(),
-        )
-        .await;
 
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
             let mut on_modify = OnModify::new(ex, node_name, node_id, me.clone());
             on_modify.when_change(rect.clone(), Self::redraw);
             on_modify.when_change(z_index.prop(), Self::redraw);
-            on_modify.when_change(text.prop(), Self::redraw);
-            on_modify.when_change(font_size.prop(), Self::redraw);
-            on_modify.when_change(text_color.prop(), Self::redraw);
-            on_modify.when_change(debug.prop(), Self::redraw);
-            on_modify.when_change(baseline.prop(), Self::redraw);
+            on_modify.when_change(path.prop(), Self::reload);
 
             Self {
                 sg,
                 render_api,
-                text_shaper,
                 tasks: on_modify.tasks,
-                render_info: SyncMutex::new(render_info),
+                mesh: SyncMutex::new(None),
+                texture: SyncMutex::new(None),
                 dc_key: OsRng.gen(),
                 node_id,
                 rect,
                 z_index,
-                text,
-                font_size,
-                text_color,
-                baseline,
-                debug,
+                path,
             }
         });
 
-        Pimpl::Text(self_)
+        *self_.texture.lock().unwrap() = Some(self_.load_texture().await);
+
+        Pimpl::Image(self_)
     }
 
-    async fn regen_mesh(
-        render_api: &RenderApi,
-        text_shaper: &TextShaper,
-        text: String,
-        font_size: f32,
-        text_color: Color,
-        baseline: f32,
-        debug: bool,
-    ) -> TextRenderInfo {
-        debug!(target: "ui::text", "Rendering label '{}'", text);
-        let glyphs = text_shaper.shape(text, font_size).await;
-        let atlas = text2::make_texture_atlas(render_api, &glyphs).await.unwrap();
+    async fn reload(self: Arc<Self>) {
+        let texture = self.load_texture().await;
+        let old_texture = std::mem::replace(&mut *self.texture.lock().unwrap(), Some(texture));
 
-        let mut mesh = MeshBuilder::new();
-        let mut glyph_pos_iter = GlyphPositionIter::new(font_size, &glyphs, baseline);
-        for (glyph_rect, glyph) in glyph_pos_iter.zip(glyphs.iter()) {
-            let uv_rect = atlas.fetch_uv(glyph.glyph_id).expect("missing glyph UV rect");
+        self.clone().redraw().await;
 
-            //mesh.draw_outline(&glyph_rect, COLOR_BLUE, 2.);
-            let mut color = text_color.clone();
-            if glyph.sprite.has_color {
-                color = COLOR_WHITE;
-            }
-            mesh.draw_box(&glyph_rect, color, uv_rect);
+        if let Some(old_texture) = old_texture {
+            self.render_api.delete_texture(old_texture);
         }
+    }
 
-        let mesh = mesh.alloc(&render_api).await.unwrap();
+    async fn load_texture(&self) -> TextureId {
+        let path = self.path.get();
+        // TODO we should NOT use unwrap here
+        let img = image::ImageReader::open(path).unwrap().decode().unwrap().to_rgba8();
+        let width = img.width() as u16;
+        let height = img.height() as u16;
+        let bmp = img.into_raw();
 
-        let glyph_sprites = glyphs.into_iter().map(|glyph| glyph.sprite).collect();
-
-        TextRenderInfo { glyph_sprites, mesh, texture_id: atlas.texture_id }
+        let texture_id = self.render_api.new_texture(width, height, bmp).await.unwrap();
+        texture_id
     }
 
     async fn redraw(self: Arc<Self>) {
-        let old = self.render_info.lock().unwrap().clone();
-
-        // TODO move this to draw
-        let render_info = Self::regen_mesh(
-            &self.render_api,
-            &self.text_shaper,
-            self.text.get(),
-            self.font_size.get(),
-            self.text_color.get(),
-            self.baseline.get(),
-            self.debug.get(),
-        )
-        .await;
-        *self.render_info.lock().unwrap() = render_info;
-
         let sg = self.sg.lock().await;
         let node = sg.get_node(self.node_id).unwrap();
 
@@ -186,26 +128,21 @@ impl Text {
         };
         self.render_api.replace_draw_calls(draw_update.draw_calls).await;
         debug!(target: "ui::text", "replace draw calls done");
+    }
 
-        // We're finished with these so clean up.
-        self.render_api.delete_buffer(old.mesh.vertex_buffer);
-        self.render_api.delete_buffer(old.mesh.index_buffer);
-        self.render_api.delete_texture(old.texture_id);
+    /// Called whenever any property changes.
+    async fn regen_mesh(&self, clip: Rectangle) -> MeshInfo {
+        let basic = Rectangle { x: 0., y: 0., w: 1., h: 1. };
+
+        let mut mesh = MeshBuilder::new();
+        mesh.draw_box(&basic, COLOR_WHITE, &basic);
+        mesh.alloc(&self.render_api).await.unwrap()
     }
 
     pub async fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
         debug!(target: "ui::text", "Text::draw()");
         // Only used for debug messages
         let node = sg.get_node(self.node_id).unwrap();
-
-        let render_info = self.render_info.lock().unwrap().clone();
-
-        let mesh = DrawMesh {
-            vertex_buffer: render_info.mesh.vertex_buffer,
-            index_buffer: render_info.mesh.index_buffer,
-            texture: Some(render_info.texture_id),
-            num_elements: render_info.mesh.num_elements,
-        };
 
         if let Err(err) = eval_rect(self.rect.clone(), parent_rect) {
             panic!("Node {:?} bad rect property: {}", node, err);
@@ -218,10 +155,33 @@ impl Text {
         rect.x += parent_rect.x;
         rect.y += parent_rect.x;
 
+        // draw will recalc this when it's None
+        let mesh = self.regen_mesh(rect.clone()).await;
+        let old_mesh = std::mem::replace(&mut *self.mesh.lock().unwrap(), Some(mesh.clone()));
+
+        let Some(texture_id) = *self.texture.lock().unwrap() else {
+            panic!("Node {:?} missing texture_id!", node);
+        };
+
+        // We're finished with these so clean up.
+        let mut freed_buffers = vec![];
+        if let Some(old) = old_mesh {
+            freed_buffers.push(old.vertex_buffer);
+            freed_buffers.push(old.index_buffer);
+        }
+
+        let mesh = DrawMesh {
+            vertex_buffer: mesh.vertex_buffer,
+            index_buffer: mesh.index_buffer,
+            texture: Some(texture_id),
+            num_elements: mesh.num_elements,
+        };
+
         let off_x = rect.x / parent_rect.w;
         let off_y = rect.y / parent_rect.h;
-        let scale_x = 1. / parent_rect.w;
-        let scale_y = 1. / parent_rect.h;
+        // We could use pixels here if we want to. No difference really.
+        let scale_x = rect.w / parent_rect.w;
+        let scale_y = rect.h / parent_rect.h;
         let model = glam::Mat4::from_translation(glam::Vec3::new(off_x, off_y, 0.)) *
             glam::Mat4::from_scale(glam::Vec3::new(scale_x, scale_y, 1.));
 
@@ -236,23 +196,24 @@ impl Text {
                 },
             )],
             freed_textures: vec![],
-            freed_buffers: vec![],
+            freed_buffers,
         })
     }
 }
 
-impl Stoppable for Text {
-    async fn stop(&self) {
+impl Drop for Image {
+    fn drop(&mut self) {
         // TODO: Delete own draw call
 
         // Free buffers
         // Should this be in drop?
-        let render_info = self.render_info.lock().unwrap().clone();
-        let vertex_buffer = render_info.mesh.vertex_buffer;
-        let index_buffer = render_info.mesh.index_buffer;
-        let texture_id = render_info.texture_id;
-        self.render_api.delete_buffer(vertex_buffer);
-        self.render_api.delete_buffer(index_buffer);
+        if let Some(mesh) = &*self.mesh.lock().unwrap() {
+            let vertex_buffer = mesh.vertex_buffer;
+            let index_buffer = mesh.index_buffer;
+            self.render_api.delete_buffer(vertex_buffer);
+            self.render_api.delete_buffer(index_buffer);
+        }
+        let texture_id = self.texture.lock().unwrap().unwrap();
         self.render_api.delete_texture(texture_id);
     }
 }

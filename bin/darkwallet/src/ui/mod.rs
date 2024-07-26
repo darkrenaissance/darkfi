@@ -31,6 +31,8 @@ pub mod chatview;
 pub use chatview::{ChatView, ChatViewPtr};
 mod editbox;
 pub use editbox::{EditBox, EditBoxPtr};
+mod image;
+pub use image::{Image, ImagePtr};
 mod mesh;
 pub use mesh::{Mesh, MeshPtr};
 mod layer;
