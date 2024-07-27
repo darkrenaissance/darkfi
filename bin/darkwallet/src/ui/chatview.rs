@@ -289,7 +289,7 @@ impl ChatView {
                 // TODO we are maybe doing too many updates so make a widget to 'slow down'
                 // how often we move to fixed intervals.
                 // draw a poly shape and eval each line segment.
-                self.scroll.set(scroll + dist*0.05);
+                self.scroll.set(scroll + dist * 0.05);
                 self.scrollview().await;
             }
             TouchPhase::Ended => {
@@ -301,11 +301,12 @@ impl ChatView {
 
     /// Beware of this method. Here be dragons.
     /// Possibly racy so we limit it just to mouse stuff (for now).
-    fn cached_rect(&self) -> Rectangle {
+    fn cached_rect(&self) -> Option<Rectangle> {
         let Ok(rect) = read_rect(self.rect.clone()) else {
-            panic!("Node bad rect property");
+            error!(target: "ui::chatview", "cached_rect is None");
+            return None
         };
-        rect
+        Some(rect)
     }
     async fn get_parent_rect(&self) -> Option<Rectangle> {
         let sg = self.sg.lock().await;
@@ -318,7 +319,7 @@ impl ChatView {
     }
     async fn get_cached_world_rect(&self) -> Option<Rectangle> {
         // NBD if it's slightly wrong
-        let mut rect = self.cached_rect();
+        let mut rect = self.cached_rect()?;
 
         // If layers can be nested and we use offsets for (x, y)
         // then this will be incorrect for nested layers.
@@ -413,13 +414,12 @@ impl ChatView {
         let mut instrs =
             vec![DrawInstruction::ApplyViewport(rect), DrawInstruction::ApplyMatrix(model)];
         let drawcalls = self.drawcalls.lock().unwrap().clone();
-        let mut drawcalls: Vec<_> = drawcalls.into_iter().map(|dc| DrawInstruction::Draw(dc)).collect();
+        let mut drawcalls: Vec<_> =
+            drawcalls.into_iter().map(|dc| DrawInstruction::Draw(dc)).collect();
         instrs.append(&mut drawcalls);
 
-        let draw_calls = vec![(
-            self.dc_key,
-            DrawCall { instrs, dcs: vec![], z_index: self.z_index.get() },
-        )];
+        let draw_calls =
+            vec![(self.dc_key, DrawCall { instrs, dcs: vec![], z_index: self.z_index.get() })];
 
         self.render_api.replace_draw_calls(draw_calls).await;
 
@@ -542,8 +542,10 @@ impl ChatView {
         rect.y += parent_rect.y;
 
         let drawcalls = self.regen_mesh(rect.clone()).await;
-        let old_drawcalls = std::mem::replace(&mut *self.drawcalls.lock().unwrap(), drawcalls.clone());
-        let mut drawcalls: Vec<_> = drawcalls.into_iter().map(|dc| DrawInstruction::Draw(dc)).collect();
+        let old_drawcalls =
+            std::mem::replace(&mut *self.drawcalls.lock().unwrap(), drawcalls.clone());
+        let mut drawcalls: Vec<_> =
+            drawcalls.into_iter().map(|dc| DrawInstruction::Draw(dc)).collect();
 
         let mut freed_textures = vec![];
         let mut freed_buffers = vec![];

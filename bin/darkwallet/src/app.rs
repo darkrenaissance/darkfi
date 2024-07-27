@@ -45,6 +45,8 @@ const CHATDB_PATH: &str = "chatdb";
 #[cfg(target_os = "linux")]
 const KING_PATH: &str = "assets/king.png";
 
+const LIGHTMODE: bool = true;
+
 pub struct AsyncRuntime {
     signal: smol::channel::Sender<()>,
     shutdown: smol::channel::Receiver<()>,
@@ -244,19 +246,20 @@ impl App {
         let code = vec![Op::LoadVar("h".to_string())];
         prop.set_expr(3, code).unwrap();
 
+        let c = if LIGHTMODE { 1. } else { 0. };
         // Setup the pimpl
         let node_id = node.id;
         let (x1, y1) = (0., 0.);
         let (x2, y2) = (1., 1.);
         let verts = vec![
             // top left
-            Vertex { pos: [x1, y1], color: [0.3, 0., 0., 1.], uv: [0., 0.] },
+            Vertex { pos: [x1, y1], color: [c, c, c, 1.], uv: [0., 0.] },
             // top right
-            Vertex { pos: [x2, y1], color: [0., 0., 0., 1.], uv: [1., 0.] },
+            Vertex { pos: [x2, y1], color: [c, c, c, 1.], uv: [1., 0.] },
             // bottom left
-            Vertex { pos: [x1, y2], color: [0., 0., 0., 1.], uv: [0., 1.] },
+            Vertex { pos: [x1, y2], color: [c, c, c, 1.], uv: [0., 1.] },
             // bottom right
-            Vertex { pos: [x2, y2], color: [0., 0., 0., 1.], uv: [1., 1.] },
+            Vertex { pos: [x2, y2], color: [c, c, c, 1.], uv: [1., 1.] },
         ];
         let indices = vec![0, 2, 1, 1, 2, 3];
         drop(sg);
@@ -288,16 +291,29 @@ impl App {
         // Setup the pimpl
         let (x1, y1) = (0., 0.);
         let (x2, y2) = (1., 1.);
-        let verts = vec![
-            // top left
-            Vertex { pos: [x1, y1], color: [1., 0., 0., 1.], uv: [0., 0.] },
-            // top right
-            Vertex { pos: [x2, y1], color: [1., 0., 1., 1.], uv: [1., 0.] },
-            // bottom left
-            Vertex { pos: [x1, y2], color: [0., 0., 1., 1.], uv: [0., 1.] },
-            // bottom right
-            Vertex { pos: [x2, y2], color: [1., 1., 0., 1.], uv: [1., 1.] },
-        ];
+        let verts = if LIGHTMODE {
+            vec![
+                // top left
+                Vertex { pos: [x1, y1], color: [1., 0., 0., 1.], uv: [0., 0.] },
+                // top right
+                Vertex { pos: [x2, y1], color: [1., 0., 0., 1.], uv: [1., 0.] },
+                // bottom left
+                Vertex { pos: [x1, y2], color: [1., 0., 0., 1.], uv: [0., 1.] },
+                // bottom right
+                Vertex { pos: [x2, y2], color: [1., 0., 0., 1.], uv: [1., 1.] },
+            ]
+        } else {
+            vec![
+                // top left
+                Vertex { pos: [x1, y1], color: [1., 0., 0., 1.], uv: [0., 0.] },
+                // top right
+                Vertex { pos: [x2, y1], color: [1., 0., 1., 1.], uv: [1., 0.] },
+                // bottom left
+                Vertex { pos: [x1, y2], color: [0., 0., 1., 1.], uv: [0., 1.] },
+                // bottom right
+                Vertex { pos: [x2, y2], color: [1., 1., 0., 1.], uv: [1., 1.] },
+            ]
+        };
         let indices = vec![0, 2, 1, 1, 2, 3];
         drop(sg);
         let pimpl = Mesh::new(
@@ -487,10 +503,17 @@ impl App {
         node.set_property_f32("font_size", 40.).unwrap();
         node.set_property_str("text", "hello king!😁🍆jelly 🍆1234").unwrap();
         let prop = node.get_property("text_color").unwrap();
-        prop.set_f32(0, 1.).unwrap();
-        prop.set_f32(1, 1.).unwrap();
-        prop.set_f32(2, 1.).unwrap();
-        prop.set_f32(3, 1.).unwrap();
+        if LIGHTMODE {
+            prop.set_f32(0, 0.).unwrap();
+            prop.set_f32(1, 0.).unwrap();
+            prop.set_f32(2, 0.).unwrap();
+            prop.set_f32(3, 0.).unwrap();
+        } else {
+            prop.set_f32(0, 1.).unwrap();
+            prop.set_f32(1, 1.).unwrap();
+            prop.set_f32(2, 1.).unwrap();
+            prop.set_f32(3, 1.).unwrap();
+        }
         let prop = node.get_property("cursor_color").unwrap();
         prop.set_f32(0, 1.).unwrap();
         prop.set_f32(1, 0.5).unwrap();

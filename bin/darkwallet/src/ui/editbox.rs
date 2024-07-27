@@ -1104,11 +1104,12 @@ impl EditBox {
 
     /// Beware of this method. Here be dragons.
     /// Possibly racy so we limit it just to cursor scrolling.
-    fn cached_rect(&self) -> Rectangle {
+    fn cached_rect(&self) -> Option<Rectangle> {
         let Ok(rect) = read_rect(self.rect.clone()) else {
-            panic!("Node bad rect property");
+            error!(target: "ui::editbox", "cached_rect is None");
+            return None
         };
-        rect
+        Some(rect)
     }
     async fn get_parent_rect(&self) -> Option<Rectangle> {
         let sg = self.sg.lock().await;
@@ -1121,7 +1122,7 @@ impl EditBox {
     }
     async fn get_cached_world_rect(&self) -> Option<Rectangle> {
         // NBD if it's slightly wrong
-        let mut rect = self.cached_rect();
+        let mut rect = self.cached_rect()?;
 
         // If layers can be nested and we use offsets for (x, y)
         // then this will be incorrect for nested layers.
@@ -1139,7 +1140,10 @@ impl EditBox {
     /// to recalculate the scroll x property.
     fn apply_cursor_scrolling(&self) {
         // This may need updating but yolo rite
-        let rect = self.cached_rect();
+        let Some(rect) = self.cached_rect() else {
+            error!(target: "ui::editbox", "cached_rect() returned None");
+            return
+        };
 
         let cursor_pos = self.cursor_pos.get() as usize;
         let mut scroll = self.scroll.get();

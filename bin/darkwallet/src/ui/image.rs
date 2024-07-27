@@ -17,10 +17,13 @@
  */
 
 //use async_lock::Mutex;
-use miniquad::{BufferId, TextureId};
 use image::ImageReader;
+use miniquad::{BufferId, TextureId};
 use rand::{rngs::OsRng, Rng};
-use std::{io::Cursor, sync::{Arc, Mutex as SyncMutex, Weak}};
+use std::{
+    io::Cursor,
+    sync::{Arc, Mutex as SyncMutex, Weak},
+};
 
 use crate::{
     gfx2::{DrawCall, DrawInstruction, DrawMesh, Rectangle, RenderApi, RenderApiPtr, Vertex},
@@ -113,7 +116,8 @@ impl Image {
             *data2.lock().unwrap() = res.unwrap();
         });
         let data = std::mem::take(&mut *data.lock().unwrap());
-        let img = ImageReader::new(Cursor::new(data)).with_guessed_format().unwrap().decode().unwrap();
+        let img =
+            ImageReader::new(Cursor::new(data)).with_guessed_format().unwrap().decode().unwrap();
         let img = img.to_rgba8();
 
         //let img = image::ImageReader::open(path).unwrap().decode().unwrap().to_rgba8();
