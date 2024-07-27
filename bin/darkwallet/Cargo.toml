@@ -60,6 +60,7 @@ package_name = "darkfi.darkwallet"
 label = "DarkWallet"
 res = "res"
 icon = "@mipmap/ic_launcher"
+assets = "assets"
 
 [[package.metadata.android.permission]]
 name = "android.permission.INTERNET"

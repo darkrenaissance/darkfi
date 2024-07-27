@@ -34,6 +34,11 @@ use crate::{
 //    println!("{}", std::any::type_name::<T>())
 //}
 
+#[cfg(target_os = "android")]
+const CHATDB_PATH: &str = "/data/data/darkfi.darkwallet/chatdb/";
+#[cfg(target_os = "android")]
+//const KING_PATH: &str = "/data/data/darkfi.darkwallet/assets/king.png";
+const KING_PATH: &str = "king.png";
 pub struct AsyncRuntime {
     signal: smol::channel::Sender<()>,
     shutdown: smol::channel::Receiver<()>,
@@ -166,6 +171,7 @@ impl App {
         drop(sg);
 
         self.make_me_a_schema_plox().await;
+        debug!(target: "app", "Schema loaded");
 
         // Access drawable in window node and call draw()
         self.trigger_redraw().await;
@@ -358,7 +364,7 @@ impl App {
         prop.set_f32(2, 60.).unwrap();
         prop.set_f32(3, 60.).unwrap();
 
-        node.set_property_str("path", "../../king.png").unwrap();
+        node.set_property_str("path", KING_PATH).unwrap();
 
         // Setup the pimpl
         drop(sg);

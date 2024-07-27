@@ -18,8 +18,9 @@
 
 //use async_lock::Mutex;
 use miniquad::{BufferId, TextureId};
+use image::ImageReader;
 use rand::{rngs::OsRng, Rng};
-use std::sync::{Arc, Mutex as SyncMutex, Weak};
+use std::{io::Cursor, sync::{Arc, Mutex as SyncMutex, Weak}};
 
 use crate::{
     gfx2::{DrawCall, DrawInstruction, DrawMesh, Rectangle, RenderApi, RenderApiPtr, Vertex},
@@ -104,8 +105,19 @@ impl Image {
 
     async fn load_texture(&self) -> TextureId {
         let path = self.path.get();
+
         // TODO we should NOT use unwrap here
-        let img = image::ImageReader::open(path).unwrap().decode().unwrap().to_rgba8();
+        let data = Arc::new(SyncMutex::new(vec![]));
+        let data2 = data.clone();
+        miniquad::fs::load_file(&path, move |res| {
+            *data2.lock().unwrap() = res.unwrap();
+        });
+        let data = std::mem::take(&mut *data.lock().unwrap());
+        let img = ImageReader::new(Cursor::new(data)).with_guessed_format().unwrap().decode().unwrap();
+        let img = img.to_rgba8();
+
+        //let img = image::ImageReader::open(path).unwrap().decode().unwrap().to_rgba8();
+
         let width = img.width() as u16;
         let height = img.height() as u16;
         let bmp = img.into_raw();
