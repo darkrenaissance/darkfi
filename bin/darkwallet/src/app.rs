@@ -39,6 +39,12 @@ const CHATDB_PATH: &str = "/data/data/darkfi.darkwallet/chatdb/";
 #[cfg(target_os = "android")]
 //const KING_PATH: &str = "/data/data/darkfi.darkwallet/assets/king.png";
 const KING_PATH: &str = "king.png";
+
+#[cfg(target_os = "linux")]
+const CHATDB_PATH: &str = "chatdb";
+#[cfg(target_os = "linux")]
+const KING_PATH: &str = "assets/king.png";
+
 pub struct AsyncRuntime {
     signal: smol::channel::Sender<()>,
     shutdown: smol::channel::Receiver<()>,
@@ -354,6 +360,53 @@ impl App {
 
         sg.link(node_id, layer_node_id).unwrap();
 
+        // Debugging tool
+        let node_id = create_mesh(&mut sg, "debugtool2");
+
+        let node = sg.get_node_mut(node_id).unwrap();
+        let prop = node.get_property("rect").unwrap();
+        prop.set_f32(0, 0.).unwrap();
+        let code = vec![Op::Sub((
+            Box::new(Op::LoadVar("h".to_string())),
+            Box::new(Op::ConstFloat32(200.)),
+        ))];
+        prop.set_expr(1, code).unwrap();
+        let code = vec![Op::LoadVar("w".to_string())];
+        prop.set_expr(2, code).unwrap();
+        prop.set_f32(3, 5.).unwrap();
+
+        node.set_property_u32("z_index", 2).unwrap();
+
+        // Setup the pimpl
+        let (x1, y1) = (0., 0.);
+        let (x2, y2) = (1., 1.);
+        let verts = vec![
+            // top left
+            Vertex { pos: [x1, y1], color: [0., 1., 0., 1.], uv: [0., 0.] },
+            // top right
+            Vertex { pos: [x2, y1], color: [0., 1., 0., 1.], uv: [1., 0.] },
+            // bottom left
+            Vertex { pos: [x1, y2], color: [0., 1., 0., 1.], uv: [0., 1.] },
+            // bottom right
+            Vertex { pos: [x2, y2], color: [0., 1., 0., 1.], uv: [1., 1.] },
+        ];
+        let indices = vec![0, 2, 1, 1, 2, 3];
+        drop(sg);
+        let pimpl = Mesh::new(
+            self.ex.clone(),
+            self.sg.clone(),
+            node_id,
+            self.render_api.clone(),
+            verts,
+            indices,
+        )
+        .await;
+        let mut sg = self.sg.lock().await;
+        let node = sg.get_node_mut(node_id).unwrap();
+        node.pimpl = pimpl;
+
+        sg.link(node_id, layer_node_id).unwrap();
+
         // Create KING GNU!
         let node_id = create_image(&mut sg, "king");
 
@@ -494,13 +547,18 @@ impl App {
         node.set_property_u32("z_index", 1).unwrap();
 
         drop(sg);
-        let db = sled::open("chatdb").expect("cannot open sleddb");
+        let db = sled::open(CHATDB_PATH).expect("cannot open sleddb");
         let chat_tree = db.open_tree(b"chat").unwrap();
-        //populate_tree(&chat_tree);
+        if chat_tree.is_empty() {
+            populate_tree(&chat_tree);
+        }
+        debug!(target: "app", "db has {} lines", chat_tree.len());
         let pimpl = ChatView::new(
+            self.ex.clone(),
             self.sg.clone(),
             node_id,
             self.render_api.clone(),
+            self.event_pub.clone(),
             self.text_shaper.clone(),
             chat_tree,
         )
@@ -549,9 +607,12 @@ fn populate_tree(tree: &sled::Tree) {
 
         tree.insert(&key, val).unwrap();
     }
+    // O(n)
+    debug!(target: "app", "populated db with {} lines", tree.len());
 }
 
 pub fn create_layer(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
+    debug!(target: "app", "create_layer({name})");
     let node = sg.add_node(name, SceneNodeType::RenderLayer);
     let prop = Property::new("is_visible", PropertyType::Bool, PropertySubType::Null);
     node.add_property(prop).unwrap();
@@ -565,6 +626,7 @@ pub fn create_layer(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
 }
 
 pub fn create_mesh(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
+    debug!(target: "app", "create_mesh({name})");
     let node = sg.add_node(name, SceneNodeType::RenderMesh);
 
     let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
@@ -579,6 +641,7 @@ pub fn create_mesh(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
 }
 
 pub fn create_image(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
+    debug!(target: "app", "create_image({name})");
     let node = sg.add_node(name, SceneNodeType::RenderMesh);
 
     let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
@@ -596,6 +659,7 @@ pub fn create_image(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
 }
 
 fn create_text(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
+    debug!(target: "app", "create_text({name})");
     let node = sg.add_node(name, SceneNodeType::RenderText);
 
     let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
@@ -627,6 +691,7 @@ fn create_text(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
 }
 
 fn create_editbox(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
+    debug!(target: "app", "create_editbox({name})");
     let node = sg.add_node(name, SceneNodeType::EditBox);
 
     let mut prop = Property::new("is_active", PropertyType::Bool, PropertySubType::Null);
@@ -687,6 +752,7 @@ fn create_editbox(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
 }
 
 fn create_chatview(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
+    debug!(target: "app", "create_chatview({name})");
     let node = sg.add_node(name, SceneNodeType::ChatView);
 
     let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
