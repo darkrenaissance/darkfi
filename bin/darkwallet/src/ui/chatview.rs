@@ -17,6 +17,7 @@
  */
 
 use darkfi_serial::{deserialize, Decodable, Encodable, SerialDecodable, SerialEncodable};
+use miniquad::TouchPhase;
 use rand::{rngs::OsRng, Rng};
 use std::{
     collections::BTreeMap,
@@ -67,16 +68,36 @@ struct Page {
     atlas: text2::RenderedAtlas,
 }
 
+struct TouchInfo {
+    start_y: f32,
+    start_instant: std::time::Instant,
+    last_y: f32,
+}
+
+impl TouchInfo {
+    fn new() -> Self {
+        Self { start_y: 0., start_instant: std::time::Instant::now(), last_y: 0. }
+    }
+}
+
 pub type ChatViewPtr = Arc<ChatView>;
 
 pub struct ChatView {
     node_id: SceneNodeId,
+    tasks: Vec<smol::Task<()>>,
+    sg: SceneGraphPtr2,
     render_api: RenderApiPtr,
     text_shaper: TextShaperPtr,
     tree: sled::Tree,
 
     pages: SyncMutex<Vec<Page>>,
+    drawcalls: SyncMutex<Vec<DrawMesh>>,
     dc_key: u64,
+
+    /// Used for detecting when scrolling view
+    mouse_pos: SyncMutex<Point>,
+    /// Touch scrolling
+    touch_info: SyncMutex<TouchInfo>,
 
     rect: PropertyPtr,
     scroll: PropertyFloat32,
@@ -88,14 +109,18 @@ pub struct ChatView {
 
 impl ChatView {
     pub async fn new(
+        ex: Arc<smol::Executor<'static>>,
         sg: SceneGraphPtr2,
         node_id: SceneNodeId,
         render_api: RenderApiPtr,
+        event_pub: GraphicsEventPublisherPtr,
         text_shaper: TextShaperPtr,
         tree: sled::Tree,
     ) -> Pimpl {
+        debug!(target: "ui::chatview", "ChatView::new()");
         let scene_graph = sg.lock().await;
         let node = scene_graph.get_node(node_id).unwrap();
+        let node_name = node.name.clone();
 
         let rect = node.get_property("rect").expect("ChatView::rect");
         let scroll = PropertyFloat32::wrap(node, "scroll", 0).unwrap();
@@ -106,26 +131,205 @@ impl ChatView {
 
         drop(scene_graph);
 
-        let self_ = Arc::new_cyclic(|me: &Weak<Self>| Self {
-            node_id,
-            render_api,
-            text_shaper,
-            tree,
+        let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
+            let ev_sub = event_pub.subscribe_mouse_wheel();
+            let me2 = me.clone();
+            let mouse_wheel_task = ex.spawn(async move {
+                loop {
+                    Self::process_mouse_wheel(&me2, &ev_sub).await;
+                }
+            });
 
-            pages: SyncMutex::new(Vec::new()),
-            dc_key: OsRng.gen(),
+            let ev_sub = event_pub.subscribe_mouse_move();
+            let me2 = me.clone();
+            let mouse_move_task = ex.spawn(async move {
+                loop {
+                    Self::process_mouse_move(&me2, &ev_sub).await;
+                }
+            });
 
-            rect,
-            scroll,
-            font_size,
-            line_height,
-            baseline,
-            z_index,
+            let ev_sub = event_pub.subscribe_touch();
+            let me2 = me.clone();
+            let touch_task = ex.spawn(async move {
+                loop {
+                    Self::process_touch(&me2, &ev_sub).await;
+                }
+            });
+
+            let mut on_modify = OnModify::new(ex, node_name, node_id, me.clone());
+
+            //on_modify.when_change(scroll.prop(), Self::scrollview);
+
+            async fn redraw(self_: Arc<ChatView>) {
+                self_.redraw().await;
+            }
+            on_modify.when_change(rect.clone(), redraw);
+
+            let mut tasks = vec![mouse_wheel_task, mouse_move_task, touch_task];
+            tasks.append(&mut on_modify.tasks);
+
+            Self {
+                node_id,
+                tasks,
+                sg,
+                render_api,
+                text_shaper,
+                tree,
+
+                pages: SyncMutex::new(Vec::new()),
+                drawcalls: SyncMutex::new(Vec::new()),
+                dc_key: OsRng.gen(),
+
+                mouse_pos: SyncMutex::new(Point::from([0., 0.])),
+                touch_info: SyncMutex::new(TouchInfo::new()),
+
+                rect,
+                scroll,
+                font_size,
+                line_height,
+                baseline,
+                z_index,
+            }
         });
 
         self_.populate().await;
 
         Pimpl::ChatView(self_)
+    }
+
+    async fn process_mouse_wheel(me: &Weak<Self>, ev_sub: &Subscription<(f32, f32)>) {
+        let Ok((wheel_x, wheel_y)) = ev_sub.receive().await else {
+            debug!(target: "ui::chatview", "Event relayer closed");
+            return
+        };
+
+        let Some(self_) = me.upgrade() else {
+            // Should not happen
+            panic!("self destroyed before mouse_wheel_task was stopped!");
+        };
+
+        self_.handle_mouse_wheel(wheel_x, wheel_y).await;
+    }
+
+    async fn process_mouse_move(me: &Weak<Self>, ev_sub: &Subscription<(f32, f32)>) {
+        let Ok((mouse_x, mouse_y)) = ev_sub.receive().await else {
+            debug!(target: "ui::chatview", "Event relayer closed");
+            return
+        };
+
+        let Some(self_) = me.upgrade() else {
+            // Should not happen
+            panic!("self destroyed before mouse_move_task was stopped!");
+        };
+
+        self_.handle_mouse_move(mouse_x, mouse_y).await;
+    }
+
+    async fn process_touch(me: &Weak<Self>, ev_sub: &Subscription<(TouchPhase, u64, f32, f32)>) {
+        let Ok((phase, id, touch_x, touch_y)) = ev_sub.receive().await else {
+            debug!(target: "ui::chatview", "Event relayer closed");
+            return
+        };
+
+        let Some(self_) = me.upgrade() else {
+            // Should not happen
+            panic!("self destroyed before touch_task was stopped!");
+        };
+
+        self_.handle_touch(phase, id, touch_x, touch_y).await;
+    }
+
+    async fn handle_mouse_wheel(&self, wheel_x: f32, wheel_y: f32) {
+        debug!(target: "ui::chatview", "handle_mouse_wheel({wheel_x}, {wheel_y})");
+
+        let Some(rect) = self.get_cached_world_rect().await else { return };
+
+        let mouse_pos = self.mouse_pos.lock().unwrap().clone();
+        if !rect.contains(&mouse_pos) {
+            debug!(target: "ui::chatview", "not inside rect");
+            return
+        }
+        debug!(target: "ui::chatview", "inside rect");
+        let scroll = self.scroll.get();
+        self.scroll.set(scroll + wheel_y * 50.);
+        // Render will auto update from on_modify hook
+    }
+
+    async fn handle_mouse_move(&self, mouse_x: f32, mouse_y: f32) {
+        //debug!(target: "ui::chatview", "handle_mouse_move({mouse_x}, {mouse_y})");
+        let mut mouse_pos = self.mouse_pos.lock().unwrap();
+        mouse_pos.x = mouse_x;
+        mouse_pos.y = mouse_y;
+    }
+
+    async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_x: f32, touch_y: f32) {
+        // Ignore multi-touch
+        if id != 0 {
+            return
+        }
+        // Simulate mouse events
+        match phase {
+            TouchPhase::Started => {
+                let mut touch_info = self.touch_info.lock().unwrap();
+                touch_info.start_y = touch_y;
+                touch_info.start_instant = std::time::Instant::now();
+                touch_info.last_y = touch_y;
+            }
+            TouchPhase::Moved => {
+                let start_y = {
+                    let mut touch_info = self.touch_info.lock().unwrap();
+                    touch_info.last_y = touch_y;
+                    touch_info.start_y
+                };
+
+                let dist = touch_y - start_y;
+                let scroll = self.scroll.get();
+                // TODO the line selected should be fixed and move exactly that distance
+                // No use of multipliers
+                // TODO we are maybe doing too many updates so make a widget to 'slow down'
+                // how often we move to fixed intervals.
+                // draw a poly shape and eval each line segment.
+                self.scroll.set(scroll + dist*0.05);
+                self.scrollview().await;
+            }
+            TouchPhase::Ended => {
+                // Now calculate scroll acceleration
+            }
+            TouchPhase::Cancelled => {}
+        }
+    }
+
+    /// Beware of this method. Here be dragons.
+    /// Possibly racy so we limit it just to mouse stuff (for now).
+    fn cached_rect(&self) -> Rectangle {
+        let Ok(rect) = read_rect(self.rect.clone()) else {
+            panic!("Node bad rect property");
+        };
+        rect
+    }
+    async fn get_parent_rect(&self) -> Option<Rectangle> {
+        let sg = self.sg.lock().await;
+        let node = sg.get_node(self.node_id).unwrap();
+        let Some(parent_rect) = get_parent_rect(&sg, node) else {
+            return None;
+        };
+        drop(sg);
+        Some(parent_rect)
+    }
+    async fn get_cached_world_rect(&self) -> Option<Rectangle> {
+        // NBD if it's slightly wrong
+        let mut rect = self.cached_rect();
+
+        // If layers can be nested and we use offsets for (x, y)
+        // then this will be incorrect for nested layers.
+        // For now we don't allow nesting of layers.
+        let parent_rect = self.get_parent_rect().await?;
+
+        // Offset rect which is now in world coords
+        rect.x += parent_rect.x;
+        rect.y += parent_rect.y;
+
+        Some(rect)
     }
 
     async fn populate(&self) {
@@ -172,7 +376,80 @@ impl ChatView {
         *self.pages.lock().unwrap() = pages;
     }
 
-    async fn regen_mesh(&self, mut clip: Rectangle) -> Vec<DrawInstruction> {
+    /// Basically a version of redraw() where regen_mesh() is never called.
+    /// Instead we use the cached version.
+    async fn scrollview(&self) {
+        debug!(target: "ui::chatview", "scrollview()");
+        let sg = self.sg.lock().await;
+        let node = sg.get_node(self.node_id).unwrap();
+
+        let Some(parent_rect) = get_parent_rect(&sg, node) else {
+            return;
+        };
+
+        if let Err(err) = eval_rect(self.rect.clone(), &parent_rect) {
+            panic!("Node {:?} bad rect property: {}", node, err);
+        }
+
+        let Ok(mut rect) = read_rect(self.rect.clone()) else {
+            panic!("Node {:?} bad rect property", node);
+        };
+
+        //let mut drawcalls = self.regen_mesh(rect.clone()).await;
+
+        debug!(target: "ui::chatview", "chatview rect = {:?}", rect);
+
+        // Apply scroll and scissor
+        // We use the scissor for scrolling
+        // Because we use the scissor, our actual rect is now rect instead of parent_rect
+        let off_x = 0.;
+        // This calc decides whether scroll is in terms of pages or pixels
+        let off_y = (self.scroll.get() + rect.h) / rect.h;
+        let scale_x = 1. / rect.w;
+        let scale_y = 1. / rect.h;
+        let model = glam::Mat4::from_translation(glam::Vec3::new(off_x, off_y, 0.)) *
+            glam::Mat4::from_scale(glam::Vec3::new(scale_x, scale_y, 1.));
+
+        let mut instrs =
+            vec![DrawInstruction::ApplyViewport(rect), DrawInstruction::ApplyMatrix(model)];
+        let drawcalls = self.drawcalls.lock().unwrap().clone();
+        let mut drawcalls: Vec<_> = drawcalls.into_iter().map(|dc| DrawInstruction::Draw(dc)).collect();
+        instrs.append(&mut drawcalls);
+
+        let draw_calls = vec![(
+            self.dc_key,
+            DrawCall { instrs, dcs: vec![], z_index: self.z_index.get() },
+        )];
+
+        self.render_api.replace_draw_calls(draw_calls).await;
+
+        debug!(target: "ui::chatview", "scrollview done");
+    }
+
+    async fn redraw(&self) {
+        debug!(target: "ui::chatview", "redraw()");
+        let sg = self.sg.lock().await;
+        let node = sg.get_node(self.node_id).unwrap();
+
+        let Some(parent_rect) = get_parent_rect(&sg, node) else {
+            return;
+        };
+
+        let Some(draw_update) = self.draw(&sg, &parent_rect).await else {
+            error!(target: "ui::chatview", "ChatView {:?} failed to draw", node);
+            return;
+        };
+        self.render_api.replace_draw_calls(draw_update.draw_calls).await;
+        debug!(target: "ui::chatview", "replace draw calls done");
+        for buffer_id in draw_update.freed_buffers {
+            self.render_api.delete_buffer(buffer_id);
+        }
+        for texture_id in draw_update.freed_textures {
+            self.render_api.delete_texture(texture_id);
+        }
+    }
+
+    async fn regen_mesh(&self, mut clip: Rectangle) -> Vec<DrawMesh> {
         let font_size = self.font_size.get();
         let line_height = self.line_height.get();
         let baseline = self.baseline.get();
@@ -220,12 +497,12 @@ impl ChatView {
 
             let mesh = mesh.alloc(&self.render_api).await.unwrap();
 
-            draws.push(DrawInstruction::Draw(DrawMesh {
+            draws.push(DrawMesh {
                 vertex_buffer: mesh.vertex_buffer,
                 index_buffer: mesh.index_buffer,
                 texture: Some(page.atlas.texture_id),
                 num_elements: mesh.num_elements,
-            }));
+            });
         }
 
         if DEBUG_RENDER {
@@ -236,12 +513,12 @@ impl ChatView {
                 2.,
             );
             let mesh = debug_mesh.alloc(&self.render_api).await.unwrap();
-            draws.push(DrawInstruction::Draw(DrawMesh {
+            draws.push(DrawMesh {
                 vertex_buffer: mesh.vertex_buffer,
                 index_buffer: mesh.index_buffer,
                 texture: None,
                 num_elements: mesh.num_elements,
-            }));
+            });
         }
 
         draws
@@ -260,14 +537,23 @@ impl ChatView {
             panic!("Node {:?} bad rect property", node);
         };
 
+        // TODO: Do we need this? Because of the viewport clipping
         rect.x += parent_rect.x;
         rect.y += parent_rect.y;
 
-        let mut drawcalls = self.regen_mesh(rect.clone()).await;
-        // TODO: delete old buffers
-        // we need to save the buffers for that
+        let drawcalls = self.regen_mesh(rect.clone()).await;
+        let old_drawcalls = std::mem::replace(&mut *self.drawcalls.lock().unwrap(), drawcalls.clone());
+        let mut drawcalls: Vec<_> = drawcalls.into_iter().map(|dc| DrawInstruction::Draw(dc)).collect();
+
         let mut freed_textures = vec![];
         let mut freed_buffers = vec![];
+        for old_dc in old_drawcalls {
+            freed_buffers.push(old_dc.vertex_buffer);
+            freed_buffers.push(old_dc.index_buffer);
+            if let Some(texture_id) = old_dc.texture {
+                freed_textures.push(texture_id);
+            }
+        }
 
         debug!(target: "ui::chatview", "chatview rect = {:?}", rect);
 
@@ -275,7 +561,8 @@ impl ChatView {
         // We use the scissor for scrolling
         // Because we use the scissor, our actual rect is now rect instead of parent_rect
         let off_x = 0.;
-        let off_y = self.scroll.get() + rect.h / rect.h;
+        // This calc decides whether scroll is in terms of pages or pixels
+        let off_y = (self.scroll.get() + rect.h) / rect.h;
         let scale_x = 1. / rect.w;
         let scale_y = 1. / rect.h;
         let model = glam::Mat4::from_translation(glam::Vec3::new(off_x, off_y, 0.)) *

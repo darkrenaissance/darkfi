@@ -70,6 +70,11 @@ fn main() {
         android_logger::init_once(
             android_logger::Config::default().with_max_level(LevelFilter::Debug).with_tag("darkfi"),
         );
+
+        let paths = std::fs::read_dir("/data/data/darkfi.darkwallet/").unwrap();
+        for path in paths {
+            debug!("{}", path.unwrap().path().display())
+        }
     }
 
     #[cfg(target_os = "linux")]
