@@ -1,15 +1,13 @@
-Docker commands:
-
 ```
-docker system prune -a
-docker build -t apk .
+podman system service
+podman build -t apk .
 ```
 
 ```
 # This command gives an interactive terminal (useful for debugging):
-#docker run -v $(pwd):/root/dw -it apk bash
+#podman run -v $(pwd):/root/dw -it apk bash
 
-docker run -v $(pwd):/root/dw -w /root/dw -t apk cargo quad-apk build
+podman run -v $(pwd):/root/dw -w /root/dw -t apk cargo quad-apk build
 ```
 
 Enable USB debugging in developer options and run the following commands:

@@ -1,4 +1,4 @@
-FROM archlinux
+FROM docker.io/archlinux
 
 RUN pacman -Syu --noconfirm
 RUN pacman -S --noconfirm jdk8-openjdk unzip wget cmake openssl pkgconf gcc git
