@@ -45,7 +45,7 @@ const CHATDB_PATH: &str = "chatdb";
 #[cfg(target_os = "linux")]
 const KING_PATH: &str = "assets/king.png";
 
-const LIGHTMODE: bool = true;
+const LIGHTMODE: bool = false;
 
 pub struct AsyncRuntime {
     signal: smol::channel::Sender<()>,
@@ -507,7 +507,7 @@ impl App {
             prop.set_f32(0, 0.).unwrap();
             prop.set_f32(1, 0.).unwrap();
             prop.set_f32(2, 0.).unwrap();
-            prop.set_f32(3, 0.).unwrap();
+            prop.set_f32(3, 1.).unwrap();
         } else {
             prop.set_f32(0, 1.).unwrap();
             prop.set_f32(1, 1.).unwrap();
@@ -520,10 +520,17 @@ impl App {
         prop.set_f32(2, 0.5).unwrap();
         prop.set_f32(3, 1.).unwrap();
         let prop = node.get_property("hi_bg_color").unwrap();
-        prop.set_f32(0, 1.).unwrap();
-        prop.set_f32(1, 1.).unwrap();
-        prop.set_f32(2, 1.).unwrap();
-        prop.set_f32(3, 0.5).unwrap();
+        if LIGHTMODE {
+            prop.set_f32(0, 0.5).unwrap();
+            prop.set_f32(1, 0.5).unwrap();
+            prop.set_f32(2, 0.5).unwrap();
+            prop.set_f32(3, 1.).unwrap();
+        } else {
+            prop.set_f32(0, 1.).unwrap();
+            prop.set_f32(1, 1.).unwrap();
+            prop.set_f32(2, 1.).unwrap();
+            prop.set_f32(3, 0.5).unwrap();
+        }
         let prop = node.get_property("selected").unwrap();
         prop.set_null(0).unwrap();
         prop.set_null(1).unwrap();
@@ -575,10 +582,17 @@ impl App {
         prop.set_f32(2, 0.5).unwrap();
         prop.set_f32(3, 0.5).unwrap();
         let prop = node.get_property("text_color").unwrap();
-        prop.set_f32(0, 1.).unwrap();
-        prop.set_f32(1, 1.).unwrap();
-        prop.set_f32(2, 1.).unwrap();
-        prop.set_f32(3, 1.).unwrap();
+        if LIGHTMODE {
+            prop.set_f32(0, 0.).unwrap();
+            prop.set_f32(1, 0.).unwrap();
+            prop.set_f32(2, 0.).unwrap();
+            prop.set_f32(3, 1.).unwrap();
+        } else {
+            prop.set_f32(0, 1.).unwrap();
+            prop.set_f32(1, 1.).unwrap();
+            prop.set_f32(2, 1.).unwrap();
+            prop.set_f32(3, 1.).unwrap();
+        }
 
         let prop = node.get_property("nick_colors").unwrap();
         #[rustfmt::skip]
