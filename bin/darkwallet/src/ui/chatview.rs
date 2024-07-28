@@ -21,6 +21,7 @@ use miniquad::TouchPhase;
 use rand::{rngs::OsRng, Rng};
 use std::{
     collections::BTreeMap,
+    hash::{DefaultHasher, Hash, Hasher},
     sync::{Arc, Mutex as SyncMutex, Weak},
 };
 
@@ -30,7 +31,7 @@ use crate::{
         DrawCall, DrawInstruction, DrawMesh, GraphicsEventPublisherPtr, Point, Rectangle,
         RenderApi, RenderApiPtr, Vertex,
     },
-    mesh::{Color, MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_WHITE},
+    mesh::{Color, MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_GREY, COLOR_WHITE},
     prop::{
         PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyStr, PropertyUint32,
     },
@@ -43,6 +44,10 @@ use crate::{
 use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify, Stoppable};
 
 const DEBUG_RENDER: bool = false;
+
+fn is_whitespace(s: &str) -> bool {
+    s.chars().all(char::is_whitespace)
+}
 
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct ChatMsg {
@@ -104,6 +109,9 @@ pub struct ChatView {
     font_size: PropertyFloat32,
     line_height: PropertyFloat32,
     baseline: PropertyFloat32,
+    timestamp_color: PropertyColor,
+    text_color: PropertyColor,
+    nick_colors: PropertyPtr,
     z_index: PropertyUint32,
 }
 
@@ -126,7 +134,10 @@ impl ChatView {
         let scroll = PropertyFloat32::wrap(node, "scroll", 0).unwrap();
         let font_size = PropertyFloat32::wrap(node, "font_size", 0).unwrap();
         let line_height = PropertyFloat32::wrap(node, "line_height", 0).unwrap();
-        let baseline = PropertyFloat32::wrap(node, "line_height", 0).unwrap();
+        let baseline = PropertyFloat32::wrap(node, "baseline", 0).unwrap();
+        let timestamp_color = PropertyColor::wrap(node, "timestamp_color").unwrap();
+        let text_color = PropertyColor::wrap(node, "text_color").unwrap();
+        let nick_colors = node.get_property("nick_colors").expect("ChatView::nick_colors");
         let z_index = PropertyUint32::wrap(node, "z_index", 0).unwrap();
 
         drop(scene_graph);
@@ -188,6 +199,9 @@ impl ChatView {
                 font_size,
                 line_height,
                 baseline,
+                timestamp_color,
+                text_color,
+                nick_colors,
                 z_index,
             }
         });
@@ -252,7 +266,7 @@ impl ChatView {
         debug!(target: "ui::chatview", "inside rect");
         let scroll = self.scroll.get();
         self.scroll.set(scroll + wheel_y * 50.);
-        // Render will auto update from on_modify hook
+        self.scrollview().await;
     }
 
     async fn handle_mouse_move(&self, mouse_x: f32, mouse_y: f32) {
@@ -460,27 +474,44 @@ impl ChatView {
         let mut draws = vec![];
         let color = COLOR_WHITE;
 
+        let timestamp_color = self.timestamp_color.get();
+        let text_color = self.text_color.get();
+        let nick_colors = self.read_nick_colors();
+
         // This is a little hack to nudge the bottom line up slightly, otherwise
         // chars like p will cross the bottom.
-        let descent = line_height / 2.;
+        let descent = baseline / 2.;
 
         // Pages start at the bottom.
-        let mut current_idx = 1;
+        let mut current_idx = 0;
         'pageloop: for page in pages {
             let mut mesh = MeshBuilder::new();
 
             for msg in page.msgs {
                 let glyphs = msg.glyphs;
 
+                let nick_color = self.select_nick_color(&msg.chatmsg.nick, &nick_colors);
+
+                // Keep track of the 'section'
+                // Section 0 is the timestamp
+                // Section 1 is the nickname (colorized)
+                // Finally is just the message itself
+                let mut section = 2;
+
                 let mut lines = text2::wrap(clip.w, font_size, &glyphs);
                 // We are drawing bottom up but line wrap gives us lines in normal order
                 lines.reverse();
-                for line in lines {
-                    let off_y = descent + current_idx as f32 * line_height;
+                let last_idx = lines.len() - 1;
+                for (i, line) in lines.into_iter().enumerate() {
+                    let off_y = descent + baseline + current_idx as f32 * line_height;
 
                     //if px_height > clip.h {
                     //    break 'pageloop;
                     //}
+
+                    if i == last_idx {
+                        section = 0;
+                    }
 
                     // Render line
                     let mut glyph_pos_iter = GlyphPositionIter::new(font_size, &line, baseline);
@@ -488,7 +519,18 @@ impl ChatView {
                         let uv_rect =
                             page.atlas.fetch_uv(glyph.glyph_id).expect("missing glyph UV rect");
                         glyph_rect.y -= off_y;
+
+                        let color = match section {
+                            0 => timestamp_color,
+                            1 => nick_color,
+                            _ => text_color,
+                        };
+
                         mesh.draw_box(&glyph_rect, color, uv_rect);
+
+                        if section < 2 && is_whitespace(&glyph.substr) {
+                            section += 1;
+                        }
                     }
 
                     current_idx += 1;
@@ -522,6 +564,28 @@ impl ChatView {
         }
 
         draws
+    }
+
+    fn read_nick_colors(&self) -> Vec<Color> {
+        let mut colors = vec![];
+        let mut color = [0f32; 4];
+        for i in 0..self.nick_colors.get_len() {
+            color[i % 4] = self.nick_colors.get_f32(i).expect("prop logic err");
+
+            if i > 0 && i % 4 == 0 {
+                let color = std::mem::take(&mut color);
+                colors.push(color);
+            }
+        }
+        colors
+    }
+
+    fn select_nick_color(&self, nick: &str, nick_colors: &[Color]) -> Color {
+        let mut hasher = DefaultHasher::new();
+        nick.hash(&mut hasher);
+        let i = hasher.finish() as usize;
+        let color = nick_colors[i % nick_colors.len()];
+        color
     }
 
     pub async fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {

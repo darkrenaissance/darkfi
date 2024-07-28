@@ -569,6 +569,35 @@ impl App {
         node.set_property_f32("baseline", 10.).unwrap();
         node.set_property_u32("z_index", 1).unwrap();
 
+        let prop = node.get_property("timestamp_color").unwrap();
+        prop.set_f32(0, 0.5).unwrap();
+        prop.set_f32(1, 0.5).unwrap();
+        prop.set_f32(2, 0.5).unwrap();
+        prop.set_f32(3, 0.5).unwrap();
+        let prop = node.get_property("text_color").unwrap();
+        prop.set_f32(0, 1.).unwrap();
+        prop.set_f32(1, 1.).unwrap();
+        prop.set_f32(2, 1.).unwrap();
+        prop.set_f32(3, 1.).unwrap();
+
+        let prop = node.get_property("nick_colors").unwrap();
+        #[rustfmt::skip]
+        let nick_colors = [
+            0.00, 0.94, 1.00, 1.,
+            0.36, 1.00, 0.69, 1.,
+            0.29, 1.00, 0.45, 1.,
+            0.00, 0.73, 0.38, 1.,
+            0.21, 0.67, 0.67, 1.,
+            0.56, 0.61, 1.00, 1.,
+            0.84, 0.48, 1.00, 1.,
+            1.00, 0.61, 0.94, 1.,
+            1.00, 0.36, 0.48, 1.,
+            1.00, 0.30, 0.00, 1.
+        ];
+        for c in nick_colors {
+            prop.push_f32(c).unwrap();
+        }
+
         drop(sg);
         let db = sled::open(CHATDB_PATH).expect("cannot open sleddb");
         let chat_tree = db.open_tree(b"chat").unwrap();
@@ -791,6 +820,21 @@ fn create_chatview(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
     node.add_property(prop).unwrap();
 
     let prop = Property::new("line_height", PropertyType::Float32, PropertySubType::Pixel);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("timestamp_color", PropertyType::Float32, PropertySubType::Color);
+    prop.set_array_len(4);
+    prop.set_range_f32(0., 1.);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("text_color", PropertyType::Float32, PropertySubType::Color);
+    prop.set_array_len(4);
+    prop.set_range_f32(0., 1.);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("nick_colors", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_unbounded();
+    prop.set_range_f32(0., 1.);
     node.add_property(prop).unwrap();
 
     let prop = Property::new("baseline", PropertyType::Float32, PropertySubType::Pixel);
