@@ -74,6 +74,7 @@ struct Page {
 }
 
 struct TouchInfo {
+    start_scroll: f32,
     start_y: f32,
     start_instant: std::time::Instant,
     last_y: f32,
@@ -81,7 +82,7 @@ struct TouchInfo {
 
 impl TouchInfo {
     fn new() -> Self {
-        Self { start_y: 0., start_instant: std::time::Instant::now(), last_y: 0. }
+        Self { start_scroll: 0., start_y: 0., start_instant: std::time::Instant::now(), last_y: 0. }
     }
 }
 
@@ -285,25 +286,25 @@ impl ChatView {
         match phase {
             TouchPhase::Started => {
                 let mut touch_info = self.touch_info.lock().unwrap();
+                touch_info.start_scroll = self.scroll.get();
                 touch_info.start_y = touch_y;
                 touch_info.start_instant = std::time::Instant::now();
                 touch_info.last_y = touch_y;
             }
             TouchPhase::Moved => {
-                let start_y = {
+                let (start_scroll, start_y) = {
                     let mut touch_info = self.touch_info.lock().unwrap();
                     touch_info.last_y = touch_y;
-                    touch_info.start_y
+                    (touch_info.start_scroll, touch_info.start_y)
                 };
 
                 let dist = touch_y - start_y;
-                let scroll = self.scroll.get();
                 // TODO the line selected should be fixed and move exactly that distance
                 // No use of multipliers
                 // TODO we are maybe doing too many updates so make a widget to 'slow down'
                 // how often we move to fixed intervals.
                 // draw a poly shape and eval each line segment.
-                self.scroll.set(scroll + dist * 0.05);
+                self.scroll.set(start_scroll + dist);
                 self.scrollview().await;
             }
             TouchPhase::Ended => {
