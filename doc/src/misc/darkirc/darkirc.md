@@ -275,7 +275,7 @@ inbound and outbound connections.
 ## Global Buffer
 
 Copy [this script](https://github.com/narodnik/weechat-global-buffer/blob/main/buffclone.py) 
-to `~/.weechat/python/autoload/`, and you will create a single buffer 
+to `~/.local/share/weechat/python/autoload/`, and you will create a single buffer 
 which aggregates messages from all channels. It's useful to monitor 
 activity from all channels without needing to flick through them.
 
