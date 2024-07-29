@@ -703,6 +703,24 @@ impl Stage {
         }
     }
 
+    fn process_method(&mut self, method: GraphicsMethod) {
+        //debug!(target: "gfx", "Received method: {:?}", method);
+        match method {
+            GraphicsMethod::NewTexture((width, height, data, sendr)) => {
+                self.method_new_texture(width, height, data, sendr)
+            }
+            GraphicsMethod::DeleteTexture(texture) => self.method_delete_texture(texture),
+            GraphicsMethod::NewVertexBuffer((verts, sendr)) => {
+                self.method_new_vertex_buffer(verts, sendr)
+            }
+            GraphicsMethod::NewIndexBuffer((indices, sendr)) => {
+                self.method_new_index_buffer(indices, sendr)
+            }
+            GraphicsMethod::DeleteBuffer(buffer) => self.method_delete_buffer(buffer),
+            GraphicsMethod::ReplaceDrawCalls(dcs) => self.method_replace_draw_calls(dcs),
+        };
+    }
+
     fn method_new_texture(
         &mut self,
         width: u16,
@@ -768,32 +786,24 @@ impl EventHandler for Stage {
 
         // Only allow 20 ms, process as much as we can during that time
         let elapsed_since_draw = self.last_draw_time.unwrap().elapsed();
+
         // We're long overdue a redraw. Exit for now
-        if elapsed_since_draw > Duration::from_millis(20) {
+        if elapsed_since_draw > Duration::from_millis(40) {
+            // Process any requests if the device has a low framerate
+            while let Ok(method) = self.method_rep.try_recv() {
+                self.process_method(method);
+            }
             return
         }
+
         // The next redraw must happen 20ms since its last one.
         // Calculate how much time is remaining until then.
-        let allowed_time = Duration::from_millis(20) - elapsed_since_draw;
+        let allowed_time = Duration::from_millis(40) - elapsed_since_draw;
         let deadline = Instant::now() + allowed_time;
 
         loop {
             let Ok(method) = self.method_rep.recv_deadline(deadline) else { break };
-            //debug!(target: "gfx", "Received method: {:?}", method);
-            match method {
-                GraphicsMethod::NewTexture((width, height, data, sendr)) => {
-                    self.method_new_texture(width, height, data, sendr)
-                }
-                GraphicsMethod::DeleteTexture(texture) => self.method_delete_texture(texture),
-                GraphicsMethod::NewVertexBuffer((verts, sendr)) => {
-                    self.method_new_vertex_buffer(verts, sendr)
-                }
-                GraphicsMethod::NewIndexBuffer((indices, sendr)) => {
-                    self.method_new_index_buffer(indices, sendr)
-                }
-                GraphicsMethod::DeleteBuffer(buffer) => self.method_delete_buffer(buffer),
-                GraphicsMethod::ReplaceDrawCalls(dcs) => self.method_replace_draw_calls(dcs),
-            };
+            self.process_method(method);
         }
     }
 
