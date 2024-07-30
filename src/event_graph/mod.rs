@@ -101,7 +101,7 @@ pub struct EventGraph {
     /// `TipRep` message telling peers about our unreferenced tips.
     broadcasted_ids: RwLock<HashSet<blake3::Hash>>,
     /// DAG Pruning Task
-    prune_task: OnceCell<StoppableTaskPtr>,
+    pub prune_task: OnceCell<StoppableTaskPtr>,
     /// Event publisher, this notifies whenever an event is
     /// inserted into the DAG
     pub event_pub: PublisherPtr<Event>,
@@ -167,14 +167,13 @@ impl EventGraph {
 
         // Spawn the DAG pruning task
         if days_rotation > 0 {
-            let self__ = self_.clone();
             let prune_task = StoppableTask::new();
             let _ = self_.prune_task.set(prune_task.clone()).await;
 
             prune_task.clone().start(
                 self_.clone().dag_prune_task(days_rotation),
                 |_| async move {
-                    self__.clone()._handle_stop(sled_db).await;
+                    info!(target: "event_graph::_handle_stop()", "[EVENTGRAPH] Prune task stopped, flushing sled")
                 },
                 Error::DetachedTaskStopped,
                 ex.clone(),
@@ -186,11 +185,6 @@ impl EventGraph {
 
     pub fn days_rotation(&self) -> u64 {
         self.days_rotation
-    }
-
-    async fn _handle_stop(&self, sled_db: sled::Db) {
-        info!(target: "event_graph::_handle_stop()", "[EVENTGRAPH] Prune task stopped, flushing sled");
-        sled_db.flush_async().await.unwrap();
     }
 
     /// Sync the DAG from connected peers

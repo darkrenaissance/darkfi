@@ -260,6 +260,8 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     )
     .await?;
 
+    let prune_task = event_graph.prune_task.get().unwrap();
+
     info!("Registering EventGraph P2P protocol");
     let event_graph_ = Arc::clone(&event_graph);
     let registry = p2p.protocol_registry();
@@ -413,6 +415,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
 
     info!("Stopping IRC server");
     irc_task.stop().await;
+    prune_task.stop().await;
 
     info!("Flushing sled database...");
     let flushed_bytes = sled_db.flush_async().await?;
