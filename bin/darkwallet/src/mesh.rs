@@ -18,9 +18,9 @@
 
 use crate::{
     error::Result,
-    gfx2::{Point, Rectangle, RenderApi, Vertex},
+    gfx2::{DrawMesh, Point, Rectangle, RenderApi, Vertex},
 };
-use miniquad::BufferId;
+use miniquad::{BufferId, TextureId};
 
 pub type Color = [f32; 4];
 
@@ -38,6 +38,27 @@ pub struct MeshInfo {
     pub vertex_buffer: BufferId,
     pub index_buffer: BufferId,
     pub num_elements: i32,
+}
+
+impl MeshInfo {
+    /// Convenience method
+    pub fn draw_with_texture(self, texture: TextureId) -> DrawMesh {
+        DrawMesh {
+            vertex_buffer: self.vertex_buffer,
+            index_buffer: self.index_buffer,
+            texture: Some(texture),
+            num_elements: self.num_elements,
+        }
+    }
+    /// Convenience method
+    pub fn draw_untextured(self) -> DrawMesh {
+        DrawMesh {
+            vertex_buffer: self.vertex_buffer,
+            index_buffer: self.index_buffer,
+            texture: None,
+            num_elements: self.num_elements,
+        }
+    }
 }
 
 pub struct MeshBuilder {
