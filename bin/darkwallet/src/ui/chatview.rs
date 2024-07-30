@@ -265,8 +265,11 @@ impl ChatView {
             return
         }
         debug!(target: "ui::chatview", "inside rect");
-        let scroll = self.scroll.get();
-        self.scroll.set(scroll + wheel_y * 50.);
+        let mut scroll = self.scroll.get() + wheel_y * 50.;
+        if scroll < 0. {
+            scroll = 0.;
+        }
+        self.scroll.set(scroll);
         self.scrollview().await;
     }
 
@@ -485,7 +488,12 @@ impl ChatView {
 
         // Pages start at the bottom.
         let mut current_idx = 0;
-        'pageloop: for page in pages {
+        for page in pages {
+            let page_off_y = descent + baseline + current_idx as f32 * line_height;
+            if page_off_y > clip.h {
+                break
+            }
+
             let mut mesh = MeshBuilder::new();
 
             for msg in page.msgs {
@@ -505,10 +513,6 @@ impl ChatView {
                 let last_idx = lines.len() - 1;
                 for (i, line) in lines.into_iter().enumerate() {
                     let off_y = descent + baseline + current_idx as f32 * line_height;
-
-                    //if px_height > clip.h {
-                    //    break 'pageloop;
-                    //}
 
                     if i == last_idx {
                         section = 0;
