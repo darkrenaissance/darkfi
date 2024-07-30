@@ -514,6 +514,7 @@ impl ChatView {
         let font_size = self.font_size.get();
         let line_height = self.line_height.get();
         let baseline = self.baseline.get();
+        let scroll = self.scroll.get();
 
         let mut instrs = vec![];
 
@@ -527,7 +528,7 @@ impl ChatView {
         let pages = self.pages2.lock().unwrap().clone();
         let mut current_height = descent;
         for page in pages {
-            if current_height > rect.h {
+            if current_height > scroll + rect.h {
                 break
             }
 
@@ -557,17 +558,20 @@ impl ChatView {
             // Because we use the scissor, our actual rect is now rect instead of parent_rect
             let off_x = 0.;
             // This calc decides whether scroll is in terms of pages or pixels
-            let off_y = (self.scroll.get() - current_height + rect.h) / rect.h;
+            let off_y = (scroll - current_height + rect.h) / rect.h;
             let scale_x = 1. / rect.w;
             let scale_y = 1. / rect.h;
             let model = glam::Mat4::from_translation(glam::Vec3::new(off_x, off_y, 0.)) *
                 glam::Mat4::from_scale(glam::Vec3::new(scale_x, scale_y, 1.));
 
             instrs.push(DrawInstruction::ApplyMatrix(model));
-
             instrs.push(DrawInstruction::Draw(mesh_inf.mesh));
 
             current_height += mesh_inf.px_height;
+        }
+
+        if current_height < scroll + rect.h {
+            debug!(target: "ui::chatview", "draw_cached() loading more pages");
         }
 
         instrs
