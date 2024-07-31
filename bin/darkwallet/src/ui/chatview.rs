@@ -389,8 +389,7 @@ impl ChatView {
         if scroll < 0. {
             scroll = 0.;
         }
-        self.scroll.set(scroll);
-        self.scrollview().await;
+        self.scrollview(scroll).await;
     }
 
     async fn handle_mouse_move(&self, mouse_x: f32, mouse_y: f32) {
@@ -427,14 +426,19 @@ impl ChatView {
                 // TODO we are maybe doing too many updates so make a widget to 'slow down'
                 // how often we move to fixed intervals.
                 // draw a poly shape and eval each line segment.
-                self.scroll.set(start_scroll + dist);
-                self.scrollview().await;
+                let scroll = start_scroll + dist;
+                self.scrollview(scroll).await;
             }
             TouchPhase::Ended => {
                 // Now calculate scroll acceleration
             }
             TouchPhase::Cancelled => {}
         }
+    }
+
+    /// Descent = line height - baseline
+    fn descent(&self) -> f32 {
+        self.line_height.get() - self.baseline.get()
     }
 
     /// Beware of this method. Here be dragons.
@@ -472,12 +476,33 @@ impl ChatView {
     }
 
     async fn populate(&self) {
-        let mut pages = vec![];
-        let mut pages_len = 0;
+        let iter = self.tree.iter();
+        self.load_n_pages(iter, PRELOAD_PAGES).await;
+    }
 
+    /// Load an extra page
+    async fn preload_pages(&self) -> usize {
+        // Get last page
+        let last_page = self.pages2.lock().unwrap().last().unwrap().clone();
+        // get the current earliest timestamp
+        let last_timest = last_page.msgs.last().unwrap().timest;
+
+        // iterate from there
+        let key = last_timest.to_be_bytes();
+        let iter = self.tree.range(..key);
+
+        self.load_n_pages(iter, PRELOAD_PAGES).await
+    }
+
+    async fn load_n_pages<I: Iterator<Item = sled::Result<(sled::IVec, sled::IVec)>>>(
+        &self,
+        iter: I,
+        n: usize,
+    ) -> usize {
+        let mut pages_len = 0;
         let mut msgs = vec![];
 
-        for entry in self.tree.iter().rev() {
+        for entry in iter {
             let Ok((k, v)) = entry else { break };
             assert_eq!(k.len(), 4);
             let key_bytes: [u8; 4] = k.as_ref().try_into().unwrap();
@@ -496,42 +521,34 @@ impl ChatView {
             msgs.push(Message { timest, chatmsg, glyphs });
 
             if msgs.len() >= LINES_PER_PAGE {
-                let page = Page2::new(msgs.clone(), &self.render_api).await;
+                let msgs = std::mem::take(&mut msgs);
+                let page = Page2::new(msgs, &self.render_api).await;
 
                 self.pages2.lock().unwrap().push(page);
-                pages_len += 1;
 
-                if pages_len >= PRELOAD_PAGES {
+                if pages_len >= n {
                     break
                 }
             }
         }
-        debug!(target: "ui::chatview", "populated {} pages", pages.len());
-        *self.pages.lock().unwrap() = pages;
+        debug!(target: "ui::chatview", "populated {} pages", pages_len);
+
+        pages_len
     }
 
-    async fn draw_cached(&self, mut rect: Rectangle) -> Vec<DrawInstruction> {
+    async fn get_total_height(&self, rect: &Rectangle, pages: &Vec<Page2Ptr>) -> f32 {
         let font_size = self.font_size.get();
         let line_height = self.line_height.get();
         let baseline = self.baseline.get();
-        let scroll = self.scroll.get();
-
-        let mut instrs = vec![];
 
         let timest_color = self.timestamp_color.get();
         let text_color = self.text_color.get();
         let nick_colors = self.read_nick_colors();
 
         // Nudge the bottom line up slightly, otherwise chars like p will cross the bottom.
-        let descent = line_height - baseline;
+        let mut current_height = self.descent();
 
-        let pages = self.pages2.lock().unwrap().clone();
-        let mut current_height = descent;
         for page in pages {
-            if current_height > scroll + rect.h {
-                break
-            }
-
             let mesh_inf = page.mesh_inf.lock().unwrap().clone();
             let mesh_inf = match mesh_inf {
                 Some(mesh_inf) => mesh_inf,
@@ -553,12 +570,45 @@ impl ChatView {
                 }
             };
 
+            current_height += mesh_inf.px_height;
+        }
+
+        current_height
+    }
+
+    async fn draw_cached(&self, mut rect: Rectangle, scroll: &mut f32) -> Vec<DrawInstruction> {
+        let mut instrs = vec![];
+
+        // Make sure we have enough pages loaded.
+        // If there's no more to load then adjust the scroll.
+        let mut pages = self.pages2.lock().unwrap().clone();
+        while self.get_total_height(&rect, &pages).await < *scroll + rect.h {
+            debug!(target: "ui::chatview", "draw_cached() loading more pages");
+
+            if self.preload_pages().await == 0 {
+                // No more pages available to load
+                pages = self.pages2.lock().unwrap().clone();
+                let new_height = self.get_total_height(&rect, &pages).await;
+                *scroll = new_height - rect.h;
+                break
+            }
+        }
+
+        let mut current_height = self.descent();
+        for page in pages {
+            if current_height > *scroll + rect.h {
+                break
+            }
+
+            let mesh_inf = page.mesh_inf.lock().unwrap().clone();
+            let mesh_inf = mesh_inf.expect("preload above should've regen_mesh()");
+
             // Apply scroll and scissor
             // We use the scissor for scrolling
             // Because we use the scissor, our actual rect is now rect instead of parent_rect
             let off_x = 0.;
             // This calc decides whether scroll is in terms of pages or pixels
-            let off_y = (scroll - current_height + rect.h) / rect.h;
+            let off_y = (*scroll - current_height + rect.h) / rect.h;
             let scale_x = 1. / rect.w;
             let scale_y = 1. / rect.h;
             let model = glam::Mat4::from_translation(glam::Vec3::new(off_x, off_y, 0.)) *
@@ -570,16 +620,12 @@ impl ChatView {
             current_height += mesh_inf.px_height;
         }
 
-        if current_height < scroll + rect.h {
-            debug!(target: "ui::chatview", "draw_cached() loading more pages");
-        }
-
         instrs
     }
 
     /// Basically a version of redraw() where regen_mesh() is never called.
     /// Instead we use the cached version.
-    async fn scrollview(&self) {
+    async fn scrollview(&self, mut scroll: f32) {
         debug!(target: "ui::chatview", "scrollview()");
         let sg = self.sg.lock().await;
         let node = sg.get_node(self.node_id).unwrap();
@@ -596,7 +642,7 @@ impl ChatView {
             panic!("Node {:?} bad rect property", node);
         };
 
-        let mut mesh_instrs = self.draw_cached(rect.clone()).await;
+        let mut mesh_instrs = self.draw_cached(rect.clone(), &mut scroll).await;
         let mut instrs = vec![DrawInstruction::ApplyViewport(rect)];
         instrs.append(&mut mesh_instrs);
 
@@ -604,6 +650,8 @@ impl ChatView {
             vec![(self.dc_key, DrawCall { instrs, dcs: vec![], z_index: self.z_index.get() })];
 
         self.render_api.replace_draw_calls(draw_calls).await;
+
+        self.scroll.set(scroll);
     }
 
     async fn redraw(&self) {
@@ -684,7 +732,7 @@ impl ChatView {
 
         (instrs, old_drawmesh)
 
-            /*
+        /*
         if DEBUG_RENDER {
             let mut debug_mesh = MeshBuilder::new();
             debug_mesh.draw_outline(
