@@ -476,11 +476,11 @@ impl ChatView {
     }
 
     async fn populate(&self) {
-        let iter = self.tree.iter();
+        let iter = self.tree.iter().rev();
         self.load_n_pages(iter, PRELOAD_PAGES).await;
     }
 
-    /// Load an extra page
+    /// Load extra pages
     async fn preload_pages(&self) -> usize {
         // Get last page
         let last_page = self.pages2.lock().unwrap().last().unwrap().clone();
@@ -489,7 +489,8 @@ impl ChatView {
 
         // iterate from there
         let key = last_timest.to_be_bytes();
-        let iter = self.tree.range(..key);
+        debug!(target: "ui::chatview", "preloading from {key:?}");
+        let iter = self.tree.range(..key).rev();
 
         self.load_n_pages(iter, PRELOAD_PAGES).await
     }
@@ -508,7 +509,7 @@ impl ChatView {
             let key_bytes: [u8; 4] = k.as_ref().try_into().unwrap();
             let timest = Timestamp::from_be_bytes(key_bytes);
             let chatmsg: ChatMsg = deserialize(&v).unwrap();
-            //println!("{k:?} {chatmsg:?}");
+            debug!(target: "ui::chatview", "{k:?} {chatmsg:?}");
 
             let timestr = timest.to_string();
             // left pad with zeros
@@ -525,12 +526,22 @@ impl ChatView {
                 let page = Page2::new(msgs, &self.render_api).await;
 
                 self.pages2.lock().unwrap().push(page);
+                pages_len += 1;
 
                 if pages_len >= n {
                     break
                 }
             }
         }
+
+        // Any remaining messages added to a short page
+        if !msgs.is_empty() {
+            let page = Page2::new(msgs, &self.render_api).await;
+
+            self.pages2.lock().unwrap().push(page);
+            pages_len += 1;
+        }
+
         debug!(target: "ui::chatview", "populated {} pages", pages_len);
 
         pages_len
