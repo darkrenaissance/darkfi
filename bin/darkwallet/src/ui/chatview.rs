@@ -115,9 +115,6 @@ impl Page2 {
         timestamp_color: Color,
         text_color: Color,
     ) -> (PageMeshInfo, Option<DrawMesh>) {
-        // Nudge the bottom line up slightly, otherwise chars like p will cross the bottom.
-        //let descent = line_height - baseline;
-
         let mut wrapped_line_idx = 0;
 
         let mut mesh = MeshBuilder::new();
@@ -138,11 +135,15 @@ impl Page2 {
             lines.reverse();
             let last_idx = lines.len() - 1;
             for (i, line) in lines.into_iter().enumerate() {
-                let off_y = wrapped_line_idx as f32 * line_height;
+                let off_y = (wrapped_line_idx + 1) as f32 * line_height;
 
                 if i == last_idx {
                     section = 0;
                 }
+
+                // debug draw baseline
+                //let y = baseline - off_y;
+                //mesh.draw_filled_box(&Rectangle { x: 0., y: y - 1., w: clip.w, h: 1. }, COLOR_BLUE);
 
                 // Render line
                 let mut glyph_pos_iter = GlyphPositionIter::new(font_size, &line, baseline);
@@ -157,6 +158,7 @@ impl Page2 {
                         _ => text_color,
                     };
 
+                    //mesh.draw_outline(&glyph_rect, COLOR_BLUE, 2.);
                     mesh.draw_box(&glyph_rect, color, uv_rect);
 
                     if section < 2 && is_whitespace(&glyph.substr) {
@@ -385,10 +387,7 @@ impl ChatView {
             return
         }
         //debug!(target: "ui::chatview", "inside rect");
-        let mut scroll = self.scroll.get() + wheel_y * 50.;
-        if scroll < 0. {
-            scroll = 0.;
-        }
+        let scroll = self.scroll.get() + wheel_y * 50.;
         self.scrollview(scroll).await;
     }
 
@@ -590,6 +589,10 @@ impl ChatView {
     async fn draw_cached(&self, mut rect: Rectangle, scroll: &mut f32) -> Vec<DrawInstruction> {
         let mut instrs = vec![];
 
+        if *scroll < 0. {
+            *scroll = 0.;
+        }
+
         // Make sure we have enough pages loaded.
         // If there's no more to load then adjust the scroll.
         let mut pages = self.pages2.lock().unwrap().clone();
@@ -605,7 +608,8 @@ impl ChatView {
             }
         }
 
-        let mut current_height = self.descent();
+        let descent = self.descent();
+        let mut current_height = 0.;
         for page in pages {
             if current_height > *scroll + rect.h {
                 break
@@ -692,6 +696,7 @@ impl ChatView {
         let font_size = self.font_size.get();
         let line_height = self.line_height.get();
         let baseline = self.baseline.get();
+        let descent = self.descent();
 
         let mut instrs = vec![];
         let mut old_drawmesh = vec![];
@@ -700,17 +705,17 @@ impl ChatView {
         let text_color = self.text_color.get();
         let nick_colors = self.read_nick_colors();
 
-        // Nudge the bottom line up slightly, otherwise chars like p will cross the bottom.
-        let descent = line_height - baseline;
-
         let pages = self.pages2.lock().unwrap().clone();
-        let mut current_height = descent;
+
+        let mut mesh_infs = vec![];
+        // First pass is to measure the height and generate the meshes
+        let mut current_height = 0.;
         for page in pages {
             if current_height > rect.h {
                 break
             }
 
-            let (mesh_inf, old_drawmesh) = page
+            let (mesh_inf, old) = page
                 .regen_mesh(
                     &rect,
                     &self.render_api,
@@ -723,12 +728,40 @@ impl ChatView {
                 )
                 .await;
 
+            current_height += mesh_inf.px_height;
+
+            if let Some(old) = old {
+                old_drawmesh.push(old);
+            }
+            mesh_infs.push(mesh_inf);
+        }
+
+        let total_height = current_height + descent;
+
+        // If lines aren't enough to fill the available buffer then start from the top
+        let start_pos = if total_height < rect.h {
+            total_height
+        } else {
+            rect.h
+        };
+
+        let mut scroll = self.scroll.get();
+        assert!(scroll >= 0.);
+        //debug!("current_heihgt = {current_height}");
+        //if current_height < scroll + rect.h {
+        //    scroll = current_height - rect.h;
+        //    //debug!("scroll = {scroll}");
+        //    self.scroll.set(scroll);
+        //}
+
+        let mut current_height = 0.;
+        for mesh_inf in mesh_infs {
             // Apply scroll and scissor
             // We use the scissor for scrolling
             // Because we use the scissor, our actual rect is now rect instead of parent_rect
             let off_x = 0.;
             // This calc decides whether scroll is in terms of pages or pixels
-            let off_y = (self.scroll.get() - current_height + rect.h) / rect.h;
+            let off_y = (scroll + start_pos - current_height) / rect.h;
             let scale_x = 1. / rect.w;
             let scale_y = 1. / rect.h;
             let model = glam::Mat4::from_translation(glam::Vec3::new(off_x, off_y, 0.)) *

@@ -132,21 +132,24 @@ impl MeshBuilder {
         self.append(verts, indices);
     }
 
-    pub fn draw_outline(&mut self, obj: &Rectangle, color: Color, thickness: f32) {
+    pub fn draw_filled_box(&mut self, obj: &Rectangle, color: Color) {
         let uv = Rectangle { x: 0., y: 0., w: 0., h: 0. };
+        self.draw_box(obj, color, &uv);
+    }
 
+    pub fn draw_outline(&mut self, obj: &Rectangle, color: Color, thickness: f32) {
         let (x1, y1) = obj.top_left().unpack();
         let (dist_x, dist_y) = (obj.w, obj.h);
         let (x2, y2) = obj.bottom_right().unpack();
 
         // top
-        self.draw_box(&Rectangle::new(x1, y1, dist_x, thickness), color, &uv);
+        self.draw_filled_box(&Rectangle::new(x1, y1, dist_x, thickness), color);
         // left
-        self.draw_box(&Rectangle::new(x1, y1, thickness, dist_y), color, &uv);
+        self.draw_filled_box(&Rectangle::new(x1, y1, thickness, dist_y), color);
         // right
-        self.draw_box(&Rectangle::new(x2 - thickness, y1, thickness, dist_y), color, &uv);
+        self.draw_filled_box(&Rectangle::new(x2 - thickness, y1, thickness, dist_y), color);
         // bottom
-        self.draw_box(&Rectangle::new(x1, y2 - thickness, dist_x, thickness), color, &uv);
+        self.draw_filled_box(&Rectangle::new(x1, y2 - thickness, dist_x, thickness), color);
     }
 
     pub async fn alloc(self, render_api: &RenderApi) -> Result<MeshInfo> {

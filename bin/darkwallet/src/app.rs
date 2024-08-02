@@ -573,7 +573,7 @@ impl App {
         prop.set_expr(3, code).unwrap();
         node.set_property_f32("font_size", 20.).unwrap();
         node.set_property_f32("line_height", 30.).unwrap();
-        node.set_property_f32("baseline", 10.).unwrap();
+        node.set_property_f32("baseline", 20.).unwrap();
         node.set_property_u32("z_index", 1).unwrap();
 
         let prop = node.get_property("timestamp_color").unwrap();
