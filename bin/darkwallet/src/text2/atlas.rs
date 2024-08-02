@@ -34,6 +34,7 @@ pub async fn make_texture_atlas(
 ///     let uv = atlas.fetch_uv(glyph_id).unwrap();
 ///     let atlas_texture_id = atlas.texture_id;
 /// ```
+#[derive(Clone)]
 pub struct Atlas<'a> {
     glyph_ids: Vec<u32>,
     sprites: Vec<SpritePtr>,

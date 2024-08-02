@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use async_lock::Mutex as AsyncMutex;
 use darkfi_serial::{deserialize, Decodable, Encodable, SerialDecodable, SerialEncodable};
 use miniquad::TouchPhase;
 use rand::{rngs::OsRng, Rng};
@@ -84,7 +85,7 @@ type Page2Ptr = Arc<Page2>;
 
 struct Page2 {
     msgs: Vec<Message>,
-    atlas: text2::RenderedAtlas,
+    atlas: SyncMutex<text2::RenderedAtlas>,
     // One draw call per page.
     // Resizing the canvas means we recalc wrapping and the mesh changes
     mesh_inf: SyncMutex<Option<PageMeshInfo>>,
@@ -101,7 +102,7 @@ impl Page2 {
             panic!("unable to make atlas!");
         };
 
-        Arc::new(Self { msgs, atlas, mesh_inf: SyncMutex::new(None) })
+        Arc::new(Self { msgs, atlas: SyncMutex::new(atlas), mesh_inf: SyncMutex::new(None) })
     }
 
     /// Regenerates the mesh, returning the old mesh which should be freed
@@ -120,6 +121,7 @@ impl Page2 {
 
         let mut mesh = MeshBuilder::new();
 
+        let atlas = self.atlas.lock().unwrap().clone();
         for msg in &self.msgs {
             let glyphs = &msg.glyphs;
 
@@ -149,8 +151,7 @@ impl Page2 {
                 // Render line
                 let mut glyph_pos_iter = GlyphPositionIter::new(font_size, &line, baseline);
                 for (mut glyph_rect, glyph) in glyph_pos_iter.zip(line.iter()) {
-                    let uv_rect =
-                        self.atlas.fetch_uv(glyph.glyph_id).expect("missing glyph UV rect");
+                    let uv_rect = atlas.fetch_uv(glyph.glyph_id).expect("missing glyph UV rect");
                     glyph_rect.y -= off_y;
 
                     let color = match section {
@@ -173,7 +174,7 @@ impl Page2 {
         let px_height = wrapped_line_idx as f32 * line_height;
 
         let mesh = mesh.alloc(render_api).await.unwrap();
-        let mesh = mesh.draw_with_texture(self.atlas.texture_id);
+        let mesh = mesh.draw_with_texture(atlas.texture_id);
 
         let mesh_inf = PageMeshInfo { px_height, mesh };
 
@@ -216,7 +217,7 @@ pub struct ChatView {
     tree: sled::Tree,
 
     pages: SyncMutex<Vec<Page>>,
-    pages2: SyncMutex<Vec<Page2Ptr>>,
+    pages2: AsyncMutex<Vec<Page2Ptr>>,
     drawcalls: SyncMutex<Vec<DrawMesh>>,
     dc_key: u64,
 
@@ -308,7 +309,7 @@ impl ChatView {
                 tree,
 
                 pages: SyncMutex::new(Vec::new()),
-                pages2: SyncMutex::new(Vec::new()),
+                pages2: AsyncMutex::new(Vec::new()),
                 drawcalls: SyncMutex::new(Vec::new()),
                 dc_key: OsRng.gen(),
 
@@ -475,7 +476,6 @@ impl ChatView {
     async fn handle_insert_line(&self, timest: u32, nick: String, text: String) {
         debug!(target: "ui::chatview", "handle_insert_line({timest}, {nick}, {text})");
 
-        /*
         let chatmsg = ChatMsg { nick, text };
 
         let timestr = timest.to_string();
@@ -488,7 +488,7 @@ impl ChatView {
 
         // Now add message to page
 
-        let mut pages = self.pages2.lock().unwrap();
+        let mut pages = self.pages2.lock().await;
         let mut idx = None;
         for (i, page) in pages.iter_mut().enumerate() {
             let first_timest = page.msgs.first().unwrap().timest;
@@ -503,15 +503,20 @@ impl ChatView {
         }
         let idx = idx.unwrap();
 
-        let mut msgs = pages[idx].msgs.clone();
-
+        let page = &mut pages[idx];
+        let mut msgs = page.msgs.clone();
         msgs.push(Message { timest, chatmsg, glyphs });
         msgs.sort_unstable_by_key(|msg| msg.timest);
+        msgs.reverse();
 
         let new_page = Page2::new(msgs, &self.render_api).await;
-        let _ = std::mem::replace(&mut pages[idx], new_page);
+        std::mem::replace(page, new_page);
+
         drop(pages);
-        */
+
+        // This will refresh the view, so we just use this
+        let mut scroll = self.scroll.get();
+        self.scrollview(scroll).await;
     }
 
     /// Descent = line height - baseline
@@ -561,7 +566,7 @@ impl ChatView {
     /// Load extra pages
     async fn preload_pages(&self) -> usize {
         // Get last page
-        let last_page = self.pages2.lock().unwrap().last().unwrap().clone();
+        let last_page = self.pages2.lock().await.last().unwrap().clone();
         // get the current earliest timestamp
         let last_timest = last_page.msgs.last().unwrap().timest;
 
@@ -603,7 +608,7 @@ impl ChatView {
                 let msgs = std::mem::take(&mut msgs);
                 let page = Page2::new(msgs, &self.render_api).await;
 
-                self.pages2.lock().unwrap().push(page);
+                self.pages2.lock().await.push(page);
                 pages_len += 1;
 
                 if pages_len >= n {
@@ -616,7 +621,7 @@ impl ChatView {
         if !msgs.is_empty() {
             let page = Page2::new(msgs, &self.render_api).await;
 
-            self.pages2.lock().unwrap().push(page);
+            self.pages2.lock().await.push(page);
             pages_len += 1;
         }
 
@@ -674,13 +679,13 @@ impl ChatView {
 
         // Make sure we have enough pages loaded.
         // If there's no more to load then adjust the scroll.
-        let mut pages = self.pages2.lock().unwrap().clone();
+        let mut pages = self.pages2.lock().await.clone();
         while self.get_total_height(&rect, &pages).await < *scroll + rect.h {
             debug!(target: "ui::chatview", "draw_cached() loading more pages");
 
             if self.preload_pages().await == 0 {
                 // No more pages available to load
-                pages = self.pages2.lock().unwrap().clone();
+                pages = self.pages2.lock().await.clone();
                 let new_height = self.get_total_height(&rect, &pages).await;
                 *scroll = new_height - rect.h;
                 break
@@ -784,7 +789,7 @@ impl ChatView {
         let text_color = self.text_color.get();
         let nick_colors = self.read_nick_colors();
 
-        let pages = self.pages2.lock().unwrap().clone();
+        let pages = self.pages2.lock().await.clone();
 
         let mut mesh_infs = vec![];
         // First pass is to measure the height and generate the meshes
