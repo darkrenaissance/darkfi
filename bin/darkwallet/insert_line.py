@@ -3,7 +3,7 @@ from gui import *
 node_id = api.lookup_node_id("/window/view/chatty")
 
 arg_data = bytearray()
-serial.write_u32(arg_data, 110)
+serial.write_u32(arg_data, 2245)
 serial.encode_str(arg_data, "nick")
 serial.encode_str(arg_data, "hello1234")
 

@@ -498,10 +498,10 @@ impl ChatView {
                 idx = Some(i);
             }
         }
-        if idx.is_none() {
-            idx = Some(pages.len() - 1);
-        }
-        let idx = idx.unwrap();
+        let idx = match idx {
+            Some(idx) => idx,
+            None => 0,
+        };
 
         let page = &mut pages[idx];
         let mut msgs = page.msgs.clone();
