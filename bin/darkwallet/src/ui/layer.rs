@@ -144,6 +144,10 @@ impl RenderLayer {
                 Pimpl::EditBox(editb) => editb.draw(&sg, &rect).await,
                 Pimpl::ChatView(chat) => chat.draw(&sg, &rect).await,
                 Pimpl::Image(img) => img.draw(&sg, &rect).await,
+                Pimpl::Button(btn) => {
+                    btn.set_parent_rect(&rect);
+                    continue
+                }
                 _ => {
                     error!(target: "ui::layer", "unhandled pimpl type");
                     continue

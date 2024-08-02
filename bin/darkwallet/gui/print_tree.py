@@ -43,6 +43,8 @@ def print_node_info(parent_id, indent):
                 child_type = "chat_view"
             case SceneNodeType.EDIT_BOX:
                 child_type = "edit_box"
+            case SceneNodeType.BUTTON:
+                child_type = "button"
 
         desc = f"{ws}{child_name}:{child_id}/"
         desc += " "*(50 - len(desc))

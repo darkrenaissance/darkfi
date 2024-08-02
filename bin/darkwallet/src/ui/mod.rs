@@ -27,6 +27,8 @@ use crate::{
     scene::{SceneGraph, SceneNode, SceneNodeId, SceneNodeType},
 };
 
+mod button;
+pub use button::{Button, ButtonPtr};
 pub mod chatview;
 pub use chatview::{ChatView, ChatViewPtr};
 mod editbox;

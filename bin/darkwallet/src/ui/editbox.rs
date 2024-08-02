@@ -681,6 +681,9 @@ impl EditBox {
             self.selected.set_null(0).unwrap();
             self.selected.set_null(1).unwrap();
             focus_changed = true;
+        } else {
+            // Do nothing. Click was outside editbox, and editbox wasn't focused
+            return
         }
 
         // Further on_focus logic change is handled by property modified callback
@@ -691,7 +694,7 @@ impl EditBox {
             self.redraw().await;
         }
     }
-    fn handle_mouse_btn_up(&self, btn: MouseButton, x: f32, y: f32) {
+    fn handle_mouse_btn_up(&self, btn: MouseButton, _mouse_x: f32, _mouse_y: f32) {
         if btn != MouseButton::Left {
             return
         }

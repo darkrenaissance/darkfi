@@ -738,17 +738,16 @@ impl ChatView {
         let total_height = current_height + descent;
 
         // If lines aren't enough to fill the available buffer then start from the top
-        let start_pos = if total_height < rect.h {
-            total_height
-        } else {
-            rect.h
-        };
+        let start_pos = if total_height < rect.h { total_height } else { rect.h };
 
         let mut scroll = self.scroll.get();
         assert!(scroll >= 0.);
         // For when we resize the window and scroll is no longer valid
         let max_allowed_scroll = total_height - rect.h;
-        debug!("max_allowed_scroll = {max_allowed_scroll} = total_height={total_height} - rect.h={}", rect.h);
+        debug!(
+            "max_allowed_scroll = {max_allowed_scroll} = total_height={total_height} - rect.h={}",
+            rect.h
+        );
         if scroll > max_allowed_scroll {
             scroll = max_allowed_scroll;
             self.scroll.set(scroll);

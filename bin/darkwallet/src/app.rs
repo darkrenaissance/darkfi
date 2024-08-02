@@ -27,7 +27,7 @@ use crate::{
     prop::{Property, PropertySubType, PropertyType},
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId, SceneNodeType},
     text2::TextShaperPtr,
-    ui::{chatview, ChatView, EditBox, Image, Mesh, RenderLayer, Stoppable, Text, Window},
+    ui::{chatview, Button, ChatView, EditBox, Image, Mesh, RenderLayer, Stoppable, Text, Window},
 };
 
 //fn print_type_of<T>(_: &T) {
@@ -272,6 +272,87 @@ impl App {
             indices,
         )
         .await;
+        let mut sg = self.sg.lock().await;
+        let node = sg.get_node_mut(node_id).unwrap();
+        node.pimpl = pimpl;
+
+        sg.link(node_id, layer_node_id).unwrap();
+
+        // Create button bg
+        let node_id = create_mesh(&mut sg, "btnbg");
+
+        let node = sg.get_node_mut(node_id).unwrap();
+        let prop = node.get_property("rect").unwrap();
+        let code = vec![Op::Sub((
+            Box::new(Op::LoadVar("w".to_string())),
+            Box::new(Op::ConstFloat32(220.)),
+        ))];
+        prop.set_expr(0, code).unwrap();
+        prop.set_f32(1, 10.).unwrap();
+        prop.set_f32(2, 200.).unwrap();
+        prop.set_f32(3, 60.).unwrap();
+
+        // Setup the pimpl
+        let (x1, y1) = (0., 0.);
+        let (x2, y2) = (1., 1.);
+        let verts = if LIGHTMODE {
+            vec![
+                // top left
+                Vertex { pos: [x1, y1], color: [1., 0., 0., 1.], uv: [0., 0.] },
+                // top right
+                Vertex { pos: [x2, y1], color: [1., 0., 0., 1.], uv: [1., 0.] },
+                // bottom left
+                Vertex { pos: [x1, y2], color: [1., 0., 0., 1.], uv: [0., 1.] },
+                // bottom right
+                Vertex { pos: [x2, y2], color: [1., 0., 0., 1.], uv: [1., 1.] },
+            ]
+        } else {
+            vec![
+                // top left
+                Vertex { pos: [x1, y1], color: [1., 0., 0., 1.], uv: [0., 0.] },
+                // top right
+                Vertex { pos: [x2, y1], color: [1., 0., 1., 1.], uv: [1., 0.] },
+                // bottom left
+                Vertex { pos: [x1, y2], color: [0., 0., 1., 1.], uv: [0., 1.] },
+                // bottom right
+                Vertex { pos: [x2, y2], color: [1., 1., 0., 1.], uv: [1., 1.] },
+            ]
+        };
+        let indices = vec![0, 2, 1, 1, 2, 3];
+        drop(sg);
+        let pimpl = Mesh::new(
+            self.ex.clone(),
+            self.sg.clone(),
+            node_id,
+            self.render_api.clone(),
+            verts,
+            indices,
+        )
+        .await;
+        let mut sg = self.sg.lock().await;
+        let node = sg.get_node_mut(node_id).unwrap();
+        node.pimpl = pimpl;
+
+        sg.link(node_id, layer_node_id).unwrap();
+
+        // Create the button
+        let node_id = create_button(&mut sg, "btn");
+
+        let node = sg.get_node_mut(node_id).unwrap();
+        node.set_property_bool("is_active", true).unwrap();
+        let prop = node.get_property("rect").unwrap();
+        let code = vec![Op::Sub((
+            Box::new(Op::LoadVar("w".to_string())),
+            Box::new(Op::ConstFloat32(220.)),
+        ))];
+        prop.set_expr(0, code).unwrap();
+        prop.set_f32(1, 10.).unwrap();
+        prop.set_f32(2, 200.).unwrap();
+        prop.set_f32(3, 60.).unwrap();
+
+        drop(sg);
+        let pimpl =
+            Button::new(self.ex.clone(), self.sg.clone(), node_id, self.event_pub.clone()).await;
         let mut sg = self.sg.lock().await;
         let node = sg.get_node_mut(node_id).unwrap();
         node.pimpl = pimpl;
@@ -701,6 +782,22 @@ pub fn create_mesh(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
     node.add_property(prop).unwrap();
 
     let prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
+    node.id
+}
+
+pub fn create_button(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
+    debug!(target: "app", "create_button({name})");
+    let node = sg.add_node(name, SceneNodeType::Button);
+
+    let mut prop = Property::new("is_active", PropertyType::Bool, PropertySubType::Null);
+    prop.set_ui_text("Is Active", "An active Button can be clicked");
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_array_len(4);
+    prop.allow_exprs();
     node.add_property(prop).unwrap();
 
     node.id
