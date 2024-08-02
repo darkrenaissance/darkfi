@@ -526,7 +526,7 @@ impl ZeroMQAdapter {
                 let node = scene_graph.get_node_mut(node_id).ok_or(Error::NodeNotFound)?;
 
                 let method_name2 = method_name.clone();
-                let (tx, rx) = mpsc::sync_channel::<Result<Vec<u8>>>(0);
+                let (tx, rx) = mpsc::sync_channel::<Result<Vec<u8>>>(1);
                 let response_fn = Box::new(move |result| {
                     debug!(target: "req", "processing callmethod for {}:'{}'", node_id, method_name2);
                     tx.send(result).unwrap();

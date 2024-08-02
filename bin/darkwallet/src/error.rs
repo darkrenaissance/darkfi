@@ -125,4 +125,7 @@ pub enum Error {
 
     #[error("Empty atlas")]
     AtlasIsEmpty = 35,
+
+    #[error("Channel closed")]
+    ChannelClosed = 36,
 }

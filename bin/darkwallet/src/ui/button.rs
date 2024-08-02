@@ -66,27 +66,18 @@ impl Button {
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
             let ev_sub = event_pub.subscribe_mouse_btn_down();
             let me2 = me.clone();
-            let mouse_btn_down_task = ex.spawn(async move {
-                loop {
-                    Self::process_mouse_btn_down(&me2, &ev_sub).await;
-                }
-            });
+            let mouse_btn_down_task =
+                ex.spawn(async move { while Self::process_mouse_btn_down(&me2, &ev_sub).await {} });
 
             let ev_sub = event_pub.subscribe_mouse_btn_up();
             let me2 = me.clone();
-            let mouse_btn_up_task = ex.spawn(async move {
-                loop {
-                    Self::process_mouse_btn_up(&me2, &ev_sub).await;
-                }
-            });
+            let mouse_btn_up_task =
+                ex.spawn(async move { while Self::process_mouse_btn_up(&me2, &ev_sub).await {} });
 
             let ev_sub = event_pub.subscribe_touch();
             let me2 = me.clone();
-            let touch_task = ex.spawn(async move {
-                loop {
-                    Self::process_touch(&me2, &ev_sub).await;
-                }
-            });
+            let touch_task =
+                ex.spawn(async move { while Self::process_touch(&me2, &ev_sub).await {} });
 
             let tasks = vec![mouse_btn_down_task, mouse_btn_up_task, touch_task];
 
@@ -99,10 +90,10 @@ impl Button {
     async fn process_mouse_btn_down(
         me: &Weak<Self>,
         ev_sub: &Subscription<(MouseButton, f32, f32)>,
-    ) {
+    ) -> bool {
         let Ok((btn, mouse_x, mouse_y)) = ev_sub.receive().await else {
             debug!(target: "ui::button", "Event relayer closed");
-            return
+            return false
         };
 
         let Some(self_) = me.upgrade() else {
@@ -111,16 +102,20 @@ impl Button {
         };
 
         if !self_.is_active.get() {
-            return
+            return true
         }
 
         self_.handle_mouse_btn_down(btn, mouse_x, mouse_y);
+        true
     }
 
-    async fn process_mouse_btn_up(me: &Weak<Self>, ev_sub: &Subscription<(MouseButton, f32, f32)>) {
+    async fn process_mouse_btn_up(
+        me: &Weak<Self>,
+        ev_sub: &Subscription<(MouseButton, f32, f32)>,
+    ) -> bool {
         let Ok((btn, mouse_x, mouse_y)) = ev_sub.receive().await else {
             debug!(target: "ui::button", "Event relayer closed");
-            return
+            return false
         };
 
         let Some(self_) = me.upgrade() else {
@@ -129,16 +124,20 @@ impl Button {
         };
 
         if !self_.is_active.get() {
-            return
+            return true
         }
 
         self_.handle_mouse_btn_up(btn, mouse_x, mouse_y).await;
+        true
     }
 
-    async fn process_touch(me: &Weak<Self>, ev_sub: &Subscription<(TouchPhase, u64, f32, f32)>) {
+    async fn process_touch(
+        me: &Weak<Self>,
+        ev_sub: &Subscription<(TouchPhase, u64, f32, f32)>,
+    ) -> bool {
         let Ok((phase, id, touch_x, touch_y)) = ev_sub.receive().await else {
             debug!(target: "ui::button", "Event relayer closed");
-            return
+            return false
         };
 
         let Some(self_) = me.upgrade() else {
@@ -147,10 +146,11 @@ impl Button {
         };
 
         if !self_.is_active.get() {
-            return
+            return true
         }
 
         self_.handle_touch(phase, id, touch_x, touch_y).await;
+        true
     }
 
     fn handle_mouse_btn_down(&self, btn: MouseButton, mouse_x: f32, mouse_y: f32) {

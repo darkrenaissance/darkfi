@@ -22,10 +22,11 @@ use futures::{stream::FuturesUnordered, StreamExt};
 use std::{sync::Arc, thread};
 
 use crate::{
+    error::Error,
     expr::Op,
     gfx2::{GraphicsEventPublisherPtr, RenderApiPtr, Vertex},
     prop::{Property, PropertySubType, PropertyType},
-    scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId, SceneNodeType},
+    scene::{MethodResponseFn, Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId, SceneNodeType},
     text2::TextShaperPtr,
     ui::{chatview, Button, ChatView, EditBox, Image, Mesh, RenderLayer, Stoppable, Text, Window},
 };
@@ -635,7 +636,7 @@ impl App {
         sg.link(node_id, layer_node_id).unwrap();
 
         // ChatView
-        let node_id = create_chatview(&mut sg, "chatty");
+        let (node_id, recvr) = create_chatview(&mut sg, "chatty");
         let node = sg.get_node(node_id).unwrap();
         let prop = node.get_property("rect").unwrap();
         prop.set_f32(0, 0.).unwrap();
@@ -708,6 +709,7 @@ impl App {
             self.event_pub.clone(),
             self.text_shaper.clone(),
             chat_tree,
+            recvr,
         )
         .await;
         let mut sg = self.sg.lock().await;
@@ -916,7 +918,10 @@ fn create_editbox(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
     node.id
 }
 
-fn create_chatview(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
+fn create_chatview(
+    sg: &mut SceneGraph,
+    name: &str,
+) -> (SceneNodeId, async_channel::Receiver<Vec<u8>>) {
     debug!(target: "app", "create_chatview({name})");
     let node = sg.add_node(name, SceneNodeType::ChatView);
 
@@ -959,5 +964,25 @@ fn create_chatview(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
     let mut prop = Property::new("debug", PropertyType::Bool, PropertySubType::Null);
     node.add_property(prop).unwrap();
 
-    node.id
+    let (sender, recvr) = async_channel::unbounded::<Vec<u8>>();
+    let method = move |data: Vec<u8>, response_fn: MethodResponseFn| {
+        if sender.try_send(data).is_err() {
+            response_fn(Err(Error::ChannelClosed));
+        } else {
+            response_fn(Ok(vec![]));
+        }
+    };
+    node.add_method(
+        "insert_line",
+        vec![
+            ("timestamp", "Timestamp", PropertyType::Uint32),
+            ("nick", "Nickname", PropertyType::Str),
+            ("text", "Text", PropertyType::Str),
+        ],
+        vec![],
+        Box::new(method),
+    )
+    .unwrap();
+
+    (node.id, recvr)
 }

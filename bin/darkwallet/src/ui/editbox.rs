@@ -204,19 +204,13 @@ impl EditBox {
             // Start a task monitoring for key down events
             let ev_sub = event_pub.subscribe_char();
             let me2 = me.clone();
-            let char_task = ex.spawn(async move {
-                loop {
-                    Self::process_char(&me2, &ev_sub).await;
-                }
-            });
+            let char_task =
+                ex.spawn(async move { while Self::process_char(&me2, &ev_sub).await {} });
 
             let ev_sub = event_pub.subscribe_key_down();
             let me2 = me.clone();
-            let key_down_task = ex.spawn(async move {
-                loop {
-                    Self::process_key_down(&me2, &ev_sub).await;
-                }
-            });
+            let key_down_task =
+                ex.spawn(async move { while Self::process_key_down(&me2, &ev_sub).await {} });
 
             /*
             let ev_sub = event_pub.subscribe_key_up();
@@ -242,35 +236,23 @@ impl EditBox {
 
             let ev_sub = event_pub.subscribe_mouse_btn_down();
             let me2 = me.clone();
-            let mouse_btn_down_task = ex.spawn(async move {
-                loop {
-                    Self::process_mouse_btn_down(&me2, &ev_sub).await;
-                }
-            });
+            let mouse_btn_down_task =
+                ex.spawn(async move { while Self::process_mouse_btn_down(&me2, &ev_sub).await {} });
 
             let ev_sub = event_pub.subscribe_mouse_btn_up();
             let me2 = me.clone();
-            let mouse_btn_up_task = ex.spawn(async move {
-                loop {
-                    Self::process_mouse_btn_up(&me2, &ev_sub).await;
-                }
-            });
+            let mouse_btn_up_task =
+                ex.spawn(async move { while Self::process_mouse_btn_up(&me2, &ev_sub).await {} });
 
             let ev_sub = event_pub.subscribe_mouse_move();
             let me2 = me.clone();
-            let mouse_move_task = ex.spawn(async move {
-                loop {
-                    Self::process_mouse_move(&me2, &ev_sub).await;
-                }
-            });
+            let mouse_move_task =
+                ex.spawn(async move { while Self::process_mouse_move(&me2, &ev_sub).await {} });
 
             let ev_sub = event_pub.subscribe_touch();
             let me2 = me.clone();
-            let touch_task = ex.spawn(async move {
-                loop {
-                    Self::process_touch(&me2, &ev_sub).await;
-                }
-            });
+            let touch_task =
+                ex.spawn(async move { while Self::process_touch(&me2, &ev_sub).await {} });
 
             let mut on_modify = OnModify::new(ex, node_name, node_id, me.clone());
             on_modify.when_change(is_focused.prop(), Self::change_focus);
@@ -479,15 +461,15 @@ impl EditBox {
         }
     }
 
-    async fn process_char(me: &Weak<Self>, ev_sub: &Subscription<(char, KeyMods, bool)>) {
+    async fn process_char(me: &Weak<Self>, ev_sub: &Subscription<(char, KeyMods, bool)>) -> bool {
         let Ok((key, mods, repeat)) = ev_sub.receive().await else {
             debug!(target: "ui::editbox", "Event relayer closed");
-            return
+            return false
         };
 
         // First filter for only single digit keys
         if DISALLOWED_CHARS.contains(&key) {
-            return
+            return true
         }
 
         let Some(self_) = me.upgrade() else {
@@ -496,15 +478,15 @@ impl EditBox {
         };
 
         if !self_.is_focused.get() {
-            return
+            return true
         }
 
         if mods.ctrl || mods.alt {
             if repeat {
-                return
+                return true
             }
             self_.handle_shortcut(key, &mods).await;
-            return
+            return true
         }
 
         let actions = {
@@ -515,18 +497,22 @@ impl EditBox {
         for _ in 0..actions {
             self_.insert_char(key).await;
         }
+        true
     }
 
-    async fn process_key_down(me: &Weak<Self>, ev_sub: &Subscription<(KeyCode, KeyMods, bool)>) {
+    async fn process_key_down(
+        me: &Weak<Self>,
+        ev_sub: &Subscription<(KeyCode, KeyMods, bool)>,
+    ) -> bool {
         let Ok((key, mods, repeat)) = ev_sub.receive().await else {
             debug!(target: "ui::editbox", "Event relayer closed");
-            return
+            return false
         };
 
         // First filter for only single digit keys
         // Avoid processing events handled by insert_char()
         if !ALLOWED_KEYCODES.contains(&key) {
-            return
+            return true
         }
 
         let Some(self_) = me.upgrade() else {
@@ -535,7 +521,7 @@ impl EditBox {
         };
 
         if !self_.is_focused.get() {
-            return
+            return true
         }
 
         let actions = {
@@ -549,15 +535,16 @@ impl EditBox {
         for _ in 0..actions {
             self_.handle_key(&key, &mods).await;
         }
+        true
     }
 
     async fn process_mouse_btn_down(
         me: &Weak<Self>,
         ev_sub: &Subscription<(MouseButton, f32, f32)>,
-    ) {
+    ) -> bool {
         let Ok((btn, mouse_x, mouse_y)) = ev_sub.receive().await else {
             debug!(target: "ui::editbox", "Event relayer closed");
-            return
+            return false
         };
 
         let Some(self_) = me.upgrade() else {
@@ -566,16 +553,20 @@ impl EditBox {
         };
 
         if !self_.is_active.get() {
-            return
+            return true
         }
 
         self_.handle_mouse_btn_down(btn, mouse_x, mouse_y).await;
+        true
     }
 
-    async fn process_mouse_btn_up(me: &Weak<Self>, ev_sub: &Subscription<(MouseButton, f32, f32)>) {
+    async fn process_mouse_btn_up(
+        me: &Weak<Self>,
+        ev_sub: &Subscription<(MouseButton, f32, f32)>,
+    ) -> bool {
         let Ok((btn, mouse_x, mouse_y)) = ev_sub.receive().await else {
             debug!(target: "ui::editbox", "Event relayer closed");
-            return
+            return false
         };
 
         let Some(self_) = me.upgrade() else {
@@ -584,16 +575,17 @@ impl EditBox {
         };
 
         if !self_.is_active.get() {
-            return
+            return true
         }
 
         self_.handle_mouse_btn_up(btn, mouse_x, mouse_y);
+        true
     }
 
-    async fn process_mouse_move(me: &Weak<Self>, ev_sub: &Subscription<(f32, f32)>) {
+    async fn process_mouse_move(me: &Weak<Self>, ev_sub: &Subscription<(f32, f32)>) -> bool {
         let Ok((mouse_x, mouse_y)) = ev_sub.receive().await else {
             debug!(target: "ui::editbox", "Event relayer closed");
-            return
+            return false
         };
 
         let Some(self_) = me.upgrade() else {
@@ -602,16 +594,20 @@ impl EditBox {
         };
 
         if !self_.is_active.get() {
-            return
+            return true
         }
 
         self_.handle_mouse_move(mouse_x, mouse_y).await;
+        true
     }
 
-    async fn process_touch(me: &Weak<Self>, ev_sub: &Subscription<(TouchPhase, u64, f32, f32)>) {
+    async fn process_touch(
+        me: &Weak<Self>,
+        ev_sub: &Subscription<(TouchPhase, u64, f32, f32)>,
+    ) -> bool {
         let Ok((phase, id, touch_x, touch_y)) = ev_sub.receive().await else {
             debug!(target: "ui::editbox", "Event relayer closed");
-            return
+            return false
         };
 
         let Some(self_) = me.upgrade() else {
@@ -620,10 +616,11 @@ impl EditBox {
         };
 
         if !self_.is_active.get() {
-            return
+            return true
         }
 
         self_.handle_touch(phase, id, touch_x, touch_y).await;
+        true
     }
 
     async fn change_focus(self: Arc<Self>) {

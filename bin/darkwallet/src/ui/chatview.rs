@@ -22,6 +22,7 @@ use rand::{rngs::OsRng, Rng};
 use std::{
     collections::BTreeMap,
     hash::{DefaultHasher, Hash, Hasher},
+    io::Cursor,
     sync::{Arc, Mutex as SyncMutex, Weak},
 };
 
@@ -244,6 +245,7 @@ impl ChatView {
         event_pub: GraphicsEventPublisherPtr,
         text_shaper: TextShaperPtr,
         tree: sled::Tree,
+        recvr: async_channel::Receiver<Vec<u8>>,
     ) -> Pimpl {
         debug!(target: "ui::chatview", "ChatView::new()");
         let scene_graph = sg.lock().await;
@@ -265,27 +267,24 @@ impl ChatView {
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
             let ev_sub = event_pub.subscribe_mouse_wheel();
             let me2 = me.clone();
-            let mouse_wheel_task = ex.spawn(async move {
-                loop {
-                    Self::process_mouse_wheel(&me2, &ev_sub).await;
-                }
-            });
+            let mouse_wheel_task =
+                ex.spawn(async move { while Self::process_mouse_wheel(&me2, &ev_sub).await {} });
 
             let ev_sub = event_pub.subscribe_mouse_move();
             let me2 = me.clone();
-            let mouse_move_task = ex.spawn(async move {
-                loop {
-                    Self::process_mouse_move(&me2, &ev_sub).await;
-                }
-            });
+            let mouse_move_task =
+                ex.spawn(async move { while Self::process_mouse_move(&me2, &ev_sub).await {} });
 
             let ev_sub = event_pub.subscribe_touch();
             let me2 = me.clone();
-            let touch_task = ex.spawn(async move {
-                loop {
-                    Self::process_touch(&me2, &ev_sub).await;
-                }
-            });
+            let touch_task =
+                ex.spawn(async move { while Self::process_touch(&me2, &ev_sub).await {} });
+
+            let me2 = me.clone();
+            let insert_line_method_task =
+                ex.spawn(
+                    async move { while Self::process_insert_line_method(&me2, &recvr).await {} },
+                );
 
             let mut on_modify = OnModify::new(ex, node_name, node_id, me.clone());
 
@@ -296,7 +295,8 @@ impl ChatView {
             }
             on_modify.when_change(rect.clone(), redraw);
 
-            let mut tasks = vec![mouse_wheel_task, mouse_move_task, touch_task];
+            let mut tasks =
+                vec![mouse_wheel_task, mouse_move_task, touch_task, insert_line_method_task];
             tasks.append(&mut on_modify.tasks);
 
             Self {
@@ -334,10 +334,10 @@ impl ChatView {
         Pimpl::ChatView(self_)
     }
 
-    async fn process_mouse_wheel(me: &Weak<Self>, ev_sub: &Subscription<(f32, f32)>) {
+    async fn process_mouse_wheel(me: &Weak<Self>, ev_sub: &Subscription<(f32, f32)>) -> bool {
         let Ok((wheel_x, wheel_y)) = ev_sub.receive().await else {
             debug!(target: "ui::chatview", "Event relayer closed");
-            return
+            return false
         };
 
         let Some(self_) = me.upgrade() else {
@@ -346,12 +346,13 @@ impl ChatView {
         };
 
         self_.handle_mouse_wheel(wheel_x, wheel_y).await;
+        true
     }
 
-    async fn process_mouse_move(me: &Weak<Self>, ev_sub: &Subscription<(f32, f32)>) {
+    async fn process_mouse_move(me: &Weak<Self>, ev_sub: &Subscription<(f32, f32)>) -> bool {
         let Ok((mouse_x, mouse_y)) = ev_sub.receive().await else {
             debug!(target: "ui::chatview", "Event relayer closed");
-            return
+            return false
         };
 
         let Some(self_) = me.upgrade() else {
@@ -360,12 +361,16 @@ impl ChatView {
         };
 
         self_.handle_mouse_move(mouse_x, mouse_y).await;
+        true
     }
 
-    async fn process_touch(me: &Weak<Self>, ev_sub: &Subscription<(TouchPhase, u64, f32, f32)>) {
+    async fn process_touch(
+        me: &Weak<Self>,
+        ev_sub: &Subscription<(TouchPhase, u64, f32, f32)>,
+    ) -> bool {
         let Ok((phase, id, touch_x, touch_y)) = ev_sub.receive().await else {
             debug!(target: "ui::chatview", "Event relayer closed");
-            return
+            return false
         };
 
         let Some(self_) = me.upgrade() else {
@@ -374,6 +379,38 @@ impl ChatView {
         };
 
         self_.handle_touch(phase, id, touch_x, touch_y).await;
+        true
+    }
+
+    async fn process_insert_line_method(
+        me: &Weak<Self>,
+        recvr: &async_channel::Receiver<Vec<u8>>,
+    ) -> bool {
+        let Ok(data) = recvr.recv().await else {
+            debug!(target: "ui::chatview", "Event relayer closed");
+            return false
+        };
+
+        fn decode_data(data: &[u8]) -> std::io::Result<(u32, String, String)> {
+            let mut cur = Cursor::new(&data);
+            let timestamp = u32::decode(&mut cur)?;
+            let nick = String::decode(&mut cur)?;
+            let text = String::decode(&mut cur)?;
+            Ok((timestamp, nick, text))
+        }
+
+        let Ok((timestamp, nick, text)) = decode_data(&data) else {
+            error!(target: "ui::chatview", "insert_line() method invalid arg data");
+            return true
+        };
+
+        let Some(self_) = me.upgrade() else {
+            // Should not happen
+            panic!("self destroyed before touch_task was stopped!");
+        };
+
+        self_.handle_insert_line(timestamp, nick, text).await;
+        true
     }
 
     async fn handle_mouse_wheel(&self, wheel_x: f32, wheel_y: f32) {
@@ -433,6 +470,48 @@ impl ChatView {
             }
             TouchPhase::Cancelled => {}
         }
+    }
+
+    async fn handle_insert_line(&self, timest: u32, nick: String, text: String) {
+        debug!(target: "ui::chatview", "handle_insert_line({timest}, {nick}, {text})");
+
+        /*
+        let chatmsg = ChatMsg { nick, text };
+
+        let timestr = timest.to_string();
+        // left pad with zeros
+        let mut timestr = format!("{:0>4}", timestr);
+        timestr.insert(2, ':');
+
+        let text = format!("{} {} {}", timestr, chatmsg.nick, chatmsg.text);
+        let glyphs = self.text_shaper.shape(text, self.font_size.get()).await;
+
+        // Now add message to page
+
+        let mut pages = self.pages2.lock().unwrap();
+        let mut idx = None;
+        for (i, page) in pages.iter_mut().enumerate() {
+            let first_timest = page.msgs.first().unwrap().timest;
+            let last_timest = page.msgs.last().unwrap().timest;
+
+            if first_timest <= timest && timest <= last_timest {
+                idx = Some(i);
+            }
+        }
+        if idx.is_none() {
+            idx = Some(pages.len() - 1);
+        }
+        let idx = idx.unwrap();
+
+        let mut msgs = pages[idx].msgs.clone();
+
+        msgs.push(Message { timest, chatmsg, glyphs });
+        msgs.sort_unstable_by_key(|msg| msg.timest);
+
+        let new_page = Page2::new(msgs, &self.render_api).await;
+        let _ = std::mem::replace(&mut pages[idx], new_page);
+        drop(pages);
+        */
     }
 
     /// Descent = line height - baseline

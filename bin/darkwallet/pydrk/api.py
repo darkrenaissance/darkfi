@@ -152,6 +152,7 @@ class ErrorCode:
     PY_EVAL_ERR = 30
     SEXPR_EMPTY = 31
     SEXPR_GLOBAL_NOT_FOUND = 32
+    CHANNEL_CLOSED = 36
 
     @staticmethod
     def to_str(errc):
@@ -218,6 +219,8 @@ class ErrorCode:
                 return "sexpr_empty"
             case ErrorCode.SEXPR_GLOBAL_NOT_FOUND:
                 return "sexpr_global_not_found"
+            case ErrorCode.CHANNEL_CLOSED:
+                return "channel_closed"
 
 def vertex(x, y, r, g, b, a, u, v):
     buf = bytearray()
@@ -319,6 +322,8 @@ class Api:
                 raise exc.SExprEmpty
             case 32:
                 raise exc.SExprGlobalNotFound
+            case 36:
+                raise exc.ChannelClosed
         return cursor
 
     def hello(self):
@@ -475,7 +480,7 @@ class Api:
         serial.encode_str(req, node_path)
         try:
             cur = self._make_request(Command.LOOKUP_NODE_ID, req)
-        except exc.RequestNodeNotFound:
+        except exc.NodeNotFound:
             return None
         return serial.read_u32(cur)
 
