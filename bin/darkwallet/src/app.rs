@@ -800,6 +800,8 @@ pub fn create_button(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
     prop.allow_exprs();
     node.add_property(prop).unwrap();
 
+    node.add_signal("click", "Button clicked event", vec![]).unwrap();
+
     node.id
 }
 

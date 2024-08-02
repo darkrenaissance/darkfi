@@ -530,6 +530,7 @@ impl SceneNode {
         sig.freed.push(slot_id);
         Ok(())
     }
+
     pub async fn trigger(&self, sig_name: &str, data: Vec<u8>) -> Result<()> {
         let sig = self.get_signal(sig_name).ok_or(Error::SignalNotFound)?;
         let futures = FuturesUnordered::new();

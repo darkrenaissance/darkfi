@@ -30,7 +30,7 @@ use crate::{
     },
     prop::{PropertyBool, PropertyPtr, PropertyUint32},
     pubsub::Subscription,
-    scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
+    scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId, Signal},
 };
 
 use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify, Stoppable};
@@ -59,7 +59,8 @@ impl Button {
         let node = scene_graph.get_node(node_id).unwrap();
         //let node_name = node.name.clone();
         let is_active = PropertyBool::wrap(node, "is_active", 0).unwrap();
-        let rect = node.get_property("rect").expect("Mesh::rect");
+        let rect = node.get_property("rect").expect("Button::rect");
+        //let sig = node.get_signal("click").expect("Button::click");
         drop(scene_graph);
 
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
@@ -131,7 +132,7 @@ impl Button {
             return
         }
 
-        self_.handle_mouse_btn_up(btn, mouse_x, mouse_y);
+        self_.handle_mouse_btn_up(btn, mouse_x, mouse_y).await;
     }
 
     async fn process_touch(me: &Weak<Self>, ev_sub: &Subscription<(TouchPhase, u64, f32, f32)>) {
@@ -149,7 +150,7 @@ impl Button {
             return
         }
 
-        self_.handle_touch(phase, id, touch_x, touch_y);
+        self_.handle_touch(phase, id, touch_x, touch_y).await;
     }
 
     fn handle_mouse_btn_down(&self, btn: MouseButton, mouse_x: f32, mouse_y: f32) {
@@ -167,7 +168,7 @@ impl Button {
         self.mouse_btn_held.store(true, Ordering::Relaxed);
     }
 
-    fn handle_mouse_btn_up(&self, btn: MouseButton, mouse_x: f32, mouse_y: f32) {
+    async fn handle_mouse_btn_up(&self, btn: MouseButton, mouse_x: f32, mouse_y: f32) {
         if btn != MouseButton::Left {
             return
         }
@@ -187,9 +188,12 @@ impl Button {
         }
 
         debug!(target: "ui::button", "Mouse button clicked!");
+        let scene_graph = self.sg.lock().await;
+        let node = scene_graph.get_node(self.node_id).unwrap();
+        node.trigger("click", vec![]).await.unwrap();
     }
 
-    fn handle_touch(&self, phase: TouchPhase, id: u64, touch_x: f32, touch_y: f32) {
+    async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_x: f32, touch_y: f32) {
         // Ignore multi-touch
         if id != 0 {
             return
@@ -198,7 +202,9 @@ impl Button {
         match phase {
             TouchPhase::Started => self.handle_mouse_btn_down(MouseButton::Left, touch_x, touch_y),
             TouchPhase::Moved => {}
-            TouchPhase::Ended => self.handle_mouse_btn_up(MouseButton::Left, touch_x, touch_y),
+            TouchPhase::Ended => {
+                self.handle_mouse_btn_up(MouseButton::Left, touch_x, touch_y).await
+            }
             TouchPhase::Cancelled => {}
         }
     }
