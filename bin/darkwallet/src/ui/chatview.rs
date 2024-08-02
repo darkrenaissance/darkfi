@@ -711,10 +711,9 @@ impl ChatView {
         // First pass is to measure the height and generate the meshes
         let mut current_height = 0.;
         for page in pages {
-            if current_height > rect.h {
-                break
-            }
-
+            // We should be able to count lines and perform wrapping without having to
+            // generate the mesh and alloc buffers.
+            // We need to separate both these ops.
             let (mesh_inf, old) = page
                 .regen_mesh(
                     &rect,
@@ -747,15 +746,20 @@ impl ChatView {
 
         let mut scroll = self.scroll.get();
         assert!(scroll >= 0.);
-        //debug!("current_heihgt = {current_height}");
-        //if current_height < scroll + rect.h {
-        //    scroll = current_height - rect.h;
-        //    //debug!("scroll = {scroll}");
-        //    self.scroll.set(scroll);
-        //}
+        // For when we resize the window and scroll is no longer valid
+        let max_allowed_scroll = total_height - rect.h;
+        debug!("max_allowed_scroll = {max_allowed_scroll} = total_height={total_height} - rect.h={}", rect.h);
+        if scroll > max_allowed_scroll {
+            scroll = max_allowed_scroll;
+            self.scroll.set(scroll);
+        }
 
         let mut current_height = 0.;
         for mesh_inf in mesh_infs {
+            if current_height > scroll + rect.h {
+                break
+            }
+
             // Apply scroll and scissor
             // We use the scissor for scrolling
             // Because we use the scissor, our actual rect is now rect instead of parent_rect
