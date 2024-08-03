@@ -24,7 +24,7 @@ use std::{fmt, str::FromStr, sync::Arc};
 
 use crate::{
     error::{Error, Result},
-    prop::{Property, PropertyPtr, PropertyType},
+    prop::{Property, PropertyPtr, PropertyType, Role},
     ui,
 };
 
@@ -459,20 +459,20 @@ impl SceneNode {
         self.get_property(name).ok_or(Error::PropertyNotFound)?.get_node_id(0)
     }
     // Setters
-    pub fn set_property_bool(&self, name: &str, val: bool) -> Result<()> {
-        self.get_property(name).ok_or(Error::PropertyNotFound)?.set_bool(0, val)
+    pub fn set_property_bool(&self, role: Role, name: &str, val: bool) -> Result<()> {
+        self.get_property(name).ok_or(Error::PropertyNotFound)?.set_bool(role, 0, val)
     }
-    pub fn set_property_u32(&self, name: &str, val: u32) -> Result<()> {
-        self.get_property(name).ok_or(Error::PropertyNotFound)?.set_u32(0, val)
+    pub fn set_property_u32(&self, role: Role, name: &str, val: u32) -> Result<()> {
+        self.get_property(name).ok_or(Error::PropertyNotFound)?.set_u32(role, 0, val)
     }
-    pub fn set_property_f32(&self, name: &str, val: f32) -> Result<()> {
-        self.get_property(name).ok_or(Error::PropertyNotFound)?.set_f32(0, val)
+    pub fn set_property_f32(&self, role: Role, name: &str, val: f32) -> Result<()> {
+        self.get_property(name).ok_or(Error::PropertyNotFound)?.set_f32(role, 0, val)
     }
-    pub fn set_property_str<S: Into<String>>(&self, name: &str, val: S) -> Result<()> {
-        self.get_property(name).ok_or(Error::PropertyNotFound)?.set_str(0, val)
+    pub fn set_property_str<S: Into<String>>(&self, role: Role, name: &str, val: S) -> Result<()> {
+        self.get_property(name).ok_or(Error::PropertyNotFound)?.set_str(role, 0, val)
     }
-    pub fn set_property_node_id(&self, name: &str, val: SceneNodeId) -> Result<()> {
-        self.get_property(name).ok_or(Error::PropertyNotFound)?.set_node_id(0, val)
+    pub fn set_property_node_id(&self, role: Role, name: &str, val: SceneNodeId) -> Result<()> {
+        self.get_property(name).ok_or(Error::PropertyNotFound)?.set_node_id(role, 0, val)
     }
 
     pub fn add_signal<S: Into<String>>(

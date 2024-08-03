@@ -28,7 +28,7 @@ use crate::{
         DrawCall, DrawInstruction, DrawMesh, GraphicsEventPublisherPtr, Point, Rectangle,
         RenderApiPtr, Vertex,
     },
-    prop::{PropertyBool, PropertyPtr, PropertyUint32},
+    prop::{PropertyBool, PropertyPtr, PropertyUint32, Role},
     pubsub::Subscription,
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId, Signal},
 };
@@ -58,7 +58,7 @@ impl Button {
         let scene_graph = sg.lock().await;
         let node = scene_graph.get_node(node_id).unwrap();
         //let node_name = node.name.clone();
-        let is_active = PropertyBool::wrap(node, "is_active", 0).unwrap();
+        let is_active = PropertyBool::wrap(node, Role::Internal, "is_active", 0).unwrap();
         let rect = node.get_property("rect").expect("Button::rect");
         //let sig = node.get_signal("click").expect("Button::click");
         drop(scene_graph);

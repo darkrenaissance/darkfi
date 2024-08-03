@@ -20,7 +20,7 @@ use std::sync::{Arc, Weak};
 
 use crate::{
     gfx2::{DrawCall, GraphicsEventPublisherPtr, Rectangle, RenderApiPtr},
-    prop::PropertyPtr,
+    prop::{PropertyPtr, Role},
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
 };
 
@@ -70,8 +70,8 @@ impl Window {
 
                     debug!(target: "ui::win", "Window resized ({w}, {h})");
                     // Now update the properties
-                    screen_size_prop2.set_f32(0, w).unwrap();
-                    screen_size_prop2.set_f32(1, h).unwrap();
+                    screen_size_prop2.set_f32(Role::Internal, 0, w).unwrap();
+                    screen_size_prop2.set_f32(Role::Internal, 1, h).unwrap();
 
                     let Some(self_) = me2.upgrade() else {
                         // Should not happen

@@ -36,6 +36,7 @@ use crate::{
     mesh::{Color, MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_WHITE},
     prop::{
         PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyStr, PropertyUint32,
+        Role,
     },
     pubsub::Subscription,
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
@@ -177,20 +178,20 @@ impl EditBox {
         let node = scene_graph.get_node(node_id).unwrap();
         let node_name = node.name.clone();
 
-        let is_active = PropertyBool::wrap(node, "is_active", 0).unwrap();
-        let is_focused = PropertyBool::wrap(node, "is_focused", 0).unwrap();
+        let is_active = PropertyBool::wrap(node, Role::Internal, "is_active", 0).unwrap();
+        let is_focused = PropertyBool::wrap(node, Role::Internal, "is_focused", 0).unwrap();
         let rect = node.get_property("rect").expect("EditBox::rect");
-        let baseline = PropertyFloat32::wrap(node, "baseline", 0).unwrap();
-        let scroll = PropertyFloat32::wrap(node, "scroll", 0).unwrap();
-        let cursor_pos = PropertyUint32::wrap(node, "cursor_pos", 0).unwrap();
-        let font_size = PropertyFloat32::wrap(node, "font_size", 0).unwrap();
-        let text = PropertyStr::wrap(node, "text", 0).unwrap();
-        let text_color = PropertyColor::wrap(node, "text_color").unwrap();
-        let cursor_color = PropertyColor::wrap(node, "cursor_color").unwrap();
-        let hi_bg_color = PropertyColor::wrap(node, "hi_bg_color").unwrap();
+        let baseline = PropertyFloat32::wrap(node, Role::Internal, "baseline", 0).unwrap();
+        let scroll = PropertyFloat32::wrap(node, Role::Internal, "scroll", 0).unwrap();
+        let cursor_pos = PropertyUint32::wrap(node, Role::Internal, "cursor_pos", 0).unwrap();
+        let font_size = PropertyFloat32::wrap(node, Role::Internal, "font_size", 0).unwrap();
+        let text = PropertyStr::wrap(node, Role::Internal, "text", 0).unwrap();
+        let text_color = PropertyColor::wrap(node, Role::Internal, "text_color").unwrap();
+        let cursor_color = PropertyColor::wrap(node, Role::Internal, "cursor_color").unwrap();
+        let hi_bg_color = PropertyColor::wrap(node, Role::Internal, "hi_bg_color").unwrap();
         let selected = node.get_property("selected").unwrap();
-        let z_index = PropertyUint32::wrap(node, "z_index", 0).unwrap();
-        let debug = PropertyBool::wrap(node, "debug", 0).unwrap();
+        let z_index = PropertyUint32::wrap(node, Role::Internal, "z_index", 0).unwrap();
+        let debug = PropertyBool::wrap(node, Role::Internal, "debug", 0).unwrap();
 
         drop(scene_graph);
 
@@ -667,16 +668,16 @@ impl EditBox {
             self.apply_cursor_scrolling();
 
             // begin selection
-            self.selected.set_u32(0, cpos).unwrap();
-            self.selected.set_u32(1, cpos).unwrap();
+            self.selected.set_u32(Role::Internal, 0, cpos).unwrap();
+            self.selected.set_u32(Role::Internal, 1, cpos).unwrap();
 
             self.mouse_btn_held.store(true, Ordering::Relaxed);
         // click outside the box will make it unfocused
         } else if self.is_focused.get() {
             debug!(target: "ui::editbox", "EditBox unfocused");
             self.is_focused.set(false);
-            self.selected.set_null(0).unwrap();
-            self.selected.set_null(1).unwrap();
+            self.selected.set_null(Role::Internal, 0).unwrap();
+            self.selected.set_null(Role::Internal, 1).unwrap();
             focus_changed = true;
         } else {
             // Do nothing. Click was outside editbox, and editbox wasn't focused
@@ -713,7 +714,7 @@ impl EditBox {
         let cpos = self.find_closest_glyph_idx(mouse_x, &rect);
 
         self.cursor_pos.set(cpos);
-        self.selected.set_u32(1, cpos).unwrap();
+        self.selected.set_u32(Role::Internal, 1, cpos).unwrap();
 
         self.apply_cursor_scrolling();
         self.redraw().await;
@@ -856,11 +857,11 @@ impl EditBox {
 
                 // Start selection if shift is held
                 if !mods.shift {
-                    self.selected.set_null(0).unwrap();
-                    self.selected.set_null(1).unwrap();
+                    self.selected.set_null(Role::Internal, 0).unwrap();
+                    self.selected.set_null(Role::Internal, 1).unwrap();
                 } else if self.selected.is_null(0).unwrap() {
                     assert!(self.selected.is_null(1).unwrap());
-                    self.selected.set_u32(0, cursor_pos).unwrap();
+                    self.selected.set_u32(Role::Internal, 0, cursor_pos).unwrap();
                 }
 
                 if cursor_pos > 0 {
@@ -871,7 +872,7 @@ impl EditBox {
 
                 // Update selection
                 if mods.shift {
-                    self.selected.set_u32(1, cursor_pos).unwrap();
+                    self.selected.set_u32(Role::Internal, 1, cursor_pos).unwrap();
                 }
 
                 self.apply_cursor_scrolling();
@@ -882,11 +883,11 @@ impl EditBox {
 
                 // Start selection if shift is held
                 if !mods.shift {
-                    self.selected.set_null(0).unwrap();
-                    self.selected.set_null(1).unwrap();
+                    self.selected.set_null(Role::Internal, 0).unwrap();
+                    self.selected.set_null(Role::Internal, 1).unwrap();
                 } else if self.selected.is_null(0).unwrap() {
                     assert!(self.selected.is_null(1).unwrap());
-                    self.selected.set_u32(0, cursor_pos).unwrap();
+                    self.selected.set_u32(Role::Internal, 0, cursor_pos).unwrap();
                 }
 
                 let glyphs_len = self.glyphs.lock().unwrap().len() as u32;
@@ -898,7 +899,7 @@ impl EditBox {
 
                 // Update selection
                 if mods.shift {
-                    self.selected.set_u32(1, cursor_pos).unwrap();
+                    self.selected.set_u32(Role::Internal, 1, cursor_pos).unwrap();
                 }
 
                 self.apply_cursor_scrolling();
@@ -980,18 +981,18 @@ impl EditBox {
                 let cursor_pos = self.cursor_pos.get();
 
                 if !mods.shift {
-                    self.selected.set_null(0).unwrap();
-                    self.selected.set_null(1).unwrap();
+                    self.selected.set_null(Role::Internal, 0).unwrap();
+                    self.selected.set_null(Role::Internal, 1).unwrap();
                 } else if self.selected.is_null(0).unwrap() {
                     assert!(self.selected.is_null(1).unwrap());
-                    self.selected.set_u32(0, cursor_pos).unwrap();
+                    self.selected.set_u32(Role::Internal, 0, cursor_pos).unwrap();
                 }
 
                 self.cursor_pos.set(0);
 
                 // Update selection
                 if mods.shift {
-                    self.selected.set_u32(1, cursor_pos).unwrap();
+                    self.selected.set_u32(Role::Internal, 1, cursor_pos).unwrap();
                 }
 
                 self.apply_cursor_scrolling();
@@ -1001,11 +1002,11 @@ impl EditBox {
                 let cursor_pos = self.cursor_pos.get();
 
                 if !mods.shift {
-                    self.selected.set_null(0).unwrap();
-                    self.selected.set_null(1).unwrap();
+                    self.selected.set_null(Role::Internal, 0).unwrap();
+                    self.selected.set_null(Role::Internal, 1).unwrap();
                 } else if self.selected.is_null(0).unwrap() {
                     assert!(self.selected.is_null(1).unwrap());
-                    self.selected.set_u32(0, cursor_pos).unwrap();
+                    self.selected.set_u32(Role::Internal, 0, cursor_pos).unwrap();
                 }
 
                 let glyphs_len = self.glyphs.lock().unwrap().len();
@@ -1013,7 +1014,7 @@ impl EditBox {
 
                 // Update selection
                 if mods.shift {
-                    self.selected.set_u32(1, cursor_pos).unwrap();
+                    self.selected.set_u32(Role::Internal, 1, cursor_pos).unwrap();
                 }
 
                 self.apply_cursor_scrolling();
@@ -1051,8 +1052,8 @@ impl EditBox {
         );
         self.text.set(text);
 
-        self.selected.set_null(0).unwrap();
-        self.selected.set_null(1).unwrap();
+        self.selected.set_null(Role::Internal, 0).unwrap();
+        self.selected.set_null(Role::Internal, 1).unwrap();
         self.cursor_pos.set(sel_start as u32);
     }
 

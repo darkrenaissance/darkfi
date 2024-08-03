@@ -26,6 +26,7 @@ use crate::{
     mesh::{Color, MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_WHITE},
     prop::{
         PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyStr, PropertyUint32,
+        Role,
     },
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
     text2::{self, Glyph, GlyphPositionIter, SpritePtr, TextShaper, TextShaperPtr},
@@ -74,12 +75,12 @@ impl Text {
         let node = scene_graph.get_node(node_id).unwrap();
         let node_name = node.name.clone();
         let rect = node.get_property("rect").expect("Text::rect");
-        let z_index = PropertyUint32::wrap(node, "z_index", 0).unwrap();
-        let text = PropertyStr::wrap(node, "text", 0).unwrap();
-        let font_size = PropertyFloat32::wrap(node, "font_size", 0).unwrap();
-        let text_color = PropertyColor::wrap(node, "text_color").unwrap();
-        let baseline = PropertyFloat32::wrap(node, "baseline", 0).unwrap();
-        let debug = PropertyBool::wrap(node, "debug", 0).unwrap();
+        let z_index = PropertyUint32::wrap(node, Role::Internal, "z_index", 0).unwrap();
+        let text = PropertyStr::wrap(node, Role::Internal, "text", 0).unwrap();
+        let font_size = PropertyFloat32::wrap(node, Role::Internal, "font_size", 0).unwrap();
+        let text_color = PropertyColor::wrap(node, Role::Internal, "text_color").unwrap();
+        let baseline = PropertyFloat32::wrap(node, Role::Internal, "baseline", 0).unwrap();
+        let debug = PropertyBool::wrap(node, Role::Internal, "debug", 0).unwrap();
         drop(scene_graph);
 
         let render_info = Self::regen_mesh(

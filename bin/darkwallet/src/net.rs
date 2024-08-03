@@ -27,7 +27,7 @@ use zeromq::{Socket, SocketRecv, SocketSend};
 use crate::{
     error::{Error, Result},
     expr::SExprCode,
-    prop::{Property, PropertySubType, PropertyType, PropertyValue},
+    prop::{Property, PropertySubType, PropertyType, PropertyValue, Role},
     scene::{SceneGraphPtr2, SceneNodeId, SceneNodeType, Slot, SlotId},
 };
 
@@ -381,40 +381,40 @@ impl ZeroMQAdapter {
 
                 match prop_type {
                     PropertyType::Null => {
-                        prop.set_null(prop_i)?;
+                        prop.set_null(Role::User, prop_i)?;
                     }
                     PropertyType::Bool => {
                         let val = bool::decode(&mut cur).unwrap();
-                        prop.set_bool(prop_i, val)?;
+                        prop.set_bool(Role::User, prop_i, val)?;
                     }
                     PropertyType::Uint32 => {
                         let val = u32::decode(&mut cur).unwrap();
-                        prop.set_u32(prop_i, val)?;
+                        prop.set_u32(Role::User, prop_i, val)?;
                     }
                     PropertyType::Float32 => {
                         let val = f32::decode(&mut cur).unwrap();
-                        prop.set_f32(prop_i, val)?;
+                        prop.set_f32(Role::User, prop_i, val)?;
                     }
                     PropertyType::Str => {
                         let val = String::decode(&mut cur).unwrap();
-                        prop.set_str(prop_i, val)?;
+                        prop.set_str(Role::User, prop_i, val)?;
                     }
                     PropertyType::Enum => {
                         let val = String::decode(&mut cur).unwrap();
-                        prop.set_enum(prop_i, val)?;
+                        prop.set_enum(Role::User, prop_i, val)?;
                     }
                     PropertyType::Buffer => {
                         let val = Vec::<u8>::decode(&mut cur).unwrap();
-                        prop.set_buf(prop_i, val)?;
+                        prop.set_buf(Role::User, prop_i, val)?;
                     }
                     PropertyType::SceneNodeId => {
                         let val = SceneNodeId::decode(&mut cur).unwrap();
-                        prop.set_node_id(prop_i, val)?;
+                        prop.set_node_id(Role::User, prop_i, val)?;
                     }
                     PropertyType::SExpr => {
                         let val = SExprCode::decode(&mut cur).unwrap();
                         debug!(target: "req", "  received code {:?}", val);
-                        prop.set_expr(prop_i, val)?;
+                        prop.set_expr(Role::User, prop_i, val)?;
                     }
                 }
             }

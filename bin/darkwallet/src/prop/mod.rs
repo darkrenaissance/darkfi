@@ -74,6 +74,13 @@ pub enum PropertySubType {
     ResourceId = 3,
 }
 
+#[derive(Debug, Copy, Clone)]
+pub enum Role {
+    User = 0,
+    App = 1,
+    Internal = 2,
+}
+
 #[derive(Debug, Clone)]
 pub enum PropertyValue {
     Unset,
@@ -197,7 +204,7 @@ impl Encodable for PropertyValue {
 pub enum ModifyAction {
     Clear,
     Set(usize),
-    Push,
+    Push(usize),
 }
 
 pub type PropertyPtr = Arc<Property>;
@@ -226,7 +233,7 @@ pub struct Property {
     // PropertyType must be Enum
     pub enum_items: Option<Vec<String>>,
 
-    on_modify: PublisherPtr<ModifyAction>,
+    on_modify: PublisherPtr<(Role, ModifyAction)>,
 }
 
 impl Property {
@@ -327,14 +334,14 @@ impl Property {
     // Set
 
     /// This will clear all values, resetting them to the default
-    pub fn clear_values(&self) {
+    pub fn clear_values(&self, role: Role) {
         let vals = &mut self.vals.lock().unwrap();
         vals.clear();
         vals.resize(self.array_len, PropertyValue::Unset);
-        self.on_modify.notify(ModifyAction::Clear);
+        self.on_modify.notify((role, ModifyAction::Clear));
     }
 
-    fn set_raw_value(&self, i: usize, val: PropertyValue) -> Result<()> {
+    fn set_raw_value(&self, role: Role, i: usize, val: PropertyValue) -> Result<()> {
         if self.typ != val.as_type() {
             return Err(Error::PropertyWrongType)
         }
@@ -344,37 +351,40 @@ impl Property {
             return Err(Error::PropertyWrongIndex)
         }
         vals[i] = val;
-        self.on_modify.notify(ModifyAction::Set(i));
+        self.on_modify.notify((role, ModifyAction::Set(i)));
         Ok(())
     }
 
-    pub fn unset(&self, i: usize) -> Result<()> {
+    pub fn unset(&self, role: Role, i: usize) -> Result<()> {
         let vals = &mut self.vals.lock().unwrap();
         if i >= vals.len() {
             return Err(Error::PropertyWrongIndex)
         }
         vals[i] = PropertyValue::Unset;
-        self.on_modify.notify(ModifyAction::Set(i));
+        self.on_modify.notify((role, ModifyAction::Set(i)));
         Ok(())
     }
 
-    pub fn set_null(&self, i: usize) -> Result<()> {
+    pub fn set_null(&self, role: Role, i: usize) -> Result<()> {
         if !self.is_null_allowed {
             return Err(Error::PropertyNullNotAllowed)
         }
+
         let vals = &mut self.vals.lock().unwrap();
         if i >= vals.len() {
             return Err(Error::PropertyWrongIndex)
         }
         vals[i] = PropertyValue::Null;
-        self.on_modify.notify(ModifyAction::Set(i));
+        drop(vals);
+
+        self.on_modify.notify((role, ModifyAction::Set(i)));
         Ok(())
     }
 
-    pub fn set_bool(&self, i: usize, val: bool) -> Result<()> {
-        self.set_raw_value(i, PropertyValue::Bool(val))
+    pub fn set_bool(&self, role: Role, i: usize, val: bool) -> Result<()> {
+        self.set_raw_value(role, i, PropertyValue::Bool(val))
     }
-    pub fn set_u32(&self, i: usize, val: u32) -> Result<()> {
+    pub fn set_u32(&self, role: Role, i: usize, val: u32) -> Result<()> {
         if self.min_val.is_some() {
             let min = self.min_val.as_ref().unwrap().as_u32()?;
             if val < min {
@@ -387,9 +397,9 @@ impl Property {
                 return Err(Error::PropertyOutOfRange);
             }
         }
-        self.set_raw_value(i, PropertyValue::Uint32(val))
+        self.set_raw_value(role, i, PropertyValue::Uint32(val))
     }
-    pub fn set_f32(&self, i: usize, val: f32) -> Result<()> {
+    pub fn set_f32(&self, role: Role, i: usize, val: f32) -> Result<()> {
         if self.min_val.is_some() {
             let min = self.min_val.as_ref().unwrap().as_f32()?;
             if val < min {
@@ -402,12 +412,12 @@ impl Property {
                 return Err(Error::PropertyOutOfRange);
             }
         }
-        self.set_raw_value(i, PropertyValue::Float32(val))
+        self.set_raw_value(role, i, PropertyValue::Float32(val))
     }
-    pub fn set_str<S: Into<String>>(&self, i: usize, val: S) -> Result<()> {
-        self.set_raw_value(i, PropertyValue::Str(val.into()))
+    pub fn set_str<S: Into<String>>(&self, role: Role, i: usize, val: S) -> Result<()> {
+        self.set_raw_value(role, i, PropertyValue::Str(val.into()))
     }
-    pub fn set_enum<S: Into<String>>(&self, i: usize, val: S) -> Result<()> {
+    pub fn set_enum<S: Into<String>>(&self, role: Role, i: usize, val: S) -> Result<()> {
         if self.typ != PropertyType::Enum {
             return Err(Error::PropertyWrongType)
         }
@@ -415,15 +425,15 @@ impl Property {
         if !self.enum_items.as_ref().unwrap().contains(&val) {
             return Err(Error::PropertyWrongEnumItem)
         }
-        self.set_raw_value(i, PropertyValue::Enum(val.into()))
+        self.set_raw_value(role, i, PropertyValue::Enum(val.into()))
     }
-    pub fn set_buf(&self, i: usize, val: Vec<u8>) -> Result<()> {
-        self.set_raw_value(i, PropertyValue::Buffer(Arc::new(val)))
+    pub fn set_buf(&self, role: Role, i: usize, val: Vec<u8>) -> Result<()> {
+        self.set_raw_value(role, i, PropertyValue::Buffer(Arc::new(val)))
     }
-    pub fn set_node_id(&self, i: usize, val: SceneNodeId) -> Result<()> {
-        self.set_raw_value(i, PropertyValue::SceneNodeId(val))
+    pub fn set_node_id(&self, role: Role, i: usize, val: SceneNodeId) -> Result<()> {
+        self.set_raw_value(role, i, PropertyValue::SceneNodeId(val))
     }
-    pub fn set_expr(&self, i: usize, val: SExprCode) -> Result<()> {
+    pub fn set_expr(&self, role: Role, i: usize, val: SExprCode) -> Result<()> {
         if !self.is_expr_allowed {
             return Err(Error::PropertySExprNotAllowed)
         }
@@ -432,7 +442,7 @@ impl Property {
             return Err(Error::PropertyWrongIndex)
         }
         vals[i] = PropertyValue::SExpr(Arc::new(val));
-        self.on_modify.notify(ModifyAction::Set(i));
+        self.on_modify.notify((role, ModifyAction::Set(i)));
         Ok(())
     }
 
@@ -457,51 +467,46 @@ impl Property {
 
     // Push
 
-    pub fn push_null(&self) -> Result<usize> {
+    fn push_value(&self, role: Role, value: PropertyValue) -> Result<usize> {
         if self.is_bounded() {
             return Err(Error::PropertyIsBounded)
         }
+
         let vals = &mut self.vals.lock().unwrap();
         let i = vals.len();
-        vals.push(PropertyValue::Null);
-        self.on_modify.notify(ModifyAction::Push);
+        vals.push(value);
+        drop(vals);
+
+        self.on_modify.notify((role, ModifyAction::Push(i)));
         Ok(i)
     }
 
-    pub fn push_bool(&self, val: bool) -> Result<usize> {
-        let i = self.push_null()?;
-        self.set_bool(i, val)?;
-        Ok(i)
+    pub fn push_null(&self, role: Role) -> Result<usize> {
+        self.push_value(role, PropertyValue::Null)
     }
-    pub fn push_u32(&self, val: u32) -> Result<usize> {
-        let i = self.push_null()?;
-        self.set_u32(i, val)?;
-        Ok(i)
+
+    pub fn push_bool(&self, role: Role, val: bool) -> Result<usize> {
+        self.push_value(role, PropertyValue::Bool(val))
     }
-    pub fn push_f32(&self, val: f32) -> Result<usize> {
-        let i = self.push_null()?;
-        self.set_f32(i, val)?;
-        Ok(i)
+    pub fn push_u32(&self, role: Role, val: u32) -> Result<usize> {
+        // TODO: none of these push calls are enforcing constraints that are required
+        // see the set_XX calls.
+        self.push_value(role, PropertyValue::Uint32(val))
     }
-    pub fn push_str<S: Into<String>>(&self, val: S) -> Result<usize> {
-        let i = self.push_null()?;
-        self.set_str(i, val)?;
-        Ok(i)
+    pub fn push_f32(&self, role: Role, val: f32) -> Result<usize> {
+        self.push_value(role, PropertyValue::Float32(val))
     }
-    pub fn push_enum<S: Into<String>>(&self, val: S) -> Result<usize> {
-        let i = self.push_null()?;
-        self.set_enum(i, val)?;
-        Ok(i)
+    pub fn push_str<S: Into<String>>(&self, role: Role, val: S) -> Result<usize> {
+        self.push_value(role, PropertyValue::Str(val.into()))
     }
-    pub fn push_buf(&self, val: Vec<u8>) -> Result<usize> {
-        let i = self.push_null()?;
-        self.set_buf(i, val)?;
-        Ok(i)
+    pub fn push_enum<S: Into<String>>(&self, role: Role, val: S) -> Result<usize> {
+        self.push_value(role, PropertyValue::Enum(val.into()))
     }
-    pub fn push_node_id(&self, val: SceneNodeId) -> Result<usize> {
-        let i = self.push_null()?;
-        self.set_node_id(i, val)?;
-        Ok(i)
+    pub fn push_buf(&self, role: Role, val: Vec<u8>) -> Result<usize> {
+        self.push_value(role, PropertyValue::Buffer(Arc::new(val)))
+    }
+    pub fn push_node_id(&self, role: Role, val: SceneNodeId) -> Result<usize> {
+        self.push_value(role, PropertyValue::SceneNodeId(val))
     }
 
     // Get
@@ -643,7 +648,7 @@ impl Property {
 
     // Subs
 
-    pub fn subscribe_modify(&self) -> Subscription<ModifyAction> {
+    pub fn subscribe_modify(&self) -> Subscription<(Role, ModifyAction)> {
         self.on_modify.clone().subscribe()
     }
 }

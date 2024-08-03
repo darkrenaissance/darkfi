@@ -25,7 +25,7 @@ use crate::{
     error::Error,
     expr::Op,
     gfx2::{GraphicsEventPublisherPtr, RenderApiPtr, Vertex},
-    prop::{Property, PropertySubType, PropertyType},
+    prop::{Property, PropertySubType, PropertyType, Role},
     scene::{MethodResponseFn, Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId, SceneNodeType},
     text2::TextShaperPtr,
     ui::{chatview, Button, ChatView, EditBox, Image, Mesh, RenderLayer, Stoppable, Text, Window},
@@ -144,8 +144,8 @@ impl App {
         let mut prop = Property::new("screen_size", PropertyType::Float32, PropertySubType::Pixel);
         prop.set_array_len(2);
         // Window not yet initialized so we can't set these.
-        //prop.set_f32(0, screen_width);
-        //prop.set_f32(1, screen_height);
+        //prop.set_f32(Role::App, 0, screen_width);
+        //prop.set_f32(Role::App, 1, screen_height);
         window.add_property(prop).unwrap();
 
         let mut prop = Property::new("scale", PropertyType::Float32, PropertySubType::Pixel);
@@ -175,7 +175,7 @@ impl App {
 
         // Testing
         let node = sg.get_node(window_id).unwrap();
-        node.set_property_f32("scale", 2.).unwrap();
+        node.set_property_f32(Role::App, "scale", 2.).unwrap();
 
         drop(sg);
 
@@ -214,13 +214,13 @@ impl App {
         // Customize our layer
         let node = sg.get_node(layer_node_id).unwrap();
         let prop = node.get_property("rect").unwrap();
-        prop.set_f32(0, 0.).unwrap();
-        prop.set_f32(1, 0.).unwrap();
+        prop.set_f32(Role::App, 0, 0.).unwrap();
+        prop.set_f32(Role::App, 1, 0.).unwrap();
         let code = vec![Op::LoadVar("w".to_string())];
-        prop.set_expr(2, code).unwrap();
+        prop.set_expr(Role::App, 2, code).unwrap();
         let code = vec![Op::LoadVar("h".to_string())];
-        prop.set_expr(3, code).unwrap();
-        node.set_property_bool("is_visible", true).unwrap();
+        prop.set_expr(Role::App, 3, code).unwrap();
+        node.set_property_bool(Role::App, "is_visible", true).unwrap();
 
         // Setup the pimpl
         let node_id = node.id;
@@ -240,12 +240,12 @@ impl App {
 
         let node = sg.get_node_mut(node_id).unwrap();
         let prop = node.get_property("rect").unwrap();
-        prop.set_f32(0, 0.).unwrap();
-        prop.set_f32(1, 0.).unwrap();
+        prop.set_f32(Role::App, 0, 0.).unwrap();
+        prop.set_f32(Role::App, 1, 0.).unwrap();
         let code = vec![Op::LoadVar("w".to_string())];
-        prop.set_expr(2, code).unwrap();
+        prop.set_expr(Role::App, 2, code).unwrap();
         let code = vec![Op::LoadVar("h".to_string())];
-        prop.set_expr(3, code).unwrap();
+        prop.set_expr(Role::App, 3, code).unwrap();
 
         let c = if LIGHTMODE { 1. } else { 0. };
         // Setup the pimpl
@@ -288,10 +288,10 @@ impl App {
             Box::new(Op::LoadVar("w".to_string())),
             Box::new(Op::ConstFloat32(220.)),
         ))];
-        prop.set_expr(0, code).unwrap();
-        prop.set_f32(1, 10.).unwrap();
-        prop.set_f32(2, 200.).unwrap();
-        prop.set_f32(3, 60.).unwrap();
+        prop.set_expr(Role::App, 0, code).unwrap();
+        prop.set_f32(Role::App, 1, 10.).unwrap();
+        prop.set_f32(Role::App, 2, 200.).unwrap();
+        prop.set_f32(Role::App, 3, 60.).unwrap();
 
         // Setup the pimpl
         let (x1, y1) = (0., 0.);
@@ -340,16 +340,16 @@ impl App {
         let node_id = create_button(&mut sg, "btn");
 
         let node = sg.get_node_mut(node_id).unwrap();
-        node.set_property_bool("is_active", true).unwrap();
+        node.set_property_bool(Role::App, "is_active", true).unwrap();
         let prop = node.get_property("rect").unwrap();
         let code = vec![Op::Sub((
             Box::new(Op::LoadVar("w".to_string())),
             Box::new(Op::ConstFloat32(220.)),
         ))];
-        prop.set_expr(0, code).unwrap();
-        prop.set_f32(1, 10.).unwrap();
-        prop.set_f32(2, 200.).unwrap();
-        prop.set_f32(3, 60.).unwrap();
+        prop.set_expr(Role::App, 0, code).unwrap();
+        prop.set_f32(Role::App, 1, 10.).unwrap();
+        prop.set_f32(Role::App, 2, 200.).unwrap();
+        prop.set_f32(Role::App, 3, 60.).unwrap();
 
         drop(sg);
         let pimpl =
@@ -365,10 +365,10 @@ impl App {
 
         let node = sg.get_node_mut(node_id).unwrap();
         let prop = node.get_property("rect").unwrap();
-        prop.set_f32(0, 10.).unwrap();
-        prop.set_f32(1, 10.).unwrap();
-        prop.set_f32(2, 60.).unwrap();
-        prop.set_f32(3, 60.).unwrap();
+        prop.set_f32(Role::App, 0, 10.).unwrap();
+        prop.set_f32(Role::App, 1, 10.).unwrap();
+        prop.set_f32(Role::App, 2, 60.).unwrap();
+        prop.set_f32(Role::App, 3, 60.).unwrap();
 
         // Setup the pimpl
         let (x1, y1) = (0., 0.);
@@ -418,15 +418,15 @@ impl App {
 
         let node = sg.get_node_mut(node_id).unwrap();
         let prop = node.get_property("rect").unwrap();
-        prop.set_f32(0, 0.).unwrap();
+        prop.set_f32(Role::App, 0, 0.).unwrap();
         let code =
             vec![Op::Div((Box::new(Op::LoadVar("h".to_string())), Box::new(Op::ConstFloat32(2.))))];
-        prop.set_expr(1, code).unwrap();
+        prop.set_expr(Role::App, 1, code).unwrap();
         let code = vec![Op::LoadVar("w".to_string())];
-        prop.set_expr(2, code).unwrap();
-        prop.set_f32(3, 5.).unwrap();
+        prop.set_expr(Role::App, 2, code).unwrap();
+        prop.set_f32(Role::App, 3, 5.).unwrap();
 
-        node.set_property_u32("z_index", 2).unwrap();
+        node.set_property_u32(Role::App, "z_index", 2).unwrap();
 
         // Setup the pimpl
         let (x1, y1) = (0., 0.);
@@ -463,17 +463,17 @@ impl App {
 
         let node = sg.get_node_mut(node_id).unwrap();
         let prop = node.get_property("rect").unwrap();
-        prop.set_f32(0, 0.).unwrap();
+        prop.set_f32(Role::App, 0, 0.).unwrap();
         let code = vec![Op::Sub((
             Box::new(Op::LoadVar("h".to_string())),
             Box::new(Op::ConstFloat32(200.)),
         ))];
-        prop.set_expr(1, code).unwrap();
+        prop.set_expr(Role::App, 1, code).unwrap();
         let code = vec![Op::LoadVar("w".to_string())];
-        prop.set_expr(2, code).unwrap();
-        prop.set_f32(3, 5.).unwrap();
+        prop.set_expr(Role::App, 2, code).unwrap();
+        prop.set_f32(Role::App, 3, 5.).unwrap();
 
-        node.set_property_u32("z_index", 2).unwrap();
+        node.set_property_u32(Role::App, "z_index", 2).unwrap();
 
         // Setup the pimpl
         let (x1, y1) = (0., 0.);
@@ -510,12 +510,12 @@ impl App {
 
         let node = sg.get_node_mut(node_id).unwrap();
         let prop = node.get_property("rect").unwrap();
-        prop.set_f32(0, 80.).unwrap();
-        prop.set_f32(1, 10.).unwrap();
-        prop.set_f32(2, 60.).unwrap();
-        prop.set_f32(3, 60.).unwrap();
+        prop.set_f32(Role::App, 0, 80.).unwrap();
+        prop.set_f32(Role::App, 1, 10.).unwrap();
+        prop.set_f32(Role::App, 2, 60.).unwrap();
+        prop.set_f32(Role::App, 3, 60.).unwrap();
 
-        node.set_property_str("path", KING_PATH).unwrap();
+        node.set_property_str(Role::App, "path", KING_PATH).unwrap();
 
         // Setup the pimpl
         drop(sg);
@@ -532,19 +532,19 @@ impl App {
 
         let node = sg.get_node_mut(node_id).unwrap();
         let prop = node.get_property("rect").unwrap();
-        prop.set_f32(0, 100.).unwrap();
-        prop.set_f32(1, 100.).unwrap();
-        prop.set_f32(2, 800.).unwrap();
-        prop.set_f32(3, 200.).unwrap();
-        node.set_property_f32("baseline", 40.).unwrap();
-        node.set_property_f32("font_size", 60.).unwrap();
-        node.set_property_str("text", "anon1🍆").unwrap();
-        //node.set_property_str("text", "anon1").unwrap();
+        prop.set_f32(Role::App, 0, 100.).unwrap();
+        prop.set_f32(Role::App, 1, 100.).unwrap();
+        prop.set_f32(Role::App, 2, 800.).unwrap();
+        prop.set_f32(Role::App, 3, 200.).unwrap();
+        node.set_property_f32(Role::App, "baseline", 40.).unwrap();
+        node.set_property_f32(Role::App, "font_size", 60.).unwrap();
+        node.set_property_str(Role::App, "text", "anon1🍆").unwrap();
+        //node.set_property_str(Role::App, "text", "anon1").unwrap();
         let prop = node.get_property("text_color").unwrap();
-        prop.set_f32(0, 0.).unwrap();
-        prop.set_f32(1, 1.).unwrap();
-        prop.set_f32(2, 0.).unwrap();
-        prop.set_f32(3, 1.).unwrap();
+        prop.set_f32(Role::App, 0, 0.).unwrap();
+        prop.set_f32(Role::App, 1, 1.).unwrap();
+        prop.set_f32(Role::App, 2, 0.).unwrap();
+        prop.set_f32(Role::App, 3, 1.).unwrap();
 
         drop(sg);
         let pimpl = Text::new(
@@ -564,60 +564,60 @@ impl App {
         // Text edit
         let node_id = create_editbox(&mut sg, "editz");
         let node = sg.get_node(node_id).unwrap();
-        node.set_property_bool("is_active", true).unwrap();
+        node.set_property_bool(Role::App, "is_active", true).unwrap();
         let prop = node.get_property("rect").unwrap();
-        prop.set_f32(0, 150.).unwrap();
-        prop.set_f32(1, 150.).unwrap();
-        prop.set_f32(2, 380.).unwrap();
+        prop.set_f32(Role::App, 0, 150.).unwrap();
+        prop.set_f32(Role::App, 1, 150.).unwrap();
+        prop.set_f32(Role::App, 2, 380.).unwrap();
         //let code = vec![Op::Sub((
         //    Box::new(Op::LoadVar("h".to_string())),
         //    Box::new(Op::ConstFloat32(60.)),
         //))];
-        //prop.set_expr(1, code).unwrap();
+        //prop.set_expr(Role::App, 1, code).unwrap();
         //let code = vec![Op::Sub((
         //    Box::new(Op::LoadVar("w".to_string())),
         //    Box::new(Op::ConstFloat32(120.)),
         //))];
-        //prop.set_expr(2, code).unwrap();
-        prop.set_f32(3, 60.).unwrap();
-        node.set_property_f32("baseline", 40.).unwrap();
-        node.set_property_f32("font_size", 20.).unwrap();
-        node.set_property_f32("font_size", 40.).unwrap();
-        node.set_property_str("text", "hello king!😁🍆jelly 🍆1234").unwrap();
+        //prop.set_expr(Role::App, 2, code).unwrap();
+        prop.set_f32(Role::App, 3, 60.).unwrap();
+        node.set_property_f32(Role::App, "baseline", 40.).unwrap();
+        node.set_property_f32(Role::App, "font_size", 20.).unwrap();
+        node.set_property_f32(Role::App, "font_size", 40.).unwrap();
+        node.set_property_str(Role::App, "text", "hello king!😁🍆jelly 🍆1234").unwrap();
         let prop = node.get_property("text_color").unwrap();
         if LIGHTMODE {
-            prop.set_f32(0, 0.).unwrap();
-            prop.set_f32(1, 0.).unwrap();
-            prop.set_f32(2, 0.).unwrap();
-            prop.set_f32(3, 1.).unwrap();
+            prop.set_f32(Role::App, 0, 0.).unwrap();
+            prop.set_f32(Role::App, 1, 0.).unwrap();
+            prop.set_f32(Role::App, 2, 0.).unwrap();
+            prop.set_f32(Role::App, 3, 1.).unwrap();
         } else {
-            prop.set_f32(0, 1.).unwrap();
-            prop.set_f32(1, 1.).unwrap();
-            prop.set_f32(2, 1.).unwrap();
-            prop.set_f32(3, 1.).unwrap();
+            prop.set_f32(Role::App, 0, 1.).unwrap();
+            prop.set_f32(Role::App, 1, 1.).unwrap();
+            prop.set_f32(Role::App, 2, 1.).unwrap();
+            prop.set_f32(Role::App, 3, 1.).unwrap();
         }
         let prop = node.get_property("cursor_color").unwrap();
-        prop.set_f32(0, 1.).unwrap();
-        prop.set_f32(1, 0.5).unwrap();
-        prop.set_f32(2, 0.5).unwrap();
-        prop.set_f32(3, 1.).unwrap();
+        prop.set_f32(Role::App, 0, 1.).unwrap();
+        prop.set_f32(Role::App, 1, 0.5).unwrap();
+        prop.set_f32(Role::App, 2, 0.5).unwrap();
+        prop.set_f32(Role::App, 3, 1.).unwrap();
         let prop = node.get_property("hi_bg_color").unwrap();
         if LIGHTMODE {
-            prop.set_f32(0, 0.5).unwrap();
-            prop.set_f32(1, 0.5).unwrap();
-            prop.set_f32(2, 0.5).unwrap();
-            prop.set_f32(3, 1.).unwrap();
+            prop.set_f32(Role::App, 0, 0.5).unwrap();
+            prop.set_f32(Role::App, 1, 0.5).unwrap();
+            prop.set_f32(Role::App, 2, 0.5).unwrap();
+            prop.set_f32(Role::App, 3, 1.).unwrap();
         } else {
-            prop.set_f32(0, 1.).unwrap();
-            prop.set_f32(1, 1.).unwrap();
-            prop.set_f32(2, 1.).unwrap();
-            prop.set_f32(3, 0.5).unwrap();
+            prop.set_f32(Role::App, 0, 1.).unwrap();
+            prop.set_f32(Role::App, 1, 1.).unwrap();
+            prop.set_f32(Role::App, 2, 1.).unwrap();
+            prop.set_f32(Role::App, 3, 0.5).unwrap();
         }
         let prop = node.get_property("selected").unwrap();
-        prop.set_null(0).unwrap();
-        prop.set_null(1).unwrap();
-        node.set_property_u32("z_index", 1).unwrap();
-        //node.set_property_bool("debug", true).unwrap();
+        prop.set_null(Role::App, 0).unwrap();
+        prop.set_null(Role::App, 1).unwrap();
+        node.set_property_u32(Role::App, "z_index", 1).unwrap();
+        //node.set_property_bool(Role::App, "debug", true).unwrap();
 
         drop(sg);
         let pimpl = EditBox::new(
@@ -639,12 +639,12 @@ impl App {
         let (node_id, recvr) = create_chatview(&mut sg, "chatty");
         let node = sg.get_node(node_id).unwrap();
         let prop = node.get_property("rect").unwrap();
-        prop.set_f32(0, 0.).unwrap();
+        prop.set_f32(Role::App, 0, 0.).unwrap();
         let code =
             vec![Op::Div((Box::new(Op::LoadVar("h".to_string())), Box::new(Op::ConstFloat32(2.))))];
-        prop.set_expr(1, code).unwrap();
+        prop.set_expr(Role::App, 1, code).unwrap();
         let code = vec![Op::LoadVar("w".to_string())];
-        prop.set_expr(2, code).unwrap();
+        prop.set_expr(Role::App, 2, code).unwrap();
         let code = vec![Op::Sub((
             Box::new(Op::Div((
                 Box::new(Op::LoadVar("h".to_string())),
@@ -652,28 +652,28 @@ impl App {
             ))),
             Box::new(Op::ConstFloat32(200.)),
         ))];
-        prop.set_expr(3, code).unwrap();
-        node.set_property_f32("font_size", 20.).unwrap();
-        node.set_property_f32("line_height", 30.).unwrap();
-        node.set_property_f32("baseline", 20.).unwrap();
-        node.set_property_u32("z_index", 1).unwrap();
+        prop.set_expr(Role::App, 3, code).unwrap();
+        node.set_property_f32(Role::App, "font_size", 20.).unwrap();
+        node.set_property_f32(Role::App, "line_height", 30.).unwrap();
+        node.set_property_f32(Role::App, "baseline", 20.).unwrap();
+        node.set_property_u32(Role::App, "z_index", 1).unwrap();
 
         let prop = node.get_property("timestamp_color").unwrap();
-        prop.set_f32(0, 0.5).unwrap();
-        prop.set_f32(1, 0.5).unwrap();
-        prop.set_f32(2, 0.5).unwrap();
-        prop.set_f32(3, 0.5).unwrap();
+        prop.set_f32(Role::App, 0, 0.5).unwrap();
+        prop.set_f32(Role::App, 1, 0.5).unwrap();
+        prop.set_f32(Role::App, 2, 0.5).unwrap();
+        prop.set_f32(Role::App, 3, 0.5).unwrap();
         let prop = node.get_property("text_color").unwrap();
         if LIGHTMODE {
-            prop.set_f32(0, 0.).unwrap();
-            prop.set_f32(1, 0.).unwrap();
-            prop.set_f32(2, 0.).unwrap();
-            prop.set_f32(3, 1.).unwrap();
+            prop.set_f32(Role::App, 0, 0.).unwrap();
+            prop.set_f32(Role::App, 1, 0.).unwrap();
+            prop.set_f32(Role::App, 2, 0.).unwrap();
+            prop.set_f32(Role::App, 3, 1.).unwrap();
         } else {
-            prop.set_f32(0, 1.).unwrap();
-            prop.set_f32(1, 1.).unwrap();
-            prop.set_f32(2, 1.).unwrap();
-            prop.set_f32(3, 1.).unwrap();
+            prop.set_f32(Role::App, 0, 1.).unwrap();
+            prop.set_f32(Role::App, 1, 1.).unwrap();
+            prop.set_f32(Role::App, 2, 1.).unwrap();
+            prop.set_f32(Role::App, 3, 1.).unwrap();
         }
 
         let prop = node.get_property("nick_colors").unwrap();
@@ -691,7 +691,7 @@ impl App {
             1.00, 0.30, 0.00, 1.
         ];
         for c in nick_colors {
-            prop.push_f32(c).unwrap();
+            prop.push_f32(Role::App, c).unwrap();
         }
 
         drop(sg);
@@ -723,7 +723,7 @@ impl App {
         // This also affects mouse/touch input since coords need to be accurately translated
         // Also we need to think about nesting of layers.
         //let window_node = sg.get_node_mut(window_id).unwrap();
-        //win_node.set_property_f32("scale", 1.6).unwrap();
+        //win_node.set_property_f32(Role::App, "scale", 1.6).unwrap();
     }
 
     async fn trigger_redraw(&self) {

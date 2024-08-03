@@ -18,7 +18,7 @@
 
 use std::sync::Arc;
 
-use super::{Property, PropertyPtr};
+use super::{Property, PropertyPtr, Role};
 use crate::{
     error::{Error, Result},
     scene::SceneNode,
@@ -26,17 +26,18 @@ use crate::{
 
 pub struct PropertyBool {
     prop: PropertyPtr,
+    role: Role,
     idx: usize,
 }
 
 impl PropertyBool {
-    pub fn wrap(node: &SceneNode, prop_name: &str, idx: usize) -> Result<Self> {
+    pub fn wrap(node: &SceneNode, role: Role, prop_name: &str, idx: usize) -> Result<Self> {
         let prop = node.get_property(prop_name).ok_or(Error::PropertyNotFound)?;
 
         // Test if it works
         let _ = prop.get_bool(idx)?;
 
-        Ok(Self { prop, idx })
+        Ok(Self { prop, role, idx })
     }
 
     pub fn get(&self) -> bool {
@@ -44,7 +45,7 @@ impl PropertyBool {
     }
 
     pub fn set(&self, val: bool) {
-        self.prop.set_bool(self.idx, val).unwrap()
+        self.prop.set_bool(self.role, self.idx, val).unwrap()
     }
 
     pub fn prop(&self) -> PropertyPtr {
@@ -54,24 +55,25 @@ impl PropertyBool {
 
 pub struct PropertyUint32 {
     prop: PropertyPtr,
+    role: Role,
     idx: usize,
 }
 
 impl PropertyUint32 {
-    pub fn from(prop: PropertyPtr, idx: usize) -> Result<Self> {
+    pub fn from(prop: PropertyPtr, role: Role, idx: usize) -> Result<Self> {
         // Test if it works
         let _ = prop.get_u32(idx)?;
 
-        Ok(Self { prop, idx })
+        Ok(Self { prop, role, idx })
     }
 
-    pub fn wrap(node: &SceneNode, prop_name: &str, idx: usize) -> Result<Self> {
+    pub fn wrap(node: &SceneNode, role: Role, prop_name: &str, idx: usize) -> Result<Self> {
         let prop = node.get_property(prop_name).ok_or(Error::PropertyNotFound)?;
 
         // Test if it works
         let _ = prop.get_u32(idx)?;
 
-        Ok(Self { prop, idx })
+        Ok(Self { prop, role, idx })
     }
 
     pub fn get(&self) -> u32 {
@@ -79,7 +81,7 @@ impl PropertyUint32 {
     }
 
     pub fn set(&self, val: u32) {
-        self.prop.set_u32(self.idx, val).unwrap()
+        self.prop.set_u32(self.role, self.idx, val).unwrap()
     }
 
     pub fn prop(&self) -> PropertyPtr {
@@ -89,17 +91,18 @@ impl PropertyUint32 {
 
 pub struct PropertyFloat32 {
     prop: PropertyPtr,
+    role: Role,
     idx: usize,
 }
 
 impl PropertyFloat32 {
-    pub fn wrap(node: &SceneNode, prop_name: &str, idx: usize) -> Result<Self> {
+    pub fn wrap(node: &SceneNode, role: Role, prop_name: &str, idx: usize) -> Result<Self> {
         let prop = node.get_property(prop_name).ok_or(Error::PropertyNotFound)?;
 
         // Test if it works
         let _ = prop.get_f32(idx)?;
 
-        Ok(Self { prop, idx })
+        Ok(Self { prop, role, idx })
     }
 
     pub fn get(&self) -> f32 {
@@ -107,7 +110,7 @@ impl PropertyFloat32 {
     }
 
     pub fn set(&self, val: f32) {
-        self.prop.set_f32(self.idx, val).unwrap()
+        self.prop.set_f32(self.role, self.idx, val).unwrap()
     }
 
     pub fn prop(&self) -> PropertyPtr {
@@ -117,17 +120,18 @@ impl PropertyFloat32 {
 
 pub struct PropertyStr {
     prop: PropertyPtr,
+    role: Role,
     idx: usize,
 }
 
 impl PropertyStr {
-    pub fn wrap(node: &SceneNode, prop_name: &str, idx: usize) -> Result<Self> {
+    pub fn wrap(node: &SceneNode, role: Role, prop_name: &str, idx: usize) -> Result<Self> {
         let prop = node.get_property(prop_name).ok_or(Error::PropertyNotFound)?;
 
         // Test if it works
         let _ = prop.get_str(idx)?;
 
-        Ok(Self { prop, idx })
+        Ok(Self { prop, role, idx })
     }
 
     pub fn get(&self) -> String {
@@ -135,7 +139,7 @@ impl PropertyStr {
     }
 
     pub fn set<S: Into<String>>(&self, val: S) {
-        self.prop.set_str(self.idx, val.into()).unwrap()
+        self.prop.set_str(self.role, self.idx, val.into()).unwrap()
     }
 
     pub fn prop(&self) -> PropertyPtr {
@@ -145,10 +149,11 @@ impl PropertyStr {
 
 pub struct PropertyColor {
     prop: PropertyPtr,
+    role: Role,
 }
 
 impl PropertyColor {
-    pub fn wrap(node: &SceneNode, prop_name: &str) -> Result<Self> {
+    pub fn wrap(node: &SceneNode, role: Role, prop_name: &str) -> Result<Self> {
         let prop = node.get_property(prop_name).ok_or(Error::PropertyNotFound)?;
 
         if !prop.is_bounded() || prop.get_len() != 4 {
@@ -158,7 +163,7 @@ impl PropertyColor {
         // Test if it works
         let _ = prop.get_f32(0)?;
 
-        Ok(Self { prop })
+        Ok(Self { prop, role })
     }
 
     pub fn get(&self) -> [f32; 4] {
@@ -171,10 +176,10 @@ impl PropertyColor {
     }
 
     pub fn set(&self, val: [f32; 4]) {
-        self.prop.set_f32(0, val[0]).unwrap();
-        self.prop.set_f32(1, val[1]).unwrap();
-        self.prop.set_f32(2, val[2]).unwrap();
-        self.prop.set_f32(3, val[3]).unwrap();
+        self.prop.set_f32(self.role, 0, val[0]).unwrap();
+        self.prop.set_f32(self.role, 1, val[1]).unwrap();
+        self.prop.set_f32(self.role, 2, val[2]).unwrap();
+        self.prop.set_f32(self.role, 3, val[3]).unwrap();
     }
 
     pub fn prop(&self) -> PropertyPtr {

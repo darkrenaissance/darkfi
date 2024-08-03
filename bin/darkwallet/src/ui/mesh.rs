@@ -21,7 +21,7 @@ use std::sync::{Arc, Weak};
 
 use crate::{
     gfx2::{DrawCall, DrawInstruction, DrawMesh, Rectangle, RenderApiPtr, Vertex},
-    prop::{PropertyPtr, PropertyUint32},
+    prop::{PropertyPtr, PropertyUint32, Role},
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
 };
 
@@ -63,14 +63,13 @@ impl Mesh {
         let node = scene_graph.get_node(node_id).unwrap();
         let node_name = node.name.clone();
         let rect = node.get_property("rect").expect("Mesh::rect");
-        let z_index_prop = node.get_property("z_index").expect("Mesh::z_index");
-        let z_index = PropertyUint32::from(z_index_prop.clone(), 0).unwrap();
+        let z_index = PropertyUint32::wrap(node, Role::Internal, "z_index", 0).unwrap();
         drop(scene_graph);
 
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
             let mut on_modify = OnModify::new(ex, node_name, node_id, me.clone());
             on_modify.when_change(rect.clone(), Self::redraw);
-            on_modify.when_change(z_index_prop, Self::redraw);
+            on_modify.when_change(z_index.prop(), Self::redraw);
 
             Self {
                 sg,

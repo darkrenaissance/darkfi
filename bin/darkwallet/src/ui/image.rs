@@ -30,6 +30,7 @@ use crate::{
     mesh::{Color, MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_WHITE},
     prop::{
         PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyStr, PropertyUint32,
+        Role,
     },
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
     text2::{self, Glyph, GlyphPositionIter, SpritePtr, TextShaper, TextShaperPtr},
@@ -66,8 +67,8 @@ impl Image {
         let node = scene_graph.get_node(node_id).unwrap();
         let node_name = node.name.clone();
         let rect = node.get_property("rect").expect("Text::rect");
-        let z_index = PropertyUint32::wrap(node, "z_index", 0).unwrap();
-        let path = PropertyStr::wrap(node, "path", 0).unwrap();
+        let z_index = PropertyUint32::wrap(node, Role::Internal, "z_index", 0).unwrap();
+        let path = PropertyStr::wrap(node, Role::Internal, "path", 0).unwrap();
         drop(scene_graph);
 
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {

@@ -18,7 +18,7 @@
 
 use async_lock::Mutex as AsyncMutex;
 use darkfi_serial::{deserialize, Decodable, Encodable, SerialDecodable, SerialEncodable};
-use miniquad::{TouchPhase, KeyCode, KeyMods};
+use miniquad::{KeyCode, KeyMods, TouchPhase};
 use rand::{rngs::OsRng, Rng};
 use std::{
     collections::BTreeMap,
@@ -36,6 +36,7 @@ use crate::{
     mesh::{Color, MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_GREY, COLOR_WHITE},
     prop::{
         PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyStr, PropertyUint32,
+        Role,
     },
     pubsub::Subscription,
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
@@ -254,14 +255,14 @@ impl ChatView {
         let node_name = node.name.clone();
 
         let rect = node.get_property("rect").expect("ChatView::rect");
-        let scroll = PropertyFloat32::wrap(node, "scroll", 0).unwrap();
-        let font_size = PropertyFloat32::wrap(node, "font_size", 0).unwrap();
-        let line_height = PropertyFloat32::wrap(node, "line_height", 0).unwrap();
-        let baseline = PropertyFloat32::wrap(node, "baseline", 0).unwrap();
-        let timestamp_color = PropertyColor::wrap(node, "timestamp_color").unwrap();
-        let text_color = PropertyColor::wrap(node, "text_color").unwrap();
+        let scroll = PropertyFloat32::wrap(node, Role::Internal, "scroll", 0).unwrap();
+        let font_size = PropertyFloat32::wrap(node, Role::Internal, "font_size", 0).unwrap();
+        let line_height = PropertyFloat32::wrap(node, Role::Internal, "line_height", 0).unwrap();
+        let baseline = PropertyFloat32::wrap(node, Role::Internal, "baseline", 0).unwrap();
+        let timestamp_color = PropertyColor::wrap(node, Role::Internal, "timestamp_color").unwrap();
+        let text_color = PropertyColor::wrap(node, Role::Internal, "text_color").unwrap();
         let nick_colors = node.get_property("nick_colors").expect("ChatView::nick_colors");
-        let z_index = PropertyUint32::wrap(node, "z_index", 0).unwrap();
+        let z_index = PropertyUint32::wrap(node, Role::Internal, "z_index", 0).unwrap();
 
         drop(scene_graph);
 
@@ -301,8 +302,13 @@ impl ChatView {
             }
             on_modify.when_change(rect.clone(), redraw);
 
-            let mut tasks =
-                vec![mouse_wheel_task, mouse_move_task, touch_task, key_down_task, insert_line_method_task];
+            let mut tasks = vec![
+                mouse_wheel_task,
+                mouse_move_task,
+                touch_task,
+                key_down_task,
+                insert_line_method_task,
+            ];
             tasks.append(&mut on_modify.tasks);
 
             Self {

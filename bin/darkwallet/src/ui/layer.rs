@@ -22,7 +22,7 @@ use std::sync::{Arc, Weak};
 
 use crate::{
     gfx2::{DrawCall, DrawInstruction, Rectangle, RenderApiPtr},
-    prop::{PropertyBool, PropertyPtr},
+    prop::{PropertyBool, PropertyPtr, Role},
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
 };
 
@@ -55,8 +55,8 @@ impl RenderLayer {
         let node = sg.get_node(node_id).unwrap();
         let node_name = node.name.clone();
 
-        let is_visible =
-            PropertyBool::wrap(node, "is_visible", 0).expect("RenderLayer::is_visible");
+        let is_visible = PropertyBool::wrap(node, Role::Internal, "is_visible", 0)
+            .expect("RenderLayer::is_visible");
         let rect = node.get_property("rect").expect("RenderLayer::rect");
         drop(sg);
 
