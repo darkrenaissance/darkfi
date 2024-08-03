@@ -18,6 +18,7 @@
 
 #![feature(deadline_api)]
 #![feature(str_split_whitespace_remainder)]
+#![feature(duration_millis_float)]
 
 // Use these to incrementally fix warnings with cargo fix
 //#![allow(warnings, unused)]

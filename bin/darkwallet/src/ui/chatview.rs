@@ -203,6 +203,7 @@ fn select_nick_color(nick: &str, nick_colors: &[Color]) -> Color {
     color
 }
 
+#[derive(Clone)]
 struct TouchInfo {
     start_scroll: f32,
     start_y: f32,
@@ -567,6 +568,14 @@ impl ChatView {
             }
             TouchPhase::Ended => {
                 // Now calculate scroll acceleration
+                let touch_info = self.touch_info.lock().unwrap().clone();
+
+                let time = touch_info.start_instant.elapsed().as_millis_f32();
+                let dist = touch_y - touch_info.start_y;
+
+                let accel = self.mouse_scroll_start_accel.get() * dist / time;
+                self.accel.fetch_add(accel, Ordering::Relaxed);
+                self.motion_cv.notify();
             }
             TouchPhase::Cancelled => {}
         }
