@@ -88,9 +88,10 @@ pub struct EventGraph {
     p2p: P2pPtr,
     /// Sled tree containing the DAG
     dag: sled::Tree,
-
+    /// Replay logs path.
     datastore: PathBuf,
-
+    /// Run in replay_mode where if set we log Sled DB instructions
+    /// into `datastore`, useful to reacreate a faulty DAG to debug.
     replay_mode: bool,
     /// The set of unreferenced DAG tips
     unreferenced_tips: RwLock<BTreeMap<u64, HashSet<blake3::Hash>>>,
