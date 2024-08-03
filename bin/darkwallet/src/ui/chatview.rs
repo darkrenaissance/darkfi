@@ -18,7 +18,7 @@
 
 use async_lock::Mutex as AsyncMutex;
 use darkfi_serial::{deserialize, Decodable, Encodable, SerialDecodable, SerialEncodable};
-use miniquad::TouchPhase;
+use miniquad::{TouchPhase, KeyCode, KeyMods};
 use rand::{rngs::OsRng, Rng};
 use std::{
     collections::BTreeMap,
@@ -281,6 +281,11 @@ impl ChatView {
             let touch_task =
                 ex.spawn(async move { while Self::process_touch(&me2, &ev_sub).await {} });
 
+            let ev_sub = event_pub.subscribe_key_down();
+            let me2 = me.clone();
+            let key_down_task =
+                ex.spawn(async move { while Self::process_key_down(&me2, &ev_sub).await {} });
+
             let me2 = me.clone();
             let insert_line_method_task =
                 ex.spawn(
@@ -297,7 +302,7 @@ impl ChatView {
             on_modify.when_change(rect.clone(), redraw);
 
             let mut tasks =
-                vec![mouse_wheel_task, mouse_move_task, touch_task, insert_line_method_task];
+                vec![mouse_wheel_task, mouse_move_task, touch_task, key_down_task, insert_line_method_task];
             tasks.append(&mut on_modify.tasks);
 
             Self {
@@ -380,6 +385,39 @@ impl ChatView {
         };
 
         self_.handle_touch(phase, id, touch_x, touch_y).await;
+        true
+    }
+
+    async fn process_key_down(
+        me: &Weak<Self>,
+        ev_sub: &Subscription<(KeyCode, KeyMods, bool)>,
+    ) -> bool {
+        let Ok((key, mods, repeat)) = ev_sub.receive().await else {
+            debug!(target: "ui::editbox", "Event relayer closed");
+            return false
+        };
+
+        if repeat {
+            return true
+        }
+
+        let Some(self_) = me.upgrade() else {
+            // Should not happen
+            panic!("self destroyed before char_task was stopped!");
+        };
+
+        match key {
+            KeyCode::PageUp => {
+                let scroll = self_.scroll.get() + 200.;
+                self_.scrollview(scroll).await;
+            }
+            KeyCode::PageDown => {
+                let scroll = self_.scroll.get() - 200.;
+                self_.scrollview(scroll).await;
+            }
+            _ => {}
+        }
+
         true
     }
 
