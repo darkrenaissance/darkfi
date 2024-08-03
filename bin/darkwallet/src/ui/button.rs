@@ -31,6 +31,7 @@ use crate::{
     prop::{PropertyBool, PropertyPtr, PropertyUint32, Role},
     pubsub::Subscription,
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId, Signal},
+    ExecutorPtr,
 };
 
 use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify, Stoppable};
@@ -50,7 +51,7 @@ pub struct Button {
 
 impl Button {
     pub async fn new(
-        ex: Arc<smol::Executor<'static>>,
+        ex: ExecutorPtr,
         sg: SceneGraphPtr2,
         node_id: SceneNodeId,
         event_pub: GraphicsEventPublisherPtr,

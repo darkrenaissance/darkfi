@@ -29,6 +29,7 @@ use crate::{
     scene::{MethodResponseFn, Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId, SceneNodeType},
     text2::TextShaperPtr,
     ui::{chatview, Button, ChatView, EditBox, Image, Mesh, RenderLayer, Stoppable, Text, Window},
+    ExecutorPtr,
 };
 
 //fn print_type_of<T>(_: &T) {
@@ -52,12 +53,12 @@ pub struct AsyncRuntime {
     signal: smol::channel::Sender<()>,
     shutdown: smol::channel::Receiver<()>,
     exec_threadpool: std::sync::Mutex<Option<thread::JoinHandle<()>>>,
-    ex: Arc<smol::Executor<'static>>,
+    ex: ExecutorPtr,
     tasks: std::sync::Mutex<Vec<smol::Task<()>>>,
 }
 
 impl AsyncRuntime {
-    pub fn new(ex: Arc<smol::Executor<'static>>) -> Self {
+    pub fn new(ex: ExecutorPtr) -> Self {
         let (signal, shutdown) = smol::channel::unbounded::<()>();
 
         Self {
@@ -117,7 +118,7 @@ impl AsyncRuntime {
 
 pub struct App {
     sg: SceneGraphPtr2,
-    ex: Arc<smol::Executor<'static>>,
+    ex: ExecutorPtr,
     render_api: RenderApiPtr,
     event_pub: GraphicsEventPublisherPtr,
     text_shaper: TextShaperPtr,
@@ -126,7 +127,7 @@ pub struct App {
 impl App {
     pub fn new(
         sg: SceneGraphPtr2,
-        ex: Arc<smol::Executor<'static>>,
+        ex: ExecutorPtr,
         render_api: RenderApiPtr,
         event_pub: GraphicsEventPublisherPtr,
         text_shaper: TextShaperPtr,

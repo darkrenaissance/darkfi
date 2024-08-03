@@ -23,6 +23,7 @@ use crate::{
     gfx2::{DrawCall, DrawInstruction, DrawMesh, Rectangle, RenderApiPtr, Vertex},
     prop::{PropertyPtr, PropertyUint32, Role},
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
+    ExecutorPtr,
 };
 
 use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify, Stoppable};
@@ -48,7 +49,7 @@ pub struct Mesh {
 
 impl Mesh {
     pub async fn new(
-        ex: Arc<smol::Executor<'static>>,
+        ex: ExecutorPtr,
         sg: SceneGraphPtr2,
         node_id: SceneNodeId,
         render_api: RenderApiPtr,

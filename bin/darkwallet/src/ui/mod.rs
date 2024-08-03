@@ -25,6 +25,7 @@ use crate::{
     gfx2::{DrawCall, Rectangle},
     prop::{PropertyPtr, Role},
     scene::{SceneGraph, SceneNode, SceneNodeId, SceneNodeType},
+    ExecutorPtr,
 };
 
 mod button;
@@ -56,7 +57,7 @@ pub struct DrawUpdate {
 }
 
 pub struct OnModify<T> {
-    ex: Arc<smol::Executor<'static>>,
+    ex: ExecutorPtr,
     node_name: String,
     node_id: SceneNodeId,
     me: Weak<T>,
@@ -64,12 +65,7 @@ pub struct OnModify<T> {
 }
 
 impl<T: Send + Sync + 'static> OnModify<T> {
-    pub fn new(
-        ex: Arc<smol::Executor<'static>>,
-        node_name: String,
-        node_id: SceneNodeId,
-        me: Weak<T>,
-    ) -> Self {
+    pub fn new(ex: ExecutorPtr, node_name: String, node_id: SceneNodeId, me: Weak<T>) -> Self {
         Self { ex, node_name, node_id, me, tasks: vec![] }
     }
 

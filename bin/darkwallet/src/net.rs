@@ -29,6 +29,7 @@ use crate::{
     expr::SExprCode,
     prop::{Property, PropertySubType, PropertyType, PropertyValue, Role},
     scene::{SceneGraphPtr2, SceneNodeId, SceneNodeType, Slot, SlotId},
+    ExecutorPtr,
 };
 
 #[derive(Debug, SerialDecodable)]
@@ -77,14 +78,14 @@ pub struct ZeroMQAdapter {
     slot_recvr: Option<mpsc::Receiver<(Vec<u8>, Vec<u8>)>>,
     */
     scene_graph: SceneGraphPtr2,
-    ex: Arc<smol::Executor<'static>>,
+    ex: ExecutorPtr,
 
     zmq_rep: Mutex<zeromq::RepSocket>,
     zmq_pub: Mutex<zeromq::PubSocket>,
 }
 
 impl ZeroMQAdapter {
-    pub async fn new(scene_graph: SceneGraphPtr2, ex: Arc<smol::Executor<'static>>) -> Arc<Self> {
+    pub async fn new(scene_graph: SceneGraphPtr2, ex: ExecutorPtr) -> Arc<Self> {
         let mut zmq_rep = zeromq::RepSocket::new();
         zmq_rep.bind("tcp://0.0.0.0:9484").await.unwrap();
 

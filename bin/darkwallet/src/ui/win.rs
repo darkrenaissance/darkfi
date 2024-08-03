@@ -22,6 +22,7 @@ use crate::{
     gfx2::{DrawCall, GraphicsEventPublisherPtr, Rectangle, RenderApiPtr},
     prop::{PropertyPtr, Role},
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
+    ExecutorPtr,
 };
 
 use super::{OnModify, Stoppable};
@@ -39,7 +40,7 @@ pub struct Window {
 
 impl Window {
     pub async fn new(
-        ex: Arc<smol::Executor<'static>>,
+        ex: ExecutorPtr,
         sg: SceneGraphPtr2,
         node_id: SceneNodeId,
         render_api: RenderApiPtr,

@@ -31,6 +31,7 @@ use crate::{
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
     text2::{self, Glyph, GlyphPositionIter, SpritePtr, TextShaper, TextShaperPtr},
     util::zip3,
+    ExecutorPtr,
 };
 
 use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify, Stoppable};
@@ -65,7 +66,7 @@ pub struct Text {
 
 impl Text {
     pub async fn new(
-        ex: Arc<smol::Executor<'static>>,
+        ex: ExecutorPtr,
         sg: SceneGraphPtr2,
         node_id: SceneNodeId,
         render_api: RenderApiPtr,
