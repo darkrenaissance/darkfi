@@ -23,6 +23,7 @@ glam = "0.28.0"
 #async_zmq = "0.4.0"
 zeromq = { version = "0.4.0", default-features = false, features = ["async-std-runtime", "all-transport"] }
 darkfi-serial = { git = "https://codeberg.org/darkrenaissance/darkfi" }
+darkfi = { git = "https://codeberg.org/darkrenaissance/darkfi", features = ["system"] }
 thiserror = "1.0.61"
 smol = "2.0.0"
 atomic_float = "1.0.0"

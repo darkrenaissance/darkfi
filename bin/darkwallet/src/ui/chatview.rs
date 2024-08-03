@@ -17,6 +17,8 @@
  */
 
 use async_lock::Mutex as AsyncMutex;
+use atomic_float::AtomicF32;
+use darkfi::system::{msleep, CondVar};
 use darkfi_serial::{deserialize, Decodable, Encodable, SerialDecodable, SerialEncodable};
 use miniquad::{KeyCode, KeyMods, TouchPhase};
 use rand::{rngs::OsRng, Rng};
@@ -24,7 +26,7 @@ use std::{
     collections::BTreeMap,
     hash::{DefaultHasher, Hash, Hasher},
     io::Cursor,
-    sync::{Arc, Mutex as SyncMutex, Weak},
+    sync::{atomic::Ordering, Arc, Mutex as SyncMutex, Weak},
 };
 
 use crate::{
@@ -48,8 +50,15 @@ use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify, Stoppab
 
 const DEBUG_RENDER: bool = false;
 
+const EPSILON: f32 = 0.001;
+const BIG_EPSILON: f32 = 0.05;
+
 fn is_whitespace(s: &str) -> bool {
     s.chars().all(char::is_whitespace)
+}
+
+fn is_zero(x: f32) -> bool {
+    x.abs() < EPSILON
 }
 
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
@@ -236,6 +245,15 @@ pub struct ChatView {
     text_color: PropertyColor,
     nick_colors: PropertyPtr,
     z_index: PropertyUint32,
+
+    mouse_scroll_start_accel: PropertyFloat32,
+    mouse_scroll_decel: PropertyFloat32,
+    mouse_scroll_resist: PropertyFloat32,
+
+    // Scroll accel
+    motion_cv: Arc<CondVar>,
+    accel: AtomicF32,
+    speed: AtomicF32,
 }
 
 impl ChatView {
@@ -264,6 +282,12 @@ impl ChatView {
         let nick_colors = node.get_property("nick_colors").expect("ChatView::nick_colors");
         let z_index = PropertyUint32::wrap(node, Role::Internal, "z_index", 0).unwrap();
 
+        let mouse_scroll_start_accel =
+            PropertyFloat32::wrap(node, Role::Internal, "mouse_scroll_start_accel", 0).unwrap();
+        let mouse_scroll_decel =
+            PropertyFloat32::wrap(node, Role::Internal, "mouse_scroll_decel", 0).unwrap();
+        let mouse_scroll_resist =
+            PropertyFloat32::wrap(node, Role::Internal, "mouse_scroll_resist", 0).unwrap();
         drop(scene_graph);
 
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
@@ -293,6 +317,21 @@ impl ChatView {
                     async move { while Self::process_insert_line_method(&me2, &recvr).await {} },
                 );
 
+            let me2 = me.clone();
+            let motion_cv = Arc::new(CondVar::new());
+            let cv = motion_cv.clone();
+            let motion_task = ex.spawn(async move {
+                loop {
+                    cv.wait().await;
+                    let Some(self_) = me2.upgrade() else {
+                        // Should not happen
+                        panic!("self destroyed before motion_task was stopped!");
+                    };
+                    self_.handle_movement().await;
+                    cv.reset();
+                }
+            });
+
             let mut on_modify = OnModify::new(ex, node_name, node_id, me.clone());
 
             async fn reload_view(self_: Arc<ChatView>) {
@@ -311,6 +350,7 @@ impl ChatView {
                 touch_task,
                 key_down_task,
                 insert_line_method_task,
+                motion_task,
             ];
             tasks.append(&mut on_modify.tasks);
 
@@ -339,6 +379,14 @@ impl ChatView {
                 text_color,
                 nick_colors,
                 z_index,
+
+                mouse_scroll_start_accel,
+                mouse_scroll_decel,
+                mouse_scroll_resist,
+
+                motion_cv,
+                accel: AtomicF32::new(0.),
+                speed: AtomicF32::new(0.),
             }
         });
 
@@ -471,9 +519,13 @@ impl ChatView {
             //debug!(target: "ui::chatview", "not inside rect");
             return
         }
+
         //debug!(target: "ui::chatview", "inside rect");
-        let scroll = self.scroll.get() + wheel_y * 50.;
-        self.scrollview(scroll).await;
+        //let scroll = self.scroll.get() + wheel_y * 50.;
+        //self.scrollview(scroll).await;
+
+        self.accel.fetch_add(wheel_y * self.mouse_scroll_start_accel.get(), Ordering::Relaxed);
+        self.motion_cv.notify();
     }
 
     async fn handle_mouse_move(&self, mouse_x: f32, mouse_y: f32) {
@@ -564,6 +616,48 @@ impl ChatView {
         // This will refresh the view, so we just use this
         let mut scroll = self.scroll.get();
         self.scrollview(scroll).await;
+    }
+
+    async fn handle_movement(&self) {
+        loop {
+            msleep(20).await;
+            let mut accel = self.accel.load(Ordering::Relaxed);
+            let mut speed = self.speed.fetch_add(accel, Ordering::Relaxed) + accel;
+            accel *= self.mouse_scroll_decel.get();
+            if accel.abs() < 0.05 {
+                accel = 0.;
+            }
+            self.accel.store(accel, Ordering::Relaxed);
+
+            // Apply constant decel to speed
+            if is_zero(accel) {
+                speed *= self.mouse_scroll_resist.get();
+                if speed.abs() < BIG_EPSILON {
+                    speed = 0.;
+                }
+                self.speed.store(speed, Ordering::Relaxed);
+            }
+
+            // Finished
+            if is_zero(accel) && is_zero(speed) {
+                return
+            }
+
+            if is_zero(speed) {
+                self.accel.store(0., Ordering::Relaxed);
+                self.speed.store(0., Ordering::Relaxed);
+                return
+            }
+
+            let scroll = self.scroll.get() + speed;
+            let dist = self.scrollview(scroll).await;
+
+            if is_zero(dist) {
+                self.accel.store(0., Ordering::Relaxed);
+                self.speed.store(0., Ordering::Relaxed);
+                return
+            }
+        }
     }
 
     /// Descent = line height - baseline
@@ -771,13 +865,15 @@ impl ChatView {
 
     /// Basically a version of redraw() where regen_mesh() is never called.
     /// Instead we use the cached version.
-    async fn scrollview(&self, mut scroll: f32) {
-        debug!(target: "ui::chatview", "scrollview()");
+    async fn scrollview(&self, mut scroll: f32) -> f32 {
+        //debug!(target: "ui::chatview", "scrollview()");
+        let old_scroll = self.scroll.get();
+
         let sg = self.sg.lock().await;
         let node = sg.get_node(self.node_id).unwrap();
 
         let Some(parent_rect) = get_parent_rect(&sg, node) else {
-            return;
+            return 0.;
         };
 
         if let Err(err) = eval_rect(self.rect.clone(), &parent_rect) {
@@ -798,6 +894,7 @@ impl ChatView {
         self.render_api.replace_draw_calls(draw_calls).await;
 
         self.scroll.set(scroll);
+        scroll - old_scroll
     }
 
     async fn redraw(&self) {
