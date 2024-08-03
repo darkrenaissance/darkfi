@@ -295,7 +295,10 @@ impl ChatView {
 
             let mut on_modify = OnModify::new(ex, node_name, node_id, me.clone());
 
-            //on_modify.when_change(scroll.prop(), Self::scrollview);
+            async fn reload_view(self_: Arc<ChatView>) {
+                self_.scrollview(self_.scroll.get()).await;
+            }
+            on_modify.when_change(scroll.prop(), reload_view);
 
             async fn redraw(self_: Arc<ChatView>) {
                 self_.redraw().await;
