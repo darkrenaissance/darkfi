@@ -119,8 +119,19 @@ pub struct EventGraph {
 }
 
 impl EventGraph {
-    /// Create a new [`EventGraph`] instance.
-    /// * `days_rotation` marks the lifetime of the DAG before it's pruned.
+    /// Create a new [`EventGraph`] instance, creates a new Genesis
+    /// event and checks if it
+    /// is containd in DAG, if not prunes DAG, may also start a pruning
+    /// task based on `days_rotation`, and return an atomic instance of
+    /// `Self`
+    /// * `p2p` atomic pointer to p2p.
+    /// * `sled_db` sled DB instance.
+    /// * `datastore` path where we should log db instrucion if run in
+    ///   replay mode.
+    /// * `replay_mode` set the flag to keep a log of db instructions.
+    /// * `dag_tree_name` the name of disk-backed tree (or DAG name).
+    /// * `days_rotation` marks the lifetime of the DAG before it's
+    ///   pruned.
     pub async fn new(
         p2p: P2pPtr,
         sled_db: sled::Db,
