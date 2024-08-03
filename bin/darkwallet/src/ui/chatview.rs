@@ -599,16 +599,21 @@ impl ChatView {
         let mut pages = self.pages2.lock().await;
         let mut idx = None;
         for (i, page) in pages.iter_mut().enumerate() {
-            let first_timest = page.msgs.first().unwrap().timest;
-            let last_timest = page.msgs.last().unwrap().timest;
+            let first_timest = page.msgs.last().unwrap().timest;
+            let last_timest = page.msgs.first().unwrap().timest;
 
+            //debug!(target: "ui::chatview", "page {i} [{first_timest}, {last_timest}]");
             if first_timest <= timest && timest <= last_timest {
+                //debug!(target: "ui::chatview", "found page {i} [{first_timest}, {last_timest}]");
                 idx = Some(i);
             }
         }
         let idx = match idx {
             Some(idx) => idx,
-            None => 0,
+            None => {
+                //debug!(target: "ui::chatview", "no page found");
+                0
+            },
         };
 
         let page = &mut pages[idx];
@@ -742,7 +747,7 @@ impl ChatView {
             let key_bytes: [u8; 4] = k.as_ref().try_into().unwrap();
             let timest = Timestamp::from_be_bytes(key_bytes);
             let chatmsg: ChatMsg = deserialize(&v).unwrap();
-            debug!(target: "ui::chatview", "{k:?} {chatmsg:?}");
+            debug!(target: "ui::chatview", "{timest:?} {chatmsg:?}");
 
             let timestr = timest.to_string();
             // left pad with zeros
