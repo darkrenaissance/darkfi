@@ -23,7 +23,7 @@ use crate::{
     error::{Error, Result},
     expr::{SExprMachine, SExprVal},
     gfx2::{DrawCall, Rectangle},
-    prop::PropertyPtr,
+    prop::{PropertyPtr, Role},
     scene::{SceneGraph, SceneNode, SceneNodeId, SceneNodeType},
 };
 
@@ -84,7 +84,15 @@ impl<T: Send + Sync + 'static> OnModify<T> {
         let me = self.me.clone();
         let task = self.ex.spawn(async move {
             loop {
-                let _ = on_modify_sub.receive().await;
+                let Ok((role, _)) = on_modify_sub.receive().await else {
+                    error!(target: "app", "Property '{}':{}/'{}' on_modify pipe is broken", node_name, node_id, prop_name);
+                    return
+                };
+
+                if role == Role::Internal {
+                    continue
+                }
+
                 debug!(target: "app", "Property '{}':{}/'{}' modified", node_name, node_id, prop_name);
 
                 let Some(self_) = me.upgrade() else {

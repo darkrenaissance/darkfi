@@ -74,7 +74,7 @@ pub enum PropertySubType {
     ResourceId = 3,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Role {
     User = 0,
     App = 1,
