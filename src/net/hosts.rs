@@ -721,6 +721,16 @@ impl HostContainer {
 
         let darklist = self.fetch_all(HostColor::Dark);
         for (addr, last_seen) in darklist {
+            // Skip if last_seen comes from the future.
+            //
+            // We do this to avoid an overflow, which can happen if
+            // our system clock is behind or if other nodes are
+            // misreporting the last_seen field.
+            if now < last_seen {
+                warn!(target: "net::hosts::refresh()",
+                "System clock is behind or peer is misreporting last_seen field");
+                continue
+            }
             if (now - last_seen) > max_age {
                 old_items.push(addr);
             }
@@ -1607,6 +1617,23 @@ mod tests {
             for (_, last_seen) in darklist.iter() {
                 assert!(*last_seen > old_timestamp);
             }
+
+            drop(darklist);
+            let now = UNIX_EPOCH.elapsed().unwrap().as_secs();
+            let future_timestamp = now + 100;
+
+            // Insert another 5 items into the darklist with a timestamp from the future.
+            for i in 0..5 {
+                let last_seen = future_timestamp;
+                let url = Url::parse(&format!("tcp://future_darklist{}:123", i)).unwrap();
+                hosts.container.store(HostColor::Dark as usize, url.clone(), last_seen);
+            }
+
+            hosts.container.refresh(HostColor::Dark, day);
+
+            // Darklist length should be 5 + 5 (new entries + future entries)
+            let darklist = hosts.container.hostlists[HostColor::Dark as usize].read().unwrap();
+            assert!(darklist.len() == 10);
         });
     }
 
