@@ -18,7 +18,10 @@
 
 use async_channel::Sender;
 use async_lock::Mutex;
-use darkfi_serial::{SerialDecodable, SerialEncodable};
+use darkfi_serial::{
+    async_trait, deserialize, Decodable, Encodable, FutAsyncWriteExt, ReadExt, SerialDecodable,
+    SerialEncodable, VarInt,
+};
 use futures::{stream::FuturesUnordered, StreamExt};
 use std::{fmt, str::FromStr, sync::Arc};
 

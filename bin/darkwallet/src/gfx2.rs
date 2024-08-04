@@ -16,7 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_serial::{SerialDecodable, SerialEncodable};
+use darkfi_serial::{
+    async_trait, Decodable, Encodable, FutAsyncWriteExt, ReadExt, SerialDecodable, SerialEncodable,
+};
 use log::debug;
 use miniquad::{
     conf, window, Backend, Bindings, BlendFactor, BlendState, BlendValue, BufferId, BufferLayout,

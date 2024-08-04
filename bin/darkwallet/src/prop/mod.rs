@@ -17,7 +17,10 @@
  */
 
 use crate::error::{Error, Result};
-use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
+use darkfi_serial::{
+    async_trait, deserialize, Decodable, Encodable, FutAsyncWriteExt, ReadExt, SerialDecodable,
+    SerialEncodable, VarInt,
+};
 use std::{
     io::Write,
     sync::{Arc, Mutex},

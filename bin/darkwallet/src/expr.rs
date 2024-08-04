@@ -20,7 +20,9 @@ use crate::{
     error::{Error, Result},
     //prop::{Property, PropertySubType, PropertyType, PropertySExprValue},
 };
-use darkfi_serial::{Decodable, Encodable, ReadExt, SerialDecodable, SerialEncodable};
+use darkfi_serial::{
+    async_trait, Decodable, Encodable, FutAsyncWriteExt, ReadExt, SerialDecodable, SerialEncodable,
+};
 use std::io::{Read, Write};
 
 #[derive(Clone, Debug, PartialEq, SerialEncodable, SerialDecodable)]

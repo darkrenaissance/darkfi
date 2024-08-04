@@ -1,11 +1,12 @@
 [package]
 name = "darkwallet"
+description = "Wallet UI"
 version = "0.1.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[workspace]
+authors = ["Dyne.org foundation <foundation@dyne.org>"]
+license = "AGPL-3.0-only"
+homepage = "https://dark.fi"
+repository = "https://codeberg.org/darkrenaissance/darkfi"
 
 [dependencies]
 miniquad = { git = "https://github.com/not-fl3/miniquad" }
@@ -22,8 +23,9 @@ glam = "0.28.0"
 #zmq = "0.10.0"
 #async_zmq = "0.4.0"
 zeromq = { version = "0.4.0", default-features = false, features = ["async-std-runtime", "all-transport"] }
-darkfi-serial = { git = "https://codeberg.org/darkrenaissance/darkfi" }
-darkfi = { git = "https://codeberg.org/darkrenaissance/darkfi", features = ["system"] }
+darkfi = {path = "../../", features = ["async-daemonize", "event-graph", "net", "util", "system", "zk"]}
+#darkfi-sdk = {path = "../../src/sdk", features = ["async"]}
+darkfi-serial = {path = "../../src/serial", features = ["async"]}
 thiserror = "1.0.61"
 smol = "2.0.0"
 atomic_float = "1.0.0"
@@ -40,6 +42,9 @@ sled = "0.34.7"
 [patch.crates-io]
 freetype-rs = { git = "https://github.com/narodnik/freetype-rs" }
 freetype-sys = { git = "https://github.com/narodnik/freetype-sys" }
+# I'm so confused why this is needed
+halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v4"}
+halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v4"}
 
 [target.'cfg(target_os = "android")'.dependencies]
 android_logger = "0.13.3"

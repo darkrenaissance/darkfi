@@ -19,7 +19,10 @@
 use async_lock::Mutex as AsyncMutex;
 use atomic_float::AtomicF32;
 use darkfi::system::{msleep, CondVar};
-use darkfi_serial::{deserialize, Decodable, Encodable, SerialDecodable, SerialEncodable};
+use darkfi_serial::{
+    async_trait, deserialize, Decodable, Encodable, FutAsyncWriteExt, ReadExt, SerialDecodable,
+    SerialEncodable, VarInt,
+};
 use miniquad::{KeyCode, KeyMods, TouchPhase};
 use rand::{rngs::OsRng, Rng};
 use std::{

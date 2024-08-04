@@ -33,6 +33,7 @@ extern crate log;
 use log::LevelFilter;
 
 mod app;
+mod darkirc;
 //mod chatapp;
 //mod chatview;
 //mod editbox;
@@ -62,6 +63,15 @@ fn panic_hook(panic_info: &std::panic::PanicInfo) {
     error!("panic occurred: {panic_info}");
     //error!("panic: {}", std::backtrace::Backtrace::force_capture().to_string());
     std::process::exit(1);
+}
+
+fn newmain() {
+    let ex = Arc::new(smol::Executor::new());
+    smol::block_on(async {
+        let mut p2p_settings: darkfi::net::Settings = Default::default();
+        //p2p_settings.app_version = semver::Version::parse(env!("CARGO_PKG_VERSION")).unwrap();
+        let p2p = darkfi::net::P2p::new(p2p_settings, ex.clone()).await.unwrap();
+    });
 }
 
 fn main() {
