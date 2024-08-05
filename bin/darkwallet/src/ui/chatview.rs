@@ -151,6 +151,7 @@ impl Page2 {
         nick_colors: &[Color],
         timestamp_color: Color,
         text_color: Color,
+        debug_render: bool,
     ) -> (PageMeshInfo, Option<DrawMesh>) {
         let mut wrapped_line_idx = 0;
 
@@ -180,8 +181,13 @@ impl Page2 {
                 }
 
                 // debug draw baseline
-                //let y = baseline - off_y;
-                //mesh.draw_filled_box(&Rectangle { x: 0., y: y - 1., w: clip.w, h: 1. }, COLOR_BLUE);
+                if debug_render {
+                    let y = baseline - off_y;
+                    mesh.draw_filled_box(
+                        &Rectangle { x: 0., y: y - 1., w: clip.w, h: 1. },
+                        COLOR_BLUE,
+                    );
+                }
 
                 // Render line
                 let mut glyph_pos_iter = GlyphPositionIter::new(font_size, &line, baseline);
@@ -195,7 +201,10 @@ impl Page2 {
                         _ => text_color,
                     };
 
-                    //mesh.draw_outline(&glyph_rect, COLOR_BLUE, 2.);
+                    //if debug_render {
+                    //    mesh.draw_outline(&glyph_rect, COLOR_BLUE, 2.);
+                    //}
+
                     mesh.draw_box(&glyph_rect, color, uv_rect);
 
                     if section < 2 && is_whitespace(&glyph.substr) {
@@ -208,7 +217,13 @@ impl Page2 {
 
         let px_height = wrapped_line_idx as f32 * line_height;
 
-        mesh.draw_outline(&Rectangle { x: 0., y: 0., w: clip.w, h: -px_height }, COLOR_GREEN, 1.);
+        if debug_render {
+            mesh.draw_outline(
+                &Rectangle { x: 0., y: 0., w: clip.w, h: -px_height },
+                COLOR_GREEN,
+                1.,
+            );
+        }
 
         let mesh = mesh.alloc(render_api).await.unwrap();
         let mesh = mesh.draw_with_texture(atlas.texture_id);
@@ -273,6 +288,7 @@ pub struct ChatView {
     text_color: PropertyColor,
     nick_colors: PropertyPtr,
     z_index: PropertyUint32,
+    debug: PropertyBool,
 
     mouse_scroll_start_accel: PropertyFloat32,
     mouse_scroll_decel: PropertyFloat32,
@@ -309,6 +325,7 @@ impl ChatView {
         let text_color = PropertyColor::wrap(node, Role::Internal, "text_color").unwrap();
         let nick_colors = node.get_property("nick_colors").expect("ChatView::nick_colors");
         let z_index = PropertyUint32::wrap(node, Role::Internal, "z_index", 0).unwrap();
+        let debug = PropertyBool::wrap(node, Role::Internal, "debug", 0).unwrap();
 
         let mouse_scroll_start_accel =
             PropertyFloat32::wrap(node, Role::Internal, "mouse_scroll_start_accel", 0).unwrap();
@@ -371,6 +388,7 @@ impl ChatView {
                 self_.redraw().await;
             }
             on_modify.when_change(rect.clone(), redraw);
+            on_modify.when_change(debug.prop(), redraw);
 
             let mut tasks = vec![
                 mouse_wheel_task,
@@ -407,6 +425,7 @@ impl ChatView {
                 text_color,
                 nick_colors,
                 z_index,
+                debug,
 
                 mouse_scroll_start_accel,
                 mouse_scroll_decel,
@@ -766,6 +785,7 @@ impl ChatView {
     }
 
     async fn populate(&self) {
+        debug!(target: "ui::chatview", "populating pages");
         let iter = self.tree.iter().rev();
         self.load_n_pages(iter, PRELOAD_PAGES).await;
     }
@@ -811,6 +831,7 @@ impl ChatView {
             msgs.push(Message { timest, id: message_id, chatmsg, glyphs });
 
             if msgs.len() >= PAGE_SIZE {
+                debug!(target: "ui::chatview", "added new page. page_len={pages_len}");
                 let msgs = std::mem::take(&mut msgs);
                 let page = Page2::new(msgs, &self.render_api).await;
 
@@ -825,6 +846,7 @@ impl ChatView {
 
         // Any remaining messages added to a short page
         if !msgs.is_empty() {
+            debug!(target: "ui::chatview", "added final page. page_len={pages_len}");
             let page = Page2::new(msgs, &self.render_api).await;
 
             self.pages2.lock().await.push(page);
@@ -840,6 +862,7 @@ impl ChatView {
         let font_size = self.font_size.get();
         let line_height = self.line_height.get();
         let baseline = self.baseline.get();
+        let debug_render = self.debug.get();
 
         let timest_color = self.timestamp_color.get();
         let text_color = self.text_color.get();
@@ -863,6 +886,7 @@ impl ChatView {
                             &nick_colors,
                             timest_color.clone(),
                             text_color.clone(),
+                            debug_render,
                         )
                         .await;
                     assert!(old_drawmesh.is_none());
@@ -990,6 +1014,7 @@ impl ChatView {
         let line_height = self.line_height.get();
         let baseline = self.baseline.get();
         let descent = self.descent();
+        let debug_render = self.debug.get();
 
         let mut instrs = vec![];
         let mut old_drawmesh = vec![];
@@ -1017,6 +1042,7 @@ impl ChatView {
                     &nick_colors,
                     timest_color.clone(),
                     text_color.clone(),
+                    debug_render,
                 )
                 .await;
 
