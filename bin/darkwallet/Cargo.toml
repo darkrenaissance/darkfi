@@ -37,7 +37,9 @@ futures = "0.3.30"
 async-recursion = "1.1.1"
 colored = "2.1.0"
 #rustpython-vm = "0.3.1"
-sled = "0.34.7"
+sled = "0.34"
+url = "2.5"
+semver = "1.0"
 
 [patch.crates-io]
 freetype-rs = { git = "https://github.com/narodnik/freetype-rs" }
