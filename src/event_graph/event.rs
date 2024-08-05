@@ -31,7 +31,7 @@ use super::{
 /// Representation of an event in the Event Graph
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct Event {
-    /// Timestamp of the event
+    /// Timestamp of the event in whole seconds
     pub(crate) timestamp: u64,
     /// Content of the event
     pub(crate) content: Vec<u8>,
