@@ -38,7 +38,7 @@ use crate::{
         DrawCall, DrawInstruction, DrawMesh, GraphicsEventPublisherPtr, Point, Rectangle,
         RenderApi, RenderApiPtr, Vertex,
     },
-    mesh::{Color, MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_GREY, COLOR_WHITE},
+    mesh::{Color, MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_GREEN, COLOR_GREY, COLOR_WHITE},
     prop::{
         PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyStr, PropertyUint32,
         Role,
@@ -71,11 +71,13 @@ pub struct ChatMsg {
     pub text: String,
 }
 
-type Timestamp = u32;
+type Timestamp = u64;
+type MessageId = [u8; 32];
 
 #[derive(Clone)]
 struct Message {
     timest: Timestamp,
+    id: MessageId,
     chatmsg: ChatMsg,
     glyphs: Vec<Glyph>,
 }
@@ -186,6 +188,8 @@ impl Page2 {
         }
 
         let px_height = wrapped_line_idx as f32 * line_height;
+
+        //mesh.draw_outline(&Rectangle { x: 0., y: 0., w: clip.w, h: -px_height }, COLOR_GREEN, 1.);
 
         let mesh = mesh.alloc(render_api).await.unwrap();
         let mesh = mesh.draw_with_texture(atlas.texture_id);
@@ -492,15 +496,16 @@ impl ChatView {
             return false
         };
 
-        fn decode_data(data: &[u8]) -> std::io::Result<(u32, String, String)> {
+        fn decode_data(data: &[u8]) -> std::io::Result<(Timestamp, MessageId, String, String)> {
             let mut cur = Cursor::new(&data);
-            let timestamp = u32::decode(&mut cur)?;
+            let timestamp = Timestamp::decode(&mut cur)?;
+            let message_id = MessageId::decode(&mut cur)?;
             let nick = String::decode(&mut cur)?;
             let text = String::decode(&mut cur)?;
-            Ok((timestamp, nick, text))
+            Ok((timestamp, message_id, nick, text))
         }
 
-        let Ok((timestamp, nick, text)) = decode_data(&data) else {
+        let Ok((timestamp, message_id, nick, text)) = decode_data(&data) else {
             error!(target: "ui::chatview", "insert_line() method invalid arg data");
             return true
         };
@@ -510,7 +515,7 @@ impl ChatView {
             panic!("self destroyed before touch_task was stopped!");
         };
 
-        self_.handle_insert_line(timestamp, nick, text).await;
+        self_.handle_insert_line(timestamp, message_id, nick, text).await;
         true
     }
 
@@ -585,8 +590,14 @@ impl ChatView {
         }
     }
 
-    async fn handle_insert_line(&self, timest: u32, nick: String, text: String) {
-        debug!(target: "ui::chatview", "handle_insert_line({timest}, {nick}, {text})");
+    async fn handle_insert_line(
+        &self,
+        timest: Timestamp,
+        message_id: MessageId,
+        nick: String,
+        text: String,
+    ) {
+        debug!(target: "ui::chatview", "handle_insert_line({timest}, {message_id:?}, {nick}, {text})");
 
         let chatmsg = ChatMsg { nick, text };
 
@@ -622,7 +633,7 @@ impl ChatView {
 
         let page = &mut pages[idx];
         let mut msgs = page.msgs.clone();
-        msgs.push(Message { timest, chatmsg, glyphs });
+        msgs.push(Message { timest, id: message_id, chatmsg, glyphs });
         msgs.sort_unstable_by_key(|msg| msg.timest);
         msgs.reverse();
 
@@ -747,9 +758,10 @@ impl ChatView {
 
         for entry in iter {
             let Ok((k, v)) = entry else { break };
-            assert_eq!(k.len(), 4);
-            let key_bytes: [u8; 4] = k.as_ref().try_into().unwrap();
-            let timest = Timestamp::from_be_bytes(key_bytes);
+            assert_eq!(k.len(), 8 + 32);
+            let timest_bytes: [u8; 8] = k[..8].try_into().unwrap();
+            let message_id: MessageId = k[8..].try_into().unwrap();
+            let timest = Timestamp::from_be_bytes(timest_bytes);
             let chatmsg: ChatMsg = deserialize(&v).unwrap();
             debug!(target: "ui::chatview", "{timest:?} {chatmsg:?}");
 
@@ -761,7 +773,7 @@ impl ChatView {
             let text = format!("{} {} {}", timestr, chatmsg.nick, chatmsg.text);
             let glyphs = self.text_shaper.shape(text, self.font_size.get()).await;
 
-            msgs.push(Message { timest, chatmsg, glyphs });
+            msgs.push(Message { timest, id: message_id, chatmsg, glyphs });
 
             if msgs.len() >= LINES_PER_PAGE {
                 let msgs = std::mem::take(&mut msgs);
@@ -1024,26 +1036,6 @@ impl ChatView {
         }
 
         (instrs, old_drawmesh)
-
-        /*
-        if DEBUG_RENDER {
-            let mut debug_mesh = MeshBuilder::new();
-            debug_mesh.draw_outline(
-                &Rectangle { x: 0., y: -clip.h, w: clip.w, h: clip.h },
-                COLOR_BLUE,
-                2.,
-            );
-            let mesh = debug_mesh.alloc(&self.render_api).await.unwrap();
-            draws.push(DrawMesh {
-                vertex_buffer: mesh.vertex_buffer,
-                index_buffer: mesh.index_buffer,
-                texture: None,
-                num_elements: mesh.num_elements,
-            });
-        }
-
-        draws
-        */
     }
 
     fn read_nick_colors(&self) -> Vec<Color> {

@@ -40,6 +40,7 @@ colored = "2.1.0"
 sled = "0.34"
 url = "2.5"
 semver = "1.0"
+chrono = "0.4"
 
 [patch.crates-io]
 freetype-rs = { git = "https://github.com/narodnik/freetype-rs" }

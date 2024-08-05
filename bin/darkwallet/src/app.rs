@@ -17,6 +17,7 @@
  */
 
 use async_recursion::async_recursion;
+use chrono::{NaiveDate, NaiveDateTime};
 use darkfi_serial::Encodable;
 use futures::{stream::FuturesUnordered, StreamExt};
 use std::{sync::Arc, thread};
@@ -26,7 +27,10 @@ use crate::{
     expr::Op,
     gfx2::{GraphicsEventPublisherPtr, RenderApiPtr, Vertex},
     prop::{Property, PropertySubType, PropertyType, Role},
-    scene::{MethodResponseFn, Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId, SceneNodeType},
+    scene::{
+        CallArgType, MethodResponseFn, Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId,
+        SceneNodeType,
+    },
     text2::TextShaperPtr,
     ui::{chatview, Button, ChatView, EditBox, Image, Mesh, RenderLayer, Stoppable, Text, Window},
     ExecutorPtr,
@@ -743,13 +747,23 @@ fn populate_tree(tree: &sled::Tree) {
     for line in chat_txt.lines() {
         let parts: Vec<&str> = line.splitn(3, ' ').collect();
         assert_eq!(parts.len(), 3);
-        let timest = parts[0].replace(':', "").parse::<u32>().unwrap();
+        let time_parts: Vec<&str> = parts[0].splitn(2, ':').collect();
+        let (hour, min) = (time_parts[0], time_parts[1]);
+        let hour = hour.parse::<u32>().unwrap();
+        let min = min.parse::<u32>().unwrap();
+        let dt: NaiveDateTime =
+            NaiveDate::from_ymd_opt(2024, 8, 6).unwrap().and_hms_opt(hour, min, 0).unwrap();
+        let timest = dt.and_utc().timestamp_millis() as u64;
+
+        let message_id = [0u8; 32];
         let nick = parts[1].to_string();
         let text = parts[2].to_string();
 
         // serial order is important here
-        let key = timest.to_be_bytes();
-        //timest.encode(&mut key).unwrap();
+        let timest = timest.to_be_bytes();
+        assert_eq!(timest.len(), 8);
+        let mut key = [0u8; 8 + 32];
+        key[..8].clone_from_slice(&timest);
 
         let msg = chatview::ChatMsg { nick, text };
         let mut val = vec![];
@@ -999,9 +1013,10 @@ fn create_chatview(
     node.add_method(
         "insert_line",
         vec![
-            ("timestamp", "Timestamp", PropertyType::Uint32),
-            ("nick", "Nickname", PropertyType::Str),
-            ("text", "Text", PropertyType::Str),
+            ("timestamp", "Timestamp", CallArgType::Uint64),
+            ("id", "Message ID", CallArgType::Hash),
+            ("nick", "Nickname", CallArgType::Str),
+            ("text", "Text", CallArgType::Str),
         ],
         vec![],
         Box::new(method),

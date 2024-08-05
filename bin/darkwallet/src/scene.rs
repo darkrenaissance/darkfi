@@ -482,7 +482,7 @@ impl SceneNode {
         &mut self,
         name: S,
         desc: S,
-        fmt: Vec<(S, S, PropertyType)>,
+        fmt: Vec<(S, S, CallArgType)>,
     ) -> Result<()> {
         let name = name.into();
         if self.has_signal(&name) {
@@ -551,8 +551,8 @@ impl SceneNode {
     pub fn add_method<S: Into<String>>(
         &mut self,
         name: S,
-        args: Vec<(S, S, PropertyType)>,
-        result: Vec<(S, S, PropertyType)>,
+        args: Vec<(S, S, CallArgType)>,
+        result: Vec<(S, S, CallArgType)>,
         method_fn: MethodRequestFn,
     ) -> Result<()> {
         let name = name.into();
@@ -591,10 +591,19 @@ impl SceneNode {
 }
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+pub enum CallArgType {
+    Uint32,
+    Uint64,
+    Bool,
+    Str,
+    Hash,
+}
+
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct CallArg {
     pub name: String,
     pub desc: String,
-    pub typ: PropertyType,
+    pub typ: CallArgType,
 }
 
 type SlotFn = Box<dyn Fn(Vec<u8>) + Send>;
