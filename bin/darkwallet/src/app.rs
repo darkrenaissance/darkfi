@@ -754,7 +754,7 @@ fn populate_tree(tree: &sled::Tree) {
         let min = min.parse::<u32>().unwrap();
         let dt: NaiveDateTime =
             NaiveDate::from_ymd_opt(2024, 8, 6).unwrap().and_hms_opt(hour, min, 0).unwrap();
-        let timest = dt.and_utc().timestamp_millis() as u64;
+        let timest = dt.and_utc().timestamp() as u64;
 
         let message_id = [0u8; 32];
         let nick = parts[1].to_string();

@@ -639,7 +639,7 @@ impl ChatView {
 
         let chatmsg = ChatMsg { nick, text };
 
-        let dt = Local.timestamp_millis_opt(timest as i64).unwrap();
+        let dt = Local.timestamp_opt(timest as i64, 0).unwrap();
         let timestr = dt.format("%H:%M").to_string();
 
         let text = format!("{} {} {}", timestr, chatmsg.nick, chatmsg.text);
@@ -822,7 +822,7 @@ impl ChatView {
             let chatmsg: ChatMsg = deserialize(&v).unwrap();
             debug!(target: "ui::chatview", "{timest:?} {chatmsg:?}");
 
-            let dt = Local.timestamp_millis_opt(timest as i64).unwrap();
+            let dt = Local.timestamp_opt(timest as i64, 0).unwrap();
             let timestr = dt.format("%H:%M").to_string();
 
             let text = format!("{} {} {}", timestr, chatmsg.nick, chatmsg.text);
