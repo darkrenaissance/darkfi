@@ -18,6 +18,7 @@
 
 use async_lock::Mutex as AsyncMutex;
 use atomic_float::AtomicF32;
+use chrono::{Local, TimeZone};
 use darkfi::system::{msleep, CondVar};
 use darkfi_serial::{
     async_trait, deserialize, Decodable, Encodable, FutAsyncWriteExt, ReadExt, SerialDecodable,
@@ -65,6 +66,24 @@ fn is_zero(x: f32) -> bool {
     x.abs() < EPSILON
 }
 
+// Replace vec item with N items
+fn replace_vec_item<T>(vec: &mut Vec<T>, idx: usize, mut items: Vec<T>) {
+    assert!(idx < vec.len());
+    if items.len() == 1 {
+        let item = items.remove(0);
+        std::mem::replace(&mut vec[idx], item);
+        return
+    }
+
+    let mut drain_iter = vec.drain(idx..);
+    // Drop the item at idx which will be replaced
+    drain_iter.next().unwrap();
+    let mut tail: Vec<_> = drain_iter.collect();
+
+    vec.append(&mut items);
+    vec.append(&mut tail);
+}
+
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct ChatMsg {
     pub nick: String,
@@ -82,7 +101,7 @@ struct Message {
     glyphs: Vec<Glyph>,
 }
 
-const LINES_PER_PAGE: usize = 10;
+const PAGE_SIZE: usize = 10;
 const PRELOAD_PAGES: usize = 10;
 
 #[derive(Clone)]
@@ -601,10 +620,8 @@ impl ChatView {
 
         let chatmsg = ChatMsg { nick, text };
 
-        let timestr = timest.to_string();
-        // left pad with zeros
-        let mut timestr = format!("{:0>4}", timestr);
-        timestr.insert(2, ':');
+        let dt = Local.timestamp_millis_opt(timest as i64).unwrap();
+        let timestr = dt.format("%H:%M").to_string();
 
         let text = format!("{} {} {}", timestr, chatmsg.nick, chatmsg.text);
         let glyphs = self.text_shaper.shape(text, self.font_size.get()).await;
@@ -621,6 +638,7 @@ impl ChatView {
             if first_timest <= timest && timest <= last_timest {
                 //debug!(target: "ui::chatview", "found page {i} [{first_timest}, {last_timest}]");
                 idx = Some(i);
+                break
             }
         }
         let idx = match idx {
@@ -637,8 +655,14 @@ impl ChatView {
         msgs.sort_unstable_by_key(|msg| msg.timest);
         msgs.reverse();
 
-        let new_page = Page2::new(msgs, &self.render_api).await;
-        std::mem::replace(page, new_page);
+        // Replace single page with N pages each with PAGE_SIZE messages
+        let mut new_pages = vec![];
+        for page_msgs in msgs.chunks(PAGE_SIZE).map(|m| m.into()) {
+            let new_page = Page2::new(page_msgs, &self.render_api).await;
+            new_pages.push(new_page);
+        }
+
+        replace_vec_item(&mut pages, idx, new_pages);
 
         drop(pages);
 
@@ -765,17 +789,15 @@ impl ChatView {
             let chatmsg: ChatMsg = deserialize(&v).unwrap();
             debug!(target: "ui::chatview", "{timest:?} {chatmsg:?}");
 
-            let timestr = timest.to_string();
-            // left pad with zeros
-            let mut timestr = format!("{:0>4}", timestr);
-            timestr.insert(2, ':');
+            let dt = Local.timestamp_millis_opt(timest as i64).unwrap();
+            let timestr = dt.format("%H:%M").to_string();
 
             let text = format!("{} {} {}", timestr, chatmsg.nick, chatmsg.text);
             let glyphs = self.text_shaper.shape(text, self.font_size.get()).await;
 
             msgs.push(Message { timest, id: message_id, chatmsg, glyphs });
 
-            if msgs.len() >= LINES_PER_PAGE {
+            if msgs.len() >= PAGE_SIZE {
                 let msgs = std::mem::take(&mut msgs);
                 let page = Page2::new(msgs, &self.render_api).await;
 
