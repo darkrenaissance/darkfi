@@ -208,7 +208,7 @@ impl Page2 {
 
         let px_height = wrapped_line_idx as f32 * line_height;
 
-        //mesh.draw_outline(&Rectangle { x: 0., y: 0., w: clip.w, h: -px_height }, COLOR_GREEN, 1.);
+        mesh.draw_outline(&Rectangle { x: 0., y: 0., w: clip.w, h: -px_height }, COLOR_GREEN, 1.);
 
         let mesh = mesh.alloc(render_api).await.unwrap();
         let mesh = mesh.draw_with_texture(atlas.texture_id);
@@ -655,9 +655,22 @@ impl ChatView {
         msgs.sort_unstable_by_key(|msg| msg.timest);
         msgs.reverse();
 
-        // Replace single page with N pages each with PAGE_SIZE messages
+        let chunk_size = if msgs.len() > PAGE_SIZE {
+            // Round up so we don't get a weird page with a single item
+            msgs.len() / 2 + 1
+        } else {
+            PAGE_SIZE
+        };
+
+        // Replace single page with N pages each with chunk_size messages
         let mut new_pages = vec![];
-        for page_msgs in msgs.chunks(PAGE_SIZE).map(|m| m.into()) {
+        for page_msgs in msgs.chunks(chunk_size).map(|m| m.to_vec()) {
+            debug!(target: "ui::chatview", "PAGE ==========================");
+            for msg in &page_msgs {
+                debug!(target: "ui::chatview", "{} {:?}", msg.timest, msg.chatmsg);
+            }
+            debug!(target: "ui::chatview", "===============================");
+
             let new_page = Page2::new(page_msgs, &self.render_api).await;
             new_pages.push(new_page);
         }
