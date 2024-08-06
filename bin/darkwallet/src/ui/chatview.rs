@@ -668,6 +668,18 @@ impl ChatView {
             }
         };
 
+        // Maybe we can write this code below better
+        if pages.is_empty() {
+            let msgs = vec![Message { timest, id: message_id, chatmsg, glyphs }];
+            let page = Page2::new(msgs, &self.render_api).await;
+            pages.push(page);
+            drop(pages);
+
+            let mut scroll = self.scroll.get();
+            self.scrollview(scroll).await;
+            return;
+        }
+
         let page = &mut pages[idx];
         let mut msgs = page.msgs.clone();
         msgs.push(Message { timest, id: message_id, chatmsg, glyphs });
@@ -917,7 +929,11 @@ impl ChatView {
                 // No more pages available to load
                 pages = self.pages2.lock().await.clone();
                 let new_height = self.get_total_height(&rect, &pages).await;
-                *scroll = new_height - rect.h;
+                if new_height > rect.h {
+                    *scroll = new_height - rect.h;
+                } else {
+                    *scroll = 0.;
+                }
                 break
             }
         }
@@ -955,7 +971,7 @@ impl ChatView {
     /// Basically a version of redraw() where regen_mesh() is never called.
     /// Instead we use the cached version.
     async fn scrollview(&self, mut scroll: f32) -> f32 {
-        //debug!(target: "ui::chatview", "scrollview()");
+        debug!(target: "ui::chatview", "scrollview()");
         let old_scroll = self.scroll.get();
 
         let sg = self.sg.lock().await;
@@ -1062,13 +1078,14 @@ impl ChatView {
         let mut scroll = self.scroll.get();
         assert!(scroll >= 0.);
         // For when we resize the window and scroll is no longer valid
-        let max_allowed_scroll = total_height - rect.h;
+        let max_allowed_scroll = if total_height > rect.h { total_height - rect.h } else { 0. };
         debug!(
             "max_allowed_scroll = {max_allowed_scroll} = total_height={total_height} - rect.h={}",
             rect.h
         );
         if scroll > max_allowed_scroll {
             scroll = max_allowed_scroll;
+            assert!(scroll >= 0.);
             self.scroll.set(scroll);
         }
 

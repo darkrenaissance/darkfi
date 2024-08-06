@@ -541,9 +541,7 @@ impl SceneNode {
         for (_, slot) in sig.get_slots() {
             debug!(target: "scene", "triggering {}", slot.name);
             // Trigger the slot
-            futures.push(async {
-                slot.notify.send(data.clone()).await.is_ok()
-            });
+            futures.push(async { slot.notify.send(data.clone()).await.is_ok() });
         }
         let success: Vec<_> = futures.collect().await;
         debug!(target: "scene", "trigger success: {success:?}");

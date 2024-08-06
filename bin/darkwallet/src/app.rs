@@ -20,17 +20,20 @@ use async_recursion::async_recursion;
 use chrono::{NaiveDate, NaiveDateTime};
 use darkfi_serial::Encodable;
 use futures::{stream::FuturesUnordered, StreamExt};
-use std::{sync::{Arc, Mutex as SyncMutex}, thread};
 use smol::Task;
+use std::{
+    sync::{Arc, Mutex as SyncMutex},
+    thread,
+};
 
 use crate::{
     error::Error,
     expr::Op,
     gfx2::{GraphicsEventPublisherPtr, RenderApiPtr, Vertex},
-    prop::{Property, PropertySubType, PropertyType, Role, PropertyStr, PropertyBool},
+    prop::{Property, PropertyBool, PropertyStr, PropertySubType, PropertyType, Role},
     scene::{
         CallArgType, MethodResponseFn, Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId,
-        SceneNodeType, Slot
+        SceneNodeType, Slot,
     },
     text2::TextShaperPtr,
     ui::{chatview, Button, ChatView, EditBox, Image, Mesh, RenderLayer, Stoppable, Text, Window},
@@ -362,10 +365,7 @@ impl App {
         prop.set_f32(Role::App, 3, 60.).unwrap();
 
         let (sender, btn_click_recvr) = async_channel::unbounded();
-        let slot_click = Slot {
-            name: "button_clicked".to_string(),
-            notify: sender
-        };
+        let slot_click = Slot { name: "button_clicked".to_string(), notify: sender };
         node.register("click", slot_click).unwrap();
 
         drop(sg);
@@ -641,7 +641,7 @@ impl App {
         let task = self.ex.spawn(async move {
             while let Ok(_) = btn_click_recvr.recv().await {
                 let text = editbox_text.get();
-                editbox_text.prop().unset(Role::App, 0);
+                editbox_text.prop().unset(Role::App, 0).unwrap();
                 // Clicking outside the editbox makes it lose focus
                 // So lets focus it again
                 editbox_focus.set(true);
@@ -729,9 +729,9 @@ impl App {
         drop(sg);
         let db = sled::open(CHATDB_PATH).expect("cannot open sleddb");
         let chat_tree = db.open_tree(b"chat").unwrap();
-        if chat_tree.is_empty() {
-            populate_tree(&chat_tree);
-        }
+        //if chat_tree.is_empty() {
+        //    populate_tree(&chat_tree);
+        //}
         debug!(target: "app", "db has {} lines", chat_tree.len());
         let pimpl = ChatView::new(
             self.ex.clone(),

@@ -32,7 +32,7 @@ use super::{
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct Event {
     /// Timestamp of the event in whole seconds
-    pub(crate) timestamp: u64,
+    pub timestamp: u64,
     /// Content of the event
     pub(crate) content: Vec<u8>,
     /// Parent nodes in the event DAG

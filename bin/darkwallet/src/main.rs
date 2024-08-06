@@ -35,12 +35,12 @@ use darkfi::{
         jsonrpc::JsonSubscriber,
         server::{listen_and_serve, RequestHandler},
     },
-    system::{sleep, sleep_forever, StoppableTask, StoppableTaskPtr, Subscription},
+    system::{sleep, sleep_forever, CondVar, StoppableTask, StoppableTaskPtr, Subscription},
     util::path::{expand_path, get_config_path},
     Error, Result,
 };
 use darkfi_serial::{
-    async_trait, deserialize_async, AsyncDecodable, SerialDecodable, SerialEncodable,
+    async_trait, deserialize_async, AsyncDecodable, Encodable, SerialDecodable, SerialEncodable,
 };
 
 #[macro_use]
@@ -71,7 +71,11 @@ mod text2;
 mod ui;
 mod util;
 
-use crate::{net::ZeroMQAdapter, scene::SceneGraph, text2::TextShaper};
+use crate::{
+    net::ZeroMQAdapter,
+    scene::{SceneGraph, SceneGraphPtr2},
+    text2::TextShaper,
+};
 
 pub type ExecutorPtr = Arc<smol::Executor<'static>>;
 
@@ -88,7 +92,7 @@ pub struct Privmsg {
     pub msg: String,
 }
 
-async fn print_evs(ev_sub: Subscription<event_graph::Event>) {
+async fn relay_darkirc_events(sg: SceneGraphPtr2, ev_sub: Subscription<event_graph::Event>) {
     loop {
         let ev = ev_sub.receive().await;
 
@@ -101,14 +105,31 @@ async fn print_evs(ev_sub: Subscription<event_graph::Event>) {
             }
         };
 
-        info!("ev_id={:?}", ev.id());
-        info!("ev: {:?}", ev);
-        info!("privmsg: {:?}", privmsg);
-        info!("");
+        if privmsg.channel != "#random" {
+            continue
+        }
+
+        info!(target: "main", "ev_id={:?}", ev.id());
+        info!(target: "main", "ev: {:?}", ev);
+        info!(target: "main", "privmsg: {:?}", privmsg);
+        info!(target: "main", "");
+
+        let response_fn = Box::new(|_| {});
+
+        let mut arg_data = vec![];
+        ev.timestamp.encode(&mut arg_data);
+        ev.id().as_bytes().encode(&mut arg_data);
+        privmsg.nick.encode(&mut arg_data);
+        privmsg.msg.encode(&mut arg_data);
+
+        let mut sg = sg.lock().await;
+        let chatview_node = sg.lookup_node_mut("/window/view/chatty").unwrap();
+        chatview_node.call_method("insert_line", arg_data, response_fn).unwrap();
+        drop(sg);
     }
 }
 
-async fn realmain(ex: ExecutorPtr) -> darkfi::Result<()> {
+async fn run_darkirc_backend(sg: SceneGraphPtr2, ex: ExecutorPtr) -> darkfi::Result<()> {
     let sled_db = sled::open("evgrdb")?;
 
     let mut p2p_settings: NetSettings = Default::default();
@@ -141,7 +162,7 @@ async fn realmain(ex: ExecutorPtr) -> darkfi::Result<()> {
         .await;
 
     let ev_sub = event_graph.event_pub.clone().subscribe().await;
-    let ev_task = ex.spawn(print_evs(ev_sub));
+    let ev_task = ex.spawn(relay_darkirc_events(sg, ev_sub));
 
     info!("Starting P2P network");
     p2p.clone().start().await?;
@@ -191,6 +212,7 @@ async fn realmain(ex: ExecutorPtr) -> darkfi::Result<()> {
     Ok(())
 }
 
+/*
 fn newmain() {
     simplelog::TermLogger::init(
         simplelog::LevelFilter::Info,
@@ -210,12 +232,13 @@ fn newmain() {
         // Run the main future on the current thread.
         .finish(|| {
             smol::future::block_on(async {
-                realmain(ex.clone()).await?;
+                run_darkirc_backend(ex.clone()).await?;
                 drop(signal);
                 Ok::<(), darkfi::Error>(())
             })
         });
 }
+*/
 
 fn main() {
     // Exit the application on panic right away
@@ -271,9 +294,14 @@ fn main() {
 
     let app =
         app::App::new(sg.clone(), ex.clone(), render_api.clone(), event_pub.clone(), text_shaper);
-    let app_task = ex.spawn(app.clone().start());
+    let app_cv = Arc::new(CondVar::new());
+    let app2 = app.clone();
+    let app_cv2 = app_cv.clone();
+    let app_task = ex.spawn(async move {
+        app2.start().await;
+        app_cv2.notify();
+    });
     async_runtime.push_task(app_task);
-    //app.clone().start();
 
     // Nice to see which events exist
     let ev_sub = event_pub.subscribe_key_down();
@@ -324,6 +352,17 @@ fn main() {
         }
     });
     async_runtime.push_task(ev_relay_task);
+
+    let ex2 = ex.clone();
+    let darkirc_task = ex.spawn(async move {
+        // Wait for app to finish starting
+        app_cv.wait().await;
+
+        if let Err(e) = run_darkirc_backend(sg, ex2).await {
+            error!(target: "main", "darkirc backend failed: {e}");
+        }
+    });
+    async_runtime.push_task(darkirc_task);
 
     //let stage = gfx2::Stage::new(method_rep, event_pub);
     gfx2::run_gui(app, async_runtime, method_rep, event_pub);

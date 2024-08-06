@@ -33,7 +33,7 @@ use std::{
 };
 
 use crate::{
-    app::{AsyncRuntime, AppPtr},
+    app::{AppPtr, AsyncRuntime},
     error::{Error, Result},
     pubsub::{Publisher, PublisherPtr, Subscription, SubscriptionId},
     shader,
