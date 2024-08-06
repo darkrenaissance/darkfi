@@ -27,7 +27,7 @@ use crate::{
     error::Error,
     expr::Op,
     gfx2::{GraphicsEventPublisherPtr, RenderApiPtr, Vertex},
-    prop::{Property, PropertySubType, PropertyType, Role, PropertyStr},
+    prop::{Property, PropertySubType, PropertyType, Role, PropertyStr, PropertyBool},
     scene::{
         CallArgType, MethodResponseFn, Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId,
         SceneNodeType, Slot
@@ -637,10 +637,14 @@ impl App {
         //node.set_property_bool(Role::App, "debug", true).unwrap();
 
         let editbox_text = PropertyStr::wrap(node, Role::App, "text", 0).unwrap();
+        let editbox_focus = PropertyBool::wrap(node, Role::App, "is_focused", 0).unwrap();
         let task = self.ex.spawn(async move {
             while let Ok(_) = btn_click_recvr.recv().await {
                 let text = editbox_text.get();
                 editbox_text.prop().unset(Role::App, 0);
+                // Clicking outside the editbox makes it lose focus
+                // So lets focus it again
+                editbox_focus.set(true);
                 debug!(target: "app", "sending text {text}");
             }
         });

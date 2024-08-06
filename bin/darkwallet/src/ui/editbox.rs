@@ -357,7 +357,8 @@ impl EditBox {
         let cursor_pos = self.cursor_pos.get() as usize;
         let cursor_color = self.cursor_color.get();
         let debug = self.debug.get();
-        debug!(target: "ui::editbox", "Rendering text '{}' clip={:?}", text, clip);
+        debug!(target: "ui::editbox", "Rendering text '{text}' clip={clip:?}");
+        debug!(target: "ui::editbox", "    cursor_pos={cursor_pos}, is_focused={is_focused}");
 
         let glyphs = self.glyphs.lock().unwrap().clone();
         let atlas = text2::make_texture_atlas(&self.render_api, &glyphs).await.unwrap();
@@ -655,8 +656,6 @@ impl EditBox {
 
         let mouse_pos = Point::from([mouse_x, mouse_y]);
 
-        let mut focus_changed = false;
-
         let Some(rect) = self.get_cached_world_rect().await else { return };
 
         // clicking inside box will:
@@ -670,7 +669,6 @@ impl EditBox {
             } else {
                 debug!(target: "ui::editbox", "EditBox focused");
                 self.is_focused.set(true);
-                focus_changed = true;
             }
 
             let cpos = self.find_closest_glyph_idx(mouse_x, &rect);
@@ -690,19 +688,12 @@ impl EditBox {
             self.is_focused.set(false);
             self.selected.set_null(Role::Internal, 0).unwrap();
             self.selected.set_null(Role::Internal, 1).unwrap();
-            focus_changed = true;
         } else {
             // Do nothing. Click was outside editbox, and editbox wasn't focused
             return
         }
 
-        // Further on_focus logic change is handled by property modified callback
-        // which calls Self::change_focus()
-        // We still need to redraw if cursor is changed though, but we want to avoid redrawing
-        // twice, so we do this check:
-        if !focus_changed {
-            self.redraw().await;
-        }
+        self.redraw().await;
     }
     fn handle_mouse_btn_up(&self, btn: MouseButton, _mouse_x: f32, _mouse_y: f32) {
         if btn != MouseButton::Left {
