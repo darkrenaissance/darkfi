@@ -259,6 +259,16 @@ impl EditBox {
             let mut on_modify = OnModify::new(ex, node_name, node_id, me.clone());
             on_modify.when_change(is_focused.prop(), Self::change_focus);
 
+            // When text has been changed.
+            // Cursor and selection might be invalidated.
+            async fn reset(self_: Arc<EditBox>) {
+                self_.cursor_pos.set(0);
+                self_.selected.set_null(Role::Internal, 0).unwrap();
+                self_.selected.set_null(Role::Internal, 1).unwrap();
+                self_.scroll.set(0.);
+                self_.regen_glyphs().await;
+                self_.redraw().await;
+            }
             async fn redraw(self_: Arc<EditBox>) {
                 self_.redraw().await;
             }
@@ -271,7 +281,7 @@ impl EditBox {
             //on_modify.when_change(cursor_pos.prop(), redraw);
             on_modify.when_change(font_size.prop(), redraw);
             // We must also reshape text
-            //on_modify.when_change(text.prop(), redraw);
+            on_modify.when_change(text.prop(), reset);
             on_modify.when_change(text_color.prop(), redraw);
             on_modify.when_change(cursor_color.prop(), redraw);
             on_modify.when_change(hi_bg_color.prop(), redraw);
@@ -328,6 +338,7 @@ impl EditBox {
     /// This MUST be called whenever the text property is changed.
     async fn regen_glyphs(&self) {
         let glyphs = self.text_shaper.shape(self.text.get(), self.font_size.get()).await;
+        // TODO: we aren't freeing textures
         *self.glyphs.lock().unwrap() = glyphs;
     }
 
@@ -1264,9 +1275,9 @@ impl EditBox {
         debug!(target: "ui::editbox", "sending text {}", text);
 
         // This should probably be unset instead
-        self.text.set(String::new());
-        self.cursor_pos.set(0);
-        self.redraw().await;
+        //self.text.set(String::new());
+        //self.cursor_pos.set(0);
+        //self.redraw().await;
     }
 }
 

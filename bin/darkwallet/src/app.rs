@@ -20,16 +20,17 @@ use async_recursion::async_recursion;
 use chrono::{NaiveDate, NaiveDateTime};
 use darkfi_serial::Encodable;
 use futures::{stream::FuturesUnordered, StreamExt};
-use std::{sync::Arc, thread};
+use std::{sync::{Arc, Mutex as SyncMutex}, thread};
+use smol::Task;
 
 use crate::{
     error::Error,
     expr::Op,
     gfx2::{GraphicsEventPublisherPtr, RenderApiPtr, Vertex},
-    prop::{Property, PropertySubType, PropertyType, Role},
+    prop::{Property, PropertySubType, PropertyType, Role, PropertyStr},
     scene::{
         CallArgType, MethodResponseFn, Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId,
-        SceneNodeType,
+        SceneNodeType, Slot
     },
     text2::TextShaperPtr,
     ui::{chatview, Button, ChatView, EditBox, Image, Mesh, RenderLayer, Stoppable, Text, Window},
@@ -54,28 +55,28 @@ const KING_PATH: &str = "assets/king.png";
 const LIGHTMODE: bool = false;
 
 pub struct AsyncRuntime {
-    signal: smol::channel::Sender<()>,
-    shutdown: smol::channel::Receiver<()>,
-    exec_threadpool: std::sync::Mutex<Option<thread::JoinHandle<()>>>,
+    signal: async_channel::Sender<()>,
+    shutdown: async_channel::Receiver<()>,
+    exec_threadpool: SyncMutex<Option<thread::JoinHandle<()>>>,
     ex: ExecutorPtr,
-    tasks: std::sync::Mutex<Vec<smol::Task<()>>>,
+    tasks: SyncMutex<Vec<Task<()>>>,
 }
 
 impl AsyncRuntime {
     pub fn new(ex: ExecutorPtr) -> Self {
-        let (signal, shutdown) = smol::channel::unbounded::<()>();
+        let (signal, shutdown) = async_channel::unbounded::<()>();
 
         Self {
             signal,
             shutdown,
-            exec_threadpool: std::sync::Mutex::new(None),
+            exec_threadpool: SyncMutex::new(None),
             ex,
-            tasks: std::sync::Mutex::new(vec![]),
+            tasks: SyncMutex::new(vec![]),
         }
     }
 
     pub fn start(&self) {
-        let n_threads = std::thread::available_parallelism().unwrap().get();
+        let n_threads = thread::available_parallelism().unwrap().get();
         let shutdown = self.shutdown.clone();
         let ex = self.ex.clone();
         let exec_threadpool = thread::spawn(move || {
@@ -88,7 +89,7 @@ impl AsyncRuntime {
         debug!(target: "async_runtime", "Started runtime");
     }
 
-    pub fn push_task(&self, task: smol::Task<()>) {
+    pub fn push_task(&self, task: Task<()>) {
         self.tasks.lock().unwrap().push(task);
     }
 
@@ -120,12 +121,15 @@ impl AsyncRuntime {
     }
 }
 
+pub type AppPtr = Arc<App>;
+
 pub struct App {
     sg: SceneGraphPtr2,
     ex: ExecutorPtr,
     render_api: RenderApiPtr,
     event_pub: GraphicsEventPublisherPtr,
     text_shaper: TextShaperPtr,
+    tasks: SyncMutex<Vec<Task<()>>>,
 }
 
 impl App {
@@ -136,7 +140,7 @@ impl App {
         event_pub: GraphicsEventPublisherPtr,
         text_shaper: TextShaperPtr,
     ) -> Arc<Self> {
-        Arc::new(Self { sg, ex, render_api, event_pub, text_shaper })
+        Arc::new(Self { sg, ex, render_api, event_pub, text_shaper, tasks: SyncMutex::new(vec![]) })
     }
 
     pub async fn start(self: Arc<Self>) {
@@ -212,6 +216,7 @@ impl App {
     }
 
     async fn make_me_a_schema_plox(&self) {
+        let mut tasks = vec![];
         // Create a layer called view
         let mut sg = self.sg.lock().await;
         let layer_node_id = create_layer(&mut sg, "view");
@@ -355,6 +360,13 @@ impl App {
         prop.set_f32(Role::App, 1, 10.).unwrap();
         prop.set_f32(Role::App, 2, 200.).unwrap();
         prop.set_f32(Role::App, 3, 60.).unwrap();
+
+        let (sender, btn_click_recvr) = async_channel::unbounded();
+        let slot_click = Slot {
+            name: "button_clicked".to_string(),
+            notify: sender
+        };
+        node.register("click", slot_click).unwrap();
 
         drop(sg);
         let pimpl =
@@ -624,6 +636,16 @@ impl App {
         node.set_property_u32(Role::App, "z_index", 1).unwrap();
         //node.set_property_bool(Role::App, "debug", true).unwrap();
 
+        let editbox_text = PropertyStr::wrap(node, Role::App, "text", 0).unwrap();
+        let task = self.ex.spawn(async move {
+            while let Ok(_) = btn_click_recvr.recv().await {
+                let text = editbox_text.get();
+                editbox_text.prop().unset(Role::App, 0);
+                debug!(target: "app", "sending text {text}");
+            }
+        });
+        tasks.push(task);
+
         drop(sg);
         let pimpl = EditBox::new(
             self.ex.clone(),
@@ -730,6 +752,8 @@ impl App {
         // Also we need to think about nesting of layers.
         //let window_node = sg.get_node_mut(window_id).unwrap();
         //win_node.set_property_f32(Role::App, "scale", 1.6).unwrap();
+
+        *self.tasks.lock().unwrap() = tasks;
     }
 
     async fn trigger_redraw(&self) {
@@ -739,6 +763,12 @@ impl App {
             Pimpl::Window(win) => win.draw(&sg).await,
             _ => panic!("wrong pimpl"),
         }
+    }
+}
+
+impl Drop for App {
+    fn drop(&mut self) {
+        debug!(target: "app", "dropping app");
     }
 }
 

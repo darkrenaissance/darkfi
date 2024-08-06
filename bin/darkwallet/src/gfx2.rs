@@ -33,7 +33,7 @@ use std::{
 };
 
 use crate::{
-    app::AsyncRuntime,
+    app::{AsyncRuntime, AppPtr},
     error::{Error, Result},
     pubsub::{Publisher, PublisherPtr, Subscription, SubscriptionId},
     shader,
@@ -626,6 +626,7 @@ impl GraphicsEventPublisher {
 }
 
 struct Stage {
+    app: AppPtr,
     async_runtime: AsyncRuntime,
 
     ctx: Box<dyn RenderingBackend>,
@@ -640,6 +641,7 @@ struct Stage {
 
 impl Stage {
     pub fn new(
+        app: AppPtr,
         async_runtime: AsyncRuntime,
         method_rep: mpsc::Receiver<GraphicsMethod>,
         event_pub: GraphicsEventPublisherPtr,
@@ -694,6 +696,7 @@ impl Stage {
         );
 
         Stage {
+            app,
             async_runtime,
             ctx,
             pipeline,
@@ -880,6 +883,7 @@ impl EventHandler for Stage {
 }
 
 pub fn run_gui(
+    app: AppPtr,
     async_runtime: AsyncRuntime,
     method_rep: mpsc::Receiver<GraphicsMethod>,
     event_pub: GraphicsEventPublisherPtr,
@@ -898,5 +902,5 @@ pub fn run_gui(
     conf.platform.apple_gfx_api =
         if metal { conf::AppleGfxApi::Metal } else { conf::AppleGfxApi::OpenGl };
 
-    miniquad::start(conf, || Box::new(Stage::new(async_runtime, method_rep, event_pub)));
+    miniquad::start(conf, || Box::new(Stage::new(app, async_runtime, method_rep, event_pub)));
 }

@@ -271,7 +271,7 @@ fn main() {
 
     let app =
         app::App::new(sg.clone(), ex.clone(), render_api.clone(), event_pub.clone(), text_shaper);
-    let app_task = ex.spawn(app.start());
+    let app_task = ex.spawn(app.clone().start());
     async_runtime.push_task(app_task);
     //app.clone().start();
 
@@ -326,7 +326,7 @@ fn main() {
     async_runtime.push_task(ev_relay_task);
 
     //let stage = gfx2::Stage::new(method_rep, event_pub);
-    gfx2::run_gui(async_runtime, method_rep, event_pub);
+    gfx2::run_gui(app, async_runtime, method_rep, event_pub);
     debug!(target: "main", "Started GFX backend");
 }
 

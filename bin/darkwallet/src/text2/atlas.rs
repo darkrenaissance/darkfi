@@ -137,9 +137,10 @@ impl<'a> Atlas<'a> {
     /// `rendered_atlas.fetch_uv(my_glyph_id)`.
     /// The texture ID is a struct member: `rendered_atlas.texture_id`.
     pub async fn make(self) -> Result<RenderedAtlas> {
-        if self.glyph_ids.is_empty() {
-            return Err(Error::AtlasIsEmpty);
-        }
+        //if self.glyph_ids.is_empty() {
+        //    return Err(Error::AtlasIsEmpty);
+        //}
+
         assert_eq!(self.glyph_ids.len(), self.sprites.len());
         assert_eq!(self.glyph_ids.len(), self.x_pos.len());
 

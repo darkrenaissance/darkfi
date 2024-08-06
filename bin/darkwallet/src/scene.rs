@@ -537,14 +537,16 @@ impl SceneNode {
     pub async fn trigger(&self, sig_name: &str, data: Vec<u8>) -> Result<()> {
         let sig = self.get_signal(sig_name).ok_or(Error::SignalNotFound)?;
         let futures = FuturesUnordered::new();
+        // TODO: autoremove slots which fail to send
         for (_, slot) in sig.get_slots() {
+            debug!(target: "scene", "triggering {}", slot.name);
             // Trigger the slot
             futures.push(async {
-                // Ignore the result
-                let _ = slot.notify.send(data.clone()).await;
+                slot.notify.send(data.clone()).await.is_ok()
             });
         }
-        let _: Vec<_> = futures.collect().await;
+        let success: Vec<_> = futures.collect().await;
+        debug!(target: "scene", "trigger success: {success:?}");
         Ok(())
     }
 
