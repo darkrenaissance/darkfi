@@ -7949,7 +7949,6 @@ checksum = "fb5df07e4a32aab17c8813aa43719a07fae6167212e4506b48f79a035bd2f4e9"
 dependencies = [
  "aes 0.8.4",
  "base64ct",
- "cipher 0.4.4",
  "ctr 0.9.2",
  "curve25519-dalek",
  "derive_more",
@@ -7958,7 +7957,6 @@ dependencies = [
  "educe",
  "getrandom 0.2.15",
  "hex",
- "openssl",
  "rand_core 0.6.4",
  "rsa",
  "safelog",
@@ -7970,7 +7968,6 @@ dependencies = [
  "simple_asn1",
  "subtle",
  "thiserror",
- "typenum",
  "x25519-dalek",
  "zeroize",
 ]

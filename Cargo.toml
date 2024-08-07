@@ -68,7 +68,7 @@ futures-rustls = {version = "0.26.0", default-features = false, features = ["log
 
 # Pluggable Transports
 socket2 = {version = "0.5.7", features = ["all"], optional = true}
-arti-client = {version = "0.20.0", default-features = false, features = ["async-std", "compression", "error_detail", "rustls", "accel-sha1-asm", "accel-openssl", "onion-service-client", "onion-service-service"], optional = true}
+arti-client = {version = "0.20.0", default-features = false, features = ["async-std", "compression", "error_detail", "rustls", "accel-sha1-asm", "onion-service-client", "onion-service-service"], optional = true}
 tor-error = {version = "0.20.0", optional = true}
 tor-rtcompat = {version = "0.20.0", features = ["async-std", "rustls"], optional = true}
 tor-hscrypto = {version = "0.20.0", optional = true}
@@ -260,7 +260,11 @@ net = [
     "util",
 
     "p2p-tcp",
-    "p2p-tor",
+    # This is temporarily disabled and for now is opt in.
+    # The issue is with OpenSSL on Android. While it can be disabled in arti,
+    # tor-dirmgr depends on sqlite/sqlcipher vis rusqlite. While this can be
+    # bundled, then for the crypto it requires OpenSSL again.
+    #"p2p-tor",
     #"p2p-nym",
     "p2p-unix",
 ]
