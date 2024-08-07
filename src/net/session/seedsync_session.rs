@@ -127,9 +127,10 @@ impl SeedSyncSession {
         debug!(target: "net::seedsync_session", "Seed sync session stopped!");
     }
 
+    /// Returns true if every seed attempt per slot has failed.
     pub(crate) async fn failed(&self) -> bool {
         let slots = &*self.slots.lock().await;
-        slots.iter().any(|s| s.failed())
+        slots.iter().all(|s| s.failed())
     }
 }
 
