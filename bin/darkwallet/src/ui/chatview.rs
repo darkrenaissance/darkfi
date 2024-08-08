@@ -628,6 +628,32 @@ impl ChatView {
         }
     }
 
+    fn add_line_to_db(&self,
+        timest: Timestamp,
+        message_id: &MessageId,
+        nick: &str,
+        text: &str,
+    ) -> bool {
+        let timest = timest.to_be_bytes();
+        assert_eq!(timest.len(), 8);
+        let mut key = [0u8; 8 + 32];
+        key[..8].clone_from_slice(&timest);
+        key[8..].clone_from_slice(message_id);
+
+        // When does this return Err?
+        let contains_key = self.tree.contains_key(&key);
+        if contains_key.is_err() || contains_key.unwrap() {
+            // Already exists
+            return false
+        }
+
+        let msg = ChatMsg { nick: nick.to_string(), text: text.to_string() };
+        let mut val = vec![];
+        msg.encode(&mut val).unwrap();
+
+        self.tree.insert(&key, val).unwrap();
+        true
+    }
     async fn handle_insert_line(
         &self,
         timest: Timestamp,
@@ -636,6 +662,12 @@ impl ChatView {
         text: String,
     ) {
         debug!(target: "ui::chatview", "handle_insert_line({timest}, {message_id:?}, {nick}, {text})");
+
+        if !self.add_line_to_db(timest, &message_id, &nick, &text) {
+            // Already exists so bail
+            debug!(target: "ui::chatview", "duplicate msg so bailing");
+            return
+        }
 
         let chatmsg = ChatMsg { nick, text };
 
