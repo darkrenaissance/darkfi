@@ -762,6 +762,27 @@ impl ChatView {
         self.line_height.get() - self.baseline.get()
     }
 
+    fn clamp_scroll(scroll: &mut f32, total_height: f32, rect_h: f32) -> bool {
+        assert!(*scroll >= 0.);
+
+        // For when we resize the window and scroll is no longer valid
+        let max_allowed_scroll = if total_height > rect_h { total_height - rect_h } else { 0. };
+        debug!(
+            target: "ui::chatview",
+            "max_allowed_scroll = {max_allowed_scroll} = total_height={total_height} - rect.h={}",
+            rect_h
+        );
+
+        if *scroll > max_allowed_scroll {
+            *scroll = max_allowed_scroll;
+            assert!(*scroll >= 0.);
+            return true
+        }
+
+        // Unchanged
+        false
+    }
+
     /// Beware of this method. Here be dragons.
     /// Possibly racy so we limit it just to mouse stuff (for now).
     fn cached_rect(&self) -> Option<Rectangle> {
@@ -915,6 +936,7 @@ impl ChatView {
     async fn draw_cached(&self, mut rect: Rectangle, scroll: &mut f32) -> Vec<DrawInstruction> {
         let mut instrs = vec![];
 
+        // When scrolling it can go negative so clamp it here
         if *scroll < 0. {
             *scroll = 0.;
         }
@@ -922,23 +944,28 @@ impl ChatView {
         // Make sure we have enough pages loaded.
         // If there's no more to load then adjust the scroll.
         let mut pages = self.pages2.lock().await.clone();
-        while self.get_total_height(&rect, &pages).await < *scroll + rect.h {
+        let mut total_height = self.get_total_height(&rect, &pages).await;
+        while total_height < *scroll + rect.h {
             debug!(target: "ui::chatview", "draw_cached() loading more pages");
 
-            if self.preload_pages().await == 0 {
-                // No more pages available to load
-                pages = self.pages2.lock().await.clone();
-                let new_height = self.get_total_height(&rect, &pages).await;
-                if new_height > rect.h {
-                    *scroll = new_height - rect.h;
-                } else {
-                    *scroll = 0.;
-                }
+            // No more pages available to load
+            let n_loaded_pages = self.preload_pages().await;
+
+            // We need this value after so first update it
+            total_height = self.get_total_height(&rect, &pages).await;
+
+            if n_loaded_pages == 0 {
                 break
             }
+
+            pages = self.pages2.lock().await.clone();
         }
 
-        let descent = self.descent();
+        // If lines aren't enough to fill the available buffer then start from the top
+        let start_pos = if total_height < rect.h { total_height } else { rect.h };
+
+        Self::clamp_scroll(scroll, total_height, rect.h);
+
         let mut current_height = 0.;
         for page in pages {
             if current_height > *scroll + rect.h {
@@ -946,14 +973,14 @@ impl ChatView {
             }
 
             let mesh_inf = page.mesh_inf.lock().unwrap().clone();
-            let mesh_inf = mesh_inf.expect("preload above should've regen_mesh()");
+            let mesh_inf = mesh_inf.expect("preload above should regen mesh");
 
             // Apply scroll and scissor
             // We use the scissor for scrolling
             // Because we use the scissor, our actual rect is now rect instead of parent_rect
             let off_x = 0.;
             // This calc decides whether scroll is in terms of pages or pixels
-            let off_y = (*scroll - current_height + rect.h) / rect.h;
+            let off_y = (*scroll + start_pos - current_height) / rect.h;
             let scale_x = 1. / rect.w;
             let scale_y = 1. / rect.h;
             let model = glam::Mat4::from_translation(glam::Vec3::new(off_x, off_y, 0.)) *
@@ -1029,7 +1056,6 @@ impl ChatView {
         let font_size = self.font_size.get();
         let line_height = self.line_height.get();
         let baseline = self.baseline.get();
-        let descent = self.descent();
         let debug_render = self.debug.get();
 
         let mut instrs = vec![];
@@ -1070,22 +1096,13 @@ impl ChatView {
             mesh_infs.push(mesh_inf);
         }
 
-        let total_height = current_height + descent;
+        let total_height = current_height;
 
         // If lines aren't enough to fill the available buffer then start from the top
         let start_pos = if total_height < rect.h { total_height } else { rect.h };
 
         let mut scroll = self.scroll.get();
-        assert!(scroll >= 0.);
-        // For when we resize the window and scroll is no longer valid
-        let max_allowed_scroll = if total_height > rect.h { total_height - rect.h } else { 0. };
-        debug!(
-            "max_allowed_scroll = {max_allowed_scroll} = total_height={total_height} - rect.h={}",
-            rect.h
-        );
-        if scroll > max_allowed_scroll {
-            scroll = max_allowed_scroll;
-            assert!(scroll >= 0.);
+        if Self::clamp_scroll(&mut scroll, total_height, rect.h) {
             self.scroll.set(scroll);
         }
 

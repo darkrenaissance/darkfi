@@ -77,6 +77,11 @@ use crate::{
     text2::TextShaper,
 };
 
+#[cfg(target_os = "android")]
+const EVGRDB_PATH: &str = "/data/data/darkfi.darkwallet/evgrdb/";
+#[cfg(target_os = "linux")]
+const EVGRDB_PATH: &str = "evgrdb";
+
 pub type ExecutorPtr = Arc<smol::Executor<'static>>;
 
 fn panic_hook(panic_info: &std::panic::PanicInfo) {
@@ -130,7 +135,8 @@ async fn relay_darkirc_events(sg: SceneGraphPtr2, ev_sub: Subscription<event_gra
 }
 
 async fn run_darkirc_backend(sg: SceneGraphPtr2, ex: ExecutorPtr) -> darkfi::Result<()> {
-    let sled_db = sled::open("evgrdb")?;
+    info!(target: "main", "Starting DarkIRC backend");
+    let sled_db = sled::open(EVGRDB_PATH)?;
 
     let mut p2p_settings: NetSettings = Default::default();
     p2p_settings.app_version = semver::Version::parse("0.5.0").unwrap();
@@ -151,7 +157,7 @@ async fn run_darkirc_backend(sg: SceneGraphPtr2, ex: ExecutorPtr) -> darkfi::Res
 
     let prune_task = event_graph.prune_task.get().unwrap();
 
-    info!("Registering EventGraph P2P protocol");
+    info!(target: "main", "Registering EventGraph P2P protocol");
     let event_graph_ = Arc::clone(&event_graph);
     let registry = p2p.protocol_registry();
     registry
@@ -164,16 +170,16 @@ async fn run_darkirc_backend(sg: SceneGraphPtr2, ex: ExecutorPtr) -> darkfi::Res
     let ev_sub = event_graph.event_pub.clone().subscribe().await;
     let ev_task = ex.spawn(relay_darkirc_events(sg, ev_sub));
 
-    info!("Starting P2P network");
+    info!(target: "main", "Starting P2P network");
     p2p.clone().start().await?;
 
-    info!("Waiting for some P2P connections...");
+    info!(target: "main", "Waiting for some P2P connections...");
     sleep(5).await;
 
     // We'll attempt to sync {sync_attempts} times
     let sync_attempts = 4;
     for i in 1..=sync_attempts {
-        info!("Syncing event DAG (attempt #{})", i);
+        info!(target: "main", "Syncing event DAG (attempt #{})", i);
         match event_graph.dag_sync().await {
             Ok(()) => break,
             Err(e) => {
@@ -195,19 +201,19 @@ async fn run_darkirc_backend(sg: SceneGraphPtr2, ex: ExecutorPtr) -> darkfi::Res
     // Signal handling for graceful termination.
     //let (signals_handler, signals_task) = SignalHandler::new(ex)?;
     //signals_handler.wait_termination(signals_task).await?;
-    info!("Caught termination signal, cleaning up and exiting...");
+    info!(target: "main", "Caught termination signal, cleaning up and exiting...");
 
-    info!("Stopping P2P network");
+    info!(target: "main", "Stopping P2P network");
     p2p.stop().await;
 
-    info!("Stopping IRC server");
+    info!(target: "main", "Stopping IRC server");
     prune_task.stop().await;
 
-    info!("Flushing sled database...");
+    info!(target: "main", "Flushing sled database...");
     let flushed_bytes = sled_db.flush_async().await?;
-    info!("Flushed {} bytes", flushed_bytes);
+    info!(target: "main", "Flushed {} bytes", flushed_bytes);
 
-    info!("Shut down successfully");
+    info!(target: "main", "Shut down successfully");
 
     Ok(())
 }
@@ -299,6 +305,7 @@ fn main() {
     let app_cv2 = app_cv.clone();
     let app_task = ex.spawn(async move {
         app2.start().await;
+        debug!(target: "main", "App started - sending wakeup notification to the backend");
         app_cv2.notify();
     });
     async_runtime.push_task(app_task);
@@ -353,6 +360,7 @@ fn main() {
     });
     async_runtime.push_task(ev_relay_task);
 
+    /*
     let ex2 = ex.clone();
     let darkirc_task = ex.spawn(async move {
         // Wait for app to finish starting
@@ -363,6 +371,7 @@ fn main() {
         }
     });
     async_runtime.push_task(darkirc_task);
+    */
 
     //let stage = gfx2::Stage::new(method_rep, event_pub);
     gfx2::run_gui(app, async_runtime, method_rep, event_pub);

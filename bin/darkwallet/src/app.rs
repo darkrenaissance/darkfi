@@ -928,9 +928,11 @@ fn create_editbox(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
     node.add_property(prop).unwrap();
 
     let mut prop = Property::new("scroll", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_range_f32(0., f32::MAX);
     node.add_property(prop).unwrap();
 
     let mut prop = Property::new("cursor_pos", PropertyType::Uint32, PropertySubType::Pixel);
+    prop.set_range_u32(0, u32::MAX);
     node.add_property(prop).unwrap();
 
     let mut prop = Property::new("font_size", PropertyType::Float32, PropertySubType::Pixel);
@@ -982,6 +984,7 @@ fn create_chatview(
 
     let mut prop = Property::new("scroll", PropertyType::Float32, PropertySubType::Null);
     prop.set_ui_text("Scroll", "Scroll up from the bottom");
+    prop.set_range_f32(0., f32::MAX);
     node.add_property(prop).unwrap();
 
     let prop = Property::new("font_size", PropertyType::Float32, PropertySubType::Pixel);
