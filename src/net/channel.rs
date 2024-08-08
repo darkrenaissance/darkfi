@@ -368,8 +368,6 @@ impl Channel {
                         target: "net::channel::main_receive_loop()",
                         "Stopping channel {:?}", self
                     );
-
-                    self.stop().await;
                     return Err(Error::ChannelStopped)
                 }
             };
@@ -390,7 +388,6 @@ impl Channel {
                         self.ban(self.address()).await;
                     }
 
-                    self.stop().await;
                     return Err(Error::ChannelStopped)
                 }
                 Err(_) => unreachable!("You added a new error in notify()"),
