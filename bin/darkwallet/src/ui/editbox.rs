@@ -373,7 +373,7 @@ impl EditBox {
         for (glyph_idx, (mut glyph_rect, glyph)) in glyph_pos_iter.zip(glyphs.iter()).enumerate() {
             let uv_rect = atlas.fetch_uv(glyph.glyph_id).expect("missing glyph UV rect");
 
-            glyph_rect.x += scroll;
+            glyph_rect.x -= scroll;
 
             //mesh.draw_outline(&glyph_rect, COLOR_BLUE, 2.);
             let mut color = text_color.clone();
@@ -442,7 +442,7 @@ impl EditBox {
         let mut rhs = 0.;
 
         for (glyph_idx, mut glyph_rect) in glyph_pos_iter.enumerate() {
-            glyph_rect.x += scroll;
+            glyph_rect.x -= scroll;
 
             if glyph_idx == sel_start {
                 start_x = glyph_rect.x;
@@ -770,7 +770,7 @@ impl EditBox {
             // Because we skip the first item
             let glyph_idx = (i + 1) as u32;
 
-            let x1 = glyph_rect.x + scroll;
+            let x1 = glyph_rect.x - scroll;
 
             // I don't know what this is doing but it works so I won't touch it for now.
             let curr_d = (x1 - mouse_x).abs();
@@ -1171,13 +1171,20 @@ impl EditBox {
             }
         };
 
-        let cursor_lhs = cursor_x + scroll;
+        // The LHS and RHS of the cursor box
+        let cursor_lhs = cursor_x - scroll;
         let cursor_rhs = cursor_lhs + CURSOR_WIDTH;
 
+        // RHS is outside
         if cursor_rhs > rect.w {
-            scroll = rect.w - cursor_x;
+            // We want a scroll so RHS = w
+            // cursor_x - scroll + CURSOR_WIDTH = rect.w
+            scroll = cursor_x + CURSOR_WIDTH - rect.w;
+        // LHS is negative
         } else if cursor_lhs < 0. {
-            scroll = -cursor_x + CURSOR_WIDTH;
+            // We want scroll so LHS = 0
+            // cursor_x - scroll = 0
+            scroll = cursor_x;
         }
 
         self.scroll.set(scroll);
