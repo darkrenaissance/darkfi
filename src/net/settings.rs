@@ -28,12 +28,12 @@ type BlacklistEntry = (String, Vec<String>, Vec<u16>);
 ///
 /// TODO: this will be deprecated when we introduce the p2p resource
 /// mananger.
-#[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum BanPolicy {
+    #[default]
     Strict,
 
-    #[default]
     Relaxed,
 }
 
