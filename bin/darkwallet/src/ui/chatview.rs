@@ -588,6 +588,14 @@ impl ChatView {
         if id != 0 {
             return
         }
+
+        let Some(rect) = self.get_cached_world_rect().await else { return };
+        let touch_pos = Point { x: touch_x, y: touch_y };
+        if !rect.contains(&touch_pos) {
+            //debug!(target: "ui::chatview", "not inside rect");
+            return
+        }
+
         // Simulate mouse events
         match phase {
             TouchPhase::Started => {

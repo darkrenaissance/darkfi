@@ -199,6 +199,14 @@ impl Button {
         if id != 0 {
             return
         }
+
+        let Some(rect) = self.get_cached_rect() else { return };
+        let touch_pos = Point { x: touch_x, y: touch_y };
+        if !rect.contains(&touch_pos) {
+            //debug!(target: "ui::chatview", "not inside rect");
+            return
+        }
+
         // Simulate mouse events
         match phase {
             TouchPhase::Started => self.handle_mouse_btn_down(MouseButton::Left, touch_x, touch_y),
