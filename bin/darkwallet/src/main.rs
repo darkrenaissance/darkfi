@@ -24,8 +24,8 @@
 //#![allow(warnings, unused)]
 //#![deny(unused_imports)]
 
-use async_lock::Mutex;
-use std::sync::{mpsc, Arc};
+use async_lock::Mutex as AsyncMutex;
+use std::sync::{mpsc, Arc, Mutex as SyncMutex};
 
 use darkfi::{
     async_daemonize, cli_desc,
@@ -246,6 +246,119 @@ fn newmain() {
 }
 */
 
+type DarkIrcBackendPtr = Arc<DarkIrcBackend>;
+
+struct DarkIrcData {
+    p2p: P2pPtr,
+    event_graph: EventGraphPtr,
+    ev_task: smol::Task<()>,
+    db: sled::Db,
+}
+
+struct DarkIrcBackend(SyncMutex<Option<DarkIrcData>>);
+
+impl DarkIrcBackend {
+    fn new() -> Arc<Self> {
+        Arc::new(Self(SyncMutex::new(None)))
+    }
+
+    async fn start(&self, sg: SceneGraphPtr2, ex: ExecutorPtr) -> darkfi::Result<()> {
+        info!(target: "main", "Starting DarkIRC backend");
+        let sled_db = sled::open(EVGRDB_PATH)?;
+
+        let mut p2p_settings: NetSettings = Default::default();
+        p2p_settings.app_version = semver::Version::parse("0.5.0").unwrap();
+        p2p_settings.seeds.push(url::Url::parse("tcp+tls://lilith1.dark.fi:5262").unwrap());
+
+        let p2p = P2p::new(p2p_settings, ex.clone()).await?;
+
+        let event_graph = EventGraph::new(
+            p2p.clone(),
+            sled_db.clone(),
+            std::path::PathBuf::new(),
+            false,
+            "darkirc_dag",
+            1,
+            ex.clone(),
+        )
+        .await?;
+
+        //self.prune_task.lock().unwrap() = Some(event_graph.prune_task.get().unwrap());
+
+        info!(target: "main", "Registering EventGraph P2P protocol");
+        let event_graph_ = Arc::clone(&event_graph);
+        let registry = p2p.protocol_registry();
+        registry
+            .register(SESSION_DEFAULT, move |channel, _| {
+                let event_graph_ = event_graph_.clone();
+                async move { ProtocolEventGraph::init(event_graph_, channel).await.unwrap() }
+            })
+            .await;
+
+        let ev_sub = event_graph.event_pub.clone().subscribe().await;
+        let ev_task = ex.spawn(relay_darkirc_events(sg, ev_sub));
+
+        info!(target: "main", "Starting P2P network");
+        p2p.clone().start().await?;
+
+        info!(target: "main", "Waiting for some P2P connections...");
+        sleep(5).await;
+
+        // We'll attempt to sync {sync_attempts} times
+        let sync_attempts = 4;
+        for i in 1..=sync_attempts {
+            info!(target: "main", "Syncing event DAG (attempt #{})", i);
+            match event_graph.dag_sync().await {
+                Ok(()) => break,
+                Err(e) => {
+                    if i == sync_attempts {
+                        error!("Failed syncing DAG. Exiting.");
+                        p2p.stop().await;
+                        return Err(Error::DagSyncFailed)
+                    } else {
+                        // TODO: Maybe at this point we should prune or something?
+                        // TODO: Or maybe just tell the user to delete the DAG from FS.
+                        error!("Failed syncing DAG ({}), retrying in {}s...", e, 4);
+                        sleep(4).await;
+                    }
+                }
+            }
+        }
+
+        *self.0.lock().unwrap() = Some(DarkIrcData {
+            p2p,
+            event_graph,
+            ev_task,
+            db: sled_db
+        });
+
+        Ok(())
+    }
+
+    async fn stop(&self) {
+        let self_ = self.0.lock().unwrap();
+        let Some(self_) = &*self_ else {
+            warn!(target: "main", "Backend wasn't started");
+            return
+        };
+
+        info!(target: "main", "Stopping P2P network");
+        self_.p2p.stop().await;
+
+        info!(target: "main", "Stopping IRC server");
+        let prune_task = self_.event_graph.prune_task.get().unwrap();
+        prune_task.stop().await;
+
+        info!(target: "main", "Flushing event graph sled database...");
+        let Ok(flushed_bytes) = self_.db.flush_async().await else {
+            error!(target: "main", "Flushing event graph db failed");
+            return
+        };
+        info!(target: "main", "Flushed {} bytes", flushed_bytes);
+        info!(target: "main", "Shut down backend successfully");
+    }
+}
+
 fn main() {
     // Exit the application on panic right away
     std::panic::set_hook(Box::new(panic_hook));
@@ -277,7 +390,7 @@ fn main() {
     }
 
     let ex = Arc::new(smol::Executor::new());
-    let sg = Arc::new(Mutex::new(SceneGraph::new()));
+    let sg = Arc::new(AsyncMutex::new(SceneGraph::new()));
 
     let async_runtime = app::AsyncRuntime::new(ex.clone());
     async_runtime.start();
@@ -298,16 +411,11 @@ fn main() {
 
     let text_shaper = TextShaper::new();
 
+    let darkirc_backend = DarkIrcBackend::new();
     let app =
-        app::App::new(sg.clone(), ex.clone(), render_api.clone(), event_pub.clone(), text_shaper);
-    let app_cv = Arc::new(CondVar::new());
+        app::App::new(sg.clone(), ex.clone(), render_api.clone(), event_pub.clone(), text_shaper, darkirc_backend);
     let app2 = app.clone();
-    let app_cv2 = app_cv.clone();
-    let app_task = ex.spawn(async move {
-        app2.start().await;
-        debug!(target: "main", "App started - sending wakeup notification to the backend");
-        app_cv2.notify();
-    });
+    let app_task = ex.spawn(app.clone().start());
     async_runtime.push_task(app_task);
 
     // Nice to see which events exist
@@ -359,19 +467,6 @@ fn main() {
         }
     });
     async_runtime.push_task(ev_relay_task);
-
-    /*
-    let ex2 = ex.clone();
-    let darkirc_task = ex.spawn(async move {
-        // Wait for app to finish starting
-        app_cv.wait().await;
-
-        if let Err(e) = run_darkirc_backend(sg, ex2).await {
-            error!(target: "main", "darkirc backend failed: {e}");
-        }
-    });
-    async_runtime.push_task(darkirc_task);
-    */
 
     //let stage = gfx2::Stage::new(method_rep, event_pub);
     gfx2::run_gui(app, async_runtime, method_rep, event_pub);

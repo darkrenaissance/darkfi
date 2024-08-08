@@ -878,7 +878,11 @@ impl EventHandler for Stage {
     }
 
     fn quit_requested_event(&mut self) {
-        self.async_runtime.stop();
+        debug!(target: "gfx", "quit requested");
+        // Doesn't work
+        //miniquad::window::cancel_quit();
+        //self.app.stop();
+        //self.async_runtime.stop();
     }
 }
 

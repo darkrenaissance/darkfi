@@ -38,6 +38,7 @@ use crate::{
     text2::TextShaperPtr,
     ui::{chatview, Button, ChatView, EditBox, Image, Mesh, RenderLayer, Stoppable, Text, Window},
     ExecutorPtr,
+    DarkIrcBackendPtr,
 };
 
 //fn print_type_of<T>(_: &T) {
@@ -99,7 +100,7 @@ impl AsyncRuntime {
     pub fn stop(&self) {
         // Go through event graph and call stop on everything
         // Depth first
-        debug!(target: "app", "Stopping app...");
+        debug!(target: "app", "Stopping async runtime...");
 
         let tasks = std::mem::take(&mut *self.tasks.lock().unwrap());
         // Close all tasks
@@ -132,6 +133,7 @@ pub struct App {
     render_api: RenderApiPtr,
     event_pub: GraphicsEventPublisherPtr,
     text_shaper: TextShaperPtr,
+    darkirc_backend: DarkIrcBackendPtr,
     tasks: SyncMutex<Vec<Task<()>>>,
 }
 
@@ -142,8 +144,9 @@ impl App {
         render_api: RenderApiPtr,
         event_pub: GraphicsEventPublisherPtr,
         text_shaper: TextShaperPtr,
+        darkirc_backend: DarkIrcBackendPtr,
     ) -> Arc<Self> {
-        Arc::new(Self { sg, ex, render_api, event_pub, text_shaper, tasks: SyncMutex::new(vec![]) })
+        Arc::new(Self { sg, ex, render_api, event_pub, text_shaper, darkirc_backend, tasks: SyncMutex::new(vec![]) })
     }
 
     pub async fn start(self: Arc<Self>) {
@@ -196,12 +199,26 @@ impl App {
 
         // Access drawable in window node and call draw()
         self.trigger_redraw().await;
+
+        // Start the backend
+        //if let Err(err) = self.darkirc_backend.start(self.sg.clone(), self.ex.clone()).await {
+        //    error!(target: "app", "backend error: {err}");
+        //}
     }
 
-    pub async fn stop(&self) {
+    pub fn stop(&self) {
+        smol::future::block_on(async {
+            self.async_stop().await;
+        });
+    }
+
+    async fn async_stop(&self) {
+        self.darkirc_backend.stop().await;
+
         let sg = self.sg.lock().await;
         let window_id = sg.lookup_node("/window").unwrap().id;
         self.stop_node(&sg, window_id).await;
+        drop(sg);
     }
 
     #[async_recursion]
@@ -214,6 +231,9 @@ impl App {
             Pimpl::Window(win) => win.stop().await,
             Pimpl::RenderLayer(layer) => layer.stop().await,
             Pimpl::Mesh(mesh) => mesh.stop().await,
+            Pimpl::Text(txt) => txt.stop().await,
+            Pimpl::EditBox(ebox) => ebox.stop().await,
+            Pimpl::ChatView(_) | Pimpl::Image(_) | Pimpl::Button(_) => {}
             _ => panic!("unhandled pimpl type"),
         };
     }
@@ -773,6 +793,7 @@ impl App {
 impl Drop for App {
     fn drop(&mut self) {
         debug!(target: "app", "dropping app");
+        self.stop();
     }
 }
 
