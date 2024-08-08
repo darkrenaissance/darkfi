@@ -1101,7 +1101,7 @@ impl ChatView {
 
         let mut mesh_infs = vec![];
         // First pass is to measure the height and generate the meshes
-        let mut current_height = 0.;
+        let mut current_height = self.descent();
         for page in pages {
             // We should be able to count lines and perform wrapping without having to
             // generate the mesh and alloc buffers.
