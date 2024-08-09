@@ -19,7 +19,11 @@
 use std::sync::{Arc, Mutex as SyncMutex};
 
 use darkfi::{
-    event_graph::{self, proto::ProtocolEventGraph, EventGraph, EventGraphPtr},
+    event_graph::{
+        self,
+        proto::{EventPut, ProtocolEventGraph},
+        EventGraph, EventGraphPtr,
+    },
     net::{session::SESSION_DEFAULT, settings::Settings as NetSettings, P2p, P2pPtr},
     system::{sleep, Subscription},
     Error,
@@ -189,11 +193,19 @@ impl DarkIrcBackend {
     }
 
     pub async fn send(&self, privmsg: Privmsg) {
-        let evgr =
-            self.0.lock().unwrap().as_ref().expect("backend wasnt started").event_graph.clone();
+        let (p2p, evgr) = {
+            let self_ = self.0.lock().unwrap();
+            let data = self_.as_ref().expect("backend wasnt started");
+
+            let evgr = data.event_graph.clone();
+            let p2p = data.p2p.clone();
+            (p2p, evgr)
+        };
         let event = event_graph::Event::new(serialize_async(&privmsg).await, &evgr).await;
-        if let Err(e) = evgr.dag_insert(&[event]).await {
+        if let Err(e) = evgr.dag_insert(&[event.clone()]).await {
             error!(target: "darkirc", "Failed inserting new event to DAG: {}", e);
         }
+
+        p2p.broadcast(&EventPut(event)).await;
     }
 }
