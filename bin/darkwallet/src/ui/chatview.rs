@@ -636,7 +636,7 @@ impl ChatView {
         }
     }
 
-    fn add_line_to_db(&self,
+    async fn add_line_to_db(&self,
         timest: Timestamp,
         message_id: &MessageId,
         nick: &str,
@@ -660,6 +660,7 @@ impl ChatView {
         msg.encode(&mut val).unwrap();
 
         self.tree.insert(&key, val).unwrap();
+        let _ = self.tree.flush_async().await;
         true
     }
     async fn handle_insert_line(
@@ -671,7 +672,7 @@ impl ChatView {
     ) {
         debug!(target: "ui::chatview", "handle_insert_line({timest}, {message_id:?}, {nick}, {text})");
 
-        if !self.add_line_to_db(timest, &message_id, &nick, &text) {
+        if !self.add_line_to_db(timest, &message_id, &nick, &text).await {
             // Already exists so bail
             debug!(target: "ui::chatview", "duplicate msg so bailing");
             return
