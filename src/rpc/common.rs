@@ -82,7 +82,7 @@ pub(super) async fn write_to_stream(
     };
 
     // As we're a line-based protocol, we append CRLF to the end of the JSON string.
-    for i in [object_str.as_bytes(), &[b'\r', b'\n']] {
+    for i in [object_str.as_bytes(), b"\r\n"] {
         writer.write_all(i).await?
     }
 
