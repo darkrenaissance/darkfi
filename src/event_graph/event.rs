@@ -24,7 +24,7 @@ use sled_overlay::SledTreeOverlay;
 use crate::Result;
 
 use super::{
-    util::next_rotation_timestamp, EventGraphPtr, EVENT_TIME_DRIFT, INITIAL_GENESIS, NULL_ID,
+    util::next_rotation_timestamp, EventGraph, EVENT_TIME_DRIFT, INITIAL_GENESIS, NULL_ID,
     N_EVENT_PARENTS,
 };
 
@@ -47,7 +47,7 @@ impl Event {
     /// will be `N_EVENT_PARENTS` from the current event graph unreferenced tips.
     /// The parents can also include NULL, but this should be handled by the rest
     /// of the codebase.
-    pub async fn new(data: Vec<u8>, event_graph: &EventGraphPtr) -> Self {
+    pub async fn new(data: Vec<u8>, event_graph: &EventGraph) -> Self {
         let (layer, parents) = event_graph.get_next_layer_with_parents().await;
         Self { timestamp: UNIX_EPOCH.elapsed().unwrap().as_secs(), content: data, parents, layer }
     }
@@ -147,7 +147,7 @@ impl Event {
     /// Fully validate an event for the correct layout against provided
     /// [`EventGraph`] reference and enforce relevant age, assuming some
     /// possibility for a time drift.
-    pub async fn dag_validate(&self, event_graph: &EventGraphPtr) -> Result<bool> {
+    pub async fn dag_validate(&self, event_graph: &EventGraph) -> Result<bool> {
         // Grab genesis timestamp
         let genesis_timestamp = event_graph.current_genesis.read().await.timestamp;
 
