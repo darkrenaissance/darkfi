@@ -526,6 +526,7 @@ impl PeerDiscoveryBase for PeerDiscovery {
                 settings.outbound_peer_discovery_attempt_time;
             let outbound_connections = settings.outbound_connections;
             let allowed_transports = settings.allowed_transports.clone();
+            let seeds = settings.seeds.clone();
             drop(settings);
 
             if sleep_was_instant {
@@ -553,7 +554,8 @@ impl PeerDiscoveryBase for PeerDiscovery {
             }
 
             // First 2 times try sending GetAddr to the network.
-            // 3rd time do a seed sync.
+            // 3rd time do a seed sync (providing we have seeds
+            // configured).
             if self.p2p().is_connected() && current_attempt <= 2 {
                 // Broadcast the GetAddrs message to all active peers.
                 // If we have no active peers, we will perform a SeedSyncSession instead.
@@ -607,7 +609,7 @@ impl PeerDiscoveryBase for PeerDiscovery {
                 // Drop. For now it's sufficient for publishers to be
                 // de-allocated when the Session completes.
                 store_sub.unsubscribe().await;
-            } else {
+            } else if !seeds.is_empty() {
                 info!(
                     target: "net::outbound_session::peer_discovery()",
                     "[P2P] Seeding hosts. Attempt: {}",
