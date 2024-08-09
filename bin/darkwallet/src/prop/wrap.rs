@@ -16,9 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::Arc;
-
-use super::{Property, PropertyPtr, Role};
+use super::{PropertyPtr, Role};
 use crate::{
     error::{Error, Result},
     scene::SceneNode,

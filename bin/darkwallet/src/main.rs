@@ -19,30 +19,14 @@
 #![feature(deadline_api)]
 #![feature(str_split_whitespace_remainder)]
 #![feature(duration_millis_float)]
+#![feature(stmt_expr_attributes)]
 
 // Use these to incrementally fix warnings with cargo fix
 //#![allow(warnings, unused)]
 //#![deny(unused_imports)]
 
 use async_lock::Mutex as AsyncMutex;
-use std::sync::{mpsc, Arc, Mutex as SyncMutex};
-
-use darkfi::{
-    async_daemonize, cli_desc,
-    event_graph::{self, proto::ProtocolEventGraph, EventGraph, EventGraphPtr},
-    net::{session::SESSION_DEFAULT, settings::Settings as NetSettings, P2p, P2pPtr},
-    rpc::{
-        jsonrpc::JsonSubscriber,
-        server::{listen_and_serve, RequestHandler},
-    },
-    system::{sleep, sleep_forever, CondVar, StoppableTask, StoppableTaskPtr, Subscription},
-    util::path::{expand_path, get_config_path},
-    Error, Result,
-};
-use darkfi_serial::{
-    async_trait, deserialize_async, serialize_async, AsyncDecodable, Encodable, SerialDecodable,
-    SerialEncodable,
-};
+use std::sync::{mpsc, Arc};
 
 #[macro_use]
 extern crate log;
@@ -65,12 +49,7 @@ mod text;
 mod ui;
 mod util;
 
-use crate::{
-    darkirc::DarkIrcBackend,
-    net::ZeroMQAdapter,
-    scene::{SceneGraph, SceneGraphPtr2},
-    text::TextShaper,
-};
+use crate::{darkirc::DarkIrcBackend, net::ZeroMQAdapter, scene::SceneGraph, text::TextShaper};
 
 pub type ExecutorPtr = Arc<smol::Executor<'static>>;
 
@@ -141,7 +120,6 @@ fn main() {
         text_shaper,
         darkirc_backend,
     );
-    let app2 = app.clone();
     let app_task = ex.spawn(app.clone().start());
     async_runtime.push_task(app_task);
 

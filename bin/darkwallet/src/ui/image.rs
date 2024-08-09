@@ -18,7 +18,7 @@
 
 //use async_lock::Mutex;
 use image::ImageReader;
-use miniquad::{BufferId, TextureId};
+use miniquad::TextureId;
 use rand::{rngs::OsRng, Rng};
 use std::{
     io::Cursor,
@@ -26,25 +26,21 @@ use std::{
 };
 
 use crate::{
-    gfx::{DrawCall, DrawInstruction, DrawMesh, Rectangle, RenderApi, RenderApiPtr, Vertex},
-    mesh::{Color, MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_WHITE},
-    prop::{
-        PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyStr, PropertyUint32,
-        Role,
-    },
+    gfx::{DrawCall, DrawInstruction, DrawMesh, Rectangle, RenderApiPtr},
+    mesh::{MeshBuilder, MeshInfo, COLOR_WHITE},
+    prop::{PropertyPtr, PropertyStr, PropertyUint32, Role},
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
-    text::{self, Glyph, GlyphPositionIter, SpritePtr, TextShaper, TextShaperPtr},
-    util::zip3,
     ExecutorPtr,
 };
 
-use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify, Stoppable};
+use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify};
 
 pub type ImagePtr = Arc<Image>;
 
 pub struct Image {
     sg: SceneGraphPtr2,
     render_api: RenderApiPtr,
+    #[allow(dead_code)]
     tasks: Vec<smol::Task<()>>,
 
     mesh: SyncMutex<Option<MeshInfo>>,
@@ -149,7 +145,7 @@ impl Image {
     }
 
     /// Called whenever any property changes.
-    async fn regen_mesh(&self, clip: Rectangle) -> MeshInfo {
+    async fn regen_mesh(&self, _clip: Rectangle) -> MeshInfo {
         let basic = Rectangle { x: 0., y: 0., w: 1., h: 1. };
 
         let mut mesh = MeshBuilder::new();
@@ -166,7 +162,7 @@ impl Image {
             panic!("Node {:?} bad rect property: {}", node, err);
         }
 
-        let Ok(mut rect) = read_rect(self.rect.clone()) else {
+        let Ok(rect) = read_rect(self.rect.clone()) else {
             panic!("Node {:?} bad rect property", node);
         };
 

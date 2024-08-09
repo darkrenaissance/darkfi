@@ -17,10 +17,7 @@
  */
 
 use crate::error::{Error, Result};
-use darkfi_serial::{
-    async_trait, deserialize, Decodable, Encodable, FutAsyncWriteExt, ReadExt, SerialDecodable,
-    SerialEncodable, VarInt,
-};
+use darkfi_serial::{async_trait, Encodable, FutAsyncWriteExt, SerialDecodable, SerialEncodable};
 use std::{
     io::Write,
     sync::{Arc, Mutex},
@@ -206,7 +203,9 @@ impl Encodable for PropertyValue {
 #[derive(Debug, Clone)]
 pub enum ModifyAction {
     Clear,
+    #[allow(dead_code)]
     Set(usize),
+    #[allow(dead_code)]
     Push(usize),
 }
 
@@ -373,7 +372,7 @@ impl Property {
             return Err(Error::PropertyNullNotAllowed)
         }
 
-        let vals = &mut self.vals.lock().unwrap();
+        let mut vals = self.vals.lock().unwrap();
         if i >= vals.len() {
             return Err(Error::PropertyWrongIndex)
         }
@@ -475,7 +474,7 @@ impl Property {
             return Err(Error::PropertyIsBounded)
         }
 
-        let vals = &mut self.vals.lock().unwrap();
+        let mut vals = self.vals.lock().unwrap();
         let i = vals.len();
         vals.push(value);
         drop(vals);
@@ -663,13 +662,13 @@ mod tests {
 
     #[test]
     fn test_getset() {
-        let mut prop = Property::new("foo", PropertyType::Float32, PropertySubType::Null);
-        assert!(prop.set_f32(1, 4.).is_err());
+        let prop = Property::new("foo", PropertyType::Float32, PropertySubType::Null);
+        assert!(prop.set_f32(Role::App, 1, 4.).is_err());
         assert!(prop.is_unset(0).unwrap());
-        assert!(prop.set_f32(0, 4.).is_ok());
+        assert!(prop.set_f32(Role::App, 0, 4.).is_ok());
         assert_eq!(prop.get_f32(0).unwrap(), 4.);
         assert!(!prop.is_unset(0).unwrap());
-        prop.unset(0).unwrap();
+        prop.unset(Role::App, 0).unwrap();
         assert!(prop.is_unset(0).unwrap());
         assert_eq!(prop.get_f32(0).unwrap(), 0.);
     }
@@ -681,13 +680,13 @@ mod tests {
         assert!(prop.set_defaults_f32(vec![1.0, 0.0]).is_err());
         assert!(prop.set_defaults_f32(vec![2.0]).is_ok());
         prop.allow_null_values();
-        prop.set_null(0).unwrap();
+        prop.set_null(Role::App, 0).unwrap();
 
         assert!(prop.get_f32_opt(1).is_err());
         assert!(prop.get_f32_opt(0).is_ok());
         assert!(prop.get_f32_opt(0).unwrap().is_none());
 
-        prop.clear_values();
+        prop.clear_values(Role::App);
         assert!(prop.get_f32(0).is_ok());
         assert!(prop.get_f32_opt(0).unwrap().is_some());
         assert_eq!(prop.get_f32(0).unwrap(), 2.0);
@@ -695,8 +694,8 @@ mod tests {
 
     #[test]
     fn test_nonnullable() {
-        let mut prop = Property::new("foo", PropertyType::Float32, PropertySubType::Null);
-        assert!(prop.set_null(0).is_err());
+        let prop = Property::new("foo", PropertyType::Float32, PropertySubType::Null);
+        assert!(prop.set_null(Role::App, 0).is_err());
         assert!(prop.is_unset(0).unwrap());
     }
 
@@ -705,24 +704,24 @@ mod tests {
         let mut prop = Property::new("foo", PropertyType::Float32, PropertySubType::Null);
         prop.set_unbounded();
         assert_eq!(prop.get_len(), 0);
-        prop.push_f32(2.0).unwrap();
-        prop.push_f32(3.0).unwrap();
+        prop.push_f32(Role::App, 2.0).unwrap();
+        prop.push_f32(Role::App, 3.0).unwrap();
         assert_eq!(prop.get_len(), 2);
 
-        prop.clear_values();
+        prop.clear_values(Role::App);
         assert_eq!(prop.get_len(), 0);
         prop.allow_null_values();
-        prop.push_null().unwrap();
-        prop.push_f32(4.0).unwrap();
-        prop.push_f32(5.0).unwrap();
+        prop.push_null(Role::App).unwrap();
+        prop.push_f32(Role::App, 4.0).unwrap();
+        prop.push_f32(Role::App, 5.0).unwrap();
         assert_eq!(prop.get_len(), 3);
         assert!(prop.get_f32_opt(0).unwrap().is_none());
         assert!(prop.get_f32_opt(1).unwrap().is_some());
         assert!(prop.get_f32_opt(2).unwrap().is_some());
         assert!(prop.get_f32_opt(3).is_err());
 
-        let mut prop2 = Property::new("foo", PropertyType::Float32, PropertySubType::Null);
-        assert!(prop2.push_f32(4.0).is_err());
+        let prop2 = Property::new("foo", PropertyType::Float32, PropertySubType::Null);
+        assert!(prop2.push_f32(Role::App, 4.0).is_err());
     }
 
     #[test]
@@ -730,16 +729,16 @@ mod tests {
         let mut prop = Property::new("foo", PropertyType::Float32, PropertySubType::Null);
         let half_pi = 3.1415926535 / 2.;
         prop.set_range_f32(-half_pi, half_pi);
-        assert!(prop.set_f32(0, 6.).is_err());
-        assert!(prop.set_f32(0, 1.).is_ok());
+        assert!(prop.set_f32(Role::App, 0, 6.).is_err());
+        assert!(prop.set_f32(Role::App, 0, 1.).is_ok());
     }
 
     #[test]
     fn test_enum() {
         let mut prop = Property::new("foo", PropertyType::Enum, PropertySubType::Null);
         prop.set_enum_items(vec!["ABC", "XYZ", "FOO"]).unwrap();
-        assert!(prop.set_enum(0, "ABC").is_ok());
-        assert!(prop.set_enum(0, "BAR").is_err());
+        assert!(prop.set_enum(Role::App, 0, "ABC").is_ok());
+        assert!(prop.set_enum(Role::App, 0, "BAR").is_err());
     }
 
     #[test]
@@ -748,7 +747,7 @@ mod tests {
         prop.allow_exprs();
         assert_eq!(prop.get_f32(0).unwrap(), 0.);
         let code = vec![Op::ConstFloat32(4.)];
-        prop.set_expr(0, code).unwrap();
+        prop.set_expr(Role::App, 0, code).unwrap();
         let val = prop.get_cached(0).unwrap();
         assert!(val.is_null());
         prop.set_cache_f32(0, 4.).unwrap();

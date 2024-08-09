@@ -21,39 +21,30 @@ use atomic_float::AtomicF32;
 use chrono::{Local, TimeZone};
 use darkfi::system::{msleep, CondVar};
 use darkfi_serial::{
-    async_trait, deserialize, Decodable, Encodable, FutAsyncWriteExt, ReadExt, SerialDecodable,
-    SerialEncodable, VarInt,
+    async_trait, deserialize, Decodable, Encodable, SerialDecodable, SerialEncodable,
 };
 use miniquad::{KeyCode, KeyMods, TouchPhase};
 use rand::{rngs::OsRng, Rng};
 use std::{
-    collections::BTreeMap,
     hash::{DefaultHasher, Hash, Hasher},
     io::Cursor,
     sync::{atomic::Ordering, Arc, Mutex as SyncMutex, Weak},
 };
 
 use crate::{
-    error::Result,
     gfx::{
         DrawCall, DrawInstruction, DrawMesh, GraphicsEventPublisherPtr, Point, Rectangle,
-        RenderApi, RenderApiPtr, Vertex,
+        RenderApi, RenderApiPtr,
     },
-    mesh::{Color, MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_GREEN, COLOR_GREY, COLOR_WHITE},
-    prop::{
-        PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyStr, PropertyUint32,
-        Role,
-    },
+    mesh::{Color, MeshBuilder, COLOR_BLUE, COLOR_GREEN},
+    prop::{PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyUint32, Role},
     pubsub::Subscription,
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
-    text::{self, Glyph, GlyphPositionIter, SpritePtr, TextShaper, TextShaperPtr},
-    util::zip3,
+    text::{self, Glyph, GlyphPositionIter, TextShaperPtr},
     ExecutorPtr,
 };
 
-use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify, Stoppable};
-
-const DEBUG_RENDER: bool = false;
+use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify};
 
 const EPSILON: f32 = 0.001;
 const BIG_EPSILON: f32 = 0.05;
@@ -71,7 +62,7 @@ fn replace_vec_item<T>(vec: &mut Vec<T>, idx: usize, mut items: Vec<T>) {
     assert!(idx < vec.len());
     if items.len() == 1 {
         let item = items.remove(0);
-        std::mem::replace(&mut vec[idx], item);
+        let _ = std::mem::replace(&mut vec[idx], item);
         return
     }
 
@@ -96,6 +87,7 @@ type MessageId = [u8; 32];
 #[derive(Clone)]
 struct Message {
     timest: Timestamp,
+    #[allow(dead_code)]
     id: MessageId,
     chatmsg: ChatMsg,
     glyphs: Vec<Glyph>,
@@ -105,20 +97,14 @@ const PAGE_SIZE: usize = 10;
 const PRELOAD_PAGES: usize = 10;
 
 #[derive(Clone)]
-struct Page {
-    msgs: Vec<Message>,
-    atlas: text::RenderedAtlas,
-}
-
-#[derive(Clone)]
 struct PageMeshInfo {
     px_height: f32,
     mesh: DrawMesh,
 }
 
-type Page2Ptr = Arc<Page2>;
+type PagePtr = Arc<Page>;
 
-struct Page2 {
+struct Page {
     msgs: Vec<Message>,
     atlas: SyncMutex<text::RenderedAtlas>,
     // One draw call per page.
@@ -126,7 +112,7 @@ struct Page2 {
     mesh_inf: SyncMutex<Option<PageMeshInfo>>,
 }
 
-impl Page2 {
+impl Page {
     async fn new(msgs: Vec<Message>, render_api: &RenderApi) -> Arc<Self> {
         let mut atlas = text::Atlas::new(render_api);
         for msg in &msgs {
@@ -190,7 +176,7 @@ impl Page2 {
                 }
 
                 // Render line
-                let mut glyph_pos_iter = GlyphPositionIter::new(font_size, &line, baseline);
+                let glyph_pos_iter = GlyphPositionIter::new(font_size, &line, baseline);
                 for (mut glyph_rect, glyph) in glyph_pos_iter.zip(line.iter()) {
                     let uv_rect = atlas.fetch_uv(glyph.glyph_id).expect("missing glyph UV rect");
                     glyph_rect.y -= off_y;
@@ -263,15 +249,14 @@ pub type ChatViewPtr = Arc<ChatView>;
 
 pub struct ChatView {
     node_id: SceneNodeId,
+    #[allow(dead_code)]
     tasks: Vec<smol::Task<()>>,
     sg: SceneGraphPtr2,
     render_api: RenderApiPtr,
     text_shaper: TextShaperPtr,
     tree: sled::Tree,
 
-    pages: SyncMutex<Vec<Page>>,
-    pages2: AsyncMutex<Vec<Page2Ptr>>,
-    drawcalls: SyncMutex<Vec<DrawMesh>>,
+    pages: AsyncMutex<Vec<PagePtr>>,
     dc_key: u64,
 
     /// Used for detecting when scrolling view
@@ -408,9 +393,7 @@ impl ChatView {
                 text_shaper,
                 tree,
 
-                pages: SyncMutex::new(Vec::new()),
-                pages2: AsyncMutex::new(Vec::new()),
-                drawcalls: SyncMutex::new(Vec::new()),
+                pages: AsyncMutex::new(Vec::new()),
                 dc_key: OsRng.gen(),
 
                 mouse_pos: SyncMutex::new(Point::from([0., 0.])),
@@ -496,7 +479,7 @@ impl ChatView {
         me: &Weak<Self>,
         ev_sub: &Subscription<(KeyCode, KeyMods, bool)>,
     ) -> bool {
-        let Ok((key, mods, repeat)) = ev_sub.receive().await else {
+        let Ok((key, _mods, repeat)) = ev_sub.receive().await else {
             debug!(target: "ui::editbox", "Event relayer closed");
             return false
         };
@@ -689,7 +672,7 @@ impl ChatView {
 
         // Now add message to page
 
-        let mut pages = self.pages2.lock().await;
+        let mut pages = self.pages.lock().await;
         let mut idx = None;
         for (i, page) in pages.iter_mut().enumerate() {
             let first_timest = page.msgs.last().unwrap().timest;
@@ -713,11 +696,11 @@ impl ChatView {
         // Maybe we can write this code below better
         if pages.is_empty() {
             let msgs = vec![Message { timest, id: message_id, chatmsg, glyphs }];
-            let page = Page2::new(msgs, &self.render_api).await;
+            let page = Page::new(msgs, &self.render_api).await;
             pages.push(page);
             drop(pages);
 
-            let mut scroll = self.scroll.get();
+            let scroll = self.scroll.get();
             self.scrollview(scroll).await;
             return;
         }
@@ -744,7 +727,7 @@ impl ChatView {
             }
             debug!(target: "ui::chatview", "===============================");
 
-            let new_page = Page2::new(page_msgs, &self.render_api).await;
+            let new_page = Page::new(page_msgs, &self.render_api).await;
             new_pages.push(new_page);
         }
 
@@ -753,7 +736,7 @@ impl ChatView {
         drop(pages);
 
         // This will refresh the view, so we just use this
-        let mut scroll = self.scroll.get();
+        let scroll = self.scroll.get();
         self.scrollview(scroll).await;
     }
 
@@ -868,7 +851,7 @@ impl ChatView {
     /// Load extra pages
     async fn preload_pages(&self) -> usize {
         // Get last page
-        let last_page = self.pages2.lock().await.last().unwrap().clone();
+        let last_page = self.pages.lock().await.last().unwrap().clone();
         // get the current earliest timestamp
         let last_timest = last_page.msgs.last().unwrap().timest;
 
@@ -908,9 +891,9 @@ impl ChatView {
             if msgs.len() >= PAGE_SIZE {
                 debug!(target: "ui::chatview", "added new page. page_len={pages_len}");
                 let msgs = std::mem::take(&mut msgs);
-                let page = Page2::new(msgs, &self.render_api).await;
+                let page = Page::new(msgs, &self.render_api).await;
 
-                self.pages2.lock().await.push(page);
+                self.pages.lock().await.push(page);
                 pages_len += 1;
 
                 if pages_len >= n {
@@ -922,9 +905,9 @@ impl ChatView {
         // Any remaining messages added to a short page
         if !msgs.is_empty() {
             debug!(target: "ui::chatview", "added final page. page_len={pages_len}");
-            let page = Page2::new(msgs, &self.render_api).await;
+            let page = Page::new(msgs, &self.render_api).await;
 
-            self.pages2.lock().await.push(page);
+            self.pages.lock().await.push(page);
             pages_len += 1;
         }
 
@@ -933,7 +916,7 @@ impl ChatView {
         pages_len
     }
 
-    async fn get_total_height(&self, rect: &Rectangle, pages: &Vec<Page2Ptr>) -> f32 {
+    async fn get_total_height(&self, rect: &Rectangle, pages: &Vec<PagePtr>) -> f32 {
         let font_size = self.font_size.get();
         let line_height = self.line_height.get();
         let baseline = self.baseline.get();
@@ -975,7 +958,7 @@ impl ChatView {
         current_height
     }
 
-    async fn draw_cached(&self, mut rect: Rectangle, scroll: &mut f32) -> Vec<DrawInstruction> {
+    async fn draw_cached(&self, rect: Rectangle, scroll: &mut f32) -> Vec<DrawInstruction> {
         let mut instrs = vec![];
 
         // When scrolling it can go negative so clamp it here
@@ -985,7 +968,7 @@ impl ChatView {
 
         // Make sure we have enough pages loaded.
         // If there's no more to load then adjust the scroll.
-        let mut pages = self.pages2.lock().await.clone();
+        let mut pages = self.pages.lock().await.clone();
         let mut total_height = self.get_total_height(&rect, &pages).await;
         while total_height < *scroll + rect.h {
             debug!(target: "ui::chatview", "draw_cached() loading more pages");
@@ -1000,7 +983,7 @@ impl ChatView {
                 break
             }
 
-            pages = self.pages2.lock().await.clone();
+            pages = self.pages.lock().await.clone();
         }
 
         // If lines aren't enough to fill the available buffer then start from the top
@@ -1054,7 +1037,7 @@ impl ChatView {
             panic!("Node {:?} bad rect property: {}", node, err);
         }
 
-        let Ok(mut rect) = read_rect(self.rect.clone()) else {
+        let Ok(rect) = read_rect(self.rect.clone()) else {
             panic!("Node {:?} bad rect property", node);
         };
 
@@ -1094,7 +1077,7 @@ impl ChatView {
         }
     }
 
-    async fn regen_mesh(&self, mut rect: Rectangle) -> (Vec<DrawInstruction>, Vec<DrawMesh>) {
+    async fn regen_mesh(&self, rect: Rectangle) -> (Vec<DrawInstruction>, Vec<DrawMesh>) {
         let font_size = self.font_size.get();
         let line_height = self.line_height.get();
         let baseline = self.baseline.get();
@@ -1107,7 +1090,7 @@ impl ChatView {
         let text_color = self.text_color.get();
         let nick_colors = self.read_nick_colors();
 
-        let pages = self.pages2.lock().await.clone();
+        let pages = self.pages.lock().await.clone();
 
         let mut mesh_infs = vec![];
         // First pass is to measure the height and generate the meshes
@@ -1189,14 +1172,6 @@ impl ChatView {
         colors
     }
 
-    fn select_nick_color(&self, nick: &str, nick_colors: &[Color]) -> Color {
-        let mut hasher = DefaultHasher::new();
-        nick.hash(&mut hasher);
-        let i = hasher.finish() as usize;
-        let color = nick_colors[i % nick_colors.len()];
-        color
-    }
-
     pub async fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
         debug!(target: "ui::chatview", "ChatView::draw()");
         // Only used for debug messages
@@ -1206,15 +1181,15 @@ impl ChatView {
             panic!("Node {:?} bad rect property: {}", node, err);
         }
 
-        let Ok(mut rect) = read_rect(self.rect.clone()) else {
+        let Ok(rect) = read_rect(self.rect.clone()) else {
             panic!("Node {:?} bad rect property", node);
         };
 
         let timer = std::time::Instant::now();
-        let (mut mesh_instrs, mut old_drawmesh) = self.regen_mesh(rect.clone()).await;
+        let (mut mesh_instrs, old_drawmesh) = self.regen_mesh(rect.clone()).await;
         debug!(target: "ui::chatview", "regen_mesh() took {:?}", timer.elapsed());
 
-        let mut freed_textures = vec![];
+        let freed_textures = vec![];
         let mut freed_buffers = vec![];
         for old_mesh in old_drawmesh {
             freed_buffers.push(old_mesh.vertex_buffer);

@@ -16,9 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_serial::{
-    async_trait, Decodable, Encodable, FutAsyncWriteExt, ReadExt, SerialDecodable, SerialEncodable,
-};
+use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 use log::debug;
 use miniquad::{
     conf, window, Backend, Bindings, BlendFactor, BlendState, BlendValue, BufferId, BufferLayout,
@@ -38,7 +36,6 @@ use crate::{
     app::{AppPtr, AsyncRuntime},
     error::{Error, Result},
     pubsub::{Publisher, PublisherPtr, Subscription, SubscriptionId},
-    util::ansi_texture,
 };
 
 // This is very noisy so suppress output by default
@@ -439,6 +436,7 @@ impl GraphicsEventPublisher {
         })
     }
 
+    /*
     fn lock_resize(&self, sub_id: SubscriptionId) {
         *self.lock_resize.lock().unwrap() = Some(sub_id);
     }
@@ -501,6 +499,7 @@ impl GraphicsEventPublisher {
     fn unlock_touch(&self) {
         *self.lock_touch.lock().unwrap() = None;
     }
+    */
 
     fn notify_resize(&self, w: f32, h: f32) {
         let ev = (w, h);
@@ -627,7 +626,9 @@ impl GraphicsEventPublisher {
 }
 
 struct Stage {
+    #[allow(dead_code)]
     app: AppPtr,
+    #[allow(dead_code)]
     async_runtime: AsyncRuntime,
 
     ctx: Box<dyn RenderingBackend>,
@@ -830,9 +831,6 @@ impl EventHandler for Stage {
         //let data: [u8; 64] = unsafe { std::mem::transmute_copy(&model) };
         //uniforms_data[64..].copy_from_slice(&data);
         assert_eq!(128, 2 * UniformType::Mat4.size());
-
-        let (screen_width, screen_height) = window::screen_size();
-        let default_view = Rectangle { x: 0., y: 0., w: screen_width, h: screen_height };
 
         let mut render_ctx = RenderContext {
             ctx: &mut self.ctx,

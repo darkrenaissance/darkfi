@@ -83,7 +83,7 @@ impl<T: Piped> Publisher<T> {
     }
 
     /// Publish a message to subscriptions in the include list
-    pub async fn notify_with_include(&self, message_result: T, include_list: &[SubscriptionId]) {
+    pub fn notify_with_include(&self, message_result: T, include_list: &[SubscriptionId]) {
         // Maybe we should just provide a method to get all IDs
         // Then people can call notify_with_exclude() instead.
         // TODO: just collect and clone directly into a Vec
@@ -93,7 +93,7 @@ impl<T: Piped> Publisher<T> {
                 continue
             }
 
-            if let Err(e) = sub.send(message_result.clone()).await {
+            if let Err(e) = sub.try_send(message_result.clone()) {
                 panic!("[system::publisher] Error returned sending message in notify_with_include() call! {}", e);
             }
         }

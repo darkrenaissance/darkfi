@@ -17,20 +17,19 @@
  */
 
 //use async_lock::Mutex;
-use miniquad::{BufferId, TextureId};
+use miniquad::TextureId;
 use rand::{rngs::OsRng, Rng};
 use std::sync::{Arc, Mutex as SyncMutex, Weak};
 
 use crate::{
-    gfx::{DrawCall, DrawInstruction, DrawMesh, Rectangle, RenderApi, RenderApiPtr, Vertex},
+    gfx::{DrawCall, DrawInstruction, DrawMesh, Rectangle, RenderApi, RenderApiPtr},
     mesh::{Color, MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_WHITE},
     prop::{
         PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyStr, PropertyUint32,
         Role,
     },
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
-    text::{self, Glyph, GlyphPositionIter, SpritePtr, TextShaper, TextShaperPtr},
-    util::zip3,
+    text::{self, GlyphPositionIter, TextShaper, TextShaperPtr},
     ExecutorPtr,
 };
 
@@ -40,7 +39,6 @@ pub type TextPtr = Arc<Text>;
 
 #[derive(Clone)]
 struct TextRenderInfo {
-    glyph_sprites: Vec<SpritePtr>,
     mesh: MeshInfo,
     texture_id: TextureId,
 }
@@ -49,7 +47,7 @@ pub struct Text {
     sg: SceneGraphPtr2,
     render_api: RenderApiPtr,
     text_shaper: TextShaperPtr,
-    tasks: Vec<smol::Task<()>>,
+    _tasks: Vec<smol::Task<()>>,
 
     render_info: SyncMutex<TextRenderInfo>,
     dc_key: u64,
@@ -109,7 +107,7 @@ impl Text {
                 sg,
                 render_api,
                 text_shaper,
-                tasks: on_modify.tasks,
+                _tasks: on_modify.tasks,
                 render_info: SyncMutex::new(render_info),
                 dc_key: OsRng.gen(),
                 node_id,
@@ -140,11 +138,14 @@ impl Text {
         let atlas = text::make_texture_atlas(render_api, &glyphs).await.unwrap();
 
         let mut mesh = MeshBuilder::new();
-        let mut glyph_pos_iter = GlyphPositionIter::new(font_size, &glyphs, baseline);
+        let glyph_pos_iter = GlyphPositionIter::new(font_size, &glyphs, baseline);
         for (glyph_rect, glyph) in glyph_pos_iter.zip(glyphs.iter()) {
             let uv_rect = atlas.fetch_uv(glyph.glyph_id).expect("missing glyph UV rect");
 
-            //mesh.draw_outline(&glyph_rect, COLOR_BLUE, 2.);
+            if debug {
+                mesh.draw_outline(&glyph_rect, COLOR_BLUE, 2.);
+            }
+
             let mut color = text_color.clone();
             if glyph.sprite.has_color {
                 color = COLOR_WHITE;
@@ -154,9 +155,7 @@ impl Text {
 
         let mesh = mesh.alloc(&render_api).await.unwrap();
 
-        let glyph_sprites = glyphs.into_iter().map(|glyph| glyph.sprite).collect();
-
-        TextRenderInfo { glyph_sprites, mesh, texture_id: atlas.texture_id }
+        TextRenderInfo { mesh, texture_id: atlas.texture_id }
     }
 
     async fn redraw(self: Arc<Self>) {
@@ -213,7 +212,7 @@ impl Text {
             panic!("Node {:?} bad rect property: {}", node, err);
         }
 
-        let Ok(mut rect) = read_rect(self.rect.clone()) else {
+        let Ok(rect) = read_rect(self.rect.clone()) else {
             panic!("Node {:?} bad rect property", node);
         };
 

@@ -16,32 +16,19 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_lock::Mutex as AsyncMutex;
-use std::sync::{mpsc, Arc, Mutex as SyncMutex};
+use std::sync::{Arc, Mutex as SyncMutex};
 
 use darkfi::{
-    async_daemonize, cli_desc,
     event_graph::{self, proto::ProtocolEventGraph, EventGraph, EventGraphPtr},
     net::{session::SESSION_DEFAULT, settings::Settings as NetSettings, P2p, P2pPtr},
-    rpc::{
-        jsonrpc::JsonSubscriber,
-        server::{listen_and_serve, RequestHandler},
-    },
-    system::{sleep, sleep_forever, CondVar, StoppableTask, StoppableTaskPtr, Subscription},
-    util::path::{expand_path, get_config_path},
-    Error, Result,
+    system::{sleep, Subscription},
+    Error,
 };
 use darkfi_serial::{
-    async_trait, deserialize_async, serialize_async, AsyncDecodable, Encodable, SerialDecodable,
-    SerialEncodable,
+    async_trait, deserialize_async, serialize_async, Encodable, SerialDecodable, SerialEncodable,
 };
 
-use crate::{
-    net::ZeroMQAdapter,
-    scene::{SceneGraph, SceneGraphPtr2},
-    text::TextShaper,
-    ExecutorPtr,
-};
+use crate::{scene::SceneGraphPtr2, ExecutorPtr};
 
 #[cfg(target_os = "android")]
 const EVGRDB_PATH: &str = "/data/data/darkfi.darkwallet/evgrdb/";
@@ -60,7 +47,7 @@ async fn relay_darkirc_events(sg: SceneGraphPtr2, ev_sub: Subscription<event_gra
         let ev = ev_sub.receive().await;
 
         // Try to deserialize the `Event`'s content into a `Privmsg`
-        let mut privmsg: Privmsg = match deserialize_async(ev.content()).await {
+        let privmsg: Privmsg = match deserialize_async(ev.content()).await {
             Ok(v) => v,
             Err(e) => {
                 error!("[IRC CLIENT] Failed deserializing incoming Privmsg event: {}", e);
@@ -80,10 +67,10 @@ async fn relay_darkirc_events(sg: SceneGraphPtr2, ev_sub: Subscription<event_gra
         let response_fn = Box::new(|_| {});
 
         let mut arg_data = vec![];
-        ev.timestamp.encode(&mut arg_data);
-        ev.id().as_bytes().encode(&mut arg_data);
-        privmsg.nick.encode(&mut arg_data);
-        privmsg.msg.encode(&mut arg_data);
+        ev.timestamp.encode(&mut arg_data).unwrap();
+        ev.id().as_bytes().encode(&mut arg_data).unwrap();
+        privmsg.nick.encode(&mut arg_data).unwrap();
+        privmsg.msg.encode(&mut arg_data).unwrap();
 
         let mut sg = sg.lock().await;
         let chatview_node = sg.lookup_node_mut("/window/view/chatty").unwrap();
@@ -97,6 +84,7 @@ pub type DarkIrcBackendPtr = Arc<DarkIrcBackend>;
 struct DarkIrcData {
     p2p: P2pPtr,
     event_graph: EventGraphPtr,
+    #[allow(dead_code)]
     ev_task: smol::Task<()>,
     db: sled::Db,
 }

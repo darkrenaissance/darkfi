@@ -18,19 +18,24 @@
 
 use crate::{
     error::Result,
-    gfx::{DrawMesh, Point, Rectangle, RenderApi, Vertex},
+    gfx::{DrawMesh, Rectangle, RenderApi, Vertex},
 };
 use miniquad::{BufferId, TextureId};
 
 pub type Color = [f32; 4];
 
+#[allow(dead_code)]
 pub const COLOR_RED: Color = [1., 0., 0., 1.];
+#[allow(dead_code)]
 pub const COLOR_DARKGREY: Color = [0.2, 0.2, 0.2, 1.];
+#[allow(dead_code)]
 pub const COLOR_LIGHTGREY: Color = [0.7, 0.7, 0.7, 1.];
 pub const COLOR_GREEN: Color = [0., 1., 0., 1.];
 pub const COLOR_BLUE: Color = [0., 0., 1., 1.];
 pub const COLOR_WHITE: Color = [1., 1., 1., 1.];
+#[allow(dead_code)]
 pub const COLOR_BLACK: Color = [1., 1., 1., 1.];
+#[allow(dead_code)]
 pub const COLOR_GREY: Color = [0.5, 0.5, 0.5, 1.];
 
 #[derive(Clone)]

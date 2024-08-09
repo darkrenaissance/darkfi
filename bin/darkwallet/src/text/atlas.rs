@@ -1,9 +1,8 @@
 use miniquad::TextureId;
 
 use crate::{
-    error::{Error, Result},
-    gfx::{Rectangle, RenderApi, RenderApiPtr},
-    util::{ansi_texture, zip3},
+    error::Result,
+    gfx::{Rectangle, RenderApi},
 };
 
 use super::{Glyph, Sprite, SpritePtr};

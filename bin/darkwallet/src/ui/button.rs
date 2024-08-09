@@ -16,30 +16,27 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use miniquad::{window, BufferId, KeyCode, KeyMods, MouseButton, TextureId, TouchPhase};
-use rand::{rngs::OsRng, Rng};
+use miniquad::{MouseButton, TouchPhase};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Weak,
 };
 
 use crate::{
-    gfx::{
-        DrawCall, DrawInstruction, DrawMesh, GraphicsEventPublisherPtr, Point, Rectangle,
-        RenderApiPtr, Vertex,
-    },
-    prop::{PropertyBool, PropertyPtr, PropertyUint32, Role},
+    gfx::{GraphicsEventPublisherPtr, Point, Rectangle},
+    prop::{PropertyBool, PropertyPtr, Role},
     pubsub::Subscription,
-    scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId, Signal},
+    scene::{Pimpl, SceneGraphPtr2, SceneNodeId},
     ExecutorPtr,
 };
 
-use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify, Stoppable};
+use super::{eval_rect, read_rect};
 
 pub type ButtonPtr = Arc<Button>;
 
 pub struct Button {
     node_id: SceneNodeId,
+    #[allow(dead_code)]
     tasks: Vec<smol::Task<()>>,
     sg: SceneGraphPtr2,
 

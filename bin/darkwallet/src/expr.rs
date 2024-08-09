@@ -35,6 +35,7 @@ pub enum SExprVal {
 }
 
 impl SExprVal {
+    #[allow(dead_code)]
     fn is_null(&self) -> bool {
         match self {
             Self::Null => true,
@@ -42,6 +43,7 @@ impl SExprVal {
         }
     }
 
+    #[allow(dead_code)]
     fn is_bool(&self) -> bool {
         match self {
             Self::Bool(_) => true,
@@ -56,6 +58,7 @@ impl SExprVal {
         }
     }
 
+    #[allow(dead_code)]
     fn is_f32(&self) -> bool {
         match self {
             Self::Float32(_) => true,
@@ -63,6 +66,7 @@ impl SExprVal {
         }
     }
 
+    #[allow(dead_code)]
     fn is_str(&self) -> bool {
         match self {
             Self::Str(_) => true,
@@ -70,6 +74,7 @@ impl SExprVal {
         }
     }
 
+    #[allow(dead_code)]
     fn as_bool(&self) -> Result<bool> {
         match self {
             Self::Bool(v) => Ok(*v),
@@ -91,6 +96,7 @@ impl SExprVal {
         }
     }
 
+    #[allow(dead_code)]
     fn as_str(&self) -> Result<String> {
         match self {
             Self::Str(v) => Ok(v.clone()),

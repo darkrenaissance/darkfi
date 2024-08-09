@@ -17,15 +17,11 @@
  */
 
 use async_recursion::async_recursion;
-use chrono::{NaiveDate, NaiveDateTime};
-use darkfi::event_graph;
-use darkfi_serial::Encodable;
 use futures::{stream::FuturesUnordered, StreamExt};
 use smol::Task;
 use std::{
     sync::{Arc, Mutex as SyncMutex},
     thread,
-    time::SystemTime,
 };
 
 use crate::{
@@ -39,7 +35,7 @@ use crate::{
         SceneNodeType, Slot,
     },
     text::TextShaperPtr,
-    ui::{chatview, Button, ChatView, EditBox, Image, Mesh, RenderLayer, Stoppable, Text, Window},
+    ui::{Button, ChatView, EditBox, Image, Mesh, RenderLayer, Stoppable, Text, Window},
     ExecutorPtr,
 };
 
@@ -58,13 +54,6 @@ const KING_PATH: &str = "king.png";
 const KING_PATH: &str = "assets/king.png";
 
 const LIGHTMODE: bool = false;
-
-fn get_systime() -> u64 {
-    match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
-        Ok(n) => n.as_secs(),
-        Err(_) => panic!("SystemTime before UNIX EPOCH!"),
-    }
-}
 
 pub struct AsyncRuntime {
     signal: async_channel::Sender<()>,
@@ -821,6 +810,7 @@ impl Drop for App {
 }
 
 // Just for testing
+/*
 fn populate_tree(tree: &sled::Tree) {
     let chat_txt = include_str!("../chat.txt");
     for line in chat_txt.lines() {
@@ -834,7 +824,6 @@ fn populate_tree(tree: &sled::Tree) {
             NaiveDate::from_ymd_opt(2024, 8, 6).unwrap().and_hms_opt(hour, min, 0).unwrap();
         let timest = dt.and_utc().timestamp() as u64;
 
-        let message_id = [0u8; 32];
         let nick = parts[1].to_string();
         let text = parts[2].to_string();
 
@@ -853,6 +842,7 @@ fn populate_tree(tree: &sled::Tree) {
     // O(n)
     debug!(target: "app", "populated db with {} lines", tree.len());
 }
+*/
 
 pub fn create_layer(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
     debug!(target: "app", "create_layer({name})");
@@ -968,7 +958,7 @@ fn create_editbox(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
     prop.allow_exprs();
     node.add_property(prop).unwrap();
 
-    let mut prop = Property::new("baseline", PropertyType::Float32, PropertySubType::Pixel);
+    let prop = Property::new("baseline", PropertyType::Float32, PropertySubType::Pixel);
     node.add_property(prop).unwrap();
 
     let mut prop = Property::new("scroll", PropertyType::Float32, PropertySubType::Pixel);
@@ -979,10 +969,10 @@ fn create_editbox(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
     prop.set_range_u32(0, u32::MAX);
     node.add_property(prop).unwrap();
 
-    let mut prop = Property::new("font_size", PropertyType::Float32, PropertySubType::Pixel);
+    let prop = Property::new("font_size", PropertyType::Float32, PropertySubType::Pixel);
     node.add_property(prop).unwrap();
 
-    let mut prop = Property::new("text", PropertyType::Str, PropertySubType::Null);
+    let prop = Property::new("text", PropertyType::Str, PropertySubType::Null);
     node.add_property(prop).unwrap();
 
     let mut prop = Property::new("text_color", PropertyType::Float32, PropertySubType::Color);
@@ -1005,10 +995,10 @@ fn create_editbox(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
     prop.allow_null_values();
     node.add_property(prop).unwrap();
 
-    let mut prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);
+    let prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);
     node.add_property(prop).unwrap();
 
-    let mut prop = Property::new("debug", PropertyType::Bool, PropertySubType::Null);
+    let prop = Property::new("debug", PropertyType::Bool, PropertySubType::Null);
     node.add_property(prop).unwrap();
 
     node.id
@@ -1055,10 +1045,10 @@ fn create_chatview(
     let prop = Property::new("baseline", PropertyType::Float32, PropertySubType::Pixel);
     node.add_property(prop).unwrap();
 
-    let mut prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);
+    let prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);
     node.add_property(prop).unwrap();
 
-    let mut prop = Property::new("debug", PropertyType::Bool, PropertySubType::Null);
+    let prop = Property::new("debug", PropertyType::Bool, PropertySubType::Null);
     node.add_property(prop).unwrap();
 
     let mut prop =

@@ -18,16 +18,13 @@
 
 use async_channel::Sender;
 use async_lock::Mutex;
-use darkfi_serial::{
-    async_trait, deserialize, Decodable, Encodable, FutAsyncWriteExt, ReadExt, SerialDecodable,
-    SerialEncodable, VarInt,
-};
+use darkfi_serial::{async_trait, FutAsyncWriteExt, SerialDecodable, SerialEncodable};
 use futures::{stream::FuturesUnordered, StreamExt};
 use std::{fmt, str::FromStr, sync::Arc};
 
 use crate::{
     error::{Error, Result},
-    prop::{Property, PropertyPtr, PropertyType, Role},
+    prop::{Property, PropertyPtr, Role},
     ui,
 };
 
@@ -106,7 +103,6 @@ impl FromStr for ScenePath {
     }
 }
 
-pub type SceneGraphPtr = Arc<std::sync::Mutex<SceneGraph>>;
 pub type SceneGraphPtr2 = Arc<Mutex<SceneGraph>>;
 
 pub struct SceneGraph {
@@ -176,9 +172,11 @@ impl SceneGraph {
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn root(&self) -> &SceneNode {
         &self.nodes[0]
     }
+    #[allow(dead_code)]
     fn root_mut(&mut self) -> &mut SceneNode {
         &mut self.nodes[0]
     }
@@ -574,9 +572,6 @@ impl SceneNode {
     pub fn get_method(&self, name: &str) -> Option<&Method> {
         self.methods.iter().find(|method| method.name == name)
     }
-    fn get_method_mut(&mut self, name: &str) -> Option<&mut Method> {
-        self.methods.iter_mut().find(|method| method.name == name)
-    }
 
     pub fn call_method(
         &mut self,
@@ -606,7 +601,6 @@ pub struct CallArg {
     pub typ: CallArgType,
 }
 
-type SlotFn = Box<dyn Fn(Vec<u8>) + Send>;
 pub type SlotId = u32;
 
 pub struct Slot {
@@ -616,7 +610,9 @@ pub struct Slot {
 
 pub struct Signal {
     pub name: String,
+    #[allow(dead_code)]
     pub desc: String,
+    #[allow(dead_code)]
     pub fmt: Vec<CallArg>,
     slots: Vec<Slot>,
     freed: Vec<SlotId>,

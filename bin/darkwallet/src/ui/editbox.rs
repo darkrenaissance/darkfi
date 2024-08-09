@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use miniquad::{window, BufferId, KeyCode, KeyMods, MouseButton, TextureId, TouchPhase};
+use miniquad::{window, KeyCode, KeyMods, MouseButton, TextureId, TouchPhase};
 use rand::{rngs::OsRng, Rng};
 use std::{
     collections::HashMap,
@@ -31,17 +31,16 @@ use crate::{
     error::Result,
     gfx::{
         DrawCall, DrawInstruction, DrawMesh, GraphicsEventPublisherPtr, Point, Rectangle,
-        RenderApi, RenderApiPtr, Vertex,
+        RenderApiPtr,
     },
-    mesh::{Color, MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_WHITE},
+    mesh::{MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_WHITE},
     prop::{
         PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyStr, PropertyUint32,
         Role,
     },
     pubsub::Subscription,
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
-    text::{self, Glyph, GlyphPositionIter, SpritePtr, TextShaper, TextShaperPtr},
-    util::zip3,
+    text::{self, Glyph, GlyphPositionIter, TextShaperPtr},
     ExecutorPtr,
 };
 
@@ -136,11 +135,10 @@ pub type EditBoxPtr = Arc<EditBox>;
 
 pub struct EditBox {
     node_id: SceneNodeId,
+    #[allow(dead_code)]
     tasks: Vec<smol::Task<()>>,
     sg: SceneGraphPtr2,
     render_api: RenderApiPtr,
-    // So we can lock the event stream when we gain focus
-    event_pub: GraphicsEventPublisherPtr,
     text_shaper: TextShaperPtr,
     key_repeat: SyncMutex<PressedKeysSmoothRepeat>,
 
@@ -305,7 +303,6 @@ impl EditBox {
                 tasks,
                 sg,
                 render_api,
-                event_pub,
                 text_shaper,
                 key_repeat: SyncMutex::new(PressedKeysSmoothRepeat::new(400, 50)),
 
@@ -366,7 +363,7 @@ impl EditBox {
         let mut mesh = MeshBuilder::with_clip(clip.clone());
         self.draw_selected(&mut mesh, &glyphs, clip.h).unwrap();
 
-        let mut glyph_pos_iter = GlyphPositionIter::new(font_size, &glyphs, baseline);
+        let glyph_pos_iter = GlyphPositionIter::new(font_size, &glyphs, baseline);
         // Used for drawing the cursor when it's at the end of the line.
         let mut rhs = 0.;
 
@@ -434,7 +431,7 @@ impl EditBox {
         let baseline = self.baseline.get();
         let scroll = self.scroll.get();
         let hi_bg_color = self.hi_bg_color.get();
-        let mut glyph_pos_iter = GlyphPositionIter::new(font_size, &glyphs, baseline);
+        let glyph_pos_iter = GlyphPositionIter::new(font_size, &glyphs, baseline);
 
         let mut start_x = 0.;
         let mut end_x = 0.;
@@ -466,13 +463,6 @@ impl EditBox {
         let select_rect = Rectangle { x: start_x, y: 0., w: end_x - start_x, h: clip_h };
         mesh.draw_box(&select_rect, hi_bg_color, &Rectangle::zero());
         Ok(())
-    }
-
-    async fn do_key_action(&self, key: char, mods: &KeyMods) {
-        match key {
-            //KeyCode::Left => {}
-            _ => self.insert_char(key).await,
-        }
     }
 
     async fn process_char(me: &Weak<Self>, ev_sub: &Subscription<(char, KeyMods, bool)>) -> bool {
@@ -643,8 +633,6 @@ impl EditBox {
         }
         debug!(target: "ui::editbox", "Focus changed");
 
-        let is_focused = self.is_focused.get();
-
         // Cursor visibility will change so just redraw everything lol
         self.redraw().await;
     }
@@ -703,7 +691,7 @@ impl EditBox {
         // releasing mouse button will end selection
         self.mouse_btn_held.store(false, Ordering::Relaxed);
     }
-    async fn handle_mouse_move(&self, mouse_x: f32, mouse_y: f32) {
+    async fn handle_mouse_move(&self, mouse_x: f32, _mouse_y: f32) {
         if !self.mouse_btn_held.load(Ordering::Relaxed) {
             return;
         }
@@ -763,7 +751,7 @@ impl EditBox {
         let lhs = 0.;
         let mut last_d = (lhs - mouse_x).abs();
 
-        let mut glyph_pos_iter = GlyphPositionIter::new(font_size, &glyphs, baseline);
+        let glyph_pos_iter = GlyphPositionIter::new(font_size, &glyphs, baseline);
         let mut rhs = 0.;
 
         for (i, glyph_rect) in glyph_pos_iter.skip(1).enumerate() {
@@ -1221,7 +1209,7 @@ impl EditBox {
             panic!("Node {:?} bad rect property: {}", node, err);
         }
 
-        let Ok(mut rect) = read_rect(self.rect.clone()) else {
+        let Ok(rect) = read_rect(self.rect.clone()) else {
             panic!("Node {:?} bad rect property", node);
         };
 

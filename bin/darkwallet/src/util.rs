@@ -18,11 +18,12 @@
 
 use colored::Colorize;
 
+#[allow(dead_code)]
 pub fn ansi_texture(width: usize, height: usize, data: &Vec<u8>) -> String {
     let mut out = String::new();
 
     out.push('┌');
-    for j in 0..width {
+    for _ in 0..width {
         out.push('─');
     }
     out.push('┐');
@@ -68,7 +69,7 @@ pub fn ansi_texture(width: usize, height: usize, data: &Vec<u8>) -> String {
     }
 
     out.push('└');
-    for j in 0..width {
+    for _ in 0..width {
         out.push('─');
     }
     out.push('┘');
@@ -104,6 +105,7 @@ where
     }
 }
 
+#[allow(dead_code)]
 pub fn zip3<X1, X2, X3, I1, I2, I3>(i1: I1, i2: I2, i3: I3) -> TupleIterStruct3<I1, I2, I3>
 where
     I1: Iterator<Item = X1>,

@@ -16,13 +16,14 @@ struct Token {
 }
 
 impl Token {
+    #[allow(dead_code)]
     fn as_str(&self) -> String {
         glyph_str(&self.glyphs)
     }
 }
 
 /// Get the string represented by a vec of glyphs. Useful for debugging.
-fn glyph_str(glyphs: &Vec<Glyph>) -> String {
+pub fn glyph_str(glyphs: &Vec<Glyph>) -> String {
     glyphs.iter().map(|g| g.substr.as_str()).collect::<Vec<_>>().join("")
 }
 
@@ -58,6 +59,7 @@ fn tokenize(font_size: f32, glyphs: &Vec<Glyph>) -> Vec<Token> {
 
             // Reset ruler
             lhs = -1.;
+            #[allow(unused_assignments)]
             rhs = 0.;
             // take() blanked token_glyphs above
 
@@ -91,7 +93,7 @@ fn apply_wrap(line_width: f32, tokens: Vec<Token>) -> Vec<Vec<Glyph>> {
     let mut line = vec![];
     let mut start = 0.;
 
-    for (i, mut token) in tokens.into_iter().enumerate() {
+    for mut token in tokens {
         assert!(token.token_type != TokenType::Null);
 
         // Triggered by if below

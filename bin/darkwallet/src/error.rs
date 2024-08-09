@@ -42,9 +42,6 @@ pub enum Error {
     #[error("Property has wrong type")]
     PropertyWrongType = 7,
 
-    #[error("Property has wrong subtype")]
-    PropertyWrongSubType = 8,
-
     #[error("Property value has the wrong length")]
     PropertyWrongLen = 9,
 
@@ -102,18 +99,6 @@ pub enum Error {
     #[error("Node has a sibling with this name")]
     NodeSiblingNameConflict = 27,
 
-    #[error("File not found")]
-    FileNotFound = 28,
-
-    #[error("Resource is not found")]
-    ResourceNotFound = 29,
-
-    #[error("Python expr eval error")]
-    PyEvalErr = 30,
-
-    #[error("Empty S-expr")]
-    SExprEmpty = 31,
-
     #[error("S-expr global not found")]
     SExprGlobalNotFound = 32,
 
@@ -122,9 +107,6 @@ pub enum Error {
 
     #[error("Publisher was destroyed")]
     PublisherDestroyed = 34,
-
-    #[error("Empty atlas")]
-    AtlasIsEmpty = 35,
 
     #[error("Channel closed")]
     ChannelClosed = 36,
