@@ -29,6 +29,7 @@ use std::{
 };
 
 use crate::{
+    darkirc::{DarkIrcBackendPtr, Privmsg},
     error::Error,
     expr::Op,
     gfx2::{GraphicsEventPublisherPtr, RenderApiPtr, Vertex},
@@ -39,7 +40,7 @@ use crate::{
     },
     text2::TextShaperPtr,
     ui::{chatview, Button, ChatView, EditBox, Image, Mesh, RenderLayer, Stoppable, Text, Window},
-    DarkIrcBackendPtr, ExecutorPtr, Privmsg,
+    ExecutorPtr,
 };
 
 //fn print_type_of<T>(_: &T) {
