@@ -636,7 +636,8 @@ impl ChatView {
         }
     }
 
-    async fn add_line_to_db(&self,
+    async fn add_line_to_db(
+        &self,
         timest: Timestamp,
         message_id: &MessageId,
         nick: &str,

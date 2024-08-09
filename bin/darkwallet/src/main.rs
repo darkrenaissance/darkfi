@@ -40,7 +40,8 @@ use darkfi::{
     Error, Result,
 };
 use darkfi_serial::{
-    async_trait, deserialize_async, AsyncDecodable, Encodable, SerialDecodable, SerialEncodable,
+    async_trait, deserialize_async, serialize_async, AsyncDecodable, Encodable, SerialDecodable,
+    SerialEncodable,
 };
 
 #[macro_use]
@@ -325,12 +326,7 @@ impl DarkIrcBackend {
             }
         }
 
-        *self.0.lock().unwrap() = Some(DarkIrcData {
-            p2p,
-            event_graph,
-            ev_task,
-            db: sled_db
-        });
+        *self.0.lock().unwrap() = Some(DarkIrcData { p2p, event_graph, ev_task, db: sled_db });
 
         Ok(())
     }
@@ -357,6 +353,15 @@ impl DarkIrcBackend {
         };
         info!(target: "main", "Flushed {} bytes", flushed_bytes);
         info!(target: "main", "Shut down backend successfully");
+    }
+
+    async fn send(&self, privmsg: Privmsg) {
+        let evgr =
+            self.0.lock().unwrap().as_ref().expect("backend wasnt started").event_graph.clone();
+        let event = event_graph::Event::new(serialize_async(&privmsg).await, &evgr).await;
+        if let Err(e) = evgr.dag_insert(&[event]).await {
+            error!(target: "main", "Failed inserting new event to DAG: {}", e);
+        }
     }
 }
 
@@ -413,8 +418,14 @@ fn main() {
     let text_shaper = TextShaper::new();
 
     let darkirc_backend = DarkIrcBackend::new();
-    let app =
-        app::App::new(sg.clone(), ex.clone(), render_api.clone(), event_pub.clone(), text_shaper, darkirc_backend);
+    let app = app::App::new(
+        sg.clone(),
+        ex.clone(),
+        render_api.clone(),
+        event_pub.clone(),
+        text_shaper,
+        darkirc_backend,
+    );
     let app2 = app.clone();
     let app_task = ex.spawn(app.clone().start());
     async_runtime.push_task(app_task);

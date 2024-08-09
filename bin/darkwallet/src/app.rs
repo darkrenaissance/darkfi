@@ -18,12 +18,14 @@
 
 use async_recursion::async_recursion;
 use chrono::{NaiveDate, NaiveDateTime};
+use darkfi::event_graph;
 use darkfi_serial::Encodable;
 use futures::{stream::FuturesUnordered, StreamExt};
 use smol::Task;
 use std::{
     sync::{Arc, Mutex as SyncMutex},
     thread,
+    time::SystemTime,
 };
 
 use crate::{
@@ -37,8 +39,7 @@ use crate::{
     },
     text2::TextShaperPtr,
     ui::{chatview, Button, ChatView, EditBox, Image, Mesh, RenderLayer, Stoppable, Text, Window},
-    ExecutorPtr,
-    DarkIrcBackendPtr,
+    DarkIrcBackendPtr, ExecutorPtr, Privmsg,
 };
 
 //fn print_type_of<T>(_: &T) {
@@ -56,6 +57,13 @@ const KING_PATH: &str = "king.png";
 const KING_PATH: &str = "assets/king.png";
 
 const LIGHTMODE: bool = false;
+
+fn get_systime() -> u64 {
+    match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+        Ok(n) => n.as_secs(),
+        Err(_) => panic!("SystemTime before UNIX EPOCH!"),
+    }
+}
 
 pub struct AsyncRuntime {
     signal: async_channel::Sender<()>,
@@ -145,7 +153,15 @@ impl App {
         text_shaper: TextShaperPtr,
         darkirc_backend: DarkIrcBackendPtr,
     ) -> Arc<Self> {
-        Arc::new(Self { sg, ex, render_api, event_pub, text_shaper, darkirc_backend, tasks: SyncMutex::new(vec![]) })
+        Arc::new(Self {
+            sg,
+            ex,
+            render_api,
+            event_pub,
+            text_shaper,
+            darkirc_backend,
+            tasks: SyncMutex::new(vec![]),
+        })
     }
 
     pub async fn start(self: Arc<Self>) {
@@ -657,6 +673,7 @@ impl App {
 
         let editbox_text = PropertyStr::wrap(node, Role::App, "text", 0).unwrap();
         let editbox_focus = PropertyBool::wrap(node, Role::App, "is_focused", 0).unwrap();
+        let darkirc_backend = self.darkirc_backend.clone();
         let task = self.ex.spawn(async move {
             while let Ok(_) = btn_click_recvr.recv().await {
                 let text = editbox_text.get();
@@ -664,7 +681,12 @@ impl App {
                 // Clicking outside the editbox makes it lose focus
                 // So lets focus it again
                 editbox_focus.set(true);
+
                 debug!(target: "app", "sending text {text}");
+
+                let privmsg =
+                    Privmsg { channel: "#random".to_string(), nick: "king".to_string(), msg: text };
+                darkirc_backend.send(privmsg).await;
             }
         });
         tasks.push(task);
