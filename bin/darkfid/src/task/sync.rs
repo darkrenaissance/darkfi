@@ -71,7 +71,7 @@ pub async fn sync_task(node: &Darkfid, checkpoint: Option<(u32, HeaderHash)>) ->
 
     // Grab the most common tip and the corresponding peers
     let (mut common_tip_height, mut common_tip_peers) =
-        most_common_tip(node, &last.1, checkpoint).await?;
+        most_common_tip(node, &last.1, checkpoint).await;
 
     // If last known block header is before the checkpoint, we sync until that first.
     if let Some(checkpoint) = checkpoint {
@@ -86,7 +86,7 @@ pub async fn sync_task(node: &Darkfid, checkpoint: Option<(u32, HeaderHash)>) ->
             info!(target: "darkfid::task::sync_task", "Last received block: {} - {}", last.0, last.1);
 
             // Grab synced peers most common tip again
-            (common_tip_height, common_tip_peers) = most_common_tip(node, &last.1, None).await?;
+            (common_tip_height, common_tip_peers) = most_common_tip(node, &last.1, None).await;
         }
     }
 
@@ -108,11 +108,11 @@ pub async fn sync_task(node: &Darkfid, checkpoint: Option<(u32, HeaderHash)>) ->
         last = last_received;
 
         // Grab synced peers most common tip again
-        (common_tip_height, common_tip_peers) = most_common_tip(node, &last.1, None).await?;
+        (common_tip_height, common_tip_peers) = most_common_tip(node, &last.1, None).await;
     }
 
     // Sync best fork
-    sync_best_fork(node, &common_tip_peers, &last.1).await?;
+    sync_best_fork(node, &common_tip_peers, &last.1).await;
 
     // Perform finalization
     let finalized = node.validator.finalization().await?;
@@ -136,7 +136,7 @@ async fn synced_peers(
     node: &Darkfid,
     last_tip: &HeaderHash,
     checkpoint: Option<(u32, HeaderHash)>,
-) -> Result<HashMap<(u32, [u8; 32]), Vec<ChannelPtr>>> {
+) -> HashMap<(u32, [u8; 32]), Vec<ChannelPtr>> {
     info!(target: "darkfid::task::sync::synced_peers", "Receiving tip from peers...");
     let comms_timeout = node.p2p.settings().read().await.outbound_connect_timeout;
     let mut tips = HashMap::new();
@@ -149,32 +149,47 @@ async fn synced_peers(
             // If a checkpoint was provider, we check that the peer follows that sequence
             if let Some(c) = checkpoint {
                 // Communication setup
-                let response_sub = peer.subscribe_msg::<HeaderSyncResponse>().await?;
+                let Ok(response_sub) = peer.subscribe_msg::<HeaderSyncResponse>().await else {
+                    debug!(target: "darkfid::task::sync::synced_peers", "Failure during `HeaderSyncResponse` communication setup with peer: {peer:?}");
+                    continue
+                };
 
                 // Node creates a `HeaderSyncRequest` and sends it
                 let request = HeaderSyncRequest { height: c.0 + 1 };
-                peer.send(&request).await?;
+                if let Err(e) = peer.send(&request).await {
+                    debug!(target: "darkfid::task::sync::synced_peers", "Failure during `HeaderSyncRequest` send to peer {peer:?}: {e}");
+                    continue
+                };
 
                 // Node waits for response
                 let Ok(response) = response_sub.receive_with_timeout(comms_timeout).await else {
+                    debug!(target: "darkfid::task::sync::synced_peers", "Timeout while waiting for `HeaderSyncResponse` from peer: {peer:?}");
                     continue
                 };
 
                 // Handle response
                 if response.headers.is_empty() || response.headers.last().unwrap().hash() != c.1 {
+                    debug!(target: "darkfid::task::sync::synced_peers", "Invalid `HeaderSyncResponse` from peer: {peer:?}");
                     continue
                 }
             }
 
             // Communication setup
-            let response_sub = peer.subscribe_msg::<TipResponse>().await?;
+            let Ok(response_sub) = peer.subscribe_msg::<TipResponse>().await else {
+                debug!(target: "darkfid::task::sync::synced_peers", "Failure during `TipResponse` communication setup with peer: {peer:?}");
+                continue
+            };
 
             // Node creates a `TipRequest` and sends it
             let request = TipRequest { tip: *last_tip };
-            peer.send(&request).await?;
+            if let Err(e) = peer.send(&request).await {
+                debug!(target: "darkfid::task::sync::synced_peers", "Failure during `TipRequest` send to peer {peer:?}: {e}");
+                continue
+            };
 
             // Node waits for response
             let Ok(response) = response_sub.receive_with_timeout(comms_timeout).await else {
+                debug!(target: "darkfid::task::sync::synced_peers", "Timeout while waiting for `TipResponse` from peer: {peer:?}");
                 continue
             };
 
@@ -203,7 +218,7 @@ async fn synced_peers(
         sleep(comms_timeout).await;
     }
 
-    Ok(tips)
+    tips
 }
 
 /// Auxiliary function to ask all peers for their current tip and find the most common one.
@@ -211,9 +226,9 @@ async fn most_common_tip(
     node: &Darkfid,
     last_tip: &HeaderHash,
     checkpoint: Option<(u32, HeaderHash)>,
-) -> Result<(u32, Vec<ChannelPtr>)> {
+) -> (u32, Vec<ChannelPtr>) {
     // Grab synced peers tips
-    let tips = synced_peers(node, last_tip, checkpoint).await?;
+    let tips = synced_peers(node, last_tip, checkpoint).await;
 
     // Grab the most common highest tip peers
     info!(target: "darkfid::task::sync::most_common_tip", "Finding most common tip...");
@@ -233,7 +248,7 @@ async fn most_common_tip(
     }
 
     info!(target: "darkfid::task::sync::most_common_tip", "Most common tip: {} - {}", common_tip.0, HeaderHash::new(common_tip.1));
-    Ok((common_tip.0, common_tip.2))
+    (common_tip.0, common_tip.2)
 }
 
 /// Auxiliary function to retrieve headers backwards until our last known one and verify them.
@@ -247,7 +262,13 @@ async fn retrieve_headers(
     // Communication setup
     let mut peer_subs = vec![];
     for peer in peers {
-        peer_subs.push(peer.subscribe_msg::<HeaderSyncResponse>().await?);
+        match peer.subscribe_msg::<HeaderSyncResponse>().await {
+            Ok(response_sub) => peer_subs.push(Some(response_sub)),
+            Err(e) => {
+                debug!(target: "darkfid::task::sync::retrieve_headers", "Failure during `HeaderSyncResponse` communication setup with peer {peer:?}: {e}");
+                peer_subs.push(None)
+            }
+        }
     }
     let comms_timeout = node.p2p.settings().read().await.outbound_connect_timeout;
 
@@ -256,12 +277,21 @@ async fn retrieve_headers(
     let mut last_tip_height = tip_height;
     'headers_loop: loop {
         for (index, peer) in peers.iter().enumerate() {
+            // Grab the response sub reference
+            let Some(ref response_sub) = peer_subs[index] else {
+                continue;
+            };
+
             // Node creates a `HeaderSyncRequest` and sends it
             let request = HeaderSyncRequest { height: last_tip_height };
-            peer.send(&request).await?;
+            if let Err(e) = peer.send(&request).await {
+                debug!(target: "darkfid::task::sync::retrieve_headers", "Failure during `HeaderSyncRequest` send to peer {peer:?}: {e}");
+                continue
+            };
 
             // Node waits for response
-            let Ok(response) = peer_subs[index].receive_with_timeout(comms_timeout).await else {
+            let Ok(response) = response_sub.receive_with_timeout(comms_timeout).await else {
+                debug!(target: "darkfid::task::sync::retrieve_headers", "Timeout while waiting for `HeaderSyncResponse` from peer: {peer:?}");
                 continue
             };
 
@@ -352,7 +382,13 @@ async fn retrieve_blocks(
     // Communication setup
     let mut peer_subs = vec![];
     for peer in peers {
-        peer_subs.push(peer.subscribe_msg::<SyncResponse>().await?);
+        match peer.subscribe_msg::<SyncResponse>().await {
+            Ok(response_sub) => peer_subs.push(Some(response_sub)),
+            Err(e) => {
+                debug!(target: "darkfid::task::sync::retrieve_blocks", "Failure during `SyncResponse` communication setup with peer {peer:?}: {e}");
+                peer_subs.push(None)
+            }
+        }
     }
     let comms_timeout = node.p2p.settings().read().await.outbound_connect_timeout;
 
@@ -360,6 +396,11 @@ async fn retrieve_blocks(
     let total = node.validator.blockchain.headers.len_sync();
     'blocks_loop: loop {
         for (index, peer) in peers.iter().enumerate() {
+            // Grab the response sub reference
+            let Some(ref response_sub) = peer_subs[index] else {
+                continue;
+            };
+
             // Grab first `BATCH` headers
             let headers = node.validator.blockchain.headers.get_after_sync(0, BATCH)?;
             if headers.is_empty() {
@@ -374,10 +415,14 @@ async fn retrieve_blocks(
 
             // Node creates a `SyncRequest` and sends it
             let request = SyncRequest { headers: headers_hashes.clone() };
-            peer.send(&request).await?;
+            if let Err(e) = peer.send(&request).await {
+                debug!(target: "darkfid::task::sync::retrieve_blocks", "Failure during `SyncRequest` send to peer {peer:?}: {e}");
+                continue
+            };
 
             // Node waits for response
-            let Ok(response) = peer_subs[index].receive_with_timeout(comms_timeout).await else {
+            let Ok(response) = response_sub.receive_with_timeout(comms_timeout).await else {
+                debug!(target: "darkfid::task::sync::retrieve_blocks", "Timeout while waiting for `SyncResponse` from peer: {peer:?}");
                 continue
             };
 
@@ -429,32 +474,43 @@ async fn retrieve_blocks(
 }
 
 /// Auxiliary function to retrieve best fork state from a random peer.
-async fn sync_best_fork(node: &Darkfid, peers: &[ChannelPtr], last_tip: &HeaderHash) -> Result<()> {
+async fn sync_best_fork(node: &Darkfid, peers: &[ChannelPtr], last_tip: &HeaderHash) {
     info!(target: "darkfid::task::sync::sync_best_fork", "Syncing fork states from peers...");
     // Getting a random peer to ask for blocks
-    let channel = &peers.choose(&mut OsRng).unwrap();
+    let peer = &peers.choose(&mut OsRng).unwrap();
 
     // Communication setup
-    let response_sub = channel.subscribe_msg::<ForkSyncResponse>().await?;
+    let Ok(response_sub) = peer.subscribe_msg::<ForkSyncResponse>().await else {
+        debug!(target: "darkfid::task::sync::sync_best_fork", "Failure during `ForkSyncResponse` communication setup with peer: {peer:?}");
+        return
+    };
     let notif_sub = node.subscribers.get("proposals").unwrap();
 
     // Node creates a `ForkSyncRequest` and sends it
     let request = ForkSyncRequest { tip: *last_tip, fork_tip: None };
-    channel.send(&request).await?;
+    if let Err(e) = peer.send(&request).await {
+        debug!(target: "darkfid::task::sync::sync_best_fork", "Failure during `ForkSyncRequest` send to peer {peer:?}: {e}");
+        return
+    };
 
     // Node waits for response
-    let response = response_sub
+    let Ok(response) = response_sub
         .receive_with_timeout(node.p2p.settings().read().await.outbound_connect_timeout)
-        .await?;
+        .await
+    else {
+        debug!(target: "darkfid::task::sync::sync_best_fork", "Timeout while waiting for `ForkSyncResponse` from peer: {peer:?}");
+        return
+    };
 
     // Verify and store retrieved proposals
-    debug!(target: "darkfid::task::sync_task", "Processing received proposals");
+    debug!(target: "darkfid::task::sync::sync_best_fork", "Processing received proposals");
     for proposal in &response.proposals {
-        node.validator.append_proposal(proposal).await?;
+        if let Err(e) = node.validator.append_proposal(proposal).await {
+            debug!(target: "darkfid::task::sync::sync_best_fork", "Error while appending proposal: {e}");
+            return
+        };
         // Notify subscriber
         let enc_prop = JsonValue::String(base64::encode(&serialize_async(proposal).await));
         notif_sub.notify(vec![enc_prop].into()).await;
     }
-
-    Ok(())
 }
