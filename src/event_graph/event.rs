@@ -206,7 +206,7 @@ mod tests {
     use smol::Executor;
 
     use crate::{
-        event_graph::EventGraph,
+        event_graph::{EventGraph, EventGraphPtr},
         net::{P2p, Settings},
     };
 
