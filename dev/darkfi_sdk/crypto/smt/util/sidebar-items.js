@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["is_left_child","leaf_pos_to_index","left_child","log2","parent","right_child","sibling"],"struct":["Poseidon"],"trait":["FieldElement","FieldHasher"]};

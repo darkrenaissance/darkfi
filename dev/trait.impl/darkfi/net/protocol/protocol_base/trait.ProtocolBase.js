@@ -1,0 +1,5 @@
+(function() {var implementors = {
+"darkfi":[],
+"darkfid":[["impl ProtocolBase for <a class=\"struct\" href=\"darkfid/proto/protocol_proposal/struct.ProtocolProposal.html\" title=\"struct darkfid::proto::protocol_proposal::ProtocolProposal\">ProtocolProposal</a>"],["impl ProtocolBase for <a class=\"struct\" href=\"darkfid/proto/protocol_sync/struct.ProtocolSync.html\" title=\"struct darkfid::proto::protocol_sync::ProtocolSync\">ProtocolSync</a>"],["impl ProtocolBase for <a class=\"struct\" href=\"darkfid/proto/protocol_tx/struct.ProtocolTx.html\" title=\"struct darkfid::proto::protocol_tx::ProtocolTx\">ProtocolTx</a>"]],
+"dchatd":[["impl ProtocolBase for <a class=\"struct\" href=\"dchatd/protocol_dchat/struct.ProtocolDchat.html\" title=\"struct dchatd::protocol_dchat::ProtocolDchat\">ProtocolDchat</a>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

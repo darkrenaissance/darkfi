@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["make_transfer_call","select_coins"],"mod":["builder","proof"],"struct":["TransferCallBuilder","TransferCallClearInput","TransferCallInput","TransferCallSecrets"],"type":["TransferCallOutput"]};
