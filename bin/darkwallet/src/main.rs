@@ -336,6 +336,7 @@ impl DarkIrcBackend {
     }
 
     async fn stop(&self) {
+        info!(target: "main", "Stopping DarkIRC backend");
         let self_ = self.0.lock().unwrap();
         let Some(self_) = &*self_ else {
             warn!(target: "main", "Backend wasn't started");

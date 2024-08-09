@@ -47,12 +47,11 @@ use crate::{
 
 #[cfg(target_os = "android")]
 const CHATDB_PATH: &str = "/data/data/darkfi.darkwallet/chatdb/";
-#[cfg(target_os = "android")]
-//const KING_PATH: &str = "/data/data/darkfi.darkwallet/assets/king.png";
-const KING_PATH: &str = "king.png";
-
 #[cfg(target_os = "linux")]
 const CHATDB_PATH: &str = "chatdb";
+
+#[cfg(target_os = "android")]
+const KING_PATH: &str = "king.png";
 #[cfg(target_os = "linux")]
 const KING_PATH: &str = "assets/king.png";
 
@@ -201,9 +200,9 @@ impl App {
         self.trigger_redraw().await;
 
         // Start the backend
-        //if let Err(err) = self.darkirc_backend.start(self.sg.clone(), self.ex.clone()).await {
-        //    error!(target: "app", "backend error: {err}");
-        //}
+        if let Err(err) = self.darkirc_backend.start(self.sg.clone(), self.ex.clone()).await {
+            error!(target: "app", "backend error: {err}");
+        }
     }
 
     pub fn stop(&self) {
@@ -792,8 +791,9 @@ impl App {
 
 impl Drop for App {
     fn drop(&mut self) {
-        debug!(target: "app", "dropping app");
-        self.stop();
+        debug!(target: "app", "Dropping app");
+        // This hangs
+        //self.stop();
     }
 }
 
