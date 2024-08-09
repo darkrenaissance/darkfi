@@ -39,7 +39,7 @@ use darkfi_serial::{
 use crate::{
     net::ZeroMQAdapter,
     scene::{SceneGraph, SceneGraphPtr2},
-    text2::TextShaper,
+    text::TextShaper,
     ExecutorPtr,
 };
 

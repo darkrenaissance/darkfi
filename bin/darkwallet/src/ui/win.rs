@@ -19,7 +19,7 @@
 use std::sync::{Arc, Weak};
 
 use crate::{
-    gfx2::{DrawCall, GraphicsEventPublisherPtr, Rectangle, RenderApiPtr},
+    gfx::{DrawCall, GraphicsEventPublisherPtr, Rectangle, RenderApiPtr},
     prop::{PropertyPtr, Role},
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
     ExecutorPtr,

@@ -32,13 +32,13 @@ use crate::{
     darkirc::{DarkIrcBackendPtr, Privmsg},
     error::Error,
     expr::Op,
-    gfx2::{GraphicsEventPublisherPtr, RenderApiPtr, Vertex},
+    gfx::{GraphicsEventPublisherPtr, RenderApiPtr, Vertex},
     prop::{Property, PropertyBool, PropertyStr, PropertySubType, PropertyType, Role},
     scene::{
         CallArgType, MethodResponseFn, Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId,
         SceneNodeType, Slot,
     },
-    text2::TextShaperPtr,
+    text::TextShaperPtr,
     ui::{chatview, Button, ChatView, EditBox, Image, Mesh, RenderLayer, Stoppable, Text, Window},
     ExecutorPtr,
 };

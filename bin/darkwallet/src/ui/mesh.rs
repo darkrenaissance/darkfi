@@ -20,7 +20,7 @@ use rand::{rngs::OsRng, Rng};
 use std::sync::{Arc, Weak};
 
 use crate::{
-    gfx2::{DrawCall, DrawInstruction, DrawMesh, Rectangle, RenderApiPtr, Vertex},
+    gfx::{DrawCall, DrawInstruction, DrawMesh, Rectangle, RenderApiPtr, Vertex},
     prop::{PropertyPtr, PropertyUint32, Role},
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
     ExecutorPtr,

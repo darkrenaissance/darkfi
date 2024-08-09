@@ -32,11 +32,12 @@ use std::{
     time::{Duration, Instant},
 };
 
+mod shader;
+
 use crate::{
     app::{AppPtr, AsyncRuntime},
     error::{Error, Result},
     pubsub::{Publisher, PublisherPtr, Subscription, SubscriptionId},
-    shader,
     util::ansi_texture,
 };
 
@@ -734,15 +735,15 @@ impl Stage {
         sendr: async_channel::Sender<TextureId>,
     ) {
         let texture = self.ctx.new_texture_from_rgba8(width, height, &data);
-        //debug!(target: "gfx2", "Invoked method: new_texture({}, {}, ...) -> {:?}",
+        //debug!(target: "gfx", "Invoked method: new_texture({}, {}, ...) -> {:?}",
         //       width, height, texture);
-        //debug!(target: "gfx2", "Invoked method: new_texture({}, {}, ...) -> {:?}\n{}",
+        //debug!(target: "gfx", "Invoked method: new_texture({}, {}, ...) -> {:?}\n{}",
         //       width, height, texture,
         //       ansi_texture(width as usize, height as usize, &data));
         sendr.try_send(texture).unwrap();
     }
     fn method_delete_texture(&mut self, texture: TextureId) {
-        //debug!(target: "gfx2", "Invoked method: delete_texture({:?})", texture);
+        //debug!(target: "gfx", "Invoked method: delete_texture({:?})", texture);
         self.ctx.delete_texture(texture);
     }
     fn method_new_vertex_buffer(
@@ -755,7 +756,7 @@ impl Stage {
             BufferUsage::Immutable,
             BufferSource::slice(&verts),
         );
-        //debug!(target: "gfx2", "Invoked method: new_vertex_buffer({:?}) -> {:?}", verts, buffer);
+        //debug!(target: "gfx", "Invoked method: new_vertex_buffer({:?}) -> {:?}", verts, buffer);
         sendr.try_send(buffer).unwrap();
     }
     fn method_new_index_buffer(
@@ -768,15 +769,15 @@ impl Stage {
             BufferUsage::Immutable,
             BufferSource::slice(&indices),
         );
-        //debug!(target: "gfx2", "Invoked method: new_index_buffer({:?}) -> {:?}", indices, buffer);
+        //debug!(target: "gfx", "Invoked method: new_index_buffer({:?}) -> {:?}", indices, buffer);
         sendr.try_send(buffer).unwrap();
     }
     fn method_delete_buffer(&mut self, buffer: BufferId) {
-        //debug!(target: "gfx2", "Invoked method: delete_buffer({:?})", buffer);
+        //debug!(target: "gfx", "Invoked method: delete_buffer({:?})", buffer);
         self.ctx.delete_buffer(buffer);
     }
     fn method_replace_draw_calls(&mut self, dcs: Vec<(u64, DrawCall)>) {
-        //debug!(target: "gfx2", "Invoked method: replace_draw_calls({:?})", dcs);
+        //debug!(target: "gfx", "Invoked method: replace_draw_calls({:?})", dcs);
         for (key, val) in dcs {
             self.draw_calls.insert(key, val);
         }

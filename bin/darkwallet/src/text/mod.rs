@@ -34,7 +34,7 @@ use std::{
 
 use crate::{
     error::Result,
-    gfx2::{Rectangle, RenderApi, RenderApiPtr},
+    gfx::{Rectangle, RenderApi, RenderApiPtr},
     util::ansi_texture,
 };
 

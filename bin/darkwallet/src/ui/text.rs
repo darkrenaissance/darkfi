@@ -22,14 +22,14 @@ use rand::{rngs::OsRng, Rng};
 use std::sync::{Arc, Mutex as SyncMutex, Weak};
 
 use crate::{
-    gfx2::{DrawCall, DrawInstruction, DrawMesh, Rectangle, RenderApi, RenderApiPtr, Vertex},
+    gfx::{DrawCall, DrawInstruction, DrawMesh, Rectangle, RenderApi, RenderApiPtr, Vertex},
     mesh::{Color, MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_WHITE},
     prop::{
         PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyStr, PropertyUint32,
         Role,
     },
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
-    text2::{self, Glyph, GlyphPositionIter, SpritePtr, TextShaper, TextShaperPtr},
+    text::{self, Glyph, GlyphPositionIter, SpritePtr, TextShaper, TextShaperPtr},
     util::zip3,
     ExecutorPtr,
 };
@@ -137,7 +137,7 @@ impl Text {
     ) -> TextRenderInfo {
         debug!(target: "ui::text", "Rendering label '{}'", text);
         let glyphs = text_shaper.shape(text, font_size).await;
-        let atlas = text2::make_texture_atlas(render_api, &glyphs).await.unwrap();
+        let atlas = text::make_texture_atlas(render_api, &glyphs).await.unwrap();
 
         let mut mesh = MeshBuilder::new();
         let mut glyph_pos_iter = GlyphPositionIter::new(font_size, &glyphs, baseline);

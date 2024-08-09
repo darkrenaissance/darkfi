@@ -24,7 +24,7 @@ use std::sync::{
 };
 
 use crate::{
-    gfx2::{
+    gfx::{
         DrawCall, DrawInstruction, DrawMesh, GraphicsEventPublisherPtr, Point, Rectangle,
         RenderApiPtr, Vertex,
     },

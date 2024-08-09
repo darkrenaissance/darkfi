@@ -18,7 +18,7 @@
 
 use crate::{
     error::Result,
-    gfx2::{DrawMesh, Point, Rectangle, RenderApi, Vertex},
+    gfx::{DrawMesh, Point, Rectangle, RenderApi, Vertex},
 };
 use miniquad::{BufferId, TextureId};
 

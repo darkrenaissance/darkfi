@@ -22,7 +22,7 @@ use std::sync::{Arc, Weak};
 use crate::{
     error::{Error, Result},
     expr::{SExprMachine, SExprVal},
-    gfx2::{DrawCall, Rectangle},
+    gfx::{DrawCall, Rectangle},
     prop::{PropertyPtr, Role},
     scene::{SceneGraph, SceneNode, SceneNodeId, SceneNodeType},
     ExecutorPtr,

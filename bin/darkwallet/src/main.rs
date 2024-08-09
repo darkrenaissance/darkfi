@@ -51,32 +51,25 @@ use log::LevelFilter;
 
 mod app;
 mod darkirc;
-use darkirc::DarkIrcBackend;
-//mod chatapp;
-//mod chatview;
-//mod editbox;
 mod error;
 mod expr;
-//mod gfx;
-mod gfx2;
-mod keysym;
+mod gfx;
 mod mesh;
 mod net;
 //mod plugin;
 mod prop;
 mod pubsub;
 //mod py;
-//mod res;
 mod scene;
-mod shader;
-mod text2;
+mod text;
 mod ui;
 mod util;
 
 use crate::{
+    darkirc::DarkIrcBackend,
     net::ZeroMQAdapter,
     scene::{SceneGraph, SceneGraphPtr2},
-    text2::TextShaper,
+    text::TextShaper,
 };
 
 pub type ExecutorPtr = Arc<smol::Executor<'static>>;
@@ -134,8 +127,8 @@ fn main() {
     let (method_req, method_rep) = mpsc::channel();
     // The UI actually needs to be running for this to reply back.
     // Otherwise calls will just hang.
-    let render_api = gfx2::RenderApi::new(method_req);
-    let event_pub = gfx2::GraphicsEventPublisher::new();
+    let render_api = gfx::RenderApi::new(method_req);
+    let event_pub = gfx::GraphicsEventPublisher::new();
 
     let text_shaper = TextShaper::new();
 
@@ -202,8 +195,8 @@ fn main() {
     });
     async_runtime.push_task(ev_relay_task);
 
-    //let stage = gfx2::Stage::new(method_rep, event_pub);
-    gfx2::run_gui(app, async_runtime, method_rep, event_pub);
+    //let stage = gfx::Stage::new(method_rep, event_pub);
+    gfx::run_gui(app, async_runtime, method_rep, event_pub);
     debug!(target: "main", "Started GFX backend");
 }
 

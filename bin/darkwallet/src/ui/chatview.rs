@@ -35,7 +35,7 @@ use std::{
 
 use crate::{
     error::Result,
-    gfx2::{
+    gfx::{
         DrawCall, DrawInstruction, DrawMesh, GraphicsEventPublisherPtr, Point, Rectangle,
         RenderApi, RenderApiPtr, Vertex,
     },
@@ -46,7 +46,7 @@ use crate::{
     },
     pubsub::Subscription,
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
-    text2::{self, Glyph, GlyphPositionIter, SpritePtr, TextShaper, TextShaperPtr},
+    text::{self, Glyph, GlyphPositionIter, SpritePtr, TextShaper, TextShaperPtr},
     util::zip3,
     ExecutorPtr,
 };
@@ -107,7 +107,7 @@ const PRELOAD_PAGES: usize = 10;
 #[derive(Clone)]
 struct Page {
     msgs: Vec<Message>,
-    atlas: text2::RenderedAtlas,
+    atlas: text::RenderedAtlas,
 }
 
 #[derive(Clone)]
@@ -120,7 +120,7 @@ type Page2Ptr = Arc<Page2>;
 
 struct Page2 {
     msgs: Vec<Message>,
-    atlas: SyncMutex<text2::RenderedAtlas>,
+    atlas: SyncMutex<text::RenderedAtlas>,
     // One draw call per page.
     // Resizing the canvas means we recalc wrapping and the mesh changes
     mesh_inf: SyncMutex<Option<PageMeshInfo>>,
@@ -128,7 +128,7 @@ struct Page2 {
 
 impl Page2 {
     async fn new(msgs: Vec<Message>, render_api: &RenderApi) -> Arc<Self> {
-        let mut atlas = text2::Atlas::new(render_api);
+        let mut atlas = text::Atlas::new(render_api);
         for msg in &msgs {
             atlas.push(&msg.glyphs);
         }
@@ -169,7 +169,7 @@ impl Page2 {
             // Finally is just the message itself
             let mut section = 2;
 
-            let mut lines = text2::wrap(clip.w, font_size, glyphs);
+            let mut lines = text::wrap(clip.w, font_size, glyphs);
             // We are drawing bottom up but line wrap gives us lines in normal order
             lines.reverse();
             let last_idx = lines.len() - 1;

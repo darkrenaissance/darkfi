@@ -2,7 +2,7 @@ use miniquad::TextureId;
 
 use crate::{
     error::{Error, Result},
-    gfx2::{Rectangle, RenderApi, RenderApiPtr},
+    gfx::{Rectangle, RenderApi, RenderApiPtr},
     util::{ansi_texture, zip3},
 };
 

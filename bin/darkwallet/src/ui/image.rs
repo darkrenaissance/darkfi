@@ -26,14 +26,14 @@ use std::{
 };
 
 use crate::{
-    gfx2::{DrawCall, DrawInstruction, DrawMesh, Rectangle, RenderApi, RenderApiPtr, Vertex},
+    gfx::{DrawCall, DrawInstruction, DrawMesh, Rectangle, RenderApi, RenderApiPtr, Vertex},
     mesh::{Color, MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_WHITE},
     prop::{
         PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyStr, PropertyUint32,
         Role,
     },
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
-    text2::{self, Glyph, GlyphPositionIter, SpritePtr, TextShaper, TextShaperPtr},
+    text::{self, Glyph, GlyphPositionIter, SpritePtr, TextShaper, TextShaperPtr},
     util::zip3,
     ExecutorPtr,
 };

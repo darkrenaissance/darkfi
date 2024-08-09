@@ -29,7 +29,7 @@ use std::{
 
 use crate::{
     error::Result,
-    gfx2::{
+    gfx::{
         DrawCall, DrawInstruction, DrawMesh, GraphicsEventPublisherPtr, Point, Rectangle,
         RenderApi, RenderApiPtr, Vertex,
     },
@@ -40,7 +40,7 @@ use crate::{
     },
     pubsub::Subscription,
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
-    text2::{self, Glyph, GlyphPositionIter, SpritePtr, TextShaper, TextShaperPtr},
+    text::{self, Glyph, GlyphPositionIter, SpritePtr, TextShaper, TextShaperPtr},
     util::zip3,
     ExecutorPtr,
 };
@@ -361,7 +361,7 @@ impl EditBox {
         debug!(target: "ui::editbox", "    cursor_pos={cursor_pos}, is_focused={is_focused}");
 
         let glyphs = self.glyphs.lock().unwrap().clone();
-        let atlas = text2::make_texture_atlas(&self.render_api, &glyphs).await.unwrap();
+        let atlas = text::make_texture_atlas(&self.render_api, &glyphs).await.unwrap();
 
         let mut mesh = MeshBuilder::with_clip(clip.clone());
         self.draw_selected(&mut mesh, &glyphs, clip.h).unwrap();
