@@ -110,7 +110,7 @@ impl SignedTask {
 fn encrypt_sign_task(task: &TaskInfo, workspace: &Workspace) -> TaudResult<EncryptedTask> {
     debug!(target: "taud", "start encrypting task");
     if workspace.write_key.is_none() {
-        error!("You don't have write access")
+        error!(target: "taud", "You don't have write access")
     }
     let signature: Signature = workspace.write_key.as_ref().unwrap().sign(&serialize(task)[..]);
     let signed_task = SignedTask::new(task, signature);
@@ -193,7 +193,7 @@ fn parse_configured_workspaces(data: &toml::Value) -> Result<HashMap<String, Wor
         if let Some(write_pubkey) = items.get("write_public_key") {
             if let Some(write_pubkey) = write_pubkey.as_str() {
                 if !write_pubkey.is_empty() {
-                    info!("Found configured write_public_key for {} workspace", name);
+                    info!(target: "taud", "Found configured write_public_key for {} workspace", name);
                     let write_pubkey = write_pubkey.to_string();
                     let decoded_write_pubkey = bs58::decode(write_pubkey).into_vec().unwrap();
                     ws.write_pubkey = UnparsedPublicKey::new(&ED25519, decoded_write_pubkey);
@@ -208,13 +208,13 @@ fn parse_configured_workspaces(data: &toml::Value) -> Result<HashMap<String, Wor
         if let Some(write_key) = items.get("write_key") {
             if let Some(write_key) = write_key.as_str() {
                 if !write_key.is_empty() {
-                    info!("Found configured write_key for {} workspace", name);
+                    info!(target: "taud", "Found configured write_key for {} workspace", name);
                     let write_key = write_key.to_string();
                     let pkcs8_bytes = bs58::decode(write_key).into_vec().unwrap();
                     let ed25519 = match Ed25519KeyPair::from_pkcs8(pkcs8_bytes.as_ref()) {
                         Ok(key) => key,
                         Err(e) => {
-                            error!("Failed parsing write_key: {}", e);
+                            error!(target: "taud", "Failed parsing write_key: {}", e);
                             return Err(Error::ParseFailed("Failed parsing write_key"))
                         }
                     };
@@ -227,12 +227,12 @@ fn parse_configured_workspaces(data: &toml::Value) -> Result<HashMap<String, Wor
 
         if let Some(wrt_key) = ws.write_key.as_ref() {
             if wrt_key.public_key().as_ref() != ws.write_pubkey.as_ref() {
-                error!("Wrong keypair for {} workspace, the workspace is not added!", name);
+                error!(target: "taud", "Wrong keypair for {} workspace, the workspace is not added!", name);
                 continue
             }
         }
 
-        info!("Configured NaCl box for workspace {}", name);
+        info!(target: "taud", "Configured NaCl box for workspace {}", name);
         ret.insert(name.to_string(), ws);
     }
 
@@ -245,7 +245,7 @@ async fn get_workspaces(settings: &Args) -> Result<HashMap<String, Workspace>> {
     let contents = match toml::from_str(&contents) {
         Ok(v) => v,
         Err(e) => {
-            error!("Failed parsing TOML config: {}", e);
+            error!(target: "taud", "Failed parsing TOML config: {}", e);
             return Err(Error::ParseFailed("Failed parsing TOML config"))
         }
     };
@@ -263,7 +263,7 @@ pub async fn mark_seen(
 ) -> Result<()> {
     let db = seen.get_or_init(|| sled_db.open_tree("tau_seen").unwrap());
 
-    info!("Marking event {} as seen", event_id);
+    debug!(target: "taud", "Marking event {} as seen", event_id);
     let mut batch = sled::Batch::default();
     batch.insert(event_id.as_bytes(), &[]);
     Ok(db.apply_batch(batch)?)
@@ -361,8 +361,8 @@ async fn on_receive_task(
             .is_err()
         {
             // *verified.lock().await = false;
-            error!("Task is not verified: wrong write_public_key");
-            error!("Task is not saved");
+            error!(target: "taud", "Task is not verified: wrong write_public_key");
+            error!(target: "taud", "Task is not saved");
             continue
         }
         // else {
@@ -468,7 +468,8 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
             let secret_key = SecretKey::generate(&mut OsRng);
             let encoded = bs58::encode(secret_key.to_bytes());
 
-            println!("workspace: {}:{}", workspace, encoded.into_string());
+            println!("[workspace.\"{}\"]", workspace);
+            println!("read_key = \"{}\"", encoded.into_string());
             println!("Please add it to the config file.");
             break
         }
@@ -485,7 +486,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
         return Ok(())
     }
 
-    info!("Initializing taud node");
+    info!(target: "taud", "Initializing taud node");
 
     // Create datastore path if not there already.
     let datastore = expand_path(&settings.datastore)?;
@@ -494,7 +495,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
     let replay_datastore = expand_path(&settings.replay_datastore)?;
     let replay_mode = settings.replay_mode;
 
-    info!("Instantiating event DAG");
+    info!(target: "taud", "Instantiating event DAG");
     let sled_db = sled::open(datastore)?;
     let p2p = P2p::new(settings.net.clone().into(), executor.clone()).await?;
     let event_graph = EventGraph::new(
@@ -508,7 +509,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
     )
     .await?;
 
-    info!("Registering EventGraph P2P protocol");
+    info!(target: "taud", "Registering EventGraph P2P protocol");
     let event_graph_ = Arc::clone(&event_graph);
     let registry = p2p.protocol_registry();
     registry
@@ -529,7 +530,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
     // We'll attempt to sync 5 times
     if !settings.skip_dag_sync {
         for i in 1..=6 {
-            info!("Syncing event DAG (attempt #{})", i);
+            info!(target: "taud", "Syncing event DAG (attempt #{})", i);
             match event_graph.dag_sync().await {
                 Ok(()) => break,
                 Err(e) => {
@@ -638,7 +639,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
             let deg_sub = event_graph_.deg_subscribe().await;
             loop {
                 let event = deg_sub.receive().await;
-                debug!("Got deg event: {:?}", event);
+                debug!(target: "taud", "Got deg event: {:?}", event);
                 deg_sub_.notify(vec![event.into()].into()).await;
             }
         },
@@ -681,9 +682,9 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new(executor)?;
     signals_handler.wait_termination(signals_task).await?;
-    info!("Caught termination signal, cleaning up and exiting...");
+    info!(target: "taud", "Caught termination signal, cleaning up and exiting...");
 
-    info!("Stopping P2P network");
+    info!(target: "taud", "Stopping P2P network");
     p2p.stop().await;
 
     info!(target: "taud", "Stopping JSON-RPC server...");
@@ -694,10 +695,10 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
     info!(target: "taud", "Stopping sync loop task...");
     sync_loop_task.stop().await;
 
-    info!("Flushing sled database...");
+    info!(target: "taud", "Flushing sled database...");
     let flushed_bytes = sled_db.flush_async().await?;
-    info!("Flushed {} bytes", flushed_bytes);
+    info!(target: "taud", "Flushed {} bytes", flushed_bytes);
 
-    info!("Shut down successfully");
+    info!(target: "taud", "Shut down successfully");
     Ok(())
 }
