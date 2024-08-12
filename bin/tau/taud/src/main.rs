@@ -22,7 +22,6 @@ use std::{
     ffi::CString,
     fs::{create_dir_all, remove_dir_all},
     io::{stdin, Write},
-    path::Path,
     sync::{Arc, OnceLock},
 };
 
@@ -39,7 +38,7 @@ use libc::mkfifo;
 use log::{debug, error, info};
 use rand::rngs::OsRng;
 use ring::signature::{Ed25519KeyPair, KeyPair, Signature, UnparsedPublicKey, ED25519};
-use smol::{fs, lock::RwLock, stream::StreamExt};
+use smol::{fs, stream::StreamExt};
 use structopt_toml::StructOptToml;
 use tinyjson::JsonValue;
 
@@ -47,7 +46,7 @@ use darkfi::{
     async_daemonize,
     event_graph::{
         proto::{EventPut, ProtocolEventGraph},
-        Event, EventGraph, EventGraphPtr, NULL_ID,
+        Event, EventGraph, EventGraphPtr,
     },
     net::{session::SESSION_DEFAULT, P2p, P2pPtr},
     rpc::{
@@ -256,19 +255,42 @@ async fn get_workspaces(settings: &Args) -> Result<HashMap<String, Workspace>> {
     Ok(workspaces)
 }
 
+/// Atomically mark a message as seen.
+pub async fn mark_seen(
+    sled_db: sled::Db,
+    seen: OnceLock<sled::Tree>,
+    event_id: &blake3::Hash,
+) -> Result<()> {
+    let db = seen.get_or_init(|| sled_db.open_tree("tau_seen").unwrap());
+
+    info!("Marking event {} as seen", event_id);
+    let mut batch = sled::Batch::default();
+    batch.insert(event_id.as_bytes(), &[]);
+    Ok(db.apply_batch(batch)?)
+}
+
+/// Check if a message was already marked seen.
+pub async fn is_seen(
+    sled_db: sled::Db,
+    seen: OnceLock<sled::Tree>,
+    event_id: &blake3::Hash,
+) -> Result<bool> {
+    let db = seen.get_or_init(|| sled_db.open_tree("tau_seen").unwrap());
+
+    Ok(db.contains_key(event_id.as_bytes())?)
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn start_sync_loop(
     event_graph: EventGraphPtr,
     broadcast_rcv: smol::channel::Receiver<TaskInfo>,
     workspaces: Arc<HashMap<String, Workspace>>,
-    datastore_path: std::path::PathBuf,
-    piped: bool,
+    sled_db: sled::Db,
+    settings: Args,
     p2p: P2pPtr,
-    last_sent: RwLock<blake3::Hash>,
     seen: OnceLock<sled::Tree>,
 ) -> TaudResult<()> {
     let incoming = event_graph.event_pub.clone().subscribe().await;
-    let seen_events = seen.get().unwrap();
 
     loop {
         select! {
@@ -285,19 +307,12 @@ async fn start_sync_loop(
                         &event_graph,
                     )
                     .await;
-                    // Update the last sent event.
-                    // let event_id = event.id();
-                    // *last_sent.write().await = event_id;
 
                     // If it fails for some reason, for now, we just note it
                     // and pass.
                     if let Err(e) = event_graph.dag_insert(&[event.clone()]).await {
                         error!(target: "taud", "Failed inserting new event to DAG: {}", e);
                     } else {
-                        // We sent this, so it should be considered seen.
-                        // debug!(target: "taud", "Marking event {} as seen", event_id);
-                        // seen.get().unwrap().insert(event_id.as_bytes(), &[]).unwrap();
-
                         // Otherwise, broadcast it
                         p2p.broadcast(&EventPut(event)).await;
                     }
@@ -306,13 +321,10 @@ async fn start_sync_loop(
             // Process message from the network. These should only be EncryptedTask.
             task_event = incoming.receive().fuse() => {
                 let event_id = task_event.id();
-                if *last_sent.read().await == event_id {
+                if is_seen(sled_db.clone(), seen.clone(), &event_id).await? {
                     continue
                 }
-
-                if seen_events.contains_key(event_id.as_bytes()).unwrap() {
-                    continue
-                }
+                mark_seen(sled_db.clone(), seen.clone(), &event_id).await?;
 
                 // Try to deserialize the `Event`'s content into a `EncryptedTask`
                 let enc_task: EncryptedTask = match deserialize_async_partial(task_event.content()).await {
@@ -322,20 +334,19 @@ async fn start_sync_loop(
                         continue
                     }
                 };
-                on_receive_task(&enc_task, &datastore_path, &workspaces, piped)
+                on_receive_task(&enc_task, &workspaces, &settings)
                     .await?;
             }
         }
     }
 }
 
-/// Handel a received task, decrypt it, verify it, optionally write it
+/// Handle a received task, decrypt it, verify it, optionally write it
 /// to a named pipe and save it on disk.
 async fn on_receive_task(
     enc_task: &EncryptedTask,
-    datastore_path: &Path,
     workspaces: &HashMap<String, Workspace>,
-    piped: bool,
+    settings: &Args,
 ) -> TaudResult<()> {
     for (ws_name, workspace) in workspaces.iter() {
         let signed_task = try_decrypt_task(enc_task, &workspace.read_key);
@@ -361,16 +372,17 @@ async fn on_receive_task(
         let mut task: TaskInfo = deserialize(&signed_task.unwrap().task)?;
         info!(target: "taud", "Save the task: ref: {}", task.ref_id);
         task.workspace.clone_from(ws_name);
-        if piped {
+        let datastore_path = expand_path(&settings.datastore)?;
+        if settings.piped {
             // if we can't load the task then it's a new task.
             // otherwise it's a modification.
-            match TaskInfo::load(&task.ref_id, datastore_path) {
+            match TaskInfo::load(&task.ref_id, &datastore_path) {
                 Ok(loaded_task) => {
                     let loaded_events = loaded_task.events;
                     let mut events = task.events.clone();
                     events.retain(|ev| !loaded_events.contains(ev));
 
-                    let file = "/tmp/tau_pipe";
+                    let file = settings.pipe_path.clone();
                     let mut pipe_write = pipe_write(file)?;
                     let mut task_clone = task.clone();
                     task_clone.events = events;
@@ -379,7 +391,7 @@ async fn on_receive_task(
                     pipe_write.write_all(json.stringify().unwrap().as_bytes())?;
                 }
                 Err(_) => {
-                    let file = "/tmp/tau_pipe";
+                    let file = settings.pipe_path.clone();
                     let mut pipe_write = pipe_write(file)?;
                     let mut task_clone = task.clone();
 
@@ -394,7 +406,7 @@ async fn on_receive_task(
                 }
             }
         }
-        task.save(datastore_path)?;
+        task.save(&datastore_path)?;
     }
     Ok(())
 }
@@ -430,7 +442,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
     }
 
     if settings.piped {
-        let file = "/tmp/tau_pipe";
+        let file = settings.pipe_path.clone();
         let path = CString::new(file).unwrap();
         unsafe { mkfifo(path.as_ptr(), 0o644) };
     }
@@ -484,7 +496,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
 
     info!("Instantiating event DAG");
     let sled_db = sled::open(datastore)?;
-    let p2p = P2p::new(settings.net.into(), executor.clone()).await?;
+    let p2p = P2p::new(settings.net.clone().into(), executor.clone()).await?;
     let event_graph = EventGraph::new(
         p2p.clone(),
         sled_db.clone(),
@@ -538,36 +550,33 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
         *event_graph.synced.write().await = true;
     }
 
-    ////////////////////
-    // Listner
-    ////////////////////
-    info!(target: "taud", "Starting sync loop task");
-    let last_sent = RwLock::new(NULL_ID);
     let seen = OnceLock::new();
-    seen.set(sled_db.open_tree("tau_db").unwrap()).unwrap();
+    seen.set(sled_db.open_tree("tau_seen").unwrap()).unwrap();
 
     ////////////////////
     // get history
     ////////////////////
     let dag_events = event_graph.order_events().await;
-    let seen_events = seen.get().unwrap();
 
     for event in dag_events.iter() {
         let event_id = event.id();
         // If it was seen, skip
-        if seen_events.contains_key(event_id.as_bytes()).unwrap() {
+        if is_seen(sled_db.clone(), seen.clone(), &event_id).await? {
             continue
         }
+        mark_seen(sled_db.clone(), seen.clone(), &event_id).await?;
 
         // Try to deserialize it. (Here we skip errors)
         let Ok((enc_task, _)) = deserialize_async_partial(event.content()).await else { continue };
 
         // Potentially decrypt the privmsg
-        on_receive_task(&enc_task, &datastore_path, &workspaces, false).await.unwrap();
-
-        debug!(target: "taud", "Marking event {} as seen", event_id);
-        seen_events.insert(event_id.as_bytes(), &[]).unwrap();
+        on_receive_task(&enc_task, &workspaces, &settings).await.unwrap();
     }
+
+    ////////////////////
+    // Listner
+    ////////////////////
+    info!(target: "taud", "Starting sync loop task");
 
     let sync_loop_task = StoppableTask::new();
     sync_loop_task.clone().start(
@@ -575,10 +584,9 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
             event_graph.clone(),
             broadcast_rcv,
             workspaces.clone(),
-            datastore_path.clone(),
-            settings.piped,
+            sled_db.clone(),
+            settings.clone(),
             p2p.clone(),
-            last_sent,
             seen.clone(),
         ),
         |res| async {

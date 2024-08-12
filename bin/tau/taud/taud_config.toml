@@ -14,6 +14,12 @@
 ## (for eventgraph debugging tool)
 #replay_mode = false
 
+## Named pipe path
+#pipe_path = "/tmp/tau_pipe"
+
+## Whether to pipe notifications or not
+#piped = false
+
 ## Current display name
 #nickname = "NICKNAME"
 

@@ -85,6 +85,10 @@ pub struct Args {
     #[structopt(long)]
     pub skip_dag_sync: bool,
 
+    /// Named pipe path
+    #[structopt(long, default_value = "/tmp/tau_pipe")]
+    pub pipe_path: String,
+
     // Whether to pipe notifications or not
     #[structopt(long)]
     pub piped: bool,
