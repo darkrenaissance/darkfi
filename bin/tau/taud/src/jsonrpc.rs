@@ -24,8 +24,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use crypto_box::ChaChaBox;
-use log::{debug, warn};
+use log::{debug, info, warn};
 use smol::lock::{Mutex, MutexGuard};
 use tinyjson::JsonValue;
 
@@ -46,8 +45,10 @@ use taud::{
     error::{to_json_result, TaudError, TaudResult},
     month_tasks::MonthTasks,
     task_info::{Comment, TaskInfo},
-    util::{check_write_access, set_event},
+    util::set_event,
 };
+
+use crate::Workspace;
 
 const DEFAULT_WORKSPACE: &str = "darkfi-dev";
 
@@ -56,9 +57,7 @@ pub struct JsonRpcInterface {
     notify_queue_sender: smol::channel::Sender<TaskInfo>,
     nickname: String,
     workspace: Mutex<String>,
-    workspaces: Arc<HashMap<String, ChaChaBox>>,
-    write: Option<String>,
-    password: Option<String>,
+    workspaces: Arc<HashMap<String, Workspace>>,
     p2p: net::P2pPtr,
     event_graph: EventGraphPtr,
     dnet_sub: JsonSubscriber,
@@ -117,9 +116,7 @@ impl JsonRpcInterface {
         dataset_path: PathBuf,
         notify_queue_sender: smol::channel::Sender<TaskInfo>,
         nickname: String,
-        workspaces: Arc<HashMap<String, ChaChaBox>>,
-        write: Option<String>,
-        password: Option<String>,
+        workspaces: Arc<HashMap<String, Workspace>>,
         p2p: net::P2pPtr,
         event_graph: EventGraphPtr,
         dnet_sub: JsonSubscriber,
@@ -132,8 +129,6 @@ impl JsonRpcInterface {
             workspace,
             workspaces,
             notify_queue_sender,
-            write,
-            password,
             p2p,
             event_graph,
             rpc_connections: Mutex::new(HashSet::new()),
@@ -324,12 +319,14 @@ impl JsonRpcInterface {
             _ => return Err(TaudError::InvalidData("Invalid parameter \"created_at\"".to_string())),
         };
 
-        if !check_write_access(self.write.clone(), self.password.clone())? {
+        let ws = self.workspace.lock().await.clone();
+        if self.workspaces.get(&ws).unwrap().write_key.is_none() {
+            info!("You don't have write access!");
             return Ok(JsonValue::Boolean(false))
         }
 
         let mut new_task: TaskInfo = TaskInfo::new(
-            self.workspace.lock().await.clone(),
+            ws,
             params["title"].get::<String>().unwrap(),
             params["desc"].get::<String>().unwrap(),
             &self.nickname,
@@ -401,11 +398,11 @@ impl JsonRpcInterface {
             return Err(TaudError::InvalidData("len of params should be 2".into()))
         }
 
-        if !check_write_access(self.write.clone(), self.password.clone())? {
+        let ws = self.workspace.lock().await.clone();
+        if self.workspaces.get(&ws).unwrap().write_key.is_none() {
+            info!("You don't have write access!");
             return Ok(JsonValue::Boolean(false))
         }
-
-        let ws = self.workspace.lock().await.clone();
 
         let task = self.check_params_for_modify(
             params[0].get::<String>().unwrap(),
@@ -433,12 +430,12 @@ impl JsonRpcInterface {
             return Err(TaudError::InvalidData("len of params should be 2".into()))
         }
 
-        if !check_write_access(self.write.clone(), self.password.clone())? {
-            return Ok(JsonValue::Boolean(false))
-        }
-
         let state = params[1].get::<String>().unwrap();
         let ws = self.workspace.lock().await.clone();
+        if self.workspaces.get(&ws).unwrap().write_key.is_none() {
+            info!("You don't have write access!");
+            return Ok(JsonValue::Boolean(false))
+        }
 
         let mut task: TaskInfo =
             self.load_task_by_ref_id(params[0].get::<String>().unwrap(), ws)?;
@@ -465,14 +462,15 @@ impl JsonRpcInterface {
             return Err(TaudError::InvalidData("len of params should be 2".into()))
         }
 
-        if !check_write_access(self.write.clone(), self.password.clone())? {
-            return Ok(JsonValue::Boolean(false))
-        }
-
         let ref_id = params[0].get::<String>().unwrap();
         let comment_content = params[1].get::<String>().unwrap();
 
         let ws = self.workspace.lock().await.clone();
+        if self.workspaces.get(&ws).unwrap().write_key.is_none() {
+            info!("You don't have write access!");
+            return Ok(JsonValue::Boolean(false))
+        }
+
         let mut task: TaskInfo = self.load_task_by_ref_id(ref_id, ws)?;
 
         task.set_comment(Comment::new(comment_content, &self.nickname));
@@ -654,13 +652,13 @@ impl JsonRpcInterface {
             return Err(TaudError::InvalidData("Invalid path".into()))
         }
 
-        if !check_write_access(self.write.clone(), self.password.clone())? {
-            return Ok(JsonValue::Boolean(false))
-        }
-
         let path = params[0].get::<String>().unwrap();
         let path = expand_path(path)?.join("exported_tasks");
         let ws = self.workspace.lock().await.clone();
+        if self.workspaces.get(&ws).unwrap().write_key.is_none() {
+            info!("You don't have write access!");
+            return Ok(JsonValue::Boolean(false))
+        }
 
         let imported_tasks = MonthTasks::load_current_tasks(&path, ws.clone(), true)?;
 

@@ -7103,6 +7103,7 @@ dependencies = [
  "libc",
  "log",
  "rand 0.8.5",
+ "ring 0.17.8",
  "serde",
  "signal-hook",
  "signal-hook-async-std",

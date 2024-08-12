@@ -32,6 +32,7 @@ sled = "0.34.7"
 blake3 = "1.5.1"
 crypto_box = { version = "0.9.1", features = ["std", "chacha20"] }
 rand = "0.8.5"
+ring = "0.17.8"
 
 # Encoding and parsing
 bs58 = "0.5.1"
@@ -62,4 +63,3 @@ structopt-toml = "0.5.1"
 
 [lints]
 workspace = true
-

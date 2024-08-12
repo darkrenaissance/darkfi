@@ -17,8 +17,9 @@
 ## Current display name
 #nickname = "NICKNAME"
 
-## Workspaces
-workspaces = ["darkfi-dev:2bCqQTd8BJgeUzH7JQELZxjQuWS8aCmXZ9C6w7ktNS1v"]
+[workspace."darkfi-dev"]
+read_key = "2bCqQTd8BJgeUzH7JQELZxjQuWS8aCmXZ9C6w7ktNS1v"
+write_public_key = "Fgsc8tep4KX3Rb2drq8RxMyrHFWQ7wZaZPpF9F3GQYFG"
 
 # P2P network settings
 [net]

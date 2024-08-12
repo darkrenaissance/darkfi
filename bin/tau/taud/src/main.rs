@@ -38,6 +38,7 @@ use futures::{select, FutureExt};
 use libc::mkfifo;
 use log::{debug, error, info};
 use rand::rngs::OsRng;
+use ring::signature::{Ed25519KeyPair, KeyPair, Signature, UnparsedPublicKey, ED25519};
 use smol::{fs, lock::RwLock, stream::StreamExt};
 use structopt_toml::StructOptToml;
 use tinyjson::JsonValue;
@@ -54,7 +55,7 @@ use darkfi::{
         server::{listen_and_serve, RequestHandler},
     },
     system::{sleep, StoppableTask},
-    util::path::expand_path,
+    util::path::{expand_path, get_config_path},
     Error, Result,
 };
 
@@ -72,25 +73,21 @@ use crate::{
     settings::{Args, CONFIG_FILE, CONFIG_FILE_CONTENTS},
 };
 
-fn get_workspaces(settings: &Args) -> Result<HashMap<String, ChaChaBox>> {
-    let mut workspaces = HashMap::new();
+struct Workspace {
+    read_key: ChaChaBox,
+    write_key: Option<Ed25519KeyPair>,
+    write_pubkey: UnparsedPublicKey<Vec<u8>>,
+}
 
-    for workspace in settings.workspaces.iter() {
-        let workspace: Vec<&str> = workspace.split(':').collect();
-        let (workspace, secret) = (workspace[0], workspace[1]);
-
-        let bytes: [u8; 32] = bs58::decode(secret)
-            .into_vec()?
-            .try_into()
-            .map_err(|_| Error::ParseFailed("Parse secret key failed"))?;
-
-        let secret = crypto_box::SecretKey::from(bytes);
-        let public = secret.public_key();
-        let chacha_box = crypto_box::ChaChaBox::new(&public, &secret);
-        workspaces.insert(workspace.to_string(), chacha_box);
+impl Workspace {
+    fn new() -> Self {
+        let secret_key = SecretKey::generate(&mut OsRng);
+        Self {
+            read_key: ChaChaBox::new(&secret_key.public_key(), &secret_key),
+            write_key: None,
+            write_pubkey: UnparsedPublicKey::new(&ED25519, vec![0]),
+        }
     }
-
-    Ok(workspaces)
 }
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
@@ -98,16 +95,30 @@ pub struct EncryptedTask {
     payload: String,
 }
 
-fn encrypt_task(
-    task: &TaskInfo,
-    chacha_box: &ChaChaBox,
-    rng: &mut OsRng,
-) -> TaudResult<EncryptedTask> {
-    debug!(target: "taud", "start encrypting task");
+#[derive(SerialEncodable, SerialDecodable)]
+struct SignedTask {
+    task: Vec<u8>,
+    signature: Vec<u8>,
+}
 
-    let nonce = ChaChaBox::generate_nonce(rng);
-    let payload = &serialize(task)[..];
-    let mut payload = chacha_box.encrypt(&nonce, payload)?;
+impl SignedTask {
+    fn new(task: &TaskInfo, signature: Signature) -> Self {
+        Self { task: serialize(task), signature: signature.as_ref().to_vec() }
+    }
+}
+
+/// Sign then encrypt a task
+fn encrypt_sign_task(task: &TaskInfo, workspace: &Workspace) -> TaudResult<EncryptedTask> {
+    debug!(target: "taud", "start encrypting task");
+    if workspace.write_key.is_none() {
+        error!("You don't have write access")
+    }
+    let signature: Signature = workspace.write_key.as_ref().unwrap().sign(&serialize(task)[..]);
+    let signed_task = SignedTask::new(task, signature);
+
+    let nonce = ChaChaBox::generate_nonce(&mut OsRng);
+    let payload = &serialize(&signed_task)[..];
+    let mut payload = workspace.read_key.encrypt(&nonce, payload)?;
 
     let mut concat = vec![];
     concat.append(&mut nonce.as_slice().to_vec());
@@ -118,7 +129,10 @@ fn encrypt_task(
     Ok(EncryptedTask { payload })
 }
 
-fn try_decrypt_task(encrypt_task: &EncryptedTask, chacha_box: &ChaChaBox) -> TaudResult<TaskInfo> {
+fn try_decrypt_task(
+    encrypt_task: &EncryptedTask,
+    chacha_box: &ChaChaBox,
+) -> TaudResult<SignedTask> {
     debug!(target: "taud", "start decrypting task");
 
     let bytes = match bs58::decode(&encrypt_task.payload).into_vec() {
@@ -139,16 +153,114 @@ fn try_decrypt_task(encrypt_task: &EncryptedTask, chacha_box: &ChaChaBox) -> Tau
     // let nonce = encrypt_task.nonce.as_slice();
     let decrypted_task = chacha_box.decrypt(nonce, message)?;
 
-    let task = deserialize(&decrypted_task)?;
+    let signed_task = deserialize(&decrypted_task)?;
 
-    Ok(task)
+    Ok(signed_task)
+}
+
+fn parse_configured_workspaces(data: &toml::Value) -> Result<HashMap<String, Workspace>> {
+    let mut ret = HashMap::new();
+
+    let Some(table) = data.as_table() else { return Err(Error::ParseFailed("TOML not a map")) };
+    let Some(workspace) = table.get("workspace") else { return Ok(ret) };
+    let Some(workspace) = workspace.as_table() else {
+        return Err(Error::ParseFailed("`workspace` not a map"))
+    };
+
+    for (name, items) in workspace {
+        let mut ws = Workspace::new();
+
+        if let Some(read_key) = items.get("read_key") {
+            if let Some(read_key) = read_key.as_str() {
+                let Ok(read_key_bytes) = bs58::decode(read_key).into_vec() else {
+                    return Err(Error::ParseFailed("Workspace secret not valid base58"))
+                };
+
+                if read_key_bytes.len() != 32 {
+                    return Err(Error::ParseFailed("Workspace read_key not 32 bytes long"))
+                }
+
+                let read_key_bytes: [u8; 32] = read_key_bytes.try_into().unwrap();
+                let read_key = crypto_box::SecretKey::from(read_key_bytes);
+                let public = read_key.public_key();
+                ws.read_key = ChaChaBox::new(&public, &read_key);
+            } else {
+                return Err(Error::ParseFailed("Workspace read_key not a string"))
+            }
+        } else {
+            return Err(Error::ParseFailed("Workspace read_key is not set"))
+        }
+
+        if let Some(write_pubkey) = items.get("write_public_key") {
+            if let Some(write_pubkey) = write_pubkey.as_str() {
+                if !write_pubkey.is_empty() {
+                    info!("Found configured write_public_key for {} workspace", name);
+                    let write_pubkey = write_pubkey.to_string();
+                    let decoded_write_pubkey = bs58::decode(write_pubkey).into_vec().unwrap();
+                    ws.write_pubkey = UnparsedPublicKey::new(&ED25519, decoded_write_pubkey);
+                }
+            } else {
+                return Err(Error::ParseFailed("Workspace write_public_key not a string"))
+            }
+        } else {
+            return Err(Error::ParseFailed("Workspace write_public_key is not set"))
+        }
+
+        if let Some(write_key) = items.get("write_key") {
+            if let Some(write_key) = write_key.as_str() {
+                if !write_key.is_empty() {
+                    info!("Found configured write_key for {} workspace", name);
+                    let write_key = write_key.to_string();
+                    let pkcs8_bytes = bs58::decode(write_key).into_vec().unwrap();
+                    let ed25519 = match Ed25519KeyPair::from_pkcs8(pkcs8_bytes.as_ref()) {
+                        Ok(key) => key,
+                        Err(e) => {
+                            error!("Failed parsing write_key: {}", e);
+                            return Err(Error::ParseFailed("Failed parsing write_key"))
+                        }
+                    };
+                    ws.write_key = Some(ed25519);
+                }
+            } else {
+                return Err(Error::ParseFailed("Workspace write_key not a string"))
+            }
+        }
+
+        if let Some(wrt_key) = ws.write_key.as_ref() {
+            if wrt_key.public_key().as_ref() != ws.write_pubkey.as_ref() {
+                error!("Wrong keypair for {} workspace, the workspace is not added!", name);
+                continue
+            }
+        }
+
+        info!("Configured NaCl box for workspace {}", name);
+        ret.insert(name.to_string(), ws);
+    }
+
+    Ok(ret)
+}
+
+async fn get_workspaces(settings: &Args) -> Result<HashMap<String, Workspace>> {
+    let config_path = get_config_path(settings.config.clone(), CONFIG_FILE)?;
+    let contents = fs::read_to_string(config_path).await?;
+    let contents = match toml::from_str(&contents) {
+        Ok(v) => v,
+        Err(e) => {
+            error!("Failed parsing TOML config: {}", e);
+            return Err(Error::ParseFailed("Failed parsing TOML config"))
+        }
+    };
+
+    let workspaces = parse_configured_workspaces(&contents)?;
+
+    Ok(workspaces)
 }
 
 #[allow(clippy::too_many_arguments)]
 async fn start_sync_loop(
     event_graph: EventGraphPtr,
     broadcast_rcv: smol::channel::Receiver<TaskInfo>,
-    workspaces: Arc<HashMap<String, ChaChaBox>>,
+    workspaces: Arc<HashMap<String, Workspace>>,
     datastore_path: std::path::PathBuf,
     piped: bool,
     p2p: P2pPtr,
@@ -164,8 +276,8 @@ async fn start_sync_loop(
             task_event = broadcast_rcv.recv().fuse() => {
                 let tk = task_event.map_err(Error::from)?;
                 if workspaces.contains_key(&tk.workspace) {
-                    let chacha_box = workspaces.get(&tk.workspace).unwrap();
-                    let encrypted_task = encrypt_task(&tk, chacha_box, &mut OsRng)?;
+                    let ws = workspaces.get(&tk.workspace).unwrap();
+                    let encrypted_task = encrypt_sign_task(&tk, ws)?;
                     info!(target: "taud", "Send the task: ref: {}", tk.ref_id);
                     // Build a DAG event and return it.
                     let event = Event::new(
@@ -183,9 +295,7 @@ async fn start_sync_loop(
                         error!(target: "taud", "Failed inserting new event to DAG: {}", e);
                     } else {
                         // We sent this, so it should be considered seen.
-                        // TODO: should we save task on send or on receive?
-                        // on receive better because it's garanteed your event is out there
-                        // debug!("Marking event {} as seen", event_id);
+                        // debug!(target: "taud", "Marking event {} as seen", event_id);
                         // seen.get().unwrap().insert(event_id.as_bytes(), &[]).unwrap();
 
                         // Otherwise, broadcast it
@@ -219,22 +329,38 @@ async fn start_sync_loop(
     }
 }
 
+/// Handel a received task, decrypt it, verify it, optionally write it
+/// to a named pipe and save it on disk.
 async fn on_receive_task(
-    task: &EncryptedTask,
+    enc_task: &EncryptedTask,
     datastore_path: &Path,
-    workspaces: &HashMap<String, ChaChaBox>,
+    workspaces: &HashMap<String, Workspace>,
     piped: bool,
 ) -> TaudResult<()> {
-    for (workspace, chacha_box) in workspaces.iter() {
-        let task = try_decrypt_task(task, chacha_box);
-        if let Err(e) = task {
+    for (ws_name, workspace) in workspaces.iter() {
+        let signed_task = try_decrypt_task(enc_task, &workspace.read_key);
+        if let Err(e) = signed_task {
             debug!(target: "taud", "Unable to decrypt the task: {}", e);
             continue
         }
 
-        let mut task = task.unwrap();
+        if workspace
+            .write_pubkey
+            .verify(&signed_task.as_ref().unwrap().task, &signed_task.as_ref().unwrap().signature)
+            .is_err()
+        {
+            // *verified.lock().await = false;
+            error!("Task is not verified: wrong write_public_key");
+            error!("Task is not saved");
+            continue
+        }
+        // else {
+        //     *verified.lock().await = true;
+        // }
+
+        let mut task: TaskInfo = deserialize(&signed_task.unwrap().task)?;
         info!(target: "taud", "Save the task: ref: {}", task.ref_id);
-        task.workspace.clone_from(workspace);
+        task.workspace.clone_from(ws_name);
         if piped {
             // if we can't load the task then it's a new task.
             // otherwise it's a modification.
@@ -338,7 +464,8 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
         return Ok(())
     }
 
-    let workspaces = Arc::new(get_workspaces(&settings)?);
+    let workspaces = Arc::new(get_workspaces(&settings).await?);
+    // let verified = Arc::new(Mutex::new(false));
 
     if workspaces.is_empty() {
         error!(target: "taud", "Please add at least one workspace to the config file.");
@@ -525,8 +652,6 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
         broadcast_snd,
         nickname.unwrap(),
         workspaces.clone(),
-        settings.write,
-        settings.password,
         p2p.clone(),
         event_graph.clone(),
         json_sub,
