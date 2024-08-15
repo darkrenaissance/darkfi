@@ -89,7 +89,6 @@ for a description which allows entering multiline text.
 
 ```shell
 % tau				# all non-stop tasks
-% tau list			# all non-stop tasks
 % tau 1-3			# tasks 1 to 3
 % tau show state:open	# list open tasks
 % tau rank:2			# all tasks that have rank 2
