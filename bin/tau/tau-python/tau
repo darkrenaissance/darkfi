@@ -552,6 +552,8 @@ SUBCOMMANDS:
     stop       Stop task(s).
     switch     Switch between configured workspaces.
     show       List filtered tasks.
+    export	   Save current workspace tasks to a path.
+    import	   Load current workspace tasks from a path.
     help       Show this help text.
 
 Examples:
