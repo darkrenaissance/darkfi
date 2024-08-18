@@ -21,6 +21,7 @@ use std::{
     sync::Arc,
 };
 
+use crypto_box::PublicKey;
 use darkfi::{Error::ParseFailed, Result};
 use log::info;
 
@@ -90,23 +91,13 @@ fn parse_dm_chacha_secret(data: &toml::Value) -> Result<Option<crypto_box::Secre
     Ok(Some(crypto_box::SecretKey::from(secret_bytes)))
 }
 
-/// Parse configured contacts from a TOML map.
-///
-/// ```toml
-/// [contact."anon"]
-/// dm_chacha_public = "7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"
-/// ```
-pub fn parse_configured_contacts(data: &toml::Value) -> Result<HashMap<String, IrcContact>> {
+pub fn list_configured_contacts(data: &toml::Value) -> Result<HashMap<String, PublicKey>> {
     let mut ret = HashMap::new();
 
     let Some(table) = data.as_table() else { return Err(ParseFailed("TOML not a map")) };
     let Some(contacts) = table.get("contact") else { return Ok(ret) };
     let Some(contacts) = contacts.as_table() else {
         return Err(ParseFailed("`contact` not a map"))
-    };
-
-    let Some(secret) = parse_dm_chacha_secret(data)? else {
-        return Err(ParseFailed("You have specified some contacts but you did not set up a valid chacha secret for yourself.  You can generate a keypair with: 'darkirc --gen-chacha-keypair' and then add that keypair to your config toml file."))
     };
 
     for (name, items) in contacts {
@@ -129,9 +120,35 @@ pub fn parse_configured_contacts(data: &toml::Value) -> Result<HashMap<String, I
         let public_bytes: [u8; 32] = public_bytes.try_into().unwrap();
 
         let public = crypto_box::PublicKey::from(public_bytes);
-        let saltbox = Some(Arc::new(crypto_box::ChaChaBox::new(&public, &secret)));
 
         if ret.contains_key(name) {
+            return Err(ParseFailed("Duplicate contact found"))
+        }
+
+        info!("Instantiated ChaChaBox for contact \"{}\"", name);
+        ret.insert(name.to_string(), public);
+    }
+
+    Ok(ret)
+}
+
+/// Parse configured contacts from a TOML map.
+///
+/// ```toml
+/// [contact."anon"]
+/// dm_chacha_public = "7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"
+/// ```
+pub fn parse_configured_contacts(data: &toml::Value) -> Result<HashMap<String, IrcContact>> {
+    let mut ret = HashMap::new();
+
+    let contacts = list_configured_contacts(data)?;
+    let Some(secret) = parse_dm_chacha_secret(data)? else {
+        return Err(ParseFailed("You have specified some contacts but you did not set up a valid chacha secret for yourself.  You can generate a keypair with: 'darkirc --gen-chacha-keypair' and then add that keypair to your config toml file."))
+    };
+    for (name, public) in contacts {
+        let saltbox = Some(Arc::new(crypto_box::ChaChaBox::new(&public, &secret)));
+
+        if ret.contains_key(&name) {
             return Err(ParseFailed("Duplicate contact found"))
         }
 

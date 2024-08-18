@@ -30,8 +30,10 @@ use darkfi::{
     util::path::{expand_path, get_config_path},
     Error, Result,
 };
+
 use log::{debug, error, info};
 use rand::rngs::OsRng;
+use settings::list_configured_contacts;
 use smol::{fs, lock::Mutex, stream::StreamExt, Executor};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;
@@ -130,6 +132,10 @@ struct Args {
     #[structopt(long)]
     encrypt_password: bool,
 
+    /// List configured contacts.
+    #[structopt(long)]
+    list_contacts: bool,
+
     /// P2P network settings
     #[structopt(flatten)]
     net: SettingsOpt,
@@ -212,6 +218,26 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         let secret: [u8; 32] = bytes.try_into().unwrap();
         let secret = crypto_box::SecretKey::from(secret);
         println!("{}", bs58::encode(secret.public_key().to_bytes()).into_string());
+        return Ok(())
+    }
+
+    if args.list_contacts {
+        let config_path = get_config_path(args.config, CONFIG_FILE)?;
+        let contents = fs::read_to_string(&config_path).await?;
+        let contents = match toml::from_str(&contents) {
+            Ok(v) => v,
+            Err(e) => {
+                error!("Failed parsing TOML config: {}", e);
+                return Err(Error::ParseFailed("Failed parsing TOML config"))
+            }
+        };
+
+        // Parse configured contacts
+        let contacts = list_configured_contacts(&contents)?;
+
+        for (name, public_key) in contacts {
+            println!("{}: {}", name, bs58::encode(public_key.as_bytes()).into_string())
+        }
         return Ok(())
     }
 
