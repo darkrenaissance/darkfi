@@ -459,7 +459,7 @@ async def comment(refid, args, server_name, port):
     task = await api.fetch_task(refid, server_name, port)
     assert task is not None
     title = task["title"]
-    print(f"Commented on task'{title}'")
+    print(f"Commented on task '{title}'")
     return 0
 
 def is_filtered(task, filters):
