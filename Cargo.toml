@@ -117,9 +117,6 @@ wasmer = {version = "4.3.4", optional = true}
 wasmer-compiler-singlepass = {version = "4.3.4", optional = true}
 wasmer-middlewares = {version = "4.3.4", optional = true}
 
-# SQLite stuff
-libsqlite3-sys = {version = "0.28.0", features = ["sqlcipher"], optional = true}
-
 # Blockchain store
 sled = {version = "0.34.7", optional = true}
 sled-overlay = {version = "0.1.2", optional = true}
@@ -231,7 +228,6 @@ p2p-tor = [
     "tor-rtcompat",
     "tor-proto",
     "tor-cell",
-    "libsqlite3-sys",
 ]
 
 net = [
@@ -259,11 +255,7 @@ net = [
     "util",
 
     "p2p-tcp",
-    # This is temporarily disabled and for now is opt in.
-    # The issue is with OpenSSL on Android. While it can be disabled in arti,
-    # tor-dirmgr depends on sqlite/sqlcipher vis rusqlite. While this can be
-    # bundled, then for the crypto it requires OpenSSL again.
-    #"p2p-tor",
+    "p2p-tor",
     #"p2p-nym",
     "p2p-unix",
 ]

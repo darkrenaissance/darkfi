@@ -11,7 +11,7 @@ edition = "2021"
 # ANCHOR: dependencies
 [dependencies]
 # ANCHOR: darkfi
-darkfi = {path = "../../../", features = ["net", "toml", "system", "async-daemonize", "rpc", "p2p-tor"]}
+darkfi = {path = "../../../", features = ["net", "toml", "system", "async-daemonize", "rpc"]}
 darkfi-serial = {path = "../../../src/serial"}
 # ANCHOR_END: darkfi
 

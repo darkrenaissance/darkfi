@@ -18,7 +18,7 @@ name = "darkirc"
 path = "src/main.rs"
 
 [dependencies]
-darkfi = {path = "../../", features = ["async-daemonize", "event-graph", "net", "p2p-tor", "util", "system", "rpc", "zk"]}
+darkfi = {path = "../../", features = ["async-daemonize", "event-graph", "net", "util", "system", "rpc", "zk"]}
 darkfi-sdk = {path = "../../src/sdk", features = ["async"]}
 darkfi-serial = {path = "../../src/serial", features = ["async"]}
 libc = "0.2.155"
