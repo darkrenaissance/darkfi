@@ -31,6 +31,8 @@ use std::{
     sync::{atomic::Ordering, Arc, Mutex as SyncMutex, Weak},
 };
 
+mod page;
+
 use crate::{
     gfx::{
         DrawCall, DrawInstruction, DrawMesh, GraphicsEventPublisherPtr, Point, Rectangle,
@@ -257,6 +259,7 @@ pub struct ChatView {
     tree: sled::Tree,
 
     pages: AsyncMutex<Vec<PagePtr>>,
+    pages2: AsyncMutex<page::PageManager>,
     dc_key: u64,
 
     /// Used for detecting when scrolling view
@@ -389,11 +392,12 @@ impl ChatView {
                 node_id,
                 tasks,
                 sg,
-                render_api,
-                text_shaper,
+                render_api: render_api.clone(),
+                text_shaper: text_shaper.clone(),
                 tree,
 
                 pages: AsyncMutex::new(Vec::new()),
+                pages2: AsyncMutex::new(page::PageManager::new(render_api, text_shaper)),
                 dc_key: OsRng.gen(),
 
                 mouse_pos: SyncMutex::new(Point::from([0., 0.])),
@@ -661,6 +665,11 @@ impl ChatView {
             debug!(target: "ui::chatview", "duplicate msg so bailing");
             return
         }
+
+        // Add message to page
+        self.pages2.lock().await
+            .insert_line(self.font_size.get(), timest, message_id, nick.clone(), text.clone())
+            .await;
 
         let chatmsg = ChatMsg { nick, text };
 
@@ -973,12 +982,12 @@ impl ChatView {
         while total_height < *scroll + rect.h {
             debug!(target: "ui::chatview", "draw_cached() loading more pages");
 
-            // No more pages available to load
             let n_loaded_pages = self.preload_pages().await;
 
             // We need this value after so first update it
             total_height = self.get_total_height(&rect, &pages).await;
 
+            // No more pages available to load
             if n_loaded_pages == 0 {
                 break
             }

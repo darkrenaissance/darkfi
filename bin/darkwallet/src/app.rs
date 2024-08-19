@@ -206,9 +206,9 @@ impl App {
         self.trigger_redraw().await;
 
         // Start the backend
-        if let Err(err) = self.darkirc_backend.start(self.sg.clone(), self.ex.clone()).await {
-            error!(target: "app", "backend error: {err}");
-        }
+        //if let Err(err) = self.darkirc_backend.start(self.sg.clone(), self.ex.clone()).await {
+        //    error!(target: "app", "backend error: {err}");
+        //}
     }
 
     pub fn stop(&self) {
