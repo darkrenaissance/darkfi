@@ -142,6 +142,9 @@ pub fn parse_configured_contacts(data: &toml::Value) -> Result<HashMap<String, I
     let mut ret = HashMap::new();
 
     let contacts = list_configured_contacts(data)?;
+    if contacts.is_empty() {
+        return Ok(ret);
+    }
     let Some(secret) = parse_dm_chacha_secret(data)? else {
         return Err(ParseFailed("You have specified some contacts but you did not set up a valid chacha secret for yourself.  You can generate a keypair with: 'darkirc --gen-chacha-keypair' and then add that keypair to your config toml file."))
     };
