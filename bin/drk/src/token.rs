@@ -107,7 +107,7 @@ impl Drk {
                 is_frozen,
             ],
         ) {
-            return Err(Error::RusqliteError(format!(
+            return Err(Error::DatabaseError(format!(
                 "[import_mint_authority] Inserting mint authority failed: {e:?}"
             )))
         };
@@ -157,7 +157,7 @@ impl Drk {
         let rows = match self.wallet.query_multiple(&MONEY_TOKENS_TABLE, &[], &[]) {
             Ok(r) => r,
             Err(e) => {
-                return Err(Error::RusqliteError(format!(
+                return Err(Error::DatabaseError(format!(
                     "[get_mint_authorities] Tokens mint autorities retrieval failed: {e:?}"
                 )))
             }
@@ -183,7 +183,7 @@ impl Drk {
         ) {
             Ok(r) => r,
             Err(e) => {
-                return Err(Error::RusqliteError(format!(
+                return Err(Error::DatabaseError(format!(
                     "[get_token_mint_authority] Token mint autority retrieval failed: {e:?}"
                 )))
             }

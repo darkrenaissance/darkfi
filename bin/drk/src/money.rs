@@ -202,7 +202,7 @@ impl Drk {
         ) {
             Ok(r) => r,
             Err(e) => {
-                return Err(Error::RusqliteError(format!(
+                return Err(Error::DatabaseError(format!(
                     "[default_secret] Default secret key retrieval failed: {e:?}"
                 )))
             }
@@ -225,7 +225,7 @@ impl Drk {
         ) {
             Ok(r) => r,
             Err(e) => {
-                return Err(Error::RusqliteError(format!(
+                return Err(Error::DatabaseError(format!(
                     "[default_address] Default address retrieval failed: {e:?}"
                 )))
             }
@@ -260,7 +260,7 @@ impl Drk {
         let rows = match self.wallet.query_multiple(&MONEY_KEYS_TABLE, &[], &[]) {
             Ok(r) => r,
             Err(e) => {
-                return Err(Error::RusqliteError(format!(
+                return Err(Error::DatabaseError(format!(
                     "[addresses] Addresses retrieval failed: {e:?}"
                 )))
             }
@@ -304,7 +304,7 @@ impl Drk {
             match self.wallet.query_multiple(&MONEY_KEYS_TABLE, &[MONEY_KEYS_COL_SECRET], &[]) {
                 Ok(r) => r,
                 Err(e) => {
-                    return Err(Error::RusqliteError(format!(
+                    return Err(Error::DatabaseError(format!(
                         "[get_money_secrets] Secret keys retrieval failed: {e:?}"
                     )))
                 }
@@ -356,7 +356,7 @@ impl Drk {
             if let Err(e) =
                 self.wallet.exec_sql(&query, rusqlite::params![is_default, public, secret])
             {
-                return Err(Error::RusqliteError(format!(
+                return Err(Error::DatabaseError(format!(
                     "[import_money_secrets] Inserting new address failed: {e:?}"
                 )))
             }
@@ -403,7 +403,7 @@ impl Drk {
         let rows = match query {
             Ok(r) => r,
             Err(e) => {
-                return Err(Error::RusqliteError(format!(
+                return Err(Error::DatabaseError(format!(
                     "[get_coins] Coins retrieval failed: {e:?}"
                 )))
             }
@@ -428,7 +428,7 @@ impl Drk {
         let rows = match query {
             Ok(r) => r,
             Err(e) => {
-                return Err(Error::RusqliteError(format!(
+                return Err(Error::DatabaseError(format!(
                     "[get_token_coins] Coins retrieval failed: {e:?}"
                 )))
             }
@@ -458,7 +458,7 @@ impl Drk {
         let rows = match query {
             Ok(r) => r,
             Err(e) => {
-                return Err(Error::RusqliteError(format!(
+                return Err(Error::DatabaseError(format!(
                     "[get_contract_token_coins] Coins retrieval failed: {e:?}"
                 )))
             }
@@ -580,7 +580,7 @@ impl Drk {
         let rows = match self.wallet.query_multiple(&MONEY_ALIASES_TABLE, &[], &[]) {
             Ok(r) => r,
             Err(e) => {
-                return Err(Error::RusqliteError(format!(
+                return Err(Error::DatabaseError(format!(
                     "[get_aliases] Aliases retrieval failed: {e:?}"
                 )))
             }
@@ -671,7 +671,7 @@ impl Drk {
         let row = match self.wallet.query_single(&MONEY_TREE_TABLE, &[MONEY_TREE_COL_TREE], &[]) {
             Ok(r) => r,
             Err(e) => {
-                return Err(Error::RusqliteError(format!(
+                return Err(Error::DatabaseError(format!(
                     "[get_money_tree] Tree retrieval failed: {e:?}"
                 )))
             }
@@ -689,7 +689,7 @@ impl Drk {
         let rows = match self.wallet.query_multiple(&MONEY_SMT_TABLE, &[], &[]) {
             Ok(r) => r,
             Err(e) => {
-                return Err(Error::RusqliteError(format!(
+                return Err(Error::DatabaseError(format!(
                     "[get_nullifiers_smt] SMT records retrieval failed: {e:?}"
                 )))
             }
@@ -853,7 +853,7 @@ impl Drk {
         }
 
         if let Err(e) = self.put_money_tree(&tree).await {
-            return Err(Error::RusqliteError(format!(
+            return Err(Error::DatabaseError(format!(
                 "[apply_tx_money_data] Put Money tree failed: {e:?}"
             )))
         }
@@ -898,7 +898,7 @@ impl Drk {
             ];
 
             if let Err(e) = self.wallet.exec_sql(&query, params) {
-                return Err(Error::RusqliteError(format!(
+                return Err(Error::DatabaseError(format!(
                     "[apply_tx_money_data] Inserting Money coin failed: {e:?}"
                 )))
             }
@@ -913,7 +913,7 @@ impl Drk {
             if let Err(e) =
                 self.wallet.exec_sql(&query, rusqlite::params![serialize_async(&token_id).await])
             {
-                return Err(Error::RusqliteError(format!(
+                return Err(Error::DatabaseError(format!(
                     "[apply_tx_money_data] Inserting Money coin failed: {e:?}"
                 )))
             }
@@ -1002,7 +1002,7 @@ impl Drk {
         for (coin, _, _) in self.get_coins(false).await? {
             if nullifiers.contains(&coin.nullifier()) {
                 if let Err(e) = self.mark_spent_coin(&coin.coin, spent_tx_hash).await {
-                    return Err(Error::RusqliteError(format!(
+                    return Err(Error::DatabaseError(format!(
                         "[mark_spent_coins] Marking spent coin failed: {e:?}"
                     )))
                 }

@@ -118,7 +118,6 @@ wasmer-compiler-singlepass = {version = "4.3.4", optional = true}
 wasmer-middlewares = {version = "4.3.4", optional = true}
 
 # SQLite stuff
-rusqlite = {version = "0.31.0", features = ["sqlcipher"], optional = true}
 libsqlite3-sys = {version = "0.28.0", features = ["sqlcipher"], optional = true}
 
 # Blockchain store

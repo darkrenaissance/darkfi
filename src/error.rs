@@ -327,9 +327,8 @@ pub enum Error {
     // ===============
     // Database errors
     // ===============
-    #[cfg(feature = "rusqlite")]
-    #[error("rusqlite error: {0}")]
-    RusqliteError(String),
+    #[error("Database error: {0}")]
+    DatabaseError(String),
 
     #[cfg(feature = "sled")]
     #[error(transparent)]
@@ -699,13 +698,6 @@ impl From<smol::channel::RecvError> for Error {
 impl From<log::SetLoggerError> for Error {
     fn from(err: log::SetLoggerError) -> Self {
         Self::SetLoggerError(err.to_string())
-    }
-}
-
-#[cfg(feature = "rusqlite")]
-impl From<rusqlite::Error> for Error {
-    fn from(err: rusqlite::Error) -> Self {
-        Self::RusqliteError(err.to_string())
     }
 }
 

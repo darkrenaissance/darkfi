@@ -81,7 +81,7 @@ impl Drk {
         let rows = match self.wallet.query_multiple(&DEPLOY_AUTH_TABLE, &[], &[]) {
             Ok(r) => r,
             Err(e) => {
-                return Err(Error::RusqliteError(format!(
+                return Err(Error::DatabaseError(format!(
                     "[list_deploy_auth] Deploy auth retrieval failed: {e:?}",
                 )))
             }
@@ -118,7 +118,7 @@ impl Drk {
         ) {
             Ok(v) => v,
             Err(e) => {
-                return Err(Error::RusqliteError(format!(
+                return Err(Error::DatabaseError(format!(
                     "[deploy_contract] Failed to retrieve deploy authority keypair: {e:?}"
                 )))
             }

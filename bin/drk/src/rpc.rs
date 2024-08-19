@@ -62,7 +62,7 @@ impl Drk {
         let last_scanned = match self.last_scanned_block() {
             Ok(l) => l,
             Err(e) => {
-                return Err(Error::RusqliteError(format!(
+                return Err(Error::DatabaseError(format!(
                     "[subscribe_blocks] Retrieving last scanned block failed: {e:?}"
                 )))
             }
@@ -71,7 +71,7 @@ impl Drk {
         if last_known != last_scanned {
             eprintln!("Warning: Last scanned block is not the last known block.");
             eprintln!("You should first fully scan the blockchain, and then subscribe");
-            return Err(Error::RusqliteError(
+            return Err(Error::DatabaseError(
                 "[subscribe_blocks] Blockchain not fully scanned".to_string(),
             ))
         }
@@ -140,14 +140,14 @@ impl Drk {
                         let block_data: BlockInfo = deserialize_async(&bytes).await?;
                         println!("Deserialized successfully. Scanning block...");
                         if let Err(e) = self.scan_block(&block_data).await {
-                            return Err(Error::RusqliteError(format!(
+                            return Err(Error::DatabaseError(format!(
                                 "[subscribe_blocks] Scanning block failed: {e:?}"
                             )))
                         }
                         let txs_hashes = match self.insert_tx_history_records(&block_data.txs).await {
                             Ok(hashes) => hashes,
                             Err(e) => {
-                                return Err(Error::RusqliteError(format!(
+                                return Err(Error::DatabaseError(format!(
                                     "[subscribe_blocks] Inserting transaction history records failed: {e:?}"
                                 )))
                             },
@@ -155,7 +155,7 @@ impl Drk {
                         if let Err(e) =
                             self.update_tx_history_records_status(&txs_hashes, "Finalized")
                         {
-                            return Err(Error::RusqliteError(format!(
+                            return Err(Error::DatabaseError(format!(
                                 "[subscribe_blocks] Update transaction history record status failed: {e:?}"
                             )))
                         }
@@ -223,7 +223,7 @@ impl Drk {
         let query =
             format!("UPDATE {} SET {} = ?1;", *MONEY_INFO_TABLE, MONEY_INFO_COL_LAST_SCANNED_BLOCK);
         if let Err(e) = self.wallet.exec_sql(&query, rusqlite::params![block.header.height]) {
-            return Err(Error::RusqliteError(format!(
+            return Err(Error::DatabaseError(format!(
                 "[scan_block] Update last scanned block failed: {e:?}"
             )))
         }
@@ -324,7 +324,7 @@ impl Drk {
 
         // Store transactions history record
         if let Err(e) = self.insert_tx_history_record(tx).await {
-            return Err(Error::RusqliteError(format!(
+            return Err(Error::DatabaseError(format!(
                 "[broadcast_tx] Inserting transaction history record failed: {e:?}"
             )))
         }

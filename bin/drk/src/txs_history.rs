@@ -77,7 +77,7 @@ impl Drk {
         ) {
             Ok(r) => r,
             Err(e) => {
-                return Err(Error::RusqliteError(format!(
+                return Err(Error::DatabaseError(format!(
                     "[get_tx_history_record] Transaction history record retrieval failed: {e:?}"
                 )))
             }

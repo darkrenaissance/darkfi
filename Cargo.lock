@@ -1984,7 +1984,6 @@ dependencies = [
  "randomx",
  "rcgen",
  "regex",
- "rusqlite",
  "rustls-pemfile",
  "semver 1.0.23",
  "serde",

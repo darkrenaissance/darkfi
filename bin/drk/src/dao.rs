@@ -411,7 +411,7 @@ impl Drk {
         let row = match self.wallet.query_single(&DAO_TREES_TABLE, &[], &[]) {
             Ok(r) => r,
             Err(e) => {
-                return Err(Error::RusqliteError(format!(
+                return Err(Error::DatabaseError(format!(
                     "[get_dao_trees] Trees retrieval failed: {e:?}"
                 )))
             }
@@ -496,7 +496,7 @@ impl Drk {
         let rows = match self.wallet.query_multiple(&DAO_DAOS_TABLE, &[], &[]) {
             Ok(r) => r,
             Err(e) => {
-                return Err(Error::RusqliteError(format!("[get_daos] DAOs retrieval failed: {e:?}")))
+                return Err(Error::DatabaseError(format!("[get_daos] DAOs retrieval failed: {e:?}")))
             }
         };
 
@@ -607,7 +607,7 @@ impl Drk {
     /// Fetch all known DAO proposals from the wallet given a DAO name.
     pub async fn get_dao_proposals(&self, name: &str) -> Result<Vec<ProposalRecord>> {
         let Ok(dao) = self.get_dao_by_name(name).await else {
-            return Err(Error::RusqliteError(format!(
+            return Err(Error::DatabaseError(format!(
                 "[get_dao_proposals] DAO with name {name} not found in wallet"
             )))
         };
@@ -619,7 +619,7 @@ impl Drk {
         ) {
             Ok(r) => r,
             Err(e) => {
-                return Err(Error::RusqliteError(format!(
+                return Err(Error::DatabaseError(format!(
                     "[get_dao_proposals] Proposals retrieval failed: {e:?}"
                 )))
             }
@@ -659,12 +659,12 @@ impl Drk {
 
                 // Update wallet data
                 if let Err(e) = self.put_dao_trees(&daos_tree, &proposals_tree).await {
-                    return Err(Error::RusqliteError(format!(
+                    return Err(Error::DatabaseError(format!(
                         "[apply_dao_mint_data] Put DAO tree failed: {e:?}"
                     )))
                 }
                 if let Err(e) = self.confirm_dao(&dao_to_confirm).await {
-                    return Err(Error::RusqliteError(format!(
+                    return Err(Error::DatabaseError(format!(
                         "[apply_dao_mint_data] Confirm DAO failed: {e:?}"
                     )))
                 }
@@ -723,12 +723,12 @@ impl Drk {
                     };
 
                 if let Err(e) = self.put_dao_trees(&daos_tree, &proposals_tree).await {
-                    return Err(Error::RusqliteError(format!(
+                    return Err(Error::DatabaseError(format!(
                         "[apply_dao_propose_data] Put DAO tree failed: {e:?}"
                     )))
                 }
                 if let Err(e) = self.put_dao_proposal(&our_proposal).await {
-                    return Err(Error::RusqliteError(format!(
+                    return Err(Error::DatabaseError(format!(
                         "[apply_dao_propose_data] Put DAO proposals failed: {e:?}"
                     )))
                 }
@@ -756,7 +756,7 @@ impl Drk {
         let dao = match self.get_dao_by_bulla(&proposal.proposal.dao_bulla).await {
             Ok(d) => d,
             Err(e) => {
-                return Err(Error::RusqliteError(format!(
+                return Err(Error::DatabaseError(format!(
                     "[apply_dao_vote_data] Couldn't find proposal {} DAO {}: {e}",
                     proposal.bulla(),
                     proposal.proposal.dao_bulla,
@@ -768,7 +768,7 @@ impl Drk {
         let note = match params.note.decrypt_unsafe(&dao.params.secret_key) {
             Ok(n) => n,
             Err(e) => {
-                return Err(Error::RusqliteError(format!(
+                return Err(Error::DatabaseError(format!(
                     "[apply_dao_vote_data] Couldn't decrypt proposal {} vote with DAO {} keys: {e}",
                     proposal.bulla(),
                     proposal.proposal.dao_bulla,
@@ -779,7 +779,7 @@ impl Drk {
         // Create the DAO vote record
         let vote_option = fp_to_u64(note[0]).unwrap();
         if vote_option > 1 {
-            return Err(Error::RusqliteError(format!(
+            return Err(Error::DatabaseError(format!(
                 "[apply_dao_vote_data] Malformed vote for proposal {}: {vote_option}",
                 proposal.bulla(),
             )))
@@ -802,7 +802,7 @@ impl Drk {
         };
 
         if let Err(e) = self.put_dao_vote(&v).await {
-            return Err(Error::RusqliteError(format!(
+            return Err(Error::DatabaseError(format!(
                 "[apply_dao_vote_data] Put DAO votes failed: {e:?}"
             )))
         }
@@ -824,7 +824,7 @@ impl Drk {
         // Update its exec transaction hash
         proposal.exec_tx_hash = Some(tx_hash);
         if let Err(e) = self.put_dao_proposal(&proposal).await {
-            return Err(Error::RusqliteError(format!(
+            return Err(Error::DatabaseError(format!(
                 "[apply_dao_exec_data] Put DAO proposal failed: {e:?}"
             )))
         }
@@ -920,7 +920,7 @@ impl Drk {
     /// Import given DAO proposal into the wallet.
     pub async fn put_dao_proposal(&self, proposal: &ProposalRecord) -> Result<()> {
         if let Err(e) = self.get_dao_by_bulla(&proposal.proposal.dao_bulla).await {
-            return Err(Error::RusqliteError(format!(
+            return Err(Error::DatabaseError(format!(
                 "[put_dao_proposal] Couldn't find proposal {} DAO {}: {e}",
                 proposal.bulla(),
                 proposal.proposal.dao_bulla
@@ -987,7 +987,7 @@ impl Drk {
                 exec_tx_hash,
             ],
         ) {
-            return Err(Error::RusqliteError(format!(
+            return Err(Error::DatabaseError(format!(
                 "[put_dao_proposal] Proposal insert failed: {e:?}"
             )))
         };
@@ -1115,7 +1115,7 @@ impl Drk {
     pub async fn import_dao(&self, name: &str, params: DaoParams) -> Result<()> {
         // First let's check if we've imported this DAO with the given name before.
         if self.get_dao_by_name(name).await.is_ok() {
-            return Err(Error::RusqliteError(
+            return Err(Error::DatabaseError(
                 "[import_dao] This DAO has already been imported".to_string(),
             ))
         }
@@ -1134,7 +1134,7 @@ impl Drk {
                 serialize_async(&params).await,
             ],
         ) {
-            return Err(Error::RusqliteError(format!("[import_dao] DAO insert failed: {e:?}")))
+            return Err(Error::DatabaseError(format!("[import_dao] DAO insert failed: {e:?}")))
         };
 
         Ok(())
@@ -1149,7 +1149,7 @@ impl Drk {
         ) {
             Ok(r) => r,
             Err(e) => {
-                return Err(Error::RusqliteError(format!(
+                return Err(Error::DatabaseError(format!(
                     "[get_dao_by_bulla] DAO retrieval failed: {e:?}"
                 )))
             }
@@ -1167,7 +1167,7 @@ impl Drk {
         ) {
             Ok(r) => r,
             Err(e) => {
-                return Err(Error::RusqliteError(format!(
+                return Err(Error::DatabaseError(format!(
                     "[get_dao_by_name] DAO retrieval failed: {e:?}"
                 )))
             }
@@ -1226,7 +1226,7 @@ impl Drk {
         let rows = match self.wallet.query_multiple(&DAO_PROPOSALS_TABLE, &[], &[]) {
             Ok(r) => r,
             Err(e) => {
-                return Err(Error::RusqliteError(format!(
+                return Err(Error::DatabaseError(format!(
                     "[get_proposals] DAO proposalss retrieval failed: {e:?}"
                 )))
             }
@@ -1253,7 +1253,7 @@ impl Drk {
         ) {
             Ok(r) => r,
             Err(e) => {
-                return Err(Error::RusqliteError(format!(
+                return Err(Error::DatabaseError(format!(
                     "[get_dao_proposal_by_bulla] DAO proposal retrieval failed: {e:?}"
                 )))
             }
@@ -1275,7 +1275,7 @@ impl Drk {
         ) {
             Ok(r) => r,
             Err(e) => {
-                return Err(Error::RusqliteError(format!(
+                return Err(Error::DatabaseError(format!(
                     "[get_dao_proposal_votes] Votes retrieval failed: {e:?}"
                 )))
             }
@@ -1403,7 +1403,7 @@ impl Drk {
 
         let Some(dao_mint_zkbin) = zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_DAO_MINT_NS)
         else {
-            return Err(Error::RusqliteError("[dao_mint] DAO Mint circuit not found".to_string()))
+            return Err(Error::DatabaseError("[dao_mint] DAO Mint circuit not found".to_string()))
         };
 
         let dao_mint_zkbin = ZkBinary::decode(&dao_mint_zkbin.1)?;
@@ -1544,7 +1544,7 @@ impl Drk {
         };
 
         if let Err(e) = self.put_dao_proposal(&proposal_record).await {
-            return Err(Error::RusqliteError(format!(
+            return Err(Error::DatabaseError(format!(
                 "[dao_propose_transfer] Put DAO proposal failed: {e:?}"
             )))
         }
