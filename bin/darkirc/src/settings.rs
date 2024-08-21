@@ -125,7 +125,6 @@ pub fn list_configured_contacts(data: &toml::Value) -> Result<HashMap<String, Pu
             return Err(ParseFailed("Duplicate contact found"))
         }
 
-        info!("Instantiated ChaChaBox for contact \"{}\"", name);
         ret.insert(name.to_string(), public);
     }
 
