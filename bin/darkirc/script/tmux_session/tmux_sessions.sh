@@ -17,14 +17,14 @@ tmux send-keys "../../../../darkirc --config darkirc_full_node4.toml" Enter
 
 if [ -z "$1" ]; then
 	tmux new-window -t "darkirc:1" -n "weechat"
-	tmux send-keys "weechat -t -r '/server add darkirc_a 127.0.0.1/22022 -notls;/connect darkirc_a;/nick Alice'" Enter
+	tmux send-keys "weechat -t -r '/server add darkirc_a 127.0.0.1/22022 -notls;/connect darkirc_a;/set irc.server_default.nicks Alice'" Enter
 	tmux split-window -v
-	tmux send-keys "weechat -t -r '/server add darkirc_b 127.0.0.1/22023 -notls;/connect darkirc_b;/nick Bob'" Enter
+	tmux send-keys "weechat -t -r '/server add darkirc_b 127.0.0.1/22023 -notls;/connect darkirc_b;/set irc.server_default.nicks Bob'" Enter
 	tmux split-window -h
-	tmux send-keys "weechat -t -r '/server add darkirc_c 127.0.0.1/22024 -notls;/connect darkirc_c;/nick Charlie'" Enter
+	tmux send-keys "weechat -t -r '/server add darkirc_c 127.0.0.1/22024 -notls;/connect darkirc_c;/set irc.server_default.nicks Charlie'" Enter
 	tmux select-pane -t 0
 	tmux split-window -h
-	tmux send-keys "weechat -t -r '/server add darkirc_d 127.0.0.1/22025 -notls;/connect darkirc_d;/nick Dave'" Enter
+	tmux send-keys "weechat -t -r '/server add darkirc_d 127.0.0.1/22025 -notls;/connect darkirc_d;/set irc.server_default.nicks Dave'" Enter
 fi
 
 tmux attach
