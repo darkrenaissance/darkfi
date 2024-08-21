@@ -23,9 +23,28 @@
 ## Current display name
 #nickname = "NICKNAME"
 
+## ====================
+## Workspace settings
+## ====================
+##
+## You can create a shared secret (read_key) with `taud --generate`.
+## Never share this secret over unencrypted channels or with someone
+## who you do not want to be able to read all the workspace's tasks.
+## The write_public_key is used to verify task's authenticity the admin 
+## of workspace should generate and share it, while write_key is the 
+## private part and responsible for signing tasks and gaining write 
+## access, this, too, should not be shared with someone you don't 
+## want to add/edit tasks.
+## Use it like this example:
+#[workspace."#foo"]
+#read_key = "2bCqQTd8BJgeUzH7JQELZxjQuWS8aCmXZ9C6w7ktNS1v"
+#write_public_key = "Fgsc8tep4KX3Rb2drq8RxMyrHFWQ7wZaZPpF9F3GQYFG"
+#write_key = ""
+
 [workspace."darkfi-dev"]
 read_key = "2bCqQTd8BJgeUzH7JQELZxjQuWS8aCmXZ9C6w7ktNS1v"
 write_public_key = "Fgsc8tep4KX3Rb2drq8RxMyrHFWQ7wZaZPpF9F3GQYFG"
+# write_key = ""
 
 # P2P network settings
 [net]
