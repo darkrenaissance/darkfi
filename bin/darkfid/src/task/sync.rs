@@ -395,7 +395,7 @@ async fn retrieve_blocks(
     let mut received_blocks = 0;
     let total = node.validator.blockchain.headers.len_sync();
     'blocks_loop: loop {
-        for (index, peer) in peers.iter().enumerate() {
+        'peers_loop: for (index, peer) in peers.iter().enumerate() {
             // Grab the response sub reference
             let Some(ref response_sub) = peer_subs[index] else {
                 continue;
@@ -430,10 +430,20 @@ async fn retrieve_blocks(
             debug!(target: "darkfid::task::sync::retrieve_blocks", "Processing received blocks");
             received_blocks += response.blocks.len();
             if checkpoint_blocks {
-                node.validator.add_checkpoint_blocks(&response.blocks, &headers_hashes).await?;
+                if let Err(e) =
+                    node.validator.add_checkpoint_blocks(&response.blocks, &headers_hashes).await
+                {
+                    debug!(target: "darkfid::task::sync::retrieve_blocks", "Error while adding checkpoint blocks: {e}");
+                    continue
+                };
             } else {
                 for block in &response.blocks {
-                    node.validator.append_proposal(&Proposal::new(block.clone())).await?;
+                    if let Err(e) =
+                        node.validator.append_proposal(&Proposal::new(block.clone())).await
+                    {
+                        debug!(target: "darkfid::task::sync::retrieve_blocks", "Error while appending proposal: {e}");
+                        continue 'peers_loop
+                    };
                 }
             }
             last_received = (*synced_headers.last().unwrap(), *headers_hashes.last().unwrap());
