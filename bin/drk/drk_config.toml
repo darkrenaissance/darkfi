@@ -9,6 +9,9 @@
 # Blockchain network to use
 network = "testnet"
 
+# Flag indicating whether you want some fun in your life
+fun = true
+
 # Localnet blockchain network configuration
 [network_config."localnet"]
 # Path to wallet database

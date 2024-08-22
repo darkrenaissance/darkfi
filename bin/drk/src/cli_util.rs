@@ -499,6 +499,11 @@ pub fn generate_completions(shell: &str) -> Result<()> {
         token,
     ];
 
+    let fun = Arg::with_name("fun")
+        .short("f")
+        .long("fun")
+        .help("Flag indicating whether you want some fun in your life");
+
     let log = Arg::with_name("log")
         .short("l")
         .long("log")
@@ -512,7 +517,7 @@ pub fn generate_completions(shell: &str) -> Result<()> {
 
     let mut app = App::new("drk")
         .about(cli_desc!())
-        .args(&vec![config, network, log, verbose])
+        .args(&vec![config, network, fun, log, verbose])
         .subcommands(command);
 
     let shell = match Shell::from_str(shell) {

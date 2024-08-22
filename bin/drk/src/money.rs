@@ -919,7 +919,7 @@ impl Drk {
             }
         }
 
-        if !owncoins.is_empty() {
+        if self.fun && !owncoins.is_empty() {
             kaching().await;
         }
 

@@ -30,6 +30,8 @@ pub struct Drk {
     pub wallet: WalletPtr,
     /// JSON-RPC client to execute requests to darkfid daemon
     pub rpc_client: Option<RpcClient>,
+    /// Flag indicating if fun stuff are enabled
+    pub fun: bool,
 }
 
 impl Drk {
@@ -38,6 +40,7 @@ impl Drk {
         wallet_pass: String,
         endpoint: Option<Url>,
         ex: Arc<smol::Executor<'static>>,
+        fun: bool,
     ) -> Result<Self> {
         // Script kiddies protection
         if wallet_pass == "changeme" {
@@ -67,7 +70,7 @@ impl Drk {
             None
         };
 
-        Ok(Self { wallet, rpc_client })
+        Ok(Self { wallet, rpc_client, fun })
     }
 
     /// Initialize wallet with tables for drk
