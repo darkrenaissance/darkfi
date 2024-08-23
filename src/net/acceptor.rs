@@ -202,6 +202,13 @@ impl Acceptor {
                         continue
                     }
                     x => {
+                        warn!(
+                            target: "net::acceptor::run_accept_loop()",
+                            "[P2P] Unhandled OS Error: {} {}", e, x,
+                        );
+                        continue
+
+                        /*
                         error!(
                             target: "net::acceptor::run_accept_loop()",
                             "[P2P] Acceptor failed listening: {} ({})", e, x,
@@ -211,6 +218,7 @@ impl Acceptor {
                             "[P2P] Closing listener loop"
                         );
                         return Err(e.into())
+                        */
                     }
                 },
 
