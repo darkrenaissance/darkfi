@@ -32,6 +32,7 @@ use std::{
 };
 
 mod page;
+use page::{Message as Message2, Page as Page2};
 
 use crate::{
     gfx::{
@@ -59,24 +60,6 @@ fn is_zero(x: f32) -> bool {
     x.abs() < EPSILON
 }
 
-// Replace vec item with N items
-fn replace_vec_item<T>(vec: &mut Vec<T>, idx: usize, mut items: Vec<T>) {
-    assert!(idx < vec.len());
-    if items.len() == 1 {
-        let item = items.remove(0);
-        let _ = std::mem::replace(&mut vec[idx], item);
-        return
-    }
-
-    let mut drain_iter = vec.drain(idx..);
-    // Drop the item at idx which will be replaced
-    drain_iter.next().unwrap();
-    let mut tail: Vec<_> = drain_iter.collect();
-
-    vec.append(&mut items);
-    vec.append(&mut tail);
-}
-
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct ChatMsg {
     pub nick: String,
@@ -86,152 +69,8 @@ pub struct ChatMsg {
 type Timestamp = u64;
 type MessageId = [u8; 32];
 
-#[derive(Clone)]
-struct Message {
-    timest: Timestamp,
-    #[allow(dead_code)]
-    id: MessageId,
-    chatmsg: ChatMsg,
-    glyphs: Vec<Glyph>,
-}
-
 const PAGE_SIZE: usize = 10;
 const PRELOAD_PAGES: usize = 10;
-
-#[derive(Clone)]
-struct PageMeshInfo {
-    px_height: f32,
-    mesh: DrawMesh,
-}
-
-type PagePtr = Arc<Page>;
-
-struct Page {
-    msgs: Vec<Message>,
-    atlas: SyncMutex<text::RenderedAtlas>,
-    // One draw call per page.
-    // Resizing the canvas means we recalc wrapping and the mesh changes
-    mesh_inf: SyncMutex<Option<PageMeshInfo>>,
-}
-
-impl Page {
-    async fn new(msgs: Vec<Message>, render_api: &RenderApi) -> Arc<Self> {
-        let mut atlas = text::Atlas::new(render_api);
-        for msg in &msgs {
-            atlas.push(&msg.glyphs);
-        }
-        let Ok(atlas) = atlas.make().await else {
-            // what else should I do here?
-            panic!("unable to make atlas!");
-        };
-
-        Arc::new(Self { msgs, atlas: SyncMutex::new(atlas), mesh_inf: SyncMutex::new(None) })
-    }
-
-    /// Regenerates the mesh, returning the old mesh which should be freed
-    async fn regen_mesh(
-        &self,
-        clip: &Rectangle,
-        render_api: &RenderApi,
-        font_size: f32,
-        line_height: f32,
-        baseline: f32,
-        nick_colors: &[Color],
-        timestamp_color: Color,
-        text_color: Color,
-        debug_render: bool,
-    ) -> (PageMeshInfo, Option<DrawMesh>) {
-        let mut wrapped_line_idx = 0;
-
-        let mut mesh = MeshBuilder::new();
-
-        let atlas = self.atlas.lock().unwrap().clone();
-        for msg in &self.msgs {
-            let glyphs = &msg.glyphs;
-
-            let nick_color = select_nick_color(&msg.chatmsg.nick, nick_colors);
-
-            // Keep track of the 'section'
-            // Section 0 is the timestamp
-            // Section 1 is the nickname (colorized)
-            // Finally is just the message itself
-            let mut section = 2;
-
-            let mut lines = text::wrap(clip.w, font_size, glyphs);
-            // We are drawing bottom up but line wrap gives us lines in normal order
-            lines.reverse();
-            let last_idx = lines.len() - 1;
-            for (i, line) in lines.into_iter().enumerate() {
-                let off_y = (wrapped_line_idx + 1) as f32 * line_height;
-
-                if i == last_idx {
-                    section = 0;
-                }
-
-                // debug draw baseline
-                if debug_render {
-                    let y = baseline - off_y;
-                    mesh.draw_filled_box(
-                        &Rectangle { x: 0., y: y - 1., w: clip.w, h: 1. },
-                        COLOR_BLUE,
-                    );
-                }
-
-                // Render line
-                let glyph_pos_iter = GlyphPositionIter::new(font_size, &line, baseline);
-                for (mut glyph_rect, glyph) in glyph_pos_iter.zip(line.iter()) {
-                    let uv_rect = atlas.fetch_uv(glyph.glyph_id).expect("missing glyph UV rect");
-                    glyph_rect.y -= off_y;
-
-                    let color = match section {
-                        0 => timestamp_color,
-                        1 => nick_color,
-                        _ => text_color,
-                    };
-
-                    //if debug_render {
-                    //    mesh.draw_outline(&glyph_rect, COLOR_BLUE, 2.);
-                    //}
-
-                    mesh.draw_box(&glyph_rect, color, uv_rect);
-
-                    if section < 2 && is_whitespace(&glyph.substr) {
-                        section += 1;
-                    }
-                }
-                wrapped_line_idx += 1;
-            }
-        }
-
-        let px_height = wrapped_line_idx as f32 * line_height;
-
-        if debug_render {
-            mesh.draw_outline(
-                &Rectangle { x: 0., y: 0., w: clip.w, h: -px_height },
-                COLOR_GREEN,
-                1.,
-            );
-        }
-
-        let mesh = mesh.alloc(render_api).await.unwrap();
-        let mesh = mesh.draw_with_texture(atlas.texture_id);
-
-        let mesh_inf = PageMeshInfo { px_height, mesh };
-
-        let old = std::mem::replace(&mut *self.mesh_inf.lock().unwrap(), Some(mesh_inf.clone()));
-        let old = old.map(|v| v.mesh);
-
-        (mesh_inf, old)
-    }
-}
-
-fn select_nick_color(nick: &str, nick_colors: &[Color]) -> Color {
-    let mut hasher = DefaultHasher::new();
-    nick.hash(&mut hasher);
-    let i = hasher.finish() as usize;
-    let color = nick_colors[i % nick_colors.len()];
-    color
-}
 
 #[derive(Clone)]
 struct TouchInfo {
@@ -258,8 +97,7 @@ pub struct ChatView {
     text_shaper: TextShaperPtr,
     tree: sled::Tree,
 
-    pages: AsyncMutex<Vec<PagePtr>>,
-    pages2: AsyncMutex<page::PageManager>,
+    pages: AsyncMutex<page::PageManager>,
     dc_key: u64,
 
     /// Used for detecting when scrolling view
@@ -372,11 +210,11 @@ impl ChatView {
             }
             on_modify.when_change(scroll.prop(), reload_view);
 
-            async fn redraw(self_: Arc<ChatView>) {
-                self_.redraw().await;
-            }
-            on_modify.when_change(rect.clone(), redraw);
-            on_modify.when_change(debug.prop(), redraw);
+            //async fn redraw(self_: Arc<ChatView>) {
+            //    self_.redraw().await;
+            //}
+            //on_modify.when_change(rect.clone(), redraw);
+            //on_modify.when_change(debug.prop(), redraw);
 
             let mut tasks = vec![
                 mouse_wheel_task,
@@ -396,8 +234,7 @@ impl ChatView {
                 text_shaper: text_shaper.clone(),
                 tree,
 
-                pages: AsyncMutex::new(Vec::new()),
-                pages2: AsyncMutex::new(page::PageManager::new(render_api, text_shaper)),
+                pages: AsyncMutex::new(page::PageManager::new(render_api, text_shaper)),
                 dc_key: OsRng.gen(),
 
                 mouse_pos: SyncMutex::new(Point::from([0., 0.])),
@@ -667,82 +504,11 @@ impl ChatView {
         }
 
         // Add message to page
-        self.pages2.lock().await
+        self.pages
+            .lock()
+            .await
             .insert_line(self.font_size.get(), timest, message_id, nick.clone(), text.clone())
             .await;
-
-        let chatmsg = ChatMsg { nick, text };
-
-        let dt = Local.timestamp_opt(timest as i64, 0).unwrap();
-        let timestr = dt.format("%H:%M").to_string();
-
-        let text = format!("{} {} {}", timestr, chatmsg.nick, chatmsg.text);
-        let glyphs = self.text_shaper.shape(text, self.font_size.get()).await;
-
-        // Now add message to page
-
-        let mut pages = self.pages.lock().await;
-        let mut idx = None;
-        for (i, page) in pages.iter_mut().enumerate() {
-            let first_timest = page.msgs.last().unwrap().timest;
-            let last_timest = page.msgs.first().unwrap().timest;
-
-            //debug!(target: "ui::chatview", "page {i} [{first_timest}, {last_timest}]");
-            if first_timest <= timest && timest <= last_timest {
-                //debug!(target: "ui::chatview", "found page {i} [{first_timest}, {last_timest}]");
-                idx = Some(i);
-                break
-            }
-        }
-        let idx = match idx {
-            Some(idx) => idx,
-            None => {
-                //debug!(target: "ui::chatview", "no page found");
-                0
-            }
-        };
-
-        // Maybe we can write this code below better
-        if pages.is_empty() {
-            let msgs = vec![Message { timest, id: message_id, chatmsg, glyphs }];
-            let page = Page::new(msgs, &self.render_api).await;
-            pages.push(page);
-            drop(pages);
-
-            let scroll = self.scroll.get();
-            self.scrollview(scroll).await;
-            return;
-        }
-
-        let page = &mut pages[idx];
-        let mut msgs = page.msgs.clone();
-        msgs.push(Message { timest, id: message_id, chatmsg, glyphs });
-        msgs.sort_unstable_by_key(|msg| msg.timest);
-        msgs.reverse();
-
-        let chunk_size = if msgs.len() > PAGE_SIZE {
-            // Round up so we don't get a weird page with a single item
-            msgs.len() / 2 + 1
-        } else {
-            PAGE_SIZE
-        };
-
-        // Replace single page with N pages each with chunk_size messages
-        let mut new_pages = vec![];
-        for page_msgs in msgs.chunks(chunk_size).map(|m| m.to_vec()) {
-            debug!(target: "ui::chatview", "PAGE ==========================");
-            for msg in &page_msgs {
-                debug!(target: "ui::chatview", "{} {:?}", msg.timest, msg.chatmsg);
-            }
-            debug!(target: "ui::chatview", "===============================");
-
-            let new_page = Page::new(page_msgs, &self.render_api).await;
-            new_pages.push(new_page);
-        }
-
-        replace_vec_item(&mut pages, idx, new_pages);
-
-        drop(pages);
 
         // This will refresh the view, so we just use this
         let scroll = self.scroll.get();
@@ -860,9 +626,8 @@ impl ChatView {
     /// Load extra pages
     async fn preload_pages(&self) -> usize {
         // Get last page
-        let last_page = self.pages.lock().await.last().unwrap().clone();
         // get the current earliest timestamp
-        let last_timest = last_page.msgs.last().unwrap().timest;
+        let last_timest = self.pages.lock().await.last_timestamp();
 
         // iterate from there
         let key = last_timest.to_be_bytes();
@@ -895,16 +660,25 @@ impl ChatView {
             let text = format!("{} {} {}", timestr, chatmsg.nick, chatmsg.text);
             let glyphs = self.text_shaper.shape(text, self.font_size.get()).await;
 
-            msgs.push(Message { timest, id: message_id, chatmsg, glyphs });
+            let msg = Message2::new(
+                self.font_size.get(),
+                timest,
+                message_id,
+                chatmsg.nick,
+                chatmsg.text,
+                &self.text_shaper,
+            )
+            .await;
+            msgs.push(msg);
 
             if msgs.len() >= PAGE_SIZE {
                 debug!(target: "ui::chatview", "added new page. page_len={pages_len}");
+
                 let msgs = std::mem::take(&mut msgs);
-                let page = Page::new(msgs, &self.render_api).await;
-
+                let page = Page2::new(msgs, &self.render_api).await;
                 self.pages.lock().await.push(page);
-                pages_len += 1;
 
+                pages_len += 1;
                 if pages_len >= n {
                     break
                 }
@@ -914,8 +688,8 @@ impl ChatView {
         // Any remaining messages added to a short page
         if !msgs.is_empty() {
             debug!(target: "ui::chatview", "added final page. page_len={pages_len}");
-            let page = Page::new(msgs, &self.render_api).await;
 
+            let page = Page2::new(msgs, &self.render_api).await;
             self.pages.lock().await.push(page);
             pages_len += 1;
         }
@@ -925,50 +699,17 @@ impl ChatView {
         pages_len
     }
 
-    async fn get_total_height(&self, rect: &Rectangle, pages: &Vec<PagePtr>) -> f32 {
+    async fn draw_cached(&self, rect: Rectangle, scroll: &mut f32) -> Vec<DrawInstruction> {
         let font_size = self.font_size.get();
         let line_height = self.line_height.get();
         let baseline = self.baseline.get();
         let debug_render = self.debug.get();
 
+        let mut instrs = vec![];
+
         let timest_color = self.timestamp_color.get();
         let text_color = self.text_color.get();
         let nick_colors = self.read_nick_colors();
-
-        // Nudge the bottom line up slightly, otherwise chars like p will cross the bottom.
-        let mut current_height = self.descent();
-
-        for page in pages {
-            let mesh_inf = page.mesh_inf.lock().unwrap().clone();
-            let mesh_inf = match mesh_inf {
-                Some(mesh_inf) => mesh_inf,
-                None => {
-                    let (mesh_inf, old_drawmesh) = page
-                        .regen_mesh(
-                            &rect,
-                            &self.render_api,
-                            font_size,
-                            line_height,
-                            baseline,
-                            &nick_colors,
-                            timest_color.clone(),
-                            text_color.clone(),
-                            debug_render,
-                        )
-                        .await;
-                    assert!(old_drawmesh.is_none());
-                    mesh_inf
-                }
-            };
-
-            current_height += mesh_inf.px_height;
-        }
-
-        current_height
-    }
-
-    async fn draw_cached(&self, rect: Rectangle, scroll: &mut f32) -> Vec<DrawInstruction> {
-        let mut instrs = vec![];
 
         // When scrolling it can go negative so clamp it here
         if *scroll < 0. {
@@ -977,22 +718,20 @@ impl ChatView {
 
         // Make sure we have enough pages loaded.
         // If there's no more to load then adjust the scroll.
-        let mut pages = self.pages.lock().await.clone();
-        let mut total_height = self.get_total_height(&rect, &pages).await;
+        let mut pages = self.pages.lock().await;
+        let mut total_height = pages.calc_total_height(line_height, baseline);
         while total_height < *scroll + rect.h {
             debug!(target: "ui::chatview", "draw_cached() loading more pages");
 
             let n_loaded_pages = self.preload_pages().await;
 
             // We need this value after so first update it
-            total_height = self.get_total_height(&rect, &pages).await;
+            total_height = pages.calc_total_height(line_height, baseline);
 
             // No more pages available to load
             if n_loaded_pages == 0 {
                 break
             }
-
-            pages = self.pages.lock().await.clone();
         }
 
         // If lines aren't enough to fill the available buffer then start from the top
@@ -1000,15 +739,22 @@ impl ChatView {
 
         Self::clamp_scroll(scroll, total_height, rect.h);
 
+        let meshes = pages
+            .gen_meshes(
+                &rect,
+                *scroll,
+                font_size,
+                line_height,
+                baseline,
+                &nick_colors,
+                timest_color.clone(),
+                text_color.clone(),
+                debug_render,
+            )
+            .await;
+
         let mut current_height = 0.;
-        for page in pages {
-            if current_height > *scroll + rect.h {
-                break
-            }
-
-            let mesh_inf = page.mesh_inf.lock().unwrap().clone();
-            let mesh_inf = mesh_inf.expect("preload above should regen mesh");
-
+        for (height, mesh) in meshes {
             // Apply scroll and scissor
             // We use the scissor for scrolling
             // Because we use the scissor, our actual rect is now rect instead of parent_rect
@@ -1021,9 +767,10 @@ impl ChatView {
                 glam::Mat4::from_scale(glam::Vec3::new(scale_x, scale_y, 1.));
 
             instrs.push(DrawInstruction::ApplyMatrix(model));
-            instrs.push(DrawInstruction::Draw(mesh_inf.mesh));
 
-            current_height += mesh_inf.px_height;
+            instrs.push(DrawInstruction::Draw(mesh));
+
+            current_height += height;
         }
 
         instrs
@@ -1035,20 +782,7 @@ impl ChatView {
         debug!(target: "ui::chatview", "scrollview()");
         let old_scroll = self.scroll.get();
 
-        let sg = self.sg.lock().await;
-        let node = sg.get_node(self.node_id).unwrap();
-
-        let Some(parent_rect) = get_parent_rect(&sg, node) else {
-            return 0.;
-        };
-
-        if let Err(err) = eval_rect(self.rect.clone(), &parent_rect) {
-            panic!("Node {:?} bad rect property: {}", node, err);
-        }
-
-        let Ok(rect) = read_rect(self.rect.clone()) else {
-            panic!("Node {:?} bad rect property", node);
-        };
+        let rect = read_rect(self.rect.clone()).expect("bad rect property");
 
         let mut mesh_instrs = self.draw_cached(rect.clone(), &mut scroll).await;
         let mut instrs = vec![DrawInstruction::ApplyViewport(rect)];
@@ -1086,51 +820,22 @@ impl ChatView {
         }
     }
 
-    async fn regen_mesh(&self, rect: Rectangle) -> (Vec<DrawInstruction>, Vec<DrawMesh>) {
+    async fn regen_mesh(&self, rect: Rectangle) -> Vec<DrawInstruction> {
         let font_size = self.font_size.get();
         let line_height = self.line_height.get();
         let baseline = self.baseline.get();
         let debug_render = self.debug.get();
 
         let mut instrs = vec![];
-        let mut old_drawmesh = vec![];
+        //let mut old_drawmesh = vec![];
 
         let timest_color = self.timestamp_color.get();
         let text_color = self.text_color.get();
         let nick_colors = self.read_nick_colors();
 
-        let pages = self.pages.lock().await.clone();
-
-        let mut mesh_infs = vec![];
-        // First pass is to measure the height and generate the meshes
-        let mut current_height = self.descent();
-        for page in pages {
-            // We should be able to count lines and perform wrapping without having to
-            // generate the mesh and alloc buffers.
-            // We need to separate both these ops.
-            let (mesh_inf, old) = page
-                .regen_mesh(
-                    &rect,
-                    &self.render_api,
-                    font_size,
-                    line_height,
-                    baseline,
-                    &nick_colors,
-                    timest_color.clone(),
-                    text_color.clone(),
-                    debug_render,
-                )
-                .await;
-
-            current_height += mesh_inf.px_height;
-
-            if let Some(old) = old {
-                old_drawmesh.push(old);
-            }
-            mesh_infs.push(mesh_inf);
-        }
-
-        let total_height = current_height;
+        let mut pages = self.pages.lock().await;
+        pages.adjust_line_width(rect.w);
+        let total_height = pages.calc_total_height(line_height, baseline);
 
         // If lines aren't enough to fill the available buffer then start from the top
         let start_pos = if total_height < rect.h { total_height } else { rect.h };
@@ -1140,12 +845,23 @@ impl ChatView {
             self.scroll.set(scroll);
         }
 
-        let mut current_height = 0.;
-        for mesh_inf in mesh_infs {
-            if current_height > scroll + rect.h {
-                break
-            }
+        pages.invalidate_caches();
+        let meshes = pages
+            .gen_meshes(
+                &rect,
+                scroll,
+                font_size,
+                line_height,
+                baseline,
+                &nick_colors,
+                timest_color.clone(),
+                text_color.clone(),
+                debug_render,
+            )
+            .await;
 
+        let mut current_height = 0.;
+        for (height, mesh) in meshes {
             // Apply scroll and scissor
             // We use the scissor for scrolling
             // Because we use the scissor, our actual rect is now rect instead of parent_rect
@@ -1159,12 +875,12 @@ impl ChatView {
 
             instrs.push(DrawInstruction::ApplyMatrix(model));
 
-            instrs.push(DrawInstruction::Draw(mesh_inf.mesh));
+            instrs.push(DrawInstruction::Draw(mesh));
 
-            current_height += mesh_inf.px_height;
+            current_height += height;
         }
 
-        (instrs, old_drawmesh)
+        instrs
     }
 
     fn read_nick_colors(&self) -> Vec<Color> {
@@ -1183,23 +899,16 @@ impl ChatView {
 
     pub async fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
         debug!(target: "ui::chatview", "ChatView::draw()");
-        // Only used for debug messages
-        let node = sg.get_node(self.node_id).unwrap();
 
-        if let Err(err) = eval_rect(self.rect.clone(), parent_rect) {
-            panic!("Node {:?} bad rect property: {}", node, err);
-        }
-
-        let Ok(rect) = read_rect(self.rect.clone()) else {
-            panic!("Node {:?} bad rect property", node);
-        };
+        let rect = eval_rect(self.rect.clone(), parent_rect).expect("bad rect property");
 
         let timer = std::time::Instant::now();
-        let (mut mesh_instrs, old_drawmesh) = self.regen_mesh(rect.clone()).await;
+        let mut mesh_instrs = self.regen_mesh(rect.clone()).await;
         debug!(target: "ui::chatview", "regen_mesh() took {:?}", timer.elapsed());
 
         let freed_textures = vec![];
         let mut freed_buffers = vec![];
+        /*
         for old_mesh in old_drawmesh {
             freed_buffers.push(old_mesh.vertex_buffer);
             freed_buffers.push(old_mesh.index_buffer);
@@ -1207,6 +916,7 @@ impl ChatView {
             //    freed_textures.push(texture_id);
             //}
         }
+        */
 
         debug!(target: "ui::chatview", "chatview rect = {:?}", rect);
 

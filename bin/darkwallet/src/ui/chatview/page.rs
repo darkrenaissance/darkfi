@@ -44,8 +44,12 @@ const PRELOAD_PAGES: usize = 10;
 type Timestamp = u64;
 type MessageId = [u8; 32];
 
+fn is_whitespace(s: &str) -> bool {
+    s.chars().all(char::is_whitespace)
+}
+
 #[derive(Clone)]
-struct Message {
+pub(super) struct Message {
     font_size: f32,
 
     timestamp: Timestamp,
@@ -59,7 +63,7 @@ struct Message {
 }
 
 impl Message {
-    async fn new(
+    pub(super) async fn new(
         font_size: f32,
 
         timestamp: Timestamp,
@@ -98,31 +102,34 @@ impl Message {
     }
 }
 
-#[derive(Clone)]
-struct PageMeshInfo {
-    px_height: f32,
-    mesh: DrawMesh,
+enum PageVisibility {
+    Null,
+    Invisible,
+    EnterTop,
+    Visible,
+    ExitBottom,
 }
 
-struct Page {
+pub(super) struct Page {
     msgs: Vec<Message>,
     atlas: text::RenderedAtlas,
-    mesh: Option<PageMeshInfo>,
+    mesh_cache: Option<DrawMesh>,
+    visible: PageVisibility,
 }
 
 impl Page {
-    async fn new(msgs: Vec<Message>, render_api: &RenderApi) -> Self {
+    pub(super) async fn new(msgs: Vec<Message>, render_api: &RenderApi) -> Self {
         let mut atlas = text::Atlas::new(render_api);
         for msg in &msgs {
             atlas.push(&msg.unwrapped_glyphs);
         }
         let atlas = atlas.make().await.expect("unable to make atlas!");
 
-        Self { msgs, atlas, mesh: None }
+        Self { msgs, atlas, mesh_cache: None, visible: PageVisibility::Null }
     }
 
-    fn invalidate(&mut self) -> Option<DrawMesh> {
-        std::mem::replace(&mut self.mesh, None).map(|m| m.mesh)
+    fn clear_mesh(&mut self) -> Option<DrawMesh> {
+        std::mem::replace(&mut self.mesh_cache, None)
     }
 
     async fn split(mut msgs: Vec<Message>, render_api: &RenderApi) -> Vec<Self> {
@@ -152,6 +159,127 @@ impl Page {
         assert!(new_pages.len() <= 2);
         new_pages
     }
+
+    fn wrapped_lines_count(&self) -> usize {
+        let mut count = 0;
+        for msg in &self.msgs {
+            count += msg.wrapped_lines.len();
+        }
+        count
+    }
+
+    async fn gen_mesh(
+        &mut self,
+        render_api: &RenderApi,
+        clip: &Rectangle,
+        font_size: f32,
+        line_height: f32,
+        baseline: f32,
+        nick_colors: &[Color],
+        timestamp_color: Color,
+        text_color: Color,
+        debug_render: bool,
+    ) -> DrawMesh {
+        if let Some(mesh) = &self.mesh_cache {
+            return mesh.clone()
+        }
+
+        let mut line_idx = 0;
+        let mut mesh = MeshBuilder::new();
+
+        for msg in &self.msgs {
+            let nick_color = select_nick_color(&msg.nick, nick_colors);
+
+            let last_idx = msg.wrapped_lines.len() - 1;
+            for (i, line) in msg.wrapped_lines.iter().rev().enumerate() {
+                let off_y = (line_idx + 1) as f32 * line_height;
+                let is_last_line = i == last_idx;
+
+                // debug draw baseline
+                if debug_render {
+                    let y = baseline - off_y;
+                    mesh.draw_filled_box(
+                        &Rectangle { x: 0., y: y - 1., w: clip.w, h: 1. },
+                        COLOR_BLUE,
+                    );
+                }
+
+                self.render_line(
+                    &mut mesh,
+                    line,
+                    off_y,
+                    is_last_line,
+                    font_size,
+                    baseline,
+                    timestamp_color,
+                    nick_color,
+                    text_color,
+                    debug_render,
+                );
+
+                line_idx += 1;
+            }
+        }
+
+        let mesh = mesh.alloc(render_api).await.unwrap();
+        let mesh = mesh.draw_with_texture(self.atlas.texture_id);
+        self.mesh_cache = Some(mesh.clone());
+
+        mesh
+    }
+
+    fn render_line(
+        &self,
+        mesh: &mut MeshBuilder,
+        line: &Vec<Glyph>,
+        off_y: f32,
+        is_last: bool,
+        font_size: f32,
+        baseline: f32,
+        timestamp_color: Color,
+        nick_color: Color,
+        text_color: Color,
+        debug_render: bool,
+    ) {
+        // Keep track of the 'section'
+        // Section 0 is the timestamp
+        // Section 1 is the nickname (colorized)
+        // Finally is just the message itself
+        let mut section = 2;
+        if is_last {
+            section = 0;
+        }
+
+        let glyph_pos_iter = GlyphPositionIter::new(font_size, line, baseline);
+        for (mut glyph_rect, glyph) in glyph_pos_iter.zip(line.iter()) {
+            let uv_rect = self.atlas.fetch_uv(glyph.glyph_id).expect("missing glyph UV rect");
+            glyph_rect.y -= off_y;
+
+            let color = match section {
+                0 => timestamp_color,
+                1 => nick_color,
+                _ => text_color,
+            };
+
+            //if debug_render {
+            //    mesh.draw_outline(&glyph_rect, COLOR_BLUE, 2.);
+            //}
+
+            mesh.draw_box(&glyph_rect, color, uv_rect);
+
+            if is_last && section < 2 && is_whitespace(&glyph.substr) {
+                section += 1;
+            }
+        }
+    }
+}
+
+fn select_nick_color(nick: &str, nick_colors: &[Color]) -> Color {
+    let mut hasher = DefaultHasher::new();
+    nick.hash(&mut hasher);
+    let i = hasher.finish() as usize;
+    let color = nick_colors[i % nick_colors.len()];
+    color
 }
 
 struct FreedData {
@@ -177,15 +305,22 @@ pub struct PageManager {
 }
 
 impl PageManager {
-    pub fn new(
-    render_api: RenderApiPtr,
-        text_shaper: TextShaperPtr) -> Self {
-        Self { pages: vec![], freed: FreedData { buffers: vec![], textures: vec![] }, render_api, text_shaper }
+    pub(super) fn new(render_api: RenderApiPtr, text_shaper: TextShaperPtr) -> Self {
+        Self {
+            pages: vec![],
+            freed: FreedData { buffers: vec![], textures: vec![] },
+            render_api,
+            text_shaper,
+        }
+    }
+
+    pub(super) fn push(&mut self, page: Page) {
+        self.pages.push(page);
     }
 
     /// For scrolling we want to be able to adjust and measure without
     /// explicitly rendering since it may be off screen.
-    fn adjust_line_width(&mut self, line_width: f32) {
+    pub(super) fn adjust_line_width(&mut self, line_width: f32) {
         for page in &mut self.pages {
             for msg in &mut page.msgs {
                 msg.adjust_line_width(line_width);
@@ -193,20 +328,27 @@ impl PageManager {
         }
     }
 
-    fn calc_total_height(&self) -> f32 {
-        0.
+    pub(super) fn calc_total_height(&self, line_height: f32, baseline: f32) -> f32 {
+        let descent = line_height - baseline;
+        let mut height = descent;
+
+        for page in &self.pages {
+            let lines_count = page.wrapped_lines_count();
+            height += lines_count as f32 * line_height;
+        }
+
+        height
     }
 
     pub(super) async fn insert_line(
         &mut self,
         font_size: f32,
-        timestamp: Timestamp,
+        timest: Timestamp,
         message_id: MessageId,
         nick: String,
         text: String,
     ) {
-        let msg =
-            Message::new(font_size, timestamp, message_id, nick, text, &self.text_shaper).await;
+        let msg = Message::new(font_size, timest, message_id, nick, text, &self.text_shaper).await;
 
         // Now add message to page
 
@@ -219,11 +361,19 @@ impl PageManager {
 
         let mut idx = None;
         for (i, page) in self.pages.iter_mut().enumerate() {
-            //let first_timest = page.msgs.last().unwrap().timest;
+            let first_timest = page.msgs.last().unwrap().timestamp;
             let last_timest = page.msgs.first().unwrap().timestamp;
 
+            if timest < first_timest {
+                // It does not belong to any current page
+                // Create page only if there's not enough pages for the screen rect
+                // current_height < rect.h
+                // Otherwise it just means the page wasn't loaded
+                // Maybe we need to have a flag indicating there's pages not loaded in the DB still
+            }
+
             //debug!(target: "ui::chatview", "page {i} [{first_timest}, {last_timest}]");
-            if timestamp <= last_timest {
+            if first_timest <= timest && timest <= last_timest {
                 //debug!(target: "ui::chatview", "found page {i} [{first_timest}, {last_timest}]");
                 idx = Some(i);
                 break
@@ -247,6 +397,11 @@ impl PageManager {
         let mut tail: Vec<_> = drain_iter.collect();
         assert_eq!(old_pages_len, head.len() + 1 + tail.len());
 
+        // Free texture and mesh before dropping page
+        if let Some(mesh) = old_page.mesh_cache {
+            self.freed.add(mesh);
+        }
+
         let mut msgs = old_page.msgs;
         msgs.push(msg);
         let mut new_pages = Page::split(msgs, &self.render_api).await;
@@ -257,19 +412,19 @@ impl PageManager {
     }
 
     /// Clear all meshes and caches. Returns data that needs to be freed.
-    fn invalidate_caches(&mut self) {
+    pub(super) fn invalidate_caches(&mut self) {
         for page in &mut self.pages {
-            if let Some(mesh) = page.invalidate() {
+            if let Some(mesh) = page.clear_mesh() {
                 self.freed.add(mesh);
             }
         }
     }
 
     /// Generate caches and return meshes
-    pub(super) async fn get_meshes(
-        &self,
-        clip: &Rectangle,
-        render_api: &RenderApi,
+    pub(super) async fn gen_meshes(
+        &mut self,
+        rect: &Rectangle,
+        scroll: f32,
         font_size: f32,
         line_height: f32,
         baseline: f32,
@@ -277,6 +432,42 @@ impl PageManager {
         timestamp_color: Color,
         text_color: Color,
         debug_render: bool,
-    ) {
+    ) -> Vec<(f32, DrawMesh)> {
+        let mut meshes = vec![];
+
+        let descent = line_height - baseline;
+        let mut current_height = descent;
+        for page in &mut self.pages {
+            if current_height > scroll + rect.h {
+                break
+            }
+
+            let mesh = page
+                .gen_mesh(
+                    &self.render_api,
+                    rect,
+                    font_size,
+                    line_height,
+                    baseline,
+                    nick_colors,
+                    timestamp_color,
+                    text_color,
+                    debug_render,
+                )
+                .await;
+
+            let lines_count = page.wrapped_lines_count();
+            let mesh_height = lines_count as f32 * line_height;
+
+            meshes.push((mesh_height, mesh));
+
+            current_height += mesh_height;
+        }
+
+        meshes
+    }
+
+    pub(super) fn last_timestamp(&self) -> Timestamp {
+        self.pages.last().unwrap().msgs.last().unwrap().timestamp
     }
 }

@@ -107,10 +107,12 @@ impl<T: Send + Sync + 'static> OnModify<T> {
     }
 }
 
-pub fn eval_rect(rect: PropertyPtr, parent_rect: &Rectangle) -> Result<()> {
+pub fn eval_rect(rect: PropertyPtr, parent_rect: &Rectangle) -> Result<Rectangle> {
     if rect.array_len != 4 {
         return Err(Error::PropertyWrongLen)
     }
+
+    let mut rect_arr = [0.; 4];
 
     for i in 0..4 {
         if !rect.is_expr(i)? {
@@ -129,8 +131,10 @@ pub fn eval_rect(rect: PropertyPtr, parent_rect: &Rectangle) -> Result<()> {
 
         let v = machine.call()?.as_f32()?;
         rect.set_cache_f32(i, v).unwrap();
+
+        rect_arr[i] = v;
     }
-    Ok(())
+    Ok(Rectangle::from_array(rect_arr))
 }
 
 pub fn read_rect(rect_prop: PropertyPtr) -> Result<Rectangle> {
