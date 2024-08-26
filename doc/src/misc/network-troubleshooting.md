@@ -1,4 +1,4 @@
-# Network Troubleshooting
+# Network troubleshooting
 
 If you're having network issues, refer to this page to debug various issues. If you see inconsistencies in the docs: always trust bin/darkirc/darkirc_config.toml or whichever respective apps' repo config file. Documentation updates are a current WIP.
 
@@ -45,18 +45,18 @@ $ ./ping jamie3vkiwibfiwucd6vxijskbhpjdyajmzeor4mc4i7yopvpo4p7cyd.onion
 ```
 If your external address is reachable, you'll receive a `Connected!` prompt
 
-## Check Tor Connection
+## Check tor connection
 You can verify if your local node is running over Tor. Execute this command in `~/darkfi/script`. You'll need to install pysocks `pip install pysocks` prior to running `tor-test.py` the first time.
 ```
 $ python3 tor-test.py 
 ```
 If your local node is running Tor, the response should be an IP address. An error will return if Tor isn't running.
 
-### Helpful Debug Information
+### Helpful debug information
 
 If you're looking to debug an issue, try these helpful tools
 
-#### Logs in Debug Mode
+## Logs in debug mode
 
 When looking for log information refer to the respective apps' config file. 
 Change the following settings in the configuration file, `~/.config/darkirc/darkirc_config.toml` in this example
@@ -67,18 +67,18 @@ log = "/tmp/darkirc.log"
 # Set log level. 1 is info (default), 2 is debug, 3 is trace
 verbose = 2
 ```
-#### Config File
+## Config file
 
 Your config files are generated in your `~/.config/darkirc` directory. You'll have to run each daemon once for the app to spawn a config file, which you can review and edit. There is also helpful information within the config files.
 
-#### Node Information Script
+## Node information script
 
 If you're looking for information about your node, including inbound, outbound, and seed connections, execute this command in `~/darkfi/script`
 ```
 $ python3 node_get-info.py
 ```
 
-#### Hostlist Issues
+## Hostlist issues
 
 If you receive DAG sync issues, verify:
 1. a hostlist is set in the config file of the respective app.

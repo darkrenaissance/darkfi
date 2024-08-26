@@ -124,4 +124,5 @@
 - [dnetview](misc/dnetview.md)
 - [Zero2darkfi](zero2darkfi/zero2darkfi.md)
   - [darkmap](zero2darkfi/darkmap.md)
+- [Network troubleshooting](misc/network-troubleshooting.md)
 - [Glossary](glossary/glossary.md)
