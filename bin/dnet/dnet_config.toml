@@ -4,8 +4,8 @@ host = "localhost"
 port = 26660
 type = "NORMAL"
 
-[[nodes]]
-name = "lilith"
-host = "localhost"
-port = 18927
-type = "LILITH"
+#[[nodes]]
+#name = "lilith"
+#host = "localhost"
+#port = 18927
+#type = "LILITH"
