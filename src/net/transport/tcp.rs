@@ -88,14 +88,14 @@ impl TcpDialer {
             Err(err) => return Err(err),
         };
 
-        // Wrap socket in an Async wrapper.
-        let async_socket = Async::new(socket)?;
+        let stream = Async::new_nonblocking(std::net::TcpStream::from(socket))?;
 
         // Wait until the async object becomes writable.
-        let connect = async {
-            match async_socket.get_ref().take_error()? {
+        let connect = async move {
+            stream.writable().await?;
+            match stream.get_ref().take_error()? {
                 Some(err) => Err(err),
-                None => Ok(()),
+                None => Ok(stream),
             }
         };
 
@@ -109,31 +109,14 @@ impl TcpDialer {
                 pin_mut!(connect);
 
                 match select(connect, timeout).await {
-                    Either::Left((Ok(_), _)) => {
-                        let stream = {
-                            let socket = async_socket.into_inner()?;
-                            std::net::TcpStream::from(socket)
-                        };
-                        let stream = Async::<std::net::TcpStream>::try_from(stream)?;
-                        let stream = TcpStream::from(stream);
-
-                        Ok(stream)
-                    }
+                    Either::Left((Ok(stream), _)) => Ok(TcpStream::from(stream)),
                     Either::Left((Err(e), _)) => Err(e),
-
                     Either::Right((_, _)) => Err(io::ErrorKind::TimedOut.into()),
                 }
             }
             None => {
-                connect.await?;
-                let stream = {
-                    let socket = async_socket.into_inner()?;
-                    std::net::TcpStream::from(socket)
-                };
-                let stream = Async::<std::net::TcpStream>::try_from(stream)?;
-                let stream = TcpStream::from(stream);
-
-                Ok(stream)
+                let stream = connect.await?;
+                Ok(TcpStream::from(stream))
             }
         }
     }
