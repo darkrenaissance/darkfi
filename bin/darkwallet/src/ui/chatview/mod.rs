@@ -562,27 +562,6 @@ impl ChatView {
         self.line_height.get() - self.baseline.get()
     }
 
-    fn clamp_scroll(scroll: &mut f32, total_height: f32, rect_h: f32) -> bool {
-        assert!(*scroll >= 0.);
-
-        // For when we resize the window and scroll is no longer valid
-        let max_allowed_scroll = if total_height > rect_h { total_height - rect_h } else { 0. };
-        debug!(
-            target: "ui::chatview",
-            "max_allowed_scroll = {max_allowed_scroll} = total_height={total_height} - rect.h={}",
-            rect_h
-        );
-
-        if *scroll > max_allowed_scroll {
-            *scroll = max_allowed_scroll;
-            assert!(*scroll >= 0.);
-            return true
-        }
-
-        // Unchanged
-        false
-    }
-
     async fn get_parent_rect(&self) -> Option<Rectangle> {
         let sg = self.sg.lock().await;
         let node = sg.get_node(self.node_id).unwrap();
@@ -739,7 +718,15 @@ impl ChatView {
 
         let rect = read_rect(self.rect.clone()).expect("bad rect property");
 
-        let (mut mesh_instrs, freed) = self.draw_cached(rect.clone(), &mut scroll).await;
+        let mut pages = self.pages.lock().await;
+
+        if let Some(new_scroll) = self.adjust_scroll(&mut pages, scroll, rect.h).await {
+            scroll = new_scroll;
+        }
+
+        let (mut mesh_instrs, freed) = self.get_meshes(&mut pages, &rect).await;
+        drop(pages);
+
         let mut instrs = vec![DrawInstruction::ApplyViewport(rect)];
         instrs.append(&mut mesh_instrs);
 
@@ -747,6 +734,7 @@ impl ChatView {
             vec![(self.dc_key, DrawCall { instrs, dcs: vec![], z_index: self.z_index.get() })];
 
         self.render_api.replace_draw_calls(draw_calls).await;
+
         for buffer_id in freed.buffers {
             self.render_api.delete_buffer(buffer_id);
         }
@@ -758,46 +746,27 @@ impl ChatView {
         scroll - old_scroll
     }
 
-    /// Called by draw(), will invalidate cache and redraw everything
-    async fn regen_mesh(&self, rect: Rectangle) -> (Vec<DrawInstruction>, FreedData) {
-        let line_height = self.line_height.get();
-        let baseline = self.baseline.get();
-
-        let mut pages = self.pages.lock().await;
-        pages.adjust_line_width(rect.w);
-
-        let total_height = pages.calc_total_height(line_height, baseline);
-
-        let mut scroll = self.scroll.get();
-        if Self::clamp_scroll(&mut scroll, total_height, rect.h) {
-            self.scroll.set(scroll);
-        }
-
-        pages.invalidate_caches();
-
-        self.get_meshes(&mut pages, rect).await
-    }
-
-    /// Version of regen() which doesn't redraw everything.
-    async fn draw_cached(
+    /// Adjusts a proposed scroll value to clamp it within range. It will load pages until we
+    /// either run out or we have enough, then checks scroll is within range.
+    /// Returns None if the value is within range.
+    async fn adjust_scroll(
         &self,
-        rect: Rectangle,
-        scroll: &mut f32,
-    ) -> (Vec<DrawInstruction>, FreedData) {
+        pages: &mut PageManager,
+        mut scroll: f32,
+        rect_h: f32,
+    ) -> Option<f32> {
         let line_height = self.line_height.get();
         let baseline = self.baseline.get();
 
         // When scrolling it can go negative so clamp it here
-        if *scroll < 0. {
-            *scroll = 0.;
+        if scroll < 0. {
+            scroll = 0.;
         }
 
-        // Make sure we have enough pages loaded.
-        // If there's no more to load then adjust the scroll.
-        let mut pages = self.pages.lock().await;
         let mut total_height = pages.calc_total_height(line_height, baseline);
-        while total_height < *scroll + rect.h {
-            debug!(target: "ui::chatview", "draw_cached() loading more pages");
+        // Load pages until we run out or we have enough
+        while total_height < scroll + rect_h {
+            debug!(target: "ui::chatview", "set_adjusted_scroll() loading more pages");
 
             let n_loaded_pages = self.preload_pages().await;
 
@@ -810,15 +779,23 @@ impl ChatView {
             }
         }
 
-        Self::clamp_scroll(scroll, total_height, rect.h);
+        let max_allowed_scroll = if total_height > rect_h { total_height - rect_h } else { 0. };
 
-        self.get_meshes(&mut pages, rect).await
+        if scroll > max_allowed_scroll {
+            scroll = max_allowed_scroll;
+            assert!(scroll >= 0.);
+            return Some(scroll)
+        }
+
+        // Unchanged
+        None
     }
 
+    /// Returns draw calls for drawing
     async fn get_meshes(
         &self,
         pages: &mut PageManager,
-        rect: Rectangle,
+        rect: &Rectangle,
     ) -> (Vec<DrawInstruction>, FreedData) {
         let scroll = self.scroll.get();
         let font_size = self.font_size.get();
@@ -839,7 +816,7 @@ impl ChatView {
 
         let meshes = pages
             .gen_meshes(
-                &rect,
+                rect,
                 scroll,
                 font_size,
                 line_height,
@@ -881,11 +858,19 @@ impl ChatView {
 
         let rect = eval_rect(self.rect.clone(), parent_rect).expect("bad rect property");
 
-        let timer = std::time::Instant::now();
-        let (mut mesh_instrs, freed) = self.regen_mesh(rect.clone()).await;
-        debug!(target: "ui::chatview", "regen_mesh() took {:?}", timer.elapsed());
+        let mut pages = self.pages.lock().await;
+        pages.adjust_line_width(rect.w);
 
-        debug!(target: "ui::chatview", "chatview rect = {:?}", rect);
+        let mut scroll = self.scroll.get();
+        if let Some(scroll) = self.adjust_scroll(&mut pages, scroll, rect.h).await {
+            self.scroll.set(scroll);
+        }
+
+        // Drop all meshes which forces a redraw of everything
+        pages.invalidate_caches();
+
+        let (mut mesh_instrs, freed) = self.get_meshes(&mut pages, &rect).await;
+        drop(pages);
 
         let mut instrs = vec![DrawInstruction::ApplyViewport(rect)];
         instrs.append(&mut mesh_instrs);
