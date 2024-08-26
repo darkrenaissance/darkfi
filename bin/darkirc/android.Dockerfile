@@ -48,34 +48,34 @@ ENV TARGET_CC /opt/android-sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x
 
 # Make sqlcipher
 # Needed for sqlcipher amalgamation
-RUN apt install -yq tclsh libssl-dev
-RUN cd /tmp/ && \
-    wget -O sqlcipher.zip https://github.com/sqlcipher/sqlcipher/archive/refs/tags/v4.5.6.zip && \
-    unzip sqlcipher.zip && \
-    rm sqlcipher.zip && \
-    mv sqlcipher* sqlcipher && \
-    cd sqlcipher && \
-    ./configure && \
-    make sqlite3.c && \
-    mkdir build && \
-    mv *.c *.h build/ && \
-    mkdir jni && \
-    echo '\
-APP_ABI := arm64-v8a \n\
-APP_CPPFLAGS += -fexceptions -frtti \n\
-APP_STL := c++_shared' > jni/Application.mk && \
-    echo '\
-LOCAL_PATH := $(call my-dir) \n\
-include $(CLEAR_VARS) \n\
-LOCAL_MODULE            := sqlcipher-a \n\
-LOCAL_MODULE_FILENAME   := libsqlcipher \n\
-LOCAL_SRC_FILES         := ../build/sqlite3.c \n\
-LOCAL_C_INCLUDES        := ../build \n\
-LOCAL_EXPORT_C_INCLUDES := ../build \n\
-LOCAL_CFLAGS            := -DSQLITE_THREADSAFE=1 \n\
-include $(BUILD_STATIC_LIBRARY)' > jni/Android.mk && \
-    /opt/android-sdk/ndk/25.2.9519653/ndk-build
-ENV RUSTFLAGS "-L/tmp/sqlcipher/obj/local/arm64-v8a/"
+#RUN apt install -yq tclsh libssl-dev
+#RUN cd /tmp/ && \
+#    wget -O sqlcipher.zip https://github.com/sqlcipher/sqlcipher/archive/refs/tags/v4.5.6.zip && \
+#    unzip sqlcipher.zip && \
+#    rm sqlcipher.zip && \
+#    mv sqlcipher* sqlcipher && \
+#    cd sqlcipher && \
+#    ./configure && \
+#    make sqlite3.c && \
+#    mkdir build && \
+#    mv *.c *.h build/ && \
+#    mkdir jni && \
+#    echo '\
+#APP_ABI := arm64-v8a \n\
+#APP_CPPFLAGS += -fexceptions -frtti \n\
+#APP_STL := c++_shared' > jni/Application.mk && \
+#    echo '\
+#LOCAL_PATH := $(call my-dir) \n\
+#include $(CLEAR_VARS) \n\
+#LOCAL_MODULE            := sqlcipher-a \n\
+#LOCAL_MODULE_FILENAME   := libsqlcipher \n\
+#LOCAL_SRC_FILES         := ../build/sqlite3.c \n\
+#LOCAL_C_INCLUDES        := ../build \n\
+#LOCAL_EXPORT_C_INCLUDES := ../build \n\
+#LOCAL_CFLAGS            := -DSQLITE_THREADSAFE=1 \n\
+#include $(BUILD_STATIC_LIBRARY)' > jni/Android.mk && \
+#    /opt/android-sdk/ndk/25.2.9519653/ndk-build
+#ENV RUSTFLAGS "-L/tmp/sqlcipher/obj/local/arm64-v8a/"
 
 # Make directory for user code
 RUN mkdir /root/src
