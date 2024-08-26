@@ -13,11 +13,7 @@ def send(timest, nick, msg):
 
     api.call_method(node_id, "insert_line", arg_data)
 
-#for i in range(28):
-#for i in range(27):
-#    send(1722944640000 + i, "hhi12", "hello 123")
-#    time.sleep(0.1)
-#time.sleep(0.5)
-#send(1722944641015, "john", "hpqjyzzxxdhio")
-#time.sleep(1)
-send(1722944642015, "clr", "hello1234ppjjh")
+for i in range(27):
+    send(1722944640000 + i, "hhi12", "hello 123")
+    time.sleep(0.1)
+

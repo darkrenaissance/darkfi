@@ -59,7 +59,6 @@ pub(super) struct Message {
 
     unwrapped_glyphs: Vec<Glyph>,
     wrapped_lines: Vec<Vec<Glyph>>,
-    line_width: f32,
 }
 
 impl Message {
@@ -71,6 +70,7 @@ impl Message {
         nick: String,
         text: String,
 
+        line_width: f32,
         text_shaper: &TextShaper,
     ) -> Self {
         let dt = Local.timestamp_opt(timestamp as i64, 0).unwrap();
@@ -79,26 +79,15 @@ impl Message {
         let linetext = format!("{} {} {}", timestr, nick, text);
         let unwrapped_glyphs = text_shaper.shape(linetext, font_size).await;
 
-        Self {
-            font_size,
-            timestamp,
-            id,
-            nick,
-            text,
-            unwrapped_glyphs,
-            wrapped_lines: vec![],
-            line_width: 0.,
-        }
+        let mut self_ =
+            Self { font_size, timestamp, id, nick, text, unwrapped_glyphs, wrapped_lines: vec![] };
+        self_.adjust_line_width(line_width);
+        self_
     }
 
     fn adjust_line_width(&mut self, line_width: f32) {
-        if (line_width - self.line_width).abs() < f32::EPSILON {
-            return;
-        }
-
         // Invalidate wrapped_glyphs and recalc
         self.wrapped_lines = text::wrap(line_width, self.font_size, &self.unwrapped_glyphs);
-        self.line_width = line_width;
     }
 }
 
@@ -282,9 +271,10 @@ fn select_nick_color(nick: &str, nick_colors: &[Color]) -> Color {
     color
 }
 
-struct FreedData {
-    buffers: Vec<BufferId>,
-    textures: Vec<TextureId>,
+#[derive(Default)]
+pub(super) struct FreedData {
+    pub(super) buffers: Vec<BufferId>,
+    pub(super) textures: Vec<TextureId>,
 }
 
 impl FreedData {
@@ -299,19 +289,15 @@ impl FreedData {
 
 pub struct PageManager {
     pages: Vec<Page>,
-    freed: FreedData,
+    pub(super) freed: FreedData,
+    pub(super) line_width: f32,
     render_api: RenderApiPtr,
     text_shaper: TextShaperPtr,
 }
 
 impl PageManager {
     pub(super) fn new(render_api: RenderApiPtr, text_shaper: TextShaperPtr) -> Self {
-        Self {
-            pages: vec![],
-            freed: FreedData { buffers: vec![], textures: vec![] },
-            render_api,
-            text_shaper,
-        }
+        Self { pages: vec![], freed: Default::default(), line_width: 0., render_api, text_shaper }
     }
 
     pub(super) fn push(&mut self, page: Page) {
@@ -321,6 +307,11 @@ impl PageManager {
     /// For scrolling we want to be able to adjust and measure without
     /// explicitly rendering since it may be off screen.
     pub(super) fn adjust_line_width(&mut self, line_width: f32) {
+        if (line_width - self.line_width).abs() < f32::EPSILON {
+            return;
+        }
+        self.line_width = line_width;
+
         for page in &mut self.pages {
             for msg in &mut page.msgs {
                 msg.adjust_line_width(line_width);
@@ -348,7 +339,16 @@ impl PageManager {
         nick: String,
         text: String,
     ) {
-        let msg = Message::new(font_size, timest, message_id, nick, text, &self.text_shaper).await;
+        let msg = Message::new(
+            font_size,
+            timest,
+            message_id,
+            nick,
+            text,
+            self.line_width,
+            &self.text_shaper,
+        )
+        .await;
 
         // Now add message to page
 

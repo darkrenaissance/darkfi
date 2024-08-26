@@ -117,6 +117,9 @@ impl Window {
 
         let mut draw_calls = vec![];
         let mut child_calls = vec![];
+        let mut freed_textures = vec![];
+        let mut freed_buffers = vec![];
+
         for child_inf in self_node.get_children2() {
             let node = sg.get_node(child_inf.id).unwrap();
             debug!(target: "ui::win", "Window::draw() calling draw() for node '{}':{}", node.name, node.id);
@@ -131,6 +134,8 @@ impl Window {
             let Some(mut draw_update) = dcs else { continue };
             draw_calls.append(&mut draw_update.draw_calls);
             child_calls.push(draw_update.key);
+            freed_textures.append(&mut draw_update.freed_textures);
+            freed_buffers.append(&mut draw_update.freed_buffers);
         }
 
         let root_dc = DrawCall { instrs: vec![], dcs: child_calls, z_index: 0 };
@@ -138,6 +143,14 @@ impl Window {
         //debug!(target: "ui::win", "  => {:?}", draw_calls);
 
         self.render_api.replace_draw_calls(draw_calls).await;
+
+        for texture in freed_textures {
+            self.render_api.delete_texture(texture);
+        }
+        for buff in freed_buffers {
+            self.render_api.delete_buffer(buff);
+        }
+
         debug!(target: "ui::win", "Window::draw() - replaced draw call");
     }
 }
