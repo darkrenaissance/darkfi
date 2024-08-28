@@ -8,7 +8,7 @@
 #datastore = "~/.local/darkfi/taud_db"
 
 ## Sets DB logs replay datastore path
-#replay_datastore = "~/.local/darkfi/replayed_darkirc_db"
+#replay_datastore = "~/.local/darkfi/replayed_taud_db"
 
 ## Run in replay mode to store Sled DB instructions
 ## (for eventgraph debugging tool)
@@ -19,6 +19,12 @@
 
 ## Whether to pipe notifications or not
 #piped = false
+
+## Number of attempts to sync the DAG.
+#sync_attempts = 5
+
+## Number of seconds to wait before trying again if sync fails.
+#sync_timeout = 10
 
 ## Current display name
 #nickname = "NICKNAME"
@@ -36,7 +42,7 @@
 ## access, this, too, should not be shared with someone you don't 
 ## want to add/edit tasks.
 ## Use it like this example:
-#[workspace."#foo"]
+#[workspace."foo"]
 #read_key = "2bCqQTd8BJgeUzH7JQELZxjQuWS8aCmXZ9C6w7ktNS1v"
 #write_public_key = "Fgsc8tep4KX3Rb2drq8RxMyrHFWQ7wZaZPpF9F3GQYFG"
 #write_key = ""

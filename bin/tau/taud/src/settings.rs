@@ -50,6 +50,14 @@ pub struct Args {
     #[structopt(long)]
     pub replay_mode: bool,
 
+    /// Number of attempts to sync the DAG.
+    #[structopt(long, default_value = "5")]
+    pub sync_attempts: u8,
+
+    /// Number of seconds to wait before trying again if sync fails.
+    #[structopt(long, default_value = "10")]
+    pub sync_timeout: u8,
+
     #[structopt(flatten)]
     pub net: SettingsOpt,
 

@@ -527,22 +527,25 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
     info!(target: "taud", "Waiting for some P2P connections...");
     sleep(5).await;
 
-    // We'll attempt to sync 5 times
+    // We'll attempt to sync {sync_attempts} times
     if !settings.skip_dag_sync {
-        for i in 1..=6 {
+        for i in 1..=settings.sync_attempts {
             info!(target: "taud", "Syncing event DAG (attempt #{})", i);
             match event_graph.dag_sync().await {
                 Ok(()) => break,
                 Err(e) => {
-                    if i == 6 {
+                    if i == settings.sync_attempts {
                         error!(target: "taud", "Failed syncing DAG. Exiting.");
                         p2p.stop().await;
                         return Err(Error::DagSyncFailed)
                     } else {
                         // TODO: Maybe at this point we should prune or something?
                         // TODO: Or maybe just tell the user to delete the DAG from FS.
-                        error!(target: "taud", "Failed syncing DAG ({}), retrying in 10s...", e);
-                        sleep(10).await;
+                        error!(
+                            "Failed syncing DAG ({}), retrying in {}s...",
+                            e, settings.sync_timeout
+                        );
+                        sleep(settings.sync_timeout.into()).await;
                     }
                 }
             }
