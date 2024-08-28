@@ -37,7 +37,10 @@ use futures::{select, FutureExt};
 use libc::mkfifo;
 use log::{debug, error, info};
 use rand::rngs::OsRng;
-use ring::signature::{Ed25519KeyPair, KeyPair, Signature, UnparsedPublicKey, ED25519};
+use ring::{
+    rand::SystemRandom,
+    signature::{Ed25519KeyPair, KeyPair, Signature, UnparsedPublicKey, ED25519},
+};
 use smol::{fs, stream::StreamExt};
 use structopt_toml::StructOptToml;
 use tinyjson::JsonValue;
@@ -465,12 +468,27 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
                 error!(target: "taud", "Wrong workspace try again");
                 continue
             }
+
+            // Chachabox secret key (read_key) used for encrypting tasks.
             let secret_key = SecretKey::generate(&mut OsRng);
             let encoded = bs58::encode(secret_key.to_bytes());
 
+            // Ed25519 secret key (write_key) used for signing tasks.
+            let rng = SystemRandom::new();
+            let pkcs8_bytes = Ed25519KeyPair::generate_pkcs8(&rng).unwrap();
+            // openssl genpkey -algorithm ED25519
+            let kp = Ed25519KeyPair::from_pkcs8(pkcs8_bytes.as_ref()).unwrap();
+            let sk = bs58::encode(pkcs8_bytes).into_string();
+
+            // Ed25519 public key (write_public_key) used for verifying tasks.
+            let peer_public_key_bytes = kp.public_key().as_ref();
+            let pk = bs58::encode(peer_public_key_bytes).into_string();
+
+            println!("Please add the following to the config file:");
             println!("[workspace.\"{}\"]", workspace);
             println!("read_key = \"{}\"", encoded.into_string());
-            println!("Please add it to the config file.");
+            println!("write_key = \"{}\"", sk);
+            println!("write_public_key = \"{}\"", pk);
             break
         }
 
