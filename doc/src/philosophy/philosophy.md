@@ -219,10 +219,21 @@ to enact their vision and put their ideas into practice.
 
 ## Philosophy Meetings
 
-Every other Wednesday at 16:00 CET, there is a meeting on 
+Every other Wednesday at 16:00 CET/14:00 UTC/10:00 EST, there is a meeting on 
 [darkirc](https://darkrenaissance.github.io/darkfi/misc/darkirc/darkirc.html) in 
 `#philosophy`.  Come and discuss different philosophy texts with fellow
 community members.
+
+
+Schedule for upcoming meetings: 
+* 4th of September:
+[Infocracy, The End of Communicative Action, & Digital Rationality](https://libgen.is/book/index.php?md5=A0E3362AE17379B6F48CEAC520319422)
+3 readings by Byung-Chul Han
+* 18th of September
+* 2nd of October
+* 16th of October
+* 30th of October
+
 
 <!-- TODO:
 - liberal vs expansive democracy
