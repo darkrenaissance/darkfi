@@ -219,7 +219,10 @@ to enact their vision and put their ideas into practice.
 
 ## Philosophy Meetings
 
-Every other Wednesday at 16:00 CET, there is a meeting on [darkirc](https://darkrenaissance.github.io/darkfi/misc/darkirc/darkirc.html) in `#philosophy`.  Come and discuss different philosophy texts with fellow community members.
+Every other Wednesday at 16:00 CET, there is a meeting on 
+[darkirc](https://darkrenaissance.github.io/darkfi/misc/darkirc/darkirc.html) in 
+`#philosophy`.  Come and discuss different philosophy texts with fellow
+community members.
 
 <!-- TODO:
 - liberal vs expansive democracy
