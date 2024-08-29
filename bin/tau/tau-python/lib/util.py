@@ -13,7 +13,9 @@ def now():
 def month_to_unix(month=None):
     month_year = month if month is not None else datetime.now(UTC).strftime("%m%y")
     try:
-        unix = int(datetime.strptime(month_year,"%m%y").timestamp())
+        dt = datetime.strptime(month_year,"%m%y")
+        dt = dt.replace(tzinfo=UTC)
+        unix = int(dt.timestamp())
     except ValueError:
         print("Error parsing date!")
         exit(-1)
