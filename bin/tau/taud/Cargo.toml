@@ -36,7 +36,6 @@ ring = "0.17.8"
 
 # Encoding and parsing
 bs58 = "0.5.1"
-hex = "0.4.3"
 toml = "0.8.19"
 
 # Misc
