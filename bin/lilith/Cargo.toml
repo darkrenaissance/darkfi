@@ -9,7 +9,7 @@ homepage = "https://dark.fi"
 repository = "https://codeberg.org/darkrenaissance/darkfi"
 
 [dependencies]
-darkfi = {path = "../../", features = ["toml", "async-daemonize", "net", "rpc"]}
+darkfi = {path = "../../", features = ["toml", "async-daemonize", "rpc"]}
 
 # Misc
 async-trait = "0.1.81"

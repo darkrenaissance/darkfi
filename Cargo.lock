@@ -2136,8 +2136,6 @@ dependencies = [
  "halo2_proofs",
  "log",
  "rand 0.8.5",
- "simplelog",
- "sled",
  "smol",
  "thiserror",
 ]
@@ -2174,8 +2172,6 @@ dependencies = [
  "lazy_static",
  "log",
  "rand 0.8.5",
- "simplelog",
- "sled",
  "smol",
  "thiserror",
 ]

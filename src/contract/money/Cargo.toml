@@ -17,7 +17,7 @@ thiserror = "1.0.61"
 
 # The following dependencies are used for the client API and
 # probably shouldn't be in WASM
-darkfi = { path = "../../../", features = ["zk", "rpc", "blockchain", "validator"], optional = true }
+darkfi = { path = "../../../", features = ["zk"], optional = true }
 chacha20poly1305 = { version = "0.10.1", optional = true }
 halo2_proofs = { version = "0.3.0", optional = true }
 log = { version = "0.4.22", optional = true }
@@ -29,9 +29,6 @@ lazy_static = "1.5.0"
 # These are used just for the integration tests
 [dev-dependencies]
 smol = "2.0.0"
-darkfi = {path = "../../../", features = ["tx", "blockchain"]}
-simplelog = "0.12.2"
-sled = "0.34.7"
 darkfi-contract-test-harness = {path = "../test-harness"}
 
 # We need to disable random using "custom" which makes the crate a noop

@@ -161,7 +161,6 @@ validator = [
     "lazy_static",
     "randomx",
 
-    "rpc",
     "wasm-runtime",
 ]
 
@@ -181,8 +180,6 @@ event-graph = [
     "darkfi-serial",
     "darkfi-serial/collections",
     "darkfi-serial/hash",
-
-    "rpc",
 ]
 
 p2p-unix = []
