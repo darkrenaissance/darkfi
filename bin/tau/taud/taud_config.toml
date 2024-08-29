@@ -50,7 +50,7 @@
 [workspace."darkfi-dev"]
 read_key = "4WhacatfZ314eM4aE2MYDUmDZczKpHwZo2u9zwQRaGhE"
 write_public_key = "Fgsc8tep4KX3Rb2drq8RxMyrHFWQ7wZaZPpF9F3GQYFG"
-# write_key = ""
+#write_key = ""
 
 # P2P network settings
 [net]
@@ -61,16 +61,16 @@ hostlist = "~/.local/darkfi/taud/hostlist.tsv"
 #inbound = ["tcp+tls://0.0.0.0:23331", "tcp+tls://[::]:23331"]
 
 ## Outbound connection slots
-# outbound_connections = 8
+#outbound_connections = 8
 
 ## Inbound connection slots
 #inbound_connections = 8
 
 ## White connection percent
-# gold_connect_count = 2
+#gold_connect_count = 2
 
 ## White connection percent
-# white_connect_percent = 70
+#white_connect_percent = 70
 
 ## Addresses we want to advertise to peers (optional)
 ## These should be reachable externally
@@ -83,6 +83,9 @@ seeds = [
     # "tor://rwjgdy7bs4e3eamgltccea7p5yzz3alfi2vps2xefnihurbmpd3b7hqd.onion:5362"
     # "tor://f5mldz3utfrj5esn7vy7osa6itusotix6nsjhv4uirshkcvgglb3xdqd.onion:5362"
 ]
+
+## Manual peers to connect to
+#peers = []
 
 # Whitelisted transports for outbound connections
 allowed_transports = ["tcp+tls"]
