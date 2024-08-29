@@ -21,6 +21,7 @@ use darkfi::{
     validator::{consensus::Fork, pow::PoWModule},
     Result,
 };
+use sled_overlay::sled;
 
 #[test]
 fn forks() -> Result<()> {

@@ -44,6 +44,7 @@ use darkfi_sdk::{
 use darkfi_serial::Encodable;
 use log::debug;
 use num_bigint::BigUint;
+use sled_overlay::sled;
 
 /// Utility module for caching ZK proof PKs and VKs
 pub mod vks;

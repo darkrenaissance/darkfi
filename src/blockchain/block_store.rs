@@ -26,9 +26,9 @@ use darkfi_sdk::{
 };
 #[cfg(feature = "async-serial")]
 use darkfi_serial::async_trait;
-
 use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
 use num_bigint::BigUint;
+use sled_overlay::sled;
 
 use crate::{tx::Transaction, util::time::Timestamp, Error, Result};
 

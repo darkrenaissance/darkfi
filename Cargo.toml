@@ -118,7 +118,6 @@ wasmer-compiler-singlepass = {version = "4.3.4", optional = true}
 wasmer-middlewares = {version = "4.3.4", optional = true}
 
 # Blockchain store
-sled = {version = "0.34.7", optional = true}
 sled-overlay = {version = "0.1.3", optional = true}
 
 # Miner
@@ -147,7 +146,6 @@ async-sdk = [
 ]
 
 blockchain = [
-    "sled",
     "sled-overlay",
     "num-bigint",
 
@@ -173,7 +171,6 @@ geode = [
 event-graph = [
     "blake3",
     "num-bigint",
-    "sled",
     "sled-overlay",
     "bs58",
 

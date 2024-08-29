@@ -22,6 +22,7 @@ use std::sync::Arc;
 
 use log::{info, warn};
 use rand::{prelude::SliceRandom, rngs::ThreadRng};
+use sled_overlay::sled;
 use smol::{channel, future, Executor};
 use url::Url;
 

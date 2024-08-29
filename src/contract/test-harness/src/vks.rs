@@ -45,6 +45,7 @@ use darkfi_sdk::crypto::{DAO_CONTRACT_ID, MONEY_CONTRACT_ID};
 use darkfi_serial::{deserialize, serialize};
 
 use log::debug;
+use sled_overlay::sled;
 
 /// Update these if any circuits are changed.
 /// Delete the existing cachefiles, and enable debug logging, you will see the new hashes.

@@ -260,7 +260,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
     // Initialize or open sled database
     let db_path = expand_path(&blockchain_config.database)?;
-    let sled_db = sled::open(&db_path)?;
+    let sled_db = sled_overlay::sled::open(&db_path)?;
 
     // Initialize validator configuration
     let pow_fixed_difficulty = if let Some(diff) = blockchain_config.pow_fixed_difficulty {

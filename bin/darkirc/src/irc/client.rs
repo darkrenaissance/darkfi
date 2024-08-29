@@ -32,6 +32,7 @@ use darkfi::{
 use darkfi_serial::{deserialize_async_partial, serialize_async};
 use futures::FutureExt;
 use log::{debug, error, warn};
+use sled_overlay::sled;
 use smol::{
     io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader},
     lock::{OnceCell, RwLock},

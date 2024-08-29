@@ -34,6 +34,7 @@ use darkfi::{
 use log::{debug, error, info};
 use rand::rngs::OsRng;
 use settings::list_configured_contacts;
+use sled_overlay::sled;
 use smol::{fs, lock::Mutex, stream::StreamExt, Executor};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;

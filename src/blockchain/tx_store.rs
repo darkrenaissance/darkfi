@@ -20,6 +20,7 @@ use std::collections::HashMap;
 
 use darkfi_sdk::tx::TransactionHash;
 use darkfi_serial::{deserialize, serialize};
+use sled_overlay::sled;
 
 use crate::{tx::Transaction, Error, Result};
 

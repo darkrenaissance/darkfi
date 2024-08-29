@@ -44,6 +44,7 @@ use darkfi_sdk::{
     ContractCall,
 };
 use darkfi_serial::{deserialize_async, serialize_async, AsyncEncodable};
+use sled_overlay::sled;
 
 #[derive(Parser)]
 #[command(about = cli_desc!())]

@@ -422,6 +422,7 @@ mod tests {
     };
 
     use darkfi_sdk::num_traits::Num;
+    use sled_overlay::sled;
     use num_bigint::BigUint;
 
     use crate::{

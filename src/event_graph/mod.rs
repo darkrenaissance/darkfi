@@ -26,7 +26,7 @@ use std::{
 use darkfi_serial::{deserialize_async, serialize_async};
 use log::{debug, error, info, warn};
 use num_bigint::BigUint;
-use sled_overlay::SledTreeOverlay;
+use sled_overlay::{sled, SledTreeOverlay};
 use smol::{
     lock::{OnceCell, RwLock},
     Executor,

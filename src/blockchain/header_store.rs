@@ -24,10 +24,10 @@ use darkfi_sdk::{
     hex::decode_hex_arr,
     AsHex,
 };
-
 #[cfg(feature = "async-serial")]
 use darkfi_serial::async_trait;
 use darkfi_serial::{deserialize, serialize, Encodable, SerialDecodable, SerialEncodable};
+use sled_overlay::sled;
 
 use crate::{util::time::Timestamp, Error, Result};
 

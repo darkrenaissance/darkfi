@@ -41,6 +41,7 @@ use ring::{
     rand::SystemRandom,
     signature::{Ed25519KeyPair, KeyPair, Signature, UnparsedPublicKey, ED25519},
 };
+use sled_overlay::sled;
 use smol::{fs, stream::StreamExt};
 use structopt_toml::StructOptToml;
 use tinyjson::JsonValue;

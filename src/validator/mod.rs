@@ -21,6 +21,7 @@ use std::{collections::HashMap, sync::Arc};
 use darkfi_sdk::crypto::MerkleTree;
 use log::{debug, error, info, warn};
 use num_bigint::BigUint;
+use sled_overlay::sled;
 use smol::lock::RwLock;
 
 use crate::{

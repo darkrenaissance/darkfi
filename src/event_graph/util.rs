@@ -26,6 +26,7 @@ use std::{
 
 use darkfi_serial::{deserialize, deserialize_async, serialize};
 use log::error;
+use sled_overlay::sled;
 use tinyjson::JsonValue;
 
 use crate::{

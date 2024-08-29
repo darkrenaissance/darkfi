@@ -21,6 +21,7 @@ use std::io::Cursor;
 use darkfi_sdk::crypto::ContractId;
 use darkfi_serial::{deserialize, serialize};
 use log::{debug, error};
+use sled_overlay::sled;
 
 use crate::{
     zk::{empty_witnesses, VerifyingKey, ZkCircuit},

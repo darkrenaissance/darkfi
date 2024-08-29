@@ -37,6 +37,7 @@ use darkfi_sdk::{
     ContractCall,
 };
 use darkfi_serial::Encodable;
+use sled_overlay::sled;
 use num_bigint::BigUint;
 use url::Url;
 
