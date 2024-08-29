@@ -14,7 +14,7 @@ darkfi-serial = {path = "../../../src/serial", features = ["hash"]}
 
 # Misc
 async-trait = "0.1.81"
-blake3 = "1.5.1"
+blake3 = "1.5.4"
 log = "0.4.22"
 tinyjson = "2.5.1"
 url = "2.5.2"
@@ -24,10 +24,10 @@ easy-parallel = "3.3.1"
 signal-hook-async-std = "0.2.2"
 signal-hook = "0.3.17"
 simplelog = "0.12.2"
-smol = "2.0.0"
+smol = "2.0.1"
 
 # Argument parsing
-serde = {version = "1.0.204", features = ["derive"]}
+serde = {version = "1.0.209", features = ["derive"]}
 structopt = "0.3.26"
 structopt-toml = "0.5.1"
 

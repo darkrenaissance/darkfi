@@ -9,11 +9,11 @@ edition = "2021"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-blake3 = "1.5.1"
+blake3 = "1.5.4"
 bs58 = "0.5.1"
 darkfi-sdk = { path = "../../sdk" }
 darkfi-serial = { path = "../../serial", features = ["derive", "crypto"] }
-thiserror = "1.0.61"
+thiserror = "1.0.63"
 
 # The following dependencies are used for the client API and
 # probably shouldn't be in WASM
@@ -28,7 +28,7 @@ lazy_static = "1.5.0"
 
 # These are used just for the integration tests
 [dev-dependencies]
-smol = "2.0.0"
+smol = "2.0.1"
 darkfi-contract-test-harness = {path = "../test-harness"}
 
 # We need to disable random using "custom" which makes the crate a noop

@@ -12,6 +12,6 @@ edition = "2021"
 darkfi = {path = "../../", features = ["net"]}
 darkfi-serial = {path = "../../src/serial"}
 url = {version = "2.5.2", features = ["serde"]}
-smol = "2.0.0"
+smol = "2.0.1"
 
 [workspace]

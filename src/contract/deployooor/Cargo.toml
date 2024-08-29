@@ -11,8 +11,8 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 darkfi-sdk = { path = "../../sdk" }
 darkfi-serial = { path = "../../serial", features = ["derive", "crypto"] }
-thiserror = "1.0.61"
-wasmparser = "0.212.0"
+thiserror = "1.0.63"
+wasmparser = "0.216.0"
 
 # The following dependencies are used for the client API and
 # probably shouldn't be in WASM
@@ -23,7 +23,7 @@ rand = { version = "0.8.5", optional = true }
 # These are used for integration tests
 [dev-dependencies]
 darkfi-contract-test-harness = {path = "../test-harness"}
-smol = "2.0.0"
+smol = "2.0.1"
 
 # We need to disable random using "custom" which makes the crate a noop
 # so the wasm32-unknown-unknown target is enabled.
