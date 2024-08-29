@@ -21,10 +21,11 @@ use super::{
     session::{SESSION_DEFAULT, SESSION_SEED},
 };
 
-/// Manages the tasks for the network protocol. Used by other connection
-/// protocols to handle asynchronous task execution across the network.
-/// Runs all tasks that are handed to it on an executor that has stopping
-/// functionality.
+/// Manages the tasks for the network protocol.
+///
+/// Used by other connection protocols to handle asynchronous task execution
+/// across the network. Runs all tasks that are handed to it on an executor
+/// that has stopping functionality.
 pub mod protocol_jobs_manager;
 
 /// Protocol for version information handshake between nodes at the start
@@ -38,17 +39,20 @@ pub mod protocol_jobs_manager;
 pub mod protocol_version;
 pub use protocol_version::ProtocolVersion;
 
-/// Protocol for ping-pong keepalive messages. Implements ping message and
-/// pong response. These messages are like the network heartbeat - they are
-/// sent continually between nodes, to ensure each node is still alive and
-/// active. Ping-pong messages ensure that the network doesn't time out.
+/// Protocol for ping-pong keepalive messages.
+///
+/// Implements ping message and pong response. These messages are like the
+/// network heartbeat - they are sent continually between nodes, to ensure
+/// each node is still alive and active. Ping-pong messages ensure that the
+/// network doesn't time out.
 pub mod protocol_ping;
 pub use protocol_ping::ProtocolPing;
 
-/// Protocol for address and get-address messages. Implements how nodes
-/// exchange connection information about other nodes on the network.
-/// Address and get-address messages are exchanged continually alongside
-/// ping-pong messages as part of a network connection.
+/// Protocol for address and get-address messages.
+///
+/// Implements how nodes exchange connection information about other nodes
+/// on the network. Address and get-address messages are exchanged continually
+/// alongside ping-pong messages as part of a network connection.
 ///
 /// Protocol starts by creating a subscription to address and get-address
 /// messages. Then the protocol sends out a get-address message and waits

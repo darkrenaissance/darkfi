@@ -35,6 +35,7 @@ use crate::{tx::Transaction, util::time::Timestamp, Error, Result};
 use super::{parse_record, parse_u32_key_record, Header, HeaderHash, SledDbOverlayPtr};
 
 /// This struct represents a tuple of the form (`header`, `txs`, `signature`).
+///
 /// The header and transactions are stored as hashes, serving as pointers to the actual data
 /// in the sled database.
 /// NOTE: This struct fields are considered final, as it represents a blockchain block.
@@ -67,10 +68,11 @@ impl Block {
     }
 }
 
-/// Structure representing full block data, acting as
-/// a wrapper struct over `Block`, enabling us to include
-/// more information that might be used in different block
-/// version, without affecting the original struct.
+/// Structure representing full block data.
+///
+/// It acts as a wrapper struct over `Block`, enabling us
+/// to include more information that might be used in different
+/// block versions, without affecting the original struct.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct BlockInfo {
     /// Block header data
@@ -161,6 +163,7 @@ pub struct BlockOrder {
 }
 
 /// Auxiliary structure used to keep track of block ranking information.
+///
 /// Note: we only need height cummulative ranks, but we also keep its actual
 /// ranks, so we can verify the sequence and/or know specific block height
 /// ranks, if ever needed.
@@ -188,6 +191,7 @@ impl BlockRanks {
 }
 
 /// Auxiliary structure used to keep track of block PoW difficulty information.
+///
 /// Note: we only need height cummulative difficulty, but we also keep its actual
 /// difficulty, so we can verify the sequence and/or know specific block height
 /// difficulty, if ever needed.

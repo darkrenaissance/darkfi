@@ -843,11 +843,13 @@ impl HostContainer {
 }
 
 /// Main parent class for the management and manipulation of
-/// hostlists. Keeps track of hosts and their current state via the
-/// HostRegistry, and stores hostlists and associated methods in the
-/// HostContainer. Also operates two publishers to notify other parts
-/// of the code base when new channels have been created or new hosts
-/// have been added to the hostlist.
+/// hostlists.
+///
+/// Keeps track of hosts and their current state via the HostRegistry,
+/// and stores hostlists and associated methods in the HostContainer.
+/// Also operates two publishers to notify other parts of the code base
+/// when new channels have been created or new hosts have been added to
+/// the hostlist.
 pub struct Hosts {
     /// A registry that tracks hosts and their current state.
     registry: HostRegistry,

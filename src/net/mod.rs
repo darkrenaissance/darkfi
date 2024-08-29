@@ -29,9 +29,11 @@ pub mod message;
 pub use message::Message;
 
 /// Generic publish/subscribe class that can dispatch any kind of message
-/// to a subscribed list of dispatchers. Dispatchers subscribe to a single
-/// message format of any type. This is a generalized version of the simple
-/// publish-subscribe class in system::Publisher.
+/// to a subscribed list of dispatchers.
+///
+/// Dispatchers subscribe to a single message format of any type. This is
+/// a generalized version of the simple publish-subscribe class in
+/// system::Publisher.
 ///
 /// Message Subsystem also enables the creation of new message subsystems,
 /// adding new dispatchers and clearing inactive channels.
@@ -54,9 +56,11 @@ pub use message_publisher::MessageSubscription;
 pub mod transport;
 
 /// Hosts are a list of network addresses used when establishing outbound
-/// connections. Hosts are shared across the network through the address
-/// protocol. When attempting to connect, a node will loop through addresses
-/// in the hosts store until it finds ones to connect to.
+/// connections.
+///
+/// Hosts are shared across the network through the address protocol.
+/// When attempting to connect, a node will loop through addresses in the
+/// hosts store until it finds ones to connect to.
 pub mod hosts;
 
 /// Async channel that handles the sending of messages across the network.
@@ -97,6 +101,7 @@ pub use protocol::{
 };
 
 /// Defines the interaction between nodes during a connection.
+///
 /// Consists of an inbound session, which describes how to set up an
 /// incoming connection, and an outbound session, which describes setting
 /// up an outbound connection. Also describes the sesd session, which is

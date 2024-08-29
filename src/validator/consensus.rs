@@ -587,10 +587,11 @@ impl From<Proposal> for BlockInfo {
     }
 }
 
-/// This struct represents a forked blockchain state, using an overlay over original
-/// blockchain, containing all pending to-write records. Additionally, each fork
-/// keeps a vector of valid pending transactions hashes, in order of receival, and
-/// the proposals hashes sequence, for validations.
+/// Struct representing a forked blockchain state.
+///
+/// An overlay over the original blockchain is used, containing all pending to-write
+/// records. Additionally, each fork keeps a vector of valid pending transactions hashes,
+/// in order of receival, and the proposals hashes sequence, for validations.
 #[derive(Clone)]
 pub struct Fork {
     /// Canonical (finalized) blockchain

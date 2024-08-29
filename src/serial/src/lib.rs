@@ -269,6 +269,7 @@ impl_int_encodable!(i64, read_i64, write_i64);
 impl_int_encodable!(i128, read_i128, write_i128);
 
 /// Variable-integer encoding.
+///
 /// Integer can be encoded depending on the represented value to save space.
 /// Variable length integers always precede an array/vector of a type of data
 /// that may vary in length. Longer numbers are encoded in little endian.

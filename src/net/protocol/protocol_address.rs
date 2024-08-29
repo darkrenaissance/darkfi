@@ -37,9 +37,11 @@ use super::{
 };
 use crate::{Error, Result};
 
-/// Defines address and get-address messages. On receiving GetAddr, nodes
-/// reply an AddrMessage containing nodes from their hostlist.  On receiving
-/// an AddrMessage, nodes enter the info into their greylists.
+/// Defines address and get-address messages.
+///
+/// On receiving GetAddr, nodes reply an AddrMessage containing nodes from
+/// their hostlist.  On receiving an AddrMessage, nodes enter the info into
+/// their greylists.
 ///
 /// The node selection logic for creating an AddrMessage is as follows:
 ///

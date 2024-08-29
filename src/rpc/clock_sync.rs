@@ -52,6 +52,7 @@ pub async fn ntp_request() -> Result<Timestamp> {
 }
 
 /// This is a very simple check to verify that the system time is correct.
+///
 /// Retry loop is used in case discrepancies are found.
 /// If all retries fail, system clock is considered invalid.
 /// TODO: 1. Add proxy functionality in order not to leak connections

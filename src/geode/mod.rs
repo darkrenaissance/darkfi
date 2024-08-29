@@ -78,7 +78,9 @@ const FILES_PATH: &str = "files";
 const CHUNKS_PATH: &str = "chunks";
 
 /// `ChunkedFile` is a representation of a file we're trying to
-/// retrieve from `Geode`. The tuple contains `blake3::Hash` of
+/// retrieve from `Geode`.
+///
+/// The tuple contains `blake3::Hash` of
 /// the file's chunks and an optional `PathBuf` which points to
 /// the filesystem where the chunk can be found. If `None`, it
 /// is to be assumed that the chunk is not available locally.

@@ -32,6 +32,7 @@ use crate::{
 };
 
 /// Deploy DarkFi native wasm contracts to provided blockchain overlay.
+///
 /// If overlay already contains the contracts, it will just open the
 /// necessary db and trees, and give back what it has. This means that
 /// on subsequent runs, our native contracts will already be in a deployed
@@ -108,6 +109,7 @@ pub async fn deploy_native_contracts(
 }
 
 /// Compute a block's rank, assuming that its valid, based on provided mining target.
+///
 /// Block's rank is the tuple of its squared mining target distance from max 32 bytes int,
 /// along with its squared RandomX hash number distance from max 32 bytes int.
 /// Genesis block has rank (0, 0).
@@ -194,6 +196,7 @@ pub fn find_extended_fork_index(forks: &[Fork], proposal: &Proposal) -> Result<(
 }
 
 /// Auxiliary function to find best ranked fork.
+///
 /// The best ranked fork is the one with the highest sum of
 /// its blocks squared mining target distances, from max 32
 /// bytes int. In case of a tie, the fork with the highest

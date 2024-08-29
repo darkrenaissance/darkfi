@@ -64,7 +64,8 @@ pub mod auth_token_freeze_v1;
 /// `Money::TokenMintV1` API
 pub mod token_mint_v1;
 
-/// `MoneyNote` holds the inner attributes of a `Coin`
+/// `MoneyNote` holds the inner attributes of a `Coin`.
+///
 /// It does not store the public key since it's encrypted for that key,
 /// and so is not needed to infer the coin attributes.
 /// All other coin attributes must be present.

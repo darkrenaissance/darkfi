@@ -24,8 +24,9 @@ use darkfi_serial::{SerialDecodable, SerialEncodable};
 
 use crate::error::{DarkTreeError, DarkTreeResult};
 
-/// This struct represents the information hold by a
-/// [`DarkTreeLeaf`], namely its data, along with positional
+/// Struct representing the information hold by a [`DarkTreeLeaf`].
+///
+/// This includes its data, along with positional
 /// indexes information, based on tree's traversal order.
 /// These indexes are only here to enable referencing
 /// connected nodes, and are *not* used as pointers by the
@@ -85,8 +86,9 @@ impl<T: Clone + Send + Sync> DarkTreeLeaf<T> {
     }
 }
 
-/// This struct represents a Tree using DFS post-order traversal,
-/// where when we iterate through the tree, we first process tree
+/// This struct represents a DFS post-order traversal Tree.
+///
+/// When we iterate through the tree, we first process tree
 /// node's children, and then the node itself, recursively.
 /// Based on this, initial tree node (leaf), known as the root,
 /// will always show up at the end of iteration. It is advised

@@ -51,8 +51,9 @@ macro_rules! zip {
 
 // ANCHOR: transaction
 /// A Transaction contains an arbitrary number of `ContractCall` objects,
-/// along with corresponding ZK proofs and Schnorr signatures. `DarkLeaf`
-/// is used to map relations between contract calls in the transaction.
+/// along with corresponding ZK proofs and Schnorr signatures.
+///
+/// `DarkLeaf` is used to map relations between contract calls in the transaction.
 #[derive(Clone, Default, Eq, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct Transaction {
     /// Calls executed in this transaction

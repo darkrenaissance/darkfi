@@ -115,6 +115,8 @@ pub async fn verify_genesis_block(
     Ok(())
 }
 
+/// Validate provided block according to set rules.
+///
 /// A block is considered valid when the following rules apply:
 ///     1. Block version is correct for its height
 ///     2. Parent hash is equal to the hash of the previous block
@@ -319,9 +321,11 @@ pub fn verify_producer_signature(block: &BlockInfo, public_key: &PublicKey) -> R
     Ok(())
 }
 
-/// Verify WASM execution, signatures, and ZK proofs for a given producer [`Transaction`],
-/// and apply it to the provided overlay. Returns transaction signature public key.
-/// Additionally, append its hash to the provided Merkle tree.
+/// Verify provided producer producer [`Transaction`].
+///
+/// Verify WASM execution, signatures, and ZK proofs and apply it to the provided,
+/// provided overlay. Returns transaction signature public key. Additionally,
+/// append its hash to the provided Merkle tree.
 pub async fn verify_producer_transaction(
     overlay: &BlockchainOverlayPtr,
     verifying_block_height: u32,
@@ -875,6 +879,7 @@ async fn apply_transaction(
 }
 
 /// Verify a set of [`Transaction`] in sequence and apply them if all are valid.
+///
 /// In case any of the transactions fail, they will be returned to the caller as an error.
 /// If all transactions are valid, the function will return the total gas used and total
 /// paid fees from all the transactions. Additionally, their hash is appended to the provided
@@ -992,7 +997,8 @@ async fn apply_transactions(
     Ok(())
 }
 
-/// Verify given [`Proposal`] against provided consensus state,
+/// Verify given [`Proposal`] against provided consensus state.
+///
 /// A proposal is considered valid when the following rules apply:
 ///     1. Proposal hash matches the actual block one
 ///     2. Block transactions don't exceed set limit

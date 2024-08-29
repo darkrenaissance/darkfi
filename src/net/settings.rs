@@ -21,7 +21,9 @@ use url::Url;
 
 type BlacklistEntry = (String, Vec<String>, Vec<u16>);
 
-/// Ban policy which if set to `Relaxed` will not ban peers if the case
+/// Ban policies definitions.
+///
+/// If the ban policy is set to `Relaxed` will not ban peers in case
 /// they send a message without a corresponding MessageDispatcher.
 /// This is useful for nodes that may not be subscribed to protocols,
 /// such as Lilith. For most uses this should be set to `Strict`.

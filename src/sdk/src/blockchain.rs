@@ -43,6 +43,7 @@ pub fn block_epoch(height: u32) -> u8 {
 }
 
 /// Auxiliary function to calculate provided block height expected reward value.
+///
 /// Genesis block always returns reward value 0. Rewards are halfed at fixed intervals,
 /// called epochs. After last epoch has started, reward value is based on DARK token-economics.
 pub fn expected_reward(height: u32) -> u64 {

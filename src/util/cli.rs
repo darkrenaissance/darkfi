@@ -112,9 +112,10 @@ pub fn get_log_config(verbosity_level: u8) -> simplelog::Config {
 }
 
 /// This macro is used for a standard way of daemonizing darkfi binaries
-/// with TOML config file configuration, and argument parsing. It also
-/// spawns a multithreaded async executor and passes it into the given
-/// function.
+/// with TOML config file configuration, and argument parsing.
+///
+/// It also spawns a multithreaded async executor and passes it into the
+/// given function.
 ///
 /// The Cargo.toml dependencies needed for this are:
 /// ```text

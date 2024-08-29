@@ -17,6 +17,7 @@
  */
 
 //! Seed sync session creates a connection to the seed nodes specified in settings.
+//!
 //! A new seed sync session is created every time we call [`P2p::start()`]. The
 //! seed sync session loops through all the configured seeds and creates a corresponding
 //! `Slot`. `Slot`'s are started, but sit in a suspended state until they are activated
