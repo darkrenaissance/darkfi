@@ -147,44 +147,22 @@ async-sdk = [
 ]
 
 blockchain = [
-    "blake3",
     "sled",
     "sled-overlay",
     "num-bigint",
 
-    "async-sdk",
-    "async-serial",
     "darkfi-serial/num-bigint",
     "tx",
     "util",
-    "zk",
-    "zkas",
 ]
 
 validator = [
-    "async-trait",
-    "blake3",
     "crypto_api_chachapoly",
-    "halo2_proofs",
     "lazy_static",
-    "num-bigint",
-    "rand",
     "randomx",
-    "smol",
-    "sled",
-    "url",
 
-    "async-sdk",
-    "async-serial",
-    "blockchain",
-    "net",
     "rpc",
-    "system",
-    "tx",
-    "util",
     "wasm-runtime",
-    "zk",
-    "zkas",
 ]
 
 geode = [
@@ -194,24 +172,17 @@ geode = [
 ]
 
 event-graph = [
-    "async-trait",
     "blake3",
     "num-bigint",
-    "rand",
     "sled",
     "sled-overlay",
-    "smol",
-    "tinyjson",
     "bs58",
 
     "darkfi-serial",
     "darkfi-serial/collections",
     "darkfi-serial/hash",
 
-    "net",
     "rpc",
-    "system",
-    "util",
 ]
 
 p2p-unix = []
@@ -235,19 +206,16 @@ net = [
     "ed25519-compact",
     "futures",
     "futures-rustls",
-    "rand",
     "rcgen",
     "regex",
     "rustls-pemfile",
     "semver",
-    "smol",
     "serde",
     "structopt",
     "structopt-toml",
     "url",
     "x509-parser",
 
-    "darkfi-serial",
     "darkfi-serial/url",
 
     "async-serial",
@@ -262,14 +230,8 @@ net = [
 
 rpc = [
     "async-trait",
-    "rand",
-    "smol",
-    "tinyjson",
-    "url",
 
     "net",
-    "system",
-    "util",
 ]
 
 system = [
@@ -300,12 +262,8 @@ wasm-runtime = [
     "wasmer-middlewares",
 
     "darkfi-sdk",
-    "darkfi-serial",
 
     "blockchain",
-    "util",
-    "zk",
-    "zkas",
 ]
 
 zk = [
@@ -313,7 +271,6 @@ zk = [
     "halo2_gadgets",
     "rand",
 
-    "async-serial",
     "async-sdk",
     "zkas",
 ]
