@@ -37,8 +37,8 @@ use darkfi_sdk::{
     ContractCall,
 };
 use darkfi_serial::Encodable;
-use sled_overlay::sled;
 use num_bigint::BigUint;
+use sled_overlay::sled;
 use url::Url;
 
 use crate::{proto::ProposalMessage, task::sync::sync_task, utils::spawn_p2p, Darkfid};

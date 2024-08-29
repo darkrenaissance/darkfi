@@ -21,7 +21,7 @@ use std::sync::{Arc, Mutex};
 use darkfi_sdk::tx::TransactionHash;
 use darkfi_serial::{deserialize, Decodable};
 use log::debug;
-use sled_overlay::{sled::Transactional, sled};
+use sled_overlay::{sled, sled::Transactional};
 
 use crate::{tx::Transaction, util::time::Timestamp, Error, Result};
 
