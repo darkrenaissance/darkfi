@@ -172,11 +172,15 @@ event-graph = [
     "blake3",
     "num-bigint",
     "sled-overlay",
+    "smol",
+    "tinyjson",
     "bs58",
 
     "darkfi-serial",
     "darkfi-serial/collections",
     "darkfi-serial/hash",
+    
+    "rpc",
 ]
 
 p2p-unix = []
