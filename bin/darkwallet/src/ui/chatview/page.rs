@@ -30,11 +30,12 @@ use crate::{
         DrawCall, DrawInstruction, DrawMesh, GraphicsEventPublisherPtr, Point, Rectangle,
         RenderApi, RenderApiPtr,
     },
-    mesh::{Color, MeshBuilder, COLOR_BLUE, COLOR_GREEN},
+    mesh::{Color, MeshBuilder, COLOR_BLUE, COLOR_GREEN, COLOR_PINK},
     prop::{PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyUint32, Role},
     pubsub::Subscription,
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
     text::{self, Glyph, GlyphPositionIter, TextShaper, TextShaperPtr},
+    util::enumerate_mut,
     ExecutorPtr,
 };
 
@@ -73,7 +74,7 @@ impl Message {
         line_width: f32,
         text_shaper: &TextShaper,
     ) -> Self {
-        let dt = Local.timestamp_opt(timestamp as i64, 0).unwrap();
+        let dt = Local.timestamp_millis_opt(timestamp as i64).unwrap();
         let timestr = dt.format("%H:%M").to_string();
 
         let linetext = format!("{} {} {}", timestr, nick, text);
@@ -210,6 +211,13 @@ impl Page {
             }
         }
 
+        // debug draw page outline
+        if debug_render {
+            let height = line_idx as f32 * line_height;
+            let page_rect = Rectangle::from_array([0., -height, clip.w, height]);
+            mesh.draw_outline(&page_rect, COLOR_PINK, 1.);
+        }
+
         let mesh = mesh.alloc(render_api).await.unwrap();
         let mesh = mesh.draw_with_texture(self.atlas.texture_id);
         self.mesh_cache = Some(mesh.clone());
@@ -278,12 +286,12 @@ pub(super) struct FreedData {
 }
 
 impl FreedData {
-    fn add(&mut self, mesh: DrawMesh) {
+    fn add_mesh(&mut self, mesh: DrawMesh) {
         self.buffers.push(mesh.vertex_buffer);
         self.buffers.push(mesh.index_buffer);
-        if let Some(texture_id) = mesh.texture {
-            self.textures.push(texture_id);
-        }
+    }
+    fn add_texture(&mut self, texture_id: TextureId) {
+        self.textures.push(texture_id);
     }
 }
 
@@ -315,6 +323,17 @@ impl PageManager {
         for page in &mut self.pages {
             for msg in &mut page.msgs {
                 msg.adjust_line_width(line_width);
+            }
+        }
+
+        self.clear_meshes();
+    }
+
+    /// Clear all meshes and caches. Returns data that needs to be freed.
+    fn clear_meshes(&mut self) {
+        for page in &mut self.pages {
+            if let Some(mesh) = page.clear_mesh() {
+                self.freed.add_mesh(mesh);
             }
         }
     }
@@ -352,39 +371,40 @@ impl PageManager {
 
         // Now add message to page
 
-        // Maybe we can write this code below better
+        // Create our very first page
         if self.pages.is_empty() {
             let page = Page::new(vec![msg], &self.render_api).await;
             self.pages.push(page);
             return;
         }
 
+        // We only add lines inside pages.
+        // Calling the appropriate draw() function after should preload any missing pages.
+        // When a line is before the first page, it will get preloaded as a new page.
+        let first_timest = self.pages.first().unwrap().msgs.last().unwrap().timestamp;
+        if timest < first_timest {
+            return;
+        }
+
         let mut idx = None;
-        for (i, page) in self.pages.iter_mut().enumerate() {
-            let first_timest = page.msgs.last().unwrap().timestamp;
+        for (i, page) in enumerate_mut(&mut self.pages) {
+            //let first_timest = page.msgs.last().unwrap().timestamp;
             let last_timest = page.msgs.first().unwrap().timestamp;
 
-            if timest < first_timest {
-                // It does not belong to any current page
-                // Create page only if there's not enough pages for the screen rect
-                // current_height < rect.h
-                // Otherwise it just means the page wasn't loaded
-                // Maybe we need to have a flag indicating there's pages not loaded in the DB still
-            }
-
             //debug!(target: "ui::chatview", "page {i} [{first_timest}, {last_timest}]");
-            if first_timest <= timest && timest <= last_timest {
+            if timest <= last_timest {
                 //debug!(target: "ui::chatview", "found page {i} [{first_timest}, {last_timest}]");
                 idx = Some(i);
                 break
             }
         }
 
-        let Some(idx) = idx else {
-            // Add to the end
-            let page = Page::new(vec![msg], &self.render_api).await;
-            self.pages.push(page);
-            return
+        let idx = match idx {
+            Some(idx) => idx,
+            None => {
+                let last_page_idx = 0;
+                last_page_idx
+            }
         };
 
         let old_pages_len = self.pages.len();
@@ -399,7 +419,8 @@ impl PageManager {
 
         // Free texture and mesh before dropping page
         if let Some(mesh) = old_page.mesh_cache {
-            self.freed.add(mesh);
+            self.freed.add_mesh(mesh);
+            self.freed.add_texture(old_page.atlas.texture_id);
         }
 
         let mut msgs = old_page.msgs;
@@ -409,15 +430,6 @@ impl PageManager {
         self.pages.append(&mut head);
         self.pages.append(&mut new_pages);
         self.pages.append(&mut tail);
-    }
-
-    /// Clear all meshes and caches. Returns data that needs to be freed.
-    pub(super) fn invalidate_caches(&mut self) {
-        for page in &mut self.pages {
-            if let Some(mesh) = page.clear_mesh() {
-                self.freed.add(mesh);
-            }
-        }
     }
 
     /// Generate caches and return meshes
@@ -467,7 +479,10 @@ impl PageManager {
         meshes
     }
 
-    pub(super) fn last_timestamp(&self) -> Timestamp {
-        self.pages.last().unwrap().msgs.last().unwrap().timestamp
+    pub(super) fn last_timestamp(&self) -> Option<Timestamp> {
+        let last_page_msgs = &self.pages.last()?.msgs;
+        // There should be no pages with 0 messages. We can unwrap here.
+        debug!(target: "ui::chatview", "last page has {} msgs", last_page_msgs.len());
+        Some(last_page_msgs.last().unwrap().timestamp)
     }
 }

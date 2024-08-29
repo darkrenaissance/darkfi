@@ -17,6 +17,8 @@
  */
 
 use async_recursion::async_recursion;
+use chrono::{Local, NaiveDate, NaiveDateTime, TimeZone};
+use darkfi_serial::Encodable;
 use futures::{stream::FuturesUnordered, StreamExt};
 use smol::Task;
 use std::{
@@ -35,7 +37,7 @@ use crate::{
         SceneNodeType, Slot,
     },
     text::TextShaperPtr,
-    ui::{Button, ChatView, EditBox, Image, Mesh, RenderLayer, Stoppable, Text, Window},
+    ui::{chatview, Button, ChatView, EditBox, Image, Mesh, RenderLayer, Stoppable, Text, Window},
     ExecutorPtr,
 };
 
@@ -719,7 +721,7 @@ impl App {
         node.set_property_f32(Role::App, "line_height", 30.).unwrap();
         node.set_property_f32(Role::App, "baseline", 20.).unwrap();
         node.set_property_u32(Role::App, "z_index", 1).unwrap();
-        //node.set_property_bool(Role::App, "debug", true).unwrap();
+        node.set_property_bool(Role::App, "debug", true).unwrap();
 
         let prop = node.get_property("timestamp_color").unwrap();
         prop.set_f32(Role::App, 0, 0.5).unwrap();
@@ -810,7 +812,6 @@ impl Drop for App {
 }
 
 // Just for testing
-/*
 fn populate_tree(tree: &sled::Tree) {
     let chat_txt = include_str!("../chat.txt");
     for line in chat_txt.lines() {
@@ -822,7 +823,7 @@ fn populate_tree(tree: &sled::Tree) {
         let min = min.parse::<u32>().unwrap();
         let dt: NaiveDateTime =
             NaiveDate::from_ymd_opt(2024, 8, 6).unwrap().and_hms_opt(hour, min, 0).unwrap();
-        let timest = dt.and_utc().timestamp() as u64;
+        let timest = dt.and_utc().timestamp_millis() as u64;
 
         let nick = parts[1].to_string();
         let text = parts[2].to_string();
@@ -842,7 +843,6 @@ fn populate_tree(tree: &sled::Tree) {
     // O(n)
     debug!(target: "app", "populated db with {} lines", tree.len());
 }
-*/
 
 pub fn create_layer(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
     debug!(target: "app", "create_layer({name})");

@@ -44,6 +44,7 @@ use crate::{
     pubsub::Subscription,
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
     text::{self, Glyph, GlyphPositionIter, TextShaperPtr},
+    util::enumerate,
     ExecutorPtr,
 };
 
@@ -58,6 +59,15 @@ fn is_whitespace(s: &str) -> bool {
 
 fn is_zero(x: f32) -> bool {
     x.abs() < EPSILON
+}
+
+/// std::cmp::max() doesn't work on f32
+fn max(a: f32, b: f32) -> f32 {
+    if a > b {
+        a
+    } else {
+        b
+    }
 }
 
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
@@ -124,6 +134,10 @@ pub struct ChatView {
     motion_cv: Arc<CondVar>,
     accel: AtomicF32,
     speed: AtomicF32,
+
+    /// Used for correct converting input event pos from screen to widget space.
+    /// We also use it when we re-eval rect when its changed via property.
+    parent_rect: SyncMutex<Option<Rectangle>>,
 }
 
 impl ChatView {
@@ -258,11 +272,12 @@ impl ChatView {
                 motion_cv,
                 accel: AtomicF32::new(0.),
                 speed: AtomicF32::new(0.),
+
+                parent_rect: SyncMutex::new(None),
             }
         });
 
         let timer = std::time::Instant::now();
-        self_.populate().await;
         debug!(target: "ui::chatview", "populate() took {:?}", timer.elapsed());
 
         Pimpl::ChatView(self_)
@@ -382,9 +397,9 @@ impl ChatView {
     }
 
     async fn handle_mouse_wheel(&self, wheel_x: f32, wheel_y: f32) {
-        debug!(target: "ui::chatview", "handle_mouse_wheel({wheel_x}, {wheel_y})");
+        //debug!(target: "ui::chatview", "handle_mouse_wheel({wheel_x}, {wheel_y})");
 
-        let Some(rect) = self.get_cached_world_rect().await else { return };
+        let Some(rect) = self.parent_rect.lock().unwrap().clone() else { return };
 
         let mouse_pos = self.mouse_pos.lock().unwrap().clone();
         if !rect.contains(&mouse_pos) {
@@ -413,7 +428,8 @@ impl ChatView {
             return
         }
 
-        let Some(rect) = self.get_cached_world_rect().await else { return };
+        let Some(rect) = self.parent_rect.lock().unwrap().clone() else { return };
+
         let touch_pos = Point { x: touch_x, y: touch_y };
         if !rect.contains(&touch_pos) {
             //debug!(target: "ui::chatview", "not inside rect");
@@ -562,61 +578,33 @@ impl ChatView {
         self.line_height.get() - self.baseline.get()
     }
 
-    async fn get_parent_rect(&self) -> Option<Rectangle> {
-        let sg = self.sg.lock().await;
-        let node = sg.get_node(self.node_id).unwrap();
-        let Some(parent_rect) = get_parent_rect(&sg, node) else {
-            return None;
-        };
-        drop(sg);
-        Some(parent_rect)
-    }
-    /// This calc is wrong since the element position is offset by all parents. We need to fix this.
-    async fn get_cached_world_rect(&self) -> Option<Rectangle> {
-        // NBD if it's slightly wrong
-        let mut rect = read_rect(self.rect.clone()).ok()?;
-
-        // If layers can be nested and we use offsets for (x, y)
-        // then this will be incorrect for nested layers.
-        // For now we don't allow nesting of layers.
-        let parent_rect = self.get_parent_rect().await?;
-
-        // Offset rect which is now in world coords
-        rect.x += parent_rect.x;
-        rect.y += parent_rect.y;
-
-        Some(rect)
-    }
-
-    async fn populate(&self) {
-        debug!(target: "ui::chatview", "populating pages");
-        let iter = self.tree.iter().rev();
-        self.load_n_pages(iter, PRELOAD_PAGES).await;
-    }
-
     /// Load extra pages
-    async fn preload_pages(&self) -> usize {
-        // Get last page
-        // get the current earliest timestamp
-        let last_timest = self.pages.lock().await.last_timestamp();
+    async fn preload_pages(&self, pages: &mut PageManager) -> usize {
+        // Get the current earliest timestamp
+        let iter = match pages.last_timestamp() {
+            Some(last_timest) => {
+                // iterate from there
+                let key = last_timest.to_be_bytes();
+                debug!(target: "ui::chatview", "preloading from {key:?}");
+                let iter = self.tree.range(..key).rev();
+                iter
+            }
+            None => self.tree.iter().rev(),
+        };
 
-        // iterate from there
-        let key = last_timest.to_be_bytes();
-        debug!(target: "ui::chatview", "preloading from {key:?}");
-        let iter = self.tree.range(..key).rev();
-
-        self.load_n_pages(iter, PRELOAD_PAGES).await
+        self.load_n_pages(pages, iter, PRELOAD_PAGES).await
     }
 
     async fn load_n_pages<I: Iterator<Item = sled::Result<(sled::IVec, sled::IVec)>>>(
         &self,
+        pages: &mut PageManager,
         iter: I,
         n: usize,
     ) -> usize {
         let mut pages_len = 0;
         let mut msgs = vec![];
 
-        let line_width = self.pages.lock().await.line_width;
+        let line_width = pages.line_width;
 
         for entry in iter {
             let Ok((k, v)) = entry else { break };
@@ -627,7 +615,7 @@ impl ChatView {
             let chatmsg: ChatMsg = deserialize(&v).unwrap();
             debug!(target: "ui::chatview", "{timest:?} {chatmsg:?}");
 
-            let dt = Local.timestamp_opt(timest as i64, 0).unwrap();
+            let dt = Local.timestamp_millis_opt(timest as i64).unwrap();
             let timestr = dt.format("%H:%M").to_string();
 
             let text = format!("{} {} {}", timestr, chatmsg.nick, chatmsg.text);
@@ -650,7 +638,7 @@ impl ChatView {
 
                 let msgs = std::mem::take(&mut msgs);
                 let page = Page::new(msgs, &self.render_api).await;
-                self.pages.lock().await.push(page);
+                pages.push(page);
 
                 pages_len += 1;
                 if pages_len >= n {
@@ -664,7 +652,7 @@ impl ChatView {
             debug!(target: "ui::chatview", "added final page. page_len={pages_len}");
 
             let page = Page::new(msgs, &self.render_api).await;
-            self.pages.lock().await.push(page);
+            pages.push(page);
             pages_len += 1;
         }
 
@@ -713,7 +701,7 @@ impl ChatView {
 
     /// Basically a version of redraw() which doesn't invalidate the cache
     async fn scrollview(&self, mut scroll: f32) -> f32 {
-        debug!(target: "ui::chatview", "scrollview()");
+        //debug!(target: "ui::chatview", "scrollview()");
         let old_scroll = self.scroll.get();
 
         let rect = read_rect(self.rect.clone()).expect("bad rect property");
@@ -758,17 +746,15 @@ impl ChatView {
         let line_height = self.line_height.get();
         let baseline = self.baseline.get();
 
-        // When scrolling it can go negative so clamp it here
-        if scroll < 0. {
-            scroll = 0.;
-        }
+        // We still wish to preload pages to fill the screen, so we just adjust it up to 0.
+        let nonneg_scroll = max(scroll, 0.);
 
         let mut total_height = pages.calc_total_height(line_height, baseline);
         // Load pages until we run out or we have enough
-        while total_height < scroll + rect_h {
+        while total_height < nonneg_scroll + rect_h {
             debug!(target: "ui::chatview", "set_adjusted_scroll() loading more pages");
 
-            let n_loaded_pages = self.preload_pages().await;
+            let n_loaded_pages = self.preload_pages(pages).await;
 
             // We need this value after so first update it
             total_height = pages.calc_total_height(line_height, baseline);
@@ -777,6 +763,10 @@ impl ChatView {
             if n_loaded_pages == 0 {
                 break
             }
+        }
+
+        if scroll < 0. {
+            return Some(0.)
         }
 
         let max_allowed_scroll = if total_height > rect_h { total_height - rect_h } else { 0. };
@@ -829,7 +819,7 @@ impl ChatView {
             .await;
 
         let mut current_height = 0.;
-        for (height, mesh) in meshes {
+        for (i, (height, mesh)) in enumerate(meshes) {
             // Apply scroll and scissor
             // We use the scissor for scrolling
             // Because we use the scissor, our actual rect is now rect instead of parent_rect
@@ -844,6 +834,7 @@ impl ChatView {
             instrs.push(DrawInstruction::ApplyMatrix(model));
 
             instrs.push(DrawInstruction::Draw(mesh));
+            //debug!(target: "ui::chatview", "mesh-{i}: {height} {current_height}");
 
             current_height += height;
         }
@@ -856,6 +847,8 @@ impl ChatView {
     pub async fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
         debug!(target: "ui::chatview", "ChatView::draw()");
 
+        *self.parent_rect.lock().unwrap() = Some(parent_rect.clone());
+
         let rect = eval_rect(self.rect.clone(), parent_rect).expect("bad rect property");
 
         let mut pages = self.pages.lock().await;
@@ -865,9 +858,6 @@ impl ChatView {
         if let Some(scroll) = self.adjust_scroll(&mut pages, scroll, rect.h).await {
             self.scroll.set(scroll);
         }
-
-        // Drop all meshes which forces a redraw of everything
-        pages.invalidate_caches();
 
         let (mut mesh_instrs, freed) = self.get_meshes(&mut pages, &rect).await;
         drop(pages);
