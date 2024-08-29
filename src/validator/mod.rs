@@ -366,7 +366,7 @@ impl Validator {
         let rest_proposals = fork.proposals.split_off(excess);
         let rest_diffs = fork.diffs.split_off(excess);
         let finalized_proposals = fork.proposals.clone();
-        let mut diffs = fork.diffs.clone();
+        let diffs = fork.diffs.clone();
         fork.proposals = rest_proposals;
         fork.diffs = rest_diffs;
 
@@ -380,7 +380,7 @@ impl Validator {
         info!(target: "validator::finalization", "Finalizing proposals:");
         for (index, proposal) in finalized_proposals.iter().enumerate() {
             info!(target: "validator::finalization", "\t{} - {}", proposal, finalized_blocks[index].header.height);
-            fork.overlay.lock().unwrap().overlay.lock().unwrap().apply_diff(&mut diffs[index])?;
+            fork.overlay.lock().unwrap().overlay.lock().unwrap().apply_diff(&diffs[index])?;
             let next_difficulty = module.next_difficulty()?;
             module.append(finalized_blocks[index].header.timestamp, &next_difficulty);
             finalized_txs.extend_from_slice(&finalized_blocks[index].txs);

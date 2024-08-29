@@ -22,7 +22,7 @@ use darkfi_sdk::{crypto::MerkleTree, tx::TransactionHash};
 use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 use log::{debug, info, warn};
 use num_bigint::BigUint;
-use sled_overlay::database::SledDbOverlayState;
+use sled_overlay::database::SledDbOverlayStateDiff;
 use smol::lock::RwLock;
 
 use crate::{
@@ -200,7 +200,7 @@ impl Consensus {
         let blocks = &original_fork.overlay.lock().unwrap().get_blocks_by_hash(&fork.proposals)?;
         for (index, block) in blocks.iter().enumerate() {
             // Apply block diffs
-            fork.overlay.lock().unwrap().overlay.lock().unwrap().add_diff(&fork.diffs[index]);
+            fork.overlay.lock().unwrap().overlay.lock().unwrap().add_diff(&fork.diffs[index])?;
 
             // Grab next mine target and difficulty
             let (next_target, next_difficulty) = fork.module.next_mine_target_and_difficulty()?;
@@ -445,7 +445,7 @@ impl Consensus {
                 for tree in &overlay.state.new_tree_names {
                     referenced_trees.insert(tree.clone());
                 }
-                for tree in &overlay.state.dropped_tree_names {
+                for tree in overlay.state.dropped_trees.keys() {
                     referenced_trees.insert(tree.clone());
                 }
                 // Remove finalized proposals txs from fork's mempool
@@ -493,7 +493,7 @@ impl Consensus {
             for tree in &overlay.state.new_tree_names {
                 referenced_trees.insert(tree.clone());
             }
-            for tree in &overlay.state.dropped_tree_names {
+            for tree in overlay.state.dropped_trees.keys() {
                 referenced_trees.insert(tree.clone());
             }
             drop(overlay);
@@ -524,7 +524,7 @@ impl Consensus {
                     dropped_trees.insert(tree.clone());
                 }
             }
-            for tree in &overlay.state.dropped_tree_names {
+            for tree in overlay.state.dropped_trees.keys() {
                 if !referenced_trees.contains(tree) {
                     dropped_trees.insert(tree.clone());
                 }
@@ -602,7 +602,7 @@ pub struct Fork {
     /// Fork proposal hashes sequence
     pub proposals: Vec<HeaderHash>,
     /// Fork proposal overlay diffs sequence
-    pub diffs: Vec<SledDbOverlayState>,
+    pub diffs: Vec<SledDbOverlayStateDiff>,
     /// Valid pending transaction hashes
     pub mempool: Vec<TransactionHash>,
     /// Current fork mining targets rank, cached for better performance
@@ -665,7 +665,7 @@ impl Fork {
         self.proposals.push(proposal.hash);
 
         // Push proposal overlay diff
-        self.diffs.push(self.overlay.lock().unwrap().overlay.lock().unwrap().diff(&self.diffs));
+        self.diffs.push(self.overlay.lock().unwrap().overlay.lock().unwrap().diff(&self.diffs)?);
 
         Ok(())
     }
