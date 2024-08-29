@@ -158,6 +158,7 @@ validator = [
     "crypto_api_chachapoly",
     "lazy_static",
     "randomx",
+    "smol",
 
     "wasm-runtime",
 ]
