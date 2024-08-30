@@ -56,8 +56,8 @@ To run your own instance check [Local Deployment](#local-deployment)
 		stop       Stop task(s).
 		switch     Switch between configured workspaces.
 		show       List filtered tasks.
-		export	   Save current workspace tasks to a path.
-		import	   Load current workspace tasks from a path.
+		export     Save current workspace tasks to a path.
+		import     Load current workspace tasks from a path.
 		help       Show this help text.
 
 
@@ -90,11 +90,11 @@ for a description which allows entering multiline text.
 #### List and filtering tasks
 
 ```shell
-% tau					# all non-stop tasks
-% tau 1-3				# tasks 1 to 3
-% tau show state:open	# list open tasks
-% tau show rank:2		# all tasks that have rank 2
-% tau show @dave		# tasks that assign field is "dave"
+% tau                   # all non-stop tasks
+% tau 1-3               # tasks 1 to 3
+% tau show state:open   # list open tasks
+% tau show rank:2       # all tasks that have rank 2
+% tau show @dave        # tasks that assign field is "dave"
 ```
 
 
@@ -103,25 +103,25 @@ for a description which allows entering multiline text.
 Note: mod commands are: start, open, pause, stop and modify.
 
 ```shell
-% tau 5 stop					# will stop task 5
-% tau 1,3 start					# start 1 and 3
-% tau 2 pause					# pause 2
-% tau 2,4 modify due:2009		# edit due date to September in tasks 2 and 4 
-% tau 1-4 modify project:tau	# edit project to tau in tasks 1,2,3 and 4
+% tau 5 stop                    # will stop task 5
+% tau 1,3 start                 # start 1 and 3
+% tau 2 pause                   # pause 2
+% tau 2,4 modify due:2009       # edit due date to September in tasks 2 and 4 
+% tau 1-4 modify project:tau    # edit project to tau in tasks 1,2,3 and 4
 ```
 
 #### Comments
 
 ```shell
-% tau 1 comment "content foo bar"	# will add a comment to task 1
-% tau 3 comment						# will open the editor to write a comment
+% tau 1 comment "content foo bar"   # will add a comment to task 1
+% tau 3 comment                     # will open the editor to write a comment
 ```
 
 #### Export and Import
 
 ```shell
-% tau export ~/example_dir	# will save tasks json files to the path
-% tau import ~/example_dir	# will reload saved json files from the path
+% tau export ~/example_dir    # will save tasks json files to the path
+% tau import ~/example_dir    # will reload saved json files from the path
 ```
 
 #### Archive
@@ -129,21 +129,21 @@ Note: mod commands are: start, open, pause, stop and modify.
 ```shell
 % tau archive                 # current month's completed tasks
 % tau archive 1122            # completed tasks in Nov. 2022
-% tau archive 1 1122          # show info of task by it's ID completed in Nov. 2022
+% tau archive 1122 1          # show info of task by it's ID completed in Nov. 2022
 ```
 
 #### Switch workspace
 
 ```shell
-% tau switch darkfi-dev		# darkfi-dev workspace needs to be configured in config file
+% tau switch darkfi-dev     # darkfi-dev workspace needs to be configured in config file
 ```
 
 In addition to indexing tasks by there IDs, one can use their RefID (Reference ID):
 ```shell
 % tau SjJ2OANxVIdLivItcrMplpOFbLWgzR
-# or
+## or
 % tau SjJ2OANxV
-# or even
+## or even
 % tau SjJ
 ```
 
