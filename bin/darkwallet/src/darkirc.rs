@@ -31,6 +31,7 @@ use darkfi::{
 use darkfi_serial::{
     async_trait, deserialize_async, serialize_async, Encodable, SerialDecodable, SerialEncodable,
 };
+use sled_overlay::sled;
 
 use crate::{scene::SceneGraphPtr2, ExecutorPtr};
 

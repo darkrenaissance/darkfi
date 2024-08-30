@@ -25,6 +25,7 @@ use darkfi_serial::{
 };
 use miniquad::{KeyCode, KeyMods, TouchPhase};
 use rand::{rngs::OsRng, Rng};
+use sled_overlay::sled;
 use std::{
     hash::{DefaultHasher, Hash, Hasher},
     io::Cursor,
@@ -32,7 +33,7 @@ use std::{
 };
 
 mod page;
-use page::{FreedData, Message, Page, PageManager};
+use page::{FreedData, MessageBuffer};
 
 use crate::{
     gfx::{
@@ -107,7 +108,7 @@ pub struct ChatView {
     text_shaper: TextShaperPtr,
     tree: sled::Tree,
 
-    pages: AsyncMutex<page::PageManager>,
+    msgbuf: AsyncMutex<MessageBuffer>,
     dc_key: u64,
 
     /// Used for detecting when scrolling view
@@ -248,7 +249,7 @@ impl ChatView {
                 text_shaper: text_shaper.clone(),
                 tree,
 
-                pages: AsyncMutex::new(page::PageManager::new(render_api, text_shaper)),
+                msgbuf: AsyncMutex::new(MessageBuffer::new(render_api, text_shaper)),
                 dc_key: OsRng.gen(),
 
                 mouse_pos: SyncMutex::new(Point::from([0., 0.])),
@@ -276,10 +277,6 @@ impl ChatView {
                 parent_rect: SyncMutex::new(None),
             }
         });
-
-        let timer = std::time::Instant::now();
-        debug!(target: "ui::chatview", "populate() took {:?}", timer.elapsed());
-
         Pimpl::ChatView(self_)
     }
 
@@ -407,10 +404,6 @@ impl ChatView {
             return
         }
 
-        //debug!(target: "ui::chatview", "inside rect");
-        //let scroll = self.scroll.get() + wheel_y * 50.;
-        //self.scrollview(scroll).await;
-
         self.accel.fetch_add(wheel_y * self.mouse_scroll_start_accel.get(), Ordering::Relaxed);
         self.motion_cv.notify();
     }
@@ -520,10 +513,10 @@ impl ChatView {
         }
 
         // Add message to page
-        self.pages
+        self.msgbuf
             .lock()
             .await
-            .insert_line(self.font_size.get(), timest, message_id, nick.clone(), text.clone())
+            .insert_privmsg(self.font_size.get(), timest, message_id, nick.clone(), text.clone())
             .await;
 
         // This will refresh the view, so we just use this
@@ -578,13 +571,13 @@ impl ChatView {
         self.line_height.get() - self.baseline.get()
     }
 
-    /// Load extra pages
-    async fn preload_pages(&self, pages: &mut PageManager) -> usize {
+    /// Load extra msgs
+    async fn preload_msgs(&self, msgbuf: &mut MessageBuffer) -> usize {
         // Get the current earliest timestamp
-        let iter = match pages.last_timestamp() {
-            Some(last_timest) => {
+        let iter = match msgbuf.oldest_timestamp() {
+            Some(oldest_timest) => {
                 // iterate from there
-                let key = last_timest.to_be_bytes();
+                let key = oldest_timest.to_be_bytes();
                 debug!(target: "ui::chatview", "preloading from {key:?}");
                 let iter = self.tree.range(..key).rev();
                 iter
@@ -592,19 +585,16 @@ impl ChatView {
             None => self.tree.iter().rev(),
         };
 
-        self.load_n_pages(pages, iter, PRELOAD_PAGES).await
+        self.load_n_msgs(msgbuf, iter, PRELOAD_PAGES).await
     }
 
-    async fn load_n_pages<I: Iterator<Item = sled::Result<(sled::IVec, sled::IVec)>>>(
+    async fn load_n_msgs<I: Iterator<Item = sled::Result<(sled::IVec, sled::IVec)>>>(
         &self,
-        pages: &mut PageManager,
+        msgbuf: &mut MessageBuffer,
         iter: I,
         n: usize,
     ) -> usize {
-        let mut pages_len = 0;
-        let mut msgs = vec![];
-
-        let line_width = pages.line_width;
+        let mut msgs_len = 0;
 
         for entry in iter {
             let Ok((k, v)) = entry else { break };
@@ -615,50 +605,14 @@ impl ChatView {
             let chatmsg: ChatMsg = deserialize(&v).unwrap();
             debug!(target: "ui::chatview", "{timest:?} {chatmsg:?}");
 
-            let dt = Local.timestamp_millis_opt(timest as i64).unwrap();
-            let timestr = dt.format("%H:%M").to_string();
+            msgbuf
+                .push_privmsg(self.font_size.get(), timest, message_id, chatmsg.nick, chatmsg.text)
+                .await;
 
-            let text = format!("{} {} {}", timestr, chatmsg.nick, chatmsg.text);
-            let glyphs = self.text_shaper.shape(text, self.font_size.get()).await;
-
-            let msg = Message::new(
-                self.font_size.get(),
-                timest,
-                message_id,
-                chatmsg.nick,
-                chatmsg.text,
-                line_width,
-                &self.text_shaper,
-            )
-            .await;
-            msgs.push(msg);
-
-            if msgs.len() >= PAGE_SIZE {
-                debug!(target: "ui::chatview", "added new page. page_len={pages_len}");
-
-                let msgs = std::mem::take(&mut msgs);
-                let page = Page::new(msgs, &self.render_api).await;
-                pages.push(page);
-
-                pages_len += 1;
-                if pages_len >= n {
-                    break
-                }
-            }
+            msgs_len += 1;
         }
-
-        // Any remaining messages added to a short page
-        if !msgs.is_empty() {
-            debug!(target: "ui::chatview", "added final page. page_len={pages_len}");
-
-            let page = Page::new(msgs, &self.render_api).await;
-            pages.push(page);
-            pages_len += 1;
-        }
-
-        debug!(target: "ui::chatview", "populated {} pages", pages_len);
-
-        pages_len
+        debug!(target: "ui::chatview", "populated {} messages", msgs_len);
+        msgs_len
     }
 
     fn read_nick_colors(&self) -> Vec<Color> {
@@ -706,14 +660,14 @@ impl ChatView {
 
         let rect = read_rect(self.rect.clone()).expect("bad rect property");
 
-        let mut pages = self.pages.lock().await;
+        let mut msgbuf = self.msgbuf.lock().await;
 
-        if let Some(new_scroll) = self.adjust_scroll(&mut pages, scroll, rect.h).await {
+        if let Some(new_scroll) = self.adjust_scroll(&mut msgbuf, scroll, rect.h).await {
             scroll = new_scroll;
         }
 
-        let (mut mesh_instrs, freed) = self.get_meshes(&mut pages, &rect).await;
-        drop(pages);
+        let (mut mesh_instrs, freed) = self.get_meshes(&mut msgbuf, &rect).await;
+        drop(msgbuf);
 
         let mut instrs = vec![DrawInstruction::ApplyViewport(rect)];
         instrs.append(&mut mesh_instrs);
@@ -739,7 +693,7 @@ impl ChatView {
     /// Returns None if the value is within range.
     async fn adjust_scroll(
         &self,
-        pages: &mut PageManager,
+        msgbuf: &mut MessageBuffer,
         mut scroll: f32,
         rect_h: f32,
     ) -> Option<f32> {
@@ -749,15 +703,15 @@ impl ChatView {
         // We still wish to preload pages to fill the screen, so we just adjust it up to 0.
         let nonneg_scroll = max(scroll, 0.);
 
-        let mut total_height = pages.calc_total_height(line_height, baseline);
+        let mut total_height = msgbuf.calc_total_height(line_height, baseline);
         // Load pages until we run out or we have enough
         while total_height < nonneg_scroll + rect_h {
             debug!(target: "ui::chatview", "set_adjusted_scroll() loading more pages");
 
-            let n_loaded_pages = self.preload_pages(pages).await;
+            let n_loaded_pages = self.preload_msgs(msgbuf).await;
 
             // We need this value after so first update it
-            total_height = pages.calc_total_height(line_height, baseline);
+            total_height = msgbuf.calc_total_height(line_height, baseline);
 
             // No more pages available to load
             if n_loaded_pages == 0 {
@@ -784,7 +738,7 @@ impl ChatView {
     /// Returns draw calls for drawing
     async fn get_meshes(
         &self,
-        pages: &mut PageManager,
+        msgbuf: &mut MessageBuffer,
         rect: &Rectangle,
     ) -> (Vec<DrawInstruction>, FreedData) {
         let scroll = self.scroll.get();
@@ -793,7 +747,7 @@ impl ChatView {
         let baseline = self.baseline.get();
         let debug_render = self.debug.get();
 
-        let total_height = pages.calc_total_height(line_height, baseline);
+        let total_height = msgbuf.calc_total_height(line_height, baseline);
         // If lines aren't enough to fill the available buffer then start from the top
         let start_pos = if total_height < rect.h { total_height } else { rect.h };
 
@@ -804,7 +758,7 @@ impl ChatView {
         let text_color = self.text_color.get();
         let nick_colors = self.read_nick_colors();
 
-        let meshes = pages
+        let meshes = msgbuf
             .gen_meshes(
                 rect,
                 scroll,
@@ -839,7 +793,7 @@ impl ChatView {
             current_height += height;
         }
 
-        let freed = std::mem::take(&mut pages.freed);
+        let freed = std::mem::take(&mut msgbuf.freed);
 
         (instrs, freed)
     }
@@ -851,16 +805,16 @@ impl ChatView {
 
         let rect = eval_rect(self.rect.clone(), parent_rect).expect("bad rect property");
 
-        let mut pages = self.pages.lock().await;
-        pages.adjust_line_width(rect.w);
+        let mut msgbuf = self.msgbuf.lock().await;
+        msgbuf.adjust_width(rect.w);
 
         let mut scroll = self.scroll.get();
-        if let Some(scroll) = self.adjust_scroll(&mut pages, scroll, rect.h).await {
+        if let Some(scroll) = self.adjust_scroll(&mut msgbuf, scroll, rect.h).await {
             self.scroll.set(scroll);
         }
 
-        let (mut mesh_instrs, freed) = self.get_meshes(&mut pages, &rect).await;
-        drop(pages);
+        let (mut mesh_instrs, freed) = self.get_meshes(&mut msgbuf, &rect).await;
+        drop(msgbuf);
 
         let mut instrs = vec![DrawInstruction::ApplyViewport(rect)];
         instrs.append(&mut mesh_instrs);

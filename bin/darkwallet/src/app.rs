@@ -20,6 +20,7 @@ use async_recursion::async_recursion;
 use chrono::{Local, NaiveDate, NaiveDateTime, TimeZone};
 use darkfi_serial::Encodable;
 use futures::{stream::FuturesUnordered, StreamExt};
+use sled_overlay::sled;
 use smol::Task;
 use std::{
     sync::{Arc, Mutex as SyncMutex},
@@ -721,7 +722,7 @@ impl App {
         node.set_property_f32(Role::App, "line_height", 30.).unwrap();
         node.set_property_f32(Role::App, "baseline", 20.).unwrap();
         node.set_property_u32(Role::App, "z_index", 1).unwrap();
-        node.set_property_bool(Role::App, "debug", true).unwrap();
+        //node.set_property_bool(Role::App, "debug", true).unwrap();
 
         let prop = node.get_property("timestamp_color").unwrap();
         prop.set_f32(Role::App, 0, 0.5).unwrap();

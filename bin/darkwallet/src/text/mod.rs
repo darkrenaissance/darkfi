@@ -40,7 +40,7 @@ pub use atlas::{make_texture_atlas, Atlas, RenderedAtlas};
 //pub use old_atlas::{make_texture_atlas, RenderedAtlas};
 
 mod wrap;
-pub use wrap::wrap;
+pub use wrap::{glyph_str, wrap};
 
 // From https://sourceforge.net/projects/freetype/files/freetype2/2.6/
 //
