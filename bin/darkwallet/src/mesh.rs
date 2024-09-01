@@ -68,8 +68,8 @@ impl MeshInfo {
 }
 
 pub struct MeshBuilder {
-    verts: Vec<Vertex>,
-    indices: Vec<u16>,
+    pub verts: Vec<Vertex>,
+    pub indices: Vec<u16>,
     clipper: Option<Rectangle>,
 }
 

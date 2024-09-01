@@ -207,6 +207,10 @@ impl SceneGraph {
             return Err(Error::NodesAreLinked);
         }
 
+        if child_id == parent_id {
+            return Err(Error::NodesAreSame);
+        }
+
         let parent = self.get_node(parent_id).unwrap();
         let parent_inf =
             SceneNodeInfo { name: parent.name.clone(), id: parent_id, typ: parent.typ };

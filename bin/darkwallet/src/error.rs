@@ -84,6 +84,9 @@ pub enum Error {
     #[error("Nodes are not linked")]
     NodesNotLinked = 22,
 
+    #[error("Nodes are the same")]
+    NodesAreSame = 37,
+
     #[error("Node has parents")]
     NodeHasParents = 23,
 
