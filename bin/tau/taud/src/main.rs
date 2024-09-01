@@ -615,7 +615,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
         |res| async {
             match res {
                 Ok(()) | Err(TaudError::Darkfi(Error::DetachedTaskStopped)) => { /* Do nothing */ }
-                Err(e) => error!(target: "taud", "Failed starting sync loop task: {}", e),
+                Err(e) => error!(target: "taud", "Failed stopping sync loop task: {}", e),
             }
         },
         TaudError::Darkfi(Error::DetachedTaskStopped),
@@ -643,7 +643,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
             match res {
                 Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
                 Err(e) => {
-                    error!(target: "taud", "Failed starting dnet subs task: {}", e)
+                    error!(target: "taud", "Failed stopping dnet subs task: {}", e)
                 }
             }
         },
@@ -694,7 +694,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
         |res| async move {
             match res {
                 Ok(()) | Err(Error::RpcServerStopped) => rpc_interface.stop_connections().await,
-                Err(e) => error!(target: "taud", "Failed starting JSON-RPC server: {}", e),
+                Err(e) => error!(target: "taud", "Failed stopping JSON-RPC server: {}", e),
             }
         },
         Error::RpcServerStopped,
@@ -709,13 +709,13 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
     info!(target: "taud", "Stopping P2P network");
     p2p.stop().await;
 
+    info!(target: "taud", "Stopping sync loop task...");
+    sync_loop_task.stop().await;
+
     info!(target: "taud", "Stopping JSON-RPC server...");
     rpc_task.stop().await;
     dnet_task.stop().await;
     deg_task.stop().await;
-
-    info!(target: "taud", "Stopping sync loop task...");
-    sync_loop_task.stop().await;
 
     info!(target: "taud", "Flushing sled database...");
     let flushed_bytes = sled_db.flush_async().await?;
