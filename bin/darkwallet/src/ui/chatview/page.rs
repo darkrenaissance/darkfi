@@ -587,10 +587,18 @@ impl MessageBuffer {
         let mut meshes = vec![];
 
         let descent = line_height - baseline;
-        let mut current_height = descent;
+        let mut current_pos = descent;
         for msg in &mut self.msgs {
-            if current_height > scroll + rect.h {
+            let mesh_height = msg.height(line_height);
+            let msg_bottom = current_pos;
+            let msg_top = current_pos + mesh_height;
+
+            if msg_bottom > scroll + rect.h {
                 break
+            }
+            if msg_top < scroll {
+                current_pos += mesh_height;
+                continue
             }
 
             let mesh = msg
@@ -606,13 +614,11 @@ impl MessageBuffer {
                 )
                 .await;
 
-            let mesh_height = msg.height(line_height);
-
-            meshes.push((mesh_height, mesh));
-
-            current_height += mesh_height;
+            meshes.push((current_pos, mesh));
+            current_pos += mesh_height;
         }
 
+        //debug!("gen_meshes() returning {} meshes", meshes.len());
         meshes
     }
 

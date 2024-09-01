@@ -577,8 +577,11 @@ impl ChatView {
         let iter = match msgbuf.oldest_timestamp() {
             Some(oldest_timest) => {
                 // iterate from there
-                let key = oldest_timest.to_be_bytes();
-                debug!(target: "ui::chatview", "preloading from {key:?}");
+                debug!(target: "ui::chatview", "preloading from {oldest_timest}");
+                let timest = (oldest_timest - 1).to_be_bytes();
+                let mut key = [0u8; 8 + 32];
+                key[..8].clone_from_slice(&timest);
+
                 let iter = self.tree.range(..key).rev();
                 iter
             }
@@ -706,9 +709,8 @@ impl ChatView {
         let mut total_height = msgbuf.calc_total_height(line_height, baseline);
         // Load pages until we run out or we have enough
         while total_height < nonneg_scroll + rect_h {
-            debug!(target: "ui::chatview", "set_adjusted_scroll() loading more pages");
-
             let n_loaded_pages = self.preload_msgs(msgbuf).await;
+            debug!(target: "ui::chatview", "set_adjusted_scroll() loaded until {:?}", msgbuf.oldest_timestamp());
 
             // We need this value after so first update it
             total_height = msgbuf.calc_total_height(line_height, baseline);
@@ -773,13 +775,13 @@ impl ChatView {
             .await;
 
         let mut current_height = 0.;
-        for (i, (height, mesh)) in enumerate(meshes) {
+        for (i, (y_pos, mesh)) in enumerate(meshes) {
             // Apply scroll and scissor
             // We use the scissor for scrolling
             // Because we use the scissor, our actual rect is now rect instead of parent_rect
             let off_x = 0.;
             // This calc decides whether scroll is in terms of pages or pixels
-            let off_y = (scroll + start_pos - current_height) / rect.h;
+            let off_y = (scroll + start_pos - y_pos) / rect.h;
             let scale_x = 1. / rect.w;
             let scale_y = 1. / rect.h;
             let model = glam::Mat4::from_translation(glam::Vec3::new(off_x, off_y, 0.)) *
@@ -789,8 +791,6 @@ impl ChatView {
 
             instrs.push(DrawInstruction::Draw(mesh));
             //debug!(target: "ui::chatview", "mesh-{i}: {height} {current_height}");
-
-            current_height += height;
         }
 
         let freed = std::mem::take(&mut msgbuf.freed);
