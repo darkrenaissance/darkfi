@@ -29,7 +29,10 @@ use sled_overlay::sled;
 use std::{
     hash::{DefaultHasher, Hash, Hasher},
     io::Cursor,
-    sync::{atomic::Ordering, Arc, Mutex as SyncMutex, Weak},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex as SyncMutex, Weak,
+    },
 };
 
 mod page;
@@ -122,6 +125,7 @@ pub struct ChatView {
     mouse_pos: SyncMutex<Point>,
     /// Touch scrolling
     touch_info: SyncMutex<TouchInfo>,
+    touch_is_updating: AtomicBool,
 
     rect: PropertyPtr,
     scroll: PropertyFloat32,
@@ -261,6 +265,7 @@ impl ChatView {
 
                 mouse_pos: SyncMutex::new(Point::from([0., 0.])),
                 touch_info: SyncMutex::new(TouchInfo::new()),
+                touch_is_updating: AtomicBool::new(false),
 
                 rect,
                 scroll,
@@ -447,7 +452,10 @@ impl ChatView {
                 touch_info.last_y = touch_y;
             }
             TouchPhase::Moved => {
-                let instant = std::time::Instant::now();
+                if !self.touch_is_updating.fetch_or(true, Ordering::Relaxed) {
+                    return
+                }
+
                 let (start_scroll, start_y, do_update) = {
                     let mut touch_info = self.touch_info.lock().unwrap();
                     touch_info.last_y = touch_y;
@@ -470,6 +478,8 @@ impl ChatView {
                 if do_update {
                     self.scrollview(scroll).await;
                 }
+
+                self.touch_is_updating.store(true, Ordering::Relaxed);
             }
             TouchPhase::Ended => {
                 // Now calculate scroll acceleration
