@@ -654,7 +654,7 @@ pub(super) async fn make(
     let code = vec![Op::LoadVar("h".to_string())];
     prop.set_expr(Role::App, 3, code).unwrap();
 
-    let c = if LIGHTMODE { 1. } else { 0. };
+    let c = if LIGHTMODE { 1. } else { 0.05 };
     // Setup the pimpl
     let node_id = node.id;
     let (x1, y1) = (0., 0.);
@@ -706,10 +706,10 @@ pub(super) async fn make(
     //node.set_property_bool(Role::App, "debug", true).unwrap();
 
     let prop = node.get_property("timestamp_color").unwrap();
-    prop.set_f32(Role::App, 0, 0.5).unwrap();
-    prop.set_f32(Role::App, 1, 0.5).unwrap();
-    prop.set_f32(Role::App, 2, 0.5).unwrap();
-    prop.set_f32(Role::App, 3, 0.5).unwrap();
+    prop.set_f32(Role::App, 0, 0.407).unwrap();
+    prop.set_f32(Role::App, 1, 0.604).unwrap();
+    prop.set_f32(Role::App, 2, 0.647).unwrap();
+    prop.set_f32(Role::App, 3, 1.).unwrap();
     let prop = node.get_property("text_color").unwrap();
     if LIGHTMODE {
         prop.set_f32(Role::App, 0, 0.).unwrap();
@@ -786,7 +786,7 @@ pub(super) async fn make(
     drop(sg);
     let mut mesh = MeshBuilder::new();
     mesh.draw_box(&Rectangle { x: 0., y: 0., w: 1., h: 1. },
-        [0., 1., 0., 1.], &Rectangle { x: 0., y: 0., w: 1., h: 1. });
+        [0., 0.13, 0.08, 1.], &Rectangle { x: 0., y: 0., w: 1., h: 1. });
     let pimpl = Mesh::new(
         app.ex.clone(),
         app.sg.clone(),
@@ -819,7 +819,7 @@ pub(super) async fn make(
     drop(sg);
     let mut mesh = MeshBuilder::new();
     mesh.draw_box(&Rectangle { x: 0., y: 0., w: 1., h: 1. },
-        [0., 0., 1., 1.], &Rectangle { x: 0., y: 0., w: 1., h: 1. });
+        [0.4, 0.4, 0.4, 1.], &Rectangle { x: 0., y: 0., w: 1., h: 1. });
     let pimpl = Mesh::new(
         app.ex.clone(),
         app.sg.clone(),
@@ -853,7 +853,7 @@ pub(super) async fn make(
     drop(sg);
     let mut mesh = MeshBuilder::new();
     mesh.draw_box(&Rectangle { x: 0., y: 0., w: 1., h: 1. },
-        [0., 0., 1., 1.], &Rectangle { x: 0., y: 0., w: 1., h: 1. });
+        [0.4, 0.4, 0.4, 1.], &Rectangle { x: 0., y: 0., w: 1., h: 1. });
     let pimpl = Mesh::new(
         app.ex.clone(),
         app.sg.clone(),
@@ -887,9 +887,9 @@ pub(super) async fn make(
     node.set_property_str(Role::App, "text", "anon").unwrap();
     //node.set_property_str(Role::App, "text", "anon1").unwrap();
     let prop = node.get_property("text_color").unwrap();
-    prop.set_f32(Role::App, 0, 0.).unwrap();
+    prop.set_f32(Role::App, 0, 0.365).unwrap();
     prop.set_f32(Role::App, 1, 1.).unwrap();
-    prop.set_f32(Role::App, 2, 0.).unwrap();
+    prop.set_f32(Role::App, 2, 0.694).unwrap();
     prop.set_f32(Role::App, 3, 1.).unwrap();
 
     drop(sg);
@@ -940,9 +940,9 @@ pub(super) async fn make(
         prop.set_f32(Role::App, 3, 1.).unwrap();
     }
     let prop = node.get_property("cursor_color").unwrap();
-    prop.set_f32(Role::App, 0, 1.).unwrap();
-    prop.set_f32(Role::App, 1, 0.5).unwrap();
-    prop.set_f32(Role::App, 2, 0.5).unwrap();
+    prop.set_f32(Role::App, 0, 0.816).unwrap();
+    prop.set_f32(Role::App, 1, 0.627).unwrap();
+    prop.set_f32(Role::App, 2, 1.).unwrap();
     prop.set_f32(Role::App, 3, 1.).unwrap();
     let prop = node.get_property("hi_bg_color").unwrap();
     if LIGHTMODE {
