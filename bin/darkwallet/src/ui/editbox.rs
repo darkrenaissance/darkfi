@@ -41,6 +41,7 @@ use crate::{
     pubsub::Subscription,
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
     text::{self, Glyph, GlyphPositionIter, TextShaperPtr},
+    util::is_whitespace,
     ExecutorPtr,
 };
 
@@ -392,6 +393,10 @@ impl EditBox {
             let cursor_rect = Rectangle { x: 0., y: 0., w: CURSOR_WIDTH, h: clip.h };
             mesh.draw_box(&cursor_rect, cursor_color, &Rectangle::zero());
         } else if is_focused && cursor_pos == glyphs.len() {
+            if is_whitespace(&glyphs.last().unwrap().substr) {
+                rhs += font_size / 2.;
+            }
+
             let cursor_rect =
                 Rectangle { x: rhs - CURSOR_WIDTH, y: 0., w: CURSOR_WIDTH, h: clip.h };
             mesh.draw_box(&cursor_rect, cursor_color, &Rectangle::zero());
@@ -1151,7 +1156,12 @@ impl EditBox {
                 0.
             } else if cursor_pos == glyphs.len() {
                 let glyph_pos = glyph_pos_iter.last().unwrap();
-                glyph_pos.rhs()
+
+                let mut rhs = glyph_pos.rhs();
+                if is_whitespace(&glyphs.last().unwrap().substr) {
+                    rhs += font_size / 2.;
+                }
+                rhs
             } else {
                 assert!(cursor_pos < glyphs.len());
                 let glyph_pos = glyph_pos_iter.nth(cursor_pos).expect("glyph pos mismatch glyphs");

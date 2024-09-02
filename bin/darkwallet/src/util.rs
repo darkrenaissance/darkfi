@@ -18,6 +18,10 @@
 
 use colored::Colorize;
 
+pub fn is_whitespace(s: &str) -> bool {
+    s.chars().all(char::is_whitespace)
+}
+
 #[allow(dead_code)]
 pub fn ansi_texture(width: usize, height: usize, data: &Vec<u8>) -> String {
     let mut out = String::new();

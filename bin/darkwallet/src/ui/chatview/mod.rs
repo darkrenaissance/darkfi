@@ -48,7 +48,7 @@ use crate::{
     pubsub::Subscription,
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
     text::{self, Glyph, GlyphPositionIter, TextShaperPtr},
-    util::enumerate,
+    util::{enumerate, is_whitespace},
     ExecutorPtr,
 };
 
@@ -56,10 +56,6 @@ use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify};
 
 const EPSILON: f32 = 0.001;
 const BIG_EPSILON: f32 = 0.05;
-
-fn is_whitespace(s: &str) -> bool {
-    s.chars().all(char::is_whitespace)
-}
 
 fn is_zero(x: f32) -> bool {
     x.abs() < EPSILON
