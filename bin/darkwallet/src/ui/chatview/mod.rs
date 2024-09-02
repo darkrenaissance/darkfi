@@ -88,12 +88,19 @@ struct TouchInfo {
     start_scroll: f32,
     start_y: f32,
     start_instant: std::time::Instant,
+    last_instant: std::time::Instant,
     last_y: f32,
 }
 
 impl TouchInfo {
     fn new() -> Self {
-        Self { start_scroll: 0., start_y: 0., start_instant: std::time::Instant::now(), last_y: 0. }
+        Self {
+            start_scroll: 0.,
+            start_y: 0.,
+            start_instant: std::time::Instant::now(),
+            last_instant: std::time::Instant::now(),
+            last_y: 0.,
+        }
     }
 }
 
@@ -436,13 +443,20 @@ impl ChatView {
                 touch_info.start_scroll = self.scroll.get();
                 touch_info.start_y = touch_y;
                 touch_info.start_instant = std::time::Instant::now();
+                touch_info.last_instant = std::time::Instant::now();
                 touch_info.last_y = touch_y;
             }
             TouchPhase::Moved => {
-                let (start_scroll, start_y) = {
+                let instant = std::time::Instant::now();
+                let (start_scroll, start_y, do_update) = {
                     let mut touch_info = self.touch_info.lock().unwrap();
                     touch_info.last_y = touch_y;
-                    (touch_info.start_scroll, touch_info.start_y)
+                    let last_elapsed = touch_info.last_instant.elapsed().as_millis_f32();
+                    let do_update = last_elapsed > 20.;
+                    if do_update {
+                        touch_info.last_instant = std::time::Instant::now();
+                    }
+                    (touch_info.start_scroll, touch_info.start_y, do_update)
                 };
 
                 let dist = touch_y - start_y;
@@ -452,7 +466,10 @@ impl ChatView {
                 // how often we move to fixed intervals.
                 // draw a poly shape and eval each line segment.
                 let scroll = start_scroll + dist;
-                self.scrollview(scroll).await;
+                let instant = std::time::Instant::now();
+                if do_update {
+                    self.scrollview(scroll).await;
+                }
             }
             TouchPhase::Ended => {
                 // Now calculate scroll acceleration

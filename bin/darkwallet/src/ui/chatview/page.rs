@@ -119,6 +119,10 @@ impl PrivMessage {
         debug_render: bool,
         render_api: &RenderApi,
     ) -> DrawMesh {
+        if let Some(mesh) = &self.mesh_cache {
+            return mesh.clone()
+        }
+
         //debug!(target: "ui::chatview", "gen_mesh({})", glyph_str(&self.unwrapped_glyphs));
         let mut mesh = MeshBuilder::new();
 
@@ -586,8 +590,7 @@ impl MessageBuffer {
     ) -> Vec<(f32, DrawMesh)> {
         let mut meshes = vec![];
 
-        let descent = line_height - baseline;
-        let mut current_pos = descent;
+        let mut current_pos = 0.;
         for msg in &mut self.msgs {
             let mesh_height = msg.height(line_height);
             let msg_bottom = current_pos;
