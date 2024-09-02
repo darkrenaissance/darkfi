@@ -80,7 +80,9 @@ is down. Please do the following:
 1. Take careful note of the `IO error` that is written after `Unable to
 connect to seed`.
 2. Send a message in the community Telegram (t.me/darkfichat) with the
-seed IO error. 
+seed IO error. Please don't send screenshots- instead use pastebin (or
+termbin or pastenym) for multi-line errors, or just copy paste for a
+single line error.
 3. You can set a peer such as `tcp+tls://example_peer:26661/` in your
 config file. Ask in the telegram community channel for an active peer
 (here we are using a fake peer called `example_peer`. Then open the
@@ -117,9 +119,14 @@ to the network`.
 
 If the hostlist is not empty, retry the darkirc connection and carefully
 note the connection errors that are happening from peers. Report these
-errors on the community telegram (t.me/darkfichat). It might be simply
-the case that there are not enough peers on the network, or perhaps
-there is another issue we are not aware of.
+errors on the community telegram (t.me/darkfichat).
+
+Please don't send screenshots- instead use pastebin (or termbin or
+pastenym) for multi-line errors, or just copy paste for a single line
+error.
+
+It might be simply the case that there are not enough peers on the
+network, or perhaps there is another issue we are not aware of.
 
 You can also check the liveness of peers using the `ping` tool.
 
@@ -139,7 +146,9 @@ If the peers are reachable, you'll receive a `Connected!` output
 If you're able to connect to the seed but are failing to establish peer
 connections, please retry the darkirc connection and carefully note the
 connection errors that are happening from peers. Report these errors on
-the community telegram (t.me/darkfichat).
+the community telegram (t.me/darkfichat). Please don't send screenshots-
+instead use pastebin (or termbin or pastenym) for multi-line errors,
+or just copy paste for a single line error.
 
 ## dnet
 
