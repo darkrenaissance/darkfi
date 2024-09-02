@@ -311,7 +311,7 @@ impl Slot {
             let (addr, channel) = match self.try_connect(host.clone(), last_seen).await {
                 Ok(connect_info) => connect_info,
                 Err(err) => {
-                    info!(
+                    debug!(
                         target: "net::outbound_session::try_connect()",
                         "[P2P] Outbound slot #{} connection failed: {}",
                         slot, err
@@ -396,7 +396,7 @@ impl Slot {
             Ok((addr_final, channel)) => Ok((addr_final, channel)),
 
             Err(err) => {
-                debug!(
+                info!(
                     target: "net::outbound_session::try_connect()",
                     "[P2P] Unable to connect outbound slot #{} [{}]: {}",
                     self.slot, addr, err
