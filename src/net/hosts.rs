@@ -727,8 +727,8 @@ impl HostContainer {
             // our system clock is behind or if other nodes are
             // misreporting the last_seen field.
             if now < last_seen {
-                warn!(target: "net::hosts::refresh()",
-                "System clock is behind or peer is misreporting last_seen field");
+                debug!(target: "net::hosts::refresh()",
+                "last_seen [{}] is newer than current system time [{}]. Skipping", now, last_seen);
                 continue
             }
             if (now - last_seen) > max_age {
