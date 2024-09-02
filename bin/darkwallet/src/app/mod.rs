@@ -193,9 +193,7 @@ impl App {
 
         drop(sg);
 
-        schema::make(
-            &self
-        ).await;
+        schema::make(&self).await;
         debug!(target: "app", "Schema loaded");
 
         // Access drawable in window node and call draw()
@@ -289,4 +287,3 @@ fn populate_tree(tree: &sled::Tree) {
     // O(n)
     debug!(target: "app", "populated db with {} lines", tree.len());
 }
-

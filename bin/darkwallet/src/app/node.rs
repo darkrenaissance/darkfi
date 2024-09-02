@@ -284,4 +284,3 @@ pub fn create_chatview(
 
     (node.id, recvr)
 }
-

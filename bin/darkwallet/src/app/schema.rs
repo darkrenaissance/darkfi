@@ -22,20 +22,25 @@ use crate::{
     darkirc::{DarkIrcBackendPtr, Privmsg},
     error::Error,
     expr::Op,
-    gfx::{GraphicsEventPublisherPtr, RenderApiPtr, Vertex, Rectangle},
+    gfx::{GraphicsEventPublisherPtr, Rectangle, RenderApiPtr, Vertex},
+    mesh::{Color, MeshBuilder},
     prop::{Property, PropertyBool, PropertyStr, PropertySubType, PropertyType, Role},
     scene::{
         CallArgType, MethodResponseFn, Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId,
         SceneNodeType, Slot,
     },
-    mesh::{Color, MeshBuilder},
     text::TextShaperPtr,
     ui::{chatview, Button, ChatView, EditBox, Image, Mesh, RenderLayer, Stoppable, Text, Window},
     ExecutorPtr,
 };
 
-use super::{App, populate_tree,
-node::{create_mesh, create_layer, create_button, create_image, create_text, create_editbox, create_chatview}};
+use super::{
+    node::{
+        create_button, create_chatview, create_editbox, create_image, create_layer, create_mesh,
+        create_text,
+    },
+    populate_tree, App,
+};
 
 #[cfg(target_os = "android")]
 const CHATDB_PATH: &str = "/data/data/darkfi.darkwallet/chatdb/";
@@ -64,9 +69,7 @@ const FONTSIZE: f32 = 40.;
 #[cfg(target_os = "linux")]
 const FONTSIZE: f32 = 20.;
 
-pub(super) async fn make_old(
-    app: &App
-) {
+pub(super) async fn make_old(app: &App) {
     //let mut tasks = vec![];
     // Create a layer called view
     let mut sg = app.sg.lock().await;
@@ -87,8 +90,7 @@ pub(super) async fn make_old(
     let node_id = node.id;
     drop(sg);
     let pimpl =
-        RenderLayer::new(app.ex.clone(), app.sg.clone(), node_id, app.render_api.clone())
-            .await;
+        RenderLayer::new(app.ex.clone(), app.sg.clone(), node_id, app.render_api.clone()).await;
     let mut sg = app.sg.lock().await;
     let node = sg.get_node_mut(node_id).unwrap();
     node.pimpl = pimpl;
@@ -125,15 +127,9 @@ pub(super) async fn make_old(
     ];
     let indices = vec![0, 2, 1, 1, 2, 3];
     drop(sg);
-    let pimpl = Mesh::new(
-        app.ex.clone(),
-        app.sg.clone(),
-        node_id,
-        app.render_api.clone(),
-        verts,
-        indices,
-    )
-    .await;
+    let pimpl =
+        Mesh::new(app.ex.clone(), app.sg.clone(), node_id, app.render_api.clone(), verts, indices)
+            .await;
     let mut sg = app.sg.lock().await;
     let node = sg.get_node_mut(node_id).unwrap();
     node.pimpl = pimpl;
@@ -145,10 +141,8 @@ pub(super) async fn make_old(
 
     let node = sg.get_node_mut(node_id).unwrap();
     let prop = node.get_property("rect").unwrap();
-    let code = vec![Op::Sub((
-        Box::new(Op::LoadVar("w".to_string())),
-        Box::new(Op::ConstFloat32(220.)),
-    ))];
+    let code =
+        vec![Op::Sub((Box::new(Op::LoadVar("w".to_string())), Box::new(Op::ConstFloat32(220.))))];
     prop.set_expr(Role::App, 0, code).unwrap();
     prop.set_f32(Role::App, 1, 10.).unwrap();
     prop.set_f32(Role::App, 2, 200.).unwrap();
@@ -182,15 +176,9 @@ pub(super) async fn make_old(
     };
     let indices = vec![0, 2, 1, 1, 2, 3];
     drop(sg);
-    let pimpl = Mesh::new(
-        app.ex.clone(),
-        app.sg.clone(),
-        node_id,
-        app.render_api.clone(),
-        verts,
-        indices,
-    )
-    .await;
+    let pimpl =
+        Mesh::new(app.ex.clone(), app.sg.clone(), node_id, app.render_api.clone(), verts, indices)
+            .await;
     let mut sg = app.sg.lock().await;
     let node = sg.get_node_mut(node_id).unwrap();
     node.pimpl = pimpl;
@@ -203,10 +191,8 @@ pub(super) async fn make_old(
     let node = sg.get_node_mut(node_id).unwrap();
     node.set_property_bool(Role::App, "is_active", true).unwrap();
     let prop = node.get_property("rect").unwrap();
-    let code = vec![Op::Sub((
-        Box::new(Op::LoadVar("w".to_string())),
-        Box::new(Op::ConstFloat32(220.)),
-    ))];
+    let code =
+        vec![Op::Sub((Box::new(Op::LoadVar("w".to_string())), Box::new(Op::ConstFloat32(220.))))];
     prop.set_expr(Role::App, 0, code).unwrap();
     prop.set_f32(Role::App, 1, 10.).unwrap();
     prop.set_f32(Role::App, 2, 200.).unwrap();
@@ -217,8 +203,7 @@ pub(super) async fn make_old(
     node.register("click", slot_click).unwrap();
 
     drop(sg);
-    let pimpl =
-        Button::new(app.ex.clone(), app.sg.clone(), node_id, app.event_pub.clone()).await;
+    let pimpl = Button::new(app.ex.clone(), app.sg.clone(), node_id, app.event_pub.clone()).await;
     let mut sg = app.sg.lock().await;
     let node = sg.get_node_mut(node_id).unwrap();
     node.pimpl = pimpl;
@@ -263,15 +248,9 @@ pub(super) async fn make_old(
     };
     let indices = vec![0, 2, 1, 1, 2, 3];
     drop(sg);
-    let pimpl = Mesh::new(
-        app.ex.clone(),
-        app.sg.clone(),
-        node_id,
-        app.render_api.clone(),
-        verts,
-        indices,
-    )
-    .await;
+    let pimpl =
+        Mesh::new(app.ex.clone(), app.sg.clone(), node_id, app.render_api.clone(), verts, indices)
+            .await;
     let mut sg = app.sg.lock().await;
     let node = sg.get_node_mut(node_id).unwrap();
     node.pimpl = pimpl;
@@ -308,15 +287,9 @@ pub(super) async fn make_old(
     ];
     let indices = vec![0, 2, 1, 1, 2, 3];
     drop(sg);
-    let pimpl = Mesh::new(
-        app.ex.clone(),
-        app.sg.clone(),
-        node_id,
-        app.render_api.clone(),
-        verts,
-        indices,
-    )
-    .await;
+    let pimpl =
+        Mesh::new(app.ex.clone(), app.sg.clone(), node_id, app.render_api.clone(), verts, indices)
+            .await;
     let mut sg = app.sg.lock().await;
     let node = sg.get_node_mut(node_id).unwrap();
     node.pimpl = pimpl;
@@ -329,10 +302,8 @@ pub(super) async fn make_old(
     let node = sg.get_node_mut(node_id).unwrap();
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(Role::App, 0, 0.).unwrap();
-    let code = vec![Op::Sub((
-        Box::new(Op::LoadVar("h".to_string())),
-        Box::new(Op::ConstFloat32(200.)),
-    ))];
+    let code =
+        vec![Op::Sub((Box::new(Op::LoadVar("h".to_string())), Box::new(Op::ConstFloat32(200.))))];
     prop.set_expr(Role::App, 1, code).unwrap();
     let code = vec![Op::LoadVar("w".to_string())];
     prop.set_expr(Role::App, 2, code).unwrap();
@@ -355,15 +326,9 @@ pub(super) async fn make_old(
     ];
     let indices = vec![0, 2, 1, 1, 2, 3];
     drop(sg);
-    let pimpl = Mesh::new(
-        app.ex.clone(),
-        app.sg.clone(),
-        node_id,
-        app.render_api.clone(),
-        verts,
-        indices,
-    )
-    .await;
+    let pimpl =
+        Mesh::new(app.ex.clone(), app.sg.clone(), node_id, app.render_api.clone(), verts, indices)
+            .await;
     let mut sg = app.sg.lock().await;
     let node = sg.get_node_mut(node_id).unwrap();
     node.pimpl = pimpl;
@@ -384,8 +349,7 @@ pub(super) async fn make_old(
 
     // Setup the pimpl
     drop(sg);
-    let pimpl =
-        Image::new(app.ex.clone(), app.sg.clone(), node_id, app.render_api.clone()).await;
+    let pimpl = Image::new(app.ex.clone(), app.sg.clone(), node_id, app.render_api.clone()).await;
     let mut sg = app.sg.lock().await;
     let node = sg.get_node_mut(node_id).unwrap();
     node.pimpl = pimpl;
@@ -531,10 +495,7 @@ pub(super) async fn make_old(
     let code = vec![Op::LoadVar("w".to_string())];
     prop.set_expr(Role::App, 2, code).unwrap();
     let code = vec![Op::Sub((
-        Box::new(Op::Div((
-            Box::new(Op::LoadVar("h".to_string())),
-            Box::new(Op::ConstFloat32(2.)),
-        ))),
+        Box::new(Op::Div((Box::new(Op::LoadVar("h".to_string())), Box::new(Op::ConstFloat32(2.))))),
         Box::new(Op::ConstFloat32(200.)),
     ))];
     prop.set_expr(Role::App, 3, code).unwrap();
@@ -614,9 +575,7 @@ pub(super) async fn make_old(
     //*app.tasks.lock().unwrap() = tasks;
 }
 
-pub(super) async fn make(
-    app: &App
-) {
+pub(super) async fn make(app: &App) {
     // Main view
     let mut sg = app.sg.lock().await;
     let layer_node_id = create_layer(&mut sg, "view");
@@ -633,8 +592,7 @@ pub(super) async fn make(
     let node_id = node.id;
     drop(sg);
     let pimpl =
-        RenderLayer::new(app.ex.clone(), app.sg.clone(), node_id, app.render_api.clone())
-            .await;
+        RenderLayer::new(app.ex.clone(), app.sg.clone(), node_id, app.render_api.clone()).await;
     let mut sg = app.sg.lock().await;
     let node = sg.get_node_mut(node_id).unwrap();
     node.pimpl = pimpl;
@@ -671,15 +629,9 @@ pub(super) async fn make(
     ];
     let indices = vec![0, 2, 1, 1, 2, 3];
     drop(sg);
-    let pimpl = Mesh::new(
-        app.ex.clone(),
-        app.sg.clone(),
-        node_id,
-        app.render_api.clone(),
-        verts,
-        indices,
-    )
-    .await;
+    let pimpl =
+        Mesh::new(app.ex.clone(), app.sg.clone(), node_id, app.render_api.clone(), verts, indices)
+            .await;
     let mut sg = app.sg.lock().await;
     let node = sg.get_node_mut(node_id).unwrap();
     node.pimpl = pimpl;
@@ -700,7 +652,7 @@ pub(super) async fn make(
     ))];
     prop.set_expr(Role::App, 3, code).unwrap();
     node.set_property_f32(Role::App, "font_size", FONTSIZE).unwrap();
-    node.set_property_f32(Role::App, "line_height", FONTSIZE*1.5).unwrap();
+    node.set_property_f32(Role::App, "line_height", FONTSIZE * 1.5).unwrap();
     node.set_property_f32(Role::App, "baseline", 20.).unwrap();
     node.set_property_u32(Role::App, "z_index", 1).unwrap();
     //node.set_property_bool(Role::App, "debug", true).unwrap();
@@ -785,8 +737,11 @@ pub(super) async fn make(
     node.set_property_u32(Role::App, "z_index", 0).unwrap();
     drop(sg);
     let mut mesh = MeshBuilder::new();
-    mesh.draw_box(&Rectangle { x: 0., y: 0., w: 1., h: 1. },
-        [0., 0.13, 0.08, 1.], &Rectangle { x: 0., y: 0., w: 1., h: 1. });
+    mesh.draw_box(
+        &Rectangle { x: 0., y: 0., w: 1., h: 1. },
+        [0., 0.13, 0.08, 1.],
+        &Rectangle { x: 0., y: 0., w: 1., h: 1. },
+    );
     let pimpl = Mesh::new(
         app.ex.clone(),
         app.sg.clone(),
@@ -818,8 +773,11 @@ pub(super) async fn make(
     node.set_property_u32(Role::App, "z_index", 1).unwrap();
     drop(sg);
     let mut mesh = MeshBuilder::new();
-    mesh.draw_box(&Rectangle { x: 0., y: 0., w: 1., h: 1. },
-        [0.4, 0.4, 0.4, 1.], &Rectangle { x: 0., y: 0., w: 1., h: 1. });
+    mesh.draw_box(
+        &Rectangle { x: 0., y: 0., w: 1., h: 1. },
+        [0.4, 0.4, 0.4, 1.],
+        &Rectangle { x: 0., y: 0., w: 1., h: 1. },
+    );
     let pimpl = Mesh::new(
         app.ex.clone(),
         app.sg.clone(),
@@ -852,8 +810,11 @@ pub(super) async fn make(
     node.set_property_u32(Role::App, "z_index", 1).unwrap();
     drop(sg);
     let mut mesh = MeshBuilder::new();
-    mesh.draw_box(&Rectangle { x: 0., y: 0., w: 1., h: 1. },
-        [0.4, 0.4, 0.4, 1.], &Rectangle { x: 0., y: 0., w: 1., h: 1. });
+    mesh.draw_box(
+        &Rectangle { x: 0., y: 0., w: 1., h: 1. },
+        [0.4, 0.4, 0.4, 1.],
+        &Rectangle { x: 0., y: 0., w: 1., h: 1. },
+    );
     let pimpl = Mesh::new(
         app.ex.clone(),
         app.sg.clone(),
@@ -882,7 +843,7 @@ pub(super) async fn make(
     prop.set_expr(Role::App, 1, code).unwrap();
     prop.set_f32(Role::App, 2, NICKLABEL_WIDTH).unwrap();
     prop.set_f32(Role::App, 3, EDITCHAT_HEIGHT).unwrap();
-    node.set_property_f32(Role::App, "baseline", (EDITCHAT_HEIGHT + 20.)/2.).unwrap();
+    node.set_property_f32(Role::App, "baseline", (EDITCHAT_HEIGHT + 20.) / 2.).unwrap();
     node.set_property_f32(Role::App, "font_size", FONTSIZE).unwrap();
     node.set_property_str(Role::App, "text", "anon").unwrap();
     //node.set_property_str(Role::App, "text", "anon1").unwrap();
@@ -924,7 +885,7 @@ pub(super) async fn make(
     ))];
     prop.set_expr(Role::App, 2, code).unwrap();
     prop.set_f32(Role::App, 3, EDITCHAT_HEIGHT).unwrap();
-    node.set_property_f32(Role::App, "baseline", (EDITCHAT_HEIGHT + 20.)/2.).unwrap();
+    node.set_property_f32(Role::App, "baseline", (EDITCHAT_HEIGHT + 20.) / 2.).unwrap();
     node.set_property_f32(Role::App, "font_size", FONTSIZE).unwrap();
     //node.set_property_str(Role::App, "text", "hello king!😁🍆jelly 🍆1234").unwrap();
     let prop = node.get_property("text_color").unwrap();
@@ -998,4 +959,3 @@ pub(super) async fn make(
 
     sg.link(node_id, layer_node_id).unwrap();
 }
-
