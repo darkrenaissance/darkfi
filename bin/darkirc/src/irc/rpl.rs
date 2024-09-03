@@ -147,6 +147,12 @@ pub const RPL_MOTD: u16 = 372;
 /// Indicates the end of the Message of the Day to the client.
 pub const RPL_ENDOFMOTD: u16 = 376;
 
+/// `<client> <config file> :Rehashing`
+///
+/// Sent to an operator which has just successfully issued a REHASH
+/// command.
+pub const RPL_REHASHING: u16 = 382;
+
 /// `<client> <nickname> :No such nick/channel`
 ///
 /// Indicates that no client can be found for the supplied nickname.
