@@ -480,10 +480,6 @@ impl MessageBuffer {
         }
     }
 
-    pub(super) fn push(&mut self, msg: Message) {
-        self.msgs.push(msg);
-    }
-
     /// For scrolling we want to be able to adjust and measure without
     /// explicitly rendering since it may be off screen.
     pub(super) fn adjust_width(&mut self, line_width: f32) {
@@ -574,7 +570,7 @@ impl MessageBuffer {
             }
         };
 
-        self.insert_msg(msg, idx).await;
+        self.msgs.insert(idx, msg);
     }
 
     pub(super) async fn push_privmsg(
@@ -583,7 +579,7 @@ impl MessageBuffer {
         message_id: MessageId,
         nick: String,
         text: String,
-    ) {
+    ) -> f32 {
         let font_size = self.font_size.get();
 
         let msg = PrivMessage::new(
@@ -598,29 +594,15 @@ impl MessageBuffer {
         )
         .await;
 
+        let msg_height = msg.height(self.line_height.get());
+
         if self.msgs.is_empty() {
             self.msgs.push(msg);
-            return
+            return msg_height
         }
 
-        let idx = self.msgs.len() - 1;
-        self.insert_msg(msg, idx).await;
-    }
-
-    async fn insert_msg(&mut self, msg: Message, idx: usize) {
-        let font_size = self.font_size.get();
-
-        let timest = msg.timestamp();
-        let msg_is_date = msg.is_date();
-
-        // Do we cross from a new day?
-        let prev_msg = &self.msgs[idx];
-        let prev_timest = prev_msg.timestamp();
-        let prev_is_date = prev_msg.is_date();
-        let prev_date = Local.timestamp_millis_opt(prev_timest as i64).unwrap().date_naive();
-        let curr_date = Local.timestamp_millis_opt(timest as i64).unwrap().date_naive();
-
-        self.msgs.insert(idx, msg);
+        self.msgs.push(msg);
+        msg_height
     }
 
     /// Generate caches and return meshes

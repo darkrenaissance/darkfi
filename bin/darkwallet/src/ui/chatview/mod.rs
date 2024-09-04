@@ -79,8 +79,7 @@ pub struct ChatMsg {
 type Timestamp = u64;
 type MessageId = [u8; 32];
 
-const PAGE_SIZE: usize = 10;
-const PRELOAD_PAGES: usize = 10;
+const PRELOAD_PAGES: usize = 1;
 
 #[derive(Clone)]
 struct TouchInfo {
@@ -233,13 +232,13 @@ impl ChatView {
             let cv = bgload_cv.clone();
             let bgload_task = ex.spawn(async move {
                 loop {
+                    cv.wait().await;
                     let Some(self_) = me2.upgrade() else {
                         // Should not happen
-                        panic!("self destroyed before motion_task was stopped!");
+                        panic!("self destroyed before bgload_task was stopped!");
                     };
-                    cv.reset();
                     self_.handle_bgload().await;
-                    cv.wait().await;
+                    cv.reset();
                 }
             });
 
@@ -567,11 +566,9 @@ impl ChatView {
         }
 
         // Add message to page
+        let mut msgbuf = self.msgbuf.lock().await;
         self.msgbuf.lock().await.insert_privmsg(timest, message_id, nick, text).await;
-
-        // This will refresh the view, so we just use this
-        let scroll = self.scroll.get();
-        self.scrollview(scroll).await;
+        self.bgload_cv.notify();
     }
 
     async fn handle_movement(&self) {
@@ -617,10 +614,26 @@ impl ChatView {
     }
 
     async fn handle_bgload(&self) {
+        //debug!(target: "ui::chatview", "ChatView::handle_bgload()");
         // Do we need to load some more?
         let scroll = self.scroll.get();
+        let mut rect = read_rect(self.rect.clone()).expect("bad rect property");
+        let top = scroll + rect.h;
+
+        let preload_height = PRELOAD_PAGES as f32 * rect.h;
 
         let mut msgbuf = self.msgbuf.lock().await;
+
+        let total_height = msgbuf.calc_total_height().await;
+        if total_height > top + preload_height {
+            // Nothing to do here
+            //debug!(target: "ui::chatview", "bgloader: buffer is sufficient");
+            return
+        }
+
+        // Keep loading until this is below 0
+        let mut remaining_load_height = top + preload_height - total_height;
+        debug!(target: "ui::chatview", "bgloader: remaining px = {remaining_load_height}");
 
         // Get the current earliest timestamp
         let iter = match msgbuf.oldest_timestamp() {
@@ -634,7 +647,10 @@ impl ChatView {
                 let iter = self.tree.range(..key).rev();
                 iter
             }
-            None => self.tree.iter().rev(),
+            None => {
+                debug!(target: "ui::chatview", "initial load");
+                self.tree.iter().rev()
+            }
         };
 
         for entry in iter {
@@ -646,7 +662,17 @@ impl ChatView {
             let chatmsg: ChatMsg = deserialize(&v).unwrap();
             debug!(target: "ui::chatview", "{timest:?} {chatmsg:?}");
 
-            msgbuf.push_privmsg(timest, message_id, chatmsg.nick, chatmsg.text).await;
+            let msg_height =
+                msgbuf.push_privmsg(timest, message_id, chatmsg.nick, chatmsg.text).await;
+
+            remaining_load_height -= msg_height;
+            if remaining_load_height <= 0. {
+                break
+            }
+
+            // todo: if msg is visible {
+            self.redraw_cached(&mut msgbuf).await;
+            // }
         }
     }
 
@@ -655,31 +681,6 @@ impl ChatView {
         self.line_height.get() - self.baseline.get()
     }
 
-    /// Invalidates cache and redraws everything
-    async fn redraw(&self) {
-        debug!(target: "ui::chatview", "redraw()");
-        let sg = self.sg.lock().await;
-        let node = sg.get_node(self.node_id).unwrap();
-
-        let Some(parent_rect) = get_parent_rect(&sg, node) else {
-            return;
-        };
-
-        let Some(draw_update) = self.draw(&sg, &parent_rect).await else {
-            error!(target: "ui::chatview", "ChatView {:?} failed to draw", node);
-            return;
-        };
-        self.render_api.replace_draw_calls(draw_update.draw_calls).await;
-        debug!(target: "ui::chatview", "replace draw calls done");
-        for buffer_id in draw_update.freed_buffers {
-            self.render_api.delete_buffer(buffer_id);
-        }
-        for texture_id in draw_update.freed_textures {
-            self.render_api.delete_texture(texture_id);
-        }
-    }
-
-    /// Basically a version of redraw() which doesn't invalidate the cache
     async fn scrollview(&self, mut scroll: f32) -> f32 {
         //debug!(target: "ui::chatview", "scrollview()");
         let old_scroll = self.scroll.get();
@@ -692,25 +693,11 @@ impl ChatView {
             scroll = new_scroll;
         }
 
-        let (mut mesh_instrs, freed) = self.get_meshes(&mut msgbuf, &rect).await;
-        drop(msgbuf);
-
-        let mut instrs = vec![DrawInstruction::ApplyViewport(rect)];
-        instrs.append(&mut mesh_instrs);
-
-        let draw_calls =
-            vec![(self.dc_key, DrawCall { instrs, dcs: vec![], z_index: self.z_index.get() })];
-
-        self.render_api.replace_draw_calls(draw_calls).await;
-
-        for buffer_id in freed.buffers {
-            self.render_api.delete_buffer(buffer_id);
-        }
-        for texture_id in freed.textures {
-            self.render_api.delete_texture(texture_id);
-        }
+        self.redraw_cached(&mut msgbuf).await;
 
         self.scroll.set(scroll);
+        self.bgload_cv.notify();
+
         scroll - old_scroll
     }
 
@@ -726,17 +713,11 @@ impl ChatView {
         // We still wish to preload pages to fill the screen, so we just adjust it up to 0.
         let nonneg_scroll = max(scroll, 0.);
 
-        let mut total_height = msgbuf.calc_total_height().await;
-
-        //if total_height < nonneg_scroll + rect_h {
-        //    // Trigger loading
-        //    self.bgload_cv.notify();
-        //}
-
         if scroll < 0. {
             return Some(0.)
         }
 
+        let total_height = msgbuf.calc_total_height().await;
         let max_allowed_scroll = if total_height > rect_h { total_height - rect_h } else { 0. };
 
         if scroll > max_allowed_scroll {
@@ -794,7 +775,6 @@ impl ChatView {
         debug!(target: "ui::chatview", "ChatView::draw()");
 
         *self.parent_rect.lock().unwrap() = Some(parent_rect.clone());
-
         let rect = eval_rect(self.rect.clone(), parent_rect).expect("bad rect property");
 
         let mut msgbuf = self.msgbuf.lock().await;
@@ -804,6 +784,10 @@ impl ChatView {
         if let Some(scroll) = self.adjust_scroll(&mut msgbuf, scroll, rect.h).await {
             self.scroll.set(scroll);
         }
+
+        // We may need to load more messages since the screen size has changed.
+        // Now we have updated all the values so it's safe to wake up here.
+        self.bgload_cv.notify();
 
         let (mut mesh_instrs, freed) = self.get_meshes(&mut msgbuf, &rect).await;
         drop(msgbuf);
@@ -820,5 +804,32 @@ impl ChatView {
             freed_textures: freed.textures,
             freed_buffers: freed.buffers,
         })
+    }
+
+    async fn redraw_cached(&self, msgbuf: &mut MessageBuffer) {
+        let rect = read_rect(self.rect.clone()).expect("bad rect property");
+
+        let (mut mesh_instrs, freed) = self.get_meshes(msgbuf, &rect).await;
+
+        let mut instrs = vec![DrawInstruction::ApplyViewport(rect)];
+        instrs.append(&mut mesh_instrs);
+
+        let draw_calls =
+            vec![(self.dc_key, DrawCall { instrs, dcs: vec![], z_index: self.z_index.get() })];
+
+        self.render_api.replace_draw_calls(draw_calls).await;
+
+        for buffer_id in freed.buffers {
+            self.render_api.delete_buffer(buffer_id);
+        }
+        for texture_id in freed.textures {
+            self.render_api.delete_texture(texture_id);
+        }
+    }
+
+    /// Invalidates cache and redraws everything
+    async fn redraw_all(&self) {
+        debug!(target: "ui::chatview", "redraw()");
+        // ... todo fin
     }
 }
