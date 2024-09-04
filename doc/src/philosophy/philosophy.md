@@ -226,13 +226,11 @@ community members.
 
 
 Schedule for upcoming meetings: 
-* 4th of September:
-[Infocracy, The End of Communicative Action, & Digital Rationality](https://libgen.is/book/index.php?md5=A0E3362AE17379B6F48CEAC520319422)
-3 readings by Byung-Chul Han
-* 18th of September
+* 18th of September: [The System's Neatest Trick](https://theanarchistlibrary.org/library/ted-kaczynski-the-system-s-neatest-trick) by Theodore J. Kaczynski
 * 2nd of October
 * 16th of October
 * 30th of October
+* 13th of November
 
 
 <!-- TODO:
