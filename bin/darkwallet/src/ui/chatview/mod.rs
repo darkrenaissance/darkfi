@@ -634,6 +634,7 @@ impl ChatView {
         // Keep loading until this is below 0
         let mut remaining_load_height = top + preload_height - total_height;
         debug!(target: "ui::chatview", "bgloader: remaining px = {remaining_load_height}");
+        let mut remaining_visible = top - total_height;
 
         // Get the current earliest timestamp
         let iter = match msgbuf.oldest_timestamp() {
@@ -670,9 +671,10 @@ impl ChatView {
                 break
             }
 
-            // todo: if msg is visible {
-            self.redraw_cached(&mut msgbuf).await;
-            // }
+            if remaining_visible > 0. {
+                self.redraw_cached(&mut msgbuf).await;
+            }
+            remaining_visible -= msg_height;
         }
     }
 
