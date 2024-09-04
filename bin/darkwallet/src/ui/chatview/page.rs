@@ -436,17 +436,45 @@ pub struct MessageBuffer {
     date_msgs: HashMap<NaiveDate, Message>,
     pub(super) freed: FreedData,
     pub(super) line_width: f32,
+
+    font_size: PropertyFloat32,
+    line_height: PropertyFloat32,
+    baseline: PropertyFloat32,
+    timestamp_color: PropertyColor,
+    text_color: PropertyColor,
+    nick_colors: PropertyPtr,
+    debug: PropertyBool,
+
     render_api: RenderApiPtr,
     text_shaper: TextShaperPtr,
 }
 
 impl MessageBuffer {
-    pub(super) fn new(render_api: RenderApiPtr, text_shaper: TextShaperPtr) -> Self {
+    pub(super) fn new(
+        font_size: PropertyFloat32,
+        line_height: PropertyFloat32,
+        baseline: PropertyFloat32,
+        timestamp_color: PropertyColor,
+        text_color: PropertyColor,
+        nick_colors: PropertyPtr,
+        debug: PropertyBool,
+        render_api: RenderApiPtr,
+        text_shaper: TextShaperPtr,
+    ) -> Self {
         Self {
             msgs: vec![],
             date_msgs: HashMap::new(),
             freed: Default::default(),
             line_width: 0.,
+
+            font_size,
+            line_height,
+            baseline,
+            timestamp_color,
+            text_color,
+            nick_colors,
+            debug,
+
             render_api,
             text_shaper,
         }
@@ -480,15 +508,11 @@ impl MessageBuffer {
         }
     }
 
-    pub(super) async fn calc_total_height(
-        &mut self,
-        line_height: f32,
-        baseline: f32,
-        font_size: f32,
-    ) -> f32 {
+    pub(super) async fn calc_total_height(&mut self) -> f32 {
+        let line_height = self.line_height.get();
         let mut height = 0.;
 
-        let msgs = self.msgs_with_date(font_size);
+        let msgs = self.msgs_with_date();
         let mut msgs = pin!(msgs);
 
         while let Some(msg) = msgs.next().await {
@@ -500,12 +524,13 @@ impl MessageBuffer {
 
     pub(super) async fn insert_privmsg(
         &mut self,
-        font_size: f32,
         timest: Timestamp,
         message_id: MessageId,
         nick: String,
         text: String,
     ) {
+        let font_size = self.font_size.get();
+
         let msg = PrivMessage::new(
             font_size,
             timest,
@@ -549,17 +574,18 @@ impl MessageBuffer {
             }
         };
 
-        self.insert_msg(msg, idx, font_size).await;
+        self.insert_msg(msg, idx).await;
     }
 
     pub(super) async fn push_privmsg(
         &mut self,
-        font_size: f32,
         timest: Timestamp,
         message_id: MessageId,
         nick: String,
         text: String,
     ) {
+        let font_size = self.font_size.get();
+
         let msg = PrivMessage::new(
             font_size,
             timest,
@@ -578,10 +604,12 @@ impl MessageBuffer {
         }
 
         let idx = self.msgs.len() - 1;
-        self.insert_msg(msg, idx, font_size).await;
+        self.insert_msg(msg, idx).await;
     }
 
-    async fn insert_msg(&mut self, msg: Message, idx: usize, font_size: f32) {
+    async fn insert_msg(&mut self, msg: Message, idx: usize) {
+        let font_size = self.font_size.get();
+
         let timest = msg.timestamp();
         let msg_is_date = msg.is_date();
 
@@ -600,17 +628,18 @@ impl MessageBuffer {
         &mut self,
         rect: &Rectangle,
         scroll: f32,
-        font_size: f32,
-        line_height: f32,
-        baseline: f32,
-        nick_colors: &[Color],
-        timestamp_color: Color,
-        text_color: Color,
-        debug_render: bool,
     ) -> Vec<(f32, DrawMesh)> {
+        let line_height = self.line_height.get();
+        let baseline = self.baseline.get();
+        let debug_render = self.debug.get();
+
+        let timest_color = self.timestamp_color.get();
+        let text_color = self.text_color.get();
+        let nick_colors = self.read_nick_colors();
+
         let render_api = self.render_api.clone();
 
-        let msgs = self.msgs_with_date(font_size);
+        let msgs = self.msgs_with_date();
         let mut msgs = pin!(msgs);
 
         let mut meshes = vec![];
@@ -633,8 +662,8 @@ impl MessageBuffer {
                     rect,
                     line_height,
                     baseline,
-                    nick_colors,
-                    timestamp_color,
+                    &nick_colors,
+                    timest_color,
                     text_color,
                     debug_render,
                     &render_api,
@@ -650,7 +679,8 @@ impl MessageBuffer {
     }
 
     /// Gets around borrow checker with unsafe
-    fn msgs_with_date(&mut self, font_size: f32) -> impl Stream<Item = &mut Message> {
+    fn msgs_with_date(&mut self) -> impl Stream<Item = &mut Message> {
+        let font_size = self.font_size.get();
         AsyncIter::from(async_gen! {
             let mut last_date = None;
 
@@ -704,5 +734,19 @@ impl MessageBuffer {
     pub(super) fn latest_timestamp(&self) -> Option<Timestamp> {
         let first_msg = &self.msgs.first()?;
         Some(first_msg.timestamp())
+    }
+
+    fn read_nick_colors(&self) -> Vec<Color> {
+        let mut colors = vec![];
+        let mut color = [0f32; 4];
+        for i in 0..self.nick_colors.get_len() {
+            color[i % 4] = self.nick_colors.get_f32(i).expect("prop logic err");
+
+            if i > 0 && i % 4 == 0 {
+                let color = std::mem::take(&mut color);
+                colors.push(color);
+            }
+        }
+        colors
     }
 }

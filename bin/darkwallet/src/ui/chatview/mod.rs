@@ -143,6 +143,9 @@ pub struct ChatView {
     accel: AtomicF32,
     speed: AtomicF32,
 
+    // Triggers the background loading task to wake up
+    bgload_cv: Arc<CondVar>,
+
     /// Used for correct converting input event pos from screen to widget space.
     /// We also use it when we re-eval rect when its changed via property.
     parent_rect: SyncMutex<Option<Rectangle>>,
@@ -225,6 +228,21 @@ impl ChatView {
                 }
             });
 
+            let me2 = me.clone();
+            let bgload_cv = Arc::new(CondVar::new());
+            let cv = bgload_cv.clone();
+            let bgload_task = ex.spawn(async move {
+                loop {
+                    let Some(self_) = me2.upgrade() else {
+                        // Should not happen
+                        panic!("self destroyed before motion_task was stopped!");
+                    };
+                    cv.reset();
+                    self_.handle_bgload().await;
+                    cv.wait().await;
+                }
+            });
+
             let mut on_modify = OnModify::new(ex, node_name, node_id, me.clone());
 
             async fn reload_view(self_: Arc<ChatView>) {
@@ -245,6 +263,7 @@ impl ChatView {
                 key_down_task,
                 insert_line_method_task,
                 motion_task,
+                bgload_task,
             ];
             tasks.append(&mut on_modify.tasks);
 
@@ -256,7 +275,17 @@ impl ChatView {
                 text_shaper: text_shaper.clone(),
                 tree,
 
-                msgbuf: AsyncMutex::new(MessageBuffer::new(render_api, text_shaper)),
+                msgbuf: AsyncMutex::new(MessageBuffer::new(
+                    font_size.clone(),
+                    line_height.clone(),
+                    baseline.clone(),
+                    timestamp_color.clone(),
+                    text_color.clone(),
+                    nick_colors.clone(),
+                    debug.clone(),
+                    render_api,
+                    text_shaper,
+                )),
                 dc_key: OsRng.gen(),
 
                 mouse_pos: SyncMutex::new(Point::from([0., 0.])),
@@ -281,6 +310,8 @@ impl ChatView {
                 motion_cv,
                 accel: AtomicF32::new(0.),
                 speed: AtomicF32::new(0.),
+
+                bgload_cv,
 
                 parent_rect: SyncMutex::new(None),
             }
@@ -536,11 +567,7 @@ impl ChatView {
         }
 
         // Add message to page
-        self.msgbuf
-            .lock()
-            .await
-            .insert_privmsg(self.font_size.get(), timest, message_id, nick.clone(), text.clone())
-            .await;
+        self.msgbuf.lock().await.insert_privmsg(timest, message_id, nick, text).await;
 
         // This will refresh the view, so we just use this
         let scroll = self.scroll.get();
@@ -589,13 +616,12 @@ impl ChatView {
         }
     }
 
-    /// Descent = line height - baseline
-    fn descent(&self) -> f32 {
-        self.line_height.get() - self.baseline.get()
-    }
+    async fn handle_bgload(&self) {
+        // Do we need to load some more?
+        let scroll = self.scroll.get();
 
-    /// Load extra msgs
-    async fn preload_msgs(&self, msgbuf: &mut MessageBuffer) -> usize {
+        let mut msgbuf = self.msgbuf.lock().await;
+
         // Get the current earliest timestamp
         let iter = match msgbuf.oldest_timestamp() {
             Some(oldest_timest) => {
@@ -611,17 +637,6 @@ impl ChatView {
             None => self.tree.iter().rev(),
         };
 
-        self.load_n_msgs(msgbuf, iter, PRELOAD_PAGES).await
-    }
-
-    async fn load_n_msgs<I: Iterator<Item = sled::Result<(sled::IVec, sled::IVec)>>>(
-        &self,
-        msgbuf: &mut MessageBuffer,
-        iter: I,
-        n: usize,
-    ) -> usize {
-        let mut msgs_len = 0;
-
         for entry in iter {
             let Ok((k, v)) = entry else { break };
             assert_eq!(k.len(), 8 + 32);
@@ -631,28 +646,13 @@ impl ChatView {
             let chatmsg: ChatMsg = deserialize(&v).unwrap();
             debug!(target: "ui::chatview", "{timest:?} {chatmsg:?}");
 
-            msgbuf
-                .push_privmsg(self.font_size.get(), timest, message_id, chatmsg.nick, chatmsg.text)
-                .await;
-
-            msgs_len += 1;
+            msgbuf.push_privmsg(timest, message_id, chatmsg.nick, chatmsg.text).await;
         }
-        debug!(target: "ui::chatview", "populated {} messages", msgs_len);
-        msgs_len
     }
 
-    fn read_nick_colors(&self) -> Vec<Color> {
-        let mut colors = vec![];
-        let mut color = [0f32; 4];
-        for i in 0..self.nick_colors.get_len() {
-            color[i % 4] = self.nick_colors.get_f32(i).expect("prop logic err");
-
-            if i > 0 && i % 4 == 0 {
-                let color = std::mem::take(&mut color);
-                colors.push(color);
-            }
-        }
-        colors
+    /// Descent = line height - baseline
+    fn descent(&self) -> f32 {
+        self.line_height.get() - self.baseline.get()
     }
 
     /// Invalidates cache and redraws everything
@@ -723,27 +723,15 @@ impl ChatView {
         mut scroll: f32,
         rect_h: f32,
     ) -> Option<f32> {
-        let line_height = self.line_height.get();
-        let baseline = self.baseline.get();
-        let font_size = self.font_size.get();
-
         // We still wish to preload pages to fill the screen, so we just adjust it up to 0.
         let nonneg_scroll = max(scroll, 0.);
 
-        let mut total_height = msgbuf.calc_total_height(line_height, baseline, font_size).await;
-        // Load pages until we run out or we have enough
-        while total_height < nonneg_scroll + rect_h {
-            let n_loaded_pages = self.preload_msgs(msgbuf).await;
-            debug!(target: "ui::chatview", "set_adjusted_scroll() loaded until {:?}", msgbuf.oldest_timestamp());
+        let mut total_height = msgbuf.calc_total_height().await;
 
-            // We need this value after so first update it
-            total_height = msgbuf.calc_total_height(line_height, baseline, font_size).await;
-
-            // No more pages available to load
-            if n_loaded_pages == 0 {
-                break
-            }
-        }
+        //if total_height < nonneg_scroll + rect_h {
+        //    // Trigger loading
+        //    self.bgload_cv.notify();
+        //}
 
         if scroll < 0. {
             return Some(0.)
@@ -768,35 +756,15 @@ impl ChatView {
         rect: &Rectangle,
     ) -> (Vec<DrawInstruction>, FreedData) {
         let scroll = self.scroll.get();
-        let font_size = self.font_size.get();
-        let line_height = self.line_height.get();
-        let baseline = self.baseline.get();
-        let debug_render = self.debug.get();
 
-        let total_height = msgbuf.calc_total_height(line_height, baseline, font_size).await;
+        let total_height = msgbuf.calc_total_height().await;
         // If lines aren't enough to fill the available buffer then start from the top
         let start_pos = if total_height < rect.h { total_height } else { rect.h };
 
         let mut instrs = vec![];
         //let mut old_drawmesh = vec![];
 
-        let timest_color = self.timestamp_color.get();
-        let text_color = self.text_color.get();
-        let nick_colors = self.read_nick_colors();
-
-        let meshes = msgbuf
-            .gen_meshes(
-                rect,
-                scroll,
-                font_size,
-                line_height,
-                baseline,
-                &nick_colors,
-                timest_color.clone(),
-                text_color.clone(),
-                debug_render,
-            )
-            .await;
+        let meshes = msgbuf.gen_meshes(rect, scroll).await;
 
         let mut current_height = 0.;
         for (i, (y_pos, mesh)) in enumerate(meshes) {

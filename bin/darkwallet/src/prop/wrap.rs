@@ -22,6 +22,7 @@ use crate::{
     scene::SceneNode,
 };
 
+#[derive(Clone)]
 pub struct PropertyBool {
     prop: PropertyPtr,
     role: Role,
@@ -51,6 +52,7 @@ impl PropertyBool {
     }
 }
 
+#[derive(Clone)]
 pub struct PropertyUint32 {
     prop: PropertyPtr,
     role: Role,
@@ -87,6 +89,7 @@ impl PropertyUint32 {
     }
 }
 
+#[derive(Clone)]
 pub struct PropertyFloat32 {
     prop: PropertyPtr,
     role: Role,
@@ -116,6 +119,7 @@ impl PropertyFloat32 {
     }
 }
 
+#[derive(Clone)]
 pub struct PropertyStr {
     prop: PropertyPtr,
     role: Role,
@@ -145,6 +149,7 @@ impl PropertyStr {
     }
 }
 
+#[derive(Clone)]
 pub struct PropertyColor {
     prop: PropertyPtr,
     role: Role,
