@@ -16,12 +16,16 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use async_gen::{gen as async_gen, AsyncIter};
 use async_lock::Mutex as AsyncMutex;
-use chrono::{Local, TimeZone};
+use chrono::{Local, NaiveDate, TimeZone};
+use futures::stream::{Stream, StreamExt};
 use miniquad::{BufferId, TextureId};
 use std::{
+    collections::HashMap,
     hash::{DefaultHasher, Hash, Hasher},
     io::Cursor,
+    pin::pin,
     sync::{atomic::Ordering, Arc, Mutex as SyncMutex, Weak},
 };
 
@@ -35,7 +39,7 @@ use crate::{
     pubsub::Subscription,
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
     text::{self, glyph_str, Glyph, GlyphPositionIter, TextShaper, TextShaperPtr},
-    util::enumerate_mut,
+    util::{enumerate_mut, enumerate_ref},
     ExecutorPtr,
 };
 
@@ -223,6 +227,14 @@ impl PrivMessage {
     }
 }
 
+impl std::fmt::Debug for PrivMessage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let dt = Local.timestamp_millis_opt(self.timestamp as i64).unwrap();
+        let timestr = dt.format("%H:%M").to_string();
+        write!(f, "{} <{}> {}", timestr, self.nick, self.text)
+    }
+}
+
 #[derive(Clone)]
 pub(super) struct DateMessage {
     font_size: f32,
@@ -301,7 +313,16 @@ impl DateMessage {
     }
 }
 
+impl std::fmt::Debug for DateMessage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let dt = Local.timestamp_millis_opt(self.timestamp as i64).unwrap();
+        let datestr = dt.format("%a %-d %b %Y").to_string();
+        write!(f, "{}", datestr)
+    }
+}
+
 /// Easier than fucking around with traits nonsense
+#[derive(Debug)]
 enum Message {
     Priv(PrivMessage),
     Date(DateMessage),
@@ -412,6 +433,7 @@ impl FreedData {
 pub struct MessageBuffer {
     /// From most recent to older
     msgs: Vec<Message>,
+    date_msgs: HashMap<NaiveDate, Message>,
     pub(super) freed: FreedData,
     pub(super) line_width: f32,
     render_api: RenderApiPtr,
@@ -420,7 +442,14 @@ pub struct MessageBuffer {
 
 impl MessageBuffer {
     pub(super) fn new(render_api: RenderApiPtr, text_shaper: TextShaperPtr) -> Self {
-        Self { msgs: vec![], freed: Default::default(), line_width: 0., render_api, text_shaper }
+        Self {
+            msgs: vec![],
+            date_msgs: HashMap::new(),
+            freed: Default::default(),
+            line_width: 0.,
+            render_api,
+            text_shaper,
+        }
     }
 
     pub(super) fn push(&mut self, msg: Message) {
@@ -451,10 +480,18 @@ impl MessageBuffer {
         }
     }
 
-    pub(super) fn calc_total_height(&self, line_height: f32, baseline: f32) -> f32 {
+    pub(super) async fn calc_total_height(
+        &mut self,
+        line_height: f32,
+        baseline: f32,
+        font_size: f32,
+    ) -> f32 {
         let mut height = 0.;
 
-        for msg in &self.msgs {
+        let msgs = self.msgs_with_date(font_size);
+        let mut msgs = pin!(msgs);
+
+        while let Some(msg) = msgs.next().await {
             height += msg.height(line_height);
         }
 
@@ -482,12 +519,7 @@ impl MessageBuffer {
         .await;
 
         if self.msgs.is_empty() {
-            let datemsg =
-                DateMessage::new(font_size, timest, &self.text_shaper, &self.render_api).await;
-            assert!(datemsg.timestamp() <= timest);
-
             self.msgs.push(msg);
-            self.msgs.push(datemsg);
             return
         }
 
@@ -541,12 +573,7 @@ impl MessageBuffer {
         .await;
 
         if self.msgs.is_empty() {
-            let datemsg =
-                DateMessage::new(font_size, timest, &self.text_shaper, &self.render_api).await;
-            assert!(datemsg.timestamp() <= timest);
-
             self.msgs.push(msg);
-            self.msgs.push(datemsg);
             return
         }
 
@@ -566,13 +593,6 @@ impl MessageBuffer {
         let curr_date = Local.timestamp_millis_opt(timest as i64).unwrap().date_naive();
 
         self.msgs.insert(idx, msg);
-
-        if !prev_is_date && !msg_is_date && prev_date != curr_date {
-            let datemsg =
-                DateMessage::new(font_size, timest, &self.text_shaper, &self.render_api).await;
-            assert!(datemsg.timestamp() <= timest);
-            self.msgs.insert(idx + 1, datemsg);
-        }
     }
 
     /// Generate caches and return meshes
@@ -588,10 +608,14 @@ impl MessageBuffer {
         text_color: Color,
         debug_render: bool,
     ) -> Vec<(f32, DrawMesh)> {
-        let mut meshes = vec![];
+        let render_api = self.render_api.clone();
 
+        let msgs = self.msgs_with_date(font_size);
+        let mut msgs = pin!(msgs);
+
+        let mut meshes = vec![];
         let mut current_pos = 0.;
-        for msg in &mut self.msgs {
+        while let Some(msg) = msgs.next().await {
             let mesh_height = msg.height(line_height);
             let msg_bottom = current_pos;
             let msg_top = current_pos + mesh_height;
@@ -613,7 +637,7 @@ impl MessageBuffer {
                     timestamp_color,
                     text_color,
                     debug_render,
-                    &self.render_api,
+                    &render_api,
                 )
                 .await;
 
@@ -623,6 +647,53 @@ impl MessageBuffer {
 
         //debug!("gen_meshes() returning {} meshes", meshes.len());
         meshes
+    }
+
+    /// Gets around borrow checker with unsafe
+    fn msgs_with_date(&mut self, font_size: f32) -> impl Stream<Item = &mut Message> {
+        AsyncIter::from(async_gen! {
+            let mut last_date = None;
+
+            for idx in 0..self.msgs.len() {
+                let msg = &mut self.msgs[idx] as *mut Message;
+                let msg = unsafe { &mut *msg };
+                let timest = msg.timestamp();
+
+                let older_date = Local.timestamp_millis_opt(timest as i64).unwrap().date_naive();
+
+                if let Some(newer_date) = last_date {
+                    if newer_date != older_date {
+                        let datemsg = self.get_date_msg(newer_date, font_size).await;
+                        let datemsg = unsafe { &mut *(datemsg as *mut Message) };
+                        //debug!(target: "ui::chatview", "Adding date: {idx} {datemsg:?}");
+                        yield datemsg;
+                    }
+                }
+                last_date = Some(older_date);
+
+                //debug!(target: "ui::chatview", "{idx} {msg:?}");
+                yield msg;
+            }
+
+            if let Some(date) = last_date {
+                let datemsg = self.get_date_msg(date, font_size).await;
+                let datemsg = unsafe { &mut *(datemsg as *mut Message) };
+                yield datemsg;
+            }
+        })
+    }
+
+    async fn get_date_msg(&mut self, date: NaiveDate, font_size: f32) -> &mut Message {
+        let dt = date.and_hms_opt(0, 0, 0).unwrap();
+        let timest = Local.from_local_datetime(&dt).unwrap().timestamp_millis() as u64;
+
+        if !self.date_msgs.contains_key(&date) {
+            let datemsg =
+                DateMessage::new(font_size, timest, &self.text_shaper, &self.render_api).await;
+            self.date_msgs.insert(date, datemsg);
+        }
+
+        self.date_msgs.get_mut(&date).unwrap()
     }
 
     pub(super) fn oldest_timestamp(&self) -> Option<Timestamp> {

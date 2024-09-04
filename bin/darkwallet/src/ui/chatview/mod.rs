@@ -725,18 +725,19 @@ impl ChatView {
     ) -> Option<f32> {
         let line_height = self.line_height.get();
         let baseline = self.baseline.get();
+        let font_size = self.font_size.get();
 
         // We still wish to preload pages to fill the screen, so we just adjust it up to 0.
         let nonneg_scroll = max(scroll, 0.);
 
-        let mut total_height = msgbuf.calc_total_height(line_height, baseline);
+        let mut total_height = msgbuf.calc_total_height(line_height, baseline, font_size).await;
         // Load pages until we run out or we have enough
         while total_height < nonneg_scroll + rect_h {
             let n_loaded_pages = self.preload_msgs(msgbuf).await;
             debug!(target: "ui::chatview", "set_adjusted_scroll() loaded until {:?}", msgbuf.oldest_timestamp());
 
             // We need this value after so first update it
-            total_height = msgbuf.calc_total_height(line_height, baseline);
+            total_height = msgbuf.calc_total_height(line_height, baseline, font_size).await;
 
             // No more pages available to load
             if n_loaded_pages == 0 {
@@ -772,7 +773,7 @@ impl ChatView {
         let baseline = self.baseline.get();
         let debug_render = self.debug.get();
 
-        let total_height = msgbuf.calc_total_height(line_height, baseline);
+        let total_height = msgbuf.calc_total_height(line_height, baseline, font_size).await;
         // If lines aren't enough to fill the available buffer then start from the top
         let start_pos = if total_height < rect.h { total_height } else { rect.h };
 
