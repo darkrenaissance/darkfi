@@ -750,7 +750,6 @@ impl ChatView {
 
         let meshes = msgbuf.gen_meshes(rect, scroll).await;
 
-        let mut current_height = 0.;
         for (i, (y_pos, mesh)) in enumerate(meshes) {
             // Apply scroll and scissor
             // We use the scissor for scrolling
@@ -766,7 +765,6 @@ impl ChatView {
             instrs.push(DrawInstruction::ApplyMatrix(model));
 
             instrs.push(DrawInstruction::Draw(mesh));
-            //debug!(target: "ui::chatview", "mesh-{i}: {height} {current_height}");
         }
 
         let freed = std::mem::take(&mut msgbuf.freed);

@@ -652,8 +652,8 @@ pub(super) async fn make(app: &App) {
     ))];
     prop.set_expr(Role::App, 3, code).unwrap();
     node.set_property_f32(Role::App, "font_size", FONTSIZE).unwrap();
-    node.set_property_f32(Role::App, "line_height", FONTSIZE * 1.5).unwrap();
-    node.set_property_f32(Role::App, "baseline", 20.).unwrap();
+    node.set_property_f32(Role::App, "line_height", FONTSIZE * 1.6).unwrap();
+    node.set_property_f32(Role::App, "baseline", FONTSIZE * 1.2).unwrap();
     node.set_property_u32(Role::App, "z_index", 1).unwrap();
     //node.set_property_bool(Role::App, "debug", true).unwrap();
 
