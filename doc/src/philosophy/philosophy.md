@@ -217,22 +217,6 @@ to enact their vision and put their ideas into practice.
   and the other by society. The technology we create is to solve problems that
   society and aligned communities have.
 
-## Philosophy Meetings
-
-Every other Wednesday at 16:00 CET/14:00 UTC/10:00 EST, there is a meeting on 
-[darkirc](https://darkrenaissance.github.io/darkfi/misc/darkirc/darkirc.html) in 
-`#philosophy`.  Come and discuss different philosophy texts with fellow
-community members.
-
-
-Schedule for upcoming meetings: 
-* 18th of September: [The System's Neatest Trick](https://theanarchistlibrary.org/library/ted-kaczynski-the-system-s-neatest-trick) by Theodore J. Kaczynski
-* 2nd of October
-* 16th of October
-* 30th of October
-* 13th of November
-
-
 <!-- TODO:
 - liberal vs expansive democracy
 - fostering democratic orgs, democratic culture, lifecycle of an org
