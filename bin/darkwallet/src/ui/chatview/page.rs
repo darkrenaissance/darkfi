@@ -525,6 +525,7 @@ impl MessageBuffer {
         nick: String,
         text: String,
     ) {
+        //debug!(target: "ui::chatview", "MessageBuffer::insert_privmsg()");
         let font_size = self.font_size.get();
 
         let msg = PrivMessage::new(

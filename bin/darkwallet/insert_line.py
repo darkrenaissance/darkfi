@@ -18,5 +18,5 @@ for i in range(200):
     name = f"bob-{i}"
     send(1732944640000 + i*60000, "hhi12", f"hello {name}")
     #time.sleep(0.4)
-    #input("> ")
+    input("> ")
 

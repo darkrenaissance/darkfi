@@ -567,7 +567,8 @@ impl ChatView {
 
         // Add message to page
         let mut msgbuf = self.msgbuf.lock().await;
-        self.msgbuf.lock().await.insert_privmsg(timest, message_id, nick, text).await;
+        msgbuf.insert_privmsg(timest, message_id, nick, text).await;
+        self.redraw_cached(&mut msgbuf).await;
         self.bgload_cv.notify();
     }
 
@@ -614,7 +615,7 @@ impl ChatView {
     }
 
     async fn handle_bgload(&self) {
-        //debug!(target: "ui::chatview", "ChatView::handle_bgload()");
+        debug!(target: "ui::chatview", "ChatView::handle_bgload()");
         // Do we need to load some more?
         let scroll = self.scroll.get();
         let mut rect = read_rect(self.rect.clone()).expect("bad rect property");
@@ -627,7 +628,7 @@ impl ChatView {
         let total_height = msgbuf.calc_total_height().await;
         if total_height > top + preload_height {
             // Nothing to do here
-            //debug!(target: "ui::chatview", "bgloader: buffer is sufficient");
+            debug!(target: "ui::chatview", "bgloader: buffer is sufficient");
             return
         }
 
