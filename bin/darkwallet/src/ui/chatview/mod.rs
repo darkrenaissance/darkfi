@@ -46,6 +46,7 @@ use crate::{
     mesh::{Color, MeshBuilder, COLOR_BLUE, COLOR_GREEN},
     prop::{PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyUint32, Role},
     pubsub::Subscription,
+    ringbuf::RingBuffer,
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
     text::{self, Glyph, GlyphPositionIter, TextShaperPtr},
     util::{enumerate, is_whitespace},
@@ -86,6 +87,10 @@ struct TouchInfo {
     start_scroll: f32,
     start_y: f32,
     start_instant: std::time::Instant,
+
+    /// Used for flick scrolling
+    samples: RingBuffer<(std::time::Instant, f32), 2>,
+
     last_instant: std::time::Instant,
     last_y: f32,
 }
@@ -96,6 +101,7 @@ impl TouchInfo {
             start_scroll: 0.,
             start_y: 0.,
             start_instant: std::time::Instant::now(),
+            samples: RingBuffer::new(),
             last_instant: std::time::Instant::now(),
             last_y: 0.,
         }
@@ -474,6 +480,8 @@ impl ChatView {
                 touch_info.start_scroll = self.scroll.get();
                 touch_info.start_y = touch_y;
                 touch_info.start_instant = std::time::Instant::now();
+                touch_info.samples = RingBuffer::new();
+                touch_info.samples.push((std::time::Instant::now(), touch_y));
                 touch_info.last_instant = std::time::Instant::now();
                 touch_info.last_y = touch_y;
             }
@@ -485,11 +493,19 @@ impl ChatView {
                 let (start_scroll, start_y, do_update) = {
                     let mut touch_info = self.touch_info.lock().unwrap();
                     touch_info.last_y = touch_y;
+
+                    let last_sample = touch_info.samples.head().unwrap().0.elapsed().as_millis_f32();
+                    // Sample every 10ms
+                    if last_sample > 10. {
+                        touch_info.samples.push((std::time::Instant::now(), touch_y));
+                    }
+
                     let last_elapsed = touch_info.last_instant.elapsed().as_millis_f32();
                     let do_update = last_elapsed > 20.;
                     if do_update {
                         touch_info.last_instant = std::time::Instant::now();
                     }
+
                     (touch_info.start_scroll, touch_info.start_y, do_update)
                 };
 
@@ -500,7 +516,7 @@ impl ChatView {
                 // how often we move to fixed intervals.
                 // draw a poly shape and eval each line segment.
                 let scroll = start_scroll + dist;
-                let instant = std::time::Instant::now();
+
                 if do_update {
                     self.scrollview(scroll).await;
                 }
@@ -511,10 +527,17 @@ impl ChatView {
                 // Now calculate scroll acceleration
                 let touch_info = self.touch_info.lock().unwrap().clone();
 
-                let time = touch_info.start_instant.elapsed().as_millis_f32();
-                let dist = touch_y - touch_info.start_y;
+                let (oldest_sample, sample_y) = touch_info.samples.head().unwrap();
+                //let Some((oldest_sample, sample_y)) = touch_info.samples.head() else { return };
+                let time = oldest_sample.elapsed().as_millis_f32();
+                let dist = touch_y - sample_y;
+
+                //let speed = dist / time;
+                //self.speed.fetch_add(speed, Ordering::Relaxed);
+                //debug!(target: "ui::chatview", "speed = {dist} / {time} = {speed}");
 
                 let accel = self.mouse_scroll_start_accel.get() * dist / time;
+                debug!(target: "ui::chatview", "accel = {dist} / {time} = {accel}");
                 self.accel.fetch_add(accel, Ordering::Relaxed);
                 self.motion_cv.notify();
             }
@@ -574,17 +597,18 @@ impl ChatView {
 
     async fn handle_movement(&self) {
         loop {
-            msleep(20).await;
             let mut accel = self.accel.load(Ordering::Relaxed);
             let mut speed = self.speed.fetch_add(accel, Ordering::Relaxed) + accel;
+
+            // Apply resistance to acceleration
             accel *= self.mouse_scroll_decel.get();
             if accel.abs() < 0.05 {
                 accel = 0.;
             }
             self.accel.store(accel, Ordering::Relaxed);
 
-            // Apply constant decel to speed
             if is_zero(accel) {
+                // Apply constant decel to speed
                 speed *= self.mouse_scroll_resist.get();
                 if speed.abs() < BIG_EPSILON {
                     speed = 0.;
@@ -597,25 +621,22 @@ impl ChatView {
                 return
             }
 
-            if is_zero(speed) {
-                self.accel.store(0., Ordering::Relaxed);
-                self.speed.store(0., Ordering::Relaxed);
-                return
-            }
-
             let scroll = self.scroll.get() + speed;
             let dist = self.scrollview(scroll).await;
 
+            // We reached the end so just stop
             if is_zero(dist) {
                 self.accel.store(0., Ordering::Relaxed);
                 self.speed.store(0., Ordering::Relaxed);
                 return
             }
+
+            msleep(20).await;
         }
     }
 
     async fn handle_bgload(&self) {
-        debug!(target: "ui::chatview", "ChatView::handle_bgload()");
+        //debug!(target: "ui::chatview", "ChatView::handle_bgload()");
         // Do we need to load some more?
         let scroll = self.scroll.get();
         let mut rect = read_rect(self.rect.clone()).expect("bad rect property");
@@ -628,20 +649,20 @@ impl ChatView {
         let total_height = msgbuf.calc_total_height().await;
         if total_height > top + preload_height {
             // Nothing to do here
-            debug!(target: "ui::chatview", "bgloader: buffer is sufficient");
+            //debug!(target: "ui::chatview", "bgloader: buffer is sufficient");
             return
         }
 
         // Keep loading until this is below 0
         let mut remaining_load_height = top + preload_height - total_height;
-        debug!(target: "ui::chatview", "bgloader: remaining px = {remaining_load_height}");
+        //debug!(target: "ui::chatview", "bgloader: remaining px = {remaining_load_height}");
         let mut remaining_visible = top - total_height;
 
         // Get the current earliest timestamp
         let iter = match msgbuf.oldest_timestamp() {
             Some(oldest_timest) => {
                 // iterate from there
-                debug!(target: "ui::chatview", "preloading from {oldest_timest}");
+                //debug!(target: "ui::chatview", "preloading from {oldest_timest}");
                 let timest = (oldest_timest - 1).to_be_bytes();
                 let mut key = [0u8; 8 + 32];
                 key[..8].clone_from_slice(&timest);
@@ -650,7 +671,7 @@ impl ChatView {
                 iter
             }
             None => {
-                debug!(target: "ui::chatview", "initial load");
+                //debug!(target: "ui::chatview", "initial load");
                 self.tree.iter().rev()
             }
         };

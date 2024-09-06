@@ -662,7 +662,11 @@ pub(super) async fn make(app: &App) {
     #[cfg(target_os = "linux")]
     node.set_property_f32(Role::App, "mouse_scroll_start_accel", 4.).unwrap();
 
+    #[cfg(target_os = "android")]
+    node.set_property_f32(Role::App, "mouse_scroll_decel", 0.9).unwrap();
+    #[cfg(target_os = "linux")]
     node.set_property_f32(Role::App, "mouse_scroll_decel", 0.5).unwrap();
+
     node.set_property_f32(Role::App, "mouse_scroll_resist", 0.9).unwrap();
 
     let prop = node.get_property("timestamp_color").unwrap();

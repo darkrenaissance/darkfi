@@ -44,6 +44,7 @@ mod net;
 mod prop;
 mod pubsub;
 //mod py;
+mod ringbuf;
 mod scene;
 mod text;
 mod ui;
