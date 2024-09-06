@@ -99,12 +99,12 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     let datastore = expand_path(&args.datastore)?;
     fs::create_dir_all(&datastore).await?;
 
-    /*
     let replay_datastore = expand_path(&args.replay_datastore)?;
     let replay_mode = args.replay_mode;
 
     info!("Instantiating event DAG");
     let sled_db = sled::open(datastore)?;
+    /*
     let mut p2p_settings: darkfi::net::Settings = args.net.into();
     p2p_settings.app_version = semver::Version::parse(env!("CARGO_PKG_VERSION")).unwrap();
     let p2p = P2p::new(p2p_settings, ex.clone()).await?;
