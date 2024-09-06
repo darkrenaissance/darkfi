@@ -121,7 +121,7 @@ class DetailView(u.WidgetWrap):
         u.WidgetWrap.__init__(self, t)
         
     def set_event(self, c):
-        s = f'Hash: {c["hash"]}\nChildren: {c["children"]}\nParents: {c["parents"]}\nContent: {c["content"]}\nLayer: {c["layer"]}'
+        s = f'Hash: {c["hash"]}\nChildren: {c["children"]}\nParents: {c["parents"]}\nContent: {c["content"]}\nLayer: {c["layer"]}\nTimestamp: {c["timestamp"]}'
         self._w.set_text(s)
 
 class App(object):
