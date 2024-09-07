@@ -504,6 +504,28 @@ impl BlockStore {
         Ok(order)
     }
 
+    /// Fetches the blocks within a specified range of height from the store's order tree
+    /// returning a collection of block heights with their associated [`HeaderHash`]s.
+    pub fn get_order_by_range(&self, start: u32, end: u32) -> Result<Vec<(u32, HeaderHash)>> {
+        if start >= end {
+            return Err(Error::DatabaseError(format!(
+                "Heights range is invalid: {}..{}",
+                start, end
+            )))
+        }
+
+        let mut blocks = vec![];
+
+        let start_key = start.to_be_bytes();
+        let end_key = end.to_be_bytes();
+
+        for block in self.order.range(start_key..end_key) {
+            blocks.push(parse_u32_key_record(block.unwrap())?);
+        }
+
+        Ok(blocks)
+    }
+
     /// Retrieve all block difficulties from the store's difficulty tree in
     /// the form of a vector containing (`height`, `difficulty`) tuples.
     /// Be careful as this will try to load everything in memory.
@@ -571,6 +593,22 @@ impl BlockStore {
         let (height, hash) = parse_u32_key_record(found)?;
 
         Ok((height, hash))
+    }
+
+    /// Fetch the last N records from order tree
+    pub fn get_last_n_orders(&self, n: usize) -> Result<Vec<(u32, HeaderHash)>> {
+        // Build an iterator to retrieve last N records
+        let records = self.order.iter().rev().take(n);
+
+        // Since the iterator grabs in right -> left order,
+        // we deserialize found records, and push them in reverse order
+        let mut last_n = vec![];
+        for record in records {
+            let record = record?;
+            let parsed_record = parse_u32_key_record(record)?;
+            last_n.insert(0, parsed_record);
+        }
+        Ok(last_n)
     }
 
     /// Fetch the last record in the difficulty tree, based on the `Ord`

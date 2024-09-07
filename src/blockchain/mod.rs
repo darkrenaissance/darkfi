@@ -333,6 +333,29 @@ impl Blockchain {
         Ok(blocks)
     }
 
+    /// Retrieve [`BlockInfo`]s by given heights range.
+    pub fn get_by_range(&self, start: u32, end: u32) -> Result<Vec<BlockInfo>> {
+        let blockhashes = self.blocks.get_order_by_range(start, end)?;
+        let hashes: Vec<HeaderHash> = blockhashes.into_iter().map(|(_, hash)| hash).collect();
+        self.get_blocks_by_hash(&hashes)
+    }
+
+    /// Retrieve last 'N' [`BlockInfo`]s from the blockchain.
+    pub fn get_last_n(&self, n: usize) -> Result<Vec<BlockInfo>> {
+        let records = self.blocks.get_last_n_orders(n)?;
+
+        let mut last_n = vec![];
+        for record in records {
+            let header_hash = record.1;
+            let blocks = self.get_blocks_by_hash(&[header_hash])?;
+            for block in blocks {
+                last_n.push(block.clone());
+            }
+        }
+
+        Ok(last_n)
+    }
+
     /// Auxiliary function to reset the blockchain and consensus state
     /// to the provided block height.
     pub fn reset_to_height(&self, height: u32) -> Result<()> {
