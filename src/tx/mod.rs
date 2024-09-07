@@ -193,6 +193,21 @@ impl Transaction {
         self.encode(&mut hasher).expect("blake3 hasher");
         TransactionHash(hasher.finalize().into())
     }
+
+    /// Returns true if transaction is a PoW reward one.
+    pub fn is_pow_reward(&self) -> bool {
+        // PoW rewards must be single contract calls
+        if !self.is_single_call() {
+            return false;
+        }
+
+        self.calls[0].data.is_money_pow_reward()
+    }
+
+    /// Returns true if the transaction consists of a single call with non-empty data.
+    pub fn is_single_call(&self) -> bool {
+        self.calls.len() == 1 && !self.calls[0].data.data.is_empty()
+    }
 }
 
 // Avoid showing the proofs and sigs in the debug output since often they are very long.

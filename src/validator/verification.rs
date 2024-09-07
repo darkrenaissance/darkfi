@@ -333,17 +333,13 @@ pub async fn verify_producer_transaction(
     let tx_hash = tx.hash();
     debug!(target: "validator::verification::verify_producer_transaction", "Validating producer transaction {}", tx_hash);
 
-    // Producer transactions must contain a single, non-empty call
-    if tx.calls.len() != 1 || tx.calls[0].data.data.is_empty() {
+    // Transaction must be a PoW reward one
+    if !tx.is_pow_reward() {
         return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
     }
 
-    // Verify call based on version
+    // Retrieve first call from the transaction for further processing
     let call = &tx.calls[0];
-    // Call must be a PoW reward
-    if !call.data.is_money_pow_reward() {
-        return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
-    }
 
     // Map of ZK proof verifying keys for the current transaction
     let mut verifying_keys: HashMap<[u8; 32], HashMap<String, VerifyingKey>> = HashMap::new();
@@ -471,7 +467,7 @@ async fn apply_producer_transaction(
     debug!(target: "validator::verification::apply_producer_transaction", "Applying producer transaction {}", tx_hash);
 
     // Producer transactions must contain a single, non-empty call
-    if tx.calls.len() != 1 || tx.calls[0].data.data.is_empty() {
+    if !tx.is_single_call() {
         return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
     }
 
