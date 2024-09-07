@@ -40,7 +40,7 @@ use crate::{
     tx::{Transaction, MAX_TX_CALLS, MIN_TX_CALLS},
     validator::{
         consensus::{Consensus, Fork, Proposal, GAS_LIMIT_UNPROPOSED_TXS},
-        fees::{circuit_gas_use, PALLAS_SCHNORR_SIGNATURE_FEE},
+        fees::{circuit_gas_use, GasData, PALLAS_SCHNORR_SIGNATURE_FEE},
         pow::PoWModule,
     },
     zk::VerifyingKey,
@@ -540,13 +540,12 @@ pub async fn verify_transaction(
     tree: &mut MerkleTree,
     verifying_keys: &mut HashMap<[u8; 32], HashMap<String, VerifyingKey>>,
     verify_fee: bool,
-) -> Result<(u64, u64)> {
+) -> Result<GasData> {
     let tx_hash = tx.hash();
     debug!(target: "validator::verification::verify_transaction", "Validating transaction {}", tx_hash);
 
-    // Gas accumulator
-    let mut gas_used = 0;
-    let mut gas_paid = 0;
+    // Create a FeeData instance to hold the calculated fee data
+    let mut gas_data = GasData::default();
 
     // Verify calls indexes integrity
     if verify_fee {
@@ -697,9 +696,7 @@ pub async fn verify_transaction(
 
             let deploy_gas_used = deploy_runtime.gas_used();
             debug!(target: "validator::verification::verify_transaction", "The gas used for deployment call {:?} of transaction {}: {}", call, tx_hash, deploy_gas_used);
-
-            // Append the used deployment gas
-            gas_used += deploy_gas_used;
+            gas_data.deploy_gas_used += deploy_gas_used;
         }
 
         // At this point we're done with the call and move on to the next one.
@@ -708,16 +705,13 @@ pub async fn verify_transaction(
         debug!(target: "validator::verification::verify_transaction", "The gas used for WASM call {:?} of transaction {}: {}", call, tx_hash, wasm_gas_used);
 
         // Append the used wasm gas
-        gas_used += wasm_gas_used;
+        gas_data.wasm_gas_used += wasm_gas_used;
     }
 
     // The signature fee is tx_size + fixed_sig_fee * n_signatures
-    let signature_fee = (PALLAS_SCHNORR_SIGNATURE_FEE * tx.signatures.len() as u64) +
+    gas_data.signature_gas_used = (PALLAS_SCHNORR_SIGNATURE_FEE * tx.signatures.len() as u64) +
         serialize_async(tx).await.len() as u64;
-    debug!(target: "validator::verification::verify_transaction", "The gas used for signature of transaction {}: {}", tx_hash, signature_fee);
-
-    // Append the used signature gas
-    gas_used += signature_fee;
+    debug!(target: "validator::verification::verify_transaction", "The gas used for signature of transaction {}: {}", tx_hash, gas_data.signature_gas_used);
 
     // The ZK circuit fee is calculated using a function in validator/fees.rs
     for zkbin in circuits_to_verify.iter() {
@@ -725,8 +719,11 @@ pub async fn verify_transaction(
         debug!(target: "validator::verification::verify_transaction", "The gas used for ZK circuit in namespace {} of transaction {}: {}", zkbin.namespace, tx_hash, zk_circuit_gas_used);
 
         // Append the used zk circuit gas
-        gas_used += zk_circuit_gas_used;
+        gas_data.zk_circuit_gas_used += zk_circuit_gas_used;
     }
+
+    // Store the calculated total gas used to avoid recalculating it for subsequent uses
+    let total_gas_used = gas_data.total_gas_used();
 
     if verify_fee {
         // Deserialize the fee call to find the paid fee
@@ -743,18 +740,18 @@ pub async fn verify_transaction(
 
         // TODO: This counts 1 gas as 1 token unit. Pricing should be better specified.
         // Check that enough fee has been paid for the used gas in this transaction.
-        if gas_used > fee {
+        if total_gas_used > fee {
             error!(
                 target: "validator::verification::verify_transaction",
                 "[VALIDATOR] Transaction {} has insufficient fee. Required: {}, Paid: {}",
-                tx_hash, gas_used, fee,
+                tx_hash, total_gas_used, fee,
             );
             return Err(TxVerifyFailed::InsufficientFee.into())
         }
-        debug!(target: "validator::verification::verify_transaction", "The gas paid for transaction {}: {}", tx_hash, gas_paid);
+        debug!(target: "validator::verification::verify_transaction", "The gas paid for transaction {}: {}", tx_hash, gas_data.gas_paid);
 
         // Store paid fee
-        gas_paid = fee;
+        gas_data.gas_paid = fee;
     }
 
     // When we're done looping and executing over the tx's contract calls and
@@ -792,9 +789,9 @@ pub async fn verify_transaction(
     // Append hash to merkle tree
     append_tx_to_merkle_tree(tree, tx);
 
-    debug!(target: "validator::verification::verify_transaction", "The total gas used for transaction {}: {}", tx_hash, gas_used);
+    debug!(target: "validator::verification::verify_transaction", "The total gas used for transaction {}: {}", tx_hash, total_gas_used);
     debug!(target: "validator::verification::verify_transaction", "Transaction {} verified successfully", tx_hash);
-    Ok((gas_used, gas_paid))
+    Ok(gas_data)
 }
 
 /// Apply given [`Transaction`] to the provided overlay.
@@ -910,7 +907,7 @@ pub async fn verify_transactions(
     // Iterate over transactions and attempt to verify them
     for tx in txs {
         overlay.lock().unwrap().checkpoint();
-        let (tx_gas_used, tx_gas_paid) = match verify_transaction(
+        let gas_data = match verify_transaction(
             overlay,
             verifying_block_height,
             block_target,
@@ -930,6 +927,9 @@ pub async fn verify_transactions(
             }
         };
 
+        // Store the gas used by the verified transaction
+        let tx_gas_used = gas_data.total_gas_used();
+
         // Calculate current accumulated gas usage
         let accumulated_gas_usage = total_gas_used + tx_gas_used;
 
@@ -943,7 +943,7 @@ pub async fn verify_transactions(
 
         // Update accumulated total gas
         total_gas_used += tx_gas_used;
-        total_gas_paid += tx_gas_paid;
+        total_gas_paid += gas_data.gas_paid;
     }
 
     if !erroneous_txs.is_empty() {

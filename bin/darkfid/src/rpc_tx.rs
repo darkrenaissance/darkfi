@@ -258,6 +258,6 @@ impl DarkfiNode {
             return server_error(RpcError::TxGasCalculationFail, id, None)
         };
 
-        JsonResponse::new(JsonValue::Number(result.unwrap() as f64), id).into()
+        JsonResponse::new(JsonValue::Number(result.unwrap().total_gas_used() as f64), id).into()
     }
 }

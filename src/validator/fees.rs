@@ -17,6 +17,7 @@
  */
 
 use darkfi_sdk::crypto::constants::{MERKLE_DEPTH_ORCHARD, SPARSE_MERKLE_DEPTH};
+use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 
 use crate::zkas::{Opcode, VarType, ZkBinary};
 
@@ -91,4 +92,27 @@ pub fn circuit_gas_use(zkbin: &ZkBinary) -> u64 {
     }
 
     accumulator
+}
+
+/// Auxiliary struct representing the full gas usage breakdown of a transaction.
+///
+/// This data is used for accounting of fees, providing details relating to
+/// resource consumption across different transactions.
+#[derive(Default, Clone, Eq, PartialEq, Debug, SerialEncodable, SerialDecodable)]
+pub struct GasData {
+    pub gas_paid: u64,
+    pub wasm_gas_used: u64,
+    pub zk_circuit_gas_used: u64,
+    pub signature_gas_used: u64,
+    pub deploy_gas_used: u64,
+}
+
+impl GasData {
+    /// Calculates the total gas used by summing all individual gas usage fields.
+    pub fn total_gas_used(&self) -> u64 {
+        self.wasm_gas_used +
+            self.zk_circuit_gas_used +
+            self.signature_gas_used +
+            self.deploy_gas_used
+    }
 }

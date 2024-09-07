@@ -751,7 +751,7 @@ impl Fork {
 
             // Verify the transaction against current state
             overlay.lock().unwrap().checkpoint();
-            let (tx_gas_used, tx_gas_paid) = match verify_transaction(
+            let gas_data = match verify_transaction(
                 &overlay,
                 verifying_block_height,
                 block_target,
@@ -770,6 +770,9 @@ impl Fork {
                 }
             };
 
+            // Store the gas used by the verified transaction
+            let tx_gas_used = gas_data.total_gas_used();
+
             // Calculate current accumulated gas usage
             let accumulated_gas_usage = total_gas_used + tx_gas_used;
 
@@ -781,7 +784,7 @@ impl Fork {
 
             // Update accumulated total gas
             total_gas_used += tx_gas_used;
-            total_gas_paid += tx_gas_paid;
+            total_gas_paid += gas_data.gas_paid;
 
             // Push the tx hash into the unproposed transactions vector
             unproposed_txs.push(unproposed_tx);
