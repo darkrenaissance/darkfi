@@ -30,6 +30,7 @@ use super::{
     hex::{decode_hex_arr, AsHex},
     ContractError, GenericResult,
 };
+use crate::crypto::{DAO_CONTRACT_ID, DEPLOYOOOR_CONTRACT_ID, MONEY_CONTRACT_ID};
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq, SerialEncodable, SerialDecodable)]
 // We have to introduce a type rather than using an alias so we can implement Display
@@ -80,8 +81,85 @@ pub struct ContractCall {
 }
 // ANCHOR_END: contractcall
 
+impl ContractCall {
+    /// Returns true if call is a money fee.
+    pub fn is_money_fee(&self) -> bool {
+        self.matches_contract_call_type(*MONEY_CONTRACT_ID, 0x00)
+    }
+
+    /// Returns true if call is a money genesis mint.
+    pub fn is_money_genesis_mint(&self) -> bool {
+        self.matches_contract_call_type(*MONEY_CONTRACT_ID, 0x01)
+    }
+
+    /// Returns true if call is a money PoW reward.
+    pub fn is_money_pow_reward(&self) -> bool {
+        self.matches_contract_call_type(*MONEY_CONTRACT_ID, 0x02)
+    }
+
+    /// Returns true if call is a money transfer.
+    pub fn is_money_transfer(&self) -> bool {
+        self.matches_contract_call_type(*MONEY_CONTRACT_ID, 0x03)
+    }
+
+    /// Returns true if call is a money over-the-counter swap.
+    pub fn is_money_otc_swap(&self) -> bool {
+        self.matches_contract_call_type(*MONEY_CONTRACT_ID, 0x04)
+    }
+
+    /// Returns true if call is a money token mint authorization.
+    pub fn is_money_auth_token_mint(&self) -> bool {
+        self.matches_contract_call_type(*MONEY_CONTRACT_ID, 0x05)
+    }
+
+    /// Returns true if call is a money token freeze authorization.
+    pub fn is_money_auth_token_freeze(&self) -> bool {
+        self.matches_contract_call_type(*MONEY_CONTRACT_ID, 0x06)
+    }
+
+    /// Returns true if call is a money token mint.
+    pub fn is_money_token_mint(&self) -> bool {
+        self.matches_contract_call_type(*MONEY_CONTRACT_ID, 0x07)
+    }
+
+    /// Returns true if call is a DAO mint.
+    pub fn is_dao_mint(&self) -> bool {
+        self.matches_contract_call_type(*DAO_CONTRACT_ID, 0x00)
+    }
+
+    /// Returns true if call is a DAO proposal.
+    pub fn is_dao_propose(&self) -> bool {
+        self.matches_contract_call_type(*DAO_CONTRACT_ID, 0x01)
+    }
+
+    /// Returns true if call is a DAO vote.
+    pub fn is_dao_vote(&self) -> bool {
+        self.matches_contract_call_type(*DAO_CONTRACT_ID, 0x02)
+    }
+
+    /// Returns true if call is a DAO execution.
+    pub fn is_dao_exec(&self) -> bool {
+        self.matches_contract_call_type(*DAO_CONTRACT_ID, 0x03)
+    }
+
+    /// Returns true if call is a DAO money transfer authorization.
+    pub fn is_dao_auth_money_transfer(&self) -> bool {
+        self.matches_contract_call_type(*DAO_CONTRACT_ID, 0x04)
+    }
+
+    /// Returns true if call is a deployoor deployment.
+    pub fn is_deployment(&self) -> bool {
+        self.matches_contract_call_type(*DEPLOYOOOR_CONTRACT_ID, 0x00)
+    }
+
+    /// Returns true if contract call matches provided contract id and function code.
+    pub fn matches_contract_call_type(&self, contract_id: ContractId, func_code: u8) -> bool {
+        !self.data.is_empty() && self.contract_id == contract_id && self.data[0] == func_code
+    }
+}
+
 // Avoid showing the data in the debug output since often the calldata is very long.
-impl std::fmt::Debug for ContractCall {
+impl Debug for ContractCall {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "ContractCall(id={:?}", self.contract_id.inner())?;
         let calldata = &self.data;

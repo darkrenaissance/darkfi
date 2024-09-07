@@ -20,10 +20,7 @@ use std::collections::HashMap;
 
 use darkfi_sdk::{
     blockchain::block_version,
-    crypto::{
-        schnorr::SchnorrPublic, ContractId, MerkleTree, PublicKey, DEPLOYOOOR_CONTRACT_ID,
-        MONEY_CONTRACT_ID,
-    },
+    crypto::{schnorr::SchnorrPublic, ContractId, MerkleTree, PublicKey},
     dark_tree::dark_forest_leaf_vec_integrity_check,
     deploy::DeployParamsV1,
     pasta::pallas,
@@ -271,7 +268,7 @@ pub async fn verify_checkpoint_block(
         return Err(Error::BlockContainsNoTransactions(block_hash.as_string()))
     }
 
-    // Apply transactions, exluding producer(last) one
+    // Apply transactions, excluding producer(last) one
     let mut tree = MerkleTree::new(1);
     let txs = &block.txs[..block.txs.len() - 1];
     let e = apply_transactions(overlay, block.header.height, block_target, txs, &mut tree).await;
@@ -321,7 +318,7 @@ pub fn verify_producer_signature(block: &BlockInfo, public_key: &PublicKey) -> R
     Ok(())
 }
 
-/// Verify provided producer producer [`Transaction`].
+/// Verify provided producer [`Transaction`].
 ///
 /// Verify WASM execution, signatures, and ZK proofs and apply it to the provided,
 /// provided overlay. Returns transaction signature public key. Additionally,
@@ -343,8 +340,8 @@ pub async fn verify_producer_transaction(
 
     // Verify call based on version
     let call = &tx.calls[0];
-    // Block must contain a Money::PoWReward(0x02) call
-    if call.data.contract_id != *MONEY_CONTRACT_ID || call.data.data[0] != 0x02 {
+    // Call must be a PoW reward
+    if !call.data.is_money_pow_reward() {
         return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
     }
 
@@ -576,9 +573,9 @@ pub async fn verify_transaction(
 
     if verify_fee {
         let mut found_fee = false;
-        // Verify that there is a Money::FeeV1 (0x00) call in the transaction
+        // Verify that there is a money fee call in the transaction
         for (call_idx, call) in tx.calls.iter().enumerate() {
-            if call.data.contract_id == *MONEY_CONTRACT_ID && call.data.data[0] == 0x00 {
+            if call.data.is_money_fee() {
                 found_fee = true;
                 fee_call_idx = call_idx;
                 break
@@ -599,8 +596,8 @@ pub async fn verify_transaction(
 
     // Iterate over all calls to get the metadata
     for (idx, call) in tx.calls.iter().enumerate() {
-        // Transaction must not contain a Money::PoWReward(0x02) call
-        if call.data.contract_id == *MONEY_CONTRACT_ID && call.data.data[0] == 0x02 {
+        // Transaction must not contain a Pow reward call
+        if call.data.is_money_pow_reward() {
             error!(target: "validator::verification::verify_transaction", "Reward transaction detected");
             return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
         }
@@ -681,7 +678,7 @@ pub async fn verify_transaction(
 
         // If this call is supposed to deploy a new contract, we have to instantiate
         // a new `Runtime` and run its deploy function.
-        if call.data.contract_id == *DEPLOYOOOR_CONTRACT_ID && call.data.data[0] == 0x00
+        if call.data.is_deployment()
         /* DeployV1 */
         {
             debug!(target: "validator::verification::verify_transaction", "Deploying new contract");
@@ -848,7 +845,7 @@ async fn apply_transaction(
 
         // If this call is supposed to deploy a new contract, we have to instantiate
         // a new `Runtime` and run its deploy function.
-        if call.data.contract_id == *DEPLOYOOOR_CONTRACT_ID && call.data.data[0] == 0x00
+        if call.data.is_deployment()
         /* DeployV1 */
         {
             debug!(target: "validator::verification::apply_transaction", "Deploying new contract");
