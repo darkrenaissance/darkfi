@@ -89,7 +89,7 @@ impl P2p {
     /// p2p parent class.
     pub async fn new(settings: Settings, executor: ExecutorPtr) -> Result<P2pPtr> {
         // Create the datastore
-        if let Some(ref datastore) = settings.datastore {
+        if let Some(ref datastore) = settings.p2p_datastore {
             let datastore = expand_path(datastore)?;
             fs::create_dir_all(&datastore).await?;
             fs::set_permissions(&datastore, PermissionsExt::from_mode(0o700)).await?;

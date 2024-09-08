@@ -65,7 +65,7 @@ impl Connector {
         let settings = self.settings.read().await;
         let transports = settings.allowed_transports.clone();
         let transport_mixing = settings.transport_mixing;
-        let datastore = settings.datastore.clone();
+        let datastore = settings.p2p_datastore.clone();
         let outbound_connect_timeout = settings.outbound_connect_timeout;
         drop(settings);
 

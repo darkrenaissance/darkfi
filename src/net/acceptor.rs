@@ -64,7 +64,7 @@ impl Acceptor {
     /// Start accepting inbound socket connections
     pub async fn start(self: Arc<Self>, endpoint: Url, ex: Arc<Executor<'_>>) -> Result<()> {
         let datastore =
-            self.session.upgrade().unwrap().p2p().settings().read().await.datastore.clone();
+            self.session.upgrade().unwrap().p2p().settings().read().await.p2p_datastore.clone();
 
         // Initialize listener
         let listener = Listener::new(endpoint.clone(), datastore).await?;
