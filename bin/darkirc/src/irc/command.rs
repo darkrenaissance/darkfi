@@ -731,7 +731,7 @@ impl Client {
             error!("Failed to rehash server: {}", e);
         }
 
-        Ok(vec![ReplyType::Server((RPL_REHASHING, format!("Config reloaded!")))])
+        Ok(vec![ReplyType::Server((RPL_REHASHING, "Config reloaded!".to_string()))])
     }
 
     /// `TOPIC <channel> [<topic>]`
