@@ -5,7 +5,7 @@
 - [DarkFi](README.md)
 - [Start Here](start-here.md)
 - [Philosophy](philosophy/philosophy.md)
-  - [Discussion](philosophy/meeting.md)
+  - [Discussion](philosophy/meetings.md)
   - [Ideology](philosophy/ideology.md)
   - [Books](philosophy/books.md)
 
