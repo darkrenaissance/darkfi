@@ -3015,40 +3015,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "evgrd"
-version = "0.5.0"
-dependencies = [
- "async-trait",
- "bcrypt",
- "blake3 1.5.4",
- "bs58",
- "crypto_box",
- "darkfi",
- "darkfi-sdk",
- "darkfi-serial",
- "easy-parallel",
- "futures",
- "futures-rustls",
- "libc",
- "log",
- "openssl",
- "rand 0.8.5",
- "rusqlite",
- "rustls-pemfile",
- "semver 1.0.23",
- "serde",
- "signal-hook",
- "signal-hook-async-std",
- "simplelog",
- "sled-overlay",
- "smol",
- "structopt",
- "structopt-toml",
- "toml 0.8.19",
- "url",
-]
-
-[[package]]
 name = "fallible-iterator"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
