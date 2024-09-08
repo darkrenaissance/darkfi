@@ -104,7 +104,6 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
 
     info!("Instantiating event DAG");
     let sled_db = sled::open(datastore)?;
-    /*
     let mut p2p_settings: darkfi::net::Settings = args.net.into();
     p2p_settings.app_version = semver::Version::parse(env!("CARGO_PKG_VERSION")).unwrap();
     let p2p = P2p::new(p2p_settings, ex.clone()).await?;
@@ -179,6 +178,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         ex.clone(),
     );
 
+    /*
     info!("Starting JSON-RPC server");
     let darkirc = Arc::new(DarkIrc::new(
         p2p.clone(),
@@ -228,6 +228,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         Error::DetachedTaskStopped,
         ex.clone(),
     );
+    */
 
     info!("Starting P2P network");
     p2p.clone().start().await?;
@@ -268,12 +269,11 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     p2p.stop().await;
 
     info!("Stopping JSON-RPC server");
-    rpc_task.stop().await;
+    //rpc_task.stop().await;
     dnet_task.stop().await;
     deg_task.stop().await;
 
     info!("Stopping IRC server");
-    irc_task.stop().await;
     prune_task.stop().await;
 
     info!("Flushing sled database...");
@@ -281,6 +281,5 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     info!("Flushed {} bytes", flushed_bytes);
 
     info!("Shut down successfully");
-    */
     Ok(())
 }
