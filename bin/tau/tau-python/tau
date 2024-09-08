@@ -690,7 +690,7 @@ Examples:
             else:
                 print("Command prevented from running.")
                 exit(-1)
-        elif any(id == rfid[:len(id)] or id == rfid for rfid in refids):
+        elif any(id == rfid[:len(id)] for rfid in refids if len(id) > 2):
             refid = []
             for rid in refids:
                 if id == rid[:len(id)]:
