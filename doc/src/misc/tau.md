@@ -10,12 +10,12 @@ and all users will have synced tasks.
 ```shell
 % git clone https://codeberg.org/darkrenaissance/darkfi
 % cd darkfi
-% make BINS="taud"
+% make taud
 ```
 
 If you want to have `taud` system wide:
 ```shell
-% sudo make install BINS="taud"
+% sudo make install taud
 ```
 
 And then run the daemon:
@@ -23,12 +23,18 @@ And then run the daemon:
 % taud
 ```
 
-For the CLI part of `tau`, we use `tau-python`, you can run it with:
+For the CLI part of `tau`, we use `tau-python`,
+Let's install the requirements:
 ```shell
 % cd bin/tau/tau-python
+% pip install -r requirements.txt
+```
+
+Then you can run it with:
+```shell
 % ./tau
 ```
-Or you can alias it by adding this line to your `bashrc`:
+Or you can alias it by adding this line to your `~/.bashrc`:
 ```shell
 % alias tau=/path-to-darkfi/bin/tau/tau-python/tau
 ```
