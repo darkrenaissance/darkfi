@@ -126,6 +126,7 @@ pub struct ChatView {
     mouse_pos: SyncMutex<Point>,
     /// Touch scrolling
     touch_info: SyncMutex<TouchInfo>,
+    touch_is_active: AtomicBool,
     touch_is_updating: AtomicBool,
 
     rect: PropertyPtr,
@@ -145,7 +146,6 @@ pub struct ChatView {
 
     // Scroll accel
     motion_cv: Arc<CondVar>,
-    accel: AtomicF32,
     speed: AtomicF32,
 
     // Triggers the background loading task to wake up
@@ -295,6 +295,7 @@ impl ChatView {
 
                 mouse_pos: SyncMutex::new(Point::from([0., 0.])),
                 touch_info: SyncMutex::new(TouchInfo::new()),
+                touch_is_active: AtomicBool::new(false),
                 touch_is_updating: AtomicBool::new(false),
 
                 rect,
@@ -313,7 +314,6 @@ impl ChatView {
                 mouse_scroll_resist,
 
                 motion_cv,
-                accel: AtomicF32::new(0.),
                 speed: AtomicF32::new(0.),
 
                 bgload_cv,
@@ -448,7 +448,7 @@ impl ChatView {
             return
         }
 
-        self.accel.fetch_add(wheel_y * self.mouse_scroll_start_accel.get(), Ordering::Relaxed);
+        self.speed.fetch_add(wheel_y * self.mouse_scroll_start_accel.get(), Ordering::Relaxed);
         self.motion_cv.notify();
     }
 
@@ -476,6 +476,8 @@ impl ChatView {
         // Simulate mouse events
         match phase {
             TouchPhase::Started => {
+                self.touch_is_active.store(true, Ordering::Relaxed);
+
                 let mut touch_info = self.touch_info.lock().unwrap();
                 touch_info.start_scroll = self.scroll.get();
                 touch_info.start_y = touch_y;
@@ -490,13 +492,17 @@ impl ChatView {
                     return
                 }
 
-                let (start_scroll, start_y, do_update) = {
+                let (start_scroll, start_y, start_elapsed, do_update) = {
                     let mut touch_info = self.touch_info.lock().unwrap();
                     touch_info.last_y = touch_y;
 
+                    let start_elapsed = touch_info.start_instant.elapsed().as_millis_f32();
+
                     let last_sample = touch_info.samples.head().unwrap().0.elapsed().as_millis_f32();
-                    // Sample every 10ms
-                    if last_sample > 10. {
+                    // Sample every 40ms
+                    // Average small touch time is 80ms, sometimes 40ms
+                    // A longer sample time means a more accurate reading for the exit velocity.
+                    if last_sample > 40. {
                         touch_info.samples.push((std::time::Instant::now(), touch_y));
                     }
 
@@ -506,8 +512,16 @@ impl ChatView {
                         touch_info.last_instant = std::time::Instant::now();
                     }
 
-                    (touch_info.start_scroll, touch_info.start_y, do_update)
+                    let start_scroll = touch_info.start_scroll;
+                    let start_y = touch_info.start_y;
+
+                    (start_scroll, start_y, start_elapsed, do_update)
                 };
+
+                if start_elapsed > 200. {
+                    debug!(target: "ui::chatview", "Stopping scroll accel");
+                    self.speed.store(0., Ordering::Relaxed);
+                }
 
                 let dist = touch_y - start_y;
                 // TODO the line selected should be fixed and move exactly that distance
@@ -524,6 +538,8 @@ impl ChatView {
                 self.touch_is_updating.store(true, Ordering::Relaxed);
             }
             TouchPhase::Ended => {
+                self.touch_is_active.store(false, Ordering::Relaxed);
+
                 // Now calculate scroll acceleration
                 let touch_info = self.touch_info.lock().unwrap().clone();
 
@@ -532,13 +548,19 @@ impl ChatView {
                 let time = oldest_sample.elapsed().as_millis_f32();
                 let dist = touch_y - sample_y;
 
+                // Ignore sub-ms events
+                if time < 1. {
+                    return
+                }
+
                 //let speed = dist / time;
                 //self.speed.fetch_add(speed, Ordering::Relaxed);
                 //debug!(target: "ui::chatview", "speed = {dist} / {time} = {speed}");
 
                 let accel = self.mouse_scroll_start_accel.get() * dist / time;
-                debug!(target: "ui::chatview", "accel = {dist} / {time} = {accel}");
-                self.accel.fetch_add(accel, Ordering::Relaxed);
+                let touch_time = touch_info.start_instant.elapsed();
+                debug!(target: "ui::chatview", "accel = {dist} / {time} = {accel},  touch = {touch_time:?}");
+                self.speed.fetch_add(accel, Ordering::Relaxed);
                 self.motion_cv.notify();
             }
             TouchPhase::Cancelled => {}
@@ -596,28 +618,29 @@ impl ChatView {
     }
 
     async fn handle_movement(&self) {
+        // We need to fix this impl because it depends very much on the speed of the device
+        // that it's running on.
+        // Look into optimizing scrollview() so scrolling is smooth.
+        // We could use skiplists to avoid looping from the very bottom.
+        // So index 1 in the skiplist advances to 100px up... (or however much multiplier)
         loop {
-            let mut accel = self.accel.load(Ordering::Relaxed);
-            let mut speed = self.speed.fetch_add(accel, Ordering::Relaxed) + accel;
+            msleep(10).await;
 
-            // Apply resistance to acceleration
-            accel *= self.mouse_scroll_decel.get();
-            if accel.abs() < 0.05 {
-                accel = 0.;
+            if self.touch_is_active.load(Ordering::Relaxed) {
+                return
             }
-            self.accel.store(accel, Ordering::Relaxed);
 
-            if is_zero(accel) {
-                // Apply constant decel to speed
-                speed *= self.mouse_scroll_resist.get();
-                if speed.abs() < BIG_EPSILON {
-                    speed = 0.;
-                }
-                self.speed.store(speed, Ordering::Relaxed);
+            let mut speed = self.speed.load(Ordering::Relaxed);
+
+            // Apply constant decel to speed
+            speed *= self.mouse_scroll_resist.get();
+            if speed.abs() < BIG_EPSILON {
+                speed = 0.;
             }
+            self.speed.store(speed, Ordering::Relaxed);
 
             // Finished
-            if is_zero(accel) && is_zero(speed) {
+            if is_zero(speed) {
                 return
             }
 
@@ -626,12 +649,9 @@ impl ChatView {
 
             // We reached the end so just stop
             if is_zero(dist) {
-                self.accel.store(0., Ordering::Relaxed);
                 self.speed.store(0., Ordering::Relaxed);
                 return
             }
-
-            msleep(20).await;
         }
     }
 
