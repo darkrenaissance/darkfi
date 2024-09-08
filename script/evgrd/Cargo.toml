@@ -59,6 +59,12 @@ structopt-toml = "0.5.1"
 openssl = { version = "*", features = ["vendored"] }
 rusqlite = {version = "0.31.0", features = ["bundled"]}
 
-[lints]
-workspace = true
+#[lints]
+#workspace = true
+
+# Temp stuff
+[workspace]
+[patch.crates-io]
+halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v4"}
+halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v4"}
 

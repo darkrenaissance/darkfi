@@ -47,7 +47,7 @@ members = [
     "src/contract/dao",
     "src/contract/deployooor",
 
-    "example/dchat/dchatd", "bin/evgrd",
+    "example/dchat/dchatd",
 ]
 
 [dependencies]
