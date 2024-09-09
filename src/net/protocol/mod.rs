@@ -71,6 +71,14 @@ pub use protocol_address::ProtocolAddress;
 pub mod protocol_seed;
 pub use protocol_seed::ProtocolSeed;
 
+/// Generic protocol to receive specified structure messages.
+///
+/// Acts as a simple message queue, where we listen for the specified
+/// structure message, and when one is received, we send it to the provided
+/// smol channel. Afterwards, we wait for an action signal, specifying whether
+/// or not we should propagate the message to rest nodes or skip it.
+pub mod protocol_generic;
+
 /// Base trait for implementing P2P protocols
 pub mod protocol_base;
 /// Interface for registering arbitrary P2P protocols

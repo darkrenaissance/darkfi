@@ -39,6 +39,11 @@ impl ProtocolJobsManager {
         Arc::new(Self { name, channel, tasks: Mutex::new(vec![]) })
     }
 
+    /// Returns configured name
+    pub fn name(self: Arc<Self>) -> &'static str {
+        self.name
+    }
+
     /// Runs the task on an executor
     pub fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) {
         executor.spawn(self.handle_stop()).detach()
