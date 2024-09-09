@@ -658,7 +658,7 @@ pub(super) async fn make(app: &App) {
     //node.set_property_bool(Role::App, "debug", true).unwrap();
 
     #[cfg(target_os = "android")]
-    node.set_property_f32(Role::App, "mouse_scroll_start_accel", 5.).unwrap();
+    node.set_property_f32(Role::App, "mouse_scroll_start_accel", 20.).unwrap();
     #[cfg(target_os = "linux")]
     node.set_property_f32(Role::App, "mouse_scroll_start_accel", 15.).unwrap();
 

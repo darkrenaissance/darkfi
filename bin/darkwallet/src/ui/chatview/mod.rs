@@ -733,10 +733,12 @@ impl ChatView {
 
         let mut msgbuf = self.msgbuf.lock().await;
 
+        // 1/3 of time spent here  ~1.5ms
         if let Some(new_scroll) = self.adjust_scroll(&mut msgbuf, scroll, rect.h).await {
             scroll = new_scroll;
         }
 
+        // 2/3 of time spent here  ~3.3ms
         self.redraw_cached(&mut msgbuf).await;
 
         self.scroll.set(scroll);
