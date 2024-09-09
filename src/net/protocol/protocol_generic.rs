@@ -61,23 +61,40 @@ pub struct ProtocolGenericHandler<M: Message + Clone> {
     // Since smol channels close if all senders or all receivers
     // get dropped, we will keep one here to remain alive with the
     // handler.
+    /// Message queue sender, passed to each P2P channel.
     sender: Sender<(u32, M)>,
+    /// Message queue receiver listening for new messages
+    /// from all channels.
     pub receiver: Receiver<(u32, M)>,
+    /// Senders mapped by channel ID to propagate the
+    /// action signal after a message retrieval.
     senders: RwLock<HashMap<u32, Sender<ProtocolGenericAction>>>,
+    /// Handler background task to run the messages listener
+    /// function with.
     pub task: StoppableTaskPtr,
 }
 
 impl<M: Message + Clone> ProtocolGenericHandler<M> {
+    /// Generate a new ProtocolGenericHandler for the provided P2P
+    /// instance. The handler also attaches its generic protocol.
     pub async fn new(
         p2p: &P2pPtr,
         name: &'static str,
         session: SessionBitFlag,
     ) -> ProtocolGenericHandlerPtr<M> {
+        // Generate the message queue smol channel
         let (sender, receiver) = smol::channel::unbounded::<(u32, M)>();
+
+        // Keep a map for all P2P channels senders
         let senders = RwLock::new(HashMap::new());
+
+        // Create a new stoppable task
         let task = StoppableTask::new();
+
+        // Create the handler
         let handler = Arc::new(Self { sender, receiver, senders, task });
 
+        // Attach a generic protocol to the P2P insstance
         let _handler = handler.clone();
         p2p.protocol_registry()
             .register(session, move |channel, p2p| {
@@ -92,17 +109,23 @@ impl<M: Message + Clone> ProtocolGenericHandler<M> {
     /// Registers a new channel sender to the handler map.
     /// Additionally, looks for stale(closed) channels and prunes then from it.
     async fn register_channel_sender(&self, channel: u32, sender: Sender<ProtocolGenericAction>) {
+        // Register the new channel sender
         let mut lock = self.senders.write().await;
         lock.insert(channel, sender);
+
+        // Look for stale channels
         let mut stale = vec![];
         for (channel, sender) in lock.iter() {
             if sender.is_closed() {
                 stale.push(*channel);
             }
         }
+
+        // Prune stale channels
         for channel in stale {
             lock.remove(&channel);
         }
+
         drop(lock);
     }
 
@@ -112,15 +135,20 @@ impl<M: Message + Clone> ProtocolGenericHandler<M> {
             target: "net::protocol_generic::ProtocolGenericHandler::send_action",
             "Sending action {action:?} to channel {channel}..."
         );
+
+        // Grab the requested channel sender
         let mut lock = self.senders.write().await;
         let Some(sender) = lock.get(&channel) else {
             debug!(
                 target: "net::protocol_generic::ProtocolGenericHandler::send_action",
                 "Channel wasn't found."
             );
+
             drop(lock);
             return
         };
+
+        // Send the provided action
         if let Err(e) = sender.send(action).await {
             debug!(
                 target: "net::protocol_generic::ProtocolGenericHandler::send_action",
@@ -128,6 +156,7 @@ impl<M: Message + Clone> ProtocolGenericHandler<M> {
             );
             lock.remove(&channel);
         };
+
         drop(lock);
     }
 }
@@ -160,6 +189,7 @@ impl<M: Message + Clone> ProtocolGeneric<M> {
             target: "net::protocol_generic::init",
             "Adding generic protocol for message {name} to the protocol registry"
         );
+
         // Add the message dispatcher
         let msg_subsystem = channel.message_subsystem();
         msg_subsystem.add_dispatch::<M>().await;
@@ -191,6 +221,7 @@ impl<M: Message + Clone> ProtocolGeneric<M> {
             "START"
         );
         let exclude_list = vec![self.channel.address().clone()];
+
         loop {
             // Wait for a new message
             let msg = match self.msg_sub.receive().await {
