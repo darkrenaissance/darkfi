@@ -35,7 +35,10 @@ use super::{
     protocol_jobs_manager::{ProtocolJobsManager, ProtocolJobsManagerPtr},
     P2pPtr,
 };
-use crate::{system::StoppableTask, Error, Result};
+use crate::{
+    system::{StoppableTask, StoppableTaskPtr},
+    Error, Result,
+};
 
 /// Defines generic messages protocol action signal.
 #[derive(Debug)]
@@ -50,10 +53,10 @@ pub enum ProtocolGenericAction {
 
 pub type ProtocolGenericHandlerPtr<M> = Arc<ProtocolGenericHandler<M>>;
 
-/// Defines a hanlder for generic messages, consisting of
-/// a message receiver, action signal senders mapped by each
-/// channel ID, and a stoppable task to run the handler in
-/// the background.
+/// Defines a handler for generic protocol messages, consisting
+/// of a message receiver, action signal senders mapped by each
+/// channel ID, and a stoppable task to run the handler in the
+/// background.
 pub struct ProtocolGenericHandler<M: Message + Clone> {
     // Since smol channels close if all senders or all receivers
     // get dropped, we will keep one here to remain alive with the
@@ -61,7 +64,7 @@ pub struct ProtocolGenericHandler<M: Message + Clone> {
     sender: Sender<(u32, M)>,
     pub receiver: Receiver<(u32, M)>,
     senders: RwLock<HashMap<u32, Sender<ProtocolGenericAction>>>,
-    pub task: Arc<StoppableTask>,
+    pub task: StoppableTaskPtr,
 }
 
 impl<M: Message + Clone> ProtocolGenericHandler<M> {
