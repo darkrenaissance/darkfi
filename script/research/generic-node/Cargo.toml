@@ -1,0 +1,28 @@
+[package]
+name = "generic-node"
+version = "0.4.1"
+description = "Generic node daemon to test out design choices before integrating them to core nodes."
+authors = ["Dyne.org foundation <foundation@dyne.org>"]
+repository = "https://codeberg.org/darkrenaissance/darkfi"
+license = "AGPL-3.0-only"
+edition = "2021"
+
+[workspace]
+
+[dependencies]
+darkfi = {path = "../../../", features = ["async-daemonize", "net"]}
+darkfi-serial = {path = "../../../src/serial"}
+rand = "0.8.5"
+
+# Daemon
+easy-parallel = "3.3.1"
+log = "0.4.22"
+signal-hook-async-std = "0.2.2"
+signal-hook = "0.3.17"
+simplelog = "0.12.2"
+smol = "2.0.1"
+
+# Argument parsing
+serde = {version = "1.0.209", features = ["derive"]}
+structopt = "0.3.26"
+structopt-toml = "0.5.1"
