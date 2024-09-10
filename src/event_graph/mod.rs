@@ -840,4 +840,36 @@ impl EventGraph {
 
         JsonResponse::new(result, id).into()
     }
+
+    /// Fetch all the events that are on a higher layers than the
+    /// provided ones.
+    pub async fn fetch_successors_of(&self, tips: Vec<(u64, blake3::Hash)>) -> Result<Vec<Event>> {
+        debug!(
+             target: "event_graph::fetch_successors_of()",
+             "fetching successors of c{tips:?}"
+        );
+
+        let mut graph = HashMap::new();
+        for iter_elem in self.dag.iter() {
+            let (id, val) = iter_elem.unwrap();
+            let hash = blake3::Hash::from_bytes((&id as &[u8]).try_into().unwrap());
+            let event: Event = deserialize_async(&val).await.unwrap();
+            graph.insert(hash, event);
+        }
+
+        let mut result = vec![];
+
+        for tip in tips.iter() {
+            if !graph.contains_key(&tip.1) {
+                continue;
+            }
+            for (_, ev) in graph.iter() {
+                if ev.layer > tip.0 {
+                    result.push(ev.clone())
+                }
+            }
+        }
+
+        Ok(result)
+    }
 }
