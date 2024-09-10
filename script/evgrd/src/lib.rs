@@ -47,7 +47,7 @@ impl VersionMessage {
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct FetchEventsMessage {
-    unref_tips: Vec<(u64, blake3::Hash)>,
+    pub unref_tips: Vec<(u64, blake3::Hash)>,
 }
 
 impl FetchEventsMessage {

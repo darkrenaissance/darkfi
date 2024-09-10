@@ -202,19 +202,15 @@ async fn handle_connect(
 
                 let fetchevs = FetchEventsMessage::decode_async(&mut stream).await?;
                 info!(target: "evgrd", "Fetching events {fetchevs:?}");
-                // Now do your thing with the daemon and get missing tips
+                let events = daemon.event_graph.fetch_successors_of(fetchevs.unref_tips).await?;
 
-                // Then send them like this:
-
-                // for ev in evs {
-                //    MSG_EVENT.encode_async(&mut stream).await?;
-                //    ev.encode_async(&mut stream).await?;
-                // }
+                for event in events {
+                   MSG_EVENT.encode_async(&mut stream).await?;
+                   event.encode_async(&mut stream).await?;
+                }
             }
         }
     }
-
-    Ok(())
 }
 
 async_daemonize!(realmain);
