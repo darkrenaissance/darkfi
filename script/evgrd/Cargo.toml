@@ -10,12 +10,17 @@ repository = "https://codeberg.org/darkrenaissance/darkfi"
 
 [[bin]]
 name = "evgrd"
-path = "src/main.rs"
+path = "bin/evgrd.rs"
+
+[[bin]]
+name = "test"
+path = "bin/test.rs"
 
 [dependencies]
 darkfi = {path = "../../", features = ["async-daemonize", "event-graph", "rpc", "zk"]}
 darkfi-sdk = {path = "../../src/sdk", features = ["async"]}
 darkfi-serial = {path = "../../src/serial", features = ["async"]}
+futures-lite = "2.3.0"
 libc = "0.2.158"
 
 # Event Graph DB
