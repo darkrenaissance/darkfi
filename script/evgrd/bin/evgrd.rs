@@ -43,6 +43,7 @@ use rand::rngs::OsRng;
 use sled_overlay::sled;
 use smol::{fs, lock::Mutex, stream::StreamExt, Executor};
 use std::{
+    collections::HashSet,
     path::PathBuf,
     sync::{Arc, Mutex as SyncMutex},
 };
@@ -50,6 +51,8 @@ use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;
 
 use evgrd::{FetchEventsMessage, VersionMessage, MSG_EVENT, MSG_FETCHEVENTS};
+
+mod rpc;
 
 const CONFIG_FILE: &str = "evgrd.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../evgrd.toml");
@@ -72,7 +75,11 @@ struct Args {
 
     #[structopt(long, default_value = "tcp://127.0.0.1:5588")]
     /// RPC server listen address
-    rpc_listen: Url,
+    daemon_listen: Url,
+
+    #[structopt(long, default_value = "tcp://127.0.0.1:26690")]
+    /// JSON-RPC server listen address
+    json_rpc_listen: Url,
 
     #[structopt(short, long, default_value = "~/.local/darkfi/evgrd_db")]
     /// Datastore (DB) path
@@ -104,39 +111,39 @@ struct Args {
 }
 
 pub struct Daemon {
-    ///// P2P network pointer
-    //p2p: P2pPtr,
+    /// P2P network pointer
+    p2p: P2pPtr,
     ///// Sled DB (also used in event_graph and for RLN)
     //sled: sled::Db,
     /// Event Graph instance
     event_graph: EventGraphPtr,
-    ///// JSON-RPC connection tracker
-    //rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
-    ///// dnet JSON-RPC subscriber
-    //dnet_sub: JsonSubscriber,
-    ///// deg JSON-RPC subscriber
-    //deg_sub: JsonSubscriber,
-    ///// Replay logs (DB) path
-    //replay_datastore: PathBuf,
+    /// JSON-RPC connection tracker
+    rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
+    /// dnet JSON-RPC subscriber
+    dnet_sub: JsonSubscriber,
+    /// deg JSON-RPC subscriber
+    deg_sub: JsonSubscriber,
+    /// Replay logs (DB) path
+    replay_datastore: PathBuf,
 }
 
 impl Daemon {
     fn new(
-        //p2p: P2pPtr,
+        p2p: P2pPtr,
         //sled: sled::Db,
         event_graph: EventGraphPtr,
-        //dnet_sub: JsonSubscriber,
-        //deg_sub: JsonSubscriber,
-        //replay_datastore: PathBuf,
+        dnet_sub: JsonSubscriber,
+        deg_sub: JsonSubscriber,
+        replay_datastore: PathBuf,
     ) -> Self {
         Self {
-            //p2p,
+            p2p,
             //sled,
             event_graph,
-            //rpc_connections: Mutex::new(HashSet::new()),
-            //dnet_sub,
-            //deg_sub,
-            //replay_datastore,
+            rpc_connections: Mutex::new(HashSet::new()),
+            dnet_sub,
+            deg_sub,
+            replay_datastore,
         }
     }
 }
@@ -299,15 +306,31 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
 
     info!("Starting JSON-RPC server");
     let daemon = Arc::new(Daemon::new(
-        //p2p.clone(),
+        p2p.clone(),
         //sled_db.clone(),
         event_graph.clone(),
-        //dnet_sub,
-        //deg_sub,
-        //replay_datastore.clone(),
+        dnet_sub,
+        deg_sub,
+        replay_datastore.clone(),
     ));
 
-    let listener = Listener::new(args.rpc_listen, None).await?;
+    // Used for deg and dnet
+    let daemon_ = daemon.clone();
+    let rpc_task = StoppableTask::new();
+    rpc_task.clone().start(
+        listen_and_serve(args.json_rpc_listen, daemon.clone(), None, ex.clone()),
+        |res| async move {
+            match res {
+                Ok(()) | Err(Error::RpcServerStopped) => daemon_.stop_connections().await,
+                Err(e) => error!("Failed stopping JSON-RPC server: {}", e),
+            }
+        },
+        Error::RpcServerStopped,
+        ex.clone(),
+    );
+
+    info!("Starting evgrd server");
+    let listener = Listener::new(args.daemon_listen, None).await?;
     let ptlistener = listener.listen().await?;
 
     let rpc_task = StoppableTask::new();
