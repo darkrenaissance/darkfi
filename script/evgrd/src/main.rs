@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::{Arc, Mutex as SyncMutex};
+use std::{sync::{Arc, Mutex as SyncMutex}, path::PathBuf};
 use darkfi::{
     async_daemonize, cli_desc,
     event_graph::{proto::ProtocolEventGraph, EventGraph, EventGraphPtr},
@@ -89,6 +89,44 @@ struct Args {
     /// P2P network settings
     #[structopt(flatten)]
     net: NetSettingsOpt,
+}
+
+pub struct Daemon {
+    /// P2P network pointer
+    p2p: P2pPtr,
+    /// Sled DB (also used in event_graph and for RLN)
+    sled: sled::Db,
+    /// Event Graph instance
+    event_graph: EventGraphPtr,
+    /// JSON-RPC connection tracker
+    //rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
+    /// dnet JSON-RPC subscriber
+    dnet_sub: JsonSubscriber,
+    /// deg JSON-RPC subscriber
+    deg_sub: JsonSubscriber,
+    /// Replay logs (DB) path
+    replay_datastore: PathBuf,
+}
+
+impl Daemon {
+    fn new(
+        p2p: P2pPtr,
+        sled: sled::Db,
+        event_graph: EventGraphPtr,
+        dnet_sub: JsonSubscriber,
+        deg_sub: JsonSubscriber,
+        replay_datastore: PathBuf,
+    ) -> Self {
+        Self {
+            p2p,
+            sled,
+            event_graph,
+            //rpc_connections: Mutex::new(HashSet::new()),
+            dnet_sub,
+            deg_sub,
+            replay_datastore,
+        }
+    }
 }
 
 async_daemonize!(realmain);
@@ -178,9 +216,8 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         ex.clone(),
     );
 
-    /*
     info!("Starting JSON-RPC server");
-    let darkirc = Arc::new(DarkIrc::new(
+    let daemon = Arc::new(Daemon::new(
         p2p.clone(),
         sled_db.clone(),
         event_graph.clone(),
@@ -188,44 +225,18 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         deg_sub,
         replay_datastore.clone(),
     ));
-    let darkirc_ = Arc::clone(&darkirc);
+    let daemon_ = Arc::clone(&daemon);
+    /*
     let rpc_task = StoppableTask::new();
     rpc_task.clone().start(
-        listen_and_serve(args.rpc_listen, darkirc.clone(), None, ex.clone()),
+        listen_and_serve(args.rpc_listen, daemon.clone(), None, ex.clone()),
         |res| async move {
             match res {
-                Ok(()) | Err(Error::RpcServerStopped) => darkirc_.stop_connections().await,
+                Ok(()) | Err(Error::RpcServerStopped) => daemon_.stop_connections().await,
                 Err(e) => error!("Failed stopping JSON-RPC server: {}", e),
             }
         },
         Error::RpcServerStopped,
-        ex.clone(),
-    );
-
-    info!("Starting IRC server");
-    let password = args.password.unwrap_or_default();
-    let config_path = get_config_path(args.config, CONFIG_FILE)?;
-    let irc_server = IrcServer::new(
-        darkirc.clone(),
-        args.irc_listen,
-        args.irc_tls_cert,
-        args.irc_tls_secret,
-        config_path,
-        password,
-    )
-    .await?;
-
-    let irc_task = StoppableTask::new();
-    let ex_ = ex.clone();
-    irc_task.clone().start(
-        irc_server.clone().listen(ex_),
-        |res| async move {
-            match res {
-                Ok(()) | Err(Error::DetachedTaskStopped) => { /* TODO: */ }
-                Err(e) => error!("Failed stopping IRC server: {}", e),
-            }
-        },
-        Error::DetachedTaskStopped,
         ex.clone(),
     );
     */
