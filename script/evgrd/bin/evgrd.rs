@@ -108,8 +108,8 @@ pub struct Daemon {
     //p2p: P2pPtr,
     ///// Sled DB (also used in event_graph and for RLN)
     //sled: sled::Db,
-    ///// Event Graph instance
-    //event_graph: EventGraphPtr,
+    /// Event Graph instance
+    event_graph: EventGraphPtr,
     ///// JSON-RPC connection tracker
     //rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
     ///// dnet JSON-RPC subscriber
@@ -118,29 +118,25 @@ pub struct Daemon {
     //deg_sub: JsonSubscriber,
     ///// Replay logs (DB) path
     //replay_datastore: PathBuf,
-    /// New events publisher
-    events_pub: PublisherPtr<event_graph::Event>,
 }
 
 impl Daemon {
     fn new(
         //p2p: P2pPtr,
         //sled: sled::Db,
-        //event_graph: EventGraphPtr,
+        event_graph: EventGraphPtr,
         //dnet_sub: JsonSubscriber,
         //deg_sub: JsonSubscriber,
         //replay_datastore: PathBuf,
-        events_pub: PublisherPtr<event_graph::Event>,
     ) -> Self {
         Self {
             //p2p,
             //sled,
-            //event_graph,
+            event_graph,
             //rpc_connections: Mutex::new(HashSet::new()),
             //dnet_sub,
             //deg_sub,
             //replay_datastore,
-            events_pub,
         }
     }
 }
@@ -182,7 +178,7 @@ async fn handle_connect(
     let version = VersionMessage::new();
     version.encode_async(&mut stream).await?;
 
-    let event_sub = daemon.events_pub.clone().subscribe().await;
+    let event_sub = daemon.event_graph.event_pub.clone().subscribe().await;
 
     loop {
         futures::select! {
@@ -218,7 +214,6 @@ async_daemonize!(realmain);
 async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     info!("Starting evgrd node");
 
-    /*
     // Create datastore path if not there already.
     let datastore = expand_path(&args.datastore)?;
     fs::create_dir_all(&datastore).await?;
@@ -301,20 +296,15 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         Error::DetachedTaskStopped,
         ex.clone(),
     );
-    */
-
-    // New events are published here
-    let events_pub = Publisher::new();
 
     info!("Starting JSON-RPC server");
     let daemon = Arc::new(Daemon::new(
         //p2p.clone(),
         //sled_db.clone(),
-        //event_graph.clone(),
+        event_graph.clone(),
         //dnet_sub,
         //deg_sub,
         //replay_datastore.clone(),
-        events_pub,
     ));
 
     let listener = Listener::new(args.rpc_listen, None).await?;
@@ -334,15 +324,12 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         ex.clone(),
     );
 
-    /*
     info!("Starting P2P network");
     p2p.clone().start().await?;
-    */
 
     info!("Waiting for some P2P connections...");
     sleep(5).await;
 
-    /*
     // We'll attempt to sync {sync_attempts} times
     if !args.skip_dag_sync {
         for i in 1..=args.sync_attempts {
@@ -366,21 +353,17 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     } else {
         *event_graph.synced.write().await = true;
     }
-    */
 
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new(ex)?;
     signals_handler.wait_termination(signals_task).await?;
     info!("Caught termination signal, cleaning up and exiting...");
 
-    /*
     info!("Stopping P2P network");
     p2p.stop().await;
-    */
 
     info!("Stopping RPC server");
     rpc_task.stop().await;
-    /*
     dnet_task.stop().await;
     deg_task.stop().await;
 
@@ -392,6 +375,5 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     info!("Flushed {} bytes", flushed_bytes);
 
     info!("Shut down successfully");
-    */
     Ok(())
 }
