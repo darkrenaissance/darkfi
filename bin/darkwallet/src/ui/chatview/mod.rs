@@ -97,14 +97,14 @@ struct TouchInfo {
 }
 
 impl TouchInfo {
-    fn new() -> Self {
+    fn new(start_scroll: f32, y: f32) -> Self {
         Self {
-            start_scroll: 0.,
-            start_y: 0.,
+            start_scroll,
+            start_y: y,
             start_instant: std::time::Instant::now(),
-            samples: VecDeque::new(),
+            samples: VecDeque::from([(std::time::Instant::now(), y)]),
             last_instant: std::time::Instant::now(),
-            last_y: 0.,
+            last_y: y,
         }
     }
 
@@ -142,7 +142,7 @@ pub struct ChatView {
     /// Used for detecting when scrolling view
     mouse_pos: SyncMutex<Point>,
     /// Touch scrolling
-    touch_info: SyncMutex<TouchInfo>,
+    touch_info: SyncMutex<Option<TouchInfo>>,
     touch_is_active: AtomicBool,
     touch_is_updating: AtomicBool,
 
@@ -308,7 +308,7 @@ impl ChatView {
                 dc_key: OsRng.gen(),
 
                 mouse_pos: SyncMutex::new(Point::from([0., 0.])),
-                touch_info: SyncMutex::new(TouchInfo::new()),
+                touch_info: SyncMutex::new(None),
                 touch_is_active: AtomicBool::new(false),
                 touch_is_updating: AtomicBool::new(false),
 
@@ -453,7 +453,7 @@ impl ChatView {
     async fn handle_mouse_wheel(&self, wheel_x: f32, wheel_y: f32) {
         //debug!(target: "ui::chatview", "handle_mouse_wheel({wheel_x}, {wheel_y})");
 
-        let Some(rect) = self.parent_rect.lock().unwrap().clone() else { return };
+        let Ok(rect) = read_rect(self.rect.clone()) else { return };
 
         let mouse_pos = self.mouse_pos.lock().unwrap().clone();
         if !rect.contains(&mouse_pos) {
@@ -478,11 +478,15 @@ impl ChatView {
             return
         }
 
-        let Some(rect) = self.parent_rect.lock().unwrap().clone() else { return };
+        let Ok(rect) = read_rect(self.rect.clone()) else { return };
+        //debug!(target: "ui::chatview", "handle_touch({phase:?}, {touch_x}, {touch_y})");
 
         let touch_pos = Point { x: touch_x, y: touch_y };
         if !rect.contains(&touch_pos) {
-            //debug!(target: "ui::chatview", "not inside rect");
+            match phase {
+                TouchPhase::Started => *self.touch_info.lock().unwrap() = None,
+                _ => self.end_touch_phase(touch_y),
+            }
             return
         }
 
@@ -492,13 +496,7 @@ impl ChatView {
                 self.touch_is_active.store(true, Ordering::Relaxed);
 
                 let mut touch_info = self.touch_info.lock().unwrap();
-                touch_info.start_scroll = self.scroll.get();
-                touch_info.start_y = touch_y;
-                touch_info.start_instant = std::time::Instant::now();
-                touch_info.samples = VecDeque::new();
-                touch_info.samples.push_back((std::time::Instant::now(), touch_y));
-                touch_info.last_instant = std::time::Instant::now();
-                touch_info.last_y = touch_y;
+                *touch_info = Some(TouchInfo::new(self.scroll.get(), touch_y));
             }
             TouchPhase::Moved => {
                 if !self.touch_is_updating.fetch_or(true, Ordering::Relaxed) {
@@ -507,6 +505,8 @@ impl ChatView {
 
                 let (start_scroll, start_y, start_elapsed, do_update) = {
                     let mut touch_info = self.touch_info.lock().unwrap();
+                    let Some(touch_info) = &mut *touch_info else { return };
+
                     touch_info.last_y = touch_y;
 
                     let start_elapsed = touch_info.start_instant.elapsed().as_millis_f32();
@@ -545,33 +545,37 @@ impl ChatView {
 
                 self.touch_is_updating.store(true, Ordering::Relaxed);
             }
-            TouchPhase::Ended => {
-                self.touch_is_active.store(false, Ordering::Relaxed);
-
-                // Now calculate scroll acceleration
-                let touch_info = self.touch_info.lock().unwrap().clone();
-
-                let Some((time, sample_y)) = touch_info.first_sample() else { return };
-                let dist = touch_y - sample_y;
-
-                // Ignore sub-ms events
-                if time < 1. {
-                    error!(target: "ui::chatview", "Received a sub-ms touch event!");
-                    return
-                }
-
-                //let speed = dist / time;
-                //self.speed.fetch_add(speed, Ordering::Relaxed);
-                //debug!(target: "ui::chatview", "speed = {dist} / {time} = {speed}");
-
-                let accel = self.scroll_start_accel.get() * dist / time;
-                let touch_time = touch_info.start_instant.elapsed();
-                debug!(target: "ui::chatview", "accel = {dist} / {time} = {accel},  touch = {touch_time:?}");
-                self.speed.fetch_add(accel, Ordering::Relaxed);
-                self.motion_cv.notify();
+            TouchPhase::Ended | TouchPhase::Cancelled => {
+                self.end_touch_phase(touch_y);
             }
-            TouchPhase::Cancelled => {}
         }
+    }
+
+    fn end_touch_phase(&self, touch_y: f32) {
+        // Now calculate scroll acceleration
+        let touch_info = std::mem::replace(&mut *self.touch_info.lock().unwrap(), None);
+        let Some(touch_info) = &touch_info else { return };
+
+        self.touch_is_active.store(false, Ordering::Relaxed);
+
+        let Some((time, sample_y)) = touch_info.first_sample() else { return };
+        let dist = touch_y - sample_y;
+
+        // Ignore sub-ms events
+        if time < 1. {
+            error!(target: "ui::chatview", "Received a sub-ms touch event!");
+            return
+        }
+
+        //let speed = dist / time;
+        //self.speed.fetch_add(speed, Ordering::Relaxed);
+        //debug!(target: "ui::chatview", "speed = {dist} / {time} = {speed}");
+
+        let accel = self.scroll_start_accel.get() * dist / time;
+        let touch_time = touch_info.start_instant.elapsed();
+        debug!(target: "ui::chatview", "accel = {dist} / {time} = {accel},  touch = {touch_time:?}");
+        self.speed.fetch_add(accel, Ordering::Relaxed);
+        self.motion_cv.notify();
     }
 
     async fn add_line_to_db(

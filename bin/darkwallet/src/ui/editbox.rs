@@ -1207,7 +1207,7 @@ impl EditBox {
             return;
         };
         self.render_api.replace_draw_calls(draw_update.draw_calls);
-        debug!(target: "ui::editbox", "replace draw calls done");
+        //debug!(target: "ui::editbox", "replace draw calls done");
         for buffer_id in draw_update.freed_buffers {
             self.render_api.delete_buffer(buffer_id);
         }
@@ -1217,7 +1217,7 @@ impl EditBox {
     }
 
     pub fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
-        debug!(target: "ui::editbox", "EditBox::draw()");
+        //debug!(target: "ui::editbox", "EditBox::draw()");
         // Only used for debug messages
         let node = sg.get_node(self.node_id).unwrap();
 
