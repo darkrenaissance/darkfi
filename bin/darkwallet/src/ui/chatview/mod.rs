@@ -27,6 +27,7 @@ use miniquad::{KeyCode, KeyMods, TouchPhase};
 use rand::{rngs::OsRng, Rng};
 use sled_overlay::sled;
 use std::{
+    collections::VecDeque,
     hash::{DefaultHasher, Hash, Hasher},
     io::Cursor,
     sync::{
@@ -89,7 +90,7 @@ struct TouchInfo {
     start_instant: std::time::Instant,
 
     /// Used for flick scrolling
-    samples: RingBuffer<(std::time::Instant, f32), 2>,
+    samples: VecDeque<(std::time::Instant, f32)>,
 
     last_instant: std::time::Instant,
     last_y: f32,
@@ -101,10 +102,26 @@ impl TouchInfo {
             start_scroll: 0.,
             start_y: 0.,
             start_instant: std::time::Instant::now(),
-            samples: RingBuffer::new(),
+            samples: VecDeque::new(),
             last_instant: std::time::Instant::now(),
             last_y: 0.,
         }
+    }
+
+    fn push_sample(&mut self, y: f32) {
+        self.samples.push_back((std::time::Instant::now(), y));
+
+        // Now drop all old samples older than 40ms
+        while let Some((instant, _)) = self.samples.front() {
+            if instant.elapsed().as_millis_f32() <= 40. {
+                break
+            }
+            self.samples.pop_front().unwrap();
+        }
+    }
+
+    fn first_sample(&self) -> Option<(f32, f32)> {
+        self.samples.front().map(|(t, s)| (t.elapsed().as_millis_f32(), *s))
     }
 }
 
@@ -478,8 +495,8 @@ impl ChatView {
                 touch_info.start_scroll = self.scroll.get();
                 touch_info.start_y = touch_y;
                 touch_info.start_instant = std::time::Instant::now();
-                touch_info.samples = RingBuffer::new();
-                touch_info.samples.push((std::time::Instant::now(), touch_y));
+                touch_info.samples = VecDeque::new();
+                touch_info.samples.push_back((std::time::Instant::now(), touch_y));
                 touch_info.last_instant = std::time::Instant::now();
                 touch_info.last_y = touch_y;
             }
@@ -494,15 +511,9 @@ impl ChatView {
 
                     let start_elapsed = touch_info.start_instant.elapsed().as_millis_f32();
 
-                    let last_sample =
-                        touch_info.samples.head().unwrap().0.elapsed().as_millis_f32();
-                    // Sample every 40ms
-                    // Average small touch time is 80ms, sometimes 40ms
-                    // A longer sample time means a more accurate reading for the exit velocity.
-                    if last_sample > 40. {
-                        touch_info.samples.push((std::time::Instant::now(), touch_y));
-                    }
+                    touch_info.push_sample(touch_y);
 
+                    // Only update screen every 20ms. Avoid wasting cycles.
                     let last_elapsed = touch_info.last_instant.elapsed().as_millis_f32();
                     let do_update = last_elapsed > 20.;
                     if do_update {
@@ -540,13 +551,12 @@ impl ChatView {
                 // Now calculate scroll acceleration
                 let touch_info = self.touch_info.lock().unwrap().clone();
 
-                let (oldest_sample, sample_y) = touch_info.samples.head().unwrap();
-                //let Some((oldest_sample, sample_y)) = touch_info.samples.head() else { return };
-                let time = oldest_sample.elapsed().as_millis_f32();
+                let Some((time, sample_y)) = touch_info.first_sample() else { return };
                 let dist = touch_y - sample_y;
 
                 // Ignore sub-ms events
                 if time < 1. {
+                    error!(target: "ui::chatview", "Received a sub-ms touch event!");
                     return
                 }
 
