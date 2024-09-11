@@ -36,6 +36,7 @@ use crate::{
     app::{AppPtr, AsyncRuntime},
     error::{Error, Result},
     pubsub::{Publisher, PublisherPtr, Subscription, SubscriptionId},
+    util::ansi_texture,
 };
 
 pub type GfxTextureId = u32;
@@ -43,6 +44,7 @@ pub type GfxBufferId = u32;
 
 // This is very noisy so suppress output by default
 const DEBUG_RENDER: bool = false;
+const DEBUG_GFXAPI: bool = false;
 
 #[derive(Debug, SerialEncodable, SerialDecodable)]
 #[repr(C)]
@@ -797,16 +799,21 @@ impl Stage {
         gfx_texture_id: GfxTextureId,
     ) {
         let texture = self.ctx.new_texture_from_rgba8(width, height, &data);
-        //debug!(target: "gfx", "Invoked method: new_texture({}, {}, ...) -> {:?}",
-        //       width, height, texture);
-        //debug!(target: "gfx", "Invoked method: new_texture({}, {}, ...) -> {:?}\n{}",
-        //       width, height, texture,
-        //       ansi_texture(width as usize, height as usize, &data));
+        if DEBUG_GFXAPI {
+            debug!(target: "gfx", "Invoked method: new_texture({}, {}, ..., {}) -> {:?}",
+                   width, height, gfx_texture_id, texture);
+            //debug!(target: "gfx", "Invoked method: new_texture({}, {}, ..., {}) -> {:?}\n{}",
+            //       width, height, gfx_texture_id, texture,
+            //       ansi_texture(width as usize, height as usize, &data));
+        }
         self.textures.insert(gfx_texture_id, texture);
     }
     fn method_delete_texture(&mut self, gfx_texture_id: GfxTextureId) {
-        //debug!(target: "gfx", "Invoked method: delete_texture({:?})", texture);
         let texture = self.textures.remove(&gfx_texture_id).expect("couldn't find gfx_texture_id");
+        if DEBUG_GFXAPI {
+            debug!(target: "gfx", "Invoked method: delete_texture({} => {:?})",
+                   gfx_texture_id, texture);
+        }
         self.ctx.delete_texture(texture);
     }
     fn method_new_vertex_buffer(&mut self, verts: Vec<Vertex>, gfx_buffer_id: GfxBufferId) {
@@ -815,7 +822,12 @@ impl Stage {
             BufferUsage::Immutable,
             BufferSource::slice(&verts),
         );
-        //debug!(target: "gfx", "Invoked method: new_vertex_buffer({:?}) -> {:?}", verts, buffer);
+        if DEBUG_GFXAPI {
+            debug!(target: "gfx", "Invoked method: new_vertex_buffer(..., {}) -> {:?}",
+                   gfx_buffer_id, buffer);
+            //debug!(target: "gfx", "Invoked method: new_vertex_buffer({:?}, {}) -> {:?}",
+            //       verts, gfx_buffer_id, buffer);
+        }
         self.buffers.insert(gfx_buffer_id, buffer);
     }
     fn method_new_index_buffer(&mut self, indices: Vec<u16>, gfx_buffer_id: GfxBufferId) {
@@ -824,16 +836,26 @@ impl Stage {
             BufferUsage::Immutable,
             BufferSource::slice(&indices),
         );
-        //debug!(target: "gfx", "Invoked method: new_index_buffer({:?}) -> {:?}", indices, buffer);
+        if DEBUG_GFXAPI {
+            debug!(target: "gfx", "Invoked method: new_index_buffer({}) -> {:?}",
+                   gfx_buffer_id, buffer);
+            //debug!(target: "gfx", "Invoked method: new_index_buffer({:?}, {}) -> {:?}",
+            //       indices, gfx_buffer_id, buffer);
+        }
         self.buffers.insert(gfx_buffer_id, buffer);
     }
     fn method_delete_buffer(&mut self, gfx_buffer_id: GfxBufferId) {
-        //debug!(target: "gfx", "Invoked method: delete_buffer({:?})", buffer);
         let buffer = self.buffers.remove(&gfx_buffer_id).expect("couldn't find gfx_buffer_id");
+        if DEBUG_GFXAPI {
+            debug!(target: "gfx", "Invoked method: delete_buffer({} => {:?})",
+                   gfx_buffer_id, buffer);
+        }
         self.ctx.delete_buffer(buffer);
     }
     fn method_replace_draw_calls(&mut self, dcs: Vec<(u64, GfxDrawCall)>) {
-        //debug!(target: "gfx", "Invoked method: replace_draw_calls({:?})", dcs);
+        if DEBUG_GFXAPI {
+            debug!(target: "gfx", "Invoked method: replace_draw_calls({:?})", dcs);
+        }
         for (key, val) in dcs {
             let val = val.compile(&self.textures, &self.buffers);
             self.draw_calls.insert(key, val);
@@ -932,6 +954,7 @@ pub fn run_gui(
         platform: miniquad::conf::Platform {
             linux_backend: miniquad::conf::LinuxBackend::WaylandWithX11Fallback,
             wayland_use_fallback_decorations: false,
+            //blocking_event_loop: true,
             ..Default::default()
         },
         ..Default::default()
