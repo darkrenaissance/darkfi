@@ -203,6 +203,8 @@ impl App {
         //if let Err(err) = self.darkirc_backend.start(self.sg.clone(), self.ex.clone()).await {
         //    error!(target: "app", "backend error: {err}");
         //}
+
+        debug!(target: "app", "App started");
     }
 
     pub fn stop(&self) {

@@ -195,9 +195,6 @@ impl EditBox {
 
         drop(scene_graph);
 
-        // testing
-        window::show_keyboard(true);
-
         // Must do this whenever the text changes
         let glyphs = text_shaper.shape(text.get(), font_size.get()).await;
 

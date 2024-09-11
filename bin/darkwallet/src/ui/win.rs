@@ -106,12 +106,12 @@ impl Window {
     }
 
     pub async fn draw(&self, sg: &SceneGraph) {
-        debug!(target: "ui::win", "Window::draw()");
-        // SceneGraph should remain locked for the entire draw
-        let self_node = sg.get_node(self.node_id).unwrap();
-
         let screen_width = self.screen_size_prop.get_f32(0).unwrap();
         let screen_height = self.screen_size_prop.get_f32(1).unwrap();
+        debug!(target: "ui::win", "Window::draw({screen_width}, {screen_height})");
+
+        // SceneGraph should remain locked for the entire draw
+        let self_node = sg.get_node(self.node_id).unwrap();
 
         let parent_rect = Rectangle::from_array([0., 0., screen_width, screen_height]);
 
@@ -122,7 +122,7 @@ impl Window {
 
         for child_inf in self_node.get_children2() {
             let node = sg.get_node(child_inf.id).unwrap();
-            debug!(target: "ui::win", "Window::draw() calling draw() for node '{}':{}", node.name, node.id);
+            //debug!(target: "ui::win", "Window::draw() calling draw() for node '{}':{}", node.name, node.id);
 
             let dcs = match &node.pimpl {
                 Pimpl::RenderLayer(layer) => layer.draw(sg, &parent_rect).await,

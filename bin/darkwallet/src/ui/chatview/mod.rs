@@ -785,8 +785,11 @@ impl ChatView {
         let scroll = self.scroll.get();
 
         let total_height = msgbuf.calc_total_height().await;
-        // If lines aren't enough to fill the available buffer then start from the top
-        let start_pos = if total_height < rect.h { total_height } else { rect.h };
+
+        // Use this to start from the top
+        //let start_pos = if total_height < rect.h { total_height } else { rect.h };
+        // We start from the bottom though
+        let start_pos = rect.h;
 
         let mut instrs = vec![];
         //let mut old_drawmesh = vec![];
