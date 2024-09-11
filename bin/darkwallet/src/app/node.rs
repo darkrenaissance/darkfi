@@ -239,24 +239,13 @@ pub fn create_chatview(
     node.add_property(prop).unwrap();
 
     let mut prop =
-        Property::new("mouse_scroll_start_accel", PropertyType::Float32, PropertySubType::Pixel);
-    prop.set_ui_text("Mouse Scroll Start Acceleration", "Initial acceperation when scrolling");
+        Property::new("scroll_start_accel", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_ui_text("Scroll Start Acceleration", "Initial acceperation when scrolling");
     prop.set_defaults_f32(vec![4.]).unwrap();
     node.add_property(prop).unwrap();
 
-    let mut prop =
-        Property::new("mouse_scroll_decel", PropertyType::Float32, PropertySubType::Pixel);
-    prop.set_ui_text(
-        "Mouse Scroll Deceleration",
-        "Deceleration factor for mouse scroll acceleration",
-    );
-    prop.set_range_f32(0., 1.);
-    prop.set_defaults_f32(vec![0.5]).unwrap();
-    node.add_property(prop).unwrap();
-
-    let mut prop =
-        Property::new("mouse_scroll_resist", PropertyType::Float32, PropertySubType::Pixel);
-    prop.set_ui_text("Mouse Scroll Resistance", "How quickly scrolling speed is dampened");
+    let mut prop = Property::new("scroll_resist", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_ui_text("Scroll Resistance", "How quickly scrolling speed is dampened");
     prop.set_range_f32(0., 1.);
     prop.set_defaults_f32(vec![0.9]).unwrap();
     node.add_property(prop).unwrap();

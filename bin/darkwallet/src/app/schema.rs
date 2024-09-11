@@ -658,16 +658,11 @@ pub(super) async fn make(app: &App) {
     //node.set_property_bool(Role::App, "debug", true).unwrap();
 
     #[cfg(target_os = "android")]
-    node.set_property_f32(Role::App, "mouse_scroll_start_accel", 20.).unwrap();
+    node.set_property_f32(Role::App, "scroll_start_accel", 40.).unwrap();
     #[cfg(target_os = "linux")]
-    node.set_property_f32(Role::App, "mouse_scroll_start_accel", 15.).unwrap();
+    node.set_property_f32(Role::App, "scroll_start_accel", 15.).unwrap();
 
-    #[cfg(target_os = "android")]
-    node.set_property_f32(Role::App, "mouse_scroll_decel", 0.99).unwrap();
-    #[cfg(target_os = "linux")]
-    node.set_property_f32(Role::App, "mouse_scroll_decel", 0.5).unwrap();
-
-    node.set_property_f32(Role::App, "mouse_scroll_resist", 0.9).unwrap();
+    node.set_property_f32(Role::App, "scroll_resist", 0.9).unwrap();
 
     let prop = node.get_property("timestamp_color").unwrap();
     prop.set_f32(Role::App, 0, 0.407).unwrap();

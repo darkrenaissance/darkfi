@@ -140,9 +140,8 @@ pub struct ChatView {
     z_index: PropertyUint32,
     debug: PropertyBool,
 
-    mouse_scroll_start_accel: PropertyFloat32,
-    mouse_scroll_decel: PropertyFloat32,
-    mouse_scroll_resist: PropertyFloat32,
+    scroll_start_accel: PropertyFloat32,
+    scroll_resist: PropertyFloat32,
 
     // Scroll accel
     motion_cv: Arc<CondVar>,
@@ -183,12 +182,10 @@ impl ChatView {
         let z_index = PropertyUint32::wrap(node, Role::Internal, "z_index", 0).unwrap();
         let debug = PropertyBool::wrap(node, Role::Internal, "debug", 0).unwrap();
 
-        let mouse_scroll_start_accel =
-            PropertyFloat32::wrap(node, Role::Internal, "mouse_scroll_start_accel", 0).unwrap();
-        let mouse_scroll_decel =
-            PropertyFloat32::wrap(node, Role::Internal, "mouse_scroll_decel", 0).unwrap();
-        let mouse_scroll_resist =
-            PropertyFloat32::wrap(node, Role::Internal, "mouse_scroll_resist", 0).unwrap();
+        let scroll_start_accel =
+            PropertyFloat32::wrap(node, Role::Internal, "scroll_start_accel", 0).unwrap();
+        let scroll_resist =
+            PropertyFloat32::wrap(node, Role::Internal, "scroll_resist", 0).unwrap();
         drop(scene_graph);
 
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
@@ -309,9 +306,8 @@ impl ChatView {
                 z_index,
                 debug,
 
-                mouse_scroll_start_accel,
-                mouse_scroll_decel,
-                mouse_scroll_resist,
+                scroll_start_accel,
+                scroll_resist,
 
                 motion_cv,
                 speed: AtomicF32::new(0.),
@@ -448,7 +444,7 @@ impl ChatView {
             return
         }
 
-        self.speed.fetch_add(wheel_y * self.mouse_scroll_start_accel.get(), Ordering::Relaxed);
+        self.speed.fetch_add(wheel_y * self.scroll_start_accel.get(), Ordering::Relaxed);
         self.motion_cv.notify();
     }
 
@@ -558,7 +554,7 @@ impl ChatView {
                 //self.speed.fetch_add(speed, Ordering::Relaxed);
                 //debug!(target: "ui::chatview", "speed = {dist} / {time} = {speed}");
 
-                let accel = self.mouse_scroll_start_accel.get() * dist / time;
+                let accel = self.scroll_start_accel.get() * dist / time;
                 let touch_time = touch_info.start_instant.elapsed();
                 debug!(target: "ui::chatview", "accel = {dist} / {time} = {accel},  touch = {touch_time:?}");
                 self.speed.fetch_add(accel, Ordering::Relaxed);
@@ -634,7 +630,7 @@ impl ChatView {
             let mut speed = self.speed.load(Ordering::Relaxed);
 
             // Apply constant decel to speed
-            speed *= self.mouse_scroll_resist.get();
+            speed *= self.scroll_resist.get();
             if speed.abs() < BIG_EPSILON {
                 speed = 0.;
             }
