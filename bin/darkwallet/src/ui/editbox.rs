@@ -54,6 +54,14 @@ const CURSOR_EOL_WS_NUDGE: f32 = 0.8;
 // EOL chars are more aesthetic when given a smallish nudge
 const CURSOR_EOL_NUDGE: f32 = 0.2;
 
+fn eol_nudge(font_size: f32, glyphs: &Vec<Glyph>) -> f32 {
+    if is_whitespace(&glyphs.last().unwrap().substr) {
+        (font_size * CURSOR_EOL_WS_NUDGE).round()
+    } else {
+        (font_size * CURSOR_EOL_NUDGE).round()
+    }
+}
+
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
 enum PressedKey {
     Char(char),
@@ -394,12 +402,7 @@ impl EditBox {
             let cursor_rect = Rectangle { x: 0., y: 0., w: CURSOR_WIDTH, h: clip.h };
             mesh.draw_box(&cursor_rect, cursor_color, &Rectangle::zero());
         } else if is_focused && cursor_pos == glyphs.len() {
-            if is_whitespace(&glyphs.last().unwrap().substr) {
-                rhs += (font_size * CURSOR_EOL_WS_NUDGE).round();
-            } else {
-                // Slight nudge forwards
-                rhs += (font_size * CURSOR_EOL_NUDGE).round();
-            }
+            rhs += eol_nudge(font_size, &glyphs);
 
             let cursor_rect = Rectangle { x: rhs, y: 0., w: CURSOR_WIDTH, h: clip.h };
             mesh.draw_box(&cursor_rect, cursor_color, &Rectangle::zero());
@@ -464,6 +467,7 @@ impl EditBox {
         }
 
         if sel_end == glyphs.len() {
+            rhs += eol_nudge(font_size, &glyphs);
             end_x = rhs;
         }
 
@@ -1160,13 +1164,7 @@ impl EditBox {
             } else if cursor_pos == glyphs.len() {
                 let glyph_pos = glyph_pos_iter.last().unwrap();
 
-                let mut rhs = glyph_pos.rhs();
-                if is_whitespace(&glyphs.last().unwrap().substr) {
-                    rhs += (font_size * CURSOR_EOL_WS_NUDGE).round();
-                } else {
-                    rhs += (font_size * CURSOR_EOL_NUDGE).round();
-                }
-
+                let rhs = glyph_pos.rhs() + eol_nudge(font_size, &glyphs);
                 rhs
             } else {
                 assert!(cursor_pos < glyphs.len());
