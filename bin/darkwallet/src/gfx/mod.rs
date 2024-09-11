@@ -843,29 +843,8 @@ impl Stage {
 
 impl EventHandler for Stage {
     fn update(&mut self) {
-        if self.last_draw_time.is_none() {
-            return
-        }
-
-        // Only allow 20 ms, process as much as we can during that time
-        let elapsed_since_draw = self.last_draw_time.unwrap().elapsed();
-
-        // We're long overdue a redraw. Exit for now
-        if elapsed_since_draw > Duration::from_millis(40) {
-            // Process any requests if the device has a low framerate
-            while let Ok(method) = self.method_rep.try_recv() {
-                self.process_method(method);
-            }
-            return
-        }
-
-        // The next redraw must happen 20ms since its last one.
-        // Calculate how much time is remaining until then.
-        let allowed_time = Duration::from_millis(40) - elapsed_since_draw;
-        let deadline = Instant::now() + allowed_time;
-
-        loop {
-            let Ok(method) = self.method_rep.recv_deadline(deadline) else { break };
+        // Process as many methods as we can
+        while let Ok(method) = self.method_rep.try_recv() {
             self.process_method(method);
         }
     }
