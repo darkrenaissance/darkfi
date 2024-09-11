@@ -47,7 +47,12 @@ use crate::{
 
 use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify, Stoppable};
 
-const CURSOR_WIDTH: f32 = 4.;
+// Pixel width of the cursor
+const CURSOR_WIDTH: f32 = 2.;
+// EOL whitespace is given a nudge since it has a width of 0 after text shaping
+const CURSOR_EOL_WS_NUDGE: f32 = 0.8;
+// EOL chars are more aesthetic when given a smallish nudge
+const CURSOR_EOL_NUDGE: f32 = 0.2;
 
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
 enum PressedKey {
@@ -378,8 +383,7 @@ impl EditBox {
             mesh.draw_box(&glyph_rect, color, uv_rect);
 
             if is_focused && cursor_pos != 0 && cursor_pos == glyph_idx {
-                let cursor_rect =
-                    Rectangle { x: glyph_rect.x - CURSOR_WIDTH, y: 0., w: CURSOR_WIDTH, h: clip.h };
+                let cursor_rect = Rectangle { x: glyph_rect.x, y: 0., w: CURSOR_WIDTH, h: clip.h };
                 mesh.draw_box(&cursor_rect, cursor_color, &Rectangle::zero());
             }
 
@@ -391,11 +395,13 @@ impl EditBox {
             mesh.draw_box(&cursor_rect, cursor_color, &Rectangle::zero());
         } else if is_focused && cursor_pos == glyphs.len() {
             if is_whitespace(&glyphs.last().unwrap().substr) {
-                rhs += font_size / 2.;
+                rhs += (font_size * CURSOR_EOL_WS_NUDGE).round();
+            } else {
+                // Slight nudge forwards
+                rhs += (font_size * CURSOR_EOL_NUDGE).round();
             }
 
-            let cursor_rect =
-                Rectangle { x: rhs - CURSOR_WIDTH, y: 0., w: CURSOR_WIDTH, h: clip.h };
+            let cursor_rect = Rectangle { x: rhs, y: 0., w: CURSOR_WIDTH, h: clip.h };
             mesh.draw_box(&cursor_rect, cursor_color, &Rectangle::zero());
         }
 
@@ -1156,8 +1162,11 @@ impl EditBox {
 
                 let mut rhs = glyph_pos.rhs();
                 if is_whitespace(&glyphs.last().unwrap().substr) {
-                    rhs += font_size / 2.;
+                    rhs += (font_size * CURSOR_EOL_WS_NUDGE).round();
+                } else {
+                    rhs += (font_size * CURSOR_EOL_NUDGE).round();
                 }
+
                 rhs
             } else {
                 assert!(cursor_pos < glyphs.len());
