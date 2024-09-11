@@ -40,7 +40,7 @@ use page::{FreedData, MessageBuffer};
 
 use crate::{
     gfx::{
-        DrawCall, DrawInstruction, DrawMesh, GraphicsEventPublisherPtr, Point, Rectangle,
+        GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GraphicsEventPublisherPtr, Point, Rectangle,
         RenderApi, RenderApiPtr,
     },
     mesh::{Color, MeshBuilder, COLOR_BLUE, COLOR_GREEN},
@@ -498,7 +498,8 @@ impl ChatView {
 
                     let start_elapsed = touch_info.start_instant.elapsed().as_millis_f32();
 
-                    let last_sample = touch_info.samples.head().unwrap().0.elapsed().as_millis_f32();
+                    let last_sample =
+                        touch_info.samples.head().unwrap().0.elapsed().as_millis_f32();
                     // Sample every 40ms
                     // Average small touch time is 80ms, sometimes 40ms
                     // A longer sample time means a more accurate reading for the exit velocity.
@@ -781,7 +782,7 @@ impl ChatView {
         &self,
         msgbuf: &mut MessageBuffer,
         rect: &Rectangle,
-    ) -> (Vec<DrawInstruction>, FreedData) {
+    ) -> (Vec<GfxDrawInstruction>, FreedData) {
         let scroll = self.scroll.get();
 
         let total_height = msgbuf.calc_total_height().await;
@@ -808,9 +809,9 @@ impl ChatView {
             let model = glam::Mat4::from_translation(glam::Vec3::new(off_x, off_y, 0.)) *
                 glam::Mat4::from_scale(glam::Vec3::new(scale_x, scale_y, 1.));
 
-            instrs.push(DrawInstruction::ApplyMatrix(model));
+            instrs.push(GfxDrawInstruction::ApplyMatrix(model));
 
-            instrs.push(DrawInstruction::Draw(mesh));
+            instrs.push(GfxDrawInstruction::Draw(mesh));
         }
 
         let freed = std::mem::take(&mut msgbuf.freed);
@@ -839,14 +840,14 @@ impl ChatView {
         let (mut mesh_instrs, freed) = self.get_meshes(&mut msgbuf, &rect).await;
         drop(msgbuf);
 
-        let mut instrs = vec![DrawInstruction::ApplyViewport(rect)];
+        let mut instrs = vec![GfxDrawInstruction::ApplyViewport(rect)];
         instrs.append(&mut mesh_instrs);
 
         Some(DrawUpdate {
             key: self.dc_key,
             draw_calls: vec![(
                 self.dc_key,
-                DrawCall { instrs, dcs: vec![], z_index: self.z_index.get() },
+                GfxDrawCall { instrs, dcs: vec![], z_index: self.z_index.get() },
             )],
             freed_textures: freed.textures,
             freed_buffers: freed.buffers,
@@ -858,13 +859,13 @@ impl ChatView {
 
         let (mut mesh_instrs, freed) = self.get_meshes(msgbuf, &rect).await;
 
-        let mut instrs = vec![DrawInstruction::ApplyViewport(rect)];
+        let mut instrs = vec![GfxDrawInstruction::ApplyViewport(rect)];
         instrs.append(&mut mesh_instrs);
 
         let draw_calls =
-            vec![(self.dc_key, DrawCall { instrs, dcs: vec![], z_index: self.z_index.get() })];
+            vec![(self.dc_key, GfxDrawCall { instrs, dcs: vec![], z_index: self.z_index.get() })];
 
-        self.render_api.replace_draw_calls(draw_calls).await;
+        self.render_api.replace_draw_calls(draw_calls);
 
         for buffer_id in freed.buffers {
             self.render_api.delete_buffer(buffer_id);

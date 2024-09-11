@@ -16,13 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-//use async_lock::Mutex;
-use miniquad::TextureId;
 use rand::{rngs::OsRng, Rng};
 use std::sync::{Arc, Mutex as SyncMutex, Weak};
 
 use crate::{
-    gfx::{DrawCall, DrawInstruction, DrawMesh, Rectangle, RenderApi, RenderApiPtr},
+    gfx::{
+        GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId, Rectangle, RenderApi,
+        RenderApiPtr,
+    },
     mesh::{Color, MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_WHITE},
     prop::{
         PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyStr, PropertyUint32,
@@ -40,7 +41,7 @@ pub type TextPtr = Arc<Text>;
 #[derive(Clone)]
 struct TextRenderInfo {
     mesh: MeshInfo,
-    texture_id: TextureId,
+    texture_id: GfxTextureId,
 }
 
 pub struct Text {
@@ -135,7 +136,7 @@ impl Text {
     ) -> TextRenderInfo {
         debug!(target: "ui::text", "Rendering label '{}'", text);
         let glyphs = text_shaper.shape(text, font_size).await;
-        let atlas = text::make_texture_atlas(render_api, &glyphs).await.unwrap();
+        let atlas = text::make_texture_atlas(render_api, &glyphs);
 
         let mut mesh = MeshBuilder::new();
         let glyph_pos_iter = GlyphPositionIter::new(font_size, &glyphs, baseline);
@@ -153,7 +154,7 @@ impl Text {
             mesh.draw_box(&glyph_rect, color, uv_rect);
         }
 
-        let mesh = mesh.alloc(&render_api).await.unwrap();
+        let mesh = mesh.alloc(&render_api);
 
         TextRenderInfo { mesh, texture_id: atlas.texture_id }
     }
@@ -181,11 +182,11 @@ impl Text {
             return;
         };
 
-        let Some(draw_update) = self.draw(&sg, &parent_rect).await else {
+        let Some(draw_update) = self.draw(&sg, &parent_rect) else {
             error!(target: "ui::text", "Text {:?} failed to draw", node);
             return;
         };
-        self.render_api.replace_draw_calls(draw_update.draw_calls).await;
+        self.render_api.replace_draw_calls(draw_update.draw_calls);
         debug!(target: "ui::text", "replace draw calls done");
 
         // We're finished with these so clean up.
@@ -194,14 +195,14 @@ impl Text {
         self.render_api.delete_texture(old.texture_id);
     }
 
-    pub async fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
+    pub fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
         debug!(target: "ui::text", "Text::draw()");
         // Only used for debug messages
         let node = sg.get_node(self.node_id).unwrap();
 
         let render_info = self.render_info.lock().unwrap().clone();
 
-        let mesh = DrawMesh {
+        let mesh = GfxDrawMesh {
             vertex_buffer: render_info.mesh.vertex_buffer,
             index_buffer: render_info.mesh.index_buffer,
             texture: Some(render_info.texture_id),
@@ -227,8 +228,11 @@ impl Text {
             key: self.dc_key,
             draw_calls: vec![(
                 self.dc_key,
-                DrawCall {
-                    instrs: vec![DrawInstruction::ApplyMatrix(model), DrawInstruction::Draw(mesh)],
+                GfxDrawCall {
+                    instrs: vec![
+                        GfxDrawInstruction::ApplyMatrix(model),
+                        GfxDrawInstruction::Draw(mesh),
+                    ],
                     dcs: vec![],
                     z_index: self.z_index.get(),
                 },

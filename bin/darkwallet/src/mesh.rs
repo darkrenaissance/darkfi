@@ -18,9 +18,8 @@
 
 use crate::{
     error::Result,
-    gfx::{DrawMesh, Rectangle, RenderApi, Vertex},
+    gfx::{GfxBufferId, GfxDrawMesh, GfxTextureId, Rectangle, RenderApi, Vertex},
 };
-use miniquad::{BufferId, TextureId};
 
 pub type Color = [f32; 4];
 
@@ -41,15 +40,15 @@ pub const COLOR_GREY: Color = [0.5, 0.5, 0.5, 1.];
 
 #[derive(Clone)]
 pub struct MeshInfo {
-    pub vertex_buffer: BufferId,
-    pub index_buffer: BufferId,
+    pub vertex_buffer: GfxBufferId,
+    pub index_buffer: GfxBufferId,
     pub num_elements: i32,
 }
 
 impl MeshInfo {
     /// Convenience method
-    pub fn draw_with_texture(self, texture: TextureId) -> DrawMesh {
-        DrawMesh {
+    pub fn draw_with_texture(self, texture: GfxTextureId) -> GfxDrawMesh {
+        GfxDrawMesh {
             vertex_buffer: self.vertex_buffer,
             index_buffer: self.index_buffer,
             texture: Some(texture),
@@ -57,8 +56,8 @@ impl MeshInfo {
         }
     }
     /// Convenience method
-    pub fn draw_untextured(self) -> DrawMesh {
-        DrawMesh {
+    pub fn draw_untextured(self) -> GfxDrawMesh {
+        GfxDrawMesh {
             vertex_buffer: self.vertex_buffer,
             index_buffer: self.index_buffer,
             texture: None,
@@ -158,14 +157,14 @@ impl MeshBuilder {
         self.draw_filled_box(&Rectangle::new(x1, y2 - thickness, dist_x, thickness), color);
     }
 
-    pub async fn alloc(self, render_api: &RenderApi) -> Result<MeshInfo> {
+    pub fn alloc(self, render_api: &RenderApi) -> MeshInfo {
         //debug!(target: "mesh", "allocating {} verts:", self.verts.len());
         //for vert in &self.verts {
         //    debug!(target: "mesh", "  {:?}", vert);
         //}
         let num_elements = self.indices.len() as i32;
-        let vertex_buffer = render_api.new_vertex_buffer(self.verts).await?;
-        let index_buffer = render_api.new_index_buffer(self.indices).await?;
-        Ok(MeshInfo { vertex_buffer, index_buffer, num_elements })
+        let vertex_buffer = render_api.new_vertex_buffer(self.verts);
+        let index_buffer = render_api.new_index_buffer(self.indices);
+        MeshInfo { vertex_buffer, index_buffer, num_elements }
     }
 }

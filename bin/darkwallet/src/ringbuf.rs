@@ -20,7 +20,7 @@
 pub struct RingBuffer<T, const N: usize> {
     vals: [Option<T>; N],
     head: i64,
-    tail: i64
+    tail: i64,
 }
 
 impl<T, const N: usize> RingBuffer<T, N> {
@@ -59,4 +59,3 @@ impl<T, const N: usize> RingBuffer<T, N> {
         Some(self.vals[self.tail as usize].as_ref().unwrap())
     }
 }
-

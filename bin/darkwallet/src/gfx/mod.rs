@@ -19,10 +19,10 @@
 use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 use log::debug;
 use miniquad::{
-    conf, window, Backend, Bindings, BlendFactor, BlendState, BlendValue, BufferId, BufferLayout,
+    conf, window, Backend, Bindings, BlendFactor, BlendState, BlendValue, BufferLayout,
     BufferSource, BufferType, BufferUsage, Equation, EventHandler, KeyCode, KeyMods, MouseButton,
-    PassAction, Pipeline, PipelineParams, RenderingBackend, ShaderMeta, ShaderSource, TextureId,
-    TouchPhase, UniformDesc, UniformType, VertexAttribute, VertexFormat,
+    PassAction, Pipeline, PipelineParams, RenderingBackend, ShaderMeta, ShaderSource, TouchPhase,
+    UniformDesc, UniformType, VertexAttribute, VertexFormat,
 };
 use std::{
     collections::HashMap,
@@ -37,6 +37,9 @@ use crate::{
     error::{Error, Result},
     pubsub::{Publisher, PublisherPtr, Subscription, SubscriptionId},
 };
+
+pub type GfxTextureId = u32;
+pub type GfxBufferId = u32;
 
 // This is very noisy so suppress output by default
 const DEBUG_RENDER: bool = false;
@@ -188,88 +191,141 @@ impl RenderApi {
         Arc::new(Self { method_req })
     }
 
-    pub async fn new_texture(&self, width: u16, height: u16, data: Vec<u8>) -> Result<TextureId> {
-        let (sendr, recvr) = async_channel::bounded(1);
+    pub fn new_texture(&self, width: u16, height: u16, data: Vec<u8>) -> GfxTextureId {
+        let gfx_texture_id = rand::random();
 
-        let method = GraphicsMethod::NewTexture((width, height, data, sendr));
+        let method = GraphicsMethod::NewTexture((width, height, data, gfx_texture_id));
+        let _ = self.method_req.send(method);
 
-        self.method_req.send(method).map_err(|_| Error::GfxWindowClosed)?;
-
-        let texture_id = recvr.recv().await.map_err(|_| Error::GfxWindowClosed)?;
-        Ok(texture_id)
+        gfx_texture_id
     }
 
-    pub fn delete_texture(&self, texture: TextureId) {
+    pub fn delete_texture(&self, texture: GfxTextureId) {
         let method = GraphicsMethod::DeleteTexture(texture);
-
-        // Ignore any error
         let _ = self.method_req.send(method);
     }
 
-    pub async fn new_vertex_buffer(&self, verts: Vec<Vertex>) -> Result<BufferId> {
-        let (sendr, recvr) = async_channel::bounded(1);
+    pub fn new_vertex_buffer(&self, verts: Vec<Vertex>) -> GfxBufferId {
+        let gfx_buffer_id = rand::random();
 
-        let method = GraphicsMethod::NewVertexBuffer((verts, sendr));
+        let method = GraphicsMethod::NewVertexBuffer((verts, gfx_buffer_id));
+        let _ = self.method_req.send(method);
 
-        self.method_req.send(method).map_err(|_| Error::GfxWindowClosed)?;
-
-        let buffer = recvr.recv().await.map_err(|_| Error::GfxWindowClosed)?;
-        Ok(buffer)
+        gfx_buffer_id
     }
 
-    pub async fn new_index_buffer(&self, indices: Vec<u16>) -> Result<BufferId> {
-        let (sendr, recvr) = async_channel::bounded(1);
+    pub fn new_index_buffer(&self, indices: Vec<u16>) -> GfxBufferId {
+        let gfx_buffer_id = rand::random();
 
-        let method = GraphicsMethod::NewIndexBuffer((indices, sendr));
+        let method = GraphicsMethod::NewIndexBuffer((indices, gfx_buffer_id));
+        let _ = self.method_req.send(method);
 
-        self.method_req.send(method).map_err(|_| Error::GfxWindowClosed)?;
-
-        let buffer = recvr.recv().await.map_err(|_| Error::GfxWindowClosed)?;
-        Ok(buffer)
+        gfx_buffer_id
     }
 
-    pub fn delete_buffer(&self, buffer: BufferId) {
+    pub fn delete_buffer(&self, buffer: GfxBufferId) {
         let method = GraphicsMethod::DeleteBuffer(buffer);
-
-        // Ignore any error
         let _ = self.method_req.send(method);
     }
 
-    pub async fn replace_draw_calls(&self, dcs: Vec<(u64, DrawCall)>) {
+    pub fn replace_draw_calls(&self, dcs: Vec<(u64, GfxDrawCall)>) {
         let method = GraphicsMethod::ReplaceDrawCalls(dcs);
-
-        // Ignore any error
         let _ = self.method_req.send(method);
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct DrawMesh {
-    pub vertex_buffer: BufferId,
-    pub index_buffer: BufferId,
-    pub texture: Option<TextureId>,
+pub struct GfxDrawMesh {
+    pub vertex_buffer: GfxBufferId,
+    pub index_buffer: GfxBufferId,
+    pub texture: Option<GfxTextureId>,
     pub num_elements: i32,
 }
 
+impl GfxDrawMesh {
+    fn compile(
+        self,
+        textures: &HashMap<GfxTextureId, miniquad::TextureId>,
+        buffers: &HashMap<GfxBufferId, miniquad::BufferId>,
+    ) -> DrawMesh {
+        DrawMesh {
+            vertex_buffer: buffers[&self.vertex_buffer],
+            index_buffer: buffers[&self.index_buffer],
+            texture: self.texture.map(|t| textures[&t]),
+            num_elements: self.num_elements,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
-pub enum DrawInstruction {
+pub enum GfxDrawInstruction {
+    ApplyViewport(Rectangle),
+    ApplyMatrix(glam::Mat4),
+    Draw(GfxDrawMesh),
+}
+
+impl GfxDrawInstruction {
+    fn compile(
+        self,
+        textures: &HashMap<GfxTextureId, miniquad::TextureId>,
+        buffers: &HashMap<GfxBufferId, miniquad::BufferId>,
+    ) -> DrawInstruction {
+        match self {
+            Self::ApplyViewport(rect) => DrawInstruction::ApplyViewport(rect),
+            Self::ApplyMatrix(mat) => DrawInstruction::ApplyMatrix(mat),
+            Self::Draw(mesh) => DrawInstruction::Draw(mesh.compile(textures, buffers)),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct GfxDrawCall {
+    pub instrs: Vec<GfxDrawInstruction>,
+    pub dcs: Vec<u64>,
+    pub z_index: u32,
+}
+
+impl GfxDrawCall {
+    fn compile(
+        self,
+        textures: &HashMap<GfxTextureId, miniquad::TextureId>,
+        buffers: &HashMap<GfxBufferId, miniquad::BufferId>,
+    ) -> DrawCall {
+        DrawCall {
+            instrs: self.instrs.into_iter().map(|i| i.compile(textures, buffers)).collect(),
+            dcs: self.dcs,
+            z_index: self.z_index,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct DrawMesh {
+    vertex_buffer: miniquad::BufferId,
+    index_buffer: miniquad::BufferId,
+    texture: Option<miniquad::TextureId>,
+    num_elements: i32,
+}
+
+#[derive(Debug, Clone)]
+enum DrawInstruction {
     ApplyViewport(Rectangle),
     ApplyMatrix(glam::Mat4),
     Draw(DrawMesh),
 }
 
 #[derive(Debug)]
-pub struct DrawCall {
-    pub instrs: Vec<DrawInstruction>,
-    pub dcs: Vec<u64>,
-    pub z_index: u32,
+struct DrawCall {
+    instrs: Vec<DrawInstruction>,
+    dcs: Vec<u64>,
+    z_index: u32,
 }
 
 struct RenderContext<'a> {
     ctx: &'a mut Box<dyn RenderingBackend>,
     draw_calls: &'a HashMap<u64, DrawCall>,
     uniforms_data: [u8; 128],
-    white_texture: TextureId,
+    white_texture: miniquad::TextureId,
 }
 
 impl<'a> RenderContext<'a> {
@@ -365,12 +421,12 @@ impl<'a> RenderContext<'a> {
 
 #[derive(Debug)]
 pub enum GraphicsMethod {
-    NewTexture((u16, u16, Vec<u8>, async_channel::Sender<TextureId>)),
-    DeleteTexture(TextureId),
-    NewVertexBuffer((Vec<Vertex>, async_channel::Sender<BufferId>)),
-    NewIndexBuffer((Vec<u16>, async_channel::Sender<BufferId>)),
-    DeleteBuffer(BufferId),
-    ReplaceDrawCalls(Vec<(u64, DrawCall)>),
+    NewTexture((u16, u16, Vec<u8>, GfxTextureId)),
+    DeleteTexture(GfxTextureId),
+    NewVertexBuffer((Vec<Vertex>, GfxBufferId)),
+    NewIndexBuffer((Vec<u16>, GfxBufferId)),
+    DeleteBuffer(GfxBufferId),
+    ReplaceDrawCalls(Vec<(u64, GfxDrawCall)>),
 }
 
 pub type GraphicsEventPublisherPtr = Arc<GraphicsEventPublisher>;
@@ -633,9 +689,12 @@ struct Stage {
 
     ctx: Box<dyn RenderingBackend>,
     pipeline: Pipeline,
-    white_texture: TextureId,
+    white_texture: miniquad::TextureId,
     draw_calls: HashMap<u64, DrawCall>,
     last_draw_time: Option<Instant>,
+
+    textures: HashMap<GfxTextureId, miniquad::TextureId>,
+    buffers: HashMap<GfxBufferId, miniquad::BufferId>,
 
     method_rep: mpsc::Receiver<GraphicsMethod>,
     event_pub: GraphicsEventPublisherPtr,
@@ -705,6 +764,8 @@ impl Stage {
             white_texture,
             draw_calls: HashMap::from([(0, DrawCall { instrs: vec![], dcs: vec![], z_index: 0 })]),
             last_draw_time: None,
+            textures: HashMap::new(),
+            buffers: HashMap::new(),
             method_rep,
             event_pub,
         }
@@ -713,8 +774,8 @@ impl Stage {
     fn process_method(&mut self, method: GraphicsMethod) {
         //debug!(target: "gfx", "Received method: {:?}", method);
         match method {
-            GraphicsMethod::NewTexture((width, height, data, sendr)) => {
-                self.method_new_texture(width, height, data, sendr)
+            GraphicsMethod::NewTexture((width, height, data, gfx_texture_id)) => {
+                self.method_new_texture(width, height, data, gfx_texture_id)
             }
             GraphicsMethod::DeleteTexture(texture) => self.method_delete_texture(texture),
             GraphicsMethod::NewVertexBuffer((verts, sendr)) => {
@@ -733,7 +794,7 @@ impl Stage {
         width: u16,
         height: u16,
         data: Vec<u8>,
-        sendr: async_channel::Sender<TextureId>,
+        gfx_texture_id: GfxTextureId,
     ) {
         let texture = self.ctx.new_texture_from_rgba8(width, height, &data);
         //debug!(target: "gfx", "Invoked method: new_texture({}, {}, ...) -> {:?}",
@@ -741,45 +802,40 @@ impl Stage {
         //debug!(target: "gfx", "Invoked method: new_texture({}, {}, ...) -> {:?}\n{}",
         //       width, height, texture,
         //       ansi_texture(width as usize, height as usize, &data));
-        sendr.try_send(texture).unwrap();
+        self.textures.insert(gfx_texture_id, texture);
     }
-    fn method_delete_texture(&mut self, texture: TextureId) {
+    fn method_delete_texture(&mut self, gfx_texture_id: GfxTextureId) {
         //debug!(target: "gfx", "Invoked method: delete_texture({:?})", texture);
+        let texture = self.textures.remove(&gfx_texture_id).expect("couldn't find gfx_texture_id");
         self.ctx.delete_texture(texture);
     }
-    fn method_new_vertex_buffer(
-        &mut self,
-        verts: Vec<Vertex>,
-        sendr: async_channel::Sender<BufferId>,
-    ) {
+    fn method_new_vertex_buffer(&mut self, verts: Vec<Vertex>, gfx_buffer_id: GfxBufferId) {
         let buffer = self.ctx.new_buffer(
             BufferType::VertexBuffer,
             BufferUsage::Immutable,
             BufferSource::slice(&verts),
         );
         //debug!(target: "gfx", "Invoked method: new_vertex_buffer({:?}) -> {:?}", verts, buffer);
-        sendr.try_send(buffer).unwrap();
+        self.buffers.insert(gfx_buffer_id, buffer);
     }
-    fn method_new_index_buffer(
-        &mut self,
-        indices: Vec<u16>,
-        sendr: async_channel::Sender<BufferId>,
-    ) {
+    fn method_new_index_buffer(&mut self, indices: Vec<u16>, gfx_buffer_id: GfxBufferId) {
         let buffer = self.ctx.new_buffer(
             BufferType::IndexBuffer,
             BufferUsage::Immutable,
             BufferSource::slice(&indices),
         );
         //debug!(target: "gfx", "Invoked method: new_index_buffer({:?}) -> {:?}", indices, buffer);
-        sendr.try_send(buffer).unwrap();
+        self.buffers.insert(gfx_buffer_id, buffer);
     }
-    fn method_delete_buffer(&mut self, buffer: BufferId) {
+    fn method_delete_buffer(&mut self, gfx_buffer_id: GfxBufferId) {
         //debug!(target: "gfx", "Invoked method: delete_buffer({:?})", buffer);
+        let buffer = self.buffers.remove(&gfx_buffer_id).expect("couldn't find gfx_buffer_id");
         self.ctx.delete_buffer(buffer);
     }
-    fn method_replace_draw_calls(&mut self, dcs: Vec<(u64, DrawCall)>) {
+    fn method_replace_draw_calls(&mut self, dcs: Vec<(u64, GfxDrawCall)>) {
         //debug!(target: "gfx", "Invoked method: replace_draw_calls({:?})", dcs);
         for (key, val) in dcs {
+            let val = val.compile(&self.textures, &self.buffers);
             self.draw_calls.insert(key, val);
         }
     }

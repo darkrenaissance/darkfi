@@ -16,13 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use miniquad::{BufferId, TextureId};
 use std::sync::{Arc, Weak};
 
 use crate::{
     error::{Error, Result},
     expr::{SExprMachine, SExprVal},
-    gfx::{DrawCall, Rectangle},
+    gfx::{GfxBufferId, GfxDrawCall, GfxTextureId, Rectangle},
     prop::{PropertyPtr, Role},
     scene::{SceneGraph, SceneNode, SceneNodeId, SceneNodeType},
     ExecutorPtr,
@@ -51,9 +50,9 @@ pub trait Stoppable {
 
 pub struct DrawUpdate {
     pub key: u64,
-    pub draw_calls: Vec<(u64, DrawCall)>,
-    pub freed_textures: Vec<TextureId>,
-    pub freed_buffers: Vec<BufferId>,
+    pub draw_calls: Vec<(u64, GfxDrawCall)>,
+    pub freed_textures: Vec<GfxTextureId>,
+    pub freed_buffers: Vec<GfxBufferId>,
 }
 
 pub struct OnModify<T> {

@@ -20,7 +20,9 @@ use rand::{rngs::OsRng, Rng};
 use std::sync::{Arc, Weak};
 
 use crate::{
-    gfx::{DrawCall, DrawInstruction, DrawMesh, Rectangle, RenderApiPtr, Vertex},
+    gfx::{
+        GfxBufferId, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, Rectangle, RenderApiPtr, Vertex,
+    },
     prop::{PropertyPtr, PropertyUint32, Role},
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
     ExecutorPtr,
@@ -35,8 +37,8 @@ pub struct Mesh {
     render_api: RenderApiPtr,
     _tasks: Vec<smol::Task<()>>,
 
-    vertex_buffer: miniquad::BufferId,
-    index_buffer: miniquad::BufferId,
+    vertex_buffer: GfxBufferId,
+    index_buffer: GfxBufferId,
     // Texture
     num_elements: i32,
 
@@ -57,8 +59,8 @@ impl Mesh {
         indices: Vec<u16>,
     ) -> Pimpl {
         let num_elements = indices.len() as i32;
-        let vertex_buffer = render_api.new_vertex_buffer(verts).await.unwrap();
-        let index_buffer = render_api.new_index_buffer(indices).await.unwrap();
+        let vertex_buffer = render_api.new_vertex_buffer(verts);
+        let index_buffer = render_api.new_index_buffer(indices);
 
         let scene_graph = sg.lock().await;
         let node = scene_graph.get_node(node_id).unwrap();
@@ -101,7 +103,7 @@ impl Mesh {
             error!(target: "ui::mesh", "Mesh {:?} failed to draw", node);
             return;
         };
-        self.render_api.replace_draw_calls(draw_update.draw_calls).await;
+        self.render_api.replace_draw_calls(draw_update.draw_calls);
         debug!(target: "ui::mesh", "replace draw calls done");
     }
 
@@ -110,7 +112,7 @@ impl Mesh {
         // Only used for debug messages
         let node = sg.get_node(self.node_id).unwrap();
 
-        let mesh = DrawMesh {
+        let mesh = GfxDrawMesh {
             vertex_buffer: self.vertex_buffer,
             index_buffer: self.index_buffer,
             texture: None,
@@ -139,8 +141,11 @@ impl Mesh {
             key: self.dc_key,
             draw_calls: vec![(
                 self.dc_key,
-                DrawCall {
-                    instrs: vec![DrawInstruction::ApplyMatrix(model), DrawInstruction::Draw(mesh)],
+                GfxDrawCall {
+                    instrs: vec![
+                        GfxDrawInstruction::ApplyMatrix(model),
+                        GfxDrawInstruction::Draw(mesh),
+                    ],
                     dcs: vec![],
                     z_index: self.z_index.get(),
                 },

@@ -21,7 +21,7 @@ use rand::{rngs::OsRng, Rng};
 use std::sync::{Arc, Weak};
 
 use crate::{
-    gfx::{DrawCall, DrawInstruction, Rectangle, RenderApiPtr},
+    gfx::{GfxDrawCall, GfxDrawInstruction, Rectangle, RenderApiPtr},
     prop::{PropertyBool, PropertyPtr, Role},
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
     ExecutorPtr,
@@ -91,7 +91,7 @@ impl RenderLayer {
             error!(target: "ui::layer", "RenderLayer {:?} failed to draw", node);
             return;
         };
-        self.render_api.replace_draw_calls(draw_update.draw_calls).await;
+        self.render_api.replace_draw_calls(draw_update.draw_calls);
         debug!(target: "ui::layer", "replace draw calls done");
     }
 
@@ -141,10 +141,10 @@ impl RenderLayer {
             let dcs = match &node.pimpl {
                 Pimpl::RenderLayer(layer) => layer.draw(&sg, &rect).await,
                 Pimpl::Mesh(mesh) => mesh.draw(&sg, &rect),
-                Pimpl::Text(txt) => txt.draw(&sg, &rect).await,
-                Pimpl::EditBox(editb) => editb.draw(&sg, &rect).await,
+                Pimpl::Text(txt) => txt.draw(&sg, &rect),
+                Pimpl::EditBox(editb) => editb.draw(&sg, &rect),
                 Pimpl::ChatView(chat) => chat.draw(&sg, &rect).await,
-                Pimpl::Image(img) => img.draw(&sg, &rect).await,
+                Pimpl::Image(img) => img.draw(&sg, &rect),
                 Pimpl::Button(btn) => {
                     btn.set_parent_rect(&rect);
                     continue
@@ -161,8 +161,8 @@ impl RenderLayer {
             freed_buffers.append(&mut draw_update.freed_buffers);
         }
 
-        let dc = DrawCall {
-            instrs: vec![DrawInstruction::ApplyViewport(rect)],
+        let dc = GfxDrawCall {
+            instrs: vec![GfxDrawInstruction::ApplyViewport(rect)],
             dcs: child_calls,
             z_index: 0,
         };

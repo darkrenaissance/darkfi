@@ -1,11 +1,8 @@
-use miniquad::TextureId;
-
+use super::{Glyph, Sprite, SpritePtr};
 use crate::{
     error::Result,
-    gfx::{Rectangle, RenderApi},
+    gfx::{GfxTextureId, Rectangle, RenderApi},
 };
-
-use super::{Glyph, Sprite, SpritePtr};
 
 /// Prevents render artifacts from aliasing.
 /// Even with aliasing turned off, some bleed still appears possibly
@@ -13,13 +10,10 @@ use super::{Glyph, Sprite, SpritePtr};
 const ATLAS_GAP: usize = 2;
 
 /// Convenience wrapper fn. Use if rendering a single line of glyphs.
-pub async fn make_texture_atlas(
-    render_api: &RenderApi,
-    glyphs: &Vec<Glyph>,
-) -> Result<RenderedAtlas> {
+pub fn make_texture_atlas(render_api: &RenderApi, glyphs: &Vec<Glyph>) -> RenderedAtlas {
     let mut atlas = Atlas::new(render_api);
     atlas.push(&glyphs);
-    atlas.make().await
+    atlas.make()
 }
 
 /// Responsible for aggregating glyphs, and then producing a single software
@@ -135,7 +129,7 @@ impl<'a> Atlas<'a> {
     /// Each glyph is given a sub-rect within the texture, accessible by calling
     /// `rendered_atlas.fetch_uv(my_glyph_id)`.
     /// The texture ID is a struct member: `rendered_atlas.texture_id`.
-    pub async fn make(self) -> Result<RenderedAtlas> {
+    pub fn make(self) -> RenderedAtlas {
         //if self.glyph_ids.is_empty() {
         //    return Err(Error::AtlasIsEmpty);
         //}
@@ -144,13 +138,12 @@ impl<'a> Atlas<'a> {
         assert_eq!(self.glyph_ids.len(), self.x_pos.len());
 
         let atlas = self.render();
-        let texture_id =
-            self.render_api.new_texture(self.width as u16, self.height as u16, atlas).await?;
+        let texture_id = self.render_api.new_texture(self.width as u16, self.height as u16, atlas);
 
         let uv_rects = self.compute_uvs();
         let glyph_ids = self.glyph_ids;
 
-        Ok(RenderedAtlas { glyph_ids, uv_rects, texture_id })
+        RenderedAtlas { glyph_ids, uv_rects, texture_id }
     }
 }
 
@@ -180,7 +173,7 @@ pub struct RenderedAtlas {
     /// UV rectangle within the texture.
     uv_rects: Vec<Rectangle>,
     /// Allocated atlas texture. Must be manually deallocated by the user.
-    pub texture_id: TextureId,
+    pub texture_id: GfxTextureId,
 }
 
 impl RenderedAtlas {

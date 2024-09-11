@@ -16,9 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-//use async_lock::Mutex;
 use image::ImageReader;
-use miniquad::TextureId;
 use rand::{rngs::OsRng, Rng};
 use std::{
     io::Cursor,
@@ -26,7 +24,7 @@ use std::{
 };
 
 use crate::{
-    gfx::{DrawCall, DrawInstruction, DrawMesh, Rectangle, RenderApiPtr},
+    gfx::{GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId, Rectangle, RenderApiPtr},
     mesh::{MeshBuilder, MeshInfo, COLOR_WHITE},
     prop::{PropertyPtr, PropertyStr, PropertyUint32, Role},
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
@@ -44,7 +42,7 @@ pub struct Image {
     tasks: Vec<smol::Task<()>>,
 
     mesh: SyncMutex<Option<MeshInfo>>,
-    texture: SyncMutex<Option<TextureId>>,
+    texture: SyncMutex<Option<GfxTextureId>>,
     dc_key: u64,
 
     node_id: SceneNodeId,
@@ -88,13 +86,13 @@ impl Image {
             }
         });
 
-        *self_.texture.lock().unwrap() = Some(self_.load_texture().await);
+        *self_.texture.lock().unwrap() = Some(self_.load_texture());
 
         Pimpl::Image(self_)
     }
 
     async fn reload(self: Arc<Self>) {
-        let texture = self.load_texture().await;
+        let texture = self.load_texture();
         let old_texture = std::mem::replace(&mut *self.texture.lock().unwrap(), Some(texture));
 
         self.clone().redraw().await;
@@ -104,7 +102,7 @@ impl Image {
         }
     }
 
-    async fn load_texture(&self) -> TextureId {
+    fn load_texture(&self) -> GfxTextureId {
         let path = self.path.get();
 
         // TODO we should NOT use unwrap here
@@ -124,7 +122,7 @@ impl Image {
         let height = img.height() as u16;
         let bmp = img.into_raw();
 
-        let texture_id = self.render_api.new_texture(width, height, bmp).await.unwrap();
+        let texture_id = self.render_api.new_texture(width, height, bmp);
         texture_id
     }
 
@@ -136,24 +134,24 @@ impl Image {
             return;
         };
 
-        let Some(draw_update) = self.draw(&sg, &parent_rect).await else {
+        let Some(draw_update) = self.draw(&sg, &parent_rect) else {
             error!(target: "ui::text", "Text {:?} failed to draw", node);
             return;
         };
-        self.render_api.replace_draw_calls(draw_update.draw_calls).await;
+        self.render_api.replace_draw_calls(draw_update.draw_calls);
         debug!(target: "ui::text", "replace draw calls done");
     }
 
     /// Called whenever any property changes.
-    async fn regen_mesh(&self, _clip: Rectangle) -> MeshInfo {
+    fn regen_mesh(&self, _clip: Rectangle) -> MeshInfo {
         let basic = Rectangle { x: 0., y: 0., w: 1., h: 1. };
 
         let mut mesh = MeshBuilder::new();
         mesh.draw_box(&basic, COLOR_WHITE, &basic);
-        mesh.alloc(&self.render_api).await.unwrap()
+        mesh.alloc(&self.render_api)
     }
 
-    pub async fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
+    pub fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
         debug!(target: "ui::text", "Text::draw()");
         // Only used for debug messages
         let node = sg.get_node(self.node_id).unwrap();
@@ -167,7 +165,7 @@ impl Image {
         };
 
         // draw will recalc this when it's None
-        let mesh = self.regen_mesh(rect.clone()).await;
+        let mesh = self.regen_mesh(rect.clone());
         let old_mesh = std::mem::replace(&mut *self.mesh.lock().unwrap(), Some(mesh.clone()));
 
         let Some(texture_id) = *self.texture.lock().unwrap() else {
@@ -181,7 +179,7 @@ impl Image {
             freed_buffers.push(old.index_buffer);
         }
 
-        let mesh = DrawMesh {
+        let mesh = GfxDrawMesh {
             vertex_buffer: mesh.vertex_buffer,
             index_buffer: mesh.index_buffer,
             texture: Some(texture_id),
@@ -200,8 +198,11 @@ impl Image {
             key: self.dc_key,
             draw_calls: vec![(
                 self.dc_key,
-                DrawCall {
-                    instrs: vec![DrawInstruction::ApplyMatrix(model), DrawInstruction::Draw(mesh)],
+                GfxDrawCall {
+                    instrs: vec![
+                        GfxDrawInstruction::ApplyMatrix(model),
+                        GfxDrawInstruction::Draw(mesh),
+                    ],
                     dcs: vec![],
                     z_index: self.z_index.get(),
                 },

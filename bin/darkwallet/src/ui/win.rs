@@ -19,7 +19,7 @@
 use std::sync::{Arc, Weak};
 
 use crate::{
-    gfx::{DrawCall, GraphicsEventPublisherPtr, Rectangle, RenderApiPtr},
+    gfx::{GfxDrawCall, GraphicsEventPublisherPtr, Rectangle, RenderApiPtr},
     prop::{PropertyPtr, Role},
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
     ExecutorPtr,
@@ -138,11 +138,11 @@ impl Window {
             freed_buffers.append(&mut draw_update.freed_buffers);
         }
 
-        let root_dc = DrawCall { instrs: vec![], dcs: child_calls, z_index: 0 };
+        let root_dc = GfxDrawCall { instrs: vec![], dcs: child_calls, z_index: 0 };
         draw_calls.push((0, root_dc));
         //debug!(target: "ui::win", "  => {:?}", draw_calls);
 
-        self.render_api.replace_draw_calls(draw_calls).await;
+        self.render_api.replace_draw_calls(draw_calls);
 
         for texture in freed_textures {
             self.render_api.delete_texture(texture);

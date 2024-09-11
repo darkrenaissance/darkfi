@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use miniquad::{window, KeyCode, KeyMods, MouseButton, TextureId, TouchPhase};
+use miniquad::{window, KeyCode, KeyMods, MouseButton, TouchPhase};
 use rand::{rngs::OsRng, Rng};
 use std::{
     collections::HashMap,
@@ -30,8 +30,8 @@ use std::{
 use crate::{
     error::Result,
     gfx::{
-        DrawCall, DrawInstruction, DrawMesh, GraphicsEventPublisherPtr, Point, Rectangle,
-        RenderApiPtr,
+        GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId, GraphicsEventPublisherPtr,
+        Point, Rectangle, RenderApiPtr,
     },
     mesh::{MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_WHITE},
     prop::{
@@ -129,7 +129,7 @@ impl RepeatingKeyTimer {
 #[derive(Clone)]
 struct TextRenderInfo {
     mesh: MeshInfo,
-    texture_id: TextureId,
+    texture_id: GfxTextureId,
 }
 
 pub type EditBoxPtr = Arc<EditBox>;
@@ -339,7 +339,7 @@ impl EditBox {
 
     /// Called whenever the text or any text property changes.
     /// Not related to cursor, text highlighting or bounding (clip) rects.
-    async fn regen_mesh(&self, mut clip: Rectangle) -> TextRenderInfo {
+    fn regen_mesh(&self, mut clip: Rectangle) -> TextRenderInfo {
         clip.x = 0.;
         clip.y = 0.;
 
@@ -356,7 +356,7 @@ impl EditBox {
         debug!(target: "ui::editbox", "    cursor_pos={cursor_pos}, is_focused={is_focused}");
 
         let glyphs = self.glyphs.lock().unwrap().clone();
-        let atlas = text::make_texture_atlas(&self.render_api, &glyphs).await.unwrap();
+        let atlas = text::make_texture_atlas(&self.render_api, &glyphs);
 
         let mut mesh = MeshBuilder::with_clip(clip.clone());
         self.draw_selected(&mut mesh, &glyphs, clip.h).unwrap();
@@ -403,7 +403,7 @@ impl EditBox {
             mesh.draw_outline(&clip, COLOR_BLUE, 1.);
         }
 
-        let mesh = mesh.alloc(&self.render_api).await.unwrap();
+        let mesh = mesh.alloc(&self.render_api);
 
         TextRenderInfo { mesh, texture_id: atlas.texture_id }
     }
@@ -1193,11 +1193,11 @@ impl EditBox {
             return;
         };
 
-        let Some(draw_update) = self.draw(&sg, &parent_rect).await else {
+        let Some(draw_update) = self.draw(&sg, &parent_rect) else {
             error!(target: "ui::editbox", "Text {:?} failed to draw", node);
             return;
         };
-        self.render_api.replace_draw_calls(draw_update.draw_calls).await;
+        self.render_api.replace_draw_calls(draw_update.draw_calls);
         debug!(target: "ui::editbox", "replace draw calls done");
         for buffer_id in draw_update.freed_buffers {
             self.render_api.delete_buffer(buffer_id);
@@ -1207,7 +1207,7 @@ impl EditBox {
         }
     }
 
-    pub async fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
+    pub fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
         debug!(target: "ui::editbox", "EditBox::draw()");
         // Only used for debug messages
         let node = sg.get_node(self.node_id).unwrap();
@@ -1221,7 +1221,7 @@ impl EditBox {
         };
 
         // draw will recalc this when it's None
-        let render_info = self.regen_mesh(rect.clone()).await;
+        let render_info = self.regen_mesh(rect.clone());
         let old_render_info =
             std::mem::replace(&mut *self.render_info.lock().unwrap(), Some(render_info.clone()));
 
@@ -1234,7 +1234,7 @@ impl EditBox {
             freed_buffers.push(old.mesh.index_buffer);
         }
 
-        let mesh = DrawMesh {
+        let mesh = GfxDrawMesh {
             vertex_buffer: render_info.mesh.vertex_buffer,
             index_buffer: render_info.mesh.index_buffer,
             texture: Some(render_info.texture_id),
@@ -1252,8 +1252,11 @@ impl EditBox {
             key: self.dc_key,
             draw_calls: vec![(
                 self.dc_key,
-                DrawCall {
-                    instrs: vec![DrawInstruction::ApplyMatrix(model), DrawInstruction::Draw(mesh)],
+                GfxDrawCall {
+                    instrs: vec![
+                        GfxDrawInstruction::ApplyMatrix(model),
+                        GfxDrawInstruction::Draw(mesh),
+                    ],
                     dcs: vec![],
                     z_index: self.z_index.get(),
                 },

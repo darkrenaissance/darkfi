@@ -20,7 +20,6 @@ use async_gen::{gen as async_gen, AsyncIter};
 use async_lock::Mutex as AsyncMutex;
 use chrono::{Local, NaiveDate, TimeZone};
 use futures::stream::{Stream, StreamExt};
-use miniquad::{BufferId, TextureId};
 use std::{
     collections::HashMap,
     hash::{DefaultHasher, Hash, Hasher},
@@ -31,8 +30,8 @@ use std::{
 
 use crate::{
     gfx::{
-        DrawCall, DrawInstruction, DrawMesh, GraphicsEventPublisherPtr, Point, Rectangle,
-        RenderApi, RenderApiPtr,
+        GfxBufferId, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId,
+        GraphicsEventPublisherPtr, Point, Rectangle, RenderApi, RenderApiPtr,
     },
     mesh::{Color, MeshBuilder, COLOR_BLUE, COLOR_GREEN, COLOR_PINK},
     prop::{PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyUint32, Role},
@@ -66,7 +65,7 @@ pub(super) struct PrivMessage {
     wrapped_lines: Vec<Vec<Glyph>>,
 
     atlas: text::RenderedAtlas,
-    mesh_cache: Option<DrawMesh>,
+    mesh_cache: Option<GfxDrawMesh>,
 }
 
 impl PrivMessage {
@@ -91,7 +90,7 @@ impl PrivMessage {
 
         let mut atlas = text::Atlas::new(render_api);
         atlas.push(&unwrapped_glyphs);
-        let atlas = atlas.make().await.expect("unable to make atlas");
+        let atlas = atlas.make();
 
         let mut self_ = Self {
             font_size,
@@ -112,7 +111,7 @@ impl PrivMessage {
         self.wrapped_lines.len() as f32 * line_height
     }
 
-    async fn gen_mesh(
+    fn gen_mesh(
         &mut self,
         clip: &Rectangle,
         line_height: f32,
@@ -122,7 +121,7 @@ impl PrivMessage {
         text_color: Color,
         debug_render: bool,
         render_api: &RenderApi,
-    ) -> DrawMesh {
+    ) -> GfxDrawMesh {
         if let Some(mesh) = &self.mesh_cache {
             return mesh.clone()
         }
@@ -165,7 +164,7 @@ impl PrivMessage {
             );
         }
 
-        let mesh = mesh.alloc(render_api).await.unwrap();
+        let mesh = mesh.alloc(render_api);
         let mesh = mesh.draw_with_texture(self.atlas.texture_id);
         self.mesh_cache = Some(mesh.clone());
 
@@ -217,7 +216,7 @@ impl PrivMessage {
         }
     }
 
-    fn clear_mesh(&mut self) -> Option<DrawMesh> {
+    fn clear_mesh(&mut self) -> Option<GfxDrawMesh> {
         std::mem::replace(&mut self.mesh_cache, None)
     }
 
@@ -242,7 +241,7 @@ pub(super) struct DateMessage {
     glyphs: Vec<Glyph>,
 
     atlas: text::RenderedAtlas,
-    mesh_cache: Option<DrawMesh>,
+    mesh_cache: Option<GfxDrawMesh>,
 }
 
 impl DateMessage {
@@ -264,12 +263,12 @@ impl DateMessage {
 
         let mut atlas = text::Atlas::new(render_api);
         atlas.push(&glyphs);
-        let atlas = atlas.make().await.expect("unable to make atlas");
+        let atlas = atlas.make();
 
         Message::Date(Self { font_size, timestamp, glyphs, atlas, mesh_cache: None })
     }
 
-    fn clear_mesh(&mut self) -> Option<DrawMesh> {
+    fn clear_mesh(&mut self) -> Option<GfxDrawMesh> {
         None
     }
 
@@ -277,7 +276,7 @@ impl DateMessage {
         // Do nothing
     }
 
-    async fn gen_mesh(
+    fn gen_mesh(
         &mut self,
         clip: &Rectangle,
         line_height: f32,
@@ -287,7 +286,7 @@ impl DateMessage {
         text_color: Color,
         debug_render: bool,
         render_api: &RenderApi,
-    ) -> DrawMesh {
+    ) -> GfxDrawMesh {
         let mut mesh = MeshBuilder::new();
 
         let glyph_pos_iter = GlyphPositionIter::new(self.font_size, &self.glyphs, baseline);
@@ -305,7 +304,7 @@ impl DateMessage {
             );
         }
 
-        let mesh = mesh.alloc(render_api).await.unwrap();
+        let mesh = mesh.alloc(render_api);
         let mesh = mesh.draw_with_texture(self.atlas.texture_id);
         self.mesh_cache = Some(mesh.clone());
 
@@ -343,7 +342,7 @@ impl Message {
         }
     }
 
-    fn clear_mesh(&mut self) -> Option<DrawMesh> {
+    fn clear_mesh(&mut self) -> Option<GfxDrawMesh> {
         match self {
             Self::Priv(m) => m.clear_mesh(),
             Self::Date(m) => m.clear_mesh(),
@@ -357,7 +356,7 @@ impl Message {
         }
     }
 
-    async fn gen_mesh(
+    fn gen_mesh(
         &mut self,
         clip: &Rectangle,
         line_height: f32,
@@ -367,34 +366,28 @@ impl Message {
         text_color: Color,
         debug_render: bool,
         render_api: &RenderApi,
-    ) -> DrawMesh {
+    ) -> GfxDrawMesh {
         match self {
-            Self::Priv(m) => {
-                m.gen_mesh(
-                    clip,
-                    line_height,
-                    baseline,
-                    nick_colors,
-                    timestamp_color,
-                    text_color,
-                    debug_render,
-                    render_api,
-                )
-                .await
-            }
-            Self::Date(m) => {
-                m.gen_mesh(
-                    clip,
-                    line_height,
-                    baseline,
-                    nick_colors,
-                    timestamp_color,
-                    text_color,
-                    debug_render,
-                    render_api,
-                )
-                .await
-            }
+            Self::Priv(m) => m.gen_mesh(
+                clip,
+                line_height,
+                baseline,
+                nick_colors,
+                timestamp_color,
+                text_color,
+                debug_render,
+                render_api,
+            ),
+            Self::Date(m) => m.gen_mesh(
+                clip,
+                line_height,
+                baseline,
+                nick_colors,
+                timestamp_color,
+                text_color,
+                debug_render,
+                render_api,
+            ),
         }
     }
 
@@ -416,16 +409,16 @@ fn select_nick_color(nick: &str, nick_colors: &[Color]) -> Color {
 
 #[derive(Default)]
 pub(super) struct FreedData {
-    pub(super) buffers: Vec<BufferId>,
-    pub(super) textures: Vec<TextureId>,
+    pub(super) buffers: Vec<GfxBufferId>,
+    pub(super) textures: Vec<GfxTextureId>,
 }
 
 impl FreedData {
-    fn add_mesh(&mut self, mesh: DrawMesh) {
+    fn add_mesh(&mut self, mesh: GfxDrawMesh) {
         self.buffers.push(mesh.vertex_buffer);
         self.buffers.push(mesh.index_buffer);
     }
-    fn add_texture(&mut self, texture_id: TextureId) {
+    fn add_texture(&mut self, texture_id: GfxTextureId) {
         self.textures.push(texture_id);
     }
 }
@@ -611,7 +604,7 @@ impl MessageBuffer {
         &mut self,
         rect: &Rectangle,
         scroll: f32,
-    ) -> Vec<(f32, DrawMesh)> {
+    ) -> Vec<(f32, GfxDrawMesh)> {
         let line_height = self.line_height.get();
         let baseline = self.baseline.get();
         let debug_render = self.debug.get();
@@ -640,18 +633,16 @@ impl MessageBuffer {
                 continue
             }
 
-            let mesh = msg
-                .gen_mesh(
-                    rect,
-                    line_height,
-                    baseline,
-                    &nick_colors,
-                    timest_color,
-                    text_color,
-                    debug_render,
-                    &render_api,
-                )
-                .await;
+            let mesh = msg.gen_mesh(
+                rect,
+                line_height,
+                baseline,
+                &nick_colors,
+                timest_color,
+                text_color,
+                debug_render,
+                &render_api,
+            );
 
             meshes.push((current_pos, mesh));
             current_pos += mesh_height;
