@@ -10,9 +10,9 @@ The default location for config files is `~/.config/darkfi`
 Note: throughout this page we generally assume you are using
 `darkirc` since it's our main p2p app currently. If you're
 using a different app such as `darkfid` or `taud`, the same
-instructions will follow but the app name will change (for example
-the config file `.config/darkfi/darkirc_config.toml` will become
-`.config/darkfi/taud_config.toml`)
+instructions will follow but the app name will change (for example,
+if using `taud`, the config file `.config/darkfi/darkirc_config.toml` 
+would become `.config/darkfi/taud_config.toml`)
 
 ## Common net problems 
 
@@ -79,10 +79,7 @@ is down. Please do the following:
 
 1. Take careful note of the `IO error` that is written after `Unable to
 connect to seed`.
-2. Send a message in the community Telegram (t.me/darkfichat) with the
-seed IO error. Please don't send screenshots- instead use pastebin (or
-termbin or pastenym) for multi-line errors, or just copy paste for a
-single line error.
+2. Refer to `Error reporting` section below.
 3. You can set a peer such as `tcp+tls://example_peer:26661/` in your
 config file. Ask in the telegram community channel for an active peer
 (here we are using a fake peer called `example_peer`. Then open the
@@ -118,22 +115,15 @@ Then follow the steps in the above section `It's my first time connecting
 to the network`.
 
 If the hostlist is not empty, retry the darkirc connection and carefully
-note the connection errors that are happening from peers. Report these
-errors on the community telegram (t.me/darkfichat).
-
-Please don't send screenshots- instead use pastebin (or termbin or
-pastenym) for multi-line errors, or just copy paste for a single line
-error.
-
+note the connection errors that are happening from peers. See `Error reporting` 
+section below to report errors.
 It might be simply the case that there are not enough peers on the
 network, or perhaps there is another issue we are not aware of.
 
 You can also check the liveness of peers using the `ping` tool.
-
 To access the `ping` tool, in the `~/darkfi/script/ping` directory run
 `cargo run main.rs`. Once completed, you can now use the `ping` tool in
 the `~/darkfi/script/ping/target/debug` directory.
-
 Ping the peers located in your hostlist
 
 ```
@@ -145,10 +135,8 @@ If the peers are reachable, you'll receive a `Connected!` output
 
 If you're able to connect to the seed but are failing to establish peer
 connections, please retry the darkirc connection and carefully note the
-connection errors that are happening from peers. Report these errors on
-the community telegram (t.me/darkfichat). Please don't send screenshots-
-instead use pastebin (or termbin or pastenym) for multi-line errors,
-or just copy paste for a single line error.
+connection errors that are happening from peers. See 
+`Error reporting` section to report errors.
 
 ## dnet
 
@@ -159,7 +147,7 @@ dnet to gather more network information. dnet displays:
 2. Outgoing, incoming, manual and seed sessions
 3. Each associated connection and recent messages.
 
-To install dnet, go [here](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/bin/dnet/README.md#run).
+To install and learn to use dnet, go [here](https://darkrenaissance.github.io/darkfi/learn/dchat/network-tools/using-dnet.html).
 You can use dnet to view the network topology and see how your node 
 interacts within the network. dnet log information is created in `bin/dnet/dnet.log`
 
@@ -203,6 +191,11 @@ $ python3 tor-test.py
 If your local node is running Tor, the response should be an IP address.
 An error will return if Tor isn't running.
 
+You can also verify if your node is running over Tor with 
+dnet. If you run `./dnet` and if you see onion addresses
+as outbound connections, and localhost connections as inbound 
+connections, this means you're connected to Tor.
+
 ### Helpful debug information
 
 If you're looking to debug an issue, try these helpful tools
@@ -245,3 +238,11 @@ If you receive DAG sync issues, verify:
 default seed on the first run). You can find the hostlist files within 
 the respective apps' repo. For example darkirc's default hostlist location 
 is `~/.local/darkfi/darkirc/hostlist.tsv`
+
+## Error reporting
+
+If you're receiving errors and need to report them, report using darkirc first. If you
+cannot connect, you can report these errors on the community telegram (t.me/darkfichat). 
+- Don't send screenshots.
+- Use [pastebin](https://pastebin.com/) (or [termbin](https://termbin.com/)
+or pastenym) for multi-line errors, or just copy-paste for a single line error.
