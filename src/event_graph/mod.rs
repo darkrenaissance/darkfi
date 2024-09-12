@@ -864,7 +864,7 @@ impl EventGraph {
                 continue;
             }
             for (_, ev) in graph.iter() {
-                if ev.layer > tip.0 {
+                if ev.layer > tip.0 && !result.contains(ev) {
                     result.push(ev.clone())
                 }
             }

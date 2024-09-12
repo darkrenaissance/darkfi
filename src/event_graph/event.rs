@@ -29,7 +29,7 @@ use super::{
 };
 
 /// Representation of an event in the Event Graph
-#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct Event {
     /// Timestamp of the event in whole seconds
     pub timestamp: u64,
