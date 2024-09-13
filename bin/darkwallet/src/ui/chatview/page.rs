@@ -61,6 +61,8 @@ pub(super) struct PrivMessage {
     nick: String,
     text: String,
 
+    is_selected: bool,
+
     unwrapped_glyphs: Vec<Glyph>,
     wrapped_lines: Vec<Vec<Glyph>>,
 
@@ -98,6 +100,7 @@ impl PrivMessage {
             id,
             nick,
             text,
+            is_selected: false,
             unwrapped_glyphs,
             wrapped_lines: vec![],
             atlas,
@@ -119,6 +122,7 @@ impl PrivMessage {
         nick_colors: &[Color],
         timestamp_color: Color,
         text_color: Color,
+        hi_bg_color: Color,
         debug_render: bool,
         render_api: &RenderApi,
     ) -> GfxDrawMesh {
@@ -128,6 +132,14 @@ impl PrivMessage {
 
         //debug!(target: "ui::chatview", "gen_mesh({})", glyph_str(&self.unwrapped_glyphs));
         let mut mesh = MeshBuilder::new();
+
+        if self.is_selected {
+            let height = self.height(line_height);
+            mesh.draw_filled_box(
+                &Rectangle { x: 0., y: -height, w: clip.w, h: height },
+                hi_bg_color,
+            );
+        }
 
         let nick_color = select_nick_color(&self.nick, nick_colors);
 
@@ -223,6 +235,10 @@ impl PrivMessage {
     fn adjust_width(&mut self, line_width: f32) {
         // Invalidate wrapped_glyphs and recalc
         self.wrapped_lines = text::wrap(line_width, self.font_size, &self.unwrapped_glyphs);
+    }
+
+    fn select(&mut self) {
+        self.is_selected = true;
     }
 }
 
@@ -364,6 +380,7 @@ impl Message {
         nick_colors: &[Color],
         timestamp_color: Color,
         text_color: Color,
+        hi_bg_color: Color,
         debug_render: bool,
         render_api: &RenderApi,
     ) -> GfxDrawMesh {
@@ -375,6 +392,7 @@ impl Message {
                 nick_colors,
                 timestamp_color,
                 text_color,
+                hi_bg_color,
                 debug_render,
                 render_api,
             ),
@@ -385,6 +403,7 @@ impl Message {
                 nick_colors,
                 timestamp_color,
                 text_color,
+                // No hi_bg_color since dates can't be highlighted
                 debug_render,
                 render_api,
             ),
@@ -395,6 +414,13 @@ impl Message {
         match self {
             Self::Priv(m) => false,
             Self::Date(_) => true,
+        }
+    }
+
+    fn select(&mut self) {
+        match self {
+            Self::Priv(m) => m.select(),
+            Self::Date(_) => {}
         }
     }
 }
@@ -436,6 +462,7 @@ pub struct MessageBuffer {
     timestamp_color: PropertyColor,
     text_color: PropertyColor,
     nick_colors: PropertyPtr,
+    hi_bg_color: PropertyColor,
     debug: PropertyBool,
 
     render_api: RenderApiPtr,
@@ -450,6 +477,7 @@ impl MessageBuffer {
         timestamp_color: PropertyColor,
         text_color: PropertyColor,
         nick_colors: PropertyPtr,
+        hi_bg_color: PropertyColor,
         debug: PropertyBool,
         render_api: RenderApiPtr,
         text_shaper: TextShaperPtr,
@@ -466,6 +494,7 @@ impl MessageBuffer {
             timestamp_color,
             text_color,
             nick_colors,
+            hi_bg_color,
             debug,
 
             render_api,
@@ -612,6 +641,7 @@ impl MessageBuffer {
         let timest_color = self.timestamp_color.get();
         let text_color = self.text_color.get();
         let nick_colors = self.read_nick_colors();
+        let hi_bg_color = self.hi_bg_color.get();
 
         let render_api = self.render_api.clone();
 
@@ -640,6 +670,7 @@ impl MessageBuffer {
                 &nick_colors,
                 timest_color,
                 text_color,
+                hi_bg_color,
                 debug_render,
                 &render_api,
             );
@@ -722,5 +753,32 @@ impl MessageBuffer {
             }
         }
         colors
+    }
+
+    pub(super) async fn select_line(&mut self, y: f32) {
+        let line_height = self.line_height.get();
+
+        let msgs = self.msgs_with_date();
+        let mut msgs = pin!(msgs);
+
+        let mut current_pos = 0.;
+        while let Some(msg) = msgs.next().await {
+            let mesh_height = msg.height(line_height);
+            let msg_bottom = current_pos;
+            let msg_top = current_pos + mesh_height;
+
+            if msg_bottom <= y && y <= msg_top {
+                // Do nothing
+                if msg.is_date() {
+                    break
+                }
+
+                msg.select();
+                msg.clear_mesh();
+                break
+            }
+
+            current_pos += mesh_height;
+        }
     }
 }

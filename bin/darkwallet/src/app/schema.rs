@@ -541,12 +541,25 @@ pub(super) async fn make_old(app: &App) {
         prop.push_f32(Role::App, c).unwrap();
     }
 
+    let prop = node.get_property("hi_bg_color").unwrap();
+    if LIGHTMODE {
+        prop.set_f32(Role::App, 0, 0.5).unwrap();
+        prop.set_f32(Role::App, 1, 0.5).unwrap();
+        prop.set_f32(Role::App, 2, 0.5).unwrap();
+        prop.set_f32(Role::App, 3, 1.).unwrap();
+    } else {
+        prop.set_f32(Role::App, 0, 0.5).unwrap();
+        prop.set_f32(Role::App, 1, 0.5).unwrap();
+        prop.set_f32(Role::App, 2, 0.5).unwrap();
+        prop.set_f32(Role::App, 3, 1.).unwrap();
+    }
+
     drop(sg);
     let db = sled::open(CHATDB_PATH).expect("cannot open sleddb");
     let chat_tree = db.open_tree(b"chat").unwrap();
-    //if chat_tree.is_empty() {
-    //    populate_tree(&chat_tree);
-    //}
+    if chat_tree.is_empty() {
+        populate_tree(&chat_tree);
+    }
     debug!(target: "app", "db has {} lines", chat_tree.len());
     let pimpl = ChatView::new(
         app.ex.clone(),
@@ -698,6 +711,19 @@ pub(super) async fn make(app: &App) {
     ];
     for c in nick_colors {
         prop.push_f32(Role::App, c).unwrap();
+    }
+
+    let prop = node.get_property("hi_bg_color").unwrap();
+    if LIGHTMODE {
+        prop.set_f32(Role::App, 0, 0.5).unwrap();
+        prop.set_f32(Role::App, 1, 0.5).unwrap();
+        prop.set_f32(Role::App, 2, 0.5).unwrap();
+        prop.set_f32(Role::App, 3, 1.).unwrap();
+    } else {
+        prop.set_f32(Role::App, 0, 0.5).unwrap();
+        prop.set_f32(Role::App, 1, 0.5).unwrap();
+        prop.set_f32(Role::App, 2, 0.5).unwrap();
+        prop.set_f32(Role::App, 3, 1.).unwrap();
     }
 
     drop(sg);

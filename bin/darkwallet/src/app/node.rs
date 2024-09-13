@@ -229,6 +229,11 @@ pub fn create_chatview(
     prop.set_range_f32(0., 1.);
     node.add_property(prop).unwrap();
 
+    let mut prop = Property::new("hi_bg_color", PropertyType::Float32, PropertySubType::Color);
+    prop.set_array_len(4);
+    prop.set_range_f32(0., 1.);
+    node.add_property(prop).unwrap();
+
     let prop = Property::new("baseline", PropertyType::Float32, PropertySubType::Pixel);
     node.add_property(prop).unwrap();
 
@@ -248,6 +253,11 @@ pub fn create_chatview(
     prop.set_ui_text("Scroll Resistance", "How quickly scrolling speed is dampened");
     prop.set_range_f32(0., 1.);
     prop.set_defaults_f32(vec![0.9]).unwrap();
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("select_hold_time", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_ui_text("Select Holding Time", "How long to hard press for selecting lines (ms)");
+    prop.set_defaults_f32(vec![1000.]).unwrap();
     node.add_property(prop).unwrap();
 
     let (sender, recvr) = async_channel::unbounded::<Vec<u8>>();
