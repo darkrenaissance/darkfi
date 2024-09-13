@@ -30,9 +30,9 @@ use crate::{
 
 use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify, Stoppable};
 
-pub type MeshPtr = Arc<Mesh>;
+pub type VectorArtPtr = Arc<VectorArt>;
 
-pub struct Mesh {
+pub struct VectorArt {
     sg: SceneGraphPtr2,
     render_api: RenderApiPtr,
     _tasks: Vec<smol::Task<()>>,
@@ -49,7 +49,7 @@ pub struct Mesh {
     z_index: PropertyUint32,
 }
 
-impl Mesh {
+impl VectorArt {
     pub async fn new(
         ex: ExecutorPtr,
         sg: SceneGraphPtr2,
@@ -88,7 +88,7 @@ impl Mesh {
             }
         });
 
-        Pimpl::Mesh(self_)
+        Pimpl::VectorArt(self_)
     }
 
     async fn redraw(self: Arc<Self>) {
@@ -156,7 +156,7 @@ impl Mesh {
     }
 }
 
-impl Stoppable for Mesh {
+impl Stoppable for VectorArt {
     async fn stop(&self) {
         // TODO: Delete own draw call
 

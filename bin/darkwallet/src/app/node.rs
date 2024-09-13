@@ -27,7 +27,9 @@ use crate::{
         SceneNodeType, Slot,
     },
     text::TextShaperPtr,
-    ui::{chatview, Button, ChatView, EditBox, Image, Mesh, RenderLayer, Stoppable, Text, Window},
+    ui::{
+        chatview, Button, ChatView, EditBox, Image, RenderLayer, Stoppable, Text, VectorArt, Window,
+    },
     ExecutorPtr,
 };
 
@@ -45,9 +47,9 @@ pub fn create_layer(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
     node.id
 }
 
-pub fn create_mesh(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
-    debug!(target: "app", "create_mesh({name})");
-    let node = sg.add_node(name, SceneNodeType::RenderMesh);
+pub fn create_vector_art(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
+    debug!(target: "app", "create_vector_art({name})");
+    let node = sg.add_node(name, SceneNodeType::RenderVectorArt);
 
     let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
     prop.set_array_len(4);
@@ -80,7 +82,7 @@ pub fn create_button(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
 
 pub fn create_image(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
     debug!(target: "app", "create_image({name})");
-    let node = sg.add_node(name, SceneNodeType::RenderMesh);
+    let node = sg.add_node(name, SceneNodeType::Image);
 
     let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
     prop.set_array_len(4);

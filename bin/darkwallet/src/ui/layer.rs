@@ -140,7 +140,7 @@ impl RenderLayer {
 
             let dcs = match &node.pimpl {
                 Pimpl::RenderLayer(layer) => layer.draw(&sg, &rect).await,
-                Pimpl::Mesh(mesh) => mesh.draw(&sg, &rect),
+                Pimpl::VectorArt(svg) => svg.draw(&sg, &rect),
                 Pimpl::Text(txt) => txt.draw(&sg, &rect),
                 Pimpl::EditBox(editb) => editb.draw(&sg, &rect),
                 Pimpl::ChatView(chat) => chat.draw(&sg, &rect).await,

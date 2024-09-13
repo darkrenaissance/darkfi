@@ -51,7 +51,7 @@ class SceneNodeType:
     MOUSE = 8
     RENDER_LAYER = 3
     RENDER_OBJECT = 4
-    RENDER_MESH = 5
+    RENDER_VECTOR_ART = 5
     RENDER_TEXT = 9
     RENDER_TEXTURE = 13
     FONTS = 10

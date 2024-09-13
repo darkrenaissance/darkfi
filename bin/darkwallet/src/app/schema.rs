@@ -30,14 +30,16 @@ use crate::{
         SceneNodeType, Slot,
     },
     text::TextShaperPtr,
-    ui::{chatview, Button, ChatView, EditBox, Image, Mesh, RenderLayer, Stoppable, Text, Window},
+    ui::{
+        chatview, Button, ChatView, EditBox, Image, RenderLayer, Stoppable, Text, VectorArt, Window,
+    },
     ExecutorPtr,
 };
 
 use super::{
     node::{
-        create_button, create_chatview, create_editbox, create_image, create_layer, create_mesh,
-        create_text,
+        create_button, create_chatview, create_editbox, create_image, create_layer, create_text,
+        create_vector_art,
     },
     populate_tree, App,
 };
@@ -99,7 +101,7 @@ pub(super) async fn make_old(app: &App) {
     sg.link(node_id, window_id).unwrap();
 
     // Create a bg mesh
-    let node_id = create_mesh(&mut sg, "bg");
+    let node_id = create_vector_art(&mut sg, "bg");
 
     let node = sg.get_node_mut(node_id).unwrap();
     let prop = node.get_property("rect").unwrap();
@@ -127,9 +129,15 @@ pub(super) async fn make_old(app: &App) {
     ];
     let indices = vec![0, 2, 1, 1, 2, 3];
     drop(sg);
-    let pimpl =
-        Mesh::new(app.ex.clone(), app.sg.clone(), node_id, app.render_api.clone(), verts, indices)
-            .await;
+    let pimpl = VectorArt::new(
+        app.ex.clone(),
+        app.sg.clone(),
+        node_id,
+        app.render_api.clone(),
+        verts,
+        indices,
+    )
+    .await;
     let mut sg = app.sg.lock().await;
     let node = sg.get_node_mut(node_id).unwrap();
     node.pimpl = pimpl;
@@ -137,7 +145,7 @@ pub(super) async fn make_old(app: &App) {
     sg.link(node_id, layer_node_id).unwrap();
 
     // Create button bg
-    let node_id = create_mesh(&mut sg, "btnbg");
+    let node_id = create_vector_art(&mut sg, "btnbg");
 
     let node = sg.get_node_mut(node_id).unwrap();
     let prop = node.get_property("rect").unwrap();
@@ -176,9 +184,15 @@ pub(super) async fn make_old(app: &App) {
     };
     let indices = vec![0, 2, 1, 1, 2, 3];
     drop(sg);
-    let pimpl =
-        Mesh::new(app.ex.clone(), app.sg.clone(), node_id, app.render_api.clone(), verts, indices)
-            .await;
+    let pimpl = VectorArt::new(
+        app.ex.clone(),
+        app.sg.clone(),
+        node_id,
+        app.render_api.clone(),
+        verts,
+        indices,
+    )
+    .await;
     let mut sg = app.sg.lock().await;
     let node = sg.get_node_mut(node_id).unwrap();
     node.pimpl = pimpl;
@@ -211,7 +225,7 @@ pub(super) async fn make_old(app: &App) {
     sg.link(node_id, layer_node_id).unwrap();
 
     // Create another mesh
-    let node_id = create_mesh(&mut sg, "box");
+    let node_id = create_vector_art(&mut sg, "box");
 
     let node = sg.get_node_mut(node_id).unwrap();
     let prop = node.get_property("rect").unwrap();
@@ -248,9 +262,15 @@ pub(super) async fn make_old(app: &App) {
     };
     let indices = vec![0, 2, 1, 1, 2, 3];
     drop(sg);
-    let pimpl =
-        Mesh::new(app.ex.clone(), app.sg.clone(), node_id, app.render_api.clone(), verts, indices)
-            .await;
+    let pimpl = VectorArt::new(
+        app.ex.clone(),
+        app.sg.clone(),
+        node_id,
+        app.render_api.clone(),
+        verts,
+        indices,
+    )
+    .await;
     let mut sg = app.sg.lock().await;
     let node = sg.get_node_mut(node_id).unwrap();
     node.pimpl = pimpl;
@@ -258,7 +278,7 @@ pub(super) async fn make_old(app: &App) {
     sg.link(node_id, layer_node_id).unwrap();
 
     // Debugging tool
-    let node_id = create_mesh(&mut sg, "debugtool");
+    let node_id = create_vector_art(&mut sg, "debugtool");
 
     let node = sg.get_node_mut(node_id).unwrap();
     let prop = node.get_property("rect").unwrap();
@@ -287,9 +307,15 @@ pub(super) async fn make_old(app: &App) {
     ];
     let indices = vec![0, 2, 1, 1, 2, 3];
     drop(sg);
-    let pimpl =
-        Mesh::new(app.ex.clone(), app.sg.clone(), node_id, app.render_api.clone(), verts, indices)
-            .await;
+    let pimpl = VectorArt::new(
+        app.ex.clone(),
+        app.sg.clone(),
+        node_id,
+        app.render_api.clone(),
+        verts,
+        indices,
+    )
+    .await;
     let mut sg = app.sg.lock().await;
     let node = sg.get_node_mut(node_id).unwrap();
     node.pimpl = pimpl;
@@ -297,7 +323,7 @@ pub(super) async fn make_old(app: &App) {
     sg.link(node_id, layer_node_id).unwrap();
 
     // Debugging tool
-    let node_id = create_mesh(&mut sg, "debugtool2");
+    let node_id = create_vector_art(&mut sg, "debugtool2");
 
     let node = sg.get_node_mut(node_id).unwrap();
     let prop = node.get_property("rect").unwrap();
@@ -326,9 +352,15 @@ pub(super) async fn make_old(app: &App) {
     ];
     let indices = vec![0, 2, 1, 1, 2, 3];
     drop(sg);
-    let pimpl =
-        Mesh::new(app.ex.clone(), app.sg.clone(), node_id, app.render_api.clone(), verts, indices)
-            .await;
+    let pimpl = VectorArt::new(
+        app.ex.clone(),
+        app.sg.clone(),
+        node_id,
+        app.render_api.clone(),
+        verts,
+        indices,
+    )
+    .await;
     let mut sg = app.sg.lock().await;
     let node = sg.get_node_mut(node_id).unwrap();
     node.pimpl = pimpl;
@@ -614,7 +646,7 @@ pub(super) async fn make(app: &App) {
     sg.link(node_id, window_id).unwrap();
 
     // Create a bg mesh
-    let node_id = create_mesh(&mut sg, "bg");
+    let node_id = create_vector_art(&mut sg, "bg");
 
     let node = sg.get_node_mut(node_id).unwrap();
     let prop = node.get_property("rect").unwrap();
@@ -642,9 +674,15 @@ pub(super) async fn make(app: &App) {
     ];
     let indices = vec![0, 2, 1, 1, 2, 3];
     drop(sg);
-    let pimpl =
-        Mesh::new(app.ex.clone(), app.sg.clone(), node_id, app.render_api.clone(), verts, indices)
-            .await;
+    let pimpl = VectorArt::new(
+        app.ex.clone(),
+        app.sg.clone(),
+        node_id,
+        app.render_api.clone(),
+        verts,
+        indices,
+    )
+    .await;
     let mut sg = app.sg.lock().await;
     let node = sg.get_node_mut(node_id).unwrap();
     node.pimpl = pimpl;
@@ -751,7 +789,7 @@ pub(super) async fn make(app: &App) {
     sg.link(node_id, layer_node_id).unwrap();
 
     // Create the editbox bg
-    let node_id = create_mesh(&mut sg, "editbox_bg");
+    let node_id = create_vector_art(&mut sg, "editbox_bg");
 
     let node = sg.get_node_mut(node_id).unwrap();
     let prop = node.get_property("rect").unwrap();
@@ -775,7 +813,7 @@ pub(super) async fn make(app: &App) {
         [0., 0.13, 0.08, 1.],
         &Rectangle { x: 0., y: 0., w: 1., h: 1. },
     );
-    let pimpl = Mesh::new(
+    let pimpl = VectorArt::new(
         app.ex.clone(),
         app.sg.clone(),
         node_id,
@@ -791,7 +829,7 @@ pub(super) async fn make(app: &App) {
     sg.link(node_id, layer_node_id).unwrap();
 
     // Create the nick - editbox sep
-    let node_id = create_mesh(&mut sg, "editbox_lhs_sep");
+    let node_id = create_vector_art(&mut sg, "editbox_lhs_sep");
 
     let node = sg.get_node_mut(node_id).unwrap();
     let prop = node.get_property("rect").unwrap();
@@ -811,7 +849,7 @@ pub(super) async fn make(app: &App) {
         [0.4, 0.4, 0.4, 1.],
         &Rectangle { x: 0., y: 0., w: 1., h: 1. },
     );
-    let pimpl = Mesh::new(
+    let pimpl = VectorArt::new(
         app.ex.clone(),
         app.sg.clone(),
         node_id,
@@ -827,7 +865,7 @@ pub(super) async fn make(app: &App) {
     sg.link(node_id, layer_node_id).unwrap();
 
     // Create the chatview - editbox sep
-    let node_id = create_mesh(&mut sg, "chatview_bhs_sep");
+    let node_id = create_vector_art(&mut sg, "chatview_bhs_sep");
 
     let node = sg.get_node_mut(node_id).unwrap();
     let prop = node.get_property("rect").unwrap();
@@ -848,7 +886,7 @@ pub(super) async fn make(app: &App) {
         [0.4, 0.4, 0.4, 1.],
         &Rectangle { x: 0., y: 0., w: 1., h: 1. },
     );
-    let pimpl = Mesh::new(
+    let pimpl = VectorArt::new(
         app.ex.clone(),
         app.sg.clone(),
         node_id,
