@@ -118,6 +118,7 @@ pub fn eval_rect(rect: PropertyPtr, parent_rect: &Rectangle) -> Result<Rectangle
 
     for i in 0..4 {
         if !rect.is_expr(i)? {
+            rect_arr[i] = rect.get_f32(i)?;
             continue
         }
 

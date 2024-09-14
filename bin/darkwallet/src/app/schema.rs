@@ -63,9 +63,19 @@ const EDITCHAT_HEIGHT: f32 = 140.;
 const EDITCHAT_HEIGHT: f32 = 50.;
 
 #[cfg(target_os = "android")]
-const NICKLABEL_WIDTH: f32 = 300.;
+const EDITCHAT_LHS_PAD: f32 = 20.;
 #[cfg(target_os = "linux")]
-const NICKLABEL_WIDTH: f32 = 120.;
+const EDITCHAT_LHS_PAD: f32 = 20.;
+
+#[cfg(target_os = "android")]
+const SENDLABEL_WIDTH: f32 = 200.;
+#[cfg(target_os = "linux")]
+const SENDLABEL_WIDTH: f32 = 120.;
+
+#[cfg(target_os = "android")]
+const SENDLABEL_LHS_PAD: f32 = 30.;
+#[cfg(target_os = "linux")]
+const SENDLABEL_LHS_PAD: f32 = 30.;
 
 #[cfg(target_os = "android")]
 const FONTSIZE: f32 = 40.;
@@ -593,17 +603,80 @@ pub(super) async fn make(app: &App) {
 
     sg.link(node_id, layer_node_id).unwrap();
 
+    // Create the toolbar bg
+    let node_id = create_vector_art(&mut sg, "toolbar_bg");
+
+    let node = sg.get_node_mut(node_id).unwrap();
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(Role::App, 0, 0.).unwrap();
+    prop.set_f32(Role::App, 1, 0.).unwrap();
+    prop.set_expr(Role::App, 2, shape::load_var("w")).unwrap();
+    prop.set_f32(Role::App, 3, EDITCHAT_HEIGHT).unwrap();
+    node.set_property_u32(Role::App, "z_index", 0).unwrap();
+    drop(sg);
+    let mut shape = VectorShape::new();
+    shape.add_outline(
+        shape::const_f32(0.),
+        shape::const_f32(0.),
+        shape::load_var("w"),
+        shape::load_var("h"),
+        1.,
+        [0.4, 0.4, 0.4, 1.],
+    );
+
+    let pimpl =
+        VectorArt::new(app.ex.clone(), app.sg.clone(), node_id, app.render_api.clone(), shape)
+            .await;
+    let mut sg = app.sg.lock().await;
+    let node = sg.get_node_mut(node_id).unwrap();
+    node.pimpl = pimpl;
+
+    sg.link(node_id, layer_node_id).unwrap();
+
+    // Create some text
+    let node_id = create_text(&mut sg, "channel_label");
+
+    let node = sg.get_node_mut(node_id).unwrap();
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(Role::App, 0, SENDLABEL_LHS_PAD).unwrap();
+    prop.set_f32(Role::App, 1, 0.).unwrap();
+    prop.set_expr(Role::App, 2, shape::load_var("w")).unwrap();
+    prop.set_f32(Role::App, 3, EDITCHAT_HEIGHT).unwrap();
+    node.set_property_f32(Role::App, "baseline", (EDITCHAT_HEIGHT + 20.) / 2.).unwrap();
+    node.set_property_f32(Role::App, "font_size", FONTSIZE).unwrap();
+    node.set_property_str(Role::App, "text", "random").unwrap();
+    //node.set_property_str(Role::App, "text", "anon1").unwrap();
+    let prop = node.get_property("text_color").unwrap();
+    prop.set_f32(Role::App, 0, 1.).unwrap();
+    prop.set_f32(Role::App, 1, 1.).unwrap();
+    prop.set_f32(Role::App, 2, 1.).unwrap();
+    prop.set_f32(Role::App, 3, 1.).unwrap();
+
+    drop(sg);
+    let pimpl = Text::new(
+        app.ex.clone(),
+        app.sg.clone(),
+        node_id,
+        app.render_api.clone(),
+        app.text_shaper.clone(),
+    )
+    .await;
+    let mut sg = app.sg.lock().await;
+    let node = sg.get_node_mut(node_id).unwrap();
+    node.pimpl = pimpl;
+
+    sg.link(node_id, layer_node_id).unwrap();
+
     // ChatView
     let (node_id, recvr) = create_chatview(&mut sg, "chatty");
     let node = sg.get_node(node_id).unwrap();
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(Role::App, 0, 0.).unwrap();
-    prop.set_f32(Role::App, 1, 0.).unwrap();
-    let code = vec![Op::LoadVar("w".to_string())];
-    prop.set_expr(Role::App, 2, code).unwrap();
+    prop.set_f32(Role::App, 1, EDITCHAT_HEIGHT).unwrap();
+    prop.set_expr(Role::App, 2, shape::load_var("w")).unwrap();
     let code = vec![Op::Sub((
         Box::new(Op::LoadVar("h".to_string())),
-        Box::new(Op::ConstFloat32(EDITCHAT_HEIGHT)),
+        Box::new(Op::ConstFloat32(2. * EDITCHAT_HEIGHT)),
     ))];
     prop.set_expr(Role::App, 3, code).unwrap();
     node.set_property_f32(Role::App, "font_size", FONTSIZE).unwrap();
@@ -697,27 +770,38 @@ pub(super) async fn make(app: &App) {
 
     let node = sg.get_node_mut(node_id).unwrap();
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(Role::App, 0, NICKLABEL_WIDTH).unwrap();
+    prop.set_f32(Role::App, 0, 0.).unwrap();
     let code = vec![Op::Sub((
         Box::new(Op::LoadVar("h".to_string())),
         Box::new(Op::ConstFloat32(EDITCHAT_HEIGHT)),
     ))];
     prop.set_expr(Role::App, 1, code).unwrap();
-    let code = vec![Op::Sub((
-        Box::new(Op::LoadVar("w".to_string())),
-        Box::new(Op::ConstFloat32(NICKLABEL_WIDTH)),
-    ))];
-    prop.set_expr(Role::App, 2, code).unwrap();
+    prop.set_expr(Role::App, 2, shape::load_var("w")).unwrap();
     prop.set_f32(Role::App, 3, EDITCHAT_HEIGHT).unwrap();
     node.set_property_u32(Role::App, "z_index", 0).unwrap();
     drop(sg);
     let mut shape = VectorShape::new();
+    let send_btn_lhs = vec![Op::Sub((
+        Box::new(Op::LoadVar("w".to_string())),
+        Box::new(Op::ConstFloat32(SENDLABEL_WIDTH)),
+    ))];
+    let send_btn_lhs_1px = vec![Op::Sub((
+        Box::new(Op::LoadVar("w".to_string())),
+        Box::new(Op::ConstFloat32(SENDLABEL_WIDTH - 1.)),
+    ))];
     shape.add_filled_box(
         shape::const_f32(0.),
         shape::const_f32(0.),
-        shape::load_var("w"),
+        send_btn_lhs.clone(),
         shape::load_var("h"),
         [0., 0.13, 0.08, 1.],
+    );
+    shape.add_filled_box(
+        send_btn_lhs.clone(),
+        shape::const_f32(0.),
+        send_btn_lhs_1px,
+        shape::load_var("h"),
+        [0.4, 0.4, 0.4, 1.],
     );
     shape.add_outline(
         shape::const_f32(0.),
@@ -738,26 +822,30 @@ pub(super) async fn make(app: &App) {
     sg.link(node_id, layer_node_id).unwrap();
 
     // Create some text
-    let node_id = create_text(&mut sg, "nick_label");
+    let node_id = create_text(&mut sg, "send_label");
 
     let node = sg.get_node_mut(node_id).unwrap();
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(Role::App, 0, 20.).unwrap();
+    let code = vec![Op::Sub((
+        Box::new(Op::LoadVar("w".to_string())),
+        Box::new(Op::ConstFloat32(SENDLABEL_WIDTH - SENDLABEL_LHS_PAD)),
+    ))];
+    prop.set_expr(Role::App, 0, code).unwrap();
     let code = vec![Op::Sub((
         Box::new(Op::LoadVar("h".to_string())),
         Box::new(Op::ConstFloat32(EDITCHAT_HEIGHT)),
     ))];
     prop.set_expr(Role::App, 1, code).unwrap();
-    prop.set_f32(Role::App, 2, NICKLABEL_WIDTH).unwrap();
+    prop.set_f32(Role::App, 2, SENDLABEL_WIDTH).unwrap();
     prop.set_f32(Role::App, 3, EDITCHAT_HEIGHT).unwrap();
     node.set_property_f32(Role::App, "baseline", (EDITCHAT_HEIGHT + 20.) / 2.).unwrap();
     node.set_property_f32(Role::App, "font_size", FONTSIZE).unwrap();
-    node.set_property_str(Role::App, "text", "anon").unwrap();
+    node.set_property_str(Role::App, "text", "send").unwrap();
     //node.set_property_str(Role::App, "text", "anon1").unwrap();
     let prop = node.get_property("text_color").unwrap();
-    prop.set_f32(Role::App, 0, 0.365).unwrap();
+    prop.set_f32(Role::App, 0, 0.).unwrap();
     prop.set_f32(Role::App, 1, 1.).unwrap();
-    prop.set_f32(Role::App, 2, 0.694).unwrap();
+    prop.set_f32(Role::App, 2, 0.94).unwrap();
     prop.set_f32(Role::App, 3, 1.).unwrap();
 
     drop(sg);
@@ -780,7 +868,7 @@ pub(super) async fn make(app: &App) {
     let node = sg.get_node(node_id).unwrap();
     node.set_property_bool(Role::App, "is_active", true).unwrap();
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(Role::App, 0, NICKLABEL_WIDTH + 20.).unwrap();
+    prop.set_f32(Role::App, 0, EDITCHAT_LHS_PAD).unwrap();
     let code = vec![Op::Sub((
         Box::new(Op::LoadVar("h".to_string())),
         Box::new(Op::ConstFloat32(EDITCHAT_HEIGHT)),
@@ -788,7 +876,7 @@ pub(super) async fn make(app: &App) {
     prop.set_expr(Role::App, 1, code).unwrap();
     let code = vec![Op::Sub((
         Box::new(Op::LoadVar("w".to_string())),
-        Box::new(Op::ConstFloat32(NICKLABEL_WIDTH + 20.)),
+        Box::new(Op::ConstFloat32(SENDLABEL_WIDTH + 20.)),
     ))];
     prop.set_expr(Role::App, 2, code).unwrap();
     prop.set_f32(Role::App, 3, EDITCHAT_HEIGHT).unwrap();
