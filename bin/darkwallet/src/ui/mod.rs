@@ -35,8 +35,11 @@ mod editbox;
 pub use editbox::{EditBox, EditBoxPtr};
 mod image;
 pub use image::{Image, ImagePtr};
-mod vector_art;
-pub use vector_art::{VectorArt, VectorArtPtr};
+pub mod vector_art;
+pub use vector_art::{
+    shape::{ShapeVertex, VectorShape},
+    VectorArt, VectorArtPtr,
+};
 mod layer;
 pub use layer::{RenderLayer, RenderLayerPtr};
 mod text;

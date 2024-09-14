@@ -17,18 +17,25 @@
  */
 
 use rand::{rngs::OsRng, Rng};
-use std::sync::{Arc, Weak};
+use std::sync::{Arc, Mutex as SyncMutex, Weak};
 
 use crate::{
+    error::{Error, Result},
+    expr::{Op, SExprCode, SExprMachine, SExprVal},
     gfx::{
         GfxBufferId, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, Rectangle, RenderApiPtr, Vertex,
     },
+    mesh::Color,
     prop::{PropertyPtr, PropertyUint32, Role},
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
+    util::enumerate,
     ExecutorPtr,
 };
 
 use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify, Stoppable};
+
+pub mod shape;
+use shape::VectorShape;
 
 pub type VectorArtPtr = Arc<VectorArt>;
 
@@ -37,10 +44,8 @@ pub struct VectorArt {
     render_api: RenderApiPtr,
     _tasks: Vec<smol::Task<()>>,
 
-    vertex_buffer: GfxBufferId,
-    index_buffer: GfxBufferId,
-    // Texture
-    num_elements: i32,
+    shape: VectorShape,
+    buffers: SyncMutex<Option<GfxDrawMesh>>,
 
     dc_key: u64,
 
@@ -55,13 +60,8 @@ impl VectorArt {
         sg: SceneGraphPtr2,
         node_id: SceneNodeId,
         render_api: RenderApiPtr,
-        verts: Vec<Vertex>,
-        indices: Vec<u16>,
+        shape: VectorShape,
     ) -> Pimpl {
-        let num_elements = indices.len() as i32;
-        let vertex_buffer = render_api.new_vertex_buffer(verts);
-        let index_buffer = render_api.new_index_buffer(indices);
-
         let scene_graph = sg.lock().await;
         let node = scene_graph.get_node(node_id).unwrap();
         let node_name = node.name.clone();
@@ -78,9 +78,8 @@ impl VectorArt {
                 sg,
                 render_api,
                 _tasks: on_modify.tasks,
-                vertex_buffer,
-                index_buffer,
-                num_elements,
+                shape,
+                buffers: SyncMutex::new(None),
                 dc_key: OsRng.gen(),
                 node_id,
                 rect,
@@ -100,24 +99,17 @@ impl VectorArt {
         };
 
         let Some(draw_update) = self.draw(&sg, &parent_rect) else {
-            error!(target: "ui::mesh", "Mesh {:?} failed to draw", node);
+            error!(target: "ui::vector_art", "Mesh {:?} failed to draw", node);
             return;
         };
         self.render_api.replace_draw_calls(draw_update.draw_calls);
-        debug!(target: "ui::mesh", "replace draw calls done");
+        debug!(target: "ui::vector_art", "replace draw calls done");
     }
 
     pub fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
-        debug!(target: "ui::mesh", "Mesh::draw()");
+        debug!(target: "ui::vector_art", "VectorArt::draw()");
         // Only used for debug messages
         let node = sg.get_node(self.node_id).unwrap();
-
-        let mesh = GfxDrawMesh {
-            vertex_buffer: self.vertex_buffer,
-            index_buffer: self.index_buffer,
-            texture: None,
-            num_elements: self.num_elements,
-        };
 
         if let Err(err) = eval_rect(self.rect.clone(), parent_rect) {
             panic!("Node {:?} bad rect property: {}", node, err);
@@ -130,10 +122,29 @@ impl VectorArt {
         rect.x += parent_rect.x;
         rect.y += parent_rect.x;
 
+        let verts = self.shape.eval(rect.w, rect.h).expect("bad shape");
+
+        let vertex_buffer = self.render_api.new_vertex_buffer(verts);
+        // You are one lazy motherfucker
+        let index_buffer = self.render_api.new_index_buffer(self.shape.indices.clone());
+        let mesh = GfxDrawMesh {
+            vertex_buffer,
+            index_buffer,
+            texture: None,
+            num_elements: self.shape.indices.len() as i32,
+        };
+
+        let old_mesh = std::mem::replace(&mut *self.buffers.lock().unwrap(), Some(mesh.clone()));
+        let mut freed_buffers = vec![];
+        if let Some(old_mesh) = old_mesh {
+            freed_buffers.push(old_mesh.vertex_buffer);
+            freed_buffers.push(old_mesh.index_buffer);
+        }
+
         let off_x = rect.x / parent_rect.w;
         let off_y = rect.y / parent_rect.h;
-        let scale_x = rect.w / parent_rect.w;
-        let scale_y = rect.h / parent_rect.h;
+        let scale_x = 1. / parent_rect.w;
+        let scale_y = 1. / parent_rect.h;
         let model = glam::Mat4::from_translation(glam::Vec3::new(off_x, off_y, 0.)) *
             glam::Mat4::from_scale(glam::Vec3::new(scale_x, scale_y, 1.));
 
@@ -151,7 +162,7 @@ impl VectorArt {
                 },
             )],
             freed_textures: vec![],
-            freed_buffers: vec![],
+            freed_buffers,
         })
     }
 }
@@ -162,7 +173,9 @@ impl Stoppable for VectorArt {
 
         // Free buffers
         // Should this be in drop?
-        self.render_api.delete_buffer(self.vertex_buffer);
-        self.render_api.delete_buffer(self.index_buffer);
+        if let Some(mesh) = &*self.buffers.lock().unwrap() {
+            self.render_api.delete_buffer(mesh.vertex_buffer);
+            self.render_api.delete_buffer(mesh.index_buffer);
+        }
     }
 }

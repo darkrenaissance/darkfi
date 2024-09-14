@@ -31,7 +31,8 @@ use crate::{
     },
     text::TextShaperPtr,
     ui::{
-        chatview, Button, ChatView, EditBox, Image, RenderLayer, Stoppable, Text, VectorArt, Window,
+        chatview, vector_art::shape, Button, ChatView, EditBox, Image, RenderLayer, ShapeVertex,
+        Stoppable, Text, VectorArt, VectorShape, Window,
     },
     ExecutorPtr,
 };
@@ -115,29 +116,18 @@ pub(super) async fn make_old(app: &App) {
     let c = if LIGHTMODE { 1. } else { 0. };
     // Setup the pimpl
     let node_id = node.id;
-    let (x1, y1) = (0., 0.);
-    let (x2, y2) = (1., 1.);
-    let verts = vec![
-        // top left
-        Vertex { pos: [x1, y1], color: [c, c, c, 1.], uv: [0., 0.] },
-        // top right
-        Vertex { pos: [x2, y1], color: [c, c, c, 1.], uv: [1., 0.] },
-        // bottom left
-        Vertex { pos: [x1, y2], color: [c, c, c, 1.], uv: [0., 1.] },
-        // bottom right
-        Vertex { pos: [x2, y2], color: [c, c, c, 1.], uv: [1., 1.] },
-    ];
-    let indices = vec![0, 2, 1, 1, 2, 3];
+    let mut shape = VectorShape::new();
+    shape.add_filled_box(
+        shape::const_f32(0.),
+        shape::const_f32(0.),
+        shape::load_var("w"),
+        shape::load_var("h"),
+        [c, c, c, 1.],
+    );
     drop(sg);
-    let pimpl = VectorArt::new(
-        app.ex.clone(),
-        app.sg.clone(),
-        node_id,
-        app.render_api.clone(),
-        verts,
-        indices,
-    )
-    .await;
+    let pimpl =
+        VectorArt::new(app.ex.clone(), app.sg.clone(), node_id, app.render_api.clone(), shape)
+            .await;
     let mut sg = app.sg.lock().await;
     let node = sg.get_node_mut(node_id).unwrap();
     node.pimpl = pimpl;
@@ -157,42 +147,27 @@ pub(super) async fn make_old(app: &App) {
     prop.set_f32(Role::App, 3, 60.).unwrap();
 
     // Setup the pimpl
-    let (x1, y1) = (0., 0.);
-    let (x2, y2) = (1., 1.);
     let verts = if LIGHTMODE {
         vec![
-            // top left
-            Vertex { pos: [x1, y1], color: [1., 0., 0., 1.], uv: [0., 0.] },
-            // top right
-            Vertex { pos: [x2, y1], color: [1., 0., 0., 1.], uv: [1., 0.] },
-            // bottom left
-            Vertex { pos: [x1, y2], color: [1., 0., 0., 1.], uv: [0., 1.] },
-            // bottom right
-            Vertex { pos: [x2, y2], color: [1., 0., 0., 1.], uv: [1., 1.] },
+            ShapeVertex::from_xy(0., 0., [1., 0., 0., 1.]),
+            ShapeVertex::from_xy(200., 0., [1., 0., 0., 1.]),
+            ShapeVertex::from_xy(0., 60., [1., 0., 0., 1.]),
+            ShapeVertex::from_xy(200., 60., [1., 0., 0., 1.]),
         ]
     } else {
         vec![
-            // top left
-            Vertex { pos: [x1, y1], color: [1., 0., 0., 1.], uv: [0., 0.] },
-            // top right
-            Vertex { pos: [x2, y1], color: [1., 0., 1., 1.], uv: [1., 0.] },
-            // bottom left
-            Vertex { pos: [x1, y2], color: [0., 0., 1., 1.], uv: [0., 1.] },
-            // bottom right
-            Vertex { pos: [x2, y2], color: [1., 1., 0., 1.], uv: [1., 1.] },
+            ShapeVertex::from_xy(0., 0., [1., 0., 0., 1.]),
+            ShapeVertex::from_xy(200., 0., [1., 0., 1., 1.]),
+            ShapeVertex::from_xy(0., 60., [0., 0., 1., 1.]),
+            ShapeVertex::from_xy(200., 60., [1., 1., 0., 1.]),
         ]
     };
     let indices = vec![0, 2, 1, 1, 2, 3];
+    let shape = VectorShape { verts, indices };
     drop(sg);
-    let pimpl = VectorArt::new(
-        app.ex.clone(),
-        app.sg.clone(),
-        node_id,
-        app.render_api.clone(),
-        verts,
-        indices,
-    )
-    .await;
+    let pimpl =
+        VectorArt::new(app.ex.clone(), app.sg.clone(), node_id, app.render_api.clone(), shape)
+            .await;
     let mut sg = app.sg.lock().await;
     let node = sg.get_node_mut(node_id).unwrap();
     node.pimpl = pimpl;
@@ -235,42 +210,27 @@ pub(super) async fn make_old(app: &App) {
     prop.set_f32(Role::App, 3, 60.).unwrap();
 
     // Setup the pimpl
-    let (x1, y1) = (0., 0.);
-    let (x2, y2) = (1., 1.);
     let verts = if LIGHTMODE {
         vec![
-            // top left
-            Vertex { pos: [x1, y1], color: [1., 0., 0., 1.], uv: [0., 0.] },
-            // top right
-            Vertex { pos: [x2, y1], color: [1., 0., 0., 1.], uv: [1., 0.] },
-            // bottom left
-            Vertex { pos: [x1, y2], color: [1., 0., 0., 1.], uv: [0., 1.] },
-            // bottom right
-            Vertex { pos: [x2, y2], color: [1., 0., 0., 1.], uv: [1., 1.] },
+            ShapeVertex::from_xy(0., 0., [1., 0., 0., 1.]),
+            ShapeVertex::from_xy(60., 0., [1., 0., 0., 1.]),
+            ShapeVertex::from_xy(0., 60., [0., 0., 0., 1.]),
+            ShapeVertex::from_xy(60., 60., [1., 0., 0., 1.]),
         ]
     } else {
         vec![
-            // top left
-            Vertex { pos: [x1, y1], color: [1., 0., 0., 1.], uv: [0., 0.] },
-            // top right
-            Vertex { pos: [x2, y1], color: [1., 0., 1., 1.], uv: [1., 0.] },
-            // bottom left
-            Vertex { pos: [x1, y2], color: [0., 0., 1., 1.], uv: [0., 1.] },
-            // bottom right
-            Vertex { pos: [x2, y2], color: [1., 1., 0., 1.], uv: [1., 1.] },
+            ShapeVertex::from_xy(0., 0., [1., 0., 0., 1.]),
+            ShapeVertex::from_xy(60., 0., [1., 0., 1., 1.]),
+            ShapeVertex::from_xy(0., 60., [0., 0., 1., 1.]),
+            ShapeVertex::from_xy(60., 60., [1., 1., 0., 1.]),
         ]
     };
     let indices = vec![0, 2, 1, 1, 2, 3];
+    let shape = VectorShape { verts, indices };
     drop(sg);
-    let pimpl = VectorArt::new(
-        app.ex.clone(),
-        app.sg.clone(),
-        node_id,
-        app.render_api.clone(),
-        verts,
-        indices,
-    )
-    .await;
+    let pimpl =
+        VectorArt::new(app.ex.clone(), app.sg.clone(), node_id, app.render_api.clone(), shape)
+            .await;
     let mut sg = app.sg.lock().await;
     let node = sg.get_node_mut(node_id).unwrap();
     node.pimpl = pimpl;
@@ -288,79 +248,34 @@ pub(super) async fn make_old(app: &App) {
     prop.set_expr(Role::App, 1, code).unwrap();
     let code = vec![Op::LoadVar("w".to_string())];
     prop.set_expr(Role::App, 2, code).unwrap();
-    prop.set_f32(Role::App, 3, 5.).unwrap();
+    let code = vec![Op::Sub((
+        Box::new(Op::Div((Box::new(Op::LoadVar("h".to_string())), Box::new(Op::ConstFloat32(2.))))),
+        Box::new(Op::ConstFloat32(200.)),
+    ))];
+    prop.set_expr(Role::App, 3, code).unwrap();
 
     node.set_property_u32(Role::App, "z_index", 2).unwrap();
 
     // Setup the pimpl
-    let (x1, y1) = (0., 0.);
-    let (x2, y2) = (1., 1.);
-    let verts = vec![
-        // top left
-        Vertex { pos: [x1, y1], color: [0., 1., 0., 1.], uv: [0., 0.] },
-        // top right
-        Vertex { pos: [x2, y1], color: [0., 1., 0., 1.], uv: [1., 0.] },
-        // bottom left
-        Vertex { pos: [x1, y2], color: [0., 1., 0., 1.], uv: [0., 1.] },
-        // bottom right
-        Vertex { pos: [x2, y2], color: [0., 1., 0., 1.], uv: [1., 1.] },
-    ];
-    let indices = vec![0, 2, 1, 1, 2, 3];
+    let mut shape = VectorShape::new();
+    shape.add_filled_box(
+        shape::const_f32(0.),
+        shape::const_f32(0.),
+        shape::load_var("w"),
+        shape::const_f32(5.),
+        [0., 1., 0., 1.],
+    );
+    shape.add_filled_box(
+        shape::const_f32(0.),
+        vec![Op::Sub((Box::new(Op::LoadVar("h".to_string())), Box::new(Op::ConstFloat32(5.))))],
+        shape::load_var("w"),
+        shape::load_var("h"),
+        [0., 1., 0., 1.],
+    );
     drop(sg);
-    let pimpl = VectorArt::new(
-        app.ex.clone(),
-        app.sg.clone(),
-        node_id,
-        app.render_api.clone(),
-        verts,
-        indices,
-    )
-    .await;
-    let mut sg = app.sg.lock().await;
-    let node = sg.get_node_mut(node_id).unwrap();
-    node.pimpl = pimpl;
-
-    sg.link(node_id, layer_node_id).unwrap();
-
-    // Debugging tool
-    let node_id = create_vector_art(&mut sg, "debugtool2");
-
-    let node = sg.get_node_mut(node_id).unwrap();
-    let prop = node.get_property("rect").unwrap();
-    prop.set_f32(Role::App, 0, 0.).unwrap();
-    let code =
-        vec![Op::Sub((Box::new(Op::LoadVar("h".to_string())), Box::new(Op::ConstFloat32(200.))))];
-    prop.set_expr(Role::App, 1, code).unwrap();
-    let code = vec![Op::LoadVar("w".to_string())];
-    prop.set_expr(Role::App, 2, code).unwrap();
-    prop.set_f32(Role::App, 3, 5.).unwrap();
-
-    node.set_property_u32(Role::App, "z_index", 2).unwrap();
-
-    // Setup the pimpl
-    let (x1, y1) = (0., 0.);
-    let (x2, y2) = (1., 1.);
-    let verts = vec![
-        // top left
-        Vertex { pos: [x1, y1], color: [0., 1., 0., 1.], uv: [0., 0.] },
-        // top right
-        Vertex { pos: [x2, y1], color: [0., 1., 0., 1.], uv: [1., 0.] },
-        // bottom left
-        Vertex { pos: [x1, y2], color: [0., 1., 0., 1.], uv: [0., 1.] },
-        // bottom right
-        Vertex { pos: [x2, y2], color: [0., 1., 0., 1.], uv: [1., 1.] },
-    ];
-    let indices = vec![0, 2, 1, 1, 2, 3];
-    drop(sg);
-    let pimpl = VectorArt::new(
-        app.ex.clone(),
-        app.sg.clone(),
-        node_id,
-        app.render_api.clone(),
-        verts,
-        indices,
-    )
-    .await;
+    let pimpl =
+        VectorArt::new(app.ex.clone(), app.sg.clone(), node_id, app.render_api.clone(), shape)
+            .await;
     let mut sg = app.sg.lock().await;
     let node = sg.get_node_mut(node_id).unwrap();
     node.pimpl = pimpl;
@@ -660,29 +575,18 @@ pub(super) async fn make(app: &App) {
     let c = if LIGHTMODE { 1. } else { 0.05 };
     // Setup the pimpl
     let node_id = node.id;
-    let (x1, y1) = (0., 0.);
-    let (x2, y2) = (1., 1.);
-    let verts = vec![
-        // top left
-        Vertex { pos: [x1, y1], color: [c, c, c, 1.], uv: [0., 0.] },
-        // top right
-        Vertex { pos: [x2, y1], color: [c, c, c, 1.], uv: [1., 0.] },
-        // bottom left
-        Vertex { pos: [x1, y2], color: [c, c, c, 1.], uv: [0., 1.] },
-        // bottom right
-        Vertex { pos: [x2, y2], color: [c, c, c, 1.], uv: [1., 1.] },
-    ];
-    let indices = vec![0, 2, 1, 1, 2, 3];
+    let mut shape = VectorShape::new();
+    shape.add_filled_box(
+        shape::const_f32(0.),
+        shape::const_f32(0.),
+        shape::load_var("w"),
+        shape::load_var("h"),
+        [c, c, c, 1.],
+    );
     drop(sg);
-    let pimpl = VectorArt::new(
-        app.ex.clone(),
-        app.sg.clone(),
-        node_id,
-        app.render_api.clone(),
-        verts,
-        indices,
-    )
-    .await;
+    let pimpl =
+        VectorArt::new(app.ex.clone(), app.sg.clone(), node_id, app.render_api.clone(), shape)
+            .await;
     let mut sg = app.sg.lock().await;
     let node = sg.get_node_mut(node_id).unwrap();
     node.pimpl = pimpl;
@@ -807,94 +711,26 @@ pub(super) async fn make(app: &App) {
     prop.set_f32(Role::App, 3, EDITCHAT_HEIGHT).unwrap();
     node.set_property_u32(Role::App, "z_index", 0).unwrap();
     drop(sg);
-    let mut mesh = MeshBuilder::new();
-    mesh.draw_box(
-        &Rectangle { x: 0., y: 0., w: 1., h: 1. },
+    let mut shape = VectorShape::new();
+    shape.add_filled_box(
+        shape::const_f32(0.),
+        shape::const_f32(0.),
+        shape::load_var("w"),
+        shape::load_var("h"),
         [0., 0.13, 0.08, 1.],
-        &Rectangle { x: 0., y: 0., w: 1., h: 1. },
     );
-    let pimpl = VectorArt::new(
-        app.ex.clone(),
-        app.sg.clone(),
-        node_id,
-        app.render_api.clone(),
-        mesh.verts,
-        mesh.indices,
-    )
-    .await;
-    let mut sg = app.sg.lock().await;
-    let node = sg.get_node_mut(node_id).unwrap();
-    node.pimpl = pimpl;
-
-    sg.link(node_id, layer_node_id).unwrap();
-
-    // Create the nick - editbox sep
-    let node_id = create_vector_art(&mut sg, "editbox_lhs_sep");
-
-    let node = sg.get_node_mut(node_id).unwrap();
-    let prop = node.get_property("rect").unwrap();
-    prop.set_f32(Role::App, 0, NICKLABEL_WIDTH).unwrap();
-    let code = vec![Op::Sub((
-        Box::new(Op::LoadVar("h".to_string())),
-        Box::new(Op::ConstFloat32(EDITCHAT_HEIGHT)),
-    ))];
-    prop.set_expr(Role::App, 1, code).unwrap();
-    prop.set_f32(Role::App, 2, 1.).unwrap();
-    prop.set_f32(Role::App, 3, EDITCHAT_HEIGHT).unwrap();
-    node.set_property_u32(Role::App, "z_index", 1).unwrap();
-    drop(sg);
-    let mut mesh = MeshBuilder::new();
-    mesh.draw_box(
-        &Rectangle { x: 0., y: 0., w: 1., h: 1. },
+    shape.add_outline(
+        shape::const_f32(0.),
+        shape::const_f32(0.),
+        shape::load_var("w"),
+        shape::load_var("h"),
+        1.,
         [0.4, 0.4, 0.4, 1.],
-        &Rectangle { x: 0., y: 0., w: 1., h: 1. },
     );
-    let pimpl = VectorArt::new(
-        app.ex.clone(),
-        app.sg.clone(),
-        node_id,
-        app.render_api.clone(),
-        mesh.verts,
-        mesh.indices,
-    )
-    .await;
-    let mut sg = app.sg.lock().await;
-    let node = sg.get_node_mut(node_id).unwrap();
-    node.pimpl = pimpl;
 
-    sg.link(node_id, layer_node_id).unwrap();
-
-    // Create the chatview - editbox sep
-    let node_id = create_vector_art(&mut sg, "chatview_bhs_sep");
-
-    let node = sg.get_node_mut(node_id).unwrap();
-    let prop = node.get_property("rect").unwrap();
-    prop.set_f32(Role::App, 0, 0.).unwrap();
-    let code = vec![Op::Sub((
-        Box::new(Op::LoadVar("h".to_string())),
-        Box::new(Op::ConstFloat32(EDITCHAT_HEIGHT)),
-    ))];
-    prop.set_expr(Role::App, 1, code).unwrap();
-    let code = vec![Op::LoadVar("w".to_string())];
-    prop.set_expr(Role::App, 2, code).unwrap();
-    prop.set_f32(Role::App, 3, 1.).unwrap();
-    node.set_property_u32(Role::App, "z_index", 1).unwrap();
-    drop(sg);
-    let mut mesh = MeshBuilder::new();
-    mesh.draw_box(
-        &Rectangle { x: 0., y: 0., w: 1., h: 1. },
-        [0.4, 0.4, 0.4, 1.],
-        &Rectangle { x: 0., y: 0., w: 1., h: 1. },
-    );
-    let pimpl = VectorArt::new(
-        app.ex.clone(),
-        app.sg.clone(),
-        node_id,
-        app.render_api.clone(),
-        mesh.verts,
-        mesh.indices,
-    )
-    .await;
+    let pimpl =
+        VectorArt::new(app.ex.clone(), app.sg.clone(), node_id, app.render_api.clone(), shape)
+            .await;
     let mut sg = app.sg.lock().await;
     let node = sg.get_node_mut(node_id).unwrap();
     node.pimpl = pimpl;

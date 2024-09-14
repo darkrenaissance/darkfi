@@ -122,7 +122,7 @@ pub struct SExprMachine<'a> {
 // Each item is a statement
 pub type SExprCode = Vec<Op>;
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Op {
     Null,
     Add((Box<Op>, Box<Op>)),
