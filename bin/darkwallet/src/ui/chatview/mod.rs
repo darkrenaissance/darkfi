@@ -646,7 +646,9 @@ impl ChatView {
                 }
 
                 // We are in selection mode so don't scroll the screen until touch phase ends.
-                if let Some(is_select_mode) = is_select_mode {
+                if let Some(is_select_mode) = is_select_mode &&
+                    is_select_mode
+                {
                     self.select_line(touch_y).await;
                     return
                 }
@@ -936,7 +938,7 @@ impl ChatView {
         // Use this to start from the top
         //let start_pos = if total_height < rect.h { total_height } else { rect.h };
         // We start from the bottom though
-        let start_pos = rect.y + rect.h;
+        let start_pos = rect.h;
 
         let mut instrs = vec![];
         //let mut old_drawmesh = vec![];

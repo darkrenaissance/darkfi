@@ -16,10 +16,16 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+// channel wait until deadline
 #![feature(deadline_api)]
+// Adds remainder() fn for String::split() result
 #![feature(str_split_whitespace_remainder)]
+// instant.elapsed().as_millis_f32()
 #![feature(duration_millis_float)]
+// Allow attributes on statements and code blocks
 #![feature(stmt_expr_attributes)]
+// if let Some(is_foo) = is_foo && is_foo { ... }
+#![feature(let_chains)]
 
 // Use these to incrementally fix warnings with cargo fix
 //#![allow(warnings, unused)]
