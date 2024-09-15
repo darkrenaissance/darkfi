@@ -1,3 +1,4 @@
 toml==0.10.2
 urwid==2.2.3
 base58==2.1.1
+networkx==3.3
