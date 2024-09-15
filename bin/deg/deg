@@ -72,7 +72,8 @@ class ListItem(u.WidgetWrap):
         self.content = event
         layer_num = int(event["layer"])
         layer = "layer " + str(layer_num) + indent(layer_num) if layer_num != 0 else "genesis       "
-        dt = event['hash'][:10] + " │ " + str(datetime.fromtimestamp(int(event['timestamp'])))
+        dt = datetime.fromtimestamp(int(event['timestamp'])) if int(event['timestamp']) < 1e10 else datetime.fromtimestamp(int(int(event['timestamp'])/1000))
+        dt = event['hash'][:10] + " │ " + str(dt)
         t = u.AttrMap(u.Text([('word', dt),
                               ('layer-num', " " + layer),
                               ('word', g),
