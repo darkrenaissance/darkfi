@@ -21,7 +21,7 @@ use sled_overlay::sled;
 use crate::{
     darkirc::{DarkIrcBackendPtr, Privmsg},
     error::Error,
-    expr,
+    expr::Compiler,
     gfx::{GraphicsEventPublisherPtr, Rectangle, RenderApiPtr, Vertex},
     mesh::{Color, MeshBuilder},
     prop::{Property, PropertyBool, PropertyStr, PropertySubType, PropertyType, Role},
@@ -83,6 +83,8 @@ const FONTSIZE: f32 = 40.;
 const FONTSIZE: f32 = 20.;
 
 pub(super) async fn make_old(app: &App) {
+    let mut cc = Compiler::new();
+
     //let mut tasks = vec![];
     // Create a layer called view
     let mut sg = app.sg.lock().await;
@@ -145,7 +147,7 @@ pub(super) async fn make_old(app: &App) {
 
     let node = sg.get_node_mut(node_id).unwrap();
     let prop = node.get_property("rect").unwrap();
-    let code = expr::compile("w - 220").unwrap();
+    let code = cc.compile("w - 220").unwrap();
     prop.set_expr(Role::App, 0, code).unwrap();
     prop.set_f32(Role::App, 1, 10.).unwrap();
     prop.set_f32(Role::App, 2, 200.).unwrap();
@@ -185,7 +187,7 @@ pub(super) async fn make_old(app: &App) {
     let node = sg.get_node_mut(node_id).unwrap();
     node.set_property_bool(Role::App, "is_active", true).unwrap();
     let prop = node.get_property("rect").unwrap();
-    let code = expr::compile("w - 220").unwrap();
+    let code = cc.compile("w - 220").unwrap();
     prop.set_expr(Role::App, 0, code).unwrap();
     prop.set_f32(Role::App, 1, 10.).unwrap();
     prop.set_f32(Role::App, 2, 200.).unwrap();
@@ -247,10 +249,10 @@ pub(super) async fn make_old(app: &App) {
     let node = sg.get_node_mut(node_id).unwrap();
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(Role::App, 0, 0.).unwrap();
-    let code = expr::compile("h/2").unwrap();
+    let code = cc.compile("h/2").unwrap();
     prop.set_expr(Role::App, 1, code).unwrap();
     prop.set_expr(Role::App, 2, shape::load_var("w")).unwrap();
-    let code = expr::compile("h/2 - 200").unwrap();
+    let code = cc.compile("h/2 - 200").unwrap();
     prop.set_expr(Role::App, 3, code).unwrap();
 
     node.set_property_u32(Role::App, "z_index", 2).unwrap();
@@ -266,7 +268,7 @@ pub(super) async fn make_old(app: &App) {
     );
     shape.add_filled_box(
         shape::const_f32(0.),
-        expr::compile("h - 5").unwrap(),
+        cc.compile("h - 5").unwrap(),
         shape::load_var("w"),
         shape::load_var("h"),
         [0., 1., 0., 1.],
@@ -435,10 +437,10 @@ pub(super) async fn make_old(app: &App) {
     let node = sg.get_node(node_id).unwrap();
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(Role::App, 0, 0.).unwrap();
-    let code = expr::compile("h/2").unwrap();
+    let code = cc.compile("h/2").unwrap();
     prop.set_expr(Role::App, 1, code).unwrap();
     prop.set_expr(Role::App, 2, shape::load_var("w")).unwrap();
-    let code = expr::compile("h/2 - 200").unwrap();
+    let code = cc.compile("h/2 - 200").unwrap();
     prop.set_expr(Role::App, 3, code).unwrap();
     node.set_property_f32(Role::App, "font_size", 20.).unwrap();
     node.set_property_f32(Role::App, "line_height", 30.).unwrap();
@@ -530,6 +532,12 @@ pub(super) async fn make_old(app: &App) {
 }
 
 pub(super) async fn make(app: &App) {
+    let mut cc = Compiler::new();
+
+    cc.add_const_f32("EDITCHAT_HEIGHT", EDITCHAT_HEIGHT);
+    cc.add_const_f32("SENDLABEL_WIDTH", SENDLABEL_WIDTH);
+    cc.add_const_f32("SENDLABEL_LHS_PAD", SENDLABEL_LHS_PAD);
+
     // Main view
     let mut sg = app.sg.lock().await;
     let layer_node_id = create_layer(&mut sg, "view");
@@ -654,7 +662,7 @@ pub(super) async fn make(app: &App) {
     prop.set_f32(Role::App, 0, 0.).unwrap();
     prop.set_f32(Role::App, 1, EDITCHAT_HEIGHT).unwrap();
     prop.set_expr(Role::App, 2, shape::load_var("w")).unwrap();
-    let code = expr::compile(format!("h - 2 * {EDITCHAT_HEIGHT}")).unwrap();
+    let code = cc.compile("h - 2 * EDITCHAT_HEIGHT").unwrap();
     prop.set_expr(Role::App, 3, code).unwrap();
     node.set_property_f32(Role::App, "font_size", FONTSIZE).unwrap();
     node.set_property_f32(Role::App, "line_height", FONTSIZE * 1.6).unwrap();
@@ -748,7 +756,7 @@ pub(super) async fn make(app: &App) {
     let node = sg.get_node_mut(node_id).unwrap();
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(Role::App, 0, 0.).unwrap();
-    let code = expr::compile(format!("h - {EDITCHAT_HEIGHT}")).unwrap();
+    let code = cc.compile("h - EDITCHAT_HEIGHT").unwrap();
     prop.set_expr(Role::App, 1, code).unwrap();
     prop.set_expr(Role::App, 2, shape::load_var("w")).unwrap();
     prop.set_f32(Role::App, 3, EDITCHAT_HEIGHT).unwrap();
@@ -758,14 +766,14 @@ pub(super) async fn make(app: &App) {
     shape.add_filled_box(
         shape::const_f32(0.),
         shape::const_f32(0.),
-        expr::compile(format!("w - {SENDLABEL_WIDTH}")).unwrap(),
+        cc.compile("w - SENDLABEL_WIDTH").unwrap(),
         shape::load_var("h"),
         [0., 0.13, 0.08, 1.],
     );
     shape.add_filled_box(
-        expr::compile(format!("w - {SENDLABEL_WIDTH}")).unwrap(),
+        cc.compile("w - SENDLABEL_WIDTH").unwrap(),
         shape::const_f32(0.),
-        expr::compile(format!("w - {SENDLABEL_WIDTH} - 1")).unwrap(),
+        cc.compile("w - SENDLABEL_WIDTH - 1").unwrap(),
         shape::load_var("h"),
         [0.4, 0.4, 0.4, 1.],
     );
@@ -792,9 +800,9 @@ pub(super) async fn make(app: &App) {
 
     let node = sg.get_node_mut(node_id).unwrap();
     let prop = node.get_property("rect").unwrap();
-    let code = expr::compile(format!("w - {}", SENDLABEL_WIDTH - SENDLABEL_LHS_PAD)).unwrap();
+    let code = cc.compile("w - (SENDLABEL_WIDTH - SENDLABEL_LHS_PAD)").unwrap();
     prop.set_expr(Role::App, 0, code).unwrap();
-    let code = expr::compile(format!("h - {EDITCHAT_HEIGHT}")).unwrap();
+    let code = cc.compile("h - EDITCHAT_HEIGHT").unwrap();
     prop.set_expr(Role::App, 1, code).unwrap();
     prop.set_f32(Role::App, 2, SENDLABEL_WIDTH).unwrap();
     prop.set_f32(Role::App, 3, EDITCHAT_HEIGHT).unwrap();
@@ -830,9 +838,9 @@ pub(super) async fn make(app: &App) {
 
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(Role::App, 0, EDITCHAT_LHS_PAD).unwrap();
-    let code = expr::compile(format!("h - {EDITCHAT_HEIGHT}")).unwrap();
+    let code = cc.compile("h - EDITCHAT_HEIGHT").unwrap();
     prop.set_expr(Role::App, 1, code).unwrap();
-    let code = expr::compile(format!("w - ({SENDLABEL_WIDTH} + 20)")).unwrap();
+    let code = cc.compile("w - (SENDLABEL_WIDTH + 20)").unwrap();
     prop.set_expr(Role::App, 2, code).unwrap();
     prop.set_f32(Role::App, 3, EDITCHAT_HEIGHT).unwrap();
 

@@ -26,7 +26,7 @@ use darkfi_serial::{
 use std::io::{Read, Write};
 
 mod compile;
-pub use compile::compile;
+pub use compile::Compiler;
 
 #[derive(Clone, Debug, PartialEq, SerialEncodable, SerialDecodable)]
 pub enum SExprVal {

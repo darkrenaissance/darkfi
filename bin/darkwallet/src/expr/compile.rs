@@ -20,20 +20,12 @@ use crate::{
     error::{Error, Result},
     //prop::{Property, PropertySubType, PropertyType, PropertySExprValue},
 };
+use std::collections::HashMap;
 
 use super::{Op, SExprCode};
 
 fn remove_whitespace(s: &str) -> String {
     s.chars().filter(|c| !c.is_whitespace()).collect()
-}
-
-pub fn compile<S: AsRef<str>>(stmts: S) -> Result<SExprCode> {
-    let stmts = stmts.as_ref();
-    let mut code = vec![];
-    for stmt in stmts.split(';') {
-        code.push(compile_line(stmt)?);
-    }
-    Ok(code)
 }
 
 #[derive(Debug, Clone)]
@@ -61,52 +53,99 @@ impl Token {
     }
 }
 
-fn tokenize(stmt: &str) -> Vec<Token> {
-    let mut tokens = Vec::new();
-    let mut current_token = String::new();
-    for chr in stmt.chars() {
-        match chr {
-            '+' => {
-                clear_accum(&mut current_token, &mut tokens);
-                tokens.push(Token::Add);
-            }
-            '-' => {
-                clear_accum(&mut current_token, &mut tokens);
-                tokens.push(Token::Sub);
-            }
-            '*' => {
-                clear_accum(&mut current_token, &mut tokens);
-                tokens.push(Token::Mul);
-            }
-            '/' => {
-                clear_accum(&mut current_token, &mut tokens);
-                tokens.push(Token::Div);
-            }
-            '(' => {
-                clear_accum(&mut current_token, &mut tokens);
-                tokens.push(Token::LeftParen);
-            }
-            ')' => {
-                clear_accum(&mut current_token, &mut tokens);
-                tokens.push(Token::RightParen);
-            }
-            _ => current_token.push(chr),
-        }
-    }
-    clear_accum(&mut current_token, &mut tokens);
-    tokens
+pub struct Compiler {
+    table: HashMap<String, Token>,
 }
 
-fn clear_accum(current_token: &mut String, tokens: &mut Vec<Token>) {
-    let prev_token = std::mem::replace(current_token, String::new());
-    if prev_token.is_empty() {
-        return
+impl Compiler {
+    pub fn new() -> Self {
+        Self { table: HashMap::new() }
     }
 
-    // Number or var?
-    match prev_token.parse::<f32>() {
-        Ok(v) => tokens.push(Token::ConstFloat32(v)),
-        Err(_) => tokens.push(Token::LoadVar(prev_token)),
+    pub fn add_const_f32<S: Into<String>>(&mut self, name: S, val: f32) {
+        self.table.insert(name.into(), Token::ConstFloat32(val));
+    }
+    /*
+    pub fn get_const_f32<S: AsRef<str>>(&self, name: S) -> Option<f32> {
+        let name = name.as_ref();
+        let val = self.table.get(name)?;
+        match val {
+            Token::ConstFloat32(v) => Some(v)
+            _ => None
+        }
+    }
+    */
+
+    pub fn compile<S: AsRef<str>>(&self, stmts: S) -> Result<SExprCode> {
+        let stmts = stmts.as_ref();
+        let mut code = vec![];
+        for stmt in stmts.split(';') {
+            code.push(self.compile_line(stmt)?);
+        }
+        Ok(code)
+    }
+
+    fn compile_line(&self, stmt: &str) -> Result<Op> {
+        let stmt = remove_whitespace(stmt);
+        let tokens = self.tokenize(&stmt);
+        //println!("{tokens:#?}");
+        let tokens = to_rpn(tokens)?;
+        //println!("{tokens:#?}");
+        Ok(convert(&mut tokens.into_iter())?)
+    }
+
+    fn tokenize(&self, stmt: &str) -> Vec<Token> {
+        let mut tokens = Vec::new();
+        let mut current_token = String::new();
+        for chr in stmt.chars() {
+            match chr {
+                '+' => {
+                    self.clear_accum(&mut current_token, &mut tokens);
+                    tokens.push(Token::Add);
+                }
+                '-' => {
+                    self.clear_accum(&mut current_token, &mut tokens);
+                    tokens.push(Token::Sub);
+                }
+                '*' => {
+                    self.clear_accum(&mut current_token, &mut tokens);
+                    tokens.push(Token::Mul);
+                }
+                '/' => {
+                    self.clear_accum(&mut current_token, &mut tokens);
+                    tokens.push(Token::Div);
+                }
+                '(' => {
+                    self.clear_accum(&mut current_token, &mut tokens);
+                    tokens.push(Token::LeftParen);
+                }
+                ')' => {
+                    self.clear_accum(&mut current_token, &mut tokens);
+                    tokens.push(Token::RightParen);
+                }
+                _ => current_token.push(chr),
+            }
+        }
+        self.clear_accum(&mut current_token, &mut tokens);
+        tokens
+    }
+
+    fn clear_accum(&self, current_token: &mut String, tokens: &mut Vec<Token>) {
+        let prev_token = std::mem::replace(current_token, String::new());
+        if prev_token.is_empty() {
+            return
+        }
+
+        if let Some(token) = self.table.get(&prev_token) {
+            tokens.push(token.clone());
+            return
+        }
+
+        // Number or var?
+        match prev_token.parse::<f32>() {
+            Ok(v) => tokens.push(Token::ConstFloat32(v)),
+            Err(_) => tokens.push(Token::LoadVar(prev_token)),
+        }
     }
 }
 
@@ -268,22 +307,15 @@ fn convert<I: Iterator<Item = Token>>(iter: &mut I) -> Result<Op> {
     Ok(op)
 }
 
-fn compile_line(stmt: &str) -> Result<Op> {
-    let stmt = remove_whitespace(stmt);
-    let tokens = tokenize(&stmt);
-    //println!("{tokens:#?}");
-    let tokens = to_rpn(tokens)?;
-    //println!("{tokens:#?}");
-    Ok(convert(&mut tokens.into_iter())?)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn single_line() {
-        let code = compile("h/2 - 200").unwrap();
+        let compiler = Compiler::new();
+
+        let code = compiler.compile("h/2 - 200").unwrap();
         #[rustfmt::skip]
         let code2 = vec![Op::Sub((
             Box::new(Op::Div((
@@ -294,7 +326,7 @@ mod tests {
         ))];
         assert_eq!(code, code2);
 
-        let code = compile("(x + h/2 + (y + 7)/5) - 200").unwrap();
+        let code = compiler.compile("(x + h/2 + (y + 7)/5) - 200").unwrap();
         #[rustfmt::skip]
         let code2 = vec![Op::Sub((
             Box::new(Op::Add((
@@ -317,6 +349,16 @@ mod tests {
 
             Box::new(Op::ConstFloat32(200.))
         ))];
+        assert_eq!(code, code2);
+    }
+
+    #[test]
+    fn dosub() {
+        let mut compiler = Compiler::new();
+        compiler.add_const_f32("HELLO", 110.);
+
+        let code = compiler.compile("HELLO").unwrap();
+        let code2 = vec![Op::ConstFloat32(110.)];
         assert_eq!(code, code2);
     }
 }
