@@ -27,7 +27,8 @@ fn remove_whitespace(s: &str) -> String {
     s.chars().filter(|c| !c.is_whitespace()).collect()
 }
 
-pub fn compile(stmts: &str) -> Result<SExprCode> {
+pub fn compile<S: AsRef<str>>(stmts: S) -> Result<SExprCode> {
+    let stmts = stmts.as_ref();
     let mut code = vec![];
     for stmt in stmts.split(';') {
         code.push(compile_line(stmt)?);
