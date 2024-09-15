@@ -190,7 +190,30 @@ impl Client {
                                     }
 
                                     // Otherwise, broadcast it
-                                    self.server.darkirc.p2p.broadcast(&EventPut(event)).await;
+                                    let self_version = self.server.darkirc.p2p.settings().read().await.app_version.clone();
+                                    let connected_peers = self.server.darkirc.p2p.hosts().peers();
+                                    let mut peers_with_matched_version = vec![];
+                                    let mut peers_with_different_version = vec![];
+                                    for peer in connected_peers {
+                                        let peer_version = peer.version.lock().await.clone();
+                                        if let Some(ref peer_version) = peer_version {
+                                            if self_version == peer_version.version {
+                                                peers_with_matched_version.push(peer)
+                                            } else {
+                                                peers_with_different_version.push(peer)
+                                            }
+                                        }
+                                    }
+
+                                    if !peers_with_matched_version.is_empty() {
+                                        self.server.darkirc.p2p.broadcast_to(&EventPut(event.clone()), &peers_with_matched_version).await;
+                                    }
+                                    if !peers_with_different_version.is_empty() {
+                                        let mut event = event;
+                                        event.timestamp /= 1000;
+                                        self.server.darkirc.p2p.broadcast_to(&EventPut(event), &peers_with_different_version).await;
+                                    }
+                                    // self.server.darkirc.p2p.broadcast(&EventPut(event)).await;
                                 }
                             }
                         }

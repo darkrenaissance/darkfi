@@ -2208,7 +2208,7 @@ dependencies = [
 
 [[package]]
 name = "darkirc"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "async-trait",
  "bcrypt",
@@ -7091,7 +7091,7 @@ checksum = "61c41af27dd6d1e27b1b16b489db798443478cef1f06a660c96db617ba5de3b1"
 
 [[package]]
 name = "taud"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "async-trait",
  "blake3 1.5.4",

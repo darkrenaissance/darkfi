@@ -35,7 +35,7 @@ use tinyjson::JsonValue::{self};
 
 use crate::{
     event_graph::util::{replayer_log, seconds_until_next_rotation},
-    net::P2pPtr,
+    net::{channel::Channel, P2pPtr},
     rpc::{
         jsonrpc::{JsonResponse, JsonResult},
         util::json_map,
@@ -66,16 +66,16 @@ use deg::DegEvent;
 #[cfg(test)]
 mod tests;
 
-/// Initial genesis timestamp (07 Sep 2023, 00:00:00 UTC)
+/// Initial genesis timestamp in millis (07 Sep 2023, 00:00:00 UTC)
 /// Must always be UTC midnight.
-const INITIAL_GENESIS: u64 = 1694044800;
+const INITIAL_GENESIS: u64 = 1_694_044_800_000;
 /// Genesis event contents
 const GENESIS_CONTENTS: &[u8] = &[0x47, 0x45, 0x4e, 0x45, 0x53, 0x49, 0x53];
 
 /// The number of parents an event is supposed to have.
 const N_EVENT_PARENTS: usize = 5;
-/// Allowed timestamp drift in seconds
-const EVENT_TIME_DRIFT: u64 = 60;
+/// Allowed timestamp drift in milliseconds
+const EVENT_TIME_DRIFT: u64 = 60_000;
 /// Null event ID
 pub const NULL_ID: blake3::Hash = blake3::Hash::from_bytes([0x00; blake3::OUT_LEN]);
 
@@ -871,5 +871,19 @@ impl EventGraph {
         }
 
         Ok(result)
+    }
+
+    /// Check if the our version matches the connected peer's
+    /// return true if they are, false otherwise
+    async fn check_version_match(&self, channel: &Arc<Channel>) -> bool {
+        let self_version = self.p2p.settings().read().await.app_version.clone();
+        let peer_version = channel.version.lock().await.clone();
+        if let Some(ref peer_version) = peer_version {
+            if self_version == peer_version.version {
+                return true
+            }
+        }
+
+        false
     }
 }

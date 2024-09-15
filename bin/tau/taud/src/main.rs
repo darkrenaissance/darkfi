@@ -318,7 +318,30 @@ async fn start_sync_loop(
                         error!(target: "taud", "Failed inserting new event to DAG: {}", e);
                     } else {
                         // Otherwise, broadcast it
-                        p2p.broadcast(&EventPut(event)).await;
+                        let self_version = p2p.settings().read().await.app_version.clone();
+                        let connected_peers = p2p.hosts().peers();
+                        let mut peers_with_matched_version = vec![];
+                        let mut peers_with_different_version = vec![];
+                        for peer in connected_peers {
+                            let peer_version = peer.version.lock().await.clone();
+                            if let Some(ref peer_version) = peer_version {
+                                if self_version == peer_version.version {
+                                    peers_with_matched_version.push(peer)
+                                } else {
+                                    peers_with_different_version.push(peer)
+                                }
+                            }
+                        }
+
+                        if !peers_with_matched_version.is_empty() {
+                            p2p.broadcast_to(&EventPut(event.clone()), &peers_with_matched_version).await;
+                        }
+                        if !peers_with_different_version.is_empty() {
+                            let mut event = event;
+                            event.timestamp /= 1000;
+                            p2p.broadcast_to(&EventPut(event), &peers_with_different_version).await;
+                        }
+                        // p2p.broadcast(&EventPut(event)).await;
                     }
                 }
             }

@@ -93,7 +93,7 @@ pub struct Channel {
     /// The version message of the node we are connected to.
     /// Some if the version exchange has already occurred, None
     /// otherwise.
-    version: Mutex<Option<Arc<VersionMessage>>>,
+    pub version: Mutex<Option<Arc<VersionMessage>>>,
     /// Channel debug info
     pub info: ChannelInfo,
 }

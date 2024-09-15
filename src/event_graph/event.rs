@@ -49,13 +49,20 @@ impl Event {
     /// of the codebase.
     pub async fn new(data: Vec<u8>, event_graph: &EventGraph) -> Self {
         let (layer, parents) = event_graph.get_next_layer_with_parents().await;
-        Self { timestamp: UNIX_EPOCH.elapsed().unwrap().as_secs(), content: data, parents, layer }
+        Self {
+            timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64,
+            content: data,
+            parents,
+            layer,
+        }
     }
 
     /// Hash the [`Event`] to retrieve its ID
     pub fn id(&self) -> blake3::Hash {
         let mut hasher = blake3::Hasher::new();
-        self.timestamp.encode(&mut hasher).unwrap();
+        let timestamp =
+            if self.timestamp > 1e10 as u64 { self.timestamp / 1000 } else { self.timestamp };
+        timestamp.encode(&mut hasher).unwrap();
         self.content.encode(&mut hasher).unwrap();
         self.parents.encode(&mut hasher).unwrap();
         self.layer.encode(&mut hasher).unwrap();
@@ -91,7 +98,7 @@ impl Event {
         }
 
         // Check if the event timestamp is after genesis timestamp
-        if self.timestamp < genesis_timestamp - EVENT_TIME_DRIFT {
+        if self.timestamp < genesis_timestamp - EVENT_TIME_DRIFT / 1000 {
             return Ok(false)
         }
 
@@ -99,7 +106,7 @@ impl Event {
         // is after the next genesis timestamp
         if days_rotation > 0 {
             let next_genesis_timestamp = next_rotation_timestamp(INITIAL_GENESIS, days_rotation);
-            if self.timestamp > next_genesis_timestamp + EVENT_TIME_DRIFT {
+            if self.timestamp > next_genesis_timestamp + EVENT_TIME_DRIFT / 1000 {
                 return Ok(false)
             }
         }
@@ -159,19 +166,28 @@ impl Event {
     /// assuming some possibility for a time drift.
     /// Note: This validation does *NOT* check for recursive references(circles),
     /// and should be used as a first quick check.
-    pub fn validate_new(&self) -> bool {
+    pub fn validate_new(&self, is_ver_match: bool) -> bool {
         // Let's not bother with empty events
         if self.content.is_empty() {
             return false
         }
 
-        // Check if the event is too old or too new
-        let now = UNIX_EPOCH.elapsed().unwrap().as_secs();
-        let too_old = self.timestamp < now - EVENT_TIME_DRIFT;
-        let too_new = self.timestamp > now + EVENT_TIME_DRIFT;
-
-        if too_old || too_new {
-            return false
+        if is_ver_match {
+            // Check if the event is too old or too new
+            let now = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
+            let too_old = self.timestamp < now - EVENT_TIME_DRIFT;
+            let too_new = self.timestamp > now + EVENT_TIME_DRIFT;
+            if too_old || too_new {
+                return false
+            }
+        } else {
+            // Check if the event is too old or too new
+            let now = UNIX_EPOCH.elapsed().unwrap().as_secs();
+            let too_old = self.timestamp < (now - (EVENT_TIME_DRIFT / 1000));
+            let too_new = self.timestamp > (now + (EVENT_TIME_DRIFT / 1000));
+            if too_old || too_new {
+                return false
+            }
         }
 
         // Validate the parents. We have to check that at least one parent
