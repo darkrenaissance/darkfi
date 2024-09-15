@@ -113,4 +113,7 @@ pub enum Error {
 
     #[error("Channel closed")]
     ChannelClosed = 36,
+
+    #[error("Unexpected token found")]
+    UnexpectedToken = 38,
 }

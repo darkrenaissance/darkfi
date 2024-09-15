@@ -26,6 +26,8 @@
 #![feature(stmt_expr_attributes)]
 // if let Some(is_foo) = is_foo && is_foo { ... }
 #![feature(let_chains)]
+// consume a box
+#![feature(box_into_inner)]
 
 // Use these to incrementally fix warnings with cargo fix
 //#![allow(warnings, unused)]
