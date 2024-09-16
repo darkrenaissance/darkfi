@@ -434,217 +434,66 @@ pub enum GraphicsMethod {
 pub type GraphicsEventPublisherPtr = Arc<GraphicsEventPublisher>;
 
 pub struct GraphicsEventPublisher {
-    lock_resize: SyncMutex<Option<SubscriptionId>>,
     resize: PublisherPtr<(f32, f32)>,
-
-    lock_key_down: SyncMutex<Option<SubscriptionId>>,
     key_down: PublisherPtr<(KeyCode, KeyMods, bool)>,
-
-    lock_key_up: SyncMutex<Option<SubscriptionId>>,
     key_up: PublisherPtr<(KeyCode, KeyMods)>,
-
-    lock_char: SyncMutex<Option<SubscriptionId>>,
     chr: PublisherPtr<(char, KeyMods, bool)>,
-
-    lock_mouse_btn_down: SyncMutex<Option<SubscriptionId>>,
     mouse_btn_down: PublisherPtr<(MouseButton, Point)>,
-
-    lock_mouse_btn_up: SyncMutex<Option<SubscriptionId>>,
     mouse_btn_up: PublisherPtr<(MouseButton, Point)>,
-
-    lock_mouse_move: SyncMutex<Option<SubscriptionId>>,
     mouse_move: PublisherPtr<Point>,
-
-    lock_mouse_wheel: SyncMutex<Option<SubscriptionId>>,
     mouse_wheel: PublisherPtr<Point>,
-
-    lock_touch: SyncMutex<Option<SubscriptionId>>,
     touch: PublisherPtr<(TouchPhase, u64, Point)>,
 }
 
 impl GraphicsEventPublisher {
     pub fn new() -> Arc<Self> {
         Arc::new(Self {
-            lock_resize: SyncMutex::new(None),
             resize: Publisher::new(),
-
-            lock_key_down: SyncMutex::new(None),
             key_down: Publisher::new(),
-
-            lock_key_up: SyncMutex::new(None),
             key_up: Publisher::new(),
-
-            lock_char: SyncMutex::new(None),
             chr: Publisher::new(),
-
-            lock_mouse_btn_down: SyncMutex::new(None),
             mouse_btn_down: Publisher::new(),
-
-            lock_mouse_btn_up: SyncMutex::new(None),
             mouse_btn_up: Publisher::new(),
-
-            lock_mouse_move: SyncMutex::new(None),
             mouse_move: Publisher::new(),
-
-            lock_mouse_wheel: SyncMutex::new(None),
             mouse_wheel: Publisher::new(),
-
-            lock_touch: SyncMutex::new(None),
             touch: Publisher::new(),
         })
     }
 
-    /*
-    fn lock_resize(&self, sub_id: SubscriptionId) {
-        *self.lock_resize.lock().unwrap() = Some(sub_id);
-    }
-    fn unlock_resize(&self) {
-        *self.lock_resize.lock().unwrap() = None;
-    }
-
-    fn lock_mouse_move(&self, sub_id: SubscriptionId) {
-        *self.lock_mouse_move.lock().unwrap() = Some(sub_id);
-    }
-    fn unlock_mouse_move(&self) {
-        *self.lock_mouse_move.lock().unwrap() = None;
-    }
-
-    fn lock_mouse_wheel(&self, sub_id: SubscriptionId) {
-        *self.lock_mouse_wheel.lock().unwrap() = Some(sub_id);
-    }
-    fn unlock_mouse_wheel(&self) {
-        *self.lock_mouse_wheel.lock().unwrap() = None;
-    }
-
-    fn lock_mouse_btn_down(&self, sub_id: SubscriptionId) {
-        *self.lock_mouse_btn_down.lock().unwrap() = Some(sub_id);
-    }
-    fn unlock_mouse_btn_down(&self) {
-        *self.lock_mouse_btn_down.lock().unwrap() = None;
-    }
-
-    fn lock_mouse_btn_up(&self, sub_id: SubscriptionId) {
-        *self.lock_mouse_btn_up.lock().unwrap() = Some(sub_id);
-    }
-    fn unlock_mouse_btn_up(&self) {
-        *self.lock_mouse_btn_up.lock().unwrap() = None;
-    }
-
-    fn lock_char(&self, sub_id: SubscriptionId) {
-        *self.lock_char.lock().unwrap() = Some(sub_id);
-    }
-    fn unlock_char(&self) {
-        *self.lock_char.lock().unwrap() = None;
-    }
-
-    fn lock_key_down(&self, sub_id: SubscriptionId) {
-        *self.lock_key_down.lock().unwrap() = Some(sub_id);
-    }
-    fn unlock_key_down(&self) {
-        *self.lock_key_down.lock().unwrap() = None;
-    }
-
-    fn lock_key_up(&self, sub_id: SubscriptionId) {
-        *self.lock_key_up.lock().unwrap() = Some(sub_id);
-    }
-    fn unlock_key_up(&self) {
-        *self.lock_key_up.lock().unwrap() = None;
-    }
-
-    fn lock_touch(&self, sub_id: SubscriptionId) {
-        *self.lock_touch.lock().unwrap() = Some(sub_id);
-    }
-    fn unlock_touch(&self) {
-        *self.lock_touch.lock().unwrap() = None;
-    }
-    */
-
     fn notify_resize(&self, w: f32, h: f32) {
         let ev = (w, h);
-
-        let locked = self.lock_resize.lock().unwrap().clone();
-        if let Some(locked) = locked {
-            self.resize.notify_with_include(ev, &[locked]);
-        } else {
-            self.resize.notify(ev);
-        }
+        self.resize.notify(ev);
     }
     fn notify_key_down(&self, key: KeyCode, mods: KeyMods, repeat: bool) {
         let ev = (key, mods, repeat);
-
-        let locked = self.lock_key_down.lock().unwrap().clone();
-        if let Some(locked) = locked {
-            self.key_down.notify_with_include(ev, &[locked]);
-        } else {
-            self.key_down.notify(ev);
-        }
+        self.key_down.notify(ev);
     }
     fn notify_key_up(&self, key: KeyCode, mods: KeyMods) {
         let ev = (key, mods);
-
-        let locked = self.lock_key_up.lock().unwrap().clone();
-        if let Some(locked) = locked {
-            self.key_up.notify_with_include(ev, &[locked]);
-        } else {
-            self.key_up.notify(ev);
-        }
+        self.key_up.notify(ev);
     }
     fn notify_char(&self, chr: char, mods: KeyMods, repeat: bool) {
         let ev = (chr, mods, repeat);
-
-        let locked = self.lock_char.lock().unwrap().clone();
-        if let Some(locked) = locked {
-            self.chr.notify_with_include(ev, &[locked]);
-        } else {
-            self.chr.notify(ev);
-        }
+        self.chr.notify(ev);
     }
     fn notify_mouse_btn_down(&self, button: MouseButton, mouse_pos: Point) {
         let ev = (button, mouse_pos);
-
-        let locked = self.lock_mouse_btn_down.lock().unwrap().clone();
-        if let Some(locked) = locked {
-            self.mouse_btn_down.notify_with_include(ev, &[locked]);
-        } else {
-            self.mouse_btn_down.notify(ev);
-        }
+        self.mouse_btn_down.notify(ev);
     }
     fn notify_mouse_btn_up(&self, button: MouseButton, mouse_pos: Point) {
         let ev = (button, mouse_pos);
-
-        let locked = self.lock_mouse_btn_up.lock().unwrap().clone();
-        if let Some(locked) = locked {
-            self.mouse_btn_up.notify_with_include(ev, &[locked]);
-        } else {
-            self.mouse_btn_up.notify(ev);
-        }
+        self.mouse_btn_up.notify(ev);
     }
 
     fn notify_mouse_move(&self, mouse_pos: Point) {
-        let locked = self.lock_mouse_move.lock().unwrap().clone();
-        if let Some(locked) = locked {
-            self.mouse_move.notify_with_include(mouse_pos, &[locked]);
-        } else {
-            self.mouse_move.notify(mouse_pos);
-        }
+        self.mouse_move.notify(mouse_pos);
     }
     fn notify_mouse_wheel(&self, wheel_pos: Point) {
-        let locked = self.lock_mouse_wheel.lock().unwrap().clone();
-        if let Some(locked) = locked {
-            self.mouse_wheel.notify_with_include(wheel_pos, &[locked]);
-        } else {
-            self.mouse_wheel.notify(wheel_pos);
-        }
+        self.mouse_wheel.notify(wheel_pos);
     }
     fn notify_touch(&self, phase: TouchPhase, id: u64, touch_pos: Point) {
         let ev = (phase, id, touch_pos);
-
-        let locked = self.lock_touch.lock().unwrap().clone();
-        if let Some(locked) = locked {
-            self.touch.notify_with_include(ev, &[locked]);
-        } else {
-            self.touch.notify(ev);
-        }
+        self.touch.notify(ev);
     }
 
     pub fn subscribe_resize(&self) -> Subscription<(f32, f32)> {
