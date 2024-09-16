@@ -235,4 +235,3 @@ impl UIObject for Image {
         self.z_index.get()
     }
 }
-

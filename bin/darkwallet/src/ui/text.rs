@@ -264,4 +264,3 @@ impl UIObject for Text {
         self.z_index.get()
     }
 }
-

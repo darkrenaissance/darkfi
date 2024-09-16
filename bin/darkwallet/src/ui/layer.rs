@@ -16,20 +16,23 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_trait::async_trait;
 use async_recursion::async_recursion;
-use miniquad::{KeyMods, KeyCode};
+use async_trait::async_trait;
+use miniquad::{KeyCode, KeyMods, MouseButton, TouchPhase};
 use rand::{rngs::OsRng, Rng};
 use std::sync::{Arc, Weak};
 
 use crate::{
     gfx::{GfxDrawCall, GfxDrawInstruction, Rectangle, RenderApiPtr},
-    prop::{PropertyBool, PropertyPtr, Role, PropertyUint32},
+    prop::{PropertyBool, PropertyPtr, PropertyUint32, Role},
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
     ExecutorPtr,
 };
 
-use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify, Stoppable, UIObject, get_child_nodes_ordered, get_ui_object};
+use super::{
+    eval_rect, get_child_nodes_ordered, get_parent_rect, get_ui_object, read_rect, DrawUpdate,
+    OnModify, Stoppable, UIObject,
+};
 
 pub type RenderLayerPtr = Arc<RenderLayer>;
 
@@ -77,14 +80,20 @@ impl RenderLayer {
                 dc_key: OsRng.gen(),
                 is_visible,
                 rect,
-                z_index
+                z_index,
             }
         });
 
         Pimpl::RenderLayer(self_)
     }
 
-    pub async fn handle_char(&self, sg: &SceneGraph, key: char, mods: KeyMods, repeat: bool) -> bool {
+    pub async fn handle_char(
+        &self,
+        sg: &SceneGraph,
+        key: char,
+        mods: KeyMods,
+        repeat: bool,
+    ) -> bool {
         false
     }
 
@@ -194,22 +203,107 @@ impl UIObject for RenderLayer {
         for child_id in get_child_nodes_ordered(&sg, self.node_id) {
             let node = sg.get_node(child_id).unwrap();
             let obj = get_ui_object(node);
-            if obj.handle_char(&sg, key, mods, repeat).await {
+            if obj.handle_char(sg, key, mods, repeat).await {
                 return true
             }
         }
         false
     }
 
-    async fn handle_key_down(&self, sg: &SceneGraph, key: KeyCode, mods: KeyMods, repeat: bool) -> bool {
+    async fn handle_key_down(
+        &self,
+        sg: &SceneGraph,
+        key: KeyCode,
+        mods: KeyMods,
+        repeat: bool,
+    ) -> bool {
         for child_id in get_child_nodes_ordered(&sg, self.node_id) {
             let node = sg.get_node(child_id).unwrap();
             let obj = get_ui_object(node);
-            if obj.handle_key_down(&sg, key, mods, repeat).await {
+            if obj.handle_key_down(sg, key, mods, repeat).await {
+                return true
+            }
+        }
+        false
+    }
+
+    async fn handle_key_up(&self, sg: &SceneGraph, key: KeyCode, mods: KeyMods) -> bool {
+        for child_id in get_child_nodes_ordered(&sg, self.node_id) {
+            let node = sg.get_node(child_id).unwrap();
+            let obj = get_ui_object(node);
+            if obj.handle_key_up(sg, key, mods).await {
+                return true
+            }
+        }
+        false
+    }
+    async fn handle_mouse_btn_down(
+        &self,
+        sg: &SceneGraph,
+        btn: MouseButton,
+        mouse_x: f32,
+        mouse_y: f32,
+    ) -> bool {
+        for child_id in get_child_nodes_ordered(&sg, self.node_id) {
+            let node = sg.get_node(child_id).unwrap();
+            let obj = get_ui_object(node);
+            if obj.handle_mouse_btn_down(sg, btn, mouse_x, mouse_y).await {
+                return true
+            }
+        }
+        false
+    }
+    async fn handle_mouse_btn_up(
+        &self,
+        sg: &SceneGraph,
+        btn: MouseButton,
+        mouse_x: f32,
+        mouse_y: f32,
+    ) -> bool {
+        for child_id in get_child_nodes_ordered(&sg, self.node_id) {
+            let node = sg.get_node(child_id).unwrap();
+            let obj = get_ui_object(node);
+            if obj.handle_mouse_btn_up(sg, btn, mouse_x, mouse_y).await {
+                return true
+            }
+        }
+        false
+    }
+    async fn handle_mouse_move(&self, sg: &SceneGraph, mouse_x: f32, mouse_y: f32) -> bool {
+        for child_id in get_child_nodes_ordered(&sg, self.node_id) {
+            let node = sg.get_node(child_id).unwrap();
+            let obj = get_ui_object(node);
+            if obj.handle_mouse_move(sg, mouse_x, mouse_y).await {
+                return true
+            }
+        }
+        false
+    }
+    async fn handle_mouse_wheel(&self, sg: &SceneGraph, wheel_x: f32, wheel_y: f32) -> bool {
+        for child_id in get_child_nodes_ordered(&sg, self.node_id) {
+            let node = sg.get_node(child_id).unwrap();
+            let obj = get_ui_object(node);
+            if obj.handle_mouse_wheel(sg, wheel_x, wheel_y).await {
+                return true
+            }
+        }
+        false
+    }
+    async fn handle_touch(
+        &self,
+        sg: &SceneGraph,
+        phase: TouchPhase,
+        id: u64,
+        touch_x: f32,
+        touch_y: f32,
+    ) -> bool {
+        for child_id in get_child_nodes_ordered(&sg, self.node_id) {
+            let node = sg.get_node(child_id).unwrap();
+            let obj = get_ui_object(node);
+            if obj.handle_touch(sg, phase, id, touch_x, touch_y).await {
                 return true
             }
         }
         false
     }
 }
-

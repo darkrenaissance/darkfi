@@ -185,4 +185,3 @@ impl UIObject for VectorArt {
         self.z_index.get()
     }
 }
-

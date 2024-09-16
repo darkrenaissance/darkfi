@@ -16,14 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_trait::async_trait;
 use async_lock::Mutex as AsyncMutex;
+use async_trait::async_trait;
 use atomic_float::AtomicF32;
 use chrono::{Local, TimeZone};
 use darkfi::system::{msleep, CondVar};
-use darkfi_serial::{
-    deserialize, Decodable, Encodable, SerialDecodable, SerialEncodable,
-};
+use darkfi_serial::{deserialize, Decodable, Encodable, SerialDecodable, SerialEncodable};
 use miniquad::{KeyCode, KeyMods, MouseButton, TouchPhase};
 use rand::{rngs::OsRng, Rng};
 use sled_overlay::sled;
@@ -217,31 +215,6 @@ impl ChatView {
         drop(scene_graph);
 
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
-            let ev_sub = event_pub.subscribe_mouse_wheel();
-            let me2 = me.clone();
-            let mouse_wheel_task =
-                ex.spawn(async move { while Self::process_mouse_wheel(&me2, &ev_sub).await {} });
-
-            let ev_sub = event_pub.subscribe_mouse_move();
-            let me2 = me.clone();
-            let mouse_move_task =
-                ex.spawn(async move { while Self::process_mouse_move(&me2, &ev_sub).await {} });
-
-            let ev_sub = event_pub.subscribe_mouse_btn_down();
-            let me2 = me.clone();
-            let mouse_btn_down_task =
-                ex.spawn(async move { while Self::process_mouse_btn_down(&me2, &ev_sub).await {} });
-
-            let ev_sub = event_pub.subscribe_mouse_btn_up();
-            let me2 = me.clone();
-            let mouse_btn_up_task =
-                ex.spawn(async move { while Self::process_mouse_btn_up(&me2, &ev_sub).await {} });
-
-            let ev_sub = event_pub.subscribe_touch();
-            let me2 = me.clone();
-            let touch_task =
-                ex.spawn(async move { while Self::process_touch(&me2, &ev_sub).await {} });
-
             let me2 = me.clone();
             let insert_line_method_task =
                 ex.spawn(
@@ -291,16 +264,7 @@ impl ChatView {
             //on_modify.when_change(rect.clone(), redraw);
             //on_modify.when_change(debug.prop(), redraw);
 
-            let mut tasks = vec![
-                mouse_wheel_task,
-                mouse_move_task,
-                mouse_btn_down_task,
-                mouse_btn_up_task,
-                touch_task,
-                insert_line_method_task,
-                motion_task,
-                bgload_task,
-            ];
+            let mut tasks = vec![insert_line_method_task, motion_task, bgload_task];
             tasks.append(&mut on_modify.tasks);
 
             Self {
@@ -358,90 +322,6 @@ impl ChatView {
         Pimpl::ChatView(self_)
     }
 
-    async fn process_mouse_wheel(me: &Weak<Self>, ev_sub: &Subscription<(f32, f32)>) -> bool {
-        let Ok((wheel_x, wheel_y)) = ev_sub.receive().await else {
-            debug!(target: "ui::chatview", "Event relayer closed");
-            return false
-        };
-
-        let Some(self_) = me.upgrade() else {
-            // Should not happen
-            panic!("self destroyed before mouse_wheel_task was stopped!");
-        };
-
-        self_.handle_mouse_wheel(wheel_x, wheel_y).await;
-        true
-    }
-
-    async fn process_mouse_move(me: &Weak<Self>, ev_sub: &Subscription<(f32, f32)>) -> bool {
-        let Ok((mouse_x, mouse_y)) = ev_sub.receive().await else {
-            debug!(target: "ui::chatview", "Event relayer closed");
-            return false
-        };
-
-        let Some(self_) = me.upgrade() else {
-            // Should not happen
-            panic!("self destroyed before mouse_move_task was stopped!");
-        };
-
-        self_.handle_mouse_move(mouse_x, mouse_y).await;
-        true
-    }
-
-    async fn process_mouse_btn_down(
-        me: &Weak<Self>,
-        ev_sub: &Subscription<(MouseButton, f32, f32)>,
-    ) -> bool {
-        let Ok((btn, mouse_x, mouse_y)) = ev_sub.receive().await else {
-            debug!(target: "ui::button", "Event relayer closed");
-            return false
-        };
-
-        let Some(self_) = me.upgrade() else {
-            // Should not happen
-            panic!("self destroyed before mouse_btn_down_task was stopped!");
-        };
-
-        self_.handle_mouse_btn_down(btn, mouse_x, mouse_y).await;
-        true
-    }
-
-    async fn process_mouse_btn_up(
-        me: &Weak<Self>,
-        ev_sub: &Subscription<(MouseButton, f32, f32)>,
-    ) -> bool {
-        let Ok((btn, mouse_x, mouse_y)) = ev_sub.receive().await else {
-            debug!(target: "ui::button", "Event relayer closed");
-            return false
-        };
-
-        let Some(self_) = me.upgrade() else {
-            // Should not happen
-            panic!("self destroyed before mouse_btn_up_task was stopped!");
-        };
-
-        self_.handle_mouse_btn_up(btn, mouse_x, mouse_y).await;
-        true
-    }
-
-    async fn process_touch(
-        me: &Weak<Self>,
-        ev_sub: &Subscription<(TouchPhase, u64, f32, f32)>,
-    ) -> bool {
-        let Ok((phase, id, touch_x, touch_y)) = ev_sub.receive().await else {
-            debug!(target: "ui::chatview", "Event relayer closed");
-            return false
-        };
-
-        let Some(self_) = me.upgrade() else {
-            // Should not happen
-            panic!("self destroyed before touch_task was stopped!");
-        };
-
-        self_.handle_touch(phase, id, touch_x, touch_y).await;
-        true
-    }
-
     async fn process_insert_line_method(
         me: &Weak<Self>,
         recvr: &async_channel::Receiver<Vec<u8>>,
@@ -472,162 +352,6 @@ impl ChatView {
 
         self_.handle_insert_line(timestamp, message_id, nick, text).await;
         true
-    }
-
-    async fn handle_mouse_wheel(&self, wheel_x: f32, wheel_y: f32) {
-        //debug!(target: "ui::chatview", "handle_mouse_wheel({wheel_x}, {wheel_y})");
-
-        let Ok(rect) = read_rect(self.rect.clone()) else { return };
-
-        let mouse_pos = self.mouse_pos.lock().unwrap().clone();
-        if !rect.contains(&mouse_pos) {
-            //debug!(target: "ui::chatview", "not inside rect");
-            return
-        }
-
-        self.speed.fetch_add(wheel_y * self.scroll_start_accel.get(), Ordering::Relaxed);
-        self.motion_cv.notify();
-    }
-
-    async fn handle_mouse_move(&self, mouse_x: f32, mouse_y: f32) {
-        //debug!(target: "ui::chatview", "handle_mouse_move({mouse_x}, {mouse_y})");
-        let mouse_pos = Point::from([mouse_x, mouse_y]);
-
-        // We store the mouse pos for use in handle_mouse_wheel()
-        *self.mouse_pos.lock().unwrap() = mouse_pos.clone();
-
-        if !self.mouse_btn_held.load(Ordering::Relaxed) {
-            return
-        }
-
-        let Ok(rect) = read_rect(self.rect.clone()) else { return };
-        if !rect.contains(&mouse_pos) {
-            return
-        }
-
-        self.select_line(mouse_y).await;
-    }
-
-    async fn handle_mouse_btn_down(&self, btn: MouseButton, mouse_x: f32, mouse_y: f32) {
-        if btn != MouseButton::Left {
-            return
-        }
-
-        let mouse_pos = Point::from([mouse_x, mouse_y]);
-
-        let Ok(rect) = read_rect(self.rect.clone()) else { return };
-        if !rect.contains(&mouse_pos) {
-            return
-        }
-
-        self.select_line(mouse_y).await;
-        self.mouse_btn_held.store(true, Ordering::Relaxed);
-    }
-
-    async fn handle_mouse_btn_up(&self, btn: MouseButton, mouse_x: f32, mouse_y: f32) {
-        if btn != MouseButton::Left {
-            return
-        }
-
-        self.mouse_btn_held.store(false, Ordering::Relaxed);
-    }
-
-    async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_x: f32, touch_y: f32) {
-        // Ignore multi-touch
-        if id != 0 {
-            return
-        }
-
-        let Ok(rect) = read_rect(self.rect.clone()) else { return };
-        //debug!(target: "ui::chatview", "handle_touch({phase:?}, {touch_x}, {touch_y})");
-
-        let touch_pos = Point { x: touch_x, y: touch_y };
-        if !rect.contains(&touch_pos) {
-            match phase {
-                TouchPhase::Started => *self.touch_info.lock().unwrap() = None,
-                _ => self.end_touch_phase(touch_y),
-            }
-            return
-        }
-
-        let select_hold_time = self.select_hold_time.get();
-
-        // Simulate mouse events
-        match phase {
-            TouchPhase::Started => {
-                self.touch_is_active.store(true, Ordering::Relaxed);
-
-                let mut touch_info = self.touch_info.lock().unwrap();
-                *touch_info = Some(TouchInfo::new(self.scroll.get(), touch_y));
-            }
-            TouchPhase::Moved => {
-                let (start_scroll, start_y, start_elapsed, do_update, is_select_mode) = {
-                    let mut touch_info = self.touch_info.lock().unwrap();
-                    let Some(touch_info) = &mut *touch_info else { return };
-
-                    touch_info.last_y = touch_y;
-
-                    let start_scroll = touch_info.start_scroll;
-                    let start_y = touch_info.start_y;
-
-                    let start_elapsed = touch_info.start_instant.elapsed().as_millis_f32();
-                    if start_elapsed > select_hold_time && touch_info.is_select_mode.is_none() {
-                        // Did we move?
-                        if (touch_y - start_y).abs() < BIG_EPSILON {
-                            touch_info.is_select_mode = Some(true);
-                        } else {
-                            touch_info.is_select_mode = Some(false);
-                        }
-                    }
-                    let is_select_mode = touch_info.is_select_mode.clone();
-
-                    touch_info.push_sample(touch_y);
-
-                    // Only update screen every 20ms. Avoid wasting cycles.
-                    let last_elapsed = touch_info.last_instant.elapsed().as_millis_f32();
-                    let do_update = last_elapsed > 20.;
-                    if do_update {
-                        touch_info.last_instant = std::time::Instant::now();
-                    }
-
-                    (start_scroll, start_y, start_elapsed, do_update, is_select_mode)
-                };
-
-                debug!(target: "ui::chatview", "touch phase moved, is_select_mode={is_select_mode:?}");
-
-                // When scrolling if we suddenly grab the screen for more than a brief period
-                // of time then stop the scrolling completely.
-                if start_elapsed > 200. {
-                    //debug!(target: "ui::chatview", "Stopping scroll accel");
-                    self.speed.store(0., Ordering::Relaxed);
-                }
-
-                // Only update every so often to prevent wasting resources.
-                if !do_update {
-                    return
-                }
-
-                // We are in selection mode so don't scroll the screen until touch phase ends.
-                if let Some(is_select_mode) = is_select_mode &&
-                    is_select_mode
-                {
-                    self.select_line(touch_y).await;
-                    return
-                }
-
-                let dist = touch_y - start_y;
-                // No movement so just return
-                if dist.abs() < BIG_EPSILON {
-                    return
-                }
-                let scroll = start_scroll + dist;
-                // Redraws the screen from the cache
-                self.scrollview(scroll).await;
-            }
-            TouchPhase::Ended | TouchPhase::Cancelled => {
-                self.end_touch_phase(touch_y);
-            }
-        }
     }
 
     /// Mark line as selected
@@ -998,7 +722,13 @@ impl UIObject for ChatView {
         self.z_index.get()
     }
 
-    async fn handle_key_down(&self, sg: &SceneGraph, key: KeyCode, mods: KeyMods, repeat: bool) -> bool {
+    async fn handle_key_down(
+        &self,
+        sg: &SceneGraph,
+        key: KeyCode,
+        mods: KeyMods,
+        repeat: bool,
+    ) -> bool {
         if repeat {
             return false
         }
@@ -1015,6 +745,186 @@ impl UIObject for ChatView {
             _ => {}
         }
 
+        true
+    }
+
+    async fn handle_mouse_btn_down(
+        &self,
+        sg: &SceneGraph,
+        btn: MouseButton,
+        mouse_x: f32,
+        mouse_y: f32,
+    ) -> bool {
+        if btn != MouseButton::Left {
+            return false
+        }
+
+        let mouse_pos = Point::from([mouse_x, mouse_y]);
+
+        let Ok(rect) = read_rect(self.rect.clone()) else { return false };
+        if !rect.contains(&mouse_pos) {
+            return false
+        }
+
+        self.select_line(mouse_y).await;
+        self.mouse_btn_held.store(true, Ordering::Relaxed);
+        true
+    }
+
+    async fn handle_mouse_btn_up(
+        &self,
+        sg: &SceneGraph,
+        btn: MouseButton,
+        mouse_x: f32,
+        mouse_y: f32,
+    ) -> bool {
+        if btn != MouseButton::Left {
+            return false
+        }
+
+        self.mouse_btn_held.store(false, Ordering::Relaxed);
+        true
+    }
+
+    async fn handle_mouse_move(&self, sg: &SceneGraph, mouse_x: f32, mouse_y: f32) -> bool {
+        //debug!(target: "ui::chatview", "handle_mouse_move({mouse_x}, {mouse_y})");
+        let mouse_pos = Point::from([mouse_x, mouse_y]);
+
+        // We store the mouse pos for use in handle_mouse_wheel()
+        *self.mouse_pos.lock().unwrap() = mouse_pos.clone();
+
+        if !self.mouse_btn_held.load(Ordering::Relaxed) {
+            return false
+        }
+
+        let Ok(rect) = read_rect(self.rect.clone()) else { return false };
+        if !rect.contains(&mouse_pos) {
+            return false
+        }
+
+        self.select_line(mouse_y).await;
+        false
+    }
+
+    async fn handle_mouse_wheel(&self, sg: &SceneGraph, wheel_x: f32, wheel_y: f32) -> bool {
+        debug!(target: "ui::chatview", "handle_mouse_wheel({wheel_x}, {wheel_y})");
+
+        let Ok(rect) = read_rect(self.rect.clone()) else { return false };
+
+        let mouse_pos = self.mouse_pos.lock().unwrap().clone();
+        if !rect.contains(&mouse_pos) {
+            //debug!(target: "ui::chatview", "not inside rect");
+            return false
+        }
+
+        self.speed.fetch_add(wheel_y * self.scroll_start_accel.get(), Ordering::Relaxed);
+        self.motion_cv.notify();
+        true
+    }
+
+    async fn handle_touch(
+        &self,
+        sg: &SceneGraph,
+        phase: TouchPhase,
+        id: u64,
+        touch_x: f32,
+        touch_y: f32,
+    ) -> bool {
+        // Ignore multi-touch
+        if id != 0 {
+            return false
+        }
+
+        let Ok(rect) = read_rect(self.rect.clone()) else { return false };
+        //debug!(target: "ui::chatview", "handle_touch({phase:?}, {touch_x}, {touch_y})");
+
+        let touch_pos = Point { x: touch_x, y: touch_y };
+        if !rect.contains(&touch_pos) {
+            match phase {
+                TouchPhase::Started => *self.touch_info.lock().unwrap() = None,
+                _ => self.end_touch_phase(touch_y),
+            }
+            return false
+        }
+
+        let select_hold_time = self.select_hold_time.get();
+
+        // Simulate mouse events
+        match phase {
+            TouchPhase::Started => {
+                self.touch_is_active.store(true, Ordering::Relaxed);
+
+                let mut touch_info = self.touch_info.lock().unwrap();
+                *touch_info = Some(TouchInfo::new(self.scroll.get(), touch_y));
+            }
+            TouchPhase::Moved => {
+                let (start_scroll, start_y, start_elapsed, do_update, is_select_mode) = {
+                    let mut touch_info = self.touch_info.lock().unwrap();
+                    let Some(touch_info) = &mut *touch_info else { return false };
+
+                    touch_info.last_y = touch_y;
+
+                    let start_scroll = touch_info.start_scroll;
+                    let start_y = touch_info.start_y;
+
+                    let start_elapsed = touch_info.start_instant.elapsed().as_millis_f32();
+                    if start_elapsed > select_hold_time && touch_info.is_select_mode.is_none() {
+                        // Did we move?
+                        if (touch_y - start_y).abs() < BIG_EPSILON {
+                            touch_info.is_select_mode = Some(true);
+                        } else {
+                            touch_info.is_select_mode = Some(false);
+                        }
+                    }
+                    let is_select_mode = touch_info.is_select_mode.clone();
+
+                    touch_info.push_sample(touch_y);
+
+                    // Only update screen every 20ms. Avoid wasting cycles.
+                    let last_elapsed = touch_info.last_instant.elapsed().as_millis_f32();
+                    let do_update = last_elapsed > 20.;
+                    if do_update {
+                        touch_info.last_instant = std::time::Instant::now();
+                    }
+
+                    (start_scroll, start_y, start_elapsed, do_update, is_select_mode)
+                };
+
+                debug!(target: "ui::chatview", "touch phase moved, is_select_mode={is_select_mode:?}");
+
+                // When scrolling if we suddenly grab the screen for more than a brief period
+                // of time then stop the scrolling completely.
+                if start_elapsed > 200. {
+                    //debug!(target: "ui::chatview", "Stopping scroll accel");
+                    self.speed.store(0., Ordering::Relaxed);
+                }
+
+                // Only update every so often to prevent wasting resources.
+                if !do_update {
+                    return true
+                }
+
+                // We are in selection mode so don't scroll the screen until touch phase ends.
+                if let Some(is_select_mode) = is_select_mode &&
+                    is_select_mode
+                {
+                    self.select_line(touch_y).await;
+                    return true
+                }
+
+                let dist = touch_y - start_y;
+                // No movement so just return
+                if dist.abs() < BIG_EPSILON {
+                    return true
+                }
+                let scroll = start_scroll + dist;
+                // Redraws the screen from the cache
+                self.scrollview(scroll).await;
+            }
+            TouchPhase::Ended | TouchPhase::Cancelled => {
+                self.end_touch_phase(touch_y);
+            }
+        }
         true
     }
 }

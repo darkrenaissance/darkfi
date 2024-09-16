@@ -217,26 +217,6 @@ impl EditBox {
         let glyphs = text_shaper.shape(text.get(), font_size.get()).await;
 
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
-            let ev_sub = event_pub.subscribe_mouse_btn_down();
-            let me2 = me.clone();
-            let mouse_btn_down_task =
-                ex.spawn(async move { while Self::process_mouse_btn_down(&me2, &ev_sub).await {} });
-
-            let ev_sub = event_pub.subscribe_mouse_btn_up();
-            let me2 = me.clone();
-            let mouse_btn_up_task =
-                ex.spawn(async move { while Self::process_mouse_btn_up(&me2, &ev_sub).await {} });
-
-            let ev_sub = event_pub.subscribe_mouse_move();
-            let me2 = me.clone();
-            let mouse_move_task =
-                ex.spawn(async move { while Self::process_mouse_move(&me2, &ev_sub).await {} });
-
-            let ev_sub = event_pub.subscribe_touch();
-            let me2 = me.clone();
-            let touch_task =
-                ex.spawn(async move { while Self::process_touch(&me2, &ev_sub).await {} });
-
             let mut on_modify = OnModify::new(ex, node_name, node_id, me.clone());
             on_modify.when_change(is_focused.prop(), Self::change_focus);
 
@@ -270,14 +250,7 @@ impl EditBox {
             on_modify.when_change(z_index.prop(), redraw);
             on_modify.when_change(debug.prop(), redraw);
 
-            // on modify tasks too
-            let mut tasks = vec![
-                mouse_btn_down_task,
-                mouse_btn_up_task,
-                mouse_move_task,
-                touch_task,
-            ];
-            tasks.append(&mut on_modify.tasks);
+            let tasks = on_modify.tasks;
 
             Self {
                 node_id,
@@ -449,91 +422,6 @@ impl EditBox {
         Ok(())
     }
 
-    async fn process_mouse_btn_down(
-        me: &Weak<Self>,
-        ev_sub: &Subscription<(MouseButton, f32, f32)>,
-    ) -> bool {
-        let Ok((btn, mouse_x, mouse_y)) = ev_sub.receive().await else {
-            debug!(target: "ui::editbox", "Event relayer closed");
-            return false
-        };
-
-        let Some(self_) = me.upgrade() else {
-            // Should not happen
-            panic!("self destroyed before mouse_btn_down_task was stopped!");
-        };
-
-        if !self_.is_active.get() {
-            return true
-        }
-
-        self_.handle_mouse_btn_down(btn, mouse_x, mouse_y).await;
-        true
-    }
-
-    async fn process_mouse_btn_up(
-        me: &Weak<Self>,
-        ev_sub: &Subscription<(MouseButton, f32, f32)>,
-    ) -> bool {
-        let Ok((btn, mouse_x, mouse_y)) = ev_sub.receive().await else {
-            debug!(target: "ui::editbox", "Event relayer closed");
-            return false
-        };
-
-        let Some(self_) = me.upgrade() else {
-            // Should not happen
-            panic!("self destroyed before mouse_btn_up_task was stopped!");
-        };
-
-        if !self_.is_active.get() {
-            return true
-        }
-
-        self_.handle_mouse_btn_up(btn, mouse_x, mouse_y);
-        true
-    }
-
-    async fn process_mouse_move(me: &Weak<Self>, ev_sub: &Subscription<(f32, f32)>) -> bool {
-        let Ok((mouse_x, mouse_y)) = ev_sub.receive().await else {
-            debug!(target: "ui::editbox", "Event relayer closed");
-            return false
-        };
-
-        let Some(self_) = me.upgrade() else {
-            // Should not happen
-            panic!("self destroyed before mouse_move_task was stopped!");
-        };
-
-        if !self_.is_active.get() {
-            return true
-        }
-
-        self_.handle_mouse_move(mouse_x, mouse_y).await;
-        true
-    }
-
-    async fn process_touch(
-        me: &Weak<Self>,
-        ev_sub: &Subscription<(TouchPhase, u64, f32, f32)>,
-    ) -> bool {
-        let Ok((phase, id, touch_x, touch_y)) = ev_sub.receive().await else {
-            debug!(target: "ui::editbox", "Event relayer closed");
-            return false
-        };
-
-        let Some(self_) = me.upgrade() else {
-            // Should not happen
-            panic!("self destroyed before touch_task was stopped!");
-        };
-
-        if !self_.is_active.get() {
-            return true
-        }
-
-        self_.handle_touch(phase, id, touch_x, touch_y).await;
-        true
-    }
-
     async fn change_focus(self: Arc<Self>) {
         if !self.is_active.get() {
             return
@@ -544,7 +432,7 @@ impl EditBox {
         self.redraw().await;
     }
 
-    async fn handle_mouse_btn_down(&self, btn: MouseButton, mouse_x: f32, mouse_y: f32) {
+    async fn handle_click_down(&self, btn: MouseButton, mouse_x: f32, mouse_y: f32) {
         if btn != MouseButton::Left {
             return
         }
@@ -590,7 +478,7 @@ impl EditBox {
 
         self.redraw().await;
     }
-    fn handle_mouse_btn_up(&self, btn: MouseButton, _mouse_x: f32, _mouse_y: f32) {
+    fn handle_click_up(&self, btn: MouseButton, _mouse_x: f32, _mouse_y: f32) {
         if btn != MouseButton::Left {
             return
         }
@@ -598,7 +486,7 @@ impl EditBox {
         // releasing mouse button will end selection
         self.mouse_btn_held.store(false, Ordering::Relaxed);
     }
-    async fn handle_mouse_move(&self, mouse_x: f32, _mouse_y: f32) {
+    async fn handle_cursor_move(&self, mouse_x: f32, _mouse_y: f32) {
         if !self.mouse_btn_held.load(Ordering::Relaxed) {
             return;
         }
@@ -626,10 +514,10 @@ impl EditBox {
         // Simulate mouse events
         match phase {
             TouchPhase::Started => {
-                self.handle_mouse_btn_down(MouseButton::Left, touch_x, touch_y).await
+                self.handle_click_down(MouseButton::Left, touch_x, touch_y).await
             }
-            TouchPhase::Moved => self.handle_mouse_move(touch_x, touch_y).await,
-            TouchPhase::Ended => self.handle_mouse_btn_up(MouseButton::Left, touch_x, touch_y),
+            TouchPhase::Moved => self.handle_cursor_move(touch_x, touch_y).await,
+            TouchPhase::Ended => self.handle_click_up(MouseButton::Left, touch_x, touch_y),
             TouchPhase::Cancelled => {}
         }
     }
@@ -1080,9 +968,7 @@ impl EditBox {
     }
 
     fn draw_cached(&self) -> Option<DrawUpdate> {
-        let Ok(rect) = read_rect(self.rect.clone()) else {
-            panic!("Node bad rect property")
-        };
+        let Ok(rect) = read_rect(self.rect.clone()) else { panic!("Node bad rect property") };
 
         // draw will recalc this when it's None
         let render_info = self.regen_mesh(rect.clone());
@@ -1105,9 +991,7 @@ impl EditBox {
             num_elements: render_info.mesh.num_elements,
         };
 
-        let Some(parent_rect) = self.parent_rect.lock().unwrap().clone() else {
-            return None
-        };
+        let Some(parent_rect) = self.parent_rect.lock().unwrap().clone() else { return None };
 
         let off_x = rect.x / parent_rect.w;
         let off_y = rect.y / parent_rect.h;
@@ -1216,7 +1100,13 @@ impl UIObject for EditBox {
         true
     }
 
-    async fn handle_key_down(&self, sg: &SceneGraph, key: KeyCode, mods: KeyMods, repeat: bool) -> bool {
+    async fn handle_key_down(
+        &self,
+        sg: &SceneGraph,
+        key: KeyCode,
+        mods: KeyMods,
+        repeat: bool,
+    ) -> bool {
         // First filter for only single digit keys
         // Avoid processing events handled by insert_char()
         if !ALLOWED_KEYCODES.contains(&key) {
@@ -1238,6 +1128,61 @@ impl UIObject for EditBox {
         for _ in 0..actions {
             self.handle_key(&key, &mods).await;
         }
+        true
+    }
+
+    async fn handle_mouse_btn_down(
+        &self,
+        sg: &SceneGraph,
+        btn: MouseButton,
+        mouse_x: f32,
+        mouse_y: f32,
+    ) -> bool {
+        if !self.is_active.get() {
+            return true
+        }
+
+        self.handle_click_down(btn, mouse_x, mouse_y).await;
+        true
+    }
+
+    async fn handle_mouse_btn_up(
+        &self,
+        sg: &SceneGraph,
+        btn: MouseButton,
+        mouse_x: f32,
+        mouse_y: f32,
+    ) -> bool {
+        if !self.is_active.get() {
+            return true
+        }
+
+        self.handle_click_up(btn, mouse_x, mouse_y);
+        true
+    }
+
+    async fn handle_mouse_move(&self, sg: &SceneGraph, mouse_x: f32, mouse_y: f32) -> bool {
+        if !self.is_active.get() {
+            return false
+        }
+
+        self.handle_cursor_move(mouse_x, mouse_y).await;
+        false
+    }
+
+    async fn handle_touch(
+        &self,
+        sg: &SceneGraph,
+        phase: TouchPhase,
+        id: u64,
+        touch_x: f32,
+        touch_y: f32,
+    ) -> bool {
+        if !self.is_active.get() {
+            return true
+        }
+
+        self.handle_touch(phase, id, touch_x, touch_y).await;
         true
     }
 }

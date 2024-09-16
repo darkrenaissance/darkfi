@@ -17,15 +17,15 @@
  */
 
 use async_trait::async_trait;
+use miniquad::{KeyCode, KeyMods, MouseButton, TouchPhase};
 use std::sync::{Arc, Weak};
-use miniquad::{KeyMods, KeyCode};
 
 use crate::{
     error::{Error, Result},
     expr::{SExprMachine, SExprVal},
     gfx::{GfxBufferId, GfxDrawCall, GfxTextureId, Rectangle},
     prop::{PropertyPtr, Role},
-    scene::{SceneGraph, SceneNode, SceneNodeId, SceneNodeType, Pimpl},
+    scene::{Pimpl, SceneGraph, SceneNode, SceneNodeId, SceneNodeType},
     ExecutorPtr,
 };
 
@@ -57,9 +57,55 @@ pub trait Stoppable {
 pub trait UIObject: Sync {
     fn z_index(&self) -> u32;
 
-    async fn handle_char(&self, sg: &SceneGraph, key: char, mods: KeyMods, repeat: bool) -> bool { false }
-    async fn handle_key_down(&self, sg: &SceneGraph, key: KeyCode, mods: KeyMods, repeat: bool) -> bool { false }
-    async fn handle_key_up(&self, sg: &SceneGraph, key: KeyCode, mods: KeyMods) -> bool { false }
+    async fn handle_char(&self, sg: &SceneGraph, key: char, mods: KeyMods, repeat: bool) -> bool {
+        false
+    }
+    async fn handle_key_down(
+        &self,
+        sg: &SceneGraph,
+        key: KeyCode,
+        mods: KeyMods,
+        repeat: bool,
+    ) -> bool {
+        false
+    }
+    async fn handle_key_up(&self, sg: &SceneGraph, key: KeyCode, mods: KeyMods) -> bool {
+        false
+    }
+    async fn handle_mouse_btn_down(
+        &self,
+        sg: &SceneGraph,
+        btn: MouseButton,
+        mouse_x: f32,
+        mouse_y: f32,
+    ) -> bool {
+        false
+    }
+    async fn handle_mouse_btn_up(
+        &self,
+        sg: &SceneGraph,
+        btn: MouseButton,
+        mouse_x: f32,
+        mouse_y: f32,
+    ) -> bool {
+        false
+    }
+    async fn handle_mouse_move(&self, sg: &SceneGraph, mouse_x: f32, mouse_y: f32) -> bool {
+        false
+    }
+    async fn handle_mouse_wheel(&self, sg: &SceneGraph, wheel_x: f32, wheel_y: f32) -> bool {
+        false
+    }
+    async fn handle_touch(
+        &self,
+        sg: &SceneGraph,
+        phase: TouchPhase,
+        id: u64,
+        touch_x: f32,
+        touch_y: f32,
+    ) -> bool {
+        false
+    }
 }
 
 pub struct DrawUpdate {
@@ -225,16 +271,16 @@ pub fn get_parent_rect(sg: &SceneGraph, node: &SceneNode) -> Option<Rectangle> {
 }
 
 pub fn get_ui_object<'a>(node: &'a SceneNode) -> &'a dyn UIObject {
-        match &node.pimpl {
-            Pimpl::RenderLayer(layer) => layer.as_ref(),
-            Pimpl::VectorArt(svg) => svg.as_ref(),
-            Pimpl::Text(txt) => txt.as_ref(),
-            Pimpl::EditBox(editb) => editb.as_ref(),
-            Pimpl::ChatView(chat) => chat.as_ref(),
-            Pimpl::Image(img) => img.as_ref(),
-            Pimpl::Button(btn) => btn.as_ref(),
-            _ => panic!("unhandled type for get_ui_object"),
-        }
+    match &node.pimpl {
+        Pimpl::RenderLayer(layer) => layer.as_ref(),
+        Pimpl::VectorArt(svg) => svg.as_ref(),
+        Pimpl::Text(txt) => txt.as_ref(),
+        Pimpl::EditBox(editb) => editb.as_ref(),
+        Pimpl::ChatView(chat) => chat.as_ref(),
+        Pimpl::Image(img) => img.as_ref(),
+        Pimpl::Button(btn) => btn.as_ref(),
+        _ => panic!("unhandled type for get_ui_object"),
+    }
 }
 
 pub fn get_child_nodes_ordered(sg: &SceneGraph, node_id: SceneNodeId) -> Vec<SceneNodeId> {
@@ -251,4 +297,3 @@ pub fn get_child_nodes_ordered(sg: &SceneGraph, node_id: SceneNodeId) -> Vec<Sce
     let nodes = child_nodes.into_iter().rev().map(|(node_id, _)| node_id).collect();
     nodes
 }
-
