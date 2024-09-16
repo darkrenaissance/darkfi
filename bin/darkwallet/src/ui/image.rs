@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use async_trait::async_trait;
 use image::ImageReader;
 use rand::{rngs::OsRng, Rng};
 use std::{
@@ -134,7 +135,7 @@ impl Image {
             return;
         };
 
-        let Some(draw_update) = self.draw(&sg, &parent_rect) else {
+        let Some(draw_update) = self.draw(&sg, &parent_rect).await else {
             error!(target: "ui::text", "Text {:?} failed to draw", node);
             return;
         };
@@ -150,8 +151,32 @@ impl Image {
         mesh.draw_box(&basic, COLOR_WHITE, &basic);
         mesh.alloc(&self.render_api)
     }
+}
 
-    pub fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
+impl Drop for Image {
+    fn drop(&mut self) {
+        // TODO: Delete own draw call
+
+        // Free buffers
+        // Should this be in drop?
+        if let Some(mesh) = &*self.mesh.lock().unwrap() {
+            let vertex_buffer = mesh.vertex_buffer;
+            let index_buffer = mesh.index_buffer;
+            self.render_api.delete_buffer(vertex_buffer);
+            self.render_api.delete_buffer(index_buffer);
+        }
+        let texture_id = self.texture.lock().unwrap().unwrap();
+        self.render_api.delete_texture(texture_id);
+    }
+}
+
+#[async_trait]
+impl UIObject for Image {
+    fn z_index(&self) -> u32 {
+        self.z_index.get()
+    }
+
+    async fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
         debug!(target: "ui::text", "Text::draw()");
         // Only used for debug messages
         let node = sg.get_node(self.node_id).unwrap();
@@ -210,28 +235,5 @@ impl Image {
             freed_textures: vec![],
             freed_buffers,
         })
-    }
-}
-
-impl Drop for Image {
-    fn drop(&mut self) {
-        // TODO: Delete own draw call
-
-        // Free buffers
-        // Should this be in drop?
-        if let Some(mesh) = &*self.mesh.lock().unwrap() {
-            let vertex_buffer = mesh.vertex_buffer;
-            let index_buffer = mesh.index_buffer;
-            self.render_api.delete_buffer(vertex_buffer);
-            self.render_api.delete_buffer(index_buffer);
-        }
-        let texture_id = self.texture.lock().unwrap().unwrap();
-        self.render_api.delete_texture(texture_id);
-    }
-}
-
-impl UIObject for Image {
-    fn z_index(&self) -> u32 {
-        self.z_index.get()
     }
 }

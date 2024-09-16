@@ -402,18 +402,14 @@ impl Window {
         let mut freed_textures = vec![];
         let mut freed_buffers = vec![];
 
-        for child_inf in self_node.get_children2() {
-            let node = sg.get_node(child_inf.id).unwrap();
-            //debug!(target: "ui::win", "Window::draw() calling draw() for node '{}':{}", node.name, node.id);
-
-            let dcs = match &node.pimpl {
-                Pimpl::RenderLayer(layer) => layer.draw(sg, &parent_rect).await,
-                _ => {
-                    error!(target: "ui::win", "unhandled pimpl type");
-                    continue
-                }
+        for child_id in get_child_nodes_ordered(&sg, self.node_id) {
+            let node = sg.get_node(child_id).unwrap();
+            let obj = get_ui_object(node);
+            let Some(mut draw_update) = obj.draw(sg, &parent_rect).await else {
+                error!(target: "ui::layer", "draw() of {node:?} failed");
+                continue
             };
-            let Some(mut draw_update) = dcs else { continue };
+
             draw_calls.append(&mut draw_update.draw_calls);
             child_calls.push(draw_update.key);
             freed_textures.append(&mut draw_update.freed_textures);

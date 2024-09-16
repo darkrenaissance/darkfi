@@ -569,6 +569,7 @@ pub(super) async fn make(app: &App) {
     prop.set_f32(Role::App, 1, 0.).unwrap();
     prop.set_expr(Role::App, 2, shape::load_var("w")).unwrap();
     prop.set_expr(Role::App, 3, shape::load_var("h")).unwrap();
+    node.set_property_u32(Role::App, "z_index", 0).unwrap();
 
     let c = if LIGHTMODE { 1. } else { 0.05 };
     // Setup the pimpl
@@ -600,7 +601,7 @@ pub(super) async fn make(app: &App) {
     prop.set_f32(Role::App, 1, 0.).unwrap();
     prop.set_expr(Role::App, 2, shape::load_var("w")).unwrap();
     prop.set_f32(Role::App, 3, EDITCHAT_HEIGHT).unwrap();
-    node.set_property_u32(Role::App, "z_index", 0).unwrap();
+    node.set_property_u32(Role::App, "z_index", 1).unwrap();
     drop(sg);
     let mut shape = VectorShape::new();
     shape.add_outline(
@@ -630,6 +631,7 @@ pub(super) async fn make(app: &App) {
     prop.set_f32(Role::App, 1, 0.).unwrap();
     prop.set_expr(Role::App, 2, shape::load_var("w")).unwrap();
     prop.set_f32(Role::App, 3, EDITCHAT_HEIGHT).unwrap();
+    node.set_property_u32(Role::App, "z_index", 2).unwrap();
     node.set_property_f32(Role::App, "baseline", (EDITCHAT_HEIGHT + 20.) / 2.).unwrap();
     node.set_property_f32(Role::App, "font_size", FONTSIZE).unwrap();
     node.set_property_str(Role::App, "text", "random").unwrap();
@@ -760,7 +762,7 @@ pub(super) async fn make(app: &App) {
     prop.set_expr(Role::App, 1, code).unwrap();
     prop.set_expr(Role::App, 2, shape::load_var("w")).unwrap();
     prop.set_f32(Role::App, 3, EDITCHAT_HEIGHT).unwrap();
-    node.set_property_u32(Role::App, "z_index", 0).unwrap();
+    node.set_property_u32(Role::App, "z_index", 1).unwrap();
     drop(sg);
     let mut shape = VectorShape::new();
     shape.add_filled_box(
@@ -815,6 +817,7 @@ pub(super) async fn make(app: &App) {
     prop.set_f32(Role::App, 1, 1.).unwrap();
     prop.set_f32(Role::App, 2, 0.94).unwrap();
     prop.set_f32(Role::App, 3, 1.).unwrap();
+    node.set_property_u32(Role::App, "z_index", 2).unwrap();
 
     drop(sg);
     let pimpl = Text::new(
@@ -879,7 +882,7 @@ pub(super) async fn make(app: &App) {
     let prop = node.get_property("selected").unwrap();
     prop.set_null(Role::App, 0).unwrap();
     prop.set_null(Role::App, 1).unwrap();
-    node.set_property_u32(Role::App, "z_index", 1).unwrap();
+    node.set_property_u32(Role::App, "z_index", 2).unwrap();
     //node.set_property_bool(Role::App, "debug", true).unwrap();
 
     let editbox_text = PropertyStr::wrap(node, Role::App, "text", 0).unwrap();

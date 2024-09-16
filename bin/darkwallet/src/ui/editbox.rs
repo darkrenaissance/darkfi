@@ -1014,19 +1014,6 @@ impl EditBox {
         })
     }
 
-    pub fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
-        *self.parent_rect.lock().unwrap() = Some(parent_rect.clone());
-        //debug!(target: "ui::editbox", "EditBox::draw()");
-        // Only used for debug messages
-        let node = sg.get_node(self.node_id).unwrap();
-
-        if let Err(err) = eval_rect(self.rect.clone(), parent_rect) {
-            panic!("Node {:?} bad rect property: {}", node, err);
-        }
-
-        self.draw_cached()
-    }
-
     async fn send_event(&self) {
         let text = self.text.get();
         debug!(target: "ui::editbox", "sending text {}", text);
@@ -1065,6 +1052,19 @@ impl Stoppable for EditBox {
 impl UIObject for EditBox {
     fn z_index(&self) -> u32 {
         self.z_index.get()
+    }
+
+    async fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
+        *self.parent_rect.lock().unwrap() = Some(parent_rect.clone());
+        //debug!(target: "ui::editbox", "EditBox::draw()");
+        // Only used for debug messages
+        let node = sg.get_node(self.node_id).unwrap();
+
+        if let Err(err) = eval_rect(self.rect.clone(), parent_rect) {
+            panic!("Node {:?} bad rect property: {}", node, err);
+        }
+
+        self.draw_cached()
     }
 
     async fn handle_char(&self, sg: &SceneGraph, key: char, mods: KeyMods, repeat: bool) -> bool {

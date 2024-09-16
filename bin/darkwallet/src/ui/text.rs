@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use async_trait::async_trait;
 use rand::{rngs::OsRng, Rng};
 use std::sync::{Arc, Mutex as SyncMutex, Weak};
 
@@ -182,7 +183,7 @@ impl Text {
             return;
         };
 
-        let Some(draw_update) = self.draw(&sg, &parent_rect) else {
+        let Some(draw_update) = self.draw(&sg, &parent_rect).await else {
             error!(target: "ui::text", "Text {:?} failed to draw", node);
             return;
         };
@@ -194,8 +195,31 @@ impl Text {
         self.render_api.delete_buffer(old.mesh.index_buffer);
         self.render_api.delete_texture(old.texture_id);
     }
+}
 
-    pub fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
+impl Stoppable for Text {
+    async fn stop(&self) {
+        // TODO: Delete own draw call
+
+        // Free buffers
+        // Should this be in drop?
+        let render_info = self.render_info.lock().unwrap().clone();
+        let vertex_buffer = render_info.mesh.vertex_buffer;
+        let index_buffer = render_info.mesh.index_buffer;
+        let texture_id = render_info.texture_id;
+        self.render_api.delete_buffer(vertex_buffer);
+        self.render_api.delete_buffer(index_buffer);
+        self.render_api.delete_texture(texture_id);
+    }
+}
+
+#[async_trait]
+impl UIObject for Text {
+    fn z_index(&self) -> u32 {
+        self.z_index.get()
+    }
+
+    async fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
         debug!(target: "ui::text", "Text::draw()");
         // Only used for debug messages
         let node = sg.get_node(self.node_id).unwrap();
@@ -240,27 +264,5 @@ impl Text {
             freed_textures: vec![],
             freed_buffers: vec![],
         })
-    }
-}
-
-impl Stoppable for Text {
-    async fn stop(&self) {
-        // TODO: Delete own draw call
-
-        // Free buffers
-        // Should this be in drop?
-        let render_info = self.render_info.lock().unwrap().clone();
-        let vertex_buffer = render_info.mesh.vertex_buffer;
-        let index_buffer = render_info.mesh.index_buffer;
-        let texture_id = render_info.texture_id;
-        self.render_api.delete_buffer(vertex_buffer);
-        self.render_api.delete_buffer(index_buffer);
-        self.render_api.delete_texture(texture_id);
-    }
-}
-
-impl UIObject for Text {
-    fn z_index(&self) -> u32 {
-        self.z_index.get()
     }
 }

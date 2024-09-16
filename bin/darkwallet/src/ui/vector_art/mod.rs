@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use async_trait::async_trait;
 use rand::{rngs::OsRng, Rng};
 use std::sync::{Arc, Mutex as SyncMutex, Weak};
 
@@ -98,15 +99,35 @@ impl VectorArt {
             return;
         };
 
-        let Some(draw_update) = self.draw(&sg, &parent_rect) else {
+        let Some(draw_update) = self.draw(&sg, &parent_rect).await else {
             error!(target: "ui::vector_art", "Mesh {:?} failed to draw", node);
             return;
         };
         self.render_api.replace_draw_calls(draw_update.draw_calls);
         debug!(target: "ui::vector_art", "replace draw calls done");
     }
+}
 
-    pub fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
+impl Stoppable for VectorArt {
+    async fn stop(&self) {
+        // TODO: Delete own draw call
+
+        // Free buffers
+        // Should this be in drop?
+        if let Some(mesh) = &*self.buffers.lock().unwrap() {
+            self.render_api.delete_buffer(mesh.vertex_buffer);
+            self.render_api.delete_buffer(mesh.index_buffer);
+        }
+    }
+}
+
+#[async_trait]
+impl UIObject for VectorArt {
+    fn z_index(&self) -> u32 {
+        self.z_index.get()
+    }
+
+    async fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
         debug!(target: "ui::vector_art", "VectorArt::draw()");
         // Only used for debug messages
         let node = sg.get_node(self.node_id).unwrap();
@@ -164,24 +185,5 @@ impl VectorArt {
             freed_textures: vec![],
             freed_buffers,
         })
-    }
-}
-
-impl Stoppable for VectorArt {
-    async fn stop(&self) {
-        // TODO: Delete own draw call
-
-        // Free buffers
-        // Should this be in drop?
-        if let Some(mesh) = &*self.buffers.lock().unwrap() {
-            self.render_api.delete_buffer(mesh.vertex_buffer);
-            self.render_api.delete_buffer(mesh.index_buffer);
-        }
-    }
-}
-
-impl UIObject for VectorArt {
-    fn z_index(&self) -> u32 {
-        self.z_index.get()
     }
 }

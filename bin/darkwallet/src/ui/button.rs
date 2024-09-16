@@ -31,7 +31,7 @@ use crate::{
     ExecutorPtr,
 };
 
-use super::{eval_rect, read_rect, UIObject};
+use super::{eval_rect, read_rect, DrawUpdate, UIObject};
 
 pub type ButtonPtr = Arc<Button>;
 
@@ -81,18 +81,19 @@ impl Button {
         };
         Some(rect)
     }
-
-    pub fn set_parent_rect(&self, parent_rect: &Rectangle) {
-        if let Err(err) = eval_rect(self.rect.clone(), parent_rect) {
-            panic!("Button bad rect property: {}", err);
-        }
-    }
 }
 
 #[async_trait]
 impl UIObject for Button {
     fn z_index(&self) -> u32 {
         self.z_index.get()
+    }
+
+    async fn draw(&self, _: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
+        if let Err(err) = eval_rect(self.rect.clone(), parent_rect) {
+            panic!("Button bad rect property: {}", err);
+        }
+        None
     }
 
     async fn handle_mouse_btn_down(
@@ -145,8 +146,7 @@ impl UIObject for Button {
         }
 
         debug!(target: "ui::button", "Mouse button clicked!");
-        let scene_graph = self.sg.lock().await;
-        let node = scene_graph.get_node(self.node_id).unwrap();
+        let node = sg.get_node(self.node_id).unwrap();
         node.trigger("click", vec![]).await.unwrap();
 
         true

@@ -112,9 +112,20 @@ impl RenderLayer {
         self.render_api.replace_draw_calls(draw_update.draw_calls);
         debug!(target: "ui::layer", "replace draw calls done");
     }
+}
 
-    #[async_recursion]
-    pub async fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
+impl Stoppable for RenderLayer {
+    async fn stop(&self) {}
+}
+
+#[async_trait]
+impl UIObject for RenderLayer {
+    fn z_index(&self) -> u32 {
+        self.z_index.get()
+    }
+
+    //#[async_recursion]
+    async fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
         debug!(target: "ui::layer", "RenderLayer::draw()");
         let node = sg.get_node(self.node_id).unwrap();
 
@@ -153,26 +164,14 @@ impl RenderLayer {
         let mut freed_textures = vec![];
         let mut freed_buffers = vec![];
 
-        for child_inf in node.get_children2() {
-            let node = sg.get_node(child_inf.id).unwrap();
-
-            let dcs = match &node.pimpl {
-                Pimpl::RenderLayer(layer) => layer.draw(&sg, &rect).await,
-                Pimpl::VectorArt(svg) => svg.draw(&sg, &rect),
-                Pimpl::Text(txt) => txt.draw(&sg, &rect),
-                Pimpl::EditBox(editb) => editb.draw(&sg, &rect),
-                Pimpl::ChatView(chat) => chat.draw(&sg, &rect).await,
-                Pimpl::Image(img) => img.draw(&sg, &rect),
-                Pimpl::Button(btn) => {
-                    btn.set_parent_rect(&rect);
-                    continue
-                }
-                _ => {
-                    error!(target: "ui::layer", "unhandled pimpl type");
-                    continue
-                }
+        for child_id in get_child_nodes_ordered(&sg, self.node_id) {
+            let node = sg.get_node(child_id).unwrap();
+            let obj = get_ui_object(node);
+            let Some(mut draw_update) = obj.draw(sg, &rect).await else {
+                debug!(target: "ui::layer", "Skipped draw() of {node:?}");
+                continue
             };
-            let Some(mut draw_update) = dcs else { continue };
+
             draw_calls.append(&mut draw_update.draw_calls);
             child_calls.push(draw_update.key);
             freed_textures.append(&mut draw_update.freed_textures);
@@ -186,17 +185,6 @@ impl RenderLayer {
         };
         draw_calls.push((self.dc_key, dc));
         Some(DrawUpdate { key: self.dc_key, draw_calls, freed_textures, freed_buffers })
-    }
-}
-
-impl Stoppable for RenderLayer {
-    async fn stop(&self) {}
-}
-
-#[async_trait]
-impl UIObject for RenderLayer {
-    fn z_index(&self) -> u32 {
-        self.z_index.get()
     }
 
     async fn handle_char(&self, sg: &SceneGraph, key: char, mods: KeyMods, repeat: bool) -> bool {

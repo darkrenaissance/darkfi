@@ -653,41 +653,6 @@ impl ChatView {
         (instrs, freed)
     }
 
-    pub async fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
-        debug!(target: "ui::chatview", "ChatView::draw()");
-
-        *self.parent_rect.lock().unwrap() = Some(parent_rect.clone());
-        let rect = eval_rect(self.rect.clone(), parent_rect).expect("bad rect property");
-
-        let mut msgbuf = self.msgbuf.lock().await;
-        msgbuf.adjust_width(rect.w);
-
-        let mut scroll = self.scroll.get();
-        if let Some(scroll) = self.adjust_scroll(&mut msgbuf, scroll, rect.h).await {
-            self.scroll.set(scroll);
-        }
-
-        // We may need to load more messages since the screen size has changed.
-        // Now we have updated all the values so it's safe to wake up here.
-        self.bgload_cv.notify();
-
-        let (mut mesh_instrs, freed) = self.get_meshes(&mut msgbuf, &rect).await;
-        drop(msgbuf);
-
-        let mut instrs = vec![GfxDrawInstruction::ApplyViewport(rect)];
-        instrs.append(&mut mesh_instrs);
-
-        Some(DrawUpdate {
-            key: self.dc_key,
-            draw_calls: vec![(
-                self.dc_key,
-                GfxDrawCall { instrs, dcs: vec![], z_index: self.z_index.get() },
-            )],
-            freed_textures: freed.textures,
-            freed_buffers: freed.buffers,
-        })
-    }
-
     async fn redraw_cached(&self, msgbuf: &mut MessageBuffer) {
         let rect = read_rect(self.rect.clone()).expect("bad rect property");
 
@@ -720,6 +685,41 @@ impl ChatView {
 impl UIObject for ChatView {
     fn z_index(&self) -> u32 {
         self.z_index.get()
+    }
+
+    async fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
+        debug!(target: "ui::chatview", "ChatView::draw()");
+
+        *self.parent_rect.lock().unwrap() = Some(parent_rect.clone());
+        let rect = eval_rect(self.rect.clone(), parent_rect).expect("bad rect property");
+
+        let mut msgbuf = self.msgbuf.lock().await;
+        msgbuf.adjust_width(rect.w);
+
+        let mut scroll = self.scroll.get();
+        if let Some(scroll) = self.adjust_scroll(&mut msgbuf, scroll, rect.h).await {
+            self.scroll.set(scroll);
+        }
+
+        // We may need to load more messages since the screen size has changed.
+        // Now we have updated all the values so it's safe to wake up here.
+        self.bgload_cv.notify();
+
+        let (mut mesh_instrs, freed) = self.get_meshes(&mut msgbuf, &rect).await;
+        drop(msgbuf);
+
+        let mut instrs = vec![GfxDrawInstruction::ApplyViewport(rect)];
+        instrs.append(&mut mesh_instrs);
+
+        Some(DrawUpdate {
+            key: self.dc_key,
+            draw_calls: vec![(
+                self.dc_key,
+                GfxDrawCall { instrs, dcs: vec![], z_index: self.z_index.get() },
+            )],
+            freed_textures: freed.textures,
+            freed_buffers: freed.buffers,
+        })
     }
 
     async fn handle_key_down(

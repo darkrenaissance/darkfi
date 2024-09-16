@@ -57,6 +57,10 @@ pub trait Stoppable {
 pub trait UIObject: Sync {
     fn z_index(&self) -> u32;
 
+    async fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
+        None
+    }
+
     async fn handle_char(&self, sg: &SceneGraph, key: char, mods: KeyMods, repeat: bool) -> bool {
         false
     }
