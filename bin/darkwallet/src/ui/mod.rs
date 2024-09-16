@@ -43,7 +43,7 @@ pub use vector_art::{
     VectorArt, VectorArtPtr,
 };
 mod layer;
-pub use layer::{RenderLayer, RenderLayerPtr};
+pub use layer::{Layer, LayerPtr};
 mod text;
 pub use text::{Text, TextPtr};
 mod win;
@@ -217,11 +217,11 @@ pub fn read_rect(rect_prop: PropertyPtr) -> Result<Rectangle> {
 pub fn get_parent_rect(sg: &SceneGraph, node: &SceneNode) -> Option<Rectangle> {
     // read our parent
     if node.parents.is_empty() {
-        info!("RenderLayer {:?} has no parents so skipping", node);
+        info!("Layer {:?} has no parents so skipping", node);
         return None
     }
     if node.parents.len() != 1 {
-        error!("RenderLayer {:?} has too many parents so skipping", node);
+        error!("Layer {:?} has too many parents so skipping", node);
         return None
     }
     let parent_id = node.parents[0].id;
@@ -230,7 +230,7 @@ pub fn get_parent_rect(sg: &SceneGraph, node: &SceneNode) -> Option<Rectangle> {
         SceneNodeType::Window => {
             let Some(screen_size_prop) = parent_node.get_property("screen_size") else {
                 error!(
-                    "RenderLayer {:?} parent node {:?} missing screen_size property",
+                    "Window {:?} parent node {:?} missing screen_size property",
                     node, parent_node
                 );
                 return None
@@ -241,28 +241,22 @@ pub fn get_parent_rect(sg: &SceneGraph, node: &SceneNode) -> Option<Rectangle> {
             let parent_rect = Rectangle::from_array([0., 0., screen_width, screen_height]);
             parent_rect
         }
-        SceneNodeType::RenderLayer => {
+        SceneNodeType::Layer => {
             // get their rect property
             let Some(parent_rect) = parent_node.get_property("rect") else {
-                error!(
-                    "RenderLayer {:?} parent node {:?} missing rect property",
-                    node, parent_node
-                );
+                error!("Layer {:?} parent node {:?} missing rect property", node, parent_node);
                 return None
             };
             // read parent's rect
             let Ok(parent_rect) = read_rect(parent_rect) else {
-                error!(
-                    "RenderLayer {:?} parent node {:?} malformed rect property",
-                    node, parent_node
-                );
+                error!("Layer {:?} parent node {:?} malformed rect property", node, parent_node);
                 return None
             };
             parent_rect
         }
         _ => {
             error!(
-                "RenderLayer {:?} parent node {:?} wrong type {:?}",
+                "Layer {:?} parent node {:?} wrong type {:?}",
                 node, parent_node, parent_node.typ
             );
             return None
@@ -273,7 +267,7 @@ pub fn get_parent_rect(sg: &SceneGraph, node: &SceneNode) -> Option<Rectangle> {
 
 pub fn get_ui_object<'a>(node: &'a SceneNode) -> &'a dyn UIObject {
     match &node.pimpl {
-        Pimpl::RenderLayer(layer) => layer.as_ref(),
+        Pimpl::Layer(layer) => layer.as_ref(),
         Pimpl::VectorArt(svg) => svg.as_ref(),
         Pimpl::Text(txt) => txt.as_ref(),
         Pimpl::EditBox(editb) => editb.as_ref(),

@@ -25,16 +25,16 @@ def print_node_info(parent_id, indent):
                 child_type = "keyboard"
             case SceneNodeType.MOUSE:
                 child_type = "mouse"
-            case SceneNodeType.RENDER_LAYER:
-                child_type = "render_layer"
-            case SceneNodeType.RENDER_OBJECT:
-                child_type = "render_object"
-            case SceneNodeType.RENDER_VECTOR_ART:
-                child_type = "render_vector_art"
-            case SceneNodeType.RENDER_TEXT:
-                child_type = "render_text"
-            case SceneNodeType.RENDER_TEXTURE:
-                child_type = "render_texture"
+            case SceneNodeType.LAYER:
+                child_type = "layer"
+            case SceneNodeType.OBJECT:
+                child_type = "object"
+            case SceneNodeType.VECTOR_ART:
+                child_type = "vector_art"
+            case SceneNodeType.TEXT:
+                child_type = "text"
+            case SceneNodeType.TEXTURE:
+                child_type = "texture"
             case SceneNodeType.FONTS:
                 child_type = "fonts"
             case SceneNodeType.FONT:

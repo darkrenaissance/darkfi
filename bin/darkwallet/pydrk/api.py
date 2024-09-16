@@ -49,11 +49,11 @@ class SceneNodeType:
     WINDOW_INPUT = 6
     KEYBOARD = 7
     MOUSE = 8
-    RENDER_LAYER = 3
-    RENDER_OBJECT = 4
-    RENDER_VECTOR_ART = 5
-    RENDER_TEXT = 9
-    RENDER_TEXTURE = 13
+    LAYER = 3
+    OBJECT = 4
+    VECTOR_ART = 5
+    TEXT = 9
+    TEXTURE = 13
     FONTS = 10
     FONT = 11
     PLUGINS = 14

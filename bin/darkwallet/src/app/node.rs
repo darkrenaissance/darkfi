@@ -27,15 +27,13 @@ use crate::{
         SceneNodeType, Slot,
     },
     text::TextShaperPtr,
-    ui::{
-        chatview, Button, ChatView, EditBox, Image, RenderLayer, Stoppable, Text, VectorArt, Window,
-    },
+    ui::{chatview, Button, ChatView, EditBox, Image, Layer, Stoppable, Text, VectorArt, Window},
     ExecutorPtr,
 };
 
 pub fn create_layer(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
     debug!(target: "app", "create_layer({name})");
-    let node = sg.add_node(name, SceneNodeType::RenderLayer);
+    let node = sg.add_node(name, SceneNodeType::Layer);
     let prop = Property::new("is_visible", PropertyType::Bool, PropertySubType::Null);
     node.add_property(prop).unwrap();
 
@@ -52,7 +50,7 @@ pub fn create_layer(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
 
 pub fn create_vector_art(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
     debug!(target: "app", "create_vector_art({name})");
-    let node = sg.add_node(name, SceneNodeType::RenderVectorArt);
+    let node = sg.add_node(name, SceneNodeType::VectorArt);
 
     let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
     prop.set_array_len(4);
@@ -106,7 +104,7 @@ pub fn create_image(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
 
 pub fn create_text(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
     debug!(target: "app", "create_text({name})");
-    let node = sg.add_node(name, SceneNodeType::RenderText);
+    let node = sg.add_node(name, SceneNodeType::Text);
 
     let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
     prop.set_array_len(4);

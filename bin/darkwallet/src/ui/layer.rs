@@ -34,12 +34,12 @@ use super::{
     OnModify, Stoppable, UIObject,
 };
 
-pub type RenderLayerPtr = Arc<RenderLayer>;
+pub type LayerPtr = Arc<Layer>;
 
-pub struct RenderLayer {
+pub struct Layer {
     sg: SceneGraphPtr2,
     node_id: SceneNodeId,
-    // Task is dropped at the end of the scope for RenderLayer, hence ending it
+    // Task is dropped at the end of the scope for Layer, hence ending it
     #[allow(dead_code)]
     tasks: Vec<smol::Task<()>>,
     render_api: RenderApiPtr,
@@ -51,7 +51,7 @@ pub struct RenderLayer {
     z_index: PropertyUint32,
 }
 
-impl RenderLayer {
+impl Layer {
     pub async fn new(
         ex: ExecutorPtr,
         sg_ptr: SceneGraphPtr2,
@@ -62,9 +62,9 @@ impl RenderLayer {
         let node = sg.get_node(node_id).unwrap();
         let node_name = node.name.clone();
 
-        let is_visible = PropertyBool::wrap(node, Role::Internal, "is_visible", 0)
-            .expect("RenderLayer::is_visible");
-        let rect = node.get_property("rect").expect("RenderLayer::rect");
+        let is_visible =
+            PropertyBool::wrap(node, Role::Internal, "is_visible", 0).expect("Layer::is_visible");
+        let rect = node.get_property("rect").expect("Layer::rect");
         let z_index = PropertyUint32::wrap(node, Role::Internal, "z_index", 0).unwrap();
         drop(sg);
 
@@ -84,7 +84,7 @@ impl RenderLayer {
             }
         });
 
-        Pimpl::RenderLayer(self_)
+        Pimpl::Layer(self_)
     }
 
     pub async fn handle_char(
@@ -106,7 +106,7 @@ impl RenderLayer {
         };
 
         let Some(draw_update) = self.draw(&sg, &parent_rect).await else {
-            error!(target: "ui::layer", "RenderLayer {:?} failed to draw", node);
+            error!(target: "ui::layer", "Layer {:?} failed to draw", node);
             return;
         };
         self.render_api.replace_draw_calls(draw_update.draw_calls);
@@ -114,19 +114,19 @@ impl RenderLayer {
     }
 }
 
-impl Stoppable for RenderLayer {
+impl Stoppable for Layer {
     async fn stop(&self) {}
 }
 
 #[async_trait]
-impl UIObject for RenderLayer {
+impl UIObject for Layer {
     fn z_index(&self) -> u32 {
         self.z_index.get()
     }
 
     //#[async_recursion]
     async fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
-        debug!(target: "ui::layer", "RenderLayer::draw()");
+        debug!(target: "ui::layer", "Layer::draw()");
         let node = sg.get_node(self.node_id).unwrap();
 
         if !self.is_visible.get() {

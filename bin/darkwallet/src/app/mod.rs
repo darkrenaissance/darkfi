@@ -38,9 +38,7 @@ use crate::{
         SceneNodeType, Slot,
     },
     text::TextShaperPtr,
-    ui::{
-        chatview, Button, ChatView, EditBox, Image, RenderLayer, Stoppable, Text, VectorArt, Window,
-    },
+    ui::{chatview, Button, ChatView, EditBox, Image, Layer, Stoppable, Text, VectorArt, Window},
     ExecutorPtr,
 };
 
@@ -232,7 +230,7 @@ impl App {
         }
         match &node.pimpl {
             Pimpl::Window(win) => win.stop().await,
-            Pimpl::RenderLayer(layer) => layer.stop().await,
+            Pimpl::Layer(layer) => layer.stop().await,
             Pimpl::VectorArt(svg) => svg.stop().await,
             Pimpl::Text(txt) => txt.stop().await,
             Pimpl::EditBox(ebox) => ebox.stop().await,

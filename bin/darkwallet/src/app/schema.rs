@@ -31,7 +31,7 @@ use crate::{
     },
     text::TextShaperPtr,
     ui::{
-        chatview, vector_art::shape, Button, ChatView, EditBox, Image, RenderLayer, ShapeVertex,
+        chatview, vector_art::shape, Button, ChatView, EditBox, Image, Layer, ShapeVertex,
         Stoppable, Text, VectorArt, VectorShape, Window,
     },
     ExecutorPtr,
@@ -102,8 +102,7 @@ pub(super) async fn make_old(app: &App) {
     // Setup the pimpl
     let node_id = node.id;
     drop(sg);
-    let pimpl =
-        RenderLayer::new(app.ex.clone(), app.sg.clone(), node_id, app.render_api.clone()).await;
+    let pimpl = Layer::new(app.ex.clone(), app.sg.clone(), node_id, app.render_api.clone()).await;
     let mut sg = app.sg.lock().await;
     let node = sg.get_node_mut(node_id).unwrap();
     node.pimpl = pimpl;
@@ -551,8 +550,7 @@ pub(super) async fn make(app: &App) {
 
     let node_id = node.id;
     drop(sg);
-    let pimpl =
-        RenderLayer::new(app.ex.clone(), app.sg.clone(), node_id, app.render_api.clone()).await;
+    let pimpl = Layer::new(app.ex.clone(), app.sg.clone(), node_id, app.render_api.clone()).await;
     let mut sg = app.sg.lock().await;
     let node = sg.get_node_mut(node_id).unwrap();
     node.pimpl = pimpl;
