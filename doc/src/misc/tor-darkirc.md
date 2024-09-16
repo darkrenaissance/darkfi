@@ -52,7 +52,9 @@ Run `./darkirc`. Welcome to the dark forest.
 ## Troubleshooting
 
 Run `darkirc -vv` for verbose debugging. This will show detailed errors including
-tor connection issues.
+tor connection issues. Refer to 
+[Network troubleshooting](https://darkrenaissance.github.io/darkfi/misc/network-troubleshooting.html)
+for further troubleshooting resources.
 
 ### Connection issues
 
