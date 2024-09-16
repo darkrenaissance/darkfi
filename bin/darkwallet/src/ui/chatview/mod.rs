@@ -54,7 +54,7 @@ use crate::{
     ExecutorPtr,
 };
 
-use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify};
+use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify, UIObject};
 
 const EPSILON: f32 = 0.001;
 const BIG_EPSILON: f32 = 0.05;
@@ -1027,5 +1027,11 @@ impl ChatView {
     async fn redraw_all(&self) {
         debug!(target: "ui::chatview", "redraw()");
         // ... todo fin
+    }
+}
+
+impl UIObject for ChatView {
+    fn z_index(&self) -> u32 {
+        self.z_index.get()
     }
 }

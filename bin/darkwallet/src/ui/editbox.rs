@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use async_trait::async_trait;
 use miniquad::{window, KeyCode, KeyMods, MouseButton, TouchPhase};
 use rand::{rngs::OsRng, Rng};
 use std::{
@@ -45,7 +46,7 @@ use crate::{
     ExecutorPtr,
 };
 
-use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify, Stoppable};
+use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify, Stoppable, UIObject};
 
 // Pixel width of the cursor
 const CURSOR_WIDTH: f32 = 2.;
@@ -176,6 +177,10 @@ pub struct EditBox {
     debug: PropertyBool,
 
     mouse_btn_held: AtomicBool,
+
+    // I mean this is wrong since it's using the parent instead of the screen
+    // But keep it for now...
+    parent_rect: SyncMutex<Option<Rectangle>>,
 }
 
 impl EditBox {
@@ -213,11 +218,6 @@ impl EditBox {
 
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
             // Start a task monitoring for key down events
-            let ev_sub = event_pub.subscribe_char();
-            let me2 = me.clone();
-            let char_task =
-                ex.spawn(async move { while Self::process_char(&me2, &ev_sub).await {} });
-
             let ev_sub = event_pub.subscribe_key_down();
             let me2 = me.clone();
             let key_down_task =
@@ -300,7 +300,6 @@ impl EditBox {
 
             // on modify tasks too
             let mut tasks = vec![
-                char_task,
                 key_down_task,
                 mouse_btn_down_task,
                 mouse_btn_up_task,
@@ -337,6 +336,8 @@ impl EditBox {
                 debug,
 
                 mouse_btn_held: AtomicBool::new(false),
+
+                parent_rect: SyncMutex::new(None),
             }
         });
 
@@ -475,45 +476,6 @@ impl EditBox {
         let select_rect = Rectangle { x: start_x, y: 0., w: end_x - start_x, h: clip_h };
         mesh.draw_box(&select_rect, hi_bg_color, &Rectangle::zero());
         Ok(())
-    }
-
-    async fn process_char(me: &Weak<Self>, ev_sub: &Subscription<(char, KeyMods, bool)>) -> bool {
-        let Ok((key, mods, repeat)) = ev_sub.receive().await else {
-            debug!(target: "ui::editbox", "Event relayer closed");
-            return false
-        };
-
-        // First filter for only single digit keys
-        if DISALLOWED_CHARS.contains(&key) {
-            return true
-        }
-
-        let Some(self_) = me.upgrade() else {
-            // Should not happen
-            panic!("self destroyed before char_task was stopped!");
-        };
-
-        if !self_.is_focused.get() {
-            return true
-        }
-
-        if mods.ctrl || mods.alt {
-            if repeat {
-                return true
-            }
-            self_.handle_shortcut(key, &mods).await;
-            return true
-        }
-
-        let actions = {
-            let mut repeater = self_.key_repeat.lock().unwrap();
-            repeater.key_down(PressedKey::Char(key), repeat)
-        };
-        debug!(target: "ui::editbox", "Key {:?} has {} actions", key, actions);
-        for _ in 0..actions {
-            self_.insert_char(key).await;
-        }
-        true
     }
 
     async fn process_key_down(
@@ -656,7 +618,7 @@ impl EditBox {
 
         let mouse_pos = Point::from([mouse_x, mouse_y]);
 
-        let Some(rect) = self.get_cached_world_rect().await else { return };
+        let Some(rect) = self.cached_rect() else { return };
 
         // clicking inside box will:
         // 1. make it active
@@ -713,7 +675,7 @@ impl EditBox {
         // just scroll to the end
         // also set cursor_pos too
 
-        let Some(rect) = self.get_cached_world_rect().await else { return };
+        let Some(rect) = self.cached_rect() else { return };
         let cpos = self.find_closest_glyph_idx(mouse_x, &rect);
 
         self.cursor_pos.set(cpos);
@@ -1115,30 +1077,6 @@ impl EditBox {
         };
         Some(rect)
     }
-    async fn get_parent_rect(&self) -> Option<Rectangle> {
-        let sg = self.sg.lock().await;
-        let node = sg.get_node(self.node_id).unwrap();
-        let Some(parent_rect) = get_parent_rect(&sg, node) else {
-            return None;
-        };
-        drop(sg);
-        Some(parent_rect)
-    }
-    async fn get_cached_world_rect(&self) -> Option<Rectangle> {
-        // NBD if it's slightly wrong
-        let mut rect = self.cached_rect()?;
-
-        // If layers can be nested and we use offsets for (x, y)
-        // then this will be incorrect for nested layers.
-        // For now we don't allow nesting of layers.
-        let parent_rect = self.get_parent_rect().await?;
-
-        // Offset rect which is now in world coords
-        rect.x += parent_rect.x;
-        rect.y += parent_rect.y;
-
-        Some(rect)
-    }
 
     /// Whenever the cursor property is modified this MUST be called
     /// to recalculate the scroll x property.
@@ -1193,17 +1131,11 @@ impl EditBox {
     }
 
     async fn redraw(&self) {
-        let sg = self.sg.lock().await;
-        let node = sg.get_node(self.node_id).unwrap();
-
-        let Some(parent_rect) = get_parent_rect(&sg, node) else {
+        let Some(draw_update) = self.draw_cached() else {
+            error!(target: "ui::editbox", "Text failed to draw");
             return;
         };
 
-        let Some(draw_update) = self.draw(&sg, &parent_rect) else {
-            error!(target: "ui::editbox", "Text {:?} failed to draw", node);
-            return;
-        };
         self.render_api.replace_draw_calls(draw_update.draw_calls);
         //debug!(target: "ui::editbox", "replace draw calls done");
         for buffer_id in draw_update.freed_buffers {
@@ -1214,17 +1146,9 @@ impl EditBox {
         }
     }
 
-    pub fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
-        //debug!(target: "ui::editbox", "EditBox::draw()");
-        // Only used for debug messages
-        let node = sg.get_node(self.node_id).unwrap();
-
-        if let Err(err) = eval_rect(self.rect.clone(), parent_rect) {
-            panic!("Node {:?} bad rect property: {}", node, err);
-        }
-
+    fn draw_cached(&self) -> Option<DrawUpdate> {
         let Ok(rect) = read_rect(self.rect.clone()) else {
-            panic!("Node {:?} bad rect property", node);
+            panic!("Node bad rect property")
         };
 
         // draw will recalc this when it's None
@@ -1246,6 +1170,10 @@ impl EditBox {
             index_buffer: render_info.mesh.index_buffer,
             texture: Some(render_info.texture_id),
             num_elements: render_info.mesh.num_elements,
+        };
+
+        let Some(parent_rect) = self.parent_rect.lock().unwrap().clone() else {
+            return None
         };
 
         let off_x = rect.x / parent_rect.w;
@@ -1271,6 +1199,19 @@ impl EditBox {
             freed_textures,
             freed_buffers,
         })
+    }
+
+    pub fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
+        *self.parent_rect.lock().unwrap() = Some(parent_rect.clone());
+        //debug!(target: "ui::editbox", "EditBox::draw()");
+        // Only used for debug messages
+        let node = sg.get_node(self.node_id).unwrap();
+
+        if let Err(err) = eval_rect(self.rect.clone(), parent_rect) {
+            panic!("Node {:?} bad rect property: {}", node, err);
+        }
+
+        self.draw_cached()
     }
 
     async fn send_event(&self) {
@@ -1304,6 +1245,42 @@ impl Stoppable for EditBox {
         // Should this be in drop?
         //self.render_api.delete_buffer(self.vertex_buffer);
         //self.render_api.delete_buffer(self.index_buffer);
+    }
+}
+
+#[async_trait]
+impl UIObject for EditBox {
+    fn z_index(&self) -> u32 {
+        self.z_index.get()
+    }
+
+    async fn handle_char(&self, sg: &SceneGraph, key: char, mods: KeyMods, repeat: bool) -> bool {
+        // First filter for only single digit keys
+        if DISALLOWED_CHARS.contains(&key) {
+            return false
+        }
+
+        if !self.is_focused.get() {
+            return false
+        }
+
+        if mods.ctrl || mods.alt {
+            if repeat {
+                return false
+            }
+            self.handle_shortcut(key, &mods).await;
+            return true
+        }
+
+        let actions = {
+            let mut repeater = self.key_repeat.lock().unwrap();
+            repeater.key_down(PressedKey::Char(key), repeat)
+        };
+        debug!(target: "ui::editbox", "Key {:?} has {} actions", key, actions);
+        for _ in 0..actions {
+            self.insert_char(key).await;
+        }
+        true
     }
 }
 

@@ -17,20 +17,24 @@
  */
 
 use std::sync::{Arc, Weak};
+use miniquad::KeyMods;
 
 use crate::{
     gfx::{GfxDrawCall, GraphicsEventPublisherPtr, Rectangle, RenderApiPtr},
     prop::{PropertyPtr, Role},
+    pubsub::Subscription,
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
     ExecutorPtr,
 };
 
-use super::{OnModify, Stoppable};
+use super::{OnModify, Stoppable, get_child_nodes_ordered, get_ui_object};
 
 pub type WindowPtr = Arc<Window>;
 
 pub struct Window {
     node_id: SceneNodeId,
+    sg: SceneGraphPtr2,
+
     // Task is dropped at the end of the scope for Window, hence ending it
     #[allow(dead_code)]
     tasks: Vec<smol::Task<()>>,
@@ -84,6 +88,38 @@ impl Window {
                 }
             });
 
+            let ev_sub = event_pub.subscribe_char();
+            let me2 = me.clone();
+            let char_task =
+                ex.spawn(async move { while Self::process_char(&me2, &ev_sub).await {} });
+
+            /*
+            let ev_sub = event_pub.subscribe_key_down();
+            let me2 = me.clone();
+            let key_down_task =
+                ex.spawn(async move { while Self::process_key_down(&me2, &ev_sub).await {} });
+
+            let ev_sub = event_pub.subscribe_key_up();
+            let me2 = me.clone();
+            let key_up_task =
+                ex.spawn(async move { while Self::process_key_up(&me2, &ev_sub).await {} });
+
+            let ev_sub = event_pub.subscribe_mouse_btn_down();
+            let me2 = me.clone();
+            let mouse_btn_down_task =
+                ex.spawn(async move { while Self::process_mouse_btn_down(&me2, &ev_sub).await {} });
+
+            let ev_sub = event_pub.subscribe_mouse_btn_up();
+            let me2 = me.clone();
+            let mouse_btn_up_task =
+                ex.spawn(async move { while Self::process_mouse_btn_up(&me2, &ev_sub).await {} });
+
+            let ev_sub = event_pub.subscribe_touch();
+            let me2 = me.clone();
+            let touch_task =
+                ex.spawn(async move { while Self::process_touch(&me2, &ev_sub).await {} });
+            */
+
             let sg2 = sg.clone();
             let redraw_fn = move |self_: Arc<Self>| {
                 let sg = sg2.clone();
@@ -96,13 +132,49 @@ impl Window {
             let mut on_modify = OnModify::new(ex.clone(), node_name, node_id, me.clone());
             on_modify.when_change(scale_prop, redraw_fn);
 
-            let mut tasks = on_modify.tasks;
-            tasks.push(resize_task);
+            let mut tasks = vec![
+                resize_task,
+                char_task,
+                //key_down_task,
+                //key_up_task,
+                //mouse_btn_down_task,
+                //mouse_btn_up_task,
+                //mouse_move_task,
+                //touch_task,
+            ];
+            tasks.append(&mut on_modify.tasks);
 
-            Self { node_id, tasks, screen_size_prop, render_api }
+            Self { node_id, sg, tasks, screen_size_prop, render_api }
         });
 
         Pimpl::Window(self_)
+    }
+
+    async fn process_char(me: &Weak<Self>, ev_sub: &Subscription<(char, KeyMods, bool)>) -> bool {
+        let Ok((key, mods, repeat)) = ev_sub.receive().await else {
+            debug!(target: "ui::win", "Event relayer closed");
+            return false
+        };
+
+        let Some(self_) = me.upgrade() else {
+            // Should not happen
+            panic!("self destroyed before char_task was stopped!");
+        };
+
+        self_.handle_char(key, mods, repeat).await;
+        true
+    }
+
+    async fn handle_char(&self, key: char, mods: KeyMods, repeat: bool) {
+        let sg = self.sg.lock().await;
+
+        for child_id in get_child_nodes_ordered(&sg, self.node_id) {
+            let node = sg.get_node(child_id).unwrap();
+            let obj = get_ui_object(node);
+            if obj.handle_char(&sg, key, mods, repeat).await {
+                return
+            }
+        }
     }
 
     pub async fn draw(&self, sg: &SceneGraph) {

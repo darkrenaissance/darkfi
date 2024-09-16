@@ -16,18 +16,20 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use async_trait::async_trait;
 use async_recursion::async_recursion;
+use miniquad::KeyMods;
 use rand::{rngs::OsRng, Rng};
 use std::sync::{Arc, Weak};
 
 use crate::{
     gfx::{GfxDrawCall, GfxDrawInstruction, Rectangle, RenderApiPtr},
-    prop::{PropertyBool, PropertyPtr, Role},
+    prop::{PropertyBool, PropertyPtr, Role, PropertyUint32},
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
     ExecutorPtr,
 };
 
-use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify, Stoppable};
+use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify, Stoppable, UIObject, get_child_nodes_ordered, get_ui_object};
 
 pub type RenderLayerPtr = Arc<RenderLayer>;
 
@@ -43,6 +45,7 @@ pub struct RenderLayer {
 
     is_visible: PropertyBool,
     rect: PropertyPtr,
+    z_index: PropertyUint32,
 }
 
 impl RenderLayer {
@@ -59,6 +62,7 @@ impl RenderLayer {
         let is_visible = PropertyBool::wrap(node, Role::Internal, "is_visible", 0)
             .expect("RenderLayer::is_visible");
         let rect = node.get_property("rect").expect("RenderLayer::rect");
+        let z_index = PropertyUint32::wrap(node, Role::Internal, "z_index", 0).unwrap();
         drop(sg);
 
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
@@ -73,10 +77,15 @@ impl RenderLayer {
                 dc_key: OsRng.gen(),
                 is_visible,
                 rect,
+                z_index
             }
         });
 
         Pimpl::RenderLayer(self_)
+    }
+
+    pub async fn handle_char(&self, sg: &SceneGraph, key: char, mods: KeyMods, repeat: bool) -> bool {
+        false
     }
 
     async fn redraw(self: Arc<Self>) {
@@ -174,3 +183,22 @@ impl RenderLayer {
 impl Stoppable for RenderLayer {
     async fn stop(&self) {}
 }
+
+#[async_trait]
+impl UIObject for RenderLayer {
+    fn z_index(&self) -> u32 {
+        self.z_index.get()
+    }
+
+    async fn handle_char(&self, sg: &SceneGraph, key: char, mods: KeyMods, repeat: bool) -> bool {
+        for child_id in get_child_nodes_ordered(&sg, self.node_id) {
+            let node = sg.get_node(child_id).unwrap();
+            let obj = get_ui_object(node);
+            if obj.handle_char(&sg, key, mods, repeat).await {
+                return true
+            }
+        }
+        false
+    }
+}
+

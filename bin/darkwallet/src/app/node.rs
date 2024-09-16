@@ -44,6 +44,9 @@ pub fn create_layer(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
     prop.allow_exprs();
     node.add_property(prop).unwrap();
 
+    let prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
     node.id
 }
 
@@ -73,6 +76,9 @@ pub fn create_button(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
     let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
     prop.set_array_len(4);
     prop.allow_exprs();
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);
     node.add_property(prop).unwrap();
 
     node.add_signal("click", "Button clicked event", vec![]).unwrap();

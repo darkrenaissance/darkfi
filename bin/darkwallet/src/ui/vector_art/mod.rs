@@ -32,7 +32,7 @@ use crate::{
     ExecutorPtr,
 };
 
-use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify, Stoppable};
+use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify, Stoppable, UIObject};
 
 pub mod shape;
 use shape::VectorShape;
@@ -179,3 +179,10 @@ impl Stoppable for VectorArt {
         }
     }
 }
+
+impl UIObject for VectorArt {
+    fn z_index(&self) -> u32 {
+        self.z_index.get()
+    }
+}
+

@@ -16,14 +16,16 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use async_trait::async_trait;
 use std::sync::{Arc, Weak};
+use miniquad::KeyMods;
 
 use crate::{
     error::{Error, Result},
     expr::{SExprMachine, SExprVal},
     gfx::{GfxBufferId, GfxDrawCall, GfxTextureId, Rectangle},
     prop::{PropertyPtr, Role},
-    scene::{SceneGraph, SceneNode, SceneNodeId, SceneNodeType},
+    scene::{SceneGraph, SceneNode, SceneNodeId, SceneNodeType, Pimpl},
     ExecutorPtr,
 };
 
@@ -49,6 +51,13 @@ pub use win::{Window, WindowPtr};
 
 pub trait Stoppable {
     async fn stop(&self);
+}
+
+#[async_trait]
+pub trait UIObject: Sync {
+    fn z_index(&self) -> u32;
+
+    async fn handle_char(&self, sg: &SceneGraph, key: char, mods: KeyMods, repeat: bool) -> bool { false }
 }
 
 pub struct DrawUpdate {
@@ -212,3 +221,32 @@ pub fn get_parent_rect(sg: &SceneGraph, node: &SceneNode) -> Option<Rectangle> {
     };
     Some(parent_rect)
 }
+
+pub fn get_ui_object<'a>(node: &'a SceneNode) -> &'a dyn UIObject {
+        match &node.pimpl {
+            Pimpl::RenderLayer(layer) => layer.as_ref(),
+            Pimpl::VectorArt(svg) => svg.as_ref(),
+            Pimpl::Text(txt) => txt.as_ref(),
+            Pimpl::EditBox(editb) => editb.as_ref(),
+            Pimpl::ChatView(chat) => chat.as_ref(),
+            Pimpl::Image(img) => img.as_ref(),
+            Pimpl::Button(btn) => btn.as_ref(),
+            _ => panic!("unhandled type for get_ui_object"),
+        }
+}
+
+pub fn get_child_nodes_ordered(sg: &SceneGraph, node_id: SceneNodeId) -> Vec<SceneNodeId> {
+    let mut child_nodes = vec![];
+    let self_node = sg.get_node(node_id).unwrap();
+    for child_inf in self_node.get_children2() {
+        let node = sg.get_node(child_inf.id).unwrap();
+        let obj = get_ui_object(node);
+        let z_index = obj.z_index();
+        child_nodes.push((node.id, z_index));
+    }
+    child_nodes.sort_unstable_by_key(|(node_id, _)| *node_id);
+
+    let nodes = child_nodes.into_iter().rev().map(|(node_id, _)| node_id).collect();
+    nodes
+}
+

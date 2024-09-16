@@ -24,13 +24,13 @@ use std::sync::{
 
 use crate::{
     gfx::{GraphicsEventPublisherPtr, Point, Rectangle},
-    prop::{PropertyBool, PropertyPtr, Role},
+    prop::{PropertyBool, PropertyPtr, Role, PropertyUint32},
     pubsub::Subscription,
     scene::{Pimpl, SceneGraphPtr2, SceneNodeId},
     ExecutorPtr,
 };
 
-use super::{eval_rect, read_rect};
+use super::{eval_rect, read_rect, UIObject};
 
 pub type ButtonPtr = Arc<Button>;
 
@@ -42,6 +42,7 @@ pub struct Button {
 
     is_active: PropertyBool,
     rect: PropertyPtr,
+    z_index: PropertyUint32,
 
     mouse_btn_held: AtomicBool,
 }
@@ -58,6 +59,7 @@ impl Button {
         //let node_name = node.name.clone();
         let is_active = PropertyBool::wrap(node, Role::Internal, "is_active", 0).unwrap();
         let rect = node.get_property("rect").expect("Button::rect");
+        let z_index = PropertyUint32::wrap(node, Role::Internal, "z_index", 0).unwrap();
         //let sig = node.get_signal("click").expect("Button::click");
         drop(scene_graph);
 
@@ -79,7 +81,9 @@ impl Button {
 
             let tasks = vec![mouse_btn_down_task, mouse_btn_up_task, touch_task];
 
-            Self { node_id, tasks, sg, is_active, rect, mouse_btn_held: AtomicBool::new(false) }
+            Self { node_id, tasks, sg, is_active, rect, 
+                z_index,
+                mouse_btn_held: AtomicBool::new(false) }
         });
 
         Pimpl::Button(self_)
@@ -229,3 +233,10 @@ impl Button {
         }
     }
 }
+
+impl UIObject for Button {
+    fn z_index(&self) -> u32 {
+        self.z_index.get()
+    }
+}
+

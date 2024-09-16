@@ -31,7 +31,7 @@ use crate::{
     ExecutorPtr,
 };
 
-use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify};
+use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify, UIObject};
 
 pub type ImagePtr = Arc<Image>;
 
@@ -229,3 +229,10 @@ impl Drop for Image {
         self.render_api.delete_texture(texture_id);
     }
 }
+
+impl UIObject for Image {
+    fn z_index(&self) -> u32 {
+        self.z_index.get()
+    }
+}
+
