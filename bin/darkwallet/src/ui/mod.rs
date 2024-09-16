@@ -23,7 +23,7 @@ use std::sync::{Arc, Weak};
 use crate::{
     error::{Error, Result},
     expr::{SExprMachine, SExprVal},
-    gfx::{GfxBufferId, GfxDrawCall, GfxTextureId, Rectangle},
+    gfx::{GfxBufferId, GfxDrawCall, GfxTextureId, Point, Rectangle},
     prop::{PropertyPtr, Role},
     scene::{Pimpl, SceneGraph, SceneNode, SceneNodeId, SceneNodeType},
     ExecutorPtr,
@@ -76,8 +76,7 @@ pub trait UIObject: Sync {
         &self,
         sg: &SceneGraph,
         btn: MouseButton,
-        mouse_x: f32,
-        mouse_y: f32,
+        mouse_pos: &Point,
     ) -> bool {
         false
     }
@@ -85,15 +84,14 @@ pub trait UIObject: Sync {
         &self,
         sg: &SceneGraph,
         btn: MouseButton,
-        mouse_x: f32,
-        mouse_y: f32,
+        mouse_pos: &Point,
     ) -> bool {
         false
     }
-    async fn handle_mouse_move(&self, sg: &SceneGraph, mouse_x: f32, mouse_y: f32) -> bool {
+    async fn handle_mouse_move(&self, sg: &SceneGraph, mouse_pos: &Point) -> bool {
         false
     }
-    async fn handle_mouse_wheel(&self, sg: &SceneGraph, wheel_x: f32, wheel_y: f32) -> bool {
+    async fn handle_mouse_wheel(&self, sg: &SceneGraph, wheel_pos: &Point) -> bool {
         false
     }
     async fn handle_touch(
@@ -101,8 +99,7 @@ pub trait UIObject: Sync {
         sg: &SceneGraph,
         phase: TouchPhase,
         id: u64,
-        touch_x: f32,
-        touch_y: f32,
+        touch_pos: &Point,
     ) -> bool {
         false
     }

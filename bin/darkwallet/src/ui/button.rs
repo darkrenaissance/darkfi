@@ -99,8 +99,7 @@ impl UIObject for Button {
         &self,
         sg: &SceneGraph,
         btn: MouseButton,
-        mouse_x: f32,
-        mouse_y: f32,
+        mouse_pos: &Point,
     ) -> bool {
         if !self.is_active.get() {
             return false
@@ -110,10 +109,8 @@ impl UIObject for Button {
             return false
         }
 
-        let mouse_pos = Point::from([mouse_x, mouse_y]);
-
         let Some(rect) = self.get_cached_rect() else { return false };
-        if !rect.contains(&mouse_pos) {
+        if !rect.contains(mouse_pos) {
             return false
         }
 
@@ -125,8 +122,7 @@ impl UIObject for Button {
         &self,
         sg: &SceneGraph,
         btn: MouseButton,
-        mouse_x: f32,
-        mouse_y: f32,
+        mouse_pos: &Point,
     ) -> bool {
         if !self.is_active.get() {
             return false
@@ -142,11 +138,9 @@ impl UIObject for Button {
             return false
         }
 
-        let mouse_pos = Point::from([mouse_x, mouse_y]);
-
         // Are we releasing the click inside the button?
         let Some(rect) = self.get_cached_rect() else { return false };
-        if !rect.contains(&mouse_pos) {
+        if !rect.contains(mouse_pos) {
             return false
         }
 
@@ -163,8 +157,7 @@ impl UIObject for Button {
         sg: &SceneGraph,
         phase: TouchPhase,
         id: u64,
-        touch_x: f32,
-        touch_y: f32,
+        touch_pos: &Point,
     ) -> bool {
         if !self.is_active.get() {
             return false
@@ -176,8 +169,7 @@ impl UIObject for Button {
         }
 
         let Some(rect) = self.get_cached_rect() else { return false };
-        let touch_pos = Point { x: touch_x, y: touch_y };
-        if !rect.contains(&touch_pos) {
+        if !rect.contains(touch_pos) {
             //debug!(target: "ui::chatview", "not inside rect");
             return false
         }
@@ -185,11 +177,11 @@ impl UIObject for Button {
         // Simulate mouse events
         match phase {
             TouchPhase::Started => {
-                self.handle_mouse_btn_down(sg, MouseButton::Left, touch_x, touch_y).await;
+                self.handle_mouse_btn_down(sg, MouseButton::Left, touch_pos).await;
             }
             TouchPhase::Moved => {}
             TouchPhase::Ended => {
-                self.handle_mouse_btn_up(sg, MouseButton::Left, touch_x, touch_y).await;
+                self.handle_mouse_btn_up(sg, MouseButton::Left, touch_pos).await;
             }
             TouchPhase::Cancelled => {}
         }

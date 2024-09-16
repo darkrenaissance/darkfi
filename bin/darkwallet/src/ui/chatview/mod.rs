@@ -752,21 +752,18 @@ impl UIObject for ChatView {
         &self,
         sg: &SceneGraph,
         btn: MouseButton,
-        mouse_x: f32,
-        mouse_y: f32,
+        mouse_pos: &Point,
     ) -> bool {
         if btn != MouseButton::Left {
             return false
         }
 
-        let mouse_pos = Point::from([mouse_x, mouse_y]);
-
         let Ok(rect) = read_rect(self.rect.clone()) else { return false };
-        if !rect.contains(&mouse_pos) {
+        if !rect.contains(mouse_pos) {
             return false
         }
 
-        self.select_line(mouse_y).await;
+        self.select_line(mouse_pos.y).await;
         self.mouse_btn_held.store(true, Ordering::Relaxed);
         true
     }
@@ -775,8 +772,7 @@ impl UIObject for ChatView {
         &self,
         sg: &SceneGraph,
         btn: MouseButton,
-        mouse_x: f32,
-        mouse_y: f32,
+        mouse_pos: &Point,
     ) -> bool {
         if btn != MouseButton::Left {
             return false
@@ -786,9 +782,8 @@ impl UIObject for ChatView {
         true
     }
 
-    async fn handle_mouse_move(&self, sg: &SceneGraph, mouse_x: f32, mouse_y: f32) -> bool {
+    async fn handle_mouse_move(&self, sg: &SceneGraph, mouse_pos: &Point) -> bool {
         //debug!(target: "ui::chatview", "handle_mouse_move({mouse_x}, {mouse_y})");
-        let mouse_pos = Point::from([mouse_x, mouse_y]);
 
         // We store the mouse pos for use in handle_mouse_wheel()
         *self.mouse_pos.lock().unwrap() = mouse_pos.clone();
@@ -798,16 +793,16 @@ impl UIObject for ChatView {
         }
 
         let Ok(rect) = read_rect(self.rect.clone()) else { return false };
-        if !rect.contains(&mouse_pos) {
+        if !rect.contains(mouse_pos) {
             return false
         }
 
-        self.select_line(mouse_y).await;
+        self.select_line(mouse_pos.y).await;
         false
     }
 
-    async fn handle_mouse_wheel(&self, sg: &SceneGraph, wheel_x: f32, wheel_y: f32) -> bool {
-        debug!(target: "ui::chatview", "handle_mouse_wheel({wheel_x}, {wheel_y})");
+    async fn handle_mouse_wheel(&self, sg: &SceneGraph, wheel_pos: &Point) -> bool {
+        //debug!(target: "ui::chatview", "handle_mouse_wheel({wheel_x}, {wheel_y})");
 
         let Ok(rect) = read_rect(self.rect.clone()) else { return false };
 
@@ -817,7 +812,7 @@ impl UIObject for ChatView {
             return false
         }
 
-        self.speed.fetch_add(wheel_y * self.scroll_start_accel.get(), Ordering::Relaxed);
+        self.speed.fetch_add(wheel_pos.y * self.scroll_start_accel.get(), Ordering::Relaxed);
         self.motion_cv.notify();
         true
     }
@@ -827,8 +822,7 @@ impl UIObject for ChatView {
         sg: &SceneGraph,
         phase: TouchPhase,
         id: u64,
-        touch_x: f32,
-        touch_y: f32,
+        touch_pos: &Point,
     ) -> bool {
         // Ignore multi-touch
         if id != 0 {
@@ -838,8 +832,9 @@ impl UIObject for ChatView {
         let Ok(rect) = read_rect(self.rect.clone()) else { return false };
         //debug!(target: "ui::chatview", "handle_touch({phase:?}, {touch_x}, {touch_y})");
 
-        let touch_pos = Point { x: touch_x, y: touch_y };
-        if !rect.contains(&touch_pos) {
+        let touch_y = touch_pos.y;
+
+        if !rect.contains(touch_pos) {
             match phase {
                 TouchPhase::Started => *self.touch_info.lock().unwrap() = None,
                 _ => self.end_touch_phase(touch_y),

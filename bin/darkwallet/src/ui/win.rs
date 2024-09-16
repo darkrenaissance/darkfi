@@ -20,7 +20,7 @@ use miniquad::{KeyCode, KeyMods, MouseButton, TouchPhase};
 use std::sync::{Arc, Weak};
 
 use crate::{
-    gfx::{GfxDrawCall, GraphicsEventPublisherPtr, Rectangle, RenderApiPtr},
+    gfx::{GfxDrawCall, GraphicsEventPublisherPtr, Point, Rectangle, RenderApiPtr},
     prop::{PropertyPtr, Role},
     pubsub::Subscription,
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
@@ -209,9 +209,9 @@ impl Window {
 
     async fn process_mouse_btn_down(
         me: &Weak<Self>,
-        ev_sub: &Subscription<(MouseButton, f32, f32)>,
+        ev_sub: &Subscription<(MouseButton, Point)>,
     ) -> bool {
-        let Ok((btn, mouse_x, mouse_y)) = ev_sub.receive().await else {
+        let Ok((btn, mouse_pos)) = ev_sub.receive().await else {
             debug!(target: "ui::editbox", "Event relayer closed");
             return false
         };
@@ -221,15 +221,15 @@ impl Window {
             panic!("self destroyed before mouse_btn_down_task was stopped!");
         };
 
-        self_.handle_mouse_btn_down(btn, mouse_x, mouse_y).await;
+        self_.handle_mouse_btn_down(btn, mouse_pos).await;
         true
     }
 
     async fn process_mouse_btn_up(
         me: &Weak<Self>,
-        ev_sub: &Subscription<(MouseButton, f32, f32)>,
+        ev_sub: &Subscription<(MouseButton, Point)>,
     ) -> bool {
-        let Ok((btn, mouse_x, mouse_y)) = ev_sub.receive().await else {
+        let Ok((btn, mouse_pos)) = ev_sub.receive().await else {
             debug!(target: "ui::editbox", "Event relayer closed");
             return false
         };
@@ -239,12 +239,12 @@ impl Window {
             panic!("self destroyed before mouse_btn_up_task was stopped!");
         };
 
-        self_.handle_mouse_btn_up(btn, mouse_x, mouse_y).await;
+        self_.handle_mouse_btn_up(btn, mouse_pos).await;
         true
     }
 
-    async fn process_mouse_move(me: &Weak<Self>, ev_sub: &Subscription<(f32, f32)>) -> bool {
-        let Ok((mouse_x, mouse_y)) = ev_sub.receive().await else {
+    async fn process_mouse_move(me: &Weak<Self>, ev_sub: &Subscription<Point>) -> bool {
+        let Ok(mouse_pos) = ev_sub.receive().await else {
             debug!(target: "ui::editbox", "Event relayer closed");
             return false
         };
@@ -254,12 +254,12 @@ impl Window {
             panic!("self destroyed before mouse_move_task was stopped!");
         };
 
-        self_.handle_mouse_move(mouse_x, mouse_y).await;
+        self_.handle_mouse_move(mouse_pos).await;
         true
     }
 
-    async fn process_mouse_wheel(me: &Weak<Self>, ev_sub: &Subscription<(f32, f32)>) -> bool {
-        let Ok((wheel_x, wheel_y)) = ev_sub.receive().await else {
+    async fn process_mouse_wheel(me: &Weak<Self>, ev_sub: &Subscription<Point>) -> bool {
+        let Ok(wheel_pos) = ev_sub.receive().await else {
             debug!(target: "ui::chatview", "Event relayer closed");
             return false
         };
@@ -269,15 +269,15 @@ impl Window {
             panic!("self destroyed before mouse_wheel_task was stopped!");
         };
 
-        self_.handle_mouse_wheel(wheel_x, wheel_y).await;
+        self_.handle_mouse_wheel(wheel_pos).await;
         true
     }
 
     async fn process_touch(
         me: &Weak<Self>,
-        ev_sub: &Subscription<(TouchPhase, u64, f32, f32)>,
+        ev_sub: &Subscription<(TouchPhase, u64, Point)>,
     ) -> bool {
-        let Ok((phase, id, touch_x, touch_y)) = ev_sub.receive().await else {
+        let Ok((phase, id, touch_pos)) = ev_sub.receive().await else {
             debug!(target: "ui::editbox", "Event relayer closed");
             return false
         };
@@ -287,7 +287,7 @@ impl Window {
             panic!("self destroyed before touch_task was stopped!");
         };
 
-        self_.handle_touch(phase, id, touch_x, touch_y).await;
+        self_.handle_touch(phase, id, touch_pos).await;
         true
     }
 
@@ -327,61 +327,61 @@ impl Window {
         }
     }
 
-    async fn handle_mouse_btn_down(&self, btn: MouseButton, mouse_x: f32, mouse_y: f32) {
+    async fn handle_mouse_btn_down(&self, btn: MouseButton, mouse_pos: Point) {
         let sg = self.sg.lock().await;
 
         for child_id in get_child_nodes_ordered(&sg, self.node_id) {
             let node = sg.get_node(child_id).unwrap();
             let obj = get_ui_object(node);
-            if obj.handle_mouse_btn_down(&sg, btn.clone(), mouse_x, mouse_y).await {
+            if obj.handle_mouse_btn_down(&sg, btn.clone(), &mouse_pos).await {
                 return
             }
         }
     }
 
-    async fn handle_mouse_btn_up(&self, btn: MouseButton, mouse_x: f32, mouse_y: f32) {
+    async fn handle_mouse_btn_up(&self, btn: MouseButton, mouse_pos: Point) {
         let sg = self.sg.lock().await;
 
         for child_id in get_child_nodes_ordered(&sg, self.node_id) {
             let node = sg.get_node(child_id).unwrap();
             let obj = get_ui_object(node);
-            if obj.handle_mouse_btn_up(&sg, btn.clone(), mouse_x, mouse_y).await {
+            if obj.handle_mouse_btn_up(&sg, btn.clone(), &mouse_pos).await {
                 return
             }
         }
     }
 
-    async fn handle_mouse_move(&self, mouse_x: f32, mouse_y: f32) {
+    async fn handle_mouse_move(&self, mouse_pos: Point) {
         let sg = self.sg.lock().await;
 
         for child_id in get_child_nodes_ordered(&sg, self.node_id) {
             let node = sg.get_node(child_id).unwrap();
             let obj = get_ui_object(node);
-            if obj.handle_mouse_move(&sg, mouse_x, mouse_y).await {
+            if obj.handle_mouse_move(&sg, &mouse_pos).await {
                 return
             }
         }
     }
 
-    async fn handle_mouse_wheel(&self, wheel_x: f32, wheel_y: f32) {
+    async fn handle_mouse_wheel(&self, wheel_pos: Point) {
         let sg = self.sg.lock().await;
 
         for child_id in get_child_nodes_ordered(&sg, self.node_id) {
             let node = sg.get_node(child_id).unwrap();
             let obj = get_ui_object(node);
-            if obj.handle_mouse_wheel(&sg, wheel_x, wheel_y).await {
+            if obj.handle_mouse_wheel(&sg, &wheel_pos).await {
                 return
             }
         }
     }
 
-    async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_x: f32, touch_y: f32) {
+    async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_pos: Point) {
         let sg = self.sg.lock().await;
 
         for child_id in get_child_nodes_ordered(&sg, self.node_id) {
             let node = sg.get_node(child_id).unwrap();
             let obj = get_ui_object(node);
-            if obj.handle_touch(&sg, phase, id, touch_x, touch_y).await {
+            if obj.handle_touch(&sg, phase, id, &touch_pos).await {
                 return
             }
         }

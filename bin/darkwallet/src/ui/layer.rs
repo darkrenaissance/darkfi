@@ -23,7 +23,7 @@ use rand::{rngs::OsRng, Rng};
 use std::sync::{Arc, Weak};
 
 use crate::{
-    gfx::{GfxDrawCall, GfxDrawInstruction, Rectangle, RenderApiPtr},
+    gfx::{GfxDrawCall, GfxDrawInstruction, Point, Rectangle, RenderApiPtr},
     prop::{PropertyBool, PropertyPtr, PropertyUint32, Role},
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
     ExecutorPtr,
@@ -241,13 +241,12 @@ impl UIObject for RenderLayer {
         &self,
         sg: &SceneGraph,
         btn: MouseButton,
-        mouse_x: f32,
-        mouse_y: f32,
+        mouse_pos: &Point,
     ) -> bool {
         for child_id in get_child_nodes_ordered(&sg, self.node_id) {
             let node = sg.get_node(child_id).unwrap();
             let obj = get_ui_object(node);
-            if obj.handle_mouse_btn_down(sg, btn, mouse_x, mouse_y).await {
+            if obj.handle_mouse_btn_down(sg, btn, mouse_pos).await {
                 return true
             }
         }
@@ -257,33 +256,32 @@ impl UIObject for RenderLayer {
         &self,
         sg: &SceneGraph,
         btn: MouseButton,
-        mouse_x: f32,
-        mouse_y: f32,
+        mouse_pos: &Point,
     ) -> bool {
         for child_id in get_child_nodes_ordered(&sg, self.node_id) {
             let node = sg.get_node(child_id).unwrap();
             let obj = get_ui_object(node);
-            if obj.handle_mouse_btn_up(sg, btn, mouse_x, mouse_y).await {
+            if obj.handle_mouse_btn_up(sg, btn, mouse_pos).await {
                 return true
             }
         }
         false
     }
-    async fn handle_mouse_move(&self, sg: &SceneGraph, mouse_x: f32, mouse_y: f32) -> bool {
+    async fn handle_mouse_move(&self, sg: &SceneGraph, mouse_pos: &Point) -> bool {
         for child_id in get_child_nodes_ordered(&sg, self.node_id) {
             let node = sg.get_node(child_id).unwrap();
             let obj = get_ui_object(node);
-            if obj.handle_mouse_move(sg, mouse_x, mouse_y).await {
+            if obj.handle_mouse_move(sg, mouse_pos).await {
                 return true
             }
         }
         false
     }
-    async fn handle_mouse_wheel(&self, sg: &SceneGraph, wheel_x: f32, wheel_y: f32) -> bool {
+    async fn handle_mouse_wheel(&self, sg: &SceneGraph, wheel_pos: &Point) -> bool {
         for child_id in get_child_nodes_ordered(&sg, self.node_id) {
             let node = sg.get_node(child_id).unwrap();
             let obj = get_ui_object(node);
-            if obj.handle_mouse_wheel(sg, wheel_x, wheel_y).await {
+            if obj.handle_mouse_wheel(sg, wheel_pos).await {
                 return true
             }
         }
@@ -294,13 +292,12 @@ impl UIObject for RenderLayer {
         sg: &SceneGraph,
         phase: TouchPhase,
         id: u64,
-        touch_x: f32,
-        touch_y: f32,
+        touch_pos: &Point,
     ) -> bool {
         for child_id in get_child_nodes_ordered(&sg, self.node_id) {
             let node = sg.get_node(child_id).unwrap();
             let obj = get_ui_object(node);
-            if obj.handle_touch(sg, phase, id, touch_x, touch_y).await {
+            if obj.handle_touch(sg, phase, id, touch_pos).await {
                 return true
             }
         }

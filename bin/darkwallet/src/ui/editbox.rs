@@ -432,12 +432,10 @@ impl EditBox {
         self.redraw().await;
     }
 
-    async fn handle_click_down(&self, btn: MouseButton, mouse_x: f32, mouse_y: f32) {
+    async fn handle_click_down(&self, btn: MouseButton, mouse_pos: &Point) {
         if btn != MouseButton::Left {
             return
         }
-
-        let mouse_pos = Point::from([mouse_x, mouse_y]);
 
         let Some(rect) = self.cached_rect() else { return };
 
@@ -454,7 +452,7 @@ impl EditBox {
                 self.is_focused.set(true);
             }
 
-            let cpos = self.find_closest_glyph_idx(mouse_x, &rect);
+            let cpos = self.find_closest_glyph_idx(mouse_pos.x, &rect);
 
             // set cursor pos
             self.cursor_pos.set(cpos);
@@ -478,7 +476,7 @@ impl EditBox {
 
         self.redraw().await;
     }
-    fn handle_click_up(&self, btn: MouseButton, _mouse_x: f32, _mouse_y: f32) {
+    fn handle_click_up(&self, btn: MouseButton, pos: &Point) {
         if btn != MouseButton::Left {
             return
         }
@@ -486,7 +484,7 @@ impl EditBox {
         // releasing mouse button will end selection
         self.mouse_btn_held.store(false, Ordering::Relaxed);
     }
-    async fn handle_cursor_move(&self, mouse_x: f32, _mouse_y: f32) {
+    async fn handle_cursor_move(&self, pos: &Point) {
         if !self.mouse_btn_held.load(Ordering::Relaxed) {
             return;
         }
@@ -497,7 +495,7 @@ impl EditBox {
         // also set cursor_pos too
 
         let Some(rect) = self.cached_rect() else { return };
-        let cpos = self.find_closest_glyph_idx(mouse_x, &rect);
+        let cpos = self.find_closest_glyph_idx(pos.x, &rect);
 
         self.cursor_pos.set(cpos);
         self.selected.set_u32(Role::Internal, 1, cpos).unwrap();
@@ -506,18 +504,16 @@ impl EditBox {
         self.redraw().await;
     }
 
-    async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_x: f32, touch_y: f32) {
+    async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_pos: &Point) {
         // Ignore multi-touch
         if id != 0 {
             return
         }
         // Simulate mouse events
         match phase {
-            TouchPhase::Started => {
-                self.handle_click_down(MouseButton::Left, touch_x, touch_y).await
-            }
-            TouchPhase::Moved => self.handle_cursor_move(touch_x, touch_y).await,
-            TouchPhase::Ended => self.handle_click_up(MouseButton::Left, touch_x, touch_y),
+            TouchPhase::Started => self.handle_click_down(MouseButton::Left, touch_pos).await,
+            TouchPhase::Moved => self.handle_cursor_move(touch_pos).await,
+            TouchPhase::Ended => self.handle_click_up(MouseButton::Left, touch_pos),
             TouchPhase::Cancelled => {}
         }
     }
@@ -1135,14 +1131,13 @@ impl UIObject for EditBox {
         &self,
         sg: &SceneGraph,
         btn: MouseButton,
-        mouse_x: f32,
-        mouse_y: f32,
+        mouse_pos: &Point,
     ) -> bool {
         if !self.is_active.get() {
             return true
         }
 
-        self.handle_click_down(btn, mouse_x, mouse_y).await;
+        self.handle_click_down(btn, mouse_pos).await;
         true
     }
 
@@ -1150,23 +1145,22 @@ impl UIObject for EditBox {
         &self,
         sg: &SceneGraph,
         btn: MouseButton,
-        mouse_x: f32,
-        mouse_y: f32,
+        mouse_pos: &Point,
     ) -> bool {
         if !self.is_active.get() {
             return true
         }
 
-        self.handle_click_up(btn, mouse_x, mouse_y);
+        self.handle_click_up(btn, mouse_pos);
         true
     }
 
-    async fn handle_mouse_move(&self, sg: &SceneGraph, mouse_x: f32, mouse_y: f32) -> bool {
+    async fn handle_mouse_move(&self, sg: &SceneGraph, mouse_pos: &Point) -> bool {
         if !self.is_active.get() {
             return false
         }
 
-        self.handle_cursor_move(mouse_x, mouse_y).await;
+        self.handle_cursor_move(mouse_pos).await;
         false
     }
 
@@ -1175,14 +1169,13 @@ impl UIObject for EditBox {
         sg: &SceneGraph,
         phase: TouchPhase,
         id: u64,
-        touch_x: f32,
-        touch_y: f32,
+        touch_pos: &Point,
     ) -> bool {
         if !self.is_active.get() {
             return true
         }
 
-        self.handle_touch(phase, id, touch_x, touch_y).await;
+        self.handle_touch(phase, id, touch_pos).await;
         true
     }
 }
