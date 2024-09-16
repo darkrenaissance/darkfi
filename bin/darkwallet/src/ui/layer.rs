@@ -221,8 +221,9 @@ impl UIObject for Layer {
         &self,
         sg: &SceneGraph,
         btn: MouseButton,
-        mouse_pos: Point,
+        mut mouse_pos: Point,
     ) -> bool {
+        mouse_pos -= self.rect.get().pos();
         for child_id in get_child_nodes_ordered(&sg, self.node_id) {
             let node = sg.get_node(child_id).unwrap();
             let obj = get_ui_object(node);
@@ -236,8 +237,9 @@ impl UIObject for Layer {
         &self,
         sg: &SceneGraph,
         btn: MouseButton,
-        mouse_pos: Point,
+        mut mouse_pos: Point,
     ) -> bool {
+        mouse_pos -= self.rect.get().pos();
         for child_id in get_child_nodes_ordered(&sg, self.node_id) {
             let node = sg.get_node(child_id).unwrap();
             let obj = get_ui_object(node);
@@ -247,7 +249,8 @@ impl UIObject for Layer {
         }
         false
     }
-    async fn handle_mouse_move(&self, sg: &SceneGraph, mouse_pos: Point) -> bool {
+    async fn handle_mouse_move(&self, sg: &SceneGraph, mut mouse_pos: Point) -> bool {
+        mouse_pos -= self.rect.get().pos();
         for child_id in get_child_nodes_ordered(&sg, self.node_id) {
             let node = sg.get_node(child_id).unwrap();
             let obj = get_ui_object(node);
@@ -257,7 +260,8 @@ impl UIObject for Layer {
         }
         false
     }
-    async fn handle_mouse_wheel(&self, sg: &SceneGraph, wheel_pos: Point) -> bool {
+    async fn handle_mouse_wheel(&self, sg: &SceneGraph, mut wheel_pos: Point) -> bool {
+        wheel_pos -= self.rect.get().pos();
         for child_id in get_child_nodes_ordered(&sg, self.node_id) {
             let node = sg.get_node(child_id).unwrap();
             let obj = get_ui_object(node);
@@ -272,8 +276,9 @@ impl UIObject for Layer {
         sg: &SceneGraph,
         phase: TouchPhase,
         id: u64,
-        touch_pos: Point,
+        mut touch_pos: Point,
     ) -> bool {
+        touch_pos -= self.rect.get().pos();
         for child_id in get_child_nodes_ordered(&sg, self.node_id) {
             let node = sg.get_node(child_id).unwrap();
             let obj = get_ui_object(node);

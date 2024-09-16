@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::ops::{Add, Sub};
+use std::ops::{Add, AddAssign, Sub, SubAssign};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Point {
@@ -65,6 +65,18 @@ impl Sub for Point {
 
     fn sub(self, other: Self) -> Self::Output {
         Self { x: self.x - other.x, y: self.y - other.y }
+    }
+}
+
+impl AddAssign for Point {
+    fn add_assign(&mut self, other: Self) {
+        *self = Self { x: self.x + other.x, y: self.y + other.y };
+    }
+}
+
+impl SubAssign for Point {
+    fn sub_assign(&mut self, other: Self) {
+        *self = Self { x: self.x - other.x, y: self.y - other.y };
     }
 }
 
