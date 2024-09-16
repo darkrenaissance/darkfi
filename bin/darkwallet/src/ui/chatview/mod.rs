@@ -44,7 +44,10 @@ use crate::{
         RenderApi, RenderApiPtr,
     },
     mesh::{Color, MeshBuilder, COLOR_BLUE, COLOR_GREEN},
-    prop::{PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyUint32, Role},
+    prop::{
+        PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyRect, PropertyUint32,
+        Role,
+    },
     pubsub::Subscription,
     ringbuf::RingBuffer,
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
@@ -53,7 +56,7 @@ use crate::{
     ExecutorPtr,
 };
 
-use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify, UIObject};
+use super::{get_parent_rect, DrawUpdate, OnModify, UIObject};
 
 const EPSILON: f32 = 0.001;
 const BIG_EPSILON: f32 = 0.05;
@@ -148,7 +151,7 @@ pub struct ChatView {
     touch_info: SyncMutex<Option<TouchInfo>>,
     touch_is_active: AtomicBool,
 
-    rect: PropertyPtr,
+    rect: PropertyRect,
     scroll: PropertyFloat32,
     font_size: PropertyFloat32,
     line_height: PropertyFloat32,
@@ -194,7 +197,7 @@ impl ChatView {
         let node = scene_graph.get_node(node_id).unwrap();
         let node_name = node.name.clone();
 
-        let rect = node.get_property("rect").expect("ChatView::rect");
+        let rect = PropertyRect::wrap(node, Role::Internal, "rect").unwrap();
         let scroll = PropertyFloat32::wrap(node, Role::Internal, "scroll", 0).unwrap();
         let font_size = PropertyFloat32::wrap(node, Role::Internal, "font_size", 0).unwrap();
         let line_height = PropertyFloat32::wrap(node, Role::Internal, "line_height", 0).unwrap();
@@ -358,7 +361,7 @@ impl ChatView {
     async fn select_line(&self, mut y: f32) {
         // The cursor is inside the rect. We just have to find which line it clicked.
         let scroll = self.scroll.get();
-        let rect = read_rect(self.rect.clone()).expect("bad rect property");
+        let rect = self.rect.get();
         let bottom = scroll + rect.y + rect.h;
 
         assert!(bottom >= y);
@@ -494,7 +497,7 @@ impl ChatView {
         //debug!(target: "ui::chatview", "ChatView::handle_bgload()");
         // Do we need to load some more?
         let scroll = self.scroll.get();
-        let mut rect = read_rect(self.rect.clone()).expect("bad rect property");
+        let rect = self.rect.get();
         let top = scroll + rect.h;
 
         let preload_height = PRELOAD_PAGES as f32 * rect.h;
@@ -564,7 +567,7 @@ impl ChatView {
         //debug!(target: "ui::chatview", "scrollview()");
         let old_scroll = self.scroll.get();
 
-        let rect = read_rect(self.rect.clone()).expect("bad rect property");
+        let rect = self.rect.get();
 
         let mut msgbuf = self.msgbuf.lock().await;
 
@@ -654,7 +657,7 @@ impl ChatView {
     }
 
     async fn redraw_cached(&self, msgbuf: &mut MessageBuffer) {
-        let rect = read_rect(self.rect.clone()).expect("bad rect property");
+        let rect = self.rect.get();
 
         let (mut mesh_instrs, freed) = self.get_meshes(msgbuf, &rect).await;
 
@@ -691,7 +694,8 @@ impl UIObject for ChatView {
         debug!(target: "ui::chatview", "ChatView::draw()");
 
         *self.parent_rect.lock().unwrap() = Some(parent_rect.clone());
-        let rect = eval_rect(self.rect.clone(), parent_rect).expect("bad rect property");
+        self.rect.eval(parent_rect).ok()?;
+        let rect = self.rect.get();
 
         let mut msgbuf = self.msgbuf.lock().await;
         msgbuf.adjust_width(rect.w);
@@ -758,7 +762,7 @@ impl UIObject for ChatView {
             return false
         }
 
-        let Ok(rect) = read_rect(self.rect.clone()) else { return false };
+        let rect = self.rect.get();
         if !rect.contains(mouse_pos) {
             return false
         }
@@ -792,7 +796,7 @@ impl UIObject for ChatView {
             return false
         }
 
-        let Ok(rect) = read_rect(self.rect.clone()) else { return false };
+        let rect = self.rect.get();
         if !rect.contains(mouse_pos) {
             return false
         }
@@ -804,7 +808,7 @@ impl UIObject for ChatView {
     async fn handle_mouse_wheel(&self, sg: &SceneGraph, wheel_pos: &Point) -> bool {
         //debug!(target: "ui::chatview", "handle_mouse_wheel({wheel_x}, {wheel_y})");
 
-        let Ok(rect) = read_rect(self.rect.clone()) else { return false };
+        let rect = self.rect.get();
 
         let mouse_pos = self.mouse_pos.lock().unwrap().clone();
         if !rect.contains(&mouse_pos) {
@@ -829,7 +833,7 @@ impl UIObject for ChatView {
             return false
         }
 
-        let Ok(rect) = read_rect(self.rect.clone()) else { return false };
+        let rect = self.rect.get();
         //debug!(target: "ui::chatview", "handle_touch({phase:?}, {touch_x}, {touch_y})");
 
         let touch_y = touch_pos.y;

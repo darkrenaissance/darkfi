@@ -30,7 +30,9 @@ use crate::{
 };
 
 mod wrap;
-pub use wrap::{PropertyBool, PropertyColor, PropertyFloat32, PropertyStr, PropertyUint32};
+pub use wrap::{
+    PropertyBool, PropertyColor, PropertyFloat32, PropertyRect, PropertyStr, PropertyUint32,
+};
 
 type Buffer = Arc<Vec<u8>>;
 
@@ -211,6 +213,7 @@ pub enum ModifyAction {
 
 pub type PropertyPtr = Arc<Property>;
 
+#[derive(Debug)]
 pub struct Property {
     pub name: String,
     pub typ: PropertyType,
@@ -551,11 +554,19 @@ impl Property {
         if i >= vals.len() {
             return Err(Error::PropertyWrongIndex)
         }
-        Ok(vals[i].clone())
+        let val = vals[i].clone();
+        Ok(val)
     }
 
     pub fn get_value(&self, i: usize) -> Result<PropertyValue> {
         let val = self.get_raw_value(i)?;
+        if val.is_expr() {
+            let cached = self.get_cached(i)?;
+            if cached.is_null() {
+                return Ok(self.defaults[i].clone())
+            }
+            return Ok(cached)
+        }
         if val.is_unset() {
             return Ok(self.defaults[i].clone())
         }
@@ -634,7 +645,7 @@ impl Property {
     }
 
     pub fn get_expr(&self, i: usize) -> Result<Arc<SExprCode>> {
-        self.get_value(i)?.as_sexpr()
+        self.get_raw_value(i)?.as_sexpr()
     }
 
     pub fn get_cached(&self, i: usize) -> Result<PropertyValue> {

@@ -25,13 +25,13 @@ use std::sync::{
 
 use crate::{
     gfx::{GraphicsEventPublisherPtr, Point, Rectangle},
-    prop::{PropertyBool, PropertyPtr, PropertyUint32, Role},
+    prop::{PropertyBool, PropertyPtr, PropertyRect, PropertyUint32, Role},
     pubsub::Subscription,
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
     ExecutorPtr,
 };
 
-use super::{eval_rect, read_rect, DrawUpdate, UIObject};
+use super::{DrawUpdate, UIObject};
 
 pub type ButtonPtr = Arc<Button>;
 
@@ -40,7 +40,7 @@ pub struct Button {
     sg: SceneGraphPtr2,
 
     is_active: PropertyBool,
-    rect: PropertyPtr,
+    rect: PropertyRect,
     z_index: PropertyUint32,
 
     mouse_btn_held: AtomicBool,
@@ -57,7 +57,7 @@ impl Button {
         let node = scene_graph.get_node(node_id).unwrap();
         //let node_name = node.name.clone();
         let is_active = PropertyBool::wrap(node, Role::Internal, "is_active", 0).unwrap();
-        let rect = node.get_property("rect").expect("Button::rect");
+        let rect = PropertyRect::wrap(node, Role::Internal, "rect").unwrap();
         let z_index = PropertyUint32::wrap(node, Role::Internal, "z_index", 0).unwrap();
         //let sig = node.get_signal("click").expect("Button::click");
         drop(scene_graph);
@@ -73,14 +73,6 @@ impl Button {
 
         Pimpl::Button(self_)
     }
-
-    fn get_cached_rect(&self) -> Option<Rectangle> {
-        let Ok(rect) = read_rect(self.rect.clone()) else {
-            error!(target: "ui::button", "cached_rect is None");
-            return None
-        };
-        Some(rect)
-    }
 }
 
 #[async_trait]
@@ -90,9 +82,7 @@ impl UIObject for Button {
     }
 
     async fn draw(&self, _: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
-        if let Err(err) = eval_rect(self.rect.clone(), parent_rect) {
-            panic!("Button bad rect property: {}", err);
-        }
+        let _ = self.rect.eval(parent_rect);
         None
     }
 
@@ -110,7 +100,7 @@ impl UIObject for Button {
             return false
         }
 
-        let Some(rect) = self.get_cached_rect() else { return false };
+        let rect = self.rect.get();
         if !rect.contains(mouse_pos) {
             return false
         }
@@ -140,7 +130,7 @@ impl UIObject for Button {
         }
 
         // Are we releasing the click inside the button?
-        let Some(rect) = self.get_cached_rect() else { return false };
+        let rect = self.rect.get();
         if !rect.contains(mouse_pos) {
             return false
         }
@@ -168,7 +158,7 @@ impl UIObject for Button {
             return false
         }
 
-        let Some(rect) = self.get_cached_rect() else { return false };
+        let rect = self.rect.get();
         if !rect.contains(touch_pos) {
             //debug!(target: "ui::chatview", "not inside rect");
             return false

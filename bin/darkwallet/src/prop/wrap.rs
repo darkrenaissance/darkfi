@@ -16,11 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use super::{PropertyPtr, Role};
 use crate::{
     error::{Error, Result},
+    expr::{SExprMachine, SExprVal},
+    gfx::Rectangle,
     scene::SceneNode,
 };
+
+use super::{PropertyPtr, Role};
 
 #[derive(Clone)]
 pub struct PropertyBool {
@@ -183,6 +186,62 @@ impl PropertyColor {
         self.prop.set_f32(self.role, 1, val[1]).unwrap();
         self.prop.set_f32(self.role, 2, val[2]).unwrap();
         self.prop.set_f32(self.role, 3, val[3]).unwrap();
+    }
+
+    pub fn prop(&self) -> PropertyPtr {
+        self.prop.clone()
+    }
+}
+
+#[derive(Clone)]
+pub struct PropertyRect {
+    prop: PropertyPtr,
+    role: Role,
+}
+
+impl PropertyRect {
+    pub fn wrap(node: &SceneNode, role: Role, prop_name: &str) -> Result<Self> {
+        let prop = node.get_property(prop_name).ok_or(Error::PropertyNotFound)?;
+
+        if !prop.is_bounded() || prop.get_len() != 4 {
+            return Err(Error::PropertyWrongLen)
+        }
+
+        // Test if it works
+        let _ = prop.get_f32(0)?;
+
+        Ok(Self { prop, role })
+    }
+
+    pub fn eval(&self, parent_rect: &Rectangle) -> Result<()> {
+        for i in 0..4 {
+            if !self.prop.is_expr(i)? {
+                continue
+            }
+
+            let expr = self.prop.get_expr(i).unwrap();
+
+            let machine = SExprMachine {
+                globals: vec![
+                    ("w".to_string(), SExprVal::Float32(parent_rect.w)),
+                    ("h".to_string(), SExprVal::Float32(parent_rect.h)),
+                ],
+                stmts: &expr,
+            };
+
+            let v = machine.call()?.as_f32()?;
+            self.prop.set_cache_f32(i, v).unwrap();
+        }
+        Ok(())
+    }
+
+    pub fn get(&self) -> Rectangle {
+        Rectangle::from_array([
+            self.prop.get_f32(0).unwrap(),
+            self.prop.get_f32(1).unwrap(),
+            self.prop.get_f32(2).unwrap(),
+            self.prop.get_f32(3).unwrap(),
+        ])
     }
 
     pub fn prop(&self) -> PropertyPtr {

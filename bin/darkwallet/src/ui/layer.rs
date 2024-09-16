@@ -24,14 +24,14 @@ use std::sync::{Arc, Weak};
 
 use crate::{
     gfx::{GfxDrawCall, GfxDrawInstruction, Point, Rectangle, RenderApiPtr},
-    prop::{PropertyBool, PropertyPtr, PropertyUint32, Role},
+    prop::{PropertyBool, PropertyPtr, PropertyRect, PropertyUint32, Role},
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
     ExecutorPtr,
 };
 
 use super::{
-    eval_rect, get_child_nodes_ordered, get_parent_rect, get_ui_object, read_rect, DrawUpdate,
-    OnModify, Stoppable, UIObject,
+    get_child_nodes_ordered, get_parent_rect, get_ui_object, DrawUpdate, OnModify, Stoppable,
+    UIObject,
 };
 
 pub type LayerPtr = Arc<Layer>;
@@ -47,7 +47,7 @@ pub struct Layer {
     dc_key: u64,
 
     is_visible: PropertyBool,
-    rect: PropertyPtr,
+    rect: PropertyRect,
     z_index: PropertyUint32,
 }
 
@@ -64,13 +64,13 @@ impl Layer {
 
         let is_visible =
             PropertyBool::wrap(node, Role::Internal, "is_visible", 0).expect("Layer::is_visible");
-        let rect = node.get_property("rect").expect("Layer::rect");
+        let rect = PropertyRect::wrap(node, Role::Internal, "rect").unwrap();
         let z_index = PropertyUint32::wrap(node, Role::Internal, "z_index", 0).unwrap();
         drop(sg);
 
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
             let mut on_modify = OnModify::new(ex.clone(), node_name, node_id, me.clone());
-            on_modify.when_change(rect.clone(), Self::redraw);
+            on_modify.when_change(rect.prop(), Self::redraw);
 
             Self {
                 sg: sg_ptr,
@@ -134,13 +134,8 @@ impl UIObject for Layer {
             return None
         }
 
-        if let Err(err) = eval_rect(self.rect.clone(), parent_rect) {
-            panic!("Node {:?} bad rect property: {}", node, err);
-        }
-
-        let Ok(mut rect) = read_rect(self.rect.clone()) else {
-            panic!("Node {:?} bad rect property", node);
-        };
+        self.rect.eval(parent_rect).ok()?;
+        let mut rect = self.rect.get();
 
         rect.x += parent_rect.x;
         rect.y += parent_rect.x;

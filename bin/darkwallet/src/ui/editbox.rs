@@ -36,8 +36,8 @@ use crate::{
     },
     mesh::{MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_WHITE},
     prop::{
-        PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyStr, PropertyUint32,
-        Role,
+        PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyRect, PropertyStr,
+        PropertyUint32, Role,
     },
     pubsub::Subscription,
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
@@ -46,7 +46,7 @@ use crate::{
     ExecutorPtr,
 };
 
-use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify, Stoppable, UIObject};
+use super::{DrawUpdate, OnModify, Stoppable, UIObject};
 
 // Pixel width of the cursor
 const CURSOR_WIDTH: f32 = 2.;
@@ -163,7 +163,7 @@ pub struct EditBox {
 
     is_active: PropertyBool,
     is_focused: PropertyBool,
-    rect: PropertyPtr,
+    rect: PropertyRect,
     baseline: PropertyFloat32,
     scroll: PropertyFloat32,
     cursor_pos: PropertyUint32,
@@ -198,7 +198,7 @@ impl EditBox {
 
         let is_active = PropertyBool::wrap(node, Role::Internal, "is_active", 0).unwrap();
         let is_focused = PropertyBool::wrap(node, Role::Internal, "is_focused", 0).unwrap();
-        let rect = node.get_property("rect").expect("EditBox::rect");
+        let rect = PropertyRect::wrap(node, Role::Internal, "rect").unwrap();
         let baseline = PropertyFloat32::wrap(node, Role::Internal, "baseline", 0).unwrap();
         let scroll = PropertyFloat32::wrap(node, Role::Internal, "scroll", 0).unwrap();
         let cursor_pos = PropertyUint32::wrap(node, Role::Internal, "cursor_pos", 0).unwrap();
@@ -233,7 +233,7 @@ impl EditBox {
             async fn redraw(self_: Arc<EditBox>) {
                 self_.redraw().await;
             }
-            on_modify.when_change(rect.clone(), redraw);
+            on_modify.when_change(rect.prop(), redraw);
             on_modify.when_change(baseline.prop(), redraw);
             // The commented properties are modified on input events
             // So then redraw() will get repeatedly triggered when these properties
@@ -437,7 +437,7 @@ impl EditBox {
             return
         }
 
-        let Some(rect) = self.cached_rect() else { return };
+        let rect = self.rect.get();
 
         // clicking inside box will:
         // 1. make it active
@@ -494,7 +494,7 @@ impl EditBox {
         // just scroll to the end
         // also set cursor_pos too
 
-        let Some(rect) = self.cached_rect() else { return };
+        let rect = self.rect.get();
         let cpos = self.find_closest_glyph_idx(pos.x, &rect);
 
         self.cursor_pos.set(cpos);
@@ -885,24 +885,10 @@ impl EditBox {
         self.redraw().await;
     }
 
-    /// Beware of this method. Here be dragons.
-    /// Possibly racy so we limit it just to cursor scrolling.
-    fn cached_rect(&self) -> Option<Rectangle> {
-        let Ok(rect) = read_rect(self.rect.clone()) else {
-            error!(target: "ui::editbox", "cached_rect is None");
-            return None
-        };
-        Some(rect)
-    }
-
     /// Whenever the cursor property is modified this MUST be called
     /// to recalculate the scroll x property.
     fn apply_cursor_scrolling(&self) {
-        // This may need updating but yolo rite
-        let Some(rect) = self.cached_rect() else {
-            error!(target: "ui::editbox", "cached_rect() returned None");
-            return
-        };
+        let rect = self.rect.get();
 
         let cursor_pos = self.cursor_pos.get() as usize;
         let mut scroll = self.scroll.get();
@@ -964,7 +950,7 @@ impl EditBox {
     }
 
     fn draw_cached(&self) -> Option<DrawUpdate> {
-        let Ok(rect) = read_rect(self.rect.clone()) else { panic!("Node bad rect property") };
+        let rect = self.rect.get();
 
         // draw will recalc this when it's None
         let render_info = self.regen_mesh(rect.clone());
@@ -1060,9 +1046,7 @@ impl UIObject for EditBox {
         // Only used for debug messages
         let node = sg.get_node(self.node_id).unwrap();
 
-        if let Err(err) = eval_rect(self.rect.clone(), parent_rect) {
-            panic!("Node {:?} bad rect property: {}", node, err);
-        }
+        self.rect.eval(parent_rect).ok()?;
 
         self.draw_cached()
     }

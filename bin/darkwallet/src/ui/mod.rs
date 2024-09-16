@@ -167,38 +167,7 @@ impl<T: Send + Sync + 'static> OnModify<T> {
     }
 }
 
-pub fn eval_rect(rect: PropertyPtr, parent_rect: &Rectangle) -> Result<Rectangle> {
-    if rect.array_len != 4 {
-        return Err(Error::PropertyWrongLen)
-    }
-
-    let mut rect_arr = [0.; 4];
-
-    for i in 0..4 {
-        if !rect.is_expr(i)? {
-            rect_arr[i] = rect.get_f32(i)?;
-            continue
-        }
-
-        let expr = rect.get_expr(i).unwrap();
-
-        let machine = SExprMachine {
-            globals: vec![
-                ("w".to_string(), SExprVal::Float32(parent_rect.w)),
-                ("h".to_string(), SExprVal::Float32(parent_rect.h)),
-            ],
-            stmts: &expr,
-        };
-
-        let v = machine.call()?.as_f32()?;
-        rect.set_cache_f32(i, v).unwrap();
-
-        rect_arr[i] = v;
-    }
-    Ok(Rectangle::from_array(rect_arr))
-}
-
-pub fn read_rect(rect_prop: PropertyPtr) -> Result<Rectangle> {
+fn read_rect(rect_prop: PropertyPtr) -> Result<Rectangle> {
     if rect_prop.array_len != 4 {
         return Err(Error::PropertyWrongLen)
     }

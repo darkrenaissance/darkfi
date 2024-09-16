@@ -27,15 +27,15 @@ use crate::{
     },
     mesh::{Color, MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_WHITE},
     prop::{
-        PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyStr, PropertyUint32,
-        Role,
+        PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyRect, PropertyStr,
+        PropertyUint32, Role,
     },
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
     text::{self, GlyphPositionIter, TextShaper, TextShaperPtr},
     ExecutorPtr,
 };
 
-use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify, Stoppable, UIObject};
+use super::{get_parent_rect, DrawUpdate, OnModify, Stoppable, UIObject};
 
 pub type TextPtr = Arc<Text>;
 
@@ -55,7 +55,7 @@ pub struct Text {
     dc_key: u64,
 
     node_id: SceneNodeId,
-    rect: PropertyPtr,
+    rect: PropertyRect,
     z_index: PropertyUint32,
     text: PropertyStr,
     font_size: PropertyFloat32,
@@ -75,7 +75,7 @@ impl Text {
         let scene_graph = sg.lock().await;
         let node = scene_graph.get_node(node_id).unwrap();
         let node_name = node.name.clone();
-        let rect = node.get_property("rect").expect("Text::rect");
+        let rect = PropertyRect::wrap(node, Role::Internal, "rect").unwrap();
         let z_index = PropertyUint32::wrap(node, Role::Internal, "z_index", 0).unwrap();
         let text = PropertyStr::wrap(node, Role::Internal, "text", 0).unwrap();
         let font_size = PropertyFloat32::wrap(node, Role::Internal, "font_size", 0).unwrap();
@@ -97,7 +97,7 @@ impl Text {
 
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
             let mut on_modify = OnModify::new(ex, node_name, node_id, me.clone());
-            on_modify.when_change(rect.clone(), Self::redraw);
+            on_modify.when_change(rect.prop(), Self::redraw);
             on_modify.when_change(z_index.prop(), Self::redraw);
             on_modify.when_change(text.prop(), Self::redraw);
             on_modify.when_change(font_size.prop(), Self::redraw);
@@ -233,13 +233,8 @@ impl UIObject for Text {
             num_elements: render_info.mesh.num_elements,
         };
 
-        if let Err(err) = eval_rect(self.rect.clone(), parent_rect) {
-            panic!("Node {:?} bad rect property: {}", node, err);
-        }
-
-        let Ok(rect) = read_rect(self.rect.clone()) else {
-            panic!("Node {:?} bad rect property", node);
-        };
+        self.rect.eval(parent_rect).ok()?;
+        let rect = self.rect.get();
 
         let off_x = rect.x / parent_rect.w;
         let off_y = rect.y / parent_rect.h;

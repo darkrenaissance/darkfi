@@ -27,13 +27,13 @@ use crate::{
         GfxBufferId, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, Rectangle, RenderApiPtr, Vertex,
     },
     mesh::Color,
-    prop::{PropertyPtr, PropertyUint32, Role},
+    prop::{PropertyPtr, PropertyRect, PropertyUint32, Role},
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
     util::enumerate,
     ExecutorPtr,
 };
 
-use super::{eval_rect, get_parent_rect, read_rect, DrawUpdate, OnModify, Stoppable, UIObject};
+use super::{get_parent_rect, DrawUpdate, OnModify, Stoppable, UIObject};
 
 pub mod shape;
 use shape::VectorShape;
@@ -51,7 +51,7 @@ pub struct VectorArt {
     dc_key: u64,
 
     node_id: SceneNodeId,
-    rect: PropertyPtr,
+    rect: PropertyRect,
     z_index: PropertyUint32,
 }
 
@@ -66,13 +66,13 @@ impl VectorArt {
         let scene_graph = sg.lock().await;
         let node = scene_graph.get_node(node_id).unwrap();
         let node_name = node.name.clone();
-        let rect = node.get_property("rect").expect("Mesh::rect");
+        let rect = PropertyRect::wrap(node, Role::Internal, "rect").unwrap();
         let z_index = PropertyUint32::wrap(node, Role::Internal, "z_index", 0).unwrap();
         drop(scene_graph);
 
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
             let mut on_modify = OnModify::new(ex, node_name, node_id, me.clone());
-            on_modify.when_change(rect.clone(), Self::redraw);
+            on_modify.when_change(rect.prop(), Self::redraw);
             on_modify.when_change(z_index.prop(), Self::redraw);
 
             Self {
@@ -132,13 +132,8 @@ impl UIObject for VectorArt {
         // Only used for debug messages
         let node = sg.get_node(self.node_id).unwrap();
 
-        if let Err(err) = eval_rect(self.rect.clone(), parent_rect) {
-            panic!("Node {:?} bad rect property: {}", node, err);
-        }
-
-        let Ok(mut rect) = read_rect(self.rect.clone()) else {
-            panic!("Node {:?} bad rect property", node);
-        };
+        self.rect.eval(parent_rect).ok()?;
+        let mut rect = self.rect.get();
 
         rect.x += parent_rect.x;
         rect.y += parent_rect.x;
