@@ -124,7 +124,6 @@ impl UIObject for Layer {
         self.z_index.get()
     }
 
-    //#[async_recursion]
     async fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
         debug!(target: "ui::layer", "Layer::draw()");
         let node = sg.get_node(self.node_id).unwrap();
@@ -135,22 +134,20 @@ impl UIObject for Layer {
         }
 
         self.rect.eval(parent_rect).ok()?;
-        let mut rect = self.rect.get();
 
-        rect.x += parent_rect.x;
-        rect.y += parent_rect.x;
+        let mut screen_rect = self.rect.get() + parent_rect.pos();
 
-        if !parent_rect.includes(&rect) {
+        if !parent_rect.includes(&screen_rect) {
             error!(
                 target: "ui::layer",
                 "layer '{}':{} rect {:?} is not inside parent {:?}",
-                node.name, node.id, rect, parent_rect
+                node.name, node.id, screen_rect, parent_rect
             );
             return None
         }
 
         debug!(target: "ui::layer", "Parent rect: {:?}", parent_rect);
-        debug!(target: "ui::layer", "Viewport rect: {:?}", rect);
+        debug!(target: "ui::layer", "Viewport rect: {:?}", screen_rect);
 
         // Apply viewport
 
@@ -162,7 +159,7 @@ impl UIObject for Layer {
         for child_id in get_child_nodes_ordered(&sg, self.node_id) {
             let node = sg.get_node(child_id).unwrap();
             let obj = get_ui_object(node);
-            let Some(mut draw_update) = obj.draw(sg, &rect).await else {
+            let Some(mut draw_update) = obj.draw(sg, &screen_rect).await else {
                 debug!(target: "ui::layer", "Skipped draw() of {node:?}");
                 continue
             };
@@ -174,7 +171,7 @@ impl UIObject for Layer {
         }
 
         let dc = GfxDrawCall {
-            instrs: vec![GfxDrawInstruction::ApplyViewport(rect)],
+            instrs: vec![GfxDrawInstruction::ApplyViewport(screen_rect)],
             dcs: child_calls,
             z_index: 0,
         };
@@ -224,7 +221,7 @@ impl UIObject for Layer {
         &self,
         sg: &SceneGraph,
         btn: MouseButton,
-        mouse_pos: &Point,
+        mouse_pos: Point,
     ) -> bool {
         for child_id in get_child_nodes_ordered(&sg, self.node_id) {
             let node = sg.get_node(child_id).unwrap();
@@ -239,7 +236,7 @@ impl UIObject for Layer {
         &self,
         sg: &SceneGraph,
         btn: MouseButton,
-        mouse_pos: &Point,
+        mouse_pos: Point,
     ) -> bool {
         for child_id in get_child_nodes_ordered(&sg, self.node_id) {
             let node = sg.get_node(child_id).unwrap();
@@ -250,7 +247,7 @@ impl UIObject for Layer {
         }
         false
     }
-    async fn handle_mouse_move(&self, sg: &SceneGraph, mouse_pos: &Point) -> bool {
+    async fn handle_mouse_move(&self, sg: &SceneGraph, mouse_pos: Point) -> bool {
         for child_id in get_child_nodes_ordered(&sg, self.node_id) {
             let node = sg.get_node(child_id).unwrap();
             let obj = get_ui_object(node);
@@ -260,7 +257,7 @@ impl UIObject for Layer {
         }
         false
     }
-    async fn handle_mouse_wheel(&self, sg: &SceneGraph, wheel_pos: &Point) -> bool {
+    async fn handle_mouse_wheel(&self, sg: &SceneGraph, wheel_pos: Point) -> bool {
         for child_id in get_child_nodes_ordered(&sg, self.node_id) {
             let node = sg.get_node(child_id).unwrap();
             let obj = get_ui_object(node);
@@ -275,7 +272,7 @@ impl UIObject for Layer {
         sg: &SceneGraph,
         phase: TouchPhase,
         id: u64,
-        touch_pos: &Point,
+        touch_pos: Point,
     ) -> bool {
         for child_id in get_child_nodes_ordered(&sg, self.node_id) {
             let node = sg.get_node(child_id).unwrap();

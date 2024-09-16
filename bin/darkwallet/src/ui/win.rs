@@ -21,7 +21,7 @@ use std::sync::{Arc, Weak};
 
 use crate::{
     gfx::{GfxDrawCall, GraphicsEventPublisherPtr, Point, Rectangle, RenderApiPtr},
-    prop::{PropertyPtr, Role},
+    prop::{PropertyFloat32, PropertyPtr, Role},
     pubsub::Subscription,
     scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
     ExecutorPtr,
@@ -38,7 +38,8 @@ pub struct Window {
     // Task is dropped at the end of the scope for Window, hence ending it
     #[allow(dead_code)]
     tasks: Vec<smol::Task<()>>,
-    screen_size_prop: PropertyPtr,
+    screen_w: PropertyFloat32,
+    screen_h: PropertyFloat32,
     render_api: RenderApiPtr,
 }
 
@@ -55,7 +56,8 @@ impl Window {
         let scene_graph = sg.lock().await;
         let node = scene_graph.get_node(node_id).unwrap();
         let node_name = node.name.clone();
-        let screen_size_prop = node.get_property("screen_size").unwrap();
+        let screen_w = PropertyFloat32::wrap(node, Role::Internal, "screen_size", 0).unwrap();
+        let screen_h = PropertyFloat32::wrap(node, Role::Internal, "screen_size", 1).unwrap();
         let scale_prop = node.get_property("scale").unwrap();
         drop(scene_graph);
 
@@ -63,7 +65,8 @@ impl Window {
             // Start a task monitoring for window resize events
             // which updates screen_size
             let ev_sub = event_pub.subscribe_resize();
-            let screen_size_prop2 = screen_size_prop.clone();
+            let screen_w2 = screen_w.clone();
+            let screen_h2 = screen_h.clone();
             let me2 = me.clone();
             let sg2 = sg.clone();
             let resize_task = ex.spawn(async move {
@@ -75,8 +78,8 @@ impl Window {
 
                     debug!(target: "ui::win", "Window resized ({w}, {h})");
                     // Now update the properties
-                    screen_size_prop2.set_f32(Role::Internal, 0, w).unwrap();
-                    screen_size_prop2.set_f32(Role::Internal, 1, h).unwrap();
+                    screen_w2.set(w);
+                    screen_h2.set(h);
 
                     let Some(self_) = me2.upgrade() else {
                         // Should not happen
@@ -153,7 +156,7 @@ impl Window {
             ];
             tasks.append(&mut on_modify.tasks);
 
-            Self { node_id, sg, tasks, screen_size_prop, render_api }
+            Self { node_id, sg, tasks, screen_w, screen_h, render_api }
         });
 
         Pimpl::Window(self_)
@@ -333,7 +336,7 @@ impl Window {
         for child_id in get_child_nodes_ordered(&sg, self.node_id) {
             let node = sg.get_node(child_id).unwrap();
             let obj = get_ui_object(node);
-            if obj.handle_mouse_btn_down(&sg, btn.clone(), &mouse_pos).await {
+            if obj.handle_mouse_btn_down(&sg, btn.clone(), mouse_pos).await {
                 return
             }
         }
@@ -345,7 +348,7 @@ impl Window {
         for child_id in get_child_nodes_ordered(&sg, self.node_id) {
             let node = sg.get_node(child_id).unwrap();
             let obj = get_ui_object(node);
-            if obj.handle_mouse_btn_up(&sg, btn.clone(), &mouse_pos).await {
+            if obj.handle_mouse_btn_up(&sg, btn.clone(), mouse_pos).await {
                 return
             }
         }
@@ -357,7 +360,7 @@ impl Window {
         for child_id in get_child_nodes_ordered(&sg, self.node_id) {
             let node = sg.get_node(child_id).unwrap();
             let obj = get_ui_object(node);
-            if obj.handle_mouse_move(&sg, &mouse_pos).await {
+            if obj.handle_mouse_move(&sg, mouse_pos).await {
                 return
             }
         }
@@ -369,7 +372,7 @@ impl Window {
         for child_id in get_child_nodes_ordered(&sg, self.node_id) {
             let node = sg.get_node(child_id).unwrap();
             let obj = get_ui_object(node);
-            if obj.handle_mouse_wheel(&sg, &wheel_pos).await {
+            if obj.handle_mouse_wheel(&sg, wheel_pos).await {
                 return
             }
         }
@@ -381,21 +384,21 @@ impl Window {
         for child_id in get_child_nodes_ordered(&sg, self.node_id) {
             let node = sg.get_node(child_id).unwrap();
             let obj = get_ui_object(node);
-            if obj.handle_touch(&sg, phase, id, &touch_pos).await {
+            if obj.handle_touch(&sg, phase, id, touch_pos).await {
                 return
             }
         }
     }
 
     pub async fn draw(&self, sg: &SceneGraph) {
-        let screen_width = self.screen_size_prop.get_f32(0).unwrap();
-        let screen_height = self.screen_size_prop.get_f32(1).unwrap();
-        debug!(target: "ui::win", "Window::draw({screen_width}, {screen_height})");
+        let screen_w = self.screen_w.get();
+        let screen_h = self.screen_h.get();
+        debug!(target: "ui::win", "Window::draw({screen_w}, {screen_h})");
 
         // SceneGraph should remain locked for the entire draw
         let self_node = sg.get_node(self.node_id).unwrap();
 
-        let parent_rect = Rectangle::from_array([0., 0., screen_width, screen_height]);
+        let screen_rect = Rectangle::new(0., 0., screen_w, screen_h);
 
         let mut draw_calls = vec![];
         let mut child_calls = vec![];
@@ -405,7 +408,7 @@ impl Window {
         for child_id in get_child_nodes_ordered(&sg, self.node_id) {
             let node = sg.get_node(child_id).unwrap();
             let obj = get_ui_object(node);
-            let Some(mut draw_update) = obj.draw(sg, &parent_rect).await else {
+            let Some(mut draw_update) = obj.draw(sg, &screen_rect).await else {
                 error!(target: "ui::layer", "draw() of {node:?} failed");
                 continue
             };

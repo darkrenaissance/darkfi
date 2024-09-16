@@ -31,7 +31,8 @@ use crate::{
 
 mod wrap;
 pub use wrap::{
-    PropertyBool, PropertyColor, PropertyFloat32, PropertyRect, PropertyStr, PropertyUint32,
+    PropertyBool, PropertyColor, PropertyFloat32, PropertyPoint, PropertyRect, PropertyStr,
+    PropertyUint32,
 };
 
 type Buffer = Arc<Vec<u8>>;

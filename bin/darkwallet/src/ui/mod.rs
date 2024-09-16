@@ -80,7 +80,7 @@ pub trait UIObject: Sync {
         &self,
         sg: &SceneGraph,
         btn: MouseButton,
-        mouse_pos: &Point,
+        mouse_pos: Point,
     ) -> bool {
         false
     }
@@ -88,14 +88,14 @@ pub trait UIObject: Sync {
         &self,
         sg: &SceneGraph,
         btn: MouseButton,
-        mouse_pos: &Point,
+        mouse_pos: Point,
     ) -> bool {
         false
     }
-    async fn handle_mouse_move(&self, sg: &SceneGraph, mouse_pos: &Point) -> bool {
+    async fn handle_mouse_move(&self, sg: &SceneGraph, mouse_pos: Point) -> bool {
         false
     }
-    async fn handle_mouse_wheel(&self, sg: &SceneGraph, wheel_pos: &Point) -> bool {
+    async fn handle_mouse_wheel(&self, sg: &SceneGraph, wheel_pos: Point) -> bool {
         false
     }
     async fn handle_touch(
@@ -103,7 +103,7 @@ pub trait UIObject: Sync {
         sg: &SceneGraph,
         phase: TouchPhase,
         id: u64,
-        touch_pos: &Point,
+        touch_pos: Point,
     ) -> bool {
         false
     }

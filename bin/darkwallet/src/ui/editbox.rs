@@ -432,7 +432,7 @@ impl EditBox {
         self.redraw().await;
     }
 
-    async fn handle_click_down(&self, btn: MouseButton, mouse_pos: &Point) {
+    async fn handle_click_down(&self, btn: MouseButton, mouse_pos: Point) {
         if btn != MouseButton::Left {
             return
         }
@@ -442,7 +442,7 @@ impl EditBox {
         // clicking inside box will:
         // 1. make it active
         // 2. begin selection
-        if rect.contains(&mouse_pos) {
+        if rect.contains(mouse_pos) {
             window::show_keyboard(true);
 
             if self.is_focused.get() {
@@ -476,7 +476,7 @@ impl EditBox {
 
         self.redraw().await;
     }
-    fn handle_click_up(&self, btn: MouseButton, pos: &Point) {
+    fn handle_click_up(&self, btn: MouseButton, pos: Point) {
         if btn != MouseButton::Left {
             return
         }
@@ -484,7 +484,7 @@ impl EditBox {
         // releasing mouse button will end selection
         self.mouse_btn_held.store(false, Ordering::Relaxed);
     }
-    async fn handle_cursor_move(&self, pos: &Point) {
+    async fn handle_cursor_move(&self, pos: Point) {
         if !self.mouse_btn_held.load(Ordering::Relaxed) {
             return;
         }
@@ -504,7 +504,7 @@ impl EditBox {
         self.redraw().await;
     }
 
-    async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_pos: &Point) {
+    async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_pos: Point) {
         // Ignore multi-touch
         if id != 0 {
             return
@@ -1115,7 +1115,7 @@ impl UIObject for EditBox {
         &self,
         sg: &SceneGraph,
         btn: MouseButton,
-        mouse_pos: &Point,
+        mouse_pos: Point,
     ) -> bool {
         if !self.is_active.get() {
             return true
@@ -1129,7 +1129,7 @@ impl UIObject for EditBox {
         &self,
         sg: &SceneGraph,
         btn: MouseButton,
-        mouse_pos: &Point,
+        mouse_pos: Point,
     ) -> bool {
         if !self.is_active.get() {
             return true
@@ -1139,7 +1139,7 @@ impl UIObject for EditBox {
         true
     }
 
-    async fn handle_mouse_move(&self, sg: &SceneGraph, mouse_pos: &Point) -> bool {
+    async fn handle_mouse_move(&self, sg: &SceneGraph, mouse_pos: Point) -> bool {
         if !self.is_active.get() {
             return false
         }
@@ -1153,7 +1153,7 @@ impl UIObject for EditBox {
         sg: &SceneGraph,
         phase: TouchPhase,
         id: u64,
-        touch_pos: &Point,
+        touch_pos: Point,
     ) -> bool {
         if !self.is_active.get() {
             return true

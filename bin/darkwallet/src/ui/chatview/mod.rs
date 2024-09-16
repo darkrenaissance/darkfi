@@ -756,7 +756,7 @@ impl UIObject for ChatView {
         &self,
         sg: &SceneGraph,
         btn: MouseButton,
-        mouse_pos: &Point,
+        mouse_pos: Point,
     ) -> bool {
         if btn != MouseButton::Left {
             return false
@@ -776,17 +776,17 @@ impl UIObject for ChatView {
         &self,
         sg: &SceneGraph,
         btn: MouseButton,
-        mouse_pos: &Point,
+        mouse_pos: Point,
     ) -> bool {
         if btn != MouseButton::Left {
             return false
         }
 
         self.mouse_btn_held.store(false, Ordering::Relaxed);
-        true
+        false
     }
 
-    async fn handle_mouse_move(&self, sg: &SceneGraph, mouse_pos: &Point) -> bool {
+    async fn handle_mouse_move(&self, sg: &SceneGraph, mouse_pos: Point) -> bool {
         //debug!(target: "ui::chatview", "handle_mouse_move({mouse_x}, {mouse_y})");
 
         // We store the mouse pos for use in handle_mouse_wheel()
@@ -805,13 +805,13 @@ impl UIObject for ChatView {
         false
     }
 
-    async fn handle_mouse_wheel(&self, sg: &SceneGraph, wheel_pos: &Point) -> bool {
+    async fn handle_mouse_wheel(&self, sg: &SceneGraph, wheel_pos: Point) -> bool {
         //debug!(target: "ui::chatview", "handle_mouse_wheel({wheel_x}, {wheel_y})");
 
         let rect = self.rect.get();
 
         let mouse_pos = self.mouse_pos.lock().unwrap().clone();
-        if !rect.contains(&mouse_pos) {
+        if !rect.contains(mouse_pos) {
             //debug!(target: "ui::chatview", "not inside rect");
             return false
         }
@@ -826,7 +826,7 @@ impl UIObject for ChatView {
         sg: &SceneGraph,
         phase: TouchPhase,
         id: u64,
-        touch_pos: &Point,
+        touch_pos: Point,
     ) -> bool {
         // Ignore multi-touch
         if id != 0 {

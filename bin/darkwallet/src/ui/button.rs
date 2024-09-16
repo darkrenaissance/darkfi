@@ -90,7 +90,7 @@ impl UIObject for Button {
         &self,
         sg: &SceneGraph,
         btn: MouseButton,
-        mouse_pos: &Point,
+        mouse_pos: Point,
     ) -> bool {
         if !self.is_active.get() {
             return false
@@ -113,7 +113,7 @@ impl UIObject for Button {
         &self,
         sg: &SceneGraph,
         btn: MouseButton,
-        mouse_pos: &Point,
+        mouse_pos: Point,
     ) -> bool {
         if !self.is_active.get() {
             return false
@@ -147,7 +147,7 @@ impl UIObject for Button {
         sg: &SceneGraph,
         phase: TouchPhase,
         id: u64,
-        touch_pos: &Point,
+        touch_pos: Point,
     ) -> bool {
         if !self.is_active.get() {
             return false

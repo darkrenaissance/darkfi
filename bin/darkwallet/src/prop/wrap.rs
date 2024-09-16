@@ -19,7 +19,7 @@
 use crate::{
     error::{Error, Result},
     expr::{SExprMachine, SExprVal},
-    gfx::Rectangle,
+    gfx::{Point, Rectangle},
     scene::SceneNode,
 };
 
@@ -186,6 +186,40 @@ impl PropertyColor {
         self.prop.set_f32(self.role, 1, val[1]).unwrap();
         self.prop.set_f32(self.role, 2, val[2]).unwrap();
         self.prop.set_f32(self.role, 3, val[3]).unwrap();
+    }
+
+    pub fn prop(&self) -> PropertyPtr {
+        self.prop.clone()
+    }
+}
+
+#[derive(Clone)]
+pub struct PropertyPoint {
+    prop: PropertyPtr,
+    role: Role,
+}
+
+impl PropertyPoint {
+    pub fn wrap(node: &SceneNode, role: Role, prop_name: &str) -> Result<Self> {
+        let prop = node.get_property(prop_name).ok_or(Error::PropertyNotFound)?;
+
+        if !prop.is_bounded() || prop.get_len() != 2 {
+            return Err(Error::PropertyWrongLen)
+        }
+
+        // Test if it works
+        let _ = prop.get_f32(0)?;
+
+        Ok(Self { prop, role })
+    }
+
+    pub fn get(&self) -> Point {
+        [self.prop.get_f32(0).unwrap(), self.prop.get_f32(1).unwrap()].into()
+    }
+
+    pub fn set(&self, pos: Point) {
+        self.prop.set_f32(self.role, 0, pos.x).unwrap();
+        self.prop.set_f32(self.role, 1, pos.y).unwrap();
     }
 
     pub fn prop(&self) -> PropertyPtr {
