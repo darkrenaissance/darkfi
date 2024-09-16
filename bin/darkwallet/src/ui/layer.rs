@@ -18,7 +18,7 @@
 
 use async_trait::async_trait;
 use async_recursion::async_recursion;
-use miniquad::KeyMods;
+use miniquad::{KeyMods, KeyCode};
 use rand::{rngs::OsRng, Rng};
 use std::sync::{Arc, Weak};
 
@@ -195,6 +195,17 @@ impl UIObject for RenderLayer {
             let node = sg.get_node(child_id).unwrap();
             let obj = get_ui_object(node);
             if obj.handle_char(&sg, key, mods, repeat).await {
+                return true
+            }
+        }
+        false
+    }
+
+    async fn handle_key_down(&self, sg: &SceneGraph, key: KeyCode, mods: KeyMods, repeat: bool) -> bool {
+        for child_id in get_child_nodes_ordered(&sg, self.node_id) {
+            let node = sg.get_node(child_id).unwrap();
+            let obj = get_ui_object(node);
+            if obj.handle_key_down(&sg, key, mods, repeat).await {
                 return true
             }
         }

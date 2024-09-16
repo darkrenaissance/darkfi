@@ -17,7 +17,7 @@
  */
 
 use std::sync::{Arc, Weak};
-use miniquad::KeyMods;
+use miniquad::{KeyMods, KeyCode};
 
 use crate::{
     gfx::{GfxDrawCall, GraphicsEventPublisherPtr, Rectangle, RenderApiPtr},
@@ -93,7 +93,6 @@ impl Window {
             let char_task =
                 ex.spawn(async move { while Self::process_char(&me2, &ev_sub).await {} });
 
-            /*
             let ev_sub = event_pub.subscribe_key_down();
             let me2 = me.clone();
             let key_down_task =
@@ -104,6 +103,7 @@ impl Window {
             let key_up_task =
                 ex.spawn(async move { while Self::process_key_up(&me2, &ev_sub).await {} });
 
+            /*
             let ev_sub = event_pub.subscribe_mouse_btn_down();
             let me2 = me.clone();
             let mouse_btn_down_task =
@@ -135,8 +135,8 @@ impl Window {
             let mut tasks = vec![
                 resize_task,
                 char_task,
-                //key_down_task,
-                //key_up_task,
+                key_down_task,
+                key_up_task,
                 //mouse_btn_down_task,
                 //mouse_btn_up_task,
                 //mouse_move_task,
@@ -165,6 +165,42 @@ impl Window {
         true
     }
 
+    async fn process_key_down(
+        me: &Weak<Self>,
+        ev_sub: &Subscription<(KeyCode, KeyMods, bool)>,
+    ) -> bool {
+        let Ok((key, mods, repeat)) = ev_sub.receive().await else {
+            debug!(target: "ui::win", "Event relayer closed");
+            return false
+        };
+
+        let Some(self_) = me.upgrade() else {
+            // Should not happen
+            panic!("self destroyed before char_task was stopped!");
+        };
+
+        self_.handle_key_down(key, mods, repeat).await;
+        true
+    }
+
+    async fn process_key_up(
+        me: &Weak<Self>,
+        ev_sub: &Subscription<(KeyCode, KeyMods)>,
+    ) -> bool {
+        let Ok((key, mods)) = ev_sub.receive().await else {
+            debug!(target: "ui::win", "Event relayer closed");
+            return false
+        };
+
+        let Some(self_) = me.upgrade() else {
+            // Should not happen
+            panic!("self destroyed before char_task was stopped!");
+        };
+
+        self_.handle_key_up(key, mods).await;
+        true
+    }
+
     async fn handle_char(&self, key: char, mods: KeyMods, repeat: bool) {
         let sg = self.sg.lock().await;
 
@@ -172,6 +208,30 @@ impl Window {
             let node = sg.get_node(child_id).unwrap();
             let obj = get_ui_object(node);
             if obj.handle_char(&sg, key, mods, repeat).await {
+                return
+            }
+        }
+    }
+
+    async fn handle_key_down(&self, key: KeyCode, mods: KeyMods, repeat: bool) {
+        let sg = self.sg.lock().await;
+
+        for child_id in get_child_nodes_ordered(&sg, self.node_id) {
+            let node = sg.get_node(child_id).unwrap();
+            let obj = get_ui_object(node);
+            if obj.handle_key_down(&sg, key, mods, repeat).await {
+                return
+            }
+        }
+    }
+
+    async fn handle_key_up(&self, key: KeyCode, mods: KeyMods) {
+        let sg = self.sg.lock().await;
+
+        for child_id in get_child_nodes_ordered(&sg, self.node_id) {
+            let node = sg.get_node(child_id).unwrap();
+            let obj = get_ui_object(node);
+            if obj.handle_key_up(&sg, key, mods).await {
                 return
             }
         }

@@ -217,34 +217,6 @@ impl EditBox {
         let glyphs = text_shaper.shape(text.get(), font_size.get()).await;
 
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
-            // Start a task monitoring for key down events
-            let ev_sub = event_pub.subscribe_key_down();
-            let me2 = me.clone();
-            let key_down_task =
-                ex.spawn(async move { while Self::process_key_down(&me2, &ev_sub).await {} });
-
-            /*
-            let ev_sub = event_pub.subscribe_key_up();
-            let me2 = me.clone();
-            let key_up_task = ex.spawn(async move {
-                loop {
-                    let Ok((key, mods)) = ev_sub.receive().await else {
-                        debug!(target: "ui::editbox", "Event relayer closed");
-                        break
-                    };
-
-                    let Some(self_) = me2.upgrade() else {
-                        // Should not happen
-                        panic!("self destroyed before key_up_task was stopped!");
-                    };
-
-                    let key = PressedKey::Key(key);
-                    let mut repeater = self_.key_repeat.lock().unwrap();
-                    repeater.key_up(&key);
-                }
-            });
-            */
-
             let ev_sub = event_pub.subscribe_mouse_btn_down();
             let me2 = me.clone();
             let mouse_btn_down_task =
@@ -300,7 +272,6 @@ impl EditBox {
 
             // on modify tasks too
             let mut tasks = vec![
-                key_down_task,
                 mouse_btn_down_task,
                 mouse_btn_up_task,
                 mouse_move_task,
@@ -476,44 +447,6 @@ impl EditBox {
         let select_rect = Rectangle { x: start_x, y: 0., w: end_x - start_x, h: clip_h };
         mesh.draw_box(&select_rect, hi_bg_color, &Rectangle::zero());
         Ok(())
-    }
-
-    async fn process_key_down(
-        me: &Weak<Self>,
-        ev_sub: &Subscription<(KeyCode, KeyMods, bool)>,
-    ) -> bool {
-        let Ok((key, mods, repeat)) = ev_sub.receive().await else {
-            debug!(target: "ui::editbox", "Event relayer closed");
-            return false
-        };
-
-        // First filter for only single digit keys
-        // Avoid processing events handled by insert_char()
-        if !ALLOWED_KEYCODES.contains(&key) {
-            return true
-        }
-
-        let Some(self_) = me.upgrade() else {
-            // Should not happen
-            panic!("self destroyed before char_task was stopped!");
-        };
-
-        if !self_.is_focused.get() {
-            return true
-        }
-
-        let actions = {
-            let mut repeater = self_.key_repeat.lock().unwrap();
-            repeater.key_down(PressedKey::Key(key), repeat)
-        };
-        // Suppress noisy message
-        if actions > 0 {
-            debug!(target: "ui::editbox", "Key {:?} has {} actions", key, actions);
-        }
-        for _ in 0..actions {
-            self_.handle_key(&key, &mods).await;
-        }
-        true
     }
 
     async fn process_mouse_btn_down(
@@ -1279,6 +1212,31 @@ impl UIObject for EditBox {
         debug!(target: "ui::editbox", "Key {:?} has {} actions", key, actions);
         for _ in 0..actions {
             self.insert_char(key).await;
+        }
+        true
+    }
+
+    async fn handle_key_down(&self, sg: &SceneGraph, key: KeyCode, mods: KeyMods, repeat: bool) -> bool {
+        // First filter for only single digit keys
+        // Avoid processing events handled by insert_char()
+        if !ALLOWED_KEYCODES.contains(&key) {
+            return false
+        }
+
+        if !self.is_focused.get() {
+            return false
+        }
+
+        let actions = {
+            let mut repeater = self.key_repeat.lock().unwrap();
+            repeater.key_down(PressedKey::Key(key), repeat)
+        };
+        // Suppress noisy message
+        if actions > 0 {
+            debug!(target: "ui::editbox", "Key {:?} has {} actions", key, actions);
+        }
+        for _ in 0..actions {
+            self.handle_key(&key, &mods).await;
         }
         true
     }

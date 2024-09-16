@@ -18,7 +18,7 @@
 
 use async_trait::async_trait;
 use std::sync::{Arc, Weak};
-use miniquad::KeyMods;
+use miniquad::{KeyMods, KeyCode};
 
 use crate::{
     error::{Error, Result},
@@ -58,6 +58,8 @@ pub trait UIObject: Sync {
     fn z_index(&self) -> u32;
 
     async fn handle_char(&self, sg: &SceneGraph, key: char, mods: KeyMods, repeat: bool) -> bool { false }
+    async fn handle_key_down(&self, sg: &SceneGraph, key: KeyCode, mods: KeyMods, repeat: bool) -> bool { false }
+    async fn handle_key_up(&self, sg: &SceneGraph, key: KeyCode, mods: KeyMods) -> bool { false }
 }
 
 pub struct DrawUpdate {
