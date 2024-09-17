@@ -264,7 +264,7 @@ impl PropertyRect {
             };
 
             let v = machine.call()?.as_f32()?;
-            self.prop.set_cache_f32(i, v).unwrap();
+            self.prop.set_cache_f32(self.role, i, v).unwrap();
         }
         Ok(())
     }

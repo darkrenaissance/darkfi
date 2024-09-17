@@ -206,9 +206,8 @@ impl Encodable for PropertyValue {
 #[derive(Debug, Clone)]
 pub enum ModifyAction {
     Clear,
-    #[allow(dead_code)]
     Set(usize),
-    #[allow(dead_code)]
+    SetCache(usize),
     Push(usize),
 }
 
@@ -452,7 +451,7 @@ impl Property {
         Ok(())
     }
 
-    fn set_cache(&self, i: usize, val: PropertyValue) -> Result<()> {
+    fn set_cache(&self, role: Role, i: usize, val: PropertyValue) -> Result<()> {
         if self.typ != val.as_type() {
             return Err(Error::PropertyWrongType)
         }
@@ -462,13 +461,14 @@ impl Property {
             return Err(Error::PropertyWrongIndex)
         }
         cache[i] = val;
+        self.on_modify.notify((role, ModifyAction::SetCache(i)));
         Ok(())
     }
-    pub fn set_cache_f32(&self, i: usize, val: f32) -> Result<()> {
-        self.set_cache(i, PropertyValue::Float32(val))
+    pub fn set_cache_f32(&self, role: Role, i: usize, val: f32) -> Result<()> {
+        self.set_cache(role, i, PropertyValue::Float32(val))
     }
-    pub fn set_cache_u32(&self, i: usize, val: u32) -> Result<()> {
-        self.set_cache(i, PropertyValue::Uint32(val))
+    pub fn set_cache_u32(&self, role: Role, i: usize, val: u32) -> Result<()> {
+        self.set_cache(role, i, PropertyValue::Uint32(val))
     }
 
     // Push

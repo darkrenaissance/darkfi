@@ -432,9 +432,9 @@ impl EditBox {
         self.redraw().await;
     }
 
-    async fn handle_click_down(&self, btn: MouseButton, mouse_pos: Point) {
+    async fn handle_click_down(&self, btn: MouseButton, mouse_pos: Point) -> bool {
         if btn != MouseButton::Left {
-            return
+            return false
         }
 
         let rect = self.rect.get();
@@ -471,22 +471,24 @@ impl EditBox {
             self.selected.set_null(Role::Internal, 1).unwrap();
         } else {
             // Do nothing. Click was outside editbox, and editbox wasn't focused
-            return
+            return false
         }
 
         self.redraw().await;
+        true
     }
-    fn handle_click_up(&self, btn: MouseButton, pos: Point) {
+    fn handle_click_up(&self, btn: MouseButton, pos: Point) -> bool {
         if btn != MouseButton::Left {
-            return
+            return false
         }
 
         // releasing mouse button will end selection
         self.mouse_btn_held.store(false, Ordering::Relaxed);
+        false
     }
-    async fn handle_cursor_move(&self, pos: Point) {
+    async fn handle_cursor_move(&self, pos: Point) -> bool {
         if !self.mouse_btn_held.load(Ordering::Relaxed) {
-            return;
+            return false;
         }
 
         // if active and selection_active, then use x to modify the selection.
@@ -502,20 +504,7 @@ impl EditBox {
 
         self.apply_cursor_scrolling();
         self.redraw().await;
-    }
-
-    async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_pos: Point) {
-        // Ignore multi-touch
-        if id != 0 {
-            return
-        }
-        // Simulate mouse events
-        match phase {
-            TouchPhase::Started => self.handle_click_down(MouseButton::Left, touch_pos).await,
-            TouchPhase::Moved => self.handle_cursor_move(touch_pos).await,
-            TouchPhase::Ended => self.handle_click_up(MouseButton::Left, touch_pos),
-            TouchPhase::Cancelled => {}
-        }
+        false
     }
 
     /// Used when clicking the text. Given the x coord of the mouse, it finds the index
@@ -1159,8 +1148,18 @@ impl UIObject for EditBox {
             return true
         }
 
-        self.handle_touch(phase, id, touch_pos).await;
-        true
+        // Ignore multi-touch
+        if id != 0 {
+            return false
+        }
+
+        // Simulate mouse events
+        match phase {
+            TouchPhase::Started => self.handle_click_down(MouseButton::Left, touch_pos).await,
+            TouchPhase::Moved => self.handle_cursor_move(touch_pos).await,
+            TouchPhase::Ended => self.handle_click_up(MouseButton::Left, touch_pos),
+            TouchPhase::Cancelled => false
+        }
     }
 }
 
