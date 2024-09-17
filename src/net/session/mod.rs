@@ -58,16 +58,14 @@ pub async fn remove_sub_on_stop(
     p2p: P2pPtr,
     channel: ChannelPtr,
     type_id: SessionBitFlag,
-    stop_sub: Result<Subscription<Error>>,
+    stop_sub: Subscription<Error>,
 ) {
     debug!(target: "net::session::remove_sub_on_stop()", "[START]");
     let hosts = p2p.hosts();
     let addr = channel.address();
 
-    if let Ok(stop_sub) = stop_sub {
-        // Wait for a stop event
-        stop_sub.receive().await;
-    }
+    stop_sub.receive().await;
+
     debug!(
         target: "net::session::remove_sub_on_stop()",
         "Received stop event. Removing channel {}", addr,
@@ -178,7 +176,7 @@ pub trait Session: Sync {
         executor: Arc<Executor<'_>>,
     ) -> Result<()> {
         // Subscribe to stop events
-        let stop_sub = channel.clone().subscribe_stop().await;
+        let stop_sub = channel.clone().subscribe_stop().await?;
 
         // Perform handshake
         match protocol_version.run(executor.clone()).await {
