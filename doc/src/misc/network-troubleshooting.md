@@ -103,7 +103,7 @@ cat .local/darkfi/darkirc/hostlist.tsv
 ```
 
 If the list is empty, open `.config/darkfi/darkirc_config` and ensure
-that the `hostlist` field is set with a path of your chosing.
+that the `hostlist` field is set with a path of your choosing.
 
 For example:
 
@@ -137,6 +137,21 @@ If you're able to connect to the seed but are failing to establish peer
 connections, please retry the darkirc connection and carefully note the
 connection errors that are happening from peers. See 
 `Error reporting` section to report errors.
+
+### Cannot establish Tor onion connections
+
+You may get an error like this:
+```
+[WARN] darkfi::net::transport::tor: error: tor: Onion Service not found: Failed to obtain hidden service circuit to ????.onion: Unable to download hidden service descriptor
+```
+This happens when arti gets corrupted due to internet downtime or other triggers. To fix this, we'll delete the directory
+
+```
+$ stop tor daemon
+$ rm -rf .local/share/arti
+$ start tor daemon
+$ ./darkirc
+```
 
 ## dnet
 
