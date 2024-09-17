@@ -46,7 +46,7 @@ pub trait RequestHandler: Sync + Send {
         JsonResponse::new(JsonValue::String("pong".to_string()), id).into()
     }
 
-    async fn connections_mut(&self) -> MutexGuard<'_, HashSet<StoppableTaskPtr>>;
+    async fn connections_mut(&self) -> MutexGuard<'life0, HashSet<StoppableTaskPtr>>;
 
     async fn connections(&self) -> Vec<StoppableTaskPtr> {
         self.connections_mut().await.iter().cloned().collect()
@@ -405,7 +405,7 @@ mod tests {
             }
         }
 
-        async fn connections_mut(&self) -> MutexGuard<'_, HashSet<StoppableTaskPtr>> {
+        async fn connections_mut(&self) -> MutexGuard<'life0, HashSet<StoppableTaskPtr>> {
             self.rpc_connections.lock().await
         }
     }

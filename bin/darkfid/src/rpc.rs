@@ -89,7 +89,7 @@ impl RequestHandler for Darkfid {
         }
     }
 
-    async fn connections_mut(&self) -> MutexGuard<'_, HashSet<StoppableTaskPtr>> {
+    async fn connections_mut(&self) -> MutexGuard<'life0, HashSet<StoppableTaskPtr>> {
         self.rpc_connections.lock().await
     }
 }
