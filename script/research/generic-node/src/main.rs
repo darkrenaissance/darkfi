@@ -79,6 +79,18 @@ struct GenericNumberMessage {
 }
 impl_p2p_message!(GenericNumberMessage, "generic_number_message");
 
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+struct GenericRequestMessage {
+    msg: String,
+}
+impl_p2p_message!(GenericRequestMessage, "generic_request_message");
+
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+struct GenericResponseMessage {
+    msg: String,
+}
+impl_p2p_message!(GenericResponseMessage, "generic_response_message");
+
 /// Generic daemon structure
 struct Genericd {
     /// Node ID, used in the dummy messages
@@ -86,9 +98,14 @@ struct Genericd {
     /// P2P network pointer
     p2p: P2pPtr,
     /// GenericStringMessage handler
-    generic_string_msg_handler: ProtocolGenericHandlerPtr<GenericStringMessage>,
+    generic_string_msg_handler:
+        ProtocolGenericHandlerPtr<GenericStringMessage, GenericStringMessage>,
     /// GenericNumberMessage handler
-    generic_number_msg_handler: ProtocolGenericHandlerPtr<GenericNumberMessage>,
+    generic_number_msg_handler:
+        ProtocolGenericHandlerPtr<GenericNumberMessage, GenericNumberMessage>,
+    /// GenericRequestMessage handler
+    generic_request_msg_handler:
+        ProtocolGenericHandlerPtr<GenericRequestMessage, GenericResponseMessage>,
     /// Broadcasting messages task
     broadcast_task: StoppableTaskPtr,
 }
@@ -111,6 +128,10 @@ impl Genericd {
         let generic_number_msg_handler =
             ProtocolGenericHandler::new(&p2p, "ProtocolGenericNumber", SESSION_DEFAULT).await;
 
+        // Add a generic protocol for GenericRequestMessage
+        let generic_request_msg_handler =
+            ProtocolGenericHandler::new(&p2p, "ProtocolGenericRequest", SESSION_DEFAULT).await;
+
         let broadcast_task = StoppableTask::new();
 
         Ok(Self {
@@ -118,12 +139,13 @@ impl Genericd {
             p2p,
             generic_string_msg_handler,
             generic_number_msg_handler,
+            generic_request_msg_handler,
             broadcast_task,
         })
     }
 
     /// Start all daemon background tasks.
-    async fn start(&self, executor: &Arc<Executor<'static>>) -> Result<()> {
+    async fn start(&self) -> Result<()> {
         info!(target: "genericd", "Starting tasks...");
 
         self.generic_string_msg_handler.task.clone().start(
@@ -135,7 +157,7 @@ impl Genericd {
                 }
             },
             Error::DetachedTaskStopped,
-            executor.clone(),
+            self.p2p.executor(),
         );
 
         self.generic_number_msg_handler.task.clone().start(
@@ -147,7 +169,19 @@ impl Genericd {
                 }
             },
             Error::DetachedTaskStopped,
-            executor.clone(),
+            self.p2p.executor(),
+        );
+
+        self.generic_request_msg_handler.task.clone().start(
+            handle_generic_request_msg(self.node_id, self.generic_request_msg_handler.clone()),
+            |res| async move {
+                match res {
+                    Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                    Err(e) => error!(target: "genericd", "Failed starting protocol generic request handler task: {e}"),
+                }
+            },
+            Error::DetachedTaskStopped,
+            self.p2p.executor(),
         );
 
         self.p2p.clone().start().await?;
@@ -161,7 +195,7 @@ impl Genericd {
                 }
             },
             Error::DetachedTaskStopped,
-            executor.clone(),
+            self.p2p.executor(),
         );
 
         info!(target: "genericd", "All tasks started!");
@@ -171,16 +205,18 @@ impl Genericd {
     /// Stop all daemon background tasks.
     async fn stop(&self) {
         info!(target: "genericd", "Terminating tasks...");
+        self.broadcast_task.stop().await;
         self.p2p.stop().await;
         self.generic_string_msg_handler.task.stop().await;
         self.generic_number_msg_handler.task.stop().await;
+        self.generic_request_msg_handler.task.stop().await;
         info!(target: "genericd", "All tasks terminated!");
     }
 }
 
 /// Background handler function for GenericStringMessage.
 async fn handle_generic_string_msg(
-    handler: ProtocolGenericHandlerPtr<GenericStringMessage>,
+    handler: ProtocolGenericHandlerPtr<GenericStringMessage, GenericStringMessage>,
 ) -> Result<()> {
     let mut seen = HashSet::new();
     loop {
@@ -192,7 +228,7 @@ async fn handle_generic_string_msg(
             continue
         }
 
-        info!("Received string message from channel {channel}: {}", msg.msg);
+        info!(target: "handle_generic_string_msg", "Received string message from channel {channel}: {}", msg.msg);
         seen.insert(msg.msg);
 
         handler.send_action(channel, ProtocolGenericAction::Broadcast).await;
@@ -201,7 +237,7 @@ async fn handle_generic_string_msg(
 
 /// Background handler function for GenericNumberMessage.
 async fn handle_generic_number_msg(
-    handler: ProtocolGenericHandlerPtr<GenericNumberMessage>,
+    handler: ProtocolGenericHandlerPtr<GenericNumberMessage, GenericNumberMessage>,
 ) -> Result<()> {
     let mut seen = HashSet::new();
     loop {
@@ -213,27 +249,68 @@ async fn handle_generic_number_msg(
             continue
         }
 
-        info!("Received string message from channel {channel}: {}", msg.num);
+        info!(target: "handle_generic_number_msg", "Received number message from channel {channel}: {}", msg.num);
         seen.insert(msg.num);
 
         handler.send_action(channel, ProtocolGenericAction::Broadcast).await;
     }
 }
 
+/// Background handler function for GenericRequestMessage.
+async fn handle_generic_request_msg(
+    node_id: u64,
+    handler: ProtocolGenericHandlerPtr<GenericRequestMessage, GenericResponseMessage>,
+) -> Result<()> {
+    let response = GenericResponseMessage { msg: format!("Pong from node {node_id}!") };
+    loop {
+        // Wait for a new message
+        let (channel, msg) = handler.receiver.recv().await?;
+
+        info!(target: "handle_generic_request_msg", "Received request message from channel {channel}: {}", msg.msg);
+
+        handler.send_action(channel, ProtocolGenericAction::Response(response.clone())).await;
+    }
+}
+
 /// Background function to send messages at random intervals.
 async fn broadcast_messages(node_id: u64, p2p: P2pPtr) -> Result<()> {
+    let comms_timeout = p2p.settings().read().await.outbound_connect_timeout;
+    let request = GenericRequestMessage { msg: format!("Ping from node {node_id}!") };
     let mut counter = 0;
     loop {
         let sleep_time = OsRng.gen_range(1..=10);
-        info!("Sleeping {sleep_time} till next broadcast...");
+        info!(target: "broadcast_messages", "Sleeping {sleep_time} till next broadcast...");
         sleep(sleep_time).await;
 
-        info!("Broacasting messages...");
+        info!(target: "broadcast_messages", "Broacasting messages...");
+        // Broadcast a generic string message
         let string_msg =
             GenericStringMessage { msg: format!("Hello from node {node_id}({counter})!") };
-        let number_msg = GenericNumberMessage { num: node_id + counter };
         p2p.broadcast(&string_msg).await;
+
+        // Broadcast a generic number message
+        let number_msg = GenericNumberMessage { num: node_id + counter };
         p2p.broadcast(&number_msg).await;
+
+        // Perform a direct request to each peer and grab their response
+        let peers = p2p.hosts().channels();
+        for peer in peers {
+            info!(target: "broadcast_messages", "Sending request message to peer {peer:?}: {}", request.msg);
+            let Ok(response_sub) = peer.subscribe_msg::<GenericResponseMessage>().await else {
+                error!(target: "broadcast_messages", "Failure during `GenericResponseMessage` communication setup with peer: {peer:?}");
+                continue
+            };
+            if let Err(e) = peer.send(&request).await {
+                error!(target: "broadcast_messages", "Failure during `GenericResponseMessage` send to peer {peer:?}: {e}");
+                continue
+            };
+            let Ok(response) = response_sub.receive_with_timeout(comms_timeout).await else {
+                error!(target: "broadcast_messages", "Timeout while waiting for `GenericResponseMessage` from peer: {peer:?}");
+                continue
+            };
+            info!(target: "broadcast_messages", "Received response message from peer {peer:?}: {}", response.msg);
+        }
+
         counter += 1;
     }
 }
@@ -243,7 +320,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     info!(target: "generic-node", "Initializing generic node...");
 
     let genericd = Genericd::new(args.node_id, &args.net.into(), &ex).await?;
-    genericd.start(&ex).await?;
+    genericd.start().await?;
 
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new(ex)?;

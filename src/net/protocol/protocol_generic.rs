@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{clone::Clone, collections::HashMap, sync::Arc};
+use std::{clone::Clone, collections::HashMap, fmt::Debug, sync::Arc};
 
 use async_trait::async_trait;
 use log::debug;
@@ -42,22 +42,24 @@ use crate::{
 
 /// Defines generic messages protocol action signal.
 #[derive(Debug)]
-pub enum ProtocolGenericAction {
+pub enum ProtocolGenericAction<M> {
     /// Broadcast message to rest nodes
     Broadcast,
+    /// Send provided response message to the node
+    Response(M),
     /// Skip message broadcast
     Skip,
     /// Stop the channel entirely
     Stop,
 }
 
-pub type ProtocolGenericHandlerPtr<M> = Arc<ProtocolGenericHandler<M>>;
+pub type ProtocolGenericHandlerPtr<M, R> = Arc<ProtocolGenericHandler<M, R>>;
 
 /// Defines a handler for generic protocol messages, consisting
 /// of a message receiver, action signal senders mapped by each
 /// channel ID, and a stoppable task to run the handler in the
 /// background.
-pub struct ProtocolGenericHandler<M: Message + Clone> {
+pub struct ProtocolGenericHandler<M: Message + Clone, R: Message + Clone + Debug> {
     // Since smol channels close if all senders or all receivers
     // get dropped, we will keep one here to remain alive with the
     // handler.
@@ -68,20 +70,20 @@ pub struct ProtocolGenericHandler<M: Message + Clone> {
     pub receiver: Receiver<(u32, M)>,
     /// Senders mapped by channel ID to propagate the
     /// action signal after a message retrieval.
-    senders: RwLock<HashMap<u32, Sender<ProtocolGenericAction>>>,
+    senders: RwLock<HashMap<u32, Sender<ProtocolGenericAction<R>>>>,
     /// Handler background task to run the messages listener
     /// function with.
     pub task: StoppableTaskPtr,
 }
 
-impl<M: Message + Clone> ProtocolGenericHandler<M> {
+impl<M: Message + Clone, R: Message + Clone + Debug> ProtocolGenericHandler<M, R> {
     /// Generate a new ProtocolGenericHandler for the provided P2P
     /// instance. The handler also attaches its generic protocol.
     pub async fn new(
         p2p: &P2pPtr,
         name: &'static str,
         session: SessionBitFlag,
-    ) -> ProtocolGenericHandlerPtr<M> {
+    ) -> ProtocolGenericHandlerPtr<M, R> {
         // Generate the message queue smol channel
         let (sender, receiver) = smol::channel::unbounded::<(u32, M)>();
 
@@ -108,7 +110,11 @@ impl<M: Message + Clone> ProtocolGenericHandler<M> {
 
     /// Registers a new channel sender to the handler map.
     /// Additionally, looks for stale(closed) channels and prunes then from it.
-    async fn register_channel_sender(&self, channel: u32, sender: Sender<ProtocolGenericAction>) {
+    async fn register_channel_sender(
+        &self,
+        channel: u32,
+        sender: Sender<ProtocolGenericAction<R>>,
+    ) {
         // Register the new channel sender
         let mut lock = self.senders.write().await;
         lock.insert(channel, sender);
@@ -130,7 +136,7 @@ impl<M: Message + Clone> ProtocolGenericHandler<M> {
     }
 
     /// Sends provided protocol generic action to requested channel, if it exists.
-    pub async fn send_action(&self, channel: u32, action: ProtocolGenericAction) {
+    pub async fn send_action(&self, channel: u32, action: ProtocolGenericAction<R>) {
         debug!(
             target: "net::protocol_generic::ProtocolGenericHandler::send_action",
             "Sending action {action:?} to channel {channel}..."
@@ -162,13 +168,13 @@ impl<M: Message + Clone> ProtocolGenericHandler<M> {
 }
 
 /// Defines generic messages protocol.
-pub struct ProtocolGeneric<M: Message + Clone> {
+pub struct ProtocolGeneric<M: Message + Clone, R: Message + Clone + Debug> {
     /// The P2P channel message subcription
     msg_sub: MessageSubscription<M>,
     /// The generic message smol channel sender
     sender: Sender<(u32, M)>,
     /// Action signal smol channel receiver
-    receiver: Receiver<ProtocolGenericAction>,
+    receiver: Receiver<ProtocolGenericAction<R>>,
     /// The P2P channel the protocol is serving
     channel: ChannelPtr,
     /// Pointer to the whole P2P instance
@@ -177,12 +183,12 @@ pub struct ProtocolGeneric<M: Message + Clone> {
     jobsman: ProtocolJobsManagerPtr,
 }
 
-impl<M: Message + Clone> ProtocolGeneric<M> {
+impl<M: Message + Clone, R: Message + Clone + Debug> ProtocolGeneric<M, R> {
     /// Initialize a new generic protocol.
     pub async fn init(
         channel: ChannelPtr,
         name: &'static str,
-        handler: ProtocolGenericHandlerPtr<M>,
+        handler: ProtocolGenericHandlerPtr<M, R>,
         p2p: P2pPtr,
     ) -> Result<ProtocolBasePtr> {
         debug!(
@@ -193,6 +199,7 @@ impl<M: Message + Clone> ProtocolGeneric<M> {
         // Add the message dispatcher
         let msg_subsystem = channel.message_subsystem();
         msg_subsystem.add_dispatch::<M>().await;
+        msg_subsystem.add_dispatch::<R>().await;
 
         // Create the message subscription
         let msg_sub = channel.subscribe_msg::<M>().await?;
@@ -263,6 +270,14 @@ impl<M: Message + Clone> ProtocolGeneric<M> {
                 ProtocolGenericAction::Broadcast => {
                     self.p2p.broadcast_with_exclude(&msg_copy, &exclude_list).await
                 }
+                ProtocolGenericAction::Response(r) => {
+                    if let Err(e) = self.channel.send(&r).await {
+                        debug!(
+                            target: "net::protocol_generic::handle_receive_message",
+                            "[{}] Channel send fail: {e}", self.jobsman.clone().name()
+                        )
+                    };
+                }
                 ProtocolGenericAction::Skip => {
                     debug!(
                         target: "net::protocol_generic::handle_receive_message",
@@ -279,7 +294,7 @@ impl<M: Message + Clone> ProtocolGeneric<M> {
 }
 
 #[async_trait]
-impl<M: Message + Clone> ProtocolBase for ProtocolGeneric<M> {
+impl<M: Message + Clone, R: Message + Clone + Debug> ProtocolBase for ProtocolGeneric<M, R> {
     async fn start(self: Arc<Self>, ex: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "net::protocol_generic::start", "START");
         self.jobsman.clone().start(ex.clone());
