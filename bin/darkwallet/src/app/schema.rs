@@ -26,14 +26,15 @@ use crate::{
     prop::{
         Property, PropertyBool, PropertyFloat32, PropertyStr, PropertySubType, PropertyType, Role,
     },
-    scene::SceneNodePtr,
+    scene::{SceneNodePtr, Slot},
     text::TextShaperPtr,
     ui::{
+        //chatview, vector_art::shape, Button, ChatView, EditBox, Image, Layer, ShapeVertex,
+        //Stoppable, Text, VectorArt, VectorShape, Window,
+        Button,
         Image,
         Layer,
         ShapeVertex,
-        //chatview, vector_art::shape, Button, ChatView, EditBox, Image, Layer, ShapeVertex,
-        //Stoppable, Text, VectorArt, VectorShape, Window,
         Text,
         VectorArt,
         VectorShape,
@@ -156,11 +157,8 @@ pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
         node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
     layer_node.link(node);
 
-    /*
     // Create the button
-    let node_id = create_button(&mut sg, "btn");
-
-    let node = sg.get_node_mut(node_id).unwrap();
+    let node = create_button("btn");
     node.set_property_bool(Role::App, "is_active", true).unwrap();
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile("w - 220").unwrap();
@@ -169,18 +167,12 @@ pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
     prop.set_f32(Role::App, 2, 200.).unwrap();
     prop.set_f32(Role::App, 3, 60.).unwrap();
 
-    let (sender, btn_click_recvr) = async_channel::unbounded();
-    let slot_click = Slot { name: "button_clicked".to_string(), notify: sender };
-    node.register("click", slot_click).unwrap();
+    //let (sender, btn_click_recvr) = async_channel::unbounded();
+    //let slot_click = Slot { name: "button_clicked".to_string(), notify: sender };
+    //node.register("click", slot_click).unwrap();
 
-    drop(sg);
-    let pimpl = Button::new(app.ex.clone(), app.sg.clone(), node_id, app.event_pub.clone()).await;
-    let mut sg = app.sg.lock().await;
-    let node = sg.get_node_mut(node_id).unwrap();
-    node.pimpl = pimpl;
-
-    sg.link(node_id, layer_node_id).unwrap();
-    */
+    let node = node.setup(|me| Button::new(me, app.event_pub.clone(), app.ex.clone())).await;
+    layer_node.link(node);
 
     // Create another mesh
     let node = create_vector_art("box");

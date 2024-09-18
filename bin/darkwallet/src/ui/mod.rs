@@ -29,8 +29,8 @@ use crate::{
     ExecutorPtr,
 };
 
-//mod button;
-//pub use button::{Button, ButtonPtr};
+mod button;
+pub use button::{Button, ButtonPtr};
 //pub mod chatview;
 //pub use chatview::{ChatView, ChatViewPtr};
 //mod editbox;
@@ -149,7 +149,7 @@ pub fn get_ui_object3<'a>(node: &'a SceneNode3) -> &'a dyn UIObject {
         //Pimpl::EditBox(editb) => editb.as_ref(),
         //Pimpl::ChatView(chat) => chat.as_ref(),
         Pimpl::Image(obj) => obj.as_ref(),
-        //Pimpl::Button(btn) => btn.as_ref(),
+        Pimpl::Button(obj) => obj.as_ref(),
         _ => panic!("unhandled type for get_ui_object"),
     }
 }

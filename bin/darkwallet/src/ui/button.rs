@@ -27,7 +27,7 @@ use crate::{
     gfx::{GraphicsEventPublisherPtr, Point, Rectangle},
     prop::{PropertyBool, PropertyPtr, PropertyRect, PropertyUint32, Role},
     pubsub::Subscription,
-    scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
+    scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
     ExecutorPtr,
 };
 
@@ -36,8 +36,7 @@ use super::{DrawUpdate, UIObject};
 pub type ButtonPtr = Arc<Button>;
 
 pub struct Button {
-    node_id: SceneNodeId,
-    sg: SceneGraphPtr2,
+    node: SceneNodeWeak,
 
     is_active: PropertyBool,
     rect: PropertyRect,
@@ -48,23 +47,19 @@ pub struct Button {
 
 impl Button {
     pub async fn new(
-        ex: ExecutorPtr,
-        sg: SceneGraphPtr2,
-        node_id: SceneNodeId,
+        node: SceneNodeWeak,
         event_pub: GraphicsEventPublisherPtr,
+        ex: ExecutorPtr,
     ) -> Pimpl {
-        let scene_graph = sg.lock().await;
-        let node = scene_graph.get_node(node_id).unwrap();
-        //let node_name = node.name.clone();
-        let is_active = PropertyBool::wrap(node, Role::Internal, "is_active", 0).unwrap();
-        let rect = PropertyRect::wrap(node, Role::Internal, "rect").unwrap();
-        let z_index = PropertyUint32::wrap(node, Role::Internal, "z_index", 0).unwrap();
-        //let sig = node.get_signal("click").expect("Button::click");
-        drop(scene_graph);
+        debug!(target: "ui::button", "Button::new()");
+
+        let node_ref = &node.upgrade().unwrap();
+        let is_active = PropertyBool::wrap(node_ref, Role::Internal, "is_active", 0).unwrap();
+        let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
+        let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
 
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| Self {
-            node_id,
-            sg,
+            node,
             is_active,
             rect,
             z_index,
@@ -81,17 +76,12 @@ impl UIObject for Button {
         self.z_index.get()
     }
 
-    async fn draw(&self, _: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
-        let _ = self.rect.eval(parent_rect);
+    async fn draw(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
+        let _ = self.rect.eval(&parent_rect);
         None
     }
 
-    async fn handle_mouse_btn_down(
-        &self,
-        sg: &SceneGraph,
-        btn: MouseButton,
-        mouse_pos: Point,
-    ) -> bool {
+    async fn handle_mouse_btn_down(&self, btn: MouseButton, mouse_pos: Point) -> bool {
         if !self.is_active.get() {
             return false
         }
@@ -109,12 +99,7 @@ impl UIObject for Button {
         true
     }
 
-    async fn handle_mouse_btn_up(
-        &self,
-        sg: &SceneGraph,
-        btn: MouseButton,
-        mouse_pos: Point,
-    ) -> bool {
+    async fn handle_mouse_btn_up(&self, btn: MouseButton, mouse_pos: Point) -> bool {
         if !self.is_active.get() {
             return false
         }
@@ -136,19 +121,13 @@ impl UIObject for Button {
         }
 
         debug!(target: "ui::button", "Mouse button clicked!");
-        let node = sg.get_node(self.node_id).unwrap();
-        node.trigger("click", vec![]).await.unwrap();
+        let node = self.node.upgrade().unwrap();
+        //node.trigger("click", vec![]).await.unwrap();
 
         true
     }
 
-    async fn handle_touch(
-        &self,
-        sg: &SceneGraph,
-        phase: TouchPhase,
-        id: u64,
-        touch_pos: Point,
-    ) -> bool {
+    async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
         if !self.is_active.get() {
             return false
         }
@@ -166,15 +145,10 @@ impl UIObject for Button {
 
         // Simulate mouse events
         match phase {
-            TouchPhase::Started => {
-                self.handle_mouse_btn_down(sg, MouseButton::Left, touch_pos).await;
-            }
-            TouchPhase::Moved => {}
-            TouchPhase::Ended => {
-                self.handle_mouse_btn_up(sg, MouseButton::Left, touch_pos).await;
-            }
-            TouchPhase::Cancelled => {}
+            TouchPhase::Started => self.handle_mouse_btn_down(MouseButton::Left, touch_pos).await,
+            TouchPhase::Moved => false,
+            TouchPhase::Ended => self.handle_mouse_btn_up(MouseButton::Left, touch_pos).await,
+            TouchPhase::Cancelled => false,
         }
-        true
     }
 }
