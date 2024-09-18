@@ -40,13 +40,13 @@ use crate::{
         PropertyUint32, Role,
     },
     pubsub::Subscription,
-    scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
+    scene::{Pimpl, SceneNodeWeak},
     text::{self, Glyph, GlyphPositionIter, TextShaperPtr},
     util::is_whitespace,
     ExecutorPtr,
 };
 
-use super::{DrawUpdate, OnModify, Stoppable, UIObject};
+use super::{DrawUpdate, OnModify, UIObject};
 
 // Pixel width of the cursor
 const CURSOR_WIDTH: f32 = 2.;
@@ -149,10 +149,9 @@ struct TextRenderInfo {
 pub type EditBoxPtr = Arc<EditBox>;
 
 pub struct EditBox {
-    node_id: SceneNodeId,
+    node: SceneNodeWeak,
     #[allow(dead_code)]
     tasks: Vec<smol::Task<()>>,
-    sg: SceneGraphPtr2,
     render_api: RenderApiPtr,
     text_shaper: TextShaperPtr,
     key_repeat: SyncMutex<PressedKeysSmoothRepeat>,
@@ -178,40 +177,36 @@ pub struct EditBox {
 
     mouse_btn_held: AtomicBool,
 
-    // I mean this is wrong since it's using the parent instead of the screen
-    // But keep it for now...
     parent_rect: SyncMutex<Option<Rectangle>>,
 }
 
 impl EditBox {
     pub async fn new(
-        ex: ExecutorPtr,
-        sg: SceneGraphPtr2,
-        node_id: SceneNodeId,
+        node: SceneNodeWeak,
         render_api: RenderApiPtr,
-        event_pub: GraphicsEventPublisherPtr,
         text_shaper: TextShaperPtr,
+        ex: ExecutorPtr,
     ) -> Pimpl {
-        let scene_graph = sg.lock().await;
-        let node = scene_graph.get_node(node_id).unwrap();
-        let node_name = node.name.clone();
+        debug!(target: "ui::editbox", "EditBox::new()");
 
-        let is_active = PropertyBool::wrap(node, Role::Internal, "is_active", 0).unwrap();
-        let is_focused = PropertyBool::wrap(node, Role::Internal, "is_focused", 0).unwrap();
-        let rect = PropertyRect::wrap(node, Role::Internal, "rect").unwrap();
-        let baseline = PropertyFloat32::wrap(node, Role::Internal, "baseline", 0).unwrap();
-        let scroll = PropertyFloat32::wrap(node, Role::Internal, "scroll", 0).unwrap();
-        let cursor_pos = PropertyUint32::wrap(node, Role::Internal, "cursor_pos", 0).unwrap();
-        let font_size = PropertyFloat32::wrap(node, Role::Internal, "font_size", 0).unwrap();
-        let text = PropertyStr::wrap(node, Role::Internal, "text", 0).unwrap();
-        let text_color = PropertyColor::wrap(node, Role::Internal, "text_color").unwrap();
-        let cursor_color = PropertyColor::wrap(node, Role::Internal, "cursor_color").unwrap();
-        let hi_bg_color = PropertyColor::wrap(node, Role::Internal, "hi_bg_color").unwrap();
-        let selected = node.get_property("selected").unwrap();
-        let z_index = PropertyUint32::wrap(node, Role::Internal, "z_index", 0).unwrap();
-        let debug = PropertyBool::wrap(node, Role::Internal, "debug", 0).unwrap();
+        let node_ref = &node.upgrade().unwrap();
+        let is_active = PropertyBool::wrap(node_ref, Role::Internal, "is_active", 0).unwrap();
+        let is_focused = PropertyBool::wrap(node_ref, Role::Internal, "is_focused", 0).unwrap();
+        let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
+        let baseline = PropertyFloat32::wrap(node_ref, Role::Internal, "baseline", 0).unwrap();
+        let scroll = PropertyFloat32::wrap(node_ref, Role::Internal, "scroll", 0).unwrap();
+        let cursor_pos = PropertyUint32::wrap(node_ref, Role::Internal, "cursor_pos", 0).unwrap();
+        let font_size = PropertyFloat32::wrap(node_ref, Role::Internal, "font_size", 0).unwrap();
+        let text = PropertyStr::wrap(node_ref, Role::Internal, "text", 0).unwrap();
+        let text_color = PropertyColor::wrap(node_ref, Role::Internal, "text_color").unwrap();
+        let cursor_color = PropertyColor::wrap(node_ref, Role::Internal, "cursor_color").unwrap();
+        let hi_bg_color = PropertyColor::wrap(node_ref, Role::Internal, "hi_bg_color").unwrap();
+        let selected = node_ref.get_property("selected").unwrap();
+        let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
+        let debug = PropertyBool::wrap(node_ref, Role::Internal, "debug", 0).unwrap();
 
-        drop(scene_graph);
+        let node_name = node_ref.name.clone();
+        let node_id = node_ref.id;
 
         // Must do this whenever the text changes
         let glyphs = text_shaper.shape(text.get(), font_size.get()).await;
@@ -253,9 +248,8 @@ impl EditBox {
             let tasks = on_modify.tasks;
 
             Self {
-                node_id,
+                node,
                 tasks,
-                sg,
                 render_api,
                 text_shaper,
                 key_repeat: SyncMutex::new(PressedKeysSmoothRepeat::new(400, 50)),
@@ -962,22 +956,13 @@ impl EditBox {
             num_elements: render_info.mesh.num_elements,
         };
 
-        let Some(parent_rect) = self.parent_rect.lock().unwrap().clone() else { return None };
-
-        let off_x = rect.x / parent_rect.w;
-        let off_y = rect.y / parent_rect.h;
-        let scale_x = 1. / parent_rect.w;
-        let scale_y = 1. / parent_rect.h;
-        let model = glam::Mat4::from_translation(glam::Vec3::new(off_x, off_y, 0.)) *
-            glam::Mat4::from_scale(glam::Vec3::new(scale_x, scale_y, 1.));
-
         Some(DrawUpdate {
             key: self.dc_key,
             draw_calls: vec![(
                 self.dc_key,
                 GfxDrawCall {
                     instrs: vec![
-                        GfxDrawInstruction::ApplyMatrix(model),
+                        GfxDrawInstruction::Move(rect.pos()),
                         GfxDrawInstruction::Draw(mesh),
                     ],
                     dcs: vec![],
@@ -1012,35 +997,20 @@ impl Drop for EditBox {
     }
 }
 
-impl Stoppable for EditBox {
-    async fn stop(&self) {
-        // TODO: Delete own draw call
-
-        // Free buffers
-        // Should this be in drop?
-        //self.render_api.delete_buffer(self.vertex_buffer);
-        //self.render_api.delete_buffer(self.index_buffer);
-    }
-}
-
 #[async_trait]
 impl UIObject for EditBox {
     fn z_index(&self) -> u32 {
         self.z_index.get()
     }
 
-    async fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
-        *self.parent_rect.lock().unwrap() = Some(parent_rect.clone());
-        //debug!(target: "ui::editbox", "EditBox::draw()");
-        // Only used for debug messages
-        let node = sg.get_node(self.node_id).unwrap();
-
-        self.rect.eval(parent_rect).ok()?;
-
+    async fn draw(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
+        debug!(target: "ui::editbox", "EditBox::draw()");
+        *self.parent_rect.lock().unwrap() = Some(parent_rect);
+        self.rect.eval(&parent_rect).ok()?;
         self.draw_cached()
     }
 
-    async fn handle_char(&self, sg: &SceneGraph, key: char, mods: KeyMods, repeat: bool) -> bool {
+    async fn handle_char(&self, key: char, mods: KeyMods, repeat: bool) -> bool {
         // First filter for only single digit keys
         if DISALLOWED_CHARS.contains(&key) {
             return false
@@ -1069,13 +1039,7 @@ impl UIObject for EditBox {
         true
     }
 
-    async fn handle_key_down(
-        &self,
-        sg: &SceneGraph,
-        key: KeyCode,
-        mods: KeyMods,
-        repeat: bool,
-    ) -> bool {
+    async fn handle_key_down(&self, key: KeyCode, mods: KeyMods, repeat: bool) -> bool {
         // First filter for only single digit keys
         // Avoid processing events handled by insert_char()
         if !ALLOWED_KEYCODES.contains(&key) {
@@ -1100,12 +1064,7 @@ impl UIObject for EditBox {
         true
     }
 
-    async fn handle_mouse_btn_down(
-        &self,
-        sg: &SceneGraph,
-        btn: MouseButton,
-        mouse_pos: Point,
-    ) -> bool {
+    async fn handle_mouse_btn_down(&self, btn: MouseButton, mouse_pos: Point) -> bool {
         if !self.is_active.get() {
             return true
         }
@@ -1114,12 +1073,7 @@ impl UIObject for EditBox {
         true
     }
 
-    async fn handle_mouse_btn_up(
-        &self,
-        sg: &SceneGraph,
-        btn: MouseButton,
-        mouse_pos: Point,
-    ) -> bool {
+    async fn handle_mouse_btn_up(&self, btn: MouseButton, mouse_pos: Point) -> bool {
         if !self.is_active.get() {
             return true
         }
@@ -1128,7 +1082,7 @@ impl UIObject for EditBox {
         true
     }
 
-    async fn handle_mouse_move(&self, sg: &SceneGraph, mouse_pos: Point) -> bool {
+    async fn handle_mouse_move(&self, mouse_pos: Point) -> bool {
         if !self.is_active.get() {
             return false
         }
@@ -1137,13 +1091,7 @@ impl UIObject for EditBox {
         false
     }
 
-    async fn handle_touch(
-        &self,
-        sg: &SceneGraph,
-        phase: TouchPhase,
-        id: u64,
-        touch_pos: Point,
-    ) -> bool {
+    async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
         if !self.is_active.get() {
             return true
         }
@@ -1158,7 +1106,7 @@ impl UIObject for EditBox {
             TouchPhase::Started => self.handle_click_down(MouseButton::Left, touch_pos).await,
             TouchPhase::Moved => self.handle_cursor_move(touch_pos).await,
             TouchPhase::Ended => self.handle_click_up(MouseButton::Left, touch_pos),
-            TouchPhase::Cancelled => false
+            TouchPhase::Cancelled => false,
         }
     }
 }
@@ -1193,3 +1141,16 @@ static ALLOWED_KEYCODES: &'static [KeyCode] = &[
     KeyCode::Home,
     KeyCode::End,
 ];
+
+/*
+impl Stoppable for EditBox {
+    async fn stop(&self) {
+        // TODO: Delete own draw call
+
+        // Free buffers
+        // Should this be in drop?
+        //self.render_api.delete_buffer(self.vertex_buffer);
+        //self.render_api.delete_buffer(self.index_buffer);
+    }
+}
+*/

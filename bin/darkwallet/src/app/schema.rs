@@ -29,9 +29,10 @@ use crate::{
     scene::{SceneNodePtr, Slot},
     text::TextShaperPtr,
     ui::{
+        Button,
         //chatview, vector_art::shape, Button, ChatView, EditBox, Image, Layer, ShapeVertex,
         //Stoppable, Text, VectorArt, VectorShape, Window,
-        Button,
+        EditBox,
         Image,
         Layer,
         ShapeVertex,
@@ -171,7 +172,7 @@ pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
     //let slot_click = Slot { name: "button_clicked".to_string(), notify: sender };
     //node.register("click", slot_click).unwrap();
 
-    let node = node.setup(|me| Button::new(me, app.event_pub.clone(), app.ex.clone())).await;
+    let node = node.setup(|me| Button::new(me, app.ex.clone())).await;
     layer_node.link(node);
 
     // Create another mesh
@@ -270,10 +271,8 @@ pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
         .await;
     layer_node.link(node);
 
-    /*
     // Text edit
-    let node_id = create_editbox(&mut sg, "editz");
-    let node = sg.get_node(node_id).unwrap();
+    let node = create_editbox("editz");
     node.set_property_bool(Role::App, "is_active", true).unwrap();
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(Role::App, 0, 150.).unwrap();
@@ -329,8 +328,8 @@ pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
     node.set_property_u32(Role::App, "z_index", 1).unwrap();
     //node.set_property_bool(Role::App, "debug", true).unwrap();
 
-    let editbox_text = PropertyStr::wrap(node, Role::App, "text", 0).unwrap();
-    let editbox_focus = PropertyBool::wrap(node, Role::App, "is_focused", 0).unwrap();
+    //let editbox_text = PropertyStr::wrap(node, Role::App, "text", 0).unwrap();
+    //let editbox_focus = PropertyBool::wrap(node, Role::App, "is_focused", 0).unwrap();
     //let darkirc_backend = app.darkirc_backend.clone();
     //let task = app.ex.spawn(async move {
     //    while let Ok(_) = btn_click_recvr.recv().await {
@@ -349,22 +348,14 @@ pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
     //});
     //tasks.push(task);
 
-    drop(sg);
-    let pimpl = EditBox::new(
-        app.ex.clone(),
-        app.sg.clone(),
-        node_id,
-        app.render_api.clone(),
-        app.event_pub.clone(),
-        app.text_shaper.clone(),
-    )
-    .await;
-    let mut sg = app.sg.lock().await;
-    let node = sg.get_node_mut(node_id).unwrap();
-    node.pimpl = pimpl;
+    let node = node
+        .setup(|me| {
+            EditBox::new(me, app.render_api.clone(), app.text_shaper.clone(), app.ex.clone())
+        })
+        .await;
+    layer_node.link(node);
 
-    sg.link(node_id, layer_node_id).unwrap();
-
+    /*
     // ChatView
     let (node_id, recvr) = create_chatview(&mut sg, "chatty");
     let node = sg.get_node(node_id).unwrap();
@@ -442,7 +433,6 @@ pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
         app.sg.clone(),
         node_id,
         app.render_api.clone(),
-        app.event_pub.clone(),
         app.text_shaper.clone(),
         chat_tree,
         recvr,
@@ -641,7 +631,6 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
         app.sg.clone(),
         node_id,
         app.render_api.clone(),
-        app.event_pub.clone(),
         app.text_shaper.clone(),
         chat_tree,
         recvr,
@@ -794,7 +783,6 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
         app.sg.clone(),
         node_id,
         app.render_api.clone(),
-        app.event_pub.clone(),
         app.text_shaper.clone(),
     )
     .await;

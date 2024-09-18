@@ -46,11 +46,7 @@ pub struct Button {
 }
 
 impl Button {
-    pub async fn new(
-        node: SceneNodeWeak,
-        event_pub: GraphicsEventPublisherPtr,
-        ex: ExecutorPtr,
-    ) -> Pimpl {
+    pub async fn new(node: SceneNodeWeak, ex: ExecutorPtr) -> Pimpl {
         debug!(target: "ui::button", "Button::new()");
 
         let node_ref = &node.upgrade().unwrap();
