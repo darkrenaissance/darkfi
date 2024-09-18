@@ -138,11 +138,11 @@ async fn synced_peers(
     checkpoint: Option<(u32, HeaderHash)>,
 ) -> HashMap<(u32, [u8; 32]), Vec<ChannelPtr>> {
     info!(target: "darkfid::task::sync::synced_peers", "Receiving tip from peers...");
-    let comms_timeout = node.p2p.settings().read().await.outbound_connect_timeout;
+    let comms_timeout = node.p2p_handler.p2p.settings().read().await.outbound_connect_timeout;
     let mut tips = HashMap::new();
     loop {
         // Grab channels
-        let peers = node.p2p.hosts().channels();
+        let peers = node.p2p_handler.p2p.hosts().channels();
 
         // Ask each peer(if we got any) if they are synced
         for peer in peers {
@@ -210,7 +210,7 @@ async fn synced_peers(
         }
 
         warn!(target: "darkfid::task::sync::synced_peers", "Node is not connected to other synced nodes, waiting to retry...");
-        let subscription = node.p2p.hosts().subscribe_channel().await;
+        let subscription = node.p2p_handler.p2p.hosts().subscribe_channel().await;
         let _ = subscription.receive().await;
         subscription.unsubscribe().await;
 
@@ -270,7 +270,7 @@ async fn retrieve_headers(
             }
         }
     }
-    let comms_timeout = node.p2p.settings().read().await.outbound_connect_timeout;
+    let comms_timeout = node.p2p_handler.p2p.settings().read().await.outbound_connect_timeout;
 
     // We subtract 1 since tip_height is increased by one
     let total = tip_height - last_known - 1;
@@ -390,7 +390,7 @@ async fn retrieve_blocks(
             }
         }
     }
-    let comms_timeout = node.p2p.settings().read().await.outbound_connect_timeout;
+    let comms_timeout = node.p2p_handler.p2p.settings().read().await.outbound_connect_timeout;
 
     let mut received_blocks = 0;
     let total = node.validator.blockchain.headers.len_sync();
@@ -505,7 +505,7 @@ async fn sync_best_fork(node: &Darkfid, peers: &[ChannelPtr], last_tip: &HeaderH
 
     // Node waits for response
     let Ok(response) = response_sub
-        .receive_with_timeout(node.p2p.settings().read().await.outbound_connect_timeout)
+        .receive_with_timeout(node.p2p_handler.p2p.settings().read().await.outbound_connect_timeout)
         .await
     else {
         debug!(target: "darkfid::task::sync::sync_best_fork", "Timeout while waiting for `ForkSyncResponse` from peer: {peer:?}");

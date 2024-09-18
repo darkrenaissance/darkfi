@@ -20,17 +20,20 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use log::{debug, error};
-use smol::Executor;
 
 use darkfi::{
     blockchain::{BlockInfo, Header, HeaderHash},
     impl_p2p_message,
     net::{
-        ChannelPtr, Message, MessageSubscription, ProtocolBase, ProtocolBasePtr,
-        ProtocolJobsManager, ProtocolJobsManagerPtr,
+        protocol::protocol_generic::{
+            ProtocolGenericAction, ProtocolGenericHandler, ProtocolGenericHandlerPtr,
+        },
+        session::SESSION_DEFAULT,
+        Message, P2pPtr,
     },
+    system::ExecutorPtr,
     validator::{consensus::Proposal, ValidatorPtr},
-    Result,
+    Error, Result,
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 
@@ -40,7 +43,7 @@ pub const BATCH: usize = 20;
 /// Structure represening a request to ask a node for their current
 /// canonical(finalized) tip block hash, if they are synced. We also
 /// include our own tip, so they can verify we follow the same sequence.
-#[derive(Debug, SerialEncodable, SerialDecodable)]
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct TipRequest {
     /// Canonical(finalized) tip block hash
     pub tip: HeaderHash,
@@ -51,7 +54,7 @@ impl_p2p_message!(TipRequest, "tiprequest");
 /// Structure representing the response to `TipRequest`,
 /// containing a boolean flag to indicate if we are synced,
 /// and our canonical(finalized) tip block height and hash.
-#[derive(Debug, SerialEncodable, SerialDecodable)]
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct TipResponse {
     /// Flag indicating the node is synced
     pub synced: bool,
@@ -65,7 +68,7 @@ impl_p2p_message!(TipResponse, "tipresponse");
 
 /// Structure represening a request to ask a node for up to `BATCH` headers before
 /// the provided header height.
-#[derive(Debug, SerialEncodable, SerialDecodable)]
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct HeaderSyncRequest {
     /// Header height
     pub height: u32,
@@ -75,7 +78,7 @@ impl_p2p_message!(HeaderSyncRequest, "headersyncrequest");
 
 /// Structure representing the response to `HeaderSyncRequest`,
 /// containing up to `BATCH` headers before the requested block height.
-#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct HeaderSyncResponse {
     /// Response headers
     pub headers: Vec<Header>,
@@ -85,7 +88,7 @@ impl_p2p_message!(HeaderSyncResponse, "headersyncresponse");
 
 /// Structure represening a request to ask a node for up to`BATCH` blocks
 /// of provided headers.
-#[derive(Debug, SerialEncodable, SerialDecodable)]
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct SyncRequest {
     /// Header hashes
     pub headers: Vec<HeaderHash>,
@@ -95,7 +98,7 @@ impl_p2p_message!(SyncRequest, "syncrequest");
 
 /// Structure representing the response to `SyncRequest`,
 /// containing up to `BATCH` blocks after the requested block height.
-#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct SyncResponse {
     /// Response blocks
     pub blocks: Vec<BlockInfo>,
@@ -108,7 +111,7 @@ impl_p2p_message!(SyncResponse, "syncresponse");
 /// otherwise they respond with their best fork sequence.
 /// We also include our own canonical(finalized) tip, so they can verify
 /// we follow the same sequence.
-#[derive(Debug, SerialEncodable, SerialDecodable)]
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct ForkSyncRequest {
     /// Canonical(finalized) tip block hash
     pub tip: HeaderHash,
@@ -120,7 +123,7 @@ impl_p2p_message!(ForkSyncRequest, "forksyncrequest");
 
 /// Structure representing the response to `ForkSyncRequest`,
 /// containing the requested fork sequence.
-#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct ForkSyncResponse {
     /// Response fork proposals
     pub proposals: Vec<Proposal>,
@@ -128,308 +131,346 @@ pub struct ForkSyncResponse {
 
 impl_p2p_message!(ForkSyncResponse, "forksyncresponse");
 
-pub struct ProtocolSync {
-    tip_sub: MessageSubscription<TipRequest>,
-    header_sub: MessageSubscription<HeaderSyncRequest>,
-    request_sub: MessageSubscription<SyncRequest>,
-    fork_request_sub: MessageSubscription<ForkSyncRequest>,
-    jobsman: ProtocolJobsManagerPtr,
-    validator: ValidatorPtr,
-    channel: ChannelPtr,
+/// Atomic pointer to the `ProtocolSync` handler.
+pub type ProtocolSyncHandlerPtr = Arc<ProtocolSyncHandler>;
+
+/// Handler managing all `ProtocolSync` messages, over generic P2P protocols.
+pub struct ProtocolSyncHandler {
+    /// The generic handler for `TipRequest` messages.
+    tip_handler: ProtocolGenericHandlerPtr<TipRequest, TipResponse>,
+    /// The generic handler for `HeaderSyncRequest` messages.
+    header_handler: ProtocolGenericHandlerPtr<HeaderSyncRequest, HeaderSyncResponse>,
+    /// The generic handler for `SyncRequest` messages.
+    sync_handler: ProtocolGenericHandlerPtr<SyncRequest, SyncResponse>,
+    /// The generic handler for `ForkSyncRequest` messages.
+    fork_sync_handler: ProtocolGenericHandlerPtr<ForkSyncRequest, ForkSyncResponse>,
 }
 
-impl ProtocolSync {
-    pub async fn init(channel: ChannelPtr, validator: ValidatorPtr) -> Result<ProtocolBasePtr> {
+impl ProtocolSyncHandler {
+    /// Initialize the generic prototocol handlers for all `ProtocolSync` messages
+    /// and register them to the provided P2P network, using the default session flag.
+    pub async fn init(p2p: &P2pPtr) -> ProtocolSyncHandlerPtr {
         debug!(
             target: "darkfid::proto::protocol_sync::init",
-            "Adding ProtocolSync to the protocol registry"
+            "Adding all sync protocols to the protocol registry"
         );
-        let msg_subsystem = channel.message_subsystem();
-        msg_subsystem.add_dispatch::<TipRequest>().await;
-        msg_subsystem.add_dispatch::<TipResponse>().await;
-        msg_subsystem.add_dispatch::<HeaderSyncRequest>().await;
-        msg_subsystem.add_dispatch::<HeaderSyncResponse>().await;
-        msg_subsystem.add_dispatch::<SyncRequest>().await;
-        msg_subsystem.add_dispatch::<SyncResponse>().await;
-        msg_subsystem.add_dispatch::<ForkSyncRequest>().await;
-        msg_subsystem.add_dispatch::<ForkSyncResponse>().await;
 
-        let tip_sub = channel.subscribe_msg::<TipRequest>().await?;
-        let header_sub = channel.subscribe_msg::<HeaderSyncRequest>().await?;
-        let request_sub = channel.subscribe_msg::<SyncRequest>().await?;
-        let fork_request_sub = channel.subscribe_msg::<ForkSyncRequest>().await?;
+        let tip_handler =
+            ProtocolGenericHandler::new(p2p, "ProtocolSyncTip", SESSION_DEFAULT).await;
+        let header_handler =
+            ProtocolGenericHandler::new(p2p, "ProtocolSyncHeader", SESSION_DEFAULT).await;
+        let sync_handler = ProtocolGenericHandler::new(p2p, "ProtocolSync", SESSION_DEFAULT).await;
+        let fork_sync_handler =
+            ProtocolGenericHandler::new(p2p, "ProtocolSyncFork", SESSION_DEFAULT).await;
 
-        Ok(Arc::new(Self {
-            tip_sub,
-            header_sub,
-            request_sub,
-            fork_request_sub,
-            jobsman: ProtocolJobsManager::new("SyncProtocol", channel.clone()),
-            validator,
-            channel,
-        }))
+        Arc::new(Self { tip_handler, header_handler, sync_handler, fork_sync_handler })
     }
 
-    async fn handle_receive_tip_request(self: Arc<Self>) -> Result<()> {
-        debug!(target: "darkfid::proto::protocol_sync::handle_receive_tip_request", "START");
-        loop {
-            let request = match self.tip_sub.receive().await {
-                Ok(v) => v,
-                Err(e) => {
-                    debug!(
-                        target: "darkfid::proto::protocol_sync::handle_receive_tip_request",
-                        "recv fail: {e}"
-                    );
-                    continue
+    /// Start all `ProtocolSync` background tasks.
+    pub async fn start(&self, executor: &ExecutorPtr, validator: &ValidatorPtr) -> Result<()> {
+        debug!(
+            target: "darkfid::proto::protocol_sync::start",
+            "Starting sync protocols handlers tasks..."
+        );
+
+        self.tip_handler.task.clone().start(
+            handle_receive_tip_request(self.tip_handler.clone(), validator.clone()),
+            |res| async move {
+                match res {
+                    Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                    Err(e) => error!(target: "darkfid::proto::protocol_sync::start", "Failed starting ProtocolSyncTip handler task: {e}"),
                 }
-            };
+            },
+            Error::DetachedTaskStopped,
+            executor.clone(),
+        );
 
-            // Check if node has finished syncing its blockchain
-            let response = if !*self.validator.synced.read().await {
-                debug!(
-                    target: "darkfid::proto::protocol_sync::handle_receive_tip_request",
-                    "Node still syncing blockchain, skipping..."
-                );
-                TipResponse { synced: false, height: None, hash: None }
-            } else {
-                // Check we follow the same sequence
-                match self.validator.blockchain.blocks.contains(&request.tip) {
-                    Ok(contains) => {
-                        if !contains {
-                            debug!(
-                                target: "darkfid::proto::protocol_sync::handle_receive_tip_request",
-                                "Node doesn't follow request sequence"
-                            );
-                            continue
-                        }
-                    }
-                    Err(e) => {
-                        error!(
-                            target: "darkfid::proto::protocol_sync::handle_receive_tip_request",
-                            "block_store.contains fail: {e}"
-                        );
-                        continue
-                    }
+        self.header_handler.task.clone().start(
+            handle_receive_header_request(self.header_handler.clone(), validator.clone()),
+            |res| async move {
+                match res {
+                    Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                    Err(e) => error!(target: "darkfid::proto::protocol_sync::start", "Failed starting ProtocolSyncHeader handler task: {e}"),
                 }
+            },
+            Error::DetachedTaskStopped,
+            executor.clone(),
+        );
 
-                // Grab our current tip and return it
-                let tip = match self.validator.blockchain.last() {
-                    Ok(v) => v,
-                    Err(e) => {
-                        error!(
-                            target: "darkfid::proto::protocol_sync::handle_receive_tip_request",
-                            "blockchain.last fail: {e}"
-                        );
-                        continue
-                    }
-                };
-
-                TipResponse { synced: true, height: Some(tip.0), hash: Some(tip.1) }
-            };
-
-            if let Err(e) = self.channel.send(&response).await {
-                error!(
-                    target: "darkfid::proto::protocol_sync::handle_receive_tip_request",
-                    "Channel send fail: {e}"
-                )
-            };
-        }
-    }
-
-    async fn handle_receive_header_request(self: Arc<Self>) -> Result<()> {
-        debug!(target: "darkfid::proto::protocol_sync::handle_receive_header_request", "START");
-        loop {
-            let request = match self.header_sub.receive().await {
-                Ok(v) => v,
-                Err(e) => {
-                    debug!(
-                        target: "darkfid::proto::protocol_sync::handle_receive_header_request",
-                        "recv fail: {}",
-                        e
-                    );
-                    continue
+        self.sync_handler.task.clone().start(
+            handle_receive_request(self.sync_handler.clone(), validator.clone()),
+            |res| async move {
+                match res {
+                    Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                    Err(e) => error!(target: "darkfid::proto::protocol_sync::start", "Failed starting ProtocolSync handler task: {e}"),
                 }
-            };
+            },
+            Error::DetachedTaskStopped,
+            executor.clone(),
+        );
 
-            // Check if node has finished syncing its blockchain
-            if !*self.validator.synced.read().await {
-                debug!(
-                    target: "darkfid::proto::protocol_sync::handle_receive_header_request",
-                    "Node still syncing blockchain, skipping..."
-                );
-                continue
-            }
-
-            let headers = match self.validator.blockchain.get_headers_before(request.height, BATCH)
-            {
-                Ok(v) => v,
-                Err(e) => {
-                    error!(
-                        target: "darkfid::proto::protocol_sync::handle_receive_header_request",
-                        "get_headers_before fail: {}",
-                        e
-                    );
-                    continue
+        self.fork_sync_handler.task.clone().start(
+            handle_receive_fork_request(self.fork_sync_handler.clone(), validator.clone()),
+            |res| async move {
+                match res {
+                    Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                    Err(e) => error!(target: "darkfid::proto::protocol_sync::start", "Failed starting ProtocolSyncFork handler task: {e}"),
                 }
-            };
+            },
+            Error::DetachedTaskStopped,
+            executor.clone(),
+        );
 
-            let response = HeaderSyncResponse { headers };
-            if let Err(e) = self.channel.send(&response).await {
-                error!(
-                    target: "darkfid::proto::protocol_sync::handle_receive_header_request",
-                    "channel send fail: {}",
-                    e
-                )
-            };
-        }
-    }
+        debug!(
+            target: "darkfid::proto::protocol_sync::start",
+            "Sync protocols handlers tasks started!"
+        );
 
-    async fn handle_receive_request(self: Arc<Self>) -> Result<()> {
-        debug!(target: "darkfid::proto::protocol_sync::handle_receive_request", "START");
-        loop {
-            let request = match self.request_sub.receive().await {
-                Ok(v) => v,
-                Err(e) => {
-                    debug!(
-                        target: "darkfid::proto::protocol_sync::handle_receive_request",
-                        "recv fail: {}",
-                        e
-                    );
-                    continue
-                }
-            };
-
-            // Check if node has finished syncing its blockchain
-            if !*self.validator.synced.read().await {
-                debug!(
-                    target: "darkfid::proto::protocol_sync::handle_receive_request",
-                    "Node still syncing blockchain, skipping..."
-                );
-                continue
-            }
-
-            // Check if request exists the configured limit
-            if request.headers.len() > BATCH {
-                debug!(
-                    target: "darkfid::proto::protocol_sync::handle_receive_request",
-                    "Node requested more blocks than allowed."
-                );
-                continue
-            }
-
-            let blocks = match self.validator.blockchain.get_blocks_by_hash(&request.headers) {
-                Ok(v) => v,
-                Err(e) => {
-                    error!(
-                        target: "darkfid::proto::protocol_sync::handle_receive_request",
-                        "get_blocks_after fail: {}",
-                        e
-                    );
-                    continue
-                }
-            };
-
-            let response = SyncResponse { blocks };
-            if let Err(e) = self.channel.send(&response).await {
-                error!(
-                    target: "darkfid::proto::protocol_sync::handle_receive_request",
-                    "channel send fail: {}",
-                    e
-                )
-            };
-        }
-    }
-
-    async fn handle_receive_fork_request(self: Arc<Self>) -> Result<()> {
-        debug!(target: "darkfid::proto::protocol_sync::handle_receive_fork_request", "START");
-        loop {
-            let request = match self.fork_request_sub.receive().await {
-                Ok(v) => v,
-                Err(e) => {
-                    debug!(
-                        target: "darkfid::proto::protocol_sync::handle_receive_fork_request",
-                        "recv fail: {}",
-                        e
-                    );
-                    continue
-                }
-            };
-
-            // Check if node has finished syncing its blockchain
-            if !*self.validator.synced.read().await {
-                debug!(
-                    target: "darkfid::proto::protocol_sync::handle_receive_fork_request",
-                    "Node still syncing blockchain, skipping..."
-                );
-                continue
-            }
-
-            debug!(target: "darkfid::proto::protocol_sync::handle_receive_request", "Received request: {request:?}");
-
-            // If a fork tip is provided, grab its fork proposals sequence.
-            // Otherwise, grab best fork proposals sequence.
-            let proposals = match request.fork_tip {
-                Some(fork_tip) => {
-                    self.validator
-                        .consensus
-                        .get_fork_proposals(request.tip, fork_tip, BATCH as u32)
-                        .await
-                }
-                None => {
-                    self.validator
-                        .consensus
-                        .get_best_fork_proposals(request.tip, BATCH as u32)
-                        .await
-                }
-            };
-            let proposals = match proposals {
-                Ok(p) => p,
-                Err(e) => {
-                    debug!(
-                        target: "darkfid::proto::protocol_sync::handle_receive_request",
-                        "Getting fork proposals failed: {}",
-                        e
-                    );
-                    continue
-                }
-            };
-
-            let response = ForkSyncResponse { proposals };
-            debug!(target: "darkfid::proto::protocol_sync::handle_receive_request", "Response: {response:?}");
-            if let Err(e) = self.channel.send(&response).await {
-                debug!(
-                    target: "darkfid::proto::protocol_sync::handle_receive_fork_request",
-                    "channel send fail: {}",
-                    e
-                )
-            };
-        }
-    }
-}
-
-#[async_trait]
-impl ProtocolBase for ProtocolSync {
-    async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
-        debug!(target: "darkfid::proto::protocol_sync::start", "START");
-        self.jobsman.clone().start(executor.clone());
-        self.jobsman
-            .clone()
-            .spawn(self.clone().handle_receive_tip_request(), executor.clone())
-            .await;
-        self.jobsman
-            .clone()
-            .spawn(self.clone().handle_receive_header_request(), executor.clone())
-            .await;
-        self.jobsman.clone().spawn(self.clone().handle_receive_request(), executor.clone()).await;
-        self.jobsman
-            .clone()
-            .spawn(self.clone().handle_receive_fork_request(), executor.clone())
-            .await;
-        debug!(target: "darkfid::proto::protocol_sync::start", "END");
         Ok(())
     }
 
-    fn name(&self) -> &'static str {
-        "ProtocolSync"
+    /// Stop all `ProtocolSync` background tasks.
+    pub async fn stop(&self) {
+        debug!(target: "darkfid::proto::protocol_sync::stop", "Terminating sync protocols handlers tasks...");
+        self.tip_handler.task.stop().await;
+        self.header_handler.task.stop().await;
+        self.sync_handler.task.stop().await;
+        self.fork_sync_handler.task.stop().await;
+        debug!(target: "darkfid::proto::protocol_sync::stop", "Sync protocols handlers tasks terminated!");
+    }
+}
+
+/// Background handler function for ProtocolSyncTip.
+async fn handle_receive_tip_request(
+    handler: ProtocolGenericHandlerPtr<TipRequest, TipResponse>,
+    validator: ValidatorPtr,
+) -> Result<()> {
+    debug!(target: "darkfid::proto::protocol_sync::handle_receive_tip_request", "START");
+    loop {
+        // Wait for a new tip request message
+        let (channel, request) = match handler.receiver.recv().await {
+            Ok(r) => r,
+            Err(e) => {
+                debug!(
+                    target: "darkfid::proto::protocol_sync::handle_receive_tip_request",
+                    "recv fail: {e}"
+                );
+                continue
+            }
+        };
+
+        // Check if node has finished syncing its blockchain
+        let response = if !*validator.synced.read().await {
+            TipResponse { synced: false, height: None, hash: None }
+        } else {
+            // Check we follow the same sequence
+            match validator.blockchain.blocks.contains(&request.tip) {
+                Ok(contains) => {
+                    if !contains {
+                        debug!(
+                            target: "darkfid::proto::protocol_sync::handle_receive_tip_request",
+                            "Node doesn't follow request sequence"
+                        );
+                        handler.send_action(channel, ProtocolGenericAction::Skip).await;
+                        continue
+                    }
+                }
+                Err(e) => {
+                    error!(
+                        target: "darkfid::proto::protocol_sync::handle_receive_tip_request",
+                        "block_store.contains fail: {e}"
+                    );
+                    handler.send_action(channel, ProtocolGenericAction::Skip).await;
+                    continue
+                }
+            }
+
+            // Grab our current tip and return it
+            let tip = match validator.blockchain.last() {
+                Ok(v) => v,
+                Err(e) => {
+                    error!(
+                        target: "darkfid::proto::protocol_sync::handle_receive_tip_request",
+                        "blockchain.last fail: {e}"
+                    );
+                    handler.send_action(channel, ProtocolGenericAction::Skip).await;
+                    continue
+                }
+            };
+
+            TipResponse { synced: true, height: Some(tip.0), hash: Some(tip.1) }
+        };
+
+        // Send response
+        handler.send_action(channel, ProtocolGenericAction::Response(response)).await;
+    }
+}
+
+/// Background handler function for ProtocolSyncHeader.
+async fn handle_receive_header_request(
+    handler: ProtocolGenericHandlerPtr<HeaderSyncRequest, HeaderSyncResponse>,
+    validator: ValidatorPtr,
+) -> Result<()> {
+    debug!(target: "darkfid::proto::protocol_sync::handle_receive_header_request", "START");
+    loop {
+        // Wait for a new header request message
+        let (channel, request) = match handler.receiver.recv().await {
+            Ok(r) => r,
+            Err(e) => {
+                debug!(
+                    target: "darkfid::proto::protocol_sync::handle_receive_header_request",
+                    "recv fail: {e}"
+                );
+                continue
+            }
+        };
+
+        // Check if node has finished syncing its blockchain
+        if !*validator.synced.read().await {
+            debug!(
+                target: "darkfid::proto::protocol_sync::handle_receive_header_request",
+                "Node still syncing blockchain, skipping..."
+            );
+            handler.send_action(channel, ProtocolGenericAction::Skip).await;
+            continue
+        }
+
+        // Grab the corresponding headers
+        let headers = match validator.blockchain.get_headers_before(request.height, BATCH) {
+            Ok(v) => v,
+            Err(e) => {
+                error!(
+                    target: "darkfid::proto::protocol_sync::handle_receive_header_request",
+                    "get_headers_before fail: {}",
+                    e
+                );
+                handler.send_action(channel, ProtocolGenericAction::Skip).await;
+                continue
+            }
+        };
+
+        // Send response
+        handler
+            .send_action(channel, ProtocolGenericAction::Response(HeaderSyncResponse { headers }))
+            .await;
+    }
+}
+
+/// Background handler function for ProtocolSync.
+async fn handle_receive_request(
+    handler: ProtocolGenericHandlerPtr<SyncRequest, SyncResponse>,
+    validator: ValidatorPtr,
+) -> Result<()> {
+    debug!(target: "darkfid::proto::protocol_sync::handle_receive_request", "START");
+    loop {
+        // Wait for a new sync request message
+        let (channel, request) = match handler.receiver.recv().await {
+            Ok(r) => r,
+            Err(e) => {
+                debug!(
+                    target: "darkfid::proto::protocol_sync::handle_receive_request",
+                    "recv fail: {e}"
+                );
+                continue
+            }
+        };
+
+        // Check if node has finished syncing its blockchain
+        if !*validator.synced.read().await {
+            debug!(
+                target: "darkfid::proto::protocol_sync::handle_receive_request",
+                "Node still syncing blockchain, skipping..."
+            );
+            handler.send_action(channel, ProtocolGenericAction::Skip).await;
+            continue
+        }
+
+        // Check if request exists the configured limit
+        if request.headers.len() > BATCH {
+            debug!(
+                target: "darkfid::proto::protocol_sync::handle_receive_request",
+                "Node requested more blocks than allowed."
+            );
+            handler.send_action(channel, ProtocolGenericAction::Skip).await;
+            continue
+        }
+
+        // Grab the corresponding blocks
+        let blocks = match validator.blockchain.get_blocks_by_hash(&request.headers) {
+            Ok(v) => v,
+            Err(e) => {
+                error!(
+                    target: "darkfid::proto::protocol_sync::handle_receive_request",
+                    "get_blocks_after fail: {}",
+                    e
+                );
+                handler.send_action(channel, ProtocolGenericAction::Skip).await;
+                continue
+            }
+        };
+
+        // Send response
+        handler
+            .send_action(channel, ProtocolGenericAction::Response(SyncResponse { blocks }))
+            .await;
+    }
+}
+
+/// Background handler function for ProtocolSyncFork.
+async fn handle_receive_fork_request(
+    handler: ProtocolGenericHandlerPtr<ForkSyncRequest, ForkSyncResponse>,
+    validator: ValidatorPtr,
+) -> Result<()> {
+    debug!(target: "darkfid::proto::protocol_sync::handle_receive_fork_request", "START");
+    loop {
+        // Wait for a new fork sync request message
+        let (channel, request) = match handler.receiver.recv().await {
+            Ok(r) => r,
+            Err(e) => {
+                debug!(
+                    target: "darkfid::proto::protocol_sync::handle_receive_fork_request",
+                    "recv fail: {e}"
+                );
+                continue
+            }
+        };
+
+        // Check if node has finished syncing its blockchain
+        if !*validator.synced.read().await {
+            debug!(
+                target: "darkfid::proto::protocol_sync::handle_receive_fork_request",
+                "Node still syncing blockchain, skipping..."
+            );
+            handler.send_action(channel, ProtocolGenericAction::Skip).await;
+            continue
+        }
+
+        debug!(target: "darkfid::proto::protocol_sync::handle_receive_fork_request", "Received request: {request:?}");
+
+        // If a fork tip is provided, grab its fork proposals sequence.
+        // Otherwise, grab best fork proposals sequence.
+        let proposals = match request.fork_tip {
+            Some(fork_tip) => {
+                validator.consensus.get_fork_proposals(request.tip, fork_tip, BATCH as u32).await
+            }
+            None => validator.consensus.get_best_fork_proposals(request.tip, BATCH as u32).await,
+        };
+        let proposals = match proposals {
+            Ok(p) => p,
+            Err(e) => {
+                debug!(
+                    target: "darkfid::proto::protocol_sync::handle_receive_fork_request",
+                    "Getting fork proposals failed: {}",
+                    e
+                );
+                handler.send_action(channel, ProtocolGenericAction::Skip).await;
+                continue
+            }
+        };
+
+        // Send response
+        handler
+            .send_action(channel, ProtocolGenericAction::Response(ForkSyncResponse { proposals }))
+            .await;
     }
 }

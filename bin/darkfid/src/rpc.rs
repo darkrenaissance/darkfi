@@ -121,9 +121,9 @@ impl Darkfid {
         let switch = params[0].get::<bool>().unwrap();
 
         if *switch {
-            self.p2p.dnet_enable();
+            self.p2p_handler.p2p.dnet_enable();
         } else {
-            self.p2p.dnet_disable();
+            self.p2p_handler.p2p.dnet_disable();
         }
 
         JsonResponse::new(JsonValue::Boolean(true), id).into()
@@ -224,6 +224,6 @@ impl Darkfid {
 
 impl HandlerP2p for Darkfid {
     fn p2p(&self) -> P2pPtr {
-        self.p2p.clone()
+        self.p2p_handler.p2p.clone()
     }
 }

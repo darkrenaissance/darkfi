@@ -338,7 +338,7 @@ async fn mine_next_block(
     extended_fork.module.verify_current_block(&next_block)?;
 
     // Check if we are connected to the network
-    if !skip_sync && !node.p2p.is_connected() {
+    if !skip_sync && !node.p2p_handler.p2p.is_connected() {
         return Err(Error::NetworkNotConnected)
     }
 
@@ -348,7 +348,7 @@ async fn mine_next_block(
 
     // Broadcast proposal to the network
     let message = ProposalMessage(proposal);
-    node.p2p.broadcast(&message).await;
+    node.p2p_handler.p2p.broadcast(&message).await;
 
     Ok(())
 }

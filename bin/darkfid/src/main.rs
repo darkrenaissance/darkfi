@@ -30,7 +30,7 @@ use darkfi::{
     async_daemonize,
     blockchain::BlockInfo,
     cli_desc,
-    net::{settings::SettingsOpt, P2pPtr},
+    net::settings::SettingsOpt,
     rpc::{
         client::RpcChadClient,
         jsonrpc::JsonSubscriber,
@@ -60,10 +60,11 @@ use task::{consensus::ConsensusInitTaskConfig, consensus_init_task};
 
 /// P2P net protocols
 mod proto;
+use proto::{DarkfidP2pHandler, DarkfidP2pHandlerPtr};
 
 /// Utility functions
 mod utils;
-use utils::{parse_blockchain_config, spawn_p2p};
+use utils::parse_blockchain_config;
 
 const CONFIG_FILE: &str = "darkfid_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../darkfid_config.toml");
@@ -186,8 +187,8 @@ impl MinerRpcCLient {
 
 /// Daemon structure
 pub struct Darkfid {
-    /// P2P network pointer
-    p2p: P2pPtr,
+    /// P2P network protocols handler.
+    p2p_handler: DarkfidP2pHandlerPtr,
     /// Validator(node) pointer
     validator: ValidatorPtr,
     /// Flag to specify node is a miner
@@ -206,7 +207,7 @@ pub struct Darkfid {
 
 impl Darkfid {
     pub async fn new(
-        p2p: P2pPtr,
+        p2p_handler: DarkfidP2pHandlerPtr,
         validator: ValidatorPtr,
         miner: bool,
         txs_batch_size: usize,
@@ -215,7 +216,7 @@ impl Darkfid {
         dnet_sub: JsonSubscriber,
     ) -> Self {
         Self {
-            p2p,
+            p2p_handler,
             validator,
             miner,
             txs_batch_size,
@@ -288,8 +289,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     subscribers.insert("proposals", JsonSubscriber::new("blockchain.subscribe_proposals"));
 
     // Initialize P2P network
-    let p2p =
-        spawn_p2p(&blockchain_config.net.into(), &validator, &subscribers, ex.clone()).await?;
+    let p2p_handler = DarkfidP2pHandler::init(&blockchain_config.net.into(), &ex).await?;
 
     // Initialize JSON-RPC client to perform requests to minerd
     let rpc_client = if blockchain_config.miner {
@@ -319,7 +319,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     info!(target: "darkfid", "Starting dnet subs task");
     let dnet_sub = JsonSubscriber::new("dnet.subscribe_events");
     let dnet_sub_ = dnet_sub.clone();
-    let p2p_ = p2p.clone();
+    let p2p_ = p2p_handler.p2p.clone();
     let dnet_task = StoppableTask::new();
     dnet_task.clone().start(
         async move {
@@ -342,11 +342,11 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
     // Initialize node
     let darkfid = Darkfid::new(
-        p2p.clone(),
-        validator,
+        p2p_handler.clone(),
+        validator.clone(),
         blockchain_config.miner,
         txs_batch_size,
-        subscribers,
+        subscribers.clone(),
         rpc_client,
         dnet_sub,
     )
@@ -383,7 +383,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     );
 
     info!(target: "darkfid", "Starting P2P network");
-    p2p.clone().start().await?;
+    p2p_handler.clone().start(&ex, &validator, &subscribers).await?;
 
     // Consensus protocol
     info!(target: "darkfid", "Starting consensus protocol task");
@@ -424,8 +424,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     info!(target: "darkfid", "Stopping JSON-RPC server...");
     rpc_task.stop().await;
 
-    info!(target: "darkfid", "Stopping P2P network...");
-    p2p.stop().await;
+    info!(target: "darkfid", "Stopping P2P network protocols handler...");
+    p2p_handler.stop().await;
 
     info!(target: "darkfid", "Stopping consensus task...");
     consensus_task.stop().await;

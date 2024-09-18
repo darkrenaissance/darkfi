@@ -16,19 +16,130 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::{collections::HashMap, sync::Arc};
+
+use darkfi::{
+    net::{P2p, P2pPtr, Settings},
+    rpc::jsonrpc::JsonSubscriber,
+    system::ExecutorPtr,
+    validator::ValidatorPtr,
+    Result,
+};
+use log::info;
+
 // TODO: Protocal functions need to be protected so peers can't spam us.
 
 /// Block proposal broadcast protocol
 mod protocol_proposal;
-pub use protocol_proposal::{ProposalMessage, ProtocolProposal};
+pub use protocol_proposal::{ProposalMessage, ProtocolProposalHandler, ProtocolProposalHandlerPtr};
 
 /// Validator blockchain sync protocol
 mod protocol_sync;
 pub use protocol_sync::{
-    ForkSyncRequest, ForkSyncResponse, HeaderSyncRequest, HeaderSyncResponse, ProtocolSync,
-    SyncRequest, SyncResponse, TipRequest, TipResponse, BATCH,
+    ForkSyncRequest, ForkSyncResponse, HeaderSyncRequest, HeaderSyncResponse, ProtocolSyncHandler,
+    ProtocolSyncHandlerPtr, SyncRequest, SyncResponse, TipRequest, TipResponse, BATCH,
 };
 
 /// Transaction broadcast protocol
 mod protocol_tx;
-pub use protocol_tx::ProtocolTx;
+pub use protocol_tx::{ProtocolTxHandler, ProtocolTxHandlerPtr};
+
+/// Atomic pointer to the Darkfid P2P protocols handler.
+pub type DarkfidP2pHandlerPtr = Arc<DarkfidP2pHandler>;
+
+/// Darkfid P2P protocols handler.
+pub struct DarkfidP2pHandler {
+    /// P2P network pointer
+    pub p2p: P2pPtr,
+    /// `ProtocolProposal` messages handler
+    proposals: ProtocolProposalHandlerPtr,
+    /// `ProtocolSync` messages handler
+    sync: ProtocolSyncHandlerPtr,
+    /// `ProtocolTx` messages handler
+    txs: ProtocolTxHandlerPtr,
+}
+
+impl DarkfidP2pHandler {
+    /// Initialize a Darkfid P2P protocols handler.
+    ///
+    /// A new P2P instance is generated using provided settings and all
+    /// corresponding protocols are registered.
+    pub async fn init(settings: &Settings, executor: &ExecutorPtr) -> Result<DarkfidP2pHandlerPtr> {
+        info!(
+            target: "darkfid::proto::mod::DarkfidP2pHandler::init",
+            "Initializing a new Darkfid P2P handler..."
+        );
+
+        // Generate a new P2P instance
+        let p2p = P2p::new(settings.clone(), executor.clone()).await?;
+
+        // Generate a new `ProtocolProposal` messages handler
+        let proposals = ProtocolProposalHandler::init(&p2p).await;
+
+        // Generate a new `ProtocolSync` messages handler
+        let sync = ProtocolSyncHandler::init(&p2p).await;
+
+        // Generate a new `ProtocolTx` messages handler
+        let txs = ProtocolTxHandler::init(&p2p).await;
+
+        info!(
+            target: "darkfid::proto::mod::DarkfidP2pHandler::init",
+            "Darkfid P2P handler generated successfully!"
+        );
+
+        Ok(Arc::new(Self { p2p, proposals, sync, txs }))
+    }
+
+    /// Start the Darkfid P2P protocols handler for provided validator.
+    pub async fn start(
+        &self,
+        executor: &ExecutorPtr,
+        validator: &ValidatorPtr,
+        subscribers: &HashMap<&'static str, JsonSubscriber>,
+    ) -> Result<()> {
+        info!(
+            target: "darkfid::proto::mod::DarkfidP2pHandler::start",
+            "Starting the Darkfid P2P handler..."
+        );
+
+        // Start the `ProtocolProposal` messages handler
+        let subscriber = subscribers.get("proposals").unwrap().clone();
+        self.proposals.start(executor, validator, &self.p2p, subscriber).await?;
+
+        // Start the `ProtocolSync` messages handler
+        self.sync.start(executor, validator).await?;
+
+        // Start the `ProtocolTx` messages handler
+        let subscriber = subscribers.get("txs").unwrap().clone();
+        self.txs.start(executor, validator, subscriber).await?;
+
+        // Start the P2P instance
+        self.p2p.clone().start().await?;
+
+        info!(
+            target: "darkfid::proto::mod::DarkfidP2pHandler::start",
+            "Darkfid P2P handler started successfully!"
+        );
+
+        Ok(())
+    }
+
+    /// Stop the Darkfid P2P protocols handler.
+    pub async fn stop(&self) {
+        info!(target: "darkfid::proto::mod::DarkfidP2pHandler::stop", "Terminating Darkfid P2P handler...");
+
+        // Stop the P2P instance
+        self.p2p.stop().await;
+
+        // Start the `ProtocolTx` messages handler
+        self.txs.stop().await;
+
+        // Start the `ProtocolSync` messages handler
+        self.sync.stop().await;
+
+        // Start the `ProtocolProposal` messages handler
+        self.proposals.stop().await;
+
+        info!(target: "darkfid::proto::mod::DarkfidP2pHandler::stop", "Darkfid P2P handler terminated successfully!");
+    }
+}

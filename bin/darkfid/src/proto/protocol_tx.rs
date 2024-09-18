@@ -18,119 +18,134 @@
 
 use std::sync::Arc;
 
-use async_trait::async_trait;
-use log::debug;
-use smol::Executor;
+use log::{debug, error};
 use tinyjson::JsonValue;
-use url::Url;
 
 use darkfi::{
     net::{
-        ChannelPtr, MessageSubscription, P2pPtr, ProtocolBase, ProtocolBasePtr,
-        ProtocolJobsManager, ProtocolJobsManagerPtr,
+        protocol::protocol_generic::{
+            ProtocolGenericAction, ProtocolGenericHandler, ProtocolGenericHandlerPtr,
+        },
+        session::SESSION_DEFAULT,
+        P2pPtr,
     },
     rpc::jsonrpc::JsonSubscriber,
+    system::ExecutorPtr,
     tx::Transaction,
     util::encoding::base64,
     validator::ValidatorPtr,
-    Result,
+    Error, Result,
 };
 use darkfi_serial::serialize_async;
 
-pub struct ProtocolTx {
-    tx_sub: MessageSubscription<Transaction>,
-    jobsman: ProtocolJobsManagerPtr,
-    validator: ValidatorPtr,
-    p2p: P2pPtr,
-    channel_address: Url,
-    subscriber: JsonSubscriber,
+/// Atomic pointer to the `ProtocolTx` handler.
+pub type ProtocolTxHandlerPtr = Arc<ProtocolTxHandler>;
+
+/// Handler managing [`Transaction`] messages, over a generic P2P protocol.
+pub struct ProtocolTxHandler {
+    /// The generic handler for [`Transaction`] messages.
+    handler: ProtocolGenericHandlerPtr<Transaction, Transaction>,
 }
 
-impl ProtocolTx {
-    pub async fn init(
-        channel: ChannelPtr,
-        validator: ValidatorPtr,
-        p2p: P2pPtr,
-        subscriber: JsonSubscriber,
-    ) -> Result<ProtocolBasePtr> {
+impl ProtocolTxHandler {
+    /// Initialize a generic prototocol handler for [`Transaction`] messages
+    /// and registers it to the provided P2P network, using the default session flag.
+    pub async fn init(p2p: &P2pPtr) -> ProtocolTxHandlerPtr {
         debug!(
             target: "darkfid::proto::protocol_tx::init",
             "Adding ProtocolTx to the protocol registry"
         );
-        let msg_subsystem = channel.message_subsystem();
-        msg_subsystem.add_dispatch::<Transaction>().await;
 
-        let tx_sub = channel.subscribe_msg::<Transaction>().await?;
+        let handler = ProtocolGenericHandler::new(p2p, "ProtocolTx", SESSION_DEFAULT).await;
 
-        Ok(Arc::new(Self {
-            tx_sub,
-            jobsman: ProtocolJobsManager::new("TxProtocol", channel.clone()),
-            validator,
-            p2p,
-            channel_address: channel.address().clone(),
-            subscriber,
-        }))
+        Arc::new(Self { handler })
     }
 
-    async fn handle_receive_tx(self: Arc<Self>) -> Result<()> {
+    /// Start the `ProtocolTx` background task.
+    pub async fn start(
+        &self,
+        executor: &ExecutorPtr,
+        validator: &ValidatorPtr,
+        subscriber: JsonSubscriber,
+    ) -> Result<()> {
         debug!(
-            target: "darkfid::proto::protocol_tx::handle_receive_tx",
-            "START"
+            target: "darkfid::proto::protocol_tx::start",
+            "Starting ProtocolTx handler task..."
         );
-        let exclude_list = vec![self.channel_address.clone()];
-        loop {
-            let tx = match self.tx_sub.receive().await {
-                Ok(v) => v,
-                Err(e) => {
-                    debug!(
-                        target: "darkfid::proto::protocol_tx::handle_receive_tx",
-                        "recv fail: {e}"
-                    );
-                    continue
+
+        self.handler.task.clone().start(
+            handle_receive_tx(self.handler.clone(), validator.clone(), subscriber),
+            |res| async move {
+                match res {
+                    Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                    Err(e) => error!(target: "darkfid::proto::protocol_tx::start", "Failed starting ProtocolTx handler task: {e}"),
                 }
-            };
+            },
+            Error::DetachedTaskStopped,
+            executor.clone(),
+        );
 
-            // Check if node has finished syncing its blockchain
-            if !*self.validator.synced.read().await {
-                debug!(
-                    target: "darkfid::proto::protocol_tx::handle_receive_tx",
-                    "Node still syncing blockchain, skipping..."
-                );
-                continue
-            }
+        debug!(
+            target: "darkfid::proto::protocol_tx::start",
+            "ProtocolTx handler task started!"
+        );
 
-            let tx_copy = (*tx).clone();
-
-            // Nodes use unconfirmed_txs vector as seen_txs pool.
-            match self.validator.append_tx(&tx_copy, true).await {
-                Ok(()) => {
-                    self.p2p.broadcast_with_exclude(&tx_copy, &exclude_list).await;
-                    let encoded_tx =
-                        JsonValue::String(base64::encode(&serialize_async(&tx_copy).await));
-                    self.subscriber.notify(vec![encoded_tx].into()).await;
-                }
-                Err(e) => {
-                    debug!(
-                        target: "darkfid::proto::protocol_tx::handle_receive_tx",
-                        "append_tx fail: {e}"
-                    );
-                }
-            }
-        }
-    }
-}
-
-#[async_trait]
-impl ProtocolBase for ProtocolTx {
-    async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
-        debug!(target: "darkfid::proto::protocol_tx::start", "START");
-        self.jobsman.clone().start(executor.clone());
-        self.jobsman.clone().spawn(self.clone().handle_receive_tx(), executor.clone()).await;
-        debug!(target: "darkfid::proto::protocol_tx::start", "END");
         Ok(())
     }
 
-    fn name(&self) -> &'static str {
-        "ProtocolTx"
+    /// Stop the `ProtocolTx` background task.
+    pub async fn stop(&self) {
+        debug!(target: "darkfid::proto::protocol_tx::stop", "Terminating ProtocolTx handler task...");
+        self.handler.task.stop().await;
+        debug!(target: "darkfid::proto::protocol_tx::stop", "ProtocolTx handler task terminated!");
+    }
+}
+
+/// Background handler function for ProtocolTx.
+async fn handle_receive_tx(
+    handler: ProtocolGenericHandlerPtr<Transaction, Transaction>,
+    validator: ValidatorPtr,
+    subscriber: JsonSubscriber,
+) -> Result<()> {
+    debug!(target: "darkfid::proto::protocol_tx::handle_receive_tx", "START");
+    loop {
+        // Wait for a new transaction message
+        let (channel, tx) = match handler.receiver.recv().await {
+            Ok(r) => r,
+            Err(e) => {
+                debug!(
+                    target: "darkfid::proto::protocol_tx::handle_receive_tx",
+                    "recv fail: {e}"
+                );
+                continue
+            }
+        };
+
+        // Check if node has finished syncing its blockchain
+        if !*validator.synced.read().await {
+            debug!(
+                target: "darkfid::proto::protocol_tx::handle_receive_tx",
+                "Node still syncing blockchain, skipping..."
+            );
+            handler.send_action(channel, ProtocolGenericAction::Skip).await;
+            continue
+        }
+
+        // Append transaction
+        if let Err(e) = validator.append_tx(&tx, true).await {
+            debug!(
+                target: "darkfid::proto::protocol_tx::handle_receive_tx",
+                "append_tx fail: {e}"
+            );
+            handler.send_action(channel, ProtocolGenericAction::Skip).await;
+            continue
+        }
+
+        // Signal handler to broadcast the valid transaction to rest nodes
+        handler.send_action(channel, ProtocolGenericAction::Broadcast).await;
+
+        // Notify subscriber
+        let encoded_tx = JsonValue::String(base64::encode(&serialize_async(&tx).await));
+        subscriber.notify(vec![encoded_tx].into()).await;
     }
 }

@@ -20,16 +20,19 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use log::{debug, error, warn};
-use smol::Executor;
 use tinyjson::JsonValue;
 
 use darkfi::{
     impl_p2p_message,
     net::{
-        ChannelPtr, Message, MessageSubscription, P2pPtr, ProtocolBase, ProtocolBasePtr,
-        ProtocolJobsManager, ProtocolJobsManagerPtr,
+        protocol::protocol_generic::{
+            ProtocolGenericAction, ProtocolGenericHandler, ProtocolGenericHandlerPtr,
+        },
+        session::SESSION_DEFAULT,
+        Message, P2pPtr,
     },
     rpc::jsonrpc::JsonSubscriber,
+    system::ExecutorPtr,
     util::encoding::base64,
     validator::{consensus::Proposal, ValidatorPtr},
     Error, Result,
@@ -44,191 +47,217 @@ pub struct ProposalMessage(pub Proposal);
 
 impl_p2p_message!(ProposalMessage, "proposal");
 
-pub struct ProtocolProposal {
-    proposal_sub: MessageSubscription<ProposalMessage>,
-    proposals_response_sub: MessageSubscription<ForkSyncResponse>,
-    jobsman: ProtocolJobsManagerPtr,
-    validator: ValidatorPtr,
-    p2p: P2pPtr,
-    channel: ChannelPtr,
-    subscriber: JsonSubscriber,
+/// Atomic pointer to the `ProtocolProposal` handler.
+pub type ProtocolProposalHandlerPtr = Arc<ProtocolProposalHandler>;
+
+/// Handler managing [`Proposal`] messages, over a generic P2P protocol.
+pub struct ProtocolProposalHandler {
+    /// The generic handler for [`Proposal`] messages.
+    handler: ProtocolGenericHandlerPtr<ProposalMessage, ProposalMessage>,
 }
 
-impl ProtocolProposal {
-    pub async fn init(
-        channel: ChannelPtr,
-        validator: ValidatorPtr,
-        p2p: P2pPtr,
-        subscriber: JsonSubscriber,
-    ) -> Result<ProtocolBasePtr> {
+impl ProtocolProposalHandler {
+    /// Initialize a generic prototocol handler for [`Proposal`] messages
+    /// and registers it to the provided P2P network, using the default session flag.
+    pub async fn init(p2p: &P2pPtr) -> ProtocolProposalHandlerPtr {
         debug!(
             target: "darkfid::proto::protocol_proposal::init",
             "Adding ProtocolProposal to the protocol registry"
         );
-        let msg_subsystem = channel.message_subsystem();
-        msg_subsystem.add_dispatch::<ProposalMessage>().await;
 
-        let proposal_sub = channel.subscribe_msg::<ProposalMessage>().await?;
-        let proposals_response_sub = channel.subscribe_msg::<ForkSyncResponse>().await?;
+        let handler = ProtocolGenericHandler::new(p2p, "ProtocolProposal", SESSION_DEFAULT).await;
 
-        Ok(Arc::new(Self {
-            proposal_sub,
-            proposals_response_sub,
-            jobsman: ProtocolJobsManager::new("ProposalProtocol", channel.clone()),
-            validator,
-            p2p,
-            channel,
-            subscriber,
-        }))
+        Arc::new(Self { handler })
     }
 
-    async fn handle_receive_proposal(self: Arc<Self>) -> Result<()> {
-        debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "START");
-        let exclude_list = vec![self.channel.address().clone()];
-        loop {
-            let proposal = match self.proposal_sub.receive().await {
-                Ok(v) => v,
-                Err(e) => {
-                    debug!(
-                        target: "darkfid::proto::protocol_proposal::handle_receive_proposal",
-                        "recv fail: {e}"
-                    );
-                    continue
+    /// Start the `ProtocolProposal` background task.
+    pub async fn start(
+        &self,
+        executor: &ExecutorPtr,
+        validator: &ValidatorPtr,
+        p2p: &P2pPtr,
+        subscriber: JsonSubscriber,
+    ) -> Result<()> {
+        debug!(
+            target: "darkfid::proto::protocol_proposal::start",
+            "Starting ProtocolProposal handler task..."
+        );
+
+        self.handler.task.clone().start(
+            handle_receive_proposal(self.handler.clone(), validator.clone(), p2p.clone(), subscriber),
+            |res| async move {
+                match res {
+                    Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                    Err(e) => error!(target: "darkfid::proto::protocol_proposal::start", "Failed starting ProtocolProposal handler task: {e}"),
                 }
-            };
+            },
+            Error::DetachedTaskStopped,
+            executor.clone(),
+        );
 
-            // Check if node has finished syncing its blockchain
-            if !*self.validator.synced.read().await {
-                debug!(
-                    target: "darkfid::proto::protocol_proposal::handle_receive_proposal",
-                    "Node still syncing blockchain, skipping..."
-                );
-                continue
-            }
+        debug!(
+            target: "darkfid::proto::protocol_proposal::start",
+            "ProtocolProposal handler task started!"
+        );
 
-            let proposal_copy = (*proposal).clone();
-
-            match self.validator.append_proposal(&proposal_copy.0).await {
-                Ok(()) => {
-                    self.p2p.broadcast_with_exclude(&proposal_copy, &exclude_list).await;
-                    let enc_prop =
-                        JsonValue::String(base64::encode(&serialize_async(&proposal_copy).await));
-                    self.subscriber.notify(vec![enc_prop].into()).await;
-                    continue
-                }
-                Err(e) => {
-                    debug!(
-                        target: "darkfid::proto::protocol_proposal::handle_receive_proposal",
-                        "append_proposal fail: {e}",
-                    );
-
-                    match e {
-                        Error::ExtendedChainIndexNotFound => { /* Do nothing */ }
-                        _ => continue,
-                    }
-                }
-            };
-
-            // If proposal fork chain was not found, we ask our peer for its sequence
-            debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Asking peer for fork sequence");
-
-            // Cleanup subscriber
-            if let Err(e) = self.proposals_response_sub.clean().await {
-                error!(
-                    target: "darkfid::proto::protocol_proposal::handle_receive_proposal",
-                    "Error during proposals response subscriber cleanup: {e}"
-                );
-                continue
-            };
-
-            // Grab last known block to create the request and execute it
-            let last = match self.validator.blockchain.last() {
-                Ok(l) => l,
-                Err(e) => {
-                    debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Blockchain last retriaval failed: {e}");
-                    continue
-                }
-            };
-            let request = ForkSyncRequest { tip: last.1, fork_tip: Some(proposal_copy.0.hash) };
-            if let Err(e) = self.channel.send(&request).await {
-                debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Channel send failed: {e}");
-                continue
-            };
-
-            // Node waits for response
-            let response = match self
-                .proposals_response_sub
-                .receive_with_timeout(self.p2p.settings().read().await.outbound_connect_timeout)
-                .await
-            {
-                Ok(r) => r,
-                Err(e) => {
-                    debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Asking peer for fork sequence failed: {e}");
-                    continue
-                }
-            };
-            debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Peer response: {response:?}");
-
-            // Verify and store retrieved proposals
-            debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Processing received proposals");
-
-            // Response should not be empty
-            if response.proposals.is_empty() {
-                warn!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Peer responded with empty sequence, node might be out of sync!");
-                continue
-            }
-
-            // Sequence length must correspond to requested height
-            if response.proposals.len() as u32 != proposal_copy.0.block.header.height - last.0 {
-                debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Response sequence length is erroneous");
-                continue
-            }
-
-            // First proposal must extend canonical
-            if response.proposals[0].block.header.previous != last.1 {
-                debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Response sequence doesn't extend canonical");
-                continue
-            }
-
-            // Last proposal must be the same as the one requested
-            if response.proposals.last().unwrap().hash != proposal_copy.0.hash {
-                debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Response sequence doesn't correspond to requested tip");
-                continue
-            }
-
-            for proposal in &response.proposals {
-                match self.validator.append_proposal(proposal).await {
-                    Ok(()) => { /* Do nothing */ }
-                    // Skip already existing proposals
-                    Err(Error::ProposalAlreadyExists) => continue,
-                    Err(e) => {
-                        error!(
-                            target: "darkfid::proto::protocol_proposal::handle_receive_proposal",
-                            "Error while appending response proposal: {e}"
-                        );
-                    }
-                };
-                let message = ProposalMessage(proposal.clone());
-                self.p2p.broadcast_with_exclude(&message, &exclude_list).await;
-                // Notify subscriber
-                let enc_prop = JsonValue::String(base64::encode(&serialize_async(proposal).await));
-                self.subscriber.notify(vec![enc_prop].into()).await;
-            }
-        }
-    }
-}
-
-#[async_trait]
-impl ProtocolBase for ProtocolProposal {
-    async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
-        debug!(target: "darkfid::proto::protocol_proposal::start", "START");
-        self.jobsman.clone().start(executor.clone());
-        self.jobsman.clone().spawn(self.clone().handle_receive_proposal(), executor.clone()).await;
-        debug!(target: "darkfid::proto::protocol_proposal::start", "END");
         Ok(())
     }
 
-    fn name(&self) -> &'static str {
-        "ProtocolProposal"
+    /// Stop the `ProtocolProposal` background task.
+    pub async fn stop(&self) {
+        debug!(target: "darkfid::proto::protocol_proposal::stop", "Terminating ProtocolProposal handler task...");
+        self.handler.task.stop().await;
+        debug!(target: "darkfid::proto::protocol_proposal::stop", "ProtocolProposal handler task terminated!");
+    }
+}
+
+/// Background handler function for ProtocolProposal.
+async fn handle_receive_proposal(
+    handler: ProtocolGenericHandlerPtr<ProposalMessage, ProposalMessage>,
+    validator: ValidatorPtr,
+    p2p: P2pPtr,
+    subscriber: JsonSubscriber,
+) -> Result<()> {
+    debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "START");
+    loop {
+        // Wait for a new proposal message
+        let (channel, proposal) = match handler.receiver.recv().await {
+            Ok(r) => r,
+            Err(e) => {
+                debug!(
+                    target: "darkfid::proto::protocol_proposal::handle_receive_proposal",
+                    "recv fail: {e}"
+                );
+                continue
+            }
+        };
+
+        // Check if node has finished syncing its blockchain
+        if !*validator.synced.read().await {
+            debug!(
+                target: "darkfid::proto::protocol_proposal::handle_receive_proposal",
+                "Node still syncing blockchain, skipping..."
+            );
+            handler.send_action(channel, ProtocolGenericAction::Skip).await;
+            continue
+        }
+
+        // Append proposal
+        match validator.append_proposal(&proposal.0).await {
+            Ok(()) => {
+                // Signal handler to broadcast the valid proposal to rest nodes
+                handler.send_action(channel, ProtocolGenericAction::Broadcast).await;
+
+                // Notify subscriber
+                let enc_prop = JsonValue::String(base64::encode(&serialize_async(&proposal).await));
+                subscriber.notify(vec![enc_prop].into()).await;
+
+                continue
+            }
+            Err(e) => {
+                debug!(
+                    target: "darkfid::proto::protocol_proposal::handle_receive_proposal",
+                    "append_proposal fail: {e}",
+                );
+
+                handler.send_action(channel, ProtocolGenericAction::Skip).await;
+
+                match e {
+                    Error::ExtendedChainIndexNotFound => { /* Do nothing */ }
+                    _ => continue,
+                }
+            }
+        };
+
+        // If proposal fork chain was not found, we ask our peer for its sequence
+        debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Asking peer for fork sequence");
+        let Some(channel) = p2p.get_channel(channel) else {
+            error!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Channel {channel} wasn't found.");
+            continue
+        };
+
+        // Communication setup
+        let Ok(response_sub) = channel.subscribe_msg::<ForkSyncResponse>().await else {
+            error!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Failure during `ForkSyncResponse` communication setup with peer: {channel:?}");
+            continue
+        };
+
+        // Grab last known block to create the request and execute it
+        let last = match validator.blockchain.last() {
+            Ok(l) => l,
+            Err(e) => {
+                debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Blockchain last retriaval failed: {e}");
+                continue
+            }
+        };
+        let request = ForkSyncRequest { tip: last.1, fork_tip: Some(proposal.0.hash) };
+        if let Err(e) = channel.send(&request).await {
+            debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Channel send failed: {e}");
+            continue
+        };
+
+        // Node waits for response
+        let response = match response_sub
+            .receive_with_timeout(p2p.settings().read().await.outbound_connect_timeout)
+            .await
+        {
+            Ok(r) => r,
+            Err(e) => {
+                debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Asking peer for fork sequence failed: {e}");
+                continue
+            }
+        };
+        debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Peer response: {response:?}");
+
+        // Verify and store retrieved proposals
+        debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Processing received proposals");
+
+        // Response should not be empty
+        if response.proposals.is_empty() {
+            warn!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Peer responded with empty sequence, node might be out of sync!");
+            continue
+        }
+
+        // Sequence length must correspond to requested height
+        if response.proposals.len() as u32 != proposal.0.block.header.height - last.0 {
+            debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Response sequence length is erroneous");
+            continue
+        }
+
+        // First proposal must extend canonical
+        if response.proposals[0].block.header.previous != last.1 {
+            debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Response sequence doesn't extend canonical");
+            continue
+        }
+
+        // Last proposal must be the same as the one requested
+        if response.proposals.last().unwrap().hash != proposal.0.hash {
+            debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "Response sequence doesn't correspond to requested tip");
+            continue
+        }
+
+        // Process response proposals
+        for proposal in &response.proposals {
+            // Append proposal
+            match validator.append_proposal(proposal).await {
+                Ok(()) => { /* Do nothing */ }
+                // Skip already existing proposals
+                Err(Error::ProposalAlreadyExists) => continue,
+                Err(e) => {
+                    error!(
+                        target: "darkfid::proto::protocol_proposal::handle_receive_proposal",
+                        "Error while appending response proposal: {e}"
+                    );
+                }
+            };
+
+            // Broadcast proposal to rest nodes
+            let message = ProposalMessage(proposal.clone());
+            p2p.broadcast_with_exclude(&message, &[channel.address().clone()]).await;
+
+            // Notify subscriber
+            let enc_prop = JsonValue::String(base64::encode(&serialize_async(proposal).await));
+            subscriber.notify(vec![enc_prop].into()).await;
+        }
     }
 }

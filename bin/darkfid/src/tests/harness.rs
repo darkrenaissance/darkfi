@@ -41,7 +41,11 @@ use num_bigint::BigUint;
 use sled_overlay::sled;
 use url::Url;
 
-use crate::{proto::ProposalMessage, task::sync::sync_task, utils::spawn_p2p, Darkfid};
+use crate::{
+    proto::{DarkfidP2pHandler, ProposalMessage},
+    task::sync::sync_task,
+    Darkfid,
+};
 
 pub struct HarnessConfig {
     pub pow_target: u32,
@@ -150,7 +154,7 @@ impl Harness {
             let proposal = Proposal::new(block.clone());
             self.alice.validator.append_proposal(&proposal).await?;
             let message = ProposalMessage(proposal);
-            self.alice.p2p.broadcast(&message).await;
+            self.alice.p2p_handler.p2p.broadcast(&message).await;
         }
 
         // Sleep a bit so blocks can be propagated and then
@@ -242,10 +246,19 @@ pub async fn generate_node(
     // We initialize a dnet subscriber but do not activate it.
     let dnet_sub = JsonSubscriber::new("dnet.subscribe_events");
 
-    let p2p = spawn_p2p(settings, &validator, &subscribers, ex.clone()).await?;
-    let node = Darkfid::new(p2p.clone(), validator, miner, 50, subscribers, None, dnet_sub).await;
+    let p2p_handler = DarkfidP2pHandler::init(settings, ex).await?;
+    let node = Darkfid::new(
+        p2p_handler.clone(),
+        validator.clone(),
+        miner,
+        50,
+        subscribers.clone(),
+        None,
+        dnet_sub,
+    )
+    .await;
 
-    p2p.start().await?;
+    p2p_handler.clone().start(ex, &validator, &subscribers).await?;
 
     node.validator.consensus.generate_empty_fork().await?;
 

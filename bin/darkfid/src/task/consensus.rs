@@ -166,7 +166,7 @@ async fn replicator_task(node: Arc<Darkfid>, ex: Arc<smol::Executor<'static>>) -
     let prop_subscription = proposals_sub.publisher.clone().subscribe().await;
 
     // Subscribe to the network disconnect subscriber
-    let net_subscription = node.p2p.hosts().subscribe_disconnect().await;
+    let net_subscription = node.p2p_handler.p2p.hosts().subscribe_disconnect().await;
 
     let result = smol::future::or(
         monitor_network(&net_subscription),

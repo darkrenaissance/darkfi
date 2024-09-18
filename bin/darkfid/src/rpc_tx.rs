@@ -133,8 +133,8 @@ impl Darkfid {
             return server_error(RpcError::TxSimulationFail, id, None)
         };
 
-        self.p2p.broadcast(&tx).await;
-        if !self.p2p.is_connected() {
+        self.p2p_handler.p2p.broadcast(&tx).await;
+        if !self.p2p_handler.p2p.is_connected() {
             warn!(target: "darkfid::rpc::tx_broadcast", "No connected channels to broadcast tx");
         }
 

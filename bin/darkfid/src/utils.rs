@@ -16,70 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashMap, sync::Arc};
-
-use log::{debug, error, info};
-use smol::{fs::read_to_string, Executor};
+use log::{debug, error};
+use smol::fs::read_to_string;
 use structopt_toml::StructOptToml;
 
-use darkfi::{
-    net::{session::SESSION_DEFAULT, P2p, P2pPtr, Settings},
-    rpc::jsonrpc::JsonSubscriber,
-    util::path::get_config_path,
-    validator::ValidatorPtr,
-    Error, Result,
-};
+use darkfi::{util::path::get_config_path, Error, Result};
 
-use crate::{
-    proto::{ProtocolProposal, ProtocolSync, ProtocolTx},
-    BlockchainNetwork, CONFIG_FILE,
-};
-
-/// Auxiliary function to generate the P2P network and register all its protocols.
-pub async fn spawn_p2p(
-    settings: &Settings,
-    validator: &ValidatorPtr,
-    subscribers: &HashMap<&'static str, JsonSubscriber>,
-    executor: Arc<Executor<'static>>,
-) -> Result<P2pPtr> {
-    info!(target: "darkfid", "Registering sync network P2P protocols...");
-    let p2p = P2p::new(settings.clone(), executor.clone()).await?;
-    let registry = p2p.protocol_registry();
-
-    let _validator = validator.clone();
-    registry
-        .register(SESSION_DEFAULT, move |channel, _p2p| {
-            let validator = _validator.clone();
-            async move { ProtocolSync::init(channel, validator).await.unwrap() }
-        })
-        .await;
-
-    let _validator = validator.clone();
-    let _subscriber = subscribers.get("proposals").unwrap().clone();
-    registry
-        .register(SESSION_DEFAULT, move |channel, p2p| {
-            let validator = _validator.clone();
-            let subscriber = _subscriber.clone();
-            async move {
-                ProtocolProposal::init(channel, validator, p2p, subscriber)
-                    .await
-                    .unwrap()
-            }
-        })
-        .await;
-
-    let _validator = validator.clone();
-    let _subscriber = subscribers.get("txs").unwrap().clone();
-    registry
-        .register(SESSION_DEFAULT, move |channel, p2p| {
-            let validator = _validator.clone();
-            let subscriber = _subscriber.clone();
-            async move { ProtocolTx::init(channel, validator, p2p, subscriber).await.unwrap() }
-        })
-        .await;
-
-    Ok(p2p)
-}
+use crate::{BlockchainNetwork, CONFIG_FILE};
 
 /// Auxiliary function to parse darkfid configuration file and extract requested
 /// blockchain network config.
