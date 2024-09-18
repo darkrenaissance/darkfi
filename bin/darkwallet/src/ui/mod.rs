@@ -31,8 +31,8 @@ use crate::{
 
 mod button;
 pub use button::{Button, ButtonPtr};
-//pub mod chatview;
-//pub use chatview::{ChatView, ChatViewPtr};
+pub mod chatview;
+pub use chatview::{ChatView, ChatViewPtr};
 mod editbox;
 pub use editbox::{EditBox, EditBoxPtr};
 mod image;
@@ -147,7 +147,7 @@ pub fn get_ui_object3<'a>(node: &'a SceneNode3) -> &'a dyn UIObject {
         Pimpl::VectorArt(obj) => obj.as_ref(),
         Pimpl::Text(obj) => obj.as_ref(),
         Pimpl::EditBox(obj) => obj.as_ref(),
-        //Pimpl::ChatView(chat) => chat.as_ref(),
+        Pimpl::ChatView(obj) => obj.as_ref(),
         Pimpl::Image(obj) => obj.as_ref(),
         Pimpl::Button(obj) => obj.as_ref(),
         _ => panic!("unhandled type for get_ui_object"),

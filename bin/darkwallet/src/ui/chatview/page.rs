@@ -36,7 +36,6 @@ use crate::{
     mesh::{Color, MeshBuilder, COLOR_BLUE, COLOR_GREEN, COLOR_PINK},
     prop::{PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyUint32, Role},
     pubsub::Subscription,
-    scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
     text::{self, glyph_str, Glyph, GlyphPositionIter, TextShaper, TextShaperPtr},
     util::{enumerate_mut, enumerate_ref},
     ExecutorPtr,

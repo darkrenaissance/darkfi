@@ -245,7 +245,7 @@ impl<'a> RenderContext<'a> {
 
         let view_x = view.x.round() as i32;
         let view_y = screen_height - (view.y + view.h);
-        let view_y = view.y.round() as i32;
+        let view_y = view_y.round() as i32;
         let view_w = view.w.round() as i32;
         let view_h = view.h.round() as i32;
 
@@ -288,7 +288,7 @@ impl<'a> RenderContext<'a> {
                     }
                 }
                 DrawInstruction::Move(off) => {
-                    self.cursor += *off;
+                    self.cursor = old_cursor + *off;
                     if DEBUG_RENDER {
                         debug!(target: "gfx",
                             "{ws}move({off:?})  cursor={:?}, scale={}, view={:?}",

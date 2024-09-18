@@ -351,7 +351,7 @@ pub enum Pimpl {
     VectorArt(ui::VectorArtPtr),
     Text(ui::TextPtr),
     EditBox(ui::EditBoxPtr),
-    //ChatView(ui::ChatViewPtr),
+    ChatView(ui::ChatViewPtr),
     Image(ui::ImagePtr),
     Button(ui::ButtonPtr),
 }

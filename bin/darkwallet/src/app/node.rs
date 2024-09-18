@@ -192,7 +192,7 @@ pub fn create_editbox(name: &str) -> SceneNode {
     node
 }
 
-pub fn create_chatview(name: &str) -> (SceneNode, async_channel::Receiver<Vec<u8>>) {
+pub fn create_chatview(name: &str) -> SceneNode {
     debug!(target: "app", "create_chatview({name})");
     let mut node = SceneNode::new(name, SceneNodeType::ChatView);
 
@@ -258,14 +258,7 @@ pub fn create_chatview(name: &str) -> (SceneNode, async_channel::Receiver<Vec<u8
     prop.set_defaults_f32(vec![1000.]).unwrap();
     node.add_property(prop).unwrap();
 
-    let (sender, recvr) = async_channel::unbounded::<Vec<u8>>();
-    let method = move |data: Vec<u8>, response_fn: MethodResponseFn| {
-        if sender.try_send(data).is_err() {
-            response_fn(Err(Error::ChannelClosed));
-        } else {
-            response_fn(Ok(vec![]));
-        }
-    };
+    /*
     node.add_method(
         "insert_line",
         vec![
@@ -278,6 +271,7 @@ pub fn create_chatview(name: &str) -> (SceneNode, async_channel::Receiver<Vec<u8
         Box::new(method),
     )
     .unwrap();
+    */
 
-    (node, recvr)
+    node
 }

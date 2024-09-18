@@ -49,14 +49,13 @@ use crate::{
         Role,
     },
     pubsub::Subscription,
-    ringbuf::RingBuffer,
-    scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
+    scene::{Pimpl, SceneNodeWeak},
     text::{self, Glyph, GlyphPositionIter, TextShaperPtr},
     util::{enumerate, is_whitespace},
     ExecutorPtr,
 };
 
-use super::{get_parent_rect, DrawUpdate, OnModify, UIObject};
+use super::{DrawUpdate, OnModify, UIObject};
 
 const EPSILON: f32 = 0.001;
 const BIG_EPSILON: f32 = 0.05;
@@ -134,14 +133,13 @@ impl TouchInfo {
 pub type ChatViewPtr = Arc<ChatView>;
 
 pub struct ChatView {
-    node_id: SceneNodeId,
+    node: SceneNodeWeak,
     #[allow(dead_code)]
     tasks: Vec<smol::Task<()>>,
-    sg: SceneGraphPtr2,
     render_api: RenderApiPtr,
     text_shaper: TextShaperPtr,
-    tree: sled::Tree,
 
+    tree: sled::Tree,
     msgbuf: AsyncMutex<MessageBuffer>,
     dc_key: u64,
 
@@ -167,62 +165,62 @@ pub struct ChatView {
     scroll_resist: PropertyFloat32,
     select_hold_time: PropertyFloat32,
 
-    // Scroll accel
+    /// Scroll accel
     motion_cv: Arc<CondVar>,
     speed: AtomicF32,
 
     mouse_btn_held: AtomicBool,
 
-    // Triggers the background loading task to wake up
+    /// Triggers the background loading task to wake up
     bgload_cv: Arc<CondVar>,
 
-    /// Used for correct converting input event pos from screen to widget space.
-    /// We also use it when we re-eval rect when its changed via property.
+    /// We use it when we re-eval rect when its changed via property.
     parent_rect: SyncMutex<Option<Rectangle>>,
 }
 
 impl ChatView {
     pub async fn new(
-        ex: ExecutorPtr,
-        sg: SceneGraphPtr2,
-        node_id: SceneNodeId,
-        render_api: RenderApiPtr,
-        event_pub: GraphicsEventPublisherPtr,
-        text_shaper: TextShaperPtr,
+        node: SceneNodeWeak,
         tree: sled::Tree,
-        recvr: async_channel::Receiver<Vec<u8>>,
+        render_api: RenderApiPtr,
+        text_shaper: TextShaperPtr,
+        ex: ExecutorPtr,
     ) -> Pimpl {
         debug!(target: "ui::chatview", "ChatView::new()");
-        let scene_graph = sg.lock().await;
-        let node = scene_graph.get_node(node_id).unwrap();
-        let node_name = node.name.clone();
 
-        let rect = PropertyRect::wrap(node, Role::Internal, "rect").unwrap();
-        let scroll = PropertyFloat32::wrap(node, Role::Internal, "scroll", 0).unwrap();
-        let font_size = PropertyFloat32::wrap(node, Role::Internal, "font_size", 0).unwrap();
-        let line_height = PropertyFloat32::wrap(node, Role::Internal, "line_height", 0).unwrap();
-        let baseline = PropertyFloat32::wrap(node, Role::Internal, "baseline", 0).unwrap();
-        let timestamp_color = PropertyColor::wrap(node, Role::Internal, "timestamp_color").unwrap();
-        let text_color = PropertyColor::wrap(node, Role::Internal, "text_color").unwrap();
-        let nick_colors = node.get_property("nick_colors").expect("ChatView::nick_colors");
-        let hi_bg_color = PropertyColor::wrap(node, Role::Internal, "hi_bg_color").unwrap();
-        let z_index = PropertyUint32::wrap(node, Role::Internal, "z_index", 0).unwrap();
-        let debug = PropertyBool::wrap(node, Role::Internal, "debug", 0).unwrap();
+        let node_ref = &node.upgrade().unwrap();
+        let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
+        let scroll = PropertyFloat32::wrap(node_ref, Role::Internal, "scroll", 0).unwrap();
+        let font_size = PropertyFloat32::wrap(node_ref, Role::Internal, "font_size", 0).unwrap();
+        let line_height =
+            PropertyFloat32::wrap(node_ref, Role::Internal, "line_height", 0).unwrap();
+        let baseline = PropertyFloat32::wrap(node_ref, Role::Internal, "baseline", 0).unwrap();
+        let timestamp_color =
+            PropertyColor::wrap(node_ref, Role::Internal, "timestamp_color").unwrap();
+        let text_color = PropertyColor::wrap(node_ref, Role::Internal, "text_color").unwrap();
+        let nick_colors = node_ref.get_property("nick_colors").expect("ChatView::nick_colors");
+        let hi_bg_color = PropertyColor::wrap(node_ref, Role::Internal, "hi_bg_color").unwrap();
+        let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
+        let debug = PropertyBool::wrap(node_ref, Role::Internal, "debug", 0).unwrap();
 
         let scroll_start_accel =
-            PropertyFloat32::wrap(node, Role::Internal, "scroll_start_accel", 0).unwrap();
+            PropertyFloat32::wrap(node_ref, Role::Internal, "scroll_start_accel", 0).unwrap();
         let scroll_resist =
-            PropertyFloat32::wrap(node, Role::Internal, "scroll_resist", 0).unwrap();
+            PropertyFloat32::wrap(node_ref, Role::Internal, "scroll_resist", 0).unwrap();
         let select_hold_time =
-            PropertyFloat32::wrap(node, Role::Internal, "select_hold_time", 0).unwrap();
-        drop(scene_graph);
+            PropertyFloat32::wrap(node_ref, Role::Internal, "select_hold_time", 0).unwrap();
+
+        let node_name = node_ref.name.clone();
+        let node_id = node_ref.id;
 
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
+            /*
             let me2 = me.clone();
             let insert_line_method_task =
                 ex.spawn(
                     async move { while Self::process_insert_line_method(&me2, &recvr).await {} },
                 );
+            */
 
             let me2 = me.clone();
             let motion_cv = Arc::new(CondVar::new());
@@ -267,17 +265,16 @@ impl ChatView {
             //on_modify.when_change(rect.clone(), redraw);
             //on_modify.when_change(debug.prop(), redraw);
 
-            let mut tasks = vec![insert_line_method_task, motion_task, bgload_task];
+            let mut tasks = vec![/*insert_line_method_task,*/ motion_task, bgload_task];
             tasks.append(&mut on_modify.tasks);
 
             Self {
-                node_id,
+                node,
                 tasks,
-                sg,
                 render_api: render_api.clone(),
                 text_shaper: text_shaper.clone(),
-                tree,
 
+                tree,
                 msgbuf: AsyncMutex::new(MessageBuffer::new(
                     font_size.clone(),
                     line_height.clone(),
@@ -640,14 +637,10 @@ impl ChatView {
             // Because we use the scissor, our actual rect is now rect instead of parent_rect
             let off_x = 0.;
             // This calc decides whether scroll is in terms of pages or pixels
-            let off_y = (scroll + start_pos - y_pos) / rect.h;
-            let scale_x = 1. / rect.w;
-            let scale_y = 1. / rect.h;
-            let model = glam::Mat4::from_translation(glam::Vec3::new(off_x, off_y, 0.)) *
-                glam::Mat4::from_scale(glam::Vec3::new(scale_x, scale_y, 1.));
+            let off_y = (scroll + start_pos - y_pos);
+            let pos = Point::from([0., off_y]);
 
-            instrs.push(GfxDrawInstruction::ApplyMatrix(model));
-
+            instrs.push(GfxDrawInstruction::Move(pos));
             instrs.push(GfxDrawInstruction::Draw(mesh));
         }
 
@@ -661,7 +654,7 @@ impl ChatView {
 
         let (mut mesh_instrs, freed) = self.get_meshes(msgbuf, &rect).await;
 
-        let mut instrs = vec![GfxDrawInstruction::ApplyViewport(rect)];
+        let mut instrs = vec![GfxDrawInstruction::ApplyView(rect)];
         instrs.append(&mut mesh_instrs);
 
         let draw_calls =
@@ -690,11 +683,11 @@ impl UIObject for ChatView {
         self.z_index.get()
     }
 
-    async fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
+    async fn draw(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
         debug!(target: "ui::chatview", "ChatView::draw()");
 
         *self.parent_rect.lock().unwrap() = Some(parent_rect.clone());
-        self.rect.eval(parent_rect).ok()?;
+        self.rect.eval(&parent_rect).ok()?;
         let rect = self.rect.get();
 
         let mut msgbuf = self.msgbuf.lock().await;
@@ -712,7 +705,7 @@ impl UIObject for ChatView {
         let (mut mesh_instrs, freed) = self.get_meshes(&mut msgbuf, &rect).await;
         drop(msgbuf);
 
-        let mut instrs = vec![GfxDrawInstruction::ApplyViewport(rect)];
+        let mut instrs = vec![GfxDrawInstruction::ApplyView(rect)];
         instrs.append(&mut mesh_instrs);
 
         Some(DrawUpdate {
@@ -726,13 +719,7 @@ impl UIObject for ChatView {
         })
     }
 
-    async fn handle_key_down(
-        &self,
-        sg: &SceneGraph,
-        key: KeyCode,
-        mods: KeyMods,
-        repeat: bool,
-    ) -> bool {
+    async fn handle_key_down(&self, key: KeyCode, mods: KeyMods, repeat: bool) -> bool {
         if repeat {
             return false
         }
@@ -752,12 +739,7 @@ impl UIObject for ChatView {
         true
     }
 
-    async fn handle_mouse_btn_down(
-        &self,
-        sg: &SceneGraph,
-        btn: MouseButton,
-        mouse_pos: Point,
-    ) -> bool {
+    async fn handle_mouse_btn_down(&self, btn: MouseButton, mouse_pos: Point) -> bool {
         if btn != MouseButton::Left {
             return false
         }
@@ -772,12 +754,7 @@ impl UIObject for ChatView {
         true
     }
 
-    async fn handle_mouse_btn_up(
-        &self,
-        sg: &SceneGraph,
-        btn: MouseButton,
-        mouse_pos: Point,
-    ) -> bool {
+    async fn handle_mouse_btn_up(&self, btn: MouseButton, mouse_pos: Point) -> bool {
         if btn != MouseButton::Left {
             return false
         }
@@ -786,7 +763,7 @@ impl UIObject for ChatView {
         false
     }
 
-    async fn handle_mouse_move(&self, sg: &SceneGraph, mouse_pos: Point) -> bool {
+    async fn handle_mouse_move(&self, mouse_pos: Point) -> bool {
         //debug!(target: "ui::chatview", "handle_mouse_move({mouse_x}, {mouse_y})");
 
         // We store the mouse pos for use in handle_mouse_wheel()
@@ -805,7 +782,7 @@ impl UIObject for ChatView {
         false
     }
 
-    async fn handle_mouse_wheel(&self, sg: &SceneGraph, wheel_pos: Point) -> bool {
+    async fn handle_mouse_wheel(&self, wheel_pos: Point) -> bool {
         //debug!(target: "ui::chatview", "handle_mouse_wheel({wheel_x}, {wheel_y})");
 
         let rect = self.rect.get();
@@ -821,13 +798,7 @@ impl UIObject for ChatView {
         true
     }
 
-    async fn handle_touch(
-        &self,
-        sg: &SceneGraph,
-        phase: TouchPhase,
-        id: u64,
-        touch_pos: Point,
-    ) -> bool {
+    async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
         // Ignore multi-touch
         if id != 0 {
             return false

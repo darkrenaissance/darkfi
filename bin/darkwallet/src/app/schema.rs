@@ -30,8 +30,7 @@ use crate::{
     text::TextShaperPtr,
     ui::{
         Button,
-        //chatview, vector_art::shape, Button, ChatView, EditBox, Image, Layer, ShapeVertex,
-        //Stoppable, Text, VectorArt, VectorShape, Window,
+        ChatView,
         EditBox,
         Image,
         Layer,
@@ -355,10 +354,8 @@ pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
         .await;
     layer_node.link(node);
 
-    /*
     // ChatView
-    let (node_id, recvr) = create_chatview(&mut sg, "chatty");
-    let node = sg.get_node(node_id).unwrap();
+    let node = create_chatview("chatty");
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(Role::App, 0, 0.).unwrap();
     let code = cc.compile("h/2").unwrap();
@@ -421,38 +418,21 @@ pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
         prop.set_f32(Role::App, 3, 1.).unwrap();
     }
 
-    drop(sg);
     let db = sled::open(CHATDB_PATH).expect("cannot open sleddb");
     let chat_tree = db.open_tree(b"chat").unwrap();
     if chat_tree.is_empty() {
         populate_tree(&chat_tree);
     }
     debug!(target: "app", "db has {} lines", chat_tree.len());
-    let pimpl = ChatView::new(
-        app.ex.clone(),
-        app.sg.clone(),
-        node_id,
+    let node =
+        node.setup(|me| ChatView::new(
+                me,
+        chat_tree,
         app.render_api.clone(),
         app.text_shaper.clone(),
-        chat_tree,
-        recvr,
-    )
-    .await;
-    let mut sg = app.sg.lock().await;
-    let node = sg.get_node_mut(node_id).unwrap();
-    node.pimpl = pimpl;
-
-    sg.link(node_id, layer_node_id).unwrap();
-
-    // On android lets scale the UI up
-    // TODO: add support for fractional scaling
-    // This also affects mouse/touch input since coords need to be accurately translated
-    // Also we need to think about nesting of layers.
-    //let window_node = sg.get_node_mut(window_id).unwrap();
-    //win_node.set_property_f32(Role::App, "scale", 1.6).unwrap();
-
-    // *app.tasks.lock().unwrap() = tasks;
-    */
+        app.ex.clone(),
+                )).await;
+    layer_node.link(node);
 }
 
 pub(super) async fn make(app: &App, window: SceneNodePtr) {
@@ -547,10 +527,8 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
         .await;
     layer_node.link(node);
 
-    /*
     // ChatView
-    let (node_id, recvr) = create_chatview(&mut sg, "chatty");
-    let node = sg.get_node(node_id).unwrap();
+    let node = create_chatview("chatty");
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(Role::App, 0, 0.).unwrap();
     prop.set_f32(Role::App, 1, EDITCHAT_HEIGHT).unwrap();
@@ -619,29 +597,21 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
         prop.set_f32(Role::App, 3, 1.).unwrap();
     }
 
-    drop(sg);
     let db = sled::open(CHATDB_PATH).expect("cannot open sleddb");
     let chat_tree = db.open_tree(b"chat").unwrap();
     if chat_tree.is_empty() {
         populate_tree(&chat_tree);
     }
     debug!(target: "app", "db has {} lines", chat_tree.len());
-    let pimpl = ChatView::new(
-        app.ex.clone(),
-        app.sg.clone(),
-        node_id,
+    let node =
+        node.setup(|me| ChatView::new(
+                me,
+        chat_tree,
         app.render_api.clone(),
         app.text_shaper.clone(),
-        chat_tree,
-        recvr,
-    )
-    .await;
-    let mut sg = app.sg.lock().await;
-    let node = sg.get_node_mut(node_id).unwrap();
-    node.pimpl = pimpl;
-
-    sg.link(node_id, layer_node_id).unwrap();
-    */
+        app.ex.clone(),
+                )).await;
+    layer_node.link(node);
 
     // Create the editbox bg
     let node = create_vector_art("editbox_bg");
@@ -705,10 +675,8 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
         .await;
     layer_node.link(node);
 
-    /*
     // Text edit
-    let node_id = create_editbox(&mut sg, "editz");
-    let node = sg.get_node(node_id).unwrap();
+    let node = create_editbox("editz");
     node.set_property_bool(Role::App, "is_active", true).unwrap();
 
     let prop = node.get_property("rect").unwrap();
@@ -757,8 +725,8 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     node.set_property_u32(Role::App, "z_index", 2).unwrap();
     //node.set_property_bool(Role::App, "debug", true).unwrap();
 
-    let editbox_text = PropertyStr::wrap(node, Role::App, "text", 0).unwrap();
-    let editbox_focus = PropertyBool::wrap(node, Role::App, "is_focused", 0).unwrap();
+    //let editbox_text = PropertyStr::wrap(node, Role::App, "text", 0).unwrap();
+    //let editbox_focus = PropertyBool::wrap(node, Role::App, "is_focused", 0).unwrap();
     //let darkirc_backend = app.darkirc_backend.clone();
     //let task = app.ex.spawn(async move {
     //    while let Ok(_) = btn_click_recvr.recv().await {
@@ -777,19 +745,10 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     //});
     //tasks.push(task);
 
-    drop(sg);
-    let pimpl = EditBox::new(
-        app.ex.clone(),
-        app.sg.clone(),
-        node_id,
-        app.render_api.clone(),
-        app.text_shaper.clone(),
-    )
-    .await;
-    let mut sg = app.sg.lock().await;
-    let node = sg.get_node_mut(node_id).unwrap();
-    node.pimpl = pimpl;
-
-    sg.link(node_id, layer_node_id).unwrap();
-    */
+    let node = node
+        .setup(|me| {
+            EditBox::new(me, app.render_api.clone(), app.text_shaper.clone(), app.ex.clone())
+        })
+        .await;
+    layer_node.link(node);
 }

@@ -34,8 +34,7 @@ use crate::{
     prop::{Property, PropertyBool, PropertyStr, PropertySubType, PropertyType, Role},
     scene::{Pimpl, SceneNode as SceneNode3, SceneNodePtr, SceneNodeType as SceneNodeType3},
     text::TextShaperPtr,
-    //ui::{chatview, Button, ChatView, EditBox, Image, Layer, Stoppable, Text, VectorArt, Window},
-    ui::Window,
+    ui::{chatview, Window},
     ExecutorPtr,
 };
 
@@ -222,7 +221,7 @@ impl App {
             })
             .await;
         self.sg_root.link(window.clone());
-        schema::make_test(&self, window).await;
+        schema::make(&self, window).await;
 
         debug!(target: "app", "Schema loaded");
 
@@ -288,11 +287,11 @@ fn populate_tree(tree: &sled::Tree) {
         let mut key = [0u8; 8 + 32];
         key[..8].clone_from_slice(&timest);
 
-        //let msg = chatview::ChatMsg { nick, text };
-        //let mut val = vec![];
-        //msg.encode(&mut val).unwrap();
+        let msg = chatview::ChatMsg { nick, text };
+        let mut val = vec![];
+        msg.encode(&mut val).unwrap();
 
-        //tree.insert(&key, val).unwrap();
+        tree.insert(&key, val).unwrap();
     }
     // O(n)
     debug!(target: "app", "populated db with {} lines", tree.len());
