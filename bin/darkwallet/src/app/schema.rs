@@ -127,7 +127,7 @@ pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
     // Create button bg
     let node = create_vector_art("btnbg");
     let prop = node.get_property("rect").unwrap();
-    let code = cc.compile("w - 220").unwrap();
+    let code = cc.compile("w - 210").unwrap();
     prop.set_expr(Role::App, 0, code).unwrap();
     prop.set_f32(Role::App, 1, 10.).unwrap();
     prop.set_f32(Role::App, 2, 200.).unwrap();

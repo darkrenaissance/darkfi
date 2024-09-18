@@ -239,7 +239,7 @@ impl<'a> RenderContext<'a> {
     }
 
     fn apply_view(&mut self) {
-        let view = self.view / self.scale;
+        let view = self.view * self.scale;
 
         let (_, screen_height) = window::screen_size();
 
@@ -260,8 +260,8 @@ impl<'a> RenderContext<'a> {
         let off_x = self.cursor.x / self.view.w;
         let off_y = self.cursor.y / self.view.h;
 
-        let scale_w = self.scale / self.view.w;
-        let scale_h = self.scale / self.view.h;
+        let scale_w = 1. / self.view.w;
+        let scale_h = 1. / self.view.h;
 
         let model = glam::Mat4::from_translation(glam::Vec3::new(off_x, off_y, 0.)) *
             glam::Mat4::from_scale(glam::Vec3::new(scale_w, scale_h, 1.));
@@ -281,7 +281,12 @@ impl<'a> RenderContext<'a> {
 
         for instr in &draw_call.instrs {
             match instr {
-                DrawInstruction::SetScale(scale) => self.scale = *scale,
+                DrawInstruction::SetScale(scale) => {
+                    self.scale = *scale;
+                    if DEBUG_RENDER {
+                        debug!(target: "gfx", "{ws}set_scale({scale})");
+                    }
+                }
                 DrawInstruction::Move(off) => {
                     self.cursor += *off;
                     if DEBUG_RENDER {
