@@ -144,14 +144,13 @@ impl P2p {
         // Start the refine session
         self.session_refine().start().await;
 
-        info!(target: "net::p2p::start", "[P2P] P2P subsystem started");
+        info!(target: "net::p2p::start", "[P2P] P2P subsystem started successfully");
         Ok(())
     }
 
     /// Reseed the P2P network.
     pub async fn seed(self: Arc<Self>) {
         debug!(target: "net::p2p::seed()", "P2P::seed() [BEGIN]");
-        info!(target: "net::p2p::seed()", "[P2P] Seeding P2P subsystem");
 
         // Activate the seed session.
         self.session_seedsync().notify().await;

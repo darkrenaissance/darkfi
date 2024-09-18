@@ -541,7 +541,7 @@ impl PeerDiscoveryBase for PeerDiscovery {
                 debug!("current attempt: {}", current_attempt);
                 info!(
                     target: "net::outbound_session::peer_discovery()",
-                    "[P2P] Sleeping and trying again..."
+                    "[P2P] [PEER DISCOVERY] Sleeping and trying again..."
                 );
 
                 dnetev!(self, OutboundPeerDiscovery, {
@@ -559,12 +559,9 @@ impl PeerDiscoveryBase for PeerDiscovery {
             if self.p2p().is_connected() && current_attempt <= 2 {
                 // Broadcast the GetAddrs message to all active peers.
                 // If we have no active peers, we will perform a SeedSyncSession instead.
-
                 info!(
                     target: "net::outbound_session::peer_discovery()",
-                    "[P2P] Requesting addrs from active peers. Attempt: {}",
-                    current_attempt
-                );
+                    "[P2P] [PEER DISCOVERY] Asking peers for new peers to connect to...");
 
                 dnetev!(self, OutboundPeerDiscovery, {
                     attempt: current_attempt,
@@ -591,13 +588,13 @@ impl PeerDiscoveryBase for PeerDiscovery {
                     Ok(addrs_len) => {
                         info!(
                             target: "net::outbound_session::peer_discovery()",
-                            "[P2P] Discovered {} addrs", addrs_len
+                            "[P2P] [PEER DISCOVERY] Discovered {} peers", addrs_len
                         );
                     }
                     Err(_) => {
                         warn!(
                             target: "net::outbound_session::peer_discovery()",
-                            "[P2P] Peer discovery waiting for addrs timed out."
+                            "[P2P] [PEER DISCOVERY] Waiting for addrs timed out."
                         );
                         // Just do seed next time
                         current_attempt = 3;
@@ -612,9 +609,7 @@ impl PeerDiscoveryBase for PeerDiscovery {
             } else if !seeds.is_empty() {
                 info!(
                     target: "net::outbound_session::peer_discovery()",
-                    "[P2P] Seeding hosts. Attempt: {}",
-                    current_attempt
-                );
+                    "[P2P] [PEER DISCOVERY] Asking seeds for new peers to connect to...");
 
                 dnetev!(self, OutboundPeerDiscovery, {
                     attempt: current_attempt,
@@ -622,13 +617,6 @@ impl PeerDiscoveryBase for PeerDiscovery {
                 });
 
                 self.p2p().seed().await;
-
-                if self.p2p().session_seedsync().failed().await {
-                    error!(
-                        target: "net::outbound_session::peer_discovery()",
-                        "[P2P] Network reseed failed!"
-                    );
-                }
             }
 
             self.wakeup_self.reset();
