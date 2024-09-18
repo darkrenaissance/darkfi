@@ -284,4 +284,9 @@ impl P2p {
     pub(super) async fn dnet_notify(&self, event: DnetEvent) {
         self.dnet_publisher.notify(event).await;
     }
+
+    /// Grab the channel pointer of provided channel ID, if it exists.
+    pub fn get_channel(&self, id: u32) -> Option<ChannelPtr> {
+        self.hosts.get_channel(id)
+    }
 }

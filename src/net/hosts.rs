@@ -1041,6 +1041,21 @@ impl Hosts {
         channels
     }
 
+    /// Grab the channel pointer of provided channel ID, if it exists.
+    pub fn get_channel(&self, id: u32) -> Option<ChannelPtr> {
+        let mut channel = None;
+
+        let channels = self.channels();
+        for c in channels {
+            if c.info.id == id {
+                channel = Some(c.clone());
+                break
+            }
+        }
+
+        channel
+    }
+
     /// Return the list of connected peers. Seed and refinery connections
     /// are not taken into account.
     pub fn peers(&self) -> Vec<ChannelPtr> {
