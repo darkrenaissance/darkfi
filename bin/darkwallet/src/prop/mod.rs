@@ -31,8 +31,8 @@ use crate::{
 
 mod wrap;
 pub use wrap::{
-    PropertyBool, PropertyColor, PropertyFloat32, PropertyPoint, PropertyRect, PropertyStr,
-    PropertyUint32,
+    PropertyBool, PropertyColor, PropertyDimension, PropertyFloat32, PropertyPoint, PropertyRect,
+    PropertyStr, PropertyUint32,
 };
 
 type Buffer = Arc<Vec<u8>>;
@@ -333,6 +333,16 @@ impl Property {
     pub fn set_defaults_str(&mut self, defaults: Vec<String>) -> Result<()> {
         self.check_defaults_len(defaults.len())?;
         self.defaults = defaults.into_iter().map(|v| PropertyValue::Str(v)).collect();
+        Ok(())
+    }
+    pub fn set_defaults_null(&mut self) -> Result<()> {
+        if !self.is_null_allowed {
+            return Err(Error::PropertyNullNotAllowed)
+        }
+        if !self.is_bounded() {
+            return Err(Error::PropertyWrongLen)
+        }
+        self.defaults = (0..self.array_len).map(|_| PropertyValue::Null).collect();
         Ok(())
     }
 

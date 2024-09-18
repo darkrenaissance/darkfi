@@ -20,74 +20,69 @@ use miniquad::{KeyCode, KeyMods, MouseButton, TouchPhase};
 use std::sync::{Arc, Weak};
 
 use crate::{
-    gfx::{GfxDrawCall, GraphicsEventPublisherPtr, Point, Rectangle, RenderApiPtr},
-    prop::{PropertyFloat32, PropertyPtr, Role},
+    gfx::{
+        GfxDrawCall, GfxDrawInstruction, GraphicsEventPublisherPtr, Point, Rectangle, RenderApiPtr,
+    },
+    prop::{PropertyDimension, PropertyFloat32, PropertyPtr, Role},
     pubsub::Subscription,
-    scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
+    scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
     ExecutorPtr,
 };
 
-use super::{get_child_nodes_ordered, get_ui_object, OnModify, Stoppable};
+use super::{get_children_ordered, get_ui_object3, OnModify};
 
 pub type WindowPtr = Arc<Window>;
 
 pub struct Window {
-    node_id: SceneNodeId,
-    sg: SceneGraphPtr2,
+    node: SceneNodeWeak,
 
     // Task is dropped at the end of the scope for Window, hence ending it
     #[allow(dead_code)]
     tasks: Vec<smol::Task<()>>,
-    screen_w: PropertyFloat32,
-    screen_h: PropertyFloat32,
+    screen_size: PropertyDimension,
+    scale: PropertyFloat32,
     render_api: RenderApiPtr,
 }
 
 impl Window {
     pub async fn new(
-        ex: ExecutorPtr,
-        sg: SceneGraphPtr2,
-        node_id: SceneNodeId,
+        node: SceneNodeWeak,
         render_api: RenderApiPtr,
         event_pub: GraphicsEventPublisherPtr,
+        ex: ExecutorPtr,
     ) -> Pimpl {
         debug!(target: "ui::win", "Window::new()");
 
-        let scene_graph = sg.lock().await;
-        let node = scene_graph.get_node(node_id).unwrap();
-        let node_name = node.name.clone();
-        let screen_w = PropertyFloat32::wrap(node, Role::Internal, "screen_size", 0).unwrap();
-        let screen_h = PropertyFloat32::wrap(node, Role::Internal, "screen_size", 1).unwrap();
-        let scale_prop = node.get_property("scale").unwrap();
-        drop(scene_graph);
+        let node_ref = &node.upgrade().unwrap();
+        let screen_size = PropertyDimension::wrap(node_ref, Role::Internal, "screen_size").unwrap();
+        let scale = PropertyFloat32::wrap(node_ref, Role::Internal, "scale", 0).unwrap();
+
+        let node_name = node_ref.name.clone();
+        let node_id = node_ref.id;
 
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
             // Start a task monitoring for window resize events
             // which updates screen_size
             let ev_sub = event_pub.subscribe_resize();
-            let screen_w2 = screen_w.clone();
-            let screen_h2 = screen_h.clone();
+            let screen_size2 = screen_size.clone();
             let me2 = me.clone();
-            let sg2 = sg.clone();
             let resize_task = ex.spawn(async move {
                 loop {
-                    let Ok((w, h)) = ev_sub.receive().await else {
+                    let Ok(size) = ev_sub.receive().await else {
                         debug!(target: "ui::win", "Event relayer closed");
                         break
                     };
 
-                    debug!(target: "ui::win", "Window resized ({w}, {h})");
+                    debug!(target: "ui::win", "Window resized {size:?}");
                     // Now update the properties
-                    screen_w2.set(w);
-                    screen_h2.set(h);
+                    screen_size2.set(size);
 
                     let Some(self_) = me2.upgrade() else {
                         // Should not happen
                         panic!("self destroyed before modify_task was stopped!");
                     };
 
-                    let sg = sg2.lock().await;
-                    self_.draw(&sg).await;
+                    self_.draw().await;
                 }
             });
 
@@ -131,17 +126,12 @@ impl Window {
             let touch_task =
                 ex.spawn(async move { while Self::process_touch(&me2, &ev_sub).await {} });
 
-            let sg2 = sg.clone();
-            let redraw_fn = move |self_: Arc<Self>| {
-                let sg = sg2.clone();
-                async move {
-                    let sg = sg.lock().await;
-                    self_.draw(&sg).await;
-                }
+            let redraw_fn = move |self_: Arc<Self>| async move {
+                self_.draw().await;
             };
 
             let mut on_modify = OnModify::new(ex.clone(), node_name, node_id, me.clone());
-            on_modify.when_change(scale_prop, redraw_fn);
+            on_modify.when_change(scale.prop(), redraw_fn);
 
             let mut tasks = vec![
                 resize_task,
@@ -156,7 +146,7 @@ impl Window {
             ];
             tasks.append(&mut on_modify.tasks);
 
-            Self { node_id, sg, tasks, screen_w, screen_h, render_api }
+            Self { node, tasks, screen_size, scale, render_api }
         });
 
         Pimpl::Window(self_)
@@ -294,122 +284,108 @@ impl Window {
         true
     }
 
-    async fn handle_char(&self, key: char, mods: KeyMods, repeat: bool) {
-        let sg = self.sg.lock().await;
+    fn get_children(&self) -> Vec<SceneNodePtr> {
+        let node = self.node.upgrade().unwrap();
+        get_children_ordered(&node)
+    }
 
-        for child_id in get_child_nodes_ordered(&sg, self.node_id) {
-            let node = sg.get_node(child_id).unwrap();
-            let obj = get_ui_object(node);
-            if obj.handle_char(&sg, key, mods, repeat).await {
+    async fn handle_char(&self, key: char, mods: KeyMods, repeat: bool) {
+        for child in self.get_children() {
+            let obj = get_ui_object3(&child);
+            if obj.handle_char(key, mods, repeat).await {
                 return
             }
         }
     }
 
     async fn handle_key_down(&self, key: KeyCode, mods: KeyMods, repeat: bool) {
-        let sg = self.sg.lock().await;
-
-        for child_id in get_child_nodes_ordered(&sg, self.node_id) {
-            let node = sg.get_node(child_id).unwrap();
-            let obj = get_ui_object(node);
-            if obj.handle_key_down(&sg, key, mods, repeat).await {
+        for child in self.get_children() {
+            let obj = get_ui_object3(&child);
+            if obj.handle_key_down(key, mods, repeat).await {
                 return
             }
         }
     }
 
     async fn handle_key_up(&self, key: KeyCode, mods: KeyMods) {
-        let sg = self.sg.lock().await;
-
-        for child_id in get_child_nodes_ordered(&sg, self.node_id) {
-            let node = sg.get_node(child_id).unwrap();
-            let obj = get_ui_object(node);
-            if obj.handle_key_up(&sg, key, mods).await {
+        for child in self.get_children() {
+            let obj = get_ui_object3(&child);
+            if obj.handle_key_up(key, mods).await {
                 return
             }
         }
     }
 
-    async fn handle_mouse_btn_down(&self, btn: MouseButton, mouse_pos: Point) {
-        let sg = self.sg.lock().await;
+    /// Converts from screen to local coords
+    fn local_scale(&self, point: &mut Point) {
+        point.x /= self.scale.get();
+        point.y /= self.scale.get();
+    }
 
-        for child_id in get_child_nodes_ordered(&sg, self.node_id) {
-            let node = sg.get_node(child_id).unwrap();
-            let obj = get_ui_object(node);
-            if obj.handle_mouse_btn_down(&sg, btn.clone(), mouse_pos).await {
+    async fn handle_mouse_btn_down(&self, btn: MouseButton, mut mouse_pos: Point) {
+        self.local_scale(&mut mouse_pos);
+        for child in self.get_children() {
+            let obj = get_ui_object3(&child);
+            if obj.handle_mouse_btn_down(btn.clone(), mouse_pos).await {
                 return
             }
         }
     }
 
-    async fn handle_mouse_btn_up(&self, btn: MouseButton, mouse_pos: Point) {
-        let sg = self.sg.lock().await;
-
-        for child_id in get_child_nodes_ordered(&sg, self.node_id) {
-            let node = sg.get_node(child_id).unwrap();
-            let obj = get_ui_object(node);
-            if obj.handle_mouse_btn_up(&sg, btn.clone(), mouse_pos).await {
+    async fn handle_mouse_btn_up(&self, btn: MouseButton, mut mouse_pos: Point) {
+        self.local_scale(&mut mouse_pos);
+        for child in self.get_children() {
+            let obj = get_ui_object3(&child);
+            if obj.handle_mouse_btn_up(btn.clone(), mouse_pos).await {
                 return
             }
         }
     }
 
-    async fn handle_mouse_move(&self, mouse_pos: Point) {
-        let sg = self.sg.lock().await;
-
-        for child_id in get_child_nodes_ordered(&sg, self.node_id) {
-            let node = sg.get_node(child_id).unwrap();
-            let obj = get_ui_object(node);
-            if obj.handle_mouse_move(&sg, mouse_pos).await {
+    async fn handle_mouse_move(&self, mut mouse_pos: Point) {
+        self.local_scale(&mut mouse_pos);
+        for child in self.get_children() {
+            let obj = get_ui_object3(&child);
+            if obj.handle_mouse_move(mouse_pos).await {
                 return
             }
         }
     }
 
-    async fn handle_mouse_wheel(&self, wheel_pos: Point) {
-        let sg = self.sg.lock().await;
-
-        for child_id in get_child_nodes_ordered(&sg, self.node_id) {
-            let node = sg.get_node(child_id).unwrap();
-            let obj = get_ui_object(node);
-            if obj.handle_mouse_wheel(&sg, wheel_pos).await {
+    async fn handle_mouse_wheel(&self, mut wheel_pos: Point) {
+        self.local_scale(&mut wheel_pos);
+        for child in self.get_children() {
+            let obj = get_ui_object3(&child);
+            if obj.handle_mouse_wheel(wheel_pos).await {
                 return
             }
         }
     }
 
-    async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_pos: Point) {
-        let sg = self.sg.lock().await;
-
-        for child_id in get_child_nodes_ordered(&sg, self.node_id) {
-            let node = sg.get_node(child_id).unwrap();
-            let obj = get_ui_object(node);
-            if obj.handle_touch(&sg, phase, id, touch_pos).await {
+    async fn handle_touch(&self, phase: TouchPhase, id: u64, mut touch_pos: Point) {
+        self.local_scale(&mut touch_pos);
+        for child in self.get_children() {
+            let obj = get_ui_object3(&child);
+            if obj.handle_touch(phase, id, touch_pos).await {
                 return
             }
         }
     }
 
-    pub async fn draw(&self, sg: &SceneGraph) {
-        let screen_w = self.screen_w.get();
-        let screen_h = self.screen_h.get();
-        debug!(target: "ui::win", "Window::draw({screen_w}, {screen_h})");
-
-        // SceneGraph should remain locked for the entire draw
-        let self_node = sg.get_node(self.node_id).unwrap();
-
-        let screen_rect = Rectangle::new(0., 0., screen_w, screen_h);
+    pub async fn draw(&self) {
+        let local = self.screen_size.get() / self.scale.get();
+        let rect = Rectangle::from([0., 0., local.w, local.h]);
+        debug!(target: "ui::win", "Window::draw({rect:?})");
 
         let mut draw_calls = vec![];
         let mut child_calls = vec![];
         let mut freed_textures = vec![];
         let mut freed_buffers = vec![];
 
-        for child_id in get_child_nodes_ordered(&sg, self.node_id) {
-            let node = sg.get_node(child_id).unwrap();
-            let obj = get_ui_object(node);
-            let Some(mut draw_update) = obj.draw(sg, &screen_rect).await else {
-                error!(target: "ui::layer", "draw() of {node:?} failed");
+        for child in self.get_children() {
+            let obj = get_ui_object3(&child);
+            let Some(mut draw_update) = obj.draw(rect).await else {
+                error!(target: "ui::layer", "draw() of {child:?} failed");
                 continue
             };
 
@@ -419,8 +395,12 @@ impl Window {
             freed_buffers.append(&mut draw_update.freed_buffers);
         }
 
-        let root_dc = GfxDrawCall { instrs: vec![], dcs: child_calls, z_index: 0 };
-        draw_calls.push((0, root_dc));
+        let dc = GfxDrawCall {
+            instrs: vec![GfxDrawInstruction::SetScale(self.scale.get())],
+            dcs: child_calls,
+            z_index: 0,
+        };
+        draw_calls.push((0, dc));
         //debug!(target: "ui::win", "  => {:?}", draw_calls);
 
         self.render_api.replace_draw_calls(draw_calls);
@@ -434,9 +414,4 @@ impl Window {
 
         debug!(target: "ui::win", "Window::draw() - replaced draw call");
     }
-}
-
-// Nodes should be stopped before being removed
-impl Stoppable for Window {
-    async fn stop(&self) {}
 }

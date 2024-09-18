@@ -28,6 +28,13 @@ use std::io::{Read, Write};
 mod compile;
 pub use compile::Compiler;
 
+pub fn const_f32(x: f32) -> SExprCode {
+    vec![Op::ConstFloat32(x)]
+}
+pub fn load_var<S: Into<String>>(var: S) -> SExprCode {
+    vec![Op::LoadVar(var.into())]
+}
+
 #[derive(Clone, Debug, PartialEq, SerialEncodable, SerialDecodable)]
 pub enum SExprVal {
     Null,

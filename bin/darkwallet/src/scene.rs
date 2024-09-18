@@ -17,16 +17,74 @@
  */
 
 use async_channel::Sender;
-use async_lock::Mutex;
-use darkfi_serial::{async_trait, FutAsyncWriteExt, SerialDecodable, SerialEncodable};
-use futures::{stream::FuturesUnordered, StreamExt};
-use std::{fmt, str::FromStr, sync::Arc};
+use async_lock::RwLock as AsyncRwLock;
+use async_trait::async_trait;
+use darkfi_serial::{FutAsyncWriteExt, SerialDecodable, SerialEncodable};
+use std::{
+    collections::VecDeque,
+    fmt,
+    future::Future,
+    str::FromStr,
+    sync::{Arc, RwLock as SyncRwLock, Weak},
+};
 
 use crate::{
     error::{Error, Result},
     prop::{Property, PropertyPtr, Role},
     ui,
 };
+
+pub struct ScenePath(VecDeque<String>);
+
+impl<S: Into<String>> From<S> for ScenePath {
+    fn from(path: S) -> Self {
+        let path: String = path.into();
+        (&path).parse().expect("invalid ScenePath &str")
+    }
+}
+
+impl fmt::Display for ScenePath {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "/")?;
+        for token in &self.0 {
+            write!(f, "{}/", token)?;
+        }
+        Ok(())
+    }
+}
+
+impl FromStr for ScenePath {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        if s.is_empty() || s.chars().nth(0).unwrap() != '/' {
+            return Err(Error::InvalidScenePath);
+        }
+        if s == "/" {
+            return Ok(ScenePath(VecDeque::new()));
+        }
+
+        let mut tokens = s.split('/');
+        // Should start with a /
+        let initial = tokens.next().expect("should not be empty");
+        if !initial.is_empty() {
+            return Err(Error::InvalidScenePath);
+        }
+
+        let mut path = VecDeque::new();
+        for token in tokens {
+            // There should not be any double slashes //
+            if token.is_empty() {
+                return Err(Error::InvalidScenePath);
+            }
+            path.push_back(token.to_string());
+        }
+        Ok(ScenePath(path))
+    }
+}
+
+pub type SceneNodePtr = Arc<SceneNode>;
+pub type SceneNodeWeak = Weak<SceneNode>;
 
 pub type SceneNodeId = u32;
 
@@ -54,329 +112,12 @@ pub enum SceneNodeType {
     Button = 19,
 }
 
-pub struct ScenePath(Vec<String>);
-
-impl<S: Into<String>> From<S> for ScenePath {
-    fn from(path: S) -> Self {
-        let path: String = path.into();
-        (&path).parse().expect("invalid ScenePath &str")
-    }
-}
-
-impl fmt::Display for ScenePath {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "/")?;
-        for token in &self.0 {
-            write!(f, "{}/", token)?;
-        }
-        Ok(())
-    }
-}
-
-impl FromStr for ScenePath {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self> {
-        if s.is_empty() || s.chars().nth(0).unwrap() != '/' {
-            return Err(Error::InvalidScenePath);
-        }
-        if s == "/" {
-            return Ok(ScenePath(vec![]));
-        }
-
-        let mut tokens = s.split('/');
-        // Should start with a /
-        let initial = tokens.next().expect("should not be empty");
-        if !initial.is_empty() {
-            return Err(Error::InvalidScenePath);
-        }
-
-        let mut path = vec![];
-        for token in tokens {
-            // There should not be any double slashes //
-            if token.is_empty() {
-                return Err(Error::InvalidScenePath);
-            }
-            path.push(token.to_string());
-        }
-        Ok(ScenePath(path))
-    }
-}
-
-pub type SceneGraphPtr2 = Arc<Mutex<SceneGraph>>;
-
-pub struct SceneGraph {
-    // Node 0 is always the root
-    nodes: Vec<SceneNode>,
-    freed: Vec<SceneNodeId>,
-}
-
-impl SceneGraph {
-    pub const ROOT_ID: SceneNodeId = 0;
-
-    pub fn new() -> Self {
-        let root = SceneNode {
-            name: "/".to_string(),
-            id: 0,
-            typ: SceneNodeType::Root,
-            parents: vec![],
-            children: vec![],
-            props: vec![],
-            sigs: vec![],
-            methods: vec![],
-            pimpl: Pimpl::Null,
-        };
-        Self { nodes: vec![root], freed: vec![] }
-    }
-
-    pub fn add_node<S: Into<String>>(&mut self, name: S, typ: SceneNodeType) -> &mut SceneNode {
-        let node = SceneNode {
-            name: name.into(),
-            // We set this at the end
-            id: 0,
-            typ,
-            parents: vec![],
-            children: vec![],
-            props: vec![],
-            sigs: vec![],
-            methods: vec![],
-            pimpl: Pimpl::Null,
-        };
-
-        let node_id = if self.freed.is_empty() {
-            let node_id = self.nodes.len() as SceneNodeId;
-            self.nodes.push(node);
-            node_id
-        } else {
-            let node_id = self.freed.pop().unwrap();
-            let _ = std::mem::replace(&mut self.nodes[node_id as usize], node);
-            node_id
-        };
-
-        self.nodes[node_id as usize].id = node_id;
-        &mut self.nodes[node_id as usize]
-    }
-
-    pub fn remove_node(&mut self, id: SceneNodeId) -> Result<()> {
-        let node = self.get_node_mut(id).ok_or(Error::NodeNotFound)?;
-        if !node.parents.is_empty() {
-            return Err(Error::NodeHasParents);
-        }
-        if !node.children.is_empty() {
-            return Err(Error::NodeHasChildren);
-        }
-        node.name.clear();
-        node.typ = SceneNodeType::Null;
-        node.props.clear();
-        self.freed.push(id);
-        Ok(())
-    }
-
-    #[allow(dead_code)]
-    fn root(&self) -> &SceneNode {
-        &self.nodes[0]
-    }
-    #[allow(dead_code)]
-    fn root_mut(&mut self) -> &mut SceneNode {
-        &mut self.nodes[0]
-    }
-
-    fn exists(&self, id: SceneNodeId) -> bool {
-        id < self.nodes.len() as SceneNodeId && !self.freed.contains(&id)
-    }
-
-    pub fn get_node(&self, id: SceneNodeId) -> Option<&SceneNode> {
-        if self.exists(id) {
-            Some(&self.nodes[id as usize])
-        } else {
-            None
-        }
-    }
-    pub fn get_node_mut(&mut self, id: SceneNodeId) -> Option<&mut SceneNode> {
-        if self.exists(id) {
-            Some(&mut self.nodes[id as usize])
-        } else {
-            None
-        }
-    }
-
-    pub fn link(&mut self, child_id: SceneNodeId, parent_id: SceneNodeId) -> Result<()> {
-        // Check both nodes are not already linked
-        let is_linked = self.is_linked(child_id, parent_id)?;
-        if is_linked {
-            return Err(Error::NodesAreLinked);
-        }
-
-        if child_id == parent_id {
-            return Err(Error::NodesAreSame);
-        }
-
-        let parent = self.get_node(parent_id).unwrap();
-        let parent_inf =
-            SceneNodeInfo { name: parent.name.clone(), id: parent_id, typ: parent.typ };
-        let child_name = &self.get_node(child_id).unwrap().name;
-        if parent.has_child(child_name) {
-            return Err(Error::NodeChildNameConflict);
-        }
-
-        // Link parent into child
-        let child = self.get_node_mut(child_id).unwrap();
-        if child.has_parent(&parent_inf.name) {
-            return Err(Error::NodeParentNameConflict);
-        }
-        let child_inf = SceneNodeInfo { name: child.name.clone(), id: child_id, typ: child.typ };
-        assert!(!child.has_parent_id(parent_id));
-        child.parents.push(parent_inf);
-
-        // Link child into parent
-        let parent = self.get_node_mut(parent_id).unwrap();
-        assert!(!parent.has_child(&child_inf.name));
-        parent.children.push(child_inf);
-        Ok(())
-    }
-
-    pub fn unlink(&mut self, child_id: SceneNodeId, parent_id: SceneNodeId) -> Result<()> {
-        // Check both nodes are actually linked
-        let is_linked = self.is_linked(child_id, parent_id)?;
-        if !is_linked {
-            return Err(Error::NodesNotLinked);
-        }
-
-        // Unlink parent from child
-        let child = self.get_node_mut(child_id).unwrap();
-        child.remove_parent(parent_id);
-
-        // Unlink child from parent
-        let parent = self.get_node_mut(parent_id).unwrap();
-        parent.remove_child(child_id);
-        Ok(())
-    }
-
-    pub fn is_linked(&self, child_id: SceneNodeId, parent_id: SceneNodeId) -> Result<bool> {
-        let parent = self.get_node(parent_id).ok_or(Error::ParentNodeNotFound)?;
-        let child = self.get_node(child_id).ok_or(Error::ChildNodeNotFound)?;
-        let parent_has_child = parent.has_child_id(child_id);
-        let child_has_parent = child.has_parent_id(parent_id);
-        // Internal consistency checks
-        if parent_has_child {
-            assert!(child_has_parent);
-        } else {
-            assert!(!child_has_parent);
-        }
-        Ok(parent_has_child)
-    }
-
-    pub fn lookup_node_id<P: Into<ScenePath>>(&self, path: P) -> Option<SceneNodeId> {
-        let path: ScenePath = path.into();
-        let mut current_id = Self::ROOT_ID;
-        for node_name in path.0 {
-            let parent_node = self.get_node(current_id).unwrap();
-            match parent_node.get_child(&node_name) {
-                Some(child_id) => {
-                    current_id = child_id;
-                }
-                None => return None,
-            }
-        }
-        Some(current_id)
-    }
-
-    pub fn lookup_node<P: Into<ScenePath>>(&self, path: P) -> Option<&SceneNode> {
-        let node_id = self.lookup_node_id(path)?;
-        Some(self.get_node(node_id).unwrap())
-    }
-    pub fn lookup_node_mut<P: Into<ScenePath>>(&mut self, path: P) -> Option<&mut SceneNode> {
-        let node_id = self.lookup_node_id(path)?;
-        Some(self.get_node_mut(node_id).unwrap())
-    }
-
-    pub fn rename_node<S: Into<String>>(
-        &mut self,
-        node_id: SceneNodeId,
-        node_name: S,
-    ) -> Result<()> {
-        let node_name = node_name.into();
-        for sibling_inf in self.node_siblings(node_id)? {
-            if sibling_inf.name == node_name {
-                return Err(Error::NodeSiblingNameConflict)
-            }
-        }
-        let node = self.get_node_mut(node_id).unwrap();
-        node.name = node_name.clone();
-
-        // Now update it for all children and parents too
-        let parent_ids: Vec<_> = node.parents.iter().map(|parent_inf| parent_inf.id).collect();
-        let child_ids: Vec<_> = node.children.iter().map(|child_inf| child_inf.id).collect();
-
-        'next_parent: for parent_id in parent_ids {
-            let parent = self.get_node_mut(parent_id).unwrap();
-            for child in &mut parent.children {
-                if child.id == node_id {
-                    child.name = node_name.clone();
-                    continue 'next_parent
-                }
-            }
-            panic!("child {} not found in parent {}!", node_id, parent.id)
-        }
-
-        'next_child: for child_id in child_ids {
-            let child = self.get_node_mut(child_id).unwrap();
-            for parent in &mut child.parents {
-                if parent.id == node_id {
-                    parent.name = node_name.clone();
-                    continue 'next_child
-                }
-            }
-            panic!("parent {} not found in child {}!", node_id, child.id)
-        }
-        Ok(())
-    }
-    fn node_siblings(&self, node_id: SceneNodeId) -> Result<Vec<SceneNodeInfo>> {
-        let mut siblings = vec![];
-        let node = self.get_node(node_id).ok_or(Error::NodeNotFound)?;
-        for parent_inf in &node.parents {
-            let parent = self.get_node(parent_inf.id).ok_or(Error::ParentNodeNotFound)?;
-            let mut sibling_infs = parent
-                .children
-                .iter()
-                .cloned()
-                .filter(|child_inf| child_inf.id != node_id)
-                .collect();
-            siblings.append(&mut sibling_infs);
-        }
-        Ok(siblings)
-    }
-
-    pub fn scan_dangling(&self) -> Vec<SceneNodeId> {
-        let mut dangling = vec![];
-        for node in &self.nodes {
-            if node.id == Self::ROOT_ID {
-                continue
-            }
-            if self.freed.contains(&node.id) {
-                continue
-            }
-            if node.parents.is_empty() {
-                dangling.push(node.id);
-            }
-        }
-        dangling
-    }
-}
-
-#[derive(Clone)]
-pub struct SceneNodeInfo {
-    pub name: String,
-    pub id: SceneNodeId,
-    pub typ: SceneNodeType,
-}
-
 pub struct SceneNode {
     pub name: String,
     pub id: SceneNodeId,
     pub typ: SceneNodeType,
-    pub parents: Vec<SceneNodeInfo>,
-    pub children: Vec<SceneNodeInfo>,
+    parent: SyncRwLock<Option<Weak<Self>>>,
+    children: SyncRwLock<Vec<SceneNodePtr>>,
     pub props: Vec<PropertyPtr>,
     pub sigs: Vec<Signal>,
     pub methods: Vec<Method>,
@@ -384,60 +125,78 @@ pub struct SceneNode {
 }
 
 impl SceneNode {
-    fn has_parent_id(&self, parent_id: SceneNodeId) -> bool {
-        self.parents.iter().any(|parent| parent.id == parent_id)
-    }
-    fn has_child_id(&self, child_id: SceneNodeId) -> bool {
-        self.children.iter().any(|child| child.id == child_id)
+    pub fn root() -> SceneNodePtr {
+        Arc::new(Self::new("", SceneNodeType::Root))
     }
 
-    fn has_parent(&self, parent_name: &str) -> bool {
-        self.parents.iter().any(|parent| parent.name == parent_name)
+    pub fn new<S: Into<String>>(name: S, typ: SceneNodeType) -> Self {
+        Self {
+            name: name.into(),
+            id: rand::random(),
+            typ,
+            parent: SyncRwLock::new(None),
+            children: SyncRwLock::new(vec![]),
+            props: vec![],
+            sigs: vec![],
+            methods: vec![],
+            pimpl: Pimpl::Null,
+        }
     }
-    fn has_child(&self, child_name: &str) -> bool {
-        self.children.iter().any(|child| child.name == child_name)
+
+    pub async fn setup<F, Fut>(self, pimpl_fn: F) -> SceneNodePtr
+    where
+        F: FnOnce(SceneNodeWeak) -> Fut,
+        Fut: Future<Output = Pimpl>,
+    {
+        let mut self_ = Arc::new(self);
+        let weak_self = Arc::downgrade(&self_);
+        let pimpl = pimpl_fn(weak_self).await;
+        // Arc::new_cyclic() doesnt allow async so we do this instead
+        unsafe {
+            Arc::get_mut_unchecked(&mut self_).pimpl = pimpl;
+        }
+        self_
     }
-    fn get_child(&self, child_name: &str) -> Option<SceneNodeId> {
-        for child in &self.children {
+
+    pub fn link(&self, child: SceneNodePtr) {
+        let mut childs_parent = child.parent.write().unwrap();
+        assert!(childs_parent.is_none());
+        *childs_parent = Some(Arc::downgrade(&child));
+        drop(childs_parent);
+
+        let mut children = self.children.write().unwrap();
+        children.push(child);
+    }
+
+    pub fn get_children(&self) -> Vec<SceneNodePtr> {
+        self.children.read().unwrap().clone()
+    }
+
+    pub fn lookup_node<P: Into<ScenePath>>(self: Arc<Self>, path: P) -> Option<SceneNodePtr> {
+        let path: ScenePath = path.into();
+        let mut path = path.0;
+        if path.is_empty() {
+            return Some(self)
+        }
+        let child_name = path.pop_front().unwrap();
+        for child in self.get_children() {
             if child.name == child_name {
-                return Some(child.id);
+                let path = ScenePath(path);
+                return child.lookup_node(path)
             }
         }
         None
     }
 
-    // Panics if parent is not linked
-    fn remove_parent(&mut self, parent_id: SceneNodeId) {
-        let parent_idx = self.parents.iter().position(|parent| parent.id == parent_id).unwrap();
-        self.parents.swap_remove(parent_idx);
+    fn has_property(&self, name: &str) -> bool {
+        self.props.iter().any(|prop| prop.name == name)
     }
-    // Panics if child is not linked
-    fn remove_child(&mut self, child_id: SceneNodeId) {
-        let child_idx = self.children.iter().position(|child| child.id == child_id).unwrap();
-        self.children.swap_remove(child_idx);
-    }
-
-    pub fn get_children(&self, allowed_types: &[SceneNodeType]) -> Vec<SceneNodeInfo> {
-        self.children
-            .iter()
-            .cloned()
-            .filter(move |child_inf| allowed_types.contains(&child_inf.typ))
-            .collect()
-    }
-    pub fn get_children2(&self) -> Vec<SceneNodeInfo> {
-        self.children.iter().cloned().collect()
-    }
-
     pub fn add_property(&mut self, prop: Property) -> Result<()> {
         if self.has_property(&prop.name) {
             return Err(Error::PropertyAlreadyExists);
         }
         self.props.push(Arc::new(prop));
         Ok(())
-    }
-
-    fn has_property(&self, name: &str) -> bool {
-        self.props.iter().any(|prop| prop.name == name)
     }
 
     pub fn get_property(&self, name: &str) -> Option<PropertyPtr> {
@@ -507,48 +266,6 @@ impl SceneNode {
     fn has_signal(&self, name: &str) -> bool {
         self.sigs.iter().any(|sig| sig.name == name)
     }
-    pub fn get_signal(&self, name: &str) -> Option<&Signal> {
-        self.sigs.iter().find(|sig| sig.name == name)
-    }
-    fn get_signal_mut(&mut self, name: &str) -> Option<&mut Signal> {
-        self.sigs.iter_mut().find(|sig| sig.name == name)
-    }
-
-    pub fn register(&mut self, sig_name: &str, slot: Slot) -> Result<SlotId> {
-        let sig = self.get_signal_mut(sig_name).ok_or(Error::SignalNotFound)?;
-        let slot_id = if sig.freed.is_empty() {
-            let slot_id = sig.slots.len() as SlotId;
-            sig.slots.push(slot);
-            slot_id
-        } else {
-            let slot_id = sig.freed.pop().unwrap();
-            let _ = std::mem::replace(&mut sig.slots[slot_id as usize], slot);
-            slot_id
-        };
-        Ok(slot_id)
-    }
-    pub fn unregister(&mut self, sig_name: &str, slot_id: SlotId) -> Result<()> {
-        let sig = self.get_signal_mut(sig_name).ok_or(Error::SignalNotFound)?;
-        if !sig.slot_exists(slot_id) {
-            return Err(Error::SlotNotFound);
-        }
-        sig.freed.push(slot_id);
-        Ok(())
-    }
-
-    pub async fn trigger(&self, sig_name: &str, data: Vec<u8>) -> Result<()> {
-        let sig = self.get_signal(sig_name).ok_or(Error::SignalNotFound)?;
-        let futures = FuturesUnordered::new();
-        // TODO: autoremove slots which fail to send
-        for (_, slot) in sig.get_slots() {
-            debug!(target: "scene", "triggering {}", slot.name);
-            // Trigger the slot
-            futures.push(async { slot.notify.send(data.clone()).await.is_ok() });
-        }
-        let success: Vec<_> = futures.collect().await;
-        debug!(target: "scene", "trigger success: {success:?}");
-        Ok(())
-    }
 
     pub fn add_method<S: Into<String>>(
         &mut self,
@@ -558,7 +275,7 @@ impl SceneNode {
         method_fn: MethodRequestFn,
     ) -> Result<()> {
         let name = name.into();
-        if self.has_signal(&name) {
+        if self.has_method(&name) {
             return Err(Error::MethodAlreadyExists);
         }
         let args = args
@@ -573,19 +290,14 @@ impl SceneNode {
         Ok(())
     }
 
-    pub fn get_method(&self, name: &str) -> Option<&Method> {
-        self.methods.iter().find(|method| method.name == name)
+    fn has_method(&self, name: &str) -> bool {
+        self.methods.iter().any(|sig| sig.name == name)
     }
+}
 
-    pub fn call_method(
-        &mut self,
-        name: &str,
-        arg_data: Vec<u8>,
-        response_fn: MethodResponseFn,
-    ) -> Result<()> {
-        let method = self.get_method(name).ok_or(Error::MethodNotFound)?;
-        (method.method_fn)(arg_data, response_fn);
-        Ok(())
+impl std::fmt::Debug for SceneNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "'{}':{}", self.name, self.id)
     }
 }
 
@@ -622,32 +334,6 @@ pub struct Signal {
     freed: Vec<SlotId>,
 }
 
-impl Signal {
-    fn slot_exists(&self, slot_id: SlotId) -> bool {
-        if slot_id >= self.slots.len() as SlotId {
-            return false;
-        }
-        return !self.freed.contains(&slot_id);
-    }
-
-    pub fn get_slots<'a>(&'a self) -> impl Iterator<Item = (SlotId, &'a Slot)> {
-        self.slots
-            .iter()
-            .enumerate()
-            .filter(|(slot_id, _)| !self.freed.contains(&(*slot_id as SlotId)))
-            .map(|(slot_id, slot)| (slot_id as SlotId, slot))
-    }
-
-    pub fn lookup_slot_id(&self, slot_name: &str) -> Option<SlotId> {
-        for (slot_id, slot) in self.get_slots() {
-            if slot.name == slot_name {
-                return Some(slot_id);
-            }
-        }
-        None
-    }
-}
-
 type MethodRequestFn = Box<dyn Fn(Vec<u8>, MethodResponseFn) + Send + Sync>;
 pub type MethodResponseFn = Box<dyn Fn(Result<Vec<u8>>) + Send + Sync>;
 
@@ -664,14 +350,8 @@ pub enum Pimpl {
     Layer(ui::LayerPtr),
     VectorArt(ui::VectorArtPtr),
     Text(ui::TextPtr),
-    EditBox(ui::EditBoxPtr),
-    ChatView(ui::ChatViewPtr),
+    //EditBox(ui::EditBoxPtr),
+    //ChatView(ui::ChatViewPtr),
     Image(ui::ImagePtr),
-    Button(ui::ButtonPtr),
-}
-
-impl std::fmt::Debug for SceneNode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "'{}':{}", self.name, self.id)
-    }
+    //Button(ui::ButtonPtr),
 }

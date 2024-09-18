@@ -19,8 +19,8 @@
 use crate::{
     error::{Error, Result},
     expr::{SExprMachine, SExprVal},
-    gfx::{Point, Rectangle},
-    scene::SceneNode,
+    gfx::{Dimension, Point, Rectangle},
+    scene::SceneNode as SceneNode3,
 };
 
 use super::{PropertyPtr, Role};
@@ -33,7 +33,7 @@ pub struct PropertyBool {
 }
 
 impl PropertyBool {
-    pub fn wrap(node: &SceneNode, role: Role, prop_name: &str, idx: usize) -> Result<Self> {
+    pub fn wrap(node: &SceneNode3, role: Role, prop_name: &str, idx: usize) -> Result<Self> {
         let prop = node.get_property(prop_name).ok_or(Error::PropertyNotFound)?;
 
         // Test if it works
@@ -70,7 +70,7 @@ impl PropertyUint32 {
         Ok(Self { prop, role, idx })
     }
 
-    pub fn wrap(node: &SceneNode, role: Role, prop_name: &str, idx: usize) -> Result<Self> {
+    pub fn wrap(node: &SceneNode3, role: Role, prop_name: &str, idx: usize) -> Result<Self> {
         let prop = node.get_property(prop_name).ok_or(Error::PropertyNotFound)?;
 
         // Test if it works
@@ -100,7 +100,7 @@ pub struct PropertyFloat32 {
 }
 
 impl PropertyFloat32 {
-    pub fn wrap(node: &SceneNode, role: Role, prop_name: &str, idx: usize) -> Result<Self> {
+    pub fn wrap(node: &SceneNode3, role: Role, prop_name: &str, idx: usize) -> Result<Self> {
         let prop = node.get_property(prop_name).ok_or(Error::PropertyNotFound)?;
 
         // Test if it works
@@ -130,7 +130,7 @@ pub struct PropertyStr {
 }
 
 impl PropertyStr {
-    pub fn wrap(node: &SceneNode, role: Role, prop_name: &str, idx: usize) -> Result<Self> {
+    pub fn wrap(node: &SceneNode3, role: Role, prop_name: &str, idx: usize) -> Result<Self> {
         let prop = node.get_property(prop_name).ok_or(Error::PropertyNotFound)?;
 
         // Test if it works
@@ -159,7 +159,7 @@ pub struct PropertyColor {
 }
 
 impl PropertyColor {
-    pub fn wrap(node: &SceneNode, role: Role, prop_name: &str) -> Result<Self> {
+    pub fn wrap(node: &SceneNode3, role: Role, prop_name: &str) -> Result<Self> {
         let prop = node.get_property(prop_name).ok_or(Error::PropertyNotFound)?;
 
         if !prop.is_bounded() || prop.get_len() != 4 {
@@ -194,13 +194,47 @@ impl PropertyColor {
 }
 
 #[derive(Clone)]
+pub struct PropertyDimension {
+    prop: PropertyPtr,
+    role: Role,
+}
+
+impl PropertyDimension {
+    pub fn wrap(node: &SceneNode3, role: Role, prop_name: &str) -> Result<Self> {
+        let prop = node.get_property(prop_name).ok_or(Error::PropertyNotFound)?;
+
+        if !prop.is_bounded() || prop.get_len() != 2 {
+            return Err(Error::PropertyWrongLen)
+        }
+
+        // Test if it works
+        let _ = prop.get_f32(0)?;
+
+        Ok(Self { prop, role })
+    }
+
+    pub fn get(&self) -> Dimension {
+        [self.prop.get_f32(0).unwrap(), self.prop.get_f32(1).unwrap()].into()
+    }
+
+    pub fn set(&self, dim: Dimension) {
+        self.prop.set_f32(self.role, 0, dim.w).unwrap();
+        self.prop.set_f32(self.role, 1, dim.h).unwrap();
+    }
+
+    pub fn prop(&self) -> PropertyPtr {
+        self.prop.clone()
+    }
+}
+
+#[derive(Clone)]
 pub struct PropertyPoint {
     prop: PropertyPtr,
     role: Role,
 }
 
 impl PropertyPoint {
-    pub fn wrap(node: &SceneNode, role: Role, prop_name: &str) -> Result<Self> {
+    pub fn wrap(node: &SceneNode3, role: Role, prop_name: &str) -> Result<Self> {
         let prop = node.get_property(prop_name).ok_or(Error::PropertyNotFound)?;
 
         if !prop.is_bounded() || prop.get_len() != 2 {
@@ -234,7 +268,7 @@ pub struct PropertyRect {
 }
 
 impl PropertyRect {
-    pub fn wrap(node: &SceneNode, role: Role, prop_name: &str) -> Result<Self> {
+    pub fn wrap(node: &SceneNode3, role: Role, prop_name: &str) -> Result<Self> {
         let prop = node.get_property(prop_name).ok_or(Error::PropertyNotFound)?;
 
         if !prop.is_bounded() || prop.get_len() != 4 {
@@ -276,6 +310,22 @@ impl PropertyRect {
             self.prop.get_f32(2).unwrap(),
             self.prop.get_f32(3).unwrap(),
         ])
+    }
+
+    pub fn get_opt(&self) -> Option<Rectangle> {
+        Some(Rectangle::from_array([
+            self.prop.get_f32(0).ok()?,
+            self.prop.get_f32(1).ok()?,
+            self.prop.get_f32(2).ok()?,
+            self.prop.get_f32(3).ok()?,
+        ]))
+    }
+
+    pub fn set(&self, rect: &Rectangle) {
+        self.prop.set_f32(self.role, 0, rect.x).unwrap();
+        self.prop.set_f32(self.role, 1, rect.y).unwrap();
+        self.prop.set_f32(self.role, 2, rect.y).unwrap();
+        self.prop.set_f32(self.role, 3, rect.y).unwrap();
     }
 
     pub fn prop(&self) -> PropertyPtr {

@@ -19,20 +19,25 @@
 use sled_overlay::sled;
 
 use crate::{
-    darkirc::{DarkIrcBackendPtr, Privmsg},
     error::Error,
-    expr::Compiler,
+    expr::{self, Compiler},
     gfx::{GraphicsEventPublisherPtr, Rectangle, RenderApiPtr, Vertex},
     mesh::{Color, MeshBuilder},
-    prop::{Property, PropertyBool, PropertyStr, PropertySubType, PropertyType, Role},
-    scene::{
-        CallArgType, MethodResponseFn, Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId,
-        SceneNodeType, Slot,
+    prop::{
+        Property, PropertyBool, PropertyFloat32, PropertyStr, PropertySubType, PropertyType, Role,
     },
+    scene::SceneNodePtr,
     text::TextShaperPtr,
     ui::{
-        chatview, vector_art::shape, Button, ChatView, EditBox, Image, Layer, ShapeVertex,
-        Stoppable, Text, VectorArt, VectorShape, Window,
+        Image,
+        Layer,
+        ShapeVertex,
+        //chatview, vector_art::shape, Button, ChatView, EditBox, Image, Layer, ShapeVertex,
+        //Stoppable, Text, VectorArt, VectorShape, Window,
+        Text,
+        VectorArt,
+        VectorShape,
+        Window,
     },
     ExecutorPtr,
 };
@@ -82,75 +87,52 @@ const FONTSIZE: f32 = 40.;
 #[cfg(target_os = "linux")]
 const FONTSIZE: f32 = 20.;
 
-pub(super) async fn make_old(app: &App) {
+pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
     let mut cc = Compiler::new();
 
-    //let mut tasks = vec![];
     // Create a layer called view
-    let mut sg = app.sg.lock().await;
-    let layer_node_id = create_layer(&mut sg, "view");
-
-    // Customize our layer
-    let node = sg.get_node(layer_node_id).unwrap();
-    let prop = node.get_property("rect").unwrap();
+    let layer_node = create_layer("view");
+    let prop = layer_node.get_property("rect").unwrap();
     prop.set_f32(Role::App, 0, 0.).unwrap();
     prop.set_f32(Role::App, 1, 0.).unwrap();
-    prop.set_expr(Role::App, 2, shape::load_var("w")).unwrap();
-    prop.set_expr(Role::App, 3, shape::load_var("h")).unwrap();
-    node.set_property_bool(Role::App, "is_visible", true).unwrap();
-
-    // Setup the pimpl
-    let node_id = node.id;
-    drop(sg);
-    let pimpl = Layer::new(app.ex.clone(), app.sg.clone(), node_id, app.render_api.clone()).await;
-    let mut sg = app.sg.lock().await;
-    let node = sg.get_node_mut(node_id).unwrap();
-    node.pimpl = pimpl;
-
-    let window_id = sg.lookup_node("/window").unwrap().id;
-    sg.link(node_id, window_id).unwrap();
+    prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_expr(Role::App, 3, expr::load_var("h")).unwrap();
+    layer_node.set_property_bool(Role::App, "is_visible", true).unwrap();
+    let layer_node =
+        layer_node.setup(|me| Layer::new(me, app.render_api.clone(), app.ex.clone())).await;
+    window.link(layer_node.clone());
 
     // Create a bg mesh
-    let node_id = create_vector_art(&mut sg, "bg");
-
-    let node = sg.get_node_mut(node_id).unwrap();
+    let node = create_vector_art("bg");
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(Role::App, 0, 0.).unwrap();
     prop.set_f32(Role::App, 1, 0.).unwrap();
-    prop.set_expr(Role::App, 2, shape::load_var("w")).unwrap();
-    prop.set_expr(Role::App, 3, shape::load_var("h")).unwrap();
+    prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_expr(Role::App, 3, expr::load_var("h")).unwrap();
+    node.set_property_u32(Role::App, "z_index", 0).unwrap();
 
     let c = if LIGHTMODE { 1. } else { 0. };
-    // Setup the pimpl
-    let node_id = node.id;
     let mut shape = VectorShape::new();
     shape.add_filled_box(
-        shape::const_f32(0.),
-        shape::const_f32(0.),
-        shape::load_var("w"),
-        shape::load_var("h"),
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::load_var("h"),
         [c, c, c, 1.],
     );
-    drop(sg);
-    let pimpl =
-        VectorArt::new(app.ex.clone(), app.sg.clone(), node_id, app.render_api.clone(), shape)
-            .await;
-    let mut sg = app.sg.lock().await;
-    let node = sg.get_node_mut(node_id).unwrap();
-    node.pimpl = pimpl;
-
-    sg.link(node_id, layer_node_id).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
+    layer_node.link(node);
 
     // Create button bg
-    let node_id = create_vector_art(&mut sg, "btnbg");
-
-    let node = sg.get_node_mut(node_id).unwrap();
+    let node = create_vector_art("btnbg");
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile("w - 220").unwrap();
     prop.set_expr(Role::App, 0, code).unwrap();
     prop.set_f32(Role::App, 1, 10.).unwrap();
     prop.set_f32(Role::App, 2, 200.).unwrap();
     prop.set_f32(Role::App, 3, 60.).unwrap();
+    node.set_property_u32(Role::App, "z_index", 1).unwrap();
 
     // Setup the pimpl
     let verts = if LIGHTMODE {
@@ -170,16 +152,11 @@ pub(super) async fn make_old(app: &App) {
     };
     let indices = vec![0, 2, 1, 1, 2, 3];
     let shape = VectorShape { verts, indices };
-    drop(sg);
-    let pimpl =
-        VectorArt::new(app.ex.clone(), app.sg.clone(), node_id, app.render_api.clone(), shape)
-            .await;
-    let mut sg = app.sg.lock().await;
-    let node = sg.get_node_mut(node_id).unwrap();
-    node.pimpl = pimpl;
+    let node =
+        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
+    layer_node.link(node);
 
-    sg.link(node_id, layer_node_id).unwrap();
-
+    /*
     // Create the button
     let node_id = create_button(&mut sg, "btn");
 
@@ -203,16 +180,16 @@ pub(super) async fn make_old(app: &App) {
     node.pimpl = pimpl;
 
     sg.link(node_id, layer_node_id).unwrap();
+    */
 
     // Create another mesh
-    let node_id = create_vector_art(&mut sg, "box");
-
-    let node = sg.get_node_mut(node_id).unwrap();
+    let node = create_vector_art("box");
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(Role::App, 0, 10.).unwrap();
     prop.set_f32(Role::App, 1, 10.).unwrap();
     prop.set_f32(Role::App, 2, 60.).unwrap();
     prop.set_f32(Role::App, 3, 60.).unwrap();
+    node.set_property_u32(Role::App, "z_index", 1).unwrap();
 
     // Setup the pimpl
     let verts = if LIGHTMODE {
@@ -232,81 +209,54 @@ pub(super) async fn make_old(app: &App) {
     };
     let indices = vec![0, 2, 1, 1, 2, 3];
     let shape = VectorShape { verts, indices };
-    drop(sg);
-    let pimpl =
-        VectorArt::new(app.ex.clone(), app.sg.clone(), node_id, app.render_api.clone(), shape)
-            .await;
-    let mut sg = app.sg.lock().await;
-    let node = sg.get_node_mut(node_id).unwrap();
-    node.pimpl = pimpl;
-
-    sg.link(node_id, layer_node_id).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
+    layer_node.link(node);
 
     // Debugging tool
-    let node_id = create_vector_art(&mut sg, "debugtool");
-
-    let node = sg.get_node_mut(node_id).unwrap();
+    let node = create_vector_art("debugtool");
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(Role::App, 0, 0.).unwrap();
     let code = cc.compile("h/2").unwrap();
     prop.set_expr(Role::App, 1, code).unwrap();
-    prop.set_expr(Role::App, 2, shape::load_var("w")).unwrap();
+    prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
     let code = cc.compile("h/2 - 200").unwrap();
     prop.set_expr(Role::App, 3, code).unwrap();
-
     node.set_property_u32(Role::App, "z_index", 2).unwrap();
 
-    // Setup the pimpl
     let mut shape = VectorShape::new();
     shape.add_filled_box(
-        shape::const_f32(0.),
-        shape::const_f32(0.),
-        shape::load_var("w"),
-        shape::const_f32(5.),
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::const_f32(5.),
         [0., 1., 0., 1.],
     );
     shape.add_filled_box(
-        shape::const_f32(0.),
+        expr::const_f32(0.),
         cc.compile("h - 5").unwrap(),
-        shape::load_var("w"),
-        shape::load_var("h"),
+        expr::load_var("w"),
+        expr::load_var("h"),
         [0., 1., 0., 1.],
     );
-    drop(sg);
-    let pimpl =
-        VectorArt::new(app.ex.clone(), app.sg.clone(), node_id, app.render_api.clone(), shape)
-            .await;
-    let mut sg = app.sg.lock().await;
-    let node = sg.get_node_mut(node_id).unwrap();
-    node.pimpl = pimpl;
-
-    sg.link(node_id, layer_node_id).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
+    layer_node.link(node);
 
     // Create KING GNU!
-    let node_id = create_image(&mut sg, "king");
-
-    let node = sg.get_node_mut(node_id).unwrap();
+    let node = create_image("king");
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(Role::App, 0, 80.).unwrap();
     prop.set_f32(Role::App, 1, 10.).unwrap();
     prop.set_f32(Role::App, 2, 60.).unwrap();
     prop.set_f32(Role::App, 3, 60.).unwrap();
-
     node.set_property_str(Role::App, "path", KING_PATH).unwrap();
-
-    // Setup the pimpl
-    drop(sg);
-    let pimpl = Image::new(app.ex.clone(), app.sg.clone(), node_id, app.render_api.clone()).await;
-    let mut sg = app.sg.lock().await;
-    let node = sg.get_node_mut(node_id).unwrap();
-    node.pimpl = pimpl;
-
-    sg.link(node_id, layer_node_id).unwrap();
+    node.set_property_u32(Role::App, "z_index", 1).unwrap();
+    let node = node.setup(|me| Image::new(me, app.render_api.clone(), app.ex.clone())).await;
+    layer_node.link(node);
 
     // Create some text
-    let node_id = create_text(&mut sg, "label");
-
-    let node = sg.get_node_mut(node_id).unwrap();
+    let node = create_text("label");
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(Role::App, 0, 100.).unwrap();
     prop.set_f32(Role::App, 1, 100.).unwrap();
@@ -321,22 +271,14 @@ pub(super) async fn make_old(app: &App) {
     prop.set_f32(Role::App, 1, 1.).unwrap();
     prop.set_f32(Role::App, 2, 0.).unwrap();
     prop.set_f32(Role::App, 3, 1.).unwrap();
+    node.set_property_u32(Role::App, "z_index", 1).unwrap();
 
-    drop(sg);
-    let pimpl = Text::new(
-        app.ex.clone(),
-        app.sg.clone(),
-        node_id,
-        app.render_api.clone(),
-        app.text_shaper.clone(),
-    )
-    .await;
-    let mut sg = app.sg.lock().await;
-    let node = sg.get_node_mut(node_id).unwrap();
-    node.pimpl = pimpl;
+    let node = node
+        .setup(|me| Text::new(me, app.render_api.clone(), app.text_shaper.clone(), app.ex.clone()))
+        .await;
+    layer_node.link(node);
 
-    sg.link(node_id, layer_node_id).unwrap();
-
+    /*
     // Text edit
     let node_id = create_editbox(&mut sg, "editz");
     let node = sg.get_node(node_id).unwrap();
@@ -438,7 +380,7 @@ pub(super) async fn make_old(app: &App) {
     prop.set_f32(Role::App, 0, 0.).unwrap();
     let code = cc.compile("h/2").unwrap();
     prop.set_expr(Role::App, 1, code).unwrap();
-    prop.set_expr(Role::App, 2, shape::load_var("w")).unwrap();
+    prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
     let code = cc.compile("h/2 - 200").unwrap();
     prop.set_expr(Role::App, 3, code).unwrap();
     node.set_property_f32(Role::App, "font_size", 20.).unwrap();
@@ -527,10 +469,13 @@ pub(super) async fn make_old(app: &App) {
     //let window_node = sg.get_node_mut(window_id).unwrap();
     //win_node.set_property_f32(Role::App, "scale", 1.6).unwrap();
 
-    //*app.tasks.lock().unwrap() = tasks;
+    // *app.tasks.lock().unwrap() = tasks;
+    */
 }
 
-pub(super) async fn make(app: &App) {
+pub(super) async fn make(app: &App, window: SceneNodePtr) {
+    let screen_scale = PropertyFloat32::wrap(&window, Role::Internal, "scale", 0).unwrap();
+
     let mut cc = Compiler::new();
 
     cc.add_const_f32("EDITCHAT_HEIGHT", EDITCHAT_HEIGHT);
@@ -538,35 +483,24 @@ pub(super) async fn make(app: &App) {
     cc.add_const_f32("SENDLABEL_LHS_PAD", SENDLABEL_LHS_PAD);
 
     // Main view
-    let mut sg = app.sg.lock().await;
-    let layer_node_id = create_layer(&mut sg, "view");
-    let node = sg.get_node(layer_node_id).unwrap();
-    let prop = node.get_property("rect").unwrap();
+    let layer_node = create_layer("view");
+    let prop = layer_node.get_property("rect").unwrap();
     prop.set_f32(Role::App, 0, 0.).unwrap();
     prop.set_f32(Role::App, 1, 0.).unwrap();
-    prop.set_expr(Role::App, 2, shape::load_var("w")).unwrap();
-    prop.set_expr(Role::App, 3, shape::load_var("h")).unwrap();
-    node.set_property_bool(Role::App, "is_visible", true).unwrap();
-
-    let node_id = node.id;
-    drop(sg);
-    let pimpl = Layer::new(app.ex.clone(), app.sg.clone(), node_id, app.render_api.clone()).await;
-    let mut sg = app.sg.lock().await;
-    let node = sg.get_node_mut(node_id).unwrap();
-    node.pimpl = pimpl;
-
-    let window_id = sg.lookup_node("/window").unwrap().id;
-    sg.link(node_id, window_id).unwrap();
+    prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_expr(Role::App, 3, expr::load_var("h")).unwrap();
+    layer_node.set_property_bool(Role::App, "is_visible", true).unwrap();
+    let layer_node =
+        layer_node.setup(|me| Layer::new(me, app.render_api.clone(), app.ex.clone())).await;
+    window.link(layer_node.clone());
 
     // Create a bg mesh
-    let node_id = create_vector_art(&mut sg, "bg");
-
-    let node = sg.get_node_mut(node_id).unwrap();
+    let node = create_vector_art("bg");
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(Role::App, 0, 0.).unwrap();
     prop.set_f32(Role::App, 1, 0.).unwrap();
-    prop.set_expr(Role::App, 2, shape::load_var("w")).unwrap();
-    prop.set_expr(Role::App, 3, shape::load_var("h")).unwrap();
+    prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_expr(Role::App, 3, expr::load_var("h")).unwrap();
     node.set_property_u32(Role::App, "z_index", 0).unwrap();
 
     let c = if LIGHTMODE { 1. } else { 0.05 };
@@ -574,60 +508,45 @@ pub(super) async fn make(app: &App) {
     let node_id = node.id;
     let mut shape = VectorShape::new();
     shape.add_filled_box(
-        shape::const_f32(0.),
-        shape::const_f32(0.),
-        shape::load_var("w"),
-        shape::load_var("h"),
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::load_var("h"),
         [c, c, c, 1.],
     );
-    drop(sg);
-    let pimpl =
-        VectorArt::new(app.ex.clone(), app.sg.clone(), node_id, app.render_api.clone(), shape)
-            .await;
-    let mut sg = app.sg.lock().await;
-    let node = sg.get_node_mut(node_id).unwrap();
-    node.pimpl = pimpl;
-
-    sg.link(node_id, layer_node_id).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
+    layer_node.link(node);
 
     // Create the toolbar bg
-    let node_id = create_vector_art(&mut sg, "toolbar_bg");
-
-    let node = sg.get_node_mut(node_id).unwrap();
+    let node = create_vector_art("toolbar_bg");
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(Role::App, 0, 0.).unwrap();
     prop.set_f32(Role::App, 1, 0.).unwrap();
-    prop.set_expr(Role::App, 2, shape::load_var("w")).unwrap();
+    prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
     prop.set_f32(Role::App, 3, EDITCHAT_HEIGHT).unwrap();
     node.set_property_u32(Role::App, "z_index", 1).unwrap();
-    drop(sg);
+
     let mut shape = VectorShape::new();
     shape.add_outline(
-        shape::const_f32(0.),
-        shape::const_f32(0.),
-        shape::load_var("w"),
-        shape::load_var("h"),
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::load_var("h"),
         1.,
         [0.4, 0.4, 0.4, 1.],
     );
 
-    let pimpl =
-        VectorArt::new(app.ex.clone(), app.sg.clone(), node_id, app.render_api.clone(), shape)
-            .await;
-    let mut sg = app.sg.lock().await;
-    let node = sg.get_node_mut(node_id).unwrap();
-    node.pimpl = pimpl;
-
-    sg.link(node_id, layer_node_id).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
+    layer_node.link(node);
 
     // Create some text
-    let node_id = create_text(&mut sg, "channel_label");
-
-    let node = sg.get_node_mut(node_id).unwrap();
+    let node = create_text("channel_label");
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(Role::App, 0, SENDLABEL_LHS_PAD).unwrap();
     prop.set_f32(Role::App, 1, 0.).unwrap();
-    prop.set_expr(Role::App, 2, shape::load_var("w")).unwrap();
+    prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
     prop.set_f32(Role::App, 3, EDITCHAT_HEIGHT).unwrap();
     node.set_property_u32(Role::App, "z_index", 2).unwrap();
     node.set_property_f32(Role::App, "baseline", (EDITCHAT_HEIGHT + 20.) / 2.).unwrap();
@@ -639,29 +558,21 @@ pub(super) async fn make(app: &App) {
     prop.set_f32(Role::App, 1, 1.).unwrap();
     prop.set_f32(Role::App, 2, 1.).unwrap();
     prop.set_f32(Role::App, 3, 1.).unwrap();
+    node.set_property_u32(Role::App, "z_index", 1).unwrap();
 
-    drop(sg);
-    let pimpl = Text::new(
-        app.ex.clone(),
-        app.sg.clone(),
-        node_id,
-        app.render_api.clone(),
-        app.text_shaper.clone(),
-    )
-    .await;
-    let mut sg = app.sg.lock().await;
-    let node = sg.get_node_mut(node_id).unwrap();
-    node.pimpl = pimpl;
+    let node = node
+        .setup(|me| Text::new(me, app.render_api.clone(), app.text_shaper.clone(), app.ex.clone()))
+        .await;
+    layer_node.link(node);
 
-    sg.link(node_id, layer_node_id).unwrap();
-
+    /*
     // ChatView
     let (node_id, recvr) = create_chatview(&mut sg, "chatty");
     let node = sg.get_node(node_id).unwrap();
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(Role::App, 0, 0.).unwrap();
     prop.set_f32(Role::App, 1, EDITCHAT_HEIGHT).unwrap();
-    prop.set_expr(Role::App, 2, shape::load_var("w")).unwrap();
+    prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
     let code = cc.compile("h - 2 * EDITCHAT_HEIGHT").unwrap();
     prop.set_expr(Role::App, 3, code).unwrap();
     node.set_property_f32(Role::App, "font_size", FONTSIZE).unwrap();
@@ -749,56 +660,47 @@ pub(super) async fn make(app: &App) {
     node.pimpl = pimpl;
 
     sg.link(node_id, layer_node_id).unwrap();
+    */
 
     // Create the editbox bg
-    let node_id = create_vector_art(&mut sg, "editbox_bg");
-
-    let node = sg.get_node_mut(node_id).unwrap();
+    let node = create_vector_art("editbox_bg");
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(Role::App, 0, 0.).unwrap();
     let code = cc.compile("h - EDITCHAT_HEIGHT").unwrap();
     prop.set_expr(Role::App, 1, code).unwrap();
-    prop.set_expr(Role::App, 2, shape::load_var("w")).unwrap();
+    prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
     prop.set_f32(Role::App, 3, EDITCHAT_HEIGHT).unwrap();
     node.set_property_u32(Role::App, "z_index", 1).unwrap();
-    drop(sg);
+
     let mut shape = VectorShape::new();
     shape.add_filled_box(
-        shape::const_f32(0.),
-        shape::const_f32(0.),
+        expr::const_f32(0.),
+        expr::const_f32(0.),
         cc.compile("w - SENDLABEL_WIDTH").unwrap(),
-        shape::load_var("h"),
+        expr::load_var("h"),
         [0., 0.13, 0.08, 1.],
     );
     shape.add_filled_box(
         cc.compile("w - SENDLABEL_WIDTH").unwrap(),
-        shape::const_f32(0.),
+        expr::const_f32(0.),
         cc.compile("w - SENDLABEL_WIDTH - 1").unwrap(),
-        shape::load_var("h"),
+        expr::load_var("h"),
         [0.4, 0.4, 0.4, 1.],
     );
     shape.add_outline(
-        shape::const_f32(0.),
-        shape::const_f32(0.),
-        shape::load_var("w"),
-        shape::load_var("h"),
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::load_var("h"),
         1.,
         [0.4, 0.4, 0.4, 1.],
     );
-
-    let pimpl =
-        VectorArt::new(app.ex.clone(), app.sg.clone(), node_id, app.render_api.clone(), shape)
-            .await;
-    let mut sg = app.sg.lock().await;
-    let node = sg.get_node_mut(node_id).unwrap();
-    node.pimpl = pimpl;
-
-    sg.link(node_id, layer_node_id).unwrap();
+    let node =
+        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
+    layer_node.link(node);
 
     // Create some text
-    let node_id = create_text(&mut sg, "send_label");
-
-    let node = sg.get_node_mut(node_id).unwrap();
+    let node = create_text("send_label");
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile("w - (SENDLABEL_WIDTH - SENDLABEL_LHS_PAD)").unwrap();
     prop.set_expr(Role::App, 0, code).unwrap();
@@ -817,21 +719,12 @@ pub(super) async fn make(app: &App) {
     prop.set_f32(Role::App, 3, 1.).unwrap();
     node.set_property_u32(Role::App, "z_index", 2).unwrap();
 
-    drop(sg);
-    let pimpl = Text::new(
-        app.ex.clone(),
-        app.sg.clone(),
-        node_id,
-        app.render_api.clone(),
-        app.text_shaper.clone(),
-    )
-    .await;
-    let mut sg = app.sg.lock().await;
-    let node = sg.get_node_mut(node_id).unwrap();
-    node.pimpl = pimpl;
+    let node = node
+        .setup(|me| Text::new(me, app.render_api.clone(), app.text_shaper.clone(), app.ex.clone()))
+        .await;
+    layer_node.link(node);
 
-    sg.link(node_id, layer_node_id).unwrap();
-
+    /*
     // Text edit
     let node_id = create_editbox(&mut sg, "editz");
     let node = sg.get_node(node_id).unwrap();
@@ -918,4 +811,5 @@ pub(super) async fn make(app: &App) {
     node.pimpl = pimpl;
 
     sg.link(node_id, layer_node_id).unwrap();
+    */
 }

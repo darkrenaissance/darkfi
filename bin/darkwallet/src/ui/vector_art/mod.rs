@@ -27,13 +27,13 @@ use crate::{
         GfxBufferId, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, Rectangle, RenderApiPtr, Vertex,
     },
     mesh::Color,
-    prop::{PropertyPtr, PropertyRect, PropertyUint32, Role},
-    scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
+    prop::{PropertyFloat32, PropertyPtr, PropertyRect, PropertyUint32, Role},
+    scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
     util::enumerate,
     ExecutorPtr,
 };
 
-use super::{get_parent_rect, DrawUpdate, OnModify, Stoppable, UIObject};
+use super::{DrawUpdate, OnModify, UIObject};
 
 pub mod shape;
 use shape::VectorShape;
@@ -41,34 +41,35 @@ use shape::VectorShape;
 pub type VectorArtPtr = Arc<VectorArt>;
 
 pub struct VectorArt {
-    sg: SceneGraphPtr2,
+    node: SceneNodeWeak,
     render_api: RenderApiPtr,
     _tasks: Vec<smol::Task<()>>,
 
     shape: VectorShape,
     buffers: SyncMutex<Option<GfxDrawMesh>>,
-
     dc_key: u64,
 
-    node_id: SceneNodeId,
     rect: PropertyRect,
     z_index: PropertyUint32,
+
+    parent_rect: SyncMutex<Option<Rectangle>>,
 }
 
 impl VectorArt {
     pub async fn new(
-        ex: ExecutorPtr,
-        sg: SceneGraphPtr2,
-        node_id: SceneNodeId,
-        render_api: RenderApiPtr,
+        node: SceneNodeWeak,
         shape: VectorShape,
+        render_api: RenderApiPtr,
+        ex: ExecutorPtr,
     ) -> Pimpl {
-        let scene_graph = sg.lock().await;
-        let node = scene_graph.get_node(node_id).unwrap();
-        let node_name = node.name.clone();
-        let rect = PropertyRect::wrap(node, Role::Internal, "rect").unwrap();
-        let z_index = PropertyUint32::wrap(node, Role::Internal, "z_index", 0).unwrap();
-        drop(scene_graph);
+        debug!(target: "ui::vector_art", "VectorArt::new()");
+
+        let node_ref = &node.upgrade().unwrap();
+        let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
+        let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
+
+        let node_name = node_ref.name.clone();
+        let node_id = node_ref.id;
 
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
             let mut on_modify = OnModify::new(ex, node_name, node_id, me.clone());
@@ -76,15 +77,18 @@ impl VectorArt {
             on_modify.when_change(z_index.prop(), Self::redraw);
 
             Self {
-                sg,
+                node,
                 render_api,
                 _tasks: on_modify.tasks,
+
                 shape,
                 buffers: SyncMutex::new(None),
                 dc_key: OsRng.gen(),
-                node_id,
+
                 rect,
                 z_index,
+
+                parent_rect: SyncMutex::new(None),
             }
         });
 
@@ -92,54 +96,29 @@ impl VectorArt {
     }
 
     async fn redraw(self: Arc<Self>) {
-        let sg = self.sg.lock().await;
-        let node = sg.get_node(self.node_id).unwrap();
+        let Some(parent_rect) = self.parent_rect.lock().unwrap().clone() else { return };
 
-        let Some(parent_rect) = get_parent_rect(&sg, node) else {
-            return;
-        };
-
-        let Some(draw_update) = self.draw(&sg, &parent_rect).await else {
-            error!(target: "ui::vector_art", "Mesh {:?} failed to draw", node);
+        let Some(draw_update) = self.get_draw_calls(parent_rect).await else {
+            error!(target: "ui::vector_art", "Mesh failed to draw");
             return;
         };
         self.render_api.replace_draw_calls(draw_update.draw_calls);
+        for texture in draw_update.freed_textures {
+            self.render_api.delete_texture(texture);
+        }
+        for buff in draw_update.freed_buffers {
+            self.render_api.delete_buffer(buff);
+        }
         debug!(target: "ui::vector_art", "replace draw calls done");
     }
-}
 
-impl Stoppable for VectorArt {
-    async fn stop(&self) {
-        // TODO: Delete own draw call
-
-        // Free buffers
-        // Should this be in drop?
-        if let Some(mesh) = &*self.buffers.lock().unwrap() {
-            self.render_api.delete_buffer(mesh.vertex_buffer);
-            self.render_api.delete_buffer(mesh.index_buffer);
-        }
-    }
-}
-
-#[async_trait]
-impl UIObject for VectorArt {
-    fn z_index(&self) -> u32 {
-        self.z_index.get()
-    }
-
-    async fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
-        debug!(target: "ui::vector_art", "VectorArt::draw()");
-        // Only used for debug messages
-        let node = sg.get_node(self.node_id).unwrap();
-
-        self.rect.eval(parent_rect).ok()?;
-        let mut rect = self.rect.get();
-
-        rect.x += parent_rect.x;
-        rect.y += parent_rect.x;
-
+    async fn get_draw_calls(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
+        debug!(target: "ui::vector_art", "VectorArt::draw_cached()");
+        self.rect.eval(&parent_rect).ok()?;
+        let rect = self.rect.get();
         let verts = self.shape.eval(rect.w, rect.h).expect("bad shape");
 
+        //debug!(target: "ui::vector_art", "=> {verts:#?}");
         let vertex_buffer = self.render_api.new_vertex_buffer(verts);
         // You are one lazy motherfucker
         let index_buffer = self.render_api.new_index_buffer(self.shape.indices.clone());
@@ -157,20 +136,13 @@ impl UIObject for VectorArt {
             freed_buffers.push(old_mesh.index_buffer);
         }
 
-        let off_x = rect.x / parent_rect.w;
-        let off_y = rect.y / parent_rect.h;
-        let scale_x = 1. / parent_rect.w;
-        let scale_y = 1. / parent_rect.h;
-        let model = glam::Mat4::from_translation(glam::Vec3::new(off_x, off_y, 0.)) *
-            glam::Mat4::from_scale(glam::Vec3::new(scale_x, scale_y, 1.));
-
         Some(DrawUpdate {
             key: self.dc_key,
             draw_calls: vec![(
                 self.dc_key,
                 GfxDrawCall {
                     instrs: vec![
-                        GfxDrawInstruction::ApplyMatrix(model),
+                        GfxDrawInstruction::Move(rect.pos()),
                         GfxDrawInstruction::Draw(mesh),
                     ],
                     dcs: vec![],
@@ -182,3 +154,31 @@ impl UIObject for VectorArt {
         })
     }
 }
+
+#[async_trait]
+impl UIObject for VectorArt {
+    fn z_index(&self) -> u32 {
+        self.z_index.get()
+    }
+
+    async fn draw(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
+        debug!(target: "ui::vector_art", "VectorArt::draw()");
+        *self.parent_rect.lock().unwrap() = Some(parent_rect);
+        self.get_draw_calls(parent_rect).await
+    }
+}
+
+/*
+impl Stoppable for VectorArt {
+    async fn stop(&self) {
+        // TODO: Delete own draw call
+
+        // Free buffers
+        // Should this be in drop? ---> yes it should
+        if let Some(mesh) = &*self.buffers.lock().unwrap() {
+            self.render_api.delete_buffer(mesh.vertex_buffer);
+            self.render_api.delete_buffer(mesh.index_buffer);
+        }
+    }
+}
+*/

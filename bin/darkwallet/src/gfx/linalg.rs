@@ -16,7 +16,41 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::ops::{Add, AddAssign, Sub, SubAssign};
+use std::ops::{Add, AddAssign, Div, Mul, Sub, SubAssign};
+
+#[derive(Clone, Copy, Debug)]
+pub struct Dimension {
+    pub w: f32,
+    pub h: f32,
+}
+
+impl Dimension {
+    pub fn contains(&self, other: &Dimension) -> bool {
+        other.w <= self.w && other.h <= self.h
+    }
+}
+
+impl From<[f32; 2]> for Dimension {
+    fn from(dim: [f32; 2]) -> Self {
+        Self { w: dim[0], h: dim[1] }
+    }
+}
+
+impl Mul<f32> for Dimension {
+    type Output = Dimension;
+
+    fn mul(self, scale: f32) -> Self::Output {
+        Self { w: self.w * scale, h: self.h * scale }
+    }
+}
+
+impl Div<f32> for Dimension {
+    type Output = Dimension;
+
+    fn div(self, scale: f32) -> Self::Output {
+        Self { w: self.w / scale, h: self.h / scale }
+    }
+}
 
 #[derive(Clone, Copy, Debug)]
 pub struct Point {
@@ -27,6 +61,10 @@ pub struct Point {
 impl Point {
     pub fn new(x: f32, y: f32) -> Self {
         Self { x, y }
+    }
+
+    pub fn zero() -> Self {
+        Self { x: 0., y: 0. }
     }
 
     pub fn unpack(&self) -> (f32, f32) {
@@ -80,7 +118,7 @@ impl SubAssign for Point {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct Rectangle {
     pub x: f32,
     pub y: f32,
@@ -97,6 +135,8 @@ impl Rectangle {
         Self { x: 0., y: 0., w: 0., h: 0. }
     }
 
+    /// Use from() instead
+    #[deprecated]
     pub fn from_array(arr: [f32; 4]) -> Self {
         Self { x: arr[0], y: arr[1], w: arr[2], h: arr[3] }
     }
@@ -164,6 +204,10 @@ impl Rectangle {
         Point { x: self.x + self.w, y: self.y + self.h }
     }
 
+    pub fn dim(&self) -> Dimension {
+        Dimension { w: self.w, h: self.h }
+    }
+
     #[deprecated]
     pub fn top_left(&self) -> Point {
         Point { x: self.x, y: self.y }
@@ -175,6 +219,12 @@ impl Rectangle {
 
     pub fn includes(&self, child: &Self) -> bool {
         self.contains(child.pos()) && self.contains(child.corner())
+    }
+}
+
+impl From<[f32; 4]> for Rectangle {
+    fn from(rect: [f32; 4]) -> Self {
+        Self { x: rect[0], y: rect[1], w: rect[2], h: rect[3] }
     }
 }
 
@@ -191,5 +241,21 @@ impl Sub<Point> for Rectangle {
 
     fn sub(self, other: Point) -> Self::Output {
         Self { x: self.x - other.x, y: self.y - other.y, w: self.w, h: self.h }
+    }
+}
+
+impl Mul<f32> for Rectangle {
+    type Output = Rectangle;
+
+    fn mul(self, scale: f32) -> Self::Output {
+        Self { x: self.x * scale, y: self.y * scale, w: self.w * scale, h: self.h * scale }
+    }
+}
+
+impl Div<f32> for Rectangle {
+    type Output = Rectangle;
+
+    fn div(self, scale: f32) -> Self::Output {
+        Self { x: self.x / scale, y: self.y / scale, w: self.w / scale, h: self.h / scale }
     }
 }

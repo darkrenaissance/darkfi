@@ -31,7 +31,7 @@ use std::{
 };
 
 mod linalg;
-pub use linalg::{Point, Rectangle};
+pub use linalg::{Dimension, Point, Rectangle};
 mod shader;
 
 use crate::{
@@ -144,6 +144,9 @@ impl GfxDrawMesh {
 
 #[derive(Debug, Clone)]
 pub enum GfxDrawInstruction {
+    SetScale(f32),
+    Move(Point),
+    ApplyView(Rectangle),
     ApplyViewport(Rectangle),
     ApplyMatrix(glam::Mat4),
     Draw(GfxDrawMesh),
@@ -156,6 +159,9 @@ impl GfxDrawInstruction {
         buffers: &HashMap<GfxBufferId, miniquad::BufferId>,
     ) -> DrawInstruction {
         match self {
+            Self::SetScale(scale) => DrawInstruction::SetScale(scale),
+            Self::Move(off) => DrawInstruction::Move(off),
+            Self::ApplyView(view) => DrawInstruction::ApplyView(view),
             Self::ApplyViewport(rect) => DrawInstruction::ApplyViewport(rect),
             Self::ApplyMatrix(mat) => DrawInstruction::ApplyMatrix(mat),
             Self::Draw(mesh) => DrawInstruction::Draw(mesh.compile(textures, buffers)),
@@ -194,6 +200,9 @@ struct DrawMesh {
 
 #[derive(Debug, Clone)]
 enum DrawInstruction {
+    SetScale(f32),
+    Move(Point),
+    ApplyView(Rectangle),
     ApplyViewport(Rectangle),
     ApplyMatrix(glam::Mat4),
     Draw(DrawMesh),
@@ -211,6 +220,10 @@ struct RenderContext<'a> {
     draw_calls: &'a HashMap<u64, DrawCall>,
     uniforms_data: [u8; 128],
     white_texture: miniquad::TextureId,
+
+    scale: f32,
+    view: Rectangle,
+    cursor: Point,
 }
 
 impl<'a> RenderContext<'a> {
@@ -218,40 +231,88 @@ impl<'a> RenderContext<'a> {
         if DEBUG_RENDER {
             debug!(target: "gfx", "RenderContext::draw()");
         }
+        let curr_pos = Point::zero();
         self.draw_call(&self.draw_calls[&0], 0);
         if DEBUG_RENDER {
             debug!(target: "gfx", "RenderContext::draw() [DONE]");
         }
     }
 
-    fn apply_view(&mut self, view: &Rectangle) {
+    fn apply_view(&mut self) {
+        let view = self.view / self.scale;
+
         let (_, screen_height) = window::screen_size();
 
         let view_x = view.x.round() as i32;
         let view_y = screen_height - (view.y + view.h);
-        let view_y = view_y.round() as i32;
+        let view_y = view.y.round() as i32;
         let view_w = view.w.round() as i32;
         let view_h = view.h.round() as i32;
 
+        //if DEBUG_RENDER {
+        //    debug!(target: "gfx", "=> viewport {view_x} {view_y} {view_w} {view_h}");
+        //}
         self.ctx.apply_viewport(view_x, view_y, view_w, view_h);
         self.ctx.apply_scissor_rect(view_x, view_y, view_w, view_h);
+    }
+
+    fn apply_model(&mut self) {
+        let off_x = self.cursor.x / self.view.w;
+        let off_y = self.cursor.y / self.view.h;
+
+        let scale_w = self.scale / self.view.w;
+        let scale_h = self.scale / self.view.h;
+
+        let model = glam::Mat4::from_translation(glam::Vec3::new(off_x, off_y, 0.)) *
+            glam::Mat4::from_scale(glam::Vec3::new(scale_w, scale_h, 1.));
+
+        let data: [u8; 64] = unsafe { std::mem::transmute_copy(&model) };
+        self.uniforms_data[64..].copy_from_slice(&data);
+        self.ctx.apply_uniforms_from_bytes(self.uniforms_data.as_ptr(), self.uniforms_data.len());
     }
 
     fn draw_call(&mut self, draw_call: &DrawCall, indent: u32) {
         let ws = if DEBUG_RENDER { " ".repeat(indent as usize * 4) } else { String::new() };
 
-        let mut prev_view = None;
+        //// This is buggy since it does not reset back to parent
+        //let mut prev_view = None;
+        let old_view = self.view;
+        let old_cursor = self.cursor;
 
         for instr in &draw_call.instrs {
             match instr {
+                DrawInstruction::SetScale(scale) => self.scale = *scale,
+                DrawInstruction::Move(off) => {
+                    self.cursor += *off;
+                    if DEBUG_RENDER {
+                        debug!(target: "gfx",
+                            "{ws}move({off:?})  cursor={:?}, scale={}, view={:?}",
+                            self.cursor, self.scale, self.view
+                        );
+                    }
+                    self.apply_model();
+                }
+                DrawInstruction::ApplyView(view) => {
+                    self.view = *view;
+                    if DEBUG_RENDER {
+                        debug!(target: "gfx",
+                            "{ws}apply_view({view:?})  scale={}, view={:?}",
+                            self.scale, self.view
+                        );
+                    }
+                    self.apply_view();
+                }
                 DrawInstruction::ApplyViewport(view) => {
+                    /*
                     if DEBUG_RENDER {
                         debug!(target: "gfx", "{}apply_viewport({:?})", ws, view);
                     }
                     prev_view = Some(view.clone());
                     self.apply_view(view);
+                    */
                 }
                 DrawInstruction::ApplyMatrix(model) => {
+                    /*
                     if DEBUG_RENDER {
                         debug!(target: "gfx", "{}apply_matrix(", ws);
                         debug!(target: "gfx", "{}    {:?}", ws, model.row(0).to_array());
@@ -266,10 +327,11 @@ impl<'a> RenderContext<'a> {
                         self.uniforms_data.as_ptr(),
                         self.uniforms_data.len(),
                     );
+                    */
                 }
                 DrawInstruction::Draw(mesh) => {
                     if DEBUG_RENDER {
-                        debug!(target: "gfx", "{}draw({:?})", ws, mesh);
+                        debug!(target: "gfx", "{ws}draw({mesh:?})");
                     }
                     let texture = match mesh.texture {
                         Some(texture) => texture,
@@ -287,12 +349,16 @@ impl<'a> RenderContext<'a> {
         }
 
         let mut draw_calls: Vec<_> =
-            draw_call.dcs.iter().map(|key| &self.draw_calls[key]).collect();
-        draw_calls.sort_unstable_by_key(|dc| dc.z_index);
+            draw_call.dcs.iter().map(|key| (key, &self.draw_calls[key])).collect();
+        draw_calls.sort_unstable_by_key(|(_, dc)| dc.z_index);
 
-        for dc in draw_calls {
+        for (dc_key, dc) in draw_calls {
+            if DEBUG_RENDER {
+                debug!(target: "gfx", "{ws}drawcall {dc_key}");
+            }
             self.draw_call(dc, indent + 1);
 
+            /*
             // Reset view back again in case the draw call changed it
             if let Some(view) = &prev_view {
                 if DEBUG_RENDER {
@@ -300,7 +366,14 @@ impl<'a> RenderContext<'a> {
                 }
                 self.apply_view(view);
             }
+            */
         }
+
+        self.cursor = old_cursor;
+        self.apply_model();
+
+        self.view = old_view;
+        self.apply_view();
     }
 }
 
@@ -317,7 +390,7 @@ pub enum GraphicsMethod {
 pub type GraphicsEventPublisherPtr = Arc<GraphicsEventPublisher>;
 
 pub struct GraphicsEventPublisher {
-    resize: PublisherPtr<(f32, f32)>,
+    resize: PublisherPtr<Dimension>,
     key_down: PublisherPtr<(KeyCode, KeyMods, bool)>,
     key_up: PublisherPtr<(KeyCode, KeyMods)>,
     chr: PublisherPtr<(char, KeyMods, bool)>,
@@ -343,9 +416,8 @@ impl GraphicsEventPublisher {
         })
     }
 
-    fn notify_resize(&self, w: f32, h: f32) {
-        let ev = (w, h);
-        self.resize.notify(ev);
+    fn notify_resize(&self, screen_size: Dimension) {
+        self.resize.notify(screen_size);
     }
     fn notify_key_down(&self, key: KeyCode, mods: KeyMods, repeat: bool) {
         let ev = (key, mods, repeat);
@@ -379,7 +451,7 @@ impl GraphicsEventPublisher {
         self.touch.notify(ev);
     }
 
-    pub fn subscribe_resize(&self) -> Subscription<(f32, f32)> {
+    pub fn subscribe_resize(&self) -> Subscription<Dimension> {
         self.resize.clone().subscribe()
     }
     pub fn subscribe_key_down(&self) -> Subscription<(KeyCode, KeyMods, bool)> {
@@ -441,7 +513,7 @@ impl Stage {
         #[cfg(target_os = "android")]
         {
             let (screen_width, screen_height) = window::screen_size();
-            event_pub.notify_resize(screen_width, screen_height);
+            event_pub.notify_resize(Dimension::from([screen_width, screen_height]));
         }
 
         let white_texture = ctx.new_texture_from_rgba8(1, 1, &[255, 255, 255, 255]);
@@ -614,11 +686,16 @@ impl EventHandler for Stage {
         //uniforms_data[64..].copy_from_slice(&data);
         assert_eq!(128, 2 * UniformType::Mat4.size());
 
+        let (screen_w, screen_h) = miniquad::window::screen_size();
+
         let mut render_ctx = RenderContext {
             ctx: &mut self.ctx,
             draw_calls: &self.draw_calls,
             uniforms_data,
             white_texture: self.white_texture,
+            scale: 1.,
+            view: Rectangle::from([0., 0., screen_w, screen_h]),
+            cursor: Point::from([0., 0.]),
         };
         render_ctx.draw();
 
@@ -626,7 +703,7 @@ impl EventHandler for Stage {
     }
 
     fn resize_event(&mut self, width: f32, height: f32) {
-        self.event_pub.notify_resize(width, height);
+        self.event_pub.notify_resize(Dimension::from([width, height]));
     }
 
     fn key_down_event(&mut self, keycode: KeyCode, mods: KeyMods, repeat: bool) {

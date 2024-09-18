@@ -28,17 +28,14 @@ use std::{
 };
 
 use crate::{
-    darkirc::{DarkIrcBackendPtr, Privmsg},
     error::Error,
     expr::Op,
     gfx::{GraphicsEventPublisherPtr, RenderApiPtr, Vertex},
     prop::{Property, PropertyBool, PropertyStr, PropertySubType, PropertyType, Role},
-    scene::{
-        CallArgType, MethodResponseFn, Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId,
-        SceneNodeType, Slot,
-    },
+    scene::{Pimpl, SceneNode as SceneNode3, SceneNodePtr, SceneNodeType as SceneNodeType3},
     text::TextShaperPtr,
-    ui::{chatview, Button, ChatView, EditBox, Image, Layer, Stoppable, Text, VectorArt, Window},
+    //ui::{chatview, Button, ChatView, EditBox, Image, Layer, Stoppable, Text, VectorArt, Window},
+    ui::Window,
     ExecutorPtr,
 };
 
@@ -119,37 +116,43 @@ impl AsyncRuntime {
 pub type AppPtr = Arc<App>;
 
 pub struct App {
-    pub(self) sg: SceneGraphPtr2,
-    pub(self) ex: ExecutorPtr,
+    pub(self) sg_root: SceneNodePtr,
     pub(self) render_api: RenderApiPtr,
     pub(self) event_pub: GraphicsEventPublisherPtr,
     pub(self) text_shaper: TextShaperPtr,
-    pub(self) darkirc_backend: DarkIrcBackendPtr,
+    //pub(self) darkirc_backend: DarkIrcBackendPtr,
     pub(self) tasks: SyncMutex<Vec<Task<()>>>,
+    pub(self) ex: ExecutorPtr,
 }
 
 impl App {
     pub fn new(
-        sg: SceneGraphPtr2,
-        ex: ExecutorPtr,
+        sg_root: SceneNodePtr,
         render_api: RenderApiPtr,
         event_pub: GraphicsEventPublisherPtr,
         text_shaper: TextShaperPtr,
-        darkirc_backend: DarkIrcBackendPtr,
+        //darkirc_backend: DarkIrcBackendPtr,
+        ex: ExecutorPtr,
     ) -> Arc<Self> {
         Arc::new(Self {
-            sg,
+            sg_root,
             ex,
             render_api,
             event_pub,
             text_shaper,
-            darkirc_backend,
+            //darkirc_backend,
             tasks: SyncMutex::new(vec![]),
         })
     }
 
     pub async fn start(self: Arc<Self>) {
         debug!(target: "app", "App::start()");
+
+        ////////////////////////////////////////////////////////////////////////////////////
+        // OLD
+        ////////////////////////////////////////////////////////////////////////////////////
+
+        /*
         // Setup UI
         let mut sg = self.sg.lock().await;
 
@@ -193,11 +196,38 @@ impl App {
 
         drop(sg);
 
-        schema::make(&self).await;
+        //schema::make(&self).await;
+        debug!(target: "app", "Schema loaded");
+        */
+
+        ////////////////////////////////////////////////////////////////////////////////////
+        // NEW
+        ////////////////////////////////////////////////////////////////////////////////////
+        let mut window = SceneNode3::new("window", SceneNodeType3::Window);
+
+        let mut prop = Property::new("screen_size", PropertyType::Float32, PropertySubType::Pixel);
+        prop.set_array_len(2);
+        // Window not yet initialized so we can't set these.
+        //prop.set_f32(Role::App, 0, screen_width);
+        //prop.set_f32(Role::App, 1, screen_height);
+        window.add_property(prop).unwrap();
+
+        let mut prop = Property::new("scale", PropertyType::Float32, PropertySubType::Pixel);
+        prop.set_defaults_f32(vec![1.]).unwrap();
+        window.add_property(prop).unwrap();
+
+        let window = window
+            .setup(|me| {
+                Window::new(me, self.render_api.clone(), self.event_pub.clone(), self.ex.clone())
+            })
+            .await;
+        self.sg_root.link(window.clone());
+        schema::make(&self, window).await;
+
         debug!(target: "app", "Schema loaded");
 
         // Access drawable in window node and call draw()
-        self.trigger_redraw().await;
+        self.trigger_draw().await;
 
         // Start the backend
         //if let Err(err) = self.darkirc_backend.start(self.sg.clone(), self.ex.clone()).await {
@@ -213,37 +243,15 @@ impl App {
         });
     }
 
+    /// Shutdown code here
     async fn async_stop(&self) {
-        self.darkirc_backend.stop().await;
-
-        let sg = self.sg.lock().await;
-        let window_id = sg.lookup_node("/window").unwrap().id;
-        self.stop_node(&sg, window_id).await;
-        drop(sg);
+        //self.darkirc_backend.stop().await;
     }
 
-    #[async_recursion]
-    async fn stop_node(&self, sg: &SceneGraph, node_id: SceneNodeId) {
-        let node = sg.get_node(node_id).unwrap();
-        for child_inf in node.get_children2() {
-            self.stop_node(sg, child_inf.id).await;
-        }
-        match &node.pimpl {
-            Pimpl::Window(win) => win.stop().await,
-            Pimpl::Layer(layer) => layer.stop().await,
-            Pimpl::VectorArt(svg) => svg.stop().await,
-            Pimpl::Text(txt) => txt.stop().await,
-            Pimpl::EditBox(ebox) => ebox.stop().await,
-            Pimpl::ChatView(_) | Pimpl::Image(_) | Pimpl::Button(_) => {}
-            _ => panic!("unhandled pimpl type"),
-        };
-    }
-
-    async fn trigger_redraw(&self) {
-        let sg = self.sg.lock().await;
-        let window_node = sg.lookup_node("/window").expect("no window attached!");
+    async fn trigger_draw(&self) {
+        let window_node = self.sg_root.clone().lookup_node("/window").expect("no window attached!");
         match &window_node.pimpl {
-            Pimpl::Window(win) => win.draw(&sg).await,
+            Pimpl::Window(win) => win.draw().await,
             _ => panic!("wrong pimpl"),
         }
     }
@@ -280,11 +288,11 @@ fn populate_tree(tree: &sled::Tree) {
         let mut key = [0u8; 8 + 32];
         key[..8].clone_from_slice(&timest);
 
-        let msg = chatview::ChatMsg { nick, text };
-        let mut val = vec![];
-        msg.encode(&mut val).unwrap();
+        //let msg = chatview::ChatMsg { nick, text };
+        //let mut val = vec![];
+        //msg.encode(&mut val).unwrap();
 
-        tree.insert(&key, val).unwrap();
+        //tree.insert(&key, val).unwrap();
     }
     // O(n)
     debug!(target: "app", "populated db with {} lines", tree.len());

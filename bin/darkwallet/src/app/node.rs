@@ -17,23 +17,18 @@
  */
 
 use crate::{
-    darkirc::{DarkIrcBackendPtr, Privmsg},
     error::Error,
     expr::Op,
     gfx::{GraphicsEventPublisherPtr, RenderApiPtr, Vertex},
     prop::{Property, PropertyBool, PropertyStr, PropertySubType, PropertyType, Role},
-    scene::{
-        CallArgType, MethodResponseFn, Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId,
-        SceneNodeType, Slot,
-    },
+    scene::{CallArgType, MethodResponseFn, SceneNode, SceneNodeType, Slot},
     text::TextShaperPtr,
-    ui::{chatview, Button, ChatView, EditBox, Image, Layer, Stoppable, Text, VectorArt, Window},
     ExecutorPtr,
 };
 
-pub fn create_layer(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
+pub fn create_layer(name: &str) -> SceneNode {
     debug!(target: "app", "create_layer({name})");
-    let node = sg.add_node(name, SceneNodeType::Layer);
+    let mut node = SceneNode::new(name, SceneNodeType::Layer);
     let prop = Property::new("is_visible", PropertyType::Bool, PropertySubType::Null);
     node.add_property(prop).unwrap();
 
@@ -45,12 +40,12 @@ pub fn create_layer(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
     let prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);
     node.add_property(prop).unwrap();
 
-    node.id
+    node
 }
 
-pub fn create_vector_art(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
+pub fn create_vector_art(name: &str) -> SceneNode {
     debug!(target: "app", "create_vector_art({name})");
-    let node = sg.add_node(name, SceneNodeType::VectorArt);
+    let mut node = SceneNode::new(name, SceneNodeType::VectorArt);
 
     let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
     prop.set_array_len(4);
@@ -60,12 +55,12 @@ pub fn create_vector_art(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
     let prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);
     node.add_property(prop).unwrap();
 
-    node.id
+    node
 }
 
-pub fn create_button(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
+pub fn create_button(name: &str) -> SceneNode {
     debug!(target: "app", "create_button({name})");
-    let node = sg.add_node(name, SceneNodeType::Button);
+    let mut node = SceneNode::new(name, SceneNodeType::Button);
 
     let mut prop = Property::new("is_active", PropertyType::Bool, PropertySubType::Null);
     prop.set_ui_text("Is Active", "An active Button can be clicked");
@@ -81,12 +76,12 @@ pub fn create_button(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
 
     node.add_signal("click", "Button clicked event", vec![]).unwrap();
 
-    node.id
+    node
 }
 
-pub fn create_image(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
+pub fn create_image(name: &str) -> SceneNode {
     debug!(target: "app", "create_image({name})");
-    let node = sg.add_node(name, SceneNodeType::Image);
+    let mut node = SceneNode::new(name, SceneNodeType::Image);
 
     let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
     prop.set_array_len(4);
@@ -99,12 +94,12 @@ pub fn create_image(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
     let prop = Property::new("path", PropertyType::Str, PropertySubType::Null);
     node.add_property(prop).unwrap();
 
-    node.id
+    node
 }
 
-pub fn create_text(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
+pub fn create_text(name: &str) -> SceneNode {
     debug!(target: "app", "create_text({name})");
-    let node = sg.add_node(name, SceneNodeType::Text);
+    let mut node = SceneNode::new(name, SceneNodeType::Text);
 
     let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
     prop.set_array_len(4);
@@ -131,12 +126,12 @@ pub fn create_text(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
     let prop = Property::new("debug", PropertyType::Bool, PropertySubType::Null);
     node.add_property(prop).unwrap();
 
-    node.id
+    node
 }
 
-pub fn create_editbox(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
+pub fn create_editbox(name: &str) -> SceneNode {
     debug!(target: "app", "create_editbox({name})");
-    let node = sg.add_node(name, SceneNodeType::EditBox);
+    let mut node = SceneNode::new(name, SceneNodeType::EditBox);
 
     let mut prop = Property::new("is_active", PropertyType::Bool, PropertySubType::Null);
     prop.set_ui_text("Is Active", "An active EditBox can be focused");
@@ -194,15 +189,12 @@ pub fn create_editbox(sg: &mut SceneGraph, name: &str) -> SceneNodeId {
     let prop = Property::new("debug", PropertyType::Bool, PropertySubType::Null);
     node.add_property(prop).unwrap();
 
-    node.id
+    node
 }
 
-pub fn create_chatview(
-    sg: &mut SceneGraph,
-    name: &str,
-) -> (SceneNodeId, async_channel::Receiver<Vec<u8>>) {
+pub fn create_chatview(name: &str) -> (SceneNode, async_channel::Receiver<Vec<u8>>) {
     debug!(target: "app", "create_chatview({name})");
-    let node = sg.add_node(name, SceneNodeType::ChatView);
+    let mut node = SceneNode::new(name, SceneNodeType::ChatView);
 
     let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
     prop.set_array_len(4);
@@ -287,5 +279,5 @@ pub fn create_chatview(
     )
     .unwrap();
 
-    (node.id, recvr)
+    (node, recvr)
 }

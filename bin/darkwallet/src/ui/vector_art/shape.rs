@@ -24,17 +24,9 @@ use crate::{
     },
     mesh::Color,
     prop::{PropertyPtr, PropertyUint32, Role},
-    scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
     util::enumerate,
     ExecutorPtr,
 };
-
-pub fn const_f32(x: f32) -> SExprCode {
-    vec![Op::ConstFloat32(x)]
-}
-pub fn load_var<S: Into<String>>(var: S) -> SExprCode {
-    vec![Op::LoadVar(var.into())]
-}
 
 #[derive(Debug)]
 pub struct ShapeVertex {

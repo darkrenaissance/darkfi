@@ -30,12 +30,12 @@ use crate::{
         PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyRect, PropertyStr,
         PropertyUint32, Role,
     },
-    scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
+    scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
     text::{self, GlyphPositionIter, TextShaper, TextShaperPtr},
     ExecutorPtr,
 };
 
-use super::{get_parent_rect, DrawUpdate, OnModify, Stoppable, UIObject};
+use super::{DrawUpdate, OnModify, UIObject};
 
 pub type TextPtr = Arc<Text>;
 
@@ -46,7 +46,7 @@ struct TextRenderInfo {
 }
 
 pub struct Text {
-    sg: SceneGraphPtr2,
+    node: SceneNodeWeak,
     render_api: RenderApiPtr,
     text_shaper: TextShaperPtr,
     _tasks: Vec<smol::Task<()>>,
@@ -54,7 +54,6 @@ pub struct Text {
     render_info: SyncMutex<TextRenderInfo>,
     dc_key: u64,
 
-    node_id: SceneNodeId,
     rect: PropertyRect,
     z_index: PropertyUint32,
     text: PropertyStr,
@@ -62,27 +61,30 @@ pub struct Text {
     text_color: PropertyColor,
     baseline: PropertyFloat32,
     debug: PropertyBool,
+
+    parent_rect: SyncMutex<Option<Rectangle>>,
 }
 
 impl Text {
     pub async fn new(
-        ex: ExecutorPtr,
-        sg: SceneGraphPtr2,
-        node_id: SceneNodeId,
+        node: SceneNodeWeak,
         render_api: RenderApiPtr,
         text_shaper: TextShaperPtr,
+        ex: ExecutorPtr,
     ) -> Pimpl {
-        let scene_graph = sg.lock().await;
-        let node = scene_graph.get_node(node_id).unwrap();
-        let node_name = node.name.clone();
-        let rect = PropertyRect::wrap(node, Role::Internal, "rect").unwrap();
-        let z_index = PropertyUint32::wrap(node, Role::Internal, "z_index", 0).unwrap();
-        let text = PropertyStr::wrap(node, Role::Internal, "text", 0).unwrap();
-        let font_size = PropertyFloat32::wrap(node, Role::Internal, "font_size", 0).unwrap();
-        let text_color = PropertyColor::wrap(node, Role::Internal, "text_color").unwrap();
-        let baseline = PropertyFloat32::wrap(node, Role::Internal, "baseline", 0).unwrap();
-        let debug = PropertyBool::wrap(node, Role::Internal, "debug", 0).unwrap();
-        drop(scene_graph);
+        debug!(target: "ui::text", "Text::new()");
+
+        let node_ref = &node.upgrade().unwrap();
+        let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
+        let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
+        let text = PropertyStr::wrap(node_ref, Role::Internal, "text", 0).unwrap();
+        let font_size = PropertyFloat32::wrap(node_ref, Role::Internal, "font_size", 0).unwrap();
+        let text_color = PropertyColor::wrap(node_ref, Role::Internal, "text_color").unwrap();
+        let baseline = PropertyFloat32::wrap(node_ref, Role::Internal, "baseline", 0).unwrap();
+        let debug = PropertyBool::wrap(node_ref, Role::Internal, "debug", 0).unwrap();
+
+        let node_name = node_ref.name.clone();
+        let node_id = node_ref.id;
 
         let render_info = Self::regen_mesh(
             &render_api,
@@ -106,13 +108,13 @@ impl Text {
             on_modify.when_change(baseline.prop(), Self::redraw);
 
             Self {
-                sg,
+                node,
                 render_api,
                 text_shaper,
                 _tasks: on_modify.tasks,
                 render_info: SyncMutex::new(render_info),
                 dc_key: OsRng.gen(),
-                node_id,
+
                 rect,
                 z_index,
                 text,
@@ -120,6 +122,8 @@ impl Text {
                 text_color,
                 baseline,
                 debug,
+
+                parent_rect: SyncMutex::new(None),
             }
         });
 
@@ -163,7 +167,6 @@ impl Text {
     async fn redraw(self: Arc<Self>) {
         let old = self.render_info.lock().unwrap().clone();
 
-        // TODO move this to draw
         let render_info = Self::regen_mesh(
             &self.render_api,
             &self.text_shaper,
@@ -174,29 +177,73 @@ impl Text {
             self.debug.get(),
         )
         .await;
+
         *self.render_info.lock().unwrap() = render_info;
 
-        let sg = self.sg.lock().await;
-        let node = sg.get_node(self.node_id).unwrap();
+        let Some(parent_rect) = self.parent_rect.lock().unwrap().clone() else { return };
 
-        let Some(parent_rect) = get_parent_rect(&sg, node) else {
-            return;
-        };
-
-        let Some(draw_update) = self.draw(&sg, &parent_rect).await else {
-            error!(target: "ui::text", "Text {:?} failed to draw", node);
+        let Some(draw_update) = self.get_draw_calls(parent_rect).await else {
+            error!(target: "ui::text", "Text failed to draw");
             return;
         };
         self.render_api.replace_draw_calls(draw_update.draw_calls);
         debug!(target: "ui::text", "replace draw calls done");
 
         // We're finished with these so clean up.
+        assert!(draw_update.freed_textures.is_empty());
+        assert!(draw_update.freed_buffers.is_empty());
         self.render_api.delete_buffer(old.mesh.vertex_buffer);
         self.render_api.delete_buffer(old.mesh.index_buffer);
         self.render_api.delete_texture(old.texture_id);
     }
+
+    async fn get_draw_calls(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
+        debug!(target: "ui::text", "Text::get_draw_calls()");
+        self.rect.eval(&parent_rect).ok()?;
+        let rect = self.rect.get();
+
+        let render_info = self.render_info.lock().unwrap().clone();
+
+        let mesh = GfxDrawMesh {
+            vertex_buffer: render_info.mesh.vertex_buffer,
+            index_buffer: render_info.mesh.index_buffer,
+            texture: Some(render_info.texture_id),
+            num_elements: render_info.mesh.num_elements,
+        };
+
+        Some(DrawUpdate {
+            key: self.dc_key,
+            draw_calls: vec![(
+                self.dc_key,
+                GfxDrawCall {
+                    instrs: vec![
+                        GfxDrawInstruction::Move(rect.pos()),
+                        GfxDrawInstruction::Draw(mesh),
+                    ],
+                    dcs: vec![],
+                    z_index: self.z_index.get(),
+                },
+            )],
+            freed_textures: vec![],
+            freed_buffers: vec![],
+        })
+    }
 }
 
+#[async_trait]
+impl UIObject for Text {
+    fn z_index(&self) -> u32 {
+        self.z_index.get()
+    }
+
+    async fn draw(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
+        debug!(target: "ui::text", "Text::draw()");
+        *self.parent_rect.lock().unwrap() = Some(parent_rect);
+        self.get_draw_calls(parent_rect).await
+    }
+}
+
+/*
 impl Stoppable for Text {
     async fn stop(&self) {
         // TODO: Delete own draw call
@@ -212,52 +259,4 @@ impl Stoppable for Text {
         self.render_api.delete_texture(texture_id);
     }
 }
-
-#[async_trait]
-impl UIObject for Text {
-    fn z_index(&self) -> u32 {
-        self.z_index.get()
-    }
-
-    async fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
-        debug!(target: "ui::text", "Text::draw()");
-        // Only used for debug messages
-        let node = sg.get_node(self.node_id).unwrap();
-
-        let render_info = self.render_info.lock().unwrap().clone();
-
-        let mesh = GfxDrawMesh {
-            vertex_buffer: render_info.mesh.vertex_buffer,
-            index_buffer: render_info.mesh.index_buffer,
-            texture: Some(render_info.texture_id),
-            num_elements: render_info.mesh.num_elements,
-        };
-
-        self.rect.eval(parent_rect).ok()?;
-        let rect = self.rect.get();
-
-        let off_x = rect.x / parent_rect.w;
-        let off_y = rect.y / parent_rect.h;
-        let scale_x = 1. / parent_rect.w;
-        let scale_y = 1. / parent_rect.h;
-        let model = glam::Mat4::from_translation(glam::Vec3::new(off_x, off_y, 0.)) *
-            glam::Mat4::from_scale(glam::Vec3::new(scale_x, scale_y, 1.));
-
-        Some(DrawUpdate {
-            key: self.dc_key,
-            draw_calls: vec![(
-                self.dc_key,
-                GfxDrawCall {
-                    instrs: vec![
-                        GfxDrawInstruction::ApplyMatrix(model),
-                        GfxDrawInstruction::Draw(mesh),
-                    ],
-                    dcs: vec![],
-                    z_index: self.z_index.get(),
-                },
-            )],
-            freed_textures: vec![],
-            freed_buffers: vec![],
-        })
-    }
-}
+*/

@@ -18,136 +18,88 @@
 
 use async_recursion::async_recursion;
 use async_trait::async_trait;
+use atomic_float::AtomicF32;
 use miniquad::{KeyCode, KeyMods, MouseButton, TouchPhase};
 use rand::{rngs::OsRng, Rng};
-use std::sync::{Arc, Weak};
+use std::sync::{atomic::Ordering, Arc, Mutex as SyncMutex, Weak};
 
 use crate::{
     gfx::{GfxDrawCall, GfxDrawInstruction, Point, Rectangle, RenderApiPtr},
-    prop::{PropertyBool, PropertyPtr, PropertyRect, PropertyUint32, Role},
-    scene::{Pimpl, SceneGraph, SceneGraphPtr2, SceneNodeId},
+    prop::{PropertyBool, PropertyFloat32, PropertyPtr, PropertyRect, PropertyUint32, Role},
+    scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
     ExecutorPtr,
 };
 
-use super::{
-    get_child_nodes_ordered, get_parent_rect, get_ui_object, DrawUpdate, OnModify, Stoppable,
-    UIObject,
-};
+use super::{get_children_ordered, get_ui_object3, DrawUpdate, OnModify, UIObject};
 
 pub type LayerPtr = Arc<Layer>;
 
 pub struct Layer {
-    sg: SceneGraphPtr2,
-    node_id: SceneNodeId,
-    // Task is dropped at the end of the scope for Layer, hence ending it
-    #[allow(dead_code)]
-    tasks: Vec<smol::Task<()>>,
+    node: SceneNodeWeak,
     render_api: RenderApiPtr,
-
+    _tasks: Vec<smol::Task<()>>,
     dc_key: u64,
 
     is_visible: PropertyBool,
     rect: PropertyRect,
     z_index: PropertyUint32,
+
+    parent_rect: SyncMutex<Option<Rectangle>>,
 }
 
 impl Layer {
-    pub async fn new(
-        ex: ExecutorPtr,
-        sg_ptr: SceneGraphPtr2,
-        node_id: SceneNodeId,
-        render_api: RenderApiPtr,
-    ) -> Pimpl {
-        let sg = sg_ptr.lock().await;
-        let node = sg.get_node(node_id).unwrap();
-        let node_name = node.name.clone();
+    pub async fn new(node: SceneNodeWeak, render_api: RenderApiPtr, ex: ExecutorPtr) -> Pimpl {
+        debug!(target: "ui::layer", "Layer::new()");
 
-        let is_visible =
-            PropertyBool::wrap(node, Role::Internal, "is_visible", 0).expect("Layer::is_visible");
-        let rect = PropertyRect::wrap(node, Role::Internal, "rect").unwrap();
-        let z_index = PropertyUint32::wrap(node, Role::Internal, "z_index", 0).unwrap();
-        drop(sg);
+        let node_ref = &node.upgrade().unwrap();
+        let is_visible = PropertyBool::wrap(node_ref, Role::Internal, "is_visible", 0).unwrap();
+        let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
+        let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
+
+        let node_name = node_ref.name.clone();
+        let node_id = node_ref.id;
 
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
             let mut on_modify = OnModify::new(ex.clone(), node_name, node_id, me.clone());
             on_modify.when_change(rect.prop(), Self::redraw);
 
             Self {
-                sg: sg_ptr,
-                node_id,
-                tasks: on_modify.tasks,
+                node,
                 render_api,
+                _tasks: on_modify.tasks,
                 dc_key: OsRng.gen(),
+
                 is_visible,
                 rect,
                 z_index,
+
+                parent_rect: SyncMutex::new(None),
             }
         });
 
         Pimpl::Layer(self_)
     }
 
-    pub async fn handle_char(
-        &self,
-        sg: &SceneGraph,
-        key: char,
-        mods: KeyMods,
-        repeat: bool,
-    ) -> bool {
-        false
+    fn get_children(&self) -> Vec<SceneNodePtr> {
+        let node = self.node.upgrade().unwrap();
+        get_children_ordered(&node)
     }
 
     async fn redraw(self: Arc<Self>) {
-        let sg = self.sg.lock().await;
-        let node = sg.get_node(self.node_id).unwrap();
+        let Some(parent_rect) = self.parent_rect.lock().unwrap().clone() else { return };
 
-        let Some(parent_rect) = get_parent_rect(&sg, node) else {
-            return;
-        };
-
-        let Some(draw_update) = self.draw(&sg, &parent_rect).await else {
-            error!(target: "ui::layer", "Layer {:?} failed to draw", node);
+        let Some(draw_update) = self.get_draw_calls(parent_rect).await else {
+            error!(target: "ui::layer", "Layer failed to draw");
             return;
         };
         self.render_api.replace_draw_calls(draw_update.draw_calls);
         debug!(target: "ui::layer", "replace draw calls done");
     }
-}
 
-impl Stoppable for Layer {
-    async fn stop(&self) {}
-}
-
-#[async_trait]
-impl UIObject for Layer {
-    fn z_index(&self) -> u32 {
-        self.z_index.get()
-    }
-
-    async fn draw(&self, sg: &SceneGraph, parent_rect: &Rectangle) -> Option<DrawUpdate> {
-        debug!(target: "ui::layer", "Layer::draw()");
-        let node = sg.get_node(self.node_id).unwrap();
-
-        if !self.is_visible.get() {
-            debug!(target: "ui::layer", "invisible layer node '{}':{}", node.name, node.id);
-            return None
-        }
-
-        self.rect.eval(parent_rect).ok()?;
-
-        let mut screen_rect = self.rect.get() + parent_rect.pos();
-
-        if !parent_rect.includes(&screen_rect) {
-            error!(
-                target: "ui::layer",
-                "layer '{}':{} rect {:?} is not inside parent {:?}",
-                node.name, node.id, screen_rect, parent_rect
-            );
-            return None
-        }
-
-        debug!(target: "ui::layer", "Parent rect: {:?}", parent_rect);
-        debug!(target: "ui::layer", "Viewport rect: {:?}", screen_rect);
+    async fn get_draw_calls(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
+        debug!(target: "ui::layer", "Layer::get_draw_calls()");
+        self.rect.eval(&parent_rect).ok()?;
+        let rect = self.rect.get();
 
         // Apply viewport
 
@@ -156,11 +108,10 @@ impl UIObject for Layer {
         let mut freed_textures = vec![];
         let mut freed_buffers = vec![];
 
-        for child_id in get_child_nodes_ordered(&sg, self.node_id) {
-            let node = sg.get_node(child_id).unwrap();
-            let obj = get_ui_object(node);
-            let Some(mut draw_update) = obj.draw(sg, &screen_rect).await else {
-                debug!(target: "ui::layer", "Skipped draw() of {node:?}");
+        for child in self.get_children() {
+            let obj = get_ui_object3(&child);
+            let Some(mut draw_update) = obj.draw(rect).await else {
+                debug!(target: "ui::layer", "Skipped draw() of {child:?}");
                 continue
             };
 
@@ -171,118 +122,146 @@ impl UIObject for Layer {
         }
 
         let dc = GfxDrawCall {
-            instrs: vec![GfxDrawInstruction::ApplyViewport(screen_rect)],
+            instrs: vec![GfxDrawInstruction::ApplyView(rect)],
             dcs: child_calls,
             z_index: 0,
         };
         draw_calls.push((self.dc_key, dc));
         Some(DrawUpdate { key: self.dc_key, draw_calls, freed_textures, freed_buffers })
     }
+}
 
-    async fn handle_char(&self, sg: &SceneGraph, key: char, mods: KeyMods, repeat: bool) -> bool {
-        for child_id in get_child_nodes_ordered(&sg, self.node_id) {
-            let node = sg.get_node(child_id).unwrap();
-            let obj = get_ui_object(node);
-            if obj.handle_char(sg, key, mods, repeat).await {
-                return true
-            }
-        }
-        false
+#[async_trait]
+impl UIObject for Layer {
+    fn z_index(&self) -> u32 {
+        self.z_index.get()
     }
 
-    async fn handle_key_down(
-        &self,
-        sg: &SceneGraph,
-        key: KeyCode,
-        mods: KeyMods,
-        repeat: bool,
-    ) -> bool {
-        for child_id in get_child_nodes_ordered(&sg, self.node_id) {
-            let node = sg.get_node(child_id).unwrap();
-            let obj = get_ui_object(node);
-            if obj.handle_key_down(sg, key, mods, repeat).await {
+    async fn draw(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
+        debug!(target: "ui::layer", "Layer::draw()");
+        *self.parent_rect.lock().unwrap() = Some(parent_rect);
+
+        // If we are invisible, then when layer is made visible again, the children
+        // draw calls will be recalculated and they will get the updated parent_rect.
+        if !self.is_visible.get() {
+            debug!(target: "ui::layer", "invisible layer node");
+            return None
+        }
+
+        debug!(target: "ui::layer", "Parent rect: {:?}", parent_rect);
+
+        /*
+        if !parent_rect.dim().contains(&offset_rect) {
+            error!(
+                target: "ui::layer",
+                "layer rect {:?} is not inside parent {:?}",
+                offset_rect, parent_rect
+            );
+            return None
+        }
+        */
+
+        self.get_draw_calls(parent_rect).await
+    }
+
+    async fn handle_char(&self, key: char, mods: KeyMods, repeat: bool) -> bool {
+        if !self.is_visible.get() {
+            return false
+        }
+        for child in self.get_children() {
+            let obj = get_ui_object3(&child);
+            if obj.handle_char(key, mods, repeat).await {
                 return true
             }
         }
         false
     }
 
-    async fn handle_key_up(&self, sg: &SceneGraph, key: KeyCode, mods: KeyMods) -> bool {
-        for child_id in get_child_nodes_ordered(&sg, self.node_id) {
-            let node = sg.get_node(child_id).unwrap();
-            let obj = get_ui_object(node);
-            if obj.handle_key_up(sg, key, mods).await {
+    async fn handle_key_down(&self, key: KeyCode, mods: KeyMods, repeat: bool) -> bool {
+        if !self.is_visible.get() {
+            return false
+        }
+        for child in self.get_children() {
+            let obj = get_ui_object3(&child);
+            if obj.handle_key_down(key, mods, repeat).await {
                 return true
             }
         }
         false
     }
-    async fn handle_mouse_btn_down(
-        &self,
-        sg: &SceneGraph,
-        btn: MouseButton,
-        mut mouse_pos: Point,
-    ) -> bool {
+
+    async fn handle_key_up(&self, key: KeyCode, mods: KeyMods) -> bool {
+        if !self.is_visible.get() {
+            return false
+        }
+        for child in self.get_children() {
+            let obj = get_ui_object3(&child);
+            if obj.handle_key_up(key, mods).await {
+                return true
+            }
+        }
+        false
+    }
+    async fn handle_mouse_btn_down(&self, btn: MouseButton, mut mouse_pos: Point) -> bool {
+        if !self.is_visible.get() {
+            return false
+        }
         mouse_pos -= self.rect.get().pos();
-        for child_id in get_child_nodes_ordered(&sg, self.node_id) {
-            let node = sg.get_node(child_id).unwrap();
-            let obj = get_ui_object(node);
-            if obj.handle_mouse_btn_down(sg, btn, mouse_pos).await {
+        for child in self.get_children() {
+            let obj = get_ui_object3(&child);
+            if obj.handle_mouse_btn_down(btn, mouse_pos).await {
                 return true
             }
         }
         false
     }
-    async fn handle_mouse_btn_up(
-        &self,
-        sg: &SceneGraph,
-        btn: MouseButton,
-        mut mouse_pos: Point,
-    ) -> bool {
+    async fn handle_mouse_btn_up(&self, btn: MouseButton, mut mouse_pos: Point) -> bool {
+        if !self.is_visible.get() {
+            return false
+        }
         mouse_pos -= self.rect.get().pos();
-        for child_id in get_child_nodes_ordered(&sg, self.node_id) {
-            let node = sg.get_node(child_id).unwrap();
-            let obj = get_ui_object(node);
-            if obj.handle_mouse_btn_up(sg, btn, mouse_pos).await {
+        for child in self.get_children() {
+            let obj = get_ui_object3(&child);
+            if obj.handle_mouse_btn_up(btn, mouse_pos).await {
                 return true
             }
         }
         false
     }
-    async fn handle_mouse_move(&self, sg: &SceneGraph, mut mouse_pos: Point) -> bool {
+    async fn handle_mouse_move(&self, mut mouse_pos: Point) -> bool {
+        if !self.is_visible.get() {
+            return false
+        }
         mouse_pos -= self.rect.get().pos();
-        for child_id in get_child_nodes_ordered(&sg, self.node_id) {
-            let node = sg.get_node(child_id).unwrap();
-            let obj = get_ui_object(node);
-            if obj.handle_mouse_move(sg, mouse_pos).await {
+        for child in self.get_children() {
+            let obj = get_ui_object3(&child);
+            if obj.handle_mouse_move(mouse_pos).await {
                 return true
             }
         }
         false
     }
-    async fn handle_mouse_wheel(&self, sg: &SceneGraph, mut wheel_pos: Point) -> bool {
+    async fn handle_mouse_wheel(&self, mut wheel_pos: Point) -> bool {
+        if !self.is_visible.get() {
+            return false
+        }
         wheel_pos -= self.rect.get().pos();
-        for child_id in get_child_nodes_ordered(&sg, self.node_id) {
-            let node = sg.get_node(child_id).unwrap();
-            let obj = get_ui_object(node);
-            if obj.handle_mouse_wheel(sg, wheel_pos).await {
+        for child in self.get_children() {
+            let obj = get_ui_object3(&child);
+            if obj.handle_mouse_wheel(wheel_pos).await {
                 return true
             }
         }
         false
     }
-    async fn handle_touch(
-        &self,
-        sg: &SceneGraph,
-        phase: TouchPhase,
-        id: u64,
-        mut touch_pos: Point,
-    ) -> bool {
+    async fn handle_touch(&self, phase: TouchPhase, id: u64, mut touch_pos: Point) -> bool {
+        if !self.is_visible.get() {
+            return false
+        }
         touch_pos -= self.rect.get().pos();
-        for child_id in get_child_nodes_ordered(&sg, self.node_id) {
-            let node = sg.get_node(child_id).unwrap();
-            let obj = get_ui_object(node);
-            if obj.handle_touch(sg, phase, id, touch_pos).await {
+        for child in self.get_children() {
+            let obj = get_ui_object3(&child);
+            if obj.handle_touch(phase, id, touch_pos).await {
                 return true
             }
         }

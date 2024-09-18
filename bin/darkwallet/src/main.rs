@@ -28,12 +28,16 @@
 #![feature(let_chains)]
 // consume a box
 #![feature(box_into_inner)]
+// we need Arc::get_mut_unchecked() to workaround the lack of Arc::new_cyclic() which
+// accepts async fns.
+// See https://github.com/rust-lang/rust/issues/112566
+#![feature(get_mut_unchecked)]
 
 // Use these to incrementally fix warnings with cargo fix
 //#![allow(warnings, unused)]
 //#![deny(unused_imports)]
 
-use async_lock::Mutex as AsyncMutex;
+use async_lock::{Mutex as AsyncMutex, RwLock as AsyncRwLock};
 use std::sync::{mpsc, Arc};
 
 #[macro_use]
@@ -42,23 +46,26 @@ extern crate log;
 use log::LevelFilter;
 
 mod app;
-mod darkirc;
+//mod darkirc;
 mod error;
 mod expr;
 mod gfx;
 mod mesh;
-mod net;
+//mod net;
 //mod plugin;
 mod prop;
 mod pubsub;
 //mod py;
 mod ringbuf;
+//mod scene;
 mod scene;
+use scene::SceneNode as SceneNode3;
 mod text;
 mod ui;
 mod util;
 
-use crate::{darkirc::DarkIrcBackend, net::ZeroMQAdapter, scene::SceneGraph, text::TextShaper};
+//use crate::{darkirc::DarkIrcBackend, net::ZeroMQAdapter, scene::SceneGraph, text::TextShaper};
+use crate::text::TextShaper;
 
 pub type ExecutorPtr = Arc<smol::Executor<'static>>;
 
@@ -99,18 +106,18 @@ fn main() {
     }
 
     let ex = Arc::new(smol::Executor::new());
-    let sg = Arc::new(AsyncMutex::new(SceneGraph::new()));
+    let sg3 = SceneNode3::root();
 
     let async_runtime = app::AsyncRuntime::new(ex.clone());
     async_runtime.start();
 
-    let sg2 = sg.clone();
-    let ex2 = ex.clone();
-    let zmq_task = ex.spawn(async {
-        let zmq_rpc = ZeroMQAdapter::new(sg2, ex2).await;
-        zmq_rpc.run().await;
-    });
-    async_runtime.push_task(zmq_task);
+    //let sg2 = sg.clone();
+    //let ex2 = ex.clone();
+    //let zmq_task = ex.spawn(async {
+    //    let zmq_rpc = ZeroMQAdapter::new(sg2, ex2).await;
+    //    zmq_rpc.run().await;
+    //});
+    //async_runtime.push_task(zmq_task);
 
     let (method_req, method_rep) = mpsc::channel();
     // The UI actually needs to be running for this to reply back.
@@ -120,14 +127,14 @@ fn main() {
 
     let text_shaper = TextShaper::new();
 
-    let darkirc_backend = DarkIrcBackend::new();
+    //let darkirc_backend = DarkIrcBackend::new();
     let app = app::App::new(
-        sg.clone(),
-        ex.clone(),
+        sg3.clone(),
         render_api.clone(),
         event_pub.clone(),
         text_shaper,
-        darkirc_backend,
+        //darkirc_backend,
+        ex.clone(),
     );
     let app_task = ex.spawn(app.clone().start());
     async_runtime.push_task(app_task);
