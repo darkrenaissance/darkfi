@@ -29,16 +29,7 @@ use crate::{
     scene::{SceneNodePtr, Slot},
     text::TextShaperPtr,
     ui::{
-        Button,
-        ChatView,
-        EditBox,
-        Image,
-        Layer,
-        ShapeVertex,
-        Text,
-        VectorArt,
-        VectorShape,
-        Window,
+        Button, ChatView, EditBox, Image, Layer, ShapeVertex, Text, VectorArt, VectorShape, Window,
     },
     ExecutorPtr,
 };
@@ -424,14 +415,17 @@ pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
         populate_tree(&chat_tree);
     }
     debug!(target: "app", "db has {} lines", chat_tree.len());
-    let node =
-        node.setup(|me| ChatView::new(
+    let node = node
+        .setup(|me| {
+            ChatView::new(
                 me,
-        chat_tree,
-        app.render_api.clone(),
-        app.text_shaper.clone(),
-        app.ex.clone(),
-                )).await;
+                chat_tree,
+                app.render_api.clone(),
+                app.text_shaper.clone(),
+                app.ex.clone(),
+            )
+        })
+        .await;
     layer_node.link(node);
 }
 
@@ -603,14 +597,17 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
         populate_tree(&chat_tree);
     }
     debug!(target: "app", "db has {} lines", chat_tree.len());
-    let node =
-        node.setup(|me| ChatView::new(
+    let node = node
+        .setup(|me| {
+            ChatView::new(
                 me,
-        chat_tree,
-        app.render_api.clone(),
-        app.text_shaper.clone(),
-        app.ex.clone(),
-                )).await;
+                chat_tree,
+                app.render_api.clone(),
+                app.text_shaper.clone(),
+                app.ex.clone(),
+            )
+        })
+        .await;
     layer_node.link(node);
 
     // Create the editbox bg

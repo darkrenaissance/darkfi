@@ -338,9 +338,9 @@ class Api:
         type = serial.read_u8(cur)
         return (name, type)
 
-    def get_children(self, node_id):
+    def get_children(self, node_path):
         req = bytearray()
-        serial.write_u32(req, node_id)
+        serial.encode_str(req, node_path)
         cur = self._make_request(Command.GET_CHILDREN, req)
         children_len = serial.decode_varint(cur)
         children = []
@@ -364,9 +364,9 @@ class Api:
             parents.append((parent_name, parent_id, parent_type))
         return parents
 
-    def get_properties(self, node_id):
+    def get_properties(self, node_path):
         req = bytearray()
-        serial.write_u32(req, node_id)
+        serial.encode_str(req, node_path)
         cur = self._make_request(Command.GET_PROPERTIES, req)
         props_len = serial.decode_varint(cur)
         props = []
@@ -427,9 +427,9 @@ class Api:
             case _:
                 raise Exception("unknown property type returned")
 
-    def get_property_value(self, node_id, prop_name):
+    def get_property_value(self, node_path, prop_name):
         req = bytearray()
-        serial.write_u32(req, node_id)
+        serial.encode_str(req, node_path)
         serial.encode_str(req, prop_name)
         cur = self._make_request(Command.GET_PROPERTY_VALUE, req)
         prop_type = serial.read_u8(cur)
@@ -549,71 +549,71 @@ class Api:
         serial.write_u32(req, parent_id)
         self._make_request(Command.UNLINK_NODE, req)
 
-    def set_property_null(self, node_id, prop_name, i):
+    def set_property_null(self, node_path, prop_name, i):
         req = bytearray()
-        serial.write_u32(req, node_id)
+        serial.encode_str(req, node_path)
         serial.encode_str(req, prop_name)
         serial.write_u32(req, i)
         serial.write_u8(req, PropertyType.NULL)
         self._make_request(Command.SET_PROPERTY_VALUE, req)
 
-    def set_property_bool(self, node_id, prop_name, i, val):
+    def set_property_bool(self, node_path, prop_name, i, val):
         req = bytearray()
-        serial.write_u32(req, node_id)
+        serial.encode_str(req, node_path)
         serial.encode_str(req, prop_name)
         serial.write_u32(req, i)
         serial.write_u8(req, PropertyType.BOOL)
         serial.write_u8(req, int(val))
         self._make_request(Command.SET_PROPERTY_VALUE, req)
 
-    def set_property_u32(self, node_id, prop_name, i, val):
+    def set_property_u32(self, node_path, prop_name, i, val):
         req = bytearray()
-        serial.write_u32(req, node_id)
+        serial.encode_str(req, node_path)
         serial.encode_str(req, prop_name)
         serial.write_u32(req, i)
         serial.write_u8(req, PropertyType.UINT32)
         serial.write_u32(req, val)
         self._make_request(Command.SET_PROPERTY_VALUE, req)
 
-    def set_property_f32(self, node_id, prop_name, i, val):
+    def set_property_f32(self, node_path, prop_name, i, val):
         req = bytearray()
-        serial.write_u32(req, node_id)
+        serial.encode_str(req, node_path)
         serial.encode_str(req, prop_name)
         serial.write_u32(req, i)
         serial.write_u8(req, PropertyType.FLOAT32)
         serial.write_f32(req, val)
         self._make_request(Command.SET_PROPERTY_VALUE, req)
 
-    def set_property_str(self, node_id, prop_name, i, val):
+    def set_property_str(self, node_path, prop_name, i, val):
         req = bytearray()
-        serial.write_u32(req, node_id)
+        serial.encode_str(req, node_path)
         serial.encode_str(req, prop_name)
         serial.write_u32(req, i)
         serial.write_u8(req, PropertyType.STR)
         serial.encode_str(req, val)
         self._make_request(Command.SET_PROPERTY_VALUE, req)
 
-    def set_property_enum(self, node_id, prop_name, i, val):
+    def set_property_enum(self, node_path, prop_name, i, val):
         req = bytearray()
-        serial.write_u32(req, node_id)
+        serial.encode_str(req, node_path)
         serial.encode_str(req, prop_name)
         serial.write_u32(req, i)
         serial.write_u8(req, PropertyType.ENUM)
         serial.encode_str(req, val)
         self._make_request(Command.SET_PROPERTY_VALUE, req)
 
-    def set_property_buf(self, node_id, prop_name, i, buf):
+    def set_property_buf(self, node_path, prop_name, i, buf):
         req = bytearray()
-        serial.write_u32(req, node_id)
+        serial.encode_str(req, node_path)
         serial.encode_str(req, prop_name)
         serial.write_u32(req, i)
         serial.write_u8(req, PropertyType.BUFFER)
         serial.encode_buf(req, buf)
         self._make_request(Command.SET_PROPERTY_VALUE, req)
 
-    def set_property_expr(self, node_id, prop_name, i, code):
+    def set_property_expr(self, node_path, prop_name, i, code):
         req = bytearray()
-        serial.write_u32(req, node_id)
+        serial.encode_str(req, node_path)
         serial.encode_str(req, prop_name)
         serial.write_u32(req, i)
         serial.write_u8(req, PropertyType.SEXPR)

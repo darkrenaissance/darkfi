@@ -7,13 +7,12 @@ def join(parent_path, child_name):
     return f"{parent_path}/{child_name}"
 
 def print_tree():
-    root_id = api.lookup_node_id("/")
     print("/")
-    print_node_info(root_id, indent=1)
+    print_node_info("/", indent=1)
 
-def print_node_info(parent_id, indent):
+def print_node_info(parent_path, indent):
     ws = " "*4*indent
-    for (child_name, child_id, child_type) in api.get_children(parent_id):
+    for (child_name, child_id, child_type) in api.get_children(parent_path):
         match child_type:
             case SceneNodeType.ROOT:
                 child_type = "root"
@@ -51,11 +50,16 @@ def print_node_info(parent_id, indent):
         desc += f"[{child_type}]"
         print(desc)
 
-        print_node_info(child_id, indent+1)
+        if parent_path == "/":
+            child_path = "/" + child_name
+        else:
+            child_path = parent_path + "/" + child_name
 
-    for prop in api.get_properties(parent_id):
+        print_node_info(child_path, indent+1)
+
+    for prop in api.get_properties(parent_path):
         if prop.type != PropertyType.BUFFER:
-            prop_val = api.get_property_value(parent_id, prop.name)
+            prop_val = api.get_property_value(parent_path, prop.name)
 
             if prop.type == PropertyType.STR:
                 prop_val = [f"\"{pv}\"" for pv in prop_val]
@@ -71,17 +75,17 @@ def print_node_info(parent_id, indent):
 
         print(f"{ws}{prop.name}: {prop_type}{prop_val}")
 
-    for sig in api.get_signals(parent_id):
-        print(f"{ws}~{sig}")
-        for slot_id, slot in api.get_slots(parent_id, sig):
-            print(f"{ws}- '{slot}' ({slot_id})")
+    #for sig in api.get_signals(parent_id):
+    #    print(f"{ws}~{sig}")
+    #    for slot_id, slot in api.get_slots(parent_id, sig):
+    #        print(f"{ws}- '{slot}' ({slot_id})")
 
-    for method_name in api.get_methods(parent_id):
-        args, results = api.get_method(parent_id, method_name)
+    #for method_name in api.get_methods(parent_id):
+    #    args, results = api.get_method(parent_id, method_name)
 
-        args = [f"{name}: " + PropertyType.to_str(typ) for (name, _, typ) in args]
-        results = [f"{name}: " + PropertyType.to_str(typ) for (name, _, typ) in results]
+    #    args = [f"{name}: " + PropertyType.to_str(typ) for (name, _, typ) in args]
+    #    results = [f"{name}: " + PropertyType.to_str(typ) for (name, _, typ) in results]
 
-        method_str = f"{method_name}(" + ", ".join(args) + ") -> (" + ", ".join(results) + ")"
-        print(f"{ws}{method_str}")
+    #    method_str = f"{method_name}(" + ", ".join(args) + ") -> (" + ", ".join(results) + ")"
+    #    print(f"{ws}{method_str}")
 

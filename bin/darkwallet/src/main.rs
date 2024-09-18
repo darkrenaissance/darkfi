@@ -51,21 +51,19 @@ mod error;
 mod expr;
 mod gfx;
 mod mesh;
-//mod net;
+mod net;
 //mod plugin;
 mod prop;
 mod pubsub;
 //mod py;
 mod ringbuf;
-//mod scene;
 mod scene;
 use scene::SceneNode as SceneNode3;
 mod text;
 mod ui;
 mod util;
 
-//use crate::{darkirc::DarkIrcBackend, net::ZeroMQAdapter, scene::SceneGraph, text::TextShaper};
-use crate::text::TextShaper;
+use crate::{net::ZeroMQAdapter, text::TextShaper};
 
 pub type ExecutorPtr = Arc<smol::Executor<'static>>;
 
@@ -106,18 +104,18 @@ fn main() {
     }
 
     let ex = Arc::new(smol::Executor::new());
-    let sg3 = SceneNode3::root();
+    let sg_root = SceneNode3::root();
 
     let async_runtime = app::AsyncRuntime::new(ex.clone());
     async_runtime.start();
 
-    //let sg2 = sg.clone();
-    //let ex2 = ex.clone();
-    //let zmq_task = ex.spawn(async {
-    //    let zmq_rpc = ZeroMQAdapter::new(sg2, ex2).await;
-    //    zmq_rpc.run().await;
-    //});
-    //async_runtime.push_task(zmq_task);
+    let sg_root2 = sg_root.clone();
+    let ex2 = ex.clone();
+    let zmq_task = ex.spawn(async {
+        let zmq_rpc = ZeroMQAdapter::new(sg_root2, ex2).await;
+        zmq_rpc.run().await;
+    });
+    async_runtime.push_task(zmq_task);
 
     let (method_req, method_rep) = mpsc::channel();
     // The UI actually needs to be running for this to reply back.
@@ -129,7 +127,7 @@ fn main() {
 
     //let darkirc_backend = DarkIrcBackend::new();
     let app = app::App::new(
-        sg3.clone(),
+        sg_root.clone(),
         render_api.clone(),
         event_pub.clone(),
         text_shaper,

@@ -28,7 +28,7 @@ use crate::{
     error::{Error, Result},
     expr::SExprCode,
     prop::{Property, PropertySubType, PropertyType, PropertyValue, Role},
-    scene::{SceneGraphPtr2, SceneNodeId, SceneNodeType, Slot, SlotId},
+    scene::{SceneNodeId, SceneNodePtr, ScenePath},
     ExecutorPtr,
 };
 
@@ -77,7 +77,7 @@ pub struct ZeroMQAdapter {
     slot_sender: mpsc::SyncSender<(Vec<u8>, Vec<u8>)>,
     slot_recvr: Option<mpsc::Receiver<(Vec<u8>, Vec<u8>)>>,
     */
-    scene_graph: SceneGraphPtr2,
+    sg_root: SceneNodePtr,
     ex: ExecutorPtr,
 
     zmq_rep: Mutex<zeromq::RepSocket>,
@@ -85,19 +85,14 @@ pub struct ZeroMQAdapter {
 }
 
 impl ZeroMQAdapter {
-    pub async fn new(scene_graph: SceneGraphPtr2, ex: ExecutorPtr) -> Arc<Self> {
+    pub async fn new(sg_root: SceneNodePtr, ex: ExecutorPtr) -> Arc<Self> {
         let mut zmq_rep = zeromq::RepSocket::new();
         zmq_rep.bind("tcp://0.0.0.0:9484").await.unwrap();
 
         let mut zmq_pub = zeromq::PubSocket::new();
         zmq_pub.bind("tcp://0.0.0.0:9485").await.unwrap();
 
-        Arc::new(Self {
-            scene_graph,
-            ex,
-            zmq_rep: Mutex::new(zmq_rep),
-            zmq_pub: Mutex::new(zmq_pub),
-        })
+        Arc::new(Self { sg_root, ex, zmq_rep: Mutex::new(zmq_rep), zmq_pub: Mutex::new(zmq_pub) })
     }
 
     pub async fn run(self: Arc<Self>) {
@@ -135,7 +130,6 @@ impl ZeroMQAdapter {
     }
 
     async fn process_request(self: Arc<Self>, cmd: Command, payload: Vec<u8>) -> Result<Vec<u8>> {
-        let mut scene_graph = self.scene_graph.lock().await;
         let mut cur = Cursor::new(&payload);
         let mut reply = vec![];
         match cmd {
@@ -145,26 +139,30 @@ impl ZeroMQAdapter {
                 "hello".encode(&mut reply).unwrap();
             }
             Command::GetInfo => {
+                /*
                 let node_id = SceneNodeId::decode(&mut cur).unwrap();
                 debug!(target: "req", "{:?}({})", cmd, node_id);
 
                 let node = scene_graph.get_node(node_id).ok_or(Error::NodeNotFound)?;
                 node.name.encode(&mut reply).unwrap();
                 node.typ.encode(&mut reply).unwrap();
+                */
             }
             Command::GetChildren => {
-                let node_id = SceneNodeId::decode(&mut cur).unwrap();
-                debug!(target: "req", "{:?}({})", cmd, node_id);
+                let node_path: ScenePath = String::decode(&mut cur).unwrap().parse()?;
+                debug!(target: "req", "{cmd:?}({node_path})");
+                let node =
+                    self.sg_root.clone().lookup_node(node_path).ok_or(Error::NodeNotFound)?;
 
-                let node = scene_graph.get_node(node_id).ok_or(Error::NodeNotFound)?;
                 let children: Vec<_> = node
-                    .children
+                    .get_children()
                     .iter()
-                    .map(|node_inf| (node_inf.name.clone(), node_inf.id, node_inf.typ))
+                    .map(|node| (node.name.clone(), node.id, node.typ))
                     .collect();
                 children.encode(&mut reply).unwrap();
             }
             Command::GetParents => {
+                /*
                 let node_id = SceneNodeId::decode(&mut cur).unwrap();
                 debug!(target: "req", "{:?}({})", cmd, node_id);
 
@@ -175,12 +173,14 @@ impl ZeroMQAdapter {
                     .map(|node_inf| (node_inf.name.clone(), node_inf.id, node_inf.typ))
                     .collect();
                 parents.encode(&mut reply).unwrap();
+                */
             }
             Command::GetProperties => {
-                let node_id = SceneNodeId::decode(&mut cur).unwrap();
-                debug!(target: "req", "{:?}({})", cmd, node_id);
+                let node_path: ScenePath = String::decode(&mut cur).unwrap().parse()?;
+                debug!(target: "req", "{cmd:?}({node_path})");
+                let node =
+                    self.sg_root.clone().lookup_node(node_path).ok_or(Error::NodeNotFound)?;
 
-                let node = scene_graph.get_node(node_id).ok_or(Error::NodeNotFound)?;
                 VarInt(node.props.len() as u64).encode(&mut reply).unwrap();
                 for prop in &node.props {
                     prop.name.encode(&mut reply).unwrap();
@@ -198,11 +198,12 @@ impl ZeroMQAdapter {
                 }
             }
             Command::GetPropertyValue => {
-                let node_id = SceneNodeId::decode(&mut cur).unwrap();
+                let node_path: ScenePath = String::decode(&mut cur).unwrap().parse()?;
                 let prop_name = String::decode(&mut cur).unwrap();
-                debug!(target: "req", "{:?}({}, {})", cmd, node_id, prop_name);
+                debug!(target: "req", "{cmd:?}({node_path}, {prop_name})");
+                let node =
+                    self.sg_root.clone().lookup_node(node_path).ok_or(Error::NodeNotFound)?;
 
-                let node = scene_graph.get_node(node_id).ok_or(Error::NodeNotFound)?;
                 let prop = node.get_property(&prop_name).ok_or(Error::PropertyNotFound)?;
                 prop.typ.encode(&mut reply).unwrap();
                 VarInt(prop.get_len() as u64).encode(&mut reply).unwrap();
@@ -222,36 +223,97 @@ impl ZeroMQAdapter {
                     }
                 }
             }
+            Command::SetPropertyValue => {
+                let node_path: ScenePath = String::decode(&mut cur).unwrap().parse()?;
+                let prop_name = String::decode(&mut cur).unwrap();
+                let prop_i = u32::decode(&mut cur).unwrap() as usize;
+                let prop_type = PropertyType::decode(&mut cur).unwrap();
+                debug!(target: "req", "{cmd:?}({node_path}, {prop_name}, {prop_i}, {prop_type:?})");
+
+                let node =
+                    self.sg_root.clone().lookup_node(node_path).ok_or(Error::NodeNotFound)?;
+                let prop = node.get_property(&prop_name).ok_or(Error::PropertyNotFound)?;
+
+                match prop_type {
+                    PropertyType::Null => {
+                        prop.set_null(Role::User, prop_i)?;
+                    }
+                    PropertyType::Bool => {
+                        let val = bool::decode(&mut cur).unwrap();
+                        prop.set_bool(Role::User, prop_i, val)?;
+                    }
+                    PropertyType::Uint32 => {
+                        let val = u32::decode(&mut cur).unwrap();
+                        prop.set_u32(Role::User, prop_i, val)?;
+                    }
+                    PropertyType::Float32 => {
+                        let val = f32::decode(&mut cur).unwrap();
+                        prop.set_f32(Role::User, prop_i, val)?;
+                    }
+                    PropertyType::Str => {
+                        let val = String::decode(&mut cur).unwrap();
+                        prop.set_str(Role::User, prop_i, val)?;
+                    }
+                    PropertyType::Enum => {
+                        let val = String::decode(&mut cur).unwrap();
+                        prop.set_enum(Role::User, prop_i, val)?;
+                    }
+                    PropertyType::Buffer => {
+                        let val = Vec::<u8>::decode(&mut cur).unwrap();
+                        prop.set_buf(Role::User, prop_i, val)?;
+                    }
+                    PropertyType::SceneNodeId => {
+                        let val = SceneNodeId::decode(&mut cur).unwrap();
+                        prop.set_node_id(Role::User, prop_i, val)?;
+                    }
+                    PropertyType::SExpr => {
+                        let val = SExprCode::decode(&mut cur).unwrap();
+                        debug!(target: "req", "  received code {:?}", val);
+                        prop.set_expr(Role::User, prop_i, val)?;
+                    }
+                }
+            }
             Command::AddNode => {
+                /*
                 let node_name = String::decode(&mut cur).unwrap();
                 let node_type = SceneNodeType::decode(&mut cur).unwrap();
                 debug!(target: "req", "{:?}({}, {:?})", cmd, node_name, node_type);
 
                 let node_id = scene_graph.add_node(&node_name, node_type).id;
                 node_id.encode(&mut reply).unwrap();
+                */
             }
             Command::RemoveNode => {
+                /*
                 let node_id = SceneNodeId::decode(&mut cur).unwrap();
                 debug!(target: "req", "{:?}({})", cmd, node_id);
                 scene_graph.remove_node(node_id)?;
+                */
             }
             Command::RenameNode => {
+                /*
                 let node_id = SceneNodeId::decode(&mut cur).unwrap();
                 let node_name = String::decode(&mut cur).unwrap();
                 debug!(target: "req", "{:?}({}, {})", cmd, node_id, node_name);
                 scene_graph.rename_node(node_id, node_name)?;
+                */
             }
             Command::ScanDangling => {
+                /*
                 let dangling = scene_graph.scan_dangling();
                 dangling.encode(&mut reply).unwrap();
+                */
             }
             Command::LookupNodeId => {
+                /*
                 let node_path: String = deserialize(&payload).unwrap();
                 debug!(target: "req", "{:?}({})", cmd, node_path);
                 let node_id = scene_graph.lookup_node_id(&node_path).ok_or(Error::NodeNotFound)?;
                 node_id.encode(&mut reply).unwrap();
+                */
             }
             Command::AddProperty => {
+                /*
                 let node_id = SceneNodeId::decode(&mut cur).unwrap();
                 let prop_name = String::decode(&mut cur).unwrap();
                 let prop_type = PropertyType::decode(&mut cur).unwrap();
@@ -357,69 +419,26 @@ impl ZeroMQAdapter {
                     prop.set_enum_items(prop_enum_items)?;
                 }
                 node.add_property(prop)?;
+                */
             }
             Command::LinkNode => {
+                /*
                 let child_id = SceneNodeId::decode(&mut cur).unwrap();
                 let parent_id = SceneNodeId::decode(&mut cur).unwrap();
                 debug!(target: "req", "{:?}({}, {})", cmd, child_id, parent_id);
                 scene_graph.link(child_id, parent_id)?;
+                */
             }
             Command::UnlinkNode => {
+                /*
                 let child_id = SceneNodeId::decode(&mut cur).unwrap();
                 let parent_id = SceneNodeId::decode(&mut cur).unwrap();
                 debug!(target: "req", "{:?}({}, {})", cmd, child_id, parent_id);
                 scene_graph.unlink(child_id, parent_id)?;
-            }
-            Command::SetPropertyValue => {
-                let node_id = SceneNodeId::decode(&mut cur).unwrap();
-                let prop_name = String::decode(&mut cur).unwrap();
-                let prop_i = u32::decode(&mut cur).unwrap() as usize;
-                let prop_type = PropertyType::decode(&mut cur).unwrap();
-                debug!(target: "req", "{:?}({}, {}, {}, {:?})", cmd, node_id, prop_name, prop_i, prop_type);
-
-                let node = scene_graph.get_node_mut(node_id).ok_or(Error::NodeNotFound)?;
-                let prop = node.get_property(&prop_name).ok_or(Error::PropertyNotFound)?;
-
-                match prop_type {
-                    PropertyType::Null => {
-                        prop.set_null(Role::User, prop_i)?;
-                    }
-                    PropertyType::Bool => {
-                        let val = bool::decode(&mut cur).unwrap();
-                        prop.set_bool(Role::User, prop_i, val)?;
-                    }
-                    PropertyType::Uint32 => {
-                        let val = u32::decode(&mut cur).unwrap();
-                        prop.set_u32(Role::User, prop_i, val)?;
-                    }
-                    PropertyType::Float32 => {
-                        let val = f32::decode(&mut cur).unwrap();
-                        prop.set_f32(Role::User, prop_i, val)?;
-                    }
-                    PropertyType::Str => {
-                        let val = String::decode(&mut cur).unwrap();
-                        prop.set_str(Role::User, prop_i, val)?;
-                    }
-                    PropertyType::Enum => {
-                        let val = String::decode(&mut cur).unwrap();
-                        prop.set_enum(Role::User, prop_i, val)?;
-                    }
-                    PropertyType::Buffer => {
-                        let val = Vec::<u8>::decode(&mut cur).unwrap();
-                        prop.set_buf(Role::User, prop_i, val)?;
-                    }
-                    PropertyType::SceneNodeId => {
-                        let val = SceneNodeId::decode(&mut cur).unwrap();
-                        prop.set_node_id(Role::User, prop_i, val)?;
-                    }
-                    PropertyType::SExpr => {
-                        let val = SExprCode::decode(&mut cur).unwrap();
-                        debug!(target: "req", "  received code {:?}", val);
-                        prop.set_expr(Role::User, prop_i, val)?;
-                    }
-                }
+                */
             }
             Command::GetSignals => {
+                /*
                 let node_id = SceneNodeId::decode(&mut cur).unwrap();
                 debug!(target: "req", "{:?}({})", cmd, node_id);
 
@@ -430,8 +449,10 @@ impl ZeroMQAdapter {
                     sigs.push(sig.name.clone());
                 }
                 sigs.encode(&mut reply).unwrap();
+                */
             }
             Command::RegisterSlot => {
+                /*
                 let node_id = SceneNodeId::decode(&mut cur).unwrap();
                 let sig_name = String::decode(&mut cur).unwrap();
                 let slot_name = String::decode(&mut cur).unwrap();
@@ -463,8 +484,10 @@ impl ZeroMQAdapter {
 
                 let slot_id = node.register(&sig_name, slot)?;
                 slot_id.encode(&mut reply).unwrap();
+                */
             }
             Command::UnregisterSlot => {
+                /*
                 let node_id = SceneNodeId::decode(&mut cur).unwrap();
                 let sig_name = String::decode(&mut cur).unwrap();
                 let slot_id = SlotId::decode(&mut cur).unwrap();
@@ -472,8 +495,10 @@ impl ZeroMQAdapter {
 
                 let node = scene_graph.get_node_mut(node_id).ok_or(Error::NodeNotFound)?;
                 node.unregister(&sig_name, slot_id)?;
+                */
             }
             Command::LookupSlotId => {
+                /*
                 let node_id = SceneNodeId::decode(&mut cur).unwrap();
                 let sig_name = String::decode(&mut cur).unwrap();
                 let slot_name = String::decode(&mut cur).unwrap();
@@ -483,8 +508,10 @@ impl ZeroMQAdapter {
                 let signal = node.get_signal(&sig_name).ok_or(Error::SignalNotFound)?;
                 let slot_id = signal.lookup_slot_id(&slot_name).ok_or(Error::SlotNotFound)?;
                 slot_id.encode(&mut reply).unwrap();
+                */
             }
             Command::GetSlots => {
+                /*
                 let node_id = SceneNodeId::decode(&mut cur).unwrap();
                 let sig_name = String::decode(&mut cur).unwrap();
                 debug!(target: "req", "{:?}({}, {})", cmd, node_id, sig_name);
@@ -497,8 +524,10 @@ impl ZeroMQAdapter {
                     slots.push((slot.name.clone(), slot_id));
                 }
                 slots.encode(&mut reply).unwrap();
+                */
             }
             Command::GetMethods => {
+                /*
                 let node_id = SceneNodeId::decode(&mut cur).unwrap();
                 debug!(target: "req", "{:?}({})", cmd, node_id);
 
@@ -506,8 +535,10 @@ impl ZeroMQAdapter {
                 let method_names: Vec<_> = node.methods.iter().map(|m| m.name.clone()).collect();
 
                 method_names.encode(&mut reply).unwrap();
+                */
             }
             Command::GetMethod => {
+                /*
                 let node_id = SceneNodeId::decode(&mut cur).unwrap();
                 let method_name = String::decode(&mut cur).unwrap();
                 debug!(target: "req", "{:?}({}, {})", cmd, node_id, method_name);
@@ -517,8 +548,10 @@ impl ZeroMQAdapter {
 
                 method.args.encode(&mut reply).unwrap();
                 method.result.encode(&mut reply).unwrap();
+                */
             }
             Command::CallMethod => {
+                /*
                 let node_id = SceneNodeId::decode(&mut cur).unwrap();
                 let method_name = String::decode(&mut cur).unwrap();
                 let arg_data = Vec::<u8>::decode(&mut cur).unwrap();
@@ -548,6 +581,7 @@ impl ZeroMQAdapter {
                         0u8.encode(&mut reply).unwrap();
                     }
                 }
+                */
             }
         }
 
