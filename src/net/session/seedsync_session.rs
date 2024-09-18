@@ -129,9 +129,9 @@ impl SeedSyncSession {
     }
 
     /// Returns true if every seed attempt per slot has failed.
-    async fn failed(&self) -> bool {
+    async fn _failed(&self) -> bool {
         let slots = &*self.slots.lock().await;
-        slots.iter().all(|s| s.failed())
+        slots.iter().all(|s| s._failed())
     }
 }
 
@@ -277,7 +277,7 @@ impl Slot {
         self.reset();
     }
 
-    fn failed(&self) -> bool {
+    fn _failed(&self) -> bool {
         self.failed.load(SeqCst)
     }
 
