@@ -930,7 +930,7 @@ impl EditBox {
     }
 
     async fn redraw(&self) {
-        let Some(draw_update) = self.draw_cached() else {
+        let Some(draw_update) = self.draw_cached().await else {
             error!(target: "ui::editbox", "Text failed to draw");
             return;
         };
@@ -945,7 +945,7 @@ impl EditBox {
         }
     }
 
-    fn draw_cached(&self) -> Option<DrawUpdate> {
+    async fn draw_cached(&self) -> Option<DrawUpdate> {
         let rect = self.rect.get();
 
         let mut freed_textures = vec![];
@@ -953,6 +953,8 @@ impl EditBox {
 
         let window_scale = self.window_scale.get();
         if self.old_window_scale.swap(window_scale, Ordering::Relaxed) != window_scale {
+            self.regen_glyphs().await;
+
             let render_info = std::mem::replace(&mut *self.render_info.lock().unwrap(), None);
             // We're finished with these so clean up.
             if let Some(old) = render_info {
@@ -1032,7 +1034,7 @@ impl UIObject for EditBox {
         debug!(target: "ui::editbox", "EditBox::draw()");
         *self.parent_rect.lock().unwrap() = Some(parent_rect);
         self.rect.eval(&parent_rect).ok()?;
-        self.draw_cached()
+        self.draw_cached().await
     }
 
     async fn handle_char(&self, key: char, mods: KeyMods, repeat: bool) -> bool {
