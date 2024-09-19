@@ -43,7 +43,7 @@ pub struct Privmsg {
 async fn amain() -> Result<()> {
     info!("Instantiating event DAG");
     let ex = std::sync::Arc::new(smol::Executor::new());
-    let datastore = expand_path("~/.local/darkfi/evgrd")?;
+    let datastore = expand_path("~/.local/darkfi/evgrd-test-client")?;
     fs::create_dir_all(&datastore).await?;
     let sled_db = sled::open(datastore)?;
 
