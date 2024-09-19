@@ -22,13 +22,23 @@ use darkfi::{
     util::path::expand_path,
     Error, Result,
 };
-use darkfi_serial::{AsyncDecodable, AsyncEncodable};
+use darkfi_serial::{
+    async_trait, deserialize_async_partial, AsyncDecodable, AsyncEncodable, SerialDecodable,
+    SerialEncodable,
+};
 use log::{error, info};
 use sled_overlay::sled;
 use smol::fs;
 use url::Url;
 
 use evgrd::{FetchEventsMessage, LocalEventGraph, VersionMessage, MSG_EVENT, MSG_FETCHEVENTS};
+
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct Privmsg {
+    pub channel: String,
+    pub nick: String,
+    pub msg: String,
+}
 
 async fn amain() -> Result<()> {
     info!("Instantiating event DAG");
@@ -76,7 +86,17 @@ async fn amain() -> Result<()> {
             ev.validate(&evgr.dag, genesis_timestamp, evgr.days_rotation, None).await?
         {
             println!("got {ev:?}");
-            evgr.dag_insert(&[ev]).await.unwrap();
+            evgr.dag_insert(&[ev.clone()]).await.unwrap();
+
+            let privmsg: Privmsg = match deserialize_async_partial(ev.content()).await {
+                Ok((v, _)) => v,
+                Err(e) => {
+                    println!("Failed deserializing incoming Privmsg event: {}", e);
+                    continue
+                }
+            };
+
+            println!("privmsg: {privmsg:?}");
         } else {
             println!("Event is invalid!")
         }
