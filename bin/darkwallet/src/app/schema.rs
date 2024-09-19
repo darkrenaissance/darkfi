@@ -350,7 +350,13 @@ pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
 
     let node = node
         .setup(|me| {
-            EditBox::new(me, app.render_api.clone(), app.text_shaper.clone(), app.ex.clone())
+            EditBox::new(
+                me,
+                window_scale.clone(),
+                app.render_api.clone(),
+                app.text_shaper.clone(),
+                app.ex.clone(),
+            )
         })
         .await;
     layer_node.link(node);
@@ -772,7 +778,13 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
 
     let node = node
         .setup(|me| {
-            EditBox::new(me, app.render_api.clone(), app.text_shaper.clone(), app.ex.clone())
+            EditBox::new(
+                me,
+                window_scale.clone(),
+                app.render_api.clone(),
+                app.text_shaper.clone(),
+                app.ex.clone(),
+            )
         })
         .await;
     layer_node.link(node);

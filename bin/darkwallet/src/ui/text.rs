@@ -145,15 +145,12 @@ impl Text {
         window_scale: f32,
     ) -> TextRenderInfo {
         debug!(target: "ui::text", "Rendering label '{}'", text);
-        let glyphs = text_shaper.shape(text, font_size * window_scale).await;
+        let glyphs = text_shaper.shape(text, font_size, window_scale).await;
         let atlas = text::make_texture_atlas(render_api, &glyphs);
 
         let mut mesh = MeshBuilder::new();
-        let glyph_pos_iter =
-            GlyphPositionIter::new(font_size * window_scale, &glyphs, baseline * window_scale);
+        let glyph_pos_iter = GlyphPositionIter::new(font_size, window_scale, &glyphs, baseline);
         for (mut glyph_rect, glyph) in glyph_pos_iter.zip(glyphs.iter()) {
-            let glyph_rect = glyph_rect / window_scale;
-
             let uv_rect = atlas.fetch_uv(glyph.glyph_id).expect("missing glyph UV rect");
 
             if debug {

@@ -86,7 +86,7 @@ impl PrivMessage {
         render_api: &RenderApi,
     ) -> Message {
         let linetext = Self::gen_line_text(timestamp, &nick, &text);
-        let unwrapped_glyphs = text_shaper.shape(linetext, font_size * window_scale).await;
+        let unwrapped_glyphs = text_shaper.shape(linetext, font_size, window_scale).await;
 
         let mut atlas = text::Atlas::new(render_api);
         atlas.push(&unwrapped_glyphs);
@@ -211,14 +211,9 @@ impl PrivMessage {
             section = 0;
         }
 
-        let glyph_pos_iter = GlyphPositionIter::new(
-            self.font_size * self.window_scale,
-            line,
-            baseline * self.window_scale,
-        );
-        for (glyph_rect, glyph) in glyph_pos_iter.zip(line.iter()) {
-            let mut glyph_rect = glyph_rect / self.window_scale;
-
+        let glyph_pos_iter =
+            GlyphPositionIter::new(self.font_size, self.window_scale, line, baseline);
+        for (mut glyph_rect, glyph) in glyph_pos_iter.zip(line.iter()) {
             let uv_rect = self.atlas.fetch_uv(glyph.glyph_id).expect("missing glyph UV rect");
             glyph_rect.y -= off_y;
 
@@ -250,7 +245,7 @@ impl PrivMessage {
         self.window_scale = window_scale;
 
         let linetext = Self::gen_line_text(self.timestamp, &self.nick, &self.text);
-        self.unwrapped_glyphs = text_shaper.shape(linetext, self.font_size * window_scale).await;
+        self.unwrapped_glyphs = text_shaper.shape(linetext, self.font_size, window_scale).await;
 
         let texture_id = self.atlas.texture_id;
 
@@ -265,7 +260,7 @@ impl PrivMessage {
     fn adjust_width(&mut self, line_width: f32) {
         // Invalidate wrapped_glyphs and recalc
         self.wrapped_lines =
-            text::wrap(line_width * self.window_scale, self.font_size, &self.unwrapped_glyphs);
+            text::wrap(line_width, self.font_size, self.window_scale, &self.unwrapped_glyphs);
     }
 
     fn clear_mesh(&mut self) -> Option<GfxDrawMesh> {
@@ -310,7 +305,7 @@ impl DateMessage {
         let datestr = Self::datestr(timestamp);
         let timestamp = Self::timest_to_midnight(timestamp);
 
-        let glyphs = text_shaper.shape(datestr, font_size).await;
+        let glyphs = text_shaper.shape(datestr, font_size, window_scale).await;
 
         let mut atlas = text::Atlas::new(render_api);
         atlas.push(&glyphs);
@@ -343,7 +338,7 @@ impl DateMessage {
         self.window_scale = window_scale;
 
         let datestr = Self::datestr(self.timestamp);
-        self.glyphs = text_shaper.shape(datestr, self.font_size * window_scale).await;
+        self.glyphs = text_shaper.shape(datestr, self.font_size, window_scale).await;
 
         let texture_id = self.atlas.texture_id;
 
@@ -373,7 +368,8 @@ impl DateMessage {
     ) -> GfxDrawMesh {
         let mut mesh = MeshBuilder::new();
 
-        let glyph_pos_iter = GlyphPositionIter::new(self.font_size, &self.glyphs, baseline);
+        let glyph_pos_iter =
+            GlyphPositionIter::new(self.font_size, self.window_scale, &self.glyphs, baseline);
         for (mut glyph_rect, glyph) in glyph_pos_iter.zip(self.glyphs.iter()) {
             let uv_rect = self.atlas.fetch_uv(glyph.glyph_id).expect("missing glyph UV rect");
             glyph_rect.y -= line_height;

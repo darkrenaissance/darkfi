@@ -27,8 +27,8 @@ pub fn glyph_str(glyphs: &Vec<Glyph>) -> String {
     glyphs.iter().map(|g| g.substr.as_str()).collect::<Vec<_>>().join("")
 }
 
-fn tokenize(font_size: f32, glyphs: &Vec<Glyph>) -> Vec<Token> {
-    let glyph_pos_iter = GlyphPositionIter::new(font_size, glyphs, 0.);
+fn tokenize(font_size: f32, window_scale: f32, glyphs: &Vec<Glyph>) -> Vec<Token> {
+    let glyph_pos_iter = GlyphPositionIter::new(font_size, window_scale, glyphs, 0.);
 
     let mut tokens = vec![];
     let mut token_glyphs = vec![];
@@ -133,8 +133,13 @@ fn apply_wrap(line_width: f32, tokens: Vec<Token>) -> Vec<Vec<Glyph>> {
     lines
 }
 
-pub fn wrap(line_width: f32, font_size: f32, glyphs: &Vec<Glyph>) -> Vec<Vec<Glyph>> {
-    let tokens = tokenize(font_size, glyphs);
+pub fn wrap(
+    line_width: f32,
+    font_size: f32,
+    window_scale: f32,
+    glyphs: &Vec<Glyph>,
+) -> Vec<Vec<Glyph>> {
+    let tokens = tokenize(font_size, window_scale, glyphs);
 
     //debug!(target: "text::wrap", "tokenized words {:?}",
     //       words.iter().map(|w| w.as_str()).collect::<Vec<_>>());

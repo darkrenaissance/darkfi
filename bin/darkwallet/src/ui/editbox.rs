@@ -17,6 +17,7 @@
  */
 
 use async_trait::async_trait;
+use atomic_float::AtomicF32;
 use miniquad::{window, KeyCode, KeyMods, MouseButton, TouchPhase};
 use rand::{rngs::OsRng, Rng};
 use std::{
@@ -177,12 +178,15 @@ pub struct EditBox {
 
     mouse_btn_held: AtomicBool,
 
+    old_window_scale: AtomicF32,
+    window_scale: PropertyFloat32,
     parent_rect: SyncMutex<Option<Rectangle>>,
 }
 
 impl EditBox {
     pub async fn new(
         node: SceneNodeWeak,
+        window_scale: PropertyFloat32,
         render_api: RenderApiPtr,
         text_shaper: TextShaperPtr,
         ex: ExecutorPtr,
@@ -209,7 +213,7 @@ impl EditBox {
         let node_id = node_ref.id;
 
         // Must do this whenever the text changes
-        let glyphs = text_shaper.shape(text.get(), font_size.get()).await;
+        let glyphs = text_shaper.shape(text.get(), font_size.get(), window_scale.get()).await;
 
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
             let mut on_modify = OnModify::new(ex, node_name, node_id, me.clone());
@@ -275,6 +279,8 @@ impl EditBox {
 
                 mouse_btn_held: AtomicBool::new(false),
 
+                old_window_scale: AtomicF32::new(window_scale.get()),
+                window_scale,
                 parent_rect: SyncMutex::new(None),
             }
         });
@@ -284,7 +290,9 @@ impl EditBox {
 
     /// This MUST be called whenever the text property is changed.
     async fn regen_glyphs(&self) {
-        let glyphs = self.text_shaper.shape(self.text.get(), self.font_size.get()).await;
+        let font_size = self.font_size.get();
+        let window_scale = self.window_scale.get();
+        let glyphs = self.text_shaper.shape(self.text.get(), font_size, window_scale).await;
         // TODO: we aren't freeing textures
         *self.glyphs.lock().unwrap() = glyphs;
     }
@@ -298,6 +306,7 @@ impl EditBox {
         let is_focused = self.is_focused.get();
         let text = self.text.get();
         let font_size = self.font_size.get();
+        let window_scale = self.window_scale.get();
         let text_color = self.text_color.get();
         let baseline = self.baseline.get();
         let scroll = self.scroll.get();
@@ -313,7 +322,7 @@ impl EditBox {
         let mut mesh = MeshBuilder::with_clip(clip.clone());
         self.draw_selected(&mut mesh, &glyphs, clip.h).unwrap();
 
-        let glyph_pos_iter = GlyphPositionIter::new(font_size, &glyphs, baseline);
+        let glyph_pos_iter = GlyphPositionIter::new(font_size, window_scale, &glyphs, baseline);
         // Used for drawing the cursor when it's at the end of the line.
         let mut rhs = 0.;
 
@@ -378,10 +387,11 @@ impl EditBox {
         let sel_end = std::cmp::max(start, end);
 
         let font_size = self.font_size.get();
+        let window_scale = self.window_scale.get();
         let baseline = self.baseline.get();
         let scroll = self.scroll.get();
         let hi_bg_color = self.hi_bg_color.get();
-        let glyph_pos_iter = GlyphPositionIter::new(font_size, &glyphs, baseline);
+        let glyph_pos_iter = GlyphPositionIter::new(font_size, window_scale, &glyphs, baseline);
 
         let mut start_x = 0.;
         let mut end_x = 0.;
@@ -505,6 +515,7 @@ impl EditBox {
     /// of the closest glyph to that x coord.
     fn find_closest_glyph_idx(&self, x: f32, rect: &Rectangle) -> u32 {
         let font_size = self.font_size.get();
+        let window_scale = self.window_scale.get();
         let baseline = self.baseline.get();
         let glyphs = self.glyphs.lock().unwrap().clone();
 
@@ -525,7 +536,7 @@ impl EditBox {
         let lhs = 0.;
         let mut last_d = (lhs - mouse_x).abs();
 
-        let glyph_pos_iter = GlyphPositionIter::new(font_size, &glyphs, baseline);
+        let glyph_pos_iter = GlyphPositionIter::new(font_size, window_scale, &glyphs, baseline);
         let mut rhs = 0.;
 
         for (i, glyph_rect) in glyph_pos_iter.skip(1).enumerate() {
@@ -878,10 +889,12 @@ impl EditBox {
 
         let cursor_x = {
             let font_size = self.font_size.get();
+            let window_scale = self.window_scale.get();
             let baseline = self.baseline.get();
             let glyphs = self.glyphs.lock().unwrap().clone();
 
-            let mut glyph_pos_iter = GlyphPositionIter::new(font_size, &glyphs, baseline);
+            let mut glyph_pos_iter =
+                GlyphPositionIter::new(font_size, window_scale, &glyphs, baseline);
 
             if cursor_pos == 0 {
                 0.
@@ -935,14 +948,26 @@ impl EditBox {
     fn draw_cached(&self) -> Option<DrawUpdate> {
         let rect = self.rect.get();
 
+        let mut freed_textures = vec![];
+        let mut freed_buffers = vec![];
+
+        let window_scale = self.window_scale.get();
+        if self.old_window_scale.swap(window_scale, Ordering::Relaxed) != window_scale {
+            let render_info = std::mem::replace(&mut *self.render_info.lock().unwrap(), None);
+            // We're finished with these so clean up.
+            if let Some(old) = render_info {
+                freed_textures.push(old.texture_id);
+                freed_buffers.push(old.mesh.vertex_buffer);
+                freed_buffers.push(old.mesh.index_buffer);
+            }
+        }
+
         // draw will recalc this when it's None
         let render_info = self.regen_mesh(rect.clone());
         let old_render_info =
             std::mem::replace(&mut *self.render_info.lock().unwrap(), Some(render_info.clone()));
 
         // We're finished with these so clean up.
-        let mut freed_textures = vec![];
-        let mut freed_buffers = vec![];
         if let Some(old) = old_render_info {
             freed_textures.push(old.texture_id);
             freed_buffers.push(old.mesh.vertex_buffer);

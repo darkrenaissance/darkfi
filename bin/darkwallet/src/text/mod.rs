@@ -69,6 +69,7 @@ pub use wrap::{glyph_str, wrap};
 
 pub struct GlyphPositionIter<'a> {
     font_size: f32,
+    window_scale: f32,
     glyphs: &'a Vec<Glyph>,
     current_x: f32,
     current_y: f32,
@@ -76,8 +77,15 @@ pub struct GlyphPositionIter<'a> {
 }
 
 impl<'a> GlyphPositionIter<'a> {
-    pub fn new(font_size: f32, glyphs: &'a Vec<Glyph>, baseline_y: f32) -> Self {
-        Self { font_size, glyphs, current_x: 0., current_y: baseline_y, i: 0 }
+    pub fn new(font_size: f32, window_scale: f32, glyphs: &'a Vec<Glyph>, baseline_y: f32) -> Self {
+        Self {
+            font_size,
+            window_scale,
+            glyphs,
+            current_x: 0.,
+            current_y: baseline_y * window_scale,
+            i: 0,
+        }
     }
 }
 
@@ -120,6 +128,8 @@ impl<'a> Iterator for GlyphPositionIter<'a> {
 
             Rectangle { x, y, w, h }
         };
+
+        let mut rect = rect / self.window_scale;
 
         self.i += 1;
         Some(rect)
@@ -186,7 +196,7 @@ impl TextShaper {
         substrs
     }
 
-    pub async fn shape(&self, text: String, font_size: f32) -> Vec<Glyph> {
+    pub async fn shape(&self, text: String, font_size: f32, window_scale: f32) -> Vec<Glyph> {
         //debug!(target: "text", "shape('{}', {})", text, font_size);
         // Lock font faces
         // Freetype faces are not threadsafe
@@ -205,7 +215,8 @@ impl TextShaper {
                 //face.set_char_size(109 * 64, 0, 72, 72).unwrap();
                 face.select_size(0).unwrap();
             } else {
-                face.set_char_size(font_size as isize * 64, 0, 96, 96).unwrap();
+                let size = font_size * window_scale;
+                face.set_char_size(size as isize * 64, 0, 96, 96).unwrap();
             }
 
             /*
@@ -284,7 +295,7 @@ impl TextShaper {
                     font_size: if face.has_fixed_sizes() {
                         FontSize::Fixed
                     } else {
-                        FontSize::from(font_size)
+                        FontSize::from((font_size, window_scale))
                     },
                     face_idx,
                 };
@@ -408,13 +419,15 @@ impl TextShaper {
 #[derive(Eq, Hash, PartialEq, Debug)]
 enum FontSize {
     Fixed,
-    Size(u32),
+    Size((u32, u32)),
 }
 
 impl FontSize {
     /// You can't use f32 in Hash and Eq impls
-    fn from(size: f32) -> Self {
-        Self::Size((size * 1000.).round() as u32)
+    fn from(size: (f32, f32)) -> Self {
+        let font_size = (size.0 * 1000.).round() as u32;
+        let scale = (size.1 * 1000.).round() as u32;
+        Self::Size((font_size, scale))
     }
 }
 
