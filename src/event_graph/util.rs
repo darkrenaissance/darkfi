@@ -69,7 +69,7 @@ pub(super) fn days_since(midnight_ts: u64) -> u64 {
 }
 
 /// Calculate the timestamp of the next DAG rotation.
-pub(super) fn next_rotation_timestamp(starting_timestamp: u64, rotation_period: u64) -> u64 {
+pub fn next_rotation_timestamp(starting_timestamp: u64, rotation_period: u64) -> u64 {
     // Prevent division by 0
     if rotation_period == 0 {
         panic!("Rotation period cannot be 0");
@@ -99,7 +99,7 @@ pub(super) fn next_rotation_timestamp(starting_timestamp: u64, rotation_period: 
 /// Calculate the time in milliseconds until the next_rotation, given
 /// as a timestamp.
 /// `next_rotation` here represents a timestamp in UNIX epoch format.
-pub(super) fn seconds_until_next_rotation(next_rotation: u64) -> u64 {
+pub fn seconds_until_next_rotation(next_rotation: u64) -> u64 {
     // Store `now` in a variable in order to avoid a TOCTOU error.
     // There may be a drift of one second between this panic check and
     // the return value if we get unlucky.
@@ -111,7 +111,7 @@ pub(super) fn seconds_until_next_rotation(next_rotation: u64) -> u64 {
 }
 
 /// Generate a deterministic genesis event corresponding to the DAG's configuration.
-pub(super) fn generate_genesis(days_rotation: u64) -> Event {
+pub fn generate_genesis(days_rotation: u64) -> Event {
     // Days rotation is u64 except zero
     let timestamp = if days_rotation == 0 {
         INITIAL_GENESIS

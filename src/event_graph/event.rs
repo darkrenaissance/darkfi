@@ -34,11 +34,11 @@ pub struct Event {
     /// Timestamp of the event in whole seconds
     pub timestamp: u64,
     /// Content of the event
-    pub(crate) content: Vec<u8>,
+    pub content: Vec<u8>,
     /// Parent nodes in the event DAG
-    pub(crate) parents: [blake3::Hash; N_EVENT_PARENTS],
+    pub parents: [blake3::Hash; N_EVENT_PARENTS],
     /// DAG layer index of the event
-    pub(crate) layer: u64,
+    pub layer: u64,
 }
 
 impl Event {

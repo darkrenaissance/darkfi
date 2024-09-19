@@ -60,7 +60,7 @@ pub mod util;
 use util::{generate_genesis, next_rotation_timestamp};
 
 // Debugging event graph
-pub(crate) mod deg;
+pub mod deg;
 use deg::DegEvent;
 
 #[cfg(test)]
@@ -68,12 +68,12 @@ mod tests;
 
 /// Initial genesis timestamp in millis (07 Sep 2023, 00:00:00 UTC)
 /// Must always be UTC midnight.
-const INITIAL_GENESIS: u64 = 1_694_044_800_000;
+pub const INITIAL_GENESIS: u64 = 1_694_044_800_000;
 /// Genesis event contents
-const GENESIS_CONTENTS: &[u8] = &[0x47, 0x45, 0x4e, 0x45, 0x53, 0x49, 0x53];
+pub const GENESIS_CONTENTS: &[u8] = &[0x47, 0x45, 0x4e, 0x45, 0x53, 0x49, 0x53];
 
 /// The number of parents an event is supposed to have.
-const N_EVENT_PARENTS: usize = 5;
+pub const N_EVENT_PARENTS: usize = 5;
 /// Allowed timestamp drift in milliseconds
 const EVENT_TIME_DRIFT: u64 = 60_000;
 /// Null event ID
@@ -843,10 +843,13 @@ impl EventGraph {
 
     /// Fetch all the events that are on a higher layers than the
     /// provided ones.
-    pub async fn fetch_successors_of(&self, tips: Vec<(u64, blake3::Hash)>) -> Result<Vec<Event>> {
+    pub async fn fetch_successors_of(
+        &self,
+        tips: BTreeMap<u64, HashSet<blake3::Hash>>,
+    ) -> Result<Vec<Event>> {
         debug!(
              target: "event_graph::fetch_successors_of()",
-             "fetching successors of c{tips:?}"
+             "fetching successors of {tips:?}"
         );
 
         let mut graph = HashMap::new();
@@ -859,16 +862,21 @@ impl EventGraph {
 
         let mut result = vec![];
 
-        for tip in tips.iter() {
-            if !graph.contains_key(&tip.1) {
-                continue;
+        'outer: for tip in tips.iter() {
+            for i in tip.1.iter() {
+                if !graph.contains_key(i) {
+                    continue 'outer;
+                }
             }
+
             for (_, ev) in graph.iter() {
-                if ev.layer > tip.0 && !result.contains(ev) {
+                if ev.layer > *tip.0 && !result.contains(ev) {
                     result.push(ev.clone())
                 }
             }
         }
+
+        result.sort_by(|a, b| a.layer.cmp(&b.layer));
 
         Ok(result)
     }

@@ -17,33 +17,27 @@
  */
 
 use darkfi::{
-    async_daemonize, cli_desc,
-    event_graph::{self, proto::ProtocolEventGraph, EventGraph, EventGraphPtr},
-    net::{
-        session::SESSION_DEFAULT,
-        settings::SettingsOpt as NetSettingsOpt,
-        transport::{Dialer, Listener, PtListener, PtStream},
-        P2p, P2pPtr,
-    },
-    rpc::{
-        jsonrpc::JsonSubscriber,
-        server::{listen_and_serve, RequestHandler},
-    },
-    system::{sleep, StoppableTask, StoppableTaskPtr},
-    util::path::{expand_path, get_config_path},
+    event_graph::{self},
+    net::transport::Dialer,
+    util::path::expand_path,
     Error, Result,
 };
-use darkfi_serial::{
-    async_trait, deserialize_async, serialize_async, AsyncDecodable, AsyncEncodable, Encodable,
-    SerialDecodable, SerialEncodable,
-};
-use log::{debug, error, info, warn};
+use darkfi_serial::{AsyncDecodable, AsyncEncodable};
+use log::{error, info};
+use sled_overlay::sled;
+use smol::fs;
 use url::Url;
 
 use evgrd::{FetchEventsMessage, LocalEventGraph, VersionMessage, MSG_EVENT, MSG_FETCHEVENTS};
 
 async fn amain() -> Result<()> {
-    let evgr = LocalEventGraph::new();
+    info!("Instantiating event DAG");
+    let ex = std::sync::Arc::new(smol::Executor::new());
+    let datastore = expand_path("~/.local/darkfi/evgrd")?;
+    fs::create_dir_all(&datastore).await?;
+    let sled_db = sled::open(datastore)?;
+
+    let evgr = LocalEventGraph::new(sled_db.clone(), "evgrd_testdag", 1, ex.clone()).await?;
 
     let endpoint = "tcp://127.0.0.1:5588";
     let endpoint = Url::parse(endpoint)?;
@@ -51,33 +45,44 @@ async fn amain() -> Result<()> {
     let dialer = Dialer::new(endpoint, None).await?;
     let timeout = std::time::Duration::from_secs(60);
 
-    info!("Connecting...");
+    println!("Connecting...");
     let mut stream = dialer.dial(Some(timeout)).await?;
-    info!("Connected!");
+    println!("Connected!");
 
     let version = VersionMessage::new();
     version.encode_async(&mut stream).await?;
 
     let server_version = VersionMessage::decode_async(&mut stream).await?;
-    info!("Server version: {}", server_version.protocol_version);
+    println!("Server version: {}", server_version.protocol_version);
 
-    let fetchevs = FetchEventsMessage::new(evgr.unref_tips.clone());
+    let unref_tips = evgr.unreferenced_tips.read().await.clone();
+    let fetchevs = FetchEventsMessage::new(unref_tips);
     MSG_FETCHEVENTS.encode_async(&mut stream).await?;
     fetchevs.encode_async(&mut stream).await?;
 
     loop {
         let msg_type = u8::decode_async(&mut stream).await?;
+        println!("Received: {msg_type:?}");
         if msg_type != MSG_EVENT {
             error!("Received invalid msg_type: {msg_type}");
             return Err(Error::MalformedPacket)
         }
 
         let ev = event_graph::Event::decode_async(&mut stream).await?;
-    }
 
-    Ok(())
+        let genesis_timestamp = evgr.current_genesis.read().await.clone().timestamp;
+        let ev_id = ev.id();
+        if !evgr.dag.contains_key(ev_id.as_bytes()).unwrap() &&
+            ev.validate(&evgr.dag, genesis_timestamp, evgr.days_rotation, None).await?
+        {
+            println!("got {ev:?}");
+            evgr.dag_insert(&[ev]).await.unwrap();
+        } else {
+            println!("Event is invalid!")
+        }
+    }
 }
 
 fn main() {
-    smol::block_on(amain());
+    let _ = smol::block_on(amain());
 }

@@ -18,7 +18,7 @@
 
 use darkfi::{
     async_daemonize, cli_desc,
-    event_graph::{self, proto::ProtocolEventGraph, EventGraph, EventGraphPtr},
+    event_graph::{proto::ProtocolEventGraph, Event, EventGraph, EventGraphPtr},
     net::{
         session::SESSION_DEFAULT,
         settings::SettingsOpt as NetSettingsOpt,
@@ -29,24 +29,16 @@ use darkfi::{
         jsonrpc::JsonSubscriber,
         server::{listen_and_serve, RequestHandler},
     },
-    system::{sleep, Publisher, PublisherPtr, StoppableTask, StoppableTaskPtr},
-    util::path::{expand_path, get_config_path},
+    system::{sleep, StoppableTask, StoppableTaskPtr},
+    util::path::expand_path,
     Error, Result,
 };
-use darkfi_serial::{
-    async_trait, deserialize_async, serialize_async, AsyncDecodable, AsyncEncodable, Encodable,
-    SerialDecodable, SerialEncodable,
-};
+use darkfi_serial::{AsyncDecodable, AsyncEncodable};
 use futures::FutureExt;
 use log::{debug, error, info};
-use rand::rngs::OsRng;
 use sled_overlay::sled;
 use smol::{fs, lock::Mutex, stream::StreamExt, Executor};
-use std::{
-    collections::HashSet,
-    path::PathBuf,
-    sync::{Arc, Mutex as SyncMutex},
-};
+use std::{collections::HashSet, path::PathBuf, sync::Arc};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;
 
@@ -102,7 +94,7 @@ struct Args {
     sync_attempts: u8,
 
     /// Number of seconds to wait before trying again if sync fails.
-    #[structopt(long, default_value = "10")]
+    #[structopt(long, default_value = "50")]
     sync_timeout: u8,
 
     /// P2P network settings
@@ -170,14 +162,12 @@ async fn rpc_serve(
             }
         }
     }
-
-    Ok(())
 }
 
 async fn handle_connect(
     mut stream: Box<dyn PtStream>,
     daemon: Arc<Daemon>,
-    ex: Arc<Executor<'_>>,
+    _ex: Arc<Executor<'_>>,
 ) -> Result<()> {
     let client_version = VersionMessage::decode_async(&mut stream).await?;
     info!(target: "evgrd", "Client version: {}", client_version.protocol_version);
@@ -203,6 +193,8 @@ async fn handle_connect(
                 let fetchevs = FetchEventsMessage::decode_async(&mut stream).await?;
                 info!(target: "evgrd", "Fetching events {fetchevs:?}");
                 let events = daemon.event_graph.fetch_successors_of(fetchevs.unref_tips).await?;
+
+                info!("fetched {events:?}");
 
                 for event in events {
                    MSG_EVENT.encode_async(&mut stream).await?;
@@ -234,11 +226,17 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         sled_db.clone(),
         replay_datastore.clone(),
         replay_mode,
-        "darkirc_dag",
+        "evgrd_dag",
         1,
         ex.clone(),
     )
     .await?;
+
+    // Adding some events
+    // for i in 1..6 {
+    //     let event = Event::new(vec![1, 2, 3, i], &event_graph).await;
+    //     event_graph.dag_insert(&[event.clone()]).await.unwrap();
+    // }
 
     let prune_task = event_graph.prune_task.get().unwrap();
 
