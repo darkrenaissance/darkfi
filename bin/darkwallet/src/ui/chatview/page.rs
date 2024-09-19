@@ -52,8 +52,9 @@ fn is_whitespace(s: &str) -> bool {
 }
 
 #[derive(Clone)]
-pub(super) struct PrivMessage {
+pub struct PrivMessage {
     font_size: f32,
+    window_scale: f32,
 
     timestamp: Timestamp,
     id: MessageId,
@@ -70,8 +71,9 @@ pub(super) struct PrivMessage {
 }
 
 impl PrivMessage {
-    pub(super) async fn new(
+    pub async fn new(
         font_size: f32,
+        window_scale: f32,
 
         timestamp: Timestamp,
         id: MessageId,
@@ -83,11 +85,8 @@ impl PrivMessage {
         text_shaper: &TextShaper,
         render_api: &RenderApi,
     ) -> Message {
-        let dt = Local.timestamp_millis_opt(timestamp as i64).unwrap();
-        let timestr = dt.format("%H:%M").to_string();
-
-        let linetext = format!("{} {} {}", timestr, nick, text);
-        let unwrapped_glyphs = text_shaper.shape(linetext, font_size).await;
+        let linetext = Self::gen_line_text(timestamp, &nick, &text);
+        let unwrapped_glyphs = text_shaper.shape(linetext, font_size * window_scale).await;
 
         let mut atlas = text::Atlas::new(render_api);
         atlas.push(&unwrapped_glyphs);
@@ -95,6 +94,7 @@ impl PrivMessage {
 
         let mut self_ = Self {
             font_size,
+            window_scale,
             timestamp,
             id,
             nick,
@@ -107,6 +107,13 @@ impl PrivMessage {
         };
         self_.adjust_width(line_width);
         Message::Priv(self_)
+    }
+
+    fn gen_line_text(timestamp: Timestamp, nick: &str, text: &str) -> String {
+        let dt = Local.timestamp_millis_opt(timestamp as i64).unwrap();
+        let timestr = dt.format("%H:%M").to_string();
+
+        format!("{} {} {}", timestr, nick, text)
     }
 
     fn height(&self, line_height: f32) -> f32 {
@@ -204,8 +211,14 @@ impl PrivMessage {
             section = 0;
         }
 
-        let glyph_pos_iter = GlyphPositionIter::new(self.font_size, line, baseline);
-        for (mut glyph_rect, glyph) in glyph_pos_iter.zip(line.iter()) {
+        let glyph_pos_iter = GlyphPositionIter::new(
+            self.font_size * self.window_scale,
+            line,
+            baseline * self.window_scale,
+        );
+        for (glyph_rect, glyph) in glyph_pos_iter.zip(line.iter()) {
+            let mut glyph_rect = glyph_rect / self.window_scale;
+
             let uv_rect = self.atlas.fetch_uv(glyph.glyph_id).expect("missing glyph UV rect");
             glyph_rect.y -= off_y;
 
@@ -227,13 +240,36 @@ impl PrivMessage {
         }
     }
 
-    fn clear_mesh(&mut self) -> Option<GfxDrawMesh> {
-        std::mem::replace(&mut self.mesh_cache, None)
+    /// clear_mesh() must be called after this.
+    async fn adjust_window_scale(
+        &mut self,
+        window_scale: f32,
+        text_shaper: &TextShaper,
+        render_api: &RenderApi,
+    ) -> GfxTextureId {
+        self.window_scale = window_scale;
+
+        let linetext = Self::gen_line_text(self.timestamp, &self.nick, &self.text);
+        self.unwrapped_glyphs = text_shaper.shape(linetext, self.font_size * window_scale).await;
+
+        let texture_id = self.atlas.texture_id;
+
+        let mut atlas = text::Atlas::new(render_api);
+        atlas.push(&self.unwrapped_glyphs);
+        self.atlas = atlas.make();
+
+        texture_id
     }
 
+    /// clear_mesh() must be called after this.
     fn adjust_width(&mut self, line_width: f32) {
         // Invalidate wrapped_glyphs and recalc
-        self.wrapped_lines = text::wrap(line_width, self.font_size, &self.unwrapped_glyphs);
+        self.wrapped_lines =
+            text::wrap(line_width * self.window_scale, self.font_size, &self.unwrapped_glyphs);
+    }
+
+    fn clear_mesh(&mut self) -> Option<GfxDrawMesh> {
+        std::mem::replace(&mut self.mesh_cache, None)
     }
 
     fn select(&mut self) {
@@ -250,8 +286,10 @@ impl std::fmt::Debug for PrivMessage {
 }
 
 #[derive(Clone)]
-pub(super) struct DateMessage {
+pub struct DateMessage {
     font_size: f32,
+    window_scale: f32,
+
     timestamp: Timestamp,
     glyphs: Vec<Glyph>,
 
@@ -260,19 +298,17 @@ pub(super) struct DateMessage {
 }
 
 impl DateMessage {
-    pub(super) async fn new(
+    pub async fn new(
         font_size: f32,
+        window_scale: f32,
+
         timestamp: Timestamp,
 
         text_shaper: &TextShaper,
         render_api: &RenderApi,
     ) -> Message {
-        let dt = Local.timestamp_millis_opt(timestamp as i64).unwrap();
-        let datestr = dt.format("%a %-d %b %Y").to_string();
-
-        let dt2 = dt.date_naive().and_hms_opt(0, 0, 0).unwrap();
-        assert_eq!(dt.date_naive(), dt2.date());
-        let timestamp = Local.from_local_datetime(&dt2).unwrap().timestamp_millis() as u64;
+        let datestr = Self::datestr(timestamp);
+        let timestamp = Self::timest_to_midnight(timestamp);
 
         let glyphs = text_shaper.shape(datestr, font_size).await;
 
@@ -280,15 +316,48 @@ impl DateMessage {
         atlas.push(&glyphs);
         let atlas = atlas.make();
 
-        Message::Date(Self { font_size, timestamp, glyphs, atlas, mesh_cache: None })
+        Message::Date(Self { font_size, window_scale, timestamp, glyphs, atlas, mesh_cache: None })
     }
+
+    fn datestr(timestamp: Timestamp) -> String {
+        let dt = Local.timestamp_millis_opt(timestamp as i64).unwrap();
+        let datestr = dt.format("%a %-d %b %Y").to_string();
+        datestr
+    }
+
+    fn timest_to_midnight(timestamp: Timestamp) -> Timestamp {
+        let dt = Local.timestamp_millis_opt(timestamp as i64).unwrap();
+        let dt2 = dt.date_naive().and_hms_opt(0, 0, 0).unwrap();
+        assert_eq!(dt.date_naive(), dt2.date());
+        let timestamp = Local.from_local_datetime(&dt2).unwrap().timestamp_millis() as u64;
+        timestamp
+    }
+
+    /// clear_mesh() must be called after this.
+    async fn adjust_window_scale(
+        &mut self,
+        window_scale: f32,
+        text_shaper: &TextShaper,
+        render_api: &RenderApi,
+    ) -> GfxTextureId {
+        self.window_scale = window_scale;
+
+        let datestr = Self::datestr(self.timestamp);
+        self.glyphs = text_shaper.shape(datestr, self.font_size * window_scale).await;
+
+        let texture_id = self.atlas.texture_id;
+
+        let mut atlas = text::Atlas::new(render_api);
+        atlas.push(&self.glyphs);
+        self.atlas = atlas.make();
+
+        texture_id
+    }
+
+    //fn adjust_width(&mut self, line_width: f32) { }
 
     fn clear_mesh(&mut self) -> Option<GfxDrawMesh> {
-        None
-    }
-
-    fn adjust_width(&mut self, line_width: f32) {
-        // Do nothing
+        std::mem::replace(&mut self.mesh_cache, None)
     }
 
     fn gen_mesh(
@@ -357,10 +426,15 @@ impl Message {
         }
     }
 
-    fn clear_mesh(&mut self) -> Option<GfxDrawMesh> {
+    async fn adjust_window_scale(
+        &mut self,
+        window_scale: f32,
+        text_shaper: &TextShaper,
+        render_api: &RenderApi,
+    ) -> GfxTextureId {
         match self {
-            Self::Priv(m) => m.clear_mesh(),
-            Self::Date(m) => m.clear_mesh(),
+            Self::Priv(m) => m.adjust_window_scale(window_scale, text_shaper, render_api).await,
+            Self::Date(m) => m.adjust_window_scale(window_scale, text_shaper, render_api).await,
         }
     }
 
@@ -368,6 +442,13 @@ impl Message {
         match self {
             Self::Priv(m) => m.adjust_width(line_width),
             Self::Date(_) => {}
+        }
+    }
+
+    fn clear_mesh(&mut self) -> Option<GfxDrawMesh> {
+        match self {
+            Self::Priv(m) => m.clear_mesh(),
+            Self::Date(m) => m.clear_mesh(),
         }
     }
 
@@ -433,9 +514,9 @@ fn select_nick_color(nick: &str, nick_colors: &[Color]) -> Color {
 }
 
 #[derive(Default)]
-pub(super) struct FreedData {
-    pub(super) buffers: Vec<GfxBufferId>,
-    pub(super) textures: Vec<GfxTextureId>,
+pub struct FreedData {
+    pub buffers: Vec<GfxBufferId>,
+    pub textures: Vec<GfxTextureId>,
 }
 
 impl FreedData {
@@ -452,8 +533,8 @@ pub struct MessageBuffer {
     /// From most recent to older
     msgs: Vec<Message>,
     date_msgs: HashMap<NaiveDate, Message>,
-    pub(super) freed: FreedData,
-    pub(super) line_width: f32,
+    pub freed: FreedData,
+    pub line_width: f32,
 
     font_size: PropertyFloat32,
     line_height: PropertyFloat32,
@@ -464,12 +545,17 @@ pub struct MessageBuffer {
     hi_bg_color: PropertyColor,
     debug: PropertyBool,
 
+    window_scale: PropertyFloat32,
+    /// Used to detect if the window scale was changed when drawing.
+    /// If it does then we must reload the glyphs too.
+    old_window_scale: f32,
+
     render_api: RenderApiPtr,
     text_shaper: TextShaperPtr,
 }
 
 impl MessageBuffer {
-    pub(super) fn new(
+    pub fn new(
         font_size: PropertyFloat32,
         line_height: PropertyFloat32,
         baseline: PropertyFloat32,
@@ -478,9 +564,11 @@ impl MessageBuffer {
         nick_colors: PropertyPtr,
         hi_bg_color: PropertyColor,
         debug: PropertyBool,
+        window_scale: PropertyFloat32,
         render_api: RenderApiPtr,
         text_shaper: TextShaperPtr,
     ) -> Self {
+        let old_window_scale = window_scale.get();
         Self {
             msgs: vec![],
             date_msgs: HashMap::new(),
@@ -496,14 +584,30 @@ impl MessageBuffer {
             hi_bg_color,
             debug,
 
+            window_scale,
+            old_window_scale,
+
             render_api,
             text_shaper,
         }
     }
 
+    pub async fn adjust_window_scale(&mut self) {
+        let window_scale = self.window_scale.get();
+        if self.old_window_scale == window_scale {
+            return
+        }
+
+        for msg in &mut self.msgs {
+            let old_texture_id =
+                msg.adjust_window_scale(window_scale, &self.text_shaper, &self.render_api).await;
+            self.freed.add_texture(old_texture_id);
+        }
+    }
+
     /// For scrolling we want to be able to adjust and measure without
     /// explicitly rendering since it may be off screen.
-    pub(super) fn adjust_width(&mut self, line_width: f32) {
+    pub fn adjust_width(&mut self, line_width: f32) {
         if (line_width - self.line_width).abs() < f32::EPSILON {
             return;
         }
@@ -512,12 +616,10 @@ impl MessageBuffer {
         for msg in &mut self.msgs {
             msg.adjust_width(line_width);
         }
-
-        self.clear_meshes();
     }
 
     /// Clear all meshes and caches. Returns data that needs to be freed.
-    fn clear_meshes(&mut self) {
+    pub fn clear_meshes(&mut self) {
         for msg in &mut self.msgs {
             if let Some(mesh) = msg.clear_mesh() {
                 self.freed.add_mesh(mesh);
@@ -525,7 +627,7 @@ impl MessageBuffer {
         }
     }
 
-    pub(super) async fn calc_total_height(&mut self) -> f32 {
+    pub async fn calc_total_height(&mut self) -> f32 {
         let line_height = self.line_height.get();
         let mut height = 0.;
 
@@ -539,7 +641,7 @@ impl MessageBuffer {
         height
     }
 
-    pub(super) async fn insert_privmsg(
+    pub async fn insert_privmsg(
         &mut self,
         timest: Timestamp,
         message_id: MessageId,
@@ -548,9 +650,11 @@ impl MessageBuffer {
     ) {
         //debug!(target: "ui::chatview", "MessageBuffer::insert_privmsg()");
         let font_size = self.font_size.get();
+        let window_scale = self.window_scale.get();
 
         let msg = PrivMessage::new(
             font_size,
+            window_scale,
             timest,
             message_id,
             nick,
@@ -595,7 +699,7 @@ impl MessageBuffer {
         self.msgs.insert(idx, msg);
     }
 
-    pub(super) async fn push_privmsg(
+    pub async fn push_privmsg(
         &mut self,
         timest: Timestamp,
         message_id: MessageId,
@@ -603,9 +707,11 @@ impl MessageBuffer {
         text: String,
     ) -> f32 {
         let font_size = self.font_size.get();
+        let window_scale = self.window_scale.get();
 
         let msg = PrivMessage::new(
             font_size,
+            window_scale,
             timest,
             message_id,
             nick,
@@ -628,11 +734,7 @@ impl MessageBuffer {
     }
 
     /// Generate caches and return meshes
-    pub(super) async fn gen_meshes(
-        &mut self,
-        rect: &Rectangle,
-        scroll: f32,
-    ) -> Vec<(f32, GfxDrawMesh)> {
+    pub async fn gen_meshes(&mut self, rect: &Rectangle, scroll: f32) -> Vec<(f32, GfxDrawMesh)> {
         let line_height = self.line_height.get();
         let baseline = self.baseline.get();
         let debug_render = self.debug.get();
@@ -685,6 +787,7 @@ impl MessageBuffer {
     /// Gets around borrow checker with unsafe
     fn msgs_with_date(&mut self) -> impl Stream<Item = &mut Message> {
         let font_size = self.font_size.get();
+        let window_scale = self.window_scale.get();
         AsyncIter::from(async_gen! {
             let mut last_date = None;
 
@@ -697,7 +800,7 @@ impl MessageBuffer {
 
                 if let Some(newer_date) = last_date {
                     if newer_date != older_date {
-                        let datemsg = self.get_date_msg(newer_date, font_size).await;
+                        let datemsg = self.get_date_msg(newer_date, font_size, window_scale).await;
                         let datemsg = unsafe { &mut *(datemsg as *mut Message) };
                         //debug!(target: "ui::chatview", "Adding date: {idx} {datemsg:?}");
                         yield datemsg;
@@ -710,32 +813,43 @@ impl MessageBuffer {
             }
 
             if let Some(date) = last_date {
-                let datemsg = self.get_date_msg(date, font_size).await;
+                let datemsg = self.get_date_msg(date, font_size, window_scale).await;
                 let datemsg = unsafe { &mut *(datemsg as *mut Message) };
                 yield datemsg;
             }
         })
     }
 
-    async fn get_date_msg(&mut self, date: NaiveDate, font_size: f32) -> &mut Message {
+    async fn get_date_msg(
+        &mut self,
+        date: NaiveDate,
+        font_size: f32,
+        window_scale: f32,
+    ) -> &mut Message {
         let dt = date.and_hms_opt(0, 0, 0).unwrap();
         let timest = Local.from_local_datetime(&dt).unwrap().timestamp_millis() as u64;
 
         if !self.date_msgs.contains_key(&date) {
-            let datemsg =
-                DateMessage::new(font_size, timest, &self.text_shaper, &self.render_api).await;
+            let datemsg = DateMessage::new(
+                font_size,
+                window_scale,
+                timest,
+                &self.text_shaper,
+                &self.render_api,
+            )
+            .await;
             self.date_msgs.insert(date, datemsg);
         }
 
         self.date_msgs.get_mut(&date).unwrap()
     }
 
-    pub(super) fn oldest_timestamp(&self) -> Option<Timestamp> {
+    pub fn oldest_timestamp(&self) -> Option<Timestamp> {
         let last_msg = &self.msgs.last()?;
         Some(last_msg.timestamp())
     }
 
-    pub(super) fn latest_timestamp(&self) -> Option<Timestamp> {
+    pub fn latest_timestamp(&self) -> Option<Timestamp> {
         let first_msg = &self.msgs.first()?;
         Some(first_msg.timestamp())
     }
@@ -754,7 +868,7 @@ impl MessageBuffer {
         colors
     }
 
-    pub(super) async fn select_line(&mut self, y: f32) {
+    pub async fn select_line(&mut self, y: f32) {
         let line_height = self.line_height.get();
 
         let msgs = self.msgs_with_date();

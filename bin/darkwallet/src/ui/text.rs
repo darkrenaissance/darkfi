@@ -62,12 +62,14 @@ pub struct Text {
     baseline: PropertyFloat32,
     debug: PropertyBool,
 
+    window_scale: PropertyFloat32,
     parent_rect: SyncMutex<Option<Rectangle>>,
 }
 
 impl Text {
     pub async fn new(
         node: SceneNodeWeak,
+        window_scale: PropertyFloat32,
         render_api: RenderApiPtr,
         text_shaper: TextShaperPtr,
         ex: ExecutorPtr,
@@ -94,6 +96,7 @@ impl Text {
             text_color.get(),
             baseline.get(),
             debug.get(),
+            window_scale.get(),
         )
         .await;
 
@@ -123,6 +126,7 @@ impl Text {
                 baseline,
                 debug,
 
+                window_scale,
                 parent_rect: SyncMutex::new(None),
             }
         });
@@ -138,14 +142,18 @@ impl Text {
         text_color: Color,
         baseline: f32,
         debug: bool,
+        window_scale: f32,
     ) -> TextRenderInfo {
         debug!(target: "ui::text", "Rendering label '{}'", text);
-        let glyphs = text_shaper.shape(text, font_size).await;
+        let glyphs = text_shaper.shape(text, font_size * window_scale).await;
         let atlas = text::make_texture_atlas(render_api, &glyphs);
 
         let mut mesh = MeshBuilder::new();
-        let glyph_pos_iter = GlyphPositionIter::new(font_size, &glyphs, baseline);
-        for (glyph_rect, glyph) in glyph_pos_iter.zip(glyphs.iter()) {
+        let glyph_pos_iter =
+            GlyphPositionIter::new(font_size * window_scale, &glyphs, baseline * window_scale);
+        for (mut glyph_rect, glyph) in glyph_pos_iter.zip(glyphs.iter()) {
+            let glyph_rect = glyph_rect / window_scale;
+
             let uv_rect = atlas.fetch_uv(glyph.glyph_id).expect("missing glyph UV rect");
 
             if debug {
@@ -165,21 +173,6 @@ impl Text {
     }
 
     async fn redraw(self: Arc<Self>) {
-        let old = self.render_info.lock().unwrap().clone();
-
-        let render_info = Self::regen_mesh(
-            &self.render_api,
-            &self.text_shaper,
-            self.text.get(),
-            self.font_size.get(),
-            self.text_color.get(),
-            self.baseline.get(),
-            self.debug.get(),
-        )
-        .await;
-
-        *self.render_info.lock().unwrap() = render_info;
-
         let Some(parent_rect) = self.parent_rect.lock().unwrap().clone() else { return };
 
         let Some(draw_update) = self.get_draw_calls(parent_rect).await else {
@@ -190,11 +183,12 @@ impl Text {
         debug!(target: "ui::text", "replace draw calls done");
 
         // We're finished with these so clean up.
-        assert!(draw_update.freed_textures.is_empty());
-        assert!(draw_update.freed_buffers.is_empty());
-        self.render_api.delete_buffer(old.mesh.vertex_buffer);
-        self.render_api.delete_buffer(old.mesh.index_buffer);
-        self.render_api.delete_texture(old.texture_id);
+        for texture in draw_update.freed_textures {
+            self.render_api.delete_texture(texture);
+        }
+        for buff in draw_update.freed_buffers {
+            self.render_api.delete_buffer(buff);
+        }
     }
 
     async fn get_draw_calls(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
@@ -202,7 +196,21 @@ impl Text {
         self.rect.eval(&parent_rect).ok()?;
         let rect = self.rect.get();
 
-        let render_info = self.render_info.lock().unwrap().clone();
+        let old_render_info = self.render_info.lock().unwrap().clone();
+
+        let render_info = Self::regen_mesh(
+            &self.render_api,
+            &self.text_shaper,
+            self.text.get(),
+            self.font_size.get(),
+            self.text_color.get(),
+            self.baseline.get(),
+            self.debug.get(),
+            self.window_scale.get(),
+        )
+        .await;
+
+        *self.render_info.lock().unwrap() = render_info.clone();
 
         let mesh = GfxDrawMesh {
             vertex_buffer: render_info.mesh.vertex_buffer,
@@ -224,8 +232,11 @@ impl Text {
                     z_index: self.z_index.get(),
                 },
             )],
-            freed_textures: vec![],
-            freed_buffers: vec![],
+            freed_textures: vec![old_render_info.texture_id],
+            freed_buffers: vec![
+                old_render_info.mesh.vertex_buffer,
+                old_render_info.mesh.index_buffer,
+            ],
         })
     }
 }

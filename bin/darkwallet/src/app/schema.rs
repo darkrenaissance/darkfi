@@ -80,6 +80,8 @@ const FONTSIZE: f32 = 40.;
 const FONTSIZE: f32 = 20.;
 
 pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
+    let window_scale = PropertyFloat32::wrap(&window, Role::Internal, "scale", 0).unwrap();
+
     let mut cc = Compiler::new();
 
     // Create a layer called view
@@ -257,7 +259,15 @@ pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
     node.set_property_u32(Role::App, "z_index", 1).unwrap();
 
     let node = node
-        .setup(|me| Text::new(me, app.render_api.clone(), app.text_shaper.clone(), app.ex.clone()))
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.render_api.clone(),
+                app.text_shaper.clone(),
+                app.ex.clone(),
+            )
+        })
         .await;
     layer_node.link(node);
 
@@ -420,6 +430,7 @@ pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
             ChatView::new(
                 me,
                 chat_tree,
+                window_scale,
                 app.render_api.clone(),
                 app.text_shaper.clone(),
                 app.ex.clone(),
@@ -430,7 +441,7 @@ pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
 }
 
 pub(super) async fn make(app: &App, window: SceneNodePtr) {
-    let screen_scale = PropertyFloat32::wrap(&window, Role::Internal, "scale", 0).unwrap();
+    let window_scale = PropertyFloat32::wrap(&window, Role::Internal, "scale", 0).unwrap();
 
     let mut cc = Compiler::new();
 
@@ -517,7 +528,15 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     node.set_property_u32(Role::App, "z_index", 1).unwrap();
 
     let node = node
-        .setup(|me| Text::new(me, app.render_api.clone(), app.text_shaper.clone(), app.ex.clone()))
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.render_api.clone(),
+                app.text_shaper.clone(),
+                app.ex.clone(),
+            )
+        })
         .await;
     layer_node.link(node);
 
@@ -602,6 +621,7 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
             ChatView::new(
                 me,
                 chat_tree,
+                window_scale.clone(),
                 app.render_api.clone(),
                 app.text_shaper.clone(),
                 app.ex.clone(),
@@ -668,7 +688,15 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     node.set_property_u32(Role::App, "z_index", 2).unwrap();
 
     let node = node
-        .setup(|me| Text::new(me, app.render_api.clone(), app.text_shaper.clone(), app.ex.clone()))
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.render_api.clone(),
+                app.text_shaper.clone(),
+                app.ex.clone(),
+            )
+        })
         .await;
     layer_node.link(node);
 

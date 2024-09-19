@@ -182,6 +182,7 @@ impl ChatView {
     pub async fn new(
         node: SceneNodeWeak,
         tree: sled::Tree,
+        window_scale: PropertyFloat32,
         render_api: RenderApiPtr,
         text_shaper: TextShaperPtr,
         ex: ExecutorPtr,
@@ -284,6 +285,7 @@ impl ChatView {
                     nick_colors.clone(),
                     hi_bg_color.clone(),
                     debug.clone(),
+                    window_scale,
                     render_api,
                     text_shaper,
                 )),
@@ -691,7 +693,9 @@ impl UIObject for ChatView {
         let rect = self.rect.get();
 
         let mut msgbuf = self.msgbuf.lock().await;
+        msgbuf.adjust_window_scale().await;
         msgbuf.adjust_width(rect.w);
+        msgbuf.clear_meshes();
 
         let mut scroll = self.scroll.get();
         if let Some(scroll) = self.adjust_scroll(&mut msgbuf, scroll, rect.h).await {
