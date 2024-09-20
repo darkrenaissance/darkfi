@@ -64,6 +64,10 @@
 - [Key Recovery Scheme](crypto/key-recovery.md)
 - [Reading maths books](crypto/reading-maths-books.md)
 
+# User Interface
+
+- [UI](ui/ui.md)
+
 # DEP
 
 - [DEP 0001: Version Message Info (accepted)](dep/0001.md)
