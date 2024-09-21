@@ -47,6 +47,7 @@ use log::LevelFilter;
 
 mod app;
 //mod darkirc;
+mod darkirc2;
 mod error;
 mod expr;
 mod gfx;
@@ -127,8 +128,8 @@ fn main() {
 
     //let darkirc_backend = DarkIrcBackend::new();
     let app = app::App::new(
-        sg_root.clone(),
-        render_api.clone(),
+        sg_root,
+        render_api,
         event_pub.clone(),
         text_shaper,
         //darkirc_backend,
@@ -137,6 +138,18 @@ fn main() {
     let app_task = ex.spawn(app.clone().start());
     async_runtime.push_task(app_task);
 
+    let cv_started = app.is_started.clone();
+    let sg_root = app.sg_root.clone();
+    let ex2 = ex.clone();
+    let darkirc_task = ex.spawn(async move {
+        cv_started.wait().await;
+        if let Err(e) = darkirc2::receive_msgs(sg_root, ex2).await {
+            error!("DarkIRC error: {e}")
+        }
+    });
+    async_runtime.push_task(darkirc_task);
+
+    /*
     // Nice to see which events exist
     let ev_sub = event_pub.subscribe_key_down();
     let ev_relay_task = ex.spawn(async move {
@@ -186,6 +199,7 @@ fn main() {
         }
     });
     async_runtime.push_task(ev_relay_task);
+    */
 
     //let stage = gfx::Stage::new(method_rep, event_pub);
     gfx::run_gui(app, async_runtime, method_rep, event_pub);

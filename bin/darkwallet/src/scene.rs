@@ -293,6 +293,21 @@ impl SceneNode {
     fn has_method(&self, name: &str) -> bool {
         self.methods.iter().any(|sig| sig.name == name)
     }
+
+    pub fn get_method(&self, name: &str) -> Option<&Method> {
+        self.methods.iter().find(|method| method.name == name)
+    }
+
+    pub fn call_method(
+        &self,
+        name: &str,
+        arg_data: Vec<u8>,
+        response_fn: MethodResponseFn,
+    ) -> Result<()> {
+        let method = self.get_method(name).ok_or(Error::MethodNotFound)?;
+        (method.method_fn)(arg_data, response_fn);
+        Ok(())
+    }
 }
 
 impl std::fmt::Debug for SceneNode {

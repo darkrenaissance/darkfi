@@ -618,9 +618,9 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
 
     let db = sled::open(CHATDB_PATH).expect("cannot open sleddb");
     let chat_tree = db.open_tree(b"chat").unwrap();
-    if chat_tree.is_empty() {
-        populate_tree(&chat_tree);
-    }
+    //if chat_tree.is_empty() {
+    //    populate_tree(&chat_tree);
+    //}
     debug!(target: "app", "db has {} lines", chat_tree.len());
     let node = node
         .setup(|me| {

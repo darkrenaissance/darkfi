@@ -18,6 +18,7 @@
 
 use async_recursion::async_recursion;
 use chrono::{Local, NaiveDate, NaiveDateTime, TimeZone};
+use darkfi::system::CondVar;
 use darkfi_serial::Encodable;
 use futures::{stream::FuturesUnordered, StreamExt};
 use sled_overlay::sled;
@@ -115,13 +116,14 @@ impl AsyncRuntime {
 pub type AppPtr = Arc<App>;
 
 pub struct App {
-    pub(self) sg_root: SceneNodePtr,
-    pub(self) render_api: RenderApiPtr,
-    pub(self) event_pub: GraphicsEventPublisherPtr,
-    pub(self) text_shaper: TextShaperPtr,
+    pub sg_root: SceneNodePtr,
+    pub is_started: Arc<CondVar>,
+    pub render_api: RenderApiPtr,
+    pub event_pub: GraphicsEventPublisherPtr,
+    pub text_shaper: TextShaperPtr,
     //pub(self) darkirc_backend: DarkIrcBackendPtr,
-    pub(self) tasks: SyncMutex<Vec<Task<()>>>,
-    pub(self) ex: ExecutorPtr,
+    pub tasks: SyncMutex<Vec<Task<()>>>,
+    pub ex: ExecutorPtr,
 }
 
 impl App {
@@ -135,6 +137,7 @@ impl App {
     ) -> Arc<Self> {
         Arc::new(Self {
             sg_root,
+            is_started: Arc::new(CondVar::new()),
             ex,
             render_api,
             event_pub,
@@ -147,61 +150,6 @@ impl App {
     pub async fn start(self: Arc<Self>) {
         debug!(target: "app", "App::start()");
 
-        ////////////////////////////////////////////////////////////////////////////////////
-        // OLD
-        ////////////////////////////////////////////////////////////////////////////////////
-
-        /*
-        // Setup UI
-        let mut sg = self.sg.lock().await;
-
-        let window = sg.add_node("window", SceneNodeType::Window);
-
-        let mut prop = Property::new("screen_size", PropertyType::Float32, PropertySubType::Pixel);
-        prop.set_array_len(2);
-        // Window not yet initialized so we can't set these.
-        //prop.set_f32(Role::App, 0, screen_width);
-        //prop.set_f32(Role::App, 1, screen_height);
-        window.add_property(prop).unwrap();
-
-        let mut prop = Property::new("scale", PropertyType::Float32, PropertySubType::Pixel);
-        prop.set_defaults_f32(vec![1.]).unwrap();
-        window.add_property(prop).unwrap();
-
-        let window_id = window.id;
-
-        // Create Window
-        // Window::new(window, weak sg)
-        drop(sg);
-        let pimpl = Window::new(
-            self.ex.clone(),
-            self.sg.clone(),
-            window_id,
-            self.render_api.clone(),
-            self.event_pub.clone(),
-        )
-        .await;
-        // -> reads any props it needs
-        // -> starts procs
-        let mut sg = self.sg.lock().await;
-        let node = sg.get_node_mut(window_id).unwrap();
-        node.pimpl = pimpl;
-
-        sg.link(window_id, SceneGraph::ROOT_ID).unwrap();
-
-        // Testing
-        let node = sg.get_node(window_id).unwrap();
-        node.set_property_f32(Role::App, "scale", 2.).unwrap();
-
-        drop(sg);
-
-        //schema::make(&self).await;
-        debug!(target: "app", "Schema loaded");
-        */
-
-        ////////////////////////////////////////////////////////////////////////////////////
-        // NEW
-        ////////////////////////////////////////////////////////////////////////////////////
         let mut window = SceneNode3::new("window", SceneNodeType3::Window);
 
         let mut prop = Property::new("screen_size", PropertyType::Float32, PropertySubType::Pixel);
@@ -228,12 +176,8 @@ impl App {
         // Access drawable in window node and call draw()
         self.trigger_draw().await;
 
-        // Start the backend
-        //if let Err(err) = self.darkirc_backend.start(self.sg.clone(), self.ex.clone()).await {
-        //    error!(target: "app", "backend error: {err}");
-        //}
-
         debug!(target: "app", "App started");
+        self.is_started.notify();
     }
 
     pub fn stop(&self) {
