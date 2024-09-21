@@ -6,19 +6,29 @@ make
 
 # Android
 
-Make sure you have podman installed. Then run `make android`.
-
-To debug any issues, you can enter an interactive terminal using:
+Make sure you have podman installed. Then run:
 
 ```
-podman run -v $(pwd):/root/dw -it apk bash
+make android
 ```
 
-# Debugging Missing Symbols (note to self)
+To debug any issues, you can enter an interactive terminal using `make cli`.
+
+# Useful Dev Commands
+
+This is just devs.
+
+## Debugging Missing Symbols
 
 ```
 "hb_ft_font_create_referenced"
 
 nm libharfbuzz_rs-5d6b743170eb0207.rlib | grep hb_ | less
+```
+
+## Resolve Dependency Issues
+
+```
+cargo tree --target aarch64-linux-android --invert openssl-sys
 ```
 

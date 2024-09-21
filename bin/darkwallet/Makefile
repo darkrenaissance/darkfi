@@ -17,6 +17,10 @@ android: fonts
 	adb logcat -c
 	adb logcat -s darkfi
 
+# Useful for dev
+cli:
+	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/darkwallet/ -it apk bash
+
 clean:
 	podman run -v $(shell pwd):/root/dw -w /root/dw -t apk rm -fr target/
 

@@ -54,8 +54,9 @@ halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v4"}
 
 [target.'cfg(target_os = "android")'.dependencies]
 android_logger = "0.13.3"
-#openssl = { version = "*", features = ["vendored"] }
-rusqlite = {version = "0.31.0", features = ["bundled"]}
+# Required by Arti: tor-dirmgr
+#rusqlite = {version = "0.31.0", features = ["bundled"]}
+tor-dirmgr = {version="0.21.0", features=["static"]}
 
 [target.'cfg(target_os = "linux")'.dependencies]
 simplelog = "0.12.1"

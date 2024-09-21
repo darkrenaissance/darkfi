@@ -46,6 +46,7 @@ extern crate log;
 use log::LevelFilter;
 
 mod app;
+mod build_info;
 //mod darkirc;
 mod darkirc2;
 mod error;
@@ -103,6 +104,9 @@ fn main() {
         );
         simplelog::CombinedLogger::init(vec![term_logger]).expect("logger");
     }
+
+    info!("Target OS: {}", build_info::TARGET_OS);
+    info!("Target arch: {}", build_info::TARGET_ARCH);
 
     let ex = Arc::new(smol::Executor::new());
     let sg_root = SceneNode3::root();

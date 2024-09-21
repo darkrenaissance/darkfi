@@ -51,13 +51,14 @@ pub async fn receive_msgs(sg_root: SceneNodePtr, ex: ExecutorPtr) -> Result<()> 
     let chatview_node = sg_root.lookup_node("/window/view/chatty").ok_or(Error::ConnectFailed)?;
 
     info!(target: "darkirc", "Instantiating DarkIRC event DAG");
-    let datastore = expand_path(EVGRDB_PATH)?;
-    fs::create_dir_all(&datastore).await?;
-    let sled_db = sled::open(datastore)?;
+    //let datastore = expand_path(EVGRDB_PATH)?;
+    //fs::create_dir_all(&datastore).await?;
+    let sled_db = sled::open(EVGRDB_PATH)?;
 
     let evgr = LocalEventGraph::new(sled_db.clone(), "darkirc_dag", 1, ex.clone()).await?;
 
     let endpoint = "tcp://127.0.0.1:5588";
+    let endpoint = "tcp://192.168.1.38:5588";
     let endpoint = Url::parse(endpoint)?;
 
     let dialer = Dialer::new(endpoint.clone(), None).await?;
