@@ -103,7 +103,7 @@ cat .local/darkfi/darkirc/hostlist.tsv
 ```
 
 If the list is empty, open `.config/darkfi/darkirc_config` and ensure
-that the `hostlist` field is set with a path of your choosing.
+that the `hostlist` field is set with a path of your chosing.
 
 For example:
 
@@ -137,23 +137,6 @@ If you're able to connect to the seed but are failing to establish peer
 connections, please retry the darkirc connection and carefully note the
 connection errors that are happening from peers. See 
 `Error reporting` section to report errors.
-
-### Cannot establish Tor onion connections
-
-You may get an error like this:
-```
-[WARN] darkfi::net::transport::tor: error: tor: Onion Service not found: Failed to obtain hidden service circuit to ????.onion: Unable to download hidden service descriptor
-```
-This happens when [Arti](https://gitlab.torproject.org/tpo/core/arti/-/blob/main/README.md) 
-gets corrupted due to internet downtime or other triggers. To fix this, 
-we'll delete the directory
-
-```
-$ stop tor daemon
-$ rm -rf .local/share/arti
-$ start tor daemon
-$ ./darkirc
-```
 
 ## dnet
 
@@ -215,14 +198,14 @@ connections, this means you're connected to Tor.
 
 ## Helpful debug information
 
-If you're looking to debug an issue, try these helpful tools.
+If you're looking to debug an issue, try these helpful tools
 
-### Logs in debug mode
+## Logs in debug mode
 
 You can run any app in debug mode as follows:
-```
-$ ./darkirc -vv
-```
+
+`./darkirc -vv`
+
 Alternatively, modify the config file at `.config/darkfi/darkirc.toml' as follows:
 
 ```toml
@@ -231,23 +214,14 @@ log = "/tmp/darkirc.log"
 # Set log level. 1 is info (default), 2 is debug, 3 is trace
 verbose = 2
 ```
-
-### Peer Discovery
-
-When running in debug mode, you will see `[INFO]` messages that indicate 
-`PEER DISCOVERY`. This is healthy and expected behavior.
-```
-[INFO] net::outbound_session::peer_discovery(): [P2P] [PEER DISCOVERY] Asking peers for new peers to connect to...
-```
-
-### Config file
+## Config file
 
 Your config files are generated in your `~/.config/darkirc` directory. 
 You'll have to run each daemon once for the app to spawn a config file, 
 which you can review and edit. There is also helpful information within 
 the config files.
 
-### Node information script
+## Node information script
 
 If you're looking for information about your node, including inbound, 
 outbound, and seed connections, execute this command in `~/darkfi/script`
@@ -255,7 +229,7 @@ outbound, and seed connections, execute this command in `~/darkfi/script`
 $ python3 node_get-info.py
 ```
 
-### Hostlist issues
+## Hostlist issues
 
 If you receive DAG sync issues, verify:
 
@@ -265,7 +239,7 @@ default seed on the first run). You can find the hostlist files within
 the respective apps' repo. For example darkirc's default hostlist location 
 is `~/.local/darkfi/darkirc/hostlist.tsv`
 
-### Error reporting
+## Error reporting
 
 If you're receiving errors and need to report them, report using darkirc first. If you
 cannot connect, you can report these errors on the community telegram (t.me/darkfichat). 
