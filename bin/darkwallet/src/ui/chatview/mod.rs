@@ -49,7 +49,7 @@ use crate::{
         Role,
     },
     pubsub::Subscription,
-    scene::{Pimpl, SceneNodeWeak},
+    scene::{MethodCallSub, Pimpl, SceneNodeWeak},
     text::{self, Glyph, GlyphPositionIter, TextShaperPtr},
     util::{enumerate, is_whitespace},
     ExecutorPtr,
@@ -215,13 +215,11 @@ impl ChatView {
         let node_id = node_ref.id;
 
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
-            /*
+            let method_sub = node_ref.subscribe_method_call("insert_line").unwrap();
             let me2 = me.clone();
-            let insert_line_method_task =
-                ex.spawn(
-                    async move { while Self::process_insert_line_method(&me2, &recvr).await {} },
-                );
-            */
+            let insert_line_method_task = ex.spawn(async move {
+                while Self::process_insert_line_method(&me2, &method_sub).await {}
+            });
 
             let me2 = me.clone();
             let motion_cv = Arc::new(CondVar::new());
@@ -266,7 +264,7 @@ impl ChatView {
             //on_modify.when_change(rect.clone(), redraw);
             //on_modify.when_change(debug.prop(), redraw);
 
-            let mut tasks = vec![/*insert_line_method_task,*/ motion_task, bgload_task];
+            let mut tasks = vec![insert_line_method_task, motion_task, bgload_task];
             tasks.append(&mut on_modify.tasks);
 
             Self {
@@ -324,14 +322,14 @@ impl ChatView {
         Pimpl::ChatView(self_)
     }
 
-    async fn process_insert_line_method(
-        me: &Weak<Self>,
-        recvr: &async_channel::Receiver<Vec<u8>>,
-    ) -> bool {
-        let Ok(data) = recvr.recv().await else {
+    async fn process_insert_line_method(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
+        let Ok(method_call) = sub.receive().await else {
             debug!(target: "ui::chatview", "Event relayer closed");
             return false
         };
+
+        debug!(target: "ui::chatview", "method called: insert_line({method_call:?})");
+        assert!(method_call.send_res.is_none());
 
         fn decode_data(data: &[u8]) -> std::io::Result<(Timestamp, MessageId, String, String)> {
             let mut cur = Cursor::new(&data);
@@ -342,7 +340,7 @@ impl ChatView {
             Ok((timestamp, message_id, nick, text))
         }
 
-        let Ok((timestamp, message_id, nick, text)) = decode_data(&data) else {
+        let Ok((timestamp, message_id, nick, text)) = decode_data(&method_call.data) else {
             error!(target: "ui::chatview", "insert_line() method invalid arg data");
             return true
         };

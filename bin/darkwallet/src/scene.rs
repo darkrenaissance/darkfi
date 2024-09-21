@@ -31,6 +31,7 @@ use std::{
 use crate::{
     error::{Error, Result},
     prop::{Property, PropertyPtr, Role},
+    pubsub::{Publisher, PublisherPtr, Subscription},
     ui,
 };
 
@@ -271,8 +272,7 @@ impl SceneNode {
         &mut self,
         name: S,
         args: Vec<(S, S, CallArgType)>,
-        result: Vec<(S, S, CallArgType)>,
-        method_fn: MethodRequestFn,
+        result: Option<Vec<(S, S, CallArgType)>>,
     ) -> Result<()> {
         let name = name.into();
         if self.has_method(&name) {
@@ -282,11 +282,16 @@ impl SceneNode {
             .into_iter()
             .map(|(n, d, t)| CallArg { name: n.into(), desc: d.into(), typ: t })
             .collect();
-        let result = result
-            .into_iter()
-            .map(|(n, d, t)| CallArg { name: n.into(), desc: d.into(), typ: t })
-            .collect();
-        self.methods.push(Method { name: name.into(), args, result, method_fn });
+        let result = match result {
+            Some(result) => Some(
+                result
+                    .into_iter()
+                    .map(|(n, d, t)| CallArg { name: n.into(), desc: d.into(), typ: t })
+                    .collect(),
+            ),
+            None => None,
+        };
+        self.methods.push(Method::new(name.into(), args, result));
         Ok(())
     }
 
@@ -298,15 +303,15 @@ impl SceneNode {
         self.methods.iter().find(|method| method.name == name)
     }
 
-    pub fn call_method(
-        &self,
-        name: &str,
-        arg_data: Vec<u8>,
-        response_fn: MethodResponseFn,
-    ) -> Result<()> {
+    pub async fn call_method(&self, name: &str, arg_data: CallData) -> Result<Option<CallData>> {
         let method = self.get_method(name).ok_or(Error::MethodNotFound)?;
-        (method.method_fn)(arg_data, response_fn);
-        Ok(())
+        Ok(method.call(arg_data).await)
+    }
+
+    pub fn subscribe_method_call(&self, name: &str) -> Result<MethodCallSub> {
+        let method = self.get_method(name).ok_or(Error::MethodNotFound)?;
+        let method_sub = method.pubsub.clone().subscribe();
+        Ok(method_sub)
     }
 }
 
@@ -332,11 +337,13 @@ pub struct CallArg {
     pub typ: CallArgType,
 }
 
+pub type CallData = Vec<u8>;
+
 pub type SlotId = u32;
 
 pub struct Slot {
     pub name: String,
-    pub notify: Sender<Vec<u8>>,
+    pub notify: Sender<CallData>,
 }
 
 pub struct Signal {
@@ -349,14 +356,45 @@ pub struct Signal {
     freed: Vec<SlotId>,
 }
 
-type MethodRequestFn = Box<dyn Fn(Vec<u8>, MethodResponseFn) + Send + Sync>;
-pub type MethodResponseFn = Box<dyn Fn(Result<Vec<u8>>) + Send + Sync>;
+#[derive(Clone, Debug)]
+pub struct MethodCall {
+    pub data: CallData,
+    pub send_res: Option<Sender<CallData>>,
+}
+
+impl MethodCall {
+    fn new(data: CallData, send_res: Option<Sender<CallData>>) -> Self {
+        Self { data, send_res }
+    }
+}
+
+pub type MethodCallSub = Subscription<MethodCall>;
 
 pub struct Method {
     pub name: String,
     pub args: Vec<CallArg>,
-    pub result: Vec<CallArg>,
-    method_fn: MethodRequestFn,
+    pub result: Option<Vec<CallArg>>,
+    pub pubsub: PublisherPtr<MethodCall>,
+}
+
+impl Method {
+    fn new(name: String, args: Vec<CallArg>, result: Option<Vec<CallArg>>) -> Self {
+        Self { name, args, result, pubsub: Publisher::new() }
+    }
+
+    async fn call(&self, data: CallData) -> Option<CallData> {
+        match &self.result {
+            Some(_) => {
+                let (send_res, recv_res) = async_channel::bounded(1);
+                self.pubsub.notify(MethodCall::new(data, Some(send_res)));
+                Some(recv_res.recv().await.unwrap())
+            }
+            None => {
+                self.pubsub.notify(MethodCall::new(data, None));
+                None
+            }
+        }
+    }
 }
 
 pub enum Pimpl {

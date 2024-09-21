@@ -109,11 +109,9 @@ pub async fn receive_msgs(sg_root: SceneNodePtr, ex: ExecutorPtr) -> Result<()> 
 
         debug!(target: "darkirc", "privmsg: {privmsg:?}");
 
-        if privmsg.channel != "random" {
+        if privmsg.channel != "#random" {
             continue
         }
-
-        let response_fn = Box::new(|_| {});
 
         let mut arg_data = vec![];
         ev.timestamp.encode(&mut arg_data).unwrap();
@@ -121,6 +119,6 @@ pub async fn receive_msgs(sg_root: SceneNodePtr, ex: ExecutorPtr) -> Result<()> 
         privmsg.nick.encode(&mut arg_data).unwrap();
         privmsg.msg.encode(&mut arg_data).unwrap();
 
-        chatview_node.call_method("insert_line", arg_data, response_fn).unwrap();
+        chatview_node.call_method("insert_line", arg_data).await.unwrap();
     }
 }

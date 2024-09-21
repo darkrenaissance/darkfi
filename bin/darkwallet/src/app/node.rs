@@ -21,7 +21,7 @@ use crate::{
     expr::Op,
     gfx::{GraphicsEventPublisherPtr, RenderApiPtr, Vertex},
     prop::{Property, PropertyBool, PropertyStr, PropertySubType, PropertyType, Role},
-    scene::{CallArgType, MethodResponseFn, SceneNode, SceneNodeType, Slot},
+    scene::{CallArgType, SceneNode, SceneNodeType, Slot},
     text::TextShaperPtr,
     ExecutorPtr,
 };
@@ -258,7 +258,6 @@ pub fn create_chatview(name: &str) -> SceneNode {
     prop.set_defaults_f32(vec![1000.]).unwrap();
     node.add_property(prop).unwrap();
 
-    /*
     node.add_method(
         "insert_line",
         vec![
@@ -267,11 +266,9 @@ pub fn create_chatview(name: &str) -> SceneNode {
             ("nick", "Nickname", CallArgType::Str),
             ("text", "Text", CallArgType::Str),
         ],
-        vec![],
-        Box::new(method),
+        None,
     )
     .unwrap();
-    */
 
     node
 }
