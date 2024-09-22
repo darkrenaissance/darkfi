@@ -116,9 +116,9 @@ impl UIObject for Button {
             return false
         }
 
-        debug!(target: "ui::button", "Mouse button clicked!");
+        debug!(target: "ui::button", "Button clicked!");
         let node = self.node.upgrade().unwrap();
-        //node.trigger("click", vec![]).await.unwrap();
+        node.trigger("click", vec![]).await.unwrap();
 
         true
     }

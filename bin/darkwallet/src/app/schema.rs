@@ -795,4 +795,18 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
         })
         .await;
     layer_node.link(node);
+
+    // Create the send button
+    let node = create_button("send_btn");
+    node.set_property_bool(Role::App, "is_active", true).unwrap();
+    let prop = node.get_property("rect").unwrap();
+    let code = cc.compile("w - SENDLABEL_WIDTH").unwrap();
+    prop.set_expr(Role::App, 0, code).unwrap();
+    let code = cc.compile("h - EDITCHAT_HEIGHT").unwrap();
+    prop.set_expr(Role::App, 1, code).unwrap();
+    prop.set_f32(Role::App, 2, SENDLABEL_WIDTH).unwrap();
+    prop.set_f32(Role::App, 3, EDITCHAT_HEIGHT).unwrap();
+
+    let node = node.setup(|me| Button::new(me, app.ex.clone())).await;
+    layer_node.link(node);
 }

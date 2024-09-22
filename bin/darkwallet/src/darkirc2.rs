@@ -38,13 +38,19 @@ use smol::{
     fs,
     io::{ReadHalf, WriteHalf},
 };
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc, Mutex as SyncMutex, Weak,
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex as SyncMutex, Weak,
+    },
+    time::UNIX_EPOCH,
 };
 use url::Url;
 
-use crate::scene::SceneNodePtr;
+use crate::{
+    prop::{PropertyStr, Role},
+    scene::{SceneNodePtr, Slot},
+};
 
 #[cfg(target_os = "android")]
 const EVGRDB_PATH: &str = "/data/data/darkfi.darkwallet/evgr/";
@@ -74,14 +80,20 @@ pub struct LocalDarkIRC {
     writer: AsyncMutex<Option<WriteHalf<Box<dyn PtStream>>>>,
 
     evgr: LocalEventGraphPtr,
-    receive_task: SyncMutex<Option<smol::Task<()>>>,
+    tasks: SyncMutex<Vec<smol::Task<()>>>,
 
     chatview_node: SceneNodePtr,
+    sendbtn_node: SceneNodePtr,
+    editbox_text: PropertyStr,
 }
 
 impl LocalDarkIRC {
     pub async fn new(sg_root: SceneNodePtr, ex: ExecutorPtr) -> Result<Arc<Self>> {
-        let chatview_node = sg_root.lookup_node("/window/view/chatty").unwrap();
+        let chatview_node = sg_root.clone().lookup_node("/window/view/chatty").unwrap();
+        let sendbtn_node = sg_root.clone().lookup_node("/window/view/send_btn").unwrap();
+
+        let editbox_node = sg_root.lookup_node("/window/view/editz").unwrap();
+        let editbox_text = PropertyStr::wrap(&editbox_node, Role::App, "text", 0).unwrap();
 
         info!(target: "darkirc", "Instantiating DarkIRC event DAG");
         let datastore = expand_path(EVGRDB_PATH)?;
@@ -96,9 +108,11 @@ impl LocalDarkIRC {
             writer: AsyncMutex::new(None),
 
             evgr,
-            receive_task: SyncMutex::new(None),
+            tasks: SyncMutex::new(vec![]),
 
             chatview_node,
+            sendbtn_node,
+            editbox_text,
         }))
     }
 
@@ -125,16 +139,30 @@ impl LocalDarkIRC {
         self.version_exchange().await?;
 
         let me = Arc::downgrade(&self);
-        let task = ex.spawn(async move {
+        let recv_task = ex.spawn(async move {
             while let Some(self_) = me.upgrade() {
                 self_.receive_msg().await.unwrap();
             }
             error!(target: "darkirc", "Closing DarkIRC receive loop");
         });
 
-        let mut receive_task = self.receive_task.lock().unwrap();
-        assert!(receive_task.is_none());
-        *receive_task = Some(task);
+        let (slot_click, click_recvr) = Slot::new("send_button_clicked");
+        self.sendbtn_node.register("click", slot_click).unwrap();
+
+        let me = Arc::downgrade(&self);
+        let send_task = ex.spawn(async move {
+            while let Some(self_) = me.upgrade() {
+                let Ok(_) = click_recvr.recv().await else {
+                    error!(target: "ui::win", "Button click recvr closed");
+                    break
+                };
+                self_.handle_send().await;
+            }
+        });
+
+        let mut tasks = self.tasks.lock().unwrap();
+        assert!(tasks.is_empty());
+        *tasks = vec![recv_task, send_task];
 
         self.is_connected.store(true, Ordering::Relaxed);
 
@@ -235,5 +263,18 @@ impl LocalDarkIRC {
         self.chatview_node.call_method("insert_line", arg_data).await.unwrap();
 
         Ok(())
+    }
+
+    async fn handle_send(&self) {
+        // Get text from editbox
+        let text = self.editbox_text.get();
+        // Clear editbox
+        self.editbox_text.set("");
+
+        // Send text to channel
+        debug!(target: "darkirc", "Sending privmsg: {text}");
+        let msg = Privmsg::new("#random".to_string(), "anon".to_string(), text);
+        let timestamp = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
+        self.send_msg(timestamp, msg).await.unwrap();
     }
 }

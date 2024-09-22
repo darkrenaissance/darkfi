@@ -446,39 +446,39 @@ impl EditBox {
         // clicking inside box will:
         // 1. make it active
         // 2. begin selection
-        if rect.contains(mouse_pos) {
-            window::show_keyboard(true);
-
+        if !rect.contains(mouse_pos) {
             if self.is_focused.get() {
-                debug!(target: "ui::editbox", "EditBox clicked");
-            } else {
-                debug!(target: "ui::editbox", "EditBox focused");
-                self.is_focused.set(true);
+                debug!(target: "ui::editbox", "EditBox unfocused");
+                self.is_focused.set(false);
+                self.selected.set_null(Role::Internal, 0).unwrap();
+                self.selected.set_null(Role::Internal, 1).unwrap();
+
+                self.redraw().await;
             }
-
-            let cpos = self.find_closest_glyph_idx(mouse_pos.x, &rect);
-
-            // set cursor pos
-            self.cursor_pos.set(cpos);
-            self.apply_cursor_scrolling();
-
-            // begin selection
-            self.selected.set_u32(Role::Internal, 0, cpos).unwrap();
-            self.selected.set_u32(Role::Internal, 1, cpos).unwrap();
-
-            self.mouse_btn_held.store(true, Ordering::Relaxed);
-        // click outside the box will make it unfocused
-        } else if self.is_focused.get() {
-            debug!(target: "ui::editbox", "EditBox unfocused");
-            self.is_focused.set(false);
-            self.selected.set_null(Role::Internal, 0).unwrap();
-            self.selected.set_null(Role::Internal, 1).unwrap();
-        } else {
-            // Do nothing. Click was outside editbox, and editbox wasn't focused
             return false
         }
 
-        self.redraw().await;
+        window::show_keyboard(true);
+
+        if self.is_focused.get() {
+            debug!(target: "ui::editbox", "EditBox clicked");
+        } else {
+            debug!(target: "ui::editbox", "EditBox focused");
+            self.is_focused.set(true);
+        }
+
+        let cpos = self.find_closest_glyph_idx(mouse_pos.x, &rect);
+
+        // set cursor pos
+        self.cursor_pos.set(cpos);
+        self.apply_cursor_scrolling();
+
+        // begin selection
+        self.selected.set_u32(Role::Internal, 0, cpos).unwrap();
+        self.selected.set_u32(Role::Internal, 1, cpos).unwrap();
+
+        self.mouse_btn_held.store(true, Ordering::Relaxed);
+
         true
     }
     fn handle_click_up(&self, btn: MouseButton, pos: Point) -> bool {
@@ -1096,8 +1096,7 @@ impl UIObject for EditBox {
             return true
         }
 
-        self.handle_click_down(btn, mouse_pos).await;
-        true
+        self.handle_click_down(btn, mouse_pos).await
     }
 
     async fn handle_mouse_btn_up(&self, btn: MouseButton, mouse_pos: Point) -> bool {
@@ -1105,8 +1104,7 @@ impl UIObject for EditBox {
             return true
         }
 
-        self.handle_click_up(btn, mouse_pos);
-        true
+        self.handle_click_up(btn, mouse_pos)
     }
 
     async fn handle_mouse_move(&self, mouse_pos: Point) -> bool {
@@ -1114,8 +1112,7 @@ impl UIObject for EditBox {
             return false
         }
 
-        self.handle_cursor_move(mouse_pos).await;
-        false
+        self.handle_cursor_move(mouse_pos).await
     }
 
     async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {

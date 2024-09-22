@@ -16,12 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_channel::Sender;
+use async_channel::{Receiver, Sender};
 use async_lock::RwLock as AsyncRwLock;
 use async_trait::async_trait;
 use darkfi_serial::{FutAsyncWriteExt, SerialDecodable, SerialEncodable};
+use futures::{stream::FuturesUnordered, StreamExt};
 use std::{
-    collections::VecDeque,
+    collections::{HashMap, VecDeque},
     fmt,
     future::Future,
     str::FromStr,
@@ -120,7 +121,7 @@ pub struct SceneNode {
     parent: SyncRwLock<Option<Weak<Self>>>,
     children: SyncRwLock<Vec<SceneNodePtr>>,
     pub props: Vec<PropertyPtr>,
-    pub sigs: Vec<Signal>,
+    pub sigs: SyncRwLock<Vec<SignalPtr>>,
     pub methods: Vec<Method>,
     pub pimpl: Pimpl,
 }
@@ -138,7 +139,7 @@ impl SceneNode {
             parent: SyncRwLock::new(None),
             children: SyncRwLock::new(vec![]),
             props: vec![],
-            sigs: vec![],
+            sigs: SyncRwLock::new(vec![]),
             methods: vec![],
             pimpl: Pimpl::Null,
         }
@@ -254,18 +255,53 @@ impl SceneNode {
             .into_iter()
             .map(|(n, d, t)| CallArg { name: n.into(), desc: d.into(), typ: t })
             .collect();
-        self.sigs.push(Signal {
+        let mut sigs = self.sigs.write().unwrap();
+        sigs.push(Arc::new(Signal {
             name: name.into(),
             desc: desc.into(),
             fmt,
-            slots: vec![],
-            freed: vec![],
-        });
+            slots: SyncRwLock::new(HashMap::new()),
+        }));
         Ok(())
     }
 
     fn has_signal(&self, name: &str) -> bool {
-        self.sigs.iter().any(|sig| sig.name == name)
+        let sigs = self.sigs.read().unwrap();
+        sigs.iter().any(|sig| sig.name == name)
+    }
+    pub fn get_signal(&self, name: &str) -> Option<SignalPtr> {
+        let sigs = self.sigs.read().unwrap();
+        sigs.iter().find(|sig| sig.name == name).cloned()
+    }
+
+    pub fn register(&self, sig_name: &str, slot: Slot) -> Result<SlotId> {
+        let slot_id = rand::random();
+        let sig = self.get_signal(sig_name).ok_or(Error::SignalNotFound)?;
+        let mut slots = sig.slots.write().unwrap();
+        slots.insert(slot_id, slot);
+        Ok(slot_id)
+    }
+    pub fn unregister(&self, sig_name: &str, slot_id: SlotId) -> Result<()> {
+        let sig = self.get_signal(sig_name).ok_or(Error::SignalNotFound)?;
+        let mut slots = sig.slots.write().unwrap();
+        slots.remove(&slot_id).ok_or(Error::SlotNotFound)?;
+        Ok(())
+    }
+
+    pub async fn trigger(&self, sig_name: &str, data: Vec<u8>) -> Result<()> {
+        let sig = self.get_signal(sig_name).ok_or(Error::SignalNotFound)?;
+        let futures = FuturesUnordered::new();
+        let slots: Vec<_> = sig.slots.read().unwrap().values().cloned().collect();
+        // TODO: autoremove failed slots
+        for slot in slots {
+            debug!(target: "scene", "triggering {}", slot.name);
+            // Trigger the slot
+            let data = data.clone();
+            futures.push(async move { slot.notify.send(data).await.is_ok() });
+        }
+        let success: Vec<_> = futures.collect().await;
+        debug!(target: "scene", "trigger success: {success:?}");
+        Ok(())
     }
 
     pub fn add_method<S: Into<String>>(
@@ -341,10 +377,21 @@ pub type CallData = Vec<u8>;
 
 pub type SlotId = u32;
 
+#[derive(Clone)]
 pub struct Slot {
     pub name: String,
     pub notify: Sender<CallData>,
 }
+
+impl Slot {
+    pub fn new<S: Into<String>>(name: S) -> (Self, Receiver<CallData>) {
+        let (notify, recvr) = async_channel::unbounded();
+        let self_ = Self { name: name.into(), notify };
+        (self_, recvr)
+    }
+}
+
+type SignalPtr = Arc<Signal>;
 
 pub struct Signal {
     pub name: String,
@@ -352,8 +399,7 @@ pub struct Signal {
     pub desc: String,
     #[allow(dead_code)]
     pub fmt: Vec<CallArg>,
-    slots: Vec<Slot>,
-    freed: Vec<SlotId>,
+    slots: SyncRwLock<HashMap<SlotId, Slot>>,
 }
 
 #[derive(Clone, Debug)]
