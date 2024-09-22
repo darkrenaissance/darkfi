@@ -350,7 +350,7 @@ impl Channel {
                     if Self::is_eof_error(&err) {
                         info!(
                             target: "net::channel::main_receive_loop()",
-                            "[P2P] Channel inbound connection {} disconnected",
+                            "[P2P] Channel {} disconnected",
                             self.address(),
                         );
                     } else if self.session.upgrade().unwrap().type_id() &
