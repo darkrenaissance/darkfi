@@ -1,13 +1,13 @@
 default: fonts
 	cargo lrun
 
-ibm-plex-mono-light.otf:
-	wget https://codeberg.org/darkrenaissance/darkfi/raw/branch/data/ibm-plex-mono-light.otf
+ibm-plex-mono-regular.otf:
+	wget https://codeberg.org/darkrenaissance/darkfi/raw/branch/data/ibm-plex-mono-regular.otf
 
 NotoColorEmoji.ttf:
 	wget https://codeberg.org/darkrenaissance/darkfi/raw/branch/data/NotoColorEmoji.ttf
 
-fonts: ibm-plex-mono-light.otf NotoColorEmoji.ttf
+fonts: ibm-plex-mono-regular.otf NotoColorEmoji.ttf
 
 android: fonts
 	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/darkwallet/ -t apk cargo quad-apk build
