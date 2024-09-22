@@ -18,7 +18,7 @@
 
 use darkfi::{
     async_daemonize, cli_desc,
-    event_graph::{proto::ProtocolEventGraph, Event, EventGraph, EventGraphPtr},
+    event_graph::{proto::{ProtocolEventGraph, EventPut}, Event, EventGraph, EventGraphPtr},
     net::{
         session::SESSION_DEFAULT,
         settings::SettingsOpt as NetSettingsOpt,
@@ -197,7 +197,7 @@ async fn fetch_events(stream: &mut Box<dyn PtStream>, daemon: &Daemon) -> Result
     info!(target: "evgrd", "Fetching events {fetchevs:?}");
     let events = daemon.event_graph.fetch_successors_of(fetchevs.unref_tips).await?;
 
-    info!("fetched {events:?}");
+    //info!("fetched {events:?}");
 
     for event in events {
         MSG_EVENT.encode_async(stream).await?;
@@ -209,10 +209,12 @@ async fn fetch_events(stream: &mut Box<dyn PtStream>, daemon: &Daemon) -> Result
 async fn send_event(stream: &mut Box<dyn PtStream>, daemon: &Daemon) -> Result<()> {
     let timestamp = u64::decode_async(stream).await?;
     let content = Vec::<u8>::decode_async(stream).await?;
-    info!("send_event: {timestamp}, {content:?}");
+    info!(target: "evgrd", "send_event: {timestamp}, {content:?}");
 
     let event = Event::with_timestamp(timestamp, content, &daemon.event_graph).await;
     daemon.event_graph.dag_insert(&[event.clone()]).await.unwrap();
+
+    daemon.p2p.broadcast(&EventPut(event)).await;
 
     Ok(())
 }

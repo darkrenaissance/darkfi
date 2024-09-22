@@ -26,7 +26,7 @@ use darkfi::{
 };
 use darkfi_serial::{
     async_trait, deserialize_async_partial, AsyncDecodable, AsyncEncodable, Encodable,
-    SerialDecodable, SerialEncodable,
+    SerialDecodable, SerialEncodable, serialize_async,
 };
 use evgrd::{
     FetchEventsMessage, LocalEventGraph, LocalEventGraphPtr, VersionMessage, MSG_EVENT,
@@ -136,6 +136,7 @@ impl LocalDarkIRC {
     pub async fn start(self: Arc<Self>, ex: ExecutorPtr) -> Result<()> {
         debug!(target: "darkirc", "LocalDarkIRC::start()");
 
+        //self.reconnect().await?;
         self.version_exchange().await?;
 
         let me = Arc::downgrade(&self);
@@ -164,8 +165,6 @@ impl LocalDarkIRC {
         assert!(tasks.is_empty());
         *tasks = vec![recv_task, send_task];
 
-        self.is_connected.store(true, Ordering::Relaxed);
-
         Ok(())
     }
 
@@ -190,11 +189,14 @@ impl LocalDarkIRC {
         MSG_FETCHEVENTS.encode_async(writer).await?;
         fetchevs.encode_async(writer).await?;
 
+        self.is_connected.store(true, Ordering::Relaxed);
+
         Ok(())
     }
 
     async fn send_msg(&self, timestamp: u64, msg: Privmsg) -> Result<()> {
         if !self.is_connected.load(Ordering::Relaxed) {
+            debug!(target: "darkirc", "send_msg: not connected, reconnecting...");
             self.reconnect().await?;
         }
 
@@ -203,7 +205,10 @@ impl LocalDarkIRC {
 
         MSG_SENDEVENT.encode_async(writer).await?;
         timestamp.encode_async(writer).await?;
-        msg.encode_async(writer).await?;
+
+        let content: Vec<u8> = serialize_async(&msg).await;
+        content.encode_async(writer).await?;
+
         Ok(())
     }
 

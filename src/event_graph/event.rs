@@ -60,12 +60,7 @@ impl Event {
     /// Same as `Event::new()` but allows specifying the timestamp explicitly.
     pub async fn with_timestamp(timestamp: u64, data: Vec<u8>, event_graph: &EventGraph) -> Self {
         let (layer, parents) = event_graph.get_next_layer_with_parents().await;
-        Self {
-            timestamp,
-            content: data,
-            parents,
-            layer,
-        }
+        Self { timestamp, content: data, parents, layer }
     }
 
     /// Hash the [`Event`] to retrieve its ID
