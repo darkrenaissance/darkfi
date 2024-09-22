@@ -353,6 +353,18 @@ mod tests {
     }
 
     #[test]
+    fn h_minus_1() {
+        let mut compiler = Compiler::new();
+        let code = compiler.compile("h - 1").unwrap();
+        #[rustfmt::skip]
+        let code2 = vec![Op::Sub((
+            Box::new(Op::LoadVar("h".to_string())),
+            Box::new(Op::ConstFloat32(1.))
+        ))];
+        assert_eq!(code, code2);
+    }
+
+    #[test]
     fn dosub() {
         let mut compiler = Compiler::new();
         compiler.add_const_f32("HELLO", 110.);

@@ -29,6 +29,7 @@ use std::{
 };
 
 use crate::{
+    darkirc2::LocalDarkIRCPtr,
     error::Error,
     expr::Op,
     gfx::{GraphicsEventPublisherPtr, RenderApiPtr, Vertex},
@@ -121,7 +122,7 @@ pub struct App {
     pub render_api: RenderApiPtr,
     pub event_pub: GraphicsEventPublisherPtr,
     pub text_shaper: TextShaperPtr,
-    //pub(self) darkirc_backend: DarkIrcBackendPtr,
+    pub darkirc_evgr: SyncMutex<Option<LocalDarkIRCPtr>>,
     pub tasks: SyncMutex<Vec<Task<()>>>,
     pub ex: ExecutorPtr,
 }
@@ -132,7 +133,6 @@ impl App {
         render_api: RenderApiPtr,
         event_pub: GraphicsEventPublisherPtr,
         text_shaper: TextShaperPtr,
-        //darkirc_backend: DarkIrcBackendPtr,
         ex: ExecutorPtr,
     ) -> Arc<Self> {
         Arc::new(Self {
@@ -142,7 +142,7 @@ impl App {
             render_api,
             event_pub,
             text_shaper,
-            //darkirc_backend,
+            darkirc_evgr: SyncMutex::new(None),
             tasks: SyncMutex::new(vec![]),
         })
     }

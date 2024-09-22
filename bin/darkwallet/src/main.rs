@@ -65,7 +65,11 @@ mod text;
 mod ui;
 mod util;
 
-use crate::{net::ZeroMQAdapter, text::TextShaper};
+use crate::{
+    darkirc2::{LocalDarkIRC, LocalDarkIRCPtr},
+    net::ZeroMQAdapter,
+    text::TextShaper,
+};
 
 pub type ExecutorPtr = Arc<smol::Executor<'static>>;
 
@@ -130,24 +134,19 @@ fn main() {
 
     let text_shaper = TextShaper::new();
 
-    //let darkirc_backend = DarkIrcBackend::new();
-    let app = app::App::new(
-        sg_root,
-        render_api,
-        event_pub.clone(),
-        text_shaper,
-        //darkirc_backend,
-        ex.clone(),
-    );
+    let app = app::App::new(sg_root, render_api, event_pub.clone(), text_shaper, ex.clone());
     let app_task = ex.spawn(app.clone().start());
     async_runtime.push_task(app_task);
 
+    let app2 = app.clone();
     let cv_started = app.is_started.clone();
     let sg_root = app.sg_root.clone();
     let ex2 = ex.clone();
     let darkirc_task = ex.spawn(async move {
         cv_started.wait().await;
-        if let Err(e) = darkirc2::receive_msgs(sg_root, ex2).await {
+        let darkirc_evgr = LocalDarkIRC::new(sg_root.clone(), ex2.clone()).await.unwrap();
+        *app2.darkirc_evgr.lock().unwrap() = Some(darkirc_evgr.clone());
+        if let Err(e) = darkirc_evgr.start(ex2).await {
             error!("DarkIRC error: {e}")
         }
     });

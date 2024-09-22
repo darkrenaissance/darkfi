@@ -772,7 +772,7 @@ mod tests {
         prop.set_expr(Role::App, 0, code).unwrap();
         let val = prop.get_cached(0).unwrap();
         assert!(val.is_null());
-        prop.set_cache_f32(0, 4.).unwrap();
+        prop.set_cache_f32(Role::App, 0, 4.).unwrap();
         let val = prop.get_cached(0).unwrap();
         assert_eq!(val.as_f32().unwrap(), 4.);
     }
