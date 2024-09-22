@@ -55,12 +55,21 @@ const KING_PATH: &str = "assets/king.png";
 const LIGHTMODE: bool = false;
 
 #[cfg(target_os = "android")]
-const EDITCHAT_HEIGHT: f32 = 140.;
+const EDITCHAT_HEIGHT: f32 = 163.;
 #[cfg(target_os = "linux")]
 const EDITCHAT_HEIGHT: f32 = 50.;
 
 #[cfg(target_os = "android")]
-const EDITCHAT_LHS_PAD: f32 = 20.;
+const TEXTBAR_BASELINE: f32 = 93.;
+#[cfg(target_os = "linux")]
+const TEXTBAR_BASELINE: f32 = 34.;
+
+// reduce cursor height
+// fix chatview text alignment
+// small timestamps
+
+#[cfg(target_os = "android")]
+const EDITCHAT_LHS_PAD: f32 = 30.;
 #[cfg(target_os = "linux")]
 const EDITCHAT_LHS_PAD: f32 = 20.;
 
@@ -501,12 +510,11 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     node.set_property_u32(Role::App, "z_index", 1).unwrap();
 
     let mut shape = VectorShape::new();
-    shape.add_outline(
+    shape.add_filled_box(
         expr::const_f32(0.),
-        expr::const_f32(0.),
+        cc.compile("h - 1").unwrap(),
         expr::load_var("w"),
         expr::load_var("h"),
-        1.,
         [0.4, 0.4, 0.4, 1.],
     );
 
@@ -522,7 +530,7 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
     prop.set_f32(Role::App, 3, EDITCHAT_HEIGHT).unwrap();
     node.set_property_u32(Role::App, "z_index", 2).unwrap();
-    node.set_property_f32(Role::App, "baseline", (EDITCHAT_HEIGHT + 20.) / 2.).unwrap();
+    node.set_property_f32(Role::App, "baseline", TEXTBAR_BASELINE).unwrap();
     node.set_property_f32(Role::App, "font_size", FONTSIZE).unwrap();
     node.set_property_str(Role::App, "text", "random").unwrap();
     //node.set_property_str(Role::App, "text", "anon1").unwrap();
@@ -655,19 +663,18 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
         [0., 0.13, 0.08, 1.],
     );
     shape.add_filled_box(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::const_f32(1.),
+        [0.41, 0.6, 0.65, 1.],
+    );
+    shape.add_filled_box(
         cc.compile("w - SENDLABEL_WIDTH").unwrap(),
         expr::const_f32(0.),
         cc.compile("w - SENDLABEL_WIDTH - 1").unwrap(),
         expr::load_var("h"),
-        [0.4, 0.4, 0.4, 1.],
-    );
-    shape.add_outline(
-        expr::const_f32(0.),
-        expr::const_f32(0.),
-        expr::load_var("w"),
-        expr::load_var("h"),
-        1.,
-        [0.4, 0.4, 0.4, 1.],
+        [0.41, 0.6, 0.65, 1.],
     );
     let node =
         node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
@@ -682,7 +689,7 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     prop.set_expr(Role::App, 1, code).unwrap();
     prop.set_f32(Role::App, 2, SENDLABEL_WIDTH).unwrap();
     prop.set_f32(Role::App, 3, EDITCHAT_HEIGHT).unwrap();
-    node.set_property_f32(Role::App, "baseline", (EDITCHAT_HEIGHT + 20.) / 2.).unwrap();
+    node.set_property_f32(Role::App, "baseline", TEXTBAR_BASELINE).unwrap();
     node.set_property_f32(Role::App, "font_size", FONTSIZE).unwrap();
     node.set_property_str(Role::App, "text", "send").unwrap();
     //node.set_property_str(Role::App, "text", "anon1").unwrap();
@@ -718,7 +725,7 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     prop.set_expr(Role::App, 2, code).unwrap();
     prop.set_f32(Role::App, 3, EDITCHAT_HEIGHT).unwrap();
 
-    node.set_property_f32(Role::App, "baseline", (EDITCHAT_HEIGHT + 20.) / 2.).unwrap();
+    node.set_property_f32(Role::App, "baseline", TEXTBAR_BASELINE).unwrap();
     node.set_property_f32(Role::App, "font_size", FONTSIZE).unwrap();
     //node.set_property_str(Role::App, "text", "hello king!😁🍆jelly 🍆1234").unwrap();
     let prop = node.get_property("text_color").unwrap();
