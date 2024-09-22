@@ -184,11 +184,14 @@ impl InboundSession {
             channel_id: channel.info.id,
         });
 
-        if let Err(e) = self.register_channel(channel.clone(), ex.clone()).await {
-            warn!(
-                target: "net::inbound_session::setup_channel()",
-                "Channel setup failed! Err={}", e
-            );
+        match self.register_channel(channel.clone(), ex.clone()).await {
+            Ok(()) => {}
+            Err(e) => {
+                warn!(
+                    target: "net::inbound_session::setup_channel()",
+                    "Channel setup failed! Err={}", e
+                );
+            }
         }
 
         dnetev!(self, InboundDisconnected, {
