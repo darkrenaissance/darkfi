@@ -26,7 +26,7 @@
 use std::sync::{Arc, Weak};
 
 use async_trait::async_trait;
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use smol::{lock::Mutex, Executor};
 use url::Url;
 
@@ -184,8 +184,20 @@ impl InboundSession {
             channel_id: channel.info.id,
         });
 
+        let stop_sub = channel.subscribe_stop().await;
+
         match self.register_channel(channel.clone(), ex.clone()).await {
-            Ok(()) => {}
+            Ok(()) => {
+                if let Ok(stop_sub) = stop_sub {
+                    // Wait for a stop signal, then cleanup.
+                    stop_sub.receive().await;
+
+                    debug!(
+                        target: "net::inbound_session::setup_channel()",
+                        "Received stop_sub, channel removed from P2P",
+                    );
+                }
+            }
             Err(e) => {
                 warn!(
                     target: "net::inbound_session::setup_channel()",
