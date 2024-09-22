@@ -26,8 +26,6 @@ from src.model import Model
 from src.rpc import JsonRpc
 from src.view import View
 
-# TODO: update to latest urwid version.
-
 class Dnetview:
 
     def __init__(self):
@@ -168,6 +166,11 @@ class Dnetview:
         logging.basicConfig(filename='dnet.log',
                             encoding='utf-8',
                             level=logging.DEBUG)
+
+        # Set urwid log to ERROR, effectively silencing it.
+        urwid_logger = logging.getLogger('urwid')
+        urwid_logger.setLevel(logging.ERROR)
+
         nodes = self.config.get('nodes')
 
         loop = urwid.MainLoop(self.view.ui, self.view.palette,
@@ -187,7 +190,6 @@ class Dnetview:
             for task in asyncio.all_tasks():
                 task.cancel()
             raise urwid.ExitMainLoop()
-    
 
 if __name__ == '__main__':
     dnet = Dnetview()
