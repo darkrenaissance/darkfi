@@ -379,3 +379,4 @@ impl FetchEventsMessage {
 
 pub const MSG_EVENT: u8 = 1;
 pub const MSG_FETCHEVENTS: u8 = 2;
+pub const MSG_SENDEVENT: u8 = 3;
