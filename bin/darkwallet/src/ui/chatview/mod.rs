@@ -80,7 +80,18 @@ pub struct ChatMsg {
 }
 
 type Timestamp = u64;
-type MessageId = [u8; 32];
+
+#[derive(Clone, SerialEncodable, SerialDecodable)]
+struct MessageId([u8; 32]);
+
+impl std::fmt::Display for MessageId {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        for b in &self.0 {
+            write!(f, "{b:02x}")?
+        }
+        Ok(())
+    }
+}
 
 const PRELOAD_PAGES: usize = 1;
 
@@ -328,19 +339,19 @@ impl ChatView {
             return false
         };
 
-        debug!(target: "ui::chatview", "method called: insert_line({method_call:?})");
+        //debug!(target: "ui::chatview", "method called: insert_line({method_call:?})");
         assert!(method_call.send_res.is_none());
 
         fn decode_data(data: &[u8]) -> std::io::Result<(Timestamp, MessageId, String, String)> {
             let mut cur = Cursor::new(&data);
             let timestamp = Timestamp::decode(&mut cur)?;
-            let message_id = MessageId::decode(&mut cur)?;
+            let msg_id = MessageId::decode(&mut cur)?;
             let nick = String::decode(&mut cur)?;
             let text = String::decode(&mut cur)?;
-            Ok((timestamp, message_id, nick, text))
+            Ok((timestamp, msg_id, nick, text))
         }
 
-        let Ok((timestamp, message_id, nick, text)) = decode_data(&method_call.data) else {
+        let Ok((timestamp, msg_id, nick, text)) = decode_data(&method_call.data) else {
             error!(target: "ui::chatview", "insert_line() method invalid arg data");
             return true
         };
@@ -350,7 +361,7 @@ impl ChatView {
             panic!("self destroyed before touch_task was stopped!");
         };
 
-        self_.handle_insert_line(timestamp, message_id, nick, text).await;
+        self_.handle_insert_line(timestamp, msg_id, nick, text).await;
         true
     }
 
@@ -405,15 +416,16 @@ impl ChatView {
     async fn add_line_to_db(
         &self,
         timest: Timestamp,
-        message_id: &MessageId,
+        msg_id: &MessageId,
         nick: &str,
         text: &str,
     ) -> bool {
+        assert!(timest > 6047051717);
         let timest = timest.to_be_bytes();
         assert_eq!(timest.len(), 8);
         let mut key = [0u8; 8 + 32];
         key[..8].clone_from_slice(&timest);
-        key[8..].clone_from_slice(message_id);
+        key[8..].clone_from_slice(&msg_id.0);
 
         // When does this return Err?
         let contains_key = self.tree.contains_key(&key);
@@ -433,13 +445,13 @@ impl ChatView {
     async fn handle_insert_line(
         &self,
         timest: Timestamp,
-        message_id: MessageId,
+        msg_id: MessageId,
         nick: String,
         text: String,
     ) {
-        debug!(target: "ui::chatview", "handle_insert_line({timest}, {message_id:?}, {nick}, {text})");
+        debug!(target: "ui::chatview", "handle_insert_line({timest}, {msg_id}, {nick}, {text})");
 
-        if !self.add_line_to_db(timest, &message_id, &nick, &text).await {
+        if !self.add_line_to_db(timest, &msg_id, &nick, &text).await {
             // Already exists so bail
             debug!(target: "ui::chatview", "duplicate msg so bailing");
             return
@@ -447,7 +459,7 @@ impl ChatView {
 
         // Add message to page
         let mut msgbuf = self.msgbuf.lock().await;
-        msgbuf.insert_privmsg(timest, message_id, nick, text).await;
+        msgbuf.insert_privmsg(timest, msg_id, nick, text).await;
         self.redraw_cached(&mut msgbuf).await;
         self.bgload_cv.notify();
     }
@@ -535,13 +547,12 @@ impl ChatView {
             let Ok((k, v)) = entry else { break };
             assert_eq!(k.len(), 8 + 32);
             let timest_bytes: [u8; 8] = k[..8].try_into().unwrap();
-            let message_id: MessageId = k[8..].try_into().unwrap();
+            let msg_id = MessageId(k[8..].try_into().unwrap());
             let timest = Timestamp::from_be_bytes(timest_bytes);
             let chatmsg: ChatMsg = deserialize(&v).unwrap();
             debug!(target: "ui::chatview", "{timest:?} {chatmsg:?}");
 
-            let msg_height =
-                msgbuf.push_privmsg(timest, message_id, chatmsg.nick, chatmsg.text).await;
+            let msg_height = msgbuf.push_privmsg(timest, msg_id, chatmsg.nick, chatmsg.text).await;
 
             remaining_load_height -= msg_height;
             if remaining_load_height <= 0. {

@@ -25,8 +25,8 @@ use darkfi::{
     Error, Result,
 };
 use darkfi_serial::{
-    async_trait, deserialize_async_partial, AsyncDecodable, AsyncEncodable, Encodable,
-    SerialDecodable, SerialEncodable, serialize_async,
+    async_trait, deserialize_async_partial, serialize_async, AsyncDecodable, AsyncEncodable,
+    Encodable, SerialDecodable, SerialEncodable,
 };
 use evgrd::{
     FetchEventsMessage, LocalEventGraph, LocalEventGraphPtr, VersionMessage, MSG_EVENT,
@@ -254,13 +254,17 @@ impl LocalDarkIRC {
         };
 
         debug!(target: "darkirc", "privmsg: {privmsg:?}");
+        let mut timest = ev.timestamp;
+        if timest < 6047051717 {
+            timest *= 1000;
+        }
 
         if privmsg.channel != "#random" {
             return Ok(())
         }
 
         let mut arg_data = vec![];
-        ev.timestamp.encode_async(&mut arg_data).await.unwrap();
+        timest.encode_async(&mut arg_data).await.unwrap();
         ev.id().as_bytes().encode_async(&mut arg_data).await.unwrap();
         privmsg.nick.encode_async(&mut arg_data).await.unwrap();
         privmsg.msg.encode_async(&mut arg_data).await.unwrap();

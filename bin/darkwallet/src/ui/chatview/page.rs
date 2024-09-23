@@ -28,6 +28,7 @@ use std::{
     sync::{atomic::Ordering, Arc, Mutex as SyncMutex, Weak},
 };
 
+use super::{MessageId, Timestamp};
 use crate::{
     gfx::{
         GfxBufferId, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId,
@@ -43,9 +44,6 @@ use crate::{
 
 const PAGE_SIZE: usize = 10;
 const PRELOAD_PAGES: usize = 10;
-
-type Timestamp = u64;
-type MessageId = [u8; 32];
 
 fn is_whitespace(s: &str) -> bool {
     s.chars().all(char::is_whitespace)
@@ -640,7 +638,7 @@ impl MessageBuffer {
     pub async fn insert_privmsg(
         &mut self,
         timest: Timestamp,
-        message_id: MessageId,
+        msg_id: MessageId,
         nick: String,
         text: String,
     ) {
@@ -652,7 +650,7 @@ impl MessageBuffer {
             font_size,
             window_scale,
             timest,
-            message_id,
+            msg_id,
             nick,
             text,
             self.line_width,
@@ -698,7 +696,7 @@ impl MessageBuffer {
     pub async fn push_privmsg(
         &mut self,
         timest: Timestamp,
-        message_id: MessageId,
+        msg_id: MessageId,
         nick: String,
         text: String,
     ) -> f32 {
@@ -709,7 +707,7 @@ impl MessageBuffer {
             font_size,
             window_scale,
             timest,
-            message_id,
+            msg_id,
             nick,
             text,
             self.line_width,
