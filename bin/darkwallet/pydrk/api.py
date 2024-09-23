@@ -704,13 +704,12 @@ class Api:
 
         return (args, results)
 
-    def call_method(self, node_id, method_name, arg_data):
+    def call_method(self, node_path, method_name, arg_data):
         req = bytearray()
-        serial.write_u32(req, node_id)
+        serial.encode_str(req, node_path)
         serial.encode_str(req, method_name)
         serial.encode_buf(req, arg_data)
         cur = self._make_request(Command.CALL_METHOD, req)
-        errc = serial.read_u8(cur)
-        result = serial.decode_buf(cur)
-        return (errc, result)
+        result = serial.decode_opt(cur, serial.decode_buf)
+        return result
 

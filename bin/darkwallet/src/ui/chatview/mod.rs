@@ -372,12 +372,14 @@ impl ChatView {
     /// Mark line as selected
     async fn select_line(&self, mut y: f32) {
         // The cursor is inside the rect. We just have to find which line it clicked.
-        let scroll = self.scroll.get();
         let rect = self.rect.get();
-        let bottom = scroll + rect.y + rect.h;
 
-        assert!(bottom >= y);
-        y = bottom - y;
+        // y coord within widget's screen rect
+        y -= rect.y;
+        // The scroll is the position of the bottom of the rect on screen
+        let scroll = self.scroll.get();
+        // Now what is its distance from the absolute bottom
+        y = rect.h - y + scroll;
 
         let mut msgbuf = self.msgbuf.lock().await;
         msgbuf.select_line(y).await;

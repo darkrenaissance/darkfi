@@ -132,6 +132,7 @@ impl PrivMessage {
         &mut self,
         clip: &Rectangle,
         line_height: f32,
+        msg_spacing: f32,
         baseline: f32,
         timestamp_width: f32,
         nick_colors: &[Color],
@@ -149,7 +150,7 @@ impl PrivMessage {
         let mut mesh = MeshBuilder::new();
 
         if self.is_selected {
-            let height = self.height(line_height);
+            let height = self.height(line_height) + msg_spacing;
             mesh.draw_filled_box(
                 &Rectangle { x: 0., y: -height, w: clip.w, h: height },
                 hi_bg_color,
@@ -201,7 +202,13 @@ impl PrivMessage {
         mesh
     }
 
-    fn render_timestamp(&self, mesh: &mut MeshBuilder, baseline: f32, line_height: f32, timestamp_color: Color) {
+    fn render_timestamp(
+        &self,
+        mesh: &mut MeshBuilder,
+        baseline: f32,
+        line_height: f32,
+        timestamp_color: Color,
+    ) {
         let off_y = self.wrapped_lines.len() as f32 * line_height;
 
         let glyph_pos_iter = GlyphPositionIter::new(
@@ -517,6 +524,7 @@ impl Message {
         &mut self,
         clip: &Rectangle,
         line_height: f32,
+        msg_spacing: f32,
         baseline: f32,
         timestamp_width: f32,
         nick_colors: &[Color],
@@ -530,6 +538,7 @@ impl Message {
             Self::Priv(m) => m.gen_mesh(
                 clip,
                 line_height,
+                msg_spacing,
                 baseline,
                 timestamp_width,
                 nick_colors,
@@ -707,6 +716,7 @@ impl MessageBuffer {
 
     pub async fn calc_total_height(&mut self) -> f32 {
         let line_height = self.line_height.get();
+        let baseline = self.baseline.get();
         let msg_spacing = self.msg_spacing.get();
         let mut height = 0.;
 
@@ -718,10 +728,16 @@ impl MessageBuffer {
         while let Some(msg) = msgs.next().await {
             if is_first {
                 is_first = false;
+            } else {
                 height += msg_spacing;
             }
 
             height += msg.height(line_height);
+        }
+
+        // For the very top item. This is the ascent
+        if !is_first {
+            height += line_height - baseline;
         }
 
         height
@@ -856,6 +872,7 @@ impl MessageBuffer {
                 break
             }
             if msg_top < scroll {
+                current_pos += msg_spacing;
                 current_pos += mesh_height;
                 continue
             }
@@ -863,6 +880,7 @@ impl MessageBuffer {
             let mesh = msg.gen_mesh(
                 rect,
                 line_height,
+                msg_spacing,
                 baseline,
                 timestamp_width,
                 &nick_colors,
@@ -978,7 +996,7 @@ impl MessageBuffer {
         while let Some(msg) = msgs.next().await {
             let mesh_height = msg.height(line_height);
             let msg_bottom = current_pos;
-            let msg_top = current_pos + mesh_height;
+            let msg_top = current_pos + mesh_height + msg_spacing;
 
             if msg_bottom <= y && y <= msg_top {
                 // Do nothing

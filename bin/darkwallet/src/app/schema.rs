@@ -107,7 +107,7 @@ const TIMESTAMP_WIDTH: f32 = 60.;
 #[cfg(target_os = "android")]
 const MESSAGE_SPACING: f32 = 15.;
 #[cfg(target_os = "linux")]
-const MESSAGE_SPACING: f32 = 8.;
+const MESSAGE_SPACING: f32 = 5.;
 
 #[cfg(target_os = "android")]
 const LINE_HEIGHT: f32 = 58.;
@@ -117,7 +117,7 @@ const LINE_HEIGHT: f32 = 30.;
 #[cfg(target_os = "android")]
 const CHATVIEW_BASELINE: f32 = 36.;
 #[cfg(target_os = "linux")]
-const CHATVIEW_BASELINE: f32 = 30.;
+const CHATVIEW_BASELINE: f32 = 20.;
 
 pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
     let window_scale = PropertyFloat32::wrap(&window, Role::Internal, "scale", 0).unwrap();

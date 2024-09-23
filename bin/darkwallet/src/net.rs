@@ -551,37 +551,15 @@ impl ZeroMQAdapter {
                 */
             }
             Command::CallMethod => {
-                /*
-                let node_id = SceneNodeId::decode(&mut cur).unwrap();
+                let node_path: ScenePath = String::decode(&mut cur).unwrap().parse()?;
                 let method_name = String::decode(&mut cur).unwrap();
                 let arg_data = Vec::<u8>::decode(&mut cur).unwrap();
-                debug!(target: "req", "{:?}({}, {}, ...)", cmd, node_id, method_name);
+                debug!(target: "req", "{cmd:?}({node_path}, {method_name}, ...)");
 
-                let node = scene_graph.get_node_mut(node_id).ok_or(Error::NodeNotFound)?;
-
-                let method_name2 = method_name.clone();
-                let (tx, rx) = mpsc::sync_channel::<Result<Vec<u8>>>(1);
-                let response_fn = Box::new(move |result| {
-                    debug!(target: "req", "processing callmethod for {}:'{}'", node_id, method_name2);
-                    tx.send(result).unwrap();
-                });
-                node.call_method(&method_name, arg_data, response_fn)?;
-                drop(scene_graph);
-
-                let result = rx.recv().unwrap();
-                debug!(target: "req", "received callmethod for {}:'{}'", node_id, method_name);
-                match result {
-                    Ok(res_data) => {
-                        0u8.encode(&mut reply).unwrap();
-                        res_data.encode(&mut reply).unwrap();
-                    }
-                    Err(err) => {
-                        let errc = err as u8;
-                        errc.encode(&mut reply).unwrap();
-                        0u8.encode(&mut reply).unwrap();
-                    }
-                }
-                */
+                let node =
+                    self.sg_root.clone().lookup_node(node_path).ok_or(Error::NodeNotFound)?;
+                let result = node.call_method(&method_name, arg_data).await?;
+                result.encode(&mut reply).unwrap();
             }
         }
 
