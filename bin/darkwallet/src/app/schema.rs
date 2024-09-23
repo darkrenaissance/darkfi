@@ -60,12 +60,12 @@ const EDITCHAT_HEIGHT: f32 = 163.;
 const EDITCHAT_HEIGHT: f32 = 50.;
 
 #[cfg(target_os = "android")]
-const EDITCHAT_CURSOR_ASCENT: f32 = 80.;
+const EDITCHAT_CURSOR_ASCENT: f32 = 50.;
 #[cfg(target_os = "linux")]
 const EDITCHAT_CURSOR_ASCENT: f32 = 25.;
 
 #[cfg(target_os = "android")]
-const EDITCHAT_CURSOR_DESCENT: f32 = 30.;
+const EDITCHAT_CURSOR_DESCENT: f32 = 20.;
 #[cfg(target_os = "linux")]
 const EDITCHAT_CURSOR_DESCENT: f32 = 8.;
 
@@ -100,7 +100,7 @@ const TIMESTAMP_FONTSIZE: f32 = 30.;
 const TIMESTAMP_FONTSIZE: f32 = 12.;
 
 #[cfg(target_os = "android")]
-const TIMESTAMP_WIDTH: f32 = 120.;
+const TIMESTAMP_WIDTH: f32 = 135.;
 #[cfg(target_os = "linux")]
 const TIMESTAMP_WIDTH: f32 = 60.;
 
