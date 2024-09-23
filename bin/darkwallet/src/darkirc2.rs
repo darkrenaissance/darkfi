@@ -48,7 +48,7 @@ use std::{
 use url::Url;
 
 use crate::{
-    prop::{PropertyStr, Role},
+    prop::{PropertyBool, PropertyStr, Role},
     scene::{SceneNodePtr, Slot},
 };
 
@@ -86,6 +86,7 @@ pub struct LocalDarkIRC {
     sendbtn_node: SceneNodePtr,
     editbox_node: SceneNodePtr,
     editbox_text: PropertyStr,
+    upgrade_popup_is_visible: PropertyBool,
 }
 
 impl LocalDarkIRC {
@@ -93,8 +94,12 @@ impl LocalDarkIRC {
         let chatview_node = sg_root.clone().lookup_node("/window/view/chatty").unwrap();
         let sendbtn_node = sg_root.clone().lookup_node("/window/view/send_btn").unwrap();
 
-        let editbox_node = sg_root.lookup_node("/window/view/editz").unwrap();
+        let editbox_node = sg_root.clone().lookup_node("/window/view/editz").unwrap();
         let editbox_text = PropertyStr::wrap(&editbox_node, Role::App, "text", 0).unwrap();
+
+        let upgrade_popup_node = sg_root.clone().lookup_node("/window/view/upgrade_popup").unwrap();
+        let upgrade_popup_is_visible =
+            PropertyBool::wrap(&upgrade_popup_node, Role::App, "is_visible", 0).unwrap();
 
         info!(target: "darkirc", "Instantiating DarkIRC event DAG");
         let datastore = expand_path(EVGRDB_PATH)?;
@@ -115,11 +120,13 @@ impl LocalDarkIRC {
             sendbtn_node,
             editbox_node,
             editbox_text,
+            upgrade_popup_is_visible,
         }))
     }
 
     async fn reconnect(&self) -> Result<()> {
         let endpoint = "tcp://127.0.0.1:5588";
+        let endpoint = "tcp://192.168.1.38:5588";
         let endpoint = Url::parse(endpoint)?;
 
         let dialer = Dialer::new(endpoint.clone(), None).await?;
@@ -197,6 +204,10 @@ impl LocalDarkIRC {
 
         let server_version = VersionMessage::decode_async(reader).await?;
         info!(target: "darkirc", "Backend server version: {}", server_version.protocol_version);
+
+        if server_version.protocol_version > evgrd::PROTOCOL_VERSION {
+            self.upgrade_popup_is_visible.set(true);
+        }
 
         let unref_tips = self.evgr.unreferenced_tips.read().await.clone();
         let fetchevs = FetchEventsMessage::new(unref_tips);

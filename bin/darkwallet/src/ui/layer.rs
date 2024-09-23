@@ -61,7 +61,9 @@ impl Layer {
 
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
             let mut on_modify = OnModify::new(ex.clone(), node_name, node_id, me.clone());
+            on_modify.when_change(is_visible.prop(), Self::redraw);
             on_modify.when_change(rect.prop(), Self::redraw);
+            on_modify.when_change(z_index.prop(), Self::redraw);
 
             Self {
                 node,
@@ -108,23 +110,27 @@ impl Layer {
         let mut freed_textures = vec![];
         let mut freed_buffers = vec![];
 
-        for child in self.get_children() {
-            let obj = get_ui_object3(&child);
-            let Some(mut draw_update) = obj.draw(rect).await else {
-                debug!(target: "ui::layer", "Skipped draw() of {child:?}");
-                continue
-            };
+        // We should return a draw call so that if the layer is made visible, we can just
+        // recalculate it and update in place.
+        if self.is_visible.get() {
+            for child in self.get_children() {
+                let obj = get_ui_object3(&child);
+                let Some(mut draw_update) = obj.draw(rect).await else {
+                    debug!(target: "ui::layer", "Skipped draw() of {child:?}");
+                    continue
+                };
 
-            draw_calls.append(&mut draw_update.draw_calls);
-            child_calls.push(draw_update.key);
-            freed_textures.append(&mut draw_update.freed_textures);
-            freed_buffers.append(&mut draw_update.freed_buffers);
+                draw_calls.append(&mut draw_update.draw_calls);
+                child_calls.push(draw_update.key);
+                freed_textures.append(&mut draw_update.freed_textures);
+                freed_buffers.append(&mut draw_update.freed_buffers);
+            }
         }
 
         let dc = GfxDrawCall {
             instrs: vec![GfxDrawInstruction::ApplyView(rect)],
             dcs: child_calls,
-            z_index: 0,
+            z_index: self.z_index(),
         };
         draw_calls.push((self.dc_key, dc));
         Some(DrawUpdate { key: self.dc_key, draw_calls, freed_textures, freed_buffers })
@@ -140,15 +146,6 @@ impl UIObject for Layer {
     async fn draw(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
         debug!(target: "ui::layer", "Layer::draw()");
         *self.parent_rect.lock().unwrap() = Some(parent_rect);
-
-        // If we are invisible, then when layer is made visible again, the children
-        // draw calls will be recalculated and they will get the updated parent_rect.
-        if !self.is_visible.get() {
-            debug!(target: "ui::layer", "invisible layer node");
-            return None
-        }
-
-        debug!(target: "ui::layer", "Parent rect: {:?}", parent_rect);
 
         /*
         if !parent_rect.dim().contains(&offset_rect) {
