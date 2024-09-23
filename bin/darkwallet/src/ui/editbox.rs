@@ -18,6 +18,7 @@
 
 use async_trait::async_trait;
 use atomic_float::AtomicF32;
+use darkfi::system::msleep;
 use miniquad::{window, KeyCode, KeyMods, MouseButton, TouchPhase};
 use rand::{rngs::OsRng, Rng};
 use std::{
@@ -180,6 +181,8 @@ pub struct EditBox {
     debug: PropertyBool,
 
     mouse_btn_held: AtomicBool,
+    cursor_is_visible: AtomicBool,
+    blink_is_paused: AtomicBool,
 
     old_window_scale: AtomicF32,
     window_scale: PropertyFloat32,
@@ -209,6 +212,10 @@ impl EditBox {
         let cursor_color = PropertyColor::wrap(node_ref, Role::Internal, "cursor_color").unwrap();
         let hi_bg_color = PropertyColor::wrap(node_ref, Role::Internal, "hi_bg_color").unwrap();
         let selected = node_ref.get_property("selected").unwrap();
+        let cursor_blink_time =
+            PropertyUint32::wrap(node_ref, Role::Internal, "cursor_blink_time", 0).unwrap();
+        let cursor_idle_time =
+            PropertyUint32::wrap(node_ref, Role::Internal, "cursor_idle_time", 0).unwrap();
         let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
         let debug = PropertyBool::wrap(node_ref, Role::Internal, "debug", 0).unwrap();
 
@@ -219,7 +226,7 @@ impl EditBox {
         let glyphs = text_shaper.shape(text.get(), font_size.get(), window_scale.get()).await;
 
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
-            let mut on_modify = OnModify::new(ex, node_name, node_id, me.clone());
+            let mut on_modify = OnModify::new(ex.clone(), node_name, node_id, me.clone());
             on_modify.when_change(is_focused.prop(), Self::change_focus);
 
             // When text has been changed.
@@ -252,7 +259,26 @@ impl EditBox {
             on_modify.when_change(z_index.prop(), redraw);
             on_modify.when_change(debug.prop(), redraw);
 
-            let tasks = on_modify.tasks;
+            let me2 = me.clone();
+            let blinking_cursor_task = ex.spawn(async move {
+                loop {
+                    msleep(cursor_blink_time.get() as u64).await;
+
+                    let self_ = me2.upgrade().unwrap();
+
+                    if self_.blink_is_paused.swap(false, Ordering::Relaxed) {
+                        msleep(cursor_idle_time.get() as u64).await;
+                        continue
+                    }
+
+                    // Invert the bool
+                    self_.cursor_is_visible.fetch_not(Ordering::Relaxed);
+                    self_.redraw_cursor().await;
+                }
+            });
+
+            let mut tasks = on_modify.tasks;
+            tasks.push(blinking_cursor_task);
 
             Self {
                 node,
@@ -283,6 +309,8 @@ impl EditBox {
                 debug,
 
                 mouse_btn_held: AtomicBool::new(false),
+                cursor_is_visible: AtomicBool::new(true),
+                blink_is_paused: AtomicBool::new(false),
 
                 old_window_scale: AtomicF32::new(window_scale.get()),
                 window_scale,
@@ -629,6 +657,7 @@ impl EditBox {
         // meh lets pretend it doesn't exist for now.
         self.cursor_pos.set(cursor_pos + 1);
 
+        self.pause_blinking();
         self.regen_glyphs().await;
         self.apply_cursor_scrolling();
         self.redraw().await;
@@ -680,6 +709,7 @@ impl EditBox {
                     self.selected.set_u32(Role::Internal, 1, cursor_pos).unwrap();
                 }
 
+                self.pause_blinking();
                 self.apply_cursor_scrolling();
                 self.redraw().await;
             }
@@ -707,6 +737,7 @@ impl EditBox {
                     self.selected.set_u32(Role::Internal, 1, cursor_pos).unwrap();
                 }
 
+                self.pause_blinking();
                 self.apply_cursor_scrolling();
                 self.redraw().await;
             }
@@ -754,6 +785,7 @@ impl EditBox {
                     self.text.set(text);
                 };
 
+                self.pause_blinking();
                 self.regen_glyphs().await;
                 self.apply_cursor_scrolling();
                 self.redraw().await;
@@ -781,6 +813,7 @@ impl EditBox {
                     self.cursor_pos.set(cursor_pos - 1);
                 };
 
+                self.pause_blinking();
                 self.regen_glyphs().await;
                 self.apply_cursor_scrolling();
                 self.redraw().await;
@@ -803,6 +836,7 @@ impl EditBox {
                     self.selected.set_u32(Role::Internal, 1, cursor_pos).unwrap();
                 }
 
+                self.pause_blinking();
                 self.apply_cursor_scrolling();
                 self.redraw().await;
             }
@@ -825,6 +859,7 @@ impl EditBox {
                     self.selected.set_u32(Role::Internal, 1, cursor_pos).unwrap();
                 }
 
+                self.pause_blinking();
                 self.apply_cursor_scrolling();
                 self.redraw().await;
             }
@@ -961,6 +996,11 @@ impl EditBox {
         self.scroll.set(scroll);
     }
 
+    fn pause_blinking(&self) {
+        self.blink_is_paused.store(true, Ordering::Relaxed);
+        self.cursor_is_visible.store(true, Ordering::Relaxed);
+    }
+
     async fn redraw(&self) {
         let Some(draw_update) = self.draw_cached().await else {
             error!(target: "ui::editbox", "Text failed to draw");
@@ -975,6 +1015,47 @@ impl EditBox {
         for texture_id in draw_update.freed_textures {
             self.render_api.delete_texture(texture_id);
         }
+    }
+
+    async fn redraw_cursor(&self) {
+        let cursor_instrs = self.get_cursor_instrs();
+
+        let draw_calls = vec![(
+            self.cursor_dc_key,
+            GfxDrawCall { instrs: cursor_instrs, dcs: vec![], z_index: self.z_index.get() },
+        )];
+
+        self.render_api.replace_draw_calls(draw_calls);
+    }
+
+    fn get_cursor_instrs(&self) -> Vec<GfxDrawInstruction> {
+        if !self.is_focused.get() || !self.cursor_is_visible.load(Ordering::Relaxed) {
+            return vec![]
+        }
+
+        let mut cursor_instrs = vec![];
+
+        let mut cursor_pos = Point::zero();
+        cursor_pos.x += self.cursor_px_offset();
+        cursor_instrs.push(GfxDrawInstruction::Move(cursor_pos));
+
+        let cursor_render_mesh = {
+            let mut cursor_render_mesh = self.cursor_render_mesh.lock().unwrap();
+            if cursor_render_mesh.is_none() {
+                *cursor_render_mesh = Some(self.regen_cursor_mesh());
+            }
+            cursor_render_mesh.clone().unwrap()
+        };
+
+        let cursor_mesh = GfxDrawMesh {
+            vertex_buffer: cursor_render_mesh.vertex_buffer,
+            index_buffer: cursor_render_mesh.index_buffer,
+            texture: None,
+            num_elements: cursor_render_mesh.num_elements,
+        };
+        cursor_instrs.push(GfxDrawInstruction::Draw(cursor_mesh));
+
+        cursor_instrs
     }
 
     async fn draw_cached(&self) -> Option<DrawUpdate> {
@@ -1004,14 +1085,6 @@ impl EditBox {
             Some(text_render_info.clone()),
         );
 
-        let cursor_render_mesh = {
-            let mut cursor_render_mesh = self.cursor_render_mesh.lock().unwrap();
-            if cursor_render_mesh.is_none() {
-                *cursor_render_mesh = Some(self.regen_cursor_mesh());
-            }
-            cursor_render_mesh.clone().unwrap()
-        };
-
         // We're finished with these so clean up.
         if let Some(old) = old_text_render_info {
             freed_textures.push(old.texture_id);
@@ -1026,20 +1099,7 @@ impl EditBox {
             num_elements: text_render_info.mesh.num_elements,
         };
 
-        let mut cursor_instrs = vec![];
-        if self.is_focused.get() {
-            let mut cursor_pos = Point::zero();
-            cursor_pos.x += self.cursor_px_offset();
-            cursor_instrs.push(GfxDrawInstruction::Move(cursor_pos));
-
-            let cursor_mesh = GfxDrawMesh {
-                vertex_buffer: cursor_render_mesh.vertex_buffer,
-                index_buffer: cursor_render_mesh.index_buffer,
-                texture: None,
-                num_elements: cursor_render_mesh.num_elements,
-            };
-            cursor_instrs.push(GfxDrawInstruction::Draw(cursor_mesh));
-        }
+        let cursor_instrs = self.get_cursor_instrs();
 
         Some(DrawUpdate {
             key: self.text_dc_key,
