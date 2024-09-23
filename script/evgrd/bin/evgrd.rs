@@ -214,7 +214,33 @@ async fn send_event(stream: &mut Box<dyn PtStream>, daemon: &Daemon) -> Result<(
     let event = Event::with_timestamp(timestamp, content, &daemon.event_graph).await;
     daemon.event_graph.dag_insert(&[event.clone()]).await.unwrap();
 
-    daemon.p2p.broadcast(&EventPut(event)).await;
+    info!(target: "evgrd", "Broadcasting event put: {event:?}");
+    //daemon.p2p.broadcast(&EventPut(event)).await;
+
+    let p2p = daemon.p2p.clone();
+    let self_version = p2p.settings().read().await.app_version.clone();
+    let connected_peers = p2p.hosts().peers();
+    let mut peers_with_matched_version = vec![];
+    let mut peers_with_different_version = vec![];
+    for peer in connected_peers {
+        let peer_version = peer.version.lock().await.clone();
+        if let Some(ref peer_version) = peer_version {
+            if self_version == peer_version.version {
+                peers_with_matched_version.push(peer)
+            } else {
+                peers_with_different_version.push(peer)
+            }
+        }
+    }
+
+    if !peers_with_matched_version.is_empty() {
+        p2p.broadcast_to(&EventPut(event.clone()), &peers_with_matched_version).await;
+    }
+    if !peers_with_different_version.is_empty() {
+        let mut event = event;
+        event.timestamp /= 1000;
+        p2p.broadcast_to(&EventPut(event), &peers_with_different_version).await;
+    }
 
     Ok(())
 }
