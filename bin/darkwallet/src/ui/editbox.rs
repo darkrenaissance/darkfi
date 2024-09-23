@@ -157,9 +157,13 @@ pub struct EditBox {
     text_shaper: TextShaperPtr,
     key_repeat: SyncMutex<PressedKeysSmoothRepeat>,
 
-    render_info: SyncMutex<Option<TextRenderInfo>>,
+    text_render_info: SyncMutex<Option<TextRenderInfo>>,
     glyphs: SyncMutex<Vec<Glyph>>,
-    dc_key: u64,
+    /// DC key for the text
+    text_dc_key: u64,
+    cursor_render_mesh: SyncMutex<Option<MeshInfo>>,
+    /// DC key for the cursor. Allows updating cursor independently.
+    cursor_dc_key: u64,
 
     is_active: PropertyBool,
     is_focused: PropertyBool,
@@ -258,9 +262,11 @@ impl EditBox {
                 text_shaper,
                 key_repeat: SyncMutex::new(PressedKeysSmoothRepeat::new(400, 50)),
 
-                render_info: SyncMutex::new(None),
+                text_render_info: SyncMutex::new(None),
                 glyphs: SyncMutex::new(glyphs),
-                dc_key: OsRng.gen(),
+                text_dc_key: OsRng.gen(),
+                cursor_render_mesh: SyncMutex::new(None),
+                cursor_dc_key: OsRng.gen(),
 
                 is_active,
                 is_focused,
@@ -298,8 +304,7 @@ impl EditBox {
     }
 
     /// Called whenever the text or any text property changes.
-    /// Not related to cursor, text highlighting or bounding (clip) rects.
-    fn regen_mesh(&self, mut clip: Rectangle) -> TextRenderInfo {
+    fn regen_text_mesh(&self, mut clip: Rectangle) -> TextRenderInfo {
         clip.x = 0.;
         clip.y = 0.;
 
@@ -323,8 +328,6 @@ impl EditBox {
         self.draw_selected(&mut mesh, &glyphs, clip.h).unwrap();
 
         let glyph_pos_iter = GlyphPositionIter::new(font_size, window_scale, &glyphs, baseline);
-        // Used for drawing the cursor when it's at the end of the line.
-        let mut rhs = 0.;
 
         for (glyph_idx, (mut glyph_rect, glyph)) in glyph_pos_iter.zip(glyphs.iter()).enumerate() {
             let uv_rect = atlas.fetch_uv(glyph.glyph_id).expect("missing glyph UV rect");
@@ -337,23 +340,6 @@ impl EditBox {
                 color = COLOR_WHITE;
             }
             mesh.draw_box(&glyph_rect, color, uv_rect);
-
-            if is_focused && cursor_pos != 0 && cursor_pos == glyph_idx {
-                let cursor_rect = Rectangle { x: glyph_rect.x, y: 0., w: CURSOR_WIDTH, h: clip.h };
-                mesh.draw_box(&cursor_rect, cursor_color, &Rectangle::zero());
-            }
-
-            rhs = glyph_rect.rhs();
-        }
-
-        if is_focused && cursor_pos == 0 {
-            let cursor_rect = Rectangle { x: 0., y: 0., w: CURSOR_WIDTH, h: clip.h };
-            mesh.draw_box(&cursor_rect, cursor_color, &Rectangle::zero());
-        } else if is_focused && cursor_pos == glyphs.len() {
-            rhs += eol_nudge(font_size, &glyphs);
-
-            let cursor_rect = Rectangle { x: rhs, y: 0., w: CURSOR_WIDTH, h: clip.h };
-            mesh.draw_box(&cursor_rect, cursor_color, &Rectangle::zero());
         }
 
         if debug {
@@ -363,6 +349,49 @@ impl EditBox {
         let mesh = mesh.alloc(&self.render_api);
 
         TextRenderInfo { mesh, texture_id: atlas.texture_id }
+    }
+
+    fn regen_cursor_mesh(&self) -> MeshInfo {
+        let rect_h = self.rect.get().h;
+        let cursor_rect = Rectangle { x: 0., y: 0., w: CURSOR_WIDTH, h: rect_h };
+        let cursor_color = self.cursor_color.get();
+
+        let mut mesh = MeshBuilder::new();
+        mesh.draw_filled_box(&cursor_rect, cursor_color);
+        mesh.alloc(&self.render_api)
+    }
+
+    fn cursor_px_offset(&self) -> f32 {
+        assert!(self.is_focused.get());
+
+        let font_size = self.font_size.get();
+        let window_scale = self.window_scale.get();
+        let baseline = self.baseline.get();
+        let scroll = self.scroll.get();
+        let cursor_pos = self.cursor_pos.get() as usize;
+        let glyphs = self.glyphs.lock().unwrap().clone();
+        let glyph_pos_iter = GlyphPositionIter::new(font_size, window_scale, &glyphs, baseline);
+        // Used for drawing the cursor when it's at the end of the line.
+        let mut rhs = 0.;
+
+        if cursor_pos == 0 {
+            return 0.;
+        }
+
+        for (glyph_idx, (mut glyph_rect, glyph)) in glyph_pos_iter.zip(glyphs.iter()).enumerate() {
+            glyph_rect.x -= scroll;
+
+            if cursor_pos == glyph_idx {
+                return glyph_rect.x;
+            }
+
+            rhs = glyph_rect.rhs();
+        }
+
+        assert!(cursor_pos == glyphs.len());
+
+        rhs += eol_nudge(font_size, &glyphs);
+        rhs
     }
 
     fn draw_selected(
@@ -955,51 +984,83 @@ impl EditBox {
         let mut freed_textures = vec![];
         let mut freed_buffers = vec![];
 
+        // Force complete redraw if the window scale changed
         let window_scale = self.window_scale.get();
         if self.old_window_scale.swap(window_scale, Ordering::Relaxed) != window_scale {
             self.regen_glyphs().await;
 
-            let render_info = std::mem::replace(&mut *self.render_info.lock().unwrap(), None);
+            let text_render_info =
+                std::mem::replace(&mut *self.text_render_info.lock().unwrap(), None);
             // We're finished with these so clean up.
-            if let Some(old) = render_info {
+            if let Some(old) = text_render_info {
                 freed_textures.push(old.texture_id);
                 freed_buffers.push(old.mesh.vertex_buffer);
                 freed_buffers.push(old.mesh.index_buffer);
             }
         }
 
-        // draw will recalc this when it's None
-        let render_info = self.regen_mesh(rect.clone());
-        let old_render_info =
-            std::mem::replace(&mut *self.render_info.lock().unwrap(), Some(render_info.clone()));
+        let text_render_info = self.regen_text_mesh(rect.clone());
+        let old_text_render_info = std::mem::replace(
+            &mut *self.text_render_info.lock().unwrap(),
+            Some(text_render_info.clone()),
+        );
+
+        let cursor_render_mesh = {
+            let mut cursor_render_mesh = self.cursor_render_mesh.lock().unwrap();
+            if cursor_render_mesh.is_none() {
+                *cursor_render_mesh = Some(self.regen_cursor_mesh());
+            }
+            cursor_render_mesh.clone().unwrap()
+        };
 
         // We're finished with these so clean up.
-        if let Some(old) = old_render_info {
+        if let Some(old) = old_text_render_info {
             freed_textures.push(old.texture_id);
             freed_buffers.push(old.mesh.vertex_buffer);
             freed_buffers.push(old.mesh.index_buffer);
         }
 
-        let mesh = GfxDrawMesh {
-            vertex_buffer: render_info.mesh.vertex_buffer,
-            index_buffer: render_info.mesh.index_buffer,
-            texture: Some(render_info.texture_id),
-            num_elements: render_info.mesh.num_elements,
+        let text_mesh = GfxDrawMesh {
+            vertex_buffer: text_render_info.mesh.vertex_buffer,
+            index_buffer: text_render_info.mesh.index_buffer,
+            texture: Some(text_render_info.texture_id),
+            num_elements: text_render_info.mesh.num_elements,
         };
 
+        let mut cursor_instrs = vec![];
+        if self.is_focused.get() {
+            let mut cursor_pos = Point::zero();
+            cursor_pos.x += self.cursor_px_offset();
+            cursor_instrs.push(GfxDrawInstruction::Move(cursor_pos));
+
+            let cursor_mesh = GfxDrawMesh {
+                vertex_buffer: cursor_render_mesh.vertex_buffer,
+                index_buffer: cursor_render_mesh.index_buffer,
+                texture: None,
+                num_elements: cursor_render_mesh.num_elements,
+            };
+            cursor_instrs.push(GfxDrawInstruction::Draw(cursor_mesh));
+        }
+
         Some(DrawUpdate {
-            key: self.dc_key,
-            draw_calls: vec![(
-                self.dc_key,
-                GfxDrawCall {
-                    instrs: vec![
-                        GfxDrawInstruction::Move(rect.pos()),
-                        GfxDrawInstruction::Draw(mesh),
-                    ],
-                    dcs: vec![],
-                    z_index: self.z_index.get(),
-                },
-            )],
+            key: self.text_dc_key,
+            draw_calls: vec![
+                (
+                    self.text_dc_key,
+                    GfxDrawCall {
+                        instrs: vec![
+                            GfxDrawInstruction::Move(rect.pos()),
+                            GfxDrawInstruction::Draw(text_mesh),
+                        ],
+                        dcs: vec![self.cursor_dc_key],
+                        z_index: self.z_index.get(),
+                    },
+                ),
+                (
+                    self.cursor_dc_key,
+                    GfxDrawCall { instrs: cursor_instrs, dcs: vec![], z_index: self.z_index.get() },
+                ),
+            ],
             freed_textures,
             freed_buffers,
         })
@@ -1008,9 +1069,9 @@ impl EditBox {
 
 impl Drop for EditBox {
     fn drop(&mut self) {
-        let render_info = std::mem::replace(&mut *self.render_info.lock().unwrap(), None);
+        let text_render_info = std::mem::replace(&mut *self.text_render_info.lock().unwrap(), None);
         // We're finished with these so clean up.
-        if let Some(old) = render_info {
+        if let Some(old) = text_render_info {
             self.render_api.delete_buffer(old.mesh.vertex_buffer);
             self.render_api.delete_buffer(old.mesh.index_buffer);
             self.render_api.delete_texture(old.texture_id);

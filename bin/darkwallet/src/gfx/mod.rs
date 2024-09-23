@@ -147,8 +147,6 @@ pub enum GfxDrawInstruction {
     SetScale(f32),
     Move(Point),
     ApplyView(Rectangle),
-    ApplyViewport(Rectangle),
-    ApplyMatrix(glam::Mat4),
     Draw(GfxDrawMesh),
 }
 
@@ -162,8 +160,6 @@ impl GfxDrawInstruction {
             Self::SetScale(scale) => DrawInstruction::SetScale(scale),
             Self::Move(off) => DrawInstruction::Move(off),
             Self::ApplyView(view) => DrawInstruction::ApplyView(view),
-            Self::ApplyViewport(rect) => DrawInstruction::ApplyViewport(rect),
-            Self::ApplyMatrix(mat) => DrawInstruction::ApplyMatrix(mat),
             Self::Draw(mesh) => DrawInstruction::Draw(mesh.compile(textures, buffers)),
         }
     }
@@ -203,8 +199,6 @@ enum DrawInstruction {
     SetScale(f32),
     Move(Point),
     ApplyView(Rectangle),
-    ApplyViewport(Rectangle),
-    ApplyMatrix(glam::Mat4),
     Draw(DrawMesh),
 }
 
@@ -274,8 +268,6 @@ impl<'a> RenderContext<'a> {
     fn draw_call(&mut self, draw_call: &DrawCall, indent: u32) {
         let ws = if DEBUG_RENDER { " ".repeat(indent as usize * 4) } else { String::new() };
 
-        //// This is buggy since it does not reset back to parent
-        //let mut prev_view = None;
         let old_view = self.view;
         let old_cursor = self.cursor;
 
@@ -307,33 +299,6 @@ impl<'a> RenderContext<'a> {
                     }
                     self.apply_view();
                 }
-                DrawInstruction::ApplyViewport(view) => {
-                    /*
-                    if DEBUG_RENDER {
-                        debug!(target: "gfx", "{}apply_viewport({:?})", ws, view);
-                    }
-                    prev_view = Some(view.clone());
-                    self.apply_view(view);
-                    */
-                }
-                DrawInstruction::ApplyMatrix(model) => {
-                    /*
-                    if DEBUG_RENDER {
-                        debug!(target: "gfx", "{}apply_matrix(", ws);
-                        debug!(target: "gfx", "{}    {:?}", ws, model.row(0).to_array());
-                        debug!(target: "gfx", "{}    {:?}", ws, model.row(1).to_array());
-                        debug!(target: "gfx", "{}    {:?}", ws, model.row(2).to_array());
-                        debug!(target: "gfx", "{}    {:?}", ws, model.row(3).to_array());
-                        debug!(target: "gfx", "{})", ws);
-                    }
-                    let data: [u8; 64] = unsafe { std::mem::transmute_copy(model) };
-                    self.uniforms_data[64..].copy_from_slice(&data);
-                    self.ctx.apply_uniforms_from_bytes(
-                        self.uniforms_data.as_ptr(),
-                        self.uniforms_data.len(),
-                    );
-                    */
-                }
                 DrawInstruction::Draw(mesh) => {
                     if DEBUG_RENDER {
                         debug!(target: "gfx", "{ws}draw({mesh:?})");
@@ -362,16 +327,6 @@ impl<'a> RenderContext<'a> {
                 debug!(target: "gfx", "{ws}drawcall {dc_key}");
             }
             self.draw_call(dc, indent + 1);
-
-            /*
-            // Reset view back again in case the draw call changed it
-            if let Some(view) = &prev_view {
-                if DEBUG_RENDER {
-                    debug!(target: "gfx", "{}reset viewport to {:?}", ws, view);
-                }
-                self.apply_view(view);
-            }
-            */
         }
 
         self.cursor = old_cursor;

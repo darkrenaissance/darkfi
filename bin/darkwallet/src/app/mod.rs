@@ -169,7 +169,7 @@ impl App {
             })
             .await;
         self.sg_root.link(window.clone());
-        schema::make(&self, window).await;
+        schema::make_test(&self, window).await;
 
         debug!(target: "app", "Schema loaded");
 
