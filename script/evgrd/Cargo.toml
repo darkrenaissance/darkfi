@@ -13,9 +13,13 @@ name = "evgrd"
 path = "bin/evgrd.rs"
 required-features = ["build-daemon"]
 
-[[bin]]
-name = "test"
-path = "bin/test.rs"
+[[example]]
+name = "recv"
+path = "example/recv.rs"
+
+[[example]]
+name = "send"
+path = "example/send.rs"
 
 [dependencies]
 darkfi = {path = "../../", features = ["event-graph"]}

@@ -18,7 +18,10 @@
 
 use darkfi::{
     async_daemonize, cli_desc,
-    event_graph::{proto::{ProtocolEventGraph, EventPut}, Event, EventGraph, EventGraphPtr},
+    event_graph::{
+        proto::{EventPut, ProtocolEventGraph},
+        Event, EventGraph, EventGraphPtr,
+    },
     net::{
         session::SESSION_DEFAULT,
         settings::SettingsOpt as NetSettingsOpt,
