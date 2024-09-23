@@ -38,6 +38,7 @@ use crate::{
     prop::{PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyUint32, Role},
     pubsub::Subscription,
     text::{self, glyph_str, Glyph, GlyphPositionIter, TextShaper, TextShaperPtr},
+    ui::FreedData,
     util::{enumerate_mut, enumerate_ref},
     ExecutorPtr,
 };
@@ -505,22 +506,6 @@ fn select_nick_color(nick: &str, nick_colors: &[Color]) -> Color {
     let i = hasher.finish() as usize;
     let color = nick_colors[i % nick_colors.len()];
     color
-}
-
-#[derive(Default)]
-pub struct FreedData {
-    pub buffers: Vec<GfxBufferId>,
-    pub textures: Vec<GfxTextureId>,
-}
-
-impl FreedData {
-    fn add_mesh(&mut self, mesh: GfxDrawMesh) {
-        self.buffers.push(mesh.vertex_buffer);
-        self.buffers.push(mesh.index_buffer);
-    }
-    fn add_texture(&mut self, texture_id: GfxTextureId) {
-        self.textures.push(texture_id);
-    }
 }
 
 pub struct MessageBuffer {

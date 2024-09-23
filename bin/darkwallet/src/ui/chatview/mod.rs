@@ -36,7 +36,7 @@ use std::{
 };
 
 mod page;
-use page::{FreedData, MessageBuffer};
+use page::MessageBuffer;
 
 use crate::{
     gfx::{
@@ -51,6 +51,7 @@ use crate::{
     pubsub::Subscription,
     scene::{MethodCallSub, Pimpl, SceneNodeWeak},
     text::{self, Glyph, GlyphPositionIter, TextShaperPtr},
+    ui::FreedData,
     util::{enumerate, is_whitespace},
     ExecutorPtr,
 };

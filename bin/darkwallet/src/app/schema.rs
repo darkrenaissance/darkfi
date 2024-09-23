@@ -320,6 +320,8 @@ pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
     prop.set_f32(Role::App, 1, 0.5).unwrap();
     prop.set_f32(Role::App, 2, 0.5).unwrap();
     prop.set_f32(Role::App, 3, 1.).unwrap();
+    node.set_property_f32(Role::App, "cursor_ascent", 40.).unwrap();
+    node.set_property_f32(Role::App, "cursor_descent", 40.).unwrap();
     let prop = node.get_property("hi_bg_color").unwrap();
     if LIGHTMODE {
         prop.set_f32(Role::App, 0, 0.5).unwrap();
@@ -747,6 +749,8 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     prop.set_f32(Role::App, 1, 0.627).unwrap();
     prop.set_f32(Role::App, 2, 1.).unwrap();
     prop.set_f32(Role::App, 3, 1.).unwrap();
+    node.set_property_f32(Role::App, "cursor_ascent", 25.).unwrap();
+    node.set_property_f32(Role::App, "cursor_descent", 8.).unwrap();
     let prop = node.get_property("hi_bg_color").unwrap();
     if LIGHTMODE {
         prop.set_f32(Role::App, 0, 0.5).unwrap();

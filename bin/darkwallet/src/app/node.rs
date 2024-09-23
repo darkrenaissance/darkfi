@@ -173,6 +173,20 @@ pub fn create_editbox(name: &str) -> SceneNode {
     prop.set_range_f32(0., 1.);
     node.add_property(prop).unwrap();
 
+    let mut prop = Property::new("cursor_width", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_defaults_f32(vec![2.]).unwrap();
+    prop.set_range_f32(0., f32::MAX);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("cursor_ascent", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_defaults_f32(vec![10.]).unwrap();
+    prop.set_range_f32(0., f32::MAX);
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("cursor_descent", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_range_f32(0., f32::MAX);
+    node.add_property(prop).unwrap();
+
     let mut prop = Property::new("hi_bg_color", PropertyType::Float32, PropertySubType::Color);
     prop.set_array_len(4);
     prop.set_range_f32(0., 1.);
