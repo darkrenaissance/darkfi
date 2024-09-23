@@ -168,8 +168,8 @@ impl App {
                 Window::new(me, self.render_api.clone(), self.event_pub.clone(), self.ex.clone())
             })
             .await;
-        self.sg_root.link(window.clone());
-        schema::make_test(&self, window).await;
+        self.sg_root.clone().link(window.clone());
+        schema::make(&self, window).await;
 
         debug!(target: "app", "Schema loaded");
 

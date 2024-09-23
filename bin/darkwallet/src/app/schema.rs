@@ -125,7 +125,7 @@ pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
     );
     let node =
         node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
-    layer_node.link(node);
+    layer_node.clone().link(node);
 
     // Create button bg
     let node = create_vector_art("btnbg");
@@ -157,7 +157,7 @@ pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
     let shape = VectorShape { verts, indices };
     let node =
         node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
-    layer_node.link(node);
+    layer_node.clone().link(node);
 
     // Create the button
     let node = create_button("btn");
@@ -174,7 +174,7 @@ pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
     //node.register("click", slot_click).unwrap();
 
     let node = node.setup(|me| Button::new(me, app.ex.clone())).await;
-    layer_node.link(node);
+    layer_node.clone().link(node);
 
     // Create another mesh
     let node = create_vector_art("box");
@@ -205,7 +205,7 @@ pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
     let shape = VectorShape { verts, indices };
     let node =
         node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
-    layer_node.link(node);
+    layer_node.clone().link(node);
 
     // Debugging tool
     let node = create_vector_art("debugtool");
@@ -235,7 +235,7 @@ pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
     );
     let node =
         node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
-    layer_node.link(node);
+    layer_node.clone().link(node);
 
     // Create KING GNU!
     let node = create_image("king");
@@ -247,7 +247,7 @@ pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
     node.set_property_str(Role::App, "path", KING_PATH).unwrap();
     node.set_property_u32(Role::App, "z_index", 1).unwrap();
     let node = node.setup(|me| Image::new(me, app.render_api.clone(), app.ex.clone())).await;
-    layer_node.link(node);
+    layer_node.clone().link(node);
 
     // Create some text
     let node = create_text("label");
@@ -278,11 +278,12 @@ pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
             )
         })
         .await;
-    layer_node.link(node);
+    layer_node.clone().link(node);
 
     // Text edit
     let node = create_editbox("editz");
     node.set_property_bool(Role::App, "is_active", true).unwrap();
+    node.set_property_bool(Role::App, "is_focused", true).unwrap();
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(Role::App, 0, 150.).unwrap();
     prop.set_f32(Role::App, 1, 150.).unwrap();
@@ -368,7 +369,7 @@ pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
             )
         })
         .await;
-    layer_node.link(node);
+    layer_node.clone().link(node);
 
     // ChatView
     let node = create_chatview("chatty");
@@ -452,7 +453,7 @@ pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
             )
         })
         .await;
-    layer_node.link(node);
+    layer_node.clone().link(node);
 }
 
 pub(super) async fn make(app: &App, window: SceneNodePtr) {
@@ -498,7 +499,7 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     );
     let node =
         node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
-    layer_node.link(node);
+    layer_node.clone().link(node);
 
     // Create the toolbar bg
     let node = create_vector_art("toolbar_bg");
@@ -520,7 +521,7 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
 
     let node =
         node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
-    layer_node.link(node);
+    layer_node.clone().link(node);
 
     // Create some text
     let node = create_text("channel_label");
@@ -552,7 +553,7 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
             )
         })
         .await;
-    layer_node.link(node);
+    layer_node.clone().link(node);
 
     // ChatView
     let node = create_chatview("chatty");
@@ -642,7 +643,7 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
             )
         })
         .await;
-    layer_node.link(node);
+    layer_node.clone().link(node);
 
     // Create the editbox bg
     let node = create_vector_art("editbox_bg");
@@ -678,7 +679,7 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     );
     let node =
         node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
-    layer_node.link(node);
+    layer_node.clone().link(node);
 
     // Create some text
     let node = create_text("send_label");
@@ -711,7 +712,7 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
             )
         })
         .await;
-    layer_node.link(node);
+    layer_node.clone().link(node);
 
     // Text edit
     let node = create_editbox("editz");
@@ -795,7 +796,7 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
             )
         })
         .await;
-    layer_node.link(node);
+    layer_node.clone().link(node);
 
     // Create the send button
     let node = create_button("send_btn");
@@ -809,5 +810,5 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     prop.set_f32(Role::App, 3, EDITCHAT_HEIGHT).unwrap();
 
     let node = node.setup(|me| Button::new(me, app.ex.clone())).await;
-    layer_node.link(node);
+    layer_node.clone().link(node);
 }

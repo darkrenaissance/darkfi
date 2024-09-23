@@ -184,6 +184,7 @@ impl UIObject for Layer {
         for child in self.get_children() {
             let obj = get_ui_object3(&child);
             if obj.handle_key_down(key, mods, repeat).await {
+                //debug!(target: "layer", "handle_key_down({key:?}, {mods:?}, {repeat}) swallowed by {child:?}");
                 return true
             }
         }

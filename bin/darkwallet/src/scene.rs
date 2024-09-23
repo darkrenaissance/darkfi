@@ -160,10 +160,10 @@ impl SceneNode {
         self_
     }
 
-    pub fn link(&self, child: SceneNodePtr) {
+    pub fn link(self: Arc<Self>, child: SceneNodePtr) {
         let mut childs_parent = child.parent.write().unwrap();
         assert!(childs_parent.is_none());
-        *childs_parent = Some(Arc::downgrade(&child));
+        *childs_parent = Some(Arc::downgrade(&self));
         drop(childs_parent);
 
         let mut children = self.children.write().unwrap();
@@ -349,11 +349,32 @@ impl SceneNode {
         let method_sub = method.pubsub.clone().subscribe();
         Ok(method_sub)
     }
+
+    pub fn get_full_path(&self) -> Option<String> {
+        if self.typ == SceneNodeType::Root {
+            return Some("/".to_string())
+        }
+
+        let mut self_name = self.name.clone();
+
+        let parent = self.parent.read().unwrap().clone()?;
+        let Some(parent) = parent.upgrade() else { return None };
+
+        let parent_path = parent.get_full_path()?;
+        if parent_path == "/" {
+            return Some(format!("/{self_name}"))
+        }
+        Some(format!("{parent_path}/{self_name}"))
+    }
 }
 
 impl std::fmt::Debug for SceneNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "'{}':{}", self.name, self.id)
+        if let Some(path) = self.get_full_path() {
+            write!(f, "{path}")
+        } else {
+            write!(f, "{}:{}", self.name, self.id)
+        }
     }
 }
 

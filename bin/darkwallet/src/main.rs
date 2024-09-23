@@ -142,7 +142,6 @@ fn main() {
     let cv_started = app.is_started.clone();
     let sg_root = app.sg_root.clone();
     let ex2 = ex.clone();
-    /*
     let darkirc_task = ex.spawn(async move {
         cv_started.wait().await;
         let darkirc_evgr = LocalDarkIRC::new(sg_root.clone(), ex2.clone()).await.unwrap();
@@ -152,7 +151,6 @@ fn main() {
         }
     });
     async_runtime.push_task(darkirc_task);
-    */
 
     /*
     // Nice to see which events exist

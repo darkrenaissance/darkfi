@@ -741,15 +741,17 @@ impl UIObject for ChatView {
             KeyCode::PageUp => {
                 let scroll = self.scroll.get() + 200.;
                 self.scrollview(scroll).await;
+                return true
             }
             KeyCode::PageDown => {
                 let scroll = self.scroll.get() - 200.;
                 self.scrollview(scroll).await;
+                return true
             }
             _ => {}
         }
 
-        true
+        false
     }
 
     async fn handle_mouse_btn_down(&self, btn: MouseButton, mouse_pos: Point) -> bool {

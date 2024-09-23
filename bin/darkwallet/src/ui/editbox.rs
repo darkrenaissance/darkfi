@@ -110,7 +110,6 @@ impl PressedKeysSmoothRepeat {
     /*
     fn key_up(&mut self, key: &PressedKey) {
         //debug!(target: "PressedKeysSmoothRepeat", "key_up({:?})", key);
-        println!("{:?}", self.pressed_keys.keys());
         assert!(self.pressed_keys.contains_key(key));
         self.pressed_keys.remove(key).expect("key was pressed");
     }
