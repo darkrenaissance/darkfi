@@ -97,7 +97,7 @@ struct Args {
     sync_attempts: u8,
 
     /// Number of seconds to wait before trying again if sync fails.
-    #[structopt(long, default_value = "50")]
+    #[structopt(long, default_value = "15")]
     sync_timeout: u8,
 
     /// P2P network settings
@@ -263,6 +263,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     let sled_db = sled::open(datastore)?;
     let mut p2p_settings: darkfi::net::Settings = args.net.into();
     p2p_settings.app_version = semver::Version::parse(env!("CARGO_PKG_VERSION")).unwrap();
+    p2p_settings.seeds.push(url::Url::parse("tcp+tls://lilith1.dark.fi:5262").unwrap());
     let p2p = P2p::new(p2p_settings, ex.clone()).await?;
     let event_graph = EventGraph::new(
         p2p.clone(),
