@@ -290,5 +290,5 @@ to regenerate your font cache (or just restart) after installing them.
 ## Troubleshooting
 
 If you encounter connectivity issues refer to 
-[Network troubleshooting](https://darkrenaissance.github.io/darkfi/misc/network-troubleshooting.html) 
+[Network troubleshooting](../network-troubleshooting.html) 
 for further troubleshooting resources.

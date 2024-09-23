@@ -158,7 +158,7 @@ dnet to gather more network information. dnet displays:
 2. Outgoing, incoming, manual and seed sessions
 3. Each associated connection and recent messages.
 
-To install and learn to use dnet, go [here](../learn/dchat/network-tools/using-dnet.html).
+To install and learn to use dnet, go [here](../learn/dchat/network-tools/using-dnet.md).
 You can use dnet to view the network topology and see how your node 
 interacts within the network. dnet log information is created in 
 `${DARKFI_REPO}/bin/dnet/dnet.log`.
