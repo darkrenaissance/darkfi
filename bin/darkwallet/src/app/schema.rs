@@ -104,6 +104,21 @@ const TIMESTAMP_WIDTH: f32 = 135.;
 #[cfg(target_os = "linux")]
 const TIMESTAMP_WIDTH: f32 = 60.;
 
+#[cfg(target_os = "android")]
+const MESSAGE_SPACING: f32 = 15.;
+#[cfg(target_os = "linux")]
+const MESSAGE_SPACING: f32 = 8.;
+
+#[cfg(target_os = "android")]
+const LINE_HEIGHT: f32 = 58.;
+#[cfg(target_os = "linux")]
+const LINE_HEIGHT: f32 = 30.;
+
+#[cfg(target_os = "android")]
+const CHATVIEW_BASELINE: f32 = 36.;
+#[cfg(target_os = "linux")]
+const CHATVIEW_BASELINE: f32 = 30.;
+
 pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
     let window_scale = PropertyFloat32::wrap(&window, Role::Internal, "scale", 0).unwrap();
 
@@ -586,8 +601,9 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     node.set_property_f32(Role::App, "font_size", FONTSIZE).unwrap();
     node.set_property_f32(Role::App, "timestamp_font_size", TIMESTAMP_FONTSIZE).unwrap();
     node.set_property_f32(Role::App, "timestamp_width", TIMESTAMP_WIDTH).unwrap();
-    node.set_property_f32(Role::App, "line_height", FONTSIZE * 1.6).unwrap();
-    node.set_property_f32(Role::App, "baseline", FONTSIZE * 1.2).unwrap();
+    node.set_property_f32(Role::App, "line_height", LINE_HEIGHT).unwrap();
+    node.set_property_f32(Role::App, "message_spacing", MESSAGE_SPACING).unwrap();
+    node.set_property_f32(Role::App, "baseline", CHATVIEW_BASELINE).unwrap();
     node.set_property_u32(Role::App, "z_index", 1).unwrap();
     //node.set_property_bool(Role::App, "debug", true).unwrap();
 

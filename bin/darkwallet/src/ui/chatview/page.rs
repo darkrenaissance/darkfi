@@ -156,7 +156,7 @@ impl PrivMessage {
             );
         }
 
-        self.render_timestamp(&mut mesh, baseline, timestamp_color);
+        self.render_timestamp(&mut mesh, baseline, line_height, timestamp_color);
         let off_x = timestamp_width;
 
         let nick_color = select_nick_color(&self.nick, nick_colors);
@@ -201,7 +201,9 @@ impl PrivMessage {
         mesh
     }
 
-    fn render_timestamp(&self, mesh: &mut MeshBuilder, baseline: f32, timestamp_color: Color) {
+    fn render_timestamp(&self, mesh: &mut MeshBuilder, baseline: f32, line_height: f32, timestamp_color: Color) {
+        let off_y = self.wrapped_lines.len() as f32 * line_height;
+
         let glyph_pos_iter = GlyphPositionIter::new(
             self.timestamp_font_size,
             self.window_scale,
@@ -210,6 +212,7 @@ impl PrivMessage {
         );
         for (mut glyph_rect, glyph) in glyph_pos_iter.zip(self.time_glyphs.iter()) {
             let uv_rect = self.atlas.fetch_uv(glyph.glyph_id).expect("missing glyph UV rect");
+            glyph_rect.y -= off_y;
 
             mesh.draw_box(&glyph_rect, timestamp_color, uv_rect);
         }
@@ -585,6 +588,7 @@ pub struct MessageBuffer {
     timestamp_font_size: PropertyFloat32,
     timestamp_width: PropertyFloat32,
     line_height: PropertyFloat32,
+    msg_spacing: PropertyFloat32,
     baseline: PropertyFloat32,
     timestamp_color: PropertyColor,
     text_color: PropertyColor,
@@ -607,6 +611,7 @@ impl MessageBuffer {
         timestamp_font_size: PropertyFloat32,
         timestamp_width: PropertyFloat32,
         line_height: PropertyFloat32,
+        msg_spacing: PropertyFloat32,
         baseline: PropertyFloat32,
         timestamp_color: PropertyColor,
         text_color: PropertyColor,
@@ -628,6 +633,7 @@ impl MessageBuffer {
             timestamp_font_size,
             timestamp_width,
             line_height,
+            msg_spacing,
             baseline,
             timestamp_color,
             text_color,
@@ -701,12 +707,20 @@ impl MessageBuffer {
 
     pub async fn calc_total_height(&mut self) -> f32 {
         let line_height = self.line_height.get();
+        let msg_spacing = self.msg_spacing.get();
         let mut height = 0.;
 
         let msgs = self.msgs_with_date();
         let mut msgs = pin!(msgs);
 
+        let mut is_first = true;
+
         while let Some(msg) = msgs.next().await {
+            if is_first {
+                is_first = false;
+                height += msg_spacing;
+            }
+
             height += msg.height(line_height);
         }
 
@@ -816,6 +830,7 @@ impl MessageBuffer {
     /// Generate caches and return meshes
     pub async fn gen_meshes(&mut self, rect: &Rectangle, scroll: f32) -> Vec<(f32, GfxDrawMesh)> {
         let line_height = self.line_height.get();
+        let msg_spacing = self.msg_spacing.get();
         let baseline = self.baseline.get();
         let timestamp_width = self.timestamp_width.get();
         let debug_render = self.debug.get();
@@ -859,6 +874,8 @@ impl MessageBuffer {
             );
 
             meshes.push((current_pos, mesh));
+
+            current_pos += msg_spacing;
             current_pos += mesh_height;
         }
 
@@ -952,6 +969,7 @@ impl MessageBuffer {
 
     pub async fn select_line(&mut self, y: f32) {
         let line_height = self.line_height.get();
+        let msg_spacing = self.msg_spacing.get();
 
         let msgs = self.msgs_with_date();
         let mut msgs = pin!(msgs);
@@ -973,6 +991,7 @@ impl MessageBuffer {
                 break
             }
 
+            current_pos += msg_spacing;
             current_pos += mesh_height;
         }
     }

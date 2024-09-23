@@ -203,6 +203,8 @@ impl ChatView {
             PropertyFloat32::wrap(node_ref, Role::Internal, "timestamp_width", 0).unwrap();
         let line_height =
             PropertyFloat32::wrap(node_ref, Role::Internal, "line_height", 0).unwrap();
+        let message_spacing =
+            PropertyFloat32::wrap(node_ref, Role::Internal, "message_spacing", 0).unwrap();
         let baseline = PropertyFloat32::wrap(node_ref, Role::Internal, "baseline", 0).unwrap();
         let timestamp_color =
             PropertyColor::wrap(node_ref, Role::Internal, "timestamp_color").unwrap();
@@ -269,10 +271,13 @@ impl ChatView {
             async fn redraw(self_: Arc<ChatView>) {
                 self_.redraw_all().await;
             }
+            on_modify.when_change(baseline.prop(), redraw);
             on_modify.when_change(font_size.prop(), redraw);
             on_modify.when_change(timestamp_font_size.prop(), redraw);
             on_modify.when_change(timestamp_color.prop(), redraw);
             on_modify.when_change(timestamp_width.prop(), redraw);
+            on_modify.when_change(line_height.prop(), redraw);
+            on_modify.when_change(message_spacing.prop(), redraw);
             on_modify.when_change(text_color.prop(), redraw);
             on_modify.when_change(nick_colors.clone(), redraw);
             on_modify.when_change(hi_bg_color.prop(), redraw);
@@ -294,6 +299,7 @@ impl ChatView {
                     timestamp_font_size,
                     timestamp_width,
                     line_height,
+                    message_spacing,
                     baseline,
                     timestamp_color,
                     text_color,
