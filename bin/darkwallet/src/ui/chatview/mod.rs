@@ -266,11 +266,18 @@ impl ChatView {
             }
             on_modify.when_change(scroll.prop(), reload_view);
 
-            //async fn redraw(self_: Arc<ChatView>) {
-            //    self_.redraw().await;
-            //}
-            //on_modify.when_change(rect.clone(), redraw);
-            //on_modify.when_change(debug.prop(), redraw);
+            async fn redraw(self_: Arc<ChatView>) {
+                self_.redraw_all().await;
+            }
+            on_modify.when_change(font_size.prop(), redraw);
+            on_modify.when_change(timestamp_font_size.prop(), redraw);
+            on_modify.when_change(timestamp_color.prop(), redraw);
+            on_modify.when_change(timestamp_width.prop(), redraw);
+            on_modify.when_change(text_color.prop(), redraw);
+            on_modify.when_change(nick_colors.clone(), redraw);
+            on_modify.when_change(hi_bg_color.prop(), redraw);
+            on_modify.when_change(rect.prop(), redraw);
+            on_modify.when_change(debug.prop(), redraw);
 
             let mut tasks = vec![insert_line_method_task, motion_task, bgload_task];
             tasks.append(&mut on_modify.tasks);
@@ -669,8 +676,11 @@ impl ChatView {
 
     /// Invalidates cache and redraws everything
     async fn redraw_all(&self) {
-        debug!(target: "ui::chatview", "redraw()");
-        // ... todo fin
+        debug!(target: "ui::chatview", "redraw_all()");
+        let mut msgbuf = self.msgbuf.lock().await;
+        msgbuf.adjust_params().await;
+        msgbuf.clear_meshes();
+        self.redraw_cached(&mut msgbuf).await;
     }
 }
 

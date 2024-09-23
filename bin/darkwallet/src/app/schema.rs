@@ -60,6 +60,16 @@ const EDITCHAT_HEIGHT: f32 = 163.;
 const EDITCHAT_HEIGHT: f32 = 50.;
 
 #[cfg(target_os = "android")]
+const EDITCHAT_CURSOR_ASCENT: f32 = 80.;
+#[cfg(target_os = "linux")]
+const EDITCHAT_CURSOR_ASCENT: f32 = 25.;
+
+#[cfg(target_os = "android")]
+const EDITCHAT_CURSOR_DESCENT: f32 = 30.;
+#[cfg(target_os = "linux")]
+const EDITCHAT_CURSOR_DESCENT: f32 = 8.;
+
+#[cfg(target_os = "android")]
 const TEXTBAR_BASELINE: f32 = 93.;
 #[cfg(target_os = "linux")]
 const TEXTBAR_BASELINE: f32 = 34.;
@@ -90,7 +100,7 @@ const TIMESTAMP_FONTSIZE: f32 = 30.;
 const TIMESTAMP_FONTSIZE: f32 = 12.;
 
 #[cfg(target_os = "android")]
-const TIMESTAMP_WIDTH: f32 = 80.;
+const TIMESTAMP_WIDTH: f32 = 120.;
 #[cfg(target_os = "linux")]
 const TIMESTAMP_WIDTH: f32 = 60.;
 
@@ -759,8 +769,8 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     prop.set_f32(Role::App, 1, 0.627).unwrap();
     prop.set_f32(Role::App, 2, 1.).unwrap();
     prop.set_f32(Role::App, 3, 1.).unwrap();
-    node.set_property_f32(Role::App, "cursor_ascent", 25.).unwrap();
-    node.set_property_f32(Role::App, "cursor_descent", 8.).unwrap();
+    node.set_property_f32(Role::App, "cursor_ascent", EDITCHAT_CURSOR_ASCENT).unwrap();
+    node.set_property_f32(Role::App, "cursor_descent", EDITCHAT_CURSOR_DESCENT).unwrap();
     let prop = node.get_property("hi_bg_color").unwrap();
     if LIGHTMODE {
         prop.set_f32(Role::App, 0, 0.5).unwrap();

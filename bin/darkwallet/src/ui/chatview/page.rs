@@ -28,7 +28,7 @@ use std::{
     sync::{atomic::Ordering, Arc, Mutex as SyncMutex, Weak},
 };
 
-use super::{MessageId, Timestamp};
+use super::{max, MessageId, Timestamp};
 use crate::{
     gfx::{
         GfxBufferId, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId,
@@ -54,7 +54,6 @@ fn is_whitespace(s: &str) -> bool {
 pub struct PrivMessage {
     font_size: f32,
     timestamp_font_size: f32,
-    timestamp_width: f32,
     window_scale: f32,
 
     timestamp: Timestamp,
@@ -76,7 +75,6 @@ impl PrivMessage {
     pub async fn new(
         font_size: f32,
         timestamp_font_size: f32,
-        timestamp_width: f32,
         window_scale: f32,
 
         timestamp: Timestamp,
@@ -85,6 +83,7 @@ impl PrivMessage {
         text: String,
 
         line_width: f32,
+        timestamp_width: f32,
 
         text_shaper: &TextShaper,
         render_api: &RenderApi,
@@ -103,7 +102,6 @@ impl PrivMessage {
         let mut self_ = Self {
             font_size,
             timestamp_font_size,
-            timestamp_width,
             window_scale,
             timestamp,
             id,
@@ -116,7 +114,7 @@ impl PrivMessage {
             atlas,
             mesh_cache: None,
         };
-        self_.adjust_width(line_width);
+        self_.adjust_width(line_width, timestamp_width);
         Message::Priv(self_)
     }
 
@@ -135,6 +133,7 @@ impl PrivMessage {
         clip: &Rectangle,
         line_height: f32,
         baseline: f32,
+        timestamp_width: f32,
         nick_colors: &[Color],
         timestamp_color: Color,
         text_color: Color,
@@ -157,8 +156,8 @@ impl PrivMessage {
             );
         }
 
-        let mut off_x = self.timestamp_width;
         self.render_timestamp(&mut mesh, baseline, timestamp_color);
+        let off_x = timestamp_width;
 
         let nick_color = select_nick_color(&self.nick, nick_colors);
 
@@ -263,34 +262,48 @@ impl PrivMessage {
     }
 
     /// clear_mesh() must be called after this.
-    async fn adjust_window_scale(
+    async fn adjust_params(
         &mut self,
+        font_size: f32,
+        timestamp_font_size: f32,
         window_scale: f32,
+        line_width: f32,
+        timestamp_width: f32,
         text_shaper: &TextShaper,
         render_api: &RenderApi,
     ) -> GfxTextureId {
+        self.font_size = font_size;
+        self.timestamp_font_size = timestamp_font_size;
         self.window_scale = window_scale;
 
         let timestr = Self::gen_timestr(self.timestamp);
-        self.time_glyphs = text_shaper.shape(timestr, self.timestamp_font_size, window_scale).await;
+        self.time_glyphs = text_shaper.shape(timestr, timestamp_font_size, window_scale).await;
 
         let linetext = format!("{} {}", self.nick, self.text);
-        self.unwrapped_glyphs = text_shaper.shape(linetext, self.font_size, window_scale).await;
+        self.unwrapped_glyphs = text_shaper.shape(linetext, font_size, window_scale).await;
 
         let texture_id = self.atlas.texture_id;
 
         let mut atlas = text::Atlas::new(render_api);
+        atlas.push(&self.time_glyphs);
         atlas.push(&self.unwrapped_glyphs);
         self.atlas = atlas.make();
+
+        // We need to rewrap the glyphs since they've been reloaded
+        self.adjust_width(line_width, timestamp_width);
 
         texture_id
     }
 
     /// clear_mesh() must be called after this.
-    fn adjust_width(&mut self, line_width: f32) {
+    fn adjust_width(&mut self, line_width: f32, timestamp_width: f32) {
+        let width = line_width - timestamp_width;
+        // clamp to > 0
+        let width = max(width, 0.);
+
         // Invalidate wrapped_glyphs and recalc
         self.wrapped_lines =
-            text::wrap(line_width, self.font_size, self.window_scale, &self.unwrapped_glyphs);
+            text::wrap(width, self.font_size, self.window_scale, &self.unwrapped_glyphs);
     }
 
     fn clear_mesh(&mut self) -> Option<GfxDrawMesh> {
@@ -359,16 +372,18 @@ impl DateMessage {
     }
 
     /// clear_mesh() must be called after this.
-    async fn adjust_window_scale(
+    async fn adjust_params(
         &mut self,
+        font_size: f32,
         window_scale: f32,
         text_shaper: &TextShaper,
         render_api: &RenderApi,
     ) -> GfxTextureId {
+        self.font_size = font_size;
         self.window_scale = window_scale;
 
         let datestr = Self::datestr(self.timestamp);
-        self.glyphs = text_shaper.shape(datestr, self.font_size, window_scale).await;
+        self.glyphs = text_shaper.shape(datestr, font_size, window_scale).await;
 
         let texture_id = self.atlas.texture_id;
 
@@ -452,21 +467,38 @@ impl Message {
         }
     }
 
-    async fn adjust_window_scale(
+    async fn adjust_params(
         &mut self,
+        font_size: f32,
+        timestamp_font_size: f32,
         window_scale: f32,
+        line_width: f32,
+        timestamp_width: f32,
         text_shaper: &TextShaper,
         render_api: &RenderApi,
     ) -> GfxTextureId {
         match self {
-            Self::Priv(m) => m.adjust_window_scale(window_scale, text_shaper, render_api).await,
-            Self::Date(m) => m.adjust_window_scale(window_scale, text_shaper, render_api).await,
+            Self::Priv(m) => {
+                m.adjust_params(
+                    font_size,
+                    timestamp_font_size,
+                    window_scale,
+                    line_width,
+                    timestamp_width,
+                    text_shaper,
+                    render_api,
+                )
+                .await
+            }
+            Self::Date(m) => {
+                m.adjust_params(font_size, window_scale, text_shaper, render_api).await
+            }
         }
     }
 
-    fn adjust_width(&mut self, line_width: f32) {
+    fn adjust_width(&mut self, line_width: f32, timestamp_width: f32) {
         match self {
-            Self::Priv(m) => m.adjust_width(line_width),
+            Self::Priv(m) => m.adjust_width(line_width, timestamp_width),
             Self::Date(_) => {}
         }
     }
@@ -483,6 +515,7 @@ impl Message {
         clip: &Rectangle,
         line_height: f32,
         baseline: f32,
+        timestamp_width: f32,
         nick_colors: &[Color],
         timestamp_color: Color,
         text_color: Color,
@@ -495,6 +528,7 @@ impl Message {
                 clip,
                 line_height,
                 baseline,
+                timestamp_width,
                 nick_colors,
                 timestamp_color,
                 text_color,
@@ -506,6 +540,7 @@ impl Message {
                 clip,
                 line_height,
                 baseline,
+                // No timestamp_width
                 nick_colors,
                 timestamp_color,
                 text_color,
@@ -614,9 +649,28 @@ impl MessageBuffer {
             return
         }
 
+        self.adjust_params().await;
+    }
+
+    /// This will force a reload of everything
+    pub async fn adjust_params(&mut self) {
+        let window_scale = self.window_scale.get();
+        let font_size = self.font_size.get();
+        let timestamp_font_size = self.timestamp_font_size.get();
+        let timestamp_width = self.timestamp_width.get();
+
         for msg in &mut self.msgs {
-            let old_texture_id =
-                msg.adjust_window_scale(window_scale, &self.text_shaper, &self.render_api).await;
+            let old_texture_id = msg
+                .adjust_params(
+                    font_size,
+                    timestamp_font_size,
+                    window_scale,
+                    self.line_width,
+                    timestamp_width,
+                    &self.text_shaper,
+                    &self.render_api,
+                )
+                .await;
             self.freed.add_texture(old_texture_id);
         }
     }
@@ -629,8 +683,10 @@ impl MessageBuffer {
         }
         self.line_width = line_width;
 
+        let timestamp_width = self.timestamp_width.get();
+
         for msg in &mut self.msgs {
-            msg.adjust_width(line_width);
+            msg.adjust_width(line_width, timestamp_width);
         }
     }
 
@@ -673,13 +729,13 @@ impl MessageBuffer {
         let msg = PrivMessage::new(
             font_size,
             timestamp_font_size,
-            timestamp_width,
             window_scale,
             timest,
             msg_id,
             nick,
             text,
             self.line_width,
+            timestamp_width,
             &self.text_shaper,
             &self.render_api,
         )
@@ -734,13 +790,13 @@ impl MessageBuffer {
         let msg = PrivMessage::new(
             font_size,
             timestamp_font_size,
-            timestamp_width,
             window_scale,
             timest,
             msg_id,
             nick,
             text,
             self.line_width,
+            timestamp_width,
             &self.text_shaper,
             &self.render_api,
         )
@@ -761,6 +817,7 @@ impl MessageBuffer {
     pub async fn gen_meshes(&mut self, rect: &Rectangle, scroll: f32) -> Vec<(f32, GfxDrawMesh)> {
         let line_height = self.line_height.get();
         let baseline = self.baseline.get();
+        let timestamp_width = self.timestamp_width.get();
         let debug_render = self.debug.get();
 
         let timest_color = self.timestamp_color.get();
@@ -792,6 +849,7 @@ impl MessageBuffer {
                 rect,
                 line_height,
                 baseline,
+                timestamp_width,
                 &nick_colors,
                 timest_color,
                 text_color,
