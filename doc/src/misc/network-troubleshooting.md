@@ -12,7 +12,7 @@ The default location for config files is `~/.config/darkfi`.
 using a different app such as `darkfid` or `taud`, the syntax remains
 but the app name will change (for example, if using `taud`, 
 the config file `~/.config/darkfi/darkirc_config.toml` 
-would become `~/.config/darkfi/darkirc_config.toml`.
+would become `~/.config/darkfi/taud_config.toml`.
 
 ## Common net problems 
 
@@ -79,7 +79,7 @@ is down. Please do the following:
 
 1. Take careful note of the `IO error` that is written after `Unable to
 connect to seed`.
-2. Refer to `Error reporting` section below.
+2. Refer to [Error reporting](#error-reporting) section below.
 3. You can set a peer such as `tcp+tls://example_peer:26661` in your
 config file. Ask in the telegram community channel for an active peer
 (here we are using a fake peer called `example_peer`. Then open the
@@ -114,53 +114,40 @@ hostlist = "~/.local/darkfi/darkirc/hostlist.tsv"
 <u><b>Note</b></u>: If you are editing a line that is commented out, don't forget
 to uncomment the line.
 
-Then follow the steps in the above section `It's my first time connecting
-to the network`.
+Then follow the steps in the above section 
+[It's my first time connecting to the network](#its-my-first-time-connecting-to-the-network).
 
 If the hostlist is not empty, retry the `darkirc` connection and carefully
-note the connection errors that are happening from peers. See `Error reporting` 
+note the connection errors that are happening from peers. See [Error reporting](#error-reporting) 
 section below to report errors.
 It might be simply the case that there are not enough peers on the
 network, or perhaps there is another issue we are not aware of.
 
-You can also check the liveness of peers using the `ping` tool 
-located at `${DARKFI_REPO}/script/ping`. Select a peer from 
-your hostlist file. You can now use the `ping` tool by 
-running this command (assuming nightly is default):
-
-```
-$ cargo run -- tcp+tls://example_peer:26661
-```
-If nightly isn't default, use this command:
-
-```
-$ cargo +nightly run -- tcp+tls://example_peer:26661
-```
-
-If the peers are reachable, you'll receive a `Connected!` output.
+You can also check the liveness of peers using the `ping` tool. 
+Refer to the [Ping tool](#ping-tool) section below for instructions. 
 
 ### Cannot establish peer connections
 
 If you're able to connect to the seed but are failing to establish peer
 connections, please retry the darkirc connection and carefully note the
 connection errors that are happening from peers. See the
-`Error reporting` section to report errors.
+[Error reporting](#error-reporting) section to report errors.
 
 ### Cannot establish Tor onion connections
 
 You may get an error like this:
 ```
-[WARN] darkfi::net::transport::tor: error: tor: Onion Service not found: Failed to obtain hidden service circuit to ????.onion: Unable to download hidden service descriptor
+[WARN] darError reportingkfi::net::transport::tor: error: tor: Onion Service not found: Failed to obtain hidden service circuit to ????.onion: Unable to download hidden service descriptor
 ```
 This happens when [Arti](https://gitlab.torproject.org/tpo/core/arti/-/blob/main/README.md) 
 gets corrupted due to internet downtime or other triggers. To fix this, 
 we'll delete the directory:
 
-1. stop `darkirc` 
-2. stop `tor` daemon 
-3. remove `arti` cache folder located at `~/.local/share/arti` 
-4. start `tor` daemon 
-5. start `darkirc`
+1. Stop `darkirc` 
+2. Stop `tor` daemon 
+3. Remove `arti` cache folder located at `~/.local/share/arti` 
+4. Start `tor` daemon 
+5. Start `darkirc`
 
 ## dnet
 
@@ -179,10 +166,20 @@ interacts within the network. dnet log information is created in
 ## Ping tool
 
 You can ping any node to make sure it's online by using the provided
-`ping` tool.
+`ping` tool located at `${DARKFI_REPO}/script/ping`. Select a peer from 
+your hostlist file. You can now use the `ping` tool by 
+running this command (assuming nightly is default):
 
-Refer to the the steps in the above section 
-`It's not my first time connecting to the network` to use the ping tool. 
+```
+$ cargo run -- tcp+tls://example_peer:26661
+```
+If nightly isn't default, use this command:
+
+```
+$ cargo +nightly run -- tcp+tls://example_peer:26661
+```
+
+If the peers are reachable, you'll receive a `Connected!` output.
 
 ## Inbound
 
