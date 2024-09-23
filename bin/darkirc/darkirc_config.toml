@@ -25,13 +25,16 @@
 
 ## List of channels to autojoin for new client connections
 autojoin = [
-    "#dev",
-    "#memes",
-    "#philosophy",
-    "#markets",
-    "#math",
-    "#random",
+    "#darkfi-dev",
     "#lunardao",
+    "#cryptomath",
+    "#philosophy",
+    "#media",
+    "#tech",
+    "#markets",
+    "#random",
+    "#support",
+    "#test",
 ]
 
 ## IRC server specific password
@@ -116,26 +119,35 @@ transport_mixing = false
 #secret = "7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"
 #topic = "My secret channel"
 
-[channel."#dev"]
-topic = "DarkFi Development HQ"
-
-[channel."#markets"]
-topic = "Crypto Market Talk"
-
-[channel."#math"]
-topic = "Math Talk"
-
-[channel."#memes"]
-topic = "DarkFi Meme Reality"
-
-[channel."#philosophy"]
-topic = "Philosophy Discussions"
-
-[channel."#random"]
-topic = "/b/"
+[channel."#darkfi-dev"]
+topic = "dev meet every monday at 16:00 CET"
 
 [channel."#lunardao"]
-topic = "LunarDAO talk"
+topic = "LunarDAO anon action coordination & planning"
+
+[channel."#cryptomath"]
+topic = "cryptography & mathematics"
+
+[channel."#media"]
+topic = "memes, vids and cool stuff"
+
+[channel."#tech"]
+topic = "stallman appreciation channel"
+
+[channel."#markets"]
+topic = "wen token ser do not redeem .etc"
+
+[channel."#philosophy"]
+topic = "philosoraptor, history, pol"
+
+[channel."#random"]
+topic = "\"i'm so random!\" ---> b&"
+
+[channel."#support"]
+topic = "halp me"
+
+[channel."#test"]
+topic = "write test here to see if you're on"
 
 ## ================
 ## Contact settings
