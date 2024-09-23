@@ -235,6 +235,12 @@ pub fn create_chatview(name: &str) -> SceneNode {
     let prop = Property::new("font_size", PropertyType::Float32, PropertySubType::Pixel);
     node.add_property(prop).unwrap();
 
+    let prop = Property::new("timestamp_font_size", PropertyType::Float32, PropertySubType::Pixel);
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("timestamp_width", PropertyType::Float32, PropertySubType::Pixel);
+    node.add_property(prop).unwrap();
+
     let prop = Property::new("line_height", PropertyType::Float32, PropertySubType::Pixel);
     node.add_property(prop).unwrap();
 

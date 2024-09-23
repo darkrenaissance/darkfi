@@ -163,15 +163,7 @@ pub struct ChatView {
 
     rect: PropertyRect,
     scroll: PropertyFloat32,
-    font_size: PropertyFloat32,
-    line_height: PropertyFloat32,
-    baseline: PropertyFloat32,
-    timestamp_color: PropertyColor,
-    text_color: PropertyColor,
-    nick_colors: PropertyPtr,
-    hi_bg_color: PropertyColor,
     z_index: PropertyUint32,
-    debug: PropertyBool,
 
     scroll_start_accel: PropertyFloat32,
     scroll_resist: PropertyFloat32,
@@ -205,6 +197,10 @@ impl ChatView {
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
         let scroll = PropertyFloat32::wrap(node_ref, Role::Internal, "scroll", 0).unwrap();
         let font_size = PropertyFloat32::wrap(node_ref, Role::Internal, "font_size", 0).unwrap();
+        let timestamp_font_size =
+            PropertyFloat32::wrap(node_ref, Role::Internal, "timestamp_font_size", 0).unwrap();
+        let timestamp_width =
+            PropertyFloat32::wrap(node_ref, Role::Internal, "timestamp_width", 0).unwrap();
         let line_height =
             PropertyFloat32::wrap(node_ref, Role::Internal, "line_height", 0).unwrap();
         let baseline = PropertyFloat32::wrap(node_ref, Role::Internal, "baseline", 0).unwrap();
@@ -287,14 +283,16 @@ impl ChatView {
 
                 tree,
                 msgbuf: AsyncMutex::new(MessageBuffer::new(
-                    font_size.clone(),
-                    line_height.clone(),
-                    baseline.clone(),
-                    timestamp_color.clone(),
-                    text_color.clone(),
-                    nick_colors.clone(),
-                    hi_bg_color.clone(),
-                    debug.clone(),
+                    font_size,
+                    timestamp_font_size,
+                    timestamp_width,
+                    line_height,
+                    baseline,
+                    timestamp_color,
+                    text_color,
+                    nick_colors,
+                    hi_bg_color,
+                    debug,
                     window_scale,
                     render_api,
                     text_shaper,
@@ -307,15 +305,7 @@ impl ChatView {
 
                 rect,
                 scroll,
-                font_size,
-                line_height,
-                baseline,
-                timestamp_color,
-                text_color,
-                nick_colors,
-                hi_bg_color,
                 z_index,
-                debug,
 
                 scroll_start_accel,
                 scroll_resist,
@@ -565,11 +555,6 @@ impl ChatView {
             }
             remaining_visible -= msg_height;
         }
-    }
-
-    /// Descent = line height - baseline
-    fn descent(&self) -> f32 {
-        self.line_height.get() - self.baseline.get()
     }
 
     async fn scrollview(&self, mut scroll: f32) -> f32 {

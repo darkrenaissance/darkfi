@@ -64,10 +64,6 @@ const TEXTBAR_BASELINE: f32 = 93.;
 #[cfg(target_os = "linux")]
 const TEXTBAR_BASELINE: f32 = 34.;
 
-// reduce cursor height
-// fix chatview text alignment
-// small timestamps
-
 #[cfg(target_os = "android")]
 const EDITCHAT_LHS_PAD: f32 = 30.;
 #[cfg(target_os = "linux")]
@@ -87,6 +83,16 @@ const SENDLABEL_LHS_PAD: f32 = 30.;
 const FONTSIZE: f32 = 40.;
 #[cfg(target_os = "linux")]
 const FONTSIZE: f32 = 20.;
+
+#[cfg(target_os = "android")]
+const TIMESTAMP_FONTSIZE: f32 = 30.;
+#[cfg(target_os = "linux")]
+const TIMESTAMP_FONTSIZE: f32 = 12.;
+
+#[cfg(target_os = "android")]
+const TIMESTAMP_WIDTH: f32 = 80.;
+#[cfg(target_os = "linux")]
+const TIMESTAMP_WIDTH: f32 = 60.;
 
 pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
     let window_scale = PropertyFloat32::wrap(&window, Role::Internal, "scale", 0).unwrap();
@@ -383,6 +389,8 @@ pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
     let code = cc.compile("h/2 - 200").unwrap();
     prop.set_expr(Role::App, 3, code).unwrap();
     node.set_property_f32(Role::App, "font_size", 20.).unwrap();
+    node.set_property_f32(Role::App, "timestamp_font_size", 10.).unwrap();
+    node.set_property_f32(Role::App, "timestamp_width", 80.).unwrap();
     node.set_property_f32(Role::App, "line_height", 30.).unwrap();
     node.set_property_f32(Role::App, "baseline", 20.).unwrap();
     node.set_property_u32(Role::App, "z_index", 1).unwrap();
@@ -566,6 +574,8 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     let code = cc.compile("h - 2 * EDITCHAT_HEIGHT").unwrap();
     prop.set_expr(Role::App, 3, code).unwrap();
     node.set_property_f32(Role::App, "font_size", FONTSIZE).unwrap();
+    node.set_property_f32(Role::App, "timestamp_font_size", TIMESTAMP_FONTSIZE).unwrap();
+    node.set_property_f32(Role::App, "timestamp_width", TIMESTAMP_WIDTH).unwrap();
     node.set_property_f32(Role::App, "line_height", FONTSIZE * 1.6).unwrap();
     node.set_property_f32(Role::App, "baseline", FONTSIZE * 1.2).unwrap();
     node.set_property_u32(Role::App, "z_index", 1).unwrap();

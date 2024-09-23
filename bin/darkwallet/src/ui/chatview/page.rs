@@ -53,6 +53,8 @@ fn is_whitespace(s: &str) -> bool {
 #[derive(Clone)]
 pub struct PrivMessage {
     font_size: f32,
+    timestamp_font_size: f32,
+    timestamp_width: f32,
     window_scale: f32,
 
     timestamp: Timestamp,
@@ -62,6 +64,7 @@ pub struct PrivMessage {
 
     is_selected: bool,
 
+    time_glyphs: Vec<Glyph>,
     unwrapped_glyphs: Vec<Glyph>,
     wrapped_lines: Vec<Vec<Glyph>>,
 
@@ -72,6 +75,8 @@ pub struct PrivMessage {
 impl PrivMessage {
     pub async fn new(
         font_size: f32,
+        timestamp_font_size: f32,
+        timestamp_width: f32,
         window_scale: f32,
 
         timestamp: Timestamp,
@@ -84,21 +89,28 @@ impl PrivMessage {
         text_shaper: &TextShaper,
         render_api: &RenderApi,
     ) -> Message {
-        let linetext = Self::gen_line_text(timestamp, &nick, &text);
+        let timestr = Self::gen_timestr(timestamp);
+        let time_glyphs = text_shaper.shape(timestr, timestamp_font_size, window_scale).await;
+
+        let linetext = format!("{nick} {text}");
         let unwrapped_glyphs = text_shaper.shape(linetext, font_size, window_scale).await;
 
         let mut atlas = text::Atlas::new(render_api);
+        atlas.push(&time_glyphs);
         atlas.push(&unwrapped_glyphs);
         let atlas = atlas.make();
 
         let mut self_ = Self {
             font_size,
+            timestamp_font_size,
+            timestamp_width,
             window_scale,
             timestamp,
             id,
             nick,
             text,
             is_selected: false,
+            time_glyphs,
             unwrapped_glyphs,
             wrapped_lines: vec![],
             atlas,
@@ -108,11 +120,10 @@ impl PrivMessage {
         Message::Priv(self_)
     }
 
-    fn gen_line_text(timestamp: Timestamp, nick: &str, text: &str) -> String {
+    fn gen_timestr(timestamp: Timestamp) -> String {
         let dt = Local.timestamp_millis_opt(timestamp as i64).unwrap();
         let timestr = dt.format("%H:%M").to_string();
-
-        format!("{} {} {}", timestr, nick, text)
+        timestr
     }
 
     fn height(&self, line_height: f32) -> f32 {
@@ -146,6 +157,9 @@ impl PrivMessage {
             );
         }
 
+        let mut off_x = self.timestamp_width;
+        self.render_timestamp(&mut mesh, baseline, timestamp_color);
+
         let nick_color = select_nick_color(&self.nick, nick_colors);
 
         let last_idx = self.wrapped_lines.len() - 1;
@@ -162,10 +176,10 @@ impl PrivMessage {
             self.render_line(
                 &mut mesh,
                 line,
+                off_x,
                 off_y,
                 is_last_line,
                 baseline,
-                timestamp_color,
                 nick_color,
                 text_color,
                 debug_render,
@@ -188,24 +202,37 @@ impl PrivMessage {
         mesh
     }
 
+    fn render_timestamp(&self, mesh: &mut MeshBuilder, baseline: f32, timestamp_color: Color) {
+        let glyph_pos_iter = GlyphPositionIter::new(
+            self.timestamp_font_size,
+            self.window_scale,
+            &self.time_glyphs,
+            baseline,
+        );
+        for (mut glyph_rect, glyph) in glyph_pos_iter.zip(self.time_glyphs.iter()) {
+            let uv_rect = self.atlas.fetch_uv(glyph.glyph_id).expect("missing glyph UV rect");
+
+            mesh.draw_box(&glyph_rect, timestamp_color, uv_rect);
+        }
+    }
+
     fn render_line(
         &self,
         mesh: &mut MeshBuilder,
         line: &Vec<Glyph>,
+        off_x: f32,
         off_y: f32,
         is_last: bool,
         baseline: f32,
-        timestamp_color: Color,
         nick_color: Color,
         text_color: Color,
         debug_render: bool,
     ) {
         //debug!(target: "ui::chatview", "render_line({})", glyph_str(line));
         // Keep track of the 'section'
-        // Section 0 is the timestamp
-        // Section 1 is the nickname (colorized)
-        // Finally is just the message itself
-        let mut section = 2;
+        // Section 0   is the nickname (colorized)
+        // Section >=1 is just the message itself
+        let mut section = 1;
         if is_last {
             section = 0;
         }
@@ -214,11 +241,12 @@ impl PrivMessage {
             GlyphPositionIter::new(self.font_size, self.window_scale, line, baseline);
         for (mut glyph_rect, glyph) in glyph_pos_iter.zip(line.iter()) {
             let uv_rect = self.atlas.fetch_uv(glyph.glyph_id).expect("missing glyph UV rect");
+
+            glyph_rect.x += off_x;
             glyph_rect.y -= off_y;
 
             let color = match section {
-                0 => timestamp_color,
-                1 => nick_color,
+                0 => nick_color,
                 _ => text_color,
             };
 
@@ -228,7 +256,7 @@ impl PrivMessage {
 
             mesh.draw_box(&glyph_rect, color, uv_rect);
 
-            if is_last && section < 2 && is_whitespace(&glyph.substr) {
+            if is_last && section < 1 && is_whitespace(&glyph.substr) {
                 section += 1;
             }
         }
@@ -243,7 +271,10 @@ impl PrivMessage {
     ) -> GfxTextureId {
         self.window_scale = window_scale;
 
-        let linetext = Self::gen_line_text(self.timestamp, &self.nick, &self.text);
+        let timestr = Self::gen_timestr(self.timestamp);
+        self.time_glyphs = text_shaper.shape(timestr, self.timestamp_font_size, window_scale).await;
+
+        let linetext = format!("{} {}", self.nick, self.text);
         self.unwrapped_glyphs = text_shaper.shape(linetext, self.font_size, window_scale).await;
 
         let texture_id = self.atlas.texture_id;
@@ -516,6 +547,8 @@ pub struct MessageBuffer {
     pub line_width: f32,
 
     font_size: PropertyFloat32,
+    timestamp_font_size: PropertyFloat32,
+    timestamp_width: PropertyFloat32,
     line_height: PropertyFloat32,
     baseline: PropertyFloat32,
     timestamp_color: PropertyColor,
@@ -536,6 +569,8 @@ pub struct MessageBuffer {
 impl MessageBuffer {
     pub fn new(
         font_size: PropertyFloat32,
+        timestamp_font_size: PropertyFloat32,
+        timestamp_width: PropertyFloat32,
         line_height: PropertyFloat32,
         baseline: PropertyFloat32,
         timestamp_color: PropertyColor,
@@ -555,6 +590,8 @@ impl MessageBuffer {
             line_width: 0.,
 
             font_size,
+            timestamp_font_size,
+            timestamp_width,
             line_height,
             baseline,
             timestamp_color,
@@ -629,10 +666,14 @@ impl MessageBuffer {
     ) {
         //debug!(target: "ui::chatview", "MessageBuffer::insert_privmsg()");
         let font_size = self.font_size.get();
+        let timestamp_font_size = self.timestamp_font_size.get();
+        let timestamp_width = self.timestamp_width.get();
         let window_scale = self.window_scale.get();
 
         let msg = PrivMessage::new(
             font_size,
+            timestamp_font_size,
+            timestamp_width,
             window_scale,
             timest,
             msg_id,
@@ -686,10 +727,14 @@ impl MessageBuffer {
         text: String,
     ) -> f32 {
         let font_size = self.font_size.get();
+        let timestamp_font_size = self.timestamp_font_size.get();
+        let timestamp_width = self.timestamp_width.get();
         let window_scale = self.window_scale.get();
 
         let msg = PrivMessage::new(
             font_size,
+            timestamp_font_size,
+            timestamp_width,
             window_scale,
             timest,
             msg_id,
