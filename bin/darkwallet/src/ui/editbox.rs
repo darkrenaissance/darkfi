@@ -479,6 +479,7 @@ impl EditBox {
 
         self.mouse_btn_held.store(true, Ordering::Relaxed);
 
+        self.redraw().await;
         true
     }
     fn handle_click_up(&self, btn: MouseButton, pos: Point) -> bool {
@@ -695,7 +696,10 @@ impl EditBox {
             KeyCode::Kp8 => self.insert_char('8').await,
             KeyCode::Kp9 => self.insert_char('9').await,
             KeyCode::KpDecimal => self.insert_char('.').await,
-            KeyCode::Enter | KeyCode::KpEnter => self.send_event().await,
+            KeyCode::Enter | KeyCode::KpEnter => {
+                let node = self.node.upgrade().unwrap();
+                node.trigger("enter_pressed", vec![]).await.unwrap();
+            }
             KeyCode::Delete => {
                 if !self.selected.is_null(0).unwrap() {
                     self.delete_highlighted();
@@ -999,16 +1003,6 @@ impl EditBox {
             freed_textures,
             freed_buffers,
         })
-    }
-
-    async fn send_event(&self) {
-        let text = self.text.get();
-        debug!(target: "ui::editbox", "sending text {}", text);
-
-        // This should probably be unset instead
-        //self.text.set(String::new());
-        //self.cursor_pos.set(0);
-        //self.redraw().await;
     }
 }
 

@@ -84,6 +84,7 @@ pub struct LocalDarkIRC {
 
     chatview_node: SceneNodePtr,
     sendbtn_node: SceneNodePtr,
+    editbox_node: SceneNodePtr,
     editbox_text: PropertyStr,
 }
 
@@ -112,6 +113,7 @@ impl LocalDarkIRC {
 
             chatview_node,
             sendbtn_node,
+            editbox_node,
             editbox_text,
         }))
     }
@@ -147,14 +149,26 @@ impl LocalDarkIRC {
             error!(target: "darkirc", "Closing DarkIRC receive loop");
         });
 
-        let (slot_click, click_recvr) = Slot::new("send_button_clicked");
-        self.sendbtn_node.register("click", slot_click).unwrap();
-
+        let (slot, recvr) = Slot::new("send_button_clicked");
+        self.sendbtn_node.register("click", slot).unwrap();
         let me = Arc::downgrade(&self);
         let send_task = ex.spawn(async move {
             while let Some(self_) = me.upgrade() {
-                let Ok(_) = click_recvr.recv().await else {
+                let Ok(_) = recvr.recv().await else {
                     error!(target: "ui::win", "Button click recvr closed");
+                    break
+                };
+                self_.handle_send().await;
+            }
+        });
+
+        let (slot, recvr) = Slot::new("enter_pressed");
+        self.editbox_node.register("enter_pressed", slot).unwrap();
+        let me = Arc::downgrade(&self);
+        let enter_task = ex.spawn(async move {
+            while let Some(self_) = me.upgrade() {
+                let Ok(_) = recvr.recv().await else {
+                    error!(target: "ui::win", "EditBox enter_pressed recvr closed");
                     break
                 };
                 self_.handle_send().await;
@@ -163,7 +177,7 @@ impl LocalDarkIRC {
 
         let mut tasks = self.tasks.lock().unwrap();
         assert!(tasks.is_empty());
-        *tasks = vec![recv_task, send_task];
+        *tasks = vec![recv_task, send_task, enter_task];
 
         Ok(())
     }

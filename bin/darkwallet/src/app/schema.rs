@@ -716,6 +716,7 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     // Text edit
     let node = create_editbox("editz");
     node.set_property_bool(Role::App, "is_active", true).unwrap();
+    node.set_property_bool(Role::App, "is_focused", true).unwrap();
 
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(Role::App, 0, EDITCHAT_LHS_PAD).unwrap();
