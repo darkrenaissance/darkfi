@@ -2,17 +2,17 @@
 
 If you're having network issues, refer to this page to debug various 
 issues. If you see inconsistencies in the docs: always trust 
-`bin/darkirc/darkirc_config.toml` or whichever respective apps' repo
-config file. Documentation updates are a current WIP.
+`${DARKFI_REPO}/bin/darkirc/darkirc_config.toml` or whichever respective 
+apps' repo config file. Documentation updates are a current WIP.
 
-The default location for config files is `~/.config/darkfi`
+The default location for config files is `~/.config/darkfi`.
 
-Note: throughout this page we generally assume you are using
+<u><b>Note</b></u>: throughout this page we generally assume you are using
 `darkirc` since it's our main p2p app currently. If you're
-using a different app such as `darkfid` or `taud`, the same
-instructions will follow but the app name will change (for example,
-if using `taud`, the config file `.config/darkfi/darkirc_config.toml` 
-would become `.config/darkfi/taud_config.toml`)
+using a different app such as `darkfid` or `taud`, the syntax remains
+but the app name will change (for example, if using `taud`, 
+the config file `~/.config/darkfi/darkirc_config.toml` 
+would become `~/.config/darkfi/darkirc_config.toml`.
 
 ## Common net problems 
 
@@ -51,8 +51,8 @@ seed connection like so:
 Followed by multiple connection failed messages, like so:
 
 ```
-[INFO] [P2P] Unable to connect outbound slot #5 [tcp+tls://dasman.xyz:26661/]: IO error: connection refused
-[INFO] [P2P] Unable to connect outbound slot #6 [tcp+tls://[2a02:aa13:8342:1400:8972:cc07:ae3:8676]:26661/]: IO error: host unreachable
+[INFO] [P2P] Unable to connect outbound slot #5 [tcp+tls://example_peer:26661/]: IO error: connection refused
+[INFO] [P2P] Unable to connect outbound slot #6 [tcp+tls://example_peer2:26661/]: IO error: host unreachable
 ```
 
 ### Seed node is down
@@ -65,7 +65,7 @@ If you get an error like this:
 
 This means you are failing to establish a connection to the seed node.
 
-Please note: the IO error might not always read `connection refused`
+<u><b>Note</b></u>: the IO error might not always read `connection refused`
 but could be some other error such as `host unreachable`. Please note
 this IO error as it is useful debugging info.
 
@@ -80,14 +80,14 @@ is down. Please do the following:
 1. Take careful note of the `IO error` that is written after `Unable to
 connect to seed`.
 2. Refer to `Error reporting` section below.
-3. You can set a peer such as `tcp+tls://example_peer:26661/` in your
+3. You can set a peer such as `tcp+tls://example_peer:26661` in your
 config file. Ask in the telegram community channel for an active peer
 (here we are using a fake peer called `example_peer`. Then open the
-config file at `.local/config/darkirc_config.toml` and modify the `peers`
+config file at `~/.local/config/darkirc_config.toml` and modify the `peers`
 field with the provided peer as follows:
 
 ```
-peers =  tcp+tls://example_peer:26661/
+peers = ["tcp+tls://example_peer:26661"]
 ```
 
 #### It's not my first time connecting to the network
@@ -99,10 +99,10 @@ This is possible via a list of hosts that your darkirc node keeps locally.
 You can inspect the hostlist as follows:
 
 ```
-cat .local/darkfi/darkirc/hostlist.tsv
+cat ~/.local/darkfi/darkirc/hostlist.tsv
 ```
 
-If the list is empty, open `.config/darkfi/darkirc_config` and ensure
+If the list is empty, open `~/.config/darkfi/darkirc_config` and ensure
 that the `hostlist` field is set with a path of your choosing.
 
 For example:
@@ -111,31 +111,39 @@ For example:
 hostlist = "~/.local/darkfi/darkirc/hostlist.tsv"
 ```
 
+<u><b>Note</b></u>: If you are editing a line that is commented out, don't forget
+to uncomment the line.
+
 Then follow the steps in the above section `It's my first time connecting
 to the network`.
 
-If the hostlist is not empty, retry the darkirc connection and carefully
+If the hostlist is not empty, retry the `darkirc` connection and carefully
 note the connection errors that are happening from peers. See `Error reporting` 
 section below to report errors.
 It might be simply the case that there are not enough peers on the
 network, or perhaps there is another issue we are not aware of.
 
-You can also check the liveness of peers using the `ping` tool.
-To access the `ping` tool, in the `~/darkfi/script/ping` directory run
-`cargo run main.rs`. Once completed, you can now use the `ping` tool in
-the `~/darkfi/script/ping/target/debug` directory.
-Ping the peers located in your hostlist
+You can also check the liveness of peers using the `ping` tool 
+located at `${DARKFI_REPO}/script/ping`. Select a peer from 
+your hostlist file. You can now use the `ping` tool by 
+running this command (assuming nightly is default):
 
 ```
-$ ./ping tcp+tls://example_peer:26661
+$ cargo run -- tcp+tls://example_peer:26661
 ```
-If the peers are reachable, you'll receive a `Connected!` output
+If nightly isn't default, use this command:
+
+```
+$ cargo +nightly run -- tcp+tls://example_peer:26661
+```
+
+If the peers are reachable, you'll receive a `Connected!` output.
 
 ### Cannot establish peer connections
 
 If you're able to connect to the seed but are failing to establish peer
 connections, please retry the darkirc connection and carefully note the
-connection errors that are happening from peers. See 
+connection errors that are happening from peers. See the
 `Error reporting` section to report errors.
 
 ### Cannot establish Tor onion connections
@@ -146,14 +154,13 @@ You may get an error like this:
 ```
 This happens when [Arti](https://gitlab.torproject.org/tpo/core/arti/-/blob/main/README.md) 
 gets corrupted due to internet downtime or other triggers. To fix this, 
-we'll delete the directory
+we'll delete the directory:
 
-```
-$ stop tor daemon
-$ rm -rf .local/share/arti
-$ start tor daemon
-$ ./darkirc
-```
+1. stop `darkirc` 
+2. stop `tor` daemon 
+3. remove `arti` cache folder located at `~/.local/share/arti` 
+4. start `tor` daemon 
+5. start `darkirc`
 
 ## dnet
 
@@ -164,53 +171,51 @@ dnet to gather more network information. dnet displays:
 2. Outgoing, incoming, manual and seed sessions
 3. Each associated connection and recent messages.
 
-To install and learn to use dnet, go [here](https://darkrenaissance.github.io/darkfi/learn/dchat/network-tools/using-dnet.html).
+To install and learn to use dnet, go [here](../learn/dchat/network-tools/using-dnet.html).
 You can use dnet to view the network topology and see how your node 
-interacts within the network. dnet log information is created in `bin/dnet/dnet.log`
+interacts within the network. dnet log information is created in 
+`${DARKFI_REPO}/bin/dnet/dnet.log`.
 
 ## Ping tool
 
 You can ping any node to make sure it's online by using the provided
 `ping` tool.
 
-To access the `ping` tool, in the `~/darkfi/script/ping` directory run
-`cargo run main.rs`. Once completed, you can now use the `ping` tool in
-the `~/darkfi/script/ping/target/debug` directory.
-
-Ping the peers located in your hostlist
-
-```
-$ ./ping tcp+tls://example_peer:26661
-```
-If the peers are reachable, you'll receive a `Connected!` output
+Refer to the the steps in the above section 
+`It's not my first time connecting to the network` to use the ping tool. 
 
 ## Inbound
 
 To see if your address is reachable to others in the network, you'll need 
-to use separate device to `ping` your external address. 
-[Generate an external address here](https://darkrenaissance.github.io/darkfi/clients/tor_inbound.html?highlight=tor#1-install-tor).
+to use a separate device to `ping` your external address. 
+[You can generate an external address here](../clients/tor_inbound.md#1-install-tor).
 For example purposes, let's assume your external address is 
-`jamie3vkiwibfiwucd6vxijskbhpjdyajmzeor4mc4i7yopvpo4p7cyd.onion`. 
-`ping` your generated external address from a separate device. 
+`jamie3vkiwibfiwucd6vxijskbhpjdyajmzeor4mc4i7yopvpo4p7cyd.onion`. In 
+`${DARKFI_REPO}/script/ping` we can attempt to `ping` your external address 
+from a separate device. 
+
 ```
-$ ./ping jamie3vkiwibfiwucd6vxijskbhpjdyajmzeor4mc4i7yopvpo4p7cyd.onion
+$ cargo run -- tor://jamie3vkiwiskbhpjdyajmzeor4mc4i7yopvpo4p7cyd.onion
 ```
-If your external address is reachable, you'll receive a `Connected!` prompt
+
+If your external address is reachable, you'll receive a `Connected!` prompt.
 
 ## Check tor connection
 
 You can verify if your local node is running over Tor. Execute this 
-command in `~/darkfi/script`. You'll need to install pysocks 
-`pip install pysocks` prior to running `tor-test.py` the first time.
+command in `${DARKFI_REPO}/script`. You'll need to install pysocks 
+`pip install pysocks` prior to running `tor-test.py` the first time:
+
 ```
-$ python3 tor-test.py 
+$ python tor-test.py 
 ```
+
 If your local node is running Tor, the response should be an IP address.
 An error will return if Tor isn't running.
 
 You can also verify if your node is running over Tor with 
-dnet. If you run `./dnet` and if you see onion addresses
-as outbound connections, and localhost connections as inbound 
+dnet. If you run `dnet` and you see onion addresses as
+outbound connections, and localhost connections as inbound 
 connections, this means you're connected to Tor.
 
 ## Helpful debug information
@@ -220,10 +225,12 @@ If you're looking to debug an issue, try these helpful tools.
 ### Logs in debug mode
 
 You can run any app in debug mode as follows:
+
 ```
 $ ./darkirc -vv
 ```
-Alternatively, modify the config file at `.config/darkfi/darkirc.toml' as follows:
+
+Alternatively, modify the config file at `~/.config/darkfi/darkirc.toml` as follows:
 
 ```toml
 # Log to file. Off by default.
@@ -236,13 +243,14 @@ verbose = 2
 
 When running in debug mode, you will see `[INFO]` messages that indicate 
 `PEER DISCOVERY`. This is healthy and expected behavior.
+
 ```
 [INFO] net::outbound_session::peer_discovery(): [P2P] [PEER DISCOVERY] Asking peers for new peers to connect to...
 ```
 
 ### Config file
 
-Your config files are generated in your `~/.config/darkirc` directory. 
+Your config files are generated in your `~/.config/darkfi` directory. 
 You'll have to run each daemon once for the app to spawn a config file, 
 which you can review and edit. There is also helpful information within 
 the config files.
@@ -250,25 +258,26 @@ the config files.
 ### Node information script
 
 If you're looking for information about your node, including inbound, 
-outbound, and seed connections, execute this command in `~/darkfi/script`
+outbound, and seed connections, execute this command in ``${DARKFI_REPO}/script``:
+
 ```
-$ python3 node_get-info.py
+$ python node_get-info.py
 ```
 
 ### Hostlist issues
 
 If you receive DAG sync issues, verify:
 
-1. a hostlist is set in the config file of the respective app.
+1. A hostlist is set in the config file of the respective app.
 2. There are hosts in the hostlists (you should get hostlists from the 
 default seed on the first run). You can find the hostlist files within 
-the respective apps' repo. For example darkirc's default hostlist location 
-is `~/.local/darkfi/darkirc/hostlist.tsv`
+the respective apps' repo. For example `darkirc`'s default hostlist location 
+is `~/.local/darkfi/darkirc/hostlist.tsv`.
 
 ### Error reporting
 
-If you're receiving errors and need to report them, report using darkirc first. If you
+If you're receiving errors and need to report them, report using `darkirc` first. If you
 cannot connect, you can report these errors on the community telegram (t.me/darkfichat). 
 - Don't send screenshots.
 - Use [pastebin](https://pastebin.com/) (or [termbin](https://termbin.com/)
-or pastenym) for multi-line errors, or just copy-paste for a single line error.
+or another paste service) for multi-line errors, or just copy-paste for a single line error.
