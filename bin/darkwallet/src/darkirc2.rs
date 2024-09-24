@@ -59,7 +59,7 @@ const EVGRDB_PATH: &str = "/data/data/darkfi.darkwallet/evgr/";
 #[cfg(target_os = "linux")]
 const EVGRDB_PATH: &str = "~/.local/darkfi/darkwallet/evgr/";
 
-const ENDPOINT: &str = "tcp://127.0.0.1:5588";
+const ENDPOINT: &str = "tcp://agorism.dev:5588";
 const CHANNEL: &str = "#random";
 
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]

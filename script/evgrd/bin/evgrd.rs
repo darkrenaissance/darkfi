@@ -70,7 +70,7 @@ struct Args {
 
     #[structopt(long, default_value = "tcp://127.0.0.1:5588")]
     /// RPC server listen address
-    daemon_listen: Url,
+    daemon_listen: Vec<Url>,
 
     #[structopt(long, default_value = "tcp://127.0.0.1:26690")]
     /// JSON-RPC server listen address
@@ -368,22 +368,26 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     );
 
     info!("Starting evgrd server");
-    let listener = Listener::new(args.daemon_listen, None).await?;
-    let ptlistener = listener.listen().await?;
+    let mut rpc_tasks = vec![];
+    for listen_url in args.daemon_listen {
+        let listener = Listener::new(listen_url, None).await?;
+        let ptlistener = listener.listen().await?;
 
-    let rpc_task = StoppableTask::new();
-    rpc_task.clone().start(
-        rpc_serve(ptlistener, daemon.clone(), ex.clone()),
-        |res| async move {
-            match res {
-                Ok(()) => panic!("Acceptor task should never complete without error status"),
-                //Err(Error::RpcServerStopped) => daemon_.stop_connections().await,
-                Err(e) => error!("Failed stopping RPC server: {}", e),
-            }
-        },
-        Error::RpcServerStopped,
-        ex.clone(),
-    );
+        let rpc_task = StoppableTask::new();
+        rpc_task.clone().start(
+            rpc_serve(ptlistener, daemon.clone(), ex.clone()),
+            |res| async move {
+                match res {
+                    Ok(()) => panic!("Acceptor task should never complete without error status"),
+                    //Err(Error::RpcServerStopped) => daemon_.stop_connections().await,
+                    Err(e) => error!("Failed stopping RPC server: {}", e),
+                }
+            },
+            Error::RpcServerStopped,
+            ex.clone(),
+        );
+        rpc_tasks.push(rpc_task);
+    }
 
     info!("Starting P2P network");
     p2p.clone().start().await?;
@@ -424,7 +428,9 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     p2p.stop().await;
 
     info!("Stopping RPC server");
-    rpc_task.stop().await;
+    for rpc_task in rpc_tasks {
+        rpc_task.stop().await;
+    }
     dnet_task.stop().await;
     deg_task.stop().await;
 
