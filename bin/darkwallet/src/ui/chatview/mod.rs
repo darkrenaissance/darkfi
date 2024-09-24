@@ -288,13 +288,14 @@ impl ChatView {
             tasks.append(&mut on_modify.tasks);
 
             Self {
-                node,
+                node: node.clone(),
                 tasks,
                 render_api: render_api.clone(),
                 text_shaper: text_shaper.clone(),
 
                 tree,
                 msgbuf: AsyncMutex::new(MessageBuffer::new(
+                    node,
                     font_size,
                     timestamp_font_size,
                     timestamp_width,

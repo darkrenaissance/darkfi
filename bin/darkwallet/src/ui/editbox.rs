@@ -42,7 +42,7 @@ use crate::{
         PropertyUint32, Role,
     },
     pubsub::Subscription,
-    scene::{Pimpl, SceneNodeWeak},
+    scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
     text::{self, Glyph, GlyphPositionIter, TextShaperPtr},
     ui::FreedData,
     util::is_whitespace,
@@ -337,6 +337,10 @@ impl EditBox {
         });
 
         Pimpl::EditBox(self_)
+    }
+
+    fn node(&self) -> SceneNodePtr {
+        self.node.upgrade().unwrap()
     }
 
     /// This MUST be called whenever the text property is changed.
@@ -1093,6 +1097,7 @@ impl EditBox {
             // We're finished with these so clean up.
             if let Some(old) = text_mesh {
                 if let Some(texture) = old.texture {
+                    debug!(target: "ui::editbox", "{:?}: freeing old texture", self.node());
                     freed.textures.push(texture);
                 }
                 freed.buffers.push(old.vertex_buffer);
@@ -1107,6 +1112,7 @@ impl EditBox {
         // We're finished with these so clean up.
         if let Some(old) = old_text_mesh {
             if let Some(texture) = old.texture {
+                debug!(target: "ui::editbox", "{:?}: freeing old texture", self.node());
                 freed.textures.push(texture);
             }
             freed.buffers.push(old.vertex_buffer);

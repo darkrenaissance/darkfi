@@ -16,11 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use async_channel::{Receiver, Sender};
 use async_lock::Mutex as AsyncMutex;
 use darkfi::{
     event_graph::{self},
     net::transport::{Dialer, PtStream},
-    system::ExecutorPtr,
+    system::{sleep, ExecutorPtr},
     util::path::expand_path,
     Error, Result,
 };
@@ -32,6 +33,7 @@ use evgrd::{
     FetchEventsMessage, LocalEventGraph, LocalEventGraphPtr, VersionMessage, MSG_EVENT,
     MSG_FETCHEVENTS, MSG_SENDEVENT,
 };
+use futures::{select, FutureExt};
 use log::{error, info};
 use sled_overlay::sled;
 use smol::{
@@ -57,6 +59,9 @@ const EVGRDB_PATH: &str = "/data/data/darkfi.darkwallet/evgr/";
 #[cfg(target_os = "linux")]
 const EVGRDB_PATH: &str = "~/.local/darkfi/darkwallet/evgr/";
 
+const ENDPOINT: &str = "tcp://127.0.0.1:5588";
+const CHANNEL: &str = "#random";
+
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct Privmsg {
     pub channel: String,
@@ -73,14 +78,12 @@ impl Privmsg {
 pub type LocalDarkIRCPtr = Arc<LocalDarkIRC>;
 
 pub struct LocalDarkIRC {
-    is_connected: AtomicBool,
-    /// The reading half of the transport stream
-    reader: AsyncMutex<Option<ReadHalf<Box<dyn PtStream>>>>,
-    /// The writing half of the transport stream
-    writer: AsyncMutex<Option<WriteHalf<Box<dyn PtStream>>>>,
+    stream: AsyncMutex<Option<Box<dyn PtStream>>>,
 
     evgr: LocalEventGraphPtr,
     tasks: SyncMutex<Vec<smol::Task<()>>>,
+    send_sender: Sender<(u64, Privmsg)>,
+    send_recvr: Receiver<(u64, Privmsg)>,
 
     chatview_node: SceneNodePtr,
     sendbtn_node: SceneNodePtr,
@@ -108,13 +111,15 @@ impl LocalDarkIRC {
 
         let evgr = LocalEventGraph::new(sled_db.clone(), "darkirc_dag", 1, ex.clone()).await?;
 
+        let (send_sender, send_recvr) = async_channel::unbounded();
+
         Ok(Arc::new(Self {
-            is_connected: AtomicBool::new(false),
-            reader: AsyncMutex::new(None),
-            writer: AsyncMutex::new(None),
+            stream: AsyncMutex::new(None),
 
             evgr,
             tasks: SyncMutex::new(vec![]),
+            send_sender,
+            send_recvr,
 
             chatview_node,
             sendbtn_node,
@@ -124,37 +129,11 @@ impl LocalDarkIRC {
         }))
     }
 
-    async fn reconnect(&self) -> Result<()> {
-        let endpoint = "tcp://127.0.0.1:5588";
-        let endpoint = "tcp://192.168.1.38:5588";
-        let endpoint = Url::parse(endpoint)?;
-
-        let dialer = Dialer::new(endpoint.clone(), None).await?;
-        let timeout = std::time::Duration::from_secs(60);
-
-        let stream = dialer.dial(Some(timeout)).await?;
-        info!(target: "darkirc", "Connected to the backend: {endpoint}");
-
-        let (reader, writer) = smol::io::split(stream);
-        *self.writer.lock().await = Some(writer);
-        *self.reader.lock().await = Some(reader);
-
-        Ok(())
-    }
-
     pub async fn start(self: Arc<Self>, ex: ExecutorPtr) -> Result<()> {
         debug!(target: "darkirc", "LocalDarkIRC::start()");
 
-        //self.reconnect().await?;
-        self.version_exchange().await?;
-
         let me = Arc::downgrade(&self);
-        let recv_task = ex.spawn(async move {
-            while let Some(self_) = me.upgrade() {
-                self_.receive_msg().await.unwrap();
-            }
-            error!(target: "darkirc", "Closing DarkIRC receive loop");
-        });
+        let mainloop_task = ex.spawn(Self::run_mainloop(me));
 
         let (slot, recvr) = Slot::new("send_button_clicked");
         self.sendbtn_node.register("click", slot).unwrap();
@@ -184,25 +163,84 @@ impl LocalDarkIRC {
 
         let mut tasks = self.tasks.lock().unwrap();
         assert!(tasks.is_empty());
-        *tasks = vec![recv_task, send_task, enter_task];
+        *tasks = vec![mainloop_task, send_task, enter_task];
+
+        Ok(())
+    }
+
+    async fn run_mainloop(me: Weak<Self>) {
+        let mut send_queue = vec![];
+
+        'reconnect: loop {
+            loop {
+                debug!(target: "darkirc", "Connecting to evgrd...");
+                let Some(self_) = me.upgrade() else { return };
+                while let Err(e) = self_.connect().await {
+                    error!(target: "darkirc", "Unable to connect to evgrd backend: {e}");
+                    sleep(2).await;
+                }
+                let Err(e) = self_.version_exchange().await else { break };
+                error!(target: "darkirc", "Version exchange with evgrd failed: {e}");
+            }
+
+            info!(target: "darkirc", "Connected to evgrd backend");
+
+            let Some(self_) = me.upgrade() else { return };
+            if !send_queue.is_empty() {
+                info!(target: "darkirc", "Resending {} messages", send_queue.len());
+            }
+            for (timest, privmsg) in std::mem::take(&mut send_queue) {
+                if let Err(e) = self_.send_msg(timest, privmsg).await {
+                    error!(target: "darkirc", "Send failed");
+                    continue 'reconnect
+                }
+            }
+            drop(self_);
+
+            loop {
+                let Some(self_) = me.upgrade() else { return };
+
+                select! {
+                    res = self_.receive_msg().fuse() => {
+                        let Ok(msg) = res else {
+                            continue 'reconnect
+                        };
+                    }
+                    res = self_.send_recvr.recv().fuse() => {
+                        let (timest, privmsg) = res.unwrap();
+                        info!(target: "darkirc", "Sending msg: {timest} {privmsg:?}");
+                        if let Err(e) = self_.send_msg(timest, privmsg.clone()).await {
+                            error!(target: "darkirc", "Send failed");
+                            send_queue.push((timest, privmsg));
+                            continue 'reconnect
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    async fn connect(&self) -> Result<()> {
+        let endpoint = Url::parse(ENDPOINT)?;
+
+        let dialer = Dialer::new(endpoint.clone(), None).await?;
+        let timeout = std::time::Duration::from_secs(60);
+
+        let stream = dialer.dial(Some(timeout)).await?;
+        info!(target: "darkirc", "Connected to the backend: {endpoint}");
+
+        *self.stream.lock().await = Some(stream);
 
         Ok(())
     }
 
     async fn version_exchange(&self) -> Result<()> {
-        if !self.is_connected.load(Ordering::Relaxed) {
-            self.reconnect().await?;
-        }
-
-        let mut writer = self.writer.lock().await;
-        let mut reader = self.reader.lock().await;
-        let writer = writer.as_mut().unwrap();
-        let reader = reader.as_mut().unwrap();
+        let Some(stream) = &mut *self.stream.lock().await else { return Err(Error::ConnectFailed) };
 
         let version = VersionMessage::new();
-        version.encode_async(writer).await?;
+        version.encode_async(stream).await?;
 
-        let server_version = VersionMessage::decode_async(reader).await?;
+        let server_version = VersionMessage::decode_async(stream).await?;
         info!(target: "darkirc", "Backend server version: {}", server_version.protocol_version);
 
         if server_version.protocol_version > evgrd::PROTOCOL_VERSION {
@@ -211,43 +249,30 @@ impl LocalDarkIRC {
 
         let unref_tips = self.evgr.unreferenced_tips.read().await.clone();
         let fetchevs = FetchEventsMessage::new(unref_tips);
-        MSG_FETCHEVENTS.encode_async(writer).await?;
-        fetchevs.encode_async(writer).await?;
-
-        self.is_connected.store(true, Ordering::Relaxed);
+        MSG_FETCHEVENTS.encode_async(stream).await?;
+        fetchevs.encode_async(stream).await?;
 
         Ok(())
     }
 
     async fn send_msg(&self, timestamp: u64, msg: Privmsg) -> Result<()> {
-        if !self.is_connected.load(Ordering::Relaxed) {
-            debug!(target: "darkirc", "send_msg: not connected, reconnecting...");
-            self.reconnect().await?;
-        }
+        let Some(stream) = &mut *self.stream.lock().await else { return Err(Error::ConnectFailed) };
 
-        let mut writer = self.writer.lock().await;
-        let writer = writer.as_mut().unwrap();
-
-        MSG_SENDEVENT.encode_async(writer).await?;
-        timestamp.encode_async(writer).await?;
+        MSG_SENDEVENT.encode_async(stream).await?;
+        timestamp.encode_async(stream).await?;
 
         let content: Vec<u8> = serialize_async(&msg).await;
-        content.encode_async(writer).await?;
+        content.encode_async(stream).await?;
 
         Ok(())
     }
 
     async fn receive_msg(&self) -> Result<()> {
-        if !self.is_connected.load(Ordering::Relaxed) {
-            self.reconnect().await?;
-        }
-
         debug!(target: "darkirc", "Receiving message...");
 
-        let mut reader = self.reader.lock().await;
-        let reader = reader.as_mut().unwrap();
+        let Some(stream) = &mut *self.stream.lock().await else { return Err(Error::ConnectFailed) };
 
-        let msg_type = u8::decode_async(reader).await?;
+        let msg_type = u8::decode_async(stream).await?;
         debug!(target: "darkirc", "Received: {msg_type:?}");
         if msg_type != MSG_EVENT {
             error!(target: "darkirc", "Received invalid msg_type: {msg_type}");
@@ -255,7 +280,7 @@ impl LocalDarkIRC {
             return Ok(())
         }
 
-        let ev = event_graph::Event::decode_async(reader).await?;
+        let ev = event_graph::Event::decode_async(stream).await?;
 
         let genesis_timestamp = self.evgr.current_genesis.read().await.clone().timestamp;
         let ev_id = ev.id();
@@ -284,7 +309,7 @@ impl LocalDarkIRC {
             timest *= 1000;
         }
 
-        if privmsg.channel != "#random" {
+        if privmsg.channel != CHANNEL {
             return Ok(())
         }
 
@@ -307,8 +332,9 @@ impl LocalDarkIRC {
 
         // Send text to channel
         debug!(target: "darkirc", "Sending privmsg: {text}");
-        let msg = Privmsg::new("#random".to_string(), "anon".to_string(), text);
+        let msg = Privmsg::new(CHANNEL.to_string(), "anon".to_string(), text);
         let timestamp = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
-        self.send_msg(timestamp, msg).await.unwrap();
+
+        self.send_sender.send((timestamp, msg)).await.unwrap();
     }
 }

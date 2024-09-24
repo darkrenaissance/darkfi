@@ -37,6 +37,7 @@ use crate::{
     mesh::{Color, MeshBuilder, COLOR_BLUE, COLOR_GREEN, COLOR_PINK},
     prop::{PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyUint32, Role},
     pubsub::Subscription,
+    scene::{SceneNodePtr, SceneNodeWeak},
     text::{self, glyph_str, Glyph, GlyphPositionIter, TextShaper, TextShaperPtr},
     ui::FreedData,
     util::{enumerate_mut, enumerate_ref},
@@ -587,6 +588,8 @@ fn select_nick_color(nick: &str, nick_colors: &[Color]) -> Color {
 }
 
 pub struct MessageBuffer {
+    node: SceneNodeWeak,
+
     /// From most recent to older
     msgs: Vec<Message>,
     date_msgs: HashMap<NaiveDate, Message>,
@@ -616,6 +619,7 @@ pub struct MessageBuffer {
 
 impl MessageBuffer {
     pub fn new(
+        node: SceneNodeWeak,
         font_size: PropertyFloat32,
         timestamp_font_size: PropertyFloat32,
         timestamp_width: PropertyFloat32,
@@ -633,6 +637,8 @@ impl MessageBuffer {
     ) -> Self {
         let old_window_scale = window_scale.get();
         Self {
+            node,
+
             msgs: vec![],
             date_msgs: HashMap::new(),
             freed: Default::default(),
@@ -658,6 +664,10 @@ impl MessageBuffer {
         }
     }
 
+    fn node(&self) -> SceneNodePtr {
+        self.node.upgrade().unwrap()
+    }
+
     pub async fn adjust_window_scale(&mut self) {
         let window_scale = self.window_scale.get();
         if self.old_window_scale == window_scale {
@@ -674,6 +684,8 @@ impl MessageBuffer {
         let timestamp_font_size = self.timestamp_font_size.get();
         let timestamp_width = self.timestamp_width.get();
 
+        debug!(target: "ui::chatview::page", "{:?}: freeing old textures", self.node());
+
         for msg in &mut self.msgs {
             let old_texture_id = msg
                 .adjust_params(
@@ -686,6 +698,7 @@ impl MessageBuffer {
                     &self.render_api,
                 )
                 .await;
+
             self.freed.add_texture(old_texture_id);
         }
     }
