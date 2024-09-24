@@ -25,16 +25,13 @@
 
 ## List of channels to autojoin for new client connections
 autojoin = [
-    "#darkfi-dev",
-    "#lunardao",
-    "#cryptomath",
+    "#dev",
+    "#memes",
     "#philosophy",
-    "#media",
-    "#tech",
     "#markets",
+    "#math",
     "#random",
-    "#support",
-    "#test",
+    "#lunardao",
 ]
 
 ## IRC server specific password
@@ -119,35 +116,26 @@ transport_mixing = false
 #secret = "7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"
 #topic = "My secret channel"
 
-[channel."#darkfi-dev"]
-topic = "dev meet every monday at 16:00 CET"
-
-[channel."#lunardao"]
-topic = "LunarDAO anon action coordination & planning"
-
-[channel."#cryptomath"]
-topic = "cryptography & mathematics"
-
-[channel."#media"]
-topic = "memes, vids and cool stuff"
-
-[channel."#tech"]
-topic = "stallman appreciation channel"
+[channel."#dev"]
+topic = "DarkFi Development HQ"
 
 [channel."#markets"]
-topic = "wen token ser do not redeem .etc"
+topic = "Crypto Market Talk"
+
+[channel."#math"]
+topic = "Math Talk"
+
+[channel."#memes"]
+topic = "DarkFi Meme Reality"
 
 [channel."#philosophy"]
-topic = "philosoraptor, history, pol"
+topic = "Philosophy Discussions"
 
 [channel."#random"]
-topic = "\"i'm so random!\" ---> b&"
+topic = "/b/"
 
-[channel."#support"]
-topic = "halp me"
-
-[channel."#test"]
-topic = "write test here to see if you're on"
+[channel."#lunardao"]
+topic = "LunarDAO talk"
 
 ## ================
 ## Contact settings
