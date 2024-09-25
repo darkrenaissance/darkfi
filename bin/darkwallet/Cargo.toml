@@ -51,6 +51,8 @@ freetype-sys = { git = "https://github.com/narodnik/freetype-sys" }
 # I'm so confused why this is needed
 halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v4"}
 halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v4"}
+# This patch didn't work for me
+#dirs-sys = {git="https://github.com/sbechet/dirs-sys-rs.git"}
 
 [target.'cfg(target_os = "android")'.dependencies]
 android_logger = "0.13.3"

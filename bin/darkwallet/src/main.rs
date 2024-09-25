@@ -85,6 +85,12 @@ fn main() {
 
     #[cfg(target_os = "android")]
     {
+        // Workaround for this bug
+        // https://gitlab.torproject.org/tpo/core/arti/-/issues/999
+        unsafe {
+            std::env::set_var("HOME", "/data/data/darkfi.darkwallet/");
+        }
+
         android_logger::init_once(
             android_logger::Config::default().with_max_level(LevelFilter::Debug).with_tag("darkfi"),
         );

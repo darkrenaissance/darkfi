@@ -33,7 +33,7 @@ use evgrd::{
     FetchEventsMessage, LocalEventGraph, LocalEventGraphPtr, VersionMessage, MSG_EVENT,
     MSG_FETCHEVENTS, MSG_SENDEVENT,
 };
-use futures::{select, FutureExt, AsyncWriteExt};
+use futures::{select, AsyncWriteExt, FutureExt};
 use log::{error, info};
 use sled_overlay::sled;
 use smol::{
