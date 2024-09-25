@@ -42,82 +42,47 @@ use super::{
     populate_tree, App,
 };
 
-#[cfg(target_os = "android")]
-const CHATDB_PATH: &str = "/data/data/darkfi.darkwallet/chatdb/";
-#[cfg(target_os = "linux")]
-const CHATDB_PATH: &str = "chatdb";
-
-#[cfg(target_os = "android")]
-const KING_PATH: &str = "king.png";
-#[cfg(target_os = "linux")]
-const KING_PATH: &str = "assets/king.png";
-
 const LIGHTMODE: bool = false;
 
 #[cfg(target_os = "android")]
-const EDITCHAT_HEIGHT: f32 = 163.;
-#[cfg(target_os = "linux")]
-const EDITCHAT_HEIGHT: f32 = 50.;
+mod ui_consts {
+    pub const CHATDB_PATH: &str = "/data/data/darkfi.darkwallet/chatdb/";
+    pub const KING_PATH: &str = "king.png";
+    pub const EDITCHAT_HEIGHT: f32 = 163.;
+    pub const EDITCHAT_CURSOR_ASCENT: f32 = 50.;
+    pub const EDITCHAT_CURSOR_DESCENT: f32 = 20.;
+    pub const TEXTBAR_BASELINE: f32 = 93.;
+    pub const EDITCHAT_LHS_PAD: f32 = 30.;
+    pub const SENDLABEL_WIDTH: f32 = 200.;
+    pub const SENDLABEL_LHS_PAD: f32 = 30.;
+    pub const FONTSIZE: f32 = 40.;
+    pub const TIMESTAMP_FONTSIZE: f32 = 30.;
+    pub const TIMESTAMP_WIDTH: f32 = 135.;
+    pub const MESSAGE_SPACING: f32 = 15.;
+    pub const LINE_HEIGHT: f32 = 58.;
+    pub const CHATVIEW_BASELINE: f32 = 36.;
+}
 
-#[cfg(target_os = "android")]
-const EDITCHAT_CURSOR_ASCENT: f32 = 50.;
-#[cfg(target_os = "linux")]
-const EDITCHAT_CURSOR_ASCENT: f32 = 25.;
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+mod ui_consts {
+    pub const CHATDB_PATH: &str = "chatdb";
+    pub const KING_PATH: &str = "assets/king.png";
+    pub const EDITCHAT_HEIGHT: f32 = 50.;
+    pub const EDITCHAT_CURSOR_ASCENT: f32 = 25.;
+    pub const EDITCHAT_CURSOR_DESCENT: f32 = 8.;
+    pub const TEXTBAR_BASELINE: f32 = 34.;
+    pub const EDITCHAT_LHS_PAD: f32 = 20.;
+    pub const SENDLABEL_WIDTH: f32 = 120.;
+    pub const SENDLABEL_LHS_PAD: f32 = 30.;
+    pub const FONTSIZE: f32 = 20.;
+    pub const TIMESTAMP_FONTSIZE: f32 = 12.;
+    pub const TIMESTAMP_WIDTH: f32 = 60.;
+    pub const MESSAGE_SPACING: f32 = 5.;
+    pub const LINE_HEIGHT: f32 = 30.;
+    pub const CHATVIEW_BASELINE: f32 = 20.;
+}
 
-#[cfg(target_os = "android")]
-const EDITCHAT_CURSOR_DESCENT: f32 = 20.;
-#[cfg(target_os = "linux")]
-const EDITCHAT_CURSOR_DESCENT: f32 = 8.;
-
-#[cfg(target_os = "android")]
-const TEXTBAR_BASELINE: f32 = 93.;
-#[cfg(target_os = "linux")]
-const TEXTBAR_BASELINE: f32 = 34.;
-
-#[cfg(target_os = "android")]
-const EDITCHAT_LHS_PAD: f32 = 30.;
-#[cfg(target_os = "linux")]
-const EDITCHAT_LHS_PAD: f32 = 20.;
-
-#[cfg(target_os = "android")]
-const SENDLABEL_WIDTH: f32 = 200.;
-#[cfg(target_os = "linux")]
-const SENDLABEL_WIDTH: f32 = 120.;
-
-#[cfg(target_os = "android")]
-const SENDLABEL_LHS_PAD: f32 = 30.;
-#[cfg(target_os = "linux")]
-const SENDLABEL_LHS_PAD: f32 = 30.;
-
-#[cfg(target_os = "android")]
-const FONTSIZE: f32 = 40.;
-#[cfg(target_os = "linux")]
-const FONTSIZE: f32 = 20.;
-
-#[cfg(target_os = "android")]
-const TIMESTAMP_FONTSIZE: f32 = 30.;
-#[cfg(target_os = "linux")]
-const TIMESTAMP_FONTSIZE: f32 = 12.;
-
-#[cfg(target_os = "android")]
-const TIMESTAMP_WIDTH: f32 = 135.;
-#[cfg(target_os = "linux")]
-const TIMESTAMP_WIDTH: f32 = 60.;
-
-#[cfg(target_os = "android")]
-const MESSAGE_SPACING: f32 = 15.;
-#[cfg(target_os = "linux")]
-const MESSAGE_SPACING: f32 = 5.;
-
-#[cfg(target_os = "android")]
-const LINE_HEIGHT: f32 = 58.;
-#[cfg(target_os = "linux")]
-const LINE_HEIGHT: f32 = 30.;
-
-#[cfg(target_os = "android")]
-const CHATVIEW_BASELINE: f32 = 36.;
-#[cfg(target_os = "linux")]
-const CHATVIEW_BASELINE: f32 = 20.;
+use ui_consts::*;
 
 pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
     let window_scale = PropertyFloat32::wrap(&window, Role::Internal, "scale", 0).unwrap();
