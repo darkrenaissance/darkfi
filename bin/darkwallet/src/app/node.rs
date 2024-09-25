@@ -88,6 +88,13 @@ pub fn create_image(name: &str) -> SceneNode {
     prop.allow_exprs();
     node.add_property(prop).unwrap();
 
+    let mut prop = Property::new("uv", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_array_len(4);
+    prop.allow_exprs();
+    prop.set_range_f32(0., 1.);
+    prop.set_defaults_f32(vec![0., 0., 1., 1.]).unwrap();
+    node.add_property(prop).unwrap();
+
     let prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);
     node.add_property(prop).unwrap();
 

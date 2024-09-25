@@ -47,6 +47,7 @@ pub struct Image {
     dc_key: u64,
 
     rect: PropertyRect,
+    uv: PropertyRect,
     z_index: PropertyUint32,
     path: PropertyStr,
 
@@ -59,6 +60,7 @@ impl Image {
 
         let node_ref = &node.upgrade().unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
+        let uv = PropertyRect::wrap(node_ref, Role::Internal, "uv").unwrap();
         let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
         let path = PropertyStr::wrap(node_ref, Role::Internal, "path", 0).unwrap();
 
@@ -68,6 +70,7 @@ impl Image {
         let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
             let mut on_modify = OnModify::new(ex, node_name, node_id, me.clone());
             on_modify.when_change(rect.prop(), Self::redraw);
+            on_modify.when_change(uv.prop(), Self::redraw);
             on_modify.when_change(z_index.prop(), Self::redraw);
             on_modify.when_change(path.prop(), Self::reload);
 
@@ -81,6 +84,7 @@ impl Image {
                 dc_key: OsRng.gen(),
 
                 rect,
+                uv,
                 z_index,
                 path,
 
@@ -137,9 +141,7 @@ impl Image {
         };
         self.render_api.replace_draw_calls(draw_update.draw_calls);
         debug!(target: "ui::image", "replace draw calls done");
-        for texture in draw_update.freed_textures {
-            self.render_api.delete_texture(texture);
-        }
+        assert!(draw_update.freed_textures.is_empty());
         for buff in draw_update.freed_buffers {
             self.render_api.delete_buffer(buff);
         }
@@ -148,7 +150,7 @@ impl Image {
     /// Called whenever any property changes.
     fn regen_mesh(&self) -> MeshInfo {
         let rect = self.rect.get();
-        let uv = Rectangle::from([0., 0., 1., 1.]);
+        let uv = self.uv.get();
         let mesh_rect = Rectangle::from([0., 0., rect.w, rect.h]);
         let mut mesh = MeshBuilder::new();
         mesh.draw_box(&mesh_rect, COLOR_WHITE, &uv);
@@ -158,13 +160,12 @@ impl Image {
     async fn get_draw_calls(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
         self.rect.eval(&parent_rect).ok()?;
         let rect = self.rect.get();
+        self.uv.eval(&rect).ok()?;
 
         let mesh = self.regen_mesh();
         let old_mesh = std::mem::replace(&mut *self.mesh.lock().unwrap(), Some(mesh.clone()));
 
-        let Some(texture_id) = *self.texture.lock().unwrap() else {
-            panic!("Node missing texture_id!");
-        };
+        let texture_id = self.texture.lock().unwrap().expect("Node missing texture_id!");
 
         // We're finished with these so clean up.
         let mut freed_buffers = vec![];

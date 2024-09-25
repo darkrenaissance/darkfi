@@ -486,6 +486,11 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     prop.set_f32(Role::App, 1, 0.).unwrap();
     prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
     prop.set_expr(Role::App, 3, expr::load_var("h")).unwrap();
+    let prop = node.get_property("uv").unwrap();
+    prop.set_f32(Role::App, 0, 0.).unwrap();
+    prop.set_f32(Role::App, 1, 0.).unwrap();
+    prop.set_f32(Role::App, 2, 1.).unwrap();
+    prop.set_f32(Role::App, 3, 1.).unwrap();
     node.set_property_str(Role::App, "path", BG_PATH).unwrap();
     node.set_property_u32(Role::App, "z_index", 0).unwrap();
     let node = node.setup(|me| Image::new(me, app.render_api.clone(), app.ex.clone())).await;
