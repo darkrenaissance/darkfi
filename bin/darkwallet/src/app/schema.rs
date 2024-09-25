@@ -509,7 +509,7 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
         expr::const_f32(0.),
         expr::load_var("w"),
         expr::load_var("h"),
-        [c, c, c, 0.8],
+        [c, c, c, 0.4],
     );
     let node =
         node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
