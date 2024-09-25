@@ -62,6 +62,10 @@ const EVGRDB_PATH: &str = "~/.local/darkfi/darkwallet/evgr/";
 const ENDPOINT: &str = "tcp://agorism.dev:5588";
 const CHANNEL: &str = "#random";
 
+/// Due to drift between different machine's clocks, if the message timestamp is recent
+/// then we will just correct it to the current time so messages appear sequential in the UI.
+const RECENT_TIME_DIST: u64 = 10;
+
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct Privmsg {
     pub channel: String,
@@ -318,6 +322,12 @@ impl LocalDarkIRC {
 
         if privmsg.channel != CHANNEL {
             return Ok(())
+        }
+
+        // This is a hack to make messages appear sequentially in the UI
+        let now_timest = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
+        if timest.abs_diff(now_timest) < RECENT_TIME_DIST {
+            timest = now_timest;
         }
 
         let mut arg_data = vec![];
