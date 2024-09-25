@@ -169,7 +169,7 @@ impl LocalDarkIRC {
     }
 
     async fn run_mainloop(me: Weak<Self>) {
-        let mut send_queue = vec![];
+        let mut send_queue: Vec<(u64, Privmsg)> = vec![];
 
         'reconnect: loop {
             loop {
@@ -179,6 +179,7 @@ impl LocalDarkIRC {
                     error!(target: "darkirc", "Unable to connect to evgrd backend: {e}");
                     sleep(2).await;
                 }
+                debug!(target: "darkirc", "Attempting version exchange...");
                 let Err(e) = self_.version_exchange().await else { break };
                 error!(target: "darkirc", "Version exchange with evgrd failed: {e}");
             }
@@ -189,9 +190,10 @@ impl LocalDarkIRC {
             if !send_queue.is_empty() {
                 info!(target: "darkirc", "Resending {} messages", send_queue.len());
             }
-            for (timest, privmsg) in std::mem::take(&mut send_queue) {
-                if let Err(e) = self_.send_msg(timest, privmsg).await {
+            while let Some((timest, privmsg)) = send_queue.pop() {
+                if let Err(e) = self_.send_msg(timest, privmsg.clone()).await {
                     error!(target: "darkirc", "Send failed");
+                    send_queue.push((timest, privmsg));
                     continue 'reconnect
                 }
             }
@@ -202,7 +204,8 @@ impl LocalDarkIRC {
 
                 select! {
                     res = self_.receive_msg().fuse() => {
-                        let Ok(msg) = res else {
+                        if let Err(e) = res {
+                            error!(target: "darkirc", "Receive failed: {e}");
                             continue 'reconnect
                         };
                     }
