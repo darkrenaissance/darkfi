@@ -50,7 +50,7 @@ use std::{
 use url::Url;
 
 use crate::{
-    prop::{PropertyBool, PropertyStr, PropertyFloat32, Role},
+    prop::{PropertyBool, PropertyFloat32, PropertyStr, Role},
     scene::{SceneNodePtr, Slot},
 };
 
@@ -59,7 +59,7 @@ const EVGRDB_PATH: &str = "/data/data/darkfi.darkwallet/evgr/";
 #[cfg(target_os = "linux")]
 const EVGRDB_PATH: &str = "~/.local/darkfi/darkwallet/evgr/";
 
-const ENDPOINT: &str = "tcp://agorism.dev:5588";
+const ENDPOINT: &str = "tor://obbc5rgtsqtscnph7yxrbsgsm5axbppfn552yr5lrrd2ocgkdcsjcnyd.onion:25589";
 const CHANNEL: &str = "#random";
 
 /// Due to drift between different machine's clocks, if the message timestamp is recent
@@ -105,7 +105,8 @@ impl LocalDarkIRC {
         let editbox_node = sg_root.clone().lookup_node("/window/view/editz").unwrap();
         let editbox_text = PropertyStr::wrap(&editbox_node, Role::App, "text", 0).unwrap();
 
-        let chatview_scroll = PropertyFloat32::wrap(&chatview_node, Role::Internal, "scroll", 0).unwrap();
+        let chatview_scroll =
+            PropertyFloat32::wrap(&chatview_node, Role::Internal, "scroll", 0).unwrap();
 
         let upgrade_popup_node = sg_root.clone().lookup_node("/window/view/upgrade_popup").unwrap();
         let upgrade_popup_is_visible =
@@ -249,8 +250,10 @@ impl LocalDarkIRC {
         let Some(stream) = &mut *self.stream.lock().await else { return Err(Error::ConnectFailed) };
 
         let version = VersionMessage::new();
+        debug!(target: "darkirc", "Sending version: {version:?}");
         version.encode_async(stream).await?;
 
+        debug!(target: "darkirc", "Receiving version...");
         let server_version = VersionMessage::decode_async(stream).await?;
         info!(target: "darkirc", "Backend server version: {}", server_version.protocol_version);
 
