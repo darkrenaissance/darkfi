@@ -37,7 +37,7 @@ use darkfi::{
     Error, Result,
 };
 use darkfi_serial::{AsyncDecodable, AsyncEncodable};
-use futures::FutureExt;
+use futures::{FutureExt, AsyncWriteExt};
 use log::{debug, error, info};
 use sled_overlay::sled;
 use smol::{fs, lock::Mutex, stream::StreamExt, Executor};
@@ -174,12 +174,12 @@ async fn rpc_serve(
 }
 
 async fn handle_connect(mut stream: Box<dyn PtStream>, daemon: Arc<Daemon>) -> Result<()> {
-    debug!(target: "evgrd", "Receiving version...");
     let client_version = VersionMessage::decode_async(&mut stream).await?;
     info!(target: "evgrd", "Client version: {}", client_version.protocol_version);
 
     let version = VersionMessage::new();
     version.encode_async(&mut stream).await?;
+    stream.flush().await?;
     debug!(target: "darkirc", "Sent version: {version:?}");
 
     let event_sub = daemon.event_graph.event_pub.clone().subscribe().await;
@@ -188,7 +188,9 @@ async fn handle_connect(mut stream: Box<dyn PtStream>, daemon: Arc<Daemon>) -> R
         futures::select! {
             ev = event_sub.receive().fuse() => {
                 MSG_EVENT.encode_async(&mut stream).await?;
+                stream.flush().await?;
                 ev.encode_async(&mut stream).await?;
+                stream.flush().await?;
             }
             msg_type = u8::decode_async(&mut stream).fuse() => {
                 debug!(target: "evgrd", "Received msg_type: {msg_type:?}");
@@ -205,15 +207,17 @@ async fn handle_connect(mut stream: Box<dyn PtStream>, daemon: Arc<Daemon>) -> R
 
 async fn fetch_events(stream: &mut Box<dyn PtStream>, daemon: &Daemon) -> Result<()> {
     let fetchevs = FetchEventsMessage::decode_async(stream).await?;
-    info!(target: "evgrd", "Fetching events {fetchevs:?}");
+    info!(target: "evgrd", "Fetch events: {fetchevs:?}");
     let events = daemon.event_graph.fetch_successors_of(fetchevs.unref_tips).await?;
 
-    //info!(target: "evgrd", "fetched {events:?}");
-
+    let n_events = events.len();
     for event in events {
         MSG_EVENT.encode_async(stream).await?;
+        stream.flush().await?;
         event.encode_async(stream).await?;
+        stream.flush().await?;
     }
+    debug!(target: "evgrd", "Sent {n_events} for fetch");
     Ok(())
 }
 

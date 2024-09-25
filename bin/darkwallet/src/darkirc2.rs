@@ -33,7 +33,7 @@ use evgrd::{
     FetchEventsMessage, LocalEventGraph, LocalEventGraphPtr, VersionMessage, MSG_EVENT,
     MSG_FETCHEVENTS, MSG_SENDEVENT,
 };
-use futures::{select, FutureExt};
+use futures::{select, FutureExt, AsyncWriteExt};
 use log::{error, info};
 use sled_overlay::sled;
 use smol::{
@@ -59,6 +59,7 @@ const EVGRDB_PATH: &str = "/data/data/darkfi.darkwallet/evgr/";
 #[cfg(target_os = "linux")]
 const EVGRDB_PATH: &str = "~/.local/darkfi/darkwallet/evgr/";
 
+//const ENDPOINT: &str = "tcp://agorism.dev:25588";
 const ENDPOINT: &str = "tor://obbc5rgtsqtscnph7yxrbsgsm5axbppfn552yr5lrrd2ocgkdcsjcnyd.onion:25589";
 const CHANNEL: &str = "#random";
 
@@ -252,6 +253,7 @@ impl LocalDarkIRC {
         let version = VersionMessage::new();
         debug!(target: "darkirc", "Sending version: {version:?}");
         version.encode_async(stream).await?;
+        stream.flush().await?;
 
         debug!(target: "darkirc", "Receiving version...");
         let server_version = VersionMessage::decode_async(stream).await?;
@@ -264,7 +266,9 @@ impl LocalDarkIRC {
         let unref_tips = self.evgr.unreferenced_tips.read().await.clone();
         let fetchevs = FetchEventsMessage::new(unref_tips);
         MSG_FETCHEVENTS.encode_async(stream).await?;
+        stream.flush().await?;
         fetchevs.encode_async(stream).await?;
+        stream.flush().await?;
 
         Ok(())
     }
@@ -273,10 +277,13 @@ impl LocalDarkIRC {
         let Some(stream) = &mut *self.stream.lock().await else { return Err(Error::ConnectFailed) };
 
         MSG_SENDEVENT.encode_async(stream).await?;
+        stream.flush().await?;
         timestamp.encode_async(stream).await?;
+        stream.flush().await?;
 
         let content: Vec<u8> = serialize_async(&msg).await;
         content.encode_async(stream).await?;
+        stream.flush().await?;
 
         Ok(())
     }
