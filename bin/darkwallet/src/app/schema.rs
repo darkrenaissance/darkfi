@@ -48,6 +48,7 @@ const LIGHTMODE: bool = false;
 mod ui_consts {
     pub const CHATDB_PATH: &str = "/data/data/darkfi.darkwallet/chatdb/";
     pub const KING_PATH: &str = "king.png";
+    pub const BG_PATH: &str = "bg.png";
     pub const EDITCHAT_HEIGHT: f32 = 163.;
     pub const EDITCHAT_CURSOR_ASCENT: f32 = 50.;
     pub const EDITCHAT_CURSOR_DESCENT: f32 = 20.;
@@ -67,6 +68,7 @@ mod ui_consts {
 mod ui_consts {
     pub const CHATDB_PATH: &str = "chatdb";
     pub const KING_PATH: &str = "assets/king.png";
+    pub const BG_PATH: &str = "assets/bg.png";
     pub const EDITCHAT_HEIGHT: f32 = 50.;
     pub const EDITCHAT_CURSOR_ASCENT: f32 = 25.;
     pub const EDITCHAT_CURSOR_DESCENT: f32 = 8.;
@@ -477,6 +479,18 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
         layer_node.setup(|me| Layer::new(me, app.render_api.clone(), app.ex.clone())).await;
     window.link(layer_node.clone());
 
+    // Create a bg image
+    let node = create_image("bg_image");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(Role::App, 0, 0.).unwrap();
+    prop.set_f32(Role::App, 1, 0.).unwrap();
+    prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_expr(Role::App, 3, expr::load_var("h")).unwrap();
+    node.set_property_str(Role::App, "path", BG_PATH).unwrap();
+    node.set_property_u32(Role::App, "z_index", 0).unwrap();
+    let node = node.setup(|me| Image::new(me, app.render_api.clone(), app.ex.clone())).await;
+    layer_node.clone().link(node);
+
     // Create a bg mesh
     let node = create_vector_art("bg");
     let prop = node.get_property("rect").unwrap();
@@ -484,7 +498,7 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     prop.set_f32(Role::App, 1, 0.).unwrap();
     prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
     prop.set_expr(Role::App, 3, expr::load_var("h")).unwrap();
-    node.set_property_u32(Role::App, "z_index", 0).unwrap();
+    node.set_property_u32(Role::App, "z_index", 1).unwrap();
 
     let c = if LIGHTMODE { 1. } else { 0.05 };
     // Setup the pimpl
@@ -495,7 +509,7 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
         expr::const_f32(0.),
         expr::load_var("w"),
         expr::load_var("h"),
-        [c, c, c, 1.],
+        [c, c, c, 0.8],
     );
     let node =
         node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
@@ -508,9 +522,16 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     prop.set_f32(Role::App, 1, 0.).unwrap();
     prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
     prop.set_f32(Role::App, 3, EDITCHAT_HEIGHT).unwrap();
-    node.set_property_u32(Role::App, "z_index", 1).unwrap();
+    node.set_property_u32(Role::App, "z_index", 2).unwrap();
 
     let mut shape = VectorShape::new();
+    shape.add_filled_box(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::load_var("h"),
+        [0.05, 0.05, 0.05, 1.],
+    );
     shape.add_filled_box(
         expr::const_f32(0.),
         cc.compile("h - 1").unwrap(),
@@ -540,7 +561,7 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     prop.set_f32(Role::App, 1, 1.).unwrap();
     prop.set_f32(Role::App, 2, 1.).unwrap();
     prop.set_f32(Role::App, 3, 1.).unwrap();
-    node.set_property_u32(Role::App, "z_index", 1).unwrap();
+    node.set_property_u32(Role::App, "z_index", 3).unwrap();
 
     let node = node
         .setup(|me| {
@@ -569,7 +590,7 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     node.set_property_f32(Role::App, "line_height", LINE_HEIGHT).unwrap();
     node.set_property_f32(Role::App, "message_spacing", MESSAGE_SPACING).unwrap();
     node.set_property_f32(Role::App, "baseline", CHATVIEW_BASELINE).unwrap();
-    node.set_property_u32(Role::App, "z_index", 1).unwrap();
+    node.set_property_u32(Role::App, "z_index", 2).unwrap();
     //node.set_property_bool(Role::App, "debug", true).unwrap();
 
     #[cfg(target_os = "android")]
@@ -656,7 +677,7 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     prop.set_expr(Role::App, 1, code).unwrap();
     prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
     prop.set_f32(Role::App, 3, EDITCHAT_HEIGHT).unwrap();
-    node.set_property_u32(Role::App, "z_index", 1).unwrap();
+    node.set_property_u32(Role::App, "z_index", 2).unwrap();
 
     let mut shape = VectorShape::new();
     shape.add_filled_box(
@@ -680,6 +701,13 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
         expr::load_var("h"),
         [0.41, 0.6, 0.65, 1.],
     );
+    shape.add_filled_box(
+        cc.compile("w - SENDLABEL_WIDTH + 1").unwrap(),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::load_var("h"),
+        [0.04, 0.04, 0.04, 1.],
+    );
     let node =
         node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
     layer_node.clone().link(node);
@@ -702,7 +730,7 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     prop.set_f32(Role::App, 1, 1.).unwrap();
     prop.set_f32(Role::App, 2, 0.94).unwrap();
     prop.set_f32(Role::App, 3, 1.).unwrap();
-    node.set_property_u32(Role::App, "z_index", 2).unwrap();
+    node.set_property_u32(Role::App, "z_index", 3).unwrap();
 
     let node = node
         .setup(|me| {
@@ -767,7 +795,7 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     let prop = node.get_property("selected").unwrap();
     prop.set_null(Role::App, 0).unwrap();
     prop.set_null(Role::App, 1).unwrap();
-    node.set_property_u32(Role::App, "z_index", 2).unwrap();
+    node.set_property_u32(Role::App, "z_index", 3).unwrap();
     //node.set_property_bool(Role::App, "debug", true).unwrap();
 
     //let editbox_text = PropertyStr::wrap(node, Role::App, "text", 0).unwrap();
