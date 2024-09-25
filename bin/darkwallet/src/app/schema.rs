@@ -726,7 +726,7 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     prop.set_f32(Role::App, 0, EDITCHAT_LHS_PAD).unwrap();
     let code = cc.compile("h - EDITCHAT_HEIGHT").unwrap();
     prop.set_expr(Role::App, 1, code).unwrap();
-    let code = cc.compile("w - (SENDLABEL_WIDTH + 20)").unwrap();
+    let code = cc.compile("w - (SENDLABEL_WIDTH + SENDLABEL_LHS_PAD)").unwrap();
     prop.set_expr(Role::App, 2, code).unwrap();
     prop.set_f32(Role::App, 3, EDITCHAT_HEIGHT).unwrap();
 

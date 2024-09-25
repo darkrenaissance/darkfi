@@ -533,6 +533,7 @@ impl EditBox {
         // 1. make it active
         // 2. begin selection
         if !rect.contains(mouse_pos) {
+            /*
             if self.is_focused.get() {
                 debug!(target: "ui::editbox", "EditBox unfocused");
                 self.is_focused.set(false);
@@ -541,6 +542,7 @@ impl EditBox {
 
                 self.redraw().await;
             }
+            */
             return false
         }
 

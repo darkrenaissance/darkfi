@@ -50,7 +50,7 @@ use std::{
 use url::Url;
 
 use crate::{
-    prop::{PropertyBool, PropertyStr, Role},
+    prop::{PropertyBool, PropertyStr, PropertyFloat32, Role},
     scene::{SceneNodePtr, Slot},
 };
 
@@ -89,6 +89,7 @@ pub struct LocalDarkIRC {
     sendbtn_node: SceneNodePtr,
     editbox_node: SceneNodePtr,
     editbox_text: PropertyStr,
+    chatview_scroll: PropertyFloat32,
     upgrade_popup_is_visible: PropertyBool,
 }
 
@@ -99,6 +100,8 @@ impl LocalDarkIRC {
 
         let editbox_node = sg_root.clone().lookup_node("/window/view/editz").unwrap();
         let editbox_text = PropertyStr::wrap(&editbox_node, Role::App, "text", 0).unwrap();
+
+        let chatview_scroll = PropertyFloat32::wrap(&chatview_node, Role::Internal, "scroll", 0).unwrap();
 
         let upgrade_popup_node = sg_root.clone().lookup_node("/window/view/upgrade_popup").unwrap();
         let upgrade_popup_is_visible =
@@ -125,6 +128,7 @@ impl LocalDarkIRC {
             sendbtn_node,
             editbox_node,
             editbox_text,
+            chatview_scroll,
             upgrade_popup_is_visible,
         }))
     }
@@ -332,6 +336,7 @@ impl LocalDarkIRC {
         let text = self.editbox_text.get();
         // Clear editbox
         self.editbox_text.set("");
+        self.chatview_scroll.set(0.);
 
         // Send text to channel
         debug!(target: "darkirc", "Sending privmsg: {text}");
