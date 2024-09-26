@@ -289,7 +289,7 @@ impl PropertyRect {
 
             let expr = self.prop.get_expr(i).unwrap();
 
-            let machine = SExprMachine {
+            let mut machine = SExprMachine {
                 globals: vec![
                     ("w".to_string(), SExprVal::Float32(parent_rect.w)),
                     ("h".to_string(), SExprVal::Float32(parent_rect.h)),

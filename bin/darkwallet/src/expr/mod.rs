@@ -144,16 +144,17 @@ pub enum Op {
     ConstFloat32(f32),
     ConstStr(String),
     LoadVar(String),
-    //StoreVar((String, Box<Op>)),
+    StoreVar((String, Box<Op>)),
     Min((Box<Op>, Box<Op>)),
     Max((Box<Op>, Box<Op>)),
     IsEqual((Box<Op>, Box<Op>)),
     LessThan((Box<Op>, Box<Op>)),
     Float32ToUint32(Box<Op>),
+    IfElse((Box<Op>, SExprCode, SExprCode)),
 }
 
 impl<'a> SExprMachine<'a> {
-    pub fn call(&self) -> Result<SExprVal> {
+    pub fn call(&mut self) -> Result<SExprVal> {
         if self.stmts.is_empty() {
             return Ok(SExprVal::Null)
         }
@@ -163,7 +164,7 @@ impl<'a> SExprMachine<'a> {
         self.eval(self.stmts.last().unwrap())
     }
 
-    fn eval(&self, op: &Op) -> Result<SExprVal> {
+    fn eval(&mut self, op: &Op) -> Result<SExprVal> {
         match op {
             Op::Null => Ok(SExprVal::Null),
             Op::Add((lhs, rhs)) => self.add(lhs, rhs),
@@ -175,16 +176,17 @@ impl<'a> SExprMachine<'a> {
             Op::ConstFloat32(val) => Ok(SExprVal::Float32(*val)),
             Op::ConstStr(val) => Ok(SExprVal::Str(val.clone())),
             Op::LoadVar(var) => self.load_var(var),
-            //Op::StoreVar((var, val)) => self.store_var(var, val),
+            Op::StoreVar((var, val)) => self.store_var(var, val),
             Op::Min((lhs, rhs)) => self.min(lhs, rhs),
             Op::Max((lhs, rhs)) => self.max(lhs, rhs),
             Op::IsEqual((lhs, rhs)) => self.is_equal(lhs, rhs),
             Op::LessThan((lhs, rhs)) => self.less_than(lhs, rhs),
             Op::Float32ToUint32(val) => self.float32_to_uint32(val),
+            Op::IfElse((cond, if_val, else_val)) => self.if_else(cond, if_val, else_val),
         }
     }
 
-    fn add(&self, lhs: &Op, rhs: &Op) -> Result<SExprVal> {
+    fn add(&mut self, lhs: &Op, rhs: &Op) -> Result<SExprVal> {
         let lhs = self.eval(lhs)?;
         let rhs = self.eval(rhs)?;
 
@@ -197,7 +199,7 @@ impl<'a> SExprMachine<'a> {
 
         Ok(SExprVal::Float32(lhs + rhs))
     }
-    fn sub(&self, lhs: &Op, rhs: &Op) -> Result<SExprVal> {
+    fn sub(&mut self, lhs: &Op, rhs: &Op) -> Result<SExprVal> {
         let lhs = self.eval(lhs)?;
         let rhs = self.eval(rhs)?;
 
@@ -210,7 +212,7 @@ impl<'a> SExprMachine<'a> {
 
         Ok(SExprVal::Float32(lhs - rhs))
     }
-    fn mul(&self, lhs: &Op, rhs: &Op) -> Result<SExprVal> {
+    fn mul(&mut self, lhs: &Op, rhs: &Op) -> Result<SExprVal> {
         let lhs = self.eval(lhs)?;
         let rhs = self.eval(rhs)?;
 
@@ -223,7 +225,7 @@ impl<'a> SExprMachine<'a> {
 
         Ok(SExprVal::Float32(lhs * rhs))
     }
-    fn div(&self, lhs: &Op, rhs: &Op) -> Result<SExprVal> {
+    fn div(&mut self, lhs: &Op, rhs: &Op) -> Result<SExprVal> {
         let lhs = self.eval(lhs)?;
         let rhs = self.eval(rhs)?;
 
@@ -242,9 +244,12 @@ impl<'a> SExprMachine<'a> {
         }
         Err(Error::SExprGlobalNotFound)
     }
-    //fn store_var(&mut self, var, val) {
-    //}
-    fn min(&self, lhs: &Op, rhs: &Op) -> Result<SExprVal> {
+    fn store_var(&mut self, var: &str, val: &Op) -> Result<SExprVal> {
+        let val = self.eval(val)?;
+        self.globals.push((var.to_string(), val));
+        Ok(SExprVal::Null)
+    }
+    fn min(&mut self, lhs: &Op, rhs: &Op) -> Result<SExprVal> {
         let lhs = self.eval(lhs)?;
         let rhs = self.eval(rhs)?;
 
@@ -261,7 +266,7 @@ impl<'a> SExprMachine<'a> {
 
         Ok(SExprVal::Float32(min))
     }
-    fn max(&self, lhs: &Op, rhs: &Op) -> Result<SExprVal> {
+    fn max(&mut self, lhs: &Op, rhs: &Op) -> Result<SExprVal> {
         let lhs = self.eval(lhs)?;
         let rhs = self.eval(rhs)?;
 
@@ -278,7 +283,7 @@ impl<'a> SExprMachine<'a> {
 
         Ok(SExprVal::Float32(max))
     }
-    fn is_equal(&self, lhs: &Op, rhs: &Op) -> Result<SExprVal> {
+    fn is_equal(&mut self, lhs: &Op, rhs: &Op) -> Result<SExprVal> {
         let lhs = self.eval(lhs)?;
         let rhs = self.eval(rhs)?;
 
@@ -292,7 +297,7 @@ impl<'a> SExprMachine<'a> {
 
         Ok(SExprVal::Bool(is_equal))
     }
-    fn less_than(&self, lhs: &Op, rhs: &Op) -> Result<SExprVal> {
+    fn less_than(&mut self, lhs: &Op, rhs: &Op) -> Result<SExprVal> {
         let lhs = self.eval(lhs)?;
         let rhs = self.eval(rhs)?;
 
@@ -305,12 +310,24 @@ impl<'a> SExprMachine<'a> {
 
         Ok(SExprVal::Bool(lhs < rhs))
     }
-    fn float32_to_uint32(&self, val: &Op) -> Result<SExprVal> {
+    fn float32_to_uint32(&mut self, val: &Op) -> Result<SExprVal> {
         let val = self.eval(val)?;
         if val.is_u32() {
             return Ok(SExprVal::Uint32(val.as_u32()?))
         }
         Ok(SExprVal::Uint32(val.as_f32()? as u32))
+    }
+    fn if_else(&mut self, cond: &Op, if_val: &SExprCode, else_val: &SExprCode) -> Result<SExprVal> {
+        let cond = self.eval(cond)?;
+        let cond = cond.as_bool()?;
+
+        if cond {
+            let mut machine = SExprMachine { globals: self.globals.clone(), stmts: if_val };
+            machine.call()
+        } else {
+            let mut machine = SExprMachine { globals: self.globals.clone(), stmts: else_val };
+            machine.call()
+        }
     }
 }
 
@@ -361,7 +378,11 @@ impl Encodable for Op {
                 len += 9u8.encode(s)?;
                 len += var.encode(s)?;
             }
-            // StoreVar
+            Self::StoreVar((var, val)) => {
+                len += 10u8.encode(s)?;
+                len += var.encode(s)?;
+                len += val.encode(s)?;
+            }
             Self::Min((lhs, rhs)) => {
                 len += 11u8.encode(s)?;
                 len += lhs.encode(s)?;
@@ -386,6 +407,12 @@ impl Encodable for Op {
                 len += 15u8.encode(s)?;
                 len += val.encode(s)?;
             }
+            Self::IfElse((cond, if_val, else_val)) => {
+                len += 16u8.encode(s)?;
+                len += cond.encode(s)?;
+                len += if_val.encode(s)?;
+                len += else_val.encode(s)?;
+            }
         }
         Ok(len)
     }
@@ -405,12 +432,17 @@ impl Decodable for Op {
             7 => Self::ConstFloat32(d.read_f32()?),
             8 => Self::ConstStr(String::decode(d)?),
             9 => Self::LoadVar(String::decode(d)?),
-            // StoreVar
+            10 => Self::StoreVar((String::decode(d)?, Box::new(Self::decode(d)?))),
             11 => Self::Min((Box::new(Self::decode(d)?), Box::new(Self::decode(d)?))),
             12 => Self::Max((Box::new(Self::decode(d)?), Box::new(Self::decode(d)?))),
             13 => Self::IsEqual((Box::new(Self::decode(d)?), Box::new(Self::decode(d)?))),
             14 => Self::LessThan((Box::new(Self::decode(d)?), Box::new(Self::decode(d)?))),
             15 => Self::Float32ToUint32(Box::new(Self::decode(d)?)),
+            16 => Self::IfElse((
+                Box::new(Self::decode(d)?),
+                Decodable::decode(d)?,
+                Decodable::decode(d)?,
+            )),
             _ => return Err(std::io::Error::new(std::io::ErrorKind::Other, "Invalid Op type")),
         };
         Ok(self_)
@@ -424,7 +456,7 @@ mod tests {
 
     #[test]
     fn seval() {
-        let machine = SExprMachine {
+        let mut machine = SExprMachine {
             globals: vec![
                 ("sw".to_string(), SExprVal::Uint32(110u32)),
                 ("sh".to_string(), SExprVal::Uint32(4u32)),
@@ -453,5 +485,22 @@ mod tests {
         let code_s = serialize(&code);
         let code2 = deserialize::<Op>(&code_s).unwrap();
         assert_eq!(code, code2);
+    }
+
+    #[test]
+    fn if_store() {
+        let code = vec![
+            Op::StoreVar((
+                "s".to_string(),
+                Box::new(Op::IfElse((
+                    Box::new(Op::ConstBool(false)),
+                    vec![Op::ConstUint32(4)],
+                    vec![Op::ConstUint32(110)],
+                ))),
+            )),
+            Op::LoadVar("s".to_string()),
+        ];
+        let mut machine = SExprMachine { globals: vec![], stmts: &code };
+        assert_eq!(machine.call().unwrap(), SExprVal::Uint32(110));
     }
 }

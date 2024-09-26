@@ -61,7 +61,7 @@ impl VectorShape {
         for shape_vert in &self.verts {
             let mut pos = [0.; 2];
             for (i, shape_X) in [(0, &shape_vert.x), (1, &shape_vert.y)] {
-                let machine = SExprMachine {
+                let mut machine = SExprMachine {
                     globals: vec![
                         ("w".to_string(), SExprVal::Float32(w)),
                         ("h".to_string(), SExprVal::Float32(h)),

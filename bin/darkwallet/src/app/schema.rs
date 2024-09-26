@@ -20,7 +20,7 @@ use sled_overlay::sled;
 
 use crate::{
     error::Error,
-    expr::{self, Compiler},
+    expr::{self, Compiler, Op},
     gfx::{GraphicsEventPublisherPtr, Rectangle, RenderApiPtr, Vertex},
     mesh::{Color, MeshBuilder},
     prop::{
@@ -486,11 +486,42 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     prop.set_f32(Role::App, 1, 0.).unwrap();
     prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
     prop.set_expr(Role::App, 3, expr::load_var("h")).unwrap();
+
+    let R = 1.78;
+    let code = vec![Op::StoreVar((
+        "r".to_string(),
+        Box::new(Op::Div((
+            Box::new(Op::LoadVar("w".to_string())),
+            Box::new(Op::LoadVar("h".to_string())),
+        ))),
+    ))];
+
+    let mut u_code = code.clone();
+    u_code.push(Op::IfElse((
+        Box::new(Op::LessThan((
+            Box::new(Op::LoadVar("r".to_string())),
+            Box::new(Op::ConstFloat32(R)),
+        ))),
+        vec![Op::Div((Box::new(Op::LoadVar("r".to_string())), Box::new(Op::ConstFloat32(R))))],
+        vec![Op::ConstFloat32(1.)],
+    )));
+
+    let mut v_code = code.clone();
+    v_code.push(Op::IfElse((
+        Box::new(Op::LessThan((
+            Box::new(Op::LoadVar("r".to_string())),
+            Box::new(Op::ConstFloat32(R)),
+        ))),
+        vec![Op::ConstFloat32(1.)],
+        vec![Op::Div((Box::new(Op::ConstFloat32(R)), Box::new(Op::LoadVar("r".to_string()))))],
+    )));
+
     let prop = node.get_property("uv").unwrap();
     prop.set_f32(Role::App, 0, 0.).unwrap();
     prop.set_f32(Role::App, 1, 0.).unwrap();
-    prop.set_f32(Role::App, 2, 1.).unwrap();
-    prop.set_f32(Role::App, 3, 1.).unwrap();
+    prop.set_expr(Role::App, 2, u_code).unwrap();
+    prop.set_expr(Role::App, 3, v_code).unwrap();
+
     node.set_property_str(Role::App, "path", BG_PATH).unwrap();
     node.set_property_u32(Role::App, "z_index", 0).unwrap();
     let node = node.setup(|me| Image::new(me, app.render_api.clone(), app.ex.clone())).await;
