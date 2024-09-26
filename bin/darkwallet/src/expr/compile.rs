@@ -24,10 +24,6 @@ use std::collections::HashMap;
 
 use super::{Op, SExprCode};
 
-fn remove_whitespace(s: &str) -> String {
-    s.chars().filter(|c| !c.is_whitespace()).collect()
-}
-
 #[derive(Debug, Clone)]
 enum Token {
     LoadVar(String),
@@ -39,9 +35,26 @@ enum Token {
     RightParen,
     ConstFloat32(f32),
     NestedExpr(Box<Vec<Token>>),
+    SubExpr(Box<Vec<Token>>),
+    If,
+    Else,
+    LeftBrace,
+    RightBrace,
+    LessThan,
+    IfElse((Box<Vec<Token>>, Box<Vec<Token>>, Box<Vec<Token>>)),
+    LessThanCompare((Box<Vec<Token>>, Box<Vec<Token>>)),
+    Equals,
+    SetValue((String, Box<Vec<Token>>)),
 }
 
 impl Token {
+    fn is_sub_expr(&self) -> bool {
+        match self {
+            Self::SubExpr(_) => true,
+            _ => false,
+        }
+    }
+
     fn flatten(self) -> Vec<Self> {
         match self {
             Self::NestedExpr(tokens) => {
@@ -86,7 +99,6 @@ impl Compiler {
     }
 
     fn compile_line(&self, stmt: &str) -> Result<Op> {
-        let stmt = remove_whitespace(stmt);
         let tokens = self.tokenize(&stmt);
         //println!("{tokens:#?}");
         let tokens = to_rpn(tokens)?;
@@ -99,6 +111,9 @@ impl Compiler {
         let mut current_token = String::new();
         for chr in stmt.chars() {
             match chr {
+                ' ' | '\t' | '\n' => {
+                    self.clear_accum(&mut current_token, &mut tokens);
+                }
                 '+' => {
                     self.clear_accum(&mut current_token, &mut tokens);
                     tokens.push(Token::Add);
@@ -123,6 +138,22 @@ impl Compiler {
                     self.clear_accum(&mut current_token, &mut tokens);
                     tokens.push(Token::RightParen);
                 }
+                '{' => {
+                    self.clear_accum(&mut current_token, &mut tokens);
+                    tokens.push(Token::LeftBrace);
+                }
+                '}' => {
+                    self.clear_accum(&mut current_token, &mut tokens);
+                    tokens.push(Token::RightBrace);
+                }
+                '<' => {
+                    self.clear_accum(&mut current_token, &mut tokens);
+                    tokens.push(Token::LessThan);
+                }
+                '=' => {
+                    self.clear_accum(&mut current_token, &mut tokens);
+                    tokens.push(Token::Equals);
+                }
                 _ => current_token.push(chr),
             }
         }
@@ -141,6 +172,18 @@ impl Compiler {
             return
         }
 
+        match prev_token.as_str() {
+            "if" => {
+                tokens.push(Token::If);
+                return
+            }
+            "else" => {
+                tokens.push(Token::Else);
+                return
+            }
+            _ => {}
+        }
+
         // Number or var?
         match prev_token.parse::<f32>() {
             Ok(v) => tokens.push(Token::ConstFloat32(v)),
@@ -155,7 +198,50 @@ fn to_rpn(tokens: Vec<Token>) -> Result<Vec<Token>> {
     let mut out = Vec::new();
     let mut stack = Vec::new();
 
+    // equals
+    let mut iter = tokens.into_iter();
+    let mut var = String::new();
+    let mut lhs = vec![];
+    let mut rhs = vec![];
+    let mut comparison = 0;
+    // 0: none
+    // 1: =
+    while let Some(token) = iter.next() {
+        match token {
+            Token::Equals => {
+                if comparison != 0 {
+                    return Err(Error::UnexpectedToken)
+                }
+                comparison = 1;
+                if lhs.len() != 1 {
+                    return Err(Error::UnexpectedToken)
+                }
+                let lhs = std::mem::take(&mut lhs);
+                match lhs.into_iter().next().unwrap() {
+                    Token::LoadVar(v) => var = v,
+                    _ => return Err(Error::UnexpectedToken),
+                }
+            }
+            token => {
+                if comparison == 0 {
+                    lhs.push(token);
+                } else {
+                    rhs.push(token);
+                }
+            }
+        }
+    }
+    if comparison == 1 {
+        let stack = std::mem::take(&mut rhs);
+        let rpn = to_rpn(stack)?;
+        out = vec![Token::SetValue((var, Box::new(rpn)))];
+    } else {
+        assert!(rhs.is_empty());
+        out = lhs;
+    }
+
     // Parens
+    let tokens = std::mem::take(&mut out);
     let mut paren = 0;
     for token in tokens {
         match token {
@@ -196,10 +282,140 @@ fn to_rpn(tokens: Vec<Token>) -> Result<Vec<Token>> {
     }
     out.append(&mut stack);
 
-    // */
-    let tokens = out.clone();
+    // Braces
+    let tokens = std::mem::take(&mut out);
     assert!(stack.is_empty());
-    out.clear();
+    let mut paren = 0;
+    for token in tokens {
+        match token {
+            Token::LeftBrace => {
+                // Is this the first opening paren for this subexpr?
+                if paren > 0 {
+                    stack.push(token);
+                }
+                paren += 1;
+                continue
+            }
+            Token::RightBrace => {
+                paren -= 1;
+
+                // Whoops non-matching number of parens!
+                if paren < 0 {
+                    return Err(Error::UnexpectedToken)
+                }
+
+                // Did we finally reach the closing paren for this subexpr?
+                if paren == 0 {
+                    let stack = std::mem::take(&mut stack);
+                    let mut rpn = to_rpn(stack)?;
+                    out.push(Token::SubExpr(Box::new(rpn)));
+                } else {
+                    stack.push(token);
+                }
+
+                continue
+            }
+            _ => {}
+        }
+        if paren > 0 {
+            stack.push(token);
+        } else {
+            out.push(token);
+        }
+    }
+    out.append(&mut stack);
+
+    let tokens = std::mem::take(&mut out);
+    assert!(stack.is_empty());
+    let mut iter = tokens.into_iter();
+    'mainloop: while let Some(token) = iter.next() {
+        match token {
+            Token::If => {
+                let mut section = 0;
+                let mut cond_expr = vec![];
+                let mut if_expr = vec![];
+                let mut else_expr = vec![];
+                while let Some(token) = iter.next() {
+                    match token {
+                        Token::SubExpr(tokens) => {
+                            if section == 0 {
+                                let cexpr = std::mem::take(&mut cond_expr);
+                                cond_expr = to_rpn(cexpr)?;
+
+                                if_expr = *tokens;
+                            } else if section == 1 {
+                                else_expr = *tokens;
+                            } else {
+                                return Err(Error::UnexpectedToken)
+                            }
+
+                            section += 1;
+                        }
+                        Token::Else => {
+                            if section != 1 {
+                                return Err(Error::UnexpectedToken)
+                            }
+                        }
+                        token => {
+                            if section != 0 {
+                                out.push(Token::IfElse((
+                                    Box::new(cond_expr),
+                                    Box::new(if_expr),
+                                    Box::new(else_expr),
+                                )));
+                                out.push(token);
+                                continue 'mainloop
+                            }
+                            cond_expr.push(token);
+                        }
+                    }
+                }
+                // We reached the end
+                out.push(Token::IfElse((
+                    Box::new(cond_expr),
+                    Box::new(if_expr),
+                    Box::new(else_expr),
+                )));
+            }
+            token => out.push(token),
+        }
+    }
+
+    // comparisons <>=
+    let tokens = std::mem::take(&mut out);
+    let mut iter = tokens.into_iter();
+    let mut lhs = vec![];
+    let mut rhs = vec![];
+    let mut comparison = 0;
+    // 0: none
+    // 1: <
+    while let Some(token) = iter.next() {
+        match token {
+            Token::LessThan => {
+                if comparison != 0 {
+                    return Err(Error::UnexpectedToken)
+                }
+                comparison = 1;
+            }
+            token => {
+                if comparison == 0 {
+                    lhs.push(token);
+                } else {
+                    rhs.push(token);
+                }
+            }
+        }
+    }
+    if comparison == 1 {
+        out = vec![Token::LessThanCompare((Box::new(lhs), Box::new(rhs)))];
+    } else {
+        assert!(rhs.is_empty());
+        out = lhs;
+    }
+
+    // */
+    let tokens = std::mem::take(&mut out);
+    assert!(stack.is_empty());
     let mut is_op = false;
     for token in tokens {
         match token {
@@ -236,8 +452,7 @@ fn to_rpn(tokens: Vec<Token>) -> Result<Vec<Token>> {
     }
 
     // +-
-    let tokens = out.clone();
-    out.clear();
+    let tokens = std::mem::take(&mut out);
     let mut is_op = false;
     for token in tokens {
         match token {
@@ -301,6 +516,21 @@ fn convert<I: Iterator<Item = Token>>(iter: &mut I) -> Result<Op> {
             let lhs = convert(iter)?;
             let rhs = convert(iter)?;
             Op::Div((Box::new(lhs), Box::new(rhs)))
+        }
+        Token::IfElse((cond, if_val, else_val)) => {
+            let cond = convert(&mut cond.into_iter())?;
+            let if_val = convert(&mut if_val.into_iter())?;
+            let else_val = convert(&mut else_val.into_iter())?;
+            Op::IfElse((Box::new(cond), vec![if_val], vec![else_val]))
+        }
+        Token::LessThanCompare((lhs, rhs)) => {
+            let lhs = convert(&mut lhs.into_iter())?;
+            let rhs = convert(&mut rhs.into_iter())?;
+            Op::LessThan((Box::new(lhs), Box::new(rhs)))
+        }
+        Token::SetValue((var, expr)) => {
+            let expr = convert(&mut expr.into_iter())?;
+            Op::StoreVar((var, Box::new(expr)))
         }
         _ => return Err(Error::UnexpectedToken),
     };
@@ -371,6 +601,54 @@ mod tests {
 
         let code = compiler.compile("HELLO").unwrap();
         let code2 = vec![Op::ConstFloat32(110.)];
+        assert_eq!(code, code2);
+    }
+
+    #[test]
+    fn if_else() {
+        let mut compiler = Compiler::new();
+        let code = compiler
+            .compile(
+                "
+            if h < 4 {
+                h - 1
+            } else {
+                2 * h + 5
+            }
+        ",
+            )
+            .unwrap();
+        let code2 = vec![Op::IfElse((
+            Box::new(Op::LessThan((
+                Box::new(Op::LoadVar("h".to_string())),
+                Box::new(Op::ConstFloat32(4.)),
+            ))),
+            vec![Op::Sub((Box::new(Op::LoadVar("h".to_string())), Box::new(Op::ConstFloat32(1.))))],
+            vec![Op::Add((
+                Box::new(Op::Mul((
+                    Box::new(Op::ConstFloat32(2.)),
+                    Box::new(Op::LoadVar("h".to_string())),
+                ))),
+                Box::new(Op::ConstFloat32(5.)),
+            ))],
+        ))];
+        assert_eq!(code, code2);
+    }
+
+    #[test]
+    fn set_val() {
+        let mut compiler = Compiler::new();
+        let code = compiler
+            .compile(
+                "
+            r = 10 / 4
+        ",
+            )
+            .unwrap();
+        let code2 = vec![Op::StoreVar((
+            "r".to_string(),
+            Box::new(Op::Div((Box::new(Op::ConstFloat32(10.)), Box::new(Op::ConstFloat32(4.))))),
+        ))];
         assert_eq!(code, code2);
     }
 }

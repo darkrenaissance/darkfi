@@ -487,40 +487,33 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
     prop.set_expr(Role::App, 3, expr::load_var("h")).unwrap();
 
+    // Image aspect ratio
     let R = 1.78;
-    let code = vec![Op::StoreVar((
-        "r".to_string(),
-        Box::new(Op::Div((
-            Box::new(Op::LoadVar("w".to_string())),
-            Box::new(Op::LoadVar("h".to_string())),
-        ))),
-    ))];
-
-    let mut u_code = code.clone();
-    u_code.push(Op::IfElse((
-        Box::new(Op::LessThan((
-            Box::new(Op::LoadVar("r".to_string())),
-            Box::new(Op::ConstFloat32(R)),
-        ))),
-        vec![Op::Div((Box::new(Op::LoadVar("r".to_string())), Box::new(Op::ConstFloat32(R))))],
-        vec![Op::ConstFloat32(1.)],
-    )));
-
-    let mut v_code = code.clone();
-    v_code.push(Op::IfElse((
-        Box::new(Op::LessThan((
-            Box::new(Op::LoadVar("r".to_string())),
-            Box::new(Op::ConstFloat32(R)),
-        ))),
-        vec![Op::ConstFloat32(1.)],
-        vec![Op::Div((Box::new(Op::ConstFloat32(R)), Box::new(Op::LoadVar("r".to_string()))))],
-    )));
+    cc.add_const_f32("R", R);
 
     let prop = node.get_property("uv").unwrap();
     prop.set_f32(Role::App, 0, 0.).unwrap();
     prop.set_f32(Role::App, 1, 0.).unwrap();
-    prop.set_expr(Role::App, 2, u_code).unwrap();
-    prop.set_expr(Role::App, 3, v_code).unwrap();
+    #[rustfmt::skip]
+    let code = cc.compile("
+        r = w / h;
+        if r < R {
+            r / R
+        } else {
+            1
+        }
+    ").unwrap();
+    prop.set_expr(Role::App, 2, code).unwrap();
+    #[rustfmt::skip]
+    let code = cc.compile("
+        r = w / h;
+        if r < R {
+            1
+        } else {
+            R / r
+        }
+    ").unwrap();
+    prop.set_expr(Role::App, 3, code).unwrap();
 
     node.set_property_str(Role::App, "path", BG_PATH).unwrap();
     node.set_property_u32(Role::App, "z_index", 0).unwrap();
