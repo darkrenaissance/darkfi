@@ -7,7 +7,9 @@ community members.
 
 Schedule for upcoming meetings: 
 
-* 2nd of October: [Political Theology: Four Chapters on the Concept of Sovereignty ](https://anarch.cc/uploads/carl-schmitt/political-theology.pdf) Chapter 1 and Chapter 4, by Carl Schmitt
+* 2nd of October: 
+[Political Theology: Four Chapters on the Concept of Sovereignty ](https://anarch.cc/uploads/carl-schmitt/political-theology.pdf)
+Chapter 1 and Chapter 4, by Carl Schmitt
 * 16th of October
 * 30th of October
 * 13th of November
