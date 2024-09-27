@@ -38,6 +38,7 @@
 //#![deny(unused_imports)]
 
 use async_lock::{Mutex as AsyncMutex, RwLock as AsyncRwLock};
+use file_rotate::{compression::Compression, suffix::AppendCount, ContentLimit, FileRotate};
 use std::sync::{mpsc, Arc};
 
 #[macro_use]
@@ -52,6 +53,7 @@ mod darkirc2;
 mod error;
 mod expr;
 mod gfx;
+mod logger;
 mod mesh;
 mod net;
 //mod plugin;
@@ -83,6 +85,8 @@ fn main() {
     // Exit the application on panic right away
     std::panic::set_hook(Box::new(panic_hook));
 
+    logger::setup_logging();
+
     #[cfg(target_os = "android")]
     {
         // Workaround for this bug
@@ -91,28 +95,10 @@ fn main() {
             std::env::set_var("HOME", "/data/data/darkfi.darkwallet/");
         }
 
-        android_logger::init_once(
-            android_logger::Config::default().with_max_level(LevelFilter::Debug).with_tag("darkfi"),
-        );
-
         let paths = std::fs::read_dir("/data/data/darkfi.darkwallet/").unwrap();
         for path in paths {
             debug!("{}", path.unwrap().path().display())
         }
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        // For ANSI colors in the terminal
-        colored::control::set_override(true);
-
-        let term_logger = simplelog::TermLogger::new(
-            simplelog::LevelFilter::Debug,
-            simplelog::Config::default(),
-            simplelog::TerminalMode::Mixed,
-            simplelog::ColorChoice::Auto,
-        );
-        simplelog::CombinedLogger::init(vec![term_logger]).expect("logger");
     }
 
     info!("Target OS: {}", build_info::TARGET_OS);

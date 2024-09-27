@@ -45,6 +45,9 @@ chrono = "0.4.38"
 async-gen = "0.2"
 async-trait = "0.1.82"
 blake3 = "1.5.4"
+simplelog = "0.12.1"
+# For log files
+file-rotate = "0.7.6"
 
 [patch.crates-io]
 freetype-rs = { git = "https://github.com/narodnik/freetype-rs" }
@@ -60,9 +63,6 @@ android_logger = "0.13.3"
 # Required by Arti: tor-dirmgr
 #rusqlite = {version = "0.31.0", features = ["bundled"]}
 tor-dirmgr = {version="0.21.0", features=["static"]}
-
-[target.'cfg(target_os = "linux")'.dependencies]
-simplelog = "0.12.1"
 
 [package.metadata.android.activity_attributes]
 "android:exported" = "true"

@@ -290,7 +290,12 @@ impl ChatView {
             on_modify.when_change(rect.prop(), redraw);
             on_modify.when_change(debug.prop(), redraw);
 
-            let mut tasks = vec![insert_line_method_task, insert_unconf_line_method_task, motion_task, bgload_task];
+            let mut tasks = vec![
+                insert_line_method_task,
+                insert_unconf_line_method_task,
+                motion_task,
+                bgload_task,
+            ];
             tasks.append(&mut on_modify.tasks);
 
             Self {
@@ -531,9 +536,7 @@ impl ChatView {
 
         // Add message to page
         let mut msgbuf = self.msgbuf.lock().await;
-        let Some(privmsg) = msgbuf.insert_privmsg(timest, msg_id, nick, text).await else {
-            return
-        };
+        let Some(privmsg) = msgbuf.insert_privmsg(timest, msg_id, nick, text).await else { return };
         privmsg.confirmed = false;
         self.redraw_cached(&mut msgbuf).await;
         self.bgload_cv.notify();

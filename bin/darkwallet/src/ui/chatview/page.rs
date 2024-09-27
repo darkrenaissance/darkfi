@@ -261,7 +261,13 @@ impl PrivMessage {
 
             let color = match section {
                 0 => nick_color,
-                _ => if self.confirmed { text_color } else { UNCONF_COLOR },
+                _ => {
+                    if self.confirmed {
+                        text_color
+                    } else {
+                        UNCONF_COLOR
+                    }
+                }
             };
 
             //if debug_render {
@@ -585,13 +591,13 @@ impl Message {
     fn get_privmsg(&self) -> Option<&PrivMessage> {
         match self {
             Message::Priv(msg) => Some(msg),
-            _ => None
+            _ => None,
         }
     }
     fn get_privmsg_mut(&mut self) -> Option<&mut PrivMessage> {
         match self {
             Message::Priv(msg) => Some(msg),
-            _ => None
+            _ => None,
         }
     }
 }
@@ -783,9 +789,7 @@ impl MessageBuffer {
         None
     }
     pub fn mark_confirmed(&mut self, msg_id: &MessageId) -> bool {
-        let Some(privmsg) = self.find_privmsg_mut(msg_id) else {
-            return false
-        };
+        let Some(privmsg) = self.find_privmsg_mut(msg_id) else { return false };
 
         assert_eq!(privmsg.confirmed, false);
         privmsg.confirmed = true;
