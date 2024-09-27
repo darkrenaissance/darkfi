@@ -11,6 +11,12 @@ port = 23330
 type = "NORMAL"
 
 #[[nodes]]
+#name = "evgrd"
+#host = "localhost"
+#port = 26690
+#type = "NORMAL"
+
+#[[nodes]]
 #name = "lilith"
 #host = "localhost"
 #port = 18927
