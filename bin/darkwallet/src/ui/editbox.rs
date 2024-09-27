@@ -367,8 +367,8 @@ impl EditBox {
         let cursor_pos = self.cursor_pos.get() as usize;
         let cursor_color = self.cursor_color.get();
         let debug = self.debug.get();
-        debug!(target: "ui::editbox", "Rendering text '{text}' clip={clip:?}");
-        debug!(target: "ui::editbox", "    cursor_pos={cursor_pos}, is_focused={is_focused}");
+        //debug!(target: "ui::editbox", "Rendering text '{text}' clip={clip:?}");
+        //debug!(target: "ui::editbox", "    cursor_pos={cursor_pos}, is_focused={is_focused}");
 
         let glyphs = self.glyphs.lock().unwrap().clone();
         let atlas = text::make_texture_atlas(&self.render_api, &glyphs);
@@ -1099,7 +1099,7 @@ impl EditBox {
             // We're finished with these so clean up.
             if let Some(old) = text_mesh {
                 if let Some(texture) = old.texture {
-                    debug!(target: "ui::editbox", "{:?}: freeing old texture", self.node());
+                    //debug!(target: "ui::editbox", "{:?}: freeing old texture", self.node());
                     freed.textures.push(texture);
                 }
                 freed.buffers.push(old.vertex_buffer);
@@ -1114,7 +1114,7 @@ impl EditBox {
         // We're finished with these so clean up.
         if let Some(old) = old_text_mesh {
             if let Some(texture) = old.texture {
-                debug!(target: "ui::editbox", "{:?}: freeing old texture", self.node());
+                //debug!(target: "ui::editbox", "{:?}: freeing old texture", self.node());
                 freed.textures.push(texture);
             }
             freed.buffers.push(old.vertex_buffer);
@@ -1197,7 +1197,7 @@ impl UIObject for EditBox {
             let mut repeater = self.key_repeat.lock().unwrap();
             repeater.key_down(PressedKey::Char(key), repeat)
         };
-        debug!(target: "ui::editbox", "Key {:?} has {} actions", key, actions);
+        //debug!(target: "ui::editbox", "Key {:?} has {} actions", key, actions);
         for _ in 0..actions {
             self.insert_char(key).await;
         }
@@ -1220,9 +1220,9 @@ impl UIObject for EditBox {
             repeater.key_down(PressedKey::Key(key), repeat)
         };
         // Suppress noisy message
-        if actions > 0 {
+        /*if actions > 0 {
             debug!(target: "ui::editbox", "Key {:?} has {} actions", key, actions);
-        }
+        }*/
         for _ in 0..actions {
             self.handle_key(&key, &mods).await;
         }

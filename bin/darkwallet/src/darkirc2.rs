@@ -65,7 +65,7 @@ const CHANNEL: &str = "#random";
 
 /// Due to drift between different machine's clocks, if the message timestamp is recent
 /// then we will just correct it to the current time so messages appear sequential in the UI.
-const RECENT_TIME_DIST: u64 = 10;
+const RECENT_TIME_DIST: u64 = 10_000;
 
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct Privmsg {
@@ -324,11 +324,11 @@ impl LocalDarkIRC {
             }
         };
 
-        debug!(target: "darkirc", "privmsg: {privmsg:?}");
         let mut timest = ev.timestamp;
         if timest < 6047051717 {
             timest *= 1000;
         }
+        debug!(target: "darkirc", "Recv privmsg: <{timest}> {privmsg:?}");
 
         if privmsg.channel != CHANNEL {
             return Ok(())
@@ -337,6 +337,7 @@ impl LocalDarkIRC {
         // This is a hack to make messages appear sequentially in the UI
         let now_timest = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
         if timest.abs_diff(now_timest) < RECENT_TIME_DIST {
+            debug!(target: "darkirc", "Applied timestamp correction: <{timest}> => <{now_timest}>");
             timest = now_timest;
         }
 
@@ -359,9 +360,9 @@ impl LocalDarkIRC {
         self.chatview_scroll.set(0.);
 
         // Send text to channel
-        debug!(target: "darkirc", "Sending privmsg: {text}");
-        let msg = Privmsg::new(CHANNEL.to_string(), "anon".to_string(), text);
         let timestamp = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
+        debug!(target: "darkirc", "Sending privmsg: <{timestamp}> {text}");
+        let msg = Privmsg::new(CHANNEL.to_string(), "anon".to_string(), text);
 
         self.send_sender.send((timestamp, msg)).await.unwrap();
     }
