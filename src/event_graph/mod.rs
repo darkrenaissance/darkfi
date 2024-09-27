@@ -509,7 +509,7 @@ impl EventGraph {
 
         loop {
             // Find the next rotation timestamp:
-            let next_rotation = next_rotation_timestamp(INITIAL_GENESIS, days_rotation);
+            let next_rotation = next_rotation_timestamp(INITIAL_GENESIS / 1000, days_rotation);
 
             // Prepare the new genesis event
             let current_genesis = Event {
