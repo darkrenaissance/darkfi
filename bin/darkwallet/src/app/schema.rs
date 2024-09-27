@@ -374,7 +374,7 @@ pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
     // ChatView
     let node = create_chatview("chatty");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(Role::App, 0, 0.).unwrap();
+    prop.set_f32(Role::App, 0, 10.).unwrap();
     let code = cc.compile("h/2").unwrap();
     prop.set_expr(Role::App, 1, code).unwrap();
     prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
@@ -488,7 +488,8 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     prop.set_expr(Role::App, 3, expr::load_var("h")).unwrap();
 
     // Image aspect ratio
-    let R = 1.78;
+    //let R = 1.78;
+    let R = 1.555;
     cc.add_const_f32("R", R);
 
     let prop = node.get_property("uv").unwrap();
@@ -529,7 +530,7 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     prop.set_expr(Role::App, 3, expr::load_var("h")).unwrap();
     node.set_property_u32(Role::App, "z_index", 1).unwrap();
 
-    let c = if LIGHTMODE { 1. } else { 0.05 };
+    let c = if LIGHTMODE { 1. } else { 0. };
     // Setup the pimpl
     let node_id = node.id;
     let mut shape = VectorShape::new();
@@ -538,7 +539,7 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
         expr::const_f32(0.),
         expr::load_var("w"),
         expr::load_var("h"),
-        [c, c, c, 0.4],
+        [c, c, c, 0.3],
     );
     let node =
         node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
@@ -608,9 +609,10 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     // ChatView
     let node = create_chatview("chatty");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(Role::App, 0, 0.).unwrap();
+    prop.set_f32(Role::App, 0, 10.).unwrap();
     prop.set_f32(Role::App, 1, EDITCHAT_HEIGHT).unwrap();
-    prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
+    let code = cc.compile("w - 30").unwrap();
+    prop.set_expr(Role::App, 2, code).unwrap();
     let code = cc.compile("h - 2 * EDITCHAT_HEIGHT").unwrap();
     prop.set_expr(Role::App, 3, code).unwrap();
     node.set_property_f32(Role::App, "font_size", FONTSIZE).unwrap();
