@@ -345,14 +345,15 @@ impl LocalDarkIRC {
         }
 
         // This is a hack to make messages appear sequentially in the UI
+        let mut adj_timest = timest;
         let now_timest = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
         if timest.abs_diff(now_timest) < RECENT_TIME_DIST {
             debug!(target: "darkirc", "Applied timestamp correction: <{timest}> => <{now_timest}>");
-            timest = now_timest;
+            adj_timest = now_timest;
         }
 
         let mut arg_data = vec![];
-        timest.encode_async(&mut arg_data).await.unwrap();
+        adj_timest.encode_async(&mut arg_data).await.unwrap();
         privmsg.msg_id(timest).encode_async(&mut arg_data).await.unwrap();
         privmsg.nick.encode_async(&mut arg_data).await.unwrap();
         privmsg.msg.encode_async(&mut arg_data).await.unwrap();
