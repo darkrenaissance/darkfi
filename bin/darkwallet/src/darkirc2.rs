@@ -52,6 +52,7 @@ use url::Url;
 use crate::{
     prop::{PropertyBool, PropertyFloat32, PropertyStr, Role},
     scene::{SceneNodePtr, Slot},
+    ui::chatview::MessageId,
 };
 
 #[cfg(target_os = "android")]
@@ -77,6 +78,15 @@ pub struct Privmsg {
 impl Privmsg {
     pub fn new(channel: String, nick: String, msg: String) -> Self {
         Self { channel, nick, msg }
+    }
+
+    pub fn msg_id(&self, timest: u64) -> MessageId {
+        let mut hasher = blake3::Hasher::new();
+        timest.encode(&mut hasher).unwrap();
+        self.channel.encode(&mut hasher).unwrap();
+        self.nick.encode(&mut hasher).unwrap();
+        self.msg.encode(&mut hasher).unwrap();
+        MessageId(hasher.finalize().into())
     }
 }
 
@@ -303,19 +313,6 @@ impl LocalDarkIRC {
 
         let ev = event_graph::Event::decode_async(stream).await?;
 
-        let genesis_timestamp = self.evgr.current_genesis.read().await.clone().timestamp;
-        let ev_id = ev.id();
-        if self.evgr.dag.contains_key(ev_id.as_bytes()).unwrap() ||
-            !ev.validate(&self.evgr.dag, genesis_timestamp, self.evgr.days_rotation, None)
-                .await?
-        {
-            error!(target: "darkirc", "Event is invalid! {ev:?}");
-            return Ok(())
-        }
-
-        debug!(target: "darkirc", "got {ev:?}");
-        self.evgr.dag_insert(&[ev.clone()]).await.unwrap();
-
         let privmsg: Privmsg = match deserialize_async_partial(ev.content()).await {
             Ok((v, _)) => v,
             Err(e) => {
@@ -330,7 +327,20 @@ impl LocalDarkIRC {
         }
         debug!(target: "darkirc", "Recv privmsg: <{timest}> {privmsg:?}");
 
+        let genesis_timestamp = self.evgr.current_genesis.read().await.clone().timestamp;
+        let ev_id = ev.id();
+        if self.evgr.dag.contains_key(ev_id.as_bytes()).unwrap() ||
+            !ev.validate(&self.evgr.dag, genesis_timestamp, self.evgr.days_rotation, None)
+                .await?
+        {
+            error!(target: "darkirc", "Event is invalid! {ev:?}");
+            return Ok(())
+        }
+
+        self.evgr.dag_insert(&[ev.clone()]).await.unwrap();
+
         if privmsg.channel != CHANNEL {
+            //debug!(target: "darkirc", "{} != {CHANNEL}", privmsg.channel);
             return Ok(())
         }
 
@@ -343,7 +353,7 @@ impl LocalDarkIRC {
 
         let mut arg_data = vec![];
         timest.encode_async(&mut arg_data).await.unwrap();
-        ev.id().as_bytes().encode_async(&mut arg_data).await.unwrap();
+        privmsg.msg_id(timest).encode_async(&mut arg_data).await.unwrap();
         privmsg.nick.encode_async(&mut arg_data).await.unwrap();
         privmsg.msg.encode_async(&mut arg_data).await.unwrap();
 
@@ -360,10 +370,18 @@ impl LocalDarkIRC {
         self.chatview_scroll.set(0.);
 
         // Send text to channel
-        let timestamp = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
-        debug!(target: "darkirc", "Sending privmsg: <{timestamp}> {text}");
+        let timest = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
+        debug!(target: "darkirc", "Sending privmsg: <{timest}> {text}");
         let msg = Privmsg::new(CHANNEL.to_string(), "anon".to_string(), text);
 
-        self.send_sender.send((timestamp, msg)).await.unwrap();
+        let mut arg_data = vec![];
+        timest.encode_async(&mut arg_data).await.unwrap();
+        msg.msg_id(timest).encode_async(&mut arg_data).await.unwrap();
+        msg.nick.encode_async(&mut arg_data).await.unwrap();
+        msg.msg.encode_async(&mut arg_data).await.unwrap();
+
+        self.send_sender.send((timest, msg)).await.unwrap();
+
+        self.chatview_node.call_method("insert_unconf_line", arg_data).await.unwrap();
     }
 }

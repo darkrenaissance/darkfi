@@ -82,8 +82,8 @@ pub struct ChatMsg {
 
 type Timestamp = u64;
 
-#[derive(Clone, SerialEncodable, SerialDecodable)]
-struct MessageId([u8; 32]);
+#[derive(Clone, SerialEncodable, SerialDecodable, PartialEq)]
+pub struct MessageId(pub [u8; 32]);
 
 impl std::fmt::Display for MessageId {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -231,6 +231,12 @@ impl ChatView {
                 while Self::process_insert_line_method(&me2, &method_sub).await {}
             });
 
+            let method_sub = node_ref.subscribe_method_call("insert_unconf_line").unwrap();
+            let me2 = me.clone();
+            let insert_unconf_line_method_task = ex.spawn(async move {
+                while Self::process_insert_unconf_line_method(&me2, &method_sub).await {}
+            });
+
             let me2 = me.clone();
             let motion_cv = Arc::new(CondVar::new());
             let cv = motion_cv.clone();
@@ -284,7 +290,7 @@ impl ChatView {
             on_modify.when_change(rect.prop(), redraw);
             on_modify.when_change(debug.prop(), redraw);
 
-            let mut tasks = vec![insert_line_method_task, motion_task, bgload_task];
+            let mut tasks = vec![insert_line_method_task, insert_unconf_line_method_task, motion_task, bgload_task];
             tasks.append(&mut on_modify.tasks);
 
             Self {
@@ -367,6 +373,37 @@ impl ChatView {
         };
 
         self_.handle_insert_line(timestamp, msg_id, nick, text).await;
+        true
+    }
+    async fn process_insert_unconf_line_method(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
+        let Ok(method_call) = sub.receive().await else {
+            debug!(target: "ui::chatview", "Event relayer closed");
+            return false
+        };
+
+        //debug!(target: "ui::chatview", "method called: insert_line({method_call:?})");
+        assert!(method_call.send_res.is_none());
+
+        fn decode_data(data: &[u8]) -> std::io::Result<(Timestamp, MessageId, String, String)> {
+            let mut cur = Cursor::new(&data);
+            let timestamp = Timestamp::decode(&mut cur)?;
+            let msg_id = MessageId::decode(&mut cur)?;
+            let nick = String::decode(&mut cur)?;
+            let text = String::decode(&mut cur)?;
+            Ok((timestamp, msg_id, nick, text))
+        }
+
+        let Ok((timestamp, msg_id, nick, text)) = decode_data(&method_call.data) else {
+            error!(target: "ui::chatview", "insert_unconf_line() method invalid arg data");
+            return true
+        };
+
+        let Some(self_) = me.upgrade() else {
+            // Should not happen
+            panic!("self destroyed before touch_task was stopped!");
+        };
+
+        self_.handle_insert_unconf_line(timestamp, msg_id, nick, text).await;
         true
     }
 
@@ -466,7 +503,38 @@ impl ChatView {
 
         // Add message to page
         let mut msgbuf = self.msgbuf.lock().await;
-        msgbuf.insert_privmsg(timest, msg_id, nick, text).await;
+        if msgbuf.mark_confirmed(&msg_id) {
+            // Message already exists. Which means it must be an unconfirmed sent message.
+            // Mark it as confirmed.
+            debug!(target: "ui::chatview", "Mark sent message as confirmed");
+        } else {
+            // Insert the privmsg since it doesn't already exist
+            if msgbuf.insert_privmsg(timest, msg_id, nick, text).await.is_none() {
+                // Not visible so no need to redraw
+                return
+            }
+        }
+
+        self.redraw_cached(&mut msgbuf).await;
+        self.bgload_cv.notify();
+    }
+    async fn handle_insert_unconf_line(
+        &self,
+        timest: Timestamp,
+        msg_id: MessageId,
+        nick: String,
+        text: String,
+    ) {
+        debug!(target: "ui::chatview", "handle_insert_unconf_line({timest}, {msg_id}, {nick}, {text})");
+
+        // We don't add unconfirmed lines to the db. Maybe we should?
+
+        // Add message to page
+        let mut msgbuf = self.msgbuf.lock().await;
+        let Some(privmsg) = msgbuf.insert_privmsg(timest, msg_id, nick, text).await else {
+            return
+        };
+        privmsg.confirmed = false;
         self.redraw_cached(&mut msgbuf).await;
         self.bgload_cv.notify();
     }

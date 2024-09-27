@@ -47,6 +47,8 @@ use crate::{
 const PAGE_SIZE: usize = 10;
 const PRELOAD_PAGES: usize = 10;
 
+const UNCONF_COLOR: [f32; 4] = [0.4, 0.4, 0.4, 1.];
+
 fn is_whitespace(s: &str) -> bool {
     s.chars().all(char::is_whitespace)
 }
@@ -61,6 +63,7 @@ pub struct PrivMessage {
     id: MessageId,
     nick: String,
     text: String,
+    pub confirmed: bool,
 
     is_selected: bool,
 
@@ -108,6 +111,7 @@ impl PrivMessage {
             id,
             nick,
             text,
+            confirmed: true,
             is_selected: false,
             time_glyphs,
             unwrapped_glyphs,
@@ -257,7 +261,7 @@ impl PrivMessage {
 
             let color = match section {
                 0 => nick_color,
-                _ => text_color,
+                _ => if self.confirmed { text_color } else { UNCONF_COLOR },
             };
 
             //if debug_render {
@@ -577,6 +581,19 @@ impl Message {
             Self::Date(_) => {}
         }
     }
+
+    fn get_privmsg(&self) -> Option<&PrivMessage> {
+        match self {
+            Message::Priv(msg) => Some(msg),
+            _ => None
+        }
+    }
+    fn get_privmsg_mut(&mut self) -> Option<&mut PrivMessage> {
+        match self {
+            Message::Priv(msg) => Some(msg),
+            _ => None
+        }
+    }
 }
 
 fn select_nick_color(nick: &str, nick_colors: &[Color]) -> Color {
@@ -756,13 +773,36 @@ impl MessageBuffer {
         height
     }
 
+    fn find_privmsg_mut(&mut self, msg_id: &MessageId) -> Option<&mut PrivMessage> {
+        for (idx, msg) in enumerate_mut(&mut self.msgs) {
+            let Some(privmsg) = msg.get_privmsg_mut() else { continue };
+            if privmsg.id == *msg_id {
+                return Some(privmsg)
+            }
+        }
+        None
+    }
+    pub fn mark_confirmed(&mut self, msg_id: &MessageId) -> bool {
+        let Some(privmsg) = self.find_privmsg_mut(msg_id) else {
+            return false
+        };
+
+        assert_eq!(privmsg.confirmed, false);
+        privmsg.confirmed = true;
+        if let Some(mesh) = privmsg.clear_mesh() {
+            self.freed.add_mesh(mesh);
+        }
+
+        return true
+    }
+
     pub async fn insert_privmsg(
         &mut self,
         timest: Timestamp,
         msg_id: MessageId,
         nick: String,
         text: String,
-    ) {
+    ) -> Option<&mut PrivMessage> {
         //debug!(target: "ui::chatview", "MessageBuffer::insert_privmsg()");
         let font_size = self.font_size.get();
         let timestamp_font_size = self.timestamp_font_size.get();
@@ -785,8 +825,9 @@ impl MessageBuffer {
         .await;
 
         if self.msgs.is_empty() {
+            let msg_idx = self.msgs.len();
             self.msgs.push(msg);
-            return
+            return self.msgs.last_mut().unwrap().get_privmsg_mut();
         }
 
         // We only add lines inside pages.
@@ -794,7 +835,7 @@ impl MessageBuffer {
         // When a line is before the first page, it will get preloaded as a new page.
         let oldest_timest = self.oldest_timestamp().unwrap();
         if timest < oldest_timest {
-            return;
+            return None;
         }
 
         // Timestamps go from most recent backwards
@@ -816,6 +857,7 @@ impl MessageBuffer {
         };
 
         self.msgs.insert(idx, msg);
+        return self.msgs[idx].get_privmsg_mut();
     }
 
     pub async fn push_privmsg(

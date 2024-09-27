@@ -44,6 +44,7 @@ semver = "1.0.23"
 chrono = "0.4.38"
 async-gen = "0.2"
 async-trait = "0.1.82"
+blake3 = "1.5.4"
 
 [patch.crates-io]
 freetype-rs = { git = "https://github.com/narodnik/freetype-rs" }

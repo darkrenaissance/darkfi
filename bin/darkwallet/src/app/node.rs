@@ -312,5 +312,17 @@ pub fn create_chatview(name: &str) -> SceneNode {
     )
     .unwrap();
 
+    node.add_method(
+        "insert_unconf_line",
+        vec![
+            ("timestamp", "Timestamp", CallArgType::Uint64),
+            ("id", "Message ID", CallArgType::Hash),
+            ("nick", "Nickname", CallArgType::Str),
+            ("text", "Text", CallArgType::Str),
+        ],
+        None,
+    )
+    .unwrap();
+
     node
 }
