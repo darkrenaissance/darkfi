@@ -52,7 +52,7 @@ pub(super) fn midnight_timestamp(days: i64) -> u64 {
     let cur_midnight = (now / DAY) * DAY;
 
     // Adjust for days_from_now
-    (cur_midnight + (DAY * days)) as u64
+    ((cur_midnight + (DAY * days)) / 1000) as u64
 }
 
 /// Calculate the number of days since a given midnight timestamp.
@@ -103,7 +103,7 @@ pub fn seconds_until_next_rotation(next_rotation: u64) -> u64 {
     // Store `now` in a variable in order to avoid a TOCTOU error.
     // There may be a drift of one second between this panic check and
     // the return value if we get unlucky.
-    let now = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
+    let now = UNIX_EPOCH.elapsed().unwrap().as_secs() as u64;
     if next_rotation < now {
         panic!("Next rotation timestamp is in the past");
     }

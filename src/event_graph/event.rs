@@ -103,8 +103,11 @@ impl Event {
             return Ok(false)
         }
 
+        let timestamp =
+            if self.timestamp > 1e10 as u64 { self.timestamp / 1000 } else { self.timestamp };
+
         // Check if the event timestamp is after genesis timestamp
-        if self.timestamp < genesis_timestamp - EVENT_TIME_DRIFT / 1000 {
+        if timestamp < genesis_timestamp - EVENT_TIME_DRIFT / 1000 {
             return Ok(false)
         }
 
@@ -112,7 +115,7 @@ impl Event {
         // is after the next genesis timestamp
         if days_rotation > 0 {
             let next_genesis_timestamp = next_rotation_timestamp(INITIAL_GENESIS, days_rotation);
-            if self.timestamp > next_genesis_timestamp + EVENT_TIME_DRIFT / 1000 {
+            if timestamp > next_genesis_timestamp + EVENT_TIME_DRIFT / 1000 {
                 return Ok(false)
             }
         }
