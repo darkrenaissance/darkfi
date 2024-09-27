@@ -58,14 +58,14 @@ pub(super) fn midnight_timestamp(days: i64) -> u64 {
 /// Calculate the number of days since a given midnight timestamp.
 pub(super) fn days_since(midnight_ts: u64) -> u64 {
     // Get current time
-    let now = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
+    let now = UNIX_EPOCH.elapsed().unwrap().as_secs();
 
     // Calculate the difference between the current timestamp
     // and the given midnight timestamp
     let elapsed_seconds = now - midnight_ts;
 
     // Convert the elapsed seconds into days
-    elapsed_seconds / DAY as u64
+    elapsed_seconds / (DAY / 1000) as u64
 }
 
 /// Calculate the timestamp of the next DAG rotation.
@@ -117,7 +117,7 @@ pub fn generate_genesis(days_rotation: u64) -> Event {
         INITIAL_GENESIS
     } else {
         // First check how many days passed since initial genesis.
-        let days_passed = days_since(INITIAL_GENESIS);
+        let days_passed = days_since(INITIAL_GENESIS / 1000);
 
         // Calculate the number of days_rotation intervals since INITIAL_GENESIS
         let rotations_since_genesis = days_passed / days_rotation;
@@ -225,7 +225,7 @@ mod tests {
         // we should get tomorrow's timestamp.
         // This is a special case.
         let midnight_today: u64 = midnight_timestamp(0);
-        let midnight_tomorrow = midnight_today + 86_400_000u64; // add a day, in milliseconds
+        let midnight_tomorrow = midnight_today + 86_400u64; // add a day
         assert_eq!(midnight_tomorrow, next_rotation_timestamp(midnight_today, 1));
     }
 
@@ -245,7 +245,7 @@ mod tests {
     fn test_seconds_until_next_rotation_is_within_rotation_interval() {
         let days_rotation = 1u64;
         // The amount of time in seconds between rotations.
-        let rotation_interval = days_rotation * 86_400_000u64;
+        let rotation_interval = days_rotation * 86_400u64;
         let next_rotation_timestamp = next_rotation_timestamp(INITIAL_GENESIS, days_rotation);
         let s = seconds_until_next_rotation(next_rotation_timestamp);
         assert!(s < rotation_interval);
