@@ -8,6 +8,10 @@ license = "AGPL-3.0-only"
 homepage = "https://dark.fi"
 repository = "https://codeberg.org/darkrenaissance/darkfi"
 
+#[[bin]]
+#name = "drawsim"
+#path = "bin/drawsim.rs"
+
 [dependencies]
 miniquad = { git = "https://github.com/not-fl3/miniquad" }
 

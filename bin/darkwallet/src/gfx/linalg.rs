@@ -16,9 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use async_trait::async_trait;
 use std::ops::{Add, AddAssign, Div, Mul, Sub, SubAssign};
+use darkfi_serial::{SerialEncodable, SerialDecodable};
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, SerialEncodable, SerialDecodable)]
 pub struct Dimension {
     pub w: f32,
     pub h: f32,
@@ -52,7 +54,7 @@ impl Div<f32> for Dimension {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, SerialEncodable, SerialDecodable)]
 pub struct Point {
     pub x: f32,
     pub y: f32,
@@ -118,7 +120,7 @@ impl SubAssign for Point {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, SerialEncodable, SerialDecodable)]
 pub struct Rectangle {
     pub x: f32,
     pub y: f32,

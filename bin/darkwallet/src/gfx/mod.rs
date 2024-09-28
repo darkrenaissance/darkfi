@@ -29,9 +29,11 @@ use std::{
     sync::{mpsc, Arc, Mutex as SyncMutex},
     time::{Duration, Instant},
 };
+use futures::AsyncWriteExt;
 
 mod linalg;
 pub use linalg::{Dimension, Point, Rectangle};
+mod scr;
 mod shader;
 
 use crate::{
@@ -47,8 +49,9 @@ pub type GfxBufferId = u32;
 // This is very noisy so suppress output by default
 const DEBUG_RENDER: bool = false;
 const DEBUG_GFXAPI: bool = false;
+const DEBUG_DRAW_LOG: bool = false;
 
-#[derive(Debug, SerialEncodable, SerialDecodable)]
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 #[repr(C)]
 pub struct Vertex {
     pub pos: [f32; 2],
@@ -119,7 +122,7 @@ impl RenderApi {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct GfxDrawMesh {
     pub vertex_buffer: GfxBufferId,
     pub index_buffer: GfxBufferId,
@@ -142,7 +145,7 @@ impl GfxDrawMesh {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub enum GfxDrawInstruction {
     SetScale(f32),
     Move(Point),
@@ -165,7 +168,7 @@ impl GfxDrawInstruction {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct GfxDrawCall {
     pub instrs: Vec<GfxDrawInstruction>,
     pub dcs: Vec<u64>,
@@ -337,7 +340,7 @@ impl<'a> RenderContext<'a> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub enum GraphicsMethod {
     NewTexture((u16, u16, Vec<u8>, GfxTextureId)),
     DeleteTexture(GfxTextureId),
@@ -450,13 +453,14 @@ struct Stage {
     pipeline: Pipeline,
     white_texture: miniquad::TextureId,
     draw_calls: HashMap<u64, DrawCall>,
-    last_draw_time: Option<Instant>,
 
     textures: HashMap<GfxTextureId, miniquad::TextureId>,
     buffers: HashMap<GfxBufferId, miniquad::BufferId>,
 
     method_rep: mpsc::Receiver<GraphicsMethod>,
     event_pub: GraphicsEventPublisherPtr,
+
+    draw_log: Option<scr::DrawLog>,
 }
 
 impl Stage {
@@ -522,16 +526,20 @@ impl Stage {
             pipeline,
             white_texture,
             draw_calls: HashMap::from([(0, DrawCall { instrs: vec![], dcs: vec![], z_index: 0 })]),
-            last_draw_time: None,
             textures: HashMap::new(),
             buffers: HashMap::new(),
             method_rep,
             event_pub,
+            draw_log: if DEBUG_DRAW_LOG { Some(scr::DrawLog::new()) } else { None }
         }
     }
 
     fn process_method(&mut self, method: GraphicsMethod) {
         //debug!(target: "gfx", "Received method: {:?}", method);
+        if let Some(dlog) = &mut self.draw_log {
+            dlog.log(method.clone());
+        }
+
         match method {
             GraphicsMethod::NewTexture((width, height, data, gfx_texture_id)) => {
                 self.method_new_texture(width, height, data, gfx_texture_id)
@@ -629,8 +637,6 @@ impl EventHandler for Stage {
     }
 
     fn draw(&mut self) {
-        self.last_draw_time = Some(Instant::now());
-
         self.ctx.begin_default_pass(PassAction::Nothing);
         self.ctx.apply_pipeline(&self.pipeline);
 
