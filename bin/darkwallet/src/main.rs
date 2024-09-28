@@ -38,6 +38,7 @@
 //#![deny(unused_imports)]
 
 use async_lock::{Mutex as AsyncMutex, RwLock as AsyncRwLock};
+use darkfi::system::CondVar;
 use file_rotate::{compression::Compression, suffix::AppendCount, ContentLimit, FileRotate};
 use std::sync::{mpsc, Arc};
 
@@ -126,12 +127,17 @@ fn main() {
 
     let text_shaper = TextShaper::new();
 
+    let cv_started = Arc::new(CondVar::new());
+    let cv_started2 = cv_started.clone();
     let app = app::App::new(sg_root, render_api, event_pub.clone(), text_shaper, ex.clone());
-    let app_task = ex.spawn(app.clone().start());
+    let app2 = app.clone();
+    let app_task = ex.spawn(async move {
+        app2.start().await;
+        cv_started2.notify();
+    });
     async_runtime.push_task(app_task);
 
     let app2 = app.clone();
-    let cv_started = app.is_started.clone();
     let sg_root = app.sg_root.clone();
     let ex2 = ex.clone();
     let darkirc_task = ex.spawn(async move {

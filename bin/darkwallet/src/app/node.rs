@@ -210,7 +210,7 @@ pub fn create_editbox(name: &str) -> SceneNode {
     node.add_property(prop).unwrap();
 
     let mut prop = Property::new("cursor_idle_time", PropertyType::Uint32, PropertySubType::Null);
-    prop.set_defaults_u32(vec![1000]).unwrap();
+    prop.set_defaults_u32(vec![150]).unwrap();
     prop.set_range_u32(0, u32::MAX);
     node.add_property(prop).unwrap();
 

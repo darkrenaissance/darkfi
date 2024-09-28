@@ -79,7 +79,7 @@ impl AsyncRuntime {
                 .run();
         });
         *self.exec_threadpool.lock().unwrap() = Some(exec_threadpool);
-        debug!(target: "async_runtime", "Started runtime");
+        info!(target: "async_runtime", "Started runtime [{n_threads} threads]");
     }
 
     pub fn push_task(&self, task: Task<()>) {
@@ -118,7 +118,6 @@ pub type AppPtr = Arc<App>;
 
 pub struct App {
     pub sg_root: SceneNodePtr,
-    pub is_started: Arc<CondVar>,
     pub render_api: RenderApiPtr,
     pub event_pub: GraphicsEventPublisherPtr,
     pub text_shaper: TextShaperPtr,
@@ -137,7 +136,6 @@ impl App {
     ) -> Arc<Self> {
         Arc::new(Self {
             sg_root,
-            is_started: Arc::new(CondVar::new()),
             ex,
             render_api,
             event_pub,
@@ -177,7 +175,6 @@ impl App {
         self.trigger_draw().await;
 
         debug!(target: "app", "App started");
-        self.is_started.notify();
     }
 
     pub fn stop(&self) {

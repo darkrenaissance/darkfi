@@ -9,6 +9,9 @@ make
 Make sure you have podman installed. Then run:
 
 ```
+# You only need to build the container once
+podman build -t apk .
+
 make android
 ```
 
