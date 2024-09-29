@@ -203,8 +203,7 @@ impl ProtocolEventGraph {
             // Validate the new event first. If we do not consider it valid, we
             // will just drop it and stay quiet. If the malicious threshold
             // is reached, we will stop the connection.
-            let is_ver_match = self.event_graph.check_version_match(&self.channel).await;
-            if !event.validate_new(is_ver_match) {
+            if !event.validate_new() {
                 self.clone().increase_malicious_count().await?;
                 continue
             }

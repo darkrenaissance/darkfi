@@ -35,7 +35,7 @@ use tinyjson::JsonValue::{self};
 
 use crate::{
     event_graph::util::{replayer_log, seconds_until_next_rotation},
-    net::{channel::Channel, P2pPtr},
+    net::P2pPtr,
     rpc::{
         jsonrpc::{JsonResponse, JsonResult},
         util::json_map,
@@ -879,19 +879,5 @@ impl EventGraph {
         result.sort_by(|a, b| a.layer.cmp(&b.layer));
 
         Ok(result)
-    }
-
-    /// Check if the our version matches the connected peer's
-    /// return true if they are, false otherwise
-    async fn check_version_match(&self, channel: &Arc<Channel>) -> bool {
-        let self_version = self.p2p.settings().read().await.app_version.clone();
-        let peer_version = channel.version.lock().await.clone();
-        if let Some(ref peer_version) = peer_version {
-            if self_version == peer_version.version {
-                return true
-            }
-        }
-
-        false
     }
 }

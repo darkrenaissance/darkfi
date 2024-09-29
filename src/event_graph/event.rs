@@ -176,28 +176,21 @@ impl Event {
     /// assuming some possibility for a time drift.
     /// Note: This validation does *NOT* check for recursive references(circles),
     /// and should be used as a first quick check.
-    pub fn validate_new(&self, is_ver_match: bool) -> bool {
+    pub fn validate_new(&self) -> bool {
         // Let's not bother with empty events
         if self.content.is_empty() {
             return false
         }
 
-        if is_ver_match {
-            // Check if the event is too old or too new
-            let now = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
-            let too_old = self.timestamp < now - EVENT_TIME_DRIFT;
-            let too_new = self.timestamp > now + EVENT_TIME_DRIFT;
-            if too_old || too_new {
-                return false
-            }
-        } else {
-            // Check if the event is too old or too new
-            let now = UNIX_EPOCH.elapsed().unwrap().as_secs();
-            let too_old = self.timestamp < (now - (EVENT_TIME_DRIFT / 1000));
-            let too_new = self.timestamp > (now + (EVENT_TIME_DRIFT / 1000));
-            if too_old || too_new {
-                return false
-            }
+        let timestamp =
+            if self.timestamp > 1e10 as u64 { self.timestamp / 1000 } else { self.timestamp };
+
+        // Check if the event is too old or too new
+        let now = UNIX_EPOCH.elapsed().unwrap().as_secs();
+        let too_old = timestamp < (now - (EVENT_TIME_DRIFT / 1000));
+        let too_new = timestamp > (now + (EVENT_TIME_DRIFT / 1000));
+        if too_old || too_new {
+            return false
         }
 
         // Validate the parents. We have to check that at least one parent

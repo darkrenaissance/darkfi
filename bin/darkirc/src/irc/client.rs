@@ -47,6 +47,8 @@ use super::{
 
 const PENALTY_LIMIT: usize = 5;
 
+const PROTOCOL_VERSION_SECS_TIMESTAMPS: semver::Version = semver::Version::new(0, 5, 0);
+
 /// Reply types, we can either send server replies, or client replies.
 pub enum ReplyType {
     /// Server reply, we have to use numerics
@@ -190,28 +192,27 @@ impl Client {
                                     }
 
                                     // Otherwise, broadcast it
-                                    let self_version = self.server.darkirc.p2p.settings().read().await.app_version.clone();
                                     let connected_peers = self.server.darkirc.p2p.hosts().peers();
-                                    let mut peers_with_matched_version = vec![];
-                                    let mut peers_with_different_version = vec![];
+                                    let mut peers_millis = vec![];
+                                    let mut peers_seconds = vec![];
                                     for peer in connected_peers {
                                         let peer_version = peer.version.lock().await.clone();
                                         if let Some(ref peer_version) = peer_version {
-                                            if self_version == peer_version.version {
-                                                peers_with_matched_version.push(peer)
+                                            if peer_version.version > PROTOCOL_VERSION_SECS_TIMESTAMPS{
+                                                peers_millis.push(peer)
                                             } else {
-                                                peers_with_different_version.push(peer)
+                                                peers_seconds.push(peer)
                                             }
                                         }
                                     }
 
-                                    if !peers_with_matched_version.is_empty() {
-                                        self.server.darkirc.p2p.broadcast_to(&EventPut(event.clone()), &peers_with_matched_version).await;
+                                    if !peers_millis.is_empty() {
+                                        self.server.darkirc.p2p.broadcast_to(&EventPut(event.clone()), &peers_millis).await;
                                     }
-                                    if !peers_with_different_version.is_empty() {
+                                    if !peers_seconds.is_empty() {
                                         let mut event = event;
                                         event.timestamp /= 1000;
-                                        self.server.darkirc.p2p.broadcast_to(&EventPut(event), &peers_with_different_version).await;
+                                        self.server.darkirc.p2p.broadcast_to(&EventPut(event), &peers_seconds).await;
                                     }
                                     // self.server.darkirc.p2p.broadcast(&EventPut(event)).await;
                                 }
