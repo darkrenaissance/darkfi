@@ -184,8 +184,11 @@ impl EventGraph {
 
             prune_task.clone().start(
                 self_.clone().dag_prune_task(days_rotation),
-                |_| async move {
-                    info!(target: "event_graph::_handle_stop()", "[EVENTGRAPH] Prune task stopped, flushing sled")
+                |res| async move {
+                    match res {
+                        Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                        Err(e) => error!(target: "event_graph::_handle_stop()", "[EVENTGRAPH] Failed stopping prune task: {e}")
+                    }
                 },
                 Error::DetachedTaskStopped,
                 ex.clone(),
