@@ -38,11 +38,11 @@ use darkfi_serial::{async_trait, deserialize_async};
 
 use crate::{
     error::{server_error, RpcError},
-    Minerd,
+    MinerNode,
 };
 
 #[async_trait]
-impl RequestHandler for Minerd {
+impl RequestHandler for MinerNode {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
         debug!(target: "minerd::rpc", "--> {}", req.stringify().unwrap());
 
@@ -59,7 +59,7 @@ impl RequestHandler for Minerd {
     }
 }
 
-impl Minerd {
+impl MinerNode {
     // RPCAPI:
     // Signals miner daemon to abort mining pending request.
     // Returns `true` on success.
