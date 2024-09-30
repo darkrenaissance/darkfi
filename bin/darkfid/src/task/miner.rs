@@ -16,12 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::Arc;
-
 use darkfi::{
     blockchain::{BlockInfo, Header},
     rpc::{jsonrpc::JsonNotification, util::JsonValue},
-    system::{StoppableTask, Subscription},
+    system::{ExecutorPtr, StoppableTask, Subscription},
     tx::{ContractCallLeaf, Transaction, TransactionBuilder},
     util::{encoding::base64, time::Timestamp},
     validator::{
@@ -46,7 +44,7 @@ use num_bigint::BigUint;
 use rand::rngs::OsRng;
 use smol::channel::{Receiver, Sender};
 
-use crate::{proto::ProposalMessage, task::garbage_collect_task, Darkfid};
+use crate::{proto::ProposalMessage, task::garbage_collect_task, DarkfiNodePtr};
 
 /// Auxiliary structure representing node miner rewards recipient configuration
 pub struct MinerRewardsRecipientConfig {
@@ -56,6 +54,7 @@ pub struct MinerRewardsRecipientConfig {
 }
 
 /// Async task used for participating in the PoW block production.
+///
 /// Miner initializes their setup and waits for next finalization,
 /// by listenning for new proposals from the network, for optimal
 /// conditions. After finalization occurs, they start the actual
@@ -66,10 +65,10 @@ pub struct MinerRewardsRecipientConfig {
 /// mining. These two tasks run in parallel, and after one of them
 /// finishes, node triggers finallization check.
 pub async fn miner_task(
-    node: Arc<Darkfid>,
+    node: &DarkfiNodePtr,
     recipient_config: &MinerRewardsRecipientConfig,
     skip_sync: bool,
-    ex: Arc<smol::Executor<'static>>,
+    ex: &ExecutorPtr,
 ) -> Result<()> {
     // Initialize miner configuration
     info!(target: "darkfid::task::miner_task", "Starting miner task...");
@@ -163,9 +162,9 @@ pub async fn miner_task(
 
         // Start listenning for network proposals and mining next block for best fork.
         match smol::future::or(
-            listen_to_network(&node, &extended_fork, &subscription, &sender),
+            listen_to_network(node, &extended_fork, &subscription, &sender),
             mine(
-                &node,
+                node,
                 &extended_fork,
                 &mut secret,
                 recipient_config,
@@ -234,7 +233,7 @@ pub async fn miner_task(
 
 /// Async task to listen for incoming proposals and check if the best fork has changed.
 async fn listen_to_network(
-    node: &Darkfid,
+    node: &DarkfiNodePtr,
     extended_fork: &Fork,
     subscription: &Subscription<JsonNotification>,
     sender: &Sender<()>,
@@ -273,7 +272,7 @@ async fn listen_to_network(
 /// while listening for a stop signal.
 #[allow(clippy::too_many_arguments)]
 async fn mine(
-    node: &Darkfid,
+    node: &DarkfiNodePtr,
     extended_fork: &Fork,
     secret: &mut SecretKey,
     recipient_config: &MinerRewardsRecipientConfig,
@@ -304,7 +303,7 @@ pub async fn wait_stop_signal(stop_signal: &Receiver<()>) -> Result<()> {
 
 /// Async task to generate and mine provided fork index next block.
 async fn mine_next_block(
-    node: &Darkfid,
+    node: &DarkfiNodePtr,
     extended_fork: &Fork,
     secret: &mut SecretKey,
     recipient_config: &MinerRewardsRecipientConfig,

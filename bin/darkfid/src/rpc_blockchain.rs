@@ -32,9 +32,9 @@ use darkfi::{
     util::encoding::base64,
 };
 
-use crate::{server_error, Darkfid, RpcError};
+use crate::{server_error, DarkfiNode, RpcError};
 
-impl Darkfid {
+impl DarkfiNode {
     // RPCAPI:
     // Queries the blockchain database for a block in the given height.
     // Returns a readable block upon success.

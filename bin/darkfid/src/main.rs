@@ -16,13 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::sync::Arc;
 
 use log::{debug, error, info};
-use smol::{lock::Mutex, stream::StreamExt};
+use smol::{fs::read_to_string, stream::StreamExt};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;
 
@@ -31,40 +28,16 @@ use darkfi::{
     blockchain::BlockInfo,
     cli_desc,
     net::settings::SettingsOpt,
-    rpc::{
-        client::RpcChadClient,
-        jsonrpc::JsonSubscriber,
-        server::{listen_and_serve, RequestHandler},
+    util::{
+        encoding::base64,
+        path::{expand_path, get_config_path},
     },
-    system::{StoppableTask, StoppableTaskPtr},
-    util::{encoding::base64, path::expand_path},
-    validator::{Validator, ValidatorConfig, ValidatorPtr},
+    validator::ValidatorConfig,
     Error, Result,
 };
 use darkfi_serial::deserialize_async;
 
-#[cfg(test)]
-mod tests;
-
-mod error;
-use error::{server_error, RpcError};
-
-/// JSON-RPC requests handler and methods
-mod rpc;
-mod rpc_blockchain;
-mod rpc_tx;
-
-/// Validator async tasks
-mod task;
-use task::{consensus::ConsensusInitTaskConfig, consensus_init_task};
-
-/// P2P net protocols
-mod proto;
-use proto::{DarkfidP2pHandler, DarkfidP2pHandlerPtr};
-
-/// Utility functions
-mod utils;
-use utils::parse_blockchain_config;
+use darkfid::{task::consensus::ConsensusInitTaskConfig, Darkfid};
 
 const CONFIG_FILE: &str = "darkfid_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../darkfid_config.toml");
@@ -103,129 +76,67 @@ struct Args {
 pub struct BlockchainNetwork {
     #[structopt(short, long, default_value = "tcp://127.0.0.1:8240")]
     /// JSON-RPC listen URL
-    pub rpc_listen: Url,
+    rpc_listen: Url,
 
     #[structopt(long, default_value = "~/.local/darkfi/darkfid/localnet")]
     /// Path to blockchain database
-    pub database: String,
+    database: String,
 
     #[structopt(long, default_value = "3")]
     /// Finalization threshold, denominated by number of blocks
-    pub threshold: usize,
+    threshold: usize,
 
-    #[structopt(long, default_value = "tcp://127.0.0.1:28467")]
+    #[structopt(long)]
     /// minerd JSON-RPC endpoint
-    pub minerd_endpoint: Url,
+    minerd_endpoint: Option<Url>,
 
     #[structopt(long, default_value = "10")]
     /// PoW block production target, in seconds
-    pub pow_target: u32,
+    pow_target: u32,
 
     #[structopt(long)]
     /// Optional fixed PoW difficulty, used for testing
-    pub pow_fixed_difficulty: Option<usize>,
-
-    #[structopt(long)]
-    /// Participate in block production
-    pub miner: bool,
+    pow_fixed_difficulty: Option<usize>,
 
     #[structopt(long)]
     /// Wallet address to receive mining rewards
-    pub recipient: Option<String>,
+    recipient: Option<String>,
 
     #[structopt(long)]
     /// Optional contract spend hook to use in the mining reward
-    pub spend_hook: Option<String>,
+    spend_hook: Option<String>,
 
     #[structopt(long)]
     /// Optional user data to use in the mining reward
-    pub user_data: Option<String>,
+    user_data: Option<String>,
 
     #[structopt(long)]
     /// Skip syncing process and start node right away
-    pub skip_sync: bool,
+    skip_sync: bool,
 
     #[structopt(long)]
     /// Disable transaction's fee verification, used for testing
-    pub skip_fees: bool,
+    skip_fees: bool,
 
     #[structopt(long)]
     /// Optional sync checkpoint height
-    pub checkpoint_height: Option<u32>,
+    checkpoint_height: Option<u32>,
 
     #[structopt(long)]
     /// Optional sync checkpoint hash
-    pub checkpoint: Option<String>,
+    checkpoint: Option<String>,
 
     #[structopt(long)]
     /// Optional bootstrap timestamp
-    pub bootstrap: Option<u64>,
+    bootstrap: Option<u64>,
 
     #[structopt(long)]
     /// Garbage collection task transactions batch size
-    pub txs_batch_size: Option<usize>,
+    txs_batch_size: Option<usize>,
 
     /// P2P network settings
     #[structopt(flatten)]
-    pub net: SettingsOpt,
-}
-
-/// Structure to hold a JSON-RPC client and its config,
-/// so we can recreate it in case of an error.
-pub struct MinerRpcCLient {
-    endpoint: Url,
-    ex: Arc<smol::Executor<'static>>,
-    client: RpcChadClient,
-}
-
-impl MinerRpcCLient {
-    pub async fn new(endpoint: Url, ex: Arc<smol::Executor<'static>>) -> Result<Self> {
-        let client = RpcChadClient::new(endpoint.clone(), ex.clone()).await?;
-        Ok(Self { endpoint, ex, client })
-    }
-}
-
-/// Daemon structure
-pub struct Darkfid {
-    /// P2P network protocols handler.
-    p2p_handler: DarkfidP2pHandlerPtr,
-    /// Validator(node) pointer
-    validator: ValidatorPtr,
-    /// Flag to specify node is a miner
-    miner: bool,
-    /// Garbage collection task transactions batch size
-    txs_batch_size: usize,
-    /// A map of various subscribers exporting live info from the blockchain
-    subscribers: HashMap<&'static str, JsonSubscriber>,
-    /// JSON-RPC connection tracker
-    rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
-    /// JSON-RPC client to execute requests to the miner daemon
-    rpc_client: Option<Mutex<MinerRpcCLient>>,
-    /// dnet JSON-RPC subscriber
-    dnet_sub: JsonSubscriber,
-}
-
-impl Darkfid {
-    pub async fn new(
-        p2p_handler: DarkfidP2pHandlerPtr,
-        validator: ValidatorPtr,
-        miner: bool,
-        txs_batch_size: usize,
-        subscribers: HashMap<&'static str, JsonSubscriber>,
-        rpc_client: Option<Mutex<MinerRpcCLient>>,
-        dnet_sub: JsonSubscriber,
-    ) -> Self {
-        Self {
-            p2p_handler,
-            validator,
-            miner,
-            txs_batch_size,
-            subscribers,
-            rpc_connections: Mutex::new(HashSet::new()),
-            rpc_client,
-            dnet_sub,
-        }
-    }
+    net: SettingsOpt,
 }
 
 async_daemonize!(realmain);
@@ -279,165 +190,83 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         verify_fees: !blockchain_config.skip_fees,
     };
 
-    // Initialize validator
-    let validator = Validator::new(&sled_db, config).await?;
-
-    // Here we initialize various subscribers that can export live blockchain/consensus data.
-    let mut subscribers = HashMap::new();
-    subscribers.insert("blocks", JsonSubscriber::new("blockchain.subscribe_blocks"));
-    subscribers.insert("txs", JsonSubscriber::new("blockchain.subscribe_txs"));
-    subscribers.insert("proposals", JsonSubscriber::new("blockchain.subscribe_proposals"));
-
-    // Initialize P2P network
-    let p2p_handler = DarkfidP2pHandler::init(&blockchain_config.net.into(), &ex).await?;
-
-    // Initialize JSON-RPC client to perform requests to minerd
-    let rpc_client = if blockchain_config.miner {
-        let Ok(rpc_client) =
-            MinerRpcCLient::new(blockchain_config.minerd_endpoint, ex.clone()).await
-        else {
-            error!(target: "darkfid", "Failed to initialize miner daemon rpc client, check if minerd is running");
-            return Err(Error::RpcClientStopped)
-        };
-        Some(Mutex::new(rpc_client))
-    } else {
-        None
-    };
-
-    // Grab blockchain network configured transactions batch size for garbage collection
-    let txs_batch_size = match blockchain_config.txs_batch_size {
-        Some(b) => {
-            if b > 0 {
-                b
-            } else {
-                50
-            }
-        }
-        None => 50,
-    };
-
-    info!(target: "darkfid", "Starting dnet subs task");
-    let dnet_sub = JsonSubscriber::new("dnet.subscribe_events");
-    let dnet_sub_ = dnet_sub.clone();
-    let p2p_ = p2p_handler.p2p.clone();
-    let dnet_task = StoppableTask::new();
-    dnet_task.clone().start(
-        async move {
-            let dnet_sub = p2p_.dnet_subscribe().await;
-            loop {
-                let event = dnet_sub.receive().await;
-                debug!(target: "darkfid", "Got dnet event: {:?}", event);
-                dnet_sub_.notify(vec![event.into()].into()).await;
-            }
-        },
-        |res| async {
-            match res {
-                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                Err(e) => error!(target: "darkfid", "Failed starting dnet subs task: {}", e),
-            }
-        },
-        Error::DetachedTaskStopped,
-        ex.clone(),
-    );
-
-    // Initialize node
-    let darkfid = Darkfid::new(
-        p2p_handler.clone(),
-        validator.clone(),
-        blockchain_config.miner,
-        txs_batch_size,
-        subscribers.clone(),
-        rpc_client,
-        dnet_sub,
+    // Generate the daemon
+    let daemon = Darkfid::init(
+        &sled_db,
+        &config,
+        &blockchain_config.net.into(),
+        &blockchain_config.minerd_endpoint,
+        &blockchain_config.txs_batch_size,
+        &ex,
     )
-    .await;
-    let darkfid = Arc::new(darkfid);
-    info!(target: "darkfid", "Node initialized successfully!");
+    .await?;
 
-    // Pinging minerd daemon to verify it listens
-    if blockchain_config.miner {
-        if let Err(e) = darkfid.ping_miner_daemon().await {
-            error!(target: "darkfid", "Failed to ping miner daemon: {}", e);
-            return Err(Error::RpcClientStopped)
-        }
-    }
-
-    // JSON-RPC server
-    info!(target: "darkfid", "Starting JSON-RPC server");
-    // Here we create a task variable so we can manually close the
-    // task later. P2P tasks don't need this since it has its own
-    // stop() function to shut down, also terminating the task we
-    // created for it.
-    let rpc_task = StoppableTask::new();
-    let darkfid_ = darkfid.clone();
-    rpc_task.clone().start(
-        listen_and_serve(blockchain_config.rpc_listen, darkfid.clone(), None, ex.clone()),
-        |res| async move {
-            match res {
-                Ok(()) | Err(Error::RpcServerStopped) => darkfid_.stop_connections().await,
-                Err(e) => error!(target: "darkfid", "Failed starting sync JSON-RPC server: {}", e),
-            }
-        },
-        Error::RpcServerStopped,
-        ex.clone(),
-    );
-
-    info!(target: "darkfid", "Starting P2P network");
-    p2p_handler.clone().start(&ex, &validator, &subscribers).await?;
-
-    // Consensus protocol
-    info!(target: "darkfid", "Starting consensus protocol task");
-    let consensus_task = StoppableTask::new();
-    consensus_task.clone().start(
-        consensus_init_task(
-            darkfid.clone(),
-            ConsensusInitTaskConfig {
-                skip_sync: blockchain_config.skip_sync,
-                checkpoint_height: blockchain_config.checkpoint_height,
-                checkpoint: blockchain_config.checkpoint,
-                miner: blockchain_config.miner,
-                recipient: blockchain_config.recipient,
-                spend_hook: blockchain_config.spend_hook,
-                user_data: blockchain_config.user_data,
-                bootstrap,
-            },
-            ex.clone(),
-        ),
-        |res| async move {
-            match res {
-                Ok(()) | Err(Error::ConsensusTaskStopped) | Err(Error::MinerTaskStopped) => { /* Do nothing */ }
-                Err(e) => error!(target: "darkfid", "Failed starting consensus initialization task: {}", e),
-            }
-        },
-        Error::ConsensusTaskStopped,
-        ex.clone(),
-    );
+    // Start the daemon
+    let config = ConsensusInitTaskConfig {
+        skip_sync: blockchain_config.skip_sync,
+        checkpoint_height: blockchain_config.checkpoint_height,
+        checkpoint: blockchain_config.checkpoint,
+        miner: blockchain_config.minerd_endpoint.is_some(),
+        recipient: blockchain_config.recipient,
+        spend_hook: blockchain_config.spend_hook,
+        user_data: blockchain_config.user_data,
+        bootstrap,
+    };
+    daemon.start(&ex, &blockchain_config.rpc_listen, &config).await?;
 
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new(ex)?;
     signals_handler.wait_termination(signals_task).await?;
     info!(target: "darkfid", "Caught termination signal, cleaning up and exiting...");
 
-    info!(target: "darkfid", "Stopping dnet subs task...");
-    dnet_task.stop().await;
+    daemon.stop().await?;
 
-    info!(target: "darkfid", "Stopping JSON-RPC server...");
-    rpc_task.stop().await;
-
-    info!(target: "darkfid", "Stopping P2P network protocols handler...");
-    p2p_handler.stop().await;
-
-    info!(target: "darkfid", "Stopping consensus task...");
-    consensus_task.stop().await;
-
-    info!(target: "darkfid", "Flushing sled database...");
-    let flushed_bytes = sled_db.flush_async().await?;
-    info!(target: "darkfid", "Flushed {} bytes", flushed_bytes);
-
-    if let Some(ref rpc_client) = darkfid.rpc_client {
-        info!(target: "darkfid", "Stopping JSON-RPC client...");
-        rpc_client.lock().await.client.stop().await;
-    };
+    info!(target: "darkfid", "Shut down successfully");
 
     Ok(())
+}
+
+/// Auxiliary function to parse darkfid configuration file and extract requested
+/// blockchain network config.
+pub async fn parse_blockchain_config(
+    config: Option<String>,
+    network: &str,
+) -> Result<BlockchainNetwork> {
+    // Grab config path
+    let config_path = get_config_path(config, CONFIG_FILE)?;
+    debug!(target: "darkfid", "Parsing configuration file: {:?}", config_path);
+
+    // Parse TOML file contents
+    let contents = read_to_string(&config_path).await?;
+    let contents: toml::Value = match toml::from_str(&contents) {
+        Ok(v) => v,
+        Err(e) => {
+            error!(target: "darkfid", "Failed parsing TOML config: {}", e);
+            return Err(Error::ParseFailed("Failed parsing TOML config"))
+        }
+    };
+
+    // Grab requested network config
+    let Some(table) = contents.as_table() else { return Err(Error::ParseFailed("TOML not a map")) };
+    let Some(network_configs) = table.get("network_config") else {
+        return Err(Error::ParseFailed("TOML does not contain network configurations"))
+    };
+    let Some(network_configs) = network_configs.as_table() else {
+        return Err(Error::ParseFailed("`network_config` not a map"))
+    };
+    let Some(network_config) = network_configs.get(network) else {
+        return Err(Error::ParseFailed("TOML does not contain requested network configuration"))
+    };
+    let network_config = toml::to_string(&network_config).unwrap();
+    let network_config =
+        match BlockchainNetwork::from_iter_with_toml::<Vec<String>>(&network_config, vec![]) {
+            Ok(v) => v,
+            Err(e) => {
+                error!(target: "darkfid", "Failed parsing requested network configuration: {}", e);
+                return Err(Error::ParseFailed("Failed parsing requested network configuration"))
+            }
+        };
+    debug!(target: "darkfid", "Parsed network configuration: {:?}", network_config);
+
+    Ok(network_config)
 }

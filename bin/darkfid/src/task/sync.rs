@@ -32,14 +32,14 @@ use crate::{
         ForkSyncRequest, ForkSyncResponse, HeaderSyncRequest, HeaderSyncResponse, SyncRequest,
         SyncResponse, TipRequest, TipResponse, BATCH,
     },
-    Darkfid,
+    DarkfiNodePtr,
 };
 
 // TODO: Parallelize independent requests.
 //       We can also make them be like torrents, where we retrieve chunks not in order.
 /// async task used for block syncing.
 /// A checkpoint can be provided to ensure node syncs the correct sequence.
-pub async fn sync_task(node: &Darkfid, checkpoint: Option<(u32, HeaderHash)>) -> Result<()> {
+pub async fn sync_task(node: &DarkfiNodePtr, checkpoint: Option<(u32, HeaderHash)>) -> Result<()> {
     info!(target: "darkfid::task::sync_task", "Starting blockchain sync...");
 
     // Grab blocks subscriber
@@ -133,7 +133,7 @@ pub async fn sync_task(node: &Darkfid, checkpoint: Option<(u32, HeaderHash)>) ->
 /// Auxiliary function to block until node is connected to at least one synced peer,
 /// and retrieve the synced peers tips.
 async fn synced_peers(
-    node: &Darkfid,
+    node: &DarkfiNodePtr,
     last_tip: &HeaderHash,
     checkpoint: Option<(u32, HeaderHash)>,
 ) -> HashMap<(u32, [u8; 32]), Vec<ChannelPtr>> {
@@ -223,7 +223,7 @@ async fn synced_peers(
 
 /// Auxiliary function to ask all peers for their current tip and find the most common one.
 async fn most_common_tip(
-    node: &Darkfid,
+    node: &DarkfiNodePtr,
     last_tip: &HeaderHash,
     checkpoint: Option<(u32, HeaderHash)>,
 ) -> (u32, Vec<ChannelPtr>) {
@@ -253,7 +253,7 @@ async fn most_common_tip(
 
 /// Auxiliary function to retrieve headers backwards until our last known one and verify them.
 async fn retrieve_headers(
-    node: &Darkfid,
+    node: &DarkfiNodePtr,
     peers: &[ChannelPtr],
     last_known: u32,
     tip_height: u32,
@@ -371,7 +371,7 @@ async fn retrieve_headers(
 
 /// Auxiliary function to retrieve blocks of provided headers and apply them to canonical.
 async fn retrieve_blocks(
-    node: &Darkfid,
+    node: &DarkfiNodePtr,
     peers: &[ChannelPtr],
     last_known: (u32, HeaderHash),
     block_sub: &JsonSubscriber,
@@ -484,7 +484,7 @@ async fn retrieve_blocks(
 }
 
 /// Auxiliary function to retrieve best fork state from a random peer.
-async fn sync_best_fork(node: &Darkfid, peers: &[ChannelPtr], last_tip: &HeaderHash) {
+async fn sync_best_fork(node: &DarkfiNodePtr, peers: &[ChannelPtr], last_tip: &HeaderHash) {
     info!(target: "darkfid::task::sync::sync_best_fork", "Syncing fork states from peers...");
     // Getting a random peer to ask for blocks
     let peer = &peers.choose(&mut OsRng).unwrap();

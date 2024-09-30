@@ -170,7 +170,7 @@ impl Wallet {
             genesis_block,
             verify_fees,
         };
-        let validator = Validator::new(&sled_db, validator_config).await?;
+        let validator = Validator::new(&sled_db, &validator_config).await?;
 
         // The Merkle tree for the `Money` contract is initialized with a "null"
         // leaf at position 0.

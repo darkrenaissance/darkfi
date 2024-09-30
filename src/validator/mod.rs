@@ -88,7 +88,7 @@ pub struct Validator {
 }
 
 impl Validator {
-    pub async fn new(db: &sled::Db, config: ValidatorConfig) -> Result<ValidatorPtr> {
+    pub async fn new(db: &sled::Db, config: &ValidatorConfig) -> Result<ValidatorPtr> {
         info!(target: "validator::new", "Initializing Validator");
 
         info!(target: "validator::new", "Initializing Blockchain");
@@ -114,7 +114,7 @@ impl Validator {
             blockchain.clone(),
             config.finalization_threshold,
             config.pow_target,
-            config.pow_fixed_difficulty,
+            config.pow_fixed_difficulty.clone(),
         )?;
 
         // Create the actual state

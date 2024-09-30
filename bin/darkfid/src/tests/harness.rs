@@ -44,7 +44,7 @@ use url::Url;
 use crate::{
     proto::{DarkfidP2pHandler, ProposalMessage},
     task::sync::sync_task,
-    Darkfid,
+    DarkfiNode, DarkfiNodePtr,
 };
 
 pub struct HarnessConfig {
@@ -59,8 +59,8 @@ pub struct Harness {
     pub config: HarnessConfig,
     pub vks: Vec<(Vec<u8>, String, Vec<u8>)>,
     pub validator_config: ValidatorConfig,
-    pub alice: Darkfid,
-    pub bob: Darkfid,
+    pub alice: DarkfiNodePtr,
+    pub bob: DarkfiNodePtr,
 }
 
 impl Harness {
@@ -97,13 +97,13 @@ impl Harness {
         // Alice
         let alice_url = Url::parse(&config.alice_url)?;
         settings.inbound_addrs = vec![alice_url.clone()];
-        let alice = generate_node(&vks, &validator_config, &settings, ex, true, true, None).await?;
+        let alice = generate_node(&vks, &validator_config, &settings, ex, true, None).await?;
 
         // Bob
         let bob_url = Url::parse(&config.bob_url)?;
         settings.inbound_addrs = vec![bob_url];
         settings.peers = vec![alice_url];
-        let bob = generate_node(&vks, &validator_config, &settings, ex, true, false, None).await?;
+        let bob = generate_node(&vks, &validator_config, &settings, ex, false, None).await?;
 
         Ok(Self { config, vks, validator_config, alice, bob })
     }
@@ -223,40 +223,30 @@ impl Harness {
     }
 }
 
-// Note: This function should mirror darkfid::main
+// Note: This function should mirror `darkfid::Darkfid::init`
 pub async fn generate_node(
     vks: &Vec<(Vec<u8>, String, Vec<u8>)>,
     config: &ValidatorConfig,
     settings: &Settings,
     ex: &Arc<smol::Executor<'static>>,
-    miner: bool,
     skip_sync: bool,
     checkpoint: Option<(u32, HeaderHash)>,
-) -> Result<Darkfid> {
+) -> Result<DarkfiNodePtr> {
     let sled_db = sled::Config::new().temporary(true).open()?;
     vks::inject(&sled_db, vks)?;
 
-    let validator = Validator::new(&sled_db, config.clone()).await?;
+    let validator = Validator::new(&sled_db, config).await?;
 
     let mut subscribers = HashMap::new();
     subscribers.insert("blocks", JsonSubscriber::new("blockchain.subscribe_blocks"));
     subscribers.insert("txs", JsonSubscriber::new("blockchain.subscribe_txs"));
     subscribers.insert("proposals", JsonSubscriber::new("blockchain.subscribe_proposals"));
-
-    // We initialize a dnet subscriber but do not activate it.
-    let dnet_sub = JsonSubscriber::new("dnet.subscribe_events");
+    subscribers.insert("dnet", JsonSubscriber::new("dnet.subscribe_events"));
 
     let p2p_handler = DarkfidP2pHandler::init(settings, ex).await?;
-    let node = Darkfid::new(
-        p2p_handler.clone(),
-        validator.clone(),
-        miner,
-        50,
-        subscribers.clone(),
-        None,
-        dnet_sub,
-    )
-    .await;
+    let node =
+        DarkfiNode::new(p2p_handler.clone(), validator.clone(), 50, subscribers.clone(), None)
+            .await;
 
     p2p_handler.clone().start(ex, &validator, &subscribers).await?;
 

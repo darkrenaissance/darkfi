@@ -38,12 +38,12 @@ use darkfi::{
 
 use crate::{
     error::{server_error, RpcError},
-    Darkfid,
+    DarkfiNode,
 };
 
 #[async_trait]
 #[rustfmt::skip]
-impl RequestHandler for Darkfid {
+impl RequestHandler for DarkfiNode {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
         debug!(target: "darkfid::rpc", "--> {}", req.stringify().unwrap());
 
@@ -94,7 +94,7 @@ impl RequestHandler for Darkfid {
     }
 }
 
-impl Darkfid {
+impl DarkfiNode {
     // RPCAPI:
     // Returns current system clock as `u64` (String) timestamp.
     //
@@ -142,7 +142,7 @@ impl Darkfid {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         }
 
-        self.dnet_sub.clone().into()
+        self.subscribers.get("dnet").unwrap().clone().into()
     }
 
     // RPCAPI:
@@ -222,7 +222,7 @@ impl Darkfid {
     }
 }
 
-impl HandlerP2p for Darkfid {
+impl HandlerP2p for DarkfiNode {
     fn p2p(&self) -> P2pPtr {
         self.p2p_handler.p2p.clone()
     }

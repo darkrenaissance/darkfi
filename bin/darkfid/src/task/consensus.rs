@@ -16,12 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{str::FromStr, sync::Arc};
+use std::str::FromStr;
 
 use darkfi::{
     blockchain::HeaderHash,
     rpc::{jsonrpc::JsonNotification, util::JsonValue},
-    system::{sleep, StoppableTask, Subscription},
+    system::{sleep, ExecutorPtr, StoppableTask, Subscription},
     util::{encoding::base64, time::Timestamp},
     Error, Result,
 };
@@ -34,10 +34,11 @@ use log::{error, info};
 
 use crate::{
     task::{garbage_collect_task, miner::MinerRewardsRecipientConfig, miner_task, sync_task},
-    Darkfid,
+    DarkfiNodePtr,
 };
 
 /// Auxiliary structure representing node consensus init task configuration
+#[derive(Clone)]
 pub struct ConsensusInitTaskConfig {
     pub skip_sync: bool,
     pub checkpoint_height: Option<u32>,
@@ -51,9 +52,9 @@ pub struct ConsensusInitTaskConfig {
 
 /// Sync the node consensus state and start the corresponding task, based on node type.
 pub async fn consensus_init_task(
-    node: Arc<Darkfid>,
+    node: DarkfiNodePtr,
     config: ConsensusInitTaskConfig,
-    ex: Arc<smol::Executor<'static>>,
+    ex: ExecutorPtr,
 ) -> Result<()> {
     // Check if network is configured to start in the future.
     // NOTE: Always configure the network to start in the future when bootstrapping
@@ -100,15 +101,15 @@ pub async fn consensus_init_task(
             Err(_) => return Err(Error::InvalidAddress),
         };
 
-        let spend_hook = match config.spend_hook {
-            Some(s) => match FuncId::from_str(&s) {
+        let spend_hook = match &config.spend_hook {
+            Some(s) => match FuncId::from_str(s) {
                 Ok(s) => Some(s),
                 Err(_) => return Err(Error::ParseFailed("Invalid spend hook")),
             },
             None => None,
         };
 
-        let user_data = match config.user_data {
+        let user_data = match &config.user_data {
             Some(u) => {
                 let bytes: [u8; 32] = match bs58::decode(&u).into_vec()?.try_into() {
                     Ok(b) => b,
@@ -131,15 +132,9 @@ pub async fn consensus_init_task(
     // Gracefully handle network disconnections
     loop {
         let result = if config.miner {
-            miner_task(
-                node.clone(),
-                recipient_config.as_ref().unwrap(),
-                config.skip_sync,
-                ex.clone(),
-            )
-            .await
+            miner_task(&node, recipient_config.as_ref().unwrap(), config.skip_sync, &ex).await
         } else {
-            replicator_task(node.clone(), ex.clone()).await
+            replicator_task(&node, &ex).await
         };
 
         match result {
@@ -160,7 +155,7 @@ pub async fn consensus_init_task(
 }
 
 /// Async task to start the consensus task, while monitoring for a network disconnections.
-async fn replicator_task(node: Arc<Darkfid>, ex: Arc<smol::Executor<'static>>) -> Result<()> {
+async fn replicator_task(node: &DarkfiNodePtr, ex: &ExecutorPtr) -> Result<()> {
     // Grab proposals subscriber and subscribe to it
     let proposals_sub = node.subscribers.get("proposals").unwrap();
     let prop_subscription = proposals_sub.publisher.clone().subscribe().await;
@@ -188,9 +183,9 @@ async fn monitor_network(subscription: &Subscription<Error>) -> Result<()> {
 
 /// Async task used for listening for new blocks and perform consensus.
 async fn consensus_task(
-    node: Arc<Darkfid>,
+    node: &DarkfiNodePtr,
     subscription: &Subscription<JsonNotification>,
-    ex: Arc<smol::Executor<'static>>,
+    ex: &ExecutorPtr,
 ) -> Result<()> {
     info!(target: "darkfid::task::consensus_task", "Starting consensus task...");
 

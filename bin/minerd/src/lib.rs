@@ -102,7 +102,7 @@ impl Minerd {
             |res| async move {
                 match res {
                     Ok(()) | Err(Error::RpcServerStopped) => node_.stop_connections().await,
-                    Err(e) => error!(target: "minerd::Minerd::start", "Failed stopping JSON-RPC server: {}", e),
+                    Err(e) => error!(target: "minerd::Minerd::start", "Failed starting JSON-RPC server: {}", e),
                 }
             },
             Error::RpcServerStopped,
@@ -189,10 +189,13 @@ fn minerd_programmatic_control() -> Result<()> {
                 daemon.start(&ex, &rpc_listen);
 
                 // Generate a JSON-RPC client to send mining jobs
-                let rpc_client =
-                    darkfi::rpc::client::RpcClient::new(rpc_listen.clone(), ex.clone())
-                        .await
-                        .unwrap();
+                let mut rpc_client =
+                    darkfi::rpc::client::RpcClient::new(rpc_listen.clone(), ex.clone()).await;
+                while rpc_client.is_err() {
+                    rpc_client =
+                        darkfi::rpc::client::RpcClient::new(rpc_listen.clone(), ex.clone()).await;
+                }
+                let rpc_client = rpc_client.unwrap();
 
                 // Send a mining job but stop the daemon after it starts mining
                 smol::future::or(

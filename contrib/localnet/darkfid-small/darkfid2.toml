@@ -26,9 +26,6 @@ minerd_endpoint = "tcp://127.0.0.1:28467"
 # PoW block production target, in seconds
 pow_target = 20
 
-# Participate in block production
-miner = false
-
 # Skip syncing process and start node right away
 skip_sync = false
 

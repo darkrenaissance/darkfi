@@ -16,16 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::Arc;
-
 use darkfi::{error::TxVerifyFailed, validator::verification::verify_transactions, Error, Result};
 use darkfi_sdk::crypto::MerkleTree;
 use log::{debug, error, info};
 
-use crate::Darkfid;
+use crate::DarkfiNodePtr;
 
 /// Async task used for purging erroneous pending transactions from the nodes mempool.
-pub async fn garbage_collect_task(node: Arc<Darkfid>) -> Result<()> {
+pub async fn garbage_collect_task(node: DarkfiNodePtr) -> Result<()> {
     info!(target: "darkfid::task::garbage_collect_task", "Starting garbage collection task...");
 
     // Grab all current unproposed transactions.  We verify them in batches,

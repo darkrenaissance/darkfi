@@ -34,9 +34,6 @@ minerd_endpoint = "tcp://127.0.0.1:48567"
 # PoW block production target, in seconds
 pow_target = 20
 
-# Participate in block production
-miner = true
-
 # Wallet address to receive mining rewards.
 # This is a dummy one so the miner can start,
 # replace with your own one.

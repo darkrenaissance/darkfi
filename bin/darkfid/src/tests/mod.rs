@@ -98,7 +98,6 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
         &settings,
         &ex,
         false,
-        false,
         Some((block2.header.height, block2.hash())),
     )
     .await?;
@@ -193,6 +192,97 @@ fn sync_blocks() -> Result<()> {
         || {
             smol::block_on(async {
                 sync_blocks_real(ex.clone()).await.unwrap();
+                drop(signal);
+            })
+        },
+    );
+
+    Ok(())
+}
+
+#[test]
+/// Test the programmatic control of `Darkfid`.
+///
+/// First we initialize a daemon, start it and then perform
+/// couple of restarts to verify everything works as expected.
+fn darkfid_programmatic_control() -> Result<()> {
+    // Initialize logger
+    let mut cfg = simplelog::ConfigBuilder::new();
+
+    // We check this error so we can execute same file tests in parallel,
+    // otherwise second one fails to init logger here.
+    if simplelog::TermLogger::init(
+        simplelog::LevelFilter::Info,
+        //simplelog::LevelFilter::Debug,
+        //simplelog::LevelFilter::Trace,
+        cfg.build(),
+        simplelog::TerminalMode::Mixed,
+        simplelog::ColorChoice::Auto,
+    )
+    .is_err()
+    {
+        log::debug!(target: "darkfid_programmatic_control", "Logger initialized");
+    }
+
+    // Daemon configuration
+    let mut genesis_block = darkfi::blockchain::BlockInfo::default();
+    let producer_tx = genesis_block.txs.pop().unwrap();
+    genesis_block.append_txs(vec![producer_tx]);
+    let bootstrap = genesis_block.header.timestamp.inner();
+    let config = darkfi::validator::ValidatorConfig {
+        finalization_threshold: 1,
+        pow_target: 20,
+        pow_fixed_difficulty: Some(BigUint::one()),
+        genesis_block,
+        verify_fees: false,
+    };
+    let consensus_config = crate::ConsensusInitTaskConfig {
+        skip_sync: true,
+        checkpoint_height: None,
+        checkpoint: None,
+        miner: false,
+        recipient: None,
+        spend_hook: None,
+        user_data: None,
+        bootstrap,
+    };
+    let sled_db = sled_overlay::sled::Config::new().temporary(true).open()?;
+    let (_, vks) = darkfi_contract_test_harness::vks::get_cached_pks_and_vks()?;
+    darkfi_contract_test_harness::vks::inject(&sled_db, &vks)?;
+    let rpc_listen = Url::parse("tcp://127.0.0.1:8240")?;
+
+    // Create an executor and communication signals
+    let ex = Arc::new(smol::Executor::new());
+    let (signal, shutdown) = smol::channel::unbounded::<()>();
+
+    easy_parallel::Parallel::new().each(0..1, |_| smol::block_on(ex.run(shutdown.recv()))).finish(
+        || {
+            smol::block_on(async {
+                // Initialize a daemon
+                let daemon = crate::Darkfid::init(
+                    &sled_db,
+                    &config,
+                    &darkfi::net::Settings::default(),
+                    &None,
+                    &None,
+                    &ex,
+                )
+                .await
+                .unwrap();
+
+                // Start it
+                daemon.start(&ex, &rpc_listen, &consensus_config).await.unwrap();
+
+                // Stop it
+                daemon.stop().await.unwrap();
+
+                // Start it again
+                daemon.start(&ex, &rpc_listen, &consensus_config).await.unwrap();
+
+                // Stop it
+                daemon.stop().await.unwrap();
+
+                // Shutdown entirely
                 drop(signal);
             })
         },

@@ -29,10 +29,10 @@ use darkfi::{
     util::encoding::base64,
 };
 
-use super::Darkfid;
+use super::DarkfiNode;
 use crate::{server_error, RpcError};
 
-impl Darkfid {
+impl DarkfiNode {
     // RPCAPI:
     // Simulate a network state transition with the given transaction.
     // Returns `true` if the transaction is valid, otherwise, a corresponding
@@ -122,13 +122,13 @@ impl Darkfid {
         // Block production participants can directly perform
         // the state transition check and append to their
         // pending transactions store.
-        let error_message = if self.miner {
+        let error_message = if self.rpc_client.is_some() {
             "Failed to append transaction to mempool"
         } else {
             "Failed to validate state transition"
         };
         // We'll perform the state transition check here.
-        if let Err(e) = self.validator.append_tx(&tx, self.miner).await {
+        if let Err(e) = self.validator.append_tx(&tx, self.rpc_client.is_some()).await {
             error!(target: "darkfid::rpc::tx_broadcast", "{}: {}", error_message, e);
             return server_error(RpcError::TxSimulationFail, id, None)
         };
