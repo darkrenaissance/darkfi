@@ -106,6 +106,8 @@ pub struct LocalDarkIRC {
     editbox_text: PropertyStr,
     chatview_scroll: PropertyFloat32,
     upgrade_popup_is_visible: PropertyBool,
+
+    seen_msgs: SyncMutex<Vec<MessageId>>,
 }
 
 impl LocalDarkIRC {
@@ -146,6 +148,8 @@ impl LocalDarkIRC {
             editbox_text,
             chatview_scroll,
             upgrade_popup_is_visible,
+
+            seen_msgs: SyncMutex::new(vec![]),
         }))
     }
 
@@ -352,9 +356,19 @@ impl LocalDarkIRC {
             adj_timest = now_timest;
         }
 
+        let msg_id = privmsg.msg_id(timest);
+        {
+            let mut seen = self.seen_msgs.lock().unwrap();
+            if seen.contains(&msg_id) {
+                warn!(target: "darkirc", "Skipping duplicate seen message: {msg_id}");
+                return Ok(())
+            }
+            seen.push(msg_id.clone());
+        }
+
         let mut arg_data = vec![];
         adj_timest.encode_async(&mut arg_data).await.unwrap();
-        privmsg.msg_id(timest).encode_async(&mut arg_data).await.unwrap();
+        msg_id.encode_async(&mut arg_data).await.unwrap();
         privmsg.nick.encode_async(&mut arg_data).await.unwrap();
         privmsg.msg.encode_async(&mut arg_data).await.unwrap();
 
