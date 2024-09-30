@@ -8,6 +8,8 @@ use simplelog::{
 use std::{thread::sleep, time::Duration};
 
 const LOGS_ENABLED: bool = true;
+// Measured in bytes
+const LOGFILE_MAXSIZE: usize = 5_000_000;
 
 #[cfg(target_os = "android")]
 const LOGFILE_PATH: &str = "/sdcard/Download/darkwallet.log";
@@ -82,8 +84,8 @@ pub fn setup_logging() {
         let logfile_path = expand_path(LOGFILE_PATH).unwrap();
         let log_file = FileRotate::new(
             logfile_path,
-            AppendCount::new(7),
-            ContentLimit::Lines(1000),
+            AppendCount::new(0),
+            ContentLimit::BytesSurpassed(LOGFILE_MAXSIZE),
             Compression::None,
             #[cfg(unix)]
             None,
