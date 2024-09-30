@@ -1,5 +1,5 @@
 default: fonts
-	cargo lrun
+	cargo lbuild
 	mv target/debug/darkwallet .
 	./darkwallet
 

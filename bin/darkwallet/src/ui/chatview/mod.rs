@@ -61,6 +61,9 @@ use super::{DrawUpdate, OnModify, UIObject};
 const EPSILON: f32 = 0.001;
 const BIG_EPSILON: f32 = 0.05;
 
+// Disable selecting lines for this release.
+const ENABLE_SELECT: bool = false;
+
 fn is_zero(x: f32) -> bool {
     x.abs() < EPSILON
 }
@@ -843,7 +846,9 @@ impl UIObject for ChatView {
             return false
         }
 
-        self.select_line(mouse_pos.y).await;
+        if ENABLE_SELECT {
+            self.select_line(mouse_pos.y).await;
+        }
         self.mouse_btn_held.store(true, Ordering::Relaxed);
         true
     }
@@ -872,7 +877,9 @@ impl UIObject for ChatView {
             return false
         }
 
-        self.select_line(mouse_pos.y).await;
+        if ENABLE_SELECT {
+            self.select_line(mouse_pos.y).await;
+        }
         false
     }
 
@@ -972,7 +979,9 @@ impl UIObject for ChatView {
                 if let Some(is_select_mode) = is_select_mode &&
                     is_select_mode
                 {
-                    self.select_line(touch_y).await;
+                    if ENABLE_SELECT {
+                        self.select_line(touch_y).await;
+                    }
                     return true
                 }
 
