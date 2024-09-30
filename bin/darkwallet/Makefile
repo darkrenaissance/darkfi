@@ -1,5 +1,7 @@
 default: fonts
 	cargo lrun
+	mv target/debug/darkwallet .
+	./darkwallet
 
 ibm-plex-mono-regular.otf:
 	wget https://codeberg.org/darkrenaissance/darkfi/raw/branch/data/ibm-plex-mono-regular.otf

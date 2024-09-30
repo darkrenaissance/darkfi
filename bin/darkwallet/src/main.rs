@@ -102,8 +102,14 @@ fn main() {
         }
     }
 
+    let exe_path = std::env::current_exe().unwrap();
+    let basename = exe_path.parent().unwrap();
+    std::env::set_current_dir(basename);
+
     info!("Target OS: {}", build_info::TARGET_OS);
     info!("Target arch: {}", build_info::TARGET_ARCH);
+    let cwd = std::env::current_dir().unwrap();
+    info!("Current dir: {}", cwd.display());
 
     let ex = Arc::new(smol::Executor::new());
     let sg_root = SceneNode3::root();
