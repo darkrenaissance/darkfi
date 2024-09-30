@@ -246,6 +246,11 @@ impl<'a> RenderContext<'a> {
         let view_w = view.w.round() as i32;
         let view_h = view.h.round() as i32;
 
+        // OpenGL does not like negative values here
+        if view_w <= 0 || view_h <= 0 {
+            return
+        }
+
         //if DEBUG_RENDER {
         //    debug!(target: "gfx", "=> viewport {view_x} {view_y} {view_w} {view_h}");
         //}
