@@ -807,7 +807,7 @@ impl MessageBuffer {
         nick: String,
         text: String,
     ) -> Option<&mut PrivMessage> {
-        //debug!(target: "ui::chatview", "MessageBuffer::insert_privmsg()");
+        debug!(target: "ui::chatview", "MessageBuffer::insert_privmsg({timest}, {msg_id}, {nick}, {text})");
         let font_size = self.font_size.get();
         let timestamp_font_size = self.timestamp_font_size.get();
         let timestamp_width = self.timestamp_width.get();
@@ -871,6 +871,7 @@ impl MessageBuffer {
         nick: String,
         text: String,
     ) -> f32 {
+        debug!(target: "ui::chatview", "MessageBuffer::push_privmsg({timest}, {msg_id}, {nick}, {text})");
         let font_size = self.font_size.get();
         let timestamp_font_size = self.timestamp_font_size.get();
         let timestamp_width = self.timestamp_width.get();

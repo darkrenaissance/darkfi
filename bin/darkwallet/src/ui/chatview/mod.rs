@@ -500,6 +500,10 @@ impl ChatView {
     ) {
         debug!(target: "ui::chatview", "handle_insert_line({timest}, {msg_id}, {nick}, {text})");
 
+        // Lock message buffer so background loader doesn't load the message as soon as it's
+        // inserted into the DB.
+        let mut msgbuf = self.msgbuf.lock().await;
+
         if !self.add_line_to_db(timest, &msg_id, &nick, &text).await {
             // Already exists so bail
             debug!(target: "ui::chatview", "duplicate msg so bailing");
@@ -507,7 +511,6 @@ impl ChatView {
         }
 
         // Add message to page
-        let mut msgbuf = self.msgbuf.lock().await;
         if msgbuf.mark_confirmed(&msg_id) {
             // Message already exists. Which means it must be an unconfirmed sent message.
             // Mark it as confirmed.
