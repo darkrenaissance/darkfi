@@ -45,8 +45,9 @@ ENV NDK_HOME /usr/local/android-ndk-r25
 
 # Copy contents to container. Should only use this on a clean directory
 WORKDIR /root/
-#RUN git clone https://github.com/not-fl3/cargo-quad-apk cargo-apk
-RUN git clone https://github.com/narodnik/cargo-quad-apk cargo-apk
+RUN git clone https://github.com/not-fl3/cargo-quad-apk cargo-apk
+# For deterministic builds, we want a deterministic toolchain
+RUN cd /root/cargo-apk && git checkout c9c5dfeac69921c888e0fac7963b23068cbc9446
 
 # ArmV7a
 #ENV CC ${NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi31-clang
