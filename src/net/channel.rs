@@ -480,7 +480,7 @@ impl Channel {
         session.type_id()
     }
 
-    fn p2p(&self) -> P2pPtr {
+    pub(in crate::net) fn p2p(&self) -> P2pPtr {
         self.session().p2p()
     }
 

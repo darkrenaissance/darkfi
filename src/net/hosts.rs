@@ -1098,6 +1098,11 @@ impl Hosts {
     pub(in crate::net) async fn register_channel(&self, channel: ChannelPtr) {
         let address = channel.address().clone();
 
+        // This is an attempt to skip any Tor (and similar-behaving) inbound connections
+        if channel.p2p().settings().read().await.inbound_addrs.contains(&address) {
+            return
+        }
+
         // This will panic if we are already connected to this peer, this peer
         // is suspended, or this peer is currently being inserted into the hostlist.
         // None of these scenarios should ever happen.
