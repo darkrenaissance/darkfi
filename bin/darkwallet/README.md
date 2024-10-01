@@ -17,6 +17,8 @@ make android
 
 To debug any issues, you can enter an interactive terminal using `make cli`.
 
+To delete everything, run `podman system reset`.
+
 # Useful Dev Commands
 
 This is just devs.

@@ -380,6 +380,9 @@ impl LocalDarkIRC {
     async fn handle_send(&self) {
         // Get text from editbox
         let text = self.editbox_text.get();
+        if text.is_empty() {
+            return
+        }
         // Clear editbox
         self.editbox_text.set("");
         self.chatview_scroll.set(0.);
