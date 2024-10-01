@@ -18,6 +18,10 @@
 - [DAO](testnet/dao.md)
 - [DarkIRC](misc/darkirc/darkirc.md)
 	- [Private Message](misc/darkirc/private_message.md)
+    - [Anonymous Nodes](clients/anonymous_nodes.md)
+        - [Tor Inbound Node](clients/tor_inbound.md)
+        - [tor-darkirc](misc/tor-darkirc.md)
+        
 
 # Developer Doc
 
@@ -51,8 +55,6 @@
     - [Anonymous payments](zkas/examples/sapling.md)
 - [Client](clients/clients.md)
   - [darkfid JSON-RPC API](clients/darkfid_jsonrpc.md)
-  - [Anonymous Nodes](clients/anonymous_nodes.md)
-    - [Tor Inbound Node](clients/tor_inbound.md)
 
 # Crypto
 
@@ -120,7 +122,6 @@
 
 # Misc
 
-- [tor-darkirc](misc/tor-darkirc.md)
 - [vanityaddr](misc/vanityaddr.md)
 - [darkIRC Specification](misc/darkirc/specification.md)
 - [tau](misc/tau.md)
