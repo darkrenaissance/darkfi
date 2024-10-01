@@ -34,14 +34,14 @@ use smol::{
 use tinyjson::JsonValue::{self};
 
 use crate::{
-    event_graph::util::{replayer_log, seconds_until_next_rotation},
+    event_graph::util::replayer_log,
     net::P2pPtr,
     rpc::{
         jsonrpc::{JsonResponse, JsonResult},
         util::json_map,
     },
     system::{
-        sleep, timeout::timeout, Publisher, PublisherPtr, StoppableTask, StoppableTaskPtr,
+        msleep, timeout::timeout, Publisher, PublisherPtr, StoppableTask, StoppableTaskPtr,
         Subscription,
     },
     Error, Result,
@@ -57,7 +57,7 @@ use proto::{EventRep, EventReq, TipRep, TipReq};
 
 /// Utility functions
 pub mod util;
-use util::{generate_genesis, next_rotation_timestamp};
+use util::{generate_genesis, millis_until_next_rotation, next_rotation_timestamp};
 
 // Debugging event graph
 pub mod deg;
@@ -512,7 +512,7 @@ impl EventGraph {
 
         loop {
             // Find the next rotation timestamp:
-            let next_rotation = next_rotation_timestamp(INITIAL_GENESIS / 1000, days_rotation);
+            let next_rotation = next_rotation_timestamp(INITIAL_GENESIS, days_rotation);
 
             // Prepare the new genesis event
             let current_genesis = Event {
@@ -523,10 +523,10 @@ impl EventGraph {
             };
 
             // Sleep until it's time to rotate.
-            let s = seconds_until_next_rotation(next_rotation);
+            let s = millis_until_next_rotation(next_rotation);
 
             debug!(target: "event_graph::dag_prune_task()", "Sleeping {}s until next DAG prune", s);
-            sleep(s).await;
+            msleep(s).await;
             debug!(target: "event_graph::dag_prune_task()", "Rotation period reached");
 
             // Trigger DAG prune

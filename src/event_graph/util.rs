@@ -52,20 +52,20 @@ pub(super) fn midnight_timestamp(days: i64) -> u64 {
     let cur_midnight = (now / DAY) * DAY;
 
     // Adjust for days_from_now
-    ((cur_midnight + (DAY * days)) / 1000) as u64
+    (cur_midnight + (DAY * days)) as u64
 }
 
 /// Calculate the number of days since a given midnight timestamp.
 pub(super) fn days_since(midnight_ts: u64) -> u64 {
     // Get current time
-    let now = UNIX_EPOCH.elapsed().unwrap().as_secs();
+    let now = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
 
     // Calculate the difference between the current timestamp
     // and the given midnight timestamp
     let elapsed_seconds = now - midnight_ts;
 
     // Convert the elapsed seconds into days
-    elapsed_seconds / (DAY / 1000) as u64
+    elapsed_seconds / DAY as u64
 }
 
 /// Calculate the timestamp of the next DAG rotation.
@@ -99,11 +99,11 @@ pub fn next_rotation_timestamp(starting_timestamp: u64, rotation_period: u64) ->
 /// Calculate the time in milliseconds until the next_rotation, given
 /// as a timestamp.
 /// `next_rotation` here represents a timestamp in UNIX epoch format.
-pub fn seconds_until_next_rotation(next_rotation: u64) -> u64 {
+pub fn millis_until_next_rotation(next_rotation: u64) -> u64 {
     // Store `now` in a variable in order to avoid a TOCTOU error.
     // There may be a drift of one second between this panic check and
     // the return value if we get unlucky.
-    let now = UNIX_EPOCH.elapsed().unwrap().as_secs();
+    let now = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
     if next_rotation < now {
         panic!("Next rotation timestamp is in the past");
     }
@@ -117,7 +117,7 @@ pub fn generate_genesis(days_rotation: u64) -> Event {
         INITIAL_GENESIS
     } else {
         // First check how many days passed since initial genesis.
-        let days_passed = days_since(INITIAL_GENESIS / 1000);
+        let days_passed = days_since(INITIAL_GENESIS);
 
         // Calculate the number of days_rotation intervals since INITIAL_GENESIS
         let rotations_since_genesis = days_passed / days_rotation;
@@ -126,7 +126,7 @@ pub fn generate_genesis(days_rotation: u64) -> Event {
         INITIAL_GENESIS + (rotations_since_genesis * days_rotation * DAY as u64)
     };
     Event {
-        timestamp: timestamp / 1000, // to keep the genesis hash equal to old nodes.
+        timestamp,
         content: GENESIS_CONTENTS.to_vec(),
         parents: [NULL_ID; N_EVENT_PARENTS],
         layer: 0,
@@ -225,7 +225,7 @@ mod tests {
         // we should get tomorrow's timestamp.
         // This is a special case.
         let midnight_today: u64 = midnight_timestamp(0);
-        let midnight_tomorrow = midnight_today + 86_400u64; // add a day
+        let midnight_tomorrow = midnight_today + 86_400_000u64; // add a day
         assert_eq!(midnight_tomorrow, next_rotation_timestamp(midnight_today, 1));
     }
 
@@ -242,12 +242,12 @@ mod tests {
     }
 
     #[test]
-    fn test_seconds_until_next_rotation_is_within_rotation_interval() {
+    fn test_millis_until_next_rotation_is_within_rotation_interval() {
         let days_rotation = 1u64;
         // The amount of time in seconds between rotations.
-        let rotation_interval = days_rotation * 86_400u64;
+        let rotation_interval = days_rotation * 86_400_000u64;
         let next_rotation_timestamp = next_rotation_timestamp(INITIAL_GENESIS, days_rotation);
-        let s = seconds_until_next_rotation(next_rotation_timestamp);
+        let s = millis_until_next_rotation(next_rotation_timestamp);
         assert!(s < rotation_interval);
     }
 }

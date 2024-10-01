@@ -37,7 +37,6 @@ ring = "0.17.8"
 # Encoding and parsing
 bs58 = "0.5.1"
 toml = "0.8.19"
-semver = "1.0.23"
 
 # Misc
 async-trait = "0.1.83"

@@ -7029,7 +7029,6 @@ dependencies = [
  "log",
  "rand 0.8.5",
  "ring 0.17.8",
- "semver 1.0.23",
  "serde",
  "signal-hook",
  "signal-hook-async-std",

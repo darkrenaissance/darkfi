@@ -76,8 +76,6 @@ use crate::{
     settings::{Args, CONFIG_FILE, CONFIG_FILE_CONTENTS},
 };
 
-const PROTOCOL_VERSION_SECS_TIMESTAMPS: semver::Version = semver::Version::new(0, 5, 0);
-
 struct Workspace {
     read_key: ChaChaBox,
     write_key: Option<Ed25519KeyPair>,
@@ -320,29 +318,7 @@ async fn start_sync_loop(
                         error!(target: "taud", "Failed inserting new event to DAG: {}", e);
                     } else {
                         // Otherwise, broadcast it
-                        let connected_peers = p2p.hosts().peers();
-                        let mut peers_millis = vec![];
-                        let mut peers_seconds = vec![];
-                        for peer in connected_peers {
-                            let peer_version = peer.version.lock().await.clone();
-                            if let Some(ref peer_version) = peer_version {
-                                if peer_version.version > PROTOCOL_VERSION_SECS_TIMESTAMPS {
-                                    peers_millis.push(peer)
-                                } else {
-                                    peers_seconds.push(peer)
-                                }
-                            }
-                        }
-
-                        if !peers_millis.is_empty() {
-                            p2p.broadcast_to(&EventPut(event.clone()), &peers_millis).await;
-                        }
-                        if !peers_seconds.is_empty() {
-                            let mut event = event;
-                            event.timestamp /= 1000;
-                            p2p.broadcast_to(&EventPut(event), &peers_seconds).await;
-                        }
-                        // p2p.broadcast(&EventPut(event)).await;
+                        p2p.broadcast(&EventPut(event)).await;
                     }
                 }
             }
