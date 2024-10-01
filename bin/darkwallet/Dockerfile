@@ -10,7 +10,7 @@ ENV RUSTUP_HOME=/usr/local/rustup \
 
 RUN curl -o rustup.sh --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs
 RUN chmod +x rustup.sh
-RUN ./rustup.sh -y --default-toolchain nightly
+RUN ./rustup.sh -y --default-toolchain nightly-2024-09-30
 
 #RUN rustup toolchain install nightly
 #RUN rustup default nightly
@@ -61,4 +61,3 @@ RUN cargo install --path /root/cargo-apk
 
 # Add build-tools to PATH, for apksigner
 ENV PATH="/opt/android-sdk-linux/build-tools/31.0.0/:${PATH}"
-
