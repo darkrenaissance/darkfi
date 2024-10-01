@@ -1,7 +1,43 @@
 # Set-up a Tor-enabled darkirc node
 
+_To connect to Tor, we use [Arti](https://gitlab.torproject.org/tpo/core/arti). 
+This is an experimental project with incomplete security features. See Arti's 
+[roadmap](https://gitlab.torproject.org/tpo/core/arti#roadmap) for more 
+information._
+
+Using Tor, we can host anonymous nodes as Tor hidden services. To do
+this, we need to set up our Tor daemon and create a hidden service.
+The following instructions should work on any Linux system.
+
 ## Step 1: Install Tor and Launch a Hidden Service
-[Install Tor](https://darkrenaissance.github.io/darkfi/clients/tor_inbound.html).
+
+Tor can usually be installed with your package manager. For example
+on an `apt` based system we can run:
+
+```
+# apt install tor
+```
+
+This will install it. Now in `/etc/tor/torrc` we can set up the hidden
+service. For hosting an anonymous `darkirc` node, set up the following
+lines in the file:
+
+```
+HiddenServiceDir /var/lib/tor/darkfi_darkirc
+HiddenServicePort 25551 127.0.0.1:25551
+```
+
+Then restart Tor:
+
+```
+# /etc/init.d/tor restart
+```
+
+You can grab the hostname of your hidden service from the directory:
+
+```
+# cat /var/lib/tor/darkfi_darkirc/hostname
+```
 
 Note your `.onion` address and the ports you used while setting up the
 Hidden Service.
@@ -53,12 +89,12 @@ Run `./darkirc`. Welcome to the dark forest.
 
 Run `darkirc -vv` for verbose debugging. This will show detailed errors including
 tor connection issues. Refer to 
-[Network troubleshooting](https://darkrenaissance.github.io/darkfi/misc/network-troubleshooting.html)
+[Network troubleshooting](../misc/network-troubleshooting.html)
 for further troubleshooting resources.
 
 ### Connection issues
 
-Review the configuration file for any mistakes. Check for duplicated variables.
+Review the configuration file for any mistakes. Check for duplicate variables.
 
 ### DagSync spam
 

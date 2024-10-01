@@ -19,9 +19,7 @@
 - [DarkIRC](misc/darkirc/darkirc.md)
 	- [Private Message](misc/darkirc/private_message.md)
     - [Anonymous Nodes](clients/anonymous_nodes.md)
-        - [Tor Inbound Node](clients/tor_inbound.md)
-        - [tor-darkirc](misc/tor-darkirc.md)
-        
+        - [Tor DarkIRC](misc/tor_darkirc.md)
 
 # Developer Doc
 
