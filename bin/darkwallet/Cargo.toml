@@ -31,9 +31,9 @@ darkfi = {path = "../../", features = ["async-daemonize", "event-graph", "net", 
 evgrd = {path = "../../script/evgrd/"}
 #darkfi-sdk = {path = "../../src/sdk", features = ["async"]}
 darkfi-serial = {path = "../../src/serial", features = ["async"]}
-thiserror = "1.0.63"
-smol = "2.0.1"
-atomic_float = "1.0.0"
+thiserror = "1.0.64"
+smol = "2.0.2"
+atomic_float = "1.1.0"
 async-channel = "2.3.1"
 easy-parallel = "3.3.1"
 rand = "0.8.5"
@@ -46,10 +46,10 @@ sled-overlay = "0.1.3"
 url = "2.5.2"
 semver = "1.0.23"
 chrono = "0.4.38"
-async-gen = "0.2"
-async-trait = "0.1.82"
+async-gen = "0.2.3"
+async-trait = "0.1.83"
 blake3 = "1.5.4"
-simplelog = "0.12.1"
+simplelog = "0.12.2"
 # For log files
 file-rotate = "0.7.6"
 
@@ -65,8 +65,8 @@ halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v4"}
 [target.'cfg(target_os = "android")'.dependencies]
 android_logger = "0.13.3"
 # Required by Arti: tor-dirmgr
-#rusqlite = {version = "0.31.0", features = ["bundled"]}
-tor-dirmgr = {version="0.21.0", features=["static"]}
+rusqlite = {version = "0.32.1", features = ["bundled"]}
+tor-dirmgr = {version="0.23.0", features=["static"]}
 
 [package.metadata.android.activity_attributes]
 "android:exported" = "true"

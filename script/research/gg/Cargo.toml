@@ -21,7 +21,7 @@ darkfi-sdk = {path = "../../../src/sdk"}
 darkfi-serial = {path = "../../../src/serial"}
 
 # Misc
-async-std = {version = "1.12.0", features = ["attributes"]}
+async-std = {version = "1.13.0", features = ["attributes"]}
 bs58 = "0.5.1"
 clap = {version = "4.4.11", features = ["derive"]}
 sled-overlay = "0.1.3"

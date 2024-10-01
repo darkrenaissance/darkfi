@@ -20,15 +20,15 @@ easy-parallel = "3.3.1"
 signal-hook-async-std = "0.2.2"
 signal-hook = "0.3.17"
 simplelog = "0.12.2"
-smol = "2.0.1"
+smol = "2.0.2"
 
 # arg parsing
-serde = {version = "1.0.209", features = ["derive"]}
+serde = {version = "1.0.210", features = ["derive"]}
 structopt = "0.3.26"
 structopt-toml = "0.5.1"
 
 # misc
-async-trait = "0.1.81"
+async-trait = "0.1.83"
 log = "0.4.22"
 url = "2.5.2"
 # ANCHOR_END: dependencies

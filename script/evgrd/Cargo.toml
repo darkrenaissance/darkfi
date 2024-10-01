@@ -36,17 +36,17 @@ log = "0.4.22"
 url = "2.5.2"
 
 # Daemon
-smol = "2.0.1"
+smol = "2.0.2"
 
 # evgrd deps
-async-trait = {version = "0.1.81", optional = true}
+async-trait = {version = "0.1.83", optional = true}
 futures = {version = "0.3.30", optional = true}
 semver = {version = "1.0.23", optional = true}
 easy-parallel = {version = "3.3.1", optional = true}
 signal-hook-async-std = {version = "0.2.2", optional = true}
 signal-hook = {version = "0.3.17", optional = true}
 simplelog = {version = "0.12.2", optional = true}
-serde = {version = "1.0.209", features = ["derive"], optional = true}
+serde = {version = "1.0.210", features = ["derive"], optional = true}
 structopt = {version = "0.3.26", optional = true}
 structopt-toml = {version = "0.5.1", optional = true}
 
@@ -70,4 +70,3 @@ build-daemon = [
 
 # Temp stuff
 [workspace]
-
