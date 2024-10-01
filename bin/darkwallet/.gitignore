@@ -1,5 +1,6 @@
 /chatdb
 /target
-ibm-plex-mono-light.otf
-NotoColorEmoji.ttf
-Cargo.lock
+src/build_info.rs
+*.apk
+*.otf
+*.ttf
