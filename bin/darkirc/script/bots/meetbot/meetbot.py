@@ -132,7 +132,7 @@ async def main(debug=False):
                     await writer.drain()
 
                     for i, topic in enumerate(topics):
-                        reply = f"PRIVMSG {chan} :{i+1}. {topic}\e\n"
+                        reply = f"PRIVMSG {chan} :{i+1}. {topic}\r\n"
                         writer.write(reply.encode("utf-8"))
                         await writer.drain()
 
