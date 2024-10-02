@@ -525,7 +525,7 @@ impl EventGraph {
             // Sleep until it's time to rotate.
             let s = millis_until_next_rotation(next_rotation);
 
-            debug!(target: "event_graph::dag_prune_task()", "Sleeping {}s until next DAG prune", s);
+            debug!(target: "event_graph::dag_prune_task()", "Sleeping {}ms until next DAG prune", s);
             msleep(s).await;
             debug!(target: "event_graph::dag_prune_task()", "Rotation period reached");
 
