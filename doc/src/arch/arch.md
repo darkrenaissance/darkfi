@@ -262,5 +262,5 @@ to properly price them for verification fees.
 
 ### Documentation
 
-* Create beginner level tutorial to introduce contract developement and tools.
+* Create beginner level tutorial to introduce contract development and tools.
 * Create a list of outstanding work before mainnet.
