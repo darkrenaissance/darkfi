@@ -22,7 +22,9 @@ def month_to_unix(month=None):
     return unix
 
 def unix_to_datetime(timestamp):
-    return datetime.fromtimestamp(int(timestamp), UTC)
+    timestamp = int(timestamp)
+    ts = timestamp if timestamp < 1e10 else timestamp/1000
+    return datetime.fromtimestamp(ts, UTC)
 
 task_template = {
     "workspace": str,
