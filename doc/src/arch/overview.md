@@ -7,7 +7,7 @@ outline a few key terms that help explain DarkFi.
 **Blockchain:** The DarkFi blockchain is based off Proof of Work RandomX
 algorithm, paired with Delayed finality. Consensus participating nodes,
 called miners, produce and propose new blocks to the network, extending
-some fork chain, which once it reaches a finality security thresshold,
+some fork chain, which once it reaches a finality security threshold,
 can be appended to canonical by all nodes in the network.
 
 **Wallet:** A wallet is a portal to the DarkFi network. It provides
@@ -23,7 +23,7 @@ and P2P task manager [tau](../misc/tau.md).
 
 **ZK smart contracts:** Anonymous applications on DarkFi run on proofs
 that enforce an order of operations. We call these zero-knowledge smart
-contracts. Anonymous transactions on DarkFi is possible due to the
+contracts. Anonymous transactions on DarkFi are possible due to the
 interplay of two contracts, mint and burn (see the [sapling payment
 scheme](../zkas/examples/sapling.md)). Using the same method, we can
 define advanced applications.

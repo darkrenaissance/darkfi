@@ -5,7 +5,7 @@
 There is a scheme called commit-and-reveal, where given an object $x$
 (or set of objects), you generate a random blind $b$, and construct the
 commitment $C = \textrm{hash}(x, b)$. By publishing $C$, you are
-commmitted to the value $x$.
+committed to the value $x$.
 
 Secondly, we may wish to publish long lived objects on the blockchain,
 which are essentially commitments to several parameters that represent
@@ -184,7 +184,7 @@ the vote is proposed.
 
 ## Forking the Global State (with SMT)
 
-Instead of revealing the nullifier, we instead snapshot the the nullifier
+Instead of revealing the nullifier, we instead snapshot the nullifier
 tree alongside $C$.
 
 The downsides are:
@@ -238,7 +238,7 @@ The proposal is as follows and involves a merkle tree $𝐂$, and a SMT $𝐍$.
 
 For the sake of clarity, we will not detail the storing of the trees themselves.
 For $𝐂$, the tree is stored in `db_info`, while $𝐍$ has a full on-disk
-representation. Instead the info in this section concerns the auxilliary data
+representation. Instead the info in this section concerns the auxiliary data
 required for using the trees with snapshotted states.
 
 ## DB Merkle Roots

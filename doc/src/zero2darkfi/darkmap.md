@@ -6,13 +6,13 @@ Suppose you want to build a name registry.
 
 You want this to be:
 * resistant to any coercion
-* leaving no trace who owns a name
+* leaving no trace of who owns a name
 
 Because the users intend to use it for critical things that they like privacy for.
 Say naming their wallet address e.g. anon42's wallet address -> 0x696969696969.
 
 Getting a wrong wallet address means, you pay a bad person instead of anon42.
-Revealing who owns the name reveals information who might own the wallet.
+Revealing who owns the name reveals information on who might own the wallet.
 Both are unacceptable to your users.
 
 Upon examination we see backdoor in many solutions.
@@ -25,7 +25,7 @@ Upon examination we see backdoor in many solutions.
 An immutable name registry deployed on Darkfi.
 
 * names can be immutable, not even the name registry owner can change the name
-* there is no trace who owns the name
+* there is no trace of who owns the name
 
 ### API: Get
 
@@ -81,7 +81,7 @@ cd ../ && git clone https://github.com/darkrenaissance/darkmap
 ## Tool 1: `ZKAS`, `ZKVM`
 
 We want a way for someone to control an account and account to control one name registry. 
-You could use public key crytography.
+You could use public key cryptography.
 But in here, we will use ZK to accomplish the same thing for our learning.
 
 In Darkfi, circuits are programmed in `ZKAS` (ZK Assembly) and later run in `ZKVM` for generating proofs.
@@ -100,13 +100,13 @@ Let's see how to run the set_v1.zk by reading `<darkfi>/bin/zkrunner/README.md`.
 
 ### Outcome
 
-Good job! Now you have you learned how to prove and run using a ZKAS circuit.
+Good job! Now you have learned how to prove and run using a ZKAS circuit.
 
 ## Tool 2: WASM contract
 
 In Darkfi, a contract is deployed as a wasm module. 
 Rust has one of the best wasm support along with C and C++, so Darkmap is implemented in Rust.
-In theory, any language that compiles to wasm can be used make a contract.
+In theory, any language that compiles to wasm can be used to make a contract.
 
 Let's learn about the contract by reading `<darkmap>/src/entrypoints.rs`.
 
@@ -117,17 +117,17 @@ FIXME: perhaps more detailed explanation
 ## Deploying 
 
 Currently, the infrastructure for deploying non-native contracts is being worked on. 
-So Darkmap was tested by modifiying the darkfi validator to deploy it as native contract.
+So Darkmap was tested by modifying the darkfi validator to deploy it as native contract.
 
 If you like to try it out, take a look at the [pull request draft](https://codeberg.org/darkrenaissance/darkfi/pulls/170/files#diff-1592d061816d5a4da17e089758e15df75ae1ab963b2288e6d84b8f29b06f7d4f).
 
 In particular:
 * `src/consensus/validator.rs`
-* `sdk/src/crpyto/*`
+* `sdk/src/crypto/*`
 
 ## Testing and client implementation
 
-For now, the best place to learn is learn from the darkmap pull request draft or `src/contract/money`.
+For now, the best place to learn is to learn from the darkmap pull request draft or `src/contract/money`.
 
 ## Notes
 

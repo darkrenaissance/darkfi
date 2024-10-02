@@ -83,7 +83,7 @@ sum of its block's squared target distances, and the second being the sum of
 their squared hash distances. Squared distances are used to disproportionately
 favors smaller targets, with the idea being that it will be harder to trigger
 a longer reorg between forks. When we compare forks, we first check the first
-sum, and if its tied, we use the second as the tie breaker, since we know it
+sum, and if it's tied, we use the second as the tie breaker, since we know it
 will be statistically unique for each sequence.
 
 The ranking of a fork is always increasing as new blocks are appended.
@@ -163,7 +163,7 @@ Extending the canonical blockchain with a new block proposal:
 ## Finalization
 
 Based on the rank properties, each node will diverge to the highest ranking
-fork, and new fork wil emerge extending that at its tips.
+fork, and new fork will emerge extending that at its tips.
 A security threshold is set, which refers to the height where the probability
 to produce a fork, able to reorg the current best ranking fork reaches zero,
 similar to the # of block confirmation used by other PoW based protocols.
@@ -315,7 +315,7 @@ which means it's sufficient to compare $𝐚$ and $𝐛$ directly.
 
 ## Proposed Rank
 
-With a PoW mining system, we are guaranteed to always have that the block hash
+With a PoW mining system, we are guaranteed to always have the block hash
 $h(b) ≤ T(b)$. Since the block hashes $( h(b₁), …, h(bₘ) )$ for a sequence
 $( b₁, …, bₘ )$ have the property that $∑ h(bᵢ) ≤ ∑ T(bᵢ)$, as well as being
 sufficiently random, we can use them to define our work function.
