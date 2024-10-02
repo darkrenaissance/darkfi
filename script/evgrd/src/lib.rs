@@ -18,10 +18,10 @@
 
 use darkfi::{
     event_graph::{
-        util::{generate_genesis, next_rotation_timestamp, seconds_until_next_rotation},
+        util::{generate_genesis, millis_until_next_rotation, next_rotation_timestamp},
         Event, GENESIS_CONTENTS, INITIAL_GENESIS, NULL_ID, N_EVENT_PARENTS,
     },
-    system::{sleep, Publisher, PublisherPtr, StoppableTask, StoppableTaskPtr},
+    system::{msleep, Publisher, PublisherPtr, StoppableTask, StoppableTaskPtr},
     Error, Result,
 };
 use darkfi_serial::{
@@ -173,7 +173,7 @@ impl LocalEventGraph {
 
         loop {
             // Find the next rotation timestamp:
-            let next_rotation = next_rotation_timestamp(INITIAL_GENESIS / 1000, days_rotation);
+            let next_rotation = next_rotation_timestamp(INITIAL_GENESIS, days_rotation);
 
             // Prepare the new genesis event
             let current_genesis = Event {
@@ -184,10 +184,10 @@ impl LocalEventGraph {
             };
 
             // Sleep until it's time to rotate.
-            let s = seconds_until_next_rotation(next_rotation);
+            let s = millis_until_next_rotation(next_rotation);
 
             debug!(target: "event_graph::dag_prune_task()", "Sleeping {}s until next DAG prune", s);
-            sleep(s).await;
+            msleep(s).await;
             debug!(target: "event_graph::dag_prune_task()", "Rotation period reached");
 
             // Trigger DAG prune
