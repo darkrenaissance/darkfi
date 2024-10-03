@@ -83,7 +83,7 @@ impl ZkBinary {
     }
 
     fn opcodes(&self) -> Vec<ZkOpcode> {
-        return self.0.opcodes.iter().map(|op| ZkOpcode(op.0)).collect()
+        self.0.opcodes.iter().map(|op| ZkOpcode(op.0)).collect()
     }
 }
 

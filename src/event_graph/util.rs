@@ -80,7 +80,7 @@ pub fn next_rotation_timestamp(starting_timestamp: u64, rotation_period: u64) ->
     // Find out how many rotation periods have occurred since
     // the starting point.
     // Note: when rotation_period = 1, rotations_since_start = days_passed
-    let rotations_since_start = (days_passed + rotation_period - 1) / rotation_period;
+    let rotations_since_start = days_passed.div_ceil(rotation_period);
 
     // Find out the number of days until the next rotation. Panic if result is beyond the range
     // of i64.

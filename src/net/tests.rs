@@ -182,7 +182,7 @@ async fn get_random_gold_host(
     (entry.clone(), position)
 }
 
-async fn _check_random_hostlist(outbound_instances: &Vec<Arc<P2p>>, rng: &mut ThreadRng) {
+async fn _check_random_hostlist(outbound_instances: &[Arc<P2p>], rng: &mut ThreadRng) {
     let mut urls = HashSet::new();
     let random_node = outbound_instances.choose(rng).unwrap();
     let external_addr = random_node.settings().read().await.external_addrs[0].clone();

@@ -154,11 +154,7 @@ async fn bootstrap_nodes(
     eg_instances
 }
 
-async fn assert_dags(
-    eg_instances: &Vec<Arc<EventGraph>>,
-    expected_len: usize,
-    rng: &mut ThreadRng,
-) {
+async fn assert_dags(eg_instances: &[Arc<EventGraph>], expected_len: usize, rng: &mut ThreadRng) {
     let random_node = eg_instances.choose(rng).unwrap();
     let last_layer_tips =
         random_node.unreferenced_tips.read().await.last_key_value().unwrap().1.clone();

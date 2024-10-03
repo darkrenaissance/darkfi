@@ -139,7 +139,7 @@ impl Darkfid {
     ) -> Result<DarkfidPtr> {
         info!(target: "darkfid::Darkfid::init", "Initializing a Darkfi daemon...");
         // Initialize validator
-        let validator = Validator::new(&sled_db, config).await?;
+        let validator = Validator::new(sled_db, config).await?;
 
         // Initialize P2P network
         let p2p_handler = DarkfidP2pHandler::init(net_settings, ex).await?;

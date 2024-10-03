@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-//! Smart contract implementing Anonymous DAOs on DarkFi
+//! Smart contract implementing Anonymous DAOs on DarkFi.
 
 use darkfi_sdk::error::ContractError;
 

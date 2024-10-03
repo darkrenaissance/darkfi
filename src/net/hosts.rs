@@ -83,7 +83,7 @@ use crate::{
 ///
 ///  TODO: Use HostState::Free `age` variable to implement a pruning logic that deletes peers from
 ///  the registry once they have bypassed a certain age threshold.
-
+///
 // An array containing all possible local host strings
 // TODO: This could perhaps be more exhaustive?
 pub const LOCAL_HOST_STRS: [&str; 2] = ["localhost", "localhost.localdomain"];
@@ -830,7 +830,7 @@ impl HostContainer {
             }
         }
 
-        if !tsv.eq("") {
+        if !tsv.is_empty() {
             info!(target: "net::hosts::save_hosts()", "Saving hosts to: {:?}",
                   path);
             if let Err(e) = save_file(&path, &tsv) {

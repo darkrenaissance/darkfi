@@ -310,7 +310,6 @@ pub struct DaoVoteParamsInput {
     pub signature_public: PublicKey,
 }
 // ANCHOR_END: dao-vote-params-input
-/// Input for a DAO proposal vote
 
 /// State update for `Dao::Vote`
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]

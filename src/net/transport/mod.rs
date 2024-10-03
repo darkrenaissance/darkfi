@@ -200,7 +200,6 @@ impl Dialer {
     }
 
     /// Dial an instantiated [`Dialer`]. This creates a connection and returns a stream.
-
     /// The Tor-based Dialer variants can panic: this is intended. There exists validation
     /// for hosts and ports in other parts of the codebase. A panic occurring here
     /// likely indicates a configuration issue on the part of the user. It is preferable
