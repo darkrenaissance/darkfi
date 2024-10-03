@@ -257,22 +257,19 @@ impl EventGraph {
                 continue
             };
 
-            let peer_tips = match timeout(
-                Duration::from_secs(self.p2p.settings().read().await.outbound_connect_timeout),
-                tip_rep_sub.receive(),
-            )
-            .await
-            {
-                Ok(peer_tips) => peer_tips?,
-                Err(_) => {
-                    error!(
-                        target: "event_graph::dag_sync()",
-                        "[EVENTGRAPH] Sync: Peer {} didn't reply with tips in time, skipping", url,
-                    );
-                    communicated_peers -= 1;
-                    continue
-                }
+            // Node waits for response
+            let Ok(peer_tips) = tip_rep_sub
+                .receive_with_timeout(self.p2p.settings().read().await.outbound_connect_timeout)
+                .await
+            else {
+                error!(
+                    target: "event_graph::dag_sync()",
+                    "[EVENTGRAPH] Sync: Peer {} didn't reply with tips in time, skipping", url,
+                );
+                communicated_peers -= 1;
+                continue
             };
+
             let peer_tips = &peer_tips.0;
 
             // Note down the seen tips
