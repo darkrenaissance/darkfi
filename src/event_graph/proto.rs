@@ -22,7 +22,6 @@ use std::{
         atomic::{AtomicUsize, Ordering::SeqCst},
         Arc,
     },
-    time::Duration,
 };
 
 use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
@@ -30,7 +29,7 @@ use log::{debug, error, trace, warn};
 use smol::Executor;
 
 use super::{Event, EventGraphPtr, NULL_ID};
-use crate::{impl_p2p_message, net::*, system::timeout::timeout, Error, Result};
+use crate::{impl_p2p_message, net::*, Error, Result};
 
 /// Malicious behaviour threshold. If the threshold is reached, we will
 /// drop the peer from our P2P connection.
@@ -256,25 +255,23 @@ impl ProtocolEventGraph {
                         .send(&EventReq(missing_parents.clone().into_iter().collect()))
                         .await?;
 
-                    let parents = match timeout(
-                        Duration::from_secs(
+                    // Node waits for response
+                    let Ok(parents) = self
+                        .ev_rep_sub
+                        .receive_with_timeout(
                             self.event_graph.p2p.settings().read().await.outbound_connect_timeout,
-                        ),
-                        self.ev_rep_sub.receive(),
-                    )
-                    .await
-                    {
-                        Ok(parent) => parent?,
-                        Err(_) => {
-                            error!(
-                                target: "event_graph::protocol::handle_event_put()",
-                                "[EVENTGRAPH] Timeout while waiting for parents {:?} from {}",
-                                missing_parents, self.channel.address(),
-                            );
-                            self.channel.stop().await;
-                            return Err(Error::ChannelStopped)
-                        }
+                        )
+                        .await
+                    else {
+                        error!(
+                            target: "event_graph::protocol::handle_event_put()",
+                            "[EVENTGRAPH] Timeout while waiting for parents {:?} from {}",
+                            missing_parents, self.channel.address(),
+                        );
+                        self.channel.stop().await;
+                        return Err(Error::ChannelStopped)
                     };
+
                     let parents = parents.0.clone();
 
                     for parent in parents {

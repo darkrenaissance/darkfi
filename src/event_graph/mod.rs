@@ -20,7 +20,6 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet, VecDeque},
     path::PathBuf,
     sync::Arc,
-    time::Duration,
 };
 
 use darkfi_serial::{deserialize_async, serialize_async};
@@ -40,10 +39,7 @@ use crate::{
         jsonrpc::{JsonResponse, JsonResult},
         util::json_map,
     },
-    system::{
-        msleep, timeout::timeout, Publisher, PublisherPtr, StoppableTask, StoppableTaskPtr,
-        Subscription,
-    },
+    system::{msleep, Publisher, PublisherPtr, StoppableTask, StoppableTaskPtr, Subscription},
     Error, Result,
 };
 
@@ -358,34 +354,20 @@ impl EventGraph {
                     continue
                 }
 
-                let parent = match timeout(
-                    Duration::from_secs(self.p2p.settings().read().await.outbound_connect_timeout),
-                    ev_rep_sub.receive(),
-                )
-                .await
-                {
-                    Ok(parent) => parent,
-                    Err(_) => {
-                        error!(
-                            target: "event_graph::dag_sync()",
-                            "[EVENTGRAPH] Sync: Timeout waiting for parents {:?} from {}",
-                            missing_parents, url,
-                        );
-                        continue
-                    }
+                // Node waits for response
+                let Ok(parent) = ev_rep_sub
+                    .receive_with_timeout(self.p2p.settings().read().await.outbound_connect_timeout)
+                    .await
+                else {
+                    error!(
+                        target: "event_graph::dag_sync()",
+                        "[EVENTGRAPH] Sync: Timeout waiting for parents {:?} from {}",
+                        missing_parents, url,
+                    );
+                    continue
                 };
 
-                let parents = match parent {
-                    Ok(v) => v.0.clone(),
-                    Err(e) => {
-                        error!(
-                            target: "event_graph::dag_sync()",
-                            "[EVENTGRAPH] Sync: Failed receiving parents {:?}: {}",
-                            missing_parents, e,
-                        );
-                        continue
-                    }
-                };
+                let parents = parent.0.clone();
 
                 for parent in parents {
                     let parent_id = parent.id();
