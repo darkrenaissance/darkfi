@@ -137,6 +137,8 @@ class Model:
             case 'outbound_slot_connected':
                 slot = info['slot']
                 addr = info['addr']
+                event = self.nodes[name]['event']
+                event[(f'{name}', f'{slot}')] = [f'connected: addr={addr}', 0]
                 id = info['channel_id']
                 self.nodes[name]['outbound'][f'{slot}'] = [addr, id]
                 logging.debug(f'{current_time}  slot {slot}: connected    addr={addr}')
