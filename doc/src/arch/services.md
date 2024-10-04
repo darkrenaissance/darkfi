@@ -156,7 +156,7 @@ impl Child {
 ```
 
 Otherwise if the relationship is just one way, use `Arc<Foo>`. For example if doing dependency
-injection where component B dependent on component A, then we could do:
+injection where component B is dependent on component A, then we could do:
 
 ```rust
 let comp_a = Foo::new();
