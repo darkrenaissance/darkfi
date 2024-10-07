@@ -45,5 +45,8 @@ witness.json
 /bin/vanityaddr/vanityaddr
 /vanityaddr
 
+/bin/darkwallet/darkwallet
+/darkwallet
+
 *.rusty-tags.emacs
 /tags
