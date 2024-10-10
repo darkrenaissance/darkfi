@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["ENCODE_STD","STD_INV_ALPHABET"],"fn":["decode","encode"]};

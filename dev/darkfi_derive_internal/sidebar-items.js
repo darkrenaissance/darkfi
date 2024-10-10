@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["async_enum_de","async_enum_ser","async_struct_de","async_struct_ser","contains_initialize_with","contains_skip","discriminant_map","enum_de","enum_ser","struct_de","struct_ser"],"mod":["async_derive","sync_derive"],"struct":["VariantParts"]};

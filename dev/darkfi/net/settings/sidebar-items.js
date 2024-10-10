@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["BanPolicy"],"struct":["Settings","SettingsOpt"],"type":["BlacklistEntry"]};

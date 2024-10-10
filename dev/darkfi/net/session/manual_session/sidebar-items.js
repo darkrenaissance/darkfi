@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["ManualSession","Slot"],"type":["ManualSessionPtr"]};

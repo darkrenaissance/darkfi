@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["ALLOWED_FIELDS","MAX_K","MAX_NS_LEN","MIN_BIN_SIZE"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["EPOCH","NTP_ADDRESS","RETRIES"],"fn":["check_clock","clock_check","ntp_request"]};
