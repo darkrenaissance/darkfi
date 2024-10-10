@@ -149,6 +149,15 @@ we'll delete the directory:
 4. Start `tor` daemon 
 5. Start `darkirc`
 
+### DagSync spam
+
+If you see a many rapid `EventReq` messages in the log, it is possible that there is
+an incompatibility with your local `darkirc` database and the state of the network.
+
+This can be resolved by deleting `~/.local/darkfi/darkirc_db/`
+
+This is a known bug and we are working on a fix.
+
 ## dnet
 
 dnet is a simple tui to explore darkfi p2p network topology. You can use 
@@ -251,6 +260,9 @@ Your config files are generated in your `~/.config/darkfi` directory.
 You'll have to run each daemon once for the app to spawn a config file, 
 which you can review and edit. There is also helpful information within 
 the config files.
+
+If experiencing connection issues review the configuration file for any mistakes. 
+Check for duplicate variables.
 
 ### Node information script
 

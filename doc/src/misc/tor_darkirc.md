@@ -90,17 +90,4 @@ Run `./darkirc`. Welcome to the dark forest.
 Run `darkirc -vv` for verbose debugging. This will show detailed errors including
 tor connection issues. Refer to 
 [Network troubleshooting](../misc/network-troubleshooting.html)
-for further troubleshooting resources.
-
-### Connection issues
-
-Review the configuration file for any mistakes. Check for duplicate variables.
-
-### DagSync spam
-
-If you see a many rapid `EventReq` messages in the log, it is possible that there is
-an incompatibility with your local `darkirc` database and the state of the network.
-
-This can be resolved by deleting `~/.local/darkfi/darkirc_db/`
-
-This is a known bug and we are working on a fix.
+for troubleshooting resources.
