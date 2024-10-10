@@ -317,7 +317,8 @@ impl Client {
         W: AsyncWrite + Unpin,
     {
         if line.is_empty() || line == "\n" || line == "\r\n" {
-            return Err(Error::ParseFailed("Line is empty"))
+            // <https://www.rfc-editor.org/rfc/rfc1459> allows empty messages
+            return Ok(None); 
         }
 
         let mut line = line.to_string();
