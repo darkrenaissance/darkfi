@@ -38,7 +38,7 @@ pub struct HexDecodeIter<'a> {
     curr: usize,
 }
 
-impl<'a> Iterator for HexDecodeIter<'a> {
+impl Iterator for HexDecodeIter<'_> {
     type Item = GenericResult<u8>;
 
     // FromIterator auto converts [Result<u8>, ...] into Result<[u8, ...]>

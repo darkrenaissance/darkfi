@@ -62,7 +62,7 @@ pub struct DaoProposeCall<'a, T: StorageAdapter<Value = pallas::Base>> {
     pub signature_secret: SecretKey,
 }
 
-impl<'a, T: StorageAdapter<Value = pallas::Base>> DaoProposeCall<'a, T> {
+impl<T: StorageAdapter<Value = pallas::Base>> DaoProposeCall<'_, T> {
     pub fn make(
         self,
         burn_zkbin: &ZkBinary,

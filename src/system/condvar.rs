@@ -102,7 +102,7 @@ pub struct CondVarWait<'a> {
     state: &'a Mutex<CondVarState>,
 }
 
-impl<'a> Future for CondVarWait<'a> {
+impl Future for CondVarWait<'_> {
     type Output = ();
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {

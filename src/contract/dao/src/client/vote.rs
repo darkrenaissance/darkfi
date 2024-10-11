@@ -64,7 +64,7 @@ pub struct DaoVoteCall<'a, T: StorageAdapter<Value = pallas::Base>> {
     pub current_blockwindow: u64,
 }
 
-impl<'a, T: StorageAdapter<Value = pallas::Base>> DaoVoteCall<'a, T> {
+impl<T: StorageAdapter<Value = pallas::Base>> DaoVoteCall<'_, T> {
     pub fn make(
         self,
         burn_zkbin: &ZkBinary,

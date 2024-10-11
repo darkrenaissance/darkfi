@@ -54,11 +54,11 @@ impl<F: Field + EncDecode> Blind<F> {
     }
 }
 
-impl<'a, 'b, F: Field + EncDecode> std::ops::Add<&'b Blind<F>> for &'a Blind<F> {
+impl<'a, F: Field + EncDecode> std::ops::Add<&'a Blind<F>> for &Blind<F> {
     type Output = Blind<F>;
 
     #[inline]
-    fn add(self, rhs: &'b Blind<F>) -> Blind<F> {
+    fn add(self, rhs: &'a Blind<F>) -> Blind<F> {
         Blind(self.0.add(rhs.0))
     }
 }

@@ -303,7 +303,7 @@ impl<'a> WalletStorage<'a> {
     }
 }
 
-impl<'a> StorageAdapter for WalletStorage<'a> {
+impl StorageAdapter for WalletStorage<'_> {
     type Value = pallas::Base;
 
     fn put(&mut self, key: BigUint, value: pallas::Base) -> ContractResult {

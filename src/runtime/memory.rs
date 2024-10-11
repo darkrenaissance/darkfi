@@ -24,7 +24,7 @@ pub trait MemoryManipulation {
     fn write_slice(&self, value_slice: &[u8], mem_offset: u32) -> Result<()>;
 }
 
-impl<'a> MemoryManipulation for MemoryView<'a> {
+impl MemoryManipulation for MemoryView<'_> {
     fn write_slice(&self, value_slice: &[u8], mem_offset: u32) -> Result<()> {
         // Prepare WasmPtr
         let ptr: WasmPtr<u8> = WasmPtr::new(mem_offset);

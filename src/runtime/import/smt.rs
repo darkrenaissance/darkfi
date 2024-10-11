@@ -41,7 +41,7 @@ pub struct SledStorage<'a> {
     tree_key: &'a [u8],
 }
 
-impl<'a> StorageAdapter for SledStorage<'a> {
+impl StorageAdapter for SledStorage<'_> {
     type Value = pallas::Base;
 
     fn put(&mut self, key: BigUint, value: pallas::Base) -> ContractResult {
