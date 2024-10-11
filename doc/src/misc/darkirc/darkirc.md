@@ -279,6 +279,9 @@ to `~/.local/share/weechat/python/autoload/`, and you will create a single buffe
 which aggregates messages from all channels. It's useful to monitor 
 activity from all channels without needing to flick through them.
 
+You may need to install `weechat-python` to enable Python scripting support
+in your weechat.
+
 ## Emojis
 
 Install the `noto` fonts to have the full unicode set. Popular Linux distros
