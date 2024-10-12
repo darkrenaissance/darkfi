@@ -300,7 +300,7 @@ Filter all join-part-quit messages (only relevant for other networks):
 
 ```
 /set irc.look.smart_filter on
-/filter add joinquit * irc_join,irc_part,irc_quit *
+/filter add joinquit * irc_join,irc_part,irc_quit,irc_nick,irc_account,irc_chghost *
 ```
 
 For customizing the colors, see
