@@ -151,16 +151,13 @@ nicknames or registration on this p2p anonymous chat.
 
 You can change your nickname using `/nick foo`, and navigate channels
 using F5/F6 or ALT+X where X is the channel number displayed.
+You can also use ALT+up/down.
 
 Whenever you edit `darkirc_config.toml` file and if you have your 
 `darkirc` daemon running you don't need to restart it to reload the 
 config, you just need to send a `rehash` command from IRC client for 
 the changes to reflect, like so:
 
-```
-/quote rehash
-```
-Or:
 ```
 /rehash
 ```
@@ -289,6 +286,52 @@ should have packages for them.
 
 Once installed you can view all the emojis in your terminal. Note, you may need
 to regenerate your font cache (or just restart) after installing them.
+
+## Further Customization
+
+Group channels under respective networks:
+
+```
+/set irc.look.server_buffer independent
+/set irc.look.new_channel_position near_server
+```
+
+Filter all join-part-quit messages (only relevant for other networks):
+
+```
+/set irc.look.smart_filter on
+/filter add joinquit * irc_join,irc_part,irc_quit *
+```
+
+For customizing the colors, see
+[this article](https://blog.swwomm.com/2020/07/weechat-light-theme.html).
+
+Make sure you run `/save`, `/quit` to reload your config after these changes.
+
+To see the Weechat settings editor, simply type `/set` in the main buffer.
+You can then type prefixes like "autojoin" and press enter to find all settings
+related to that. To change it type ALT+enter. Everything in Weechat is
+customizable!
+
+### Other IRC Networks
+
+For more fun, you can join Libera IRC. Note this may potentially dox your node,
+especially if you have autoconnect enabled since Libera is not anon.
+
+```
+/server add libera irc.libera.chat/6697 -ssl -autoconnect
+/save
+/connect libera
+/join #rust
+/join #linux
+/join #math
+```
+
+You can find more channels with `/list`. Then add your favorite channels to the
+libera autojoin list.
+
+Note that your nick is temporary. If you want to claim a nick, you will need to
+[register with the NickServer](https://libera.chat/guides/registration).
 
 ## Troubleshooting
 
