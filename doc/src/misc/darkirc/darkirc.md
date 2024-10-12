@@ -306,12 +306,24 @@ Filter all join-part-quit messages (only relevant for other networks):
 For customizing the colors, see
 [this article](https://blog.swwomm.com/2020/07/weechat-light-theme.html).
 
+### Settings Editor
+
 Make sure you run `/save`, `/quit` to reload your config after these changes.
 
 To see the Weechat settings editor, simply type `/set` in the main buffer.
 You can then type prefixes like "autojoin" and press enter to find all settings
 related to that. To change it type ALT+enter. Everything in Weechat is
 customizable!
+
+The help is your friend. Every command has help.
+
+```
+/help key
+/help server
+```
+
+For example to set the shortcut ALT-w to close a buffer,
+use `/key bind meta-w /close`.
 
 ### Other IRC Networks
 
