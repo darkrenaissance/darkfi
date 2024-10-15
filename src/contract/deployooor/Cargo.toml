@@ -10,7 +10,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 darkfi-sdk = { path = "../../sdk" }
-darkfi-serial = { path = "../../serial", features = ["derive", "crypto"] }
+darkfi-serial = { version = "0.4.2", features = ["derive", "crypto"] }
 thiserror = "1.0.64"
 wasmparser = "0.219.1"
 
@@ -44,4 +44,3 @@ client = [
 
 [lints]
 workspace = true
-

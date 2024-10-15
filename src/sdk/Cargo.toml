@@ -20,7 +20,7 @@ async = ["darkfi-serial/async"]
 thiserror = "1.0.64"
 
 # Serialization
-darkfi-serial = {path = "../serial", features = ["crypto"]}
+darkfi-serial = {version = "0.4.2", features = ["crypto"]}
 
 # Encoding
 bs58 = "0.5.1"
@@ -48,4 +48,3 @@ rand = "0.8.5"
 
 [lints]
 workspace = true
-

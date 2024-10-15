@@ -12,7 +12,7 @@ crate-type = ["cdylib", "rlib"]
 blake3 = "1.5.4"
 bs58 = "0.5.1"
 darkfi-sdk = { path = "../../sdk" }
-darkfi-serial = { path = "../../serial", features = ["derive", "crypto"] }
+darkfi-serial = { version = "0.4.2", features = ["derive", "crypto"] }
 thiserror = "1.0.64"
 
 # The following dependencies are used for the client API and
@@ -51,4 +51,3 @@ client = [
 
 [lints]
 workspace = true
-

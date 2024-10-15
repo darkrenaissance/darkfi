@@ -12,7 +12,7 @@ repository = "https://codeberg.org/darkrenaissance/darkfi"
 genevd = {path = "../genevd"}
 
 darkfi = {path = "../../../", features = ["event-graph", "rpc", "bs58"]}
-darkfi-serial = {path = "../../../src/serial"}
+darkfi-serial = "0.4.2"
 
 smol = "2.0.2"
 clap = {version = "4.4.11", features = ["derive"]}
@@ -23,4 +23,3 @@ url = "2.5.2"
 
 [lints]
 workspace = true
-

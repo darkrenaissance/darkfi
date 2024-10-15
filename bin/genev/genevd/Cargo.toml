@@ -22,7 +22,7 @@ darkfi = { path = "../../../", features = [
     "event-graph",
     "rpc",
 ] }
-darkfi-serial = { path = "../../../src/serial" }
+darkfi-serial = "0.4.2"
 
 # Crypto
 blake3 = "1.5.4"
@@ -50,4 +50,3 @@ structopt-toml = "0.5.1"
 
 [lints]
 workspace = true
-

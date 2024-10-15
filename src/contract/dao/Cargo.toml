@@ -12,7 +12,7 @@ crate-type = ["cdylib", "rlib"]
 blake2b_simd = "1.0.2"
 bs58 = "0.5.1"
 darkfi-sdk = { path = "../../sdk" }
-darkfi-serial = { path = "../../serial", features = ["derive", "crypto"] }
+darkfi-serial = { version = "0.4.2", features = ["derive", "crypto"] }
 darkfi_money_contract = { path = "../money", features = ["no-entrypoint"] }
 thiserror = "1.0.64"
 
@@ -51,4 +51,3 @@ client = [
 
 [lints]
 workspace = true
-

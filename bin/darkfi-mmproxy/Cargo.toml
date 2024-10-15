@@ -10,7 +10,7 @@ edition = "2021"
 
 [dependencies]
 darkfi = {path = "../../", features = ["async-daemonize", "async-serial", "system", "util", "rpc"]}
-darkfi-serial = {path = "../../src/serial", features = ["async"]}
+darkfi-serial = {version = "0.4.2", features = ["async"]}
 
 # Misc
 log = "0.4.22"
@@ -40,4 +40,3 @@ structopt-toml = "0.5.1"
 
 [lints]
 workspace = true
-

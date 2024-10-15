@@ -23,7 +23,8 @@ darkfi = { path = "../../../", features = [
     "event-graph",
     "rpc",
 ] }
-darkfi-serial = { path = "../../../src/serial" }
+
+darkfi-serial = "0.4.2"
 
 # Event Graph DB
 sled-overlay = "0.1.3"

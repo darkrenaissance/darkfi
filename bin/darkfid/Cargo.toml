@@ -14,7 +14,7 @@ darkfi = {path = "../../", features = ["async-daemonize", "bs58"]}
 darkfi_money_contract = {path = "../../src/contract/money"}
 darkfi-contract-test-harness = {path = "../../src/contract/test-harness"}
 darkfi-sdk = {path = "../../src/sdk"}
-darkfi-serial = {path = "../../src/serial"}
+darkfi-serial = "0.4.2"
 
 # Misc
 blake3 = "1.5.4"
@@ -44,4 +44,3 @@ structopt-toml = "0.5.1"
 
 [lints]
 workspace = true
-

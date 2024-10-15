@@ -1941,7 +1941,7 @@ dependencies = [
  "clap 4.5.20",
  "criterion",
  "crypto_api_chachapoly",
- "darkfi-derive 0.4.2",
+ "darkfi-derive",
  "darkfi-sdk",
  "darkfi-serial",
  "easy-parallel",
@@ -2002,17 +2002,6 @@ dependencies = [
  "rand 0.8.5",
  "simplelog",
  "sled-overlay",
-]
-
-[[package]]
-name = "darkfi-derive"
-version = "0.4.2"
-dependencies = [
- "darkfi-derive-internal",
- "proc-macro-crate 3.2.0",
- "proc-macro2",
- "quote",
- "syn 2.0.79",
 ]
 
 [[package]]
@@ -2100,11 +2089,13 @@ dependencies = [
 [[package]]
 name = "darkfi-serial"
 version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b2a240620a7858db545156a1de5b215c9b10344c7ad527eed0fc67efd5cea08a"
 dependencies = [
  "async-trait",
  "blake3 1.5.4",
  "bridgetree",
- "darkfi-derive 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "darkfi-derive",
  "futures-lite 2.3.0",
  "num-bigint",
  "pasta_curves",

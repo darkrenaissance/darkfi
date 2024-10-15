@@ -30,7 +30,7 @@ zeromq = { version = "0.4.1", default-features = false, features = ["async-std-r
 darkfi = {path = "../../", features = ["async-daemonize", "event-graph", "net", "util", "system", "zk"]}
 evgrd = {path = "../../script/evgrd/"}
 #darkfi-sdk = {path = "../../src/sdk", features = ["async"]}
-darkfi-serial = {path = "../../src/serial", features = ["async"]}
+darkfi-serial = {version = "0.4.2", features = ["async"]}
 thiserror = "1.0.64"
 smol = "2.0.2"
 atomic_float = "1.1.0"

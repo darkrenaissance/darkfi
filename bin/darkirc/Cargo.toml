@@ -20,7 +20,7 @@ path = "src/main.rs"
 [dependencies]
 darkfi = {path = "../../", features = ["async-daemonize", "event-graph", "rpc", "zk"]}
 darkfi-sdk = {path = "../../src/sdk", features = ["async"]}
-darkfi-serial = {path = "../../src/serial", features = ["async"]}
+darkfi-serial = {version = "0.4.2", features = ["async"]}
 libc = "0.2.159"
 
 # Event Graph DB
