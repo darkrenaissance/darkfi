@@ -22,6 +22,3 @@ darkfi-derive-internal = "0.4.2"
 [features]
 default = []
 async = ["darkfi-derive-internal/async"]
-
-[lints]
-workspace = true
