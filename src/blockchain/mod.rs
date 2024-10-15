@@ -29,7 +29,7 @@ use crate::{tx::Transaction, util::time::Timestamp, Error, Result};
 pub mod block_store;
 pub use block_store::{
     Block, BlockDifficulty, BlockInfo, BlockStore, BlockStoreOverlay, SLED_BLOCK_DIFFICULTY_TREE,
-    SLED_BLOCK_ORDER_TREE, SLED_BLOCK_TREE,
+    SLED_BLOCK_ORDER_TREE, SLED_BLOCK_STATE_DIFF_TREE, SLED_BLOCK_TREE,
 };
 
 /// Header definition and storage implementation
@@ -362,6 +362,7 @@ impl BlockchainOverlay {
             SLED_BLOCK_TREE,
             SLED_BLOCK_ORDER_TREE,
             SLED_BLOCK_DIFFICULTY_TREE,
+            SLED_BLOCK_STATE_DIFF_TREE,
             SLED_HEADER_TREE,
             SLED_SYNC_HEADER_TREE,
             SLED_TX_TREE,

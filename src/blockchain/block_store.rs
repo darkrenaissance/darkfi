@@ -28,7 +28,7 @@ use darkfi_sdk::{
 use darkfi_serial::async_trait;
 use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
 use num_bigint::BigUint;
-use sled_overlay::sled;
+use sled_overlay::{sled, SledDbOverlayStateDiff};
 
 use crate::{tx::Transaction, util::time::Timestamp, Error, Result};
 
@@ -235,6 +235,7 @@ impl BlockDifficulty {
 pub const SLED_BLOCK_TREE: &[u8] = b"_blocks";
 pub const SLED_BLOCK_ORDER_TREE: &[u8] = b"_block_order";
 pub const SLED_BLOCK_DIFFICULTY_TREE: &[u8] = b"_block_difficulty";
+pub const SLED_BLOCK_STATE_DIFF_TREE: &[u8] = b"_block_state_diff";
 
 /// The `BlockStore` is a structure representing all `sled` trees related
 /// to storing the blockchain's blocks information.
@@ -247,10 +248,14 @@ pub struct BlockStore {
     /// where the key is the height number, and the value is the blocks'
     /// hash.
     pub order: sled::Tree,
-    /// The `sled` tree storing the the difficulty information of the
+    /// The `sled` tree storing the difficulty information of the
     /// blockchain's blocks, where the key is the block height number,
     /// and the value is the blocks' hash.
     pub difficulty: sled::Tree,
+    /// The `sled` tree storing each blocks' full database state changes,
+    /// where the key is the block height number, and the value is the
+    /// serialized database diff.
+    pub state_diff: sled::Tree,
 }
 
 impl BlockStore {
@@ -259,7 +264,8 @@ impl BlockStore {
         let main = db.open_tree(SLED_BLOCK_TREE)?;
         let order = db.open_tree(SLED_BLOCK_ORDER_TREE)?;
         let difficulty = db.open_tree(SLED_BLOCK_DIFFICULTY_TREE)?;
-        Ok(Self { main, order, difficulty })
+        let state_diff = db.open_tree(SLED_BLOCK_STATE_DIFF_TREE)?;
+        Ok(Self { main, order, difficulty, state_diff })
     }
 
     /// Insert a slice of [`Block`] into the store's main tree.
@@ -282,6 +288,18 @@ impl BlockStore {
     pub fn insert_difficulty(&self, block_difficulties: &[BlockDifficulty]) -> Result<()> {
         let batch = self.insert_batch_difficulty(block_difficulties);
         self.difficulty.apply_batch(batch)?;
+        Ok(())
+    }
+
+    /// Insert a slice of `u32` and block diffs into the store's
+    /// database diffs tree.
+    pub fn insert_state_diff(
+        &self,
+        heights: &[u32],
+        diffs: &[SledDbOverlayStateDiff],
+    ) -> Result<()> {
+        let batch = self.insert_batch_state_diff(heights, diffs);
+        self.state_diff.apply_batch(batch)?;
         Ok(())
     }
 
@@ -325,6 +343,24 @@ impl BlockStore {
 
         for block_difficulty in block_difficulties {
             batch.insert(&block_difficulty.height.to_be_bytes(), serialize(block_difficulty));
+        }
+
+        batch
+    }
+
+    /// Generate the sled batch corresponding to an insert to the database diffs
+    /// tree, so caller can handle the write operation.
+    /// The block height is used as the key, and the serialized database diff is
+    /// used as value.
+    pub fn insert_batch_state_diff(
+        &self,
+        heights: &[u32],
+        diffs: &[SledDbOverlayStateDiff],
+    ) -> sled::Batch {
+        let mut batch = sled::Batch::default();
+
+        for (i, height) in heights.iter().enumerate() {
+            batch.insert(&height.to_be_bytes(), serialize(&diffs[i]));
         }
 
         batch
@@ -407,6 +443,34 @@ impl BlockStore {
             }
             if strict {
                 return Err(Error::BlockDifficultyNotFound(*height))
+            }
+            ret.push(None);
+        }
+
+        Ok(ret)
+    }
+
+    /// Fetch given block height numbers from the store's state diffs tree.
+    /// The resulting vector contains `Option`, which is `Some` if the block
+    /// height number was found in the block database diffs store, and otherwise
+    /// it is `None`, if it has not.
+    /// The second parameter is a boolean which tells the function to fail in
+    /// case at least one block height number was not found.
+    pub fn get_state_diff(
+        &self,
+        heights: &[u32],
+        strict: bool,
+    ) -> Result<Vec<Option<SledDbOverlayStateDiff>>> {
+        let mut ret = Vec::with_capacity(heights.len());
+
+        for height in heights {
+            if let Some(found) = self.state_diff.get(height.to_be_bytes())? {
+                let state_diff = deserialize(&found)?;
+                ret.push(Some(state_diff));
+                continue
+            }
+            if strict {
+                return Err(Error::BlockStateDiffNotFound(*height))
             }
             ret.push(None);
         }
@@ -551,6 +615,7 @@ impl BlockStoreOverlay {
         overlay.lock().unwrap().open_tree(SLED_BLOCK_TREE, true)?;
         overlay.lock().unwrap().open_tree(SLED_BLOCK_ORDER_TREE, true)?;
         overlay.lock().unwrap().open_tree(SLED_BLOCK_DIFFICULTY_TREE, true)?;
+        overlay.lock().unwrap().open_tree(SLED_BLOCK_STATE_DIFF_TREE, true)?;
         Ok(Self(overlay.clone()))
     }
 

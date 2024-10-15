@@ -378,6 +378,8 @@ impl Validator {
         // Apply finalized proposals diffs and update PoW module
         let mut module = self.consensus.module.write().await;
         let mut finalized_txs = vec![];
+        let mut state_diffs_heights = vec![];
+        let mut state_diffs = vec![];
         info!(target: "validator::finalization", "Finalizing proposals:");
         for (index, proposal) in finalized_proposals.iter().enumerate() {
             info!(target: "validator::finalization", "\t{} - {}", proposal, finalized_blocks[index].header.height);
@@ -385,9 +387,14 @@ impl Validator {
             let next_difficulty = module.next_difficulty()?;
             module.append(finalized_blocks[index].header.timestamp, &next_difficulty);
             finalized_txs.extend_from_slice(&finalized_blocks[index].txs);
+            state_diffs_heights.push(finalized_blocks[index].header.height);
+            state_diffs.push(diffs[index].clone());
         }
         drop(module);
         drop(forks);
+
+        // Store the block diffs
+        self.blockchain.blocks.insert_state_diff(&state_diffs_heights, &state_diffs)?;
 
         // Reset forks starting with the finalized blocks
         self.consensus.reset_forks(&finalized_proposals, &finalized_fork, &finalized_txs).await?;
@@ -429,6 +436,10 @@ impl Validator {
 
         // Keep track of all blocks transactions to remove them from pending txs store
         let mut removed_txs = vec![];
+
+        // Keep track of all block database state diffs
+        let mut diffs_heights = vec![];
+        let mut diffs = vec![];
 
         // Validate and insert each block
         for (index, block) in blocks.iter().enumerate() {
@@ -476,10 +487,17 @@ impl Validator {
             for tx in &block.txs {
                 removed_txs.push(tx.clone());
             }
+
+            // Store block database state diff
+            diffs_heights.push(block.header.height);
+            diffs.push(overlay.lock().unwrap().overlay.lock().unwrap().diff(&diffs)?);
         }
 
         debug!(target: "validator::add_checkpoint_blocks", "Applying overlay changes");
         overlay.lock().unwrap().overlay.lock().unwrap().apply()?;
+
+        // Store the block diffs
+        self.blockchain.blocks.insert_state_diff(&diffs_heights, &diffs)?;
 
         // Remove blocks transactions from pending txs store
         self.blockchain.remove_pending_txs(&removed_txs)?;
@@ -514,6 +532,10 @@ impl Validator {
 
         // Keep track of all blocks transactions to remove them from pending txs store
         let mut removed_txs = vec![];
+
+        // Keep track of all block database state diffs
+        let mut diffs_heights = vec![];
+        let mut diffs = vec![];
 
         // Validate and insert each block
         for block in blocks {
@@ -565,12 +587,19 @@ impl Validator {
                 removed_txs.push(tx.clone());
             }
 
+            // Store block database state diff
+            diffs_heights.push(block.header.height);
+            diffs.push(overlay.lock().unwrap().overlay.lock().unwrap().diff(&diffs)?);
+
             // Use last inserted block as next iteration previous
             previous = block;
         }
 
         debug!(target: "validator::add_test_blocks", "Applying overlay changes");
         overlay.lock().unwrap().overlay.lock().unwrap().apply()?;
+
+        // Store the block diffs
+        self.blockchain.blocks.insert_state_diff(&diffs_heights, &diffs)?;
 
         // Purge pending erroneous txs since canonical state has been changed
         self.blockchain.remove_pending_txs(&removed_txs)?;
