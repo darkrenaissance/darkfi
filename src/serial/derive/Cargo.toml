@@ -1,6 +1,6 @@
 [package]
 name = "darkfi-derive"
-version = "0.4.1"
+version = "0.4.2"
 homepage = "https://dark.fi"
 description = "Crate for serialization derive macros"
 authors = ["Dyne.org foundation <foundation@dyne.org>"]
@@ -12,12 +12,12 @@ edition = "2021"
 proc-macro = true
 
 [dependencies]
-proc-macro-crate = "3.2.0"
-proc-macro2 = "1.0.86"
-quote = "1.0.37"
-syn = {version = "2.0.79", features = ["full", "fold"]}
+proc-macro-crate = "3"
+proc-macro2 = "1"
+quote = "1"
+syn = {version = "2", features = ["full", "fold"]}
 
-darkfi-derive-internal = {version = "0.4.1", path = "../derive-internal"}
+darkfi-derive-internal = "0.4.2"
 
 [features]
 default = []
@@ -25,4 +25,3 @@ async = ["darkfi-derive-internal/async"]
 
 [lints]
 workspace = true
-
