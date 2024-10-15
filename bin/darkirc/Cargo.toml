@@ -28,7 +28,7 @@ sled-overlay = "0.1.3"
 
 # TLS
 async-trait = "0.1.83"
-futures = "0.3.30"
+futures = "0.3.31"
 futures-rustls = {version = "0.26.0", default-features = false, features = ["logging", "tls12", "ring"]}
 rustls-pemfile = "2.1.3"
 

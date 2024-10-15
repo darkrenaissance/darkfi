@@ -13,7 +13,7 @@ edition = "2021"
 darkfi = {path = "../../", features = ["net", "rpc"]}
 # Async
 smol = "2.0.2"
-futures = "0.3.30"
+futures = "0.3.31"
 async-std = "1.13.0"
 async-trait = "0.1.83"
 async-channel = "2.3.1"

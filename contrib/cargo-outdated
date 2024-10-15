@@ -109,14 +109,17 @@ def check_dep(name, data):
     else:
         raise ValueError(f"Invalid dependency: {name}")
 
-    if semver.compare(local_version, metadata["vers"]) < 0:
-        name = metadata["name"]
-        vers = metadata["vers"]
+    try:
+        if semver.compare(local_version, metadata["vers"]) < 0:
+            name = metadata["name"]
+            vers = metadata["vers"]
 
-        if name in YANKED and vers in YANKED[name]:
-            return None
+            if name in YANKED and vers in YANKED[name]:
+                return None
 
-        return (local_version, vers)
+            return (local_version, vers)
+    except:
+        return None
 
     return None
 

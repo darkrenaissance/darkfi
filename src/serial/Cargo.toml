@@ -8,12 +8,13 @@ repository = "https://codeberg.org/darkrenaissance/darkfi"
 license = "AGPL-3.0-only"
 edition = "2021"
 
-[workspace]
-members = [
-    "./derive-internal",
-    "./derive",
-    "./",
-]
+# Uncomment this when publishing crate
+#[workspace]
+#members = [
+#    "./derive-internal",
+#    "./derive",
+#    "./",
+#]
 
 [dependencies]
 darkfi-derive = {version = "0.4.2", optional = true}

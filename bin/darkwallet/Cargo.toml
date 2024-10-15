@@ -26,7 +26,7 @@ log = "0.4.22"
 glam = "0.29.0"
 #zmq = "0.10.0"
 #async_zmq = "0.4.0"
-zeromq = { version = "0.4.0", default-features = false, features = ["async-std-runtime", "all-transport"] }
+zeromq = { version = "0.4.1", default-features = false, features = ["async-std-runtime", "all-transport"] }
 darkfi = {path = "../../", features = ["async-daemonize", "event-graph", "net", "util", "system", "zk"]}
 evgrd = {path = "../../script/evgrd/"}
 #darkfi-sdk = {path = "../../src/sdk", features = ["async"]}
@@ -38,7 +38,7 @@ async-channel = "2.3.1"
 easy-parallel = "3.3.1"
 rand = "0.8.5"
 async-lock = "3.4.0"
-futures = "0.3.30"
+futures = "0.3.31"
 async-recursion = "1.1.1"
 colored = "2.1.0"
 #rustpython-vm = "0.3.1"
