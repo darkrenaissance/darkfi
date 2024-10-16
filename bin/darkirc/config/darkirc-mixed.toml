@@ -1,0 +1,49 @@
+## List of channels to autojoin for new client connections
+autojoin = [
+    "#dev",
+    "#memes",
+    "#philosophy",
+    "#markets",
+    "#math",
+    "#random",
+    "#lunardao",
+]
+
+## P2P network settings
+[net]
+## Path to the P2P datastore
+datastore = "~/.local/darkfi/darkirc"
+
+## Path to a configured hostlist for saving known peers
+hostlist = "~/.local/darkfi/darkirc/p2p_hostlist.tsv"
+
+## connection settings
+outbound_connect_timeout = 60
+channel_handshake_timeout = 55
+channel_heartbeat_interval = 90
+outbound_peer_discovery_cooloff_time = 60
+
+## Whitelisted transports for outbound connections
+allowed_transports = ["tcp+tls", "tor"]
+
+## Addresses we want to advertise to peers
+external_addr = ["tcp+tls://[youripv6address]:26661", "tor://youraddress.onion:your-port"]
+
+## Seed nodes to connect to 
+seeds = [
+    "tcp+tls://lilith1.dark.fi:5262",
+    "tor://rwjgdy7bs4e3eamgltccea7p5yzz3alfi2vps2xefnihurbmpd3b7hqd.onion:5262",
+    "tor://f5mldz3utfrj5esn7vy7osa6itusotix6nsjhv4uirshkcvgglb3xdqd.onion:5262",
+]
+
+## P2P accept addresses
+inbound = ["tcp://127.0.0.1:your-port", "tcp+tls://[::]:26661"]
+
+## Outbound connection slots
+outbound_connections = 8
+
+## Inbound connection slots
+inbound_connections = 8
+
+## Enable transport mixing
+transport_mixing = true
