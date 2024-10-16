@@ -774,4 +774,28 @@ impl Validator {
 
         Ok(next_block_height)
     }
+
+    /// Auxiliary function to reset the validator blockchain and consensus states
+    /// to the provided block height.
+    pub async fn reset_to_height(&self, height: u32) -> Result<()> {
+        info!(target: "validator::reset_to_height", "Resetting validator to height: {height}");
+        // Grab append lock so no new proposals can be appended while we execute a reset
+        let append_lock = self.consensus.append_lock.write().await;
+
+        // Reset our databasse to provided height
+        self.blockchain.reset_to_height(height)?;
+
+        // Reset consensus PoW module
+        self.consensus.reset_pow_module().await?;
+
+        // Purge current forks
+        self.consensus.purge_forks().await?;
+
+        // Release append lock
+        drop(append_lock);
+
+        info!(target: "validator::reset_to_height", "Validator reset successfully!");
+
+        Ok(())
+    }
 }

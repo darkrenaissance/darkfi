@@ -563,6 +563,20 @@ impl Consensus {
         debug!(target: "validator::consensus::purge_forks", "Forks purged!");
         Ok(())
     }
+
+    /// Auxiliary function to reset PoW module.
+    pub async fn reset_pow_module(&self) -> Result<()> {
+        debug!(target: "validator::consensus::reset_pow_module", "Resetting PoW module...");
+        let mut module = self.module.write().await;
+        *module = PoWModule::new(
+            self.blockchain.clone(),
+            module.target,
+            module.fixed_difficulty.clone(),
+        )?;
+        drop(module);
+        debug!(target: "validator::consensus::reset_pow_module", "PoW module reset successfully!");
+        Ok(())
+    }
 }
 
 /// This struct represents a block proposal, used for consensus.

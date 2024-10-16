@@ -332,6 +332,40 @@ impl Blockchain {
 
         Ok(blocks)
     }
+
+    /// Auxiliary function to reset the blockchain and consensus state
+    /// to the provided block height.
+    pub fn reset_to_height(&self, height: u32) -> Result<()> {
+        // First we grab the last block height
+        let (last, _) = self.last()?;
+
+        // Check if request height is after our last height
+        if height >= last {
+            return Ok(())
+        }
+
+        // Grab all state diffs until requested height going backwards
+        let heights: Vec<u32> = (height + 1..=last).rev().collect();
+        let diffs = self.blocks.get_state_diff(&heights, true)?;
+
+        // Create an overlay to apply the reverse diffs
+        let overlay = BlockchainOverlay::new(self)?;
+
+        // Apply the inverse diffs sequence
+        let overlay_lock = overlay.lock().unwrap();
+        let mut lock = overlay_lock.overlay.lock().unwrap();
+        for diff in diffs {
+            // Since we used strict retrieval it's safe to unwrap here
+            let inverse_diff = diff.unwrap().inverse();
+            lock.add_diff(&inverse_diff)?;
+            lock.apply_diff(&inverse_diff)?;
+            self.sled_db.flush()?;
+        }
+        drop(lock);
+        drop(overlay_lock);
+
+        Ok(())
+    }
 }
 
 /// Atomic pointer to sled db overlay.

@@ -32,7 +32,7 @@ use darkfi::{
         encoding::base64,
         path::{expand_path, get_config_path},
     },
-    validator::ValidatorConfig,
+    validator::{Validator, ValidatorConfig},
     Error, Result,
 };
 use darkfi_serial::deserialize_async;
@@ -59,6 +59,10 @@ struct Args {
     #[structopt(short, long, default_value = "testnet")]
     /// Blockchain network to use
     network: String,
+
+    #[structopt(short, long)]
+    /// Reset validator state to given block height
+    reset: Option<u32>,
 
     #[structopt(short, long)]
     /// Set log file to ouput into
@@ -189,6 +193,15 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         genesis_block,
         verify_fees: !blockchain_config.skip_fees,
     };
+
+    // Check if reset was requested
+    if let Some(height) = args.reset {
+        info!(target: "darkfid", "Node will reset validator state to height: {}", height);
+        let validator = Validator::new(&sled_db, &config).await?;
+        validator.reset_to_height(height).await?;
+        info!(target: "darkfid", "Validator state reset successfully!");
+        return Ok(())
+    }
 
     // Generate the daemon
     let daemon = Darkfid::init(
