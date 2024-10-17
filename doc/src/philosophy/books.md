@@ -28,6 +28,37 @@
   including about cryptocurrency, algorithmic money and the response by
   nation states against this emeregent technology. Good reading to understand
   the coming conflict between cryptocurrency and states.
+* Jean Baudrillard, Spirit of Terrorism
+
+## Lunarpunk
+
+* Carl Schmitt, Theory of a Partisan
+* Ernst Junger, Forest Passage
+* Nietzsche, Thus Spoke Zarathustra
+* Nietzsche, Will to Power
+* Deleuze, Nietzsche and Philosophy
+* Mircea Eliade, Patterns in Comparative Religion
+* Abdullah Ocalan, Sociology of Freedom
+
+## (Geo)-politics
+
+* Desmond Fennell, Beyond Nationalism
+* Alexander Dugin, The Forth Political Theory
+* Padraig Pearse, Collected Works
+
+## Philosophy of technology
+
+* Ted Kaczynski, Anti-Tech Revolution
+* Nick Land, Fanged Noumena
+* Ivan Illich, Tools for Conviviality
+* Heidegger, The Question Concerning Technology
+* Yuk Hui, The Question Concerning Technology in China
+
+## History - Myth - Religion
+
+* Alain de Benoist, On Being a Pagan
+* Peter Berresford Ellis, A Brief History of the Druids
+* Mircea Eliade, The Myth of the Eternal Return
 
 ## Python
 
