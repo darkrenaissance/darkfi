@@ -3,7 +3,7 @@
 ## `PoseidonHash` Function
 
 Poseidon is a circuit friendly permutation hash function described in
-the paper GKRRS2019.
+the paper [GKRRS2019](https://eprint.iacr.org/2019/458.pdf).
 
 | Parameter         | Setting                        |
 |-------------------|--------------------------------|
