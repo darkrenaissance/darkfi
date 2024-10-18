@@ -1,0 +1,13 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//dark.fi//Seminars//EN
+BEGIN:VEVENT
+SUMMARY:DarkFi Seminar: DarkFi Consensus Algorithm and Control Theory
+UID:5df0cfae-db6d-5f96-68eb-c149b7d3795e
+DTSTART:20230622T140000Z
+DTEND:20230622T160000Z
+DTSTAMP:20230622T140000Z
+CATEGORIES:Consensus
+URL:https://meet.jit.si/darkfi-seminar
+END:VEVENT
+END:VCALENDAR

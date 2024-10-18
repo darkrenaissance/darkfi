@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["TransferCallBuilder","TransferCallClearInput","TransferCallInput","TransferCallSecrets"],"type":["TransferCallOutput"]};

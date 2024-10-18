@@ -1,0 +1,40 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Make a simple anonymous transfer call."><title>make_transfer_call in darkfi_money_contract::client::transfer_v1 - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-dd39b87e5fcfba68.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="darkfi_money_contract" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0-nightly (ed7e35f34 2024-07-06)" data-channel="nightly" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../darkfi_money_contract/index.html">darkfi_money_contract</a><span class="version">0.4.1</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In darkfi_money_contract::client::transfer_v1</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Function <a href="../../index.html">darkfi_money_contract</a>::<wbr><a href="../index.html">client</a>::<wbr><a href="index.html">transfer_v1</a>::<wbr><a class="fn" href="#">make_transfer_call</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/darkfi_money_contract/client/transfer_v1/mod.rs.html#92-220">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub fn make_transfer_call(
+    keypair: Keypair,
+    recipient: PublicKey,
+    value: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u64.html">u64</a>,
+    token_id: <a class="struct" href="../../model/token_id/struct.TokenId.html" title="struct darkfi_money_contract::model::token_id::TokenId">TokenId</a>,
+    coins: <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="struct" href="../struct.OwnCoin.html" title="struct darkfi_money_contract::client::OwnCoin">OwnCoin</a>&gt;,
+    tree: MerkleTree,
+    output_spend_hook: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;FuncId&gt;,
+    output_user_data: <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;Base&gt;,
+    mint_zkbin: ZkBinary,
+    mint_pk: ProvingKey,
+    burn_zkbin: ZkBinary,
+    burn_pk: ProvingKey,
+    half_split: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.bool.html">bool</a>,
+) -&gt; Result&lt;(<a class="struct" href="../../model/struct.MoneyTransferParamsV1.html" title="struct darkfi_money_contract::model::MoneyTransferParamsV1">MoneyTransferParamsV1</a>, <a class="struct" href="builder/struct.TransferCallSecrets.html" title="struct darkfi_money_contract::client::transfer_v1::builder::TransferCallSecrets">TransferCallSecrets</a>, <a class="struct" href="https://doc.rust-lang.org/nightly/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="struct" href="../struct.OwnCoin.html" title="struct darkfi_money_contract::client::OwnCoin">OwnCoin</a>&gt;)&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Make a simple anonymous transfer call.</p>
+<ul>
+<li><code>keypair</code>: Caller’s keypair</li>
+<li><code>recipient</code>: Recipient’s public key</li>
+<li><code>value</code>: Amount that we want to send to the recipient</li>
+<li><code>token_id</code>: Token ID that we want to send to the recipient</li>
+<li><code>coins</code>: Set of <code>OwnCoin</code> we’re given to use in this builder</li>
+<li><code>tree</code>: Merkle tree of coins used to create inclusion proofs</li>
+<li>`output_spend_hook: Optional contract spend hook to use in
+the output, not applicable to the change</li>
+<li>`output_user_data: Optional user data to use in the output,
+not applicable to the change</li>
+<li><code>mint_zkbin</code>: <code>Mint_V1</code> zkas circuit ZkBinary</li>
+<li><code>mint_pk</code>: Proving key for the <code>Mint_V1</code> zk circuit</li>
+<li><code>burn_zkbin</code>: <code>Burn_V1</code> zkas circuit ZkBinary</li>
+<li><code>burn_pk</code>: Proving key for the <code>Burn_V1</code> zk circuit</li>
+<li><code>half_split</code>: Flag indicating to split the output coin into
+two equal halves.</li>
+</ul>
+<p>Returns a tuple of:</p>
+<ul>
+<li>The actual call data</li>
+<li>Secret values such as blinds</li>
+<li>A list of the spent coins</li>
+</ul>
+</div></details></section></div></main></body></html>

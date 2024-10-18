@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["DeployUpdateV1","LockParamsV1","LockUpdateV1"]};

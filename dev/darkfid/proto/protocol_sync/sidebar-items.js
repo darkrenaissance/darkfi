@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["BATCH"],"fn":["handle_receive_fork_request","handle_receive_header_request","handle_receive_request","handle_receive_tip_request"],"struct":["ForkSyncRequest","ForkSyncResponse","HeaderSyncRequest","HeaderSyncResponse","ProtocolSyncHandler","SyncRequest","SyncResponse","TipRequest","TipResponse"],"type":["ProtocolSyncHandlerPtr"]};
