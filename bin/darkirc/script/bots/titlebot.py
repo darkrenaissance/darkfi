@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import re
+import signal
 import irc
 import requests
 from bs4 import BeautifulSoup
@@ -8,11 +9,19 @@ from urllib.parse import urlparse
 
 ## IRC Config
 server = "127.0.0.1"
-port = 11070
+port = 22025
 channels = ["#test", "#test1"]
 botnick = "website-title"
 ircc = irc.IRC()
 ircc.connect(server, port, channels, botnick)
+
+def signal_handler(sig, frame):
+    print("Caught termination signal, cleaning up and exiting...")
+    ircc.disconnect(server, port)
+    print("Shut down successfully")
+    exit(0)
+
+signal.signal(signal.SIGINT, signal_handler)
 
 while True:
     text = ircc.get_response()

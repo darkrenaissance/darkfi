@@ -266,6 +266,12 @@ async def main(debug=False):
     except ConnectionRefusedError:
         logging.error("%s/%d: Connection refused", host, port)
         return
+    finally:
+        reply = "QUIT\r\n"
+        writer.write(reply.encode("utf-8"))
+        await writer.drain()
+        writer.close()
+        await writer.wait_closed()
 
 
 if __name__ == "__main__":

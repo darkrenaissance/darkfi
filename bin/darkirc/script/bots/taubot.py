@@ -1,4 +1,5 @@
 import argparse
+import signal
 import irc
 import json
 import sys
@@ -20,6 +21,14 @@ channels = [args.channel, args.alt_chan] if args.alt_chan is not None else args.
 
 ircc = irc.IRC()
 ircc.connect(args.server, int(args.port), channels, args.nickname)
+
+def signal_handler(sig, frame):
+    print("Caught termination signal, cleaning up and exiting...")
+    ircc.disconnect(args.server, args.port)
+    print("Shut down successfully")
+    exit(0)
+
+signal.signal(signal.SIGINT, signal_handler)
 
 while True:
     with open(args.pipe) as handle:

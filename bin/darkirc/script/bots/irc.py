@@ -26,6 +26,15 @@ class IRC:
         # join the channel
         for chan in channels:
             self.irc.send(bytes("JOIN " + chan + "\n", "UTF-8"))
+
+    def disconnect(self, server, port):
+        # Disonnect from the server and gracefully shutdown and close socket
+        print("Disonnecting from: " + server + ":" + str(port))
+        # Send QUIT command to IRC server
+        self.irc.send(bytes("QUIT\n", "UTF-8"))
+        self.irc.shutdown(socket.SHUT_RDWR)
+        self.irc.close()
+        
  
     def get_response(self):
         # Get the response

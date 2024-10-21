@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import irc
+import signal
 
 ## IRC Config
 server = "127.0.0.1"
@@ -9,6 +10,14 @@ channels = ["#dev", "#memes", "#philosophy", "#markets", "#math", "#random", "#t
 botnick = "testbot"
 ircc = irc.IRC()
 ircc.connect(server, port, channels, botnick)
+
+def signal_handler(sig, frame):
+    print("Caught termination signal, cleaning up and exiting...")
+    ircc.disconnect(server, port)
+    print("Shut down successfully")
+    exit(0)
+
+signal.signal(signal.SIGINT, signal_handler)
 
 while True:
     text = ircc.get_response().strip()
@@ -23,4 +32,3 @@ while True:
         bot_msg = text.split(':')[-1].strip()
         if bot_msg.lower() == "test" or bot_msg.lower() == "echo":
             ircc.send(channel, f"{bot_msg} back")
-            continue

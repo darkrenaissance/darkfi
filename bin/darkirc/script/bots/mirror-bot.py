@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import signal
 import irc
 import argparse
 
@@ -33,6 +34,16 @@ ircd_channels = args.channels
 
 ircd = irc.IRC()
 ircd.connect(ircd_server, ircd_port, ircd_channels, botnick)
+
+def signal_handler(sig, frame):
+    print("Caught termination signal, cleaning up and exiting...")
+    ircd.disconnect(args.server_to, args.port_to)
+    darkirc.disconnect(args.server_from, args.port_from)
+    print("Shut down successfully")
+    exit(0)
+
+signal.signal(signal.SIGINT, signal_handler)
+
 
 while True:
     darkirc_text = darkirc.get_response()
