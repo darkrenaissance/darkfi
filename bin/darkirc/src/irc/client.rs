@@ -207,7 +207,6 @@ impl Client {
 
                     // Clear the line buffer
                     line = String::new();
-                    continue
                 }
 
                 // Process message from the network. These should only be PRIVMSG.
@@ -316,8 +315,9 @@ impl Client {
     where
         W: AsyncWrite + Unpin,
     {
-        if line.is_empty() || line == "\n" || line == "\r\n" {
-            return Err(Error::ParseFailed("Line is empty"))
+        if line.trim().is_empty() {
+            // Silently ignore empty commands
+            return Ok(None)
         }
 
         let mut line = line.to_string();
