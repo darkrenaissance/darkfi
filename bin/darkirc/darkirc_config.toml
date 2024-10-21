@@ -38,12 +38,6 @@ autojoin = [
 ## (optional, but once configured, it is required from the IRC client side)
 #password = "CHANGE_ME"
 
-## Number of attempts to sync the DAG.
-#sync_attempts = 5
-
-## Number of seconds to wait before trying again if sync fails.
-#sync_timeout = 10
-
 # Log to file. Off by default.
 #log = "/tmp/darkirc.log"
 # Set log level. 1 is info (default), 2 is debug, 3 is trace
