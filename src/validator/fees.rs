@@ -100,19 +100,21 @@ pub fn circuit_gas_use(zkbin: &ZkBinary) -> u64 {
 /// resource consumption across different transactions.
 #[derive(Default, Clone, Eq, PartialEq, Debug, SerialEncodable, SerialDecodable)]
 pub struct GasData {
-    pub gas_paid: u64,
-    pub wasm_gas_used: u64,
-    pub zk_circuit_gas_used: u64,
-    pub signature_gas_used: u64,
-    pub deploy_gas_used: u64,
+    /// Transaction paid fee
+    pub paid: u64,
+    /// Wasm calls gas consumption
+    pub wasm: u64,
+    /// ZK circuits gas consumption
+    pub zk_circuits: u64,
+    /// Signature fee
+    pub signatures: u64,
+    /// Contract deployment gas
+    pub deployments: u64,
 }
 
 impl GasData {
     /// Calculates the total gas used by summing all individual gas usage fields.
     pub fn total_gas_used(&self) -> u64 {
-        self.wasm_gas_used +
-            self.zk_circuit_gas_used +
-            self.signature_gas_used +
-            self.deploy_gas_used
+        self.wasm + self.zk_circuits + self.signatures + self.deployments
     }
 }

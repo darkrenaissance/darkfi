@@ -784,7 +784,7 @@ impl Fork {
 
             // Update accumulated total gas
             total_gas_used += tx_gas_used;
-            total_gas_paid += gas_data.gas_paid;
+            total_gas_paid += gas_data.paid;
 
             // Push the tx hash into the unproposed transactions vector
             unproposed_txs.push(unproposed_tx);

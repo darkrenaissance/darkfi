@@ -696,7 +696,7 @@ pub async fn verify_transaction(
 
             let deploy_gas_used = deploy_runtime.gas_used();
             debug!(target: "validator::verification::verify_transaction", "The gas used for deployment call {:?} of transaction {}: {}", call, tx_hash, deploy_gas_used);
-            gas_data.deploy_gas_used += deploy_gas_used;
+            gas_data.deployments += deploy_gas_used;
         }
 
         // At this point we're done with the call and move on to the next one.
@@ -705,13 +705,13 @@ pub async fn verify_transaction(
         debug!(target: "validator::verification::verify_transaction", "The gas used for WASM call {:?} of transaction {}: {}", call, tx_hash, wasm_gas_used);
 
         // Append the used wasm gas
-        gas_data.wasm_gas_used += wasm_gas_used;
+        gas_data.wasm += wasm_gas_used;
     }
 
     // The signature fee is tx_size + fixed_sig_fee * n_signatures
-    gas_data.signature_gas_used = (PALLAS_SCHNORR_SIGNATURE_FEE * tx.signatures.len() as u64) +
+    gas_data.signatures = (PALLAS_SCHNORR_SIGNATURE_FEE * tx.signatures.len() as u64) +
         serialize_async(tx).await.len() as u64;
-    debug!(target: "validator::verification::verify_transaction", "The gas used for signature of transaction {}: {}", tx_hash, gas_data.signature_gas_used);
+    debug!(target: "validator::verification::verify_transaction", "The gas used for signature of transaction {}: {}", tx_hash, gas_data.signatures);
 
     // The ZK circuit fee is calculated using a function in validator/fees.rs
     for zkbin in circuits_to_verify.iter() {
@@ -719,7 +719,7 @@ pub async fn verify_transaction(
         debug!(target: "validator::verification::verify_transaction", "The gas used for ZK circuit in namespace {} of transaction {}: {}", zkbin.namespace, tx_hash, zk_circuit_gas_used);
 
         // Append the used zk circuit gas
-        gas_data.zk_circuit_gas_used += zk_circuit_gas_used;
+        gas_data.zk_circuits += zk_circuit_gas_used;
     }
 
     // Store the calculated total gas used to avoid recalculating it for subsequent uses
@@ -748,10 +748,10 @@ pub async fn verify_transaction(
             );
             return Err(TxVerifyFailed::InsufficientFee.into())
         }
-        debug!(target: "validator::verification::verify_transaction", "The gas paid for transaction {}: {}", tx_hash, gas_data.gas_paid);
+        debug!(target: "validator::verification::verify_transaction", "The gas paid for transaction {}: {}", tx_hash, gas_data.paid);
 
         // Store paid fee
-        gas_data.gas_paid = fee;
+        gas_data.paid = fee;
     }
 
     // When we're done looping and executing over the tx's contract calls and
@@ -943,7 +943,7 @@ pub async fn verify_transactions(
 
         // Update accumulated total gas
         total_gas_used += tx_gas_used;
-        total_gas_paid += gas_data.gas_paid;
+        total_gas_paid += gas_data.paid;
     }
 
     if !erroneous_txs.is_empty() {
