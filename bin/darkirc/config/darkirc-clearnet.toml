@@ -33,7 +33,7 @@ inbound = ["tcp+tls://0.0.0.0:26661", "tcp+tls://[::]:26661"]
 outbound_connections = 8
 
 ## Inbound connection slots
-inbound_connections = 8
+inbound_connections = 64
 
 ## Enable transport mixing
 transport_mixing = false
