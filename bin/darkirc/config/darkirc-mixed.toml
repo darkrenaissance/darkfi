@@ -27,7 +27,7 @@ outbound_peer_discovery_cooloff_time = 60
 allowed_transports = ["tcp+tls", "tor"]
 
 ## Addresses we want to advertise to peers
-external_addr = ["tcp+tls://MY_IP_V4:26661", "tcp+tls://MY_IP_V6:26661", "tcp+tls://my.resolveable.address:26661", "tor://youraddress.onion:your-port"]
+external_addrs = ["tcp+tls://MY_IP_V4:26661", "tcp+tls://MY_IP_V6:26661", "tcp+tls://my.resolveable.address:26661", "tor://youraddress.onion:your-port"]
 
 ## Seed nodes to connect to 
 seeds = [
@@ -43,7 +43,7 @@ inbound = ["tcp://127.0.0.1:your-port", "tcp+tls://0.0.0.0:26661", "tcp+tls://[:
 outbound_connections = 8
 
 ## Inbound connection slots
-inbound_connections = 8
+inbound_connections = 64
 
 ## Enable transport mixing
 transport_mixing = true
