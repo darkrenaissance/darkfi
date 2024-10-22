@@ -377,6 +377,9 @@ async fn on_receive_task(
         info!(target: "taud", "Save the task: ref: {}", task.ref_id);
         task.workspace.clone_from(ws_name);
         let datastore_path = expand_path(&settings.datastore)?;
+        task.save(&datastore_path)?;
+
+        // Push a notification to a fifo if set
         if settings.piped {
             // if we can't load the task then it's a new task.
             // otherwise it's a modification.
@@ -410,7 +413,6 @@ async fn on_receive_task(
                 }
             }
         }
-        task.save(&datastore_path)?;
     }
     Ok(())
 }
