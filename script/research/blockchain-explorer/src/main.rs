@@ -59,6 +59,9 @@ mod statistics;
 /// Test utilities used for unit and integration testing
 mod test_utils;
 
+/// Database store functionality related to metrics
+mod metrics_store;
+
 const CONFIG_FILE: &str = "blockchain_explorer_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../blockchain_explorer_config.toml");
 
