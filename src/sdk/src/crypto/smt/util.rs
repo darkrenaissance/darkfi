@@ -83,7 +83,7 @@ pub(super) fn leaf_pos_to_index<const N: usize, F: FieldElement>(pos: &F) -> Big
     // 2^N - 1
     let final_level_index = (BigUint::from(1u32) << (N as u64)) - 1u32;
 
-    final_level_index.clone() + pos.as_biguint()
+    final_level_index + pos.as_biguint()
 }
 
 /// Returns the log2 value of the given number. Used for converting the index to the level.
