@@ -11,9 +11,9 @@ edition = "2021"
 
 [dependencies]
 # Darkfi
-darkfi = {path = "../../../", features = ["async-daemonize", "validator", "rusqlite"]}
+darkfi = {path = "../../../", features = ["async-daemonize", "validator"]}
 darkfi-sdk = {path = "../../../src/sdk"}
-darkfi-serial = {path = "../../../src/serial"}
+darkfi-serial = "0.4.2"
 drk = {path = "../../../bin/drk"}
 
 # Misc

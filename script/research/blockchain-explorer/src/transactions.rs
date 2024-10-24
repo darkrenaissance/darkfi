@@ -103,7 +103,7 @@ impl BlockchainExplorer {
                 serialize(&transaction.payload),
             ],
         ) {
-            return Err(Error::RusqliteError(format!(
+            return Err(Error::DatabaseError(format!(
                 "[put_transaction] Transaction insert failed: {e:?}"
             )))
         };
@@ -140,7 +140,7 @@ impl BlockchainExplorer {
         let rows = match self.database.query_multiple(TRANSACTIONS_TABLE, &[], &[]) {
             Ok(r) => r,
             Err(e) => {
-                return Err(Error::RusqliteError(format!(
+                return Err(Error::DatabaseError(format!(
                     "[get_transactions] Transactions retrieval failed: {e:?}"
                 )))
             }
@@ -166,7 +166,7 @@ impl BlockchainExplorer {
         ) {
             Ok(r) => r,
             Err(e) => {
-                return Err(Error::RusqliteError(format!(
+                return Err(Error::DatabaseError(format!(
                     "[get_transactions_by_header_hash] Transactions retrieval failed: {e:?}"
                 )))
             }
@@ -189,7 +189,7 @@ impl BlockchainExplorer {
         ) {
             Ok(r) => r,
             Err(e) => {
-                return Err(Error::RusqliteError(format!(
+                return Err(Error::DatabaseError(format!(
                     "[get_transaction_by_hash] Transaction retrieval failed: {e:?}"
                 )))
             }

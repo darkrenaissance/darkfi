@@ -141,7 +141,7 @@ impl BlockchainExplorer {
                 serialize(&block.signature),
             ],
         ) {
-            return Err(Error::RusqliteError(format!("[put_block] Block insert failed: {e:?}")))
+            return Err(Error::DatabaseError(format!("[put_block] Block insert failed: {e:?}")))
         };
 
         Ok(())
@@ -216,7 +216,7 @@ impl BlockchainExplorer {
         let rows = match self.database.query_multiple(BLOCKS_TABLE, &[], &[]) {
             Ok(r) => r,
             Err(e) => {
-                return Err(Error::RusqliteError(format!(
+                return Err(Error::DatabaseError(format!(
                     "[get_blocks] Blocks retrieval failed: {e:?}"
                 )))
             }
@@ -239,7 +239,7 @@ impl BlockchainExplorer {
         ) {
             Ok(r) => r,
             Err(e) => {
-                return Err(Error::RusqliteError(format!(
+                return Err(Error::DatabaseError(format!(
                     "[get_block_by_hash] Block retrieval failed: {e:?}"
                 )))
             }
@@ -299,7 +299,7 @@ impl BlockchainExplorer {
             let row = match rows.next() {
                 Ok(r) => r,
                 Err(_) => {
-                    return Err(Error::RusqliteError(format!(
+                    return Err(Error::DatabaseError(format!(
                         "[get_last_n_blocks] {}",
                         WalletDbError::QueryExecutionFailed
                     )))
@@ -340,13 +340,13 @@ impl BlockchainExplorer {
             BLOCKS_TABLE, BLOCKS_COL_HEIGHT, n
         );
         let Ok(conn) = self.database.conn.lock() else {
-            return Err(Error::RusqliteError(format!(
+            return Err(Error::DatabaseError(format!(
                 "[get_last_n_blocks] {}",
                 WalletDbError::FailedToAquireLock
             )))
         };
         let Ok(mut stmt) = conn.prepare(&query) else {
-            return Err(Error::RusqliteError(format!(
+            return Err(Error::DatabaseError(format!(
                 "[get_last_n_blocks] {}",
                 WalletDbError::QueryPreparationFailed
             )))
@@ -354,7 +354,7 @@ impl BlockchainExplorer {
 
         // Execute the query using provided params
         let Ok(mut rows) = stmt.query([]) else {
-            return Err(Error::RusqliteError(format!(
+            return Err(Error::DatabaseError(format!(
                 "[get_last_n_blocks] {}",
                 WalletDbError::QueryExecutionFailed
             )))
@@ -371,13 +371,13 @@ impl BlockchainExplorer {
             BLOCKS_TABLE, BLOCKS_COL_HEIGHT, start, BLOCKS_COL_HEIGHT, end, BLOCKS_COL_HEIGHT
         );
         let Ok(conn) = self.database.conn.lock() else {
-            return Err(Error::RusqliteError(format!(
+            return Err(Error::DatabaseError(format!(
                 "[get_blocks_in_height_range] {}",
                 WalletDbError::FailedToAquireLock
             )))
         };
         let Ok(mut stmt) = conn.prepare(&query) else {
-            return Err(Error::RusqliteError(format!(
+            return Err(Error::DatabaseError(format!(
                 "[get_blocks_in_height_range] {}",
                 WalletDbError::QueryPreparationFailed
             )))
@@ -385,7 +385,7 @@ impl BlockchainExplorer {
 
         // Execute the query using provided params
         let Ok(mut rows) = stmt.query([]) else {
-            return Err(Error::RusqliteError(format!(
+            return Err(Error::DatabaseError(format!(
                 "[get_blocks_in_height_range] {}",
                 WalletDbError::QueryExecutionFailed
             )))

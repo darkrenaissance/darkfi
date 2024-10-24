@@ -256,7 +256,7 @@ pub async fn subscribe_blocks(
     let (last_synced, _) = match explorer.last_block().await {
         Ok(l) => l,
         Err(e) => {
-            return Err(Error::RusqliteError(format!(
+            return Err(Error::DatabaseError(format!(
                 "[subscribe_blocks] Retrieving last synced block failed: {e:?}"
             )))
         }
@@ -265,7 +265,7 @@ pub async fn subscribe_blocks(
     if last_known != last_synced {
         warn!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "Warning: Last synced block is not the last known block.");
         warn!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "You should first fully sync the blockchain, and then subscribe");
-        return Err(Error::RusqliteError(
+        return Err(Error::DatabaseError(
             "[subscribe_blocks] Blockchain not fully synced".to_string(),
         ))
     }
@@ -342,7 +342,7 @@ pub async fn subscribe_blocks(
 
                             info!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "Deserialized successfully. Storring block...");
                             if let Err(e) = explorer.put_block(&(&block_data).into()).await {
-                                return Err(Error::RusqliteError(format!(
+                                return Err(Error::DatabaseError(format!(
                                     "[subscribe_blocks] Insert block failed: {e:?}"
                                 )))
                             }
@@ -350,7 +350,7 @@ pub async fn subscribe_blocks(
                             let block_hash = block_data.hash().to_string();
                             for transaction in block_data.txs {
                                 if let Err(e) = explorer.put_transaction(&(&block_hash, &transaction).into()).await {
-                                    return Err(Error::RusqliteError(format!(
+                                    return Err(Error::DatabaseError(format!(
                                         "[subscribe_blocks] Insert block transaction failed: {e:?}"
                                     )))
                                 };

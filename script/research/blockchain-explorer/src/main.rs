@@ -149,7 +149,7 @@ impl BlockchainExplorer {
             Err(e) => {
                 let err = format!("{e:?}");
                 error!(target: "blockchain-explorer", "Error initializing database: {err}");
-                return Err(Error::RusqliteError(err))
+                return Err(Error::DatabaseError(err))
             }
         };
 
@@ -162,12 +162,12 @@ impl BlockchainExplorer {
         if let Err(e) = explorer.initialize_blocks().await {
             let err = format!("{e:?}");
             error!(target: "blockchain-explorer", "Error initializing blocks database table: {err}");
-            return Err(Error::RusqliteError(err))
+            return Err(Error::DatabaseError(err))
         }
         if let Err(e) = explorer.initialize_transactions().await {
             let err = format!("{e:?}");
             error!(target: "blockchain-explorer", "Error initializing transactions database table: {err}");
-            return Err(Error::RusqliteError(err))
+            return Err(Error::DatabaseError(err))
         }
         // TODO: Map deployed contracts to their corresponding files with sql table and retrieval methods
 
@@ -207,7 +207,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     if let Err(e) = explorer.sync_blocks(args.reset).await {
         let err = format!("{e:?}");
         error!(target: "blockchain-explorer", "Error syncing blocks: {err}");
-        return Err(Error::RusqliteError(err))
+        return Err(Error::DatabaseError(err))
     }
 
     info!(target: "blockchain-explorer", "Subscribing to new blocks...");
@@ -222,7 +222,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         Err(e) => {
             let err = format!("{e:?}");
             error!(target: "blockchain-explorer", "Error while setting up blocks subscriber: {err}");
-            return Err(Error::RusqliteError(err))
+            return Err(Error::DatabaseError(err))
         }
     };
 
