@@ -101,7 +101,7 @@ _Tasks are in no particular order. Use common sense._
 
 1. Finish `darkfid` with PoW and research and implement XMR merge mining
 2. Make `darkfi-mmproxy` stable and implement what is needed for DarkFi x Monero merge mining
-3. Finish dnetview
+3. ~~~Finish dnetview~~~
 4. Make `eventgraph` stable and implement proper unit and integration tests
   * Unit tests should test pieces of the eventgraph code
   * Integration tests should simulate a P2P network and ensure deterministic state after a simulated run
@@ -140,7 +140,7 @@ _Tasks are in no particular order. Use common sense._
     serial in your wallet.
 23. Separate mining logic from darkfid into a new program and communicate over RPC
 24. Python utility tool (swiss army knife) for working with txs, contract calls and params.
-25. Python event viewer to inspect and debug the event graph.
+25. ~~Python event viewer to inspect and debug the event graph.~~
 26. Fix `protocol_address` for anonymity. There is a loop sending self addr constantly. We should
     have this mixed with a bunch of random addrs to avoid leaking our own addr.
 27. Add support for colorizing zkas code samples in darkfi book (see arch/dao page)
@@ -180,7 +180,7 @@ _Tasks are in no particular order. Use common sense._
 | **22.**  | `B1-66ER`  |
 | **23.**  | `upgrayedd`|
 | **24.**  |            |
-| **25.**  | `lain`     |
+| **25.**  | `dasman`   |
 
 ## Fuzz testing
 
