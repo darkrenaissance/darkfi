@@ -42,8 +42,11 @@ pub type WalletPtr = Arc<WalletDb>;
 
 /// Structure representing base wallet database operations.
 pub struct WalletDb {
-    /// Connection to the SQLite database
+    /// Connection to the SQLite database.
     pub conn: Mutex<Connection>,
+    /// Inverse queries cache, in case we want to rollback
+    /// executed queries, stored as raw SQL strings.
+    inverse_cache: Mutex<Vec<String>>,
 }
 
 impl WalletDb {
@@ -68,7 +71,7 @@ impl WalletDb {
         };
 
         debug!(target: "walletdb::new", "[WalletDb] Opened Sqlite connection at \"{path:?}\"");
-        Ok(Arc::new(Self { conn: Mutex::new(conn) }))
+        Ok(Arc::new(Self { conn: Mutex::new(conn), inverse_cache: Mutex::new(vec![]) }))
     }
 
     /// This function executes a given SQL query that contains multiple SQL statements,
@@ -118,6 +121,38 @@ impl WalletDb {
         drop(conn);
 
         Ok(())
+    }
+
+    /// Generate a new statement for provided query and bind the provided params,
+    /// returning the raw SQL query as a string.
+    pub fn create_prepared_statement(
+        &self,
+        query: &str,
+        params: &[&dyn ToSql],
+    ) -> WalletDbResult<String> {
+        debug!(target: "walletdb::create_prepared_statement", "[WalletDb] Preparing statement for SQL query:\n{query}");
+        let Ok(conn) = self.conn.lock() else { return Err(WalletDbError::FailedToAquireLock) };
+
+        // First we prepare the query
+        let Ok(mut stmt) = conn.prepare(query) else {
+            return Err(WalletDbError::QueryPreparationFailed)
+        };
+
+        // Bind all provided params
+        for (index, param) in params.iter().enumerate() {
+            if stmt.raw_bind_parameter(index + 1, param).is_err() {
+                return Err(WalletDbError::QueryPreparationFailed)
+            };
+        }
+
+        // Grab the raw SQL
+        let query = stmt.expanded_sql().unwrap();
+
+        // Drop statement and the connection lock
+        drop(stmt);
+        drop(conn);
+
+        Ok(query)
     }
 
     /// Generate a `SELECT` query for provided table from selected column names and
@@ -260,6 +295,43 @@ impl WalletDb {
 
         Ok(result)
     }
+
+    /// Auxiliary function to store provided inverse query into our cache.
+    pub fn cache_inverse(&self, query: String) -> WalletDbResult<()> {
+        debug!(target: "walletdb::cache_inverse", "[WalletDb] Storing query:\n{query}");
+        let Ok(mut cache) = self.inverse_cache.lock() else {
+            return Err(WalletDbError::FailedToAquireLock)
+        };
+
+        // Push the query into the cache
+        cache.push(query);
+
+        // Drop cache lock
+        drop(cache);
+
+        Ok(())
+    }
+
+    /// Auxiliary function to retrieve caches inverse queries into an single execution block.
+    /// The final query will contain the queries in reverse order, and cache is cleared afterwards.
+    pub fn grab_inverse_block(&self) -> WalletDbResult<String> {
+        debug!(target: "walletdb::grab_inverse_block", "[WalletDb] Grabbing cached inversed quirie");
+        let Ok(mut cache) = self.inverse_cache.lock() else {
+            return Err(WalletDbError::FailedToAquireLock)
+        };
+
+        let mut inverse_batch = String::from("BEGIN;");
+        for query in cache.iter().rev() {
+            inverse_batch += query;
+        }
+        inverse_batch += "END;";
+
+        // Clear cache and drop the lock
+        *cache = vec![];
+        drop(cache);
+
+        Ok(inverse_batch)
+    }
 }
 
 /// Custom implementation of rusqlite::named_params! to use `expr` instead of `literal` as `$param_name`,
@@ -307,14 +379,65 @@ impl StorageAdapter for WalletStorage<'_> {
     type Value = pallas::Base;
 
     fn put(&mut self, key: BigUint, value: pallas::Base) -> ContractResult {
-        let query = format!(
-            "INSERT OR REPLACE INTO {} ({}, {}) VALUES (?1, ?2);",
-            self.table, self.key_col, self.value_col
-        );
-        if let Err(e) =
-            self.wallet.exec_sql(&query, rusqlite::params![key.to_bytes_le(), value.to_repr()])
-        {
+        // Check if record already exists to create the corresponding query,
+        // its param and its inverse.
+        let (query, params, inverse) = match self.get(&key) {
+            Some(v) => {
+                // Create an SQL `UPDATE` query
+                let q = format!(
+                    "UPDATE {} SET {} = ?1 WHERE {} = ?2;",
+                    self.table, self.value_col, self.key_col
+                );
+
+                // Create its inverse query
+                let i = match self.wallet.create_prepared_statement(
+                    &format!(
+                        "UPDATE {} SET {} = ?1 WHERE {} = ?2;",
+                        self.table, self.value_col, self.key_col
+                    ),
+                    rusqlite::params![v.to_repr(), key.to_bytes_le()],
+                ) {
+                    Ok(i) => i,
+                    Err(e) => {
+                        error!(target: "walletdb::StorageAdapter::put", "Creating inverse query for key {key:?} failed: {e:?}");
+                        return Err(ContractError::SmtPutFailed)
+                    }
+                };
+
+                (q, rusqlite::params![value.to_repr(), key.to_bytes_le()], i)
+            }
+            None => {
+                // Create an SQL `INSERT` query
+                let q = format!(
+                    "INSERT INTO {} ({}, {}) VALUES (?1, ?2);",
+                    self.table, self.key_col, self.value_col
+                );
+
+                // Create its inverse query
+                let i = match self.wallet.create_prepared_statement(
+                    &format!("DELETE FROM {} WHERE {} = ?1;", self.table, self.key_col),
+                    rusqlite::params![key.to_bytes_le()],
+                ) {
+                    Ok(i) => i,
+                    Err(e) => {
+                        error!(target: "walletdb::StorageAdapter::put", "Creating inverse query for key {key:?} failed: {e:?}");
+                        return Err(ContractError::SmtPutFailed)
+                    }
+                };
+
+                (q, rusqlite::params![key.to_bytes_le(), value.to_repr()], i)
+            }
+        };
+
+        // Execute the query
+        if let Err(e) = self.wallet.exec_sql(&query, params) {
             error!(target: "walletdb::StorageAdapter::put", "Inserting key {key:?}, value {value:?} into DB failed: {e:?}");
+            return Err(ContractError::SmtPutFailed)
+        }
+
+        // Store its inverse
+        if let Err(e) = self.wallet.cache_inverse(inverse) {
+            error!(target: "walletdb::StorageAdapter::put", "Inserting inverse query into cache failed: {e:?}");
             return Err(ContractError::SmtPutFailed)
         }
 
@@ -347,9 +470,45 @@ impl StorageAdapter for WalletStorage<'_> {
     }
 
     fn del(&mut self, key: &BigUint) -> ContractResult {
-        let query = format!("DELETE FROM {} WHERE {} = ?1;", self.table, self.key_col);
-        if let Err(e) = self.wallet.exec_sql(&query, rusqlite::params![key.to_bytes_le()]) {
+        // Check if record already exists to create the corresponding query,
+        // its param and its inverse.
+        let (query, params, inverse) = match self.get(key) {
+            Some(value) => {
+                // Create an SQL `DELETE` query
+                let q = format!("DELETE FROM {} WHERE {} = ?1;", self.table, self.key_col);
+
+                // Create its inverse query
+                let i = match self.wallet.create_prepared_statement(
+                    &format!(
+                        "INSERT INTO {} ({}, {}) VALUES (?1, ?2);",
+                        self.table, self.key_col, self.value_col
+                    ),
+                    rusqlite::params![key.to_bytes_le(), value.to_repr()],
+                ) {
+                    Ok(i) => i,
+                    Err(e) => {
+                        error!(target: "walletdb::StorageAdapter::del", "Creating inverse query for key {key:?} failed: {e:?}");
+                        return Err(ContractError::SmtDelFailed)
+                    }
+                };
+
+                (q, rusqlite::params![key.to_bytes_le()], i)
+            }
+            None => {
+                // If record doesn't exist do nothing
+                return Ok(())
+            }
+        };
+
+        // Execute the query
+        if let Err(e) = self.wallet.exec_sql(&query, params) {
             error!(target: "walletdb::StorageAdapter::del", "Removing key {key:?} from DB failed: {e:?}");
+            return Err(ContractError::SmtDelFailed)
+        }
+
+        // Store its inverse
+        if let Err(e) = self.wallet.cache_inverse(inverse) {
+            error!(target: "walletdb::StorageAdapter::del", "Inserting inverse query into cache failed: {e:?}");
             return Err(ContractError::SmtDelFailed)
         }
 
@@ -491,6 +650,10 @@ mod tests {
             &empty_nodes,
         );
 
+        // Verify database is empty
+        let rows = wallet.query_multiple(table, &[key_col], &[]).unwrap();
+        assert!(rows.is_empty());
+
         let leaves = vec![
             (pallas::Base::from(1), pallas::Base::random(&mut OsRng)),
             (pallas::Base::from(2), pallas::Base::random(&mut OsRng)),
@@ -523,5 +686,17 @@ mod tests {
         assert_eq!(root, hash(hash(path.path[1], hash(path.path[2], hash3)), path.path[0]));
 
         assert!(path.verify(&root, &hash3, &pos));
+
+        // Verify database contains keys
+        let rows = wallet.query_multiple(table, &[key_col], &[]).unwrap();
+        assert!(!rows.is_empty());
+
+        // We are now going to rollback the wallet changes
+        let rollback_query = wallet.grab_inverse_block().unwrap();
+        wallet.exec_batch_sql(&rollback_query).unwrap();
+
+        // Verify database is empty again
+        let rows = wallet.query_multiple(table, &[key_col], &[]).unwrap();
+        assert!(rows.is_empty());
     }
 }
