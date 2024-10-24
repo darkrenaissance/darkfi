@@ -372,8 +372,11 @@ mod tests {
     #[test]
     fn test_mem_wallet() {
         let wallet = WalletDb::new(None, Some("foobar")).unwrap();
-        wallet.exec_sql("CREATE TABLE mista ( numba INTEGER );", &[]).unwrap();
-        wallet.exec_sql("INSERT INTO mista ( numba ) VALUES ( 42 );", &[]).unwrap();
+        wallet
+            .exec_batch_sql(
+                "CREATE TABLE mista ( numba INTEGER ); INSERT INTO mista ( numba ) VALUES ( 42 );",
+            )
+            .unwrap();
 
         let ret = wallet.query_single("mista", &["numba"], &[]).unwrap();
         assert_eq!(ret.len(), 1);
@@ -385,7 +388,7 @@ mod tests {
     fn test_query_single() {
         let wallet = WalletDb::new(None, None).unwrap();
         wallet
-            .exec_sql("CREATE TABLE mista ( why INTEGER, are TEXT, you INTEGER, gae BLOB );", &[])
+            .exec_batch_sql("CREATE TABLE mista ( why INTEGER, are TEXT, you INTEGER, gae BLOB );")
             .unwrap();
 
         let why = 42;
@@ -422,7 +425,7 @@ mod tests {
     fn test_query_multi() {
         let wallet = WalletDb::new(None, None).unwrap();
         wallet
-            .exec_sql("CREATE TABLE mista ( why INTEGER, are TEXT, you INTEGER, gae BLOB );", &[])
+            .exec_batch_sql("CREATE TABLE mista ( why INTEGER, are TEXT, you INTEGER, gae BLOB );")
             .unwrap();
 
         let why = 42;
@@ -474,7 +477,7 @@ mod tests {
         let key_col = &"smt_key";
         let value_col = &"smt_value";
         let wallet = WalletDb::new(None, None).unwrap();
-        wallet.exec_sql(&format!("CREATE TABLE {table} ( {key_col} BLOB INTEGER PRIMARY KEY NOT NULL, {value_col} BLOB NOT NULL);"), &[]).unwrap();
+        wallet.exec_batch_sql(&format!("CREATE TABLE {table} ( {key_col} BLOB INTEGER PRIMARY KEY NOT NULL, {value_col} BLOB NOT NULL);")).unwrap();
 
         // Setup SMT
         const HEIGHT: usize = 3;
