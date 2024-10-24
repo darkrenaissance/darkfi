@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"trait":["ProtocolBase"],"type":["ProtocolBasePtr"]};

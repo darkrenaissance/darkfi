@@ -1,0 +1,32 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="The main interface for interacting with the hostlist. Contains the following:"><title>LOCAL_HOST_STRS in darkfi::net::hosts - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-dd39b87e5fcfba68.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="darkfi" data-themes="" data-resource-suffix="" data-rustdoc-version="1.81.0-nightly (ed7e35f34 2024-07-06)" data-channel="nightly" data-search-js="search-d234aafac6c221dd.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc constant"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../darkfi/index.html">darkfi</a><span class="version">0.4.1</span></h2></div><div class="sidebar-elems"><h2><a href="index.html">In darkfi::net::hosts</a></h2></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><h1>Constant <a href="../../index.html">darkfi</a>::<wbr><a href="../index.html">net</a>::<wbr><a href="index.html">hosts</a>::<wbr><a class="constant" href="#">LOCAL_HOST_STRS</a><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><span class="out-of-band"><a class="src" href="../../../src/darkfi/net/hosts.rs.html#89">source</a> · <button id="toggle-all-docs" title="collapse all docs">[<span>&#x2212;</span>]</button></span></div><pre class="rust item-decl"><code>pub const LOCAL_HOST_STRS: [&amp;<a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.str.html">str</a>; <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.array.html">2</a>];</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>The main interface for interacting with the hostlist. Contains the following:</p>
+<p><code>Hosts</code>: the main parent class that manages HostRegistry and HostContainer. It is also
+responsible for filtering addresses before writing to the hostlist.</p>
+<p><code>HostRegistry</code>: A locked HashMap that maps peer addresses onto mutually exclusive
+states (<code>HostState</code>). Prevents race conditions by dictating a strict flow of logically
+acceptable states.</p>
+<p><code>HostContainer</code>: A wrapper for the hostlists. Each hostlist is represented by a <code>HostColor</code>,
+which can be Grey, White, Gold or Black. Exposes a common interface for hostlist queries and
+utilities.</p>
+<p><code>HostColor</code>:
+White: Hosts that have passed the <code>GreylistRefinery</code> successfully.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code>Gold: Hosts we have been able to establish a connection to <span class="kw">in </span>`OutboundSession`.
+
+Grey: Recently received hosts that are checked by the `GreylistRefinery` and
+      upgraded to the whitelist <span class="kw">if </span>valid. If they<span class="lifetime">'re </span>inaccessible by the Refinery
+      they will be deleted.
+
+Black: hostile hosts that are strictly avoided <span class="kw">for </span>the duration of the program.
+
+Dark: hosts that <span class="kw">do </span>not <span class="kw">match </span>our transports, but that we <span class="kw">continue </span>to share with
+      other peers. We <span class="kw">do </span>not keep darklist entries that are older than one day.
+      This is to avoid peers propagating nodes that may be faulty. We assume that
+      within the one day period, the nodes will be picked up by peers that accept
+      the transports and can refine them to remove inactive peers. Dark list hosts
+      are otherwise ignored.</code></pre></div>
+<p><code>HostState</code>: a set of mutually exclusive states that can be Insert, Refine, Connect, Suspend
+or Connected. The state is <code>None</code> when the corresponding host has been removed from the
+HostRegistry.</p>
+<p>TODO: Use HostState::Free <code>age</code> variable to implement a pruning logic that deletes peers from
+the registry once they have bypassed a certain age threshold.</p>
+</div></details></section></div></main></body></html>
