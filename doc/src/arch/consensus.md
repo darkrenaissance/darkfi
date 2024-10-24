@@ -70,7 +70,7 @@ that, we compute the squared distance of its height target from `MAX_INT`.
 For two honest nodes that mine the next block height of the highest ranking
 fork, their block will have the same rank. To mitigate this tie scenario,
 we also compute the squared distance of the blocks `RandomX` hash from
-`MAX_INT`, allowing us to always chose the actual higher ranking block for
+`MAX_INT`, allowing us to always choose the actual higher ranking block for
 that height, in case of ties. The complete block rank is a tuple containing
 both squared distances.
 
