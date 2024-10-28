@@ -6,7 +6,7 @@
 2. See the areas of work below. Good areas to get started are with
    tooling, Python bindings, p2p apps like the DHT.
 
-Every monday 16:00 CET, there is our main dev meeting on
+Every monday 15:00 UTC, there is our main dev meeting on
 [our chat](https://darkrenaissance.github.io/darkfi/misc/darkirc/darkirc.html).
 Feel free to join and discuss with other darkfi devs.
 
@@ -259,7 +259,7 @@ Check `README.md` for instructions.
 
 Join our DarkIRC chat and ask to speak with the core team.
 
-Usually the best time would be our weekly Monday meetings at 16:00 CET.
+Usually the best time would be our weekly Monday meetings at 15:00 UTC.
 
 If it's sensitive and time critical, then we will get in touch over DM,
 and we will post a message on dark.fi to confirm our identity once we're in
