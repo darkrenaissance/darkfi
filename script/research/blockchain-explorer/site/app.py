@@ -31,11 +31,11 @@ async def index():
 @app.route('/search', methods=['GET', 'POST'])
 async def search():
     search_hash = request.args.get('search_hash', '')
-    try:
-        block = await rpc.get_block(search_hash)
-        transactions = await rpc.get_block_transactions(search_hash)
+    block = await rpc.get_block(search_hash)
+    transactions = await rpc.get_block_transactions(search_hash)
+    if transactions:
         return render_template('block.html', block=block, transactions=transactions)
-    except Exception:
+    else:
         transaction = await rpc.get_transaction(search_hash)
         return render_template('transaction.html', transaction=transaction)
 

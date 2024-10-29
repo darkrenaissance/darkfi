@@ -34,11 +34,11 @@ use darkfi::{
 
 use crate::{
     error::{server_error, RpcError},
-    BlockchainExplorer,
+    Explorerd,
 };
 
 #[async_trait]
-impl RequestHandler for BlockchainExplorer {
+impl RequestHandler for Explorerd {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
         debug!(target: "blockchain-explorer::rpc", "--> {}", req.stringify().unwrap());
 
@@ -75,7 +75,7 @@ impl RequestHandler for BlockchainExplorer {
                 self.statistics_get_basic_statistics(req.id, req.params).await
             }
 
-            // TODO: add any other usefull methods
+            // TODO: add any other useful methods
 
             // ==============
             // Invalid method
@@ -89,7 +89,7 @@ impl RequestHandler for BlockchainExplorer {
     }
 }
 
-impl BlockchainExplorer {
+impl Explorerd {
     // RPCAPI:
     // Pings configured darkfid daemon for liveness.
     // Returns `true` on success.

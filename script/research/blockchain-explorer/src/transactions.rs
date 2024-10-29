@@ -17,23 +17,19 @@
  */
 
 use log::info;
-use rusqlite::types::Value;
 use tinyjson::JsonValue;
 
-use darkfi::{tx::Transaction, Error, Result};
-use darkfi_serial::{deserialize, serialize};
-use drk::{convert_named_params, error::WalletDbResult};
+use darkfi::{
+    blockchain::{
+        HeaderHash, SLED_PENDING_TX_ORDER_TREE, SLED_PENDING_TX_TREE, SLED_TX_LOCATION_TREE,
+        SLED_TX_TREE,
+    },
+    tx::Transaction,
+    Error, Result,
+};
+use darkfi_sdk::tx::TransactionHash;
 
-use crate::BlockchainExplorer;
-
-// Database SQL table constant names. These have to represent the `transactions.sql`
-// SQL schema.
-pub const TRANSACTIONS_TABLE: &str = "transactions";
-
-// TRANSACTIONS_TABLE
-pub const TRANSACTIONS_COL_TRANSACTION_HASH: &str = "transaction_hash";
-pub const TRANSACTIONS_COL_HEADER_HASH: &str = "header_hash";
-pub const TRANSACTIONS_COL_PAYLOAD: &str = "payload";
+use crate::ExplorerDb;
 
 #[derive(Debug, Clone)]
 /// Structure representing a `TRANSACTIONS_TABLE` record.
@@ -68,90 +64,43 @@ impl From<(&String, &Transaction)> for TransactionRecord {
     }
 }
 
-impl BlockchainExplorer {
-    /// Initialize database with transactions tables.
-    pub async fn initialize_transactions(&self) -> WalletDbResult<()> {
-        // Initialize transactions database schema
-        let database_schema = include_str!("../transactions.sql");
-        self.database.exec_batch_sql(database_schema)?;
+impl ExplorerDb {
+    /// Resets transactions in the database by clearing transaction-related trees, returning an Ok result on success.
+    pub fn reset_transactions(&self) -> Result<()> {
+        // Initialize transaction trees to reset
+        let trees_to_reset =
+            [SLED_TX_TREE, SLED_TX_LOCATION_TREE, SLED_PENDING_TX_TREE, SLED_PENDING_TX_ORDER_TREE];
+
+        // Iterate over each associated transaction tree and delete its contents
+        for tree_name in &trees_to_reset {
+            let tree = &self.blockchain.sled_db.open_tree(tree_name)?;
+            tree.clear()?;
+            let tree_name_str = std::str::from_utf8(tree_name)?;
+            info!(target: "blockchain-explorer::blocks", "Successfully reset transaction tree: {tree_name_str}");
+        }
 
         Ok(())
     }
 
-    /// Reset transactions table in the database.
-    pub fn reset_transactions(&self) -> WalletDbResult<()> {
-        info!(target: "blockchain-explorer::transactions::reset_transactions", "Resetting transactions...");
-        let query = format!("DELETE FROM {};", TRANSACTIONS_TABLE);
-        self.database.exec_sql(&query, &[])
-    }
-
-    /// Import given transaction into the database.
-    pub async fn put_transaction(&self, transaction: &TransactionRecord) -> Result<()> {
-        let query = format!(
-            "INSERT OR REPLACE INTO {} ({}, {}, {}) VALUES (?1, ?2, ?3);",
-            TRANSACTIONS_TABLE,
-            TRANSACTIONS_COL_TRANSACTION_HASH,
-            TRANSACTIONS_COL_HEADER_HASH,
-            TRANSACTIONS_COL_PAYLOAD
-        );
-
-        if let Err(e) = self.database.exec_sql(
-            &query,
-            rusqlite::params![
-                transaction.transaction_hash,
-                transaction.header_hash,
-                serialize(&transaction.payload),
-            ],
-        ) {
-            return Err(Error::DatabaseError(format!(
-                "[put_transaction] Transaction insert failed: {e:?}"
-            )))
-        };
-
-        Ok(())
-    }
-
-    /// Auxiliary function to parse a `TRANSACTIONS_TABLE` record.
-    fn parse_transaction_record(&self, row: &[Value]) -> Result<TransactionRecord> {
-        let Value::Text(ref transaction_hash) = row[0] else {
-            return Err(Error::ParseFailed(
-                "[parse_transaction_record] Transaction hash parsing failed",
-            ))
-        };
-        let transaction_hash = transaction_hash.clone();
-
-        let Value::Text(ref header_hash) = row[1] else {
-            return Err(Error::ParseFailed("[parse_transaction_record] Header hash parsing failed"))
-        };
-        let header_hash = header_hash.clone();
-
-        let Value::Blob(ref payload_bytes) = row[2] else {
-            return Err(Error::ParseFailed(
-                "[parse_transaction_record] Payload bytes bytes parsing failed",
-            ))
-        };
-        let payload = deserialize(payload_bytes)?;
-
-        Ok(TransactionRecord { transaction_hash, header_hash, payload })
+    /// Provides the transaction count of all the transactions in the explorer database.
+    pub fn get_transaction_count(&self) -> usize {
+        self.blockchain.txs_len()
     }
 
     /// Fetch all known transactions from the database.
     pub fn get_transactions(&self) -> Result<Vec<TransactionRecord>> {
-        let rows = match self.database.query_multiple(TRANSACTIONS_TABLE, &[], &[]) {
-            Ok(r) => r,
-            Err(e) => {
-                return Err(Error::DatabaseError(format!(
-                    "[get_transactions] Transactions retrieval failed: {e:?}"
-                )))
-            }
-        };
+        // Retrieve all transactions and handle any errors encountered
+        let transactions_result = self.blockchain.transactions.get_all().map_err(|e| {
+            Error::DatabaseError(format!("[get_transactions] Trxs retrieval: {e:?}"))
+        })?;
 
-        let mut transactions = Vec::with_capacity(rows.len());
-        for row in rows {
-            transactions.push(self.parse_transaction_record(&row)?);
-        }
+        // Transform the found transactions into a vector of transaction records
+        let transaction_records: Vec<TransactionRecord> = transactions_result
+            .iter()
+            .map(|(tx_hash, tx)| TransactionRecord::from((&tx_hash.as_string(), tx)))
+            .collect();
 
-        Ok(transactions)
+        Ok(transaction_records)
     }
 
     /// Fetch all transactions from the database for the given block header hash.
@@ -159,42 +108,79 @@ impl BlockchainExplorer {
         &self,
         header_hash: &str,
     ) -> Result<Vec<TransactionRecord>> {
-        let rows = match self.database.query_multiple(
-            TRANSACTIONS_TABLE,
-            &[],
-            convert_named_params! {(TRANSACTIONS_COL_HEADER_HASH, header_hash)},
-        ) {
-            Ok(r) => r,
+        // Parse header hash, returning an error if parsing fails
+        let header_hash = header_hash
+            .parse::<HeaderHash>()
+            .map_err(|_| Error::ParseFailed("[get_transactions_by_header_hash] Invalid hash"))?;
+
+        // Fetch all blocks by hash and handle encountered errors
+        let blocks = match self.blockchain.get_blocks_by_hash(&[header_hash]) {
+            Ok(blocks) => blocks,
+            Err(Error::BlockNotFound(_)) => return Ok(vec![]),
             Err(e) => {
                 return Err(Error::DatabaseError(format!(
-                    "[get_transactions_by_header_hash] Transactions retrieval failed: {e:?}"
+                    "[get_transactions_by_header_hash] Block retrieval failed: {e:?}"
                 )))
             }
         };
 
-        let mut transactions = Vec::with_capacity(rows.len());
-        for row in rows {
-            transactions.push(self.parse_transaction_record(&row)?);
-        }
+        // Transform block transactions into transaction records
+        let tx_records = {
+            let block = &blocks[0];
+            block
+                .txs
+                .iter()
+                .map(|tx| TransactionRecord::from((&block.header.hash().as_string(), tx)))
+                .collect::<Vec<TransactionRecord>>()
+        };
 
-        Ok(transactions)
+        Ok(tx_records)
     }
 
     /// Fetch a transaction given its header hash.
-    pub fn get_transaction_by_hash(&self, transaction_hash: &str) -> Result<TransactionRecord> {
-        let row = match self.database.query_single(
-            TRANSACTIONS_TABLE,
-            &[],
-            convert_named_params! {(TRANSACTIONS_COL_TRANSACTION_HASH, transaction_hash)},
-        ) {
-            Ok(r) => r,
-            Err(e) => {
-                return Err(Error::DatabaseError(format!(
-                    "[get_transaction_by_hash] Transaction retrieval failed: {e:?}"
-                )))
+    pub fn get_transaction_by_hash(
+        &self,
+        tx_hash: &TransactionHash,
+    ) -> Result<Option<TransactionRecord>> {
+        let tx_store = &self.blockchain.transactions;
+
+        // Attempt to retrieve the transaction using the provided hash handling any potential errors
+        let txs = tx_store.get(&[*tx_hash], false).map_err(|e| {
+            Error::DatabaseError(format!(
+                "[get_transaction_by_hash] Transaction retrieval failed: {e:?}"
+            ))
+        })?;
+
+        // Match on the fetched transactions to process the result
+        let tx_record = match &txs[0] {
+            Some(tx) => {
+                // Retrieve the location of the transaction to obtain its header hash
+                let locations = tx_store.get_location(&[*tx_hash], false).map_err(|e| {
+                    Error::DatabaseError(format!(
+                        "[get_transaction_by_hash] Location retrieval failed: {e:?}"
+                    ))
+                })?;
+
+                // Unwrap the first location since we know it exists for a valid transaction
+                let (block_height, _) = locations[0].unwrap();
+
+                // Retrieve the block corresponding to the transaction's height
+                let block_data =
+                    &self.blockchain.blocks.get_order(&[block_height], false).map_err(|e| {
+                        Error::DatabaseError(format!(
+                            "[get_transaction_by_hash] Block retrieval failed: {e:?}"
+                        ))
+                    })?;
+
+                // Unwrap the block since we are assured it exists due to stored location
+                let header_hash = block_data[0].unwrap();
+
+                // Transform the transaction into a TransactionRecord
+                Some(TransactionRecord::from((&header_hash.as_string(), tx)))
             }
+            None => None,
         };
 
-        self.parse_transaction_record(&row)
+        Ok(tx_record)
     }
 }

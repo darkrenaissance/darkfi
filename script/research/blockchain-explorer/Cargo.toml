@@ -18,7 +18,7 @@ drk = {path = "../../../bin/drk"}
 
 # Misc
 log = "0.4.22"
-rusqlite = {version = "0.32.1", features = ["sqlcipher"]}
+sled-overlay = {version = "0.1.4"}
 
 # JSON-RPC
 async-trait = "0.1.83"

@@ -16,20 +16,18 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{
-    collections::HashSet,
-    fs,
-    io::{stdin, stdout, Write},
-    sync::Arc,
-};
+use std::{collections::HashSet, sync::Arc};
 
 use log::{error, info};
+use sled_overlay::sled;
 use smol::{lock::Mutex, stream::StreamExt};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;
 
 use darkfi::{
-    async_daemonize, cli_desc,
+    async_daemonize,
+    blockchain::Blockchain,
+    cli_desc,
     rpc::{
         client::RpcClient,
         server::{listen_and_serve, RequestHandler},
@@ -38,7 +36,6 @@ use darkfi::{
     util::path::expand_path,
     Error, Result,
 };
-use drk::walletdb::{WalletDb, WalletPtr};
 
 /// Crate errors
 mod error;
@@ -64,7 +61,7 @@ const CONFIG_FILE_CONTENTS: &str = include_str!("../blockchain_explorer_config.t
 
 #[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
 #[serde(default)]
-#[structopt(name = "blockcahin-explorer", about = cli_desc!())]
+#[structopt(name = "blockchain-explorer", about = cli_desc!())]
 struct Args {
     #[structopt(short, long)]
     /// Configuration file to use
@@ -79,12 +76,7 @@ struct Args {
     db_path: String,
 
     #[structopt(long)]
-    /// Password for the daemon database.
-    /// If it's not present, daemon will prompt the user for it.
-    db_pass: Option<String>,
-
-    #[structopt(long)]
-    /// Reset the databae and start syncing from first block
+    /// Reset the database and start syncing from first block
     reset: bool,
 
     #[structopt(short, long, default_value = "tcp://127.0.0.1:8340")]
@@ -92,7 +84,7 @@ struct Args {
     endpoint: Url,
 
     #[structopt(short, long)]
-    /// Set log file to ouput into
+    /// Set log file to output into
     log: Option<String>,
 
     #[structopt(short, parse(from_occurrences))]
@@ -100,94 +92,59 @@ struct Args {
     verbose: u8,
 }
 
+/// Structure represents the explorer database backed by a sled DB connection.
+pub struct ExplorerDb {
+    /// Main pointer to the sled db connection
+    pub sled_db: sled::Db,
+    /// Explorer darkfid blockchain copy
+    pub blockchain: Blockchain,
+}
+
+impl ExplorerDb {
+    /// Creates a new `BlockExplorerDb` instance
+    pub fn new(db_path: String) -> Result<ExplorerDb> {
+        let db_path = expand_path(db_path.as_str())?;
+        let sled_db = sled::open(&db_path)?;
+        let blockchain = Blockchain::new(&sled_db)?;
+        info!(target: "blockchain-explorer", "Initialized explorer database {}, block count: {}", db_path.display(), blockchain.len());
+        Ok(ExplorerDb { sled_db, blockchain })
+    }
+}
+
 /// Daemon structure
-pub struct BlockchainExplorer {
-    /// Daemon database operations handler
-    pub database: WalletPtr,
+pub struct Explorerd {
+    /// Explorer database instance
+    pub db: ExplorerDb,
     /// JSON-RPC connection tracker
     pub rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
     /// JSON-RPC client to execute requests to darkfid daemon
     pub rpc_client: RpcClient,
 }
 
-impl BlockchainExplorer {
-    async fn new(
-        db_path: String,
-        db_pass: Option<String>,
-        endpoint: Url,
-        ex: Arc<smol::Executor<'static>>,
-    ) -> Result<Self> {
-        // Grab password
-        let db_pass = match db_pass {
-            Some(pass) => pass,
-            None => {
-                let mut pass = String::new();
-                while pass.trim().is_empty() {
-                    info!(target: "blockchain-explorer", "Provide database passsword:");
-                    stdout().flush()?;
-                    stdin().read_line(&mut pass).unwrap_or(0);
-                }
-                pass.trim().to_string()
-            }
-        };
-
-        // Script kiddies protection
-        if db_pass == "changeme" {
-            error!(target: "blockchain-explorer", "Please don't use default database password...");
-            return Err(Error::ParseFailed("Default database password usage"))
-        }
-
-        // Initialize database
-        let db_path = expand_path(&db_path)?;
-        if !db_path.exists() {
-            if let Some(parent) = db_path.parent() {
-                fs::create_dir_all(parent)?;
-            }
-        }
-        let database = match WalletDb::new(Some(db_path), Some(&db_pass)) {
-            Ok(w) => w,
-            Err(e) => {
-                let err = format!("{e:?}");
-                error!(target: "blockchain-explorer", "Error initializing database: {err}");
-                return Err(Error::DatabaseError(err))
-            }
-        };
-
+impl Explorerd {
+    /// Creates a new `BlockchainExplorer` instance.
+    async fn new(db_path: String, endpoint: Url, ex: Arc<smol::Executor<'static>>) -> Result<Self> {
         // Initialize rpc client
-        let rpc_client = RpcClient::new(endpoint, ex).await?;
+        let rpc_client = RpcClient::new(endpoint.clone(), ex).await?;
+        info!(target: "explorerd", "Created rpc client: {:?}", endpoint.clone());
 
-        let explorer = Self { database, rpc_connections: Mutex::new(HashSet::new()), rpc_client };
+        // Initialize explorer database
+        let explorer_db = ExplorerDb::new(db_path)?;
 
-        // Initialize all the database tables
-        if let Err(e) = explorer.initialize_blocks().await {
-            let err = format!("{e:?}");
-            error!(target: "blockchain-explorer", "Error initializing blocks database table: {err}");
-            return Err(Error::DatabaseError(err))
-        }
-        if let Err(e) = explorer.initialize_transactions().await {
-            let err = format!("{e:?}");
-            error!(target: "blockchain-explorer", "Error initializing transactions database table: {err}");
-            return Err(Error::DatabaseError(err))
-        }
-        // TODO: Map deployed contracts to their corresponding files with sql table and retrieval methods
-
-        Ok(explorer)
+        Ok(Self { rpc_connections: Mutex::new(HashSet::new()), rpc_client, db: explorer_db })
     }
 }
 
 async_daemonize!(realmain);
 async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     info!(target: "blockchain-explorer", "Initializing DarkFi blockchain explorer node...");
-    let explorer =
-        BlockchainExplorer::new(args.db_path, args.db_pass, args.endpoint.clone(), ex.clone())
-            .await?;
+    let explorer = Explorerd::new(args.db_path, args.endpoint.clone(), ex.clone()).await?;
     let explorer = Arc::new(explorer);
     info!(target: "blockchain-explorer", "Node initialized successfully!");
 
     // JSON-RPC server
     info!(target: "blockchain-explorer", "Starting JSON-RPC server");
-    // Here we create a task variable so we can manually close the
-    // task later.
+    // Here we create a task variable so we can manually close the task later.
     let rpc_task = StoppableTask::new();
     let explorer_ = explorer.clone();
     rpc_task.clone().start(
@@ -205,26 +162,22 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     // Sync blocks
     info!(target: "blockchain-explorer", "Syncing blocks from darkfid...");
     if let Err(e) = explorer.sync_blocks(args.reset).await {
-        let err = format!("{e:?}");
-        error!(target: "blockchain-explorer", "Error syncing blocks: {err}");
-        return Err(Error::DatabaseError(err))
+        let error_message = format!("Error syncing blocks: {:?}", e);
+        error!(target: "blockchain-explorer", "{error_message}");
+        return Err(Error::DatabaseError(error_message));
     }
 
+    // Subscribe blocks
     info!(target: "blockchain-explorer", "Subscribing to new blocks...");
-    let (subscriber_task, listener_task) = match subscribe_blocks(
-        explorer.clone(),
-        args.endpoint,
-        ex.clone(),
-    )
-    .await
-    {
-        Ok(pair) => pair,
-        Err(e) => {
-            let err = format!("{e:?}");
-            error!(target: "blockchain-explorer", "Error while setting up blocks subscriber: {err}");
-            return Err(Error::DatabaseError(err))
-        }
-    };
+    let (subscriber_task, listener_task) =
+        match subscribe_blocks(explorer.clone(), args.endpoint, ex.clone()).await {
+            Ok(pair) => pair,
+            Err(e) => {
+                let error_message = format!("Error setting up blocks subscriber: {:?}", e);
+                error!(target: "blockchain-explorer", "{error_message}");
+                return Err(Error::DatabaseError(error_message));
+            }
+        };
 
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new(ex)?;

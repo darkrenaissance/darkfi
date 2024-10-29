@@ -36,11 +36,10 @@ use darkfi::{
     Error, Result,
 };
 use darkfi_serial::deserialize_async;
-use drk::error::{WalletDbError, WalletDbResult};
 
-use crate::BlockchainExplorer;
+use crate::Explorerd;
 
-impl BlockchainExplorer {
+impl Explorerd {
     // Queries darkfid for a block with given height.
     async fn get_block_by_height(&self, height: u32) -> Result<BlockInfo> {
         let params = self
@@ -57,14 +56,23 @@ impl BlockchainExplorer {
 
     /// Syncs the blockchain starting from the last synced block.
     /// If reset flag is provided, all tables are reset, and start syncing from beginning.
-    pub async fn sync_blocks(&self, reset: bool) -> WalletDbResult<()> {
+    pub async fn sync_blocks(&self, reset: bool) -> Result<()> {
         // Grab last synced block height
-        let (mut height, _) = self.last_block().await?;
+        let mut height = match self.db.last_block() {
+            Ok(Some((height, _))) => height,
+            Ok(None) => 0,
+            Err(e) => {
+                return Err(Error::DatabaseError(format!(
+                    "[sync_blocks] Retrieving last synced block failed: {:?}",
+                    e
+                )));
+            }
+        };
         // If last synced block is genesis (0) or reset flag
         // has been provided we reset, otherwise continue with
         // the next block height
         if height == 0 || reset {
-            self.reset_blocks()?;
+            self.db.reset_blocks()?;
             height = 0;
         } else {
             height += 1;
@@ -77,8 +85,9 @@ impl BlockchainExplorer {
             {
                 Ok(r) => r,
                 Err(e) => {
-                    error!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "[sync_blocks] RPC client request failed: {e:?}");
-                    return Err(WalletDbError::GenericError)
+                    let error_message = format!("[sync_blocks] RPC client request failed: {:?}", e);
+                    error!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "{}", error_message);
+                    return Err(Error::DatabaseError(error_message));
                 }
             };
             let last = *rep.get::<f64>().unwrap() as u32;
@@ -92,29 +101,23 @@ impl BlockchainExplorer {
             }
 
             while height <= last {
-                info!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "Requesting block {height}... ");
-
                 let block = match self.get_block_by_height(height).await {
                     Ok(r) => r,
                     Err(e) => {
-                        error!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "[sync_blocks] RPC client request failed: {e:?}");
-                        return Err(WalletDbError::GenericError)
+                        let error_message =
+                            format!("[sync_blocks] RPC client request failed: {:?}", e);
+                        error!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "{}", error_message);
+                        return Err(Error::DatabaseError(error_message));
                     }
                 };
 
-                if let Err(e) = self.put_block(&(&block).into()).await {
-                    error!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "[sync_blocks] Insert block failed: {e:?}");
-                    return Err(WalletDbError::GenericError)
+                if let Err(e) = self.db.put_block(&block).await {
+                    let error_message = format!("[sync_blocks] Put block failed: {:?}", e);
+                    error!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "{}", error_message);
+                    return Err(Error::DatabaseError(error_message));
                 };
 
-                let block_hash = block.hash().to_string();
-                for transaction in block.txs {
-                    if let Err(e) = self.put_transaction(&(&block_hash, &transaction).into()).await
-                    {
-                        error!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "[sync_blocks] Insert block transaction failed: {e:?}");
-                        return Err(WalletDbError::GenericError)
-                    };
-                }
+                info!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "Synced block {height}");
 
                 height += 1;
             }
@@ -139,24 +142,29 @@ impl BlockchainExplorer {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
-        let n = match params[0].get::<String>().unwrap().parse::<u16>() {
+        // Extract the number of last blocks to retrieve from parameters
+        let n = match params[0].get::<String>().unwrap().parse::<usize>() {
             Ok(v) => v,
             Err(_) => return JsonError::new(ParseError, None, id).into(),
         };
 
-        let blocks = match self.get_last_n_blocks(n) {
-            Ok(v) => v,
+        // Fetch the blocks and handle potential errors
+        let blocks_result = match self.db.get_last_n(n) {
+            Ok(blocks) => blocks,
             Err(e) => {
                 error!(target: "blockchain-explorer::rpc_blocks::blocks_get_last_n_blocks", "Failed fetching blocks: {}", e);
-                return JsonError::new(InternalError, None, id).into()
+                return JsonError::new(InternalError, None, id).into();
             }
         };
 
-        let mut ret = vec![];
-        for block in blocks {
-            ret.push(block.to_json_array());
+        // Transform blocks to json and return result
+        if blocks_result.is_empty() {
+            JsonResponse::new(JsonValue::Array(vec![]), id).into()
+        } else {
+            let json_blocks: Vec<JsonValue> =
+                blocks_result.into_iter().map(|block| block.to_json_array()).collect();
+            JsonResponse::new(JsonValue::Array(json_blocks), id).into()
         }
-        JsonResponse::new(JsonValue::Array(ret), id).into()
     }
 
     // RPCAPI:
@@ -196,19 +204,23 @@ impl BlockchainExplorer {
             return JsonError::new(ParseError, None, id).into()
         }
 
-        let blocks = match self.get_blocks_in_heights_range(start, end) {
-            Ok(v) => v,
+        // Fetch the blocks and handle potential errors
+        let blocks_result = match self.db.get_by_range(start, end) {
+            Ok(blocks) => blocks,
             Err(e) => {
                 error!(target: "blockchain-explorer::rpc_blocks::blocks_get_blocks_in_height_range", "Failed fetching blocks: {}", e);
-                return JsonError::new(InternalError, None, id).into()
+                return JsonError::new(InternalError, None, id).into();
             }
         };
 
-        let mut ret = vec![];
-        for block in blocks {
-            ret.push(block.to_json_array());
+        // Transform blocks to json and return result
+        if blocks_result.is_empty() {
+            JsonResponse::new(JsonValue::Array(vec![]), id).into()
+        } else {
+            let json_blocks: Vec<JsonValue> =
+                blocks_result.into_iter().map(|block| block.to_json_array()).collect();
+            JsonResponse::new(JsonValue::Array(json_blocks), id).into()
         }
-        JsonResponse::new(JsonValue::Array(ret), id).into()
     }
 
     // RPCAPI:
@@ -229,23 +241,28 @@ impl BlockchainExplorer {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
-        let header_hash = params[0].get::<String>().unwrap();
-        let block = match self.get_block_by_hash(header_hash) {
-            Ok(v) => v,
-            Err(e) => {
-                error!(target: "blockchain-explorer::rpc_blocks::blocks_get_get_block_by_hash", "Failed fetching block: {}", e);
-                return JsonError::new(InternalError, None, id).into()
-            }
+        // Extract header hash from params, returning error if not provided
+        let header_hash = match params[0].get::<String>() {
+            Some(hash) => hash,
+            None => return JsonError::new(InvalidParams, None, id).into(),
         };
 
-        JsonResponse::new(block.to_json_array(), id).into()
+        // Fetch and transform block to json, handling any errors and returning the result
+        match self.db.get_block_by_hash(header_hash) {
+            Ok(Some(block)) => JsonResponse::new(block.to_json_array(), id).into(),
+            Ok(None) => JsonResponse::new(JsonValue::Array(vec![]), id).into(),
+            Err(e) => {
+                error!(target: "blockchain-explorer::rpc_blocks", "Failed fetching block: {:?}", e);
+                JsonError::new(InternalError, None, id).into()
+            }
+        }
     }
 }
 
 /// Subscribes to darkfid's JSON-RPC notification endpoint that serves
 /// new finalized blocks. Upon receiving them, store them to the database.
 pub async fn subscribe_blocks(
-    explorer: Arc<BlockchainExplorer>,
+    explorer: Arc<Explorerd>,
     endpoint: Url,
     ex: Arc<smol::Executor<'static>>,
 ) -> Result<(StoppableTaskPtr, StoppableTaskPtr)> {
@@ -253,8 +270,9 @@ pub async fn subscribe_blocks(
         .darkfid_daemon_request("blockchain.last_known_block", &JsonValue::Array(vec![]))
         .await?;
     let last_known = *rep.get::<f64>().unwrap() as u32;
-    let (last_synced, _) = match explorer.last_block().await {
-        Ok(l) => l,
+    let last_synced = match explorer.db.last_block() {
+        Ok(Some((height, _))) => height,
+        Ok(None) => 0,
         Err(e) => {
             return Err(Error::DatabaseError(format!(
                 "[subscribe_blocks] Retrieving last synced block failed: {e:?}"
@@ -340,20 +358,11 @@ pub async fn subscribe_blocks(
                             info!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "Block header: {header_hash}");
                             info!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "=======================================");
 
-                            info!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "Deserialized successfully. Storring block...");
-                            if let Err(e) = explorer.put_block(&(&block_data).into()).await {
+                            info!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "Deserialized successfully. Storing block...");
+                            if let Err(e) = explorer.db.put_block(&block_data).await {
                                 return Err(Error::DatabaseError(format!(
-                                    "[subscribe_blocks] Insert block failed: {e:?}"
+                                    "[subscribe_blocks] Put block failed: {e:?}"
                                 )))
-                            }
-
-                            let block_hash = block_data.hash().to_string();
-                            for transaction in block_data.txs {
-                                if let Err(e) = explorer.put_transaction(&(&block_hash, &transaction).into()).await {
-                                    return Err(Error::DatabaseError(format!(
-                                        "[subscribe_blocks] Insert block transaction failed: {e:?}"
-                                    )))
-                                };
                             }
                         }
                     }

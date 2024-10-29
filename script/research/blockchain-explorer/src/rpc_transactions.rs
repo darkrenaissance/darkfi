@@ -23,10 +23,11 @@ use darkfi::rpc::jsonrpc::{
     ErrorCode::{InternalError, InvalidParams},
     JsonError, JsonResponse, JsonResult,
 };
+use darkfi_sdk::tx::TransactionHash;
 
-use crate::BlockchainExplorer;
+use crate::Explorerd;
 
-impl BlockchainExplorer {
+impl Explorerd {
     // RPCAPI:
     // Queries the database to retrieve the transactions corresponding to the provided block header hash.
     // Returns the readable transactions upon success.
@@ -50,7 +51,7 @@ impl BlockchainExplorer {
         }
 
         let header_hash = params[0].get::<String>().unwrap();
-        let transactions = match self.get_transactions_by_header_hash(header_hash) {
+        let transactions = match self.db.get_transactions_by_header_hash(header_hash) {
             Ok(v) => v,
             Err(e) => {
                 error!(target: "blockchain-explorer::rpc_transactions::transactions_get_transaction_by_header_hash", "Failed fetching block transactions: {}", e);
@@ -87,15 +88,21 @@ impl BlockchainExplorer {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
-        let transaction_hash = params[0].get::<String>().unwrap();
-        let transaction = match self.get_transaction_by_hash(transaction_hash) {
-            Ok(v) => v,
-            Err(e) => {
-                error!(target: "blockchain-explorer::rpc_transactions::transactions_get_transaction_by_hash", "Failed fetching transaction: {}", e);
-                return JsonError::new(InternalError, None, id).into()
-            }
+        // Validate provided hash and store it for later use
+        let tx_hash_str = params[0].get::<String>().unwrap();
+        let tx_hash = match tx_hash_str.parse::<TransactionHash>() {
+            Ok(hash) => hash,
+            Err(e) => return JsonError::new(InternalError, Some(e.to_string()), id).into(),
         };
 
-        JsonResponse::new(transaction.to_json_array(), id).into()
+        // Retrieve transaction by hash and return result
+        match self.db.get_transaction_by_hash(&tx_hash) {
+            Ok(Some(transaction)) => JsonResponse::new(transaction.to_json_array(), id).into(),
+            Ok(None) => JsonResponse::new(JsonValue::Array(vec![]), id).into(),
+            Err(e) => {
+                error!(target: "blockchain-explorer::rpc_transactions::transactions_get_transaction_by_hash", "Failed fetching transaction: {}", e);
+                JsonError::new(InternalError, None, id).into()
+            }
+        }
     }
 }

@@ -16,13 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use rusqlite::types::Value;
 use tinyjson::JsonValue;
 
+use darkfi::{Error, Result};
 use darkfi_sdk::blockchain::block_epoch;
-use drk::error::{WalletDbError, WalletDbResult};
 
-use crate::{blocks::BLOCKS_TABLE, transactions::TRANSACTIONS_TABLE, BlockchainExplorer};
+use crate::ExplorerDb;
 
 #[derive(Debug, Clone)]
 /// Structure representing basic statistic extracted from the database.
@@ -34,9 +33,9 @@ pub struct BaseStatistics {
     /// Blockchains' last block hash
     pub last_block: String,
     /// Blockchain total blocks
-    pub total_blocks: u64,
+    pub total_blocks: usize,
     /// Blockchain total transactions
-    pub total_txs: u64,
+    pub total_txs: usize,
 }
 
 impl BaseStatistics {
@@ -52,45 +51,24 @@ impl BaseStatistics {
     }
 }
 
-impl BlockchainExplorer {
-    /// Fetch total rows count of given table from the database.
-    pub async fn get_table_count(&self, table: &str) -> WalletDbResult<u64> {
-        // First we prepare the query
-        let query = format!("SELECT COUNT() FROM {};", table);
-        let Ok(conn) = self.database.conn.lock() else {
-            return Err(WalletDbError::FailedToAquireLock)
-        };
-        let Ok(mut stmt) = conn.prepare(&query) else {
-            return Err(WalletDbError::QueryPreparationFailed)
-        };
-
-        // Execute the query using provided params
-        let Ok(mut rows) = stmt.query([]) else { return Err(WalletDbError::QueryExecutionFailed) };
-
-        // Check if row exists
-        let Ok(next) = rows.next() else { return Err(WalletDbError::QueryExecutionFailed) };
-        let row = match next {
-            Some(row_result) => row_result,
-            None => return Ok(0_u64),
-        };
-
-        // Parse returned value
-        let Ok(count) = row.get(0) else { return Err(WalletDbError::ParseColumnValueError) };
-        let Value::Integer(count) = count else { return Err(WalletDbError::ParseColumnValueError) };
-        let Ok(count) = u64::try_from(count) else {
-            return Err(WalletDbError::ParseColumnValueError)
-        };
-
-        Ok(count)
-    }
-
-    /// Fetch current database basic statistic.
-    pub async fn get_base_statistics(&self) -> WalletDbResult<BaseStatistics> {
-        let (height, last_block) = self.last_block().await?;
-        let epoch = block_epoch(height);
-        let total_blocks = self.get_table_count(BLOCKS_TABLE).await?;
-        let total_txs = self.get_table_count(TRANSACTIONS_TABLE).await?;
-
-        Ok(BaseStatistics { height, epoch, last_block, total_blocks, total_txs })
+impl ExplorerDb {
+    /// Fetch current database basic statistics.
+    pub fn get_base_statistics(&self) -> Result<Option<BaseStatistics>> {
+        let last_block = self.last_block();
+        Ok(last_block
+            // Throw database error if last_block retrievals fails
+            .map_err(|e| {
+                Error::DatabaseError(format!(
+                    "[get_base_statistics] Retrieving last block failed: {:?}",
+                    e
+                ))
+            })?
+            // Calculate base statistics and return result
+            .map(|(height, header_hash)| {
+                let epoch = block_epoch(height);
+                let total_blocks = self.get_block_count();
+                let total_txs = self.get_transaction_count();
+                BaseStatistics { height, epoch, last_block: header_hash, total_blocks, total_txs }
+            }))
     }
 }

@@ -16,36 +16,22 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use log::info;
-use rusqlite::types::Value;
+use log::{debug, info};
 use tinyjson::JsonValue;
 
-use darkfi::{blockchain::BlockInfo, Error, Result};
-use darkfi_sdk::crypto::schnorr::Signature;
-use darkfi_serial::{deserialize, serialize};
-use drk::{
-    convert_named_params,
-    error::{WalletDbError, WalletDbResult},
+use darkfi::{
+    blockchain::{
+        BlockInfo, BlockchainOverlay, HeaderHash, SLED_BLOCK_DIFFICULTY_TREE,
+        SLED_BLOCK_ORDER_TREE, SLED_BLOCK_TREE,
+    },
+    Error, Result,
 };
+use darkfi_sdk::crypto::schnorr::Signature;
 
-use crate::BlockchainExplorer;
-
-// Database SQL table constant names. These have to represent the `blocks.sql`
-// SQL schema.
-pub const BLOCKS_TABLE: &str = "blocks";
-
-// BLOCKS_TABLE
-pub const BLOCKS_COL_HEADER_HASH: &str = "header_hash";
-pub const BLOCKS_COL_VERSION: &str = "version";
-pub const BLOCKS_COL_PREVIOUS: &str = "previous";
-pub const BLOCKS_COL_HEIGHT: &str = "height";
-pub const BLOCKS_COL_TIMESTAMP: &str = "timestamp";
-pub const BLOCKS_COL_NONCE: &str = "nonce";
-pub const BLOCKS_COL_ROOT: &str = "root";
-pub const BLOCKS_COL_SIGNATURE: &str = "signature";
+use crate::ExplorerDb;
 
 #[derive(Debug, Clone)]
-/// Structure representing a `BLOCKS_TABLE` record.
+/// Structure representing a block record.
 pub struct BlockRecord {
     /// Header hash identifier of the block
     pub header_hash: String,
@@ -96,148 +82,63 @@ impl From<&BlockInfo> for BlockRecord {
     }
 }
 
-impl BlockchainExplorer {
-    /// Initialize database with blocks tables.
-    pub async fn initialize_blocks(&self) -> WalletDbResult<()> {
-        // Initialize blocks database schema
-        let database_schema = include_str!("../blocks.sql");
-        self.database.exec_batch_sql(database_schema)?;
+impl ExplorerDb {
+    /// Resets blocks in the database by clearing all block related trees, returning an Ok result on success.
+    pub fn reset_blocks(&self) -> Result<()> {
+        let db = &self.blockchain.sled_db;
+        // Initialize block related trees to reset
+        let trees_to_reset = [SLED_BLOCK_TREE, SLED_BLOCK_ORDER_TREE, SLED_BLOCK_DIFFICULTY_TREE];
+
+        // Iterate over each tree and remove its entries
+        for tree_name in &trees_to_reset {
+            let tree = db.open_tree(tree_name)?;
+            tree.clear()?;
+            let tree_name_str = std::str::from_utf8(tree_name)?;
+            info!(target: "blockchain-explorer::blocks", "Successfully reset block tree: {tree_name_str}");
+        }
 
         Ok(())
     }
 
-    /// Reset blocks table in the database.
-    pub fn reset_blocks(&self) -> WalletDbResult<()> {
-        info!(target: "blockchain-explorer::blocks::reset_blocks", "Resetting blocks...");
-        let query = format!("DELETE FROM {};", BLOCKS_TABLE);
-        self.database.exec_sql(&query, &[])
-    }
-
-    /// Import given block into the database.
-    pub async fn put_block(&self, block: &BlockRecord) -> Result<()> {
-        let query = format!(
-            "INSERT OR REPLACE INTO {} ({}, {}, {}, {}, {}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8);",
-            BLOCKS_TABLE,
-            BLOCKS_COL_HEADER_HASH,
-            BLOCKS_COL_VERSION,
-            BLOCKS_COL_PREVIOUS,
-            BLOCKS_COL_HEIGHT,
-            BLOCKS_COL_TIMESTAMP,
-            BLOCKS_COL_NONCE,
-            BLOCKS_COL_ROOT,
-            BLOCKS_COL_SIGNATURE
-        );
-
-        if let Err(e) = self.database.exec_sql(
-            &query,
-            rusqlite::params![
-                block.header_hash,
-                block.version,
-                block.previous,
-                block.height,
-                block.timestamp,
-                block.nonce,
-                block.root,
-                serialize(&block.signature),
-            ],
-        ) {
-            return Err(Error::DatabaseError(format!("[put_block] Block insert failed: {e:?}")))
-        };
-
+    /// Adds a block to the block explorer database.
+    pub async fn put_block(&self, block: &BlockInfo) -> Result<()> {
+        let blockchain_overlay = BlockchainOverlay::new(&self.blockchain)?;
+        // Add the synced block and commit the changes
+        let _ = blockchain_overlay.lock().unwrap().add_block(block)?;
+        blockchain_overlay.lock().unwrap().overlay.lock().unwrap().apply()?;
+        debug!(target:"blockchain_explorer::blocks::put_block", "Added block {:?}", block);
         Ok(())
     }
 
-    /// Auxiliary function to parse a `BLOCKS_TABLE` record.
-    fn parse_block_record(&self, row: &[Value]) -> Result<BlockRecord> {
-        let Value::Text(ref header_hash) = row[0] else {
-            return Err(Error::ParseFailed("[parse_block_record] Header hash parsing failed"))
-        };
-        let header_hash = header_hash.clone();
-
-        let Value::Integer(version) = row[1] else {
-            return Err(Error::ParseFailed("[parse_block_record] Version parsing failed"))
-        };
-        let Ok(version) = u8::try_from(version) else {
-            return Err(Error::ParseFailed("[parse_block_record] Version parsing failed"))
-        };
-
-        let Value::Text(ref previous) = row[2] else {
-            return Err(Error::ParseFailed("[parse_block_record] Previous parsing failed"))
-        };
-        let previous = previous.clone();
-
-        let Value::Integer(height) = row[3] else {
-            return Err(Error::ParseFailed("[parse_block_record] Height parsing failed"))
-        };
-        let Ok(height) = u32::try_from(height) else {
-            return Err(Error::ParseFailed("[parse_block_record] Height parsing failed"))
-        };
-
-        let Value::Integer(timestamp) = row[4] else {
-            return Err(Error::ParseFailed("[parse_block_record] Timestamp parsing failed"))
-        };
-        let Ok(timestamp) = u64::try_from(timestamp) else {
-            return Err(Error::ParseFailed("[parse_block_record] Timestamp parsing failed"))
-        };
-
-        let Value::Integer(nonce) = row[5] else {
-            return Err(Error::ParseFailed("[parse_block_record] Nonce parsing failed"))
-        };
-        let Ok(nonce) = u64::try_from(nonce) else {
-            return Err(Error::ParseFailed("[parse_block_record] Nonce parsing failed"))
-        };
-
-        let Value::Text(ref root) = row[6] else {
-            return Err(Error::ParseFailed("[parse_block_record] Root parsing failed"))
-        };
-        let root = root.clone();
-
-        let Value::Blob(ref signature_bytes) = row[7] else {
-            return Err(Error::ParseFailed(
-                "[parse_block_record] Signature bytes bytes parsing failed",
-            ))
-        };
-        let signature = deserialize(signature_bytes)?;
-
-        Ok(BlockRecord {
-            header_hash,
-            version,
-            previous,
-            height,
-            timestamp,
-            nonce,
-            root,
-            signature,
-        })
+    /// Provides the total block count.
+    pub fn get_block_count(&self) -> usize {
+        self.blockchain.len()
     }
 
     /// Fetch all known blocks from the database.
     pub fn get_blocks(&self) -> Result<Vec<BlockRecord>> {
-        let rows = match self.database.query_multiple(BLOCKS_TABLE, &[], &[]) {
-            Ok(r) => r,
-            Err(e) => {
-                return Err(Error::DatabaseError(format!(
-                    "[get_blocks] Blocks retrieval failed: {e:?}"
-                )))
-            }
-        };
+        // Fetch blocks and handle any errors encountered
+        let blocks = &self.blockchain.get_all().map_err(|e| {
+            Error::DatabaseError(format!("[get_blocks] Block retrieval failed: {e:?}"))
+        })?;
 
-        let mut blocks = Vec::with_capacity(rows.len());
-        for row in rows {
-            blocks.push(self.parse_block_record(&row)?);
-        }
+        // Transform the found blocks into a vector of block records
+        let block_records: Vec<BlockRecord> = blocks.iter().map(BlockRecord::from).collect();
 
-        Ok(blocks)
+        Ok(block_records)
     }
 
-    /// Fetch a block given its header hash.
-    pub fn get_block_by_hash(&self, header_hash: &str) -> Result<BlockRecord> {
-        let row = match self.database.query_single(
-            BLOCKS_TABLE,
-            &[],
-            convert_named_params! {(BLOCKS_COL_HEADER_HASH, header_hash)},
-        ) {
-            Ok(r) => r,
+    /// Fetch a block given its header hash from the database.
+    pub fn get_block_by_hash(&self, header_hash: &str) -> Result<Option<BlockRecord>> {
+        // Parse header hash, returning an error if parsing fails
+        let header_hash = header_hash
+            .parse::<HeaderHash>()
+            .map_err(|_| Error::ParseFailed("[get_block_by_hash] Invalid header hash"))?;
+
+        // Fetch all blocks by hash and handle encountered errors
+        let blocks = match self.blockchain.get_blocks_by_hash(&[header_hash]) {
+            Ok(blocks) => blocks,
+            Err(Error::BlockNotFound(_)) => return Ok(None),
             Err(e) => {
                 return Err(Error::DatabaseError(format!(
                     "[get_block_by_hash] Block retrieval failed: {e:?}"
@@ -245,152 +146,53 @@ impl BlockchainExplorer {
             }
         };
 
-        self.parse_block_record(&row)
+        // Transform found block to a BlockRecord
+        let block = Some(BlockRecord::from(&blocks[0]));
+
+        Ok(block)
     }
 
-    /// Fetch last block height from the database.
-    pub async fn last_block(&self) -> WalletDbResult<(u32, String)> {
-        // First we prepare the query
-        let query = format!(
-            "SELECT {}, {} FROM {} ORDER BY {} DESC LIMIT 1;",
-            BLOCKS_COL_HEADER_HASH, BLOCKS_COL_HEIGHT, BLOCKS_TABLE, BLOCKS_COL_HEIGHT
-        );
-        let Ok(conn) = self.database.conn.lock() else {
-            return Err(WalletDbError::FailedToAquireLock)
-        };
-        let Ok(mut stmt) = conn.prepare(&query) else {
-            return Err(WalletDbError::QueryPreparationFailed)
-        };
+    /// Fetch the last block from the database.
+    pub fn last_block(&self) -> Result<Option<(u32, String)>> {
+        let block_store = &self.blockchain.blocks;
 
-        // Execute the query using provided params
-        let Ok(mut rows) = stmt.query([]) else { return Err(WalletDbError::QueryExecutionFailed) };
-
-        // Check if row exists
-        let Ok(next) = rows.next() else { return Err(WalletDbError::QueryExecutionFailed) };
-        let row = match next {
-            Some(row_result) => row_result,
-            None => return Ok((0_u32, "".to_string())),
-        };
-
-        // Parse returned values
-        let Ok(value) = row.get(0) else { return Err(WalletDbError::ParseColumnValueError) };
-        let Value::Text(ref header_hash) = value else {
-            return Err(WalletDbError::ParseColumnValueError)
-        };
-        let header_hash = header_hash.clone();
-
-        let Ok(value) = row.get(1) else { return Err(WalletDbError::ParseColumnValueError) };
-        let Value::Integer(height) = value else {
-            return Err(WalletDbError::ParseColumnValueError)
-        };
-        let Ok(height) = u32::try_from(height) else {
-            return Err(WalletDbError::ParseColumnValueError)
-        };
-
-        Ok((height, header_hash))
-    }
-
-    /// Auxiliary function to parse a `BLOCKS_TABLE` query rows into block records.
-    fn parse_blocks_query_rows(&self, rows: &mut rusqlite::Rows) -> Result<Vec<BlockRecord>> {
-        // Loop over returned rows and parse them
-        let mut records = vec![];
-        loop {
-            // Check if an error occured
-            let row = match rows.next() {
-                Ok(r) => r,
-                Err(_) => {
-                    return Err(Error::DatabaseError(format!(
-                        "[get_last_n_blocks] {}",
-                        WalletDbError::QueryExecutionFailed
-                    )))
-                }
-            };
-
-            // Check if no row was returned
-            let row = match row {
-                Some(r) => r,
-                None => break,
-            };
-
-            // Grab row returned values
-            let mut row_values = vec![];
-            let mut idx = 0;
-            loop {
-                let Ok(value) = row.get(idx) else { break };
-                row_values.push(value);
-                idx += 1;
-            }
-            records.push(row_values);
+        // Return None result when no blocks exist
+        if block_store.is_empty() {
+            return Ok(None);
         }
 
-        // Parse the records into blocks
-        let mut blocks = Vec::with_capacity(records.len());
-        for record in records {
-            blocks.push(self.parse_block_record(&record)?);
-        }
+        // Blocks exist, retrieve last block
+        let (height, header_hash) = block_store.get_last().map_err(|e| {
+            Error::DatabaseError(format!("[last_block] Block retrieval failed: {e:?}"))
+        })?;
 
-        Ok(blocks)
+        // Convert header hash to a string and return result
+        Ok(Some((height, header_hash.to_string())))
     }
 
-    /// Fetch last N blocks from the database.
-    pub fn get_last_n_blocks(&self, n: u16) -> Result<Vec<BlockRecord>> {
-        // First we prepare the query
-        let query = format!(
-            "SELECT * FROM {} ORDER BY {} DESC LIMIT {};",
-            BLOCKS_TABLE, BLOCKS_COL_HEIGHT, n
-        );
-        let Ok(conn) = self.database.conn.lock() else {
-            return Err(Error::DatabaseError(format!(
-                "[get_last_n_blocks] {}",
-                WalletDbError::FailedToAquireLock
-            )))
-        };
-        let Ok(mut stmt) = conn.prepare(&query) else {
-            return Err(Error::DatabaseError(format!(
-                "[get_last_n_blocks] {}",
-                WalletDbError::QueryPreparationFailed
-            )))
-        };
+    /// Fetch the last N blocks from the database.
+    pub fn get_last_n(&self, n: usize) -> Result<Vec<BlockRecord>> {
+        // Fetch the last n blocks and handle any errors encountered
+        let blocks_result = &self.blockchain.get_last_n(n).map_err(|e| {
+            Error::DatabaseError(format!("[get_last_n] Block retrieval failed: {e:?}"))
+        })?;
 
-        // Execute the query using provided params
-        let Ok(mut rows) = stmt.query([]) else {
-            return Err(Error::DatabaseError(format!(
-                "[get_last_n_blocks] {}",
-                WalletDbError::QueryExecutionFailed
-            )))
-        };
+        // Transform the found blocks into a vector of block records
+        let block_records: Vec<BlockRecord> = blocks_result.iter().map(BlockRecord::from).collect();
 
-        self.parse_blocks_query_rows(&mut rows)
+        Ok(block_records)
     }
 
-    /// Fetch last N blocks from the database.
-    pub fn get_blocks_in_heights_range(&self, start: u32, end: u32) -> Result<Vec<BlockRecord>> {
-        // First we prepare the query
-        let query = format!(
-            "SELECT * FROM {} WHERE {} >= {} AND {} <= {} ORDER BY {} ASC;",
-            BLOCKS_TABLE, BLOCKS_COL_HEIGHT, start, BLOCKS_COL_HEIGHT, end, BLOCKS_COL_HEIGHT
-        );
-        let Ok(conn) = self.database.conn.lock() else {
-            return Err(Error::DatabaseError(format!(
-                "[get_blocks_in_height_range] {}",
-                WalletDbError::FailedToAquireLock
-            )))
-        };
-        let Ok(mut stmt) = conn.prepare(&query) else {
-            return Err(Error::DatabaseError(format!(
-                "[get_blocks_in_height_range] {}",
-                WalletDbError::QueryPreparationFailed
-            )))
-        };
+    /// Fetch blocks within a specified range from the database.
+    pub fn get_by_range(&self, start: u32, end: u32) -> Result<Vec<BlockRecord>> {
+        // Fetch blocks in the specified range and handle any errors encountered
+        let blocks_result = &self.blockchain.get_by_range(start, end).map_err(|e| {
+            Error::DatabaseError(format!("[get_by_range]: Block retrieval failed: {e:?}"))
+        })?;
 
-        // Execute the query using provided params
-        let Ok(mut rows) = stmt.query([]) else {
-            return Err(Error::DatabaseError(format!(
-                "[get_blocks_in_height_range] {}",
-                WalletDbError::QueryExecutionFailed
-            )))
-        };
+        // Transform the found blocks into a vector of block records
+        let block_records: Vec<BlockRecord> = blocks_result.iter().map(BlockRecord::from).collect();
 
-        self.parse_blocks_query_rows(&mut rows)
+        Ok(block_records)
     }
 }
