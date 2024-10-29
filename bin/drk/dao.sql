@@ -124,8 +124,6 @@
 --   $ drk dao exec f6cae...1f6cf > dao_exec_tx
 --   $ drk broadcast < dao_exec_tx
 
-PRAGMA foreign_keys = ON;
-
 CREATE TABLE IF NOT EXISTS Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_daos (
     -- Bulla identifier of the DAO
     bulla BLOB PRIMARY KEY NOT NULL,

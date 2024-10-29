@@ -1,11 +1,6 @@
 -- Wallet definitions for this contract.
 -- We store data that is needed to be able to receive and send tokens.
 
--- Arbitrary info that is potentially useful
-CREATE TABLE IF NOT EXISTS BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o_money_info (
-	last_scanned_block INTEGER NOT NULL
-);
-
 -- The Merkle tree containing coins
 CREATE TABLE IF NOT EXISTS BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o_money_tree (
 	tree BLOB NOT NULL

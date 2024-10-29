@@ -60,16 +60,14 @@ use darkfi_serial::{deserialize_async, serialize_async, AsyncEncodable};
 use crate::{
     cli_util::kaching,
     convert_named_params,
-    error::{WalletDbError, WalletDbResult},
+    error::WalletDbResult,
     walletdb::{WalletSmt, WalletStorage},
     Drk,
 };
 
-// Wallet SQL table constant names. These have to represent the `wallet.sql`
+// Wallet SQL table constant names. These have to represent the `money.sql`
 // SQL schema. Table names are prefixed with the contract ID to avoid collisions.
 lazy_static! {
-    pub static ref MONEY_INFO_TABLE: String =
-        format!("{}_money_info", MONEY_CONTRACT_ID.to_string());
     pub static ref MONEY_TREE_TABLE: String =
         format!("{}_money_tree", MONEY_CONTRACT_ID.to_string());
     pub static ref MONEY_SMT_TABLE: String = format!("{}_money_smt", MONEY_CONTRACT_ID.to_string());
@@ -82,9 +80,6 @@ lazy_static! {
     pub static ref MONEY_ALIASES_TABLE: String =
         format!("{}_money_aliases", MONEY_CONTRACT_ID.to_string());
 }
-
-// MONEY_INFO_TABLE
-pub const MONEY_INFO_COL_LAST_SCANNED_BLOCK: &str = "last_scanned_block";
 
 // MONEY_TREE_TABLE
 pub const MONEY_TREE_COL_TREE: &str = "tree";
@@ -145,16 +140,6 @@ impl Drk {
             let _ = tree.mark().unwrap();
             self.put_money_tree(&tree).await?;
             println!("Successfully initialized Merkle tree for the Money contract");
-        }
-
-        // We maintain the last scanned block as part of the Money contract,
-        // but at this moment it is also somewhat applicable to DAO scans.
-        if self.last_scanned_block().is_err() {
-            let query = format!(
-                "INSERT INTO {} ({}) VALUES (?1);",
-                *MONEY_INFO_TABLE, MONEY_INFO_COL_LAST_SCANNED_BLOCK
-            );
-            self.wallet.exec_sql(&query, rusqlite::params![0])?;
         }
 
         // Insert DRK alias
@@ -715,23 +700,6 @@ impl Drk {
         }
 
         Ok(smt)
-    }
-
-    /// Get the last scanned block height from the wallet.
-    pub fn last_scanned_block(&self) -> WalletDbResult<u32> {
-        let ret = self.wallet.query_single(
-            &MONEY_INFO_TABLE,
-            &[MONEY_INFO_COL_LAST_SCANNED_BLOCK],
-            &[],
-        )?;
-        let Value::Integer(height) = ret[0] else {
-            return Err(WalletDbError::ParseColumnValueError);
-        };
-        let Ok(height) = u32::try_from(height) else {
-            return Err(WalletDbError::ParseColumnValueError);
-        };
-
-        Ok(height)
     }
 
     /// Auxiliary function to grab all the nullifiers, coins, notes and freezes from

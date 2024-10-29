@@ -79,7 +79,7 @@ use crate::{
     Drk,
 };
 
-// Wallet SQL table constant names. These have to represent the `wallet.sql`
+// Wallet SQL table constant names. These have to represent the `dao.sql`
 // SQL schema. Table names are prefixed with the contract ID to avoid collisions.
 lazy_static! {
     pub static ref DAO_DAOS_TABLE: String = format!("{}_dao_daos", DAO_CONTRACT_ID.to_string());

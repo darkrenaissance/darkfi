@@ -23,27 +23,31 @@ pub type WalletDbResult<T> = std::result::Result<T, WalletDbError>;
 /// Please sort them sensefully.
 #[derive(Debug)]
 pub enum WalletDbError {
+    // Initialization error
+    InitializationFailed = -32100,
+
     // Connection related errors
-    ConnectionFailed = -32100,
-    FailedToAquireLock = -32101,
+    ConnectionFailed = -32110,
+    FailedToAquireLock = -32111,
 
     // Configuration related errors
-    PragmaUpdateError = -32110,
+    PragmaUpdateError = -32120,
 
     // Query execution related errors
-    QueryPreparationFailed = -32120,
-    QueryExecutionFailed = -32121,
-    QueryFinalizationFailed = -32122,
-    ParseColumnValueError = -32123,
-    RowNotFound = -32124,
+    QueryPreparationFailed = -32130,
+    QueryExecutionFailed = -32131,
+    QueryFinalizationFailed = -32132,
+    ParseColumnValueError = -32133,
+    RowNotFound = -32134,
 
     // Generic error
-    GenericError = -32130,
+    GenericError = -32140,
 }
 
 impl std::fmt::Display for WalletDbError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            WalletDbError::InitializationFailed => write!(f, "WalletDbError::InitializationFailed"),
             WalletDbError::ConnectionFailed => write!(f, "WalletDbError::ConnectionFailed"),
             WalletDbError::FailedToAquireLock => write!(f, "WalletDbError::FailedToAquireLock"),
             WalletDbError::PragmaUpdateError => write!(f, "WalletDbError::PragmaUpdateError"),

@@ -40,7 +40,6 @@ use darkfi_serial::{deserialize_async, serialize_async};
 
 use crate::{
     error::{WalletDbError, WalletDbResult},
-    money::{MONEY_INFO_COL_LAST_SCANNED_BLOCK, MONEY_INFO_TABLE},
     Drk,
 };
 
@@ -68,6 +67,8 @@ impl Drk {
             }
         };
 
+        // TODO/FIXME: we can subscribe without scanning the geneseis(0) block,
+        // when no other block has been created.
         if last_known != last_scanned {
             eprintln!("Warning: Last scanned block is not the last known block.");
             eprintln!("You should first fully scan the blockchain, and then subscribe");
@@ -220,9 +221,7 @@ impl Drk {
         }
 
         // Write this block height into `last_scanned_block`
-        let query =
-            format!("UPDATE {} SET {} = ?1;", *MONEY_INFO_TABLE, MONEY_INFO_COL_LAST_SCANNED_BLOCK);
-        if let Err(e) = self.wallet.exec_sql(&query, rusqlite::params![block.header.height]) {
+        if let Err(e) = self.update_last_scanned_block(block.header.height) {
             return Err(Error::DatabaseError(format!(
                 "[scan_block] Update last scanned block failed: {e:?}"
             )))
