@@ -312,25 +312,42 @@ impl WalletDb {
         Ok(())
     }
 
-    /// Auxiliary function to retrieve caches inverse queries into an single execution block.
+    /// Auxiliary function to retrieve cached inverse queries into a single SQL execution block.
     /// The final query will contain the queries in reverse order, and cache is cleared afterwards.
-    pub fn grab_inverse_block(&self) -> WalletDbResult<String> {
-        debug!(target: "walletdb::grab_inverse_block", "[WalletDb] Grabbing cached inversed quirie");
-        let Ok(mut cache) = self.inverse_cache.lock() else {
+    pub fn grab_inverse_cache_block(&self) -> WalletDbResult<String> {
+        // Grab cache lock
+        debug!(target: "walletdb::grab_inverse_block", "[WalletDb] Grabbing cached inverse queries");
+        let Ok(cache) = self.inverse_cache.lock() else {
             return Err(WalletDbError::FailedToAquireLock)
         };
 
+        // Build the full SQL block query
         let mut inverse_batch = String::from("BEGIN;");
         for query in cache.iter().rev() {
             inverse_batch += query;
         }
         inverse_batch += "END;";
 
-        // Clear cache and drop the lock
-        *cache = vec![];
+        // Drop the lock
         drop(cache);
 
         Ok(inverse_batch)
+    }
+
+    /// Auxiliary function to clear inverse queries cache.
+    pub fn clear_inverse_cache(&self) -> WalletDbResult<()> {
+        // Grab cache lock
+        let Ok(mut cache) = self.inverse_cache.lock() else {
+            return Err(WalletDbError::FailedToAquireLock)
+        };
+
+        // Clear cache
+        *cache = vec![];
+
+        // Drop the lock
+        drop(cache);
+
+        Ok(())
     }
 }
 
@@ -692,8 +709,11 @@ mod tests {
         assert!(!rows.is_empty());
 
         // We are now going to rollback the wallet changes
-        let rollback_query = wallet.grab_inverse_block().unwrap();
+        let rollback_query = wallet.grab_inverse_cache_block().unwrap();
         wallet.exec_batch_sql(&rollback_query).unwrap();
+
+        // Clear cache
+        wallet.clear_inverse_cache().unwrap();
 
         // Verify database is empty again
         let rows = wallet.query_multiple(table, &[key_col], &[]).unwrap();
