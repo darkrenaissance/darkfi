@@ -77,7 +77,7 @@ circuit "Burn_V1" {
     # With this, we can actually produce a fake coin of coin_value 0
     # above and use it as a dummy input. The inclusion merkle tree
     # has a 0x00 leaf at position 0, so zero_cond will output coin_value
-    # iff coin_value is 0 - which is equivalent to 0x00 so that's the
+    # if coin_value is 0 - which is equivalent to 0x00 so that's the
     # trick we use to make the inclusion proof.
     coin_incl = zero_cond(coin_value, coin);
 
