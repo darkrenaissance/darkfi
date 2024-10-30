@@ -20,6 +20,8 @@
 	- [Private Message](misc/darkirc/private_message.md)
     - [Anonymous Nodes](clients/anonymous_nodes.md)
         - [Tor DarkIRC](misc/tor_darkirc.md)
+- [Public Node Configurations](misc/darkfi_public_node_guide.md)
+- [Network Troubleshooting](misc/network-troubleshooting.md)
 
 # Developer Doc
 
@@ -128,5 +130,4 @@
 - [dnetview](misc/dnetview.md)
 - [Zero2darkfi](zero2darkfi/zero2darkfi.md)
   - [darkmap](zero2darkfi/darkmap.md)
-- [Network troubleshooting](misc/network-troubleshooting.md)
 - [Glossary](glossary/glossary.md)

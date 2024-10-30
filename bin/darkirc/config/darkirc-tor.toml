@@ -27,7 +27,7 @@ outbound_peer_discovery_cooloff_time = 60
 allowed_transports = ["tor", "tor+tls"]
 
 ## Addresses we want to advertise to peers
-external_addrs = ["tor://youraddress.onion:your-port"]
+external_addrs = ["tor://youraddress.onion:25551"]
 
 ## Seed nodes to connect to 
 seeds = [
@@ -36,7 +36,7 @@ seeds = [
 ]
 
 ## P2P accept addresses
-inbound = ["tcp://127.0.0.1:your-port"]
+inbound = ["tcp://127.0.0.1:25551"]
 
 ## Outbound connection slots
 outbound_connections = 8
