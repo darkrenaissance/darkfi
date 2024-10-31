@@ -54,10 +54,26 @@ impl Drk {
         endpoint: Url,
         ex: Arc<smol::Executor<'static>>,
     ) -> Result<()> {
+        // Grab last known block
         let rep = self
             .darkfid_daemon_request("blockchain.last_known_block", &JsonValue::Array(vec![]))
             .await?;
-        let last_known = *rep.get::<f64>().unwrap() as u32;
+        let mut last_known = *rep.get::<f64>().unwrap() as u32;
+
+        // Handle genesis(0) block
+        if last_known == 0 {
+            if let Err(e) = self.scan_blocks(true).await {
+                return Err(Error::DatabaseError(format!(
+                    "[subscribe_blocks] Scanning from genesis block failed: {e:?}"
+                )))
+            }
+        }
+
+        // Grab last known block again
+        let rep = self
+            .darkfid_daemon_request("blockchain.last_known_block", &JsonValue::Array(vec![]))
+            .await?;
+        last_known = *rep.get::<f64>().unwrap() as u32;
         let last_scanned = match self.last_scanned_block() {
             Ok(l) => l,
             Err(e) => {
@@ -67,7 +83,6 @@ impl Drk {
             }
         };
 
-        // TODO/FIXME: we can subscribe without scanning the geneseis(0) block,
         // when no other block has been created.
         if last_known != last_scanned {
             eprintln!("Warning: Last scanned block is not the last known block.");
