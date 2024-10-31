@@ -634,13 +634,14 @@ impl Drk {
         Ok(proposals)
     }
 
-    // Auxiliary function to apply `DaoFunction::Mint` call data to the wallet.
+    /// Auxiliary function to apply `DaoFunction::Mint` call data to the wallet.
+    /// Returns a flag indicating if the provided call refers to our own wallet.
     async fn apply_dao_mint_data(
         &self,
         new_bulla: DaoBulla,
         tx_hash: TransactionHash,
         call_index: u8,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         let daos = self.get_daos().await?;
         let (mut daos_tree, proposals_tree) = self.get_dao_trees().await?;
         daos_tree.append(MerkleNode::from(new_bulla.inner()));
@@ -669,20 +670,21 @@ impl Drk {
                     )))
                 }
 
-                break
+                return Ok(true);
             }
         }
 
-        Ok(())
+        Ok(false)
     }
 
-    // Auxiliary function to apply `DaoFunction::Propose` call data to the wallet.
+    /// Auxiliary function to apply `DaoFunction::Propose` call data to the wallet.
+    /// Returns a flag indicating if the provided call refers to our own wallet.
     async fn apply_dao_propose_data(
         &self,
         params: DaoProposeParams,
         tx_hash: TransactionHash,
         call_index: u8,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         let daos = self.get_daos().await?;
         let (daos_tree, mut proposals_tree) = self.get_dao_trees().await?;
         proposals_tree.append(MerkleNode::from(params.proposal_bulla.inner()));
@@ -733,23 +735,24 @@ impl Drk {
                     )))
                 }
 
-                break
+                return Ok(true);
             }
         }
 
-        Ok(())
+        Ok(false)
     }
 
-    // Auxiliary function to apply `DaoFunction::Vote` call data to the wallet.
+    /// Auxiliary function to apply `DaoFunction::Vote` call data to the wallet.
+    /// Returns a flag indicating if the provided call refers to our own wallet.
     async fn apply_dao_vote_data(
         &self,
         params: DaoVoteParams,
         tx_hash: TransactionHash,
         call_index: u8,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         // Check if we got the corresponding proposal
         let Ok(proposal) = self.get_dao_proposal_by_bulla(&params.proposal_bulla).await else {
-            return Ok(())
+            return Ok(false)
         };
 
         // Grab the proposal DAO
@@ -807,18 +810,19 @@ impl Drk {
             )))
         }
 
-        Ok(())
+        Ok(true)
     }
 
-    // Auxiliary function to apply `DaoFunction::Exec` call data to the wallet.
+    /// Auxiliary function to apply `DaoFunction::Exec` call data to the wallet.
+    /// Returns a flag indicating if the provided call refers to our own wallet.
     async fn apply_dao_exec_data(
         &self,
         params: DaoExecParams,
         tx_hash: TransactionHash,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         // Check if we got the corresponding proposal
         let Ok(mut proposal) = self.get_dao_proposal_by_bulla(&params.proposal_bulla).await else {
-            return Ok(())
+            return Ok(false)
         };
 
         // Update its exec transaction hash
@@ -829,16 +833,17 @@ impl Drk {
             )))
         }
 
-        Ok(())
+        Ok(true)
     }
 
     /// Append data related to DAO contract transactions into the wallet database.
+    /// Returns a flag indicating if the provided data refer to our own wallet.
     pub async fn apply_tx_dao_data(
         &self,
         data: &[u8],
         tx_hash: TransactionHash,
         call_idx: u8,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         // Run through the transaction call data and see what we got:
         match DaoFunction::try_from(data[0])? {
             DaoFunction::Mint => {
@@ -864,7 +869,7 @@ impl Drk {
             DaoFunction::AuthMoneyTransfer => {
                 println!("[apply_tx_dao_data] Found Dao::AuthMoneyTransfer call");
                 // Does nothing, just verifies the other calls are correct
-                Ok(())
+                Ok(false)
             }
         }
     }

@@ -48,6 +48,7 @@ use darkfi_serial::{deserialize_async, serialize_async, AsyncEncodable};
 
 use crate::{
     convert_named_params,
+    error::WalletDbResult,
     money::{
         BALANCE_BASE10_DECIMALS, MONEY_TOKENS_COL_IS_FROZEN, MONEY_TOKENS_COL_MINT_AUTHORITY,
         MONEY_TOKENS_COL_TOKEN_BLIND, MONEY_TOKENS_COL_TOKEN_ID, MONEY_TOKENS_TABLE,
@@ -150,6 +151,13 @@ impl Drk {
         };
 
         Ok((token_id, mint_authority, token_blind, frozen != 0))
+    }
+
+    /// Reset all token mint authorities frozen status in the wallet.
+    pub fn reset_mint_authorities(&self) -> WalletDbResult<()> {
+        let query =
+            format!("UPDATE {} SET {} = 0", *MONEY_TOKENS_TABLE, MONEY_TOKENS_COL_IS_FROZEN,);
+        self.wallet.exec_sql(&query, &[])
     }
 
     /// Fetch all token mint authorities from the wallet.

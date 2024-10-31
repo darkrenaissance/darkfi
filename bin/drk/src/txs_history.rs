@@ -35,32 +35,37 @@ const WALLET_TXS_HISTORY_COL_STATUS: &str = "status";
 const WALLET_TXS_HISTORY_COL_TX: &str = "tx";
 
 impl Drk {
-    /// Insert a `Transaction` history record into the wallet.
-    pub async fn insert_tx_history_record(&self, tx: &Transaction) -> WalletDbResult<String> {
+    /// Insert or update a `Transaction` history record into the wallet,
+    /// with the provided status.
+    pub async fn put_tx_history_record(
+        &self,
+        tx: &Transaction,
+        status: &str,
+    ) -> WalletDbResult<String> {
         let query = format!(
-            "INSERT OR IGNORE INTO {} ({}, {}, {}) VALUES (?1, ?2, ?3);",
+            "INSERT OR UPDATE INTO {} ({}, {}, {}) VALUES (?1, ?2, ?3);",
             WALLET_TXS_HISTORY_TABLE,
             WALLET_TXS_HISTORY_COL_TX_HASH,
             WALLET_TXS_HISTORY_COL_STATUS,
             WALLET_TXS_HISTORY_COL_TX,
         );
         let tx_hash = tx.hash().to_string();
-        self.wallet.exec_sql(
-            &query,
-            rusqlite::params![tx_hash, "Broadcasted", &serialize_async(tx).await,],
-        )?;
+        self.wallet
+            .exec_sql(&query, rusqlite::params![tx_hash, status, &serialize_async(tx).await,])?;
 
         Ok(tx_hash)
     }
 
-    /// Insert a slice of [`Transaction`] history records into the wallet.
-    pub async fn insert_tx_history_records(
+    /// Insert or update a slice of [`Transaction`] history records into the wallet,
+    /// with the provided status.
+    pub async fn put_tx_history_records(
         &self,
-        txs: &[Transaction],
+        txs: &[&Transaction],
+        status: &str,
     ) -> WalletDbResult<Vec<String>> {
         let mut ret = Vec::with_capacity(txs.len());
         for tx in txs {
-            ret.push(self.insert_tx_history_record(tx).await?);
+            ret.push(self.put_tx_history_record(tx, status).await?);
         }
         Ok(ret)
     }
@@ -127,34 +132,13 @@ impl Drk {
         Ok(ret)
     }
 
-    /// Update given transactions history record statuses to the given one.
-    pub fn update_tx_history_records_status(
-        &self,
-        txs_hashes: &[String],
-        status: &str,
-    ) -> WalletDbResult<()> {
-        if txs_hashes.is_empty() {
-            return Ok(())
-        }
+    /// Reset the transaction history records in the wallet.
+    pub fn reset_tx_history(&self) -> WalletDbResult<()> {
+        println!("Resetting transactions history");
+        let query = format!("DELETE FROM {};", WALLET_TXS_HISTORY_TABLE);
+        self.wallet.exec_sql(&query, &[])?;
+        println!("Successfully reset transactions history");
 
-        let txs_hashes_string = format!("{:?}", txs_hashes).replace('[', "(").replace(']', ")");
-        let query = format!(
-            "UPDATE {} SET {} = ?1 WHERE {} IN {};",
-            WALLET_TXS_HISTORY_TABLE,
-            WALLET_TXS_HISTORY_COL_STATUS,
-            WALLET_TXS_HISTORY_COL_TX_HASH,
-            txs_hashes_string
-        );
-
-        self.wallet.exec_sql(&query, rusqlite::params![status])
-    }
-
-    /// Update all transaction history records statuses to the given one.
-    pub fn update_all_tx_history_records_status(&self, status: &str) -> WalletDbResult<()> {
-        let query = format!(
-            "UPDATE {} SET {} = ?1",
-            WALLET_TXS_HISTORY_TABLE, WALLET_TXS_HISTORY_COL_STATUS,
-        );
-        self.wallet.exec_sql(&query, rusqlite::params![status])
+        Ok(())
     }
 }

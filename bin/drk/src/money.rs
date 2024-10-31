@@ -788,12 +788,13 @@ impl Drk {
     }
 
     /// Append data related to Money contract transactions into the wallet database.
+    /// Returns a flag indicating if the provided data refer to our own wallet.
     pub async fn apply_tx_money_data(
         &self,
         call_idx: usize,
         calls: &[DarkLeaf<ContractCall>],
         tx_hash: &String,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         let (nullifiers, coins, notes, freezes) = self.parse_money_call(call_idx, calls).await?;
         let secrets = self.get_money_secrets().await?;
         let dao_secrets = self.get_dao_secrets().await?;
@@ -826,7 +827,7 @@ impl Drk {
             )))
         }
         self.smt_insert(&nullifiers)?;
-        self.mark_spent_coins(&nullifiers, tx_hash).await?;
+        let wallet_spent_coins = self.mark_spent_coins(&nullifiers, tx_hash).await?;
 
         // This is the SQL query we'll be executing to insert new coins
         // into the wallet
@@ -872,6 +873,7 @@ impl Drk {
             }
         }
 
+        let mut wallet_freezes = false;
         for token_id in freezes {
             let query = format!(
                 "UPDATE {} SET {} = 1 WHERE {} = ?1;",
@@ -885,13 +887,15 @@ impl Drk {
                     "[apply_tx_money_data] Inserting Money coin failed: {e:?}"
                 )))
             }
+
+            wallet_freezes = true;
         }
 
         if self.fun && !owncoins.is_empty() {
             kaching().await;
         }
 
-        Ok(())
+        Ok(wallet_spent_coins || !owncoins.is_empty() || wallet_freezes)
     }
 
     /// Auxiliary function to  grab all the nullifiers from a transaction money call.
@@ -958,15 +962,17 @@ impl Drk {
     }
 
     /// Marks all coins in the wallet as spent, if their nullifier is in the given set.
+    /// Returns a flag indicating if any of the provided nullifiers refer to our own wallet.
     pub async fn mark_spent_coins(
         &self,
         nullifiers: &[Nullifier],
         spent_tx_hash: &String,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         if nullifiers.is_empty() {
-            return Ok(())
+            return Ok(false)
         }
 
+        let mut wallet_spent_coins = false;
         for (coin, _, _) in self.get_coins(false).await? {
             if nullifiers.contains(&coin.nullifier()) {
                 if let Err(e) = self.mark_spent_coin(&coin.coin, spent_tx_hash).await {
@@ -974,10 +980,11 @@ impl Drk {
                         "[mark_spent_coins] Marking spent coin failed: {e:?}"
                     )))
                 }
+                wallet_spent_coins = true;
             }
         }
 
-        Ok(())
+        Ok(wallet_spent_coins)
     }
 
     /// Inserts given slice to the wallets nullifiers Sparse Merkle Tree.

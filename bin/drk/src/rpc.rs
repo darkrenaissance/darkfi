@@ -145,21 +145,6 @@ impl Drk {
                                 "[subscribe_blocks] Scanning block failed: {e:?}"
                             )))
                         }
-                        let txs_hashes = match self.insert_tx_history_records(&block_data.txs).await {
-                            Ok(hashes) => hashes,
-                            Err(e) => {
-                                return Err(Error::DatabaseError(format!(
-                                    "[subscribe_blocks] Inserting transaction history records failed: {e:?}"
-                                )))
-                            },
-                        };
-                        if let Err(e) =
-                            self.update_tx_history_records_status(&txs_hashes, "Finalized")
-                        {
-                            return Err(Error::DatabaseError(format!(
-                                "[subscribe_blocks] Update transaction history record status failed: {e:?}"
-                            )))
-                        }
                     }
                 }
 
@@ -184,28 +169,39 @@ impl Drk {
     /// based on the called contract. Additionally, will update `last_scanned_block` to
     /// the probided block height.
     async fn scan_block(&self, block: &BlockInfo) -> Result<()> {
+        // Keep track of our wallet transactions
+        let mut wallet_txs = vec![];
         println!("=======================================");
         println!("{}", block.header);
         println!("=======================================");
         println!("[scan_block] Iterating over {} transactions", block.txs.len());
         for tx in block.txs.iter() {
             let tx_hash = tx.hash().to_string();
+            let mut wallet_tx = false;
             println!("[scan_block] Processing transaction: {tx_hash}");
             for (i, call) in tx.calls.iter().enumerate() {
                 if call.data.contract_id == *MONEY_CONTRACT_ID {
                     println!("[scan_block] Found Money contract in call {i}");
-                    self.apply_tx_money_data(i, &tx.calls, &tx_hash).await?;
+                    if self.apply_tx_money_data(i, &tx.calls, &tx_hash).await? {
+                        wallet_tx = true;
+                    };
                     continue
                 }
 
                 if call.data.contract_id == *DAO_CONTRACT_ID {
                     println!("[scan_block] Found DAO contract in call {i}");
-                    self.apply_tx_dao_data(
-                        &call.data.data,
-                        TransactionHash::new(*blake3::hash(&serialize_async(tx).await).as_bytes()),
-                        i as u8,
-                    )
-                    .await?;
+                    if self
+                        .apply_tx_dao_data(
+                            &call.data.data,
+                            TransactionHash::new(
+                                *blake3::hash(&serialize_async(tx).await).as_bytes(),
+                            ),
+                            i as u8,
+                        )
+                        .await?
+                    {
+                        wallet_tx = true;
+                    };
                     continue
                 }
 
@@ -218,6 +214,18 @@ impl Drk {
                 // TODO: For now we skip non-native contract calls
                 println!("[scan_block] Found non-native contract in call {i}, skipping.");
             }
+
+            // If this is our wallet tx we mark it for update
+            if wallet_tx {
+                wallet_txs.push(tx);
+            }
+        }
+
+        // Update wallet transactions records
+        if let Err(e) = self.put_tx_history_records(&wallet_txs, "Finalized").await {
+            return Err(Error::DatabaseError(format!(
+                "[scan_block] Inserting transaction history records failed: {e:?}"
+            )))
         }
 
         // Write this block height into `last_scanned_block`
@@ -244,11 +252,12 @@ impl Drk {
             self.reset_money_tree().await?;
             self.reset_money_smt()?;
             self.reset_money_coins()?;
+            self.reset_mint_authorities()?;
             self.reset_dao_trees().await?;
             self.reset_daos().await?;
             self.reset_dao_proposals().await?;
             self.reset_dao_votes()?;
-            self.update_all_tx_history_records_status("Rejected")?;
+            self.reset_tx_history()?;
             height = 0;
         } else {
             height += 1;
@@ -289,8 +298,6 @@ impl Drk {
                     eprintln!("[scan_blocks] Scan block failed: {e:?}");
                     return Err(WalletDbError::GenericError)
                 };
-                let txs_hashes = self.insert_tx_history_records(&block.txs).await?;
-                self.update_tx_history_records_status(&txs_hashes, "Finalized")?;
                 height += 1;
             }
         }
@@ -322,7 +329,7 @@ impl Drk {
         let txid = rep.get::<String>().unwrap().clone();
 
         // Store transactions history record
-        if let Err(e) = self.insert_tx_history_record(tx).await {
+        if let Err(e) = self.put_tx_history_record(tx, "Broadcasted").await {
             return Err(Error::DatabaseError(format!(
                 "[broadcast_tx] Inserting transaction history record failed: {e:?}"
             )))
