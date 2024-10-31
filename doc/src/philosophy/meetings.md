@@ -20,8 +20,9 @@ Meeting schedule:
 | Rescheduled                                                                                                                             | 2nd of October, 2024   |                                                         |
 | [Political Theology](https://anarch.cc/uploads/carl-schmitt/political-theology.pdf)                                                     | 16th of October, 2024  | Carl Schmitt                                            |
 | [Ganienkeh Manifesto](http://www.ganienkeh.net/images/manifesto_web.pdf)                                                                | 30th of October, 2024  | [Mohawk Nation](https://en.wikipedia.org/wiki/Ganienkeh)|
-|  Open for submissions                                                                                                                   | 13th of November, 2024 |                                                         |
+| [A New Nationalism for the New Ireland](https://xeno.tools/uploads/fennell-new-nationalism.pdf)                                         | 13th of November, 2024 | Desmond Fennell                                         |
 |  Open for submissions                                                                                                                   | 27th of November, 2024 |                                                         |
 |  Open for submissions                                                                                                                   | 11th of December, 2024 |                                                         |
+|  Open for submissions                                                                                                                   | 25th of December, 2024 |                                                         |
 
 Feel free to propose a text for a future meeting by sharing it in #philosophy.
