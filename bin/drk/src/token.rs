@@ -155,9 +155,13 @@ impl Drk {
 
     /// Reset all token mint authorities frozen status in the wallet.
     pub fn reset_mint_authorities(&self) -> WalletDbResult<()> {
+        println!("Resetting mint authorities frozen status");
         let query =
             format!("UPDATE {} SET {} = 0", *MONEY_TOKENS_TABLE, MONEY_TOKENS_COL_IS_FROZEN,);
-        self.wallet.exec_sql(&query, &[])
+        self.wallet.exec_sql(&query, &[])?;
+        println!("Successfully mint authorities frozen status");
+
+        Ok(())
     }
 
     /// Fetch all token mint authorities from the wallet.

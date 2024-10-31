@@ -43,7 +43,7 @@ impl Drk {
         status: &str,
     ) -> WalletDbResult<String> {
         let query = format!(
-            "INSERT OR UPDATE INTO {} ({}, {}, {}) VALUES (?1, ?2, ?3);",
+            "INSERT OR REPLACE INTO {} ({}, {}, {}) VALUES (?1, ?2, ?3);",
             WALLET_TXS_HISTORY_TABLE,
             WALLET_TXS_HISTORY_COL_TX_HASH,
             WALLET_TXS_HISTORY_COL_STATUS,
