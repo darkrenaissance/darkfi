@@ -372,7 +372,7 @@ impl Drk {
         // a bit better and safer.
         // For now, on success, we don't care what's returned, but in the future
         // we should actually check it.
-        if self.wallet.query_single(&DAO_TREES_TABLE, &[DAO_TREES_COL_DAOS_TREE], &[]).is_err() {
+        if self.get_dao_trees().await.is_err() {
             println!("Initializing DAO Merkle trees");
             let tree = MerkleTree::new(1);
             self.put_dao_trees(&tree, &tree).await?;
@@ -388,14 +388,9 @@ impl Drk {
         daos_tree: &MerkleTree,
         proposals_tree: &MerkleTree,
     ) -> WalletDbResult<()> {
-        // First we remove old records
-        let query = format!("DELETE FROM {};", *DAO_TREES_TABLE);
-        self.wallet.exec_sql(&query, &[])?;
-
-        // then we insert the new one
         let query = format!(
-            "INSERT INTO {} ({}, {}) VALUES (?1, ?2);",
-            *DAO_TREES_TABLE, DAO_TREES_COL_DAOS_TREE, DAO_TREES_COL_PROPOSALS_TREE,
+            "UPDATE {} SET {} = ?1, {} = ?2;",
+            *DAO_TREES_TABLE, DAO_TREES_COL_DAOS_TREE, DAO_TREES_COL_PROPOSALS_TREE
         );
         self.wallet.exec_sql(
             &query,

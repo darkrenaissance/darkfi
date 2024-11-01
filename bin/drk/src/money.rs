@@ -641,13 +641,7 @@ impl Drk {
 
     /// Replace the Money Merkle tree in the wallet.
     pub async fn put_money_tree(&self, tree: &MerkleTree) -> WalletDbResult<()> {
-        // First we remove old record
-        let query = format!("DELETE FROM {};", *MONEY_TREE_TABLE);
-        self.wallet.exec_sql(&query, &[])?;
-
-        // then we insert the new one
-        let query =
-            format!("INSERT INTO {} ({}) VALUES (?1);", *MONEY_TREE_TABLE, MONEY_TREE_COL_TREE,);
+        let query = format!("UPDATE {} SET {} = ?1;", *MONEY_TREE_TABLE, MONEY_TREE_COL_TREE);
         self.wallet.exec_sql(&query, rusqlite::params![serialize_async(tree).await])
     }
 
