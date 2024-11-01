@@ -20,12 +20,6 @@
 ## Whether to pipe notifications or not
 #piped = false
 
-## Number of attempts to sync the DAG.
-#sync_attempts = 5
-
-## Number of seconds to wait before trying again if sync fails.
-#sync_timeout = 10
-
 ## Current display name
 #nickname = "NICKNAME"
 
