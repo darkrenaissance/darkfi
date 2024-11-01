@@ -7,6 +7,18 @@ https://darkrenaissance.github.io/darkfi
 When adding or removing a section of the book, make sure to update the
 [SUMMARY.md](src/SUMMARY.md) file to actually list the contents.
 
+Use a python virtual environment to install its requirements:
+```shell
+% python -m venv venv
+% source venv/bin/activate
+```
+
+Then install the requirements:
+
+```shell
+% pip install -r requirements.txt
+```
+
 For the mdbook-katex backend run:
 
 ```
