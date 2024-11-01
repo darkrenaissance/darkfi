@@ -671,7 +671,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             .await;
 
             if initialize {
-                if let Err(e) = drk.initialize_wallet() {
+                if let Err(e) = drk.initialize_wallet().await {
                     eprintln!("Error initializing wallet: {e:?}");
                     exit(2);
                 }

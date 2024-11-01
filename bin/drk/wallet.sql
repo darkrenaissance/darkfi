@@ -5,7 +5,8 @@ PRAGMA foreign_keys = ON;
 
 -- Arbitrary info that is potentially useful
 CREATE TABLE IF NOT EXISTS wallet_info (
-	last_scanned_block INTEGER NOT NULL
+	last_scanned_block_height INTEGER NOT NULL,
+	last_scanned_block_hash TEXT NOT NULL
 );
 
 -- Transactions history

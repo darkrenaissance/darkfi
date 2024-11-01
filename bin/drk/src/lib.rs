@@ -61,7 +61,8 @@ use walletdb::{WalletDb, WalletPtr};
 // Wallet SQL table constant names. These have to represent the `wallet.sql`
 // SQL schema.
 const WALLET_INFO_TABLE: &str = "wallet_info";
-const WALLET_INFO_COL_LAST_SCANNED_BLOCK: &str = "last_scanned_block";
+const WALLET_INFO_COL_LAST_SCANNED_BLOCK_HEIGHT: &str = "last_scanned_block_height";
+const WALLET_INFO_COL_LAST_SCANNED_BLOCK_HASH: &str = "last_scanned_block_hash";
 
 /// CLI-util structure
 pub struct Drk {
@@ -103,39 +104,40 @@ impl Drk {
     }
 
     /// Initialize wallet with tables for `Drk`.
-    pub fn initialize_wallet(&self) -> WalletDbResult<()> {
+    pub async fn initialize_wallet(&self) -> WalletDbResult<()> {
         // Initialize wallet schema
         self.wallet.exec_batch_sql(include_str!("../wallet.sql"))?;
 
         // We maintain the last scanned block as part of the wallet
         // info table.
-        if self.last_scanned_block().is_err() {
+        if self.last_scanned_block().await.is_err() {
             let query = format!(
-                "INSERT INTO {} ({}) VALUES (?1);",
-                WALLET_INFO_TABLE, WALLET_INFO_COL_LAST_SCANNED_BLOCK
+                "INSERT INTO {} ({}, {}) VALUES (?1, ?2);",
+                WALLET_INFO_TABLE,
+                WALLET_INFO_COL_LAST_SCANNED_BLOCK_HEIGHT,
+                WALLET_INFO_COL_LAST_SCANNED_BLOCK_HASH
             );
-            self.wallet.exec_sql(&query, rusqlite::params![0])?;
+            self.wallet.exec_sql(&query, rusqlite::params![0, "-"])?;
         }
 
         Ok(())
     }
 
-    /// Update the last scanned block height in the wallet.
-    pub fn update_last_scanned_block(&self, height: u32) -> WalletDbResult<()> {
+    /// Update the last scanned block height and hash in the wallet.
+    pub fn update_last_scanned_block(&self, height: u32, hash: &str) -> WalletDbResult<()> {
         let query = format!(
-            "UPDATE {} SET {} = ?1;",
-            WALLET_INFO_TABLE, WALLET_INFO_COL_LAST_SCANNED_BLOCK
+            "UPDATE {} SET {} = ?1, {} = ?2;",
+            WALLET_INFO_TABLE,
+            WALLET_INFO_COL_LAST_SCANNED_BLOCK_HEIGHT,
+            WALLET_INFO_COL_LAST_SCANNED_BLOCK_HASH
         );
-        self.wallet.exec_sql(&query, rusqlite::params![height])
+        self.wallet.exec_sql(&query, rusqlite::params![height, hash])
     }
 
-    /// Get the last scanned block height from the wallet.
-    pub fn last_scanned_block(&self) -> WalletDbResult<u32> {
-        let ret = self.wallet.query_single(
-            WALLET_INFO_TABLE,
-            &[WALLET_INFO_COL_LAST_SCANNED_BLOCK],
-            &[],
-        )?;
+    /// Get the last scanned block height and hash from the wallet.
+    pub async fn last_scanned_block(&self) -> WalletDbResult<(u32, String)> {
+        let ret = self.wallet.query_single(WALLET_INFO_TABLE, &[], &[])?;
+
         let Value::Integer(height) = ret[0] else {
             return Err(WalletDbError::ParseColumnValueError);
         };
@@ -143,6 +145,10 @@ impl Drk {
             return Err(WalletDbError::ParseColumnValueError);
         };
 
-        Ok(height)
+        let Value::Text(ref hash) = ret[1] else {
+            return Err(WalletDbError::ParseColumnValueError);
+        };
+
+        Ok((height, hash.clone()))
     }
 }
