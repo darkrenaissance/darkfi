@@ -275,15 +275,6 @@ impl Client {
             }
         }
 
-        // We need at least one channel.
-        if channels.is_empty() {
-            self.penalty.fetch_add(1, SeqCst);
-            return Ok(vec![ReplyType::Server((
-                ERR_NEEDMOREPARAMS,
-                format!("{} JOIN :{}", nick, INVALID_SYNTAX),
-            ))])
-        }
-
         // Weechat sends channels as `#chan1,#chan2,#chan3`. Handle it.
         if channels.len() == 1 {
             let list = channels.iter().next().unwrap().clone();

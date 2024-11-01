@@ -332,6 +332,21 @@ impl Client {
             return Err(Error::ParseFailed("Line doesn't end with CR/LF"))
         }
 
+        // Prefix the message part of PRIVMSG with ':' if is not already.
+        // Or realname part of USER command.
+        let mut words: Vec<String> = line.split_whitespace().map(|s| s.to_string()).collect();
+        if words[0].to_uppercase() == "PRIVMSG" {
+            if words.len() > 1 && !words[2].starts_with(':') {
+                words[2] = format!(":{}", words[2]);
+            }
+            line = words.join(" ");
+        } else if words[0].to_uppercase() == "USER" {
+            if words.len() > 1 && !words[4].starts_with(':') {
+                words[4] = format!(":{}", words[4]);
+            }
+            line = words.join(" ");
+        }
+
         // Parse the line
         let mut tokens = line.split_ascii_whitespace();
         // Commands can begin with :garbage, but we will reject clients
