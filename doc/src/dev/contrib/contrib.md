@@ -7,7 +7,7 @@
    tooling, Python bindings, p2p apps like the DHT.
 
 Every monday 15:00 UTC, there is our main dev meeting on
-[our chat](https://darkrenaissance.github.io/darkfi/misc/darkirc/darkirc.html).
+[our chat](../../misc/darkirc/darkirc.md).
 Feel free to join and discuss with other darkfi devs.
 
 In general, the best way to get started is to explore the codebase thoroughly and
@@ -15,10 +15,10 @@ identify issues and areas of improvement.
 
 Contribute according to your own interests, skills, and topics in which you would
 like to become more knowledgable. Take initiative. Other darkfi devs can help you
-as mentors: see [the Methodology section of the Study Guide](https://darkrenaissance.github.io/darkfi/dev/learn.html#methodology).
+as mentors: see [the Methodology section of the Study Guide](../learn.md#methodology).
 
 Few people are able be an expert in all domains. Choose a topic and specialize.
-Example specializations are described [here](https://darkrenaissance.github.io/darkfi/dev/learn.html#branches).
+Example specializations are described [here](../learn.md#branches).
 Don't make the mistake that you must become an expert in all areas before getting started.
 It's best to just jump in.
 
@@ -35,7 +35,7 @@ $ git grep -E 'TODO|FIXME'
 ## Employment
 
 We are only looking for devs right now. If you're not a dev, see the
-[learn section](dev/learn.md). We offer mentoring. Anybody can become a dev.
+[learn section](../learn.md). We offer mentoring. Anybody can become a dev.
 It's not that hard, you just need focus and dedication.
 
 To be hired as a dev, you must make commits to the repo, preferably
@@ -43,7 +43,7 @@ more than minor cosmetic changes. It also is useful to have online repositories
 containing your work. We don't care about degrees or qualifications -
 many of the best coders don't have any.
 
-Secondly you need to get on [our online chat](misc/darkirc/darkirc.md) and
+Secondly you need to get on [our online chat](../../misc/darkirc/darkirc.md) and
 make yourself known. We are not spending time on social media or proprietary
 chats like Telegram because we're very busy.
 
@@ -63,7 +63,7 @@ There are several areas of work that are either undergoing maintenance
 or need to be maintained:
 
 * **Documentation:** general documentation and code docs (cargo doc). This is a very 
-  important work for example [overview](https://darkrenaissance.github.io/darkfi/arch/overview.html) 
+  important work for example [overview](../../arch/overview.md) 
   page is out of date.
     * We need a tutorial on writing smart contracts. The tutorial could show
       how to make an anon ZK credential for a service like a forum.
@@ -84,7 +84,7 @@ or need to be maintained:
     * The event graph could have Python bindings but involves some tricky part integrating Python and Rust async.
     * Bindings for txs, calls and so on. Make a tool in Python for working with various contract params.
 * **Events System:** See the
-  [event graph](https://darkrenaissance.github.io/darkfi/misc/event_graph/event_graph.html) system.
+  [event graph](../../misc/event_graph/event_graph.md) system.
   We need extra review of the code and improvement of the design. This is a good submodule to begin working on.
 * **DHT:** Currently this is broken and needs fixing.
 * **p2p Network:** this is a good place to start reviewing the code and suggesting improvements.
@@ -105,7 +105,7 @@ _Tasks are in no particular order. Use common sense._
 4. Make `eventgraph` stable and implement proper unit and integration tests
   * Unit tests should test pieces of the eventgraph code
   * Integration tests should simulate a P2P network and ensure deterministic state after a simulated run
-  * Update https://darkrenaissance.github.io/darkfi/misc/event_graph/event_graph.html
+  * Update [event graph](../../misc/event_graph/event_graph.md)
     and make it the specification for the `eventgraph` implementation.
 5. Rework `drk` (the wallet CLI) to work standalone and make it work with the new `darkfid`
 6. Make `tau` stable
@@ -119,7 +119,7 @@ _Tasks are in no particular order. Use common sense._
 14. Implement cross-chain atomic swaps (XMR, ETH, anything applicable)
 15. ~~Rework the connection algo for p2p to use black list, grey and white list~~
   * ~~https://eprint.iacr.org/2019/411.pdf (Section 2.2)~~
-  * ~~See also [P2P Network: Common Mitigations](arch/p2p-network.md#common-mitigations)~~
+  * ~~See also [P2P Network: Common Mitigations](../../arch/p2p-network.md#common-mitigations)~~
 16. Create a P2P stack test harness in order to be able to easily simulate network
     behaviour
   * Possibly we can create a dummy p2p which can simulate network connections and routing traffic.
@@ -131,7 +131,7 @@ _Tasks are in no particular order. Use common sense._
 20. Randomize outputs in `Money::*`, and potentially elsewhere where applicable
   * This is so the change output isn't always in the same predictable place, and makes identifying
     which output is the change impossible.
-21. Document contracts in the manner of https://darkrenaissance.github.io/darkfi/arch/consensus/stake.html
+21. Document contracts in the manner of [dao](../../spec/contract/dao/dao.md)
 22. Serial used in money coins
   * One solution is: don't accept coins with existing serial in drk.
   * We should construct a scheme to derive the serial, evaluate how simple changing the crypto is.
