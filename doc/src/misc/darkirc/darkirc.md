@@ -20,6 +20,8 @@ between hosts.
 Therefore this is the world's most strongly anonymous chat in existence.
 Nothing else exists like it.
 
+<u><b>Note</b></u>: `darkirc` follows IRC's [RFC2812](https://www.rfc-editor.org/rfc/rfc2812)
+
 ## Installation
 
 Follow the instructions in the
