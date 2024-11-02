@@ -134,7 +134,7 @@ For A -> B payments in DarkFi we use the Sapling scheme that originates
 from zcash. A payment transaction has a number of _inputs_ (which are
 coins being burned/spent), and a number of _outputs_ (which are coins
 being minted/created). An explanation for the ZK proofs for this scheme
-can be found in the Zkas section of this book, under Sapling.
+can be found [here](../zkas/examples/sapling.md) under the Zkas section of this book.
 
 In code, the structs we use are the following:
 
