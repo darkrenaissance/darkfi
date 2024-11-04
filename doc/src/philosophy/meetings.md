@@ -1,6 +1,6 @@
 # Discussion group
 
-Every other Wednesday at 14:00 UTC/15:00 CET/9:00 EST, there is a meeting on
+Every other Wednesday at 15:00 UTC/16:00 CET/10:00 EST, there is a meeting on
 [darkirc](https://darkrenaissance.github.io/darkfi/misc/darkirc/darkirc.html) in 
 `#philosophy`.  Come and discuss different philosophy texts with fellow
 community members.
