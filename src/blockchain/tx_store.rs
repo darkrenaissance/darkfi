@@ -225,7 +225,7 @@ impl TxStore {
         &self,
         tx_hashes: &[TransactionHash],
         strict: bool,
-    ) -> Result<Vec<Option<(u64, u16)>>> {
+    ) -> Result<Vec<Option<(u32, u16)>>> {
         let mut ret = Vec::with_capacity(tx_hashes.len());
 
         for tx_hash in tx_hashes {
