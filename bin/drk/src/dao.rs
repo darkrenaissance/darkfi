@@ -374,8 +374,12 @@ impl Drk {
         // we should actually check it.
         if self.get_dao_trees().await.is_err() {
             println!("Initializing DAO Merkle trees");
-            let tree = MerkleTree::new(1);
-            self.put_dao_trees(&tree, &tree).await?;
+            let tree = serialize_async(&MerkleTree::new(1)).await;
+            let query = format!(
+                "INSERT INTO {} ({}, {}) VALUES (?1, ?2);",
+                *DAO_TREES_TABLE, DAO_TREES_COL_DAOS_TREE, DAO_TREES_COL_PROPOSALS_TREE
+            );
+            self.wallet.exec_sql(&query, rusqlite::params![tree, tree])?;
             println!("Successfully initialized Merkle trees for the DAO contract");
         }
 

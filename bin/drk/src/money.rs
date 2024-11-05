@@ -138,7 +138,9 @@ impl Drk {
             let mut tree = MerkleTree::new(1);
             tree.append(MerkleNode::from(pallas::Base::ZERO));
             let _ = tree.mark().unwrap();
-            self.put_money_tree(&tree).await?;
+            let query =
+                format!("INSERT INTO {} ({}) VALUES (?1);", *MONEY_TREE_TABLE, MONEY_TREE_COL_TREE);
+            self.wallet.exec_sql(&query, rusqlite::params![serialize_async(&tree).await])?;
             println!("Successfully initialized Merkle tree for the Money contract");
         }
 
