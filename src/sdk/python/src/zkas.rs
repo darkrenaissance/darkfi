@@ -304,8 +304,7 @@ impl Proof {
         };
 
         // Now replace the "stuff" back again
-        for (_, (circ, stuff)) in circuits.iter().zip(ucircuits.into_iter().zip(other_stuff))
-        {
+        for (_, (circ, stuff)) in circuits.iter().zip(ucircuits.into_iter().zip(other_stuff)) {
             ZkCircuit(circ, stuff.0, stuff.1);
         }
         Some(Self(proof))

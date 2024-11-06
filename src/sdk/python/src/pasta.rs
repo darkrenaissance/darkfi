@@ -24,9 +24,8 @@ use darkfi_sdk::{
 };
 use halo2_gadgets::ecc::chip::FixedPoint;
 use pyo3::{
-    basic::CompareOp, pyclass, pyfunction, pymethods, types::PyModule, wrap_pyfunction,
+    basic::CompareOp, prelude::*, pyclass, pyfunction, pymethods, types::PyModule, wrap_pyfunction,
 };
-use pyo3::prelude::*;
 use rand::rngs::OsRng;
 
 macro_rules! impl_elem {

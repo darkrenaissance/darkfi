@@ -17,9 +17,9 @@
  */
 use std::ops::Deref;
 
+use super::pasta::Fp;
 use darkfi_sdk::crypto::{merkle_node, MerkleNode};
 use pyo3::prelude::*;
-use super::pasta::Fp;
 
 #[pyclass]
 /// Class representing a bridgetree
