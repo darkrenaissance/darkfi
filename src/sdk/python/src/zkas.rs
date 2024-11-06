@@ -23,7 +23,7 @@ use darkfi::{
     zkas::{self, decoder},
 };
 use darkfi_sdk::{crypto::MerkleNode, pasta::pallas};
-use pyo3::{pyclass, pymethods, types::PyModule, PyCell, PyResult, Python};
+use pyo3::prelude::*;
 use rand::rngs::OsRng;
 
 use super::pasta::{Ep, Fp, Fq};
@@ -87,7 +87,8 @@ impl ZkBinary {
     }
 }
 
-#[pyclass]
+#[pyclass(eq, eq_int)]
+#[derive(PartialEq)]
 enum DebugOpValue {
     EcPoint,
     Base,
@@ -114,7 +115,7 @@ pub struct ZkCircuit(zk::vm::ZkCircuit, Vec<zk::vm::Witness>, decoder::ZkBinary)
 #[pymethods]
 impl ZkCircuit {
     #[new]
-    fn new(zkbin: &PyCell<ZkBinary>) -> Self {
+    fn new(zkbin: &Bound<ZkBinary>) -> Self {
         let zkbin = zkbin.borrow().deref().0.clone();
         let circuit = zk::vm::ZkCircuit::new(vec![], &zkbin);
         Self(circuit, vec![], zkbin)
@@ -131,38 +132,38 @@ impl ZkCircuit {
         Self(circuit, witnesses, self.2.clone())
     }
 
-    fn witness_ecpoint(&mut self, w: &PyCell<Ep>) {
+    fn witness_ecpoint(&mut self, w: &Bound<Ep>) {
         let w = w.borrow();
         let w = w.deref();
         self.1.push(zk::vm::Witness::EcPoint(Value::known(w.0)));
     }
 
-    fn witness_ecnipoint(&mut self, w: &PyCell<Ep>) {
+    fn witness_ecnipoint(&mut self, w: &Bound<Ep>) {
         let w = w.borrow();
         let w = w.deref();
         self.1.push(zk::vm::Witness::EcNiPoint(Value::known(w.0)));
     }
 
-    fn witness_base(&mut self, w: &PyCell<Fp>) {
+    fn witness_base(&mut self, w: &Bound<Fp>) {
         let w = w.borrow();
         let w = w.deref();
         self.1.push(zk::vm::Witness::Base(Value::known(w.0)));
     }
 
-    fn witness_scalar(&mut self, w: &PyCell<Fq>) {
+    fn witness_scalar(&mut self, w: &Bound<Fq>) {
         let w = w.borrow();
         let w = w.deref();
         self.1.push(zk::vm::Witness::Scalar(Value::known(w.0)));
     }
 
-    fn witness_merklepath(&mut self, w: Vec<&PyCell<Fp>>) {
+    fn witness_merklepath(&mut self, w: Vec<Bound<Fp>>) {
         assert!(w.len() == 32);
         let path: Vec<MerkleNode> =
             w.iter().map(|x| MerkleNode::from(x.borrow().deref().0)).collect();
         self.1.push(zk::vm::Witness::MerklePath(Value::known(path.try_into().unwrap())));
     }
 
-    fn witness_sparsemerklepath(&mut self, w: Vec<&PyCell<Fp>>) {
+    fn witness_sparsemerklepath(&mut self, w: Vec<Bound<Fp>>) {
         assert!(w.len() == 255);
         let path: Vec<pallas::Base> = w.iter().map(|x| x.borrow().deref().0).collect();
         self.1.push(zk::vm::Witness::SparseMerklePath(Value::known(path.try_into().unwrap())));
@@ -222,7 +223,7 @@ pub struct VerifyingKey(zk::proof::VerifyingKey);
 #[pymethods]
 impl VerifyingKey {
     #[staticmethod]
-    fn build(k: u32, circuit: &PyCell<ZkCircuit>) -> Self {
+    fn build(k: u32, circuit: &Bound<ZkCircuit>) -> Self {
         let circuit_ref = circuit.borrow();
         let circuit = &circuit_ref.deref().0;
         let vk = zk::proof::VerifyingKey::build(k, circuit);
@@ -237,7 +238,7 @@ pub struct ProvingKey(zk::proof::ProvingKey);
 #[pymethods]
 impl ProvingKey {
     #[staticmethod]
-    fn build(k: u32, circuit: &PyCell<ZkCircuit>) -> Self {
+    fn build(k: u32, circuit: &Bound<ZkCircuit>) -> Self {
         let circuit_ref = circuit.borrow();
         let circuit = &circuit_ref.deref().0;
         let pk = zk::proof::ProvingKey::build(k, circuit);
@@ -253,9 +254,9 @@ pub struct Proof(zk::proof::Proof);
 impl Proof {
     #[staticmethod]
     fn create(
-        pk: &PyCell<ProvingKey>,
-        circuits: Vec<&PyCell<ZkCircuit>>,
-        instances: Vec<&PyCell<Fp>>,
+        pk: &Bound<ProvingKey>,
+        circuits: Vec<Bound<ZkCircuit>>,
+        instances: Vec<Bound<Fp>>,
     ) -> Option<Self> {
         let pk = pk.borrow().deref().0.clone();
 
@@ -279,7 +280,7 @@ impl Proof {
         let empty_circuit = zk::vm::ZkCircuit::new(Vec::new(), &zkbin);
         let curr_circuits: Vec<ZkCircuit> = circuits
             .iter()
-            .map(|c| c.replace(ZkCircuit(empty_circuit.clone(), Vec::new(), zkbin.clone())))
+            .map(|_| ZkCircuit(empty_circuit.clone(), Vec::new(), zkbin.clone()))
             .collect();
 
         let mut ucircuits = Vec::new();
@@ -303,14 +304,14 @@ impl Proof {
         };
 
         // Now replace the "stuff" back again
-        for (old_circ, (circ, stuff)) in circuits.iter().zip(ucircuits.into_iter().zip(other_stuff))
+        for (_, (circ, stuff)) in circuits.iter().zip(ucircuits.into_iter().zip(other_stuff))
         {
-            old_circ.replace(ZkCircuit(circ, stuff.0, stuff.1));
+            ZkCircuit(circ, stuff.0, stuff.1);
         }
         Some(Self(proof))
     }
 
-    fn verify(&self, vk: &PyCell<VerifyingKey>, instances: Vec<&PyCell<Fp>>) -> bool {
+    fn verify(&self, vk: &Bound<VerifyingKey>, instances: Vec<Bound<Fp>>) -> bool {
         let vk = vk.borrow().deref().0.clone();
         let instances: Vec<pallas::Base> = instances.iter().map(|i| i.borrow().deref().0).collect();
         self.0.verify(&vk, instances.as_slice()).is_ok()
@@ -325,7 +326,7 @@ pub struct MockProver(zk::halo2::dev::MockProver<pallas::Base>);
 #[pymethods]
 impl MockProver {
     #[staticmethod]
-    fn run(k: u32, circuit: &PyCell<ZkCircuit>, instances: Vec<&PyCell<Fp>>) -> Self {
+    fn run(k: u32, circuit: &Bound<ZkCircuit>, instances: Vec<Bound<Fp>>) -> Self {
         let circuit = circuit.borrow().deref().0.clone();
         let instances: Vec<pallas::Base> = instances.iter().map(|i| i.borrow().deref().0).collect();
         let prover = zk::halo2::dev::MockProver::run(k, &circuit, vec![instances]).unwrap();
@@ -337,8 +338,8 @@ impl MockProver {
     }
 }
 
-pub fn create_module(py: Python<'_>) -> PyResult<&PyModule> {
-    let submod = PyModule::new(py, "zkas")?;
+pub fn create_module(py: Python<'_>) -> PyResult<Bound<PyModule>> {
+    let submod = PyModule::new_bound(py, "zkas")?;
 
     submod.add_class::<ZkBinary>()?;
     submod.add_class::<ZkCircuit>()?;

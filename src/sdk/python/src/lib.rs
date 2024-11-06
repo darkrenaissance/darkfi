@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use pyo3::prelude::*;
+
 /// Pallas and Vesta curves
 mod pasta;
 
@@ -29,22 +31,22 @@ mod crypto;
 mod zkas;
 
 #[pyo3::prelude::pymodule]
-fn darkfi_sdk(py: pyo3::Python<'_>, m: &pyo3::types::PyModule) -> pyo3::PyResult<()> {
+fn darkfi_sdk(py: pyo3::Python<'_>, m: &Bound<'_, PyModule>) -> pyo3::PyResult<()> {
     let submodule = pasta::create_module(py)?;
     pyo3::py_run!(py, submodule, "import sys; sys.modules['darkfi_sdk.pasta'] = submodule");
-    m.add_submodule(submodule)?;
+    m.add_submodule(&submodule)?;
 
     let submodule = merkle::create_module(py)?;
     pyo3::py_run!(py, submodule, "import sys; sys.modules['darkfi_sdk.merkle'] = submodule");
-    m.add_submodule(submodule)?;
+    m.add_submodule(&submodule)?;
 
     let submodule = crypto::create_module(py)?;
     pyo3::py_run!(py, submodule, "import sys; sys.modules['darkfi_sdk.crypto'] = submodule");
-    m.add_submodule(submodule)?;
+    m.add_submodule(&submodule)?;
 
     let submodule = zkas::create_module(py)?;
     pyo3::py_run!(py, submodule, "import sys; sys.modules['darkfi_sdk.zkas'] = submodule");
-    m.add_submodule(submodule)?;
+    m.add_submodule(&submodule)?;
 
     Ok(())
 }

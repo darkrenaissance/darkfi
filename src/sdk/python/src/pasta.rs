@@ -24,9 +24,9 @@ use darkfi_sdk::{
 };
 use halo2_gadgets::ecc::chip::FixedPoint;
 use pyo3::{
-    basic::CompareOp, pyclass, pyfunction, pymethods, types::PyModule, wrap_pyfunction, PyCell,
-    PyResult,
+    basic::CompareOp, pyclass, pyfunction, pymethods, types::PyModule, wrap_pyfunction,
 };
+use pyo3::prelude::*;
 use rand::rngs::OsRng;
 
 macro_rules! impl_elem {
@@ -101,9 +101,8 @@ macro_rules! impl_elem {
                 Ok(format!("{:?}", self.0))
             }
 
-            fn __repr__(slf: &PyCell<Self>) -> PyResult<String> {
-                let class_name: &str = &slf.get_type().name()?;
-                Ok(format!("{}({:?})", class_name, slf.borrow().0))
+            fn __repr__(slf: &Bound<Self>) -> PyResult<String> {
+                Ok(format!("{}({:?})", slf, slf.borrow().0))
             }
 
             fn __add__(&self, other: &Self) -> Self {
@@ -153,14 +152,14 @@ macro_rules! impl_affine {
             }
 
             #[staticmethod]
-            fn from_xy(x: &PyCell<$base>, y: &PyCell<$base>) -> PyResult<Self> {
+            fn from_xy(x: &Bound<$base>, y: &Bound<$base>) -> PyResult<Self> {
                 let affine_point =
                     <$inner>::from_xy(x.borrow().deref().0, y.borrow().deref().0).unwrap();
                 Ok(Self(affine_point))
             }
 
             #[staticmethod]
-            fn from_projective(x: &PyCell<$projective>) -> Self {
+            fn from_projective(x: &Bound<$projective>) -> Self {
                 Self(<$inner>::from(x.borrow().deref().0))
             }
 
@@ -168,9 +167,8 @@ macro_rules! impl_affine {
                 format!("{:?}", self.0)
             }
 
-            fn __repr__(slf: &PyCell<Self>) -> PyResult<String> {
-                let class_name: &str = &slf.get_type().name()?;
-                Ok(format!("{}({:?})", class_name, slf.borrow().0))
+            fn __repr__(slf: &Bound<Self>) -> PyResult<String> {
+                Ok(format!("{}({:?})", slf, slf.borrow().0))
             }
         }
     };
@@ -181,7 +179,7 @@ macro_rules! impl_point {
         #[pymethods]
         impl $x {
             #[new]
-            fn new(x: &PyCell<$base>, y: &PyCell<$base>) -> PyResult<Self> {
+            fn new(x: &Bound<$base>, y: &Bound<$base>) -> PyResult<Self> {
                 let affine_point = <$affine>::from_xy(x, y).unwrap();
                 Ok(Self::from_affine(affine_point))
             }
@@ -206,15 +204,14 @@ macro_rules! impl_point {
                 Self(<$inner>::from(p.0))
             }
 
-            fn __str__(slf: &PyCell<Self>) -> PyResult<String> {
+            fn __str__(slf: &Bound<Self>) -> PyResult<String> {
                 let affine = <$affine>::from_projective(slf);
                 let (x, y) = affine.coordinates();
                 Ok(format!("[{}, {}]", x.__str__()?, y.__str__()?))
             }
 
-            fn __repr__(slf: &PyCell<Self>) -> PyResult<String> {
-                let class_name: &str = &slf.get_type().name()?;
-                Ok(format!("{}({:?})", class_name, slf.borrow().0))
+            fn __repr__(slf: &Bound<Self>) -> PyResult<String> {
+                Ok(format!("{}({:?})", slf, slf.borrow().0))
             }
 
             fn __add__(&self, rhs: &Self) -> Self {
@@ -291,12 +288,12 @@ pub fn nullifier_k() -> EpAffine {
 
 #[pyfunction]
 /// Convert Fp to Fq safely.
-pub fn fp_mod_fv(x: &PyCell<Fp>) -> PyResult<Fq> {
+pub fn fp_mod_fv(x: &Bound<Fp>) -> PyResult<Fq> {
     Ok(Fq(util::fp_mod_fv(x.borrow().deref().0)))
 }
 
-pub fn create_module(py: pyo3::Python<'_>) -> PyResult<&PyModule> {
-    let submod = PyModule::new(py, "pasta")?;
+pub fn create_module(py: pyo3::Python<'_>) -> PyResult<Bound<PyModule>> {
+    let submod = PyModule::new_bound(py, "pasta")?;
 
     submod.add_class::<Fp>()?;
     submod.add_class::<Fq>()?;
@@ -305,8 +302,8 @@ pub fn create_module(py: pyo3::Python<'_>) -> PyResult<&PyModule> {
     submod.add_class::<Eq>()?;
     submod.add_class::<EqAffine>()?;
 
-    submod.add_function(wrap_pyfunction!(nullifier_k, submod)?)?;
-    submod.add_function(wrap_pyfunction!(fp_mod_fv, submod)?)?;
+    submod.clone().add_function(wrap_pyfunction!(nullifier_k, submod.clone())?)?;
+    submod.clone().add_function(wrap_pyfunction!(fp_mod_fv, submod.clone())?)?;
 
     Ok(submod)
 }
