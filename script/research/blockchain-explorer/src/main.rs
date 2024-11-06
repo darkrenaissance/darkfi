@@ -126,7 +126,7 @@ impl Explorerd {
     async fn new(db_path: String, endpoint: Url, ex: Arc<smol::Executor<'static>>) -> Result<Self> {
         // Initialize rpc client
         let rpc_client = RpcClient::new(endpoint.clone(), ex).await?;
-        info!(target: "explorerd", "Created rpc client: {:?}", endpoint.clone());
+        info!(target: "explorerd", "Created rpc client: {:?}", endpoint);
 
         // Initialize explorer database
         let explorer_db = ExplorerDb::new(db_path)?;

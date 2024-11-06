@@ -90,12 +90,12 @@ impl ExplorerDb {
     /// Fetch all known transactions from the database.
     pub fn get_transactions(&self) -> Result<Vec<TransactionRecord>> {
         // Retrieve all transactions and handle any errors encountered
-        let transactions_result = self.blockchain.transactions.get_all().map_err(|e| {
+        let transactions = self.blockchain.transactions.get_all().map_err(|e| {
             Error::DatabaseError(format!("[get_transactions] Trxs retrieval: {e:?}"))
         })?;
 
         // Transform the found transactions into a vector of transaction records
-        let transaction_records: Vec<TransactionRecord> = transactions_result
+        let transaction_records: Vec<TransactionRecord> = transactions
             .iter()
             .map(|(tx_hash, tx)| TransactionRecord::from((&tx_hash.as_string(), tx)))
             .collect();
@@ -113,7 +113,7 @@ impl ExplorerDb {
             .parse::<HeaderHash>()
             .map_err(|_| Error::ParseFailed("[get_transactions_by_header_hash] Invalid hash"))?;
 
-        // Fetch all blocks by hash and handle encountered errors
+        // Fetch block by hash and handle encountered errors
         let blocks = match self.blockchain.get_blocks_by_hash(&[header_hash]) {
             Ok(blocks) => blocks,
             Err(Error::BlockNotFound(_)) => return Ok(vec![]),
@@ -125,16 +125,11 @@ impl ExplorerDb {
         };
 
         // Transform block transactions into transaction records
-        let tx_records = {
-            let block = &blocks[0];
-            block
-                .txs
-                .iter()
-                .map(|tx| TransactionRecord::from((&block.header.hash().as_string(), tx)))
-                .collect::<Vec<TransactionRecord>>()
-        };
-
-        Ok(tx_records)
+        Ok(blocks[0]
+            .txs
+            .iter()
+            .map(|tx| TransactionRecord::from((&blocks[0].header.hash().as_string(), tx)))
+            .collect::<Vec<TransactionRecord>>())
     }
 
     /// Fetch a transaction given its header hash.
@@ -151,36 +146,29 @@ impl ExplorerDb {
             ))
         })?;
 
-        // Match on the fetched transactions to process the result
-        let tx_record = match &txs[0] {
-            Some(tx) => {
-                // Retrieve the location of the transaction to obtain its header hash
-                let locations = tx_store.get_location(&[*tx_hash], false).map_err(|e| {
-                    Error::DatabaseError(format!(
-                        "[get_transaction_by_hash] Location retrieval failed: {e:?}"
-                    ))
-                })?;
-
-                // Unwrap the first location since we know it exists for a valid transaction
-                let (block_height, _) = locations[0].unwrap();
-
-                // Retrieve the block corresponding to the transaction's height
-                let block_data =
-                    &self.blockchain.blocks.get_order(&[block_height], false).map_err(|e| {
-                        Error::DatabaseError(format!(
-                            "[get_transaction_by_hash] Block retrieval failed: {e:?}"
-                        ))
-                    })?;
-
-                // Unwrap the block since we are assured it exists due to stored location
-                let header_hash = block_data[0].unwrap();
-
-                // Transform the transaction into a TransactionRecord
-                Some(TransactionRecord::from((&header_hash.as_string(), tx)))
-            }
-            None => None,
+        // Check if transaction was found
+        if txs[0].is_none() {
+            return Ok(None);
         };
 
-        Ok(tx_record)
+        // Retrieve the location of the transaction to obtain its header hash
+        let (block_height, _) = tx_store.get_location(&[*tx_hash], true).map_err(|e| {
+            Error::DatabaseError(format!(
+                "[get_transaction_by_hash] Location retrieval failed: {e:?}"
+            ))
+        })?[0]
+            .unwrap();
+
+        // Retrieve the block corresponding to the transaction's height
+        let header_hash =
+            &self.blockchain.blocks.get_order(&[block_height], true).map_err(|e| {
+                Error::DatabaseError(format!(
+                    "[get_transaction_by_hash] Block retrieval failed: {e:?}"
+                ))
+            })?[0]
+                .unwrap();
+
+        // Transform the transaction into a TransactionRecord
+        Ok(Some(TransactionRecord::from((&header_hash.as_string(), txs[0].as_ref().unwrap()))))
     }
 }

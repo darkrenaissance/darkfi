@@ -135,21 +135,14 @@ impl ExplorerDb {
             .parse::<HeaderHash>()
             .map_err(|_| Error::ParseFailed("[get_block_by_hash] Invalid header hash"))?;
 
-        // Fetch all blocks by hash and handle encountered errors
-        let blocks = match self.blockchain.get_blocks_by_hash(&[header_hash]) {
-            Ok(blocks) => blocks,
-            Err(Error::BlockNotFound(_)) => return Ok(None),
-            Err(e) => {
-                return Err(Error::DatabaseError(format!(
-                    "[get_block_by_hash] Block retrieval failed: {e:?}"
-                )))
-            }
-        };
-
-        // Transform found block to a BlockRecord
-        let block = Some(BlockRecord::from(&blocks[0]));
-
-        Ok(block)
+        // Fetch block by hash and handle encountered errors
+        match self.blockchain.get_blocks_by_hash(&[header_hash]) {
+            Ok(blocks) => Ok(Some(BlockRecord::from(&blocks[0]))),
+            Err(Error::BlockNotFound(_)) => Ok(None),
+            Err(e) => Err(Error::DatabaseError(format!(
+                "[get_block_by_hash] Block retrieval failed: {e:?}"
+            ))),
+        }
     }
 
     /// Fetch the last block from the database.
