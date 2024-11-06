@@ -665,6 +665,24 @@ impl Drk {
         Ok(tree)
     }
 
+    /// Auxiliary function to fetch the current Money Merkle tree state,
+    /// as an update query.
+    pub async fn get_money_tree_state_query(&self) -> Result<String> {
+        // Grab current money tree
+        let tree = self.get_money_tree().await?;
+
+        // Create the update query
+        match self.wallet.create_prepared_statement(
+            &format!("UPDATE {} SET {} = ?1;", *MONEY_TREE_TABLE, MONEY_TREE_COL_TREE),
+            rusqlite::params![serialize_async(&tree).await],
+        ) {
+            Ok(q) => Ok(q),
+            Err(e) => Err(Error::DatabaseError(format!(
+                "[get_money_tree_state_query] Creating query for money tree failed: {e:?}"
+            ))),
+        }
+    }
+
     /// Fetch the Money nullifiers SMT from the wallet, as a map.
     pub async fn get_nullifiers_smt(&self) -> Result<HashMap<BigUint, pallas::Base>> {
         let rows = match self.wallet.query_multiple(&MONEY_SMT_TABLE, &[], &[]) {
@@ -783,7 +801,8 @@ impl Drk {
         Ok((nullifiers, coins, notes, freezes))
     }
 
-    /// Append data related to Money contract transactions into the wallet database.
+    /// Append data related to Money contract transactions into the wallet database,
+    /// and store their inverse queries into the cache.
     /// Returns a flag indicating if the provided data refer to our own wallet.
     pub async fn apply_tx_money_data(
         &self,
@@ -825,8 +844,7 @@ impl Drk {
         self.smt_insert(&nullifiers)?;
         let wallet_spent_coins = self.mark_spent_coins(&nullifiers, tx_hash).await?;
 
-        // This is the SQL query we'll be executing to insert new coins
-        // into the wallet
+        // This is the SQL query we'll be executing to insert new coins into the wallet
         let query = format!(
             "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12);",
             *MONEY_COINS_TABLE,
@@ -844,11 +862,31 @@ impl Drk {
             MONEY_COINS_COL_MEMO,
         );
 
+        // This is its inverse query
+        let inverse_query =
+            format!("DELETE FROM {} WHERE {} = ?1;", *MONEY_COINS_TABLE, MONEY_COINS_COL_COIN);
+
         println!("Found {} OwnCoin(s) in transaction", owncoins.len());
         for owncoin in &owncoins {
             println!("OwnCoin: {:?}", owncoin.coin);
+            // Grab coin record key
+            let key = serialize_async(&owncoin.coin).await;
+
+            // Create its inverse query
+            let inverse =
+                match self.wallet.create_prepared_statement(&inverse_query, rusqlite::params![key])
+                {
+                    Ok(q) => q,
+                    Err(e) => {
+                        return Err(Error::DatabaseError(format!(
+                    "[apply_tx_money_data] Creating Money coin insert inverse query failed: {e:?}"
+                )))
+                    }
+                };
+
+            // Execute the query
             let params = rusqlite::params![
-                serialize_async(&owncoin.coin).await,
+                key,
                 0, // <-- is_spent
                 serialize_async(&owncoin.note.value).await,
                 serialize_async(&owncoin.note.token_id).await,
@@ -867,31 +905,63 @@ impl Drk {
                     "[apply_tx_money_data] Inserting Money coin failed: {e:?}"
                 )))
             }
+
+            // Store its inverse
+            if let Err(e) = self.wallet.cache_inverse(inverse) {
+                return Err(Error::DatabaseError(format!(
+                    "[apply_tx_money_data] Inserting inverse query into cache failed: {e:?}"
+                )))
+            }
         }
 
-        let mut wallet_freezes = false;
-        for token_id in freezes {
-            let query = format!(
-                "UPDATE {} SET {} = 1 WHERE {} = ?1;",
-                *MONEY_TOKENS_TABLE, MONEY_TOKENS_COL_IS_FROZEN, MONEY_TOKENS_COL_TOKEN_ID,
-            );
+        // This is the SQL query we'll be executing to update frozen tokens into the wallet
+        let query = format!(
+            "UPDATE {} SET {} = 1 WHERE {} = ?1;",
+            *MONEY_TOKENS_TABLE, MONEY_TOKENS_COL_IS_FROZEN, MONEY_TOKENS_COL_TOKEN_ID,
+        );
 
-            if let Err(e) =
-                self.wallet.exec_sql(&query, rusqlite::params![serialize_async(&token_id).await])
-            {
+        // This is its inverse query
+        let inverse_query = format!(
+            "UPDATE {} SET {} = 0 WHERE {} = ?1;",
+            *MONEY_TOKENS_TABLE, MONEY_TOKENS_COL_IS_FROZEN, MONEY_TOKENS_COL_TOKEN_ID,
+        );
+
+        for token_id in &freezes {
+            // Grab token record key
+            let key = serialize_async(token_id).await;
+
+            // Create its inverse query
+            let inverse =
+                match self.wallet.create_prepared_statement(&inverse_query, rusqlite::params![key])
+                {
+                    Ok(q) => q,
+                    Err(e) => {
+                        return Err(Error::DatabaseError(format!(
+                    "[apply_tx_money_data] Creating Money token freeze inverse query failed: {e:?}"
+                )))
+                    }
+                };
+
+            // Execute the query
+            if let Err(e) = self.wallet.exec_sql(&query, rusqlite::params![key]) {
                 return Err(Error::DatabaseError(format!(
-                    "[apply_tx_money_data] Inserting Money coin failed: {e:?}"
+                    "[apply_tx_money_data] Update Money token freeze failed: {e:?}"
                 )))
             }
 
-            wallet_freezes = true;
+            // Store its inverse
+            if let Err(e) = self.wallet.cache_inverse(inverse) {
+                return Err(Error::DatabaseError(format!(
+                    "[apply_tx_money_data] Inserting inverse query into cache failed: {e:?}"
+                )))
+            }
         }
 
         if self.fun && !owncoins.is_empty() {
             kaching().await;
         }
 
-        Ok(wallet_spent_coins || !owncoins.is_empty() || wallet_freezes)
+        Ok(wallet_spent_coins || !owncoins.is_empty() || !freezes.is_empty())
     }
 
     /// Auxiliary function to  grab all the nullifiers from a transaction money call.
@@ -941,20 +1011,37 @@ impl Drk {
         Ok(())
     }
 
-    /// Mark a coin in the wallet as spent.
+    /// Mark a coin in the wallet as spent, and store its inverse query into the cache.
     pub async fn mark_spent_coin(&self, coin: &Coin, spent_tx_hash: &String) -> WalletDbResult<()> {
+        // Grab coin record key
+        let key = serialize_async(&coin.inner()).await;
+
+        // Create an SQL `UPDATE` query to mark rows as spent(1)
         let query = format!(
-            "UPDATE {} SET {} = ?1, {} = ?2 WHERE {} = ?3;",
+            "UPDATE {} SET {} = 1, {} = ?1 WHERE {} = ?2;",
             *MONEY_COINS_TABLE,
             MONEY_COINS_COL_IS_SPENT,
             MONEY_COINS_COL_SPENT_TX_HASH,
             MONEY_COINS_COL_COIN
         );
-        let is_spent = 1;
-        self.wallet.exec_sql(
-            &query,
-            rusqlite::params![is_spent, spent_tx_hash, serialize_async(&coin.inner()).await],
-        )
+
+        // Create its inverse query
+        let inverse = self.wallet.create_prepared_statement(
+            &format!(
+                "UPDATE {} SET {} = 0, {} = '-' WHERE {} = ?1;",
+                *MONEY_COINS_TABLE,
+                MONEY_COINS_COL_IS_SPENT,
+                MONEY_COINS_COL_SPENT_TX_HASH,
+                MONEY_COINS_COL_COIN
+            ),
+            rusqlite::params![key],
+        )?;
+
+        // Execute the query
+        self.wallet.exec_sql(&query, rusqlite::params![spent_tx_hash, key])?;
+
+        // Store its inverse
+        self.wallet.cache_inverse(inverse)
     }
 
     /// Marks all coins in the wallet as spent, if their nullifier is in the given set.

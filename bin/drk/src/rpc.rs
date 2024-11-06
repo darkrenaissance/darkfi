@@ -182,8 +182,11 @@ impl Drk {
 
     /// `scan_block` will go over over transactions in a block and handle their calls
     /// based on the called contract. Additionally, will update `last_scanned_block` to
-    /// the probided block height.
+    /// the provided block height and will store its height, hash and inverse query.
     async fn scan_block(&self, block: &BlockInfo) -> Result<()> {
+        // Reset wallet inverse cache state
+        self.reset_inverse_cache().await?;
+
         // Keep track of our wallet transactions
         let mut wallet_txs = vec![];
         println!("=======================================");
@@ -243,6 +246,9 @@ impl Drk {
             )))
         }
 
+        // Store this block rollback query
+        self.store_inverse_cache(block.header.height, &block.hash().to_string())?;
+
         // Write this block height into `last_scanned_block`
         if let Err(e) =
             self.update_last_scanned_block(block.header.height, &block.hash().to_string())
@@ -266,6 +272,7 @@ impl Drk {
         // has been provided we reset, otherwise continue with
         // the next block height
         if height == 0 || reset {
+            self.reset_scanned_blocks()?;
             self.reset_money_tree().await?;
             self.reset_money_smt()?;
             self.reset_money_coins()?;

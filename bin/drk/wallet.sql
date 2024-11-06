@@ -9,6 +9,13 @@ CREATE TABLE IF NOT EXISTS wallet_info (
 	last_scanned_block_hash TEXT NOT NULL
 );
 
+-- Scanned blocks information
+CREATE TABLE IF NOT EXISTS scanned_blocks (
+	height INTEGER PRIMARY KEY NOT NULL,
+	hash TEXT NOT NULL,
+	rollback_query TEXT NOT NULL
+);
+
 -- Transactions history
 CREATE TABLE IF NOT EXISTS transactions_history (
     transaction_hash TEXT PRIMARY KEY NOT NULL,

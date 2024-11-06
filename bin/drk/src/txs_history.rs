@@ -36,12 +36,13 @@ const WALLET_TXS_HISTORY_COL_TX: &str = "tx";
 
 impl Drk {
     /// Insert or update a `Transaction` history record into the wallet,
-    /// with the provided status.
+    /// with the provided status, and store its inverse query into the cache.
     pub async fn put_tx_history_record(
         &self,
         tx: &Transaction,
         status: &str,
     ) -> WalletDbResult<String> {
+        // Create an SQL `INSERT OR REPLACE` query
         let query = format!(
             "INSERT OR REPLACE INTO {} ({}, {}, {}) VALUES (?1, ?2, ?3);",
             WALLET_TXS_HISTORY_TABLE,
@@ -49,9 +50,26 @@ impl Drk {
             WALLET_TXS_HISTORY_COL_STATUS,
             WALLET_TXS_HISTORY_COL_TX,
         );
+
+        // Create its inverse query
         let tx_hash = tx.hash().to_string();
+        // We only need to reverse the transaction status to "Broadcasted"
+        let inverse = self.wallet.create_prepared_statement(
+            &format!(
+                "UPDATE {} SET {} = ?1 WHERE {} = ?2;",
+                WALLET_TXS_HISTORY_TABLE,
+                WALLET_TXS_HISTORY_COL_STATUS,
+                WALLET_TXS_HISTORY_COL_TX_HASH
+            ),
+            rusqlite::params!["Broadcasted", tx_hash],
+        )?;
+
+        // Execute the query
         self.wallet
             .exec_sql(&query, rusqlite::params![tx_hash, status, &serialize_async(tx).await,])?;
+
+        // Store its inverse
+        self.wallet.cache_inverse(inverse)?;
 
         Ok(tx_hash)
     }
