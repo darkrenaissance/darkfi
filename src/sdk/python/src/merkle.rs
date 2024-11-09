@@ -15,10 +15,14 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
 use std::ops::Deref;
 
 use darkfi_sdk::crypto::{merkle_node, MerkleNode};
-use pyo3::{pyclass, pymethods, types::PyModule, PyCell, PyResult};
+use pyo3::{
+    prelude::{PyModule, PyModuleMethods},
+    pyclass, pymethods, Bound, PyResult,
+};
 
 use super::pasta::Fp;
 
@@ -33,7 +37,7 @@ impl MerkleTree {
         Self(merkle_node::MerkleTree::new(1))
     }
 
-    fn append(&mut self, node: &PyCell<Fp>) -> PyResult<bool> {
+    fn append(&mut self, node: &Bound<Fp>) -> PyResult<bool> {
         Ok(self.0.append(MerkleNode::from(node.borrow().deref().0)))
     }
 
@@ -53,8 +57,8 @@ impl MerkleTree {
 }
 
 /// Wrapper function for creating this Python module.
-pub(crate) fn create_module(py: pyo3::Python<'_>) -> PyResult<&PyModule> {
-    let submod = PyModule::new(py, "merkle")?;
+pub(crate) fn create_module(py: pyo3::Python<'_>) -> PyResult<Bound<PyModule>> {
+    let submod = PyModule::new_bound(py, "merkle")?;
     submod.add_class::<MerkleTree>()?;
     Ok(submod)
 }
