@@ -19,13 +19,16 @@
 use std::ops::Deref;
 
 use darkfi_sdk::{crypto, pasta::pallas};
-use pyo3::{pyfunction, types::PyModule, wrap_pyfunction, PyCell, PyResult, Python};
+use pyo3::{
+    prelude::{PyModule, PyModuleMethods},
+    pyfunction, wrap_pyfunction, Bound, PyResult, Python,
+};
 
 use super::pasta::{Ep, Fp, Fq};
 
 /// Calculate the Poseidon hash of given `Fp` elements.
 #[pyfunction]
-pub fn poseidon_hash(messages: Vec<&PyCell<Fp>>) -> Fp {
+pub fn poseidon_hash(messages: Vec<Bound<Fp>>) -> Fp {
     let messages: Vec<pallas::Base> = messages.iter().map(|x| x.borrow().deref().0).collect();
     match messages.len() {
         1 => Fp(crypto::util::poseidon_hash::<1>(messages.try_into().unwrap())),
@@ -50,13 +53,13 @@ pub fn poseidon_hash(messages: Vec<&PyCell<Fp>>) -> Fp {
 
 /// Calculate a Pedersen commitment with an u64 value.
 #[pyfunction]
-pub fn pedersen_commitment_u64(value: u64, blind: &PyCell<Fq>) -> Ep {
+pub fn pedersen_commitment_u64(value: u64, blind: &Bound<Fq>) -> Ep {
     Ep(crypto::pedersen::pedersen_commitment_u64(value, crypto::Blind(blind.borrow().deref().0)))
 }
 
 /// Calculate a Pedersen commitment with an Fp value.
 #[pyfunction]
-pub fn pedersen_commitment_base(value: &PyCell<Fp>, blind: &PyCell<Fq>) -> Ep {
+pub fn pedersen_commitment_base(value: &Bound<Fp>, blind: &Bound<Fq>) -> Ep {
     Ep(crypto::pedersen::pedersen_commitment_base(
         value.borrow().deref().0,
         crypto::Blind(blind.borrow().deref().0),
@@ -64,10 +67,10 @@ pub fn pedersen_commitment_base(value: &PyCell<Fp>, blind: &PyCell<Fq>) -> Ep {
 }
 
 /// Wrapper function for creating this Python module.
-pub(crate) fn create_module(py: Python<'_>) -> PyResult<&PyModule> {
-    let submod = PyModule::new(py, "crypto")?;
-    submod.add_function(wrap_pyfunction!(poseidon_hash, submod)?)?;
-    submod.add_function(wrap_pyfunction!(pedersen_commitment_u64, submod)?)?;
-    submod.add_function(wrap_pyfunction!(pedersen_commitment_base, submod)?)?;
+pub(crate) fn create_module(py: Python<'_>) -> PyResult<Bound<PyModule>> {
+    let submod = PyModule::new_bound(py, "crypto")?;
+    submod.add_function(wrap_pyfunction!(poseidon_hash, &submod)?)?;
+    submod.add_function(wrap_pyfunction!(pedersen_commitment_u64, &submod)?)?;
+    submod.add_function(wrap_pyfunction!(pedersen_commitment_base, &submod)?)?;
     Ok(submod)
 }
