@@ -328,7 +328,7 @@ def task_table(task):
             val = f"{args}"
             event = f"{who} added {val} to {act}"
             if val[0] == "-":
-                event = f"{who} removed {val} from {act}"
+                event = f"{who} removed {val[1:]} from {act}"
             table.append([
                 Style.DIM + event + Style.RESET_ALL,
                 "",
@@ -391,14 +391,14 @@ def wrap_comment(comment, width):
     return '\n'.join(lines)
 
 async def modify_task(refid, args, server_name, port):
-    changes = {}    
+    changes = {}
+    changes["assign"] = []
+    changes["tags"] = []
     for arg in args:
         # This must go before the next elif block
         if arg.startswith("@") or arg.startswith("-@"):
-            changes["assign"] = []
             changes["assign"].append(arg)
         elif arg.startswith("+") or arg.startswith("-"):
-            changes["tags"] = []
             changes["tags"].append(arg)
         elif arg.lower() in ["desc", "description"]:
             task = await api.fetch_task(refid, server_name, port)
