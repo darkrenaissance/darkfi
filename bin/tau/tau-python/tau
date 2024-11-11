@@ -152,6 +152,8 @@ def convert_attr_val(attr, val):
         year = int(date.strftime("%Y"))%100
         try:
             dt = datetime.strptime(f"18:00 {val}{year}", "%H:%M %d%m%y")
+            if dt.date() < date:
+                dt = datetime.strptime(f"18:00 {val}{year+1}", "%H:%M %d%m%y")
         except ValueError:
             print(f"error: unknown date format {val}")
             sys.exit(-1)
