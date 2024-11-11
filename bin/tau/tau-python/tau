@@ -315,8 +315,10 @@ def task_table(task):
         when = when.strftime("%H:%M %d/%m/%y")
         
         if act == "due" and when is not None:
+            due_date = lib.util.unix_to_datetime(args)
+            due_date = due_date.strftime("%H:%M %d/%m/%y")
             table.append([
-                Style.DIM + f"{who} changed {act} to {when}" + Style.RESET_ALL,
+                Style.DIM + f"{who} changed {act} to {due_date}" + Style.RESET_ALL,
                 "",
                 Style.DIM + when + Style.RESET_ALL
             ])
@@ -540,7 +542,8 @@ async def main():
     tau [OPTIONS] [SUBCOMMAND]
 
 OPTIONS:
-    -h, --help                   Print help information
+    -h, --help      Print help information
+    -e              RPC endpoint [default: 127.0.0.1:23330]
 
 SUBCOMMANDS:
     add        Add a new task.
@@ -552,8 +555,8 @@ SUBCOMMANDS:
     stop       Stop task(s).
     switch     Switch between configured workspaces.
     show       List filtered tasks.
-    export	   Save current workspace tasks to a path.
-    import	   Load current workspace tasks from a path.
+    export     Save current workspace tasks to a path.
+    import     Load current workspace tasks from a path.
     help       Show this help text.
 
 Examples:
