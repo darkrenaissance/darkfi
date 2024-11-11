@@ -100,7 +100,21 @@ while True:
                     project = task['project'] if task['project'] is not None else []
                     if args.skip in project or '+' + args.skip in task['tags'] or args.skip_workspace in task['workspace']:
                         channel = args.alt_chan
+                    
+                    removed = []
+                    added = []
+                    for assignee in assignees.split(', '):
+                        if assignee.startswith("-"):
+                            removed.append(assignee[1:])
+                        else:
+                            added.append(assignee)
 
-                    notification = f"{user} reassigned task ({refid}): {title} to {assignees}"
+                    if removed and added:
+                        notification = f"{user} added {', '.join(added)} and removed {', '.join(removed)} from assign in task ({refid}): {title}"
+                    if (not removed) and added:
+                        notification = f"{user} added {', '.join(added)} to assign in task ({refid}): {title}"
+                    if (not added) and removed:
+                        notification = f"{user} removed {', '.join(removed)} from assign in task ({refid}): {title}"
+
                     # print(notification)
                     ircc.send(channel, notification)
