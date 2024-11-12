@@ -69,7 +69,7 @@ impl ZkBinary {
         let (namespace, _): (String, _) = deserialize_partial(&bytes[9..])?;
 
         // Enforce a limit on the namespace string length
-        if namespace.as_bytes().len() > MAX_NS_LEN {
+        if namespace.len() > MAX_NS_LEN {
             return Err(ZkasErr("Namespace too long".to_string()))
         }
 
