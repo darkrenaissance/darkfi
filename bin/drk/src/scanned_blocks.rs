@@ -20,7 +20,11 @@ use rusqlite::types::Value;
 
 use darkfi::{Error, Result};
 
-use crate::{convert_named_params, error::WalletDbResult, Drk};
+use crate::{
+    convert_named_params,
+    error::{WalletDbError, WalletDbResult},
+    Drk,
+};
 
 // Wallet SQL table constant names. These have to represent the `wallet.sql`
 // SQL schema.
@@ -80,6 +84,36 @@ impl Drk {
         };
 
         Ok((height, hash.clone(), rollback_query.clone()))
+    }
+
+    /// Get the last scanned block height and hash from the wallet.
+    /// If database is empty default (0, '-') is returned.
+    pub fn get_last_scanned_block(&self) -> WalletDbResult<(u32, String)> {
+        let query = format!(
+            "SELECT {}, {} FROM {} ORDER BY {} DESC LIMIT 1;",
+            WALLET_SCANNED_BLOCKS_COL_HEIGH,
+            WALLET_SCANNED_BLOCKS_COL_HASH,
+            WALLET_SCANNED_BLOCKS_TABLE,
+            WALLET_SCANNED_BLOCKS_COL_HEIGH,
+        );
+        let ret = self.wallet.query_custom(&query, &[])?;
+
+        if ret.is_empty() {
+            return Ok((0, String::from("-")))
+        }
+
+        let Value::Integer(height) = ret[0][0] else {
+            return Err(WalletDbError::ParseColumnValueError);
+        };
+        let Ok(height) = u32::try_from(height) else {
+            return Err(WalletDbError::ParseColumnValueError);
+        };
+
+        let Value::Text(ref hash) = ret[0][1] else {
+            return Err(WalletDbError::ParseColumnValueError);
+        };
+
+        Ok((height, hash.clone()))
     }
 
     /// Reset the scanned blocks information records in the wallet.

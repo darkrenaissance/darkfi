@@ -74,7 +74,7 @@ impl Drk {
             .darkfid_daemon_request("blockchain.last_known_block", &JsonValue::Array(vec![]))
             .await?;
         last_known = *rep.get::<f64>().unwrap() as u32;
-        let last_scanned = match self.last_scanned_block().await {
+        let last_scanned = match self.get_last_scanned_block() {
             Ok((l, _)) => l,
             Err(e) => {
                 return Err(Error::DatabaseError(format!(
@@ -249,15 +249,6 @@ impl Drk {
         // Store this block rollback query
         self.store_inverse_cache(block.header.height, &block.hash().to_string())?;
 
-        // Write this block height into `last_scanned_block`
-        if let Err(e) =
-            self.update_last_scanned_block(block.header.height, &block.hash().to_string())
-        {
-            return Err(Error::DatabaseError(format!(
-                "[scan_block] Update last scanned block failed: {e:?}"
-            )))
-        }
-
         Ok(())
     }
 
@@ -267,7 +258,7 @@ impl Drk {
     /// it looks for a checkpoint in the wallet to reset and start scanning from.
     pub async fn scan_blocks(&self, reset: bool) -> WalletDbResult<()> {
         // Grab last scanned block height
-        let (mut height, _) = self.last_scanned_block().await?;
+        let (mut height, _) = self.get_last_scanned_block()?;
         // If last scanned block is genesis (0) or reset flag
         // has been provided we reset, otherwise continue with
         // the next block height
