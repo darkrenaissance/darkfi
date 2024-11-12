@@ -245,7 +245,7 @@ impl WalletDb {
     ) -> WalletDbResult<Vec<Vec<Value>>> {
         // Generate `SELECT` query
         let query = self.generate_select_query(table, col_names, params);
-        debug!(target: "walletdb::multiple", "[WalletDb] Executing SQL query:\n{query}");
+        debug!(target: "walletdb::query_multiple", "[WalletDb] Executing SQL query:\n{query}");
 
         // First we prepare the query
         let Ok(conn) = self.conn.lock() else { return Err(WalletDbError::FailedToAquireLock) };
@@ -289,6 +289,54 @@ impl WalletDb {
                     };
                     row_values.push(value);
                 }
+            }
+            result.push(row_values);
+        }
+
+        Ok(result)
+    }
+
+    /// Query provided table using provided query for multiple rows.
+    pub fn query_custom(
+        &self,
+        query: &str,
+        params: &[&dyn ToSql],
+    ) -> WalletDbResult<Vec<Vec<Value>>> {
+        debug!(target: "walletdb::query_custom", "[WalletDb] Executing SQL query:\n{query}");
+
+        // First we prepare the query
+        let Ok(conn) = self.conn.lock() else { return Err(WalletDbError::FailedToAquireLock) };
+        let Ok(mut stmt) = conn.prepare(query) else {
+            return Err(WalletDbError::QueryPreparationFailed)
+        };
+
+        // Execute the query using provided converted params
+        let Ok(mut rows) = stmt.query(params) else {
+            return Err(WalletDbError::QueryExecutionFailed)
+        };
+
+        // Loop over returned rows and parse them
+        let mut result = vec![];
+        loop {
+            // Check if an error occured
+            let row = match rows.next() {
+                Ok(r) => r,
+                Err(_) => return Err(WalletDbError::QueryExecutionFailed),
+            };
+
+            // Check if no row was returned
+            let row = match row {
+                Some(r) => r,
+                None => break,
+            };
+
+            // Grab row returned values
+            let mut row_values = vec![];
+            let mut idx = 0;
+            loop {
+                let Ok(value) = row.get(idx) else { break };
+                row_values.push(value);
+                idx += 1;
             }
             result.push(row_values);
         }
@@ -558,6 +606,12 @@ mod tests {
         assert_eq!(ret.len(), 1);
         let numba: i64 = if let Value::Integer(numba) = ret[0] { numba } else { -1 };
         assert_eq!(numba, 42);
+
+        let ret = wallet.query_custom("SELECT numba FROM mista;", &[]).unwrap();
+        assert_eq!(ret.len(), 1);
+        assert_eq!(ret[0].len(), 1);
+        let numba: i64 = if let Value::Integer(numba) = ret[0][0] { numba } else { -1 };
+        assert_eq!(numba, 42);
     }
 
     #[test]
@@ -585,6 +639,13 @@ mod tests {
         assert_eq!(ret[1], Value::Text(are.clone()));
         assert_eq!(ret[2], Value::Integer(you));
         assert_eq!(ret[3], Value::Blob(gae.clone()));
+        let ret = wallet.query_custom("SELECT why, are, you, gae FROM mista;", &[]).unwrap();
+        assert_eq!(ret.len(), 1);
+        assert_eq!(ret[0].len(), 4);
+        assert_eq!(ret[0][0], Value::Integer(why));
+        assert_eq!(ret[0][1], Value::Text(are.clone()));
+        assert_eq!(ret[0][2], Value::Integer(you));
+        assert_eq!(ret[0][3], Value::Blob(gae.clone()));
 
         let ret = wallet
             .query_single(
@@ -594,7 +655,16 @@ mod tests {
             )
             .unwrap();
         assert_eq!(ret.len(), 1);
-        assert_eq!(ret[0], Value::Blob(gae));
+        assert_eq!(ret[0], Value::Blob(gae.clone()));
+        let ret = wallet
+            .query_custom(
+                "SELECT gae FROM mista WHERE why = ?1 AND are = ?2 AND you = ?3;",
+                rusqlite::params![why, are, you],
+            )
+            .unwrap();
+        assert_eq!(ret.len(), 1);
+        assert_eq!(ret[0].len(), 1);
+        assert_eq!(ret[0][0], Value::Blob(gae));
     }
 
     #[test]
@@ -631,12 +701,32 @@ mod tests {
             assert_eq!(row[2], Value::Integer(you));
             assert_eq!(row[3], Value::Blob(gae.clone()));
         }
+        let ret = wallet.query_custom("SELECT * FROM mista;", &[]).unwrap();
+        assert_eq!(ret.len(), 2);
+        for row in ret {
+            assert_eq!(row.len(), 4);
+            assert_eq!(row[0], Value::Integer(why));
+            assert_eq!(row[1], Value::Text(are.clone()));
+            assert_eq!(row[2], Value::Integer(you));
+            assert_eq!(row[3], Value::Blob(gae.clone()));
+        }
 
         let ret = wallet
             .query_multiple(
                 "mista",
                 &["gae"],
                 convert_named_params! {("why", why), ("are", are), ("you", you)},
+            )
+            .unwrap();
+        assert_eq!(ret.len(), 2);
+        for row in ret {
+            assert_eq!(row.len(), 1);
+            assert_eq!(row[0], Value::Blob(gae.clone()));
+        }
+        let ret = wallet
+            .query_custom(
+                "SELECT gae FROM mista WHERE why = ?1 AND are = ?2 AND you = ?3;",
+                rusqlite::params![why, are, you],
             )
             .unwrap();
         assert_eq!(ret.len(), 2);
