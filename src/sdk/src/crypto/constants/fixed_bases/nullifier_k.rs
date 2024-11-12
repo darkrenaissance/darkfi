@@ -41,7 +41,7 @@ pub const Z: [u64; super::NUM_WINDOWS] = [
 ];
 
 /// Full-width u-values for GENERATOR
-pub const U: [[[u8; 32]; super::H]; super::NUM_WINDOWS] = [
+pub static U: [[[u8; 32]; super::H]; super::NUM_WINDOWS] = [
     [
         [
             8, 177, 117, 90, 104, 127, 169, 131, 254, 128, 23, 151, 181, 247, 22, 208, 55, 1, 147,
