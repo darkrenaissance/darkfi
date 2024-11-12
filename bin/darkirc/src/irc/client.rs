@@ -250,7 +250,7 @@ impl Client {
                     // longer than our MAX_NICK_LEN, so in case it is garbled, it should be
                     // skipped by this code.
                     let have_channel = self.channels.read().await.contains(&privmsg.channel);
-                    let msg_for_self = !privmsg.channel.starts_with('#') && privmsg.channel.as_bytes().len() <= MAX_NICK_LEN;
+                    let msg_for_self = !privmsg.channel.starts_with('#') && privmsg.channel.len() <= MAX_NICK_LEN;
 
                     if have_channel || msg_for_self {
                         // Add the nickname to the list of nicks on the channel, if it's a channel.

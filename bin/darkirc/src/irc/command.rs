@@ -281,7 +281,7 @@ impl Client {
             channels.remove(list.as_str());
 
             for channel in list.split(',') {
-                if !channel.starts_with('#') || channel.as_bytes().len() > MAX_NICK_LEN {
+                if !channel.starts_with('#') || channel.len() > MAX_NICK_LEN {
                     self.penalty.fetch_add(1, SeqCst);
                     return Ok(vec![ReplyType::Server((
                         ERR_NEEDMOREPARAMS,
@@ -518,7 +518,7 @@ impl Client {
         }
 
         // Disallow too long nicks
-        if nickname.as_bytes().len() > MAX_NICK_LEN {
+        if nickname.len() > MAX_NICK_LEN {
             self.penalty.fetch_add(1, SeqCst);
             return Ok(vec![ReplyType::Server((
                 ERR_ERRONEOUSNICKNAME,
