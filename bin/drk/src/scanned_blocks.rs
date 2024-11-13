@@ -18,8 +18,6 @@
 
 use rusqlite::types::Value;
 
-use darkfi::{Error, Result};
-
 use crate::{
     convert_named_params,
     error::{WalletDbError, WalletDbResult},
@@ -52,35 +50,26 @@ impl Drk {
     }
 
     /// Get a scanned block information record.
-    pub fn get_scanned_block_record(&self, height: u32) -> Result<(u32, String, String)> {
-        let row = match self.wallet.query_single(
+    pub fn get_scanned_block_record(&self, height: u32) -> WalletDbResult<(u32, String, String)> {
+        let row = self.wallet.query_single(
             WALLET_SCANNED_BLOCKS_TABLE,
             &[],
             convert_named_params! {(WALLET_SCANNED_BLOCKS_COL_HEIGH, height)},
-        ) {
-            Ok(r) => r,
-            Err(e) => {
-                return Err(Error::DatabaseError(format!(
-                    "[get_scanned_block_record] Scanned block information record retrieval failed: {e:?}"
-                )))
-            }
-        };
+        )?;
 
         let Value::Integer(height) = row[0] else {
-            return Err(Error::ParseFailed("[get_scanned_block_record] Block height parsing failed"))
+            return Err(WalletDbError::ParseColumnValueError);
         };
         let Ok(height) = u32::try_from(height) else {
-            return Err(Error::ParseFailed("[get_scanned_block_record] Block height parsing failed"))
+            return Err(WalletDbError::ParseColumnValueError);
         };
 
         let Value::Text(ref hash) = row[1] else {
-            return Err(Error::ParseFailed("[get_scanned_block_record] Hash parsing failed"))
+            return Err(WalletDbError::ParseColumnValueError);
         };
 
         let Value::Text(ref rollback_query) = row[2] else {
-            return Err(Error::ParseFailed(
-                "[get_scanned_block_record] Rollback query parsing failed",
-            ))
+            return Err(WalletDbError::ParseColumnValueError);
         };
 
         Ok((height, hash.clone(), rollback_query.clone()))
@@ -123,6 +112,42 @@ impl Drk {
         self.wallet.exec_sql(&query, &[])?;
         println!("Successfully reset scanned blocks");
 
+        Ok(())
+    }
+
+    /// Reset state to provided block height.
+    /// If genesis block height(0) was provided, perform a full reset.
+    pub async fn reset_to_height(&self, height: u32) -> WalletDbResult<()> {
+        println!("Resetting wallet state to block: {height}");
+
+        // If genesis block height(0) was provided,
+        // perform a full reset.
+        if height == 0 {
+            return self.reset().await
+        }
+
+        // Grab last scanned block height
+        let (last, _) = self.get_last_scanned_block()?;
+
+        // Check if requested height is after it
+        if last <= height {
+            println!("Requested block height is greater or equal to last scanned block");
+            return Ok(())
+        }
+
+        // Iterate the range (height, last] in reverse to grab the corresponding blocks
+        for height in (height + 1..=last).rev() {
+            let (height, hash, query) = self.get_scanned_block_record(height)?;
+            println!("Reverting block: {height} - {hash}");
+            self.wallet.exec_batch_sql(&query)?;
+            let query = format!(
+                "DELETE FROM {} WHERE {} = {};",
+                WALLET_SCANNED_BLOCKS_TABLE, WALLET_SCANNED_BLOCKS_COL_HEIGH, height
+            );
+            self.wallet.exec_batch_sql(&query)?;
+        }
+
+        println!("Successfully reset wallet state");
         Ok(())
     }
 }

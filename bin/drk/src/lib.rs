@@ -107,6 +107,23 @@ impl Drk {
         Ok(())
     }
 
+    /// Auxiliary function to completely reset wallet state.
+    pub async fn reset(&self) -> WalletDbResult<()> {
+        println!("Resetting full wallet state");
+        self.reset_scanned_blocks()?;
+        self.reset_money_tree().await?;
+        self.reset_money_smt()?;
+        self.reset_money_coins()?;
+        self.reset_mint_authorities()?;
+        self.reset_dao_trees().await?;
+        self.reset_daos().await?;
+        self.reset_dao_proposals().await?;
+        self.reset_dao_votes()?;
+        self.reset_tx_history()?;
+        println!("Successfully reset full wallet state");
+        Ok(())
+    }
+
     /// Auxiliary function to reset `walletdb` inverse cache state.
     /// Additionally, set current trees state inverse queries.
     /// We keep the entire trees state as two distinct inverse queries,

@@ -62,7 +62,7 @@ impl Drk {
 
         // Handle genesis(0) block
         if last_known == 0 {
-            if let Err(e) = self.scan_blocks(true).await {
+            if let Err(e) = self.scan_blocks().await {
                 return Err(Error::DatabaseError(format!(
                     "[subscribe_blocks] Scanning from genesis block failed: {e:?}"
                 )))
@@ -252,31 +252,18 @@ impl Drk {
         Ok(())
     }
 
-    /// Scans the blockchain starting from the last scanned block, for relevant
-    /// money transfer transactions. If reset flag is provided, Merkle tree state
-    /// and coins are reset, and start scanning from beginning. Alternatively,
-    /// it looks for a checkpoint in the wallet to reset and start scanning from.
-    pub async fn scan_blocks(&self, reset: bool) -> WalletDbResult<()> {
+    /// Scans the blockchain for wallet relevant transactions,
+    /// starting from the last scanned block.
+    pub async fn scan_blocks(&self) -> WalletDbResult<()> {
         // Grab last scanned block height
         let (mut height, _) = self.get_last_scanned_block()?;
-        // If last scanned block is genesis (0) or reset flag
-        // has been provided we reset, otherwise continue with
-        // the next block height
-        if height == 0 || reset {
-            self.reset_scanned_blocks()?;
-            self.reset_money_tree().await?;
-            self.reset_money_smt()?;
-            self.reset_money_coins()?;
-            self.reset_mint_authorities()?;
-            self.reset_dao_trees().await?;
-            self.reset_daos().await?;
-            self.reset_dao_proposals().await?;
-            self.reset_dao_votes()?;
-            self.reset_tx_history()?;
-            height = 0;
+        // If last scanned block is genesis(0) we reset,
+        // otherwise continue with the next block height.
+        if height == 0 {
+            self.reset().await?;
         } else {
             height += 1;
-        };
+        }
 
         loop {
             let rep = match self

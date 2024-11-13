@@ -362,7 +362,7 @@ pub fn generate_completions(shell: &str) -> Result<()> {
     // Scan
     let reset = Arg::with_name("reset")
         .long("reset")
-        .help("Reset Merkle tree and start scanning from first block");
+        .help("Reset wallet state to provided block height and start scanning");
 
     let scan = SubCommand::with_name("scan")
         .about("Scan the blockchain and parse relevant transactions")

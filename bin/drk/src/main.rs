@@ -216,8 +216,8 @@ enum Subcmd {
     /// Scan the blockchain and parse relevant transactions
     Scan {
         #[structopt(long)]
-        /// Reset Merkle tree and start scanning from first block
-        reset: bool,
+        /// Reset wallet state to provided block height and start scanning
+        reset: Option<u32>,
     },
 
     /// Explorer related subcommands
@@ -1827,18 +1827,14 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             )
             .await;
 
-            if reset {
-                println!("Reset requested.");
-                if let Err(e) = drk.scan_blocks(true).await {
-                    eprintln!("Failed during scanning: {e:?}");
+            if let Some(height) = reset {
+                if let Err(e) = drk.reset_to_height(height).await {
+                    eprintln!("Failed during wallet reset: {e:?}");
                     exit(2);
                 }
-                println!("Finished scanning blockchain");
-
-                return drk.stop_rpc_client().await
             }
 
-            if let Err(e) = drk.scan_blocks(false).await {
+            if let Err(e) = drk.scan_blocks().await {
                 eprintln!("Failed during scanning: {e:?}");
                 exit(2);
             }
