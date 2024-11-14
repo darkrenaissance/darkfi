@@ -48,17 +48,20 @@ impl Drk {
     /// new finalized blocks. Upon receiving them, all the transactions are
     /// scanned and we check if any of them call the money contract, and if
     /// the payments are intended for us. If so, we decrypt them and append
-    /// the metadata to our wallet.
+    /// the metadata to our wallet. If a reorg block is received, we revert
+    /// to its previous height and then scan it. We assume that the blocks
+    /// up to that point are unchanged, since darkfid will just broadcast
+    /// the sequence after the reorg.
     pub async fn subscribe_blocks(
         &self,
         endpoint: Url,
         ex: Arc<smol::Executor<'static>>,
     ) -> Result<()> {
-        // Grab last finalized block
-        let (last_finalized, _) = self.get_last_finalized_block().await?;
+        // Grab last finalized block height
+        let (last_finalized_height, _) = self.get_last_finalized_block().await?;
 
         // Handle genesis(0) block
-        if last_finalized == 0 {
+        if last_finalized_height == 0 {
             if let Err(e) = self.scan_blocks().await {
                 return Err(Error::DatabaseError(format!(
                     "[subscribe_blocks] Scanning from genesis block failed: {e:?}"
@@ -67,11 +70,11 @@ impl Drk {
         }
 
         // Grab last finalized block again
-        let (last_finalized, _) = self.get_last_finalized_block().await?;
+        let (last_finalized_height, last_finalized_hash) = self.get_last_finalized_block().await?;
 
         // Grab last scanned block
-        let last_scanned = match self.get_last_scanned_block() {
-            Ok((l, _)) => l,
+        let (mut last_scanned_height, last_scanned_hash) = match self.get_last_scanned_block() {
+            Ok(last) => last,
             Err(e) => {
                 return Err(Error::DatabaseError(format!(
                     "[subscribe_blocks] Retrieving last scanned block failed: {e:?}"
@@ -80,7 +83,8 @@ impl Drk {
         };
 
         // Check if other blocks have been created
-        if last_finalized != last_scanned {
+        if last_finalized_height != last_scanned_height || last_finalized_hash != last_scanned_hash
+        {
             eprintln!("Warning: Last scanned block is not the last finalized block.");
             eprintln!("You should first fully scan the blockchain, and then subscribe");
             return Err(Error::DatabaseError(
@@ -149,13 +153,29 @@ impl Drk {
                         let param = param.get::<String>().unwrap();
                         let bytes = base64::decode(param).unwrap();
 
-                        let block_data: BlockInfo = deserialize_async(&bytes).await?;
+                        let block: BlockInfo = deserialize_async(&bytes).await?;
                         println!("Deserialized successfully. Scanning block...");
-                        if let Err(e) = self.scan_block(&block_data).await {
+
+                        // TODO: Fully test this once darkfid broadcasts reorg sequences
+                        // Check if a reorg block was received, to reset to its previous
+                        if block.header.height <= last_scanned_height {
+                            if let Err(e) =
+                                self.reset_to_height(block.header.height.saturating_sub(1)).await
+                            {
+                                return Err(Error::DatabaseError(format!(
+                                    "[subscribe_blocks] Wallet state reset failed: {e:?}"
+                                )))
+                            }
+                        }
+
+                        if let Err(e) = self.scan_block(&block).await {
                             return Err(Error::DatabaseError(format!(
                                 "[subscribe_blocks] Scanning block failed: {e:?}"
                             )))
                         }
+
+                        // Set new last scanned block height
+                        last_scanned_height = block.header.height;
                     }
                 }
 
@@ -249,10 +269,56 @@ impl Drk {
     }
 
     /// Scans the blockchain for wallet relevant transactions,
-    /// starting from the last scanned block.
+    /// starting from the last scanned block. If a reorg has happened,
+    /// we revert to its previous height and then scan from there.
     pub async fn scan_blocks(&self) -> WalletDbResult<()> {
         // Grab last scanned block height
-        let (mut height, _) = self.get_last_scanned_block()?;
+        let (mut height, hash) = self.get_last_scanned_block()?;
+
+        // Grab our last scanned block from darkfid
+        let block = match self.get_block_by_height(height).await {
+            Ok(b) => Some(b),
+            // Check if block was found
+            Err(Error::JsonRpcError((-32121, _))) => None,
+            Err(e) => {
+                eprintln!("[scan_blocks] RPC client request failed: {e:?}");
+                return Err(WalletDbError::GenericError)
+            }
+        };
+
+        // Check if a reorg has happened
+        if block.is_none() || hash != block.unwrap().hash().to_string() {
+            // Find the exact block height the reorg happened
+            println!("A reorg has happened, finding last known common block...");
+            height = height.saturating_sub(1);
+            while height != 0 {
+                // Grab our scanned block hash for that height
+                let (_, scanned_block_hash, _) = self.get_scanned_block_record(height)?;
+
+                // Grab the block from darkfid for that height
+                let block = match self.get_block_by_height(height).await {
+                    Ok(b) => Some(b),
+                    // Check if block was found
+                    Err(Error::JsonRpcError((-32121, _))) => None,
+                    Err(e) => {
+                        eprintln!("[scan_blocks] RPC client request failed: {e:?}");
+                        return Err(WalletDbError::GenericError)
+                    }
+                };
+
+                // Continue to previous one if they don't match
+                if block.is_none() || scanned_block_hash != block.unwrap().hash().to_string() {
+                    height = height.saturating_sub(1);
+                    continue
+                }
+
+                // Reset to its height
+                println!("Last common block found: {height} - {scanned_block_hash}");
+                self.reset_to_height(height).await?;
+                break
+            }
+        }
+
         // If last scanned block is genesis(0) we reset,
         // otherwise continue with the next block height.
         if height == 0 {
@@ -263,6 +329,7 @@ impl Drk {
 
         loop {
             // Grab last finalized block
+            println!("Requested to scan from block number: {height}");
             let (last_height, last_hash) = match self.get_last_finalized_block().await {
                 Ok(last) => last,
                 Err(e) => {
@@ -270,8 +337,6 @@ impl Drk {
                     return Err(WalletDbError::GenericError)
                 }
             };
-
-            println!("Requested to scan from block number: {height}");
             println!("Last finalized block reported by darkfid: {last_height} - {last_hash}");
 
             // Already scanned last finalized block
@@ -282,7 +347,7 @@ impl Drk {
             while height <= last_height {
                 println!("Requesting block {height}...");
                 let block = match self.get_block_by_height(height).await {
-                    Ok(r) => r,
+                    Ok(b) => b,
                     Err(e) => {
                         eprintln!("[scan_blocks] RPC client request failed: {e:?}");
                         return Err(WalletDbError::GenericError)
