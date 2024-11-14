@@ -79,28 +79,18 @@ impl Explorerd {
         };
 
         loop {
-            let rep = match self
-                .darkfid_daemon_request("blockchain.last_known_block", &JsonValue::Array(vec![]))
-                .await
-            {
-                Ok(r) => r,
-                Err(e) => {
-                    let error_message = format!("[sync_blocks] RPC client request failed: {:?}", e);
-                    error!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "{}", error_message);
-                    return Err(Error::DatabaseError(error_message));
-                }
-            };
-            let last = *rep.get::<f64>().unwrap() as u32;
+            // Grab last finalized block
+            let (last_height, last_hash) = self.get_last_finalized_block().await?;
 
             info!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "Requested to sync from block number: {height}");
-            info!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "Last known block number reported by darkfid: {last}");
+            info!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "Last finalized block number reported by darkfid: {last_height} - {last_hash}");
 
-            // Already synced last known block
-            if height > last {
+            // Already synced last finalized block
+            if height > last_height {
                 return Ok(())
             }
 
-            while height <= last {
+            while height <= last_height {
                 let block = match self.get_block_by_height(height).await {
                     Ok(r) => r,
                     Err(e) => {
@@ -257,6 +247,18 @@ impl Explorerd {
             }
         }
     }
+
+    // Queries darkfid for last finalized block.
+    async fn get_last_finalized_block(&self) -> Result<(u32, String)> {
+        let rep = self
+            .darkfid_daemon_request("blockchain.last_finalized_block", &JsonValue::Array(vec![]))
+            .await?;
+        let params = rep.get::<Vec<JsonValue>>().unwrap();
+        let height = *params[0].get::<f64>().unwrap() as u32;
+        let hash = params[1].get::<String>().unwrap().clone();
+
+        Ok((height, hash))
+    }
 }
 
 /// Subscribes to darkfid's JSON-RPC notification endpoint that serves
@@ -266,10 +268,10 @@ pub async fn subscribe_blocks(
     endpoint: Url,
     ex: Arc<smol::Executor<'static>>,
 ) -> Result<(StoppableTaskPtr, StoppableTaskPtr)> {
-    let rep = explorer
-        .darkfid_daemon_request("blockchain.last_known_block", &JsonValue::Array(vec![]))
-        .await?;
-    let last_known = *rep.get::<f64>().unwrap() as u32;
+    // Grab last finalized block
+    let (last_finalized, _) = explorer.get_last_finalized_block().await?;
+
+    // Grab last synced block
     let last_synced = match explorer.db.last_block() {
         Ok(Some((height, _))) => height,
         Ok(None) => 0,
@@ -280,8 +282,8 @@ pub async fn subscribe_blocks(
         }
     };
 
-    if last_known != last_synced {
-        warn!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "Warning: Last synced block is not the last known block.");
+    if last_finalized != last_synced {
+        warn!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "Warning: Last synced block is not the last finalized block.");
         warn!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "You should first fully sync the blockchain, and then subscribe");
         return Err(Error::DatabaseError(
             "[subscribe_blocks] Blockchain not fully synced".to_string(),

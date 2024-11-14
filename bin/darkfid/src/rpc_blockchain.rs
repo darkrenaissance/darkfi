@@ -117,28 +117,35 @@ impl DarkfiNode {
     }
 
     // RPCAPI:
-    // Queries the blockchain database to find the last known block.
+    // Queries the blockchain database to find the last finalized block.
     //
     // **Params:**
     // * `None`
     //
     // **Returns:**
-    // * `f64` Height of the last known block
+    // * `f64`   : Height of the last finalized block
+    // * `String`: Header hash of the last finalized block
     //
-    // --> {"jsonrpc": "2.0", "method": "blockchain.last_known_block", "params": [], "id": 1}
-    // <-- {"jsonrpc": "2.0", "result": 1234, "id": 1}
-    pub async fn blockchain_last_known_block(&self, id: u16, params: JsonValue) -> JsonResult {
+    // --> {"jsonrpc": "2.0", "method": "blockchain.last_finalized_block", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": [1234, "HeaderHash"], "id": 1}
+    pub async fn blockchain_last_finalized_block(&self, id: u16, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if !params.is_empty() {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
-        let blockchain = self.validator.blockchain.clone();
-        let Ok(last_block_height) = blockchain.last() else {
+        let Ok((height, hash)) = self.validator.blockchain.last() else {
             return JsonError::new(InternalError, None, id).into()
         };
 
-        JsonResponse::new(JsonValue::Number(last_block_height.0 as f64), id).into()
+        JsonResponse::new(
+            JsonValue::Array(vec![
+                JsonValue::Number(height as f64),
+                JsonValue::String(hash.to_string()),
+            ]),
+            id,
+        )
+        .into()
     }
 
     // RPCAPI:
@@ -148,7 +155,7 @@ impl DarkfiNode {
     // * `None`
     //
     // **Returns:**
-    // * `f64` Height of the last known block
+    // * `f64`: Current best fork next block height
     //
     // --> {"jsonrpc": "2.0", "method": "blockchain.best_fork_next_block_height", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": 1234, "id": 1}
@@ -176,7 +183,7 @@ impl DarkfiNode {
     // * `None`
     //
     // **Returns:**
-    // * `f64` Height of the last known block
+    // * `f64`: Current block target time
     //
     // --> {"jsonrpc": "2.0", "method": "blockchain.block_target", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": 1234, "id": 1}
@@ -267,10 +274,8 @@ impl DarkfiNode {
             }
         };
 
-        let blockchain = self.validator.blockchain.clone();
-
-        let Ok(zkas_db) = blockchain.contracts.lookup(
-            &blockchain.sled_db,
+        let Ok(zkas_db) = self.validator.blockchain.contracts.lookup(
+            &self.validator.blockchain.sled_db,
             &contract_id,
             SMART_CONTRACT_ZKAS_DB_NAME,
         ) else {
