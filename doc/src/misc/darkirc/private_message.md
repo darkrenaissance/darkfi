@@ -21,7 +21,7 @@ file under [crypto] as shown below.
 
 ```toml
 [crypto]
-dm_chacha_secret.”your_private_key_goes_here”
+dm_chacha_secret = “your_private_key_goes_here”
 ```
 
 To share your Public Key with a user over `darkirc` you can use one of the 
