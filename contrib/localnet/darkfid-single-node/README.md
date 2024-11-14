@@ -8,17 +8,13 @@ If we want to test wallet stuff, we must generate
 a testing wallet and pass its address to the `darkfid`
 config, so the wallet gets the block rewards the node
 produces. We generate a wallet, set it as the default
-and grab its address:
+and set its address as the `recipient` field in
+`darkfid.toml`, using the porvided automated script:
 ```
-% ../../../drk -c drk.toml wallet --initialize
-% ../../../drk -c drk.toml wallet --keygen
-% ../../../drk -c drk.toml wallet --default-address 1
-% ../../../drk -c drk.toml wallet --address
+% ./init-wallet.sh
 ```
 
-Then we replace the `recipient` field in `darkfid.toml`
-config with the output of the last command, start
-`darkfid` and wait until its initialized:
+Then start `darkfid` and wait until its initialized:
 ```
 % ./tmux_sessions.sh
 ```
@@ -26,8 +22,7 @@ config with the output of the last command, start
 After some blocks have been generated we
 will see some `DRK` in our test wallet.
 ```
-% ../../../drk -c drk.toml scan
-% ../../../drk -c drk.toml wallet --balance
+% ./wallet-balance.sh
 ```
 
 See the user guide in the book for more info.

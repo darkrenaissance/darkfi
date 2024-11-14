@@ -147,20 +147,14 @@ wallet CLI:
 $ make darkfid minerd drk
 ```
 
-Enter the localnet folder, generate a wallet, set it as the
-default one and grab its address:
+Enter the localnet folder, and initialize a wallet:
 
 ```
 $ cd contrib/localnet/darkfid-single-node/
-$ ../../../drk -c drk.toml wallet --initialize
-$ ../../../drk -c drk.toml wallet --keygen
-$ ../../../drk -c drk.toml wallet --default-address 1
-$ ../../../drk -c drk.toml wallet --address
+$ ./init-wallet.sh
 ```
 
-Then we replace the `recipient` field in `darkfid.toml`
-config, existing in the folder, with the output of the last
-command, start `darkfid` and wait until its initialized:
+Then start `darkfid` and wait until its initialized:
 
 ```
 $ ./tmux_sessions.sh
@@ -168,12 +162,12 @@ $ ./tmux_sessions.sh
 
 After some blocks have been generated we
 will see some `DRK` in our test wallet.
-On a different shell, navigate to `contrib/localnet/darkfid-single-node`
-folder again and scan for new blocks
+On a different shell(or tmux pane in the session),
+navigate to `contrib/localnet/darkfid-single-node`
+folder again and check wallet balance
 
 ```
-$ ../../../drk -c drk.toml scan
-$ ../../../drk -c drk.toml wallet --balance
+$ ./wallet-balance.sh
 ```
 
 Don't forget that when using this local node, all operations
