@@ -1,0 +1,13 @@
+## blockchain-explorer configuration file
+##
+## Please make sure you go through all the settings so you can configure
+## your daemon properly.
+##
+## The default values are left commented. They can be overridden either by
+## uncommenting, or by using the command-line.
+
+# darkfid JSON-RPC endpoint
+endpoint = "tcp://127.0.0.1:8340"
+
+# Block height to measure until
+height = 0

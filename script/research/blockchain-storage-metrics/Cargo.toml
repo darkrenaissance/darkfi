@@ -1,0 +1,39 @@
+[package]
+name = "blockchain-storage-metrics"
+version = "0.4.1"
+description = "Experimental script to grab blocks from darkfid and measure their usage."
+authors = ["Dyne.org foundation <foundation@dyne.org>"]
+repository = "https://codeberg.org/darkrenaissance/darkfi"
+license = "AGPL-3.0-only"
+edition = "2021"
+
+[workspace]
+
+[dependencies]
+# Darkfi
+darkfi = {path = "../../../", features = ["async-daemonize", "validator", "rpc"]}
+darkfi-serial = "0.4.2"
+
+# Misc
+log = "0.4.22"
+
+# JSON-RPC
+async-trait = "0.1.83"
+tinyjson = "2.5.1"
+url = "2.5.2"
+
+# Daemon
+easy-parallel = "3.3.1"
+signal-hook-async-std = "0.2.2"
+signal-hook = "0.3.17"
+simplelog = "0.12.2"
+smol = "2.0.2"
+
+# Argument parsing
+serde = {version = "1.0.210", features = ["derive"]}
+structopt = "0.3.26"
+structopt-toml = "0.5.1"
+
+[patch.crates-io]
+halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v4"}
+halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v4"}
