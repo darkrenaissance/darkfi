@@ -10,7 +10,7 @@ copy-fonts = true
 default-theme = "ayu"
 preferred-dark-theme = "ayu"
 theme = "theme"
-additional-js = ["theme/mermaid.min.js", "theme/mermaid-init.js"]
+additional-js = ["theme/mermaid.min.js", "theme/mermaid-init.js", "theme/zkas-highlight.js"]
 
 [output.html.playground]
 runnable = false

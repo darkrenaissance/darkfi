@@ -14,7 +14,7 @@ with its voter's key on the database, so votes wouldn't be secret.
 
 ## Vote proof
 
-```
+```zkas
 {{#include ../../../../proof/voting.zk}}
 ```
 
@@ -47,4 +47,3 @@ zero-knowledge proof.
     [paper on Non-Interactive and
     Information-Theoretic Secure Verifiable Secret
     Sharing](https://link.springer.com/content/pdf/10.1007%2F3-540-46766-1_9.pdf)
-

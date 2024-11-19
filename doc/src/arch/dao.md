@@ -15,7 +15,7 @@ these bullas.
 ## `DAO::mint()`: Establishing the DAO
 
 From `darkfi/src/contract/dao/proof/dao-mint.zk`:
-```
+```zkas
 	bulla = poseidon_hash(
 		dao_proposer_limit,
 		dao_quorum,
@@ -43,7 +43,7 @@ if desired.
 ## `DAO::propose()`: Propose the Vote
 
 From `darkfi/src/contract/dao/proof/dao-propose-main.zk`:
-```
+```zkas
 	proposal_bulla = poseidon_hash(
 		proposal_dest_x,
 		proposal_dest_y,
@@ -77,7 +77,7 @@ belong to the DAO and have the condition that they can only be spent
 when combined with `DAO::exec()`. Here is what coins in `money::transfer()`
 look like:
 
-```
+```zkas
 	C = poseidon_hash(
 		pub_x,
 		pub_y,

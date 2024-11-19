@@ -10,7 +10,7 @@ $C$, and we use the burn proof to spend a previously minted _coin_.
 
 ## Mint proof
 
-```
+```zkas
 {{#include ../../../../proof/mint.zk}}
 ```
 
@@ -153,7 +153,7 @@ proof.verify(&verifying_key, &public_inputs)?;
 
 ## Burn
 
-```
+```zkas
 {{#include ../../../../proof/burn.zk}}
 ```
 

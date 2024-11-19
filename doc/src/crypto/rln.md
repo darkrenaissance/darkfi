@@ -126,13 +126,13 @@ $$ a_0 = \sum_{j=0}^{k-1} y_j \prod_{\begin{smallmatrix} m\,=\,0 \\ m\,\ne\,j \e
 
 ### Interaction
 
-```
+```zkas
 {{#include ../../../script/research/rln/rlnv1/signal.zk}}
 ```
 
 ### Slashing
 
-```
+```zkas
 {{#include ../../../script/research/rln/rlnv1/slash.zk}}
 ```
 
