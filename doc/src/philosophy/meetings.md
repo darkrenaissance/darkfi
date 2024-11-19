@@ -20,9 +20,10 @@ Meeting schedule:
 | Rescheduled                                                                                                                             | 2nd of October, 2024   |                                                         |
 | [Political Theology](https://anarch.cc/uploads/carl-schmitt/political-theology.pdf)                                                     | 16th of October, 2024  | Carl Schmitt                                            |
 | [Ganienkeh Manifesto](http://www.ganienkeh.net/images/manifesto_web.pdf)                                                                | 30th of October, 2024  | [Mohawk Nation](https://en.wikipedia.org/wiki/Ganienkeh)|
-| [A New Nationalism for the New Ireland](https://xeno.tools/uploads/fennell-new-nationalism.pdf)/[Complimentary Reading - Solutions to the Northern Ireland Problem](https://sci-hub.se/https://doi.org/10.2307/25513014)| 13th of November, 2024 | Desmond Fennell                                         |
-|  Open for submissions                                                                                                                   | 27th of November, 2024 |                                                         |
+| Rescheduled                                                                                                                             | 13th of November, 2024 |                                                         |
+|  [A New Nationalism for the New Ireland](https://xeno.tools/uploads/fennell-new-nationalism.pdf)/[Complimentary Reading - Solutions to the Northern Ireland Problem](https://sci-hub.se/https://doi.org/10.2307/25513014)| 27th of November, 2024 | Desmond Fennell |
 |  Open for submissions                                                                                                                   | 11th of December, 2024 |                                                         |
 |  Open for submissions                                                                                                                   | 25th of December, 2024 |                                                         |
+|  Open for submissions                                                                                                                   | 8th of January, 2025   |                                                         |
 
 Feel free to propose a text for a future meeting by sharing it in #philosophy.
