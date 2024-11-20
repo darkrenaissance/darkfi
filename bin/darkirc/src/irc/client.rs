@@ -29,7 +29,7 @@ use darkfi::{
     system::Subscription,
     Error, Result,
 };
-use darkfi_serial::{deserialize_async_partial, serialize_async};
+use darkfi_serial::serialize_async;
 use futures::FutureExt;
 use log::{debug, error, warn};
 use sled_overlay::sled;
@@ -42,7 +42,7 @@ use smol::{
 
 use super::{
     server::{IrcServer, MAX_MSG_LEN, MAX_NICK_LEN},
-    NickServ, Privmsg, SERVER_NAME,
+    Msg, NickServ, OldPrivmsg, SERVER_NAME,
 };
 
 const PENALTY_LIMIT: usize = 5;
@@ -228,8 +228,9 @@ impl Client {
                     }
 
                     // Try to deserialize the `Event`'s content into a `Privmsg`
-                    let mut privmsg: Privmsg = match deserialize_async_partial(r.content()).await {
-                        Ok((v, _)) => v,
+                    let mut privmsg = match Msg::deserialize(r.content()).await {
+                        Ok(Msg::V1(old_msg)) => old_msg.into_new(),
+                        Ok(Msg::V2(new_msg)) => new_msg,
                         Err(e) => {
                             error!("[IRC CLIENT] Failed deserializing incoming Privmsg event: {}", e);
                             continue
@@ -432,8 +433,15 @@ impl Client {
 
         // Truncate messages longer than MAX_MSG_LEN
         let msg = if msg.len() > MAX_MSG_LEN { msg.split_at(MAX_MSG_LEN).0 } else { msg };
-        let mut privmsg =
-            Privmsg { channel, nick: self.nickname.read().await.to_string(), msg: msg.to_string() };
+
+        // TODO: This is kept as old version of privmsg, since now we
+        // can deserialize both old and new versions, after some time
+        // this will be replaced with Privmsg (new version)
+        let mut privmsg = OldPrivmsg {
+            channel,
+            nick: self.nickname.read().await.to_string(),
+            msg: msg.to_string(),
+        };
 
         // Encrypt the Privmsg if an encryption method is available.
         self.server.try_encrypt(&mut privmsg).await;

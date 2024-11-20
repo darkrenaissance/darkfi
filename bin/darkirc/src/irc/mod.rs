@@ -19,7 +19,8 @@
 use std::{collections::HashSet, sync::Arc};
 
 use crypto_box::ChaChaBox;
-use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
+use darkfi::{Error, Result};
+use darkfi_serial::{async_trait, deserialize_async_partial, SerialDecodable, SerialEncodable};
 
 /// IRC client state
 pub(crate) mod client;
@@ -40,12 +41,88 @@ pub(crate) mod rpl;
 /// Hardcoded server name
 const SERVER_NAME: &str = "irc.dark.fi";
 
-/// IRC PRIVMSG
+pub trait Priv {
+    fn channel(&mut self) -> &mut String;
+    fn nick(&mut self) -> &mut String;
+    fn msg(&mut self) -> &mut String;
+}
+
+/// IRC PRIVMSG (old version)
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
-pub struct Privmsg {
+pub struct OldPrivmsg {
     pub channel: String,
     pub nick: String,
     pub msg: String,
+}
+
+impl OldPrivmsg {
+    pub fn into_new(&self) -> Privmsg {
+        Privmsg {
+            version: 0,
+            msg_type: 0,
+            channel: self.channel.clone(),
+            nick: self.nick.clone(),
+            msg: self.msg.clone(),
+        }
+    }
+}
+
+/// IRC PRIVMSG (new version)
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct Privmsg {
+    pub version: u8,
+    pub msg_type: u8,
+    pub channel: String,
+    pub nick: String,
+    pub msg: String,
+}
+
+impl Priv for OldPrivmsg {
+    fn channel(&mut self) -> &mut String {
+        &mut self.channel
+    }
+
+    fn nick(&mut self) -> &mut String {
+        &mut self.nick
+    }
+
+    fn msg(&mut self) -> &mut String {
+        &mut self.msg
+    }
+}
+impl Priv for Privmsg {
+    fn channel(&mut self) -> &mut String {
+        &mut self.channel
+    }
+
+    fn nick(&mut self) -> &mut String {
+        &mut self.nick
+    }
+
+    fn msg(&mut self) -> &mut String {
+        &mut self.msg
+    }
+}
+
+pub enum Msg {
+    V1(OldPrivmsg),
+    V2(Privmsg),
+}
+
+impl Msg {
+    pub async fn deserialize(bytes: &[u8]) -> Result<Self> {
+        let old_privmsg = deserialize_async_partial(bytes).await;
+        if let Ok((old_msg, _)) = old_privmsg {
+            return Ok(Msg::V1(old_msg))
+        }
+
+        let new_privmsg = deserialize_async_partial(bytes).await;
+        if let Ok((new_msg, _)) = new_privmsg {
+            return Ok(Msg::V2(new_msg))
+        }
+
+        Err(Error::Custom("Unknown message format".into()))
+    }
 }
 
 /// IRC channel definition

@@ -52,14 +52,13 @@
 use std::{collections::HashSet, sync::atomic::Ordering::SeqCst};
 
 use darkfi::Result;
-use darkfi_serial::deserialize_async_partial;
 use log::{error, info};
 
 use super::{
     client::{Client, ReplyType},
     rpl::*,
     server::MAX_NICK_LEN,
-    IrcChannel, SERVER_NAME,
+    IrcChannel, Msg, SERVER_NAME,
 };
 use crate::crypto::bcrypt::bcrypt_hash_password;
 
@@ -978,8 +977,10 @@ impl Client {
             }
 
             // Try to deserialize it. (Here we skip errors)
-            let Ok((mut privmsg, _)) = deserialize_async_partial(event.content()).await else {
-                continue
+            let mut privmsg = match Msg::deserialize(event.content()).await {
+                Ok(Msg::V1(old_msg)) => old_msg.into_new(),
+                Ok(Msg::V2(new_msg)) => new_msg,
+                Err(_) => continue,
             };
 
             // Potentially decrypt the privmsg

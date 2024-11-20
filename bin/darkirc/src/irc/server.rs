@@ -38,7 +38,7 @@ use smol::{
 };
 use url::Url;
 
-use super::{client::Client, IrcChannel, IrcContact, Privmsg};
+use super::{client::Client, IrcChannel, IrcContact, Priv, Privmsg};
 use crate::{
     crypto::saltbox,
     settings::{parse_autojoin_channels, parse_configured_channels, parse_configured_contacts},
@@ -282,24 +282,24 @@ impl IrcServer {
     }
 
     /// Try encrypting a given `Privmsg` if there is such a channel/contact.
-    pub async fn try_encrypt(&self, privmsg: &mut Privmsg) {
-        if let Some((name, channel)) = self.channels.read().await.get_key_value(&privmsg.channel) {
+    pub async fn try_encrypt<T: Priv>(&self, privmsg: &mut T) {
+        if let Some((name, channel)) = self.channels.read().await.get_key_value(privmsg.channel()) {
             if let Some(saltbox) = &channel.saltbox {
                 // We will pad the name and nick to MAX_NICK_LEN so they all look the same.
-                privmsg.channel = saltbox::encrypt(saltbox, &Self::pad(&privmsg.channel));
-                privmsg.nick = saltbox::encrypt(saltbox, &Self::pad(&privmsg.nick));
-                privmsg.msg = saltbox::encrypt(saltbox, privmsg.msg.as_bytes());
+                *privmsg.channel() = saltbox::encrypt(saltbox, &Self::pad(privmsg.channel()));
+                *privmsg.nick() = saltbox::encrypt(saltbox, &Self::pad(privmsg.nick()));
+                *privmsg.msg() = saltbox::encrypt(saltbox, privmsg.msg().as_bytes());
                 debug!("Successfully encrypted message for {}", name);
                 return
             }
         };
 
-        if let Some((name, contact)) = self.contacts.read().await.get_key_value(&privmsg.channel) {
+        if let Some((name, contact)) = self.contacts.read().await.get_key_value(privmsg.channel()) {
             if let Some(saltbox) = &contact.saltbox {
                 // We will pad the nicks to MAX_NICK_LEN so they all look the same.
-                privmsg.channel = saltbox::encrypt(saltbox, &Self::pad(&privmsg.channel));
-                privmsg.nick = saltbox::encrypt(saltbox, &Self::pad(&privmsg.nick));
-                privmsg.msg = saltbox::encrypt(saltbox, privmsg.msg.as_bytes());
+                *privmsg.channel() = saltbox::encrypt(saltbox, &Self::pad(privmsg.channel()));
+                *privmsg.nick() = saltbox::encrypt(saltbox, &Self::pad(privmsg.nick()));
+                *privmsg.msg() = saltbox::encrypt(saltbox, privmsg.msg().as_bytes());
                 debug!("Successfully encrypted message for {}", name);
             }
         };
