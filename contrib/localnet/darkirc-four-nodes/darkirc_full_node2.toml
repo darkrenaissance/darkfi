@@ -10,14 +10,22 @@ datastore = "/tmp/darkirc_test/darkirc2"
 ## List of channels to autojoin for new client connections
 autojoin = ["#dev", "#test"]
 
+# Log to file. Off by default.
+#log = "/tmp/darkirc2.log"
+# Set log level. 1 is info (default), 2 is debug, 3 is trace
+#verbose = 2
+
 ## P2P net settings
 [net]
 ## Connection slots
-outbound_connections = 3
+outbound_connections = 8
 
-inbound = ["tcp://127.0.0.1:25553"]
+## Inbound connection slots
+# inbound_connections = 8
 
-external_addrs = ["tcp://127.0.0.1:25553"]
+# inbound = ["tcp://127.0.0.1:25553"]
+
+# external_addrs = ["tcp://127.0.0.1:25553"]
 
 # peers = ["tcp://127.0.0.1:25552"]
 
@@ -28,6 +36,8 @@ seeds = ["tcp://127.0.0.1:25551"]
 allowed_transports = ["tcp"]
 
 localnet = true
+hostlist = "/tmp/darkirc_test/darkirc2-host.tsv"
+
 #
 # [channel."#dev"]
 # topic = "DarkFi Development HQ"
@@ -35,8 +45,9 @@ localnet = true
 [channel."#test"]
 secret = "HoLfk8vXBvNsBZ73e2xRPBZ9vEbnF9FVi4fDdyU9AZLU"
 
-[secret_key."GnS3vqKQtCnbJJcFMsUfTJc7w3B1E49MgZ8jKiksumYh"]
+[crypto]
+#dm_chacha_public = "ACaVU2uf4n2cheRHFP7RB9PASLweBJNdp5QJ4PGwVz67"
+dm_chacha_secret = "JwsF8D2xvr9ff3Z5j1rhUCBL8odhdZR7qvR2qJ1ZV6P"
 
 [contact."node1"]
-## contact public key
-public_key = "9sfMEVLphJ4dTX3SEvm6NBhTbWDqfsxu7R2bo88CtV8g"
+dm_chacha_public = "BmUo88RJ5TyR7gUWnr6Mk7tqZE5xPuCqJdJV8KWzsagh"

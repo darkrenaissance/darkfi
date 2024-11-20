@@ -1,8 +1,8 @@
 ## JSON-RPC listen URL
-# rpc_listen="tcp://127.0.0.1:8888"
+rpc_listen="tcp://127.0.0.1:8888"
 
 ## IRC listen URL
-# irc_listen="tcp://127.0.0.1:22020"
+irc_listen="tcp://127.0.0.1:22020"
 
 ## Sets Datastore Path
 datastore = "/tmp/darkirc_test/darkirc_seed"
@@ -16,18 +16,27 @@ autojoin = ["#dev"]
 ## TLS secret key path if IRC acceptor uses TLS (optional)
 #irc_tls_secret = "/etc/letsencrypt/darkirc/privkey.pem"
 
+# Log to file. Off by default.
+#log = "/tmp/darkirc0.log"
+# Set log level. 1 is info (default), 2 is debug, 3 is trace
+#verbose = 2
+
 ## P2P net settings
 [net]
-## Connection slots
-# outbound_connections=8
+## Outbound connection slots
+# outbound_connections = 8
+
+## Inbound connection slots
+inbound_connections = 8
 
 ## P2P accept addresses
 inbound = ["tcp://127.0.0.1:25551"]
 
 # Prefered transports for outbound connections
-outbound_transports = ["tcp"]
+allowed_transports = ["tcp"]
 
 localnet = true
+hostlist = "/tmp/darkirc_test/darkirc-seed-host.tsv"
 
 ## Seed nodes to connect to 
 # seeds = ["tcp://127.0.0.1:25551", "tls://lilith1.dark.fi:25551"]
