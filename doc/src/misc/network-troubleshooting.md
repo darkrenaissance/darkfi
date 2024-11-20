@@ -12,7 +12,7 @@ The default location for config files is `~/.config/darkfi`.
 using a different app such as `darkfid` or `taud`, the syntax remains
 but the app name will change (for example, if using `taud`, 
 the config file `~/.config/darkfi/darkirc_config.toml` 
-would become `~/.config/darkfi/taud_config.toml`.
+would become `~/.config/darkfi/taud_config.toml`).
 
 ## Common net problems 
 
@@ -194,7 +194,7 @@ If the peers are reachable, you'll receive a `Connected!` output.
 
 To see if your address is reachable to others in the network, you'll need 
 to use a separate device to `ping` your external address. 
-[You can generate an external address here](tor_darkirc.md#step-1-install-tor-and-launch-a-hidden-service).
+[You can generate an external address here](nodes/tor-guide.md#inbound-node-settings).
 For example purposes, let's assume your external address is 
 `jamie3vkiwibfiwucd6vxijskbhpjdyajmzeor4mc4i7yopvpo4p7cyd.onion`. In 
 `${DARKFI_REPO}/script/ping` we can attempt to `ping` your external address 

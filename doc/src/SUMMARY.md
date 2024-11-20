@@ -18,9 +18,9 @@
 - [DAO](testnet/dao.md)
 - [DarkIRC](misc/darkirc/darkirc.md)
 	- [Private Message](misc/darkirc/private_message.md)
-    - [Anonymous Nodes](clients/anonymous_nodes.md)
-        - [Tor DarkIRC](misc/tor_darkirc.md)
-- [Public Node Configurations](misc/darkfi_public_node_guide.md)
+- [Node Configurations](misc/nodes/node-configurations.md)
+    - [Public Node Configurations](misc/nodes/public-guide.md)
+    - [Tor Nodes](misc/nodes/tor-guide.md)
 - [Network Troubleshooting](misc/network-troubleshooting.md)
 
 # Developer Doc
