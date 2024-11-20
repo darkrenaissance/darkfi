@@ -1,0 +1,94 @@
+## This is the tau daemon configuration file.
+## Review it carefully.
+
+## JSON-RPC listen URL
+rpc_listen="tcp://127.0.0.1:23343"
+
+## Datastore Path
+datastore = "/tmp/taud/taud_db_node3"
+
+## Sets DB logs replay datastore path
+#replay_datastore = "~/.local/darkfi/replayed_taud_db"
+
+## Run in replay mode to store Sled DB instructions
+## (for eventgraph debugging tool)
+#replay_mode = false
+
+## Named pipe path
+#pipe_path = "/tmp/tau_pipe"
+
+## Whether to pipe notifications or not
+#piped = false
+
+## Current display name
+nickname = "node3"
+
+## ====================
+## Workspace settings
+## ====================
+##
+## You can create a shared secret (read_key) with `taud --generate`.
+## Never share this secret over unencrypted channels or with someone
+## who you do not want to be able to read all the workspace's tasks.
+## The write_public_key is used to verify task's authenticity the admin 
+## of workspace should generate and share it, while write_key is the 
+## private part and responsible for signing tasks and gaining write 
+## access, this, too, should not be shared with someone you don't 
+## want to add/edit tasks.
+## Use it like this example:
+#[workspace."foo"]
+#read_key = "2bCqQTd8BJgeUzH7JQELZxjQuWS8aCmXZ9C6w7ktNS1v"
+#write_public_key = "Fgsc8tep4KX3Rb2drq8RxMyrHFWQ7wZaZPpF9F3GQYFG"
+#write_key = ""
+
+[workspace."test"]
+read_key = "DDEza5ifrphkKTvMSP1c8dR5RyUgn1WQHBvnAJKNzDRK"
+write_public_key = "CAX5qCXCTGwqT27ixzdgm4H54kbh2HtrXbzj9odAyjxh"
+write_key = "nGpVmGTNjfvJ9ojqijQwUMsbjrzaqHK5RniGAx9LTJfm49QcGY48RCaJ6riePvtr7xwUCyfvrwjxS8oqnDgpiZhS8KCQrykRYAwuFoHb41PSEMALu"
+
+# P2P network settings
+[net]
+# Path to a configured hostlist for saving known peers
+hostlist = "/tmp/taud_hostlist_node3.tsv"
+
+## P2P accept addresses
+inbound = ["tcp://127.0.0.1:23334"]
+
+## Outbound connection slots
+outbound_connections = 8
+
+## Inbound connection slots
+# inbound_connections = 8
+
+## White connection percent
+#gold_connect_count = 2
+
+## White connection percent
+#white_connect_percent = 70
+
+## Addresses we want to advertise to peers (optional)
+## These should be reachable externally
+external_addrs = ["tcp://127.0.0.1:23334"]
+
+## Seed nodes to connect to
+seeds = ["tcp://127.0.0.1:23331"]
+
+## Manual peers to connect to
+#peers = []
+
+# Whitelisted transports for outbound connections
+allowed_transports = ["tcp"]
+#allowed_transports = ["tor"]
+
+# Enable transport mixing
+# Allows mixing transports, e.g. tor+tls:// connecting to tcp+tls://
+# By default this is not allowed.
+transport_mixing = false
+
+localnet = true
+
+# Nodes to avoid interacting with for the duration of the program, in the
+# format ["host", ["scheme", "scheme"], [port, port]].
+# If scheme is left empty it will default to "tcp+tls". 
+# If ports are left empty all ports from this peer will be blocked.
+#blacklist = [["example.com", ["tcp"], [8551, 23331]]]
