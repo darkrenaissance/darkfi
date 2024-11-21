@@ -89,5 +89,5 @@ Run `./darkirc`. Welcome to the dark forest.
 
 Run `darkirc -vv` for verbose debugging. This will show detailed errors including
 tor connection issues. Refer to 
-[Network troubleshooting](../misc/network-troubleshooting.html)
+[Network troubleshooting](network-troubleshooting.md)
 for troubleshooting resources.

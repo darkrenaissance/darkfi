@@ -8,17 +8,17 @@ For this phase of development we organize into teams lead by a single
 surgeon. The role of the team is to give full support to the surgeon
 and make his work effortless and smooth.
 
-| Component   | Description                                                            | Status   |
-|-------------|------------------------------------------------------------------------|----------|
-| consensus   | Algorithm for blockchain consensus                                     | Alpha    |
-| zk / crypto | ZK compiler and crypto algos                                           | Alpha    |
-| wasm        | WASM smart contract system                                             | Alpha    |
-| net         | p2p network protocol code                                              | Alpha    |
-| blockchain  | consensus + net + db                                                   | Alpha    |
-| bridge      | Develop robust & secure multi-chain bridge architecture                | None     |
-| tokenomics  | Research and define DRK tokenomics                                     | Alpha    |
-| util        | Various utilities and tooling                                          | Alpha    |
-| arch        | Architecture, project management and integration                       | Alpha    |
+| Component   | Description                                             | Status |
+|-------------|---------------------------------------------------------|--------|
+| consensus   | Algorithm for blockchain consensus                      | Alpha  |
+| zk / crypto | ZK compiler and crypto algos                            | Alpha  |
+| wasm        | WASM smart contract system                              | Alpha  |
+| net         | p2p network protocol code                               | Alpha  |
+| blockchain  | consensus + net + db                                    | Alpha  |
+| bridge      | Develop robust & secure multi-chain bridge architecture | None   |
+| tokenomics  | Research and define DRK tokenomics                      | Alpha  |
+| util        | Various utilities and tooling                           | Alpha  |
+| arch        | Architecture, project management and integration        | Alpha  |
 
 ## Release Cycle
 

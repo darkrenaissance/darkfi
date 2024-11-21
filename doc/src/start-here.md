@@ -23,9 +23,8 @@ DarkFi broadly follows the standardized unix directory structure.
 
 ## Using DarkFi
 
-Refer to the main
-[README](https://codeberg.org/darkrenaissance/darkfi/src/branch/master/README.md)
-file for instructions on how to install Rust and necessary deps.
+Refer to the main [README](../index.html) file for instructions on how to
+install Rust and necessary deps.
 
 Then proceed to the [Running a Node](testnet/node.md) guide.
 
@@ -82,7 +81,7 @@ Inside `bin/` contains utilities and applications:
 * `dnet/` is a viewer to see the p2p traffic of nodes, and `deg/` is a viewer for the event graph data. We use these as debugging and monitoring tools.
 * `dhtd/` is a distributed hash table, like IPFS, for transferring static data and large files around. Currently just a prototype but we'll use this later for images in the chat or other static content like seller pages on the marketplace.
 * `tau/` is an anon p2p task manager which we use. We don't use github issues, and seek to minimize our dependence on centralized services. Eventually we want to be fully p2p and attack resistant.
-* `darkirc/` is our main community chat. It uses [RLN](https://darkrenaissance.github.io/darkfi/crypto/rln.html); you stake money and if you post twice in an epoch then you get slashed which prevents spam. There is a free tier. It uses the `event_graph` for synchronizing the history. You can attach any IRC frontend to use it rn. Later we'll make our own UI.
+* `darkirc/` is our main community chat. It uses [RLN](crypto/rln.md); you stake money and if you post twice in an epoch then you get slashed which prevents spam. There is a free tier. It uses the `event_graph` for synchronizing the history. You can attach any IRC frontend to use it rn. Later we'll make our own UI.
 * `zkas/` is our ZK compiler.
 * `zkrunner/` contains our ZK debugger (run `zkrunner` with `--trace`), and `zkrender` which renders a graphic of the circuit layout.
 * `lilith/` is a universal seed node. Eventually we will add swarming support to our p2p network which is an easy addon.
@@ -97,6 +96,6 @@ We could say more on our design philosophy of simplicity oriented approach to sy
 
 Recent crypto code audit: [ZK Security DarkFi Code Audit](https://dark.fi/zksecurity-audit-q124.pdf)
 
-Useful link on [our ZK toolchain](https://darkrenaissance.github.io/darkfi/zkas/writing-zk-proofs.html)
+Useful link on [our ZK toolchain](zkas/writing-zk-proofs.md)
 
 For proof files, see `proof/` and `src/contract/*/proof/` subdirs.

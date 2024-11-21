@@ -4,7 +4,7 @@
 ## PrivMsgEvent
 
 This is the main message type inside `darkirc`. The `PrivMsgEvent` is an
-[event action](https://darkrenaissance.github.io/darkfi/misc/event_graph/network_protocol.html#event).
+[event action](../event_graph/network_protocol.md#event).
 
 
 | Description	| Data Type		| Comments																	| 

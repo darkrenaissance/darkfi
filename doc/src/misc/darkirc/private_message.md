@@ -57,8 +57,8 @@ dm_chacha_public = “9sfMEVLphJ4dTX3SEvm6NBhTbWDqfsxu7R2bo88CtV8g”
 ```
 
 Lets see an Example where 'alice' sends “Hi” message to 'bob' using 
-the /msg command  
-```     
+the /msg command
+```
 /msg bob Hi
 ```
 
@@ -68,7 +68,7 @@ pop in weechat client until you receive a reply from that person.
 
 For example here 'alice' will not see any new buffer on her irc interface for 
 the recent message which she just send to 'bob' until 'bob' replies,
-but 'bob' will get a buffer shown on his irc client with the message 'Hi'.      
+but 'bob' will get a buffer shown on his irc client with the message 'Hi'.
 
 Reply from 'bob' to 'alice' 
 ```

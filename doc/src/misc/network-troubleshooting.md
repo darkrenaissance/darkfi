@@ -194,7 +194,7 @@ If the peers are reachable, you'll receive a `Connected!` output.
 
 To see if your address is reachable to others in the network, you'll need 
 to use a separate device to `ping` your external address. 
-[You can generate an external address here](../clients/tor_inbound.md#1-install-tor).
+[You can generate an external address here](tor_darkirc.md#step-1-install-tor-and-launch-a-hidden-service).
 For example purposes, let's assume your external address is 
 `jamie3vkiwibfiwucd6vxijskbhpjdyajmzeor4mc4i7yopvpo4p7cyd.onion`. In 
 `${DARKFI_REPO}/script/ping` we can attempt to `ping` your external address 

@@ -80,7 +80,7 @@ network. A Tor node provides the best anonymity on the network.
 
 You need to configure Tor and launch your hidden service prior to running your 
 public node over Tor. Please refer to 
-[Tor DarkIRC](/misc/tor_darkirc.html#step-1-install-tor-and-launch-a-hidden-service).
+[Tor DarkIRC](tor_darkirc.md#step-1-install-tor-and-launch-a-hidden-service).
 
 ```toml
 ## connection settings
@@ -121,7 +121,7 @@ This provides the most benefit for the health of the network. This is the most
 maximally compatible node for people that wish to support the network. You can 
 find a complete example config file for `darkirc-mixed.toml` in 
 `${DARKFI_REPO}/bin/darkirc/config`. Refer to 
-[Tor DarkIRC](/misc/tor_darkirc.html#step-1-install-tor-and-launch-a-hidden-service) 
+[Tor DarkIRC](tor_darkirc.md#step-1-install-tor-and-launch-a-hidden-service)
 to configure Tor.
 
 ```toml
@@ -160,11 +160,11 @@ transport_mixing = true
 ## Test your node
 
 You can test if your node is configured properly on the network. Use 
-[Dnet](/learn/dchat/network-tools/using-dnet.html) and the 
-[ping-tool](/misc/network-troubleshooting.html#ping-tool) to test your node 
+[Dnet](../learn/dchat/network-tools/using-dnet.md) and the
+[ping-tool](network-troubleshooting.md#ping-tool) to test your node
 connections. You can view if your node is making inbound and outbound connections.
 
 ## Troubleshooting
 
-Refer to [Network troubleshooting](/misc/network-troubleshooting.html)
+Refer to [Network troubleshooting](network-troubleshooting.md)
 for further troubleshooting resources.

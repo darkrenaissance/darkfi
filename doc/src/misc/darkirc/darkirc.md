@@ -24,13 +24,10 @@ Nothing else exists like it.
 
 ## Installation
 
-Follow the instructions in the
-[README](https://darkrenaissance.github.io/darkfi/index.html#build) to ensure
-you have all the necessary dependencies.
+Follow the instructions in the [README](../../index.html#build) to ensure
+you have all the necessary dependencies. After that, in repo root folder:
 
 ```shell
-% git clone https://codeberg.org/darkrenaissance/darkfi
-% cd darkfi 
 % make darkirc
 % # install system wide only if you can make sure there would be no
 % # multiple darkirc versions installed:
@@ -350,5 +347,5 @@ Note that your nick is temporary. If you want to claim a nick, you will need to
 ## Troubleshooting
 
 If you encounter connectivity issues refer to 
-[Network troubleshooting](../network-troubleshooting.html) 
+[Network troubleshooting](../network-troubleshooting.md)
 for further troubleshooting resources.

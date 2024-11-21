@@ -277,7 +277,7 @@ management scopes` into a straightforward hierarchy:
               +
        +------|------+
        +             +
-    message       protocol  
+    message       protocol
 
 ```
 
