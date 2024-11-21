@@ -5,7 +5,7 @@
 rpc_listen="tcp://127.0.0.1:23342"
 
 ## Datastore Path
-datastore = "/tmp/taud/taud_db_node2"
+datastore = "taud2"
 
 ## Sets DB logs replay datastore path
 #replay_datastore = "~/.local/darkfi/replayed_taud_db"
@@ -49,7 +49,7 @@ write_key = "nGpVmGTNjfvJ9ojqijQwUMsbjrzaqHK5RniGAx9LTJfm49QcGY48RCaJ6riePvtr7xw
 # P2P network settings
 [net]
 # Path to a configured hostlist for saving known peers
-hostlist = "/tmp/taud_hostlist_node2.tsv"
+hostlist = "taud2/hostlist.tsv"
 
 ## P2P accept addresses
 inbound = ["tcp://127.0.0.1:23333"]

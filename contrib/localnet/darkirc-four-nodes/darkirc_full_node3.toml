@@ -5,7 +5,7 @@ rpc_listen = "tcp://127.0.0.1:8892"
 irc_listen = "tcp://127.0.0.1:22024"
 
 ## Sets Datastore Path
-datastore = "/tmp/darkirc_test/darkirc3"
+datastore = "darkirc3"
 
 ## List of channels to autojoin for new client connections
 autojoin = ["#dev", "#test"]
@@ -36,7 +36,7 @@ seeds = ["tcp://127.0.0.1:25551"]
 allowed_transports = ["tcp"]
 
 localnet = true
-hostlist = "/tmp/darkirc_test/darkirc3-host.tsv"
+hostlist = "darkirc3/hostlist.tsv"
 
 #
 # [channel."#dev"]

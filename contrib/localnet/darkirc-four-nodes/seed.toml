@@ -5,7 +5,7 @@ rpc_listen="tcp://127.0.0.1:8888"
 irc_listen="tcp://127.0.0.1:22020"
 
 ## Sets Datastore Path
-datastore = "/tmp/darkirc_test/darkirc_seed"
+datastore = "seed"
 
 ## List of channels to autojoin for new client connections
 autojoin = ["#dev"]
@@ -36,7 +36,7 @@ inbound = ["tcp://127.0.0.1:25551"]
 allowed_transports = ["tcp"]
 
 localnet = true
-hostlist = "/tmp/darkirc_test/darkirc-seed-host.tsv"
+hostlist = "seed/hostlist.tsv"
 
 ## Seed nodes to connect to 
 # seeds = ["tcp://127.0.0.1:25551", "tls://lilith1.dark.fi:25551"]
