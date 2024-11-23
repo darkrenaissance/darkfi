@@ -55,7 +55,8 @@ Podman is a drop in replacement.
     make the file executable `chmod +x darkirc.aarch64-android`). 
     Copy this to your phone.
 3. Install Termux and RevolutionIRC on F-Droid.
-4. You can access the phone storage from `/sdcard/` and copy the file
+4. Run `termux-setup-storage` and allow access to external storage.
+   Now you can access the phone storage from `/sdcard/` and copy the file
    into the Termux home.
 5. Run `termux-wake-lock`. This stops Android suspending the daemon.
 6. Run the daemon. You can open new Termux sessions by swiping from
