@@ -111,11 +111,15 @@ impl Image {
     fn load_texture(&self) -> GfxTextureId {
         let path = self.path.get();
 
-        // TODO we should NOT use unwrap here
+        // TODO we should NOT use panic here
         let data = Arc::new(SyncMutex::new(vec![]));
         let data2 = data.clone();
-        miniquad::fs::load_file(&path, move |res| {
-            *data2.lock().unwrap() = res.unwrap();
+        miniquad::fs::load_file(&path.clone(), move |res| match res {
+            Ok(res) => *data2.lock().unwrap() = res,
+            Err(e) => {
+                error!(target: "ui::image", "Unable to open image: {path}");
+                panic!("Resource not found!");
+            }
         });
         let data = std::mem::take(&mut *data.lock().unwrap());
         let img =
