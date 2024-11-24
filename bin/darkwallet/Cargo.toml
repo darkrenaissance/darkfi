@@ -13,7 +13,7 @@ repository = "https://codeberg.org/darkrenaissance/darkfi"
 #path = "bin/drawsim.rs"
 
 [dependencies]
-miniquad = { git = "https://github.com/not-fl3/miniquad" }
+miniquad = { git = "https://github.com/narodnik/miniquad" }
 
 # Currently latest version links to freetype-sys 0.19 but we use 0.21
 #harfbuzz-sys = "0.6.1"
@@ -67,6 +67,7 @@ android_logger = "0.13.3"
 # Required by Arti: tor-dirmgr
 rusqlite = {version = "0.32.1", features = ["bundled"]}
 tor-dirmgr = {version="0.23.0", features=["static"]}
+#android-fileopen = {path = "./android-fileopen/"}
 
 [package.metadata.android.activity_attributes]
 "android:exported" = "true"

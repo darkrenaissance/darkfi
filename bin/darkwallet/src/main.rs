@@ -49,7 +49,7 @@ use log::LevelFilter;
 
 mod app;
 mod build_info;
-//mod darkirc;
+mod darkirc;
 mod darkirc2;
 mod error;
 mod expr;
@@ -69,7 +69,7 @@ mod ui;
 mod util;
 
 use crate::{
-    darkirc2::{LocalDarkIRC, LocalDarkIRCPtr},
+    darkirc::{DarkIrcBackend, DarkIrcBackendPtr},
     net::ZeroMQAdapter,
     text::TextShaper,
 };
@@ -81,6 +81,18 @@ fn panic_hook(panic_info: &std::panic::PanicInfo) {
     //error!("panic: {}", std::backtrace::Backtrace::force_capture().to_string());
     std::process::exit(1);
 }
+
+/*
+async fn whomain() {
+    use std::sync::Mutex as SyncMutex;
+    let file_data = Arc::new(SyncMutex::new(None));
+    android_fileopen::find_file(file_data.clone());
+
+    //if let Some(ref file_data) = &*file_data.lock().unwrap() {
+    //    info!("content byte length: {}", file_data.len());
+    //}
+}
+*/
 
 fn main() {
     // Exit the application on panic right away
@@ -148,7 +160,7 @@ fn main() {
     let ex2 = ex.clone();
     let darkirc_task = ex.spawn(async move {
         cv_started.wait().await;
-        let darkirc_evgr = LocalDarkIRC::new(sg_root.clone(), ex2.clone()).await.unwrap();
+        let darkirc_evgr = DarkIrcBackend::new(sg_root.clone(), ex2.clone()).await.unwrap();
         *app2.darkirc_evgr.lock().unwrap() = Some(darkirc_evgr.clone());
         if let Err(e) = darkirc_evgr.start(ex2).await {
             error!("DarkIRC error: {e}")

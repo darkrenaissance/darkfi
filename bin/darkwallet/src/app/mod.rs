@@ -29,7 +29,7 @@ use std::{
 };
 
 use crate::{
-    darkirc2::LocalDarkIRCPtr,
+    darkirc::DarkIrcBackendPtr,
     error::Error,
     expr::Op,
     gfx::{GraphicsEventPublisherPtr, RenderApiPtr, Vertex},
@@ -121,7 +121,7 @@ pub struct App {
     pub render_api: RenderApiPtr,
     pub event_pub: GraphicsEventPublisherPtr,
     pub text_shaper: TextShaperPtr,
-    pub darkirc_evgr: SyncMutex<Option<LocalDarkIRCPtr>>,
+    pub darkirc_evgr: SyncMutex<Option<DarkIrcBackendPtr>>,
     pub tasks: SyncMutex<Vec<Task<()>>>,
     pub ex: ExecutorPtr,
 }

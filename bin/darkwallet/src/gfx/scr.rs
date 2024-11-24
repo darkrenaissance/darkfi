@@ -17,8 +17,13 @@
  */
 
 use async_trait::async_trait;
-use darkfi_serial::{SerialEncodable, SerialDecodable, serialize, Encodable, Decodable, deserialize};
-use std::{fs::{OpenOptions, File}, time::Instant};
+use darkfi_serial::{
+    deserialize, serialize, Decodable, Encodable, SerialDecodable, SerialEncodable,
+};
+use std::{
+    fs::{File, OpenOptions},
+    time::Instant,
+};
 
 use super::GraphicsMethod;
 
@@ -27,7 +32,7 @@ const FILENAME: &str = "drawinstrs.dat";
 #[derive(Debug, SerialEncodable, SerialDecodable)]
 struct Instruction {
     timest: u64,
-    method: GraphicsMethod
+    method: GraphicsMethod,
 }
 
 pub struct DrawLog {
@@ -39,17 +44,11 @@ impl DrawLog {
     pub fn new() -> Self {
         let instant = Instant::now();
         let fd = OpenOptions::new().write(true).create(true).open(FILENAME).unwrap();
-        Self {
-            instant,
-            fd,
-        }
+        Self { instant, fd }
     }
 
     pub fn log(&mut self, method: GraphicsMethod) {
-        let instr = Instruction {
-            timest: self.instant.elapsed().as_millis() as u64,
-            method
-        };
+        let instr = Instruction { timest: self.instant.elapsed().as_millis() as u64, method };
         let data = serialize(&instr);
         data.encode(&mut self.fd).unwrap();
     }
@@ -65,4 +64,3 @@ impl DrawLog {
         instrs
     }
 }
-

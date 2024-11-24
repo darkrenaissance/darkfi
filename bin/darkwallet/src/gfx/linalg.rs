@@ -17,8 +17,8 @@
  */
 
 use async_trait::async_trait;
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 use std::ops::{Add, AddAssign, Div, Mul, Sub, SubAssign};
-use darkfi_serial::{SerialEncodable, SerialDecodable};
 
 #[derive(Clone, Copy, Debug, SerialEncodable, SerialDecodable)]
 pub struct Dimension {

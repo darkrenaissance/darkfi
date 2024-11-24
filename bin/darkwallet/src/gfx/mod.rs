@@ -17,6 +17,7 @@
  */
 
 use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
+use futures::AsyncWriteExt;
 use log::debug;
 use miniquad::{
     conf, window, Backend, Bindings, BlendFactor, BlendState, BlendValue, BufferLayout,
@@ -29,7 +30,6 @@ use std::{
     sync::{mpsc, Arc, Mutex as SyncMutex},
     time::{Duration, Instant},
 };
-use futures::AsyncWriteExt;
 
 mod linalg;
 pub use linalg::{Dimension, Point, Rectangle};
@@ -535,7 +535,7 @@ impl Stage {
             buffers: HashMap::new(),
             method_rep,
             event_pub,
-            draw_log: if DEBUG_DRAW_LOG { Some(scr::DrawLog::new()) } else { None }
+            draw_log: if DEBUG_DRAW_LOG { Some(scr::DrawLog::new()) } else { None },
         }
     }
 
