@@ -36,8 +36,8 @@ members = [
     "bin/lilith",
 
     "src/sdk",
-    "src/sdk/python",
-
+    #"src/sdk/python",
+    "src/event_graph/python",
     #"src/serial",
     #"src/serial/derive",
     #"src/serial/derive-internal",
@@ -48,6 +48,7 @@ members = [
     "src/contract/deployooor",
 
     "example/dchat/dchatd",
+    
 ]
 
 [dependencies]
