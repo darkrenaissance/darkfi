@@ -56,7 +56,7 @@ pub struct OldPrivmsg {
 }
 
 impl OldPrivmsg {
-    pub fn into_new(&self) -> Privmsg {
+    pub fn into_new(self) -> Privmsg {
         Privmsg {
             version: 0,
             msg_type: 0,
