@@ -24,7 +24,10 @@ use tinyjson::JsonValue;
 use url::Url;
 
 use super::{
-    common::{read_from_stream, write_to_stream, INIT_BUF_SIZE, READ_TIMEOUT},
+    common::{
+        http_read_from_stream_response, http_write_to_stream, read_from_stream, write_to_stream,
+        INIT_BUF_SIZE, READ_TIMEOUT,
+    },
     jsonrpc::*,
 };
 use crate::{
@@ -56,9 +59,18 @@ impl RpcClient {
         let (rep_send, rep_recv) = channel::unbounded();
         let (req_skip_send, req_skip_recv) = channel::unbounded();
 
+        // Figure out if we're using HTTP and rewrite the URL accordingly.
+        let mut dialer_url = endpoint.clone();
+        if endpoint.scheme().starts_with("http+") {
+            let scheme = endpoint.scheme().strip_prefix("http+").unwrap();
+            let url_str = endpoint.as_str().replace(endpoint.scheme(), scheme);
+            dialer_url = url_str.parse()?;
+        }
+        let use_http = endpoint.scheme().starts_with("http+");
+
         // Instantiate Dialer and dial the server
         // TODO: Could add a timeout here
-        let dialer = Dialer::new(endpoint, None).await?;
+        let dialer = Dialer::new(dialer_url, None).await?;
         let stream = dialer.dial(None).await?;
 
         // Create the StoppableTask running the request-reply loop.
@@ -66,7 +78,7 @@ impl RpcClient {
         // using `RpcClient::stop()`.
         let task = StoppableTask::new();
         task.clone().start(
-            Self::reqrep_loop(stream, rep_send, req_recv, req_skip_recv),
+            Self::reqrep_loop(use_http, stream, rep_send, req_recv, req_skip_recv),
             |res| async move {
                 match res {
                     Ok(()) | Err(Error::RpcClientStopped) => {}
@@ -89,6 +101,7 @@ impl RpcClient {
 
     /// Internal function that loops on a given stream and multiplexes the data
     async fn reqrep_loop(
+        use_http: bool,
         stream: Box<dyn PtStream>,
         rep_send: channel::Sender<JsonResult>,
         req_recv: channel::Receiver<(JsonRequest, bool)>,
@@ -111,7 +124,11 @@ impl RpcClient {
                     with_timeout = timeout;
 
                     let request = JsonResult::Request(request);
-                    write_to_stream(&mut writer, &request).await?;
+                    if use_http {
+                        http_write_to_stream(&mut writer, &request).await?;
+                    } else {
+                        write_to_stream(&mut writer, &request).await?;
+                    }
                     Ok::<(), crate::Error>(())
                 },
                 async {
@@ -122,9 +139,23 @@ impl RpcClient {
             .await?;
 
             if with_timeout {
-                let _ = io_timeout(READ_TIMEOUT, read_from_stream(&mut reader, &mut buf)).await?;
+                if use_http {
+                    let _ = io_timeout(
+                        READ_TIMEOUT,
+                        http_read_from_stream_response(&mut reader, &mut buf),
+                    )
+                    .await?;
+                } else {
+                    let _ =
+                        io_timeout(READ_TIMEOUT, read_from_stream(&mut reader, &mut buf)).await?;
+                }
             } else {
-                let _ = read_from_stream(&mut reader, &mut buf).await?;
+                #[allow(clippy::collapsible_else_if)]
+                if use_http {
+                    let _ = http_read_from_stream_response(&mut reader, &mut buf).await?;
+                } else {
+                    let _ = read_from_stream(&mut reader, &mut buf).await?;
+                }
             }
 
             let val: JsonValue = String::from_utf8(buf)?.parse()?;
@@ -280,9 +311,18 @@ impl RpcChadClient {
         let (req_send, req_recv) = channel::unbounded();
         let (rep_send, rep_recv) = channel::unbounded();
 
+        // Figure out if we're using HTTP and rewrite the URL accordingly.
+        let mut dialer_url = endpoint.clone();
+        if endpoint.scheme().starts_with("http+") {
+            let scheme = endpoint.scheme().strip_prefix("http+").unwrap();
+            let url_str = endpoint.as_str().replace(endpoint.scheme(), scheme);
+            dialer_url = url_str.parse()?;
+        }
+        let use_http = endpoint.scheme().starts_with("http+");
+
         // Instantiate Dialer and dial the server
         // TODO: Could add a timeout here
-        let dialer = Dialer::new(endpoint, None).await?;
+        let dialer = Dialer::new(dialer_url, None).await?;
         let stream = dialer.dial(None).await?;
 
         // Create the StoppableTask running the request-reply loop.
@@ -290,7 +330,7 @@ impl RpcChadClient {
         // using `RpcChadClient::stop()`.
         let task = StoppableTask::new();
         task.clone().start(
-            Self::reqrep_loop(stream, rep_send, req_recv),
+            Self::reqrep_loop(use_http, stream, rep_send, req_recv),
             |res| async move {
                 match res {
                     Ok(()) | Err(Error::RpcClientStopped) => {}
@@ -313,6 +353,7 @@ impl RpcChadClient {
 
     /// Internal function that loops on a given stream and multiplexes the data
     async fn reqrep_loop(
+        use_http: bool,
         stream: Box<dyn PtStream>,
         rep_send: channel::Sender<JsonResult>,
         req_recv: channel::Receiver<JsonRequest>,
@@ -330,11 +371,19 @@ impl RpcChadClient {
                 async {
                     let request = req_recv.recv().await?;
                     let request = JsonResult::Request(request);
-                    write_to_stream(&mut writer, &request).await?;
+                    if use_http {
+                        http_write_to_stream(&mut writer, &request).await?;
+                    } else {
+                        write_to_stream(&mut writer, &request).await?;
+                    }
                     Ok::<(), crate::Error>(())
                 },
                 async {
-                    let _ = read_from_stream(&mut reader, &mut buf).await?;
+                    if use_http {
+                        let _ = http_read_from_stream_response(&mut reader, &mut buf).await?;
+                    } else {
+                        let _ = read_from_stream(&mut reader, &mut buf).await?;
+                    }
                     let val: JsonValue = String::from_utf8(buf)?.parse()?;
                     let rep = JsonResult::try_from_value(&val)?;
                     rep_send.send(rep).await?;

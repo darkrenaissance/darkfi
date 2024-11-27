@@ -86,6 +86,7 @@ x509-parser = {version = "0.16.0", features = ["validate", "verify"], optional =
 bs58 = {version = "0.5.1", optional = true}
 serde = {version = "1.0.210", features = ["derive"], optional = true}
 tinyjson = {version = "2.5.1", optional = true}
+httparse = {version = "1.9.5", optional = true}
 semver = {version = "1.0.23", optional = true}
 structopt = {version= "0.3.26", optional = true}
 structopt-toml = {version= "0.5.1", optional = true}
@@ -233,6 +234,7 @@ net = [
 
 rpc = [
     "async-trait",
+    "httparse",
 
     "net",
 ]

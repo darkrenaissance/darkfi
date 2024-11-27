@@ -71,8 +71,29 @@ impl RequestHandler for RpcSrv {
     }
 }
 
+/// Initialize the logging mechanism
+fn init_logger() {
+    let mut cfg = simplelog::ConfigBuilder::new();
+
+    // We check this error so we can execute same file tests in parallel,
+    // otherwise second one fails to init logger here.
+    if simplelog::TermLogger::init(
+        //simplelog::LevelFilter::Info,
+        simplelog::LevelFilter::Debug,
+        //simplelog::LevelFilter::Trace,
+        cfg.build(),
+        simplelog::TerminalMode::Mixed,
+        simplelog::ColorChoice::Auto,
+    )
+    .is_err()
+    {
+        log::debug!("Logger initialized");
+    }
+}
+
 #[test]
 fn jsonrpc_reqrep() -> Result<()> {
+    init_logger();
     let executor = Arc::new(Executor::new());
 
     smol::block_on(executor.run(async {
@@ -80,6 +101,56 @@ fn jsonrpc_reqrep() -> Result<()> {
         let listener = TcpListener::bind("127.0.0.1:0").await?;
         let sockaddr = listener.local_addr()?;
         let endpoint = Url::parse(&format!("tcp://127.0.0.1:{}", sockaddr.port()))?;
+        drop(listener);
+
+        let rpcsrv = Arc::new(RpcSrv {
+            stop_sub: smol::channel::unbounded(),
+            rpc_connections: Mutex::new(HashSet::new()),
+        });
+        let rpcsrv_ = Arc::clone(&rpcsrv);
+
+        let rpc_task = StoppableTask::new();
+        rpc_task.clone().start(
+            listen_and_serve(endpoint.clone(), rpcsrv.clone(), None, executor.clone()),
+            |res| async move {
+                match res {
+                    Ok(()) | Err(Error::RpcServerStopped) => rpcsrv_.stop_connections().await,
+                    Err(e) => eprintln!("Failed starting JSON-RPC server: {}", e),
+                }
+            },
+            Error::RpcServerStopped,
+            executor.clone(),
+        );
+
+        msleep(500).await;
+
+        let client = RpcClient::new(endpoint, executor.clone()).await?;
+        let req = JsonRequest::new("ping", vec![].into());
+        let rep = client.request(req).await?;
+
+        let rep = String::try_from(rep).unwrap();
+        assert_eq!(&rep, "pong");
+
+        let req = JsonRequest::new("kill", vec![].into());
+        let rep = client.request(req).await?;
+
+        let rep = String::try_from(rep).unwrap();
+        assert_eq!(&rep, "bye");
+
+        Ok(())
+    }))
+}
+
+#[test]
+fn http_jsonrpc_reqrep() -> Result<()> {
+    init_logger();
+    let executor = Arc::new(Executor::new());
+
+    smol::block_on(executor.run(async {
+        // Find an available port
+        let listener = TcpListener::bind("127.0.0.1:0").await?;
+        let sockaddr = listener.local_addr()?;
+        let endpoint = Url::parse(&format!("http+tcp://127.0.0.1:{}", sockaddr.port()))?;
         drop(listener);
 
         let rpcsrv = Arc::new(RpcSrv {

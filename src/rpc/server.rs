@@ -28,7 +28,10 @@ use tinyjson::JsonValue;
 use url::Url;
 
 use super::{
-    common::{read_from_stream, write_to_stream, INIT_BUF_SIZE},
+    common::{
+        http_read_from_stream_request, http_write_to_stream, read_from_stream, write_to_stream,
+        INIT_BUF_SIZE,
+    },
     jsonrpc::*,
 };
 use crate::{
@@ -80,6 +83,7 @@ async fn handle_request(
     rh: Arc<impl RequestHandler + 'static>,
     ex: Arc<smol::Executor<'_>>,
     tasks: Arc<Mutex<HashSet<Arc<StoppableTask>>>>,
+    use_http: bool,
     req: JsonRequest,
 ) -> Result<()> {
     let rep = rh.handle_request(req).await;
@@ -107,10 +111,20 @@ async fn handle_request(
                         let notification = JsonResult::Notification(notification);
 
                         let mut writer_lock = writer_.lock().await;
-                        if let Err(e) = write_to_stream(&mut writer_lock, &notification).await {
-                            subscription.unsubscribe().await;
-                            return Err(e.into())
+
+                        #[allow(clippy::collapsible_else_if)]
+                        if use_http {
+                            if let Err(e) = http_write_to_stream(&mut writer_lock, &notification).await {
+                                subscription.unsubscribe().await;
+                                return Err(e.into())
+                            }
+                        } else {
+                            if let Err(e) = write_to_stream(&mut writer_lock, &notification).await {
+                                subscription.unsubscribe().await;
+                                return Err(e.into())
+                            }
                         }
+
                         drop(writer_lock);
                     }
                 },
@@ -133,7 +147,11 @@ async fn handle_request(
             // Write the response
             debug!(target: "rpc::server", "{} <-- {}", addr, reply.stringify()?);
             let mut writer_lock = writer.lock().await;
-            write_to_stream(&mut writer_lock, &reply.into()).await?;
+            if use_http {
+                http_write_to_stream(&mut writer_lock, &reply.into()).await?;
+            } else {
+                write_to_stream(&mut writer_lock, &reply.into()).await?;
+            }
             drop(writer_lock);
 
             let task = StoppableTask::new();
@@ -157,10 +175,19 @@ async fn handle_request(
                         let notification = JsonResult::Notification(notification);
 
                         let mut writer_lock = writer_.lock().await;
-                        if let Err(e) = write_to_stream(&mut writer_lock, &notification).await {
-                            subscription.unsubscribe().await;
-                            drop(writer_lock);
-                            return Err(e.into())
+                        #[allow(clippy::collapsible_else_if)]
+                        if use_http {
+                            if let Err(e) = http_write_to_stream(&mut writer_lock, &notification).await {
+                                subscription.unsubscribe().await;
+                                drop(writer_lock);
+                                return Err(e.into())
+                            }
+                        } else {
+                            if let Err(e) = write_to_stream(&mut writer_lock, &notification).await {
+                                subscription.unsubscribe().await;
+                                drop(writer_lock);
+                                return Err(e.into())
+                            }
                         }
                         drop(writer_lock);
                     }
@@ -187,14 +214,22 @@ async fn handle_request(
         JsonResult::Response(ref v) => {
             debug!(target: "rpc::server", "{} <-- {}", addr, v.stringify()?);
             let mut writer_lock = writer.lock().await;
-            write_to_stream(&mut writer_lock, &rep).await?;
+            if use_http {
+                http_write_to_stream(&mut writer_lock, &rep).await?;
+            } else {
+                write_to_stream(&mut writer_lock, &rep).await?;
+            }
             drop(writer_lock);
         }
 
         JsonResult::Error(ref v) => {
             debug!(target: "rpc::server", "{} <-- {}", addr, v.stringify()?);
             let mut writer_lock = writer.lock().await;
-            write_to_stream(&mut writer_lock, &rep).await?;
+            if use_http {
+                http_write_to_stream(&mut writer_lock, &rep).await?;
+            } else {
+                write_to_stream(&mut writer_lock, &rep).await?;
+            }
             drop(writer_lock);
         }
     }
@@ -211,6 +246,7 @@ pub async fn accept(
     addr: Url,
     rh: Arc<impl RequestHandler + 'static>,
     conn_limit: Option<usize>,
+    use_http: bool,
     ex: Arc<smol::Executor<'_>>,
 ) -> Result<()> {
     // If there's a connection limit set, we will refuse connections
@@ -232,7 +268,11 @@ pub async fn accept(
         let mut buf = Vec::with_capacity(INIT_BUF_SIZE);
 
         let mut reader_lock = reader.lock().await;
-        let _ = read_from_stream(&mut reader_lock, &mut buf).await?;
+        if use_http {
+            let _ = http_read_from_stream_request(&mut reader_lock, &mut buf).await?;
+        } else {
+            let _ = read_from_stream(&mut reader_lock, &mut buf).await?;
+        }
         drop(reader_lock);
 
         let line = match String::from_utf8(buf) {
@@ -287,6 +327,7 @@ pub async fn accept(
                 rh.clone(),
                 ex.clone(),
                 tasks.clone(),
+                use_http,
                 req,
             ),
             move |_| async move {
@@ -311,6 +352,7 @@ async fn run_accept_loop(
     listener: Box<dyn PtListener>,
     rh: Arc<impl RequestHandler + 'static>,
     conn_limit: Option<usize>,
+    use_http: bool,
     ex: Arc<smol::Executor<'_>>,
 ) -> Result<()> {
     loop {
@@ -327,7 +369,7 @@ async fn run_accept_loop(
                 let task_ = task.clone();
                 let ex_ = ex.clone();
                 task.clone().start(
-                    accept(reader, writer, url.clone(), rh.clone(), conn_limit, ex_),
+                    accept(reader, writer, url.clone(), rh.clone(), conn_limit, use_http, ex_),
                     |_| async move {
                         info!(target: "rpc::server", "[RPC] Closed conn from {}", url);
                         rh_.clone().unmark_connection(task_.clone()).await;
@@ -374,16 +416,29 @@ async fn run_accept_loop(
     }
 }
 
-/// Start a JSON-RPC server bound to the given accept URL and use the
+/// Start a JSON-RPC server bound to the givven accept URL and use the
 /// given [`RequestHandler`] to handle incoming requests.
+///
+/// The supported network schemes can be prefixed with `http+` to serve
+/// JSON-RPC over HTTP/1.1.
 pub async fn listen_and_serve(
     accept_url: Url,
     rh: Arc<impl RequestHandler + 'static>,
     conn_limit: Option<usize>,
     ex: Arc<smol::Executor<'_>>,
 ) -> Result<()> {
-    let listener = Listener::new(accept_url, None).await?.listen().await?;
-    run_accept_loop(listener, rh, conn_limit, ex.clone()).await
+    // Figure out if we're using HTTP and rewrite the URL accordingly.
+    let mut listen_url = accept_url.clone();
+    if accept_url.scheme().starts_with("http+") {
+        let scheme = accept_url.scheme().strip_prefix("http+").unwrap();
+        let url_str = accept_url.as_str().replace(accept_url.scheme(), scheme);
+        listen_url = url_str.parse()?;
+    }
+
+    let listener = Listener::new(listen_url, None).await?.listen().await?;
+
+    let use_http = accept_url.scheme().starts_with("http+");
+    run_accept_loop(listener, rh, conn_limit, use_http, ex.clone()).await
 }
 
 #[cfg(test)]
