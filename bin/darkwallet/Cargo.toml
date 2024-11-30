@@ -13,7 +13,7 @@ repository = "https://codeberg.org/darkrenaissance/darkfi"
 #path = "bin/drawsim.rs"
 
 [dependencies]
-miniquad = { git = "https://github.com/narodnik/miniquad" }
+miniquad = { git = "https://github.com/not-fl3/miniquad" }
 
 # Currently latest version links to freetype-sys 0.19 but we use 0.21
 #harfbuzz-sys = "0.6.1"
@@ -89,3 +89,4 @@ assets = "assets"
 name = "android.permission.INTERNET"
 [[package.metadata.android.permission]]
 name = "android.permission.ACCESS_NETWORK_STATE"
+

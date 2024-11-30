@@ -47,7 +47,7 @@ ENV NDK_HOME /usr/local/android-ndk-r25
 WORKDIR /root/
 RUN git clone https://github.com/not-fl3/cargo-quad-apk cargo-apk
 # For deterministic builds, we want a deterministic toolchain
-RUN cd /root/cargo-apk && git checkout c9c5dfeac69921c888e0fac7963b23068cbc9446
+RUN cd /root/cargo-apk && git checkout 8962f6888e748e201f6ac2ced411669a3f939e07
 
 # ArmV7a
 #ENV CC ${NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi31-clang

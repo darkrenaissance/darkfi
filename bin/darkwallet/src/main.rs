@@ -47,6 +47,8 @@ extern crate log;
 #[allow(unused_imports)]
 use log::LevelFilter;
 
+#[cfg(target_os = "android")]
+mod android;
 mod app;
 mod build_info;
 mod darkirc;
@@ -81,18 +83,6 @@ fn panic_hook(panic_info: &std::panic::PanicInfo) {
     //error!("panic: {}", std::backtrace::Backtrace::force_capture().to_string());
     std::process::exit(1);
 }
-
-/*
-async fn whomain() {
-    use std::sync::Mutex as SyncMutex;
-    let file_data = Arc::new(SyncMutex::new(None));
-    android_fileopen::find_file(file_data.clone());
-
-    //if let Some(ref file_data) = &*file_data.lock().unwrap() {
-    //    info!("content byte length: {}", file_data.len());
-    //}
-}
-*/
 
 fn main() {
     // Exit the application on panic right away
@@ -155,6 +145,7 @@ fn main() {
     });
     async_runtime.push_task(app_task);
 
+    /*
     let app2 = app.clone();
     let sg_root = app.sg_root.clone();
     let ex2 = ex.clone();
@@ -167,6 +158,7 @@ fn main() {
         }
     });
     async_runtime.push_task(darkirc_task);
+    */
 
     /*
     // Nice to see which events exist
