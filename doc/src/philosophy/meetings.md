@@ -21,7 +21,7 @@ Meeting schedule:
 | [Ganienkeh Manifesto][10]                                                                                           | 30th of October, 2024   | [Mohawk Nation][11]                |
 | Rescheduled                                                                                                         | 13th of November, 2024  |                                    |
 | [A New Nationalism for the New Ireland][12]/[Complimentary Reading - Solutions to the Northern Ireland Problem][13] | 27th of November, 2024  | Desmond Fennell                    |
-| Open for submissions                                                                                                | 11th of December, 2024  |                                    |
+| [Two Cheers for Anarchism][14] - Chapter 2, starting at 'Fragment 7', all of Chapter 4			      | 11th of December, 2024  | James C. Scott                     |
 | Open for submissions                                                                                                | 25th of December, 2024  |                                    |
 | Open for submissions                                                                                                | 8th of January, 2025    |                                    |
 
@@ -40,3 +40,4 @@ Feel free to propose a text for a future meeting by sharing it in #philosophy.
 [11]: https://en.wikipedia.org/wiki/Ganienkeh
 [12]: https://xeno.tools/uploads/fennell-new-nationalism.pdf
 [13]: https://sci-hub.se/https://doi.org/10.2307/25513014
+[14]: https://libgen.is/book/index.php?md5=8CCB39685697A9F94D9256078BC757AE
