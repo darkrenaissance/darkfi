@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::vec::Vec;
+
 use log::error;
 use tinyjson::JsonValue;
 
@@ -46,7 +48,7 @@ impl Explorerd {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
-        // Fetch base statistics and return results
+        // Fetch `BaseStatistics`, transform to `JsonResult`, and return results
         match self.db.get_base_statistics() {
             Ok(Some(statistics)) => JsonResponse::new(statistics.to_json_array(), id).into(),
             Ok(None) => JsonResponse::new(JsonValue::Array(vec![]), id).into(),
@@ -58,5 +60,72 @@ impl Explorerd {
                 JsonError::new(InternalError, None, id).into()
             }
         }
+    }
+
+    // RPCAPI:
+    // Queries the database to retrieve all metrics statistics.
+    // Returns a collection of metric statistics upon success.
+    //
+    // **Params:**
+    // * `None`
+    //
+    // **Returns:**
+    // * `MetricsStatistics` array encoded into a JSON.
+    //
+    // --> {"jsonrpc": "2.0", "method": "statistics.get_metric_statistics", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": {...}, "id": 1}
+    pub async fn statistics_get_metric_statistics(&self, id: u16, params: JsonValue) -> JsonResult {
+        // Validate to ensure parameters are empty
+        let params = params.get::<Vec<JsonValue>>().unwrap();
+        if !params.is_empty() {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+        // Fetch metric statistics and return results
+        let metrics = match self.db.get_metrics_statistics().await {
+            Ok(v) => v,
+            Err(e) => {
+                error!(target: "blockchain-explorer::rpc_statistics::statistics_get_metric_statistics", "Failed fetching metric statistics: {}", e);
+                return JsonError::new(InternalError, None, id).into()
+            }
+        };
+
+        // Transform statistics to JsonResponse and return result
+        let metrics_json: Vec<JsonValue> = metrics.iter().map(|m| m.to_json_array()).collect();
+        JsonResponse::new(JsonValue::Array(metrics_json), id).into()
+    }
+
+    // RPCAPI:
+    // Queries the database to retrieve latest metric statistics.
+    // Returns the readable metric statistics upon success.
+    //
+    // **Params:**
+    // * `None`
+    //
+    // **Returns:**
+    // * `MetricsStatistics` encoded into a JSON.
+    //
+    // --> {"jsonrpc": "2.0", "method": "statistics.get_latest_metric_statistics", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": {...}, "id": 1}
+    pub async fn statistics_get_latest_metric_statistics(
+        &self,
+        id: u16,
+        params: JsonValue,
+    ) -> JsonResult {
+        // Validate to ensure parameters are empty
+        let params = params.get::<Vec<JsonValue>>().unwrap();
+        if !params.is_empty() {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+        // Fetch metric statistics and return results
+        let metrics = match self.db.get_latest_metrics_statistics().await {
+            Ok(v) => v,
+            Err(e) => {
+                error!(target: "blockchain-explorer::rpc_statistics::statistics_get_latest_metric_statistics", "Failed fetching metric statistics: {}", e);
+                return JsonError::new(InternalError, None, id).into()
+            }
+        };
+
+        // Transform statistics to JsonResponse and return result
+        JsonResponse::new(metrics.to_json_array(), id).into()
     }
 }

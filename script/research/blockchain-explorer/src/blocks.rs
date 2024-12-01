@@ -24,6 +24,7 @@ use darkfi::{
         BlockInfo, BlockchainOverlay, HeaderHash, SLED_BLOCK_DIFFICULTY_TREE,
         SLED_BLOCK_ORDER_TREE, SLED_BLOCK_TREE,
     },
+    util::time::Timestamp,
     Error, Result,
 };
 use darkfi_sdk::crypto::schnorr::Signature;
@@ -42,7 +43,7 @@ pub struct BlockRecord {
     /// Block height
     pub height: u32,
     /// Block creation timestamp
-    pub timestamp: u64,
+    pub timestamp: Timestamp,
     /// The block's nonce. This value changes arbitrarily with mining.
     pub nonce: u64,
     /// Merkle tree root of the transactions hashes contained in this block
@@ -59,7 +60,7 @@ impl BlockRecord {
             JsonValue::Number(self.version as f64),
             JsonValue::String(self.previous.clone()),
             JsonValue::Number(self.height as f64),
-            JsonValue::Number(self.timestamp as f64),
+            JsonValue::String(self.timestamp.to_string()),
             JsonValue::Number(self.nonce as f64),
             JsonValue::String(self.root.clone()),
             JsonValue::String(format!("{:?}", self.signature)),
@@ -74,7 +75,7 @@ impl From<&BlockInfo> for BlockRecord {
             version: block.header.version,
             previous: block.header.previous.to_string(),
             height: block.header.height,
-            timestamp: block.header.timestamp.inner(),
+            timestamp: block.header.timestamp,
             nonce: block.header.nonce,
             root: block.header.root.to_string(),
             signature: block.signature,
@@ -100,13 +101,42 @@ impl ExplorerDb {
         Ok(())
     }
 
-    /// Adds a block to the block explorer database.
+    /// Adds the provided [`BlockInfo`] to the block explorer database.
+    ///
+    /// This function processes each transaction in the block, calculating and updating the
+    /// latest [`GasMetrics`] for non-genesis blocks and for transactions that are not
+    /// PoW rewards. After processing all transactions, the block is permanently persisted to
+    /// the explorer database.
     pub async fn put_block(&self, block: &BlockInfo) -> Result<()> {
         let blockchain_overlay = BlockchainOverlay::new(&self.blockchain)?;
-        // Add the synced block and commit the changes
+
+        // Initialize collections to hold gas data and transactions that have gas data
+        let mut tx_gas_data = Vec::with_capacity(block.txs.len());
+        let mut txs_hashes_with_gas_data = Vec::with_capacity(block.txs.len());
+
+        // Calculate gas data for non-PoW reward transactions and non-genesis blocks
+        for (i, tx) in block.txs.iter().enumerate() {
+            if !tx.is_pow_reward() && block.header.height != 0 {
+                tx_gas_data.insert(i, self.calculate_tx_gas_data(tx, false).await?);
+                txs_hashes_with_gas_data.insert(i, tx.hash());
+            }
+        }
+
+        // If the block contains transaction gas data, insert the gas metrics into the metrics store
+        if !tx_gas_data.is_empty() {
+            self.metrics_store.insert_gas_metrics(
+                block.header.height,
+                &block.header.timestamp,
+                &txs_hashes_with_gas_data,
+                &tx_gas_data,
+            )?;
+        }
+
+        // Add the block and commit the changes to persist it
         let _ = blockchain_overlay.lock().unwrap().add_block(block)?;
         blockchain_overlay.lock().unwrap().overlay.lock().unwrap().apply()?;
-        debug!(target:"blockchain_explorer::blocks::put_block", "Added block {:?}", block);
+        debug!(target: "blockchain_explorer::blocks::put_block", "Added block {:?}", block);
+
         Ok(())
     }
 

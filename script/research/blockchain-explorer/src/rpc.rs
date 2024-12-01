@@ -74,6 +74,9 @@ impl RequestHandler<()> for Explorerd {
             "statistics.get_basic_statistics" => {
                 self.statistics_get_basic_statistics(req.id, req.params).await
             }
+            "statistics.get_metric_statistics" => {
+                self.statistics_get_metric_statistics(req.id, req.params).await
+            }
 
             // TODO: add any other useful methods
 
