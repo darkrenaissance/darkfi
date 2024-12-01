@@ -21,13 +21,14 @@ use std::sync::{LazyLock, Mutex as SyncMutex};
 
 struct GlobalData {
     inp_conn: ndk_sys::jobject,
+    sender: Option<async_channel::Sender<AndroidSuggestEvent>>,
 }
 
 unsafe impl Send for GlobalData {}
 unsafe impl Sync for GlobalData {}
 
 static GLOBALS: LazyLock<SyncMutex<GlobalData>> =
-    LazyLock::new(|| SyncMutex::new(GlobalData { inp_conn: std::ptr::null_mut() }));
+    LazyLock::new(|| SyncMutex::new(GlobalData { inp_conn: std::ptr::null_mut(), sender: None }));
 
 #[no_mangle]
 pub unsafe extern "C" fn Java_autosuggest_CustomInputConnection_setup() {
@@ -40,6 +41,11 @@ pub unsafe extern "C" fn Java_autosuggest_CustomInputConnection_setup() {
     GLOBALS.lock().unwrap().inp_conn = inp_conn;
 }
 
+pub enum AndroidSuggestEvent {
+    CommitText(String),
+    EditText(String),
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn Java_autosuggest_CustomInputConnection_onCommitText(
     env: *mut ndk_sys::JNIEnv,
@@ -48,6 +54,9 @@ pub unsafe extern "C" fn Java_autosuggest_CustomInputConnection_onCommitText(
 ) {
     let text = ndk_utils::get_utf_str!(env, text);
     debug!(target: "android", "onCommitText: {text}");
+    if let Some(sender) = &GLOBALS.lock().unwrap().sender {
+        let _ = sender.try_send(AndroidSuggestEvent::CommitText(text.to_string()));
+    }
 }
 
 #[no_mangle]
@@ -58,4 +67,11 @@ pub unsafe extern "C" fn Java_autosuggest_CustomInputConnection_onEndEdit(
 ) {
     let text = ndk_utils::get_utf_str!(env, text);
     debug!(target: "android", "onEditText: {text}");
+    if let Some(sender) = &GLOBALS.lock().unwrap().sender {
+        let _ = sender.try_send(AndroidSuggestEvent::EditText(text.to_string()));
+    }
+}
+
+pub fn set_sender(sender: async_channel::Sender<AndroidSuggestEvent>) {
+    GLOBALS.lock().unwrap().sender = Some(sender);
 }

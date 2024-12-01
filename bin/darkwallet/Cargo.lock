@@ -1170,6 +1170,7 @@ dependencies = [
  "futures-rustls",
  "halo2_gadgets",
  "halo2_proofs",
+ "httparse",
  "libc",
  "log",
  "num-bigint",

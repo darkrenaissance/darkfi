@@ -81,6 +81,14 @@ pub trait UIObject: Sync {
     async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
         false
     }
+
+    // Android Autosuggest
+    async fn handle_edit_text(&self, text: &str) -> bool {
+        false
+    }
+    async fn handle_commit_text(&self, text: &str) -> bool {
+        false
+    }
 }
 
 pub struct DrawUpdate {

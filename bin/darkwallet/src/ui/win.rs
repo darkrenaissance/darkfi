@@ -144,7 +144,31 @@ impl Window {
                 mouse_wheel_task,
                 touch_task,
             ];
+
             tasks.append(&mut on_modify.tasks);
+
+            #[cfg(target_os = "android")]
+            {
+                let (sender, recvr) = async_channel::unbounded();
+                crate::android::set_sender(sender);
+                let me2 = me.clone();
+                let autosuggest_task = ex.spawn(async move {
+                    loop {
+                        let Ok(ev) = recvr.recv().await else {
+                            debug!(target: "ui::win", "Event relayer closed");
+                            break
+                        };
+
+                        let Some(self_) = me2.upgrade() else {
+                            // Should not happen
+                            panic!("self destroyed before modify_task was stopped!");
+                        };
+
+                        self_.handle_autosuggest(ev).await;
+                    }
+                });
+                tasks.push(autosuggest_task);
+            }
 
             Self { node, tasks, screen_size, scale, render_api }
         });
@@ -367,6 +391,21 @@ impl Window {
         for child in self.get_children() {
             let obj = get_ui_object3(&child);
             if obj.handle_touch(phase, id, touch_pos).await {
+                return
+            }
+        }
+    }
+
+    #[cfg(target_os = "android")]
+    async fn handle_autosuggest(&self, ev: crate::android::AndroidSuggestEvent) {
+        use crate::android::AndroidSuggestEvent::*;
+        for child in self.get_children() {
+            let obj = get_ui_object3(&child);
+            let is_handled = match &ev {
+                EditText(text) => obj.handle_edit_text(&text).await,
+                CommitText(text) => obj.handle_commit_text(&text).await,
+            };
+            if is_handled {
                 return
             }
         }
