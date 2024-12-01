@@ -33,7 +33,7 @@ OPTIONS:
 
 On first execution, daemon will create default config file ~/.config/darkfi/fud_config.toml.
 Configuration must be verified and application should be configured accordingly.
-Additionaly, default content folder will be created at ~/.config/darkfi/fud.
+Additionally, default content folder will be created at ~/.config/darkfi/fud.
 
 Run fud as follows:
 
@@ -45,7 +45,7 @@ Run fud as follows:
 13:23:04 [INFO] Initializing fud dht state for folder: "/home/x/.config/darkfi/fud"
 13:23:04 [INFO] Not configured for accepting incoming connections.
 13:23:04 [INFO] JSON-RPC listener bound to tcp://127.0.0.1:13337
-13:23:04 [INFO] Entry: seedd_config.toml
+13:23:04 [INFO] Entry: seed_config.toml
 13:23:04 [INFO] Starting 8 outbound connection slots.
 13:23:04 [INFO] Entry: lt.py
 13:23:07 [INFO] Caught termination signal, cleaning up and exiting...
@@ -83,7 +83,7 @@ Execution examples:
 ```
 % fu list
 13:25:14 [INFO] ----------Content-------------
-13:25:14 [INFO] 	seedd_config.toml
+13:25:14 [INFO] 	seed_config.toml
 13:25:14 [INFO] 	lt.py
 13:25:14 [INFO] ------------------------------
 13:25:14 [INFO] ----------New files-----------
