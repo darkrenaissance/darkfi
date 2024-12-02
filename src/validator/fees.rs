@@ -98,10 +98,8 @@ pub fn circuit_gas_use(zkbin: &ZkBinary) -> u64 {
 ///
 /// This data is used for accounting of fees, providing details relating to
 /// resource consumption across different transactions.
-#[derive(Default, Clone, Eq, PartialEq, Debug, SerialEncodable, SerialDecodable)]
+#[derive(Default, Clone, Eq, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct GasData {
-    /// Transaction paid fee
-    pub paid: u64,
     /// Wasm calls gas consumption
     pub wasm: u64,
     /// ZK circuits gas consumption
@@ -110,11 +108,27 @@ pub struct GasData {
     pub signatures: u64,
     /// Contract deployment gas
     pub deployments: u64,
+    /// Transaction paid fee
+    pub paid: u64,
 }
 
 impl GasData {
     /// Calculates the total gas used by summing all individual gas usage fields.
     pub fn total_gas_used(&self) -> u64 {
         self.wasm + self.zk_circuits + self.signatures + self.deployments
+    }
+}
+
+/// Implements custom debug trait to include [`GasData::total_gas_used`].
+impl std::fmt::Debug for GasData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GasData")
+            .field("total", &self.total_gas_used())
+            .field("wasm", &self.wasm)
+            .field("zk_circuits", &self.zk_circuits)
+            .field("signatures", &self.signatures)
+            .field("deployments", &self.deployments)
+            .field("paid", &self.paid)
+            .finish()
     }
 }
