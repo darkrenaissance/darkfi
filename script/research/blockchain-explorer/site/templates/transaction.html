@@ -28,9 +28,19 @@
 
     <div class="row m-0 border-secondary border-top">
         <div class="text-white mb-0 border-bottom border-secondary lead-text" style="width:100%;">
+            <h2 class="display-8 text-white border-l3" style="font-family:'Weissrundgotisch';line-height:.9em;">Summary</h2>
             <ul>
+                <li>Timestamp: {{ transaction[3] }}</li>
                 <li>Block: <a href="../block/{{ transaction[1] }}">{{ transaction[1] }}</a></li>
                 <li>Payload: {{ transaction[2] }}</li>
+            </ul>
+            <h2 class="display-8 text-white border-l3" style="font-family:'Weissrundgotisch';line-height:.9em;">Gas Consumption</h2>
+            <ul>
+                <li>Total: {{ transaction[4] }}</li>
+                <li>WASM: {{ transaction[5] }}</li>
+                <li>ZK Circuits: {{ transaction[6] }}</li>
+                <li>Signatures: {{ transaction[7] }}</li>
+                <li>Deployments: {{ transaction[8] }}</li>
             </ul>
         </div>
     </div>

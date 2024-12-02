@@ -15,18 +15,34 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import asyncio
-from flask import Flask, request, render_template
-
 import rpc
+from flask import Flask, request, render_template
 
 app = Flask(__name__)
 
 @app.route('/')
 async def index():
+    # Fetch data from RPC
     blocks = await rpc.get_last_n_blocks("10")
-    stats = await rpc.get_basic_statistics()
-    return render_template('index.html', blocks=blocks, stats=stats)
+    basic_stats = await rpc.get_basic_statistics()
+
+    # Fetch the metric statistics
+    metric_stats = await rpc.get_metric_statistics()
+    has_metrics = metric_stats and isinstance(metric_stats, list)
+
+    # Get the latest metric statistics, or use None if no metrics are found
+    if has_metrics:
+        latest_metric_stats = metric_stats[-1]
+    else:
+        latest_metric_stats = None
+
+    # Render template
+    return render_template(
+        'index.html',
+        blocks=blocks,
+        basic_stats=basic_stats,
+        metric_stats=latest_metric_stats,
+    )
 
 @app.route('/search', methods=['GET', 'POST'])
 async def search():
@@ -45,6 +61,7 @@ async def block(header_hash):
     transactions = await rpc.get_block_transactions(header_hash)
     return render_template('block.html', block=block, transactions=transactions)
 
+
 @app.route('/transaction/<transaction_hash>')
 async def transaction(transaction_hash):
     transaction = await rpc.get_transaction(transaction_hash)
@@ -57,3 +74,4 @@ def page_not_found(e):
 @app.errorhandler(500)
 def page_not_found(e):
     return render_template('500.html'), 500
+

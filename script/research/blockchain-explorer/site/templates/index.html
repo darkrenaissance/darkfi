@@ -53,16 +53,56 @@
 
     <div class="row m-0 border-secondary border-top">
         <div class="text-white mb-0 border-bottom border-secondary lead-text" style="width:100%;">
-            <h2 class="display-8 text-white border-l3" style="font-family:'Weissrundgotisch';line-height:.9em;">Statistics</h2>
+            <h2 class="display-8 text-white border-l3" style="font-family:'Weissrundgotisch';line-height:.9em;">Basic Statistics</h2>
             <ul>
-                <li>Height: {{ stats[0] }}</li>
-                <li>Epoch: {{ stats[1] }}</li>
-                <li>Last block: <a href="block/{{ stats[2] }}">{{ stats[2] }}</a></li>
-                <li>Total blocks: {{ stats[3] }}</li>
-                <li>Total transactions: {{ stats[4] }}</li>
+                <li>Height: {{ basic_stats[0] }}</li>
+                <li>Epoch: {{ basic_stats[1] }}</li>
+                <li>Last block: <a href="block/{{ basic_stats[2] }}">{{ basic_stats[2] }}</a></li>
+                <li>Total blocks: {{ basic_stats[3] }}</li>
+                <li>Total transactions: {{ basic_stats[4] }}</li>
             </ul>
         </div>
     </div>
+
+<div class="row m-0 border-secondary border-top">
+    <div class="text-white mb-0 border-bottom border-secondary lead-text" style="width:100%;">
+        <h2 class="display-8 text-white border-l3" style="font-family:'Weissrundgotisch';line-height:.9em;">Total Network Gas Consumption Statistics</h2>
+
+        <strong>Total Gas</strong>
+        <ul>
+            <li>Average: {{ metric_stats[0] }}</li>
+            <li>Minimum: {{ metric_stats[1] }}</li>
+            <li>Maximum: {{ metric_stats[2] }}</li>
+        </ul>
+
+        <strong>WASM Gas</strong>
+        <ul>
+            <li>Average: {{ metric_stats[3] }}</li>
+            <li>Minimum: {{ metric_stats[4] }}</li>
+            <li>Maximum: {{ metric_stats[5] }}</li>
+        </ul>
+
+        <strong>ZK Circuits Gas</strong>
+        <ul>
+            <li>Average: {{ metric_stats[6] }}</li>
+            <li>Minimum: {{ metric_stats[7] }}</li>
+            <li>Maximum: {{ metric_stats[8] }}</li>
+        </ul>
+
+        <strong>Signatures Gas</strong>
+        <ul>
+            <li>Average: {{ metric_stats[9] }}</li>
+            <li>Minimum: {{ metric_stats[10] }}</li>
+            <li>Maximum: {{ metric_stats[11] }}</li>
+        </ul>
+
+        <strong>Deployments Gas</strong>
+        <ul>
+            <li>Average: {{ metric_stats[12] }}</li>
+            <li>Minimum: {{ metric_stats[13] }}</li>
+            <li>Maximum: {{ metric_stats[14] }}</li>
+        </ul>
+</div>
     
 {% endblock %}
 

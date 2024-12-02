@@ -94,6 +94,10 @@ async def get_last_n_blocks(n: str):
 async def get_basic_statistics():
     return await query("statistics.get_basic_statistics", [])
 
+# Retrieve fee data statistics from blockchain-explorer daemon
+async def get_metric_statistics():
+    return await query("statistics.get_metric_statistics", [])
+
 # Retrieve the block information of given header hash from blockchain-explorer daemon
 async def get_block(header_hash: str):
     return await query("blocks.get_block_by_hash", [header_hash])
