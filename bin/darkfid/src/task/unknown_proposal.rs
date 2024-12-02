@@ -471,21 +471,21 @@ async fn handle_reorg(
     *forks = vec![peer_fork];
     drop(forks);
 
-    // Check if we can finalize anything and broadcast them
-    let finalized = match validator.finalization().await {
+    // Check if we can confirm anything and broadcast them
+    let confirmed = match validator.confirmation().await {
         Ok(f) => f,
         Err(e) => {
-            error!(target: "darkfid::task::handle_reorg", "Finalization failed: {e}");
+            error!(target: "darkfid::task::handle_reorg", "Confirmation failed: {e}");
             return Ok(())
         }
     };
 
-    if finalized.is_empty() {
+    if confirmed.is_empty() {
         return Ok(())
     }
 
-    let mut notif_blocks = Vec::with_capacity(finalized.len());
-    for block in finalized {
+    let mut notif_blocks = Vec::with_capacity(confirmed.len());
+    for block in confirmed {
         notif_blocks.push(JsonValue::String(base64::encode(&serialize_async(&block).await)));
     }
     subscriber.notify(JsonValue::Array(notif_blocks)).await;

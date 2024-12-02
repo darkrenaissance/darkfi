@@ -17,7 +17,7 @@ rpc_listen = "tcp://127.0.0.1:48340"
 # Path to the blockchain database directory
 database = "darkfid1"
 
-# Finalization threshold, denominated by number of blocks
+# Confirmation threshold, denominated by number of blocks
 threshold = 6
 
 # minerd JSON-RPC endpoint

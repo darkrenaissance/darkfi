@@ -45,7 +45,7 @@ use crate::{
 
 impl Drk {
     /// Subscribes to darkfid's JSON-RPC notification endpoint that serves
-    /// new finalized blocks. Upon receiving them, all the transactions are
+    /// new confirmed blocks. Upon receiving them, all the transactions are
     /// scanned and we check if any of them call the money contract, and if
     /// the payments are intended for us. If so, we decrypt them and append
     /// the metadata to our wallet. If a reorg block is received, we revert
@@ -57,11 +57,11 @@ impl Drk {
         endpoint: Url,
         ex: Arc<smol::Executor<'static>>,
     ) -> Result<()> {
-        // Grab last finalized block height
-        let (last_finalized_height, _) = self.get_last_finalized_block().await?;
+        // Grab last confirmed block height
+        let (last_confirmed_height, _) = self.get_last_confirmed_block().await?;
 
         // Handle genesis(0) block
-        if last_finalized_height == 0 {
+        if last_confirmed_height == 0 {
             if let Err(e) = self.scan_blocks().await {
                 return Err(Error::DatabaseError(format!(
                     "[subscribe_blocks] Scanning from genesis block failed: {e:?}"
@@ -69,8 +69,8 @@ impl Drk {
             }
         }
 
-        // Grab last finalized block again
-        let (last_finalized_height, last_finalized_hash) = self.get_last_finalized_block().await?;
+        // Grab last confirmed block again
+        let (last_confirmed_height, last_confirmed_hash) = self.get_last_confirmed_block().await?;
 
         // Grab last scanned block
         let (mut last_scanned_height, last_scanned_hash) = match self.get_last_scanned_block() {
@@ -83,9 +83,9 @@ impl Drk {
         };
 
         // Check if other blocks have been created
-        if last_finalized_height != last_scanned_height || last_finalized_hash != last_scanned_hash
+        if last_confirmed_height != last_scanned_height || last_confirmed_hash != last_scanned_hash
         {
-            eprintln!("Warning: Last scanned block is not the last finalized block.");
+            eprintln!("Warning: Last scanned block is not the last confirmed block.");
             eprintln!("You should first fully scan the blockchain, and then subscribe");
             return Err(Error::DatabaseError(
                 "[subscribe_blocks] Blockchain not fully scanned".to_string(),
@@ -256,7 +256,7 @@ impl Drk {
         }
 
         // Update wallet transactions records
-        if let Err(e) = self.put_tx_history_records(&wallet_txs, "Finalized").await {
+        if let Err(e) = self.put_tx_history_records(&wallet_txs, "Confirmed").await {
             return Err(Error::DatabaseError(format!(
                 "[scan_block] Inserting transaction history records failed: {e:?}"
             )))
@@ -328,18 +328,18 @@ impl Drk {
         }
 
         loop {
-            // Grab last finalized block
+            // Grab last confirmed block
             println!("Requested to scan from block number: {height}");
-            let (last_height, last_hash) = match self.get_last_finalized_block().await {
+            let (last_height, last_hash) = match self.get_last_confirmed_block().await {
                 Ok(last) => last,
                 Err(e) => {
                     eprintln!("[scan_blocks] RPC client request failed: {e:?}");
                     return Err(WalletDbError::GenericError)
                 }
             };
-            println!("Last finalized block reported by darkfid: {last_height} - {last_hash}");
+            println!("Last confirmed block reported by darkfid: {last_height} - {last_hash}");
 
-            // Already scanned last finalized block
+            // Already scanned last confirmed block
             if height > last_height {
                 return Ok(())
             }
@@ -363,10 +363,10 @@ impl Drk {
         }
     }
 
-    // Queries darkfid for last finalized block.
-    async fn get_last_finalized_block(&self) -> Result<(u32, String)> {
+    // Queries darkfid for last confirmed block.
+    async fn get_last_confirmed_block(&self) -> Result<(u32, String)> {
         let rep = self
-            .darkfid_daemon_request("blockchain.last_finalized_block", &JsonValue::Array(vec![]))
+            .darkfid_daemon_request("blockchain.last_confirmed_block", &JsonValue::Array(vec![]))
             .await?;
         let params = rep.get::<Vec<JsonValue>>().unwrap();
         let height = *params[0].get::<f64>().unwrap() as u32;

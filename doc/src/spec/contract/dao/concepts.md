@@ -21,7 +21,7 @@ Once proposals are posted on chain, they are immediately active.
 * *Active*: the proposal is open to voting.
 * *Expired*: the proposal passed its duration and can no longer be voted on.
 * *Accepted*: the proposal gained sufficient votes but is not yet executed.
-* *Executed*: the proposal was accepted and has been finalized on chain.
+* *Executed*: the proposal was accepted and has been confirmed on chain.
 
 ## Vote
 

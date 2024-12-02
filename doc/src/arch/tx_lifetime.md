@@ -15,10 +15,10 @@ that transactions reach `M`.
 To avoid spam attacks, `S` should keep $tx$ in their mempool for some
 period of time, and then prune it.
 
-## Ideal simulation with instant finality
+## Ideal simulation with instant confirmation
 
 The lifetime of a transaction $tx$ that passes verification and whose
-state transition can be applied on top of the finalized (canonical)
+state transition can be applied on top of the canonical (confirmed)
 chain:
 
 1. User creates a transaction $tx$
@@ -29,18 +29,18 @@ chain:
 6. `M` validates $tx$ state transition
 7. $tx$ enters `M` `mempool`
 8. `M` validates all transactions in its `mempool` in sequence
-9. `M` proposes a block finalization containing $tx$
+9. `M` proposes a block confirmation containing $tx$
 10. `M` writes the state transition update of $tx$ to their chain
 11. `M` removes $tx$ from their `mempool`
-12. `M` broadcasts the finalized proposal
+12. `M` broadcasts the confirmed proposal
 13. `S` receives the proposal and validates transactions
 14. `S` writes the state updates to their chain
 15. `S` removes $tx$ from their `mempool`
 
-## Real-world simulation with non-instant finality
+## Real-world simulation with non-instant confirmation
 
 The lifetime of a transaction $tx$ that passes verification and whose
-state transition is pending to be applied on top of the finalized (canonical)
+state transition is pending to be applied on top of the canonical (confirmed)
 chain:
 
 1. User creates a transaction $tx$
@@ -52,19 +52,19 @@ chain:
 7. $tx$ enters `M` `mempool`
 8. `M` proposes a block proposal containing $tx$
 9. `M` proposes more block proposals
-10. When proposals can be finalized, `M` validates all their transactions
+10. When proposals can be confirmed, `M` validates all their transactions
 in sequence
 11. `M` writes the state transition update of $tx$ to their chain
 12. `M` removes $tx$ from their `mempool`
-13. `M` broadcasts the finalized proposals sequence
+13. `M` broadcasts the confirmed proposals sequence
 14. `S` receives the proposals sequence and validates transactions
 15. `S` writes the state updates to their chain
 16. `S` removes $tx$ from their `mempool`
 
-## Real-world simulation with non-instant finality, forks and multiple `CP` nodes
+## Real-world simulation with non-instant confirmation, forks and multiple `CP` nodes
 
 The lifetime of a transaction $tx$ that passes verifications and whose
-state transition is pending to be applied on top of the finalized (canonical)
+state transition is pending to be applied on top of the canonical (confirmed)
 chain:
 
 1. User creates a transaction $tx$
@@ -82,22 +82,22 @@ against extended fork state, discarding invalid
 12. `M` receives block proposal and validates its transactions against
 the extended fork state
 13. `SM` proposes more block proposals extending a fork state
-14. When a fork can be finalized, `M` validates all its proposals
+14. When a fork can be confirmed, `M` validates all its proposals
 transactions in sequence, against canonical state
 15. `M` writes the state transition update of $tx$ to their chain
 16. `M` removes $tx$ from their `mempool`
-17. `M` drop rest forks and keeps only the finalized one
-18. `M` broadcasts the finalized proposals sequence
+17. `M` drop rest forks and keeps only the confirmed one
+18. `M` broadcasts the confirmed proposals sequence
 19. `S` receives the proposals sequence and validates transactions
 20. `S` writes the state updates to their chain
 21. `S` removes $tx$ from their `mempool`
 
 `M` will keep $tx$ in its `mempool` as long as it is a valid state transition
-for any fork(including canonical) or it get finalized.
+for any fork(including canonical) or it get confirmed.
 
 Unproposed transactions refers to all $tx$ not included in a proposal of any fork.
 
-If a fork that can be finalized fails to validate all its transactions(14), it should be dropped.
+If a fork that can be confirmed fails to validate all its transactions(14), it should be dropped.
 
 ## The `Transaction` object
 

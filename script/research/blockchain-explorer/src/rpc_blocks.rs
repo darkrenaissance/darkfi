@@ -79,13 +79,13 @@ impl Explorerd {
         };
 
         loop {
-            // Grab last finalized block
-            let (last_height, last_hash) = self.get_last_finalized_block().await?;
+            // Grab last confirmed block
+            let (last_height, last_hash) = self.get_last_confirmed_block().await?;
 
             info!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "Requested to sync from block number: {height}");
-            info!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "Last finalized block number reported by darkfid: {last_height} - {last_hash}");
+            info!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "Last confirmed block number reported by darkfid: {last_height} - {last_hash}");
 
-            // Already synced last finalized block
+            // Already synced last confirmed block
             if height > last_height {
                 return Ok(())
             }
@@ -248,10 +248,10 @@ impl Explorerd {
         }
     }
 
-    // Queries darkfid for last finalized block.
-    async fn get_last_finalized_block(&self) -> Result<(u32, String)> {
+    // Queries darkfid for last confirmed block.
+    async fn get_last_confirmed_block(&self) -> Result<(u32, String)> {
         let rep = self
-            .darkfid_daemon_request("blockchain.last_finalized_block", &JsonValue::Array(vec![]))
+            .darkfid_daemon_request("blockchain.last_confirmed_block", &JsonValue::Array(vec![]))
             .await?;
         let params = rep.get::<Vec<JsonValue>>().unwrap();
         let height = *params[0].get::<f64>().unwrap() as u32;
@@ -262,14 +262,14 @@ impl Explorerd {
 }
 
 /// Subscribes to darkfid's JSON-RPC notification endpoint that serves
-/// new finalized blocks. Upon receiving them, store them to the database.
+/// new confirmed blocks. Upon receiving them, store them to the database.
 pub async fn subscribe_blocks(
     explorer: Arc<Explorerd>,
     endpoint: Url,
     ex: Arc<smol::Executor<'static>>,
 ) -> Result<(StoppableTaskPtr, StoppableTaskPtr)> {
-    // Grab last finalized block
-    let (last_finalized, _) = explorer.get_last_finalized_block().await?;
+    // Grab last confirmed block
+    let (last_confirmed, _) = explorer.get_last_confirmed_block().await?;
 
     // Grab last synced block
     let last_synced = match explorer.db.last_block() {
@@ -282,8 +282,8 @@ pub async fn subscribe_blocks(
         }
     };
 
-    if last_finalized != last_synced {
-        warn!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "Warning: Last synced block is not the last finalized block.");
+    if last_confirmed != last_synced {
+        warn!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "Warning: Last synced block is not the last confirmed block.");
         warn!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "You should first fully sync the blockchain, and then subscribe");
         return Err(Error::DatabaseError(
             "[subscribe_blocks] Blockchain not fully synced".to_string(),

@@ -36,7 +36,7 @@ async fn sync_forks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     let config = HarnessConfig {
         pow_target,
         pow_fixed_difficulty: pow_fixed_difficulty.clone(),
-        finalization_threshold: 6,
+        confirmation_threshold: 6,
         alice_url: "tcp+tls://127.0.0.1:18440".to_string(),
         bob_url: "tcp+tls://127.0.0.1:18441".to_string(),
     };

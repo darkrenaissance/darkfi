@@ -204,24 +204,24 @@ async fn consensus_task(
     loop {
         subscription.receive().await;
 
-        // Check if we can finalize anything and broadcast them
-        let finalized = match node.validator.finalization().await {
+        // Check if we can confirm anything and broadcast them
+        let confirmed = match node.validator.confirmation().await {
             Ok(f) => f,
             Err(e) => {
                 error!(
                     target: "darkfid::task::consensus_task",
-                    "Finalization failed: {e}"
+                    "Confirmation failed: {e}"
                 );
                 continue
             }
         };
 
-        if finalized.is_empty() {
+        if confirmed.is_empty() {
             continue
         }
 
-        let mut notif_blocks = Vec::with_capacity(finalized.len());
-        for block in finalized {
+        let mut notif_blocks = Vec::with_capacity(confirmed.len());
+        for block in confirmed {
             notif_blocks.push(JsonValue::String(base64::encode(&serialize_async(&block).await)));
         }
         block_sub.notify(JsonValue::Array(notif_blocks)).await;

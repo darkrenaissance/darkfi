@@ -13,13 +13,13 @@ blockchain achieve consensus.
 | Unproposed Transaction | Transaction that exists in the memory pool but has not yet been included in a proposal |
 | Block proposal         | Block that has not yet been appended onto the canonical blockchain                     |
 | P2P network            | Peer-to-peer network on which nodes communicate with each other                        |
-| Finalization           | State achieved when a block and its contents are appended to the canonical blockchain  |
+| Confirmation           | State achieved when a block and its contents are appended to the canonical blockchain  |
 | Fork                   | Chain of block proposals that begins with the last block of the canonical blockchain   |
 | MAX_INT                | The maximum 32 bytes (256 bits) integer 2^256 − 1                                      |
 
 ## Miner main loop
 
-DarkFi uses RandomX Proof of Work algorithm with enforced finality.
+DarkFi uses RandomX Proof of Work algorithm.
 Therefore, block production involves the following steps:
 
 * First, a miner grabs its current best ranking fork and extends it with a
@@ -31,8 +31,8 @@ Therefore, block production involves the following steps:
   algorithm](https://github.com/tevador/RandomX).
 
 * Once the miner finds such a nonce, it broadcasts its block proposal to the
-  P2P network. Finally the miner triggers a finalization check to see if its
-  newly extended fork can be finalized.
+  P2P network. Finally the miner triggers a confirmation check to see if its
+  newly extended fork can be confirmed.
 
 Pseudocode:
 ```
@@ -47,7 +47,7 @@ loop {
 
     fork.append_proposal(block)
 
-    chain_finalization()
+    chain_confirmation()
 }
 ```
 
@@ -56,7 +56,7 @@ loop {
 Each node listens for new block proposals on the P2P network. Upon receiving
 block proposals, nodes try to extend the proposals onto a fork held in memory
 (this process is described in the next section). Then nodes trigger a
-finalization check to see if their newly extended fork can be finalized.
+confirmation check to see if their newly extended fork can be confirmed.
 
 Upon receiving a new block proposal, miners also check if the extended fork
 rank is better than the one they are currently trying to extend. If the fork
@@ -108,13 +108,13 @@ Upon receiving a block, one of the following cases may occur:
 | Block extends a known fork at its end         | Append block to fork                                                |
 | Block extends a known fork not at its end     | Create a new fork up to the extended block and append the new block |
 | Block extends canonical blockchain at its end | Create a new fork containing the new block                          |
-| Block doesn't extend any known chain          | Ignore block                                                        |
+| Block doesn't extend any known chain          | Check if a reorg should be executed                                 |
 
 ### Visual Examples
 
 | Symbol        | Description                            |
 |---------------|----------------------------------------|
-| [C]           | Canonical (finalized) blockchain block |
+| [C]           | Canonical (confirmed) blockchain block |
 | [C]--...--[C] | Sequence of canonical blocks           |
 | [Mn]          | Proposal produced by Miner n           |
 | Fn            | Fork name to identify them in examples |
@@ -159,8 +159,22 @@ Extending the canonical blockchain with a new block proposal:
                    |
                    |+--[M4]      <-- F3
 
+##### Case 4
 
-## Finalization
+Reorg happened and we rebuild the chain:
+
+                              |--[M0]--[M2] <-- F0
+    [C]--...--[C]/--...--[C]--|
+               |              |--[M1]       <-- F1
+               |              |
+               |              |--[M0]--[M3] <-- F2
+               |              |
+               |              |--[M4]       <-- F3
+               |
+               ...--...--[C]--|+--[M5]      <-- F4
+
+
+## Confirmation
 
 Based on the rank properties, each node will diverge to the highest ranking
 fork, and new fork will emerge extending that at its tips.
@@ -168,17 +182,17 @@ A security threshold is set, which refers to the height where the probability
 to produce a fork, able to reorg the current best ranking fork reaches zero,
 similar to the # of block confirmation used by other PoW based protocols.
 
-When the finalization check kicks in, each node will grab its best fork.
-If the fork's length exceeds the security threshold, the node will push (finalize)
+When the confirmation check kicks in, each node will grab its best fork.
+If the fork's length exceeds the security threshold, the node will push (confirm)
 its first proposal to the canonical blockchain. The fork acts as a queue (buffer)
-for the to-be-finalized proposals.
+for the to-be-confirmed proposals.
 
-Once a finalization occurs, all the fork chains not starting with the finalized
+Once a confirmation occurs, all the fork chains not starting with the confirmed
 block(s) are removed from the node's memory pool.
 
 We continue Case 3 from the previous section to visualize this logic.
 
-The finalization threshold used in this example is 3 blocks. A node observes 2
+The confirmation threshold used in this example is 3 blocks. A node observes 2
 proposals. One extends the F0 fork and the other extends the F2 fork:
 
                    |--[M0]--[M2]+--[M5] <-- F0
@@ -200,7 +214,7 @@ Later, the node only observes 1 proposal, extending the F2 fork:
                    |
                    |--[M4]                    <-- F3
 
-When the finalization sync period starts, the node finalizes block M0 and
+When the confirmation sync period starts, the node confirms block M0 and
 keeps the forks that extend that:
 
                    |--[M0]--[M2]--[M5]       <-- F0
@@ -275,7 +289,7 @@ the tx in Bitcoin with the most outputs has 2501.
 
 | Field       | Type              | Description                            |
 |-------------|-------------------|----------------------------------------|
-| `canonical` | `Blockchain`      | Canonical (finalized) blockchain       |
+| `canonical` | `Blockchain`      | Canonical (confirmed) blockchain       |
 | `forks`     | `Vec<Blockchain>` | Fork chains containing block proposals |
 
 # Appendix: Ranking Blocks

@@ -65,7 +65,7 @@ $ ./drk broadcast < swap_tx
 ```
 
 On success, you should see a transaction ID. This transaction will now
-also be in the mempool, so you should wait again until it's finalized.
+also be in the mempool, so you should wait again until it's confirmed.
 
 ![pablo-waiting2](pablo2.jpg)
 
@@ -77,4 +77,4 @@ $ ./drk wallet --balance
 
 If you see your counterparty's tokens, that means the swap was
 successful.  In case you still see your old tokens, that could mean
-that the swap transaction has not yet been finalized.
+that the swap transaction has not yet been confirmed.

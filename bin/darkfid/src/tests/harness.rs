@@ -50,7 +50,7 @@ use crate::{
 pub struct HarnessConfig {
     pub pow_target: u32,
     pub pow_fixed_difficulty: Option<BigUint>,
-    pub finalization_threshold: usize,
+    pub confirmation_threshold: usize,
     pub alice_url: String,
     pub bob_url: String,
 }
@@ -82,7 +82,7 @@ impl Harness {
         // NOTE: we are not using consensus constants here so we
         // don't get circular dependencies.
         let validator_config = ValidatorConfig {
-            finalization_threshold: config.finalization_threshold,
+            confirmation_threshold: config.confirmation_threshold,
             pow_target: config.pow_target,
             pow_fixed_difficulty: config.pow_fixed_difficulty.clone(),
             genesis_block,
@@ -158,10 +158,10 @@ impl Harness {
         }
 
         // Sleep a bit so blocks can be propagated and then
-        // trigger finalization check to Alice and Bob
+        // trigger confirmation check to Alice and Bob
         sleep(10).await;
-        self.alice.validator.finalization().await?;
-        self.bob.validator.finalization().await?;
+        self.alice.validator.confirmation().await?;
+        self.bob.validator.confirmation().await?;
 
         Ok(())
     }

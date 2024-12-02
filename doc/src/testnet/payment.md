@@ -17,7 +17,7 @@ to the network:
 $ ./drk broadcast < payment_tx
 ```
 
-On success we'll see a transaction ID. Now again the same finalization
+On success we'll see a transaction ID. Now again the same confirmation
 process has to occur and `8sRwB7AwBTKEkyTW6oMyRoJWZhJwtqGTf7nyHwuJ74pj`
 will receive the tokens you've sent.
 

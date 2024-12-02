@@ -61,8 +61,8 @@ use utils::{best_fork_index, block_rank, deploy_native_contracts};
 /// Configuration for initializing [`Validator`]
 #[derive(Clone)]
 pub struct ValidatorConfig {
-    /// Currently configured finalization security threshold
-    pub finalization_threshold: usize,
+    /// Currently configured confirmation security threshold
+    pub confirmation_threshold: usize,
     /// Currently configured PoW target
     pub pow_target: u32,
     /// Optional fixed difficulty, for testing purposes
@@ -78,7 +78,7 @@ pub type ValidatorPtr = Arc<Validator>;
 
 /// This struct represents a DarkFi validator node.
 pub struct Validator {
-    /// Canonical (finalized) blockchain
+    /// Canonical (confirmed) blockchain
     pub blockchain: Blockchain,
     /// Hot/Live data used by the consensus algorithm
     pub consensus: Consensus,
@@ -113,7 +113,7 @@ impl Validator {
         info!(target: "validator::new", "Initializing Consensus");
         let consensus = Consensus::new(
             blockchain.clone(),
-            config.finalization_threshold,
+            config.confirmation_threshold,
             config.pow_target,
             config.pow_fixed_difficulty.clone(),
         )?;
@@ -332,63 +332,63 @@ impl Validator {
         result
     }
 
-    /// The node checks if best fork can be finalized.
-    /// If proposals can be finalized, node appends them to canonical,
+    /// The node checks if best fork can be confirmed.
+    /// If proposals can be confirmed, node appends them to canonical,
     /// and resets the current forks.
-    pub async fn finalization(&self) -> Result<Vec<BlockInfo>> {
+    pub async fn confirmation(&self) -> Result<Vec<BlockInfo>> {
         // Grab append lock so no new proposals can be appended while
-        // we execute finalization
+        // we execute confirmation
         let append_lock = self.consensus.append_lock.write().await;
 
-        info!(target: "validator::finalization", "Performing finalization check");
+        info!(target: "validator::confirmation", "Performing confirmation check");
 
-        // Grab best fork index that can be finalized
-        let finalized_fork = match self.consensus.finalization().await {
+        // Grab best fork index that can be confirmed
+        let confirmed_fork = match self.consensus.confirmation().await {
             Ok(f) => f,
             Err(e) => {
                 drop(append_lock);
                 return Err(e)
             }
         };
-        if finalized_fork.is_none() {
-            info!(target: "validator::finalization", "No proposals can be finalized");
+        if confirmed_fork.is_none() {
+            info!(target: "validator::confirmation", "No proposals can be confirmed");
             drop(append_lock);
             return Ok(vec![])
         }
 
         // Grab the actual best fork
-        let finalized_fork = finalized_fork.unwrap();
+        let confirmed_fork = confirmed_fork.unwrap();
         let mut forks = self.consensus.forks.write().await;
-        let fork = &mut forks[finalized_fork];
+        let fork = &mut forks[confirmed_fork];
 
-        // Find the excess over finalization threshold
-        let excess = (fork.proposals.len() - self.consensus.finalization_threshold) + 1;
+        // Find the excess over confirmation threshold
+        let excess = (fork.proposals.len() - self.consensus.confirmation_threshold) + 1;
 
-        // Grab finalized proposals and update fork's sequences
+        // Grab confirmed proposals and update fork's sequences
         let rest_proposals = fork.proposals.split_off(excess);
         let rest_diffs = fork.diffs.split_off(excess);
-        let finalized_proposals = fork.proposals.clone();
+        let confirmed_proposals = fork.proposals.clone();
         let diffs = fork.diffs.clone();
         fork.proposals = rest_proposals;
         fork.diffs = rest_diffs;
 
-        // Grab finalized proposals blocks
-        let finalized_blocks =
-            fork.overlay.lock().unwrap().get_blocks_by_hash(&finalized_proposals)?;
+        // Grab confirmed proposals blocks
+        let confirmed_blocks =
+            fork.overlay.lock().unwrap().get_blocks_by_hash(&confirmed_proposals)?;
 
-        // Apply finalized proposals diffs and update PoW module
+        // Apply confirmed proposals diffs and update PoW module
         let mut module = self.consensus.module.write().await;
-        let mut finalized_txs = vec![];
+        let mut confirmed_txs = vec![];
         let mut state_diffs_heights = vec![];
         let mut state_diffs = vec![];
-        info!(target: "validator::finalization", "Finalizing proposals:");
-        for (index, proposal) in finalized_proposals.iter().enumerate() {
-            info!(target: "validator::finalization", "\t{} - {}", proposal, finalized_blocks[index].header.height);
+        info!(target: "validator::confirmation", "Confirming proposals:");
+        for (index, proposal) in confirmed_proposals.iter().enumerate() {
+            info!(target: "validator::confirmation", "\t{} - {}", proposal, confirmed_blocks[index].header.height);
             fork.overlay.lock().unwrap().overlay.lock().unwrap().apply_diff(&diffs[index])?;
             let next_difficulty = module.next_difficulty()?;
-            module.append(finalized_blocks[index].header.timestamp, &next_difficulty);
-            finalized_txs.extend_from_slice(&finalized_blocks[index].txs);
-            state_diffs_heights.push(finalized_blocks[index].header.height);
+            module.append(confirmed_blocks[index].header.timestamp, &next_difficulty);
+            confirmed_txs.extend_from_slice(&confirmed_blocks[index].txs);
+            state_diffs_heights.push(confirmed_blocks[index].header.height);
             state_diffs.push(diffs[index].clone());
         }
         drop(module);
@@ -397,14 +397,14 @@ impl Validator {
         // Store the block diffs
         self.blockchain.blocks.insert_state_diff(&state_diffs_heights, &state_diffs)?;
 
-        // Reset forks starting with the finalized blocks
-        self.consensus.reset_forks(&finalized_proposals, &finalized_fork, &finalized_txs).await?;
-        info!(target: "validator::finalization", "Finalization completed!");
+        // Reset forks starting with the confirmed blocks
+        self.consensus.reset_forks(&confirmed_proposals, &confirmed_fork, &confirmed_txs).await?;
+        info!(target: "validator::confirmation", "Confirmation completed!");
 
         // Release append lock
         drop(append_lock);
 
-        Ok(finalized_blocks)
+        Ok(confirmed_blocks)
     }
 
     /// Apply provided set of [`BlockInfo`] without doing formal verification.

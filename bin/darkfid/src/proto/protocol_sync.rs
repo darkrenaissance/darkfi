@@ -41,11 +41,11 @@ use darkfi_serial::{SerialDecodable, SerialEncodable};
 pub const BATCH: usize = 20;
 
 /// Structure represening a request to ask a node for their current
-/// canonical(finalized) tip block hash, if they are synced. We also
+/// canonical(confirmed) tip block hash, if they are synced. We also
 /// include our own tip, so they can verify we follow the same sequence.
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct TipRequest {
-    /// Canonical(finalized) tip block hash
+    /// Canonical(confirmed) tip block hash
     pub tip: HeaderHash,
 }
 
@@ -53,14 +53,14 @@ impl_p2p_message!(TipRequest, "tiprequest");
 
 /// Structure representing the response to `TipRequest`,
 /// containing a boolean flag to indicate if we are synced,
-/// and our canonical(finalized) tip block height and hash.
+/// and our canonical(confirmed) tip block height and hash.
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct TipResponse {
     /// Flag indicating the node is synced
     pub synced: bool,
-    /// Canonical(finalized) tip block height
+    /// Canonical(confirmed) tip block height
     pub height: Option<u32>,
-    /// Canonical(finalized) tip block hash
+    /// Canonical(confirmed) tip block hash
     pub hash: Option<HeaderHash>,
 }
 
@@ -109,11 +109,11 @@ impl_p2p_message!(SyncResponse, "syncresponse");
 /// Structure represening a request to ask a node a fork sequence.
 /// If we include a specific fork tip, they have to return its sequence,
 /// otherwise they respond with their best fork sequence.
-/// We also include our own canonical(finalized) tip, so they can verify
+/// We also include our own canonical(confirmed) tip, so they can verify
 /// we follow the same sequence.
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct ForkSyncRequest {
-    /// Canonical(finalized) tip block hash
+    /// Canonical(confirmed) tip block hash
     pub tip: HeaderHash,
     /// Optional fork tip block hash
     pub fork_tip: Option<HeaderHash>,

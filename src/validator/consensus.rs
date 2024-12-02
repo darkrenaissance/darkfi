@@ -52,10 +52,10 @@ pub const GAS_LIMIT_UNPROPOSED_TXS: u64 = GAS_TX_AVG * GAS_LIMIT_MULTIPLIER_UNPR
 
 /// This struct represents the information required by the consensus algorithm
 pub struct Consensus {
-    /// Canonical (finalized) blockchain
+    /// Canonical (confirmed) blockchain
     pub blockchain: Blockchain,
-    /// Fork size(length) after which it can be finalized
-    pub finalization_threshold: usize,
+    /// Fork size(length) after which it can be confirmed
+    pub confirmation_threshold: usize,
     /// Fork chains containing block proposals
     pub forks: RwLock<Vec<Fork>>,
     /// Canonical blockchain PoW module state
@@ -68,7 +68,7 @@ impl Consensus {
     /// Generate a new Consensus state.
     pub fn new(
         blockchain: Blockchain,
-        finalization_threshold: usize,
+        confirmation_threshold: usize,
         pow_target: u32,
         pow_fixed_difficulty: Option<BigUint>,
     ) -> Result<Self> {
@@ -80,7 +80,7 @@ impl Consensus {
             None,
         )?);
         let append_lock = RwLock::new(());
-        Ok(Self { blockchain, finalization_threshold, forks, module, append_lock })
+        Ok(Self { blockchain, confirmation_threshold, forks, module, append_lock })
     }
 
     /// Generate a new empty fork.
@@ -236,16 +236,16 @@ impl Consensus {
         Ok((fork, None))
     }
 
-    /// Check if best fork proposals can be finalized.
-    /// Consensus finalization logic:
+    /// Check if best fork proposals can be confirmed.
+    /// Consensus confirmation logic:
     /// - If the current best fork has reached greater length than the security threshold,
     ///   and no other fork exist with same rank, first proposal(s) in that fork can be
-    ///   appended to canonical blockchain (finalize).
+    ///   appended to canonical blockchain (confirme).
     ///
-    /// When best fork can be finalized, first block(s) should be appended to canonical,
+    /// When best fork can be confirmed, first block(s) should be appended to canonical,
     /// and forks should be rebuilt.
-    pub async fn finalization(&self) -> Result<Option<usize>> {
-        debug!(target: "validator::consensus::finalization", "Started finalization check");
+    pub async fn confirmation(&self) -> Result<Option<usize>> {
+        debug!(target: "validator::consensus::confirmation", "Started confirmation check");
 
         // Grab best fork
         let forks = self.forks.read().await;
@@ -254,8 +254,8 @@ impl Consensus {
 
         // Check its length
         let length = fork.proposals.len();
-        if length < self.finalization_threshold {
-            debug!(target: "validator::consensus::finalization", "Nothing to finalize yet, best fork size: {}", length);
+        if length < self.confirmation_threshold {
+            debug!(target: "validator::consensus::confirmation", "Nothing to confirme yet, best fork size: {}", length);
             drop(forks);
             return Ok(None)
         }
@@ -466,22 +466,22 @@ impl Consensus {
     }
 
     /// Auxiliary function to purge current forks and reset the ones starting
-    /// with the provided prefix, excluding provided finalized fork.
-    /// Additionally, remove finalized transactions from the forks mempools,
+    /// with the provided prefix, excluding provided confirmed fork.
+    /// Additionally, remove confirmed transactions from the forks mempools,
     /// along with the unporposed transactions sled trees.
     /// This function assumes that the prefix blocks have already been appended
-    /// to canonical chain from the finalized fork.
+    /// to canonical chain from the confirmed fork.
     pub async fn reset_forks(
         &self,
         prefix: &[HeaderHash],
-        finalized_fork_index: &usize,
-        finalized_txs: &[Transaction],
+        confirmed_fork_index: &usize,
+        confirmed_txs: &[Transaction],
     ) -> Result<()> {
         // Grab a lock over current forks
         let mut forks = self.forks.write().await;
 
         // Find all the forks that start with the provided prefix,
-        // excluding finalized fork index, and remove their prefixed
+        // excluding confirmed fork index, and remove their prefixed
         // proposals, and their corresponding diffs.
         // If the fork is not starting with the provided prefix,
         // drop it. Additionally, keep track of all the referenced
@@ -492,10 +492,10 @@ impl Consensus {
         let mut keep = vec![true; forks.len()];
         let mut referenced_trees = HashSet::new();
         let mut referenced_txs = HashSet::new();
-        let finalized_txs_hashes: Vec<TransactionHash> =
-            finalized_txs.iter().map(|tx| tx.hash()).collect();
+        let confirmed_txs_hashes: Vec<TransactionHash> =
+            confirmed_txs.iter().map(|tx| tx.hash()).collect();
         for (index, fork) in forks.iter_mut().enumerate() {
-            if &index == finalized_fork_index {
+            if &index == confirmed_fork_index {
                 // Store its tree references
                 let fork_overlay = fork.overlay.lock().unwrap();
                 let overlay = fork_overlay.overlay.lock().unwrap();
@@ -508,8 +508,8 @@ impl Consensus {
                 for tree in overlay.state.dropped_trees.keys() {
                     referenced_trees.insert(tree.clone());
                 }
-                // Remove finalized proposals txs from fork's mempool
-                fork.mempool.retain(|tx| !finalized_txs_hashes.contains(tx));
+                // Remove confirmed proposals txs from fork's mempool
+                fork.mempool.retain(|tx| !confirmed_txs_hashes.contains(tx));
                 // Store its txs references
                 for tx in &fork.mempool {
                     referenced_txs.insert(*tx);
@@ -527,8 +527,8 @@ impl Consensus {
                 continue
             }
 
-            // Remove finalized proposals txs from fork's mempool
-            fork.mempool.retain(|tx| !finalized_txs_hashes.contains(tx));
+            // Remove confirmed proposals txs from fork's mempool
+            fork.mempool.retain(|tx| !confirmed_txs_hashes.contains(tx));
             // Store its txs references
             for tx in &fork.mempool {
                 referenced_txs.insert(*tx);
@@ -602,8 +602,8 @@ impl Consensus {
         let mut iter = keep.iter();
         forks.retain(|_| *iter.next().unwrap());
 
-        // Remove finalized proposals txs from the unporposed txs sled tree
-        self.blockchain.remove_pending_txs_hashes(&finalized_txs_hashes)?;
+        // Remove confirmed proposals txs from the unporposed txs sled tree
+        self.blockchain.remove_pending_txs_hashes(&confirmed_txs_hashes)?;
 
         // Remove unreferenced txs from the unporposed txs sled tree
         self.blockchain.remove_pending_txs_hashes(&Vec::from_iter(dropped_txs))?;
@@ -669,7 +669,7 @@ impl From<Proposal> for BlockInfo {
 /// in order of receival, and the proposals hashes sequence, for validations.
 #[derive(Clone)]
 pub struct Fork {
-    /// Canonical (finalized) blockchain
+    /// Canonical (confirmed) blockchain
     pub blockchain: Blockchain,
     /// Overlay cache over canonical Blockchain
     pub overlay: BlockchainOverlayPtr,

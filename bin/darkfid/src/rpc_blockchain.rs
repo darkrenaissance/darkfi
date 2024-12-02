@@ -117,18 +117,18 @@ impl DarkfiNode {
     }
 
     // RPCAPI:
-    // Queries the blockchain database to find the last finalized block.
+    // Queries the blockchain database to find the last confirmed block.
     //
     // **Params:**
     // * `None`
     //
     // **Returns:**
-    // * `f64`   : Height of the last finalized block
-    // * `String`: Header hash of the last finalized block
+    // * `f64`   : Height of the last confirmed block
+    // * `String`: Header hash of the last confirmed block
     //
-    // --> {"jsonrpc": "2.0", "method": "blockchain.last_finalized_block", "params": [], "id": 1}
+    // --> {"jsonrpc": "2.0", "method": "blockchain.last_confirmed_block", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": [1234, "HeaderHash"], "id": 1}
-    pub async fn blockchain_last_finalized_block(&self, id: u16, params: JsonValue) -> JsonResult {
+    pub async fn blockchain_last_confirmed_block(&self, id: u16, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if !params.is_empty() {
             return JsonError::new(InvalidParams, None, id).into()

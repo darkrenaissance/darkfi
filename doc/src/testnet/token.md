@@ -3,14 +3,14 @@
 Now that you have your wallet set up, you will need some native `DRK`
 tokens in order to be able to perform transactions, since that token
 is used to pay the transaction fees. You can obtain `DRK` either by
-successfully mining a block that gets finalized or by asking for some
+successfully mining a block that gets confirmed or by asking for some
 by the community on `darkirc` and/or your comrades. Don't forget to
 tell them to add the `--half-split` flag when they create the transfer
 transaction, so you get more than one coins to play with.
 
 After you request some `DRK` and the other party submitted a transaction
 to the network, it should be in the consensus' mempool, waiting for
-inclusion in the next block(s). Depending on the network, finalization
+inclusion in the next block(s). Depending on the network, confirmation
 of the blocks could take some time. You'll have to wait for this to happen.
 If your `drk subscribe` is running, then after some time your new balance
 should be in your wallet.
@@ -89,5 +89,5 @@ $ ./drk broadcast < mint_tx
 
 Now the transaction should be published to the network. If you have
 an active block subscription (which you can do with `drk subscribe`),
-then when the transaction is finalized, your wallet should have your
+then when the transaction is confirmed, your wallet should have your
 new tokens listed when you request to see the balance.

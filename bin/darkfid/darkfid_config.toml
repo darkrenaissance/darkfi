@@ -17,7 +17,7 @@ rpc_listen = "tcp://127.0.0.1:8240"
 # Path to the blockchain database directory
 database = "~/.local/darkfi/darkfid/localnet"
 
-# Finalization threshold, denominated by number of blocks
+# Confirmation threshold, denominated by number of blocks
 threshold = 3
 
 # minerd JSON-RPC endpoint
@@ -123,7 +123,7 @@ rpc_listen = "tcp://127.0.0.1:8340"
 # Path to the blockchain database directory
 database = "~/.local/darkfi/darkfid/testnet"
 
-# Finalization threshold, denominated by number of blocks
+# Confirmation threshold, denominated by number of blocks
 threshold = 6
 
 # minerd JSON-RPC endpoint
@@ -228,7 +228,7 @@ rpc_listen = "tcp://127.0.0.1:8440"
 # Path to the blockchain database directory
 database = "~/.local/darkfi/darkfid/mainnet"
 
-# Finalization threshold, denominated by number of blocks
+# Confirmation threshold, denominated by number of blocks
 threshold = 11
 
 # minerd JSON-RPC endpoint

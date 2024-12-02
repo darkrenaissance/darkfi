@@ -55,15 +55,15 @@ pub struct MinerRewardsRecipientConfig {
 
 /// Async task used for participating in the PoW block production.
 ///
-/// Miner initializes their setup and waits for next finalization,
+/// Miner initializes their setup and waits for next confirmation,
 /// by listenning for new proposals from the network, for optimal
-/// conditions. After finalization occurs, they start the actual
+/// conditions. After confirmation occurs, they start the actual
 /// miner loop, where they first grab the best ranking fork to extend,
 /// and start mining procedure for its next block. Additionally, they
 /// listen to the network for new proposals, and check if these
 /// proposals produce a new best ranking fork. If they do, the stop
 /// mining. These two tasks run in parallel, and after one of them
-/// finishes, node triggers finallization check.
+/// finishes, node triggers confirmation check.
 pub async fn miner_task(
     node: &DarkfiNodePtr,
     recipient_config: &MinerRewardsRecipientConfig,
@@ -97,21 +97,21 @@ pub async fn miner_task(
     let proposals_sub = node.subscribers.get("proposals").unwrap();
     let subscription = proposals_sub.publisher.clone().subscribe().await;
 
-    // Listen for blocks until next finalization, for optimal conditions
+    // Listen for blocks until next confirmation, for optimal conditions
     if !skip_sync {
-        info!(target: "darkfid::task::miner_task", "Waiting for next finalization...");
+        info!(target: "darkfid::task::miner_task", "Waiting for next confirmation...");
         loop {
             subscription.receive().await;
 
-            // Check if we can finalize anything and broadcast them
-            let finalized = node.validator.finalization().await?;
+            // Check if we can confirmation anything and broadcast them
+            let confirmed = node.validator.confirmation().await?;
 
-            if finalized.is_empty() {
+            if confirmed.is_empty() {
                 continue
             }
 
-            let mut notif_blocks = Vec::with_capacity(finalized.len());
-            for block in finalized {
+            let mut notif_blocks = Vec::with_capacity(confirmed.len());
+            for block in confirmed {
                 notif_blocks
                     .push(JsonValue::String(base64::encode(&serialize_async(&block).await)));
             }
@@ -191,24 +191,24 @@ pub async fn miner_task(
             }
         }
 
-        // Check if we can finalize anything and broadcast them
-        let finalized = match node.validator.finalization().await {
+        // Check if we can confirm anything and broadcast them
+        let confirmed = match node.validator.confirmation().await {
             Ok(f) => f,
             Err(e) => {
                 error!(
                     target: "darkfid::task::miner_task",
-                    "Finalization failed: {e}"
+                    "Confirmation failed: {e}"
                 );
                 continue
             }
         };
 
-        if finalized.is_empty() {
+        if confirmed.is_empty() {
             continue
         }
 
-        let mut notif_blocks = Vec::with_capacity(finalized.len());
-        for block in finalized {
+        let mut notif_blocks = Vec::with_capacity(confirmed.len());
+        for block in confirmed {
             notif_blocks.push(JsonValue::String(base64::encode(&serialize_async(&block).await)));
         }
         block_sub.notify(JsonValue::Array(notif_blocks)).await;

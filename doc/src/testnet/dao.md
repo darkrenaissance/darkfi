@@ -47,7 +47,7 @@ $ ./drk broadcast < dao_mldy_mint_tx
 ```
 
 Now the transaction is broadcasted to the network. Wait for it to
-finalize, and if your `drk` is subscribed, after finalization you
+confirm, and if your `drk` is subscribed, after confirmation you
 should see a leaf position and a transaction hash when running
 `dao list MiladyMakerDAO`.
 
@@ -66,7 +66,7 @@ $ ./drk transfer 10 WCKD {DAO_PUBLIC_KEY} \
 $ ./drk broadcast < dao_mldy_transfer_tx
 ```
 
-Wait for it to finalize, and if subscribed, you should see the DAO
+Wait for it to confirm, and if subscribed, you should see the DAO
 receive the funds:
 
 ```
@@ -109,7 +109,7 @@ $ ./drk broadcast < dao_mldy_transfer_proposal_mint_tx
 Members that didn't receive the encrypted file will receive the
 proposal when they scan the corresponding block, but its plaintext
 data will be missing, so they should ask the DAO for it.
-Once finalized and scanned, you should see a leaf position and a
+Once confirmed and scanned, you should see a leaf position and a
 transaction hash when running `dao proposal {PROPOSAL_BULLA}`.
 
 ## Voting on a proposal
@@ -141,14 +141,14 @@ $ ./drk dao vote {PROPOSAL_BULLA} 1 > dao_mldy_transfer_proposal_vote_tx
 $ ./drk broadcast < dao_mldy_transfer_proposal_vote_tx
 ```
 
-Once finalized and scanned, you should see votes information and
+Once confirmed and scanned, you should see votes information and
 current status when running `dao proposal {PROPOSAL_BULLA}`.
 
 ## Executing the proposal
 
 Once enough votes have been cast that meet the required minimum (quorum)
 and assuming the yes:no votes ratio is bigger than the approval ratio,
-then we are ready to finalize the vote. Any DAO member can perform this
+then we are ready to confirm the vote. Any DAO member can perform this
 action.
 
 Since in our tutorial the `MLDY` governance tokens we used surpass the
@@ -182,7 +182,7 @@ $ ./drk token mint MLDY 20 {DAO_PUBLIC_KEY} \
 $ ./drk broadcast < mint_dao_mldy_tx
 ```
 
-After finalization we will see the dao holding its own
+After confirmation we will see the dao holding its own
 governance tokens in its treasury:
 
 ```

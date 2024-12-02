@@ -87,7 +87,7 @@ pub struct BlockchainNetwork {
     database: String,
 
     #[structopt(long, default_value = "3")]
-    /// Finalization threshold, denominated by number of blocks
+    /// Confirmation threshold, denominated by number of blocks
     threshold: usize,
 
     #[structopt(long)]
@@ -187,7 +187,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     };
 
     let config = ValidatorConfig {
-        finalization_threshold: blockchain_config.threshold,
+        confirmation_threshold: blockchain_config.threshold,
         pow_target: blockchain_config.pow_target,
         pow_fixed_difficulty,
         genesis_block,

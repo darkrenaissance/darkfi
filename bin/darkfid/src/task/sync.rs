@@ -114,12 +114,12 @@ pub async fn sync_task(node: &DarkfiNodePtr, checkpoint: Option<(u32, HeaderHash
     // Sync best fork
     sync_best_fork(node, &common_tip_peers, &last.1).await;
 
-    // Perform finalization
-    let finalized = node.validator.finalization().await?;
-    if !finalized.is_empty() {
+    // Perform confirmation
+    let confirmed = node.validator.confirmation().await?;
+    if !confirmed.is_empty() {
         // Notify subscriber
-        let mut notif_blocks = Vec::with_capacity(finalized.len());
-        for block in finalized {
+        let mut notif_blocks = Vec::with_capacity(confirmed.len());
+        for block in confirmed {
             notif_blocks.push(JsonValue::String(base64::encode(&serialize_async(&block).await)));
         }
         block_sub.notify(JsonValue::Array(notif_blocks)).await;
@@ -462,12 +462,12 @@ async fn retrieve_blocks(
                 }
                 block_sub.notify(JsonValue::Array(notif_blocks)).await;
             } else {
-                // Perform finalization for received blocks
-                let finalized = node.validator.finalization().await?;
-                if !finalized.is_empty() {
+                // Perform confirmation for received blocks
+                let confirmed = node.validator.confirmation().await?;
+                if !confirmed.is_empty() {
                     // Notify subscriber
-                    let mut notif_blocks = Vec::with_capacity(finalized.len());
-                    for block in finalized {
+                    let mut notif_blocks = Vec::with_capacity(confirmed.len());
+                    for block in confirmed {
                         notif_blocks.push(JsonValue::String(base64::encode(
                             &serialize_async(&block).await,
                         )));

@@ -58,7 +58,7 @@ async fn simulate_unproposed_txs(
     let config = HarnessConfig {
         pow_target,
         pow_fixed_difficulty: pow_fixed_difficulty.clone(),
-        finalization_threshold: 6,
+        confirmation_threshold: 6,
         alice_url,
         bob_url,
     };

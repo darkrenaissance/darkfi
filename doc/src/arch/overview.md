@@ -5,10 +5,10 @@ applications. It is currently under development. This overview will
 outline a few key terms that help explain DarkFi.
 
 **Blockchain:** The DarkFi blockchain is based off Proof of Work RandomX
-algorithm, paired with Delayed finality. Consensus participating nodes,
-called miners, produce and propose new blocks to the network, extending
-some fork chain, which once it reaches a finality security threshold,
-can be appended to canonical by all nodes in the network.
+algorithm. Consensus participating nodes, called miners, produce and propose
+new blocks to the network, extending some fork chain, which once it reaches
+a confirmation security threshold, can be appended to canonical by all nodes
+in the network.
 
 **Wallet:** A wallet is a portal to the DarkFi network. It provides
 the user with the ability to send and receive anonymous _darkened_

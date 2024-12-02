@@ -43,7 +43,7 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     let config = HarnessConfig {
         pow_target,
         pow_fixed_difficulty: pow_fixed_difficulty.clone(),
-        finalization_threshold: 3,
+        confirmation_threshold: 3,
         alice_url: "tcp+tls://127.0.0.1:18340".to_string(),
         bob_url: "tcp+tls://127.0.0.1:18341".to_string(),
     };
@@ -73,7 +73,7 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
 
     // Grab current best fork index
     let forks = th.alice.validator.consensus.forks.read().await;
-    // If index corresponds to the small fork, finalization
+    // If index corresponds to the small fork, confirmation
     // did not occur, as it's size is not over the threshold.
     let small_best = best_fork_index(&forks)? == 1;
     drop(forks);
@@ -142,20 +142,20 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     drop(charlie_forks);
 
     // Since the don't know if the second fork was the best,
-    // we extend it until it becomes best and a finalization
+    // we extend it until it becomes best and a confirmation
     // occurred.
     let mut fork_sequence = vec![block6, block7];
     loop {
         let proposal = th.generate_next_block(fork_sequence.last().unwrap()).await?;
         th.add_blocks(&vec![proposal.clone()]).await?;
         fork_sequence.push(proposal);
-        // Check if finalization occured
+        // Check if confirmation occured
         if th.alice.validator.blockchain.len() > 4 {
             break
         }
     }
 
-    // Nodes must have executed finalization, so we validate their chains
+    // Nodes must have executed confirmation, so we validate their chains
     th.validate_chains(4 + (fork_sequence.len() - 2)).await?;
     let bob = &th.bob.validator;
     let last = alice.blockchain.last()?.1;
@@ -168,7 +168,7 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     assert_eq!(last_proposal, bob.consensus.forks.read().await[0].proposals[1]);
 
     // Same for Charlie
-    charlie.finalization().await?;
+    charlie.confirmation().await?;
     charlie.validate_blockchain(pow_target, pow_fixed_difficulty).await?;
     assert_eq!(alice.blockchain.len(), charlie.blockchain.len());
     assert!(charlie.blockchain.headers.is_empty_sync());
@@ -230,7 +230,7 @@ fn darkfid_programmatic_control() -> Result<()> {
     genesis_block.append_txs(vec![producer_tx]);
     let bootstrap = genesis_block.header.timestamp.inner();
     let config = darkfi::validator::ValidatorConfig {
-        finalization_threshold: 1,
+        confirmation_threshold: 1,
         pow_target: 20,
         pow_fixed_difficulty: Some(BigUint::one()),
         genesis_block,
