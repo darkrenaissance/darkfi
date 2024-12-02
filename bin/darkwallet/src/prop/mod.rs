@@ -546,6 +546,9 @@ impl Property {
     }
     pub fn is_null(&self, i: usize) -> Result<bool> {
         let val = self.get_raw_value(i)?;
+        if val.is_unset() {
+            return Ok(self.defaults[i].is_null())
+        }
         Ok(val.is_null())
     }
 

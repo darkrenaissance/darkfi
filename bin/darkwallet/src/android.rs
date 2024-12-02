@@ -53,7 +53,7 @@ pub unsafe extern "C" fn Java_autosuggest_CustomInputConnection_onCommitText(
     text: ndk_sys::jobject,
 ) {
     let text = ndk_utils::get_utf_str!(env, text);
-    debug!(target: "android", "onCommitText: {text}");
+    //debug!(target: "android", "onCommitText({text})");
     if let Some(sender) = &GLOBALS.lock().unwrap().sender {
         let _ = sender.try_send(AndroidSuggestEvent::CommitText(text.to_string()));
     }
@@ -66,7 +66,7 @@ pub unsafe extern "C" fn Java_autosuggest_CustomInputConnection_onEndEdit(
     text: ndk_sys::jobject,
 ) {
     let text = ndk_utils::get_utf_str!(env, text);
-    debug!(target: "android", "onEditText: {text}");
+    //debug!(target: "android", "onEditText({text})");
     if let Some(sender) = &GLOBALS.lock().unwrap().sender {
         let _ = sender.try_send(AndroidSuggestEvent::EditText(text.to_string()));
     }
@@ -74,4 +74,18 @@ pub unsafe extern "C" fn Java_autosuggest_CustomInputConnection_onEndEdit(
 
 pub fn set_sender(sender: async_channel::Sender<AndroidSuggestEvent>) {
     GLOBALS.lock().unwrap().sender = Some(sender);
+}
+
+pub fn reset_autosuggest() {
+    let env = unsafe { android::attach_jni_env() };
+    let mut globals = GLOBALS.lock().unwrap();
+
+    if globals.inp_conn.is_null() {
+        error!(target: "android", "InputConnection is not ready!");
+        return
+    }
+
+    unsafe {
+        ndk_utils::call_void_method!(env, globals.inp_conn, "reset", "()V");
+    }
 }

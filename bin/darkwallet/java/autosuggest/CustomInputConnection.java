@@ -35,8 +35,13 @@ public class CustomInputConnection extends BaseInputConnection {
     native static void onCommitText(String text);
     native static void onEndEdit(String text);
 
+    // Android is sending commit("foo") then edit("foo") events which is confusing.
+    // We use this to skip edit("foo") when proceeded by the commit.
+    private String lastCommitText;
+
     public CustomInputConnection(View view, boolean fullEditor) {
         super(view, fullEditor);
+        lastCommitText = null;
         setup();
     }
 
@@ -57,12 +62,7 @@ public class CustomInputConnection extends BaseInputConnection {
         } else if (action == KeyEvent.ACTION_DOWN && keycode == KeyEvent.KEYCODE_FORWARD_DEL) {
             deleteSurroundingText(0, 1);
         } else if (action == KeyEvent.ACTION_DOWN && keycode == KeyEvent.KEYCODE_ENTER) {
-            setComposingText("", 0);
-
-            // Chromium does this but the above seems to work too.
-            //beginBatchEdit();
-            //finishComposingText();
-            //endBatchEdit();
+            reset();
         }
         return true;
     }
@@ -70,7 +70,8 @@ public class CustomInputConnection extends BaseInputConnection {
     @Override
     public boolean commitText(CharSequence text, int newCursorPosition) {
         //Log.i("darkfi", String.format("commitText(%s, %d)", text.toString(), newCursorPosition));
-        onCommitText(text.toString());
+        lastCommitText = text.toString();
+        onCommitText(lastCommitText);
         return super.commitText(text, newCursorPosition);
     }
 
@@ -78,8 +79,19 @@ public class CustomInputConnection extends BaseInputConnection {
     public boolean endBatchEdit() {
         //Log.i("darkfi", "endBatchEdit: " + curr);
         String text = getTextBeforeCursor(100, 0).toString();
-        onEndEdit(text);
+        if (!text.equals(lastCommitText))
+            onEndEdit(text);
+        lastCommitText = null;
         return super.endBatchEdit();
+    }
+
+    public void reset() {
+        setComposingText("", 0);
+
+        // Chromium does this but the above seems to work too.
+        //beginBatchEdit();
+        //finishComposingText();
+        //endBatchEdit();
     }
 }
 

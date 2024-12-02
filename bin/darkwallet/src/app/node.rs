@@ -202,6 +202,13 @@ pub fn create_editbox(name: &str) -> SceneNode {
     let mut prop = Property::new("selected", PropertyType::Uint32, PropertySubType::Color);
     prop.set_array_len(2);
     prop.allow_null_values();
+    prop.set_defaults_null().unwrap();
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("underline", PropertyType::Uint32, PropertySubType::Color);
+    prop.set_array_len(2);
+    prop.allow_null_values();
+    prop.set_defaults_null().unwrap();
     node.add_property(prop).unwrap();
 
     let mut prop = Property::new("cursor_blink_time", PropertyType::Uint32, PropertySubType::Null);

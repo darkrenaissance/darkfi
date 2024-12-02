@@ -174,6 +174,7 @@ pub struct EditBox {
     cursor_descent: PropertyFloat32,
     hi_bg_color: PropertyColor,
     selected: PropertyPtr,
+    underline: PropertyPtr,
     z_index: PropertyUint32,
     debug: PropertyBool,
 
@@ -215,6 +216,7 @@ impl EditBox {
             PropertyFloat32::wrap(node_ref, Role::Internal, "cursor_descent", 0).unwrap();
         let hi_bg_color = PropertyColor::wrap(node_ref, Role::Internal, "hi_bg_color").unwrap();
         let selected = node_ref.get_property("selected").unwrap();
+        let underline = node_ref.get_property("underline").unwrap();
         let cursor_blink_time =
             PropertyUint32::wrap(node_ref, Role::Internal, "cursor_blink_time", 0).unwrap();
         let cursor_idle_time =
@@ -238,6 +240,8 @@ impl EditBox {
                 self_.cursor_pos.set(0);
                 self_.selected.set_null(Role::Internal, 0).unwrap();
                 self_.selected.set_null(Role::Internal, 1).unwrap();
+                self_.underline.set_null(Role::Internal, 0).unwrap();
+                self_.underline.set_null(Role::Internal, 1).unwrap();
                 self_.scroll.set(0.);
                 self_.regen_glyphs().await;
                 self_.redraw().await;
@@ -323,6 +327,7 @@ impl EditBox {
                 cursor_descent,
                 hi_bg_color,
                 selected,
+                underline,
                 z_index,
                 debug,
 
@@ -899,6 +904,86 @@ impl EditBox {
         }
     }
 
+    fn set_underline_text(&self, suggest_text: &str) {
+        if self.underline.is_null(0).unwrap() {
+            assert!(self.underline.is_null(1).unwrap());
+            debug!(target: "ui::editbox", "underline is null");
+
+            // Underline is not set. Lets insert text before cursor_pos.
+            let mut cursor_pos = self.cursor_pos.get();
+            let glyphs = self.glyphs.lock().unwrap().clone();
+
+            let mut text = String::new();
+            if glyphs.is_empty() {
+                text.push_str(suggest_text);
+            }
+            for (i, glyph) in glyphs.iter().enumerate() {
+                if cursor_pos == i as u32 {
+                    text.push_str(suggest_text);
+                }
+                text.push_str(&glyph.substr);
+            }
+            // Append to the end
+            if cursor_pos == glyphs.len() as u32 {
+                text.push_str(suggest_text);
+            }
+
+            debug!(target: "ui::editbox", "setting text = {text}");
+            self.text.set(text);
+
+            self.underline.set_u32(Role::Internal, 0, cursor_pos).unwrap();
+            cursor_pos += suggest_text.len() as u32;
+            self.underline.set_u32(Role::Internal, 1, cursor_pos).unwrap();
+            self.cursor_pos.set(cursor_pos);
+        } else {
+            assert!(!self.underline.is_null(1).unwrap());
+            debug!(target: "ui::editbox", "underline is NOT null");
+
+            // We are going to delete the current underline text and replace it with our new one.
+            let mut cursor_pos = self.cursor_pos.get();
+            let glyphs = self.glyphs.lock().unwrap().clone();
+            // Start pos remains unchanged.
+            let underline_start = self.underline.get_u32(0).unwrap() as usize;
+            let underline_end = self.underline.get_u32(1).unwrap() as usize;
+
+            debug!(target: "ui::editbox", "inserting underline text at {underline_start}");
+
+            let mut text = String::new();
+            if glyphs.is_empty() {
+                text.push_str(suggest_text);
+            }
+            for (i, glyph) in glyphs.iter().enumerate() {
+                if underline_start == i {
+                    text.push_str(suggest_text);
+                }
+                if underline_start <= i && i <= underline_end {
+                    continue
+                }
+                text.push_str(&glyph.substr);
+            }
+            // Append to the end
+            if underline_start == glyphs.len() {
+                text.push_str(suggest_text);
+            }
+
+            debug!(target: "ui::editbox", "setting text = {text}");
+            self.text.set(text);
+
+            let underline_end = (underline_start + suggest_text.len()) as u32;
+            self.underline.set_u32(Role::Internal, 1, underline_end).unwrap();
+            // Put cursor after inserted text
+            self.cursor_pos.set(underline_end);
+        }
+    }
+
+    fn reset_android_autosuggest(&self) {
+        #[cfg(target_os = "android")]
+        crate::android::reset_autosuggest();
+
+        self.underline.set_null(Role::Internal, 0).unwrap();
+        self.underline.set_null(Role::Internal, 1).unwrap();
+    }
+
     fn delete_highlighted(&self) {
         assert!(!self.selected.is_null(0).unwrap());
         assert!(!self.selected.is_null(1).unwrap());
@@ -1185,6 +1270,8 @@ impl UIObject for EditBox {
             return false
         }
 
+        self.reset_android_autosuggest();
+
         if mods.ctrl || mods.alt {
             if repeat {
                 return false
@@ -1215,6 +1302,8 @@ impl UIObject for EditBox {
             return false
         }
 
+        self.reset_android_autosuggest();
+
         let actions = {
             let mut repeater = self.key_repeat.lock().unwrap();
             repeater.key_down(PressedKey::Key(key), repeat)
@@ -1231,7 +1320,7 @@ impl UIObject for EditBox {
 
     async fn handle_mouse_btn_down(&self, btn: MouseButton, mouse_pos: Point) -> bool {
         if !self.is_active.get() {
-            return true
+            return false
         }
 
         self.handle_click_down(btn, mouse_pos).await
@@ -1239,7 +1328,7 @@ impl UIObject for EditBox {
 
     async fn handle_mouse_btn_up(&self, btn: MouseButton, mouse_pos: Point) -> bool {
         if !self.is_active.get() {
-            return true
+            return false
         }
 
         self.handle_click_up(btn, mouse_pos)
@@ -1255,8 +1344,10 @@ impl UIObject for EditBox {
 
     async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
         if !self.is_active.get() {
-            return true
+            return false
         }
+
+        self.reset_android_autosuggest();
 
         // Ignore multi-touch
         if id != 0 {
@@ -1270,6 +1361,40 @@ impl UIObject for EditBox {
             TouchPhase::Ended => self.handle_click_up(MouseButton::Left, touch_pos),
             TouchPhase::Cancelled => false,
         }
+    }
+
+    async fn handle_edit_text(&self, suggest_text: &str) -> bool {
+        debug!(target: "ui::editbox", "handle_edit_text({suggest_text})");
+
+        if !self.is_active.get() {
+            return false
+        }
+
+        self.set_underline_text(suggest_text);
+
+        self.regen_glyphs().await;
+        //self.apply_cursor_scrolling();
+        self.redraw().await;
+
+        true
+    }
+    async fn handle_commit_text(&self, suggest_text: &str) -> bool {
+        debug!(target: "ui::editbox", "handle_commit_text({suggest_text})");
+
+        if !self.is_active.get() {
+            return false
+        }
+
+        self.set_underline_text(suggest_text);
+
+        self.underline.set_null(Role::Internal, 0).unwrap();
+        self.underline.set_null(Role::Internal, 1).unwrap();
+
+        self.regen_glyphs().await;
+        //self.apply_cursor_scrolling();
+        self.redraw().await;
+
+        true
     }
 }
 
