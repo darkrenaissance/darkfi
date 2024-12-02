@@ -92,10 +92,13 @@ pub struct PoWModule {
 }
 
 impl PoWModule {
+    // Initialize a new `PowModule` for provided target over provided `Blockchain`.
+    // Optionally, a fixed difficulty can be set and/or initialize before some height.
     pub fn new(
         blockchain: Blockchain,
         target: u32,
         fixed_difficulty: Option<BigUint>,
+        height: Option<u32>,
     ) -> Result<Self> {
         // Retrieve genesis block timestamp
         let genesis = blockchain.genesis_block()?.header.timestamp;
@@ -104,7 +107,10 @@ impl PoWModule {
         let mut timestamps = RingBuffer::<Timestamp, BUF_SIZE>::new();
         let mut difficulties = RingBuffer::<BigUint, BUF_SIZE>::new();
         let mut cummulative_difficulty = BigUint::zero();
-        let last_n = blockchain.blocks.get_last_n_difficulties(BUF_SIZE)?;
+        let last_n = match height {
+            Some(h) => blockchain.blocks.get_difficulties_before(h, BUF_SIZE)?,
+            None => blockchain.blocks.get_last_n_difficulties(BUF_SIZE)?,
+        };
         for difficulty in last_n {
             timestamps.push(difficulty.timestamp);
             difficulties.push(difficulty.cummulative_difficulty.clone());
@@ -197,25 +203,25 @@ impl PoWModule {
         Ok((cut_begin, cut_end))
     }
 
-    /// Compute the next mine target
+    /// Compute the next mine target.
     pub fn next_mine_target(&self) -> Result<BigUint> {
         Ok(BigUint::from_bytes_be(&[0xFF; 32]) / &self.next_difficulty()?)
     }
 
-    /// Compute the next mine target and difficulty
+    /// Compute the next mine target and difficulty.
     pub fn next_mine_target_and_difficulty(&self) -> Result<(BigUint, BigUint)> {
         let difficulty = self.next_difficulty()?;
         let mine_target = BigUint::from_bytes_be(&[0xFF; 32]) / &difficulty;
         Ok((mine_target, difficulty))
     }
 
-    /// Verify provided difficulty corresponds to the next one
+    /// Verify provided difficulty corresponds to the next one.
     pub fn verify_difficulty(&self, difficulty: &BigUint) -> Result<bool> {
         Ok(difficulty == &self.next_difficulty()?)
     }
 
     /// Verify provided block timestamp is not far in the future and
-    /// check its valid acorrding to current timestamps median
+    /// check its valid acorrding to current timestamps median.
     pub fn verify_current_timestamp(&self, timestamp: Timestamp) -> Result<bool> {
         if timestamp > Timestamp::current_time().checked_add(BLOCK_FUTURE_TIME_LIMIT)? {
             return Ok(false)
@@ -224,7 +230,7 @@ impl PoWModule {
         Ok(self.verify_timestamp_by_median(timestamp))
     }
 
-    /// Verify provided block timestamp is valid and matches certain criteria
+    /// Verify provided block timestamp is valid and matches certain criteria.
     pub fn verify_timestamp_by_median(&self, timestamp: Timestamp) -> bool {
         // Check timestamp is after genesis one
         if timestamp <= self.genesis {
@@ -248,7 +254,7 @@ impl PoWModule {
         timestamp >= median(timestamps).into()
     }
 
-    /// Verify provided block timestamp and hash
+    /// Verify provided block timestamp and hash.
     pub fn verify_current_block(&self, block: &BlockInfo) -> Result<()> {
         // First we verify the block's timestamp
         if !self.verify_current_timestamp(block.header.timestamp)? {
@@ -259,9 +265,8 @@ impl PoWModule {
         self.verify_block_hash(block)
     }
 
-    /// Verify provided block corresponds to next mine target
+    /// Verify provided block corresponds to next mine target.
     pub fn verify_block_hash(&self, block: &BlockInfo) -> Result<()> {
-        // Then we verify the proof of work:
         let verifier_setup = Instant::now();
 
         // Grab the next mine target
@@ -275,7 +280,7 @@ impl PoWModule {
 
         // Compute the output hash
         let verification_time = Instant::now();
-        let out_hash = vm.hash(block.hash().inner());
+        let out_hash = vm.hash(block.header.hash().inner());
         let out_hash = BigUint::from_bytes_be(&out_hash);
 
         // Verify hash is less than the expected mine target
@@ -287,7 +292,7 @@ impl PoWModule {
         Ok(())
     }
 
-    /// Append provided timestamp and difficulty to the ring buffers
+    /// Append provided timestamp and difficulty to the ring buffers.
     pub fn append(&mut self, timestamp: Timestamp, difficulty: &BigUint) {
         self.timestamps.push(timestamp);
         self.cummulative_difficulty += difficulty;
@@ -295,7 +300,7 @@ impl PoWModule {
     }
 
     /// Append provided block difficulty to the ring buffers and insert
-    /// it to provided overlay
+    /// it to provided overlay.
     pub fn append_difficulty(
         &mut self,
         overlay: &BlockchainOverlayPtr,
@@ -305,7 +310,7 @@ impl PoWModule {
         overlay.lock().unwrap().blocks.insert_difficulty(&[difficulty])
     }
 
-    /// Mine provided block, based on next mine target
+    /// Mine provided block, based on next mine target.
     pub fn mine_block(
         &self,
         miner_block: &mut BlockInfo,
@@ -329,7 +334,7 @@ impl std::fmt::Display for PoWModule {
     }
 }
 
-/// Mine provided block, based on provided PoW module next mine target
+/// Mine provided block, based on provided PoW module next mine target.
 pub fn mine_block(
     target: &BigUint,
     miner_block: &mut BlockInfo,
@@ -441,7 +446,7 @@ mod tests {
         let blockchain = Blockchain::new(&sled_db)?;
         let genesis_block = BlockInfo::default();
         blockchain.add_block(&genesis_block)?;
-        let mut module = PoWModule::new(blockchain, DEFAULT_TEST_DIFFICULTY_TARGET, None)?;
+        let mut module = PoWModule::new(blockchain, DEFAULT_TEST_DIFFICULTY_TARGET, None, None)?;
 
         let output = Command::new("./script/research/pow/gen_wide_data.py").output().unwrap();
         let reader = Cursor::new(output.stdout);
@@ -477,7 +482,7 @@ mod tests {
         let mut genesis_block = BlockInfo::default();
         genesis_block.header.timestamp = 0.into();
         blockchain.add_block(&genesis_block)?;
-        let module = PoWModule::new(blockchain, DEFAULT_TEST_DIFFICULTY_TARGET, None)?;
+        let module = PoWModule::new(blockchain, DEFAULT_TEST_DIFFICULTY_TARGET, None, None)?;
         let (_, recvr) = smol::channel::bounded(1);
 
         // Mine next block

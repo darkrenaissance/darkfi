@@ -514,6 +514,14 @@ impl BlockchainOverlay {
         Ok(blockhash == block.hash())
     }
 
+    /// Retrieve [`Header`]s by given hashes. Fails if any of them is not found.
+    pub fn get_headers_by_hash(&self, hashes: &[HeaderHash]) -> Result<Vec<Header>> {
+        let headers = self.headers.get(hashes, true)?;
+        let ret: Vec<Header> = headers.iter().map(|x| x.clone().unwrap()).collect();
+
+        Ok(ret)
+    }
+
     /// Retrieve [`BlockInfo`]s by given hashes. Fails if any of them is not found.
     pub fn get_blocks_by_hash(&self, hashes: &[HeaderHash]) -> Result<Vec<BlockInfo>> {
         let blocks = self.blocks.get(hashes, true)?;

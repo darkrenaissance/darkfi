@@ -157,7 +157,7 @@ pub fn validate_blockchain(
     pow_fixed_difficulty: Option<BigUint>,
 ) -> Result<()> {
     // Generate a PoW module
-    let mut module = PoWModule::new(blockchain.clone(), pow_target, pow_fixed_difficulty)?;
+    let mut module = PoWModule::new(blockchain.clone(), pow_target, pow_fixed_difficulty, None)?;
     // We use block order store here so we have all blocks in order
     let blocks = blockchain.blocks.get_all_order()?;
     for (index, block) in blocks[1..].iter().enumerate() {
@@ -994,8 +994,7 @@ async fn apply_transactions(
 ///
 /// A proposal is considered valid when the following rules apply:
 ///     1. Proposal hash matches the actual block one
-///     2. Block transactions don't exceed set limit
-///     3. Block is valid
+///     2. Block is valid
 /// Additional validity rules can be applied.
 pub async fn verify_proposal(
     consensus: &Consensus,
@@ -1006,7 +1005,7 @@ pub async fn verify_proposal(
     let proposal_hash = proposal.block.hash();
     if proposal.hash != proposal_hash {
         warn!(
-            target: "validator::verification::verify_pow_proposal", "Received proposal contains mismatched hashes: {} - {}",
+            target: "validator::verification::verify_proposal", "Received proposal contains mismatched hashes: {} - {}",
             proposal.hash, proposal_hash
         );
         return Err(Error::ProposalHashesMissmatchError)
@@ -1018,15 +1017,52 @@ pub async fn verify_proposal(
     // Grab overlay last block
     let previous = fork.overlay.lock().unwrap().last_block()?;
 
-    // Verify proposal block (3)
+    // Verify proposal block (2)
     if verify_block(&fork.overlay, &fork.module, &proposal.block, &previous, verify_fees)
         .await
         .is_err()
     {
-        error!(target: "validator::verification::verify_pow_proposal", "Erroneous proposal block found");
+        error!(target: "validator::verification::verify_proposal", "Erroneous proposal block found");
         fork.overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
         return Err(Error::BlockIsInvalid(proposal.hash.as_string()))
     };
 
     Ok((fork, index))
+}
+
+/// Verify given [`Proposal`] against provided fork state.
+///
+/// A proposal is considered valid when the following rules apply:
+///     1. Proposal hash matches the actual block one
+///     2. Block is valid
+/// Additional validity rules can be applied.
+pub async fn verify_fork_proposal(
+    fork: &Fork,
+    proposal: &Proposal,
+    verify_fees: bool,
+) -> Result<()> {
+    // Check if proposal hash matches actual one (1)
+    let proposal_hash = proposal.block.hash();
+    if proposal.hash != proposal_hash {
+        warn!(
+            target: "validator::verification::verify_fork_proposal", "Received proposal contains mismatched hashes: {} - {}",
+            proposal.hash, proposal_hash
+        );
+        return Err(Error::ProposalHashesMissmatchError)
+    }
+
+    // Grab overlay last block
+    let previous = fork.overlay.lock().unwrap().last_block()?;
+
+    // Verify proposal block (2)
+    if verify_block(&fork.overlay, &fork.module, &proposal.block, &previous, verify_fees)
+        .await
+        .is_err()
+    {
+        error!(target: "validator::verification::verify_fork_proposal", "Erroneous proposal block found");
+        fork.overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
+        return Err(Error::BlockIsInvalid(proposal.hash.as_string()))
+    };
+
+    Ok(())
 }

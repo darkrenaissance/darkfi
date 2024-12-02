@@ -745,7 +745,7 @@ impl Validator {
         overlay.lock().unwrap().overlay.lock().unwrap().apply()?;
 
         // Create a PoW module to validate each block
-        let mut module = PoWModule::new(blockchain, pow_target, pow_fixed_difficulty)?;
+        let mut module = PoWModule::new(blockchain, pow_target, pow_fixed_difficulty, None)?;
 
         // Validate and insert each block
         for block in &blocks[1..] {

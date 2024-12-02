@@ -25,7 +25,7 @@ use num_bigint::BigUint;
 use randomx::{RandomXCache, RandomXFlags, RandomXVM};
 
 use crate::{
-    blockchain::{BlockInfo, BlockchainOverlayPtr},
+    blockchain::{BlockInfo, BlockchainOverlayPtr, Header},
     runtime::vm_runtime::Runtime,
     validator::consensus::{Fork, Proposal},
     Error, Result,
@@ -106,6 +106,45 @@ pub async fn deploy_native_contracts(
     info!(target: "validator::utils::deploy_native_contracts", "Finished deployment of native WASM contracts");
 
     Ok(())
+}
+
+/// Verify provided header is valid for provided mining target and compute its rank.
+///
+/// Header's rank is the tuple of its squared mining target distance from max 32 bytes int,
+/// along with its squared RandomX hash number distance from max 32 bytes int.
+/// Genesis block has rank (0, 0).
+pub fn header_rank(header: &Header, target: &BigUint) -> Result<(BigUint, BigUint)> {
+    // Genesis header has rank 0
+    if header.height == 0 {
+        return Ok((0u64.into(), 0u64.into()))
+    }
+
+    // Setup RandomX verifier
+    let flags = RandomXFlags::default();
+    let cache = RandomXCache::new(flags, header.previous.inner()).unwrap();
+    let vm = RandomXVM::new(flags, &cache).unwrap();
+
+    // Compute the output hash
+    let out_hash = vm.hash(header.hash().inner());
+    let out_hash = BigUint::from_bytes_be(&out_hash);
+
+    // Verify hash is less than the expected mine target
+    if out_hash > *target {
+        return Err(Error::PoWInvalidOutHash)
+    }
+
+    // Grab the max 32 bytes int
+    let max = BigUint::from_bytes_be(&[0xFF; 32]);
+
+    // Compute the squared mining target distance
+    let target_distance = &max - target;
+    let target_distance_sq = &target_distance * &target_distance;
+
+    // Compute the output hash distance
+    let hash_distance = max - out_hash;
+    let hash_distance_sq = &hash_distance * &hash_distance;
+
+    Ok((target_distance_sq, hash_distance_sq))
 }
 
 /// Compute a block's rank, assuming that its valid, based on provided mining target.

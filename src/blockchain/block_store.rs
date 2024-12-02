@@ -167,7 +167,7 @@ pub struct BlockOrder {
 /// Note: we only need height cummulative ranks, but we also keep its actual
 /// ranks, so we can verify the sequence and/or know specific block height
 /// ranks, if ever needed.
-#[derive(Debug, SerialEncodable, SerialDecodable)]
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct BlockRanks {
     /// Block target rank
     pub target_rank: BigUint,
@@ -195,7 +195,7 @@ impl BlockRanks {
 /// Note: we only need height cummulative difficulty, but we also keep its actual
 /// difficulty, so we can verify the sequence and/or know specific block height
 /// difficulty, if ever needed.
-#[derive(Debug, SerialEncodable, SerialDecodable)]
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct BlockDifficulty {
     /// Block height number
     pub height: u32,
@@ -548,17 +548,19 @@ impl BlockStore {
         let mut key = height;
         let mut counter = 0;
         while counter < n {
-            if let Some(found) = self.order.get_lt(key.to_be_bytes())? {
-                let (height, hash) = parse_u32_key_record(found)?;
-                key = height;
-                ret.push(hash);
-                counter += 1;
-                continue
+            let record = self.order.get_lt(key.to_be_bytes())?;
+            if record.is_none() {
+                break
             }
-            break
+            // Since the iterator grabs in right -> left order,
+            // we deserialize found records, and push them in reverse order
+            let (height, hash) = parse_u32_key_record(record.unwrap())?;
+            key = height;
+            ret.insert(0, hash);
+            counter += 1;
         }
 
-        Ok(ret.iter().rev().copied().collect())
+        Ok(ret)
     }
 
     /// Fetch all hashes after given height. In the iteration, if an order
@@ -632,6 +634,46 @@ impl BlockStore {
         }
 
         Ok(last_n)
+    }
+
+    /// Fetch N records before given height from the store's difficulty tree, in order.
+    /// In the iteration, if a record height is not found, the iteration stops and the
+    /// function returns what it has found so far in the store's difficulty tree.
+    pub fn get_difficulties_before(&self, height: u32, n: usize) -> Result<Vec<BlockDifficulty>> {
+        let mut ret = vec![];
+
+        let mut key = height;
+        let mut counter = 0;
+        while counter < n {
+            let record = self.difficulty.get_lt(key.to_be_bytes())?;
+            if record.is_none() {
+                break
+            }
+            // Since the iterator grabs in right -> left order,
+            // we deserialize found records, and push them in reverse order
+            let (height, difficulty) = parse_u32_key_record(record.unwrap())?;
+            key = height;
+            ret.insert(0, difficulty);
+            counter += 1;
+        }
+
+        Ok(ret)
+    }
+
+    /// Fetch all state diffs after given height. In the iteration, if a state
+    /// diff is not found, the iteration stops and the function returns what
+    /// it has found so far in the store's state diffs tree.
+    pub fn get_state_diffs_after(&self, height: u32) -> Result<Vec<SledDbOverlayStateDiff>> {
+        let mut ret = vec![];
+
+        let mut key = height;
+        while let Some(found) = self.state_diff.get_gt(key.to_be_bytes())? {
+            let (height, state_diff) = parse_u32_key_record(found)?;
+            key = height;
+            ret.push(state_diff);
+        }
+
+        Ok(ret)
     }
 
     /// Retrieve store's order tree records count.

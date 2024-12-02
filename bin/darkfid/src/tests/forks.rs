@@ -39,7 +39,7 @@ fn forks() -> Result<()> {
         let genesis_block_hash = genesis_block.hash();
 
         // Generate the PoW module
-        let module = PoWModule::new(blockchain.clone(), 90, None)?;
+        let module = PoWModule::new(blockchain.clone(), 90, None, None)?;
 
         // Create a fork
         let fork = Fork::new(blockchain.clone(), module).await?;

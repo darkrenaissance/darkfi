@@ -36,8 +36,10 @@ pub use protocol_proposal::{ProposalMessage, ProtocolProposalHandler, ProtocolPr
 /// Validator blockchain sync protocol
 mod protocol_sync;
 pub use protocol_sync::{
-    ForkSyncRequest, ForkSyncResponse, HeaderSyncRequest, HeaderSyncResponse, ProtocolSyncHandler,
-    ProtocolSyncHandlerPtr, SyncRequest, SyncResponse, TipRequest, TipResponse, BATCH,
+    ForkHeaderHashRequest, ForkHeaderHashResponse, ForkHeadersRequest, ForkHeadersResponse,
+    ForkProposalsRequest, ForkProposalsResponse, ForkSyncRequest, ForkSyncResponse,
+    HeaderSyncRequest, HeaderSyncResponse, ProtocolSyncHandler, ProtocolSyncHandlerPtr,
+    SyncRequest, SyncResponse, TipRequest, TipResponse, BATCH,
 };
 
 /// Transaction broadcast protocol

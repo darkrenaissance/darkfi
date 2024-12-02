@@ -131,6 +131,74 @@ pub struct ForkSyncResponse {
 
 impl_p2p_message!(ForkSyncResponse, "forksyncresponse");
 
+/// Structure represening a request to ask a node a fork header for the
+/// requested height. The fork is identified by the provided header hash.
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct ForkHeaderHashRequest {
+    /// Header height
+    pub height: u32,
+    /// Block header hash to identify the fork
+    pub fork_header: HeaderHash,
+}
+
+impl_p2p_message!(ForkHeaderHashRequest, "forkheaderhashrequest");
+
+/// Structure representing the response to `ForkHeaderHashRequest`,
+/// containing the requested fork header hash, if it was found.
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct ForkHeaderHashResponse {
+    /// Response fork block header hash
+    pub fork_header: Option<HeaderHash>,
+}
+
+impl_p2p_message!(ForkHeaderHashResponse, "forkheaderhashresponse");
+
+/// Structure represening a request to ask a node for up to `BATCH`
+/// fork headers for provided header hashes.  The fork is identified
+/// by the provided header hash.
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct ForkHeadersRequest {
+    /// Header hashes
+    pub headers: Vec<HeaderHash>,
+    /// Block header hash to identify the fork
+    pub fork_header: HeaderHash,
+}
+
+impl_p2p_message!(ForkHeadersRequest, "forkheadersrequest");
+
+/// Structure representing the response to `ForkHeadersRequest`,
+/// containing up to `BATCH` fork headers.
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct ForkHeadersResponse {
+    /// Response headers
+    pub headers: Vec<Header>,
+}
+
+impl_p2p_message!(ForkHeadersResponse, "forkheadersresponse");
+
+/// Structure represening a request to ask a node for up to `BATCH`
+/// fork proposals for provided header hashes.  The fork is identified
+/// by the provided header hash.
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct ForkProposalsRequest {
+    /// Header hashes
+    pub headers: Vec<HeaderHash>,
+    /// Block header hash to identify the fork
+    pub fork_header: HeaderHash,
+}
+
+impl_p2p_message!(ForkProposalsRequest, "forkproposalsrequest");
+
+/// Structure representing the response to `ForkProposalsRequest`,
+/// containing up to `BATCH` fork headers.
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct ForkProposalsResponse {
+    /// Response proposals
+    pub proposals: Vec<Proposal>,
+}
+
+impl_p2p_message!(ForkProposalsResponse, "forkproposalsresponse");
+
 /// Atomic pointer to the `ProtocolSync` handler.
 pub type ProtocolSyncHandlerPtr = Arc<ProtocolSyncHandler>;
 
@@ -144,6 +212,13 @@ pub struct ProtocolSyncHandler {
     sync_handler: ProtocolGenericHandlerPtr<SyncRequest, SyncResponse>,
     /// The generic handler for `ForkSyncRequest` messages.
     fork_sync_handler: ProtocolGenericHandlerPtr<ForkSyncRequest, ForkSyncResponse>,
+    /// The generic handler for `ForkHeaderHashRequest` messages.
+    fork_header_hash_handler:
+        ProtocolGenericHandlerPtr<ForkHeaderHashRequest, ForkHeaderHashResponse>,
+    /// The generic handler for `ForkHeadersRequest` messages.
+    fork_headers_handler: ProtocolGenericHandlerPtr<ForkHeadersRequest, ForkHeadersResponse>,
+    /// The generic handler for `ForkProposalsRequest` messages.
+    fork_proposals_handler: ProtocolGenericHandlerPtr<ForkProposalsRequest, ForkProposalsResponse>,
 }
 
 impl ProtocolSyncHandler {
@@ -162,8 +237,22 @@ impl ProtocolSyncHandler {
         let sync_handler = ProtocolGenericHandler::new(p2p, "ProtocolSync", SESSION_DEFAULT).await;
         let fork_sync_handler =
             ProtocolGenericHandler::new(p2p, "ProtocolSyncFork", SESSION_DEFAULT).await;
+        let fork_header_hash_handler =
+            ProtocolGenericHandler::new(p2p, "ProtocolSyncForkHeaderHash", SESSION_DEFAULT).await;
+        let fork_headers_handler =
+            ProtocolGenericHandler::new(p2p, "ProtocolSyncForkHeaders", SESSION_DEFAULT).await;
+        let fork_proposals_handler =
+            ProtocolGenericHandler::new(p2p, "ProtocolSyncForkProposals", SESSION_DEFAULT).await;
 
-        Arc::new(Self { tip_handler, header_handler, sync_handler, fork_sync_handler })
+        Arc::new(Self {
+            tip_handler,
+            header_handler,
+            sync_handler,
+            fork_sync_handler,
+            fork_header_hash_handler,
+            fork_headers_handler,
+            fork_proposals_handler,
+        })
     }
 
     /// Start all `ProtocolSync` background tasks.
@@ -221,6 +310,42 @@ impl ProtocolSyncHandler {
             executor.clone(),
         );
 
+        self.fork_header_hash_handler.task.clone().start(
+            handle_receive_fork_header_hash_request(self.fork_header_hash_handler.clone(), validator.clone()),
+            |res| async move {
+                match res {
+                    Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                    Err(e) => error!(target: "darkfid::proto::protocol_sync::start", "Failed starting ProtocolSyncForkHeaderHash handler task: {e}"),
+                }
+            },
+            Error::DetachedTaskStopped,
+            executor.clone(),
+        );
+
+        self.fork_headers_handler.task.clone().start(
+            handle_receive_fork_headers_request(self.fork_headers_handler.clone(), validator.clone()),
+            |res| async move {
+                match res {
+                    Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                    Err(e) => error!(target: "darkfid::proto::protocol_sync::start", "Failed starting ProtocolSyncForkHeaders handler task: {e}"),
+                }
+            },
+            Error::DetachedTaskStopped,
+            executor.clone(),
+        );
+
+        self.fork_proposals_handler.task.clone().start(
+            handle_receive_fork_proposals_request(self.fork_proposals_handler.clone(), validator.clone()),
+            |res| async move {
+                match res {
+                    Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                    Err(e) => error!(target: "darkfid::proto::protocol_sync::start", "Failed starting ProtocolSyncForkProposals handler task: {e}"),
+                }
+            },
+            Error::DetachedTaskStopped,
+            executor.clone(),
+        );
+
         debug!(
             target: "darkfid::proto::protocol_sync::start",
             "Sync protocols handlers tasks started!"
@@ -236,6 +361,9 @@ impl ProtocolSyncHandler {
         self.header_handler.task.stop().await;
         self.sync_handler.task.stop().await;
         self.fork_sync_handler.task.stop().await;
+        self.fork_header_hash_handler.task.stop().await;
+        self.fork_headers_handler.task.stop().await;
+        self.fork_proposals_handler.task.stop().await;
         debug!(target: "darkfid::proto::protocol_sync::stop", "Sync protocols handlers tasks terminated!");
     }
 }
@@ -259,50 +387,73 @@ async fn handle_receive_tip_request(
             }
         };
 
+        debug!(target: "darkfid::proto::protocol_sync::handle_receive_tip_request", "Received request: {request:?}");
+
         // Check if node has finished syncing its blockchain
-        let response = if !*validator.synced.read().await {
-            TipResponse { synced: false, height: None, hash: None }
-        } else {
-            // Check we follow the same sequence
-            match validator.blockchain.blocks.contains(&request.tip) {
-                Ok(contains) => {
-                    if !contains {
-                        debug!(
-                            target: "darkfid::proto::protocol_sync::handle_receive_tip_request",
-                            "Node doesn't follow request sequence"
-                        );
-                        handler.send_action(channel, ProtocolGenericAction::Skip).await;
-                        continue
-                    }
-                }
-                Err(e) => {
-                    error!(
+        if !*validator.synced.read().await {
+            debug!(
+                target: "darkfid::proto::protocol_sync::handle_receive_tip_request",
+                "Node still syncing blockchain"
+            );
+            handler
+                .send_action(
+                    channel,
+                    ProtocolGenericAction::Response(TipResponse {
+                        synced: false,
+                        height: None,
+                        hash: None,
+                    }),
+                )
+                .await;
+            continue
+        }
+
+        // Check we follow the same sequence
+        match validator.blockchain.blocks.contains(&request.tip) {
+            Ok(contains) => {
+                if !contains {
+                    debug!(
                         target: "darkfid::proto::protocol_sync::handle_receive_tip_request",
-                        "block_store.contains fail: {e}"
+                        "Node doesn't follow request sequence"
                     );
                     handler.send_action(channel, ProtocolGenericAction::Skip).await;
                     continue
                 }
             }
+            Err(e) => {
+                error!(
+                    target: "darkfid::proto::protocol_sync::handle_receive_tip_request",
+                    "block_store.contains fail: {e}"
+                );
+                handler.send_action(channel, ProtocolGenericAction::Skip).await;
+                continue
+            }
+        }
 
-            // Grab our current tip and return it
-            let tip = match validator.blockchain.last() {
-                Ok(v) => v,
-                Err(e) => {
-                    error!(
-                        target: "darkfid::proto::protocol_sync::handle_receive_tip_request",
-                        "blockchain.last fail: {e}"
-                    );
-                    handler.send_action(channel, ProtocolGenericAction::Skip).await;
-                    continue
-                }
-            };
-
-            TipResponse { synced: true, height: Some(tip.0), hash: Some(tip.1) }
+        // Grab our current tip and return it
+        let tip = match validator.blockchain.last() {
+            Ok(v) => v,
+            Err(e) => {
+                error!(
+                    target: "darkfid::proto::protocol_sync::handle_receive_tip_request",
+                    "blockchain.last fail: {e}"
+                );
+                handler.send_action(channel, ProtocolGenericAction::Skip).await;
+                continue
+            }
         };
 
         // Send response
-        handler.send_action(channel, ProtocolGenericAction::Response(response)).await;
+        handler
+            .send_action(
+                channel,
+                ProtocolGenericAction::Response(TipResponse {
+                    synced: true,
+                    height: Some(tip.0),
+                    hash: Some(tip.1),
+                }),
+            )
+            .await;
     }
 }
 
@@ -334,6 +485,8 @@ async fn handle_receive_header_request(
             handler.send_action(channel, ProtocolGenericAction::Skip).await;
             continue
         }
+
+        debug!(target: "darkfid::proto::protocol_sync::handle_receive_header_request", "Received request: {request:?}");
 
         // Grab the corresponding headers
         let headers = match validator.blockchain.get_headers_before(request.height, BATCH) {
@@ -395,6 +548,8 @@ async fn handle_receive_request(
             continue
         }
 
+        debug!(target: "darkfid::proto::protocol_sync::handle_receive_request", "Received request: {request:?}");
+
         // Grab the corresponding blocks
         let blocks = match validator.blockchain.get_blocks_by_hash(&request.headers) {
             Ok(v) => v,
@@ -447,15 +602,12 @@ async fn handle_receive_fork_request(
 
         debug!(target: "darkfid::proto::protocol_sync::handle_receive_fork_request", "Received request: {request:?}");
 
-        // If a fork tip is provided, grab its fork proposals sequence.
-        // Otherwise, grab best fork proposals sequence.
-        let proposals = match request.fork_tip {
-            Some(fork_tip) => {
-                validator.consensus.get_fork_proposals(request.tip, fork_tip, BATCH as u32).await
-            }
-            None => validator.consensus.get_best_fork_proposals(request.tip, BATCH as u32).await,
-        };
-        let proposals = match proposals {
+        // Retrieve proposals sequence
+        let proposals = match validator
+            .consensus
+            .get_fork_proposals_after(request.tip, request.fork_tip, BATCH as u32)
+            .await
+        {
             Ok(p) => p,
             Err(e) => {
                 debug!(
@@ -471,6 +623,200 @@ async fn handle_receive_fork_request(
         // Send response
         handler
             .send_action(channel, ProtocolGenericAction::Response(ForkSyncResponse { proposals }))
+            .await;
+    }
+}
+
+/// Background handler function for ProtocolSyncForkHeaderHash.
+async fn handle_receive_fork_header_hash_request(
+    handler: ProtocolGenericHandlerPtr<ForkHeaderHashRequest, ForkHeaderHashResponse>,
+    validator: ValidatorPtr,
+) -> Result<()> {
+    debug!(target: "darkfid::proto::protocol_sync::handle_receive_fork_header_hash_request", "START");
+    loop {
+        // Wait for a new fork header hash request message
+        let (channel, request) = match handler.receiver.recv().await {
+            Ok(r) => r,
+            Err(e) => {
+                debug!(
+                    target: "darkfid::proto::protocol_sync::handle_receive_fork_header_hash_request",
+                    "recv fail: {e}"
+                );
+                continue
+            }
+        };
+
+        // Check if node has finished syncing its blockchain
+        if !*validator.synced.read().await {
+            debug!(
+                target: "darkfid::proto::protocol_sync::handle_receive_fork_header_hash_request",
+                "Node still syncing blockchain, skipping..."
+            );
+            handler.send_action(channel, ProtocolGenericAction::Skip).await;
+            continue
+        }
+
+        debug!(target: "darkfid::proto::protocol_sync::handle_receive_fork_header_hash_request", "Received request: {request:?}");
+
+        // Retrieve fork header
+        let fork_header = match validator
+            .consensus
+            .get_fork_header_hash(request.height, &request.fork_header)
+            .await
+        {
+            Ok(h) => h,
+            Err(e) => {
+                debug!(
+                    target: "darkfid::proto::protocol_sync::handle_receive_fork_header_hash_request",
+                    "Getting fork header hash failed: {}",
+                    e
+                );
+                handler.send_action(channel, ProtocolGenericAction::Skip).await;
+                continue
+            }
+        };
+
+        // Send response
+        handler
+            .send_action(
+                channel,
+                ProtocolGenericAction::Response(ForkHeaderHashResponse { fork_header }),
+            )
+            .await;
+    }
+}
+
+/// Background handler function for ProtocolSyncForkHeaders.
+async fn handle_receive_fork_headers_request(
+    handler: ProtocolGenericHandlerPtr<ForkHeadersRequest, ForkHeadersResponse>,
+    validator: ValidatorPtr,
+) -> Result<()> {
+    debug!(target: "darkfid::proto::protocol_sync::handle_receive_fork_headers_request", "START");
+    loop {
+        // Wait for a new fork header hash request message
+        let (channel, request) = match handler.receiver.recv().await {
+            Ok(r) => r,
+            Err(e) => {
+                debug!(
+                    target: "darkfid::proto::protocol_sync::handle_receive_fork_headers_request",
+                    "recv fail: {e}"
+                );
+                continue
+            }
+        };
+
+        // Check if node has finished syncing its blockchain
+        if !*validator.synced.read().await {
+            debug!(
+                target: "darkfid::proto::protocol_sync::handle_receive_fork_headers_request",
+                "Node still syncing blockchain, skipping..."
+            );
+            handler.send_action(channel, ProtocolGenericAction::Skip).await;
+            continue
+        }
+
+        // Check if request exists the configured limit
+        if request.headers.len() > BATCH {
+            debug!(
+                target: "darkfid::proto::protocol_sync::handle_receive_fork_headers_request",
+                "Node requested more headers than allowed."
+            );
+            handler.send_action(channel, ProtocolGenericAction::Skip).await;
+            continue
+        }
+
+        debug!(target: "darkfid::proto::protocol_sync::handle_receive_fork_headers_request", "Received request: {request:?}");
+
+        // Retrieve fork headers
+        let headers = match validator
+            .consensus
+            .get_fork_headers(&request.headers, &request.fork_header)
+            .await
+        {
+            Ok(h) => h,
+            Err(e) => {
+                debug!(
+                    target: "darkfid::proto::protocol_sync::handle_receive_fork_headers_request",
+                    "Getting fork headers failed: {}",
+                    e
+                );
+                handler.send_action(channel, ProtocolGenericAction::Skip).await;
+                continue
+            }
+        };
+
+        // Send response
+        handler
+            .send_action(channel, ProtocolGenericAction::Response(ForkHeadersResponse { headers }))
+            .await;
+    }
+}
+
+/// Background handler function for ProtocolSyncForkProposals.
+async fn handle_receive_fork_proposals_request(
+    handler: ProtocolGenericHandlerPtr<ForkProposalsRequest, ForkProposalsResponse>,
+    validator: ValidatorPtr,
+) -> Result<()> {
+    debug!(target: "darkfid::proto::protocol_sync::handle_receive_fork_proposals_request", "START");
+    loop {
+        // Wait for a new fork header hash request message
+        let (channel, request) = match handler.receiver.recv().await {
+            Ok(r) => r,
+            Err(e) => {
+                debug!(
+                    target: "darkfid::proto::protocol_sync::handle_receive_fork_proposals_request",
+                    "recv fail: {e}"
+                );
+                continue
+            }
+        };
+
+        // Check if node has finished syncing its blockchain
+        if !*validator.synced.read().await {
+            debug!(
+                target: "darkfid::proto::protocol_sync::handle_receive_fork_proposals_request",
+                "Node still syncing blockchain, skipping..."
+            );
+            handler.send_action(channel, ProtocolGenericAction::Skip).await;
+            continue
+        }
+
+        // Check if request exists the configured limit
+        if request.headers.len() > BATCH {
+            debug!(
+                target: "darkfid::proto::protocol_sync::handle_receive_fork_proposals_request",
+                "Node requested more proposals than allowed."
+            );
+            handler.send_action(channel, ProtocolGenericAction::Skip).await;
+            continue
+        }
+
+        debug!(target: "darkfid::proto::protocol_sync::handle_receive_fork_proposals_request", "Received request: {request:?}");
+
+        // Retrieve fork headers
+        let proposals = match validator
+            .consensus
+            .get_fork_proposals(&request.headers, &request.fork_header)
+            .await
+        {
+            Ok(p) => p,
+            Err(e) => {
+                debug!(
+                    target: "darkfid::proto::protocol_sync::handle_receive_fork_proposals_request",
+                    "Getting fork proposals failed: {}",
+                    e
+                );
+                handler.send_action(channel, ProtocolGenericAction::Skip).await;
+                continue
+            }
+        };
+
+        // Send response
+        handler
+            .send_action(
+                channel,
+                ProtocolGenericAction::Response(ForkProposalsResponse { proposals }),
+            )
             .await;
     }
 }
