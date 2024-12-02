@@ -914,9 +914,6 @@ impl EditBox {
             let glyphs = self.glyphs.lock().unwrap().clone();
 
             let mut text = String::new();
-            if glyphs.is_empty() {
-                text.push_str(suggest_text);
-            }
             for (i, glyph) in glyphs.iter().enumerate() {
                 if cursor_pos == i as u32 {
                     text.push_str(suggest_text);
@@ -949,14 +946,11 @@ impl EditBox {
             debug!(target: "ui::editbox", "inserting underline text at {underline_start}");
 
             let mut text = String::new();
-            if glyphs.is_empty() {
-                text.push_str(suggest_text);
-            }
             for (i, glyph) in glyphs.iter().enumerate() {
                 if underline_start == i {
                     text.push_str(suggest_text);
                 }
-                if underline_start <= i && i <= underline_end {
+                if underline_start <= i && i < underline_end {
                     continue
                 }
                 text.push_str(&glyph.substr);
