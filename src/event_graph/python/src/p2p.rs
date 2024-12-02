@@ -16,7 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi::net;
+use crate::event_graph::{Event, EventGraphPtr};
+use darkfi::{event_graph, net};
 use pyo3::{
     prelude::PyModule, pyclass, pyfunction, pymethods, types::PyAny, wrap_pyfunction, PyCell,
     PyResult, Python,
@@ -147,10 +148,10 @@ fn new_settings(
 #[pyclass]
 pub struct P2pPtr(pub net::P2pPtr);
 
-/*
 #[pymethods]
 impl P2pPtr {
     // FIXME can't get conversion from PyAny to EventGraphPtr  because it doesn't impl clone, in otherwords can you get future_into_py return anything other than PyAny if it doesn't implement clone?
+    /*
     #[new]
     fn new<'a>(py: Python<'a>, settings: &'a Settings) -> PyResult<Self> {
         let p2p_ptr_pyany : PyResult<&PyAny> = new_p2p(py, settings);
@@ -161,8 +162,8 @@ impl P2pPtr {
         let p2p_ptr : P2pPtr = p2p_ptr_pyany.unwrap().borrow();
         Ok(p2p_ptr)
     }
+     */
 }
- */
 
 #[pyclass]
 pub struct P2p(pub net::P2p);
@@ -192,6 +193,45 @@ fn start_p2p<'a>(py: Python<'a>, net_p2p_ptr: &'a P2pPtr) -> PyResult<&'a PyAny>
     })
 }
 
+#[pyfunction]
+fn broadcast_p2p<'a>(
+    py: Python<'a>,
+    net_p2p_ptr: &'a P2pPtr,
+    event_py: &PyCell<Event>,
+) -> PyResult<&'a PyAny> {
+    let p2p_ptr: net::P2pPtr = net_p2p_ptr.0.clone();
+    let event: event_graph::Event = event_py.borrow().deref().0.clone();
+    pyo3_asyncio::async_std::future_into_py(py, async move {
+        let _ = p2p_ptr.broadcast(&event_graph::proto::EventPut(event)).await;
+        Ok(())
+    })
+}
+
+#[pyfunction]
+fn register_protocol_p2p<'a>(
+    py: Python<'a>,
+    net_p2p_ptr: &'a P2pPtr,
+    event_graph: &PyCell<EventGraphPtr>,
+) -> PyResult<&'a PyAny> {
+    let p2p_ptr: net::P2pPtr = net_p2p_ptr.0.clone();
+    let eg: event_graph::EventGraphPtr = event_graph.borrow().deref().0.clone();
+    pyo3_asyncio::async_std::future_into_py(py, async move {
+        *eg.synced.write().await = true;
+        let registry = p2p_ptr.protocol_registry();
+        registry
+            .register(net::session::SESSION_DEFAULT, move |channel, _| {
+                let event_graph_ = eg.clone();
+                async move {
+                    event_graph::proto::ProtocolEventGraph::init(event_graph_, channel)
+                        .await
+                        .unwrap()
+                }
+            })
+            .await;
+        Ok(())
+    })
+}
+
 pub fn create_module(py: Python<'_>) -> PyResult<&PyModule> {
     let submod = PyModule::new(py, "event_graph")?;
     submod.add_class::<P2pPtr>()?;
@@ -205,5 +245,7 @@ pub fn create_module(py: Python<'_>) -> PyResult<&PyModule> {
     submod.add_function(wrap_pyfunction!(parse_url, submod)?)?;
     submod.add_function(wrap_pyfunction!(new_p2p, submod)?)?;
     submod.add_function(wrap_pyfunction!(start_p2p, submod)?)?;
+    submod.add_function(wrap_pyfunction!(broadcast_p2p, submod)?)?;
+    submod.add_function(wrap_pyfunction!(register_protocol_p2p, submod)?)?;
     Ok(submod)
 }

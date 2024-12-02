@@ -28,10 +28,10 @@ use smol::Executor;
 use std::{self, ops::Deref, path::PathBuf, sync::Arc};
 
 #[pyclass]
-pub struct EventGraphPtr(event_graph::EventGraphPtr);
+pub struct EventGraphPtr(pub event_graph::EventGraphPtr);
 
-//#[pyclass]
-//pub struct EventGraph(event_graph::EventGraph);
+#[pyclass]
+pub struct EventGraph(pub event_graph::EventGraph);
 
 #[pyfunction]
 fn new_event_graph<'a>(
@@ -71,7 +71,40 @@ fn new_event_graph<'a>(
 
 #[pyclass]
 pub struct Event(pub event::Event);
-//TODO implement new event
+
+#[pyfunction]
+fn new_event<'a>(
+    py: Python<'a>,
+    data: Vec<u8>,
+    eg_py: &PyCell<EventGraphPtr>,
+) -> PyResult<&'a PyAny> {
+    let eg_ptr: event_graph::EventGraphPtr = eg_py.borrow().deref().0.clone();
+    pyo3_asyncio::async_std::future_into_py(py, async move {
+        let eg: &event_graph::EventGraph = eg_ptr.deref();
+        let event_fut = event::Event::new(data, eg);
+        let ev: event::Event = event_fut.await;
+        let event_py: Event = Event(ev);
+        Ok(event_py)
+    })
+}
+
+/* FIXME eg_option.exect fails
+#[pyfunction]
+fn egp2eg(eg_py: &PyCell<EventGraphPtr>) -> PyResult<EventGraph> {
+    let eg_ptr : event_graph::EventGraphPtr = eg_py.borrow().deref().0.clone();
+    let eg_option : Option<event_graph::EventGraph> = Arc::try_unwrap(eg_ptr).ok();
+    let eg : event_graph::EventGraph = eg_option.expect("reason");
+    Ok(EventGraph(eg))
+}
+*/
+
+/*
+#[pyfunction]
+fn egp_dag(eg_py: &PyCell<EventGraphPtr>) -> PyResult<SledTree> {
+    let eg_ptr : event_graph::EventGraphPtr = eg_py.borrow().deref().0.clone();
+    Ok(eg_ptr.dag)
+}
+ */
 
 #[pyclass]
 pub struct Hash(pub blake3::Hash);
@@ -85,8 +118,8 @@ pub struct Hash(pub blake3::Hash);
 // note! only unit variants supported py pyclass, so implemnet MessageInfo class with boolean type send/recev being true or false. or enum send/recv embedded in the struct.
 #[pyclass]
 pub enum DegEvent {
-    SendMessage(MessageInfo),
-    RecvMessage(MessageInfo),
+SendMessage(MessageInfo),
+RecvMessage(MessageInfo),
 }
 */
 
@@ -110,7 +143,7 @@ impl EventGraphPtr {
     }
     */
 
-    fn dag_async<'a>(&'a self, py: Python<'a>) -> PyResult<&'a PyAny> {
+    fn dag_sync<'a>(&'a self, py: Python<'a>) -> PyResult<&'a PyAny> {
         let eg_ptr: event_graph::EventGraphPtr = self.0.clone();
         pyo3_asyncio::async_std::future_into_py(py, async move {
             let _ = eg_ptr.dag_sync().await;
@@ -145,10 +178,17 @@ impl EventGraphPtr {
         pyo3_asyncio::async_std::future_into_py(py, async move {
             let event_res: Result<Option<event::Event>, darkfi::Error> =
                 eg_ptr.dag_get(&event_id).await;
-            let event: event::Event = event_res.unwrap().expect("expecting event in return");
+            let event: event::Event = event_res
+                .unwrap()
+                .expect(&format!("expecting event in return with id: {}", event_id).to_string());
             let event_native: Event = Event(event);
             Ok(event_native)
         })
+    }
+
+    fn dag_len(&self, _py: Python) -> usize {
+        let eg_ptr: event_graph::EventGraphPtr = self.0.clone();
+        eg_ptr.dag_len()
     }
 
     fn order_events<'a>(&'a self, py: Python<'a>) -> PyResult<&'a PyAny> {
@@ -202,9 +242,12 @@ impl EventGraphPtr {
 pub fn create_module(py: Python<'_>) -> PyResult<&PyModule> {
     let submod = PyModule::new(py, "event_graph")?;
     submod.add_class::<EventGraphPtr>()?;
-    //submod.add_class::<EventGraph>()?;
+    submod.add_class::<EventGraph>()?;
     submod.add_class::<Event>()?;
     submod.add_class::<Hash>()?;
     submod.add_function(wrap_pyfunction!(new_event_graph, submod)?)?;
+    submod.add_function(wrap_pyfunction!(new_event, submod)?)?;
+    //submod.add_function(wrap_pyfunction!(egp2eg, submod)?)?;
+    //submod.add_function(wrap_pyfunction!(egp_dag, submod)?)?;
     Ok(submod)
 }

@@ -22,12 +22,23 @@ use sled_overlay::sled;
 #[pyclass]
 pub struct SledDb(pub sled::Db);
 
+#[pyclass]
+pub struct SledTree(pub sled::Tree);
+
 #[pymethods]
 impl SledDb {
     #[new]
     fn new(pathpy: String) -> Self {
         let path: &std::path::Path = std::path::Path::new(&pathpy);
-        let db_res = sled::open(path);
+        let db_res;
+        if pathpy == "" {
+            // note! with this method, make sure to drop db file for every new call
+            // if the file exists
+            db_res = sled::open(path);
+        } else {
+            // otherwise should use this without a path
+            db_res = sled::Config::new().temporary(true).open();
+        };
         Self(db_res.unwrap())
     }
 }
@@ -35,5 +46,6 @@ impl SledDb {
 pub(crate) fn create_module(py: Python<'_>) -> PyResult<&PyModule> {
     let submod = PyModule::new(py, "sled")?;
     submod.add_class::<SledDb>()?;
+    submod.add_class::<SledTree>()?;
     Ok(submod)
 }

@@ -198,6 +198,11 @@ impl EventGraph {
         self.days_rotation
     }
 
+    /// return dag length necessary for event graph bindings testing.
+    pub fn dag_len(&self) -> usize {
+        self.dag.len()
+    }
+
     /// Sync the DAG from connected peers
     pub async fn dag_sync(&self) -> Result<()> {
         // We do an optimistic sync where we ask all our connected peers for
