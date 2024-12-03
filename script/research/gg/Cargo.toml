@@ -18,13 +18,13 @@ darkfi = {path = "../../../", features = ["bs58", "validator"]}
 darkfi_money_contract = {path = "../../../src/contract/money", features = ["no-entrypoint", "client"]}
 darkfi-contract-test-harness = {path = "../../../src/contract/test-harness"}
 darkfi-sdk = {path = "../../../src/sdk"}
-darkfi-serial = {path = "../../../src/serial"}
+darkfi-serial = "0.4.2"
 
 # Misc
 async-std = {version = "1.13.0", features = ["attributes"]}
 bs58 = "0.5.1"
 clap = {version = "4.4.11", features = ["derive"]}
-sled-overlay = "0.1.5"
+sled-overlay = "0.1.6"
 
 [patch.crates-io]
 halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v4"}

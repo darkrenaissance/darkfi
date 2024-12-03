@@ -27,11 +27,14 @@ use darkfi_sdk::{
 #[cfg(feature = "async-serial")]
 use darkfi_serial::async_trait;
 use darkfi_serial::{deserialize, serialize, Encodable, SerialDecodable, SerialEncodable};
-use sled_overlay::sled;
+use sled_overlay::{
+    serial::{parse_record, parse_u32_key_record},
+    sled,
+};
 
 use crate::{util::time::Timestamp, Error, Result};
 
-use super::{parse_record, parse_u32_key_record, SledDbOverlayPtr};
+use super::SledDbOverlayPtr;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, SerialEncodable, SerialDecodable)]
 // We have to introduce a type rather than using an alias so we can restrict API access

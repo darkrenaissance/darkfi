@@ -21,7 +21,7 @@ use std::io::Cursor;
 use darkfi_sdk::crypto::ContractId;
 use darkfi_serial::{deserialize, serialize};
 use log::{debug, error};
-use sled_overlay::sled;
+use sled_overlay::{serial::parse_record, sled};
 
 use crate::{
     zk::{empty_witnesses, VerifyingKey, ZkCircuit},
@@ -29,7 +29,7 @@ use crate::{
     Error, Result,
 };
 
-use super::{parse_record, SledDbOverlayPtr};
+use super::SledDbOverlayPtr;
 
 pub const SLED_CONTRACTS_TREE: &[u8] = b"_contracts";
 pub const SLED_BINCODE_TREE: &[u8] = b"_wasm_bincode";

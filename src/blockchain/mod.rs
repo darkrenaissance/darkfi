@@ -19,7 +19,6 @@
 use std::sync::{Arc, Mutex};
 
 use darkfi_sdk::tx::TransactionHash;
-use darkfi_serial::{deserialize, Decodable};
 use log::debug;
 use sled_overlay::{sled, sled::Transactional};
 
@@ -584,32 +583,4 @@ impl BlockchainOverlay {
 
         Ok(Arc::new(Mutex::new(Self { overlay, headers, blocks, transactions, contracts })))
     }
-}
-
-/// Parse a sled record with a u32 key in the form of a tuple (`key`, `value`).
-pub fn parse_u32_key_record<T: Decodable>(record: (sled::IVec, sled::IVec)) -> Result<(u32, T)> {
-    let key_bytes: [u8; 4] = record.0.as_ref().try_into().unwrap();
-    let key = u32::from_be_bytes(key_bytes);
-    let value = deserialize(&record.1)?;
-
-    Ok((key, value))
-}
-
-/// Parse a sled record with a u64 key in the form of a tuple (`key`, `value`).
-pub fn parse_u64_key_record<T: Decodable>(record: (sled::IVec, sled::IVec)) -> Result<(u64, T)> {
-    let key_bytes: [u8; 8] = record.0.as_ref().try_into().unwrap();
-    let key = u64::from_be_bytes(key_bytes);
-    let value = deserialize(&record.1)?;
-
-    Ok((key, value))
-}
-
-/// Parse a sled record in the form of a tuple (`key`, `value`).
-pub fn parse_record<T1: Decodable, T2: Decodable>(
-    record: (sled::IVec, sled::IVec),
-) -> Result<(T1, T2)> {
-    let key = deserialize(&record.0)?;
-    let value = deserialize(&record.1)?;
-
-    Ok((key, value))
 }

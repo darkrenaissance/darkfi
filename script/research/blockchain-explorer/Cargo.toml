@@ -18,7 +18,7 @@ drk = {path = "../../../bin/drk"}
 
 # Misc
 log = "0.4.22"
-sled-overlay = "0.1.5"
+sled-overlay = "0.1.6"
 
 # JSON-RPC
 async-trait = "0.1.83"

@@ -20,11 +20,14 @@ use std::collections::HashMap;
 
 use darkfi_sdk::tx::TransactionHash;
 use darkfi_serial::{deserialize, serialize};
-use sled_overlay::sled;
+use sled_overlay::{
+    serial::{parse_record, parse_u64_key_record},
+    sled,
+};
 
 use crate::{tx::Transaction, Error, Result};
 
-use super::{parse_record, parse_u64_key_record, SledDbOverlayPtr};
+use super::SledDbOverlayPtr;
 
 pub const SLED_TX_TREE: &[u8] = b"_transactions";
 pub const SLED_TX_LOCATION_TREE: &[u8] = b"_transaction_location";
