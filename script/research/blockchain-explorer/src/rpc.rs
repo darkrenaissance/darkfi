@@ -38,7 +38,7 @@ use crate::{
 };
 
 #[async_trait]
-impl RequestHandler for Explorerd {
+impl RequestHandler<()> for Explorerd {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
         debug!(target: "blockchain-explorer::rpc", "--> {}", req.stringify().unwrap());
 

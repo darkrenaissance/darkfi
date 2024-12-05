@@ -248,7 +248,7 @@ impl Dhtd {
 }
 
 #[async_trait]
-impl RequestHandler for Dhtd {
+impl RequestHandler<()> for Dhtd {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
         if !req.params.is_array() {
             return JsonError::new(InvalidParams, None, req.id).into()

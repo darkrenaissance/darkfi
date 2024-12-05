@@ -35,7 +35,7 @@ use smol::lock::MutexGuard;
 use super::DarkIrc;
 
 #[async_trait]
-impl RequestHandler for DarkIrc {
+impl RequestHandler<()> for DarkIrc {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
         debug!(target: "darkirc::rpc", "--> {}", req.stringify().unwrap());
 

@@ -241,7 +241,7 @@ impl Lilith {
 }
 
 #[async_trait]
-impl RequestHandler for Lilith {
+impl RequestHandler<()> for Lilith {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
         return match req.method.as_str() {
             "ping" => self.pong(req.id, req.params).await,

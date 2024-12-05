@@ -43,7 +43,7 @@ use crate::{
 
 #[async_trait]
 #[rustfmt::skip]
-impl RequestHandler for DarkfiNode {
+impl RequestHandler<()> for DarkfiNode {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
         debug!(target: "darkfid::rpc", "--> {}", req.stringify().unwrap());
 

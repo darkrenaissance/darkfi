@@ -66,7 +66,7 @@ pub struct JsonRpcInterface {
 }
 
 #[async_trait]
-impl RequestHandler for JsonRpcInterface {
+impl RequestHandler<()> for JsonRpcInterface {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
         let rep = match req.method.as_str() {
             "add" => self.add(req.params).await,

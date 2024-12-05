@@ -25,7 +25,7 @@ any methods yet, so for now let's just return a `JsonError`.
 
 ```rust
 #[async_trait]
-impl RequestHandler for Dchat {
+impl RequestHandler<()> for Dchat {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
         if req.params.as_array().is_none() {
             return JsonError::new(ErrorCode::InvalidRequest, None, req.id).into()

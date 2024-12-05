@@ -42,7 +42,7 @@ use crate::{
 
 /// Asynchronous trait implementing a handler for incoming JSON-RPC requests.
 #[async_trait]
-pub trait RequestHandler: Sync + Send {
+pub trait RequestHandler<T>: Sync + Send {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult;
 
     async fn pong(&self, id: u16, _params: JsonValue) -> JsonResult {
@@ -77,10 +77,10 @@ pub trait RequestHandler: Sync + Send {
 }
 
 /// Auxiliary function to handle a request in the background.
-async fn handle_request(
+async fn handle_request<T>(
     writer: Arc<Mutex<WriteHalf<Box<dyn PtStream>>>>,
     addr: Url,
-    rh: Arc<impl RequestHandler + 'static>,
+    rh: Arc<impl RequestHandler<T> + 'static>,
     ex: Arc<smol::Executor<'_>>,
     tasks: Arc<Mutex<HashSet<Arc<StoppableTask>>>>,
     use_http: bool,
@@ -240,14 +240,14 @@ async fn handle_request(
 /// Accept function that should run inside a loop for accepting incoming
 /// JSON-RPC requests and passing them to the [`RequestHandler`].
 #[allow(clippy::type_complexity)]
-pub async fn accept(
+pub async fn accept<'a, T: 'a>(
     reader: Arc<Mutex<BufReader<ReadHalf<Box<dyn PtStream>>>>>,
     writer: Arc<Mutex<WriteHalf<Box<dyn PtStream>>>>,
     addr: Url,
-    rh: Arc<impl RequestHandler + 'static>,
+    rh: Arc<impl RequestHandler<T> + 'static>,
     conn_limit: Option<usize>,
     use_http: bool,
-    ex: Arc<smol::Executor<'_>>,
+    ex: Arc<smol::Executor<'a>>,
 ) -> Result<()> {
     // If there's a connection limit set, we will refuse connections
     // after this point.
@@ -348,12 +348,12 @@ pub async fn accept(
 
 /// Wrapper function around [`accept()`] to take the incoming connection and
 /// pass it forward.
-async fn run_accept_loop(
+async fn run_accept_loop<'a, T: 'a>(
     listener: Box<dyn PtListener>,
-    rh: Arc<impl RequestHandler + 'static>,
+    rh: Arc<impl RequestHandler<T> + 'static>,
     conn_limit: Option<usize>,
     use_http: bool,
-    ex: Arc<smol::Executor<'_>>,
+    ex: Arc<smol::Executor<'a>>,
 ) -> Result<()> {
     loop {
         match listener.next().await {
@@ -421,11 +421,11 @@ async fn run_accept_loop(
 ///
 /// The supported network schemes can be prefixed with `http+` to serve
 /// JSON-RPC over HTTP/1.1.
-pub async fn listen_and_serve(
+pub async fn listen_and_serve<'a, T: 'a>(
     accept_url: Url,
-    rh: Arc<impl RequestHandler + 'static>,
+    rh: Arc<impl RequestHandler<T> + 'static>,
     conn_limit: Option<usize>,
-    ex: Arc<smol::Executor<'_>>,
+    ex: Arc<smol::Executor<'a>>,
 ) -> Result<()> {
     // Figure out if we're using HTTP and rewrite the URL accordingly.
     let mut listen_url = accept_url.clone();
@@ -452,7 +452,7 @@ mod tests {
     }
 
     #[async_trait]
-    impl RequestHandler for RpcServer {
+    impl RequestHandler<()> for RpcServer {
         async fn handle_request(&self, req: JsonRequest) -> JsonResult {
             match req.method.as_str() {
                 "ping" => return self.pong(req.id, req.params).await,

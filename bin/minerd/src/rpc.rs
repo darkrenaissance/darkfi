@@ -42,7 +42,7 @@ use crate::{
 };
 
 #[async_trait]
-impl RequestHandler for MinerNode {
+impl RequestHandler<()> for MinerNode {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
         debug!(target: "minerd::rpc", "--> {}", req.stringify().unwrap());
 

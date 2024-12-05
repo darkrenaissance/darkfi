@@ -32,7 +32,7 @@ use darkfi::rpc::{
 use crate::{dchatmsg::DchatMsg, Dchat};
 
 #[async_trait]
-impl RequestHandler for Dchat {
+impl RequestHandler<()> for Dchat {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
         debug!(target: "dchat::rpc", "--> {}", req.stringify().unwrap());
 

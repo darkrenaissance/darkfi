@@ -55,7 +55,7 @@ impl RpcSrv {
 }
 
 #[async_trait]
-impl RequestHandler for RpcSrv {
+impl RequestHandler<()> for RpcSrv {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
         assert!(req.params.is_array());
 
