@@ -47,6 +47,7 @@ mod rpc;
 use rpc::{DefaultRpcHandler, MinerRpcClient, MmRpcHandler};
 mod rpc_blockchain;
 mod rpc_tx;
+mod rpc_xmr;
 
 /// Validator async tasks
 pub mod task;

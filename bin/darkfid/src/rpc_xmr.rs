@@ -34,7 +34,7 @@ impl DarkfiNode {
     //
     // --> {"jsonrpc":"2.0", "method": "merge_mining_get_chain_id", "id": 1}
     // <-- {"jsonrpc":"2.0", "result": {"chain_id": "0f28c...7863"}, "id": 1}
-    pub async fn xmr_merge_mining_get_chain_id(self, id: u16, _params: JsonValue) -> JsonResult {
+    pub async fn xmr_merge_mining_get_chain_id(&self, id: u16, _params: JsonValue) -> JsonResult {
         let (_, genesis_hash) = match self.validator.blockchain.genesis() {
             Ok(v) => v,
             Err(e) => {

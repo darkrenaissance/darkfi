@@ -97,7 +97,6 @@ impl RequestHandler<DefaultRpcHandler> for DarkfiNode {
             "blockchain.subscribe_blocks" => self.blockchain_subscribe_blocks(req.id, req.params).await,
             "blockchain.subscribe_txs" =>  self.blockchain_subscribe_txs(req.id, req.params).await,
             "blockchain.subscribe_proposals" => self.blockchain_subscribe_proposals(req.id, req.params).await,
-            "merge_mining_get_chain_id" => self.merge_mining_get_chain_id(req.id, req.params).await,
 
             // ===================
             // Transaction methods
@@ -127,11 +126,10 @@ impl RequestHandler<MmRpcHandler> for DarkfiNode {
         debug!(target: "darkfid::mm_rpc", "--> {}", req.stringify().unwrap());
 
         match req.method.as_str() {
-            // =====================
-            // Miscellaneous methods
-            // =====================
-            "ping" => <DarkfiNode as RequestHandler<MmRpcHandler>>::pong(self, req.id, req.params).await,
-            "clock" => self.clock(req.id, req.params).await,
+            // ================================================
+            // P2Pool methods requested for Monero Merge Mining
+            // ================================================
+            "merge_mining_get_chain_id" => self.xmr_merge_mining_get_chain_id(req.id, req.params).await,
 
             // ==============
             // Invalid method
