@@ -29,6 +29,11 @@ use url::Url;
 /// TLS upgrade mechanism
 pub(crate) mod tls;
 
+/*
+/// SOCKS5 proxy client
+pub(crate) mod socks5;
+*/
+
 #[cfg(feature = "p2p-tcp")]
 /// TCP transport
 pub(crate) mod tcp;
