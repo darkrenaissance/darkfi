@@ -48,6 +48,9 @@ write_public_key = "Fgsc8tep4KX3Rb2drq8RxMyrHFWQ7wZaZPpF9F3GQYFG"
 
 # P2P network settings
 [net]
+# Path to the P2P datastore
+datastore = "~/.local/darkfi/taud"
+
 # Path to a configured hostlist for saving known peers
 hostlist = "~/.local/darkfi/taud/hostlist.tsv"
 
