@@ -271,13 +271,13 @@ fn darkfid_programmatic_control() -> Result<()> {
                 .unwrap();
 
                 // Start it
-                daemon.start(&ex, &rpc_listen, &consensus_config).await.unwrap();
+                daemon.start(&ex, &rpc_listen, &None, &consensus_config).await.unwrap();
 
                 // Stop it
                 daemon.stop().await.unwrap();
 
                 // Start it again
-                daemon.start(&ex, &rpc_listen, &consensus_config).await.unwrap();
+                daemon.start(&ex, &rpc_listen, &None, &consensus_config).await.unwrap();
 
                 // Stop it
                 daemon.stop().await.unwrap();

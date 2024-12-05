@@ -28,7 +28,6 @@ use url::Url;
 use darkfi::{
     net::settings::Settings,
     rpc::{
-        client::RpcChadClient,
         jsonrpc::JsonSubscriber,
         server::{listen_and_serve, RequestHandler},
     },
@@ -45,6 +44,7 @@ use error::{server_error, RpcError};
 
 /// JSON-RPC requests handler and methods
 mod rpc;
+use rpc::{DefaultRpcHandler, MinerRpcClient, MmRpcHandler};
 mod rpc_blockchain;
 mod rpc_tx;
 
@@ -55,21 +55,6 @@ use task::{consensus::ConsensusInitTaskConfig, consensus_init_task};
 /// P2P net protocols
 mod proto;
 use proto::{DarkfidP2pHandler, DarkfidP2pHandlerPtr};
-
-/// Structure to hold a JSON-RPC client and its config,
-/// so we can recreate it in case of an error.
-pub struct MinerRpcClient {
-    endpoint: Url,
-    ex: ExecutorPtr,
-    client: RpcChadClient,
-}
-
-impl MinerRpcClient {
-    pub async fn new(endpoint: Url, ex: ExecutorPtr) -> Result<Self> {
-        let client = RpcChadClient::new(endpoint.clone(), ex.clone()).await?;
-        Ok(Self { endpoint, ex, client })
-    }
-}
 
 /// Atomic pointer to the DarkFi node
 pub type DarkfiNodePtr = Arc<DarkfiNode>;
@@ -88,6 +73,8 @@ pub struct DarkfiNode {
     rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
     /// JSON-RPC client to execute requests to the miner daemon
     rpc_client: Option<Mutex<MinerRpcClient>>,
+    /// HTTP JSON-RPC connection tracker
+    mm_rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
 }
 
 impl DarkfiNode {
@@ -105,6 +92,7 @@ impl DarkfiNode {
             subscribers,
             rpc_connections: Mutex::new(HashSet::new()),
             rpc_client,
+            mm_rpc_connections: Mutex::new(HashSet::new()),
         })
     }
 }
@@ -120,6 +108,8 @@ pub struct Darkfid {
     dnet_task: StoppableTaskPtr,
     /// JSON-RPC background task
     rpc_task: StoppableTaskPtr,
+    /// HTTP JSON-RPC background task
+    mm_rpc_task: StoppableTaskPtr,
     /// Consensus protocol background task
     consensus_task: StoppableTaskPtr,
 }
@@ -182,11 +172,12 @@ impl Darkfid {
         // Generate the background tasks
         let dnet_task = StoppableTask::new();
         let rpc_task = StoppableTask::new();
+        let mm_rpc_task = StoppableTask::new();
         let consensus_task = StoppableTask::new();
 
         info!(target: "darkfid::Darkfid::init", "Darkfi daemon initialized successfully!");
 
-        Ok(Arc::new(Self { node, dnet_task, rpc_task, consensus_task }))
+        Ok(Arc::new(Self { node, dnet_task, rpc_task, mm_rpc_task, consensus_task }))
     }
 
     /// Start the DarkFi daemon in the given executor, using the provided JSON-RPC listen url
@@ -195,6 +186,7 @@ impl Darkfid {
         &self,
         executor: &ExecutorPtr,
         rpc_listen: &Url,
+        mm_rpc_listen: &Option<Url>,
         config: &ConsensusInitTaskConfig,
     ) -> Result<()> {
         info!(target: "darkfid::Darkfid::start", "Starting Darkfi daemon...");
@@ -234,16 +226,41 @@ impl Darkfid {
         info!(target: "darkfid::Darkfid::start", "Starting JSON-RPC server");
         let node_ = self.node.clone();
         self.rpc_task.clone().start(
-            listen_and_serve(rpc_listen.clone(), self.node.clone(), None, executor.clone()),
+            listen_and_serve::<DefaultRpcHandler>(rpc_listen.clone(), self.node.clone(), None, executor.clone()),
             |res| async move {
                 match res {
-                    Ok(()) | Err(Error::RpcServerStopped) => node_.stop_connections().await,
+                    Ok(()) | Err(Error::RpcServerStopped) => <DarkfiNode as RequestHandler<DefaultRpcHandler>>::stop_connections(&node_).await,
                     Err(e) => error!(target: "darkfid::Darkfid::start", "Failed starting JSON-RPC server: {}", e),
                 }
             },
             Error::RpcServerStopped,
             executor.clone(),
         );
+
+        // Start the HTTP JSON-RPC task
+        if let Some(url) = mm_rpc_listen {
+            info!(target: "darkfid::Darkfid::start", "Starting HTTP JSON-RPC server");
+            let node_ = self.node.clone();
+            self.mm_rpc_task.clone().start(
+                listen_and_serve::<MmRpcHandler>(url.clone(), self.node.clone(), None, executor.clone()),
+                |res| async move {
+                    match res {
+                        Ok(()) | Err(Error::RpcServerStopped) => <DarkfiNode as RequestHandler<MmRpcHandler>>::stop_connections(&node_).await,
+                        Err(e) => error!(target: "darkfid::Darkfid::start", "Failed starting HTTP JSON-RPC server: {}", e),
+                    }
+                },
+                Error::RpcServerStopped,
+                executor.clone(),
+            );
+        } else {
+            // Create a dummy task
+            self.mm_rpc_task.clone().start(
+                async { Ok(()) },
+                |_| async { /* Do nothing */ },
+                Error::RpcServerStopped,
+                executor.clone(),
+            );
+        }
 
         // Start the P2P network
         info!(target: "darkfid::Darkfid::start", "Starting P2P network");
@@ -287,6 +304,10 @@ impl Darkfid {
         info!(target: "darkfid::Darkfid::stop", "Stopping JSON-RPC server...");
         self.rpc_task.stop().await;
 
+        // Stop the HTTP JSON-RPC task
+        info!(target: "darkfid::Darkfid::stop", "Stopping HTTP JSON-RPC server...");
+        self.rpc_task.stop().await;
+
         // Stop the P2P network
         info!(target: "darkfid::Darkfid::stop", "Stopping P2P network protocols handler...");
         self.node.p2p_handler.stop().await;
@@ -303,7 +324,7 @@ impl Darkfid {
         // Close the JSON-RPC client, if it was initialized
         if let Some(ref rpc_client) = self.node.rpc_client {
             info!(target: "darkfid::Darkfid::stop", "Stopping JSON-RPC client...");
-            rpc_client.lock().await.client.stop().await;
+            rpc_client.lock().await.stop().await;
         };
 
         info!(target: "darkfid::Darkfid::stop", "Darkfi daemon terminated successfully!");

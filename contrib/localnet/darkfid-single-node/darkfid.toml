@@ -23,6 +23,9 @@ threshold = 1
 # minerd JSON-RPC endpoint
 minerd_endpoint = "tcp://127.0.0.1:48467"
 
+# Optional HTTP JSON-RPC listen URL to serve handlers for p2pool merge mining requests
+#mm_rpc_listen = "http+tcp://127.0.0.1:8241"
+
 # PoW block production target, in seconds
 pow_target = 10
 

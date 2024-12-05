@@ -94,6 +94,10 @@ pub struct BlockchainNetwork {
     /// minerd JSON-RPC endpoint
     minerd_endpoint: Option<Url>,
 
+    #[structopt(long)]
+    /// Optional HTTP JSON-RPC listen URL to serve handlers for p2pool merge mining requests
+    mm_rpc_listen: Option<Url>,
+
     #[structopt(long, default_value = "10")]
     /// PoW block production target, in seconds
     pow_target: u32,
@@ -225,7 +229,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         user_data: blockchain_config.user_data,
         bootstrap,
     };
-    daemon.start(&ex, &blockchain_config.rpc_listen, &config).await?;
+    daemon
+        .start(&ex, &blockchain_config.rpc_listen, &blockchain_config.mm_rpc_listen, &config)
+        .await?;
 
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new(ex)?;

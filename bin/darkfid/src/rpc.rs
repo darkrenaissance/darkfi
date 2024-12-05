@@ -22,6 +22,7 @@ use async_trait::async_trait;
 use log::{debug, error, info};
 use smol::lock::MutexGuard;
 use tinyjson::JsonValue;
+use url::Url;
 
 use darkfi::{
     net::P2pPtr,
@@ -31,7 +32,7 @@ use darkfi::{
         p2p_method::HandlerP2p,
         server::RequestHandler,
     },
-    system::{sleep, StoppableTaskPtr},
+    system::{sleep, ExecutorPtr, StoppableTaskPtr},
     util::time::Timestamp,
     Error, Result,
 };
@@ -41,9 +42,34 @@ use crate::{
     DarkfiNode,
 };
 
+/// Default JSON-RPC `RequestHandler` type
+pub struct DefaultRpcHandler;
+/// HTTP JSON-RPC `RequestHandler` type for p2pool
+pub struct MmRpcHandler;
+
+/// Structure to hold a JSON-RPC client and its config,
+/// so we can recreate it in case of an error.
+pub struct MinerRpcClient {
+    endpoint: Url,
+    ex: ExecutorPtr,
+    client: RpcChadClient,
+}
+
+impl MinerRpcClient {
+    pub async fn new(endpoint: Url, ex: ExecutorPtr) -> Result<Self> {
+        let client = RpcChadClient::new(endpoint.clone(), ex.clone()).await?;
+        Ok(Self { endpoint, ex, client })
+    }
+
+    /// Stop the client.
+    pub async fn stop(&self) {
+        self.client.stop().await
+    }
+}
+
 #[async_trait]
 #[rustfmt::skip]
-impl RequestHandler<()> for DarkfiNode {
+impl RequestHandler<DefaultRpcHandler> for DarkfiNode {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
         debug!(target: "darkfid::rpc", "--> {}", req.stringify().unwrap());
 
@@ -51,7 +77,7 @@ impl RequestHandler<()> for DarkfiNode {
             // =====================
             // Miscellaneous methods
             // =====================
-            "ping" => self.pong(req.id, req.params).await,
+            "ping" => <DarkfiNode as RequestHandler<DefaultRpcHandler>>::pong(self, req.id, req.params).await,
             "clock" => self.clock(req.id, req.params).await,
             "ping_miner" => self.ping_miner(req.id, req.params).await,
             "dnet.switch" => self.dnet_switch(req.id, req.params).await,
@@ -91,6 +117,31 @@ impl RequestHandler<()> for DarkfiNode {
 
     async fn connections_mut(&self) -> MutexGuard<'life0, HashSet<StoppableTaskPtr>> {
         self.rpc_connections.lock().await
+    }
+}
+
+#[async_trait]
+#[rustfmt::skip]
+impl RequestHandler<MmRpcHandler> for DarkfiNode {
+    async fn handle_request(&self, req: JsonRequest) -> JsonResult {
+        debug!(target: "darkfid::mm_rpc", "--> {}", req.stringify().unwrap());
+
+        match req.method.as_str() {
+            // =====================
+            // Miscellaneous methods
+            // =====================
+            "ping" => <DarkfiNode as RequestHandler<MmRpcHandler>>::pong(self, req.id, req.params).await,
+            "clock" => self.clock(req.id, req.params).await,
+
+            // ==============
+            // Invalid method
+            // ==============
+            _ => JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
+        }
+    }
+
+    async fn connections_mut(&self) -> MutexGuard<'life0, HashSet<StoppableTaskPtr>> {
+        self.mm_rpc_connections.lock().await
     }
 }
 
