@@ -46,9 +46,7 @@ impl DarkfiNode {
             }
         };
 
-        let hex_hash = format!("{:x?}", genesis_hash);
-        let resp_obj = HashMap::from([("chain_id".to_string(), JsonValue::String(hex_hash))]);
-
+        let resp_obj = HashMap::from([("chain_id".to_string(), genesis_hash.to_string().into())]);
         JsonResponse::new(resp_obj.into(), id).into()
     }
 }
