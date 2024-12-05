@@ -49,13 +49,14 @@ write_public_key = "Fgsc8tep4KX3Rb2drq8RxMyrHFWQ7wZaZPpF9F3GQYFG"
 # P2P network settings
 [net]
 # Path to the P2P datastore
-datastore = "~/.local/darkfi/taud"
+p2p_datastore = "~/.local/darkfi/taud"
 
 # Path to a configured hostlist for saving known peers
 hostlist = "~/.local/darkfi/taud/hostlist.tsv"
 
 ## P2P accept addresses
 #inbound = ["tcp+tls://0.0.0.0:23331", "tcp+tls://[::]:23331"]
+#inbound = ["tor://127.0.0.1:23331"]
 
 ## Outbound connection slots
 #outbound_connections = 8
@@ -87,6 +88,7 @@ seeds = [
 # Whitelisted transports for outbound connections
 allowed_transports = ["tcp+tls"]
 #allowed_transports = ["tor"]
+#allowed_transports = ["tor", "tor+tls"]
 
 # Enable transport mixing
 # Allows mixing transports, e.g. tor+tls:// connecting to tcp+tls://
