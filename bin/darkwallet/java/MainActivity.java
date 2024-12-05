@@ -12,9 +12,7 @@ if (true) {
         | EditorInfo.TYPE_TEXT_FLAG_AUTO_CORRECT;
     outAttrs.imeOptions = EditorInfo.IME_FLAG_NO_FULLSCREEN
         | EditorInfo.IME_ACTION_NONE;
-    // fullEditor is false, but we might set this to true for enabling
-    // text selection, and copy/paste. Lets see.
-    return new CustomInputConnection(this, false);
+    return new CustomInputConnection(this, outAttrs);
 }
 
 //% END

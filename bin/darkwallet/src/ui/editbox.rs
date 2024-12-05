@@ -378,8 +378,10 @@ impl EditBox {
         let glyphs = self.glyphs.lock().unwrap().clone();
         let atlas = text::make_texture_atlas(&self.render_api, &glyphs);
 
-        let mut mesh = MeshBuilder::with_clip(clip.clone());
+        //let mut mesh = MeshBuilder::with_clip(clip.clone());
+        let mut mesh = MeshBuilder::new();
         self.draw_selected(&mut mesh, &glyphs, clip.h).unwrap();
+        self.draw_underline(&mut mesh, &glyphs, clip.h).unwrap();
 
         let glyph_pos_iter = GlyphPositionIter::new(font_size, window_scale, &glyphs, baseline);
 
@@ -514,6 +516,65 @@ impl EditBox {
         // We don't need to do manual clipping since MeshBuilder should do that
         let select_rect = Rectangle { x: start_x, y: 0., w: end_x - start_x, h: clip_h };
         mesh.draw_box(&select_rect, hi_bg_color, &Rectangle::zero());
+        Ok(())
+    }
+
+    fn draw_underline(
+        &self,
+        mesh: &mut MeshBuilder,
+        glyphs: &Vec<Glyph>,
+        clip_h: f32,
+    ) -> Result<()> {
+        if self.underline.is_null(0)? || self.underline.is_null(1)? {
+            // Nothing underline so do nothing
+            return Ok(())
+        }
+        let under_start = self.underline.get_u32(0)? as usize;
+        let under_end = self.underline.get_u32(1)? as usize;
+
+        // Text started but nothing selected yet so do nothing
+        if under_start == under_end {
+            return Ok(())
+        }
+
+        assert!(under_start <= under_end);
+
+        let font_size = self.font_size.get();
+        let window_scale = self.window_scale.get();
+        let baseline = self.baseline.get();
+        let scroll = self.scroll.get();
+        let text_color = self.text_color.get();
+        let glyph_pos_iter = GlyphPositionIter::new(font_size, window_scale, &glyphs, baseline);
+
+        let mut start_x = 0.;
+        let mut end_x = 0.;
+        // When cursor lands at the end of the line
+        let mut rhs = 0.;
+
+        for (glyph_idx, mut glyph_rect) in glyph_pos_iter.enumerate() {
+            glyph_rect.x -= scroll;
+
+            if glyph_idx == under_start {
+                start_x = glyph_rect.x;
+            }
+            if glyph_idx == under_end {
+                end_x = glyph_rect.x;
+            }
+
+            rhs = glyph_rect.rhs();
+        }
+
+        if under_start == 0 {
+            start_x = scroll;
+        }
+
+        if under_end == glyphs.len() {
+            end_x = rhs;
+        }
+
+        // We don't need to do manual clipping since MeshBuilder should do that
+        let underline_rect = Rectangle { x: start_x, y: baseline + 6., w: end_x - start_x, h: 4. };
+        mesh.draw_box(&underline_rect, text_color, &Rectangle::zero());
         Ok(())
     }
 
@@ -907,7 +968,7 @@ impl EditBox {
     fn set_underline_text(&self, suggest_text: &str) {
         if self.underline.is_null(0).unwrap() {
             assert!(self.underline.is_null(1).unwrap());
-            debug!(target: "ui::editbox", "underline is null");
+            //debug!(target: "ui::editbox", "underline is null");
 
             // Underline is not set. Lets insert text before cursor_pos.
             let mut cursor_pos = self.cursor_pos.get();
@@ -925,7 +986,7 @@ impl EditBox {
                 text.push_str(suggest_text);
             }
 
-            debug!(target: "ui::editbox", "setting text = {text}");
+            //debug!(target: "ui::editbox", "setting text = {text}");
             self.text.set(text);
 
             self.underline.set_u32(Role::Internal, 0, cursor_pos).unwrap();
@@ -934,7 +995,7 @@ impl EditBox {
             self.cursor_pos.set(cursor_pos);
         } else {
             assert!(!self.underline.is_null(1).unwrap());
-            debug!(target: "ui::editbox", "underline is NOT null");
+            //debug!(target: "ui::editbox", "underline is NOT null");
 
             // We are going to delete the current underline text and replace it with our new one.
             let mut cursor_pos = self.cursor_pos.get();
@@ -943,7 +1004,7 @@ impl EditBox {
             let underline_start = self.underline.get_u32(0).unwrap() as usize;
             let underline_end = self.underline.get_u32(1).unwrap() as usize;
 
-            debug!(target: "ui::editbox", "inserting underline text at {underline_start}");
+            //debug!(target: "ui::editbox", "inserting underline text at {underline_start}");
 
             let mut text = String::new();
             for (i, glyph) in glyphs.iter().enumerate() {
@@ -960,7 +1021,7 @@ impl EditBox {
                 text.push_str(suggest_text);
             }
 
-            debug!(target: "ui::editbox", "setting text = {text}");
+            //debug!(target: "ui::editbox", "setting text = {text}");
             self.text.set(text);
 
             let underline_end = (underline_start + suggest_text.len()) as u32;
@@ -972,7 +1033,7 @@ impl EditBox {
 
     fn reset_android_autosuggest(&self) {
         #[cfg(target_os = "android")]
-        crate::android::reset_autosuggest();
+        crate::android::cancel_composition();
 
         self.underline.set_null(Role::Internal, 0).unwrap();
         self.underline.set_null(Role::Internal, 1).unwrap();
@@ -1357,14 +1418,19 @@ impl UIObject for EditBox {
         }
     }
 
-    async fn handle_edit_text(&self, suggest_text: &str) -> bool {
-        debug!(target: "ui::editbox", "handle_edit_text({suggest_text})");
+    async fn handle_compose_text(&self, suggest_text: &str, is_commit: bool) -> bool {
+        debug!(target: "ui::editbox", "handle_compose_text({suggest_text}, {is_commit})");
 
         if !self.is_active.get() {
             return false
         }
 
         self.set_underline_text(suggest_text);
+
+        if is_commit {
+            self.underline.set_null(Role::Internal, 0).unwrap();
+            self.underline.set_null(Role::Internal, 1).unwrap();
+        }
 
         self.regen_glyphs().await;
         //self.apply_cursor_scrolling();
@@ -1372,21 +1438,12 @@ impl UIObject for EditBox {
 
         true
     }
-    async fn handle_commit_text(&self, suggest_text: &str) -> bool {
-        debug!(target: "ui::editbox", "handle_commit_text({suggest_text})");
+    async fn handle_set_compose_region(&self, start: usize, end: usize) -> bool {
+        debug!(target: "ui::editbox", "handle_set_compose_region({start}, {end})");
 
         if !self.is_active.get() {
             return false
         }
-
-        self.set_underline_text(suggest_text);
-
-        self.underline.set_null(Role::Internal, 0).unwrap();
-        self.underline.set_null(Role::Internal, 1).unwrap();
-
-        self.regen_glyphs().await;
-        //self.apply_cursor_scrolling();
-        self.redraw().await;
 
         true
     }

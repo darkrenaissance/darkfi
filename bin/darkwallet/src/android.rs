@@ -42,33 +42,48 @@ pub unsafe extern "C" fn Java_autosuggest_CustomInputConnection_setup() {
 }
 
 pub enum AndroidSuggestEvent {
-    CommitText(String),
-    EditText(String),
+    Compose { text: String, cursor_pos: i32, is_commit: bool },
+    ComposeRegion { start: usize, end: usize },
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn Java_autosuggest_CustomInputConnection_onCommitText(
+pub unsafe extern "C" fn Java_autosuggest_CustomInputConnection_onCompose(
     env: *mut ndk_sys::JNIEnv,
     _: ndk_sys::jobject,
     text: ndk_sys::jobject,
+    cursor_pos: ndk_sys::jint,
+    is_commit: ndk_sys::jboolean,
 ) {
     let text = ndk_utils::get_utf_str!(env, text);
-    //debug!(target: "android", "onCommitText({text})");
     if let Some(sender) = &GLOBALS.lock().unwrap().sender {
-        let _ = sender.try_send(AndroidSuggestEvent::CommitText(text.to_string()));
+        let _ = sender.try_send(AndroidSuggestEvent::Compose {
+            text: text.to_string(),
+            cursor_pos,
+            is_commit: is_commit != 0,
+        });
     }
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn Java_autosuggest_CustomInputConnection_onEndEdit(
+pub unsafe extern "C" fn Java_autosuggest_CustomInputConnection_onSetComposeRegion(
     env: *mut ndk_sys::JNIEnv,
     _: ndk_sys::jobject,
-    text: ndk_sys::jobject,
+    start: ndk_sys::jint,
+    end: ndk_sys::jint,
 ) {
-    let text = ndk_utils::get_utf_str!(env, text);
-    //debug!(target: "android", "onEditText({text})");
+    let begin = std::cmp::min(start, end);
+    let end = std::cmp::max(start, end);
+
+    if begin < 0 || end < 0 {
+        warn!(target: "android", "setComposeRegion({start}, {end}) is < 0 so skipping");
+        return
+    }
+
+    let start = begin as usize;
+    let end = end as usize;
+
     if let Some(sender) = &GLOBALS.lock().unwrap().sender {
-        let _ = sender.try_send(AndroidSuggestEvent::EditText(text.to_string()));
+        let _ = sender.try_send(AndroidSuggestEvent::ComposeRegion { start, end });
     }
 }
 
@@ -76,7 +91,7 @@ pub fn set_sender(sender: async_channel::Sender<AndroidSuggestEvent>) {
     GLOBALS.lock().unwrap().sender = Some(sender);
 }
 
-pub fn reset_autosuggest() {
+pub fn cancel_composition() {
     let env = unsafe { android::attach_jni_env() };
     let mut globals = GLOBALS.lock().unwrap();
 
@@ -86,6 +101,6 @@ pub fn reset_autosuggest() {
     }
 
     unsafe {
-        ndk_utils::call_void_method!(env, globals.inp_conn, "reset", "()V");
+        ndk_utils::call_void_method!(env, globals.inp_conn, "cancelComposition", "()V");
     }
 }

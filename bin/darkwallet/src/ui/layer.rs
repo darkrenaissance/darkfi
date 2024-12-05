@@ -265,27 +265,25 @@ impl UIObject for Layer {
         }
         false
     }
-    async fn handle_edit_text(&self, suggest_text: &str) -> bool {
+    async fn handle_compose_text(&self, suggest_text: &str, is_commit: bool) -> bool {
         if !self.is_visible.get() {
             return false
         }
         for child in self.get_children() {
             let obj = get_ui_object3(&child);
-            if obj.handle_edit_text(suggest_text).await {
-                //debug!(target: "layer", "handle_edit_text({suggest_text}) swallowed by {child:?}");
+            if obj.handle_compose_text(suggest_text, is_commit).await {
                 return true
             }
         }
         false
     }
-    async fn handle_commit_text(&self, suggest_text: &str) -> bool {
+    async fn handle_set_compose_region(&self, start: usize, end: usize) -> bool {
         if !self.is_visible.get() {
             return false
         }
         for child in self.get_children() {
             let obj = get_ui_object3(&child);
-            if obj.handle_commit_text(suggest_text).await {
-                //debug!(target: "layer", "handle_edit_text({suggest_text}) swallowed by {child:?}");
+            if obj.handle_set_compose_region(start, end).await {
                 return true
             }
         }

@@ -83,10 +83,10 @@ pub trait UIObject: Sync {
     }
 
     // Android Autosuggest
-    async fn handle_edit_text(&self, text: &str) -> bool {
+    async fn handle_compose_text(&self, text: &str, is_commit: bool) -> bool {
         false
     }
-    async fn handle_commit_text(&self, text: &str) -> bool {
+    async fn handle_set_compose_region(&self, start: usize, end: usize) -> bool {
         false
     }
 }

@@ -402,8 +402,10 @@ impl Window {
         for child in self.get_children() {
             let obj = get_ui_object3(&child);
             let is_handled = match &ev {
-                EditText(text) => obj.handle_edit_text(&text).await,
-                CommitText(text) => obj.handle_commit_text(&text).await,
+                Compose { text, cursor_pos, is_commit } => {
+                    obj.handle_compose_text(&text, *is_commit).await
+                }
+                ComposeRegion { start, end } => obj.handle_set_compose_region(*start, *end).await,
             };
             if is_handled {
                 return
