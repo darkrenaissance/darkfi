@@ -9,7 +9,7 @@
 
 # Arguments configuration
 ARG DEBIAN_VER=sid
-ARG RUST_VER=nightly-2024-04-05
+ARG RUST_VER=nightly-2024-12-05
 #TODO: only darkirc has been tested, have to check rest binaries to add deps and ports.
 ARG BINS=darkirc
 
