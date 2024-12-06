@@ -25,8 +25,54 @@ use std::{
 use futures::{AsyncReadExt, AsyncWriteExt};
 use log::debug;
 use smol::net::TcpStream;
+use url::Url;
+
+/// SOCKS5 dialer
+#[derive(Clone, Debug)]
+pub struct Socks5Dialer {
+    client: Socks5Client,
+    endpoint: AddrKind,
+}
+
+impl Socks5Dialer {
+    /// Instantiate a new [`Socks5Dialer`] with given URI
+    pub(crate) async fn new(uri: &Url) -> io::Result<Self> {
+        // URIs in the form of: socks5://user:pass@proxy:port/destination:port
+        /*
+        let auth_user = uri.username();
+        let auth_pass = uri.password();
+        */
+
+        // Parse destination
+        let mut dest = uri.path().strip_prefix("/").unwrap().split(':');
+
+        let Some(dest_host) = dest.next() else { return Err(io::ErrorKind::InvalidInput.into()) };
+        let Some(dest_port) = dest.next() else { return Err(io::ErrorKind::InvalidInput.into()) };
+
+        let dest_port: u16 = match dest_port.parse() {
+            Ok(v) => v,
+            Err(_) => return Err(io::ErrorKind::InvalidData.into()),
+        };
+
+        let client = Socks5Client::new(uri.host_str().unwrap(), uri.port().unwrap());
+        let endpoint: AddrKind = (dest_host, dest_port).into();
+
+        Ok(Self { client, endpoint })
+    }
+
+    /// Internal dial function
+    pub(crate) async fn do_dial(&self) -> io::Result<TcpStream> {
+        debug!(
+            target: "net::socks5::do_dial",
+            "Dialing {:?} with SOCKS5...", self.endpoint,
+        );
+
+        self.client.connect(self.endpoint.clone()).await
+    }
+}
 
 /// SOCKS5 proxy client
+#[derive(Clone, Debug)]
 pub struct Socks5Client {
     /// SOCKS5 server host
     host: String,
@@ -191,7 +237,7 @@ impl Socks5Client {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum AddrKind {
     Ip(SocketAddr),
     Domain(String, u16),

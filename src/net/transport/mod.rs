@@ -73,6 +73,9 @@ pub enum DialerVariant {
 
     /// Unix socket
     Unix(unix::UnixDialer),
+
+    /// SOCKS5 proxy
+    Socks5(socks5::Socks5Dialer),
 }
 
 /// Listener variants
@@ -184,6 +187,14 @@ impl Dialer {
                 Ok(Self { endpoint, variant })
             }
 
+            "socks5" => {
+                // Build a SOCKS5 dialer
+                enforce_hostport!(endpoint);
+                let variant = socks5::Socks5Dialer::new(&endpoint).await?;
+                let variant = DialerVariant::Socks5(variant);
+                Ok(Self { endpoint, variant })
+            }
+
             x => {
                 error!("[P2P] Requested unsupported transport: {}", x);
                 Err(io::Error::from_raw_os_error(libc::ENETUNREACH))
@@ -247,6 +258,11 @@ impl Dialer {
                     Err(_) => return Err(io::Error::new(ErrorKind::Unsupported, "Invalid path")),
                 };
                 let stream = dialer.do_dial(path).await?;
+                Ok(Box::new(stream))
+            }
+
+            DialerVariant::Socks5(dialer) => {
+                let stream = dialer.do_dial().await?;
                 Ok(Box::new(stream))
             }
         }
