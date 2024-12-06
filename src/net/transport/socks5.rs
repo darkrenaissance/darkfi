@@ -64,37 +64,38 @@ impl Socks5Client {
         // Build CONNECT request
 
         // VER=5, CMD=CONNECT, RSV
-        stream.write_all(&[0x05, 0x01, 0x00]).await?;
+        let mut reqbuf = vec![0x05, 0x01, 0x00];
 
         match addr {
             AddrKind::Ip(socketaddr) => {
                 if socketaddr.is_ipv4() {
                     // ATYP=0x01
-                    stream.write_all(&[0x01]).await?;
+                    reqbuf.push(0x01);
                 } else {
                     // ATYP=0x04
-                    stream.write_all(&[0x04]).await?;
+                    reqbuf.push(0x04);
                 }
                 // DST.ADDR
                 match socketaddr.ip() {
-                    IpAddr::V4(ip) => stream.write_all(&ip.octets()).await?,
-                    IpAddr::V6(ip) => stream.write_all(&ip.octets()).await?,
+                    IpAddr::V4(ip) => reqbuf.extend_from_slice(&ip.octets()),
+                    IpAddr::V6(ip) => reqbuf.extend_from_slice(&ip.octets()),
                 }
                 // DST.PORT
-                stream.write_all(&socketaddr.port().to_be_bytes()).await?;
+                reqbuf.extend_from_slice(&socketaddr.port().to_be_bytes());
             }
             AddrKind::Domain(ref host, port) => {
                 // ATYP=0x03
-                stream.write_all(&[0x03]).await?;
+                reqbuf.push(0x03);
                 // DST.ADDR
-                stream.write_all(&[host.len() as u8]).await?;
-                stream.write_all(host.as_bytes()).await?;
+                reqbuf.push(host.len() as u8);
+                reqbuf.extend_from_slice(host.as_bytes());
                 // DST.PORT
-                stream.write_all(&port.to_be_bytes()).await?;
+                reqbuf.extend_from_slice(&port.to_be_bytes());
             }
         };
 
-        // Flush request
+        // Send it
+        stream.write_all(&reqbuf).await?;
         stream.flush().await?;
         debug!(
             target: "net::transport::socks5::connect",
