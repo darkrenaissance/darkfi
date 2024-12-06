@@ -44,7 +44,7 @@ import android.view.inputmethod.InputMethodManager;
 // It then adapts android's IME to chrome's RenderWidgetHostView using the
 // native ImeAdapterAndroid via the outer class ImeAdapter.
 public class CustomInputConnection extends BaseInputConnection {
-    private static final boolean DEBUG = false;
+    private static final boolean DEBUG = true;
 
     private View mInternalView;
     //private ImeAdapter mImeAdapter;
@@ -113,7 +113,7 @@ public class CustomInputConnection extends BaseInputConnection {
             outAttrs.imeOptions |= EditorInfo.IME_ACTION_NEXT;
         }
         */
-        //setup();
+        setup();
     }
 
     /**
@@ -346,6 +346,7 @@ public class CustomInputConnection extends BaseInputConnection {
      * is called by the IME when it wants to end a composition.
      */
     void cancelComposition() {
+        if (DEBUG) Log.d("darkfi", "cancelComposition()");
         getInputMethodManager().restartInput(mInternalView);
     }
 

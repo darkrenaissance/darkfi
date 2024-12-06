@@ -34,7 +34,7 @@ android: $(SRC) fonts
 	adb install $(APK)
 	reset
 	adb logcat -c
-	adb logcat -s darkfi
+	adb logcat -s darkfi -s SAPP
 
 # Useful for dev
 cli:
