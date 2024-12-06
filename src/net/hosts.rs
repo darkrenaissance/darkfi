@@ -1318,7 +1318,6 @@ impl Hosts {
                 #[cfg(feature = "p2p-nym")]
                 "nym" | "nym+tls" => continue, // <-- Temp skip
 
-                #[cfg(feature = "p2p-tcp")]
                 "tcp" | "tcp+tls" => {
                     trace!(
                         target: "net::hosts::filter_addresses",

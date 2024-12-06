@@ -418,7 +418,6 @@ impl Channel {
                     return
                 }
 
-                #[cfg(feature = "p2p-unix")]
                 if peer.scheme() == "unix" {
                     return
                 }

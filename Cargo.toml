@@ -189,11 +189,7 @@ event-graph = [
     "rpc",
 ]
 
-p2p-unix = []
-
 p2p-nym = []
-
-p2p-tcp = ["socket2"]
 
 p2p-tor = [
     "arti-client",
@@ -215,6 +211,7 @@ net = [
     "rustls-pemfile",
     "semver",
     "serde",
+    "socket2",
     "structopt",
     "structopt-toml",
     "url",
@@ -226,10 +223,8 @@ net = [
     "system",
     "util",
 
-    "p2p-tcp",
     "p2p-tor",
     #"p2p-nym",
-    "p2p-unix",
 ]
 
 rpc = [
