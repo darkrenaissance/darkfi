@@ -44,7 +44,8 @@ import android.view.inputmethod.InputMethodManager;
 // It then adapts android's IME to chrome's RenderWidgetHostView using the
 // native ImeAdapterAndroid via the outer class ImeAdapter.
 public class CustomInputConnection extends BaseInputConnection {
-    private static final boolean DEBUG = true;
+    private static final boolean DEBUG = false;
+    private int ID = (int)(Math.random() * (1 << 30));
 
     private View mInternalView;
     //private ImeAdapter mImeAdapter;
@@ -53,14 +54,13 @@ public class CustomInputConnection extends BaseInputConnection {
     private int numBatchEdits;
     private boolean shouldUpdateImeSelection;
 
-    native static void setup();
     native static void onCompose(String text, int newCursorPos, boolean isCommit);
     native static void onSetComposeRegion(int start, int end);
 
     //private AdapterInputConnection(View view, ImeAdapter imeAdapter, EditorInfo outAttrs) {
     public CustomInputConnection(View view, EditorInfo outAttrs) {
         super(view, true);
-        if (DEBUG) Log.d("darkfi", "CustomInputConnection()");
+        log("CustomInputConnection()");
         mInternalView = view;
         //mImeAdapter = imeAdapter;
         //mImeAdapter.setInputConnection(this);
@@ -113,7 +113,12 @@ public class CustomInputConnection extends BaseInputConnection {
             outAttrs.imeOptions |= EditorInfo.IME_ACTION_NEXT;
         }
         */
-        setup();
+    }
+
+    private void log(String fstr, Object... args) {
+        if (!DEBUG) return;
+        String text = "(" + ID + "): " + String.format(fstr, args);
+        Log.d("darkfi", text);
     }
 
     /**
@@ -133,9 +138,9 @@ public class CustomInputConnection extends BaseInputConnection {
      */
     public void setEditableText(String text, int selectionStart, int selectionEnd,
             int compositionStart, int compositionEnd) {
-        if (DEBUG) Log.d("darkfi", "setEditableText(" + text + ", " + selectionStart
-            + ", " + selectionEnd + ", " + compositionStart
-            + ", " + compositionEnd + ")");
+        log("darkfi", "setEditableText(%s, %d, %d, %d, %d)",
+            text, selectionStart, selectionEnd,
+            compositionStart, compositionEnd);
 
         if (mEditable == null) {
             mEditable = Editable.Factory.getInstance().newEditable("");
@@ -187,18 +192,17 @@ public class CustomInputConnection extends BaseInputConnection {
 
     @Override
     public Editable getEditable() {
-        if (DEBUG) Log.d("darkfi", "getEditable()");
         if (mEditable == null) {
             mEditable = Editable.Factory.getInstance().newEditable("");
             Selection.setSelection(mEditable, 0);
         }
-        if (DEBUG) Log.d("darkfi", "  -> " + editableToXml(mEditable));
+        log("getEditable() -> %s", editableToXml(mEditable));
         return mEditable;
     }
 
     @Override
     public boolean setComposingText(CharSequence text, int newCursorPosition) {
-        if (DEBUG) Log.d("darkfi", "setComposingText(" + text + ", " + newCursorPosition + ")");
+        log("setComposingText(%s, %d)", text, newCursorPosition);
         super.setComposingText(text, newCursorPosition);
         shouldUpdateImeSelection = true;
         onCompose(text.toString(), newCursorPosition, false);
@@ -207,7 +211,7 @@ public class CustomInputConnection extends BaseInputConnection {
 
     @Override
     public boolean commitText(CharSequence text, int newCursorPosition) {
-        if (DEBUG) Log.d("darkfi", "commitText(" + text.toString() + ", " + newCursorPosition + ")");
+        log("commitText(%s, %d)", text, newCursorPosition);
         super.commitText(text, newCursorPosition);
         shouldUpdateImeSelection = true;
         onCompose(text.toString(), newCursorPosition, text.length() > 0);
@@ -216,7 +220,7 @@ public class CustomInputConnection extends BaseInputConnection {
 
     @Override
     public boolean performEditorAction(int actionCode) {
-        if (DEBUG) Log.d("darkfi", "performEditorAction(" + actionCode + ")");
+        log("performEditorAction(%d)", actionCode);
         switch (actionCode) {
             case EditorInfo.IME_ACTION_NEXT:
                 cancelComposition();
@@ -236,7 +240,7 @@ public class CustomInputConnection extends BaseInputConnection {
 
     @Override
     public boolean performContextMenuAction(int id) {
-        if (DEBUG) Log.d("darkfi", "performContextMenuAction(" + id + ")");
+        log("performContextMenuAction(%d)", id);
         /*
         switch (id) {
             case android.R.id.selectAll:
@@ -256,7 +260,7 @@ public class CustomInputConnection extends BaseInputConnection {
 
     @Override
     public ExtractedText getExtractedText(ExtractedTextRequest request, int flags) {
-        if (DEBUG) Log.d("darkfi", "getExtractedText(...)");
+        log("getExtractedText(...)");
         ExtractedText et = new ExtractedText();
         if (mEditable == null) {
             et.text = "";
@@ -272,7 +276,7 @@ public class CustomInputConnection extends BaseInputConnection {
 
     @Override
     public boolean deleteSurroundingText(int leftLength, int rightLength) {
-        if (DEBUG) Log.d("darkfi", "deleteSurroundingText(" + leftLength + ", " + rightLength + ")");
+        log("deleteSurroundingText(%d, %d)", leftLength, rightLength);
         if (!super.deleteSurroundingText(leftLength, rightLength)) {
             return false;
         }
@@ -285,7 +289,7 @@ public class CustomInputConnection extends BaseInputConnection {
     public boolean sendKeyEvent(KeyEvent event) {
         int action = event.getAction();
         int keycode = event.getKeyCode();
-        if (DEBUG) Log.d("darkfi", "sendKeyEvent()  action=" + action + ", keycode=" + keycode);
+        log("sendKeyEvent()  [action=%d, keycode=%d]", action, keycode);
 
         //mImeAdapter.mSelectionHandleController.hideAndDisallowAutomaticShowing();
         //mImeAdapter.mInsertionHandleController.hideAndDisallowAutomaticShowing();
@@ -320,7 +324,7 @@ public class CustomInputConnection extends BaseInputConnection {
 
     @Override
     public boolean finishComposingText() {
-        if (DEBUG) Log.d("darkfi", "finishComposingText()");
+        log("finishComposingText()");
         if (mEditable == null
                 || (getComposingSpanStart(mEditable) == getComposingSpanEnd(mEditable))) {
             return true;
@@ -332,7 +336,7 @@ public class CustomInputConnection extends BaseInputConnection {
 
     @Override
     public boolean setSelection(int start, int end) {
-        if (DEBUG) Log.d("darkfi", "setSelection(" + start + ", " + end + ")");
+        log("setSelection(%d, %d)", start, end);
         if (start < 0 || end < 0) return true;
         super.setSelection(start, end);
         shouldUpdateImeSelection = true;
@@ -346,13 +350,13 @@ public class CustomInputConnection extends BaseInputConnection {
      * is called by the IME when it wants to end a composition.
      */
     void cancelComposition() {
-        if (DEBUG) Log.d("darkfi", "cancelComposition()");
+        log("cancelComposition()");
         getInputMethodManager().restartInput(mInternalView);
     }
 
     @Override
     public boolean setComposingRegion(int start, int end) {
-        if (DEBUG) Log.d("darkfi", "setComposingRegion(" + start + ", " + end + ")");
+        log("setComposingRegion(%d, %d)", start, end);
         int a = Math.min(start, end);
         int b = Math.max(start, end);
         super.setComposingRegion(a, b);
@@ -370,7 +374,7 @@ public class CustomInputConnection extends BaseInputConnection {
     }
 
     private void updateImeSelection() {
-        if (DEBUG) Log.d("darkfi", "updateImeSelection()");
+        log("updateImeSelection()");
         if (mEditable != null) {
             getInputMethodManager().updateSelection(mInternalView,
                     Selection.getSelectionStart(mEditable),
@@ -382,14 +386,14 @@ public class CustomInputConnection extends BaseInputConnection {
 
     @Override
     public boolean beginBatchEdit() {
-        if (DEBUG) Log.d("darkfi", "beginBatchEdit");
+        log("beginBatchEdit");
         ++numBatchEdits;
         return false;
     }
 
     @Override
     public boolean endBatchEdit() {
-        if (DEBUG) Log.d("darkfi", "endBatchEdit");
+        log("endBatchEdit");
         if (--numBatchEdits == 0 && shouldUpdateImeSelection) {
             updateImeSelection();
             shouldUpdateImeSelection = false;
