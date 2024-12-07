@@ -1,6 +1,18 @@
 //% IMPORTS
 
+import android.view.inputmethod.InputMethodManager;
+
 import autosuggest.CustomInputConnection;
+
+//% END
+
+//% MAIN_ACTIVITY_BODY
+
+public void cancelComposition() {
+    InputMethodManager imm =
+        (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
+    imm.restartInput(view);
+}
 
 //% END
 

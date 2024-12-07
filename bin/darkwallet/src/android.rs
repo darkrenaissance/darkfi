@@ -20,7 +20,6 @@ use miniquad::native::android::{self, ndk_sys, ndk_utils};
 use std::sync::{LazyLock, Mutex as SyncMutex};
 
 struct GlobalData {
-    inp_conn: ndk_sys::jobject,
     sender: Option<async_channel::Sender<AndroidSuggestEvent>>,
 }
 
@@ -28,18 +27,7 @@ unsafe impl Send for GlobalData {}
 unsafe impl Sync for GlobalData {}
 
 static GLOBALS: LazyLock<SyncMutex<GlobalData>> =
-    LazyLock::new(|| SyncMutex::new(GlobalData { inp_conn: std::ptr::null_mut(), sender: None }));
-
-#[no_mangle]
-pub unsafe extern "C" fn Java_autosuggest_CustomInputConnection_setup() {
-    let env = android::attach_jni_env();
-
-    let inp_conn = ndk_utils::new_object!(env, "autosuggest/CustomInputConnection", "()V");
-    assert!(!inp_conn.is_null());
-
-    let inp_conn = ndk_utils::new_global_ref!(env, inp_conn);
-    GLOBALS.lock().unwrap().inp_conn = inp_conn;
-}
+    LazyLock::new(|| SyncMutex::new(GlobalData { sender: None }));
 
 pub enum AndroidSuggestEvent {
     Compose { text: String, cursor_pos: i32, is_commit: bool },
@@ -92,15 +80,9 @@ pub fn set_sender(sender: async_channel::Sender<AndroidSuggestEvent>) {
 }
 
 pub fn cancel_composition() {
-    let env = unsafe { android::attach_jni_env() };
-    let mut globals = GLOBALS.lock().unwrap();
-
-    if globals.inp_conn.is_null() {
-        error!(target: "android", "InputConnection is not ready!");
-        return
-    }
-
     unsafe {
-        ndk_utils::call_void_method!(env, globals.inp_conn, "cancelComposition", "()V");
+        let env = android::attach_jni_env();
+
+        ndk_utils::call_void_method!(env, android::ACTIVITY, "cancelComposition", "()V");
     }
 }
