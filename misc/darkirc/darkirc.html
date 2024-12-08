@@ -1,0 +1,489 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js ayu">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>DarkIRC - The DarkFi Book</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="../../favicon.svg">
+        <link rel="shortcut icon" href="../../favicon.png">
+        <link rel="stylesheet" href="../../css/variables.css">
+        <link rel="stylesheet" href="../../css/general.css">
+        <link rel="stylesheet" href="../../css/chrome.css">
+        <link rel="stylesheet" href="../../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../../highlight.css">
+        <link rel="stylesheet" href="../../tomorrow-night.css">
+        <link rel="stylesheet" href="../../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "ayu" : "ayu";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('ayu')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var html = document.querySelector('html');
+            var sidebar = null;
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded affix "><li class="part-title">About</li><li class="chapter-item expanded "><a href="../../index.html"><strong aria-hidden="true">1.</strong> DarkFi</a></li><li class="chapter-item expanded "><a href="../../start-here.html"><strong aria-hidden="true">2.</strong> Start Here</a></li><li class="chapter-item expanded "><a href="../../philosophy/philosophy.html"><strong aria-hidden="true">3.</strong> Philosophy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../philosophy/meetings.html"><strong aria-hidden="true">3.1.</strong> Discussion</a></li><li class="chapter-item expanded "><a href="../../philosophy/ideology.html"><strong aria-hidden="true">3.2.</strong> Ideology</a></li><li class="chapter-item expanded "><a href="../../philosophy/books.html"><strong aria-hidden="true">3.3.</strong> Books</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">User Guide</li><li class="chapter-item expanded "><a href="../../testnet/node.html"><strong aria-hidden="true">4.</strong> Running a Node</a></li><li class="chapter-item expanded "><a href="../../testnet/token.html"><strong aria-hidden="true">5.</strong> Tokens</a></li><li class="chapter-item expanded "><a href="../../testnet/payment.html"><strong aria-hidden="true">6.</strong> Payments</a></li><li class="chapter-item expanded "><a href="../../testnet/atomic-swap.html"><strong aria-hidden="true">7.</strong> Atomic Swap</a></li><li class="chapter-item expanded "><a href="../../testnet/dao.html"><strong aria-hidden="true">8.</strong> DAO</a></li><li class="chapter-item expanded "><a href="../../misc/darkirc/darkirc.html" class="active"><strong aria-hidden="true">9.</strong> DarkIRC</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../misc/darkirc/private_message.html"><strong aria-hidden="true">9.1.</strong> Private Message</a></li></ol></li><li class="chapter-item expanded "><a href="../../misc/nodes/node-configurations.html"><strong aria-hidden="true">10.</strong> Node Configurations</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../misc/nodes/public-guide.html"><strong aria-hidden="true">10.1.</strong> Public Node Configurations</a></li><li class="chapter-item expanded "><a href="../../misc/nodes/tor-guide.html"><strong aria-hidden="true">10.2.</strong> Tor Nodes</a></li></ol></li><li class="chapter-item expanded "><a href="../../misc/network-troubleshooting.html"><strong aria-hidden="true">11.</strong> Network Troubleshooting</a></li><li class="chapter-item expanded affix "><li class="part-title">Developer Doc</li><li class="chapter-item expanded "><a href="../../dev/dev.html"><strong aria-hidden="true">12.</strong> Development</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../dev/contrib/contrib.html"><strong aria-hidden="true">12.1.</strong> Contribute</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../dev/contrib/tor.html"><strong aria-hidden="true">12.1.1.</strong> Using Tor</a></li></ol></li><li class="chapter-item expanded "><a href="../../dev/learn.html"><strong aria-hidden="true">12.2.</strong> Learn</a></li><li class="chapter-item expanded "><a href="../../dev/rustdoc.html"><strong aria-hidden="true">12.3.</strong> API Rustdoc</a></li><li class="chapter-item expanded "><a href="../../dev/native_contracts.html"><strong aria-hidden="true">12.4.</strong> Native Contracts</a></li><li class="chapter-item expanded "><a href="../../dev/seminars.html"><strong aria-hidden="true">12.5.</strong> Seminars</a></li><li class="chapter-item expanded "><a href="../../dev/bench.html"><strong aria-hidden="true">12.6.</strong> Benchmark</a></li></ol></li><li class="chapter-item expanded "><a href="../../arch/arch.html"><strong aria-hidden="true">13.</strong> Architecture</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../arch/overview.html"><strong aria-hidden="true">13.1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="../../arch/anonymous_assets.html"><strong aria-hidden="true">13.2.</strong> Anonymous assets</a></li><li class="chapter-item expanded "><a href="../../arch/consensus.html"><strong aria-hidden="true">13.3.</strong> Consensus</a></li><li class="chapter-item expanded "><a href="../../arch/tx_lifetime.html"><strong aria-hidden="true">13.4.</strong> Transactions</a></li><li class="chapter-item expanded "><a href="../../arch/bridge.html"><strong aria-hidden="true">13.5.</strong> Bridge</a></li><li class="chapter-item expanded "><a href="../../arch/tooling.html"><strong aria-hidden="true">13.6.</strong> Tooling</a></li><li class="chapter-item expanded "><a href="../../arch/p2p-network.html"><strong aria-hidden="true">13.7.</strong> P2P Network</a></li><li class="chapter-item expanded "><a href="../../arch/services.html"><strong aria-hidden="true">13.8.</strong> Services</a></li><li class="chapter-item expanded "><a href="../../arch/sc/sc.html"><strong aria-hidden="true">13.9.</strong> Smart Contracts</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../arch/sc/tx-lifetime.html"><strong aria-hidden="true">13.9.1.</strong> Transaction lifetime</a></li></ol></li><li class="chapter-item expanded "><a href="../../arch/dao.html"><strong aria-hidden="true">13.10.</strong> DAO</a></li><li class="chapter-item expanded "><a href="../../arch/wallet.html"><strong aria-hidden="true">13.11.</strong> Wallet</a></li></ol></li><li class="chapter-item expanded "><a href="../../zkas/index.html"><strong aria-hidden="true">14.</strong> zkas</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../zkas/writing-zk-proofs.html"><strong aria-hidden="true">14.1.</strong> Writing ZK Proofs</a></li><li class="chapter-item expanded "><a href="../../zkas/bincode.html"><strong aria-hidden="true">14.2.</strong> Bincode</a></li><li class="chapter-item expanded "><a href="../../zkas/zkvm.html"><strong aria-hidden="true">14.3.</strong> zkVM</a></li><li class="chapter-item expanded "><a href="../../zkas/examples.html"><strong aria-hidden="true">14.4.</strong> Examples</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../zkas/examples/voting.html"><strong aria-hidden="true">14.4.1.</strong> Anonymous voting</a></li><li class="chapter-item expanded "><a href="../../zkas/examples/sapling.html"><strong aria-hidden="true">14.4.2.</strong> Anonymous payments</a></li></ol></li></ol></li><li class="chapter-item expanded "><a href="../../clients/clients.html"><strong aria-hidden="true">15.</strong> Client</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../clients/darkfid_jsonrpc.html"><strong aria-hidden="true">15.1.</strong> darkfid JSON-RPC API</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">Crypto</li><li class="chapter-item expanded "><a href="../../crypto/fft.html"><strong aria-hidden="true">16.</strong> FFT</a></li><li class="chapter-item expanded "><a href="../../crypto/zk_explainer.html"><strong aria-hidden="true">17.</strong> ZK explainer</a></li><li class="chapter-item expanded "><a href="../../crypto/research.html"><strong aria-hidden="true">18.</strong> Research</a></li><li class="chapter-item expanded "><a href="../../crypto/rln.html"><strong aria-hidden="true">19.</strong> Rate-Limit Nullifiers</a></li><li class="chapter-item expanded "><a href="../../crypto/key-recovery.html"><strong aria-hidden="true">20.</strong> Key Recovery Scheme</a></li><li class="chapter-item expanded "><a href="../../crypto/reading-maths-books.html"><strong aria-hidden="true">21.</strong> Reading maths books</a></li><li class="chapter-item expanded affix "><li class="part-title">User Interface</li><li class="chapter-item expanded "><a href="../../ui/ui.html"><strong aria-hidden="true">22.</strong> UI</a></li><li class="chapter-item expanded affix "><li class="part-title">DEP</li><li class="chapter-item expanded "><a href="../../dep/0001.html"><strong aria-hidden="true">23.</strong> DEP 0001: Version Message Info (accepted)</a></li><li class="chapter-item expanded "><a href="../../dep/0002.html"><strong aria-hidden="true">24.</strong> DEP 0002: Smart Contract Composability (deprecated)</a></li><li class="chapter-item expanded "><a href="../../dep/0003.html"><strong aria-hidden="true">25.</strong> DEP 0003: Token Mint Authorization (accepted)</a></li><li class="chapter-item expanded "><a href="../../dep/0004.html"><strong aria-hidden="true">26.</strong> DEP 0004: Client wallet WASM modules (draft)</a></li><li class="chapter-item expanded affix "><li class="part-title">Specs</li><li class="chapter-item expanded "><a href="../../spec/notation.html"><strong aria-hidden="true">27.</strong> Notation</a></li><li class="chapter-item expanded "><a href="../../spec/concepts.html"><strong aria-hidden="true">28.</strong> Concepts</a></li><li class="chapter-item expanded "><a href="../../spec/crypto-schemes.html"><strong aria-hidden="true">29.</strong> Cryptographic Schemes</a></li><li class="chapter-item expanded "><div><strong aria-hidden="true">30.</strong> Contracts</div></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../spec/contract/dao/dao.html"><strong aria-hidden="true">30.1.</strong> DAO</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../spec/contract/dao/concepts.html"><strong aria-hidden="true">30.1.1.</strong> Concepts</a></li><li class="chapter-item expanded "><a href="../../spec/contract/dao/model.html"><strong aria-hidden="true">30.1.2.</strong> Model</a></li><li class="chapter-item expanded "><a href="../../spec/contract/dao/scheme.html"><strong aria-hidden="true">30.1.3.</strong> Scheme</a></li></ol></li><li class="chapter-item expanded "><a href="../../spec/contract/money/money.html"><strong aria-hidden="true">30.2.</strong> Money</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../spec/contract/money/model.html"><strong aria-hidden="true">30.2.1.</strong> Model</a></li><li class="chapter-item expanded "><a href="../../spec/contract/money/scheme.html"><strong aria-hidden="true">30.2.2.</strong> Scheme</a></li></ol></li><li class="chapter-item expanded "><a href="../../spec/contract/vesting/vesting.html"><strong aria-hidden="true">30.3.</strong> Vesting</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">P2P API Tutorial</li><li class="chapter-item expanded "><a href="../../learn/dchat/dchat.html"><strong aria-hidden="true">31.</strong> P2P API Tutorial</a></li><li class="chapter-item expanded "><a href="../../learn/dchat/deployment/part-1.html"><strong aria-hidden="true">32.</strong> Deployment</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../learn/dchat/deployment/getting-started.html"><strong aria-hidden="true">32.1.</strong> Getting started</a></li><li class="chapter-item expanded "><a href="../../learn/dchat/deployment/writing-a-daemon.html"><strong aria-hidden="true">32.2.</strong> Writing a daemon</a></li><li class="chapter-item expanded "><a href="../../learn/dchat/deployment/sessions.html"><strong aria-hidden="true">32.3.</strong> Sessions</a></li><li class="chapter-item expanded "><a href="../../learn/dchat/deployment/settings.html"><strong aria-hidden="true">32.4.</strong> Settings</a></li><li class="chapter-item expanded "><a href="../../learn/dchat/deployment/start-stop.html"><strong aria-hidden="true">32.5.</strong> Start-Run-Stop</a></li><li class="chapter-item expanded "><a href="../../learn/dchat/deployment/seed-node.html"><strong aria-hidden="true">32.6.</strong> Seed</a></li><li class="chapter-item expanded "><a href="../../learn/dchat/deployment/deploy.html"><strong aria-hidden="true">32.7.</strong> Deploy</a></li></ol></li><li class="chapter-item expanded "><a href="../../learn/dchat/creating-dchatd/part-2.html"><strong aria-hidden="true">33.</strong> Creating dchatd</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../learn/dchat/creating-dchatd/message.html"><strong aria-hidden="true">33.1.</strong> Message</a></li><li class="chapter-item expanded "><a href="../../learn/dchat/creating-dchatd/protocols.html"><strong aria-hidden="true">33.2.</strong> Understanding Protocols</a></li><li class="chapter-item expanded "><a href="../../learn/dchat/creating-dchatd/protocol-dchat.html"><strong aria-hidden="true">33.3.</strong> ProtocolDchat</a></li><li class="chapter-item expanded "><a href="../../learn/dchat/creating-dchatd/register-protocol.html"><strong aria-hidden="true">33.4.</strong> Register protocol</a></li><li class="chapter-item expanded "><a href="../../learn/dchat/creating-dchatd/sending-messages.html"><strong aria-hidden="true">33.5.</strong> Sending messages</a></li><li class="chapter-item expanded "><a href="../../learn/dchat/creating-dchatd/accept-addr.html"><strong aria-hidden="true">33.6.</strong> Accept addr</a></li><li class="chapter-item expanded "><a href="../../learn/dchat/creating-dchatd/rpc-requests.html"><strong aria-hidden="true">33.7.</strong> Handling RPC requests</a></li><li class="chapter-item expanded "><a href="../../learn/dchat/creating-dchatd/stoppable-task.html"><strong aria-hidden="true">33.8.</strong> StoppableTask</a></li><li class="chapter-item expanded "><a href="../../learn/dchat/creating-dchatd/rpc-methods.html"><strong aria-hidden="true">33.9.</strong> Adding methods</a></li></ol></li><li class="chapter-item expanded "><a href="../../learn/dchat/creating-dchat-cli/part-3.html"><strong aria-hidden="true">34.</strong> Creating dchat-cli</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../learn/dchat/creating-dchat-cli/ui.html"><strong aria-hidden="true">34.1.</strong> UI</a></li><li class="chapter-item expanded "><a href="../../learn/dchat/creating-dchat-cli/using-dchat.html"><strong aria-hidden="true">34.2.</strong> Using dchat</a></li></ol></li><li class="chapter-item expanded "><a href="../../learn/dchat/network-tools/part-4.html"><strong aria-hidden="true">35.</strong> Net tools</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../learn/dchat/network-tools/get-info.html"><strong aria-hidden="true">35.1.</strong> get_info</a></li><li class="chapter-item expanded "><a href="../../learn/dchat/network-tools/attaching-dnet.html"><strong aria-hidden="true">35.2.</strong> Attaching dchat</a></li><li class="chapter-item expanded "><a href="../../learn/dchat/network-tools/using-dnet.html"><strong aria-hidden="true">35.3.</strong> Using dnet</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">Misc</li><li class="chapter-item expanded "><a href="../../misc/vanityaddr.html"><strong aria-hidden="true">36.</strong> vanityaddr</a></li><li class="chapter-item expanded "><a href="../../misc/darkirc/specification.html"><strong aria-hidden="true">37.</strong> darkIRC Specification</a></li><li class="chapter-item expanded "><a href="../../misc/tau.html"><strong aria-hidden="true">38.</strong> tau</a></li><li class="chapter-item expanded "><a href="../../misc/event_graph/event_graph.html"><strong aria-hidden="true">39.</strong> event_graph</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../misc/event_graph/network_protocol.html"><strong aria-hidden="true">39.1.</strong> Network Protocol</a></li></ol></li><li class="chapter-item expanded "><a href="../../misc/dnetview.html"><strong aria-hidden="true">40.</strong> dnetview</a></li><li class="chapter-item expanded "><a href="../../zero2darkfi/zero2darkfi.html"><strong aria-hidden="true">41.</strong> Zero2darkfi</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../zero2darkfi/darkmap.html"><strong aria-hidden="true">41.1.</strong> darkmap</a></li></ol></li><li class="chapter-item expanded "><a href="../../glossary/glossary.html"><strong aria-hidden="true">42.</strong> Glossary</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">The DarkFi Book</h1>
+
+                    <div class="right-buttons">
+                        <a href="../../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.12.0/dist/katex.min.css" integrity="sha384-AfEj0r4/OFrOo5t7NnNe46zW/tFgW6x/bCJG8FqQCEo3+Aro6EYUG4+cU+KJWu/X" crossorigin="anonymous">
+<h1 id="darkirc-strong-anonymity-p2p-chat"><a class="header" href="#darkirc-strong-anonymity-p2p-chat">DarkIRC: Strong Anonymity P2P Chat</a></h1>
+<p>In DarkFi, we organize our communication using resilient and
+censorship-resistant infrastructure. For chatting, <code>darkirc</code> is a
+peer-to-peer implementation of an IRC server in which any user can
+participate anonymously using any IRC frontend and by running the
+IRC daemon. <code>darkirc</code> uses the DarkFi P2P engine to synchronize chats
+between hosts.</p>
+<h2 id="benefits"><a class="header" href="#benefits">Benefits</a></h2>
+<ul>
+<li>Encrypted using same algorithms as Signal.</li>
+<li>There are no identities. You cannot see who is in the chat.</li>
+<li>Completely anonymous. You can rename yourself easily by using the
+command <code>/nick foo</code>. This means all messages are unlinkable.</li>
+<li>God-fearing based CLI without soy gui shit.</li>
+<li>p2p decentralized.</li>
+<li>Optionally run it over Tor or Nym (soon) for network level anonymity.</li>
+</ul>
+<p>Therefore this is the world's most strongly anonymous chat in existence.
+Nothing else exists like it.</p>
+<p><u><b>Note</b></u>: <code>darkirc</code> follows IRC's <a href="https://www.rfc-editor.org/rfc/rfc2812">RFC2812</a></p>
+<h2 id="installation"><a class="header" href="#installation">Installation</a></h2>
+<p>Follow the instructions in the <a href="../../index.html#build">README</a> to ensure
+you have all the necessary dependencies. After that, in repo root folder:</p>
+<pre><code class="language-shell">% make darkirc
+% # install system wide only if you can make sure there would be no
+% # multiple darkirc versions installed:
+% # sudo make install darkirc 
+</code></pre>
+<h2 id="installation-android"><a class="header" href="#installation-android">Installation (Android)</a></h2>
+<p>This is for Android 64 bit (which is most phones).
+You will compile darkirc on your computer then copy it to your phone
+and run it in Termux (a command-line terminal for Android).</p>
+<p>We will use podman which is a secure replacement for docker. However if you
+prefer to use docker just be aware of
+<a href="https://docs.docker.com/engine/security/#docker-daemon-attack-surface">the security risks</a>.
+Podman is a drop in replacement.</p>
+<ol>
+<li>Setup podman on your computer which may look like:
+<ol>
+<li>Install podman package</li>
+<li>Run the podman daemon service under your local user
+<ol>
+<li>Use the command <code>podman system service</code>.</li>
+<li>For Docker it's more complicated, see <a href="https://docs.docker.com/engine/security/rootless/">rootless mode</a>.</li>
+</ol>
+</li>
+</ol>
+</li>
+<li>Run <code>cd bin/darkirc/ &amp;&amp; make podman-android</code>. The resulting file 
+will be called <code>darkirc.aarch64-android</code> (it might be needed to 
+make the file executable <code>chmod +x darkirc.aarch64-android</code>). 
+Copy this to your phone.</li>
+<li>Install Termux and RevolutionIRC on F-Droid.</li>
+<li>Run <code>termux-setup-storage</code> and allow access to external storage.
+Now you can access the phone storage from <code>/sdcard/</code> and copy the file
+into the Termux home.</li>
+<li>Run <code>termux-wake-lock</code>. This stops Android suspending the daemon.</li>
+<li>Run the daemon. You can open new Termux sessions by swiping from
+the left to bring up the sidebar.</li>
+<li>Connect the RevolutionIRC frontend by adding a new server:
+<ol>
+<li>Write a name for the server (i.g <code>darkirc</code>).</li>
+<li>Set the server address and port (if using default config these 
+should be 127.0.0.1:6667).</li>
+<li>Untick <code>Use SSL/TLS</code> option.</li>
+<li>Save and connect.</li>
+</ol>
+</li>
+</ol>
+<h2 id="logs"><a class="header" href="#logs">Logs</a></h2>
+<p>The public channels have <a href="https://agorism.dev/log/">logs available</a>, and
+additionally there is a mirror on telegram @darkfi_darkirc channel.
+You can also message @darkirc_bot with &quot;sub&quot; to avoid doxxing your username.
+Use &quot;unsub&quot; to unsubscribe.</p>
+<h2 id="usage-darkfi-network"><a class="header" href="#usage-darkfi-network">Usage (DarkFi Network)</a></h2>
+<p>Upon compiling <code>darkirc</code> as described above, the preconfigured defaults
+will allow you to connect to the network and start chatting with the
+rest of the DarkFi community.</p>
+<p>First, try to start <code>darkirc</code> from your command-line so it can spawn its
+configuration file in place. The preconfigured defaults will autojoin
+you to several default channels one of which is <code>#dev</code> where we have 
+weekly meetings, and where the community is most active and talks 
+about DarkFi development.</p>
+<pre><code class="language-shell">% ./darkirc
+</code></pre>
+<p><code>darkirc</code> will create a configuration file <code>darkirc_config.toml</code> by 
+default in <code>~/.config/darkfi/</code> you can review and potentially edit. It 
+might be useful if you want to add other channels you want to autojoin 
+(like <code>#philosophy</code> and <code>#memes</code>), or if you want to set a shared 
+secret for some channel in order for it to be encrypted between its 
+participants.</p>
+<p>When done, you can run <code>darkirc</code> for the second time in order for it to
+connect to the network and start participating in the P2P protocol:</p>
+<pre><code class="language-shell">% ./darkirc
+</code></pre>
+<p>The daemon will start conncting to peers and sync its database, you'll 
+know it's finished syncing when you see this log message:</p>
+<pre><code class="language-shell">% [EVENTGRAPH] DAG synced successfully!
+</code></pre>
+<p>Now connect your favorite IRC client and it should replay missed 
+messages that have been sent by people.</p>
+<h2 id="clients"><a class="header" href="#clients">Clients</a></h2>
+<h3 id="weechat"><a class="header" href="#weechat">Weechat</a></h3>
+<p>In this section, we'll briefly cover how to use the <a href="https://github.com/weechat/weechat">Weechat IRC
+client</a> to connect and chat with
+<code>darkirc</code>.</p>
+<p>Normally, you should be able to install weechat using your
+distribution's package manager. If not, have a look at the weechat
+<a href="https://github.com/weechat/weechat">git repository</a> for instructions
+on how to install it on your computer.</p>
+<p>Once installed, we can configure a new server which will represent our
+<code>darkirc</code> instance. First, start weechat, and in its window - run the
+following commands (there is an assumption that <code>irc_listen</code> in the
+<code>darkirc</code> config file is set to <code>127.0.0.1:6667</code>):</p>
+<pre><code>/server add darkfi localhost/6667 -notls -autoconnect
+/save
+/quit
+</code></pre>
+<p>This will set up the server, save the settings, and exit weechat.
+You are now ready to begin using the chat. Simply start weechat
+and everything should work.</p>
+<p>When you join, you should see users nicknames on the right panel.
+those nicknames are users who previously sent messages and you got 
+those messages as history when you synced.
+Normally nicks would not be shown since there is no concept of 
+nicknames or registration on this p2p anonymous chat.</p>
+<p>You can change your nickname using <code>/nick foo</code>, and navigate channels
+using F5/F6 or ALT+X where X is the channel number displayed.
+You can also use ALT+up/down.</p>
+<p>Whenever you edit <code>darkirc_config.toml</code> file and if you have your 
+<code>darkirc</code> daemon running you don't need to restart it to reload the 
+config, you just need to send a <code>rehash</code> command from IRC client for 
+the changes to reflect, like so:</p>
+<pre><code>/rehash
+</code></pre>
+<h2 id="network-level-privacy"><a class="header" href="#network-level-privacy">Network-level privacy</a></h2>
+<p>Nodes have knowledge of their peers, including the IP addresses of 
+connected hosts.</p>
+<p>DarkFi supports the use of pluggable transports, including Tor and Nym, 
+to provide network-level privacy. As long as there are live seed nodes
+configured to support a Tor or Nym connection, users can connect to 
+<code>darkirc</code> and benefit from the protections offered by these protocols.</p>
+<p>Other approaches include connecting via a cloud server or VPN. Research 
+the risks involved in these methods before connecting.</p>
+<h2 id="usage-local-deployment"><a class="header" href="#usage-local-deployment">Usage (Local Deployment)</a></h2>
+<p>These steps below are only for developers who wish to make a testing
+deployment. The previous sections are sufficient to join the chat.</p>
+<h3 id="seed-node"><a class="header" href="#seed-node">Seed Node</a></h3>
+<p>First you must run a seed node. The seed node is a static host which
+nodes can connect to when they first connect to the network. The
+<code>seed_session</code> simply connects to a seed node and runs <code>protocol_seed</code>,
+which requests a list of addresses from the seed node and disconnects
+straight after receiving them.</p>
+<p>The first time you run the program, a config file will be created in
+<code>~/.config/darkfi</code> if you are using Linux or in 
+<code>~/Library/Application Support/darkfi/</code> on MacOS. 
+You must specify an inbound accept address in your config file to configure a seed node:</p>
+<pre><code class="language-toml">## P2P accept addresses
+inbound=[&quot;127.0.0.1:11001&quot;]
+</code></pre>
+<p>Note that the above config doesn't specify an external address since
+the seed node shouldn't be advertised in the list of connectable
+nodes. The seed node does not participate as a normal node in the
+p2p network. It simply allows new nodes to discover other nodes in
+the network during the bootstrapping phase.</p>
+<h3 id="inbound-node"><a class="header" href="#inbound-node">Inbound Node</a></h3>
+<p>This is a node accepting inbound connections on the network but which
+is not making any outbound connections.</p>
+<p>The external addresses are important and must be correct.</p>
+<p>To run an inbound node, your config file must contain the following
+info:</p>
+<pre><code class="language-toml">## P2P accept addresses
+inbound=[&quot;127.0.0.1:11002&quot;]
+
+## P2P external addresses
+external_addr=[&quot;127.0.0.1:11002&quot;]
+
+## Seed nodes to connect to 
+seeds=[&quot;127.0.0.1:11001&quot;]
+</code></pre>
+<h3 id="outbound-node"><a class="header" href="#outbound-node">Outbound Node</a></h3>
+<p>This is a node which has 8 outbound connection slots and no inbound
+connections.  This means the node has 8 slots which will actively
+search for unique nodes to connect to in the p2p network.</p>
+<p>In your config file:</p>
+<pre><code class="language-toml">## Connection slots
+outbound_connections=8
+
+## Seed nodes to connect to 
+seeds=[&quot;127.0.0.1:11001&quot;]
+</code></pre>
+<h3 id="attaching-the-irc-frontend"><a class="header" href="#attaching-the-irc-frontend">Attaching the IRC Frontend</a></h3>
+<p>Assuming you have run the above 3 commands to create a small model
+testnet, and both inbound and outbound nodes above are connected,
+you can test them out using weechat.</p>
+<p>To create separate weechat instances, use the <code>--dir</code> command:</p>
+<pre><code>weechat --dir /tmp/a/
+weechat --dir /tmp/b/
+</code></pre>
+<p>Then in both clients, you must set the option to connect to temporary
+servers:</p>
+<pre><code>/set irc.look.temporary_servers on
+</code></pre>
+<p>Finally you can attach to the local darkirc instances:</p>
+<pre><code>/connect localhost/6667
+/connect localhost/6668
+</code></pre>
+<p>And send messages to yourself.</p>
+<h3 id="running-a-fullnode"><a class="header" href="#running-a-fullnode">Running a Fullnode</a></h3>
+<p>See the script <code>script/run_node.sh</code> for an example of how to deploy
+a full node which does seed session synchronization, and accepts both
+inbound and outbound connections.</p>
+<h2 id="global-buffer"><a class="header" href="#global-buffer">Global Buffer</a></h2>
+<p>Copy <a href="https://github.com/narodnik/weechat-global-buffer/blob/main/buffclone.py">this script</a> 
+to <code>~/.local/share/weechat/python/autoload/</code>, and you will create a single buffer 
+which aggregates messages from all channels. It's useful to monitor 
+activity from all channels without needing to flick through them.</p>
+<p>You may need to install <code>weechat-python</code> to enable Python scripting support
+in your weechat.</p>
+<h2 id="emojis"><a class="header" href="#emojis">Emojis</a></h2>
+<p>Install the <code>noto</code> fonts to have the full unicode set. Popular Linux distros
+should have packages for them.</p>
+<p>Once installed you can view all the emojis in your terminal. Note, you may need
+to regenerate your font cache (or just restart) after installing them.</p>
+<h2 id="further-customization"><a class="header" href="#further-customization">Further Customization</a></h2>
+<p>Group channels under respective networks:</p>
+<pre><code>/set irc.look.server_buffer independent
+/set irc.look.new_channel_position near_server
+</code></pre>
+<p>Filter all join-part-quit messages (only relevant for other networks):</p>
+<pre><code>/set irc.look.smart_filter on
+/filter add joinquit * irc_join,irc_part,irc_quit,irc_nick,irc_account,irc_chghost *
+</code></pre>
+<p>For customizing the colors, see
+<a href="https://blog.swwomm.com/2020/07/weechat-light-theme.html">this article</a>.</p>
+<h3 id="settings-editor"><a class="header" href="#settings-editor">Settings Editor</a></h3>
+<p>Make sure you run <code>/save</code>, <code>/quit</code> to reload your config after these changes.</p>
+<p>To see the Weechat settings editor, simply type <code>/set</code> in the main buffer.
+You can then type prefixes like &quot;autojoin&quot; and press enter to find all settings
+related to that. To change it type ALT+enter. Everything in Weechat is
+customizable!</p>
+<p>The help is your friend. Every command has help.</p>
+<pre><code>/help key
+/help server
+</code></pre>
+<p>For example to set the shortcut ALT-w to close a buffer,
+use <code>/key bind meta-w /close</code>.</p>
+<h3 id="other-irc-networks"><a class="header" href="#other-irc-networks">Other IRC Networks</a></h3>
+<p>For more fun, you can join Libera IRC. Note this may potentially dox your node,
+especially if you have autoconnect enabled since Libera is not anon.</p>
+<pre><code>/server add libera irc.libera.chat/6697 -ssl -autoconnect
+/save
+/connect libera
+/join #rust
+/join #linux
+/join #math
+</code></pre>
+<p>You can find more channels with <code>/list</code>. Then add your favorite channels to the
+libera autojoin list.</p>
+<p>Note that your nick is temporary. If you want to claim a nick, you will need to
+<a href="https://libera.chat/guides/registration">register with the NickServer</a>.</p>
+<h2 id="troubleshooting"><a class="header" href="#troubleshooting">Troubleshooting</a></h2>
+<p>If you encounter connectivity issues refer to 
+<a href="../network-troubleshooting.html">Network troubleshooting</a>
+for further troubleshooting resources.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../../testnet/dao.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next" href="../../misc/darkirc/private_message.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../../testnet/dao.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next" href="../../misc/darkirc/private_message.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../../elasticlunr.min.js"></script>
+        <script src="../../mark.min.js"></script>
+        <script src="../../searcher.js"></script>
+
+        <script src="../../clipboard.min.js"></script>
+        <script src="../../highlight.js"></script>
+        <script src="../../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../../theme/mermaid.min.js"></script>
+        <script src="../../theme/mermaid-init.js"></script>
+        <script src="../../theme/zkas-highlight.js"></script>
+
+
+    </div>
+    </body>
+</html>

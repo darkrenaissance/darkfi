@@ -1,0 +1,419 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js ayu">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Philosophy - The DarkFi Book</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "ayu" : "ayu";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('ayu')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var html = document.querySelector('html');
+            var sidebar = null;
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded affix "><li class="part-title">About</li><li class="chapter-item expanded "><a href="../index.html"><strong aria-hidden="true">1.</strong> DarkFi</a></li><li class="chapter-item expanded "><a href="../start-here.html"><strong aria-hidden="true">2.</strong> Start Here</a></li><li class="chapter-item expanded "><a href="../philosophy/philosophy.html" class="active"><strong aria-hidden="true">3.</strong> Philosophy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../philosophy/meetings.html"><strong aria-hidden="true">3.1.</strong> Discussion</a></li><li class="chapter-item expanded "><a href="../philosophy/ideology.html"><strong aria-hidden="true">3.2.</strong> Ideology</a></li><li class="chapter-item expanded "><a href="../philosophy/books.html"><strong aria-hidden="true">3.3.</strong> Books</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">User Guide</li><li class="chapter-item expanded "><a href="../testnet/node.html"><strong aria-hidden="true">4.</strong> Running a Node</a></li><li class="chapter-item expanded "><a href="../testnet/token.html"><strong aria-hidden="true">5.</strong> Tokens</a></li><li class="chapter-item expanded "><a href="../testnet/payment.html"><strong aria-hidden="true">6.</strong> Payments</a></li><li class="chapter-item expanded "><a href="../testnet/atomic-swap.html"><strong aria-hidden="true">7.</strong> Atomic Swap</a></li><li class="chapter-item expanded "><a href="../testnet/dao.html"><strong aria-hidden="true">8.</strong> DAO</a></li><li class="chapter-item expanded "><a href="../misc/darkirc/darkirc.html"><strong aria-hidden="true">9.</strong> DarkIRC</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../misc/darkirc/private_message.html"><strong aria-hidden="true">9.1.</strong> Private Message</a></li></ol></li><li class="chapter-item expanded "><a href="../misc/nodes/node-configurations.html"><strong aria-hidden="true">10.</strong> Node Configurations</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../misc/nodes/public-guide.html"><strong aria-hidden="true">10.1.</strong> Public Node Configurations</a></li><li class="chapter-item expanded "><a href="../misc/nodes/tor-guide.html"><strong aria-hidden="true">10.2.</strong> Tor Nodes</a></li></ol></li><li class="chapter-item expanded "><a href="../misc/network-troubleshooting.html"><strong aria-hidden="true">11.</strong> Network Troubleshooting</a></li><li class="chapter-item expanded affix "><li class="part-title">Developer Doc</li><li class="chapter-item expanded "><a href="../dev/dev.html"><strong aria-hidden="true">12.</strong> Development</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../dev/contrib/contrib.html"><strong aria-hidden="true">12.1.</strong> Contribute</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../dev/contrib/tor.html"><strong aria-hidden="true">12.1.1.</strong> Using Tor</a></li></ol></li><li class="chapter-item expanded "><a href="../dev/learn.html"><strong aria-hidden="true">12.2.</strong> Learn</a></li><li class="chapter-item expanded "><a href="../dev/rustdoc.html"><strong aria-hidden="true">12.3.</strong> API Rustdoc</a></li><li class="chapter-item expanded "><a href="../dev/native_contracts.html"><strong aria-hidden="true">12.4.</strong> Native Contracts</a></li><li class="chapter-item expanded "><a href="../dev/seminars.html"><strong aria-hidden="true">12.5.</strong> Seminars</a></li><li class="chapter-item expanded "><a href="../dev/bench.html"><strong aria-hidden="true">12.6.</strong> Benchmark</a></li></ol></li><li class="chapter-item expanded "><a href="../arch/arch.html"><strong aria-hidden="true">13.</strong> Architecture</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../arch/overview.html"><strong aria-hidden="true">13.1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="../arch/anonymous_assets.html"><strong aria-hidden="true">13.2.</strong> Anonymous assets</a></li><li class="chapter-item expanded "><a href="../arch/consensus.html"><strong aria-hidden="true">13.3.</strong> Consensus</a></li><li class="chapter-item expanded "><a href="../arch/tx_lifetime.html"><strong aria-hidden="true">13.4.</strong> Transactions</a></li><li class="chapter-item expanded "><a href="../arch/bridge.html"><strong aria-hidden="true">13.5.</strong> Bridge</a></li><li class="chapter-item expanded "><a href="../arch/tooling.html"><strong aria-hidden="true">13.6.</strong> Tooling</a></li><li class="chapter-item expanded "><a href="../arch/p2p-network.html"><strong aria-hidden="true">13.7.</strong> P2P Network</a></li><li class="chapter-item expanded "><a href="../arch/services.html"><strong aria-hidden="true">13.8.</strong> Services</a></li><li class="chapter-item expanded "><a href="../arch/sc/sc.html"><strong aria-hidden="true">13.9.</strong> Smart Contracts</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../arch/sc/tx-lifetime.html"><strong aria-hidden="true">13.9.1.</strong> Transaction lifetime</a></li></ol></li><li class="chapter-item expanded "><a href="../arch/dao.html"><strong aria-hidden="true">13.10.</strong> DAO</a></li><li class="chapter-item expanded "><a href="../arch/wallet.html"><strong aria-hidden="true">13.11.</strong> Wallet</a></li></ol></li><li class="chapter-item expanded "><a href="../zkas/index.html"><strong aria-hidden="true">14.</strong> zkas</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../zkas/writing-zk-proofs.html"><strong aria-hidden="true">14.1.</strong> Writing ZK Proofs</a></li><li class="chapter-item expanded "><a href="../zkas/bincode.html"><strong aria-hidden="true">14.2.</strong> Bincode</a></li><li class="chapter-item expanded "><a href="../zkas/zkvm.html"><strong aria-hidden="true">14.3.</strong> zkVM</a></li><li class="chapter-item expanded "><a href="../zkas/examples.html"><strong aria-hidden="true">14.4.</strong> Examples</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../zkas/examples/voting.html"><strong aria-hidden="true">14.4.1.</strong> Anonymous voting</a></li><li class="chapter-item expanded "><a href="../zkas/examples/sapling.html"><strong aria-hidden="true">14.4.2.</strong> Anonymous payments</a></li></ol></li></ol></li><li class="chapter-item expanded "><a href="../clients/clients.html"><strong aria-hidden="true">15.</strong> Client</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../clients/darkfid_jsonrpc.html"><strong aria-hidden="true">15.1.</strong> darkfid JSON-RPC API</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">Crypto</li><li class="chapter-item expanded "><a href="../crypto/fft.html"><strong aria-hidden="true">16.</strong> FFT</a></li><li class="chapter-item expanded "><a href="../crypto/zk_explainer.html"><strong aria-hidden="true">17.</strong> ZK explainer</a></li><li class="chapter-item expanded "><a href="../crypto/research.html"><strong aria-hidden="true">18.</strong> Research</a></li><li class="chapter-item expanded "><a href="../crypto/rln.html"><strong aria-hidden="true">19.</strong> Rate-Limit Nullifiers</a></li><li class="chapter-item expanded "><a href="../crypto/key-recovery.html"><strong aria-hidden="true">20.</strong> Key Recovery Scheme</a></li><li class="chapter-item expanded "><a href="../crypto/reading-maths-books.html"><strong aria-hidden="true">21.</strong> Reading maths books</a></li><li class="chapter-item expanded affix "><li class="part-title">User Interface</li><li class="chapter-item expanded "><a href="../ui/ui.html"><strong aria-hidden="true">22.</strong> UI</a></li><li class="chapter-item expanded affix "><li class="part-title">DEP</li><li class="chapter-item expanded "><a href="../dep/0001.html"><strong aria-hidden="true">23.</strong> DEP 0001: Version Message Info (accepted)</a></li><li class="chapter-item expanded "><a href="../dep/0002.html"><strong aria-hidden="true">24.</strong> DEP 0002: Smart Contract Composability (deprecated)</a></li><li class="chapter-item expanded "><a href="../dep/0003.html"><strong aria-hidden="true">25.</strong> DEP 0003: Token Mint Authorization (accepted)</a></li><li class="chapter-item expanded "><a href="../dep/0004.html"><strong aria-hidden="true">26.</strong> DEP 0004: Client wallet WASM modules (draft)</a></li><li class="chapter-item expanded affix "><li class="part-title">Specs</li><li class="chapter-item expanded "><a href="../spec/notation.html"><strong aria-hidden="true">27.</strong> Notation</a></li><li class="chapter-item expanded "><a href="../spec/concepts.html"><strong aria-hidden="true">28.</strong> Concepts</a></li><li class="chapter-item expanded "><a href="../spec/crypto-schemes.html"><strong aria-hidden="true">29.</strong> Cryptographic Schemes</a></li><li class="chapter-item expanded "><div><strong aria-hidden="true">30.</strong> Contracts</div></li><li><ol class="section"><li class="chapter-item expanded "><a href="../spec/contract/dao/dao.html"><strong aria-hidden="true">30.1.</strong> DAO</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../spec/contract/dao/concepts.html"><strong aria-hidden="true">30.1.1.</strong> Concepts</a></li><li class="chapter-item expanded "><a href="../spec/contract/dao/model.html"><strong aria-hidden="true">30.1.2.</strong> Model</a></li><li class="chapter-item expanded "><a href="../spec/contract/dao/scheme.html"><strong aria-hidden="true">30.1.3.</strong> Scheme</a></li></ol></li><li class="chapter-item expanded "><a href="../spec/contract/money/money.html"><strong aria-hidden="true">30.2.</strong> Money</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../spec/contract/money/model.html"><strong aria-hidden="true">30.2.1.</strong> Model</a></li><li class="chapter-item expanded "><a href="../spec/contract/money/scheme.html"><strong aria-hidden="true">30.2.2.</strong> Scheme</a></li></ol></li><li class="chapter-item expanded "><a href="../spec/contract/vesting/vesting.html"><strong aria-hidden="true">30.3.</strong> Vesting</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">P2P API Tutorial</li><li class="chapter-item expanded "><a href="../learn/dchat/dchat.html"><strong aria-hidden="true">31.</strong> P2P API Tutorial</a></li><li class="chapter-item expanded "><a href="../learn/dchat/deployment/part-1.html"><strong aria-hidden="true">32.</strong> Deployment</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../learn/dchat/deployment/getting-started.html"><strong aria-hidden="true">32.1.</strong> Getting started</a></li><li class="chapter-item expanded "><a href="../learn/dchat/deployment/writing-a-daemon.html"><strong aria-hidden="true">32.2.</strong> Writing a daemon</a></li><li class="chapter-item expanded "><a href="../learn/dchat/deployment/sessions.html"><strong aria-hidden="true">32.3.</strong> Sessions</a></li><li class="chapter-item expanded "><a href="../learn/dchat/deployment/settings.html"><strong aria-hidden="true">32.4.</strong> Settings</a></li><li class="chapter-item expanded "><a href="../learn/dchat/deployment/start-stop.html"><strong aria-hidden="true">32.5.</strong> Start-Run-Stop</a></li><li class="chapter-item expanded "><a href="../learn/dchat/deployment/seed-node.html"><strong aria-hidden="true">32.6.</strong> Seed</a></li><li class="chapter-item expanded "><a href="../learn/dchat/deployment/deploy.html"><strong aria-hidden="true">32.7.</strong> Deploy</a></li></ol></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/part-2.html"><strong aria-hidden="true">33.</strong> Creating dchatd</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/message.html"><strong aria-hidden="true">33.1.</strong> Message</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/protocols.html"><strong aria-hidden="true">33.2.</strong> Understanding Protocols</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/protocol-dchat.html"><strong aria-hidden="true">33.3.</strong> ProtocolDchat</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/register-protocol.html"><strong aria-hidden="true">33.4.</strong> Register protocol</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/sending-messages.html"><strong aria-hidden="true">33.5.</strong> Sending messages</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/accept-addr.html"><strong aria-hidden="true">33.6.</strong> Accept addr</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/rpc-requests.html"><strong aria-hidden="true">33.7.</strong> Handling RPC requests</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/stoppable-task.html"><strong aria-hidden="true">33.8.</strong> StoppableTask</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/rpc-methods.html"><strong aria-hidden="true">33.9.</strong> Adding methods</a></li></ol></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchat-cli/part-3.html"><strong aria-hidden="true">34.</strong> Creating dchat-cli</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchat-cli/ui.html"><strong aria-hidden="true">34.1.</strong> UI</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchat-cli/using-dchat.html"><strong aria-hidden="true">34.2.</strong> Using dchat</a></li></ol></li><li class="chapter-item expanded "><a href="../learn/dchat/network-tools/part-4.html"><strong aria-hidden="true">35.</strong> Net tools</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../learn/dchat/network-tools/get-info.html"><strong aria-hidden="true">35.1.</strong> get_info</a></li><li class="chapter-item expanded "><a href="../learn/dchat/network-tools/attaching-dnet.html"><strong aria-hidden="true">35.2.</strong> Attaching dchat</a></li><li class="chapter-item expanded "><a href="../learn/dchat/network-tools/using-dnet.html"><strong aria-hidden="true">35.3.</strong> Using dnet</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">Misc</li><li class="chapter-item expanded "><a href="../misc/vanityaddr.html"><strong aria-hidden="true">36.</strong> vanityaddr</a></li><li class="chapter-item expanded "><a href="../misc/darkirc/specification.html"><strong aria-hidden="true">37.</strong> darkIRC Specification</a></li><li class="chapter-item expanded "><a href="../misc/tau.html"><strong aria-hidden="true">38.</strong> tau</a></li><li class="chapter-item expanded "><a href="../misc/event_graph/event_graph.html"><strong aria-hidden="true">39.</strong> event_graph</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../misc/event_graph/network_protocol.html"><strong aria-hidden="true">39.1.</strong> Network Protocol</a></li></ol></li><li class="chapter-item expanded "><a href="../misc/dnetview.html"><strong aria-hidden="true">40.</strong> dnetview</a></li><li class="chapter-item expanded "><a href="../zero2darkfi/zero2darkfi.html"><strong aria-hidden="true">41.</strong> Zero2darkfi</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../zero2darkfi/darkmap.html"><strong aria-hidden="true">41.1.</strong> darkmap</a></li></ol></li><li class="chapter-item expanded "><a href="../glossary/glossary.html"><strong aria-hidden="true">42.</strong> Glossary</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">The DarkFi Book</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.12.0/dist/katex.min.css" integrity="sha384-AfEj0r4/OFrOo5t7NnNe46zW/tFgW6x/bCJG8FqQCEo3+Aro6EYUG4+cU+KJWu/X" crossorigin="anonymous">
+<h1 id="darkfi-philosophy"><a class="header" href="#darkfi-philosophy">DarkFi Philosophy</a></h1>
+<h2 id="state-civilization-and-the-democratic-nation"><a class="header" href="#state-civilization-and-the-democratic-nation">State Civilization and the Democratic Nation</a></h2>
+<p><strong>State civilization</strong> has a 5000 year history. The origin of civilizations in mesopotamia
+experienced a cambrian explosion of various forms. The legacy of state civilization
+can be traced back to ancient assyria which was essentially a military dictatorship
+that mobilized all of society's resources to wage war and defeat other civilizations,
+enslaving them and seizing their wealth.</p>
+<p>Wikipedia defines civilization:</p>
+<blockquote>
+<p>Civilizations are organized densely-populated settlements divided into hierarchical
+social classes with a ruling elite and subordinate urban and rural populations.</p>
+<p>Civilization concentrates power, extending human control over the rest of nature,
+including over other human beings.</p>
+</blockquote>
+<p>However this destiny of civilization was not inherent as history teaches us.
+This definition is one particular mode of civilization that became prevalent.
+During human history there has been a plethora of forms of civilizations. Our role as
+revolutionaries is to reconstruct the civilizational paradigm.</p>
+<p>The <strong>democratic nation</strong> is synonymous with society, and produces all value
+including that which the state extracts. Creative enterprise and wealth production
+originates in society from small scale business, artisans and inventors, and
+anybody driven by intent or ambition to create works.</p>
+<p>Within society, there are multiple coexisting nations which are communities of
+people sharing language, history, ethnicity or culture. For example there could
+be a nation based on spiritual belief, a nation of women, or a distinct
+cultural nation.</p>
+<p>The <strong>nation state</strong> is an extreme variant of the state civilization tendency.
+Like early state civilizations, the development of the French nation-state was
+more effective at seizing the wealth of society to mobilize in war against the
+existing empires of the time.</p>
+<p>Soon after, the remaining systems were forced to
+adopt the nation state system, including its ideology of <strong>nationalism</strong>.
+It is no mistake that the nation state tends towards nationalism and fascism
+including the worst genocides in human history. Nationalism is a blind religion
+supplanting religious ideologies weakened by secularism. However nationalism
+is separate from patriotism.</p>
+<blockquote>
+<p>Loving one's country for which you have struggled and fought over for centuries
+or even millenia as an ethnic community or nation, which you have made your
+homeland in this long struggle, represents a sacred value.</p>
+<p>~ Ocalan's &quot;PKK and Kurdish Question in the 21st century&quot;</p>
+</blockquote>
+<h2 id="defining-the-state"><a class="header" href="#defining-the-state">Defining the State</a></h2>
+<p>The state is a centralized organization that imposes and enforces rules over a
+population through the monopoly on the legitimate use of violence. In discussing
+the rise of militarism, Ocalan says:</p>
+<blockquote>
+<p>Essentially, he attempted to establish his authority over two key groups: 
+the hunters at his side and the women he was trying to confine to the 
+home. Along the way, as shamans (proto-priests) and gerontocratic
+elements (groups of elders) joined the crafty strongman, the first
+hierarchical authority was formed in many societies in various forms.</p>
+<p>Section called &quot;Society’s Militarism Problem&quot; from &quot;The Sociology of Freedom&quot;</p>
+</blockquote>
+<p>The state is defined as:</p>
+<ol>
+<li>Ideological hegemony represented by a system of priests and shamans in
+pre-state formations. Today this is the media industry, schools, and
+big tech (for example &quot;fake news&quot; and surveillance systems).</li>
+<li>Monopolization on the use of violence through military and police.
+Powerful commanders like Gilgamesh conquered neighbouring tribes, creating
+nascent state polities whose main business model was to hunt and enslave
+barbarian tribes. This enabled state to expand agricultural output
+which they seized through taxation.</li>
+<li>State bureaucracy and administration represented in tribal societies and
+proto-states through a council of elders. This arm of the state also
+includes scientific research institutes, state psychology groups and various
+forms of manipulation including modern AI and data harvesting.
+This tendency is a misappropriation of scientific methods to serve power,
+thus retarding scientific and technological development and impoverishing
+society by depriving it of its great benefits.</li>
+</ol>
+<p>The state is a parasite on society, extracting value created. There are many
+historical stateless societies such as the Medean Confederation, the Iroquiois
+Confederation, the ninja republics of Iga and Kōga, the Swiss pre-Sonderbund
+Confederation Helvetica, and Cossack society.</p>
+<p>Government is a system or people administrating a society. Although most
+governments are nation-states, we can create stateless societies with
+autonomous governments. Within a free society government is local, broadly
+democratic, and autonomous. Society is widely engaged at every level in
+decision making through local people's councils, as well as possessing the
+use of violence through a system of gun ownership and local militias.
+Government also answers to a network of various interest groups from various
+nations such as women or youth.</p>
+<h2 id="modernity-and-the-subject-of-ideology"><a class="header" href="#modernity-and-the-subject-of-ideology">Modernity and the Subject of Ideology</a></h2>
+<p><strong>Modernity</strong> was born in the &quot;age of reason&quot; and represents the overturning of
+prevailing religious ideas and rejection of tradition in favour of secularization.
+Modernity has a mixed legacy which includes alienation, commodity fetishism,
+scientific positivism, and rationalism.</p>
+<p>During this period of modernity 4 major ideologies developed, each with their
+own specific subject as its focus.</p>
+<ul>
+<li>Liberalism and its subject of the individual. Individuals are atomic units
+existing under the state system which guarantees them certain bargains in
+the form of laws and rights.</li>
+<li>Communism which focused on the concept of class warfare and economic justice
+through state power.</li>
+<li>Fascism which put the volk or state at the center of society, whereby all
+resources would be mobilized to serve the state.</li>
+<li>Anarchism with its critiques of power and favouring social freedom.</li>
+</ul>
+<p>The particular form of modernity that is predominant can be characterized as
+<strong>capitalist modernity</strong>. Capitalism, otherwise referred to by others as
+corporatism can be likened to a religion, whereby a particular elite class
+having no ideology except self profit uses the means of the state to protect
+its own interests and extract the wealth of society through nefarious means.
+In some ways, it is a parasite on the state.</p>
+<p><strong>Agorist free markets</strong> is the democratic tendency of economy. The word
+'economy' derives from the Ancient Greek 'oikonomos' which means household
+management. Economy was, during ancient periods, connected with nature, the
+role of motherhood, life, and freedom. It was believed that wealth was derived
+from the quality of our lived environments. The Kurds use the feminine
+word 'mal' to refer to the house, while the masculine variant refers to
+actual property. Later during the Roman period, economy came to be
+understood as the accumulation of property in the form of number of slaves
+owned, amount of land seized, or the quantity of money.</p>
+<p>The subject of our ideology is the moral and political society. Society exists
+within a framework of morality and politics. Here we use politics to refer not to
+red team vs blue team, but instead all social activity concerned with
+our security, necessity, and life. A society can only be free when it has
+its own morality and politics. The state seeks to keep society weak by
+depriving it of morality and replacing society's politics with statecraft.</p>
+<h2 id="the-extinction-of-humanity"><a class="header" href="#the-extinction-of-humanity">The Extinction of Humanity</a></h2>
+<p>During the 20th century, liberals, communists, and fascists vyed for state power
+each promising a new form of society. State power existed with these external
+ideological justifications.</p>
+<p>With the end of the Soviet Union, and the end of history (according to liberalism),
+state power morphed into pure domination and profit. The system simply became
+a managerial form of raw power over society without purpose or aim.
+Wars such as the Iraq War were invented by neoliberals to breathe a new purpose into society.
+Indeed, there is no more effective means to support despotism than war.</p>
+<p>Today the military industrial complex has grown into a gigantic leviathan that
+threatens the world driving economies into an ever greater spiral of desperation.
+The push for the development of automated weapons, aerial drones, and
+<a href="https://en.wikipedia.org/wiki/AGM-114_Hellfire#AGM-114R9X">ninja missiles</a>
+that eliminate all space for human resistance against tyranny.</p>
+<p>Meanwhile
+<a href="https://en.wikipedia.org/wiki/Social_Credit_System">social credit scoring</a>
+is being introduced as CBDCs with incentivization schemes such as UBI.
+Such systems will give more effective means for the seizure of wealth by
+the state from society, centralizing economic power within an already
+deeply corrupt elite class.</p>
+<p>Liberal ideologies have made people indifferent to their own situation, turning
+society inward and focused on social media, unable to organize together to
+oppose rising authoritarianism. Liberalism is essentially a tendency towards
+extinction or death.</p>
+<h2 id="nature-life-freedom"><a class="header" href="#nature-life-freedom">Nature, Life, Freedom</a></h2>
+<p><strong>Nature</strong> is the center of spiritual belief. Humanity is an aspect of nature.
+Nature is more than the number of trees. It is the going up, the ascending of life.
+Through struggle, we overcome obstacles, becoming harder and stronger along the way.
+This growth makes us more human and closer with nature.</p>
+<p>People naturally feel an empathy with nature such as when an animal is injured or
+generous feelings towards the young of any species. This feeling was put in us by
+evolution. We feel an attachment and empathy towards our lived environment and
+want to see it improve. This feeling is mother nature speaking through us.
+The more in touch we are with this deeper feeling, the more free we are since we
+are able to develop as higher human beings.</p>
+<p>Freedom does not mean the ability to be without constraint or enact any wild fantasy
+at a moment's notice. Freedom means direct conscious action with power that drives
+us to ascend. Nature is full of interwoven threads of organisms vying for influence
+or power, with time doing an ordered dance punctuated by inflection points of change.
+It is during these moments that our ability of foresight and prescience allows us
+to deeply affect events along alternative trajectories.</p>
+<h2 id="re-evaluating-anarchism"><a class="header" href="#re-evaluating-anarchism">Re-Evaluating Anarchism</a></h2>
+<p>Anarchists had the correct critique &amp; analysis of power. In particular seeing that
+the nation state would grow into a monster that would consume society.
+However they were the least equipped of all the other ideologies during modernity
+to enact their vision and put their ideas into practice.</p>
+<ul>
+<li>They fell victim to the same positivist forces that they claimed to be fighting
+against.</li>
+<li>They lacked a coherent vision and had little strategy or roadmap for how
+the revolution would happen.</li>
+<li>Their utopian demand that the state must be eliminated immediately and at all
+costs meant they were not able to plan how that would happen.</li>
+<li>Their opposition to all forms of authority, even legitimate leadership, meant
+they were ineffective at organizing revolutionary forces.</li>
+</ul>
+<h2 id="revolutionary-objectives"><a class="header" href="#revolutionary-objectives">Revolutionary Objectives</a></h2>
+<ul>
+<li>Our movement is primarily a spiritual one. One cannot understand Christianity
+by studying its system of churches, since primarily it is a body of teachings.
+Likewise, the core of our movement is in our philosophy, ideas, and concepts,
+which then inform our ideas on governance and economics.</li>
+<li>We must build a strong intellectual fabric that inoculates us and fosters
+resilience, as well as equipping us with the means to be effective in our work.</li>
+<li>There are two legacies in technology, one informed by state civilization
+and the other by society. The technology we create is to solve problems that
+society and aligned communities have.</li>
+</ul>
+<!-- TODO:
+- liberal vs expansive democracy
+- fostering democratic orgs, democratic culture, lifecycle of an org
+- nationalism vs patriotism
+-->
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../start-here.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next" href="../philosophy/meetings.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../start-here.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next" href="../philosophy/meetings.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../theme/mermaid.min.js"></script>
+        <script src="../theme/mermaid-init.js"></script>
+        <script src="../theme/zkas-highlight.js"></script>
+
+
+    </div>
+    </body>
+</html>

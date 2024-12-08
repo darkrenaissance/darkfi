@@ -1,0 +1,558 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js ayu">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Wallet - The DarkFi Book</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "ayu" : "ayu";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('ayu')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var html = document.querySelector('html');
+            var sidebar = null;
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded affix "><li class="part-title">About</li><li class="chapter-item expanded "><a href="../index.html"><strong aria-hidden="true">1.</strong> DarkFi</a></li><li class="chapter-item expanded "><a href="../start-here.html"><strong aria-hidden="true">2.</strong> Start Here</a></li><li class="chapter-item expanded "><a href="../philosophy/philosophy.html"><strong aria-hidden="true">3.</strong> Philosophy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../philosophy/meetings.html"><strong aria-hidden="true">3.1.</strong> Discussion</a></li><li class="chapter-item expanded "><a href="../philosophy/ideology.html"><strong aria-hidden="true">3.2.</strong> Ideology</a></li><li class="chapter-item expanded "><a href="../philosophy/books.html"><strong aria-hidden="true">3.3.</strong> Books</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">User Guide</li><li class="chapter-item expanded "><a href="../testnet/node.html"><strong aria-hidden="true">4.</strong> Running a Node</a></li><li class="chapter-item expanded "><a href="../testnet/token.html"><strong aria-hidden="true">5.</strong> Tokens</a></li><li class="chapter-item expanded "><a href="../testnet/payment.html"><strong aria-hidden="true">6.</strong> Payments</a></li><li class="chapter-item expanded "><a href="../testnet/atomic-swap.html"><strong aria-hidden="true">7.</strong> Atomic Swap</a></li><li class="chapter-item expanded "><a href="../testnet/dao.html"><strong aria-hidden="true">8.</strong> DAO</a></li><li class="chapter-item expanded "><a href="../misc/darkirc/darkirc.html"><strong aria-hidden="true">9.</strong> DarkIRC</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../misc/darkirc/private_message.html"><strong aria-hidden="true">9.1.</strong> Private Message</a></li></ol></li><li class="chapter-item expanded "><a href="../misc/nodes/node-configurations.html"><strong aria-hidden="true">10.</strong> Node Configurations</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../misc/nodes/public-guide.html"><strong aria-hidden="true">10.1.</strong> Public Node Configurations</a></li><li class="chapter-item expanded "><a href="../misc/nodes/tor-guide.html"><strong aria-hidden="true">10.2.</strong> Tor Nodes</a></li></ol></li><li class="chapter-item expanded "><a href="../misc/network-troubleshooting.html"><strong aria-hidden="true">11.</strong> Network Troubleshooting</a></li><li class="chapter-item expanded affix "><li class="part-title">Developer Doc</li><li class="chapter-item expanded "><a href="../dev/dev.html"><strong aria-hidden="true">12.</strong> Development</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../dev/contrib/contrib.html"><strong aria-hidden="true">12.1.</strong> Contribute</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../dev/contrib/tor.html"><strong aria-hidden="true">12.1.1.</strong> Using Tor</a></li></ol></li><li class="chapter-item expanded "><a href="../dev/learn.html"><strong aria-hidden="true">12.2.</strong> Learn</a></li><li class="chapter-item expanded "><a href="../dev/rustdoc.html"><strong aria-hidden="true">12.3.</strong> API Rustdoc</a></li><li class="chapter-item expanded "><a href="../dev/native_contracts.html"><strong aria-hidden="true">12.4.</strong> Native Contracts</a></li><li class="chapter-item expanded "><a href="../dev/seminars.html"><strong aria-hidden="true">12.5.</strong> Seminars</a></li><li class="chapter-item expanded "><a href="../dev/bench.html"><strong aria-hidden="true">12.6.</strong> Benchmark</a></li></ol></li><li class="chapter-item expanded "><a href="../arch/arch.html"><strong aria-hidden="true">13.</strong> Architecture</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../arch/overview.html"><strong aria-hidden="true">13.1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="../arch/anonymous_assets.html"><strong aria-hidden="true">13.2.</strong> Anonymous assets</a></li><li class="chapter-item expanded "><a href="../arch/consensus.html"><strong aria-hidden="true">13.3.</strong> Consensus</a></li><li class="chapter-item expanded "><a href="../arch/tx_lifetime.html"><strong aria-hidden="true">13.4.</strong> Transactions</a></li><li class="chapter-item expanded "><a href="../arch/bridge.html"><strong aria-hidden="true">13.5.</strong> Bridge</a></li><li class="chapter-item expanded "><a href="../arch/tooling.html"><strong aria-hidden="true">13.6.</strong> Tooling</a></li><li class="chapter-item expanded "><a href="../arch/p2p-network.html"><strong aria-hidden="true">13.7.</strong> P2P Network</a></li><li class="chapter-item expanded "><a href="../arch/services.html"><strong aria-hidden="true">13.8.</strong> Services</a></li><li class="chapter-item expanded "><a href="../arch/sc/sc.html"><strong aria-hidden="true">13.9.</strong> Smart Contracts</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../arch/sc/tx-lifetime.html"><strong aria-hidden="true">13.9.1.</strong> Transaction lifetime</a></li></ol></li><li class="chapter-item expanded "><a href="../arch/dao.html"><strong aria-hidden="true">13.10.</strong> DAO</a></li><li class="chapter-item expanded "><a href="../arch/wallet.html" class="active"><strong aria-hidden="true">13.11.</strong> Wallet</a></li></ol></li><li class="chapter-item expanded "><a href="../zkas/index.html"><strong aria-hidden="true">14.</strong> zkas</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../zkas/writing-zk-proofs.html"><strong aria-hidden="true">14.1.</strong> Writing ZK Proofs</a></li><li class="chapter-item expanded "><a href="../zkas/bincode.html"><strong aria-hidden="true">14.2.</strong> Bincode</a></li><li class="chapter-item expanded "><a href="../zkas/zkvm.html"><strong aria-hidden="true">14.3.</strong> zkVM</a></li><li class="chapter-item expanded "><a href="../zkas/examples.html"><strong aria-hidden="true">14.4.</strong> Examples</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../zkas/examples/voting.html"><strong aria-hidden="true">14.4.1.</strong> Anonymous voting</a></li><li class="chapter-item expanded "><a href="../zkas/examples/sapling.html"><strong aria-hidden="true">14.4.2.</strong> Anonymous payments</a></li></ol></li></ol></li><li class="chapter-item expanded "><a href="../clients/clients.html"><strong aria-hidden="true">15.</strong> Client</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../clients/darkfid_jsonrpc.html"><strong aria-hidden="true">15.1.</strong> darkfid JSON-RPC API</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">Crypto</li><li class="chapter-item expanded "><a href="../crypto/fft.html"><strong aria-hidden="true">16.</strong> FFT</a></li><li class="chapter-item expanded "><a href="../crypto/zk_explainer.html"><strong aria-hidden="true">17.</strong> ZK explainer</a></li><li class="chapter-item expanded "><a href="../crypto/research.html"><strong aria-hidden="true">18.</strong> Research</a></li><li class="chapter-item expanded "><a href="../crypto/rln.html"><strong aria-hidden="true">19.</strong> Rate-Limit Nullifiers</a></li><li class="chapter-item expanded "><a href="../crypto/key-recovery.html"><strong aria-hidden="true">20.</strong> Key Recovery Scheme</a></li><li class="chapter-item expanded "><a href="../crypto/reading-maths-books.html"><strong aria-hidden="true">21.</strong> Reading maths books</a></li><li class="chapter-item expanded affix "><li class="part-title">User Interface</li><li class="chapter-item expanded "><a href="../ui/ui.html"><strong aria-hidden="true">22.</strong> UI</a></li><li class="chapter-item expanded affix "><li class="part-title">DEP</li><li class="chapter-item expanded "><a href="../dep/0001.html"><strong aria-hidden="true">23.</strong> DEP 0001: Version Message Info (accepted)</a></li><li class="chapter-item expanded "><a href="../dep/0002.html"><strong aria-hidden="true">24.</strong> DEP 0002: Smart Contract Composability (deprecated)</a></li><li class="chapter-item expanded "><a href="../dep/0003.html"><strong aria-hidden="true">25.</strong> DEP 0003: Token Mint Authorization (accepted)</a></li><li class="chapter-item expanded "><a href="../dep/0004.html"><strong aria-hidden="true">26.</strong> DEP 0004: Client wallet WASM modules (draft)</a></li><li class="chapter-item expanded affix "><li class="part-title">Specs</li><li class="chapter-item expanded "><a href="../spec/notation.html"><strong aria-hidden="true">27.</strong> Notation</a></li><li class="chapter-item expanded "><a href="../spec/concepts.html"><strong aria-hidden="true">28.</strong> Concepts</a></li><li class="chapter-item expanded "><a href="../spec/crypto-schemes.html"><strong aria-hidden="true">29.</strong> Cryptographic Schemes</a></li><li class="chapter-item expanded "><div><strong aria-hidden="true">30.</strong> Contracts</div></li><li><ol class="section"><li class="chapter-item expanded "><a href="../spec/contract/dao/dao.html"><strong aria-hidden="true">30.1.</strong> DAO</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../spec/contract/dao/concepts.html"><strong aria-hidden="true">30.1.1.</strong> Concepts</a></li><li class="chapter-item expanded "><a href="../spec/contract/dao/model.html"><strong aria-hidden="true">30.1.2.</strong> Model</a></li><li class="chapter-item expanded "><a href="../spec/contract/dao/scheme.html"><strong aria-hidden="true">30.1.3.</strong> Scheme</a></li></ol></li><li class="chapter-item expanded "><a href="../spec/contract/money/money.html"><strong aria-hidden="true">30.2.</strong> Money</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../spec/contract/money/model.html"><strong aria-hidden="true">30.2.1.</strong> Model</a></li><li class="chapter-item expanded "><a href="../spec/contract/money/scheme.html"><strong aria-hidden="true">30.2.2.</strong> Scheme</a></li></ol></li><li class="chapter-item expanded "><a href="../spec/contract/vesting/vesting.html"><strong aria-hidden="true">30.3.</strong> Vesting</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">P2P API Tutorial</li><li class="chapter-item expanded "><a href="../learn/dchat/dchat.html"><strong aria-hidden="true">31.</strong> P2P API Tutorial</a></li><li class="chapter-item expanded "><a href="../learn/dchat/deployment/part-1.html"><strong aria-hidden="true">32.</strong> Deployment</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../learn/dchat/deployment/getting-started.html"><strong aria-hidden="true">32.1.</strong> Getting started</a></li><li class="chapter-item expanded "><a href="../learn/dchat/deployment/writing-a-daemon.html"><strong aria-hidden="true">32.2.</strong> Writing a daemon</a></li><li class="chapter-item expanded "><a href="../learn/dchat/deployment/sessions.html"><strong aria-hidden="true">32.3.</strong> Sessions</a></li><li class="chapter-item expanded "><a href="../learn/dchat/deployment/settings.html"><strong aria-hidden="true">32.4.</strong> Settings</a></li><li class="chapter-item expanded "><a href="../learn/dchat/deployment/start-stop.html"><strong aria-hidden="true">32.5.</strong> Start-Run-Stop</a></li><li class="chapter-item expanded "><a href="../learn/dchat/deployment/seed-node.html"><strong aria-hidden="true">32.6.</strong> Seed</a></li><li class="chapter-item expanded "><a href="../learn/dchat/deployment/deploy.html"><strong aria-hidden="true">32.7.</strong> Deploy</a></li></ol></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/part-2.html"><strong aria-hidden="true">33.</strong> Creating dchatd</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/message.html"><strong aria-hidden="true">33.1.</strong> Message</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/protocols.html"><strong aria-hidden="true">33.2.</strong> Understanding Protocols</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/protocol-dchat.html"><strong aria-hidden="true">33.3.</strong> ProtocolDchat</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/register-protocol.html"><strong aria-hidden="true">33.4.</strong> Register protocol</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/sending-messages.html"><strong aria-hidden="true">33.5.</strong> Sending messages</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/accept-addr.html"><strong aria-hidden="true">33.6.</strong> Accept addr</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/rpc-requests.html"><strong aria-hidden="true">33.7.</strong> Handling RPC requests</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/stoppable-task.html"><strong aria-hidden="true">33.8.</strong> StoppableTask</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/rpc-methods.html"><strong aria-hidden="true">33.9.</strong> Adding methods</a></li></ol></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchat-cli/part-3.html"><strong aria-hidden="true">34.</strong> Creating dchat-cli</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchat-cli/ui.html"><strong aria-hidden="true">34.1.</strong> UI</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchat-cli/using-dchat.html"><strong aria-hidden="true">34.2.</strong> Using dchat</a></li></ol></li><li class="chapter-item expanded "><a href="../learn/dchat/network-tools/part-4.html"><strong aria-hidden="true">35.</strong> Net tools</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../learn/dchat/network-tools/get-info.html"><strong aria-hidden="true">35.1.</strong> get_info</a></li><li class="chapter-item expanded "><a href="../learn/dchat/network-tools/attaching-dnet.html"><strong aria-hidden="true">35.2.</strong> Attaching dchat</a></li><li class="chapter-item expanded "><a href="../learn/dchat/network-tools/using-dnet.html"><strong aria-hidden="true">35.3.</strong> Using dnet</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">Misc</li><li class="chapter-item expanded "><a href="../misc/vanityaddr.html"><strong aria-hidden="true">36.</strong> vanityaddr</a></li><li class="chapter-item expanded "><a href="../misc/darkirc/specification.html"><strong aria-hidden="true">37.</strong> darkIRC Specification</a></li><li class="chapter-item expanded "><a href="../misc/tau.html"><strong aria-hidden="true">38.</strong> tau</a></li><li class="chapter-item expanded "><a href="../misc/event_graph/event_graph.html"><strong aria-hidden="true">39.</strong> event_graph</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../misc/event_graph/network_protocol.html"><strong aria-hidden="true">39.1.</strong> Network Protocol</a></li></ol></li><li class="chapter-item expanded "><a href="../misc/dnetview.html"><strong aria-hidden="true">40.</strong> dnetview</a></li><li class="chapter-item expanded "><a href="../zero2darkfi/zero2darkfi.html"><strong aria-hidden="true">41.</strong> Zero2darkfi</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../zero2darkfi/darkmap.html"><strong aria-hidden="true">41.1.</strong> darkmap</a></li></ol></li><li class="chapter-item expanded "><a href="../glossary/glossary.html"><strong aria-hidden="true">42.</strong> Glossary</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">The DarkFi Book</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.12.0/dist/katex.min.css" integrity="sha384-AfEj0r4/OFrOo5t7NnNe46zW/tFgW6x/bCJG8FqQCEo3+Aro6EYUG4+cU+KJWu/X" crossorigin="anonymous">
+<h1 id="wallet-notes"><a class="header" href="#wallet-notes">Wallet Notes</a></h1>
+<h2 id="optimizing-note-decryption"><a class="header" href="#optimizing-note-decryption">Optimizing Note Decryption</a></h2>
+<p>See <a href="https://words.str4d.xyz/dagsync-graph-aware-zcash-wallets/">DAGSync: Graph-aware Zcash wallets</a> by str4d.</p>
+<p>TLDR: as we're syncing the wallet, we normally scan forwards prioritizing both
+sends and receives the same. Instead we can optimize this for immediate
+spendability (despite not having full received balance). Assume we have the
+entire blockchain state but haven't yet trial decrypted all notes.</p>
+<ul>
+<li><strong>Nullifier Tracking:</strong> for every note, look for a nullifier. If it doesn't exist then the note has
+not yet been spent.</li>
+<li><strong>Targeted Decryption:</strong> when the nullifier exists, then check the output notes of that transaction.
+One of these is likely to be change we can spend.</li>
+</ul>
+<p>Additionally:</p>
+<ul>
+<li><strong>Source Discovery:</strong> go backwards from the latest block and trial decrypt
+outputs. Then for those decrypted outputs, check their nullifiers (as per
+nullifier tracking above).</li>
+<li><strong>History Discovery:</strong> simultaneously another scan goes forwards from
+the last sync point until it meets the source discovery (going backwards).</li>
+</ul>
+<p><strong>Knitting</strong> is where periodically wallets will gather all unspent coins and
+construct a new one. It will use the memo field to indicate to wallet sync
+that it doesn't need to go back any further than this point.</p>
+<p>However since wallets keep track of their own coins (assuming a wallet isn't
+shared between 2 devices) which is the majority usecase, then this technique
+is less relevant since you know which coins you've spent.</p>
+<h2 id="modules-and-addons"><a class="header" href="#modules-and-addons">Modules and Addons</a></h2>
+<p>The current standard model for smart contract cryptocurrencies is to abuse
+the web browser's plugin architecture. This has several undesirable effects:</p>
+<ul>
+<li>Dependency on js.</li>
+<li>Poor security model.</li>
+<li>Centralized frontends. The frontend can be loaded via IPFS (usually via a
+gateway), but it still needs to access a hosted RPC. Users can deploy their
+own and then configure the RPC URL but this is complicated so it rarely
+happens. Then there are projects for &quot;decentralized RPC&quot; but this is lipstick
+on a cow (the bloated browser).
+<ul>
+<li>Hosted frontends are a legal risk. See TornadoCash.</li>
+</ul>
+</li>
+<li>Limitations of the browser addon architecture. I cannot for example run a p2p
+network and must go through some centralized &quot;solution&quot; (not a solution but
+actually an anti-pattern).
+<ul>
+<li>Firefox used to have a much stronger XUL framework which enabled cool things
+like remote CLI control of the browser or interfacing with other tools,
+but they deleted this and just put Chrome's addon architecture which made
+a whole load of addons no longer possible.</li>
+</ul>
+</li>
+<li>Non-portable. Running metamask ethereum apps on mobile is generally
+non-trivial. Wallets should easily work across all platforms and devices
+seamlessly.
+<ul>
+<li>Metamask has a separate standalone Android app which is non-ideal since
+now the big app has 2 separate impls. Ideally there is just one big app
+since diverging impls lead to fragmentation.</li>
+</ul>
+</li>
+<li>The architecture is specific to browsers and non-portable to other software
+unless they include a browser engine like WebKit which is a huge chunk of
+code.</li>
+</ul>
+<p>Benefits of <a href="https://www.geoffreylitt.com/2019/07/29/browser-extensions">hackable software</a> are:</p>
+<ul>
+<li>Small tools, not big apps. The software is just a minimal shell. All
+functionality exists as plugins.</li>
+<li>User extendable, which allows community control over the direction and
+use of the software.
+<ul>
+<li>Niche users can find a plugin for their edgecase which might not be
+supported in the big app.</li>
+</ul>
+</li>
+<li>Easy entry for devs that have an idea compared to making a new app or tool.
+<ul>
+<li>Blender has a built in Python terminal, and the code is fully introspectable
+which allows exploring the codebase and calling <code>help(foo)</code> on objects.</li>
+</ul>
+</li>
+<li>Most major successful products are hackable. Important examples:
+WinAmp, Blender3D, Firefox.</li>
+</ul>
+<h3 id="addons"><a class="header" href="#addons">Addons</a></h3>
+<p>Addons are sandboxed WASM code which has tightly controlled permissions.
+They are untrusted third party 'apps'.</p>
+<p>Most functionality are the client code for wallets. For example we want to use
+the DAO contract so we download an addon. An addon may provide this functionality:</p>
+<ul>
+<li>An API that can be called by other addons.</li>
+<li>A UI schema for building an interface.</li>
+<li>Transaction scanner that can do things like trial decryption of notes,
+maintaining any client specific state.</li>
+</ul>
+<p>Addons should be sandboxed. By default access to all host functions is
+blacklisted, and they must be explicitly whitelisted to call any function,
+including other addons.</p>
+<p>We can run addons in separate threads so that if one of them crashes,
+the host application can simply kill the process. Addons can then run alongside
+each other without any effect on each other. However this leads to increased
+memory usage from the overhead of having every addon spawning a new thread,
+so we may wish to use WASM functionality to interpret addon functions that
+take too long.</p>
+<p>There is a special function inside the WASM which is called on startup
+called <code>requested_permissions()</code>. This is used to request the permissions
+from the user who then adds it to the whitelist for this addon.
+While the requested permissions will be a list of namespaced functions,
+the UI will simply display these as something simple to the user like
+&quot;manage a database&quot; or &quot;use event graph&quot; (see below).</p>
+<p>Addons are loaded dynamically and can be downloaded from a source such as
+the DHT network.</p>
+<p><img src="../assets/blender-addons.png" alt="blender addons" /></p>
+<p><img src="../assets/firefox-addons.png" alt="firefox addons" /></p>
+<p>Blender's addon browser looks much better than Firefox's.</p>
+<p>When creating addon UIs, there should be a way to allow live reloading of the
+UI for convenient design, and possibly the impl too which makes live debugging
+possible.</p>
+<h4 id="addon-maintenance"><a class="header" href="#addon-maintenance">Addon Maintenance</a></h4>
+<p>Overtime there will be a tension between upgrading the core API and maintaining
+a large ecosystem of addons. Therefore there should be a centralized git repo
+for all addons listed in the wallet. Addon authors can tag releases and request
+their addon be updated downstream by the wallet maintainers.</p>
+<p>This way when large breaking API changes are needed, we have the ability to:</p>
+<ul>
+<li>Simultaneously update all addons at once.</li>
+<li>Communicate with addon authors to coordinate any changes needed such
+as architectural ones.</li>
+<li>Ensure a canonical repository of vetted addons.</li>
+</ul>
+<p>This is similar to how Linux distributions maintain packages.</p>
+<p>Addons must also have contact details so darkfi core and the wallet team are
+able to contact them.</p>
+<h3 id="modules"><a class="header" href="#modules">Modules</a></h3>
+<p>These are dynamic objects which are trusted and provide full access to the
+host system.</p>
+<p>An example of such a module could be an <code>event_graph</code> module.
+This enables addons to request a specific event graph instance. For example
+the users of a DAO may wish to coordinate through the p2p network.
+They would therefore use the <code>event_graph</code> module to create an event graph
+instance for that usecase, and the p2p network would create a swarm for this
+event graph. All of this would be handled by the module which simply provides
+a convenient interface to the addon.</p>
+<p>This enables using the full power of the system, but safely segregating this
+functionality from untrusted addons through a firewall.
+It solves the issue of relying on hosted/centralized gateways since user wallets
+will just spin up p2p nodes locally.</p>
+<p>Modules can only be installed manually from file and require restarting the
+wallet.</p>
+<h3 id="scenegraph"><a class="header" href="#scenegraph">Scenegraph</a></h3>
+<p>This is a popular gamedev design pattern where the entire program state is
+represented as an introspectable tree. It's similar to the UNIX pattern of
+&quot;everything is a file&quot;, and maybe plan9's idea.</p>
+<p><a href="https://archive.gamedev.net/archive/reference/programming/features/scenegraph/index.html">The scenegraph</a>
+is a world where the children are objects, and the objects have
+attributes that can be read and operated on. These can all be composed together
+through generic node interfaces.</p>
+<p><img src="../assets/gamedev-scenegraph.jpg" alt="gamedev scenegraph" /></p>
+<p><em>example of a scenegraph from a game engine</em></p>
+<p><img src="../assets/blender-scenegraph.png" alt="blender scenegraph" /></p>
+<p><em>scenegraph in blender</em></p>
+<pre><code>Application
+    SettingsRegistry
+    Window #1
+        TabBar
+            Tab #1
+                Panel #1
+                    WasmSandbox
+                        ...
+                Panel #2
+                ...
+            Tab #2
+                ...
+            ...
+    Window #2
+        ...
+    Module #1
+</code></pre>
+<ul>
+<li>Each object can emit events, and subscribe to events from other objects.
+All objects have an <code>event()</code> method and <code>update()</code> method.
+Update is called per frame, while event can be used for timer events such
+as periodic updates or wakeups, as well as input events.</li>
+<li>Drawing related objects have a boundary where they can draw.
+They all implement a <code>draw()</code> method. Drawing outside the boundary is
+disallowed.</li>
+<li>Everything has names, attributes and methods with docstrings.
+This is all introspectable and eventually scriptable.
+Also the internal state can be accessed through inbuilt terminal, possibly
+using Python.</li>
+</ul>
+<h2 id="ui-specifics"><a class="header" href="#ui-specifics">UI Specifics</a></h2>
+<p>Laundry list of required features:</p>
+<ul>
+<li>XUL/bpy inspired. There is a small wallet core, but the entire UI is created
+using definitions and the DSL.</li>
+<li>Dynamic fractional scaling.</li>
+<li>Customizable scriptable interface, preferably using Python and/or Rust.</li>
+<li>Calm UI with default darkmode. No animations.</li>
+<li>Text oriented, clean and minimal design.</li>
+<li>Avoid modal dialogs. Instead use mode toggling and expanding panels.
+<ul>
+<li>The UI should enable you to view all relevant options and tools at a glance,
+without the need for pushing or dragging windows around.</li>
+<li>Tools and interface options designed to not block the user from
+using any other parts.
+<ul>
+<li>The UI should stay responsive by all means.
+<ul>
+<li>This means the UI runs in its own thread, communicating with the
+backend which runs on another thread.</li>
+<li>Non blocking and async. Remains responsive despite work happening.</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>User input should remain as consistent and predictable as possible.</li>
+</ul>
+</li>
+<li>Installation free: run out of the box for new installs, not requiring
+root system access.</li>
+<li>Responsive design across desktop and mobile devices with minimal specific code
+or changes required. Ideally none at all.</li>
+<li>First class CLI support with access to all functionality existing in the UI.
+<ul>
+<li>Possibly there is a way of transforming the UI schema specced by addons
+into a command line interface.</li>
+</ul>
+</li>
+</ul>
+<p>See also the <a href="https://developer.blender.org/docs/features/interface/human_interface_guidelines/paradigms/">Blender Human Interface Guidelines: Paradigms</a>.</p>
+<h2 id="roadmap"><a class="header" href="#roadmap">Roadmap</a></h2>
+<ol>
+<li>Simple <code>drk</code> CLI tool with basic core apps working. We want to ship so
+this is the only core prerequisite to start.</li>
+<li>We can add WASM addons with the basic framework after. Then migrate core apps
+such as money or DAO to this.</li>
+<li>Add modules subsystem.</li>
+<li>Construct the UI.</li>
+<li>Create the overall framework of resizable 'editors' and define the
+terminology.</li>
+<li>Add in the scripting functionality for the UI.</li>
+<li>Ensure cross-platform support and clean architecture.</li>
+<li>Iterate on finer UI design specifics.</li>
+<li>Allow customization of UI such as colors and style (optional).</li>
+</ol>
+<p>Steps 3 and 4 can be done in parallel.</p>
+<h2 id="target-mainnet-functionality"><a class="header" href="#target-mainnet-functionality">Target Mainnet Functionality</a></h2>
+<p>Multi-platform main view with splitting and these editors:</p>
+<ul>
+<li>Money::transfer()</li>
+<li>Money::swap()</li>
+<li>DAO</li>
+<li>Chat</li>
+<li>Explorer</li>
+<li>Settings</li>
+</ul>
+<h2 id="specifics"><a class="header" href="#specifics">Specifics</a></h2>
+<h3 id="story"><a class="header" href="#story">Story</a></h3>
+<p>The story goes like this. There's a node running of some kind. This could be
+darkfid or darkirc.</p>
+<p>In the case of darkfid, there's additional per wallet processing that's done
+such as scanning transactions. Currently this is the role played by drk scan.</p>
+<p>Regardless of whether there's one node with functionality existing as pluggable
+modules, we assume now there are nodes running which the wallet/UI must
+communicate with.</p>
+<p>Inside the user wallet, there are multiple plugins. A plugin might need to
+query the blockchain, spawn a p2p network (to exchange data for OTC or
+coordinate DAO activity as examples). They do this by connecting to the nodes.</p>
+<h3 id="key-concepts"><a class="header" href="#key-concepts">Key Concepts</a></h3>
+<p>We now give an overview of the current iteration of the scene graph:</p>
+<ul>
+<li>Nodes have a type. Each node can have multiple children.</li>
+<li>It is a graph not a tree. A node can have multiple parents.</li>
+<li>Each node has several properties which have types such as f32, u32, str, enum.
+Properties can also be an array or vec of these types.
+See <code>bin/darkwallet/pydrk/api.py:5</code> for the fields in a property.</li>
+<li>Nodes have signals such as <code>mouse_clicked</code>. Multiple slots can be
+registered for a signal. Think of this like notifications.</li>
+<li>Nodes have methods such as <code>create_foo()</code> which is like request-reply.</li>
+</ul>
+<h3 id="plugins"><a class="header" href="#plugins">Plugins</a></h3>
+<p>Each app has a separate plugin. Plugins have their own private internal data.
+Any data they wish to expose can be done by providing properties or methods in
+their node in the scene graph.</p>
+<p>The scene graph then applies access restrictions depending on the ownership
+semantics of properties and methods (think like UNIX users and groups).</p>
+<p>Plugins provide <code>init()</code> and <code>update(event)</code> functions. <code>init()</code> is called when
+a new <em>plugin instance</em> is created. Plugins can have multiple instances.</p>
+<p>Using the scene graph, this is scriptable from any language, introspectable and
+with permissions - using a data structure inspised by UNIX and plan9.</p>
+<h4 id="example"><a class="header" href="#example">Example</a></h4>
+<p>When a plugin is opened, the UI creates</p>
+<pre><code>    /plugin/dao/instance1
+</code></pre>
+<p>and gives it a layer to draw in, which is simultaneously linked into both</p>
+<pre><code>    /window/dao_instance1_layer
+    /plugin/dao/instance1/dao_instance1_layer
+</code></pre>
+<p>The plugin can then speak with modules by calling methods or subscribing to
+signals on <code>/mod/darkfid</code>. Methods and signals are automatically proxied from
+the node.</p>
+<h3 id="running-a-new-node-per-function"><a class="header" href="#running-a-new-node-per-function">Running a New Node per Function</a></h3>
+<p>Lets say we wish to do OTC swaps and utilize the event graph. Are users then
+required to run a new node per app?</p>
+<p>At least in this case, there should be a way to spin up an event graph.</p>
+<p>For scanning transactions, is this done at startup incurring an initialization
+cost when opening the wallet? I guess so to maintain independence of keys from
+the darkfid node.</p>
+<p>Another example is the task manager and darkirc chat. Do these remain separate
+daemons? When we add swarming support to p2p, it might be possible to merge all
+p2p functionality across apps into a unified subsystem, reducing complexity.
+In which case there should be a simple way to utilize this subsystem.</p>
+<p>The more nodes users are required to run, the more difficult it will become to
+have a decentralized network, so we should find a way to reduce the burden for
+users to setup our infra.</p>
+<h3 id="usage-patterns"><a class="header" href="#usage-patterns">Usage Patterns</a></h3>
+<p>Wallets are clients talking to the node (remote).</p>
+<ul>
+<li>There's persistent nodes running some process to sync data from the network (darkfid downloading/verifying blockchain, event graph, ...)</li>
+<li>There's scanning done by wallets on startup (check for recv'd payments, decrypt DMs, .etc)
+<ul>
+<li>Scanning downloads the updates from persistent nodes</li>
+</ul>
+</li>
+<li>Wallets can interact with nodes to push data to the network, or communicate with other nodes .etc</li>
+<li>Wallet apps can talk with each other.</li>
+</ul>
+<h2 id="references"><a class="header" href="#references">References</a></h2>
+<ul>
+<li><a href="https://mickens.seas.harvard.edu/files/mickens/files/veil.pdf">Veil: Private Browsing Semantics Without Browser-side Assistance</a></li>
+<li><a href="https://scholar.harvard.edu/files/mickens/files/atlantis.pdf">Atlantis: Robust, Extensible Execution Environments for Web Applications</a></li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../arch/dao.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next" href="../zkas/index.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../arch/dao.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next" href="../zkas/index.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../theme/mermaid.min.js"></script>
+        <script src="../theme/mermaid-init.js"></script>
+        <script src="../theme/zkas-highlight.js"></script>
+
+
+    </div>
+    </body>
+</html>

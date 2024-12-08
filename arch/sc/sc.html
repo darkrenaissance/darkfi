@@ -1,0 +1,596 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js ayu">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Smart Contracts - The DarkFi Book</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="../../favicon.svg">
+        <link rel="shortcut icon" href="../../favicon.png">
+        <link rel="stylesheet" href="../../css/variables.css">
+        <link rel="stylesheet" href="../../css/general.css">
+        <link rel="stylesheet" href="../../css/chrome.css">
+        <link rel="stylesheet" href="../../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../../highlight.css">
+        <link rel="stylesheet" href="../../tomorrow-night.css">
+        <link rel="stylesheet" href="../../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "ayu" : "ayu";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('ayu')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var html = document.querySelector('html');
+            var sidebar = null;
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded affix "><li class="part-title">About</li><li class="chapter-item expanded "><a href="../../index.html"><strong aria-hidden="true">1.</strong> DarkFi</a></li><li class="chapter-item expanded "><a href="../../start-here.html"><strong aria-hidden="true">2.</strong> Start Here</a></li><li class="chapter-item expanded "><a href="../../philosophy/philosophy.html"><strong aria-hidden="true">3.</strong> Philosophy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../philosophy/meetings.html"><strong aria-hidden="true">3.1.</strong> Discussion</a></li><li class="chapter-item expanded "><a href="../../philosophy/ideology.html"><strong aria-hidden="true">3.2.</strong> Ideology</a></li><li class="chapter-item expanded "><a href="../../philosophy/books.html"><strong aria-hidden="true">3.3.</strong> Books</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">User Guide</li><li class="chapter-item expanded "><a href="../../testnet/node.html"><strong aria-hidden="true">4.</strong> Running a Node</a></li><li class="chapter-item expanded "><a href="../../testnet/token.html"><strong aria-hidden="true">5.</strong> Tokens</a></li><li class="chapter-item expanded "><a href="../../testnet/payment.html"><strong aria-hidden="true">6.</strong> Payments</a></li><li class="chapter-item expanded "><a href="../../testnet/atomic-swap.html"><strong aria-hidden="true">7.</strong> Atomic Swap</a></li><li class="chapter-item expanded "><a href="../../testnet/dao.html"><strong aria-hidden="true">8.</strong> DAO</a></li><li class="chapter-item expanded "><a href="../../misc/darkirc/darkirc.html"><strong aria-hidden="true">9.</strong> DarkIRC</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../misc/darkirc/private_message.html"><strong aria-hidden="true">9.1.</strong> Private Message</a></li></ol></li><li class="chapter-item expanded "><a href="../../misc/nodes/node-configurations.html"><strong aria-hidden="true">10.</strong> Node Configurations</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../misc/nodes/public-guide.html"><strong aria-hidden="true">10.1.</strong> Public Node Configurations</a></li><li class="chapter-item expanded "><a href="../../misc/nodes/tor-guide.html"><strong aria-hidden="true">10.2.</strong> Tor Nodes</a></li></ol></li><li class="chapter-item expanded "><a href="../../misc/network-troubleshooting.html"><strong aria-hidden="true">11.</strong> Network Troubleshooting</a></li><li class="chapter-item expanded affix "><li class="part-title">Developer Doc</li><li class="chapter-item expanded "><a href="../../dev/dev.html"><strong aria-hidden="true">12.</strong> Development</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../dev/contrib/contrib.html"><strong aria-hidden="true">12.1.</strong> Contribute</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../dev/contrib/tor.html"><strong aria-hidden="true">12.1.1.</strong> Using Tor</a></li></ol></li><li class="chapter-item expanded "><a href="../../dev/learn.html"><strong aria-hidden="true">12.2.</strong> Learn</a></li><li class="chapter-item expanded "><a href="../../dev/rustdoc.html"><strong aria-hidden="true">12.3.</strong> API Rustdoc</a></li><li class="chapter-item expanded "><a href="../../dev/native_contracts.html"><strong aria-hidden="true">12.4.</strong> Native Contracts</a></li><li class="chapter-item expanded "><a href="../../dev/seminars.html"><strong aria-hidden="true">12.5.</strong> Seminars</a></li><li class="chapter-item expanded "><a href="../../dev/bench.html"><strong aria-hidden="true">12.6.</strong> Benchmark</a></li></ol></li><li class="chapter-item expanded "><a href="../../arch/arch.html"><strong aria-hidden="true">13.</strong> Architecture</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../arch/overview.html"><strong aria-hidden="true">13.1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="../../arch/anonymous_assets.html"><strong aria-hidden="true">13.2.</strong> Anonymous assets</a></li><li class="chapter-item expanded "><a href="../../arch/consensus.html"><strong aria-hidden="true">13.3.</strong> Consensus</a></li><li class="chapter-item expanded "><a href="../../arch/tx_lifetime.html"><strong aria-hidden="true">13.4.</strong> Transactions</a></li><li class="chapter-item expanded "><a href="../../arch/bridge.html"><strong aria-hidden="true">13.5.</strong> Bridge</a></li><li class="chapter-item expanded "><a href="../../arch/tooling.html"><strong aria-hidden="true">13.6.</strong> Tooling</a></li><li class="chapter-item expanded "><a href="../../arch/p2p-network.html"><strong aria-hidden="true">13.7.</strong> P2P Network</a></li><li class="chapter-item expanded "><a href="../../arch/services.html"><strong aria-hidden="true">13.8.</strong> Services</a></li><li class="chapter-item expanded "><a href="../../arch/sc/sc.html" class="active"><strong aria-hidden="true">13.9.</strong> Smart Contracts</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../arch/sc/tx-lifetime.html"><strong aria-hidden="true">13.9.1.</strong> Transaction lifetime</a></li></ol></li><li class="chapter-item expanded "><a href="../../arch/dao.html"><strong aria-hidden="true">13.10.</strong> DAO</a></li><li class="chapter-item expanded "><a href="../../arch/wallet.html"><strong aria-hidden="true">13.11.</strong> Wallet</a></li></ol></li><li class="chapter-item expanded "><a href="../../zkas/index.html"><strong aria-hidden="true">14.</strong> zkas</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../zkas/writing-zk-proofs.html"><strong aria-hidden="true">14.1.</strong> Writing ZK Proofs</a></li><li class="chapter-item expanded "><a href="../../zkas/bincode.html"><strong aria-hidden="true">14.2.</strong> Bincode</a></li><li class="chapter-item expanded "><a href="../../zkas/zkvm.html"><strong aria-hidden="true">14.3.</strong> zkVM</a></li><li class="chapter-item expanded "><a href="../../zkas/examples.html"><strong aria-hidden="true">14.4.</strong> Examples</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../zkas/examples/voting.html"><strong aria-hidden="true">14.4.1.</strong> Anonymous voting</a></li><li class="chapter-item expanded "><a href="../../zkas/examples/sapling.html"><strong aria-hidden="true">14.4.2.</strong> Anonymous payments</a></li></ol></li></ol></li><li class="chapter-item expanded "><a href="../../clients/clients.html"><strong aria-hidden="true">15.</strong> Client</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../clients/darkfid_jsonrpc.html"><strong aria-hidden="true">15.1.</strong> darkfid JSON-RPC API</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">Crypto</li><li class="chapter-item expanded "><a href="../../crypto/fft.html"><strong aria-hidden="true">16.</strong> FFT</a></li><li class="chapter-item expanded "><a href="../../crypto/zk_explainer.html"><strong aria-hidden="true">17.</strong> ZK explainer</a></li><li class="chapter-item expanded "><a href="../../crypto/research.html"><strong aria-hidden="true">18.</strong> Research</a></li><li class="chapter-item expanded "><a href="../../crypto/rln.html"><strong aria-hidden="true">19.</strong> Rate-Limit Nullifiers</a></li><li class="chapter-item expanded "><a href="../../crypto/key-recovery.html"><strong aria-hidden="true">20.</strong> Key Recovery Scheme</a></li><li class="chapter-item expanded "><a href="../../crypto/reading-maths-books.html"><strong aria-hidden="true">21.</strong> Reading maths books</a></li><li class="chapter-item expanded affix "><li class="part-title">User Interface</li><li class="chapter-item expanded "><a href="../../ui/ui.html"><strong aria-hidden="true">22.</strong> UI</a></li><li class="chapter-item expanded affix "><li class="part-title">DEP</li><li class="chapter-item expanded "><a href="../../dep/0001.html"><strong aria-hidden="true">23.</strong> DEP 0001: Version Message Info (accepted)</a></li><li class="chapter-item expanded "><a href="../../dep/0002.html"><strong aria-hidden="true">24.</strong> DEP 0002: Smart Contract Composability (deprecated)</a></li><li class="chapter-item expanded "><a href="../../dep/0003.html"><strong aria-hidden="true">25.</strong> DEP 0003: Token Mint Authorization (accepted)</a></li><li class="chapter-item expanded "><a href="../../dep/0004.html"><strong aria-hidden="true">26.</strong> DEP 0004: Client wallet WASM modules (draft)</a></li><li class="chapter-item expanded affix "><li class="part-title">Specs</li><li class="chapter-item expanded "><a href="../../spec/notation.html"><strong aria-hidden="true">27.</strong> Notation</a></li><li class="chapter-item expanded "><a href="../../spec/concepts.html"><strong aria-hidden="true">28.</strong> Concepts</a></li><li class="chapter-item expanded "><a href="../../spec/crypto-schemes.html"><strong aria-hidden="true">29.</strong> Cryptographic Schemes</a></li><li class="chapter-item expanded "><div><strong aria-hidden="true">30.</strong> Contracts</div></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../spec/contract/dao/dao.html"><strong aria-hidden="true">30.1.</strong> DAO</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../spec/contract/dao/concepts.html"><strong aria-hidden="true">30.1.1.</strong> Concepts</a></li><li class="chapter-item expanded "><a href="../../spec/contract/dao/model.html"><strong aria-hidden="true">30.1.2.</strong> Model</a></li><li class="chapter-item expanded "><a href="../../spec/contract/dao/scheme.html"><strong aria-hidden="true">30.1.3.</strong> Scheme</a></li></ol></li><li class="chapter-item expanded "><a href="../../spec/contract/money/money.html"><strong aria-hidden="true">30.2.</strong> Money</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../spec/contract/money/model.html"><strong aria-hidden="true">30.2.1.</strong> Model</a></li><li class="chapter-item expanded "><a href="../../spec/contract/money/scheme.html"><strong aria-hidden="true">30.2.2.</strong> Scheme</a></li></ol></li><li class="chapter-item expanded "><a href="../../spec/contract/vesting/vesting.html"><strong aria-hidden="true">30.3.</strong> Vesting</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">P2P API Tutorial</li><li class="chapter-item expanded "><a href="../../learn/dchat/dchat.html"><strong aria-hidden="true">31.</strong> P2P API Tutorial</a></li><li class="chapter-item expanded "><a href="../../learn/dchat/deployment/part-1.html"><strong aria-hidden="true">32.</strong> Deployment</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../learn/dchat/deployment/getting-started.html"><strong aria-hidden="true">32.1.</strong> Getting started</a></li><li class="chapter-item expanded "><a href="../../learn/dchat/deployment/writing-a-daemon.html"><strong aria-hidden="true">32.2.</strong> Writing a daemon</a></li><li class="chapter-item expanded "><a href="../../learn/dchat/deployment/sessions.html"><strong aria-hidden="true">32.3.</strong> Sessions</a></li><li class="chapter-item expanded "><a href="../../learn/dchat/deployment/settings.html"><strong aria-hidden="true">32.4.</strong> Settings</a></li><li class="chapter-item expanded "><a href="../../learn/dchat/deployment/start-stop.html"><strong aria-hidden="true">32.5.</strong> Start-Run-Stop</a></li><li class="chapter-item expanded "><a href="../../learn/dchat/deployment/seed-node.html"><strong aria-hidden="true">32.6.</strong> Seed</a></li><li class="chapter-item expanded "><a href="../../learn/dchat/deployment/deploy.html"><strong aria-hidden="true">32.7.</strong> Deploy</a></li></ol></li><li class="chapter-item expanded "><a href="../../learn/dchat/creating-dchatd/part-2.html"><strong aria-hidden="true">33.</strong> Creating dchatd</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../learn/dchat/creating-dchatd/message.html"><strong aria-hidden="true">33.1.</strong> Message</a></li><li class="chapter-item expanded "><a href="../../learn/dchat/creating-dchatd/protocols.html"><strong aria-hidden="true">33.2.</strong> Understanding Protocols</a></li><li class="chapter-item expanded "><a href="../../learn/dchat/creating-dchatd/protocol-dchat.html"><strong aria-hidden="true">33.3.</strong> ProtocolDchat</a></li><li class="chapter-item expanded "><a href="../../learn/dchat/creating-dchatd/register-protocol.html"><strong aria-hidden="true">33.4.</strong> Register protocol</a></li><li class="chapter-item expanded "><a href="../../learn/dchat/creating-dchatd/sending-messages.html"><strong aria-hidden="true">33.5.</strong> Sending messages</a></li><li class="chapter-item expanded "><a href="../../learn/dchat/creating-dchatd/accept-addr.html"><strong aria-hidden="true">33.6.</strong> Accept addr</a></li><li class="chapter-item expanded "><a href="../../learn/dchat/creating-dchatd/rpc-requests.html"><strong aria-hidden="true">33.7.</strong> Handling RPC requests</a></li><li class="chapter-item expanded "><a href="../../learn/dchat/creating-dchatd/stoppable-task.html"><strong aria-hidden="true">33.8.</strong> StoppableTask</a></li><li class="chapter-item expanded "><a href="../../learn/dchat/creating-dchatd/rpc-methods.html"><strong aria-hidden="true">33.9.</strong> Adding methods</a></li></ol></li><li class="chapter-item expanded "><a href="../../learn/dchat/creating-dchat-cli/part-3.html"><strong aria-hidden="true">34.</strong> Creating dchat-cli</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../learn/dchat/creating-dchat-cli/ui.html"><strong aria-hidden="true">34.1.</strong> UI</a></li><li class="chapter-item expanded "><a href="../../learn/dchat/creating-dchat-cli/using-dchat.html"><strong aria-hidden="true">34.2.</strong> Using dchat</a></li></ol></li><li class="chapter-item expanded "><a href="../../learn/dchat/network-tools/part-4.html"><strong aria-hidden="true">35.</strong> Net tools</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../learn/dchat/network-tools/get-info.html"><strong aria-hidden="true">35.1.</strong> get_info</a></li><li class="chapter-item expanded "><a href="../../learn/dchat/network-tools/attaching-dnet.html"><strong aria-hidden="true">35.2.</strong> Attaching dchat</a></li><li class="chapter-item expanded "><a href="../../learn/dchat/network-tools/using-dnet.html"><strong aria-hidden="true">35.3.</strong> Using dnet</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">Misc</li><li class="chapter-item expanded "><a href="../../misc/vanityaddr.html"><strong aria-hidden="true">36.</strong> vanityaddr</a></li><li class="chapter-item expanded "><a href="../../misc/darkirc/specification.html"><strong aria-hidden="true">37.</strong> darkIRC Specification</a></li><li class="chapter-item expanded "><a href="../../misc/tau.html"><strong aria-hidden="true">38.</strong> tau</a></li><li class="chapter-item expanded "><a href="../../misc/event_graph/event_graph.html"><strong aria-hidden="true">39.</strong> event_graph</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../misc/event_graph/network_protocol.html"><strong aria-hidden="true">39.1.</strong> Network Protocol</a></li></ol></li><li class="chapter-item expanded "><a href="../../misc/dnetview.html"><strong aria-hidden="true">40.</strong> dnetview</a></li><li class="chapter-item expanded "><a href="../../zero2darkfi/zero2darkfi.html"><strong aria-hidden="true">41.</strong> Zero2darkfi</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../../zero2darkfi/darkmap.html"><strong aria-hidden="true">41.1.</strong> darkmap</a></li></ol></li><li class="chapter-item expanded "><a href="../../glossary/glossary.html"><strong aria-hidden="true">42.</strong> Glossary</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">The DarkFi Book</h1>
+
+                    <div class="right-buttons">
+                        <a href="../../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.12.0/dist/katex.min.css" integrity="sha384-AfEj0r4/OFrOo5t7NnNe46zW/tFgW6x/bCJG8FqQCEo3+Aro6EYUG4+cU+KJWu/X" crossorigin="anonymous">
+<h1 id="anonymous-smart-contracts"><a class="header" href="#anonymous-smart-contracts">Anonymous Smart Contracts</a></h1>
+<ul>
+<li><a href="#important-invariants">Important Invariants</a></li>
+<li><a href="#global-smart-contract-state">Global Smart Contract State</a></li>
+<li><a href="#atomic-transactions">Atomic Transactions</a></li>
+<li><a href="#zk-proofs-and-signatures">ZK Proofs and Signatures</a></li>
+<li><a href="#invoking-contracts">Invoking Contracts</a>
+<ul>
+<li><a href="#depending-on-state-changes">Depending on State Changes</a></li>
+</ul>
+</li>
+<li><a href="#abi">ABI</a></li>
+<li><a href="#events">Events</a></li>
+</ul>
+<p>Every full node is a <strong>verifier</strong>.</p>
+<p><strong>Prover</strong> is the person executing the smart contract function on
+their secret witness data. They are also verifiers in our model.</p>
+<p>Lets take a pseudocode smart contract:</p>
+<pre><code>contract Dao {
+    # 1: the DAO's global state
+    dao_bullas = DaoBulla[]
+    proposal_bullas = ProposalBulla[]
+    proposal_nulls = ProposalNull[]
+
+    # 2. a public smart contract function
+    #    there can be many of these
+    fn mint(...) {
+        ...
+    }
+
+    ...
+}
+</code></pre>
+<h2 id="important-invariants"><a class="header" href="#important-invariants">Important Invariants</a></h2>
+<ol>
+<li>The state of a contract (the contract member values) is globally
+readable but <em>only</em> writable by that contract's functions.</li>
+<li>Transactions are atomic. If a subsequent contract function call
+fails then the earlier ones are also invalid. The entire tx will be
+rolled back.</li>
+<li><code>foo_contract::bar_func::validate::process()</code> is able to
+access the entire transaction to perform validation on its structure.
+It might need to enforce requirements on the calldata of other
+function calls within the same tx. See <code>DAO::exec()</code>.</li>
+</ol>
+<h2 id="global-smart-contract-state"><a class="header" href="#global-smart-contract-state">Global Smart Contract State</a></h2>
+<p>Internally we could represent this smart contract like this:</p>
+<pre><code class="language-rust">mod dao_contract {
+    // Corresponds to 2. mint()
+    // Prover specific
+    struct MintCall {
+        ...
+        // secret witness values for prover
+        ...
+    }
+
+    impl MintCall {
+        fn new(...) -&gt; Self {
+            ...
+        }
+
+        fn make() -&gt; FuncCall {
+            ...
+        }
+    }
+
+    // Verifier code
+    struct MintParams {
+        ...
+        // contains the function call data
+        ...
+    }
+}</code></pre>
+<p>There is a pipeline where the prover runs <code>MintCall::make()</code> to create
+the <code>MintParams</code> object that is then broadcast to the verifiers through
+the p2p network.</p>
+<p>The <code>CallData</code> usually is the public values exported from a ZK proof.
+Essentially it is the data used by the verifier to check the function
+call for <code>DAO::mint()</code>.</p>
+<h2 id="atomic-transactions"><a class="header" href="#atomic-transactions">Atomic Transactions</a></h2>
+<p>Transactions represent several function call invocations
+that are atomic. If any function call fails, the entire tx is
+rejected. Additionally some smart contracts might impose additional
+conditions on the transaction's structure or other function calls
+(such as their call data).</p>
+<pre><code class="language-rust">/// A Transaction contains an arbitrary number of `ContractCall` objects,
+/// along with corresponding ZK proofs and Schnorr signatures.
+///
+/// `DarkLeaf` is used to map relations between contract calls in the transaction.
+#[derive(Clone, Default, Eq, PartialEq, SerialEncodable, SerialDecodable)]
+pub struct Transaction {
+    /// Calls executed in this transaction
+    pub calls: Vec&lt;DarkLeaf&lt;ContractCall&gt;&gt;,
+    /// Attached ZK proofs
+    pub proofs: Vec&lt;Vec&lt;Proof&gt;&gt;,
+    /// Attached Schnorr signatures
+    pub signatures: Vec&lt;Vec&lt;Signature&gt;&gt;,
+}</code></pre>
+<p>Function calls represent mutations of the current active state to a new state.</p>
+<pre><code class="language-rust">/// A ContractCall is the part of a transaction that executes a certain
+/// `contract_id` with `data` as the call's payload.
+#[derive(Clone, Eq, PartialEq, SerialEncodable, SerialDecodable)]
+pub struct ContractCall {
+    /// ID of the contract invoked
+    pub contract_id: ContractId,
+    /// Call data passed to the contract
+    pub data: Vec&lt;u8&gt;,
+}</code></pre>
+<p>The <code>contract_id</code> corresponds to the top level module for the contract which
+includes the global <code>State</code>.</p>
+<p>The <code>func_id</code> of a function call corresponds to predefined objects
+in the submodules:</p>
+<ul>
+<li><code>Builder</code> creates the anonymized <code>CallData</code>. Ran by the prover.</li>
+<li><code>CallData</code> is the parameters used by the anonymized function call
+invocation.
+Verifiers have this.</li>
+<li><code>process()</code> that runs the function call on the current state
+using the <code>CallData</code>.</li>
+<li><code>apply()</code> commits the update to the current state taking it to the
+next state.</li>
+</ul>
+<p>An example of a <code>contract_id</code> could represent <code>DAO</code> or <code>Money</code>.
+Examples of <code>func_id</code> could represent <code>DAO::mint()</code> or
+<code>Money::transfer()</code>.</p>
+<p>Each function call invocation is ran using its own
+<code>process()</code> function.</p>
+<pre><code class="language-rust">mod dao_contract {
+    ...
+
+    // DAO::mint() in the smart contract pseudocode
+    mod mint {
+        ...
+
+        fn process(states: &amp;StateRegistry, func_call_index: usize, parent_tx: &amp;Transaction) -&gt; Result&lt;Update&gt; {
+            // we could also change the process() function signature
+            // so we pass the func_call itself in
+            let func_call = parent_tx.func_calls[func_call_index];
+            let call_data = func_call.call_data;
+            // It's useful to have the func_call_index within parent_tx because
+            // we might want to enforce that it appears at a certain index exactly.
+            // So we know the tx is well formed.
+
+            ...
+        }
+    }
+}</code></pre>
+<p><code>process()</code> has access to the entire atomic transaction to
+enforce correctness. For example combining of function calls is used by
+the <code>DAO::exec()</code> smart contract function to execute moving money out
+of the treasury using <code>Money::transfer()</code> within the same transaction.</p>
+<p>Additionally smart contracts have access to the
+global states of all smart contracts on the network, which is needed
+for some contracts.</p>
+<p>Note that during this step, the state is <em>not</em> modified. Modification
+happens after the <code>process()</code> is run for all function
+call invocations within the transaction. Assuming they all pass
+successfully, the updates are then applied at the end. This ensures
+atomicity property of transactions.</p>
+<pre><code class="language-rust">mod dao_contract {
+    ...
+
+    // DAO::mint() in the smart contract pseudocode
+    mod mint {
+        ...
+
+        // StateRegistry is mutable
+        fn apply(states: &amp;mut StateRegistry, update: Update) {
+            ...
+        }
+    }
+}</code></pre>
+<p>The transaction verification pipeline roughly looks like this:</p>
+<ol>
+<li>Loop through all function call invocations within the transaction:
+<ol>
+<li>Lookup their respective <code>process()</code> function based off
+their <code>contract_id</code>. The <code>contract_id</code> and
+<code>func_id</code> corresponds to the contract and specific function,
+such as <code>DAO::mint()</code>.</li>
+<li>Call the <code>process()</code> function and store the update.
+Halt if this function fails.</li>
+</ol>
+</li>
+<li>Loop through all updates
+<ol>
+<li>Lookup specific <code>apply()</code> function based off the <code>contract_id</code>
+and <code>func_id</code>.</li>
+<li>Call <code>apply(update)</code> to finalize the change.</li>
+</ol>
+</li>
+</ol>
+<h2 id="zk-proofs-and-signatures"><a class="header" href="#zk-proofs-and-signatures">ZK Proofs and Signatures</a></h2>
+<p>Lets review again the format of transactions.</p>
+<pre><code class="language-rust">/// A Transaction contains an arbitrary number of `ContractCall` objects,
+/// along with corresponding ZK proofs and Schnorr signatures.
+///
+/// `DarkLeaf` is used to map relations between contract calls in the transaction.
+#[derive(Clone, Default, Eq, PartialEq, SerialEncodable, SerialDecodable)]
+pub struct Transaction {
+    /// Calls executed in this transaction
+    pub calls: Vec&lt;DarkLeaf&lt;ContractCall&gt;&gt;,
+    /// Attached ZK proofs
+    pub proofs: Vec&lt;Vec&lt;Proof&gt;&gt;,
+    /// Attached Schnorr signatures
+    pub signatures: Vec&lt;Vec&lt;Signature&gt;&gt;,
+}</code></pre>
+<p>And corresponding function calls.</p>
+<pre><code class="language-rust">/// A ContractCall is the part of a transaction that executes a certain
+/// `contract_id` with `data` as the call's payload.
+#[derive(Clone, Eq, PartialEq, SerialEncodable, SerialDecodable)]
+pub struct ContractCall {
+    /// ID of the contract invoked
+    pub contract_id: ContractId,
+    /// Call data passed to the contract
+    pub data: Vec&lt;u8&gt;,
+}</code></pre>
+<p>As we can see the ZK proofs and signatures are separate from the
+actual <code>call_data</code> interpreted by <code>process()</code>. They are
+both automatically verified by the VM.</p>
+<p>However for verification to work, the ZK proofs also need corresponding
+public values, and the signatures need the public keys. We do this
+by exporting these values. (TODO: link the code where this happens)</p>
+<p>These methods export the required values needed for the ZK proofs
+and signature verification from the actual call data itself.</p>
+<p>For signature verification, the data we are verifying is simply
+the entire transactions minus the actual signatures. That's why the
+signatures are a separate top level field in the transaction.</p>
+<p>This section of the book documents smart contract development.</p>
+<h2 id="invoking-contracts"><a class="header" href="#invoking-contracts">Invoking Contracts</a></h2>
+<p>In Solana and Ethereum, when invoking a contract, the call happens directly
+at the site of calling. That means the calling contract is responsible for
+constructing the params used to process the instruction.</p>
+<p>In our case, it's more complicated since a smart contract function invocation
+involves ZK proofs with <code>get_metadata()</code> that can be verified in parallel.
+If we used the above model, we would first have to execute
+<code>process()</code> before verifying the proofs or signatures.</p>
+<p>Also arbitrary invocation allows arbitrary infinite recursion.</p>
+<p>The alternative method which is close to what we're doing already, is having
+the entire callgraph as a tree. Each <code>ContractCall</code>, now has a field called
+<code>children: Vec&lt;ContractCall&gt;</code>.</p>
+<pre><code class="language-rust">pub struct ContractCall {
+    /// ID of the contract invoked
+    pub contract_id: ContractId,
+    /// Call data passed to the contract
+    pub data: Vec&lt;u8&gt;,
+
+    /// Contract calls invoked by this one
+    pub children: Vec&lt;ContractCall&gt;,
+}</code></pre>
+<p>Let <code>n = len(children)</code>. Then inside the contract, we are expected to
+call <code>invoke()</code> exactly <code>n</code> times.</p>
+<pre><code class="language-rust">    let (params, retdat) = invoke(function_id);</code></pre>
+<p>This doesn't actually invoke any function directly, but just iterates to the
+next child call in the current call. We should iterate through the entire list.
+If this doesn't happen, then there's a mismatch and the call fails with an
+error.</p>
+<p>This logic is handled completely inside the contract without needing host
+functions.</p>
+<p>The downside is that the entire calldata for a smart contract is bundled
+in a tx, and isn't generated on the fly. This makes tx size bigger.
+However since we need ZK proofs, I expect the calldata would need to
+bundle the proofs for all invoked calls anyway.</p>
+<p>Essentially the entire program trace is created ahead of time by the &quot;prover&quot;,
+and then the verifier simply checks the trace for correctness. This can be
+done in parallel since we have all the data ahead of time.</p>
+<h3 id="depending-on-state-changes"><a class="header" href="#depending-on-state-changes">Depending on State Changes</a></h3>
+<p>Another downside of this model is that state changes at the site of invocation
+are not immediate.</p>
+<p>Currently in DarkFi, we separate contract calls into 2-phases: <code>process()</code>
+which verifies the calldata, and <code>update()</code> which takes a state update from
+<code>process()</code> and writes the changes.</p>
+<p>Host functions have permissions:</p>
+<ul>
+<li><code>process()</code> is READONLY, which means state can only be read. For example
+it can use <code>db_get()</code> but <em>not</em> <code>db_set()</code>.</li>
+<li><code>update()</code> is WRITEONLY. It can only write to the state. For example
+it can use <code>db_set()</code> but <em>not</em> <code>db_get()</code>.</li>
+</ul>
+<p>Let <code>A</code>, <code>B</code> be smart contract functions. <code>A</code> calls <code>invoke(B)</code>. The normal
+flow in Ethereum would be:</p>
+<pre><code>process(A) -&gt;
+    invoke(B) -&gt;
+        process(B) -&gt;
+        update(B) -&gt;
+update(A)
+</code></pre>
+<p>However with the model described, instead would be:</p>
+<pre><code>process(B) -&gt;
+update(B) -&gt;
+process(A) -&gt;
+update(A)
+</code></pre>
+<p>which simulates the previous trace.</p>
+<p><del>State changes occur linearly after all <code>process()</code> calls have passed
+successfully.</del></p>
+<p>NOTE: we can iterate depth first through the tree to simulate the normal
+calling pattern.</p>
+<p>An upside of this strict separation, is that it makes reentrancy attacks
+impossible. Say for example we have this code:</p>
+<pre><code class="language-js">contract VulnerableContract {
+    function withdraw(amount) {
+        // ...
+        sender.call(amount);
+        balances[sender] -= amount;
+    }
+}
+
+contract AttackerContract {
+    function receive(amount) {
+        if balance(VulnerableContract) &gt;= 1 {
+            VulnerableContract.withdraw(1);
+        }
+    }
+}
+</code></pre>
+<p>The main recommended way to mitigate these attacks is using the
+'checks-effects-interactions' pattern<a href="https://docs.soliditylang.org/en/v0.4.21/security-considerations.html#use-the-checks-effects-interactions-pattern">[1]</a>
+<a href="https://fravoll.github.io/solidity-patterns/checks_effects_interactions.html">[2]</a>.
+whereby the code is delineated into 3 strict parts.</p>
+<pre><code class="language-js">contract ChecksEffectsInteractions {
+    // ...
+
+    function withdraw(uint amount) public {
+        require(balances[msg.sender] &gt;= amount);
+
+        balances[msg.sender] -= amount;
+
+        msg.sender.transfer(amount);
+    }
+}
+</code></pre>
+<p>Interactions always occur last since they cause unknown effects. Performing
+logic based off state changes from an interacting outside contract (especially
+when user provided) is very risky.</p>
+<p>With the model of <code>invoke()</code> given above, we do not have any possibility of such
+an attack occurring.</p>
+<h2 id="abi"><a class="header" href="#abi">ABI</a></h2>
+<p>We can do this in Rust through clever use of the serializer. Basically there
+is a special overlay provided for a Model which describes its layout.
+The layout saves the field names and types. Later this can be provided
+via a macro.</p>
+<p>Then dynamically in the program code, the params can be serialized/deserialized
+and inspected via this ABI overlay. This enables dynamic calls provided by
+users to be supported in an elegant and simple way.</p>
+<p>The ABI also aids in debugging since when the overlay is loaded, then calldata
+can be inspected. Then we can inspect txs in Python, with exported ABIs saved
+as JSON files per contract documenting each function's params.</p>
+<h2 id="events"><a class="header" href="#events">Events</a></h2>
+<p>Custom apps will need to subscribe to blockchain txs, and be able to respond
+to certain events. In Ethereum, there is a custom mechanism called
+<a href="https://docs.soliditylang.org/en/latest/abi-spec.html#events">events</a>.
+This allows smart contracts to
+<a href="https://ethereum.stackexchange.com/questions/56879/can-anyone-explain-what-is-the-main-purpose-of-events-in-solidity-and-when-to-us">return values to the UI</a>.
+Events are indexed in the database.</p>
+<p>An equivalent mechanism in DarkFi, may be the ability to emit events which
+wallets can subscribe to. As for storing them an indexed DB, we already offer
+that functionality with <code>db_set()</code> during the update phase.</p>
+<p>The emitted event could consist of the ContractId/FunctionId, an optional list
+of topics, and a binary blob.</p>
+<p>Alternatively, wallets would have to listen to all calls of a specific
+FunctionId. This allows wallets to only subscribe to some specific aspect of
+those calls.</p>
+<p>Solana by contrast allows the RPC to subscribe to accounts directly. The
+equivalent in our case, is subscribing to <code>db_set()</code> calls. Wallets can also
+receive these state changes and reflect them in their UI.
+An <a href="https://github.com/solana-labs/solana/issues/14076">EventEmitter</a>
+was recently added to Solana.</p>
+<p>Adding an explicit event emitter allows sending specific events used for
+wallets. This makes dev on the UI side much easier.
+Additionally the cost is low since any events emitted with no subscribers
+for that contract or not matching the filter will just be immediately dropped.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../../arch/services.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next" href="../../arch/sc/tx-lifetime.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../../arch/services.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next" href="../../arch/sc/tx-lifetime.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../../elasticlunr.min.js"></script>
+        <script src="../../mark.min.js"></script>
+        <script src="../../searcher.js"></script>
+
+        <script src="../../clipboard.min.js"></script>
+        <script src="../../highlight.js"></script>
+        <script src="../../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../../theme/mermaid.min.js"></script>
+        <script src="../../theme/mermaid-init.js"></script>
+        <script src="../../theme/zkas-highlight.js"></script>
+
+
+    </div>
+    </body>
+</html>
