@@ -32,7 +32,7 @@ use super::{max, MessageId, Timestamp};
 use crate::{
     gfx::{
         GfxBufferId, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId,
-        GraphicsEventPublisherPtr, Point, Rectangle, RenderApi, RenderApiPtr,
+        GraphicsEventPublisherPtr, Point, Rectangle, RenderApi,
     },
     mesh::{Color, MeshBuilder, COLOR_BLUE, COLOR_GREEN, COLOR_PINK},
     prop::{PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyUint32, Role},
@@ -636,7 +636,7 @@ pub struct MessageBuffer {
     /// If it does then we must reload the glyphs too.
     old_window_scale: f32,
 
-    render_api: RenderApiPtr,
+    render_api: RenderApi,
     text_shaper: TextShaperPtr,
 }
 
@@ -655,7 +655,7 @@ impl MessageBuffer {
         hi_bg_color: PropertyColor,
         debug: PropertyBool,
         window_scale: PropertyFloat32,
-        render_api: RenderApiPtr,
+        render_api: RenderApi,
         text_shaper: TextShaperPtr,
     ) -> Self {
         let old_window_scale = window_scale.get();

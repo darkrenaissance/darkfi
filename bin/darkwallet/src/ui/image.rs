@@ -25,7 +25,7 @@ use std::{
 };
 
 use crate::{
-    gfx::{GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId, Rectangle, RenderApiPtr},
+    gfx::{GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId, Rectangle, RenderApi},
     mesh::{MeshBuilder, MeshInfo, COLOR_WHITE},
     prop::{PropertyPtr, PropertyRect, PropertyStr, PropertyUint32, Role},
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
@@ -38,7 +38,7 @@ pub type ImagePtr = Arc<Image>;
 
 pub struct Image {
     node: SceneNodeWeak,
-    render_api: RenderApiPtr,
+    render_api: RenderApi,
     #[allow(dead_code)]
     tasks: Vec<smol::Task<()>>,
 
@@ -55,7 +55,7 @@ pub struct Image {
 }
 
 impl Image {
-    pub async fn new(node: SceneNodeWeak, render_api: RenderApiPtr, ex: ExecutorPtr) -> Pimpl {
+    pub async fn new(node: SceneNodeWeak, render_api: RenderApi, ex: ExecutorPtr) -> Pimpl {
         debug!(target: "ui::image", "Image::new()");
 
         let node_ref = &node.upgrade().unwrap();

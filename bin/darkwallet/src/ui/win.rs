@@ -21,7 +21,7 @@ use std::sync::{Arc, Weak};
 
 use crate::{
     gfx::{
-        GfxDrawCall, GfxDrawInstruction, GraphicsEventPublisherPtr, Point, Rectangle, RenderApiPtr,
+        GfxDrawCall, GfxDrawInstruction, GraphicsEventPublisherPtr, Point, Rectangle, RenderApi,
     },
     prop::{PropertyDimension, PropertyFloat32, PropertyPtr, Role},
     pubsub::Subscription,
@@ -41,13 +41,13 @@ pub struct Window {
     tasks: Vec<smol::Task<()>>,
     screen_size: PropertyDimension,
     scale: PropertyFloat32,
-    render_api: RenderApiPtr,
+    render_api: RenderApi,
 }
 
 impl Window {
     pub async fn new(
         node: SceneNodeWeak,
-        render_api: RenderApiPtr,
+        render_api: RenderApi,
         event_pub: GraphicsEventPublisherPtr,
         ex: ExecutorPtr,
     ) -> Pimpl {

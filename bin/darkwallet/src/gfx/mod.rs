@@ -68,15 +68,14 @@ impl Vertex {
     }
 }
 
-pub type RenderApiPtr = Arc<RenderApi>;
-
+#[derive(Clone)]
 pub struct RenderApi {
     method_req: mpsc::Sender<GraphicsMethod>,
 }
 
 impl RenderApi {
-    pub fn new(method_req: mpsc::Sender<GraphicsMethod>) -> Arc<Self> {
-        Arc::new(Self { method_req })
+    pub fn new(method_req: mpsc::Sender<GraphicsMethod>) -> Self {
+        Self { method_req }
     }
 
     pub fn new_texture(&self, width: u16, height: u16, data: Vec<u8>) -> GfxTextureId {

@@ -24,7 +24,7 @@ use rand::{rngs::OsRng, Rng};
 use std::sync::{atomic::Ordering, Arc, Mutex as SyncMutex, Weak};
 
 use crate::{
-    gfx::{GfxDrawCall, GfxDrawInstruction, Point, Rectangle, RenderApiPtr},
+    gfx::{GfxDrawCall, GfxDrawInstruction, Point, Rectangle, RenderApi},
     prop::{PropertyBool, PropertyFloat32, PropertyPtr, PropertyRect, PropertyUint32, Role},
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
     ExecutorPtr,
@@ -36,7 +36,7 @@ pub type LayerPtr = Arc<Layer>;
 
 pub struct Layer {
     node: SceneNodeWeak,
-    render_api: RenderApiPtr,
+    render_api: RenderApi,
     _tasks: Vec<smol::Task<()>>,
     dc_key: u64,
 
@@ -48,7 +48,7 @@ pub struct Layer {
 }
 
 impl Layer {
-    pub async fn new(node: SceneNodeWeak, render_api: RenderApiPtr, ex: ExecutorPtr) -> Pimpl {
+    pub async fn new(node: SceneNodeWeak, render_api: RenderApi, ex: ExecutorPtr) -> Pimpl {
         debug!(target: "ui::layer", "Layer::new()");
 
         let node_ref = &node.upgrade().unwrap();

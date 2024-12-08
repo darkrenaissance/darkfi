@@ -21,10 +21,7 @@ use rand::{rngs::OsRng, Rng};
 use std::sync::{Arc, Mutex as SyncMutex, Weak};
 
 use crate::{
-    gfx::{
-        GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId, Rectangle, RenderApi,
-        RenderApiPtr,
-    },
+    gfx::{GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId, Rectangle, RenderApi},
     mesh::{Color, MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_WHITE},
     prop::{
         PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyRect, PropertyStr,
@@ -47,7 +44,7 @@ struct TextRenderInfo {
 
 pub struct Text {
     node: SceneNodeWeak,
-    render_api: RenderApiPtr,
+    render_api: RenderApi,
     text_shaper: TextShaperPtr,
     _tasks: Vec<smol::Task<()>>,
 
@@ -70,7 +67,7 @@ impl Text {
     pub async fn new(
         node: SceneNodeWeak,
         window_scale: PropertyFloat32,
-        render_api: RenderApiPtr,
+        render_api: RenderApi,
         text_shaper: TextShaperPtr,
         ex: ExecutorPtr,
     ) -> Pimpl {

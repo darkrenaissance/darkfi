@@ -19,7 +19,7 @@
 use crate::{
     error::Error,
     expr::Op,
-    gfx::{GraphicsEventPublisherPtr, RenderApiPtr, Vertex},
+    gfx::{GraphicsEventPublisherPtr, Vertex},
     prop::{Property, PropertyBool, PropertyStr, PropertySubType, PropertyType, Role},
     scene::{CallArgType, SceneNode, SceneNodeType, Slot},
     text::TextShaperPtr,

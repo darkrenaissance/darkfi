@@ -24,7 +24,7 @@ use crate::{
     error::{Error, Result},
     expr::{Op, SExprCode, SExprMachine, SExprVal},
     gfx::{
-        GfxBufferId, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, Rectangle, RenderApiPtr, Vertex,
+        GfxBufferId, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, Rectangle, RenderApi, Vertex,
     },
     mesh::Color,
     prop::{PropertyFloat32, PropertyPtr, PropertyRect, PropertyUint32, Role},
@@ -42,7 +42,7 @@ pub type VectorArtPtr = Arc<VectorArt>;
 
 pub struct VectorArt {
     node: SceneNodeWeak,
-    render_api: RenderApiPtr,
+    render_api: RenderApi,
     _tasks: Vec<smol::Task<()>>,
 
     shape: VectorShape,
@@ -59,7 +59,7 @@ impl VectorArt {
     pub async fn new(
         node: SceneNodeWeak,
         shape: VectorShape,
-        render_api: RenderApiPtr,
+        render_api: RenderApi,
         ex: ExecutorPtr,
     ) -> Pimpl {
         debug!(target: "ui::vector_art", "VectorArt::new()");

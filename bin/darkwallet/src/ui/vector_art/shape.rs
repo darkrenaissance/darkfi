@@ -19,9 +19,7 @@
 use crate::{
     error::{Error, Result},
     expr::{Op, SExprCode, SExprMachine, SExprVal},
-    gfx::{
-        GfxBufferId, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, Rectangle, RenderApiPtr, Vertex,
-    },
+    gfx::{GfxBufferId, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, Rectangle, Vertex},
     mesh::Color,
     prop::{PropertyPtr, PropertyUint32, Role},
     util::enumerate,

@@ -41,7 +41,7 @@ use page::MessageBuffer;
 use crate::{
     gfx::{
         GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GraphicsEventPublisherPtr, Point, Rectangle,
-        RenderApi, RenderApiPtr,
+        RenderApi,
     },
     mesh::{Color, MeshBuilder, COLOR_BLUE, COLOR_GREEN},
     prop::{
@@ -151,7 +151,7 @@ pub struct ChatView {
     node: SceneNodeWeak,
     #[allow(dead_code)]
     tasks: Vec<smol::Task<()>>,
-    render_api: RenderApiPtr,
+    render_api: RenderApi,
     text_shaper: TextShaperPtr,
 
     tree: sled::Tree,
@@ -190,7 +190,7 @@ impl ChatView {
         node: SceneNodeWeak,
         tree: sled::Tree,
         window_scale: PropertyFloat32,
-        render_api: RenderApiPtr,
+        render_api: RenderApi,
         text_shaper: TextShaperPtr,
         ex: ExecutorPtr,
     ) -> Pimpl {

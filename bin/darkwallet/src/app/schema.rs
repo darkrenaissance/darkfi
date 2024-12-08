@@ -21,7 +21,7 @@ use sled_overlay::sled;
 use crate::{
     error::Error,
     expr::{self, Compiler, Op},
-    gfx::{GraphicsEventPublisherPtr, Rectangle, RenderApiPtr, Vertex},
+    gfx::{GraphicsEventPublisherPtr, Rectangle, RenderApi, Vertex},
     mesh::{Color, MeshBuilder},
     prop::{
         Property, PropertyBool, PropertyFloat32, PropertyStr, PropertySubType, PropertyType, Role,

@@ -32,7 +32,7 @@ use crate::{
     darkirc::DarkIrcBackendPtr,
     error::Error,
     expr::Op,
-    gfx::{GraphicsEventPublisherPtr, RenderApiPtr, Vertex},
+    gfx::{GraphicsEventPublisherPtr, RenderApi, Vertex},
     prop::{Property, PropertyBool, PropertyStr, PropertySubType, PropertyType, Role},
     scene::{Pimpl, SceneNode as SceneNode3, SceneNodePtr, SceneNodeType as SceneNodeType3},
     text::TextShaperPtr,
@@ -118,7 +118,7 @@ pub type AppPtr = Arc<App>;
 
 pub struct App {
     pub sg_root: SceneNodePtr,
-    pub render_api: RenderApiPtr,
+    pub render_api: RenderApi,
     pub event_pub: GraphicsEventPublisherPtr,
     pub text_shaper: TextShaperPtr,
     pub darkirc_evgr: SyncMutex<Option<DarkIrcBackendPtr>>,
@@ -129,7 +129,7 @@ pub struct App {
 impl App {
     pub fn new(
         sg_root: SceneNodePtr,
-        render_api: RenderApiPtr,
+        render_api: RenderApi,
         event_pub: GraphicsEventPublisherPtr,
         text_shaper: TextShaperPtr,
         ex: ExecutorPtr,

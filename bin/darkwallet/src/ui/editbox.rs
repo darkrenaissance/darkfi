@@ -35,7 +35,7 @@ use crate::{
     error::Result,
     gfx::{
         GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId, GraphicsEventPublisherPtr,
-        Point, Rectangle, RenderApiPtr,
+        Point, Rectangle, RenderApi,
     },
     mesh::{MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_WHITE},
     prop::{
@@ -261,7 +261,7 @@ pub struct EditBox {
     node: SceneNodeWeak,
     #[allow(dead_code)]
     tasks: Vec<smol::Task<()>>,
-    render_api: RenderApiPtr,
+    render_api: RenderApi,
     text_shaper: TextShaperPtr,
     key_repeat: SyncMutex<PressedKeysSmoothRepeat>,
 
@@ -307,7 +307,7 @@ impl EditBox {
     pub async fn new(
         node: SceneNodeWeak,
         window_scale: PropertyFloat32,
-        render_api: RenderApiPtr,
+        render_api: RenderApi,
         text_shaper: TextShaperPtr,
         ex: ExecutorPtr,
     ) -> Pimpl {
