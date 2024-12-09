@@ -1,0 +1,519 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js ayu">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>P2P Network - The DarkFi Book</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "ayu" : "ayu";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('ayu')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var html = document.querySelector('html');
+            var sidebar = null;
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded affix "><li class="part-title">About</li><li class="chapter-item expanded "><a href="../index.html"><strong aria-hidden="true">1.</strong> DarkFi</a></li><li class="chapter-item expanded "><a href="../start-here.html"><strong aria-hidden="true">2.</strong> Start Here</a></li><li class="chapter-item expanded "><a href="../philosophy/philosophy.html"><strong aria-hidden="true">3.</strong> Philosophy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../philosophy/meetings.html"><strong aria-hidden="true">3.1.</strong> Discussion</a></li><li class="chapter-item expanded "><a href="../philosophy/ideology.html"><strong aria-hidden="true">3.2.</strong> Ideology</a></li><li class="chapter-item expanded "><a href="../philosophy/books.html"><strong aria-hidden="true">3.3.</strong> Books</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">User Guide</li><li class="chapter-item expanded "><a href="../testnet/node.html"><strong aria-hidden="true">4.</strong> Running a Node</a></li><li class="chapter-item expanded "><a href="../testnet/token.html"><strong aria-hidden="true">5.</strong> Tokens</a></li><li class="chapter-item expanded "><a href="../testnet/payment.html"><strong aria-hidden="true">6.</strong> Payments</a></li><li class="chapter-item expanded "><a href="../testnet/atomic-swap.html"><strong aria-hidden="true">7.</strong> Atomic Swap</a></li><li class="chapter-item expanded "><a href="../testnet/dao.html"><strong aria-hidden="true">8.</strong> DAO</a></li><li class="chapter-item expanded "><a href="../misc/darkirc/darkirc.html"><strong aria-hidden="true">9.</strong> DarkIRC</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../misc/darkirc/private_message.html"><strong aria-hidden="true">9.1.</strong> Private Message</a></li></ol></li><li class="chapter-item expanded "><a href="../misc/nodes/node-configurations.html"><strong aria-hidden="true">10.</strong> Node Configurations</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../misc/nodes/public-guide.html"><strong aria-hidden="true">10.1.</strong> Public Node Configurations</a></li><li class="chapter-item expanded "><a href="../misc/nodes/tor-guide.html"><strong aria-hidden="true">10.2.</strong> Tor Nodes</a></li></ol></li><li class="chapter-item expanded "><a href="../misc/network-troubleshooting.html"><strong aria-hidden="true">11.</strong> Network Troubleshooting</a></li><li class="chapter-item expanded affix "><li class="part-title">Developer Doc</li><li class="chapter-item expanded "><a href="../dev/dev.html"><strong aria-hidden="true">12.</strong> Development</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../dev/contrib/contrib.html"><strong aria-hidden="true">12.1.</strong> Contribute</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../dev/contrib/tor.html"><strong aria-hidden="true">12.1.1.</strong> Using Tor</a></li></ol></li><li class="chapter-item expanded "><a href="../dev/learn.html"><strong aria-hidden="true">12.2.</strong> Learn</a></li><li class="chapter-item expanded "><a href="../dev/rustdoc.html"><strong aria-hidden="true">12.3.</strong> API Rustdoc</a></li><li class="chapter-item expanded "><a href="../dev/native_contracts.html"><strong aria-hidden="true">12.4.</strong> Native Contracts</a></li><li class="chapter-item expanded "><a href="../dev/seminars.html"><strong aria-hidden="true">12.5.</strong> Seminars</a></li><li class="chapter-item expanded "><a href="../dev/bench.html"><strong aria-hidden="true">12.6.</strong> Benchmark</a></li></ol></li><li class="chapter-item expanded "><a href="../arch/arch.html"><strong aria-hidden="true">13.</strong> Architecture</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../arch/overview.html"><strong aria-hidden="true">13.1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="../arch/anonymous_assets.html"><strong aria-hidden="true">13.2.</strong> Anonymous assets</a></li><li class="chapter-item expanded "><a href="../arch/consensus.html"><strong aria-hidden="true">13.3.</strong> Consensus</a></li><li class="chapter-item expanded "><a href="../arch/tx_lifetime.html"><strong aria-hidden="true">13.4.</strong> Transactions</a></li><li class="chapter-item expanded "><a href="../arch/bridge.html"><strong aria-hidden="true">13.5.</strong> Bridge</a></li><li class="chapter-item expanded "><a href="../arch/tooling.html"><strong aria-hidden="true">13.6.</strong> Tooling</a></li><li class="chapter-item expanded "><a href="../arch/p2p-network.html" class="active"><strong aria-hidden="true">13.7.</strong> P2P Network</a></li><li class="chapter-item expanded "><a href="../arch/services.html"><strong aria-hidden="true">13.8.</strong> Services</a></li><li class="chapter-item expanded "><a href="../arch/sc/sc.html"><strong aria-hidden="true">13.9.</strong> Smart Contracts</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../arch/sc/tx-lifetime.html"><strong aria-hidden="true">13.9.1.</strong> Transaction lifetime</a></li></ol></li><li class="chapter-item expanded "><a href="../arch/dao.html"><strong aria-hidden="true">13.10.</strong> DAO</a></li><li class="chapter-item expanded "><a href="../arch/wallet.html"><strong aria-hidden="true">13.11.</strong> Wallet</a></li></ol></li><li class="chapter-item expanded "><a href="../zkas/index.html"><strong aria-hidden="true">14.</strong> zkas</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../zkas/writing-zk-proofs.html"><strong aria-hidden="true">14.1.</strong> Writing ZK Proofs</a></li><li class="chapter-item expanded "><a href="../zkas/bincode.html"><strong aria-hidden="true">14.2.</strong> Bincode</a></li><li class="chapter-item expanded "><a href="../zkas/zkvm.html"><strong aria-hidden="true">14.3.</strong> zkVM</a></li><li class="chapter-item expanded "><a href="../zkas/examples.html"><strong aria-hidden="true">14.4.</strong> Examples</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../zkas/examples/voting.html"><strong aria-hidden="true">14.4.1.</strong> Anonymous voting</a></li><li class="chapter-item expanded "><a href="../zkas/examples/sapling.html"><strong aria-hidden="true">14.4.2.</strong> Anonymous payments</a></li></ol></li></ol></li><li class="chapter-item expanded "><a href="../clients/clients.html"><strong aria-hidden="true">15.</strong> Client</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../clients/darkfid_jsonrpc.html"><strong aria-hidden="true">15.1.</strong> darkfid JSON-RPC API</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">Crypto</li><li class="chapter-item expanded "><a href="../crypto/fft.html"><strong aria-hidden="true">16.</strong> FFT</a></li><li class="chapter-item expanded "><a href="../crypto/zk_explainer.html"><strong aria-hidden="true">17.</strong> ZK explainer</a></li><li class="chapter-item expanded "><a href="../crypto/research.html"><strong aria-hidden="true">18.</strong> Research</a></li><li class="chapter-item expanded "><a href="../crypto/rln.html"><strong aria-hidden="true">19.</strong> Rate-Limit Nullifiers</a></li><li class="chapter-item expanded "><a href="../crypto/key-recovery.html"><strong aria-hidden="true">20.</strong> Key Recovery Scheme</a></li><li class="chapter-item expanded "><a href="../crypto/reading-maths-books.html"><strong aria-hidden="true">21.</strong> Reading maths books</a></li><li class="chapter-item expanded affix "><li class="part-title">User Interface</li><li class="chapter-item expanded "><a href="../ui/ui.html"><strong aria-hidden="true">22.</strong> UI</a></li><li class="chapter-item expanded affix "><li class="part-title">DEP</li><li class="chapter-item expanded "><a href="../dep/0001.html"><strong aria-hidden="true">23.</strong> DEP 0001: Version Message Info (accepted)</a></li><li class="chapter-item expanded "><a href="../dep/0002.html"><strong aria-hidden="true">24.</strong> DEP 0002: Smart Contract Composability (deprecated)</a></li><li class="chapter-item expanded "><a href="../dep/0003.html"><strong aria-hidden="true">25.</strong> DEP 0003: Token Mint Authorization (accepted)</a></li><li class="chapter-item expanded "><a href="../dep/0004.html"><strong aria-hidden="true">26.</strong> DEP 0004: Client wallet WASM modules (draft)</a></li><li class="chapter-item expanded affix "><li class="part-title">Specs</li><li class="chapter-item expanded "><a href="../spec/notation.html"><strong aria-hidden="true">27.</strong> Notation</a></li><li class="chapter-item expanded "><a href="../spec/concepts.html"><strong aria-hidden="true">28.</strong> Concepts</a></li><li class="chapter-item expanded "><a href="../spec/crypto-schemes.html"><strong aria-hidden="true">29.</strong> Cryptographic Schemes</a></li><li class="chapter-item expanded "><div><strong aria-hidden="true">30.</strong> Contracts</div></li><li><ol class="section"><li class="chapter-item expanded "><a href="../spec/contract/dao/dao.html"><strong aria-hidden="true">30.1.</strong> DAO</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../spec/contract/dao/concepts.html"><strong aria-hidden="true">30.1.1.</strong> Concepts</a></li><li class="chapter-item expanded "><a href="../spec/contract/dao/model.html"><strong aria-hidden="true">30.1.2.</strong> Model</a></li><li class="chapter-item expanded "><a href="../spec/contract/dao/scheme.html"><strong aria-hidden="true">30.1.3.</strong> Scheme</a></li></ol></li><li class="chapter-item expanded "><a href="../spec/contract/money/money.html"><strong aria-hidden="true">30.2.</strong> Money</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../spec/contract/money/model.html"><strong aria-hidden="true">30.2.1.</strong> Model</a></li><li class="chapter-item expanded "><a href="../spec/contract/money/scheme.html"><strong aria-hidden="true">30.2.2.</strong> Scheme</a></li></ol></li><li class="chapter-item expanded "><a href="../spec/contract/vesting/vesting.html"><strong aria-hidden="true">30.3.</strong> Vesting</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">P2P API Tutorial</li><li class="chapter-item expanded "><a href="../learn/dchat/dchat.html"><strong aria-hidden="true">31.</strong> P2P API Tutorial</a></li><li class="chapter-item expanded "><a href="../learn/dchat/deployment/part-1.html"><strong aria-hidden="true">32.</strong> Deployment</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../learn/dchat/deployment/getting-started.html"><strong aria-hidden="true">32.1.</strong> Getting started</a></li><li class="chapter-item expanded "><a href="../learn/dchat/deployment/writing-a-daemon.html"><strong aria-hidden="true">32.2.</strong> Writing a daemon</a></li><li class="chapter-item expanded "><a href="../learn/dchat/deployment/sessions.html"><strong aria-hidden="true">32.3.</strong> Sessions</a></li><li class="chapter-item expanded "><a href="../learn/dchat/deployment/settings.html"><strong aria-hidden="true">32.4.</strong> Settings</a></li><li class="chapter-item expanded "><a href="../learn/dchat/deployment/start-stop.html"><strong aria-hidden="true">32.5.</strong> Start-Run-Stop</a></li><li class="chapter-item expanded "><a href="../learn/dchat/deployment/seed-node.html"><strong aria-hidden="true">32.6.</strong> Seed</a></li><li class="chapter-item expanded "><a href="../learn/dchat/deployment/deploy.html"><strong aria-hidden="true">32.7.</strong> Deploy</a></li></ol></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/part-2.html"><strong aria-hidden="true">33.</strong> Creating dchatd</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/message.html"><strong aria-hidden="true">33.1.</strong> Message</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/protocols.html"><strong aria-hidden="true">33.2.</strong> Understanding Protocols</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/protocol-dchat.html"><strong aria-hidden="true">33.3.</strong> ProtocolDchat</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/register-protocol.html"><strong aria-hidden="true">33.4.</strong> Register protocol</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/sending-messages.html"><strong aria-hidden="true">33.5.</strong> Sending messages</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/accept-addr.html"><strong aria-hidden="true">33.6.</strong> Accept addr</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/rpc-requests.html"><strong aria-hidden="true">33.7.</strong> Handling RPC requests</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/stoppable-task.html"><strong aria-hidden="true">33.8.</strong> StoppableTask</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/rpc-methods.html"><strong aria-hidden="true">33.9.</strong> Adding methods</a></li></ol></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchat-cli/part-3.html"><strong aria-hidden="true">34.</strong> Creating dchat-cli</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchat-cli/ui.html"><strong aria-hidden="true">34.1.</strong> UI</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchat-cli/using-dchat.html"><strong aria-hidden="true">34.2.</strong> Using dchat</a></li></ol></li><li class="chapter-item expanded "><a href="../learn/dchat/network-tools/part-4.html"><strong aria-hidden="true">35.</strong> Net tools</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../learn/dchat/network-tools/get-info.html"><strong aria-hidden="true">35.1.</strong> get_info</a></li><li class="chapter-item expanded "><a href="../learn/dchat/network-tools/attaching-dnet.html"><strong aria-hidden="true">35.2.</strong> Attaching dchat</a></li><li class="chapter-item expanded "><a href="../learn/dchat/network-tools/using-dnet.html"><strong aria-hidden="true">35.3.</strong> Using dnet</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">Misc</li><li class="chapter-item expanded "><a href="../misc/vanityaddr.html"><strong aria-hidden="true">36.</strong> vanityaddr</a></li><li class="chapter-item expanded "><a href="../misc/darkirc/specification.html"><strong aria-hidden="true">37.</strong> darkIRC Specification</a></li><li class="chapter-item expanded "><a href="../misc/tau.html"><strong aria-hidden="true">38.</strong> tau</a></li><li class="chapter-item expanded "><a href="../misc/event_graph/event_graph.html"><strong aria-hidden="true">39.</strong> event_graph</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../misc/event_graph/network_protocol.html"><strong aria-hidden="true">39.1.</strong> Network Protocol</a></li></ol></li><li class="chapter-item expanded "><a href="../misc/dnetview.html"><strong aria-hidden="true">40.</strong> dnetview</a></li><li class="chapter-item expanded "><a href="../zero2darkfi/zero2darkfi.html"><strong aria-hidden="true">41.</strong> Zero2darkfi</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../zero2darkfi/darkmap.html"><strong aria-hidden="true">41.1.</strong> darkmap</a></li></ol></li><li class="chapter-item expanded "><a href="../glossary/glossary.html"><strong aria-hidden="true">42.</strong> Glossary</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">The DarkFi Book</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.12.0/dist/katex.min.css" integrity="sha384-AfEj0r4/OFrOo5t7NnNe46zW/tFgW6x/bCJG8FqQCEo3+Aro6EYUG4+cU+KJWu/X" crossorigin="anonymous">
+<h1 id="p2p-network"><a class="header" href="#p2p-network">P2P Network</a></h1>
+<p>We instantiate a <code>p2p</code> network and call <code>start()</code>. This will begin running a single
+p2p network until <code>stop()</code> is called.</p>
+<p>There are 3 session types:</p>
+<ul>
+<li><code>InboundSession</code>, concerned with incoming connections</li>
+<li><code>OutboundSession</code>, concerned with outgoing connections</li>
+<li><code>SeedSession</code> is a special session type which connects to seed nodes to populate
+the hosts pool, then finishes once synced.</li>
+</ul>
+<p>Connections are made by either <code>Acceptor</code> or <code>Connector</code> for incoming or outgoing
+respectively. They have multiple transport types; see <code>src/net/transport/</code> for the
+full list.</p>
+<p>Connections are then wrapped in a <code>Channel</code> abstraction which allows
+protocols to be attached. See <code>src/net/protocol/</code> and run <code>fd protocol</code> for custom
+application specific network protocols. Also see the follow tutorial:</p>
+<ul>
+<li><a href="../learn/dchat/creating-dchatd/protocols.html">Understanding Protocols</a></li>
+</ul>
+<h2 id="outbound-session"><a class="header" href="#outbound-session">Outbound Session</a></h2>
+<p>The outbound session is responsible to ensure the hosts pool is populated, either
+through currently connected nodes or using the seed session.
+It performs this algorithm:</p>
+<ol>
+<li>Start <span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.10903em;">N</span></span></span></span> slots, and a sleeping peer discovery process</li>
+</ol>
+<p>Then each slot performs this algorithm:</p>
+<ol>
+<li>If no addresses matching our filters are in the hosts pool then:
+<ol>
+<li>Wakeup the peer discovery process. This does nothing if peer discovery is already active.</li>
+<li>Peer discovery tries first 2 times to poll the current network if there are connected nodes,
+otherwise it will do a seed server sync.</li>
+<li>Peer discovery then wakes any sleeping slots and goes back to sleep.</li>
+</ol>
+</li>
+</ol>
+<h2 id="hostlist-filtering"><a class="header" href="#hostlist-filtering">Hostlist filtering</a></h2>
+<p>Node maintain a hostlist consisting of three parts, a whitelist, a
+greylist and an anchorlist. Each hostlist entry is a tuple of two parts,
+a URL address and a <code>last_seen</code> data field, which is a timestamp of the
+last time the peer was interacted with.</p>
+<p>The lists are ordered chronologically according to <code>last_seen</code>, with the
+most recently seen peers at the top of the list. The whitelist max size
+is 1000. The greylist max size is 5000. If the number of peers in these
+lists reach this maximum, then the peers with the oldest <code>last_seen</code>
+fields are removed from the list.</p>
+<p>Each time a node receives info about a set of peers, the info is
+inserted into its greylist. To discover peers, nodes broadcast <code>GetAddr</code>
+messages. Upon receiving a <code>GetAddr</code> message, peers reply with an <code>Addr</code>
+message containing their whitelist. The requester inserts the received
+peer data into its greylist.</p>
+<p>Nodes update their hostlists through a mechanism called
+&quot;greylist housekeeping&quot;, which periodically pings randomly selected peers
+from its greylist. If a peer is responsive, then it is promoted to the
+whitelist with an updated <code>last_seen</code> field, otherwise it is removed
+from the greylist.</p>
+<p>On shutdown, whitelist entries are downgraded to greylist. This forces
+all whitelisted entries through the greylist refinery each time a node
+is started, further ensuring that whitelisted entries are active.</p>
+<p>If a connection is established to a host, that host is promoted to 
+anchorlist. If anchorlist or whitelist nodes disconnect or cannot
+be connected to, those hosts are downgraded to greylist.</p>
+<p>Nodes can configure how many anchorlist connections or what percentage
+of whitelist connections they would like to make, and this configuration
+influences the connection behavior in <code>OutboundSession</code>. If there's
+not enough anchorlist entries, the connection loop will select from
+the whitelist. If there's not enough whitelist entries in the hostlist,
+it will select from the greylist.</p>
+<p>This design has been largely informed by the <a href="https://eprint.iacr.org/2019/411.pdf">Monero p2p
+algo</a></p>
+<h2 id="security"><a class="header" href="#security">Security</a></h2>
+<h3 id="design-considerations"><a class="header" href="#design-considerations">Design Considerations</a></h3>
+<ul>
+<li>Mitigate attacks to a reasonable degree. Ensuring complete coverage against attacks is infeasible and likely
+introduces significant latency into protocols.</li>
+<li>Primarily target the p2p network running over anonymity networks like Tor, i2p or Nym.
+This means we cannot rely on node addresses being reliable. Even on the clearnet, attackers can easily obtain
+large numbers of proxy addresses.</li>
+</ul>
+<p>The main attacks are:</p>
+<ul>
+<li><strong>Sybil attack</strong>. A malicious actor tries to subvert the network using sockpuppet nodes. For example
+false signalling using version messages on the p2p network.</li>
+<li><strong>Eclipse attack</strong>. Targets a single node, through a p2p MitM attack where the malicious actor controls all
+the traffic you see. For example they might send you a payment, then want to doublespend without you
+knowing about it.</li>
+<li><strong>Denial of Service</strong>. Usually happens when a node is overloaded by too much data being sent.</li>
+</ul>
+<p>From <a href="https://docs.libp2p.io/concepts/security/dos-mitigation/">libp2p2 DoS mitigation</a>: &quot;An attack is
+considered viable if it takes fewer resources to execute than the damage
+it does. In other words, if the payoff is higher than the investment it
+is a viable attack and should be mitigated.&quot;</p>
+<h3 id="common-mitigations"><a class="header" href="#common-mitigations">Common Mitigations</a></h3>
+<ul>
+<li><strong>Backoff/falloff</strong>. This is the strategy implemented in Bitcoin. This can be bad when arbitrary limits are implemented
+since we slow down traffic for no reason.</li>
+<li><strong>Choking controller</strong>. BitTorrent no longer uses naive tit-for-tat, instead libtorrent implements an anti-leech seeding algo
+from the paper <a href="https://qed.usc.edu/papers/ChowGM08.pdf">Improving BitTorrent: A Simple Approach</a>, which is focused on distributing
+bandwidth to all peers. See also <a href="https://github.com/arvidn/libtorrent/blob/RC_2_0/src/choker.cpp">libtorrent/src/choker.cpp</a>.
+<ul>
+<li>All p2p messages will have a score which represents workload for the node. There is a hard limit, and in general the choker
+will try to balance the scores between all available channels.</li>
+<li>Opening the connection itself has a score with inbound connections assigned more cost than outgoing ones.</li>
+</ul>
+</li>
+<li><strong>Smart ban</strong>. Malicious peers which violate protocols are hard banned. For example sending the wrong data for a chunk.
+<ul>
+<li>See the method <code>channel.ban()</code> which immediately disconnects and blacklists the address.</li>
+</ul>
+</li>
+<li><strong>uTP congestion control</strong>. BitTorrent implements a UDP protocol with its own congestion control. We could do such a similar strategy
+with the addition of removing ordering. This reduces protocol latency mitigating attacks. See <a href="https://libtorrent.org/utp.html">libtorrent.org/utp.html</a>
+for more info.
+<ul>
+<li>Maybe less important if we use alternative networks like Tor or i2p.</li>
+</ul>
+</li>
+<li><strong>White, gray and black lists</strong>. See section 2.2 of <a href="https://eprint.iacr.org/2019/411.pdf">Exploring the Monero P2P Network</a> for
+details of this algorithm. This aids with network connectivity, avoiding netsplits which could make the network more susceptible to
+eclipse/sybil attacks (large scale MiTM).
+<ul>
+<li>See: <a href="https://codeberg.org/darkrenaissance/darkfi/src/branch/master/src/net/session/refine_session.rs">Refine Session</a></li>
+</ul>
+</li>
+<li><strong>Protocol-level reputation system</strong>. You have a keypair, which accrues more trust from the network. Nodes gossip trust metrics.
+<ul>
+<li>See <a href="https://www.usenix.org/system/files/conference/nsdi16/nsdi16-paper-zhai.pdf">AnonRep: Towards Tracking-Resistant Anonymous Reputation</a></li>
+<li>Also the discussion in
+<a href="https://ethresear.ch/t/semaphore-rln-rate-limiting-nullifier-for-spam-prevention-in-anonymous-p2p-setting/5009">Semaphore RLN, rate limiting nullifier for spam prevention in anonymous p2p setting</a></li>
+</ul>
+</li>
+<li><strong>Reduce blast radius</strong>. The p2p subsystem should run on its own dedicated executor, separate from database lookups or other
+system operations.</li>
+<li><strong>fail2ban</strong></li>
+<li><strong>Optimized blockchain database</strong>. Most databases are written for interleaved reads and writes as well as deletion. Blockchains follow
+a different pattern of infrequent writes being mostly append-only, and requiring weaker guarantees.</li>
+</ul>
+<h3 id="protocol-suggestions"><a class="header" href="#protocol-suggestions">Protocol Suggestions</a></h3>
+<p>Core protocols should be modeled and analyzed with DoS protections added. Below are suggestions to start the investigation.</p>
+<ul>
+<li>Do not forward orphan txs or blocks.</li>
+<li>Drop all double spend txs.
+<ul>
+<li>Alternatively require a higher fee if we want to enable replace by fee.</li>
+<li>Do not forward double spend txs.</li>
+</ul>
+</li>
+<li>Do not forward the same object (block, transaction .etc) to the same peer twice. Violation results in <code>channel.ban()</code>.</li>
+<li>Very low fee txs are rate limited.</li>
+<li>Limit orphan txs.</li>
+<li>Drop large or unusual orphan transactions to limit damage.</li>
+<li>Consider a verification cache to prevent attacks that try to trigger re-verification of stored orphan txs. Also limit the size of the cache.
+See <a href="https://bitcointalk.org/index.php?topic=136422.0">Fixed vulnerability explanation: Why the signature cache is a DoS protection.</a></li>
+<li>Perform more expensive checks later in tx validation.</li>
+<li>Nodes will only relay valid transactions with a certain fee amount. More expensive transactions require a higher fee.</li>
+<li>Complex operations such as requesting data can be mitigated by tracking the number of requests from a peer.
+<ul>
+<li>Attackers may attempt flooding invs for invalid data. The peer responds with get data but that object doesn't exist using
+up precious bandwidth. Limit both the rate of invs to 2/s and size of items to 35.</li>
+<li>Also loops can cause an issue if triggered by the network. This should be carefully analyzed and flattened if possible,
+otherwise they should be guarded against attack.</li>
+</ul>
+</li>
+</ul>
+<h3 id="customizable-policy"><a class="header" href="#customizable-policy">Customizable Policy</a></h3>
+<p>Apps should be able to configure:</p>
+<ul>
+<li>Reject hosts, for example based off current overall resource utilization or the host addr.
+<ul>
+<li>Note: we have a configurable setting called <code>blacklist</code> which allows us to reject hosts by addr.</li>
+</ul>
+</li>
+<li>Accounting abstraction for scoring connections.</li>
+</ul>
+<h2 id="swarming"><a class="header" href="#swarming">Swarming</a></h2>
+<p>TODO: research how this is handled on bittorrent. How do we lookup nodes in the swarm? Does the network maintain routing tables?
+Is this done through a DHT like Kademlia?</p>
+<p>Swarming means more efficient downloading of data specific to a certain subset. A new p2p instance is spawned with a
+clean hosts table. This subnetwork is self contained.</p>
+<p>An application is for example DarkIRC where everyday a new event graph is spawned. With swarming, you would connect to nodes
+maintaining this particular day's event graph.</p>
+<p>The feature allows overlaying multiple different features in a single network such as tau, darkirc and so on. New networks require
+nodes to bootstrap, but with swarming, we reduce all these networks to a single bootstrap. The overlay network maintaining the
+routing tables is a kind of decentralized lilith which keeps track of all the swarms.</p>
+<p>Possibly a post-mainnet feature depending on the scale of architectural changes or new code required in the net submodule.</p>
+<p>To faciliate this future upgrade, we have made the peer discovery process a generic trait called <code>PeerDiscoveryBase</code>. Currently there is only one imeplementation, <code>PeerDiscovery</code>, which implements the peer discovery process in outbound sesssion. In the future <code>PeerDiscoveryBase</code> can be implemented to make new forms of peer discovery (i.e. subnets vs overlay peer discovery processes).</p>
+<h2 id="scoring-subsystem"><a class="header" href="#scoring-subsystem">Scoring Subsystem</a></h2>
+<p>Connections should maintain a scoring system. Protocols can increment the score.</p>
+<p>The score backs off exponentially. If the watermark is crossed then the
+connection is dropped.</p>
+<h3 id="libp2p-resource-manager"><a class="header" href="#libp2p-resource-manager">Libp2p resource manager</a></h3>
+<p>In libp2p, resource usage is constrained by a <code>Resource Manager</code> that
+defines resource usage limits. The <code>Resource Manager</code> checks whether
+a given request is within a limit and returns an error if it exceeds
+a limit.</p>
+<p>Resources are deliminated by <em>Resource Management Scopes</em>. Each scope
+has a corresponding limit that resources cannot exceed.</p>
+<p>Limits are calculated by measuring the following resources: </p>
+<ul>
+<li>
+<p>Memory </p>
+</li>
+<li>
+<p>File descriptors</p>
+</li>
+<li>
+<p>Connections (Inbound connections have stricter limits than outbound
+connections)</p>
+</li>
+<li>
+<p>Streams: an object of interaction between nodes (~analogous to
+<code>Channel</code>). Streams are not metered directly- rather they are constrained
+within the protocol and service scope (defined below). Inbound streams
+are more tightly controlled than outbound streams.</p>
+</li>
+</ul>
+<p>Resource Management Scopes are hierarchial and downstream resource usage
+is aggregated at higher levels.</p>
+<pre><code>System
+ +------------&gt; Transient.............+................+
+ |                                    .                .
+ +------------&gt;  Service------------- . ----------+    .
+ |                                    .           |    .
+ +-------------&gt;  Protocol----------- . ----------+    .
+ |                                    .           |    .
+ +--------------&gt;* Peer               \/          |    .
+                    +------------&gt; Connection     |    .
+                    |                             \/   \/
+                    +---------------------------&gt;  Stream
+</code></pre>
+<ul>
+<li>System scope: top level scope. Nests all other scopes and defines
+global hard limits.</li>
+<li>Transcient scope: scope of resources still being established, e.g. a
+connection prior to a handshake.</li>
+<li>Service (analogous to <code>Session</code>) scopes. Logical groupings of streams
+that implement protocol flow and may additionally consume resources such
+as memory.</li>
+<li>Protocol scopes. Faciliates backwards compatiability since nodes can
+run multiple protocols (incl. old ones) with constrained resource usage.</li>
+<li>Peer scopes. Sets a total limit on the resource usage of an individual
+peer.</li>
+<li>Connection scopes. Constrains resource usage by a single
+connection. Starts monitoring when the connection begins and ends when
+the connection ends.</li>
+<li>Stream (analogous to <code>Channel</code>) scopes. Begins when a stream is created
+and ends when the stream is closed.</li>
+<li>User transaction scopes. A generic extension to the resource manager
+that can be implemented by a programmer.</li>
+</ul>
+<p>There is also:</p>
+<ul>
+<li>Allowlist System scope</li>
+<li>Allowlist Transcient scope </li>
+</ul>
+<p>These are System and Transcient scopes for the <code>allowlist</code>, which is a
+list of honest peer anagolous to our <code>goldlist</code>. Allowlist scopes can
+continue to use (and meter) resources while the System scope has already
+reached its limit (to protect against ellipse attack).</p>
+<p>Limits have a default setting that can be configured. It's also possible
+to scale limits with a particular config that allows for scaling to
+different machines.</p>
+<h3 id="darkfi-p2p-resource-manager"><a class="header" href="#darkfi-p2p-resource-manager">DarkFi p2p resource manager</a></h3>
+<p>The goal is to make something simple that we can extend later if necessary
+given how it behaves in the wild. We have simplified the libp2p <code>Resource management scopes</code> into a straightforward hierarchy:</p>
+<pre><code>            node
+              +
+           channel
+              +
+       +------|------+
+       +             +
+    message       protocol
+
+</code></pre>
+<p>Resource usage is calculated from <code>Message</code> and <code>Protocol</code> and stored in
+<code>Channel</code>. We can sum the total resources by adding the total amount
+of resources used by each channel using the <code>p2p</code> method <code>channels()</code>,
+(this is easy since <code>Channel</code> has access to <code>p2p</code> via a weak ptr).</p>
+<p>Resources are arranged in a struct called <code>AbstractComputer</code> which
+contains resource usage indicators such as: CPU, Memory, hard disk,
+bandwidth, etc.</p>
+<p>The <code>ScoringSubsystem</code> monitors scoring actions such as <code>send_message</code>
+or <code>recv_message</code> (and other actions that make use of resources defined
+by the <code>AbstractComputer</code>) and increments the resource usage.</p>
+<p>There is also a <code>Controller</code> that defines limits and decides on what action
+to take when a given limit has been breached (such as <code>channel.ban()</code>,
+<code>channel.throttle()</code> (TODO), or <code>choke()</code>, <code>snub()</code> etc (also TODO). It
+is important that the limits set by the <code>Controller</code> are configurable and
+can be injected in at runtime since <code>Message</code> and <code>Protocol</code> are dynamic,
+user-defined types.</p>
+<p>TODO:</p>
+<ul>
+<li>implement <code>ScoringSubsystem</code>, <code>AbstractComputer</code>, and <code>Controller</code>.</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../arch/tooling.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next" href="../arch/services.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../arch/tooling.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next" href="../arch/services.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../theme/mermaid.min.js"></script>
+        <script src="../theme/mermaid-init.js"></script>
+        <script src="../theme/zkas-highlight.js"></script>
+
+
+    </div>
+    </body>
+</html>
