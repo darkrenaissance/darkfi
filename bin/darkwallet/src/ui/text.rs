@@ -21,7 +21,10 @@ use rand::{rngs::OsRng, Rng};
 use std::sync::{Arc, Mutex as SyncMutex, OnceLock, Weak};
 
 use crate::{
-    gfx::{GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId, Rectangle, RenderApi},
+    gfx::{
+        GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId, ManagedTexturePtr, Rectangle,
+        RenderApi,
+    },
     mesh::{Color, MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_WHITE},
     prop::{
         PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyRect, PropertyStr,
@@ -39,7 +42,7 @@ pub type TextPtr = Arc<Text>;
 #[derive(Clone)]
 struct TextRenderInfo {
     mesh: MeshInfo,
-    texture_id: GfxTextureId,
+    texture: ManagedTexturePtr,
 }
 
 pub struct Text {
@@ -151,7 +154,7 @@ impl Text {
 
         let mesh = mesh.alloc(&render_api);
 
-        TextRenderInfo { mesh, texture_id: atlas.texture_id }
+        TextRenderInfo { mesh, texture: atlas.texture }
     }
 
     async fn redraw(self: Arc<Self>) {
@@ -165,9 +168,6 @@ impl Text {
         debug!(target: "ui::text", "replace draw calls done");
 
         // We're finished with these so clean up.
-        for texture in draw_update.freed_textures {
-            self.render_api.delete_texture(texture);
-        }
         for buff in draw_update.freed_buffers {
             self.render_api.delete_buffer(buff);
         }
@@ -196,7 +196,7 @@ impl Text {
         let mesh = GfxDrawMesh {
             vertex_buffer: render_info.mesh.vertex_buffer,
             index_buffer: render_info.mesh.index_buffer,
-            texture: Some(render_info.texture_id),
+            texture: Some(render_info.texture),
             num_elements: render_info.mesh.num_elements,
         };
 
@@ -213,7 +213,7 @@ impl Text {
                     z_index: self.z_index.get(),
                 },
             )],
-            freed_textures: vec![old_render_info.texture_id],
+            freed_textures: vec![],
             freed_buffers: vec![
                 old_render_info.mesh.vertex_buffer,
                 old_render_info.mesh.index_buffer,

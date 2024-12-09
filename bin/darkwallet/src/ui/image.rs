@@ -25,7 +25,10 @@ use std::{
 };
 
 use crate::{
-    gfx::{GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId, Rectangle, RenderApi},
+    gfx::{
+        GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId, ManagedTexturePtr, Rectangle,
+        RenderApi,
+    },
     mesh::{MeshBuilder, MeshInfo, COLOR_WHITE},
     prop::{PropertyPtr, PropertyRect, PropertyStr, PropertyUint32, Role},
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
@@ -42,7 +45,7 @@ pub struct Image {
     tasks: OnceLock<Vec<smol::Task<()>>>,
 
     mesh: SyncMutex<Option<MeshInfo>>,
-    texture: SyncMutex<Option<GfxTextureId>>,
+    texture: SyncMutex<Option<ManagedTexturePtr>>,
     dc_key: u64,
 
     rect: PropertyRect,
@@ -93,13 +96,9 @@ impl Image {
         let old_texture = std::mem::replace(&mut *self.texture.lock().unwrap(), Some(texture));
 
         self.clone().redraw().await;
-
-        if let Some(old_texture) = old_texture {
-            self.render_api.delete_texture(old_texture);
-        }
     }
 
-    fn load_texture(&self) -> GfxTextureId {
+    fn load_texture(&self) -> ManagedTexturePtr {
         let path = self.path.get();
 
         // TODO we should NOT use panic here
@@ -123,8 +122,8 @@ impl Image {
         let height = img.height() as u16;
         let bmp = img.into_raw();
 
-        let texture_id = self.render_api.new_texture(width, height, bmp);
-        texture_id
+        let texture = self.render_api.new_texture(width, height, bmp);
+        texture
     }
 
     async fn redraw(self: Arc<Self>) {
@@ -160,7 +159,7 @@ impl Image {
         let mesh = self.regen_mesh();
         let old_mesh = std::mem::replace(&mut *self.mesh.lock().unwrap(), Some(mesh.clone()));
 
-        let texture_id = self.texture.lock().unwrap().expect("Node missing texture_id!");
+        let texture = self.texture.lock().unwrap().clone().expect("Node missing texture_id!");
 
         // We're finished with these so clean up.
         let mut freed_buffers = vec![];
@@ -172,7 +171,7 @@ impl Image {
         let mesh = GfxDrawMesh {
             vertex_buffer: mesh.vertex_buffer,
             index_buffer: mesh.index_buffer,
-            texture: Some(texture_id),
+            texture: Some(texture),
             num_elements: mesh.num_elements,
         };
 
@@ -236,7 +235,5 @@ impl Drop for Image {
             self.render_api.delete_buffer(vertex_buffer);
             self.render_api.delete_buffer(index_buffer);
         }
-        let texture_id = self.texture.lock().unwrap().unwrap();
-        self.render_api.delete_texture(texture_id);
     }
 }

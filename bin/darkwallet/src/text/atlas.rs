@@ -1,7 +1,7 @@
 use super::{Glyph, Sprite, SpritePtr};
 use crate::{
     error::Result,
-    gfx::{GfxTextureId, Rectangle, RenderApi},
+    gfx::{GfxTextureId, ManagedTexturePtr, Rectangle, RenderApi},
 };
 
 /// Prevents render artifacts from aliasing.
@@ -138,12 +138,12 @@ impl<'a> Atlas<'a> {
         assert_eq!(self.glyph_ids.len(), self.x_pos.len());
 
         let atlas = self.render();
-        let texture_id = self.render_api.new_texture(self.width as u16, self.height as u16, atlas);
+        let texture = self.render_api.new_texture(self.width as u16, self.height as u16, atlas);
 
         let uv_rects = self.compute_uvs();
         let glyph_ids = self.glyph_ids;
 
-        RenderedAtlas { glyph_ids, uv_rects, texture_id }
+        RenderedAtlas { glyph_ids, uv_rects, texture }
     }
 }
 
@@ -172,8 +172,8 @@ pub struct RenderedAtlas {
     glyph_ids: Vec<u32>,
     /// UV rectangle within the texture.
     uv_rects: Vec<Rectangle>,
-    /// Allocated atlas texture. Must be manually deallocated by the user.
-    pub texture_id: GfxTextureId,
+    /// Allocated atlas texture.
+    pub texture: ManagedTexturePtr,
 }
 
 impl RenderedAtlas {

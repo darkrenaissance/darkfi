@@ -32,7 +32,7 @@ use super::{max, MessageId, Timestamp};
 use crate::{
     gfx::{
         GfxBufferId, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId,
-        GraphicsEventPublisherPtr, Point, Rectangle, RenderApi,
+        GraphicsEventPublisherPtr, ManagedTexturePtr, Point, Rectangle, RenderApi,
     },
     mesh::{Color, MeshBuilder, COLOR_BLUE, COLOR_GREEN, COLOR_PINK},
     prop::{PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyUint32, Role},
@@ -201,7 +201,7 @@ impl PrivMessage {
         }
 
         let mesh = mesh.alloc(render_api);
-        let mesh = mesh.draw_with_texture(self.atlas.texture_id);
+        let mesh = mesh.draw_with_texture(self.atlas.texture.clone());
         self.mesh_cache = Some(mesh.clone());
 
         mesh
@@ -292,7 +292,7 @@ impl PrivMessage {
         timestamp_width: f32,
         text_shaper: &TextShaper,
         render_api: &RenderApi,
-    ) -> GfxTextureId {
+    ) {
         self.font_size = font_size;
         self.timestamp_font_size = timestamp_font_size;
         self.window_scale = window_scale;
@@ -303,8 +303,6 @@ impl PrivMessage {
         let linetext = format!("{} {}", self.nick, self.text);
         self.unwrapped_glyphs = text_shaper.shape(linetext, font_size, window_scale);
 
-        let texture_id = self.atlas.texture_id;
-
         let mut atlas = text::Atlas::new(render_api);
         atlas.push(&self.time_glyphs);
         atlas.push(&self.unwrapped_glyphs);
@@ -312,8 +310,6 @@ impl PrivMessage {
 
         // We need to rewrap the glyphs since they've been reloaded
         self.adjust_width(line_width, timestamp_width);
-
-        texture_id
     }
 
     /// clear_mesh() must be called after this.
@@ -399,20 +395,16 @@ impl DateMessage {
         window_scale: f32,
         text_shaper: &TextShaper,
         render_api: &RenderApi,
-    ) -> GfxTextureId {
+    ) {
         self.font_size = font_size;
         self.window_scale = window_scale;
 
         let datestr = Self::datestr(self.timestamp);
         self.glyphs = text_shaper.shape(datestr, font_size, window_scale);
 
-        let texture_id = self.atlas.texture_id;
-
         let mut atlas = text::Atlas::new(render_api);
         atlas.push(&self.glyphs);
         self.atlas = atlas.make();
-
-        texture_id
     }
 
     //fn adjust_width(&mut self, line_width: f32) { }
@@ -451,7 +443,7 @@ impl DateMessage {
         }
 
         let mesh = mesh.alloc(render_api);
-        let mesh = mesh.draw_with_texture(self.atlas.texture_id);
+        let mesh = mesh.draw_with_texture(self.atlas.texture.clone());
         self.mesh_cache = Some(mesh.clone());
 
         mesh
@@ -497,7 +489,7 @@ impl Message {
         timestamp_width: f32,
         text_shaper: &TextShaper,
         render_api: &RenderApi,
-    ) -> GfxTextureId {
+    ) {
         match self {
             Self::Priv(m) => m.adjust_params(
                 font_size,
@@ -705,7 +697,7 @@ impl MessageBuffer {
         debug!(target: "ui::chatview::page", "{:?}: freeing old textures", self.node());
 
         for msg in &mut self.msgs {
-            let old_texture_id = msg.adjust_params(
+            msg.adjust_params(
                 font_size,
                 timestamp_font_size,
                 window_scale,
@@ -714,8 +706,6 @@ impl MessageBuffer {
                 &self.text_shaper,
                 &self.render_api,
             );
-
-            self.freed.add_texture(old_texture_id);
         }
     }
 

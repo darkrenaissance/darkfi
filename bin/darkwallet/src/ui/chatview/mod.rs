@@ -679,9 +679,6 @@ impl ChatView {
         for buffer_id in freed.buffers {
             self.render_api.delete_buffer(buffer_id);
         }
-        for texture_id in freed.textures {
-            self.render_api.delete_texture(texture_id);
-        }
     }
 
     /// Invalidates cache and redraws everything

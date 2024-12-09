@@ -34,7 +34,6 @@ use std::{
 
 mod linalg;
 pub use linalg::{Dimension, Point, Rectangle};
-mod scr;
 mod shader;
 
 use crate::{
@@ -69,6 +68,27 @@ impl Vertex {
     }
 }
 
+pub type ManagedTexturePtr = Arc<ManagedTexture>;
+
+/// Auto-deletes texture on drop
+#[derive(Clone)]
+pub struct ManagedTexture {
+    id: GfxTextureId,
+    render_api: RenderApi,
+}
+
+impl Drop for ManagedTexture {
+    fn drop(&mut self) {
+        self.render_api.delete_texture(self.id);
+    }
+}
+
+impl std::fmt::Debug for ManagedTexture {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ManagedTexture").field("id", &self.id).finish()
+    }
+}
+
 #[derive(Clone)]
 pub struct RenderApi {
     method_req: mpsc::Sender<GraphicsMethod>,
@@ -79,13 +99,20 @@ impl RenderApi {
         Self { method_req }
     }
 
-    pub fn new_texture(&self, width: u16, height: u16, data: Vec<u8>) -> GfxTextureId {
+    pub fn new_unmanaged_texture(&self, width: u16, height: u16, data: Vec<u8>) -> GfxTextureId {
         let gfx_texture_id = rand::random();
 
         let method = GraphicsMethod::NewTexture((width, height, data, gfx_texture_id));
         let _ = self.method_req.send(method);
 
         gfx_texture_id
+    }
+
+    pub fn new_texture(&self, width: u16, height: u16, data: Vec<u8>) -> ManagedTexturePtr {
+        Arc::new(ManagedTexture {
+            id: self.new_unmanaged_texture(width, height, data),
+            render_api: self.clone(),
+        })
     }
 
     pub fn delete_texture(&self, texture: GfxTextureId) {
@@ -122,11 +149,11 @@ impl RenderApi {
     }
 }
 
-#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+#[derive(Clone, Debug)]
 pub struct GfxDrawMesh {
     pub vertex_buffer: GfxBufferId,
     pub index_buffer: GfxBufferId,
-    pub texture: Option<GfxTextureId>,
+    pub texture: Option<ManagedTexturePtr>,
     pub num_elements: i32,
 }
 
@@ -139,13 +166,13 @@ impl GfxDrawMesh {
         DrawMesh {
             vertex_buffer: buffers[&self.vertex_buffer],
             index_buffer: buffers[&self.index_buffer],
-            texture: self.texture.map(|t| textures[&t]),
+            texture: self.texture.map(|t| (t.clone(), textures[&t.id])),
             num_elements: self.num_elements,
         }
     }
 }
 
-#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone)]
 pub enum GfxDrawInstruction {
     SetScale(f32),
     Move(Point),
@@ -168,7 +195,7 @@ impl GfxDrawInstruction {
     }
 }
 
-#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+#[derive(Clone, Debug)]
 pub struct GfxDrawCall {
     pub instrs: Vec<GfxDrawInstruction>,
     pub dcs: Vec<u64>,
@@ -193,7 +220,7 @@ impl GfxDrawCall {
 struct DrawMesh {
     vertex_buffer: miniquad::BufferId,
     index_buffer: miniquad::BufferId,
-    texture: Option<miniquad::TextureId>,
+    texture: Option<(ManagedTexturePtr, miniquad::TextureId)>,
     num_elements: i32,
 }
 
@@ -312,7 +339,7 @@ impl<'a> RenderContext<'a> {
                         debug!(target: "gfx", "{ws}draw({mesh:?})");
                     }
                     let texture = match mesh.texture {
-                        Some(texture) => texture,
+                        Some((_, texture)) => texture,
                         None => self.white_texture,
                     };
                     let bindings = Bindings {
@@ -345,7 +372,7 @@ impl<'a> RenderContext<'a> {
     }
 }
 
-#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+#[derive(Clone, Debug)]
 pub enum GraphicsMethod {
     NewTexture((u16, u16, Vec<u8>, GfxTextureId)),
     DeleteTexture(GfxTextureId),
@@ -464,8 +491,6 @@ struct Stage {
 
     method_rep: mpsc::Receiver<GraphicsMethod>,
     event_pub: GraphicsEventPublisherPtr,
-
-    draw_log: Option<scr::DrawLog>,
 }
 
 impl Stage {
@@ -532,16 +557,11 @@ impl Stage {
             buffers: HashMap::new(),
             method_rep,
             event_pub,
-            draw_log: if DEBUG_DRAW_LOG { Some(scr::DrawLog::new()) } else { None },
         }
     }
 
     fn process_method(&mut self, method: GraphicsMethod) {
         //debug!(target: "gfx", "Received method: {:?}", method);
-        if let Some(dlog) = &mut self.draw_log {
-            dlog.log(method.clone());
-        }
-
         match method {
             GraphicsMethod::NewTexture((width, height, data, gfx_texture_id)) => {
                 self.method_new_texture(width, height, data, gfx_texture_id)

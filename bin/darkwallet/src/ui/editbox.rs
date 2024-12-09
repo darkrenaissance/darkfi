@@ -462,7 +462,7 @@ impl EditBox {
             mesh.draw_outline(&clip, COLOR_BLUE, 1.);
         }
 
-        mesh.alloc(&self.render_api).draw_with_texture(atlas.texture_id)
+        mesh.alloc(&self.render_api).draw_with_texture(atlas.texture)
     }
 
     fn regen_cursor_mesh(&self) -> GfxDrawMesh {
@@ -1187,9 +1187,6 @@ impl EditBox {
         for buffer_id in draw_update.freed_buffers {
             self.render_api.delete_buffer(buffer_id);
         }
-        for texture_id in draw_update.freed_textures {
-            self.render_api.delete_texture(texture_id);
-        }
     }
 
     async fn redraw_cursor(&self) {
@@ -1240,10 +1237,6 @@ impl EditBox {
             let text_mesh = std::mem::replace(&mut *self.text_mesh.lock().unwrap(), None);
             // We're finished with these so clean up.
             if let Some(old) = text_mesh {
-                if let Some(texture) = old.texture {
-                    //debug!(target: "ui::editbox", "{:?}: freeing old texture", self.node());
-                    freed.textures.push(texture);
-                }
                 freed.buffers.push(old.vertex_buffer);
                 freed.buffers.push(old.index_buffer);
             }
@@ -1255,10 +1248,6 @@ impl EditBox {
 
         // We're finished with these so clean up.
         if let Some(old) = old_text_mesh {
-            if let Some(texture) = old.texture {
-                //debug!(target: "ui::editbox", "{:?}: freeing old texture", self.node());
-                freed.textures.push(texture);
-            }
             freed.buffers.push(old.vertex_buffer);
             freed.buffers.push(old.index_buffer);
         }
@@ -1284,7 +1273,7 @@ impl EditBox {
                     GfxDrawCall { instrs: cursor_instrs, dcs: vec![], z_index: self.z_index.get() },
                 ),
             ],
-            freed_textures: freed.textures,
+            freed_textures: vec![],
             freed_buffers: freed.buffers,
         })
     }
@@ -1295,9 +1284,6 @@ impl Drop for EditBox {
         let text_mesh = std::mem::replace(&mut *self.text_mesh.lock().unwrap(), None);
         // We're finished with these so clean up.
         if let Some(old) = text_mesh {
-            if let Some(texture) = old.texture {
-                self.render_api.delete_texture(texture);
-            }
             self.render_api.delete_buffer(old.vertex_buffer);
             self.render_api.delete_buffer(old.index_buffer);
         }

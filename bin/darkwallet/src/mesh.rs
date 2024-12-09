@@ -18,7 +18,9 @@
 
 use crate::{
     error::Result,
-    gfx::{GfxBufferId, GfxDrawMesh, GfxTextureId, Rectangle, RenderApi, Vertex},
+    gfx::{
+        GfxBufferId, GfxDrawMesh, GfxTextureId, ManagedTexturePtr, Rectangle, RenderApi, Vertex,
+    },
 };
 
 pub type Color = [f32; 4];
@@ -47,7 +49,7 @@ pub struct MeshInfo {
 
 impl MeshInfo {
     /// Convenience method
-    pub fn draw_with_texture(self, texture: GfxTextureId) -> GfxDrawMesh {
+    pub fn draw_with_texture(self, texture: ManagedTexturePtr) -> GfxDrawMesh {
         GfxDrawMesh {
             vertex_buffer: self.vertex_buffer,
             index_buffer: self.index_buffer,
