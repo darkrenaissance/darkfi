@@ -21,7 +21,7 @@ use image::ImageReader;
 use rand::{rngs::OsRng, Rng};
 use std::{
     io::Cursor,
-    sync::{Arc, Mutex as SyncMutex, Weak},
+    sync::{Arc, Mutex as SyncMutex, OnceLock, Weak},
 };
 
 use crate::{
@@ -39,8 +39,7 @@ pub type ImagePtr = Arc<Image>;
 pub struct Image {
     node: SceneNodeWeak,
     render_api: RenderApi,
-    #[allow(dead_code)]
-    tasks: Vec<smol::Task<()>>,
+    tasks: OnceLock<Vec<smol::Task<()>>>,
 
     mesh: SyncMutex<Option<MeshInfo>>,
     texture: SyncMutex<Option<GfxTextureId>>,
@@ -67,29 +66,21 @@ impl Image {
         let node_name = node_ref.name.clone();
         let node_id = node_ref.id;
 
-        let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
-            let mut on_modify = OnModify::new(ex, node_name, node_id, me.clone());
-            on_modify.when_change(rect.prop(), Self::redraw);
-            on_modify.when_change(uv.prop(), Self::redraw);
-            on_modify.when_change(z_index.prop(), Self::redraw);
-            on_modify.when_change(path.prop(), Self::reload);
+        let self_ = Arc::new(Self {
+            node,
+            render_api,
+            tasks: OnceLock::new(),
 
-            Self {
-                node,
-                render_api,
-                tasks: on_modify.tasks,
+            mesh: SyncMutex::new(None),
+            texture: SyncMutex::new(None),
+            dc_key: OsRng.gen(),
 
-                mesh: SyncMutex::new(None),
-                texture: SyncMutex::new(None),
-                dc_key: OsRng.gen(),
+            rect,
+            uv,
+            z_index,
+            path,
 
-                rect,
-                uv,
-                z_index,
-                path,
-
-                parent_rect: SyncMutex::new(None),
-            }
+            parent_rect: SyncMutex::new(None),
         });
 
         *self_.texture.lock().unwrap() = Some(self_.load_texture());
@@ -208,6 +199,22 @@ impl Image {
 impl UIObject for Image {
     fn z_index(&self) -> u32 {
         self.z_index.get()
+    }
+
+    async fn start(self: Arc<Self>, ex: ExecutorPtr) {
+        let me = Arc::downgrade(&self);
+
+        let node_ref = &self.node.upgrade().unwrap();
+        let node_name = node_ref.name.clone();
+        let node_id = node_ref.id;
+
+        let mut on_modify = OnModify::new(ex, node_name, node_id, me.clone());
+        on_modify.when_change(self.rect.prop(), Self::redraw);
+        on_modify.when_change(self.uv.prop(), Self::redraw);
+        on_modify.when_change(self.z_index.prop(), Self::redraw);
+        on_modify.when_change(self.path.prop(), Self::reload);
+
+        self.tasks.set(on_modify.tasks);
     }
 
     async fn draw(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {

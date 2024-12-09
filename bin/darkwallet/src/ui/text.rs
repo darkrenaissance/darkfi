@@ -18,7 +18,7 @@
 
 use async_trait::async_trait;
 use rand::{rngs::OsRng, Rng};
-use std::sync::{Arc, Mutex as SyncMutex, Weak};
+use std::sync::{Arc, Mutex as SyncMutex, OnceLock, Weak};
 
 use crate::{
     gfx::{GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId, Rectangle, RenderApi},
@@ -46,7 +46,7 @@ pub struct Text {
     node: SceneNodeWeak,
     render_api: RenderApi,
     text_shaper: TextShaperPtr,
-    _tasks: Vec<smol::Task<()>>,
+    tasks: OnceLock<Vec<smol::Task<()>>>,
 
     render_info: SyncMutex<TextRenderInfo>,
     dc_key: u64,
@@ -97,35 +97,24 @@ impl Text {
         )
         .await;
 
-        let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
-            let mut on_modify = OnModify::new(ex, node_name, node_id, me.clone());
-            on_modify.when_change(rect.prop(), Self::redraw);
-            on_modify.when_change(z_index.prop(), Self::redraw);
-            on_modify.when_change(text.prop(), Self::redraw);
-            on_modify.when_change(font_size.prop(), Self::redraw);
-            on_modify.when_change(text_color.prop(), Self::redraw);
-            on_modify.when_change(debug.prop(), Self::redraw);
-            on_modify.when_change(baseline.prop(), Self::redraw);
+        let self_ = Arc::new(Self {
+            node,
+            render_api,
+            text_shaper,
+            tasks: OnceLock::new(),
+            render_info: SyncMutex::new(render_info),
+            dc_key: OsRng.gen(),
 
-            Self {
-                node,
-                render_api,
-                text_shaper,
-                _tasks: on_modify.tasks,
-                render_info: SyncMutex::new(render_info),
-                dc_key: OsRng.gen(),
+            rect,
+            z_index,
+            text,
+            font_size,
+            text_color,
+            baseline,
+            debug,
 
-                rect,
-                z_index,
-                text,
-                font_size,
-                text_color,
-                baseline,
-                debug,
-
-                window_scale,
-                parent_rect: SyncMutex::new(None),
-            }
+            window_scale,
+            parent_rect: SyncMutex::new(None),
         });
 
         Pimpl::Text(self_)
@@ -239,6 +228,25 @@ impl Text {
 impl UIObject for Text {
     fn z_index(&self) -> u32 {
         self.z_index.get()
+    }
+
+    async fn start(self: Arc<Self>, ex: ExecutorPtr) {
+        let me = Arc::downgrade(&self);
+
+        let node_ref = &self.node.upgrade().unwrap();
+        let node_name = node_ref.name.clone();
+        let node_id = node_ref.id;
+
+        let mut on_modify = OnModify::new(ex, node_name, node_id, me.clone());
+        on_modify.when_change(self.rect.prop(), Self::redraw);
+        on_modify.when_change(self.z_index.prop(), Self::redraw);
+        on_modify.when_change(self.text.prop(), Self::redraw);
+        on_modify.when_change(self.font_size.prop(), Self::redraw);
+        on_modify.when_change(self.text_color.prop(), Self::redraw);
+        on_modify.when_change(self.debug.prop(), Self::redraw);
+        on_modify.when_change(self.baseline.prop(), Self::redraw);
+
+        self.tasks.set(on_modify.tasks);
     }
 
     async fn draw(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {

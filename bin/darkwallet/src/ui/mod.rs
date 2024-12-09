@@ -53,6 +53,8 @@ pub use win::{Window, WindowPtr};
 pub trait UIObject: Sync {
     fn z_index(&self) -> u32;
 
+    async fn start(self: Arc<Self>, ex: ExecutorPtr) {}
+
     async fn draw(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
         None
     }
@@ -149,6 +151,18 @@ impl<T: Send + Sync + 'static> OnModify<T> {
     }
 }
 
+pub fn get_ui_object_ptr(node: &SceneNode3) -> Arc<dyn UIObject + Send> {
+    match &node.pimpl {
+        Pimpl::Layer(obj) => obj.clone(),
+        Pimpl::VectorArt(obj) => obj.clone(),
+        Pimpl::Text(obj) => obj.clone(),
+        Pimpl::EditBox(obj) => obj.clone(),
+        Pimpl::ChatView(obj) => obj.clone(),
+        Pimpl::Image(obj) => obj.clone(),
+        Pimpl::Button(obj) => obj.clone(),
+        _ => panic!("unhandled type for get_ui_object"),
+    }
+}
 pub fn get_ui_object3<'a>(node: &'a SceneNode3) -> &'a dyn UIObject {
     match &node.pimpl {
         Pimpl::Layer(obj) => obj.as_ref(),

@@ -17,7 +17,7 @@
  */
 
 use miniquad::{KeyCode, KeyMods, MouseButton, TouchPhase};
-use std::sync::{Arc, Weak};
+use std::sync::{Arc, OnceLock, Weak};
 
 use crate::{
     gfx::{
@@ -29,151 +29,152 @@ use crate::{
     ExecutorPtr,
 };
 
-use super::{get_children_ordered, get_ui_object3, OnModify};
+use super::{get_children_ordered, get_ui_object3, get_ui_object_ptr, OnModify};
 
 pub type WindowPtr = Arc<Window>;
 
 pub struct Window {
     node: SceneNodeWeak,
 
-    // Task is dropped at the end of the scope for Window, hence ending it
-    #[allow(dead_code)]
-    tasks: Vec<smol::Task<()>>,
+    tasks: OnceLock<Vec<smol::Task<()>>>,
     screen_size: PropertyDimension,
     scale: PropertyFloat32,
     render_api: RenderApi,
 }
 
 impl Window {
-    pub async fn new(
-        node: SceneNodeWeak,
-        render_api: RenderApi,
-        event_pub: GraphicsEventPublisherPtr,
-        ex: ExecutorPtr,
-    ) -> Pimpl {
+    pub async fn new(node: SceneNodeWeak, render_api: RenderApi) -> Pimpl {
         debug!(target: "ui::win", "Window::new()");
 
         let node_ref = &node.upgrade().unwrap();
         let screen_size = PropertyDimension::wrap(node_ref, Role::Internal, "screen_size").unwrap();
         let scale = PropertyFloat32::wrap(node_ref, Role::Internal, "scale", 0).unwrap();
 
+        let self_ = Arc::new(Self { node, tasks: OnceLock::new(), screen_size, scale, render_api });
+
+        Pimpl::Window(self_)
+    }
+
+    pub async fn start(self: Arc<Self>, event_pub: GraphicsEventPublisherPtr, ex: ExecutorPtr) {
+        let me = Arc::downgrade(&self);
+
+        let node_ref = &self.node.upgrade().unwrap();
         let node_name = node_ref.name.clone();
         let node_id = node_ref.id;
 
-        let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
-            // Start a task monitoring for window resize events
-            // which updates screen_size
-            let ev_sub = event_pub.subscribe_resize();
-            let screen_size2 = screen_size.clone();
+        // Start a task monitoring for window resize events
+        // which updates screen_size
+        let ev_sub = event_pub.subscribe_resize();
+        let screen_size2 = self.screen_size.clone();
+        let me2 = me.clone();
+        let resize_task = ex.spawn(async move {
+            loop {
+                let Ok(size) = ev_sub.receive().await else {
+                    debug!(target: "ui::win", "Event relayer closed");
+                    break
+                };
+
+                debug!(target: "ui::win", "Window resized {size:?}");
+                // Now update the properties
+                screen_size2.set(size);
+
+                let Some(self_) = me2.upgrade() else {
+                    // Should not happen
+                    panic!("self destroyed before modify_task was stopped!");
+                };
+
+                self_.draw().await;
+            }
+        });
+
+        let ev_sub = event_pub.subscribe_char();
+        let me2 = me.clone();
+        let char_task = ex.spawn(async move { while Self::process_char(&me2, &ev_sub).await {} });
+
+        let ev_sub = event_pub.subscribe_key_down();
+        let me2 = me.clone();
+        let key_down_task =
+            ex.spawn(async move { while Self::process_key_down(&me2, &ev_sub).await {} });
+
+        let ev_sub = event_pub.subscribe_key_up();
+        let me2 = me.clone();
+        let key_up_task =
+            ex.spawn(async move { while Self::process_key_up(&me2, &ev_sub).await {} });
+
+        let ev_sub = event_pub.subscribe_mouse_btn_down();
+        let me2 = me.clone();
+        let mouse_btn_down_task =
+            ex.spawn(async move { while Self::process_mouse_btn_down(&me2, &ev_sub).await {} });
+
+        let ev_sub = event_pub.subscribe_mouse_btn_up();
+        let me2 = me.clone();
+        let mouse_btn_up_task =
+            ex.spawn(async move { while Self::process_mouse_btn_up(&me2, &ev_sub).await {} });
+
+        let ev_sub = event_pub.subscribe_mouse_move();
+        let me2 = me.clone();
+        let mouse_move_task =
+            ex.spawn(async move { while Self::process_mouse_move(&me2, &ev_sub).await {} });
+
+        let ev_sub = event_pub.subscribe_mouse_wheel();
+        let me2 = me.clone();
+        let mouse_wheel_task =
+            ex.spawn(async move { while Self::process_mouse_wheel(&me2, &ev_sub).await {} });
+
+        let ev_sub = event_pub.subscribe_touch();
+        let me2 = me.clone();
+        let touch_task = ex.spawn(async move { while Self::process_touch(&me2, &ev_sub).await {} });
+
+        let redraw_fn = move |self_: Arc<Self>| async move {
+            self_.draw().await;
+        };
+
+        let mut on_modify = OnModify::new(ex.clone(), node_name, node_id, me.clone());
+        on_modify.when_change(self.scale.prop(), redraw_fn);
+
+        let mut tasks = vec![
+            resize_task,
+            char_task,
+            key_down_task,
+            key_up_task,
+            mouse_btn_down_task,
+            mouse_btn_up_task,
+            mouse_move_task,
+            mouse_wheel_task,
+            touch_task,
+        ];
+
+        tasks.append(&mut on_modify.tasks);
+
+        #[cfg(target_os = "android")]
+        {
+            let (sender, recvr) = async_channel::unbounded();
+            crate::android::set_sender(sender);
             let me2 = me.clone();
-            let resize_task = ex.spawn(async move {
+            let autosuggest_task = ex.spawn(async move {
                 loop {
-                    let Ok(size) = ev_sub.receive().await else {
+                    let Ok(ev) = recvr.recv().await else {
                         debug!(target: "ui::win", "Event relayer closed");
                         break
                     };
-
-                    debug!(target: "ui::win", "Window resized {size:?}");
-                    // Now update the properties
-                    screen_size2.set(size);
 
                     let Some(self_) = me2.upgrade() else {
                         // Should not happen
                         panic!("self destroyed before modify_task was stopped!");
                     };
 
-                    self_.draw().await;
+                    self_.handle_autosuggest(ev).await;
                 }
             });
+            tasks.push(autosuggest_task);
+        }
 
-            let ev_sub = event_pub.subscribe_char();
-            let me2 = me.clone();
-            let char_task =
-                ex.spawn(async move { while Self::process_char(&me2, &ev_sub).await {} });
+        self.tasks.set(tasks);
 
-            let ev_sub = event_pub.subscribe_key_down();
-            let me2 = me.clone();
-            let key_down_task =
-                ex.spawn(async move { while Self::process_key_down(&me2, &ev_sub).await {} });
-
-            let ev_sub = event_pub.subscribe_key_up();
-            let me2 = me.clone();
-            let key_up_task =
-                ex.spawn(async move { while Self::process_key_up(&me2, &ev_sub).await {} });
-
-            let ev_sub = event_pub.subscribe_mouse_btn_down();
-            let me2 = me.clone();
-            let mouse_btn_down_task =
-                ex.spawn(async move { while Self::process_mouse_btn_down(&me2, &ev_sub).await {} });
-
-            let ev_sub = event_pub.subscribe_mouse_btn_up();
-            let me2 = me.clone();
-            let mouse_btn_up_task =
-                ex.spawn(async move { while Self::process_mouse_btn_up(&me2, &ev_sub).await {} });
-
-            let ev_sub = event_pub.subscribe_mouse_move();
-            let me2 = me.clone();
-            let mouse_move_task =
-                ex.spawn(async move { while Self::process_mouse_move(&me2, &ev_sub).await {} });
-
-            let ev_sub = event_pub.subscribe_mouse_wheel();
-            let me2 = me.clone();
-            let mouse_wheel_task =
-                ex.spawn(async move { while Self::process_mouse_wheel(&me2, &ev_sub).await {} });
-
-            let ev_sub = event_pub.subscribe_touch();
-            let me2 = me.clone();
-            let touch_task =
-                ex.spawn(async move { while Self::process_touch(&me2, &ev_sub).await {} });
-
-            let redraw_fn = move |self_: Arc<Self>| async move {
-                self_.draw().await;
-            };
-
-            let mut on_modify = OnModify::new(ex.clone(), node_name, node_id, me.clone());
-            on_modify.when_change(scale.prop(), redraw_fn);
-
-            let mut tasks = vec![
-                resize_task,
-                char_task,
-                key_down_task,
-                key_up_task,
-                mouse_btn_down_task,
-                mouse_btn_up_task,
-                mouse_move_task,
-                mouse_wheel_task,
-                touch_task,
-            ];
-
-            tasks.append(&mut on_modify.tasks);
-
-            #[cfg(target_os = "android")]
-            {
-                let (sender, recvr) = async_channel::unbounded();
-                crate::android::set_sender(sender);
-                let me2 = me.clone();
-                let autosuggest_task = ex.spawn(async move {
-                    loop {
-                        let Ok(ev) = recvr.recv().await else {
-                            debug!(target: "ui::win", "Event relayer closed");
-                            break
-                        };
-
-                        let Some(self_) = me2.upgrade() else {
-                            // Should not happen
-                            panic!("self destroyed before modify_task was stopped!");
-                        };
-
-                        self_.handle_autosuggest(ev).await;
-                    }
-                });
-                tasks.push(autosuggest_task);
-            }
-
-            Self { node, tasks, screen_size, scale, render_api }
-        });
-
-        Pimpl::Window(self_)
+        for child in self.get_children() {
+            let obj = get_ui_object_ptr(&child);
+            obj.start(ex.clone()).await;
+        }
     }
 
     async fn process_char(me: &Weak<Self>, ev_sub: &Subscription<(char, KeyMods, bool)>) -> bool {

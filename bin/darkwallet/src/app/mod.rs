@@ -145,35 +145,43 @@ impl App {
         })
     }
 
-    pub async fn start(self: Arc<Self>) {
-        debug!(target: "app", "App::start()");
+    /// Does not require miniquad to be init. Created the scene graph tree / schema and all
+    /// the objects.
+    pub async fn setup(&self) {
+        debug!(target: "app", "App::setup()");
 
         let mut window = SceneNode3::new("window", SceneNodeType3::Window);
 
         let mut prop = Property::new("screen_size", PropertyType::Float32, PropertySubType::Pixel);
         prop.set_array_len(2);
-        // Window not yet initialized so we can't set these.
-        //prop.set_f32(Role::App, 0, screen_width);
-        //prop.set_f32(Role::App, 1, screen_height);
         window.add_property(prop).unwrap();
 
         let mut prop = Property::new("scale", PropertyType::Float32, PropertySubType::Pixel);
         prop.set_defaults_f32(vec![1.]).unwrap();
         window.add_property(prop).unwrap();
 
-        let window = window
-            .setup(|me| {
-                Window::new(me, self.render_api.clone(), self.event_pub.clone(), self.ex.clone())
-            })
-            .await;
+        let window = window.setup(|me| Window::new(me, self.render_api.clone())).await;
         self.sg_root.clone().link(window.clone());
         schema::make(&self, window).await;
 
         debug!(target: "app", "Schema loaded");
+    }
+
+    /// Begins the draw of the tree, and then starts the UI procs.
+    pub async fn start(self: Arc<Self>) {
+        debug!(target: "app", "App::start()");
+
+        let window_node = self.sg_root.clone().lookup_node("/window").unwrap();
+        let prop = window_node.get_property("screen_size").unwrap();
+        // We can only do this once the window has been created in miniquad.
+        let (screen_width, screen_height) = miniquad::window::screen_size();
+        prop.set_f32(Role::App, 0, screen_width);
+        prop.set_f32(Role::App, 1, screen_height);
 
         // Access drawable in window node and call draw()
         self.trigger_draw().await;
 
+        self.start_procs().await;
         debug!(target: "app", "App started");
     }
 
@@ -183,17 +191,24 @@ impl App {
         });
     }
 
-    /// Shutdown code here
-    async fn async_stop(&self) {
-        //self.darkirc_backend.stop().await;
-    }
-
     async fn trigger_draw(&self) {
         let window_node = self.sg_root.clone().lookup_node("/window").expect("no window attached!");
         match &window_node.pimpl {
             Pimpl::Window(win) => win.draw().await,
             _ => panic!("wrong pimpl"),
         }
+    }
+    async fn start_procs(&self) {
+        let window_node = self.sg_root.clone().lookup_node("/window").unwrap();
+        match &window_node.pimpl {
+            Pimpl::Window(win) => win.clone().start(self.event_pub.clone(), self.ex.clone()).await,
+            _ => panic!("wrong pimpl"),
+        }
+    }
+
+    /// Shutdown code here
+    async fn async_stop(&self) {
+        //self.darkirc_backend.stop().await;
     }
 }
 

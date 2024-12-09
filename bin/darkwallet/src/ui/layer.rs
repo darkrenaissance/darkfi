@@ -21,7 +21,7 @@ use async_trait::async_trait;
 use atomic_float::AtomicF32;
 use miniquad::{KeyCode, KeyMods, MouseButton, TouchPhase};
 use rand::{rngs::OsRng, Rng};
-use std::sync::{atomic::Ordering, Arc, Mutex as SyncMutex, Weak};
+use std::sync::{atomic::Ordering, Arc, Mutex as SyncMutex, OnceLock, Weak};
 
 use crate::{
     gfx::{GfxDrawCall, GfxDrawInstruction, Point, Rectangle, RenderApi},
@@ -30,14 +30,16 @@ use crate::{
     ExecutorPtr,
 };
 
-use super::{get_children_ordered, get_ui_object3, DrawUpdate, OnModify, UIObject};
+use super::{
+    get_children_ordered, get_ui_object3, get_ui_object_ptr, DrawUpdate, OnModify, UIObject,
+};
 
 pub type LayerPtr = Arc<Layer>;
 
 pub struct Layer {
     node: SceneNodeWeak,
     render_api: RenderApi,
-    _tasks: Vec<smol::Task<()>>,
+    tasks: OnceLock<Vec<smol::Task<()>>>,
     dc_key: u64,
 
     is_visible: PropertyBool,
@@ -59,24 +61,17 @@ impl Layer {
         let node_name = node_ref.name.clone();
         let node_id = node_ref.id;
 
-        let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
-            let mut on_modify = OnModify::new(ex.clone(), node_name, node_id, me.clone());
-            on_modify.when_change(is_visible.prop(), Self::redraw);
-            on_modify.when_change(rect.prop(), Self::redraw);
-            on_modify.when_change(z_index.prop(), Self::redraw);
+        let self_ = Arc::new(Self {
+            node,
+            render_api,
+            tasks: OnceLock::new(),
+            dc_key: OsRng.gen(),
 
-            Self {
-                node,
-                render_api,
-                _tasks: on_modify.tasks,
-                dc_key: OsRng.gen(),
+            is_visible,
+            rect,
+            z_index,
 
-                is_visible,
-                rect,
-                z_index,
-
-                parent_rect: SyncMutex::new(None),
-            }
+            parent_rect: SyncMutex::new(None),
         });
 
         Pimpl::Layer(self_)
@@ -141,6 +136,26 @@ impl Layer {
 impl UIObject for Layer {
     fn z_index(&self) -> u32 {
         self.z_index.get()
+    }
+
+    async fn start(self: Arc<Self>, ex: ExecutorPtr) {
+        let me = Arc::downgrade(&self);
+
+        let node_ref = &self.node.upgrade().unwrap();
+        let node_name = node_ref.name.clone();
+        let node_id = node_ref.id;
+
+        let mut on_modify = OnModify::new(ex.clone(), node_name, node_id, me.clone());
+        on_modify.when_change(self.is_visible.prop(), Self::redraw);
+        on_modify.when_change(self.rect.prop(), Self::redraw);
+        on_modify.when_change(self.z_index.prop(), Self::redraw);
+
+        self.tasks.set(on_modify.tasks);
+
+        for child in self.get_children() {
+            let obj = get_ui_object_ptr(&child);
+            obj.start(ex.clone()).await;
+        }
     }
 
     async fn draw(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {

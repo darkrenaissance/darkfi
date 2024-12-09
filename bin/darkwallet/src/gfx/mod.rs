@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use darkfi::system::CondVar;
 use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 use futures::AsyncWriteExt;
 use log::debug;
@@ -473,16 +474,13 @@ impl Stage {
         async_runtime: AsyncRuntime,
         method_rep: mpsc::Receiver<GraphicsMethod>,
         event_pub: GraphicsEventPublisherPtr,
+        cv_started: Arc<CondVar>,
     ) -> Self {
         let mut ctx: Box<dyn RenderingBackend> = window::new_rendering_backend();
 
-        // Maybe should be patched upstream since inconsistent behaviour
-        // Needs testing on other platforms too.
-        #[cfg(target_os = "android")]
-        {
-            let (screen_width, screen_height) = window::screen_size();
-            event_pub.notify_resize(Dimension::from([screen_width, screen_height]));
-        }
+        // This will start the app to start. Needed since we cannot get window size for init
+        // until window is created.
+        cv_started.notify();
 
         let white_texture = ctx.new_texture_from_rgba8(1, 1, &[255, 255, 255, 255]);
 
@@ -724,6 +722,7 @@ pub fn run_gui(
     async_runtime: AsyncRuntime,
     method_rep: mpsc::Receiver<GraphicsMethod>,
     event_pub: GraphicsEventPublisherPtr,
+    cv_started: Arc<CondVar>,
 ) {
     let mut conf = miniquad::conf::Conf {
         high_dpi: true,
@@ -740,5 +739,7 @@ pub fn run_gui(
     conf.platform.apple_gfx_api =
         if metal { conf::AppleGfxApi::Metal } else { conf::AppleGfxApi::OpenGl };
 
-    miniquad::start(conf, || Box::new(Stage::new(app, async_runtime, method_rep, event_pub)));
+    miniquad::start(conf, || {
+        Box::new(Stage::new(app, async_runtime, method_rep, event_pub, cv_started))
+    });
 }

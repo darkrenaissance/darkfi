@@ -135,13 +135,17 @@ fn main() {
 
     let text_shaper = TextShaper::new();
 
-    let cv_started = Arc::new(CondVar::new());
-    let cv_started2 = cv_started.clone();
+    let cv_gfxwin_started = Arc::new(CondVar::new());
+    let cv_gfxwin_started2 = cv_gfxwin_started.clone();
+    let cv_app_started = Arc::new(CondVar::new());
+    let cv_app_started2 = cv_app_started.clone();
     let app = app::App::new(sg_root, render_api, event_pub.clone(), text_shaper, ex.clone());
     let app2 = app.clone();
     let app_task = ex.spawn(async move {
+        app2.setup().await;
+        cv_gfxwin_started2.wait().await;
         app2.start().await;
-        cv_started2.notify();
+        cv_app_started2.notify();
     });
     async_runtime.push_task(app_task);
 
@@ -150,7 +154,7 @@ fn main() {
     let sg_root = app.sg_root.clone();
     let ex2 = ex.clone();
     let darkirc_task = ex.spawn(async move {
-        cv_started.wait().await;
+        cv_app_started.wait().await;
         let darkirc_evgr = DarkIrcBackend::new(sg_root.clone(), ex2.clone()).await.unwrap();
         *app2.darkirc_evgr.lock().unwrap() = Some(darkirc_evgr.clone());
         if let Err(e) = darkirc_evgr.start(ex2).await {
@@ -213,7 +217,7 @@ fn main() {
     */
 
     //let stage = gfx::Stage::new(method_rep, event_pub);
-    gfx::run_gui(app, async_runtime, method_rep, event_pub);
+    gfx::run_gui(app, async_runtime, method_rep, event_pub, cv_gfxwin_started);
     debug!(target: "main", "Started GFX backend");
 }
 

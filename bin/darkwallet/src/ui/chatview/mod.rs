@@ -31,7 +31,7 @@ use std::{
     io::Cursor,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex as SyncMutex, Weak,
+        Arc, Mutex as SyncMutex, OnceLock, Weak,
     },
 };
 
@@ -149,8 +149,7 @@ pub type ChatViewPtr = Arc<ChatView>;
 
 pub struct ChatView {
     node: SceneNodeWeak,
-    #[allow(dead_code)]
-    tasks: Vec<smol::Task<()>>,
+    tasks: OnceLock<Vec<smol::Task<()>>>,
     render_api: RenderApi,
     text_shaper: TextShaperPtr,
 
@@ -224,130 +223,55 @@ impl ChatView {
         let select_hold_time =
             PropertyFloat32::wrap(node_ref, Role::Internal, "select_hold_time", 0).unwrap();
 
-        let node_name = node_ref.name.clone();
-        let node_id = node_ref.id;
+        let motion_cv = Arc::new(CondVar::new());
+        let bgload_cv = Arc::new(CondVar::new());
 
-        let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
-            let method_sub = node_ref.subscribe_method_call("insert_line").unwrap();
-            let me2 = me.clone();
-            let insert_line_method_task = ex.spawn(async move {
-                while Self::process_insert_line_method(&me2, &method_sub).await {}
-            });
+        let self_ = Arc::new(Self {
+            node: node.clone(),
+            tasks: OnceLock::new(),
+            render_api: render_api.clone(),
+            text_shaper: text_shaper.clone(),
 
-            let method_sub = node_ref.subscribe_method_call("insert_unconf_line").unwrap();
-            let me2 = me.clone();
-            let insert_unconf_line_method_task = ex.spawn(async move {
-                while Self::process_insert_unconf_line_method(&me2, &method_sub).await {}
-            });
+            tree,
+            msgbuf: AsyncMutex::new(MessageBuffer::new(
+                node,
+                font_size,
+                timestamp_font_size,
+                timestamp_width,
+                line_height,
+                message_spacing,
+                baseline,
+                timestamp_color,
+                text_color,
+                nick_colors,
+                hi_bg_color,
+                debug,
+                window_scale,
+                render_api,
+                text_shaper,
+            )),
+            dc_key: OsRng.gen(),
 
-            let me2 = me.clone();
-            let motion_cv = Arc::new(CondVar::new());
-            let cv = motion_cv.clone();
-            let motion_task = ex.spawn(async move {
-                loop {
-                    cv.wait().await;
-                    let Some(self_) = me2.upgrade() else {
-                        // Should not happen
-                        panic!("self destroyed before motion_task was stopped!");
-                    };
-                    self_.handle_movement().await;
-                    cv.reset();
-                }
-            });
+            mouse_pos: SyncMutex::new(Point::from([0., 0.])),
+            touch_info: SyncMutex::new(None),
+            touch_is_active: AtomicBool::new(false),
 
-            let me2 = me.clone();
-            let bgload_cv = Arc::new(CondVar::new());
-            let cv = bgload_cv.clone();
-            let bgload_task = ex.spawn(async move {
-                loop {
-                    cv.wait().await;
-                    let Some(self_) = me2.upgrade() else {
-                        // Should not happen
-                        panic!("self destroyed before bgload_task was stopped!");
-                    };
-                    self_.handle_bgload().await;
-                    cv.reset();
-                }
-            });
+            rect,
+            scroll,
+            z_index,
 
-            let mut on_modify = OnModify::new(ex, node_name, node_id, me.clone());
+            scroll_start_accel,
+            scroll_resist,
+            select_hold_time,
 
-            async fn reload_view(self_: Arc<ChatView>) {
-                self_.scrollview(self_.scroll.get()).await;
-            }
-            on_modify.when_change(scroll.prop(), reload_view);
+            motion_cv,
+            speed: AtomicF32::new(0.),
 
-            async fn redraw(self_: Arc<ChatView>) {
-                self_.redraw_all().await;
-            }
-            on_modify.when_change(baseline.prop(), redraw);
-            on_modify.when_change(font_size.prop(), redraw);
-            on_modify.when_change(timestamp_font_size.prop(), redraw);
-            on_modify.when_change(timestamp_color.prop(), redraw);
-            on_modify.when_change(timestamp_width.prop(), redraw);
-            on_modify.when_change(line_height.prop(), redraw);
-            on_modify.when_change(message_spacing.prop(), redraw);
-            on_modify.when_change(text_color.prop(), redraw);
-            on_modify.when_change(nick_colors.clone(), redraw);
-            on_modify.when_change(hi_bg_color.prop(), redraw);
-            on_modify.when_change(rect.prop(), redraw);
-            on_modify.when_change(debug.prop(), redraw);
+            mouse_btn_held: AtomicBool::new(false),
 
-            let mut tasks = vec![
-                insert_line_method_task,
-                insert_unconf_line_method_task,
-                motion_task,
-                bgload_task,
-            ];
-            tasks.append(&mut on_modify.tasks);
+            bgload_cv,
 
-            Self {
-                node: node.clone(),
-                tasks,
-                render_api: render_api.clone(),
-                text_shaper: text_shaper.clone(),
-
-                tree,
-                msgbuf: AsyncMutex::new(MessageBuffer::new(
-                    node,
-                    font_size,
-                    timestamp_font_size,
-                    timestamp_width,
-                    line_height,
-                    message_spacing,
-                    baseline,
-                    timestamp_color,
-                    text_color,
-                    nick_colors,
-                    hi_bg_color,
-                    debug,
-                    window_scale,
-                    render_api,
-                    text_shaper,
-                )),
-                dc_key: OsRng.gen(),
-
-                mouse_pos: SyncMutex::new(Point::from([0., 0.])),
-                touch_info: SyncMutex::new(None),
-                touch_is_active: AtomicBool::new(false),
-
-                rect,
-                scroll,
-                z_index,
-
-                scroll_start_accel,
-                scroll_resist,
-                select_hold_time,
-
-                motion_cv,
-                speed: AtomicF32::new(0.),
-
-                mouse_btn_held: AtomicBool::new(false),
-
-                bgload_cv,
-
-                parent_rect: SyncMutex::new(None),
-            }
+            parent_rect: SyncMutex::new(None),
         });
         Pimpl::ChatView(self_)
     }
@@ -774,6 +698,88 @@ impl ChatView {
 impl UIObject for ChatView {
     fn z_index(&self) -> u32 {
         self.z_index.get()
+    }
+
+    async fn start(self: Arc<Self>, ex: ExecutorPtr) {
+        let me = Arc::downgrade(&self);
+
+        let node_ref = &self.node.upgrade().unwrap();
+        let node_name = node_ref.name.clone();
+        let node_id = node_ref.id;
+
+        let method_sub = node_ref.subscribe_method_call("insert_line").unwrap();
+        let me2 = me.clone();
+        let insert_line_method_task =
+            ex.spawn(
+                async move { while Self::process_insert_line_method(&me2, &method_sub).await {} },
+            );
+
+        let method_sub = node_ref.subscribe_method_call("insert_unconf_line").unwrap();
+        let me2 = me.clone();
+        let insert_unconf_line_method_task = ex.spawn(async move {
+            while Self::process_insert_unconf_line_method(&me2, &method_sub).await {}
+        });
+
+        let me2 = me.clone();
+        let cv = self.motion_cv.clone();
+        let motion_task = ex.spawn(async move {
+            loop {
+                cv.wait().await;
+                let Some(self_) = me2.upgrade() else {
+                    // Should not happen
+                    panic!("self destroyed before motion_task was stopped!");
+                };
+                self_.handle_movement().await;
+                cv.reset();
+            }
+        });
+
+        let me2 = me.clone();
+        let cv = self.bgload_cv.clone();
+        let bgload_task = ex.spawn(async move {
+            loop {
+                cv.wait().await;
+                let Some(self_) = me2.upgrade() else {
+                    // Should not happen
+                    panic!("self destroyed before bgload_task was stopped!");
+                };
+                self_.handle_bgload().await;
+                cv.reset();
+            }
+        });
+
+        let mut on_modify = OnModify::new(ex, node_name, node_id, me.clone());
+
+        async fn reload_view(self_: Arc<ChatView>) {
+            self_.scrollview(self_.scroll.get()).await;
+        }
+        on_modify.when_change(self.scroll.prop(), reload_view);
+
+        async fn redraw(self_: Arc<ChatView>) {
+            self_.redraw_all().await;
+        }
+
+        // These should be inside the class
+        /*
+        on_modify.when_change(self.baseline.prop(), redraw);
+        on_modify.when_change(self.font_size.prop(), redraw);
+        on_modify.when_change(self.timestamp_font_size.prop(), redraw);
+        on_modify.when_change(self.timestamp_color.prop(), redraw);
+        on_modify.when_change(self.timestamp_width.prop(), redraw);
+        on_modify.when_change(self.line_height.prop(), redraw);
+        on_modify.when_change(self.message_spacing.prop(), redraw);
+        on_modify.when_change(self.text_color.prop(), redraw);
+        on_modify.when_change(self.nick_colors.clone(), redraw);
+        on_modify.when_change(self.hi_bg_color.prop(), redraw);
+        on_modify.when_change(self.rect.prop(), redraw);
+        on_modify.when_change(self.debug.prop(), redraw);
+        */
+
+        let mut tasks =
+            vec![insert_line_method_task, insert_unconf_line_method_task, motion_task, bgload_task];
+        tasks.append(&mut on_modify.tasks);
+
+        self.tasks.set(tasks);
     }
 
     async fn draw(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {

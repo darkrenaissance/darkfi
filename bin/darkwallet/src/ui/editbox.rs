@@ -26,7 +26,7 @@ use std::{
     collections::HashMap,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex as SyncMutex, Weak,
+        Arc, Mutex as SyncMutex, OnceLock, Weak,
     },
     time::Instant,
 };
@@ -259,8 +259,7 @@ pub type EditBoxPtr = Arc<EditBox>;
 
 pub struct EditBox {
     node: SceneNodeWeak,
-    #[allow(dead_code)]
-    tasks: Vec<smol::Task<()>>,
+    tasks: OnceLock<Vec<smol::Task<()>>>,
     render_api: RenderApi,
     text_shaper: TextShaperPtr,
     key_repeat: SyncMutex<PressedKeysSmoothRepeat>,
@@ -287,6 +286,8 @@ pub struct EditBox {
     cursor_width: PropertyFloat32,
     cursor_ascent: PropertyFloat32,
     cursor_descent: PropertyFloat32,
+    cursor_blink_time: PropertyUint32,
+    cursor_idle_time: PropertyUint32,
     hi_bg_color: PropertyColor,
     selected: PropertyPtr,
     z_index: PropertyUint32,
@@ -345,114 +346,49 @@ impl EditBox {
         // Must do this whenever the text changes
         let glyphs = text_shaper.shape(text.get(), font_size.get(), window_scale.get()).await;
 
-        let self_ = Arc::new_cyclic(|me: &Weak<Self>| {
-            let mut on_modify = OnModify::new(ex.clone(), node_name, node_id, me.clone());
-            on_modify.when_change(is_focused.prop(), Self::change_focus);
+        let self_ = Arc::new(Self {
+            node,
+            tasks: OnceLock::new(),
+            render_api,
+            text_shaper: text_shaper.clone(),
+            key_repeat: SyncMutex::new(PressedKeysSmoothRepeat::new(400, 50)),
 
-            // When text has been changed.
-            // Cursor and selection might be invalidated.
-            async fn reset(self_: Arc<EditBox>) {
-                self_.cursor_pos.set(0);
-                self_.selected.set_null(Role::Internal, 0).unwrap();
-                self_.selected.set_null(Role::Internal, 1).unwrap();
-                self_.scroll.set(0.);
-                self_.regen_glyphs().await;
-                self_.redraw().await;
-            }
-            async fn redraw(self_: Arc<EditBox>) {
-                self_.redraw().await;
-            }
-            on_modify.when_change(rect.prop(), redraw);
-            on_modify.when_change(baseline.prop(), redraw);
-            // The commented properties are modified on input events
-            // So then redraw() will get repeatedly triggered when these properties
-            // are changed. We should find a solution. For now the hooks are disabled.
-            //on_modify.when_change(scroll.prop(), redraw);
-            //on_modify.when_change(cursor_pos.prop(), redraw);
-            on_modify.when_change(font_size.prop(), redraw);
-            // We must also reshape text
-            on_modify.when_change(text.prop(), reset);
-            on_modify.when_change(text_color.prop(), redraw);
-            on_modify.when_change(hi_bg_color.prop(), redraw);
-            //on_modify.when_change(selected.clone(), redraw);
-            on_modify.when_change(z_index.prop(), redraw);
-            on_modify.when_change(debug.prop(), redraw);
+            text_mesh: SyncMutex::new(None),
+            glyphs: SyncMutex::new(glyphs),
+            text_dc_key: OsRng.gen(),
+            cursor_mesh: SyncMutex::new(None),
+            cursor_dc_key: OsRng.gen(),
+            freed: SyncMutex::new(Default::default()),
 
-            async fn regen_cursor(self_: Arc<EditBox>) {
-                let mesh = std::mem::take(&mut *self_.cursor_mesh.lock().unwrap());
-                let mut freed = self_.freed.lock().unwrap();
-                if let Some(mesh) = mesh {
-                    freed.add_mesh(mesh);
-                }
-            }
-            on_modify.when_change(cursor_color.prop(), regen_cursor);
-            on_modify.when_change(cursor_ascent.prop(), regen_cursor);
-            on_modify.when_change(cursor_descent.prop(), regen_cursor);
-            on_modify.when_change(cursor_width.prop(), regen_cursor);
+            is_active,
+            is_focused,
+            rect,
+            baseline,
+            scroll,
+            cursor_pos,
+            font_size,
+            text,
+            text_color,
+            cursor_color,
+            cursor_width,
+            cursor_ascent,
+            cursor_descent,
+            cursor_blink_time,
+            cursor_idle_time,
+            hi_bg_color,
+            selected,
+            z_index,
+            debug,
 
-            let me2 = me.clone();
-            let blinking_cursor_task = ex.spawn(async move {
-                loop {
-                    msleep(cursor_blink_time.get() as u64).await;
+            composer: AsyncMutex::new(ComposingText::new(text_shaper)),
 
-                    let self_ = me2.upgrade().unwrap();
+            mouse_btn_held: AtomicBool::new(false),
+            cursor_is_visible: AtomicBool::new(true),
+            blink_is_paused: AtomicBool::new(false),
 
-                    if self_.blink_is_paused.swap(false, Ordering::Relaxed) {
-                        msleep(cursor_idle_time.get() as u64).await;
-                        continue
-                    }
-
-                    // Invert the bool
-                    self_.cursor_is_visible.fetch_not(Ordering::Relaxed);
-                    self_.redraw_cursor().await;
-                }
-            });
-
-            let mut tasks = on_modify.tasks;
-            tasks.push(blinking_cursor_task);
-
-            Self {
-                node,
-                tasks,
-                render_api,
-                text_shaper: text_shaper.clone(),
-                key_repeat: SyncMutex::new(PressedKeysSmoothRepeat::new(400, 50)),
-
-                text_mesh: SyncMutex::new(None),
-                glyphs: SyncMutex::new(glyphs),
-                text_dc_key: OsRng.gen(),
-                cursor_mesh: SyncMutex::new(None),
-                cursor_dc_key: OsRng.gen(),
-                freed: SyncMutex::new(Default::default()),
-
-                is_active,
-                is_focused,
-                rect,
-                baseline,
-                scroll,
-                cursor_pos,
-                font_size,
-                text,
-                text_color,
-                cursor_color,
-                cursor_width,
-                cursor_ascent,
-                cursor_descent,
-                hi_bg_color,
-                selected,
-                z_index,
-                debug,
-
-                composer: AsyncMutex::new(ComposingText::new(text_shaper)),
-
-                mouse_btn_held: AtomicBool::new(false),
-                cursor_is_visible: AtomicBool::new(true),
-                blink_is_paused: AtomicBool::new(false),
-
-                old_window_scale: AtomicF32::new(window_scale.get()),
-                window_scale,
-                parent_rect: SyncMutex::new(None),
-            }
+            old_window_scale: AtomicF32::new(window_scale.get()),
+            window_scale,
+            parent_rect: SyncMutex::new(None),
         });
 
         Pimpl::EditBox(self_)
@@ -1372,6 +1308,82 @@ impl Drop for EditBox {
 impl UIObject for EditBox {
     fn z_index(&self) -> u32 {
         self.z_index.get()
+    }
+
+    async fn start(self: Arc<Self>, ex: ExecutorPtr) {
+        let me = Arc::downgrade(&self);
+
+        let node_ref = &self.node.upgrade().unwrap();
+        let node_name = node_ref.name.clone();
+        let node_id = node_ref.id;
+
+        let mut on_modify = OnModify::new(ex.clone(), node_name, node_id, me.clone());
+        on_modify.when_change(self.is_focused.prop(), Self::change_focus);
+
+        // When text has been changed.
+        // Cursor and selection might be invalidated.
+        async fn reset(self_: Arc<EditBox>) {
+            self_.cursor_pos.set(0);
+            self_.selected.set_null(Role::Internal, 0).unwrap();
+            self_.selected.set_null(Role::Internal, 1).unwrap();
+            self_.scroll.set(0.);
+            self_.regen_glyphs().await;
+            self_.redraw().await;
+        }
+        async fn redraw(self_: Arc<EditBox>) {
+            self_.redraw().await;
+        }
+        on_modify.when_change(self.rect.prop(), redraw);
+        on_modify.when_change(self.baseline.prop(), redraw);
+        // The commented properties are modified on input events
+        // So then redraw() will get repeatedly triggered when these properties
+        // are changed. We should find a solution. For now the hooks are disabled.
+        //on_modify.when_change(scroll.prop(), redraw);
+        //on_modify.when_change(cursor_pos.prop(), redraw);
+        on_modify.when_change(self.font_size.prop(), redraw);
+        // We must also reshape text
+        on_modify.when_change(self.text.prop(), reset);
+        on_modify.when_change(self.text_color.prop(), redraw);
+        on_modify.when_change(self.hi_bg_color.prop(), redraw);
+        //on_modify.when_change(selected.clone(), redraw);
+        on_modify.when_change(self.z_index.prop(), redraw);
+        on_modify.when_change(self.debug.prop(), redraw);
+
+        async fn regen_cursor(self_: Arc<EditBox>) {
+            let mesh = std::mem::take(&mut *self_.cursor_mesh.lock().unwrap());
+            let mut freed = self_.freed.lock().unwrap();
+            if let Some(mesh) = mesh {
+                freed.add_mesh(mesh);
+            }
+        }
+        on_modify.when_change(self.cursor_color.prop(), regen_cursor);
+        on_modify.when_change(self.cursor_ascent.prop(), regen_cursor);
+        on_modify.when_change(self.cursor_descent.prop(), regen_cursor);
+        on_modify.when_change(self.cursor_width.prop(), regen_cursor);
+
+        let me2 = me.clone();
+        let cursor_blink_time = self.cursor_blink_time.clone();
+        let cursor_idle_time = self.cursor_idle_time.clone();
+        let blinking_cursor_task = ex.spawn(async move {
+            loop {
+                msleep(cursor_blink_time.get() as u64).await;
+
+                let self_ = me2.upgrade().unwrap();
+
+                if self_.blink_is_paused.swap(false, Ordering::Relaxed) {
+                    msleep(cursor_idle_time.get() as u64).await;
+                    continue
+                }
+
+                // Invert the bool
+                self_.cursor_is_visible.fetch_not(Ordering::Relaxed);
+                self_.redraw_cursor().await;
+            }
+        });
+
+        let mut tasks = on_modify.tasks;
+        tasks.push(blinking_cursor_task);
+        self.tasks.set(tasks);
     }
 
     async fn draw(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {

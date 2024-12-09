@@ -54,7 +54,7 @@ impl Button {
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
         let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
 
-        let self_ = Arc::new_cyclic(|me: &Weak<Self>| Self {
+        let self_ = Arc::new(Self {
             node,
             is_active,
             rect,
