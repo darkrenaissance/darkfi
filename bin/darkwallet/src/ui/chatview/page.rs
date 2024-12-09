@@ -76,7 +76,7 @@ pub struct PrivMessage {
 }
 
 impl PrivMessage {
-    pub async fn new(
+    pub fn new(
         font_size: f32,
         timestamp_font_size: f32,
         window_scale: f32,
@@ -93,10 +93,10 @@ impl PrivMessage {
         render_api: &RenderApi,
     ) -> Message {
         let timestr = Self::gen_timestr(timestamp);
-        let time_glyphs = text_shaper.shape(timestr, timestamp_font_size, window_scale).await;
+        let time_glyphs = text_shaper.shape(timestr, timestamp_font_size, window_scale);
 
         let linetext = format!("{nick} {text}");
-        let unwrapped_glyphs = text_shaper.shape(linetext, font_size, window_scale).await;
+        let unwrapped_glyphs = text_shaper.shape(linetext, font_size, window_scale);
 
         let mut atlas = text::Atlas::new(render_api);
         atlas.push(&time_glyphs);
@@ -283,7 +283,7 @@ impl PrivMessage {
     }
 
     /// clear_mesh() must be called after this.
-    async fn adjust_params(
+    fn adjust_params(
         &mut self,
         font_size: f32,
         timestamp_font_size: f32,
@@ -298,10 +298,10 @@ impl PrivMessage {
         self.window_scale = window_scale;
 
         let timestr = Self::gen_timestr(self.timestamp);
-        self.time_glyphs = text_shaper.shape(timestr, timestamp_font_size, window_scale).await;
+        self.time_glyphs = text_shaper.shape(timestr, timestamp_font_size, window_scale);
 
         let linetext = format!("{} {}", self.nick, self.text);
-        self.unwrapped_glyphs = text_shaper.shape(linetext, font_size, window_scale).await;
+        self.unwrapped_glyphs = text_shaper.shape(linetext, font_size, window_scale);
 
         let texture_id = self.atlas.texture_id;
 
@@ -357,7 +357,7 @@ pub struct DateMessage {
 }
 
 impl DateMessage {
-    pub async fn new(
+    pub fn new(
         font_size: f32,
         window_scale: f32,
 
@@ -369,7 +369,7 @@ impl DateMessage {
         let datestr = Self::datestr(timestamp);
         let timestamp = Self::timest_to_midnight(timestamp);
 
-        let glyphs = text_shaper.shape(datestr, font_size, window_scale).await;
+        let glyphs = text_shaper.shape(datestr, font_size, window_scale);
 
         let mut atlas = text::Atlas::new(render_api);
         atlas.push(&glyphs);
@@ -393,7 +393,7 @@ impl DateMessage {
     }
 
     /// clear_mesh() must be called after this.
-    async fn adjust_params(
+    fn adjust_params(
         &mut self,
         font_size: f32,
         window_scale: f32,
@@ -404,7 +404,7 @@ impl DateMessage {
         self.window_scale = window_scale;
 
         let datestr = Self::datestr(self.timestamp);
-        self.glyphs = text_shaper.shape(datestr, font_size, window_scale).await;
+        self.glyphs = text_shaper.shape(datestr, font_size, window_scale);
 
         let texture_id = self.atlas.texture_id;
 
@@ -488,7 +488,7 @@ impl Message {
         }
     }
 
-    async fn adjust_params(
+    fn adjust_params(
         &mut self,
         font_size: f32,
         timestamp_font_size: f32,
@@ -499,21 +499,16 @@ impl Message {
         render_api: &RenderApi,
     ) -> GfxTextureId {
         match self {
-            Self::Priv(m) => {
-                m.adjust_params(
-                    font_size,
-                    timestamp_font_size,
-                    window_scale,
-                    line_width,
-                    timestamp_width,
-                    text_shaper,
-                    render_api,
-                )
-                .await
-            }
-            Self::Date(m) => {
-                m.adjust_params(font_size, window_scale, text_shaper, render_api).await
-            }
+            Self::Priv(m) => m.adjust_params(
+                font_size,
+                timestamp_font_size,
+                window_scale,
+                line_width,
+                timestamp_width,
+                text_shaper,
+                render_api,
+            ),
+            Self::Date(m) => m.adjust_params(font_size, window_scale, text_shaper, render_api),
         }
     }
 
@@ -691,17 +686,17 @@ impl MessageBuffer {
         self.node.upgrade().unwrap()
     }
 
-    pub async fn adjust_window_scale(&mut self) {
+    pub fn adjust_window_scale(&mut self) {
         let window_scale = self.window_scale.get();
         if self.old_window_scale == window_scale {
             return
         }
 
-        self.adjust_params().await;
+        self.adjust_params();
     }
 
     /// This will force a reload of everything
-    pub async fn adjust_params(&mut self) {
+    pub fn adjust_params(&mut self) {
         let window_scale = self.window_scale.get();
         let font_size = self.font_size.get();
         let timestamp_font_size = self.timestamp_font_size.get();
@@ -710,17 +705,15 @@ impl MessageBuffer {
         debug!(target: "ui::chatview::page", "{:?}: freeing old textures", self.node());
 
         for msg in &mut self.msgs {
-            let old_texture_id = msg
-                .adjust_params(
-                    font_size,
-                    timestamp_font_size,
-                    window_scale,
-                    self.line_width,
-                    timestamp_width,
-                    &self.text_shaper,
-                    &self.render_api,
-                )
-                .await;
+            let old_texture_id = msg.adjust_params(
+                font_size,
+                timestamp_font_size,
+                window_scale,
+                self.line_width,
+                timestamp_width,
+                &self.text_shaper,
+                &self.render_api,
+            );
 
             self.freed.add_texture(old_texture_id);
         }
@@ -800,7 +793,7 @@ impl MessageBuffer {
         return true
     }
 
-    pub async fn insert_privmsg(
+    pub fn insert_privmsg(
         &mut self,
         timest: Timestamp,
         msg_id: MessageId,
@@ -825,8 +818,7 @@ impl MessageBuffer {
             timestamp_width,
             &self.text_shaper,
             &self.render_api,
-        )
-        .await;
+        );
 
         if self.msgs.is_empty() {
             let msg_idx = self.msgs.len();
@@ -864,7 +856,7 @@ impl MessageBuffer {
         return self.msgs[idx].get_privmsg_mut();
     }
 
-    pub async fn push_privmsg(
+    pub fn push_privmsg(
         &mut self,
         timest: Timestamp,
         msg_id: MessageId,
@@ -889,8 +881,7 @@ impl MessageBuffer {
             timestamp_width,
             &self.text_shaper,
             &self.render_api,
-        )
-        .await;
+        );
 
         let msg_height = msg.height(self.line_height.get());
 
@@ -977,7 +968,7 @@ impl MessageBuffer {
 
                 if let Some(newer_date) = last_date {
                     if newer_date != older_date {
-                        let datemsg = self.get_date_msg(newer_date, font_size, window_scale).await;
+                        let datemsg = self.get_date_msg(newer_date, font_size, window_scale);
                         let datemsg = unsafe { &mut *(datemsg as *mut Message) };
                         //debug!(target: "ui::chatview", "Adding date: {idx} {datemsg:?}");
                         yield datemsg;
@@ -990,19 +981,14 @@ impl MessageBuffer {
             }
 
             if let Some(date) = last_date {
-                let datemsg = self.get_date_msg(date, font_size, window_scale).await;
+                let datemsg = self.get_date_msg(date, font_size, window_scale);
                 let datemsg = unsafe { &mut *(datemsg as *mut Message) };
                 yield datemsg;
             }
         })
     }
 
-    async fn get_date_msg(
-        &mut self,
-        date: NaiveDate,
-        font_size: f32,
-        window_scale: f32,
-    ) -> &mut Message {
+    fn get_date_msg(&mut self, date: NaiveDate, font_size: f32, window_scale: f32) -> &mut Message {
         let dt = date.and_hms_opt(0, 0, 0).unwrap();
         let timest = Local.from_local_datetime(&dt).unwrap().timestamp_millis() as u64;
 
@@ -1013,8 +999,7 @@ impl MessageBuffer {
                 timest,
                 &self.text_shaper,
                 &self.render_api,
-            )
-            .await;
+            );
             self.date_msgs.insert(date, datemsg);
         }
 

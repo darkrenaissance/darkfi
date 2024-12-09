@@ -94,8 +94,7 @@ impl Text {
             baseline.get(),
             debug.get(),
             window_scale.get(),
-        )
-        .await;
+        );
 
         let self_ = Arc::new(Self {
             node,
@@ -120,7 +119,7 @@ impl Text {
         Pimpl::Text(self_)
     }
 
-    async fn regen_mesh(
+    fn regen_mesh(
         render_api: &RenderApi,
         text_shaper: &TextShaper,
         text: String,
@@ -131,7 +130,7 @@ impl Text {
         window_scale: f32,
     ) -> TextRenderInfo {
         debug!(target: "ui::text", "Rendering label '{}'", text);
-        let glyphs = text_shaper.shape(text, font_size, window_scale).await;
+        let glyphs = text_shaper.shape(text, font_size, window_scale);
         let atlas = text::make_texture_atlas(render_api, &glyphs);
 
         let mut mesh = MeshBuilder::new();
@@ -190,8 +189,7 @@ impl Text {
             self.baseline.get(),
             self.debug.get(),
             self.window_scale.get(),
-        )
-        .await;
+        );
 
         *self.render_info.lock().unwrap() = render_info.clone();
 

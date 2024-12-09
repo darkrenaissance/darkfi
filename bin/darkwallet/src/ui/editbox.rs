@@ -199,14 +199,14 @@ impl ComposingText {
     }
 
     /// Set composing text.
-    async fn compose(&mut self, text: String, font_size: f32, window_scale: f32) {
+    fn compose(&mut self, text: String, font_size: f32, window_scale: f32) {
         assert!(self.is_active);
         self.compose_text = text;
 
         self.region_start = self.commit_text.len();
         self.region_end = self.region_start + self.compose_text.len();
 
-        let glyphs = self.text_shaper.shape(self.get_text(), font_size, window_scale).await;
+        let glyphs = self.text_shaper.shape(self.get_text(), font_size, window_scale);
         self.glyphs = glyphs;
     }
 
@@ -293,7 +293,7 @@ pub struct EditBox {
     z_index: PropertyUint32,
     debug: PropertyBool,
 
-    composer: AsyncMutex<ComposingText>,
+    composer: SyncMutex<ComposingText>,
 
     mouse_btn_held: AtomicBool,
     cursor_is_visible: AtomicBool,
@@ -344,7 +344,7 @@ impl EditBox {
         let node_id = node_ref.id;
 
         // Must do this whenever the text changes
-        let glyphs = text_shaper.shape(text.get(), font_size.get(), window_scale.get()).await;
+        let glyphs = text_shaper.shape(text.get(), font_size.get(), window_scale.get());
 
         let self_ = Arc::new(Self {
             node,
@@ -380,7 +380,7 @@ impl EditBox {
             z_index,
             debug,
 
-            composer: AsyncMutex::new(ComposingText::new(text_shaper)),
+            composer: SyncMutex::new(ComposingText::new(text_shaper)),
 
             mouse_btn_held: AtomicBool::new(false),
             cursor_is_visible: AtomicBool::new(true),
@@ -399,10 +399,10 @@ impl EditBox {
     }
 
     /// This MUST be called whenever the text property is changed.
-    async fn regen_glyphs(&self) {
+    fn regen_glyphs(&self) {
         let font_size = self.font_size.get();
         let window_scale = self.window_scale.get();
-        let glyphs = self.text_shaper.shape(self.text.get(), font_size, window_scale).await;
+        let glyphs = self.text_shaper.shape(self.text.get(), font_size, window_scale);
         // TODO: we aren't freeing textures
         *self.glyphs.lock().unwrap() = glyphs;
     }
@@ -428,7 +428,7 @@ impl EditBox {
         let mut glyphs = self.glyphs.lock().unwrap().clone();
 
         // We clone composer. FYI we do destructive mods on it.
-        let composer = self.composer.lock().await.clone();
+        let composer = self.composer.lock().unwrap().clone();
         let has_compose = composer.has_compose();
         let under_start = composer.pos + composer.glyph_compose_start();
         let under_end = composer.pos + composer.glyph_compose_end();
@@ -495,7 +495,7 @@ impl EditBox {
         let mut cursor_pos = self.cursor_pos.get() as usize;
         let mut glyphs = self.glyphs.lock().unwrap().clone();
         // Add composer glyphs too
-        let composer = self.composer.lock().await.clone();
+        let composer = self.composer.lock().unwrap().clone();
         if cursor_pos >= composer.pos {
             cursor_pos += composer.glyphs.len();
         }
@@ -780,7 +780,7 @@ impl EditBox {
     async fn insert_char(&self, key: char) {
         if !self.selected.is_null(0).unwrap() {
             self.delete_highlighted();
-            self.regen_glyphs().await;
+            self.regen_glyphs();
         };
 
         let mut text = String::new();
@@ -813,7 +813,7 @@ impl EditBox {
         self.cursor_pos.set(cursor_pos + 1);
 
         self.pause_blinking();
-        self.regen_glyphs().await;
+        self.regen_glyphs();
         self.apply_cursor_scrolling();
         self.redraw().await;
     }
@@ -941,7 +941,7 @@ impl EditBox {
                 };
 
                 self.pause_blinking();
-                self.regen_glyphs().await;
+                self.regen_glyphs();
                 self.apply_cursor_scrolling();
                 self.redraw().await;
             }
@@ -969,7 +969,7 @@ impl EditBox {
                 };
 
                 self.pause_blinking();
-                self.regen_glyphs().await;
+                self.regen_glyphs();
                 self.apply_cursor_scrolling();
                 self.redraw().await;
             }
@@ -1028,7 +1028,7 @@ impl EditBox {
 
         // Clear the composer state and add the glyphs
         let (compose_idx, compose_glyphs) = {
-            let mut composer = self.composer.lock().await;
+            let mut composer = self.composer.lock().unwrap();
             composer.reset()
         };
 
@@ -1235,7 +1235,7 @@ impl EditBox {
         // Force complete redraw if the window scale changed
         let window_scale = self.window_scale.get();
         if self.old_window_scale.swap(window_scale, Ordering::Relaxed) != window_scale {
-            self.regen_glyphs().await;
+            self.regen_glyphs();
 
             let text_mesh = std::mem::replace(&mut *self.text_mesh.lock().unwrap(), None);
             // We're finished with these so clean up.
@@ -1327,7 +1327,7 @@ impl UIObject for EditBox {
             self_.selected.set_null(Role::Internal, 0).unwrap();
             self_.selected.set_null(Role::Internal, 1).unwrap();
             self_.scroll.set(0.);
-            self_.regen_glyphs().await;
+            self_.regen_glyphs();
             self_.redraw().await;
         }
         async fn redraw(self_: Arc<EditBox>) {
@@ -1505,10 +1505,10 @@ impl UIObject for EditBox {
         let window_scale = self.window_scale.get();
 
         {
-            let mut composer = self.composer.lock().await;
+            let mut composer = self.composer.lock().unwrap();
 
             composer.activate_or_cont(self.cursor_pos.get() as usize);
-            composer.compose(suggest_text.to_string(), font_size, window_scale).await;
+            composer.compose(suggest_text.to_string(), font_size, window_scale);
 
             if is_commit {
                 composer.commit();
@@ -1528,7 +1528,7 @@ impl UIObject for EditBox {
         }
 
         {
-            let mut composer = self.composer.lock().await;
+            let mut composer = self.composer.lock().unwrap();
             composer.set_compose_region(start, end);
         }
         self.redraw().await;

@@ -444,7 +444,7 @@ impl ChatView {
             debug!(target: "ui::chatview", "Mark sent message as confirmed");
         } else {
             // Insert the privmsg since it doesn't already exist
-            if msgbuf.insert_privmsg(timest, msg_id, nick, text).await.is_none() {
+            if msgbuf.insert_privmsg(timest, msg_id, nick, text).is_none() {
                 // Not visible so no need to redraw
                 return
             }
@@ -466,7 +466,7 @@ impl ChatView {
 
         // Add message to page
         let mut msgbuf = self.msgbuf.lock().await;
-        let Some(privmsg) = msgbuf.insert_privmsg(timest, msg_id, nick, text).await else { return };
+        let Some(privmsg) = msgbuf.insert_privmsg(timest, msg_id, nick, text) else { return };
         privmsg.confirmed = false;
         self.redraw_cached(&mut msgbuf).await;
         self.bgload_cv.notify();
@@ -560,7 +560,7 @@ impl ChatView {
             let chatmsg: ChatMsg = deserialize(&v).unwrap();
             debug!(target: "ui::chatview", "{timest:?} {chatmsg:?}");
 
-            let msg_height = msgbuf.push_privmsg(timest, msg_id, chatmsg.nick, chatmsg.text).await;
+            let msg_height = msgbuf.push_privmsg(timest, msg_id, chatmsg.nick, chatmsg.text);
 
             remaining_load_height -= msg_height;
             if remaining_load_height <= 0. {
@@ -688,7 +688,7 @@ impl ChatView {
     async fn redraw_all(&self) {
         debug!(target: "ui::chatview", "redraw_all()");
         let mut msgbuf = self.msgbuf.lock().await;
-        msgbuf.adjust_params().await;
+        msgbuf.adjust_params();
         msgbuf.clear_meshes();
         self.redraw_cached(&mut msgbuf).await;
     }
@@ -790,7 +790,7 @@ impl UIObject for ChatView {
         let rect = self.rect.get();
 
         let mut msgbuf = self.msgbuf.lock().await;
-        msgbuf.adjust_window_scale().await;
+        msgbuf.adjust_window_scale();
         msgbuf.adjust_width(rect.w);
         msgbuf.clear_meshes();
 

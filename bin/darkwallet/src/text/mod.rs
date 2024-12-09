@@ -16,7 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_lock::Mutex;
 use freetype as ft;
 use harfbuzz_sys::{
     freetype::hb_ft_font_create_referenced, hb_buffer_add_utf8, hb_buffer_create,
@@ -28,7 +27,7 @@ use harfbuzz_sys::{
 use std::{
     collections::HashMap,
     os,
-    sync::{Arc, Weak},
+    sync::{Arc, Mutex as SyncMutex, Weak},
 };
 
 use crate::gfx::Rectangle;
@@ -63,7 +62,7 @@ pub use wrap::{glyph_str, wrap};
 
 // Notes:
 // * All ft init and face creation should happen at startup.
-// * FT faces protected behind an async Mutex
+// * FT faces protected behind a Mutex
 // * Glyph cache. Key is (glyph_id, font_size)
 // * Glyph texture cache: (glyph_id, font_size, color)
 
@@ -136,9 +135,13 @@ impl<'a> Iterator for GlyphPositionIter<'a> {
     }
 }
 
+struct TextShaperInternal {
+    font_faces: FtFaces,
+    cache: TextShaperCache,
+}
+
 pub struct TextShaper {
-    font_faces: Mutex<FtFaces>,
-    cache: Mutex<TextShaperCache>,
+    intern: SyncMutex<TextShaperInternal>,
 }
 
 impl TextShaper {
@@ -155,13 +158,15 @@ impl TextShaper {
         let ft_face = ftlib.new_memory_face2(font_data, 0).unwrap();
         faces.push(ft_face);
 
-        Arc::new(Self { font_faces: Mutex::new(FtFaces(faces)), cache: Mutex::new(HashMap::new()) })
+        Arc::new(Self {
+            intern: SyncMutex::new(TextShaperInternal {
+                font_faces: FtFaces(faces),
+                cache: HashMap::new(),
+            }),
+        })
     }
 
-    pub fn split_into_substrs(
-        font_faces: &Vec<FreetypeFace>,
-        text: String,
-    ) -> Vec<(usize, String)> {
+    fn split_into_substrs(font_faces: &Vec<FreetypeFace>, text: String) -> Vec<(usize, String)> {
         let mut current_idx = 0;
         let mut current_str = String::new();
         let mut substrs = vec![];
@@ -196,20 +201,21 @@ impl TextShaper {
         substrs
     }
 
-    pub async fn shape(&self, text: String, font_size: f32, window_scale: f32) -> Vec<Glyph> {
+    pub fn shape(&self, text: String, font_size: f32, window_scale: f32) -> Vec<Glyph> {
         //debug!(target: "text", "shape('{}', {})", text, font_size);
         // Lock font faces
         // Freetype faces are not threadsafe
-        let mut faces = self.font_faces.lock().await;
-        let mut cache = self.cache.lock().await;
+        let mut intern = self.intern.lock().unwrap();
+        //let faces = &mut intern.font_faces;
+        //let cache = &mut intern.cache;
 
-        let substrs = Self::split_into_substrs(&faces.0, text.clone());
+        let substrs = Self::split_into_substrs(&intern.font_faces.0, text.clone());
 
         let mut glyphs: Vec<Glyph> = vec![];
 
         for (face_idx, text) in substrs {
             //debug!("substr {}", text);
-            let face = &mut faces.0[face_idx];
+            let face = &mut intern.font_faces.0[face_idx];
             if face.has_fixed_sizes() {
                 // emojis required a fixed size
                 //face.set_char_size(109 * 64, 0, 72, 72).unwrap();
@@ -267,6 +273,8 @@ impl TextShaper {
             'iter_glyphs: for (i, (position, info)) in
                 glyph_pos_iter.iter().zip(glyph_infos_iter.iter()).enumerate()
             {
+                let face = &mut intern.font_faces.0[face_idx];
+
                 let glyph_id = info.codepoint as u32;
                 // Index within this substr
                 let curr_cluster = info.cluster as usize;
@@ -299,9 +307,10 @@ impl TextShaper {
                     },
                     face_idx,
                 };
+
                 //debug!(target: "text", "cache_key: {:?}", cache_key);
                 'load_sprite: {
-                    if let Some(sprite) = cache.get(&cache_key) {
+                    if let Some(sprite) = intern.cache.get(&cache_key) {
                         let Some(sprite) = sprite.upgrade() else {
                             break 'load_sprite;
                         };
@@ -322,6 +331,7 @@ impl TextShaper {
                     }
                 }
 
+                let face = &mut intern.font_faces.0[face_idx];
                 let mut flags = ft::face::LoadFlag::DEFAULT;
                 if face.has_color() {
                     flags |= ft::face::LoadFlag::COLOR;
@@ -387,7 +397,7 @@ impl TextShaper {
                     has_color: face.has_color(),
                 });
 
-                cache.insert(cache_key, Arc::downgrade(&sprite));
+                intern.cache.insert(cache_key, Arc::downgrade(&sprite));
 
                 let glyph = Glyph {
                     glyph_id,
