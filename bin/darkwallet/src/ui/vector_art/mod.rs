@@ -46,7 +46,6 @@ pub struct VectorArt {
     tasks: OnceLock<Vec<smol::Task<()>>>,
 
     shape: VectorShape,
-    buffers: SyncMutex<Option<GfxDrawMesh>>,
     dc_key: u64,
 
     rect: PropertyRect,
@@ -77,7 +76,6 @@ impl VectorArt {
             tasks: OnceLock::new(),
 
             shape,
-            buffers: SyncMutex::new(None),
             dc_key: OsRng.gen(),
 
             rect,
@@ -116,8 +114,6 @@ impl VectorArt {
             texture: None,
             num_elements: self.shape.indices.len() as i32,
         };
-
-        let old_mesh = std::mem::replace(&mut *self.buffers.lock().unwrap(), Some(mesh.clone()));
 
         Some(DrawUpdate {
             key: self.dc_key,
@@ -163,17 +159,8 @@ impl UIObject for VectorArt {
     }
 }
 
-/*
-impl Stoppable for VectorArt {
-    async fn stop(&self) {
-        // TODO: Delete own draw call
-
-        // Free buffers
-        // Should this be in drop? ---> yes it should
-        if let Some(mesh) = &*self.buffers.lock().unwrap() {
-            self.render_api.delete_buffer(mesh.vertex_buffer);
-            self.render_api.delete_buffer(mesh.index_buffer);
-        }
+impl Drop for VectorArt {
+    fn drop(&mut self) {
+        self.render_api.replace_draw_calls(vec![(self.dc_key, Default::default())]);
     }
 }
-*/

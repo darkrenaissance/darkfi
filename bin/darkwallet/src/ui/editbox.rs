@@ -263,7 +263,6 @@ pub struct EditBox {
     text_shaper: TextShaperPtr,
     key_repeat: SyncMutex<PressedKeysSmoothRepeat>,
 
-    text_mesh: SyncMutex<Option<GfxDrawMesh>>,
     glyphs: SyncMutex<Vec<Glyph>>,
     /// DC key for the text
     text_dc_key: u64,
@@ -351,7 +350,6 @@ impl EditBox {
             text_shaper: text_shaper.clone(),
             key_repeat: SyncMutex::new(PressedKeysSmoothRepeat::new(400, 50)),
 
-            text_mesh: SyncMutex::new(None),
             glyphs: SyncMutex::new(glyphs),
             text_dc_key: OsRng.gen(),
             cursor_mesh: SyncMutex::new(None),
@@ -1224,13 +1222,9 @@ impl EditBox {
         let window_scale = self.window_scale.get();
         if self.old_window_scale.swap(window_scale, Ordering::Relaxed) != window_scale {
             self.regen_glyphs();
-
-            let text_mesh = std::mem::replace(&mut *self.text_mesh.lock().unwrap(), None);
         }
 
         let text_mesh = self.regen_text_mesh(rect.clone()).await;
-        let old_text_mesh =
-            std::mem::replace(&mut *self.text_mesh.lock().unwrap(), Some(text_mesh.clone()));
 
         let cursor_instrs = self.get_cursor_instrs().await;
 
@@ -1259,7 +1253,7 @@ impl EditBox {
 
 impl Drop for EditBox {
     fn drop(&mut self) {
-        *self.text_mesh.lock().unwrap() = None;
+        self.render_api.replace_draw_calls(vec![(self.text_dc_key, Default::default())]);
     }
 }
 

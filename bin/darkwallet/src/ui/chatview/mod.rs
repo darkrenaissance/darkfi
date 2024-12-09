@@ -995,3 +995,9 @@ impl UIObject for ChatView {
         true
     }
 }
+
+impl Drop for ChatView {
+    fn drop(&mut self) {
+        self.render_api.replace_draw_calls(vec![(self.dc_key, Default::default())]);
+    }
+}
