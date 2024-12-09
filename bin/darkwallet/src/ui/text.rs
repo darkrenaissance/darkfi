@@ -166,11 +166,6 @@ impl Text {
         };
         self.render_api.replace_draw_calls(draw_update.draw_calls);
         debug!(target: "ui::text", "replace draw calls done");
-
-        // We're finished with these so clean up.
-        for buff in draw_update.freed_buffers {
-            self.render_api.delete_buffer(buff);
-        }
     }
 
     async fn get_draw_calls(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
@@ -213,10 +208,6 @@ impl Text {
                     z_index: self.z_index.get(),
                 },
             )],
-            freed_buffers: vec![
-                old_render_info.mesh.vertex_buffer,
-                old_render_info.mesh.index_buffer,
-            ],
         })
     }
 }

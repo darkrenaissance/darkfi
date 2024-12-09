@@ -39,7 +39,6 @@ use crate::{
     pubsub::Subscription,
     scene::{SceneNodePtr, SceneNodeWeak},
     text::{self, glyph_str, Glyph, GlyphPositionIter, TextShaper, TextShaperPtr},
-    ui::FreedData,
     util::{enumerate_mut, enumerate_ref},
     ExecutorPtr,
 };
@@ -323,8 +322,9 @@ impl PrivMessage {
             text::wrap(width, self.font_size, self.window_scale, &self.unwrapped_glyphs);
     }
 
-    fn clear_mesh(&mut self) -> Option<GfxDrawMesh> {
-        std::mem::replace(&mut self.mesh_cache, None)
+    fn clear_mesh(&mut self) {
+        // Auto-deletes when refs are dropped
+        self.mesh_cache = None;
     }
 
     fn select(&mut self) {
@@ -409,8 +409,9 @@ impl DateMessage {
 
     //fn adjust_width(&mut self, line_width: f32) { }
 
-    fn clear_mesh(&mut self) -> Option<GfxDrawMesh> {
-        std::mem::replace(&mut self.mesh_cache, None)
+    fn clear_mesh(&mut self) {
+        // Auto-deletes when refs are dropped
+        self.mesh_cache = None;
     }
 
     fn gen_mesh(
@@ -511,7 +512,7 @@ impl Message {
         }
     }
 
-    fn clear_mesh(&mut self) -> Option<GfxDrawMesh> {
+    fn clear_mesh(&mut self) {
         match self {
             Self::Priv(m) => m.clear_mesh(),
             Self::Date(m) => m.clear_mesh(),
@@ -603,7 +604,6 @@ pub struct MessageBuffer {
     /// From most recent to older
     msgs: Vec<Message>,
     date_msgs: HashMap<NaiveDate, Message>,
-    pub freed: FreedData,
     pub line_width: f32,
 
     font_size: PropertyFloat32,
@@ -651,7 +651,6 @@ impl MessageBuffer {
 
             msgs: vec![],
             date_msgs: HashMap::new(),
-            freed: Default::default(),
             line_width: 0.,
 
             font_size,
@@ -724,12 +723,10 @@ impl MessageBuffer {
         }
     }
 
-    /// Clear all meshes and caches. Returns data that needs to be freed.
+    /// Clear all meshes and caches.
     pub fn clear_meshes(&mut self) {
         for msg in &mut self.msgs {
-            if let Some(mesh) = msg.clear_mesh() {
-                self.freed.add_mesh(mesh);
-            }
+            msg.clear_mesh();
         }
     }
 
@@ -776,9 +773,7 @@ impl MessageBuffer {
 
         assert_eq!(privmsg.confirmed, false);
         privmsg.confirmed = true;
-        if let Some(mesh) = privmsg.clear_mesh() {
-            self.freed.add_mesh(mesh);
-        }
+        privmsg.clear_mesh();
 
         return true
     }

@@ -135,9 +135,6 @@ impl Image {
         };
         self.render_api.replace_draw_calls(draw_update.draw_calls);
         debug!(target: "ui::image", "replace draw calls done");
-        for buff in draw_update.freed_buffers {
-            self.render_api.delete_buffer(buff);
-        }
     }
 
     /// Called whenever any property changes.
@@ -160,13 +157,6 @@ impl Image {
 
         let texture = self.texture.lock().unwrap().clone().expect("Node missing texture_id!");
 
-        // We're finished with these so clean up.
-        let mut freed_buffers = vec![];
-        if let Some(old) = old_mesh {
-            freed_buffers.push(old.vertex_buffer);
-            freed_buffers.push(old.index_buffer);
-        }
-
         let mesh = GfxDrawMesh {
             vertex_buffer: mesh.vertex_buffer,
             index_buffer: mesh.index_buffer,
@@ -187,7 +177,6 @@ impl Image {
                     z_index: self.z_index.get(),
                 },
             )],
-            freed_buffers,
         })
     }
 }
@@ -227,11 +216,6 @@ impl Drop for Image {
 
         // Free buffers
         // Should this be in drop?
-        if let Some(mesh) = &*self.mesh.lock().unwrap() {
-            let vertex_buffer = mesh.vertex_buffer;
-            let index_buffer = mesh.index_buffer;
-            self.render_api.delete_buffer(vertex_buffer);
-            self.render_api.delete_buffer(index_buffer);
-        }
+        *self.mesh.lock().unwrap() = None;
     }
 }

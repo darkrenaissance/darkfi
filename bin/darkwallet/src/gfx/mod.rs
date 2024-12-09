@@ -100,7 +100,7 @@ pub struct ManagedBuffer {
 
 impl Drop for ManagedBuffer {
     fn drop(&mut self) {
-        //self.render_api.delete_unmanaged_buffer(self.id);
+        self.render_api.delete_unmanaged_buffer(self.id);
     }
 }
 
@@ -141,7 +141,7 @@ impl RenderApi {
         let _ = self.method_req.send(method);
     }
 
-    pub fn new_vertex_buffer(&self, verts: Vec<Vertex>) -> GfxBufferId {
+    fn new_unmanaged_vertex_buffer(&self, verts: Vec<Vertex>) -> GfxBufferId {
         let gfx_buffer_id = rand::random();
 
         let method = GraphicsMethod::NewVertexBuffer((verts, gfx_buffer_id));
@@ -150,7 +150,7 @@ impl RenderApi {
         gfx_buffer_id
     }
 
-    pub fn new_index_buffer(&self, indices: Vec<u16>) -> GfxBufferId {
+    fn new_unmanaged_index_buffer(&self, indices: Vec<u16>) -> GfxBufferId {
         let gfx_buffer_id = rand::random();
 
         let method = GraphicsMethod::NewIndexBuffer((indices, gfx_buffer_id));
@@ -159,7 +159,20 @@ impl RenderApi {
         gfx_buffer_id
     }
 
-    pub fn delete_buffer(&self, buffer: GfxBufferId) {
+    pub fn new_vertex_buffer(&self, verts: Vec<Vertex>) -> ManagedBufferPtr {
+        Arc::new(ManagedBuffer {
+            id: self.new_unmanaged_vertex_buffer(verts),
+            render_api: self.clone(),
+        })
+    }
+    pub fn new_index_buffer(&self, indices: Vec<u16>) -> ManagedBufferPtr {
+        Arc::new(ManagedBuffer {
+            id: self.new_unmanaged_index_buffer(indices),
+            render_api: self.clone(),
+        })
+    }
+
+    fn delete_unmanaged_buffer(&self, buffer: GfxBufferId) {
         let method = GraphicsMethod::DeleteBuffer(buffer);
         let _ = self.method_req.send(method);
     }
@@ -172,8 +185,8 @@ impl RenderApi {
 
 #[derive(Clone, Debug)]
 pub struct GfxDrawMesh {
-    pub vertex_buffer: GfxBufferId,
-    pub index_buffer: GfxBufferId,
+    pub vertex_buffer: ManagedBufferPtr,
+    pub index_buffer: ManagedBufferPtr,
     pub texture: Option<ManagedTexturePtr>,
     pub num_elements: i32,
 }
@@ -184,9 +197,11 @@ impl GfxDrawMesh {
         textures: &HashMap<GfxTextureId, miniquad::TextureId>,
         buffers: &HashMap<GfxBufferId, miniquad::BufferId>,
     ) -> DrawMesh {
+        let buffers_keep_alive = [self.vertex_buffer.clone(), self.index_buffer.clone()];
         DrawMesh {
-            vertex_buffer: buffers[&self.vertex_buffer],
-            index_buffer: buffers[&self.index_buffer],
+            vertex_buffer: buffers[&self.vertex_buffer.id],
+            index_buffer: buffers[&self.index_buffer.id],
+            buffers_keep_alive,
             texture: self.texture.map(|t| (t.clone(), textures[&t.id])),
             num_elements: self.num_elements,
         }
@@ -241,6 +256,8 @@ impl GfxDrawCall {
 struct DrawMesh {
     vertex_buffer: miniquad::BufferId,
     index_buffer: miniquad::BufferId,
+    /// Keeps the buffers alive for the duration of this draw call
+    buffers_keep_alive: [ManagedBufferPtr; 2],
     texture: Option<(ManagedTexturePtr, miniquad::TextureId)>,
     num_elements: i32,
 }

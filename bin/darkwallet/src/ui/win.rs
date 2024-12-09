@@ -421,7 +421,6 @@ impl Window {
 
         let mut draw_calls = vec![];
         let mut child_calls = vec![];
-        let mut freed_buffers = vec![];
 
         for child in self.get_children() {
             let obj = get_ui_object3(&child);
@@ -432,7 +431,6 @@ impl Window {
 
             draw_calls.append(&mut draw_update.draw_calls);
             child_calls.push(draw_update.key);
-            freed_buffers.append(&mut draw_update.freed_buffers);
         }
 
         let dc = GfxDrawCall {
@@ -444,10 +442,6 @@ impl Window {
         //debug!(target: "ui::win", "  => {:?}", draw_calls);
 
         self.render_api.replace_draw_calls(draw_calls);
-
-        for buff in freed_buffers {
-            self.render_api.delete_buffer(buff);
-        }
 
         debug!(target: "ui::win", "Window::draw() - replaced draw call");
     }

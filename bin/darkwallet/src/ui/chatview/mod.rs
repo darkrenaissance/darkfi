@@ -51,7 +51,6 @@ use crate::{
     pubsub::Subscription,
     scene::{MethodCallSub, Pimpl, SceneNodeWeak},
     text::{self, Glyph, GlyphPositionIter, TextShaperPtr},
-    ui::FreedData,
     util::{enumerate, is_whitespace},
     ExecutorPtr,
 };
@@ -630,7 +629,7 @@ impl ChatView {
         &self,
         msgbuf: &mut MessageBuffer,
         rect: &Rectangle,
-    ) -> (Vec<GfxDrawInstruction>, FreedData) {
+    ) -> Vec<GfxDrawInstruction> {
         let scroll = self.scroll.get();
 
         let total_height = msgbuf.calc_total_height().await;
@@ -658,15 +657,13 @@ impl ChatView {
             instrs.push(GfxDrawInstruction::Draw(mesh));
         }
 
-        let freed = std::mem::take(&mut msgbuf.freed);
-
-        (instrs, freed)
+        instrs
     }
 
     async fn redraw_cached(&self, msgbuf: &mut MessageBuffer) {
         let rect = self.rect.get();
 
-        let (mut mesh_instrs, freed) = self.get_meshes(msgbuf, &rect).await;
+        let mut mesh_instrs = self.get_meshes(msgbuf, &rect).await;
 
         let mut instrs = vec![GfxDrawInstruction::ApplyView(rect)];
         instrs.append(&mut mesh_instrs);
@@ -675,10 +672,6 @@ impl ChatView {
             vec![(self.dc_key, GfxDrawCall { instrs, dcs: vec![], z_index: self.z_index.get() })];
 
         self.render_api.replace_draw_calls(draw_calls);
-
-        for buffer_id in freed.buffers {
-            self.render_api.delete_buffer(buffer_id);
-        }
     }
 
     /// Invalidates cache and redraws everything
@@ -800,7 +793,7 @@ impl UIObject for ChatView {
         // Now we have updated all the values so it's safe to wake up here.
         self.bgload_cv.notify();
 
-        let (mut mesh_instrs, freed) = self.get_meshes(&mut msgbuf, &rect).await;
+        let mut mesh_instrs = self.get_meshes(&mut msgbuf, &rect).await;
         drop(msgbuf);
 
         let mut instrs = vec![GfxDrawInstruction::ApplyView(rect)];
@@ -812,7 +805,6 @@ impl UIObject for ChatView {
                 self.dc_key,
                 GfxDrawCall { instrs, dcs: vec![], z_index: self.z_index.get() },
             )],
-            freed_buffers: freed.buffers,
         })
     }
 

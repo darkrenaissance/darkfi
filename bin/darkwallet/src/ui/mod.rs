@@ -96,7 +96,6 @@ pub trait UIObject: Sync {
 pub struct DrawUpdate {
     pub key: u64,
     pub draw_calls: Vec<(u64, GfxDrawCall)>,
-    pub freed_buffers: Vec<GfxBufferId>,
 }
 
 pub struct OnModify<T> {
@@ -186,20 +185,4 @@ pub fn get_children_ordered(node: &SceneNode3) -> Vec<SceneNodePtr> {
 
     let nodes = child_infs.into_iter().rev().map(|(node, _)| node).collect();
     nodes
-}
-
-#[derive(Default)]
-pub struct FreedData {
-    pub buffers: Vec<GfxBufferId>,
-    pub textures: Vec<GfxTextureId>,
-}
-
-impl FreedData {
-    pub fn add_mesh(&mut self, mesh: GfxDrawMesh) {
-        self.buffers.push(mesh.vertex_buffer);
-        self.buffers.push(mesh.index_buffer);
-    }
-    pub fn add_texture(&mut self, texture_id: GfxTextureId) {
-        self.textures.push(texture_id);
-    }
 }

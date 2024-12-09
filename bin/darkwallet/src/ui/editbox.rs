@@ -45,7 +45,6 @@ use crate::{
     pubsub::Subscription,
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
     text::{self, Glyph, GlyphPositionIter, TextShaperPtr},
-    ui::FreedData,
     util::is_whitespace,
     ExecutorPtr,
 };
@@ -271,7 +270,6 @@ pub struct EditBox {
     cursor_mesh: SyncMutex<Option<GfxDrawMesh>>,
     /// DC key for the cursor. Allows updating cursor independently.
     cursor_dc_key: u64,
-    freed: SyncMutex<FreedData>,
 
     is_active: PropertyBool,
     is_focused: PropertyBool,
@@ -358,7 +356,6 @@ impl EditBox {
             text_dc_key: OsRng.gen(),
             cursor_mesh: SyncMutex::new(None),
             cursor_dc_key: OsRng.gen(),
-            freed: SyncMutex::new(Default::default()),
 
             is_active,
             is_focused,
@@ -1183,10 +1180,6 @@ impl EditBox {
         };
 
         self.render_api.replace_draw_calls(draw_update.draw_calls);
-        //debug!(target: "ui::editbox", "replace draw calls done");
-        for buffer_id in draw_update.freed_buffers {
-            self.render_api.delete_buffer(buffer_id);
-        }
     }
 
     async fn redraw_cursor(&self) {
@@ -1227,30 +1220,17 @@ impl EditBox {
     async fn draw_cached(&self) -> Option<DrawUpdate> {
         let rect = self.rect.get();
 
-        let mut freed = std::mem::take(&mut *self.freed.lock().unwrap());
-
         // Force complete redraw if the window scale changed
         let window_scale = self.window_scale.get();
         if self.old_window_scale.swap(window_scale, Ordering::Relaxed) != window_scale {
             self.regen_glyphs();
 
             let text_mesh = std::mem::replace(&mut *self.text_mesh.lock().unwrap(), None);
-            // We're finished with these so clean up.
-            if let Some(old) = text_mesh {
-                freed.buffers.push(old.vertex_buffer);
-                freed.buffers.push(old.index_buffer);
-            }
         }
 
         let text_mesh = self.regen_text_mesh(rect.clone()).await;
         let old_text_mesh =
             std::mem::replace(&mut *self.text_mesh.lock().unwrap(), Some(text_mesh.clone()));
-
-        // We're finished with these so clean up.
-        if let Some(old) = old_text_mesh {
-            freed.buffers.push(old.vertex_buffer);
-            freed.buffers.push(old.index_buffer);
-        }
 
         let cursor_instrs = self.get_cursor_instrs().await;
 
@@ -1273,19 +1253,13 @@ impl EditBox {
                     GfxDrawCall { instrs: cursor_instrs, dcs: vec![], z_index: self.z_index.get() },
                 ),
             ],
-            freed_buffers: freed.buffers,
         })
     }
 }
 
 impl Drop for EditBox {
     fn drop(&mut self) {
-        let text_mesh = std::mem::replace(&mut *self.text_mesh.lock().unwrap(), None);
-        // We're finished with these so clean up.
-        if let Some(old) = text_mesh {
-            self.render_api.delete_buffer(old.vertex_buffer);
-            self.render_api.delete_buffer(old.index_buffer);
-        }
+        *self.text_mesh.lock().unwrap() = None;
     }
 }
 
@@ -1336,10 +1310,6 @@ impl UIObject for EditBox {
 
         async fn regen_cursor(self_: Arc<EditBox>) {
             let mesh = std::mem::take(&mut *self_.cursor_mesh.lock().unwrap());
-            let mut freed = self_.freed.lock().unwrap();
-            if let Some(mesh) = mesh {
-                freed.add_mesh(mesh);
-            }
         }
         on_modify.when_change(self.cursor_color.prop(), regen_cursor);
         on_modify.when_change(self.cursor_ascent.prop(), regen_cursor);

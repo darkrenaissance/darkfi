@@ -18,9 +18,7 @@
 
 use crate::{
     error::Result,
-    gfx::{
-        GfxBufferId, GfxDrawMesh, GfxTextureId, ManagedTexturePtr, Rectangle, RenderApi, Vertex,
-    },
+    gfx::{GfxDrawMesh, ManagedBufferPtr, ManagedTexturePtr, Rectangle, RenderApi, Vertex},
 };
 
 pub type Color = [f32; 4];
@@ -42,8 +40,8 @@ pub const COLOR_GREY: Color = [0.5, 0.5, 0.5, 1.];
 
 #[derive(Clone)]
 pub struct MeshInfo {
-    pub vertex_buffer: GfxBufferId,
-    pub index_buffer: GfxBufferId,
+    pub vertex_buffer: ManagedBufferPtr,
+    pub index_buffer: ManagedBufferPtr,
     pub num_elements: i32,
 }
 

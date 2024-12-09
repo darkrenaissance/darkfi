@@ -97,9 +97,6 @@ impl VectorArt {
             return;
         };
         self.render_api.replace_draw_calls(draw_update.draw_calls);
-        for buff in draw_update.freed_buffers {
-            self.render_api.delete_buffer(buff);
-        }
         debug!(target: "ui::vector_art", "replace draw calls done");
     }
 
@@ -121,11 +118,6 @@ impl VectorArt {
         };
 
         let old_mesh = std::mem::replace(&mut *self.buffers.lock().unwrap(), Some(mesh.clone()));
-        let mut freed_buffers = vec![];
-        if let Some(old_mesh) = old_mesh {
-            freed_buffers.push(old_mesh.vertex_buffer);
-            freed_buffers.push(old_mesh.index_buffer);
-        }
 
         Some(DrawUpdate {
             key: self.dc_key,
@@ -140,7 +132,6 @@ impl VectorArt {
                     z_index: self.z_index.get(),
                 },
             )],
-            freed_buffers,
         })
     }
 }
