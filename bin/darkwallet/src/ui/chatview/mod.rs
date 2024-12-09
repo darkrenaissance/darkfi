@@ -812,7 +812,6 @@ impl UIObject for ChatView {
                 self.dc_key,
                 GfxDrawCall { instrs, dcs: vec![], z_index: self.z_index.get() },
             )],
-            freed_textures: freed.textures,
             freed_buffers: freed.buffers,
         })
     }

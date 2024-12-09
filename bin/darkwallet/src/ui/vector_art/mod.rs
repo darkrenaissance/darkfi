@@ -97,7 +97,6 @@ impl VectorArt {
             return;
         };
         self.render_api.replace_draw_calls(draw_update.draw_calls);
-        assert!(draw_update.freed_textures.is_empty());
         for buff in draw_update.freed_buffers {
             self.render_api.delete_buffer(buff);
         }
@@ -141,7 +140,6 @@ impl VectorArt {
                     z_index: self.z_index.get(),
                 },
             )],
-            freed_textures: vec![],
             freed_buffers,
         })
     }

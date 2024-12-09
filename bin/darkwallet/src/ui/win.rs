@@ -421,7 +421,6 @@ impl Window {
 
         let mut draw_calls = vec![];
         let mut child_calls = vec![];
-        let mut freed_textures = vec![];
         let mut freed_buffers = vec![];
 
         for child in self.get_children() {
@@ -433,7 +432,6 @@ impl Window {
 
             draw_calls.append(&mut draw_update.draw_calls);
             child_calls.push(draw_update.key);
-            freed_textures.append(&mut draw_update.freed_textures);
             freed_buffers.append(&mut draw_update.freed_buffers);
         }
 
@@ -447,9 +445,6 @@ impl Window {
 
         self.render_api.replace_draw_calls(draw_calls);
 
-        for texture in freed_textures {
-            self.render_api.delete_texture(texture);
-        }
         for buff in freed_buffers {
             self.render_api.delete_buffer(buff);
         }

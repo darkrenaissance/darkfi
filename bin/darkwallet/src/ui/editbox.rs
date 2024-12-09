@@ -1273,7 +1273,6 @@ impl EditBox {
                     GfxDrawCall { instrs: cursor_instrs, dcs: vec![], z_index: self.z_index.get() },
                 ),
             ],
-            freed_textures: vec![],
             freed_buffers: freed.buffers,
         })
     }

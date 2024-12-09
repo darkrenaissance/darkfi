@@ -102,7 +102,6 @@ impl Layer {
 
         let mut draw_calls = vec![];
         let mut child_calls = vec![];
-        let mut freed_textures = vec![];
         let mut freed_buffers = vec![];
 
         // We should return a draw call so that if the layer is made visible, we can just
@@ -117,7 +116,6 @@ impl Layer {
 
                 draw_calls.append(&mut draw_update.draw_calls);
                 child_calls.push(draw_update.key);
-                freed_textures.append(&mut draw_update.freed_textures);
                 freed_buffers.append(&mut draw_update.freed_buffers);
             }
         }
@@ -128,7 +126,7 @@ impl Layer {
             z_index: self.z_index(),
         };
         draw_calls.push((self.dc_key, dc));
-        Some(DrawUpdate { key: self.dc_key, draw_calls, freed_textures, freed_buffers })
+        Some(DrawUpdate { key: self.dc_key, draw_calls, freed_buffers })
     }
 }
 

@@ -96,7 +96,6 @@ pub trait UIObject: Sync {
 pub struct DrawUpdate {
     pub key: u64,
     pub draw_calls: Vec<(u64, GfxDrawCall)>,
-    pub freed_textures: Vec<GfxTextureId>,
     pub freed_buffers: Vec<GfxBufferId>,
 }
 

@@ -79,13 +79,34 @@ pub struct ManagedTexture {
 
 impl Drop for ManagedTexture {
     fn drop(&mut self) {
-        self.render_api.delete_texture(self.id);
+        self.render_api.delete_unmanaged_texture(self.id);
     }
 }
 
 impl std::fmt::Debug for ManagedTexture {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ManagedTexture").field("id", &self.id).finish()
+    }
+}
+
+pub type ManagedBufferPtr = Arc<ManagedBuffer>;
+
+/// Auto-deletes buffer on drop
+#[derive(Clone)]
+pub struct ManagedBuffer {
+    id: GfxBufferId,
+    render_api: RenderApi,
+}
+
+impl Drop for ManagedBuffer {
+    fn drop(&mut self) {
+        //self.render_api.delete_unmanaged_buffer(self.id);
+    }
+}
+
+impl std::fmt::Debug for ManagedBuffer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ManagedBuffer").field("id", &self.id).finish()
     }
 }
 
@@ -99,7 +120,7 @@ impl RenderApi {
         Self { method_req }
     }
 
-    pub fn new_unmanaged_texture(&self, width: u16, height: u16, data: Vec<u8>) -> GfxTextureId {
+    fn new_unmanaged_texture(&self, width: u16, height: u16, data: Vec<u8>) -> GfxTextureId {
         let gfx_texture_id = rand::random();
 
         let method = GraphicsMethod::NewTexture((width, height, data, gfx_texture_id));
@@ -115,7 +136,7 @@ impl RenderApi {
         })
     }
 
-    pub fn delete_texture(&self, texture: GfxTextureId) {
+    fn delete_unmanaged_texture(&self, texture: GfxTextureId) {
         let method = GraphicsMethod::DeleteTexture(texture);
         let _ = self.method_req.send(method);
     }

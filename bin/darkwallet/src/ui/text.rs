@@ -213,7 +213,6 @@ impl Text {
                     z_index: self.z_index.get(),
                 },
             )],
-            freed_textures: vec![],
             freed_buffers: vec![
                 old_render_info.mesh.vertex_buffer,
                 old_render_info.mesh.index_buffer,
