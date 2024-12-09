@@ -51,7 +51,6 @@ pub struct Text {
     text_shaper: TextShaperPtr,
     tasks: OnceLock<Vec<smol::Task<()>>>,
 
-    render_info: SyncMutex<TextRenderInfo>,
     dc_key: u64,
 
     rect: PropertyRect,
@@ -88,23 +87,11 @@ impl Text {
         let node_name = node_ref.name.clone();
         let node_id = node_ref.id;
 
-        let render_info = Self::regen_mesh(
-            &render_api,
-            &text_shaper,
-            text.get(),
-            font_size.get(),
-            text_color.get(),
-            baseline.get(),
-            debug.get(),
-            window_scale.get(),
-        );
-
         let self_ = Arc::new(Self {
             node,
             render_api,
             text_shaper,
             tasks: OnceLock::new(),
-            render_info: SyncMutex::new(render_info),
             dc_key: OsRng.gen(),
 
             rect,
@@ -122,19 +109,17 @@ impl Text {
         Pimpl::Text(self_)
     }
 
-    fn regen_mesh(
-        render_api: &RenderApi,
-        text_shaper: &TextShaper,
-        text: String,
-        font_size: f32,
-        text_color: Color,
-        baseline: f32,
-        debug: bool,
-        window_scale: f32,
-    ) -> TextRenderInfo {
+    fn regen_mesh(&self) -> TextRenderInfo {
+        let text = self.text.get();
+        let font_size = self.font_size.get();
+        let text_color = self.text_color.get();
+        let baseline = self.baseline.get();
+        let debug = self.debug.get();
+        let window_scale = self.window_scale.get();
+
         debug!(target: "ui::text", "Rendering label '{}'", text);
-        let glyphs = text_shaper.shape(text, font_size, window_scale);
-        let atlas = text::make_texture_atlas(render_api, &glyphs);
+        let glyphs = self.text_shaper.shape(text, font_size, window_scale);
+        let atlas = text::make_texture_atlas(&self.render_api, &glyphs);
 
         let mut mesh = MeshBuilder::new();
         let glyph_pos_iter = GlyphPositionIter::new(font_size, window_scale, &glyphs, baseline);
@@ -152,7 +137,7 @@ impl Text {
             mesh.draw_box(&glyph_rect, color, uv_rect);
         }
 
-        let mesh = mesh.alloc(&render_api);
+        let mesh = mesh.alloc(&self.render_api);
 
         TextRenderInfo { mesh, texture: atlas.texture }
     }
@@ -173,20 +158,7 @@ impl Text {
         self.rect.eval(&parent_rect).ok()?;
         let rect = self.rect.get();
 
-        let old_render_info = self.render_info.lock().unwrap().clone();
-
-        let render_info = Self::regen_mesh(
-            &self.render_api,
-            &self.text_shaper,
-            self.text.get(),
-            self.font_size.get(),
-            self.text_color.get(),
-            self.baseline.get(),
-            self.debug.get(),
-            self.window_scale.get(),
-        );
-
-        *self.render_info.lock().unwrap() = render_info.clone();
+        let render_info = self.regen_mesh();
 
         let mesh = GfxDrawMesh {
             vertex_buffer: render_info.mesh.vertex_buffer,
@@ -244,20 +216,8 @@ impl UIObject for Text {
     }
 }
 
-/*
-impl Stoppable for Text {
-    async fn stop(&self) {
-        // TODO: Delete own draw call
-
-        // Free buffers
-        // Should this be in drop?
-        let render_info = self.render_info.lock().unwrap().clone();
-        let vertex_buffer = render_info.mesh.vertex_buffer;
-        let index_buffer = render_info.mesh.index_buffer;
-        let texture_id = render_info.texture_id;
-        self.render_api.delete_buffer(vertex_buffer);
-        self.render_api.delete_buffer(index_buffer);
-        self.render_api.delete_texture(texture_id);
+impl Drop for Text {
+    fn drop(&mut self) {
+        self.render_api.replace_draw_calls(vec![(self.dc_key, Default::default())]);
     }
 }
-*/

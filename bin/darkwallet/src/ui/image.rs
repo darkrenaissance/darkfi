@@ -44,7 +44,6 @@ pub struct Image {
     render_api: RenderApi,
     tasks: OnceLock<Vec<smol::Task<()>>>,
 
-    mesh: SyncMutex<Option<MeshInfo>>,
     texture: SyncMutex<Option<ManagedTexturePtr>>,
     dc_key: u64,
 
@@ -74,7 +73,6 @@ impl Image {
             render_api,
             tasks: OnceLock::new(),
 
-            mesh: SyncMutex::new(None),
             texture: SyncMutex::new(None),
             dc_key: OsRng.gen(),
 
@@ -153,8 +151,6 @@ impl Image {
         self.uv.eval(&rect).ok()?;
 
         let mesh = self.regen_mesh();
-        let old_mesh = std::mem::replace(&mut *self.mesh.lock().unwrap(), Some(mesh.clone()));
-
         let texture = self.texture.lock().unwrap().clone().expect("Node missing texture_id!");
 
         let mesh = GfxDrawMesh {
@@ -212,10 +208,6 @@ impl UIObject for Image {
 
 impl Drop for Image {
     fn drop(&mut self) {
-        // TODO: Delete own draw call
-
-        // Free buffers
-        // Should this be in drop?
-        *self.mesh.lock().unwrap() = None;
+        self.render_api.replace_draw_calls(vec![(self.dc_key, Default::default())]);
     }
 }

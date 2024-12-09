@@ -162,7 +162,7 @@ impl App {
 
         let window = window.setup(|me| Window::new(me, self.render_api.clone())).await;
         self.sg_root.clone().link(window.clone());
-        schema::make(&self, window).await;
+        schema::make_test(&self, window).await;
 
         debug!(target: "app", "Schema loaded");
     }
