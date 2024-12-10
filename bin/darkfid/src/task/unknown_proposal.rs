@@ -45,7 +45,8 @@ use crate::proto::{
 pub async fn handle_unknown_proposal(
     validator: ValidatorPtr,
     p2p: P2pPtr,
-    subscriber: JsonSubscriber,
+    proposals_sub: JsonSubscriber,
+    blocks_sub: JsonSubscriber,
     channel: u32,
     proposal: Proposal,
 ) -> Result<()> {
@@ -95,25 +96,25 @@ pub async fn handle_unknown_proposal(
     // Response should not be empty
     if response.proposals.is_empty() {
         warn!(target: "darkfid::task::handle_unknown_proposal", "Peer responded with empty sequence, node might be out of sync!");
-        return handle_reorg(validator, p2p, subscriber, channel, proposal).await
+        return handle_reorg(validator, p2p, proposals_sub, blocks_sub, channel, proposal).await
     }
 
     // Sequence length must correspond to requested height
     if response.proposals.len() as u32 != proposal.block.header.height - last.0 {
         debug!(target: "darkfid::task::handle_unknown_proposal", "Response sequence length is erroneous");
-        return handle_reorg(validator, p2p, subscriber, channel, proposal).await
+        return handle_reorg(validator, p2p, proposals_sub, blocks_sub, channel, proposal).await
     }
 
     // First proposal must extend canonical
     if response.proposals[0].block.header.previous != last.1 {
         debug!(target: "darkfid::task::handle_unknown_proposal", "Response sequence doesn't extend canonical");
-        return handle_reorg(validator, p2p, subscriber, channel, proposal).await
+        return handle_reorg(validator, p2p, proposals_sub, blocks_sub, channel, proposal).await
     }
 
     // Last proposal must be the same as the one requested
     if response.proposals.last().unwrap().hash != proposal.hash {
         debug!(target: "darkfid::task::handle_unknown_proposal", "Response sequence doesn't correspond to requested tip");
-        return handle_reorg(validator, p2p, subscriber, channel, proposal).await
+        return handle_reorg(validator, p2p, proposals_sub, blocks_sub, channel, proposal).await
     }
 
     // Process response proposals
@@ -136,9 +137,9 @@ pub async fn handle_unknown_proposal(
         let message = ProposalMessage(proposal.clone());
         p2p.broadcast_with_exclude(&message, &[channel.address().clone()]).await;
 
-        // Notify subscriber
+        // Notify proposals subscriber
         let enc_prop = JsonValue::String(base64::encode(&serialize_async(proposal).await));
-        subscriber.notify(vec![enc_prop].into()).await;
+        proposals_sub.notify(vec![enc_prop].into()).await;
     }
 
     Ok(())
@@ -153,7 +154,8 @@ pub async fn handle_unknown_proposal(
 async fn handle_reorg(
     validator: ValidatorPtr,
     p2p: P2pPtr,
-    subscriber: JsonSubscriber,
+    proposals_sub: JsonSubscriber,
+    blocks_sub: JsonSubscriber,
     channel: ChannelPtr,
     proposal: Proposal,
 ) -> Result<()> {
@@ -480,19 +482,21 @@ async fn handle_reorg(
         }
     };
 
-    if confirmed.is_empty() {
-        return Ok(())
+    if !confirmed.is_empty() {
+        let mut notif_blocks = Vec::with_capacity(confirmed.len());
+        for block in confirmed {
+            notif_blocks.push(JsonValue::String(base64::encode(&serialize_async(&block).await)));
+        }
+        blocks_sub.notify(JsonValue::Array(notif_blocks)).await;
     }
-
-    let mut notif_blocks = Vec::with_capacity(confirmed.len());
-    for block in confirmed {
-        notif_blocks.push(JsonValue::String(base64::encode(&serialize_async(&block).await)));
-    }
-    subscriber.notify(JsonValue::Array(notif_blocks)).await;
 
     // Broadcast proposal to the network
-    let message = ProposalMessage(proposal);
+    let message = ProposalMessage(proposal.clone());
     p2p.broadcast(&message).await;
+
+    // Notify proposals subscriber
+    let enc_prop = JsonValue::String(base64::encode(&serialize_async(&proposal).await));
+    proposals_sub.notify(vec![enc_prop].into()).await;
 
     Ok(())
 }

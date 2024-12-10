@@ -105,8 +105,9 @@ impl DarkfidP2pHandler {
         );
 
         // Start the `ProtocolProposal` messages handler
-        let subscriber = subscribers.get("proposals").unwrap().clone();
-        self.proposals.start(executor, validator, &self.p2p, subscriber).await?;
+        let proposals_sub = subscribers.get("proposals").unwrap().clone();
+        let blocks_sub = subscribers.get("blocks").unwrap().clone();
+        self.proposals.start(executor, validator, &self.p2p, proposals_sub, blocks_sub).await?;
 
         // Start the `ProtocolSync` messages handler
         self.sync.start(executor, validator).await?;

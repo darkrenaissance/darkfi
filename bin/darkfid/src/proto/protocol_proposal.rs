@@ -80,7 +80,8 @@ impl ProtocolProposalHandler {
         executor: &ExecutorPtr,
         validator: &ValidatorPtr,
         p2p: &P2pPtr,
-        subscriber: JsonSubscriber,
+        proposals_sub: JsonSubscriber,
+        blocks_sub: JsonSubscriber,
     ) -> Result<()> {
         debug!(
             target: "darkfid::proto::protocol_proposal::start",
@@ -88,7 +89,7 @@ impl ProtocolProposalHandler {
         );
 
         self.handler.task.clone().start(
-            handle_receive_proposal(self.handler.clone(), self.tasks.clone(), validator.clone(), p2p.clone(), subscriber, executor.clone()),
+            handle_receive_proposal(self.handler.clone(), self.tasks.clone(), validator.clone(), p2p.clone(), proposals_sub, blocks_sub, executor.clone()),
             |res| async move {
                 match res {
                     Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
@@ -127,7 +128,8 @@ async fn handle_receive_proposal(
     tasks: Arc<RwLock<HashSet<StoppableTaskPtr>>>,
     validator: ValidatorPtr,
     p2p: P2pPtr,
-    subscriber: JsonSubscriber,
+    proposals_sub: JsonSubscriber,
+    blocks_sub: JsonSubscriber,
     executor: ExecutorPtr,
 ) -> Result<()> {
     debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "START");
@@ -160,9 +162,9 @@ async fn handle_receive_proposal(
                 // Signal handler to broadcast the valid proposal to rest nodes
                 handler.send_action(channel, ProtocolGenericAction::Broadcast).await;
 
-                // Notify subscriber
+                // Notify proposals subscriber
                 let enc_prop = JsonValue::String(base64::encode(&serialize_async(&proposal).await));
-                subscriber.notify(vec![enc_prop].into()).await;
+                proposals_sub.notify(vec![enc_prop].into()).await;
 
                 continue
             }
@@ -186,7 +188,7 @@ async fn handle_receive_proposal(
         let _tasks = tasks.clone();
         let _task = task.clone();
         task.clone().start(
-            handle_unknown_proposal(validator.clone(), p2p.clone(), subscriber.clone(), channel, proposal.0),
+            handle_unknown_proposal(validator.clone(), p2p.clone(), proposals_sub.clone(), blocks_sub.clone(), channel, proposal.0),
             |res| async move {
                 match res {
                     Ok(()) | Err(Error::DetachedTaskStopped) => { _tasks.write().await.remove(&_task); }
