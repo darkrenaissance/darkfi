@@ -1,0 +1,427 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js ayu">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Learn - The DarkFi Book</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body>
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "ayu" : "ayu";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('ayu')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var html = document.querySelector('html');
+            var sidebar = null;
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded affix "><li class="part-title">About</li><li class="chapter-item expanded "><a href="../index.html"><strong aria-hidden="true">1.</strong> DarkFi</a></li><li class="chapter-item expanded "><a href="../start-here.html"><strong aria-hidden="true">2.</strong> Start Here</a></li><li class="chapter-item expanded "><a href="../philosophy/philosophy.html"><strong aria-hidden="true">3.</strong> Philosophy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../philosophy/meetings.html"><strong aria-hidden="true">3.1.</strong> Discussion</a></li><li class="chapter-item expanded "><a href="../philosophy/ideology.html"><strong aria-hidden="true">3.2.</strong> Ideology</a></li><li class="chapter-item expanded "><a href="../philosophy/books.html"><strong aria-hidden="true">3.3.</strong> Books</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">User Guide</li><li class="chapter-item expanded "><a href="../testnet/node.html"><strong aria-hidden="true">4.</strong> Running a Node</a></li><li class="chapter-item expanded "><a href="../testnet/token.html"><strong aria-hidden="true">5.</strong> Tokens</a></li><li class="chapter-item expanded "><a href="../testnet/payment.html"><strong aria-hidden="true">6.</strong> Payments</a></li><li class="chapter-item expanded "><a href="../testnet/atomic-swap.html"><strong aria-hidden="true">7.</strong> Atomic Swap</a></li><li class="chapter-item expanded "><a href="../testnet/dao.html"><strong aria-hidden="true">8.</strong> DAO</a></li><li class="chapter-item expanded "><a href="../misc/darkirc/darkirc.html"><strong aria-hidden="true">9.</strong> DarkIRC</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../misc/darkirc/private_message.html"><strong aria-hidden="true">9.1.</strong> Private Message</a></li></ol></li><li class="chapter-item expanded "><a href="../misc/nodes/node-configurations.html"><strong aria-hidden="true">10.</strong> Node Configurations</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../misc/nodes/public-guide.html"><strong aria-hidden="true">10.1.</strong> Public Node Configurations</a></li><li class="chapter-item expanded "><a href="../misc/nodes/tor-guide.html"><strong aria-hidden="true">10.2.</strong> Tor Nodes</a></li></ol></li><li class="chapter-item expanded "><a href="../misc/network-troubleshooting.html"><strong aria-hidden="true">11.</strong> Network Troubleshooting</a></li><li class="chapter-item expanded affix "><li class="part-title">Developer Doc</li><li class="chapter-item expanded "><a href="../dev/dev.html"><strong aria-hidden="true">12.</strong> Development</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../dev/contrib/contrib.html"><strong aria-hidden="true">12.1.</strong> Contribute</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../dev/contrib/tor.html"><strong aria-hidden="true">12.1.1.</strong> Using Tor</a></li></ol></li><li class="chapter-item expanded "><a href="../dev/learn.html" class="active"><strong aria-hidden="true">12.2.</strong> Learn</a></li><li class="chapter-item expanded "><a href="../dev/rustdoc.html"><strong aria-hidden="true">12.3.</strong> API Rustdoc</a></li><li class="chapter-item expanded "><a href="../dev/native_contracts.html"><strong aria-hidden="true">12.4.</strong> Native Contracts</a></li><li class="chapter-item expanded "><a href="../dev/seminars.html"><strong aria-hidden="true">12.5.</strong> Seminars</a></li><li class="chapter-item expanded "><a href="../dev/bench.html"><strong aria-hidden="true">12.6.</strong> Benchmark</a></li></ol></li><li class="chapter-item expanded "><a href="../arch/arch.html"><strong aria-hidden="true">13.</strong> Architecture</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../arch/overview.html"><strong aria-hidden="true">13.1.</strong> Overview</a></li><li class="chapter-item expanded "><a href="../arch/anonymous_assets.html"><strong aria-hidden="true">13.2.</strong> Anonymous assets</a></li><li class="chapter-item expanded "><a href="../arch/consensus.html"><strong aria-hidden="true">13.3.</strong> Consensus</a></li><li class="chapter-item expanded "><a href="../arch/tx_lifetime.html"><strong aria-hidden="true">13.4.</strong> Transactions</a></li><li class="chapter-item expanded "><a href="../arch/bridge.html"><strong aria-hidden="true">13.5.</strong> Bridge</a></li><li class="chapter-item expanded "><a href="../arch/tooling.html"><strong aria-hidden="true">13.6.</strong> Tooling</a></li><li class="chapter-item expanded "><a href="../arch/p2p-network.html"><strong aria-hidden="true">13.7.</strong> P2P Network</a></li><li class="chapter-item expanded "><a href="../arch/services.html"><strong aria-hidden="true">13.8.</strong> Services</a></li><li class="chapter-item expanded "><a href="../arch/sc/sc.html"><strong aria-hidden="true">13.9.</strong> Smart Contracts</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../arch/sc/tx-lifetime.html"><strong aria-hidden="true">13.9.1.</strong> Transaction lifetime</a></li></ol></li><li class="chapter-item expanded "><a href="../arch/dao.html"><strong aria-hidden="true">13.10.</strong> DAO</a></li><li class="chapter-item expanded "><a href="../arch/wallet.html"><strong aria-hidden="true">13.11.</strong> Wallet</a></li></ol></li><li class="chapter-item expanded "><a href="../zkas/index.html"><strong aria-hidden="true">14.</strong> zkas</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../zkas/writing-zk-proofs.html"><strong aria-hidden="true">14.1.</strong> Writing ZK Proofs</a></li><li class="chapter-item expanded "><a href="../zkas/bincode.html"><strong aria-hidden="true">14.2.</strong> Bincode</a></li><li class="chapter-item expanded "><a href="../zkas/zkvm.html"><strong aria-hidden="true">14.3.</strong> zkVM</a></li><li class="chapter-item expanded "><a href="../zkas/examples.html"><strong aria-hidden="true">14.4.</strong> Examples</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../zkas/examples/voting.html"><strong aria-hidden="true">14.4.1.</strong> Anonymous voting</a></li><li class="chapter-item expanded "><a href="../zkas/examples/sapling.html"><strong aria-hidden="true">14.4.2.</strong> Anonymous payments</a></li></ol></li></ol></li><li class="chapter-item expanded "><a href="../clients/clients.html"><strong aria-hidden="true">15.</strong> Client</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../clients/darkfid_jsonrpc.html"><strong aria-hidden="true">15.1.</strong> darkfid JSON-RPC API</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">Crypto</li><li class="chapter-item expanded "><a href="../crypto/fft.html"><strong aria-hidden="true">16.</strong> FFT</a></li><li class="chapter-item expanded "><a href="../crypto/zk_explainer.html"><strong aria-hidden="true">17.</strong> ZK explainer</a></li><li class="chapter-item expanded "><a href="../crypto/research.html"><strong aria-hidden="true">18.</strong> Research</a></li><li class="chapter-item expanded "><a href="../crypto/rln.html"><strong aria-hidden="true">19.</strong> Rate-Limit Nullifiers</a></li><li class="chapter-item expanded "><a href="../crypto/key-recovery.html"><strong aria-hidden="true">20.</strong> Key Recovery Scheme</a></li><li class="chapter-item expanded "><a href="../crypto/reading-maths-books.html"><strong aria-hidden="true">21.</strong> Reading maths books</a></li><li class="chapter-item expanded affix "><li class="part-title">User Interface</li><li class="chapter-item expanded "><a href="../ui/ui.html"><strong aria-hidden="true">22.</strong> UI</a></li><li class="chapter-item expanded affix "><li class="part-title">DEP</li><li class="chapter-item expanded "><a href="../dep/0001.html"><strong aria-hidden="true">23.</strong> DEP 0001: Version Message Info (accepted)</a></li><li class="chapter-item expanded "><a href="../dep/0002.html"><strong aria-hidden="true">24.</strong> DEP 0002: Smart Contract Composability (deprecated)</a></li><li class="chapter-item expanded "><a href="../dep/0003.html"><strong aria-hidden="true">25.</strong> DEP 0003: Token Mint Authorization (accepted)</a></li><li class="chapter-item expanded "><a href="../dep/0004.html"><strong aria-hidden="true">26.</strong> DEP 0004: Client wallet WASM modules (draft)</a></li><li class="chapter-item expanded affix "><li class="part-title">Specs</li><li class="chapter-item expanded "><a href="../spec/notation.html"><strong aria-hidden="true">27.</strong> Notation</a></li><li class="chapter-item expanded "><a href="../spec/concepts.html"><strong aria-hidden="true">28.</strong> Concepts</a></li><li class="chapter-item expanded "><a href="../spec/crypto-schemes.html"><strong aria-hidden="true">29.</strong> Cryptographic Schemes</a></li><li class="chapter-item expanded "><div><strong aria-hidden="true">30.</strong> Contracts</div></li><li><ol class="section"><li class="chapter-item expanded "><a href="../spec/contract/dao/dao.html"><strong aria-hidden="true">30.1.</strong> DAO</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../spec/contract/dao/concepts.html"><strong aria-hidden="true">30.1.1.</strong> Concepts</a></li><li class="chapter-item expanded "><a href="../spec/contract/dao/model.html"><strong aria-hidden="true">30.1.2.</strong> Model</a></li><li class="chapter-item expanded "><a href="../spec/contract/dao/scheme.html"><strong aria-hidden="true">30.1.3.</strong> Scheme</a></li></ol></li><li class="chapter-item expanded "><a href="../spec/contract/money/money.html"><strong aria-hidden="true">30.2.</strong> Money</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../spec/contract/money/model.html"><strong aria-hidden="true">30.2.1.</strong> Model</a></li><li class="chapter-item expanded "><a href="../spec/contract/money/scheme.html"><strong aria-hidden="true">30.2.2.</strong> Scheme</a></li></ol></li><li class="chapter-item expanded "><a href="../spec/contract/vesting/vesting.html"><strong aria-hidden="true">30.3.</strong> Vesting</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">P2P API Tutorial</li><li class="chapter-item expanded "><a href="../learn/dchat/dchat.html"><strong aria-hidden="true">31.</strong> P2P API Tutorial</a></li><li class="chapter-item expanded "><a href="../learn/dchat/deployment/part-1.html"><strong aria-hidden="true">32.</strong> Deployment</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../learn/dchat/deployment/getting-started.html"><strong aria-hidden="true">32.1.</strong> Getting started</a></li><li class="chapter-item expanded "><a href="../learn/dchat/deployment/writing-a-daemon.html"><strong aria-hidden="true">32.2.</strong> Writing a daemon</a></li><li class="chapter-item expanded "><a href="../learn/dchat/deployment/sessions.html"><strong aria-hidden="true">32.3.</strong> Sessions</a></li><li class="chapter-item expanded "><a href="../learn/dchat/deployment/settings.html"><strong aria-hidden="true">32.4.</strong> Settings</a></li><li class="chapter-item expanded "><a href="../learn/dchat/deployment/start-stop.html"><strong aria-hidden="true">32.5.</strong> Start-Run-Stop</a></li><li class="chapter-item expanded "><a href="../learn/dchat/deployment/seed-node.html"><strong aria-hidden="true">32.6.</strong> Seed</a></li><li class="chapter-item expanded "><a href="../learn/dchat/deployment/deploy.html"><strong aria-hidden="true">32.7.</strong> Deploy</a></li></ol></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/part-2.html"><strong aria-hidden="true">33.</strong> Creating dchatd</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/message.html"><strong aria-hidden="true">33.1.</strong> Message</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/protocols.html"><strong aria-hidden="true">33.2.</strong> Understanding Protocols</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/protocol-dchat.html"><strong aria-hidden="true">33.3.</strong> ProtocolDchat</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/register-protocol.html"><strong aria-hidden="true">33.4.</strong> Register protocol</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/sending-messages.html"><strong aria-hidden="true">33.5.</strong> Sending messages</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/accept-addr.html"><strong aria-hidden="true">33.6.</strong> Accept addr</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/rpc-requests.html"><strong aria-hidden="true">33.7.</strong> Handling RPC requests</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/stoppable-task.html"><strong aria-hidden="true">33.8.</strong> StoppableTask</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchatd/rpc-methods.html"><strong aria-hidden="true">33.9.</strong> Adding methods</a></li></ol></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchat-cli/part-3.html"><strong aria-hidden="true">34.</strong> Creating dchat-cli</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchat-cli/ui.html"><strong aria-hidden="true">34.1.</strong> UI</a></li><li class="chapter-item expanded "><a href="../learn/dchat/creating-dchat-cli/using-dchat.html"><strong aria-hidden="true">34.2.</strong> Using dchat</a></li></ol></li><li class="chapter-item expanded "><a href="../learn/dchat/network-tools/part-4.html"><strong aria-hidden="true">35.</strong> Net tools</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../learn/dchat/network-tools/get-info.html"><strong aria-hidden="true">35.1.</strong> get_info</a></li><li class="chapter-item expanded "><a href="../learn/dchat/network-tools/attaching-dnet.html"><strong aria-hidden="true">35.2.</strong> Attaching dchat</a></li><li class="chapter-item expanded "><a href="../learn/dchat/network-tools/using-dnet.html"><strong aria-hidden="true">35.3.</strong> Using dnet</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">Misc</li><li class="chapter-item expanded "><a href="../misc/vanityaddr.html"><strong aria-hidden="true">36.</strong> vanityaddr</a></li><li class="chapter-item expanded "><a href="../misc/darkirc/specification.html"><strong aria-hidden="true">37.</strong> darkIRC Specification</a></li><li class="chapter-item expanded "><a href="../misc/tau.html"><strong aria-hidden="true">38.</strong> tau</a></li><li class="chapter-item expanded "><a href="../misc/event_graph/event_graph.html"><strong aria-hidden="true">39.</strong> event_graph</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../misc/event_graph/network_protocol.html"><strong aria-hidden="true">39.1.</strong> Network Protocol</a></li></ol></li><li class="chapter-item expanded "><a href="../misc/dnetview.html"><strong aria-hidden="true">40.</strong> dnetview</a></li><li class="chapter-item expanded "><a href="../zero2darkfi/zero2darkfi.html"><strong aria-hidden="true">41.</strong> Zero2darkfi</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../zero2darkfi/darkmap.html"><strong aria-hidden="true">41.1.</strong> darkmap</a></li></ol></li><li class="chapter-item expanded "><a href="../glossary/glossary.html"><strong aria-hidden="true">42.</strong> Glossary</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">The DarkFi Book</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.12.0/dist/katex.min.css" integrity="sha384-AfEj0r4/OFrOo5t7NnNe46zW/tFgW6x/bCJG8FqQCEo3+Aro6EYUG4+cU+KJWu/X" crossorigin="anonymous">
+<h1 id="agorism-hackers-study-guide"><a class="header" href="#agorism-hackers-study-guide">Agorism Hackers Study Guide</a></h1>
+<p>During the 90s, the crypto-anarchists applied the emerging technology
+of cryptography to create online zones encoded with the seed of
+resistance. Cryptocurrency descends from that lineage, and lies at the
+intersection of economics, politics and technology.</p>
+<p>The agorists believed in leveraging economic power to create free and
+democratic parallel societies.  We define revolution as a transformation
+in the moral and political fabric of society. We can leverage crypto
+technology for moral and poltical society and create encrypted free
+zones online.</p>
+<p>Money takes many forms, whether cash, credit, loans or debt. The
+properties of money changes depending on its location, while measures like
+interest rates and inflation obscure local differences.</p>
+<p>The real source of power lies in economic networks. Money is a unit
+of account between economic networks. By understanding economics, we
+can use technological techniques to greatly influence the material and
+political worlds and encode them with our values and philosophy.</p>
+<h2 id="methodology"><a class="header" href="#methodology">Methodology</a></h2>
+<p>Our critique of the student-teacher relation, where a teacher dictates a
+course schedule to a student who has to learn the material, is as follows:</p>
+<ol>
+<li>Students are not self led, and instead become reliant on an
+instructor, instead of developing independently.</li>
+<li>Creativity is supressed since students do not explore and engage
+with knowledge in a dialectic way.</li>
+</ol>
+<p>Instead we provide a system of mentorship. Everybody engages in study and
+research inside the organization.  Subjects are not separated from one
+another and we encourage people to read multiple subjects in a directed
+way.  Our aim is to train leaders and raise people up.</p>
+<p>Leaders must possess:</p>
+<ol>
+<li>Strategic knowledge to be able to make strong macro analysis and
+direct activity.</li>
+<li>Strong techncial skills to directly affect change themselves.</li>
+</ol>
+<p>We emphasize a combination of both. Ideas should not gather dust in
+books. We must put our ideas into action through practice. However,
+blind undirected action is wasted effort. Therefore we seek to foster
+both theory and practice in participants.</p>
+<p>With the mentorship system, participants are self directed but are under
+the influence of more senior mentors.  If they get stuck, they can
+ask mentors for assistance to get past difficult concepts or discuss
+ideas to gain a better understanding.  Learning through dialogue is
+encouraged since it creates stronger bonds and relations between people
+in the community.</p>
+<h2 id="progression"><a class="header" href="#progression">Progression</a></h2>
+<h3 id="mandatory-initial-stage"><a class="header" href="#mandatory-initial-stage">Mandatory Initial Stage</a></h3>
+<p>Everybody in the organization must study philosophy and programming
+as essential skills. To start there are two objects of study:</p>
+<ol>
+<li><a href="https://agorism.dev/book/philosophy/1.civilization.pdf">&quot;Manifesto for a Democratic Civilization&quot;</a>
+by Ocalan, is 3 separate books. You should complete at least 1 book
+for the initial stage, and then study the other two as you continue
+further into later stages.</li>
+<li><a href="https://agorism.dev/book/python/Eric%20Matthes%20-%20Python%20Crash%20Course%20A%20Hands-On%2C%20Project-Based%20Introduction%20to%20Programming%20%282016%2C%20No%20Starch%20Press%29.pdf">&quot;Project Based Python Programming&quot;</a>
+this will teach you Python programming which will be an essential
+skill for any branch you decide to continue onto.</li>
+</ol>
+<p>Programming takes time and dedication to become proficient at. Many people
+give up during the initial phase which can take more than a year. You
+have to push through it. Once you master programming, it becomes enjoyable
+and fun. Code is the medium of our organization. We are hacker-artists.</p>
+<h3 id="branches"><a class="header" href="#branches">Branches</a></h3>
+<p>All branches take roughly the same time to become highly proficient in:
+around 1-2 years. Even after 6 months, participants can begin using
+their acquired knowledge in a practical way with small limited tasks. We
+actively encourage the combination of theory and practice to strengthen
+one another.</p>
+<h4 id="token-scientist"><a class="header" href="#token-scientist">Token Scientist</a></h4>
+<p>Token engineering is a new emerging science. Tokens are a breakthrough
+in building online networks, since we have a means to engineer
+incentive mechanisms and encourage certain user behaviours.</p>
+<p>DeFi protocols in crypto make extensive use of token engineering to
+design how liquidity flows in and out of networks, and is an important
+key part of leveraging cryptoeconomic power.</p>
+<p>To become proficient in this area requires study of economics,
+mathematics, and finance. It also makes heavy use of Python programming
+to build simulations and economic models.</p>
+<ol>
+<li><a href="https://agorism.dev/book/economy/Richard%20A.%20Werner%20%28auth.%29%20-%20New%20Paradigm%20in%20Macroeconomics_%20Solving%20the%20Riddle%20of%20Japanese%20Macroeconomic%20Performance-Palgrave%20Macmillan%20UK%20%282005%29.pdf">&quot;New Paradigm for Macroeconomics&quot;</a> by Werner. This book will take several months to study but is a strong basis for understanding economics.
+<ol>
+<li>Notes from the <a href="https://wiki.polytech.barcelona/index.php?title=Notes/New_Paradigm_in_Macroeconomics/Introduction">introduction</a> to Werner's book.</li>
+<li><a href="https://wiki.polytech.barcelona/index.php?title=Notes/Werner">Notes</a> on 'Shifting from Central Planning to a Decentralized Economy</li>
+</ol>
+</li>
+<li><a href="https://agorism.dev/book/math/intro/A.%20J.%20Sadler%2C%20D.W.S.Thorning%20-%20Understanding%20Pure%20Mathematics%20%281987%2C%20Oxford%20Up%20Education%29.pdf">&quot;Understanding Pure Mathematics&quot;</a>. We have a full high school mathematics course. This can also be skipped if you already know maths well.
+<ol>
+<li>Continuing on with mathematics, you can learn more about stochastics, statistics, probability and analysis.</li>
+</ol>
+</li>
+<li><a href="https://agorism.dev/book/economy/Economics%20and%20Math%20of%20Token%20Engineering%20and%20DeFiV1.1.pdf">The DeFi and Token Engineering book</a>.</li>
+</ol>
+<h4 id="software-developer"><a class="header" href="#software-developer">Software Developer</a></h4>
+<p>Software developers create the end result software that others
+use. They take research and create a product from that research
+by applying the ideas.  Developers can further be focused more on
+creating prototypes from research, or developing prototypes into
+polished final products.</p>
+<p>To become a senior developer means learning about how the computer
+works on a deep level, and learning advanced programming skills.
+It takes time to fully master with a lot of early frustration but
+is eventually highly rewarding and creative.  Developers are highly
+sought after and rare.</p>
+<ol>
+<li>Learn from various materials about computer architecture, operating systems, and software architecture.
+<ol>
+<li>Books such as the history of UNIX or the mythical man month.</li>
+<li>Articles by <a href="http://hintjens.com/blog:19">hintjens.com</a></li>
+</ol>
+</li>
+<li><a href="https://doc.rust-lang.org/stable/book/">Rust programming book</a></li>
+<li><a href="https://wiki.archlinux.org/title/Installation_guide">Install Arch Linux</a>, learn to use the terminal</li>
+</ol>
+<h4 id="cryptography-researcher"><a class="header" href="#cryptography-researcher">Cryptography Researcher</a></h4>
+<p>Cryptography researchers craft the weapons or implements of change
+that developers use.  They use advanced algebra to exploit the hard
+limits set by the universe on reality and craft cryptographic schemas
+that obey certain properties. They are in a sense reality-hackers. They
+hack reality to create systems that obey objective properties due to
+the underlying mathematics.</p>
+<p>Cryptography researchers create mathematics and repurpose existing
+algorithms in their schemas. Needless to say, the advanced cryptographer
+is a good mathematician.</p>
+<p>For cryptography, you will study <a href="https://agorism.dev/book/math/algebra/%28Dover%20Books%20on%20Mathematics%29%20Charles%20C%20Pinter%20-%20A%20Book%20of%20Abstract%20Algebra-Dover%20Publications%20%282010%29.pdf">&quot;Abstract Algebra&quot;</a> by Pinter, and starting with simple cryptographic schemes
+gradually move towards learning more complex ones. You will prototype
+these schemes using a computer algebra system called
+<a href="https://doc.sagemath.org/pdf/en/a_tour_of_sage/a_tour_of_sage.pdf">SAGE</a>.</p>
+<h4 id="protocol-engineer"><a class="header" href="#protocol-engineer">Protocol Engineer</a></h4>
+<p>Good knowledge of computer science fundamentals as well as the ability
+to write code. Algebra studies are also required but not to the same
+degree as cryptography.</p>
+<p>The protocol engineer is responsible for blockchain consensus algorithms,
+developing p2p networks, and other forms of distributed synchronization
+such as CRDTs. They establish the fundamentals for creating distributed
+applications and hardening the censorship-resistant properties of
+crypto. They also harden networks against de-anonymization attempts
+through the use of encrypted mixnetworking and other techniques.</p>
+<p>Protocol engineers have to possess a good knowledge about the theory
+behind distributed networks, as well as experience in how they work in
+practice. This topic is part theory, part practical. They must have a
+good grasp of algorithms and computer science theory.</p>
+<h4 id="other"><a class="header" href="#other">Other</a></h4>
+<p>Alongside this study, continuing to study Ocalan is required. After
+finishing the Ocalan texts, you can then read Werner's book on
+economics, as well as Mumford or other philosophers.</p>
+<p>Also engagement and familiarization with crypto is a must. Begin
+following <a href="https://twitter.com/i/lists/1345778435390640129">this list</a>
+and participating in crypto communities.</p>
+<h2 id="starting"><a class="header" href="#starting">Starting</a></h2>
+<ol>
+<li>Download and install a simple Linux operating system to get started. Options can be Ubuntu or Manjaro Linux.</li>
+<li>Watch <a href="https://www.youtube.com/c/Finematics/videos">Finematics videos</a>.</li>
+<li>Begin the initial stage listed above.</li>
+<li>Follow the instructions on the Darkfi Book and run <a href="https://darkrenaissance.github.io/darkfi/misc/darkirc/darkirc.html">darkirc</a> to connect with the team.</li>
+</ol>
+<h2 id="further-reading"><a class="header" href="#further-reading">Further Reading</a></h2>
+<ul>
+<li><a href="https://dark.fi/insights/">DarkFi Insights</a></li>
+</ul>
+<h3 id="current-situation-and-macro-overview"><a class="header" href="#current-situation-and-macro-overview">Current Situation and Macro Overview</a></h3>
+<ul>
+<li><a href="https://thedefiant.io/gensler-sec-regulate-all-crypto/">Gensler Vows Action Against DeFi</a></li>
+<li><a href="https://multicoin.capital/2019/04/24/multicoin-investment-thesis/">Crypto Mega Theses</a></li>
+<li><a href="https://medium.com/@Austerity_Sucks/the-future-of-defi-must-be-no-kyc-7ff4578bd72e">The Future of DeFi Must be No KYC</a></li>
+<li><a href="https://www.mirror.co.uk/money/every-single-bitcoin-product-banned-22800240">Every single Bitcoin product banned in the UK as regulators crack down on crypto</a></li>
+<li><a href="https://www.coindesk.com/crypto-enforcement-framework">The DOJ’s ‘Crypto Enforcement Framework’ Argues Against Privacy Tools and for International Regulation</a></li>
+<li><a href="https://www.memri.org/reports/coming-storm-%E2%80%93-terrorists-using-cryptocurrency">The Coming Storm – Terrorists Using Cryptocurrency</a></li>
+<li><a href="https://www.cnbc.com/2020/08/21/china-users-move-50-billion-of-cryptocurrency-out-of-country-hinting-at-capital-flight.html">Report finds $50 billion of cryptocurrency moved out of China hinting at capital flight against Beijing rules</a></li>
+</ul>
+<h3 id="economics"><a class="header" href="#economics">Economics</a></h3>
+<ul>
+<li><a href="https://twitter.com/mattigags/status/1463430142081093641">mattigag's required reading</a></li>
+<li><a href="https://insights.deribit.com/market-research/on-reflexivity-and-imitation/">Deribit, On Reflexivity and Imitation, Part 1</a>
+<ul>
+<li><a href="https://insights.deribit.com/market-research/on-reflexivity-and-imitation-part-2/">Part 2</a></li>
+</ul>
+</li>
+<li><a href="https://www.lynalden.com/fraying-petrodollar-system/">The Fraying of the US Global Currency Reserve System</a></li>
+<li><a href="https://wiki.polytech.barcelona/index.php?title=Notes/New_Paradigm_in_Macroeconomics/Introduction">Introduction to Richard Werner: New Paradigm in Marcoeconomics</a></li>
+<li><a href="https://professorwerner.org/shifting-from-central-planning-to-a-decentralised-economy/">Shifting from Central Planning to a Decentralized Economy</a></li>
+<li><a href="https://insights.deribit.com/market-research/the-great-race-to-crypto-banking/">The Great Race to Crypto Banking</a></li>
+<li><a href="https://blog.bitmex.com/dreams-of-a-peasant/">Dreams of a Peasant</a></li>
+<li><a href="https://cryptohayes.medium.com/dao-lay-lo-mo-3645f517d2d6">DAO Lay Lo Mo</a></li>
+<li><a href="https://arjun.af/crypto-market-structure">Crypto Market Structure</a></li>
+</ul>
+<h3 id="web-30"><a class="header" href="#web-30">Web 3.0</a></h3>
+<ul>
+<li><a href="https://www.coindesk.com/markets/2021/07/09/ethereums-political-philosophy-explained/">Ethereum's Political Philosophy Explained</a></li>
+<li><a href="https://otherinter.net/research/squad-wealth/">Squad Wealth</a></li>
+<li><a href="https://gnosisguild.mirror.xyz/t4F5rItMw4-mlpLZf5JQhElbDfQ2JRVKAzEpanyxW1Q">Prehistory of DAOs</a></li>
+<li><a href="https://blog.gnosis.pm/inventories-not-identities-7da9a4ec5a3e">Inventories, not Identities</a></li>
+<li><a href="https://whiterabbit1111.medium.com/the-origin-digital-antiquities-market-nfts-1ea9b69c03f9">The origin of the digital antiquities market (NFTs)</a></li>
+</ul>
+<h3 id="agorism-and-crypto-anarchy"><a class="header" href="#agorism-and-crypto-anarchy">Agorism and crypto-anarchy</a></h3>
+<ul>
+<li><a href="https://www.coindesk.com/tech/2020/08/21/bitcoin-has-lost-its-way-heres-how-to-return-to-cryptos-subversive-roots/">How to Return to Crypto's Subversive Roots</a></li>
+<li><a href="https://activism.net/cypherpunk/crypto-anarchy.html">The Crypto Anarchist Manifesto</a></li>
+<li><a href="https://www.forbes.com/sites/andygreenberg/2013/04/29/collected-quotations-of-the-dread-pirate-roberts-founder-of-the-drug-site-silk-road-and-radical-libertarian/#196a8231b0c4">Collected Quotations of The Dread Pirate Roberts</a></li>
+<li><a href="https://theanarchistlibrary.org/library/samuel-edward-konkin-iii-new-libertarian-manifesto">New Libertarian Manifesto</a></li>
+<li><a href="https://nakamotoinstitute.org/cyberspace-independence/">A Declaration of the Independence of Cyberspace</a></li>
+<li><a href="https://nakamotoinstitute.org/cypherpunk-manifesto/">A Cypherpunk's Manifesto</a></li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../dev/contrib/tor.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next" href="../dev/rustdoc.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../dev/contrib/tor.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next" href="../dev/rustdoc.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../theme/mermaid.min.js"></script>
+        <script src="../theme/mermaid-init.js"></script>
+        <script src="../theme/zkas-highlight.js"></script>
+
+
+    </div>
+    </body>
+</html>
