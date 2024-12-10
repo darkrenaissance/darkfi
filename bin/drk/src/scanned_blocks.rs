@@ -49,14 +49,8 @@ impl Drk {
         self.wallet.exec_sql(&query, rusqlite::params![height, hash, rollback_query])
     }
 
-    /// Get a scanned block information record.
-    pub fn get_scanned_block_record(&self, height: u32) -> WalletDbResult<(u32, String, String)> {
-        let row = self.wallet.query_single(
-            WALLET_SCANNED_BLOCKS_TABLE,
-            &[],
-            convert_named_params! {(WALLET_SCANNED_BLOCKS_COL_HEIGH, height)},
-        )?;
-
+    /// Auxiliary function to parse a `WALLET_SCANNED_BLOCKS_TABLE` records.
+    fn parse_scanned_block_record(&self, row: &[Value]) -> WalletDbResult<(u32, String, String)> {
         let Value::Integer(height) = row[0] else {
             return Err(WalletDbError::ParseColumnValueError);
         };
@@ -75,15 +69,35 @@ impl Drk {
         Ok((height, hash.clone(), rollback_query.clone()))
     }
 
+    /// Get a scanned block information record.
+    pub fn get_scanned_block_record(&self, height: u32) -> WalletDbResult<(u32, String, String)> {
+        let row = self.wallet.query_single(
+            WALLET_SCANNED_BLOCKS_TABLE,
+            &[],
+            convert_named_params! {(WALLET_SCANNED_BLOCKS_COL_HEIGH, height)},
+        )?;
+
+        self.parse_scanned_block_record(&row)
+    }
+
+    /// Fetch all scanned block information record.
+    pub fn get_scanned_block_records(&self) -> WalletDbResult<Vec<(u32, String, String)>> {
+        let rows = self.wallet.query_multiple(WALLET_SCANNED_BLOCKS_TABLE, &[], &[])?;
+
+        let mut ret = Vec::with_capacity(rows.len());
+        for row in rows {
+            ret.push(self.parse_scanned_block_record(&row)?);
+        }
+
+        Ok(ret)
+    }
+
     /// Get the last scanned block height and hash from the wallet.
     /// If database is empty default (0, '-') is returned.
     pub fn get_last_scanned_block(&self) -> WalletDbResult<(u32, String)> {
         let query = format!(
-            "SELECT {}, {} FROM {} ORDER BY {} DESC LIMIT 1;",
-            WALLET_SCANNED_BLOCKS_COL_HEIGH,
-            WALLET_SCANNED_BLOCKS_COL_HASH,
-            WALLET_SCANNED_BLOCKS_TABLE,
-            WALLET_SCANNED_BLOCKS_COL_HEIGH,
+            "SELECT * FROM {} ORDER BY {} DESC LIMIT 1;",
+            WALLET_SCANNED_BLOCKS_TABLE, WALLET_SCANNED_BLOCKS_COL_HEIGH,
         );
         let ret = self.wallet.query_custom(&query, &[])?;
 
@@ -91,18 +105,9 @@ impl Drk {
             return Ok((0, String::from("-")))
         }
 
-        let Value::Integer(height) = ret[0][0] else {
-            return Err(WalletDbError::ParseColumnValueError);
-        };
-        let Ok(height) = u32::try_from(height) else {
-            return Err(WalletDbError::ParseColumnValueError);
-        };
+        let (height, hash, _) = self.parse_scanned_block_record(&ret[0])?;
 
-        let Value::Text(ref hash) = ret[0][1] else {
-            return Err(WalletDbError::ParseColumnValueError);
-        };
-
-        Ok((height, hash.clone()))
+        Ok((height, hash))
     }
 
     /// Reset the scanned blocks information records in the wallet.

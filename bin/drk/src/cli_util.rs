@@ -382,7 +382,7 @@ pub fn generate_completions(shell: &str) -> Result<()> {
     let simulate_tx =
         SubCommand::with_name("simulate-tx").about("Read a transaction from stdin and simulate it");
 
-    let tx_hash = Arg::with_name("tx-hash").help("Transaction hash");
+    let tx_hash = Arg::with_name("tx-hash").help("Fetch specific history record (optional)");
 
     let encode = Arg::with_name("encode")
         .long("encode")
@@ -392,9 +392,15 @@ pub fn generate_completions(shell: &str) -> Result<()> {
         .about("Fetch broadcasted transactions history")
         .args(&vec![tx_hash, encode]);
 
+    let height = Arg::with_name("height").help("Fetch specific height record (optional)");
+
+    let scanned_blocks = SubCommand::with_name("scanned-blocks")
+        .about("Fetch scanned blocks records")
+        .args(&vec![height]);
+
     let explorer = SubCommand::with_name("explorer")
         .about("Explorer related subcommands")
-        .subcommands(vec![fetch_tx, simulate_tx, txs_history]);
+        .subcommands(vec![fetch_tx, simulate_tx, txs_history, scanned_blocks]);
 
     // Alias
     let alias = Arg::with_name("alias").help("Token alias");

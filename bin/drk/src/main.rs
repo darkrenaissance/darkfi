@@ -410,6 +410,12 @@ enum ExplorerSubcmd {
         /// Encode specific history record transaction to base58
         encode: bool,
     },
+
+    /// Fetch scanned blocks records
+    ScannedBlocks {
+        /// Fetch specific height record (optional)
+        height: Option<u32>,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize, StructOpt)]
@@ -1954,6 +1960,56 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
                 if table.is_empty() {
                     println!("No transactions found");
+                } else {
+                    println!("{table}");
+                }
+
+                Ok(())
+            }
+
+            ExplorerSubcmd::ScannedBlocks { height } => {
+                let drk = new_wallet(
+                    blockchain_config.wallet_path,
+                    blockchain_config.wallet_pass,
+                    None,
+                    ex,
+                    args.fun,
+                )
+                .await;
+
+                if let Some(h) = height {
+                    let (height, hash, _) = match drk.get_scanned_block_record(h) {
+                        Ok(ret) => ret,
+                        Err(e) => {
+                            eprintln!("Failed to retrieve scanned block record: {e:?}");
+                            exit(2);
+                        }
+                    };
+
+                    println!("Height: {height}");
+                    println!("Hash: {hash}");
+
+                    return Ok(())
+                }
+
+                let map = match drk.get_scanned_block_records() {
+                    Ok(m) => m,
+                    Err(e) => {
+                        eprintln!("Failed to retrieve scanned blocks records: {e:?}");
+                        exit(2);
+                    }
+                };
+
+                // Create a prettytable with the new data:
+                let mut table = Table::new();
+                table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+                table.set_titles(row!["Height", "Hash"]);
+                for (height, hash, _) in map.iter() {
+                    table.add_row(row![height, hash]);
+                }
+
+                if table.is_empty() {
+                    println!("No scanned blocks records found");
                 } else {
                     println!("{table}");
                 }
