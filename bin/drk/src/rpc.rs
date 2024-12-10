@@ -156,15 +156,30 @@ impl Drk {
                         let block: BlockInfo = deserialize_async(&bytes).await?;
                         println!("Deserialized successfully. Scanning block...");
 
-                        // TODO: Fully test this once darkfid broadcasts reorg sequences
                         // Check if a reorg block was received, to reset to its previous
                         if block.header.height <= last_scanned_height {
-                            if let Err(e) =
-                                self.reset_to_height(block.header.height.saturating_sub(1)).await
-                            {
+                            let reset_height = block.header.height.saturating_sub(1);
+                            if let Err(e) = self.reset_to_height(reset_height).await {
                                 return Err(Error::DatabaseError(format!(
                                     "[subscribe_blocks] Wallet state reset failed: {e:?}"
                                 )))
+                            }
+
+                            // Scan genesis again if needed
+                            if reset_height == 0 {
+                                let genesis = match self.get_block_by_height(reset_height).await {
+                                    Ok(b) => b,
+                                    Err(e) => {
+                                        return Err(Error::Custom(format!(
+                                            "[subscribe_blocks] RPC client request failed: {e:?}"
+                                        )))
+                                    }
+                                };
+                                if let Err(e) = self.scan_block(&genesis).await {
+                                    return Err(Error::DatabaseError(format!(
+                                        "[subscribe_blocks] Scanning block failed: {e:?}"
+                                    )))
+                                };
                             }
                         }
 
