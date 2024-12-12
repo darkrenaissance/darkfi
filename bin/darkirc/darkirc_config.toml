@@ -26,6 +26,7 @@
 ## List of channels to autojoin for new client connections
 autojoin = [
     "#dev",
+    "#media",
     "#memes",
     "#philosophy",
     "#markets",
@@ -112,6 +113,9 @@ transport_mixing = false
 
 [channel."#dev"]
 topic = "DarkFi Development HQ"
+
+[channel."#media"]
+topic = "DarkFi Art, Fashion, Video, Memetics"
 
 [channel."#markets"]
 topic = "Crypto Market Talk"
