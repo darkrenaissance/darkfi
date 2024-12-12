@@ -32,6 +32,8 @@
 // accepts async fns.
 // See https://github.com/rust-lang/rust/issues/112566
 #![feature(get_mut_unchecked)]
+// string.chars().advance_back_by(n), not strictly needed but makes life easier
+#![feature(iter_advance_by)]
 
 // Use these to incrementally fix warnings with cargo fix
 //#![allow(warnings, unused)]
