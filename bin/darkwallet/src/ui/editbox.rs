@@ -426,6 +426,10 @@ impl Editable {
             self.composer.commit();
         }
     }
+    /// Convenience function
+    fn set_compose_region(&mut self, start: usize, end: usize) {
+        self.composer.set_compose_region(start, end);
+    }
 
     fn delete(&mut self, before: usize, after: usize) {
         self.end_compose();
@@ -444,8 +448,7 @@ impl Editable {
         self.end_compose();
 
         let rendered = self.render();
-        let cursor_off = self.get_text_before().len();
-        let mut cursor_pos = rendered.idx_to_pos(cursor_off);
+        let mut cursor_pos = self.get_cursor_pos(&rendered);
 
         // Move the cursor pos
         if dir < 0 {
@@ -469,6 +472,12 @@ impl Editable {
         let after_text = text.split_off(cursor_idx);
         self.before_text = text;
         self.after_text = after_text;
+    }
+
+    fn get_cursor_pos(&self, rendered: &RenderedEditable) -> usize {
+        let cursor_off = self.get_text_before().len();
+        let cursor_pos = rendered.idx_to_pos(cursor_off);
+        cursor_pos
     }
 
     fn render(&self) -> RenderedEditable {
@@ -790,18 +799,18 @@ impl EditBox {
     fn cursor_px_offset(&self) -> f32 {
         assert!(self.is_focused.get());
 
+        let (cursor_pos, glyphs) = {
+            let editable = self.editable.lock().unwrap();
+            let rendered = editable.render();
+            let cursor_pos = editable.get_cursor_pos(&rendered);
+            (cursor_pos, rendered.glyphs)
+        };
+
         let font_size = self.font_size.get();
         let window_scale = self.window_scale.get();
         let baseline = self.baseline.get();
         let scroll = self.scroll.get();
-        let mut cursor_pos = self.cursor_pos.get() as usize;
-        let mut glyphs = self.glyphs.lock().unwrap().clone();
         // Add composer glyphs too
-        let composer = self.composer.lock().unwrap().clone();
-        if cursor_pos >= composer.pos {
-            cursor_pos += composer.glyphs.len();
-        }
-        glyphs.splice(composer.pos..composer.pos, composer.glyphs);
         let glyph_pos_iter = GlyphPositionIter::new(font_size, window_scale, &glyphs, baseline);
         // Used for drawing the cursor when it's at the end of the line.
         let mut rhs = 0.;
@@ -1152,6 +1161,7 @@ impl EditBox {
         match key {
             KeyCode::Left => {
                 self.editable.lock().unwrap().move_cursor(-1);
+                self.pause_blinking();
                 self.redraw().await;
 
                 /*
@@ -1184,6 +1194,7 @@ impl EditBox {
             }
             KeyCode::Right => {
                 self.editable.lock().unwrap().move_cursor(1);
+                self.pause_blinking();
                 self.redraw().await;
 
                 /*
@@ -1235,7 +1246,10 @@ impl EditBox {
             }
             KeyCode::Delete => {
                 self.editable.lock().unwrap().delete(0, 1);
+                self.pause_blinking();
+                self.redraw().await;
 
+                /*
                 if !self.selected.is_null(0).unwrap() {
                     self.delete_highlighted();
                 } else {
@@ -1265,9 +1279,11 @@ impl EditBox {
                 self.regen_glyphs();
                 self.apply_cursor_scrolling();
                 self.redraw().await;
+                */
             }
             KeyCode::Backspace => {
                 self.editable.lock().unwrap().delete(1, 0);
+                self.pause_blinking();
                 self.redraw().await;
 
                 /*
@@ -1793,18 +1809,9 @@ impl UIObject for EditBox {
             return false
         }
 
-        let font_size = self.font_size.get();
-        let window_scale = self.window_scale.get();
-
         {
-            let mut composer = self.composer.lock().unwrap();
-
-            composer.activate_or_cont(self.cursor_pos.get() as usize);
-            composer.compose(suggest_text.to_string(), font_size, window_scale);
-
-            if is_commit {
-                composer.commit();
-            }
+            let mut editable = self.editable.lock().unwrap();
+            editable.compose(suggest_text, is_commit);
         }
 
         //self.apply_cursor_scrolling();
@@ -1820,9 +1827,10 @@ impl UIObject for EditBox {
         }
 
         {
-            let mut composer = self.composer.lock().unwrap();
-            composer.set_compose_region(start, end);
+            let mut editable = self.editable.lock().unwrap();
+            editable.set_compose_region(start, end);
         }
+
         self.redraw().await;
 
         true
