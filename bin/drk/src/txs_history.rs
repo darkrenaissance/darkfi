@@ -53,7 +53,7 @@ impl Drk {
 
         // Create its inverse query
         let tx_hash = tx.hash().to_string();
-        // We only need to reverse the transaction status to "Broadcasted"
+        // We only need to set the transaction status to "Reverted"
         let inverse = self.wallet.create_prepared_statement(
             &format!(
                 "UPDATE {} SET {} = ?1 WHERE {} = ?2;",
@@ -61,7 +61,7 @@ impl Drk {
                 WALLET_TXS_HISTORY_COL_STATUS,
                 WALLET_TXS_HISTORY_COL_TX_HASH
             ),
-            rusqlite::params!["Broadcasted", tx_hash],
+            rusqlite::params!["Reverted", tx_hash],
         )?;
 
         // Execute the query
@@ -156,6 +156,20 @@ impl Drk {
         let query = format!("DELETE FROM {};", WALLET_TXS_HISTORY_TABLE);
         self.wallet.exec_sql(&query, &[])?;
         println!("Successfully reset transactions history");
+
+        Ok(())
+    }
+
+    /// Remove the transaction history records in the wallet
+    /// that have been reverted.
+    pub fn remove_reverted_txs(&self) -> WalletDbResult<()> {
+        println!("Removing reverted transactions history records");
+        let query = format!(
+            "DELETE FROM {} WHERE {} = 'Reverted';",
+            WALLET_TXS_HISTORY_TABLE, WALLET_TXS_HISTORY_COL_STATUS
+        );
+        self.wallet.exec_sql(&query, &[])?;
+        println!("Successfully removed reverted transactions history records");
 
         Ok(())
     }

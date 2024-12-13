@@ -392,6 +392,9 @@ pub fn generate_completions(shell: &str) -> Result<()> {
         .about("Fetch broadcasted transactions history")
         .args(&vec![tx_hash, encode]);
 
+    let clear_reverted =
+        SubCommand::with_name("clear-reverted").about("Remove reverted transactions from history");
+
     let height = Arg::with_name("height").help("Fetch specific height record (optional)");
 
     let scanned_blocks = SubCommand::with_name("scanned-blocks")
@@ -400,7 +403,7 @@ pub fn generate_completions(shell: &str) -> Result<()> {
 
     let explorer = SubCommand::with_name("explorer")
         .about("Explorer related subcommands")
-        .subcommands(vec![fetch_tx, simulate_tx, txs_history, scanned_blocks]);
+        .subcommands(vec![fetch_tx, simulate_tx, txs_history, clear_reverted, scanned_blocks]);
 
     // Alias
     let alias = Arg::with_name("alias").help("Token alias");

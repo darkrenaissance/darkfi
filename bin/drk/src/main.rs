@@ -411,6 +411,9 @@ enum ExplorerSubcmd {
         encode: bool,
     },
 
+    /// Remove reverted transactions from history
+    ClearReverted,
+
     /// Fetch scanned blocks records
     ScannedBlocks {
         /// Fetch specific height record (optional)
@@ -1963,6 +1966,24 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 } else {
                     println!("{table}");
                 }
+
+                Ok(())
+            }
+
+            ExplorerSubcmd::ClearReverted => {
+                let drk = new_wallet(
+                    blockchain_config.wallet_path,
+                    blockchain_config.wallet_pass,
+                    None,
+                    ex,
+                    args.fun,
+                )
+                .await;
+
+                if let Err(e) = drk.remove_reverted_txs() {
+                    eprintln!("Failed to remove reverted transactions: {e:?}");
+                    exit(2);
+                };
 
                 Ok(())
             }
