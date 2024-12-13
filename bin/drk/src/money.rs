@@ -404,6 +404,31 @@ impl Drk {
         Ok(owncoins)
     }
 
+    /// Fetch provided transaction coins from the wallet.
+    pub async fn get_transaction_coins(&self, spent_tx_hash: &String) -> Result<Vec<OwnCoin>> {
+        let query = self.wallet.query_multiple(
+            &MONEY_COINS_TABLE,
+            &[],
+            convert_named_params! {(MONEY_COINS_COL_SPENT_TX_HASH, spent_tx_hash)},
+        );
+
+        let rows = match query {
+            Ok(r) => r,
+            Err(e) => {
+                return Err(Error::DatabaseError(format!(
+                    "[get_transaction_coins] Coins retrieval failed: {e:?}"
+                )))
+            }
+        };
+
+        let mut owncoins = Vec::with_capacity(rows.len());
+        for row in rows {
+            owncoins.push(self.parse_coin_record(&row).await?.0)
+        }
+
+        Ok(owncoins)
+    }
+
     /// Fetch provided token unspend balances from the wallet.
     pub async fn get_token_coins(&self, token_id: &TokenId) -> Result<Vec<OwnCoin>> {
         let query = self.wallet.query_multiple(
@@ -1055,16 +1080,28 @@ impl Drk {
             return Ok(false)
         }
 
+        // First we remark transaction spent coins
         let mut wallet_spent_coins = false;
-        for (coin, _, _) in self.get_coins(false).await? {
-            if nullifiers.contains(&coin.nullifier()) {
-                if let Err(e) = self.mark_spent_coin(&coin.coin, spent_tx_hash).await {
-                    return Err(Error::DatabaseError(format!(
-                        "[mark_spent_coins] Marking spent coin failed: {e:?}"
-                    )))
-                }
-                wallet_spent_coins = true;
+        for coin in self.get_transaction_coins(spent_tx_hash).await? {
+            if let Err(e) = self.mark_spent_coin(&coin.coin, spent_tx_hash).await {
+                return Err(Error::DatabaseError(format!(
+                    "[mark_spent_coins] Marking spent coin failed: {e:?}"
+                )))
             }
+            wallet_spent_coins = true;
+        }
+
+        // Then we mark transaction unspent coins
+        for (coin, _, _) in self.get_coins(false).await? {
+            if !nullifiers.contains(&coin.nullifier()) {
+                continue
+            }
+            if let Err(e) = self.mark_spent_coin(&coin.coin, spent_tx_hash).await {
+                return Err(Error::DatabaseError(format!(
+                    "[mark_spent_coins] Marking spent coin failed: {e:?}"
+                )))
+            }
+            wallet_spent_coins = true;
         }
 
         Ok(wallet_spent_coins)
