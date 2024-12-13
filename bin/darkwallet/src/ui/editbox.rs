@@ -359,6 +359,21 @@ impl RenderedEditable {
     }
 }
 
+/// Represents a string with a cursor. The cursor can be moved in terms of glyphs, which does
+/// not always correspond to chars in the string. We refer to byte indexes as idx, and glyph
+/// indexes as pos.
+///
+/// The full string is: `before_text + commit_text + compose_text + after_text`.
+/// The commit/compose text is the current text being composed which is needed for Android
+/// autosuggest input.
+///
+/// Before and after text refers to the cursor. The cursor position is always everything
+/// before `after_text`, that is: `before_text + commit_text + compose_text`.
+///
+/// We have to be careful when adjusting the cursor and other related ops like selecting text
+/// to first render and move in terms of glyphs due to kerning. For example the chars "ae"
+/// may be rendered as a single glyph in some fonts. Same for emojis represented by multiple
+/// chars which are often not even a single byte.
 struct Editable {
     text_shaper: TextShaperPtr,
 
@@ -472,6 +487,17 @@ impl Editable {
         let after_text = text.split_off(cursor_idx);
         self.before_text = text;
         self.after_text = after_text;
+    }
+
+    fn move_start(&mut self) {
+        self.end_compose();
+        self.after_text = self.get_text();
+        self.before_text.clear();
+    }
+    fn move_end(&mut self) {
+        self.end_compose();
+        self.before_text = self.get_text();
+        self.after_text.clear();
     }
 
     fn get_cursor_pos(&self, rendered: &RenderedEditable) -> usize {
@@ -1062,13 +1088,13 @@ impl EditBox {
         debug!(target: "ui::editbox", "handle_key({:?}, {:?})", key, mods);
         match key {
             KeyCode::Left => {
-                self.adjust_cursor(-1, mods.shift);
+                self.adjust_cursor(mods.shift, |editable| editable.move_cursor(-1));
                 self.pause_blinking();
                 //self.apply_cursor_scrolling();
                 self.redraw().await;
             }
             KeyCode::Right => {
-                self.adjust_cursor(1, mods.shift);
+                self.adjust_cursor(mods.shift, |editable| editable.move_cursor(1));
                 self.pause_blinking();
                 //self.apply_cursor_scrolling();
                 self.redraw().await;
@@ -1099,65 +1125,26 @@ impl EditBox {
                 self.redraw().await;
             }
             KeyCode::Home => {
-                /*
-                let cursor_pos = self.cursor_pos.get();
-
-                if !mods.shift {
-                    self.selected.set_null(Role::Internal, 0).unwrap();
-                    self.selected.set_null(Role::Internal, 1).unwrap();
-                } else if self.selected.is_null(0).unwrap() {
-                    assert!(self.selected.is_null(1).unwrap());
-                    self.selected.set_u32(Role::Internal, 0, cursor_pos).unwrap();
-                }
-
-                self.cursor_pos.set(0);
-
-                // Update selection
-                if mods.shift {
-                    self.selected.set_u32(Role::Internal, 1, cursor_pos).unwrap();
-                }
-
+                self.adjust_cursor(mods.shift, |editable| editable.move_start());
                 self.pause_blinking();
-                self.apply_cursor_scrolling();
+                //self.apply_cursor_scrolling();
                 self.redraw().await;
-                */
             }
             KeyCode::End => {
-                /*
-                let cursor_pos = self.cursor_pos.get();
-
-                if !mods.shift {
-                    self.selected.set_null(Role::Internal, 0).unwrap();
-                    self.selected.set_null(Role::Internal, 1).unwrap();
-                } else if self.selected.is_null(0).unwrap() {
-                    assert!(self.selected.is_null(1).unwrap());
-                    self.selected.set_u32(Role::Internal, 0, cursor_pos).unwrap();
-                }
-
-                let glyphs_len = self.glyphs.lock().unwrap().len();
-                self.cursor_pos.set(glyphs_len as u32);
-
-                // Update selection
-                if mods.shift {
-                    self.selected.set_u32(Role::Internal, 1, cursor_pos).unwrap();
-                }
-
+                self.adjust_cursor(mods.shift, |editable| editable.move_end());
                 self.pause_blinking();
-                self.apply_cursor_scrolling();
+                //self.apply_cursor_scrolling();
                 self.redraw().await;
-                */
             }
             _ => {}
         }
     }
 
-    fn adjust_cursor(&self, dir: isize, has_shift: bool) {
+    fn adjust_cursor(&self, has_shift: bool, move_cursor: impl Fn(&mut Editable)) {
         let mut editable = self.editable.lock().unwrap();
-
         let rendered = editable.render();
         let prev_cursor_pos = editable.get_cursor_pos(&rendered);
-
-        editable.move_cursor(dir);
+        move_cursor(&mut editable);
         let cursor_pos = editable.get_cursor_pos(&rendered);
         drop(editable);
 
