@@ -504,6 +504,18 @@ fn glyphs_to_string(glyphs: &Vec<Glyph>) -> String {
     text
 }
 
+#[derive(Clone)]
+struct Selection {
+    start: usize,
+    end: usize,
+}
+
+impl Selection {
+    fn new(start: usize, end: usize) -> Self {
+        Self { start, end }
+    }
+}
+
 pub type EditBoxPtr = Arc<EditBox>;
 
 pub struct EditBox {
@@ -519,7 +531,6 @@ pub struct EditBox {
     cursor_mesh: SyncMutex<Option<GfxDrawMesh>>,
     /// DC key for the cursor. Allows updating cursor independently.
     cursor_dc_key: u64,
-    text2_dc_key: u64,
 
     is_active: PropertyBool,
     is_focused: PropertyBool,
@@ -543,6 +554,7 @@ pub struct EditBox {
 
     composer: SyncMutex<ComposingText>,
     editable: SyncMutex<Editable>,
+    select: SyncMutex<Vec<Selection>>,
 
     mouse_btn_held: AtomicBool,
     cursor_is_visible: AtomicBool,
@@ -606,7 +618,6 @@ impl EditBox {
             text_dc_key: OsRng.gen(),
             cursor_mesh: SyncMutex::new(None),
             cursor_dc_key: OsRng.gen(),
-            text2_dc_key: OsRng.gen(),
 
             is_active,
             is_focused,
@@ -635,6 +646,7 @@ impl EditBox {
                 window_scale.clone(),
                 baseline,
             )),
+            select: SyncMutex::new(vec![]),
 
             mouse_btn_held: AtomicBool::new(false),
             cursor_is_visible: AtomicBool::new(true),
@@ -652,74 +664,8 @@ impl EditBox {
         self.node.upgrade().unwrap()
     }
 
-    /// This MUST be called whenever the text property is changed.
-    fn regen_glyphs(&self) {
-        let font_size = self.font_size.get();
-        let window_scale = self.window_scale.get();
-        let glyphs = self.text_shaper.shape(self.text.get(), font_size, window_scale);
-        // TODO: we aren't freeing textures
-        *self.glyphs.lock().unwrap() = glyphs;
-    }
-
     /// Called whenever the text or any text property changes.
     fn regen_text_mesh(&self, mut clip: Rectangle) -> GfxDrawMesh {
-        clip.x = 0.;
-        clip.y = 0.;
-
-        let is_focused = self.is_focused.get();
-        let text = self.text.get();
-        let font_size = self.font_size.get();
-        let window_scale = self.window_scale.get();
-        let text_color = self.text_color.get();
-        let baseline = self.baseline.get();
-        let scroll = self.scroll.get();
-        let cursor_pos = self.cursor_pos.get() as usize;
-        let cursor_color = self.cursor_color.get();
-        let debug = self.debug.get();
-        //debug!(target: "ui::editbox", "Rendering text '{text}' clip={clip:?}");
-        //debug!(target: "ui::editbox", "    cursor_pos={cursor_pos}, is_focused={is_focused}");
-
-        let mut glyphs = self.glyphs.lock().unwrap().clone();
-
-        // We clone composer. FYI we do destructive mods on it.
-        let composer = self.composer.lock().unwrap().clone();
-        let has_compose = composer.has_compose();
-        let under_start = composer.pos + composer.glyph_compose_start();
-        let under_end = composer.pos + composer.glyph_compose_end();
-        glyphs.splice(composer.pos..composer.pos, composer.glyphs);
-
-        let atlas = text::make_texture_atlas(&self.render_api, &glyphs);
-
-        //let mut mesh = MeshBuilder::with_clip(clip.clone());
-        let mut mesh = MeshBuilder::new();
-        self.draw_selected(&mut mesh, &glyphs, clip.h).unwrap();
-        if has_compose {
-            self.draw_underline(&mut mesh, &glyphs, clip.h, under_start, under_end);
-        }
-
-        let glyph_pos_iter = GlyphPositionIter::new(font_size, window_scale, &glyphs, baseline);
-
-        for (glyph_idx, (mut glyph_rect, glyph)) in glyph_pos_iter.zip(glyphs.iter()).enumerate() {
-            let uv_rect = atlas.fetch_uv(glyph.glyph_id).expect("missing glyph UV rect");
-
-            glyph_rect.x -= scroll;
-
-            //mesh.draw_outline(&glyph_rect, COLOR_BLUE, 2.);
-            let mut color = text_color.clone();
-            if glyph.sprite.has_color {
-                color = COLOR_WHITE;
-            }
-            mesh.draw_box(&glyph_rect, color, uv_rect);
-        }
-
-        if debug {
-            mesh.draw_outline(&clip, COLOR_BLUE, 1.);
-        }
-
-        mesh.alloc(&self.render_api).draw_with_texture(atlas.texture)
-    }
-
-    fn regen_text_mesh2(&self, mut clip: Rectangle) -> GfxDrawMesh {
         clip.x = 0.;
         clip.y = 0.;
 
@@ -741,6 +687,12 @@ impl EditBox {
 
         //let mut mesh = MeshBuilder::with_clip(clip.clone());
         let mut mesh = MeshBuilder::new();
+
+        let selections = self.select.lock().unwrap().clone();
+        for select in selections {
+            self.draw_selected(&mut mesh, &select, &rendered.glyphs, clip.h);
+        }
+
         if rendered.has_underline() {
             self.draw_underline(
                 &mut mesh,
@@ -838,23 +790,12 @@ impl EditBox {
     fn draw_selected(
         &self,
         mesh: &mut MeshBuilder,
+        select: &Selection,
         glyphs: &Vec<Glyph>,
         clip_h: f32,
-    ) -> Result<()> {
-        if self.selected.is_null(0)? || self.selected.is_null(1)? {
-            // Nothing selected so do nothing
-            return Ok(())
-        }
-        let start = self.selected.get_u32(0)? as usize;
-        let end = self.selected.get_u32(1)? as usize;
-
-        // Selection started but nothing selected yet so do nothing
-        if start == end {
-            return Ok(())
-        }
-
-        let sel_start = std::cmp::min(start, end);
-        let sel_end = std::cmp::max(start, end);
+    ) {
+        let start = std::cmp::min(select.start, select.end);
+        let end = std::cmp::max(select.start, select.end);
 
         let font_size = self.font_size.get();
         let window_scale = self.window_scale.get();
@@ -871,21 +812,21 @@ impl EditBox {
         for (glyph_idx, mut glyph_rect) in glyph_pos_iter.enumerate() {
             glyph_rect.x -= scroll;
 
-            if glyph_idx == sel_start {
+            if glyph_idx == start {
                 start_x = glyph_rect.x;
             }
-            if glyph_idx == sel_end {
+            if glyph_idx == end {
                 end_x = glyph_rect.x;
             }
 
             rhs = glyph_rect.rhs();
         }
 
-        if sel_start == 0 {
+        if start == 0 {
             start_x = scroll;
         }
 
-        if sel_end == glyphs.len() {
+        if end == glyphs.len() {
             rhs += eol_nudge(font_size, &glyphs);
             end_x = rhs;
         }
@@ -893,7 +834,6 @@ impl EditBox {
         // We don't need to do manual clipping since MeshBuilder should do that
         let select_rect = Rectangle { x: start_x, y: 0., w: end_x - start_x, h: clip_h };
         mesh.draw_box(&select_rect, hi_bg_color, &Rectangle::zero());
-        Ok(())
     }
 
     fn draw_underline(
@@ -977,8 +917,6 @@ impl EditBox {
             */
             return false
         }
-
-        self.reset_android_autosuggest().await;
 
         window::show_keyboard(true);
 
@@ -1096,43 +1034,7 @@ impl EditBox {
             editable.compose(key_str, true);
         }
 
-        if !self.selected.is_null(0).unwrap() {
-            self.delete_highlighted();
-            self.regen_glyphs();
-        };
-
-        let mut text = String::new();
-
-        let cursor_pos = self.cursor_pos.get();
-
-        let glyphs = self.glyphs.lock().unwrap().clone();
-
-        // We rebuild the string but insert our substr at cursor_pos.
-        // The substr is inserted before cursor_pos, and appending to the end
-        // of the string is when cursor_pos = len(str).
-        // We can't use String::insert() because sometimes multiple chars are combined
-        // into a single glyph. We treat the cursor pos as acting on the substrs
-        // themselves.
-        for (i, glyph) in glyphs.iter().enumerate() {
-            if cursor_pos == i as u32 {
-                text.push(key);
-            }
-            text.push_str(&glyph.substr);
-        }
-        // Append to the end
-        if cursor_pos == glyphs.len() as u32 {
-            text.push(key);
-        }
-
-        self.text.set(text);
-        // Not always true lol
-        // If glyphs are recombined, this could get messed up
-        // meh lets pretend it doesn't exist for now.
-        self.cursor_pos.set(cursor_pos + 1);
-
         self.pause_blinking();
-        self.regen_glyphs();
-        self.apply_cursor_scrolling();
         self.redraw().await;
     }
 
@@ -1160,75 +1062,17 @@ impl EditBox {
         debug!(target: "ui::editbox", "handle_key({:?}, {:?})", key, mods);
         match key {
             KeyCode::Left => {
-                self.editable.lock().unwrap().move_cursor(-1);
+                self.adjust_cursor(-1, mods.shift);
                 self.pause_blinking();
+                //self.apply_cursor_scrolling();
                 self.redraw().await;
-
-                /*
-                let mut cursor_pos = self.cursor_pos.get();
-
-                // Start selection if shift is held
-                if !mods.shift {
-                    self.selected.set_null(Role::Internal, 0).unwrap();
-                    self.selected.set_null(Role::Internal, 1).unwrap();
-                } else if self.selected.is_null(0).unwrap() {
-                    assert!(self.selected.is_null(1).unwrap());
-                    self.selected.set_u32(Role::Internal, 0, cursor_pos).unwrap();
-                }
-
-                if cursor_pos > 0 {
-                    cursor_pos -= 1;
-                    debug!(target: "ui::editbox", "Left cursor_pos={}", cursor_pos);
-                    self.cursor_pos.set(cursor_pos);
-                }
-
-                // Update selection
-                if mods.shift {
-                    self.selected.set_u32(Role::Internal, 1, cursor_pos).unwrap();
-                }
-
-                self.pause_blinking();
-                self.apply_cursor_scrolling();
-                self.redraw().await;
-                */
             }
             KeyCode::Right => {
-                self.editable.lock().unwrap().move_cursor(1);
+                self.adjust_cursor(1, mods.shift);
                 self.pause_blinking();
+                //self.apply_cursor_scrolling();
                 self.redraw().await;
-
-                /*
-                let mut cursor_pos = self.cursor_pos.get();
-
-                // Start selection if shift is held
-                if !mods.shift {
-                    self.selected.set_null(Role::Internal, 0).unwrap();
-                    self.selected.set_null(Role::Internal, 1).unwrap();
-                } else if self.selected.is_null(0).unwrap() {
-                    assert!(self.selected.is_null(1).unwrap());
-                    self.selected.set_u32(Role::Internal, 0, cursor_pos).unwrap();
-                }
-
-                let glyphs_len = self.glyphs.lock().unwrap().len() as u32;
-                if cursor_pos < glyphs_len {
-                    cursor_pos += 1;
-                    debug!(target: "ui::editbox", "Right cursor_pos={}", cursor_pos);
-                    self.cursor_pos.set(cursor_pos);
-                }
-
-                // Update selection
-                if mods.shift {
-                    self.selected.set_u32(Role::Internal, 1, cursor_pos).unwrap();
-                }
-
-                self.pause_blinking();
-                self.apply_cursor_scrolling();
-                self.redraw().await;
-                */
             }
-            //KeyCode::Up,
-            //KeyCode::Down,
-            //KeyCode::Enter,
             KeyCode::Kp0 => self.insert_char('0').await,
             KeyCode::Kp1 => self.insert_char('1').await,
             KeyCode::Kp2 => self.insert_char('2').await,
@@ -1248,74 +1092,14 @@ impl EditBox {
                 self.editable.lock().unwrap().delete(0, 1);
                 self.pause_blinking();
                 self.redraw().await;
-
-                /*
-                if !self.selected.is_null(0).unwrap() {
-                    self.delete_highlighted();
-                } else {
-                    let glyphs = self.glyphs.lock().unwrap().clone();
-
-                    let cursor_pos = self.cursor_pos.get();
-                    if cursor_pos == glyphs.len() as u32 {
-                        return;
-                    }
-
-                    // Regen text
-                    let mut text = String::new();
-                    for (i, glyph) in glyphs.iter().enumerate() {
-                        let mut substr = glyph.substr.clone();
-                        if cursor_pos as usize == i {
-                            // Lmk if anyone knows a better way to do substr.pop_front()
-                            let mut chars = substr.chars();
-                            chars.next();
-                            substr = chars.as_str().to_string();
-                        }
-                        text.push_str(&substr);
-                    }
-                    self.text.set(text);
-                };
-
-                self.pause_blinking();
-                self.regen_glyphs();
-                self.apply_cursor_scrolling();
-                self.redraw().await;
-                */
             }
             KeyCode::Backspace => {
                 self.editable.lock().unwrap().delete(1, 0);
                 self.pause_blinking();
                 self.redraw().await;
-
-                /*
-                if !self.selected.is_null(0).unwrap() {
-                    self.delete_highlighted();
-                } else {
-                    let glyphs = self.glyphs.lock().unwrap().clone();
-
-                    let cursor_pos = self.cursor_pos.get();
-                    if cursor_pos == 0 {
-                        return;
-                    }
-
-                    let mut text = String::new();
-                    for (i, glyph) in glyphs.iter().enumerate() {
-                        let mut substr = glyph.substr.clone();
-                        if cursor_pos as usize - 1 == i {
-                            substr.pop().unwrap();
-                        }
-                        text.push_str(&substr);
-                    }
-                    self.text.set(text);
-                    self.cursor_pos.set(cursor_pos - 1);
-                };
-
-                self.pause_blinking();
-                self.regen_glyphs();
-                self.apply_cursor_scrolling();
-                self.redraw().await;
-                */
             }
             KeyCode::Home => {
+                /*
                 let cursor_pos = self.cursor_pos.get();
 
                 if !mods.shift {
@@ -1336,8 +1120,10 @@ impl EditBox {
                 self.pause_blinking();
                 self.apply_cursor_scrolling();
                 self.redraw().await;
+                */
             }
             KeyCode::End => {
+                /*
                 let cursor_pos = self.cursor_pos.get();
 
                 if !mods.shift {
@@ -1359,29 +1145,38 @@ impl EditBox {
                 self.pause_blinking();
                 self.apply_cursor_scrolling();
                 self.redraw().await;
+                */
             }
             _ => {}
         }
     }
 
-    async fn reset_android_autosuggest(&self) {
-        #[cfg(target_os = "android")]
-        crate::android::cancel_composition();
+    fn adjust_cursor(&self, dir: isize, has_shift: bool) {
+        let mut editable = self.editable.lock().unwrap();
 
-        // Clear the composer state and add the glyphs
-        let (compose_idx, compose_glyphs) = {
-            let mut composer = self.composer.lock().unwrap();
-            composer.reset()
-        };
+        let rendered = editable.render();
+        let prev_cursor_pos = editable.get_cursor_pos(&rendered);
 
-        let mut glyphs = self.glyphs.lock().unwrap();
-        glyphs.splice(compose_idx..compose_idx, compose_glyphs);
+        editable.move_cursor(dir);
+        let cursor_pos = editable.get_cursor_pos(&rendered);
+        drop(editable);
 
-        let text = Self::glyphs_to_string(&glyphs);
-        drop(glyphs);
+        let mut select = self.select.lock().unwrap();
 
-        self.text.set(text);
+        // Start selection if shift is held
+        if has_shift {
+            // Create a new selection
+            if select.is_empty() {
+                select.push(Selection::new(prev_cursor_pos, cursor_pos));
+            }
+
+            // Update the selection
+            select.last_mut().unwrap().end = cursor_pos;
+        } else {
+            select.clear();
+        }
     }
+
     fn glyphs_to_string(glyphs: &Vec<Glyph>) -> String {
         let mut text = String::new();
         for (i, glyph) in glyphs.iter().enumerate() {
@@ -1565,19 +1360,8 @@ impl EditBox {
     fn draw_cached(&self) -> Option<DrawUpdate> {
         let rect = self.rect.get();
 
-        // Force complete redraw if the window scale changed
-        let window_scale = self.window_scale.get();
-        if self.old_window_scale.swap(window_scale, Ordering::Relaxed) != window_scale {
-            self.regen_glyphs();
-        }
-
         let text_mesh = self.regen_text_mesh(rect.clone());
-
         let cursor_instrs = self.get_cursor_instrs();
-
-        // ------------------
-        let text_mesh2 = self.regen_text_mesh2(rect.clone());
-        // ------------------
 
         Some(DrawUpdate {
             key: self.text_dc_key,
@@ -1587,23 +1371,15 @@ impl EditBox {
                     GfxDrawCall {
                         instrs: vec![
                             GfxDrawInstruction::Move(rect.pos()),
-                            //GfxDrawInstruction::Draw(text_mesh),
+                            GfxDrawInstruction::Draw(text_mesh),
                         ],
-                        dcs: vec![self.cursor_dc_key, self.text2_dc_key],
+                        dcs: vec![self.cursor_dc_key],
                         z_index: self.z_index.get(),
                     },
                 ),
                 (
                     self.cursor_dc_key,
                     GfxDrawCall { instrs: cursor_instrs, dcs: vec![], z_index: self.z_index.get() },
-                ),
-                (
-                    self.text2_dc_key,
-                    GfxDrawCall {
-                        instrs: vec![GfxDrawInstruction::Draw(text_mesh2)],
-                        dcs: vec![],
-                        z_index: self.z_index.get(),
-                    },
                 ),
             ],
         })
@@ -1639,7 +1415,6 @@ impl UIObject for EditBox {
             self_.selected.set_null(Role::Internal, 0).unwrap();
             self_.selected.set_null(Role::Internal, 1).unwrap();
             self_.scroll.set(0.);
-            self_.regen_glyphs();
             self_.redraw();
         }
         async fn redraw(self_: Arc<EditBox>) {
@@ -1711,8 +1486,6 @@ impl UIObject for EditBox {
             return false
         }
 
-        self.reset_android_autosuggest().await;
-
         if mods.ctrl || mods.alt {
             if repeat {
                 return false
@@ -1742,8 +1515,6 @@ impl UIObject for EditBox {
         if !self.is_focused.get() {
             return false
         }
-
-        self.reset_android_autosuggest().await;
 
         let actions = {
             let mut repeater = self.key_repeat.lock().unwrap();
@@ -1793,6 +1564,7 @@ impl UIObject for EditBox {
             return false
         }
 
+        /*
         // Simulate mouse events
         match phase {
             TouchPhase::Started => self.handle_click_down(MouseButton::Left, touch_pos).await,
@@ -1800,6 +1572,9 @@ impl UIObject for EditBox {
             TouchPhase::Ended => self.handle_click_up(MouseButton::Left, touch_pos),
             TouchPhase::Cancelled => false,
         }
+        */
+
+        false
     }
 
     async fn handle_compose_text(&self, suggest_text: &str, is_commit: bool) -> bool {
