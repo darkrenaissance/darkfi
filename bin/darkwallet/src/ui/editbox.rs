@@ -357,6 +357,27 @@ impl RenderedEditable {
     fn has_underline(&self) -> bool {
         self.under_start != self.under_end
     }
+
+    /// Converts x offset to glyph pos. Will round to the closest side.
+    fn x_to_pos(&self, x: f32, font_size: f32, window_scale: f32, baseline: f32) -> usize {
+        debug!(target: "ui::editbox", "x_to_pos({x})");
+        let glyph_pos_iter =
+            GlyphPositionIter::new(font_size, window_scale, &self.glyphs, baseline);
+        for (glyph_idx, glyph_rect) in glyph_pos_iter.enumerate() {
+            if x >= glyph_rect.rhs() {
+                continue
+            }
+
+            let midpoint = glyph_rect.x + glyph_rect.w / 2.;
+            if x < midpoint {
+                return glyph_idx;
+            }
+            assert!(x >= midpoint);
+            return glyph_idx + 1;
+        }
+        // Everything to the right is at the end
+        self.glyphs.len()
+    }
 }
 
 /// Represents a string with a cursor. The cursor can be moved in terms of glyphs, which does
@@ -482,9 +503,16 @@ impl Editable {
         }
 
         // Convert cursor pos to string idx
-        let cursor_idx = rendered.pos_to_idx(cursor_pos);
+        let idx = rendered.pos_to_idx(cursor_pos);
+        self.set_cursor_idx(idx);
+    }
+
+    fn set_cursor_idx(&mut self, idx: usize) {
+        // move_cursor() also calls this, but should be fine.
+        self.end_compose();
+
         let mut text = self.get_text();
-        let after_text = text.split_off(cursor_idx);
+        let after_text = text.split_off(idx);
         self.before_text = text;
         self.after_text = after_text;
     }
@@ -530,7 +558,7 @@ fn glyphs_to_string(glyphs: &Vec<Glyph>) -> String {
     text
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 struct Selection {
     start: usize,
     end: usize,
@@ -820,6 +848,9 @@ impl EditBox {
         glyphs: &Vec<Glyph>,
         clip_h: f32,
     ) {
+        if select.start == select.end {
+            return
+        }
         let start = std::cmp::min(select.start, select.end);
         let end = std::cmp::max(select.start, select.end);
 
@@ -920,138 +951,6 @@ impl EditBox {
         self.redraw().await;
     }
 
-    async fn handle_click_down(&self, btn: MouseButton, mouse_pos: Point) -> bool {
-        if btn != MouseButton::Left {
-            return false
-        }
-
-        let rect = self.rect.get();
-
-        // clicking inside box will:
-        // 1. make it active
-        // 2. begin selection
-        if !rect.contains(mouse_pos) {
-            /*
-            if self.is_focused.get() {
-                debug!(target: "ui::editbox", "EditBox unfocused");
-                self.is_focused.set(false);
-                self.selected.set_null(Role::Internal, 0).unwrap();
-                self.selected.set_null(Role::Internal, 1).unwrap();
-
-                self.redraw().await;
-            }
-            */
-            return false
-        }
-
-        window::show_keyboard(true);
-
-        if self.is_focused.get() {
-            debug!(target: "ui::editbox", "EditBox clicked");
-        } else {
-            debug!(target: "ui::editbox", "EditBox focused");
-            self.is_focused.set(true);
-        }
-
-        let cpos = self.find_closest_glyph_idx(mouse_pos.x, &rect);
-
-        // set cursor pos
-        self.cursor_pos.set(cpos);
-        self.apply_cursor_scrolling();
-
-        // begin selection
-        self.selected.set_u32(Role::Internal, 0, cpos).unwrap();
-        self.selected.set_u32(Role::Internal, 1, cpos).unwrap();
-
-        self.mouse_btn_held.store(true, Ordering::Relaxed);
-
-        self.redraw().await;
-        true
-    }
-    fn handle_click_up(&self, btn: MouseButton, pos: Point) -> bool {
-        if btn != MouseButton::Left {
-            return false
-        }
-
-        // releasing mouse button will end selection
-        self.mouse_btn_held.store(false, Ordering::Relaxed);
-        false
-    }
-    async fn handle_cursor_move(&self, pos: Point) -> bool {
-        if !self.mouse_btn_held.load(Ordering::Relaxed) {
-            return false;
-        }
-
-        // if active and selection_active, then use x to modify the selection.
-        // also implement scrolling when cursor is to the left or right
-        // just scroll to the end
-        // also set cursor_pos too
-
-        let rect = self.rect.get();
-        let cpos = self.find_closest_glyph_idx(pos.x, &rect);
-
-        self.cursor_pos.set(cpos);
-        self.selected.set_u32(Role::Internal, 1, cpos).unwrap();
-
-        self.apply_cursor_scrolling();
-        self.redraw().await;
-        false
-    }
-
-    /// Used when clicking the text. Given the x coord of the mouse, it finds the index
-    /// of the closest glyph to that x coord.
-    fn find_closest_glyph_idx(&self, x: f32, rect: &Rectangle) -> u32 {
-        let font_size = self.font_size.get();
-        let window_scale = self.window_scale.get();
-        let baseline = self.baseline.get();
-        let glyphs = self.glyphs.lock().unwrap().clone();
-
-        let mouse_x = x - rect.x;
-
-        if mouse_x > rect.w {
-            // Highlight to the end
-            let cpos = glyphs.len() as u32;
-            return cpos;
-            // Scroll to the right handled in render
-        } else if mouse_x < 0. {
-            return 0;
-        }
-
-        let scroll = self.scroll.get();
-
-        let mut cpos = 0;
-        let lhs = 0.;
-        let mut last_d = (lhs - mouse_x).abs();
-
-        let glyph_pos_iter = GlyphPositionIter::new(font_size, window_scale, &glyphs, baseline);
-        let mut rhs = 0.;
-
-        for (i, glyph_rect) in glyph_pos_iter.skip(1).enumerate() {
-            // Because we skip the first item
-            let glyph_idx = (i + 1) as u32;
-
-            let x1 = glyph_rect.x - scroll;
-
-            // I don't know what this is doing but it works so I won't touch it for now.
-            let curr_d = (x1 - mouse_x).abs();
-            if curr_d < last_d {
-                last_d = curr_d;
-                cpos = glyph_idx;
-            }
-
-            rhs = glyph_rect.rhs();
-        }
-
-        // also check the right hand side
-        let curr_d = (rhs - mouse_x).abs();
-        if curr_d < last_d {
-            //last_d = curr_d;
-            cpos = glyphs.len() as u32;
-        }
-
-        cpos
-    }
-
     async fn insert_char(&self, key: char) {
         {
             let mut editable = self.editable.lock().unwrap();
@@ -1115,12 +1014,12 @@ impl EditBox {
                 node.trigger("enter_pressed", vec![]).await.unwrap();
             }
             KeyCode::Delete => {
-                self.editable.lock().unwrap().delete(0, 1);
+                self.delete(0, 1);
                 self.pause_blinking();
                 self.redraw().await;
             }
             KeyCode::Backspace => {
-                self.editable.lock().unwrap().delete(1, 0);
+                self.delete(1, 0);
                 self.pause_blinking();
                 self.redraw().await;
             }
@@ -1138,6 +1037,18 @@ impl EditBox {
             }
             _ => {}
         }
+    }
+
+    fn delete(&self, before: usize, after: usize) {
+        let mut editable = self.editable.lock().unwrap();
+        let mut select = self.select.lock().unwrap();
+
+        if select.is_empty() {
+            editable.delete(before, after);
+            return
+        }
+
+        // How do we preserve the cursor pos after deleting text?
     }
 
     fn adjust_cursor(&self, has_shift: bool, move_cursor: impl Fn(&mut Editable)) {
@@ -1522,7 +1433,60 @@ impl UIObject for EditBox {
             return false
         }
 
-        self.handle_click_down(btn, mouse_pos).await
+        if btn != MouseButton::Left {
+            return false
+        }
+
+        let rect = self.rect.get();
+
+        // clicking inside box will:
+        // 1. make it active
+        // 2. begin selection
+        if !rect.contains(mouse_pos) {
+            if self.is_focused.get() {
+                debug!(target: "ui::editbox", "EditBox unfocused");
+                self.is_focused.set(false);
+                self.select.lock().unwrap().clear();
+
+                self.redraw().await;
+            }
+            return false
+        }
+
+        window::show_keyboard(true);
+
+        if self.is_focused.get() {
+            debug!(target: "ui::editbox", "EditBox clicked");
+        } else {
+            debug!(target: "ui::editbox", "EditBox focused");
+            self.is_focused.set(true);
+        }
+
+        let font_size = self.font_size.get();
+        let window_scale = self.window_scale.get();
+        let baseline = self.baseline.get();
+
+        {
+            let mut editable = self.editable.lock().unwrap();
+            let rendered = editable.render();
+            // Adjust with scroll here too
+            let x = mouse_pos.x - rect.x;
+
+            let cpos = rendered.x_to_pos(x, font_size, window_scale, baseline);
+            let cidx = rendered.pos_to_idx(cpos);
+            editable.set_cursor_idx(cidx);
+
+            // begin selection
+            let mut select = self.select.lock().unwrap();
+            select.clear();
+            select.push(Selection::new(cpos, cpos));
+
+            self.mouse_btn_held.store(true, Ordering::Relaxed);
+        }
+
+        self.pause_blinking();
+        self.redraw().await;
+        true
     }
 
     async fn handle_mouse_btn_up(&self, btn: MouseButton, mouse_pos: Point) -> bool {
@@ -1530,7 +1494,9 @@ impl UIObject for EditBox {
             return false
         }
 
-        self.handle_click_up(btn, mouse_pos)
+        // releasing mouse button will end selection
+        self.mouse_btn_held.store(false, Ordering::Relaxed);
+        false
     }
 
     async fn handle_mouse_move(&self, mouse_pos: Point) -> bool {
@@ -1538,7 +1504,40 @@ impl UIObject for EditBox {
             return false
         }
 
-        self.handle_cursor_move(mouse_pos).await
+        if !self.mouse_btn_held.load(Ordering::Relaxed) {
+            return false;
+        }
+
+        // if active and selection_active, then use x to modify the selection.
+        // also implement scrolling when cursor is to the left or right
+        // just scroll to the end
+        // also set cursor_pos too
+
+        let rect = self.rect.get();
+
+        let font_size = self.font_size.get();
+        let window_scale = self.window_scale.get();
+        let baseline = self.baseline.get();
+
+        {
+            let mut editable = self.editable.lock().unwrap();
+            let rendered = editable.render();
+            // Adjust with scroll here too
+            let x = mouse_pos.x - rect.x;
+
+            let cpos = rendered.x_to_pos(x, font_size, window_scale, baseline);
+            let cidx = rendered.pos_to_idx(cpos);
+            editable.set_cursor_idx(cidx);
+
+            // begin selection
+            let mut select = self.select.lock().unwrap();
+            select.last_mut().unwrap().end = cpos;
+        }
+
+        self.pause_blinking();
+        //self.apply_cursor_scrolling();
+        self.redraw().await;
+        false
     }
 
     async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {

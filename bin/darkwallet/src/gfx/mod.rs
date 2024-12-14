@@ -733,7 +733,6 @@ impl EventHandler for Stage {
     }
 
     fn key_down_event(&mut self, keycode: KeyCode, mods: KeyMods, repeat: bool) {
-        debug!(target: "gfx", "key_down_event");
         self.event_pub.notify_key_down(keycode, mods, repeat);
     }
     fn key_up_event(&mut self, keycode: KeyCode, mods: KeyMods) {
