@@ -1058,14 +1058,15 @@ impl Drk {
 
         // Create its inverse query
         let inverse_query = format!(
-            "UPDATE {} SET {} = NULL, {} = NULL, {} = NULL, {} = NULL, {} = NULL, WHERE {} = ?1;",
+            "UPDATE {} SET {} = NULL, {} = NULL, {} = NULL, {} = NULL, {} = NULL, {} = NULL WHERE {} = ?1;",
             *DAO_PROPOSALS_TABLE,
             DAO_PROPOSALS_COL_LEAF_POSITION,
             DAO_PROPOSALS_COL_MONEY_SNAPSHOT_TREE,
             DAO_PROPOSALS_COL_NULLIFIERS_SMT_SNAPSHOT,
             DAO_PROPOSALS_COL_TX_HASH,
             DAO_PROPOSALS_COL_CALL_INDEX,
-            DAO_PROPOSALS_COL_BULLA,
+            DAO_PROPOSALS_COL_EXEC_TX_HASH,
+            DAO_PROPOSALS_COL_BULLA
         );
         let inverse =
             match self.wallet.create_prepared_statement(&inverse_query, rusqlite::params![key]) {
@@ -1098,7 +1099,7 @@ impl Drk {
     pub async fn unconfirm_proposals(&self, proposals: &[ProposalRecord]) -> WalletDbResult<()> {
         for proposal in proposals {
             let query = format!(
-                "UPDATE {} SET {} = ?1, {} = ?2, {} = ?3, {} = ?4, {} = ?5, {} = ?6 WHERE {} = ?7;",
+                "UPDATE {} SET {} = NULL, {} = NULL, {} = NULL, {} = NULL, {} = NULL, {} = NULL WHERE {} = ?1;",
                 *DAO_PROPOSALS_TABLE,
                 DAO_PROPOSALS_COL_LEAF_POSITION,
                 DAO_PROPOSALS_COL_MONEY_SNAPSHOT_TREE,
@@ -1108,18 +1109,8 @@ impl Drk {
                 DAO_PROPOSALS_COL_EXEC_TX_HASH,
                 DAO_PROPOSALS_COL_BULLA
             );
-            self.wallet.exec_sql(
-                &query,
-                rusqlite::params![
-                    None::<Vec<u8>>,
-                    None::<Vec<u8>>,
-                    None::<Vec<u8>>,
-                    None::<Vec<u8>>,
-                    None::<u64>,
-                    None::<Vec<u8>>,
-                    serialize_async(&proposal.bulla()).await
-                ],
-            )?;
+            self.wallet
+                .exec_sql(&query, rusqlite::params![serialize_async(&proposal.bulla()).await])?;
         }
 
         Ok(())
@@ -1160,7 +1151,7 @@ impl Drk {
         // Since we don't know the record ID we will remove it
         // using all its fields.
         let inverse_query = format!(
-            "DELETE FROM {} WHERE {} = ?1, {} = ?2, {} = ?3, {} = ?4, {} = ?5, {} = ?6, {} = ?7, {} = ?8;",
+            "DELETE FROM {} WHERE {} = ?1 AND {} = ?2 AND {} = ?3 AND {} = ?4 AND {} = ?5 AND {} = ?6 AND {} = ?7 AND {} = ?8;",
             *DAO_VOTES_TABLE,
             DAO_VOTES_COL_PROPOSAL_BULLA,
             DAO_VOTES_COL_VOTE_OPTION,
