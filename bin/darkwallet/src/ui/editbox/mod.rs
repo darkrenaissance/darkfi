@@ -35,7 +35,7 @@ use crate::{
     error::Result,
     gfx::{
         GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId, GraphicsEventPublisherPtr,
-        Point, Rectangle, RenderApi,
+        Point, Rectangle, RenderApi, Vertex,
     },
     mesh::{MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_WHITE},
     prop::{
@@ -163,6 +163,7 @@ enum TouchStateAction {
     Select,
     ScrollUp,
     MoveCursor,
+    DragSelectHandle { side: isize }
 }
 
 struct TouchInfo {
@@ -223,7 +224,6 @@ pub struct EditBox {
     cursor_mesh: SyncMutex<Option<GfxDrawMesh>>,
     /// DC key for the cursor. Allows updating cursor independently.
     cursor_dc_key: u64,
-    popup_dc_key: u64,
 
     is_active: PropertyBool,
     is_focused: PropertyBool,
@@ -258,7 +258,7 @@ pub struct EditBox {
     hide_cursor: AtomicBool,
 
     touch_info: SyncMutex<TouchInfo>,
-    phone_select: AtomicBool,
+    is_phone_select: AtomicBool,
 
     old_window_scale: AtomicF32,
     window_scale: PropertyFloat32,
@@ -323,7 +323,6 @@ impl EditBox {
             text_dc_key: OsRng.gen(),
             cursor_mesh: SyncMutex::new(None),
             cursor_dc_key: OsRng.gen(),
-            popup_dc_key: OsRng.gen(),
 
             is_active,
             is_focused,
@@ -362,7 +361,7 @@ impl EditBox {
             hide_cursor: AtomicBool::new(false),
 
             touch_info: SyncMutex::new(TouchInfo::new()),
-            phone_select: AtomicBool::new(false),
+            is_phone_select: AtomicBool::new(false),
 
             old_window_scale: AtomicF32::new(window_scale.get()),
             window_scale,
@@ -402,6 +401,10 @@ impl EditBox {
         let mut mesh = MeshBuilder::new();
 
         let selections = self.select.lock().unwrap().clone();
+        // Just an assert
+        if self.is_phone_select.load(Ordering::Relaxed) {
+            assert!(selections.len() <= 1);
+        }
         for select in &selections {
             self.draw_selected(&mut mesh, select, &rendered.glyphs, clip.h);
         }
@@ -537,6 +540,8 @@ impl EditBox {
         let hi_bg_color = self.hi_bg_color.get();
         let glyph_pos_iter = GlyphPositionIter::new(font_size, window_scale, &glyphs, baseline);
 
+        let is_phone_select = self.is_phone_select.load(Ordering::Relaxed);
+
         let mut start_x = 0.;
         let mut end_x = 0.;
         // When cursor lands at the end of the line
@@ -574,6 +579,65 @@ impl EditBox {
             h: select_ascent + select_descent,
         };
         mesh.draw_box(&select_rect, hi_bg_color, &Rectangle::zero());
+
+        if is_phone_select {
+            self.draw_phone_select_handle(mesh, start_x);
+            self.draw_phone_select_handle(mesh, end_x);
+        }
+    }
+
+    fn draw_phone_select_handle(&self, mesh: &mut MeshBuilder, x: f32) {
+        let baseline = self.baseline.get();
+        let select_ascent = self.select_ascent.get();
+        let select_descent = self.select_descent.get();
+        let color = self.text_hi_color.get();
+
+        const HANDLE_HEIGHT: f32 = 10.;
+        const DIAMOND_HEIGHT: f32 = 35.;
+        const DIAMOND_RADIUS: f32 = 25.;
+        const BEVEL_HEIGHT: f32 = 15.;
+        const BEVEL_WIDTH: f32 = 5.;
+
+        let line_rect = Rectangle {
+            // Make x the middle
+            x: x - 1.,
+            y: baseline - select_ascent - HANDLE_HEIGHT,
+            // Extend 1px on either side
+            w: 2.,
+            h: select_ascent + select_descent + HANDLE_HEIGHT,
+        };
+        mesh.draw_box(&line_rect, color, &Rectangle::zero());
+
+        let y = line_rect.y;
+
+        // Go anti-clockwise
+        let verts = vec![
+            Vertex { pos: [x, y], color, uv: [0., 0.] },
+            Vertex { pos: [x - DIAMOND_RADIUS, y - DIAMOND_HEIGHT], color, uv: [0., 0.] },
+            Vertex { pos: [x + DIAMOND_RADIUS, y - DIAMOND_HEIGHT], color, uv: [0., 0.] },
+            Vertex {
+                pos: [x - DIAMOND_RADIUS + BEVEL_WIDTH, y - DIAMOND_HEIGHT],
+                color,
+                uv: [0., 0.],
+            },
+            Vertex {
+                pos: [x - DIAMOND_RADIUS + 2. * BEVEL_WIDTH, y - DIAMOND_HEIGHT - BEVEL_HEIGHT],
+                color,
+                uv: [0., 0.],
+            },
+            Vertex {
+                pos: [x + DIAMOND_RADIUS - BEVEL_WIDTH, y - DIAMOND_HEIGHT],
+                color,
+                uv: [0., 0.],
+            },
+            Vertex {
+                pos: [x + DIAMOND_RADIUS - 2. * BEVEL_WIDTH, y - DIAMOND_HEIGHT - BEVEL_HEIGHT],
+                color,
+                uv: [0., 0.],
+            },
+        ];
+        let indices = vec![0, 2, 1, 1, 3, 4, 2, 5, 6, 4, 3, 5, 4, 5, 6];
+        mesh.append(verts, indices);
     }
 
     fn draw_underline(
@@ -803,6 +867,7 @@ impl EditBox {
             select.push(Selection::new(cpos_start, cpos_end));
         }
 
+        self.is_phone_select.store(true, Ordering::Relaxed);
         // redraw() will now hide the cursor
         self.hide_cursor.store(true, Ordering::Relaxed);
     }
@@ -889,7 +954,17 @@ impl EditBox {
 
     async fn handle_touch_start(&self, pos: Point) -> bool {
         debug!(target: "ui::editbox", "handle_touch_start({pos:?})");
-        self.touch_info.lock().unwrap().start(pos.clone());
+        let mut touch_info = self.touch_info.lock().unwrap();
+
+        let selections = self.select.lock().unwrap().clone();
+        if self.is_phone_select.load(Ordering::Relaxed) && selections.len() == 1 {
+            // Get left handle centerpoint
+            // Get right handle centerpoint
+            // Are we within range of either one?
+            // Set touch_state status to enable begin dragging them
+        }
+
+        touch_info.start(pos.clone());
         false
     }
     async fn handle_touch_move(&self, pos: Point) -> bool {
@@ -935,6 +1010,7 @@ impl EditBox {
                     select.clear();
                 }
 
+                self.is_phone_select.store(false, Ordering::Relaxed);
                 // Reshow cursor (if hidden)
                 self.hide_cursor.store(false, Ordering::Relaxed);
 
