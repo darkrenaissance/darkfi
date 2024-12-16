@@ -52,6 +52,8 @@ mod ui_consts {
     pub const EDITCHAT_HEIGHT: f32 = 163.;
     pub const EDITCHAT_CURSOR_ASCENT: f32 = 50.;
     pub const EDITCHAT_CURSOR_DESCENT: f32 = 20.;
+    pub const EDITCHAT_SELECT_ASCENT: f32 = 60.;
+    pub const EDITCHAT_SELECT_DESCENT: f32 = 30.;
     pub const TEXTBAR_BASELINE: f32 = 93.;
     pub const EDITCHAT_LHS_PAD: f32 = 30.;
     pub const SENDLABEL_WIDTH: f32 = 200.;
@@ -72,6 +74,8 @@ mod ui_consts {
     pub const EDITCHAT_HEIGHT: f32 = 50.;
     pub const EDITCHAT_CURSOR_ASCENT: f32 = 25.;
     pub const EDITCHAT_CURSOR_DESCENT: f32 = 8.;
+    pub const EDITCHAT_SELECT_ASCENT: f32 = 30.;
+    pub const EDITCHAT_SELECT_DESCENT: f32 = 10.;
     pub const TEXTBAR_BASELINE: f32 = 34.;
     pub const EDITCHAT_LHS_PAD: f32 = 20.;
     pub const SENDLABEL_WIDTH: f32 = 120.;
@@ -320,6 +324,8 @@ pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
     prop.set_f32(Role::App, 3, 1.).unwrap();
     node.set_property_f32(Role::App, "cursor_ascent", 40.).unwrap();
     node.set_property_f32(Role::App, "cursor_descent", 40.).unwrap();
+    node.set_property_f32(Role::App, "select_ascent", 60.).unwrap();
+    node.set_property_f32(Role::App, "select_descent", 60.).unwrap();
     let prop = node.get_property("hi_bg_color").unwrap();
     if LIGHTMODE {
         prop.set_f32(Role::App, 0, 0.5).unwrap();
@@ -804,6 +810,11 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
         prop.set_f32(Role::App, 2, 1.).unwrap();
         prop.set_f32(Role::App, 3, 1.).unwrap();
     }
+    let prop = node.get_property("text_hi_color").unwrap();
+    prop.set_f32(Role::App, 0, 0.44).unwrap();
+    prop.set_f32(Role::App, 1, 0.96).unwrap();
+    prop.set_f32(Role::App, 2, 1.).unwrap();
+    prop.set_f32(Role::App, 3, 1.).unwrap();
     let prop = node.get_property("cursor_color").unwrap();
     prop.set_f32(Role::App, 0, 0.816).unwrap();
     prop.set_f32(Role::App, 1, 0.627).unwrap();
@@ -812,16 +823,18 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     node.set_property_f32(Role::App, "cursor_ascent", EDITCHAT_CURSOR_ASCENT).unwrap();
     node.set_property_f32(Role::App, "cursor_descent", EDITCHAT_CURSOR_DESCENT).unwrap();
     let prop = node.get_property("hi_bg_color").unwrap();
+    node.set_property_f32(Role::App, "select_ascent", EDITCHAT_SELECT_ASCENT).unwrap();
+    node.set_property_f32(Role::App, "select_descent", EDITCHAT_SELECT_DESCENT).unwrap();
     if LIGHTMODE {
         prop.set_f32(Role::App, 0, 0.5).unwrap();
         prop.set_f32(Role::App, 1, 0.5).unwrap();
         prop.set_f32(Role::App, 2, 0.5).unwrap();
         prop.set_f32(Role::App, 3, 1.).unwrap();
     } else {
-        prop.set_f32(Role::App, 0, 1.).unwrap();
-        prop.set_f32(Role::App, 1, 1.).unwrap();
-        prop.set_f32(Role::App, 2, 1.).unwrap();
-        prop.set_f32(Role::App, 3, 0.5).unwrap();
+        prop.set_f32(Role::App, 0, 0.).unwrap();
+        prop.set_f32(Role::App, 1, 0.27).unwrap();
+        prop.set_f32(Role::App, 2, 0.22).unwrap();
+        prop.set_f32(Role::App, 3, 1.).unwrap();
     }
     let prop = node.get_property("selected").unwrap();
     prop.set_null(Role::App, 0).unwrap();

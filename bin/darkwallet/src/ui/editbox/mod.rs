@@ -45,11 +45,14 @@ use crate::{
     pubsub::Subscription,
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
     text::{self, Glyph, GlyphPositionIter, TextShaperPtr},
-    util::{enumerate_ref, is_whitespace},
+    util::{enumerate_ref, is_whitespace, zip3},
     ExecutorPtr,
 };
 
 use super::{DrawUpdate, OnModify, UIObject};
+
+mod editable;
+use editable::{Editable, Selection, TextIdx, TextPos};
 
 // EOL whitespace is given a nudge since it has a width of 0 after text shaping
 const CURSOR_EOL_WS_NUDGE: f32 = 0.8;
@@ -140,433 +143,68 @@ impl RepeatingKeyTimer {
     }
 }
 
-/// Android composing text from autosuggest.
-/// We need this because IMEs can arbitrary set a composing region after
-/// the text has been committed.
 #[derive(Clone)]
-struct ComposingText {
-    is_active: bool,
-    /// Glyph insertion point in the main text.
-    pos: usize,
-    /// Text that has been committed
-    commit_text: String,
-    /// Text that is being composed
-    compose_text: String,
-
-    region_start: usize,
-    region_end: usize,
-
-    glyphs: Vec<Glyph>,
-    text_shaper: TextShaperPtr,
+struct TouchStartInfo {
+    pos: Point,
+    instant: std::time::Instant,
 }
 
-impl ComposingText {
-    fn new(text_shaper: TextShaperPtr) -> Self {
-        Self {
-            is_active: false,
-            pos: 0,
-            commit_text: String::new(),
-            compose_text: String::new(),
-            region_start: 0,
-            region_end: 0,
-            glyphs: Vec::new(),
-            text_shaper,
-        }
-    }
-
-    /// When clearing, the glyphs should be taken and added to the main glyphs vec in parent
-    fn reset(&mut self) -> (usize, Vec<Glyph>) {
-        self.is_active = false;
-        self.commit_text.clear();
-        self.compose_text.clear();
-        self.region_start = 0;
-        self.region_end = 0;
-        (self.pos, std::mem::take(&mut self.glyphs))
-    }
-
-    /// If deactivated, then active at the cursor_pos
-    fn activate_or_cont(&mut self, cursor_pos: usize) {
-        if !self.is_active {
-            self.is_active = true;
-            self.pos = cursor_pos;
-        }
-    }
-
-    /// Total text to display.
-    fn get_text(&self) -> String {
-        self.commit_text.clone() + &self.compose_text
-    }
-
-    /// Set composing text.
-    fn compose(&mut self, text: String, font_size: f32, window_scale: f32) {
-        assert!(self.is_active);
-        self.compose_text = text;
-
-        self.region_start = self.commit_text.len();
-        self.region_end = self.region_start + self.compose_text.len();
-
-        let glyphs = self.text_shaper.shape(self.get_text(), font_size, window_scale);
-        self.glyphs = glyphs;
-    }
-
-    /// Commit the composing text.
-    fn commit(&mut self) {
-        assert!(self.is_active);
-        self.commit_text += &self.compose_text;
-        self.compose_text.clear();
-
-        self.region_start = self.commit_text.len();
-        self.region_end = self.commit_text.len();
-    }
-
-    /// Override the composing region for display.
-    /// Anyone who looks closely at this impl might thing it's wrong that subsequent
-    /// calls to compose() will ignore what's set here, but indeed this is how Android behaves.
-    fn set_compose_region(&mut self, start: usize, end: usize) {
-        assert!(start <= end);
-        assert!(end <= self.commit_text.len() + self.compose_text.len());
-        self.region_start = start;
-        self.region_end = end;
-    }
-
-    fn glyph_compose_start(&self) -> usize {
-        self.convert_str_idx(self.region_start)
-    }
-    fn glyph_compose_end(&self) -> usize {
-        self.convert_str_idx(self.region_end)
-    }
-
-    fn has_compose(&self) -> bool {
-        self.region_start != self.region_end
-    }
-
-    /// Convert index in str to index in glyphs vec
-    fn convert_str_idx(&self, idx: usize) -> usize {
-        let mut curr_idx = 0;
-        for (i, glyph) in self.glyphs.iter().enumerate() {
-            curr_idx += glyph.substr.len();
-            if curr_idx > idx {
-                return i;
-            }
-        }
-        // We reached the end
-        return self.glyphs.len();
+impl TouchStartInfo {
+    fn new(pos: Point) -> Self {
+        Self { pos, instant: std::time::Instant::now() }
     }
 }
 
-/// Android composing text from autosuggest.
-/// We need this because IMEs can arbitrary set a composing region after
-/// the text has been committed.
 #[derive(Clone)]
-struct ComposingText2 {
-    /// Text that is being composed
-    compose_text: String,
-    /// Text that has been committed
-    commit_text: String,
-
-    region_start: usize,
-    region_end: usize,
+enum TouchStateAction {
+    Inactive,
+    Started { pos: Point, instant: std::time::Instant },
+    StartSelect,
+    Select,
+    ScrollUp,
+    MoveCursor,
 }
 
-impl ComposingText2 {
+struct TouchInfo {
+    state: TouchStateAction,
+    start: Option<TouchStartInfo>,
+}
+
+impl TouchInfo {
     fn new() -> Self {
-        Self {
-            compose_text: String::new(),
-            commit_text: String::new(),
-            region_start: 0,
-            region_end: 0,
-        }
+        Self { state: TouchStateAction::Inactive, start: None }
     }
 
-    fn clear(&mut self) -> String {
-        self.region_start = 0;
-        self.region_end = 0;
-        let final_text = std::mem::take(&mut self.compose_text) + &self.commit_text;
-        self.commit_text.clear();
-        final_text
+    fn start(&mut self, pos: Point) {
+        self.state = TouchStateAction::Started { pos, instant: std::time::Instant::now() };
     }
 
-    /// Set composing text.
-    fn compose(&mut self, text: String) {
-        self.compose_text = text;
-
-        self.region_start = self.commit_text.len();
-        self.region_end = self.region_start + self.compose_text.len();
+    fn stop(&mut self) -> TouchStateAction {
+        std::mem::replace(&mut self.state, TouchStateAction::Inactive)
     }
 
-    /// Commit the composing text.
-    fn commit(&mut self) {
-        self.commit_text += &self.compose_text;
-        self.compose_text.clear();
+    fn update(&mut self, pos: &Point) {
+        match &self.state {
+            TouchStateAction::Started { pos: start_pos, instant } => {
+                let travel_dist = pos.dist_sq(&start_pos);
+                let y_dist = pos.y - start_pos.y;
+                let elapsed = instant.elapsed().as_millis();
 
-        self.region_start = self.commit_text.len();
-        self.region_end = self.commit_text.len();
-    }
-
-    /// Override the composing region for display.
-    /// Anyone who looks closely at this impl might thing it's wrong that subsequent
-    /// calls to compose() will ignore what's set here, but indeed this is how Android behaves.
-    fn set_compose_region(&mut self, start: usize, end: usize) {
-        assert!(start <= end);
-        assert!(end <= self.commit_text.len() + self.compose_text.len());
-        self.region_start = start;
-        self.region_end = end;
-    }
-}
-
-struct RenderedEditable {
-    glyphs: Vec<Glyph>,
-    under_start: usize,
-    under_end: usize,
-    //select_start: usize,
-    //select_end: usize,
-}
-
-impl RenderedEditable {
-    fn new(glyphs: Vec<Glyph>, under_start: usize, under_end: usize) -> Self {
-        let mut self_ = Self { glyphs, under_start: 0, under_end: 0 };
-        self_.under_start = self_.idx_to_pos(under_start);
-        self_.under_end = self_.idx_to_pos(under_end);
-        self_
-    }
-
-    /// Which glyph contains the char at idx?
-    fn idx_to_pos(&self, idx: usize) -> usize {
-        let mut total = 0;
-        for (i, glyph) in enumerate_ref(&self.glyphs) {
-            total += glyph.substr.len();
-            if idx < total {
-                return i
+                if travel_dist < 5. {
+                    if elapsed > 1000 {
+                        self.state = TouchStateAction::StartSelect;
+                        debug!(target: "ui::editbox", "touch long-hold select activated");
+                    }
+                } else if y_dist.abs() > 5. {
+                    self.state = TouchStateAction::ScrollUp;
+                    debug!(target: "ui::editbox", "touch scroll-up activated");
+                } else {
+                    self.state = TouchStateAction::MoveCursor;
+                    debug!(target: "ui::editbox", "move-cursor activated");
+                }
             }
+            _ => {}
         }
-        return self.glyphs.len();
-    }
-
-    /// Converts glyph pos to idx in the string
-    fn pos_to_idx(&self, pos: usize) -> usize {
-        let mut idx = 0;
-        for (i, glyph) in enumerate_ref(&self.glyphs) {
-            if i == pos {
-                return idx
-            }
-            idx += glyph.substr.len();
-        }
-        return idx;
-    }
-
-    fn has_underline(&self) -> bool {
-        self.under_start != self.under_end
-    }
-
-    /// Converts x offset to glyph pos. Will round to the closest side.
-    fn x_to_pos(&self, x: f32, font_size: f32, window_scale: f32, baseline: f32) -> usize {
-        debug!(target: "ui::editbox", "x_to_pos({x})");
-        let glyph_pos_iter =
-            GlyphPositionIter::new(font_size, window_scale, &self.glyphs, baseline);
-        for (glyph_idx, glyph_rect) in glyph_pos_iter.enumerate() {
-            if x >= glyph_rect.rhs() {
-                continue
-            }
-
-            let midpoint = glyph_rect.x + glyph_rect.w / 2.;
-            if x < midpoint {
-                return glyph_idx;
-            }
-            assert!(x >= midpoint);
-            return glyph_idx + 1;
-        }
-        // Everything to the right is at the end
-        self.glyphs.len()
-    }
-}
-
-/// Represents a string with a cursor. The cursor can be moved in terms of glyphs, which does
-/// not always correspond to chars in the string. We refer to byte indexes as idx, and glyph
-/// indexes as pos.
-///
-/// The full string is: `before_text + commit_text + compose_text + after_text`.
-/// The commit/compose text is the current text being composed which is needed for Android
-/// autosuggest input.
-///
-/// Before and after text refers to the cursor. The cursor position is always everything
-/// before `after_text`, that is: `before_text + commit_text + compose_text`.
-///
-/// We have to be careful when adjusting the cursor and other related ops like selecting text
-/// to first render and move in terms of glyphs due to kerning. For example the chars "ae"
-/// may be rendered as a single glyph in some fonts. Same for emojis represented by multiple
-/// chars which are often not even a single byte.
-struct Editable {
-    text_shaper: TextShaperPtr,
-
-    composer: ComposingText2,
-
-    before_text: String,
-    after_text: String,
-
-    font_size: PropertyFloat32,
-    window_scale: PropertyFloat32,
-    baseline: PropertyFloat32,
-}
-
-impl Editable {
-    fn new(
-        text_shaper: TextShaperPtr,
-
-        font_size: PropertyFloat32,
-        window_scale: PropertyFloat32,
-        baseline: PropertyFloat32,
-    ) -> Self {
-        Self {
-            text_shaper,
-            composer: ComposingText2::new(),
-            before_text: String::new(),
-            after_text: String::new(),
-            font_size,
-            window_scale,
-            baseline,
-        }
-    }
-
-    // reset composition
-    // set text
-    // find pos
-    // compose
-    // commit
-    // set_compose_region
-    // delete (forward, back)
-    // set cursor
-
-    /// Reset any composition in progress
-    fn end_compose(&mut self) {
-        #[cfg(target_os = "android")]
-        crate::android::cancel_composition();
-
-        let final_text = self.composer.clear();
-        self.before_text += &final_text;
-    }
-
-    fn get_text_before(&self) -> String {
-        let text =
-            self.before_text.clone() + &self.composer.commit_text + &self.composer.compose_text;
-        text
-    }
-    fn get_text(&self) -> String {
-        let text = self.get_text_before() + &self.after_text;
-        text
-    }
-
-    fn compose(&mut self, suggest_text: &str, is_commit: bool) {
-        //composer.activate_or_cont(self.cursor_pos.get() as usize);
-        self.composer.compose(suggest_text.to_string());
-        if is_commit {
-            self.composer.commit();
-        }
-    }
-    /// Convenience function
-    fn set_compose_region(&mut self, start: usize, end: usize) {
-        self.composer.set_compose_region(start, end);
-    }
-
-    fn delete(&mut self, before: usize, after: usize) {
-        self.end_compose();
-
-        let mut chars = self.before_text.chars();
-        chars.advance_back_by(before);
-        self.before_text = chars.as_str().to_string();
-
-        let mut chars = self.after_text.chars();
-        chars.advance_by(after);
-        self.after_text = chars.as_str().to_string();
-    }
-
-    /// Move the cursor. This offset should be computed from the glyphs.
-    fn move_cursor(&mut self, dir: isize) {
-        self.end_compose();
-
-        let rendered = self.render();
-        let mut cursor_pos = self.get_cursor_pos(&rendered);
-
-        // Move the cursor pos
-        if dir < 0 {
-            assert!(-dir >= 0);
-            let dir = -dir as usize;
-            if cursor_pos > 0 {
-                cursor_pos -= dir;
-            }
-        } else {
-            assert!(dir >= 0);
-            cursor_pos += dir as usize;
-            let glyphs_len = rendered.glyphs.len();
-            if cursor_pos > glyphs_len {
-                cursor_pos = glyphs_len;
-            }
-        }
-
-        // Convert cursor pos to string idx
-        let idx = rendered.pos_to_idx(cursor_pos);
-        self.set_cursor_idx(idx);
-    }
-
-    fn set_cursor_idx(&mut self, idx: usize) {
-        // move_cursor() also calls this, but should be fine.
-        self.end_compose();
-
-        let mut text = self.get_text();
-        let after_text = text.split_off(idx);
-        self.before_text = text;
-        self.after_text = after_text;
-    }
-
-    fn move_start(&mut self) {
-        self.end_compose();
-        self.after_text = self.get_text();
-        self.before_text.clear();
-    }
-    fn move_end(&mut self) {
-        self.end_compose();
-        self.before_text = self.get_text();
-        self.after_text.clear();
-    }
-
-    fn get_cursor_pos(&self, rendered: &RenderedEditable) -> usize {
-        let cursor_off = self.get_text_before().len();
-        let cursor_pos = rendered.idx_to_pos(cursor_off);
-        cursor_pos
-    }
-
-    fn render(&self) -> RenderedEditable {
-        let font_size = self.font_size.get();
-        let window_scale = self.window_scale.get();
-
-        let text = self.get_text();
-        let glyphs = self.text_shaper.shape(text, font_size, window_scale);
-
-        let compose_off = self.before_text.len();
-        RenderedEditable::new(
-            glyphs,
-            compose_off + self.composer.region_start,
-            compose_off + self.composer.region_end,
-        )
-    }
-}
-
-fn glyphs_to_string(glyphs: &Vec<Glyph>) -> String {
-    let mut text = String::new();
-    for (i, glyph) in glyphs.iter().enumerate() {
-        text.push_str(&glyph.substr);
-    }
-    text
-}
-
-#[derive(Debug, Clone)]
-struct Selection {
-    start: usize,
-    end: usize,
-}
-
-impl Selection {
-    fn new(start: usize, end: usize) -> Self {
-        Self { start, end }
     }
 }
 
@@ -585,6 +223,7 @@ pub struct EditBox {
     cursor_mesh: SyncMutex<Option<GfxDrawMesh>>,
     /// DC key for the cursor. Allows updating cursor independently.
     cursor_dc_key: u64,
+    popup_dc_key: u64,
 
     is_active: PropertyBool,
     is_focused: PropertyBool,
@@ -595,6 +234,7 @@ pub struct EditBox {
     font_size: PropertyFloat32,
     text: PropertyStr,
     text_color: PropertyColor,
+    text_hi_color: PropertyColor,
     cursor_color: PropertyColor,
     cursor_width: PropertyFloat32,
     cursor_ascent: PropertyFloat32,
@@ -602,17 +242,23 @@ pub struct EditBox {
     cursor_blink_time: PropertyUint32,
     cursor_idle_time: PropertyUint32,
     hi_bg_color: PropertyColor,
+    select_ascent: PropertyFloat32,
+    select_descent: PropertyFloat32,
     selected: PropertyPtr,
     z_index: PropertyUint32,
     debug: PropertyBool,
 
-    composer: SyncMutex<ComposingText>,
     editable: SyncMutex<Editable>,
     select: SyncMutex<Vec<Selection>>,
 
     mouse_btn_held: AtomicBool,
     cursor_is_visible: AtomicBool,
     blink_is_paused: AtomicBool,
+    /// Used to explicitly hide the cursor. Must be manually re-enabled.
+    hide_cursor: AtomicBool,
+
+    touch_info: SyncMutex<TouchInfo>,
+    phone_select: AtomicBool,
 
     old_window_scale: AtomicF32,
     window_scale: PropertyFloat32,
@@ -639,6 +285,7 @@ impl EditBox {
         let font_size = PropertyFloat32::wrap(node_ref, Role::Internal, "font_size", 0).unwrap();
         let text = PropertyStr::wrap(node_ref, Role::Internal, "text", 0).unwrap();
         let text_color = PropertyColor::wrap(node_ref, Role::Internal, "text_color").unwrap();
+        let text_hi_color = PropertyColor::wrap(node_ref, Role::Internal, "text_hi_color").unwrap();
         let cursor_color = PropertyColor::wrap(node_ref, Role::Internal, "cursor_color").unwrap();
         let cursor_width =
             PropertyFloat32::wrap(node_ref, Role::Internal, "cursor_width", 0).unwrap();
@@ -647,6 +294,10 @@ impl EditBox {
         let cursor_descent =
             PropertyFloat32::wrap(node_ref, Role::Internal, "cursor_descent", 0).unwrap();
         let hi_bg_color = PropertyColor::wrap(node_ref, Role::Internal, "hi_bg_color").unwrap();
+        let select_ascent =
+            PropertyFloat32::wrap(node_ref, Role::Internal, "select_ascent", 0).unwrap();
+        let select_descent =
+            PropertyFloat32::wrap(node_ref, Role::Internal, "select_descent", 0).unwrap();
         let selected = node_ref.get_property("selected").unwrap();
         let cursor_blink_time =
             PropertyUint32::wrap(node_ref, Role::Internal, "cursor_blink_time", 0).unwrap();
@@ -672,6 +323,7 @@ impl EditBox {
             text_dc_key: OsRng.gen(),
             cursor_mesh: SyncMutex::new(None),
             cursor_dc_key: OsRng.gen(),
+            popup_dc_key: OsRng.gen(),
 
             is_active,
             is_focused,
@@ -682,6 +334,7 @@ impl EditBox {
             font_size: font_size.clone(),
             text,
             text_color,
+            text_hi_color,
             cursor_color,
             cursor_width,
             cursor_ascent,
@@ -689,11 +342,12 @@ impl EditBox {
             cursor_blink_time,
             cursor_idle_time,
             hi_bg_color,
+            select_ascent,
+            select_descent,
             selected,
             z_index,
             debug,
 
-            composer: SyncMutex::new(ComposingText::new(text_shaper.clone())),
             editable: SyncMutex::new(Editable::new(
                 text_shaper,
                 font_size,
@@ -705,6 +359,10 @@ impl EditBox {
             mouse_btn_held: AtomicBool::new(false),
             cursor_is_visible: AtomicBool::new(true),
             blink_is_paused: AtomicBool::new(false),
+            hide_cursor: AtomicBool::new(false),
+
+            touch_info: SyncMutex::new(TouchInfo::new()),
+            phone_select: AtomicBool::new(false),
 
             old_window_scale: AtomicF32::new(window_scale.get()),
             window_scale,
@@ -728,6 +386,7 @@ impl EditBox {
         let font_size = self.font_size.get();
         let window_scale = self.window_scale.get();
         let text_color = self.text_color.get();
+        let text_hi_color = self.text_hi_color.get();
         let baseline = self.baseline.get();
         let scroll = self.scroll.get();
         let cursor_pos = self.cursor_pos.get() as usize;
@@ -743,9 +402,10 @@ impl EditBox {
         let mut mesh = MeshBuilder::new();
 
         let selections = self.select.lock().unwrap().clone();
-        for select in selections {
-            self.draw_selected(&mut mesh, &select, &rendered.glyphs, clip.h);
+        for select in &selections {
+            self.draw_selected(&mut mesh, select, &rendered.glyphs, clip.h);
         }
+        let select_marks = self.mark_selected_glyphs(&rendered.glyphs, selections);
 
         if rendered.has_underline() {
             self.draw_underline(
@@ -760,8 +420,8 @@ impl EditBox {
         let glyph_pos_iter =
             GlyphPositionIter::new(font_size, window_scale, &rendered.glyphs, baseline);
 
-        for (glyph_idx, (mut glyph_rect, glyph)) in
-            glyph_pos_iter.zip(rendered.glyphs.iter()).enumerate()
+        for (glyph_idx, mut glyph_rect, glyph, is_selected) in
+            zip3(glyph_pos_iter, rendered.glyphs.iter(), select_marks.iter())
         {
             let uv_rect = atlas.fetch_uv(glyph.glyph_id).expect("missing glyph UV rect");
 
@@ -769,6 +429,9 @@ impl EditBox {
 
             //mesh.draw_outline(&glyph_rect, COLOR_BLUE, 2.);
             let mut color = text_color.clone();
+            if *is_selected {
+                color = text_hi_color.clone();
+            }
             if glyph.sprite.has_color {
                 color = COLOR_WHITE;
             }
@@ -841,6 +504,19 @@ impl EditBox {
         rhs
     }
 
+    fn mark_selected_glyphs(&self, glyphs: &Vec<Glyph>, selections: Vec<Selection>) -> Vec<bool> {
+        let mut marks: Vec<_> = glyphs.iter().map(|_| false).collect();
+        for select in selections {
+            let start = std::cmp::min(select.start, select.end);
+            let end = std::cmp::max(select.start, select.end);
+
+            for i in start..end {
+                marks[i] = true;
+            }
+        }
+        marks
+    }
+
     fn draw_selected(
         &self,
         mesh: &mut MeshBuilder,
@@ -888,8 +564,15 @@ impl EditBox {
             end_x = rhs;
         }
 
-        // We don't need to do manual clipping since MeshBuilder should do that
-        let select_rect = Rectangle { x: start_x, y: 0., w: end_x - start_x, h: clip_h };
+        let select_ascent = self.select_ascent.get();
+        let select_descent = self.select_descent.get();
+
+        let select_rect = Rectangle {
+            x: start_x,
+            y: baseline - select_ascent,
+            w: end_x - start_x,
+            h: select_ascent + select_descent,
+        };
         mesh.draw_box(&select_rect, hi_bg_color, &Rectangle::zero());
     }
 
@@ -1075,6 +758,55 @@ impl EditBox {
         }
     }
 
+    /// This will select the entire word rather than move the cursor to that location
+    fn start_touch_select(&self, x: f32) {
+        let rect = self.rect.get();
+
+        let font_size = self.font_size.get();
+        let window_scale = self.window_scale.get();
+        let baseline = self.baseline.get();
+
+        {
+            let mut editable = self.editable.lock().unwrap();
+            let rendered = editable.render();
+            // Adjust with scroll here too
+            let x = x - rect.x;
+
+            let cpos = rendered.x_to_pos(x, font_size, window_scale, baseline);
+
+            // Find word start
+            let mut cpos_start = cpos;
+            while cpos_start > 0 {
+                // Is the glyph before this pos just whitespace?
+                let glyph_str = &rendered.glyphs[cpos_start - 1].substr;
+                if is_whitespace(glyph_str) {
+                    break
+                }
+                cpos_start -= 1;
+            }
+            // Find word end
+            let mut cpos_end = cpos;
+            while cpos_end < rendered.glyphs.len() {
+                cpos_end += 1;
+                let glyph_str = &rendered.glyphs[cpos_end].substr;
+                if is_whitespace(glyph_str) {
+                    break
+                }
+            }
+
+            let cidx_start = rendered.pos_to_idx(cpos_start);
+            let cidx_end = rendered.pos_to_idx(cpos_end);
+
+            // begin selection
+            let mut select = self.select.lock().unwrap();
+            select.clear();
+            select.push(Selection::new(cpos_start, cpos_end));
+        }
+
+        // redraw() will now hide the cursor
+        self.hide_cursor.store(true, Ordering::Relaxed);
+    }
+
     fn glyphs_to_string(glyphs: &Vec<Glyph>) -> String {
         let mut text = String::new();
         for (i, glyph) in glyphs.iter().enumerate() {
@@ -1155,6 +887,65 @@ impl EditBox {
         self.redraw().await;
     }
 
+    async fn handle_touch_start(&self, pos: Point) -> bool {
+        debug!(target: "ui::editbox", "handle_touch_start({pos:?})");
+        self.touch_info.lock().unwrap().start(pos.clone());
+        false
+    }
+    async fn handle_touch_move(&self, pos: Point) -> bool {
+        debug!(target: "ui::editbox", "handle_touch_move({pos:?})");
+        let touch_state = {
+            let mut touch_info = self.touch_info.lock().unwrap();
+            touch_info.update(&pos);
+            touch_info.state.clone()
+        };
+        match &touch_state {
+            TouchStateAction::StartSelect => {
+                let x = pos.x;
+                self.start_touch_select(x);
+                self.redraw().await;
+                self.touch_info.lock().unwrap().state = TouchStateAction::Select;
+            }
+            _ => {}
+        }
+        false
+    }
+    async fn handle_touch_end(&self, pos: Point) -> bool {
+        debug!(target: "ui::editbox", "handle_touch_end({pos:?})");
+        let state = self.touch_info.lock().unwrap().stop();
+        match state {
+            TouchStateAction::Started { pos: _, instant: _ } => {
+                let rect = self.rect.get();
+                let font_size = self.font_size.get();
+                let window_scale = self.window_scale.get();
+                let baseline = self.baseline.get();
+
+                {
+                    let mut editable = self.editable.lock().unwrap();
+                    let rendered = editable.render();
+                    // Adjust with scroll here too
+                    let x = pos.x - rect.x;
+
+                    let cpos = rendered.x_to_pos(x, font_size, window_scale, baseline);
+                    let cidx = rendered.pos_to_idx(cpos);
+                    editable.set_cursor_idx(cidx);
+
+                    // begin selection
+                    let mut select = self.select.lock().unwrap();
+                    select.clear();
+                }
+
+                // Reshow cursor (if hidden)
+                self.hide_cursor.store(false, Ordering::Relaxed);
+
+                self.redraw().await;
+            }
+            _ => {}
+        }
+        window::show_keyboard(true);
+        false
+    }
+
     /// Whenever the cursor property is modified this MUST be called
     /// to recalculate the scroll x property.
     fn apply_cursor_scrolling(&self) {
@@ -1232,7 +1023,10 @@ impl EditBox {
     }
 
     fn get_cursor_instrs(&self) -> Vec<GfxDrawInstruction> {
-        if !self.is_focused.get() || !self.cursor_is_visible.load(Ordering::Relaxed) {
+        if !self.is_focused.get() ||
+            !self.cursor_is_visible.load(Ordering::Relaxed) ||
+            self.hide_cursor.load(Ordering::Relaxed)
+        {
             return vec![]
         }
 
@@ -1453,8 +1247,6 @@ impl UIObject for EditBox {
             return false
         }
 
-        window::show_keyboard(true);
-
         if self.is_focused.get() {
             debug!(target: "ui::editbox", "EditBox clicked");
         } else {
@@ -1550,17 +1342,12 @@ impl UIObject for EditBox {
             return false
         }
 
-        /*
-        // Simulate mouse events
         match phase {
-            TouchPhase::Started => self.handle_click_down(MouseButton::Left, touch_pos).await,
-            TouchPhase::Moved => self.handle_cursor_move(touch_pos).await,
-            TouchPhase::Ended => self.handle_click_up(MouseButton::Left, touch_pos),
+            TouchPhase::Started => self.handle_touch_start(touch_pos).await,
+            TouchPhase::Moved => self.handle_touch_move(touch_pos).await,
+            TouchPhase::Ended => self.handle_touch_end(touch_pos).await,
             TouchPhase::Cancelled => false,
         }
-        */
-
-        false
     }
 
     async fn handle_compose_text(&self, suggest_text: &str, is_commit: bool) -> bool {

@@ -84,6 +84,10 @@ impl Point {
     pub fn to_rect(&self, w: f32, h: f32) -> Rectangle {
         Rectangle { x: self.x, y: self.y, w, h }
     }
+
+    pub fn dist_sq(&self, other: &Point) -> f32 {
+        (self.x - other.x).powi(2) + (self.y - other.y).powi(2)
+    }
 }
 
 impl From<[f32; 2]> for Point {
