@@ -23,7 +23,7 @@ use darkfi::{
 use darkfi_dao_contract::{
     blockwindow,
     client::{DaoVoteCall, DaoVoteInput},
-    model::{Dao, DaoProposal, DaoProposalBulla, DaoVoteParams},
+    model::{Dao, DaoProposal, DaoVoteParams},
     DaoFunction, DAO_CONTRACT_ZKAS_DAO_VOTE_INPUT_NS, DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS,
 };
 use darkfi_money_contract::{
@@ -42,7 +42,6 @@ use super::{Holder, TestHarness};
 
 impl TestHarness {
     /// Create a `Dao::Vote` transaction.
-    #[allow(clippy::too_many_arguments)]
     pub async fn dao_vote(
         &mut self,
         voter: &Holder,
@@ -50,7 +49,6 @@ impl TestHarness {
         dao: &Dao,
         dao_keypair: &Keypair,
         proposal: &DaoProposal,
-        proposal_bulla: &DaoProposalBulla,
         block_height: u32,
     ) -> Result<(Transaction, DaoVoteParams, Option<MoneyFeeParamsV1>)> {
         let wallet = self.holders.get(voter).unwrap();
@@ -61,8 +59,8 @@ impl TestHarness {
         let (dao_vote_main_pk, dao_vote_main_zkbin) =
             self.proving_keys.get(DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS).unwrap();
 
-        let (_proposal_leaf_pos, snapshot_money_merkle_tree) =
-            wallet.dao_prop_leafs.get(proposal_bulla).unwrap();
+        let (_, snapshot_money_merkle_tree) =
+            wallet.dao_prop_leafs.get(&proposal.to_bulla()).unwrap();
 
         let vote_owncoin: OwnCoin = wallet
             .unspent_money_coins
@@ -142,7 +140,6 @@ impl TestHarness {
         &mut self,
         holder: &Holder,
         tx: Transaction,
-        _params: &DaoVoteParams,
         fee_params: &Option<MoneyFeeParamsV1>,
         block_height: u32,
         append: bool,

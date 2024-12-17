@@ -22,7 +22,7 @@ use darkfi::{
 };
 use darkfi_dao_contract::{
     client::{DaoAuthMoneyTransferCall, DaoExecCall},
-    model::{Dao, DaoBulla, DaoExecParams, DaoProposal},
+    model::{Dao, DaoProposal},
     DaoFunction, DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS,
     DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS, DAO_CONTRACT_ZKAS_DAO_EXEC_NS,
 };
@@ -52,7 +52,6 @@ impl TestHarness {
         &mut self,
         holder: &Holder,
         dao: &Dao,
-        dao_bulla: &DaoBulla,
         proposal: &DaoProposal,
         proposal_coinattrs: Vec<CoinAttributes>,
         yes_vote_value: u64,
@@ -60,7 +59,7 @@ impl TestHarness {
         yes_vote_blind: ScalarBlind,
         all_vote_blind: ScalarBlind,
         block_height: u32,
-    ) -> Result<(Transaction, MoneyTransferParamsV1, DaoExecParams, Option<MoneyFeeParamsV1>)> {
+    ) -> Result<(Transaction, MoneyTransferParamsV1, Option<MoneyFeeParamsV1>)> {
         let dao_wallet = self.holders.get(&Holder::Dao).unwrap();
 
         let (mint_pk, mint_zkbin) = self.proving_keys.get(MONEY_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
@@ -114,7 +113,7 @@ impl TestHarness {
             value: change_value,
             token_id: proposal_token_id,
             spend_hook,
-            user_data: dao_bulla.inner(),
+            user_data: dao.to_bulla().inner(),
             blind: Blind::random(&mut OsRng),
         };
         outputs.push(dao_coin_attrs.clone());
@@ -154,10 +153,6 @@ impl TestHarness {
             all_vote_value,
             yes_vote_blind,
             all_vote_blind,
-            input_value,
-            input_value_blind,
-            input_user_data_blind,
-            hook_dao_exec: DAO_CONTRACT_ID.inner(),
             signature_secret: exec_signature_secret,
         };
 
@@ -240,19 +235,17 @@ impl TestHarness {
             tx.signatures.push(sigs);
         }
 
-        Ok((tx, xfer_params, exec_params, fee_params))
+        Ok((tx, xfer_params, fee_params))
     }
 
     /// Execute the transaction made by `dao_exec()` for a given [`Holder`].
     ///
     /// Returns any found [`OwnCoin`]s.
-    #[allow(clippy::too_many_arguments)]
     pub async fn execute_dao_exec_tx(
         &mut self,
         holder: &Holder,
         tx: Transaction,
         xfer_params: &MoneyTransferParamsV1,
-        _exec_params: &DaoExecParams,
         fee_params: &Option<MoneyFeeParamsV1>,
         block_height: u32,
         append: bool,

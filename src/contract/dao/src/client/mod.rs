@@ -17,7 +17,7 @@
  */
 
 pub mod mint;
-pub use mint::{make_mint_call, DaoInfo};
+pub use mint::make_mint_call;
 
 /// Provides core structs for DAO::propose()
 ///

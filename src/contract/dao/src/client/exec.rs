@@ -17,9 +17,7 @@
  */
 
 use darkfi_sdk::{
-    crypto::{
-        pasta_prelude::*, pedersen_commitment_u64, BaseBlind, PublicKey, ScalarBlind, SecretKey,
-    },
+    crypto::{pasta_prelude::*, pedersen_commitment_u64, PublicKey, ScalarBlind, SecretKey},
     pasta::pallas,
 };
 
@@ -44,10 +42,6 @@ pub struct DaoExecCall {
     pub all_vote_value: u64,
     pub yes_vote_blind: ScalarBlind,
     pub all_vote_blind: ScalarBlind,
-    pub input_value: u64,
-    pub input_value_blind: ScalarBlind,
-    pub input_user_data_blind: BaseBlind,
-    pub hook_dao_exec: pallas::Base,
     pub signature_secret: SecretKey,
 }
 

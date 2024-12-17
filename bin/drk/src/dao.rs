@@ -2310,14 +2310,6 @@ impl Drk {
         transfer_params.encode_async(&mut data).await?;
         let transfer_call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
 
-        // Now we need to extract the exec call parameters
-        let mut input_value = 0;
-        let mut input_value_blind = Blind::ZERO;
-        for (input, blind) in spent_coins.iter().zip(transfer_secrets.input_value_blinds.iter()) {
-            input_value += input.note.value;
-            input_value_blind += *blind;
-        }
-
         // Create the exec call
         let exec_signature_secret = SecretKey::random(&mut OsRng);
         let exec_builder = DaoExecCall {
@@ -2327,10 +2319,6 @@ impl Drk {
             all_vote_value,
             yes_vote_blind,
             all_vote_blind,
-            input_value,
-            input_value_blind,
-            input_user_data_blind,
-            hook_dao_exec: DAO_CONTRACT_ID.inner(),
             signature_secret: exec_signature_secret,
         };
         let (exec_params, exec_proofs) = exec_builder.make(&dao_exec_zkbin, &dao_exec_pk)?;

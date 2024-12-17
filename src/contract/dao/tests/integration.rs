@@ -295,14 +295,7 @@ fn integration_test() -> Result<()> {
         let user_data = pallas::Base::ZERO;
 
         let (propose_tx, (propose_params, fee_params), propose_info) = th
-            .dao_propose(
-                &Holder::Alice,
-                &proposal_coinattrs,
-                user_data,
-                &dao,
-                &dao_mint_params.dao_bulla,
-                current_block_height,
-            )
+            .dao_propose(&Holder::Alice, &proposal_coinattrs, user_data, &dao, current_block_height)
             .await?;
 
         for holder in &HOLDERS {
@@ -330,28 +323,12 @@ fn integration_test() -> Result<()> {
 
         info!("[Alice] Building vote tx (yes)");
         let (alice_vote_tx, alice_vote_params, alice_vote_fee_params) = th
-            .dao_vote(
-                &Holder::Alice,
-                true,
-                &dao,
-                &dao_keypair,
-                &propose_info,
-                &propose_params.proposal_bulla,
-                current_block_height,
-            )
+            .dao_vote(&Holder::Alice, true, &dao, &dao_keypair, &propose_info, current_block_height)
             .await?;
 
         info!("[Bob] Building vote tx (no)");
         let (bob_vote_tx, bob_vote_params, bob_vote_fee_params) = th
-            .dao_vote(
-                &Holder::Bob,
-                false,
-                &dao,
-                &dao_keypair,
-                &propose_info,
-                &propose_params.proposal_bulla,
-                current_block_height,
-            )
+            .dao_vote(&Holder::Bob, false, &dao, &dao_keypair, &propose_info, current_block_height)
             .await?;
 
         info!("[Charlie] Building vote tx (yes)");
@@ -362,7 +339,6 @@ fn integration_test() -> Result<()> {
                 &dao,
                 &dao_keypair,
                 &propose_info,
-                &propose_params.proposal_bulla,
                 current_block_height,
             )
             .await?;
@@ -372,7 +348,6 @@ fn integration_test() -> Result<()> {
             th.execute_dao_vote_tx(
                 holder,
                 alice_vote_tx.clone(),
-                &alice_vote_params,
                 &alice_vote_fee_params,
                 current_block_height,
                 true,
@@ -383,7 +358,6 @@ fn integration_test() -> Result<()> {
             th.execute_dao_vote_tx(
                 holder,
                 bob_vote_tx.clone(),
-                &bob_vote_params,
                 &bob_vote_fee_params,
                 current_block_height,
                 true,
@@ -394,7 +368,6 @@ fn integration_test() -> Result<()> {
             th.execute_dao_vote_tx(
                 holder,
                 charlie_vote_tx.clone(),
-                &charlie_vote_params,
                 &charlie_vote_fee_params,
                 current_block_height,
                 true,
@@ -478,11 +451,10 @@ fn integration_test() -> Result<()> {
         info!("Stage 6. Execute the vote");
 
         info!("[Dao] Building Dao::Exec tx");
-        let (exec_tx, xfer_params, exec_params, exec_fee_params) = th
+        let (exec_tx, xfer_params, exec_fee_params) = th
             .dao_exec(
                 &Holder::Alice,
                 &dao,
-                &dao_mint_params.dao_bulla,
                 &propose_info,
                 proposal_coinattrs,
                 total_yes_vote_value,
@@ -499,7 +471,6 @@ fn integration_test() -> Result<()> {
                 holder,
                 exec_tx.clone(),
                 &xfer_params,
-                &exec_params,
                 &exec_fee_params,
                 current_block_height,
                 true,

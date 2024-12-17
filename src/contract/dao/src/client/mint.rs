@@ -21,27 +21,11 @@ use darkfi::{
     zkas::ZkBinary,
     Result,
 };
-use darkfi_sdk::{
-    crypto::{PublicKey, SecretKey},
-    pasta::pallas,
-};
+use darkfi_sdk::{crypto::SecretKey, pasta::pallas};
 use log::debug;
 use rand::rngs::OsRng;
 
-use darkfi_money_contract::model::TokenId;
-
 use crate::model::{Dao, DaoMintParams};
-
-#[derive(Clone)]
-pub struct DaoInfo {
-    pub proposer_limit: u64,
-    pub quorum: u64,
-    pub approval_ratio_quot: u64,
-    pub approval_ratio_base: u64,
-    pub gov_token_id: TokenId,
-    pub public_key: PublicKey,
-    pub bulla_blind: pallas::Base,
-}
 
 pub fn make_mint_call(
     dao: &Dao,

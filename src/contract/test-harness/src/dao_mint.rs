@@ -46,7 +46,7 @@ impl TestHarness {
     pub async fn dao_mint(
         &mut self,
         holder: &Holder,
-        dao_info: &Dao,
+        dao: &Dao,
         dao_kp: &Keypair,
         block_height: u32,
     ) -> Result<(Transaction, DaoMintParams, Option<MoneyFeeParamsV1>)> {
@@ -54,8 +54,7 @@ impl TestHarness {
             self.proving_keys.get(DAO_CONTRACT_ZKAS_DAO_MINT_NS).unwrap();
 
         // Create the call
-        let (params, proofs) =
-            make_mint_call(dao_info, &dao_kp.secret, dao_mint_zkbin, dao_mint_pk)?;
+        let (params, proofs) = make_mint_call(dao, &dao_kp.secret, dao_mint_zkbin, dao_mint_pk)?;
 
         // Encode the call
         let mut data = vec![DaoFunction::Mint as u8];

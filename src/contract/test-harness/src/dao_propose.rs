@@ -23,7 +23,7 @@ use darkfi::{
 use darkfi_dao_contract::{
     blockwindow,
     client::{DaoProposeCall, DaoProposeStakeInput},
-    model::{Dao, DaoAuthCall, DaoBulla, DaoProposal, DaoProposeParams},
+    model::{Dao, DaoAuthCall, DaoProposal, DaoProposeParams},
     DaoFunction, DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS,
 };
 use darkfi_money_contract::{
@@ -53,7 +53,6 @@ impl TestHarness {
         proposal_coinattrs: &[CoinAttributes],
         user_data: pallas::Base,
         dao: &Dao,
-        dao_bulla: &DaoBulla,
         block_height: u32,
     ) -> Result<(Transaction, (DaoProposeParams, Option<MoneyFeeParamsV1>), DaoProposal)> {
         let wallet = self.holders.get(proposer).unwrap();
@@ -129,16 +128,17 @@ impl TestHarness {
         };
 
         let signature_secret = SecretKey::random(&mut OsRng);
+        let dao_bulla = dao.to_bulla();
 
         let call = DaoProposeCall {
             money_null_smt: &wallet.money_null_smt,
             inputs: vec![input],
             proposal: proposal.clone(),
             dao: dao.clone(),
-            dao_leaf_position: *wallet.dao_leafs.get(dao_bulla).unwrap(),
+            dao_leaf_position: *wallet.dao_leafs.get(&dao_bulla).unwrap(),
             dao_merkle_path: wallet
                 .dao_merkle_tree
-                .witness(*wallet.dao_leafs.get(dao_bulla).unwrap(), 0)
+                .witness(*wallet.dao_leafs.get(&dao_bulla).unwrap(), 0)
                 .unwrap(),
             dao_merkle_root: wallet.dao_merkle_tree.root(0).unwrap(),
             signature_secret,
