@@ -77,8 +77,8 @@ fn integration_test() -> Result<()> {
         // And the DRK token as the treasury token
         let drk_token_id = *DARK_TOKEN_ID;
         const DRK_TOKEN_SUPPLY: u64 = 1_000_000_000;
-        // The tokens we want to send via the proposal
-        const PROPOSAL_AMOUNT: u64 = 250_000_000;
+        // The tokens we want to send via the transfer proposal
+        const TRANSFER_PROPOSAL_AMOUNT: u64 = 250_000_000;
 
         // Block height to verify against
         let mut current_block_height = 0;
@@ -87,7 +87,7 @@ fn integration_test() -> Result<()> {
         let dao_keypair = th.holders.get(&Holder::Dao).unwrap().keypair;
         let dao = Dao {
             proposer_limit: 100_000_000,
-            quorum: 199_999_999,
+            quorum: 200_000_000,
             approval_ratio_base: 2,
             approval_ratio_quot: 1,
             gov_token_id,
@@ -272,39 +272,70 @@ fn integration_test() -> Result<()> {
 
         // ================
         // Dao::Propose
-        // Propose the vote
+        // Propose the votes
         // ================
-        info!("Stage 4. Propose the vote");
+        info!("Stage 4. Propose the votes");
+        // We can add whatever we want in here, even arbitrary text
+        // It's up to the auth module to decide what to do with it.
+        let user_data = pallas::Base::ZERO;
+
+        info!("[Alice] Building DAO generic proposal tx");
+        let (
+            propose_generic_tx,
+            propose_generic_params,
+            propose_generic_fee_params,
+            propose_generic_info,
+        ) = th.dao_propose_generic(&Holder::Alice, user_data, &dao, current_block_height).await?;
+
         // TODO: look into proposal expiry once time for voting has finished
         // TODO: Is it possible for an invalid transfer() to be constructed on exec()?
         //       Need to look into this.
-        info!("[Alice] Building DAO proposal tx");
+        info!("[Alice] Building DAO transfer proposal tx");
 
         // These coins are passed around to all DAO members who verify its validity
         // They also check hashing them equals the proposal_commit
-        let proposal_coinattrs = vec![CoinAttributes {
+        let transfer_proposal_coinattrs = vec![CoinAttributes {
             public_key: th.holders.get(&Holder::Rachel).unwrap().keypair.public,
-            value: PROPOSAL_AMOUNT,
+            value: TRANSFER_PROPOSAL_AMOUNT,
             token_id: drk_token_id,
             spend_hook: FuncId::none(),
             user_data: pallas::Base::ZERO,
             blind: Blind::random(&mut OsRng),
         }];
-        // We can add whatever we want in here, even arbitrary text
-        // It's up to the auth module to decide what to do with it.
-        let user_data = pallas::Base::ZERO;
 
-        let (propose_tx, (propose_params, fee_params), propose_info) = th
-            .dao_propose(&Holder::Alice, &proposal_coinattrs, user_data, &dao, current_block_height)
+        let (
+            propose_transfer_tx,
+            propose_transfer_params,
+            propose_transfer_fee_params,
+            propose_transfer_info,
+        ) = th
+            .dao_propose_transfer(
+                &Holder::Alice,
+                &transfer_proposal_coinattrs,
+                user_data,
+                &dao,
+                current_block_height,
+            )
             .await?;
 
         for holder in &HOLDERS {
-            info!("[{holder:?}] Executing DAO proposal tx");
+            info!("[{holder:?}] Executing DAO generic proposal tx");
             th.execute_dao_propose_tx(
                 holder,
-                propose_tx.clone(),
-                &propose_params,
-                &fee_params,
+                propose_generic_tx.clone(),
+                &propose_generic_params,
+                &propose_generic_fee_params,
+                current_block_height,
+                true,
+            )
+            .await?;
+
+            info!("[{holder:?}] Executing DAO transfer proposal tx");
+            th.execute_dao_propose_tx(
+                holder,
+                propose_transfer_tx.clone(),
+                &propose_transfer_params,
+                &propose_transfer_fee_params,
                 current_block_height,
                 true,
             )
@@ -317,80 +348,166 @@ fn integration_test() -> Result<()> {
 
         // =====================================
         // Dao::Vote
-        // Proposal is accepted. Start the vote.
+        // Proposals are accepted. Start the votes.
         // =====================================
         info!("Stage 5. Start voting");
 
-        info!("[Alice] Building vote tx (yes)");
-        let (alice_vote_tx, alice_vote_params, alice_vote_fee_params) = th
-            .dao_vote(&Holder::Alice, true, &dao, &dao_keypair, &propose_info, current_block_height)
+        info!("[Alice] Building generic vote tx (yes)");
+        let (alice_generic_vote_tx, alice_generic_vote_params, alice_generic_vote_fee_params) = th
+            .dao_vote(
+                &Holder::Alice,
+                true,
+                &dao,
+                &dao_keypair,
+                &propose_generic_info,
+                current_block_height,
+            )
             .await?;
 
-        info!("[Bob] Building vote tx (no)");
-        let (bob_vote_tx, bob_vote_params, bob_vote_fee_params) = th
-            .dao_vote(&Holder::Bob, false, &dao, &dao_keypair, &propose_info, current_block_height)
+        info!("[Alice] Building transfer vote tx (yes)");
+        let (alice_transfer_vote_tx, alice_transfer_vote_params, alice_transfer_vote_fee_params) =
+            th.dao_vote(
+                &Holder::Alice,
+                true,
+                &dao,
+                &dao_keypair,
+                &propose_transfer_info,
+                current_block_height,
+            )
             .await?;
 
-        info!("[Charlie] Building vote tx (yes)");
-        let (charlie_vote_tx, charlie_vote_params, charlie_vote_fee_params) = th
+        info!("[Bob] Building generic vote tx (no)");
+        let (bob_generic_vote_tx, bob_generic_vote_params, bob_generic_vote_fee_params) = th
+            .dao_vote(
+                &Holder::Bob,
+                false,
+                &dao,
+                &dao_keypair,
+                &propose_generic_info,
+                current_block_height,
+            )
+            .await?;
+
+        info!("[Bob] Building transfer vote tx (no)");
+        let (bob_transfer_vote_tx, bob_transfer_vote_params, bob_transfer_vote_fee_params) = th
+            .dao_vote(
+                &Holder::Bob,
+                false,
+                &dao,
+                &dao_keypair,
+                &propose_transfer_info,
+                current_block_height,
+            )
+            .await?;
+
+        info!("[Charlie] Building generic vote tx (no)");
+        let (charlie_generic_vote_tx, charlie_generic_vote_params, charlie_generic_vote_fee_params) =
+            th.dao_vote(
+                &Holder::Charlie,
+                true,
+                &dao,
+                &dao_keypair,
+                &propose_generic_info,
+                current_block_height,
+            )
+            .await?;
+
+        info!("[Charlie] Building transfer vote tx (yes)");
+        let (
+            charlie_transfer_vote_tx,
+            charlie_transfer_vote_params,
+            charlie_transfer_vote_fee_params,
+        ) = th
             .dao_vote(
                 &Holder::Charlie,
                 true,
                 &dao,
                 &dao_keypair,
-                &propose_info,
+                &propose_transfer_info,
                 current_block_height,
             )
             .await?;
 
         for holder in &HOLDERS {
-            info!("[{holder:?}] Executing Alice vote tx");
+            info!("[{holder:?}] Executing Alice generic vote tx");
             th.execute_dao_vote_tx(
                 holder,
-                alice_vote_tx.clone(),
-                &alice_vote_fee_params,
+                alice_generic_vote_tx.clone(),
+                &alice_generic_vote_fee_params,
                 current_block_height,
                 true,
             )
             .await?;
 
-            info!("[{holder:?}] Executing Bob vote tx");
+            info!("[{holder:?}] Executing Alice transfer vote tx");
             th.execute_dao_vote_tx(
                 holder,
-                bob_vote_tx.clone(),
-                &bob_vote_fee_params,
+                alice_transfer_vote_tx.clone(),
+                &alice_transfer_vote_fee_params,
                 current_block_height,
                 true,
             )
             .await?;
 
-            info!("[{holder:?}] Executing Charlie vote tx");
+            info!("[{holder:?}] Executing Bob generic vote tx");
             th.execute_dao_vote_tx(
                 holder,
-                charlie_vote_tx.clone(),
-                &charlie_vote_fee_params,
+                bob_generic_vote_tx.clone(),
+                &bob_generic_vote_fee_params,
+                current_block_height,
+                true,
+            )
+            .await?;
+
+            info!("[{holder:?}] Executing Bob transfer vote tx");
+            th.execute_dao_vote_tx(
+                holder,
+                bob_transfer_vote_tx.clone(),
+                &bob_transfer_vote_fee_params,
+                current_block_height,
+                true,
+            )
+            .await?;
+
+            info!("[{holder:?}] Executing Charlie generic vote tx");
+            th.execute_dao_vote_tx(
+                holder,
+                charlie_generic_vote_tx.clone(),
+                &charlie_generic_vote_fee_params,
+                current_block_height,
+                true,
+            )
+            .await?;
+
+            info!("[{holder:?}] Executing Charlie transfer vote tx");
+            th.execute_dao_vote_tx(
+                holder,
+                charlie_transfer_vote_tx.clone(),
+                &charlie_transfer_vote_fee_params,
                 current_block_height,
                 true,
             )
             .await?;
         }
 
-        // Gather and decrypt all vote notes
-        let vote_note_1 = alice_vote_params.note.decrypt_unsafe(&dao_keypair.secret).unwrap();
-        let vote_note_2 = bob_vote_params.note.decrypt_unsafe(&dao_keypair.secret).unwrap();
-        let vote_note_3 = charlie_vote_params.note.decrypt_unsafe(&dao_keypair.secret).unwrap();
+        // Gather and decrypt all generic vote notes
+        let vote_note_1 =
+            alice_generic_vote_params.note.decrypt_unsafe(&dao_keypair.secret).unwrap();
+        let vote_note_2 = bob_generic_vote_params.note.decrypt_unsafe(&dao_keypair.secret).unwrap();
+        let vote_note_3 =
+            charlie_generic_vote_params.note.decrypt_unsafe(&dao_keypair.secret).unwrap();
 
         // Count the votes
-        let mut total_yes_vote_value = 0;
-        let mut total_all_vote_value = 0;
-        let mut blind_total_vote = DaoBlindAggregateVote::default();
-        let mut total_yes_vote_blind = Blind::ZERO;
-        let mut total_all_vote_blind = Blind::ZERO;
+        let mut total_yes_generic_vote_value = 0;
+        let mut total_all_generic_vote_value = 0;
+        let mut blind_total_generic_vote = DaoBlindAggregateVote::default();
+        let mut total_yes_generic_vote_blind = Blind::ZERO;
+        let mut total_all_generic_vote_blind = Blind::ZERO;
 
         for (i, (note, params)) in [
-            (vote_note_1, alice_vote_params),
-            (vote_note_2, bob_vote_params),
-            (vote_note_3, charlie_vote_params),
+            (vote_note_1, alice_generic_vote_params),
+            (vote_note_2, bob_generic_vote_params),
+            (vote_note_3, charlie_generic_vote_params),
         ]
         .iter()
         .enumerate()
@@ -407,71 +524,192 @@ fn integration_test() -> Result<()> {
             let all_vote_blind = Blind(fp_mod_fv(note[3]));
             assert!(vote_option == 0 || vote_option == 1);
 
-            total_yes_vote_blind += yes_vote_blind;
-            total_all_vote_blind += all_vote_blind;
+            total_yes_generic_vote_blind += yes_vote_blind;
+            total_all_generic_vote_blind += all_vote_blind;
 
             // Update private values
             // vote_option is either 0 or 1
             let yes_vote_value = vote_option * all_vote_value;
-            total_yes_vote_value += yes_vote_value;
-            total_all_vote_value += all_vote_value;
+            total_yes_generic_vote_value += yes_vote_value;
+            total_all_generic_vote_value += all_vote_value;
 
             // Update public values
             let yes_vote_commit = params.yes_vote_commit;
             let all_vote_commit = params.inputs.iter().map(|i| i.vote_commit).sum();
             let blind_vote = DaoBlindAggregateVote { yes_vote_commit, all_vote_commit };
-            blind_total_vote.aggregate(blind_vote);
+            blind_total_generic_vote.aggregate(blind_vote);
 
             // Just for the debug
             let vote_result = match vote_option != 0 {
                 true => "yes",
                 false => "no",
             };
-            info!("Voter {} voted {} with {} tokens", i, vote_result, all_vote_value);
+            info!(
+                "Voter {} voted {} with {} tokens in generic vote",
+                i, vote_result, all_vote_value
+            );
         }
 
-        info!("Outcome = {} / {}", total_yes_vote_value, total_all_vote_value);
-
-        assert!(
-            blind_total_vote.all_vote_commit ==
-                pedersen_commitment_u64(total_all_vote_value, total_all_vote_blind)
+        info!(
+            "Generic vote outcome = {} / {}",
+            total_yes_generic_vote_value, total_all_generic_vote_value
         );
 
         assert!(
-            blind_total_vote.yes_vote_commit ==
-                pedersen_commitment_u64(total_yes_vote_value, total_yes_vote_blind)
+            blind_total_generic_vote.all_vote_commit ==
+                pedersen_commitment_u64(
+                    total_all_generic_vote_value,
+                    total_all_generic_vote_blind
+                )
         );
+
+        assert!(
+            blind_total_generic_vote.yes_vote_commit ==
+                pedersen_commitment_u64(
+                    total_yes_generic_vote_value,
+                    total_yes_generic_vote_blind
+                )
+        );
+
+        // Gather and decrypt all transfer vote notes
+        let vote_note_1 =
+            alice_transfer_vote_params.note.decrypt_unsafe(&dao_keypair.secret).unwrap();
+        let vote_note_2 =
+            bob_transfer_vote_params.note.decrypt_unsafe(&dao_keypair.secret).unwrap();
+        let vote_note_3 =
+            charlie_transfer_vote_params.note.decrypt_unsafe(&dao_keypair.secret).unwrap();
+
+        // Count the votes
+        let mut total_yes_transfer_vote_value = 0;
+        let mut total_all_transfer_vote_value = 0;
+        let mut blind_total_transfer_vote = DaoBlindAggregateVote::default();
+        let mut total_yes_transfer_vote_blind = Blind::ZERO;
+        let mut total_all_transfer_vote_blind = Blind::ZERO;
+
+        for (i, (note, params)) in [
+            (vote_note_1, alice_transfer_vote_params),
+            (vote_note_2, bob_transfer_vote_params),
+            (vote_note_3, charlie_transfer_vote_params),
+        ]
+        .iter()
+        .enumerate()
+        {
+            // Note format: [
+            //   vote_option,
+            //   yes_vote_blind,
+            //   all_vote_value_fp,
+            //   all_vote_blind,
+            // ]
+            let vote_option = fp_to_u64(note[0]).unwrap();
+            let yes_vote_blind = Blind(fp_mod_fv(note[1]));
+            let all_vote_value = fp_to_u64(note[2]).unwrap();
+            let all_vote_blind = Blind(fp_mod_fv(note[3]));
+            assert!(vote_option == 0 || vote_option == 1);
+
+            total_yes_transfer_vote_blind += yes_vote_blind;
+            total_all_transfer_vote_blind += all_vote_blind;
+
+            // Update private values
+            // vote_option is either 0 or 1
+            let yes_vote_value = vote_option * all_vote_value;
+            total_yes_transfer_vote_value += yes_vote_value;
+            total_all_transfer_vote_value += all_vote_value;
+
+            // Update public values
+            let yes_vote_commit = params.yes_vote_commit;
+            let all_vote_commit = params.inputs.iter().map(|i| i.vote_commit).sum();
+            let blind_vote = DaoBlindAggregateVote { yes_vote_commit, all_vote_commit };
+            blind_total_transfer_vote.aggregate(blind_vote);
+
+            // Just for the debug
+            let vote_result = match vote_option != 0 {
+                true => "yes",
+                false => "no",
+            };
+            info!(
+                "Voter {} voted {} with {} tokens in transfer vote",
+                i, vote_result, all_vote_value
+            );
+        }
+
+        info!(
+            "Transfer vote outcome = {} / {}",
+            total_yes_transfer_vote_value, total_all_transfer_vote_value
+        );
+
+        assert!(
+            blind_total_transfer_vote.all_vote_commit ==
+                pedersen_commitment_u64(
+                    total_all_transfer_vote_value,
+                    total_all_transfer_vote_blind
+                )
+        );
+
+        assert!(
+            blind_total_transfer_vote.yes_vote_commit ==
+                pedersen_commitment_u64(
+                    total_yes_transfer_vote_value,
+                    total_yes_transfer_vote_blind
+                )
+        );
+
+        th.assert_trees(&HOLDERS);
 
         current_block_height += 1;
 
         // ================
         // Dao::Exec
-        // Execute the vote
+        // Execute the votes
         // ================
-        info!("Stage 6. Execute the vote");
+        info!("Stage 6. Execute the votes");
 
-        info!("[Dao] Building Dao::Exec tx");
-        let (exec_tx, xfer_params, exec_fee_params) = th
-            .dao_exec(
+        info!("[Dao] Building generic Dao::Exec tx");
+        let (exec_generic_tx, exec_generic_fee_params) = th
+            .dao_exec_generic(
                 &Holder::Alice,
                 &dao,
-                &propose_info,
-                proposal_coinattrs,
-                total_yes_vote_value,
-                total_all_vote_value,
-                total_yes_vote_blind,
-                total_all_vote_blind,
+                &propose_generic_info,
+                total_yes_generic_vote_value,
+                total_all_generic_vote_value,
+                total_yes_generic_vote_blind,
+                total_all_generic_vote_blind,
+                current_block_height,
+            )
+            .await?;
+
+        info!("[Dao] Building transfer Dao::Exec tx");
+        let (exec_transfer_tx, xfer_params, exec_transfer_fee_params) = th
+            .dao_exec_transfer(
+                &Holder::Alice,
+                &dao,
+                &propose_transfer_info,
+                transfer_proposal_coinattrs,
+                total_yes_transfer_vote_value,
+                total_all_transfer_vote_value,
+                total_yes_transfer_vote_blind,
+                total_all_transfer_vote_blind,
                 current_block_height,
             )
             .await?;
 
         for holder in &HOLDERS {
-            info!("[{holder:?}] Executing Dao::Exec tx");
+            info!("[{holder:?}] Executing generic Dao::Exec tx");
             th.execute_dao_exec_tx(
                 holder,
-                exec_tx.clone(),
-                &xfer_params,
-                &exec_fee_params,
+                exec_generic_tx.clone(),
+                None,
+                &exec_generic_fee_params,
+                current_block_height,
+                true,
+            )
+            .await?;
+
+            info!("[{holder:?}] Executing transfer Dao::Exec tx");
+            th.execute_dao_exec_tx(
+                holder,
+                exec_transfer_tx.clone(),
+                Some(&xfer_params),
+                &exec_transfer_fee_params,
                 current_block_height,
                 true,
             )
@@ -481,11 +719,14 @@ fn integration_test() -> Result<()> {
         th.assert_trees(&HOLDERS);
 
         let rachel_wallet = th.holders.get(&Holder::Rachel).unwrap();
-        assert!(rachel_wallet.unspent_money_coins[0].note.value == PROPOSAL_AMOUNT);
+        assert!(rachel_wallet.unspent_money_coins[0].note.value == TRANSFER_PROPOSAL_AMOUNT);
         assert!(rachel_wallet.unspent_money_coins[0].note.token_id == drk_token_id);
 
         let dao_wallet = th.holders.get(&Holder::Dao).unwrap();
-        assert!(dao_wallet.unspent_money_coins[0].note.value == DRK_TOKEN_SUPPLY - PROPOSAL_AMOUNT);
+        assert!(
+            dao_wallet.unspent_money_coins[0].note.value ==
+                DRK_TOKEN_SUPPLY - TRANSFER_PROPOSAL_AMOUNT
+        );
         assert!(dao_wallet.unspent_money_coins[0].note.token_id == drk_token_id);
 
         // Thanks for reading

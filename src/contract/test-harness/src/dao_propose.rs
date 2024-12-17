@@ -46,15 +46,15 @@ use rand::rngs::OsRng;
 use super::{Holder, TestHarness};
 
 impl TestHarness {
-    /// Create a `Dao::Propose` transaction.
-    pub async fn dao_propose(
+    /// Create a transfer `Dao::Propose` transaction.
+    pub async fn dao_propose_transfer(
         &mut self,
         proposer: &Holder,
         proposal_coinattrs: &[CoinAttributes],
         user_data: pallas::Base,
         dao: &Dao,
         block_height: u32,
-    ) -> Result<(Transaction, (DaoProposeParams, Option<MoneyFeeParamsV1>), DaoProposal)> {
+    ) -> Result<(Transaction, DaoProposeParams, Option<MoneyFeeParamsV1>, DaoProposal)> {
         let wallet = self.holders.get(proposer).unwrap();
 
         let (dao_propose_burn_pk, dao_propose_burn_zkbin) =
@@ -183,10 +183,127 @@ impl TestHarness {
             tx.signatures.push(sigs);
         }
 
-        Ok((tx, (params, fee_params), proposal))
+        Ok((tx, params, fee_params, proposal))
     }
 
-    /// Execute the transaction created by `dao_propose()` for a given [`Holder`].
+    /// Create a generic `Dao::Propose` transaction.
+    pub async fn dao_propose_generic(
+        &mut self,
+        proposer: &Holder,
+        user_data: pallas::Base,
+        dao: &Dao,
+        block_height: u32,
+    ) -> Result<(Transaction, DaoProposeParams, Option<MoneyFeeParamsV1>, DaoProposal)> {
+        let wallet = self.holders.get(proposer).unwrap();
+
+        let (dao_propose_burn_pk, dao_propose_burn_zkbin) =
+            self.proving_keys.get(DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS).unwrap();
+
+        let (dao_propose_main_pk, dao_propose_main_zkbin) =
+            self.proving_keys.get(DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS).unwrap();
+
+        let propose_owncoin: OwnCoin = wallet
+            .unspent_money_coins
+            .iter()
+            .find(|x| x.note.token_id == dao.gov_token_id)
+            .unwrap()
+            .clone();
+
+        // Useful code snippet to dump a sled contract DB
+        /*{
+            let blockchain = &wallet.validator.blockchain;
+            let contracts = &blockchain.contracts;
+            let tree = contracts
+                .lookup(&blockchain.sled_db, &MONEY_CONTRACT_ID, "nullifier_roots")
+                .unwrap();
+            for kv in tree.iter() {
+                let (key, value) = kv.unwrap();
+                debug!("STATE {:?}", key);
+                debug!("  => {:?}", value);
+            }
+        }*/
+
+        let input = DaoProposeStakeInput {
+            secret: wallet.keypair.secret,
+            note: propose_owncoin.note.clone(),
+            leaf_position: propose_owncoin.leaf_position,
+            merkle_path: wallet
+                .money_merkle_tree
+                .witness(propose_owncoin.leaf_position, 0)
+                .unwrap(),
+        };
+
+        let block_target = wallet.validator.consensus.module.read().await.target;
+        let creation_blockwindow = blockwindow(block_height, block_target);
+        let proposal = DaoProposal {
+            auth_calls: vec![],
+            creation_blockwindow,
+            duration_blockwindows: 30,
+            user_data,
+            dao_bulla: dao.to_bulla(),
+            blind: Blind::random(&mut OsRng),
+        };
+
+        let signature_secret = SecretKey::random(&mut OsRng);
+        let dao_bulla = dao.to_bulla();
+
+        let call = DaoProposeCall {
+            money_null_smt: &wallet.money_null_smt,
+            inputs: vec![input],
+            proposal: proposal.clone(),
+            dao: dao.clone(),
+            dao_leaf_position: *wallet.dao_leafs.get(&dao_bulla).unwrap(),
+            dao_merkle_path: wallet
+                .dao_merkle_tree
+                .witness(*wallet.dao_leafs.get(&dao_bulla).unwrap(), 0)
+                .unwrap(),
+            dao_merkle_root: wallet.dao_merkle_tree.root(0).unwrap(),
+            signature_secret,
+        };
+
+        let (params, proofs) = call.make(
+            dao_propose_burn_zkbin,
+            dao_propose_burn_pk,
+            dao_propose_main_zkbin,
+            dao_propose_main_pk,
+        )?;
+
+        // Encode the call
+        let mut data = vec![DaoFunction::Propose as u8];
+        params.encode_async(&mut data).await?;
+        let call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
+        let mut tx_builder = TransactionBuilder::new(ContractCallLeaf { call, proofs }, vec![])?;
+
+        // If fees are enabled, make an offering
+        let mut fee_params = None;
+        let mut fee_signature_secrets = None;
+        if self.verify_fees {
+            let mut tx = tx_builder.build()?;
+            let sigs = tx.create_sigs(&[signature_secret])?;
+            tx.signatures = vec![sigs];
+
+            let (fee_call, fee_proofs, fee_secrets, _spent_fee_coins, fee_call_params) =
+                self.append_fee_call(proposer, tx, block_height, &[]).await?;
+
+            // Append the fee call to the transaction
+            tx_builder.append(ContractCallLeaf { call: fee_call, proofs: fee_proofs }, vec![])?;
+            fee_signature_secrets = Some(fee_secrets);
+            fee_params = Some(fee_call_params);
+        }
+
+        // Now build the actual transaction and sign it with necessary keys.
+        let mut tx = tx_builder.build()?;
+        let sigs = tx.create_sigs(&[signature_secret])?;
+        tx.signatures = vec![sigs];
+        if let Some(fee_signature_secrets) = fee_signature_secrets {
+            let sigs = tx.create_sigs(&fee_signature_secrets)?;
+            tx.signatures.push(sigs);
+        }
+
+        Ok((tx, params, fee_params, proposal))
+    }
+
+    /// Execute the transaction created by `dao_propose_*()` for a given [`Holder`].
     ///
     /// Returns any found [`OwnCoin`]s.
     pub async fn execute_dao_propose_tx(

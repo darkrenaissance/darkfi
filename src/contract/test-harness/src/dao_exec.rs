@@ -46,9 +46,9 @@ use rand::rngs::OsRng;
 use super::{Holder, TestHarness};
 
 impl TestHarness {
-    /// Create a `Dao::Exec` transaction.
+    /// Create a transfer `Dao::Exec` transaction.
     #[allow(clippy::too_many_arguments)]
-    pub async fn dao_exec(
+    pub async fn dao_exec_transfer(
         &mut self,
         holder: &Holder,
         dao: &Dao,
@@ -238,14 +238,84 @@ impl TestHarness {
         Ok((tx, xfer_params, fee_params))
     }
 
-    /// Execute the transaction made by `dao_exec()` for a given [`Holder`].
+    /// Create a generic `Dao::Exec` transaction.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn dao_exec_generic(
+        &mut self,
+        holder: &Holder,
+        dao: &Dao,
+        proposal: &DaoProposal,
+        yes_vote_value: u64,
+        all_vote_value: u64,
+        yes_vote_blind: ScalarBlind,
+        all_vote_blind: ScalarBlind,
+        block_height: u32,
+    ) -> Result<(Transaction, Option<MoneyFeeParamsV1>)> {
+        let (dao_exec_pk, dao_exec_zkbin) =
+            self.proving_keys.get(DAO_CONTRACT_ZKAS_DAO_EXEC_NS).unwrap();
+
+        // Create the exec call
+        let exec_signature_secret = SecretKey::random(&mut OsRng);
+        let exec_builder = DaoExecCall {
+            proposal: proposal.clone(),
+            dao: dao.clone(),
+            yes_vote_value,
+            all_vote_value,
+            yes_vote_blind,
+            all_vote_blind,
+            signature_secret: exec_signature_secret,
+        };
+        let (exec_params, exec_proofs) = exec_builder.make(dao_exec_zkbin, dao_exec_pk)?;
+
+        // Encode the call
+        let mut data = vec![DaoFunction::Exec as u8];
+        exec_params.encode_async(&mut data).await?;
+        let exec_call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
+
+        // Create the TransactionBuilder containing the `DAO::Exec` call
+        let mut tx_builder = TransactionBuilder::new(
+            ContractCallLeaf { call: exec_call, proofs: exec_proofs },
+            vec![],
+        )?;
+
+        // If fees are enabled, make an offering
+        let mut fee_params = None;
+        let mut fee_signature_secrets = None;
+        if self.verify_fees {
+            let mut tx = tx_builder.build()?;
+            let exec_sigs = tx.create_sigs(&[exec_signature_secret])?;
+            tx.signatures = vec![exec_sigs];
+
+            let (fee_call, fee_proofs, fee_secrets, _spent_fee_coins, fee_call_params) =
+                self.append_fee_call(holder, tx, block_height, &[]).await?;
+
+            // Append the fee call to the transaction
+            tx_builder.append(ContractCallLeaf { call: fee_call, proofs: fee_proofs }, vec![])?;
+            fee_signature_secrets = Some(fee_secrets);
+            fee_params = Some(fee_call_params);
+        }
+
+        // Now build the actual transaction and sign it with necessary keys.
+        let mut tx = tx_builder.build()?;
+        let exec_sigs = tx.create_sigs(&[exec_signature_secret])?;
+        tx.signatures = vec![exec_sigs];
+
+        if let Some(fee_signature_secrets) = fee_signature_secrets {
+            let sigs = tx.create_sigs(&fee_signature_secrets)?;
+            tx.signatures.push(sigs);
+        }
+
+        Ok((tx, fee_params))
+    }
+
+    /// Execute the transaction made by `dao_exec_*()` for a given [`Holder`].
     ///
     /// Returns any found [`OwnCoin`]s.
     pub async fn execute_dao_exec_tx(
         &mut self,
         holder: &Holder,
         tx: Transaction,
-        xfer_params: &MoneyTransferParamsV1,
+        xfer_params: Option<&MoneyTransferParamsV1>,
         fee_params: &Option<MoneyFeeParamsV1>,
         block_height: u32,
         append: bool,
@@ -259,8 +329,10 @@ impl TestHarness {
             return Ok(vec![])
         }
 
-        let mut inputs = xfer_params.inputs.to_vec();
-        let mut outputs = xfer_params.outputs.to_vec();
+        let (mut inputs, mut outputs) = match xfer_params {
+            Some(params) => (params.inputs.to_vec(), params.outputs.to_vec()),
+            None => (vec![], vec![]),
+        };
 
         if let Some(ref fee_params) = fee_params {
             inputs.push(fee_params.input.clone());
