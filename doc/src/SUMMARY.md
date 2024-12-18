@@ -130,4 +130,5 @@
 - [dnetview](misc/dnetview.md)
 - [Zero2darkfi](zero2darkfi/zero2darkfi.md)
   - [darkmap](zero2darkfi/darkmap.md)
+- [FAQ](misc/faq.md)
 - [Glossary](glossary/glossary.md)
