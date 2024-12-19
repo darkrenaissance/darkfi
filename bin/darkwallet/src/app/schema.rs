@@ -44,16 +44,12 @@ use super::{
 
 const LIGHTMODE: bool = false;
 
-#[cfg(target_os = "android")]
-mod ui_consts {
-    pub const CHATDB_PATH: &str = "/data/data/darkfi.darkwallet/chatdb/";
-    pub const KING_PATH: &str = "king.png";
-    pub const BG_PATH: &str = "bg.png";
+mod android_ui_consts {
     pub const EDITCHAT_HEIGHT: f32 = 163.;
     pub const EDITCHAT_CURSOR_ASCENT: f32 = 50.;
     pub const EDITCHAT_CURSOR_DESCENT: f32 = 20.;
-    pub const EDITCHAT_SELECT_ASCENT: f32 = 60.;
-    pub const EDITCHAT_SELECT_DESCENT: f32 = 30.;
+    pub const EDITCHAT_SELECT_ASCENT: f32 = 40.;
+    pub const EDITCHAT_SELECT_DESCENT: f32 = 8.;
     pub const TEXTBAR_BASELINE: f32 = 93.;
     pub const EDITCHAT_LHS_PAD: f32 = 30.;
     pub const SENDLABEL_WIDTH: f32 = 200.;
@@ -66,7 +62,26 @@ mod ui_consts {
     pub const CHATVIEW_BASELINE: f32 = 36.;
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+#[cfg(target_os = "android")]
+mod ui_consts {
+    pub const CHATDB_PATH: &str = "/data/data/darkfi.darkwallet/chatdb/";
+    pub const KING_PATH: &str = "king.png";
+    pub const BG_PATH: &str = "bg.png";
+    pub use super::android_ui_consts::*;
+}
+
+#[cfg(feature = "emulate-android")]
+mod ui_consts {
+    pub const CHATDB_PATH: &str = "chatdb";
+    pub const KING_PATH: &str = "assets/king.png";
+    pub const BG_PATH: &str = "assets/bg.png";
+    pub use super::android_ui_consts::*;
+}
+
+#[cfg(all(
+    any(target_os = "linux", target_os = "macos", target_os = "windows"),
+    not(feature = "emulate-android")
+))]
 mod ui_consts {
     pub const CHATDB_PATH: &str = "chatdb";
     pub const KING_PATH: &str = "assets/king.png";

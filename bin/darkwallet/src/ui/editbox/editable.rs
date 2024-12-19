@@ -150,6 +150,26 @@ impl RenderedEditable {
         // Everything to the right is at the end
         self.glyphs.len()
     }
+
+    pub fn pos_to_xw(
+        &self,
+        pos: TextPos,
+        font_size: f32,
+        window_scale: f32,
+        baseline: f32,
+    ) -> (f32, f32) {
+        debug!(target: "ui::editbox", "pos_to_xw({pos}) [glyphs_len={}]", self.glyphs.len());
+        let mut glyph_pos_iter =
+            GlyphPositionIter::new(font_size, window_scale, &self.glyphs, baseline);
+        let mut end = 0.;
+        for (glyph_idx, glyph_rect) in glyph_pos_iter.enumerate() {
+            if glyph_idx == pos {
+                return (glyph_rect.x, glyph_rect.w)
+            }
+            end = glyph_rect.rhs();
+        }
+        (end, 0.)
+    }
 }
 
 /// Represents a string with a cursor. The cursor can be moved in terms of glyphs, which does

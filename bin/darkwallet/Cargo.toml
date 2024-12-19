@@ -53,6 +53,9 @@ simplelog = "0.12.2"
 # For log files
 file-rotate = "0.7.6"
 
+[features]
+emulate-android = []
+
 [patch.crates-io]
 freetype-rs = { git = "https://github.com/narodnik/freetype-rs" }
 freetype-sys = { git = "https://github.com/narodnik/freetype-sys2" }

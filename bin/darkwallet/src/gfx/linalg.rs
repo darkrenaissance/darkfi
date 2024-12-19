@@ -54,7 +54,7 @@ impl Div<f32> for Dimension {
     }
 }
 
-#[derive(Clone, Copy, Debug, SerialEncodable, SerialDecodable)]
+#[derive(Clone, Copy, SerialEncodable, SerialDecodable)]
 pub struct Point {
     pub x: f32,
     pub y: f32,
@@ -93,6 +93,12 @@ impl Point {
 impl From<[f32; 2]> for Point {
     fn from(pos: [f32; 2]) -> Self {
         Self { x: pos[0], y: pos[1] }
+    }
+}
+
+impl std::fmt::Debug for Point {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}, {})", self.x, self.y)
     }
 }
 

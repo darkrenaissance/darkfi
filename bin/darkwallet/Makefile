@@ -11,8 +11,10 @@ SRC = \
 	$(shell find src -type f) \
 	$(shell find res -type f)
 
+#FEATURES = --features=emulate-android
+
 all: $(SRC) fonts
-	cargo lbuild
+	cargo lbuild $(FEATURES)
 	mv target/debug/darkwallet .
 	./darkwallet
 

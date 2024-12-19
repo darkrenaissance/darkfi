@@ -31,6 +31,12 @@ use crate::{
 
 use super::{get_children_ordered, get_ui_object3, get_ui_object_ptr, OnModify};
 
+#[cfg(feature = "emulate-android")]
+const EMULATE_TOUCH: bool = true;
+
+#[cfg(not(feature = "emulate-android"))]
+const EMULATE_TOUCH: bool = false;
+
 pub type WindowPtr = Arc<Window>;
 
 pub struct Window {
@@ -351,8 +357,14 @@ impl Window {
         self.local_scale(&mut mouse_pos);
         for child in self.get_children() {
             let obj = get_ui_object3(&child);
-            if obj.handle_mouse_btn_down(btn.clone(), mouse_pos).await {
-                return
+            if EMULATE_TOUCH {
+                if obj.handle_touch(TouchPhase::Started, 0, mouse_pos).await {
+                    return
+                }
+            } else {
+                if obj.handle_mouse_btn_down(btn.clone(), mouse_pos).await {
+                    return
+                }
             }
         }
     }
@@ -361,8 +373,14 @@ impl Window {
         self.local_scale(&mut mouse_pos);
         for child in self.get_children() {
             let obj = get_ui_object3(&child);
-            if obj.handle_mouse_btn_up(btn.clone(), mouse_pos).await {
-                return
+            if EMULATE_TOUCH {
+                if obj.handle_touch(TouchPhase::Ended, 0, mouse_pos).await {
+                    return
+                }
+            } else {
+                if obj.handle_mouse_btn_up(btn.clone(), mouse_pos).await {
+                    return
+                }
             }
         }
     }
@@ -371,8 +389,14 @@ impl Window {
         self.local_scale(&mut mouse_pos);
         for child in self.get_children() {
             let obj = get_ui_object3(&child);
-            if obj.handle_mouse_move(mouse_pos).await {
-                return
+            if EMULATE_TOUCH {
+                if obj.handle_touch(TouchPhase::Moved, 0, mouse_pos).await {
+                    return
+                }
+            } else {
+                if obj.handle_mouse_move(mouse_pos).await {
+                    return
+                }
             }
         }
     }

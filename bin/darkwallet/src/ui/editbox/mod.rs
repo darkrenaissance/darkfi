@@ -161,9 +161,8 @@ enum TouchStateAction {
     Started { pos: Point, instant: std::time::Instant },
     StartSelect,
     Select,
-    ScrollUp,
-    MoveCursor,
-    DragSelectHandle { side: isize }
+    DragSelectHandle { side: isize },
+    ScrollHoriz,
 }
 
 struct TouchInfo {
@@ -177,6 +176,7 @@ impl TouchInfo {
     }
 
     fn start(&mut self, pos: Point) {
+        debug!(target: "ui::editbox", "TouchStateAction::Started");
         self.state = TouchStateAction::Started { pos, instant: std::time::Instant::now() };
     }
 
@@ -188,20 +188,17 @@ impl TouchInfo {
         match &self.state {
             TouchStateAction::Started { pos: start_pos, instant } => {
                 let travel_dist = pos.dist_sq(&start_pos);
-                let y_dist = pos.y - start_pos.y;
+                let x_dist = pos.x - start_pos.x;
                 let elapsed = instant.elapsed().as_millis();
 
                 if travel_dist < 5. {
                     if elapsed > 1000 {
+                        debug!(target: "ui::editbox", "TouchStateAction::StartSelect");
                         self.state = TouchStateAction::StartSelect;
-                        debug!(target: "ui::editbox", "touch long-hold select activated");
                     }
-                } else if y_dist.abs() > 5. {
-                    self.state = TouchStateAction::ScrollUp;
-                    debug!(target: "ui::editbox", "touch scroll-up activated");
-                } else {
-                    self.state = TouchStateAction::MoveCursor;
-                    debug!(target: "ui::editbox", "move-cursor activated");
+                } else if x_dist.abs() > 5. {
+                    debug!(target: "ui::editbox", "TouchStateAction::ScrollHoriz");
+                    self.state = TouchStateAction::ScrollHoriz;
                 }
             }
             _ => {}
@@ -581,62 +578,51 @@ impl EditBox {
         mesh.draw_box(&select_rect, hi_bg_color, &Rectangle::zero());
 
         if is_phone_select {
-            self.draw_phone_select_handle(mesh, start_x);
-            self.draw_phone_select_handle(mesh, end_x);
+            self.draw_phone_select_handle(mesh, start_x, -1.);
+            self.draw_phone_select_handle(mesh, end_x, 1.);
         }
     }
 
-    fn draw_phone_select_handle(&self, mesh: &mut MeshBuilder, x: f32) {
+    fn draw_phone_select_handle(&self, mesh: &mut MeshBuilder, x: f32, side: f32) {
+        debug!(target: "ui::editbox", "draw_phone_select_handle(..., {x}, {side})");
+
         let baseline = self.baseline.get();
         let select_ascent = self.select_ascent.get();
         let select_descent = self.select_descent.get();
         let color = self.text_hi_color.get();
+        // Transparent for fade
+        let mut color_trans = color.clone();
+        color_trans[3] = 0.;
 
-        const HANDLE_HEIGHT: f32 = 10.;
-        const DIAMOND_HEIGHT: f32 = 35.;
-        const DIAMOND_RADIUS: f32 = 25.;
-        const BEVEL_HEIGHT: f32 = 15.;
-        const BEVEL_WIDTH: f32 = 5.;
+        // Vertical line downwards. We use this instead of draw_box() so we have a fade.
+        let verts = vec![
+            Vertex {
+                pos: [x - side * 1., baseline - select_ascent],
+                color: color_trans,
+                uv: [0., 0.],
+            },
+            Vertex {
+                pos: [x + side * 4., baseline - select_ascent],
+                color: color_trans,
+                uv: [0., 0.],
+            },
+            Vertex { pos: [x - side * 1., baseline + select_descent + 5.], color, uv: [0., 0.] },
+            Vertex { pos: [x + side * 4., baseline + select_descent + 5.], color, uv: [0., 0.] },
+        ];
+        let indices = vec![0, 2, 1, 1, 2, 3];
+        mesh.append(verts, indices);
 
-        let line_rect = Rectangle {
-            // Make x the middle
-            x: x - 1.,
-            y: baseline - select_ascent - HANDLE_HEIGHT,
-            // Extend 1px on either side
-            w: 2.,
-            h: select_ascent + select_descent + HANDLE_HEIGHT,
-        };
-        mesh.draw_box(&line_rect, color, &Rectangle::zero());
+        let y = baseline + select_descent;
 
-        let y = line_rect.y;
-
+        // The arrow itself.
         // Go anti-clockwise
         let verts = vec![
             Vertex { pos: [x, y], color, uv: [0., 0.] },
-            Vertex { pos: [x - DIAMOND_RADIUS, y - DIAMOND_HEIGHT], color, uv: [0., 0.] },
-            Vertex { pos: [x + DIAMOND_RADIUS, y - DIAMOND_HEIGHT], color, uv: [0., 0.] },
-            Vertex {
-                pos: [x - DIAMOND_RADIUS + BEVEL_WIDTH, y - DIAMOND_HEIGHT],
-                color,
-                uv: [0., 0.],
-            },
-            Vertex {
-                pos: [x - DIAMOND_RADIUS + 2. * BEVEL_WIDTH, y - DIAMOND_HEIGHT - BEVEL_HEIGHT],
-                color,
-                uv: [0., 0.],
-            },
-            Vertex {
-                pos: [x + DIAMOND_RADIUS - BEVEL_WIDTH, y - DIAMOND_HEIGHT],
-                color,
-                uv: [0., 0.],
-            },
-            Vertex {
-                pos: [x + DIAMOND_RADIUS - 2. * BEVEL_WIDTH, y - DIAMOND_HEIGHT - BEVEL_HEIGHT],
-                color,
-                uv: [0., 0.],
-            },
+            Vertex { pos: [x, y + 50.], color, uv: [0., 0.] },
+            Vertex { pos: [x + side * 30., y + 50.], color, uv: [0., 0.] },
+            Vertex { pos: [x + side * 50., y + 25.], color, uv: [0., 0.] },
         ];
-        let indices = vec![0, 2, 1, 1, 3, 4, 2, 5, 6, 4, 3, 5, 4, 5, 6];
+        let indices = vec![0, 1, 2, 0, 2, 3];
         mesh.append(verts, indices);
     }
 
@@ -956,39 +942,127 @@ impl EditBox {
         debug!(target: "ui::editbox", "handle_touch_start({pos:?})");
         let mut touch_info = self.touch_info.lock().unwrap();
 
-        let selections = self.select.lock().unwrap().clone();
-        if self.is_phone_select.load(Ordering::Relaxed) && selections.len() == 1 {
-            // Get left handle centerpoint
-            // Get right handle centerpoint
-            // Are we within range of either one?
-            // Set touch_state status to enable begin dragging them
+        if self.try_handle_drag(&mut touch_info, pos) {
+            return true
         }
 
-        touch_info.start(pos.clone());
+        let rect = self.rect.get();
+        if !rect.contains(pos) {}
+
+        touch_info.start(pos);
+        true
+    }
+    fn try_handle_drag(&self, touch_info: &mut TouchInfo, pos: Point) -> bool {
+        let selections = self.select.lock().unwrap().clone();
+
+        if self.is_phone_select.load(Ordering::Relaxed) && selections.len() == 1 {
+            let select = selections.first().unwrap();
+
+            let rendered = {
+                let editable = self.editable.lock().unwrap();
+                editable.render()
+            };
+
+            let font_size = self.font_size.get();
+            let window_scale = self.window_scale.get();
+            let baseline = self.baseline.get();
+
+            // Get left handle centerpoint
+            let x1 = rendered.pos_to_xw(select.start, font_size, window_scale, baseline).0;
+            // Get right handle centerpoint
+            let x2 = {
+                let (x, w) = rendered.pos_to_xw(select.end, font_size, window_scale, baseline);
+                x + w
+            };
+
+            // Are we within range of either one?
+            let select_descent = self.select_descent.get();
+            let y = baseline + select_descent + 25.;
+
+            let p1 = Point::new(x1, y);
+            let p2 = Point::new(x2, y);
+            debug!(target: "ui::editbox", "handle center points = ({p1:?}, {p2:?})");
+
+            const TOUCH_RADIUS_SQ: f32 = 10_000.;
+            // Make pos relative to the rect
+            let pos_rel = pos - self.rect.get().pos();
+
+            if p1.dist_sq(&pos_rel) <= TOUCH_RADIUS_SQ {
+                debug!(target: "ui::editbox", "TouchStateAction::DragSelectHandle [side=-1]");
+                // Set touch_state status to enable begin dragging them
+                touch_info.state = TouchStateAction::DragSelectHandle { side: -1 };
+                return true;
+            }
+            if p2.dist_sq(&pos_rel) <= TOUCH_RADIUS_SQ {
+                debug!(target: "ui::editbox", "TouchStateAction::DragSelectHandle [side=1]");
+                // Set touch_state status to enable begin dragging them
+                touch_info.state = TouchStateAction::DragSelectHandle { side: 1 };
+                return true;
+            }
+        }
+
         false
     }
+
     async fn handle_touch_move(&self, pos: Point) -> bool {
-        debug!(target: "ui::editbox", "handle_touch_move({pos:?})");
+        //debug!(target: "ui::editbox", "handle_touch_move({pos:?})");
         let touch_state = {
             let mut touch_info = self.touch_info.lock().unwrap();
             touch_info.update(&pos);
             touch_info.state.clone()
         };
         match &touch_state {
+            TouchStateAction::Inactive => return false,
             TouchStateAction::StartSelect => {
                 let x = pos.x;
                 self.start_touch_select(x);
                 self.redraw().await;
+                debug!(target: "ui::editbox", "TouchStateAction::Select");
                 self.touch_info.lock().unwrap().state = TouchStateAction::Select;
+            }
+            TouchStateAction::DragSelectHandle { side } => {
+                {
+                    assert!(*side == -1 || *side == 1);
+                    assert!(self.is_phone_select.load(Ordering::Relaxed));
+                    let mut selections = self.select.lock().unwrap();
+                    assert_eq!(selections.len(), 1);
+                    let select = selections.first_mut().unwrap();
+
+                    let rendered = {
+                        let editable = self.editable.lock().unwrap();
+                        editable.render()
+                    };
+
+                    let font_size = self.font_size.get();
+                    let window_scale = self.window_scale.get();
+                    let baseline = self.baseline.get();
+
+                    let mut pos = rendered.x_to_pos(pos.x, font_size, window_scale, baseline);
+                    if *side == -1 {
+                        let select_other_pos = &mut select.end;
+                        if pos >= *select_other_pos {
+                            pos = *select_other_pos - 1;
+                        }
+                        select.start = pos;
+                    } else {
+                        let select_other_pos = &mut select.start;
+                        if pos <= *select_other_pos {
+                            pos = *select_other_pos + 1;
+                        }
+                        select.end = pos;
+                    }
+                }
+                self.redraw().await;
             }
             _ => {}
         }
-        false
+        true
     }
     async fn handle_touch_end(&self, pos: Point) -> bool {
         debug!(target: "ui::editbox", "handle_touch_end({pos:?})");
         let state = self.touch_info.lock().unwrap().stop();
         match state {
+            TouchStateAction::Inactive => return false,
             TouchStateAction::Started { pos: _, instant: _ } => {
                 let rect = self.rect.get();
                 let font_size = self.font_size.get();
@@ -1019,7 +1093,7 @@ impl EditBox {
             _ => {}
         }
         window::show_keyboard(true);
-        false
+        true
     }
 
     /// Whenever the cursor property is modified this MUST be called
