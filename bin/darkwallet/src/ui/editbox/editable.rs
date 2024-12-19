@@ -55,8 +55,8 @@ impl ComposingText {
     fn clear(&mut self) -> String {
         self.region_start = 0;
         self.region_end = 0;
-        let final_text = std::mem::take(&mut self.compose_text) + &self.commit_text;
-        self.commit_text.clear();
+        let final_text =
+            std::mem::take(&mut self.commit_text) + &std::mem::take(&mut self.compose_text);
         final_text
     }
 
@@ -229,10 +229,11 @@ impl Editable {
     // set cursor
 
     /// Reset any composition in progress
-    fn end_compose(&mut self) {
+    pub fn end_compose(&mut self) {
         #[cfg(target_os = "android")]
         crate::android::cancel_composition();
 
+        debug!(target: "ui::editbox", "end_compose() [editable={self:?}]");
         let final_text = self.composer.clear();
         self.before_text += &final_text;
     }
@@ -242,9 +243,14 @@ impl Editable {
             self.before_text.clone() + &self.composer.commit_text + &self.composer.compose_text;
         text
     }
-    fn get_text(&self) -> String {
+    pub fn get_text(&self) -> String {
         let text = self.get_text_before() + &self.after_text;
         text
+    }
+
+    pub fn set_text(&mut self, before: String, after: String) {
+        self.before_text = before;
+        self.after_text = after;
     }
 
     pub fn compose(&mut self, suggest_text: &str, is_commit: bool) {
@@ -338,6 +344,19 @@ impl Editable {
             glyphs,
             compose_off + self.composer.region_start,
             compose_off + self.composer.region_end,
+        )
+    }
+}
+
+impl std::fmt::Debug for Editable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "({}, {}, {}, {})",
+            self.before_text,
+            self.composer.commit_text,
+            self.composer.compose_text,
+            self.after_text
         )
     }
 }

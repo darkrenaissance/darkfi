@@ -774,14 +774,40 @@ impl EditBox {
 
     fn delete(&self, before: usize, after: usize) {
         let mut editable = self.editable.lock().unwrap();
-        let mut select = self.select.lock().unwrap();
+        let selection = std::mem::take(&mut *self.select.lock().unwrap());
 
-        if select.is_empty() {
+        if selection.is_empty() {
             editable.delete(before, after);
             return
         }
 
-        // How do we preserve the cursor pos after deleting text?
+        let sel = selection.first().unwrap();
+        let cursor_pos = std::cmp::min(sel.start, sel.end);
+
+        let render = editable.render();
+        let mut before_text = String::new();
+        let mut after_text = String::new();
+        'next: for (pos, glyph) in render.glyphs.iter().enumerate() {
+            for select in &selection {
+                let start = std::cmp::min(select.start, select.end);
+                let end = std::cmp::max(select.start, select.end);
+
+                if start <= pos && pos < end {
+                    continue 'next
+                }
+            }
+            if pos <= cursor_pos {
+                before_text += &glyph.substr;
+            } else {
+                after_text += &glyph.substr;
+            }
+        }
+
+        editable.set_text(before_text, after_text);
+
+        self.is_phone_select.store(false, Ordering::Relaxed);
+        // Reshow cursor (if hidden)
+        self.hide_cursor.store(false, Ordering::Relaxed);
     }
 
     fn adjust_cursor(&self, has_shift: bool, move_cursor: impl Fn(&mut Editable)) {
@@ -818,6 +844,8 @@ impl EditBox {
 
         {
             let mut editable = self.editable.lock().unwrap();
+            editable.end_compose();
+
             let rendered = editable.render();
             // Adjust with scroll here too
             let x = x - rect.x;
