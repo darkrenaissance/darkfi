@@ -162,17 +162,19 @@ enum TouchStateAction {
     StartSelect,
     Select,
     DragSelectHandle { side: isize },
-    ScrollHoriz,
+    ScrollHoriz { start_pos: Point, scroll_start: f32 },
 }
 
 struct TouchInfo {
     state: TouchStateAction,
     start: Option<TouchStartInfo>,
+
+    scroll: PropertyFloat32,
 }
 
 impl TouchInfo {
-    fn new() -> Self {
-        Self { state: TouchStateAction::Inactive, start: None }
+    fn new(scroll: PropertyFloat32) -> Self {
+        Self { state: TouchStateAction::Inactive, start: None, scroll }
     }
 
     fn start(&mut self, pos: Point) {
@@ -198,7 +200,9 @@ impl TouchInfo {
                     }
                 } else if x_dist.abs() > 5. {
                     debug!(target: "ui::editbox", "TouchStateAction::ScrollHoriz");
-                    self.state = TouchStateAction::ScrollHoriz;
+                    let scroll_start = self.scroll.get();
+                    self.state =
+                        TouchStateAction::ScrollHoriz { start_pos: *start_pos, scroll_start };
                 }
             }
             _ => {}
@@ -329,7 +333,7 @@ impl EditBox {
             is_focused,
             rect,
             baseline: baseline.clone(),
-            scroll,
+            scroll: scroll.clone(),
             scroll_speed,
             cursor_pos,
             font_size: font_size.clone(),
@@ -362,7 +366,7 @@ impl EditBox {
             blink_is_paused: AtomicBool::new(false),
             hide_cursor: AtomicBool::new(false),
 
-            touch_info: SyncMutex::new(TouchInfo::new()),
+            touch_info: SyncMutex::new(TouchInfo::new(scroll)),
             is_phone_select: AtomicBool::new(false),
 
             old_window_scale: AtomicF32::new(window_scale.get()),
@@ -752,11 +756,13 @@ impl EditBox {
             }
             KeyCode::Delete => {
                 self.delete(0, 1);
+                self.clamp_scroll();
                 self.pause_blinking();
                 self.redraw().await;
             }
             KeyCode::Backspace => {
                 self.delete(1, 0);
+                self.clamp_scroll();
                 self.pause_blinking();
                 self.redraw().await;
             }
@@ -1086,6 +1092,13 @@ impl EditBox {
                 }
                 self.redraw().await;
             }
+            TouchStateAction::ScrollHoriz { start_pos, scroll_start } => {
+                let x_dist = start_pos.x - pos.x;
+                let mut scroll = scroll_start + x_dist;
+                scroll = scroll.clamp(0., self.max_cursor_scroll());
+                self.scroll.set(scroll);
+                self.redraw().await;
+            }
             _ => {}
         }
         true
@@ -1202,6 +1215,12 @@ impl EditBox {
         }
         let max_scroll = rhs - rect_w;
         max_scroll
+    }
+
+    fn clamp_scroll(&self) {
+        let mut scroll = self.scroll.get();
+        scroll = scroll.clamp(0., self.max_cursor_scroll());
+        self.scroll.set(scroll);
     }
 
     fn pause_blinking(&self) {
@@ -1378,10 +1397,7 @@ impl UIObject for EditBox {
         *self.parent_rect.lock().unwrap() = Some(parent_rect);
         self.rect.eval(&parent_rect).ok()?;
 
-        let mut scroll = self.scroll.get();
-        scroll = scroll.clamp(0., self.max_cursor_scroll());
-        self.scroll.set(scroll);
-
+        self.clamp_scroll();
         self.make_draw_calls()
     }
 
@@ -1596,6 +1612,7 @@ impl UIObject for EditBox {
         }
 
         //self.apply_cursor_scrolling();
+        self.clamp_scroll();
         self.redraw().await;
 
         true
