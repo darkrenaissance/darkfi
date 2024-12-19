@@ -227,6 +227,7 @@ pub struct EditBox {
     rect: PropertyRect,
     baseline: PropertyFloat32,
     scroll: PropertyFloat32,
+    scroll_speed: PropertyFloat32,
     cursor_pos: PropertyUint32,
     font_size: PropertyFloat32,
     text: PropertyStr,
@@ -260,6 +261,7 @@ pub struct EditBox {
     old_window_scale: AtomicF32,
     window_scale: PropertyFloat32,
     parent_rect: SyncMutex<Option<Rectangle>>,
+    is_mouse_hover: AtomicBool,
 }
 
 impl EditBox {
@@ -278,6 +280,8 @@ impl EditBox {
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
         let baseline = PropertyFloat32::wrap(node_ref, Role::Internal, "baseline", 0).unwrap();
         let scroll = PropertyFloat32::wrap(node_ref, Role::Internal, "scroll", 0).unwrap();
+        let scroll_speed =
+            PropertyFloat32::wrap(node_ref, Role::Internal, "scroll_speed", 0).unwrap();
         let cursor_pos = PropertyUint32::wrap(node_ref, Role::Internal, "cursor_pos", 0).unwrap();
         let font_size = PropertyFloat32::wrap(node_ref, Role::Internal, "font_size", 0).unwrap();
         let text = PropertyStr::wrap(node_ref, Role::Internal, "text", 0).unwrap();
@@ -326,6 +330,7 @@ impl EditBox {
             rect,
             baseline: baseline.clone(),
             scroll,
+            scroll_speed,
             cursor_pos,
             font_size: font_size.clone(),
             text,
@@ -363,6 +368,7 @@ impl EditBox {
             old_window_scale: AtomicF32::new(window_scale.get()),
             window_scale,
             parent_rect: SyncMutex::new(None),
+            is_mouse_hover: AtomicBool::new(false),
         });
 
         Pimpl::EditBox(self_)
@@ -394,8 +400,7 @@ impl EditBox {
         let rendered = self.editable.lock().unwrap().render();
         let atlas = text::make_texture_atlas(&self.render_api, &rendered.glyphs);
 
-        //let mut mesh = MeshBuilder::with_clip(clip.clone());
-        let mut mesh = MeshBuilder::new();
+        let mut mesh = MeshBuilder::with_clip(clip.clone());
 
         let selections = self.select.lock().unwrap().clone();
         // Just an assert
@@ -451,7 +456,6 @@ impl EditBox {
         let cursor_descent = self.cursor_descent.get();
         let baseline = self.baseline.get();
 
-        let rect_h = self.rect.get().h;
         let cursor_rect = Rectangle {
             x: 0.,
             y: baseline - cursor_ascent,
@@ -1175,13 +1179,38 @@ impl EditBox {
         self.scroll.set(scroll);
     }
 
+    fn max_cursor_scroll(&self) -> f32 {
+        let font_size = self.font_size.get();
+        let window_scale = self.window_scale.get();
+        let baseline = self.baseline.get();
+        let rhs = {
+            let mut editable = self.editable.lock().unwrap();
+            let rendered = editable.render();
+
+            if rendered.glyphs.is_empty() {
+                return 0.
+            }
+            let glyph_pos_iter =
+                GlyphPositionIter::new(font_size, window_scale, &rendered.glyphs, baseline);
+            let last_rect = glyph_pos_iter.last().unwrap();
+            last_rect.x + last_rect.w
+        };
+
+        let rect_w = self.rect.get().w;
+        if rhs <= rect_w {
+            return 0.;
+        }
+        let max_scroll = rhs - rect_w;
+        max_scroll
+    }
+
     fn pause_blinking(&self) {
         self.blink_is_paused.store(true, Ordering::Relaxed);
         self.cursor_is_visible.store(true, Ordering::Relaxed);
     }
 
     async fn redraw(&self) {
-        let Some(draw_update) = self.draw_cached() else {
+        let Some(draw_update) = self.make_draw_calls() else {
             error!(target: "ui::editbox", "Text failed to draw");
             return;
         };
@@ -1210,8 +1239,13 @@ impl EditBox {
 
         let mut cursor_instrs = vec![];
 
+        let rect_w = self.rect.get().w;
+
         let mut cursor_pos = Point::zero();
         cursor_pos.x += self.cursor_px_offset();
+        if cursor_pos.x > rect_w {
+            return vec![]
+        }
         cursor_instrs.push(GfxDrawInstruction::Move(cursor_pos));
 
         let cursor_mesh = {
@@ -1227,7 +1261,7 @@ impl EditBox {
         cursor_instrs
     }
 
-    fn draw_cached(&self) -> Option<DrawUpdate> {
+    fn make_draw_calls(&self) -> Option<DrawUpdate> {
         let rect = self.rect.get();
 
         let text_mesh = self.regen_text_mesh(rect.clone());
@@ -1343,7 +1377,12 @@ impl UIObject for EditBox {
         debug!(target: "ui::editbox", "EditBox::draw()");
         *self.parent_rect.lock().unwrap() = Some(parent_rect);
         self.rect.eval(&parent_rect).ok()?;
-        self.draw_cached()
+
+        let mut scroll = self.scroll.get();
+        scroll = scroll.clamp(0., self.max_cursor_scroll());
+        self.scroll.set(scroll);
+
+        self.make_draw_calls()
     }
 
     async fn handle_char(&self, key: char, mods: KeyMods, repeat: bool) -> bool {
@@ -1474,6 +1513,9 @@ impl UIObject for EditBox {
             return false
         }
 
+        let rect = self.rect.get();
+        self.is_mouse_hover.store(rect.contains(mouse_pos), Ordering::Relaxed);
+
         if !self.mouse_btn_held.load(Ordering::Relaxed) {
             return false;
         }
@@ -1482,8 +1524,6 @@ impl UIObject for EditBox {
         // also implement scrolling when cursor is to the left or right
         // just scroll to the end
         // also set cursor_pos too
-
-        let rect = self.rect.get();
 
         let font_size = self.font_size.get();
         let window_scale = self.window_scale.get();
@@ -1507,7 +1547,22 @@ impl UIObject for EditBox {
         self.pause_blinking();
         //self.apply_cursor_scrolling();
         self.redraw().await;
-        false
+        true
+    }
+
+    async fn handle_mouse_wheel(&self, wheel_pos: Point) -> bool {
+        //debug!(target: "ui::editbox", "rect={rect:?}, wheel_pos={wheel_pos:?}");
+        if !self.is_mouse_hover.load(Ordering::Relaxed) {
+            return false
+        }
+
+        let mut scroll = self.scroll.get() + wheel_pos.y * self.scroll_speed.get();
+        scroll = scroll.clamp(0., self.max_cursor_scroll());
+        debug!(target: "ui::editbox", "handle_mouse_wheel({wheel_pos:?}) [scroll={scroll}]");
+        self.scroll.set(scroll);
+        self.redraw().await;
+
+        true
     }
 
     async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
