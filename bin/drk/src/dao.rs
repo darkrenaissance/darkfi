@@ -2269,6 +2269,12 @@ impl Drk {
         // Fetch our money Merkle tree
         let tree = self.get_money_tree().await?;
 
+        // Retrieve next block height and current block time target,
+        // to compute their window.
+        let next_block_height = self.get_next_block_height().await?;
+        let block_target = self.get_block_target().await?;
+        let current_blockwindow = blockwindow(next_block_height, block_target);
+
         // Now we can create the transfer call parameters
         let input_user_data_blind = Blind::random(&mut OsRng);
         let mut inputs = vec![];
@@ -2320,6 +2326,7 @@ impl Drk {
             yes_vote_blind,
             all_vote_blind,
             signature_secret: exec_signature_secret,
+            current_blockwindow,
         };
         let (exec_params, exec_proofs) = exec_builder.make(&dao_exec_zkbin, &dao_exec_pk)?;
 

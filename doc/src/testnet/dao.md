@@ -77,11 +77,11 @@ $ ./drk dao balance MiladyMakerDAO
 
 Now that the DAO has something in its treasury, we can generate a
 transfer proposal to send it somewhere, that will be up to vote
-for 30 block periods. Let's propose to send 5 of the 10 tokens to
+for 1 block period. Let's propose to send 5 of the 10 tokens to
 our address (we can find that with `drk wallet --address`):
 
 ```
-$ ./drk dao propose-transfer MiladyMakerDAO 30 5 WCKD {YOUR_ADDRESS}
+$ ./drk dao propose-transfer MiladyMakerDAO 1 5 WCKD {YOUR_ADDRESS}
 ```
 
 After command was executed, it will output the generated proposal
@@ -146,10 +146,10 @@ current status when running `dao proposal {PROPOSAL_BULLA}`.
 
 ## Executing the proposal
 
-Once enough votes have been cast that meet the required minimum (quorum)
-and assuming the yes:no votes ratio is bigger than the approval ratio,
-then we are ready to confirm the vote. Any DAO member can perform this
-action.
+Once the block period has passed and enough votes have been cast that
+meet the required minimum (quorum), and assuming the yes:no votes ratio
+ratio is bigger than the approval ratio, then we are ready to confirm
+the vote. Any DAO member can perform this action.
 
 Since in our tutorial the `MLDY` governance tokens we used surpass the
 quorum, we can execute the proposal right away:
@@ -203,7 +203,7 @@ from the DAO treasury to the new DAO we created:
 
 ```
 $ ./drk dao list WickedDAO
-$ ./drk dao propose-transfer MiladyMakerDAO 30 6.9 MLDY {WICKED_DAO_PUBLIC_KEY} \
+$ ./drk dao propose-transfer MiladyMakerDAO 1 6.9 MLDY {WICKED_DAO_PUBLIC_KEY} \
     {DAO_CONTRACT_SPEND_HOOK} {WICKED_DAO_BULLA}
 $ ./drk dao proposal {PROPOSAL_BULLA} --mint-proposal > dao_mldy_transfer_proposal_wckd_mint_tx
 $ ./drk broadcast < dao_mldy_transfer_proposal_wckd_mint_tx
@@ -216,7 +216,7 @@ $ ./drk dao vote {PROPOSAL_BULLA} 1 > dao_mldy_transfer_proposal_wckd_vote_tx
 $ ./drk broadcast < dao_mldy_transfer_proposal_wckd_vote_tx
 ```
 
-And execute it:
+And execute it, after the vote period(1 block period) has passed:
 
 ```
 $ ./drk dao exec {PROPOSAL_BULLA} > dao_mldy_transfer_proposal_wckd_exec_tx

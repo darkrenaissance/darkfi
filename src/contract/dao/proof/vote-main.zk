@@ -46,7 +46,7 @@ circuit "VoteMain" {
     token_commit = poseidon_hash(dao_gov_token_id, gov_token_blind);
     constrain_instance(token_commit);
 
-    # cast to EcPoint
+    # Cast to EcPoint
     # (otherwise zkas refuses to compile)
     ONE = witness_base(1);
     dao_pubkey = ec_mul_var_base(ONE, dao_public_key);

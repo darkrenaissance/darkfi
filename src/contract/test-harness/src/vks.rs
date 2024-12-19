@@ -49,8 +49,8 @@ use sled_overlay::sled;
 
 /// Update these if any circuits are changed.
 /// Delete the existing cachefiles, and enable debug logging, you will see the new hashes.
-const PKS_HASH: &str = "e8de97d286a4a31606f96dfd13bb5a6e9dfa49322573b8cd1fe936aee7e33e58";
-const VKS_HASH: &str = "aa59b5e53c10c994c127beb443d6b1b4c21ee7417ce1a4f717c82431b7b8c8d9";
+const PKS_HASH: &str = "55d9535b390a819026bb3554f5de501997b831935bbc910951639fddfec44b14";
+const VKS_HASH: &str = "cbcb356ccacd0ad4ac953417f07bf24297927e61ba770f5aeddaa9e72f159272";
 
 /// Build a `PathBuf` to a cachefile
 fn cache_path(typ: &str) -> Result<PathBuf> {

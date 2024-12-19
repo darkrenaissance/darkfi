@@ -27,6 +27,7 @@ use darkfi_sdk::{
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{
+    blockwindow,
     error::DaoError,
     model::{DaoExecParams, DaoExecUpdate, DaoProposalMetadata, VecAuthCallCommit},
     DaoFunction, DAO_CONTRACT_DB_PROPOSAL_BULLAS, DAO_CONTRACT_ZKAS_DAO_EXEC_NS,
@@ -46,6 +47,9 @@ pub(crate) fn dao_exec_get_metadata(
     // Public keys for the transaction signatures we have to verify
     let signature_pubkeys: Vec<PublicKey> = vec![params.signature_public];
 
+    let current_blockwindow =
+        blockwindow(wasm::util::get_verifying_block_height()?, wasm::util::get_block_target()?);
+
     let blind_vote = params.blind_total_vote;
     let yes_vote_coords = blind_vote.yes_vote_commit.to_affine().coordinates().unwrap();
     let all_vote_coords = blind_vote.all_vote_commit.to_affine().coordinates().unwrap();
@@ -55,6 +59,7 @@ pub(crate) fn dao_exec_get_metadata(
         vec![
             params.proposal_bulla.inner(),
             params.proposal_auth_calls.commit(),
+            pallas::Base::from(current_blockwindow),
             *yes_vote_coords.x(),
             *yes_vote_coords.y(),
             *all_vote_coords.x(),

@@ -54,6 +54,7 @@ impl TestHarness {
         user_data: pallas::Base,
         dao: &Dao,
         block_height: u32,
+        duration_blockwindows: u64,
     ) -> Result<(Transaction, DaoProposeParams, Option<MoneyFeeParamsV1>, DaoProposal)> {
         let wallet = self.holders.get(proposer).unwrap();
 
@@ -121,7 +122,7 @@ impl TestHarness {
         let proposal = DaoProposal {
             auth_calls,
             creation_blockwindow,
-            duration_blockwindows: 30,
+            duration_blockwindows,
             user_data,
             dao_bulla: dao.to_bulla(),
             blind: Blind::random(&mut OsRng),
@@ -193,6 +194,7 @@ impl TestHarness {
         user_data: pallas::Base,
         dao: &Dao,
         block_height: u32,
+        duration_blockwindows: u64,
     ) -> Result<(Transaction, DaoProposeParams, Option<MoneyFeeParamsV1>, DaoProposal)> {
         let wallet = self.holders.get(proposer).unwrap();
 
@@ -238,7 +240,7 @@ impl TestHarness {
         let proposal = DaoProposal {
             auth_calls: vec![],
             creation_blockwindow,
-            duration_blockwindows: 30,
+            duration_blockwindows,
             user_data,
             dao_bulla: dao.to_bulla(),
             blind: Blind::random(&mut OsRng),

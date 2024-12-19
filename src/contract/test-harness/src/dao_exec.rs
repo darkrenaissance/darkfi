@@ -21,6 +21,7 @@ use darkfi::{
     Result,
 };
 use darkfi_dao_contract::{
+    blockwindow,
     client::{DaoAuthMoneyTransferCall, DaoExecCall},
     model::{Dao, DaoProposal},
     DaoFunction, DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS,
@@ -146,6 +147,8 @@ impl TestHarness {
             xfer_params.inputs.iter().map(|input| input.value_commit).sum()
         );
 
+        let block_target = dao_wallet.validator.consensus.module.read().await.target;
+        let current_blockwindow = blockwindow(block_height, block_target);
         let exec_builder = DaoExecCall {
             proposal: proposal.clone(),
             dao: dao.clone(),
@@ -154,6 +157,7 @@ impl TestHarness {
             yes_vote_blind,
             all_vote_blind,
             signature_secret: exec_signature_secret,
+            current_blockwindow,
         };
 
         let (exec_params, exec_proofs) = exec_builder.make(dao_exec_zkbin, dao_exec_pk)?;
@@ -251,11 +255,15 @@ impl TestHarness {
         all_vote_blind: ScalarBlind,
         block_height: u32,
     ) -> Result<(Transaction, Option<MoneyFeeParamsV1>)> {
+        let wallet = self.holders.get_mut(holder).unwrap();
+
         let (dao_exec_pk, dao_exec_zkbin) =
             self.proving_keys.get(DAO_CONTRACT_ZKAS_DAO_EXEC_NS).unwrap();
 
         // Create the exec call
         let exec_signature_secret = SecretKey::random(&mut OsRng);
+        let block_target = wallet.validator.consensus.module.read().await.target;
+        let current_blockwindow = blockwindow(block_height, block_target);
         let exec_builder = DaoExecCall {
             proposal: proposal.clone(),
             dao: dao.clone(),
@@ -264,6 +272,7 @@ impl TestHarness {
             yes_vote_blind,
             all_vote_blind,
             signature_secret: exec_signature_secret,
+            current_blockwindow,
         };
         let (exec_params, exec_proofs) = exec_builder.make(dao_exec_zkbin, dao_exec_pk)?;
 

@@ -19,6 +19,7 @@
 use darkfi::Result;
 use darkfi_contract_test_harness::{init_logger, Holder, TestHarness};
 use darkfi_dao_contract::{
+    blockwindow,
     model::{Dao, DaoBlindAggregateVote, DaoVoteParams},
     DaoFunction,
 };
@@ -57,6 +58,7 @@ const PROPOSER_LIMIT: u64 = 100_000_000;
 const QUORUM: u64 = 200_000_000;
 const APPROVAL_RATIO_BASE: u64 = 2;
 const APPROVAL_RATIO_QUOT: u64 = 1;
+const PROPOSAL_DURATION_BLOCKWINDOW: u64 = 1;
 // The tokens we want to send via the transfer proposal
 const TRANSFER_PROPOSAL_AMOUNT: u64 = 250_000_000;
 
@@ -320,6 +322,11 @@ async fn execute_transfer_proposal(
         blind: Blind::random(&mut OsRng),
     }];
 
+    // Grab creation blockwindow
+    let block_target =
+        th.holders.get_mut(&Holder::Dao).unwrap().validator.consensus.module.read().await.target;
+    let creation_blockwindow = blockwindow(*current_block_height, block_target);
+
     let (tx, params, fee_params, proposal_info) = th
         .dao_propose_transfer(
             &Holder::Alice,
@@ -327,6 +334,7 @@ async fn execute_transfer_proposal(
             user_data,
             dao,
             *current_block_height,
+            PROPOSAL_DURATION_BLOCKWINDOW,
         )
         .await?;
 
@@ -396,7 +404,6 @@ async fn execute_transfer_proposal(
         .await?;
     }
     th.assert_trees(&HOLDERS);
-    *current_block_height += 1;
 
     // Gather and decrypt all generic vote notes
     let vote_note_1 = alice_vote_params.note.decrypt_unsafe(&dao_keypair.secret).unwrap();
@@ -410,6 +417,13 @@ async fn execute_transfer_proposal(
             (vote_note_2, bob_vote_params),
             (vote_note_3, charlie_vote_params),
         ]);
+
+    // Wait until proposal has expired
+    let mut current_blockwindow = creation_blockwindow;
+    while current_blockwindow <= creation_blockwindow + PROPOSAL_DURATION_BLOCKWINDOW + 1 {
+        *current_block_height += 1;
+        current_blockwindow = blockwindow(*current_block_height, block_target);
+    }
 
     // ================
     // Dao::Exec
@@ -472,8 +486,21 @@ async fn execute_generic_proposal(
     // Propose the vote
     // ================
     info!("[Alice] Building DAO generic proposal tx");
-    let (tx, params, fee_params, proposal_info) =
-        th.dao_propose_generic(&Holder::Alice, user_data, dao, *current_block_height).await?;
+
+    // Grab creation blockwindow
+    let block_target =
+        th.holders.get_mut(&Holder::Dao).unwrap().validator.consensus.module.read().await.target;
+    let creation_blockwindow = blockwindow(*current_block_height, block_target);
+
+    let (tx, params, fee_params, proposal_info) = th
+        .dao_propose_generic(
+            &Holder::Alice,
+            user_data,
+            dao,
+            *current_block_height,
+            PROPOSAL_DURATION_BLOCKWINDOW,
+        )
+        .await?;
 
     for holder in &HOLDERS {
         info!("[{holder:?}] Executing DAO generic proposal tx");
@@ -541,7 +568,6 @@ async fn execute_generic_proposal(
         .await?;
     }
     th.assert_trees(&HOLDERS);
-    *current_block_height += 1;
 
     // Gather and decrypt all generic vote notes
     let vote_note_1 = alice_vote_params.note.decrypt_unsafe(&dao_keypair.secret).unwrap();
@@ -555,6 +581,13 @@ async fn execute_generic_proposal(
             (vote_note_2, bob_vote_params),
             (vote_note_3, charlie_vote_params),
         ]);
+
+    // Wait until proposal has expired
+    let mut current_blockwindow = creation_blockwindow;
+    while current_blockwindow <= creation_blockwindow + PROPOSAL_DURATION_BLOCKWINDOW + 1 {
+        *current_block_height += 1;
+        current_blockwindow = blockwindow(*current_block_height, block_target);
+    }
 
     // ================
     // Dao::Exec

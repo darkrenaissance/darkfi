@@ -43,6 +43,7 @@ pub struct DaoExecCall {
     pub yes_vote_blind: ScalarBlind,
     pub all_vote_blind: ScalarBlind,
     pub signature_secret: SecretKey,
+    pub current_blockwindow: u64,
 }
 
 impl DaoExecCall {
@@ -77,8 +78,10 @@ impl DaoExecCall {
 
         let signature_public = PublicKey::from_secret(self.signature_secret);
 
+        let current_blockwindow = pallas::Base::from(self.current_blockwindow);
+
         let prover_witnesses = vec![
-            // proposal params
+            // Proposal params
             Witness::Base(Value::known(proposal_auth_calls_commit)),
             Witness::Base(Value::known(pallas::Base::from(self.proposal.creation_blockwindow))),
             Witness::Base(Value::known(pallas::Base::from(self.proposal.duration_blockwindows))),
@@ -93,12 +96,14 @@ impl DaoExecCall {
             Witness::Base(Value::known(dao_pub_x)),
             Witness::Base(Value::known(dao_pub_y)),
             Witness::Base(Value::known(self.dao.bulla_blind.inner())),
-            // votes
+            // Votes
             Witness::Base(Value::known(pallas::Base::from(self.yes_vote_value))),
             Witness::Base(Value::known(pallas::Base::from(self.all_vote_value))),
             Witness::Scalar(Value::known(self.yes_vote_blind.inner())),
             Witness::Scalar(Value::known(self.all_vote_blind.inner())),
-            // signature secret
+            // Time checks
+            Witness::Base(Value::known(current_blockwindow)),
+            // Signature secret
             Witness::Base(Value::known(self.signature_secret.inner())),
         ];
 
@@ -106,6 +111,7 @@ impl DaoExecCall {
         let public_inputs = vec![
             proposal_bulla.inner(),
             proposal_auth_calls_commit,
+            current_blockwindow,
             *yes_vote_commit_coords.x(),
             *yes_vote_commit_coords.y(),
             *all_vote_commit_coords.x(),

@@ -251,8 +251,9 @@ impl<T: StorageAdapter<Value = pallas::Base>> DaoVoteCall<'_, T> {
         let (ephem_x, ephem_y) = ephem_pubkey.xy();
 
         let current_blockwindow = pallas::Base::from(self.current_blockwindow);
+
         let prover_witnesses = vec![
-            // proposal params
+            // Proposal params
             Witness::Base(Value::known(self.proposal.auth_calls.commit())),
             Witness::Base(Value::known(pallas::Base::from(self.proposal.creation_blockwindow))),
             Witness::Base(Value::known(pallas::Base::from(self.proposal.duration_blockwindows))),
@@ -272,9 +273,9 @@ impl<T: StorageAdapter<Value = pallas::Base>> DaoVoteCall<'_, T> {
             // Total number of gov tokens allocated
             Witness::Base(Value::known(all_vote_value_fp)),
             Witness::Base(Value::known(all_vote_blind.inner())),
-            // gov token
+            // Gov token
             Witness::Base(Value::known(gov_token_blind)),
-            // time checks
+            // Time checks
             Witness::Base(Value::known(current_blockwindow)),
             // verifiable encryption
             Witness::Base(Value::known(ephem_secret.inner())),

@@ -31,6 +31,9 @@ witness "Exec" {
     Scalar yes_vote_blind,
     Scalar all_vote_blind,
 
+    # Check whether the proposal has expired or not
+    Base current_blockwindow,
+
     # Signature secret
     Base signature_secret,
 }
@@ -60,6 +63,11 @@ circuit "Exec" {
     );
     constrain_instance(proposal_bulla);
     constrain_instance(proposal_auth_calls_commit);
+
+    # Enforce that the proposal has expired
+    end_time = base_add(proposal_creation_blockwindow, proposal_duration_blockwindows);
+    less_than_strict(end_time, current_blockwindow);
+    constrain_instance(current_blockwindow);
 
     # Create Pedersen commitments for win_votes and total_votes, and
     # constrain the commitments' coordinates.
