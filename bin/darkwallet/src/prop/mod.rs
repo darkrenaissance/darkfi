@@ -35,8 +35,6 @@ pub use wrap::{
     PropertyStr, PropertyUint32,
 };
 
-type Buffer = Arc<Vec<u8>>;
-
 #[derive(Debug, Copy, Clone, PartialEq, SerialEncodable, SerialDecodable)]
 #[repr(u8)]
 pub enum PropertyType {
@@ -46,7 +44,6 @@ pub enum PropertyType {
     Float32 = 3,
     Str = 4,
     Enum = 5,
-    Buffer = 6,
     SceneNodeId = 7,
     SExpr = 8,
 }
@@ -60,7 +57,6 @@ impl PropertyType {
             Self::Float32 => PropertyValue::Float32(0.),
             Self::Str => PropertyValue::Str(String::new()),
             Self::Enum => PropertyValue::Enum(String::new()),
-            Self::Buffer => PropertyValue::Buffer(Arc::new(vec![])),
             Self::SceneNodeId => PropertyValue::SceneNodeId(0),
             Self::SExpr => PropertyValue::SExpr(Arc::new(vec![])),
         }
@@ -93,7 +89,6 @@ pub enum PropertyValue {
     Float32(f32),
     Str(String),
     Enum(String),
-    Buffer(Arc<Vec<u8>>),
     SceneNodeId(SceneNodeId),
     SExpr(Arc<SExprCode>),
 }
@@ -108,7 +103,6 @@ impl PropertyValue {
             Self::Float32(_) => PropertyType::Float32,
             Self::Str(_) => PropertyType::Str,
             Self::Enum(_) => PropertyType::Enum,
-            Self::Buffer(_) => PropertyType::Buffer,
             Self::SceneNodeId(_) => PropertyType::SceneNodeId,
             Self::SExpr(_) => PropertyType::SExpr,
         }
@@ -165,12 +159,6 @@ impl PropertyValue {
             _ => Err(Error::PropertyWrongType),
         }
     }
-    pub fn as_buf(&self) -> Result<Buffer> {
-        match self {
-            Self::Buffer(v) => Ok(v.clone()),
-            _ => Err(Error::PropertyWrongType),
-        }
-    }
     pub fn as_node_id(&self) -> Result<SceneNodeId> {
         match self {
             Self::SceneNodeId(v) => Ok(*v),
@@ -188,7 +176,7 @@ impl PropertyValue {
 impl Encodable for PropertyValue {
     fn encode<S: Write>(&self, s: &mut S) -> std::result::Result<usize, std::io::Error> {
         match self {
-            Self::Unset | Self::Null | Self::Buffer(_) => {
+            Self::Unset | Self::Null => {
                 // do nothing
                 Ok(0)
             }
@@ -452,9 +440,6 @@ impl Property {
         }
         self.set_raw_value(role, i, PropertyValue::Enum(val.into()))
     }
-    pub fn set_buf(&self, role: Role, i: usize, val: Vec<u8>) -> Result<()> {
-        self.set_raw_value(role, i, PropertyValue::Buffer(Arc::new(val)))
-    }
     pub fn set_node_id(&self, role: Role, i: usize, val: SceneNodeId) -> Result<()> {
         self.set_raw_value(role, i, PropertyValue::SceneNodeId(val))
     }
@@ -527,9 +512,6 @@ impl Property {
     }
     pub fn push_enum<S: Into<String>>(&self, role: Role, val: S) -> Result<usize> {
         self.push_value(role, PropertyValue::Enum(val.into()))
-    }
-    pub fn push_buf(&self, role: Role, val: Vec<u8>) -> Result<usize> {
-        self.push_value(role, PropertyValue::Buffer(Arc::new(val)))
     }
     pub fn push_node_id(&self, role: Role, val: SceneNodeId) -> Result<usize> {
         self.push_value(role, PropertyValue::SceneNodeId(val))
@@ -646,16 +628,6 @@ impl Property {
             return Ok(None)
         }
         Ok(Some(val.as_enum()?))
-    }
-    pub fn get_buf(&self, i: usize) -> Result<Buffer> {
-        self.get_value(i)?.as_buf()
-    }
-    pub fn get_buf_opt(&self, i: usize) -> Result<Option<Buffer>> {
-        let val = self.get_value(i)?;
-        if val.is_null() {
-            return Ok(None)
-        }
-        Ok(Some(val.as_buf()?))
     }
     pub fn get_node_id(&self, i: usize) -> Result<SceneNodeId> {
         self.get_value(i)?.as_node_id()
