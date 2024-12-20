@@ -857,8 +857,7 @@ impl EditBox {
             editable.end_compose();
 
             let rendered = editable.render();
-            // Adjust with scroll here too
-            let x = x - rect.x;
+            let x = x - rect.x + self.scroll.get();
 
             let cpos = rendered.x_to_pos(x, font_size, window_scale, baseline);
 
@@ -1015,10 +1014,11 @@ impl EditBox {
 
             // Are we within range of either one?
             let select_descent = self.select_descent.get();
+            let scroll = self.scroll.get();
             let y = baseline + select_descent + 25.;
 
-            let p1 = Point::new(x1, y);
-            let p2 = Point::new(x2, y);
+            let p1 = Point::new(x1 - scroll, y);
+            let p2 = Point::new(x2 - scroll, y);
             debug!(target: "ui::editbox", "handle center points = ({p1:?}, {p2:?})");
 
             const TOUCH_RADIUS_SQ: f32 = 10_000.;
@@ -1075,7 +1075,9 @@ impl EditBox {
                     let window_scale = self.window_scale.get();
                     let baseline = self.baseline.get();
 
-                    let mut pos = rendered.x_to_pos(pos.x, font_size, window_scale, baseline);
+                    let pos_x = pos.x + self.scroll.get();
+
+                    let mut pos = rendered.x_to_pos(pos_x, font_size, window_scale, baseline);
                     if *side == -1 {
                         let select_other_pos = &mut select.end;
                         if pos >= *select_other_pos {
@@ -1206,7 +1208,9 @@ impl EditBox {
             let glyph_pos_iter =
                 GlyphPositionIter::new(font_size, window_scale, &rendered.glyphs, baseline);
             let last_rect = glyph_pos_iter.last().unwrap();
-            last_rect.x + last_rect.w
+            let mut rhs = last_rect.x + last_rect.w;
+            rhs += eol_nudge(font_size, &rendered.glyphs);
+            rhs
         };
 
         let rect_w = self.rect.get().w;
@@ -1494,8 +1498,7 @@ impl UIObject for EditBox {
         {
             let mut editable = self.editable.lock().unwrap();
             let rendered = editable.render();
-            // Adjust with scroll here too
-            let x = mouse_pos.x - rect.x;
+            let x = mouse_pos.x - rect.x + self.scroll.get();
 
             let cpos = rendered.x_to_pos(x, font_size, window_scale, baseline);
             let cidx = rendered.pos_to_idx(cpos);
@@ -1548,8 +1551,7 @@ impl UIObject for EditBox {
         {
             let mut editable = self.editable.lock().unwrap();
             let rendered = editable.render();
-            // Adjust with scroll here too
-            let x = mouse_pos.x - rect.x;
+            let x = mouse_pos.x - rect.x + self.scroll.get();
 
             let cpos = rendered.x_to_pos(x, font_size, window_scale, baseline);
             let cidx = rendered.pos_to_idx(cpos);
