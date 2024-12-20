@@ -57,9 +57,12 @@ file-rotate = "0.7.6"
 emulate-android = []
 
 [patch.crates-io]
+# We can remove these patches. But unfortunately harfbuzz-sys is still linking
+# the old freetype libs so we need to fix that first.
+# Fucking servo rust-harfbuzz
 freetype-rs = { git = "https://github.com/narodnik/freetype-rs" }
 freetype-sys = { git = "https://github.com/narodnik/freetype-sys2" }
-# I'm so confused why this is needed
+
 halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v4"}
 halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v4"}
 # This patch didn't work for me
