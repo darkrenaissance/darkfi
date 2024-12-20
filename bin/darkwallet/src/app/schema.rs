@@ -53,7 +53,7 @@ mod android_ui_consts {
     pub const TEXTBAR_BASELINE: f32 = 93.;
     pub const EDITCHAT_LHS_PAD: f32 = 30.;
     pub const SENDLABEL_WIDTH: f32 = 200.;
-    pub const SENDLABEL_LHS_PAD: f32 = 30.;
+    pub const SENDLABEL_LHS_PAD: f32 = 40.;
     pub const FONTSIZE: f32 = 40.;
     pub const TIMESTAMP_FONTSIZE: f32 = 30.;
     pub const TIMESTAMP_WIDTH: f32 = 135.;

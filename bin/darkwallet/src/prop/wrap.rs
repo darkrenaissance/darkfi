@@ -282,6 +282,19 @@ impl PropertyRect {
     }
 
     pub fn eval(&self, parent_rect: &Rectangle) -> Result<()> {
+        let mut globals = vec![
+            ("w".to_string(), SExprVal::Float32(parent_rect.w)),
+            ("h".to_string(), SExprVal::Float32(parent_rect.h)),
+        ];
+
+        for dep in self.prop.get_depends() {
+            let Some(prop) = dep.prop.upgrade() else { return Err(Error::PropertyNotFound) };
+
+            let value = prop.get_f32(dep.i)?;
+
+            globals.push((dep.local_name, SExprVal::Float32(value)));
+        }
+
         for i in 0..4 {
             if !self.prop.is_expr(i)? {
                 continue
@@ -289,13 +302,7 @@ impl PropertyRect {
 
             let expr = self.prop.get_expr(i).unwrap();
 
-            let mut machine = SExprMachine {
-                globals: vec![
-                    ("w".to_string(), SExprVal::Float32(parent_rect.w)),
-                    ("h".to_string(), SExprVal::Float32(parent_rect.h)),
-                ],
-                stmts: &expr,
-            };
+            let mut machine = SExprMachine { globals: globals.clone(), stmts: &expr };
 
             let v = machine.call()?.as_f32()?;
             self.prop.set_cache_f32(self.role, i, v).unwrap();

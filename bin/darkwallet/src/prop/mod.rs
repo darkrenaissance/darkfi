@@ -20,7 +20,7 @@ use crate::error::{Error, Result};
 use darkfi_serial::{async_trait, Encodable, FutAsyncWriteExt, SerialDecodable, SerialEncodable};
 use std::{
     io::Write,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex as SyncMutex, Weak},
 };
 
 use crate::{
@@ -212,6 +212,14 @@ pub enum ModifyAction {
 }
 
 pub type PropertyPtr = Arc<Property>;
+pub type PropertyWeak = Weak<Property>;
+
+#[derive(Debug, Clone)]
+pub struct PropertyDepend {
+    pub prop: PropertyWeak,
+    pub i: usize,
+    pub local_name: String,
+}
 
 #[derive(Debug)]
 pub struct Property {
@@ -220,10 +228,10 @@ pub struct Property {
     pub subtype: PropertySubType,
     pub defaults: Vec<PropertyValue>,
     // either a value or an expr must be set
-    pub vals: Mutex<Vec<PropertyValue>>,
+    pub vals: SyncMutex<Vec<PropertyValue>>,
     // only used valid when PropertyValue is an expr
     // caches the last calculated value
-    pub cache: Mutex<Vec<PropertyValue>>,
+    pub cache: SyncMutex<Vec<PropertyValue>>,
     pub ui_name: String,
     pub desc: String,
 
@@ -239,6 +247,7 @@ pub struct Property {
     pub enum_items: Option<Vec<String>>,
 
     on_modify: PublisherPtr<(Role, ModifyAction)>,
+    depends: SyncMutex<Vec<PropertyDepend>>,
 }
 
 impl Property {
@@ -249,8 +258,8 @@ impl Property {
             subtype,
 
             defaults: vec![typ.default_value()],
-            vals: Mutex::new(vec![PropertyValue::Unset]),
-            cache: Mutex::new(vec![PropertyValue::Null]),
+            vals: SyncMutex::new(vec![PropertyValue::Unset]),
+            cache: SyncMutex::new(vec![PropertyValue::Null]),
 
             ui_name: String::new(),
             desc: String::new(),
@@ -264,6 +273,7 @@ impl Property {
             enum_items: None,
 
             on_modify: Publisher::new(),
+            depends: SyncMutex::new(vec![]),
         }
     }
 
@@ -677,6 +687,20 @@ impl Property {
 
     pub fn subscribe_modify(&self) -> Subscription<(Role, ModifyAction)> {
         self.on_modify.clone().subscribe()
+    }
+
+    // Dependencies
+
+    pub fn add_depend<S: Into<String>>(&self, prop: &PropertyPtr, i: usize, local_name: S) {
+        self.depends.lock().unwrap().push(PropertyDepend {
+            prop: Arc::downgrade(prop),
+            i,
+            local_name: local_name.into(),
+        });
+    }
+
+    pub fn get_depends(&self) -> Vec<PropertyDepend> {
+        self.depends.lock().unwrap().clone()
     }
 }
 

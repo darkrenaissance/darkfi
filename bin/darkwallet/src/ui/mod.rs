@@ -17,6 +17,7 @@
  */
 
 use async_trait::async_trait;
+use futures::stream::{FuturesUnordered, StreamExt};
 use miniquad::{KeyCode, KeyMods, MouseButton, TouchPhase};
 use std::sync::{Arc, Weak};
 
@@ -117,12 +118,23 @@ impl<T: Send + Sync + 'static> OnModify<T> {
     {
         let node_name = self.node_name.clone();
         let node_id = self.node_id;
-        let on_modify_sub = prop.subscribe_modify();
+
+        let mut on_modify_subs = vec![prop.subscribe_modify()];
+        for dep in prop.get_depends() {
+            let Some(dep_prop) = dep.prop.upgrade() else { continue };
+            on_modify_subs.push(dep_prop.subscribe_modify());
+        }
+
         let prop_name = prop.name.clone();
         let me = self.me.clone();
         let task = self.ex.spawn(async move {
             loop {
-                let Ok((role, _)) = on_modify_sub.receive().await else {
+                let mut poll_queues = FuturesUnordered::new();
+                for on_modify_sub in &on_modify_subs {
+                    poll_queues.push(on_modify_sub.receive());
+                }
+
+                let Some(Ok((role, _))) = poll_queues.next().await else {
                     error!(target: "app", "Property '{}':{}/'{}' on_modify pipe is broken", node_name, node_id, prop_name);
                     return
                 };
