@@ -294,6 +294,7 @@ impl PropertyRect {
 
             globals.push((dep.local_name, SExprVal::Float32(value)));
         }
+        debug!(target: "prop::wrap", "PropertyRect::eval() [globals = {globals:?}]");
 
         for i in 0..4 {
             if !self.prop.is_expr(i)? {

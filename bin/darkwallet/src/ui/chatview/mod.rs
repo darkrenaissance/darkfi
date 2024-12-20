@@ -677,6 +677,10 @@ impl ChatView {
     /// Invalidates cache and redraws everything
     async fn redraw_all(&self) {
         debug!(target: "ui::chatview", "redraw_all()");
+
+        let parent_rect = self.parent_rect.lock().unwrap().unwrap().clone();
+        self.rect.eval(&parent_rect).expect("unable to eval rect");
+
         let mut msgbuf = self.msgbuf.lock().await;
         msgbuf.adjust_params();
         msgbuf.clear_meshes();
@@ -750,20 +754,18 @@ impl UIObject for ChatView {
         }
 
         // These should be inside the class
-        /*
-        on_modify.when_change(self.baseline.prop(), redraw);
-        on_modify.when_change(self.font_size.prop(), redraw);
-        on_modify.when_change(self.timestamp_font_size.prop(), redraw);
-        on_modify.when_change(self.timestamp_color.prop(), redraw);
-        on_modify.when_change(self.timestamp_width.prop(), redraw);
-        on_modify.when_change(self.line_height.prop(), redraw);
-        on_modify.when_change(self.message_spacing.prop(), redraw);
-        on_modify.when_change(self.text_color.prop(), redraw);
-        on_modify.when_change(self.nick_colors.clone(), redraw);
-        on_modify.when_change(self.hi_bg_color.prop(), redraw);
+        //on_modify.when_change(self.baseline.prop(), redraw);
+        //on_modify.when_change(self.font_size.prop(), redraw);
+        //on_modify.when_change(self.timestamp_font_size.prop(), redraw);
+        //on_modify.when_change(self.timestamp_color.prop(), redraw);
+        //on_modify.when_change(self.timestamp_width.prop(), redraw);
+        //on_modify.when_change(self.line_height.prop(), redraw);
+        //on_modify.when_change(self.message_spacing.prop(), redraw);
+        //on_modify.when_change(self.text_color.prop(), redraw);
+        //on_modify.when_change(self.nick_colors.clone(), redraw);
+        //on_modify.when_change(self.hi_bg_color.prop(), redraw);
         on_modify.when_change(self.rect.prop(), redraw);
-        on_modify.when_change(self.debug.prop(), redraw);
-        */
+        //on_modify.when_change(self.debug.prop(), redraw);
 
         let mut tasks =
             vec![insert_line_method_task, insert_unconf_line_method_task, motion_task, bgload_task];

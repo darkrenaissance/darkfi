@@ -1233,6 +1233,11 @@ impl EditBox {
     }
 
     async fn redraw(&self) {
+        debug!(target: "ui::editbox", "redraw()");
+
+        let parent_rect = self.parent_rect.lock().unwrap().unwrap().clone();
+        self.rect.eval(&parent_rect).expect("unable to eval rect");
+
         let Some(draw_update) = self.make_draw_calls() else {
             error!(target: "ui::editbox", "Text failed to draw");
             return;
@@ -1345,7 +1350,7 @@ impl UIObject for EditBox {
             self_.redraw();
         }
         async fn redraw(self_: Arc<EditBox>) {
-            self_.redraw();
+            self_.redraw().await;
         }
         on_modify.when_change(self.rect.prop(), redraw);
         on_modify.when_change(self.baseline.prop(), redraw);

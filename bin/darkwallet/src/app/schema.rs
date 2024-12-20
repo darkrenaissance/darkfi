@@ -634,8 +634,9 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     prop.set_f32(Role::App, 1, EDITCHAT_HEIGHT).unwrap();
     let code = cc.compile("w - 30").unwrap();
     prop.set_expr(Role::App, 2, code).unwrap();
-    let code = cc.compile("h - 2 * EDITCHAT_HEIGHT").unwrap();
+    let code = cc.compile("h - EDITCHAT_HEIGHT - editz_h").unwrap();
     prop.set_expr(Role::App, 3, code).unwrap();
+    let chatview_rect_prop = prop.clone();
     node.set_property_f32(Role::App, "font_size", FONTSIZE).unwrap();
     node.set_property_f32(Role::App, "timestamp_font_size", TIMESTAMP_FONTSIZE).unwrap();
     node.set_property_f32(Role::App, "timestamp_width", TIMESTAMP_WIDTH).unwrap();
@@ -809,6 +810,8 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     let code = cc.compile("w - (SENDLABEL_WIDTH + SENDLABEL_LHS_PAD)").unwrap();
     prop.set_expr(Role::App, 2, code).unwrap();
     prop.set_f32(Role::App, 3, EDITCHAT_HEIGHT).unwrap();
+
+    chatview_rect_prop.add_depend(&prop, 3, "editz_h");
 
     node.set_property_f32(Role::App, "baseline", TEXTBAR_BASELINE).unwrap();
     node.set_property_f32(Role::App, "font_size", FONTSIZE).unwrap();
