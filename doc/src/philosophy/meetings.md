@@ -22,8 +22,9 @@ Meeting schedule:
 | Rescheduled                                                                                                         | 13th of November, 2024  |                                    |
 | [A New Nationalism for the New Ireland][12]/[Complimentary Reading - Solutions to the Northern Ireland Problem][13] | 27th of November, 2024  | Desmond Fennell                    |
 | [Two Cheers for Anarchism][14] - Chapter 2, starting at 'Fragment 7', all of Chapter 4			      | 11th of December, 2024  | James C. Scott                     |
-| Open for submissions                                                                                                | 25th of December, 2024  |                                    |
+| Rescheduled                                                                                                         | 25th of December, 2024  |                                    |
 | Open for submissions                                                                                                | 8th of January, 2025    |                                    |
+| Open for submissions                                                                                                | 22nd of January, 2025   |                                    |
 
 Feel free to propose a text for a future meeting by sharing it in #philosophy.
 
