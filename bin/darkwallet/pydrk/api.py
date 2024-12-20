@@ -6,7 +6,7 @@ Property = namedtuple("Property", [
     "name",
     "type",
     "subtype",
-    "defaults",
+    #"defaults",
     "ui_name",
     "desc",
     "is_null_allowed",
@@ -371,20 +371,22 @@ class Api:
         props_len = serial.decode_varint(cur)
         props = []
 
-        prop_read_fn = lambda cur: Api.read_prop_val(cur, prop_type)
         enum_read_fn = lambda cur: serial.decode_arr(cur, serial.decode_str)
 
         for _ in range(props_len):
             prop_name = serial.decode_str(cur)
             # We need prop_type below
             prop_type = serial.read_u8(cur)
+
+            prop_read_fn = lambda cur: Api.read_prop_val(cur, prop_type)
+
             prop = Property(
                 prop_name,
                 prop_type,
                 # subtype 
                 serial.read_u8(cur),
                 # defaults 
-                serial.decode_arr(cur, prop_read_fn),
+                #serial.decode_arr(cur, prop_read_fn),
                 # ui_name 
                 serial.decode_str(cur),
                 # desc 

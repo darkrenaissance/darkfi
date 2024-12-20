@@ -186,7 +186,7 @@ impl ZeroMQAdapter {
                     prop.name.encode(&mut reply).unwrap();
                     prop.typ.encode(&mut reply).unwrap();
                     prop.subtype.encode(&mut reply).unwrap();
-                    prop.defaults.encode(&mut reply).unwrap();
+                    //prop.defaults.encode(&mut reply).unwrap();
                     prop.ui_name.encode(&mut reply).unwrap();
                     prop.desc.encode(&mut reply).unwrap();
                     prop.is_null_allowed.encode(&mut reply).unwrap();
@@ -257,10 +257,6 @@ impl ZeroMQAdapter {
                     PropertyType::Enum => {
                         let val = String::decode(&mut cur).unwrap();
                         prop.set_enum(Role::User, prop_i, val)?;
-                    }
-                    PropertyType::Buffer => {
-                        let val = Vec::<u8>::decode(&mut cur).unwrap();
-                        prop.set_buf(Role::User, prop_i, val)?;
                     }
                     PropertyType::SceneNodeId => {
                         let val = SceneNodeId::decode(&mut cur).unwrap();
