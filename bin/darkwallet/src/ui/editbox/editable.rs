@@ -25,8 +25,8 @@ use crate::{
     util::{enumerate_ref, is_whitespace},
 };
 
-pub(super) type TextPos = usize;
-pub(super) type TextIdx = usize;
+pub type TextPos = usize;
+pub type TextIdx = usize;
 
 /// Android composing text from autosuggest.
 /// We need this because IMEs can arbitrary set a composing region after
@@ -88,7 +88,7 @@ impl ComposingText {
     }
 }
 
-pub(super) struct RenderedEditable {
+pub struct RenderedEditable {
     pub glyphs: Vec<Glyph>,
     pub under_start: TextPos,
     pub under_end: TextPos,
@@ -187,7 +187,7 @@ impl RenderedEditable {
 /// to first render and move in terms of glyphs due to kerning. For example the chars "ae"
 /// may be rendered as a single glyph in some fonts. Same for emojis represented by multiple
 /// chars which are often not even a single byte.
-pub(super) struct Editable {
+pub struct Editable {
     text_shaper: TextShaperPtr,
 
     composer: ComposingText,
@@ -370,7 +370,7 @@ fn glyphs_to_string(glyphs: &Vec<Glyph>) -> String {
 }
 
 #[derive(Debug, Clone)]
-pub(super) struct Selection {
+pub struct Selection {
     pub start: TextPos,
     pub end: TextPos,
 }

@@ -34,11 +34,13 @@ mod button;
 pub use button::{Button, ButtonPtr};
 pub mod chatview;
 pub use chatview::{ChatView, ChatViewPtr};
+mod chatedit;
+pub use chatedit::{ChatEdit, ChatEditPtr};
 mod editbox;
 pub use editbox::{EditBox, EditBoxPtr};
 mod image;
 pub use image::{Image, ImagePtr};
-pub mod vector_art;
+mod vector_art;
 pub use vector_art::{
     shape::{ShapeVertex, VectorShape},
     VectorArt, VectorArtPtr,
@@ -167,6 +169,7 @@ pub fn get_ui_object_ptr(node: &SceneNode3) -> Arc<dyn UIObject + Send> {
         Pimpl::VectorArt(obj) => obj.clone(),
         Pimpl::Text(obj) => obj.clone(),
         Pimpl::EditBox(obj) => obj.clone(),
+        Pimpl::ChatEdit(obj) => obj.clone(),
         Pimpl::ChatView(obj) => obj.clone(),
         Pimpl::Image(obj) => obj.clone(),
         Pimpl::Button(obj) => obj.clone(),
@@ -179,6 +182,7 @@ pub fn get_ui_object3<'a>(node: &'a SceneNode3) -> &'a dyn UIObject {
         Pimpl::VectorArt(obj) => obj.as_ref(),
         Pimpl::Text(obj) => obj.as_ref(),
         Pimpl::EditBox(obj) => obj.as_ref(),
+        Pimpl::ChatEdit(obj) => obj.as_ref(),
         Pimpl::ChatView(obj) => obj.as_ref(),
         Pimpl::Image(obj) => obj.as_ref(),
         Pimpl::Button(obj) => obj.as_ref(),
