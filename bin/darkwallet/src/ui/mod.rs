@@ -132,16 +132,21 @@ impl<T: Send + Sync + 'static> OnModify<T> {
         let task = self.ex.spawn(async move {
             loop {
                 let mut poll_queues = FuturesUnordered::new();
-                for on_modify_sub in &on_modify_subs {
-                    poll_queues.push(on_modify_sub.receive());
+                for (i, on_modify_sub) in on_modify_subs.iter().enumerate() {
+                    let recv = on_modify_sub.receive();
+                    poll_queues.push(async move {
+                        let (role, _action) = recv.await.ok()?;
+                        Some((i, role))
+                    });
                 }
 
-                let Some(Ok((role, _))) = poll_queues.next().await else {
+                let Some(Some((idx, role))) = poll_queues.next().await else {
                     error!(target: "app", "Property '{}':{}/'{}' on_modify pipe is broken", node_name, node_id, prop_name);
                     return
                 };
 
-                if role == Role::Internal {
+                // Skip internal messages from ourselves
+                if idx == 0 && role == Role::Internal {
                     continue
                 }
 

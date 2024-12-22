@@ -29,15 +29,16 @@ use crate::{
     scene::{SceneNodePtr, Slot},
     text::TextShaperPtr,
     ui::{
-        Button, ChatView, EditBox, Image, Layer, ShapeVertex, Text, VectorArt, VectorShape, Window,
+        Button, ChatEdit, ChatView, EditBox, Image, Layer, ShapeVertex, Text, VectorArt,
+        VectorShape, Window,
     },
     ExecutorPtr,
 };
 
 use super::{
     node::{
-        create_button, create_chatview, create_editbox, create_image, create_layer, create_text,
-        create_vector_art,
+        create_button, create_chatedit, create_chatview, create_editbox, create_image,
+        create_layer, create_text, create_vector_art,
     },
     populate_tree, App,
 };
@@ -46,6 +47,7 @@ const LIGHTMODE: bool = false;
 
 mod android_ui_consts {
     pub const EDITCHAT_HEIGHT: f32 = 163.;
+    pub const EDITCHAT_BOTTOM_PAD: f32 = 70.;
     pub const EDITCHAT_CURSOR_ASCENT: f32 = 50.;
     pub const EDITCHAT_CURSOR_DESCENT: f32 = 20.;
     pub const EDITCHAT_SELECT_ASCENT: f32 = 40.;
@@ -87,6 +89,7 @@ mod ui_consts {
     pub const KING_PATH: &str = "assets/king.png";
     pub const BG_PATH: &str = "assets/bg.png";
     pub const EDITCHAT_HEIGHT: f32 = 50.;
+    pub const EDITCHAT_BOTTOM_PAD: f32 = 16.;
     pub const EDITCHAT_CURSOR_ASCENT: f32 = 25.;
     pub const EDITCHAT_CURSOR_DESCENT: f32 = 8.;
     pub const EDITCHAT_SELECT_ASCENT: f32 = 30.;
@@ -485,6 +488,7 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     let mut cc = Compiler::new();
 
     cc.add_const_f32("EDITCHAT_HEIGHT", EDITCHAT_HEIGHT);
+    cc.add_const_f32("EDITCHAT_BOTTOM_PAD", EDITCHAT_BOTTOM_PAD);
     cc.add_const_f32("SENDLABEL_WIDTH", SENDLABEL_WIDTH);
     cc.add_const_f32("SENDLABEL_LHS_PAD", SENDLABEL_LHS_PAD);
 
@@ -634,7 +638,7 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     prop.set_f32(Role::App, 1, EDITCHAT_HEIGHT).unwrap();
     let code = cc.compile("w - 30").unwrap();
     prop.set_expr(Role::App, 2, code).unwrap();
-    let code = cc.compile("h - EDITCHAT_HEIGHT - editz_h").unwrap();
+    let code = cc.compile("h - EDITCHAT_HEIGHT - editz_h - EDITCHAT_BOTTOM_PAD").unwrap();
     prop.set_expr(Role::App, 3, code).unwrap();
     let chatview_rect_prop = prop.clone();
     node.set_property_f32(Role::App, "font_size", FONTSIZE).unwrap();
@@ -799,15 +803,17 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     layer_node.clone().link(node);
 
     // Text edit
-    let node = create_editbox("editz");
+    let node = create_chatedit("editz");
     node.set_property_bool(Role::App, "is_active", true).unwrap();
     node.set_property_bool(Role::App, "is_focused", true).unwrap();
 
+    node.set_property_f32(Role::App, "max_height", 300.).unwrap();
+
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(Role::App, 0, EDITCHAT_LHS_PAD).unwrap();
-    let code = cc.compile("h - EDITCHAT_HEIGHT").unwrap();
+    let code = cc.compile("parent_h - rect_h - EDITCHAT_BOTTOM_PAD").unwrap();
     prop.set_expr(Role::App, 1, code).unwrap();
-    let code = cc.compile("w - (SENDLABEL_WIDTH + SENDLABEL_LHS_PAD)").unwrap();
+    let code = cc.compile("parent_w - (SENDLABEL_WIDTH + SENDLABEL_LHS_PAD)").unwrap();
     prop.set_expr(Role::App, 2, code).unwrap();
     prop.set_f32(Role::App, 3, EDITCHAT_HEIGHT).unwrap();
 
@@ -882,7 +888,7 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
 
     let node = node
         .setup(|me| {
-            EditBox::new(
+            ChatEdit::new(
                 me,
                 window_scale.clone(),
                 app.render_api.clone(),

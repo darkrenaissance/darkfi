@@ -110,8 +110,9 @@ pub enum SceneNodeType {
     Plugin = 15,
     ChatView = 16,
     EditBox = 17,
-    Image = 18,
-    Button = 19,
+    ChatEdit = 18,
+    Image = 19,
+    Button = 20,
 }
 
 pub struct SceneNode {

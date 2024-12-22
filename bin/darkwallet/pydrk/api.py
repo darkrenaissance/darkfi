@@ -60,7 +60,9 @@ class SceneNodeType:
     PLUGIN = 15
     CHAT_VIEW = 16
     EDIT_BOX = 17
-    BUTTON = 18
+    CHAT_EDIT = 18
+    IMAGE = 18
+    BUTTON = 19
 
 class PropertyType:
     NULL = 0

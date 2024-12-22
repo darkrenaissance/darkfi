@@ -42,6 +42,8 @@ def print_node_info(parent_path, indent):
                 child_type = "chat_view"
             case SceneNodeType.EDIT_BOX:
                 child_type = "edit_box"
+            case SceneNodeType.CHAT_EDIT:
+                child_type = "chat_edit"
             case SceneNodeType.BUTTON:
                 child_type = "button"
 

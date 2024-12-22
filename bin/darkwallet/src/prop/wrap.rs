@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::ops::Range;
+
 use crate::{
     error::{Error, Result},
     expr::{SExprMachine, SExprVal},
@@ -282,10 +284,14 @@ impl PropertyRect {
     }
 
     pub fn eval(&self, parent_rect: &Rectangle) -> Result<()> {
-        let mut globals = vec![
-            ("w".to_string(), SExprVal::Float32(parent_rect.w)),
-            ("h".to_string(), SExprVal::Float32(parent_rect.h)),
-        ];
+        self.eval_with(
+            0..4,
+            vec![("w".to_string(), parent_rect.w), ("h".to_string(), parent_rect.h)],
+        )
+    }
+
+    pub fn eval_with(&self, range: Range<usize>, extras: Vec<(String, f32)>) -> Result<()> {
+        let mut globals = vec![];
 
         for dep in self.prop.get_depends() {
             let Some(prop) = dep.prop.upgrade() else { return Err(Error::PropertyNotFound) };
@@ -294,9 +300,15 @@ impl PropertyRect {
 
             globals.push((dep.local_name, SExprVal::Float32(value)));
         }
+
+        for (name, val) in extras {
+            globals.push((name, SExprVal::Float32(val)));
+        }
+
         debug!(target: "prop::wrap", "PropertyRect::eval() [globals = {globals:?}]");
 
-        for i in 0..4 {
+        let mut changes = vec![];
+        for i in range.clone() {
             if !self.prop.is_expr(i)? {
                 continue
             }
@@ -306,8 +318,9 @@ impl PropertyRect {
             let mut machine = SExprMachine { globals: globals.clone(), stmts: &expr };
 
             let v = machine.call()?.as_f32()?;
-            self.prop.set_cache_f32(self.role, i, v).unwrap();
+            changes.push((i, v));
         }
+        self.prop.set_cache_f32_multi(self.role, changes).unwrap();
         Ok(())
     }
 

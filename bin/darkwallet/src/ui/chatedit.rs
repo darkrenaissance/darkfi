@@ -144,6 +144,7 @@ pub struct ChatEdit {
 
     is_active: PropertyBool,
     is_focused: PropertyBool,
+    max_height: PropertyFloat32,
     rect: PropertyRect,
     baseline: PropertyFloat32,
     scroll: PropertyFloat32,
@@ -197,6 +198,7 @@ impl ChatEdit {
         let node_ref = &node.upgrade().unwrap();
         let is_active = PropertyBool::wrap(node_ref, Role::Internal, "is_active", 0).unwrap();
         let is_focused = PropertyBool::wrap(node_ref, Role::Internal, "is_focused", 0).unwrap();
+        let max_height = PropertyFloat32::wrap(node_ref, Role::Internal, "max_height", 0).unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
         let baseline = PropertyFloat32::wrap(node_ref, Role::Internal, "baseline", 0).unwrap();
         let scroll = PropertyFloat32::wrap(node_ref, Role::Internal, "scroll", 0).unwrap();
@@ -247,6 +249,7 @@ impl ChatEdit {
 
             is_active,
             is_focused,
+            max_height,
             rect,
             baseline: baseline.clone(),
             scroll: scroll.clone(),
@@ -299,10 +302,7 @@ impl ChatEdit {
     }
 
     /// Called whenever the text or any text property changes.
-    fn regen_text_mesh(&self, mut clip: Rectangle) -> GfxDrawMesh {
-        clip.x = 0.;
-        clip.y = 0.;
-
+    fn regen_text_mesh(&self) -> GfxDrawMesh {
         let is_focused = self.is_focused.get();
         let text = self.text.get();
         let font_size = self.font_size.get();
@@ -320,51 +320,78 @@ impl ChatEdit {
         let rendered = self.editable.lock().unwrap().render();
         let atlas = text::make_texture_atlas(&self.render_api, &rendered.glyphs);
 
+        let width = self.rect.prop().get_f32(2).unwrap();
+        let wrapped_glyphs = text::wrap(width, font_size, window_scale, &rendered.glyphs);
+        let wrapped_lines_len = std::cmp::max(wrapped_glyphs.len(), 1);
+
+        let total_height = wrapped_lines_len as f32 * baseline;
+        //let height = std::cmp::min(total_height, self.max_height.get());
+        let height = total_height;
+        debug!("height = {height}");
+
+        self.rect.prop().set_f32(Role::Internal, 3, height);
+
+        // Eval the rect
+        let parent_rect = self.parent_rect.lock().unwrap().clone().unwrap();
+        self.rect.eval_with(
+            0..3,
+            vec![
+                ("parent_w".to_string(), parent_rect.w),
+                ("parent_h".to_string(), parent_rect.h),
+                ("rect_h".to_string(), height),
+            ],
+        );
+        debug!("rect = {:?}", self.rect.get());
+
+        let mut clip = self.rect.get();
+        clip.x = 0.;
+        clip.y = 0.;
+
         let mut mesh = MeshBuilder::with_clip(clip.clone());
 
-        let selections = self.select.lock().unwrap().clone();
-        // Just an assert
-        if self.is_phone_select.load(Ordering::Relaxed) {
-            assert!(selections.len() <= 1);
-        }
-        for select in &selections {
-            self.draw_selected(&mut mesh, select, &rendered.glyphs, clip.h);
-        }
-        let select_marks = self.mark_selected_glyphs(&rendered.glyphs, selections);
-
-        if rendered.has_underline() {
-            self.draw_underline(
-                &mut mesh,
-                &rendered.glyphs,
-                clip.h,
-                rendered.under_start,
-                rendered.under_end,
-            );
-        }
-
-        let glyph_pos_iter =
-            GlyphPositionIter::new(font_size, window_scale, &rendered.glyphs, baseline);
-
-        for (glyph_idx, mut glyph_rect, glyph, is_selected) in
-            zip3(glyph_pos_iter, rendered.glyphs.iter(), select_marks.iter())
-        {
-            let uv_rect = atlas.fetch_uv(glyph.glyph_id).expect("missing glyph UV rect");
-
-            glyph_rect.x -= scroll;
-
-            //mesh.draw_outline(&glyph_rect, COLOR_BLUE, 2.);
-            let mut color = text_color.clone();
-            if *is_selected {
-                color = text_hi_color.clone();
+        for (line_idx, glyphs) in wrapped_glyphs.iter().enumerate() {
+            let selections = self.select.lock().unwrap().clone();
+            // Just an assert
+            if self.is_phone_select.load(Ordering::Relaxed) {
+                assert!(selections.len() <= 1);
             }
-            if glyph.sprite.has_color {
-                color = COLOR_WHITE;
+            for select in &selections {
+                //self.draw_selected(&mut mesh, select, &rendered.glyphs, clip.h);
             }
-            mesh.draw_box(&glyph_rect, color, uv_rect);
-        }
+            let select_marks = self.mark_selected_glyphs(&glyphs, selections);
 
-        if debug {
-            mesh.draw_outline(&clip, COLOR_BLUE, 1.);
+            /*
+            if rendered.has_underline() {
+                self.draw_underline(
+                    &mut mesh,
+                    &rendered.glyphs,
+                    clip.h,
+                    rendered.under_start,
+                    rendered.under_end,
+                );
+            }
+            */
+
+            let glyph_pos_iter = GlyphPositionIter::new(font_size, window_scale, &glyphs, baseline);
+
+            for (glyph_idx, mut glyph_rect, glyph, is_selected) in
+                zip3(glyph_pos_iter, glyphs.iter(), select_marks.iter())
+            {
+                let uv_rect = atlas.fetch_uv(glyph.glyph_id).expect("missing glyph UV rect");
+
+                glyph_rect.x -= scroll;
+                glyph_rect.y += line_idx as f32 * baseline;
+
+                //mesh.draw_outline(&glyph_rect, COLOR_BLUE, 2.);
+                let mut color = text_color.clone();
+                if *is_selected {
+                    color = text_hi_color.clone();
+                }
+                if glyph.sprite.has_color {
+                    color = COLOR_WHITE;
+                }
+                mesh.draw_box(&glyph_rect, color, uv_rect);
+            }
         }
 
         mesh.alloc(&self.render_api).draw_with_texture(atlas.texture)
@@ -1151,9 +1178,6 @@ impl ChatEdit {
     async fn redraw(&self) {
         debug!(target: "ui::chatedit", "redraw()");
 
-        let parent_rect = self.parent_rect.lock().unwrap().unwrap().clone();
-        self.rect.eval(&parent_rect).expect("unable to eval rect");
-
         let Some(draw_update) = self.make_draw_calls() else {
             error!(target: "ui::chatedit", "Text failed to draw");
             return;
@@ -1206,10 +1230,10 @@ impl ChatEdit {
     }
 
     fn make_draw_calls(&self) -> Option<DrawUpdate> {
-        let rect = self.rect.get();
-
-        let text_mesh = self.regen_text_mesh(rect.clone());
+        let text_mesh = self.regen_text_mesh();
         let cursor_instrs = self.get_cursor_instrs();
+
+        let rect = self.rect.get();
 
         Some(DrawUpdate {
             key: self.text_dc_key,
@@ -1320,9 +1344,8 @@ impl UIObject for ChatEdit {
     async fn draw(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
         debug!(target: "ui::chatedit", "EditBox::draw()");
         *self.parent_rect.lock().unwrap() = Some(parent_rect);
-        self.rect.eval(&parent_rect).ok()?;
 
-        self.clamp_scroll();
+        //self.clamp_scroll();
         self.make_draw_calls()
     }
 

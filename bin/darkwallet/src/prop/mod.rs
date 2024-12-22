@@ -20,6 +20,7 @@ use crate::error::{Error, Result};
 use darkfi_serial::{async_trait, Encodable, FutAsyncWriteExt, SerialDecodable, SerialEncodable};
 use std::{
     io::Write,
+    ops::Range,
     sync::{Arc, Mutex as SyncMutex, Weak},
 };
 
@@ -195,7 +196,7 @@ impl Encodable for PropertyValue {
 pub enum ModifyAction {
     Clear,
     Set(usize),
-    SetCache(usize),
+    SetCache(Vec<usize>),
     Push(usize),
 }
 
@@ -466,14 +467,36 @@ impl Property {
             return Err(Error::PropertyWrongIndex)
         }
         cache[i] = val;
-        self.on_modify.notify((role, ModifyAction::SetCache(i)));
         Ok(())
     }
     pub fn set_cache_f32(&self, role: Role, i: usize, val: f32) -> Result<()> {
-        self.set_cache(role, i, PropertyValue::Float32(val))
+        self.set_cache(role, i, PropertyValue::Float32(val))?;
+        self.on_modify.notify((role, ModifyAction::SetCache(vec![i])));
+        Ok(())
     }
     pub fn set_cache_u32(&self, role: Role, i: usize, val: u32) -> Result<()> {
-        self.set_cache(role, i, PropertyValue::Uint32(val))
+        self.set_cache(role, i, PropertyValue::Uint32(val))?;
+        self.on_modify.notify((role, ModifyAction::SetCache(vec![i])));
+        Ok(())
+    }
+
+    pub fn set_cache_f32_multi(&self, role: Role, changes: Vec<(usize, f32)>) -> Result<()> {
+        let mut idxs = vec![];
+        for (idx, val) in changes {
+            self.set_cache(role, idx, PropertyValue::Float32(val))?;
+            idxs.push(idx);
+        }
+        self.on_modify.notify((role, ModifyAction::SetCache(idxs)));
+        Ok(())
+    }
+    pub fn set_cache_u32_range(&self, role: Role, changes: Vec<(usize, u32)>) -> Result<()> {
+        let mut idxs = vec![];
+        for (idx, val) in changes {
+            self.set_cache(role, idx, PropertyValue::Uint32(val))?;
+            idxs.push(idx);
+        }
+        self.on_modify.notify((role, ModifyAction::SetCache(idxs)));
+        Ok(())
     }
 
     // Push
