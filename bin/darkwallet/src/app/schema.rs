@@ -47,12 +47,13 @@ const LIGHTMODE: bool = false;
 
 mod android_ui_consts {
     pub const EDITCHAT_HEIGHT: f32 = 163.;
-    pub const EDITCHAT_BOTTOM_PAD: f32 = 70.;
+    pub const EDITCHAT_BOTTOM_PAD: f32 = 50.;
     pub const EDITCHAT_CURSOR_ASCENT: f32 = 50.;
     pub const EDITCHAT_CURSOR_DESCENT: f32 = 20.;
     pub const EDITCHAT_SELECT_ASCENT: f32 = 40.;
     pub const EDITCHAT_SELECT_DESCENT: f32 = 8.;
     pub const TEXTBAR_BASELINE: f32 = 93.;
+    pub const TEXT_DESCENT: f32 = 20.;
     pub const EDITCHAT_LHS_PAD: f32 = 30.;
     pub const SENDLABEL_WIDTH: f32 = 200.;
     pub const SENDLABEL_LHS_PAD: f32 = 40.;
@@ -89,12 +90,13 @@ mod ui_consts {
     pub const KING_PATH: &str = "assets/king.png";
     pub const BG_PATH: &str = "assets/bg.png";
     pub const EDITCHAT_HEIGHT: f32 = 50.;
-    pub const EDITCHAT_BOTTOM_PAD: f32 = 16.;
+    pub const EDITCHAT_BOTTOM_PAD: f32 = 6.;
     pub const EDITCHAT_CURSOR_ASCENT: f32 = 25.;
     pub const EDITCHAT_CURSOR_DESCENT: f32 = 8.;
     pub const EDITCHAT_SELECT_ASCENT: f32 = 30.;
     pub const EDITCHAT_SELECT_DESCENT: f32 = 10.;
     pub const TEXTBAR_BASELINE: f32 = 34.;
+    pub const TEXT_DESCENT: f32 = 10.;
     pub const EDITCHAT_LHS_PAD: f32 = 20.;
     pub const SENDLABEL_WIDTH: f32 = 120.;
     pub const SENDLABEL_LHS_PAD: f32 = 30.;
@@ -730,11 +732,14 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     let node = create_vector_art("editbox_bg");
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(Role::App, 0, 0.).unwrap();
-    let code = cc.compile("h - EDITCHAT_HEIGHT").unwrap();
+    let code = cc.compile("h - editz_h").unwrap();
     prop.set_expr(Role::App, 1, code).unwrap();
     prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_f32(Role::App, 3, EDITCHAT_HEIGHT).unwrap();
+    let code = cc.compile("editz_h").unwrap();
+    prop.set_expr(Role::App, 3, code).unwrap();
     node.set_property_u32(Role::App, "z_index", 2).unwrap();
+
+    let editbox_bg_rect_prop = prop.clone();
 
     let mut shape = VectorShape::new();
     shape.add_filled_box(
@@ -818,8 +823,10 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     prop.set_f32(Role::App, 3, EDITCHAT_HEIGHT).unwrap();
 
     chatview_rect_prop.add_depend(&prop, 3, "editz_h");
+    editbox_bg_rect_prop.add_depend(&prop, 3, "editz_h");
 
     node.set_property_f32(Role::App, "baseline", TEXTBAR_BASELINE).unwrap();
+    node.set_property_f32(Role::App, "descent", TEXT_DESCENT).unwrap();
     node.set_property_f32(Role::App, "font_size", FONTSIZE).unwrap();
     //node.set_property_str(Role::App, "text", "hello king!😁🍆jelly 🍆1234").unwrap();
     let prop = node.get_property("text_color").unwrap();
@@ -912,72 +919,4 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
 
     let node = node.setup(|me| Button::new(me, app.ex.clone())).await;
     layer_node.clone().link(node);
-
-    // Create a popup layer to show upgrade msg
-    let node = create_layer("upgrade_popup");
-    let prop = node.get_property("rect").unwrap();
-    prop.set_f32(Role::App, 0, 0.).unwrap();
-    prop.set_f32(Role::App, 1, 0.).unwrap();
-    prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
-    let code = cc.compile("h / 2").unwrap();
-    prop.set_expr(Role::App, 3, code).unwrap();
-    node.set_property_bool(Role::App, "is_visible", false).unwrap();
-    node.set_property_u32(Role::App, "z_index", 10).unwrap();
-    let popup_layer_node =
-        node.setup(|me| Layer::new(me, app.render_api.clone(), app.ex.clone())).await;
-    layer_node.clone().link(popup_layer_node.clone());
-
-    // Background for popup
-    let node = create_vector_art("upgradebg");
-    let prop = node.get_property("rect").unwrap();
-    prop.set_f32(Role::App, 0, 0.).unwrap();
-    prop.set_f32(Role::App, 1, 0.).unwrap();
-    prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(Role::App, 3, expr::load_var("h")).unwrap();
-    node.set_property_u32(Role::App, "z_index", 0).unwrap();
-
-    // Setup the pimpl
-    let verts = vec![
-        ShapeVertex::from_xy(0., 0., [1., 0., 0., 1.]),
-        ShapeVertex::new(expr::load_var("w"), expr::const_f32(0.), [1., 0., 1., 1.]),
-        ShapeVertex::new(expr::const_f32(0.), expr::load_var("h"), [0., 0., 1., 1.]),
-        ShapeVertex::new(expr::load_var("w"), expr::load_var("h"), [1., 1., 0., 1.]),
-    ];
-    let indices = vec![0, 2, 1, 1, 2, 3];
-    let shape = VectorShape { verts, indices };
-    let node =
-        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
-    popup_layer_node.clone().link(node);
-
-    // Create some text
-    let node = create_text("send_label");
-    let prop = node.get_property("rect").unwrap();
-    prop.set_f32(Role::App, 0, 10.).unwrap();
-    prop.set_f32(Role::App, 1, 10.).unwrap();
-    prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(Role::App, 3, expr::load_var("h")).unwrap();
-    node.set_property_f32(Role::App, "baseline", TEXTBAR_BASELINE).unwrap();
-    node.set_property_f32(Role::App, "font_size", 2. * FONTSIZE).unwrap();
-    node.set_property_str(Role::App, "text", "YO THERE'S A NEW VERSION!!! UPGRADE TIEM!!!")
-        .unwrap();
-    //node.set_property_str(Role::App, "text", "anon1").unwrap();
-    let prop = node.get_property("text_color").unwrap();
-    prop.set_f32(Role::App, 0, 0.).unwrap();
-    prop.set_f32(Role::App, 1, 1.).unwrap();
-    prop.set_f32(Role::App, 2, 0.94).unwrap();
-    prop.set_f32(Role::App, 3, 1.).unwrap();
-    node.set_property_u32(Role::App, "z_index", 1).unwrap();
-
-    let node = node
-        .setup(|me| {
-            Text::new(
-                me,
-                window_scale.clone(),
-                app.render_api.clone(),
-                app.text_shaper.clone(),
-                app.ex.clone(),
-            )
-        })
-        .await;
-    popup_layer_node.clone().link(node);
 }

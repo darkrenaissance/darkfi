@@ -147,6 +147,7 @@ pub struct ChatEdit {
     max_height: PropertyFloat32,
     rect: PropertyRect,
     baseline: PropertyFloat32,
+    descent: PropertyFloat32,
     scroll: PropertyFloat32,
     scroll_speed: PropertyFloat32,
     cursor_pos: PropertyUint32,
@@ -201,6 +202,7 @@ impl ChatEdit {
         let max_height = PropertyFloat32::wrap(node_ref, Role::Internal, "max_height", 0).unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
         let baseline = PropertyFloat32::wrap(node_ref, Role::Internal, "baseline", 0).unwrap();
+        let descent = PropertyFloat32::wrap(node_ref, Role::Internal, "descent", 0).unwrap();
         let scroll = PropertyFloat32::wrap(node_ref, Role::Internal, "scroll", 0).unwrap();
         let scroll_speed =
             PropertyFloat32::wrap(node_ref, Role::Internal, "scroll_speed", 0).unwrap();
@@ -252,6 +254,7 @@ impl ChatEdit {
             max_height,
             rect,
             baseline: baseline.clone(),
+            descent,
             scroll: scroll.clone(),
             scroll_speed,
             cursor_pos,
@@ -326,8 +329,7 @@ impl ChatEdit {
 
         let total_height = wrapped_lines_len as f32 * baseline;
         //let height = std::cmp::min(total_height, self.max_height.get());
-        let height = total_height;
-        debug!("height = {height}");
+        let height = total_height + self.descent.get();
 
         self.rect.prop().set_f32(Role::Internal, 3, height);
 
@@ -341,7 +343,6 @@ impl ChatEdit {
                 ("rect_h".to_string(), height),
             ],
         );
-        debug!("rect = {:?}", self.rect.get());
 
         let mut clip = self.rect.get();
         clip.x = 0.;
@@ -416,43 +417,60 @@ impl ChatEdit {
         mesh.alloc(&self.render_api).draw_untextured()
     }
 
-    fn cursor_px_offset(&self) -> f32 {
+    fn get_cursor_pos(&self) -> Point {
         assert!(self.is_focused.get());
-
-        let (cursor_pos, glyphs) = {
-            let editable = self.editable.lock().unwrap();
-            let rendered = editable.render();
-            let cursor_pos = editable.get_cursor_pos(&rendered);
-            (cursor_pos, rendered.glyphs)
-        };
 
         let font_size = self.font_size.get();
         let window_scale = self.window_scale.get();
         let baseline = self.baseline.get();
-        let scroll = self.scroll.get();
-        // Add composer glyphs too
-        let glyph_pos_iter = GlyphPositionIter::new(font_size, window_scale, &glyphs, baseline);
+
+        let width = self.rect.prop().get_f32(2).unwrap();
+
+        let (cursor_pos, wrap_glyphs) = {
+            let editable = self.editable.lock().unwrap();
+            let rendered = editable.render();
+            let cursor_pos = editable.get_cursor_pos(&rendered);
+            let glyphs = text::wrap(width, font_size, window_scale, &rendered.glyphs);
+            (cursor_pos, glyphs)
+        };
+
+        // Convert cursor glyph pos to a coord (x, y)
+        let mut glyph_idx = 0;
         // Used for drawing the cursor when it's at the end of the line.
         let mut rhs = 0.;
+        let mut y_pos = 0.;
 
         if cursor_pos == 0 {
-            return 0.;
+            return Point::zero();
         }
 
-        for (glyph_idx, (mut glyph_rect, glyph)) in glyph_pos_iter.zip(glyphs.iter()).enumerate() {
-            glyph_rect.x -= scroll;
+        for (line_idx, glyphs) in wrap_glyphs.iter().enumerate() {
+            debug!("glyph_idx = {glyph_idx}, y_pos = {y_pos}, rhs = {rhs}");
+            let glyph_pos_iter = GlyphPositionIter::new(font_size, window_scale, glyphs, baseline);
 
-            if cursor_pos == glyph_idx {
-                return glyph_rect.x;
+            if line_idx > 0 {
+                // +1 for the EOL whitespace
+                glyph_idx += 1;
+                y_pos += baseline;
             }
 
-            rhs = glyph_rect.rhs();
+            for (mut glyph_rect, glyph) in glyph_pos_iter.zip(glyphs.iter()) {
+                if cursor_pos == glyph_idx {
+                    let rhs = glyph_rect.rhs();
+                    debug!("retvrn {rhs}, {y_pos}");
+                    return Point::new(rhs, y_pos)
+                }
+
+                rhs = glyph_rect.rhs();
+
+                glyph_idx += 1;
+            }
         }
 
-        assert!(cursor_pos == glyphs.len());
-
-        rhs += eol_nudge(font_size, &glyphs);
-        rhs
+        if !wrap_glyphs.is_empty() {
+            rhs += eol_nudge(font_size, &wrap_glyphs.last().unwrap());
+        }
+        Point::new(rhs, y_pos)
     }
 
     fn mark_selected_glyphs(&self, glyphs: &Vec<Glyph>, selections: Vec<Selection>) -> Vec<bool> {
@@ -1209,11 +1227,7 @@ impl ChatEdit {
 
         let rect_w = self.rect.get().w;
 
-        let mut cursor_pos = Point::zero();
-        cursor_pos.x += self.cursor_px_offset();
-        if cursor_pos.x > rect_w {
-            return vec![]
-        }
+        let cursor_pos = self.get_cursor_pos();
         cursor_instrs.push(GfxDrawInstruction::Move(cursor_pos));
 
         let cursor_mesh = {
@@ -1439,10 +1453,23 @@ impl UIObject for ChatEdit {
         let window_scale = self.window_scale.get();
         let baseline = self.baseline.get();
 
+        // Convert y offset within rect to an x off based off line wrapping
+        let y_off = mouse_pos.y - rect.y;
+        let mut x_off = 0.;
+
+        let width = self.rect.prop().get_f32(2).unwrap();
+        let rendered = self.editable.lock().unwrap().render();
+        let wrapped_glyphs = text::wrap(width, font_size, window_scale, &rendered.glyphs);
+        for glyphs in wrapped_glyphs {
+            let glyph_pos_iter = GlyphPositionIter::new(font_size, window_scale, &glyphs, baseline);
+            let last_rect = glyph_pos_iter.last().unwrap();
+            x_off += last_rect.rhs();
+        }
+
         {
             let mut editable = self.editable.lock().unwrap();
             let rendered = editable.render();
-            let x = mouse_pos.x - rect.x + self.scroll.get();
+            let x = x_off + mouse_pos.x - rect.x + self.scroll.get();
 
             let cpos = rendered.x_to_pos(x, font_size, window_scale, baseline);
             let cidx = rendered.pos_to_idx(cpos);

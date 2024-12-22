@@ -268,6 +268,9 @@ pub fn create_chatedit(name: &str) -> SceneNode {
     let prop = Property::new("baseline", PropertyType::Float32, PropertySubType::Pixel);
     node.add_property(prop).unwrap();
 
+    let prop = Property::new("descent", PropertyType::Float32, PropertySubType::Pixel);
+    node.add_property(prop).unwrap();
+
     let mut prop = Property::new("scroll", PropertyType::Float32, PropertySubType::Pixel);
     prop.set_range_f32(0., f32::MAX);
     node.add_property(prop).unwrap();

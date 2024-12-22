@@ -106,7 +106,6 @@ impl VectorArt {
 
         //debug!(target: "ui::vector_art", "=> {verts:#?}");
         let vertex_buffer = self.render_api.new_vertex_buffer(verts);
-        // You are one lazy motherfucker
         let index_buffer = self.render_api.new_index_buffer(self.shape.indices.clone());
         let mesh = GfxDrawMesh {
             vertex_buffer,
