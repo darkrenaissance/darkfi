@@ -5,21 +5,21 @@ import time
 import subprocess
 import os
 import threading
+import time
 # number of nodes
-N = 4
+N = 3
 P2PDATASTORE_PATH = '/tmp/p2pdatastore'
 STARTING_PORT = 53412
 os.system("rm -rf " + P2PDATASTORE_PATH+"*")
 
-async def start_p2p(node):
-    await p2p.start_p2p(node)
+async def start_p2p(w8_time, node):
+    await p2p.start_p2p(w8_time, node)
 
-async def stop_p2p(node):
-    await p2p.stop_p2p(node)
+async def stop_p2p(w8_time, node):
+    await p2p.stop_p2p(w8_time, node)
 
 async def get_fut_p2p(settings):
     node = await p2p.new_p2p(settings)
-    #print("new p2p node created: {}".format(node))
     return node
 
 def get_seed_node(starting_port=STARTING_PORT):
@@ -27,7 +27,7 @@ def get_seed_node(starting_port=STARTING_PORT):
     node_id = str(inbound_port)
     seed_addr = p2p.Url("tcp://127.0.0.1:{}".format(inbound_port))
     inbound_addrs = [seed_addr]
-    external_addrs = []
+    external_addrs = [seed_addr]
     peers = []
     seeds = []
     app_version = p2p.new_version(0, 1, 1, '')
@@ -86,7 +86,7 @@ def get_peer_node(i, seed_addr, starting_port=STARTING_PORT):
     inbound_addrs = [p2p.Url("tcp://127.0.0.1:{}".format(inbound_port))]
     external_addrs = [p2p.Url("tcp://127.0.0.1:{}".format(inbound_port))]
     node_id = str(inbound_port)
-    peers = [p2p.Url("tcp://127.0.0.1:{}".format(starting_port+j)) for j in range(1,N) ]
+    peers = []
     seeds = [seed_addr]
     app_version = p2p.new_version(0, 1, 1, '')
     allowed_transports = ['tcp']
@@ -143,7 +143,7 @@ def new_nodes(seed_addr, starting_port=STARTING_PORT):
     nodes = []
     for i in range(1, N):
         print("=====================================")
-        print("    initializing  nodes...           ")
+        print("    initializing  nodes...            ")
         print("=====================================")
         p2p_ptr = get_peer_node(i, seed_addr)
         # start p2p node
@@ -161,6 +161,12 @@ async def get_whitelist_length(node):
 async def get_goldlist_length(node):
     return await p2p.get_goldlist_length(node)
 
+async def is_connected_async(node):
+    return await p2p.is_connected(node)
+
+def is_connected(node):
+    return asyncio.run(is_connected_async(node))
+
 # create N nodes
 seed_p2p_ptr, seed_addr = get_seed_node()
 print("=====================================")
@@ -168,35 +174,37 @@ print("starting seed node on {}".format(seed_addr))
 print("=====================================")
 
 ts = []
-start_p2p_coroutine = start_p2p(seed_p2p_ptr)
+start_p2p_coroutine = start_p2p(15, seed_p2p_ptr)
 seed_t = threading.Thread(target=asyncio.run, args=(start_p2p_coroutine,))
 seed_t.start()
 ts += [seed_t]
 p2ps = new_nodes(seed_addr)
-for node in p2ps:
+for idx, node in enumerate(p2ps):
     print("========================================")
     print("starting node: {}".format(node))
     print("========================================")
-    node_t = threading.Thread(target=asyncio.run, args=(start_p2p(node),))
+    node_t = threading.Thread(target=asyncio.run, args=(start_p2p(15, node),))
     node_t.start()
     ts += [node_t]
-for t in ts:
-    t.join()
-
+#for t in ts:
+#    t.join()
+# wait for peers to connect
+time.sleep(60)
 greylist_length = asyncio.run(get_greylist_length(seed_p2p_ptr))
+print("greylist_len: {}".format(greylist_length))
 assert(greylist_length==N-1)
 
 print("========================================")
 print("=        stop nodes                    =")
 print("========================================")
 stop_ts = []
-seed_t = threading.Thread(target=asyncio.run, args=(stop_p2p(seed_p2p_ptr),))
+seed_t = threading.Thread(target=asyncio.run, args=(stop_p2p(1, seed_p2p_ptr),))
 seed_t.start()
 stop_ts += [seed_t]
 # stop the nodes first, then the seed.
 for node in p2ps:
-    node_t = threading.Thread(target=asyncio.run, args=(stop_p2p(node),))
+    node_t = threading.Thread(target=asyncio.run, args=(stop_p2p(2, node),))
     node_t.start()
     stop_ts += [node_t]
-for t in stop_ts:
-    t.join()
+#for t in stop_ts:
+#t.join()

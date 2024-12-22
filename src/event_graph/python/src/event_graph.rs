@@ -128,7 +128,7 @@ RecvMessage(MessageInfo),
 */
 
 async fn dag_sync_wait(w8_time: u64, eg_ptr: event_graph::EventGraphPtr) {
-    let _ = eg_ptr.dag_sync().await;
+    let _ = eg_ptr.dag_sync().await.unwrap();
     async_std::task::sleep(std::time::Duration::from_secs(w8_time)).await;
 }
 
