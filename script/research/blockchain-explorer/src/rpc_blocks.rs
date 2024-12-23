@@ -58,7 +58,7 @@ impl Explorerd {
     /// If reset flag is provided, all tables are reset, and start syncing from beginning.
     pub async fn sync_blocks(&self, reset: bool) -> Result<()> {
         // Grab last synced block height
-        let mut height = match self.db.last_block() {
+        let mut height = match self.service.last_block() {
             Ok(Some((height, _))) => height,
             Ok(None) => 0,
             Err(e) => {
@@ -72,7 +72,7 @@ impl Explorerd {
         // has been provided we reset, otherwise continue with
         // the next block height
         if height == 0 || reset {
-            self.db.reset_blocks()?;
+            self.service.reset_blocks()?;
             height = 0;
         } else {
             height += 1;
@@ -101,7 +101,7 @@ impl Explorerd {
                     }
                 };
 
-                if let Err(e) = self.db.put_block(&block).await {
+                if let Err(e) = self.service.put_block(&block).await {
                     let error_message = format!("[sync_blocks] Put block failed: {:?}", e);
                     error!(target: "blockchain-explorer::rpc_blocks::sync_blocks", "{}", error_message);
                     return Err(Error::DatabaseError(error_message));
@@ -139,7 +139,7 @@ impl Explorerd {
         };
 
         // Fetch the blocks and handle potential errors
-        let blocks_result = match self.db.get_last_n(n) {
+        let blocks_result = match self.service.get_last_n(n) {
             Ok(blocks) => blocks,
             Err(e) => {
                 error!(target: "blockchain-explorer::rpc_blocks::blocks_get_last_n_blocks", "Failed fetching blocks: {}", e);
@@ -195,7 +195,7 @@ impl Explorerd {
         }
 
         // Fetch the blocks and handle potential errors
-        let blocks_result = match self.db.get_by_range(start, end) {
+        let blocks_result = match self.service.get_by_range(start, end) {
             Ok(blocks) => blocks,
             Err(e) => {
                 error!(target: "blockchain-explorer::rpc_blocks::blocks_get_blocks_in_height_range", "Failed fetching blocks: {}", e);
@@ -238,7 +238,7 @@ impl Explorerd {
         };
 
         // Fetch and transform block to json, handling any errors and returning the result
-        match self.db.get_block_by_hash(header_hash) {
+        match self.service.get_block_by_hash(header_hash) {
             Ok(Some(block)) => JsonResponse::new(block.to_json_array(), id).into(),
             Ok(None) => JsonResponse::new(JsonValue::Array(vec![]), id).into(),
             Err(e) => {
@@ -272,7 +272,7 @@ pub async fn subscribe_blocks(
     let (last_confirmed, _) = explorer.get_last_confirmed_block().await?;
 
     // Grab last synced block
-    let last_synced = match explorer.db.last_block() {
+    let last_synced = match explorer.service.last_block() {
         Ok(Some((height, _))) => height,
         Ok(None) => 0,
         Err(e) => {
@@ -361,7 +361,7 @@ pub async fn subscribe_blocks(
                             info!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "=======================================");
 
                             info!(target: "blockchain-explorer::rpc_blocks::subscribe_blocks", "Deserialized successfully. Storing block...");
-                            if let Err(e) = explorer.db.put_block(&block_data).await {
+                            if let Err(e) = explorer.service.put_block(&block_data).await {
                                 return Err(Error::DatabaseError(format!(
                                     "[subscribe_blocks] Put block failed: {e:?}"
                                 )))

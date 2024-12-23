@@ -29,7 +29,7 @@ use darkfi::{
 };
 use darkfi_sdk::crypto::schnorr::Signature;
 
-use crate::ExplorerDb;
+use crate::ExplorerService;
 
 #[derive(Debug, Clone)]
 /// Structure representing a block record.
@@ -83,10 +83,10 @@ impl From<&BlockInfo> for BlockRecord {
     }
 }
 
-impl ExplorerDb {
+impl ExplorerService {
     /// Resets blocks in the database by clearing all block related trees, returning an Ok result on success.
     pub fn reset_blocks(&self) -> Result<()> {
-        let db = &self.blockchain.sled_db;
+        let db = &self.db.blockchain.sled_db;
         // Initialize block related trees to reset
         let trees_to_reset = [SLED_BLOCK_TREE, SLED_BLOCK_ORDER_TREE, SLED_BLOCK_DIFFICULTY_TREE];
 
@@ -108,7 +108,7 @@ impl ExplorerDb {
     /// PoW rewards. After processing all transactions, the block is permanently persisted to
     /// the explorer database.
     pub async fn put_block(&self, block: &BlockInfo) -> Result<()> {
-        let blockchain_overlay = BlockchainOverlay::new(&self.blockchain)?;
+        let blockchain_overlay = BlockchainOverlay::new(&self.db.blockchain)?;
 
         // Initialize collections to hold gas data and transactions that have gas data
         let mut tx_gas_data = Vec::with_capacity(block.txs.len());
@@ -124,7 +124,7 @@ impl ExplorerDb {
 
         // If the block contains transaction gas data, insert the gas metrics into the metrics store
         if !tx_gas_data.is_empty() {
-            self.metrics_store.insert_gas_metrics(
+            self.db.metrics_store.insert_gas_metrics(
                 block.header.height,
                 &block.header.timestamp,
                 &txs_hashes_with_gas_data,
@@ -142,13 +142,13 @@ impl ExplorerDb {
 
     /// Provides the total block count.
     pub fn get_block_count(&self) -> usize {
-        self.blockchain.len()
+        self.db.blockchain.len()
     }
 
     /// Fetch all known blocks from the database.
     pub fn get_blocks(&self) -> Result<Vec<BlockRecord>> {
         // Fetch blocks and handle any errors encountered
-        let blocks = &self.blockchain.get_all().map_err(|e| {
+        let blocks = &self.db.blockchain.get_all().map_err(|e| {
             Error::DatabaseError(format!("[get_blocks] Block retrieval failed: {e:?}"))
         })?;
 
@@ -166,7 +166,7 @@ impl ExplorerDb {
             .map_err(|_| Error::ParseFailed("[get_block_by_hash] Invalid header hash"))?;
 
         // Fetch block by hash and handle encountered errors
-        match self.blockchain.get_blocks_by_hash(&[header_hash]) {
+        match self.db.blockchain.get_blocks_by_hash(&[header_hash]) {
             Ok(blocks) => Ok(Some(BlockRecord::from(&blocks[0]))),
             Err(Error::BlockNotFound(_)) => Ok(None),
             Err(e) => Err(Error::DatabaseError(format!(
@@ -177,7 +177,7 @@ impl ExplorerDb {
 
     /// Fetch the last block from the database.
     pub fn last_block(&self) -> Result<Option<(u32, String)>> {
-        let block_store = &self.blockchain.blocks;
+        let block_store = &self.db.blockchain.blocks;
 
         // Return None result when no blocks exist
         if block_store.is_empty() {
@@ -196,7 +196,7 @@ impl ExplorerDb {
     /// Fetch the last N blocks from the database.
     pub fn get_last_n(&self, n: usize) -> Result<Vec<BlockRecord>> {
         // Fetch the last n blocks and handle any errors encountered
-        let blocks_result = &self.blockchain.get_last_n(n).map_err(|e| {
+        let blocks_result = &self.db.blockchain.get_last_n(n).map_err(|e| {
             Error::DatabaseError(format!("[get_last_n] Block retrieval failed: {e:?}"))
         })?;
 
@@ -209,7 +209,7 @@ impl ExplorerDb {
     /// Fetch blocks within a specified range from the database.
     pub fn get_by_range(&self, start: u32, end: u32) -> Result<Vec<BlockRecord>> {
         // Fetch blocks in the specified range and handle any errors encountered
-        let blocks_result = &self.blockchain.get_by_range(start, end).map_err(|e| {
+        let blocks_result = &self.db.blockchain.get_by_range(start, end).map_err(|e| {
             Error::DatabaseError(format!("[get_by_range]: Block retrieval failed: {e:?}"))
         })?;
 

@@ -49,7 +49,7 @@ impl Explorerd {
         }
 
         // Fetch `BaseStatistics`, transform to `JsonResult`, and return results
-        match self.db.get_base_statistics() {
+        match self.service.get_base_statistics() {
             Ok(Some(statistics)) => JsonResponse::new(statistics.to_json_array(), id).into(),
             Ok(None) => JsonResponse::new(JsonValue::Array(vec![]), id).into(),
             Err(e) => {
@@ -81,7 +81,7 @@ impl Explorerd {
             return JsonError::new(InvalidParams, None, id).into()
         }
         // Fetch metric statistics and return results
-        let metrics = match self.db.get_metrics_statistics().await {
+        let metrics = match self.service.get_metrics_statistics().await {
             Ok(v) => v,
             Err(e) => {
                 error!(target: "blockchain-explorer::rpc_statistics::statistics_get_metric_statistics", "Failed fetching metric statistics: {}", e);
@@ -117,7 +117,7 @@ impl Explorerd {
             return JsonError::new(InvalidParams, None, id).into()
         }
         // Fetch metric statistics and return results
-        let metrics = match self.db.get_latest_metrics_statistics().await {
+        let metrics = match self.service.get_latest_metrics_statistics().await {
             Ok(v) => v,
             Err(e) => {
                 error!(target: "blockchain-explorer::rpc_statistics::statistics_get_latest_metric_statistics", "Failed fetching metric statistics: {}", e);

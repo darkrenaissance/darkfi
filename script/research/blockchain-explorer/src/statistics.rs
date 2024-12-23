@@ -21,7 +21,7 @@ use tinyjson::JsonValue;
 use darkfi::{Error, Result};
 use darkfi_sdk::blockchain::block_epoch;
 
-use crate::{metrics_store::GasMetrics, ExplorerDb};
+use crate::{metrics_store::GasMetrics, ExplorerService};
 
 #[derive(Debug, Clone)]
 /// Structure representing basic statistic extracted from the database.
@@ -85,7 +85,7 @@ impl MetricStatistics {
         ])
     }
 }
-impl ExplorerDb {
+impl ExplorerService {
     /// Fetches the latest [`BaseStatistics`] from the explorer database, or returns `None` if no block exists.
     pub fn get_base_statistics(&self) -> Result<Option<BaseStatistics>> {
         let last_block = self.last_block();
@@ -110,7 +110,7 @@ impl ExplorerDb {
     /// [`MetricStatistics`] if found, or an empty Vec if no metrics exist.
     pub async fn get_metrics_statistics(&self) -> Result<Vec<MetricStatistics>> {
         // Fetch all metrics from the metrics store, handling any potential errors
-        let metrics = self.metrics_store.get_all_metrics().map_err(|e| {
+        let metrics = self.db.metrics_store.get_all_metrics().map_err(|e| {
             Error::DatabaseError(format!(
                 "[get_metrics_statistics] Retrieving metrics failed: {:?}",
                 e
@@ -128,7 +128,7 @@ impl ExplorerDb {
     /// or zero-initialized defaults when not.
     pub async fn get_latest_metrics_statistics(&self) -> Result<MetricStatistics> {
         // Fetch the latest metrics, handling any potential errors
-        match self.metrics_store.get_last().map_err(|e| {
+        match self.db.metrics_store.get_last().map_err(|e| {
             Error::DatabaseError(format!(
                 "[get_metrics_statistics] Retrieving latest metrics failed: {:?}",
                 e
