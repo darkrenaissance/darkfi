@@ -76,6 +76,7 @@ struct TextWrap {
     font_size: PropertyFloat32,
     window_scale: PropertyFloat32,
     baseline: PropertyFloat32,
+    linespacing: PropertyFloat32,
 }
 
 impl TextWrap {
@@ -84,6 +85,7 @@ impl TextWrap {
         font_size: PropertyFloat32,
         window_scale: PropertyFloat32,
         baseline: PropertyFloat32,
+        linespacing: PropertyFloat32,
     ) -> Self {
         Self {
             editable: Editable::new(
@@ -97,6 +99,7 @@ impl TextWrap {
             font_size,
             window_scale,
             baseline,
+            linespacing,
         }
     }
 
@@ -110,14 +113,19 @@ impl TextWrap {
         self.rendered.as_ref().unwrap()
     }
 
-    fn wrap(&mut self, width: f32) -> Vec<WrappedLine> {
+    fn wrap(&mut self, width: f32) -> WrappedLines {
         let font_size = self.font_size.get();
         let window_scale = self.window_scale.get();
         let baseline = self.baseline.get();
+        let linespacing = self.linespacing.get();
 
         let rendered = self.get_render();
         let glyphs = text::wrap(width, font_size, window_scale, &rendered.glyphs);
-        glyphs.into_iter().map(|g| WrappedLine::new(g, font_size, window_scale, baseline)).collect()
+        let lines = glyphs
+            .into_iter()
+            .map(|g| WrappedLine::new(g, font_size, window_scale, baseline))
+            .collect();
+        WrappedLines::new(lines, font_size, linespacing)
     }
 
     fn cursor_pos(&mut self) -> usize {
@@ -152,6 +160,77 @@ impl WrappedLine {
             None => 0.,
             Some(rect) => rect.rhs(),
         }
+    }
+}
+
+struct WrappedLines {
+    lines: Vec<WrappedLine>,
+    font_size: f32,
+    linespacing: f32,
+}
+
+impl WrappedLines {
+    fn new(lines: Vec<WrappedLine>, font_size: f32, linespacing: f32) -> Self {
+        Self { lines, font_size, linespacing }
+    }
+
+    /// Convert an (x, y) point to a glyph pos
+    fn point_to_pos(&self, linespacing: f32, point: Point) -> usize {
+        0
+        //let total_height = wrapped_lines.len() as f32 * linespacing;
+        //if total_height < point.y {
+        //    return
+        //}
+    }
+
+    fn height(&self) -> f32 {
+        self.last_y() + self.linespacing
+    }
+
+    fn last_y(&self) -> f32 {
+        if self.lines.is_empty() {
+            return 0.
+        }
+        (self.lines.len() - 1) as f32 * self.linespacing
+    }
+
+    fn last_rhs(&self) -> f32 {
+        if self.lines.is_empty() {
+            return 0.
+        }
+        let last_line = self.lines.last().unwrap();
+        let mut rhs = last_line.rhs();
+        rhs += eol_nudge(self.font_size, &last_line.glyphs);
+        rhs
+    }
+
+    fn get_glyph_pos(&self, mut pos: TextPos) -> Point {
+        if pos == 0 {
+            return Point::zero();
+        }
+
+        let mut y = 0.;
+        for wrap_line in &self.lines {
+            assert!(!wrap_line.glyphs.is_empty());
+
+            if pos < wrap_line.len() {
+                // Cursor is on this line
+                let mut pos_iter = wrap_line.pos_iter();
+                pos_iter.advance_by(pos).unwrap();
+
+                let glyph_rect = pos_iter.next().unwrap();
+
+                let x = glyph_rect.x;
+                return Point::new(x, y)
+            }
+
+            pos -= wrap_line.len();
+            y += self.linespacing;
+        }
+
+        let rhs = self.last_rhs();
+        let last_y = self.last_y();
+        Point::new(rhs, last_y)
     }
 }
 
@@ -232,6 +311,7 @@ pub struct ChatEdit {
     key_repeat: SyncMutex<PressedKeysSmoothRepeat>,
 
     glyphs: SyncMutex<Vec<Glyph>>,
+    main_dc_key: u64,
     /// DC key for the text
     text_dc_key: u64,
     cursor_mesh: SyncMutex<Option<GfxDrawMesh>>,
@@ -344,6 +424,7 @@ impl ChatEdit {
             key_repeat: SyncMutex::new(PressedKeysSmoothRepeat::new(400, 50)),
 
             glyphs: SyncMutex::new(glyphs),
+            main_dc_key: OsRng.gen(),
             text_dc_key: OsRng.gen(),
             cursor_mesh: SyncMutex::new(None),
             cursor_dc_key: OsRng.gen(),
@@ -353,7 +434,7 @@ impl ChatEdit {
             max_height,
             rect,
             baseline: baseline.clone(),
-            linespacing,
+            linespacing: linespacing.clone(),
             descent,
             scroll: scroll.clone(),
             scroll_speed,
@@ -381,6 +462,7 @@ impl ChatEdit {
                 font_size,
                 window_scale.clone(),
                 baseline,
+                linespacing,
             )),
 
             mouse_btn_held: AtomicBool::new(false),
@@ -404,6 +486,10 @@ impl ChatEdit {
         self.node.upgrade().unwrap()
     }
 
+    fn wrap_width(&self) -> f32 {
+        self.rect.prop().get_f32(2).unwrap() - self.cursor_width.get()
+    }
+
     /// Called whenever the text or any text property changes.
     fn regen_text_mesh(&self) -> GfxDrawMesh {
         let is_focused = self.is_focused.get();
@@ -421,7 +507,7 @@ impl ChatEdit {
         //debug!(target: "ui::chatedit", "Rendering text '{text}' clip={clip:?}");
         //debug!(target: "ui::chatedit", "    cursor_pos={cursor_pos}, is_focused={is_focused}");
 
-        let width = self.rect.prop().get_f32(2).unwrap();
+        let width = self.wrap_width();
 
         let (atlas, wrapped_lines) = {
             let mut text_wrap = self.text_wrap.lock().unwrap();
@@ -431,8 +517,7 @@ impl ChatEdit {
             (atlas, wrapped_lines)
         };
 
-        let total_height = std::cmp::max(wrapped_lines.len(), 1) as f32 * linespacing;
-        let mut height = total_height + self.descent.get();
+        let mut height = wrapped_lines.height() + self.descent.get();
         height = height.clamp(0., self.max_height.get());
 
         self.rect.prop().set_f32(Role::Internal, 3, height);
@@ -455,7 +540,7 @@ impl ChatEdit {
         let mut mesh = MeshBuilder::with_clip(clip.clone());
         let mut curr_y = 0.;
 
-        for wrap_line in wrapped_lines {
+        for wrap_line in wrapped_lines.lines {
             /*
             let selections = self.select.lock().unwrap().clone();
             // Just an assert
@@ -529,53 +614,19 @@ impl ChatEdit {
         let font_size = self.font_size.get();
         let window_scale = self.window_scale.get();
         let linespacing = self.linespacing.get();
+        let scroll = self.scroll.get();
 
-        let width = self.rect.prop().get_f32(2).unwrap();
+        let width = self.wrap_width();
 
-        let (mut cursor_pos, wrapped_lines) = {
+        let (cursor_pos, wrapped_lines) = {
             let mut text_wrap = self.text_wrap.lock().unwrap();
             (text_wrap.cursor_pos(), text_wrap.wrap(width))
         };
 
-        if cursor_pos == 0 {
-            return Point::zero();
-        }
-
-        let mut y = 0.;
-        for wrap_line in &wrapped_lines {
-            assert!(!wrap_line.glyphs.is_empty());
-
-            if cursor_pos < wrap_line.len() {
-                // Cursor is on this line
-                let mut pos_iter = wrap_line.pos_iter();
-                pos_iter.advance_by(cursor_pos).unwrap();
-                let glyph_rect = pos_iter.next().unwrap();
-                let mut x = glyph_rect.x;
-                if x > width {
-                    x = width;
-                }
-                return Point::new(x, y)
-            }
-
-            cursor_pos -= wrap_line.len();
-            y += linespacing;
-        }
-
-        let mut rhs = 0.;
-        let mut last_y = 0.;
-
-        if !wrapped_lines.is_empty() {
-            let last_line = wrapped_lines.last().unwrap();
-            rhs = last_line.rhs();
-            rhs += eol_nudge(font_size, &last_line.glyphs);
-            if rhs > width {
-                rhs = width;
-            }
-
-            last_y = (wrapped_lines.len() - 1) as f32 * linespacing;
-        }
-
-        Point::new(rhs, last_y)
+        let mut point = wrapped_lines.get_glyph_pos(cursor_pos);
+        point.x = point.x.clamp(0., width);
+        point.y -= scroll;
+        point
     }
 
     fn mark_selected_glyphs(&self, glyphs: &Vec<Glyph>, selections: Vec<Selection>) -> Vec<bool> {
@@ -1326,9 +1377,14 @@ impl ChatEdit {
 
         let mut cursor_instrs = vec![];
 
-        let rect_w = self.rect.get().w;
-
         let cursor_pos = self.get_cursor_pos();
+
+        // There is some mess here since ApplyView is in abs screen coords but should be
+        // relative, and also work together with Move. We will fix this later in gfx subsys.
+        let mut view_rect = self.rect.get();
+        view_rect.h = self.max_height.get();
+
+        cursor_instrs.push(GfxDrawInstruction::ApplyView(view_rect));
         cursor_instrs.push(GfxDrawInstruction::Move(cursor_pos));
 
         let cursor_mesh = {
@@ -1351,8 +1407,16 @@ impl ChatEdit {
         let rect = self.rect.get();
 
         Some(DrawUpdate {
-            key: self.text_dc_key,
+            key: self.main_dc_key,
             draw_calls: vec![
+                (
+                    self.main_dc_key,
+                    GfxDrawCall {
+                        instrs: vec![],
+                        dcs: vec![self.text_dc_key, self.cursor_dc_key],
+                        z_index: self.z_index.get(),
+                    },
+                ),
                 (
                     self.text_dc_key,
                     GfxDrawCall {
@@ -1360,7 +1424,7 @@ impl ChatEdit {
                             GfxDrawInstruction::Move(rect.pos()),
                             GfxDrawInstruction::Draw(text_mesh),
                         ],
-                        dcs: vec![self.cursor_dc_key],
+                        dcs: vec![],
                         z_index: self.z_index.get(),
                     },
                 ),

@@ -259,6 +259,34 @@ pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
         node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
     layer_node.clone().link(node);
 
+    // Another debug tool for the chatedit
+    let node = create_vector_art("debugtool-chatedit");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(Role::App, 0, 0.).unwrap();
+    prop.set_f32(Role::App, 1, 300. - 5.).unwrap();
+    prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_f32(Role::App, 3, 200. + 10.).unwrap();
+    node.set_property_u32(Role::App, "z_index", 2).unwrap();
+
+    let mut shape = VectorShape::new();
+    shape.add_filled_box(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::const_f32(5.),
+        [0., 1., 1., 1.],
+    );
+    shape.add_filled_box(
+        expr::const_f32(0.),
+        cc.compile("h - 5").unwrap(),
+        expr::load_var("w"),
+        expr::load_var("h"),
+        [0., 1., 1., 1.],
+    );
+    let node =
+        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
+    layer_node.clone().link(node);
+
     // Create KING GNU!
     let node = create_image("king");
     let prop = node.get_property("rect").unwrap();
@@ -474,7 +502,66 @@ pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
             ChatView::new(
                 me,
                 chat_tree,
-                window_scale,
+                window_scale.clone(),
+                app.render_api.clone(),
+                app.text_shaper.clone(),
+                app.ex.clone(),
+            )
+        })
+        .await;
+    layer_node.clone().link(node);
+
+    // Text edit
+    let node = create_chatedit("editz");
+    node.set_property_bool(Role::App, "is_active", true).unwrap();
+    node.set_property_bool(Role::App, "is_focused", true).unwrap();
+
+    node.set_property_f32(Role::App, "max_height", 200.).unwrap();
+
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(Role::App, 0, 0.).unwrap();
+    prop.set_f32(Role::App, 1, 300.).unwrap();
+    prop.set_expr(Role::App, 2, expr::load_var("parent_w")).unwrap();
+    prop.set_f32(Role::App, 3, 50.).unwrap();
+
+    node.set_property_f32(Role::App, "baseline", 34.).unwrap();
+    node.set_property_f32(Role::App, "linespacing", 34.).unwrap();
+    node.set_property_f32(Role::App, "descent", 10.).unwrap();
+    node.set_property_f32(Role::App, "font_size", 20.).unwrap();
+    //node.set_property_str(Role::App, "text", "hello king!😁🍆jelly 🍆1234").unwrap();
+    let prop = node.get_property("text_color").unwrap();
+    prop.set_f32(Role::App, 0, 1.).unwrap();
+    prop.set_f32(Role::App, 1, 1.).unwrap();
+    prop.set_f32(Role::App, 2, 1.).unwrap();
+    prop.set_f32(Role::App, 3, 1.).unwrap();
+    let prop = node.get_property("text_hi_color").unwrap();
+    prop.set_f32(Role::App, 0, 0.44).unwrap();
+    prop.set_f32(Role::App, 1, 0.96).unwrap();
+    prop.set_f32(Role::App, 2, 1.).unwrap();
+    prop.set_f32(Role::App, 3, 1.).unwrap();
+    let prop = node.get_property("cursor_color").unwrap();
+    prop.set_f32(Role::App, 0, 0.816).unwrap();
+    prop.set_f32(Role::App, 1, 0.627).unwrap();
+    prop.set_f32(Role::App, 2, 1.).unwrap();
+    prop.set_f32(Role::App, 3, 1.).unwrap();
+    node.set_property_f32(Role::App, "cursor_ascent", EDITCHAT_CURSOR_ASCENT).unwrap();
+    node.set_property_f32(Role::App, "cursor_descent", EDITCHAT_CURSOR_DESCENT).unwrap();
+    node.set_property_f32(Role::App, "select_ascent", EDITCHAT_SELECT_ASCENT).unwrap();
+    node.set_property_f32(Role::App, "select_descent", EDITCHAT_SELECT_DESCENT).unwrap();
+    let prop = node.get_property("hi_bg_color").unwrap();
+    prop.set_f32(Role::App, 0, 0.5).unwrap();
+    prop.set_f32(Role::App, 1, 0.5).unwrap();
+    prop.set_f32(Role::App, 2, 0.5).unwrap();
+    prop.set_f32(Role::App, 3, 1.).unwrap();
+    let prop = node.get_property("selected").unwrap();
+    prop.set_null(Role::App, 0).unwrap();
+    prop.set_null(Role::App, 1).unwrap();
+    node.set_property_u32(Role::App, "z_index", 3).unwrap();
+    let node = node
+        .setup(|me| {
+            ChatEdit::new(
+                me,
+                window_scale.clone(),
                 app.render_api.clone(),
                 app.text_shaper.clone(),
                 app.ex.clone(),
