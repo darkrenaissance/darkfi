@@ -45,6 +45,7 @@
   - [Smart Contracts](arch/sc/sc.md)
     - [Transaction lifetime](arch/sc/tx-lifetime.md)
   - [DAO](arch/dao.md)
+  - [DEX](arch/dex.md)
   - [Wallet](arch/wallet.md)
 - [zkas](zkas/index.md)
   - [Writing ZK Proofs](zkas/writing-zk-proofs.md)
