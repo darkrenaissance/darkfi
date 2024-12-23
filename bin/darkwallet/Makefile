@@ -15,7 +15,7 @@ SRC = \
 
 all: $(SRC) fonts
 	cargo lbuild $(FEATURES)
-	mv target/debug/darkwallet .
+	-mv target/debug/darkwallet .
 	./darkwallet
 
 darkwallet.apk: $(SRC) fonts

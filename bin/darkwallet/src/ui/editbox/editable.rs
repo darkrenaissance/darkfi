@@ -88,6 +88,7 @@ impl ComposingText {
     }
 }
 
+#[derive(Clone)]
 pub struct RenderedEditable {
     pub glyphs: Vec<Glyph>,
     pub under_start: TextPos,

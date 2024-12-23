@@ -22,6 +22,17 @@ impl Token {
     }
 }
 
+impl std::fmt::Debug for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.token_type {
+            TokenType::Null => write!(f, "Token::Null")?,
+            TokenType::Word => write!(f, "Token::Word")?,
+            TokenType::Whitespace => write!(f, "Token::Whitespace")?,
+        }
+        write!(f, "({})", self.as_str())
+    }
+}
+
 /// Get the string represented by a vec of glyphs. Useful for debugging.
 pub fn glyph_str(glyphs: &Vec<Glyph>) -> String {
     glyphs.iter().map(|g| g.substr.as_str()).collect::<Vec<_>>().join("")
@@ -87,8 +98,10 @@ fn tokenize(font_size: f32, window_scale: f32, glyphs: &Vec<Glyph>) -> Vec<Token
 }
 
 /// Given a series of words, apply wrapping.
-/// Whitespace is perserved unless the word wraps.
+/// Whitespace is completely perserved.
 fn apply_wrap(line_width: f32, tokens: Vec<Token>) -> Vec<Vec<Glyph>> {
+    //debug!(target: "text::wrap", "apply_wrap({line_width}, {tokens:?})");
+
     let mut lines = vec![];
     let mut line = vec![];
     let mut start = 0.;
@@ -98,26 +111,29 @@ fn apply_wrap(line_width: f32, tokens: Vec<Token>) -> Vec<Vec<Glyph>> {
 
         // Triggered by if below
         if start < 0. {
-            assert_eq!(token.token_type, TokenType::Word);
             start = token.lhs;
         }
 
         // Does this token cross over the end of the line?
         if token.rhs > start + line_width {
+            // Whitespace tokens that cause wrapping are prepended to the current line before
+            // making the line break.
+            if token.token_type == TokenType::Whitespace {
+                line.append(&mut token.glyphs);
+            }
+
             // Start a new line
             let line = std::mem::take(&mut line);
             //debug!(target: "text::apply_wrap", "adding line: {}", glyph_str(&line));
             lines.push(line);
 
-            // Whitespace tokens that cause wrapping are just discarded.
+            // Move to the next token if this is whitespace
             if token.token_type == TokenType::Whitespace {
                 // Load LHS from next token in loop
                 start = -1.;
-                continue
+            } else {
+                start = token.lhs;
             }
-
-            assert_eq!(token.token_type, TokenType::Word);
-            start = token.lhs;
         }
 
         line.append(&mut token.glyphs);
@@ -126,7 +142,7 @@ fn apply_wrap(line_width: f32, tokens: Vec<Token>) -> Vec<Vec<Glyph>> {
     // Handle the remainders
     if !line.is_empty() {
         let line = std::mem::take(&mut line);
-        //debug!(target: "text::apply_wrap", "adding line: {}", glyph_str(&line));
+        //debug!(target: "text::apply_wrap", "adding rem line: {}", glyph_str(&line));
         lines.push(line);
     }
 

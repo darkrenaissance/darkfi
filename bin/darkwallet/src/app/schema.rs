@@ -826,6 +826,7 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     editbox_bg_rect_prop.add_depend(&prop, 3, "editz_h");
 
     node.set_property_f32(Role::App, "baseline", TEXTBAR_BASELINE).unwrap();
+    node.set_property_f32(Role::App, "linespacing", TEXTBAR_BASELINE).unwrap();
     node.set_property_f32(Role::App, "descent", TEXT_DESCENT).unwrap();
     node.set_property_f32(Role::App, "font_size", FONTSIZE).unwrap();
     //node.set_property_str(Role::App, "text", "hello king!😁🍆jelly 🍆1234").unwrap();

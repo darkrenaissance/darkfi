@@ -476,6 +476,15 @@ pub struct Glyph {
     pub y_advance: f32,
 }
 
+impl std::fmt::Debug for Glyph {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Glyph")
+            .field("glyph_id", &self.glyph_id)
+            .field("substr", &self.substr)
+            .finish()
+    }
+}
+
 type FreetypeFace = ft::Face<&'static [u8]>;
 
 struct FtFaces(Vec<FreetypeFace>);
