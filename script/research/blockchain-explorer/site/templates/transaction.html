@@ -21,29 +21,35 @@
 {% block title %}Transaction {{ transaction[0] }}{% endblock %}
 
 {% block content %}
+<div class="content-container">
 
-    <div class="container-fluid pl-5 pb-5 pr-5 title-block" style="margin-top:90px;">
-	    <h1 class="display-4 text-white border-l3" style="font-family:'Weissrundgotisch';line-height:.9em;">Transaction {{ transaction[0] }}</h1>
-	</div>
-
-    <div class="row m-0 border-secondary border-top">
-        <div class="text-white mb-0 border-bottom border-secondary lead-text" style="width:100%;">
-            <h2 class="display-8 text-white border-l3" style="font-family:'Weissrundgotisch';line-height:.9em;">Summary</h2>
-            <ul>
-                <li>Timestamp: {{ transaction[3] }}</li>
-                <li>Block: <a href="../block/{{ transaction[1] }}">{{ transaction[1] }}</a></li>
-                <li>Payload: {{ transaction[2] }}</li>
-            </ul>
-            <h2 class="display-8 text-white border-l3" style="font-family:'Weissrundgotisch';line-height:.9em;">Gas Consumption</h2>
-            <ul>
-                <li>Total: {{ transaction[4] }}</li>
-                <li>WASM: {{ transaction[5] }}</li>
-                <li>ZK Circuits: {{ transaction[6] }}</li>
-                <li>Signatures: {{ transaction[7] }}</li>
-                <li>Deployments: {{ transaction[8] }}</li>
-            </ul>
-        </div>
+    <!-- Page Content Header -->
+    <div class="content-header" style="padding-bottom: 8px">
+        <h1 class="content-section-header">Transaction Details</h1>
+        <div class="">{{ transaction[0] }}</div>
     </div>
-    
+
+    <!-- Transaction Details -->
+    <ul>
+        <li><strong>Timestamp:</strong> {{ transaction[3] }}</li>
+        <li><strong>Block:</strong> <a href="../block/{{ transaction[1] }}">{{ transaction[1] }}</a></li>
+        <li><strong>Payload:</strong> {{ transaction[2] }}</li>
+    </ul>
+
+    <!-- Page Content Divider -->
+    <hr class="content-divider"/>
+
+    <!-- Transaction Gas Consumption -->
+    <div class="content-section" style="padding-top: 12px;">
+        <h2 class="content-section-header">Gas Consumption</h2>
+        <ul>
+            <li><strong>Total:</strong> {{ transaction[4] }}</li>
+            <li><strong>WASM:</strong> {{ transaction[5] }}</li>
+            <li><strong>ZK Circuits:</strong> {{ transaction[6] }}</li>
+            <li><strong>Signatures:</strong> {{ transaction[7] }}</li>
+            <li><strong>Deployments:</strong> {{ transaction[8] }}</li>
+        </ul>
+    </div>
+</div>
 {% endblock %}
 

@@ -23,9 +23,9 @@
 {% block content %}
 
     <div class="background-container">
-        <img src="../static/img/darkfi05.jpg" style="width:100%;">
+        <img src="{{ url_for('static', filename='img/darkfi05.jpg') }}" style="width:100%">
         <div class="top-centered">
-            <h1 class="display-4 text-white border-l3" style="font-family:'Weissrundgotisch';line-height:.9em;">
+            <h1 class="display-4 text-white border-l3" style="font-family:'Weissrundgotisch';line-height:.9em">
                 Reality fractured beyond repair!
             </h1>
         </div>
