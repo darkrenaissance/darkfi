@@ -143,13 +143,20 @@ impl DaoParams {
         secret_key: SecretKey,
         bulla_blind: BaseBlind,
     ) -> Self {
+        // TODO: use diff keys and early exec quorum
         let dao = Dao {
             proposer_limit,
             quorum,
+            early_exec_quorum: quorum,
             approval_ratio_base,
             approval_ratio_quot,
             gov_token_id,
-            public_key: PublicKey::from_secret(secret_key),
+            notes_public_key: PublicKey::from_secret(secret_key),
+            proposer_public_key: PublicKey::from_secret(secret_key),
+            proposals_public_key: PublicKey::from_secret(secret_key),
+            votes_public_key: PublicKey::from_secret(secret_key),
+            exec_public_key: PublicKey::from_secret(secret_key),
+            early_exec_public_key: PublicKey::from_secret(secret_key),
             bulla_blind,
         };
         Self { dao, secret_key }
@@ -158,6 +165,7 @@ impl DaoParams {
 
 impl fmt::Display for DaoParams {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // TODO: add missing fields
         let s = format!(
             "{}\n{}\n{}: {} ({})\n{}: {} ({})\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {:?}",
             "DAO Parameters",
@@ -173,7 +181,7 @@ impl fmt::Display for DaoParams {
             "Governance Token ID",
             self.dao.gov_token_id,
             "Public key",
-            self.dao.public_key,
+            self.dao.notes_public_key,
             "Secret key",
             self.secret_key,
             "Bulla blind",
@@ -234,6 +242,7 @@ impl fmt::Display for DaoRecord {
             Some(c) => format!("{c}"),
             None => "None".to_string(),
         };
+        // TODO: add missing fields
         let s = format!(
             "{}\n{}\n{}: {}\n{}: {}\n{}: {} ({})\n{}: {} ({})\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}",
             "DAO Parameters",
@@ -253,7 +262,7 @@ impl fmt::Display for DaoRecord {
             "Governance Token ID",
             self.params.dao.gov_token_id,
             "Public key",
-            self.params.dao.public_key,
+            self.params.dao.notes_public_key,
             "Secret key",
             self.params.secret_key,
             "Bulla blind",
@@ -1527,8 +1536,18 @@ impl Drk {
         let dao_mint_pk = ProvingKey::build(dao_mint_zkbin.k, &dao_mint_circuit);
 
         // Create the DAO mint call
-        let (params, proofs) =
-            make_mint_call(&dao.params.dao, &dao.params.secret_key, &dao_mint_zkbin, &dao_mint_pk)?;
+        // TODO: use diff keys
+        let (params, proofs) = make_mint_call(
+            &dao.params.dao,
+            &dao.params.secret_key,
+            &dao.params.secret_key,
+            &dao.params.secret_key,
+            &dao.params.secret_key,
+            &dao.params.secret_key,
+            &dao.params.secret_key,
+            &dao_mint_zkbin,
+            &dao_mint_pk,
+        )?;
         let mut data = vec![DaoFunction::Mint as u8];
         params.encode_async(&mut data).await?;
         let call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
@@ -1844,7 +1863,9 @@ impl Drk {
             signature_secret,
         };
 
+        // TODO: use the proper key if we have it
         let (params, proofs) = call.make(
+            &dao.params.secret_key,
             &propose_burn_zkbin,
             &propose_burn_pk,
             &propose_main_zkbin,
@@ -2049,7 +2070,6 @@ impl Drk {
             vote_option,
             proposal: proposal.proposal.clone(),
             dao: dao.params.dao.clone(),
-            dao_keypair: dao.keypair(),
             current_blockwindow,
         };
 
@@ -2328,7 +2348,9 @@ impl Drk {
             signature_secret: exec_signature_secret,
             current_blockwindow,
         };
-        let (exec_params, exec_proofs) = exec_builder.make(&dao_exec_zkbin, &dao_exec_pk)?;
+        // TODO: use the proper key if we have it
+        let (exec_params, exec_proofs) =
+            exec_builder.make(&dao.params.secret_key, &None, &dao_exec_zkbin, &dao_exec_pk)?;
 
         // Encode the call
         let mut data = vec![DaoFunction::Exec as u8];

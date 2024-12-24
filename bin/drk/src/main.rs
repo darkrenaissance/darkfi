@@ -1442,7 +1442,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     // Encypt the proposal
                     let enc_note = AeadEncryptedNote::encrypt(
                         &proposal,
-                        &dao.params.dao.public_key,
+                        &dao.params.dao.proposals_public_key,
                         &mut OsRng,
                     )
                     .unwrap();
