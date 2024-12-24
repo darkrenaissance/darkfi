@@ -52,6 +52,7 @@ blake3 = "1.5.4"
 simplelog = "0.12.2"
 # For log files
 file-rotate = "0.7.6"
+parking_lot = { version = "0.12", features = ["nightly"] }
 
 [features]
 emulate-android = []

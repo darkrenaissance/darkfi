@@ -21,12 +21,13 @@ use async_trait::async_trait;
 use atomic_float::AtomicF32;
 use darkfi::system::msleep;
 use miniquad::{window, KeyCode, KeyMods, MouseButton, TouchPhase};
+use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
 use std::{
     collections::HashMap,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex as SyncMutex, OnceLock, Weak,
+        Arc, OnceLock, Weak,
     },
     time::Instant,
 };
@@ -306,7 +307,8 @@ enum TouchStateAction {
     StartSelect,
     Select,
     DragSelectHandle { side: isize },
-    ScrollHoriz { start_pos: Point, scroll_start: f32 },
+    ScrollVert { start_pos: Point, scroll_start: f32 },
+    SetCursorPos { start_pos: Point },
 }
 
 struct TouchInfo {
@@ -322,11 +324,12 @@ impl TouchInfo {
     }
 
     fn start(&mut self, pos: Point) {
-        debug!(target: "ui::chatedit", "TouchStateAction::Started");
+        debug!(target: "ui::chatedit::touch", "start touch: Started state");
         self.state = TouchStateAction::Started { pos, instant: std::time::Instant::now() };
     }
 
     fn stop(&mut self) -> TouchStateAction {
+        debug!(target: "ui::chatedit::touch", "stop touch: Inactive state");
         std::mem::replace(&mut self.state, TouchStateAction::Inactive)
     }
 
@@ -334,19 +337,25 @@ impl TouchInfo {
         match &self.state {
             TouchStateAction::Started { pos: start_pos, instant } => {
                 let travel_dist = pos.dist_sq(&start_pos);
-                let x_dist = pos.x - start_pos.x;
+                let grad = (pos.y - start_pos.y) / (pos.x - start_pos.x);
                 let elapsed = instant.elapsed().as_millis();
+                debug!(target: "ui::chatedit::touch", "TouchInfo::update() [travel_dist={travel_dist}, grad={grad}]");
 
                 if travel_dist < 5. {
                     if elapsed > 1000 {
-                        debug!(target: "ui::chatedit", "TouchStateAction::StartSelect");
+                        debug!(target: "ui::chatedit::touch", "update touch state: Started -> StartSelect");
                         self.state = TouchStateAction::StartSelect;
                     }
-                } else if x_dist.abs() > 5. {
-                    debug!(target: "ui::chatedit", "TouchStateAction::ScrollHoriz");
+                } else if grad > 0.5 {
+                    // Vertical movement
+                    debug!(target: "ui::chatedit::touch", "update touch state: Started -> ScrollVert");
                     let scroll_start = self.scroll.get();
                     self.state =
-                        TouchStateAction::ScrollHoriz { start_pos: *start_pos, scroll_start };
+                        TouchStateAction::ScrollVert { start_pos: *start_pos, scroll_start };
+                } else {
+                    // Horizontal movement
+                    debug!(target: "ui::chatedit::touch", "update touch state: Started -> SetCursorPos");
+                    self.state = TouchStateAction::SetCursorPos { start_pos: *start_pos };
                 }
             }
             _ => {}
@@ -532,7 +541,7 @@ impl ChatEdit {
             is_mouse_hover: AtomicBool::new(false),
         });
 
-        self_.text_wrap.lock().unwrap().editable.set_text(
+        self_.text_wrap.lock().editable.set_text(
             "".to_string(),
             "A berry is a small, pulpy, and often edible fruit. Typically, berries are juicy, rounded, brightly colored, sweet, sour or tart, and do not have a stone or pit, although many pips or seeds may be present. Common examples of berries in the culinary sense are strawberries, raspberries, blueberries, blackberries, white currants, blackcurrants, and redcurrants.In Britain, soft fruit is a horticultural term for such fruits.".to_string()
         );
@@ -546,6 +555,12 @@ impl ChatEdit {
 
     fn wrap_width(&self) -> f32 {
         self.rect.prop().get_f32(2).unwrap() - self.cursor_width.get()
+    }
+
+    fn abs_to_local(&self, point: &mut Point) {
+        let rect = self.rect.get();
+        *point -= rect.pos();
+        point.y += self.scroll.get();
     }
 
     /// Called whenever the text or any text property changes.
@@ -568,7 +583,7 @@ impl ChatEdit {
         let width = self.wrap_width();
 
         let (atlas, wrapped_lines, selections) = {
-            let mut text_wrap = self.text_wrap.lock().unwrap();
+            let mut text_wrap = self.text_wrap.lock();
             let rendered_glyphs = &text_wrap.get_render().glyphs;
             let atlas = text::make_texture_atlas(&self.render_api, rendered_glyphs);
             let wrapped_lines = text_wrap.wrap(width);
@@ -582,7 +597,7 @@ impl ChatEdit {
         self.rect.prop().set_f32(Role::Internal, 3, height);
 
         // Eval the rect
-        let parent_rect = self.parent_rect.lock().unwrap().clone().unwrap();
+        let parent_rect = self.parent_rect.lock().clone().unwrap();
         self.rect.eval_with(
             0..3,
             vec![
@@ -677,7 +692,7 @@ impl ChatEdit {
         let width = self.wrap_width();
 
         let (cursor_pos, wrapped_lines) = {
-            let mut text_wrap = self.text_wrap.lock().unwrap();
+            let mut text_wrap = self.text_wrap.lock();
             (text_wrap.cursor_pos(), text_wrap.wrap(width))
         };
 
@@ -885,7 +900,7 @@ impl ChatEdit {
 
     async fn insert_char(&self, key: char) {
         {
-            let mut text_wrap = &mut self.text_wrap.lock().unwrap();
+            let mut text_wrap = &mut self.text_wrap.lock();
             text_wrap.clear_cache();
             let mut tmp = [0; 4];
             let key_str = key.encode_utf8(&mut tmp);
@@ -948,13 +963,13 @@ impl ChatEdit {
             }
             KeyCode::Delete => {
                 self.delete(0, 1);
-                self.clamp_scroll();
+                self.clamp_scroll(&mut self.text_wrap.lock());
                 self.pause_blinking();
                 self.redraw().await;
             }
             KeyCode::Backspace => {
                 self.delete(1, 0);
-                self.clamp_scroll();
+                self.clamp_scroll(&mut self.text_wrap.lock());
                 self.pause_blinking();
                 self.redraw().await;
             }
@@ -975,9 +990,9 @@ impl ChatEdit {
     }
 
     fn delete(&self, before: usize, after: usize) {
-        let mut text_wrap = &mut self.text_wrap.lock().unwrap();
+        let mut text_wrap = &mut self.text_wrap.lock();
         text_wrap.clear_cache();
-        let selection = std::mem::take(&mut *self.select.lock().unwrap());
+        let selection = std::mem::take(&mut *self.select.lock());
 
         if selection.is_empty() {
             text_wrap.editable.delete(before, after);
@@ -1014,14 +1029,14 @@ impl ChatEdit {
     }
 
     fn adjust_cursor(&self, has_shift: bool, move_cursor: impl Fn(&mut Editable)) {
-        let mut text_wrap = &mut self.text_wrap.lock().unwrap();
+        let mut text_wrap = &mut self.text_wrap.lock();
         let rendered = text_wrap.get_render().clone();
         let prev_cursor_pos = text_wrap.editable.get_cursor_pos(&rendered);
         move_cursor(&mut text_wrap.editable);
         let cursor_pos = text_wrap.editable.get_cursor_pos(&rendered);
         drop(text_wrap);
 
-        let mut select = self.select.lock().unwrap();
+        let mut select = self.select.lock();
 
         // Start selection if shift is held
         if has_shift {
@@ -1046,7 +1061,7 @@ impl ChatEdit {
         let baseline = self.baseline.get();
 
         {
-            let mut text_wrap = &mut self.text_wrap.lock().unwrap();
+            let mut text_wrap = &mut self.text_wrap.lock();
             text_wrap.clear_cache();
             text_wrap.editable.end_compose();
 
@@ -1079,7 +1094,7 @@ impl ChatEdit {
             let cidx_end = rendered.pos_to_idx(cpos_end);
 
             // begin selection
-            let mut select = self.select.lock().unwrap();
+            let select = &mut text_wrap.select;
             select.clear();
             select.push(Selection::new(cpos_start, cpos_end));
         }
@@ -1107,7 +1122,7 @@ impl ChatEdit {
         let sel_start = std::cmp::min(start, end);
         let sel_end = std::cmp::max(start, end);
 
-        let mut glyphs = self.glyphs.lock().unwrap().clone();
+        let mut glyphs = self.glyphs.lock().clone();
         glyphs.drain(sel_start..sel_end);
 
         let text = Self::glyphs_to_string(&glyphs);
@@ -1132,7 +1147,7 @@ impl ChatEdit {
 
         let mut text = String::new();
 
-        let glyphs = self.glyphs.lock().unwrap().clone();
+        let glyphs = self.glyphs.lock().clone();
         for (glyph_idx, glyph) in glyphs.iter().enumerate() {
             if sel_start <= glyph_idx && glyph_idx < sel_end {
                 text.push_str(&glyph.substr);
@@ -1153,7 +1168,7 @@ impl ChatEdit {
             text = key.clone();
         }
 
-        let glyphs = self.glyphs.lock().unwrap().clone();
+        let glyphs = self.glyphs.lock().clone();
         for (glyph_idx, glyph) in glyphs.iter().enumerate() {
             text.push_str(&glyph.substr);
             if cursor_pos == glyph_idx as u32 + 1 {
@@ -1169,27 +1184,31 @@ impl ChatEdit {
         self.redraw().await;
     }
 
-    async fn handle_touch_start(&self, pos: Point) -> bool {
-        debug!(target: "ui::chatedit", "handle_touch_start({pos:?})");
-        let mut touch_info = self.touch_info.lock().unwrap();
+    async fn handle_touch_start(&self, mut touch_pos: Point) -> bool {
+        debug!(target: "ui::chatedit", "handle_touch_start({touch_pos:?})");
+        let mut touch_info = self.touch_info.lock();
 
-        if self.try_handle_drag(&mut touch_info, pos) {
+        if self.try_handle_drag(&mut touch_info, touch_pos) {
             return true
         }
 
         let rect = self.rect.get();
-        if !rect.contains(pos) {}
+        if !rect.contains(touch_pos) {
+            return false
+        }
 
-        touch_info.start(pos);
+        self.abs_to_local(&mut touch_pos);
+
+        touch_info.start(touch_pos);
         true
     }
     fn try_handle_drag(&self, touch_info: &mut TouchInfo, pos: Point) -> bool {
-        let selections = self.select.lock().unwrap().clone();
+        let selections = self.select.lock().clone();
 
         if self.is_phone_select.load(Ordering::Relaxed) && selections.len() == 1 {
             let select = selections.first().unwrap();
 
-            let rendered = self.text_wrap.lock().unwrap().get_render().clone();
+            let rendered = self.text_wrap.lock().get_render().clone();
 
             let font_size = self.font_size.get();
             let window_scale = self.window_scale.get();
@@ -1233,37 +1252,38 @@ impl ChatEdit {
         false
     }
 
-    async fn handle_touch_move(&self, pos: Point) -> bool {
-        //debug!(target: "ui::chatedit", "handle_touch_move({pos:?})");
+    async fn handle_touch_move(&self, mut touch_pos: Point) -> bool {
+        debug!(target: "ui::chatedit", "handle_touch_move({touch_pos:?})");
+        self.abs_to_local(&mut touch_pos);
         let touch_state = {
-            let mut touch_info = self.touch_info.lock().unwrap();
-            touch_info.update(&pos);
+            let mut touch_info = self.touch_info.lock();
+            touch_info.update(&touch_pos);
             touch_info.state.clone()
         };
         match &touch_state {
             TouchStateAction::Inactive => return false,
             TouchStateAction::StartSelect => {
-                let x = pos.x;
+                let x = touch_pos.x;
                 self.start_touch_select(x);
                 self.redraw().await;
                 debug!(target: "ui::chatedit", "TouchStateAction::Select");
-                self.touch_info.lock().unwrap().state = TouchStateAction::Select;
+                self.touch_info.lock().state = TouchStateAction::Select;
             }
             TouchStateAction::DragSelectHandle { side } => {
                 {
                     assert!(*side == -1 || *side == 1);
                     assert!(self.is_phone_select.load(Ordering::Relaxed));
-                    let mut selections = self.select.lock().unwrap();
+                    let mut selections = self.select.lock();
                     assert_eq!(selections.len(), 1);
                     let select = selections.first_mut().unwrap();
 
-                    let rendered = self.text_wrap.lock().unwrap().get_render().clone();
+                    let rendered = self.text_wrap.lock().get_render().clone();
 
                     let font_size = self.font_size.get();
                     let window_scale = self.window_scale.get();
                     let baseline = self.baseline.get();
 
-                    let pos_x = pos.x + self.scroll.get();
+                    let pos_x = touch_pos.x + self.scroll.get();
 
                     let mut pos = rendered.x_to_pos(pos_x, font_size, window_scale, baseline);
                     if *side == -1 {
@@ -1282,10 +1302,15 @@ impl ChatEdit {
                 }
                 self.redraw().await;
             }
-            TouchStateAction::ScrollHoriz { start_pos, scroll_start } => {
-                let x_dist = start_pos.x - pos.x;
-                let mut scroll = scroll_start + x_dist;
-                scroll = scroll.clamp(0., self.max_cursor_scroll());
+            TouchStateAction::ScrollVert { start_pos, scroll_start } => {
+                let max_scroll = {
+                    let mut text_wrap = self.text_wrap.lock();
+                    self.max_scroll(&mut text_wrap)
+                };
+
+                let y_dist = start_pos.y - touch_pos.y;
+                let mut scroll = scroll_start + y_dist;
+                scroll = scroll.clamp(0., max_scroll);
                 self.scroll.set(scroll);
                 self.redraw().await;
             }
@@ -1293,29 +1318,21 @@ impl ChatEdit {
         }
         true
     }
-    async fn handle_touch_end(&self, pos: Point) -> bool {
-        debug!(target: "ui::chatedit", "handle_touch_end({pos:?})");
-        let state = self.touch_info.lock().unwrap().stop();
+    async fn handle_touch_end(&self, mut touch_pos: Point) -> bool {
+        debug!(target: "ui::chatedit", "handle_touch_end({touch_pos:?})");
+        self.abs_to_local(&mut touch_pos);
+
+        let state = self.touch_info.lock().stop();
         match state {
             TouchStateAction::Inactive => return false,
-            TouchStateAction::Started { pos: _, instant: _ } => {
-                let rect = self.rect.get();
-                let font_size = self.font_size.get();
-                let window_scale = self.window_scale.get();
-                let baseline = self.baseline.get();
-
+            TouchStateAction::Started { pos: _, instant: _ } |
+            TouchStateAction::SetCursorPos { start_pos: _ } => {
+                let width = self.wrap_width();
                 {
-                    let mut text_wrap = &mut self.text_wrap.lock().unwrap();
-                    let rendered = text_wrap.get_render();
-                    // Adjust with scroll here too
-                    let x = pos.x - rect.x;
+                    let mut text_wrap = self.text_wrap.lock();
+                    let cursor_pos = text_wrap.set_cursor_with_point(touch_pos, width);
 
-                    let cpos = rendered.x_to_pos(x, font_size, window_scale, baseline);
-                    let cidx = rendered.pos_to_idx(cpos);
-                    text_wrap.editable.set_cursor_idx(cidx);
-
-                    // begin selection
-                    let mut select = self.select.lock().unwrap();
+                    let select = &mut text_wrap.select;
                     select.clear();
                 }
 
@@ -1344,7 +1361,7 @@ impl ChatEdit {
             let font_size = self.font_size.get();
             let window_scale = self.window_scale.get();
             let baseline = self.baseline.get();
-            let glyphs = self.glyphs.lock().unwrap().clone();
+            let glyphs = self.glyphs.lock().clone();
 
             let mut glyph_pos_iter =
                 GlyphPositionIter::new(font_size, window_scale, &glyphs, baseline);
@@ -1382,35 +1399,23 @@ impl ChatEdit {
         self.scroll.set(scroll);
     }
 
-    fn max_cursor_scroll(&self) -> f32 {
-        let font_size = self.font_size.get();
-        let window_scale = self.window_scale.get();
-        let baseline = self.baseline.get();
-        let rhs = {
-            let rendered = self.text_wrap.lock().unwrap().get_render().clone();
-
-            if rendered.glyphs.is_empty() {
-                return 0.
-            }
-            let glyph_pos_iter =
-                GlyphPositionIter::new(font_size, window_scale, &rendered.glyphs, baseline);
-            let last_rect = glyph_pos_iter.last().unwrap();
-            let mut rhs = last_rect.x + last_rect.w;
-            rhs += eol_nudge(font_size, &rendered.glyphs);
-            rhs
-        };
-
-        let rect_w = self.rect.get().w;
-        if rhs <= rect_w {
-            return 0.;
-        }
-        let max_scroll = rhs - rect_w;
-        max_scroll
+    fn max_scroll(&self, text_wrap: &mut TextWrap) -> f32 {
+        let width = self.wrap_width();
+        let wrapped_lines = text_wrap.wrap(width);
+        let rect_h = self.rect.get().h;
+        let max_scroll = wrapped_lines.height() - rect_h;
+        max_scroll.clamp(0., f32::MAX)
     }
 
-    fn clamp_scroll(&self) {
+    /// When we resize the screen, the rect changes so we may need to alter the scroll.
+    /// Or if we delete text.
+    fn clamp_scroll(&self, text_wrap: &mut TextWrap) {
+        let width = self.wrap_width();
+        let wrapped_lines = text_wrap.wrap(width);
+        let max_scroll = wrapped_lines.height();
+
         let mut scroll = self.scroll.get();
-        scroll = scroll.clamp(0., self.max_cursor_scroll());
+        scroll = scroll.clamp(0., wrapped_lines.height());
         self.scroll.set(scroll);
     }
 
@@ -1462,7 +1467,7 @@ impl ChatEdit {
         cursor_instrs.push(GfxDrawInstruction::Move(cursor_pos));
 
         let cursor_mesh = {
-            let mut cursor_mesh = self.cursor_mesh.lock().unwrap();
+            let mut cursor_mesh = self.cursor_mesh.lock();
             if cursor_mesh.is_none() {
                 *cursor_mesh = Some(self.regen_cursor_mesh());
             }
@@ -1562,7 +1567,7 @@ impl UIObject for ChatEdit {
         on_modify.when_change(self.debug.prop(), redraw);
 
         async fn regen_cursor(self_: Arc<ChatEdit>) {
-            let mesh = std::mem::take(&mut *self_.cursor_mesh.lock().unwrap());
+            let mesh = std::mem::take(&mut *self_.cursor_mesh.lock());
         }
         on_modify.when_change(self.cursor_color.prop(), regen_cursor);
         on_modify.when_change(self.cursor_ascent.prop(), regen_cursor);
@@ -1596,7 +1601,7 @@ impl UIObject for ChatEdit {
 
     async fn draw(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
         debug!(target: "ui::chatedit", "EditBox::draw()");
-        *self.parent_rect.lock().unwrap() = Some(parent_rect);
+        *self.parent_rect.lock() = Some(parent_rect);
 
         //self.clamp_scroll();
         self.make_draw_calls()
@@ -1621,7 +1626,7 @@ impl UIObject for ChatEdit {
         }
 
         let actions = {
-            let mut repeater = self.key_repeat.lock().unwrap();
+            let mut repeater = self.key_repeat.lock();
             repeater.key_down(PressedKey::Char(key), repeat)
         };
         //debug!(target: "ui::chatedit", "Key {:?} has {} actions", key, actions);
@@ -1643,7 +1648,7 @@ impl UIObject for ChatEdit {
         }
 
         let actions = {
-            let mut repeater = self.key_repeat.lock().unwrap();
+            let mut repeater = self.key_repeat.lock();
             repeater.key_down(PressedKey::Key(key), repeat)
         };
         // Suppress noisy message
@@ -1674,7 +1679,7 @@ impl UIObject for ChatEdit {
             if self.is_focused.get() {
                 debug!(target: "ui::chatedit", "EditBox unfocused");
                 self.is_focused.set(false);
-                self.select.lock().unwrap().clear();
+                self.select.lock().clear();
 
                 self.redraw().await;
             }
@@ -1689,13 +1694,12 @@ impl UIObject for ChatEdit {
         }
 
         // Move mouse pos within this widget
-        mouse_pos -= rect.pos();
-        mouse_pos.y += self.scroll.get();
+        self.abs_to_local(&mut mouse_pos);
 
         let width = self.wrap_width();
 
         {
-            let mut text_wrap = self.text_wrap.lock().unwrap();
+            let mut text_wrap = self.text_wrap.lock();
             let cursor_pos = text_wrap.set_cursor_with_point(mouse_pos, width);
 
             // begin selection
@@ -1739,13 +1743,12 @@ impl UIObject for ChatEdit {
         // also set cursor_pos too
 
         // Move mouse pos within this widget
-        mouse_pos -= rect.pos();
-        mouse_pos.y += self.scroll.get();
+        self.abs_to_local(&mut mouse_pos);
 
         let width = self.wrap_width();
 
         {
-            let mut text_wrap = self.text_wrap.lock().unwrap();
+            let mut text_wrap = self.text_wrap.lock();
             let cursor_pos = text_wrap.set_cursor_with_point(mouse_pos, width);
 
             // modify current selection
@@ -1765,8 +1768,13 @@ impl UIObject for ChatEdit {
             return false
         }
 
+        let max_scroll = {
+            let mut text_wrap = self.text_wrap.lock();
+            self.max_scroll(&mut text_wrap)
+        };
+
         let mut scroll = self.scroll.get() + wheel_pos.y * self.scroll_speed.get();
-        scroll = scroll.clamp(0., self.max_cursor_scroll());
+        scroll = scroll.clamp(0., max_scroll);
         debug!(target: "ui::chatedit", "handle_mouse_wheel({wheel_pos:?}) [scroll={scroll}]");
         self.scroll.set(scroll);
         self.redraw().await;
@@ -1800,13 +1808,14 @@ impl UIObject for ChatEdit {
         }
 
         {
-            let mut text_wrap = self.text_wrap.lock().unwrap();
+            let mut text_wrap = self.text_wrap.lock();
             text_wrap.clear_cache();
             text_wrap.editable.compose(suggest_text, is_commit);
+
+            self.clamp_scroll(&mut text_wrap);
         }
 
         //self.apply_cursor_scrolling();
-        self.clamp_scroll();
         self.redraw().await;
 
         true
@@ -1819,7 +1828,7 @@ impl UIObject for ChatEdit {
         }
 
         {
-            let mut text_wrap = self.text_wrap.lock().unwrap();
+            let mut text_wrap = self.text_wrap.lock();
             text_wrap.clear_cache();
             text_wrap.editable.set_compose_region(start, end);
         }

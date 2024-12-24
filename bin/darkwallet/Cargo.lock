@@ -1280,6 +1280,7 @@ dependencies = [
  "image",
  "log",
  "miniquad",
+ "parking_lot 0.12.3",
  "rand",
  "rusqlite",
  "semver",
