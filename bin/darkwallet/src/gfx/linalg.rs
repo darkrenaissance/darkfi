@@ -215,6 +215,9 @@ impl Rectangle {
     pub fn corner(&self) -> Point {
         Point { x: self.x + self.w, y: self.y + self.h }
     }
+    pub fn center(&self) -> Point {
+        Point { x: self.x + self.w / 2., y: self.y + self.h / 2. }
+    }
 
     pub fn dim(&self) -> Dimension {
         Dimension { w: self.w, h: self.h }

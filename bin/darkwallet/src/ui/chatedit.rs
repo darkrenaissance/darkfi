@@ -120,22 +120,45 @@ impl TextWrap {
         let linespacing = self.linespacing.get();
 
         let rendered = self.get_render();
-        let glyphs = text::wrap(width, font_size, window_scale, &rendered.glyphs);
-        let lines = glyphs
+        let wrapped_glyphs = text::wrap(width, font_size, window_scale, &rendered.glyphs);
+
+        let mut curr_pos = 0;
+        let lines: Vec<_> = wrapped_glyphs
             .into_iter()
-            .map(|g| WrappedLine::new(g, font_size, window_scale, baseline))
+            .map(|glyphs| {
+                let off_pos = curr_pos;
+                curr_pos += glyphs.len();
+                WrappedLine::new(glyphs, off_pos, font_size, window_scale, baseline)
+            })
             .collect();
+
+        if let Some(last) = lines.last() {
+            assert_eq!(last.last_pos(), rendered.glyphs.len());
+        }
+
         WrappedLines::new(lines, font_size, linespacing)
     }
 
-    fn cursor_pos(&mut self) -> usize {
+    fn cursor_pos(&mut self) -> TextPos {
         let rendered = self.get_render().clone();
         self.editable.get_cursor_pos(&rendered)
+    }
+
+    fn set_cursor_with_point(&mut self, point: Point, width: f32) -> TextPos {
+        let wrapped_lines = self.wrap(width);
+        let cursor_pos = wrapped_lines.point_to_pos(point);
+
+        let rendered = self.get_render();
+        let cidx = rendered.pos_to_idx(cursor_pos);
+        self.editable.set_cursor_idx(cidx);
+
+        cursor_pos
     }
 }
 
 struct WrappedLine {
     glyphs: Vec<Glyph>,
+    off_pos: TextPos,
 
     font_size: f32,
     window_scale: f32,
@@ -143,12 +166,21 @@ struct WrappedLine {
 }
 
 impl WrappedLine {
-    fn new(glyphs: Vec<Glyph>, font_size: f32, window_scale: f32, baseline: f32) -> Self {
-        Self { glyphs, font_size, window_scale, baseline }
+    fn new(
+        glyphs: Vec<Glyph>,
+        off_pos: TextPos,
+        font_size: f32,
+        window_scale: f32,
+        baseline: f32,
+    ) -> Self {
+        Self { glyphs, off_pos, font_size, window_scale, baseline }
     }
 
     fn len(&self) -> usize {
         self.glyphs.len()
+    }
+    fn last_pos(&self) -> TextPos {
+        self.off_pos + self.len()
     }
 
     fn pos_iter(&self) -> GlyphPositionIter {
@@ -160,6 +192,22 @@ impl WrappedLine {
             None => 0.,
             Some(rect) => rect.rhs(),
         }
+    }
+
+    fn find_closest(&self, x: f32) -> TextPos {
+        // Line begins at 0
+        let mut prev_dist = 0. - x;
+        for (pos, glyph_rect) in self.pos_iter().enumerate() {
+            let curr_dist = glyph_rect.x - x;
+            if curr_dist.abs() > prev_dist.abs() {
+                if pos == 0 {
+                    return 0
+                }
+                return pos - 1
+            }
+            prev_dist = curr_dist;
+        }
+        self.glyphs.len() - 1
     }
 }
 
@@ -175,12 +223,17 @@ impl WrappedLines {
     }
 
     /// Convert an (x, y) point to a glyph pos
-    fn point_to_pos(&self, linespacing: f32, point: Point) -> usize {
-        0
-        //let total_height = wrapped_lines.len() as f32 * linespacing;
-        //if total_height < point.y {
-        //    return
-        //}
+    fn point_to_pos(&self, mut point: Point) -> TextPos {
+        let mut pos = 0;
+        for wrap_line in &self.lines {
+            if point.y < self.linespacing {
+                pos += wrap_line.find_closest(point.x);
+                return pos
+            }
+            point.y -= self.linespacing;
+            pos += wrap_line.len();
+        }
+        pos
     }
 
     fn height(&self) -> f32 {
@@ -479,6 +532,11 @@ impl ChatEdit {
             is_mouse_hover: AtomicBool::new(false),
         });
 
+        self_.text_wrap.lock().unwrap().editable.set_text(
+            "".to_string(),
+            "A berry is a small, pulpy, and often edible fruit. Typically, berries are juicy, rounded, brightly colored, sweet, sour or tart, and do not have a stone or pit, although many pips or seeds may be present. Common examples of berries in the culinary sense are strawberries, raspberries, blueberries, blackberries, white currants, blackcurrants, and redcurrants.In Britain, soft fruit is a horticultural term for such fruits.".to_string()
+        );
+
         Pimpl::ChatEdit(self_)
     }
 
@@ -509,12 +567,13 @@ impl ChatEdit {
 
         let width = self.wrap_width();
 
-        let (atlas, wrapped_lines) = {
+        let (atlas, wrapped_lines, selections) = {
             let mut text_wrap = self.text_wrap.lock().unwrap();
             let rendered_glyphs = &text_wrap.get_render().glyphs;
             let atlas = text::make_texture_atlas(&self.render_api, rendered_glyphs);
             let wrapped_lines = text_wrap.wrap(width);
-            (atlas, wrapped_lines)
+            let selections = text_wrap.select.clone();
+            (atlas, wrapped_lines, selections)
         };
 
         let mut height = wrapped_lines.height() + self.descent.get();
@@ -538,20 +597,17 @@ impl ChatEdit {
         clip.y = 0.;
 
         let mut mesh = MeshBuilder::with_clip(clip.clone());
-        let mut curr_y = 0.;
+        let mut curr_y = -scroll;
+
+        debug!(target: "ui::chatedit", "regen_text_mesh() selections={selections:?}");
 
         for wrap_line in wrapped_lines.lines {
-            /*
-            let selections = self.select.lock().unwrap().clone();
             // Just an assert
             if self.is_phone_select.load(Ordering::Relaxed) {
                 assert!(selections.len() <= 1);
             }
-            for select in &selections {
-                //self.draw_selected(&mut mesh, select, &rendered.glyphs, clip.h);
-            }
-            let select_marks = self.mark_selected_glyphs(&glyphs, selections);
-            */
+            let select_marks = self.mark_selected_glyphs(&wrap_line, &selections);
+            self.draw_selected(&mut mesh, &select_marks, &wrap_line, curr_y);
 
             /*
             if rendered.has_underline() {
@@ -567,16 +623,18 @@ impl ChatEdit {
 
             let pos_iter = wrap_line.pos_iter();
 
-            for (mut glyph_rect, glyph) in pos_iter.zip(wrap_line.glyphs.iter()) {
+            for (_, mut glyph_rect, glyph, is_selected) in
+                zip3(pos_iter, wrap_line.glyphs.iter(), select_marks.into_iter())
+            {
                 let uv_rect = atlas.fetch_uv(glyph.glyph_id).expect("missing glyph UV rect");
 
-                glyph_rect.y += curr_y - scroll;
+                glyph_rect.y += curr_y;
 
                 //mesh.draw_outline(&glyph_rect, COLOR_BLUE, 2.);
                 let mut color = text_color.clone();
-                //if *is_selected {
-                //    color = text_hi_color.clone();
-                //}
+                if is_selected {
+                    color = text_hi_color.clone();
+                }
                 if glyph.sprite.has_color {
                     color = COLOR_WHITE;
                 }
@@ -629,11 +687,24 @@ impl ChatEdit {
         point
     }
 
-    fn mark_selected_glyphs(&self, glyphs: &Vec<Glyph>, selections: Vec<Selection>) -> Vec<bool> {
-        let mut marks: Vec<_> = glyphs.iter().map(|_| false).collect();
+    fn mark_selected_glyphs(
+        &self,
+        wrap_line: &WrappedLine,
+        selections: &Vec<Selection>,
+    ) -> Vec<bool> {
+        let mut marks = vec![false; wrap_line.len()];
         for select in selections {
-            let start = std::cmp::min(select.start, select.end);
-            let end = std::cmp::max(select.start, select.end);
+            let mut start = std::cmp::min(select.start, select.end);
+            let mut end = std::cmp::max(select.start, select.end);
+
+            let off_pos = wrap_line.off_pos;
+
+            if end < off_pos || start > wrap_line.last_pos() {
+                continue
+            }
+
+            end = std::cmp::min(end, wrap_line.last_pos()) - off_pos;
+            start = start.saturating_sub(off_pos);
 
             for i in start..end {
                 marks[i] = true;
@@ -645,70 +716,65 @@ impl ChatEdit {
     fn draw_selected(
         &self,
         mesh: &mut MeshBuilder,
-        select: &Selection,
-        glyphs: &Vec<Glyph>,
-        clip_h: f32,
+        select_marks: &Vec<bool>,
+        wrap_line: &WrappedLine,
+        y_off: f32,
     ) {
-        if select.start == select.end {
+        let font_size = self.font_size.get();
+        let baseline = self.baseline.get();
+        let select_ascent = self.select_ascent.get();
+        let select_descent = self.select_descent.get();
+        let hi_bg_color = self.hi_bg_color.get();
+
+        if select_marks.iter().all(|b| !b) {
             return
         }
-        let start = std::cmp::min(select.start, select.end);
-        let end = std::cmp::max(select.start, select.end);
 
-        let font_size = self.font_size.get();
-        let window_scale = self.window_scale.get();
-        let baseline = self.baseline.get();
-        let scroll = self.scroll.get();
-        let hi_bg_color = self.hi_bg_color.get();
-        let glyph_pos_iter = GlyphPositionIter::new(font_size, window_scale, &glyphs, baseline);
+        let mut start_x = None;
+        let mut end_x = None;
 
-        let is_phone_select = self.is_phone_select.load(Ordering::Relaxed);
-
-        let mut start_x = 0.;
-        let mut end_x = 0.;
-        // When cursor lands at the end of the line
-        let mut rhs = 0.;
-
-        for (glyph_idx, mut glyph_rect) in glyph_pos_iter.enumerate() {
-            glyph_rect.x -= scroll;
-
-            if glyph_idx == start {
-                start_x = glyph_rect.x;
+        for (glyph_rect, is_selected) in wrap_line.pos_iter().zip(select_marks.iter()) {
+            if *is_selected && start_x.is_none() {
+                start_x = Some(glyph_rect.x);
             }
-            if glyph_idx == end {
-                end_x = glyph_rect.x;
+            if !*is_selected && start_x.is_some() && end_x.is_none() {
+                end_x = Some(glyph_rect.x);
             }
-
-            rhs = glyph_rect.rhs();
         }
 
-        if start == 0 {
-            start_x = scroll;
+        let mut start_x = start_x.unwrap();
+
+        if select_marks[0] {
+            start_x = 0.;
         }
 
-        if end == glyphs.len() {
-            rhs += eol_nudge(font_size, &glyphs);
-            end_x = rhs;
-        }
+        let end_x = match end_x {
+            Some(end_x) => end_x,
+            None => {
+                assert!(*select_marks.last().unwrap());
+                wrap_line.rhs() + eol_nudge(font_size, &wrap_line.glyphs)
+            }
+        };
 
         let select_ascent = self.select_ascent.get();
         let select_descent = self.select_descent.get();
 
         let select_rect = Rectangle {
             x: start_x,
-            y: baseline - select_ascent,
+            y: y_off + baseline - select_ascent,
             w: end_x - start_x,
             h: select_ascent + select_descent,
         };
         mesh.draw_box(&select_rect, hi_bg_color, &Rectangle::zero());
 
+        let is_phone_select = self.is_phone_select.load(Ordering::Relaxed);
         if is_phone_select {
-            self.draw_phone_select_handle(mesh, start_x, -1.);
-            self.draw_phone_select_handle(mesh, end_x, 1.);
+            self.draw_phone_select_handle(mesh, start_x, y_off, -1.);
+            self.draw_phone_select_handle(mesh, end_x, y_off, 1.);
         }
     }
 
-    fn draw_phone_select_handle(&self, mesh: &mut MeshBuilder, x: f32, side: f32) {
+    fn draw_phone_select_handle(&self, mesh: &mut MeshBuilder, x: f32, y_off: f32, side: f32) {
         debug!(target: "ui::chatedit", "draw_phone_select_handle(..., {x}, {side})");
 
         let baseline = self.baseline.get();
@@ -722,22 +788,30 @@ impl ChatEdit {
         // Vertical line downwards. We use this instead of draw_box() so we have a fade.
         let verts = vec![
             Vertex {
-                pos: [x - side * 1., baseline - select_ascent],
+                pos: [x - side * 1., y_off + baseline - select_ascent],
                 color: color_trans,
                 uv: [0., 0.],
             },
             Vertex {
-                pos: [x + side * 4., baseline - select_ascent],
+                pos: [x + side * 4., y_off + baseline - select_ascent],
                 color: color_trans,
                 uv: [0., 0.],
             },
-            Vertex { pos: [x - side * 1., baseline + select_descent + 5.], color, uv: [0., 0.] },
-            Vertex { pos: [x + side * 4., baseline + select_descent + 5.], color, uv: [0., 0.] },
+            Vertex {
+                pos: [x - side * 1., y_off + baseline + select_descent + 5.],
+                color,
+                uv: [0., 0.],
+            },
+            Vertex {
+                pos: [x + side * 4., y_off + baseline + select_descent + 5.],
+                color,
+                uv: [0., 0.],
+            },
         ];
         let indices = vec![0, 2, 1, 1, 2, 3];
         mesh.append(verts, indices);
 
-        let y = baseline + select_descent;
+        let y = y_off + baseline + select_descent;
 
         // The arrow itself.
         // Go anti-clockwise
@@ -1582,7 +1656,7 @@ impl UIObject for ChatEdit {
         true
     }
 
-    async fn handle_mouse_btn_down(&self, btn: MouseButton, mouse_pos: Point) -> bool {
+    async fn handle_mouse_btn_down(&self, btn: MouseButton, mut mouse_pos: Point) -> bool {
         if !self.is_active.get() {
             return false
         }
@@ -1614,36 +1688,20 @@ impl UIObject for ChatEdit {
             self.is_focused.set(true);
         }
 
-        let font_size = self.font_size.get();
-        let window_scale = self.window_scale.get();
-        let baseline = self.baseline.get();
+        // Move mouse pos within this widget
+        mouse_pos -= rect.pos();
+        mouse_pos.y += self.scroll.get();
 
-        // Convert y offset within rect to an x off based off line wrapping
-        let y_off = mouse_pos.y - rect.y;
-        let mut x_off = 0.;
-
-        let width = self.rect.prop().get_f32(2).unwrap();
-        let rendered = self.text_wrap.lock().unwrap().editable.render();
-        let wrapped_glyphs = text::wrap(width, font_size, window_scale, &rendered.glyphs);
-        for glyphs in wrapped_glyphs {
-            let glyph_pos_iter = GlyphPositionIter::new(font_size, window_scale, &glyphs, baseline);
-            let last_rect = glyph_pos_iter.last().unwrap();
-            x_off += last_rect.rhs();
-        }
+        let width = self.wrap_width();
 
         {
             let mut text_wrap = self.text_wrap.lock().unwrap();
-            let rendered = text_wrap.get_render();
-            let x = x_off + mouse_pos.x - rect.x + self.scroll.get();
-
-            let cpos = rendered.x_to_pos(x, font_size, window_scale, baseline);
-            let cidx = rendered.pos_to_idx(cpos);
-            text_wrap.editable.set_cursor_idx(cidx);
+            let cursor_pos = text_wrap.set_cursor_with_point(mouse_pos, width);
 
             // begin selection
-            let mut select = self.select.lock().unwrap();
+            let select = &mut text_wrap.select;
             select.clear();
-            select.push(Selection::new(cpos, cpos));
+            select.push(Selection::new(cursor_pos, cursor_pos));
 
             self.mouse_btn_held.store(true, Ordering::Relaxed);
         }
@@ -1663,7 +1721,7 @@ impl UIObject for ChatEdit {
         false
     }
 
-    async fn handle_mouse_move(&self, mouse_pos: Point) -> bool {
+    async fn handle_mouse_move(&self, mut mouse_pos: Point) -> bool {
         if !self.is_active.get() {
             return false
         }
@@ -1680,22 +1738,19 @@ impl UIObject for ChatEdit {
         // just scroll to the end
         // also set cursor_pos too
 
-        let font_size = self.font_size.get();
-        let window_scale = self.window_scale.get();
-        let baseline = self.baseline.get();
+        // Move mouse pos within this widget
+        mouse_pos -= rect.pos();
+        mouse_pos.y += self.scroll.get();
+
+        let width = self.wrap_width();
 
         {
             let mut text_wrap = self.text_wrap.lock().unwrap();
-            let rendered = text_wrap.get_render();
-            let x = mouse_pos.x - rect.x + self.scroll.get();
+            let cursor_pos = text_wrap.set_cursor_with_point(mouse_pos, width);
 
-            let cpos = rendered.x_to_pos(x, font_size, window_scale, baseline);
-            let cidx = rendered.pos_to_idx(cpos);
-            text_wrap.editable.set_cursor_idx(cidx);
-
-            // begin selection
-            let mut select = self.select.lock().unwrap();
-            select.last_mut().unwrap().end = cpos;
+            // modify current selection
+            let select = &mut text_wrap.select;
+            select.last_mut().unwrap().end = cursor_pos;
         }
 
         self.pause_blinking();
