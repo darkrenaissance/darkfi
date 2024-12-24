@@ -1,13 +1,13 @@
 k = 11;
 field = "pallas";
 
-constant "Exec" {
+constant "EarlyExec" {
     EcFixedPointShort VALUE_COMMIT_VALUE,
     EcFixedPoint VALUE_COMMIT_RANDOM,
     EcFixedPointBase NULLIFIER_K,
 }
 
-witness "Exec" {
+witness "EarlyExec" {
     # Proposal parameters
     Base proposal_auth_calls_commit,
     Base proposal_creation_blockwindow,
@@ -31,8 +31,7 @@ witness "Exec" {
     Base dao_votes_public_x,
     Base dao_votes_public_y,
     Base dao_exec_secret,
-    Base dao_early_exec_public_x,
-    Base dao_early_exec_public_y,
+    Base dao_early_exec_secret,
     Base dao_bulla_blind,
 
     # Votes
@@ -48,11 +47,16 @@ witness "Exec" {
     Base signature_secret,
 }
 
-circuit "Exec" {
+circuit "EarlyExec" {
     # Derive DAO executor public key
     dao_exec_public = ec_mul_base(dao_exec_secret, NULLIFIER_K);
     dao_exec_public_x = ec_get_x(dao_exec_public);
     dao_exec_public_y = ec_get_y(dao_exec_public);
+
+    # Derive DAO early executor public key for 2FA
+    dao_early_exec_public = ec_mul_base(dao_early_exec_secret, NULLIFIER_K);
+    dao_early_exec_public_x = ec_get_x(dao_early_exec_public);
+    dao_early_exec_public_y = ec_get_y(dao_early_exec_public);
 
     dao_bulla = poseidon_hash(
         dao_proposer_limit,
@@ -90,11 +94,9 @@ circuit "Exec" {
     constrain_instance(proposal_bulla);
     constrain_instance(proposal_auth_calls_commit);
 
-    # Enforce that the proposal has expired
-    one = witness_base(1);
+    # Enforce that the proposal has not expired
     end_time = base_add(proposal_creation_blockwindow, proposal_duration_blockwindows);
-    current_blockwindow_1 = base_add(current_blockwindow, one);
-    less_than_strict(end_time, current_blockwindow_1);
+    less_than_strict(current_blockwindow, end_time);
     constrain_instance(current_blockwindow);
 
     # Create Pedersen commitments for win_votes and total_votes, and
@@ -111,9 +113,10 @@ circuit "Exec" {
     constrain_instance(ec_get_x(all_vote_commit));
     constrain_instance(ec_get_y(all_vote_commit));
 
-    # Check that dao_quorum is less than or equal to all_vote_value
+    # Check that dao_early_exec_quorum is less than or equal to all_vote_value
+    one = witness_base(1);
     all_vote_value_1 = base_add(all_vote_value, one);
-    less_than_strict(dao_quorum, all_vote_value_1);
+    less_than_strict(dao_early_exec_quorum, all_vote_value_1);
 
     # approval_ratio_quot / approval_ratio_base <= yes_vote / all_vote
     #

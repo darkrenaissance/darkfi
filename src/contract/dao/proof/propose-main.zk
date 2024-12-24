@@ -2,8 +2,9 @@ k = 11;
 field = "pallas";
 
 constant "ProposeMain" {
-    EcFixedPointShort VALUE_COMMIT_VALUE,
     EcFixedPoint VALUE_COMMIT_RANDOM,
+    EcFixedPointBase NULLIFIER_K,
+    EcFixedPointShort VALUE_COMMIT_VALUE,
 }
 
 witness "ProposeMain" {
@@ -24,11 +25,21 @@ witness "ProposeMain" {
     # DAO params
     Base dao_proposer_limit,
     Base dao_quorum,
+    Base dao_early_exec_quorum,
     Base dao_approval_ratio_quot,
     Base dao_approval_ratio_base,
     Base dao_gov_token_id,
-    Base dao_public_x,
-    Base dao_public_y,
+    Base dao_notes_public_x,
+    Base dao_notes_public_y,
+    Base dao_proposer_secret,
+    Base dao_proposals_public_x,
+    Base dao_proposals_public_y,
+    Base dao_votes_public_x,
+    Base dao_votes_public_y,
+    Base dao_exec_public_x,
+    Base dao_exec_public_y,
+    Base dao_early_exec_public_x,
+    Base dao_early_exec_public_y,
     Base dao_bulla_blind,
 
     Uint32 dao_leaf_pos,
@@ -39,14 +50,30 @@ circuit "ProposeMain" {
     token_commit = poseidon_hash(dao_gov_token_id, gov_token_blind);
     constrain_instance(token_commit);
 
+    # Derive DAO proposer public key
+    dao_proposer_public = ec_mul_base(dao_proposer_secret, NULLIFIER_K);
+    dao_proposer_public_x = ec_get_x(dao_proposer_public);
+    dao_proposer_public_y = ec_get_y(dao_proposer_public);
+
     dao_bulla = poseidon_hash(
         dao_proposer_limit,
         dao_quorum,
+        dao_early_exec_quorum,
         dao_approval_ratio_quot,
         dao_approval_ratio_base,
         dao_gov_token_id,
-        dao_public_x,
-        dao_public_y,
+        dao_notes_public_x,
+        dao_notes_public_y,
+        dao_proposer_public_x,
+        dao_proposer_public_y,
+        dao_proposals_public_x,
+        dao_proposals_public_y,
+        dao_votes_public_x,
+        dao_votes_public_y,
+        dao_exec_public_x,
+        dao_exec_public_y,
+        dao_early_exec_public_x,
+        dao_early_exec_public_y,
         dao_bulla_blind,
     );
 

@@ -41,13 +41,27 @@ pub struct Dao {
     pub proposer_limit: u64,
     /// Minimal threshold of participating total tokens needed for a proposal to pass
     pub quorum: u64,
+    /// Minimal threshold of participating total tokens needed for a proposal to
+    /// be considered as strongly supported, enabling early execution.
+    /// Must be greater or equal to normal quorum.
+    pub early_exec_quorum: u64,
     /// The ratio of winning/total votes needed for a proposal to pass
     pub approval_ratio_quot: u64,
     pub approval_ratio_base: u64,
     /// DAO's governance token ID
     pub gov_token_id: TokenId,
-    /// Public key of the DAO
-    pub public_key: PublicKey,
+    /// DAO notes decryption public key
+    pub notes_public_key: PublicKey,
+    /// DAO proposals creator public key
+    pub proposer_public_key: PublicKey,
+    /// DAO proposals viewer public key
+    pub proposals_public_key: PublicKey,
+    /// DAO votes viewer public key
+    pub votes_public_key: PublicKey,
+    /// DAO proposals executor public key
+    pub exec_public_key: PublicKey,
+    /// DAO strongly supported proposals executor public key
+    pub early_exec_public_key: PublicKey,
     /// DAO bulla blind
     pub bulla_blind: BaseBlind,
 }
@@ -57,17 +71,34 @@ impl Dao {
     pub fn to_bulla(&self) -> DaoBulla {
         let proposer_limit = pallas::Base::from(self.proposer_limit);
         let quorum = pallas::Base::from(self.quorum);
+        let early_exec_quorum = pallas::Base::from(self.early_exec_quorum);
         let approval_ratio_quot = pallas::Base::from(self.approval_ratio_quot);
         let approval_ratio_base = pallas::Base::from(self.approval_ratio_base);
-        let (pub_x, pub_y) = self.public_key.xy();
+        let (notes_pub_x, notes_pub_y) = self.notes_public_key.xy();
+        let (proposer_pub_x, proposer_pub_y) = self.proposer_public_key.xy();
+        let (proposals_pub_x, proposals_pub_y) = self.proposals_public_key.xy();
+        let (votes_pub_x, votes_pub_y) = self.votes_public_key.xy();
+        let (exec_pub_x, exec_pub_y) = self.exec_public_key.xy();
+        let (early_exec_pub_x, early_exec_pub_y) = self.early_exec_public_key.xy();
         let bulla = poseidon_hash([
             proposer_limit,
             quorum,
+            early_exec_quorum,
             approval_ratio_quot,
             approval_ratio_base,
             self.gov_token_id.inner(),
-            pub_x,
-            pub_y,
+            notes_pub_x,
+            notes_pub_y,
+            proposer_pub_x,
+            proposer_pub_y,
+            proposals_pub_x,
+            proposals_pub_y,
+            votes_pub_x,
+            votes_pub_y,
+            exec_pub_x,
+            exec_pub_y,
+            early_exec_pub_x,
+            early_exec_pub_y,
             self.bulla_blind.inner(),
         ]);
         DaoBulla(bulla)
@@ -215,7 +246,7 @@ darkfi_sdk::ty_from_fp!(DaoProposalBulla);
 pub struct DaoMintParams {
     /// The DAO bulla
     pub dao_bulla: DaoBulla,
-    /// The DAO public key
+    /// The DAO signature(notes) public key
     pub dao_pubkey: PublicKey,
 }
 // ANCHOR_END: dao-mint-params
@@ -357,9 +388,12 @@ impl Default for DaoBlindAggregateVote {
 pub struct DaoExecParams {
     /// The proposal bulla
     pub proposal_bulla: DaoProposalBulla,
+    /// The proposal auth calls
     pub proposal_auth_calls: Vec<DaoAuthCall>,
     /// Aggregated blinds for the vote commitments
     pub blind_total_vote: DaoBlindAggregateVote,
+    /// Flag indicating if its early execution
+    pub early_exec: bool,
     /// Public key for the signature.
     /// The signature ensures this DAO::exec call cannot be modified with other calls.
     pub signature_public: PublicKey,

@@ -65,6 +65,7 @@ pub struct DaoProposeCall<'a, T: StorageAdapter<Value = pallas::Base>> {
 impl<T: StorageAdapter<Value = pallas::Base>> DaoProposeCall<'_, T> {
     pub fn make(
         self,
+        dao_proposer_secret_key: &SecretKey,
         burn_zkbin: &ZkBinary,
         burn_pk: &ProvingKey,
         main_zkbin: &ZkBinary,
@@ -182,9 +183,14 @@ impl<T: StorageAdapter<Value = pallas::Base>> DaoProposeCall<'_, T> {
 
         let dao_proposer_limit = pallas::Base::from(self.dao.proposer_limit);
         let dao_quorum = pallas::Base::from(self.dao.quorum);
+        let dao_early_exec_quorum = pallas::Base::from(self.dao.early_exec_quorum);
         let dao_approval_ratio_quot = pallas::Base::from(self.dao.approval_ratio_quot);
         let dao_approval_ratio_base = pallas::Base::from(self.dao.approval_ratio_base);
-        let (dao_pub_x, dao_pub_y) = self.dao.public_key.xy();
+        let (dao_notes_pub_x, dao_notes_pub_y) = self.dao.notes_public_key.xy();
+        let (dao_proposals_pub_x, dao_proposals_pub_y) = self.dao.proposals_public_key.xy();
+        let (dao_votes_pub_x, dao_votes_pub_y) = self.dao.votes_public_key.xy();
+        let (dao_exec_pub_x, dao_exec_pub_y) = self.dao.exec_public_key.xy();
+        let (dao_early_exec_pub_x, dao_early_exec_pub_y) = self.dao.early_exec_public_key.xy();
 
         let dao_leaf_position: u64 = self.dao_leaf_position.into();
 
@@ -199,7 +205,7 @@ impl<T: StorageAdapter<Value = pallas::Base>> DaoProposeCall<'_, T> {
             Witness::Scalar(Value::known(total_funds_blinds.inner())),
             // Used for blinding exported gov token ID
             Witness::Base(Value::known(gov_token_blind.inner())),
-            // proposal params
+            // Proposal params
             Witness::Base(Value::known(self.proposal.auth_calls.commit())),
             Witness::Base(Value::known(pallas::Base::from(self.proposal.creation_blockwindow))),
             Witness::Base(Value::known(pallas::Base::from(self.proposal.duration_blockwindows))),
@@ -208,11 +214,21 @@ impl<T: StorageAdapter<Value = pallas::Base>> DaoProposeCall<'_, T> {
             // DAO params
             Witness::Base(Value::known(dao_proposer_limit)),
             Witness::Base(Value::known(dao_quorum)),
+            Witness::Base(Value::known(dao_early_exec_quorum)),
             Witness::Base(Value::known(dao_approval_ratio_quot)),
             Witness::Base(Value::known(dao_approval_ratio_base)),
             Witness::Base(Value::known(self.dao.gov_token_id.inner())),
-            Witness::Base(Value::known(dao_pub_x)),
-            Witness::Base(Value::known(dao_pub_y)),
+            Witness::Base(Value::known(dao_notes_pub_x)),
+            Witness::Base(Value::known(dao_notes_pub_y)),
+            Witness::Base(Value::known(dao_proposer_secret_key.inner())),
+            Witness::Base(Value::known(dao_proposals_pub_x)),
+            Witness::Base(Value::known(dao_proposals_pub_y)),
+            Witness::Base(Value::known(dao_votes_pub_x)),
+            Witness::Base(Value::known(dao_votes_pub_y)),
+            Witness::Base(Value::known(dao_exec_pub_x)),
+            Witness::Base(Value::known(dao_exec_pub_y)),
+            Witness::Base(Value::known(dao_early_exec_pub_x)),
+            Witness::Base(Value::known(dao_early_exec_pub_y)),
             Witness::Base(Value::known(self.dao.bulla_blind.inner())),
             Witness::Uint32(Value::known(dao_leaf_position.try_into().unwrap())),
             Witness::MerklePath(Value::known(self.dao_merkle_path.try_into().unwrap())),
@@ -232,7 +248,8 @@ impl<T: StorageAdapter<Value = pallas::Base>> DaoProposeCall<'_, T> {
         proofs.push(main_proof);
 
         let enc_note =
-            AeadEncryptedNote::encrypt(&self.proposal, &self.dao.public_key, &mut OsRng).unwrap();
+            AeadEncryptedNote::encrypt(&self.proposal, &self.dao.proposals_public_key, &mut OsRng)
+                .unwrap();
         let params = DaoProposeParams {
             dao_merkle_root: self.dao_merkle_root,
             proposal_bulla,

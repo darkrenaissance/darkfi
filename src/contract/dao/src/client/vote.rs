@@ -26,7 +26,7 @@ use darkfi_sdk::{
         pedersen_commitment_u64, poseidon_hash,
         smt::{PoseidonFp, SparseMerkleTree, StorageAdapter, SMT_FP_DEPTH},
         util::fv_mod_fp_unsafe,
-        Blind, Keypair, MerkleNode, PublicKey, SecretKey,
+        Blind, MerkleNode, PublicKey, SecretKey,
     },
     pasta::pallas,
 };
@@ -60,7 +60,6 @@ pub struct DaoVoteCall<'a, T: StorageAdapter<Value = pallas::Base>> {
     pub vote_option: bool,
     pub proposal: DaoProposal,
     pub dao: Dao,
-    pub dao_keypair: Keypair,
     pub current_blockwindow: u64,
 }
 
@@ -72,7 +71,7 @@ impl<T: StorageAdapter<Value = pallas::Base>> DaoVoteCall<'_, T> {
         main_zkbin: &ZkBinary,
         main_pk: &ProvingKey,
     ) -> Result<(DaoVoteParams, Vec<Proof>)> {
-        debug!(target: "contract::dao::client::vote", "build()");
+        debug!(target: "contract::dao::client::vote", "make()");
 
         if self.dao.to_bulla() != self.proposal.dao_bulla {
             return Err(ClientFailed::VerifyError(DaoError::InvalidCalls.to_string()).into())
@@ -197,7 +196,7 @@ impl<T: StorageAdapter<Value = pallas::Base>> DaoVoteCall<'_, T> {
 
             //darkfi::zk::export_witness_json("proof/witness/vote-input.json", &prover_witnesses, &public_inputs);
             let circuit = ZkCircuit::new(prover_witnesses, burn_zkbin);
-            debug!(target: "dao", "input_proof Proof::create()");
+            debug!(target: "contract::dao::client::vote", "input_proof Proof::create()");
             let input_proof = Proof::create(burn_pk, &[circuit], &public_inputs, &mut OsRng)?;
             proofs.push(input_proof);
 
@@ -213,9 +212,15 @@ impl<T: StorageAdapter<Value = pallas::Base>> DaoVoteCall<'_, T> {
 
         let dao_proposer_limit = pallas::Base::from(self.dao.proposer_limit);
         let dao_quorum = pallas::Base::from(self.dao.quorum);
+        let dao_early_exec_quorum = pallas::Base::from(self.dao.early_exec_quorum);
         let dao_approval_ratio_quot = pallas::Base::from(self.dao.approval_ratio_quot);
         let dao_approval_ratio_base = pallas::Base::from(self.dao.approval_ratio_base);
-        let dao_public_key = self.dao.public_key.inner();
+        let (dao_notes_pub_x, dao_notes_pub_y) = self.dao.notes_public_key.xy();
+        let (dao_proposer_pub_x, dao_proposer_pub_y) = self.dao.proposer_public_key.xy();
+        let (dao_proposals_pub_x, dao_proposals_pub_y) = self.dao.proposals_public_key.xy();
+        let dao_votes_public_key = self.dao.votes_public_key.inner();
+        let (dao_exec_pub_x, dao_exec_pub_y) = self.dao.exec_public_key.xy();
+        let (dao_early_exec_pub_x, dao_early_exec_pub_y) = self.dao.early_exec_public_key.xy();
 
         let vote_option = self.vote_option as u64;
         if vote_option != 0 && vote_option != 1 {
@@ -262,10 +267,21 @@ impl<T: StorageAdapter<Value = pallas::Base>> DaoVoteCall<'_, T> {
             // DAO params
             Witness::Base(Value::known(dao_proposer_limit)),
             Witness::Base(Value::known(dao_quorum)),
+            Witness::Base(Value::known(dao_early_exec_quorum)),
             Witness::Base(Value::known(dao_approval_ratio_quot)),
             Witness::Base(Value::known(dao_approval_ratio_base)),
             Witness::Base(Value::known(self.dao.gov_token_id.inner())),
-            Witness::EcNiPoint(Value::known(dao_public_key)),
+            Witness::Base(Value::known(dao_notes_pub_x)),
+            Witness::Base(Value::known(dao_notes_pub_y)),
+            Witness::Base(Value::known(dao_proposer_pub_x)),
+            Witness::Base(Value::known(dao_proposer_pub_y)),
+            Witness::Base(Value::known(dao_proposals_pub_x)),
+            Witness::Base(Value::known(dao_proposals_pub_y)),
+            Witness::EcNiPoint(Value::known(dao_votes_public_key)),
+            Witness::Base(Value::known(dao_exec_pub_x)),
+            Witness::Base(Value::known(dao_exec_pub_y)),
+            Witness::Base(Value::known(dao_early_exec_pub_x)),
+            Witness::Base(Value::known(dao_early_exec_pub_y)),
             Witness::Base(Value::known(self.dao.bulla_blind.inner())),
             // Vote
             Witness::Base(Value::known(vote_option)),
@@ -283,7 +299,7 @@ impl<T: StorageAdapter<Value = pallas::Base>> DaoVoteCall<'_, T> {
 
         let note = [vote_option, yes_vote_blind.inner(), all_vote_value_fp, all_vote_blind.inner()];
         let enc_note =
-            ElGamalEncryptedNote::encrypt_unsafe(note, &ephem_secret, &self.dao_keypair.public)?;
+            ElGamalEncryptedNote::encrypt_unsafe(note, &ephem_secret, &self.dao.votes_public_key)?;
 
         let public_inputs = vec![
             token_commit,
@@ -304,7 +320,7 @@ impl<T: StorageAdapter<Value = pallas::Base>> DaoVoteCall<'_, T> {
         //darkfi::zk::export_witness_json("proof/witness/vote-main.json", &prover_witnesses, &public_inputs);
         let circuit = ZkCircuit::new(prover_witnesses, main_zkbin);
 
-        debug!(target: "dao", "main_proof = Proof::create()");
+        debug!(target: "contract::dao::client::vote", "main_proof = Proof::create()");
         let main_proof = Proof::create(main_pk, &[circuit], &public_inputs, &mut OsRng)?;
         proofs.push(main_proof);
 

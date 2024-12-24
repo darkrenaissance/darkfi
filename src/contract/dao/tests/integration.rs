@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi::Result;
+use darkfi::{util::pcg::Pcg32, Result};
 use darkfi_contract_test_harness::{init_logger, Holder, TestHarness};
 use darkfi_dao_contract::{
     blockwindow,
@@ -32,7 +32,7 @@ use darkfi_sdk::{
         pasta_prelude::*,
         pedersen_commitment_u64, poseidon_hash,
         util::{fp_mod_fv, fp_to_u64},
-        BaseBlind, Blind, FuncId, FuncRef, Keypair, ScalarBlind, DAO_CONTRACT_ID,
+        BaseBlind, Blind, FuncId, FuncRef, Keypair, ScalarBlind, SecretKey, DAO_CONTRACT_ID,
         MONEY_CONTRACT_ID,
     },
     pasta::pallas,
@@ -56,6 +56,7 @@ const DRK_TOKEN_SUPPLY: u64 = 1_000_000_000;
 // DAO parameters configuration
 const PROPOSER_LIMIT: u64 = 100_000_000;
 const QUORUM: u64 = 200_000_000;
+const EARLY_EXEC_QUORUM: u64 = 200_000_000;
 const APPROVAL_RATIO_BASE: u64 = 2;
 const APPROVAL_RATIO_QUOT: u64 = 1;
 const PROPOSAL_DURATION_BLOCKWINDOW: u64 = 1;
@@ -92,14 +93,26 @@ fn integration_test() -> Result<()> {
         let mut current_block_height = 0;
 
         // DAO parameters
-        let dao_keypair = th.holders.get(&Holder::Dao).unwrap().keypair;
+        let dao_notes_keypair = th.holders.get(&Holder::Dao).unwrap().keypair;
+        let mut rng = Pcg32::new(42);
+        let dao_proposer_keypair = Keypair::random(&mut rng);
+        let dao_proposals_keypair = Keypair::random(&mut rng);
+        let dao_votes_keypair = Keypair::random(&mut rng);
+        let dao_exec_keypair = Keypair::random(&mut rng);
+        let dao_early_exec_keypair = Keypair::random(&mut rng);
         let dao = Dao {
             proposer_limit: PROPOSER_LIMIT,
             quorum: QUORUM,
+            early_exec_quorum: EARLY_EXEC_QUORUM,
             approval_ratio_base: APPROVAL_RATIO_BASE,
             approval_ratio_quot: APPROVAL_RATIO_QUOT,
             gov_token_id,
-            public_key: dao_keypair.public,
+            notes_public_key: dao_notes_keypair.public,
+            proposer_public_key: dao_proposer_keypair.public,
+            proposals_public_key: dao_proposals_keypair.public,
+            votes_public_key: dao_votes_keypair.public,
+            exec_public_key: dao_exec_keypair.public,
+            early_exec_public_key: dao_early_exec_keypair.public,
             bulla_blind: Blind::random(&mut OsRng),
         };
 
@@ -146,8 +159,19 @@ fn integration_test() -> Result<()> {
         // Create the DAO bulla
         // ====================
         info!("[Dao] Building DAO mint tx");
-        let (dao_mint_tx, dao_mint_params, fee_params) =
-            th.dao_mint(&Holder::Alice, &dao, &dao_keypair, current_block_height).await?;
+        let (dao_mint_tx, dao_mint_params, fee_params) = th
+            .dao_mint(
+                &Holder::Alice,
+                &dao,
+                &dao_notes_keypair.secret,
+                &dao_proposer_keypair.secret,
+                &dao_proposals_keypair.secret,
+                &dao_votes_keypair.secret,
+                &dao_exec_keypair.secret,
+                &dao_early_exec_keypair.secret,
+                current_block_height,
+            )
+            .await?;
 
         for holder in &HOLDERS {
             info!("[{holder:?}] Executing DAO Mint tx");
@@ -169,7 +193,7 @@ fn integration_test() -> Result<()> {
         // ======================================
         // Mint the governance token to 3 holders
         // ======================================
-        info!("[Alice] Building governance token mint tx for Alice");
+        info!("[Dao] Building governance token mint tx for Alice");
         let (a_token_mint_tx, a_token_mint_params, a_auth_token_mint_params, a_fee_params) = th
             .token_mint(
                 ALICE_GOV_SUPPLY,
@@ -203,7 +227,7 @@ fn integration_test() -> Result<()> {
         assert!(_alice_tokens[0].note.token_id == gov_token_id);
         assert!(_alice_tokens[0].note.value == ALICE_GOV_SUPPLY);
 
-        info!("[Alice] Building governance token mint tx for Bob");
+        info!("[Dao] Building governance token mint tx for Bob");
         let (b_token_mint_tx, b_token_mint_params, b_auth_token_mint_params, b_fee_params) = th
             .token_mint(
                 BOB_GOV_SUPPLY,
@@ -237,7 +261,7 @@ fn integration_test() -> Result<()> {
         assert!(_bob_tokens[0].note.token_id == gov_token_id);
         assert!(_bob_tokens[0].note.value == BOB_GOV_SUPPLY);
 
-        info!("[Alice] Building governance token mint tx for Charlie");
+        info!("[Dao] Building governance token mint tx for Charlie");
         let (c_token_mint_tx, c_token_mint_params, c_auth_token_mint_params, c_fee_params) = th
             .token_mint(
                 CHARLIE_GOV_SUPPLY,
@@ -280,16 +304,97 @@ fn integration_test() -> Result<()> {
         // ============================
         // Execute proposals test cases
         // ============================
+        info!("[Dao] DAO transfer proposal tx test case");
         execute_transfer_proposal(
             &mut th,
             &dao,
-            &dao_keypair,
+            &dao_proposer_keypair.secret,
+            &dao_votes_keypair.secret,
+            &dao_exec_keypair.secret,
+            &None,
+            user_data,
+            &mut current_block_height,
+            0,
+            TRANSFER_PROPOSAL_AMOUNT,
+            TRANSFER_PROPOSAL_AMOUNT,
+        )
+        .await?;
+
+        info!("[Dao] DAO early execution transfer proposal tx test case");
+        execute_transfer_proposal(
+            &mut th,
+            &dao,
+            &dao_proposer_keypair.secret,
+            &dao_votes_keypair.secret,
+            &dao_exec_keypair.secret,
+            &Some(dao_early_exec_keypair.secret),
+            user_data,
+            &mut current_block_height,
+            1,
+            TRANSFER_PROPOSAL_AMOUNT,
+            TRANSFER_PROPOSAL_AMOUNT * 2,
+        )
+        .await?;
+
+        info!("[Dao] DAO generic proposal tx test case");
+        execute_generic_proposal(
+            &mut th,
+            &dao,
+            &dao_proposer_keypair.secret,
+            &dao_votes_keypair.secret,
+            &dao_exec_keypair.secret,
+            &None,
             user_data,
             &mut current_block_height,
         )
         .await?;
-        execute_generic_proposal(&mut th, &dao, &dao_keypair, user_data, &mut current_block_height)
+
+        // Now we will execute a random money transaction,
+        // to update our merkle tree so our snapshot is fresh.
+        info!("[Dao] Building governance token mint tx for Alice");
+        let (a_token_mint_tx, a_token_mint_params, a_auth_token_mint_params, a_fee_params) = th
+            .token_mint(
+                ALICE_GOV_SUPPLY,
+                &Holder::Alice,
+                &Holder::Alice,
+                gov_token_blind,
+                None,
+                None,
+                current_block_height,
+            )
             .await?;
+
+        for holder in &HOLDERS {
+            info!("[{holder:?}] Executing governance token mint tx for Alice");
+            th.execute_token_mint_tx(
+                holder,
+                a_token_mint_tx.clone(),
+                &a_token_mint_params,
+                &a_auth_token_mint_params,
+                &a_fee_params,
+                current_block_height,
+                true,
+            )
+            .await?;
+        }
+
+        th.assert_trees(&HOLDERS);
+
+        current_block_height += 1;
+
+        // Now we can continue our test cases
+        info!("[Dao] DAO early execution generic proposal tx test case");
+        execute_generic_proposal(
+            &mut th,
+            &dao,
+            &dao_proposer_keypair.secret,
+            &dao_votes_keypair.secret,
+            &dao_exec_keypair.secret,
+            &Some(dao_early_exec_keypair.secret),
+            user_data,
+            &mut current_block_height,
+        )
+        .await?;
 
         // Thanks for reading
         Ok(())
@@ -298,24 +403,31 @@ fn integration_test() -> Result<()> {
 
 /// Test case:
 /// Generate a transfer proposal and execute it after voting passes.
+#[allow(clippy::too_many_arguments)]
 async fn execute_transfer_proposal(
     th: &mut TestHarness,
     dao: &Dao,
-    dao_keypair: &Keypair,
+    dao_proposer_secret_key: &SecretKey,
+    dao_votes_secret_key: &SecretKey,
+    dao_exec_secret_key: &SecretKey,
+    dao_early_exec_secret_key: &Option<SecretKey>,
     user_data: pallas::Base,
     current_block_height: &mut u32,
+    transfer_token_index: usize,
+    transfer_amount: u64,
+    dao_treasury_decrease: u64,
 ) -> Result<()> {
     // ================
     // Dao::Propose
     // Propose the vote
     // ================
-    info!("[Alice] Building DAO transfer proposal tx");
+    info!("[Dao] Building DAO transfer proposal tx");
 
     // These coins are passed around to all DAO members who verify its validity
     // They also check hashing them equals the proposal_commit
     let proposal_coinattrs = vec![CoinAttributes {
         public_key: th.holders.get(&Holder::Rachel).unwrap().keypair.public,
-        value: TRANSFER_PROPOSAL_AMOUNT,
+        value: transfer_amount,
         token_id: *DARK_TOKEN_ID,
         spend_hook: FuncId::none(),
         user_data: pallas::Base::ZERO,
@@ -333,6 +445,7 @@ async fn execute_transfer_proposal(
             &proposal_coinattrs,
             user_data,
             dao,
+            dao_proposer_secret_key,
             *current_block_height,
             PROPOSAL_DURATION_BLOCKWINDOW,
         )
@@ -358,19 +471,16 @@ async fn execute_transfer_proposal(
     // Proposal is accepted. Start the vote.
     // =====================================
     info!("[Alice] Building transfer vote tx (yes)");
-    let (alice_vote_tx, alice_vote_params, alice_vote_fee_params) = th
-        .dao_vote(&Holder::Alice, true, dao, dao_keypair, &proposal_info, *current_block_height)
-        .await?;
+    let (alice_vote_tx, alice_vote_params, alice_vote_fee_params) =
+        th.dao_vote(&Holder::Alice, true, dao, &proposal_info, *current_block_height).await?;
 
     info!("[Bob] Building transfer vote tx (no)");
-    let (bob_vote_tx, bob_vote_params, bob_vote_fee_params) = th
-        .dao_vote(&Holder::Bob, false, dao, dao_keypair, &proposal_info, *current_block_height)
-        .await?;
+    let (bob_vote_tx, bob_vote_params, bob_vote_fee_params) =
+        th.dao_vote(&Holder::Bob, false, dao, &proposal_info, *current_block_height).await?;
 
     info!("[Charlie] Building transfer vote tx (yes)");
-    let (charlie_vote_tx, charlie_vote_params, charlie_vote_fee_params) = th
-        .dao_vote(&Holder::Charlie, true, dao, dao_keypair, &proposal_info, *current_block_height)
-        .await?;
+    let (charlie_vote_tx, charlie_vote_params, charlie_vote_fee_params) =
+        th.dao_vote(&Holder::Charlie, true, dao, &proposal_info, *current_block_height).await?;
 
     for holder in &HOLDERS {
         info!("[{holder:?}] Executing Alice transfer vote tx");
@@ -406,9 +516,9 @@ async fn execute_transfer_proposal(
     th.assert_trees(&HOLDERS);
 
     // Gather and decrypt all generic vote notes
-    let vote_note_1 = alice_vote_params.note.decrypt_unsafe(&dao_keypair.secret).unwrap();
-    let vote_note_2 = bob_vote_params.note.decrypt_unsafe(&dao_keypair.secret).unwrap();
-    let vote_note_3 = charlie_vote_params.note.decrypt_unsafe(&dao_keypair.secret).unwrap();
+    let vote_note_1 = alice_vote_params.note.decrypt_unsafe(dao_votes_secret_key).unwrap();
+    let vote_note_2 = bob_vote_params.note.decrypt_unsafe(dao_votes_secret_key).unwrap();
+    let vote_note_3 = charlie_vote_params.note.decrypt_unsafe(dao_votes_secret_key).unwrap();
 
     // Count the votes
     let (total_yes_vote_value, total_all_vote_value, total_yes_vote_blind, total_all_vote_blind) =
@@ -419,10 +529,12 @@ async fn execute_transfer_proposal(
         ]);
 
     // Wait until proposal has expired
-    let mut current_blockwindow = creation_blockwindow;
-    while current_blockwindow <= creation_blockwindow + PROPOSAL_DURATION_BLOCKWINDOW + 1 {
-        *current_block_height += 1;
-        current_blockwindow = blockwindow(*current_block_height, block_target);
+    if dao_early_exec_secret_key.is_none() {
+        let mut current_blockwindow = creation_blockwindow;
+        while current_blockwindow <= creation_blockwindow + PROPOSAL_DURATION_BLOCKWINDOW {
+            *current_block_height += 1;
+            current_blockwindow = blockwindow(*current_block_height, block_target);
+        }
     }
 
     // ================
@@ -434,6 +546,8 @@ async fn execute_transfer_proposal(
         .dao_exec_transfer(
             &Holder::Alice,
             dao,
+            dao_exec_secret_key,
+            dao_early_exec_secret_key,
             &proposal_info,
             proposal_coinattrs,
             total_yes_vote_value,
@@ -460,12 +574,14 @@ async fn execute_transfer_proposal(
     *current_block_height += 1;
 
     let rachel_wallet = th.holders.get(&Holder::Rachel).unwrap();
-    assert!(rachel_wallet.unspent_money_coins[0].note.value == TRANSFER_PROPOSAL_AMOUNT);
-    assert!(rachel_wallet.unspent_money_coins[0].note.token_id == *DARK_TOKEN_ID);
+    assert!(rachel_wallet.unspent_money_coins[transfer_token_index].note.value == transfer_amount);
+    assert!(
+        rachel_wallet.unspent_money_coins[transfer_token_index].note.token_id == *DARK_TOKEN_ID
+    );
 
     let dao_wallet = th.holders.get(&Holder::Dao).unwrap();
     assert!(
-        dao_wallet.unspent_money_coins[0].note.value == DRK_TOKEN_SUPPLY - TRANSFER_PROPOSAL_AMOUNT
+        dao_wallet.unspent_money_coins[0].note.value == DRK_TOKEN_SUPPLY - dao_treasury_decrease
     );
     assert!(dao_wallet.unspent_money_coins[0].note.token_id == *DARK_TOKEN_ID);
 
@@ -474,10 +590,14 @@ async fn execute_transfer_proposal(
 
 /// Test case:
 /// Generate a generic proposal and execute it after voting passes.
+#[allow(clippy::too_many_arguments)]
 async fn execute_generic_proposal(
     th: &mut TestHarness,
     dao: &Dao,
-    dao_keypair: &Keypair,
+    dao_proposer_secret_key: &SecretKey,
+    dao_votes_secret_key: &SecretKey,
+    dao_exec_secret_key: &SecretKey,
+    dao_early_exec_secret_key: &Option<SecretKey>,
     user_data: pallas::Base,
     current_block_height: &mut u32,
 ) -> Result<()> {
@@ -485,7 +605,7 @@ async fn execute_generic_proposal(
     // Dao::Propose
     // Propose the vote
     // ================
-    info!("[Alice] Building DAO generic proposal tx");
+    info!("[Dao] Building DAO generic proposal tx");
 
     // Grab creation blockwindow
     let block_target =
@@ -497,6 +617,7 @@ async fn execute_generic_proposal(
             &Holder::Alice,
             user_data,
             dao,
+            dao_proposer_secret_key,
             *current_block_height,
             PROPOSAL_DURATION_BLOCKWINDOW,
         )
@@ -522,19 +643,16 @@ async fn execute_generic_proposal(
     // Proposal is accepted. Start the vote.
     // =====================================
     info!("[Alice] Building generic vote tx (yes)");
-    let (alice_vote_tx, alice_vote_params, alice_vote_fee_params) = th
-        .dao_vote(&Holder::Alice, true, dao, dao_keypair, &proposal_info, *current_block_height)
-        .await?;
+    let (alice_vote_tx, alice_vote_params, alice_vote_fee_params) =
+        th.dao_vote(&Holder::Alice, true, dao, &proposal_info, *current_block_height).await?;
 
     info!("[Bob] Building generic vote tx (no)");
-    let (bob_vote_tx, bob_vote_params, bob_vote_fee_params) = th
-        .dao_vote(&Holder::Bob, false, dao, dao_keypair, &proposal_info, *current_block_height)
-        .await?;
+    let (bob_vote_tx, bob_vote_params, bob_vote_fee_params) =
+        th.dao_vote(&Holder::Bob, false, dao, &proposal_info, *current_block_height).await?;
 
     info!("[Charlie] Building generic vote tx (no)");
-    let (charlie_vote_tx, charlie_vote_params, charlie_vote_fee_params) = th
-        .dao_vote(&Holder::Charlie, true, dao, dao_keypair, &proposal_info, *current_block_height)
-        .await?;
+    let (charlie_vote_tx, charlie_vote_params, charlie_vote_fee_params) =
+        th.dao_vote(&Holder::Charlie, true, dao, &proposal_info, *current_block_height).await?;
 
     for holder in &HOLDERS {
         info!("[{holder:?}] Executing Alice generic vote tx");
@@ -570,9 +688,9 @@ async fn execute_generic_proposal(
     th.assert_trees(&HOLDERS);
 
     // Gather and decrypt all generic vote notes
-    let vote_note_1 = alice_vote_params.note.decrypt_unsafe(&dao_keypair.secret).unwrap();
-    let vote_note_2 = bob_vote_params.note.decrypt_unsafe(&dao_keypair.secret).unwrap();
-    let vote_note_3 = charlie_vote_params.note.decrypt_unsafe(&dao_keypair.secret).unwrap();
+    let vote_note_1 = alice_vote_params.note.decrypt_unsafe(dao_votes_secret_key).unwrap();
+    let vote_note_2 = bob_vote_params.note.decrypt_unsafe(dao_votes_secret_key).unwrap();
+    let vote_note_3 = charlie_vote_params.note.decrypt_unsafe(dao_votes_secret_key).unwrap();
 
     // Count the votes
     let (total_yes_vote_value, total_all_vote_value, total_yes_vote_blind, total_all_vote_blind) =
@@ -583,10 +701,12 @@ async fn execute_generic_proposal(
         ]);
 
     // Wait until proposal has expired
-    let mut current_blockwindow = creation_blockwindow;
-    while current_blockwindow <= creation_blockwindow + PROPOSAL_DURATION_BLOCKWINDOW + 1 {
-        *current_block_height += 1;
-        current_blockwindow = blockwindow(*current_block_height, block_target);
+    if dao_early_exec_secret_key.is_none() {
+        let mut current_blockwindow = creation_blockwindow;
+        while current_blockwindow <= creation_blockwindow + PROPOSAL_DURATION_BLOCKWINDOW {
+            *current_block_height += 1;
+            current_blockwindow = blockwindow(*current_block_height, block_target);
+        }
     }
 
     // ================
@@ -598,6 +718,8 @@ async fn execute_generic_proposal(
         .dao_exec_generic(
             &Holder::Alice,
             dao,
+            dao_exec_secret_key,
+            dao_early_exec_secret_key,
             &proposal_info,
             total_yes_vote_value,
             total_all_vote_value,

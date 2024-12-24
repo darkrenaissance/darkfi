@@ -30,7 +30,7 @@ use darkfi_money_contract::{
     model::MoneyFeeParamsV1,
 };
 use darkfi_sdk::{
-    crypto::{contract_id::DAO_CONTRACT_ID, Keypair, MerkleNode},
+    crypto::{contract_id::DAO_CONTRACT_ID, MerkleNode, SecretKey},
     ContractCall,
 };
 use darkfi_serial::AsyncEncodable;
@@ -39,22 +39,38 @@ use log::debug;
 use super::{Holder, TestHarness};
 
 impl TestHarness {
-    /// Create a `Dao::Mint` transaction with the given [`Dao`] info and a keypair.
+    /// Create a `Dao::Mint` transaction with the given [`Dao`] info and keys.
     /// Takes a [`Holder`] for optionally paying the transaction fee.
     ///
     /// Returns the [`Transaction`] and any relevant parameters.
+    #[allow(clippy::too_many_arguments)]
     pub async fn dao_mint(
         &mut self,
         holder: &Holder,
         dao: &Dao,
-        dao_kp: &Keypair,
+        dao_notes_secret_key: &SecretKey,
+        dao_proposer_secret_key: &SecretKey,
+        dao_proposals_secret_key: &SecretKey,
+        dao_votes_secret_key: &SecretKey,
+        dao_exec_secret_key: &SecretKey,
+        dao_early_exec_secret_key: &SecretKey,
         block_height: u32,
     ) -> Result<(Transaction, DaoMintParams, Option<MoneyFeeParamsV1>)> {
         let (dao_mint_pk, dao_mint_zkbin) =
             self.proving_keys.get(DAO_CONTRACT_ZKAS_DAO_MINT_NS).unwrap();
 
         // Create the call
-        let (params, proofs) = make_mint_call(dao, &dao_kp.secret, dao_mint_zkbin, dao_mint_pk)?;
+        let (params, proofs) = make_mint_call(
+            dao,
+            dao_notes_secret_key,
+            dao_proposer_secret_key,
+            dao_proposals_secret_key,
+            dao_votes_secret_key,
+            dao_exec_secret_key,
+            dao_early_exec_secret_key,
+            dao_mint_zkbin,
+            dao_mint_pk,
+        )?;
 
         // Encode the call
         let mut data = vec![DaoFunction::Mint as u8];
@@ -67,7 +83,7 @@ impl TestHarness {
         let mut fee_signature_secrets = None;
         if self.verify_fees {
             let mut tx = tx_builder.build()?;
-            let sigs = tx.create_sigs(&[dao_kp.secret])?;
+            let sigs = tx.create_sigs(&[*dao_notes_secret_key])?;
             tx.signatures = vec![sigs];
 
             let (fee_call, fee_proofs, fee_secrets, _spent_fee_coins, fee_call_params) =
@@ -81,7 +97,7 @@ impl TestHarness {
 
         // Now build the actual transaction and sign it with necessary keys.
         let mut tx = tx_builder.build()?;
-        let sigs = tx.create_sigs(&[dao_kp.secret])?;
+        let sigs = tx.create_sigs(&[*dao_notes_secret_key])?;
         tx.signatures = vec![sigs];
         if let Some(fee_signature_secrets) = fee_signature_secrets {
             let sigs = tx.create_sigs(&fee_signature_secrets)?;

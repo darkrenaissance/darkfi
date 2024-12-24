@@ -38,7 +38,7 @@ use crate::{
     DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS,
 };
 
-/// `get_metdata` function for `Dao::Exec`
+/// `get_metdata` function for `Dao::AuthMoneyTransfer`
 pub(crate) fn dao_authxfer_get_metadata(
     _cid: ContractId,
     call_idx: usize,
@@ -134,7 +134,7 @@ fn find_auth_in_parent(
     None
 }
 
-/// `process_instruction` function for `Dao::Exec`
+/// `process_instruction` function for `Dao::AuthMoneyTransfer`
 pub(crate) fn dao_authxfer_process_instruction(
     _cid: ContractId,
     call_idx: usize,

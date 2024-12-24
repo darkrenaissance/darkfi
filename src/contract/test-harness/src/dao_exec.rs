@@ -25,7 +25,8 @@ use darkfi_dao_contract::{
     client::{DaoAuthMoneyTransferCall, DaoExecCall},
     model::{Dao, DaoProposal},
     DaoFunction, DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS,
-    DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS, DAO_CONTRACT_ZKAS_DAO_EXEC_NS,
+    DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS, DAO_CONTRACT_ZKAS_DAO_EARLY_EXEC_NS,
+    DAO_CONTRACT_ZKAS_DAO_EXEC_NS,
 };
 use darkfi_money_contract::{
     client::{transfer_v1 as xfer, MoneyNote, OwnCoin},
@@ -53,6 +54,8 @@ impl TestHarness {
         &mut self,
         holder: &Holder,
         dao: &Dao,
+        dao_exec_secret_key: &SecretKey,
+        dao_early_exec_secret_key: &Option<SecretKey>,
         proposal: &DaoProposal,
         proposal_coinattrs: Vec<CoinAttributes>,
         yes_vote_value: u64,
@@ -66,8 +69,10 @@ impl TestHarness {
         let (mint_pk, mint_zkbin) = self.proving_keys.get(MONEY_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
         let (burn_pk, burn_zkbin) = self.proving_keys.get(MONEY_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
 
-        let (dao_exec_pk, dao_exec_zkbin) =
-            self.proving_keys.get(DAO_CONTRACT_ZKAS_DAO_EXEC_NS).unwrap();
+        let (dao_exec_pk, dao_exec_zkbin) = match dao_early_exec_secret_key {
+            Some(_) => self.proving_keys.get(DAO_CONTRACT_ZKAS_DAO_EARLY_EXEC_NS).unwrap(),
+            None => self.proving_keys.get(DAO_CONTRACT_ZKAS_DAO_EXEC_NS).unwrap(),
+        };
         let (dao_auth_xfer_pk, dao_auth_xfer_zkbin) =
             self.proving_keys.get(DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS).unwrap();
         let (dao_auth_xfer_enc_coin_pk, dao_auth_xfer_enc_coin_zkbin) =
@@ -160,7 +165,12 @@ impl TestHarness {
             current_blockwindow,
         };
 
-        let (exec_params, exec_proofs) = exec_builder.make(dao_exec_zkbin, dao_exec_pk)?;
+        let (exec_params, exec_proofs) = exec_builder.make(
+            dao_exec_secret_key,
+            dao_early_exec_secret_key,
+            dao_exec_zkbin,
+            dao_exec_pk,
+        )?;
         let mut data = vec![DaoFunction::Exec as u8];
         exec_params.encode_async(&mut data).await?;
         let exec_call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
@@ -248,6 +258,8 @@ impl TestHarness {
         &mut self,
         holder: &Holder,
         dao: &Dao,
+        dao_exec_secret_key: &SecretKey,
+        dao_early_exec_secret_key: &Option<SecretKey>,
         proposal: &DaoProposal,
         yes_vote_value: u64,
         all_vote_value: u64,
@@ -257,8 +269,10 @@ impl TestHarness {
     ) -> Result<(Transaction, Option<MoneyFeeParamsV1>)> {
         let wallet = self.holders.get_mut(holder).unwrap();
 
-        let (dao_exec_pk, dao_exec_zkbin) =
-            self.proving_keys.get(DAO_CONTRACT_ZKAS_DAO_EXEC_NS).unwrap();
+        let (dao_exec_pk, dao_exec_zkbin) = match dao_early_exec_secret_key {
+            Some(_) => self.proving_keys.get(DAO_CONTRACT_ZKAS_DAO_EARLY_EXEC_NS).unwrap(),
+            None => self.proving_keys.get(DAO_CONTRACT_ZKAS_DAO_EXEC_NS).unwrap(),
+        };
 
         // Create the exec call
         let exec_signature_secret = SecretKey::random(&mut OsRng);
@@ -274,7 +288,12 @@ impl TestHarness {
             signature_secret: exec_signature_secret,
             current_blockwindow,
         };
-        let (exec_params, exec_proofs) = exec_builder.make(dao_exec_zkbin, dao_exec_pk)?;
+        let (exec_params, exec_proofs) = exec_builder.make(
+            dao_exec_secret_key,
+            dao_early_exec_secret_key,
+            dao_exec_zkbin,
+            dao_exec_pk,
+        )?;
 
         // Encode the call
         let mut data = vec![DaoFunction::Exec as u8];

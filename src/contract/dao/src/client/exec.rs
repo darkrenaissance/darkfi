@@ -49,6 +49,8 @@ pub struct DaoExecCall {
 impl DaoExecCall {
     pub fn make(
         self,
+        dao_exec_secret_key: &SecretKey,
+        dao_early_exec_secret_key: &Option<SecretKey>,
         exec_zkbin: &ZkBinary,
         exec_pk: &ProvingKey,
     ) -> Result<(DaoExecParams, Vec<Proof>)> {
@@ -57,10 +59,13 @@ impl DaoExecCall {
 
         let dao_proposer_limit = pallas::Base::from(self.dao.proposer_limit);
         let dao_quorum = pallas::Base::from(self.dao.quorum);
+        let dao_early_exec_quorum = pallas::Base::from(self.dao.early_exec_quorum);
         let dao_approval_ratio_quot = pallas::Base::from(self.dao.approval_ratio_quot);
         let dao_approval_ratio_base = pallas::Base::from(self.dao.approval_ratio_base);
-
-        let (dao_pub_x, dao_pub_y) = self.dao.public_key.xy();
+        let (dao_notes_pub_x, dao_notes_pub_y) = self.dao.notes_public_key.xy();
+        let (dao_proposer_pub_x, dao_proposer_pub_y) = self.dao.proposer_public_key.xy();
+        let (dao_proposals_pub_x, dao_proposals_pub_y) = self.dao.proposals_public_key.xy();
+        let (dao_votes_pub_x, dao_votes_pub_y) = self.dao.votes_public_key.xy();
 
         let dao_bulla = self.dao.to_bulla();
         if dao_bulla != self.proposal.dao_bulla {
@@ -80,7 +85,7 @@ impl DaoExecCall {
 
         let current_blockwindow = pallas::Base::from(self.current_blockwindow);
 
-        let prover_witnesses = vec![
+        let mut prover_witnesses = vec![
             // Proposal params
             Witness::Base(Value::known(proposal_auth_calls_commit)),
             Witness::Base(Value::known(pallas::Base::from(self.proposal.creation_blockwindow))),
@@ -90,11 +95,33 @@ impl DaoExecCall {
             // DAO params
             Witness::Base(Value::known(dao_proposer_limit)),
             Witness::Base(Value::known(dao_quorum)),
+            Witness::Base(Value::known(dao_early_exec_quorum)),
             Witness::Base(Value::known(dao_approval_ratio_quot)),
             Witness::Base(Value::known(dao_approval_ratio_base)),
             Witness::Base(Value::known(self.dao.gov_token_id.inner())),
-            Witness::Base(Value::known(dao_pub_x)),
-            Witness::Base(Value::known(dao_pub_y)),
+            Witness::Base(Value::known(dao_notes_pub_x)),
+            Witness::Base(Value::known(dao_notes_pub_y)),
+            Witness::Base(Value::known(dao_proposer_pub_x)),
+            Witness::Base(Value::known(dao_proposer_pub_y)),
+            Witness::Base(Value::known(dao_proposals_pub_x)),
+            Witness::Base(Value::known(dao_proposals_pub_y)),
+            Witness::Base(Value::known(dao_votes_pub_x)),
+            Witness::Base(Value::known(dao_votes_pub_y)),
+            Witness::Base(Value::known(dao_exec_secret_key.inner())),
+        ];
+        // Early exec key
+        match dao_early_exec_secret_key {
+            Some(dao_early_exec_secret_key) => prover_witnesses
+                .push(Witness::Base(Value::known(dao_early_exec_secret_key.inner()))),
+            None => {
+                let (dao_early_exec_pub_x, dao_early_exec_pub_y) =
+                    self.dao.early_exec_public_key.xy();
+                prover_witnesses.push(Witness::Base(Value::known(dao_early_exec_pub_x)));
+                prover_witnesses.push(Witness::Base(Value::known(dao_early_exec_pub_y)));
+            }
+        };
+        // Rest witnesses
+        prover_witnesses.extend_from_slice(&[
             Witness::Base(Value::known(self.dao.bulla_blind.inner())),
             // Votes
             Witness::Base(Value::known(pallas::Base::from(self.yes_vote_value))),
@@ -105,7 +132,7 @@ impl DaoExecCall {
             Witness::Base(Value::known(current_blockwindow)),
             // Signature secret
             Witness::Base(Value::known(self.signature_secret.inner())),
-        ];
+        ]);
 
         debug!(target: "contract::dao::client::exec", "proposal_bulla: {:?}", proposal_bulla);
         let public_inputs = vec![
@@ -129,6 +156,7 @@ impl DaoExecCall {
             proposal_bulla,
             proposal_auth_calls: self.proposal.auth_calls,
             blind_total_vote: DaoBlindAggregateVote { yes_vote_commit, all_vote_commit },
+            early_exec: dao_early_exec_secret_key.is_some(),
             signature_public,
         };
 

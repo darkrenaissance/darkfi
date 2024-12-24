@@ -30,7 +30,8 @@ use crate::{
     blockwindow,
     error::DaoError,
     model::{DaoExecParams, DaoExecUpdate, DaoProposalMetadata, VecAuthCallCommit},
-    DaoFunction, DAO_CONTRACT_DB_PROPOSAL_BULLAS, DAO_CONTRACT_ZKAS_DAO_EXEC_NS,
+    DaoFunction, DAO_CONTRACT_DB_PROPOSAL_BULLAS, DAO_CONTRACT_ZKAS_DAO_EARLY_EXEC_NS,
+    DAO_CONTRACT_ZKAS_DAO_EXEC_NS,
 };
 
 /// `get_metdata` function for `Dao::Exec`
@@ -54,8 +55,14 @@ pub(crate) fn dao_exec_get_metadata(
     let yes_vote_coords = blind_vote.yes_vote_commit.to_affine().coordinates().unwrap();
     let all_vote_coords = blind_vote.all_vote_commit.to_affine().coordinates().unwrap();
 
+    // Grab proof namespace to use, based on early execution flag
+    let proof_namespace = match params.early_exec {
+        true => DAO_CONTRACT_ZKAS_DAO_EARLY_EXEC_NS.to_string(),
+        false => DAO_CONTRACT_ZKAS_DAO_EXEC_NS.to_string(),
+    };
+
     zk_public_inputs.push((
-        DAO_CONTRACT_ZKAS_DAO_EXEC_NS.to_string(),
+        proof_namespace,
         vec![
             params.proposal_bulla.inner(),
             params.proposal_auth_calls.commit(),

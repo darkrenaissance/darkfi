@@ -17,7 +17,7 @@
  */
 
 use darkfi::{
-    zk::{halo2, Proof, ProvingKey, Witness, ZkCircuit},
+    zk::{halo2::Value, Proof, ProvingKey, Witness, ZkCircuit},
     zkas::ZkBinary,
     Result,
 };
@@ -27,31 +27,44 @@ use rand::rngs::OsRng;
 
 use crate::model::{Dao, DaoMintParams};
 
+#[allow(clippy::too_many_arguments)]
 pub fn make_mint_call(
     dao: &Dao,
-    dao_secret_key: &SecretKey,
+    dao_notes_secret_key: &SecretKey,
+    dao_proposer_secret_key: &SecretKey,
+    dao_proposals_secret_key: &SecretKey,
+    dao_votes_secret_key: &SecretKey,
+    dao_exec_secret_key: &SecretKey,
+    dao_early_exec_secret_key: &SecretKey,
     dao_mint_zkbin: &ZkBinary,
     dao_mint_pk: &ProvingKey,
 ) -> Result<(DaoMintParams, Vec<Proof>)> {
-    debug!(target: "contract::dao::client::mint", "Building DAO contract mint transaction");
+    debug!(target: "contract::dao::client::mint", "Building DAO contract mint transaction call");
 
-    let dao_proposer_limit = pallas::Base::from(dao.proposer_limit);
-    let dao_quorum = pallas::Base::from(dao.quorum);
-    let dao_approval_ratio_quot = pallas::Base::from(dao.approval_ratio_quot);
-    let dao_approval_ratio_base = pallas::Base::from(dao.approval_ratio_base);
+    let proposer_limit = pallas::Base::from(dao.proposer_limit);
+    let quorum = pallas::Base::from(dao.quorum);
+    let early_exec_quorum = pallas::Base::from(dao.early_exec_quorum);
+    let approval_ratio_quot = pallas::Base::from(dao.approval_ratio_quot);
+    let approval_ratio_base = pallas::Base::from(dao.approval_ratio_base);
 
     // NOTE: It's important to keep these in the same order as the zkas code.
     let prover_witnesses = vec![
-        Witness::Base(halo2::Value::known(dao_proposer_limit)),
-        Witness::Base(halo2::Value::known(dao_quorum)),
-        Witness::Base(halo2::Value::known(dao_approval_ratio_quot)),
-        Witness::Base(halo2::Value::known(dao_approval_ratio_base)),
-        Witness::Base(halo2::Value::known(dao.gov_token_id.inner())),
-        Witness::Base(halo2::Value::known(dao_secret_key.inner())),
-        Witness::Base(halo2::Value::known(dao.bulla_blind.inner())),
+        Witness::Base(Value::known(proposer_limit)),
+        Witness::Base(Value::known(quorum)),
+        Witness::Base(Value::known(early_exec_quorum)),
+        Witness::Base(Value::known(approval_ratio_quot)),
+        Witness::Base(Value::known(approval_ratio_base)),
+        Witness::Base(Value::known(dao.gov_token_id.inner())),
+        Witness::Base(Value::known(dao_notes_secret_key.inner())),
+        Witness::Base(Value::known(dao_proposer_secret_key.inner())),
+        Witness::Base(Value::known(dao_proposals_secret_key.inner())),
+        Witness::Base(Value::known(dao_votes_secret_key.inner())),
+        Witness::Base(Value::known(dao_exec_secret_key.inner())),
+        Witness::Base(Value::known(dao_early_exec_secret_key.inner())),
+        Witness::Base(Value::known(dao.bulla_blind.inner())),
     ];
 
-    let (pub_x, pub_y) = dao.public_key.xy();
+    let (pub_x, pub_y) = dao.notes_public_key.xy();
     let dao_bulla = dao.to_bulla();
     let public = vec![pub_x, pub_y, dao_bulla.inner()];
 
@@ -59,7 +72,7 @@ pub fn make_mint_call(
     let circuit = ZkCircuit::new(prover_witnesses, dao_mint_zkbin);
     let proof = Proof::create(dao_mint_pk, &[circuit], &public, &mut OsRng)?;
 
-    let dao_mint_params = DaoMintParams { dao_bulla, dao_pubkey: dao.public_key };
+    let dao_mint_params = DaoMintParams { dao_bulla, dao_pubkey: dao.notes_public_key };
 
     Ok((dao_mint_params, vec![proof]))
 }

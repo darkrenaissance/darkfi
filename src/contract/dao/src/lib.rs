@@ -84,6 +84,8 @@ pub const DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS: &str = "ProposeInput";
 pub const DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS: &str = "ProposeMain";
 /// zkas dao exec circuit namespace
 pub const DAO_CONTRACT_ZKAS_DAO_EXEC_NS: &str = "Exec";
+/// zkas dao early exec circuit namespace
+pub const DAO_CONTRACT_ZKAS_DAO_EARLY_EXEC_NS: &str = "EarlyExec";
 /// zkas dao auth money_transfer circuit namespace
 pub const DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS: &str = "AuthMoneyTransfer";
 /// zkas dao auth money_transfer encrypted coin circuit namespace

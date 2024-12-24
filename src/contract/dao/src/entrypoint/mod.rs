@@ -74,6 +74,7 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     wasm::db::zkas_db_set(&include_bytes!("../../proof/vote-input.zk.bin")[..])?;
     wasm::db::zkas_db_set(&include_bytes!("../../proof/vote-main.zk.bin")[..])?;
     wasm::db::zkas_db_set(&include_bytes!("../../proof/exec.zk.bin")[..])?;
+    wasm::db::zkas_db_set(&include_bytes!("../../proof/early-exec.zk.bin")[..])?;
     wasm::db::zkas_db_set(&include_bytes!("../../proof/auth-money-transfer.zk.bin")[..])?;
     wasm::db::zkas_db_set(&include_bytes!("../../proof/auth-money-transfer-enc-coin.zk.bin")[..])?;
 

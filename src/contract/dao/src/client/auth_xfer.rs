@@ -110,7 +110,6 @@ impl DaoAuthMoneyTransferCall {
         let change_ephem_pubkey = PublicKey::from_secret(ephem_secret);
         let (ephem_x, ephem_y) = change_ephem_pubkey.xy();
 
-        let dao_public_key = self.dao.public_key.inner();
         let dao_change_value = pallas::Base::from(self.dao_coin_attrs.value);
 
         let note = [
@@ -120,14 +119,21 @@ impl DaoAuthMoneyTransferCall {
         ];
 
         let dao_change_attrs =
-            ElGamalEncryptedNote::encrypt_unsafe(note, &ephem_secret, &self.dao.public_key)?;
+            ElGamalEncryptedNote::encrypt_unsafe(note, &ephem_secret, &self.dao.notes_public_key)?;
 
         let params = DaoAuthMoneyTransferParams { enc_attrs, dao_change_attrs };
 
         let dao_proposer_limit = pallas::Base::from(self.dao.proposer_limit);
         let dao_quorum = pallas::Base::from(self.dao.quorum);
+        let dao_early_exec_quorum = pallas::Base::from(self.dao.early_exec_quorum);
         let dao_approval_ratio_quot = pallas::Base::from(self.dao.approval_ratio_quot);
         let dao_approval_ratio_base = pallas::Base::from(self.dao.approval_ratio_base);
+        let dao_notes_public_key = self.dao.notes_public_key.inner();
+        let (dao_proposer_pub_x, dao_proposer_pub_y) = self.dao.proposer_public_key.xy();
+        let (dao_proposals_pub_x, dao_proposals_pub_y) = self.dao.proposals_public_key.xy();
+        let (dao_votes_pub_x, dao_votes_pub_y) = self.dao.votes_public_key.xy();
+        let (dao_exec_pub_x, dao_exec_pub_y) = self.dao.exec_public_key.xy();
+        let (dao_early_exec_pub_x, dao_early_exec_pub_y) = self.dao.early_exec_public_key.xy();
 
         let input_user_data_enc =
             poseidon_hash([self.dao.to_bulla().inner(), self.input_user_data_blind.inner()]);
@@ -142,10 +148,21 @@ impl DaoAuthMoneyTransferCall {
             // DAO params
             Witness::Base(Value::known(dao_proposer_limit)),
             Witness::Base(Value::known(dao_quorum)),
+            Witness::Base(Value::known(dao_early_exec_quorum)),
             Witness::Base(Value::known(dao_approval_ratio_quot)),
             Witness::Base(Value::known(dao_approval_ratio_base)),
             Witness::Base(Value::known(self.dao.gov_token_id.inner())),
-            Witness::EcNiPoint(Value::known(dao_public_key)),
+            Witness::EcNiPoint(Value::known(dao_notes_public_key)),
+            Witness::Base(Value::known(dao_proposer_pub_x)),
+            Witness::Base(Value::known(dao_proposer_pub_y)),
+            Witness::Base(Value::known(dao_proposals_pub_x)),
+            Witness::Base(Value::known(dao_proposals_pub_y)),
+            Witness::Base(Value::known(dao_votes_pub_x)),
+            Witness::Base(Value::known(dao_votes_pub_y)),
+            Witness::Base(Value::known(dao_exec_pub_x)),
+            Witness::Base(Value::known(dao_exec_pub_y)),
+            Witness::Base(Value::known(dao_early_exec_pub_x)),
+            Witness::Base(Value::known(dao_early_exec_pub_y)),
             Witness::Base(Value::known(self.dao.bulla_blind.inner())),
             // Dao input user data blind
             Witness::Base(Value::known(self.input_user_data_blind.inner())),

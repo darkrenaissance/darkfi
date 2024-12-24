@@ -31,10 +31,10 @@ use darkfi::{
 };
 use darkfi_dao_contract::{
     DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS,
-    DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS, DAO_CONTRACT_ZKAS_DAO_EXEC_NS,
-    DAO_CONTRACT_ZKAS_DAO_MINT_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS,
-    DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS, DAO_CONTRACT_ZKAS_DAO_VOTE_INPUT_NS,
-    DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS,
+    DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS, DAO_CONTRACT_ZKAS_DAO_EARLY_EXEC_NS,
+    DAO_CONTRACT_ZKAS_DAO_EXEC_NS, DAO_CONTRACT_ZKAS_DAO_MINT_NS,
+    DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS,
+    DAO_CONTRACT_ZKAS_DAO_VOTE_INPUT_NS, DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS,
 };
 use darkfi_money_contract::{
     MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1, MONEY_CONTRACT_ZKAS_BURN_NS_V1,
@@ -49,8 +49,8 @@ use sled_overlay::sled;
 
 /// Update these if any circuits are changed.
 /// Delete the existing cachefiles, and enable debug logging, you will see the new hashes.
-const PKS_HASH: &str = "55d9535b390a819026bb3554f5de501997b831935bbc910951639fddfec44b14";
-const VKS_HASH: &str = "cbcb356ccacd0ad4ac953417f07bf24297927e61ba770f5aeddaa9e72f159272";
+const PKS_HASH: &str = "46a30a57bd14b6bc5851bbde8b011ba2e12765bba7901c5e42f511bdb68b3255";
+const VKS_HASH: &str = "4e6f5326b3acc7fd4f6525914be8076276b16c5601940d034de0617c94b1170f";
 
 /// Build a `PathBuf` to a cachefile
 fn cache_path(typ: &str) -> Result<PathBuf> {
@@ -134,6 +134,7 @@ pub fn get_cached_pks_and_vks() -> Result<(Pks, Vks)> {
         &include_bytes!("../../dao/proof/vote-input.zk.bin")[..],
         &include_bytes!("../../dao/proof/vote-main.zk.bin")[..],
         &include_bytes!("../../dao/proof/exec.zk.bin")[..],
+        &include_bytes!("../../dao/proof/early-exec.zk.bin")[..],
         &include_bytes!("../../dao/proof/auth-money-transfer.zk.bin")[..],
         &include_bytes!("../../dao/proof/auth-money-transfer-enc-coin.zk.bin")[..],
     ];
@@ -207,7 +208,8 @@ pub fn inject(sled_db: &sled::Db, vks: &Vks) -> Result<()> {
             DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS |
             DAO_CONTRACT_ZKAS_DAO_EXEC_NS |
             DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS |
-            DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS => {
+            DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS |
+            DAO_CONTRACT_ZKAS_DAO_EARLY_EXEC_NS => {
                 let key = serialize(&namespace.as_str());
                 let value = serialize(&(bincode.clone(), vk.clone()));
                 dao_tree.insert(key, value)?;

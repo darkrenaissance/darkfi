@@ -47,12 +47,14 @@ use super::{Holder, TestHarness};
 
 impl TestHarness {
     /// Create a transfer `Dao::Propose` transaction.
+    #[allow(clippy::too_many_arguments)]
     pub async fn dao_propose_transfer(
         &mut self,
         proposer: &Holder,
         proposal_coinattrs: &[CoinAttributes],
         user_data: pallas::Base,
         dao: &Dao,
+        dao_proposer_secret_key: &SecretKey,
         block_height: u32,
         duration_blockwindows: u64,
     ) -> Result<(Transaction, DaoProposeParams, Option<MoneyFeeParamsV1>, DaoProposal)> {
@@ -146,6 +148,7 @@ impl TestHarness {
         };
 
         let (params, proofs) = call.make(
+            dao_proposer_secret_key,
             dao_propose_burn_zkbin,
             dao_propose_burn_pk,
             dao_propose_main_zkbin,
@@ -193,6 +196,7 @@ impl TestHarness {
         proposer: &Holder,
         user_data: pallas::Base,
         dao: &Dao,
+        dao_proposer_secret_key: &SecretKey,
         block_height: u32,
         duration_blockwindows: u64,
     ) -> Result<(Transaction, DaoProposeParams, Option<MoneyFeeParamsV1>, DaoProposal)> {
@@ -264,6 +268,7 @@ impl TestHarness {
         };
 
         let (params, proofs) = call.make(
+            dao_proposer_secret_key,
             dao_propose_burn_zkbin,
             dao_propose_burn_pk,
             dao_propose_main_zkbin,

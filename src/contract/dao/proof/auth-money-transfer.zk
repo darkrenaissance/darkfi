@@ -2,8 +2,6 @@ k = 11;
 field = "pallas";
 
 constant "AuthMoneyTransfer" {
-    EcFixedPointShort VALUE_COMMIT_VALUE,
-    EcFixedPoint VALUE_COMMIT_RANDOM,
     EcFixedPointBase NULLIFIER_K,
 }
 
@@ -18,10 +16,21 @@ witness "AuthMoneyTransfer" {
     # DAO parameters
     Base dao_proposer_limit,
     Base dao_quorum,
+    Base dao_early_exec_quorum,
     Base dao_approval_ratio_quot,
     Base dao_approval_ratio_base,
     Base dao_gov_token_id,
-    EcNiPoint dao_public_key,
+    EcNiPoint dao_notes_public_key,
+    Base dao_proposer_public_x,
+    Base dao_proposer_public_y,
+    Base dao_proposals_public_x,
+    Base dao_proposals_public_y,
+    Base dao_votes_public_x,
+    Base dao_votes_public_y,
+    Base dao_exec_public_x,
+    Base dao_exec_public_y,
+    Base dao_early_exec_public_x,
+    Base dao_early_exec_public_y,
     Base dao_bulla_blind,
 
     # Dao input(s) user data blind
@@ -40,21 +49,32 @@ witness "AuthMoneyTransfer" {
 }
 
 circuit "AuthMoneyTransfer" {
-    # cast to EcPoint
+    # Cast to EcPoint
     # (otherwise zkas refuses to compile)
     ONE = witness_base(1);
-    dao_pubkey = ec_mul_var_base(ONE, dao_public_key);
-    dao_public_x = ec_get_x(dao_pubkey);
-    dao_public_y = ec_get_y(dao_pubkey);
+    dao_notes_pubkey = ec_mul_var_base(ONE, dao_notes_public_key);
+    dao_notes_public_x = ec_get_x(dao_notes_pubkey);
+    dao_notes_public_y = ec_get_y(dao_notes_pubkey);
 
     dao_bulla = poseidon_hash(
         dao_proposer_limit,
         dao_quorum,
+        dao_early_exec_quorum,
         dao_approval_ratio_quot,
         dao_approval_ratio_base,
         dao_gov_token_id,
-        dao_public_x,
-        dao_public_y,
+        dao_notes_public_x,
+        dao_notes_public_y,
+        dao_proposer_public_x,
+        dao_proposer_public_y,
+        dao_proposals_public_x,
+        dao_proposals_public_y,
+        dao_votes_public_x,
+        dao_votes_public_y,
+        dao_exec_public_x,
+        dao_exec_public_y,
+        dao_early_exec_public_x,
+        dao_early_exec_public_y,
         dao_bulla_blind,
     );
 
@@ -77,8 +97,8 @@ circuit "AuthMoneyTransfer" {
 
     # Change output should be sending back to the DAO
     dao_change_coin = poseidon_hash(
-        dao_public_x,
-        dao_public_y,
+        dao_notes_public_x,
+        dao_notes_public_y,
         # We don't need to check this value.
         # money::transfer() checks that sum(input values) = sum(output values)
         # which ensures it will be correct.
@@ -104,7 +124,7 @@ circuit "AuthMoneyTransfer" {
     constrain_instance(ec_get_y(ephem_public));
 
     # The shared_point C = eP = dE
-    shared_point = ec_mul_var_base(ephem_secret, dao_public_key);
+    shared_point = ec_mul_var_base(ephem_secret, dao_notes_public_key);
     shared_secret = poseidon_hash(
         ec_get_x(shared_point),
         ec_get_y(shared_point),

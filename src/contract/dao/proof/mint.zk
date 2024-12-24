@@ -2,39 +2,84 @@ k = 11;
 field = "pallas";
 
 constant "Mint" {
-    EcFixedPoint VALUE_COMMIT_RANDOM,
     EcFixedPointBase NULLIFIER_K,
 }
 
 witness "Mint" {
-    Base dao_proposer_limit,
-    Base dao_quorum,
-    Base dao_approval_ratio_quot,
-    Base dao_approval_ratio_base,
-    Base dao_gov_token_id,
-    Base dao_secret,
-    Base dao_bulla_blind,
+    Base proposer_limit,
+    Base quorum,
+    Base early_exec_quorum,
+    Base approval_ratio_quot,
+    Base approval_ratio_base,
+    Base gov_token_id,
+    Base notes_secret,
+    Base proposer_secret,
+    Base proposals_secret,
+    Base votes_secret,
+    Base exec_secret,
+    Base early_exec_secret,
+    Base bulla_blind,
 }
 
 circuit "Mint" {
-    # This circuit states that the bulla is a hash of 8 values
+    # Derive and constrain DAO notes public key
+    notes_public = ec_mul_base(notes_secret, NULLIFIER_K);
+    notes_public_x = ec_get_x(notes_public);
+    notes_public_y = ec_get_y(notes_public);
+    constrain_instance(notes_public_x);
+    constrain_instance(notes_public_y);
 
-    dao_public = ec_mul_base(dao_secret, NULLIFIER_K);
-    dao_public_x = ec_get_x(dao_public);
-    dao_public_y = ec_get_y(dao_public);
-    constrain_instance(dao_public_x);
-    constrain_instance(dao_public_y);
+    # Derive DAO proposer public key
+    proposer_public = ec_mul_base(proposer_secret, NULLIFIER_K);
+    proposer_public_x = ec_get_x(proposer_public);
+    proposer_public_y = ec_get_y(proposer_public);
 
+    # Derive DAO proposals public key
+    proposals_public = ec_mul_base(proposals_secret, NULLIFIER_K);
+    proposals_public_x = ec_get_x(proposals_public);
+    proposals_public_y = ec_get_y(proposals_public);
+
+    # Derive DAO votes public key
+    votes_public = ec_mul_base(votes_secret, NULLIFIER_K);
+    votes_public_x = ec_get_x(votes_public);
+    votes_public_y = ec_get_y(votes_public);
+
+    # Derive DAO executor public key
+    exec_public = ec_mul_base(exec_secret, NULLIFIER_K);
+    exec_public_x = ec_get_x(exec_public);
+    exec_public_y = ec_get_y(exec_public);
+
+    # Derive DAO early executor public key
+    early_exec_public = ec_mul_base(early_exec_secret, NULLIFIER_K);
+    early_exec_public_x = ec_get_x(early_exec_public);
+    early_exec_public_y = ec_get_y(early_exec_public);
+
+    # Check that early execution quorum is greater or equal to normal quorum
+    one = witness_base(1);
+    early_exec_quorum_1 = base_add(early_exec_quorum, one);
+    less_than_strict(quorum, early_exec_quorum_1);
+
+    # Derive and constrain the DAO bulla
     bulla = poseidon_hash(
-        dao_proposer_limit,
-        dao_quorum,
-        dao_approval_ratio_quot,
-        dao_approval_ratio_base,
-        dao_gov_token_id,
-        dao_public_x,
-        dao_public_y,
-        dao_bulla_blind,
+        proposer_limit,
+        quorum,
+        early_exec_quorum,
+        approval_ratio_quot,
+        approval_ratio_base,
+        gov_token_id,
+        notes_public_x,
+        notes_public_y,
+        proposer_public_x,
+        proposer_public_y,
+        proposals_public_x,
+        proposals_public_y,
+        votes_public_x,
+        votes_public_y,
+        exec_public_x,
+        exec_public_y,
+        early_exec_public_x,
+        early_exec_public_y,
+        bulla_blind,
     );
-
     constrain_instance(bulla);
 }

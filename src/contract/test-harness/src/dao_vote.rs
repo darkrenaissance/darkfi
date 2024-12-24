@@ -31,7 +31,7 @@ use darkfi_money_contract::{
     model::MoneyFeeParamsV1,
 };
 use darkfi_sdk::{
-    crypto::{contract_id::DAO_CONTRACT_ID, Keypair, MerkleNode, SecretKey},
+    crypto::{contract_id::DAO_CONTRACT_ID, MerkleNode, SecretKey},
     ContractCall,
 };
 use darkfi_serial::AsyncEncodable;
@@ -47,7 +47,6 @@ impl TestHarness {
         voter: &Holder,
         vote_option: bool,
         dao: &Dao,
-        dao_keypair: &Keypair,
         proposal: &DaoProposal,
         block_height: u32,
     ) -> Result<(Transaction, DaoVoteParams, Option<MoneyFeeParamsV1>)> {
@@ -87,7 +86,6 @@ impl TestHarness {
             vote_option,
             proposal: proposal.clone(),
             dao: dao.clone(),
-            dao_keypair: *dao_keypair,
             current_blockwindow,
         };
 
