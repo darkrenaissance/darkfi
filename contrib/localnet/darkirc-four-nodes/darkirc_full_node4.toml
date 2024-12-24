@@ -4,6 +4,11 @@ rpc_listen = "tcp://127.0.0.1:8893"
 ## IRC listen URL
 irc_listen = "tcp://127.0.0.1:22025"
 
+## How many DAGs to be synced (currently each DAG represents a 24hr msg
+## history counting from UTC midnight), increasing this number means 
+## you get/sync previous days msg history as well (max. 5) 
+dags_count = 3
+
 ## Sets Datastore Path
 datastore = "darkirc4"
 

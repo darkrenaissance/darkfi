@@ -89,6 +89,10 @@ struct Args {
     /// Optional TLS certificate key file path if `irc_listen` uses TLS
     irc_tls_secret: Option<String>,
 
+    /// How many DAGs to sync.
+    #[structopt(short, long, default_value = "1")]
+    dags_count: usize,
+
     #[structopt(short, long, default_value = "~/.local/darkfi/darkirc_db")]
     /// Datastore (DB) path
     datastore: String,
@@ -273,7 +277,6 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         sled_db.clone(),
         replay_datastore.clone(),
         replay_mode,
-        "darkirc_dag",
         1,
         ex.clone(),
     )
@@ -400,7 +403,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
             // We'll attempt to sync for ever
             if !args.skip_dag_sync {
                 info!("Syncing event DAG");
-                match event_graph.dag_sync().await {
+                match event_graph.sync_selected(args.dags_count).await {
                     Ok(()) => break,
                     Err(e) => {
                         // TODO: Maybe at this point we should prune or something?

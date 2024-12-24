@@ -18,6 +18,7 @@
 
 use std::{
     collections::{BTreeMap, HashSet},
+    str::FromStr,
     sync::{
         atomic::{AtomicUsize, Ordering::SeqCst},
         Arc,
@@ -28,7 +29,7 @@ use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 use log::{debug, error, trace, warn};
 use smol::Executor;
 
-use super::{Event, EventGraphPtr, NULL_ID};
+use super::{Event, EventGraphPtr, LayerUTips, NULL_ID};
 use crate::{impl_p2p_message, net::*, Error, Result};
 
 /// Malicious behaviour threshold. If the threshold is reached, we will
@@ -74,12 +75,12 @@ impl_p2p_message!(EventRep, "EventGraph::EventRep");
 
 /// A P2P message representing a request for a peer's DAG tips
 #[derive(Clone, SerialEncodable, SerialDecodable)]
-pub struct TipReq {}
+pub struct TipReq(pub String);
 impl_p2p_message!(TipReq, "EventGraph::TipReq");
 
 /// A P2P message representing a reply for the peer's DAG tips
 #[derive(Clone, SerialEncodable, SerialDecodable)]
-pub struct TipRep(pub BTreeMap<u64, HashSet<blake3::Hash>>);
+pub struct TipRep(pub LayerUTips);
 impl_p2p_message!(TipRep, "EventGraph::TipRep");
 
 #[async_trait]
@@ -169,8 +170,18 @@ impl ProtocolEventGraph {
             }
 
             // If we have already seen the event, we'll stay quiet.
+            let current_genesis = self.event_graph.current_genesis.read().await;
+            let dag_name = current_genesis.id().to_string();
             let event_id = event.id();
-            if self.event_graph.dag.contains_key(event_id.as_bytes()).unwrap() {
+            if self
+                .event_graph
+                .dag_store
+                .read()
+                .await
+                .get_dag(&dag_name)
+                .contains_key(event_id.as_bytes())
+                .unwrap()
+            {
                 debug!(
                     target: "event_graph::protocol::handle_event_put()",
                     "Event {} is already known", event_id,
@@ -214,6 +225,9 @@ impl ProtocolEventGraph {
                 "Event {} is new", event_id,
             );
 
+            let current_genesis = self.event_graph.current_genesis.read().await;
+            let dag_name = current_genesis.id().to_string();
+
             let mut missing_parents = HashSet::new();
             for parent_id in event.parents.iter() {
                 // `event.validate_new()` should have already made sure that
@@ -222,7 +236,15 @@ impl ProtocolEventGraph {
                     continue
                 }
 
-                if !self.event_graph.dag.contains_key(parent_id.as_bytes()).unwrap() {
+                if !self
+                    .event_graph
+                    .dag_store
+                    .read()
+                    .await
+                    .get_dag(&dag_name)
+                    .contains_key(parent_id.as_bytes())
+                    .unwrap()
+                {
                     missing_parents.insert(*parent_id);
                 }
             }
@@ -243,6 +265,9 @@ impl ProtocolEventGraph {
                     target: "event_graph::protocol::handle_event_put()",
                     "Event has {} missing parents. Requesting...", missing_parents.len(),
                 );
+
+                let current_genesis = self.event_graph.current_genesis.read().await;
+                let dag_name = current_genesis.id().to_string();
 
                 while !missing_parents.is_empty() {
                     // for parent_id in missing_parents.clone().iter() {
@@ -311,7 +336,10 @@ impl ProtocolEventGraph {
                                 !received_events_hashes.contains(upper_parent) &&
                                 !self
                                     .event_graph
-                                    .dag
+                                    .dag_store
+                                    .read()
+                                    .await
+                                    .get_dag(&dag_name)
                                     .contains_key(upper_parent.as_bytes())
                                     .unwrap()
                             {
@@ -333,7 +361,7 @@ impl ProtocolEventGraph {
                         events.push(tip);
                     }
                 }
-                if self.event_graph.dag_insert(&events).await.is_err() {
+                if self.event_graph.dag_insert(&events, &dag_name).await.is_err() {
                     self.clone().increase_malicious_count().await?;
                     continue
                 }
@@ -346,7 +374,7 @@ impl ProtocolEventGraph {
                 target: "event_graph::protocol::handle_event_put()",
                 "Got all parents necessary for insertion",
             );
-            if self.event_graph.dag_insert(&[event.clone()]).await.is_err() {
+            if self.event_graph.dag_insert(&[event.clone()], &dag_name).await.is_err() {
                 self.clone().increase_malicious_count().await?;
                 continue
             }
@@ -420,7 +448,8 @@ impl ProtocolEventGraph {
                     target: "event_graph::protocol::handle_event_req()",
                     "Fetching event {:?} from DAG", event_id,
                 );
-                events.push(self.event_graph.dag_get(event_id).await.unwrap().unwrap());
+                // TODO: search for the event among all the dags
+                events.push(self.event_graph.fetch_event(event_id).await.unwrap().unwrap());
             }
 
             // Check if the incoming event is older than the genesis event. If so, something
@@ -462,7 +491,10 @@ impl ProtocolEventGraph {
     /// tips of our DAG.
     async fn handle_tip_req(self: Arc<Self>) -> Result<()> {
         loop {
-            self.tip_req_sub.receive().await?;
+            let dag_name = match self.tip_req_sub.receive().await {
+                Ok(v) => v.0.clone(),
+                Err(_) => continue,
+            };
             trace!(
                 target: "event_graph::protocol::handle_tip_req()",
                 "Got TipReq [{}]", self.channel.address(),
@@ -481,7 +513,13 @@ impl ProtocolEventGraph {
 
             // We received a tip request. Let's find them, add them to
             // our bcast ids list, and reply with them.
-            let layers = self.event_graph.unreferenced_tips.read().await.clone();
+            let dag_name_hash = blake3::Hash::from_str(&dag_name).unwrap();
+            let store = self.event_graph.dag_store.read().await;
+            let (_, layers) = match store.dags.get(&dag_name_hash) {
+                Some(v) => v,
+                None => continue,
+            };
+            // let layers = self.event_graph.dag_store.read().await.find_unreferenced_tips(&dag_name).await;
             let mut bcast_ids = self.event_graph.broadcasted_ids.write().await;
             for (_, tips) in layers.iter() {
                 for tip in tips {
@@ -490,7 +528,7 @@ impl ProtocolEventGraph {
             }
             drop(bcast_ids);
 
-            self.channel.send(&TipRep(layers)).await?;
+            self.channel.send(&TipRep(layers.clone())).await?;
         }
     }
 }

@@ -314,7 +314,9 @@ async fn start_sync_loop(
 
                     // If it fails for some reason, for now, we just note it
                     // and pass.
-                    if let Err(e) = event_graph.dag_insert(&[event.clone()]).await {
+                    let current_genesis = event_graph.current_genesis.read().await;
+                    let dag_name = current_genesis.id().to_string();
+                    if let Err(e) = event_graph.dag_insert(&[event.clone()], &dag_name).await {
                         error!(target: "taud", "Failed inserting new event to DAG: {}", e);
                     } else {
                         // Otherwise, broadcast it
@@ -525,7 +527,6 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
         sled_db.clone(),
         replay_datastore,
         replay_mode,
-        "taud_dag",
         0,
         executor.clone(),
     )
@@ -554,7 +555,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
             // We'll attempt to sync for ever
             if !settings.skip_dag_sync {
                 info!(target: "taud", "Syncing event DAG");
-                match event_graph.dag_sync().await {
+                match event_graph.sync_selected(1).await {
                     Ok(()) => break,
                     Err(e) => {
                         // TODO: Maybe at this point we should prune or something?

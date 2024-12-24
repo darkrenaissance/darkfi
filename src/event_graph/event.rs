@@ -19,6 +19,7 @@
 use std::{collections::HashSet, time::UNIX_EPOCH};
 
 use darkfi_serial::{async_trait, deserialize_async, Encodable, SerialDecodable, SerialEncodable};
+use log::info;
 use sled_overlay::{sled, SledTreeOverlay};
 
 use crate::Result;
@@ -48,7 +49,8 @@ impl Event {
     /// The parents can also include NULL, but this should be handled by the rest
     /// of the codebase.
     pub async fn new(data: Vec<u8>, event_graph: &EventGraph) -> Self {
-        let (layer, parents) = event_graph.get_next_layer_with_parents().await;
+        let current_dag_name = event_graph.current_genesis.read().await.id();
+        let (layer, parents) = event_graph.get_next_layer_with_parents(&current_dag_name).await;
         Self {
             timestamp: UNIX_EPOCH.elapsed().unwrap().as_millis() as u64,
             content: data,
@@ -59,7 +61,8 @@ impl Event {
 
     /// Same as `Event::new()` but allows specifying the timestamp explicitly.
     pub async fn with_timestamp(timestamp: u64, data: Vec<u8>, event_graph: &EventGraph) -> Self {
-        let (layer, parents) = event_graph.get_next_layer_with_parents().await;
+        let current_dag_name = event_graph.current_genesis.read().await.id();
+        let (layer, parents) = event_graph.get_next_layer_with_parents(&current_dag_name).await;
         Self { timestamp, content: data, parents, layer }
     }
 
@@ -92,14 +95,18 @@ impl Event {
     pub async fn validate(
         &self,
         dag: &sled::Tree,
-        genesis_timestamp: u64,
         days_rotation: u64,
         overlay: Option<&SledTreeOverlay>,
     ) -> Result<bool> {
         // Let's not bother with empty events
         if self.content.is_empty() {
+            info!("content is emtpy");
             return Ok(false)
         }
+
+        let genesis = dag.first().unwrap().unwrap().1;
+        let genesis_event: Event = deserialize_async(&genesis).await.unwrap();
+        let genesis_timestamp = genesis_event.timestamp;
 
         // Check if the event timestamp is after genesis timestamp
         if self.timestamp < genesis_timestamp - EVENT_TIME_DRIFT {
@@ -159,11 +166,15 @@ impl Event {
     /// [`EventGraph`] reference and enforce relevant age, assuming some
     /// possibility for a time drift.
     pub async fn dag_validate(&self, event_graph: &EventGraph) -> Result<bool> {
-        // Grab genesis timestamp
-        let genesis_timestamp = event_graph.current_genesis.read().await.timestamp;
-
         // Perform validation
-        self.validate(&event_graph.dag, genesis_timestamp, event_graph.days_rotation, None).await
+        let current_genesis = event_graph.current_genesis.read().await;
+        let dag_name = current_genesis.id().to_string();
+        self.validate(
+            &event_graph.dag_store.read().await.get_dag(&dag_name),
+            event_graph.days_rotation,
+            None,
+        )
+        .await
     }
 
     /// Validate a new event for the correct layout and enforce relevant age,
@@ -226,7 +237,7 @@ mod tests {
         let ex = Arc::new(Executor::new());
         let p2p = P2p::new(Settings::default(), ex.clone()).await?;
         let sled_db = sled::Config::new().temporary(true).open().unwrap();
-        EventGraph::new(p2p, sled_db, "/tmp".into(), false, "dag", 1, ex).await
+        EventGraph::new(p2p, sled_db, "/tmp".into(), false, 1, ex).await
     }
 
     #[test]

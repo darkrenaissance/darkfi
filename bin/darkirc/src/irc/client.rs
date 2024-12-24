@@ -180,7 +180,9 @@ impl Client {
 
                                 // If it fails for some reason, for now, we just note it
                                 // and pass.
-                                if let Err(e) = self.server.darkirc.event_graph.dag_insert(&[event.clone()]).await {
+                                let current_genesis = self.server.darkirc.event_graph.current_genesis.read().await;
+                                let dag_name = current_genesis.id().to_string();
+                                if let Err(e) = self.server.darkirc.event_graph.dag_insert(&[event.clone()], &dag_name).await {
                                     error!("[IRC CLIENT] Failed inserting new event to DAG: {}", e);
                                 } else {
                                     // We sent this, so it should be considered seen.
