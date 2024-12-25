@@ -44,7 +44,8 @@ pub struct Settings(pub net::Settings);
 #[pyclass]
 pub struct Version(pub semver::Version);
 
-#[pyclass]
+#[pyclass(eq, eq_int)]
+#[derive(PartialEq)]
 pub enum BanPolicy {
     Strict,
     Relaxed,
@@ -150,23 +151,6 @@ fn new_settings(
 #[pyclass]
 pub struct P2pPtr(pub net::P2pPtr);
 
-#[pymethods]
-impl P2pPtr {
-    // FIXME can't get conversion from PyAny to EventGraphPtr  because it doesn't impl clone, in otherwords can you get future_into_py return anything other than PyAny if it doesn't implement clone?
-    /*
-    #[new]
-    fn new<'a>(py: Python<'a>, settings: &'a Settings) -> PyResult<Self> {
-        let p2p_ptr_pyany : PyResult<&PyAny> = new_p2p(py, settings);
-        // if we return PyResult<P2pPtr> pyany.borrow_mut() require implementation of From<P2pPtr> for PyClassInitializer<p2p::P2p> which is required by Result<P2pPtr, PyErr>: IntoPyCallbackOutput<_>
-        // Ok(p2p_ptr.borrow_mut())
-        // if we return PyResult<&'a PyAny>, we get error trait From<&PyAny> is not implemented for PyClassInitializer<p2p::P2p> which is required by Result<&PyAny, PyErr>: IntoPyCallbackOutput<_>
-        //p2p_ptr
-        let p2p_ptr : P2pPtr = p2p_ptr_pyany.unwrap().borrow();
-        Ok(p2p_ptr)
-    }
-     */
-}
-
 #[pyclass]
 pub struct P2p(pub net::P2p);
 
@@ -195,36 +179,33 @@ async fn start_p2p_and_wait(w8_time: u64, p2p_ptr: net::P2pPtr) {
 fn block_on(ex: Arc<smol::Executor<'_>>) {
     let task = ex.spawn(async move {
         loop {
-            async_std::task::sleep(std::time::Duration::from_secs(0)).await;
+            async_std::task::sleep(std::time::Duration::from_secs(1)).await;
         }
     });
     smol::future::block_on(ex.run(task));
 }
 
 #[pyfunction]
-fn start_p2p<'a>(py: Python<'a>, w8_time: u64, net_p2p_ptr: &'a P2pPtr) -> PyResult<Bound<'a, PyAny>> {
+fn start_p2p<'a>(
+    py: Python<'a>,
+    w8_time: u64,
+    net_p2p_ptr: &'a P2pPtr,
+) -> PyResult<Bound<'a, PyAny>> {
     let p2p_ptr: net::P2pPtr = net_p2p_ptr.0.clone();
     let ex = p2p_ptr.clone().executor.clone();
+    let start_p2p_fut = start_p2p_and_wait(w8_time, p2p_ptr.clone());
     pyo3_async_runtimes::async_std::future_into_py(py, async move {
-        smol::future::block_on(ex.run(start_p2p_and_wait(w8_time , p2p_ptr.clone())));
-        println!(
-            "Greylist: {}\n",
-            p2p_ptr.hosts().container.fetch_all(net::hosts::HostColor::Grey).len()
-        );
+        smol::future::block_on(ex.run(start_p2p_fut));
         block_on(ex);
         Ok(())
     })
 }
 
-
 #[pyfunction]
 fn is_connected<'a>(py: Python<'a>, net_p2p_ptr: &'a P2pPtr) -> PyResult<Bound<'a, PyAny>> {
     let p2p_ptr: net::P2pPtr = net_p2p_ptr.0.clone();
-    pyo3_async_runtimes::async_std::future_into_py(py, async move {
-        Ok(p2p_ptr.is_connected())
-    })
+    pyo3_async_runtimes::async_std::future_into_py(py, async move { Ok(p2p_ptr.is_connected()) })
 }
-
 
 #[pyfunction]
 fn get_greylist_length<'a>(py: Python<'a>, net_p2p_ptr: &'a P2pPtr) -> PyResult<Bound<'a, PyAny>> {
@@ -256,18 +237,21 @@ fn get_goldlist_length<'a>(py: Python<'a>, net_p2p_ptr: &'a P2pPtr) -> PyResult<
 }
 
 #[pyfunction]
-fn stop_p2p<'a>(py: Python<'a>, w8_time: u64, net_p2p_ptr: &'a P2pPtr) -> PyResult<Bound<'a, PyAny>> {
+fn stop_p2p<'a>(
+    py: Python<'a>,
+    w8_time: u64,
+    net_p2p_ptr: &'a P2pPtr,
+) -> PyResult<Bound<'a, PyAny>> {
     let p2p_ptr: net::P2pPtr = net_p2p_ptr.0.clone();
     let ex = p2p_ptr.executor.clone();
     pyo3_async_runtimes::async_std::future_into_py(py, async move {
         smol::future::block_on(ex.run(stop_p2p_and_wait(w8_time, p2p_ptr.clone())));
-        block_on(ex);
         Ok(())
     })
 }
 
 async fn broadcast_and_wait(w8_time: u64, p2p_ptr: net::P2pPtr, event: event_graph::Event) {
-    let _ = p2p_ptr.broadcast(&event_graph::proto::EventPut(event)).await;
+    p2p_ptr.broadcast(&event_graph::proto::EventPut(event)).await;
     async_std::task::sleep(std::time::Duration::from_secs(w8_time)).await;
 }
 
@@ -279,15 +263,10 @@ fn broadcast_p2p<'a>(
     event_py: &Bound<Event>,
 ) -> PyResult<Bound<'a, PyAny>> {
     let p2p_ptr: net::P2pPtr = net_p2p_ptr.0.clone();
-    let event: event_graph::Event = event_py.borrow().deref().0.clone();
     let ex = p2p_ptr.executor.clone();
+    let event: event_graph::Event = event_py.borrow().deref().0.clone();
     pyo3_async_runtimes::async_std::future_into_py(py, async move {
-        smol::future::block_on(ex.run(broadcast_and_wait(
-            w8_time,
-            p2p_ptr.clone(),
-            event.clone(),
-        )));
-        block_on(ex);
+        smol::future::block_on(ex.run(broadcast_and_wait(w8_time, p2p_ptr.clone(), event.clone())));
         Ok(())
     })
 }

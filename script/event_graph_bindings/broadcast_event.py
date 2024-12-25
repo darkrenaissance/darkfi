@@ -6,13 +6,29 @@ import subprocess
 import os
 import threading
 # number of nodes
-N = 3
+N = 2
 P2PDATASTORE_PATH = '/tmp/p2pdatastore'
 SLED_DB_PATH = '/tmp/sleddb'
 STARTING_PORT = 54321
 os.system("rm -rf " + P2PDATASTORE_PATH+"*")
 os.system("rm -rf " + SLED_DB_PATH+"*")
+OUTBOUND_TIMEOUT = 2
+CH_HANDSHAKE_TIMEOUT = 15
+CH_HEARTBEAT_INTERVAL = 15
+DISCOVERY_COOLOFF = 15
+DISCOVERY_ATTEMPT = 5
+REFINERY_INTERVAL = 15
+WHITE_CONNECT_PERCENT = 70
+GOLD_CONNECT_COUNT = 2
+TIME_NO_CON = 60
+W8_TIME = 60
 
+
+async def is_connected_async(node):
+    return await p2p.is_connected(node)
+
+def is_connected(node):
+    return asyncio.run(is_connected_async(node))
 
 async def get_greylist_length(node):
     return await p2p.get_greylist_length(node)
@@ -37,7 +53,7 @@ def get_seed_node(starting_port=STARTING_PORT):
     node_id = str(inbound_port)
     seed_addr = p2p.Url("tcp://127.0.0.1:{}".format(inbound_port))
     inbound_addrs = [seed_addr]
-    external_addrs = []
+    external_addrs = [seed_addr]
     peers = []
     seeds = []
     app_version = p2p.new_version(0, 1, 1, '')
@@ -45,19 +61,19 @@ def get_seed_node(starting_port=STARTING_PORT):
     transport_mixing = True
     outbound_connections = 0
     inbound_connections = 1000
-    outbound_connect_timeout = 15
-    channel_handshake_timeout = 15
-    channel_heartbeat_interval = 30
+    outbound_connect_timeout = OUTBOUND_TIMEOUT
+    channel_handshake_timeout = CH_HANDSHAKE_TIMEOUT
+    channel_heartbeat_interval = CH_HEARTBEAT_INTERVAL
     localnet = True
-    outbound_peer_discovery_cooloff_time = 30
-    outbound_peer_discovery_attempt_time = 5
+    outbound_peer_discovery_cooloff_time = DISCOVERY_COOLOFF
+    outbound_peer_discovery_attempt_time = DISCOVERY_ATTEMPT
     p2p_datastore = P2PDATASTORE_PATH+'{}'.format(0)
     hostlist = ''
-    greylist_refinery_internval = 15
-    white_connect_percnet = 70
-    gold_connect_count = 2
+    greylist_refinery_internval = REFINERY_INTERVAL
+    white_connect_percnet = WHITE_CONNECT_PERCENT
+    gold_connect_count = GOLD_CONNECT_COUNT
     slot_preference_strict = False
-    time_with_no_connections = 30
+    time_with_no_connections = TIME_NO_CON
     blacklist = []
     ban_policy = p2p.get_strict_banpolicy()
     settings = p2p.new_settings(
@@ -100,28 +116,29 @@ def new_nodes(seed_addr, starting_port=STARTING_PORT):
         inbound_port = starting_port + i
         external_port = starting_port + i
         node_id = str(inbound_port)
-        inbound_addrs = [p2p.Url("tcp://127.0.0.1:{}".format(inbound_port))]
-        external_addrs = [p2p.Url("tcp://127.0.0.1:{}".format(inbound_port))]
-        peers = [p2p.Url("tcp://127.0.0.1:{}".format(starting_port+j)) for j in range(1,N) ]
+        addrs = p2p.Url("tcp://127.0.0.1:{}".format(inbound_port))
+        inbound_addrs = [addrs]
+        external_addrs = [addrs]
+        peers = []
         seeds = [seed_addr]
         app_version = p2p.new_version(0, 1, 1, '')
         allowed_transports = ['tcp']
         transport_mixing = True
         outbound_connections = N
         inbound_connections = 1000
-        outbound_connect_timeout = 15
-        channel_handshake_timeout = 15
-        channel_heartbeat_interval = 30
+        outbound_connect_timeout = OUTBOUND_TIMEOUT
+        channel_handshake_timeout = CH_HANDSHAKE_TIMEOUT
+        channel_heartbeat_interval = CH_HEARTBEAT_INTERVAL
         localnet = True
-        outbound_peer_discovery_cooloff_time = 30
-        outbound_peer_discovery_attempt_time = 5
+        outbound_peer_discovery_cooloff_time = DISCOVERY_COOLOFF
+        outbound_peer_discovery_attempt_time = DISCOVERY_ATTEMPT
         p2p_datastore = P2PDATASTORE_PATH+'{}'.format(0)
         hostlist = ''
-        greylist_refinery_internval = 15
-        white_connect_percnet = 70
-        gold_connect_count = 2
+        greylist_refinery_internval = REFINERY_INTERVAL
+        white_connect_percnet = WHITE_CONNECT_PERCENT
+        gold_connect_count = GOLD_CONNECT_COUNT
         slot_preference_strict = False
-        time_with_no_connections = 30
+        time_with_no_connections = TIME_NO_CON
         blacklist = []
         ban_policy = p2p.get_strict_banpolicy()
         settings = p2p.new_settings(
@@ -179,8 +196,10 @@ async def dag_sync(node):
 #       create seed        #
 ############################
 seed_p2p_ptr, seed_addr, seed_event_graph = get_seed_node()
-seed_t = threading.Thread(target=asyncio.run, args=(start_p2p(15, seed_p2p_ptr),))
+start_ts = []
+seed_t = threading.Thread(target=asyncio.run, args=(start_p2p(W8_TIME, seed_p2p_ptr),))
 seed_t.start()
+start_ts += [seed_t]
 seed_register_t = threading.Thread(target=asyncio.run, args=(register_protocol(seed_p2p_ptr, seed_event_graph),))
 seed_register_t.start()
 ############################
@@ -203,52 +222,44 @@ for t in register_ts:
 ###########################
 #     start node          #
 ###########################
-start_ts = [seed_t]
-for idx, node in enumerate(p2ps):
+
+for node in p2ps:
     # start p2p node
-    node_t = threading.Thread(target=asyncio.run, args=(start_p2p(15, node),))
+    node_t = threading.Thread(target=asyncio.run, args=(start_p2p(W8_TIME, node),))
     node_t.start()
     start_ts += [node_t]
-#for t in start_ts:
-#    t.join()
-# wait for peers to connect
-time.sleep(10)
-greylist_length = asyncio.run(get_greylist_length(seed_p2p_ptr))
-print("greylist_len: {}".format(greylist_length))
-assert(greylist_length==N-1)
 
 # select random node
 rnd_idx = get_random_node_idx()
 random_node = egs[rnd_idx]
-print('random node of index {} was selected: {}'.format(rnd_idx, egs[rnd_idx]))
 
 for evg in egs:
      assert(evg.dag_len()==1)
 
 # create new event
 event = asyncio.run(create_new_event([1,2,3,4], random_node))
-print("event: {}".format(event))
 
 # insert event at random node
 ids = asyncio.run(insert_events(random_node, [event]))
-print("dag id: {}".format(ids[0]))
+
+# wait for nodes to conenct
+time.sleep(40)
 
 # broadcast the new event
-#random_node_p2p = p2ps[rnd_idx]
-# broadcast to seed node isntead
-random_node_p2p = seed_p2p_ptr
+random_node_p2p = p2ps[rnd_idx]
+
 threading.Thread(target=asyncio.run, args=(broadcast_event_onp2p(15, random_node_p2p, event),)).start()
 
+for node in p2ps:
+    assert(is_connected(node))
+    print('node: {} is connected successfully'.format(node))
 
-'''
 dag_ts = []
 
 print("=======================")
 print("=      dag sync       =")
 print("=======================")
-
 # dag sync
-
 for eg in egs:
     dag_t = threading.Thread(target=asyncio.run, args=(dag_sync(eg),))
     dag_t.start()
@@ -260,10 +271,11 @@ for t in dag_ts:
 # get broadcasted event
 event2 = asyncio.run(get_event_by_id(egs[rnd_idx], ids[0]))
 print("broadcasted event: {}".format(event2))
-'''
 
+time.sleep(30)
 # assert event is broadcast to all nodes
-# FIXME
-for evg in egs:
-    print("len: {}".format(evg.dag_len()))
-    #assert(evg.dag_len()==(N-1))
+for evg in  egs:
+    assert(evg.dag_len()==(N-1))
+    print('event graph: {} received broadcasted event\n'.format(evg))
+for t in start_ts:
+    t.join()
