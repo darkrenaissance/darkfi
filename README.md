@@ -61,12 +61,16 @@ The following dependencies are also required:
 |   Dependency   |   Debian-based   |
 |----------------|------------------|
 | git            | git              |
+| cmake          | cmake            |
 | make           | make             |
 | gcc            | gcc              |
+| g++            | g++              |
 | pkg-config     | pkg-config       |
 | alsa-lib       | libasound2-dev   |
+| clang          | libclang-dev     |
 | openssl        | libssl-dev       |
 | sqlcipher      | libsqlcipher-dev |
+| sqlite3        | libsqlite3-dev   |
 | wabt           | wabt             |
 
 Users of Debian-based systems (e.g. Ubuntu) can simply run the
@@ -74,7 +78,7 @@ following to install the required dependencies:
 
 ```shell
 # apt-get update
-# apt-get install -y git make gcc pkg-config libasound2-dev libssl-dev libsqlcipher-dev wabt
+# apt-get install -y git cmake make gcc g++ pkg-config libasound2-dev libclang-dev libssl-dev libsqlcipher-dev libsqlite3-dev wabt
 ```
 
 Alternatively, users can try using the automated script under `contrib`
