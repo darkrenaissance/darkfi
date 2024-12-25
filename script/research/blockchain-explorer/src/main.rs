@@ -16,8 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashSet, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    str::FromStr,
+    sync::Arc,
+};
 
+use lazy_static::lazy_static;
 use log::{error, info};
 use rpc_blocks::subscribe_blocks;
 use sled_overlay::sled;
@@ -38,8 +43,13 @@ use darkfi::{
     validator::utils::deploy_native_contracts,
     Error, Result,
 };
+use darkfi_sdk::crypto::{ContractId, DAO_CONTRACT_ID, DEPLOYOOOR_CONTRACT_ID, MONEY_CONTRACT_ID};
 
-use crate::metrics_store::MetricsStore;
+use crate::{
+    contract_meta_store::{ContractMetaData, ContractMetaStore},
+    contracts::untar_source,
+    metrics_store::MetricsStore,
+};
 
 /// Crate errors
 mod error;
@@ -50,14 +60,17 @@ mod rpc_blocks;
 mod rpc_statistics;
 mod rpc_transactions;
 
-/// Database functionality related to blocks
+/// Service functionality related to blocks
 mod blocks;
 
-/// Database functionality related to transactions
+/// Service functionality related to transactions
 mod transactions;
 
-/// Database functionality related to statistics
+/// Service functionality related to statistics
 mod statistics;
+
+/// Service functionality related to contracts
+mod contracts;
 
 /// Test utilities used for unit and integration testing
 mod test_utils;
@@ -70,6 +83,26 @@ mod contract_meta_store;
 
 const CONFIG_FILE: &str = "blockchain_explorer_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../blockchain_explorer_config.toml");
+
+// Load the contract source archives to bootstrap them on explorer startup
+lazy_static! {
+    static ref NATIVE_CONTRACT_SOURCE_ARCHIVES: HashMap<String, &'static [u8]> = {
+        let mut src_map = HashMap::new();
+        src_map.insert(
+            MONEY_CONTRACT_ID.to_string(),
+            &include_bytes!("../native_contracts_src/money_contract_src.tar")[..],
+        );
+        src_map.insert(
+            DAO_CONTRACT_ID.to_string(),
+            &include_bytes!("../native_contracts_src/dao_contract_src.tar")[..],
+        );
+        src_map.insert(
+            DEPLOYOOOR_CONTRACT_ID.to_string(),
+            &include_bytes!("../native_contracts_src/deployooor_contract_src.tar")[..],
+        );
+        src_map
+    };
+}
 
 #[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
 #[serde(default)]
@@ -112,6 +145,7 @@ struct Args {
 ///
 /// - Data Transformation: Converting database data into structured responses suitable for RPC callers.
 /// - Blocks: Synchronization, retrieval, counting, and management.
+/// - Contracts: Handling native and user contract data, source code, tar files, and metadata.
 /// - Metrics: Providing metric-related data over the life of the chain.
 /// - Transactions: Synchronization, calculating gas data, retrieval, counting, and related block information.
 pub struct ExplorerService {
@@ -120,20 +154,75 @@ pub struct ExplorerService {
 }
 
 impl ExplorerService {
-    /// Creates a new `ExplorerService` instance
-    ///
-    /// The function sets up a new explorer database using the given [`String`] `db_path`, deploying
-    /// native contracts needed for calculating transaction gas data.
-    async fn new(db_path: String) -> Result<Self> {
+    /// Creates a new `ExplorerService` instance.
+    pub fn new(db_path: String) -> Result<Self> {
         // Initialize explorer database
         let db = ExplorerDb::new(db_path)?;
 
-        // Deploy native contracts needed to calculated transaction gas data and commit changes
-        let overlay = BlockchainOverlay::new(&db.blockchain)?;
+        Ok(Self { db })
+    }
+
+    /// Initializes the explorer service by deploying native contracts and loading native contract
+    /// source code and metadata required for its operation.
+    pub async fn init(&self) -> Result<()> {
+        self.deploy_native_contracts().await?;
+        self.load_native_contract_sources()?;
+        self.load_native_contract_metadata()?;
+        Ok(())
+    }
+
+    /// Deploys native contracts required for gas calculation and retrieval.
+    pub async fn deploy_native_contracts(&self) -> Result<()> {
+        let overlay = BlockchainOverlay::new(&self.db.blockchain)?;
         deploy_native_contracts(&overlay, 10).await?;
         overlay.lock().unwrap().overlay.lock().unwrap().apply()?;
+        Ok(())
+    }
 
-        Ok(Self { db })
+    /// Loads native contract source code into the explorer database by extracting it from tar archives
+    /// created during the explorer build process. The extracted source code is associated with
+    /// the corresponding [`ContractId`] for each loaded contract and stored.
+    pub fn load_native_contract_sources(&self) -> Result<()> {
+        // Iterate each native contract source archive
+        for (contract_id_str, archive_bytes) in NATIVE_CONTRACT_SOURCE_ARCHIVES.iter() {
+            // Untar the native contract source code
+            let source_code = untar_source(archive_bytes)?;
+
+            // Parse contract id into a contract id instance
+            let contract_id = &ContractId::from_str(contract_id_str)?;
+
+            // Add source code into the `ContractMetaStore`
+            self.db.contract_meta_store.insert_source(contract_id, &source_code)?;
+            info!("Loaded contract source for contract {}", contract_id_str.to_string());
+        }
+        Ok(())
+    }
+
+    /// Loads [`ContractMetaData`] for deployed native contracts into the explorer database by adding descriptive
+    /// information (e.g., name and description) used to display contract details.
+    pub fn load_native_contract_metadata(&self) -> Result<()> {
+        let contract_ids = [*MONEY_CONTRACT_ID, *DAO_CONTRACT_ID, *DEPLOYOOOR_CONTRACT_ID];
+
+        // Create pre-defined native contract metadata
+        let metadatas = [
+            ContractMetaData::new(
+                "Money".to_string(),
+                "Facilitates money transfers, atomic swaps, minting, freezing, and staking of consensus tokens".to_string(),
+            ),
+            ContractMetaData::new(
+                "DAO".to_string(),
+                "Provides functionality for Anonymous DAOs".to_string(),
+            ),
+            ContractMetaData::new(
+                "Deployoor".to_string(),
+                "Handles non-native smart contract deployments".to_string(),
+            ),
+        ];
+
+        // Load contract metadata into the `ContractMetaStore`
+        self.db.contract_meta_store.insert_metadata(&contract_ids, &metadatas)?;
+
+        Ok(())
     }
 }
 
@@ -147,6 +236,8 @@ pub struct ExplorerDb {
     pub blockchain: Blockchain,
     /// Store for tracking chain-related metrics
     pub metrics_store: MetricsStore,
+    /// Store for managing contract metadata, source code, and related data
+    pub contract_meta_store: ContractMetaStore,
 }
 
 impl ExplorerDb {
@@ -156,17 +247,19 @@ impl ExplorerDb {
         let sled_db = sled::open(&db_path)?;
         let blockchain = Blockchain::new(&sled_db)?;
         let metrics_store = MetricsStore::new(&sled_db)?;
+        let contract_meta_store = ContractMetaStore::new(&sled_db)?;
+
         info!(target: "blockchain-explorer", "Initialized explorer database {}, block count: {}", db_path.display(), blockchain.len());
-        Ok(Self { sled_db, blockchain, metrics_store })
+        Ok(Self { sled_db, blockchain, metrics_store, contract_meta_store })
     }
 }
 
 /// Defines a daemon structure responsible for handling incoming JSON-RPC requests and delegating them
 /// to the backend layer for processing. It provides a JSON-RPC interface for managing operations related to
-/// blocks, transactions, and metrics.
+/// blocks, transactions, contracts, and metrics.
 ///
 /// Upon startup, the daemon initializes a background task to handle incoming JSON-RPC requests.
-/// This includes processing operations related to blocks, transactions, and metrics by
+/// This includes processing operations related to blocks, transactions, contracts, and metrics by
 /// delegating them to the backend and returning appropriate RPC responses. Additionally, the daemon
 /// synchronizes blocks from the `darkfid` daemon into the explorer database and subscribes
 /// to new blocks, ensuring that the local database remains updated in real-time.
@@ -186,8 +279,11 @@ impl Explorerd {
         let rpc_client = RpcClient::new(endpoint.clone(), ex).await?;
         info!(target: "blockchain-explorer", "Created rpc client: {:?}", endpoint);
 
-        // Initialize explorer service
-        let service = ExplorerService::new(db_path).await?;
+        // Create explorer service
+        let service = ExplorerService::new(db_path)?;
+
+        // Initialize the explorer service
+        service.init().await?;
 
         Ok(Self { rpc_connections: Mutex::new(HashSet::new()), rpc_client, service })
     }

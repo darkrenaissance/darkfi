@@ -38,8 +38,6 @@ pub struct ContractMetaData {
     pub description: String,
 }
 
-// Temporarily suppress unused code warning until the store is integrated with the explorer code
-#[allow(dead_code)]
 impl ContractMetaData {
     pub fn new(name: String, description: String) -> Self {
         Self { name, description }
@@ -53,8 +51,6 @@ pub struct ContractSourceFile {
     pub content: String,
 }
 
-// Temporarily suppress unused code warning until the store is integrated with the explorer code
-#[allow(dead_code)]
 impl ContractSourceFile {
     /// Creates a `ContractSourceFile` instance.
     pub fn new(path: String, content: String) -> Self {
@@ -75,8 +71,6 @@ pub struct ContractMetaStore {
     pub source_code: sled::Tree,
 }
 
-// Temporarily suppress unused code warning until the store is integrated with the explorer code
-#[allow(dead_code)]
 impl ContractMetaStore {
     /// Creates a `ContractMetaStore` instance.
     pub fn new(db: &sled::Db) -> Result<Self> {

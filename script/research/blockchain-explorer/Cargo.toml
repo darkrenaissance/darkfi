@@ -16,10 +16,6 @@ darkfi-sdk = {path = "../../../src/sdk"}
 darkfi-serial = "0.4.2"
 drk = {path = "../../../bin/drk"}
 
-# Misc
-log = "0.4.22"
-sled-overlay = "0.1.6"
-
 # JSON-RPC
 async-trait = "0.1.83"
 tinyjson = "2.5.1"
@@ -36,6 +32,17 @@ smol = "2.0.2"
 serde = {version = "1.0.210", features = ["derive"]}
 structopt = "0.3.26"
 structopt-toml = "0.5.1"
+
+# Database
+sled-overlay = "0.1.6"
+
+# Misc
+log = "0.4.22"
+lazy_static = "1.5.0"
+tar = "0.4.43"
+
+# Testing
+tempdir = "0.3.7"
 
 [patch.crates-io]
 halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v4"}
