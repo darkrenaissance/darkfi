@@ -15,27 +15,38 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+"""
+Module: rpc.py
+
+This module provides an asynchronous interface for interacting with the DarkFi explorer daemon
+using JSON-RPC. It includes functionality to create a communication channel, send requests,
+and handle responses from the server.
+"""
+
 import asyncio, json, random
+
 from flask import abort
 
-# DarkFi blockchain-explorer daemon JSON-RPC configuration
+# DarkFi explorer daemon JSON-RPC configuration
 URL = "127.0.0.1"
 PORT = 14567
 
-# Class representing the channel with the JSON-RPC server
 class Channel:
+    """Class representing the channel with the JSON-RPC server."""
     def __init__(self, reader, writer):
+        """Initialize the channel with a reader and writer."""
         self.reader = reader
         self.writer = writer
 
     async def readline(self):
+        """Read a line from the channel, closing it if the connection is lost."""
         if not (line := await self.reader.readline()):
             self.writer.close()
             return None
-        # Strip the newline
-        return line[:-1].decode()
+        return line[:-1].decode()  # Strip the newline
 
     async def receive(self):
+        """Receive and decode a message from the channel."""
         if (plaintext := await self.readline()) is None:
             return None
 
@@ -44,34 +55,47 @@ class Channel:
         return response
 
     async def send(self, obj):
+        """Send a JSON-encoded object to the channel."""
         message = json.dumps(obj)
         data = message.encode()
 
         self.writer.write(data + b"\n")
         await self.writer.drain()
 
-# Create a Channel for given server.
 async def create_channel(server_name, port):
+    """
+     Creates a channel used to send RPC requests to the DarkFi explorer daemon.
+    """
     try:
         reader, writer = await asyncio.open_connection(server_name, port)
     except ConnectionRefusedError:
-        print(f"Error: Connection Refused to '{server_name}:{port}', Either because the daemon is down, is currently syncing or wrong url.")
+        print(
+            f"Error: Connection Refused to '{server_name}:{port}', Either because the daemon is down, is currently syncing or wrong url.")
         abort(500)
     channel = Channel(reader, writer)
     return channel
 
-# Execute a request towards the JSON-RPC server
 async def query(method, params):
+    """
+     Execute a request towards the JSON-RPC server by constructing a JSON-RPC
+     request and sending it to the server. It handles connection errors and server responses,
+     returning the result of the query or raising an error if the request fails.
+    """
+    # Create the channel to send RPC request
     channel = await create_channel(URL, PORT)
+
+    # Prepare request
     request = {
-        "id": random.randint(0, 2**32),
+        "id": random.randint(0, 2 ** 32),
         "method": method,
         "params": params,
         "jsonrpc": "2.0",
     }
-    await channel.send(request)
 
+    # Send request and await response
+    await channel.send(request)
     response = await channel.receive()
+
     # Closed connect returns None
     if response is None:
         print("error: connection with server was closed")
@@ -86,26 +110,40 @@ async def query(method, params):
 
     return response["result"]
 
-# Retrieve last n blocks from blockchain-explorer daemon
 async def get_last_n_blocks(n: str):
+    """Retrieves the last n blocks."""
     return await query("blocks.get_last_n_blocks", [n])
 
-# Retrieve basic statistics from blockchain-explorer daemon
 async def get_basic_statistics():
+    """Retrieves basic statistics."""
     return await query("statistics.get_basic_statistics", [])
 
-# Retrieve fee data statistics from blockchain-explorer daemon
 async def get_metric_statistics():
+    """Retrieves metrics statistics."""
     return await query("statistics.get_metric_statistics", [])
 
-# Retrieve the block information of given header hash from blockchain-explorer daemon
 async def get_block(header_hash: str):
+    """Retrieves block information for a given header hash."""
     return await query("blocks.get_block_by_hash", [header_hash])
 
-# Retrieve the transactions of given block header hash from blockchain-explorer daemon
 async def get_block_transactions(header_hash: str):
+    """Retrieves transactions associated with a given block header hash."""
     return await query("transactions.get_transactions_by_header_hash", [header_hash])
 
-# Retrieve the transaction information of given hash from blockchain-explorer daemon
+
 async def get_transaction(transaction_hash: str):
+    """Retrieves transaction information for a given transaction hash."""
     return await query("transactions.get_transaction_by_hash", [transaction_hash])
+
+async def get_native_contracts():
+    """Retrieves native contracts."""
+    return await query("contracts.get_native_contracts", [])
+
+
+async def get_contract_source_paths(contract_id: str):
+    """Retrieves contract source code paths for a given contract ID."""
+    return await query("contracts.get_contract_source_code_paths", [contract_id])
+
+async def get_contract_source(contract_id: str, source_path):
+    """Retrieves the contract source file for a given contract ID and source path."""
+    return await query("contracts.get_contract_source", [contract_id, source_path])

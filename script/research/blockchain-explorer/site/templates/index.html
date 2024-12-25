@@ -117,6 +117,31 @@
         {% endif %}
     </div>
 
+    <!--Native Contracts -->
+    <div class="content-section">
+        <h2 class="content-section-header">Native Contracts</h2>
+        <table class="table">
+            <thead>
+            <tr class="table-header">
+                <th class="contract-id">Contract Id</th>
+                <th class="contract-name text-center">Name</th>
+                <th class="contract-description">Description</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for contract in native_contracts %}
+            <tr class="table-row">
+                <td class="contract-id">
+                    <a href="contract/{{ contract[0] }}?name={{ contract[1]|urlencode }}">{{ contract[0] }}</a>
+                </td>
+                <td class="contract-name text-center">{{ contract[1] }}</td>
+                <td class="contract-description">{{ contract[2] }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
 </div>
 {% endblock %}
 

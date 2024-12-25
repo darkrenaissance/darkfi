@@ -115,6 +115,9 @@
   --color-background-table-header: #181818;
   --color-input-primary: #AFA99E;
   --color-border-primary: #83796B;
+  --color-source-code-link: #374151;
+  --color-source-code-link-bg: #393939;
+  --color-source-code-link-hover-bg: #313131;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -973,4 +976,90 @@ h5 a:hover {
 
 .table thead tr {
   border: 1px var(--color-border-primary) solid;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Native Contracts                                                           */
+/* -------------------------------------------------------------------------- */
+
+.contract-id {
+  width: calc(27ch + 12px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contract-name {
+  width: calc(9ch + 12px);
+  padding: 6px;
+}
+
+.contract-description {
+  width: auto;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Source Code                                                                */
+/* -------------------------------------------------------------------------- */
+
+.source-code-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.source-code-display-box {
+  padding: 16px;
+  border: 1px var(--color-border-primary) solid;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.source-path {
+  align-self: flex-start;
+  margin-bottom: 12px;
+  margin-right: 16px;
+}
+
+.source-code-list {
+  list-style-type: none;
+  padding-left: 0;
+}
+
+.source-code-list-item {
+  margin-bottom: 8px;
+}
+
+.source-file-link {
+  color: var(--color-source-code-link);
+  text-decoration: none;
+  font-weight: bold;
+  display: block;
+  padding: 8px 12px;
+  background-color: var(--color-source-code-link-bg);
+  border-radius: 2px;
+  transition: background-color 0.3s ease;
+}
+
+.source-file-link:hover {
+  background-color: var(--color-source-code-link-hover-bg);
+  color: var(--color-source-code-link);
+}
+
+.pre-source {
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  margin: 0;
+  padding: 0;
+  line-height: 1;
+  border: none;
+}
+
+.pre-source table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.pre-source td {
+  padding-right: 2px;
 }

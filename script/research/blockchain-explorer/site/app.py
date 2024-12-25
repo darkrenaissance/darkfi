@@ -15,63 +15,62 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import rpc
-from flask import Flask, request, render_template
+"""
+Module: app.py
 
-app = Flask(__name__)
+This module initializes the DarkFi explorer Flask application by registering various blueprints for handling routes
+related to blocks, contracts, transactions, search, and the explore section, including the home page. It also defines
+error handlers, ensuring appropriate responses for these common HTTP errors.
+"""
 
-@app.route('/')
-async def index():
-    # Fetch data from RPC
-    blocks = await rpc.get_last_n_blocks("10")
-    basic_stats = await rpc.get_basic_statistics()
+from flask import Flask, render_template
 
-    # Fetch the metric statistics
-    metric_stats = await rpc.get_metric_statistics()
-    has_metrics = metric_stats and isinstance(metric_stats, list)
+from blueprints.explore import explore_bp
+from blueprints.block import block_bp
+from blueprints.contract import contract_bp
+from blueprints.transaction import transaction_bp
 
-    # Get the latest metric statistics, or use None if no metrics are found
-    if has_metrics:
-        latest_metric_stats = metric_stats[-1]
-    else:
-        latest_metric_stats = None
+def create_app():
+    """
+    Creates and configures the DarkFi explorer Flask application.
 
-    # Render template
-    return render_template(
-        'index.html',
-        blocks=blocks,
-        basic_stats=basic_stats,
-        metric_stats=latest_metric_stats,
-    )
+    This function creates and initializes the explorer the Flask app,
+    registering applicable blueprints for handling explorer-related routes,
+    and defining error handling for common HTTP errors. It returns a fully
+    configured Flask application instance.
+    """
+    app = Flask(__name__)
 
-@app.route('/search', methods=['GET', 'POST'])
-async def search():
-    search_hash = request.args.get('search_hash', '')
-    block = await rpc.get_block(search_hash)
-    transactions = await rpc.get_block_transactions(search_hash)
-    if transactions:
-        return render_template('block.html', block=block, transactions=transactions)
-    else:
-        transaction = await rpc.get_transaction(search_hash)
-        return render_template('transaction.html', transaction=transaction)
+    # Register Blueprints
+    app.register_blueprint(explore_bp)
+    app.register_blueprint(block_bp)
+    app.register_blueprint(contract_bp)
+    app.register_blueprint(transaction_bp)
 
-@app.route('/block/<header_hash>')
-async def block(header_hash):
-    block = await rpc.get_block(header_hash)
-    transactions = await rpc.get_block_transactions(header_hash)
-    return render_template('block.html', block=block, transactions=transactions)
+    # Define page not found error handler
+    @app.errorhandler(404)
+    def page_not_found(e):
+        """
+        Handles 404 errors by rendering a custom 404 error page when a requested page is not found,
+        returning a rendered template along with a 404 status code.
 
+        Args:
+            e: The error object associated with the 404 error.
+        """
+        # Render the custom 404 error page
+        return render_template('404.html'), 404
 
-@app.route('/transaction/<transaction_hash>')
-async def transaction(transaction_hash):
-    transaction = await rpc.get_transaction(transaction_hash)
-    return render_template('transaction.html', transaction=transaction)
+    # Define internal server error handler
+    @app.errorhandler(500)
+    def internal_server_error(e):
+        """
+        Handles 500 errors by rendering a custom 500 error page when an internal server error occurs,
+        returning a rendered template along with a 500 status code.
 
-@app.errorhandler(404)
-def page_not_found(e):
-    return render_template('404.html'), 404
+        Args:
+            e: The error object associated with the 500 error.
+        """
+        # Render the custom 500 error page
+        return render_template('500.html'), 500
 
-@app.errorhandler(500)
-def page_not_found(e):
-    return render_template('500.html'), 500
-
+    return app
