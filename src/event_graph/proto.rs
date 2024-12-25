@@ -448,7 +448,6 @@ impl ProtocolEventGraph {
                     target: "event_graph::protocol::handle_event_req()",
                     "Fetching event {:?} from DAG", event_id,
                 );
-                // TODO: search for the event among all the dags
                 events.push(self.event_graph.fetch_event(event_id).await.unwrap().unwrap());
             }
 

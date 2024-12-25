@@ -19,7 +19,6 @@
 use std::{collections::HashSet, time::UNIX_EPOCH};
 
 use darkfi_serial::{async_trait, deserialize_async, Encodable, SerialDecodable, SerialEncodable};
-use log::info;
 use sled_overlay::{sled, SledTreeOverlay};
 
 use crate::Result;
@@ -100,7 +99,6 @@ impl Event {
     ) -> Result<bool> {
         // Let's not bother with empty events
         if self.content.is_empty() {
-            info!("content is emtpy");
             return Ok(false)
         }
 

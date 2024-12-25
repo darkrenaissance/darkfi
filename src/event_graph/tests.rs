@@ -161,7 +161,6 @@ async fn assert_dags(eg_instances: &[Arc<EventGraph>], expected_len: usize, rng:
     for (i, eg) in eg_instances.iter().enumerate() {
         let current_genesis = eg.current_genesis.read().await;
         let dag_name = current_genesis.id().to_string();
-        info!("dag_name: {}", dag_name);
         let dag = eg.dag_store.read().await.get_dag(&dag_name);
         let unreferenced_tips = eg.dag_store.read().await.find_unreferenced_tips(&dag).await;
         let node_last_layer_tips = unreferenced_tips.last_key_value().unwrap().1.clone();
@@ -225,7 +224,6 @@ async fn eventgraph_propagation_real(ex: Arc<Executor<'static>>) {
     // =========================================
     // 1. Assert that everyone's DAG is the same
     // =========================================
-    info!("11111111111");
     assert_dags(&eg_instances, 1, &mut rng).await;
 
     // ==========================================
@@ -238,20 +236,9 @@ async fn eventgraph_propagation_real(ex: Arc<Executor<'static>>) {
     assert!(event.parents.contains(&genesis_event_id));
     // The node adds it to their DAG, on layer 1.
     let event_id = random_node.dag_insert(&[event.clone()], &dag_name).await.unwrap()[0];
-    info!("event id: {}", event_id);
     let store = random_node.dag_store.read().await;
-    let (d, tips_layers) = store.dags.get(&current_genesis.id()).unwrap();
-    for key in d.iter().keys() {
-        let x = key.unwrap();
-        let id = blake3::Hash::from_bytes((&x as &[u8]).try_into().unwrap());
-        info!("id: {}", id);
-    }
+    let (_, tips_layers) = store.dags.get(&current_genesis.id()).unwrap();
 
-    for (_, i) in tips_layers.iter() {
-        for j in i.iter() {
-            info!("j: {}", j);
-        }
-    }
     // Since genesis was referenced, its layer (0) have been removed
     assert_eq!(tips_layers.len(), 1);
     assert!(tips_layers.last_key_value().unwrap().1.get(&event_id).is_some());
@@ -265,7 +252,6 @@ async fn eventgraph_propagation_real(ex: Arc<Executor<'static>>) {
     // ====================================================
     // 3. Assert that everyone has the new event in the DAG
     // ====================================================
-    info!("33333333");
     assert_dags(&eg_instances, 2, &mut rng).await;
 
     // ==============================================================
@@ -304,7 +290,6 @@ async fn eventgraph_propagation_real(ex: Arc<Executor<'static>>) {
     // ==========================================
     // 5. Assert that everyone has all the events
     // ==========================================
-    info!("555555555");
     assert_dags(&eg_instances, 5, &mut rng).await;
 
     // ===========================================
@@ -364,7 +349,6 @@ async fn eventgraph_propagation_real(ex: Arc<Executor<'static>>) {
     // 7. Assert that everyone has all the events
     // ==========================================
     // 5 events from 2. and 4. + 9 events from 6. = 14
-    info!("77777777");
     assert_dags(&eg_instances, 14, &mut rng).await;
 
     // ============================================================
@@ -403,7 +387,6 @@ async fn eventgraph_propagation_real(ex: Arc<Executor<'static>>) {
     // 9. Assert the new synced DAG has the same contents as others
     // ============================================================
     // 5 events from 2. and 4. + 9 events from 6. = 14
-    info!("9999999999");
     assert_dags(&eg_instances, 14, &mut rng).await;
 
     // Stop the P2P network
@@ -429,7 +412,6 @@ async fn eventgraph_chaotic_propagation_real(ex: Arc<Executor<'static>>) {
     // =========================================
     // 1. Assert that everyone's DAG is the same
     // =========================================
-    info!("another 111111111111");
     assert_dags(&eg_instances, 1, &mut rng).await;
 
     // ===========================================
@@ -448,7 +430,6 @@ async fn eventgraph_chaotic_propagation_real(ex: Arc<Executor<'static>>) {
     // ==========================================
     // 3. Assert that everyone has all the events
     // ==========================================
-    info!("another 333333333");
     assert_dags(&eg_instances, n_events + 1, &mut rng).await;
 
     // ============================================================
@@ -486,7 +467,6 @@ async fn eventgraph_chaotic_propagation_real(ex: Arc<Executor<'static>>) {
     // ============================================================
     // 5. Assert the new synced DAG has the same contents as others
     // ============================================================
-    info!("another 555555555");
     assert_dags(&eg_instances, n_events + 1, &mut rng).await;
 
     // Stop the P2P network

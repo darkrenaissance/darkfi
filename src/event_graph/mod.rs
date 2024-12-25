@@ -160,7 +160,6 @@ impl DAGStore {
     /// This is called if prune_task activates.
     pub async fn add_dag(&mut self, dag_name: &str, genesis_event: &Event) {
         debug!("add_dag::dags: {}", self.dags.len());
-        // TODO: sort dags by timestamp and drop the oldest
         if self.dags.len() > DAGS_MAX_NUMBER.try_into().unwrap() {
             while self.dags.len() >= DAGS_MAX_NUMBER.try_into().unwrap() {
                 debug!("[EVENTGRAPH] dropping oldest dag");
@@ -908,7 +907,6 @@ impl EventGraph {
         vec_tips
     }
 
-    // TODO: Fix fetching all events from all dags and then order and retrun them
     /// Perform a topological sort of the DAG.
     pub async fn order_events(&self) -> Vec<Event> {
         let mut ordered_events = VecDeque::new();

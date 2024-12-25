@@ -25,7 +25,7 @@ use std::{
 };
 
 use darkfi_serial::{deserialize, deserialize_async, serialize};
-use log::{error, info};
+use log::error;
 use sled_overlay::sled;
 use tinyjson::JsonValue;
 
@@ -125,7 +125,6 @@ pub fn generate_genesis(days_rotation: u64) -> Event {
         // Calculate the timestamp of the most recent event
         INITIAL_GENESIS + (rotations_since_genesis * days_rotation * DAY as u64)
     };
-    info!("generate ts: {}", timestamp);
     Event {
         timestamp,
         content: GENESIS_CONTENTS.to_vec(),
