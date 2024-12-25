@@ -59,6 +59,19 @@ impl RequestHandler<()> for Explorerd {
             "blocks.get_block_by_hash" => self.blocks_get_block_by_hash(req.id, req.params).await,
 
             // =====================
+            // Contract methods
+            // =====================
+            "contracts.get_native_contracts" => {
+                self.contracts_get_native_contracts(req.id, req.params).await
+            }
+            "contracts.get_contract_source_code_paths" => {
+                self.contracts_get_contract_source_code_paths(req.id, req.params).await
+            }
+            "contracts.get_contract_source" => {
+                self.contracts_get_contract_source(req.id, req.params).await
+            }
+
+            // =====================
             // Transactions methods
             // =====================
             "transactions.get_transactions_by_header_hash" => {

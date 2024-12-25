@@ -57,6 +57,7 @@ mod error;
 /// JSON-RPC requests handler and methods
 mod rpc;
 mod rpc_blocks;
+mod rpc_contracts;
 mod rpc_statistics;
 mod rpc_transactions;
 
