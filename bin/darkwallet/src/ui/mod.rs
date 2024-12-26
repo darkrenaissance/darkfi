@@ -25,7 +25,7 @@ use crate::{
     error::{Error, Result},
     expr::{SExprMachine, SExprVal},
     gfx::{GfxBufferId, GfxDrawCall, GfxDrawMesh, GfxTextureId, Point, Rectangle},
-    prop::{PropertyPtr, Role},
+    prop::{ModifyAction, PropertyPtr, Role},
     scene::{Pimpl, SceneNode as SceneNode3, SceneNodeId, SceneNodePtr},
     ExecutorPtr,
 };
@@ -121,10 +121,10 @@ impl<T: Send + Sync + 'static> OnModify<T> {
         let node_name = self.node_name.clone();
         let node_id = self.node_id;
 
-        let mut on_modify_subs = vec![prop.subscribe_modify()];
+        let mut on_modify_subs = vec![(None, prop.subscribe_modify())];
         for dep in prop.get_depends() {
             let Some(dep_prop) = dep.prop.upgrade() else { continue };
-            on_modify_subs.push(dep_prop.subscribe_modify());
+            on_modify_subs.push((Some(dep.i), dep_prop.subscribe_modify()));
         }
 
         let prop_name = prop.name.clone();
@@ -132,15 +132,15 @@ impl<T: Send + Sync + 'static> OnModify<T> {
         let task = self.ex.spawn(async move {
             loop {
                 let mut poll_queues = FuturesUnordered::new();
-                for (i, on_modify_sub) in on_modify_subs.iter().enumerate() {
+                for (i, (prop_i, on_modify_sub)) in on_modify_subs.iter().enumerate() {
                     let recv = on_modify_sub.receive();
                     poll_queues.push(async move {
-                        let (role, _action) = recv.await.ok()?;
-                        Some((i, role))
+                        let (role, action) = recv.await.ok()?;
+                        Some((i, prop_i, role, action))
                     });
                 }
 
-                let Some(Some((idx, role))) = poll_queues.next().await else {
+                let Some(Some((idx, prop_i, role, action))) = poll_queues.next().await else {
                     error!(target: "app", "Property '{}':{}/'{}' on_modify pipe is broken", node_name, node_id, prop_name);
                     return
                 };
@@ -148,6 +148,13 @@ impl<T: Send + Sync + 'static> OnModify<T> {
                 // Skip internal messages from ourselves
                 if idx == 0 && role == Role::Internal {
                     continue
+                }
+                if let Some(prop_i) = prop_i {
+                    match action {
+                        ModifyAction::Set(i) => if *prop_i != i { continue },
+                        ModifyAction::SetCache(idxs) => if !idxs.contains(prop_i) { continue },
+                        _ => continue
+                    }
                 }
 
                 debug!(target: "app", "Property '{}':{}/'{}' modified", node_name, node_id, prop_name);

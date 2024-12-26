@@ -331,6 +331,10 @@ pub fn create_chatedit(name: &str) -> SceneNode {
     prop.set_range_f32(0., f32::MAX);
     node.add_property(prop).unwrap();
 
+    let mut prop = Property::new("handle_descent", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_range_f32(0., f32::MAX);
+    node.add_property(prop).unwrap();
+
     let mut prop = Property::new("hi_bg_color", PropertyType::Float32, PropertySubType::Color);
     prop.set_array_len(4);
     prop.set_range_f32(0., 1.);

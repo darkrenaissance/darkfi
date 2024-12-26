@@ -218,6 +218,9 @@ impl Rectangle {
     pub fn center(&self) -> Point {
         Point { x: self.x + self.w / 2., y: self.y + self.h / 2. }
     }
+    pub fn top_right(&self) -> Point {
+        Point { x: self.rhs(), y: self.y }
+    }
 
     pub fn dim(&self) -> Dimension {
         Dimension { w: self.w, h: self.h }

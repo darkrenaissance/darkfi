@@ -1,6 +1,7 @@
 //% IMPORTS
 
 import android.view.inputmethod.InputMethodManager;
+import android.os.Environment;
 
 import autosuggest.CustomInputConnection;
 
@@ -12,6 +13,13 @@ public void cancelComposition() {
     InputMethodManager imm =
         (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
     imm.restartInput(view);
+}
+
+public String getAppDataPath() {
+    return getApplicationContext().getDataDir().getAbsolutePath();
+}
+public String getExternalStoragePath() {
+    return Environment.getExternalStorageDirectory().getAbsolutePath();
 }
 
 //% END

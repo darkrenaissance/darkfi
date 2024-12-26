@@ -370,7 +370,7 @@ fn glyphs_to_string(glyphs: &Vec<Glyph>) -> String {
     text
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Selection {
     pub start: TextPos,
     pub end: TextPos,
@@ -379,5 +379,11 @@ pub struct Selection {
 impl Selection {
     pub fn new(start: TextPos, end: TextPos) -> Self {
         Self { start, end }
+    }
+}
+
+impl std::fmt::Debug for Selection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{}, {}]", self.start, self.end)
     }
 }

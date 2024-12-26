@@ -285,12 +285,12 @@ impl PropertyRect {
 
     pub fn eval(&self, parent_rect: &Rectangle) -> Result<()> {
         self.eval_with(
-            0..4,
+            (0..4).collect(),
             vec![("w".to_string(), parent_rect.w), ("h".to_string(), parent_rect.h)],
         )
     }
 
-    pub fn eval_with(&self, range: Range<usize>, extras: Vec<(String, f32)>) -> Result<()> {
+    pub fn eval_with(&self, range: Vec<usize>, extras: Vec<(String, f32)>) -> Result<()> {
         let mut globals = vec![];
 
         for dep in self.prop.get_depends() {
@@ -305,10 +305,10 @@ impl PropertyRect {
             globals.push((name, SExprVal::Float32(val)));
         }
 
-        debug!(target: "prop::wrap", "PropertyRect::eval() [globals = {globals:?}]");
+        //debug!(target: "prop::wrap", "PropertyRect::eval() [globals = {globals:?}]");
 
         let mut changes = vec![];
-        for i in range.clone() {
+        for i in range {
             if !self.prop.is_expr(i)? {
                 continue
             }
