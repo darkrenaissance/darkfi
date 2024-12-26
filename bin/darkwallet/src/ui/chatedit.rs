@@ -207,6 +207,10 @@ impl WrappedLine {
     fn len(&self) -> usize {
         self.glyphs.len()
     }
+
+    fn first_pos(&self) -> TextPos {
+        self.off_pos
+    }
     fn last_pos(&self) -> TextPos {
         self.off_pos + self.len()
     }
@@ -653,11 +657,7 @@ impl ChatEdit {
 
         //debug!(target: "ui::chatedit", "regen_text_mesh() selections={selections:?}");
 
-        for wrap_line in wrapped_lines.lines {
-            // Just an assert
-            if self.is_phone_select.load(Ordering::Relaxed) {
-                assert!(selections.len() <= 1);
-            }
+        for wrap_line in &wrapped_lines.lines {
             let select_marks = self.mark_selected_glyphs(&wrap_line, &selections);
             self.draw_selected(&mut mesh, &select_marks, &wrap_line, curr_y);
 
@@ -694,6 +694,14 @@ impl ChatEdit {
             }
 
             curr_y += linespacing;
+        }
+
+        // Just an assert
+        if self.is_phone_select.load(Ordering::Relaxed) {
+            assert_eq!(selections.len(), 1);
+            let select = selections.last().unwrap();
+            self.draw_phone_select_handle(&mut mesh, select.start, &wrapped_lines, -1.);
+            self.draw_phone_select_handle(&mut mesh, select.end, &wrapped_lines, 1.);
         }
 
         mesh.alloc(&self.render_api).draw_with_texture(atlas.texture)
@@ -820,24 +828,29 @@ impl ChatEdit {
             h: select_ascent + select_descent,
         };
         mesh.draw_box(&select_rect, hi_bg_color, &Rectangle::zero());
-
-        let is_phone_select = self.is_phone_select.load(Ordering::Relaxed);
-        if is_phone_select {
-            self.draw_phone_select_handle(mesh, start_x, y_off, -1.);
-            self.draw_phone_select_handle(mesh, end_x, y_off, 1.);
-        }
     }
 
-    fn draw_phone_select_handle(&self, mesh: &mut MeshBuilder, x: f32, y_off: f32, side: f32) {
+    fn draw_phone_select_handle(
+        &self,
+        mesh: &mut MeshBuilder,
+        gpos: TextPos,
+        wrapped_lines: &WrappedLines,
+        side: f32,
+    ) {
         //debug!(target: "ui::chatedit", "draw_phone_select_handle(..., {x}, {side})");
-
         let baseline = self.baseline.get();
         let select_ascent = self.select_ascent.get();
         let handle_descent = self.handle_descent.get();
         let color = self.text_hi_color.get();
+        let linespacing = self.linespacing.get();
         // Transparent for fade
         let mut color_trans = color.clone();
         color_trans[3] = 0.;
+
+        // find start_x
+        let (glyph_rect, line_idx) = wrapped_lines.get_glyph_info(gpos);
+        let x = glyph_rect.x;
+        let y_off = line_idx as f32 * linespacing;
 
         // Vertical line downwards. We use this instead of draw_box() so we have a fade.
         let verts = vec![
