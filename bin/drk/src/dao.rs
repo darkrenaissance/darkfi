@@ -1862,6 +1862,64 @@ impl Drk {
         Ok(proposal_record)
     }
 
+    /// Create a DAO generic proposal.
+    pub async fn dao_propose_generic(
+        &self,
+        name: &str,
+        duration_blockwindows: u64,
+        user_data: Option<pallas::Base>,
+    ) -> Result<ProposalRecord> {
+        // Fetch DAO and check its deployed
+        let dao = self.get_dao_by_name(name).await?;
+        if dao.leaf_position.is_none() || dao.tx_hash.is_none() || dao.call_index.is_none() {
+            return Err(Error::Custom(
+                "[dao_propose_transfer] DAO seems to not have been deployed yet".to_string(),
+            ))
+        }
+
+        // Check that we have the proposer key
+        if dao.params.proposer_secret_key.is_none() {
+            return Err(Error::Custom(
+                "[dao_propose_transfer] We need the proposer secret key to create proposals for this DAO".to_string(),
+            ))
+        }
+
+        // Retrieve next block height and current block time target,
+        // to compute their window.
+        let next_block_height = self.get_next_block_height().await?;
+        let block_target = self.get_block_target().await?;
+        let creation_blockwindow = blockwindow(next_block_height, block_target);
+
+        // Create the actual proposal
+        let proposal = DaoProposal {
+            auth_calls: vec![],
+            creation_blockwindow,
+            duration_blockwindows,
+            user_data: user_data.unwrap_or(pallas::Base::ZERO),
+            dao_bulla: dao.bulla(),
+            blind: Blind::random(&mut OsRng),
+        };
+
+        let proposal_record = ProposalRecord {
+            proposal,
+            data: None,
+            leaf_position: None,
+            money_snapshot_tree: None,
+            nullifiers_smt_snapshot: None,
+            tx_hash: None,
+            call_index: None,
+            exec_tx_hash: None,
+        };
+
+        if let Err(e) = self.put_dao_proposal(&proposal_record).await {
+            return Err(Error::DatabaseError(format!(
+                "[dao_propose_transfer] Put DAO proposal failed: {e:?}"
+            )))
+        }
+
+        Ok(proposal_record)
+    }
+
     /// Create a DAO transfer proposal transaction.
     pub async fn dao_transfer_proposal_tx(&self, proposal: &ProposalRecord) -> Result<Transaction> {
         // Check we know the plaintext data
@@ -1917,6 +1975,196 @@ impl Drk {
                 "[dao_transfer_proposal_tx] Not enough DAO balance for token ID: {}",
                 proposal_coinattrs.token_id,
             )))
+        }
+
+        // Fetch our own governance OwnCoins to see what our balance is
+        let gov_owncoins = self.get_token_coins(&dao.params.dao.gov_token_id).await?;
+        if gov_owncoins.is_empty() {
+            return Err(Error::Custom(format!(
+                "[dao_transfer_proposal_tx] Did not find any governance {} coins in wallet",
+                dao.params.dao.gov_token_id
+            )))
+        }
+
+        // Find which governance coins we can use
+        let mut total_value = 0;
+        let mut gov_owncoins_to_use = vec![];
+        for gov_owncoin in gov_owncoins {
+            if total_value >= dao.params.dao.proposer_limit {
+                break
+            }
+
+            total_value += gov_owncoin.note.value;
+            gov_owncoins_to_use.push(gov_owncoin);
+        }
+
+        // Check our governance coins balance is sufficient
+        if total_value < dao.params.dao.proposer_limit {
+            return Err(Error::Custom(format!(
+                "[dao_transfer_proposal_tx] Not enough gov token {} balance to propose",
+                dao.params.dao.gov_token_id
+            )))
+        }
+
+        // Now we need to do a lookup for the zkas proof bincodes, and create
+        // the circuit objects and proving keys so we can build the transaction.
+        // We also do this through the RPC. First we grab the fee call from money.
+        let zkas_bins = self.lookup_zkas(&MONEY_CONTRACT_ID).await?;
+
+        let Some(fee_zkbin) = zkas_bins.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_FEE_NS_V1)
+        else {
+            return Err(Error::Custom(
+                "[dao_transfer_proposal_tx] Fee circuit not found".to_string(),
+            ))
+        };
+
+        let fee_zkbin = ZkBinary::decode(&fee_zkbin.1)?;
+
+        let fee_circuit = ZkCircuit::new(empty_witnesses(&fee_zkbin)?, &fee_zkbin);
+
+        // Creating Fee circuit proving key
+        let fee_pk = ProvingKey::build(fee_zkbin.k, &fee_circuit);
+
+        // Now we grab the DAO bins
+        let zkas_bins = self.lookup_zkas(&DAO_CONTRACT_ID).await?;
+
+        let Some(propose_burn_zkbin) =
+            zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS)
+        else {
+            return Err(Error::Custom(
+                "[dao_transfer_proposal_tx] Propose Burn circuit not found".to_string(),
+            ))
+        };
+
+        let Some(propose_main_zkbin) =
+            zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS)
+        else {
+            return Err(Error::Custom(
+                "[dao_transfer_proposal_tx] Propose Main circuit not found".to_string(),
+            ))
+        };
+
+        let propose_burn_zkbin = ZkBinary::decode(&propose_burn_zkbin.1)?;
+        let propose_main_zkbin = ZkBinary::decode(&propose_main_zkbin.1)?;
+
+        let propose_burn_circuit =
+            ZkCircuit::new(empty_witnesses(&propose_burn_zkbin)?, &propose_burn_zkbin);
+        let propose_main_circuit =
+            ZkCircuit::new(empty_witnesses(&propose_main_zkbin)?, &propose_main_zkbin);
+
+        // Creating DAO ProposeBurn and ProposeMain circuits proving keys
+        let propose_burn_pk = ProvingKey::build(propose_burn_zkbin.k, &propose_burn_circuit);
+        let propose_main_pk = ProvingKey::build(propose_main_zkbin.k, &propose_main_circuit);
+
+        // Fetch our money Merkle tree
+        let money_merkle_tree = self.get_money_tree().await?;
+
+        // Now we can create the proposal transaction parameters.
+        // We first generate the `DaoProposeStakeInput` inputs,
+        // using our governance OwnCoins.
+        let mut inputs = Vec::with_capacity(gov_owncoins_to_use.len());
+        for gov_owncoin in gov_owncoins_to_use {
+            let input = DaoProposeStakeInput {
+                secret: gov_owncoin.secret,
+                note: gov_owncoin.note.clone(),
+                leaf_position: gov_owncoin.leaf_position,
+                merkle_path: money_merkle_tree.witness(gov_owncoin.leaf_position, 0).unwrap(),
+            };
+            inputs.push(input);
+        }
+
+        // Now create the parameters for the proposal tx
+        let signature_secret = SecretKey::random(&mut OsRng);
+
+        // Fetch the daos Merkle tree to compute the DAO Merkle path and root
+        let (daos_tree, _) = self.get_dao_trees().await?;
+        let (dao_merkle_path, dao_merkle_root) = {
+            let root = daos_tree.root(0).unwrap();
+            let leaf_pos = dao.leaf_position.unwrap();
+            let dao_merkle_path = daos_tree.witness(leaf_pos, 0).unwrap();
+            (dao_merkle_path, root)
+        };
+
+        // Generate the Money nullifiers Sparse Merkle Tree
+        let store = WalletStorage::new(
+            &self.wallet,
+            &MONEY_SMT_TABLE,
+            MONEY_SMT_COL_KEY,
+            MONEY_SMT_COL_VALUE,
+        );
+        let money_null_smt = WalletSmt::new(store, PoseidonFp::new(), &EMPTY_NODES_FP);
+
+        // Create the proposal call
+        let call = DaoProposeCall {
+            money_null_smt: &money_null_smt,
+            inputs,
+            proposal: proposal.proposal.clone(),
+            dao: dao.params.dao,
+            dao_leaf_position: dao.leaf_position.unwrap(),
+            dao_merkle_path,
+            dao_merkle_root,
+            signature_secret,
+        };
+
+        let (params, proofs) = call.make(
+            &dao.params.proposer_secret_key.unwrap(),
+            &propose_burn_zkbin,
+            &propose_burn_pk,
+            &propose_main_zkbin,
+            &propose_main_pk,
+        )?;
+
+        // Encode the call
+        let mut data = vec![DaoFunction::Propose as u8];
+        params.encode_async(&mut data).await?;
+        let call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
+
+        // Create the TransactionBuilder containing above call
+        let mut tx_builder = TransactionBuilder::new(ContractCallLeaf { call, proofs }, vec![])?;
+
+        // We first have to execute the fee-less tx to gather its used gas, and then we feed
+        // it into the fee-creating function.
+        let mut tx = tx_builder.build()?;
+        let sigs = tx.create_sigs(&[signature_secret])?;
+        tx.signatures = vec![sigs];
+
+        let tree = self.get_money_tree().await?;
+        let (fee_call, fee_proofs, fee_secrets) =
+            self.append_fee_call(&tx, &tree, &fee_pk, &fee_zkbin, None).await?;
+
+        // Append the fee call to the transaction
+        tx_builder.append(ContractCallLeaf { call: fee_call, proofs: fee_proofs }, vec![])?;
+
+        // Now build the actual transaction and sign it with all necessary keys.
+        let mut tx = tx_builder.build()?;
+        let sigs = tx.create_sigs(&[signature_secret])?;
+        tx.signatures.push(sigs);
+        let sigs = tx.create_sigs(&fee_secrets)?;
+        tx.signatures.push(sigs);
+
+        Ok(tx)
+    }
+
+    /// Create a DAO generic proposal transaction.
+    pub async fn dao_generic_proposal_tx(&self, proposal: &ProposalRecord) -> Result<Transaction> {
+        // Fetch DAO and check its deployed
+        let Ok(dao) = self.get_dao_by_bulla(&proposal.proposal.dao_bulla).await else {
+            return Err(Error::Custom(format!(
+                "[dao_transfer_proposal_tx] DAO {} was not found",
+                proposal.proposal.dao_bulla
+            )))
+        };
+        if dao.leaf_position.is_none() || dao.tx_hash.is_none() || dao.call_index.is_none() {
+            return Err(Error::Custom(
+                "[dao_transfer_proposal_tx] DAO seems to not have been deployed yet".to_string(),
+            ))
+        }
+
+        // Check that we have the proposer key
+        if dao.params.proposer_secret_key.is_none() {
+            return Err(Error::Custom(
+                "[dao_transfer_proposal_tx] We need the proposer secret key to create proposals for this DAO".to_string(),
+            ))
         }
 
         // Fetch our own governance OwnCoins to see what our balance is
@@ -2612,6 +2860,155 @@ impl Drk {
         tx.signatures.push(sigs);
         let sigs = tx.create_sigs(&transfer_secrets.signature_secrets)?;
         tx.signatures.push(sigs);
+        let sigs = tx.create_sigs(&[exec_signature_secret])?;
+        tx.signatures.push(sigs);
+        let sigs = tx.create_sigs(&fee_secrets)?;
+        tx.signatures.push(sigs);
+
+        Ok(tx)
+    }
+
+    /// Execute a DAO generic proposal.
+    pub async fn dao_exec_generic(&self, proposal: &ProposalRecord) -> Result<Transaction> {
+        if proposal.leaf_position.is_none() ||
+            proposal.money_snapshot_tree.is_none() ||
+            proposal.nullifiers_smt_snapshot.is_none() ||
+            proposal.tx_hash.is_none() ||
+            proposal.call_index.is_none()
+        {
+            return Err(Error::Custom(
+                "[dao_exec_transfer] Proposal seems to not have been deployed yet".to_string(),
+            ))
+        }
+
+        // Check proposal is not executed
+        if let Some(exec_tx_hash) = proposal.exec_tx_hash {
+            return Err(Error::Custom(format!(
+                "[dao_exec_transfer] Proposal was executed on transaction: {exec_tx_hash}"
+            )))
+        }
+
+        // Fetch DAO and check its deployed
+        let Ok(dao) = self.get_dao_by_bulla(&proposal.proposal.dao_bulla).await else {
+            return Err(Error::Custom(format!(
+                "[dao_exec_transfer] DAO {} was not found",
+                proposal.proposal.dao_bulla
+            )))
+        };
+        if dao.leaf_position.is_none() || dao.tx_hash.is_none() || dao.call_index.is_none() {
+            return Err(Error::Custom(
+                "[dao_exec_transfer] DAO seems to not have been deployed yet".to_string(),
+            ))
+        }
+
+        // Check that we have the exec key
+        if dao.params.exec_secret_key.is_none() {
+            return Err(Error::Custom(
+                "[dao_exec_transfer] We need the exec secret key to execute proposals for this DAO"
+                    .to_string(),
+            ))
+        }
+
+        // Check proposal is approved
+        let votes = self.get_dao_proposal_votes(&proposal.bulla()).await?;
+        let mut yes_vote_value = 0;
+        let mut yes_vote_blind = Blind::ZERO;
+        let mut all_vote_value = 0;
+        let mut all_vote_blind = Blind::ZERO;
+        for vote in votes {
+            if vote.vote_option {
+                yes_vote_value += vote.all_vote_value;
+            };
+            yes_vote_blind += vote.yes_vote_blind;
+            all_vote_value += vote.all_vote_value;
+            all_vote_blind += vote.all_vote_blind;
+        }
+        let approval_ratio = (yes_vote_value as f64 * 100.0) / all_vote_value as f64;
+        if all_vote_value < dao.params.dao.quorum ||
+            approval_ratio <
+                (dao.params.dao.approval_ratio_quot / dao.params.dao.approval_ratio_base)
+                    as f64
+        {
+            return Err(Error::Custom(
+                "[dao_exec_transfer] Proposal is not approved yet".to_string(),
+            ))
+        };
+
+        // Now we need to do a lookup for the zkas proof bincodes, and create
+        // the circuit objects and proving keys so we can build the transaction.
+        // We also do this through the RPC. First we grab the calls from money.
+        let zkas_bins = self.lookup_zkas(&MONEY_CONTRACT_ID).await?;
+        let Some(fee_zkbin) = zkas_bins.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_FEE_NS_V1)
+        else {
+            return Err(Error::Custom("Fee circuit not found".to_string()))
+        };
+        let fee_zkbin = ZkBinary::decode(&fee_zkbin.1)?;
+        let fee_circuit = ZkCircuit::new(empty_witnesses(&fee_zkbin)?, &fee_zkbin);
+        let fee_pk = ProvingKey::build(fee_zkbin.k, &fee_circuit);
+
+        // Now we grab the DAO bins
+        let zkas_bins = self.lookup_zkas(&DAO_CONTRACT_ID).await?;
+        let Some(dao_exec_zkbin) = zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_DAO_EXEC_NS)
+        else {
+            return Err(Error::Custom("[dao_exec_transfer] DAO Exec circuit not found".to_string()))
+        };
+        let dao_exec_zkbin = ZkBinary::decode(&dao_exec_zkbin.1)?;
+        let dao_exec_circuit = ZkCircuit::new(empty_witnesses(&dao_exec_zkbin)?, &dao_exec_zkbin);
+        let dao_exec_pk = ProvingKey::build(dao_exec_zkbin.k, &dao_exec_circuit);
+
+        // Fetch our money Merkle tree
+        let tree = self.get_money_tree().await?;
+
+        // Retrieve next block height and current block time target,
+        // to compute their window.
+        let next_block_height = self.get_next_block_height().await?;
+        let block_target = self.get_block_target().await?;
+        let current_blockwindow = blockwindow(next_block_height, block_target);
+
+        // Create the exec call
+        let exec_signature_secret = SecretKey::random(&mut OsRng);
+        let exec_builder = DaoExecCall {
+            proposal: proposal.proposal.clone(),
+            dao: dao.params.dao.clone(),
+            yes_vote_value,
+            all_vote_value,
+            yes_vote_blind,
+            all_vote_blind,
+            signature_secret: exec_signature_secret,
+            current_blockwindow,
+        };
+        let (exec_params, exec_proofs) = exec_builder.make(
+            &dao.params.exec_secret_key.unwrap(),
+            &None,
+            &dao_exec_zkbin,
+            &dao_exec_pk,
+        )?;
+
+        // Encode the call
+        let mut data = vec![DaoFunction::Exec as u8];
+        exec_params.encode_async(&mut data).await?;
+        let exec_call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
+
+        // Create the TransactionBuilder containing above calls
+        let mut tx_builder = TransactionBuilder::new(
+            ContractCallLeaf { call: exec_call, proofs: exec_proofs },
+            vec![],
+        )?;
+
+        // We first have to execute the fee-less tx to gather its used gas, and then we feed
+        // it into the fee-creating function.
+        let mut tx = tx_builder.build()?;
+        let exec_sigs = tx.create_sigs(&[exec_signature_secret])?;
+        tx.signatures = vec![exec_sigs];
+
+        let (fee_call, fee_proofs, fee_secrets) =
+            self.append_fee_call(&tx, &tree, &fee_pk, &fee_zkbin, None).await?;
+
+        // Append the fee call to the transaction
+        tx_builder.append(ContractCallLeaf { call: fee_call, proofs: fee_proofs }, vec![])?;
+
+        // Now build the actual transaction and sign it with all necessary keys.
+        let mut tx = tx_builder.build()?;
         let sigs = tx.create_sigs(&[exec_signature_secret])?;
         tx.signatures.push(sigs);
         let sigs = tx.create_sigs(&fee_secrets)?;

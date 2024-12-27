@@ -305,13 +305,17 @@ pub fn generate_completions(shell: &str) -> Result<()> {
         .about("Create a transfer proposal for a DAO")
         .args(&vec![
             name.clone(),
-            duration,
+            duration.clone(),
             amount,
             token,
             recipient,
             spend_hook.clone(),
             user_data.clone(),
         ]);
+
+    let propose_generic = SubCommand::with_name("propose-generic")
+        .about("Create a generic proposal for a DAO")
+        .args(&vec![name.clone(), duration, user_data.clone()]);
 
     let proposals =
         SubCommand::with_name("proposals").about("List DAO proposals").args(&vec![name]);
@@ -355,6 +359,7 @@ pub fn generate_completions(shell: &str) -> Result<()> {
         balance,
         mint,
         propose_transfer,
+        propose_generic,
         proposals,
         proposal,
         proposal_import,

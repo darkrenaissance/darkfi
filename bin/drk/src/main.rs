@@ -342,6 +342,18 @@ enum DaoSubcmd {
         user_data: Option<String>,
     },
 
+    /// Create a generic proposal for a DAO
+    ProposeGeneric {
+        /// Name identifier for the DAO
+        name: String,
+
+        /// Duration of the proposal, in block windows
+        duration: u64,
+
+        /// Optional user data to use
+        user_data: Option<String>,
+    },
+
     /// List DAO proposals
     Proposals {
         /// Name identifier for the DAO
@@ -1428,6 +1440,50 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 drk.stop_rpc_client().await
             }
 
+            DaoSubcmd::ProposeGeneric { name, duration, user_data } => {
+                let drk = new_wallet(
+                    blockchain_config.wallet_path,
+                    blockchain_config.wallet_pass,
+                    Some(blockchain_config.endpoint),
+                    ex,
+                    args.fun,
+                )
+                .await;
+
+                let user_data = match user_data {
+                    Some(u) => {
+                        let bytes: [u8; 32] = match bs58::decode(&u).into_vec()?.try_into() {
+                            Ok(b) => b,
+                            Err(e) => {
+                                eprintln!("Invalid user data: {e:?}");
+                                exit(2);
+                            }
+                        };
+
+                        match pallas::Base::from_repr(bytes).into() {
+                            Some(v) => Some(v),
+                            None => {
+                                eprintln!("Invalid user data");
+                                exit(2);
+                            }
+                        }
+                    }
+                    None => None,
+                };
+
+                let proposal = match drk.dao_propose_generic(&name, duration, user_data).await {
+                    Ok(p) => p,
+                    Err(e) => {
+                        eprintln!("Failed to create DAO transfer proposal: {e:?}");
+                        exit(2);
+                    }
+                };
+
+                println!("Generated proposal: {}", proposal.bulla());
+
+                drk.stop_rpc_client().await
+            }
+
             DaoSubcmd::Proposals { name } => {
                 let drk = new_wallet(
                     blockchain_config.wallet_path,
@@ -1483,7 +1539,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 }
 
                 if mint_proposal {
+                    // Identify proposal type by its auth calls
                     for call in &proposal.proposal.auth_calls {
+                        // We only support transfer right now
                         if call.function_code == DaoFunction::AuthMoneyTransfer as u8 {
                             let tx = match drk.dao_transfer_proposal_tx(&proposal).await {
                                 Ok(tx) => tx,
@@ -1496,6 +1554,20 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                             println!("{}", base64::encode(&serialize_async(&tx).await));
                             return drk.stop_rpc_client().await
                         }
+                    }
+
+                    // If proposal has no auth calls, we consider it a generic one
+                    if proposal.proposal.auth_calls.is_empty() {
+                        let tx = match drk.dao_generic_proposal_tx(&proposal).await {
+                            Ok(tx) => tx,
+                            Err(e) => {
+                                eprintln!("Failed to create DAO generic proposal: {e:?}");
+                                exit(2);
+                            }
+                        };
+
+                        println!("{}", base64::encode(&serialize_async(&tx).await));
+                        return drk.stop_rpc_client().await
                     }
 
                     eprintln!("Unsuported DAO proposal");
@@ -1581,7 +1653,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
                 let outcome = if table.is_empty() {
                     println!("Votes: No votes found");
-                    "Rejected"
+                    "Unknown"
                 } else {
                     println!("Votes:");
                     println!("{table}");
@@ -1751,7 +1823,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 .await;
                 let proposal = drk.get_dao_proposal_by_bulla(&bulla).await?;
 
+                // Identify proposal type by its auth calls
                 for call in &proposal.proposal.auth_calls {
+                    // We only support transfer right now
                     if call.function_code == DaoFunction::AuthMoneyTransfer as u8 {
                         let tx = match drk.dao_exec_transfer(&proposal).await {
                             Ok(tx) => tx,
@@ -1764,6 +1838,20 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                         println!("{}", base64::encode(&serialize_async(&tx).await));
                         return drk.stop_rpc_client().await
                     }
+                }
+
+                // If proposal has no auth calls, we consider it a generic one
+                if proposal.proposal.auth_calls.is_empty() {
+                    let tx = match drk.dao_exec_generic(&proposal).await {
+                        Ok(tx) => tx,
+                        Err(e) => {
+                            eprintln!("Failed to execute DAO generic proposal: {e:?}");
+                            exit(2);
+                        }
+                    };
+
+                    println!("{}", base64::encode(&serialize_async(&tx).await));
+                    return drk.stop_rpc_client().await
                 }
 
                 eprintln!("Unsuported DAO proposal");
