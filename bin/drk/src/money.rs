@@ -837,7 +837,7 @@ impl Drk {
     ) -> Result<bool> {
         let (nullifiers, coins, notes, freezes) = self.parse_money_call(call_idx, calls).await?;
         let secrets = self.get_money_secrets().await?;
-        let dao_secrets = self.get_dao_secrets().await?;
+        let dao_notes_secrets = self.get_dao_notes_secrets().await?;
         let mut tree = self.get_money_tree().await?;
 
         let mut owncoins = vec![];
@@ -847,7 +847,7 @@ impl Drk {
             tree.append(MerkleNode::from(coin.inner()));
 
             // Attempt to decrypt the note
-            for secret in secrets.iter().chain(dao_secrets.iter()) {
+            for secret in secrets.iter().chain(dao_notes_secrets.iter()) {
                 if let Ok(note) = note.decrypt::<MoneyNote>(secret) {
                     println!("[apply_tx_money_data] Successfully decrypted a Money Note");
                     println!("[apply_tx_money_data] Witnessing coin in Merkle tree");

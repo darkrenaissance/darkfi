@@ -261,6 +261,9 @@ pub fn generate_completions(shell: &str) -> Result<()> {
     let quorum = Arg::with_name("quorum")
         .help("Minimal threshold of participating total tokens needed for a proposal to pass");
 
+    let early_exec_quorum = Arg::with_name("early-exec-quorum")
+        .help("Minimal threshold of participating total tokens needed for a proposal to be considered as strongly supported, enabling early execution. Must be greater or equal to normal quorum.");
+
     let approval_ratio = Arg::with_name("approval-ratio")
         .help("The ratio of winning votes/total votes needed for a proposal to pass (2 decimals)");
 
@@ -269,6 +272,7 @@ pub fn generate_completions(shell: &str) -> Result<()> {
     let create = SubCommand::with_name("create").about("Create DAO parameters").args(&vec![
         proposer_limit,
         quorum,
+        early_exec_quorum,
         approval_ratio,
         gov_token_id,
     ]);

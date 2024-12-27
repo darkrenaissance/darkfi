@@ -207,9 +207,9 @@ pub fn inject(sled_db: &sled::Db, vks: &Vks) -> Result<()> {
             DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS |
             DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS |
             DAO_CONTRACT_ZKAS_DAO_EXEC_NS |
+            DAO_CONTRACT_ZKAS_DAO_EARLY_EXEC_NS |
             DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS |
-            DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS |
-            DAO_CONTRACT_ZKAS_DAO_EARLY_EXEC_NS => {
+            DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS => {
                 let key = serialize(&namespace.as_str());
                 let value = serialize(&(bincode.clone(), vk.clone()));
                 dao_tree.insert(key, value)?;

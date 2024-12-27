@@ -43,7 +43,8 @@ use darkfi_dao_contract::{blockwindow, model::DaoProposalBulla, DaoFunction};
 use darkfi_money_contract::model::{Coin, CoinAttributes, TokenId};
 use darkfi_sdk::{
     crypto::{
-        note::AeadEncryptedNote, BaseBlind, FuncId, FuncRef, PublicKey, SecretKey, DAO_CONTRACT_ID,
+        note::AeadEncryptedNote, BaseBlind, FuncId, FuncRef, Keypair, PublicKey, SecretKey,
+        DAO_CONTRACT_ID,
     },
     pasta::{group::ff::PrimeField, pallas},
     tx::TransactionHash,
@@ -280,6 +281,10 @@ enum DaoSubcmd {
         proposer_limit: String,
         /// Minimal threshold of participating total tokens needed for a proposal to pass
         quorum: String,
+        /// Minimal threshold of participating total tokens needed for a proposal to
+        /// be considered as strongly supported, enabling early execution.
+        /// Must be greater or equal to normal quorum.
+        early_exec_quorum: String,
         /// The ratio of winning votes/total votes needed for a proposal to pass (2 decimals)
         approval_ratio: f64,
         /// DAO's governance token ID
@@ -1132,7 +1137,13 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         },
 
         Subcmd::Dao { command } => match command {
-            DaoSubcmd::Create { proposer_limit, quorum, approval_ratio, gov_token_id } => {
+            DaoSubcmd::Create {
+                proposer_limit,
+                quorum,
+                early_exec_quorum,
+                approval_ratio,
+                gov_token_id,
+            } => {
                 if let Err(e) = f64::from_str(&proposer_limit) {
                     eprintln!("Invalid proposer limit: {e:?}");
                     exit(2);
@@ -1144,6 +1155,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
                 let proposer_limit = decode_base10(&proposer_limit, BALANCE_BASE10_DECIMALS, true)?;
                 let quorum = decode_base10(&quorum, BALANCE_BASE10_DECIMALS, true)?;
+                let early_exec_quorum =
+                    decode_base10(&early_exec_quorum, BALANCE_BASE10_DECIMALS, true)?;
 
                 if approval_ratio > 1.0 {
                     eprintln!("Error: Approval ratio cannot be >1.0");
@@ -1169,16 +1182,33 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     }
                 };
 
-                let secret_key = SecretKey::random(&mut OsRng);
+                let notes_keypair = Keypair::random(&mut OsRng);
+                let proposer_keypair = Keypair::random(&mut OsRng);
+                let proposals_keypair = Keypair::random(&mut OsRng);
+                let votes_keypair = Keypair::random(&mut OsRng);
+                let exec_keypair = Keypair::random(&mut OsRng);
+                let early_exec_keypair = Keypair::random(&mut OsRng);
                 let bulla_blind = BaseBlind::random(&mut OsRng);
 
                 let params = DaoParams::new(
                     proposer_limit,
                     quorum,
+                    early_exec_quorum,
                     approval_ratio_base,
                     approval_ratio_quot,
                     gov_token_id,
-                    secret_key,
+                    Some(notes_keypair.secret),
+                    notes_keypair.public,
+                    Some(proposer_keypair.secret),
+                    proposer_keypair.public,
+                    Some(proposals_keypair.secret),
+                    proposals_keypair.public,
+                    Some(votes_keypair.secret),
+                    votes_keypair.public,
+                    Some(exec_keypair.secret),
+                    exec_keypair.public,
+                    Some(early_exec_keypair.secret),
+                    early_exec_keypair.public,
                     bulla_blind,
                 );
 
@@ -1628,21 +1658,28 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 // Retrieve all DAOs to try to decrypt the proposal
                 let daos = drk.get_daos().await?;
                 for dao in &daos {
-                    if let Ok(proposal) =
-                        encrypted_proposal.decrypt::<ProposalRecord>(&dao.params.secret_key)
-                    {
-                        let proposal = match drk.get_dao_proposal_by_bulla(&proposal.bulla()).await
-                        {
-                            Ok(p) => {
-                                let mut our_proposal = p;
-                                our_proposal.data = proposal.data;
-                                our_proposal
-                            }
-                            Err(_) => proposal,
-                        };
+                    // Check if we have the proposals key
+                    let Some(proposals_secret_key) = dao.params.proposals_secret_key else {
+                        continue
+                    };
 
-                        return drk.put_dao_proposal(&proposal).await
-                    }
+                    // Try to decrypt the proposal
+                    let Ok(proposal) =
+                        encrypted_proposal.decrypt::<ProposalRecord>(&proposals_secret_key)
+                    else {
+                        continue
+                    };
+
+                    let proposal = match drk.get_dao_proposal_by_bulla(&proposal.bulla()).await {
+                        Ok(p) => {
+                            let mut our_proposal = p;
+                            our_proposal.data = proposal.data;
+                            our_proposal
+                        }
+                        Err(_) => proposal,
+                    };
+
+                    return drk.put_dao_proposal(&proposal).await
                 }
 
                 eprintln!("Couldn't decrypt the proposal with out DAO keys");

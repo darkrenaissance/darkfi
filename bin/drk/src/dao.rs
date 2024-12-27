@@ -58,7 +58,7 @@ use darkfi_sdk::{
         poseidon_hash,
         smt::{MemoryStorageFp, PoseidonFp, SmtMemoryFp, EMPTY_NODES_FP},
         util::{fp_mod_fv, fp_to_u64},
-        BaseBlind, Blind, FuncId, FuncRef, Keypair, MerkleNode, MerkleTree, PublicKey, ScalarBlind,
+        BaseBlind, Blind, FuncId, FuncRef, MerkleNode, MerkleTree, PublicKey, ScalarBlind,
         SecretKey, DAO_CONTRACT_ID, MONEY_CONTRACT_ID,
     },
     dark_tree::DarkTree,
@@ -129,45 +129,128 @@ pub const DAO_VOTES_COL_NULLIFIERS: &str = "nullifiers";
 pub struct DaoParams {
     /// The on chain representation of the DAO
     pub dao: Dao,
-    /// Secret key for the DAO
-    pub secret_key: SecretKey,
+    /// DAO notes decryption secret key
+    pub notes_secret_key: Option<SecretKey>,
+    /// DAO proposals creator secret key
+    pub proposer_secret_key: Option<SecretKey>,
+    /// DAO proposals viewer secret key
+    pub proposals_secret_key: Option<SecretKey>,
+    /// DAO votes viewer secret key
+    pub votes_secret_key: Option<SecretKey>,
+    /// DAO proposals executor secret key
+    pub exec_secret_key: Option<SecretKey>,
+    /// DAO strongly supported proposals executor secret key
+    pub early_exec_secret_key: Option<SecretKey>,
 }
 
 impl DaoParams {
+    /// Generate new `DaoParams`. If a specific secret key is provided,
+    /// the corresponding public key will be derived from it and ignore the provided one.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         proposer_limit: u64,
         quorum: u64,
+        early_exec_quorum: u64,
         approval_ratio_base: u64,
         approval_ratio_quot: u64,
         gov_token_id: TokenId,
-        secret_key: SecretKey,
+        notes_secret_key: Option<SecretKey>,
+        notes_public_key: PublicKey,
+        proposer_secret_key: Option<SecretKey>,
+        proposer_public_key: PublicKey,
+        proposals_secret_key: Option<SecretKey>,
+        proposals_public_key: PublicKey,
+        votes_secret_key: Option<SecretKey>,
+        votes_public_key: PublicKey,
+        exec_secret_key: Option<SecretKey>,
+        exec_public_key: PublicKey,
+        early_exec_secret_key: Option<SecretKey>,
+        early_exec_public_key: PublicKey,
         bulla_blind: BaseBlind,
     ) -> Self {
-        // TODO: use diff keys and early exec quorum
+        // Derive corresponding keys from their secret or use the provided ones.
+        let notes_public_key = match notes_secret_key {
+            Some(secret_key) => PublicKey::from_secret(secret_key),
+            None => notes_public_key,
+        };
+        let proposer_public_key = match proposer_secret_key {
+            Some(secret_key) => PublicKey::from_secret(secret_key),
+            None => proposer_public_key,
+        };
+        let proposals_public_key = match proposals_secret_key {
+            Some(secret_key) => PublicKey::from_secret(secret_key),
+            None => proposals_public_key,
+        };
+        let votes_public_key = match votes_secret_key {
+            Some(secret_key) => PublicKey::from_secret(secret_key),
+            None => votes_public_key,
+        };
+        let exec_public_key = match exec_secret_key {
+            Some(secret_key) => PublicKey::from_secret(secret_key),
+            None => exec_public_key,
+        };
+        let early_exec_public_key = match early_exec_secret_key {
+            Some(secret_key) => PublicKey::from_secret(secret_key),
+            None => early_exec_public_key,
+        };
+
         let dao = Dao {
             proposer_limit,
             quorum,
-            early_exec_quorum: quorum,
+            early_exec_quorum,
             approval_ratio_base,
             approval_ratio_quot,
             gov_token_id,
-            notes_public_key: PublicKey::from_secret(secret_key),
-            proposer_public_key: PublicKey::from_secret(secret_key),
-            proposals_public_key: PublicKey::from_secret(secret_key),
-            votes_public_key: PublicKey::from_secret(secret_key),
-            exec_public_key: PublicKey::from_secret(secret_key),
-            early_exec_public_key: PublicKey::from_secret(secret_key),
+            notes_public_key,
+            proposer_public_key,
+            proposals_public_key,
+            votes_public_key,
+            exec_public_key,
+            early_exec_public_key,
             bulla_blind,
         };
-        Self { dao, secret_key }
+        Self {
+            dao,
+            notes_secret_key,
+            proposer_secret_key,
+            proposals_secret_key,
+            votes_secret_key,
+            exec_secret_key,
+            early_exec_secret_key,
+        }
     }
 }
 
 impl fmt::Display for DaoParams {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        // TODO: add missing fields
+        // Grab known secret keys
+        let notes_secret_key = match self.notes_secret_key {
+            Some(secret_key) => format!("{secret_key}"),
+            None => "None".to_string(),
+        };
+        let proposer_secret_key = match self.proposer_secret_key {
+            Some(secret_key) => format!("{secret_key}"),
+            None => "None".to_string(),
+        };
+        let proposals_secret_key = match self.proposals_secret_key {
+            Some(secret_key) => format!("{secret_key}"),
+            None => "None".to_string(),
+        };
+        let votes_secret_key = match self.votes_secret_key {
+            Some(secret_key) => format!("{secret_key}"),
+            None => "None".to_string(),
+        };
+        let exec_secret_key = match self.exec_secret_key {
+            Some(secret_key) => format!("{secret_key}"),
+            None => "None".to_string(),
+        };
+        let early_exec_secret_key = match self.early_exec_secret_key {
+            Some(secret_key) => format!("{secret_key}"),
+            None => "None".to_string(),
+        };
+
         let s = format!(
-            "{}\n{}\n{}: {} ({})\n{}: {} ({})\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {:?}",
+            "{}\n{}\n{}: {} ({})\n{}: {} ({})\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {:?}",
             "DAO Parameters",
             "==============",
             "Proposer limit",
@@ -180,10 +263,30 @@ impl fmt::Display for DaoParams {
             self.dao.approval_ratio_quot as f64 / self.dao.approval_ratio_base as f64,
             "Governance Token ID",
             self.dao.gov_token_id,
-            "Public key",
+            "Notes Public key",
             self.dao.notes_public_key,
-            "Secret key",
-            self.secret_key,
+            "Notes Secret key",
+            notes_secret_key,
+            "Proposer Public key",
+            self.dao.proposer_public_key,
+            "Proposer Secret key",
+            proposer_secret_key,
+            "Proposals Public key",
+            self.dao.proposals_public_key,
+            "Proposals Secret key",
+            proposals_secret_key,
+            "Votes Public key",
+            self.dao.votes_public_key,
+            "Votes Secret key",
+            votes_secret_key,
+            "Exec Public key",
+            self.dao.exec_public_key,
+            "Exec Secret key",
+            exec_secret_key,
+            "Early Exec Public key",
+            self.dao.early_exec_public_key,
+            "Early Exec Secret key",
+            early_exec_secret_key,
             "Bulla blind",
             self.dao.bulla_blind,
         );
@@ -221,15 +324,37 @@ impl DaoRecord {
     pub fn bulla(&self) -> DaoBulla {
         self.params.dao.to_bulla()
     }
-
-    pub fn keypair(&self) -> Keypair {
-        let public = PublicKey::from_secret(self.params.secret_key);
-        Keypair { public, secret: self.params.secret_key }
-    }
 }
 
 impl fmt::Display for DaoRecord {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // Grab known secret keys
+        let notes_secret_key = match self.params.notes_secret_key {
+            Some(secret_key) => format!("{secret_key}"),
+            None => "None".to_string(),
+        };
+        let proposer_secret_key = match self.params.proposer_secret_key {
+            Some(secret_key) => format!("{secret_key}"),
+            None => "None".to_string(),
+        };
+        let proposals_secret_key = match self.params.proposals_secret_key {
+            Some(secret_key) => format!("{secret_key}"),
+            None => "None".to_string(),
+        };
+        let votes_secret_key = match self.params.votes_secret_key {
+            Some(secret_key) => format!("{secret_key}"),
+            None => "None".to_string(),
+        };
+        let exec_secret_key = match self.params.exec_secret_key {
+            Some(secret_key) => format!("{secret_key}"),
+            None => "None".to_string(),
+        };
+        let early_exec_secret_key = match self.params.early_exec_secret_key {
+            Some(secret_key) => format!("{secret_key}"),
+            None => "None".to_string(),
+        };
+
+        // Grab mint information
         let leaf_position = match self.leaf_position {
             Some(p) => format!("{p:?}"),
             None => "None".to_string(),
@@ -242,9 +367,9 @@ impl fmt::Display for DaoRecord {
             Some(c) => format!("{c}"),
             None => "None".to_string(),
         };
-        // TODO: add missing fields
+
         let s = format!(
-            "{}\n{}\n{}: {}\n{}: {}\n{}: {} ({})\n{}: {} ({})\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}",
+            "{}\n{}\n{}: {}\n{}: {}\n{}: {} ({})\n{}: {} ({})\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}",
             "DAO Parameters",
             "==============",
             "Name",
@@ -261,10 +386,30 @@ impl fmt::Display for DaoRecord {
             self.params.dao.approval_ratio_quot as f64 / self.params.dao.approval_ratio_base as f64,
             "Governance Token ID",
             self.params.dao.gov_token_id,
-            "Public key",
+            "Notes Public key",
             self.params.dao.notes_public_key,
-            "Secret key",
-            self.params.secret_key,
+            "Notes Secret key",
+            notes_secret_key,
+            "Proposer Public key",
+            self.params.dao.proposer_public_key,
+            "Proposer Secret key",
+            proposer_secret_key,
+            "Proposals Public key",
+            self.params.dao.proposals_public_key,
+            "Proposals Secret key",
+            proposals_secret_key,
+            "Votes Public key",
+            self.params.dao.votes_public_key,
+            "Votes Secret key",
+            votes_secret_key,
+            "Exec Public key",
+            self.params.dao.exec_public_key,
+            "Exec Secret key",
+            exec_secret_key,
+            "Early Exec Public key",
+            self.params.dao.early_exec_public_key,
+            "Early Exec Secret key",
+            early_exec_secret_key,
             "Bulla blind",
             self.params.dao.bulla_blind,
             "Leaf position",
@@ -462,12 +607,14 @@ impl Drk {
         }
     }
 
-    /// Fetch all DAO secret keys from the wallet.
-    pub async fn get_dao_secrets(&self) -> Result<Vec<SecretKey>> {
+    /// Fetch all DAO notes secret keys from the wallet.
+    pub async fn get_dao_notes_secrets(&self) -> Result<Vec<SecretKey>> {
         let daos = self.get_daos().await?;
         let mut ret = Vec::with_capacity(daos.len());
         for dao in daos {
-            ret.push(dao.params.secret_key);
+            if let Some(secret_key) = dao.params.notes_secret_key {
+                ret.push(secret_key);
+            }
         }
 
         Ok(ret)
@@ -679,32 +826,34 @@ impl Drk {
         let (mut daos_tree, proposals_tree) = self.get_dao_trees().await?;
         daos_tree.append(MerkleNode::from(new_bulla.inner()));
         for dao in &daos {
-            if dao.bulla() == new_bulla {
-                println!(
-                    "[apply_dao_mint_data] Found minted DAO {}, noting down for wallet update",
-                    new_bulla
-                );
-
-                // We have this DAO imported in our wallet. Add the metadata:
-                let mut dao_to_confirm = dao.clone();
-                dao_to_confirm.leaf_position = daos_tree.mark();
-                dao_to_confirm.tx_hash = Some(tx_hash);
-                dao_to_confirm.call_index = Some(call_index);
-
-                // Update wallet data
-                if let Err(e) = self.put_dao_trees(&daos_tree, &proposals_tree).await {
-                    return Err(Error::DatabaseError(format!(
-                        "[apply_dao_mint_data] Put DAO tree failed: {e:?}"
-                    )))
-                }
-                if let Err(e) = self.confirm_dao(&dao_to_confirm).await {
-                    return Err(Error::DatabaseError(format!(
-                        "[apply_dao_mint_data] Confirm DAO failed: {e:?}"
-                    )))
-                }
-
-                return Ok(true);
+            if dao.bulla() != new_bulla {
+                continue
             }
+
+            println!(
+                "[apply_dao_mint_data] Found minted DAO {}, noting down for wallet update",
+                new_bulla
+            );
+
+            // We have this DAO imported in our wallet. Add the metadata:
+            let mut dao_to_confirm = dao.clone();
+            dao_to_confirm.leaf_position = daos_tree.mark();
+            dao_to_confirm.tx_hash = Some(tx_hash);
+            dao_to_confirm.call_index = Some(call_index);
+
+            // Update wallet data
+            if let Err(e) = self.put_dao_trees(&daos_tree, &proposals_tree).await {
+                return Err(Error::DatabaseError(format!(
+                    "[apply_dao_mint_data] Put DAO tree failed: {e:?}"
+                )))
+            }
+            if let Err(e) = self.confirm_dao(&dao_to_confirm).await {
+                return Err(Error::DatabaseError(format!(
+                    "[apply_dao_mint_data] Confirm DAO failed: {e:?}"
+                )))
+            }
+
+            return Ok(true);
         }
 
         Ok(false)
@@ -726,51 +875,56 @@ impl Drk {
         // If we're able to decrypt this note, that's the way to link it
         // to a specific DAO.
         for dao in &daos {
-            if let Ok(note) = params.note.decrypt::<DaoProposal>(&dao.params.secret_key) {
-                // We managed to decrypt it. Let's place this in a proper ProposalRecord object
-                println!("[apply_dao_propose_data] Managed to decrypt DAO proposal note");
+            // Check if we have the proposals key
+            let Some(proposals_secret_key) = dao.params.proposals_secret_key else { continue };
 
-                // We need to clone the trees here for reproducing the snapshot Merkle roots
-                let money_tree = self.get_money_tree().await?;
-                let nullifiers_smt = self.get_nullifiers_smt().await?;
+            // Try to decrypt the proposal note
+            let Ok(note) = params.note.decrypt::<DaoProposal>(&proposals_secret_key) else {
+                continue
+            };
 
-                // Check if we already got the record
-                let our_proposal =
-                    match self.get_dao_proposal_by_bulla(&params.proposal_bulla).await {
-                        Ok(p) => {
-                            let mut our_proposal = p;
-                            our_proposal.leaf_position = proposals_tree.mark();
-                            our_proposal.money_snapshot_tree = Some(money_tree);
-                            our_proposal.nullifiers_smt_snapshot = Some(nullifiers_smt);
-                            our_proposal.tx_hash = Some(tx_hash);
-                            our_proposal.call_index = Some(call_index);
-                            our_proposal
-                        }
-                        Err(_) => ProposalRecord {
-                            proposal: note,
-                            data: None,
-                            leaf_position: proposals_tree.mark(),
-                            money_snapshot_tree: Some(money_tree),
-                            nullifiers_smt_snapshot: Some(nullifiers_smt),
-                            tx_hash: Some(tx_hash),
-                            call_index: Some(call_index),
-                            exec_tx_hash: None,
-                        },
-                    };
+            // We managed to decrypt it. Let's place this in a proper ProposalRecord object
+            println!("[apply_dao_propose_data] Managed to decrypt DAO proposal note");
 
-                if let Err(e) = self.put_dao_trees(&daos_tree, &proposals_tree).await {
-                    return Err(Error::DatabaseError(format!(
-                        "[apply_dao_propose_data] Put DAO tree failed: {e:?}"
-                    )))
+            // We need to clone the trees here for reproducing the snapshot Merkle roots
+            let money_tree = self.get_money_tree().await?;
+            let nullifiers_smt = self.get_nullifiers_smt().await?;
+
+            // Check if we already got the record
+            let our_proposal = match self.get_dao_proposal_by_bulla(&params.proposal_bulla).await {
+                Ok(p) => {
+                    let mut our_proposal = p;
+                    our_proposal.leaf_position = proposals_tree.mark();
+                    our_proposal.money_snapshot_tree = Some(money_tree);
+                    our_proposal.nullifiers_smt_snapshot = Some(nullifiers_smt);
+                    our_proposal.tx_hash = Some(tx_hash);
+                    our_proposal.call_index = Some(call_index);
+                    our_proposal
                 }
-                if let Err(e) = self.put_dao_proposal(&our_proposal).await {
-                    return Err(Error::DatabaseError(format!(
-                        "[apply_dao_propose_data] Put DAO proposals failed: {e:?}"
-                    )))
-                }
+                Err(_) => ProposalRecord {
+                    proposal: note,
+                    data: None,
+                    leaf_position: proposals_tree.mark(),
+                    money_snapshot_tree: Some(money_tree),
+                    nullifiers_smt_snapshot: Some(nullifiers_smt),
+                    tx_hash: Some(tx_hash),
+                    call_index: Some(call_index),
+                    exec_tx_hash: None,
+                },
+            };
 
-                return Ok(true);
+            if let Err(e) = self.put_dao_trees(&daos_tree, &proposals_tree).await {
+                return Err(Error::DatabaseError(format!(
+                    "[apply_dao_propose_data] Put DAO tree failed: {e:?}"
+                )))
             }
+            if let Err(e) = self.put_dao_proposal(&our_proposal).await {
+                return Err(Error::DatabaseError(format!(
+                    "[apply_dao_propose_data] Put DAO proposals failed: {e:?}"
+                )))
+            }
+
+            return Ok(true);
         }
 
         Ok(false)
@@ -802,8 +956,11 @@ impl Drk {
             }
         };
 
+        // Check if we have the votes key
+        let Some(votes_secret_key) = dao.params.votes_secret_key else { return Ok(false) };
+
         // Decrypt the vote note
-        let note = match params.note.decrypt_unsafe(&dao.params.secret_key) {
+        let note = match params.note.decrypt_unsafe(&votes_secret_key) {
             Ok(n) => n,
             Err(e) => {
                 return Err(Error::DatabaseError(format!(
@@ -1237,6 +1394,7 @@ impl Drk {
     pub async fn import_dao(&self, name: &str, params: DaoParams) -> Result<()> {
         // First let's check if we've imported this DAO with the given name before.
         if self.get_dao_by_name(name).await.is_ok() {
+            // TODO: update `DaoParams` if the dao already exists
             return Err(Error::DatabaseError(
                 "[import_dao] This DAO has already been imported".to_string(),
             ))
@@ -1503,6 +1661,19 @@ impl Drk {
             ))
         }
 
+        // Check that we have all the keys
+        if dao.params.notes_secret_key.is_none() ||
+            dao.params.proposer_secret_key.is_none() ||
+            dao.params.proposals_secret_key.is_none() ||
+            dao.params.votes_secret_key.is_none() ||
+            dao.params.exec_secret_key.is_none() ||
+            dao.params.early_exec_secret_key.is_none()
+        {
+            return Err(Error::Custom(
+                "[dao_mint] We need all the secrets key to mint the DAO on-chain".to_string(),
+            ))
+        }
+
         // Now we need to do a lookup for the zkas proof bincodes, and create
         // the circuit objects and proving keys so we can build the transaction.
         // We also do this through the RPC. First we grab the fee call from money.
@@ -1536,15 +1707,15 @@ impl Drk {
         let dao_mint_pk = ProvingKey::build(dao_mint_zkbin.k, &dao_mint_circuit);
 
         // Create the DAO mint call
-        // TODO: use diff keys
+        let notes_secret_key = dao.params.notes_secret_key.unwrap();
         let (params, proofs) = make_mint_call(
             &dao.params.dao,
-            &dao.params.secret_key,
-            &dao.params.secret_key,
-            &dao.params.secret_key,
-            &dao.params.secret_key,
-            &dao.params.secret_key,
-            &dao.params.secret_key,
+            &notes_secret_key,
+            &dao.params.proposer_secret_key.unwrap(),
+            &dao.params.proposals_secret_key.unwrap(),
+            &dao.params.votes_secret_key.unwrap(),
+            &dao.params.exec_secret_key.unwrap(),
+            &dao.params.early_exec_secret_key.unwrap(),
             &dao_mint_zkbin,
             &dao_mint_pk,
         )?;
@@ -1558,7 +1729,7 @@ impl Drk {
         // We first have to execute the fee-less tx to gather its used gas, and then we feed
         // it into the fee-creating function.
         let mut tx = tx_builder.build()?;
-        let sigs = tx.create_sigs(&[dao.params.secret_key])?;
+        let sigs = tx.create_sigs(&[notes_secret_key])?;
         tx.signatures.push(sigs);
 
         let tree = self.get_money_tree().await?;
@@ -1570,7 +1741,7 @@ impl Drk {
 
         // Now build the actual transaction and sign it with all necessary keys.
         let mut tx = tx_builder.build()?;
-        let sigs = tx.create_sigs(&[dao.params.secret_key])?;
+        let sigs = tx.create_sigs(&[notes_secret_key])?;
         tx.signatures.push(sigs);
         let sigs = tx.create_sigs(&fee_secrets)?;
         tx.signatures.push(sigs);
@@ -1595,6 +1766,13 @@ impl Drk {
         if dao.leaf_position.is_none() || dao.tx_hash.is_none() || dao.call_index.is_none() {
             return Err(Error::Custom(
                 "[dao_propose_transfer] DAO seems to not have been deployed yet".to_string(),
+            ))
+        }
+
+        // Check that we have the proposer key
+        if dao.params.proposer_secret_key.is_none() {
+            return Err(Error::Custom(
+                "[dao_propose_transfer] We need the proposer secret key to create proposals for this DAO".to_string(),
             ))
         }
 
@@ -1705,6 +1883,13 @@ impl Drk {
         if dao.leaf_position.is_none() || dao.tx_hash.is_none() || dao.call_index.is_none() {
             return Err(Error::Custom(
                 "[dao_transfer_proposal_tx] DAO seems to not have been deployed yet".to_string(),
+            ))
+        }
+
+        // Check that we have the proposer key
+        if dao.params.proposer_secret_key.is_none() {
+            return Err(Error::Custom(
+                "[dao_transfer_proposal_tx] We need the proposer secret key to create proposals for this DAO".to_string(),
             ))
         }
 
@@ -1863,9 +2048,8 @@ impl Drk {
             signature_secret,
         };
 
-        // TODO: use the proper key if we have it
         let (params, proofs) = call.make(
-            &dao.params.secret_key,
+            &dao.params.proposer_secret_key.unwrap(),
             &propose_burn_zkbin,
             &propose_burn_pk,
             &propose_main_zkbin,
@@ -2153,6 +2337,14 @@ impl Drk {
             ))
         }
 
+        // Check that we have the exec key
+        if dao.params.exec_secret_key.is_none() {
+            return Err(Error::Custom(
+                "[dao_exec_transfer] We need the exec secret key to execute proposals for this DAO"
+                    .to_string(),
+            ))
+        }
+
         // Check proposal is approved
         let votes = self.get_dao_proposal_votes(&proposal.bulla()).await?;
         let mut yes_vote_value = 0;
@@ -2310,7 +2502,7 @@ impl Drk {
         outputs.push(proposal_coinattrs.clone());
 
         let dao_coin_attrs = CoinAttributes {
-            public_key: dao.keypair().public,
+            public_key: dao.params.dao.notes_public_key,
             value: change_value,
             token_id: proposal_coinattrs.token_id,
             spend_hook: dao_spend_hook,
@@ -2348,9 +2540,12 @@ impl Drk {
             signature_secret: exec_signature_secret,
             current_blockwindow,
         };
-        // TODO: use the proper key if we have it
-        let (exec_params, exec_proofs) =
-            exec_builder.make(&dao.params.secret_key, &None, &dao_exec_zkbin, &dao_exec_pk)?;
+        let (exec_params, exec_proofs) = exec_builder.make(
+            &dao.params.exec_secret_key.unwrap(),
+            &None,
+            &dao_exec_zkbin,
+            &dao_exec_pk,
+        )?;
 
         // Encode the call
         let mut data = vec![DaoFunction::Exec as u8];
