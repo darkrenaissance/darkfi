@@ -46,7 +46,7 @@ use crate::{
     pubsub::Subscription,
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
     text::{self, Glyph, GlyphPositionIter, TextShaperPtr},
-    util::{enumerate_ref, is_whitespace, zip3},
+    util::{enumerate_ref, is_whitespace, min_f32, zip3},
     ExecutorPtr,
 };
 
@@ -1296,6 +1296,7 @@ impl ChatEdit {
             TouchStateAction::DragSelectHandle { side } => {
                 {
                     let linespacing = self.linespacing.get();
+                    let baseline = self.baseline.get();
                     let handle_descent = self.handle_descent.get();
 
                     let mut text_wrap = self.text_wrap.lock();
@@ -1311,6 +1312,13 @@ impl ChatEdit {
 
                     let mut point = touch_pos;
                     point.y -= linespacing + handle_descent;
+
+                    // Only allow selecting text that is visible in the box
+                    // We do our calcs relative to (0, 0) so bhs = rect_h
+                    let rect_bhs = self.rect.get().h;
+                    debug!(target: "ui::chatedit", "min({}, {rect_bhs})", point.y);
+                    point.y = min_f32(point.y, rect_bhs);
+
                     let mut pos = wrapped_lines.point_to_pos(point);
                     debug!(target: "ui::chatedit", "desired pos = {point:?} [touch_pos={touch_pos:?}");
 

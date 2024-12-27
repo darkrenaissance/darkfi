@@ -22,6 +22,10 @@ pub fn is_whitespace(s: &str) -> bool {
     s.chars().all(char::is_whitespace)
 }
 
+pub fn min_f32(x: f32, y: f32) -> f32 {
+    if x < y { x } else { y }
+}
+
 #[allow(dead_code)]
 pub fn ansi_texture(width: usize, height: usize, data: &Vec<u8>) -> String {
     let mut out = String::new();
