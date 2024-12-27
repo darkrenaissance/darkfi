@@ -35,6 +35,7 @@ android: $(SRC) fonts
 	adb uninstall darkfi.darkwallet
 	adb install $(APK)
 	reset
+	ding 0
 	adb logcat -c
 	adb logcat -v color -s darkfi -s SAPP
 
