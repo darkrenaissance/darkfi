@@ -346,7 +346,10 @@ pub fn generate_completions(shell: &str) -> Result<()> {
         vote_weight,
     ]);
 
-    let exec = SubCommand::with_name("exec").about("Execute a DAO proposal").args(&vec![bulla]);
+    let early = Arg::with_name("early").long("early").help("Execute the proposal early");
+
+    let exec =
+        SubCommand::with_name("exec").about("Execute a DAO proposal").args(&vec![bulla, early]);
 
     let spend_hook_cmd = SubCommand::with_name("spend-hook")
         .about("Print the DAO contract base58-encoded spend hook");

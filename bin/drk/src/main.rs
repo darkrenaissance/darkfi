@@ -393,6 +393,10 @@ enum DaoSubcmd {
     Exec {
         /// Bulla identifier for the proposal
         bulla: String,
+
+        #[structopt(long)]
+        /// Execute the proposal early
+        early: bool,
     },
 
     /// Print the DAO contract base58-encoded spend hook
@@ -1804,7 +1808,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 drk.stop_rpc_client().await
             }
 
-            DaoSubcmd::Exec { bulla } => {
+            DaoSubcmd::Exec { bulla, early } => {
                 let bulla = match DaoProposalBulla::from_str(&bulla) {
                     Ok(b) => b,
                     Err(e) => {
@@ -1827,7 +1831,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 for call in &proposal.proposal.auth_calls {
                     // We only support transfer right now
                     if call.function_code == DaoFunction::AuthMoneyTransfer as u8 {
-                        let tx = match drk.dao_exec_transfer(&proposal).await {
+                        let tx = match drk.dao_exec_transfer(&proposal, early).await {
                             Ok(tx) => tx,
                             Err(e) => {
                                 eprintln!("Failed to execute DAO transfer proposal: {e:?}");
@@ -1842,7 +1846,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
                 // If proposal has no auth calls, we consider it a generic one
                 if proposal.proposal.auth_calls.is_empty() {
-                    let tx = match drk.dao_exec_generic(&proposal).await {
+                    let tx = match drk.dao_exec_generic(&proposal, early).await {
                         Ok(tx) => tx,
                         Err(e) => {
                             eprintln!("Failed to execute DAO generic proposal: {e:?}");

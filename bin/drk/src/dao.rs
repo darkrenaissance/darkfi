@@ -41,10 +41,10 @@ use darkfi_dao_contract::{
         DaoProposeParams, DaoVoteParams,
     },
     DaoFunction, DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS,
-    DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS, DAO_CONTRACT_ZKAS_DAO_EXEC_NS,
-    DAO_CONTRACT_ZKAS_DAO_MINT_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS,
-    DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS, DAO_CONTRACT_ZKAS_DAO_VOTE_INPUT_NS,
-    DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS,
+    DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS, DAO_CONTRACT_ZKAS_DAO_EARLY_EXEC_NS,
+    DAO_CONTRACT_ZKAS_DAO_EXEC_NS, DAO_CONTRACT_ZKAS_DAO_MINT_NS,
+    DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS,
+    DAO_CONTRACT_ZKAS_DAO_VOTE_INPUT_NS, DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS,
 };
 use darkfi_money_contract::{
     client::transfer_v1::{select_coins, TransferCallBuilder, TransferCallInput},
@@ -1873,14 +1873,14 @@ impl Drk {
         let dao = self.get_dao_by_name(name).await?;
         if dao.leaf_position.is_none() || dao.tx_hash.is_none() || dao.call_index.is_none() {
             return Err(Error::Custom(
-                "[dao_propose_transfer] DAO seems to not have been deployed yet".to_string(),
+                "[dao_propose_generic] DAO seems to not have been deployed yet".to_string(),
             ))
         }
 
         // Check that we have the proposer key
         if dao.params.proposer_secret_key.is_none() {
             return Err(Error::Custom(
-                "[dao_propose_transfer] We need the proposer secret key to create proposals for this DAO".to_string(),
+                "[dao_propose_generic] We need the proposer secret key to create proposals for this DAO".to_string(),
             ))
         }
 
@@ -1913,7 +1913,7 @@ impl Drk {
 
         if let Err(e) = self.put_dao_proposal(&proposal_record).await {
             return Err(Error::DatabaseError(format!(
-                "[dao_propose_transfer] Put DAO proposal failed: {e:?}"
+                "[dao_propose_generic] Put DAO proposal failed: {e:?}"
             )))
         }
 
@@ -2150,20 +2150,20 @@ impl Drk {
         // Fetch DAO and check its deployed
         let Ok(dao) = self.get_dao_by_bulla(&proposal.proposal.dao_bulla).await else {
             return Err(Error::Custom(format!(
-                "[dao_transfer_proposal_tx] DAO {} was not found",
+                "[dao_generic_proposal_tx] DAO {} was not found",
                 proposal.proposal.dao_bulla
             )))
         };
         if dao.leaf_position.is_none() || dao.tx_hash.is_none() || dao.call_index.is_none() {
             return Err(Error::Custom(
-                "[dao_transfer_proposal_tx] DAO seems to not have been deployed yet".to_string(),
+                "[dao_generic_proposal_tx] DAO seems to not have been deployed yet".to_string(),
             ))
         }
 
         // Check that we have the proposer key
         if dao.params.proposer_secret_key.is_none() {
             return Err(Error::Custom(
-                "[dao_transfer_proposal_tx] We need the proposer secret key to create proposals for this DAO".to_string(),
+                "[dao_generic_proposal_tx] We need the proposer secret key to create proposals for this DAO".to_string(),
             ))
         }
 
@@ -2171,7 +2171,7 @@ impl Drk {
         let gov_owncoins = self.get_token_coins(&dao.params.dao.gov_token_id).await?;
         if gov_owncoins.is_empty() {
             return Err(Error::Custom(format!(
-                "[dao_transfer_proposal_tx] Did not find any governance {} coins in wallet",
+                "[dao_generic_proposal_tx] Did not find any governance {} coins in wallet",
                 dao.params.dao.gov_token_id
             )))
         }
@@ -2191,7 +2191,7 @@ impl Drk {
         // Check our governance coins balance is sufficient
         if total_value < dao.params.dao.proposer_limit {
             return Err(Error::Custom(format!(
-                "[dao_transfer_proposal_tx] Not enough gov token {} balance to propose",
+                "[dao_generic_proposal_tx] Not enough gov token {} balance to propose",
                 dao.params.dao.gov_token_id
             )))
         }
@@ -2203,9 +2203,7 @@ impl Drk {
 
         let Some(fee_zkbin) = zkas_bins.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_FEE_NS_V1)
         else {
-            return Err(Error::Custom(
-                "[dao_transfer_proposal_tx] Fee circuit not found".to_string(),
-            ))
+            return Err(Error::Custom("[dao_generic_proposal_tx] Fee circuit not found".to_string()))
         };
 
         let fee_zkbin = ZkBinary::decode(&fee_zkbin.1)?;
@@ -2222,7 +2220,7 @@ impl Drk {
             zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS)
         else {
             return Err(Error::Custom(
-                "[dao_transfer_proposal_tx] Propose Burn circuit not found".to_string(),
+                "[dao_generic_proposal_tx] Propose Burn circuit not found".to_string(),
             ))
         };
 
@@ -2230,7 +2228,7 @@ impl Drk {
             zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS)
         else {
             return Err(Error::Custom(
-                "[dao_transfer_proposal_tx] Propose Main circuit not found".to_string(),
+                "[dao_generic_proposal_tx] Propose Main circuit not found".to_string(),
             ))
         };
 
@@ -2544,7 +2542,11 @@ impl Drk {
     }
 
     /// Execute a DAO transfer proposal.
-    pub async fn dao_exec_transfer(&self, proposal: &ProposalRecord) -> Result<Transaction> {
+    pub async fn dao_exec_transfer(
+        &self,
+        proposal: &ProposalRecord,
+        early: bool,
+    ) -> Result<Transaction> {
         if proposal.leaf_position.is_none() ||
             proposal.money_snapshot_tree.is_none() ||
             proposal.nullifiers_smt_snapshot.is_none() ||
@@ -2589,6 +2591,14 @@ impl Drk {
         if dao.params.exec_secret_key.is_none() {
             return Err(Error::Custom(
                 "[dao_exec_transfer] We need the exec secret key to execute proposals for this DAO"
+                    .to_string(),
+            ))
+        }
+
+        // If early flag is provided, check that we have the early exec key
+        if early && dao.params.early_exec_secret_key.is_none() {
+            return Err(Error::Custom(
+                "[dao_exec_transfer] We need the early exec secret key to execute proposals early for this DAO"
                     .to_string(),
             ))
         }
@@ -2654,17 +2664,17 @@ impl Drk {
 
         let Some(mint_zkbin) = zkas_bins.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_MINT_NS_V1)
         else {
-            return Err(Error::Custom("Mint circuit not found".to_string()))
+            return Err(Error::Custom("[dao_exec_transfer] Mint circuit not found".to_string()))
         };
 
         let Some(burn_zkbin) = zkas_bins.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_BURN_NS_V1)
         else {
-            return Err(Error::Custom("Burn circuit not found".to_string()))
+            return Err(Error::Custom("[dao_exec_transfer] Burn circuit not found".to_string()))
         };
 
         let Some(fee_zkbin) = zkas_bins.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_FEE_NS_V1)
         else {
-            return Err(Error::Custom("Fee circuit not found".to_string()))
+            return Err(Error::Custom("[dao_exec_transfer] Fee circuit not found".to_string()))
         };
 
         let mint_zkbin = ZkBinary::decode(&mint_zkbin.1)?;
@@ -2683,9 +2693,18 @@ impl Drk {
         // Now we grab the DAO bins
         let zkas_bins = self.lookup_zkas(&DAO_CONTRACT_ID).await?;
 
-        let Some(dao_exec_zkbin) = zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_DAO_EXEC_NS)
-        else {
-            return Err(Error::Custom("[dao_exec_transfer] DAO Exec circuit not found".to_string()))
+        let (namespace, early_exec_secret_key) = match early {
+            true => (
+                DAO_CONTRACT_ZKAS_DAO_EARLY_EXEC_NS,
+                Some(dao.params.early_exec_secret_key.unwrap()),
+            ),
+            false => (DAO_CONTRACT_ZKAS_DAO_EXEC_NS, None),
+        };
+
+        let Some(dao_exec_zkbin) = zkas_bins.iter().find(|x| x.0 == namespace) else {
+            return Err(Error::Custom(format!(
+                "[dao_exec_transfer] DAO {namespace} circuit not found"
+            )))
         };
 
         let Some(dao_auth_transfer_zkbin) =
@@ -2790,7 +2809,7 @@ impl Drk {
         };
         let (exec_params, exec_proofs) = exec_builder.make(
             &dao.params.exec_secret_key.unwrap(),
-            &None,
+            &early_exec_secret_key,
             &dao_exec_zkbin,
             &dao_exec_pk,
         )?;
@@ -2869,7 +2888,11 @@ impl Drk {
     }
 
     /// Execute a DAO generic proposal.
-    pub async fn dao_exec_generic(&self, proposal: &ProposalRecord) -> Result<Transaction> {
+    pub async fn dao_exec_generic(
+        &self,
+        proposal: &ProposalRecord,
+        early: bool,
+    ) -> Result<Transaction> {
         if proposal.leaf_position.is_none() ||
             proposal.money_snapshot_tree.is_none() ||
             proposal.nullifiers_smt_snapshot.is_none() ||
@@ -2877,34 +2900,42 @@ impl Drk {
             proposal.call_index.is_none()
         {
             return Err(Error::Custom(
-                "[dao_exec_transfer] Proposal seems to not have been deployed yet".to_string(),
+                "[dao_exec_generic] Proposal seems to not have been deployed yet".to_string(),
             ))
         }
 
         // Check proposal is not executed
         if let Some(exec_tx_hash) = proposal.exec_tx_hash {
             return Err(Error::Custom(format!(
-                "[dao_exec_transfer] Proposal was executed on transaction: {exec_tx_hash}"
+                "[dao_exec_generic] Proposal was executed on transaction: {exec_tx_hash}"
             )))
         }
 
         // Fetch DAO and check its deployed
         let Ok(dao) = self.get_dao_by_bulla(&proposal.proposal.dao_bulla).await else {
             return Err(Error::Custom(format!(
-                "[dao_exec_transfer] DAO {} was not found",
+                "[dao_exec_generic] DAO {} was not found",
                 proposal.proposal.dao_bulla
             )))
         };
         if dao.leaf_position.is_none() || dao.tx_hash.is_none() || dao.call_index.is_none() {
             return Err(Error::Custom(
-                "[dao_exec_transfer] DAO seems to not have been deployed yet".to_string(),
+                "[dao_exec_generic] DAO seems to not have been deployed yet".to_string(),
             ))
         }
 
         // Check that we have the exec key
         if dao.params.exec_secret_key.is_none() {
             return Err(Error::Custom(
-                "[dao_exec_transfer] We need the exec secret key to execute proposals for this DAO"
+                "[dao_exec_generic] We need the exec secret key to execute proposals for this DAO"
+                    .to_string(),
+            ))
+        }
+
+        // If early flag is provided, check that we have the early exec key
+        if early && dao.params.early_exec_secret_key.is_none() {
+            return Err(Error::Custom(
+                "[dao_exec_generic] We need the early exec secret key to execute proposals early for this DAO"
                     .to_string(),
             ))
         }
@@ -2929,9 +2960,7 @@ impl Drk {
                 (dao.params.dao.approval_ratio_quot / dao.params.dao.approval_ratio_base)
                     as f64
         {
-            return Err(Error::Custom(
-                "[dao_exec_transfer] Proposal is not approved yet".to_string(),
-            ))
+            return Err(Error::Custom("[dao_exec_generic] Proposal is not approved yet".to_string()))
         };
 
         // Now we need to do a lookup for the zkas proof bincodes, and create
@@ -2940,7 +2969,7 @@ impl Drk {
         let zkas_bins = self.lookup_zkas(&MONEY_CONTRACT_ID).await?;
         let Some(fee_zkbin) = zkas_bins.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_FEE_NS_V1)
         else {
-            return Err(Error::Custom("Fee circuit not found".to_string()))
+            return Err(Error::Custom("[dao_exec_generic] Fee circuit not found".to_string()))
         };
         let fee_zkbin = ZkBinary::decode(&fee_zkbin.1)?;
         let fee_circuit = ZkCircuit::new(empty_witnesses(&fee_zkbin)?, &fee_zkbin);
@@ -2948,9 +2977,19 @@ impl Drk {
 
         // Now we grab the DAO bins
         let zkas_bins = self.lookup_zkas(&DAO_CONTRACT_ID).await?;
-        let Some(dao_exec_zkbin) = zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_DAO_EXEC_NS)
-        else {
-            return Err(Error::Custom("[dao_exec_transfer] DAO Exec circuit not found".to_string()))
+
+        let (namespace, early_exec_secret_key) = match early {
+            true => (
+                DAO_CONTRACT_ZKAS_DAO_EARLY_EXEC_NS,
+                Some(dao.params.early_exec_secret_key.unwrap()),
+            ),
+            false => (DAO_CONTRACT_ZKAS_DAO_EXEC_NS, None),
+        };
+
+        let Some(dao_exec_zkbin) = zkas_bins.iter().find(|x| x.0 == namespace) else {
+            return Err(Error::Custom(format!(
+                "[dao_exec_generic] DAO {namespace} circuit not found"
+            )))
         };
         let dao_exec_zkbin = ZkBinary::decode(&dao_exec_zkbin.1)?;
         let dao_exec_circuit = ZkCircuit::new(empty_witnesses(&dao_exec_zkbin)?, &dao_exec_zkbin);
@@ -2979,7 +3018,7 @@ impl Drk {
         };
         let (exec_params, exec_proofs) = exec_builder.make(
             &dao.params.exec_secret_key.unwrap(),
-            &None,
+            &early_exec_secret_key,
             &dao_exec_zkbin,
             &dao_exec_pk,
         )?;
