@@ -47,13 +47,14 @@ const LIGHTMODE: bool = false;
 
 mod android_ui_consts {
     pub const EDITCHAT_HEIGHT: f32 = 163.;
-    pub const EDITCHAT_BOTTOM_PAD: f32 = 50.;
+    pub const EDITCHAT_BOTTOM_PAD: f32 = 30.;
     pub const EDITCHAT_CURSOR_ASCENT: f32 = 50.;
     pub const EDITCHAT_CURSOR_DESCENT: f32 = 20.;
     pub const EDITCHAT_SELECT_ASCENT: f32 = 40.;
     pub const EDITCHAT_SELECT_DESCENT: f32 = 8.;
-    pub const EDITCHAT_HANDLE_DESCENT: f32 = 33.;
-    pub const TEXTBAR_BASELINE: f32 = 93.;
+    pub const EDITCHAT_HANDLE_DESCENT: f32 = 10.;
+    pub const EDITCHAT_LINESPACING: f32 = 70.;
+    pub const TEXTBAR_BASELINE: f32 = 60.;
     pub const TEXT_DESCENT: f32 = 20.;
     pub const EDITCHAT_LHS_PAD: f32 = 30.;
     pub const SENDLABEL_WIDTH: f32 = 200.;
@@ -916,7 +917,7 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     editbox_bg_rect_prop.add_depend(&prop, 3, "editz_h");
 
     node.set_property_f32(Role::App, "baseline", TEXTBAR_BASELINE).unwrap();
-    node.set_property_f32(Role::App, "linespacing", TEXTBAR_BASELINE).unwrap();
+    node.set_property_f32(Role::App, "linespacing", EDITCHAT_LINESPACING).unwrap();
     node.set_property_f32(Role::App, "descent", TEXT_DESCENT).unwrap();
     node.set_property_f32(Role::App, "font_size", FONTSIZE).unwrap();
     //node.set_property_str(Role::App, "text", "hello king!😁🍆jelly 🍆1234").unwrap();
@@ -963,7 +964,7 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     prop.set_null(Role::App, 0).unwrap();
     prop.set_null(Role::App, 1).unwrap();
     node.set_property_u32(Role::App, "z_index", 3).unwrap();
-    //node.set_property_bool(Role::App, "debug", true).unwrap();
+    node.set_property_bool(Role::App, "debug", true).unwrap();
 
     //let editbox_text = PropertyStr::wrap(node, Role::App, "text", 0).unwrap();
     //let editbox_focus = PropertyBool::wrap(node, Role::App, "is_focused", 0).unwrap();

@@ -38,7 +38,7 @@ use crate::{
         GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId, GraphicsEventPublisherPtr,
         Point, Rectangle, RenderApi, Vertex,
     },
-    mesh::{MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_WHITE},
+    mesh::{MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_RED, COLOR_WHITE},
     prop::{
         PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyRect, PropertyStr,
         PropertyUint32, Role,
@@ -378,7 +378,7 @@ impl TouchInfo {
                         debug!(target: "ui::chatedit::touch", "update touch state: Started -> StartSelect");
                         self.state = TouchStateAction::StartSelect;
                     }
-                } else if grad > 0.5 {
+                } else if grad.abs() > 0.5 {
                     // Vertical movement
                     debug!(target: "ui::chatedit::touch", "update touch state: Started -> ScrollVert");
                     let scroll_start = self.scroll.get();
@@ -440,7 +440,6 @@ pub struct ChatEdit {
     z_index: PropertyUint32,
     debug: PropertyBool,
 
-    select: SyncMutex<Vec<Selection>>,
     text_wrap: SyncMutex<TextWrap>,
 
     mouse_btn_held: AtomicBool,
@@ -554,7 +553,6 @@ impl ChatEdit {
             z_index,
             debug,
 
-            select: SyncMutex::new(vec![]),
             text_wrap: SyncMutex::new(TextWrap::new(
                 text_shaper,
                 font_size,
@@ -691,6 +689,9 @@ impl ChatEdit {
                     color = COLOR_WHITE;
                 }
                 mesh.draw_box(&glyph_rect, color, uv_rect);
+                if self.debug.get() {
+                    mesh.draw_outline(&glyph_rect, COLOR_RED, 1.);
+                }
             }
 
             curr_y += linespacing;
@@ -702,6 +703,10 @@ impl ChatEdit {
             let select = selections.last().unwrap();
             self.draw_phone_select_handle(&mut mesh, select.start, &wrapped_lines, -1.);
             self.draw_phone_select_handle(&mut mesh, select.end, &wrapped_lines, 1.);
+        }
+
+        if self.debug.get() {
+            mesh.draw_outline(&clip, COLOR_BLUE, 1.);
         }
 
         mesh.alloc(&self.render_api).draw_with_texture(atlas.texture)
@@ -1044,7 +1049,7 @@ impl ChatEdit {
     fn delete(&self, before: usize, after: usize) {
         let mut text_wrap = &mut self.text_wrap.lock();
         text_wrap.clear_cache();
-        let selection = std::mem::take(&mut *self.select.lock());
+        let selection = std::mem::take(&mut self.text_wrap.lock().select);
 
         if selection.is_empty() {
             text_wrap.editable.delete(before, after);
@@ -1089,7 +1094,7 @@ impl ChatEdit {
         drop(text_wrap);
         debug!(target: "ui::editbox", "Adjust cursor pos to {cursor_pos}");
 
-        let mut select = self.select.lock();
+        let select = &mut self.text_wrap.lock().select;
 
         // Start selection if shift is held
         if has_shift {
@@ -1311,13 +1316,14 @@ impl ChatEdit {
                     let select = selections.first_mut().unwrap();
 
                     let mut point = touch_pos;
-                    point.y -= linespacing + handle_descent;
 
                     // Only allow selecting text that is visible in the box
                     // We do our calcs relative to (0, 0) so bhs = rect_h
                     let rect_bhs = self.rect.get().h;
                     debug!(target: "ui::chatedit", "min({}, {rect_bhs})", point.y);
                     point.y = min_f32(point.y, rect_bhs);
+
+                    point.y -= linespacing + handle_descent;
 
                     let mut pos = wrapped_lines.point_to_pos(point);
                     debug!(target: "ui::chatedit", "desired pos = {point:?} [touch_pos={touch_pos:?}");
@@ -1588,6 +1594,10 @@ impl UIObject for ChatEdit {
         }
         on_modify.when_change(self.rect.prop(), redraw);
         on_modify.when_change(self.baseline.prop(), redraw);
+        on_modify.when_change(self.linespacing.prop(), redraw);
+        on_modify.when_change(self.select_ascent.prop(), redraw);
+        on_modify.when_change(self.select_descent.prop(), redraw);
+        on_modify.when_change(self.handle_descent.prop(), redraw);
         // The commented properties are modified on input events
         // So then redraw() will get repeatedly triggered when these properties
         // are changed. We should find a solution. For now the hooks are disabled.
@@ -1715,7 +1725,7 @@ impl UIObject for ChatEdit {
             if self.is_focused.get() {
                 debug!(target: "ui::chatedit", "EditBox unfocused");
                 self.is_focused.set(false);
-                self.select.lock().clear();
+                self.text_wrap.lock().select.clear();
 
                 self.redraw().await;
             }

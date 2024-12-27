@@ -23,7 +23,11 @@ pub fn is_whitespace(s: &str) -> bool {
 }
 
 pub fn min_f32(x: f32, y: f32) -> f32 {
-    if x < y { x } else { y }
+    if x < y {
+        x
+    } else {
+        y
+    }
 }
 
 #[allow(dead_code)]
