@@ -202,17 +202,16 @@ fn start_p2p<'a>(
 }
 
 #[pyfunction]
-fn is_connected<'a>(py: Python<'a>, net_p2p_ptr: &'a P2pPtr) -> PyResult<Bound<'a, PyAny>> {
+fn is_connected<'a>(net_p2p_ptr: &'a P2pPtr) -> PyResult<bool> {
     let p2p_ptr: net::P2pPtr = net_p2p_ptr.0.clone();
-    pyo3_async_runtimes::async_std::future_into_py(py, async move { Ok(p2p_ptr.is_connected()) })
+    let is_connected = p2p_ptr.is_connected();
+    Ok(is_connected)
 }
 
 #[pyfunction]
-fn get_greylist_length<'a>(py: Python<'a>, net_p2p_ptr: &'a P2pPtr) -> PyResult<Bound<'a, PyAny>> {
+fn get_greylist_length<'a>(net_p2p_ptr: &'a P2pPtr) -> PyResult<usize> {
     let p2p_ptr: net::P2pPtr = net_p2p_ptr.0.clone();
-    pyo3_async_runtimes::async_std::future_into_py(py, async move {
-        Ok(p2p_ptr.hosts().container.fetch_all(net::hosts::HostColor::Grey).len())
-    })
+    Ok(p2p_ptr.hosts().container.fetch_all(net::hosts::HostColor::Grey).len())
 }
 
 async fn stop_p2p_and_wait(w8_time: u64, p2p_ptr: net::P2pPtr) {
@@ -221,19 +220,15 @@ async fn stop_p2p_and_wait(w8_time: u64, p2p_ptr: net::P2pPtr) {
 }
 
 #[pyfunction]
-fn get_whitelist_length<'a>(py: Python<'a>, net_p2p_ptr: &'a P2pPtr) -> PyResult<Bound<'a, PyAny>> {
+fn get_whitelist_length<'a>(net_p2p_ptr: &'a P2pPtr) -> PyResult<usize> {
     let p2p_ptr: net::P2pPtr = net_p2p_ptr.0.clone();
-    pyo3_async_runtimes::async_std::future_into_py(py, async move {
-        Ok(p2p_ptr.hosts().container.fetch_all(net::hosts::HostColor::White).len())
-    })
+    Ok(p2p_ptr.hosts().container.fetch_all(net::hosts::HostColor::White).len())
 }
 
 #[pyfunction]
-fn get_goldlist_length<'a>(py: Python<'a>, net_p2p_ptr: &'a P2pPtr) -> PyResult<Bound<'a, PyAny>> {
+fn get_goldlist_length<'a>(net_p2p_ptr: &'a P2pPtr) -> PyResult<usize> {
     let p2p_ptr: net::P2pPtr = net_p2p_ptr.0.clone();
-    pyo3_async_runtimes::async_std::future_into_py(py, async move {
-        Ok(p2p_ptr.hosts().container.fetch_all(net::hosts::HostColor::Gold).len())
-    })
+    Ok(p2p_ptr.hosts().container.fetch_all(net::hosts::HostColor::Gold).len())
 }
 
 #[pyfunction]

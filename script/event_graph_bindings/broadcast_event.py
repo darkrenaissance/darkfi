@@ -6,7 +6,7 @@ import subprocess
 import os
 import threading
 # number of nodes
-N = 2
+N = 3
 P2PDATASTORE_PATH = '/tmp/p2pdatastore'
 SLED_DB_PATH = '/tmp/sleddb'
 STARTING_PORT = 54321
@@ -22,16 +22,9 @@ WHITE_CONNECT_PERCENT = 70
 GOLD_CONNECT_COUNT = 2
 TIME_NO_CON = 60
 W8_TIME = 60
-
-
-async def is_connected_async(node):
-    return await p2p.is_connected(node)
-
+W8_TIME_4_CON = 40
 def is_connected(node):
-    return asyncio.run(is_connected_async(node))
-
-async def get_greylist_length(node):
-    return await p2p.get_greylist_length(node)
+    return p2p.is_connected(node)
 
 def get_random_node_idx():
     return int(random.random()*(N-1))
@@ -42,8 +35,8 @@ async def start_p2p(w8_time, node):
 async def get_fut_p2p(settings):
     return await p2p.new_p2p(settings)
 
-async def get_fut_eg(node, sled_db):
-    return await eg.new_event_graph(node, sled_db, P2PDATASTORE_PATH, False, 'dag', 1)
+def get_new_eg(node, sled_db):
+    return eg.new_event_graph(node, sled_db, P2PDATASTORE_PATH, False, 'dag', 1)
 
 async def register_protocol(p2p_node, eg_node):
     await p2p.register_protocol_p2p(p2p_node, eg_node)
@@ -105,7 +98,7 @@ def get_seed_node(starting_port=STARTING_PORT):
     )
     seed_p2p_ptr = asyncio.run(get_fut_p2p(settings))
     seed_sled_db = sled.SledDb(SLED_DB_PATH+'{}'.format(0))
-    seed_event_graph = asyncio.run(get_fut_eg(seed_p2p_ptr, seed_sled_db))
+    seed_event_graph = get_new_eg(seed_p2p_ptr, seed_sled_db)
     return seed_p2p_ptr, seed_addr, seed_event_graph
 
 def new_nodes(seed_addr, starting_port=STARTING_PORT):
@@ -170,7 +163,7 @@ def new_nodes(seed_addr, starting_port=STARTING_PORT):
         )
         p2p_ptr = asyncio.run(get_fut_p2p(settings))
         sled_db = sled.SledDb(SLED_DB_PATH+'{}'.format(i))
-        event_graph = asyncio.run(get_fut_eg(p2p_ptr, sled_db))
+        event_graph = get_new_eg(p2p_ptr, sled_db)
         event_graphs+=[event_graph]
         p2ps+=[p2p_ptr]
     return (p2ps, event_graphs)
@@ -178,8 +171,8 @@ def new_nodes(seed_addr, starting_port=STARTING_PORT):
 async def create_new_event(data, event_graph_ptr):
     return await eg.new_event(data, event_graph_ptr)
 
-async def insert_events(node, event):
-    ids = await node.dag_insert(event)
+def insert_events(node, event):
+    ids = node.dag_insert(event)
     return ids
 
 async def broadcast_event_onp2p(w8_time, p2p_node, event):
@@ -191,6 +184,8 @@ async def get_event_by_id(event_graph, event_id):
 async def dag_sync(node):
     await node.dag_sync()
 
+def event_id(event):
+    return event.id()
 
 ############################
 #       create seed        #
@@ -206,6 +201,15 @@ seed_register_t.start()
 #      create N nodes      #
 ############################
 p2ps, egs = new_nodes(seed_addr)
+
+# select random node
+rnd_idx = get_random_node_idx()
+random_node = egs[rnd_idx]
+
+for evg in egs:
+     assert(evg.dag_len()==1)
+# create new event
+event = asyncio.run(create_new_event([1,2,3,4], random_node))
 
 ############################
 #     register node        #
@@ -226,56 +230,38 @@ for t in register_ts:
 for node in p2ps:
     # start p2p node
     node_t = threading.Thread(target=asyncio.run, args=(start_p2p(W8_TIME, node),))
+    print("starting node {}".format(node))
     node_t.start()
     start_ts += [node_t]
 
-# select random node
-rnd_idx = get_random_node_idx()
-random_node = egs[rnd_idx]
-
-for evg in egs:
-     assert(evg.dag_len()==1)
-
-# create new event
-event = asyncio.run(create_new_event([1,2,3,4], random_node))
 
 # insert event at random node
-ids = asyncio.run(insert_events(random_node, [event]))
-
+ids = insert_events(random_node, [event])
+print('inserted event ids: {}'.format(str(ids[0])))
 # wait for nodes to conenct
-time.sleep(40)
+print("wait {} secs for nodes to connect".format(W8_TIME_4_CON))
+time.sleep(W8_TIME_4_CON)
 
 # broadcast the new event
 random_node_p2p = p2ps[rnd_idx]
-
-threading.Thread(target=asyncio.run, args=(broadcast_event_onp2p(15, random_node_p2p, event),)).start()
-
+print('broadcasting event: {} through node: {}'.format(event, random_node_p2p))
+asyncio.run(broadcast_event_onp2p(15, random_node_p2p, event))
 for node in p2ps:
     assert(is_connected(node))
     print('node: {} is connected successfully'.format(node))
 
-dag_ts = []
-
-print("=======================")
-print("=      dag sync       =")
-print("=======================")
-# dag sync
-for eg in egs:
-    dag_t = threading.Thread(target=asyncio.run, args=(dag_sync(eg),))
-    dag_t.start()
-    dag_ts+=[dag_t]
-
-for t in dag_ts:
-    t.join()
-
 # get broadcasted event
-event2 = asyncio.run(get_event_by_id(egs[rnd_idx], ids[0]))
-print("broadcasted event: {}".format(event2))
+received_event = asyncio.run(get_event_by_id(egs[rnd_idx], ids[0]))
+print("broadcasted event: {}".format(received_event))
+broadcasted_event_id = str(event_id(event))
+received_event_id = str(event_id(received_event))
+assert broadcasted_event_id == received_event_id, '{}, {}'.format(broadcasted_event_id, received_event_id)
 
 time.sleep(30)
 # assert event is broadcast to all nodes
 for evg in  egs:
     assert(evg.dag_len()==(N-1))
-    print('event graph: {} received broadcasted event\n'.format(evg))
+    print('event graph: {} received broadcasted event'.format(evg))
+print("Success! joining threads.")
 for t in start_ts:
     t.join()

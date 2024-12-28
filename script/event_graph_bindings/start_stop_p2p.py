@@ -7,7 +7,7 @@ import os
 import threading
 import time
 # number of nodes
-N = 2
+N = 3
 P2PDATASTORE_PATH = '/tmp/p2pdatastore'
 STARTING_PORT = 53412
 os.system("rm -rf " + P2PDATASTORE_PATH+"*")
@@ -103,7 +103,7 @@ def get_peer_node(i, seed_addr, starting_port=STARTING_PORT):
     app_version = p2p.new_version(0, 1, 1, '')
     allowed_transports = ['tcp']
     transport_mixing = True
-    outbound_connections = N
+    outbound_connections = 100
     inbound_connections = 10000
     outbound_connect_timeout = OUTBOUND_TIMEOUT
     channel_handshake_timeout = CH_HANDSHAKE_TIMEOUT
@@ -162,22 +162,8 @@ def new_nodes(seed_addr, starting_port=STARTING_PORT):
         nodes+=[p2p_ptr]
     return nodes
 
-async def get_greylist_length(node):
-    return await p2p.get_greylist_length(node)
-
-
-async def get_whitelist_length(node):
-    return await p2p.get_whitelist_length(node)
-
-
-async def get_goldlist_length(node):
-    return await p2p.get_goldlist_length(node)
-
-async def is_connected_async(node):
-    return await p2p.is_connected(node)
-
 def is_connected(node):
-    return asyncio.run(is_connected_async(node))
+    return p2p.is_connected(node)
 
 # create N nodes
 seed_p2p_ptr, seed_addr = get_seed_node()
@@ -197,7 +183,6 @@ for idx, node in enumerate(p2ps):
     node_t = threading.Thread(target=asyncio.run, args=(start_p2p(W8_TIME, node),))
     node_t.start()
     ts+=[node_t]
-
 
 # wait for peers to connect
 time.sleep(40)
