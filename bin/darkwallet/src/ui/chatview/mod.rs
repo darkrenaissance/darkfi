@@ -383,7 +383,7 @@ impl ChatView {
 
         let accel = self.scroll_start_accel.get() * dist / time;
         let touch_time = touch_info.start_instant.elapsed();
-        debug!(target: "ui::chatview", "accel = {dist} / {time} = {accel},  touch = {touch_time:?}");
+        //debug!(target: "ui::chatview", "accel = {dist} / {time} = {accel},  touch = {touch_time:?}");
         self.speed.fetch_add(accel, Ordering::Relaxed);
         self.motion_cv.notify();
     }
@@ -676,7 +676,7 @@ impl ChatView {
 
     /// Invalidates cache and redraws everything
     async fn redraw_all(&self) {
-        debug!(target: "ui::chatview", "redraw_all()");
+        //debug!(target: "ui::chatview", "redraw_all()");
 
         let parent_rect = self.parent_rect.lock().unwrap().unwrap().clone();
         self.rect.eval(&parent_rect).expect("unable to eval rect");
@@ -957,7 +957,7 @@ impl UIObject for ChatView {
                     (start_scroll, start_y, start_elapsed, do_update, is_select_mode)
                 };
 
-                debug!(target: "ui::chatview", "touch phase moved, is_select_mode={is_select_mode:?}");
+                //debug!(target: "ui::chatview", "touch phase moved, is_select_mode={is_select_mode:?}");
 
                 // When scrolling if we suddenly grab the screen for more than a brief period
                 // of time then stop the scrolling completely.

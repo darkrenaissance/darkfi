@@ -157,7 +157,7 @@ impl<T: Send + Sync + 'static> OnModify<T> {
                     }
                 }
 
-                debug!(target: "app", "Property '{}':{}/'{}' modified", node_name, node_id, prop_name);
+                //debug!(target: "app", "Property '{}':{}/'{}' modified", node_name, node_id, prop_name);
 
                 let Some(self_) = me.upgrade() else {
                     // Should not happen
@@ -167,7 +167,7 @@ impl<T: Send + Sync + 'static> OnModify<T> {
                     );
                 };
 
-                debug!(target: "app", "property modified");
+                //debug!(target: "app", "property modified");
                 f(self_).await;
             }
         });

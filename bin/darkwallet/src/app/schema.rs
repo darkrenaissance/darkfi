@@ -98,6 +98,7 @@ mod ui_consts {
     pub const EDITCHAT_SELECT_ASCENT: f32 = 30.;
     pub const EDITCHAT_SELECT_DESCENT: f32 = 10.;
     pub const EDITCHAT_HANDLE_DESCENT: f32 = 35.;
+    pub const EDITCHAT_LINESPACING: f32 = 35.;
     pub const TEXTBAR_BASELINE: f32 = 34.;
     pub const TEXT_DESCENT: f32 = 10.;
     pub const EDITCHAT_LHS_PAD: f32 = 20.;

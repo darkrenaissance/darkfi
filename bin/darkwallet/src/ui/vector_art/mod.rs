@@ -95,11 +95,11 @@ impl VectorArt {
             return;
         };
         self.render_api.replace_draw_calls(draw_update.draw_calls);
-        debug!(target: "ui::vector_art", "replace draw calls done");
+        //debug!(target: "ui::vector_art", "replace draw calls done");
     }
 
     async fn get_draw_calls(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
-        debug!(target: "ui::vector_art", "VectorArt::draw_cached()");
+        //debug!(target: "ui::vector_art", "VectorArt::draw_cached()");
         self.rect.eval(&parent_rect).ok()?;
         let rect = self.rect.get();
         let verts = self.shape.eval(rect.w, rect.h).expect("bad shape");

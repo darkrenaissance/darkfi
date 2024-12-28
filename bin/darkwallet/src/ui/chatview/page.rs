@@ -693,8 +693,6 @@ impl MessageBuffer {
         let timestamp_font_size = self.timestamp_font_size.get();
         let timestamp_width = self.timestamp_width.get();
 
-        debug!(target: "ui::chatview::page", "{:?}: freeing old textures", self.node());
-
         for msg in &mut self.msgs {
             msg.adjust_params(
                 font_size,

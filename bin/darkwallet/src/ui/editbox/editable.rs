@@ -234,7 +234,7 @@ impl Editable {
         #[cfg(target_os = "android")]
         crate::android::cancel_composition();
 
-        debug!(target: "ui::editbox", "end_compose() [editable={self:?}]");
+        //debug!(target: "ui::editbox", "end_compose() [editable={self:?}]");
         let final_text = self.composer.clear();
         self.before_text += &final_text;
     }

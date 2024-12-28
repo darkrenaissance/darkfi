@@ -60,6 +60,10 @@ use super::{
     DrawUpdate, OnModify, UIObject,
 };
 
+// Minimum dist to update scroll when finger scrolling.
+// Avoid updating too much makes scrolling smoother.
+const VERT_SCROLL_UPDATE_INC: f32 = 1.;
+
 fn is_all_whitespace(glyphs: &[Glyph]) -> bool {
     for glyph in glyphs {
         if !is_whitespace(&glyph.substr) {
@@ -260,7 +264,7 @@ impl WrappedLines {
         for (line_idx, wrap_line) in self.lines.iter().enumerate() {
             // Is it within this line?
             if point.y < self.linespacing {
-                debug!(target: "ui::editbox::wrapped_lines", "point to pos found line: {line_idx}");
+                //debug!(target: "ui::editbox::wrapped_lines", "point to pos found line: {line_idx}");
                 pos += wrap_line.find_closest(point.x);
                 return pos
             }
@@ -269,7 +273,7 @@ impl WrappedLines {
             point.y -= self.linespacing;
             pos += wrap_line.len();
         }
-        debug!(target: "ui::editbox::wrapped_lines", "point to pos using last line");
+        //debug!(target: "ui::editbox::wrapped_lines", "point to pos using last line");
         pos
     }
 
@@ -340,7 +344,7 @@ enum TouchStateAction {
     Select,
     DragSelectHandle { side: isize },
     ScrollVert { start_pos: Point, scroll_start: f32 },
-    SetCursorPos { start_pos: Point },
+    SetCursorPos,
 }
 
 struct TouchInfo {
@@ -371,7 +375,7 @@ impl TouchInfo {
                 let travel_dist = pos.dist_sq(&start_pos);
                 let grad = (pos.y - start_pos.y) / (pos.x - start_pos.x);
                 let elapsed = instant.elapsed().as_millis();
-                debug!(target: "ui::chatedit::touch", "TouchInfo::update() [travel_dist={travel_dist}, grad={grad}]");
+                //debug!(target: "ui::chatedit::touch", "TouchInfo::update() [travel_dist={travel_dist}, grad={grad}]");
 
                 if travel_dist < 5. {
                     if elapsed > 1000 {
@@ -387,7 +391,7 @@ impl TouchInfo {
                 } else {
                     // Horizontal movement
                     debug!(target: "ui::chatedit::touch", "update touch state: Started -> SetCursorPos");
-                    self.state = TouchStateAction::SetCursorPos { start_pos: *start_pos };
+                    self.state = TouchStateAction::SetCursorPos;
                 }
             }
             _ => {}
@@ -646,7 +650,7 @@ impl ChatEdit {
         );
 
         let mut clip = self.rect.get();
-        debug!(target: "ui::chatedit", "Rendering text '{text}' rect={clip:?} width={width}");
+        //debug!(target: "ui::chatedit", "Rendering text '{text}' rect={clip:?} width={width}");
         clip.x = 0.;
         clip.y = 0.;
 
@@ -848,6 +852,7 @@ impl ChatEdit {
         let handle_descent = self.handle_descent.get();
         let color = self.text_hi_color.get();
         let linespacing = self.linespacing.get();
+        let scroll = self.scroll.get();
         // Transparent for fade
         let mut color_trans = color.clone();
         color_trans[3] = 0.;
@@ -855,7 +860,12 @@ impl ChatEdit {
         // find start_x
         let (glyph_rect, line_idx) = wrapped_lines.get_glyph_info(gpos);
         let x = glyph_rect.x;
-        let y_off = line_idx as f32 * linespacing;
+        let y_off = line_idx as f32 * linespacing - scroll;
+
+        let y = y_off + baseline + handle_descent;
+        if y < 0. {
+            return
+        }
 
         // Vertical line downwards. We use this instead of draw_box() so we have a fade.
         let verts = vec![
@@ -882,8 +892,6 @@ impl ChatEdit {
         ];
         let indices = vec![0, 2, 1, 1, 2, 3];
         mesh.append(verts, indices);
-
-        let y = y_off + baseline + handle_descent;
 
         // The arrow itself.
         // Go anti-clockwise
@@ -1226,18 +1234,22 @@ impl ChatEdit {
             return false
         }
 
-        self.abs_to_local(&mut touch_pos);
-
         touch_info.start(touch_pos);
         true
     }
     fn try_handle_drag(&self, touch_info: &mut TouchInfo, mut touch_pos: Point) -> bool {
+        // Is the handle visible? Use y within rect before adding the scroll.
+        let relative_y = touch_pos.y - self.rect.get().y;
+        if relative_y < 0. {
+            return false
+        }
+
         self.abs_to_local(&mut touch_pos);
 
         let linespacing = self.linespacing.get();
         let baseline = self.baseline.get();
         let select_descent = self.select_descent.get();
-        //let scroll = self.scroll.get();
+        let scroll = self.scroll.get();
 
         let mut text_wrap = self.text_wrap.lock();
         let width = self.wrap_width();
@@ -1283,8 +1295,11 @@ impl ChatEdit {
     }
 
     async fn handle_touch_move(&self, mut touch_pos: Point) -> bool {
-        debug!(target: "ui::chatedit", "handle_touch_move({touch_pos:?})");
-        self.abs_to_local(&mut touch_pos);
+        //debug!(target: "ui::chatedit", "handle_touch_move({touch_pos:?})");
+        // We must update with non relative touch_pos bcos when doing vertical scrolling
+        // we will modify the scroll, which is used by abs_to_local(), which is used
+        // to then calculate the max scroll. So it ends up jumping around.
+        // We use the abs touch_pos without scroll adjust applied for vert scrolling.
         let touch_state = {
             let mut touch_info = self.touch_info.lock();
             touch_info.update(&touch_pos);
@@ -1293,12 +1308,14 @@ impl ChatEdit {
         match &touch_state {
             TouchStateAction::Inactive => return false,
             TouchStateAction::StartSelect => {
+                self.abs_to_local(&mut touch_pos);
                 self.start_touch_select(touch_pos);
                 self.redraw().await;
                 debug!(target: "ui::chatedit::touch", "touch state: StartSelect -> Select");
                 self.touch_info.lock().state = TouchStateAction::Select;
             }
             TouchStateAction::DragSelectHandle { side } => {
+                self.abs_to_local(&mut touch_pos);
                 {
                     let linespacing = self.linespacing.get();
                     let baseline = self.baseline.get();
@@ -1319,14 +1336,11 @@ impl ChatEdit {
 
                     // Only allow selecting text that is visible in the box
                     // We do our calcs relative to (0, 0) so bhs = rect_h
-                    let rect_bhs = self.rect.get().h;
-                    debug!(target: "ui::chatedit", "min({}, {rect_bhs})", point.y);
-                    point.y = min_f32(point.y, rect_bhs);
-
-                    point.y -= linespacing + handle_descent;
+                    point.y -= handle_descent + 25.;
+                    let bhs = wrapped_lines.height();
+                    point.y = min_f32(point.y, bhs);
 
                     let mut pos = wrapped_lines.point_to_pos(point);
-                    debug!(target: "ui::chatedit", "desired pos = {point:?} [touch_pos={touch_pos:?}");
 
                     if *side == -1 {
                         let select_other_pos = &mut select.end;
@@ -1353,8 +1367,17 @@ impl ChatEdit {
                 let y_dist = start_pos.y - touch_pos.y;
                 let mut scroll = scroll_start + y_dist;
                 scroll = scroll.clamp(0., max_scroll);
+                if (self.scroll.get() - scroll).abs() < VERT_SCROLL_UPDATE_INC {
+                    return true
+                }
                 self.scroll.set(scroll);
                 self.redraw().await;
+            }
+            TouchStateAction::SetCursorPos => {
+                // TBH I can't even see the cursor under my thumb so I'll just
+                // comment this for now.
+                //self.abs_to_local(&mut touch_pos);
+                //self.touch_set_cursor_pos(touch_pos).await
             }
             _ => {}
         }
@@ -1367,27 +1390,32 @@ impl ChatEdit {
         let state = self.touch_info.lock().stop();
         match state {
             TouchStateAction::Inactive => return false,
-            TouchStateAction::Started { pos: _, instant: _ } |
-            TouchStateAction::SetCursorPos { start_pos: _ } => {
-                let width = self.wrap_width();
-                {
-                    let mut text_wrap = self.text_wrap.lock();
-                    let cursor_pos = text_wrap.set_cursor_with_point(touch_pos, width);
-
-                    let select = &mut text_wrap.select;
-                    select.clear();
-                }
-
-                self.is_phone_select.store(false, Ordering::Relaxed);
-                // Reshow cursor (if hidden)
-                self.hide_cursor.store(false, Ordering::Relaxed);
-
-                self.redraw().await;
+            TouchStateAction::Started { pos: _, instant: _ } | TouchStateAction::SetCursorPos => {
+                self.touch_set_cursor_pos(touch_pos).await
             }
             _ => {}
         }
         window::show_keyboard(true);
         true
+    }
+
+    async fn touch_set_cursor_pos(&self, mut touch_pos: Point) {
+        debug!(target: "ui::chatedit", "touch_set_cursor_pos({touch_pos:?})");
+        let width = self.wrap_width();
+        {
+            let mut text_wrap = self.text_wrap.lock();
+            let cursor_pos = text_wrap.set_cursor_with_point(touch_pos, width);
+
+            let select = &mut text_wrap.select;
+            select.clear();
+        }
+
+        self.is_phone_select.store(false, Ordering::Relaxed);
+        // Reshow cursor (if hidden)
+        self.pause_blinking();
+        self.hide_cursor.store(false, Ordering::Relaxed);
+
+        self.redraw().await;
     }
 
     /// Whenever the cursor property is modified this MUST be called
@@ -1468,23 +1496,19 @@ impl ChatEdit {
 
     async fn redraw(&self) {
         //debug!(target: "ui::chatedit", "redraw()");
-
         let Some(draw_update) = self.make_draw_calls() else {
             error!(target: "ui::chatedit", "Text failed to draw");
             return;
         };
-
         self.render_api.replace_draw_calls(draw_update.draw_calls);
     }
 
     fn redraw_cursor(&self) {
         let cursor_instrs = self.get_cursor_instrs();
-
         let draw_calls = vec![(
             self.cursor_dc_key,
             GfxDrawCall { instrs: cursor_instrs, dcs: vec![], z_index: self.z_index.get() },
         )];
-
         self.render_api.replace_draw_calls(draw_calls);
     }
 
