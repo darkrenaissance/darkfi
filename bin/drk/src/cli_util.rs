@@ -285,6 +285,8 @@ pub fn generate_completions(shell: &str) -> Result<()> {
         .about("Import DAO data from stdin")
         .args(&vec![name.clone()]);
 
+    let update_keys = SubCommand::with_name("update-keys").about("Update DAO keys from stdin");
+
     let opt_name = Arg::with_name("dao-alias").help("Name identifier for the DAO (optional)");
 
     let list = SubCommand::with_name("list")
@@ -358,6 +360,7 @@ pub fn generate_completions(shell: &str) -> Result<()> {
         create,
         view,
         import,
+        update_keys,
         list,
         balance,
         mint,

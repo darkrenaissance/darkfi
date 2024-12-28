@@ -300,6 +300,9 @@ enum DaoSubcmd {
         name: String,
     },
 
+    /// Update DAO keys from stdin
+    UpdateKeys,
+
     /// List imported DAOs (or info about a specific one)
     List {
         /// Name identifier for the DAO (optional)
@@ -1168,6 +1171,10 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     eprintln!("Invalid quorum: {e:?}");
                     exit(2);
                 }
+                if let Err(e) = f64::from_str(&early_exec_quorum) {
+                    eprintln!("Invalid early exec quorum: {e:?}");
+                    exit(2);
+                }
 
                 let proposer_limit = decode_base10(&proposer_limit, BALANCE_BASE10_DECIMALS, true)?;
                 let quorum = decode_base10(&quorum, BALANCE_BASE10_DECIMALS, true)?;
@@ -1228,8 +1235,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     bulla_blind,
                 );
 
-                let encoded = bs58::encode(&serialize_async(&params).await).into_string();
-                println!("{encoded}");
+                println!("{}", params.toml_str());
 
                 Ok(())
             }
@@ -1237,9 +1243,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             DaoSubcmd::View => {
                 let mut buf = String::new();
                 stdin().read_to_string(&mut buf)?;
-                let bytes = bs58::decode(&buf.trim()).into_vec()?;
-                let dao_params: DaoParams = deserialize_async(&bytes).await?;
-                println!("{dao_params}");
+                let params = DaoParams::from_toml_str(&buf)?;
+                println!("{params}");
 
                 Ok(())
             }
@@ -1247,8 +1252,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             DaoSubcmd::Import { name } => {
                 let mut buf = String::new();
                 stdin().read_to_string(&mut buf)?;
-                let bytes = bs58::decode(&buf.trim()).into_vec()?;
-                let params: DaoParams = deserialize_async(&bytes).await?;
+                let params = DaoParams::from_toml_str(&buf)?;
 
                 let drk = new_wallet(
                     blockchain_config.wallet_path,
@@ -1258,8 +1262,29 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     args.fun,
                 )
                 .await;
-                if let Err(e) = drk.import_dao(&name, params).await {
+                if let Err(e) = drk.import_dao(&name, &params).await {
                     eprintln!("Failed to import DAO: {e:?}");
+                    exit(2);
+                }
+
+                Ok(())
+            }
+
+            DaoSubcmd::UpdateKeys => {
+                let mut buf = String::new();
+                stdin().read_to_string(&mut buf)?;
+                let params = DaoParams::from_toml_str(&buf)?;
+
+                let drk = new_wallet(
+                    blockchain_config.wallet_path,
+                    blockchain_config.wallet_pass,
+                    None,
+                    ex,
+                    args.fun,
+                )
+                .await;
+                if let Err(e) = drk.update_dao_keys(&params).await {
+                    eprintln!("Failed to update DAO keys: {e:?}");
                     exit(2);
                 }
 

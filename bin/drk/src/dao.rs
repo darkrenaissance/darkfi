@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashMap, fmt};
+use std::{collections::HashMap, fmt, str::FromStr};
 
 use lazy_static::lazy_static;
 use num_bigint::BigUint;
@@ -219,6 +219,373 @@ impl DaoParams {
             early_exec_secret_key,
         }
     }
+
+    /// Parse provided toml string into `DaoParams`.
+    /// If a specific secret key is provided, the corresponding public key
+    /// will be derived from it and ignore the provided one.
+    pub fn from_toml_str(toml: &str) -> Result<Self> {
+        // Parse TOML file contents
+        let Ok(contents) = toml::from_str::<toml::Value>(toml) else {
+            return Err(Error::ParseFailed("Failed parsing TOML config"))
+        };
+        let Some(table) = contents.as_table() else {
+            return Err(Error::ParseFailed("TOML not a map"))
+        };
+
+        // Grab configuration parameters
+        let Some(proposer_limit) = table.get("proposer_limit") else {
+            return Err(Error::ParseFailed("TOML does not contain proposer limit"))
+        };
+        let Some(proposer_limit) = proposer_limit.as_str() else {
+            return Err(Error::ParseFailed("Invalid proposer limit: Not a string"))
+        };
+        if f64::from_str(proposer_limit).is_err() {
+            return Err(Error::ParseFailed("Invalid proposer limit: Cannot be parsed to float"))
+        }
+        let proposer_limit = decode_base10(proposer_limit, BALANCE_BASE10_DECIMALS, true)?;
+
+        let Some(quorum) = table.get("quorum") else {
+            return Err(Error::ParseFailed("TOML does not contain quorum"))
+        };
+        let Some(quorum) = quorum.as_str() else {
+            return Err(Error::ParseFailed("Invalid quorum: Not a string"))
+        };
+        if f64::from_str(quorum).is_err() {
+            return Err(Error::ParseFailed("Invalid quorum: Cannot be parsed to float"))
+        }
+        let quorum = decode_base10(quorum, BALANCE_BASE10_DECIMALS, true)?;
+
+        let Some(early_exec_quorum) = table.get("early_exec_quorum") else {
+            return Err(Error::ParseFailed("TOML does not contain early exec quorum"))
+        };
+        let Some(early_exec_quorum) = early_exec_quorum.as_str() else {
+            return Err(Error::ParseFailed("Invalid early exec quorum: Not a string"))
+        };
+        if f64::from_str(early_exec_quorum).is_err() {
+            return Err(Error::ParseFailed("Invalid early exec quorum: Cannot be parsed to float"))
+        }
+        let early_exec_quorum = decode_base10(early_exec_quorum, BALANCE_BASE10_DECIMALS, true)?;
+
+        let Some(approval_ratio) = table.get("approval_ratio") else {
+            return Err(Error::ParseFailed("TOML does not contain approval ratio"))
+        };
+        let Some(approval_ratio) = approval_ratio.as_float() else {
+            return Err(Error::ParseFailed("Invalid approval ratio: Not a float"))
+        };
+        if approval_ratio > 1.0 {
+            return Err(Error::ParseFailed("Approval ratio cannot be >1.0"))
+        }
+        let approval_ratio_base = 100_u64;
+        let approval_ratio_quot = (approval_ratio * approval_ratio_base as f64) as u64;
+
+        let Some(gov_token_id) = table.get("gov_token_id") else {
+            return Err(Error::ParseFailed("TOML does not contain gov token id"))
+        };
+        let Some(gov_token_id) = gov_token_id.as_str() else {
+            return Err(Error::ParseFailed("Invalid gov token id: Not a string"))
+        };
+        let gov_token_id = TokenId::from_str(gov_token_id)?;
+
+        let Some(bulla_blind) = table.get("bulla_blind") else {
+            return Err(Error::ParseFailed("TOML does not contain bulla blind"))
+        };
+        let Some(bulla_blind) = bulla_blind.as_str() else {
+            return Err(Error::ParseFailed("Invalid bulla blind: Not a string"))
+        };
+        let bulla_blind = BaseBlind::from_str(bulla_blind)?;
+
+        // Grab DAO actions keypairs
+        let notes_secret_key = match table.get("notes_secret_key") {
+            Some(notes_secret_key) => {
+                let Some(notes_secret_key) = notes_secret_key.as_str() else {
+                    return Err(Error::ParseFailed("Invalid notes secret key: Not a string"))
+                };
+                let Ok(notes_secret_key) = SecretKey::from_str(notes_secret_key) else {
+                    return Err(Error::ParseFailed("Invalid notes secret key: Decoding failed"))
+                };
+                Some(notes_secret_key)
+            }
+            None => None,
+        };
+        let notes_public_key = match notes_secret_key {
+            Some(notes_secret_key) => PublicKey::from_secret(notes_secret_key),
+            None => {
+                let Some(notes_public_key) = table.get("notes_public_key") else {
+                    return Err(Error::ParseFailed("TOML does not contain notes public key"))
+                };
+                let Some(notes_public_key) = notes_public_key.as_str() else {
+                    return Err(Error::ParseFailed("Invalid notes public key: Not a string"))
+                };
+                let Ok(notes_public_key) = PublicKey::from_str(notes_public_key) else {
+                    return Err(Error::ParseFailed("Invalid notes public key: Decoding failed"))
+                };
+                notes_public_key
+            }
+        };
+
+        let proposer_secret_key = match table.get("proposer_secret_key") {
+            Some(proposer_secret_key) => {
+                let Some(proposer_secret_key) = proposer_secret_key.as_str() else {
+                    return Err(Error::ParseFailed("Invalid proposer secret key: Not a string"))
+                };
+                let Ok(proposer_secret_key) = SecretKey::from_str(proposer_secret_key) else {
+                    return Err(Error::ParseFailed("Invalid proposer secret key: Decoding failed"))
+                };
+                Some(proposer_secret_key)
+            }
+            None => None,
+        };
+        let proposer_public_key = match proposer_secret_key {
+            Some(proposer_secret_key) => PublicKey::from_secret(proposer_secret_key),
+            None => {
+                let Some(proposer_public_key) = table.get("proposer_public_key") else {
+                    return Err(Error::ParseFailed("TOML does not contain proposer public key"))
+                };
+                let Some(proposer_public_key) = proposer_public_key.as_str() else {
+                    return Err(Error::ParseFailed("Invalid proposer public key: Not a string"))
+                };
+                let Ok(proposer_public_key) = PublicKey::from_str(proposer_public_key) else {
+                    return Err(Error::ParseFailed("Invalid proposer public key: Decoding failed"))
+                };
+                proposer_public_key
+            }
+        };
+
+        let proposals_secret_key = match table.get("proposals_secret_key") {
+            Some(proposals_secret_key) => {
+                let Some(proposals_secret_key) = proposals_secret_key.as_str() else {
+                    return Err(Error::ParseFailed("Invalid proposals secret key: Not a string"))
+                };
+                let Ok(proposals_secret_key) = SecretKey::from_str(proposals_secret_key) else {
+                    return Err(Error::ParseFailed("Invalid proposals secret key: Decoding failed"))
+                };
+                Some(proposals_secret_key)
+            }
+            None => None,
+        };
+        let proposals_public_key = match proposals_secret_key {
+            Some(proposals_secret_key) => PublicKey::from_secret(proposals_secret_key),
+            None => {
+                let Some(proposals_public_key) = table.get("proposals_public_key") else {
+                    return Err(Error::ParseFailed("TOML does not contain proposals public key"))
+                };
+                let Some(proposals_public_key) = proposals_public_key.as_str() else {
+                    return Err(Error::ParseFailed("Invalid proposals public key: Not a string"))
+                };
+                let Ok(proposals_public_key) = PublicKey::from_str(proposals_public_key) else {
+                    return Err(Error::ParseFailed("Invalid proposals public key: Decoding failed"))
+                };
+                proposals_public_key
+            }
+        };
+
+        let votes_secret_key = match table.get("votes_secret_key") {
+            Some(votes_secret_key) => {
+                let Some(votes_secret_key) = votes_secret_key.as_str() else {
+                    return Err(Error::ParseFailed("Invalid votes secret key: Not a string"))
+                };
+                let Ok(votes_secret_key) = SecretKey::from_str(votes_secret_key) else {
+                    return Err(Error::ParseFailed("Invalid votes secret key: Decoding failed"))
+                };
+                Some(votes_secret_key)
+            }
+            None => None,
+        };
+        let votes_public_key = match votes_secret_key {
+            Some(votes_secret_key) => PublicKey::from_secret(votes_secret_key),
+            None => {
+                let Some(votes_public_key) = table.get("votes_public_key") else {
+                    return Err(Error::ParseFailed("TOML does not contain votes public key"))
+                };
+                let Some(votes_public_key) = votes_public_key.as_str() else {
+                    return Err(Error::ParseFailed("Invalid votes public key: Not a string"))
+                };
+                let Ok(votes_public_key) = PublicKey::from_str(votes_public_key) else {
+                    return Err(Error::ParseFailed("Invalid votes public key: Decoding failed"))
+                };
+                votes_public_key
+            }
+        };
+
+        let exec_secret_key = match table.get("exec_secret_key") {
+            Some(exec_secret_key) => {
+                let Some(exec_secret_key) = exec_secret_key.as_str() else {
+                    return Err(Error::ParseFailed("Invalid exec secret key: Not a string"))
+                };
+                let Ok(exec_secret_key) = SecretKey::from_str(exec_secret_key) else {
+                    return Err(Error::ParseFailed("Invalid exec secret key: Decoding failed"))
+                };
+                Some(exec_secret_key)
+            }
+            None => None,
+        };
+        let exec_public_key = match exec_secret_key {
+            Some(exec_secret_key) => PublicKey::from_secret(exec_secret_key),
+            None => {
+                let Some(exec_public_key) = table.get("exec_public_key") else {
+                    return Err(Error::ParseFailed("TOML does not contain exec public key"))
+                };
+                let Some(exec_public_key) = exec_public_key.as_str() else {
+                    return Err(Error::ParseFailed("Invalid exec public key: Not a string"))
+                };
+                let Ok(exec_public_key) = PublicKey::from_str(exec_public_key) else {
+                    return Err(Error::ParseFailed("Invalid exec public key: Decoding failed"))
+                };
+                exec_public_key
+            }
+        };
+
+        let early_exec_secret_key = match table.get("early_exec_secret_key") {
+            Some(early_exec_secret_key) => {
+                let Some(early_exec_secret_key) = early_exec_secret_key.as_str() else {
+                    return Err(Error::ParseFailed("Invalid early exec secret key: Not a string"))
+                };
+                let Ok(early_exec_secret_key) = SecretKey::from_str(early_exec_secret_key) else {
+                    return Err(Error::ParseFailed("Invalid early exec secret key: Decoding failed"))
+                };
+                Some(early_exec_secret_key)
+            }
+            None => None,
+        };
+        let early_exec_public_key = match early_exec_secret_key {
+            Some(early_exec_secret_key) => PublicKey::from_secret(early_exec_secret_key),
+            None => {
+                let Some(early_exec_public_key) = table.get("early_exec_public_key") else {
+                    return Err(Error::ParseFailed("TOML does not contain early exec public key"))
+                };
+                let Some(early_exec_public_key) = early_exec_public_key.as_str() else {
+                    return Err(Error::ParseFailed("Invalid early exec public key: Not a string"))
+                };
+                let Ok(early_exec_public_key) = PublicKey::from_str(early_exec_public_key) else {
+                    return Err(Error::ParseFailed("Invalid early exec public key: Decoding failed"))
+                };
+                early_exec_public_key
+            }
+        };
+
+        Ok(Self::new(
+            proposer_limit,
+            quorum,
+            early_exec_quorum,
+            approval_ratio_base,
+            approval_ratio_quot,
+            gov_token_id,
+            notes_secret_key,
+            notes_public_key,
+            proposer_secret_key,
+            proposer_public_key,
+            proposals_secret_key,
+            proposals_public_key,
+            votes_secret_key,
+            votes_public_key,
+            exec_secret_key,
+            exec_public_key,
+            early_exec_secret_key,
+            early_exec_public_key,
+            bulla_blind,
+        ))
+    }
+
+    /// Generate a toml string containing the DAO configuration.
+    pub fn toml_str(&self) -> String {
+        // Header comments
+        let mut toml = String::from(
+            "## DAO configuration file\n\
+            ##\n\
+            ## Please make sure you go through all the settings so you can configure\n\
+            ## your DAO properly.\n\
+            ##\n\
+            ## If you want to restrict access to certain actions, the corresponding\n\
+            ## secret key can be ommited. All public keys, along with the DAO configuration\n\
+            ## parameters must be shared.\n\
+            ##\n\
+            ## If you want to combine access to certain actions, you can use the same\n\
+            ## secret and public key combination for them.\n\n",
+        );
+
+        // Configuration parameters
+        toml += &format!(
+            "## ====== DAO configuration parameters =====\n\n\
+            ## The minimum amount of governance tokens needed to open a proposal for this DAO\n\
+            proposer_limit = \"{}\"\n\n\
+            ## Minimal threshold of participating total tokens needed for a proposal to pass\n\
+            quorum = \"{}\"\n\n\
+            ## Minimal threshold of participating total tokens needed for a proposal to\n\
+            ## be considered as strongly supported, enabling early execution.\n\
+            ## Must be greater or equal to normal quorum.\n\
+            early_exec_quorum = \"{}\"\n\n\
+            ## The ratio of winning votes/total votes needed for a proposal to pass (2 decimals)\n\
+            approval_ratio = {}\n\n\
+            ## DAO's governance token ID\n\
+            gov_token_id = \"{}\"\n\n\
+            ## Bulla blind\n\
+            bulla_blind = \"{}\"\n\n",
+            encode_base10(self.dao.proposer_limit, BALANCE_BASE10_DECIMALS),
+            encode_base10(self.dao.quorum, BALANCE_BASE10_DECIMALS),
+            encode_base10(self.dao.early_exec_quorum, BALANCE_BASE10_DECIMALS),
+            self.dao.approval_ratio_quot as f64 / self.dao.approval_ratio_base as f64,
+            self.dao.gov_token_id,
+            self.dao.bulla_blind,
+        );
+
+        // DAO actions keypairs
+        toml += &format!(
+            "## ====== DAO actions keypairs =====\n\n\
+            ## DAO notes decryption keypair\n\
+            notes_public_key = \"{}\"\n",
+            self.dao.notes_public_key,
+        );
+        match self.notes_secret_key {
+            Some(secret_key) => toml += &format!("notes_secret_key = \"{}\"\n\n", secret_key),
+            None => toml += "\n",
+        }
+        toml += &format!(
+            "## DAO proposals creator keypair\n\
+            proposer_public_key = \"{}\"\n",
+            self.dao.proposer_public_key,
+        );
+        match self.proposer_secret_key {
+            Some(secret_key) => toml += &format!("proposer_secret_key = \"{}\"\n\n", secret_key),
+            None => toml += "\n",
+        }
+        toml += &format!(
+            "## DAO proposals viewer keypair\n\
+            proposals_public_key = \"{}\"\n",
+            self.dao.proposals_public_key,
+        );
+        match self.proposals_secret_key {
+            Some(secret_key) => toml += &format!("proposals_secret_key = \"{}\"\n\n", secret_key),
+            None => toml += "\n",
+        }
+        toml += &format!(
+            "## DAO votes viewer keypair\n\
+            votes_public_key = \"{}\"\n",
+            self.dao.votes_public_key,
+        );
+        match self.votes_secret_key {
+            Some(secret_key) => toml += &format!("votes_secret_key = \"{}\"\n\n", secret_key),
+            None => toml += "\n",
+        }
+        toml += &format!(
+            "## DAO proposals executor keypair\n\
+            exec_public_key = \"{}\"\n",
+            self.dao.exec_public_key,
+        );
+        match self.exec_secret_key {
+            Some(secret_key) => toml += &format!("exec_secret_key = \"{}\"\n\n", secret_key),
+            None => toml += "\n",
+        }
+        toml += &format!(
+            "## DAO strongly supported proposals executor keypair\n\
+            early_exec_public_key = \"{}\"",
+            self.dao.early_exec_public_key,
+        );
+        if let Some(secret_key) = self.early_exec_secret_key {
+            toml += &format!("\nearly_exec_secret_key = \"{}\"", secret_key)
+        }
+
+        toml
+    }
 }
 
 impl fmt::Display for DaoParams {
@@ -250,7 +617,7 @@ impl fmt::Display for DaoParams {
         };
 
         let s = format!(
-            "{}\n{}\n{}: {} ({})\n{}: {} ({})\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {:?}",
+            "{}\n{}\n{}: {} ({})\n{}: {} ({})\n{}: {} ({})\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}",
             "DAO Parameters",
             "==============",
             "Proposer limit",
@@ -259,6 +626,9 @@ impl fmt::Display for DaoParams {
             "Quorum",
             encode_base10(self.dao.quorum, BALANCE_BASE10_DECIMALS),
             self.dao.quorum,
+            "Early Exec Quorum",
+            encode_base10(self.dao.early_exec_quorum, BALANCE_BASE10_DECIMALS),
+            self.dao.early_exec_quorum,
             "Approval ratio",
             self.dao.approval_ratio_quot as f64 / self.dao.approval_ratio_base as f64,
             "Governance Token ID",
@@ -369,7 +739,7 @@ impl fmt::Display for DaoRecord {
         };
 
         let s = format!(
-            "{}\n{}\n{}: {}\n{}: {}\n{}: {} ({})\n{}: {} ({})\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}",
+            "{}\n{}\n{}: {}\n{}: {}\n{}: {} ({})\n{}: {} ({})\n{}: {} ({})\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}",
             "DAO Parameters",
             "==============",
             "Name",
@@ -382,6 +752,9 @@ impl fmt::Display for DaoRecord {
             "Quorum",
             encode_base10(self.params.dao.quorum, BALANCE_BASE10_DECIMALS),
             self.params.dao.quorum,
+            "Early Exec Quorum",
+            encode_base10(self.params.dao.early_exec_quorum, BALANCE_BASE10_DECIMALS),
+            self.params.dao.early_exec_quorum,
             "Approval ratio",
             self.params.dao.approval_ratio_quot as f64 / self.params.dao.approval_ratio_base as f64,
             "Governance Token ID",
@@ -1391,10 +1764,9 @@ impl Drk {
     }
 
     /// Import given DAO params into the wallet with a given name.
-    pub async fn import_dao(&self, name: &str, params: DaoParams) -> Result<()> {
+    pub async fn import_dao(&self, name: &str, params: &DaoParams) -> Result<()> {
         // First let's check if we've imported this DAO with the given name before.
         if self.get_dao_by_name(name).await.is_ok() {
-            // TODO: update `DaoParams` if the dao already exists
             return Err(Error::DatabaseError(
                 "[import_dao] This DAO has already been imported".to_string(),
             ))
@@ -1411,10 +1783,34 @@ impl Drk {
             rusqlite::params![
                 serialize_async(&params.dao.to_bulla()).await,
                 name,
-                serialize_async(&params).await,
+                serialize_async(params).await,
             ],
         ) {
             return Err(Error::DatabaseError(format!("[import_dao] DAO insert failed: {e:?}")))
+        };
+
+        Ok(())
+    }
+
+    /// Update given DAO params into the wallet, if the corresponding DAO exists.
+    pub async fn update_dao_keys(&self, params: &DaoParams) -> Result<()> {
+        // Grab the params DAO
+        let bulla = params.dao.to_bulla();
+        let Ok(dao) = self.get_dao_by_bulla(&bulla).await else {
+            return Err(Error::DatabaseError(format!("[import_dao] DAO {bulla} was not found")))
+        };
+
+        println!("Updating \"{}\" DAO keys into the wallet", dao.name);
+
+        let query = format!(
+            "UPDATE {} SET {} = ?1 WHERE {} = ?2;",
+            *DAO_DAOS_TABLE, DAO_DAOS_COL_PARAMS, DAO_DAOS_COL_BULLA,
+        );
+        if let Err(e) = self.wallet.exec_sql(
+            &query,
+            rusqlite::params![serialize_async(params).await, serialize_async(&bulla).await,],
+        ) {
+            return Err(Error::DatabaseError(format!("[update_dao_keys] DAO update failed: {e:?}")))
         };
 
         Ok(())
