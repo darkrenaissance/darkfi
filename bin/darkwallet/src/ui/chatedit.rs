@@ -186,6 +186,34 @@ impl TextWrap {
 
         (pos_start, pos_end)
     }
+
+    fn delete_selected(&mut self) {
+        let selection = std::mem::take(&mut self.select);
+
+        let sel = selection.first().unwrap();
+        let cursor_pos = std::cmp::min(sel.start, sel.end);
+
+        let render = self.get_render();
+        let mut before_text = String::new();
+        let mut after_text = String::new();
+        'next: for (pos, glyph) in render.glyphs.iter().enumerate() {
+            for select in &selection {
+                let start = std::cmp::min(select.start, select.end);
+                let end = std::cmp::max(select.start, select.end);
+
+                if start <= pos && pos < end {
+                    continue 'next
+                }
+            }
+            if pos <= cursor_pos {
+                before_text += &glyph.substr;
+            } else {
+                after_text += &glyph.substr;
+            }
+        }
+        self.editable.set_text(before_text, after_text);
+        self.clear_cache();
+    }
 }
 
 struct WrappedLine {
@@ -982,6 +1010,9 @@ impl ChatEdit {
         {
             let mut text_wrap = &mut self.text_wrap.lock();
             text_wrap.clear_cache();
+            if !text_wrap.select.is_empty() {
+                text_wrap.delete_selected();
+            }
             let mut tmp = [0; 4];
             let key_str = key.encode_utf8(&mut tmp);
             text_wrap.editable.compose(key_str, true);
@@ -1037,10 +1068,7 @@ impl ChatEdit {
             KeyCode::Kp8 => self.insert_char('8').await,
             KeyCode::Kp9 => self.insert_char('9').await,
             KeyCode::KpDecimal => self.insert_char('.').await,
-            KeyCode::Enter | KeyCode::KpEnter => {
-                let node = self.node.upgrade().unwrap();
-                node.trigger("enter_pressed", vec![]).await.unwrap();
-            }
+            KeyCode::Enter | KeyCode::KpEnter => self.insert_char('\n').await,
             KeyCode::Delete => {
                 self.delete(0, 1);
                 self.clamp_scroll(&mut self.text_wrap.lock());
@@ -1071,37 +1099,12 @@ impl ChatEdit {
 
     fn delete(&self, before: usize, after: usize) {
         let mut text_wrap = &mut self.text_wrap.lock();
-        text_wrap.clear_cache();
-        let selection = std::mem::take(&mut self.text_wrap.lock().select);
-
-        if selection.is_empty() {
+        if text_wrap.select.is_empty() {
             text_wrap.editable.delete(before, after);
-            return
+            text_wrap.clear_cache();
+        } else {
+            text_wrap.delete_selected();
         }
-
-        let sel = selection.first().unwrap();
-        let cursor_pos = std::cmp::min(sel.start, sel.end);
-
-        let render = text_wrap.get_render();
-        let mut before_text = String::new();
-        let mut after_text = String::new();
-        'next: for (pos, glyph) in render.glyphs.iter().enumerate() {
-            for select in &selection {
-                let start = std::cmp::min(select.start, select.end);
-                let end = std::cmp::max(select.start, select.end);
-
-                if start <= pos && pos < end {
-                    continue 'next
-                }
-            }
-            if pos <= cursor_pos {
-                before_text += &glyph.substr;
-            } else {
-                after_text += &glyph.substr;
-            }
-        }
-
-        text_wrap.editable.set_text(before_text, after_text);
 
         self.is_phone_select.store(false, Ordering::Relaxed);
         // Reshow cursor (if hidden)

@@ -722,6 +722,7 @@ impl EditBox {
         let cursor_pos = std::cmp::min(sel.start, sel.end);
 
         let render = editable.render();
+        // Same code in chatedit's TextWrap::delete_selected()
         let mut before_text = String::new();
         let mut after_text = String::new();
         'next: for (pos, glyph) in render.glyphs.iter().enumerate() {
