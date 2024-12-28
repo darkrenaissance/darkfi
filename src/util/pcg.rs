@@ -39,7 +39,7 @@ impl Pcg32 {
         self.state = old_state.wrapping_mul(Self::MULTIPLIER).wrapping_add(self.increment);
         let xorshifted = ((old_state >> 18) ^ old_state) >> 27;
         let rot = old_state >> 59;
-        (xorshifted >> rot | xorshifted << ((!rot).wrapping_add(1) & 31)) as u32
+        ((xorshifted >> rot) | (xorshifted << ((!rot).wrapping_add(1) & 31))) as u32
     }
 }
 
@@ -51,7 +51,7 @@ impl RngCore for Pcg32 {
     }
 
     fn next_u64(&mut self) -> u64 {
-        (self.next_u32() as u64) << 32 | (self.next_u32() as u64)
+        ((self.next_u32() as u64) << 32) | (self.next_u32() as u64)
     }
 
     fn fill_bytes(&mut self, dest: &mut [u8]) {

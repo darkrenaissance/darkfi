@@ -37,22 +37,22 @@ impl MerkleTree {
         Self(merkle_node::MerkleTree::new(1))
     }
 
-    fn append(&mut self, node: &Bound<Fp>) -> PyResult<bool> {
-        Ok(self.0.append(MerkleNode::from(node.borrow().deref().0)))
+    fn append(&mut self, node: &Bound<Fp>) -> bool {
+        self.0.append(MerkleNode::from(node.borrow().deref().0))
     }
 
-    fn mark(&mut self) -> PyResult<u32> {
-        Ok(u64::from(self.0.mark().unwrap()) as u32)
+    fn mark(&mut self) -> u32 {
+        u64::from(self.0.mark().unwrap()) as u32
     }
 
-    fn root(&self, checkpoint_depth: usize) -> PyResult<Fp> {
+    fn root(&self, checkpoint_depth: usize) -> Fp {
         let root = self.0.root(checkpoint_depth).unwrap();
-        Ok(Fp(root.inner()))
+        Fp(root.inner())
     }
 
-    fn witness(&self, position: u32, checkpoint_depth: usize) -> PyResult<Vec<Fp>> {
+    fn witness(&self, position: u32, checkpoint_depth: usize) -> Vec<Fp> {
         let path = self.0.witness((position as u64).into(), checkpoint_depth).unwrap();
-        Ok(path.iter().map(|x| Fp(x.inner())).collect())
+        path.iter().map(|x| Fp(x.inner())).collect()
     }
 }
 
