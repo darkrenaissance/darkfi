@@ -178,13 +178,13 @@ impl TextWrap {
         }
 
         // Find word end
-        let mut pos_end = pos;
+        let mut pos_end = pos + 1;
         while pos_end < rendered.glyphs.len() {
-            pos_end += 1;
             let glyph_str = &rendered.glyphs[pos_end].substr;
             if is_whitespace(glyph_str) {
                 break
             }
+            pos_end += 1;
         }
 
         (pos_start, pos_end)
