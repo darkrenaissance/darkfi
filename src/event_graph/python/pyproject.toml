@@ -3,7 +3,7 @@ requires = ["maturin>=1.0,<2.0"]
 build-backend = "maturin"
 
 [project]
-name = "darkfi-sdk"
+name = "darkfi-eventgraph-py"
 version = "0.4.1"
 requires-python = ">=3.9"
 classifiers = [
