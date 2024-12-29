@@ -128,7 +128,7 @@ impl TextWrap {
         let wrapped_glyphs = text::wrap(width, font_size, window_scale, &rendered.glyphs);
 
         let mut curr_pos = 0;
-        let lines: Vec<_> = wrapped_glyphs
+        let mut lines: Vec<_> = wrapped_glyphs
             .into_iter()
             .map(|glyphs| {
                 let off_pos = curr_pos;
@@ -137,8 +137,9 @@ impl TextWrap {
             })
             .collect();
 
-        if let Some(last) = lines.last() {
+        if let Some(last) = lines.last_mut() {
             assert_eq!(last.last_pos(), rendered.glyphs.len());
+            last.is_last = true;
         }
 
         WrappedLines::new(lines, font_size, linespacing)
@@ -154,9 +155,11 @@ impl TextWrap {
         let cursor_pos = wrapped_lines.point_to_pos(point);
 
         let rendered = self.get_render();
+        let glyphs_len = rendered.glyphs.len();
         let cidx = rendered.pos_to_idx(cursor_pos);
         self.editable.set_cursor_idx(cidx);
 
+        debug!(target: "ui::chatedit::text_wrap", "set_cursor_with_point() -> {cursor_pos} / {glyphs_len}");
         cursor_pos
     }
 
@@ -223,6 +226,10 @@ struct WrappedLine {
     font_size: f32,
     window_scale: f32,
     baseline: f32,
+
+    /// Last line in this paragraph?
+    /// In which case the cursor does not wrap
+    is_last: bool,
 }
 
 impl WrappedLine {
@@ -233,7 +240,7 @@ impl WrappedLine {
         window_scale: f32,
         baseline: f32,
     ) -> Self {
-        Self { glyphs, off_pos, font_size, window_scale, baseline }
+        Self { glyphs, off_pos, font_size, window_scale, baseline, is_last: false }
     }
 
     fn len(&self) -> usize {
@@ -259,19 +266,18 @@ impl WrappedLine {
     }
 
     fn find_closest(&self, x: f32) -> TextPos {
-        // Line begins at 0
-        let mut prev_dist = 0. - x;
         for (pos, glyph_rect) in self.pos_iter().enumerate() {
-            let curr_dist = glyph_rect.x - x;
-            if curr_dist.abs() > prev_dist.abs() {
-                if pos == 0 {
-                    return 0
-                }
-                return pos - 1
+            let next_x = glyph_rect.center().x;
+            if x < next_x {
+                return pos
             }
-            prev_dist = curr_dist;
         }
-        self.glyphs.len() - 1
+
+        if self.is_last {
+            self.glyphs.len()
+        } else {
+            self.glyphs.len() - 1
+        }
     }
 }
 
@@ -291,8 +297,8 @@ impl WrappedLines {
         let mut pos = 0;
         for (line_idx, wrap_line) in self.lines.iter().enumerate() {
             // Is it within this line?
-            if point.y < self.linespacing {
-                //debug!(target: "ui::editbox::wrapped_lines", "point to pos found line: {line_idx}");
+            if point.y < self.linespacing || wrap_line.is_last {
+                //debug!(target: "ui::chatedit::wrapped_lines", "point to pos found line: {line_idx}");
                 pos += wrap_line.find_closest(point.x);
                 return pos
             }
@@ -301,8 +307,8 @@ impl WrappedLines {
             point.y -= self.linespacing;
             pos += wrap_line.len();
         }
-        //debug!(target: "ui::editbox::wrapped_lines", "point to pos using last line");
-        pos
+        //debug!(target: "ui::chatedit::wrapped_lines", "point to pos using last line");
+        panic!("point_to_pos() went past the last line")
     }
 
     fn height(&self) -> f32 {
@@ -607,10 +613,15 @@ impl ChatEdit {
             is_mouse_hover: AtomicBool::new(false),
         });
 
-        self_.text_wrap.lock().editable.set_text(
-            "".to_string(),
-            "A berry is a small, pulpy, and often edible fruit. Typically, berries are juicy, rounded, brightly colored, sweet, sour or tart, and do not have a stone or pit, although many pips or seeds may be present. Common examples of berries in the culinary sense are strawberries, raspberries, blueberries, blackberries, white currants, blackcurrants, and redcurrants.In Britain, soft fruit is a horticultural term for such fruits.".to_string()
-        );
+        //self_.text_wrap.lock().editable.set_text(
+        //    "".to_string(),
+        //    "A berry is a small, pulpy, and often edible fruit. Typically, berries are juicy, rounded, brightly colored, sweet, sour or tart, and do not have a stone or pit, although many pips or seeds may be present. Common examples of berries in the culinary sense are strawberries, raspberries, blueberries, blackberries, white currants, blackcurrants, and redcurrants.In Britain, soft fruit is a horticultural term for such fruits.".to_string()
+        //);
+        //self_
+        //    .text_wrap
+        //    .lock()
+        //    .editable
+        //    .set_text("A berry is small and pulpy.".to_string(), "".to_string());
 
         Pimpl::ChatEdit(self_)
     }
