@@ -47,7 +47,7 @@ members = [
     "src/contract/dao",
     "src/contract/deployooor",
 
-    "example/dchat/dchatd",
+    "example/dchat/dchatd", "src/event_graph/python",
 ]
 
 [dependencies]
