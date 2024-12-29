@@ -150,9 +150,7 @@ impl EventGraphPtr {
     ) -> PyResult<Bound<'a, PyAny>> {
         let eg_ptr: event_graph::EventGraphPtr = self.0.clone();
         let event_id: blake3::Hash = event_id_native.borrow().deref().0.clone();
-        println!("future into py\n");
         pyo3_async_runtimes::async_std::future_into_py(py, async move {
-            println!("inside future_into_py\n");
             let event_res: Result<Option<event::Event>, darkfi::Error> =
                 eg_ptr.dag_get(&event_id).await;
             let event: event::Event = event_res
