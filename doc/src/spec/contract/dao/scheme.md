@@ -23,7 +23,7 @@ the DAO params and then add the bulla to the set.
 
 * Wallet builder: `src/contract/dao/src/client/mint.rs`
 * WASM VM code: `src/contract/dao/src/entrypoint/mint.rs`
-* ZK proof: `src/contract/dao/proof/dao-mint.zk`
+* ZK proof: `src/contract/dao/proof/mint.zk`
 
 ### Function Params
 
@@ -45,22 +45,41 @@ Let there be a prover auxiliary witness inputs:
 $$ \begin{aligned}
   L &∈ ℕ₆₄ \\
   Q &∈ ℕ₆₄ \\
+  EEQ &∈ ℕ₆₄ \\
   A^\% &∈ ℕ₆₄ × ℕ₆₄ \\
   τ &∈ 𝔽ₚ \\
-  x &∈ 𝔽ₚ \\
+  Nx &∈ 𝔽ₚ \\
+  px &∈ 𝔽ₚ \\
+  Px &∈ 𝔽ₚ \\
+  Vx &∈ 𝔽ₚ \\
+  Ex &∈ 𝔽ₚ \\
+  EEx &∈ 𝔽ₚ \\
   b_\t{DAO} &∈ 𝔽ₚ
 \end{aligned} $$
 
 Attach a proof $π$ such that the following relations hold:
 
-**Proof of public key ownership** &emsp; $\t{PK} = \t{DerivePubKey}(x)$.
+**Proof of notes public key ownership** &emsp; $\t{NPK} = \t{DerivePubKey}(Nx)$.
 
-**DAO bulla integrity** &emsp; $ℬ  = \t{Bulla}_\t{DAO}((L, Q, A^\%, τ, \t{PK}), b_\t{DAO})$
+**Proof of proposer public key ownership** &emsp; $\t{pPK} = \t{DerivePubKey}(px)$.
+
+**Proof of proposals public key ownership** &emsp; $\t{PPK} = \t{DerivePubKey}(Px)$.
+
+**Proof of votes public key ownership** &emsp; $\t{VPK} = \t{DerivePubKey}(Vx)$.
+
+**Proof of executor public key ownership** &emsp; $\t{EPK} = \t{DerivePubKey}(Ex)$.
+
+**Proof of early executor public key ownership** &emsp; $\t{EEPK} = \t{DerivePubKey}(EEx)$.
+
+**Proof that early execution quorum is greater than normal quorum** &emsp; $Q <= EEQ1$.
+
+**DAO bulla integrity** &emsp; $ℬ  = \t{Bulla}_\t{DAO}((L, Q, EEQ, A^\%, τ,
+\t{NPK}, \t{pPK}, \t{PPK}, \t{VPK}, \t{EPK}, \t{EEPK}), b_\t{DAO})$
 
 ### Signatures
 
 There should be a single signature attached, which uses
-$\t{PK}$ as the signature public key.
+$\t{NPK}$ as the signature public key.
 
 ## Propose
 
@@ -89,8 +108,8 @@ A proposal contains a list of auth calls as specified in [Auth Calls](model.md#a
 * Wallet builder: `src/contract/dao/src/client/propose.rs`
 * WASM VM code: `src/contract/dao/src/entrypoint/propose.rs`
 * ZK proofs:
-  * `src/contract/dao/proof/dao-propose-main.zk`
-  * `src/contract/dao/proof/dao-propose-input.zk`
+  * `src/contract/dao/proof/propose-main.zk`
+  * `src/contract/dao/proof/propose-input.zk`
 
 ### Function Params
 
@@ -146,6 +165,8 @@ Attach a proof $π_𝒫 $ such that the following relations hold:
 **Governance token commit** &emsp; export the DAO token ID as an encrypted pedersen
 commit $T = \t{PedersenCommit}(d.τ, b_τ)$ where $T = ∑_{i ∈ 𝐢} Tᵢ$.
 
+**Proof of proposer public key ownership** &emsp; $\t{pPK} = \t{DerivePubKey}(px)$.
+
 **DAO bulla integrity** &emsp; $𝒟  = \t{Bulla}_\t{DAO}(d, b_d)$
 
 **DAO existence** &emsp; $R_\t{DAO} = \t{MerkleRoot}(ψ, Π, 𝒟 )$
@@ -200,8 +221,8 @@ public key $i.\t{PK}_σ$.
 After `DAO::propose()` is called, DAO members can then call this contract
 function. Using a similar method as before, they attach inputs proving ownership
 of a certain value of governance tokens. This is how we achieve token weighted
-voting. The result of the vote is communicated to other DAO members through the
-encrypted note $\t{note}$.
+voting. The result of the vote is communicated to DAO members that can view votes
+through the encrypted note $\t{note}$.
 
 Each nullifier $𝒩 $ is stored uniquely per proposal. Additionally as before,
 there is a leakage here connecting the coins when spent. However prodigious
@@ -220,8 +241,8 @@ and the yes votes by $V_\t{yes}$.
 * Wallet builder: `src/contract/dao/src/client/vote.rs`
 * WASM VM code: `src/contract/dao/src/entrypoint/vote.rs`
 * ZK proofs:
-  * `src/contract/dao/proof/dao-vote-main.zk`
-  * `src/contract/dao/proof/dao-vote-input.zk`
+  * `src/contract/dao/proof/vote-main.zk`
+  * `src/contract/dao/proof/vote-input.zk`
 
 ### Function Params
 
@@ -247,8 +268,9 @@ selected such that their sum is a valid field element in $𝔽ₚ$ so the blind
 for $∑ V$ can be verifiably encrypted. Likewise we do the same for the blind
 used to calculate $V_\t{yes}$.
 
-This allows DAO members to securely receive all secrets for votes on a proposal.
-This is then used in the Exec phase when we work on the sum of DAO votes.
+This allows DAO members that hold the votes key to securely receive all secrets
+for votes on a proposal. This is then used in the Exec phase when we work on the
+sum of DAO votes.
 
 ```rust
 {{#include ../../../../../src/contract/dao/src/model.rs:dao-vote-params}}
@@ -300,7 +322,7 @@ and then check $t_\t{now} < t_\t{end}$.
 
 **Verifiable encryption of vote commit secrets** &emsp;
 let $𝐧 = (o, b_y, v, bᵥ)$, and verify
-$\t{enc\_vote} = \t{ElGamal}.\t{Encrypt}(𝐧, \t{esk}, d.\t{PK})$.
+$\t{enc\_vote} = \t{ElGamal}.\t{Encrypt}(𝐧, \t{esk}, d.\t{VPK})$.
 
 For each input $i ∈ 𝐢$, perform the following checks:
 
@@ -343,8 +365,8 @@ public key $i.\t{PK}_σ$.
 
 Exec is the final stage after voting is [Accepted](concepts.md#proposal-states).
 
-It checks the correct voting conditions have been met in accordance with the
-[DAO params](model.md#dao) such as quorum and approval ratio.
+It checks that voting has passed, and correct conditions have been met, in accordance
+with the [DAO params](model.md#dao) such as quorum and approval ratio.
 $V_\t{yes}$ and $V_\t{all}$ are pedersen commits to $v_\t{yes}$ and $v_\t{all}$ respectively.
 
 It also checks that child calls have been attached in accordance with the auth
@@ -354,7 +376,9 @@ function. Currently the DAO provides a single preset for executing
 
 * Wallet builder: `src/contract/dao/src/client/exec.rs`
 * WASM VM code: `src/contract/dao/src/entrypoint/exec.rs`
-* ZK proof: `src/contract/dao/proof/dao-exec.zk`
+* ZK proofs:
+  * `src/contract/dao/proof/exec.zk`
+  * `src/contract/dao/proof/early-exec.zk`
 
 ### Function Params
 
@@ -402,16 +426,61 @@ $$ \begin{aligned}
 \end{aligned} $$
 Attach a proof $π$ such that the following relations hold:
 
+**Proof of executor public key ownership** &emsp; $\t{EPK} = \t{DerivePubKey}(Ex)$.
+
 **DAO bulla integrity** &emsp; $𝒟 = \t{Bulla}_\t{DAO}(d, b_d)$
 
 **Proposal bulla integrity** &emsp; $𝒫 = \t{Bulla}_\t{Proposal}(p, b_p)$
 where $p.𝒜  = 𝒜 $.
+
+**Proposal has expired** &emsp; let $t_\t{end} = ℕ₆₄2𝔽ₚ(p.t₀) + ℕ₆₄2𝔽ₚ(p.D)$,
+and then check $t_\t{end} <= t_\t{now}$.
 
 **Yes vote commit** &emsp; $V_\t{yes} = \t{PedersenCommit}(v_y, b_y)$
 
 **All vote commit** &emsp; $V_\t{all} = \t{PedersenCommit}(v_a, b_a)$
 
 **All votes pass quorum** &emsp; $Q ≤ v_a$
+
+**Approval ratio satisfied** &emsp; we wish to check that
+$\frac{A^\%_q}{A^\%_b} ≤ \frac{v_y}{v_a}$. Instead we perform the
+equivalent check that $v_a A^\%_q ≤ v_y A^\%_b$.
+
+### EarlyExec
+
+This is a special case of Exec for when we want to execute a strongly accepted proposal
+before voting period has passed. A different proof statement is used in this case.
+
+Let there be prover auxiliary witness inputs:
+$$ \begin{aligned}
+  p &∈ \t{Params}_\t{Proposal} \\
+  b_p &∈ 𝔽ₚ \\
+  d &∈ \t{Params}_\t{DAO} \\
+  b_d &∈ 𝔽ₚ \\
+  v_y &∈ 𝔽ₚ \\
+  v_a &∈ 𝔽ₚ \\
+  b_y &∈ 𝔽ᵥ \\
+  b_a &∈ 𝔽ᵥ \\
+\end{aligned} $$
+Attach a proof $π$ such that the following relations hold:
+
+**Proof of executor public key ownership** &emsp; $\t{EPK} = \t{DerivePubKey}(Ex)$.
+
+**Proof of early executor public key ownership** &emsp; $\t{EEPK} = \t{DerivePubKey}(EEx)$.
+
+**DAO bulla integrity** &emsp; $𝒟 = \t{Bulla}_\t{DAO}(d, b_d)$
+
+**Proposal bulla integrity** &emsp; $𝒫 = \t{Bulla}_\t{Proposal}(p, b_p)$
+where $p.𝒜  = 𝒜 $.
+
+**Proposal has not expired** &emsp; let $t_\t{end} = ℕ₆₄2𝔽ₚ(p.t₀) + ℕ₆₄2𝔽ₚ(p.D)$,
+and then check $t_\t{now} < t_\t{end}$.
+
+**Yes vote commit** &emsp; $V_\t{yes} = \t{PedersenCommit}(v_y, b_y)$
+
+**All vote commit** &emsp; $V_\t{all} = \t{PedersenCommit}(v_a, b_a)$
+
+**All votes pass early execution quorum** &emsp; $EEQ ≤ v_a$
 
 **Approval ratio satisfied** &emsp; we wish to check that
 $\frac{A^\%_q}{A^\%_b} ≤ \frac{v_y}{v_a}$. Instead we perform the
@@ -437,8 +506,8 @@ DAO treasury but be unspendable.
 * Wallet builder: `src/contract/dao/src/client/auth_xfer.rs`
 * WASM VM code: `src/contract/dao/src/entrypoint/auth_xfer.rs`
 * ZK proofs:
-  * `src/contract/dao/proof/dao-auth-money-transfer.zk`
-  * `src/contract/dao/proof/dao-auth-money-transfer-enc-coin.zk`
+  * `src/contract/dao/proof/auth-money-transfer.zk`
+  * `src/contract/dao/proof/auth-money-transfer-enc-coin.zk`
 
 ### Function Params
 

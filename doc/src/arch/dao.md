@@ -14,49 +14,70 @@ these bullas.
 
 ## `DAO::mint()`: Establishing the DAO
 
-From `darkfi/src/contract/dao/proof/dao-mint.zk`:
+From `darkfi/src/contract/dao/proof/mint.zk`:
 ```zkas
 	bulla = poseidon_hash(
-		dao_proposer_limit,
-		dao_quorum,
-		dao_approval_ratio_quot,
-		dao_approval_ratio_base,
+		proposer_limit,
+		quorum,
+		early_exec_quorum,
+		approval_ratio_quot,
+		approval_ratio_base,
 		gov_token_id,
-		dao_public_x,
-		dao_public_y,
-		dao_bulla_blind,
-	);
+		notes_public_x,
+		notes_public_y,
+		proposer_public_x,
+		proposer_public_y,
+		proposals_public_x,
+		proposals_public_y,
+		votes_public_x,
+		votes_public_y,
+		exec_public_x,
+		exec_public_y,
+		early_exec_public_x,
+		early_exec_public_y,
+		bulla_blind,
+    );
 ```
 
 Brief description of the DAO bulla params:
 
-* **proposer_limit**: minimum deposit required for proposals to become valid.
-  TODO: rename to `min_deposit`.
-* **quorum**: minimum threshold of votes before it's allowed to pass.
+* **proposer_limit**: the minimum amount of governance tokens needed to open a proposal.
+* **quorum**: minimal threshold of participating total tokens needed for a proposal to pass.
   Normally this is implemented as min % of voting power, but we do this in
   absolute value
-* **approval_ratio**: proportion of winners to losers for a proposal to pass.
+* **early_exec_quorum**: minimal threshold of participating total tokens needed for a proposal
+  to be considered as strongly supported, enabling early execution. Must be greater or equal
+  to normal quorum.
+* **approval_ratio**: the ratio of winning/total votes needed for a proposal to pass.
+* **gov_token_id**: DAO's governance token ID.
+* **notes_public_key**: notes(coins) decryption public key
+* **proposer_public_key**: proposals creator public key
+* **proposals_public_key**: proposals viewer public key
+* **votes_public_key**: votes viewer public key
+* **exec_public_key**: proposals executor public key
+* **early_exec_public_key**: strongly supported proposals executor public key
+* **bulla_blind**: bulla blind
 
-Currently there is no notion of veto although it could be trivially added
-if desired.
+DAO creators/founders have full control on how they want to configure and share
+the actions keys, giving them the ability to veto if needed.
 
 ## `DAO::propose()`: Propose the Vote
 
-From `darkfi/src/contract/dao/proof/dao-propose-main.zk`:
+From `darkfi/src/contract/dao/proof/propose-main.zk`:
 ```zkas
 	proposal_bulla = poseidon_hash(
-		proposal_dest_x,
-		proposal_dest_y,
-		proposal_amount,
-		proposal_token_id,
+		proposal_auth_calls_commit,
+		proposal_creation_blockwindow,
+		proposal_duration_blockwindows,
+		proposal_user_data,
 		dao_bulla,
 		proposal_blind,
 	);
 ```
 
-We create a proposal which will send tokens to the dest provided.
-This will soon be changed to be generic. Proposals will commit to
-calling params or code instead.
+Proposals are committed to a specific calls set, therefore they
+are generic and we can attach various calls to it. We will use a
+money transfer as the example for rest sections.
 
 ## `DAO::vote()`: Vote on a Proposal
 
@@ -366,37 +387,52 @@ be executed early. We should add this option to DarkFi DAO params.
 
 ## Suggested Changes
 
-DAO params:
+~~DAO params:~~
 
-* Voting period (currently called duration) should be moved from proposals to
-  DAO params.
-    * upgrayedd: we should just have minimum allowed period in the DAO, but keep
-      this param in the proposal.
-* Window (currently set at 4 hours of blocks) should be customizable. We need a
-  terminology for the unit of time. Maybe `time_units`.
-    * This should be switched from block index to using timestamps.
+* ~~Voting period (currently called duration) should be moved from proposals to
+  DAO params.~~
+    * ~~upgrayedd: we should just have minimum allowed period in the DAO, but keep
+      this param in the proposal.~~
+* ~~Window (currently set at 4 hours of blocks) should be customizable. We need a
+  terminology for the unit of time. Maybe `time_units`.~~
+    * ~~This should be switched from block index to using timestamps.
       See the quoted paragraph in the OpenZeppelin section above for the
-      reasoning.
-    * upgrayedd: stick with block index.
-* Early execution bool flag. If true, then passed proposals can be `exec()`uted
-  asap, otherwise the entire voting period must pass.
+      reasoning.~~
+    * ~~upgrayedd: stick with block index.~~
+* ~~Early execution bool flag. If true, then passed proposals can be `exec()`uted
+  asap, otherwise the entire voting period must pass.~~
 
-No changes to proposals, except moving duration to DAO params.
+~~No changes to proposals, except moving duration to DAO params.~~
 
-Currently the DAO public key is used for:
+> Resolution:
+> The full voting period must pass in order to be able to execute a proposal.
+> A new configuration parameter was introduced, called early exec quorum,
+> where we can define the quorum for a proposal to be considered as strongly
+> supported/voted on, which should always be greater or equal to normal quorum.
+> With this addition, we can execute proposals before the voting period has
+> passed, if they were accepted.
 
-* Encrypting votes.
-* Calling exec.
+~~Currently the DAO public key is used for:~~
 
-We should introduce a new key:
+* ~~Encrypting votes.~~
+* ~~Calling exec.~~
 
-* Proposer role, which is needed to make proposals. This can be shared openly
+~~We should introduce a new key:~~
+
+* ~~Proposer role, which is needed to make proposals. This can be shared openly
   amongst DAO members if they wish to remove the restriction on who can make
-  proposals.
-    * OZ does this with a canceller role that has the ability to cancel
-      proposals.
-    * In the future allow multiple keys for this so you can see who makes
-      proposals.
+  proposals.~~
+    * ~~OZ does this with a canceller role that has the ability to cancel
+      proposals.~~
+    * ~~In the future allow multiple keys for this so you can see who makes
+      proposals.~~
+
+> Resolution:
+> DAO public key was split into six other keys, providing maximum control over
+> each DAO action. Now the DAO creator can define who can view the coin notes,
+> create proposals, view proposals, view votes, execute proposals and early
+> execute proposals. They can configure the keys however they like like reusing
+> keys if they want some actions to have same key.
 
 Optional: many DAOs these days implement Abstain, which increases the quorum
 without voting yes. This is for when you want to weak support a measure,

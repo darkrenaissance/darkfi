@@ -2758,11 +2758,6 @@ impl Drk {
             )))
         }
 
-        // Check we know the plaintext data
-        if proposal.data.is_none() {
-            return Err(Error::Custom("[dao_vote] Proposal plainext data is empty".to_string()))
-        }
-
         // Fetch DAO and check its deployed
         let Ok(dao) = self.get_dao_by_bulla(&proposal.proposal.dao_bulla).await else {
             return Err(Error::Custom(format!(
