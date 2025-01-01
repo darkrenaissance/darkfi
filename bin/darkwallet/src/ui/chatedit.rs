@@ -613,10 +613,10 @@ impl ChatEdit {
             is_mouse_hover: AtomicBool::new(false),
         });
 
-        //self_.text_wrap.lock().editable.set_text(
-        //    "".to_string(),
-        //    "A berry is a small, pulpy, and often edible fruit. Typically, berries are juicy, rounded, brightly colored, sweet, sour or tart, and do not have a stone or pit, although many pips or seeds may be present. Common examples of berries in the culinary sense are strawberries, raspberries, blueberries, blackberries, white currants, blackcurrants, and redcurrants. In Britain, soft fruit is a horticultural term for such fruits.".to_string()
-        //);
+        self_.text_wrap.lock().editable.set_text(
+            "".to_string(),
+            "A berry is a small, pulpy, and often edible fruit. Typically, berries are juicy, rounded, brightly colored, sweet, sour or tart, and do not have a stone or pit, although many pips or seeds may be present. Common examples of berries in the culinary sense are strawberries, raspberries, blueberries, blackberries, white currants, blackcurrants, and redcurrants. In Britain, soft fruit is a horticultural term for such fruits.".to_string()
+        );
         //self_
         //    .text_wrap
         //    .lock()
@@ -1080,7 +1080,7 @@ impl ChatEdit {
             KeyCode::Kp8 => self.insert_char('8').await,
             KeyCode::Kp9 => self.insert_char('9').await,
             KeyCode::KpDecimal => self.insert_char('.').await,
-            KeyCode::Enter | KeyCode::KpEnter => self.insert_char('\n').await,
+            //KeyCode::Enter | KeyCode::KpEnter => self.insert_char('\n').await,
             KeyCode::Delete => {
                 self.delete(0, 1);
                 self.clamp_scroll(&mut self.text_wrap.lock());

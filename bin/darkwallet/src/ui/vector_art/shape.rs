@@ -41,6 +41,29 @@ impl ShapeVertex {
     pub fn from_xy(x: f32, y: f32, color: Color) -> Self {
         Self { x: vec![Op::ConstFloat32(x)], y: vec![Op::ConstFloat32(y)], color }
     }
+
+    pub fn scale(mut self, scale: f32) -> Self {
+        let last_x = self.x.pop().unwrap();
+        let last_y = self.y.pop().unwrap();
+        let mut x = self.x;
+        x.push(
+            Op::Mul((
+                Box::new(Op::ConstFloat32(scale)),
+                Box::new(last_x)
+            ))
+        );
+        let mut y = self.y;
+        y.push(
+            Op::Mul((
+                Box::new(Op::ConstFloat32(scale)),
+                Box::new(last_y)
+            ))
+        );
+        Self {
+            x, y,
+            color: self.color
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -143,5 +166,12 @@ impl VectorShape {
             y2.clone(),
             color.clone(),
         );
+    }
+
+    pub fn scaled(self, scale: f32) -> Self {
+        Self {
+            verts: self.verts.into_iter().map(|v| v.scale(scale)).collect(),
+            indices: self.indices
+        }
     }
 }

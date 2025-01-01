@@ -66,6 +66,7 @@ mod prop;
 mod pubsub;
 //mod py;
 mod ringbuf;
+mod shape;
 mod scene;
 use scene::SceneNode as SceneNode3;
 mod text;
