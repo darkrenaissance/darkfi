@@ -1114,10 +1114,9 @@ impl ChatEdit {
         let prev_cursor_pos = text_wrap.editable.get_cursor_pos(&rendered);
         move_cursor(&mut text_wrap.editable);
         let cursor_pos = text_wrap.editable.get_cursor_pos(&rendered);
-        drop(text_wrap);
         debug!(target: "ui::editbox", "Adjust cursor pos to {cursor_pos}");
 
-        let select = &mut self.text_wrap.lock().select;
+        let select = &mut text_wrap.select;
 
         // Start selection if shift is held
         if has_shift {
