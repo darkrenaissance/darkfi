@@ -208,7 +208,7 @@ impl ZeroMQAdapter {
                 prop.typ.encode(&mut reply).unwrap();
                 VarInt(prop.get_len() as u64).encode(&mut reply).unwrap();
                 for i in 0..prop.get_len() {
-                    let val = prop.get_raw_value(i)?;
+                    let val = prop.get_value(i)?;
                     if val.is_unset() {
                         1u8.encode(&mut reply).unwrap();
                         let default = &prop.defaults[i];

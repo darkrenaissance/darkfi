@@ -51,7 +51,9 @@ mod android_ui_consts {
     pub const BACKARROW_SCALE: f32 = 30.;
     pub const BACKARROW_X: f32 = 50.;
     pub const BACKARROW_Y: f32 = 70.;
-    pub const CHATEDIT_MAX_HEIGHT: f32 = 163.;
+    pub const CHATEDIT_MIN_HEIGHT: f32 = 140.;
+    pub const CHATEDIT_HEIGHT: f32 = 140.;
+    pub const CHATEDIT_SINGLE_LINE_Y: f32 = 120.;
     pub const CHATEDIT_BOTTOM_PAD: f32 = 10.;
     pub const CHATEDIT_CURSOR_ASCENT: f32 = 50.;
     pub const CHATEDIT_CURSOR_DESCENT: f32 = 20.;
@@ -66,9 +68,9 @@ mod android_ui_consts {
     pub const EMOJI_BTN_X: f32 = 60.;
     pub const EMOJI_BG_W: f32 = 120.;
     pub const EMOJI_SCALE: f32 = 40.;
-    pub const EMOJI_NEG_Y: f32 = 55.;
+    pub const EMOJI_NEG_Y: f32 = 85.;
     pub const SENDARROW_NEG_X: f32 = 50.;
-    pub const SENDARROW_NEG_Y: f32 = 50.;
+    pub const SENDARROW_NEG_Y: f32 = 80.;
     pub const FONTSIZE: f32 = 40.;
     pub const TIMESTAMP_FONTSIZE: f32 = 30.;
     pub const TIMESTAMP_WIDTH: f32 = 135.;
@@ -107,7 +109,8 @@ mod ui_consts {
     pub const BACKARROW_X: f32 = 38.;
     pub const BACKARROW_Y: f32 = 23.;
     pub const CHATEDIT_MIN_HEIGHT: f32 = 60.;
-    pub const CHATEDIT_MAX_HEIGHT: f32 = 50.;
+    pub const CHATEDIT_HEIGHT: f32 = 60.;
+    pub const CHATEDIT_SINGLE_LINE_Y: f32 = 58.;
     pub const CHATEDIT_BOTTOM_PAD: f32 = 5.;
     pub const CHATEDIT_CURSOR_ASCENT: f32 = 25.;
     pub const CHATEDIT_CURSOR_DESCENT: f32 = 8.;
@@ -140,7 +143,8 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
 
     let mut cc = Compiler::new();
 
-    cc.add_const_f32("CHATEDIT_MAX_HEIGHT", CHATEDIT_MAX_HEIGHT);
+    cc.add_const_f32("CHATEDIT_HEIGHT", CHATEDIT_HEIGHT);
+    cc.add_const_f32("CHATEDIT_SINGLE_LINE_Y", CHATEDIT_SINGLE_LINE_Y);
     cc.add_const_f32("CHATEDIT_BOTTOM_PAD", CHATEDIT_BOTTOM_PAD);
     cc.add_const_f32("CHATEDIT_NEG_W", CHATEDIT_NEG_W);
     cc.add_const_f32("CHATEDIT_MIN_HEIGHT", CHATEDIT_MIN_HEIGHT);
@@ -232,7 +236,7 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     prop.set_f32(Role::App, 0, 0.).unwrap();
     prop.set_f32(Role::App, 1, 0.).unwrap();
     prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_f32(Role::App, 3, CHATEDIT_MAX_HEIGHT).unwrap();
+    prop.set_f32(Role::App, 3, CHATEDIT_HEIGHT).unwrap();
     node.set_property_u32(Role::App, "z_index", 2).unwrap();
 
     let mut shape = VectorShape::new();
@@ -284,7 +288,7 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     prop.set_f32(Role::App, 0, CHATEDIT_LHS_PAD).unwrap();
     prop.set_f32(Role::App, 1, CHANNEL_LABEL_Y).unwrap();
     prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_f32(Role::App, 3, CHATEDIT_MAX_HEIGHT).unwrap();
+    prop.set_f32(Role::App, 3, CHATEDIT_HEIGHT).unwrap();
     node.set_property_u32(Role::App, "z_index", 2).unwrap();
     node.set_property_f32(Role::App, "baseline", 0.).unwrap();
     node.set_property_f32(Role::App, "font_size", FONTSIZE).unwrap();
@@ -314,10 +318,19 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     let node = create_chatview("chatty");
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(Role::App, 0, 10.).unwrap();
-    prop.set_f32(Role::App, 1, CHATEDIT_MAX_HEIGHT).unwrap();
+    prop.set_f32(Role::App, 1, CHATEDIT_HEIGHT).unwrap();
     let code = cc.compile("w - 30").unwrap();
     prop.set_expr(Role::App, 2, code).unwrap();
-    let code = cc.compile("h - CHATEDIT_MAX_HEIGHT - editz_h - 2 * CHATEDIT_BOTTOM_PAD").unwrap();
+    let code = cc.compile(
+"
+        height = if editz_h < CHATEDIT_MIN_HEIGHT {
+            CHATEDIT_MIN_HEIGHT
+        } else {
+            editz_h
+        };
+
+        h - CHATEDIT_HEIGHT - height - 2 * CHATEDIT_BOTTOM_PAD
+").unwrap();
     prop.set_expr(Role::App, 3, code).unwrap();
     let chatview_rect_prop = prop.clone();
     node.set_property_f32(Role::App, "font_size", FONTSIZE).unwrap();
@@ -514,21 +527,19 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
         .compile(
 "
         height = if rect_h < CHATEDIT_MIN_HEIGHT {
-            CHATEDIT_MIN_HEIGHT
+            CHATEDIT_SINGLE_LINE_Y
         } else {
             rect_h
         };
 
-        nudge_y = (height - rect_h) / 2;
-
-        parent_h - (height - nudge_y + CHATEDIT_BOTTOM_PAD)
+        parent_h - (height + CHATEDIT_BOTTOM_PAD)
 ",
         )
         .unwrap();
     prop.set_expr(Role::App, 1, code).unwrap();
     let code = cc.compile("parent_w - CHATEDIT_NEG_W").unwrap();
     prop.set_expr(Role::App, 2, code).unwrap();
-    prop.set_f32(Role::App, 3, CHATEDIT_MAX_HEIGHT).unwrap();
+    prop.set_f32(Role::App, 3, CHATEDIT_HEIGHT).unwrap();
 
     chatview_rect_prop.add_depend(&prop, 3, "editz_h");
     editbox_bg_rect_prop.add_depend(&prop, 3, "editz_h");
@@ -625,10 +636,10 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile("w - SENDLABEL_WIDTH").unwrap();
     prop.set_expr(Role::App, 0, code).unwrap();
-    let code = cc.compile("h - CHATEDIT_MAX_HEIGHT").unwrap();
+    let code = cc.compile("h - CHATEDIT_HEIGHT").unwrap();
     prop.set_expr(Role::App, 1, code).unwrap();
     prop.set_f32(Role::App, 2, SENDLABEL_WIDTH).unwrap();
-    prop.set_f32(Role::App, 3, CHATEDIT_MAX_HEIGHT).unwrap();
+    prop.set_f32(Role::App, 3, CHATEDIT_HEIGHT).unwrap();
 
     let node = node.setup(|me| Button::new(me, app.ex.clone())).await;
     layer_node.clone().link(node);
