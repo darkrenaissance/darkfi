@@ -732,21 +732,6 @@ impl ChatEdit {
                     color = COLOR_WHITE;
                 }
 
-                // Some kewl styling
-                let top_y = line_idx as f32 * linespacing + baseline - font_size - scroll;
-                if top_y < 0. {
-                    let pct = 1. + (top_y / baseline).clamp(-1., 0.);
-                    color[3] = pct;
-                }
-                //let bottom_y = top_y + linespacing;
-                let bottom_y = (line_idx + 1) as f32 * linespacing - scroll;
-                let bottom_rect = clip.h;
-                if bottom_y > bottom_rect {
-                    let dist = bottom_y - bottom_rect;
-                    let pct = 1. - (dist / linespacing).clamp(0., 1.);
-                    color[3] = pct;
-                }
-
                 mesh.draw_box(&glyph_rect, color, uv_rect);
                 if self.debug.get() {
                     mesh.draw_outline(&glyph_rect, COLOR_RED, 1.);

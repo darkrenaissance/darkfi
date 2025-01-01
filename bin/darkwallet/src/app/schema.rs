@@ -26,8 +26,8 @@ use crate::{
     prop::{
         Property, PropertyBool, PropertyFloat32, PropertyStr, PropertySubType, PropertyType, Role,
     },
-    shape,
     scene::{SceneNodePtr, Slot},
+    shape,
     text::TextShaperPtr,
     ui::{
         Button, ChatEdit, ChatView, EditBox, Image, Layer, ShapeVertex, Text, VectorArt,
@@ -52,7 +52,7 @@ mod android_ui_consts {
     pub const BACKARROW_X: f32 = 50.;
     pub const BACKARROW_Y: f32 = 70.;
     pub const EDITCHAT_HEIGHT: f32 = 163.;
-    pub const EDITCHAT_BOTTOM_PAD: f32 = 30.;
+    pub const EDITCHAT_BOTTOM_PAD: f32 = 10.;
     pub const EDITCHAT_CURSOR_ASCENT: f32 = 50.;
     pub const EDITCHAT_CURSOR_DESCENT: f32 = 20.;
     pub const EDITCHAT_SELECT_ASCENT: f32 = 50.;
@@ -106,7 +106,7 @@ mod ui_consts {
     pub const BACKARROW_X: f32 = 38.;
     pub const BACKARROW_Y: f32 = 23.;
     pub const EDITCHAT_HEIGHT: f32 = 50.;
-    pub const EDITCHAT_BOTTOM_PAD: f32 = 20.;
+    pub const EDITCHAT_BOTTOM_PAD: f32 = 5.;
     pub const EDITCHAT_CURSOR_ASCENT: f32 = 25.;
     pub const EDITCHAT_CURSOR_DESCENT: f32 = 8.;
     pub const EDITCHAT_SELECT_ASCENT: f32 = 30.;

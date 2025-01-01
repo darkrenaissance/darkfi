@@ -46,23 +46,10 @@ impl ShapeVertex {
         let last_x = self.x.pop().unwrap();
         let last_y = self.y.pop().unwrap();
         let mut x = self.x;
-        x.push(
-            Op::Mul((
-                Box::new(Op::ConstFloat32(scale)),
-                Box::new(last_x)
-            ))
-        );
+        x.push(Op::Mul((Box::new(Op::ConstFloat32(scale)), Box::new(last_x))));
         let mut y = self.y;
-        y.push(
-            Op::Mul((
-                Box::new(Op::ConstFloat32(scale)),
-                Box::new(last_y)
-            ))
-        );
-        Self {
-            x, y,
-            color: self.color
-        }
+        y.push(Op::Mul((Box::new(Op::ConstFloat32(scale)), Box::new(last_y))));
+        Self { x, y, color: self.color }
     }
 }
 
@@ -171,7 +158,7 @@ impl VectorShape {
     pub fn scaled(self, scale: f32) -> Self {
         Self {
             verts: self.verts.into_iter().map(|v| v.scale(scale)).collect(),
-            indices: self.indices
+            indices: self.indices,
         }
     }
 }
