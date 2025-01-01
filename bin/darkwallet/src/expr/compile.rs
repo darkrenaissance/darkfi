@@ -89,8 +89,18 @@ impl Compiler {
     }
     */
 
-    pub fn compile<S: AsRef<str>>(&self, stmts: S) -> Result<SExprCode> {
-        let stmts = stmts.as_ref();
+    pub fn compile<S: AsRef<str>>(&self, prestmts: S) -> Result<SExprCode> {
+        let prestmts = prestmts.as_ref();
+        // Strip all comments
+        let mut stmts = String::new();
+        for line in prestmts.lines() {
+            if let Some(chr) = line.trim_start().chars().next() {
+                if chr != '#' {
+                    stmts.push_str(line);
+                }
+            }
+        }
+
         let mut code = vec![];
         for stmt in stmts.split(';') {
             code.push(self.compile_line(stmt)?);
@@ -649,6 +659,58 @@ mod tests {
             "r".to_string(),
             Box::new(Op::Div((Box::new(Op::ConstFloat32(10.)), Box::new(Op::ConstFloat32(4.))))),
         ))];
+        assert_eq!(code, code2);
+    }
+
+    #[test]
+    fn multiline() {
+        let mut compiler = Compiler::new();
+        let code = compiler
+            .compile(
+                "
+            # This is a comment
+            r = 10 / 4;
+
+            s = if h < 4 {
+                h - 1
+            } else {
+                2 * h + 5
+            };
+
+            r + 1
+        ",
+            )
+            .unwrap();
+        let code2 = vec![
+            Op::StoreVar((
+                "r".to_string(),
+                Box::new(Op::Div((
+                    Box::new(Op::ConstFloat32(10.)),
+                    Box::new(Op::ConstFloat32(4.)),
+                ))),
+            )),
+            Op::StoreVar((
+                "s".to_string(),
+                Box::new(Op::IfElse((
+                    Box::new(Op::LessThan((
+                        Box::new(Op::LoadVar("h".to_string())),
+                        Box::new(Op::ConstFloat32(4.)),
+                    ))),
+                    vec![Op::Sub((
+                        Box::new(Op::LoadVar("h".to_string())),
+                        Box::new(Op::ConstFloat32(1.)),
+                    ))],
+                    vec![Op::Add((
+                        Box::new(Op::Mul((
+                            Box::new(Op::ConstFloat32(2.)),
+                            Box::new(Op::LoadVar("h".to_string())),
+                        ))),
+                        Box::new(Op::ConstFloat32(5.)),
+                    ))],
+                ))),
+            )),
+            Op::Add((Box::new(Op::LoadVar("r".to_string())), Box::new(Op::ConstFloat32(1.)))),
+        ];
         assert_eq!(code, code2);
     }
 }
