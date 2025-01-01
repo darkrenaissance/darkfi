@@ -294,6 +294,9 @@ impl WrappedLines {
 
     /// Convert an (x, y) point to a glyph pos
     fn point_to_pos(&self, mut point: Point) -> TextPos {
+        if self.lines.is_empty() {
+            return 0
+        }
         let mut pos = 0;
         for (line_idx, wrap_line) in self.lines.iter().enumerate() {
             // Is it within this line?
@@ -613,10 +616,10 @@ impl ChatEdit {
             is_mouse_hover: AtomicBool::new(false),
         });
 
-        self_.text_wrap.lock().editable.set_text(
-            "".to_string(),
-            "A berry is a small, pulpy, and often edible fruit. Typically, berries are juicy, rounded, brightly colored, sweet, sour or tart, and do not have a stone or pit, although many pips or seeds may be present. Common examples of berries in the culinary sense are strawberries, raspberries, blueberries, blackberries, white currants, blackcurrants, and redcurrants. In Britain, soft fruit is a horticultural term for such fruits.".to_string()
-        );
+        //self_.text_wrap.lock().editable.set_text(
+        //    "".to_string(),
+        //    "A berry is a small, pulpy, and often edible fruit. Typically, berries are juicy, rounded, brightly colored, sweet, sour or tart, and do not have a stone or pit, although many pips or seeds may be present. Common examples of berries in the culinary sense are strawberries, raspberries, blueberries, blackberries, white currants, blackcurrants, and redcurrants. In Britain, soft fruit is a horticultural term for such fruits.".to_string()
+        //);
         //self_
         //    .text_wrap
         //    .lock()

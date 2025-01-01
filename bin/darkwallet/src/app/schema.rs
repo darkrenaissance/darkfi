@@ -51,23 +51,24 @@ mod android_ui_consts {
     pub const BACKARROW_SCALE: f32 = 30.;
     pub const BACKARROW_X: f32 = 50.;
     pub const BACKARROW_Y: f32 = 70.;
-    pub const EDITCHAT_HEIGHT: f32 = 163.;
-    pub const EDITCHAT_BOTTOM_PAD: f32 = 10.;
-    pub const EDITCHAT_CURSOR_ASCENT: f32 = 50.;
-    pub const EDITCHAT_CURSOR_DESCENT: f32 = 20.;
-    pub const EDITCHAT_SELECT_ASCENT: f32 = 50.;
-    pub const EDITCHAT_SELECT_DESCENT: f32 = 20.;
-    pub const EDITCHAT_HANDLE_DESCENT: f32 = 10.;
-    pub const EDITCHAT_LINESPACING: f32 = 70.;
+    pub const CHATEDIT_HEIGHT: f32 = 163.;
+    pub const CHATEDIT_BOTTOM_PAD: f32 = 10.;
+    pub const CHATEDIT_CURSOR_ASCENT: f32 = 50.;
+    pub const CHATEDIT_CURSOR_DESCENT: f32 = 20.;
+    pub const CHATEDIT_SELECT_ASCENT: f32 = 50.;
+    pub const CHATEDIT_SELECT_DESCENT: f32 = 20.;
+    pub const CHATEDIT_HANDLE_DESCENT: f32 = 10.;
+    pub const CHATEDIT_LINESPACING: f32 = 70.;
+    pub const CHATEDIT_NEG_W: f32 = 280.;
+    pub const CHATEDIT_LHS_PAD: f32 = 150.;
     pub const TEXTBAR_BASELINE: f32 = 60.;
     pub const TEXT_DESCENT: f32 = 20.;
     pub const EMOJI_BTN_X: f32 = 60.;
     pub const EMOJI_BG_W: f32 = 120.;
     pub const EMOJI_SCALE: f32 = 40.;
-    pub const EDITCHAT_LHS_PAD: f32 = 150.;
-    pub const SENDLABEL_WIDTH: f32 = 200.;
-    pub const SENDLABEL_LHS_PAD: f32 = 40.;
-    pub const SEND_BTN_NEG_X: f32 = 50.;
+    pub const EMOJI_NEG_Y: f32 = 55.;
+    pub const SENDARROW_NEG_X: f32 = 50.;
+    pub const SENDARROW_NEG_Y: f32 = 50.;
     pub const FONTSIZE: f32 = 40.;
     pub const TIMESTAMP_FONTSIZE: f32 = 30.;
     pub const TIMESTAMP_WIDTH: f32 = 135.;
@@ -105,23 +106,24 @@ mod ui_consts {
     pub const BACKARROW_SCALE: f32 = 15.;
     pub const BACKARROW_X: f32 = 38.;
     pub const BACKARROW_Y: f32 = 23.;
-    pub const EDITCHAT_HEIGHT: f32 = 50.;
-    pub const EDITCHAT_BOTTOM_PAD: f32 = 5.;
-    pub const EDITCHAT_CURSOR_ASCENT: f32 = 25.;
-    pub const EDITCHAT_CURSOR_DESCENT: f32 = 8.;
-    pub const EDITCHAT_SELECT_ASCENT: f32 = 30.;
-    pub const EDITCHAT_SELECT_DESCENT: f32 = 10.;
-    pub const EDITCHAT_HANDLE_DESCENT: f32 = 35.;
-    pub const EDITCHAT_LINESPACING: f32 = 35.;
+    pub const CHATEDIT_HEIGHT: f32 = 50.;
+    pub const CHATEDIT_BOTTOM_PAD: f32 = 5.;
+    pub const CHATEDIT_CURSOR_ASCENT: f32 = 25.;
+    pub const CHATEDIT_CURSOR_DESCENT: f32 = 8.;
+    pub const CHATEDIT_SELECT_ASCENT: f32 = 30.;
+    pub const CHATEDIT_SELECT_DESCENT: f32 = 10.;
+    pub const CHATEDIT_HANDLE_DESCENT: f32 = 35.;
+    pub const CHATEDIT_LINESPACING: f32 = 35.;
+    pub const CHATEDIT_NEG_W: f32 = 190.;
+    pub const CHATEDIT_LHS_PAD: f32 = 100.;
     pub const TEXTBAR_BASELINE: f32 = 34.;
     pub const TEXT_DESCENT: f32 = 10.;
     pub const EMOJI_BTN_X: f32 = 40.;
     pub const EMOJI_BG_W: f32 = 80.;
     pub const EMOJI_SCALE: f32 = 20.;
-    pub const EDITCHAT_LHS_PAD: f32 = 100.;
-    pub const SENDLABEL_WIDTH: f32 = 120.;
-    pub const SENDLABEL_LHS_PAD: f32 = 30.;
-    pub const SEND_BTN_NEG_X: f32 = 50.;
+    pub const EMOJI_NEG_Y: f32 = 30.;
+    pub const SENDARROW_NEG_X: f32 = 50.;
+    pub const SENDARROW_NEG_Y: f32 = 28.;
     pub const FONTSIZE: f32 = 20.;
     pub const TIMESTAMP_FONTSIZE: f32 = 12.;
     pub const TIMESTAMP_WIDTH: f32 = 60.;
@@ -137,12 +139,12 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
 
     let mut cc = Compiler::new();
 
-    cc.add_const_f32("EDITCHAT_HEIGHT", EDITCHAT_HEIGHT);
-    cc.add_const_f32("EDITCHAT_BOTTOM_PAD", EDITCHAT_BOTTOM_PAD);
-    cc.add_const_f32("SENDLABEL_WIDTH", SENDLABEL_WIDTH);
-    cc.add_const_f32("SENDLABEL_LHS_PAD", SENDLABEL_LHS_PAD);
-    cc.add_const_f32("SEND_BTN_NEG_X", SEND_BTN_NEG_X);
-    cc.add_const_f32("EMOJI_SCALE", EMOJI_SCALE);
+    cc.add_const_f32("CHATEDIT_HEIGHT", CHATEDIT_HEIGHT);
+    cc.add_const_f32("CHATEDIT_BOTTOM_PAD", CHATEDIT_BOTTOM_PAD);
+    cc.add_const_f32("CHATEDIT_NEG_W", CHATEDIT_NEG_W);
+    cc.add_const_f32("SENDARROW_NEG_X", SENDARROW_NEG_X);
+    cc.add_const_f32("SENDARROW_NEG_Y", SENDARROW_NEG_Y);
+    cc.add_const_f32("EMOJI_NEG_Y", EMOJI_NEG_Y);
 
     // Main view
     let layer_node = create_layer("view");
@@ -228,7 +230,7 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     prop.set_f32(Role::App, 0, 0.).unwrap();
     prop.set_f32(Role::App, 1, 0.).unwrap();
     prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_f32(Role::App, 3, EDITCHAT_HEIGHT).unwrap();
+    prop.set_f32(Role::App, 3, CHATEDIT_HEIGHT).unwrap();
     node.set_property_u32(Role::App, "z_index", 2).unwrap();
 
     let mut shape = VectorShape::new();
@@ -277,10 +279,10 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     // Create some text
     let node = create_text("channel_label");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(Role::App, 0, EDITCHAT_LHS_PAD).unwrap();
+    prop.set_f32(Role::App, 0, CHATEDIT_LHS_PAD).unwrap();
     prop.set_f32(Role::App, 1, CHANNEL_LABEL_Y).unwrap();
     prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_f32(Role::App, 3, EDITCHAT_HEIGHT).unwrap();
+    prop.set_f32(Role::App, 3, CHATEDIT_HEIGHT).unwrap();
     node.set_property_u32(Role::App, "z_index", 2).unwrap();
     node.set_property_f32(Role::App, "baseline", 0.).unwrap();
     node.set_property_f32(Role::App, "font_size", FONTSIZE).unwrap();
@@ -310,10 +312,10 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     let node = create_chatview("chatty");
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(Role::App, 0, 10.).unwrap();
-    prop.set_f32(Role::App, 1, EDITCHAT_HEIGHT).unwrap();
+    prop.set_f32(Role::App, 1, CHATEDIT_HEIGHT).unwrap();
     let code = cc.compile("w - 30").unwrap();
     prop.set_expr(Role::App, 2, code).unwrap();
-    let code = cc.compile("h - EDITCHAT_HEIGHT - editz_h - 2 * EDITCHAT_BOTTOM_PAD").unwrap();
+    let code = cc.compile("h - CHATEDIT_HEIGHT - editz_h - 2 * CHATEDIT_BOTTOM_PAD").unwrap();
     prop.set_expr(Role::App, 3, code).unwrap();
     let chatview_rect_prop = prop.clone();
     node.set_property_f32(Role::App, "font_size", FONTSIZE).unwrap();
@@ -405,10 +407,10 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     let node = create_vector_art("editbox_bg");
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(Role::App, 0, 0.).unwrap();
-    let code = cc.compile("h - editz_h - 2 * EDITCHAT_BOTTOM_PAD").unwrap();
+    let code = cc.compile("h - editz_h - 2 * CHATEDIT_BOTTOM_PAD").unwrap();
     prop.set_expr(Role::App, 1, code).unwrap();
     prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
-    let code = cc.compile("editz_h + 2 * EDITCHAT_BOTTOM_PAD").unwrap();
+    let code = cc.compile("editz_h + 2 * CHATEDIT_BOTTOM_PAD").unwrap();
     prop.set_expr(Role::App, 3, code).unwrap();
     node.set_property_u32(Role::App, "z_index", 2).unwrap();
 
@@ -454,9 +456,9 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     // Create the send button
     let node = create_vector_art("send_btn_bg");
     let prop = node.get_property("rect").unwrap();
-    let code = cc.compile("w - SEND_BTN_NEG_X").unwrap();
+    let code = cc.compile("w - SENDARROW_NEG_X").unwrap();
     prop.set_expr(Role::App, 0, code).unwrap();
-    let code = cc.compile("h - 2 * EMOJI_SCALE").unwrap();
+    let code = cc.compile("h - SENDARROW_NEG_Y").unwrap();
     prop.set_expr(Role::App, 1, code).unwrap();
     prop.set_f32(Role::App, 2, 500.).unwrap();
     prop.set_f32(Role::App, 3, 500.).unwrap();
@@ -473,7 +475,7 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     let node = create_vector_art("emoji_btn_bg");
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(Role::App, 0, EMOJI_BTN_X).unwrap();
-    let code = cc.compile("h - 2 * EMOJI_SCALE").unwrap();
+    let code = cc.compile("h - EMOJI_NEG_Y").unwrap();
     prop.set_expr(Role::App, 1, code).unwrap();
     prop.set_f32(Role::App, 2, 500.).unwrap();
     prop.set_f32(Role::App, 3, 500.).unwrap();
@@ -494,12 +496,12 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     node.set_property_f32(Role::App, "max_height", 300.).unwrap();
 
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(Role::App, 0, EDITCHAT_LHS_PAD).unwrap();
-    let code = cc.compile("parent_h - rect_h - EDITCHAT_BOTTOM_PAD").unwrap();
+    prop.set_f32(Role::App, 0, CHATEDIT_LHS_PAD).unwrap();
+    let code = cc.compile("parent_h - rect_h - CHATEDIT_BOTTOM_PAD").unwrap();
     prop.set_expr(Role::App, 1, code).unwrap();
-    let code = cc.compile("parent_w - (40 + SENDLABEL_WIDTH + SENDLABEL_LHS_PAD)").unwrap();
+    let code = cc.compile("parent_w - CHATEDIT_NEG_W").unwrap();
     prop.set_expr(Role::App, 2, code).unwrap();
-    prop.set_f32(Role::App, 3, EDITCHAT_HEIGHT).unwrap();
+    prop.set_f32(Role::App, 3, CHATEDIT_HEIGHT).unwrap();
 
     chatview_rect_prop.add_depend(&prop, 3, "editz_h");
     editbox_bg_rect_prop.add_depend(&prop, 3, "editz_h");
@@ -507,7 +509,7 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     emoji_btn_rect_prop.add_depend(&prop, 3, "editz_h");
 
     node.set_property_f32(Role::App, "baseline", TEXTBAR_BASELINE).unwrap();
-    node.set_property_f32(Role::App, "linespacing", EDITCHAT_LINESPACING).unwrap();
+    node.set_property_f32(Role::App, "linespacing", CHATEDIT_LINESPACING).unwrap();
     node.set_property_f32(Role::App, "descent", TEXT_DESCENT).unwrap();
     node.set_property_f32(Role::App, "font_size", FONTSIZE).unwrap();
     //node.set_property_str(Role::App, "text", "hello king!😁🍆jelly 🍆1234").unwrap();
@@ -533,12 +535,12 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     prop.set_f32(Role::App, 1, 0.627).unwrap();
     prop.set_f32(Role::App, 2, 1.).unwrap();
     prop.set_f32(Role::App, 3, 1.).unwrap();
-    node.set_property_f32(Role::App, "cursor_ascent", EDITCHAT_CURSOR_ASCENT).unwrap();
-    node.set_property_f32(Role::App, "cursor_descent", EDITCHAT_CURSOR_DESCENT).unwrap();
+    node.set_property_f32(Role::App, "cursor_ascent", CHATEDIT_CURSOR_ASCENT).unwrap();
+    node.set_property_f32(Role::App, "cursor_descent", CHATEDIT_CURSOR_DESCENT).unwrap();
     let prop = node.get_property("hi_bg_color").unwrap();
-    node.set_property_f32(Role::App, "select_ascent", EDITCHAT_SELECT_ASCENT).unwrap();
-    node.set_property_f32(Role::App, "select_descent", EDITCHAT_SELECT_DESCENT).unwrap();
-    node.set_property_f32(Role::App, "handle_descent", EDITCHAT_HANDLE_DESCENT).unwrap();
+    node.set_property_f32(Role::App, "select_ascent", CHATEDIT_SELECT_ASCENT).unwrap();
+    node.set_property_f32(Role::App, "select_descent", CHATEDIT_SELECT_DESCENT).unwrap();
+    node.set_property_f32(Role::App, "handle_descent", CHATEDIT_HANDLE_DESCENT).unwrap();
     if LIGHTMODE {
         prop.set_f32(Role::App, 0, 0.5).unwrap();
         prop.set_f32(Role::App, 1, 0.5).unwrap();
@@ -589,17 +591,19 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
         .await;
     layer_node.clone().link(node);
 
+    /*
     // Create the send button
     let node = create_button("send_btn");
     node.set_property_bool(Role::App, "is_active", true).unwrap();
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile("w - SENDLABEL_WIDTH").unwrap();
     prop.set_expr(Role::App, 0, code).unwrap();
-    let code = cc.compile("h - EDITCHAT_HEIGHT").unwrap();
+    let code = cc.compile("h - CHATEDIT_HEIGHT").unwrap();
     prop.set_expr(Role::App, 1, code).unwrap();
     prop.set_f32(Role::App, 2, SENDLABEL_WIDTH).unwrap();
-    prop.set_f32(Role::App, 3, EDITCHAT_HEIGHT).unwrap();
+    prop.set_f32(Role::App, 3, CHATEDIT_HEIGHT).unwrap();
 
     let node = node.setup(|me| Button::new(me, app.ex.clone())).await;
     layer_node.clone().link(node);
+    */
 }
