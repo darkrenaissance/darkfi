@@ -46,7 +46,7 @@ use crate::{
 const LIGHTMODE: bool = false;
 
 mod android_ui_consts {
-    pub const CHANNEL_LABEL_BASELINE: f32 = 90.;
+    pub const CHANNEL_LABEL_BASELINE: f32 = 82.;
     pub const BACKARROW_SCALE: f32 = 30.;
     pub const BACKARROW_X: f32 = 50.;
     pub const BACKARROW_Y: f32 = 70.;
@@ -70,6 +70,7 @@ mod android_ui_consts {
     pub const EMOJI_NEG_Y: f32 = 85.;
     pub const SENDARROW_NEG_X: f32 = 50.;
     pub const SENDARROW_NEG_Y: f32 = 80.;
+    pub const SENDBTN_BOX: [f32; 4] = [86., 120., 80., 70.];
     pub const FONTSIZE: f32 = 40.;
     pub const TIMESTAMP_FONTSIZE: f32 = 30.;
     pub const TIMESTAMP_WIDTH: f32 = 135.;
@@ -103,7 +104,7 @@ mod ui_consts {
     // Main menu
 
     // Chat UI
-    pub const CHANNEL_LABEL_BASELINE: f32 = 35.;
+    pub const CHANNEL_LABEL_BASELINE: f32 = 37.;
     pub const BACKARROW_SCALE: f32 = 15.;
     pub const BACKARROW_X: f32 = 38.;
     pub const BACKARROW_Y: f32 = 26.;
@@ -127,6 +128,7 @@ mod ui_consts {
     pub const EMOJI_NEG_Y: f32 = 34.;
     pub const SENDARROW_NEG_X: f32 = 50.;
     pub const SENDARROW_NEG_Y: f32 = 32.;
+    pub const SENDBTN_BOX: [f32; 4] = [72., 50., 45., 34.];
     pub const FONTSIZE: f32 = 20.;
     pub const TIMESTAMP_FONTSIZE: f32 = 12.;
     pub const TIMESTAMP_WIDTH: f32 = 60.;
@@ -137,7 +139,7 @@ mod ui_consts {
 
 use ui_consts::*;
 
-pub async fn make(app: &App, window: SceneNodePtr) {
+pub async fn make(app: &App, window: SceneNodePtr, channel: &str, db: &sled::Db) {
     let window_scale = PropertyFloat32::wrap(&window, Role::Internal, "scale", 0).unwrap();
 
     let mut cc = Compiler::new();
@@ -150,9 +152,11 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     cc.add_const_f32("SENDARROW_NEG_X", SENDARROW_NEG_X);
     cc.add_const_f32("SENDARROW_NEG_Y", SENDARROW_NEG_Y);
     cc.add_const_f32("EMOJI_NEG_Y", EMOJI_NEG_Y);
+    cc.add_const_f32("SENDBTN_BOX_0", SENDBTN_BOX[0]);
+    cc.add_const_f32("SENDBTN_BOX_1", SENDBTN_BOX[1]);
 
     // Main view
-    let layer_node = create_layer("chat_layer");
+    let layer_node = create_layer(&(channel.to_string() + "_chat_layer"));
     let prop = layer_node.get_property("rect").unwrap();
     prop.set_f32(Role::App, 0, 0.).unwrap();
     prop.set_f32(Role::App, 1, 0.).unwrap();
@@ -209,8 +213,6 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     prop.set_f32(Role::App, 3, 500.).unwrap();
     node.set_property_u32(Role::App, "z_index", 3).unwrap();
 
-    let send_btn_rect_prop = prop.clone();
-
     let shape = shape::create_back_arrow().scaled(BACKARROW_SCALE);
     let node =
         node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
@@ -255,7 +257,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     node.set_property_u32(Role::App, "z_index", 2).unwrap();
     node.set_property_f32(Role::App, "baseline", CHANNEL_LABEL_BASELINE).unwrap();
     node.set_property_f32(Role::App, "font_size", FONTSIZE).unwrap();
-    node.set_property_str(Role::App, "text", "#random").unwrap();
+    node.set_property_str(Role::App, "text", &("#".to_string() + channel)).unwrap();
     //node.set_property_bool(Role::App, "debug", true).unwrap();
     //node.set_property_str(Role::App, "text", "anon1").unwrap();
     let prop = node.get_property("text_color").unwrap();
@@ -365,8 +367,8 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         prop.set_f32(Role::App, 3, 1.).unwrap();
     }
 
-    let db = sled::open(CHATDB_PATH).expect("cannot open sleddb");
-    let chat_tree = db.open_tree(b"chat").unwrap();
+    let tree_name = channel.to_string() + "__chat_tree";
+    let chat_tree = db.open_tree(tree_name.as_bytes()).unwrap();
     if chat_tree.is_empty() {
         populate_tree(&chat_tree);
     }
@@ -456,9 +458,6 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     prop.set_f32(Role::App, 2, 500.).unwrap();
     prop.set_f32(Role::App, 3, 500.).unwrap();
     node.set_property_u32(Role::App, "z_index", 3).unwrap();
-
-    let send_btn_rect_prop = prop.clone();
-
     let shape = shape::create_send_arrow().scaled(EMOJI_SCALE);
     let node =
         node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
@@ -473,9 +472,6 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     prop.set_f32(Role::App, 2, 500.).unwrap();
     prop.set_f32(Role::App, 3, 500.).unwrap();
     node.set_property_u32(Role::App, "z_index", 3).unwrap();
-
-    let emoji_btn_rect_prop = prop.clone();
-
     let shape = shape::create_emoji_selector().scaled(EMOJI_SCALE);
     let node =
         node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
@@ -510,8 +506,6 @@ pub async fn make(app: &App, window: SceneNodePtr) {
 
     chatview_rect_prop.add_depend(&prop, 3, "editz_h");
     editbox_bg_rect_prop.add_depend(&prop, 3, "editz_h");
-    send_btn_rect_prop.add_depend(&prop, 3, "editz_h");
-    emoji_btn_rect_prop.add_depend(&prop, 3, "editz_h");
 
     node.set_property_f32(Role::App, "baseline", TEXTBAR_BASELINE).unwrap();
     node.set_property_f32(Role::App, "linespacing", CHATEDIT_LINESPACING).unwrap();
@@ -596,19 +590,51 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         .await;
     layer_node.clone().link(node);
 
-    /*
     // Create the send button
     let node = create_button("send_btn");
     node.set_property_bool(Role::App, "is_active", true).unwrap();
     let prop = node.get_property("rect").unwrap();
-    let code = cc.compile("w - SENDLABEL_WIDTH").unwrap();
+    let code = cc.compile("w - SENDBTN_BOX_0").unwrap();
     prop.set_expr(Role::App, 0, code).unwrap();
-    let code = cc.compile("h - CHATEDIT_HEIGHT").unwrap();
+    let code = cc.compile("h - SENDBTN_BOX_1").unwrap();
     prop.set_expr(Role::App, 1, code).unwrap();
-    prop.set_f32(Role::App, 2, SENDLABEL_WIDTH).unwrap();
-    prop.set_f32(Role::App, 3, CHATEDIT_HEIGHT).unwrap();
+    prop.set_f32(Role::App, 2, SENDBTN_BOX[2]).unwrap();
+    prop.set_f32(Role::App, 3, SENDBTN_BOX[3]).unwrap();
+
+    let (slot, recvr) = Slot::new("send_clicked");
+    node.register("click", slot).unwrap();
+    let listen_click = app.ex.spawn(async move {
+        while let Ok(_) = recvr.recv().await {
+            info!(target: "app::chat", "clicked send");
+        }
+    });
+    app.tasks.lock().unwrap().push(listen_click);
 
     let node = node.setup(|me| Button::new(me, app.ex.clone())).await;
+    layer_node.clone().link(node);
+
+    /*
+    // Create debug box
+    let node = create_vector_art("debugtool");
+    let prop = node.get_property("rect").unwrap();
+    let code = cc.compile("w - 86").unwrap();
+    prop.set_expr(Role::App, 0, code).unwrap();
+    let code = cc.compile("h - 120").unwrap();
+    prop.set_expr(Role::App, 1, code).unwrap();
+    prop.set_f32(Role::App, 2, 80.).unwrap();
+    prop.set_f32(Role::App, 3, 70.).unwrap();
+    node.set_property_u32(Role::App, "z_index", 6).unwrap();
+    let mut shape = VectorShape::new();
+    shape.add_outline(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::load_var("h"),
+        2.,
+        [1., 0., 0., 1.],
+    );
+    let node =
+        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
     layer_node.clone().link(node);
     */
 }

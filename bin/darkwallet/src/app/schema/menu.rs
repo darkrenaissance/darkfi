@@ -43,6 +43,8 @@ use crate::{
     ExecutorPtr,
 };
 
+use super::CHANNELS;
+
 mod android_ui_consts {
     pub const CHANNEL_LABEL_X: f32 = 40.;
     pub const CHANNEL_LABEL_LINESPACE: f32 = 120.;
@@ -72,9 +74,6 @@ mod ui_consts {
 }
 
 use ui_consts::*;
-
-static CHANNELS: &'static [&str] =
-    &["dev", "media", "hackers", "memes", "philosophy", "markets", "math", "random"];
 
 pub async fn make(app: &App, window: SceneNodePtr) {
     let window_scale = PropertyFloat32::wrap(&window, Role::Internal, "scale", 0).unwrap();
@@ -245,7 +244,8 @@ pub async fn make(app: &App, window: SceneNodePtr) {
 
         let (slot, recvr) = Slot::new(channel.to_string() + "_clicked");
         node.register("click", slot).unwrap();
-        let chatview_node = app.sg_root.clone().lookup_node("/window/chat_layer").unwrap();
+        let chatview_path = "/window/".to_string() + channel + "_chat_layer";
+        let chatview_node = app.sg_root.clone().lookup_node(chatview_path).unwrap();
         let chatview_is_visible =
             PropertyBool::wrap(&chatview_node, Role::App, "is_visible", 0).unwrap();
         let menu_is_visible = PropertyBool::wrap(&layer_node, Role::App, "is_visible", 0).unwrap();

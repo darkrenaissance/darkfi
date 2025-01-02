@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use sled_overlay::sled;
+
 use crate::{
     app::{
         node::{
@@ -47,6 +49,7 @@ mod menu;
 
 #[cfg(target_os = "android")]
 mod ui_consts {
+    pub const CHATDB_PATH: &str = "/data/data/darkfi.darkwallet/chatdb/";
     pub const BG_PATH: &str = "bg.png";
 }
 
@@ -55,10 +58,14 @@ mod ui_consts {
     not(feature = "emulate-android")
 ))]
 mod ui_consts {
+    pub const CHATDB_PATH: &str = "chatdb";
     pub const BG_PATH: &str = "assets/bg.png";
 }
 
 use ui_consts::*;
+
+pub static CHANNELS: &'static [&str] =
+    &["dev", "media", "hackers", "memes", "philosophy", "markets", "math", "random"];
 
 pub async fn make(app: &App, window: SceneNodePtr) {
     let mut cc = Compiler::new();
@@ -143,6 +150,9 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
     layer_node.clone().link(node);
 
-    chat::make(app, window.clone()).await;
+    let db = sled::open(CHATDB_PATH).expect("cannot open sleddb");
+    for channel in CHANNELS {
+        chat::make(app, window.clone(), channel, &db).await;
+    }
     menu::make(app, window.clone()).await;
 }
