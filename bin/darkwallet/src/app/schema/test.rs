@@ -45,6 +45,11 @@ use super::{
 
 const LIGHTMODE: bool = false;
 
+#[cfg(target_os = "android")]
+pub const CHATDB_PATH: &str = "/data/data/darkfi.darkwallet/chatdb/";
+pub const KING_PATH: &str = "king.png";
+
+#[cfg(not(target_os = "android"))]
 pub const CHATDB_PATH: &str = "chatdb";
 pub const KING_PATH: &str = "assets/king.png";
 

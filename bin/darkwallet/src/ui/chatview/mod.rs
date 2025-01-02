@@ -750,10 +750,12 @@ impl UIObject for ChatView {
         on_modify.when_change(self.scroll.prop(), reload_view);
 
         async fn redraw(self_: Arc<ChatView>) {
+            if !self_.rect.has_cached() {
+                return
+            }
             self_.redraw_all().await;
         }
 
-        // These should be inside the class
         //on_modify.when_change(self.baseline.prop(), redraw);
         //on_modify.when_change(self.font_size.prop(), redraw);
         //on_modify.when_change(self.timestamp_font_size.prop(), redraw);

@@ -19,6 +19,13 @@
 use sled_overlay::sled;
 
 use crate::{
+    app::{
+        node::{
+            create_button, create_chatedit, create_chatview, create_editbox, create_image,
+            create_layer, create_text, create_vector_art,
+        },
+        populate_tree, App,
+    },
     error::Error,
     expr::{self, Compiler, Op},
     gfx::{GraphicsEventPublisherPtr, Rectangle, RenderApi, Vertex},
@@ -36,18 +43,10 @@ use crate::{
     ExecutorPtr,
 };
 
-use super::{
-    node::{
-        create_button, create_chatedit, create_chatview, create_editbox, create_image,
-        create_layer, create_text, create_vector_art,
-    },
-    populate_tree, App,
-};
-
 const LIGHTMODE: bool = false;
 
 mod android_ui_consts {
-    pub const CHANNEL_LABEL_Y: f32 = 90.;
+    pub const CHANNEL_LABEL_BASELINE: f32 = 90.;
     pub const BACKARROW_SCALE: f32 = 30.;
     pub const BACKARROW_X: f32 = 50.;
     pub const BACKARROW_Y: f32 = 70.;
@@ -82,7 +81,6 @@ mod android_ui_consts {
 #[cfg(target_os = "android")]
 mod ui_consts {
     pub const CHATDB_PATH: &str = "/data/data/darkfi.darkwallet/chatdb/";
-    pub const KING_PATH: &str = "king.png";
     pub const BG_PATH: &str = "bg.png";
     pub use super::android_ui_consts::*;
 }
@@ -90,7 +88,6 @@ mod ui_consts {
 #[cfg(feature = "emulate-android")]
 mod ui_consts {
     pub const CHATDB_PATH: &str = "chatdb";
-    pub const KING_PATH: &str = "assets/king.png";
     pub const BG_PATH: &str = "assets/bg.png";
     pub use super::android_ui_consts::*;
 }
@@ -101,13 +98,15 @@ mod ui_consts {
 ))]
 mod ui_consts {
     pub const CHATDB_PATH: &str = "chatdb";
-    pub const KING_PATH: &str = "assets/king.png";
     pub const BG_PATH: &str = "assets/bg.png";
 
-    pub const CHANNEL_LABEL_Y: f32 = 30.;
+    // Main menu
+
+    // Chat UI
+    pub const CHANNEL_LABEL_BASELINE: f32 = 35.;
     pub const BACKARROW_SCALE: f32 = 15.;
     pub const BACKARROW_X: f32 = 38.;
-    pub const BACKARROW_Y: f32 = 23.;
+    pub const BACKARROW_Y: f32 = 26.;
     pub const CHATEDIT_MIN_HEIGHT: f32 = 60.;
     pub const CHATEDIT_HEIGHT: f32 = 60.;
     pub const CHATEDIT_SINGLE_LINE_Y: f32 = 58.;
@@ -122,12 +121,12 @@ mod ui_consts {
     pub const CHATEDIT_LHS_PAD: f32 = 100.;
     pub const TEXTBAR_BASELINE: f32 = 34.;
     pub const TEXT_DESCENT: f32 = 10.;
-    pub const EMOJI_BTN_X: f32 = 40.;
+    pub const EMOJI_BTN_X: f32 = 38.;
     pub const EMOJI_BG_W: f32 = 80.;
     pub const EMOJI_SCALE: f32 = 20.;
-    pub const EMOJI_NEG_Y: f32 = 30.;
+    pub const EMOJI_NEG_Y: f32 = 34.;
     pub const SENDARROW_NEG_X: f32 = 50.;
-    pub const SENDARROW_NEG_Y: f32 = 28.;
+    pub const SENDARROW_NEG_Y: f32 = 32.;
     pub const FONTSIZE: f32 = 20.;
     pub const TIMESTAMP_FONTSIZE: f32 = 12.;
     pub const TIMESTAMP_WIDTH: f32 = 60.;
@@ -138,7 +137,7 @@ mod ui_consts {
 
 use ui_consts::*;
 
-pub(super) async fn make(app: &App, window: SceneNodePtr) {
+pub async fn make(app: &App, window: SceneNodePtr) {
     let window_scale = PropertyFloat32::wrap(&window, Role::Internal, "scale", 0).unwrap();
 
     let mut cc = Compiler::new();
@@ -153,82 +152,17 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     cc.add_const_f32("EMOJI_NEG_Y", EMOJI_NEG_Y);
 
     // Main view
-    let layer_node = create_layer("view");
+    let layer_node = create_layer("chat_layer");
     let prop = layer_node.get_property("rect").unwrap();
     prop.set_f32(Role::App, 0, 0.).unwrap();
     prop.set_f32(Role::App, 1, 0.).unwrap();
     prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
     prop.set_expr(Role::App, 3, expr::load_var("h")).unwrap();
-    layer_node.set_property_bool(Role::App, "is_visible", true).unwrap();
+    layer_node.set_property_bool(Role::App, "is_visible", false).unwrap();
+    layer_node.set_property_u32(Role::App, "z_index", 1).unwrap();
     let layer_node =
         layer_node.setup(|me| Layer::new(me, app.render_api.clone(), app.ex.clone())).await;
     window.link(layer_node.clone());
-
-    // Create a bg image
-    let node = create_image("bg_image");
-    let prop = node.get_property("rect").unwrap();
-    prop.set_f32(Role::App, 0, 0.).unwrap();
-    prop.set_f32(Role::App, 1, 0.).unwrap();
-    prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(Role::App, 3, expr::load_var("h")).unwrap();
-
-    // Image aspect ratio
-    //let R = 1.78;
-    let R = 1.555;
-    cc.add_const_f32("R", R);
-
-    let prop = node.get_property("uv").unwrap();
-    prop.set_f32(Role::App, 0, 0.).unwrap();
-    prop.set_f32(Role::App, 1, 0.).unwrap();
-    #[rustfmt::skip]
-    let code = cc.compile("
-        r = w / h;
-        if r < R {
-            r / R
-        } else {
-            1
-        }
-    ").unwrap();
-    prop.set_expr(Role::App, 2, code).unwrap();
-    #[rustfmt::skip]
-    let code = cc.compile("
-        r = w / h;
-        if r < R {
-            1
-        } else {
-            R / r
-        }
-    ").unwrap();
-    prop.set_expr(Role::App, 3, code).unwrap();
-
-    node.set_property_str(Role::App, "path", BG_PATH).unwrap();
-    node.set_property_u32(Role::App, "z_index", 0).unwrap();
-    let node = node.setup(|me| Image::new(me, app.render_api.clone(), app.ex.clone())).await;
-    layer_node.clone().link(node);
-
-    // Create a bg mesh
-    let node = create_vector_art("bg");
-    let prop = node.get_property("rect").unwrap();
-    prop.set_f32(Role::App, 0, 0.).unwrap();
-    prop.set_f32(Role::App, 1, 0.).unwrap();
-    prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(Role::App, 3, expr::load_var("h")).unwrap();
-    node.set_property_u32(Role::App, "z_index", 1).unwrap();
-
-    let c = if LIGHTMODE { 1. } else { 0. };
-    // Setup the pimpl
-    let node_id = node.id;
-    let mut shape = VectorShape::new();
-    shape.add_filled_box(
-        expr::const_f32(0.),
-        expr::const_f32(0.),
-        expr::load_var("w"),
-        expr::load_var("h"),
-        [c, c, c, 0.3],
-    );
-    let node =
-        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
-    layer_node.clone().link(node);
 
     // Create the toolbar bg
     let node = create_vector_art("toolbar_bg");
@@ -282,17 +216,47 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
         node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
     layer_node.clone().link(node);
 
+    // Create the back button
+    let node = create_button("back_btn");
+    node.set_property_bool(Role::App, "is_active", true).unwrap();
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(Role::App, 0, 0.).unwrap();
+    prop.set_f32(Role::App, 1, 0.).unwrap();
+    prop.set_f32(Role::App, 2, EMOJI_BG_W).unwrap();
+    prop.set_f32(Role::App, 3, CHATEDIT_HEIGHT).unwrap();
+
+    let (slot, recvr) = Slot::new("back_clicked");
+    node.register("click", slot).unwrap();
+    // Menu doesn't exist yet ;)
+    let sg_root = app.sg_root.clone();
+    let chatview_is_visible = PropertyBool::wrap(&layer_node, Role::App, "is_visible", 0).unwrap();
+    let listen_click = app.ex.spawn(async move {
+        while let Ok(_) = recvr.recv().await {
+            info!(target: "app::chat", "clicked back");
+
+            let menu_node = sg_root.clone().lookup_node("/window/menu_layer").unwrap();
+            menu_node.set_property_bool(Role::App, "is_visible", true).unwrap();
+
+            chatview_is_visible.set(false);
+        }
+    });
+    app.tasks.lock().unwrap().push(listen_click);
+
+    let node = node.setup(|me| Button::new(me, app.ex.clone())).await;
+    layer_node.clone().link(node);
+
     // Create some text
     let node = create_text("channel_label");
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(Role::App, 0, CHATEDIT_LHS_PAD).unwrap();
-    prop.set_f32(Role::App, 1, CHANNEL_LABEL_Y).unwrap();
+    prop.set_f32(Role::App, 1, 0.).unwrap();
     prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
     prop.set_f32(Role::App, 3, CHATEDIT_HEIGHT).unwrap();
     node.set_property_u32(Role::App, "z_index", 2).unwrap();
-    node.set_property_f32(Role::App, "baseline", 0.).unwrap();
+    node.set_property_f32(Role::App, "baseline", CHANNEL_LABEL_BASELINE).unwrap();
     node.set_property_f32(Role::App, "font_size", FONTSIZE).unwrap();
     node.set_property_str(Role::App, "text", "#random").unwrap();
+    //node.set_property_bool(Role::App, "debug", true).unwrap();
     //node.set_property_str(Role::App, "text", "anon1").unwrap();
     let prop = node.get_property("text_color").unwrap();
     prop.set_f32(Role::App, 0, 1.).unwrap();
@@ -321,8 +285,9 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     prop.set_f32(Role::App, 1, CHATEDIT_HEIGHT).unwrap();
     let code = cc.compile("w - 30").unwrap();
     prop.set_expr(Role::App, 2, code).unwrap();
-    let code = cc.compile(
-"
+    let code = cc
+        .compile(
+            "
         height = if editz_h < CHATEDIT_MIN_HEIGHT {
             CHATEDIT_MIN_HEIGHT
         } else {
@@ -330,7 +295,9 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
         };
 
         h - CHATEDIT_HEIGHT - height - 2 * CHATEDIT_BOTTOM_PAD
-").unwrap();
+",
+        )
+        .unwrap();
     prop.set_expr(Role::App, 3, code).unwrap();
     let chatview_rect_prop = prop.clone();
     node.set_property_f32(Role::App, "font_size", FONTSIZE).unwrap();
@@ -424,7 +391,7 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     prop.set_f32(Role::App, 0, 0.).unwrap();
     let code = cc
         .compile(
-"
+            "
         height = if editz_h < CHATEDIT_MIN_HEIGHT {
             CHATEDIT_MIN_HEIGHT
         } else {
@@ -525,7 +492,7 @@ pub(super) async fn make(app: &App, window: SceneNodePtr) {
     prop.set_f32(Role::App, 0, CHATEDIT_LHS_PAD).unwrap();
     let code = cc
         .compile(
-"
+            "
         height = if rect_h < CHATEDIT_MIN_HEIGHT {
             CHATEDIT_SINGLE_LINE_Y
         } else {

@@ -179,7 +179,7 @@ impl TextShaper {
                     }
                 }
 
-                warn!(target: "text", "no font fallback for char: '{}'", chr);
+                //warn!(target: "text", "no font fallback for char: '{}'", chr);
                 // Skip this char
                 continue 'next_char
             };

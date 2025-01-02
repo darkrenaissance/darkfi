@@ -25,7 +25,7 @@ use crate::{
         GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId, ManagedTexturePtr, Rectangle,
         RenderApi,
     },
-    mesh::{Color, MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_WHITE},
+    mesh::{Color, MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_RED, COLOR_WHITE},
     prop::{
         PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyRect, PropertyStr,
         PropertyUint32, Role,
@@ -135,6 +135,13 @@ impl Text {
                 color = COLOR_WHITE;
             }
             mesh.draw_box(&glyph_rect, color, uv_rect);
+        }
+
+        if debug {
+            let mut rect = self.rect.get();
+            rect.x = 0.;
+            rect.y = 0.;
+            mesh.draw_outline(&rect, COLOR_RED, 1.);
         }
 
         let mesh = mesh.alloc(&self.render_api);

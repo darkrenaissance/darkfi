@@ -352,4 +352,19 @@ impl PropertyRect {
     pub fn prop(&self) -> PropertyPtr {
         self.prop.clone()
     }
+
+    fn is_f32_or_has_cached(&self, i: usize) -> bool {
+        if self.prop.is_expr(i).unwrap() {
+            if self.prop.get_cached(i).unwrap().is_null() {
+                return false
+            }
+        }
+        true
+    }
+    pub fn has_cached(&self) -> bool {
+        self.is_f32_or_has_cached(0) &&
+            self.is_f32_or_has_cached(1) &&
+            self.is_f32_or_has_cached(2) &&
+            self.is_f32_or_has_cached(3)
+    }
 }

@@ -83,7 +83,7 @@ pub type ExecutorPtr = Arc<smol::Executor<'static>>;
 
 fn panic_hook(panic_info: &std::panic::PanicInfo) {
     error!("panic occurred: {panic_info}");
-    //error!("panic: {}", std::backtrace::Backtrace::force_capture().to_string());
+    error!("{}", std::backtrace::Backtrace::force_capture().to_string());
     std::process::exit(1);
 }
 

@@ -634,7 +634,11 @@ impl ChatEdit {
     }
 
     fn wrap_width(&self) -> f32 {
-        self.rect.prop().get_f32(2).unwrap() - self.cursor_width.get()
+        let w = self.rect.prop().get_f32(2).unwrap() - self.cursor_width.get();
+        if w < 0. {
+            return 0.
+        }
+        w
     }
 
     fn abs_to_local(&self, point: &mut Point) {
@@ -1672,6 +1676,10 @@ impl UIObject for ChatEdit {
 
                 if self_.blink_is_paused.swap(false, Ordering::Relaxed) {
                     msleep(cursor_idle_time.get() as u64).await;
+                    continue
+                }
+
+                if !self_.rect.has_cached() {
                     continue
                 }
 
