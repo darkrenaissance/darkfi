@@ -99,20 +99,16 @@ fn tokenize(font_size: f32, window_scale: f32, glyphs: &Vec<Glyph>) -> Vec<Token
 
 /// Given a series of words, apply wrapping.
 /// Whitespace is completely perserved.
-fn apply_wrap(line_width: f32, tokens: Vec<Token>) -> Vec<Vec<Glyph>> {
+fn apply_wrap(line_width: f32, mut tokens: Vec<Token>) -> Vec<Vec<Glyph>> {
     //debug!(target: "text::wrap", "apply_wrap({line_width}, {tokens:?})");
 
     let mut lines = vec![];
     let mut line = vec![];
     let mut start = 0.;
 
-    for mut token in tokens {
+    let mut tokens_iter = tokens.iter_mut().peekable();
+    while let Some(token) = tokens_iter.next() {
         assert!(token.token_type != TokenType::Null);
-
-        // Triggered by if below
-        if start < 0. {
-            start = token.lhs;
-        }
 
         // Does this token cross over the end of the line?
         if token.rhs > start + line_width {
@@ -125,12 +121,17 @@ fn apply_wrap(line_width: f32, tokens: Vec<Token>) -> Vec<Vec<Glyph>> {
             // Start a new line
             let line = std::mem::take(&mut line);
             //debug!(target: "text::apply_wrap", "adding line: {}", glyph_str(&line));
-            lines.push(line);
+            // This can happen if this token is very long and crosses the line boundary
+            if !line.is_empty() {
+                lines.push(line);
+            }
 
             // Move to the next token if this is whitespace
             if token.token_type == TokenType::Whitespace {
                 // Load LHS from next token in loop
-                start = -1.;
+                if let Some(next_token) = tokens_iter.peek() {
+                    start = next_token.lhs;
+                }
             } else {
                 start = token.lhs;
             }
@@ -149,6 +150,80 @@ fn apply_wrap(line_width: f32, tokens: Vec<Token>) -> Vec<Vec<Glyph>> {
     lines
 }
 
+/// Splits any Word token that exceeds the line width.
+/// So Word("aaaaaaaaaaaaaaa") => [Word("aaaaaaaa"), Word("aaaaaaa")].
+pub fn restrict_word_len(
+    font_size: f32,
+    window_scale: f32,
+    raw_tokens: Vec<Token>,
+    line_width: f32,
+) -> Vec<Token> {
+    let mut tokens = vec![];
+    for token in raw_tokens {
+        match token.token_type {
+            TokenType::Word => {
+                assert!(!token.glyphs.is_empty());
+                let token_width = token.rhs - token.lhs;
+                // No change required. This is the usual code path
+                if token_width < line_width {
+                    tokens.push(token);
+                    continue
+                }
+            }
+            _ => {
+                tokens.push(token);
+                continue
+            }
+        }
+
+        // OK we have encountered a Word that is very long. Lets split it up
+        // into multiple Words each under line_width.
+
+        let glyphs2 = token.glyphs.clone();
+        let glyph_pos_iter = GlyphPositionIter::new(font_size, window_scale, &glyphs2, 0.);
+        let mut token_glyphs = vec![];
+        let mut lhs = -1.;
+        let mut rhs = 0.;
+
+        // Just loop through each glyph. When the running total exceeds line_width
+        // then push the buffer, and start again.
+        // Very basic stuff.
+        for (pos, glyph) in glyph_pos_iter.zip(token.glyphs.into_iter()) {
+            if lhs < 0. {
+                lhs = pos.x;
+            }
+            rhs = pos.x + pos.w;
+
+            token_glyphs.push(glyph);
+
+            let curr_width = rhs - lhs;
+            // Line width exceeded. Do our thing.
+            if curr_width > line_width {
+                let token = Token {
+                    token_type: TokenType::Word,
+                    lhs,
+                    rhs,
+                    glyphs: std::mem::take(&mut token_glyphs),
+                };
+                tokens.push(token);
+                lhs = -1.;
+            }
+        }
+
+        // Take care of any remainders left over.
+        if !token_glyphs.is_empty() {
+            let token = Token {
+                token_type: TokenType::Word,
+                lhs,
+                rhs,
+                glyphs: std::mem::take(&mut token_glyphs),
+            };
+            tokens.push(token);
+        }
+    }
+    tokens
+}
+
 pub fn wrap(
     line_width: f32,
     font_size: f32,
@@ -160,6 +235,8 @@ pub fn wrap(
     //debug!(target: "text::wrap", "tokenized words {:?}",
     //       words.iter().map(|w| w.as_str()).collect::<Vec<_>>());
 
+    let tokens = restrict_word_len(font_size, window_scale, tokens, line_width);
+
     let lines = apply_wrap(line_width, tokens);
 
     //if lines.len() > 1 {
@@ -170,4 +247,32 @@ pub fn wrap(
     //}
 
     lines
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{super::*, *};
+
+    #[test]
+    fn wrap_simple() {
+        let shaper = TextShaper::new();
+        let glyphs = shaper.shape("hello world 123".to_string(), 32., 1.);
+
+        let wrapped = wrap(200., 32., 1., &glyphs);
+        assert_eq!(wrapped.len(), 3);
+        assert_eq!(glyph_str(&wrapped[0]), "hello ");
+        assert_eq!(glyph_str(&wrapped[1]), "world ");
+        assert_eq!(glyph_str(&wrapped[2]), "123");
+    }
+
+    #[test]
+    fn wrap_long() {
+        let shaper = TextShaper::new();
+        let glyphs = shaper.shape("aaaaaaaaaaaaaaa".to_string(), 32., 1.);
+
+        let wrapped = wrap(200., 32., 1., &glyphs);
+        assert_eq!(wrapped.len(), 2);
+        assert_eq!(glyph_str(&wrapped[0]), "aaaaaaaa");
+        assert_eq!(glyph_str(&wrapped[1]), "aaaaaaa");
+    }
 }

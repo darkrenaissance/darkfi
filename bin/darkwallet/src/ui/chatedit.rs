@@ -215,6 +215,7 @@ impl TextWrap {
                 after_text += &glyph.substr;
             }
         }
+        self.editable.end_compose();
         self.editable.set_text(before_text, after_text);
         self.clear_cache();
     }
@@ -1024,6 +1025,7 @@ impl ChatEdit {
     }
 
     async fn insert_char(&self, key: char) {
+        debug!(target: "ui::chatedit", "insert_char({key})");
         {
             let mut text_wrap = &mut self.text_wrap.lock();
             text_wrap.clear_cache();
@@ -1039,13 +1041,30 @@ impl ChatEdit {
         self.redraw().await;
     }
 
-    async fn handle_shortcut(&self, key: char, mods: &KeyMods) {
+    async fn handle_shortcut(&self, key: char, mods: &KeyMods) -> bool {
         debug!(target: "ui::chatedit", "handle_shortcut({:?}, {:?})", key, mods);
 
         match key {
+            'a' => {
+                if mods.ctrl {
+                    {
+                        let mut text_wrap = self.text_wrap.lock();
+                        let rendered = text_wrap.get_render();
+                        let end_pos = rendered.glyphs.len();
+
+                        let select = &mut text_wrap.select;
+                        select.clear();
+                        select.push(Selection::new(0, end_pos));
+                    }
+
+                    self.redraw().await;
+                    return true
+                }
+            }
             'c' => {
                 if mods.ctrl {
                     self.copy_highlighted().unwrap();
+                    return true
                 }
             }
             'v' => {
@@ -1053,10 +1072,12 @@ impl ChatEdit {
                     if let Some(text) = window::clipboard_get() {
                         self.paste_text(text).await;
                     }
+                    return true
                 }
             }
             _ => {}
         }
+        false
     }
 
     async fn handle_key(&self, key: &KeyCode, mods: &KeyMods) {
@@ -1731,8 +1752,7 @@ impl UIObject for ChatEdit {
             if repeat {
                 return false
             }
-            self.handle_shortcut(key, &mods).await;
-            return true
+            return self.handle_shortcut(key, &mods).await
         }
 
         let actions = {
@@ -1788,7 +1808,7 @@ impl UIObject for ChatEdit {
         if !rect.contains(mouse_pos) {
             if self.is_focused.get() {
                 debug!(target: "ui::chatedit", "EditBox unfocused");
-                self.is_focused.set(false);
+                //self.is_focused.set(false);
                 self.text_wrap.lock().select.clear();
 
                 self.redraw().await;

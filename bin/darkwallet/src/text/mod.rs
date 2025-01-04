@@ -71,6 +71,7 @@ pub const EMOJI_PROP_ABOVE_BASELINE: f32 = 0.75;
 // * Glyph cache. Key is (glyph_id, font_size)
 // * Glyph texture cache: (glyph_id, font_size, color)
 
+#[derive(Clone)]
 pub struct GlyphPositionIter<'a> {
     font_size: f32,
     window_scale: f32,
