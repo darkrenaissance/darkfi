@@ -47,6 +47,10 @@ pub fn create_vector_art(name: &str) -> SceneNode {
     debug!(target: "app", "create_vector_art({name})");
     let mut node = SceneNode::new(name, SceneNodeType::VectorArt);
 
+    let mut prop = Property::new("is_visible", PropertyType::Bool, PropertySubType::Null);
+    prop.set_defaults_bool(vec![true]).unwrap();
+    node.add_property(prop).unwrap();
+
     let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
     prop.set_array_len(4);
     prop.allow_exprs();
@@ -471,6 +475,21 @@ pub fn create_chatview(name: &str) -> SceneNode {
         None,
     )
     .unwrap();
+
+    node
+}
+
+pub fn create_emoji_picker(name: &str) -> SceneNode {
+    debug!(target: "app", "create_emoji_picker({name})");
+    let mut node = SceneNode::new(name, SceneNodeType::Image);
+
+    let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_array_len(4);
+    prop.allow_exprs();
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);
+    node.add_property(prop).unwrap();
 
     node
 }

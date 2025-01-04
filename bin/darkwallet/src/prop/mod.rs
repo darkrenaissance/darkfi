@@ -319,6 +319,11 @@ impl Property {
         }
         Ok(())
     }
+    pub fn set_defaults_bool(&mut self, defaults: Vec<bool>) -> Result<()> {
+        self.check_defaults_len(defaults.len())?;
+        self.defaults = defaults.into_iter().map(|v| PropertyValue::Bool(v)).collect();
+        Ok(())
+    }
     pub fn set_defaults_u32(&mut self, defaults: Vec<u32>) -> Result<()> {
         self.check_defaults_len(defaults.len())?;
         self.defaults = defaults.into_iter().map(|v| PropertyValue::Uint32(v)).collect();

@@ -476,4 +476,5 @@ pub enum Pimpl {
     ChatView(ui::ChatViewPtr),
     Image(ui::ImagePtr),
     Button(ui::ButtonPtr),
+    EmojiPicker(ui::EmojiPickerPtr),
 }

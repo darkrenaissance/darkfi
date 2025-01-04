@@ -38,6 +38,8 @@ mod chatedit;
 pub use chatedit::{ChatEdit, ChatEditPtr};
 mod editbox;
 pub use editbox::{EditBox, EditBoxPtr};
+mod emoji_picker;
+pub use emoji_picker::{EmojiPicker, EmojiPickerPtr};
 mod image;
 pub use image::{Image, ImagePtr};
 mod vector_art;
@@ -185,6 +187,7 @@ pub fn get_ui_object_ptr(node: &SceneNode3) -> Arc<dyn UIObject + Send> {
         Pimpl::ChatView(obj) => obj.clone(),
         Pimpl::Image(obj) => obj.clone(),
         Pimpl::Button(obj) => obj.clone(),
+        Pimpl::EmojiPicker(obj) => obj.clone(),
         _ => panic!("unhandled type for get_ui_object"),
     }
 }
@@ -198,6 +201,7 @@ pub fn get_ui_object3<'a>(node: &'a SceneNode3) -> &'a dyn UIObject {
         Pimpl::ChatView(obj) => obj.as_ref(),
         Pimpl::Image(obj) => obj.as_ref(),
         Pimpl::Button(obj) => obj.as_ref(),
+        Pimpl::EmojiPicker(obj) => obj.as_ref(),
         _ => panic!("unhandled type for get_ui_object"),
     }
 }

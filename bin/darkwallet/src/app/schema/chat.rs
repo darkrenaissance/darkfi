@@ -16,13 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use darkfi::system::msleep;
 use sled_overlay::sled;
 
 use crate::{
     app::{
         node::{
-            create_button, create_chatedit, create_chatview, create_editbox, create_image,
-            create_layer, create_text, create_vector_art,
+            create_button, create_chatedit, create_chatview, create_editbox, create_emoji_picker,
+            create_image, create_layer, create_text, create_vector_art,
         },
         populate_tree, App,
     },
@@ -37,8 +38,8 @@ use crate::{
     shape,
     text::TextShaperPtr,
     ui::{
-        Button, ChatEdit, ChatView, EditBox, Image, Layer, ShapeVertex, Text, VectorArt,
-        VectorShape, Window,
+        Button, ChatEdit, ChatView, EditBox, EmojiPicker, Image, Layer, ShapeVertex, Text,
+        VectorArt, VectorShape, Window,
     },
     ExecutorPtr,
 };
@@ -69,6 +70,7 @@ mod android_ui_consts {
     pub const EMOJI_SCALE: f32 = 40.;
     pub const EMOJI_NEG_Y: f32 = 85.;
     pub const EMOJIBTN_BOX: [f32; 4] = [20., 118., 80., 75.];
+    pub const EMOJI_CLOSE_SCALE: f32 = 20.;
     pub const SENDARROW_NEG_X: f32 = 50.;
     pub const SENDARROW_NEG_Y: f32 = 80.;
     pub const SENDBTN_BOX: [f32; 4] = [86., 120., 80., 70.];
@@ -128,6 +130,7 @@ mod ui_consts {
     pub const EMOJI_SCALE: f32 = 20.;
     pub const EMOJI_NEG_Y: f32 = 34.;
     pub const EMOJIBTN_BOX: [f32; 4] = [16., 50., 44., 36.];
+    pub const EMOJI_CLOSE_SCALE: f32 = 10.;
     pub const SENDARROW_NEG_X: f32 = 50.;
     pub const SENDARROW_NEG_Y: f32 = 32.;
     pub const SENDBTN_BOX: [f32; 4] = [72., 50., 45., 34.];
@@ -257,7 +260,6 @@ pub async fn make(app: &App, window: SceneNodePtr, channel: &str, db: &sled::Db)
     prop.set_f32(Role::App, 1, 0.).unwrap();
     prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
     prop.set_f32(Role::App, 3, CHATEDIT_HEIGHT).unwrap();
-    node.set_property_u32(Role::App, "z_index", 2).unwrap();
     node.set_property_f32(Role::App, "baseline", CHANNEL_LABEL_BASELINE).unwrap();
     node.set_property_f32(Role::App, "font_size", FONTSIZE).unwrap();
     node.set_property_str(Role::App, "text", &("#".to_string() + channel)).unwrap();
@@ -282,6 +284,52 @@ pub async fn make(app: &App, window: SceneNodePtr, channel: &str, db: &sled::Db)
         })
         .await;
     layer_node.clone().link(node);
+
+    // Create the emoji picker
+    let mut node = create_emoji_picker("emoji_picker");
+    let prop = Property::new("dynamic_h", PropertyType::Float32, PropertySubType::Pixel);
+    node.add_property(prop).unwrap();
+    let emoji_h_prop = node.get_property("dynamic_h").unwrap();
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(Role::App, 0, 0.).unwrap();
+    let code = cc.compile("h - dynamic_h").unwrap();
+    prop.set_expr(Role::App, 1, code).unwrap();
+    prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_expr(Role::App, 3, expr::load_var("dynamic_h")).unwrap();
+    prop.add_depend(&emoji_h_prop, 0, "dynamic_h");
+    let emoji_h_prop = PropertyFloat32::wrap(&node, Role::App, "dynamic_h", 0).unwrap();
+    let emoji_rect_prop = prop;
+    //node.set_property_f32(Role::App, "baseline", CHANNEL_LABEL_BASELINE).unwrap();
+    //node.set_property_f32(Role::App, "font_size", FONTSIZE).unwrap();
+    node.set_property_u32(Role::App, "z_index", 2).unwrap();
+    let node = node
+        .setup(|me| {
+            EmojiPicker::new(
+                me,
+                window_scale.clone(),
+                app.render_api.clone(),
+                app.text_shaper.clone(),
+                app.ex.clone(),
+            )
+        })
+        .await;
+    layer_node.clone().link(node);
+
+    // Main content view
+    let chat_layer_node = layer_node;
+    let layer_node = create_layer("content");
+    let prop = layer_node.get_property("rect").unwrap();
+    prop.set_f32(Role::App, 0, 0.).unwrap();
+    prop.set_f32(Role::App, 1, 0.).unwrap();
+    prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
+    let code = cc.compile("h - emoji_h").unwrap();
+    prop.set_expr(Role::App, 3, code).unwrap();
+    prop.add_depend(&emoji_rect_prop, 3, "emoji_h");
+    layer_node.set_property_bool(Role::App, "is_visible", true).unwrap();
+    layer_node.set_property_u32(Role::App, "z_index", 1).unwrap();
+    let layer_node =
+        layer_node.setup(|me| Layer::new(me, app.render_api.clone(), app.ex.clone())).await;
+    chat_layer_node.link(layer_node.clone());
 
     // ChatView
     let node = create_chatview("chatty");
@@ -468,6 +516,7 @@ pub async fn make(app: &App, window: SceneNodePtr, channel: &str, db: &sled::Db)
 
     // Create the emoji button
     let node = create_vector_art("emoji_btn_bg");
+    let emoji_btn_is_visible = PropertyBool::wrap(&node, Role::App, "is_visible", 0).unwrap();
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(Role::App, 0, EMOJI_BTN_X).unwrap();
     let code = cc.compile("h - EMOJI_NEG_Y").unwrap();
@@ -476,6 +525,22 @@ pub async fn make(app: &App, window: SceneNodePtr, channel: &str, db: &sled::Db)
     prop.set_f32(Role::App, 3, 500.).unwrap();
     node.set_property_u32(Role::App, "z_index", 3).unwrap();
     let shape = shape::create_emoji_selector().scaled(EMOJI_SCALE);
+    let node =
+        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
+    layer_node.clone().link(node);
+
+    // Create the emoji button
+    let node = create_vector_art("emoji_close_btn_bg");
+    node.set_property_bool(Role::App, "is_visible", false).unwrap();
+    let prop = node.get_property("rect").unwrap();
+    let emoji_close_is_visible = PropertyBool::wrap(&node, Role::App, "is_visible", 0).unwrap();
+    prop.set_f32(Role::App, 0, EMOJI_BTN_X).unwrap();
+    let code = cc.compile("h - EMOJI_NEG_Y").unwrap();
+    prop.set_expr(Role::App, 1, code).unwrap();
+    prop.set_f32(Role::App, 2, 500.).unwrap();
+    prop.set_f32(Role::App, 3, 500.).unwrap();
+    node.set_property_u32(Role::App, "z_index", 3).unwrap();
+    let shape = shape::create_close_icon().scaled(EMOJI_CLOSE_SCALE);
     let node =
         node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
     layer_node.clone().link(node);
@@ -635,6 +700,25 @@ pub async fn make(app: &App, window: SceneNodePtr, channel: &str, db: &sled::Db)
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             info!(target: "app::chat", "clicked emoji");
+            if emoji_btn_is_visible.get() {
+                assert!(!emoji_close_is_visible.get());
+                assert!(emoji_h_prop.get() < 0.001);
+                emoji_btn_is_visible.set(false);
+                emoji_close_is_visible.set(true);
+                for i in 1..=20 {
+                    emoji_h_prop.set((20 * i) as f32);
+                    msleep(10).await;
+                }
+            } else {
+                assert!(emoji_close_is_visible.get());
+                assert!(emoji_h_prop.get() > 0.);
+                emoji_btn_is_visible.set(true);
+                emoji_close_is_visible.set(false);
+                for i in 1..=20 {
+                    emoji_h_prop.set((400 - 20 * i) as f32);
+                    msleep(10).await;
+                }
+            }
         }
     });
     app.tasks.lock().unwrap().push(listen_click);

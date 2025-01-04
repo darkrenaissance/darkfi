@@ -17,55 +17,61 @@
  */
 
 use async_trait::async_trait;
+use image::ImageReader;
 use rand::{rngs::OsRng, Rng};
-use std::sync::{Arc, Mutex as SyncMutex, OnceLock, Weak};
+use std::{
+    io::Cursor,
+    sync::{Arc, Mutex as SyncMutex, OnceLock, Weak},
+};
 
 use crate::{
-    error::{Error, Result},
-    expr::{Op, SExprCode, SExprMachine, SExprVal},
     gfx::{
-        GfxBufferId, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, Rectangle, RenderApi, Vertex,
+        GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId, ManagedTexturePtr, Rectangle,
+        RenderApi,
     },
-    mesh::Color,
-    prop::{PropertyBool, PropertyFloat32, PropertyPtr, PropertyRect, PropertyUint32, Role},
+    mesh::{MeshBuilder, MeshInfo, COLOR_WHITE},
+    prop::{PropertyFloat32, PropertyPtr, PropertyRect, PropertyStr, PropertyUint32, Role},
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
-    util::enumerate,
+    text::{self, GlyphPositionIter, TextShaper, TextShaperPtr},
     ExecutorPtr,
 };
 
 use super::{DrawUpdate, OnModify, UIObject};
 
-pub mod shape;
-use shape::VectorShape;
+macro_rules! d {
+    ($($arg:tt)*) => {
+        debug!(target: "ui::emoji_picker", $($arg)*);
+    }
+}
 
-pub type VectorArtPtr = Arc<VectorArt>;
+pub type EmojiPickerPtr = Arc<EmojiPicker>;
 
-pub struct VectorArt {
+pub struct EmojiPicker {
     node: SceneNodeWeak,
     render_api: RenderApi,
+    text_shaper: TextShaperPtr,
     tasks: OnceLock<Vec<smol::Task<()>>>,
 
-    shape: VectorShape,
     dc_key: u64,
 
-    is_visible: PropertyBool,
     rect: PropertyRect,
     z_index: PropertyUint32,
 
+    window_scale: PropertyFloat32,
     parent_rect: SyncMutex<Option<Rectangle>>,
 }
 
-impl VectorArt {
+impl EmojiPicker {
     pub async fn new(
         node: SceneNodeWeak,
-        shape: VectorShape,
+        window_scale: PropertyFloat32,
         render_api: RenderApi,
+        text_shaper: TextShaperPtr,
         ex: ExecutorPtr,
     ) -> Pimpl {
-        debug!(target: "ui::vector_art", "VectorArt::new()");
+        d!("EmojiPicker::new()");
 
         let node_ref = &node.upgrade().unwrap();
-        let is_visible = PropertyBool::wrap(node_ref, Role::Internal, "is_visible", 0).unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
         let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
 
@@ -75,74 +81,81 @@ impl VectorArt {
         let self_ = Arc::new(Self {
             node,
             render_api,
+            text_shaper,
             tasks: OnceLock::new(),
 
-            shape,
             dc_key: OsRng.gen(),
 
-            is_visible,
             rect,
             z_index,
 
+            window_scale,
             parent_rect: SyncMutex::new(None),
         });
 
-        Pimpl::VectorArt(self_)
+        Pimpl::EmojiPicker(self_)
     }
 
     async fn redraw(self: Arc<Self>) {
         let Some(parent_rect) = self.parent_rect.lock().unwrap().clone() else { return };
 
         let Some(draw_update) = self.get_draw_calls(parent_rect).await else {
-            error!(target: "ui::vector_art", "Mesh failed to draw");
+            error!(target: "ui::image", "Emoji picker failed to draw");
             return;
         };
         self.render_api.replace_draw_calls(draw_update.draw_calls);
-        //debug!(target: "ui::vector_art", "replace draw calls done");
+        debug!(target: "ui::image", "replace draw calls done");
     }
 
-    fn get_draw_instrs(&self) -> Vec<GfxDrawInstruction> {
-        if !self.is_visible.get() {
-            return vec![]
-        }
-
+    /*
+    fn regen_mesh(&self) -> MeshInfo {
         let rect = self.rect.get();
-        let verts = self.shape.eval(rect.w, rect.h).expect("bad shape");
-
-        //debug!(target: "ui::vector_art", "=> {verts:#?}");
-        let vertex_buffer = self.render_api.new_vertex_buffer(verts);
-        let index_buffer = self.render_api.new_index_buffer(self.shape.indices.clone());
-        let mesh = GfxDrawMesh {
-            vertex_buffer,
-            index_buffer,
-            texture: None,
-            num_elements: self.shape.indices.len() as i32,
-        };
-
-        vec![GfxDrawInstruction::Move(rect.pos()), GfxDrawInstruction::Draw(mesh)]
+        let uv = self.uv.get();
+        let mesh_rect = Rectangle::from([0., 0., rect.w, rect.h]);
+        let mut mesh = MeshBuilder::new();
+        mesh.draw_box(&mesh_rect, COLOR_WHITE, &uv);
+        mesh.alloc(&self.render_api)
     }
+    */
 
     async fn get_draw_calls(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
-        //debug!(target: "ui::vector_art", "VectorArt::draw_cached()");
         if let Err(e) = self.rect.eval(&parent_rect) {
-            warn!(target: "ui::vector_art", "Rect eval failure: {e}");
+            warn!(target: "ui::emoji_picker", "Rect eval failed: {e}");
             return None
         }
+        let rect = self.rect.get();
 
-        let instrs = self.get_draw_instrs();
+        /*
+        let mesh = self.regen_mesh();
+        let texture = self.texture.lock().unwrap().clone().expect("Node missing texture_id!");
+
+        let mesh = GfxDrawMesh {
+            vertex_buffer: mesh.vertex_buffer,
+            index_buffer: mesh.index_buffer,
+            texture: Some(texture),
+            num_elements: mesh.num_elements,
+        };
+        */
 
         Some(DrawUpdate {
             key: self.dc_key,
             draw_calls: vec![(
                 self.dc_key,
-                GfxDrawCall { instrs, dcs: vec![], z_index: self.z_index.get() },
+                GfxDrawCall {
+                    instrs: vec![
+                        GfxDrawInstruction::Move(rect.pos()),
+                        //GfxDrawInstruction::Draw(mesh),
+                    ],
+                    dcs: vec![],
+                    z_index: self.z_index.get(),
+                },
             )],
         })
     }
 }
 
 #[async_trait]
-impl UIObject for VectorArt {
+impl UIObject for EmojiPicker {
     fn z_index(&self) -> u32 {
         self.z_index.get()
     }
@@ -155,7 +168,6 @@ impl UIObject for VectorArt {
         let node_id = node_ref.id;
 
         let mut on_modify = OnModify::new(ex, node_name, node_id, me.clone());
-        on_modify.when_change(self.is_visible.prop(), Self::redraw);
         on_modify.when_change(self.rect.prop(), Self::redraw);
         on_modify.when_change(self.z_index.prop(), Self::redraw);
 
@@ -163,13 +175,13 @@ impl UIObject for VectorArt {
     }
 
     async fn draw(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
-        debug!(target: "ui::vector_art", "VectorArt::draw()");
+        debug!(target: "ui::image", "Image::draw()");
         *self.parent_rect.lock().unwrap() = Some(parent_rect);
         self.get_draw_calls(parent_rect).await
     }
 }
 
-impl Drop for VectorArt {
+impl Drop for EmojiPicker {
     fn drop(&mut self) {
         self.render_api.replace_draw_calls(vec![(self.dc_key, Default::default())]);
     }

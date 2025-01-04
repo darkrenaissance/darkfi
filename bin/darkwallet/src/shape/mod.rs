@@ -21,6 +21,9 @@ use crate::ui::{ShapeVertex, VectorShape};
 mod back_arrow;
 pub use back_arrow::create_back_arrow;
 
+mod close;
+pub use close::create_close_icon;
+
 mod send_arrow;
 pub use send_arrow::create_send_arrow;
 
