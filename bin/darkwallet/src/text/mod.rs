@@ -41,6 +41,11 @@ pub use atlas::{make_texture_atlas, Atlas, RenderedAtlas};
 mod wrap;
 pub use wrap::{glyph_str, wrap};
 
+// Upscale emoji relative to font size
+pub const EMOJI_SCALE_FACT: f32 = 1.5;
+// How much of the emoji is above baseline?
+pub const EMOJI_PROP_ABOVE_BASELINE: f32 = 0.75;
+
 // From https://sourceforge.net/projects/freetype/files/freetype2/2.6/
 //
 // * An `FT_Face' object can only be safely used from one thread at
@@ -77,14 +82,8 @@ pub struct GlyphPositionIter<'a> {
 
 impl<'a> GlyphPositionIter<'a> {
     pub fn new(font_size: f32, window_scale: f32, glyphs: &'a Vec<Glyph>, baseline_y: f32) -> Self {
-        Self {
-            font_size,
-            window_scale,
-            glyphs,
-            current_x: 0.,
-            current_y: baseline_y * window_scale,
-            i: 0,
-        }
+        let start_y = baseline_y * window_scale;
+        Self { font_size, window_scale, glyphs, current_x: 0., current_y: start_y, i: 0 }
     }
 }
 
@@ -102,11 +101,12 @@ impl<'a> Iterator for GlyphPositionIter<'a> {
 
         let rect = if sprite.has_fixed_sizes {
             // Downscale by height
-            let w = (sprite.bmp_width as f32 * self.font_size) / sprite.bmp_height as f32;
-            let h = self.font_size;
+            let w = (sprite.bmp_width as f32 * EMOJI_SCALE_FACT * self.font_size) /
+                sprite.bmp_height as f32;
+            let h = EMOJI_SCALE_FACT * self.font_size;
 
             let x = self.current_x;
-            let y = self.current_y - h;
+            let y = self.current_y - EMOJI_PROP_ABOVE_BASELINE * h;
 
             self.current_x += w;
 
