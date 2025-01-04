@@ -155,4 +155,9 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         chat::make(app, window.clone(), channel, &db).await;
     }
     menu::make(app, window.clone()).await;
+
+    let chatview_node = app.sg_root.clone().lookup_node("/window/dev_chat_layer").unwrap();
+    chatview_node.set_property_bool(Role::App, "is_visible", true).unwrap();
+    let menu_node = app.sg_root.clone().lookup_node("/window/menu_layer").unwrap();
+    menu_node.set_property_bool(Role::App, "is_visible", false).unwrap();
 }

@@ -113,6 +113,7 @@ impl TextWrap {
     }
     fn get_render(&mut self) -> &RenderedEditable {
         if self.rendered.is_none() {
+            //debug!(target: "ui::chatedit::text_wrap", "Regenerating render cache");
             self.rendered = Some(self.editable.render());
         }
         self.rendered.as_ref().unwrap()
@@ -159,7 +160,7 @@ impl TextWrap {
         let cidx = rendered.pos_to_idx(cursor_pos);
         self.editable.set_cursor_idx(cidx);
 
-        debug!(target: "ui::chatedit::text_wrap", "set_cursor_with_point() -> {cursor_pos} / {glyphs_len}");
+        //debug!(target: "ui::chatedit::text_wrap", "set_cursor_with_point() -> {cursor_pos} / {glyphs_len}");
         cursor_pos
     }
 
@@ -462,6 +463,7 @@ pub struct ChatEdit {
     descent: PropertyFloat32,
     scroll: PropertyFloat32,
     scroll_speed: PropertyFloat32,
+    padding: PropertyPtr,
     cursor_pos: PropertyUint32,
     font_size: PropertyFloat32,
     text: PropertyStr,
@@ -520,6 +522,7 @@ impl ChatEdit {
         let scroll = PropertyFloat32::wrap(node_ref, Role::Internal, "scroll", 0).unwrap();
         let scroll_speed =
             PropertyFloat32::wrap(node_ref, Role::Internal, "scroll_speed", 0).unwrap();
+        let padding = node_ref.get_property("padding").unwrap();
         let cursor_pos = PropertyUint32::wrap(node_ref, Role::Internal, "cursor_pos", 0).unwrap();
         let font_size = PropertyFloat32::wrap(node_ref, Role::Internal, "font_size", 0).unwrap();
         let text = PropertyStr::wrap(node_ref, Role::Internal, "text", 0).unwrap();
@@ -575,6 +578,7 @@ impl ChatEdit {
             descent,
             scroll: scroll.clone(),
             scroll_speed,
+            padding,
             cursor_pos,
             font_size: font_size.clone(),
             text,
@@ -616,10 +620,10 @@ impl ChatEdit {
             is_mouse_hover: AtomicBool::new(false),
         });
 
-        //self_.text_wrap.lock().editable.set_text(
-        //    "".to_string(),
-        //    "A berry is a small, pulpy, and often edible fruit. Typically, berries are juicy, rounded, brightly colored, sweet, sour or tart, and do not have a stone or pit, although many pips or seeds may be present. Common examples of berries in the culinary sense are strawberries, raspberries, blueberries, blackberries, white currants, blackcurrants, and redcurrants. In Britain, soft fruit is a horticultural term for such fruits.".to_string()
-        //);
+        self_.text_wrap.lock().editable.set_text(
+            "".to_string(),
+            "A berry is a small, pulpy, and often edible fruit. Typically, berries are juicy, rounded, brightly colored, sweet, sour or tart, and do not have a stone or pit, although many pips or seeds may be present. Common examples of berries in the culinary sense are strawberries, raspberries, blueberries, blackberries, white currants, blackcurrants, and redcurrants. In Britain, soft fruit is a horticultural term for such fruits.".to_string()
+        );
         //self_
         //    .text_wrap
         //    .lock()
@@ -672,6 +676,10 @@ impl ChatEdit {
 
         let (atlas, wrapped_lines, selections) = {
             let mut text_wrap = self.text_wrap.lock();
+            // Must happen after rect eval, which is inside regen_text_mesh
+            // Maybe we should take the eval out of here.
+            self.clamp_scroll(&mut text_wrap);
+
             let rendered_glyphs = &text_wrap.get_render().glyphs;
             let atlas = text::make_texture_atlas(&self.render_api, rendered_glyphs);
             let wrapped_lines = text_wrap.wrap(width);
@@ -1494,20 +1502,22 @@ impl ChatEdit {
         let width = self.wrap_width();
         let wrapped_lines = text_wrap.wrap(width);
         let rect_h = self.rect.get().h;
-        let max_scroll = wrapped_lines.height() - rect_h;
+        let mut max_scroll = wrapped_lines.height() - rect_h;
+        // Top padding
+        max_scroll += self.padding.get_f32(0).unwrap();
+        // Bottom padding
+        max_scroll += self.padding.get_f32(1).unwrap();
         max_scroll.clamp(0., f32::MAX)
     }
 
     /// When we resize the screen, the rect changes so we may need to alter the scroll.
     /// Or if we delete text.
     fn clamp_scroll(&self, text_wrap: &mut TextWrap) {
-        let width = self.wrap_width();
-        let wrapped_lines = text_wrap.wrap(width);
-        let max_scroll = wrapped_lines.height();
-
+        let max_scroll = self.max_scroll(text_wrap);
         let mut scroll = self.scroll.get();
-        scroll = scroll.clamp(0., wrapped_lines.height());
-        self.scroll.set(scroll);
+        if scroll > max_scroll {
+            self.scroll.set(max_scroll);
+        }
     }
 
     fn pause_blinking(&self) {
@@ -1643,6 +1653,7 @@ impl UIObject for ChatEdit {
         on_modify.when_change(self.select_ascent.prop(), redraw);
         on_modify.when_change(self.select_descent.prop(), redraw);
         on_modify.when_change(self.handle_descent.prop(), redraw);
+        on_modify.when_change(self.padding.clone(), redraw);
         // The commented properties are modified on input events
         // So then redraw() will get repeatedly triggered when these properties
         // are changed. We should find a solution. For now the hooks are disabled.
@@ -1698,7 +1709,6 @@ impl UIObject for ChatEdit {
         debug!(target: "ui::chatedit", "EditBox::draw()");
         *self.parent_rect.lock() = Some(parent_rect);
 
-        //self.clamp_scroll();
         self.make_draw_calls()
     }
 

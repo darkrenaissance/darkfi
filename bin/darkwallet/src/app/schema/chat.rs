@@ -68,6 +68,7 @@ mod android_ui_consts {
     pub const EMOJI_BG_W: f32 = 120.;
     pub const EMOJI_SCALE: f32 = 40.;
     pub const EMOJI_NEG_Y: f32 = 85.;
+    pub const EMOJIBTN_BOX: [f32; 4] = [20., 118., 80., 75.];
     pub const SENDARROW_NEG_X: f32 = 50.;
     pub const SENDARROW_NEG_Y: f32 = 80.;
     pub const SENDBTN_BOX: [f32; 4] = [86., 120., 80., 70.];
@@ -126,6 +127,7 @@ mod ui_consts {
     pub const EMOJI_BG_W: f32 = 80.;
     pub const EMOJI_SCALE: f32 = 20.;
     pub const EMOJI_NEG_Y: f32 = 34.;
+    pub const EMOJIBTN_BOX: [f32; 4] = [16., 50., 44., 36.];
     pub const SENDARROW_NEG_X: f32 = 50.;
     pub const SENDARROW_NEG_Y: f32 = 32.;
     pub const SENDBTN_BOX: [f32; 4] = [72., 50., 45., 34.];
@@ -152,6 +154,7 @@ pub async fn make(app: &App, window: SceneNodePtr, channel: &str, db: &sled::Db)
     cc.add_const_f32("SENDARROW_NEG_X", SENDARROW_NEG_X);
     cc.add_const_f32("SENDARROW_NEG_Y", SENDARROW_NEG_Y);
     cc.add_const_f32("EMOJI_NEG_Y", EMOJI_NEG_Y);
+    cc.add_const_f32("EMOJIBTN_BOX_1", EMOJIBTN_BOX[1]);
     cc.add_const_f32("SENDBTN_BOX_0", SENDBTN_BOX[0]);
     cc.add_const_f32("SENDBTN_BOX_1", SENDBTN_BOX[1]);
 
@@ -507,6 +510,10 @@ pub async fn make(app: &App, window: SceneNodePtr, channel: &str, db: &sled::Db)
     chatview_rect_prop.add_depend(&prop, 3, "editz_h");
     editbox_bg_rect_prop.add_depend(&prop, 3, "editz_h");
 
+    let prop = node.get_property("padding").unwrap();
+    prop.set_f32(Role::App, 0, 0.).unwrap();
+    prop.set_f32(Role::App, 1, TEXTBAR_BASELINE / 2.).unwrap();
+
     node.set_property_f32(Role::App, "baseline", TEXTBAR_BASELINE).unwrap();
     node.set_property_f32(Role::App, "linespacing", CHATEDIT_LINESPACING).unwrap();
     node.set_property_f32(Role::App, "descent", TEXT_DESCENT).unwrap();
@@ -613,16 +620,42 @@ pub async fn make(app: &App, window: SceneNodePtr, channel: &str, db: &sled::Db)
     let node = node.setup(|me| Button::new(me, app.ex.clone())).await;
     layer_node.clone().link(node);
 
-    /*
-    // Create debug box
-    let node = create_vector_art("debugtool");
+    // Create the emoji button
+    let node = create_button("emoji_btn");
+    node.set_property_bool(Role::App, "is_active", true).unwrap();
     let prop = node.get_property("rect").unwrap();
-    let code = cc.compile("w - 86").unwrap();
-    prop.set_expr(Role::App, 0, code).unwrap();
-    let code = cc.compile("h - 120").unwrap();
+    prop.set_f32(Role::App, 0, EMOJIBTN_BOX[0]).unwrap();
+    let code = cc.compile("h - EMOJIBTN_BOX_1").unwrap();
     prop.set_expr(Role::App, 1, code).unwrap();
-    prop.set_f32(Role::App, 2, 80.).unwrap();
-    prop.set_f32(Role::App, 3, 70.).unwrap();
+    prop.set_f32(Role::App, 2, EMOJIBTN_BOX[2]).unwrap();
+    prop.set_f32(Role::App, 3, EMOJIBTN_BOX[3]).unwrap();
+
+    let (slot, recvr) = Slot::new("emoji_clicked");
+    node.register("click", slot).unwrap();
+    let listen_click = app.ex.spawn(async move {
+        while let Ok(_) = recvr.recv().await {
+            info!(target: "app::chat", "clicked emoji");
+        }
+    });
+    app.tasks.lock().unwrap().push(listen_click);
+
+    let node = node.setup(|me| Button::new(me, app.ex.clone())).await;
+    layer_node.clone().link(node);
+
+    // Create debug box
+    /*
+    let mut node = create_vector_art("debugtool");
+    let mut prop = Property::new("hoff", PropertyType::Float32, PropertySubType::Pixel);
+    node.add_property(prop).unwrap();
+    node.set_property_f32(Role::App, "hoff", 40.).unwrap();
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(Role::App, 0, EMOJIBTN_BOX[0]).unwrap();
+    let code = cc.compile("h - EMOJIBTN_BOX_1").unwrap();
+    prop.set_expr(Role::App, 1, code).unwrap();
+    prop.set_f32(Role::App, 2, EMOJIBTN_BOX[2]).unwrap();
+    prop.set_f32(Role::App, 3, EMOJIBTN_BOX[3]).unwrap();
+    let hoff_prop = node.get_property("hoff").unwrap();
+    prop.add_depend(&hoff_prop, 0, "hoff");
     node.set_property_u32(Role::App, "z_index", 6).unwrap();
     let mut shape = VectorShape::new();
     shape.add_outline(

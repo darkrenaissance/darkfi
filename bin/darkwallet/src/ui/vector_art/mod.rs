@@ -100,7 +100,10 @@ impl VectorArt {
 
     async fn get_draw_calls(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
         //debug!(target: "ui::vector_art", "VectorArt::draw_cached()");
-        self.rect.eval(&parent_rect).ok()?;
+        if let Err(e) = self.rect.eval(&parent_rect) {
+            warn!(target: "ui::vector_art", "Rect eval failure: {e}");
+            return None
+        }
         let rect = self.rect.get();
         let verts = self.shape.eval(rect.w, rect.h).expect("bad shape");
 

@@ -283,6 +283,12 @@ pub fn create_chatedit(name: &str) -> SceneNode {
     prop.set_defaults_f32(vec![4.]).unwrap();
     node.add_property(prop).unwrap();
 
+    let mut prop = Property::new("padding", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_ui_text("Inner Padding", "Top and bottom padding inside");
+    prop.set_range_f32(0., f32::MAX);
+    prop.set_array_len(2);
+    node.add_property(prop).unwrap();
+
     let mut prop = Property::new("cursor_pos", PropertyType::Uint32, PropertySubType::Pixel);
     prop.set_range_u32(0, u32::MAX);
     node.add_property(prop).unwrap();
