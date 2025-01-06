@@ -846,7 +846,7 @@ impl MessageBuffer {
         nick: String,
         text: String,
     ) -> f32 {
-        debug!(target: "ui::chatview", "MessageBuffer::push_privmsg({timest}, {msg_id}, {nick}, {text})");
+        //debug!(target: "ui::chatview", "MessageBuffer::push_privmsg({timest}, {msg_id}, {nick}, {text})");
         let font_size = self.font_size.get();
         let timestamp_font_size = self.timestamp_font_size.get();
         let timestamp_width = self.timestamp_width.get();

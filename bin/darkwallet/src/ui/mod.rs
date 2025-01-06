@@ -38,7 +38,7 @@ mod chatedit;
 pub use chatedit::{ChatEdit, ChatEditPtr};
 mod editbox;
 pub use editbox::{EditBox, EditBoxPtr};
-mod emoji_picker;
+pub mod emoji_picker;
 pub use emoji_picker::{EmojiPicker, EmojiPickerPtr};
 mod image;
 pub use image::{Image, ImagePtr};

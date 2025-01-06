@@ -300,7 +300,7 @@ impl ChatView {
 
         let Some(self_) = me.upgrade() else {
             // Should not happen
-            panic!("self destroyed before touch_task was stopped!");
+            panic!("self destroyed before insert_line_method_task was stopped!");
         };
 
         self_.handle_insert_line(timestamp, msg_id, nick, text).await;
@@ -557,7 +557,7 @@ impl ChatView {
             let msg_id = MessageId(k[8..].try_into().unwrap());
             let timest = Timestamp::from_be_bytes(timest_bytes);
             let chatmsg: ChatMsg = deserialize(&v).unwrap();
-            debug!(target: "ui::chatview", "{timest:?} {chatmsg:?}");
+            //debug!(target: "ui::chatview", "{timest:?} {chatmsg:?}");
 
             let msg_height = msgbuf.push_privmsg(timest, msg_id, chatmsg.nick, chatmsg.text);
 

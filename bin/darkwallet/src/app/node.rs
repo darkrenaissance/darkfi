@@ -374,6 +374,9 @@ pub fn create_chatedit(name: &str) -> SceneNode {
 
     node.add_signal("enter_pressed", "Enter key pressed", vec![]).unwrap();
 
+    // Used by emoji_picker
+    node.add_method("insert_text", vec![("text", "Text", CallArgType::Str)], None).unwrap();
+
     node
 }
 
@@ -490,6 +493,25 @@ pub fn create_emoji_picker(name: &str) -> SceneNode {
 
     let prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);
     node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("scroll", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_ui_text("Scroll", "Scroll down from the top");
+    prop.set_range_f32(0., f32::MAX);
+    node.add_property(prop).unwrap();
+
+    let mut prop =
+        Property::new("mouse_scroll_speed", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_ui_text("Mouse Scroll Speed", "Mouse Scrolling speed");
+    prop.set_defaults_f32(vec![4.]).unwrap();
+    node.add_property(prop).unwrap();
+
+    let mut prop = Property::new("emoji_size", PropertyType::Float32, PropertySubType::Pixel);
+    prop.set_ui_text("Emoji Size", "The emoji's size");
+    prop.set_range_f32(0., f32::MAX);
+    node.add_property(prop).unwrap();
+
+    node.add_signal("emoji_select", "Emoji selected", vec![("text", "Text", CallArgType::Str)])
+        .unwrap();
 
     node
 }

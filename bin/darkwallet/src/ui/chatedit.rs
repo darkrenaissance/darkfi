@@ -20,11 +20,13 @@ use async_lock::Mutex as AsyncMutex;
 use async_trait::async_trait;
 use atomic_float::AtomicF32;
 use darkfi::system::msleep;
+use darkfi_serial::{deserialize, Decodable, Encodable, SerialDecodable, SerialEncodable};
 use miniquad::{window, KeyCode, KeyMods, MouseButton, TouchPhase};
 use parking_lot::Mutex as SyncMutex;
 use rand::{rngs::OsRng, Rng};
 use std::{
     collections::HashMap,
+    io::Cursor,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc, OnceLock, Weak,
@@ -44,7 +46,7 @@ use crate::{
         PropertyUint32, Role,
     },
     pubsub::Subscription,
-    scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
+    scene::{MethodCallSub, Pimpl, SceneNodePtr, SceneNodeWeak},
     text::{self, Glyph, GlyphPositionIter, TextShaperPtr},
     util::{enumerate_ref, is_whitespace, min_f32, zip3},
     ExecutorPtr,
@@ -1026,15 +1028,23 @@ impl ChatEdit {
 
     async fn insert_char(&self, key: char) {
         debug!(target: "ui::chatedit", "insert_char({key})");
+        let mut tmp = [0; 4];
+        let key_str = key.encode_utf8(&mut tmp);
+        self.insert_text(key_str).await
+    }
+    async fn insert_text(&self, text: &str) {
+        //debug!(target: "ui::chatedit", "insert_text({text})");
         {
             let mut text_wrap = &mut self.text_wrap.lock();
             text_wrap.clear_cache();
             if !text_wrap.select.is_empty() {
                 text_wrap.delete_selected();
+
+                self.is_phone_select.store(false, Ordering::Relaxed);
+                // Reshow cursor (if hidden)
+                self.hide_cursor.store(false, Ordering::Relaxed);
             }
-            let mut tmp = [0; 4];
-            let key_str = key.encode_utf8(&mut tmp);
-            text_wrap.editable.compose(key_str, true);
+            text_wrap.editable.compose(text, true);
         }
 
         self.pause_blinking();
@@ -1637,6 +1647,35 @@ impl ChatEdit {
             ],
         })
     }
+
+    async fn process_insert_text_method(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
+        let Ok(method_call) = sub.receive().await else {
+            debug!(target: "ui::chatedit", "Event relayer closed");
+            return false
+        };
+
+        //debug!(target: "ui::chatview", "method called: insert_line({method_call:?})");
+        assert!(method_call.send_res.is_none());
+
+        fn decode_data(data: &[u8]) -> std::io::Result<String> {
+            let mut cur = Cursor::new(&data);
+            let text = String::decode(&mut cur)?;
+            Ok(text)
+        }
+
+        let Ok(text) = decode_data(&method_call.data) else {
+            error!(target: "ui::chatedit", "insert_text() method invalid arg data");
+            return true
+        };
+
+        let Some(self_) = me.upgrade() else {
+            // Should not happen
+            panic!("self destroyed before insert_text_method_task was stopped!");
+        };
+
+        self_.insert_text(&text).await;
+        true
+    }
 }
 
 impl Drop for ChatEdit {
@@ -1657,6 +1696,13 @@ impl UIObject for ChatEdit {
         let node_ref = &self.node.upgrade().unwrap();
         let node_name = node_ref.name.clone();
         let node_id = node_ref.id;
+
+        let method_sub = node_ref.subscribe_method_call("insert_text").unwrap();
+        let me2 = me.clone();
+        let insert_text_task =
+            ex.spawn(
+                async move { while Self::process_insert_text_method(&me2, &method_sub).await {} },
+            );
 
         let mut on_modify = OnModify::new(ex.clone(), node_name, node_id, me.clone());
         on_modify.when_change(self.is_focused.prop(), Self::change_focus);
@@ -1726,8 +1772,8 @@ impl UIObject for ChatEdit {
             }
         });
 
-        let mut tasks = on_modify.tasks;
-        tasks.push(blinking_cursor_task);
+        let mut tasks = vec![insert_text_task, blinking_cursor_task];
+        tasks.append(&mut on_modify.tasks);
         self.tasks.set(tasks);
     }
 
@@ -1802,24 +1848,17 @@ impl UIObject for ChatEdit {
 
         let rect = self.rect.get();
 
-        // clicking inside box will:
-        // 1. make it active
-        // 2. begin selection
         if !rect.contains(mouse_pos) {
-            if self.is_focused.get() {
-                debug!(target: "ui::chatedit", "EditBox unfocused");
-                //self.is_focused.set(false);
-                self.text_wrap.lock().select.clear();
-
-                self.redraw().await;
-            }
             return false
         }
 
+        // clicking inside box will:
+        // 1. make it active
+        // 2. begin selection
         if self.is_focused.get() {
-            debug!(target: "ui::chatedit", "EditBox clicked");
+            debug!(target: "ui::chatedit", "ChatEdit clicked");
         } else {
-            debug!(target: "ui::chatedit", "EditBox focused");
+            debug!(target: "ui::chatedit", "ChatEdit focused");
             self.is_focused.set(true);
         }
 

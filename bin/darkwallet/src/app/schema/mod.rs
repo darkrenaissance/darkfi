@@ -37,8 +37,8 @@ use crate::{
     shape,
     text::TextShaperPtr,
     ui::{
-        Button, ChatEdit, ChatView, EditBox, Image, Layer, ShapeVertex, Text, VectorArt,
-        VectorShape, Window,
+        emoji_picker, Button, ChatEdit, ChatView, EditBox, Image, Layer, ShapeVertex, Text,
+        VectorArt, VectorShape, Window,
     },
     ExecutorPtr,
 };
@@ -51,6 +51,7 @@ mod menu;
 mod ui_consts {
     pub const CHATDB_PATH: &str = "/data/data/darkfi.darkwallet/chatdb/";
     pub const BG_PATH: &str = "bg.png";
+    pub const EMOJI_PICKER_ICON_SIZE: f32 = 100.;
 }
 
 #[cfg(all(
@@ -60,6 +61,7 @@ mod ui_consts {
 mod ui_consts {
     pub const CHATDB_PATH: &str = "chatdb";
     pub const BG_PATH: &str = "assets/bg.png";
+    pub const EMOJI_PICKER_ICON_SIZE: f32 = 40.;
 }
 
 use ui_consts::*;
@@ -150,14 +152,15 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
     layer_node.clone().link(node);
 
+    let emoji_meshes = emoji_picker::EmojiMeshes::new(
+        app.render_api.clone(),
+        app.text_shaper.clone(),
+        EMOJI_PICKER_ICON_SIZE,
+    );
+
     let db = sled::open(CHATDB_PATH).expect("cannot open sleddb");
     for channel in CHANNELS {
-        chat::make(app, window.clone(), channel, &db).await;
+        chat::make(app, window.clone(), channel, &db, emoji_meshes.clone()).await;
     }
     menu::make(app, window.clone()).await;
-
-    let chatview_node = app.sg_root.clone().lookup_node("/window/dev_chat_layer").unwrap();
-    chatview_node.set_property_bool(Role::App, "is_visible", true).unwrap();
-    let menu_node = app.sg_root.clone().lookup_node("/window/menu_layer").unwrap();
-    menu_node.set_property_bool(Role::App, "is_visible", false).unwrap();
 }

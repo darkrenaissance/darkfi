@@ -38,8 +38,8 @@ use crate::{
     shape,
     text::TextShaperPtr,
     ui::{
-        Button, ChatEdit, ChatView, EditBox, EmojiPicker, Image, Layer, ShapeVertex, Text,
-        VectorArt, VectorShape, Window,
+        emoji_picker, Button, ChatEdit, ChatView, EditBox, EmojiPicker, Image, Layer, ShapeVertex,
+        Text, VectorArt, VectorShape, Window,
     },
     ExecutorPtr,
 };
@@ -142,9 +142,16 @@ mod ui_consts {
     pub const CHATVIEW_BASELINE: f32 = 20.;
 }
 
+use super::EMOJI_PICKER_ICON_SIZE;
 use ui_consts::*;
 
-pub async fn make(app: &App, window: SceneNodePtr, channel: &str, db: &sled::Db) {
+pub async fn make(
+    app: &App,
+    window: SceneNodePtr,
+    channel: &str,
+    db: &sled::Db,
+    emoji_meshes: emoji_picker::EmojiMeshesPtr,
+) {
     let window_scale = PropertyFloat32::wrap(&window, Role::Internal, "scale", 0).unwrap();
 
     let mut cc = Compiler::new();
@@ -289,18 +296,19 @@ pub async fn make(app: &App, window: SceneNodePtr, channel: &str, db: &sled::Db)
     let mut node = create_emoji_picker("emoji_picker");
     let prop = Property::new("dynamic_h", PropertyType::Float32, PropertySubType::Pixel);
     node.add_property(prop).unwrap();
-    let emoji_h_prop = node.get_property("dynamic_h").unwrap();
+    let emoji_dynamic_h_prop = node.get_property("dynamic_h").unwrap();
+    //emoji_dynamic_h_prop.set_f32(Role::App, 0, 400.).unwrap();
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(Role::App, 0, 0.).unwrap();
     let code = cc.compile("h - dynamic_h").unwrap();
     prop.set_expr(Role::App, 1, code).unwrap();
     prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
     prop.set_expr(Role::App, 3, expr::load_var("dynamic_h")).unwrap();
-    prop.add_depend(&emoji_h_prop, 0, "dynamic_h");
+    prop.add_depend(&emoji_dynamic_h_prop, 0, "dynamic_h");
     let emoji_h_prop = PropertyFloat32::wrap(&node, Role::App, "dynamic_h", 0).unwrap();
-    let emoji_rect_prop = prop;
     //node.set_property_f32(Role::App, "baseline", CHANNEL_LABEL_BASELINE).unwrap();
     //node.set_property_f32(Role::App, "font_size", FONTSIZE).unwrap();
+    node.set_property_f32(Role::App, "emoji_size", EMOJI_PICKER_ICON_SIZE).unwrap();
     node.set_property_u32(Role::App, "z_index", 2).unwrap();
     let node = node
         .setup(|me| {
@@ -308,11 +316,12 @@ pub async fn make(app: &App, window: SceneNodePtr, channel: &str, db: &sled::Db)
                 me,
                 window_scale.clone(),
                 app.render_api.clone(),
-                app.text_shaper.clone(),
+                emoji_meshes,
                 app.ex.clone(),
             )
         })
         .await;
+    let emoji_picker_node = node.clone();
     layer_node.clone().link(node);
 
     // Main content view
@@ -324,7 +333,7 @@ pub async fn make(app: &App, window: SceneNodePtr, channel: &str, db: &sled::Db)
     prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
     let code = cc.compile("h - emoji_h").unwrap();
     prop.set_expr(Role::App, 3, code).unwrap();
-    prop.add_depend(&emoji_rect_prop, 3, "emoji_h");
+    prop.add_depend(&emoji_dynamic_h_prop, 0, "emoji_h");
     layer_node.set_property_bool(Role::App, "is_visible", true).unwrap();
     layer_node.set_property_u32(Role::App, "z_index", 1).unwrap();
     let layer_node =
@@ -457,7 +466,20 @@ pub async fn make(app: &App, window: SceneNodePtr, channel: &str, db: &sled::Db)
         .unwrap();
     prop.set_expr(Role::App, 1, code).unwrap();
     prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_f32(Role::App, 3, 500.).unwrap();
+    let code = cc
+        .compile(
+            "
+        height = if editz_h < CHATEDIT_MIN_HEIGHT {
+            CHATEDIT_MIN_HEIGHT
+        } else {
+            editz_h
+        };
+
+        height + 2 * CHATEDIT_BOTTOM_PAD
+",
+        )
+        .unwrap();
+    prop.set_expr(Role::App, 3, code).unwrap();
     node.set_property_u32(Role::App, "z_index", 2).unwrap();
 
     let editbox_bg_rect_prop = prop.clone();
@@ -467,7 +489,7 @@ pub async fn make(app: &App, window: SceneNodePtr, channel: &str, db: &sled::Db)
     shape.add_filled_box(
         expr::const_f32(0.),
         expr::const_f32(0.),
-        cc.compile("w").unwrap(),
+        expr::load_var("w"),
         expr::load_var("h"),
         [0., 0.13, 0.08, 1.],
     );
@@ -492,6 +514,14 @@ pub async fn make(app: &App, window: SceneNodePtr, channel: &str, db: &sled::Db)
         expr::const_f32(EMOJI_BG_W),
         expr::const_f32(0.),
         expr::const_f32(EMOJI_BG_W + 1.),
+        expr::load_var("h"),
+        [0.41, 0.6, 0.65, 1.],
+    );
+    // Bottom line
+    shape.add_filled_box(
+        expr::const_f32(0.),
+        cc.compile("h - 1").unwrap(),
+        expr::load_var("w"),
         expr::load_var("h"),
         [0.41, 0.6, 0.65, 1.],
     );
@@ -660,7 +690,18 @@ pub async fn make(app: &App, window: SceneNodePtr, channel: &str, db: &sled::Db)
             )
         })
         .await;
+    let chatedit_node = node.clone();
     layer_node.clone().link(node);
+
+    let (slot, recvr) = Slot::new("emoji_selected");
+    emoji_picker_node.register("emoji_select", slot).unwrap();
+    let listen_click = app.ex.spawn(async move {
+        while let Ok(data) = recvr.recv().await {
+            // No need to decode the data. Just pass it straight along
+            chatedit_node.call_method("insert_text", data).await.unwrap();
+        }
+    });
+    app.tasks.lock().unwrap().push(listen_click);
 
     // Create the send button
     let node = create_button("send_btn");
