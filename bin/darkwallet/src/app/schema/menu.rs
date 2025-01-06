@@ -47,9 +47,9 @@ use super::CHANNELS;
 
 mod android_ui_consts {
     pub const CHANNEL_LABEL_X: f32 = 40.;
-    pub const CHANNEL_LABEL_LINESPACE: f32 = 120.;
+    pub const CHANNEL_LABEL_LINESPACE: f32 = 140.;
     pub const CHANNEL_LABEL_FONTSIZE: f32 = 40.;
-    pub const CHANNEL_LABEL_BASELINE: f32 = 76.;
+    pub const CHANNEL_LABEL_BASELINE: f32 = 82.;
 }
 
 #[cfg(target_os = "android")]
@@ -70,7 +70,7 @@ mod ui_consts {
     pub const CHANNEL_LABEL_X: f32 = 20.;
     pub const CHANNEL_LABEL_LINESPACE: f32 = 60.;
     pub const CHANNEL_LABEL_FONTSIZE: f32 = 20.;
-    pub const CHANNEL_LABEL_BASELINE: f32 = 38.;
+    pub const CHANNEL_LABEL_BASELINE: f32 = 37.;
 }
 
 use ui_consts::*;
