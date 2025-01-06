@@ -158,6 +158,16 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         EMOJI_PICKER_ICON_SIZE,
     );
 
+    let emoji_meshes2 = emoji_meshes.clone();
+    std::thread::spawn(move || {
+        for i in (0..500).step_by(20) {
+            let mut emoji = emoji_meshes2.lock().unwrap();
+            for j in i..(i + 20) {
+                emoji.get(j);
+            }
+        }
+    });
+
     let db = sled::open(CHATDB_PATH).expect("cannot open sleddb");
     for channel in CHANNELS {
         chat::make(app, window.clone(), channel, &db, emoji_meshes.clone()).await;

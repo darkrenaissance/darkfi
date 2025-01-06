@@ -93,7 +93,7 @@ impl EmojiMeshes {
         mesh.alloc(&self.render_api).draw_with_texture(atlas.texture)
     }
 
-    fn get(&mut self, i: usize) -> GfxDrawMesh {
+    pub fn get(&mut self, i: usize) -> GfxDrawMesh {
         assert!(i < emoji::EMOJI_LIST.len());
 
         if i >= self.meshes.len() {
