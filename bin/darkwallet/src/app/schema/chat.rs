@@ -341,6 +341,46 @@ pub async fn make(
     let emoji_picker_node = node.clone();
     layer_node.clone().link(node);
 
+    // Create the editbox bg
+    let node = create_vector_art("emoji_picker_bg");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(Role::App, 0, 0.).unwrap();
+    let code = cc.compile("h - dynamic_h").unwrap();
+    prop.set_expr(Role::App, 1, code).unwrap();
+    prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_expr(Role::App, 3, expr::load_var("dynamic_h")).unwrap();
+    prop.add_depend(&emoji_dynamic_h_prop, 0, "dynamic_h");
+    node.set_property_u32(Role::App, "z_index", 2).unwrap();
+
+    let mut shape = VectorShape::new();
+    // Main bg
+    shape.add_filled_box(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::load_var("h"),
+        [0., 0.11, 0.11, 1.],
+    );
+    // Top line
+    shape.add_filled_box(
+        expr::const_f32(EMOJI_BG_W),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::const_f32(1.),
+        [0.41, 0.6, 0.65, 1.],
+    );
+    // Bottom line
+    //shape.add_filled_box(
+    //    expr::const_f32(0.),
+    //    cc.compile("h - 1").unwrap(),
+    //    expr::load_var("w"),
+    //    expr::load_var("h"),
+    //    [0.41, 0.6, 0.65, 1.],
+    //);
+    let node =
+        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
+    layer_node.clone().link(node);
+
     // Main content view
     let chat_layer_node = layer_node;
     let layer_node = create_layer("content");
@@ -535,13 +575,13 @@ pub async fn make(
         [0.41, 0.6, 0.65, 1.],
     );
     // Bottom line
-    shape.add_filled_box(
-        expr::const_f32(0.),
-        cc.compile("h - 1").unwrap(),
-        expr::load_var("w"),
-        expr::load_var("h"),
-        [0.41, 0.6, 0.65, 1.],
-    );
+    //shape.add_filled_box(
+    //    expr::const_f32(0.),
+    //    cc.compile("h - 1").unwrap(),
+    //    expr::load_var("w"),
+    //    expr::load_var("h"),
+    //    [0.41, 0.6, 0.65, 1.],
+    //);
     let node =
         node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
     layer_node.clone().link(node);
@@ -597,7 +637,7 @@ pub async fn make(
     node.set_property_bool(Role::App, "is_active", true).unwrap();
     node.set_property_bool(Role::App, "is_focused", true).unwrap();
 
-    node.set_property_f32(Role::App, "max_height", 300.).unwrap();
+    node.set_property_f32(Role::App, "max_height", 600.).unwrap();
 
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(Role::App, 0, CHATEDIT_LHS_PAD).unwrap();
@@ -719,6 +759,43 @@ pub async fn make(
     });
     app.tasks.lock().unwrap().push(listen_click);
 
+    // No way to get the top of the editbox until eval has been called.
+    // But this is on top so it happens before the eval. So the value is 0.
+    // Not sure the best way to fix this.
+    /*
+    // Create the editbox fg shadow
+    let node = create_vector_art("editbox_fg");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(Role::App, 0, EMOJI_BG_W).unwrap();
+    let code = cc.compile("editz_bg_top_y").unwrap();
+    prop.set_expr(Role::App, 1, code).unwrap();
+    prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_f32(Role::App, 3, 300.).unwrap();
+    //prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
+    //prop.set_expr(Role::App, 3, expr::load_var("editz_bg_h")).unwrap();
+    node.set_property_u32(Role::App, "z_index", 4).unwrap();
+    prop.add_depend(&editbox_bg_rect_prop, 1, "editz_bg_top_y");
+    prop.add_depend(&editbox_bg_rect_prop, 3, "editz_bg_h");
+
+    let mut shape = VectorShape::new();
+    // Left hand darker box
+    shape.add_gradient_box(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::const_f32(40.),
+        [
+            [0., 0., 0., 1.],
+            [0., 0., 0., 1.],
+            [0., 0., 0., 0.],
+            [0., 0., 0., 0.],
+        ]
+    );
+    let node =
+        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
+    layer_node.clone().link(node);
+    */
+
     // Create the send button
     let node = create_button("send_btn");
     node.set_property_bool(Role::App, "is_active", true).unwrap();
@@ -757,24 +834,37 @@ pub async fn make(
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             info!(target: "app::chat", "clicked emoji");
+
+            /*
+            miniquad::window::show_keyboard(true);
+            #[cfg(target_os = "android")]
+            let panel_height = crate::android::get_keyboard_height();
+            #[cfg(not(target_os = "android"))]
+            let panel_height = 400.;
+            miniquad::window::show_keyboard(false);
+            info!("panel_height = {panel_height}");
+            */
+
             if emoji_btn_is_visible.get() {
                 assert!(!emoji_close_is_visible.get());
                 assert!(emoji_h_prop.get() < 0.001);
                 emoji_btn_is_visible.set(false);
                 emoji_close_is_visible.set(true);
-                for i in 1..=20 {
-                    emoji_h_prop.set((20 * i) as f32);
-                    msleep(10).await;
-                }
+                emoji_h_prop.set(400. as f32);
+                //for i in 1..=20 {
+                //    emoji_h_prop.set((20 * i) as f32);
+                //    msleep(10).await;
+                //}
             } else {
                 assert!(emoji_close_is_visible.get());
                 assert!(emoji_h_prop.get() > 0.);
                 emoji_btn_is_visible.set(true);
                 emoji_close_is_visible.set(false);
-                for i in 1..=20 {
-                    emoji_h_prop.set((400 - 20 * i) as f32);
-                    msleep(10).await;
-                }
+                emoji_h_prop.set(0. as f32);
+                //for i in 1..=20 {
+                //    emoji_h_prop.set((400 - 20 * i) as f32);
+                //    msleep(10).await;
+                //}
             }
         }
     });
@@ -842,8 +932,8 @@ pub async fn make(
 
     let mut shape = VectorShape::new();
 
-    let color1 = [0., 0., 0., 0.4];
-    let color2 = [0., 0., 0., 0.9];
+    let color1 = [0., 0.13, 0.08, 0.75];
+    let color2 = [0., 0., 0., 1.];
     let gradient = [color1.clone(), color1, color2.clone(), color2];
     let hicolor = [0., 0.94, 1., 1.];
 

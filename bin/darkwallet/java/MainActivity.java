@@ -22,6 +22,11 @@ public String getExternalStoragePath() {
     return Environment.getExternalStorageDirectory().getAbsolutePath();
 }
 
+public int getKeyboardHeight() {
+    Insets insets = view.getRootWindowInsets().getInsets(WindowInsets.Type.ime());
+    return insets.bottom;
+}
+
 //% END
 
 //% QUAD_SURFACE_ON_CREATE_INPUT_CONNECTION

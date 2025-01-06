@@ -42,9 +42,9 @@ mod wrap;
 pub use wrap::{glyph_str, wrap};
 
 // Upscale emoji relative to font size
-pub const EMOJI_SCALE_FACT: f32 = 1.5;
+pub const EMOJI_SCALE_FACT: f32 = 1.6;
 // How much of the emoji is above baseline?
-pub const EMOJI_PROP_ABOVE_BASELINE: f32 = 0.75;
+pub const EMOJI_PROP_ABOVE_BASELINE: f32 = 0.8;
 
 // From https://sourceforge.net/projects/freetype/files/freetype2/2.6/
 //

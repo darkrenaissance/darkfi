@@ -86,3 +86,11 @@ pub fn cancel_composition() {
         ndk_utils::call_void_method!(env, android::ACTIVITY, "cancelComposition", "()V");
     }
 }
+
+pub fn get_keyboard_height() -> usize {
+    unsafe {
+        let env = android::attach_jni_env();
+
+        ndk_utils::call_int_method!(env, android::ACTIVITY, "getKeyboardHeight", "()I") as usize
+    }
+}

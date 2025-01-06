@@ -51,7 +51,7 @@ mod menu;
 mod ui_consts {
     pub const CHATDB_PATH: &str = "/data/data/darkfi.darkwallet/chatdb/";
     pub const BG_PATH: &str = "bg.png";
-    pub const EMOJI_PICKER_ICON_SIZE: f32 = 100.;
+    pub const EMOJI_PICKER_ICON_SIZE: f32 = 140.;
 }
 
 #[cfg(all(
