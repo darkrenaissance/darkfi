@@ -1536,13 +1536,18 @@ impl ChatEdit {
 
     fn max_scroll(&self, text_wrap: &mut TextWrap) -> f32 {
         let width = self.wrap_width();
-        let wrapped_lines = text_wrap.wrap(width);
-        let rect_h = self.rect.get().h;
-        let mut max_scroll = wrapped_lines.height() - rect_h;
+        let mut inner_height = text_wrap.wrap(width).height();
         // Top padding
-        max_scroll += self.padding.get_f32(0).unwrap();
+        inner_height += self.padding.get_f32(0).unwrap();
         // Bottom padding
-        max_scroll += self.padding.get_f32(1).unwrap();
+        inner_height += self.padding.get_f32(1).unwrap();
+
+        let max_height = self.max_height.get();
+        if inner_height < max_height {
+            return 0.
+        }
+
+        let max_scroll = inner_height - max_height;
         max_scroll.clamp(0., f32::MAX)
     }
 
@@ -1943,7 +1948,7 @@ impl UIObject for ChatEdit {
             self.max_scroll(&mut text_wrap)
         };
 
-        let mut scroll = self.scroll.get() + wheel_pos.y * self.scroll_speed.get();
+        let mut scroll = self.scroll.get() - wheel_pos.y * self.scroll_speed.get();
         scroll = scroll.clamp(0., max_scroll);
         debug!(target: "ui::chatedit", "handle_mouse_wheel({wheel_pos:?}) [scroll={scroll}]");
         self.scroll.set(scroll);
