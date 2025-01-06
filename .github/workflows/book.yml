@@ -40,7 +40,7 @@ jobs:
               run: |
                 pip install ghp-import
                 pip install prettytable
-                sudo apt -y install make wget libasound2-dev wabt
+                sudo apt -y install make wget libasound2-dev libfontconfig1-dev wabt
                 wget "https://github.com/badboy/mdbook-toc/releases/download/0.14.1/mdbook-toc-0.14.1-x86_64-unknown-linux-gnu.tar.gz"
                 wget "https://github.com/lzanini/mdbook-katex/releases/download/v0.5.7/mdbook-katex-v0.5.7-x86_64-unknown-linux-gnu.tar.gz"
                 wget "https://github.com/badboy/mdbook-mermaid/releases/download/v0.12.6/mdbook-mermaid-v0.12.6-x86_64-unknown-linux-gnu.tar.gz"
