@@ -66,6 +66,8 @@ use super::{
 // Avoid updating too much makes scrolling smoother.
 const VERT_SCROLL_UPDATE_INC: f32 = 1.;
 
+macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::chatview", $($arg)*); } }
+
 fn is_all_whitespace(glyphs: &[Glyph]) -> bool {
     for glyph in glyphs {
         if !is_whitespace(&glyph.substr) {
@@ -482,7 +484,7 @@ pub struct ChatEdit {
     select_ascent: PropertyFloat32,
     select_descent: PropertyFloat32,
     handle_descent: PropertyFloat32,
-    selected: PropertyPtr,
+    select_text: PropertyPtr,
     z_index: PropertyUint32,
     debug: PropertyBool,
 
@@ -545,7 +547,7 @@ impl ChatEdit {
             PropertyFloat32::wrap(node_ref, Role::Internal, "select_descent", 0).unwrap();
         let handle_descent =
             PropertyFloat32::wrap(node_ref, Role::Internal, "handle_descent", 0).unwrap();
-        let selected = node_ref.get_property("selected").unwrap();
+        let select_text = node_ref.get_property("select_text").unwrap();
         let cursor_blink_time =
             PropertyUint32::wrap(node_ref, Role::Internal, "cursor_blink_time", 0).unwrap();
         let cursor_idle_time =
@@ -597,7 +599,7 @@ impl ChatEdit {
             select_ascent,
             select_descent,
             handle_descent,
-            selected,
+            select_text,
             z_index,
             debug,
 
@@ -1040,6 +1042,8 @@ impl ChatEdit {
             if !text_wrap.select.is_empty() {
                 text_wrap.delete_selected();
 
+                self.update_select_text(&mut text_wrap);
+
                 self.is_phone_select.store(false, Ordering::Relaxed);
                 // Reshow cursor (if hidden)
                 self.hide_cursor.store(false, Ordering::Relaxed);
@@ -1065,6 +1069,8 @@ impl ChatEdit {
                         let select = &mut text_wrap.select;
                         select.clear();
                         select.push(Selection::new(0, end_pos));
+
+                        self.update_select_text(&mut text_wrap);
                     }
 
                     self.redraw().await;
@@ -1073,14 +1079,14 @@ impl ChatEdit {
             }
             'c' => {
                 if mods.ctrl {
-                    self.copy_highlighted().unwrap();
+                    //self.copy_highlighted().unwrap();
                     return true
                 }
             }
             'v' => {
                 if mods.ctrl {
                     if let Some(text) = window::clipboard_get() {
-                        self.paste_text(text).await;
+                        //self.paste_text(text).await;
                     }
                     return true
                 }
@@ -1152,6 +1158,7 @@ impl ChatEdit {
             text_wrap.clear_cache();
         } else {
             text_wrap.delete_selected();
+            self.update_select_text(&mut text_wrap);
         }
 
         self.is_phone_select.store(false, Ordering::Relaxed);
@@ -1181,6 +1188,8 @@ impl ChatEdit {
         } else {
             select.clear();
         }
+
+        self.update_select_text(&mut text_wrap);
     }
 
     /// This will select the entire word rather than move the cursor to that location
@@ -1199,47 +1208,31 @@ impl ChatEdit {
         let select = &mut text_wrap.select;
         select.clear();
         select.push(Selection::new(word_start, word_end));
+
         debug!(target: "ui::chatview", "Selected {select:?} from {touch_pos:?}");
+        self.update_select_text(&mut text_wrap);
 
         self.is_phone_select.store(true, Ordering::Relaxed);
         // redraw() will now hide the cursor
         self.hide_cursor.store(true, Ordering::Relaxed);
     }
 
-    fn glyphs_to_string(glyphs: &Vec<Glyph>) -> String {
-        let mut text = String::new();
-        for (i, glyph) in glyphs.iter().enumerate() {
-            text.push_str(&glyph.substr);
-        }
-        text
+    // Call this whenever the selection changes
+    fn update_select_text(&self, text_wrap: &mut TextWrap) {
+        let select = &text_wrap.select;
+        let Some(select) = select.first().cloned() else {
+            if !self.select_text.is_null(0).unwrap() {
+                self.select_text.set_null(Role::Internal, 0).unwrap();
+            }
+            return
+        };
+        let rendered = text_wrap.get_render();
+        let glyphs = &rendered.glyphs[select.start..select.end];
+        let text = text::glyph_str(glyphs);
+        self.select_text.set_str(Role::Internal, 0, text).unwrap();
     }
 
-    fn delete_highlighted(&self) {
-        assert!(!self.selected.is_null(0).unwrap());
-        assert!(!self.selected.is_null(1).unwrap());
-
-        let start = self.selected.get_u32(0).unwrap() as usize;
-        let end = self.selected.get_u32(1).unwrap() as usize;
-
-        let sel_start = std::cmp::min(start, end);
-        let sel_end = std::cmp::max(start, end);
-
-        let mut glyphs = self.glyphs.lock().clone();
-        glyphs.drain(sel_start..sel_end);
-
-        let text = Self::glyphs_to_string(&glyphs);
-        debug!(
-            target: "ui::chatedit",
-            "delete_highlighted() text=\"{}\", cursor_pos={}",
-            text, sel_start
-        );
-        self.text.set(text);
-
-        self.selected.set_null(Role::Internal, 0).unwrap();
-        self.selected.set_null(Role::Internal, 1).unwrap();
-        self.cursor_pos.set(sel_start as u32);
-    }
-
+    /*
     fn copy_highlighted(&self) -> Result<()> {
         let start = self.selected.get_u32(0)? as usize;
         let end = self.selected.get_u32(1)? as usize;
@@ -1285,6 +1278,7 @@ impl ChatEdit {
         self.apply_cursor_scrolling();
         self.redraw().await;
     }
+    */
 
     async fn handle_touch_start(&self, mut touch_pos: Point) -> bool {
         //debug!(target: "ui::chatedit", "handle_touch_start({touch_pos:?})");
@@ -1420,6 +1414,8 @@ impl ChatEdit {
                         }
                         select.end = pos;
                     }
+
+                    self.update_select_text(&mut text_wrap);
                 }
                 self.redraw().await;
             }
@@ -1473,6 +1469,7 @@ impl ChatEdit {
 
             let select = &mut text_wrap.select;
             select.clear();
+            self.update_select_text(&mut text_wrap);
         }
 
         self.is_phone_select.store(false, Ordering::Relaxed);
@@ -1716,8 +1713,7 @@ impl UIObject for ChatEdit {
         // Cursor and selection might be invalidated.
         async fn reset(self_: Arc<ChatEdit>) {
             self_.cursor_pos.set(0);
-            self_.selected.set_null(Role::Internal, 0).unwrap();
-            self_.selected.set_null(Role::Internal, 1).unwrap();
+            //self_.select_text.set_null(Role::Internal, 0).unwrap();
             self_.scroll.set(0.);
             self_.redraw();
         }
@@ -1880,7 +1876,7 @@ impl UIObject for ChatEdit {
             // begin selection
             let select = &mut text_wrap.select;
             select.clear();
-            select.push(Selection::new(cursor_pos, cursor_pos));
+            self.update_select_text(&mut text_wrap);
 
             self.mouse_btn_held.store(true, Ordering::Relaxed);
         }
@@ -1928,7 +1924,11 @@ impl UIObject for ChatEdit {
 
             // modify current selection
             let select = &mut text_wrap.select;
-            select.last_mut().unwrap().end = cursor_pos;
+            if select.is_empty() {
+                select.push(Selection::new(cursor_pos, cursor_pos));
+            }
+            select.first_mut().unwrap().end = cursor_pos;
+            self.update_select_text(&mut text_wrap);
         }
 
         self.pause_blinking();

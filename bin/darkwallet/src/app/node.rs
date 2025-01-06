@@ -350,8 +350,7 @@ pub fn create_chatedit(name: &str) -> SceneNode {
     prop.set_range_f32(0., 1.);
     node.add_property(prop).unwrap();
 
-    let mut prop = Property::new("selected", PropertyType::Uint32, PropertySubType::Color);
-    prop.set_array_len(2);
+    let mut prop = Property::new("select_text", PropertyType::Str, PropertySubType::Null);
     prop.allow_null_values();
     prop.set_defaults_null().unwrap();
     node.add_property(prop).unwrap();

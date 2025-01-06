@@ -93,11 +93,23 @@ impl VectorShape {
         y2: SExprCode,
         color: Color,
     ) {
+        self.add_gradient_box(x1, y1, x2, y2, [color.clone(), color.clone(), color.clone(), color])
+    }
+
+    /// Colors go clockwise from top-left
+    pub fn add_gradient_box(
+        &mut self,
+        x1: SExprCode,
+        y1: SExprCode,
+        x2: SExprCode,
+        y2: SExprCode,
+        color: [Color; 4],
+    ) {
         let mut verts = vec![
-            ShapeVertex::new(x1.clone(), y1.clone(), color.clone()),
-            ShapeVertex::new(x2.clone(), y1.clone(), color.clone()),
-            ShapeVertex::new(x1.clone(), y2.clone(), color.clone()),
-            ShapeVertex::new(x2, y2, color),
+            ShapeVertex::new(x1.clone(), y1.clone(), color[0]),
+            ShapeVertex::new(x2.clone(), y1.clone(), color[1]),
+            ShapeVertex::new(x1.clone(), y2.clone(), color[3]),
+            ShapeVertex::new(x2, y2, color[2]),
         ];
         let i = self.verts.len() as u16;
         let mut indices = vec![i + 0, i + 2, i + 1, i + 1, i + 2, i + 3];

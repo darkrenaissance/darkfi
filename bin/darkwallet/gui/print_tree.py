@@ -6,9 +6,9 @@ def join(parent_path, child_name):
         return f"/{child_name}"
     return f"{parent_path}/{child_name}"
 
-def print_tree():
-    print("/")
-    print_node_info("/", indent=1)
+def print_tree(node_path="/"):
+    print(node_path)
+    print_node_info(node_path, indent=1)
 
 def print_node_info(parent_path, indent):
     ws = " "*4*indent

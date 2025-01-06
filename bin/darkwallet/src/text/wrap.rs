@@ -34,7 +34,7 @@ impl std::fmt::Debug for Token {
 }
 
 /// Get the string represented by a vec of glyphs. Useful for debugging.
-pub fn glyph_str(glyphs: &Vec<Glyph>) -> String {
+pub fn glyph_str(glyphs: &[Glyph]) -> String {
     glyphs.iter().map(|g| g.substr.as_str()).collect::<Vec<_>>().join("")
 }
 

@@ -29,7 +29,7 @@ use crate::{
     },
     error::Error,
     expr::{self, Compiler, Op},
-    gfx::{GraphicsEventPublisherPtr, Rectangle, RenderApi, Vertex},
+    gfx::{GraphicsEventPublisherPtr, Point, Rectangle, RenderApi, Vertex},
     mesh::{Color, MeshBuilder},
     prop::{
         Property, PropertyBool, PropertyFloat32, PropertyStr, PropertySubType, PropertyType, Role,
@@ -47,6 +47,8 @@ use crate::{
 const LIGHTMODE: bool = false;
 
 mod android_ui_consts {
+    use crate::gfx::{Point, Rectangle};
+
     pub const CHANNEL_LABEL_BASELINE: f32 = 82.;
     pub const BACKARROW_SCALE: f32 = 30.;
     pub const BACKARROW_X: f32 = 50.;
@@ -80,6 +82,12 @@ mod android_ui_consts {
     pub const MESSAGE_SPACING: f32 = 15.;
     pub const LINE_HEIGHT: f32 = 58.;
     pub const CHATVIEW_BASELINE: f32 = 36.;
+
+    pub const ACTION_POPUP_Y_OFF: f32 = 200.;
+    pub const ACTION_COPY_RECT: Rectangle = Rectangle::new(0., 0., 200., 160.);
+    pub const ACTION_PASTE_RECT: Rectangle = Rectangle::new(220., 0., 240., 160.);
+    pub const ACTION_SELECT_ALL_RECT: Rectangle = Rectangle::new(480., 0., 400., 160.);
+    pub const ACTION_LABEL_POS: Point = Point::new(40., 92.);
 }
 
 #[cfg(target_os = "android")]
@@ -101,6 +109,8 @@ mod ui_consts {
     not(feature = "emulate-android")
 ))]
 mod ui_consts {
+    use crate::gfx::{Point, Rectangle};
+
     pub const CHATDB_PATH: &str = "chatdb";
     pub const BG_PATH: &str = "assets/bg.png";
 
@@ -140,6 +150,12 @@ mod ui_consts {
     pub const MESSAGE_SPACING: f32 = 5.;
     pub const LINE_HEIGHT: f32 = 30.;
     pub const CHATVIEW_BASELINE: f32 = 20.;
+
+    pub const ACTION_POPUP_Y_OFF: f32 = 100.;
+    pub const ACTION_COPY_RECT: Rectangle = Rectangle::new(0., 0., 100., 80.);
+    pub const ACTION_PASTE_RECT: Rectangle = Rectangle::new(110., 0., 120., 80.);
+    pub const ACTION_SELECT_ALL_RECT: Rectangle = Rectangle::new(240., 0., 200., 80.);
+    pub const ACTION_LABEL_POS: Point = Point::new(20., 46.);
 }
 
 use super::EMOJI_PICKER_ICON_SIZE;
@@ -167,6 +183,7 @@ pub async fn make(
     cc.add_const_f32("EMOJIBTN_BOX_1", EMOJIBTN_BOX[1]);
     cc.add_const_f32("SENDBTN_BOX_0", SENDBTN_BOX[0]);
     cc.add_const_f32("SENDBTN_BOX_1", SENDBTN_BOX[1]);
+    cc.add_const_f32("ACTION_POPUP_Y_OFF", ACTION_POPUP_Y_OFF);
 
     // Main view
     let layer_node = create_layer(&(channel.to_string() + "_chat_layer"));
@@ -338,7 +355,7 @@ pub async fn make(
     layer_node.set_property_u32(Role::App, "z_index", 1).unwrap();
     let layer_node =
         layer_node.setup(|me| Layer::new(me, app.render_api.clone(), app.ex.clone())).await;
-    chat_layer_node.link(layer_node.clone());
+    chat_layer_node.clone().link(layer_node.clone());
 
     // ChatView
     let node = create_chatview("chatty");
@@ -653,11 +670,10 @@ pub async fn make(
         prop.set_f32(Role::App, 2, 0.22).unwrap();
         prop.set_f32(Role::App, 3, 1.).unwrap();
     }
-    let prop = node.get_property("selected").unwrap();
-    prop.set_null(Role::App, 0).unwrap();
-    prop.set_null(Role::App, 1).unwrap();
     node.set_property_u32(Role::App, "z_index", 3).unwrap();
     //node.set_property_bool(Role::App, "debug", true).unwrap();
+
+    let editz_select_text_prop = node.get_property("select_text").unwrap();
 
     //let editbox_text = PropertyStr::wrap(node, Role::App, "text", 0).unwrap();
     //let editbox_focus = PropertyBool::wrap(node, Role::App, "is_focused", 0).unwrap();
@@ -795,4 +811,216 @@ pub async fn make(
         node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
     layer_node.clone().link(node);
     */
+
+    // Overlay popup
+    let layer_node = create_layer("overlay");
+    let prop = layer_node.get_property("rect").unwrap();
+    prop.set_f32(Role::App, 0, 40.).unwrap();
+    let code = cc.compile("editz_bg_top_y - ACTION_POPUP_Y_OFF").unwrap();
+    //let code = cc.compile("h - 60 - 80").unwrap();
+    //let code = cc.compile("h - 60 - 300").unwrap();
+    prop.set_expr(Role::App, 1, code).unwrap();
+    prop.set_f32(Role::App, 2, ACTION_SELECT_ALL_RECT.rhs()).unwrap();
+    prop.set_f32(Role::App, 3, ACTION_SELECT_ALL_RECT.h).unwrap();
+    prop.add_depend(&editbox_bg_rect_prop, 1, "editz_bg_top_y");
+    layer_node.set_property_bool(Role::App, "is_visible", false).unwrap();
+    layer_node.set_property_u32(Role::App, "z_index", 2).unwrap();
+    let layer_node =
+        layer_node.setup(|me| Layer::new(me, app.render_api.clone(), app.ex.clone())).await;
+    chat_layer_node.link(layer_node.clone());
+
+    let actions_is_visible = PropertyBool::wrap(&layer_node, Role::App, "is_visible", 0).unwrap();
+
+    // Create the actionbar bg
+    let node = create_vector_art("actionbar_bg");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(Role::App, 0, 0.).unwrap();
+    prop.set_f32(Role::App, 1, 0.).unwrap();
+    prop.set_f32(Role::App, 2, ACTION_SELECT_ALL_RECT.rhs()).unwrap();
+    prop.set_f32(Role::App, 3, ACTION_SELECT_ALL_RECT.h).unwrap();
+    node.set_property_u32(Role::App, "z_index", 0).unwrap();
+
+    let mut shape = VectorShape::new();
+
+    let color1 = [0., 0., 0., 0.4];
+    let color2 = [0., 0., 0., 0.9];
+    let gradient = [color1.clone(), color1, color2.clone(), color2];
+    let hicolor = [0., 0.94, 1., 1.];
+
+    // Copy box
+    shape.add_gradient_box(
+        expr::const_f32(ACTION_COPY_RECT.x),
+        expr::const_f32(ACTION_COPY_RECT.y),
+        expr::const_f32(ACTION_COPY_RECT.rhs()),
+        expr::const_f32(ACTION_COPY_RECT.bhs()),
+        gradient.clone(),
+    );
+
+    // Copy outline
+    shape.add_outline(
+        expr::const_f32(ACTION_COPY_RECT.x),
+        expr::const_f32(ACTION_COPY_RECT.y),
+        expr::const_f32(ACTION_COPY_RECT.rhs()),
+        expr::const_f32(ACTION_COPY_RECT.bhs()),
+        1.,
+        hicolor.clone(),
+    );
+
+    // Paste box
+    shape.add_gradient_box(
+        expr::const_f32(ACTION_PASTE_RECT.x),
+        expr::const_f32(ACTION_PASTE_RECT.y),
+        expr::const_f32(ACTION_PASTE_RECT.rhs()),
+        expr::const_f32(ACTION_PASTE_RECT.bhs()),
+        gradient.clone(),
+    );
+
+    // Paste outline
+    shape.add_outline(
+        expr::const_f32(ACTION_PASTE_RECT.x),
+        expr::const_f32(ACTION_PASTE_RECT.y),
+        expr::const_f32(ACTION_PASTE_RECT.rhs()),
+        expr::const_f32(ACTION_PASTE_RECT.bhs()),
+        1.,
+        hicolor.clone(),
+    );
+
+    // Select all box
+    shape.add_gradient_box(
+        expr::const_f32(ACTION_SELECT_ALL_RECT.x),
+        expr::const_f32(ACTION_SELECT_ALL_RECT.y),
+        expr::const_f32(ACTION_SELECT_ALL_RECT.rhs()),
+        expr::const_f32(ACTION_SELECT_ALL_RECT.bhs()),
+        gradient,
+    );
+
+    // Select all outline
+    shape.add_outline(
+        expr::const_f32(ACTION_SELECT_ALL_RECT.x),
+        expr::const_f32(ACTION_SELECT_ALL_RECT.y),
+        expr::const_f32(ACTION_SELECT_ALL_RECT.rhs()),
+        expr::const_f32(ACTION_SELECT_ALL_RECT.bhs()),
+        1.,
+        hicolor,
+    );
+
+    let node =
+        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
+    layer_node.clone().link(node);
+
+    // Create some text
+    let node = create_text("actions_label");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(Role::App, 0, ACTION_LABEL_POS.x).unwrap();
+    prop.set_f32(Role::App, 1, ACTION_LABEL_POS.y).unwrap();
+    prop.set_f32(Role::App, 2, ACTION_SELECT_ALL_RECT.rhs()).unwrap();
+    prop.set_f32(Role::App, 3, ACTION_SELECT_ALL_RECT.h).unwrap();
+    node.set_property_f32(Role::App, "baseline", 0.).unwrap();
+    node.set_property_f32(Role::App, "font_size", FONTSIZE).unwrap();
+    node.set_property_str(Role::App, "text", "copy   paste   select all").unwrap();
+    //node.set_property_bool(Role::App, "debug", true).unwrap();
+    //node.set_property_str(Role::App, "text", "anon1").unwrap();
+    let prop = node.get_property("text_color").unwrap();
+    prop.set_f32(Role::App, 0, 0.).unwrap();
+    prop.set_f32(Role::App, 1, 0.94).unwrap();
+    prop.set_f32(Role::App, 2, 1.).unwrap();
+    prop.set_f32(Role::App, 3, 1.).unwrap();
+    node.set_property_u32(Role::App, "z_index", 1).unwrap();
+
+    let node = node
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.render_api.clone(),
+                app.text_shaper.clone(),
+                app.ex.clone(),
+            )
+        })
+        .await;
+    layer_node.clone().link(node);
+
+    // Copy button
+    let node = create_button("copy_btn");
+    node.set_property_bool(Role::App, "is_active", true).unwrap();
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(Role::App, 0, ACTION_COPY_RECT.x).unwrap();
+    prop.set_f32(Role::App, 1, ACTION_COPY_RECT.y).unwrap();
+    prop.set_f32(Role::App, 2, ACTION_COPY_RECT.w).unwrap();
+    prop.set_f32(Role::App, 3, ACTION_COPY_RECT.h).unwrap();
+
+    let (slot, recvr) = Slot::new("copy_clicked");
+    node.register("click", slot).unwrap();
+    let actions_is_visible2 = actions_is_visible.clone();
+    let listen_click = app.ex.spawn(async move {
+        while let Ok(_) = recvr.recv().await {
+            info!(target: "app::chat", "clicked copy");
+            actions_is_visible2.set(false);
+        }
+    });
+    app.tasks.lock().unwrap().push(listen_click);
+
+    let node = node.setup(|me| Button::new(me, app.ex.clone())).await;
+    layer_node.clone().link(node);
+
+    // Paste button
+    let node = create_button("paste_btn");
+    node.set_property_bool(Role::App, "is_active", true).unwrap();
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(Role::App, 0, ACTION_PASTE_RECT.x).unwrap();
+    prop.set_f32(Role::App, 1, ACTION_PASTE_RECT.y).unwrap();
+    prop.set_f32(Role::App, 2, ACTION_PASTE_RECT.w).unwrap();
+    prop.set_f32(Role::App, 3, ACTION_PASTE_RECT.h).unwrap();
+
+    let (slot, recvr) = Slot::new("paste_clicked");
+    node.register("click", slot).unwrap();
+    let actions_is_visible2 = actions_is_visible.clone();
+    let listen_click = app.ex.spawn(async move {
+        while let Ok(_) = recvr.recv().await {
+            info!(target: "app::chat", "clicked paste");
+            actions_is_visible2.set(false);
+        }
+    });
+    app.tasks.lock().unwrap().push(listen_click);
+
+    let node = node.setup(|me| Button::new(me, app.ex.clone())).await;
+    layer_node.clone().link(node);
+
+    // Select all button
+    let node = create_button("select_all_btn");
+    node.set_property_bool(Role::App, "is_active", true).unwrap();
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(Role::App, 0, ACTION_SELECT_ALL_RECT.x).unwrap();
+    prop.set_f32(Role::App, 1, ACTION_SELECT_ALL_RECT.y).unwrap();
+    prop.set_f32(Role::App, 2, ACTION_SELECT_ALL_RECT.w).unwrap();
+    prop.set_f32(Role::App, 3, ACTION_SELECT_ALL_RECT.h).unwrap();
+
+    let (slot, recvr) = Slot::new("select_all_clicked");
+    node.register("click", slot).unwrap();
+    let actions_is_visible2 = actions_is_visible.clone();
+    let listen_click = app.ex.spawn(async move {
+        while let Ok(_) = recvr.recv().await {
+            info!(target: "app::chat", "clicked select_all");
+            actions_is_visible2.set(false);
+        }
+    });
+    app.tasks.lock().unwrap().push(listen_click);
+
+    let node = node.setup(|me| Button::new(me, app.ex.clone())).await;
+    layer_node.clone().link(node);
+
+    let editz_select_sub = editz_select_text_prop.subscribe_modify();
+    let editz_select_task = app.ex.spawn(async move {
+        while let Ok(_) = editz_select_sub.receive().await {
+            if editz_select_text_prop.is_null(0).unwrap() {
+                info!(target: "app::chat", "selection changed: null");
+                actions_is_visible.set(false);
+            } else {
+                let select_text = editz_select_text_prop.get_str(0).unwrap();
+                info!(target: "app::chat", "selection changed: {select_text}");
+                actions_is_visible.set(true);
+            }
+        }
+    });
+    app.tasks.lock().unwrap().push(editz_select_task);
 }
