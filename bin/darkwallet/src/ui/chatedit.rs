@@ -40,7 +40,7 @@ use crate::{
         GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, GfxTextureId, GraphicsEventPublisherPtr,
         Point, Rectangle, RenderApi, Vertex,
     },
-    mesh::{MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_RED, COLOR_WHITE},
+    mesh::{Color, MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_RED, COLOR_WHITE},
     prop::{
         PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyRect, PropertyStr,
         PropertyUint32, Role,
@@ -48,7 +48,7 @@ use crate::{
     pubsub::Subscription,
     scene::{MethodCallSub, Pimpl, SceneNodePtr, SceneNodeWeak},
     text::{self, Glyph, GlyphPositionIter, TextShaperPtr},
-    util::{enumerate_ref, is_whitespace, min_f32, zip3},
+    util::{enumerate_ref, is_whitespace, min_f32, zip4},
     ExecutorPtr,
 };
 
@@ -442,6 +442,12 @@ impl TouchInfo {
     }
 }
 
+enum ColoringState {
+    Start,
+    IsCommand,
+    Normal,
+}
+
 pub type ChatEditPtr = Arc<ChatEdit>;
 
 pub struct ChatEdit {
@@ -474,6 +480,7 @@ pub struct ChatEdit {
     text: PropertyStr,
     text_color: PropertyColor,
     text_hi_color: PropertyColor,
+    text_cmd_color: PropertyColor,
     cursor_color: PropertyColor,
     cursor_width: PropertyFloat32,
     cursor_ascent: PropertyFloat32,
@@ -481,6 +488,7 @@ pub struct ChatEdit {
     cursor_blink_time: PropertyUint32,
     cursor_idle_time: PropertyUint32,
     hi_bg_color: PropertyColor,
+    cmd_bg_color: PropertyColor,
     select_ascent: PropertyFloat32,
     select_descent: PropertyFloat32,
     handle_descent: PropertyFloat32,
@@ -533,6 +541,8 @@ impl ChatEdit {
         let text = PropertyStr::wrap(node_ref, Role::Internal, "text", 0).unwrap();
         let text_color = PropertyColor::wrap(node_ref, Role::Internal, "text_color").unwrap();
         let text_hi_color = PropertyColor::wrap(node_ref, Role::Internal, "text_hi_color").unwrap();
+        let text_cmd_color =
+            PropertyColor::wrap(node_ref, Role::Internal, "text_cmd_color").unwrap();
         let cursor_color = PropertyColor::wrap(node_ref, Role::Internal, "cursor_color").unwrap();
         let cursor_width =
             PropertyFloat32::wrap(node_ref, Role::Internal, "cursor_width", 0).unwrap();
@@ -541,6 +551,7 @@ impl ChatEdit {
         let cursor_descent =
             PropertyFloat32::wrap(node_ref, Role::Internal, "cursor_descent", 0).unwrap();
         let hi_bg_color = PropertyColor::wrap(node_ref, Role::Internal, "hi_bg_color").unwrap();
+        let cmd_bg_color = PropertyColor::wrap(node_ref, Role::Internal, "cmd_bg_color").unwrap();
         let select_ascent =
             PropertyFloat32::wrap(node_ref, Role::Internal, "select_ascent", 0).unwrap();
         let select_descent =
@@ -589,6 +600,7 @@ impl ChatEdit {
             text,
             text_color,
             text_hi_color,
+            text_cmd_color,
             cursor_color,
             cursor_width,
             cursor_ascent,
@@ -596,6 +608,7 @@ impl ChatEdit {
             cursor_blink_time,
             cursor_idle_time,
             hi_bg_color,
+            cmd_bg_color,
             select_ascent,
             select_descent,
             handle_descent,
@@ -630,10 +643,10 @@ impl ChatEdit {
         //    .lock()
         //    .editable
         //    .set_text("".to_string(), "king!😁🍆jelly 🍆1234".to_string());
-        self_.text_wrap.lock().editable.set_text(
-            "".to_string(),
-            "A berry is a small, pulpy, and often edible fruit. Typically, berries are juicy, rounded, brightly colored, sweet, sour or tart, and do not have a stone or pit, although many pips or seeds may be present. Common examples of berries in the culinary sense are strawberries, raspberries, blueberries, blackberries, white currants, blackcurrants, and redcurrants. In Britain, soft fruit is a horticultural term for such fruits. The common usage of the term berry is different from the scientific or botanical definition of a berry, which refers to a fruit produced from the ovary of a single flower where the outer layer of the ovary wall develops into an edible fleshy portion (pericarp). The botanical definition includes many fruits that are not commonly known or referred to as berries, such as grapes, tomatoes, cucumbers, eggplants, bananas, and chili peppers.".to_string()
-        );
+        //self_.text_wrap.lock().editable.set_text(
+        //    "".to_string(),
+        //    "A berry is a small, pulpy, and often edible fruit. Typically, berries are juicy, rounded, brightly colored, sweet, sour or tart, and do not have a stone or pit, although many pips or seeds may be present. Common examples of berries in the culinary sense are strawberries, raspberries, blueberries, blackberries, white currants, blackcurrants, and redcurrants. In Britain, soft fruit is a horticultural term for such fruits. The common usage of the term berry is different from the scientific or botanical definition of a berry, which refers to a fruit produced from the ovary of a single flower where the outer layer of the ovary wall develops into an edible fleshy portion (pericarp). The botanical definition includes many fruits that are not commonly known or referred to as berries, such as grapes, tomatoes, cucumbers, eggplants, bananas, and chili peppers.".to_string()
+        //);
         //self_
         //    .text_wrap
         //    .lock()
@@ -669,6 +682,7 @@ impl ChatEdit {
         let window_scale = self.window_scale.get();
         let text_color = self.text_color.get();
         let text_hi_color = self.text_hi_color.get();
+        let text_cmd_color = self.text_cmd_color.get();
         let linespacing = self.linespacing.get();
         let baseline = self.baseline.get();
         let scroll = self.scroll.get();
@@ -725,7 +739,16 @@ impl ChatEdit {
 
         for (line_idx, wrap_line) in wrapped_lines.lines.iter().enumerate() {
             let select_marks = self.mark_selected_glyphs(&wrap_line, &selections);
-            self.draw_selected(&mut mesh, &select_marks, &wrap_line, curr_y);
+            let hi_bg_color = self.hi_bg_color.get();
+            self.draw_text_bg_box(&mut mesh, &select_marks, &wrap_line, curr_y, hi_bg_color);
+
+            let cmd_marks = if line_idx == 0 {
+                self.mark_command_glyphs(&wrap_line)
+            } else {
+                vec![false; wrap_line.len()]
+            };
+            let cmd_bg_color = self.cmd_bg_color.get();
+            self.draw_text_bg_box(&mut mesh, &cmd_marks, &wrap_line, curr_y, cmd_bg_color);
 
             /*
             if rendered.has_underline() {
@@ -741,9 +764,12 @@ impl ChatEdit {
 
             let pos_iter = wrap_line.pos_iter();
 
-            for (_, mut glyph_rect, glyph, is_selected) in
-                zip3(pos_iter, wrap_line.glyphs.iter(), select_marks.into_iter())
-            {
+            for (_, mut glyph_rect, glyph, is_selected, is_cmd) in zip4(
+                pos_iter,
+                wrap_line.glyphs.iter(),
+                select_marks.into_iter(),
+                cmd_marks.into_iter(),
+            ) {
                 let uv_rect = atlas.fetch_uv(glyph.glyph_id).expect("missing glyph UV rect");
 
                 glyph_rect.y += curr_y;
@@ -752,7 +778,10 @@ impl ChatEdit {
                 let mut color = text_color.clone();
                 if is_selected {
                     color = text_hi_color.clone();
+                } else if is_cmd {
+                    color = text_cmd_color.clone();
                 }
+
                 if glyph.sprite.has_color {
                     color = COLOR_WHITE;
                 }
@@ -849,18 +878,46 @@ impl ChatEdit {
         marks
     }
 
-    fn draw_selected(
+    fn mark_command_glyphs(&self, wrap_line: &WrappedLine) -> Vec<bool> {
+        let mut state = ColoringState::Start;
+        let mut marks = vec![false; wrap_line.len()];
+        for (idx, glyph) in wrap_line.glyphs.iter().enumerate() {
+            match state {
+                ColoringState::Start => {
+                    if glyph.substr == "/" {
+                        state = ColoringState::IsCommand
+                    } else {
+                        state = ColoringState::Normal
+                    }
+                }
+                ColoringState::IsCommand => {
+                    if is_whitespace(&glyph.substr) {
+                        state = ColoringState::Normal
+                    }
+                }
+                _ => {}
+            }
+
+            match state {
+                ColoringState::IsCommand => marks[idx] = true,
+                _ => {}
+            }
+        }
+        marks
+    }
+
+    fn draw_text_bg_box(
         &self,
         mesh: &mut MeshBuilder,
         select_marks: &Vec<bool>,
         wrap_line: &WrappedLine,
         y_off: f32,
+        color: Color,
     ) {
         let font_size = self.font_size.get();
         let baseline = self.baseline.get();
         let select_ascent = self.select_ascent.get();
         let select_descent = self.select_descent.get();
-        let hi_bg_color = self.hi_bg_color.get();
 
         if select_marks.iter().all(|b| !b) {
             return
@@ -901,7 +958,7 @@ impl ChatEdit {
             w: end_x - start_x,
             h: select_ascent + select_descent,
         };
-        mesh.draw_box(&select_rect, hi_bg_color, &Rectangle::zero());
+        mesh.draw_box(&select_rect, color, &Rectangle::zero());
     }
 
     fn draw_phone_select_handle(

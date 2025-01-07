@@ -688,6 +688,11 @@ pub async fn make(
     prop.set_f32(Role::App, 1, 0.96).unwrap();
     prop.set_f32(Role::App, 2, 1.).unwrap();
     prop.set_f32(Role::App, 3, 1.).unwrap();
+    let prop = node.get_property("text_cmd_color").unwrap();
+    prop.set_f32(Role::App, 0, 0.64).unwrap();
+    prop.set_f32(Role::App, 1, 1.).unwrap();
+    prop.set_f32(Role::App, 2, 0.83).unwrap();
+    prop.set_f32(Role::App, 3, 1.).unwrap();
     let prop = node.get_property("cursor_color").unwrap();
     prop.set_f32(Role::App, 0, 0.816).unwrap();
     prop.set_f32(Role::App, 1, 0.627).unwrap();
@@ -695,10 +700,10 @@ pub async fn make(
     prop.set_f32(Role::App, 3, 1.).unwrap();
     node.set_property_f32(Role::App, "cursor_ascent", CHATEDIT_CURSOR_ASCENT).unwrap();
     node.set_property_f32(Role::App, "cursor_descent", CHATEDIT_CURSOR_DESCENT).unwrap();
-    let prop = node.get_property("hi_bg_color").unwrap();
     node.set_property_f32(Role::App, "select_ascent", CHATEDIT_SELECT_ASCENT).unwrap();
     node.set_property_f32(Role::App, "select_descent", CHATEDIT_SELECT_DESCENT).unwrap();
     node.set_property_f32(Role::App, "handle_descent", CHATEDIT_HANDLE_DESCENT).unwrap();
+    let prop = node.get_property("hi_bg_color").unwrap();
     if LIGHTMODE {
         prop.set_f32(Role::App, 0, 0.5).unwrap();
         prop.set_f32(Role::App, 1, 0.5).unwrap();
@@ -708,6 +713,18 @@ pub async fn make(
         prop.set_f32(Role::App, 0, 0.).unwrap();
         prop.set_f32(Role::App, 1, 0.27).unwrap();
         prop.set_f32(Role::App, 2, 0.22).unwrap();
+        prop.set_f32(Role::App, 3, 1.).unwrap();
+    }
+    let prop = node.get_property("cmd_bg_color").unwrap();
+    if LIGHTMODE {
+        prop.set_f32(Role::App, 0, 0.5).unwrap();
+        prop.set_f32(Role::App, 1, 0.5).unwrap();
+        prop.set_f32(Role::App, 2, 0.5).unwrap();
+        prop.set_f32(Role::App, 3, 1.).unwrap();
+    } else {
+        prop.set_f32(Role::App, 0, 0.).unwrap();
+        prop.set_f32(Role::App, 1, 0.30).unwrap();
+        prop.set_f32(Role::App, 2, 0.25).unwrap();
         prop.set_f32(Role::App, 3, 1.).unwrap();
     }
     node.set_property_u32(Role::App, "z_index", 3).unwrap();

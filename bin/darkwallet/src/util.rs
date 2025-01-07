@@ -117,7 +117,6 @@ where
     }
 }
 
-#[allow(dead_code)]
 pub fn zip3<X1, X2, X3, I1, I2, I3>(i1: I1, i2: I2, i3: I3) -> TupleIterStruct3<I1, I2, I3>
 where
     I1: Iterator<Item = X1>,
@@ -125,6 +124,52 @@ where
     I3: Iterator<Item = X3>,
 {
     TupleIterStruct3 { idx: 0, i1, i2, i3 }
+}
+
+pub struct TupleIterStruct4<I1, I2, I3, I4> {
+    idx: usize,
+    i1: I1,
+    i2: I2,
+    i3: I3,
+    i4: I4,
+}
+
+impl<I1, I2, I3, I4> Iterator for TupleIterStruct4<I1, I2, I3, I4>
+where
+    I1: Iterator,
+    I2: Iterator,
+    I3: Iterator,
+    I4: Iterator,
+{
+    type Item = (usize, I1::Item, I2::Item, I3::Item, I4::Item);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let Some(x1) = self.i1.next() else { return None };
+        let Some(x2) = self.i2.next() else { return None };
+        let Some(x3) = self.i3.next() else { return None };
+        let Some(x4) = self.i4.next() else { return None };
+
+        let res = (self.idx, x1, x2, x3, x4);
+        self.idx += 1;
+
+        Some(res)
+    }
+}
+
+#[allow(dead_code)]
+pub fn zip4<X1, X2, X3, X4, I1, I2, I3, I4>(
+    i1: I1,
+    i2: I2,
+    i3: I3,
+    i4: I4,
+) -> TupleIterStruct4<I1, I2, I3, I4>
+where
+    I1: Iterator<Item = X1>,
+    I2: Iterator<Item = X2>,
+    I3: Iterator<Item = X3>,
+    I4: Iterator<Item = X4>,
+{
+    TupleIterStruct4 { idx: 0, i1, i2, i3, i4 }
 }
 
 pub fn enumerate<X>(v: Vec<X>) -> impl Iterator<Item = (usize, X)> {
