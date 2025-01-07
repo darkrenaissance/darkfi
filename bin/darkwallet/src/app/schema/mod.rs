@@ -47,11 +47,22 @@ mod chat;
 mod menu;
 //mod test;
 
+mod android_ui_consts {
+    pub const EMOJI_PICKER_ICON_SIZE: f32 = 140.;
+}
+
 #[cfg(target_os = "android")]
 mod ui_consts {
     pub const CHATDB_PATH: &str = "/data/data/darkfi.darkwallet/chatdb/";
     pub const BG_PATH: &str = "bg.png";
-    pub const EMOJI_PICKER_ICON_SIZE: f32 = 140.;
+    pub use super::android_ui_consts::*;
+}
+
+#[cfg(feature = "emulate-android")]
+mod ui_consts {
+    pub const CHATDB_PATH: &str = "chatdb";
+    pub const BG_PATH: &str = "assets/bg.png";
+    pub use super::android_ui_consts::*;
 }
 
 #[cfg(all(

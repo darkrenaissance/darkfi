@@ -63,7 +63,7 @@ mod android_ui_consts {
     pub const CHATEDIT_SELECT_DESCENT: f32 = 20.;
     pub const CHATEDIT_HANDLE_DESCENT: f32 = 10.;
     pub const CHATEDIT_LINESPACING: f32 = 70.;
-    pub const CHATEDIT_NEG_W: f32 = 280.;
+    pub const CHATEDIT_NEG_W: f32 = 300.;
     pub const CHATEDIT_LHS_PAD: f32 = 150.;
     pub const TEXTBAR_BASELINE: f32 = 60.;
     pub const TEXT_DESCENT: f32 = 20.;
@@ -73,9 +73,9 @@ mod android_ui_consts {
     pub const EMOJI_NEG_Y: f32 = 85.;
     pub const EMOJIBTN_BOX: [f32; 4] = [20., 118., 80., 75.];
     pub const EMOJI_CLOSE_SCALE: f32 = 20.;
-    pub const SENDARROW_NEG_X: f32 = 50.;
+    pub const SENDARROW_NEG_X: f32 = 80.;
     pub const SENDARROW_NEG_Y: f32 = 80.;
-    pub const SENDBTN_BOX: [f32; 4] = [86., 120., 80., 70.];
+    pub const SENDBTN_BOX: [f32; 4] = [116., 120., 80., 70.];
     pub const FONTSIZE: f32 = 40.;
     pub const TIMESTAMP_FONTSIZE: f32 = 30.;
     pub const TIMESTAMP_WIDTH: f32 = 135.;
