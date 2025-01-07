@@ -176,15 +176,6 @@ async fn start_p2p_and_wait(w8_time: u64, p2p_ptr: net::P2pPtr) {
     async_std::task::sleep(std::time::Duration::from_secs(w8_time)).await;
 }
 
-fn block_on(ex: Arc<smol::Executor<'_>>) {
-    let task = ex.spawn(async move {
-        loop {
-            async_std::task::sleep(std::time::Duration::from_secs(1)).await;
-        }
-    });
-    smol::future::block_on(ex.run(task));
-}
-
 #[pyfunction]
 fn start_p2p<'a>(
     py: Python<'a>,
@@ -196,7 +187,6 @@ fn start_p2p<'a>(
     let start_p2p_fut = start_p2p_and_wait(w8_time, p2p_ptr.clone());
     pyo3_async_runtimes::async_std::future_into_py(py, async move {
         smol::future::block_on(ex.run(start_p2p_fut));
-        block_on(ex);
         Ok(())
     })
 }
