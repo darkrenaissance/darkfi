@@ -1782,6 +1782,22 @@ impl UIObject for ChatEdit {
         async fn redraw(self_: Arc<ChatEdit>) {
             self_.redraw().await;
         }
+        async fn set_text(self_: Arc<ChatEdit>) {
+            {
+                let text = self_.text.get();
+
+                let mut text_wrap = self_.text_wrap.lock();
+                text_wrap.editable.end_compose();
+                text_wrap.editable.set_text(String::new(), text);
+                text_wrap.clear_cache();
+
+                let select = &mut text_wrap.select;
+                select.clear();
+            }
+
+            self_.redraw().await;
+        }
+
         on_modify.when_change(self.rect.prop(), redraw);
         on_modify.when_change(self.baseline.prop(), redraw);
         on_modify.when_change(self.linespacing.prop(), redraw);
@@ -1789,6 +1805,7 @@ impl UIObject for ChatEdit {
         on_modify.when_change(self.select_descent.prop(), redraw);
         on_modify.when_change(self.handle_descent.prop(), redraw);
         on_modify.when_change(self.padding.clone(), redraw);
+        on_modify.when_change(self.text.prop(), set_text);
         // The commented properties are modified on input events
         // So then redraw() will get repeatedly triggered when these properties
         // are changed. We should find a solution. For now the hooks are disabled.

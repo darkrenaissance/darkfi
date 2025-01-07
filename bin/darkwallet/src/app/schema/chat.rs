@@ -846,9 +846,13 @@ pub async fn make(
 
     let (slot, recvr) = Slot::new("send_clicked");
     node.register("click", slot).unwrap();
+    let editz_text2 = editz_text.clone();
+    let channel2 = channel.to_string();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
-            info!(target: "app::chat", "clicked send");
+            let text = editz_text2.get();
+            info!(target: "app::chat", "Send '{text}' to channel: #{channel2}");
+            editz_text2.set("");
         }
     });
     app.tasks.lock().unwrap().push(listen_click);
