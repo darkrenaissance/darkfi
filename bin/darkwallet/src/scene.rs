@@ -352,20 +352,16 @@ impl SceneNode {
     }
 
     pub fn get_full_path(&self) -> Option<String> {
-        if self.typ == SceneNodeType::Root {
-            return Some("/".to_string())
+        let subpath = "/".to_string() + &self.name;
+        let Some(parent_weak) = self.parent.read().unwrap().clone() else { return Some(subpath) };
+        let Some(parent) = parent_weak.upgrade() else { return None };
+
+        // Handle root /
+        if parent.typ == SceneNodeType::Root {
+            return Some(subpath)
         }
 
-        let mut self_name = self.name.clone();
-
-        let parent = self.parent.read().unwrap().clone()?;
-        let Some(parent) = parent.upgrade() else { return None };
-
-        let parent_path = parent.get_full_path()?;
-        if parent_path == "/" {
-            return Some(format!("/{self_name}"))
-        }
-        Some(format!("{parent_path}/{self_name}"))
+        Some(parent.get_full_path()? + &subpath)
     }
 }
 

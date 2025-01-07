@@ -163,7 +163,7 @@ impl UIObject for VectorArt {
     }
 
     async fn draw(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
-        debug!(target: "ui::vector_art", "VectorArt::draw()");
+        debug!(target: "ui::vector_art", "VectorArt::draw({:?})", self.node.upgrade().unwrap());
         *self.parent_rect.lock().unwrap() = Some(parent_rect);
         self.get_draw_calls(parent_rect).await
     }

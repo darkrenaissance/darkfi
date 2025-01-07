@@ -777,7 +777,7 @@ impl UIObject for ChatView {
     }
 
     async fn draw(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
-        debug!(target: "ui::chatview", "ChatView::draw()");
+        debug!(target: "ui::chatview", "ChatView::draw({:?})", self.node.upgrade().unwrap());
 
         *self.parent_rect.lock().unwrap() = Some(parent_rect.clone());
         self.rect.eval(&parent_rect).ok()?;

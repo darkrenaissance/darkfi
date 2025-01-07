@@ -155,7 +155,7 @@ impl UIObject for Layer {
     }
 
     async fn draw(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
-        debug!(target: "ui::layer", "Layer::draw()");
+        debug!(target: "ui::layer", "Layer::draw({:?})", self.node.upgrade().unwrap());
         *self.parent_rect.lock().unwrap() = Some(parent_rect);
 
         /*

@@ -521,7 +521,7 @@ impl ChatEdit {
         text_shaper: TextShaperPtr,
         ex: ExecutorPtr,
     ) -> Pimpl {
-        debug!(target: "ui::chatedit", "EditBox::new()");
+        debug!(target: "ui::chatedit", "ChatEdit::new()");
 
         let node_ref = &node.upgrade().unwrap();
         let is_active = PropertyBool::wrap(node_ref, Role::Internal, "is_active", 0).unwrap();
@@ -1093,7 +1093,7 @@ impl ChatEdit {
     }
     async fn insert_text(&self, text: &str) {
         //debug!(target: "ui::chatedit", "insert_text({text})");
-        {
+        let text = {
             let mut text_wrap = &mut self.text_wrap.lock();
             text_wrap.clear_cache();
             if !text_wrap.select.is_empty() {
@@ -1106,7 +1106,9 @@ impl ChatEdit {
                 self.hide_cursor.store(false, Ordering::Relaxed);
             }
             text_wrap.editable.compose(text, true);
-        }
+            text_wrap.editable.get_text()
+        };
+        self.text.set(text);
 
         self.pause_blinking();
         self.redraw().await;
@@ -1221,6 +1223,9 @@ impl ChatEdit {
         self.is_phone_select.store(false, Ordering::Relaxed);
         // Reshow cursor (if hidden)
         self.hide_cursor.store(false, Ordering::Relaxed);
+
+        let text = text_wrap.editable.get_text();
+        self.text.set(text);
     }
 
     fn adjust_cursor(&self, has_shift: bool, move_cursor: impl Fn(&mut Editable)) {
@@ -1836,7 +1841,7 @@ impl UIObject for ChatEdit {
     }
 
     async fn draw(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
-        debug!(target: "ui::chatedit", "EditBox::draw()");
+        debug!(target: "ui::chatedit", "ChatEdit::draw({:?})", self.node.upgrade().unwrap());
         *self.parent_rect.lock() = Some(parent_rect);
 
         self.make_draw_calls()
@@ -2039,13 +2044,15 @@ impl UIObject for ChatEdit {
             return false
         }
 
-        {
+        let text = {
             let mut text_wrap = self.text_wrap.lock();
             text_wrap.clear_cache();
             text_wrap.editable.compose(suggest_text, is_commit);
 
             self.clamp_scroll(&mut text_wrap);
-        }
+            text_wrap.editable.get_text()
+        };
+        self.text.set(text);
 
         //self.apply_cursor_scrolling();
         self.redraw().await;

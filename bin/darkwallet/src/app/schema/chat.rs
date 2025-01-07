@@ -83,6 +83,15 @@ mod android_ui_consts {
     pub const LINE_HEIGHT: f32 = 58.;
     pub const CHATVIEW_BASELINE: f32 = 36.;
 
+    pub const CMD_HELP_HEIGHT: f32 = 110.;
+    pub const CMD_HELP_GAP: f32 = 10.;
+    pub const CMD_HELP_CMD_FONTSIZE: f32 = 48.;
+    pub const CMD_HELP_BASELINE: f32 = 74.;
+    pub const CMD_HELP_CMD_LABEL_X_INSET: f32 = 40.;
+    pub const CMD_HELP_NICK_CMD_WIDTH: f32 = 280.;
+    pub const CMD_HELP_NICK_DESC_WIDTH: f32 = 1000.;
+    pub const CMD_HELP_NICK_DESC_X: f32 = 320.;
+
     pub const ACTION_POPUP_Y_OFF: f32 = 200.;
     pub const ACTION_COPY_RECT: Rectangle = Rectangle::new(0., 0., 200., 160.);
     pub const ACTION_PASTE_RECT: Rectangle = Rectangle::new(220., 0., 240., 160.);
@@ -151,6 +160,15 @@ mod ui_consts {
     pub const LINE_HEIGHT: f32 = 30.;
     pub const CHATVIEW_BASELINE: f32 = 20.;
 
+    pub const CMD_HELP_HEIGHT: f32 = 55.;
+    pub const CMD_HELP_GAP: f32 = 5.;
+    pub const CMD_HELP_CMD_FONTSIZE: f32 = 24.;
+    pub const CMD_HELP_BASELINE: f32 = 37.;
+    pub const CMD_HELP_CMD_LABEL_X_INSET: f32 = 20.;
+    pub const CMD_HELP_NICK_CMD_WIDTH: f32 = 140.;
+    pub const CMD_HELP_NICK_DESC_WIDTH: f32 = 500.;
+    pub const CMD_HELP_NICK_DESC_X: f32 = 160.;
+
     pub const ACTION_POPUP_Y_OFF: f32 = 100.;
     pub const ACTION_COPY_RECT: Rectangle = Rectangle::new(0., 0., 100., 80.);
     pub const ACTION_PASTE_RECT: Rectangle = Rectangle::new(110., 0., 120., 80.);
@@ -184,6 +202,8 @@ pub async fn make(
     cc.add_const_f32("SENDBTN_BOX_0", SENDBTN_BOX[0]);
     cc.add_const_f32("SENDBTN_BOX_1", SENDBTN_BOX[1]);
     cc.add_const_f32("ACTION_POPUP_Y_OFF", ACTION_POPUP_Y_OFF);
+    cc.add_const_f32("CMD_HELP_HEIGHT", CMD_HELP_HEIGHT);
+    cc.add_const_f32("CMD_HELP_GAP", CMD_HELP_GAP);
 
     // Main view
     let layer_node = create_layer(&(channel.to_string() + "_chat_layer"));
@@ -537,7 +557,7 @@ pub async fn make(
         )
         .unwrap();
     prop.set_expr(Role::App, 3, code).unwrap();
-    node.set_property_u32(Role::App, "z_index", 2).unwrap();
+    node.set_property_u32(Role::App, "z_index", 4).unwrap();
 
     let editbox_bg_rect_prop = prop.clone();
 
@@ -595,7 +615,7 @@ pub async fn make(
     prop.set_expr(Role::App, 1, code).unwrap();
     prop.set_f32(Role::App, 2, 500.).unwrap();
     prop.set_f32(Role::App, 3, 500.).unwrap();
-    node.set_property_u32(Role::App, "z_index", 3).unwrap();
+    node.set_property_u32(Role::App, "z_index", 5).unwrap();
     let shape = shape::create_send_arrow().scaled(EMOJI_SCALE);
     let node =
         node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
@@ -610,7 +630,7 @@ pub async fn make(
     prop.set_expr(Role::App, 1, code).unwrap();
     prop.set_f32(Role::App, 2, 500.).unwrap();
     prop.set_f32(Role::App, 3, 500.).unwrap();
-    node.set_property_u32(Role::App, "z_index", 3).unwrap();
+    node.set_property_u32(Role::App, "z_index", 5).unwrap();
     let shape = shape::create_emoji_selector().scaled(EMOJI_SCALE);
     let node =
         node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
@@ -626,7 +646,7 @@ pub async fn make(
     prop.set_expr(Role::App, 1, code).unwrap();
     prop.set_f32(Role::App, 2, 500.).unwrap();
     prop.set_f32(Role::App, 3, 500.).unwrap();
-    node.set_property_u32(Role::App, "z_index", 3).unwrap();
+    node.set_property_u32(Role::App, "z_index", 5).unwrap();
     let shape = shape::create_close_icon().scaled(EMOJI_CLOSE_SCALE);
     let node =
         node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
@@ -727,12 +747,12 @@ pub async fn make(
         prop.set_f32(Role::App, 2, 0.25).unwrap();
         prop.set_f32(Role::App, 3, 1.).unwrap();
     }
-    node.set_property_u32(Role::App, "z_index", 3).unwrap();
+    node.set_property_u32(Role::App, "z_index", 6).unwrap();
     //node.set_property_bool(Role::App, "debug", true).unwrap();
 
+    let editz_text = PropertyStr::wrap(&node, Role::App, "text", 0).unwrap();
     let editz_select_text_prop = node.get_property("select_text").unwrap();
 
-    //let editbox_text = PropertyStr::wrap(node, Role::App, "text", 0).unwrap();
     //let editbox_focus = PropertyBool::wrap(node, Role::App, "is_focused", 0).unwrap();
     //let darkirc_backend = app.darkirc_backend.clone();
     //let task = app.ex.spawn(async move {
@@ -890,6 +910,160 @@ pub async fn make(
     let node = node.setup(|me| Button::new(me, app.ex.clone())).await;
     layer_node.clone().link(node);
 
+    // Commands help hint
+    let cmd_layer_node = create_layer("cmd_hint_layer");
+    let prop = cmd_layer_node.get_property("rect").unwrap();
+    prop.set_f32(Role::App, 0, 5.).unwrap();
+    let code = cc.compile("editz_bg_top_y - CMD_HELP_HEIGHT - CMD_HELP_GAP").unwrap();
+    //let code = cc.compile("h - 60 - 80").unwrap();
+    //let code = cc.compile("h - 60 - 300").unwrap();
+    prop.set_expr(Role::App, 1, code).unwrap();
+    let code = cc.compile("w - 2 * CMD_HELP_GAP").unwrap();
+    prop.set_expr(Role::App, 2, code).unwrap();
+    prop.set_f32(Role::App, 3, CMD_HELP_HEIGHT).unwrap();
+    prop.add_depend(&editbox_bg_rect_prop, 1, "editz_bg_top_y");
+    cmd_layer_node.set_property_bool(Role::App, "is_visible", false).unwrap();
+    cmd_layer_node.set_property_u32(Role::App, "z_index", 3).unwrap();
+    let cmd_layer_node =
+        cmd_layer_node.setup(|me| Layer::new(me, app.render_api.clone(), app.ex.clone())).await;
+    layer_node.clone().link(cmd_layer_node.clone());
+
+    let cmd_hint_is_visible =
+        PropertyBool::wrap(&cmd_layer_node, Role::App, "is_visible", 0).unwrap();
+    let editz_text_sub = editz_text.prop().subscribe_modify();
+    let editz_text_task = app.ex.spawn(async move {
+        while let Ok(_) = editz_text_sub.receive().await {
+            let text = editz_text.get();
+            info!(target: "app::chat", "text changed: {text}");
+            // We want to avoid setting the property multiple times to the same value
+            // because then it triggers unnecessary redraw work.
+            if let Some(first_char) = text.chars().next() {
+                if first_char == '/' {
+                    if !cmd_hint_is_visible.get() {
+                        cmd_hint_is_visible.set(true);
+                    }
+                } else {
+                    if cmd_hint_is_visible.get() {
+                        cmd_hint_is_visible.set(false);
+                    }
+                }
+            } else {
+                if cmd_hint_is_visible.get() {
+                    cmd_hint_is_visible.set(false);
+                }
+            }
+        }
+    });
+    app.tasks.lock().unwrap().push(editz_text_task);
+
+    // Create the actionbar bg
+    let node = create_vector_art("cmd_hint_bg");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(Role::App, 0, 0.).unwrap();
+    prop.set_f32(Role::App, 1, 0.).unwrap();
+    prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
+    prop.set_expr(Role::App, 3, expr::load_var("h")).unwrap();
+    node.set_property_u32(Role::App, "z_index", 0).unwrap();
+
+    let mut shape = VectorShape::new();
+    shape.add_filled_box(
+        expr::const_f32(CMD_HELP_GAP),
+        expr::const_f32(CMD_HELP_GAP),
+        cc.compile("w - CMD_HELP_GAP").unwrap(),
+        cc.compile("h - CMD_HELP_GAP").unwrap(),
+        [0., 0.11, 0.11, 0.4],
+    );
+    shape.add_filled_box(
+        expr::const_f32(CMD_HELP_GAP),
+        expr::const_f32(CMD_HELP_GAP),
+        expr::const_f32(CMD_HELP_NICK_CMD_WIDTH),
+        cc.compile("h - CMD_HELP_GAP").unwrap(),
+        [0., 0.3, 0.25, 1.],
+    );
+    shape.add_filled_box(
+        expr::const_f32(CMD_HELP_NICK_CMD_WIDTH),
+        expr::const_f32(CMD_HELP_GAP),
+        expr::const_f32(CMD_HELP_NICK_DESC_WIDTH),
+        cc.compile("h - CMD_HELP_GAP").unwrap(),
+        [0., 0.11, 0.11, 1.],
+    );
+    shape.add_outline(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::load_var("w"),
+        expr::load_var("h"),
+        1.,
+        [0.29, 0.51, 0.45, 1.],
+    );
+
+    let node =
+        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
+    cmd_layer_node.clone().link(node);
+
+    // Create some text
+    let node = create_text("cmd_nick_label");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(Role::App, 0, CMD_HELP_CMD_LABEL_X_INSET).unwrap();
+    prop.set_f32(Role::App, 1, 0.).unwrap();
+    prop.set_f32(Role::App, 2, 1000.).unwrap();
+    prop.set_f32(Role::App, 3, 1000.).unwrap();
+    node.set_property_f32(Role::App, "baseline", CMD_HELP_BASELINE).unwrap();
+    node.set_property_f32(Role::App, "font_size", CMD_HELP_CMD_FONTSIZE).unwrap();
+    node.set_property_str(Role::App, "text", "/nick").unwrap();
+    //node.set_property_bool(Role::App, "debug", true).unwrap();
+    //node.set_property_str(Role::App, "text", "anon1").unwrap();
+    let prop = node.get_property("text_color").unwrap();
+    prop.set_f32(Role::App, 0, 0.64).unwrap();
+    prop.set_f32(Role::App, 1, 1.).unwrap();
+    prop.set_f32(Role::App, 2, 0.83).unwrap();
+    prop.set_f32(Role::App, 3, 1.).unwrap();
+    node.set_property_u32(Role::App, "z_index", 1).unwrap();
+
+    let node = node
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.render_api.clone(),
+                app.text_shaper.clone(),
+                app.ex.clone(),
+            )
+        })
+        .await;
+    cmd_layer_node.clone().link(node);
+
+    // Create some text
+    let node = create_text("cmd_nick_desc_label");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(Role::App, 0, CMD_HELP_NICK_DESC_X).unwrap();
+    prop.set_f32(Role::App, 1, 0.).unwrap();
+    prop.set_f32(Role::App, 2, 1000.).unwrap();
+    prop.set_f32(Role::App, 3, 1000.).unwrap();
+    node.set_property_f32(Role::App, "baseline", CMD_HELP_BASELINE).unwrap();
+    node.set_property_f32(Role::App, "font_size", FONTSIZE).unwrap();
+    node.set_property_str(Role::App, "text", "Change your nickname").unwrap();
+    //node.set_property_bool(Role::App, "debug", true).unwrap();
+    //node.set_property_str(Role::App, "text", "anon1").unwrap();
+    let prop = node.get_property("text_color").unwrap();
+    prop.set_f32(Role::App, 0, 0.).unwrap();
+    prop.set_f32(Role::App, 1, 0.94).unwrap();
+    prop.set_f32(Role::App, 2, 1.).unwrap();
+    prop.set_f32(Role::App, 3, 1.).unwrap();
+    node.set_property_u32(Role::App, "z_index", 1).unwrap();
+
+    let node = node
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.render_api.clone(),
+                app.text_shaper.clone(),
+                app.ex.clone(),
+            )
+        })
+        .await;
+    cmd_layer_node.clone().link(node);
+
     // Create debug box
     /*
     let mut node = create_vector_art("debugtool");
@@ -920,7 +1094,7 @@ pub async fn make(
     */
 
     // Overlay popup
-    let layer_node = create_layer("overlay");
+    let layer_node = create_layer("overlay_layer");
     let prop = layer_node.get_property("rect").unwrap();
     prop.set_f32(Role::App, 0, 40.).unwrap();
     let code = cc.compile("editz_bg_top_y - ACTION_POPUP_Y_OFF").unwrap();
