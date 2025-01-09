@@ -26,7 +26,6 @@ Meeting schedule:
 | [Will to Power][15] - Extracts (see PDF)                                                                            | 8th of January, 2025    | Friedrich Nietzsche                |
 | Post Capitalist Desire, Lecture 1 - [from 1:11:30 to 2:42:00 on Youtube][16] or pages 35 to 78 in [the book][17]    | 22nd of January, 2025   | Mark Fisher                        |
 
-
 Feel free to propose a text for a future meeting by sharing it in #philosophy.
 
 [1]: https://www.researchgate.net/publication/290120192_Free_software_philosophy_and_open_source
