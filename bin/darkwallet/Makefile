@@ -36,7 +36,7 @@ android: $(SRC) fonts
 	adb install $(APK)
 	reset
 	adb logcat -c
-	adb logcat -v color -s darkfi -s SAPP
+	adb logcat -v color -s darkfi -s SAPP -s libc -s DEBUG -s ActivityManager -s ActivityTaskManager -s WindowManager
 
 # Useful for dev
 cli:

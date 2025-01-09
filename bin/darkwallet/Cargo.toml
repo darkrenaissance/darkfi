@@ -69,6 +69,9 @@ halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v4"}
 # This patch didn't work for me
 #dirs-sys = {git="https://github.com/sbechet/dirs-sys-rs.git"}
 
+[target.'cfg(not(target_os = "android"))'.dependencies]
+arboard = {version = "3.4.1", features=["wayland-data-control"]}
+
 [target.'cfg(target_os = "android")'.dependencies]
 android_logger = "0.13.3"
 # Required by Arti: tor-dirmgr

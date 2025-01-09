@@ -179,6 +179,36 @@ mod ui_consts {
 use super::EMOJI_PICKER_ICON_SIZE;
 use ui_consts::*;
 
+struct Clipboard {
+    #[cfg(not(target_os = "android"))]
+    clip: arboard::Clipboard
+}
+
+impl Clipboard {
+    fn new() -> Self {
+        Self {
+            #[cfg(not(target_os = "android"))]
+            clip: arboard::Clipboard::new().unwrap()
+        }
+    }
+
+    fn get(&mut self) -> Option<String> {
+        #[cfg(target_os = "android")]
+        return window::clipboard_get();
+
+        #[cfg(not(target_os = "android"))]
+        return self.clip.get_text().ok();
+    }
+
+    fn set(&mut self, data: &str) {
+        #[cfg(target_os = "android")]
+        return window::clipboard_set(data);
+
+        #[cfg(not(target_os = "android"))]
+        return self.clip.set_text(data).unwrap();
+    }
+}
+
 pub async fn make(
     app: &App,
     window: SceneNodePtr,
@@ -751,7 +781,7 @@ pub async fn make(
     //node.set_property_bool(Role::App, "debug", true).unwrap();
 
     let editz_text = PropertyStr::wrap(&node, Role::App, "text", 0).unwrap();
-    let editz_select_text_prop = node.get_property("select_text").unwrap();
+    let editz_select_text = node.get_property("select_text").unwrap();
 
     //let editbox_focus = PropertyBool::wrap(node, Role::App, "is_focused", 0).unwrap();
     //let darkirc_backend = app.darkirc_backend.clone();
@@ -1237,10 +1267,14 @@ pub async fn make(
     let (slot, recvr) = Slot::new("copy_clicked");
     node.register("click", slot).unwrap();
     let actions_is_visible2 = actions_is_visible.clone();
+    let editz_select_text2 = editz_select_text.clone();
     let listen_click = app.ex.spawn(async move {
+        let mut clip = Clipboard::new();
         while let Ok(_) = recvr.recv().await {
             info!(target: "app::chat", "clicked copy");
             actions_is_visible2.set(false);
+            let select_text = editz_select_text2.get_str(0).unwrap();
+            clip.set(&select_text);
         }
     });
     app.tasks.lock().unwrap().push(listen_click);
@@ -1261,8 +1295,13 @@ pub async fn make(
     node.register("click", slot).unwrap();
     let actions_is_visible2 = actions_is_visible.clone();
     let listen_click = app.ex.spawn(async move {
+        let mut clip = Clipboard::new();
         while let Ok(_) = recvr.recv().await {
-            info!(target: "app::chat", "clicked paste");
+            if let Some(text) = clip.get() {
+                info!(target: "app::chat", "clicked paste: {text}");
+            } else {
+                info!(target: "app::chat", "clicked paste but clip is empty");
+            }
             actions_is_visible2.set(false);
         }
     });
@@ -1286,7 +1325,6 @@ pub async fn make(
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
             info!(target: "app::chat", "clicked select_all");
-            actions_is_visible2.set(false);
         }
     });
     app.tasks.lock().unwrap().push(listen_click);
@@ -1294,14 +1332,14 @@ pub async fn make(
     let node = node.setup(|me| Button::new(me, app.ex.clone())).await;
     layer_node.clone().link(node);
 
-    let editz_select_sub = editz_select_text_prop.subscribe_modify();
+    let editz_select_sub = editz_select_text.subscribe_modify();
     let editz_select_task = app.ex.spawn(async move {
         while let Ok(_) = editz_select_sub.receive().await {
-            if editz_select_text_prop.is_null(0).unwrap() {
+            if editz_select_text.is_null(0).unwrap() {
                 info!(target: "app::chat", "selection changed: null");
                 actions_is_visible.set(false);
             } else {
-                let select_text = editz_select_text_prop.get_str(0).unwrap();
+                let select_text = editz_select_text.get_str(0).unwrap();
                 info!(target: "app::chat", "selection changed: {select_text}");
                 actions_is_visible.set(true);
             }
