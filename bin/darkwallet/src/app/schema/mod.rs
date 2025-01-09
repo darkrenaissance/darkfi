@@ -48,7 +48,7 @@ mod menu;
 //mod test;
 
 mod android_ui_consts {
-    pub const EMOJI_PICKER_ICON_SIZE: f32 = 140.;
+    pub const EMOJI_PICKER_ICON_SIZE: f32 = 100.;
 }
 
 #[cfg(target_os = "android")]

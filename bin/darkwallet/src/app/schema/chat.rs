@@ -181,20 +181,20 @@ use ui_consts::*;
 
 struct Clipboard {
     #[cfg(not(target_os = "android"))]
-    clip: arboard::Clipboard
+    clip: arboard::Clipboard,
 }
 
 impl Clipboard {
     fn new() -> Self {
         Self {
             #[cfg(not(target_os = "android"))]
-            clip: arboard::Clipboard::new().unwrap()
+            clip: arboard::Clipboard::new().unwrap(),
         }
     }
 
     fn get(&mut self) -> Option<String> {
         #[cfg(target_os = "android")]
-        return window::clipboard_get();
+        return miniquad::window::clipboard_get();
 
         #[cfg(not(target_os = "android"))]
         return self.clip.get_text().ok();
@@ -202,11 +202,18 @@ impl Clipboard {
 
     fn set(&mut self, data: &str) {
         #[cfg(target_os = "android")]
-        return window::clipboard_set(data);
+        return miniquad::window::clipboard_set(data);
 
         #[cfg(not(target_os = "android"))]
         return self.clip.set_text(data).unwrap();
     }
+}
+
+fn android_keyboard_height() -> f32 {
+    #[cfg(target_os = "android")]
+    return crate::android::get_keyboard_height() as f32;
+
+    unreachable!()
 }
 
 pub async fn make(
@@ -903,30 +910,42 @@ pub async fn make(
     let (slot, recvr) = Slot::new("emoji_clicked");
     node.register("click", slot).unwrap();
     let listen_click = app.ex.spawn(async move {
+        let mut panel_height = if cfg!(target_os = "android") {
+            let keyb_height = android_keyboard_height();
+            if keyb_height > 0. {
+                keyb_height
+            } else {
+                600.
+            }
+        } else {
+            400.
+        };
+
         while let Ok(_) = recvr.recv().await {
             info!(target: "app::chat", "clicked emoji");
 
-            /*
-            miniquad::window::show_keyboard(true);
-            #[cfg(target_os = "android")]
-            let panel_height = crate::android::get_keyboard_height();
-            #[cfg(not(target_os = "android"))]
-            let panel_height = 400.;
-            miniquad::window::show_keyboard(false);
-            info!("panel_height = {panel_height}");
-            */
+            if cfg!(target_os = "android") {
+                let keyb_height = android_keyboard_height();
+                if keyb_height > panel_height {
+                    panel_height = keyb_height
+                }
+            }
 
             if emoji_btn_is_visible.get() {
+                miniquad::window::show_keyboard(false);
+
                 assert!(!emoji_close_is_visible.get());
                 assert!(emoji_h_prop.get() < 0.001);
                 emoji_btn_is_visible.set(false);
                 emoji_close_is_visible.set(true);
-                emoji_h_prop.set(400. as f32);
+                emoji_h_prop.set(panel_height as f32);
                 //for i in 1..=20 {
                 //    emoji_h_prop.set((20 * i) as f32);
                 //    msleep(10).await;
                 //}
             } else {
+                miniquad::window::show_keyboard(true);
+
                 assert!(emoji_close_is_visible.get());
                 assert!(emoji_h_prop.get() > 0.);
                 emoji_btn_is_visible.set(true);
