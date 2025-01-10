@@ -17,6 +17,7 @@
  */
 
 use darkfi::system::msleep;
+use darkfi_serial::Encodable;
 use sled_overlay::sled;
 
 use crate::{
@@ -825,10 +826,11 @@ pub async fn make(
 
     let (slot, recvr) = Slot::new("emoji_selected");
     emoji_picker_node.register("emoji_select", slot).unwrap();
+    let chatedit_node2 = chatedit_node.clone();
     let listen_click = app.ex.spawn(async move {
         while let Ok(data) = recvr.recv().await {
             // No need to decode the data. Just pass it straight along
-            chatedit_node.call_method("insert_text", data).await.unwrap();
+            chatedit_node2.call_method("insert_text", data).await.unwrap();
         }
     });
     app.tasks.lock().unwrap().push(listen_click);
@@ -1318,6 +1320,9 @@ pub async fn make(
         while let Ok(_) = recvr.recv().await {
             if let Some(text) = clip.get() {
                 info!(target: "app::chat", "clicked paste: {text}");
+                let mut data = vec![];
+                text.encode(&mut data).unwrap();
+                chatedit_node.call_method("insert_text", data).await.unwrap();
             } else {
                 info!(target: "app::chat", "clicked paste but clip is empty");
             }
