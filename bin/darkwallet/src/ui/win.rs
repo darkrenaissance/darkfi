@@ -26,6 +26,7 @@ use crate::{
     prop::{PropertyDimension, PropertyFloat32, PropertyPtr, Role},
     pubsub::Subscription,
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
+    util::unixtime,
     ExecutorPtr,
 };
 
@@ -439,6 +440,8 @@ impl Window {
     }
 
     pub async fn draw(&self) {
+        let timest = unixtime();
+
         let local = self.screen_size.get() / self.scale.get();
         let rect = Rectangle::from([0., 0., local.w, local.h]);
         debug!(target: "ui::win", "Window::draw({rect:?})");
@@ -465,7 +468,7 @@ impl Window {
         draw_calls.push((0, dc));
         //debug!(target: "ui::win", "  => {:?}", draw_calls);
 
-        self.render_api.replace_draw_calls(draw_calls);
+        self.render_api.replace_draw_calls(timest, draw_calls);
 
         debug!(target: "ui::win", "Window::draw() - replaced draw call");
     }

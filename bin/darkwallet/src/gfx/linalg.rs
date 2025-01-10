@@ -130,7 +130,7 @@ impl SubAssign for Point {
     }
 }
 
-#[derive(Debug, Clone, Copy, SerialEncodable, SerialDecodable)]
+#[derive(Clone, Copy, SerialEncodable, SerialDecodable)]
 pub struct Rectangle {
     pub x: f32,
     pub y: f32,
@@ -275,5 +275,11 @@ impl Div<f32> for Rectangle {
 
     fn div(self, scale: f32) -> Self::Output {
         Self { x: self.x / scale, y: self.y / scale, w: self.w / scale, h: self.h / scale }
+    }
+}
+
+impl std::fmt::Debug for Rectangle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({}, {}, {}, {})", self.x, self.y, self.w, self.h)
     }
 }

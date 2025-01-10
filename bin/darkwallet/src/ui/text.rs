@@ -32,6 +32,7 @@ use crate::{
     },
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
     text::{self, GlyphPositionIter, TextShaper, TextShaperPtr},
+    util::unixtime,
     ExecutorPtr,
 };
 
@@ -150,18 +151,19 @@ impl Text {
     }
 
     async fn redraw(self: Arc<Self>) {
+        let timest = unixtime();
+        debug!(target: "ui::text", "Text::redraw({:?})", self.node.upgrade().unwrap());
         let Some(parent_rect) = self.parent_rect.lock().unwrap().clone() else { return };
 
         let Some(draw_update) = self.get_draw_calls(parent_rect).await else {
             error!(target: "ui::text", "Text failed to draw");
             return;
         };
-        self.render_api.replace_draw_calls(draw_update.draw_calls);
+        self.render_api.replace_draw_calls(timest, draw_update.draw_calls);
         debug!(target: "ui::text", "replace draw calls done");
     }
 
     async fn get_draw_calls(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
-        debug!(target: "ui::text", "Text::get_draw_calls()");
         self.rect.eval(&parent_rect).ok()?;
         let rect = self.rect.get();
 
@@ -217,7 +219,7 @@ impl UIObject for Text {
     }
 
     async fn draw(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
-        debug!(target: "ui::text", "Text::draw()");
+        debug!(target: "ui::text", "Text::draw({:?})", self.node.upgrade().unwrap());
         *self.parent_rect.lock().unwrap() = Some(parent_rect);
         self.get_draw_calls(parent_rect).await
     }
@@ -225,6 +227,6 @@ impl UIObject for Text {
 
 impl Drop for Text {
     fn drop(&mut self) {
-        self.render_api.replace_draw_calls(vec![(self.dc_key, Default::default())]);
+        self.render_api.replace_draw_calls(unixtime(), vec![(self.dc_key, Default::default())]);
     }
 }

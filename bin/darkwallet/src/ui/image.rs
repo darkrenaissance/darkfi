@@ -32,6 +32,7 @@ use crate::{
     mesh::{MeshBuilder, MeshInfo, COLOR_WHITE},
     prop::{PropertyPtr, PropertyRect, PropertyStr, PropertyUint32, Role},
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
+    util::unixtime,
     ExecutorPtr,
 };
 
@@ -125,13 +126,14 @@ impl Image {
     }
 
     async fn redraw(self: Arc<Self>) {
+        let timest = unixtime();
         let Some(parent_rect) = self.parent_rect.lock().unwrap().clone() else { return };
 
         let Some(draw_update) = self.get_draw_calls(parent_rect).await else {
             error!(target: "ui::image", "Image failed to draw");
             return;
         };
-        self.render_api.replace_draw_calls(draw_update.draw_calls);
+        self.render_api.replace_draw_calls(timest, draw_update.draw_calls);
         debug!(target: "ui::image", "replace draw calls done");
     }
 
@@ -208,6 +210,6 @@ impl UIObject for Image {
 
 impl Drop for Image {
     fn drop(&mut self) {
-        self.render_api.replace_draw_calls(vec![(self.dc_key, Default::default())]);
+        self.render_api.replace_draw_calls(unixtime(), vec![(self.dc_key, Default::default())]);
     }
 }

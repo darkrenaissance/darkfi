@@ -38,6 +38,7 @@ use crate::{
     prop::{PropertyFloat32, PropertyPtr, PropertyRect, PropertyStr, PropertyUint32, Role},
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
     text::{self, GlyphPositionIter, TextShaper, TextShaperPtr},
+    util::unixtime,
     ExecutorPtr,
 };
 
@@ -234,13 +235,14 @@ impl EmojiPicker {
     }
 
     fn redraw(&self) {
+        let timest = unixtime();
         let Some(parent_rect) = self.parent_rect.lock().unwrap().clone() else { return };
 
         let Some(draw_update) = self.get_draw_calls(parent_rect) else {
             error!(target: "ui::emoji_picker", "Emoji picker failed to draw");
             return;
         };
-        self.render_api.replace_draw_calls(draw_update.draw_calls);
+        self.render_api.replace_draw_calls(timest, draw_update.draw_calls);
         d!("replace draw calls done");
     }
 
@@ -425,6 +427,6 @@ impl UIObject for EmojiPicker {
 
 impl Drop for EmojiPicker {
     fn drop(&mut self) {
-        self.render_api.replace_draw_calls(vec![(self.dc_key, Default::default())]);
+        self.render_api.replace_draw_calls(unixtime(), vec![(self.dc_key, Default::default())]);
     }
 }

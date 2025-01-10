@@ -45,7 +45,7 @@ use crate::{
     pubsub::Subscription,
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
     text::{self, Glyph, GlyphPositionIter, TextShaperPtr},
-    util::{enumerate_ref, is_whitespace, zip3},
+    util::{enumerate_ref, is_whitespace, unixtime, zip3},
     ExecutorPtr,
 };
 
@@ -1161,6 +1161,7 @@ impl EditBox {
     }
 
     async fn redraw(&self) {
+        let timest = unixtime();
         debug!(target: "ui::editbox", "redraw()");
 
         let parent_rect = self.parent_rect.lock().unwrap().unwrap().clone();
@@ -1171,10 +1172,11 @@ impl EditBox {
             return;
         };
 
-        self.render_api.replace_draw_calls(draw_update.draw_calls);
+        self.render_api.replace_draw_calls(timest, draw_update.draw_calls);
     }
 
     fn redraw_cursor(&self) {
+        let timest = unixtime();
         let cursor_instrs = self.get_cursor_instrs();
 
         let draw_calls = vec![(
@@ -1182,7 +1184,7 @@ impl EditBox {
             GfxDrawCall { instrs: cursor_instrs, dcs: vec![], z_index: self.z_index.get() },
         )];
 
-        self.render_api.replace_draw_calls(draw_calls);
+        self.render_api.replace_draw_calls(timest, draw_calls);
     }
 
     fn get_cursor_instrs(&self) -> Vec<GfxDrawInstruction> {
@@ -1248,7 +1250,8 @@ impl EditBox {
 
 impl Drop for EditBox {
     fn drop(&mut self) {
-        self.render_api.replace_draw_calls(vec![(self.text_dc_key, Default::default())]);
+        self.render_api
+            .replace_draw_calls(unixtime(), vec![(self.text_dc_key, Default::default())]);
     }
 }
 

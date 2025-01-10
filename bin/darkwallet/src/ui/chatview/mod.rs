@@ -51,7 +51,7 @@ use crate::{
     pubsub::Subscription,
     scene::{MethodCallSub, Pimpl, SceneNodeWeak},
     text::{self, Glyph, GlyphPositionIter, TextShaperPtr},
-    util::{enumerate, is_whitespace},
+    util::{enumerate, is_whitespace, unixtime},
     ExecutorPtr,
 };
 
@@ -661,6 +661,7 @@ impl ChatView {
     }
 
     async fn redraw_cached(&self, msgbuf: &mut MessageBuffer) {
+        let timest = unixtime();
         let rect = self.rect.get();
 
         let mut mesh_instrs = self.get_meshes(msgbuf, &rect).await;
@@ -671,7 +672,7 @@ impl ChatView {
         let draw_calls =
             vec![(self.dc_key, GfxDrawCall { instrs, dcs: vec![], z_index: self.z_index.get() })];
 
-        self.render_api.replace_draw_calls(draw_calls);
+        self.render_api.replace_draw_calls(timest, draw_calls);
     }
 
     /// Invalidates cache and redraws everything
@@ -1002,6 +1003,6 @@ impl UIObject for ChatView {
 
 impl Drop for ChatView {
     fn drop(&mut self) {
-        self.render_api.replace_draw_calls(vec![(self.dc_key, Default::default())]);
+        self.render_api.replace_draw_calls(unixtime(), vec![(self.dc_key, Default::default())]);
     }
 }

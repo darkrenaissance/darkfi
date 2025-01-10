@@ -6,11 +6,14 @@ def join(parent_path, child_name):
         return f"/{child_name}"
     return f"{parent_path}/{child_name}"
 
-def print_tree(node_path="/"):
+def print_tree(node_path="/", depth=None):
     print(node_path)
-    print_node_info(node_path, indent=1)
+    print_node_info(node_path, depth, indent=1)
 
-def print_node_info(parent_path, indent):
+def print_node_info(parent_path, depth, indent):
+    if indent - 1 == depth:
+        return
+
     ws = " "*4*indent
     for (child_name, child_id, child_type) in api.get_children(parent_path):
         match child_type:
@@ -57,7 +60,7 @@ def print_node_info(parent_path, indent):
         else:
             child_path = parent_path + "/" + child_name
 
-        print_node_info(child_path, indent+1)
+        print_node_info(child_path, depth, indent+1)
 
     for prop in api.get_properties(parent_path):
         if prop.type != PropertyType.BUFFER:

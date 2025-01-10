@@ -49,7 +49,6 @@ pub type GfxBufferId = u32;
 // This is very noisy so suppress output by default
 const DEBUG_RENDER: bool = false;
 const DEBUG_GFXAPI: bool = false;
-const DEBUG_DRAW_LOG: bool = false;
 
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 #[repr(C)]
@@ -177,8 +176,8 @@ impl RenderApi {
         let _ = self.method_req.send(method);
     }
 
-    pub fn replace_draw_calls(&self, dcs: Vec<(u64, GfxDrawCall)>) {
-        let method = GraphicsMethod::ReplaceDrawCalls(dcs);
+    pub fn replace_draw_calls(&self, timest: u64, dcs: Vec<(u64, GfxDrawCall)>) {
+        let method = GraphicsMethod::ReplaceDrawCalls { timest, dcs };
         let _ = self.method_req.send(method);
     }
 }
@@ -243,11 +242,13 @@ impl GfxDrawCall {
         self,
         textures: &HashMap<GfxTextureId, miniquad::TextureId>,
         buffers: &HashMap<GfxBufferId, miniquad::BufferId>,
+        timest: u64,
     ) -> DrawCall {
         DrawCall {
             instrs: self.instrs.into_iter().map(|i| i.compile(textures, buffers)).collect(),
             dcs: self.dcs,
             z_index: self.z_index,
+            timest,
         }
     }
 }
@@ -275,6 +276,7 @@ struct DrawCall {
     instrs: Vec<DrawInstruction>,
     dcs: Vec<u64>,
     z_index: u32,
+    timest: u64,
 }
 
 struct RenderContext<'a> {
@@ -316,9 +318,9 @@ impl<'a> RenderContext<'a> {
             return
         }
 
-        //if DEBUG_RENDER {
-        //    debug!(target: "gfx", "=> viewport {view_x} {view_y} {view_w} {view_h}");
-        //}
+        if DEBUG_RENDER {
+            debug!(target: "gfx", "=> viewport {view_x} {view_y} {view_w} {view_h}");
+        }
         self.ctx.apply_viewport(view_x, view_y, view_w, view_h);
         self.ctx.apply_scissor_rect(view_x, view_y, view_w, view_h);
     }
@@ -417,7 +419,7 @@ pub enum GraphicsMethod {
     NewVertexBuffer((Vec<Vertex>, GfxBufferId)),
     NewIndexBuffer((Vec<u16>, GfxBufferId)),
     DeleteBuffer(GfxBufferId),
-    ReplaceDrawCalls(Vec<(u64, GfxDrawCall)>),
+    ReplaceDrawCalls { timest: u64, dcs: Vec<(u64, GfxDrawCall)> },
 }
 
 pub type GraphicsEventPublisherPtr = Arc<GraphicsEventPublisher>;
@@ -590,7 +592,10 @@ impl Stage {
             ctx,
             pipeline,
             white_texture,
-            draw_calls: HashMap::from([(0, DrawCall { instrs: vec![], dcs: vec![], z_index: 0 })]),
+            draw_calls: HashMap::from([(
+                0,
+                DrawCall { instrs: vec![], dcs: vec![], z_index: 0, timest: 0 },
+            )]),
             textures: HashMap::new(),
             buffers: HashMap::new(),
             method_rep,
@@ -612,7 +617,9 @@ impl Stage {
                 self.method_new_index_buffer(indices, sendr)
             }
             GraphicsMethod::DeleteBuffer(buffer) => self.method_delete_buffer(buffer),
-            GraphicsMethod::ReplaceDrawCalls(dcs) => self.method_replace_draw_calls(dcs),
+            GraphicsMethod::ReplaceDrawCalls { timest, dcs } => {
+                self.method_replace_draw_calls(timest, dcs)
+            }
         };
     }
 
@@ -677,13 +684,25 @@ impl Stage {
         }
         self.ctx.delete_buffer(buffer);
     }
-    fn method_replace_draw_calls(&mut self, dcs: Vec<(u64, GfxDrawCall)>) {
+    fn method_replace_draw_calls(&mut self, timest: u64, dcs: Vec<(u64, GfxDrawCall)>) {
         if DEBUG_GFXAPI {
             debug!(target: "gfx", "Invoked method: replace_draw_calls({:?})", dcs);
         }
         for (key, val) in dcs {
-            let val = val.compile(&self.textures, &self.buffers);
-            self.draw_calls.insert(key, val);
+            let val = val.compile(&self.textures, &self.buffers, timest);
+            match self.draw_calls.get_mut(&key) {
+                Some(old_val) => {
+                    // Only replace the draw call if it is more recent
+                    if old_val.timest < timest {
+                        *old_val = val;
+                    } else if DEBUG_GFXAPI {
+                        debug!(target: "gfx", "Rejected stale draw_call {key}: {val:?}");
+                    }
+                }
+                None => {
+                    self.draw_calls.insert(key, val);
+                }
+            }
         }
     }
 }

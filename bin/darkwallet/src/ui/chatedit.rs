@@ -48,7 +48,7 @@ use crate::{
     pubsub::Subscription,
     scene::{MethodCallSub, Pimpl, SceneNodePtr, SceneNodeWeak},
     text::{self, Glyph, GlyphPositionIter, TextShaperPtr},
-    util::{enumerate_ref, is_whitespace, min_f32, zip4},
+    util::{enumerate_ref, is_whitespace, min_f32, unixtime, zip4},
     ExecutorPtr,
 };
 
@@ -1522,6 +1522,7 @@ impl ChatEdit {
             }
             _ => {}
         }
+        debug!(target: "ui::chatedit", "handle touch end showing keyboard");
         window::show_keyboard(true);
         true
     }
@@ -1630,21 +1631,23 @@ impl ChatEdit {
     }
 
     async fn redraw(&self) {
+        let timest = unixtime();
         //debug!(target: "ui::chatedit", "redraw()");
         let Some(draw_update) = self.make_draw_calls() else {
             error!(target: "ui::chatedit", "Text failed to draw");
             return;
         };
-        self.render_api.replace_draw_calls(draw_update.draw_calls);
+        self.render_api.replace_draw_calls(timest, draw_update.draw_calls);
     }
 
     fn redraw_cursor(&self) {
+        let timest = unixtime();
         let cursor_instrs = self.get_cursor_instrs();
         let draw_calls = vec![(
             self.cursor_dc_key,
             GfxDrawCall { instrs: cursor_instrs, dcs: vec![], z_index: self.z_index.get() },
         )];
-        self.render_api.replace_draw_calls(draw_calls);
+        self.render_api.replace_draw_calls(timest, draw_calls);
     }
 
     fn get_cursor_instrs(&self) -> Vec<GfxDrawInstruction> {
@@ -1748,7 +1751,8 @@ impl ChatEdit {
 
 impl Drop for ChatEdit {
     fn drop(&mut self) {
-        self.render_api.replace_draw_calls(vec![(self.text_dc_key, Default::default())]);
+        self.render_api
+            .replace_draw_calls(unixtime(), vec![(self.text_dc_key, Default::default())]);
     }
 }
 

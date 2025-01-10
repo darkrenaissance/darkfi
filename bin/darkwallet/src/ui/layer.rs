@@ -27,6 +27,7 @@ use crate::{
     gfx::{GfxDrawCall, GfxDrawInstruction, Point, Rectangle, RenderApi},
     prop::{PropertyBool, PropertyFloat32, PropertyPtr, PropertyRect, PropertyUint32, Role},
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
+    util::unixtime,
     ExecutorPtr,
 };
 
@@ -51,9 +52,8 @@ pub struct Layer {
 
 impl Layer {
     pub async fn new(node: SceneNodeWeak, render_api: RenderApi, ex: ExecutorPtr) -> Pimpl {
-        debug!(target: "ui::layer", "Layer::new()");
-
         let node_ref = &node.upgrade().unwrap();
+        debug!(target: "ui::layer", "Layer::new({node_ref:?})");
         let is_visible = PropertyBool::wrap(node_ref, Role::Internal, "is_visible", 0).unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
         let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
@@ -83,20 +83,22 @@ impl Layer {
     }
 
     async fn redraw(self: Arc<Self>) {
+        let timest = unixtime();
+        debug!(target: "ui::layer", "Layer::redraw({:?})", self.node.upgrade().unwrap());
         let Some(parent_rect) = self.parent_rect.lock().unwrap().clone() else { return };
 
         let Some(draw_update) = self.get_draw_calls(parent_rect).await else {
             error!(target: "ui::layer", "Layer failed to draw");
             return;
         };
-        self.render_api.replace_draw_calls(draw_update.draw_calls);
-        debug!(target: "ui::layer", "replace draw calls done");
+        self.render_api.replace_draw_calls(timest, draw_update.draw_calls);
+        debug!(target: "ui::layer", "Layer::redraw({:?}) DONE [timest={timest}]", self.node.upgrade().unwrap());
     }
 
     async fn get_draw_calls(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
-        debug!(target: "ui::layer", "Layer::get_draw_calls()");
         self.rect.eval(&parent_rect).ok()?;
         let rect = self.rect.get();
+        debug!(target: "ui::layer", "Layer::get_draw_calls() [rect={rect:?}, dc={}]", self.dc_key);
 
         // Apply viewport
 
@@ -109,7 +111,7 @@ impl Layer {
             for child in self.get_children() {
                 let obj = get_ui_object3(&child);
                 let Some(mut draw_update) = obj.draw(rect).await else {
-                    debug!(target: "ui::layer", "Skipped draw() of {child:?}");
+                    debug!(target: "ui::layer", "Skipped draw for {child:?}");
                     continue
                 };
 
@@ -169,7 +171,9 @@ impl UIObject for Layer {
         }
         */
 
-        self.get_draw_calls(parent_rect).await
+        let update = self.get_draw_calls(parent_rect).await;
+        debug!(target: "ui::layer", "Layer::draw({:?}) DONE", self.node.upgrade().unwrap());
+        update
     }
 
     async fn handle_char(&self, key: char, mods: KeyMods, repeat: bool) -> bool {

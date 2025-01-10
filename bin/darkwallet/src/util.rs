@@ -17,6 +17,7 @@
  */
 
 use colored::Colorize;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub fn is_whitespace(s: &str) -> bool {
     s.chars().all(char::is_whitespace)
@@ -28,6 +29,12 @@ pub fn min_f32(x: f32, y: f32) -> f32 {
     } else {
         y
     }
+}
+
+pub fn unixtime() -> u64 {
+    let timest = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
+    assert!(timest < std::u64::MAX as u128);
+    timest as u64
 }
 
 #[allow(dead_code)]
