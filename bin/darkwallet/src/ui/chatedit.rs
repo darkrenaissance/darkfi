@@ -1181,7 +1181,10 @@ impl ChatEdit {
             KeyCode::Kp8 => self.insert_char('8').await,
             KeyCode::Kp9 => self.insert_char('9').await,
             KeyCode::KpDecimal => self.insert_char('.').await,
-            //KeyCode::Enter | KeyCode::KpEnter => self.insert_char('\n').await,
+            KeyCode::Enter | KeyCode::KpEnter => {
+                let node = self.node.upgrade().unwrap();
+                node.trigger("enter_pressed", vec![]).await.unwrap();
+            }
             KeyCode::Delete => {
                 self.delete(0, 1);
                 self.clamp_scroll(&mut self.text_wrap.lock());
@@ -1522,8 +1525,10 @@ impl ChatEdit {
             }
             _ => {}
         }
-        debug!(target: "ui::chatedit", "handle touch end showing keyboard");
-        window::show_keyboard(true);
+
+        let node = self.node.upgrade().unwrap();
+        node.trigger("request_keyboard", vec![]).await.unwrap();
+
         true
     }
 

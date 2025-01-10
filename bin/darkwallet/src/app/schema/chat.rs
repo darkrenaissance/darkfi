@@ -909,6 +909,19 @@ pub async fn make(
     prop.set_f32(Role::App, 2, EMOJIBTN_BOX[2]).unwrap();
     prop.set_f32(Role::App, 3, EMOJIBTN_BOX[3]).unwrap();
 
+    let (slot, recvr) = Slot::new("reqkeyb");
+    chatedit_node.register("request_keyboard", slot).unwrap();
+    let emoji_btn_is_visible2 = emoji_btn_is_visible.clone();
+    let listen_click = app.ex.spawn(async move {
+        while let Ok(_) = recvr.recv().await {
+            if emoji_btn_is_visible2.get() {
+                debug!(target: "app::chat", "Emoji picker not visible so showing keyboard");
+                miniquad::window::show_keyboard(true);
+            }
+        }
+    });
+    app.tasks.lock().unwrap().push(listen_click);
+
     let (slot, recvr) = Slot::new("emoji_clicked");
     node.register("click", slot).unwrap();
     let listen_click = app.ex.spawn(async move {
