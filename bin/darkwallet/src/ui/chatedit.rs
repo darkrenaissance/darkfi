@@ -701,17 +701,19 @@ impl ChatEdit {
         // Height is calculated from width based on wrapping
         let width = self.wrap_width();
 
-        let (atlas, wrapped_lines, selections) = {
+        let (atlas, wrapped_lines, selections, under_start, under_end) = {
             let mut text_wrap = self.text_wrap.lock();
             // Must happen after rect eval, which is inside regen_text_mesh
             // Maybe we should take the eval out of here.
             self.clamp_scroll(&mut text_wrap);
 
-            let rendered_glyphs = &text_wrap.get_render().glyphs;
-            let atlas = text::make_texture_atlas(&self.render_api, rendered_glyphs);
+            let rendered = text_wrap.get_render();
+            let under_start = rendered.under_start;
+            let under_end = rendered.under_end;
+            let atlas = text::make_texture_atlas(&self.render_api, &rendered.glyphs);
             let wrapped_lines = text_wrap.wrap(width);
             let selections = text_wrap.select.clone();
-            (atlas, wrapped_lines, selections)
+            (atlas, wrapped_lines, selections, under_start, under_end)
         };
 
         let mut height = wrapped_lines.height() + self.descent.get();
@@ -741,6 +743,7 @@ impl ChatEdit {
         //debug!(target: "ui::chatedit", "regen_text_mesh() selections={selections:?}");
 
         for (line_idx, wrap_line) in wrapped_lines.lines.iter().enumerate() {
+            // Instead of bools, maybe we should have a GlyphStyle enum
             let select_marks = self.mark_selected_glyphs(&wrap_line, &selections);
             let hi_bg_color = self.hi_bg_color.get();
             self.draw_text_bg_box(&mut mesh, &select_marks, &wrap_line, curr_y, hi_bg_color);
@@ -753,17 +756,10 @@ impl ChatEdit {
             let cmd_bg_color = self.cmd_bg_color.get();
             self.draw_text_bg_box(&mut mesh, &cmd_marks, &wrap_line, curr_y, cmd_bg_color);
 
-            /*
-            if rendered.has_underline() {
-                self.draw_underline(
-                    &mut mesh,
-                    &rendered.glyphs,
-                    clip.h,
-                    rendered.under_start,
-                    rendered.under_end,
-                );
+            if under_start != under_end {
+                assert!(under_start < under_end);
+                self.draw_underline(&mut mesh, &wrap_line, curr_y, under_start, under_end);
             }
-            */
 
             let pos_iter = wrap_line.pos_iter();
 
@@ -964,6 +960,62 @@ impl ChatEdit {
         mesh.draw_box(&select_rect, color, &Rectangle::zero());
     }
 
+    fn draw_underline(
+        &self,
+        mesh: &mut MeshBuilder,
+        wrap_line: &WrappedLine,
+        y_off: f32,
+        under_start: usize,
+        under_end: usize,
+    ) {
+        if under_start >= wrap_line.last_pos() {
+            return
+        }
+        if under_end < wrap_line.first_pos() {
+            return
+        }
+        assert!(under_start < under_end);
+
+        let baseline = self.baseline.get();
+        let text_color = self.text_color.get();
+
+        // Doing it like this but with advance should be easier and shorter.
+        //let start = start as isize - self.start_pos as isize;
+        //let end = end as isize - self.start_pos as isize;
+        //let line_start = std::cmp::max(0, start) as usize;
+        //assert!(end > 0);
+        //let line_end = std::cmp::min(self.marks.len() as isize, end) as usize;
+
+        let mut start_x = 0.;
+        let mut end_x = 0.;
+        // When cursor lands at the end of the line
+        let mut rhs = 0.;
+
+        for (glyph_idx, mut glyph_rect) in wrap_line.pos_iter().enumerate() {
+            if glyph_idx == under_start {
+                start_x = glyph_rect.x;
+            }
+            if glyph_idx == under_end {
+                end_x = glyph_rect.x;
+            }
+
+            rhs = glyph_rect.rhs();
+        }
+
+        if under_start == 0 {
+            start_x = 0.;
+        }
+
+        if under_end == wrap_line.last_pos() {
+            end_x = rhs;
+        }
+
+        // We don't need to do manual clipping since MeshBuilder should do that
+        let underline_rect =
+            Rectangle { x: start_x, y: y_off + baseline + 6., w: end_x - start_x, h: 4. };
+        mesh.draw_box(&underline_rect, text_color, &Rectangle::zero());
+    }
+
     fn draw_phone_select_handle(
         &self,
         mesh: &mut MeshBuilder,
@@ -1028,54 +1080,6 @@ impl ChatEdit {
         ];
         let indices = vec![0, 1, 2, 0, 2, 3];
         mesh.append(verts, indices);
-    }
-
-    fn draw_underline(
-        &self,
-        mesh: &mut MeshBuilder,
-        glyphs: &Vec<Glyph>,
-        clip_h: f32,
-        under_start: usize,
-        under_end: usize,
-    ) {
-        assert!(under_start < under_end);
-
-        let font_size = self.font_size.get();
-        let window_scale = self.window_scale.get();
-        let baseline = self.baseline.get();
-        let scroll = self.scroll.get();
-        let text_color = self.text_color.get();
-        let glyph_pos_iter = GlyphPositionIter::new(font_size, window_scale, &glyphs, baseline);
-
-        let mut start_x = 0.;
-        let mut end_x = 0.;
-        // When cursor lands at the end of the line
-        let mut rhs = 0.;
-
-        for (glyph_idx, mut glyph_rect) in glyph_pos_iter.enumerate() {
-            glyph_rect.x -= scroll;
-
-            if glyph_idx == under_start {
-                start_x = glyph_rect.x;
-            }
-            if glyph_idx == under_end {
-                end_x = glyph_rect.x;
-            }
-
-            rhs = glyph_rect.rhs();
-        }
-
-        if under_start == 0 {
-            start_x = scroll;
-        }
-
-        if under_end == glyphs.len() {
-            end_x = rhs;
-        }
-
-        // We don't need to do manual clipping since MeshBuilder should do that
-        let underline_rect = Rectangle { x: start_x, y: baseline + 6., w: end_x - start_x, h: 4. };
-        mesh.draw_box(&underline_rect, text_color, &Rectangle::zero());
     }
 
     async fn change_focus(self: Arc<Self>) {
