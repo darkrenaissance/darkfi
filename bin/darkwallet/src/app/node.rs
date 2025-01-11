@@ -40,6 +40,9 @@ pub fn create_layer(name: &str) -> SceneNode {
     let prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);
     node.add_property(prop).unwrap();
 
+    let prop = Property::new("priority", PropertyType::Uint32, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
     node
 }
 
@@ -59,6 +62,9 @@ pub fn create_vector_art(name: &str) -> SceneNode {
     let prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);
     node.add_property(prop).unwrap();
 
+    let prop = Property::new("priority", PropertyType::Uint32, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
     node
 }
 
@@ -76,6 +82,9 @@ pub fn create_button(name: &str) -> SceneNode {
     node.add_property(prop).unwrap();
 
     let prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("priority", PropertyType::Uint32, PropertySubType::Null);
     node.add_property(prop).unwrap();
 
     node.add_signal("click", "Button clicked event", vec![]).unwrap();
@@ -100,6 +109,9 @@ pub fn create_image(name: &str) -> SceneNode {
     node.add_property(prop).unwrap();
 
     let prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("priority", PropertyType::Uint32, PropertySubType::Null);
     node.add_property(prop).unwrap();
 
     let prop = Property::new("path", PropertyType::Str, PropertySubType::Null);
@@ -132,6 +144,9 @@ pub fn create_text(name: &str) -> SceneNode {
     node.add_property(prop).unwrap();
 
     let prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("priority", PropertyType::Uint32, PropertySubType::Null);
     node.add_property(prop).unwrap();
 
     let prop = Property::new("debug", PropertyType::Bool, PropertySubType::Null);
@@ -239,6 +254,9 @@ pub fn create_editbox(name: &str) -> SceneNode {
     node.add_property(prop).unwrap();
 
     let prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("priority", PropertyType::Uint32, PropertySubType::Null);
     node.add_property(prop).unwrap();
 
     let prop = Property::new("debug", PropertyType::Bool, PropertySubType::Null);
@@ -378,6 +396,9 @@ pub fn create_chatedit(name: &str) -> SceneNode {
     let prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);
     node.add_property(prop).unwrap();
 
+    let prop = Property::new("priority", PropertyType::Uint32, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
     let prop = Property::new("debug", PropertyType::Bool, PropertySubType::Null);
     node.add_property(prop).unwrap();
 
@@ -445,6 +466,9 @@ pub fn create_chatview(name: &str) -> SceneNode {
     let prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);
     node.add_property(prop).unwrap();
 
+    let prop = Property::new("priority", PropertyType::Uint32, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
     let prop = Property::new("debug", PropertyType::Bool, PropertySubType::Null);
     node.add_property(prop).unwrap();
 
@@ -502,6 +526,9 @@ pub fn create_emoji_picker(name: &str) -> SceneNode {
     node.add_property(prop).unwrap();
 
     let prop = Property::new("z_index", PropertyType::Uint32, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("priority", PropertyType::Uint32, PropertySubType::Null);
     node.add_property(prop).unwrap();
 
     let mut prop = Property::new("scroll", PropertyType::Float32, PropertySubType::Pixel);

@@ -46,6 +46,7 @@ pub struct Layer {
     is_visible: PropertyBool,
     rect: PropertyRect,
     z_index: PropertyUint32,
+    priority: PropertyUint32,
 
     parent_rect: SyncMutex<Option<Rectangle>>,
 }
@@ -57,6 +58,7 @@ impl Layer {
         let is_visible = PropertyBool::wrap(node_ref, Role::Internal, "is_visible", 0).unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
         let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
+        let priority = PropertyUint32::wrap(node_ref, Role::Internal, "priority", 0).unwrap();
 
         let node_name = node_ref.name.clone();
         let node_id = node_ref.id;
@@ -70,6 +72,7 @@ impl Layer {
             is_visible,
             rect,
             z_index,
+            priority,
 
             parent_rect: SyncMutex::new(None),
         });
@@ -123,7 +126,7 @@ impl Layer {
         let dc = GfxDrawCall {
             instrs: vec![GfxDrawInstruction::ApplyView(rect)],
             dcs: child_calls,
-            z_index: self.z_index(),
+            z_index: self.z_index.get(),
         };
         draw_calls.push((self.dc_key, dc));
         Some(DrawUpdate { key: self.dc_key, draw_calls })
@@ -132,8 +135,8 @@ impl Layer {
 
 #[async_trait]
 impl UIObject for Layer {
-    fn z_index(&self) -> u32 {
-        self.z_index.get()
+    fn priority(&self) -> u32 {
+        self.priority.get()
     }
 
     async fn start(self: Arc<Self>, ex: ExecutorPtr) {

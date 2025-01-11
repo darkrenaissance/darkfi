@@ -56,7 +56,7 @@ pub use win::{Window, WindowPtr};
 
 #[async_trait]
 pub trait UIObject: Sync {
-    fn z_index(&self) -> u32;
+    fn priority(&self) -> u32;
 
     async fn start(self: Arc<Self>, ex: ExecutorPtr) {}
 
@@ -210,10 +210,10 @@ pub fn get_children_ordered(node: &SceneNode3) -> Vec<SceneNodePtr> {
     let mut child_infs = vec![];
     for child in node.get_children() {
         let obj = get_ui_object3(&child);
-        let z_index = obj.z_index();
-        child_infs.push((child, z_index));
+        let priority = obj.priority();
+        child_infs.push((child, priority));
     }
-    child_infs.sort_unstable_by_key(|(_, z_index)| *z_index);
+    child_infs.sort_unstable_by_key(|(_, priority)| *priority);
 
     let nodes = child_infs.into_iter().rev().map(|(node, _)| node).collect();
     nodes

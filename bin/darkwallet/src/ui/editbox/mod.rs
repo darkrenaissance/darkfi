@@ -175,6 +175,7 @@ pub struct EditBox {
     select_descent: PropertyFloat32,
     selected: PropertyPtr,
     z_index: PropertyUint32,
+    priority: PropertyUint32,
     debug: PropertyBool,
 
     editable: SyncMutex<Editable>,
@@ -236,6 +237,7 @@ impl EditBox {
         let cursor_idle_time =
             PropertyUint32::wrap(node_ref, Role::Internal, "cursor_idle_time", 0).unwrap();
         let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
+        let priority = PropertyUint32::wrap(node_ref, Role::Internal, "priority", 0).unwrap();
         let debug = PropertyBool::wrap(node_ref, Role::Internal, "debug", 0).unwrap();
 
         let node_name = node_ref.name.clone();
@@ -278,6 +280,7 @@ impl EditBox {
             select_descent,
             selected,
             z_index,
+            priority,
             debug,
 
             editable: SyncMutex::new(Editable::new(
@@ -1257,8 +1260,8 @@ impl Drop for EditBox {
 
 #[async_trait]
 impl UIObject for EditBox {
-    fn z_index(&self) -> u32 {
-        self.z_index.get()
+    fn priority(&self) -> u32 {
+        self.priority.get()
     }
 
     async fn start(self: Arc<Self>, ex: ExecutorPtr) {

@@ -41,6 +41,7 @@ pub struct Button {
     is_active: PropertyBool,
     rect: PropertyRect,
     z_index: PropertyUint32,
+    priority: PropertyUint32,
 
     mouse_btn_held: AtomicBool,
 }
@@ -53,12 +54,14 @@ impl Button {
         let is_active = PropertyBool::wrap(node_ref, Role::Internal, "is_active", 0).unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
         let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
+        let priority = PropertyUint32::wrap(node_ref, Role::Internal, "priority", 0).unwrap();
 
         let self_ = Arc::new(Self {
             node,
             is_active,
             rect,
             z_index,
+            priority,
             mouse_btn_held: AtomicBool::new(false),
         });
 
@@ -68,8 +71,8 @@ impl Button {
 
 #[async_trait]
 impl UIObject for Button {
-    fn z_index(&self) -> u32 {
-        self.z_index.get()
+    fn priority(&self) -> u32 {
+        self.priority.get()
     }
 
     async fn draw(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {

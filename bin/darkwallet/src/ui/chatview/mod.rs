@@ -165,6 +165,7 @@ pub struct ChatView {
     rect: PropertyRect,
     scroll: PropertyFloat32,
     z_index: PropertyUint32,
+    priority: PropertyUint32,
 
     scroll_start_accel: PropertyFloat32,
     scroll_resist: PropertyFloat32,
@@ -213,6 +214,7 @@ impl ChatView {
         let nick_colors = node_ref.get_property("nick_colors").expect("ChatView::nick_colors");
         let hi_bg_color = PropertyColor::wrap(node_ref, Role::Internal, "hi_bg_color").unwrap();
         let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
+        let priority = PropertyUint32::wrap(node_ref, Role::Internal, "priority", 0).unwrap();
         let debug = PropertyBool::wrap(node_ref, Role::Internal, "debug", 0).unwrap();
 
         let scroll_start_accel =
@@ -258,6 +260,7 @@ impl ChatView {
             rect,
             scroll,
             z_index,
+            priority,
 
             scroll_start_accel,
             scroll_resist,
@@ -691,8 +694,8 @@ impl ChatView {
 
 #[async_trait]
 impl UIObject for ChatView {
-    fn z_index(&self) -> u32 {
-        self.z_index.get()
+    fn priority(&self) -> u32 {
+        self.priority.get()
     }
 
     async fn start(self: Arc<Self>, ex: ExecutorPtr) {

@@ -470,6 +470,6 @@ impl Window {
 
         self.render_api.replace_draw_calls(timest, draw_calls);
 
-        debug!(target: "ui::win", "Window::draw() - replaced draw call");
+        debug!(target: "ui::win", "Window::draw() - replaced draw call [timest={timest}]");
     }
 }

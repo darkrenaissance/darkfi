@@ -56,6 +56,7 @@ pub struct Text {
 
     rect: PropertyRect,
     z_index: PropertyUint32,
+    priority: PropertyUint32,
     text: PropertyStr,
     font_size: PropertyFloat32,
     text_color: PropertyColor,
@@ -79,6 +80,7 @@ impl Text {
         let node_ref = &node.upgrade().unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
         let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
+        let priority = PropertyUint32::wrap(node_ref, Role::Internal, "priority", 0).unwrap();
         let text = PropertyStr::wrap(node_ref, Role::Internal, "text", 0).unwrap();
         let font_size = PropertyFloat32::wrap(node_ref, Role::Internal, "font_size", 0).unwrap();
         let text_color = PropertyColor::wrap(node_ref, Role::Internal, "text_color").unwrap();
@@ -97,6 +99,7 @@ impl Text {
 
             rect,
             z_index,
+            priority,
             text,
             font_size,
             text_color,
@@ -195,8 +198,8 @@ impl Text {
 
 #[async_trait]
 impl UIObject for Text {
-    fn z_index(&self) -> u32 {
-        self.z_index.get()
+    fn priority(&self) -> u32 {
+        self.priority.get()
     }
 
     async fn start(self: Arc<Self>, ex: ExecutorPtr) {

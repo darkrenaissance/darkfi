@@ -128,6 +128,7 @@ pub struct EmojiPicker {
 
     rect: PropertyRect,
     z_index: PropertyUint32,
+    priority: PropertyUint32,
     scroll: PropertyFloat32,
     emoji_size: PropertyFloat32,
     mouse_scroll_speed: PropertyFloat32,
@@ -151,6 +152,7 @@ impl EmojiPicker {
         let node_ref = &node.upgrade().unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
         let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
+        let priority = PropertyUint32::wrap(node_ref, Role::Internal, "priority", 0).unwrap();
         let scroll = PropertyFloat32::wrap(node_ref, Role::Internal, "scroll", 0).unwrap();
         let emoji_size = PropertyFloat32::wrap(node_ref, Role::Internal, "emoji_size", 0).unwrap();
         let mouse_scroll_speed =
@@ -169,6 +171,7 @@ impl EmojiPicker {
 
             rect,
             z_index,
+            priority,
             scroll,
             emoji_size,
             mouse_scroll_speed,
@@ -300,8 +303,8 @@ impl EmojiPicker {
 
 #[async_trait]
 impl UIObject for EmojiPicker {
-    fn z_index(&self) -> u32 {
-        self.z_index.get()
+    fn priority(&self) -> u32 {
+        self.priority.get()
     }
 
     async fn start(self: Arc<Self>, ex: ExecutorPtr) {

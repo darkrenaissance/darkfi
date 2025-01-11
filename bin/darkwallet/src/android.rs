@@ -94,3 +94,30 @@ pub fn get_keyboard_height() -> usize {
         ndk_utils::call_int_method!(env, android::ACTIVITY, "getKeyboardHeight", "()I") as usize
     }
 }
+
+pub fn get_appdata_path() -> String {
+    unsafe {
+        let env = android::attach_jni_env();
+
+        let text = ndk_utils::call_object_method!(
+            env,
+            android::ACTIVITY,
+            "getAppDataPath",
+            "()Ljava/lang/String;"
+        );
+        ndk_utils::get_utf_str!(env, text).to_string()
+    }
+}
+pub fn get_external_storage_path() -> String {
+    unsafe {
+        let env = android::attach_jni_env();
+
+        let text = ndk_utils::call_object_method!(
+            env,
+            android::ACTIVITY,
+            "getExternalStoragePath",
+            "()Ljava/lang/String;"
+        );
+        ndk_utils::get_utf_str!(env, text).to_string()
+    }
+}

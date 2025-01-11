@@ -51,6 +51,7 @@ pub struct Image {
     rect: PropertyRect,
     uv: PropertyRect,
     z_index: PropertyUint32,
+    priority: PropertyUint32,
     path: PropertyStr,
 
     parent_rect: SyncMutex<Option<Rectangle>>,
@@ -64,6 +65,7 @@ impl Image {
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
         let uv = PropertyRect::wrap(node_ref, Role::Internal, "uv").unwrap();
         let z_index = PropertyUint32::wrap(node_ref, Role::Internal, "z_index", 0).unwrap();
+        let priority = PropertyUint32::wrap(node_ref, Role::Internal, "priority", 0).unwrap();
         let path = PropertyStr::wrap(node_ref, Role::Internal, "path", 0).unwrap();
 
         let node_name = node_ref.name.clone();
@@ -80,6 +82,7 @@ impl Image {
             rect,
             uv,
             z_index,
+            priority,
             path,
 
             parent_rect: SyncMutex::new(None),
@@ -181,8 +184,8 @@ impl Image {
 
 #[async_trait]
 impl UIObject for Image {
-    fn z_index(&self) -> u32 {
-        self.z_index.get()
+    fn priority(&self) -> u32 {
+        self.priority.get()
     }
 
     async fn start(self: Arc<Self>, ex: ExecutorPtr) {

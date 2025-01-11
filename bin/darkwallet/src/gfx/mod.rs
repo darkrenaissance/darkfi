@@ -690,12 +690,14 @@ impl Stage {
         }
         for (key, val) in dcs {
             let val = val.compile(&self.textures, &self.buffers, timest);
+            self.draw_calls.insert(key, val);
+            /*
             match self.draw_calls.get_mut(&key) {
                 Some(old_val) => {
                     // Only replace the draw call if it is more recent
                     if old_val.timest < timest {
                         *old_val = val;
-                    } else if DEBUG_GFXAPI {
+                    } else {
                         debug!(target: "gfx", "Rejected stale draw_call {key}: {val:?}");
                     }
                 }
@@ -703,6 +705,7 @@ impl Stage {
                     self.draw_calls.insert(key, val);
                 }
             }
+                    */
         }
     }
 }

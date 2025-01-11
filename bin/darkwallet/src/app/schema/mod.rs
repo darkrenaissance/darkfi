@@ -53,9 +53,13 @@ mod android_ui_consts {
 
 #[cfg(target_os = "android")]
 mod ui_consts {
-    pub const CHATDB_PATH: &str = "/data/data/darkfi.darkwallet/chatdb/";
+    pub const CHATDB_PATH: &str = "APPDATA/chatdb/";
     pub const BG_PATH: &str = "bg.png";
     pub use super::android_ui_consts::*;
+
+    pub fn get_chatdb_path() -> String {
+        CHATDB_PATH.replace("APPDATA", &crate::android::get_appdata_path())
+    }
 }
 
 #[cfg(feature = "emulate-android")]
@@ -63,6 +67,10 @@ mod ui_consts {
     pub const CHATDB_PATH: &str = "chatdb";
     pub const BG_PATH: &str = "assets/bg.png";
     pub use super::android_ui_consts::*;
+
+    pub fn get_chatdb_path() -> String {
+        CHATDB_PATH.to_string()
+    }
 }
 
 #[cfg(all(
@@ -73,6 +81,10 @@ mod ui_consts {
     pub const CHATDB_PATH: &str = "chatdb";
     pub const BG_PATH: &str = "assets/bg.png";
     pub const EMOJI_PICKER_ICON_SIZE: f32 = 40.;
+
+    pub fn get_chatdb_path() -> String {
+        CHATDB_PATH.to_string()
+    }
 }
 
 use ui_consts::*;
@@ -179,7 +191,8 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         }
     });
 
-    let db = sled::open(CHATDB_PATH).expect("cannot open sleddb");
+    let chatdb_path = get_chatdb_path();
+    let db = sled::open(chatdb_path).expect("cannot open sleddb");
     for channel in CHANNELS {
         chat::make(app, window.clone(), channel, &db, emoji_meshes.clone()).await;
     }

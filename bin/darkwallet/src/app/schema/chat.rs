@@ -102,15 +102,11 @@ mod android_ui_consts {
 
 #[cfg(target_os = "android")]
 mod ui_consts {
-    pub const CHATDB_PATH: &str = "/data/data/darkfi.darkwallet/chatdb/";
-    pub const BG_PATH: &str = "bg.png";
     pub use super::android_ui_consts::*;
 }
 
 #[cfg(feature = "emulate-android")]
 mod ui_consts {
-    pub const CHATDB_PATH: &str = "chatdb";
-    pub const BG_PATH: &str = "assets/bg.png";
     pub use super::android_ui_consts::*;
 }
 
@@ -120,11 +116,6 @@ mod ui_consts {
 ))]
 mod ui_consts {
     use crate::gfx::{Point, Rectangle};
-
-    pub const CHATDB_PATH: &str = "chatdb";
-    pub const BG_PATH: &str = "assets/bg.png";
-
-    // Main menu
 
     // Chat UI
     pub const CHANNEL_LABEL_BASELINE: f32 = 37.;
@@ -451,6 +442,7 @@ pub async fn make(
     prop.add_depend(&emoji_dynamic_h_prop, 0, "emoji_h");
     layer_node.set_property_bool(Role::App, "is_visible", true).unwrap();
     layer_node.set_property_u32(Role::App, "z_index", 1).unwrap();
+    layer_node.set_property_u32(Role::App, "priority", 1).unwrap();
     let layer_node =
         layer_node.setup(|me| Layer::new(me, app.render_api.clone(), app.ex.clone())).await;
     chat_layer_node.clone().link(layer_node.clone());
@@ -786,6 +778,7 @@ pub async fn make(
         prop.set_f32(Role::App, 3, 1.).unwrap();
     }
     node.set_property_u32(Role::App, "z_index", 6).unwrap();
+    node.set_property_u32(Role::App, "priority", 1).unwrap();
     //node.set_property_bool(Role::App, "debug", true).unwrap();
 
     let editz_text = PropertyStr::wrap(&node, Role::App, "text", 0).unwrap();
