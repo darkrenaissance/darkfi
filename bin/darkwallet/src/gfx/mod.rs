@@ -705,7 +705,7 @@ impl Stage {
                     self.draw_calls.insert(key, val);
                 }
             }
-                    */
+            */
         }
     }
 }

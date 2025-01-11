@@ -23,8 +23,13 @@ public String getExternalStoragePath() {
 }
 
 public int getKeyboardHeight() {
-    Insets insets = view.getRootWindowInsets().getInsets(WindowInsets.Type.ime());
-    return insets.bottom;
+    WindowInsets windowInsets = view.getRootWindowInsets();
+    if (windowInsets == null) {
+        return 0;
+    }
+    Insets imeInsets = windowInsets.getInsets(WindowInsets.Type.ime());
+    Insets navInsets = windowInsets.getInsets(WindowInsets.Type.navigationBars());
+    return Math.max(0, imeInsets.bottom - navInsets.bottom);
 }
 
 //% END

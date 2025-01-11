@@ -588,6 +588,7 @@ pub async fn make(
         .unwrap();
     prop.set_expr(Role::App, 3, code).unwrap();
     node.set_property_u32(Role::App, "z_index", 4).unwrap();
+    node.set_property_u32(Role::App, "priority", 2).unwrap();
 
     let editbox_bg_rect_prop = prop.clone();
 
@@ -778,7 +779,7 @@ pub async fn make(
         prop.set_f32(Role::App, 3, 1.).unwrap();
     }
     node.set_property_u32(Role::App, "z_index", 6).unwrap();
-    node.set_property_u32(Role::App, "priority", 1).unwrap();
+    node.set_property_u32(Role::App, "priority", 3).unwrap();
     //node.set_property_bool(Role::App, "debug", true).unwrap();
 
     let editz_text = PropertyStr::wrap(&node, Role::App, "text", 0).unwrap();
@@ -903,7 +904,7 @@ pub async fn make(
     prop.set_f32(Role::App, 3, EMOJIBTN_BOX[3]).unwrap();
 
     let (slot, recvr) = Slot::new("reqkeyb");
-    chatedit_node.register("request_keyboard", slot).unwrap();
+    chatedit_node.register("keyboard_request", slot).unwrap();
     let emoji_btn_is_visible2 = emoji_btn_is_visible.clone();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
@@ -1155,6 +1156,7 @@ pub async fn make(
     */
 
     // Overlay popup
+    let content_layer_node = layer_node.clone();
     let layer_node = create_layer("overlay_layer");
     let prop = layer_node.get_property("rect").unwrap();
     prop.set_f32(Role::App, 0, 40.).unwrap();
@@ -1166,10 +1168,12 @@ pub async fn make(
     prop.set_f32(Role::App, 3, ACTION_SELECT_ALL_RECT.h).unwrap();
     prop.add_depend(&editbox_bg_rect_prop, 1, "editz_bg_top_y");
     layer_node.set_property_bool(Role::App, "is_visible", false).unwrap();
-    layer_node.set_property_u32(Role::App, "z_index", 2).unwrap();
+    layer_node.set_property_u32(Role::App, "z_index", 8).unwrap();
+    // Priority higher than chatview but lower than chatedit
+    layer_node.set_property_u32(Role::App, "priority", 1).unwrap();
     let layer_node =
         layer_node.setup(|me| Layer::new(me, app.render_api.clone(), app.ex.clone())).await;
-    chat_layer_node.link(layer_node.clone());
+    content_layer_node.link(layer_node.clone());
 
     let actions_is_visible = PropertyBool::wrap(&layer_node, Role::App, "is_visible", 0).unwrap();
 

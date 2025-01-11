@@ -1530,7 +1530,7 @@ impl ChatEdit {
         }
 
         let node = self.node.upgrade().unwrap();
-        node.trigger("request_keyboard", vec![]).await.unwrap();
+        node.trigger("keyboard_request", vec![]).await.unwrap();
 
         true
     }

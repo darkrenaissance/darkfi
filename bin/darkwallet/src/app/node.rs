@@ -403,7 +403,7 @@ pub fn create_chatedit(name: &str) -> SceneNode {
     node.add_property(prop).unwrap();
 
     node.add_signal("enter_pressed", "Enter key pressed", vec![]).unwrap();
-    node.add_signal("request_keyboard", "Request to show keyboard", vec![]).unwrap();
+    node.add_signal("keyboard_request", "Request to show keyboard", vec![]).unwrap();
 
     // Used by emoji_picker
     node.add_method("insert_text", vec![("text", "Text", CallArgType::Str)], None).unwrap();
