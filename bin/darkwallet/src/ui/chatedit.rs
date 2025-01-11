@@ -170,6 +170,7 @@ impl TextWrap {
 
     fn get_word_boundary(&mut self, pos: TextPos) -> (TextPos, TextPos) {
         let rendered = self.get_render();
+        let final_pos = rendered.glyphs.len();
 
         // Find word start
         let mut pos_start = pos;
@@ -183,8 +184,8 @@ impl TextWrap {
         }
 
         // Find word end
-        let mut pos_end = pos + 1;
-        while pos_end < rendered.glyphs.len() {
+        let mut pos_end = std::cmp::min(pos + 1, final_pos);
+        while pos_end < final_pos {
             let glyph_str = &rendered.glyphs[pos_end].substr;
             if is_whitespace(glyph_str) {
                 break
@@ -646,10 +647,10 @@ impl ChatEdit {
         //    .lock()
         //    .editable
         //    .set_text("".to_string(), "king!😁🍆jelly 🍆1234".to_string());
-        self_.text_wrap.lock().editable.set_text(
-            "".to_string(),
-            "A berry is a small, pulpy, and often edible fruit. Typically, berries are juicy, rounded, brightly colored, sweet, sour or tart, and do not have a stone or pit, although many pips or seeds may be present. Common examples of berries in the culinary sense are strawberries, raspberries, blueberries, blackberries, white currants, blackcurrants, and redcurrants. In Britain, soft fruit is a horticultural term for such fruits. The common usage of the term berry is different from the scientific or botanical definition of a berry, which refers to a fruit produced from the ovary of a single flower where the outer layer of the ovary wall develops into an edible fleshy portion (pericarp). The botanical definition includes many fruits that are not commonly known or referred to as berries, such as grapes, tomatoes, cucumbers, eggplants, bananas, and chili peppers.".to_string()
-        );
+        //self_.text_wrap.lock().editable.set_text(
+        //    "".to_string(),
+        //    "A berry is a small, pulpy, and often edible fruit. Typically, berries are juicy, rounded, brightly colored, sweet, sour or tart, and do not have a stone or pit, although many pips or seeds may be present. Common examples of berries in the culinary sense are strawberries, raspberries, blueberries, blackberries, white currants, blackcurrants, and redcurrants. In Britain, soft fruit is a horticultural term for such fruits. The common usage of the term berry is different from the scientific or botanical definition of a berry, which refers to a fruit produced from the ovary of a single flower where the outer layer of the ovary wall develops into an edible fleshy portion (pericarp). The botanical definition includes many fruits that are not commonly known or referred to as berries, such as grapes, tomatoes, cucumbers, eggplants, bananas, and chili peppers.".to_string()
+        //);
         //self_
         //    .text_wrap
         //    .lock()
@@ -689,7 +690,6 @@ impl ChatEdit {
         let linespacing = self.linespacing.get();
         let baseline = self.baseline.get();
         let scroll = self.scroll.get();
-        let cursor_pos = self.cursor_pos.get() as usize;
         let cursor_color = self.cursor_color.get();
         let debug = self.debug.get();
 
@@ -1275,23 +1275,23 @@ impl ChatEdit {
         // begin selection
         let select = &mut text_wrap.select;
         select.clear();
-        select.push(Selection::new(word_start, word_end));
+        if word_start != word_end {
+            select.push(Selection::new(word_start, word_end));
+
+            self.is_phone_select.store(true, Ordering::Relaxed);
+            // redraw() will now hide the cursor
+            self.hide_cursor.store(true, Ordering::Relaxed);
+        }
 
         debug!(target: "ui::chatview", "Selected {select:?} from {touch_pos:?}");
         self.update_select_text(&mut text_wrap);
-
-        self.is_phone_select.store(true, Ordering::Relaxed);
-        // redraw() will now hide the cursor
-        self.hide_cursor.store(true, Ordering::Relaxed);
     }
 
-    // Call this whenever the selection changes
+    /// Call this whenever the selection changes to update the external property
     fn update_select_text(&self, text_wrap: &mut TextWrap) {
         let select = &text_wrap.select;
         let Some(select) = select.first().cloned() else {
-            if !self.select_text.is_null(0).unwrap() {
-                self.select_text.set_null(Role::Internal, 0).unwrap();
-            }
+            self.select_text.set_null(Role::Internal, 0).unwrap();
             return
         };
 
@@ -1302,6 +1302,12 @@ impl ChatEdit {
         let glyphs = &rendered.glyphs[start..end];
         let text = text::glyph_str(glyphs);
         self.select_text.set_str(Role::Internal, 0, text).unwrap();
+    }
+
+    /// Call this whenever the cursor pos changes to update the external property
+    fn update_cursor_pos(&self, text_wrap: &mut TextWrap) {
+        let cursor_off = text_wrap.editable.get_text_before().len() as u32;
+        self.cursor_pos.set(cursor_off);
     }
 
     /*
@@ -1439,9 +1445,14 @@ impl ChatEdit {
         match &touch_state {
             TouchStateAction::Inactive => return false,
             TouchStateAction::StartSelect => {
-                self.abs_to_local(&mut touch_pos);
-                self.start_touch_select(touch_pos);
-                self.redraw().await;
+                if self.text.get().is_empty() {
+                    let node = self.node.upgrade().unwrap();
+                    node.trigger("paste_request", vec![]).await.unwrap();
+                } else {
+                    self.abs_to_local(&mut touch_pos);
+                    self.start_touch_select(touch_pos);
+                    self.redraw().await;
+                }
                 debug!(target: "ui::chatedit::touch", "touch state: StartSelect -> Select");
                 self.touch_info.lock().state = TouchStateAction::Select;
             }
@@ -1541,10 +1552,14 @@ impl ChatEdit {
         {
             let mut text_wrap = self.text_wrap.lock();
             let cursor_pos = text_wrap.set_cursor_with_point(touch_pos, width);
+            self.update_cursor_pos(&mut text_wrap);
 
             let select = &mut text_wrap.select;
+            let select_is_empty = select.is_empty();
             select.clear();
-            self.update_select_text(&mut text_wrap);
+            if !select_is_empty {
+                self.update_select_text(&mut text_wrap);
+            }
         }
 
         self.is_phone_select.store(false, Ordering::Relaxed);
@@ -1966,12 +1981,16 @@ impl UIObject for ChatEdit {
         {
             let mut text_wrap = self.text_wrap.lock();
             let cursor_pos = text_wrap.set_cursor_with_point(mouse_pos, width);
+            self.update_cursor_pos(&mut text_wrap);
             debug!(target: "ui::editbox", "Mouse move cursor pos to {cursor_pos}");
 
             // begin selection
             let select = &mut text_wrap.select;
+            let select_is_empty = select.is_empty();
             select.clear();
-            self.update_select_text(&mut text_wrap);
+            if !select_is_empty {
+                self.update_select_text(&mut text_wrap);
+            }
 
             self.mouse_btn_held.store(true, Ordering::Relaxed);
         }
@@ -2016,6 +2035,7 @@ impl UIObject for ChatEdit {
         {
             let mut text_wrap = self.text_wrap.lock();
             let cursor_pos = text_wrap.set_cursor_with_point(mouse_pos, width);
+            self.update_cursor_pos(&mut text_wrap);
 
             // modify current selection
             let select = &mut text_wrap.select;

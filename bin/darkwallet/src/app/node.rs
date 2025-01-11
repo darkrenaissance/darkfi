@@ -312,6 +312,7 @@ pub fn create_chatedit(name: &str) -> SceneNode {
     node.add_property(prop).unwrap();
 
     let mut prop = Property::new("cursor_pos", PropertyType::Uint32, PropertySubType::Pixel);
+    prop.set_ui_text("Cursor Pos", "Cursor position within the text");
     prop.set_range_u32(0, u32::MAX);
     node.add_property(prop).unwrap();
 
@@ -404,6 +405,7 @@ pub fn create_chatedit(name: &str) -> SceneNode {
 
     node.add_signal("enter_pressed", "Enter key pressed", vec![]).unwrap();
     node.add_signal("keyboard_request", "Request to show keyboard", vec![]).unwrap();
+    node.add_signal("paste_request", "Request to show paste dialog", vec![]).unwrap();
 
     // Used by emoji_picker
     node.add_method("insert_text", vec![("text", "Text", CallArgType::Str)], None).unwrap();

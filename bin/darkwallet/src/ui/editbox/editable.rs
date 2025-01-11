@@ -239,7 +239,7 @@ impl Editable {
         self.before_text += &final_text;
     }
 
-    fn get_text_before(&self) -> String {
+    pub fn get_text_before(&self) -> String {
         let text =
             self.before_text.clone() + &self.composer.commit_text + &self.composer.compose_text;
         text

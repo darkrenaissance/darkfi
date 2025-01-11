@@ -784,6 +784,7 @@ pub async fn make(
 
     let editz_text = PropertyStr::wrap(&node, Role::App, "text", 0).unwrap();
     let editz_select_text = node.get_property("select_text").unwrap();
+    let editz_cursor_pos = node.get_property("cursor_pos").unwrap();
 
     //let editbox_focus = PropertyBool::wrap(node, Role::App, "is_focused", 0).unwrap();
     //let darkirc_backend = app.darkirc_backend.clone();
@@ -992,31 +993,6 @@ pub async fn make(
 
     let cmd_hint_is_visible =
         PropertyBool::wrap(&cmd_layer_node, Role::App, "is_visible", 0).unwrap();
-    let editz_text_sub = editz_text.prop().subscribe_modify();
-    let editz_text_task = app.ex.spawn(async move {
-        while let Ok(_) = editz_text_sub.receive().await {
-            let text = editz_text.get();
-            info!(target: "app::chat", "text changed: {text}");
-            // We want to avoid setting the property multiple times to the same value
-            // because then it triggers unnecessary redraw work.
-            if let Some(first_char) = text.chars().next() {
-                if first_char == '/' {
-                    if !cmd_hint_is_visible.get() {
-                        cmd_hint_is_visible.set(true);
-                    }
-                } else {
-                    if cmd_hint_is_visible.get() {
-                        cmd_hint_is_visible.set(false);
-                    }
-                }
-            } else {
-                if cmd_hint_is_visible.get() {
-                    cmd_hint_is_visible.set(false);
-                }
-            }
-        }
-    });
-    app.tasks.lock().unwrap().push(editz_text_task);
 
     // Create the actionbar bg
     let node = create_vector_art("cmd_hint_bg");
@@ -1173,7 +1149,7 @@ pub async fn make(
     layer_node.set_property_u32(Role::App, "priority", 1).unwrap();
     let layer_node =
         layer_node.setup(|me| Layer::new(me, app.render_api.clone(), app.ex.clone())).await;
-    content_layer_node.link(layer_node.clone());
+    content_layer_node.clone().link(layer_node.clone());
 
     let actions_is_visible = PropertyBool::wrap(&layer_node, Role::App, "is_visible", 0).unwrap();
 
@@ -1325,6 +1301,7 @@ pub async fn make(
     let (slot, recvr) = Slot::new("paste_clicked");
     node.register("click", slot).unwrap();
     let actions_is_visible2 = actions_is_visible.clone();
+    let chatedit_node2 = chatedit_node.clone();
     let listen_click = app.ex.spawn(async move {
         let mut clip = Clipboard::new();
         while let Ok(_) = recvr.recv().await {
@@ -1332,7 +1309,7 @@ pub async fn make(
                 info!(target: "app::chat", "clicked paste: {text}");
                 let mut data = vec![];
                 text.encode(&mut data).unwrap();
-                chatedit_node.call_method("insert_text", data).await.unwrap();
+                chatedit_node2.call_method("insert_text", data).await.unwrap();
             } else {
                 info!(target: "app::chat", "clicked paste but clip is empty");
             }
@@ -1366,18 +1343,192 @@ pub async fn make(
     let node = node.setup(|me| Button::new(me, app.ex.clone())).await;
     layer_node.clone().link(node);
 
+    // Paste overlay popup
+    let layer_node = create_layer("paste_layer");
+    let prop = layer_node.get_property("rect").unwrap();
+    prop.set_f32(Role::App, 0, 40.).unwrap();
+    let code = cc.compile("editz_bg_top_y - ACTION_POPUP_Y_OFF").unwrap();
+    //let code = cc.compile("h - 60 - 80").unwrap();
+    //let code = cc.compile("h - 60 - 300").unwrap();
+    prop.set_expr(Role::App, 1, code).unwrap();
+    prop.set_f32(Role::App, 2, ACTION_SELECT_ALL_RECT.rhs()).unwrap();
+    prop.set_f32(Role::App, 3, ACTION_SELECT_ALL_RECT.h).unwrap();
+    prop.add_depend(&editbox_bg_rect_prop, 1, "editz_bg_top_y");
+    layer_node.set_property_bool(Role::App, "is_visible", false).unwrap();
+    layer_node.set_property_u32(Role::App, "z_index", 8).unwrap();
+    // Priority higher than chatview but lower than chatedit
+    layer_node.set_property_u32(Role::App, "priority", 1).unwrap();
+    let layer_node =
+        layer_node.setup(|me| Layer::new(me, app.render_api.clone(), app.ex.clone())).await;
+    content_layer_node.link(layer_node.clone());
+
+    let pasta_is_visible = PropertyBool::wrap(&layer_node, Role::App, "is_visible", 0).unwrap();
+
+    let (slot, recvr) = Slot::new("reqpasta");
+    chatedit_node.register("paste_request", slot).unwrap();
+    let pasta_is_visible2 = pasta_is_visible.clone();
+    let listen_click = app.ex.spawn(async move {
+        while let Ok(_) = recvr.recv().await {
+            pasta_is_visible2.set(true);
+        }
+    });
+    app.tasks.lock().unwrap().push(listen_click);
+
+    // Create the paste bg
+    let node = create_vector_art("paste_bg");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(Role::App, 0, 0.).unwrap();
+    prop.set_f32(Role::App, 1, 0.).unwrap();
+    prop.set_f32(Role::App, 2, ACTION_SELECT_ALL_RECT.rhs()).unwrap();
+    prop.set_f32(Role::App, 3, ACTION_SELECT_ALL_RECT.h).unwrap();
+    node.set_property_u32(Role::App, "z_index", 0).unwrap();
+
+    let mut shape = VectorShape::new();
+
+    let color1 = [0., 0.13, 0.08, 0.75];
+    let color2 = [0., 0., 0., 1.];
+    let gradient = [color1.clone(), color1, color2.clone(), color2];
+    let hicolor = [0., 0.94, 1., 1.];
+
+    // Paste box
+    shape.add_gradient_box(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::const_f32(ACTION_PASTE_RECT.w),
+        expr::const_f32(ACTION_PASTE_RECT.h),
+        gradient.clone(),
+    );
+
+    // Paste outline
+    shape.add_outline(
+        expr::const_f32(0.),
+        expr::const_f32(0.),
+        expr::const_f32(ACTION_PASTE_RECT.w),
+        expr::const_f32(ACTION_PASTE_RECT.h),
+        1.,
+        hicolor.clone(),
+    );
+
+    let node =
+        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
+    layer_node.clone().link(node);
+
+    // Create some text
+    let node = create_text("paste_label");
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(Role::App, 0, ACTION_LABEL_POS.x).unwrap();
+    prop.set_f32(Role::App, 1, ACTION_LABEL_POS.y).unwrap();
+    prop.set_f32(Role::App, 2, ACTION_SELECT_ALL_RECT.rhs()).unwrap();
+    prop.set_f32(Role::App, 3, ACTION_SELECT_ALL_RECT.h).unwrap();
+    node.set_property_f32(Role::App, "baseline", 0.).unwrap();
+    node.set_property_f32(Role::App, "font_size", FONTSIZE).unwrap();
+    node.set_property_str(Role::App, "text", "paste").unwrap();
+    //node.set_property_bool(Role::App, "debug", true).unwrap();
+    //node.set_property_str(Role::App, "text", "anon1").unwrap();
+    let prop = node.get_property("text_color").unwrap();
+    prop.set_f32(Role::App, 0, 0.).unwrap();
+    prop.set_f32(Role::App, 1, 0.94).unwrap();
+    prop.set_f32(Role::App, 2, 1.).unwrap();
+    prop.set_f32(Role::App, 3, 1.).unwrap();
+    node.set_property_u32(Role::App, "z_index", 1).unwrap();
+
+    let node = node
+        .setup(|me| {
+            Text::new(
+                me,
+                window_scale.clone(),
+                app.render_api.clone(),
+                app.text_shaper.clone(),
+                app.ex.clone(),
+            )
+        })
+        .await;
+    layer_node.clone().link(node);
+
+    // Paste button
+    let node = create_button("paste_btn");
+    node.set_property_bool(Role::App, "is_active", true).unwrap();
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(Role::App, 0, 0.).unwrap();
+    prop.set_f32(Role::App, 1, 0.).unwrap();
+    prop.set_f32(Role::App, 2, ACTION_PASTE_RECT.w).unwrap();
+    prop.set_f32(Role::App, 3, ACTION_PASTE_RECT.h).unwrap();
+
+    let node = node.setup(|me| Button::new(me, app.ex.clone())).await;
+    layer_node.clone().link(node.clone());
+
+    let (slot, recvr) = Slot::new("paste_clicked");
+    node.register("click", slot).unwrap();
+    let chatedit_node2 = chatedit_node.clone();
+    let pasta_is_visible2 = pasta_is_visible.clone();
+    let listen_click = app.ex.spawn(async move {
+        let mut clip = Clipboard::new();
+        while let Ok(_) = recvr.recv().await {
+            if let Some(text) = clip.get() {
+                info!(target: "app::chat", "clicked paste: {text}");
+                let mut data = vec![];
+                text.encode(&mut data).unwrap();
+                chatedit_node2.call_method("insert_text", data).await.unwrap();
+            } else {
+                info!(target: "app::chat", "clicked paste but clip is empty");
+            }
+            pasta_is_visible2.set(false);
+        }
+    });
+    app.tasks.lock().unwrap().push(listen_click);
+
+    let editz_cpos_sub = editz_cursor_pos.subscribe_modify();
+    let pasta_is_visible2 = pasta_is_visible.clone();
+    let editz_cpos_task = app.ex.spawn(async move {
+        while let Ok(_) = editz_cpos_sub.receive().await {
+            pasta_is_visible2.set(false);
+        }
+    });
+    app.tasks.lock().unwrap().push(editz_cpos_task);
+
     let editz_select_sub = editz_select_text.subscribe_modify();
+    let pasta_is_visible2 = pasta_is_visible.clone();
     let editz_select_task = app.ex.spawn(async move {
         while let Ok(_) = editz_select_sub.receive().await {
             if editz_select_text.is_null(0).unwrap() {
                 info!(target: "app::chat", "selection changed: null");
                 actions_is_visible.set(false);
+                pasta_is_visible2.set(false);
             } else {
                 let select_text = editz_select_text.get_str(0).unwrap();
                 info!(target: "app::chat", "selection changed: {select_text}");
                 actions_is_visible.set(true);
+                pasta_is_visible2.set(false);
             }
         }
     });
     app.tasks.lock().unwrap().push(editz_select_task);
+
+    let editz_text_sub = editz_text.prop().subscribe_modify();
+    let editz_text_task = app.ex.spawn(async move {
+        while let Ok(_) = editz_text_sub.receive().await {
+            pasta_is_visible.set(false);
+
+            let text = editz_text.get();
+            info!(target: "app::chat", "text changed: {text}");
+            // We want to avoid setting the property multiple times to the same value
+            // because then it triggers unnecessary redraw work.
+            if let Some(first_char) = text.chars().next() {
+                if first_char == '/' {
+                    if !cmd_hint_is_visible.get() {
+                        cmd_hint_is_visible.set(true);
+                    }
+                } else {
+                    if cmd_hint_is_visible.get() {
+                        cmd_hint_is_visible.set(false);
+                    }
+                }
+            } else {
+                if cmd_hint_is_visible.get() {
+                    cmd_hint_is_visible.set(false);
+                }
+            }
+        }
+    });
+    app.tasks.lock().unwrap().push(editz_text_task);
 }
