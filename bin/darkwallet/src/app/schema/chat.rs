@@ -19,6 +19,7 @@
 use darkfi::system::msleep;
 use darkfi_serial::Encodable;
 use sled_overlay::sled;
+use std::time::UNIX_EPOCH;
 
 use crate::{
     app::{
@@ -32,6 +33,7 @@ use crate::{
     expr::{self, Compiler, Op},
     gfx::{GraphicsEventPublisherPtr, Point, Rectangle, RenderApi, Vertex},
     mesh::{Color, MeshBuilder},
+    plugin::darkirc,
     prop::{
         Property, PropertyBool, PropertyFloat32, PropertyStr, PropertySubType, PropertyType, Role,
     },
@@ -911,9 +913,21 @@ pub async fn make(
                 continue
             }
 
+            let timest = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
+            let nick = darkirc.get_property_str("nick").unwrap();
+            let msg = darkirc::Privmsg::new(channel.clone(), nick, text);
+
             let mut data = vec![];
-            channel.encode(&mut data).unwrap();
-            text.encode(&mut data).unwrap();
+            timest.encode(&mut data).unwrap();
+            msg.msg_id(timest).encode(&mut data).unwrap();
+            msg.nick.encode(&mut data).unwrap();
+            msg.msg.encode(&mut data).unwrap();
+            chatview_node.call_method("insert_unconf_line", data).await.unwrap();
+
+            let mut data = vec![];
+            timest.encode(&mut data).unwrap();
+            msg.channel.encode(&mut data).unwrap();
+            msg.msg.encode(&mut data).unwrap();
             darkirc.call_method("send", data).await.unwrap();
         }
     });

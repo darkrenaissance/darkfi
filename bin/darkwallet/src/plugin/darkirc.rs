@@ -42,7 +42,10 @@ use crate::{
     error::{Error, Result},
     prop::{PropertyStr, Role},
     scene::{MethodCallSub, Pimpl, SceneNodePtr, SceneNodeWeak},
-    ui::{chatview::MessageId, OnModify},
+    ui::{
+        chatview::{MessageId, Timestamp},
+        OnModify,
+    },
     ExecutorPtr,
 };
 
@@ -90,11 +93,37 @@ impl Privmsg {
 
     pub fn msg_id(&self, timest: u64) -> MessageId {
         let mut hasher = blake3::Hasher::new();
+        0u8.encode(&mut hasher).unwrap();
+        0u8.encode(&mut hasher).unwrap();
         timest.encode(&mut hasher).unwrap();
         self.channel.encode(&mut hasher).unwrap();
         self.nick.encode(&mut hasher).unwrap();
         self.msg.encode(&mut hasher).unwrap();
         MessageId(hasher.finalize().into())
+    }
+}
+
+struct SeenMsg {
+    id: MessageId,
+    is_self: bool,
+    seen_times: usize,
+}
+
+struct SeenMessages {
+    seen: Vec<SeenMsg>,
+}
+
+impl SeenMessages {
+    fn new() -> Self {
+        Self { seen: vec![] }
+    }
+
+    fn get_status(&self, id: &MessageId) -> Option<&SeenMsg> {
+        self.seen.iter().find(|s| s.id == *id)
+    }
+
+    fn push(&mut self, id: MessageId, is_self: bool) {
+        self.seen.push(SeenMsg { id, is_self, seen_times: 0 });
     }
 }
 
@@ -108,7 +137,7 @@ pub struct DarkIrc {
     event_graph: EventGraphPtr,
     db: sled::Db,
 
-    seen_msgs: SyncMutex<Vec<MessageId>>,
+    seen_msgs: SyncMutex<SeenMessages>,
     nick: PropertyStr,
 }
 
@@ -169,7 +198,7 @@ impl DarkIrc {
             event_graph,
             db,
 
-            seen_msgs: SyncMutex::new(vec![]),
+            seen_msgs: SyncMutex::new(SeenMessages::new()),
             nick,
         });
         Ok(Pimpl::DarkIrc(self_))
@@ -221,31 +250,37 @@ impl DarkIrc {
                 }
             };
 
+            let mut timest = ev.timestamp;
+            let msg_id = privmsg.msg_id(timest);
             inf!(
-                "Relaying channel={}, ev_id={:?}, ev={:?}, privmsg={:?}",
-                privmsg.channel,
+                "Relaying ev_id={:?}, ev={ev:?}, msg_id={msg_id}, privmsg={privmsg:?}, timest={timest}",
                 ev.id(),
-                ev,
-                privmsg
             );
 
-            let timest = ev.timestamp;
-            // This is a hack to make messages appear sequentially in the UI
-            let mut adj_timest = timest;
-            let now_timest = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
-            if timest.abs_diff(now_timest) < RECENT_TIME_DIST {
-                d!("Applied timestamp correction: <{timest}> => <{now_timest}>");
-                adj_timest = now_timest;
-            }
-
-            let msg_id = privmsg.msg_id(timest);
-            {
+            let is_self = {
+                let mut is_self = false;
                 let mut seen = self.seen_msgs.lock().unwrap();
-                if seen.contains(&msg_id) {
-                    warn!(target: "plugin::darkirc", "Skipping duplicate seen message: {msg_id}");
-                    continue
+                match seen.get_status(&msg_id) {
+                    Some(msg) => {
+                        is_self = msg.is_self;
+
+                        if !msg.is_self || msg.seen_times > 1 {
+                            warn!(target: "plugin::darkirc", "Skipping duplicate seen message: {msg_id}");
+                            continue
+                        }
+                    }
+                    None => {
+                        seen.push(msg_id.clone(), false);
+                    }
                 }
-                seen.push(msg_id.clone());
+                is_self
+            };
+
+            // This is a hack to make messages appear sequentially in the UI
+            let now_timest = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
+            if !is_self && timest.abs_diff(now_timest) < RECENT_TIME_DIST {
+                d!("Applied timestamp correction: <{timest}> => <{now_timest}>");
+                timest = now_timest;
             }
 
             // Strip off starting #
@@ -268,8 +303,8 @@ impl DarkIrc {
 
             let mut arg_data = vec![];
             channel.encode(&mut arg_data).unwrap();
-            ev.timestamp.encode(&mut arg_data).unwrap();
-            ev.id().as_bytes().encode(&mut arg_data).unwrap();
+            timest.encode(&mut arg_data).unwrap();
+            msg_id.encode(&mut arg_data).unwrap();
             nick.encode(&mut arg_data).unwrap();
             privmsg.msg.encode(&mut arg_data).unwrap();
 
@@ -287,14 +322,15 @@ impl DarkIrc {
         d!("method called: send({method_call:?})");
         assert!(method_call.send_res.is_none());
 
-        fn decode_data(data: &[u8]) -> std::io::Result<(String, String)> {
+        fn decode_data(data: &[u8]) -> std::io::Result<(Timestamp, String, String)> {
             let mut cur = Cursor::new(&data);
+            let timest = Timestamp::decode(&mut cur).unwrap();
             let channel = String::decode(&mut cur)?;
             let msg = String::decode(&mut cur)?;
-            Ok((channel, msg))
+            Ok((timest, channel, msg))
         }
 
-        let Ok((channel, msg)) = decode_data(&method_call.data) else {
+        let Ok((timest, channel, msg)) = decode_data(&method_call.data) else {
             err!("send() method invalid arg data");
             return true
         };
@@ -304,29 +340,37 @@ impl DarkIrc {
             panic!("self destroyed before send_method_task was stopped!");
         };
 
-        self_.handle_send(channel, msg).await;
+        self_.handle_send(timest, channel, msg).await;
 
         true
     }
 
-    async fn handle_send(&self, channel: String, msg: String) {
+    async fn handle_send(&self, timest: Timestamp, channel: String, msg: String) {
         let nick = self.nick.get();
 
         // Send text to channel
-        let timest = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
-        d!("Sending privmsg: {timest} #{channel}: <{nick}> {msg}");
+        d!("Sending privmsg: {timest} {channel}: <{nick}> {msg}");
         let msg = Privmsg::new(channel, nick, msg);
+        let evgr = self.event_graph.clone();
+        let mut event = event_graph::Event::new(serialize_async(&msg).await, &evgr).await;
+        event.timestamp = timest;
+        let msg_id = msg.msg_id(timest);
+
+        // Keep track of our own messages so we don't apply timestamp correction to them
+        // which messes up the msg id.
+        {
+            let mut seen = self.seen_msgs.lock().unwrap();
+            seen.push(msg_id.clone(), true);
+        }
 
         let mut arg_data = vec![];
         timest.encode_async(&mut arg_data).await.unwrap();
-        msg.msg_id(timest).encode_async(&mut arg_data).await.unwrap();
+        msg_id.encode_async(&mut arg_data).await.unwrap();
         msg.nick.encode_async(&mut arg_data).await.unwrap();
         msg.msg.encode_async(&mut arg_data).await.unwrap();
 
         // Broadcast the msg
 
-        let evgr = self.event_graph.clone();
-        let event = event_graph::Event::new(serialize_async(&msg).await, &evgr).await;
         if let Err(e) = evgr.dag_insert(&[event.clone()]).await {
             error!(target: "darkirc", "Failed inserting new event to DAG: {}", e);
         }

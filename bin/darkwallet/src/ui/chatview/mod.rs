@@ -315,7 +315,7 @@ impl ChatView {
             return false
         };
 
-        //debug!(target: "ui::chatview", "method called: insert_line({method_call:?})");
+        //debug!(target: "ui::chatview", "method called: insert_unconf_line({method_call:?})");
         assert!(method_call.send_res.is_none());
 
         fn decode_data(data: &[u8]) -> std::io::Result<(Timestamp, MessageId, String, String)> {
@@ -445,6 +445,7 @@ impl ChatView {
             // Mark it as confirmed.
             debug!(target: "ui::chatview", "Mark sent message as confirmed");
         } else {
+            debug!(target: "ui::chatview", "Inserting new message");
             // Insert the privmsg since it doesn't already exist
             if msgbuf.insert_privmsg(timest, msg_id, nick, text).is_none() {
                 // Not visible so no need to redraw

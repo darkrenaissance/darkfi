@@ -21,7 +21,7 @@ use std::sync::Arc;
 
 use crate::ExecutorPtr;
 
-mod darkirc;
+pub mod darkirc;
 pub use darkirc::{DarkIrc, DarkIrcPtr};
 
 #[async_trait]
