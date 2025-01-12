@@ -82,7 +82,7 @@ pub struct ChatMsg {
     pub text: String,
 }
 
-type Timestamp = u64;
+pub type Timestamp = u64;
 
 #[derive(Clone, SerialEncodable, SerialDecodable, PartialEq)]
 pub struct MessageId(pub [u8; 32]);

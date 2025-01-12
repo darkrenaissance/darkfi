@@ -45,9 +45,14 @@ use crate::{
 };
 
 #[cfg(target_os = "android")]
-const EVGRDB_PATH: &str = "/data/data/darkfi.darkwallet/evgr/";
+fn get_evgrdb_path() -> String {
+    use crate::android::get_appdata_path;
+    get_appdata_path() + "/evgr/"
+}
 #[cfg(not(target_os = "android"))]
-const EVGRDB_PATH: &str = "~/.local/darkfi/darkwallet/evgr/";
+fn get_evgrdb_path() -> String {
+    "~/.local/darkfi/darkwallet/evgr/".to_string()
+}
 
 const CHANNEL: &str = "#random";
 
@@ -83,21 +88,20 @@ pub struct DarkIrcBackend {
     ex: ExecutorPtr,
     p2p: P2pPtr,
     event_graph: EventGraphPtr,
-    tasks: SyncMutex<Vec<smol::Task<()>>>,
     db: sled::Db,
 
-    chatview_node: SceneNodePtr,
-    sendbtn_node: SceneNodePtr,
-    editbox_node: SceneNodePtr,
-    editbox_text: PropertyStr,
-    chatview_scroll: PropertyFloat32,
-    upgrade_popup_is_visible: PropertyBool,
-
+    //chatview_node: SceneNodePtr,
+    //sendbtn_node: SceneNodePtr,
+    //editbox_node: SceneNodePtr,
+    //editbox_text: PropertyStr,
+    //chatview_scroll: PropertyFloat32,
+    //upgrade_popup_is_visible: PropertyBool,
     seen_msgs: SyncMutex<Vec<MessageId>>,
 }
 
 impl DarkIrcBackend {
     pub async fn new(sg_root: SceneNodePtr, ex: ExecutorPtr) -> darkfi::Result<Arc<Self>> {
+        /*
         let chatview_node = sg_root.clone().lookup_node("/window/view/chatty").unwrap();
         let sendbtn_node = sg_root.clone().lookup_node("/window/view/send_btn").unwrap();
 
@@ -110,9 +114,10 @@ impl DarkIrcBackend {
         let upgrade_popup_node = sg_root.clone().lookup_node("/window/view/upgrade_popup").unwrap();
         let upgrade_popup_is_visible =
             PropertyBool::wrap(&upgrade_popup_node, Role::App, "is_visible", 0).unwrap();
+        */
 
         info!(target: "darkirc", "Starting DarkIRC backend");
-        let db = sled::open(EVGRDB_PATH)?;
+        let db = sled::open(get_evgrdb_path())?;
 
         let mut p2p_settings: NetSettings = Default::default();
         p2p_settings.app_version = semver::Version::parse("0.5.0").unwrap();
@@ -135,16 +140,14 @@ impl DarkIrcBackend {
             ex,
             p2p,
             event_graph,
-            tasks: SyncMutex::new(vec![]),
             db,
 
-            chatview_node,
-            sendbtn_node,
-            editbox_node,
-            editbox_text,
-            chatview_scroll,
-            upgrade_popup_is_visible,
-
+            //chatview_node,
+            //sendbtn_node,
+            //editbox_node,
+            //editbox_text,
+            //chatview_scroll,
+            //upgrade_popup_is_visible,
             seen_msgs: SyncMutex::new(vec![]),
         }))
     }
@@ -167,40 +170,6 @@ impl DarkIrcBackend {
 
         info!(target: "darkirc", "Starting P2P network");
         self.p2p.clone().start().await?;
-
-        // Connect the UI send up
-
-        let (slot, recvr) = Slot::new("send_button_clicked");
-        self.sendbtn_node.register("click", slot).unwrap();
-        let me = Arc::downgrade(&self);
-        let send_task = ex.spawn(async move {
-            while let Some(self_) = me.upgrade() {
-                let Ok(_) = recvr.recv().await else {
-                    error!(target: "ui::win", "Button click recvr closed");
-                    break
-                };
-                self_.handle_send().await;
-            }
-        });
-
-        let (slot, recvr) = Slot::new("enter_pressed");
-        self.editbox_node.register("enter_pressed", slot).unwrap();
-        let me = Arc::downgrade(&self);
-        let enter_task = ex.spawn(async move {
-            while let Some(self_) = me.upgrade() {
-                let Ok(_) = recvr.recv().await else {
-                    error!(target: "ui::win", "EditBox enter_pressed recvr closed");
-                    break
-                };
-                self_.handle_send().await;
-            }
-        });
-
-        {
-            let mut tasks = self.tasks.lock().unwrap();
-            assert!(tasks.is_empty());
-            *tasks = vec![send_task, enter_task];
-        }
 
         // Sync the DAG
 
@@ -297,10 +266,11 @@ impl DarkIrcBackend {
             privmsg.nick.encode(&mut arg_data).unwrap();
             privmsg.msg.encode(&mut arg_data).unwrap();
 
-            self.chatview_node.call_method("insert_line", arg_data).await.unwrap();
+            //self.chatview_node.call_method("insert_line", arg_data).await.unwrap();
         }
     }
 
+    /*
     async fn handle_send(&self) {
         // Get text from editbox
         let text = self.editbox_text.get();
@@ -334,4 +304,5 @@ impl DarkIrcBackend {
 
         self.p2p.broadcast(&EventPut(event)).await;
     }
+    */
 }

@@ -520,7 +520,7 @@ pub fn create_chatview(name: &str) -> SceneNode {
 
 pub fn create_emoji_picker(name: &str) -> SceneNode {
     debug!(target: "app", "create_emoji_picker({name})");
-    let mut node = SceneNode::new(name, SceneNodeType::Image);
+    let mut node = SceneNode::new(name, SceneNodeType::EmojiPicker);
 
     let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
     prop.set_array_len(4);
@@ -551,6 +551,38 @@ pub fn create_emoji_picker(name: &str) -> SceneNode {
 
     node.add_signal("emoji_select", "Emoji selected", vec![("text", "Text", CallArgType::Str)])
         .unwrap();
+
+    node
+}
+
+pub fn create_darkirc(name: &str) -> SceneNode {
+    debug!(target: "app", "create_darkirc({name})");
+    let mut node = SceneNode::new(name, SceneNodeType::Plugin);
+
+    let mut prop = Property::new("nick", PropertyType::Str, PropertySubType::Null);
+    prop.set_ui_text("Nick", "Nickname");
+    prop.set_defaults_str(vec!["anon".to_string()]).unwrap();
+    node.add_property(prop).unwrap();
+
+    node.add_signal(
+        "recv",
+        "Message received",
+        vec![
+            ("channel", "Channel", CallArgType::Str),
+            ("timestamp", "Timestamp", CallArgType::Uint64),
+            ("id", "ID", CallArgType::Hash),
+            ("nick", "Nick", CallArgType::Str),
+            ("msg", "Message", CallArgType::Str),
+        ],
+    )
+    .unwrap();
+
+    node.add_method(
+        "send",
+        vec![("channel", "Channel", CallArgType::Str), ("msg", "Message", CallArgType::Str)],
+        None,
+    )
+    .unwrap();
 
     node
 }

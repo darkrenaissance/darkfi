@@ -17,7 +17,10 @@
  */
 
 use miniquad::native::android::{self, ndk_sys, ndk_utils};
-use std::sync::{LazyLock, Mutex as SyncMutex};
+use std::{
+    path::PathBuf,
+    sync::{LazyLock, Mutex as SyncMutex},
+};
 
 struct GlobalData {
     sender: Option<async_channel::Sender<AndroidSuggestEvent>>,
@@ -95,8 +98,8 @@ pub fn get_keyboard_height() -> usize {
     }
 }
 
-pub fn get_appdata_path() -> String {
-    unsafe {
+pub fn get_appdata_path() -> PathBuf {
+    let path = unsafe {
         let env = android::attach_jni_env();
 
         let text = ndk_utils::call_object_method!(
@@ -106,10 +109,11 @@ pub fn get_appdata_path() -> String {
             "()Ljava/lang/String;"
         );
         ndk_utils::get_utf_str!(env, text).to_string()
-    }
+    };
+    path.into()
 }
-pub fn get_external_storage_path() -> String {
-    unsafe {
+pub fn get_external_storage_path() -> PathBuf {
+    let path = unsafe {
         let env = android::attach_jni_env();
 
         let text = ndk_utils::call_object_method!(
@@ -119,5 +123,6 @@ pub fn get_external_storage_path() -> String {
             "()Ljava/lang/String;"
         );
         ndk_utils::get_utf_str!(env, text).to_string()
-    }
+    };
+    path.into()
 }

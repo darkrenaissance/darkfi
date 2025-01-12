@@ -19,28 +19,30 @@
 use async_recursion::async_recursion;
 use chrono::{Local, NaiveDate, NaiveDateTime, TimeZone};
 use darkfi::system::CondVar;
-use darkfi_serial::Encodable;
+use darkfi_serial::{Decodable, Encodable};
 use futures::{stream::FuturesUnordered, StreamExt};
 use sled_overlay::sled;
 use smol::Task;
 use std::{
+    io::Cursor,
     sync::{Arc, Mutex as SyncMutex},
     thread,
 };
 
 use crate::{
-    darkirc::DarkIrcBackendPtr,
     error::Error,
     expr::Op,
     gfx::{GraphicsEventPublisherPtr, RenderApi, Vertex},
+    plugin::{self, PluginObject},
     prop::{Property, PropertyBool, PropertyStr, PropertySubType, PropertyType, Role},
-    scene::{Pimpl, SceneNode as SceneNode3, SceneNodePtr, SceneNodeType as SceneNodeType3},
+    scene::{Pimpl, SceneNode as SceneNode3, SceneNodePtr, SceneNodeType as SceneNodeType3, Slot},
     text::TextShaperPtr,
     ui::{chatview, Window},
     ExecutorPtr,
 };
 
 mod node;
+use node::create_darkirc;
 mod schema;
 
 //fn print_type_of<T>(_: &T) {
@@ -121,7 +123,6 @@ pub struct App {
     pub render_api: RenderApi,
     pub event_pub: GraphicsEventPublisherPtr,
     pub text_shaper: TextShaperPtr,
-    pub darkirc_evgr: SyncMutex<Option<DarkIrcBackendPtr>>,
     pub tasks: SyncMutex<Vec<Task<()>>>,
     pub ex: ExecutorPtr,
 }
@@ -140,7 +141,6 @@ impl App {
             render_api,
             event_pub,
             text_shaper,
-            darkirc_evgr: SyncMutex::new(None),
             tasks: SyncMutex::new(vec![]),
         })
     }
@@ -165,6 +165,55 @@ impl App {
         schema::make(&self, window).await;
 
         debug!(target: "app", "Schema loaded");
+
+        let plugin = Arc::new(SceneNode3::new("plugin", SceneNodeType3::PluginRoot));
+        self.sg_root.clone().link(plugin.clone());
+
+        let darkirc = create_darkirc("darkirc");
+        let darkirc = darkirc
+            .setup(|me| async {
+                plugin::DarkIrc::new(me, self.ex.clone()).await.expect("DarkIrc pimpl setup")
+            })
+            .await;
+
+        let (slot, recvr) = Slot::new("recvmsg");
+        darkirc.register("recv", slot).unwrap();
+        let sg_root2 = self.sg_root.clone();
+        let listen_recv = self.ex.spawn(async move {
+            while let Ok(data) = recvr.recv().await {
+                let mut cur = Cursor::new(&data);
+                let channel = String::decode(&mut cur).unwrap();
+                let timestamp = chatview::Timestamp::decode(&mut cur).unwrap();
+                let id = chatview::MessageId::decode(&mut cur).unwrap();
+                let nick = String::decode(&mut cur).unwrap();
+                let msg = String::decode(&mut cur).unwrap();
+
+                let node_path = format!("/window/{channel}_chat_layer/content/chatty");
+                debug!(target: "app", "Attempting to relay message to {node_path}");
+                let Some(chatview) = sg_root2.clone().lookup_node(&node_path) else {
+                    warn!(target: "app", "Ignoring message since {node_path} doesn't exist");
+                    continue
+                };
+
+                // I prefer to just re-encode because the code is clearer.
+                let mut data = vec![];
+                timestamp.encode(&mut data).unwrap();
+                id.encode(&mut data).unwrap();
+                nick.encode(&mut data).unwrap();
+                msg.encode(&mut data).unwrap();
+                if let Err(err) = chatview.call_method("insert_line", data).await {
+                    error!(
+                        target: "app",
+                        "Call method {node_path}::insert_line({timestamp}, {id}, {nick}, '{msg}'): {err:?}"
+                    );
+                }
+            }
+        });
+        self.tasks.lock().unwrap().push(listen_recv);
+
+        plugin.link(darkirc);
+
+        debug!(target: "app", "Plugins loaded");
     }
 
     /// Begins the draw of the tree, and then starts the UI procs.
@@ -213,6 +262,14 @@ impl App {
         match &window_node.pimpl {
             Pimpl::Window(win) => win.clone().start(self.event_pub.clone(), self.ex.clone()).await,
             _ => panic!("wrong pimpl"),
+        }
+
+        let plugins = self.sg_root.clone().lookup_node("/plugin").unwrap();
+        for plugin in plugins.get_children() {
+            match &plugin.pimpl {
+                Pimpl::DarkIrc(darkirc) => darkirc.clone().start(self.ex.clone()).await,
+                _ => panic!("wrong pimpl"),
+            }
         }
     }
 

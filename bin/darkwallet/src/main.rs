@@ -53,15 +53,13 @@ use log::LevelFilter;
 mod android;
 mod app;
 mod build_info;
-mod darkirc;
-mod darkirc2;
 mod error;
 mod expr;
 mod gfx;
 mod logger;
 mod mesh;
 mod net;
-//mod plugin;
+mod plugin;
 mod prop;
 mod pubsub;
 //mod py;
@@ -73,11 +71,7 @@ mod text;
 mod ui;
 mod util;
 
-use crate::{
-    darkirc::{DarkIrcBackend, DarkIrcBackendPtr},
-    net::ZeroMQAdapter,
-    text::TextShaper,
-};
+use crate::{net::ZeroMQAdapter, text::TextShaper};
 
 pub type ExecutorPtr = Arc<smol::Executor<'static>>;
 
@@ -146,26 +140,12 @@ fn main() {
     let app2 = app.clone();
     let app_task = ex.spawn(async move {
         app2.setup().await;
+        // Needed because accessing screen_size() is not allowed until window init
         cv_gfxwin_started2.wait().await;
         app2.start().await;
         cv_app_started2.notify();
     });
     async_runtime.push_task(app_task);
-
-    /*
-    let app2 = app.clone();
-    let sg_root = app.sg_root.clone();
-    let ex2 = ex.clone();
-    let darkirc_task = ex.spawn(async move {
-        cv_app_started.wait().await;
-        let darkirc_evgr = DarkIrcBackend::new(sg_root.clone(), ex2.clone()).await.unwrap();
-        *app2.darkirc_evgr.lock().unwrap() = Some(darkirc_evgr.clone());
-        if let Err(e) = darkirc_evgr.start(ex2).await {
-            error!("DarkIRC error: {e}")
-        }
-    });
-    async_runtime.push_task(darkirc_task);
-    */
 
     /*
     // Nice to see which events exist

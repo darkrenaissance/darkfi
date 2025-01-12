@@ -1314,6 +1314,7 @@ dependencies = [
  "colored",
  "darkfi",
  "darkfi-serial",
+ "dirs",
  "easy-parallel",
  "evgrd",
  "file-rotate",

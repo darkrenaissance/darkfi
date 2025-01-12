@@ -53,23 +53,26 @@ mod android_ui_consts {
 
 #[cfg(target_os = "android")]
 mod ui_consts {
-    pub const CHATDB_PATH: &str = "APPDATA/chatdb/";
+    use std::path::PathBuf;
+
     pub const BG_PATH: &str = "bg.png";
     pub use super::android_ui_consts::*;
 
-    pub fn get_chatdb_path() -> String {
-        CHATDB_PATH.replace("APPDATA", &crate::android::get_appdata_path())
+    pub fn get_chatdb_path() -> PathBuf {
+        use crate::android::get_appdata_path;
+        get_appdata_path().join("chatdb")
     }
 }
 
 #[cfg(feature = "emulate-android")]
 mod ui_consts {
-    pub const CHATDB_PATH: &str = "chatdb";
+    use std::path::PathBuf;
+
     pub const BG_PATH: &str = "assets/bg.png";
     pub use super::android_ui_consts::*;
 
-    pub fn get_chatdb_path() -> String {
-        CHATDB_PATH.to_string()
+    pub fn get_chatdb_path() -> PathBuf {
+        dirs::cache_dir().unwrap().join("darkfi/chatdb")
     }
 }
 
@@ -78,12 +81,13 @@ mod ui_consts {
     not(feature = "emulate-android")
 ))]
 mod ui_consts {
-    pub const CHATDB_PATH: &str = "chatdb";
+    use std::path::PathBuf;
+
     pub const BG_PATH: &str = "assets/bg.png";
     pub const EMOJI_PICKER_ICON_SIZE: f32 = 40.;
 
-    pub fn get_chatdb_path() -> String {
-        CHATDB_PATH.to_string()
+    pub fn get_chatdb_path() -> PathBuf {
+        dirs::cache_dir().unwrap().join("darkfi/chatdb")
     }
 }
 

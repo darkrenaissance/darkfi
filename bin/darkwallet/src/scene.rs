@@ -31,6 +31,7 @@ use std::{
 
 use crate::{
     error::{Error, Result},
+    plugin,
     prop::{Property, PropertyPtr, Role},
     pubsub::{Publisher, PublisherPtr, Subscription},
     ui,
@@ -106,13 +107,16 @@ pub enum SceneNodeType {
     Texture = 13,
     Fonts = 10,
     Font = 11,
-    Plugins = 14,
-    Plugin = 15,
+    //Plugins = 14,
+    //Plugin = 15,
     ChatView = 16,
     EditBox = 17,
     ChatEdit = 18,
     Image = 19,
     Button = 20,
+    EmojiPicker = 21,
+    PluginRoot = 100,
+    Plugin = 101,
 }
 
 pub struct SceneNode {
@@ -473,4 +477,5 @@ pub enum Pimpl {
     Image(ui::ImagePtr),
     Button(ui::ButtonPtr),
     EmojiPicker(ui::EmojiPickerPtr),
+    DarkIrc(plugin::DarkIrcPtr),
 }

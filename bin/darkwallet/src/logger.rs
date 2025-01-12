@@ -1,20 +1,25 @@
-use darkfi::util::path::expand_path;
 use file_rotate::{compression::Compression, suffix::AppendCount, ContentLimit, FileRotate};
 use log::{Level, LevelFilter, Log, Metadata, Record};
 use simplelog::{
     ColorChoice, CombinedLogger, Config, ConfigBuilder, SharedLogger, TermLogger, TerminalMode,
     WriteLogger,
 };
-use std::{thread::sleep, time::Duration};
+use std::{path::PathBuf, thread::sleep, time::Duration};
 
 const LOGS_ENABLED: bool = true;
 // Measured in bytes
 const LOGFILE_MAXSIZE: usize = 5_000_000;
 
 #[cfg(target_os = "android")]
-const LOGFILE_PATH: &str = "/sdcard/Download/darkwallet.log";
+fn logfile_path() -> PathBuf {
+    use crate::android::get_external_storage_path;
+    get_external_storage_path().join("Download/darkfi.log")
+}
+
 #[cfg(not(target_os = "android"))]
-const LOGFILE_PATH: &str = "~/.local/darkfi/darkwallet.log";
+fn logfile_path() -> PathBuf {
+    dirs::cache_dir().unwrap().join("darkfi/darkfi.log")
+}
 
 #[cfg(target_os = "android")]
 mod android {
@@ -81,9 +86,8 @@ pub fn setup_logging() {
     let cfg = cfg.build();
 
     if LOGS_ENABLED {
-        let logfile_path = expand_path(LOGFILE_PATH).unwrap();
         let log_file = FileRotate::new(
-            logfile_path,
+            logfile_path(),
             AppendCount::new(0),
             ContentLimit::BytesSurpassed(LOGFILE_MAXSIZE),
             Compression::None,

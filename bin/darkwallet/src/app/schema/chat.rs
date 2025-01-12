@@ -536,9 +536,9 @@ pub async fn make(
 
     let tree_name = channel.to_string() + "__chat_tree";
     let chat_tree = db.open_tree(tree_name.as_bytes()).unwrap();
-    if chat_tree.is_empty() {
-        populate_tree(&chat_tree);
-    }
+    //if chat_tree.is_empty() {
+    //    populate_tree(&chat_tree);
+    //}
     debug!(target: "app", "db has {} lines", chat_tree.len());
     let node = node
         .setup(|me| {
@@ -882,11 +882,27 @@ pub async fn make(
     node.register("click", slot).unwrap();
     let editz_text2 = editz_text.clone();
     let channel2 = channel.to_string();
+    let sg_root2 = app.sg_root.clone();
     let listen_click = app.ex.spawn(async move {
+        let channel = format!("#{channel2}");
         while let Ok(_) = recvr.recv().await {
             let text = editz_text2.get();
             info!(target: "app::chat", "Send '{text}' to channel: #{channel2}");
             editz_text2.set("");
+
+            let darkirc = sg_root2.clone().lookup_node("/plugin/darkirc").unwrap();
+
+            if text.starts_with("/nick") {
+                let nick = text.split_whitespace().nth(1).unwrap_or("anon");
+                info!(target: "app::chat", "Setting nick to: {nick}");
+                darkirc.set_property_str(Role::App, "nick", nick);
+                continue
+            }
+
+            let mut data = vec![];
+            channel.encode(&mut data).unwrap();
+            text.encode(&mut data).unwrap();
+            darkirc.call_method("send", data).await.unwrap();
         }
     });
     app.tasks.lock().unwrap().push(listen_click);
