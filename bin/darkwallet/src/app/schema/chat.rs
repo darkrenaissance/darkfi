@@ -42,6 +42,7 @@ use crate::{
         emoji_picker, Button, ChatEdit, ChatView, EditBox, EmojiPicker, Image, Layer, ShapeVertex,
         Text, VectorArt, VectorShape, Window,
     },
+    util::unixtime,
     ExecutorPtr,
 };
 
@@ -540,7 +541,7 @@ pub async fn make(
     //    populate_tree(&chat_tree);
     //}
     debug!(target: "app", "db has {} lines", chat_tree.len());
-    let node = node
+    let chatview_node = node
         .setup(|me| {
             ChatView::new(
                 me,
@@ -552,7 +553,7 @@ pub async fn make(
             )
         })
         .await;
-    layer_node.clone().link(node);
+    layer_node.clone().link(chatview_node.clone());
 
     // Create the editbox bg
     let node = create_vector_art("editbox_bg");
@@ -896,6 +897,17 @@ pub async fn make(
                 let nick = text.split_whitespace().nth(1).unwrap_or("anon");
                 info!(target: "app::chat", "Setting nick to: {nick}");
                 darkirc.set_property_str(Role::App, "nick", nick);
+
+                let msg = format!("You are now known as <{nick}>");
+                let id: [u8; 32] = rand::random();
+
+                let mut data = vec![];
+                unixtime().encode(&mut data).unwrap();
+                id.encode(&mut data).unwrap();
+                "NOTICE".encode(&mut data).unwrap();
+                msg.encode(&mut data).unwrap();
+                chatview_node.call_method("insert_line", data).await.unwrap();
+
                 continue
             }
 

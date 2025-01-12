@@ -70,7 +70,7 @@ fn nick_filename() -> PathBuf {
 
 /// Due to drift between different machine's clocks, if the message timestamp is recent
 /// then we will just correct it to the current time so messages appear sequential in the UI.
-const RECENT_TIME_DIST: u64 = 10_000;
+const RECENT_TIME_DIST: u64 = 25_000;
 
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "plugin::darkirc", $($arg)*); } }
 macro_rules! inf { ($($arg:tt)*) => { info!(target: "plugin::darkirc", $($arg)*); } }
@@ -260,11 +260,17 @@ impl DarkIrc {
             }
             channel.remove(0);
 
+            // Workaround for the chatview hack. This nick is off limits!
+            let mut nick = privmsg.nick;
+            if nick == "NOTICE" {
+                nick = "noticer".to_string();
+            }
+
             let mut arg_data = vec![];
             channel.encode(&mut arg_data).unwrap();
             ev.timestamp.encode(&mut arg_data).unwrap();
             ev.id().as_bytes().encode(&mut arg_data).unwrap();
-            privmsg.nick.encode(&mut arg_data).unwrap();
+            nick.encode(&mut arg_data).unwrap();
             privmsg.msg.encode(&mut arg_data).unwrap();
 
             let node = self.node.upgrade().unwrap();
