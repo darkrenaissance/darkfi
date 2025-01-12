@@ -48,7 +48,7 @@ use crate::{
     ExecutorPtr,
 };
 
-const LIGHTMODE: bool = false;
+use super::{ColorScheme, COLOR_SCHEME};
 
 mod android_ui_consts {
     use crate::gfx::{Point, Rectangle};
@@ -259,27 +259,31 @@ pub async fn make(
     prop.set_f32(Role::App, 3, CHATEDIT_HEIGHT).unwrap();
     node.set_property_u32(Role::App, "z_index", 2).unwrap();
 
+    let (bg_color, sep_color) = match COLOR_SCHEME {
+        ColorScheme::DarkMode => ([0., 0.11, 0.11, 1.], [0.41, 0.6, 0.65, 1.]),
+        ColorScheme::PaperLight => ([1., 1., 1., 1.], [0., 0.6, 0.65, 1.]),
+    };
     let mut shape = VectorShape::new();
     shape.add_filled_box(
         expr::const_f32(0.),
         expr::const_f32(0.),
         expr::const_f32(EMOJI_BG_W),
         expr::load_var("h"),
-        [0., 0.11, 0.11, 1.],
+        bg_color,
     );
     shape.add_filled_box(
         expr::const_f32(EMOJI_BG_W),
         expr::const_f32(0.),
         expr::const_f32(EMOJI_BG_W + 1.),
         expr::load_var("h"),
-        [0.41, 0.6, 0.65, 1.],
+        sep_color,
     );
     shape.add_filled_box(
         expr::const_f32(0.),
         expr::load_var("h"),
         expr::load_var("w"),
         cc.compile("h + 1").unwrap(),
-        [0.41, 0.6, 0.65, 1.],
+        sep_color,
     );
 
     let node =
@@ -342,10 +346,17 @@ pub async fn make(
     //node.set_property_bool(Role::App, "debug", true).unwrap();
     //node.set_property_str(Role::App, "text", "anon1").unwrap();
     let prop = node.get_property("text_color").unwrap();
-    prop.set_f32(Role::App, 0, 1.).unwrap();
-    prop.set_f32(Role::App, 1, 1.).unwrap();
-    prop.set_f32(Role::App, 2, 1.).unwrap();
-    prop.set_f32(Role::App, 3, 1.).unwrap();
+    if COLOR_SCHEME == ColorScheme::DarkMode {
+        prop.set_f32(Role::App, 0, 1.).unwrap();
+        prop.set_f32(Role::App, 1, 1.).unwrap();
+        prop.set_f32(Role::App, 2, 1.).unwrap();
+        prop.set_f32(Role::App, 3, 1.).unwrap();
+    } else if COLOR_SCHEME == ColorScheme::PaperLight {
+        prop.set_f32(Role::App, 0, 0.).unwrap();
+        prop.set_f32(Role::App, 1, 0.).unwrap();
+        prop.set_f32(Role::App, 2, 0.).unwrap();
+        prop.set_f32(Role::App, 3, 1.).unwrap();
+    }
     node.set_property_u32(Role::App, "z_index", 3).unwrap();
 
     let node = node
@@ -494,12 +505,12 @@ pub async fn make(
     prop.set_f32(Role::App, 2, 0.647).unwrap();
     prop.set_f32(Role::App, 3, 1.).unwrap();
     let prop = node.get_property("text_color").unwrap();
-    if LIGHTMODE {
+    if COLOR_SCHEME == ColorScheme::PaperLight {
         prop.set_f32(Role::App, 0, 0.).unwrap();
         prop.set_f32(Role::App, 1, 0.).unwrap();
         prop.set_f32(Role::App, 2, 0.).unwrap();
         prop.set_f32(Role::App, 3, 1.).unwrap();
-    } else {
+    } else if COLOR_SCHEME == ColorScheme::DarkMode {
         prop.set_f32(Role::App, 0, 1.).unwrap();
         prop.set_f32(Role::App, 1, 1.).unwrap();
         prop.set_f32(Role::App, 2, 1.).unwrap();
@@ -525,12 +536,12 @@ pub async fn make(
     }
 
     let prop = node.get_property("hi_bg_color").unwrap();
-    if LIGHTMODE {
+    if COLOR_SCHEME == ColorScheme::PaperLight {
         prop.set_f32(Role::App, 0, 0.5).unwrap();
         prop.set_f32(Role::App, 1, 0.5).unwrap();
         prop.set_f32(Role::App, 2, 0.5).unwrap();
         prop.set_f32(Role::App, 3, 1.).unwrap();
-    } else {
+    } else if COLOR_SCHEME == ColorScheme::DarkMode {
         prop.set_f32(Role::App, 0, 0.5).unwrap();
         prop.set_f32(Role::App, 1, 0.5).unwrap();
         prop.set_f32(Role::App, 2, 0.5).unwrap();
@@ -595,6 +606,13 @@ pub async fn make(
 
     let editbox_bg_rect_prop = prop.clone();
 
+    let (bg_color, lhs_bg_color, line_color) = match COLOR_SCHEME {
+        ColorScheme::DarkMode => {
+            ([0., 0.13, 0.08, 1.], [0., 0.11, 0.11, 1.], [0.41, 0.6, 0.65, 1.])
+        }
+        ColorScheme::PaperLight => ([1., 1., 1., 1.], [1., 1., 1., 1.], [0., 0., 0., 1.]),
+    };
+
     let mut shape = VectorShape::new();
     // Main green background
     shape.add_filled_box(
@@ -602,7 +620,7 @@ pub async fn make(
         expr::const_f32(0.),
         expr::load_var("w"),
         expr::load_var("h"),
-        [0., 0.13, 0.08, 1.],
+        bg_color,
     );
     // Left hand darker box
     shape.add_filled_box(
@@ -610,7 +628,7 @@ pub async fn make(
         expr::const_f32(1.),
         expr::const_f32(EMOJI_BG_W),
         expr::load_var("h"),
-        [0., 0.11, 0.11, 1.],
+        lhs_bg_color,
     );
     // Top line
     shape.add_filled_box(
@@ -618,7 +636,7 @@ pub async fn make(
         expr::const_f32(0.),
         expr::load_var("w"),
         expr::const_f32(1.),
-        [0.41, 0.6, 0.65, 1.],
+        line_color,
     );
     // Side line
     shape.add_filled_box(
@@ -626,7 +644,7 @@ pub async fn make(
         expr::const_f32(0.),
         expr::const_f32(EMOJI_BG_W + 1.),
         expr::load_var("h"),
-        [0.41, 0.6, 0.65, 1.],
+        line_color,
     );
     // Bottom line
     //shape.add_filled_box(
@@ -665,7 +683,11 @@ pub async fn make(
     prop.set_f32(Role::App, 2, 500.).unwrap();
     prop.set_f32(Role::App, 3, 500.).unwrap();
     node.set_property_u32(Role::App, "z_index", 5).unwrap();
-    let shape = shape::create_emoji_selector().scaled(EMOJI_SCALE);
+    let color = match COLOR_SCHEME {
+        ColorScheme::DarkMode => [0., 1., 1., 1.],
+        ColorScheme::PaperLight => [0., 0., 0., 1.],
+    };
+    let shape = shape::create_emoji_selector(color).scaled(EMOJI_SCALE);
     let node =
         node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
     layer_node.clone().link(node);
@@ -726,12 +748,12 @@ pub async fn make(
     node.set_property_f32(Role::App, "font_size", FONTSIZE).unwrap();
     //node.set_property_str(Role::App, "text", "hello king!😁🍆jelly 🍆1234").unwrap();
     let prop = node.get_property("text_color").unwrap();
-    if LIGHTMODE {
+    if COLOR_SCHEME == ColorScheme::PaperLight {
         prop.set_f32(Role::App, 0, 0.).unwrap();
         prop.set_f32(Role::App, 1, 0.).unwrap();
         prop.set_f32(Role::App, 2, 0.).unwrap();
         prop.set_f32(Role::App, 3, 1.).unwrap();
-    } else {
+    } else if COLOR_SCHEME == ColorScheme::DarkMode {
         prop.set_f32(Role::App, 0, 1.).unwrap();
         prop.set_f32(Role::App, 1, 1.).unwrap();
         prop.set_f32(Role::App, 2, 1.).unwrap();
@@ -758,24 +780,24 @@ pub async fn make(
     node.set_property_f32(Role::App, "select_descent", CHATEDIT_SELECT_DESCENT).unwrap();
     node.set_property_f32(Role::App, "handle_descent", CHATEDIT_HANDLE_DESCENT).unwrap();
     let prop = node.get_property("hi_bg_color").unwrap();
-    if LIGHTMODE {
+    if COLOR_SCHEME == ColorScheme::PaperLight {
         prop.set_f32(Role::App, 0, 0.5).unwrap();
         prop.set_f32(Role::App, 1, 0.5).unwrap();
         prop.set_f32(Role::App, 2, 0.5).unwrap();
         prop.set_f32(Role::App, 3, 1.).unwrap();
-    } else {
+    } else if COLOR_SCHEME == ColorScheme::DarkMode {
         prop.set_f32(Role::App, 0, 0.).unwrap();
         prop.set_f32(Role::App, 1, 0.27).unwrap();
         prop.set_f32(Role::App, 2, 0.22).unwrap();
         prop.set_f32(Role::App, 3, 1.).unwrap();
     }
     let prop = node.get_property("cmd_bg_color").unwrap();
-    if LIGHTMODE {
+    if COLOR_SCHEME == ColorScheme::PaperLight {
         prop.set_f32(Role::App, 0, 0.5).unwrap();
         prop.set_f32(Role::App, 1, 0.5).unwrap();
         prop.set_f32(Role::App, 2, 0.5).unwrap();
         prop.set_f32(Role::App, 3, 1.).unwrap();
-    } else {
+    } else if COLOR_SCHEME == ColorScheme::DarkMode {
         prop.set_f32(Role::App, 0, 0.).unwrap();
         prop.set_f32(Role::App, 1, 0.30).unwrap();
         prop.set_f32(Role::App, 2, 0.25).unwrap();

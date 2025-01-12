@@ -43,7 +43,7 @@ use crate::{
     ExecutorPtr,
 };
 
-use super::CHANNELS;
+use super::{ColorScheme, CHANNELS, COLOR_SCHEME};
 
 mod android_ui_consts {
     pub const CHANNEL_LABEL_X: f32 = 40.;
@@ -110,8 +110,10 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     let y1 = expr::const_f32(0.);
     let x2 = expr::load_var("w");
     let y2 = expr::const_f32(CHANNEL_LABEL_LINESPACE);
-    let color1 = [0., 0.11, 0.11, 1.];
-    let color2 = [0., 0., 0., 1.];
+    let (color1, color2) = match COLOR_SCHEME {
+        ColorScheme::DarkMode => ([0., 0.11, 0.11, 1.], [0., 0., 0., 1.]),
+        ColorScheme::PaperLight => ([1., 1., 1., 1.], [1., 1., 1., 1.]),
+    };
     let mut verts = vec![
         ShapeVertex::new(x1.clone(), y1.clone(), color1),
         ShapeVertex::new(x2.clone(), y1.clone(), color1),
@@ -147,10 +149,17 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     node.set_property_str(Role::App, "text", "CHANNELS").unwrap();
     //node.set_property_str(Role::App, "text", "anon1").unwrap();
     let prop = node.get_property("text_color").unwrap();
-    prop.set_f32(Role::App, 0, 0.65).unwrap();
-    prop.set_f32(Role::App, 1, 0.87).unwrap();
-    prop.set_f32(Role::App, 2, 0.83).unwrap();
-    prop.set_f32(Role::App, 3, 1.).unwrap();
+    if COLOR_SCHEME == ColorScheme::DarkMode {
+        prop.set_f32(Role::App, 0, 0.65).unwrap();
+        prop.set_f32(Role::App, 1, 0.87).unwrap();
+        prop.set_f32(Role::App, 2, 0.83).unwrap();
+        prop.set_f32(Role::App, 3, 1.).unwrap();
+    } else if COLOR_SCHEME == ColorScheme::PaperLight {
+        prop.set_f32(Role::App, 0, 0.).unwrap();
+        prop.set_f32(Role::App, 1, 0.).unwrap();
+        prop.set_f32(Role::App, 2, 0.).unwrap();
+        prop.set_f32(Role::App, 3, 1.).unwrap();
+    }
     node.set_property_u32(Role::App, "z_index", 1).unwrap();
 
     let node = node
@@ -180,19 +189,27 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         node.set_property_u32(Role::App, "z_index", 0).unwrap();
 
         let mut shape = VectorShape::new();
+        let bg_color = match COLOR_SCHEME {
+            ColorScheme::DarkMode => [0.05, 0.05, 0.05, 1.],
+            ColorScheme::PaperLight => [1., 1., 1., 1.],
+        };
         shape.add_filled_box(
             expr::const_f32(0.),
             expr::const_f32(0.),
             expr::load_var("w"),
             expr::const_f32(CHANNEL_LABEL_LINESPACE),
-            [0.05, 0.05, 0.05, 1.],
+            bg_color,
         );
+        let sep_color = match COLOR_SCHEME {
+            ColorScheme::DarkMode => [0.4, 0.4, 0.4, 1.],
+            ColorScheme::PaperLight => [0.2, 0.2, 0.2, 1.],
+        };
         shape.add_filled_box(
             expr::const_f32(0.),
             expr::const_f32(CHANNEL_LABEL_LINESPACE - 1.),
             expr::load_var("w"),
             expr::const_f32(CHANNEL_LABEL_LINESPACE),
-            [0.4, 0.4, 0.4, 1.],
+            sep_color,
         );
 
         let node = node
@@ -214,10 +231,17 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         //node.set_property_bool(Role::App, "debug", true).unwrap();
         //node.set_property_str(Role::App, "text", "anon1").unwrap();
         let prop = node.get_property("text_color").unwrap();
-        prop.set_f32(Role::App, 0, 1.).unwrap();
-        prop.set_f32(Role::App, 1, 1.).unwrap();
-        prop.set_f32(Role::App, 2, 1.).unwrap();
-        prop.set_f32(Role::App, 3, 1.).unwrap();
+        if COLOR_SCHEME == ColorScheme::DarkMode {
+            prop.set_f32(Role::App, 0, 1.).unwrap();
+            prop.set_f32(Role::App, 1, 1.).unwrap();
+            prop.set_f32(Role::App, 2, 1.).unwrap();
+            prop.set_f32(Role::App, 3, 1.).unwrap();
+        } else if COLOR_SCHEME == ColorScheme::PaperLight {
+            prop.set_f32(Role::App, 0, 0.).unwrap();
+            prop.set_f32(Role::App, 1, 0.).unwrap();
+            prop.set_f32(Role::App, 2, 0.).unwrap();
+            prop.set_f32(Role::App, 3, 1.).unwrap();
+        }
         node.set_property_u32(Role::App, "z_index", 3).unwrap();
 
         let node = node

@@ -47,6 +47,8 @@ mod chat;
 mod menu;
 //mod test;
 
+pub const COLOR_SCHEME: ColorScheme = ColorScheme::PaperLight;
+
 mod android_ui_consts {
     pub const EMOJI_PICKER_ICON_SIZE: f32 = 100.;
 }
@@ -96,39 +98,46 @@ use ui_consts::*;
 pub static CHANNELS: &'static [&str] =
     &["dev", "media", "hackers", "memes", "philosophy", "markets", "math", "random"];
 
+#[derive(PartialEq)]
+enum ColorScheme {
+    DarkMode,
+    PaperLight,
+}
+
 pub async fn make(app: &App, window: SceneNodePtr) {
     let mut cc = Compiler::new();
 
-    // Bg layer
-    let layer_node = create_layer("bg_layer");
-    let prop = layer_node.get_property("rect").unwrap();
-    prop.set_f32(Role::App, 0, 0.).unwrap();
-    prop.set_f32(Role::App, 1, 0.).unwrap();
-    prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(Role::App, 3, expr::load_var("h")).unwrap();
-    layer_node.set_property_bool(Role::App, "is_visible", true).unwrap();
-    layer_node.set_property_u32(Role::App, "z_index", 0).unwrap();
-    let layer_node =
-        layer_node.setup(|me| Layer::new(me, app.render_api.clone(), app.ex.clone())).await;
-    window.clone().link(layer_node.clone());
+    if COLOR_SCHEME == ColorScheme::DarkMode {
+        // Bg layer
+        let layer_node = create_layer("bg_layer");
+        let prop = layer_node.get_property("rect").unwrap();
+        prop.set_f32(Role::App, 0, 0.).unwrap();
+        prop.set_f32(Role::App, 1, 0.).unwrap();
+        prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
+        prop.set_expr(Role::App, 3, expr::load_var("h")).unwrap();
+        layer_node.set_property_bool(Role::App, "is_visible", true).unwrap();
+        layer_node.set_property_u32(Role::App, "z_index", 0).unwrap();
+        let layer_node =
+            layer_node.setup(|me| Layer::new(me, app.render_api.clone(), app.ex.clone())).await;
+        window.clone().link(layer_node.clone());
 
-    // Create a bg image
-    let node = create_image("bg_image");
-    let prop = node.get_property("rect").unwrap();
-    prop.set_f32(Role::App, 0, 0.).unwrap();
-    prop.set_f32(Role::App, 1, 0.).unwrap();
-    prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(Role::App, 3, expr::load_var("h")).unwrap();
+        // Create a bg image
+        let node = create_image("bg_image");
+        let prop = node.get_property("rect").unwrap();
+        prop.set_f32(Role::App, 0, 0.).unwrap();
+        prop.set_f32(Role::App, 1, 0.).unwrap();
+        prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
+        prop.set_expr(Role::App, 3, expr::load_var("h")).unwrap();
 
-    // Image aspect ratio
-    //let R = 1.78;
-    let R = 1.555;
-    cc.add_const_f32("R", R);
+        // Image aspect ratio
+        //let R = 1.78;
+        let R = 1.555;
+        cc.add_const_f32("R", R);
 
-    let prop = node.get_property("uv").unwrap();
-    prop.set_f32(Role::App, 0, 0.).unwrap();
-    prop.set_f32(Role::App, 1, 0.).unwrap();
-    #[rustfmt::skip]
+        let prop = node.get_property("uv").unwrap();
+        prop.set_f32(Role::App, 0, 0.).unwrap();
+        prop.set_f32(Role::App, 1, 0.).unwrap();
+        #[rustfmt::skip]
     let code = cc.compile("
         r = w / h;
         if r < R {
@@ -137,8 +146,8 @@ pub async fn make(app: &App, window: SceneNodePtr) {
             1
         }
     ").unwrap();
-    prop.set_expr(Role::App, 2, code).unwrap();
-    #[rustfmt::skip]
+        prop.set_expr(Role::App, 2, code).unwrap();
+        #[rustfmt::skip]
     let code = cc.compile("
         r = w / h;
         if r < R {
@@ -147,37 +156,63 @@ pub async fn make(app: &App, window: SceneNodePtr) {
             R / r
         }
     ").unwrap();
-    prop.set_expr(Role::App, 3, code).unwrap();
+        prop.set_expr(Role::App, 3, code).unwrap();
 
-    node.set_property_str(Role::App, "path", BG_PATH).unwrap();
-    node.set_property_u32(Role::App, "z_index", 0).unwrap();
-    let node = node.setup(|me| Image::new(me, app.render_api.clone(), app.ex.clone())).await;
-    layer_node.clone().link(node);
+        node.set_property_str(Role::App, "path", BG_PATH).unwrap();
+        node.set_property_u32(Role::App, "z_index", 0).unwrap();
+        let node = node.setup(|me| Image::new(me, app.render_api.clone(), app.ex.clone())).await;
+        layer_node.clone().link(node);
 
-    // Create a bg mesh on top to fade the bg image
-    let node = create_vector_art("bg");
-    let prop = node.get_property("rect").unwrap();
-    prop.set_f32(Role::App, 0, 0.).unwrap();
-    prop.set_f32(Role::App, 1, 0.).unwrap();
-    prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(Role::App, 3, expr::load_var("h")).unwrap();
-    node.set_property_u32(Role::App, "z_index", 1).unwrap();
+        // Create a bg mesh on top to fade the bg image
+        let node = create_vector_art("bg");
+        let prop = node.get_property("rect").unwrap();
+        prop.set_f32(Role::App, 0, 0.).unwrap();
+        prop.set_f32(Role::App, 1, 0.).unwrap();
+        prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
+        prop.set_expr(Role::App, 3, expr::load_var("h")).unwrap();
+        node.set_property_u32(Role::App, "z_index", 1).unwrap();
 
-    //let c = if LIGHTMODE { 1. } else { 0. };
-    let c = 0.;
-    // Setup the pimpl
-    let node_id = node.id;
-    let mut shape = VectorShape::new();
-    shape.add_filled_box(
-        expr::const_f32(0.),
-        expr::const_f32(0.),
-        expr::load_var("w"),
-        expr::load_var("h"),
-        [c, c, c, 0.3],
-    );
-    let node =
-        node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
-    layer_node.clone().link(node);
+        //let c = if LIGHTMODE { 1. } else { 0. };
+        let c = 0.;
+        // Setup the pimpl
+        let node_id = node.id;
+        let mut shape = VectorShape::new();
+        shape.add_filled_box(
+            expr::const_f32(0.),
+            expr::const_f32(0.),
+            expr::load_var("w"),
+            expr::load_var("h"),
+            [c, c, c, 0.3],
+        );
+        let node = node
+            .setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone()))
+            .await;
+        layer_node.clone().link(node);
+    } else if COLOR_SCHEME == ColorScheme::PaperLight {
+        let node = create_vector_art("bg");
+        let prop = node.get_property("rect").unwrap();
+        prop.set_f32(Role::App, 0, 0.).unwrap();
+        prop.set_f32(Role::App, 1, 0.).unwrap();
+        prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
+        prop.set_expr(Role::App, 3, expr::load_var("h")).unwrap();
+        node.set_property_u32(Role::App, "z_index", 1).unwrap();
+
+        let c = 1.;
+        // Setup the pimpl
+        let node_id = node.id;
+        let mut shape = VectorShape::new();
+        shape.add_filled_box(
+            expr::const_f32(0.),
+            expr::const_f32(0.),
+            expr::load_var("w"),
+            expr::load_var("h"),
+            [c, c, c, 0.3],
+        );
+        let node = node
+            .setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone()))
+            .await;
+        window.clone().link(node);
+    }
 
     let emoji_meshes = emoji_picker::EmojiMeshes::new(
         app.render_api.clone(),
