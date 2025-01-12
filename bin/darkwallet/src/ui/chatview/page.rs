@@ -76,7 +76,7 @@ pub struct PrivMessage {
 
 impl PrivMessage {
     pub fn new(
-        font_size: f32,
+        mut font_size: f32,
         timestamp_font_size: f32,
         window_scale: f32,
 
@@ -94,7 +94,10 @@ impl PrivMessage {
         let timestr = Self::gen_timestr(timestamp);
         let time_glyphs = text_shaper.shape(timestr, timestamp_font_size, window_scale);
 
-        let linetext = format!("{nick} {text}");
+        let linetext = if nick == "NOTICE" { text.clone() } else { format!("{nick} {text}") };
+        if nick == "NOTICE" {
+            font_size *= 0.8;
+        }
         let unwrapped_glyphs = text_shaper.shape(linetext, font_size, window_scale);
 
         let mut atlas = text::Atlas::new(render_api);
@@ -238,7 +241,7 @@ impl PrivMessage {
         is_last: bool,
         baseline: f32,
         nick_color: Color,
-        text_color: Color,
+        mut text_color: Color,
         debug_render: bool,
     ) {
         //debug!(target: "ui::chatview", "render_line({})", glyph_str(line));
@@ -246,8 +249,26 @@ impl PrivMessage {
         // Section 0   is the nickname (colorized)
         // Section >=1 is just the message itself
         let mut section = 1;
-        if is_last {
+        if is_last && self.nick != "NOTICE" {
             section = 0;
+        }
+
+        if self.nick == "NOTICE" {
+            text_color[0] = 0.35;
+            text_color[1] = 0.81;
+            text_color[2] = 0.89;
+        }
+
+        let glyph_pos_iter =
+            GlyphPositionIter::new(self.font_size, self.window_scale, line, baseline);
+        let Some(last_rect) = glyph_pos_iter.last() else { return };
+        let rhs = last_rect.rhs();
+        if self.nick == "NOTICE" {
+            mesh.draw_box(
+                &Rectangle::new(off_x, -off_y, rhs, baseline),
+                [0., 0.14, 0.16, 1.],
+                &Rectangle::zero(),
+            );
         }
 
         let glyph_pos_iter =
@@ -299,7 +320,11 @@ impl PrivMessage {
         let timestr = Self::gen_timestr(self.timestamp);
         self.time_glyphs = text_shaper.shape(timestr, timestamp_font_size, window_scale);
 
-        let linetext = format!("{} {}", self.nick, self.text);
+        let linetext = if self.nick == "NOTICE" {
+            self.text.clone()
+        } else {
+            format!("{} {}", self.nick, self.text)
+        };
         self.unwrapped_glyphs = text_shaper.shape(linetext, font_size, window_scale);
 
         let mut atlas = text::Atlas::new(render_api);

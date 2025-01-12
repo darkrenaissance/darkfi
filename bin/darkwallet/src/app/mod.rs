@@ -183,6 +183,16 @@ impl App {
 
         self.start_procs().await;
         debug!(target: "app", "App started");
+
+        //let chatty =
+        //    self.sg_root.clone().lookup_node("/window/dev_chat_layer/content/chatty").unwrap();
+        //let mut arg_data = vec![];
+        //crate::util::unixtime().encode(&mut arg_data).unwrap();
+        //let id: [u8; 32] = rand::random();
+        //id.encode(&mut arg_data).unwrap();
+        //"NOTICE".encode(&mut arg_data).unwrap();
+        //"you are now known as <genjix>".encode(&mut arg_data).unwrap();
+        //chatty.call_method("insert_line", arg_data).await.unwrap();
     }
 
     pub fn stop(&self) {
