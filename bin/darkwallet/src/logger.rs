@@ -6,7 +6,7 @@ use simplelog::{
 };
 use std::{path::PathBuf, thread::sleep, time::Duration};
 
-const LOGS_ENABLED: bool = true;
+const LOGS_ENABLED: bool = false;
 // Measured in bytes
 const LOGFILE_MAXSIZE: usize = 5_000_000;
 
@@ -43,7 +43,11 @@ mod android {
     impl Log for AndroidLoggerWrapper {
         fn enabled(&self, metadata: &Metadata<'_>) -> bool {
             let target = metadata.target();
-            if target.starts_with("sled") || target.starts_with("rustls") {
+            if target.starts_with("sled") ||
+                target.starts_with("rustls") ||
+                target.starts_with("net::") ||
+                target.starts_with("event_graph")
+            {
                 return false
             }
             if metadata.level() > self.level {

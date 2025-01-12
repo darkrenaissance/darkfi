@@ -49,6 +49,8 @@ pub use vector_art::{
 };
 mod layer;
 pub use layer::{Layer, LayerPtr};
+mod shortcut;
+pub use shortcut::{Shortcut, ShortcutPtr};
 mod text;
 pub use text::{Text, TextPtr};
 mod win;
@@ -188,7 +190,8 @@ pub fn get_ui_object_ptr(node: &SceneNode3) -> Arc<dyn UIObject + Send> {
         Pimpl::Image(obj) => obj.clone(),
         Pimpl::Button(obj) => obj.clone(),
         Pimpl::EmojiPicker(obj) => obj.clone(),
-        _ => panic!("unhandled type for get_ui_object"),
+        Pimpl::Shortcut(obj) => obj.clone(),
+        _ => panic!("unhandled type for get_ui_object: {node:?}"),
     }
 }
 pub fn get_ui_object3<'a>(node: &'a SceneNode3) -> &'a dyn UIObject {
@@ -202,7 +205,8 @@ pub fn get_ui_object3<'a>(node: &'a SceneNode3) -> &'a dyn UIObject {
         Pimpl::Image(obj) => obj.as_ref(),
         Pimpl::Button(obj) => obj.as_ref(),
         Pimpl::EmojiPicker(obj) => obj.as_ref(),
-        _ => panic!("unhandled type for get_ui_object"),
+        Pimpl::Shortcut(obj) => obj.as_ref(),
+        _ => panic!("unhandled type for get_ui_object: {node:?}"),
     }
 }
 

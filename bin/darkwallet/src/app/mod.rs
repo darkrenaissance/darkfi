@@ -45,6 +45,8 @@ mod node;
 use node::create_darkirc;
 mod schema;
 
+const PLUGINS_ENABLED: bool = true;
+
 //fn print_type_of<T>(_: &T) {
 //    println!("{}", std::any::type_name::<T>())
 //}
@@ -168,6 +170,10 @@ impl App {
 
         let plugin = Arc::new(SceneNode3::new("plugin", SceneNodeType3::PluginRoot));
         self.sg_root.clone().link(plugin.clone());
+
+        if !PLUGINS_ENABLED {
+            return
+        }
 
         let darkirc = create_darkirc("darkirc");
         let darkirc = darkirc

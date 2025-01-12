@@ -92,6 +92,22 @@ pub fn create_button(name: &str) -> SceneNode {
     node
 }
 
+pub fn create_shortcut(name: &str) -> SceneNode {
+    debug!(target: "app", "create_shortcut({name})");
+    let mut node = SceneNode::new(name, SceneNodeType::Shortcut);
+
+    let mut prop = Property::new("key", PropertyType::Str, PropertySubType::Null);
+    prop.allow_null_values();
+    node.add_property(prop).unwrap();
+
+    let prop = Property::new("priority", PropertyType::Uint32, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
+    node.add_signal("shortcut", "Shortcut triggered", vec![]).unwrap();
+
+    node
+}
+
 pub fn create_image(name: &str) -> SceneNode {
     debug!(target: "app", "create_image({name})");
     let mut node = SceneNode::new(name, SceneNodeType::Image);
@@ -261,8 +277,6 @@ pub fn create_editbox(name: &str) -> SceneNode {
 
     let prop = Property::new("debug", PropertyType::Bool, PropertySubType::Null);
     node.add_property(prop).unwrap();
-
-    node.add_signal("enter_pressed", "Enter key pressed", vec![]).unwrap();
 
     node
 }

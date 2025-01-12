@@ -1162,7 +1162,7 @@ impl ChatEdit {
         false
     }
 
-    async fn handle_key(&self, key: &KeyCode, mods: &KeyMods) {
+    async fn handle_key(&self, key: &KeyCode, mods: &KeyMods) -> bool {
         debug!(target: "ui::chatedit", "handle_key({:?}, {:?})", key, mods);
         match key {
             KeyCode::Left => {
@@ -1170,54 +1170,95 @@ impl ChatEdit {
                 self.pause_blinking();
                 //self.apply_cursor_scrolling();
                 self.redraw().await;
+                return true
             }
             KeyCode::Right => {
                 self.adjust_cursor(mods.shift, |editable| editable.move_cursor(1));
                 self.pause_blinking();
                 //self.apply_cursor_scrolling();
                 self.redraw().await;
+                return true
             }
-            KeyCode::Kp0 => self.insert_char('0').await,
-            KeyCode::Kp1 => self.insert_char('1').await,
-            KeyCode::Kp2 => self.insert_char('2').await,
-            KeyCode::Kp3 => self.insert_char('3').await,
-            KeyCode::Kp4 => self.insert_char('4').await,
-            KeyCode::Kp5 => self.insert_char('5').await,
-            KeyCode::Kp6 => self.insert_char('6').await,
-            KeyCode::Kp7 => self.insert_char('7').await,
-            KeyCode::Kp8 => self.insert_char('8').await,
-            KeyCode::Kp9 => self.insert_char('9').await,
-            KeyCode::KpDecimal => self.insert_char('.').await,
+            KeyCode::Kp0 => {
+                self.insert_char('0').await;
+                return true
+            }
+            KeyCode::Kp1 => {
+                self.insert_char('1').await;
+                return true
+            }
+            KeyCode::Kp2 => {
+                self.insert_char('2').await;
+                return true
+            }
+            KeyCode::Kp3 => {
+                self.insert_char('3').await;
+                return true
+            }
+            KeyCode::Kp4 => {
+                self.insert_char('4').await;
+                return true
+            }
+            KeyCode::Kp5 => {
+                self.insert_char('5').await;
+                return true
+            }
+            KeyCode::Kp6 => {
+                self.insert_char('6').await;
+                return true
+            }
+            KeyCode::Kp7 => {
+                self.insert_char('7').await;
+                return true
+            }
+            KeyCode::Kp8 => {
+                self.insert_char('8').await;
+                return true
+            }
+            KeyCode::Kp9 => {
+                self.insert_char('9').await;
+                return true
+            }
+            KeyCode::KpDecimal => {
+                self.insert_char('.').await;
+                return true
+            }
             KeyCode::Enter | KeyCode::KpEnter => {
-                let node = self.node.upgrade().unwrap();
-                node.trigger("enter_pressed", vec![]).await.unwrap();
+                if mods.shift {
+                    // Does nothing for now. Later will enable multiline.
+                }
             }
             KeyCode::Delete => {
                 self.delete(0, 1);
                 self.clamp_scroll(&mut self.text_wrap.lock());
                 self.pause_blinking();
                 self.redraw().await;
+                return true
             }
             KeyCode::Backspace => {
                 self.delete(1, 0);
                 self.clamp_scroll(&mut self.text_wrap.lock());
                 self.pause_blinking();
                 self.redraw().await;
+                return true
             }
             KeyCode::Home => {
                 self.adjust_cursor(mods.shift, |editable| editable.move_start());
                 self.pause_blinking();
                 //self.apply_cursor_scrolling();
                 self.redraw().await;
+                return true
             }
             KeyCode::End => {
                 self.adjust_cursor(mods.shift, |editable| editable.move_end());
                 self.pause_blinking();
                 //self.apply_cursor_scrolling();
                 self.redraw().await;
+                return true
             }
             _ => {}
         }
+        false
     }
 
     fn delete(&self, before: usize, after: usize) {
@@ -1946,10 +1987,13 @@ impl UIObject for ChatEdit {
         /*if actions > 0 {
             debug!(target: "ui::chatedit", "Key {:?} has {} actions", key, actions);
         }*/
+        let mut is_handled = false;
         for _ in 0..actions {
-            self.handle_key(&key, &mods).await;
+            if self.handle_key(&key, &mods).await {
+                is_handled = true;
+            }
         }
-        true
+        is_handled
     }
 
     async fn handle_mouse_btn_down(&self, btn: MouseButton, mut mouse_pos: Point) -> bool {

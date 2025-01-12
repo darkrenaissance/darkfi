@@ -114,7 +114,8 @@ pub enum SceneNodeType {
     ChatEdit = 18,
     Image = 19,
     Button = 20,
-    EmojiPicker = 21,
+    Shortcut = 21,
+    EmojiPicker = 22,
     PluginRoot = 100,
     Plugin = 101,
 }
@@ -476,6 +477,7 @@ pub enum Pimpl {
     ChatView(ui::ChatViewPtr),
     Image(ui::ImagePtr),
     Button(ui::ButtonPtr),
+    Shortcut(ui::ShortcutPtr),
     EmojiPicker(ui::EmojiPickerPtr),
     DarkIrc(plugin::DarkIrcPtr),
 }

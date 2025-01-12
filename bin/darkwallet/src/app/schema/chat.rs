@@ -25,7 +25,7 @@ use crate::{
     app::{
         node::{
             create_button, create_chatedit, create_chatview, create_editbox, create_emoji_picker,
-            create_image, create_layer, create_text, create_vector_art,
+            create_image, create_layer, create_shortcut, create_text, create_vector_art,
         },
         populate_tree, App,
     },
@@ -42,7 +42,7 @@ use crate::{
     text::TextShaperPtr,
     ui::{
         emoji_picker, Button, ChatEdit, ChatView, EditBox, EmojiPicker, Image, Layer, ShapeVertex,
-        Text, VectorArt, VectorShape, Window,
+        Shortcut, Text, VectorArt, VectorShape, Window,
     },
     util::unixtime,
     ExecutorPtr,
@@ -881,19 +881,24 @@ pub async fn make(
     prop.set_f32(Role::App, 2, SENDBTN_BOX[2]).unwrap();
     prop.set_f32(Role::App, 3, SENDBTN_BOX[3]).unwrap();
 
-    let (slot, recvr) = Slot::new("send_clicked");
-    node.register("click", slot).unwrap();
-    let editz_text2 = editz_text.clone();
-    let channel2 = channel.to_string();
-    let sg_root2 = app.sg_root.clone();
-    let listen_click = app.ex.spawn(async move {
-        let channel = format!("#{channel2}");
-        while let Ok(_) = recvr.recv().await {
-            let text = editz_text2.get();
-            info!(target: "app::chat", "Send '{text}' to channel: #{channel2}");
-            editz_text2.set("");
+    #[derive(Clone)]
+    struct SendMsg {
+        channel: String,
+        editz_text: PropertyStr,
+        sg_root: SceneNodePtr,
+        chatview_node: SceneNodePtr,
+    }
 
-            let darkirc = sg_root2.clone().lookup_node("/plugin/darkirc").unwrap();
+    impl SendMsg {
+        async fn send(&self) {
+            let text = self.editz_text.get();
+            info!(target: "app::chat", "Send '{text}' to channel: #{}", self.channel);
+            self.editz_text.set("");
+
+            let Some(darkirc) = self.sg_root.clone().lookup_node("/plugin/darkirc") else {
+                error!(target: "app::chat", "DarkIrc plugin has not been loaded");
+                return
+            };
 
             if text.starts_with("/nick") {
                 let nick = text.split_whitespace().nth(1).unwrap_or("anon");
@@ -908,21 +913,21 @@ pub async fn make(
                 id.encode(&mut data).unwrap();
                 "NOTICE".encode(&mut data).unwrap();
                 msg.encode(&mut data).unwrap();
-                chatview_node.call_method("insert_line", data).await.unwrap();
+                self.chatview_node.call_method("insert_line", data).await.unwrap();
 
-                continue
+                return
             }
 
             let timest = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
             let nick = darkirc.get_property_str("nick").unwrap();
-            let msg = darkirc::Privmsg::new(channel.clone(), nick, text);
+            let msg = darkirc::Privmsg::new(self.channel.clone(), nick, text);
 
-            let mut data = vec![];
-            timest.encode(&mut data).unwrap();
-            msg.msg_id(timest).encode(&mut data).unwrap();
-            msg.nick.encode(&mut data).unwrap();
-            msg.msg.encode(&mut data).unwrap();
-            chatview_node.call_method("insert_unconf_line", data).await.unwrap();
+            //let mut data = vec![];
+            //timest.encode(&mut data).unwrap();
+            //msg.msg_id(timest).encode(&mut data).unwrap();
+            //msg.nick.encode(&mut data).unwrap();
+            //msg.msg.encode(&mut data).unwrap();
+            //chatview_node.call_method("insert_unconf_line", data).await.unwrap();
 
             let mut data = vec![];
             timest.encode(&mut data).unwrap();
@@ -930,10 +935,42 @@ pub async fn make(
             msg.msg.encode(&mut data).unwrap();
             darkirc.call_method("send", data).await.unwrap();
         }
+    }
+
+    let sendmsg = SendMsg {
+        editz_text: editz_text.clone(),
+        channel: format!("#{channel}"),
+        sg_root: app.sg_root.clone(),
+        chatview_node,
+    };
+
+    let (slot, recvr) = Slot::new("send_clicked");
+    node.register("click", slot).unwrap();
+    let sendmsg2 = sendmsg.clone();
+    let listen_click = app.ex.spawn(async move {
+        while let Ok(_) = recvr.recv().await {
+            sendmsg2.send().await;
+        }
     });
     app.tasks.lock().unwrap().push(listen_click);
 
     let node = node.setup(|me| Button::new(me, app.ex.clone())).await;
+    layer_node.clone().link(node);
+
+    // Create shortcut to send as well
+    let node = create_shortcut("send_shortcut");
+    node.set_property_str(Role::App, "key", "enter").unwrap();
+
+    let (slot, recvr) = Slot::new("enter_pressed");
+    node.register("shortcut", slot).unwrap();
+    let listen_enter = app.ex.spawn(async move {
+        while let Ok(_) = recvr.recv().await {
+            sendmsg.send().await;
+        }
+    });
+    app.tasks.lock().unwrap().push(listen_enter);
+
+    let node = node.setup(|me| Shortcut::new(me)).await;
     layer_node.clone().link(node);
 
     // Create the emoji button
