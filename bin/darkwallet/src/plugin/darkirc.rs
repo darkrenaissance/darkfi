@@ -416,6 +416,7 @@ impl PluginObject for DarkIrc {
         let dag_task = ex.spawn(self.clone().dag_sync());
 
         let mut tasks = vec![send_method_task, ev_task, dag_task];
+        tasks.append(&mut on_modify.tasks);
         self.tasks.set(tasks);
     }
 }
