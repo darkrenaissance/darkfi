@@ -313,24 +313,58 @@ pub async fn make(
     prop.set_f32(Role::App, 2, EMOJI_BG_W).unwrap();
     prop.set_f32(Role::App, 3, CHATEDIT_HEIGHT).unwrap();
 
-    let (slot, recvr) = Slot::new("back_clicked");
-    node.register("click", slot).unwrap();
-    // Menu doesn't exist yet ;)
-    let sg_root = app.sg_root.clone();
-    let chatview_is_visible = PropertyBool::wrap(&layer_node, Role::App, "is_visible", 0).unwrap();
-    let listen_click = app.ex.spawn(async move {
-        while let Ok(_) = recvr.recv().await {
+    #[derive(Clone)]
+    struct GoBack {
+        sg_root: SceneNodePtr,
+        chatview_is_visible: PropertyBool,
+    }
+
+    impl GoBack {
+        fn go(&self) {
             info!(target: "app::chat", "clicked back");
 
-            let menu_node = sg_root.clone().lookup_node("/window/menu_layer").unwrap();
+            let menu_node = self.sg_root.clone().lookup_node("/window/menu_layer").unwrap();
             menu_node.set_property_bool(Role::App, "is_visible", true).unwrap();
 
-            chatview_is_visible.set(false);
+            self.chatview_is_visible.set(false);
+        }
+    }
+    let goback = GoBack {
+        sg_root: app.sg_root.clone(),
+        chatview_is_visible: PropertyBool::wrap(&layer_node, Role::App, "is_visible", 0).unwrap(),
+    };
+
+    let (slot, recvr) = Slot::new("back_clicked");
+    node.register("click", slot).unwrap();
+    let goback2 = goback.clone();
+    // Menu doesn't exist yet ;)
+    let listen_click = app.ex.spawn(async move {
+        while let Ok(_) = recvr.recv().await {
+            goback2.go();
         }
     });
     app.tasks.lock().unwrap().push(listen_click);
 
     let node = node.setup(|me| Button::new(me, app.ex.clone())).await;
+    layer_node.clone().link(node);
+
+    // Create shortcut to go back as well
+    let node = create_shortcut("back_shortcut");
+    #[cfg(target_os = "android")]
+    node.set_property_str(Role::App, "key", "back").unwrap();
+    #[cfg(not(target_os = "android"))]
+    node.set_property_str(Role::App, "key", "alt+left").unwrap();
+
+    let (slot, recvr) = Slot::new("back_pressed");
+    node.register("shortcut", slot).unwrap();
+    let listen_enter = app.ex.spawn(async move {
+        while let Ok(_) = recvr.recv().await {
+            goback.go();
+        }
+    });
+    app.tasks.lock().unwrap().push(listen_enter);
+
+    let node = node.setup(|me| Shortcut::new(me)).await;
     layer_node.clone().link(node);
 
     // Create some text

@@ -22,7 +22,7 @@ use crate::{
     app::{
         node::{
             create_button, create_chatedit, create_chatview, create_editbox, create_image,
-            create_layer, create_text, create_vector_art,
+            create_layer, create_shortcut, create_text, create_vector_art,
         },
         populate_tree, App,
     },
@@ -37,7 +37,7 @@ use crate::{
     shape,
     text::TextShaperPtr,
     ui::{
-        Button, ChatEdit, ChatView, EditBox, Image, Layer, ShapeVertex, Text, VectorArt,
+        Button, ChatEdit, ChatView, EditBox, Image, Layer, ShapeVertex, Shortcut, Text, VectorArt,
         VectorShape, Window,
     },
     ExecutorPtr,
@@ -177,7 +177,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
 
     channel_y += CHANNEL_LABEL_LINESPACE;
 
-    for channel in CHANNELS {
+    for (i, channel) in CHANNELS.iter().enumerate() {
         let text = "#".to_string() + channel;
 
         let node = create_vector_art(&(channel.to_string() + "_channel_label_bg"));
@@ -273,16 +273,39 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         let chatview_is_visible =
             PropertyBool::wrap(&chatview_node, Role::App, "is_visible", 0).unwrap();
         let menu_is_visible = PropertyBool::wrap(&layer_node, Role::App, "is_visible", 0).unwrap();
+        let chatview_is_visible2 = chatview_is_visible.clone();
+        let menu_is_visible2 = menu_is_visible.clone();
         let listen_click = app.ex.spawn(async move {
             while let Ok(_) = recvr.recv().await {
                 info!(target: "app::menu", "clicked: {channel}!");
-                chatview_is_visible.set(true);
-                menu_is_visible.set(false);
+                chatview_is_visible2.set(true);
+                menu_is_visible2.set(false);
             }
         });
         app.tasks.lock().unwrap().push(listen_click);
 
         let node = node.setup(|me| Button::new(me, app.ex.clone())).await;
+        layer_node.clone().link(node);
+
+        // Create shortcut
+        let channel_id = i + 1;
+        let node = create_shortcut("channel_shortcut_{channel_id}");
+        let key = format!("alt+{channel_id}");
+        node.set_property_str(Role::App, "key", key).unwrap();
+        node.set_property_u32(Role::App, "priority", 1).unwrap();
+
+        let (slot, recvr) = Slot::new("back_pressed");
+        node.register("shortcut", slot).unwrap();
+        let listen_enter = app.ex.spawn(async move {
+            while let Ok(_) = recvr.recv().await {
+                info!(target: "app::menu", "shortcut go to: {channel}!");
+                chatview_is_visible.set(true);
+                menu_is_visible.set(false);
+            }
+        });
+        app.tasks.lock().unwrap().push(listen_enter);
+
+        let node = node.setup(|me| Shortcut::new(me)).await;
         layer_node.clone().link(node);
 
         channel_y += CHANNEL_LABEL_LINESPACE;

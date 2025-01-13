@@ -47,7 +47,7 @@ mod chat;
 mod menu;
 //mod test;
 
-pub const COLOR_SCHEME: ColorScheme = ColorScheme::PaperLight;
+pub const COLOR_SCHEME: ColorScheme = ColorScheme::DarkMode;
 
 mod android_ui_consts {
     pub const EMOJI_PICKER_ICON_SIZE: f32 = 100.;

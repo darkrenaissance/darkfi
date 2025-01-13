@@ -1166,14 +1166,18 @@ impl ChatEdit {
         debug!(target: "ui::chatedit", "handle_key({:?}, {:?})", key, mods);
         match key {
             KeyCode::Left => {
-                self.adjust_cursor(mods.shift, |editable| editable.move_cursor(-1));
+                if !self.adjust_cursor(&mods, |editable| editable.move_cursor(-1)) {
+                    return false
+                }
                 self.pause_blinking();
                 //self.apply_cursor_scrolling();
                 self.redraw().await;
                 return true
             }
             KeyCode::Right => {
-                self.adjust_cursor(mods.shift, |editable| editable.move_cursor(1));
+                if !self.adjust_cursor(&mods, |editable| editable.move_cursor(1)) {
+                    return false
+                }
                 self.pause_blinking();
                 //self.apply_cursor_scrolling();
                 self.redraw().await;
@@ -1243,14 +1247,14 @@ impl ChatEdit {
                 return true
             }
             KeyCode::Home => {
-                self.adjust_cursor(mods.shift, |editable| editable.move_start());
+                self.adjust_cursor(&mods, |editable| editable.move_start());
                 self.pause_blinking();
                 //self.apply_cursor_scrolling();
                 self.redraw().await;
                 return true
             }
             KeyCode::End => {
-                self.adjust_cursor(mods.shift, |editable| editable.move_end());
+                self.adjust_cursor(&mods, |editable| editable.move_end());
                 self.pause_blinking();
                 //self.apply_cursor_scrolling();
                 self.redraw().await;
@@ -1279,7 +1283,11 @@ impl ChatEdit {
         self.text.set(text);
     }
 
-    fn adjust_cursor(&self, has_shift: bool, move_cursor: impl Fn(&mut Editable)) {
+    fn adjust_cursor(&self, mods: &KeyMods, move_cursor: impl Fn(&mut Editable)) -> bool {
+        if mods.ctrl || mods.alt || mods.logo {
+            return false
+        }
+
         let mut text_wrap = &mut self.text_wrap.lock();
         let rendered = text_wrap.get_render().clone();
         let prev_cursor_pos = text_wrap.editable.get_cursor_pos(&rendered);
@@ -1290,7 +1298,7 @@ impl ChatEdit {
         let select = &mut text_wrap.select;
 
         // Start selection if shift is held
-        if has_shift {
+        if mods.shift {
             // Create a new selection
             if select.is_empty() {
                 select.push(Selection::new(prev_cursor_pos, cursor_pos));
@@ -1303,6 +1311,7 @@ impl ChatEdit {
         }
 
         self.update_select_text(&mut text_wrap);
+        true
     }
 
     /// This will select the entire word rather than move the cursor to that location
