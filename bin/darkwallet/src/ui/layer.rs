@@ -35,6 +35,8 @@ use super::{
     get_children_ordered, get_ui_object3, get_ui_object_ptr, DrawUpdate, OnModify, UIObject,
 };
 
+pub const DEBUG_LAYER: bool = false;
+
 pub type LayerPtr = Arc<Layer>;
 
 pub struct Layer {
@@ -186,6 +188,9 @@ impl UIObject for Layer {
         for child in self.get_children() {
             let obj = get_ui_object3(&child);
             if obj.handle_char(key, mods, repeat).await {
+                if DEBUG_LAYER {
+                    debug!(target: "layer", "handle_char({key:?}, {mods:?}, {repeat}) swallowed by {child:?}");
+                }
                 return true
             }
         }
@@ -199,7 +204,9 @@ impl UIObject for Layer {
         for child in self.get_children() {
             let obj = get_ui_object3(&child);
             if obj.handle_key_down(key, mods, repeat).await {
-                //debug!(target: "layer", "handle_key_down({key:?}, {mods:?}, {repeat}) swallowed by {child:?}");
+                if DEBUG_LAYER {
+                    debug!(target: "layer", "handle_key_down({key:?}, {mods:?}, {repeat}) swallowed by {child:?}");
+                }
                 return true
             }
         }
@@ -213,6 +220,9 @@ impl UIObject for Layer {
         for child in self.get_children() {
             let obj = get_ui_object3(&child);
             if obj.handle_key_up(key, mods).await {
+                if DEBUG_LAYER {
+                    debug!(target: "layer", "handle_key_up({key:?}, {mods:?}) swallowed by {child:?}");
+                }
                 return true
             }
         }
@@ -226,6 +236,9 @@ impl UIObject for Layer {
         for child in self.get_children() {
             let obj = get_ui_object3(&child);
             if obj.handle_mouse_btn_down(btn, mouse_pos).await {
+                if DEBUG_LAYER {
+                    debug!(target: "layer", "handle_mouse_btn_down({btn:?}, {mouse_pos:?}) swallowed by {child:?}");
+                }
                 return true
             }
         }
@@ -239,6 +252,9 @@ impl UIObject for Layer {
         for child in self.get_children() {
             let obj = get_ui_object3(&child);
             if obj.handle_mouse_btn_up(btn, mouse_pos).await {
+                if DEBUG_LAYER {
+                    debug!(target: "layer", "handle_mouse_btn_up({btn:?}, {mouse_pos:?}) swallowed by {child:?}");
+                }
                 return true
             }
         }
@@ -252,6 +268,9 @@ impl UIObject for Layer {
         for child in self.get_children() {
             let obj = get_ui_object3(&child);
             if obj.handle_mouse_move(mouse_pos).await {
+                if DEBUG_LAYER {
+                    debug!(target: "layer", "handle_mouse_move({mouse_pos:?}) swallowed by {child:?}");
+                }
                 return true
             }
         }

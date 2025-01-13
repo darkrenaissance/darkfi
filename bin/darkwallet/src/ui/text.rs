@@ -123,7 +123,7 @@ impl Text {
 
         debug!(target: "ui::text", "Rendering label '{}'", text);
         let glyphs = self.text_shaper.shape(text, font_size, window_scale);
-        let atlas = text::make_texture_atlas(&self.render_api, &glyphs);
+        let atlas = text::make_texture_atlas(&self.render_api, &glyphs, "text");
 
         let mut mesh = MeshBuilder::new();
         let glyph_pos_iter = GlyphPositionIter::new(font_size, window_scale, &glyphs, baseline);

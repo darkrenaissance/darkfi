@@ -49,6 +49,7 @@ pub type GfxBufferId = u32;
 // This is very noisy so suppress output by default
 const DEBUG_RENDER: bool = false;
 const DEBUG_GFXAPI: bool = false;
+const DEBUG_RESRC: bool = false;
 
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 #[repr(C)]
@@ -74,10 +75,14 @@ pub type ManagedTexturePtr = Arc<ManagedTexture>;
 pub struct ManagedTexture {
     id: GfxTextureId,
     render_api: RenderApi,
+    debug: String,
 }
 
 impl Drop for ManagedTexture {
     fn drop(&mut self) {
+        if DEBUG_RESRC {
+            debug!(target: "gfx", "Dropping texture ID={}, debug={}", self.id, self.debug);
+        }
         self.render_api.delete_unmanaged_texture(self.id);
     }
 }
@@ -128,10 +133,21 @@ impl RenderApi {
         gfx_texture_id
     }
 
-    pub fn new_texture(&self, width: u16, height: u16, data: Vec<u8>) -> ManagedTexturePtr {
+    pub fn new_texture<F>(
+        &self,
+        width: u16,
+        height: u16,
+        data: Vec<u8>,
+        make_debug: F,
+    ) -> ManagedTexturePtr
+    where
+        F: Fn() -> String,
+    {
+        let debug = if DEBUG_RESRC { make_debug().into() } else { String::new() };
         Arc::new(ManagedTexture {
             id: self.new_unmanaged_texture(width, height, data),
             render_api: self.clone(),
+            debug,
         })
     }
 
@@ -197,13 +213,39 @@ impl GfxDrawMesh {
         buffers: &HashMap<GfxBufferId, miniquad::BufferId>,
     ) -> DrawMesh {
         let buffers_keep_alive = [self.vertex_buffer.clone(), self.index_buffer.clone()];
+        let texture = match self.texture {
+            Some(gfx_texture) => Self::try_get_texture(textures, gfx_texture),
+            None => None,
+        };
         DrawMesh {
             vertex_buffer: buffers[&self.vertex_buffer.id],
             index_buffer: buffers[&self.index_buffer.id],
             buffers_keep_alive,
-            texture: self.texture.map(|t| (t.clone(), textures[&t.id])),
+            texture,
             num_elements: self.num_elements,
         }
+    }
+
+    fn try_get_texture(
+        textures: &HashMap<GfxTextureId, miniquad::TextureId>,
+        gfx_texture: ManagedTexturePtr,
+    ) -> Option<(ManagedTexturePtr, miniquad::TextureId)> {
+        let gfx_texture_id = gfx_texture.id;
+
+        let Some(mq_texture_id) = textures.get(&gfx_texture_id) else {
+            error!(target: "gfx", "Serious error: missing texture ID={gfx_texture_id}");
+            error!(target: "gfx", "Dumping textures:");
+            for (gfx_texture_id, texture_id) in textures {
+                error!(target: "gfx", "{gfx_texture_id} => {texture_id:?}");
+            }
+
+            if DEBUG_RESRC {
+                panic!("Missing texture ID={gfx_texture_id}, debug={}", gfx_texture.debug);
+            }
+            return None
+        };
+
+        Some((gfx_texture, textures[&gfx_texture_id]))
     }
 }
 

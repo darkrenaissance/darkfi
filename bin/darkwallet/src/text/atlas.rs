@@ -4,16 +4,22 @@ use crate::{
     gfx::{GfxTextureId, ManagedTexturePtr, Rectangle, RenderApi},
 };
 
+use super::glyph_str;
+
 /// Prevents render artifacts from aliasing.
 /// Even with aliasing turned off, some bleed still appears possibly
 /// due to UV coord calcs. Adding a gap perfectly fixes this.
 const ATLAS_GAP: usize = 2;
 
 /// Convenience wrapper fn. Use if rendering a single line of glyphs.
-pub fn make_texture_atlas(render_api: &RenderApi, glyphs: &Vec<Glyph>) -> RenderedAtlas {
+pub fn make_texture_atlas(
+    render_api: &RenderApi,
+    glyphs: &Vec<Glyph>,
+    debug_context: &str,
+) -> RenderedAtlas {
     let mut atlas = Atlas::new(render_api);
     atlas.push(&glyphs);
-    atlas.make()
+    atlas.make(|| format!("{debug_context}: '{}'", glyph_str(glyphs)))
 }
 
 /// Responsible for aggregating glyphs, and then producing a single software
@@ -129,7 +135,10 @@ impl<'a> Atlas<'a> {
     /// Each glyph is given a sub-rect within the texture, accessible by calling
     /// `rendered_atlas.fetch_uv(my_glyph_id)`.
     /// The texture ID is a struct member: `rendered_atlas.texture_id`.
-    pub fn make(self) -> RenderedAtlas {
+    pub fn make<F>(self, debug_info: F) -> RenderedAtlas
+    where
+        F: Fn() -> String,
+    {
         //if self.glyph_ids.is_empty() {
         //    return Err(Error::AtlasIsEmpty);
         //}
@@ -138,7 +147,8 @@ impl<'a> Atlas<'a> {
         assert_eq!(self.glyph_ids.len(), self.x_pos.len());
 
         let atlas = self.render();
-        let texture = self.render_api.new_texture(self.width as u16, self.height as u16, atlas);
+        let texture =
+            self.render_api.new_texture(self.width as u16, self.height as u16, atlas, debug_info);
 
         let uv_rects = self.compute_uvs();
         let glyph_ids = self.glyph_ids;

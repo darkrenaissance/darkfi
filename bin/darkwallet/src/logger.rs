@@ -6,7 +6,12 @@ use simplelog::{
 };
 use std::{path::PathBuf, thread::sleep, time::Duration};
 
+#[cfg(target_os = "android")]
 const LOGS_ENABLED: bool = false;
+
+#[cfg(not(target_os = "android"))]
+const LOGS_ENABLED: bool = true;
+
 // Measured in bytes
 const LOGFILE_MAXSIZE: usize = 5_000_000;
 

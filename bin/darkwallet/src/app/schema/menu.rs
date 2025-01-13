@@ -297,7 +297,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
 
         // Create shortcut
         let channel_id = i + 1;
-        let node = create_shortcut("channel_shortcut_{channel_id}");
+        let node = create_shortcut(&format!("channel_shortcut_{channel_id}"));
         let key = format!("alt+{channel_id}");
         node.set_property_str(Role::App, "key", key).unwrap();
         node.set_property_u32(Role::App, "priority", 1).unwrap();
