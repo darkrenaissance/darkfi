@@ -1874,7 +1874,7 @@ impl UIObject for ChatEdit {
 
                 let mut text_wrap = self_.text_wrap.lock();
                 text_wrap.editable.end_compose();
-                text_wrap.editable.set_text(String::new(), text);
+                text_wrap.editable.set_text(text, String::new());
                 text_wrap.clear_cache();
 
                 let select = &mut text_wrap.select;

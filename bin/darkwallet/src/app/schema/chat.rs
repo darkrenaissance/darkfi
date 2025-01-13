@@ -1081,6 +1081,31 @@ pub async fn make(
     let cmd_hint_is_visible =
         PropertyBool::wrap(&cmd_layer_node, Role::App, "is_visible", 0).unwrap();
 
+    // Make nick label clickable
+    let node = create_button("nickcmd_btn");
+    node.set_property_bool(Role::App, "is_active", true).unwrap();
+    let prop = node.get_property("rect").unwrap();
+    prop.set_f32(Role::App, 0, 0.).unwrap();
+    prop.set_f32(Role::App, 1, 0.).unwrap();
+    prop.set_f32(Role::App, 2, CMD_HELP_NICK_CMD_WIDTH).unwrap();
+    prop.set_f32(Role::App, 3, CMD_HELP_HEIGHT).unwrap();
+
+    let (slot, recvr) = Slot::new("nickcmd_clicked");
+    node.register("click", slot).unwrap();
+    let editz_text2 = editz_text.clone();
+    let listen_click = app.ex.spawn(async move {
+        while let Ok(_) = recvr.recv().await {
+            info!(target: "app::chat", "clicked /nick");
+            // This will autohide this popup due to ending in a space.
+            // Setting the property will retrigger the logic whether to show popup.
+            editz_text2.set("/nick ");
+        }
+    });
+    app.tasks.lock().unwrap().push(listen_click);
+
+    let node = node.setup(|me| Button::new(me, app.ex.clone())).await;
+    cmd_layer_node.clone().link(node);
+
     // Create the actionbar bg
     let node = create_vector_art("cmd_hint_bg");
     let prop = node.get_property("rect").unwrap();
@@ -1600,15 +1625,11 @@ pub async fn make(
             info!(target: "app::chat", "text changed: {text}");
             // We want to avoid setting the property multiple times to the same value
             // because then it triggers unnecessary redraw work.
-            if let Some(first_char) = text.chars().next() {
-                if first_char == '/' {
-                    if !cmd_hint_is_visible.get() {
-                        cmd_hint_is_visible.set(true);
-                    }
-                } else {
-                    if cmd_hint_is_visible.get() {
-                        cmd_hint_is_visible.set(false);
-                    }
+
+            // Only show popup for "/ni", "/nick", but not for: "/nick ", "/nick foo"
+            if "/nick".starts_with(&text) && text.len() <= "/nick".len() {
+                if !cmd_hint_is_visible.get() {
+                    cmd_hint_is_visible.set(true);
                 }
             } else {
                 if cmd_hint_is_visible.get() {
