@@ -82,7 +82,7 @@ pub struct BlockchainNetwork {
     /// JSON-RPC listen URL
     rpc_listen: Url,
 
-    #[structopt(long, default_value = "~/.local/darkfi/darkfid/localnet")]
+    #[structopt(long, default_value = "~/.local/share/darkfi/darkfid/localnet")]
     /// Path to blockchain database
     database: String,
 

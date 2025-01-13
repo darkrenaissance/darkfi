@@ -39,11 +39,11 @@ pub struct Args {
     pub rpc_listen: Url,
 
     /// Sets Datastore Path
-    #[structopt(long, default_value = "~/.local/darkfi/taud_db")]
+    #[structopt(long, default_value = "~/.local/share/darkfi/taud_db")]
     pub datastore: String,
 
     /// Replay logs (DB) path
-    #[structopt(long, default_value = "~/.local/darkfi/replayed_taud_db")]
+    #[structopt(long, default_value = "~/.local/share/darkfi/replayed_taud_db")]
     pub replay_datastore: String,
 
     /// Flag to store Sled DB instructions

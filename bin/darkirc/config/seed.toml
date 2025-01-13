@@ -5,7 +5,7 @@ rpc_listen = "127.0.0.1:8000"
 irc_listen = "127.0.0.1:11065"
 
 ## Sets Datastore Path
-datastore = "~/.config/darkirc-seed"
+datastore = "~/.config/darkfi/darkirc-seed"
 
 ## Raft net settings
 [net]

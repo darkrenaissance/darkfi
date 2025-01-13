@@ -5,7 +5,7 @@ rpc_listen = "127.0.0.1:7777"
 irc_listen = "127.0.0.1:11066"
 
 ## Sets Datastore Path
-datastore = "~/.config/darkirc-outbound"
+datastore = "~/.config/darkfi/darkirc-outbound"
 
 ## Raft net settings
 [net]

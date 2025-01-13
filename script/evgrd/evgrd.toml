@@ -1,4 +1,4 @@
 [net]
-datastore = "~/.local/darkfi/evgrd"
-hostlist = "~/.local/darkfi/evgrd/p2p_hostlist.tsv"
+datastore = "~/.local/share/darkfi/evgrd"
+hostlist = "~/.local/share/darkfi/evgrd/p2p_hostlist.tsv"
 

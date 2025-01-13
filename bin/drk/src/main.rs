@@ -549,7 +549,7 @@ enum ContractSubcmd {
 #[derive(Clone, Debug, serde::Deserialize, structopt::StructOpt, structopt_toml::StructOptToml)]
 #[structopt()]
 struct BlockchainNetwork {
-    #[structopt(long, default_value = "~/.local/darkfi/drk/localnet/wallet.db")]
+    #[structopt(long, default_value = "~/.local/share/darkfi/drk/localnet/wallet.db")]
     /// Path to wallet database
     wallet_path: String,
 

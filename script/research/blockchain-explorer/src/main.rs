@@ -74,7 +74,7 @@ struct Args {
     /// JSON-RPC listen URL
     rpc_listen: Url,
 
-    #[structopt(long, default_value = "~/.local/darkfi/blockchain-explorer/daemon.db")]
+    #[structopt(long, default_value = "~/.local/share/darkfi/blockchain-explorer/daemon.db")]
     /// Path to daemon database
     db_path: String,
 

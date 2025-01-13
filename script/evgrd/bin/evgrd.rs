@@ -76,11 +76,11 @@ struct Args {
     /// JSON-RPC server listen address
     json_rpc_listen: Url,
 
-    #[structopt(short, long, default_value = "~/.local/darkfi/evgrd_db")]
+    #[structopt(short, long, default_value = "~/.local/share/darkfi/evgrd_db")]
     /// Datastore (DB) path
     datastore: String,
 
-    #[structopt(short, long, default_value = "~/.local/darkfi/replayed_evgrd_db")]
+    #[structopt(short, long, default_value = "~/.local/share/darkfi/replayed_evgrd_db")]
     /// Replay logs (DB) path
     replay_datastore: String,
 

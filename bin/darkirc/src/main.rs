@@ -89,11 +89,11 @@ struct Args {
     /// Optional TLS certificate key file path if `irc_listen` uses TLS
     irc_tls_secret: Option<String>,
 
-    #[structopt(short, long, default_value = "~/.local/darkfi/darkirc_db")]
+    #[structopt(short, long, default_value = "~/.local/share/darkfi/darkirc_db")]
     /// Datastore (DB) path
     datastore: String,
 
-    #[structopt(short, long, default_value = "~/.local/darkfi/replayed_darkirc_db")]
+    #[structopt(short, long, default_value = "~/.local/share/darkfi/replayed_darkirc_db")]
     /// Replay logs (DB) path
     replay_datastore: String,
 
