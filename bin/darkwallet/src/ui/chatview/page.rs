@@ -305,7 +305,7 @@ impl PrivMessage {
     /// clear_mesh() must be called after this.
     fn adjust_params(
         &mut self,
-        font_size: f32,
+        mut font_size: f32,
         timestamp_font_size: f32,
         window_scale: f32,
         line_width: f32,
@@ -313,6 +313,9 @@ impl PrivMessage {
         text_shaper: &TextShaper,
         render_api: &RenderApi,
     ) {
+        if self.nick == "NOTICE" {
+            font_size *= 0.8;
+        }
         self.font_size = font_size;
         self.timestamp_font_size = timestamp_font_size;
         self.window_scale = window_scale;
