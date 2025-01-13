@@ -159,6 +159,8 @@ impl DarkIrc {
         let mut p2p_settings: NetSettings = Default::default();
         p2p_settings.app_version = semver::Version::parse("0.5.0").unwrap();
         p2p_settings.seeds.push(url::Url::parse("tcp+tls://lilith1.dark.fi:5262").unwrap());
+        p2p_settings.outbound_connect_timeout = 40;
+        p2p_settings.channel_handshake_timeout = 30;
 
         let p2p = match P2p::new(p2p_settings, ex.clone()).await {
             Ok(p2p) => p2p,
@@ -213,27 +215,32 @@ impl DarkIrc {
         }
 
         inf!("Waiting for some P2P connections...");
-        sleep(5).await;
+        sleep(1).await;
 
-        // We'll attempt to sync {sync_attempts} times
-        let sync_attempts = 4;
-        for i in 1..=sync_attempts {
-            inf!("Syncing event DAG (attempt #{})", i);
-            match self.event_graph.dag_sync().await {
-                Ok(()) => break,
-                Err(e) => {
-                    if i == sync_attempts {
-                        err!("Failed syncing DAG. Exiting.");
-                        self.p2p.stop().await;
-                        return
-                    } else {
-                        // TODO: Maybe at this point we should prune or something?
-                        // TODO: Or maybe just tell the user to delete the DAG from FS.
-                        err!("Failed syncing DAG ({}), retrying in {}s...", e, 4);
-                        sleep(4).await;
+        loop {
+            // We'll attempt to sync {sync_attempts} times
+            let sync_attempts = 4;
+            for i in 1..=sync_attempts {
+                inf!("Syncing event DAG (attempt #{})", i);
+                match self.event_graph.dag_sync().await {
+                    Ok(()) => break,
+                    Err(e) => {
+                        if i == sync_attempts {
+                            err!("Failed syncing DAG. Exiting.");
+                            self.p2p.stop().await;
+                            return
+                        } else {
+                            // TODO: Maybe at this point we should prune or something?
+                            // TODO: Or maybe just tell the user to delete the DAG from FS.
+                            err!("Failed syncing DAG ({}), retrying in {}s...", e, 4);
+                            sleep(4).await;
+                        }
                     }
                 }
             }
+            const sleep_time: u64 = 20;
+            inf!("Wasn't able to sync yet. Sleeping for {sleep_time} and try again.");
+            sleep(sleep_time).await;
         }
     }
 
