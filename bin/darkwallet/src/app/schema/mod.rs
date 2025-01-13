@@ -17,6 +17,7 @@
  */
 
 use sled_overlay::sled;
+use std::fs::File;
 
 use crate::{
     app::{
@@ -55,27 +56,37 @@ mod android_ui_consts {
 
 #[cfg(target_os = "android")]
 mod ui_consts {
+    use crate::android::get_appdata_path;
     use std::path::PathBuf;
 
     pub const BG_PATH: &str = "bg.png";
     pub use super::android_ui_consts::*;
 
     pub fn get_chatdb_path() -> PathBuf {
-        use crate::android::get_appdata_path;
         get_appdata_path().join("chatdb")
+    }
+    pub fn get_first_time_filename() -> PathBuf {
+        get_appdata_path().join("first_time")
+    }
+}
+
+#[cfg(not(target_os = "android"))]
+mod desktop_paths {
+    use std::path::PathBuf;
+
+    pub const BG_PATH: &str = "assets/bg.png";
+
+    pub fn get_chatdb_path() -> PathBuf {
+        dirs::cache_dir().unwrap().join("darkfi/chatdb")
+    }
+    pub fn get_first_time_filename() -> PathBuf {
+        dirs::cache_dir().unwrap().join("darkfi/first_time")
     }
 }
 
 #[cfg(feature = "emulate-android")]
 mod ui_consts {
-    use std::path::PathBuf;
-
-    pub const BG_PATH: &str = "assets/bg.png";
-    pub use super::android_ui_consts::*;
-
-    pub fn get_chatdb_path() -> PathBuf {
-        dirs::cache_dir().unwrap().join("darkfi/chatdb")
-    }
+    pub use super::{android_ui_consts::*, desktop_paths::*};
 }
 
 #[cfg(all(
@@ -83,14 +94,8 @@ mod ui_consts {
     not(feature = "emulate-android")
 ))]
 mod ui_consts {
-    use std::path::PathBuf;
-
-    pub const BG_PATH: &str = "assets/bg.png";
     pub const EMOJI_PICKER_ICON_SIZE: f32 = 40.;
-
-    pub fn get_chatdb_path() -> PathBuf {
-        dirs::cache_dir().unwrap().join("darkfi/chatdb")
-    }
+    pub use super::desktop_paths::*;
 }
 
 use ui_consts::*;
@@ -230,10 +235,15 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         }
     });
 
+    let is_first_time = !get_first_time_filename().exists();
+    if is_first_time {
+        let _ = File::create(get_first_time_filename());
+    }
+
     let chatdb_path = get_chatdb_path();
     let db = sled::open(chatdb_path).expect("cannot open sleddb");
     for channel in CHANNELS {
-        chat::make(app, window.clone(), channel, &db, emoji_meshes.clone()).await;
+        chat::make(app, window.clone(), channel, &db, emoji_meshes.clone(), is_first_time).await;
     }
     menu::make(app, window.clone()).await;
 

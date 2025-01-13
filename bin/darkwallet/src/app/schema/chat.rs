@@ -37,12 +37,12 @@ use crate::{
     prop::{
         Property, PropertyBool, PropertyFloat32, PropertyStr, PropertySubType, PropertyType, Role,
     },
-    scene::{SceneNodePtr, Slot},
+    scene::{Pimpl, SceneNodePtr, Slot},
     shape,
     text::TextShaperPtr,
     ui::{
-        emoji_picker, Button, ChatEdit, ChatView, EditBox, EmojiPicker, Image, Layer, ShapeVertex,
-        Shortcut, Text, VectorArt, VectorShape, Window,
+        chatview, emoji_picker, Button, ChatEdit, ChatView, EditBox, EmojiPicker, Image, Layer,
+        ShapeVertex, Shortcut, Text, VectorArt, VectorShape, Window,
     },
     util::{unixtime, Clipboard},
     ExecutorPtr,
@@ -187,6 +187,7 @@ pub async fn make(
     channel: &str,
     db: &sled::Db,
     emoji_meshes: emoji_picker::EmojiMeshesPtr,
+    is_first_time: bool,
 ) {
     let window_scale = PropertyFloat32::wrap(&window, Role::Internal, "scale", 0).unwrap();
 
@@ -314,6 +315,8 @@ pub async fn make(
     node.set_property_str(Role::App, "key", "back").unwrap();
     #[cfg(not(target_os = "android"))]
     node.set_property_str(Role::App, "key", "alt+left").unwrap();
+    // Not sure what was eating my keys. This is a workaround.
+    node.set_property_u32(Role::App, "priority", 10).unwrap();
 
     let (slot, recvr) = Slot::new("back_pressed");
     node.register("shortcut", slot).unwrap();
@@ -561,6 +564,19 @@ pub async fn make(
         })
         .await;
     layer_node.clone().link(chatview_node.clone());
+
+    if is_first_time {
+        let chatview = match &chatview_node.pimpl {
+            Pimpl::ChatView(obj) => obj.as_ref(),
+            _ => panic!("wrong pimpl for chatview"),
+        };
+        chatview.handle_insert_line(
+            unixtime(),
+            chatview::MessageId(rand::random()),
+            "NOTICE".to_string(),
+            "This is your first time connecting. Please be patient while the network syncs. We will fix this in future releases".to_string()
+        ).await;
+    }
 
     // Create the editbox bg
     let node = create_vector_art("editbox_bg");
@@ -1626,8 +1642,8 @@ pub async fn make(
             // We want to avoid setting the property multiple times to the same value
             // because then it triggers unnecessary redraw work.
 
-            // Only show popup for "/ni", "/nick", but not for: "/nick ", "/nick foo"
-            if "/nick".starts_with(&text) && text.len() <= "/nick".len() {
+            // Only show popup for "/ni", "/nick", but not for: "", "/nick ", "/nick foo"
+            if !text.is_empty() && "/nick".starts_with(&text) && text.len() <= "/nick".len() {
                 if !cmd_hint_is_visible.get() {
                     cmd_hint_is_visible.set(true);
                 }

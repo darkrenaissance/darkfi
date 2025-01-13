@@ -420,7 +420,7 @@ impl ChatView {
         let _ = self.tree.flush_async().await;
         true
     }
-    async fn handle_insert_line(
+    pub async fn handle_insert_line(
         &self,
         timest: Timestamp,
         msg_id: MessageId,
