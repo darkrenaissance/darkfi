@@ -48,7 +48,7 @@ use crate::{
     pubsub::Subscription,
     scene::{MethodCallSub, Pimpl, SceneNodePtr, SceneNodeWeak},
     text::{self, Glyph, GlyphPositionIter, TextShaperPtr},
-    util::{enumerate_ref, is_whitespace, min_f32, unixtime, zip4},
+    util::{enumerate_ref, is_whitespace, min_f32, unixtime, zip4, Clipboard},
     ExecutorPtr,
 };
 
@@ -1151,8 +1151,9 @@ impl ChatEdit {
             }
             'v' => {
                 if mods.ctrl {
-                    if let Some(text) = window::clipboard_get() {
-                        //self.paste_text(text).await;
+                    let mut clip = Clipboard::new();
+                    if let Some(text) = clip.get() {
+                        self.insert_text(&text).await;
                     }
                     return true
                 }
@@ -2010,11 +2011,18 @@ impl UIObject for ChatEdit {
             return false
         }
 
+        let rect = self.rect.get();
+
         if btn != MouseButton::Left {
+            if btn == MouseButton::Right && rect.contains(mouse_pos) {
+                if self.text.get().is_empty() {
+                    let node = self.node.upgrade().unwrap();
+                    node.trigger("paste_request", vec![]).await.unwrap();
+                }
+                return true
+            }
             return false
         }
-
-        let rect = self.rect.get();
 
         if !rect.contains(mouse_pos) {
             return false

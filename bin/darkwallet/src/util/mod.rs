@@ -19,6 +19,9 @@
 use colored::Colorize;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+mod clip;
+pub use clip::Clipboard;
+
 pub fn is_whitespace(s: &str) -> bool {
     s.chars().all(char::is_whitespace)
 }

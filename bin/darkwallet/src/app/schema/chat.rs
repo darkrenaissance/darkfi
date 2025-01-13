@@ -44,7 +44,7 @@ use crate::{
         emoji_picker, Button, ChatEdit, ChatView, EditBox, EmojiPicker, Image, Layer, ShapeVertex,
         Shortcut, Text, VectorArt, VectorShape, Window,
     },
-    util::unixtime,
+    util::{unixtime, Clipboard},
     ExecutorPtr,
 };
 
@@ -173,36 +173,6 @@ mod ui_consts {
 
 use super::EMOJI_PICKER_ICON_SIZE;
 use ui_consts::*;
-
-struct Clipboard {
-    #[cfg(not(target_os = "android"))]
-    clip: arboard::Clipboard,
-}
-
-impl Clipboard {
-    fn new() -> Self {
-        Self {
-            #[cfg(not(target_os = "android"))]
-            clip: arboard::Clipboard::new().unwrap(),
-        }
-    }
-
-    fn get(&mut self) -> Option<String> {
-        #[cfg(target_os = "android")]
-        return miniquad::window::clipboard_get();
-
-        #[cfg(not(target_os = "android"))]
-        return self.clip.get_text().ok();
-    }
-
-    fn set(&mut self, data: &str) {
-        #[cfg(target_os = "android")]
-        return miniquad::window::clipboard_set(data);
-
-        #[cfg(not(target_os = "android"))]
-        return self.clip.set_text(data).unwrap();
-    }
-}
 
 fn android_keyboard_height() -> f32 {
     #[cfg(target_os = "android")]
