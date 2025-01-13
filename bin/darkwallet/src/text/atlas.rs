@@ -135,9 +135,10 @@ impl<'a> Atlas<'a> {
     /// Each glyph is given a sub-rect within the texture, accessible by calling
     /// `rendered_atlas.fetch_uv(my_glyph_id)`.
     /// The texture ID is a struct member: `rendered_atlas.texture_id`.
-    pub fn make<F>(self, debug_info: F) -> RenderedAtlas
+    pub fn make<F, S>(self, debug_info: F) -> RenderedAtlas
     where
-        F: Fn() -> String,
+        F: Fn() -> S,
+        S: Into<String>,
     {
         //if self.glyph_ids.is_empty() {
         //    return Err(Error::AtlasIsEmpty);

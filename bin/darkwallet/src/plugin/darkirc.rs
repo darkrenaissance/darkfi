@@ -58,7 +58,7 @@ fn get_evgrdb_path() -> PathBuf {
 }
 #[cfg(not(target_os = "android"))]
 fn get_evgrdb_path() -> PathBuf {
-    dirs::cache_dir().unwrap().join("darkfi/evgr")
+    dirs::data_local_dir().unwrap().join("darkfi/evgr")
 }
 
 #[cfg(target_os = "android")]

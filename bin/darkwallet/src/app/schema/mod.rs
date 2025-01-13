@@ -77,10 +77,10 @@ mod desktop_paths {
     pub const BG_PATH: &str = "assets/bg.png";
 
     pub fn get_chatdb_path() -> PathBuf {
-        dirs::cache_dir().unwrap().join("darkfi/chatdb")
+        dirs::data_local_dir().unwrap().join("darkfi/wallet/chatdb")
     }
     pub fn get_first_time_filename() -> PathBuf {
-        dirs::cache_dir().unwrap().join("darkfi/first_time")
+        dirs::cache_dir().unwrap().join("darkfi/wallet/first_time")
     }
 }
 
@@ -237,7 +237,11 @@ pub async fn make(app: &App, window: SceneNodePtr) {
 
     let is_first_time = !get_first_time_filename().exists();
     if is_first_time {
-        let _ = File::create(get_first_time_filename());
+        let filename = get_first_time_filename();
+        if let Some(parent) = filename.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        let _ = File::create(filename);
     }
 
     let chatdb_path = get_chatdb_path();

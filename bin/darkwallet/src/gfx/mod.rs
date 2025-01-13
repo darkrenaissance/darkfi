@@ -133,7 +133,7 @@ impl RenderApi {
         gfx_texture_id
     }
 
-    pub fn new_texture<F>(
+    pub fn new_texture<F, S>(
         &self,
         width: u16,
         height: u16,
@@ -141,7 +141,8 @@ impl RenderApi {
         make_debug: F,
     ) -> ManagedTexturePtr
     where
-        F: Fn() -> String,
+        F: Fn() -> S,
+        S: Into<String>,
     {
         let debug = if DEBUG_RESRC { make_debug().into() } else { String::new() };
         Arc::new(ManagedTexture {
