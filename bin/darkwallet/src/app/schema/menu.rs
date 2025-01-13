@@ -230,18 +230,21 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         node.set_property_str(Role::App, "text", text).unwrap();
         //node.set_property_bool(Role::App, "debug", true).unwrap();
         //node.set_property_str(Role::App, "text", "anon1").unwrap();
-        let prop = node.get_property("text_color").unwrap();
-        if COLOR_SCHEME == ColorScheme::DarkMode {
-            prop.set_f32(Role::App, 0, 1.).unwrap();
-            prop.set_f32(Role::App, 1, 1.).unwrap();
-            prop.set_f32(Role::App, 2, 1.).unwrap();
-            prop.set_f32(Role::App, 3, 1.).unwrap();
-        } else if COLOR_SCHEME == ColorScheme::PaperLight {
-            prop.set_f32(Role::App, 0, 0.).unwrap();
-            prop.set_f32(Role::App, 1, 0.).unwrap();
-            prop.set_f32(Role::App, 2, 0.).unwrap();
-            prop.set_f32(Role::App, 3, 1.).unwrap();
-        }
+        let color_prop = node.get_property("text_color").unwrap();
+        let set_normal_color = move || {
+            if COLOR_SCHEME == ColorScheme::DarkMode {
+                color_prop.set_f32(Role::App, 0, 1.).unwrap();
+                color_prop.set_f32(Role::App, 1, 1.).unwrap();
+                color_prop.set_f32(Role::App, 2, 1.).unwrap();
+                color_prop.set_f32(Role::App, 3, 1.).unwrap();
+            } else if COLOR_SCHEME == ColorScheme::PaperLight {
+                color_prop.set_f32(Role::App, 0, 0.).unwrap();
+                color_prop.set_f32(Role::App, 1, 0.).unwrap();
+                color_prop.set_f32(Role::App, 2, 0.).unwrap();
+                color_prop.set_f32(Role::App, 3, 1.).unwrap();
+            }
+        };
+        set_normal_color();
         node.set_property_u32(Role::App, "z_index", 3).unwrap();
 
         let node = node
@@ -273,13 +276,18 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         let chatview_is_visible =
             PropertyBool::wrap(&chatview_node, Role::App, "is_visible", 0).unwrap();
         let menu_is_visible = PropertyBool::wrap(&layer_node, Role::App, "is_visible", 0).unwrap();
-        let chatview_is_visible2 = chatview_is_visible.clone();
-        let menu_is_visible2 = menu_is_visible.clone();
+
+        let select_channel = move || {
+            info!(target: "app::menu", "clicked: {channel}!");
+            chatview_is_visible.set(true);
+            menu_is_visible.set(false);
+            set_normal_color();
+        };
+
+        let select_channel2 = select_channel.clone();
         let listen_click = app.ex.spawn(async move {
             while let Ok(_) = recvr.recv().await {
-                info!(target: "app::menu", "clicked: {channel}!");
-                chatview_is_visible2.set(true);
-                menu_is_visible2.set(false);
+                select_channel2();
             }
         });
         app.tasks.lock().unwrap().push(listen_click);
@@ -298,9 +306,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         node.register("shortcut", slot).unwrap();
         let listen_enter = app.ex.spawn(async move {
             while let Ok(_) = recvr.recv().await {
-                info!(target: "app::menu", "shortcut go to: {channel}!");
-                chatview_is_visible.set(true);
-                menu_is_visible.set(false);
+                select_channel();
             }
         });
         app.tasks.lock().unwrap().push(listen_enter);

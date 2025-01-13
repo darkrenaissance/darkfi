@@ -185,6 +185,7 @@ impl App {
         let (slot, recvr) = Slot::new("recvmsg");
         darkirc.register("recv", slot).unwrap();
         let sg_root2 = self.sg_root.clone();
+        let darkirc_nick = PropertyStr::wrap(&darkirc, Role::App, "nick", 0).unwrap();
         let listen_recv = self.ex.spawn(async move {
             while let Ok(data) = recvr.recv().await {
                 let mut cur = Cursor::new(&data);
@@ -212,6 +213,29 @@ impl App {
                         target: "app",
                         "Call method {node_path}::insert_line({timestamp}, {id}, {nick}, '{msg}'): {err:?}"
                     );
+                }
+
+                // Apply coloring when you get a message
+                let menu_layer = sg_root2.clone().lookup_node("/window/menu_layer").unwrap();
+                if !menu_layer.get_property_bool("is_visible").unwrap() {
+                    continue
+                }
+
+                let node_path = format!("/window/menu_layer/{channel}_channel_label");
+                let menu_label = sg_root2.clone().lookup_node(&node_path).unwrap();
+                let prop = menu_label.get_property("text_color").unwrap();
+                if msg.contains(&darkirc_nick.get()) {
+                    // Nick highlight
+                    prop.set_f32(Role::App, 0, 0.56).unwrap();
+                    prop.set_f32(Role::App, 1, 0.61).unwrap();
+                    prop.set_f32(Role::App, 2, 1.).unwrap();
+                    prop.set_f32(Role::App, 3, 1.).unwrap();
+                } else {
+                    // Normal channel activity
+                    prop.set_f32(Role::App, 0, 0.36).unwrap();
+                    prop.set_f32(Role::App, 1, 1.).unwrap();
+                    prop.set_f32(Role::App, 2, 0.51).unwrap();
+                    prop.set_f32(Role::App, 3, 1.).unwrap();
                 }
             }
         });

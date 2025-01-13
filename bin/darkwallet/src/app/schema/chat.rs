@@ -313,25 +313,15 @@ pub async fn make(
     prop.set_f32(Role::App, 2, EMOJI_BG_W).unwrap();
     prop.set_f32(Role::App, 3, CHATEDIT_HEIGHT).unwrap();
 
-    #[derive(Clone)]
-    struct GoBack {
-        sg_root: SceneNodePtr,
-        chatview_is_visible: PropertyBool,
-    }
+    let sg_root = app.sg_root.clone();
+    let chatview_is_visible = PropertyBool::wrap(&layer_node, Role::App, "is_visible", 0).unwrap();
+    let goback = move || {
+        info!(target: "app::chat", "clicked back");
 
-    impl GoBack {
-        fn go(&self) {
-            info!(target: "app::chat", "clicked back");
+        let menu_node = sg_root.clone().lookup_node("/window/menu_layer").unwrap();
+        menu_node.set_property_bool(Role::App, "is_visible", true).unwrap();
 
-            let menu_node = self.sg_root.clone().lookup_node("/window/menu_layer").unwrap();
-            menu_node.set_property_bool(Role::App, "is_visible", true).unwrap();
-
-            self.chatview_is_visible.set(false);
-        }
-    }
-    let goback = GoBack {
-        sg_root: app.sg_root.clone(),
-        chatview_is_visible: PropertyBool::wrap(&layer_node, Role::App, "is_visible", 0).unwrap(),
+        chatview_is_visible.set(false);
     };
 
     let (slot, recvr) = Slot::new("back_clicked");
@@ -340,7 +330,7 @@ pub async fn make(
     // Menu doesn't exist yet ;)
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
-            goback2.go();
+            goback2();
         }
     });
     app.tasks.lock().unwrap().push(listen_click);
@@ -359,7 +349,7 @@ pub async fn make(
     node.register("shortcut", slot).unwrap();
     let listen_enter = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
-            goback.go();
+            goback();
         }
     });
     app.tasks.lock().unwrap().push(listen_enter);
@@ -937,21 +927,20 @@ pub async fn make(
     prop.set_f32(Role::App, 2, SENDBTN_BOX[2]).unwrap();
     prop.set_f32(Role::App, 3, SENDBTN_BOX[3]).unwrap();
 
-    #[derive(Clone)]
-    struct SendMsg {
-        channel: String,
-        editz_text: PropertyStr,
-        sg_root: SceneNodePtr,
-        chatview_node: SceneNodePtr,
-    }
+    let editz_text2 = editz_text.clone();
+    let channel2 = format!("#{channel}");
+    let sg_root = app.sg_root.clone();
+    let sendmsg = move || {
+        let editz_text = editz_text2.clone();
+        let channel = channel2.clone();
+        let sg_root = sg_root.clone();
+        let chatview_node = chatview_node.clone();
+        async move {
+            let text = editz_text.get();
+            info!(target: "app::chat", "Send '{text}' to channel: #{channel}");
+            editz_text.set("");
 
-    impl SendMsg {
-        async fn send(&self) {
-            let text = self.editz_text.get();
-            info!(target: "app::chat", "Send '{text}' to channel: #{}", self.channel);
-            self.editz_text.set("");
-
-            let Some(darkirc) = self.sg_root.clone().lookup_node("/plugin/darkirc") else {
+            let Some(darkirc) = sg_root.clone().lookup_node("/plugin/darkirc") else {
                 error!(target: "app::chat", "DarkIrc plugin has not been loaded");
                 return
             };
@@ -969,14 +958,14 @@ pub async fn make(
                 id.encode(&mut data).unwrap();
                 "NOTICE".encode(&mut data).unwrap();
                 msg.encode(&mut data).unwrap();
-                self.chatview_node.call_method("insert_line", data).await.unwrap();
+                chatview_node.call_method("insert_line", data).await.unwrap();
 
                 return
             }
 
             let timest = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;
             let nick = darkirc.get_property_str("nick").unwrap();
-            let msg = darkirc::Privmsg::new(self.channel.clone(), nick, text);
+            let msg = darkirc::Privmsg::new(channel, nick, text);
 
             //let mut data = vec![];
             //timest.encode(&mut data).unwrap();
@@ -991,13 +980,6 @@ pub async fn make(
             msg.msg.encode(&mut data).unwrap();
             darkirc.call_method("send", data).await.unwrap();
         }
-    }
-
-    let sendmsg = SendMsg {
-        editz_text: editz_text.clone(),
-        channel: format!("#{channel}"),
-        sg_root: app.sg_root.clone(),
-        chatview_node,
     };
 
     let (slot, recvr) = Slot::new("send_clicked");
@@ -1005,7 +987,7 @@ pub async fn make(
     let sendmsg2 = sendmsg.clone();
     let listen_click = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
-            sendmsg2.send().await;
+            sendmsg2().await;
         }
     });
     app.tasks.lock().unwrap().push(listen_click);
@@ -1021,7 +1003,7 @@ pub async fn make(
     node.register("shortcut", slot).unwrap();
     let listen_enter = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
-            sendmsg.send().await;
+            sendmsg().await;
         }
     });
     app.tasks.lock().unwrap().push(listen_enter);
