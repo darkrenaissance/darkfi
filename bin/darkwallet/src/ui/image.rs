@@ -124,11 +124,7 @@ impl Image {
         let height = img.height() as u16;
         let bmp = img.into_raw();
 
-        let texture = self.render_api.new_texture(width, height, bmp, || {
-            let node = &self.node.upgrade().unwrap();
-            format!("{node:?}")
-        });
-        texture
+        self.render_api.new_texture(width, height, bmp)
     }
 
     async fn redraw(self: Arc<Self>) {

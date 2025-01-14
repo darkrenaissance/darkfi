@@ -710,7 +710,7 @@ impl ChatEdit {
             let rendered = text_wrap.get_render();
             let under_start = rendered.under_start;
             let under_end = rendered.under_end;
-            let atlas = text::make_texture_atlas(&self.render_api, &rendered.glyphs, "chatedit");
+            let atlas = text::make_texture_atlas(&self.render_api, &rendered.glyphs);
             let wrapped_lines = text_wrap.wrap(width);
             let selections = text_wrap.select.clone();
             (atlas, wrapped_lines, selections, under_start, under_end)

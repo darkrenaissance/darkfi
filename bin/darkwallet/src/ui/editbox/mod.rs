@@ -332,7 +332,7 @@ impl EditBox {
         //debug!(target: "ui::editbox", "    cursor_pos={cursor_pos}, is_focused={is_focused}");
 
         let rendered = self.editable.lock().unwrap().render();
-        let atlas = text::make_texture_atlas(&self.render_api, &rendered.glyphs, "editbox");
+        let atlas = text::make_texture_atlas(&self.render_api, &rendered.glyphs);
 
         let mut mesh = MeshBuilder::with_clip(clip.clone());
 

@@ -92,13 +92,12 @@ pub type ManagedTexturePtr = Arc<ManagedTexture>;
 pub struct ManagedTexture {
     id: GfxTextureId,
     render_api: RenderApi,
-    debug: String,
 }
 
 impl Drop for ManagedTexture {
     fn drop(&mut self) {
         if DEBUG_RSRC {
-            debug!(target: "gfx", "Dropping texture ID={}, debug={}", self.id, self.debug);
+            debug!(target: "gfx", "Dropping texture ID={}", self.id);
         }
         self.render_api.delete_unmanaged_texture(self.id);
     }
@@ -150,22 +149,10 @@ impl RenderApi {
         gfx_texture_id
     }
 
-    pub fn new_texture<F, S>(
-        &self,
-        width: u16,
-        height: u16,
-        data: Vec<u8>,
-        make_debug: F,
-    ) -> ManagedTexturePtr
-    where
-        F: Fn() -> S,
-        S: Into<String>,
-    {
-        let debug = if DEBUG_RSRC { make_debug().into() } else { String::new() };
+    pub fn new_texture(&self, width: u16, height: u16, data: Vec<u8>) -> ManagedTexturePtr {
         Arc::new(ManagedTexture {
             id: self.new_unmanaged_texture(width, height, data),
             render_api: self.clone(),
-            debug,
         })
     }
 
@@ -260,7 +247,7 @@ impl GfxDrawMesh {
             }
 
             if DEBUG_RSRC {
-                panic!("Missing texture ID={gfx_texture_id}, debug={}", gfx_texture.debug);
+                panic!("Missing texture ID={gfx_texture_id}");
             }
             return None
         };

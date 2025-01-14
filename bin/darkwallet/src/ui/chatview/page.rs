@@ -98,12 +98,12 @@ impl PrivMessage {
         if nick == "NOTICE" {
             font_size *= 0.8;
         }
-        let unwrapped_glyphs = text_shaper.shape(linetext.clone(), font_size, window_scale);
+        let unwrapped_glyphs = text_shaper.shape(linetext, font_size, window_scale);
 
         let mut atlas = text::Atlas::new(render_api);
         atlas.push(&time_glyphs);
         atlas.push(&unwrapped_glyphs);
-        let atlas = atlas.make(|| format!("chatview '{linetext}'"));
+        let atlas = atlas.make();
 
         let mut self_ = Self {
             font_size,
@@ -328,12 +328,12 @@ impl PrivMessage {
         } else {
             format!("{} {}", self.nick, self.text)
         };
-        self.unwrapped_glyphs = text_shaper.shape(linetext.clone(), font_size, window_scale);
+        self.unwrapped_glyphs = text_shaper.shape(linetext, font_size, window_scale);
 
         let mut atlas = text::Atlas::new(render_api);
         atlas.push(&self.time_glyphs);
         atlas.push(&self.unwrapped_glyphs);
-        self.atlas = atlas.make(|| format!("chatview '{linetext}'"));
+        self.atlas = atlas.make();
 
         // We need to rewrap the glyphs since they've been reloaded
         self.adjust_width(line_width, timestamp_width);
@@ -393,11 +393,11 @@ impl DateMessage {
         let datestr = Self::datestr(timestamp);
         let timestamp = Self::timest_to_midnight(timestamp);
 
-        let glyphs = text_shaper.shape(datestr.clone(), font_size, window_scale);
+        let glyphs = text_shaper.shape(datestr, font_size, window_scale);
 
         let mut atlas = text::Atlas::new(render_api);
         atlas.push(&glyphs);
-        let atlas = atlas.make(|| format!("chatview '{datestr}'"));
+        let atlas = atlas.make();
 
         Message::Date(Self { font_size, window_scale, timestamp, glyphs, atlas, mesh_cache: None })
     }
@@ -428,11 +428,11 @@ impl DateMessage {
         self.window_scale = window_scale;
 
         let datestr = Self::datestr(self.timestamp);
-        self.glyphs = text_shaper.shape(datestr.clone(), font_size, window_scale);
+        self.glyphs = text_shaper.shape(datestr, font_size, window_scale);
 
         let mut atlas = text::Atlas::new(render_api);
         atlas.push(&self.glyphs);
-        self.atlas = atlas.make(|| format!("chatview '{datestr}'"));
+        self.atlas = atlas.make();
     }
 
     //fn adjust_width(&mut self, line_width: f32) { }
