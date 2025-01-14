@@ -538,10 +538,9 @@ impl PeerDiscoveryBase for PeerDiscovery {
             }
 
             if current_attempt >= 4 {
-                debug!("current attempt: {}", current_attempt);
                 info!(
                     target: "net::outbound_session::peer_discovery()",
-                    "[P2P] [PEER DISCOVERY] Sleeping and trying again..."
+                    "[P2P] [PEER DISCOVERY] Sleeping and trying again. Attempt {current_attempt}"
                 );
 
                 dnetev!(self, OutboundPeerDiscovery, {

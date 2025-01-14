@@ -685,7 +685,7 @@ pub async fn make(
 
     // Create the emoji button
     let node = create_vector_art("emoji_btn_bg");
-    let emoji_btn_is_visible = PropertyBool::wrap(&node, Role::App, "is_visible", 0).unwrap();
+    let emoji_btn_is_visible = PropertyBool::wrap(&node, Role::Ignored, "is_visible", 0).unwrap();
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(Role::App, 0, EMOJI_BTN_X).unwrap();
     let code = cc.compile("h - EMOJI_NEG_Y").unwrap();
@@ -706,7 +706,7 @@ pub async fn make(
     let node = create_vector_art("emoji_close_btn_bg");
     node.set_property_bool(Role::App, "is_visible", false).unwrap();
     let prop = node.get_property("rect").unwrap();
-    let emoji_close_is_visible = PropertyBool::wrap(&node, Role::App, "is_visible", 0).unwrap();
+    let emoji_close_is_visible = PropertyBool::wrap(&node, Role::Ignored, "is_visible", 0).unwrap();
     prop.set_f32(Role::App, 0, EMOJI_BTN_X).unwrap();
     let code = cc.compile("h - EMOJI_NEG_Y").unwrap();
     prop.set_expr(Role::App, 1, code).unwrap();

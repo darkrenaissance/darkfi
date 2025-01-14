@@ -79,6 +79,7 @@ pub enum Role {
     User = 0,
     App = 1,
     Internal = 2,
+    Ignored = 3,
 }
 
 #[derive(Debug, Clone)]

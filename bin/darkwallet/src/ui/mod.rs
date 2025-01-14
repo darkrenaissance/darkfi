@@ -149,8 +149,8 @@ impl<T: Send + Sync + 'static> OnModify<T> {
                     return
                 };
 
-                // Skip internal messages from ourselves
-                if idx == 0 && role == Role::Internal {
+                // Skip internal messages from ourselves or explicitly marked ignored
+                if (idx == 0 && role == Role::Internal) || role == Role::Ignored{
                     continue
                 }
                 if let Some(prop_i) = prop_i {

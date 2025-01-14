@@ -93,9 +93,13 @@ impl VectorArt {
         Pimpl::VectorArt(self_)
     }
 
+    fn node_path(&self) -> String {
+        format!("{:?}", self.node.upgrade().unwrap())
+    }
+
     async fn redraw(self: Arc<Self>) {
         let timest = unixtime();
-        debug!(target: "ui::vector_art", "VectorArt::redraw({:?})", self.node.upgrade().unwrap());
+        debug!(target: "ui::vector_art", "VectorArt::redraw({})", self.node_path());
         let Some(parent_rect) = self.parent_rect.lock().unwrap().clone() else { return };
 
         let Some(draw_update) = self.get_draw_calls(parent_rect).await else {
@@ -103,11 +107,11 @@ impl VectorArt {
             return;
         };
         self.render_api.replace_draw_calls(timest, draw_update.draw_calls);
-        debug!(target: "ui::vector_art", "VectorArt::redraw({:?}) DONE [timest={timest}]", self.node.upgrade().unwrap());
     }
 
     fn get_draw_instrs(&self) -> Vec<GfxDrawInstruction> {
         if !self.is_visible.get() {
+            debug!(target: "ui::vector_art", "Skipping draw for invisible {}", self.node_path());
             return vec![]
         }
 
@@ -128,16 +132,11 @@ impl VectorArt {
     }
 
     async fn get_draw_calls(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
-        //debug!(target: "ui::vector_art", "VectorArt::draw_cached()");
         if let Err(e) = self.rect.eval(&parent_rect) {
             warn!(target: "ui::vector_art", "Rect eval failure: {e}");
             return None
         }
-        let rect = self.rect.get();
-        debug!(target: "ui::vector_art", "VectorArt::get_draw_calls() [rect={rect:?}, dc={}]", self.dc_key);
-
         let instrs = self.get_draw_instrs();
-
         Some(DrawUpdate {
             key: self.dc_key,
             draw_calls: vec![(
@@ -170,11 +169,9 @@ impl UIObject for VectorArt {
     }
 
     async fn draw(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
-        debug!(target: "ui::vector_art", "VectorArt::draw({:?})", self.node.upgrade().unwrap());
+        debug!(target: "ui::vector_art", "VectorArt::draw({})", self.node_path());
         *self.parent_rect.lock().unwrap() = Some(parent_rect);
-        let update = self.get_draw_calls(parent_rect).await;
-        debug!(target: "ui::vector_art", "VectorArt::draw({:?}) DONE", self.node.upgrade().unwrap());
-        update
+        self.get_draw_calls(parent_rect).await
     }
 }
 
