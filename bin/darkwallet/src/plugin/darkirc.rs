@@ -181,6 +181,7 @@ impl DarkIrc {
         let mut p2p_settings: NetSettings = Default::default();
         p2p_settings.app_version = semver::Version::parse("0.5.0").unwrap();
         p2p_settings.seeds.push(url::Url::parse("tcp+tls://lilith1.dark.fi:5262").unwrap());
+        p2p_settings.seeds.push(url::Url::parse("tcp+tls://agorism.dev:26661").unwrap());
         p2p_settings.outbound_connect_timeout = 40;
         p2p_settings.channel_handshake_timeout = 30;
         p2p_settings.p2p_datastore = p2p_datastore_path().into_os_string().into_string().ok();

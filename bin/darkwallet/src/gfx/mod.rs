@@ -30,7 +30,10 @@ use std::{
     collections::HashMap,
     fs::File,
     path::PathBuf,
-    sync::{mpsc, Arc, Mutex as SyncMutex},
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        mpsc, Arc, Mutex as SyncMutex,
+    },
     time::{Duration, Instant},
 };
 
@@ -44,9 +47,6 @@ use crate::{
     pubsub::{Publisher, PublisherPtr, Subscription, SubscriptionId},
     util::ansi_texture,
 };
-
-pub type GfxTextureId = u32;
-pub type GfxBufferId = u32;
 
 // This is very noisy so suppress output by default
 const DEBUG_RENDER: bool = false;
@@ -78,6 +78,12 @@ impl Vertex {
         self.pos = pos.as_arr();
     }
 }
+
+pub type GfxTextureId = u32;
+pub type GfxBufferId = u32;
+
+static NEXT_BUFFER_ID: AtomicU32 = AtomicU32::new(0);
+static NEXT_TEXTURE_ID: AtomicU32 = AtomicU32::new(0);
 
 pub type ManagedTexturePtr = Arc<ManagedTexture>;
 
@@ -136,7 +142,7 @@ impl RenderApi {
     }
 
     fn new_unmanaged_texture(&self, width: u16, height: u16, data: Vec<u8>) -> GfxTextureId {
-        let gfx_texture_id = rand::random();
+        let gfx_texture_id = NEXT_TEXTURE_ID.fetch_add(1, Ordering::SeqCst);
 
         let method = GraphicsMethod::NewTexture((width, height, data, gfx_texture_id));
         let _ = self.method_req.send(method);
@@ -169,7 +175,7 @@ impl RenderApi {
     }
 
     fn new_unmanaged_vertex_buffer(&self, verts: Vec<Vertex>) -> GfxBufferId {
-        let gfx_buffer_id = rand::random();
+        let gfx_buffer_id = NEXT_BUFFER_ID.fetch_add(1, Ordering::SeqCst);
 
         let method = GraphicsMethod::NewVertexBuffer((verts, gfx_buffer_id));
         let _ = self.method_req.send(method);
@@ -178,7 +184,7 @@ impl RenderApi {
     }
 
     fn new_unmanaged_index_buffer(&self, indices: Vec<u16>) -> GfxBufferId {
-        let gfx_buffer_id = rand::random();
+        let gfx_buffer_id = NEXT_BUFFER_ID.fetch_add(1, Ordering::SeqCst);
 
         let method = GraphicsMethod::NewIndexBuffer((indices, gfx_buffer_id));
         let _ = self.method_req.send(method);
