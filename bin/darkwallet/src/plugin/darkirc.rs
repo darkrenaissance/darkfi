@@ -52,8 +52,8 @@ use super::PluginObject;
 
 #[cfg(target_os = "android")]
 mod paths {
-    use std::path::PathBuf;
     use crate::android::get_appdata_path;
+    use std::path::PathBuf;
 
     pub fn get_evgrdb_path() -> PathBuf {
         get_appdata_path().join("evgr")

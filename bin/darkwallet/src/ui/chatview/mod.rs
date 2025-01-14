@@ -564,6 +564,7 @@ impl ChatView {
             }
         };
 
+        let mut do_redraw = false;
         for entry in iter {
             let Ok((k, v)) = entry else { break };
             assert_eq!(k.len(), 8 + 32);
@@ -580,10 +581,14 @@ impl ChatView {
                 break
             }
 
+            // Do this once at the end rather than continuously redrawing
             if remaining_visible > 0. {
-                self.redraw_cached(&mut msgbuf).await;
+                do_redraw = true;
             }
             remaining_visible -= msg_height;
+        }
+        if do_redraw {
+            self.redraw_cached(&mut msgbuf).await;
         }
     }
 
@@ -675,6 +680,7 @@ impl ChatView {
     }
 
     async fn redraw_cached(&self, msgbuf: &mut MessageBuffer) {
+        //debug!(target: "ui::chatview", "ChatView::redraw_cached()");
         let timest = unixtime();
         let rect = self.rect.get();
 
@@ -687,12 +693,12 @@ impl ChatView {
             vec![(self.dc_key, GfxDrawCall { instrs, dcs: vec![], z_index: self.z_index.get() })];
 
         self.render_api.replace_draw_calls(timest, draw_calls);
+        //debug!(target: "ui::chatview", "ChatView::redraw_cached() DONE");
     }
 
     /// Invalidates cache and redraws everything
     async fn redraw_all(&self) {
-        //debug!(target: "ui::chatview", "redraw_all()");
-
+        //debug!(target: "ui::chatview", "ChatView::redraw_all()");
         let parent_rect = self.parent_rect.lock().unwrap().unwrap().clone();
         self.rect.eval(&parent_rect).expect("unable to eval rect");
 
@@ -700,6 +706,7 @@ impl ChatView {
         msgbuf.adjust_params();
         msgbuf.clear_meshes();
         self.redraw_cached(&mut msgbuf).await;
+        //debug!(target: "ui::chatview", "ChatView::redraw_all() DONE");
     }
 }
 

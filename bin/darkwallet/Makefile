@@ -14,6 +14,8 @@ SRC = \
 #FEATURES = --features=emulate-android
 
 all: $(SRC) fonts
+	# You can either install cargo-limit or just s/lbuild/build
+	# `cargo install cargo-limit`
 	cargo lbuild $(FEATURES)
 	-mv target/debug/darkwallet .
 	./darkwallet

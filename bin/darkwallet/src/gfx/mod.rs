@@ -17,7 +17,7 @@
  */
 
 use darkfi::system::CondVar;
-use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
+use darkfi_serial::{async_trait, Decodable, Encodable, SerialDecodable, SerialEncodable};
 use futures::AsyncWriteExt;
 use log::debug;
 use miniquad::{
@@ -28,6 +28,8 @@ use miniquad::{
 };
 use std::{
     collections::HashMap,
+    fs::File,
+    path::PathBuf,
     sync::{mpsc, Arc, Mutex as SyncMutex},
     time::{Duration, Instant},
 };
@@ -49,7 +51,16 @@ pub type GfxBufferId = u32;
 // This is very noisy so suppress output by default
 const DEBUG_RENDER: bool = false;
 const DEBUG_GFXAPI: bool = false;
-const DEBUG_RESRC: bool = false;
+const DEBUG_RSRC: bool = false;
+
+#[cfg(target_os = "android")]
+pub fn get_window_size_filename() -> PathBuf {
+    crate::android::get_appdata_path().join("window_size")
+}
+#[cfg(not(target_os = "android"))]
+pub fn get_window_size_filename() -> PathBuf {
+    dirs::cache_dir().unwrap().join("darkfi/wallet/window_size")
+}
 
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 #[repr(C)]
@@ -80,7 +91,7 @@ pub struct ManagedTexture {
 
 impl Drop for ManagedTexture {
     fn drop(&mut self) {
-        if DEBUG_RESRC {
+        if DEBUG_RSRC {
             debug!(target: "gfx", "Dropping texture ID={}, debug={}", self.id, self.debug);
         }
         self.render_api.delete_unmanaged_texture(self.id);
@@ -144,7 +155,7 @@ impl RenderApi {
         F: Fn() -> S,
         S: Into<String>,
     {
-        let debug = if DEBUG_RESRC { make_debug().into() } else { String::new() };
+        let debug = if DEBUG_RSRC { make_debug().into() } else { String::new() };
         Arc::new(ManagedTexture {
             id: self.new_unmanaged_texture(width, height, data),
             render_api: self.clone(),
@@ -212,19 +223,21 @@ impl GfxDrawMesh {
         self,
         textures: &HashMap<GfxTextureId, miniquad::TextureId>,
         buffers: &HashMap<GfxBufferId, miniquad::BufferId>,
-    ) -> DrawMesh {
-        let buffers_keep_alive = [self.vertex_buffer.clone(), self.index_buffer.clone()];
+    ) -> Option<DrawMesh> {
+        let vertex_buffer_id = self.vertex_buffer.id;
+        let index_buffer_id = self.index_buffer.id;
+        let buffers_keep_alive = [self.vertex_buffer, self.index_buffer];
         let texture = match self.texture {
             Some(gfx_texture) => Self::try_get_texture(textures, gfx_texture),
             None => None,
         };
-        DrawMesh {
-            vertex_buffer: buffers[&self.vertex_buffer.id],
-            index_buffer: buffers[&self.index_buffer.id],
+        Some(DrawMesh {
+            vertex_buffer: Self::try_get_buffer(buffers, vertex_buffer_id)?,
+            index_buffer: Self::try_get_buffer(buffers, index_buffer_id)?,
             buffers_keep_alive,
             texture,
             num_elements: self.num_elements,
-        }
+        })
     }
 
     fn try_get_texture(
@@ -240,13 +253,32 @@ impl GfxDrawMesh {
                 error!(target: "gfx", "{gfx_texture_id} => {texture_id:?}");
             }
 
-            if DEBUG_RESRC {
+            if DEBUG_RSRC {
                 panic!("Missing texture ID={gfx_texture_id}, debug={}", gfx_texture.debug);
             }
             return None
         };
 
         Some((gfx_texture, textures[&gfx_texture_id]))
+    }
+
+    fn try_get_buffer(
+        buffers: &HashMap<GfxBufferId, miniquad::BufferId>,
+        gfx_buffer_id: GfxBufferId,
+    ) -> Option<miniquad::BufferId> {
+        let Some(mq_buffer_id) = buffers.get(&gfx_buffer_id) else {
+            error!(target: "gfx", "Serious error: missing buffer ID={gfx_buffer_id}");
+            error!(target: "gfx", "Dumping buffers:");
+            for (gfx_buffer_id, buffer_id) in buffers {
+                error!(target: "gfx", "{gfx_buffer_id} => {buffer_id:?}");
+            }
+
+            if DEBUG_RSRC {
+                panic!("Missing buffer ID={gfx_buffer_id}");
+            }
+            return None
+        };
+        Some(*mq_buffer_id)
     }
 }
 
@@ -263,13 +295,14 @@ impl GfxDrawInstruction {
         self,
         textures: &HashMap<GfxTextureId, miniquad::TextureId>,
         buffers: &HashMap<GfxBufferId, miniquad::BufferId>,
-    ) -> DrawInstruction {
-        match self {
+    ) -> Option<DrawInstruction> {
+        let instr = match self {
             Self::SetScale(scale) => DrawInstruction::SetScale(scale),
             Self::Move(off) => DrawInstruction::Move(off),
             Self::ApplyView(view) => DrawInstruction::ApplyView(view),
-            Self::Draw(mesh) => DrawInstruction::Draw(mesh.compile(textures, buffers)),
-        }
+            Self::Draw(mesh) => DrawInstruction::Draw(mesh.compile(textures, buffers)?),
+        };
+        Some(instr)
     }
 }
 
@@ -286,13 +319,17 @@ impl GfxDrawCall {
         textures: &HashMap<GfxTextureId, miniquad::TextureId>,
         buffers: &HashMap<GfxBufferId, miniquad::BufferId>,
         timest: u64,
-    ) -> DrawCall {
-        DrawCall {
-            instrs: self.instrs.into_iter().map(|i| i.compile(textures, buffers)).collect(),
+    ) -> Option<DrawCall> {
+        Some(DrawCall {
+            instrs: self
+                .instrs
+                .into_iter()
+                .map(|i| i.compile(textures, buffers))
+                .collect::<Option<Vec<_>>>()?,
             dcs: self.dcs,
             z_index: self.z_index,
             timest,
-        }
+        })
     }
 }
 
@@ -738,15 +775,17 @@ impl Stage {
             debug!(target: "gfx", "Invoked method: replace_draw_calls({:?})", dcs);
         }
         for (key, val) in dcs {
-            let val = val.compile(&self.textures, &self.buffers, timest);
-            self.draw_calls.insert(key, val);
-            /*
+            let Some(val) = val.compile(&self.textures, &self.buffers, timest) else {
+                error!(target: "gfx", "fatal: replace_draw_calls({timest}, ...) failed with item ID={key}");
+                continue
+            };
+            //self.draw_calls.insert(key, val);
             match self.draw_calls.get_mut(&key) {
                 Some(old_val) => {
                     // Only replace the draw call if it is more recent
                     if old_val.timest < timest {
                         *old_val = val;
-                    } else {
+                    } else if DEBUG_RSRC {
                         debug!(target: "gfx", "Rejected stale draw_call {key}: {val:?}");
                     }
                 }
@@ -754,7 +793,6 @@ impl Stage {
                     self.draw_calls.insert(key, val);
                 }
             }
-            */
         }
     }
 }
@@ -800,6 +838,15 @@ impl EventHandler for Stage {
     }
 
     fn resize_event(&mut self, width: f32, height: f32) {
+        let filename = get_window_size_filename();
+        if let Some(parent) = filename.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if let Ok(mut file) = File::create(filename) {
+            (width as i32).encode(&mut file).unwrap();
+            (height as i32).encode(&mut file).unwrap();
+        }
+
         self.event_pub.notify_resize(Dimension::from([width, height]));
     }
 
@@ -852,7 +899,18 @@ pub fn run_gui(
     event_pub: GraphicsEventPublisherPtr,
     cv_started: Arc<CondVar>,
 ) {
+    let mut window_width = 1024;
+    let mut window_height = 768;
+    if let Ok(mut file) = File::open(get_window_size_filename()) {
+        window_width = Decodable::decode(&mut file).unwrap();
+        window_height = Decodable::decode(&mut file).unwrap();
+    }
+    debug!(target: "gfx", "Window size {window_width} x {window_height}");
+
     let mut conf = miniquad::conf::Conf {
+        window_title: "DarkFi".to_string(),
+        window_width,
+        window_height,
         high_dpi: true,
         window_resizable: true,
         platform: miniquad::conf::Platform {
