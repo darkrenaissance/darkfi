@@ -33,7 +33,6 @@ use darkfi_serial::{
 use sled_overlay::sled;
 use std::{
     io::Cursor,
-    path::PathBuf,
     sync::{Arc, Mutex as SyncMutex, OnceLock, Weak},
     time::UNIX_EPOCH,
 };

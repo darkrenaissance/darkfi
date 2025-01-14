@@ -49,6 +49,7 @@ mod menu;
 //mod test;
 
 pub const COLOR_SCHEME: ColorScheme = ColorScheme::DarkMode;
+//pub const COLOR_SCHEME: ColorScheme = ColorScheme::PaperLight;
 
 mod android_ui_consts {
     pub const EMOJI_PICKER_ICON_SIZE: f32 = 100.;
@@ -239,7 +240,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     if is_first_time {
         let filename = get_first_time_filename();
         if let Some(parent) = filename.parent() {
-            let _ = fs::create_dir_all(parent);
+            let _ = std::fs::create_dir_all(parent);
         }
         let _ = File::create(filename);
     }

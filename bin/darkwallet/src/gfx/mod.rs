@@ -681,7 +681,9 @@ impl Stage {
             //       width, height, gfx_texture_id, texture,
             //       ansi_texture(width as usize, height as usize, &data));
         }
-        self.textures.insert(gfx_texture_id, texture);
+        if let Some(_) = self.textures.insert(gfx_texture_id, texture) {
+            panic!("Duplicate texture ID={gfx_texture_id} detected!");
+        }
     }
     fn method_delete_texture(&mut self, gfx_texture_id: GfxTextureId) {
         let texture = self.textures.remove(&gfx_texture_id).expect("couldn't find gfx_texture_id");
@@ -703,7 +705,9 @@ impl Stage {
             //debug!(target: "gfx", "Invoked method: new_vertex_buffer({:?}, {}) -> {:?}",
             //       verts, gfx_buffer_id, buffer);
         }
-        self.buffers.insert(gfx_buffer_id, buffer);
+        if let Some(_) = self.buffers.insert(gfx_buffer_id, buffer) {
+            panic!("Duplicate vertex buffer ID={gfx_buffer_id} detected!");
+        }
     }
     fn method_new_index_buffer(&mut self, indices: Vec<u16>, gfx_buffer_id: GfxBufferId) {
         let buffer = self.ctx.new_buffer(
@@ -717,7 +721,9 @@ impl Stage {
             //debug!(target: "gfx", "Invoked method: new_index_buffer({:?}, {}) -> {:?}",
             //       indices, gfx_buffer_id, buffer);
         }
-        self.buffers.insert(gfx_buffer_id, buffer);
+        if let Some(_) = self.buffers.insert(gfx_buffer_id, buffer) {
+            panic!("Duplicate index buffer ID={gfx_buffer_id} detected!");
+        }
     }
     fn method_delete_buffer(&mut self, gfx_buffer_id: GfxBufferId) {
         let buffer = self.buffers.remove(&gfx_buffer_id).expect("couldn't find gfx_buffer_id");

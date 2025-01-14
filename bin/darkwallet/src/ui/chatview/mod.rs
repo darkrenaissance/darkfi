@@ -170,6 +170,7 @@ pub struct ChatView {
     scroll_start_accel: PropertyFloat32,
     scroll_resist: PropertyFloat32,
     select_hold_time: PropertyFloat32,
+    key_scroll_speed: PropertyFloat32,
 
     /// Scroll accel
     motion_cv: Arc<CondVar>,
@@ -223,6 +224,8 @@ impl ChatView {
             PropertyFloat32::wrap(node_ref, Role::Internal, "scroll_resist", 0).unwrap();
         let select_hold_time =
             PropertyFloat32::wrap(node_ref, Role::Internal, "select_hold_time", 0).unwrap();
+        let key_scroll_speed =
+            PropertyFloat32::wrap(node_ref, Role::Internal, "key_scroll_speed", 0).unwrap();
 
         let motion_cv = Arc::new(CondVar::new());
         let bgload_cv = Arc::new(CondVar::new());
@@ -265,6 +268,7 @@ impl ChatView {
             scroll_start_accel,
             scroll_resist,
             select_hold_time,
+            key_scroll_speed,
 
             motion_cv,
             speed: AtomicF32::new(0.),
@@ -473,6 +477,12 @@ impl ChatView {
         privmsg.confirmed = false;
         self.redraw_cached(&mut msgbuf).await;
         self.bgload_cv.notify();
+    }
+
+    /// Signal to begin scrolling
+    fn start_scroll(&self, y: f32) {
+        self.speed.fetch_add(y * self.scroll_start_accel.get(), Ordering::Relaxed);
+        self.motion_cv.notify();
     }
 
     async fn handle_movement(&self) {
@@ -824,13 +834,11 @@ impl UIObject for ChatView {
 
         match key {
             KeyCode::PageUp => {
-                let scroll = self.scroll.get() + 200.;
-                self.scrollview(scroll).await;
+                self.start_scroll(1. * self.key_scroll_speed.get());
                 return true
             }
             KeyCode::PageDown => {
-                let scroll = self.scroll.get() - 200.;
-                self.scrollview(scroll).await;
+                self.start_scroll(-1. * self.key_scroll_speed.get());
                 return true
             }
             _ => {}
@@ -897,8 +905,7 @@ impl UIObject for ChatView {
             return false
         }
 
-        self.speed.fetch_add(wheel_pos.y * self.scroll_start_accel.get(), Ordering::Relaxed);
-        self.motion_cv.notify();
+        self.start_scroll(wheel_pos.y);
         true
     }
 
