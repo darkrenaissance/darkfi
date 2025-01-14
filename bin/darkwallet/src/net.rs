@@ -195,6 +195,9 @@ impl ZeroMQAdapter {
                     prop.min_val.encode(&mut reply).unwrap();
                     prop.max_val.encode(&mut reply).unwrap();
                     prop.enum_items.encode(&mut reply).unwrap();
+
+                    let depends: Vec<_> = prop.get_depends().into_iter().map(|d| (d.i as u32, d.local_name)).collect();
+                    depends.encode(&mut reply).unwrap();
                 }
             }
             Command::GetPropertyValue => {

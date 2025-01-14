@@ -79,6 +79,8 @@ def print_node_info(parent_path, depth, indent):
         prop_type = PropertyType.to_str(prop.type)
 
         print(f"{ws}{prop.name}: {prop_type}{prop_val}")
+        if prop.depends:
+            print(f"{ws}    depends: {prop.depends}")
 
     #for sig in api.get_signals(parent_id):
     #    print(f"{ws}~{sig}")

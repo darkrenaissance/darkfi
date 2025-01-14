@@ -14,7 +14,8 @@ Property = namedtuple("Property", [
     "array_len",
     "min_val",
     "max_val",
-    "enum_items"
+    "enum_items",
+    "depends"
 ])
 
 class Command:
@@ -375,6 +376,11 @@ class Api:
 
         enum_read_fn = lambda cur: serial.decode_arr(cur, serial.decode_str)
 
+        def depend_read_fn(cur):
+            i = serial.read_u32(cur)
+            local_name = serial.decode_str(cur)
+            return (i, local_name)
+
         for _ in range(props_len):
             prop_name = serial.decode_str(cur)
             # We need prop_type below
@@ -404,7 +410,9 @@ class Api:
                 # max_val 
                 serial.decode_opt(cur, prop_read_fn),
                 # enum_items 
-                serial.decode_opt(cur, enum_read_fn)
+                serial.decode_opt(cur, enum_read_fn),
+                # depends
+                serial.decode_arr(cur, depend_read_fn)
             )
             props.append(prop)
         return props
