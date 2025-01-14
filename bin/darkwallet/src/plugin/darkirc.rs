@@ -51,24 +51,47 @@ use crate::{
 use super::PluginObject;
 
 #[cfg(target_os = "android")]
-fn get_evgrdb_path() -> PathBuf {
+mod paths {
+    use std::path::PathBuf;
     use crate::android::get_appdata_path;
-    get_appdata_path().join("evgr")
-}
-#[cfg(not(target_os = "android"))]
-fn get_evgrdb_path() -> PathBuf {
-    dirs::data_local_dir().unwrap().join("darkfi/evgr")
+
+    pub fn get_evgrdb_path() -> PathBuf {
+        get_appdata_path().join("evgr")
+    }
+
+    pub fn nick_filename() -> PathBuf {
+        get_appdata_path().join("/nick.txt")
+    }
+
+    pub fn p2p_datastore_path() -> PathBuf {
+        get_appdata_path().join("darkirc_p2p")
+    }
+    pub fn hostlist_path() -> PathBuf {
+        get_appdata_path().join("hostlist.tsv")
+    }
 }
 
-#[cfg(target_os = "android")]
-fn nick_filename() -> PathBuf {
-    use crate::android::get_appdata_path;
-    get_appdata_path().join("/nick.txt")
-}
 #[cfg(not(target_os = "android"))]
-fn nick_filename() -> PathBuf {
-    dirs::cache_dir().unwrap().join("darkfi/nick.txt")
+mod paths {
+    use std::path::PathBuf;
+
+    pub fn get_evgrdb_path() -> PathBuf {
+        dirs::data_local_dir().unwrap().join("darkfi/evgr")
+    }
+
+    pub fn nick_filename() -> PathBuf {
+        dirs::cache_dir().unwrap().join("darkfi/nick.txt")
+    }
+
+    pub fn p2p_datastore_path() -> PathBuf {
+        dirs::cache_dir().unwrap().join("darkfi/wallet/darkirc_p2p")
+    }
+    pub fn hostlist_path() -> PathBuf {
+        dirs::cache_dir().unwrap().join("darkfi/wallet/hostlist.tsv")
+    }
 }
+
+use paths::*;
 
 /// Due to drift between different machine's clocks, if the message timestamp is recent
 /// then we will just correct it to the current time so messages appear sequential in the UI.
@@ -160,6 +183,8 @@ impl DarkIrc {
         p2p_settings.seeds.push(url::Url::parse("tcp+tls://lilith1.dark.fi:5262").unwrap());
         p2p_settings.outbound_connect_timeout = 40;
         p2p_settings.channel_handshake_timeout = 30;
+        p2p_settings.p2p_datastore = p2p_datastore_path().into_os_string().into_string().ok();
+        p2p_settings.hostlist = hostlist_path().into_os_string().into_string().ok();
 
         let p2p = match P2p::new(p2p_settings, ex.clone()).await {
             Ok(p2p) => p2p,
