@@ -261,14 +261,22 @@ impl Client {
                         }
                         drop(chans_lock);
 
-                        // Format the message
-                        let msg = format!("PRIVMSG {} :{}", privmsg.channel, privmsg.msg);
+                        // Handle message lines individually
+                        for line in privmsg.msg.lines() {
+                            // Skip empty lines
+                            if line.is_empty() {
+                                continue
+                            }
 
-                        // Send it to the client
-                        let reply = ReplyType::Client((privmsg.nick, msg));
-                        if let Err(e) = self.reply(&mut writer, &reply).await {
-                            error!("[IRC CLIENT] Failed writing PRIVMSG to client: {}", e);
-                            continue
+                            // Format the message
+                            let msg = format!("PRIVMSG {} :{}", privmsg.channel, line);
+
+                            // Send it to the client
+                            let reply = ReplyType::Client((privmsg.nick.clone(), msg));
+                            if let Err(e) = self.reply(&mut writer, &reply).await {
+                                error!("[IRC CLIENT] Failed writing PRIVMSG to client: {}", e);
+                                continue
+                            }
                         }
 
                         // Mark the message as seen for this USER
