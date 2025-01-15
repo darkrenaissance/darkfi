@@ -165,6 +165,7 @@ impl App {
         let window = window.setup(|me| Window::new(me, self.render_api.clone())).await;
         self.sg_root.clone().link(window.clone());
         schema::make(&self, window).await;
+        //schema::test::make(&self, window).await;
 
         debug!(target: "app", "Schema loaded");
 
@@ -216,8 +217,9 @@ impl App {
                 }
 
                 // Apply coloring when you get a message
-                let menu_layer = sg_root2.clone().lookup_node("/window/menu_layer").unwrap();
-                if !menu_layer.get_property_bool("is_visible").unwrap() {
+                let chat_path = format!("/window/{channel}_chat_layer");
+                let chat_layer = sg_root2.clone().lookup_node(chat_path).unwrap();
+                if chat_layer.get_property_bool("is_visible").unwrap() {
                     continue
                 }
 

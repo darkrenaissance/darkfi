@@ -19,6 +19,13 @@
 use sled_overlay::sled;
 
 use crate::{
+    app::{
+        node::{
+            create_button, create_chatedit, create_chatview, create_editbox, create_image,
+            create_layer, create_text, create_vector_art,
+        },
+        populate_tree, App,
+    },
     error::Error,
     expr::{self, Compiler, Op},
     gfx::{GraphicsEventPublisherPtr, Rectangle, RenderApi, Vertex},
@@ -35,25 +42,23 @@ use crate::{
     ExecutorPtr,
 };
 
-use super::{
-    node::{
-        create_button, create_chatedit, create_chatview, create_editbox, create_image,
-        create_layer, create_text, create_vector_art,
-    },
-    populate_tree, App,
-};
-
 const LIGHTMODE: bool = false;
 
 #[cfg(target_os = "android")]
-pub const CHATDB_PATH: &str = "/data/data/darkfi.darkwallet/chatdb/";
-pub const KING_PATH: &str = "king.png";
+mod ui_consts {
+    pub const CHATDB_PATH: &str = "/data/data/darkfi.darkwallet/chatdb/";
+    pub const KING_PATH: &str = "king.png";
+}
 
 #[cfg(not(target_os = "android"))]
-pub const CHATDB_PATH: &str = "chatdb";
-pub const KING_PATH: &str = "assets/king.png";
+mod ui_consts {
+    pub const CHATDB_PATH: &str = "chatdb";
+    pub const KING_PATH: &str = "assets/king.png";
+}
 
-pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
+use ui_consts::*;
+
+pub async fn make(app: &App, window: SceneNodePtr) {
     let window_scale = PropertyFloat32::wrap(&window, Role::Internal, "scale", 0).unwrap();
 
     let mut cc = Compiler::new();
@@ -251,7 +256,7 @@ pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
     prop.set_f32(Role::App, 3, 200.).unwrap();
     node.set_property_f32(Role::App, "baseline", 40.).unwrap();
     node.set_property_f32(Role::App, "font_size", 60.).unwrap();
-    node.set_property_str(Role::App, "text", "anon1🍆").unwrap();
+    node.set_property_str(Role::App, "text", "anon1🍆 ≌ 🏳️‍⚧️").unwrap();
     //node.set_property_str(Role::App, "text", "anon1").unwrap();
     let prop = node.get_property("text_color").unwrap();
     prop.set_f32(Role::App, 0, 0.).unwrap();
@@ -295,7 +300,12 @@ pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
     node.set_property_f32(Role::App, "baseline", 40.).unwrap();
     node.set_property_f32(Role::App, "font_size", 20.).unwrap();
     node.set_property_f32(Role::App, "font_size", 40.).unwrap();
-    node.set_property_str(Role::App, "text", "hello king!😁🍆jelly 🍆1234").unwrap();
+    node.set_property_str(
+        Role::App,
+        "text",
+        "hello king!😁🍆jelly 🍆1234 '\u{01f3f3}\u{fe0f}\u{200d}\u{26a7}\u{fe0f}'",
+    )
+    .unwrap();
     let prop = node.get_property("text_color").unwrap();
     if LIGHTMODE {
         prop.set_f32(Role::App, 0, 0.).unwrap();
@@ -497,9 +507,6 @@ pub(super) async fn make_test(app: &App, window: SceneNodePtr) {
     prop.set_f32(Role::App, 1, 0.5).unwrap();
     prop.set_f32(Role::App, 2, 0.5).unwrap();
     prop.set_f32(Role::App, 3, 1.).unwrap();
-    let prop = node.get_property("selected").unwrap();
-    prop.set_null(Role::App, 0).unwrap();
-    prop.set_null(Role::App, 1).unwrap();
     node.set_property_u32(Role::App, "z_index", 3).unwrap();
     let node = node
         .setup(|me| {
