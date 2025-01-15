@@ -237,23 +237,34 @@ impl Client {
                         }
                     };
 
+                    // If successful, potentially decrypt it:
+                    self.server.try_decrypt(&mut privmsg).await;
+
                     // We should skip any attempts to contact services from the network.
                     if ["nickserv", "chanserv"].contains(&privmsg.nick.to_lowercase().as_str()) {
                         continue
                     }
 
-                    // If successful, potentially decrypt it:
-                    self.server.try_decrypt(&mut privmsg).await;
+                    // If the privmsg is intented for any of the given
+                    // channels, contacts or oursleves, add it as a reply and
+                    // mark it as seen in the seen_events tree.
+                    let channels = self.channels.read().await;
+                    let contacts = self.server.contacts.read().await;
+                    if !channels.contains(&privmsg.channel) &&
+                        !contacts.contains_key(&privmsg.channel)
+                    {
+                        continue
+                    }
 
                     // If we have this channel, or it's a DM, forward it to the client.
                     // As a DM, we consider something that is <= MAX_NICK_LEN, and does not
                     // start with the '#' character. With ChaCha, the ciphertext should be
                     // longer than our MAX_NICK_LEN, so in case it is garbled, it should be
                     // skipped by this code.
-                    let have_channel = self.channels.read().await.contains(&privmsg.channel);
-                    let msg_for_self = !privmsg.channel.starts_with('#') && privmsg.channel.len() <= MAX_NICK_LEN;
+                    let have_channel = channels.contains(&privmsg.channel);
+                    let is_dm = !privmsg.channel.starts_with('#') && privmsg.channel.len() <= MAX_NICK_LEN;
 
-                    if have_channel || msg_for_self {
+                    if have_channel || is_dm {
                         // Add the nickname to the list of nicks on the channel, if it's a channel.
                         let mut chans_lock = self.server.channels.write().await;
                         if let Some(chan) = chans_lock.get_mut(&privmsg.channel) {
