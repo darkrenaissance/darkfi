@@ -327,57 +327,50 @@ impl IrcServer {
         // for decryption, iff all passes, we will return a modified
         // (i.e. decrypted) privmsg, otherwise we return the original.
         for (name, channel) in self.channels.read().await.iter() {
-            if let Some(saltbox) = &channel.saltbox {
-                let Some(mut channel_dec) = saltbox::try_decrypt(saltbox, &channel_ciphertext)
-                else {
-                    continue
-                };
+            let Some(saltbox) = &channel.saltbox else { continue };
 
-                let Some(mut nick_dec) = saltbox::try_decrypt(saltbox, &nick_ciphertext) else {
-                    continue
-                };
+            let Some(mut channel_dec) = saltbox::try_decrypt(saltbox, &channel_ciphertext) else {
+                continue
+            };
 
-                let Some(msg_dec) = saltbox::try_decrypt(saltbox, &msg_ciphertext) else {
-                    continue
-                };
+            let Some(mut nick_dec) = saltbox::try_decrypt(saltbox, &nick_ciphertext) else {
+                continue
+            };
 
-                Self::unpad(&mut channel_dec);
-                Self::unpad(&mut nick_dec);
+            let Some(msg_dec) = saltbox::try_decrypt(saltbox, &msg_ciphertext) else { continue };
 
-                privmsg.channel = String::from_utf8_lossy(&channel_dec).into();
-                privmsg.nick = String::from_utf8_lossy(&nick_dec).into();
-                privmsg.msg = String::from_utf8_lossy(&msg_dec).into();
-                debug!("Successfully decrypted message for {}", name);
-                return
-            }
+            Self::unpad(&mut channel_dec);
+            Self::unpad(&mut nick_dec);
+
+            privmsg.channel = name.to_string();
+            privmsg.nick = String::from_utf8_lossy(&nick_dec).into();
+            privmsg.msg = String::from_utf8_lossy(&msg_dec).into();
+            debug!("Successfully decrypted message for {}", name);
+            return
         }
 
         for (name, contact) in self.contacts.read().await.iter() {
-            if let Some(saltbox) = &contact.saltbox {
-                let Some(mut channel_dec) = saltbox::try_decrypt(saltbox, &channel_ciphertext)
-                else {
-                    continue
-                };
+            let Some(saltbox) = &contact.saltbox else { continue };
 
-                let Some(mut nick_dec) = saltbox::try_decrypt(saltbox, &nick_ciphertext) else {
-                    continue
-                };
+            let Some(mut channel_dec) = saltbox::try_decrypt(saltbox, &channel_ciphertext) else {
+                continue
+            };
 
-                let Some(msg_dec) = saltbox::try_decrypt(saltbox, &msg_ciphertext) else {
-                    continue
-                };
+            let Some(mut nick_dec) = saltbox::try_decrypt(saltbox, &nick_ciphertext) else {
+                continue
+            };
 
-                Self::unpad(&mut channel_dec);
-                Self::unpad(&mut nick_dec);
+            let Some(msg_dec) = saltbox::try_decrypt(saltbox, &msg_ciphertext) else { continue };
 
-                privmsg.channel = String::from_utf8_lossy(&channel_dec).into();
-                //privmsg.nick = String::from_utf8_lossy(&nick_dec).into();
-                privmsg.nick = name.to_string();
-                privmsg.msg = String::from_utf8_lossy(&msg_dec).into();
+            Self::unpad(&mut channel_dec);
+            Self::unpad(&mut nick_dec);
 
-                debug!("Successfully decrypted message from {}", name);
-                return
-            }
+            privmsg.channel = name.to_string();
+            privmsg.nick = String::from_utf8_lossy(&nick_dec).into();
+            privmsg.msg = String::from_utf8_lossy(&msg_dec).into();
+
+            debug!("Successfully decrypted message from {}", name);
+            return
         }
     }
 }
