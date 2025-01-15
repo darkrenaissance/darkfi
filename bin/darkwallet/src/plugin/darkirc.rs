@@ -23,8 +23,9 @@ use darkfi::{
         proto::{EventPut, ProtocolEventGraph},
         EventGraph, EventGraphPtr,
     },
-    net::{session::SESSION_DEFAULT, settings::Settings as NetSettings, P2p, P2pPtr},
+    net::{session::SESSION_DEFAULT, settings::Settings as NetSettings, ChannelPtr, P2p, P2pPtr},
     system::{sleep, Subscription},
+    Result as DarkFiResult,
 };
 use darkfi_serial::{
     deserialize_async, serialize_async, AsyncEncodable, Decodable, Encodable, SerialDecodable,
@@ -49,6 +50,15 @@ use crate::{
 };
 
 use super::PluginObject;
+
+const P2P_RETRY_TIME: u64 = 20;
+const COOLOFF_SLEEP_TIME: u64 = 20;
+const COOLOFF_SYNC_ATTEMPTS: usize = 6;
+const SYNC_MIN_PEERS: usize = 2;
+
+/// Due to drift between different machine's clocks, if the message timestamp is recent
+/// then we will just correct it to the current time so messages appear sequential in the UI.
+const RECENT_TIME_DIST: u64 = 25_000;
 
 #[cfg(target_os = "android")]
 mod paths {
@@ -92,10 +102,6 @@ mod paths {
 }
 
 use paths::*;
-
-/// Due to drift between different machine's clocks, if the message timestamp is recent
-/// then we will just correct it to the current time so messages appear sequential in the UI.
-const RECENT_TIME_DIST: u64 = 25_000;
 
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "plugin::darkirc", $($arg)*); } }
 macro_rules! inf { ($($arg:tt)*) => { info!(target: "plugin::darkirc", $($arg)*); } }
@@ -232,41 +238,50 @@ impl DarkIrc {
         Ok(Pimpl::DarkIrc(self_))
     }
 
-    async fn dag_sync(self: Arc<Self>) {
+    async fn dag_sync(self: Arc<Self>, channel_sub: Subscription<DarkFiResult<ChannelPtr>>) {
         inf!("Starting p2p network");
-        // This usually means we cannot listen on the inbound ports
-        if let Err(err) = self.p2p.clone().start().await {
+        while let Err(err) = self.p2p.clone().start().await {
+            // This usually means we cannot listen on the inbound ports
             err!("Failed to start p2p network: {err}!");
-            return
+            err!("Usually this means there is another process listening on the same ports.");
+            err!("Trying again in {P2P_RETRY_TIME} secs");
+            sleep(P2P_RETRY_TIME).await;
         }
 
         inf!("Waiting for some P2P connections...");
-        sleep(4).await;
 
+        let mut sync_attempt = 0;
         loop {
-            // We'll attempt to sync {sync_attempts} times
-            let sync_attempts = 4;
-            for i in 1..=sync_attempts {
-                inf!("Syncing event DAG (attempt #{})", i);
-                match self.event_graph.dag_sync().await {
-                    Ok(()) => break,
-                    Err(e) => {
-                        if i == sync_attempts {
-                            err!("Failed syncing DAG. Exiting.");
-                            self.p2p.stop().await;
-                            return
-                        } else {
-                            // TODO: Maybe at this point we should prune or something?
-                            // TODO: Or maybe just tell the user to delete the DAG from FS.
-                            err!("Failed syncing DAG ({}), retrying in {}s...", e, 4);
-                            sleep(4).await;
-                        }
-                    }
+            // Wait for a channel
+            if let Err(_) = channel_sub.receive().await {
+                err!("There was an error listening for channels. The service closed unexpectedly.");
+                // Not sure what to do here
+                return
+            }
+
+            // Wait until we have enough connections
+            if self.p2p.hosts().peers().len() < SYNC_MIN_PEERS {
+                continue
+            }
+
+            sync_attempt += 1;
+
+            // Cool off periodically
+            if sync_attempt > COOLOFF_SYNC_ATTEMPTS {
+                inf!("Wasn't able to sync yet. Cooling off for {COOLOFF_SLEEP_TIME} then will try again.");
+                sleep(COOLOFF_SLEEP_TIME).await;
+                sync_attempt = 0;
+            }
+
+            inf!("Syncing event DAG (attempt #{sync_attempt})");
+            match self.event_graph.dag_sync().await {
+                Ok(()) => break,
+                Err(e) => {
+                    // TODO: Maybe at this point we should prune or something?
+                    // TODO: Or maybe just tell the user to delete the DAG from FS.
+                    warn!("Failed DAG sync: ({e}). Waiting for more connections before retry.");
                 }
             }
-            const sleep_time: u64 = 20;
-            inf!("Wasn't able to sync yet. Sleeping for {sleep_time} and try again.");
-            sleep(sleep_time).await;
         }
     }
 
@@ -446,7 +461,8 @@ impl PluginObject for DarkIrc {
         let ev_task = ex.spawn(self.clone().relay_events(ev_sub));
 
         // Sync the DAG
-        let dag_task = ex.spawn(self.clone().dag_sync());
+        let channel_sub = self.p2p.hosts().subscribe_channel().await;
+        let dag_task = ex.spawn(self.clone().dag_sync(channel_sub));
 
         let mut tasks = vec![send_method_task, ev_task, dag_task];
         tasks.append(&mut on_modify.tasks);
