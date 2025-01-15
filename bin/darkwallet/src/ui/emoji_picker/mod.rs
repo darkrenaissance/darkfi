@@ -188,6 +188,7 @@ impl EmojiPicker {
     fn emojis_per_line(&self) -> f32 {
         let emoji_size = self.emoji_size.get();
         let rect_w = self.rect.get().w;
+        //d!("rect_w = {rect_w}");
         (rect_w / emoji_size).floor()
     }
     fn calc_off_x(&self) -> f32 {
@@ -213,17 +214,24 @@ impl EmojiPicker {
     }
 
     async fn click_emoji(&self, pos: Point) {
-        //d!("click_emoji({pos:?})");
-        let emoji_size = self.emoji_size.get();
-        let col = (pos.x / emoji_size).floor();
-
-        let y = pos.y + self.scroll.get();
-        let row = (y / emoji_size).floor();
-
         let n_cols = self.emojis_per_line();
-        //d!("col + row * n_cols = {col} + {row} * {n_cols}");
+        let emoji_size = self.emoji_size.get();
+        let scroll = self.scroll.get();
+
+        // Emojis have spacing along the x axis.
+        // If the screen width is 2000, and emoji_size is 30, then that's 66 emojis.
+        // But that's 66.66px per emoji.
+        let real_width = self.rect.get().w / n_cols;
+        //d!("click_emoji({pos:?})");
+        let col = (pos.x / real_width).floor();
+
+        let y = pos.y + scroll;
+        let row = (y / emoji_size).floor();
+        //d!("emoji_size = {emoji_size}, col = {col}, row = {row}");
+
+        //d!("idx = col + row * n_cols = {col} + {row} * {n_cols}");
         let idx = (col + row * n_cols).round() as usize;
-        //d!("idx = {idx}, emoji_len = {}", emoji::EMOJI_LIST.len());
+        //d!("    = {idx}, emoji_len = {}", emoji::EMOJI_LIST.len());
 
         if idx < emoji::EMOJI_LIST.len() {
             let emoji = emoji::EMOJI_LIST[idx];
