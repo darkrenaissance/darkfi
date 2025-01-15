@@ -296,9 +296,10 @@ impl IrcServer {
 
         if let Some((name, contact)) = self.contacts.read().await.get_key_value(privmsg.channel()) {
             if let Some(saltbox) = &contact.saltbox {
-                // We will pad the nicks to MAX_NICK_LEN so they all look the same.
-                *privmsg.channel() = saltbox::encrypt(saltbox, &Self::pad(privmsg.channel()));
-                *privmsg.nick() = saltbox::encrypt(saltbox, &Self::pad(privmsg.nick()));
+                // We will use dummy channel and nick values since they are not used.
+                // We don't need to pad them since everyone is using the same ones.
+                *privmsg.channel() = saltbox::encrypt(saltbox, b"channel");
+                *privmsg.nick() = saltbox::encrypt(saltbox, b"nick");
                 *privmsg.msg() = saltbox::encrypt(saltbox, privmsg.msg().as_bytes());
                 debug!("Successfully encrypted message for {}", name);
             }
@@ -366,9 +367,8 @@ impl IrcServer {
             Self::unpad(&mut nick_dec);
 
             privmsg.channel = name.to_string();
-            privmsg.nick = String::from_utf8_lossy(&nick_dec).into();
+            privmsg.nick = name.to_string();
             privmsg.msg = String::from_utf8_lossy(&msg_dec).into();
-
             debug!("Successfully decrypted message from {}", name);
             return
         }
