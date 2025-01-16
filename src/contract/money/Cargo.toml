@@ -11,7 +11,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 blake3 = "1.5.4"
 bs58 = "0.5.1"
-darkfi-sdk = { path = "../../sdk" }
+darkfi-sdk = { path = "../../sdk", features = ["wasm"] }
 darkfi-serial = { version = "0.4.2", features = ["derive", "crypto"] }
 thiserror = "1.0.64"
 
