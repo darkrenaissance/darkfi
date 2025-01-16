@@ -333,7 +333,6 @@ impl IrcServer {
             let Some(saltbox) = &channel.saltbox else { continue };
 
             if saltbox::try_decrypt(saltbox, &channel_ciphertext).is_none() {
-                warn!(target: "darkirc::irc::server::try_decrypt", "Could not decrypt channel ciphertext for channel: {name}");
                 continue
             };
 
@@ -360,7 +359,6 @@ impl IrcServer {
             let Some(saltbox) = &contact.saltbox else { continue };
 
             if saltbox::try_decrypt(saltbox, &channel_ciphertext).is_none() {
-                warn!(target: "darkirc::irc::server::try_decrypt", "Could not decrypt channel ciphertext for contact: {name}");
                 continue
             };
 
