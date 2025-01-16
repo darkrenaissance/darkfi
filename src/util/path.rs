@@ -18,58 +18,79 @@
 
 use std::{
     env,
-    ffi::{CStr, OsString},
-    fs, mem,
-    os::unix::prelude::OsStringExt,
+    ffi::OsString,
+    fs,
     path::{Path, PathBuf},
-    ptr,
 };
 
 use crate::{Error, Result};
 
-/// Returns the path to the user's home directory.
-/// Use `$HOME`, fallbacks to `libc::getpwuid_r`, otherwise `None`.
-pub fn home_dir() -> Option<PathBuf> {
-    env::var_os("HOME")
-        .and_then(|h| if h.is_empty() { None } else { Some(h) })
-        .or_else(|| unsafe { home_fallback() })
-        .map(PathBuf::from)
-}
-
-/// Get the home directory from the passwd entry of the current user using
-/// `getpwuid_r(3)`. If it manages, returns an `OsString`, otherwise returns `None`.
-unsafe fn home_fallback() -> Option<OsString> {
-    let amt = match libc::sysconf(libc::_SC_GETPW_R_SIZE_MAX) {
-        n if n < 0 => 512_usize,
-        n => n as usize,
+#[cfg(target_family = "unix")]
+mod home_dir_impl {
+    use std::{
+        env,
+        ffi::{CStr, OsString},
+        mem,
+        os::unix::prelude::OsStringExt,
+        path::PathBuf,
+        ptr,
     };
 
-    let mut buf = Vec::with_capacity(amt);
-    let mut passwd: libc::passwd = mem::zeroed();
-    let mut result = ptr::null_mut();
+    /// Returns the path to the user's home directory.
+    /// Use `$HOME`, fallbacks to `libc::getpwuid_r`, otherwise `None`.
+    pub fn home_dir() -> Option<PathBuf> {
+        env::var_os("HOME")
+            .and_then(|h| if h.is_empty() { None } else { Some(h) })
+            .or_else(|| unsafe { home_fallback() })
+            .map(PathBuf::from)
+    }
 
-    let r = libc::getpwuid_r(
-        libc::getuid(),
-        &mut passwd,
-        buf.as_mut_ptr(),
-        buf.capacity(),
-        &mut result,
-    );
+    /// Get the home directory from the passwd entry of the current user using
+    /// `getpwuid_r(3)`. If it manages, returns an `OsString`, otherwise returns `None`.
+    unsafe fn home_fallback() -> Option<OsString> {
+        let amt = match libc::sysconf(libc::_SC_GETPW_R_SIZE_MAX) {
+            n if n < 0 => 512_usize,
+            n => n as usize,
+        };
 
-    match r {
-        0 if !result.is_null() => {
-            let ptr = passwd.pw_dir as *const _;
-            let bytes = CStr::from_ptr(ptr).to_bytes();
-            if bytes.is_empty() {
-                return None
+        let mut buf = Vec::with_capacity(amt);
+        let mut passwd: libc::passwd = mem::zeroed();
+        let mut result = ptr::null_mut();
+
+        let r = libc::getpwuid_r(
+            libc::getuid(),
+            &mut passwd,
+            buf.as_mut_ptr(),
+            buf.capacity(),
+            &mut result,
+        );
+
+        match r {
+            0 if !result.is_null() => {
+                let ptr = passwd.pw_dir as *const _;
+                let bytes = CStr::from_ptr(ptr).to_bytes();
+                if bytes.is_empty() {
+                    return None
+                }
+
+                Some(OsStringExt::from_vec(bytes.to_vec()))
             }
 
-            Some(OsStringExt::from_vec(bytes.to_vec()))
+            _ => None,
         }
-
-        _ => None,
     }
 }
+
+#[cfg(target_family = "windows")]
+mod home_dir_impl {
+    use std::{env, path::PathBuf};
+
+    pub fn home_dir() -> Option<PathBuf> {
+        env::var_os("APPDATA").map(PathBuf::from)
+    }
+}
+
+pub use home_dir_impl::home_dir;
 
 /// Returns `$XDG_CONFIG_HOME`, `$HOME/.config`, or `None`.
 pub fn config_dir() -> Option<PathBuf> {

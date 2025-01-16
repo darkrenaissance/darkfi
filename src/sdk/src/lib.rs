@@ -52,5 +52,6 @@ pub use tx::ContractCall;
 pub mod util;
 
 #[macro_use]
+#[cfg(feature = "wasm")]
 /// WASM API functions
 pub mod wasm;

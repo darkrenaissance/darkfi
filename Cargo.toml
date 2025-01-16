@@ -68,7 +68,7 @@ futures-rustls = {version = "0.26.0", default-features = false, features = ["log
 
 # Pluggable Transports
 socket2 = {version = "0.5.7", features = ["all"], optional = true}
-arti-client = {version = "0.23.0", default-features = false, features = ["async-std", "compression", "error_detail", "rustls", "accel-sha1-asm", "onion-service-client", "onion-service-service"], optional = true}
+arti-client = {version = "0.23.0", default-features = false, features = ["async-std", "compression", "error_detail", "rustls", "onion-service-client", "onion-service-service"], optional = true}
 tor-error = {version = "0.23.0", optional = true}
 tor-rtcompat = {version = "0.23.0", features = ["async-std", "rustls"], optional = true}
 tor-hscrypto = {version = "0.23.0", optional = true}
@@ -201,7 +201,7 @@ p2p-tor = [
     "tor-cell",
 ]
 
-net = [
+net-defaults = [
     "async-trait",
     "ed25519-compact",
     "futures",
@@ -227,11 +227,15 @@ net = [
     #"p2p-nym",
 ]
 
+p2p-unix = []
+
+net = ["net-defaults"]
+
 rpc = [
     "async-trait",
     "httparse",
 
-    "net",
+    "net-defaults",
 ]
 
 system = [
@@ -278,6 +282,14 @@ zk = [
 zkas = [
     "darkfi-serial",
 ]
+
+# Could not get this to work. Complains manifest-key is ignored.
+#[target.'cfg(target_family = "unix")'.features]
+#net = ["net-defaults", "p2p-unix"]
+#
+#[target.'cfg(target_family = "windows")'.features]
+#net = ["net-defaults"]
+
 # -----END LIBRARY FEATURES-----
 
 [patch.crates-io]

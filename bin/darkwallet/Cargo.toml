@@ -80,6 +80,10 @@ rusqlite = {version = "0.32.1", features = ["bundled"]}
 tor-dirmgr = {version="0.23.0", features=["static"]}
 #android-fileopen = {path = "./android-fileopen/"}
 
+[target.'cfg(target_os = "windows")'.dependencies]
+# Used by tor-dirmgr
+rusqlite = {version = "0.32", features = ["bundled"]}
+
 [package.metadata.android.activity_attributes]
 "android:exported" = "true"
 "android:windowSoftInputMode" = "adjustResize"

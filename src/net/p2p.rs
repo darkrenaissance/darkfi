@@ -24,11 +24,7 @@ use std::sync::{
 use futures::{stream::FuturesUnordered, TryFutureExt};
 use futures_rustls::rustls::crypto::{ring, CryptoProvider};
 use log::{debug, error, info, warn};
-use smol::{
-    fs::{self, unix::PermissionsExt},
-    lock::RwLock as AsyncRwLock,
-    stream::StreamExt,
-};
+use smol::{fs, lock::RwLock as AsyncRwLock, stream::StreamExt};
 use url::Url;
 
 use super::{
@@ -48,6 +44,9 @@ use crate::{
     util::path::expand_path,
     Result,
 };
+
+#[cfg(target_family = "unix")]
+use smol::fs::unix::PermissionsExt;
 
 /// Atomic pointer to the p2p interface
 pub type P2pPtr = Arc<P2p>;
@@ -92,6 +91,8 @@ impl P2p {
         if let Some(ref datastore) = settings.p2p_datastore {
             let datastore = expand_path(datastore)?;
             fs::create_dir_all(&datastore).await?;
+            // Windows only has readonly so don't worry about it
+            #[cfg(target_family = "unix")]
             fs::set_permissions(&datastore, PermissionsExt::from_mode(0o700)).await?;
         }
 

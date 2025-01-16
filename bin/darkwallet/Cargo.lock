@@ -3054,7 +3054,7 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 [[package]]
 name = "miniquad"
 version = "0.4.7"
-source = "git+https://github.com/not-fl3/miniquad#3a5b56399ec446a35bf4a0e855dac969f920d3d4"
+source = "git+https://github.com/not-fl3/miniquad#0d4043157531b1972e58d96bcc4d4827d853d036"
 dependencies = [
  "libc",
  "ndk-sys",
@@ -4439,16 +4439,6 @@ dependencies = [
  "cfg-if",
  "cpufeatures",
  "digest",
- "sha1-asm",
-]
-
-[[package]]
-name = "sha1-asm"
-version = "0.5.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "286acebaf8b67c1130aedffad26f594eff0c1292389158135327d2e23aed582b"
-dependencies = [
- "cc",
 ]
 
 [[package]]

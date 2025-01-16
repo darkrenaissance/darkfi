@@ -35,6 +35,7 @@ darkfi-contract-test-harness = {path = "../test-harness"}
 # so the wasm32-unknown-unknown target is enabled.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.2.8", features = ["custom"] }
+darkfi-sdk = { path = "../../sdk", features = ["wasm"] }
 
 [features]
 default = []

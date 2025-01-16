@@ -34,6 +34,23 @@ use url::Url;
 
 use super::{PtListener, PtStream};
 
+trait SocketExt {
+    fn enable_reuse_port(&self) -> io::Result<()>;
+}
+
+impl SocketExt for Socket {
+    fn enable_reuse_port(&self) -> io::Result<()> {
+        #[cfg(target_family = "unix")]
+        self.set_reuse_port(true)?;
+
+        // On Windows SO_REUSEPORT means the same thing as SO_REUSEADDR
+        #[cfg(target_family = "windows")]
+        self.set_reuse_address(true)?;
+
+        Ok(())
+    }
+}
+
 /// TCP Dialer implementation
 #[derive(Debug, Clone)]
 pub struct TcpDialer {
@@ -63,7 +80,7 @@ impl TcpDialer {
         socket.set_nodelay(true)?;
         let keepalive = TcpKeepalive::new().with_time(Duration::from_secs(20));
         socket.set_tcp_keepalive(&keepalive)?;
-        socket.set_reuse_port(true)?;
+        socket.enable_reuse_port()?;
 
         Ok(socket)
     }
@@ -147,7 +164,7 @@ impl TcpListener {
         socket.set_nodelay(true)?;
         let keepalive = TcpKeepalive::new().with_time(Duration::from_secs(20));
         socket.set_tcp_keepalive(&keepalive)?;
-        socket.set_reuse_port(true)?;
+        socket.enable_reuse_port()?;
 
         Ok(socket)
     }

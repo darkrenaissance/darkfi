@@ -16,15 +16,15 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{
-    io::{self, ErrorKind},
-    time::Duration,
-};
+use std::{io, time::Duration};
 
 use async_trait::async_trait;
 use log::error;
 use smol::io::{AsyncRead, AsyncWrite};
 use url::Url;
+
+#[cfg(feature = "p2p-unix")]
+use std::io::ErrorKind;
 
 /// TLS upgrade mechanism
 pub(crate) mod tls;
@@ -44,6 +44,7 @@ pub(crate) mod tor;
 pub(crate) mod nym;
 
 /// Unix socket transport
+#[cfg(feature = "p2p-unix")]
 pub(crate) mod unix;
 
 /// Dialer variants
@@ -72,6 +73,7 @@ pub enum DialerVariant {
     NymTls(nym::NymDialer),
 
     /// Unix socket
+    #[cfg(feature = "p2p-unix")]
     Unix(unix::UnixDialer),
 
     /// SOCKS5 proxy
@@ -92,6 +94,7 @@ pub enum ListenerVariant {
     Tor(tor::TorListener),
 
     /// Unix socket
+    #[cfg(feature = "p2p-unix")]
     Unix(unix::UnixListener),
 }
 
@@ -111,6 +114,7 @@ macro_rules! enforce_hostport {
     };
 }
 
+#[cfg(feature = "p2p-unix")]
 macro_rules! enforce_abspath {
     ($endpoint:ident) => {
         if $endpoint.host_str().is_some() || $endpoint.port().is_some() {
@@ -179,6 +183,7 @@ impl Dialer {
                 Ok(Self { endpoint, variant })
             }
 
+            #[cfg(feature = "p2p-unix")]
             "unix" => {
                 // Build a Unix socket dialer
                 enforce_abspath!(endpoint);
@@ -252,6 +257,7 @@ impl Dialer {
                 todo!();
             }
 
+            #[cfg(feature = "p2p-unix")]
             DialerVariant::Unix(dialer) => {
                 let path = match self.endpoint.to_file_path() {
                     Ok(v) => v,
@@ -312,6 +318,7 @@ impl Listener {
                 Ok(Self { endpoint, variant })
             }
 
+            #[cfg(feature = "p2p-unix")]
             "unix" => {
                 enforce_abspath!(endpoint);
                 let variant = unix::UnixListener::new().await?;
@@ -351,6 +358,7 @@ impl Listener {
                 Ok(Box::new(l))
             }
 
+            #[cfg(feature = "p2p-unix")]
             ListenerVariant::Unix(listener) => {
                 let path = match self.endpoint.to_file_path() {
                     Ok(v) => v,
@@ -384,6 +392,7 @@ impl PtStream for arti_client::DataStream {}
 #[cfg(feature = "p2p-tor")]
 impl PtStream for futures_rustls::TlsStream<arti_client::DataStream> {}
 
+#[cfg(feature = "p2p-unix")]
 impl PtStream for smol::net::unix::UnixStream {}
 
 /// Wrapper trait for async listeners
