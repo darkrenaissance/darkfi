@@ -235,7 +235,7 @@ rpc = [
     "async-trait",
     "httparse",
 
-    "net-defaults",
+    "net",
 ]
 
 system = [
