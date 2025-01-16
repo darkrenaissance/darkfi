@@ -203,7 +203,7 @@ impl EmojiPicker {
         let emojis_len = emoji::EMOJI_LIST.len() as f32;
         let emoji_size = self.emoji_size.get();
         let cols = self.emojis_per_line();
-        let rows = (emojis_len / cols).floor();
+        let rows = (emojis_len / cols).ceil();
 
         let rect_h = self.rect.get().h;
         let height = rows * emoji_size;

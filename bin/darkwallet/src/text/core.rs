@@ -138,10 +138,9 @@ impl ShapedGlyphs {
         for glyph in glyphs {
             // We have a glyph. Lets consume tail.
             // We continue while the glyphs are before this glyph's end.
-            while let Some(tail_glyph) = tail_iter.peek() {
-                if tail_glyph.cluster_end > glyph.cluster_end {
-                    break
-                }
+            while let Some(tail_glyph) = tail_iter.peek() &&
+                tail_glyph.cluster_start < glyph.cluster_end
+            {
                 tail_iter.next();
             }
 
@@ -185,6 +184,16 @@ fn count_leading_null_glyphs(glyphs: &Vec<GlyphInfo>) -> usize {
     }
     cnt
 }
+
+/*
+fn print_glyphs(ctx: &str, glyphs: &Vec<GlyphInfo>) {
+    println!("{} ------------------", ctx);
+    for (i, glyph) in glyphs.iter().enumerate() {
+        println!("{i}: {}/{} [{}, {}]", glyph.face_idx, glyph.id, glyph.cluster_start, glyph.cluster_end);
+    }
+    println!("---------------------");
+}
+*/
 
 fn face_shape(face: &mut FreetypeFace, text: &str, off: usize, face_idx: usize) -> Vec<GlyphInfo> {
     let mut glyphs: Vec<GlyphInfo> = vec![];
@@ -236,6 +245,7 @@ pub(super) fn shape(faces: &mut Vec<FreetypeFace>, text: &str) -> Vec<GlyphInfo>
             let remain_text = &text[cluster_start..];
             let glyphs = face_shape(&mut faces[face_idx], remain_text, cluster_start, face_idx);
 
+            // We weren't successful shaping with this fallback font, so skip over these glyphs.
             let leading_zeros = count_leading_null_glyphs(&glyphs);
             last_idx = off + leading_zeros;
 
@@ -252,8 +262,7 @@ pub(super) fn shape(faces: &mut Vec<FreetypeFace>, text: &str) -> Vec<GlyphInfo>
 mod tests {
     use super::*;
 
-    #[test]
-    fn shape_test() {
+    fn load_faces() -> Vec<FreetypeFace> {
         let ftlib = ft::Library::init().unwrap();
 
         let mut faces = vec![];
@@ -269,23 +278,127 @@ mod tests {
         //let face = ftlib.new_memory_face2(font_data, 0).unwrap();
         //faces.push(face);
 
-        //let text = "\u{01f3f3}\u{fe0f}\u{200d}\u{26a7}\u{fe0f} hello";
-        //let text = "i am a \u{01f3f3}\u{fe0f}\u{200d}\u{26a7}\u{fe0f} ally";
-        //let text = "hel \u{01f3f3}\u{fe0f}\u{200d}\u{26a7}\u{fe0f} 123 X\u{01f44d}\u{01f3fe}X br";
-        //let text = "日本語";
-        //let text = "hel 日本語\u{01f3f3}\u{fe0f}\u{200d}\u{26a7}\u{fe0f} ally";
+        faces
+    }
 
+    #[test]
+    fn simple_shape_test() {
+        let mut faces = load_faces();
         let text = "\u{01f3f3}\u{fe0f}\u{200d}\u{26a7}\u{fe0f}";
         let glyphs = shape(&mut faces, text);
+
         assert_eq!(glyphs.len(), 1);
         assert_eq!(glyphs[0].face_idx, 1);
         assert_eq!(glyphs[0].id, 1895);
         assert_eq!(glyphs[0].cluster_start, 0);
         assert_eq!(glyphs[0].cluster_end, 16);
+    }
 
-        //for g in shape(&mut faces, text) {
-        //    let substr = &text[g.cluster_start..g.cluster_end];
-        //    println!("{}/{}: [{}, {}], '{}'", g.face_idx, g.id, g.cluster_start, g.cluster_end, substr);
-        //}
+    #[test]
+    fn simple_double_shape_test() {
+        let mut faces = load_faces();
+        let text =
+            "\u{01f3f3}\u{fe0f}\u{200d}\u{26a7}\u{fe0f}\u{01f3f3}\u{fe0f}\u{200d}\u{26a7}\u{fe0f}";
+        let glyphs = shape(&mut faces, text);
+
+        assert_eq!(glyphs.len(), 2);
+        assert_eq!(glyphs[0].face_idx, 1);
+        assert_eq!(glyphs[0].id, 1895);
+        assert_eq!(glyphs[0].cluster_start, 0);
+        assert_eq!(glyphs[0].cluster_end, 16);
+        assert_eq!(glyphs[1].face_idx, 1);
+        assert_eq!(glyphs[1].id, 1895);
+        assert_eq!(glyphs[1].cluster_start, 16);
+        assert_eq!(glyphs[1].cluster_end, 32);
+    }
+
+    #[test]
+    fn mixed_shape_test() {
+        //let text = "日本語";
+        //let text = "hel 日本語\u{01f3f3}\u{fe0f}\u{200d}\u{26a7}\u{fe0f} ally";
+
+        let mut faces = load_faces();
+        let text = "hel \u{01f3f3}\u{fe0f}\u{200d}\u{26a7}\u{fe0f} 123 X\u{01f44d}\u{01f3fe}X br";
+        let glyphs = shape(&mut faces, text);
+
+        assert_eq!(glyphs[0].face_idx, 0);
+        assert_eq!(glyphs[0].id, 11);
+        assert_eq!(glyphs[0].cluster_start, 0);
+        assert_eq!(glyphs[0].cluster_end, 1);
+        assert_eq!(glyphs[1].face_idx, 0);
+        assert_eq!(glyphs[1].id, 6);
+        assert_eq!(glyphs[1].cluster_start, 1);
+        assert_eq!(glyphs[1].cluster_end, 2);
+        assert_eq!(glyphs[1].cluster_start, glyphs[0].cluster_end);
+        assert_eq!(glyphs[2].face_idx, 0);
+        assert_eq!(glyphs[2].id, 15);
+        assert_eq!(glyphs[2].cluster_start, 2);
+        assert_eq!(glyphs[2].cluster_end, 3);
+        assert_eq!(glyphs[2].cluster_start, glyphs[1].cluster_end);
+        assert_eq!(glyphs[3].face_idx, 0);
+        assert_eq!(glyphs[3].id, 1099);
+        assert_eq!(glyphs[3].cluster_start, 3);
+        assert_eq!(glyphs[3].cluster_end, 4);
+        assert_eq!(glyphs[3].cluster_start, glyphs[2].cluster_end);
+        assert_eq!(glyphs[4].face_idx, 1);
+        assert_eq!(glyphs[4].id, 1895);
+        assert_eq!(glyphs[4].cluster_start, 4);
+        assert_eq!(glyphs[4].cluster_end, 20);
+        assert_eq!(glyphs[4].cluster_start, glyphs[3].cluster_end);
+        assert_eq!(glyphs[5].face_idx, 0);
+        assert_eq!(glyphs[5].id, 1099);
+        assert_eq!(glyphs[5].cluster_start, 20);
+        assert_eq!(glyphs[5].cluster_end, 21);
+        assert_eq!(glyphs[5].cluster_start, glyphs[4].cluster_end);
+        assert_eq!(glyphs[6].face_idx, 0);
+        assert_eq!(glyphs[6].id, 59);
+        assert_eq!(glyphs[6].cluster_start, 21);
+        assert_eq!(glyphs[6].cluster_end, 22);
+        assert_eq!(glyphs[6].cluster_start, glyphs[5].cluster_end);
+        assert_eq!(glyphs[7].face_idx, 0);
+        assert_eq!(glyphs[7].id, 60);
+        assert_eq!(glyphs[7].cluster_start, 22);
+        assert_eq!(glyphs[7].cluster_end, 23);
+        assert_eq!(glyphs[7].cluster_start, glyphs[6].cluster_end);
+        assert_eq!(glyphs[8].face_idx, 0);
+        assert_eq!(glyphs[8].id, 61);
+        assert_eq!(glyphs[8].cluster_start, 23);
+        assert_eq!(glyphs[8].cluster_end, 24);
+        assert_eq!(glyphs[8].cluster_start, glyphs[7].cluster_end);
+        assert_eq!(glyphs[9].face_idx, 0);
+        assert_eq!(glyphs[9].id, 1099);
+        assert_eq!(glyphs[9].cluster_start, 24);
+        assert_eq!(glyphs[9].cluster_end, 25);
+        assert_eq!(glyphs[9].cluster_start, glyphs[8].cluster_end);
+        assert_eq!(glyphs[10].face_idx, 0);
+        assert_eq!(glyphs[10].id, 53);
+        assert_eq!(glyphs[10].cluster_start, 25);
+        assert_eq!(glyphs[10].cluster_end, 26);
+        assert_eq!(glyphs[10].cluster_start, glyphs[9].cluster_end);
+        assert_eq!(glyphs[11].face_idx, 1);
+        assert_eq!(glyphs[11].id, 1955);
+        assert_eq!(glyphs[11].cluster_start, 26);
+        assert_eq!(glyphs[11].cluster_end, 34);
+        assert_eq!(glyphs[11].cluster_start, glyphs[10].cluster_end);
+        assert_eq!(glyphs[12].face_idx, 0);
+        assert_eq!(glyphs[12].id, 53);
+        assert_eq!(glyphs[12].cluster_start, 34);
+        assert_eq!(glyphs[12].cluster_end, 35);
+        assert_eq!(glyphs[12].cluster_start, glyphs[11].cluster_end);
+        assert_eq!(glyphs[13].face_idx, 0);
+        assert_eq!(glyphs[13].id, 1099);
+        assert_eq!(glyphs[13].cluster_start, 35);
+        assert_eq!(glyphs[13].cluster_end, 36);
+        assert_eq!(glyphs[13].cluster_start, glyphs[12].cluster_end);
+        assert_eq!(glyphs[14].face_idx, 0);
+        assert_eq!(glyphs[14].id, 3);
+        assert_eq!(glyphs[14].cluster_start, 36);
+        assert_eq!(glyphs[14].cluster_end, 37);
+        assert_eq!(glyphs[14].cluster_start, glyphs[13].cluster_end);
+        assert_eq!(glyphs[15].face_idx, 0);
+        assert_eq!(glyphs[15].id, 21);
+        assert_eq!(glyphs[15].cluster_start, 37);
+        assert_eq!(glyphs[15].cluster_end, 38);
+        assert_eq!(glyphs[15].cluster_start, glyphs[14].cluster_end);
     }
 }
