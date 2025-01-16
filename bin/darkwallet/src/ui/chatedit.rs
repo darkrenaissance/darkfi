@@ -1951,6 +1951,7 @@ impl UIObject for ChatEdit {
     }
 
     async fn handle_char(&self, key: char, mods: KeyMods, repeat: bool) -> bool {
+        //debug!(target: "ui::chatedit", "handle_char({key}, {mods:?}, {repeat})");
         // First filter for only single digit keys
         if DISALLOWED_CHARS.contains(&key) {
             return false
@@ -1960,6 +1961,11 @@ impl UIObject for ChatEdit {
             return false
         }
 
+        let actions = {
+            let mut repeater = self.key_repeat.lock();
+            repeater.key_down(PressedKey::Char(key), repeat)
+        };
+
         if mods.ctrl || mods.alt {
             if repeat {
                 return false
@@ -1967,10 +1973,6 @@ impl UIObject for ChatEdit {
             return self.handle_shortcut(key, &mods).await
         }
 
-        let actions = {
-            let mut repeater = self.key_repeat.lock();
-            repeater.key_down(PressedKey::Char(key), repeat)
-        };
         //debug!(target: "ui::chatedit", "Key {:?} has {} actions", key, actions);
         for _ in 0..actions {
             self.insert_char(key).await;
@@ -1979,6 +1981,7 @@ impl UIObject for ChatEdit {
     }
 
     async fn handle_key_down(&self, key: KeyCode, mods: KeyMods, repeat: bool) -> bool {
+        //debug!(target: "ui::chatedit", "handle_key_down({key:?}, {mods:?}, {repeat})")
         // First filter for only single digit keys
         // Avoid processing events handled by insert_char()
         if !ALLOWED_KEYCODES.contains(&key) {
@@ -1993,10 +1996,12 @@ impl UIObject for ChatEdit {
             let mut repeater = self.key_repeat.lock();
             repeater.key_down(PressedKey::Key(key), repeat)
         };
+
         // Suppress noisy message
-        /*if actions > 0 {
-            debug!(target: "ui::chatedit", "Key {:?} has {} actions", key, actions);
-        }*/
+        //if actions > 0 {
+        //    debug!(target: "ui::chatedit", "Key {:?} has {} actions", key, actions);
+        //}
+
         let mut is_handled = false;
         for _ in 0..actions {
             if self.handle_key(&key, &mods).await {

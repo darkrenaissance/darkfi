@@ -922,7 +922,7 @@ pub async fn make(
         let sg_root = sg_root.clone();
         let chatview_node = chatview_node.clone();
         async move {
-            let text = editz_text.get();
+            let mut text = editz_text.get();
             info!(target: "app::chat", "Send '{text}' to channel: #{channel}");
             editz_text.set("");
 
@@ -947,6 +947,12 @@ pub async fn make(
                 chatview_node.call_method("insert_line", data).await.unwrap();
 
                 return
+            }
+
+            // Limit line length
+            if text.len() > 300 {
+                text.truncate(300);
+                text.push('…');
             }
 
             let timest = UNIX_EPOCH.elapsed().unwrap().as_millis() as u64;

@@ -104,8 +104,6 @@ impl MeshBuilder {
         let (u2, v2) = uv.bottom_right().unpack();
 
         // Interpolate UV coords
-        assert!(obj.w >= clipped.w);
-        assert!(obj.h >= clipped.h);
 
         let i = (clipped.x - obj.x) / obj.w;
         let clip_u1 = u1 + i * (u2 - u1);

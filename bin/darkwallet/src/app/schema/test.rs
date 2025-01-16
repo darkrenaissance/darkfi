@@ -252,11 +252,16 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     let prop = node.get_property("rect").unwrap();
     prop.set_f32(Role::App, 0, 100.).unwrap();
     prop.set_f32(Role::App, 1, 100.).unwrap();
-    prop.set_f32(Role::App, 2, 800.).unwrap();
+    prop.set_f32(Role::App, 2, 2000.).unwrap();
     prop.set_f32(Role::App, 3, 200.).unwrap();
     node.set_property_f32(Role::App, "baseline", 40.).unwrap();
     node.set_property_f32(Role::App, "font_size", 60.).unwrap();
-    node.set_property_str(Role::App, "text", "anon1🍆 ≌ 🏳️‍⚧️").unwrap();
+    node.set_property_str(
+        Role::App,
+        "text",
+        "hel \u{01f3f3}\u{fe0f}\u{200d}\u{26a7}\u{fe0f} 123 '\u{01f44d}\u{01f3fe}' br",
+    )
+    .unwrap();
     //node.set_property_str(Role::App, "text", "anon1").unwrap();
     let prop = node.get_property("text_color").unwrap();
     prop.set_f32(Role::App, 0, 0.).unwrap();
@@ -300,12 +305,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     node.set_property_f32(Role::App, "baseline", 40.).unwrap();
     node.set_property_f32(Role::App, "font_size", 20.).unwrap();
     node.set_property_f32(Role::App, "font_size", 40.).unwrap();
-    node.set_property_str(
-        Role::App,
-        "text",
-        "hello king!😁🍆jelly 🍆1234 '\u{01f3f3}\u{fe0f}\u{200d}\u{26a7}\u{fe0f}'",
-    )
-    .unwrap();
+    node.set_property_str(Role::App, "text", "\u{01f3f3}\u{fe0f}\u{200d}\u{26a7}\u{fe0f}").unwrap();
     let prop = node.get_property("text_color").unwrap();
     if LIGHTMODE {
         prop.set_f32(Role::App, 0, 0.).unwrap();
