@@ -30,6 +30,7 @@ $(BIN): $(SRC)
 clean:
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clean --target=$(RUST_TARGET) --release --package $(BIN)
 	rm -f $(BIN) ../../../$(BIN)
+	rm -rf native_contracts_src
 
 install: all
 	mkdir -p $(DESTDIR)$(PREFIX)/bin
@@ -49,4 +50,4 @@ bundle_contracts_src:
 		find contract/money/proof -name '*.zk' -exec tar -rf $(CURDIR)/native_contracts_src/money_contract_src.tar --transform 's,^.*proof/,proof/,' {} + \
 	)
 
-.PHONY: all clean install uninstall native_contracts
+.PHONY: all clean install uninstall bundle_contracts_src
