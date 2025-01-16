@@ -327,7 +327,7 @@ impl IrcServer {
         };
 
         // Now go through all 3 ciphertexts. We'll use intermediate buffers
-        // for decryption, if all passes, we will return a modified
+        // for decryption, iff all passes, we will return a modified
         // (i.e. decrypted) privmsg, otherwise we return the original.
         for (name, channel) in self.channels.read().await.iter() {
             let Some(saltbox) = &channel.saltbox else { continue };
