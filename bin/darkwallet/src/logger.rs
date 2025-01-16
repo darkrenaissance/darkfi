@@ -7,7 +7,7 @@ use simplelog::{
 use std::{path::PathBuf, thread::sleep, time::Duration};
 
 #[cfg(target_os = "android")]
-const LOGS_ENABLED: bool = false;
+const LOGS_ENABLED: bool = true;
 
 #[cfg(not(target_os = "android"))]
 const LOGS_ENABLED: bool = true;
@@ -50,8 +50,12 @@ mod android {
             let target = metadata.target();
             if target.starts_with("sled") ||
                 target.starts_with("rustls") ||
-                target.starts_with("net::") ||
-                target.starts_with("event_graph")
+                target.starts_with("net::channel") ||
+                target.starts_with("net::message_publisher") ||
+                target.starts_with("net::hosts") ||
+                target.starts_with("net::protocol") ||
+                target.starts_with("net::session") ||
+                target.starts_with("event_graph::dag_sync")
             {
                 return false
             }
@@ -92,6 +96,12 @@ pub fn setup_logging() {
     let mut cfg = ConfigBuilder::new();
     cfg.add_filter_ignore_str("sled");
     cfg.add_filter_ignore_str("rustls");
+    cfg.add_filter_ignore_str("net::channel");
+    cfg.add_filter_ignore_str("net::message_publisher");
+    cfg.add_filter_ignore_str("net::hosts");
+    cfg.add_filter_ignore_str("net::protocol");
+    cfg.add_filter_ignore_str("net::session");
+    cfg.add_filter_ignore_str("event_graph::dag_sync");
     let cfg = cfg.build();
 
     if LOGS_ENABLED {

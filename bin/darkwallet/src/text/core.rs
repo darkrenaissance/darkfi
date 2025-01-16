@@ -218,6 +218,10 @@ fn face_shape(face: &mut FreetypeFace, text: &str, off: usize, face_idx: usize) 
     glyphs
 }
 
+/// Shape text using fallback fonts. We shape it using the primary font, then go down through
+/// the list of fallbacks. For every zero we encounter, take the remaining text on that line
+/// and try to shape it. Then replace that glyph + any others in the cluster with the new one.
+/// [More info](https://zachbayl.in/blog/font_fallback_revery/)
 pub(super) fn shape(faces: &mut Vec<FreetypeFace>, text: &str) -> Vec<GlyphInfo> {
     let glyphs = face_shape(&mut faces[0], text, 0, 0);
     let mut shaped = ShapedGlyphs::new(glyphs);

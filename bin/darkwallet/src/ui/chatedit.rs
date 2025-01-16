@@ -1961,6 +1961,9 @@ impl UIObject for ChatEdit {
             return false
         }
 
+        // Must be updated before checking the mods. You can press ctrl+a, then release ctrl
+        // before a is released. Then the repeater never gets reset, and uses any old value
+        // it has from before for a.
         let actions = {
             let mut repeater = self.key_repeat.lock();
             repeater.key_down(PressedKey::Char(key), repeat)

@@ -47,7 +47,9 @@ impl PressedKeysSmoothRepeat {
     pub fn key_down(&mut self, key: PressedKey, repeat: bool) -> u32 {
         //debug!(target: "PressedKeysSmoothRepeat", "key_down({:?}, {})", key, repeat);
 
-        if !repeat {
+        let is_initial_keypress = !repeat;
+        if is_initial_keypress {
+            //debug!(target: "PressedKeysSmoothRepeat", "remove key {:?}", key);
             self.pressed_keys.remove(&key);
             return 1;
         }
