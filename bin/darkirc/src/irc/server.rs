@@ -28,7 +28,7 @@ use futures_rustls::{
     rustls::{self, pki_types::PrivateKeyDer},
     TlsAcceptor,
 };
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use smol::{
     fs,
     lock::{Mutex, RwLock},
@@ -285,8 +285,10 @@ impl IrcServer {
     pub async fn try_encrypt<T: Priv>(&self, privmsg: &mut T) {
         if let Some((name, channel)) = self.channels.read().await.get_key_value(privmsg.channel()) {
             if let Some(saltbox) = &channel.saltbox {
-                // We will pad the name and nick to MAX_NICK_LEN so they all look the same.
-                *privmsg.channel() = saltbox::encrypt(saltbox, &Self::pad(privmsg.channel()));
+                // We will use a dummy channel value of MAX_NICK_LEN,
+                // since its not used, so all encrypted messages look the same.
+                *privmsg.channel() = saltbox::encrypt(saltbox, &[0x00; MAX_NICK_LEN]);
+                // We will pad the name to MAX_NICK_LEN so they all look the same
                 *privmsg.nick() = saltbox::encrypt(saltbox, &Self::pad(privmsg.nick()));
                 *privmsg.msg() = saltbox::encrypt(saltbox, privmsg.msg().as_bytes());
                 debug!("Successfully encrypted message for {}", name);
@@ -296,10 +298,10 @@ impl IrcServer {
 
         if let Some((name, contact)) = self.contacts.read().await.get_key_value(privmsg.channel()) {
             if let Some(saltbox) = &contact.saltbox {
-                // We will use dummy channel and nick values since they are not used.
-                // We don't need to pad them since everyone is using the same ones.
-                *privmsg.channel() = saltbox::encrypt(saltbox, b"channel");
-                *privmsg.nick() = saltbox::encrypt(saltbox, b"nick");
+                // We will use dummy channel and nick values of MAX_NICK_LEN,
+                // since they are not used, so all encrypted messages look the same.
+                *privmsg.channel() = saltbox::encrypt(saltbox, &[0x00; MAX_NICK_LEN]);
+                *privmsg.nick() = saltbox::encrypt(saltbox, &[0x00; MAX_NICK_LEN]);
                 *privmsg.msg() = saltbox::encrypt(saltbox, privmsg.msg().as_bytes());
                 debug!("Successfully encrypted message for {}", name);
             }
@@ -325,22 +327,26 @@ impl IrcServer {
         };
 
         // Now go through all 3 ciphertexts. We'll use intermediate buffers
-        // for decryption, iff all passes, we will return a modified
+        // for decryption, if all passes, we will return a modified
         // (i.e. decrypted) privmsg, otherwise we return the original.
         for (name, channel) in self.channels.read().await.iter() {
             let Some(saltbox) = &channel.saltbox else { continue };
 
-            let Some(mut channel_dec) = saltbox::try_decrypt(saltbox, &channel_ciphertext) else {
+            if saltbox::try_decrypt(saltbox, &channel_ciphertext).is_none() {
+                warn!(target: "darkirc::irc::server::try_decrypt", "Could not decrypt channel ciphertext for channel: {name}");
                 continue
             };
 
             let Some(mut nick_dec) = saltbox::try_decrypt(saltbox, &nick_ciphertext) else {
+                warn!(target: "darkirc::irc::server::try_decrypt", "Could not decrypt nick ciphertext for channel: {name}");
                 continue
             };
 
-            let Some(msg_dec) = saltbox::try_decrypt(saltbox, &msg_ciphertext) else { continue };
+            let Some(msg_dec) = saltbox::try_decrypt(saltbox, &msg_ciphertext) else {
+                warn!(target: "darkirc::irc::server::try_decrypt", "Could not decrypt message ciphertext for channel: {name}");
+                continue
+            };
 
-            Self::unpad(&mut channel_dec);
             Self::unpad(&mut nick_dec);
 
             privmsg.channel = name.to_string();
@@ -353,18 +359,20 @@ impl IrcServer {
         for (name, contact) in self.contacts.read().await.iter() {
             let Some(saltbox) = &contact.saltbox else { continue };
 
-            let Some(mut channel_dec) = saltbox::try_decrypt(saltbox, &channel_ciphertext) else {
+            if saltbox::try_decrypt(saltbox, &channel_ciphertext).is_none() {
+                warn!(target: "darkirc::irc::server::try_decrypt", "Could not decrypt channel ciphertext for contact: {name}");
                 continue
             };
 
-            let Some(mut nick_dec) = saltbox::try_decrypt(saltbox, &nick_ciphertext) else {
+            if saltbox::try_decrypt(saltbox, &nick_ciphertext).is_none() {
+                warn!(target: "darkirc::irc::server::try_decrypt", "Could not decrypt channel ciphertext for contact: {name}");
                 continue
             };
 
-            let Some(msg_dec) = saltbox::try_decrypt(saltbox, &msg_ciphertext) else { continue };
-
-            Self::unpad(&mut channel_dec);
-            Self::unpad(&mut nick_dec);
+            let Some(msg_dec) = saltbox::try_decrypt(saltbox, &msg_ciphertext) else {
+                warn!(target: "darkirc::irc::server::try_decrypt", "Could not decrypt message ciphertext for contact: {name}");
+                continue
+            };
 
             privmsg.channel = name.to_string();
             privmsg.nick = name.to_string();
