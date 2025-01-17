@@ -140,7 +140,7 @@ impl Hashable for MerkleNode {
     ///     - the root is at layer 0.
     /// `l` is MERKLE_DEPTH_ORCHARD - layer - 1.
     ///     - when hashing two leaves, we produce a node on the layer
-    ///       above the the leaves, i.e. layer = 31, l = 0
+    ///       above the leaves, i.e. layer = 31, l = 0
     ///     - when hashing to the final root, we produce the anchor
     ///       with layer = 0, l = 31.
     fn combine(altitude: Level, left: &Self, right: &Self) -> Self {
