@@ -165,10 +165,6 @@ impl TextShaper {
         let ft_face = ftlib.new_memory_face2(font_data, 0).unwrap();
         faces.push(ft_face);
 
-        let font_data = include_bytes!("../../darkirc-emoji-svg.ttf") as &[u8];
-        let ft_face = ftlib.new_memory_face2(font_data, 0).unwrap();
-        faces.push(ft_face);
-
         let font_data = include_bytes!("../../NotoColorEmoji.ttf") as &[u8];
         let ft_face = ftlib.new_memory_face2(font_data, 0).unwrap();
         faces.push(ft_face);

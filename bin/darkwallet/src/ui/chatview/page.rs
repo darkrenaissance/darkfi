@@ -155,7 +155,7 @@ impl PrivMessage {
             return mesh.clone()
         }
 
-        d!("gen_mesh({})", glyph_str(&self.unwrapped_glyphs));
+        t!("gen_mesh({})", glyph_str(&self.unwrapped_glyphs));
         let mut mesh = MeshBuilder::new();
 
         if self.is_selected {
@@ -961,7 +961,7 @@ impl MessageBuffer {
             current_pos += mesh_height;
         }
 
-        d!("gen_meshes() returning {} meshes", meshes.len());
+        t!("gen_meshes() returning {} meshes", meshes.len());
         meshes
     }
 
@@ -983,13 +983,13 @@ impl MessageBuffer {
                     if newer_date != older_date {
                         let datemsg = self.get_date_msg(newer_date, font_size, window_scale);
                         let datemsg = unsafe { &mut *(datemsg as *mut Message) };
-                        d!("Adding date: {idx} {datemsg:?}");
+                        t!("Adding date: {idx} {datemsg:?}");
                         yield datemsg;
                     }
                 }
                 last_date = Some(older_date);
 
-                d!("{idx} {msg:?}");
+                t!("{idx} {msg:?}");
                 yield msg;
             }
 
