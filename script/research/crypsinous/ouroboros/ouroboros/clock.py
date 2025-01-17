@@ -10,7 +10,7 @@ class SynchedNTPClock(object):
 
     def __init__(self, epoch_length, slot_length=60, ntp_server='europe.pool.ntp.org'):
         #TODO how long should be the slot length
-        self.epoch_length=epoch_length # how many slots in a a block
+        self.epoch_length=epoch_length # how many slots in a block
         self.slot_length=slot_length
         self.ntp_server = ntp_server
         self.ntp_client = ntplib.NTPClient()
