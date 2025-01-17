@@ -923,7 +923,7 @@ pub async fn make(
         let chatview_node = chatview_node.clone();
         async move {
             let mut text = editz_text.get();
-            info!(target: "app::chat", "Send '{text}' to channel: #{channel}");
+            info!(target: "app::chat", "Send '{text}' to channel: {channel}");
             editz_text.set("");
 
             let Some(darkirc) = sg_root.clone().lookup_node("/plugin/darkirc") else {
@@ -1644,7 +1644,7 @@ pub async fn make(
             pasta_is_visible.set(false);
 
             let text = editz_text.get();
-            info!(target: "app::chat", "text changed: {text}");
+            debug!(target: "app::chat", "text changed: {text}");
             // We want to avoid setting the property multiple times to the same value
             // because then it triggers unnecessary redraw work.
 

@@ -368,7 +368,7 @@ impl DarkIrc {
             return false
         };
 
-        d!("method called: send({method_call:?})");
+        t!("method called: send({method_call:?})");
         assert!(method_call.send_res.is_none());
 
         fn decode_data(data: &[u8]) -> std::io::Result<(Timestamp, String, String)> {

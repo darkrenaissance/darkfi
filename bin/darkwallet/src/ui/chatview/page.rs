@@ -43,6 +43,8 @@ use crate::{
     ExecutorPtr,
 };
 
+macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::chatview::message_buffer", $($arg)*); } }
+
 const PAGE_SIZE: usize = 10;
 const PRELOAD_PAGES: usize = 10;
 
@@ -153,7 +155,7 @@ impl PrivMessage {
             return mesh.clone()
         }
 
-        //debug!(target: "ui::chatview", "gen_mesh({})", glyph_str(&self.unwrapped_glyphs));
+        d!("gen_mesh({})", glyph_str(&self.unwrapped_glyphs));
         let mut mesh = MeshBuilder::new();
 
         if self.is_selected {
@@ -811,7 +813,7 @@ impl MessageBuffer {
         nick: String,
         text: String,
     ) -> Option<&mut PrivMessage> {
-        debug!(target: "ui::chatview", "MessageBuffer::insert_privmsg({timest}, {msg_id}, {nick}, {text})");
+        t!("insert_privmsg({timest}, {msg_id}, {nick}, {text})");
         let font_size = self.font_size.get();
         let timestamp_font_size = self.timestamp_font_size.get();
         let timestamp_width = self.timestamp_width.get();
@@ -874,7 +876,7 @@ impl MessageBuffer {
         nick: String,
         text: String,
     ) -> f32 {
-        //debug!(target: "ui::chatview", "MessageBuffer::push_privmsg({timest}, {msg_id}, {nick}, {text})");
+        t!("push_privmsg({timest}, {msg_id}, {nick}, {text})");
         let font_size = self.font_size.get();
         let timestamp_font_size = self.timestamp_font_size.get();
         let timestamp_width = self.timestamp_width.get();
@@ -959,7 +961,7 @@ impl MessageBuffer {
             current_pos += mesh_height;
         }
 
-        //debug!("gen_meshes() returning {} meshes", meshes.len());
+        d!("gen_meshes() returning {} meshes", meshes.len());
         meshes
     }
 
@@ -981,13 +983,13 @@ impl MessageBuffer {
                     if newer_date != older_date {
                         let datemsg = self.get_date_msg(newer_date, font_size, window_scale);
                         let datemsg = unsafe { &mut *(datemsg as *mut Message) };
-                        //debug!(target: "ui::chatview", "Adding date: {idx} {datemsg:?}");
+                        d!("Adding date: {idx} {datemsg:?}");
                         yield datemsg;
                     }
                 }
                 last_date = Some(older_date);
 
-                //debug!(target: "ui::chatview", "{idx} {msg:?}");
+                d!("{idx} {msg:?}");
                 yield msg;
             }
 
