@@ -33,6 +33,9 @@ use crate::{
 
 use super::{DrawUpdate, UIObject};
 
+macro_rules! d { ($($arg:tt)*) => { debug!(target: "app", $($arg)*); } }
+macro_rules! t { ($($arg:tt)*) => { trace!(target: "app", $($arg)*); } }
+
 pub type ButtonPtr = Arc<Button>;
 
 pub struct Button {
@@ -48,7 +51,7 @@ pub struct Button {
 
 impl Button {
     pub async fn new(node: SceneNodeWeak, ex: ExecutorPtr) -> Pimpl {
-        debug!(target: "ui::button", "Button::new()");
+        t!("Button::new()");
 
         let node_ref = &node.upgrade().unwrap();
         let is_active = PropertyBool::wrap(node_ref, Role::Internal, "is_active", 0).unwrap();
@@ -99,6 +102,7 @@ impl UIObject for Button {
     }
 
     async fn handle_mouse_btn_up(&self, btn: MouseButton, mouse_pos: Point) -> bool {
+        t!("handle_mouse_btn_up({btn:?}, {mouse_pos:?})");
         if !self.is_active.get() {
             return false
         }
@@ -119,7 +123,7 @@ impl UIObject for Button {
             return false
         }
 
-        debug!(target: "ui::button", "Button clicked!");
+        d!("Button clicked!");
         let node = self.node.upgrade().unwrap();
         node.trigger("click", vec![]).await.unwrap();
 
@@ -127,6 +131,7 @@ impl UIObject for Button {
     }
 
     async fn handle_touch(&self, phase: TouchPhase, id: u64, touch_pos: Point) -> bool {
+        t!("handle_touch({phase:?}, {id}, {touch_pos:?})");
         if !self.is_active.get() {
             return false
         }
@@ -138,7 +143,7 @@ impl UIObject for Button {
 
         let rect = self.rect.get();
         if !rect.contains(touch_pos) {
-            //debug!(target: "ui::chatview", "not inside rect");
+            t!("not inside rect");
             return false
         }
 

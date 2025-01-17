@@ -38,6 +38,9 @@ use crate::{
 
 use super::{DrawUpdate, OnModify, UIObject};
 
+macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::image", $($arg)*); } }
+macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::image", $($arg)*); } }
+
 pub type ImagePtr = Arc<Image>;
 
 pub struct Image {
@@ -59,7 +62,7 @@ pub struct Image {
 
 impl Image {
     pub async fn new(node: SceneNodeWeak, render_api: RenderApi, ex: ExecutorPtr) -> Pimpl {
-        debug!(target: "ui::image", "Image::new()");
+        t!("Image::new()");
 
         let node_ref = &node.upgrade().unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
@@ -136,7 +139,7 @@ impl Image {
             return;
         };
         self.render_api.replace_draw_calls(timest, draw_update.draw_calls);
-        debug!(target: "ui::image", "replace draw calls done");
+        t!("replace draw calls done");
     }
 
     /// Called whenever any property changes.
@@ -204,7 +207,7 @@ impl UIObject for Image {
     }
 
     async fn draw(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
-        debug!(target: "ui::image", "Image::draw()");
+        t!("Image::draw()");
         *self.parent_rect.lock().unwrap() = Some(parent_rect);
         self.get_draw_calls(parent_rect).await
     }

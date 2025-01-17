@@ -67,6 +67,7 @@ use super::{
 const VERT_SCROLL_UPDATE_INC: f32 = 1.;
 
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::chatview", $($arg)*); } }
+macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::chatview", $($arg)*); } }
 
 fn is_all_whitespace(glyphs: &[Glyph]) -> bool {
     for glyph in glyphs {
@@ -523,7 +524,7 @@ impl ChatEdit {
         text_shaper: TextShaperPtr,
         ex: ExecutorPtr,
     ) -> Pimpl {
-        debug!(target: "ui::chatedit", "ChatEdit::new()");
+        t!("ChatEdit::new()");
 
         let node_ref = &node.upgrade().unwrap();
         let is_active = PropertyBool::wrap(node_ref, Role::Internal, "is_active", 0).unwrap();
@@ -1086,20 +1087,20 @@ impl ChatEdit {
         if !self.is_active.get() {
             return
         }
-        debug!(target: "ui::chatedit", "Focus changed");
+        t!("Focus changed");
 
         // Cursor visibility will change so just redraw everything lol
         self.redraw().await;
     }
 
     async fn insert_char(&self, key: char) {
-        debug!(target: "ui::chatedit", "insert_char({key})");
+        t!("insert_char({key})");
         let mut tmp = [0; 4];
         let key_str = key.encode_utf8(&mut tmp);
         self.insert_text(key_str).await
     }
     async fn insert_text(&self, text: &str) {
-        //debug!(target: "ui::chatedit", "insert_text({text})");
+        t!("insert_text({text})");
         let text = {
             let mut text_wrap = &mut self.text_wrap.lock();
             text_wrap.clear_cache();
@@ -1122,7 +1123,7 @@ impl ChatEdit {
     }
 
     async fn handle_shortcut(&self, key: char, mods: &KeyMods) -> bool {
-        debug!(target: "ui::chatedit", "handle_shortcut({:?}, {:?})", key, mods);
+        t!("handle_shortcut({:?}, {:?})", key, mods);
 
         match key {
             'a' => {
@@ -1164,7 +1165,7 @@ impl ChatEdit {
     }
 
     async fn handle_key(&self, key: &KeyCode, mods: &KeyMods) -> bool {
-        debug!(target: "ui::chatedit", "handle_key({:?}, {:?})", key, mods);
+        t!("handle_key({:?}, {:?})", key, mods);
         match key {
             KeyCode::Left => {
                 if !self.adjust_cursor(&mods, |editable| editable.move_cursor(-1)) {
@@ -1294,7 +1295,7 @@ impl ChatEdit {
         let prev_cursor_pos = text_wrap.editable.get_cursor_pos(&rendered);
         move_cursor(&mut text_wrap.editable);
         let cursor_pos = text_wrap.editable.get_cursor_pos(&rendered);
-        debug!(target: "ui::editbox", "Adjust cursor pos to {cursor_pos}");
+        d!("Adjust cursor pos to {cursor_pos}");
 
         let select = &mut text_wrap.select;
 
@@ -1338,7 +1339,7 @@ impl ChatEdit {
             self.hide_cursor.store(true, Ordering::Relaxed);
         }
 
-        debug!(target: "ui::chatview", "Selected {select:?} from {touch_pos:?}");
+        d!("Selected {select:?} from {touch_pos:?}");
         self.update_select_text(&mut text_wrap);
     }
 
@@ -1414,7 +1415,7 @@ impl ChatEdit {
     */
 
     async fn handle_touch_start(&self, mut touch_pos: Point) -> bool {
-        //debug!(target: "ui::chatedit", "handle_touch_start({touch_pos:?})");
+        t!("handle_touch_start({touch_pos:?})");
         let mut touch_info = self.touch_info.lock();
 
         if self.try_handle_drag(&mut touch_info, touch_pos) {
@@ -1465,18 +1466,18 @@ impl ChatEdit {
             p2.y = line_idx as f32 * linespacing + handle_off_y;
 
             // Are we within range of either one?
-            //debug!(target: "ui::chatedit", "handle center points = ({p1:?}, {p2:?})");
+            t!("handle center points = ({p1:?}, {p2:?})");
 
             const TOUCH_RADIUS_SQ: f32 = 10_000.;
 
             if p1.dist_sq(&touch_pos) <= TOUCH_RADIUS_SQ {
-                debug!(target: "ui::chatedit::touch", "start touch: DragSelectHandle state [side=-1]");
+                d!("start touch: DragSelectHandle state [side=-1]");
                 // Set touch_state status to enable begin dragging them
                 touch_info.state = TouchStateAction::DragSelectHandle { side: -1 };
                 return true;
             }
             if p2.dist_sq(&touch_pos) <= TOUCH_RADIUS_SQ {
-                debug!(target: "ui::chatedit::touch", "start touch: DragSelectHandle state [side=1]");
+                d!("start touch: DragSelectHandle state [side=1]");
                 // Set touch_state status to enable begin dragging them
                 touch_info.state = TouchStateAction::DragSelectHandle { side: 1 };
                 return true;
@@ -1487,7 +1488,7 @@ impl ChatEdit {
     }
 
     async fn handle_touch_move(&self, mut touch_pos: Point) -> bool {
-        //debug!(target: "ui::chatedit", "handle_touch_move({touch_pos:?})");
+        t!("handle_touch_move({touch_pos:?})");
         // We must update with non relative touch_pos bcos when doing vertical scrolling
         // we will modify the scroll, which is used by abs_to_local(), which is used
         // to then calculate the max scroll. So it ends up jumping around.
@@ -1508,7 +1509,7 @@ impl ChatEdit {
                     self.start_touch_select(touch_pos);
                     self.redraw().await;
                 }
-                debug!(target: "ui::chatedit::touch", "touch state: StartSelect -> Select");
+                d!("touch state: StartSelect -> Select");
                 self.touch_info.lock().state = TouchStateAction::Select;
             }
             TouchStateAction::DragSelectHandle { side } => {
@@ -1583,7 +1584,7 @@ impl ChatEdit {
         true
     }
     async fn handle_touch_end(&self, mut touch_pos: Point) -> bool {
-        //debug!(target: "ui::chatedit", "handle_touch_end({touch_pos:?})");
+        t!("handle_touch_end({touch_pos:?})");
         self.abs_to_local(&mut touch_pos);
 
         let state = self.touch_info.lock().stop();
@@ -1602,7 +1603,7 @@ impl ChatEdit {
     }
 
     async fn touch_set_cursor_pos(&self, mut touch_pos: Point) {
-        debug!(target: "ui::chatedit", "touch_set_cursor_pos({touch_pos:?})");
+        t!("touch_set_cursor_pos({touch_pos:?})");
         let width = self.wrap_width();
         {
             let mut text_wrap = self.text_wrap.lock();
@@ -1710,7 +1711,7 @@ impl ChatEdit {
 
     async fn redraw(&self) {
         let timest = unixtime();
-        //debug!(target: "ui::chatedit", "redraw()");
+        t!("redraw()");
         let Some(draw_update) = self.make_draw_calls() else {
             error!(target: "ui::chatedit", "Text failed to draw");
             return;
@@ -1803,7 +1804,7 @@ impl ChatEdit {
             return false
         };
 
-        //debug!(target: "ui::chatview", "method called: insert_line({method_call:?})");
+        t!("method called: insert_line({method_call:?})");
         assert!(method_call.send_res.is_none());
 
         fn decode_data(data: &[u8]) -> std::io::Result<String> {
@@ -1944,14 +1945,14 @@ impl UIObject for ChatEdit {
     }
 
     async fn draw(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
-        debug!(target: "ui::chatedit", "ChatEdit::draw({:?})", self.node.upgrade().unwrap());
+        t!("ChatEdit::draw({:?})", self.node.upgrade().unwrap());
         *self.parent_rect.lock() = Some(parent_rect);
 
         self.make_draw_calls()
     }
 
     async fn handle_char(&self, key: char, mods: KeyMods, repeat: bool) -> bool {
-        //debug!(target: "ui::chatedit", "handle_char({key}, {mods:?}, {repeat})");
+        t!("handle_char({key}, {mods:?}, {repeat})");
         // First filter for only single digit keys
         if DISALLOWED_CHARS.contains(&key) {
             return false
@@ -1976,7 +1977,7 @@ impl UIObject for ChatEdit {
             return self.handle_shortcut(key, &mods).await
         }
 
-        //debug!(target: "ui::chatedit", "Key {:?} has {} actions", key, actions);
+        t!("Key {:?} has {} actions", key, actions);
         for _ in 0..actions {
             self.insert_char(key).await;
         }
@@ -1984,7 +1985,7 @@ impl UIObject for ChatEdit {
     }
 
     async fn handle_key_down(&self, key: KeyCode, mods: KeyMods, repeat: bool) -> bool {
-        //debug!(target: "ui::chatedit", "handle_key_down({key:?}, {mods:?}, {repeat})")
+        t!("handle_key_down({key:?}, {mods:?}, {repeat})");
         // First filter for only single digit keys
         // Avoid processing events handled by insert_char()
         if !ALLOWED_KEYCODES.contains(&key) {
@@ -2001,9 +2002,9 @@ impl UIObject for ChatEdit {
         };
 
         // Suppress noisy message
-        //if actions > 0 {
-        //    debug!(target: "ui::chatedit", "Key {:?} has {} actions", key, actions);
-        //}
+        if actions > 0 {
+            t!("Key {:?} has {} actions", key, actions);
+        }
 
         let mut is_handled = false;
         for _ in 0..actions {
@@ -2040,9 +2041,9 @@ impl UIObject for ChatEdit {
         // 1. make it active
         // 2. begin selection
         if self.is_focused.get() {
-            debug!(target: "ui::chatedit", "ChatEdit clicked");
+            d!("ChatEdit clicked");
         } else {
-            debug!(target: "ui::chatedit", "ChatEdit focused");
+            d!("ChatEdit focused");
             self.is_focused.set(true);
         }
 
@@ -2055,7 +2056,7 @@ impl UIObject for ChatEdit {
             let mut text_wrap = self.text_wrap.lock();
             let cursor_pos = text_wrap.set_cursor_with_point(mouse_pos, width);
             self.update_cursor_pos(&mut text_wrap);
-            debug!(target: "ui::editbox", "Mouse move cursor pos to {cursor_pos}");
+            d!("Mouse move cursor pos to {cursor_pos}");
 
             // begin selection
             let select = &mut text_wrap.select;
@@ -2126,7 +2127,6 @@ impl UIObject for ChatEdit {
     }
 
     async fn handle_mouse_wheel(&self, wheel_pos: Point) -> bool {
-        //debug!(target: "ui::chatedit", "rect={rect:?}, wheel_pos={wheel_pos:?}");
         if !self.is_mouse_hover.load(Ordering::Relaxed) {
             return false
         }
@@ -2138,7 +2138,7 @@ impl UIObject for ChatEdit {
 
         let mut scroll = self.scroll.get() - wheel_pos.y * self.scroll_speed.get();
         scroll = scroll.clamp(0., max_scroll);
-        debug!(target: "ui::chatedit", "handle_mouse_wheel({wheel_pos:?}) [scroll={scroll}]");
+        t!("handle_mouse_wheel({wheel_pos:?}) [scroll={scroll}]");
         self.scroll.set(scroll);
         self.redraw().await;
 
@@ -2164,7 +2164,7 @@ impl UIObject for ChatEdit {
     }
 
     async fn handle_compose_text(&self, suggest_text: &str, is_commit: bool) -> bool {
-        debug!(target: "ui::chatedit", "handle_compose_text({suggest_text}, {is_commit})");
+        t!("handle_compose_text({suggest_text}, {is_commit})");
 
         if !self.is_active.get() {
             return false
@@ -2186,7 +2186,7 @@ impl UIObject for ChatEdit {
         true
     }
     async fn handle_set_compose_region(&self, start: usize, end: usize) -> bool {
-        debug!(target: "ui::chatedit", "handle_set_compose_region({start}, {end})");
+        t!("handle_set_compose_region({start}, {end})");
 
         if !self.is_active.get() {
             return false

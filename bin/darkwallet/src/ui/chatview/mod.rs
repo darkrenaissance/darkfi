@@ -57,6 +57,9 @@ use crate::{
 
 use super::{DrawUpdate, OnModify, UIObject};
 
+macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::chatview", $($arg)*); } }
+macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::chatview", $($arg)*); } }
+
 const EPSILON: f32 = 0.001;
 const BIG_EPSILON: f32 = 0.05;
 
@@ -194,7 +197,7 @@ impl ChatView {
         text_shaper: TextShaperPtr,
         ex: ExecutorPtr,
     ) -> Pimpl {
-        debug!(target: "ui::chatview", "ChatView::new()");
+        t!("ChatView::new()");
 
         let node_ref = &node.upgrade().unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
@@ -284,11 +287,11 @@ impl ChatView {
 
     async fn process_insert_line_method(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
         let Ok(method_call) = sub.receive().await else {
-            debug!(target: "ui::chatview", "Event relayer closed");
+            d!("Event relayer closed");
             return false
         };
 
-        //debug!(target: "ui::chatview", "method called: insert_line({method_call:?})");
+        t!("method called: insert_line({method_call:?})");
         assert!(method_call.send_res.is_none());
 
         fn decode_data(data: &[u8]) -> std::io::Result<(Timestamp, MessageId, String, String)> {
@@ -315,11 +318,11 @@ impl ChatView {
     }
     async fn process_insert_unconf_line_method(me: &Weak<Self>, sub: &MethodCallSub) -> bool {
         let Ok(method_call) = sub.receive().await else {
-            debug!(target: "ui::chatview", "Event relayer closed");
+            d!("Event relayer closed");
             return false
         };
 
-        //debug!(target: "ui::chatview", "method called: insert_unconf_line({method_call:?})");
+        t!("method called: insert_unconf_line({method_call:?})");
         assert!(method_call.send_res.is_none());
 
         fn decode_data(data: &[u8]) -> std::io::Result<(Timestamp, MessageId, String, String)> {
@@ -390,7 +393,7 @@ impl ChatView {
 
         let accel = self.scroll_start_accel.get() * dist / time;
         let touch_time = touch_info.start_instant.elapsed();
-        //debug!(target: "ui::chatview", "accel = {dist} / {time} = {accel},  touch = {touch_time:?}");
+        t!("accel = {dist} / {time} = {accel},  touch = {touch_time:?}");
         self.speed.fetch_add(accel, Ordering::Relaxed);
         self.motion_cv.notify();
     }
@@ -431,7 +434,7 @@ impl ChatView {
         nick: String,
         text: String,
     ) {
-        debug!(target: "ui::chatview", "handle_insert_line({timest}, {msg_id}, {nick}, {text})");
+        t!("handle_insert_line({timest}, {msg_id}, {nick}, {text})");
 
         // Lock message buffer so background loader doesn't load the message as soon as it's
         // inserted into the DB.
@@ -439,7 +442,7 @@ impl ChatView {
 
         if !self.add_line_to_db(timest, &msg_id, &nick, &text).await {
             // Already exists so bail
-            debug!(target: "ui::chatview", "duplicate msg so bailing");
+            t!("duplicate msg so bailing");
             return
         }
 
@@ -447,9 +450,9 @@ impl ChatView {
         if msgbuf.mark_confirmed(&msg_id) {
             // Message already exists. Which means it must be an unconfirmed sent message.
             // Mark it as confirmed.
-            debug!(target: "ui::chatview", "Mark sent message as confirmed");
+            t!("Mark sent message as confirmed");
         } else {
-            debug!(target: "ui::chatview", "Inserting new message");
+            t!("Inserting new message");
             // Insert the privmsg since it doesn't already exist
             if msgbuf.insert_privmsg(timest, msg_id, nick, text).is_none() {
                 // Not visible so no need to redraw
@@ -467,7 +470,7 @@ impl ChatView {
         nick: String,
         text: String,
     ) {
-        debug!(target: "ui::chatview", "handle_insert_unconf_line({timest}, {msg_id}, {nick}, {text})");
+        t!("handle_insert_unconf_line({timest}, {msg_id}, {nick}, {text})");
 
         // We don't add unconfirmed lines to the db. Maybe we should?
 
@@ -524,7 +527,7 @@ impl ChatView {
     }
 
     async fn handle_bgload(&self) {
-        //debug!(target: "ui::chatview", "ChatView::handle_bgload()");
+        t!("ChatView::handle_bgload()");
         // Do we need to load some more?
         let scroll = self.scroll.get();
         let rect = self.rect.get();
@@ -537,20 +540,20 @@ impl ChatView {
         let total_height = msgbuf.calc_total_height().await;
         if total_height > top + preload_height {
             // Nothing to do here
-            //debug!(target: "ui::chatview", "bgloader: buffer is sufficient");
+            t!("bgloader: buffer is sufficient");
             return
         }
 
         // Keep loading until this is below 0
         let mut remaining_load_height = top + preload_height - total_height;
-        //debug!(target: "ui::chatview", "bgloader: remaining px = {remaining_load_height}");
+        t!("bgloader: remaining px = {remaining_load_height}");
         let mut remaining_visible = top - total_height;
 
         // Get the current earliest timestamp
         let iter = match msgbuf.oldest_timestamp() {
             Some(oldest_timest) => {
                 // iterate from there
-                //debug!(target: "ui::chatview", "preloading from {oldest_timest}");
+                t!("preloading from {oldest_timest}");
                 let timest = (oldest_timest - 1).to_be_bytes();
                 let mut key = [0u8; 8 + 32];
                 key[..8].clone_from_slice(&timest);
@@ -559,7 +562,7 @@ impl ChatView {
                 iter
             }
             None => {
-                //debug!(target: "ui::chatview", "initial load");
+                t!("initial load");
                 self.tree.iter().rev()
             }
         };
@@ -572,7 +575,7 @@ impl ChatView {
             let msg_id = MessageId(k[8..].try_into().unwrap());
             let timest = Timestamp::from_be_bytes(timest_bytes);
             let chatmsg: ChatMsg = deserialize(&v).unwrap();
-            //debug!(target: "ui::chatview", "{timest:?} {chatmsg:?}");
+            t!("{timest:?} {chatmsg:?}");
 
             let msg_height = msgbuf.push_privmsg(timest, msg_id, chatmsg.nick, chatmsg.text);
 
@@ -593,7 +596,7 @@ impl ChatView {
     }
 
     async fn scrollview(&self, mut scroll: f32) -> f32 {
-        //debug!(target: "ui::chatview", "scrollview()");
+        t!("scrollview()");
         let old_scroll = self.scroll.get();
 
         let rect = self.rect.get();
@@ -680,7 +683,7 @@ impl ChatView {
     }
 
     async fn redraw_cached(&self, msgbuf: &mut MessageBuffer) {
-        //debug!(target: "ui::chatview", "ChatView::redraw_cached()");
+        t!("ChatView::redraw_cached()");
         let timest = unixtime();
         let rect = self.rect.get();
 
@@ -693,12 +696,12 @@ impl ChatView {
             vec![(self.dc_key, GfxDrawCall { instrs, dcs: vec![], z_index: self.z_index.get() })];
 
         self.render_api.replace_draw_calls(timest, draw_calls);
-        //debug!(target: "ui::chatview", "ChatView::redraw_cached() DONE");
+        t!("ChatView::redraw_cached() DONE");
     }
 
     /// Invalidates cache and redraws everything
     async fn redraw_all(&self) {
-        //debug!(target: "ui::chatview", "ChatView::redraw_all()");
+        t!("ChatView::redraw_all()");
         let parent_rect = self.parent_rect.lock().unwrap().unwrap().clone();
         self.rect.eval(&parent_rect).expect("unable to eval rect");
 
@@ -706,7 +709,7 @@ impl ChatView {
         msgbuf.adjust_params();
         msgbuf.clear_meshes();
         self.redraw_cached(&mut msgbuf).await;
-        //debug!(target: "ui::chatview", "ChatView::redraw_all() DONE");
+        t!("ChatView::redraw_all() DONE");
     }
 }
 
@@ -799,7 +802,7 @@ impl UIObject for ChatView {
     }
 
     async fn draw(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
-        debug!(target: "ui::chatview", "ChatView::draw({:?})", self.node.upgrade().unwrap());
+        t!("ChatView::draw({:?})", self.node.upgrade().unwrap());
 
         *self.parent_rect.lock().unwrap() = Some(parent_rect.clone());
         self.rect.eval(&parent_rect).ok()?;
@@ -872,6 +875,8 @@ impl UIObject for ChatView {
     }
 
     async fn handle_mouse_btn_up(&self, btn: MouseButton, mouse_pos: Point) -> bool {
+        t!("handle_mouse_btn_up({btn:?}, {mouse_pos:?})");
+
         if btn != MouseButton::Left {
             return false
         }
@@ -881,7 +886,7 @@ impl UIObject for ChatView {
     }
 
     async fn handle_mouse_move(&self, mouse_pos: Point) -> bool {
-        //debug!(target: "ui::chatview", "handle_mouse_move({mouse_x}, {mouse_y})");
+        t!("handle_mouse_move({mouse_pos:?})");
 
         // We store the mouse pos for use in handle_mouse_wheel()
         *self.mouse_pos.lock().unwrap() = mouse_pos.clone();
@@ -902,13 +907,13 @@ impl UIObject for ChatView {
     }
 
     async fn handle_mouse_wheel(&self, wheel_pos: Point) -> bool {
-        //debug!(target: "ui::chatview", "handle_mouse_wheel({wheel_x}, {wheel_y})");
+        t!("handle_mouse_wheel({wheel_pos:?})");
 
         let rect = self.rect.get();
 
         let mouse_pos = self.mouse_pos.lock().unwrap().clone();
         if !rect.contains(mouse_pos) {
-            //debug!(target: "ui::chatview", "not inside rect");
+            t!("not inside rect");
             return false
         }
 
@@ -923,7 +928,7 @@ impl UIObject for ChatView {
         }
 
         let rect = self.rect.get();
-        //debug!(target: "ui::chatview", "handle_touch({phase:?}, {touch_x}, {touch_y})");
+        t!("handle_touch({phase:?}, {id},{id},  {touch_pos:?})");
 
         let touch_y = touch_pos.y;
 
@@ -978,12 +983,12 @@ impl UIObject for ChatView {
                     (start_scroll, start_y, start_elapsed, do_update, is_select_mode)
                 };
 
-                //debug!(target: "ui::chatview", "touch phase moved, is_select_mode={is_select_mode:?}");
+                t!("touch phase moved, is_select_mode={is_select_mode:?}");
 
                 // When scrolling if we suddenly grab the screen for more than a brief period
                 // of time then stop the scrolling completely.
                 if start_elapsed > 200. {
-                    //debug!(target: "ui::chatview", "Stopping scroll accel");
+                    t!("Stopping scroll accel");
                     self.speed.store(0., Ordering::Relaxed);
                 }
 

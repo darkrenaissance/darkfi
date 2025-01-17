@@ -47,6 +47,7 @@ use super::{DrawUpdate, OnModify, UIObject};
 mod emoji;
 
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::emoji_picker", $($arg)*); } }
+macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::emoji_picker", $($arg)*); } }
 
 pub type EmojiMeshesPtr = Arc<SyncMutex<EmojiMeshes>>;
 
@@ -147,7 +148,7 @@ impl EmojiPicker {
         emoji_meshes: EmojiMeshesPtr,
         ex: ExecutorPtr,
     ) -> Pimpl {
-        d!("EmojiPicker::new()");
+        t!("EmojiPicker::new()");
 
         let node_ref = &node.upgrade().unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
@@ -241,7 +242,7 @@ impl EmojiPicker {
             let node = self.node.upgrade().unwrap();
             node.trigger("emoji_select", param_data).await.unwrap();
         } else {
-            d!("Index out of bounds");
+            d!("Index out of bounds: {idx}");
         }
     }
 
@@ -254,7 +255,7 @@ impl EmojiPicker {
             return;
         };
         self.render_api.replace_draw_calls(timest, draw_update.draw_calls);
-        d!("replace draw calls done");
+        t!("replace draw calls done");
     }
 
     fn get_draw_calls(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
@@ -334,7 +335,7 @@ impl UIObject for EmojiPicker {
     }
 
     async fn draw(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
-        d!("EmojiPicker::draw()");
+        t!("EmojiPicker::draw()");
         *self.parent_rect.lock().unwrap() = Some(parent_rect);
         self.get_draw_calls(parent_rect)
     }
@@ -349,7 +350,7 @@ impl UIObject for EmojiPicker {
         if !self.is_mouse_hover.load(Ordering::Relaxed) {
             return false
         }
-        d!("handle_mouse_wheel()");
+        t!("handle_mouse_wheel()");
 
         let mut scroll = self.scroll.get();
         scroll -= self.mouse_scroll_speed.get() * wheel_pos.y;

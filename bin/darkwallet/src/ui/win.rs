@@ -32,6 +32,9 @@ use crate::{
 
 use super::{get_children_ordered, get_ui_object3, get_ui_object_ptr, OnModify};
 
+macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::window", $($arg)*); } }
+macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::window", $($arg)*); } }
+
 #[cfg(feature = "emulate-android")]
 const EMULATE_TOUCH: bool = true;
 
@@ -51,7 +54,7 @@ pub struct Window {
 
 impl Window {
     pub async fn new(node: SceneNodeWeak, render_api: RenderApi) -> Pimpl {
-        debug!(target: "ui::win", "Window::new()");
+        t!("Window::new()");
 
         let node_ref = &node.upgrade().unwrap();
         let screen_size = PropertyDimension::wrap(node_ref, Role::Internal, "screen_size").unwrap();
@@ -77,11 +80,11 @@ impl Window {
         let resize_task = ex.spawn(async move {
             loop {
                 let Ok(size) = ev_sub.receive().await else {
-                    debug!(target: "ui::win", "Event relayer closed");
+                    t!("Event relayer closed");
                     break
                 };
 
-                debug!(target: "ui::win", "Window resized {size:?}");
+                d!("Window resized {size:?}");
                 // Now update the properties
                 screen_size2.set(size);
 
@@ -161,7 +164,7 @@ impl Window {
             let autosuggest_task = ex.spawn(async move {
                 loop {
                     let Ok(ev) = recvr.recv().await else {
-                        debug!(target: "ui::win", "Event relayer closed");
+                        t!("Event relayer closed");
                         break
                     };
 
@@ -186,7 +189,7 @@ impl Window {
 
     async fn process_char(me: &Weak<Self>, ev_sub: &Subscription<(char, KeyMods, bool)>) -> bool {
         let Ok((key, mods, repeat)) = ev_sub.receive().await else {
-            debug!(target: "ui::win", "Event relayer closed");
+            t!("Event relayer closed");
             return false
         };
 
@@ -204,7 +207,7 @@ impl Window {
         ev_sub: &Subscription<(KeyCode, KeyMods, bool)>,
     ) -> bool {
         let Ok((key, mods, repeat)) = ev_sub.receive().await else {
-            debug!(target: "ui::win", "Event relayer closed");
+            t!("Event relayer closed");
             return false
         };
 
@@ -219,7 +222,7 @@ impl Window {
 
     async fn process_key_up(me: &Weak<Self>, ev_sub: &Subscription<(KeyCode, KeyMods)>) -> bool {
         let Ok((key, mods)) = ev_sub.receive().await else {
-            debug!(target: "ui::win", "Event relayer closed");
+            t!("Event relayer closed");
             return false
         };
 
@@ -237,7 +240,7 @@ impl Window {
         ev_sub: &Subscription<(MouseButton, Point)>,
     ) -> bool {
         let Ok((btn, mouse_pos)) = ev_sub.receive().await else {
-            debug!(target: "ui::editbox", "Event relayer closed");
+            t!("Event relayer closed");
             return false
         };
 
@@ -255,7 +258,7 @@ impl Window {
         ev_sub: &Subscription<(MouseButton, Point)>,
     ) -> bool {
         let Ok((btn, mouse_pos)) = ev_sub.receive().await else {
-            debug!(target: "ui::editbox", "Event relayer closed");
+            t!("Event relayer closed");
             return false
         };
 
@@ -270,7 +273,7 @@ impl Window {
 
     async fn process_mouse_move(me: &Weak<Self>, ev_sub: &Subscription<Point>) -> bool {
         let Ok(mouse_pos) = ev_sub.receive().await else {
-            debug!(target: "ui::editbox", "Event relayer closed");
+            t!("Event relayer closed");
             return false
         };
 
@@ -285,7 +288,7 @@ impl Window {
 
     async fn process_mouse_wheel(me: &Weak<Self>, ev_sub: &Subscription<Point>) -> bool {
         let Ok(wheel_pos) = ev_sub.receive().await else {
-            debug!(target: "ui::chatview", "Event relayer closed");
+            t!("Event relayer closed");
             return false
         };
 
@@ -303,7 +306,7 @@ impl Window {
         ev_sub: &Subscription<(TouchPhase, u64, Point)>,
     ) -> bool {
         let Ok((phase, id, touch_pos)) = ev_sub.receive().await else {
-            debug!(target: "ui::editbox", "Event relayer closed");
+            t!("Event relayer closed");
             return false
         };
 
@@ -444,7 +447,7 @@ impl Window {
 
         let local = self.screen_size.get() / self.scale.get();
         let rect = Rectangle::from([0., 0., local.w, local.h]);
-        debug!(target: "ui::win", "Window::draw({rect:?})");
+        t!("Window::draw({rect:?})");
 
         let mut draw_calls = vec![];
         let mut child_calls = vec![];
@@ -466,10 +469,10 @@ impl Window {
             z_index: 0,
         };
         draw_calls.push((0, dc));
-        //debug!(target: "ui::win", "  => {:?}", draw_calls);
+        //t!("  => {:?}", draw_calls);
 
         self.render_api.replace_draw_calls(timest, draw_calls);
 
-        debug!(target: "ui::win", "Window::draw() - replaced draw call [timest={timest}]");
+        t!("Window::draw() - replaced draw call [timest={timest}]");
     }
 }

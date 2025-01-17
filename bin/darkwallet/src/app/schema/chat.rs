@@ -550,7 +550,7 @@ pub async fn make(
     //if chat_tree.is_empty() {
     //    populate_tree(&chat_tree);
     //}
-    debug!(target: "app", "db has {} lines", chat_tree.len());
+    debug!(target: "app", "Loaded #{channel} history: {} lines", chat_tree.len());
     let chatview_node = node
         .setup(|me| {
             ChatView::new(

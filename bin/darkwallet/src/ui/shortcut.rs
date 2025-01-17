@@ -30,6 +30,9 @@ use crate::{
 
 use super::UIObject;
 
+macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::shortcut", $($arg)*); } }
+macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::shortcut", $($arg)*); } }
+
 fn vec_to_string(v: Vec<&str>) -> Vec<String> {
     v.into_iter().map(|s| s.to_string()).collect()
 }
@@ -44,7 +47,7 @@ pub struct Shortcut {
 
 impl Shortcut {
     pub async fn new(node: SceneNodeWeak) -> Pimpl {
-        debug!(target: "ui::button", "Button::new()");
+        t!("Shortcut::new()");
 
         let node_ref = &node.upgrade().unwrap();
         let key = node_ref.get_property("key").unwrap();
@@ -69,6 +72,7 @@ impl UIObject for Shortcut {
     }
 
     async fn handle_key_down(&self, key: KeyCode, mods: KeyMods, repeat: bool) -> bool {
+        t!("handle_key_down({key:?}, {mods:?}, {repeat})");
         if repeat {
             return false
         }
@@ -84,6 +88,7 @@ impl UIObject for Shortcut {
         }
 
         let node = self.node.upgrade().unwrap();
+        d!("Shortcut invoked: {node:?}");
         node.trigger("shortcut", vec![]).await.unwrap();
 
         true

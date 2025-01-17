@@ -259,7 +259,8 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     node.set_property_str(
         Role::App,
         "text",
-        "hel \u{01f3f3}\u{fe0f}\u{200d}\u{26a7}\u{fe0f} 123 '\u{01f44d}\u{01f3fe}' br",
+        "\u{f0007}",
+        //"hel \u{01f3f3}\u{fe0f}\u{200d}\u{26a7}\u{fe0f} 123 '\u{01f44d}\u{01f3fe}' br",
     )
     .unwrap();
     //node.set_property_str(Role::App, "text", "anon1").unwrap();

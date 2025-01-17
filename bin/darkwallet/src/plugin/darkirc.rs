@@ -103,9 +103,10 @@ mod paths {
 
 use paths::*;
 
+macro_rules! t { ($($arg:tt)*) => { trace!(target: "plugin::darkirc", $($arg)*); } }
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "plugin::darkirc", $($arg)*); } }
-macro_rules! inf { ($($arg:tt)*) => { info!(target: "plugin::darkirc", $($arg)*); } }
-macro_rules! err { ($($arg:tt)*) => { error!(target: "plugin::darkirc", $($arg)*); } }
+macro_rules! i { ($($arg:tt)*) => { info!(target: "plugin::darkirc", $($arg)*); } }
+macro_rules! e { ($($arg:tt)*) => { error!(target: "plugin::darkirc", $($arg)*); } }
 
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct Privmsg {
@@ -174,12 +175,12 @@ impl DarkIrc {
         let node_ref = &node.upgrade().unwrap();
         let nick = PropertyStr::wrap(node_ref, Role::Internal, "nick", 0).unwrap();
 
-        inf!("Starting DarkIRC backend");
+        i!("Starting DarkIRC backend");
         let evgr_path = get_evgrdb_path();
         let db = match sled::open(&evgr_path) {
             Ok(db) => db,
             Err(err) => {
-                err!("Sled database '{}' failed to open: {err}!", evgr_path.display());
+                e!("Sled database '{}' failed to open: {err}!", evgr_path.display());
                 return Err(Error::SledDbErr);
             }
         };
@@ -197,7 +198,7 @@ impl DarkIrc {
         let p2p = match P2p::new(p2p_settings, ex.clone()).await {
             Ok(p2p) => p2p,
             Err(err) => {
-                err!("Create p2p network failed: {err}!");
+                e!("Create p2p network failed: {err}!");
                 return Err(Error::ServiceFailed);
             }
         };
@@ -215,7 +216,7 @@ impl DarkIrc {
         {
             Ok(evgr) => evgr,
             Err(err) => {
-                err!("Create event graph failed: {err}!");
+                e!("Create event graph failed: {err}!");
                 return Err(Error::ServiceFailed);
             }
         };
@@ -239,22 +240,22 @@ impl DarkIrc {
     }
 
     async fn dag_sync(self: Arc<Self>, channel_sub: Subscription<DarkFiResult<ChannelPtr>>) {
-        inf!("Starting p2p network");
+        i!("Starting p2p network");
         while let Err(err) = self.p2p.clone().start().await {
             // This usually means we cannot listen on the inbound ports
-            err!("Failed to start p2p network: {err}!");
-            err!("Usually this means there is another process listening on the same ports.");
-            err!("Trying again in {P2P_RETRY_TIME} secs");
+            e!("Failed to start p2p network: {err}!");
+            e!("Usually this means there is another process listening on the same ports.");
+            e!("Trying again in {P2P_RETRY_TIME} secs");
             sleep(P2P_RETRY_TIME).await;
         }
 
-        inf!("Waiting for some P2P connections...");
+        i!("Waiting for some P2P connections...");
 
         let mut sync_attempt = 0;
         loop {
             // Wait for a channel
             if let Err(_) = channel_sub.receive().await {
-                err!("There was an error listening for channels. The service closed unexpectedly.");
+                e!("There was an error listening for channels. The service closed unexpectedly.");
                 // Not sure what to do here
                 return
             }
@@ -268,12 +269,12 @@ impl DarkIrc {
 
             // Cool off periodically
             if sync_attempt > COOLOFF_SYNC_ATTEMPTS {
-                inf!("Wasn't able to sync yet. Cooling off for {COOLOFF_SLEEP_TIME} then will try again.");
+                i!("Wasn't able to sync yet. Cooling off for {COOLOFF_SLEEP_TIME} then will try again.");
                 sleep(COOLOFF_SLEEP_TIME).await;
                 sync_attempt = 0;
             }
 
-            inf!("Syncing event DAG (attempt #{sync_attempt})");
+            i!("Syncing event DAG (attempt #{sync_attempt})");
             match self.event_graph.dag_sync().await {
                 Ok(()) => break,
                 Err(e) => {
@@ -293,14 +294,14 @@ impl DarkIrc {
             let privmsg: Privmsg = match deserialize_async(ev.content()).await {
                 Ok(v) => v,
                 Err(e) => {
-                    err!("[IRC CLIENT] Failed deserializing incoming Privmsg event: {}", e);
+                    e!("[IRC CLIENT] Failed deserializing incoming Privmsg event: {}", e);
                     continue
                 }
             };
 
             let mut timest = ev.timestamp;
             let msg_id = privmsg.msg_id(timest);
-            inf!(
+            t!(
                 "Relaying ev_id={:?}, ev={ev:?}, msg_id={msg_id}, privmsg={privmsg:?}, timest={timest}",
                 ev.id(),
             );
@@ -379,7 +380,7 @@ impl DarkIrc {
         }
 
         let Ok((timest, channel, msg)) = decode_data(&method_call.data) else {
-            err!("send() method invalid arg data");
+            e!("send() method invalid arg data");
             return true
         };
 
@@ -430,7 +431,7 @@ impl DarkIrc {
 #[async_trait]
 impl PluginObject for DarkIrc {
     async fn start(self: Arc<Self>, ex: ExecutorPtr) {
-        inf!("Registering EventGraph P2P protocol");
+        i!("Registering EventGraph P2P protocol");
         let event_graph_ = Arc::clone(&self.event_graph);
         let registry = self.p2p.protocol_registry();
         registry

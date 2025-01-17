@@ -45,6 +45,10 @@ mod node;
 use node::create_darkirc;
 mod schema;
 
+macro_rules! d { ($($arg:tt)*) => { debug!(target: "app", $($arg)*); } }
+macro_rules! t { ($($arg:tt)*) => { trace!(target: "app", $($arg)*); } }
+macro_rules! i { ($($arg:tt)*) => { info!(target: "app", $($arg)*); } }
+
 const PLUGINS_ENABLED: bool = true;
 
 //fn print_type_of<T>(_: &T) {
@@ -93,7 +97,7 @@ impl AsyncRuntime {
     pub fn stop(&self) {
         // Go through event graph and call stop on everything
         // Depth first
-        debug!(target: "app", "Stopping async runtime...");
+        d!("Stopping async runtime...");
 
         let tasks = std::mem::take(&mut *self.tasks.lock().unwrap());
         // Close all tasks
@@ -114,7 +118,7 @@ impl AsyncRuntime {
         let exec_threadpool = std::mem::replace(&mut *self.exec_threadpool.lock().unwrap(), None);
         let exec_threadpool = exec_threadpool.expect("threadpool wasnt started");
         exec_threadpool.join().unwrap();
-        debug!(target: "app", "Stopped app");
+        i!("Stopped app");
     }
 }
 
@@ -150,7 +154,7 @@ impl App {
     /// Does not require miniquad to be init. Created the scene graph tree / schema and all
     /// the objects.
     pub async fn setup(&self) {
-        debug!(target: "app", "App::setup()");
+        t!("App::setup()");
 
         let mut window = SceneNode3::new("window", SceneNodeType3::Window);
 
@@ -167,7 +171,7 @@ impl App {
         schema::make(&self, window).await;
         //schema::test::make(&self, window).await;
 
-        debug!(target: "app", "Schema loaded");
+        d!("Schema loaded");
 
         let plugin = Arc::new(SceneNode3::new("plugin", SceneNodeType3::PluginRoot));
         self.sg_root.clone().link(plugin.clone());
@@ -197,9 +201,9 @@ impl App {
                 let msg = String::decode(&mut cur).unwrap();
 
                 let node_path = format!("/window/{channel}_chat_layer/content/chatty");
-                debug!(target: "app", "Attempting to relay message to {node_path}");
+                t!("Attempting to relay message to {node_path}");
                 let Some(chatview) = sg_root2.clone().lookup_node(&node_path) else {
-                    warn!(target: "app", "Ignoring message since {node_path} doesn't exist");
+                    d!("Ignoring message since {node_path} doesn't exist");
                     continue
                 };
 
@@ -245,12 +249,12 @@ impl App {
 
         plugin.link(darkirc);
 
-        debug!(target: "app", "Plugins loaded");
+        i!("Plugins loaded");
     }
 
     /// Begins the draw of the tree, and then starts the UI procs.
     pub async fn start(self: Arc<Self>) {
-        debug!(target: "app", "App::start()");
+        d!("Starting app");
 
         let window_node = self.sg_root.clone().lookup_node("/window").unwrap();
         let prop = window_node.get_property("screen_size").unwrap();
@@ -263,7 +267,7 @@ impl App {
         self.trigger_draw().await;
 
         self.start_procs().await;
-        debug!(target: "app", "App started");
+        i!("App started");
     }
 
     pub fn stop(&self) {
@@ -303,7 +307,7 @@ impl App {
 
 impl Drop for App {
     fn drop(&mut self) {
-        debug!(target: "app", "Dropping app");
+        t!("Dropping app");
         // This hangs
         //self.stop();
     }
@@ -339,5 +343,5 @@ fn populate_tree(tree: &sled::Tree) {
         tree.insert(&key, val).unwrap();
     }
     // O(n)
-    debug!(target: "app", "populated db with {} lines", tree.len());
+    d!("populated db with {} lines", tree.len());
 }

@@ -38,6 +38,9 @@ use crate::{
 
 use super::{DrawUpdate, OnModify, UIObject};
 
+macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::text", $($arg)*); } }
+macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::text", $($arg)*); } }
+
 pub type TextPtr = Arc<Text>;
 
 #[derive(Clone)]
@@ -75,7 +78,7 @@ impl Text {
         text_shaper: TextShaperPtr,
         ex: ExecutorPtr,
     ) -> Pimpl {
-        debug!(target: "ui::text", "Text::new()");
+        t!("Text::new()");
 
         let node_ref = &node.upgrade().unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
@@ -121,7 +124,7 @@ impl Text {
         let debug = self.debug.get();
         let window_scale = self.window_scale.get();
 
-        debug!(target: "ui::text", "Rendering label '{}'", text);
+        t!("Rendering label '{}'", text);
         let glyphs = self.text_shaper.shape(text, font_size, window_scale);
         let atlas = text::make_texture_atlas(&self.render_api, &glyphs);
 
@@ -155,7 +158,7 @@ impl Text {
 
     async fn redraw(self: Arc<Self>) {
         let timest = unixtime();
-        debug!(target: "ui::text", "Text::redraw({:?})", self.node.upgrade().unwrap());
+        t!("Text::redraw({:?})", self.node.upgrade().unwrap());
         let Some(parent_rect) = self.parent_rect.lock().unwrap().clone() else { return };
 
         let Some(draw_update) = self.get_draw_calls(parent_rect).await else {
@@ -163,7 +166,7 @@ impl Text {
             return;
         };
         self.render_api.replace_draw_calls(timest, draw_update.draw_calls);
-        debug!(target: "ui::text", "replace draw calls done");
+        t!("replace draw calls done");
     }
 
     async fn get_draw_calls(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
@@ -222,7 +225,7 @@ impl UIObject for Text {
     }
 
     async fn draw(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
-        debug!(target: "ui::text", "Text::draw({:?})", self.node.upgrade().unwrap());
+        t!("Text::draw({:?})", self.node.upgrade().unwrap());
         *self.parent_rect.lock().unwrap() = Some(parent_rect);
         self.get_draw_calls(parent_rect).await
     }

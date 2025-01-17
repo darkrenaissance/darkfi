@@ -38,6 +38,9 @@ use super::{DrawUpdate, OnModify, UIObject};
 pub mod shape;
 use shape::VectorShape;
 
+macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::vector_art", $($arg)*); } }
+macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::vector_art", $($arg)*); } }
+
 pub type VectorArtPtr = Arc<VectorArt>;
 
 pub struct VectorArt {
@@ -63,7 +66,7 @@ impl VectorArt {
         render_api: RenderApi,
         ex: ExecutorPtr,
     ) -> Pimpl {
-        debug!(target: "ui::vector_art", "VectorArt::new()");
+        t!("VectorArt::new()");
 
         let node_ref = &node.upgrade().unwrap();
         let is_visible = PropertyBool::wrap(node_ref, Role::Internal, "is_visible", 0).unwrap();
@@ -99,7 +102,7 @@ impl VectorArt {
 
     async fn redraw(self: Arc<Self>) {
         let timest = unixtime();
-        debug!(target: "ui::vector_art", "VectorArt::redraw({})", self.node_path());
+        trace!(target: "ui::vector_art", "VectorArt::redraw({})", self.node_path());
         let Some(parent_rect) = self.parent_rect.lock().unwrap().clone() else { return };
 
         let Some(draw_update) = self.get_draw_calls(parent_rect).await else {
@@ -111,7 +114,7 @@ impl VectorArt {
 
     fn get_draw_instrs(&self) -> Vec<GfxDrawInstruction> {
         if !self.is_visible.get() {
-            debug!(target: "ui::vector_art", "Skipping draw for invisible {}", self.node_path());
+            t!("Skipping draw for invisible {}", self.node_path());
             return vec![]
         }
 
@@ -169,7 +172,7 @@ impl UIObject for VectorArt {
     }
 
     async fn draw(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
-        debug!(target: "ui::vector_art", "VectorArt::draw({})", self.node_path());
+        t!("VectorArt::draw({})", self.node_path());
         *self.parent_rect.lock().unwrap() = Some(parent_rect);
         self.get_draw_calls(parent_rect).await
     }

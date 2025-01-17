@@ -15,6 +15,24 @@ const LOGS_ENABLED: bool = true;
 // Measured in bytes
 const LOGFILE_MAXSIZE: usize = 5_000_000;
 
+static MUTED_TARGETS: &[&'static str] = &[
+    "sled",
+    "rustls",
+    "net::channel",
+    "net::message_publisher",
+    "net::hosts",
+    "net::protocol",
+    "net::session",
+    "net::outbound_session",
+    "net::tcp",
+    "net::p2p::seed",
+    "net::refinery::handshake_node()",
+    "system::publisher",
+    "event_graph::dag_sync()",
+    "event_graph::dag_insert()",
+    "event_graph::protocol",
+];
+
 #[cfg(target_os = "android")]
 fn logfile_path() -> PathBuf {
     use crate::android::get_external_storage_path;
@@ -48,16 +66,10 @@ mod android {
     impl Log for AndroidLoggerWrapper {
         fn enabled(&self, metadata: &Metadata<'_>) -> bool {
             let target = metadata.target();
-            if target.starts_with("sled") ||
-                target.starts_with("rustls") ||
-                target.starts_with("net::channel") ||
-                target.starts_with("net::message_publisher") ||
-                target.starts_with("net::hosts") ||
-                target.starts_with("net::protocol") ||
-                target.starts_with("net::session") ||
-                target.starts_with("event_graph::dag_sync")
-            {
-                return false
+            for muted in MUTED_TARGETS {
+                if target.starts_with(muted) {
+                    return false
+                }
             }
             if metadata.level() > self.level {
                 return false
@@ -94,14 +106,9 @@ pub fn setup_logging() {
     let mut loggers: Vec<Box<dyn SharedLogger>> = vec![];
 
     let mut cfg = ConfigBuilder::new();
-    cfg.add_filter_ignore_str("sled");
-    cfg.add_filter_ignore_str("rustls");
-    cfg.add_filter_ignore_str("net::channel");
-    cfg.add_filter_ignore_str("net::message_publisher");
-    cfg.add_filter_ignore_str("net::hosts");
-    cfg.add_filter_ignore_str("net::protocol");
-    cfg.add_filter_ignore_str("net::session");
-    cfg.add_filter_ignore_str("event_graph::dag_sync");
+    for target in MUTED_TARGETS {
+        cfg.add_filter_ignore_str(target);
+    }
     let cfg = cfg.build();
 
     if LOGS_ENABLED {

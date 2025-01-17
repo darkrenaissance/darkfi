@@ -57,6 +57,9 @@ use editable::{Editable, Selection, TextIdx, TextPos};
 pub mod repeat;
 use repeat::{PressedKey, PressedKeysSmoothRepeat};
 
+macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::editbox", $($arg)*); } }
+macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::editbox", $($arg)*); } }
+
 // EOL whitespace is given a nudge since it has a width of 0 after text shaping
 const CURSOR_EOL_WS_NUDGE: f32 = 0.8;
 // EOL chars are more aesthetic when given a smallish nudge
@@ -105,7 +108,7 @@ impl TouchInfo {
     }
 
     fn start(&mut self, pos: Point) {
-        debug!(target: "ui::editbox", "TouchStateAction::Started");
+        d!("TouchStateAction::Started");
         self.state = TouchStateAction::Started { pos, instant: std::time::Instant::now() };
     }
 
@@ -122,11 +125,11 @@ impl TouchInfo {
 
                 if travel_dist < 5. {
                     if elapsed > 1000 {
-                        debug!(target: "ui::editbox", "TouchStateAction::StartSelect");
+                        d!("TouchStateAction::StartSelect");
                         self.state = TouchStateAction::StartSelect;
                     }
                 } else if x_dist.abs() > 5. {
-                    debug!(target: "ui::editbox", "TouchStateAction::ScrollHoriz");
+                    d!("TouchStateAction::ScrollHoriz");
                     let scroll_start = self.scroll.get();
                     self.state =
                         TouchStateAction::ScrollHoriz { start_pos: *start_pos, scroll_start };
@@ -204,7 +207,7 @@ impl EditBox {
         text_shaper: TextShaperPtr,
         ex: ExecutorPtr,
     ) -> Pimpl {
-        debug!(target: "ui::editbox", "EditBox::new()");
+        t!("EditBox::new()");
 
         let node_ref = &node.upgrade().unwrap();
         let is_active = PropertyBool::wrap(node_ref, Role::Internal, "is_active", 0).unwrap();
@@ -522,7 +525,7 @@ impl EditBox {
     }
 
     fn draw_phone_select_handle(&self, mesh: &mut MeshBuilder, x: f32, side: f32) {
-        debug!(target: "ui::editbox", "draw_phone_select_handle(..., {x}, {side})");
+        t!("draw_phone_select_handle(..., {x}, {side})");
 
         let baseline = self.baseline.get();
         let select_ascent = self.select_ascent.get();
@@ -616,7 +619,7 @@ impl EditBox {
         if !self.is_active.get() {
             return
         }
-        debug!(target: "ui::editbox", "Focus changed");
+        d!("Focus changed");
 
         // Cursor visibility will change so just redraw everything lol
         self.redraw().await;
@@ -635,7 +638,7 @@ impl EditBox {
     }
 
     async fn handle_shortcut(&self, key: char, mods: &KeyMods) {
-        debug!(target: "ui::editbox", "handle_shortcut({:?}, {:?})", key, mods);
+        t!("handle_shortcut({:?}, {:?})", key, mods);
 
         match key {
             'c' => {
@@ -655,7 +658,7 @@ impl EditBox {
     }
 
     async fn handle_key(&self, key: &KeyCode, mods: &KeyMods) {
-        debug!(target: "ui::editbox", "handle_key({:?}, {:?})", key, mods);
+        t!("handle_key({:?}, {:?})", key, mods);
         match key {
             KeyCode::Left => {
                 self.adjust_cursor(mods.shift, |editable| editable.move_cursor(-1));
@@ -848,11 +851,7 @@ impl EditBox {
         glyphs.drain(sel_start..sel_end);
 
         let text = Self::glyphs_to_string(&glyphs);
-        debug!(
-            target: "ui::editbox",
-            "delete_highlighted() text=\"{}\", cursor_pos={}",
-            text, sel_start
-        );
+        t!("delete_highlighted() text='{text}', cursor_pos={sel_start}");
         self.text.set(text);
 
         self.selected.set_null(Role::Internal, 0).unwrap();
@@ -907,7 +906,7 @@ impl EditBox {
     }
 
     async fn handle_touch_start(&self, pos: Point) -> bool {
-        debug!(target: "ui::editbox", "handle_touch_start({pos:?})");
+        t!("handle_touch_start({pos:?})");
         let mut touch_info = self.touch_info.lock().unwrap();
 
         if self.try_handle_drag(&mut touch_info, pos) {
@@ -950,20 +949,20 @@ impl EditBox {
 
             let p1 = Point::new(x1 - scroll, y);
             let p2 = Point::new(x2 - scroll, y);
-            debug!(target: "ui::editbox", "handle center points = ({p1:?}, {p2:?})");
+            t!("handle center points = ({p1:?}, {p2:?})");
 
             const TOUCH_RADIUS_SQ: f32 = 10_000.;
             // Make pos relative to the rect
             let pos_rel = pos - self.rect.get().pos();
 
             if p1.dist_sq(&pos_rel) <= TOUCH_RADIUS_SQ {
-                debug!(target: "ui::editbox", "TouchStateAction::DragSelectHandle [side=-1]");
+                d!("TouchStateAction::DragSelectHandle [side=-1]");
                 // Set touch_state status to enable begin dragging them
                 touch_info.state = TouchStateAction::DragSelectHandle { side: -1 };
                 return true;
             }
             if p2.dist_sq(&pos_rel) <= TOUCH_RADIUS_SQ {
-                debug!(target: "ui::editbox", "TouchStateAction::DragSelectHandle [side=1]");
+                d!("TouchStateAction::DragSelectHandle [side=1]");
                 // Set touch_state status to enable begin dragging them
                 touch_info.state = TouchStateAction::DragSelectHandle { side: 1 };
                 return true;
@@ -974,7 +973,7 @@ impl EditBox {
     }
 
     async fn handle_touch_move(&self, pos: Point) -> bool {
-        //debug!(target: "ui::editbox", "handle_touch_move({pos:?})");
+        t!("handle_touch_move({pos:?})");
         let touch_state = {
             let mut touch_info = self.touch_info.lock().unwrap();
             touch_info.update(&pos);
@@ -986,7 +985,7 @@ impl EditBox {
                 let x = pos.x;
                 self.start_touch_select(x);
                 self.redraw().await;
-                debug!(target: "ui::editbox", "TouchStateAction::Select");
+                d!("TouchStateAction::Select");
                 self.touch_info.lock().unwrap().state = TouchStateAction::Select;
             }
             TouchStateAction::DragSelectHandle { side } => {
@@ -1037,7 +1036,7 @@ impl EditBox {
         true
     }
     async fn handle_touch_end(&self, pos: Point) -> bool {
-        debug!(target: "ui::editbox", "handle_touch_end({pos:?})");
+        t!("handle_touch_end({pos:?})");
         let state = self.touch_info.lock().unwrap().stop();
         match state {
             TouchStateAction::Inactive => return false,
@@ -1165,7 +1164,7 @@ impl EditBox {
 
     async fn redraw(&self) {
         let timest = unixtime();
-        debug!(target: "ui::editbox", "redraw()");
+        t!("redraw()");
 
         let parent_rect = self.parent_rect.lock().unwrap().unwrap().clone();
         self.rect.eval(&parent_rect).expect("unable to eval rect");
@@ -1336,7 +1335,7 @@ impl UIObject for EditBox {
     }
 
     async fn draw(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
-        debug!(target: "ui::editbox", "EditBox::draw()");
+        t!("EditBox::draw()");
         *self.parent_rect.lock().unwrap() = Some(parent_rect);
         self.rect.eval(&parent_rect).ok()?;
 
@@ -1366,7 +1365,7 @@ impl UIObject for EditBox {
             let mut repeater = self.key_repeat.lock().unwrap();
             repeater.key_down(PressedKey::Char(key), repeat)
         };
-        //debug!(target: "ui::editbox", "Key {:?} has {} actions", key, actions);
+        t!("Key {key:?} has {actions} actions");
         for _ in 0..actions {
             self.insert_char(key).await;
         }
@@ -1389,9 +1388,9 @@ impl UIObject for EditBox {
             repeater.key_down(PressedKey::Key(key), repeat)
         };
         // Suppress noisy message
-        /*if actions > 0 {
-            debug!(target: "ui::editbox", "Key {:?} has {} actions", key, actions);
-        }*/
+        if actions > 0 {
+            t!("Key {key:?} has {actions} actions");
+        }
         for _ in 0..actions {
             self.handle_key(&key, &mods).await;
         }
@@ -1414,7 +1413,7 @@ impl UIObject for EditBox {
         // 2. begin selection
         if !rect.contains(mouse_pos) {
             if self.is_focused.get() {
-                debug!(target: "ui::editbox", "EditBox unfocused");
+                d!("EditBox unfocused");
                 self.is_focused.set(false);
                 self.select.lock().unwrap().clear();
 
@@ -1424,9 +1423,9 @@ impl UIObject for EditBox {
         }
 
         if self.is_focused.get() {
-            debug!(target: "ui::editbox", "EditBox clicked");
+            d!("EditBox clicked");
         } else {
-            debug!(target: "ui::editbox", "EditBox focused");
+            d!("EditBox focused");
             self.is_focused.set(true);
         }
 
@@ -1508,14 +1507,13 @@ impl UIObject for EditBox {
     }
 
     async fn handle_mouse_wheel(&self, wheel_pos: Point) -> bool {
-        //debug!(target: "ui::editbox", "rect={rect:?}, wheel_pos={wheel_pos:?}");
         if !self.is_mouse_hover.load(Ordering::Relaxed) {
             return false
         }
 
         let mut scroll = self.scroll.get() + wheel_pos.y * self.scroll_speed.get();
         scroll = scroll.clamp(0., self.max_cursor_scroll());
-        debug!(target: "ui::editbox", "handle_mouse_wheel({wheel_pos:?}) [scroll={scroll}]");
+        t!("handle_mouse_wheel({wheel_pos:?}) [scroll={scroll}]");
         self.scroll.set(scroll);
         self.redraw().await;
 
@@ -1541,7 +1539,7 @@ impl UIObject for EditBox {
     }
 
     async fn handle_compose_text(&self, suggest_text: &str, is_commit: bool) -> bool {
-        debug!(target: "ui::editbox", "handle_compose_text({suggest_text}, {is_commit})");
+        t!("handle_compose_text({suggest_text}, {is_commit})");
 
         if !self.is_active.get() {
             return false
@@ -1559,7 +1557,7 @@ impl UIObject for EditBox {
         true
     }
     async fn handle_set_compose_region(&self, start: usize, end: usize) -> bool {
-        debug!(target: "ui::editbox", "handle_set_compose_region({start}, {end})");
+        t!("handle_set_compose_region({start}, {end})");
 
         if !self.is_active.get() {
             return false

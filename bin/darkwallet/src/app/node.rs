@@ -26,8 +26,10 @@ use crate::{
     ExecutorPtr,
 };
 
+macro_rules! t { ($($arg:tt)*) => { trace!(target: "app::node", $($arg)*); } }
+
 pub fn create_layer(name: &str) -> SceneNode {
-    debug!(target: "app", "create_layer({name})");
+    t!("create_layer({name})");
     let mut node = SceneNode::new(name, SceneNodeType::Layer);
     let prop = Property::new("is_visible", PropertyType::Bool, PropertySubType::Null);
     node.add_property(prop).unwrap();
@@ -47,7 +49,7 @@ pub fn create_layer(name: &str) -> SceneNode {
 }
 
 pub fn create_vector_art(name: &str) -> SceneNode {
-    debug!(target: "app", "create_vector_art({name})");
+    t!("create_vector_art({name})");
     let mut node = SceneNode::new(name, SceneNodeType::VectorArt);
 
     let mut prop = Property::new("is_visible", PropertyType::Bool, PropertySubType::Null);
@@ -69,7 +71,7 @@ pub fn create_vector_art(name: &str) -> SceneNode {
 }
 
 pub fn create_button(name: &str) -> SceneNode {
-    debug!(target: "app", "create_button({name})");
+    t!("create_button({name})");
     let mut node = SceneNode::new(name, SceneNodeType::Button);
 
     let mut prop = Property::new("is_active", PropertyType::Bool, PropertySubType::Null);
@@ -93,7 +95,7 @@ pub fn create_button(name: &str) -> SceneNode {
 }
 
 pub fn create_shortcut(name: &str) -> SceneNode {
-    debug!(target: "app", "create_shortcut({name})");
+    t!("create_shortcut({name})");
     let mut node = SceneNode::new(name, SceneNodeType::Shortcut);
 
     let mut prop = Property::new("key", PropertyType::Str, PropertySubType::Null);
@@ -109,7 +111,7 @@ pub fn create_shortcut(name: &str) -> SceneNode {
 }
 
 pub fn create_image(name: &str) -> SceneNode {
-    debug!(target: "app", "create_image({name})");
+    t!("create_image({name})");
     let mut node = SceneNode::new(name, SceneNodeType::Image);
 
     let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
@@ -137,7 +139,7 @@ pub fn create_image(name: &str) -> SceneNode {
 }
 
 pub fn create_text(name: &str) -> SceneNode {
-    debug!(target: "app", "create_text({name})");
+    t!("create_text({name})");
     let mut node = SceneNode::new(name, SceneNodeType::Text);
 
     let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
@@ -172,7 +174,7 @@ pub fn create_text(name: &str) -> SceneNode {
 }
 
 pub fn create_editbox(name: &str) -> SceneNode {
-    debug!(target: "app", "create_editbox({name})");
+    t!("create_editbox({name})");
     let mut node = SceneNode::new(name, SceneNodeType::EditBox);
 
     let mut prop = Property::new("is_active", PropertyType::Bool, PropertySubType::Null);
@@ -282,7 +284,7 @@ pub fn create_editbox(name: &str) -> SceneNode {
 }
 
 pub fn create_chatedit(name: &str) -> SceneNode {
-    debug!(target: "app", "create_chatedit({name})");
+    t!("create_chatedit({name})");
     let mut node = SceneNode::new(name, SceneNodeType::ChatEdit);
 
     let mut prop = Property::new("is_active", PropertyType::Bool, PropertySubType::Null);
@@ -428,7 +430,7 @@ pub fn create_chatedit(name: &str) -> SceneNode {
 }
 
 pub fn create_chatview(name: &str) -> SceneNode {
-    debug!(target: "app", "create_chatview({name})");
+    t!("create_chatview({name})");
     let mut node = SceneNode::new(name, SceneNodeType::ChatView);
 
     let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
@@ -538,7 +540,7 @@ pub fn create_chatview(name: &str) -> SceneNode {
 }
 
 pub fn create_emoji_picker(name: &str) -> SceneNode {
-    debug!(target: "app", "create_emoji_picker({name})");
+    t!("create_emoji_picker({name})");
     let mut node = SceneNode::new(name, SceneNodeType::EmojiPicker);
 
     let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
@@ -575,7 +577,7 @@ pub fn create_emoji_picker(name: &str) -> SceneNode {
 }
 
 pub fn create_darkirc(name: &str) -> SceneNode {
-    debug!(target: "app", "create_darkirc({name})");
+    t!("create_darkirc({name})");
     let mut node = SceneNode::new(name, SceneNodeType::Plugin);
 
     let mut prop = Property::new("nick", PropertyType::Str, PropertySubType::Null);

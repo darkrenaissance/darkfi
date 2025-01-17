@@ -37,6 +37,8 @@ use crate::{
     ui,
 };
 
+macro_rules! t { ($($arg:tt)*) => { trace!(target: "scene", $($arg)*); } }
+
 pub struct ScenePath(VecDeque<String>);
 
 impl<S: Into<String>> From<S> for ScenePath {
@@ -295,18 +297,19 @@ impl SceneNode {
     }
 
     pub async fn trigger(&self, sig_name: &str, data: Vec<u8>) -> Result<()> {
+        t!("trigger({sig_name}, {data:?}) [node={self:?}]");
         let sig = self.get_signal(sig_name).ok_or(Error::SignalNotFound)?;
         let futures = FuturesUnordered::new();
         let slots: Vec<_> = sig.slots.read().unwrap().values().cloned().collect();
         // TODO: autoremove failed slots
         for slot in slots {
-            debug!(target: "scene", "triggering {}", slot.name);
+            t!("  triggering {}", slot.name);
             // Trigger the slot
             let data = data.clone();
             futures.push(async move { slot.notify.send(data).await.is_ok() });
         }
         let success: Vec<_> = futures.collect().await;
-        debug!(target: "scene", "trigger success: {success:?}");
+        t!("trigger success: {success:?}");
         Ok(())
     }
 
