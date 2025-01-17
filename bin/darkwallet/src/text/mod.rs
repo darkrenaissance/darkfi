@@ -16,7 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use freetype as ft;
 use harfbuzz_sys::{
     freetype::hb_ft_font_create_referenced, hb_buffer_add_utf8, hb_buffer_create,
     hb_buffer_destroy, hb_buffer_get_glyph_infos, hb_buffer_get_glyph_positions,
@@ -34,7 +33,10 @@ use crate::gfx::Rectangle;
 
 mod atlas;
 pub use atlas::{make_texture_atlas, Atlas, RenderedAtlas};
-mod core;
+mod ft;
+use ft::{render_glyph, FreetypeFace, Sprite, SpritePtr};
+mod shape;
+use shape::{set_face_size, shape};
 mod wrap;
 pub use wrap::{glyph_str, wrap};
 
@@ -155,11 +157,15 @@ pub struct TextShaper {
 
 impl TextShaper {
     pub fn new() -> Arc<Self> {
-        let ftlib = ft::Library::init().unwrap();
+        let ftlib = freetype::Library::init().unwrap();
 
         let mut faces = vec![];
 
         let font_data = include_bytes!("../../ibm-plex-mono-regular.otf") as &[u8];
+        let ft_face = ftlib.new_memory_face2(font_data, 0).unwrap();
+        faces.push(ft_face);
+
+        let font_data = include_bytes!("../../darkirc-emoji-svg.ttf") as &[u8];
         let ft_face = ftlib.new_memory_face2(font_data, 0).unwrap();
         faces.push(ft_face);
 
@@ -188,11 +194,11 @@ impl TextShaper {
 
         let size = font_size * window_scale;
         for face in intern.faces() {
-            core::set_face_size(face, size);
+            set_face_size(face, size);
         }
 
         let mut glyphs: Vec<Glyph> = vec![];
-        'next_glyph: for glyph_info in core::shape(intern.faces(), text) {
+        'next_glyph: for glyph_info in shape(intern.faces(), text) {
             let face_idx = glyph_info.face_idx;
             let face = intern.face(face_idx);
             let glyph_id = glyph_info.id;
@@ -243,75 +249,9 @@ impl TextShaper {
             }
 
             let face = intern.face(face_idx);
-            let mut flags = ft::face::LoadFlag::DEFAULT;
-            if face.has_color() {
-                flags |= ft::face::LoadFlag::COLOR;
-            }
+            let Some(sprite) = render_glyph(&face, glyph_id) else { continue };
 
-            //debug!("load_glyph {}", glyph_id);
-            if let Err(err) = face.load_glyph(glyph_id, flags) {
-                error!(target: "text", "error loading glyph {glyph_id}: {err}");
-                continue
-            }
-            //debug!("load_glyph {} [done]", glyph_id);
-
-            // https://gist.github.com/jokertarot/7583938?permalink_comment_id=3327566#gistcomment-3327566
-
-            let glyph = face.glyph();
-            glyph.render_glyph(ft::RenderMode::Normal).unwrap();
-
-            let bmp = glyph.bitmap();
-            let buffer = bmp.buffer();
-            let bmp_width = bmp.width() as usize;
-            let bmp_height = bmp.rows() as usize;
-            let bearing_x = glyph.bitmap_left() as f32;
-            let bearing_y = glyph.bitmap_top() as f32;
-            let has_fixed_sizes = face.has_fixed_sizes();
-
-            let pixel_mode = bmp.pixel_mode().unwrap();
-            let bmp = match pixel_mode {
-                ft::bitmap::PixelMode::Bgra => {
-                    let mut tdata = vec![];
-                    tdata.resize(4 * bmp_width * bmp_height, 0);
-                    // Convert from BGRA to RGBA
-                    for i in 0..bmp_width * bmp_height {
-                        let idx = i * 4;
-                        let b = buffer[idx];
-                        let g = buffer[idx + 1];
-                        let r = buffer[idx + 2];
-                        let a = buffer[idx + 3];
-                        tdata[idx] = r;
-                        tdata[idx + 1] = g;
-                        tdata[idx + 2] = b;
-                        tdata[idx + 3] = a;
-                    }
-                    tdata
-                }
-                ft::bitmap::PixelMode::Gray => {
-                    // Convert from greyscale to RGBA8
-                    let tdata: Vec<_> =
-                        buffer.iter().flat_map(|coverage| vec![255, 255, 255, *coverage]).collect();
-                    tdata
-                }
-                ft::bitmap::PixelMode::Mono => {
-                    // Convert from mono to RGBA8
-                    let tdata: Vec<_> =
-                        buffer.iter().flat_map(|coverage| vec![255, 255, 255, *coverage]).collect();
-                    tdata
-                }
-                _ => panic!("unsupport pixel mode: {:?}", pixel_mode),
-            };
-
-            let sprite = Arc::new(Sprite {
-                bmp,
-                bmp_width,
-                bmp_height,
-                bearing_x,
-                bearing_y,
-                has_fixed_sizes,
-                has_color: face.has_color(),
-            });
-
+            let sprite = Arc::new(sprite);
             intern.cache.insert(cache_key, Arc::downgrade(&sprite));
 
             let glyph =
@@ -347,19 +287,6 @@ struct CacheKey {
     face_idx: usize,
 }
 
-pub type SpritePtr = Arc<Sprite>;
-
-pub struct Sprite {
-    bmp: Vec<u8>,
-    pub bmp_width: usize,
-    pub bmp_height: usize,
-
-    pub bearing_x: f32,
-    pub bearing_y: f32,
-    pub has_fixed_sizes: bool,
-    pub has_color: bool,
-}
-
 #[derive(Clone)]
 pub struct Glyph {
     pub glyph_id: u32,
@@ -383,8 +310,6 @@ impl std::fmt::Debug for Glyph {
             .finish()
     }
 }
-
-type FreetypeFace = ft::Face<&'static [u8]>;
 
 struct FtFaces(Vec<FreetypeFace>);
 

@@ -60,10 +60,12 @@ impl<'a> Drop for HarfBuzzIter<'a> {
 
 pub(super) fn set_face_size(face: &mut FreetypeFace, size: f32) {
     if face.has_fixed_sizes() {
+        //debug!(target: "text", "fixed sizes");
         // emojis required a fixed size
         //face.set_char_size(109 * 64, 0, 72, 72).unwrap();
         face.select_size(0).unwrap();
     } else {
+        //debug!(target: "text", "set char size");
         face.set_char_size(size as isize * 64, 0, 96, 96).unwrap();
     }
 }
@@ -189,7 +191,10 @@ fn count_leading_null_glyphs(glyphs: &Vec<GlyphInfo>) -> usize {
 fn print_glyphs(ctx: &str, glyphs: &Vec<GlyphInfo>) {
     println!("{} ------------------", ctx);
     for (i, glyph) in glyphs.iter().enumerate() {
-        println!("{i}: {}/{} [{}, {}]", glyph.face_idx, glyph.id, glyph.cluster_start, glyph.cluster_end);
+        println!(
+            "{i}: {}/{} [{}, {}]",
+            glyph.face_idx, glyph.id, glyph.cluster_start, glyph.cluster_end
+        );
     }
     println!("---------------------");
 }
@@ -263,7 +268,7 @@ mod tests {
     use super::*;
 
     fn load_faces() -> Vec<FreetypeFace> {
-        let ftlib = ft::Library::init().unwrap();
+        let ftlib = freetype::Library::init().unwrap();
 
         let mut faces = vec![];
         let font_data = include_bytes!("../../ibm-plex-mono-regular.otf") as &[u8];
@@ -400,5 +405,35 @@ mod tests {
         assert_eq!(glyphs[15].cluster_start, 37);
         assert_eq!(glyphs[15].cluster_end, 38);
         assert_eq!(glyphs[15].cluster_start, glyphs[14].cluster_end);
+    }
+
+    #[test]
+    fn hb_shape_custom_emoji() {
+        let ftlib = ft::Library::init().unwrap();
+
+        let font_data = include_bytes!("../../darkirc-emoji-svg.ttf") as &[u8];
+        let mut face = ftlib.new_memory_face2(font_data, 0).unwrap();
+
+        let text = "\u{f0001}";
+
+        for (i, hbinf) in harfbuzz_shape(&mut face, text).enumerate() {
+            let glyph_id = hbinf.info.codepoint as u32;
+            // Index within this substr
+            let cluster = hbinf.info.cluster as usize;
+            println!("  {i}: glyph_id = {glyph_id}, cluster = {cluster}");
+        }
+    }
+
+    #[test]
+    fn custom_emoji() {
+        let ftlib = ft::Library::init().unwrap();
+
+        let font_data = include_bytes!("../../darkirc-emoji-svg.ttf") as &[u8];
+        let face = ftlib.new_memory_face2(font_data, 0).unwrap();
+
+        let mut faces = vec![face];
+        let text = "\u{f0001}";
+        let glyphs = shape(&mut faces, text);
+        //print_glyphs("", &glyphs);
     }
 }

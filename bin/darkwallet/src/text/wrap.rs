@@ -259,9 +259,6 @@ mod tests {
         let glyphs = shaper.shape("hello world 123".to_string(), 32., 1.);
 
         let wrapped = wrap(200., 32., 1., &glyphs);
-        for x in &wrapped {
-            println!("'{x:?}'");
-        }
         assert_eq!(wrapped.len(), 3);
         assert_eq!(glyph_str(&wrapped[0]), "hello ");
         assert_eq!(glyph_str(&wrapped[1]), "world ");

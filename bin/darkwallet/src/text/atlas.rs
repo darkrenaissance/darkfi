@@ -1,10 +1,12 @@
-use super::{Glyph, Sprite, SpritePtr};
 use crate::{
     error::Result,
     gfx::{GfxTextureId, ManagedTexturePtr, Rectangle, RenderApi},
 };
 
-use super::glyph_str;
+use super::{
+    ft::{Sprite, SpritePtr},
+    glyph_str, Glyph,
+};
 
 /// Prevents render artifacts from aliasing.
 /// Even with aliasing turned off, some bleed still appears possibly
