@@ -33,6 +33,8 @@ static MUTED_TARGETS: &[&'static str] = &[
     "event_graph::protocol",
 ];
 
+static ALLOW_TRACE: &[&'static str] = &["ui", "app"];
+
 #[cfg(target_os = "android")]
 fn logfile_path() -> PathBuf {
     use crate::android::get_external_storage_path;
@@ -101,15 +103,73 @@ mod android {
     }
 }
 
+#[cfg(not(target_os = "android"))]
+mod desktop {
+    use super::*;
+
+    /// Implements a wrapper around the android logger so it's compatible with simplelog.
+    pub struct CustomTermLogger {
+        logger: TermLogger,
+    }
+
+    impl CustomTermLogger {
+        pub fn new(level: LevelFilter, cfg: Config) -> Box<Self> {
+            let logger =
+                TermLogger::new(LevelFilter::Trace, cfg, TerminalMode::Mixed, ColorChoice::Auto);
+            Box::new(Self { logger: *logger })
+        }
+    }
+
+    impl Log for CustomTermLogger {
+        fn enabled(&self, metadata: &Metadata<'_>) -> bool {
+            let target = metadata.target();
+            for allow in ALLOW_TRACE {
+                if target.starts_with(allow) {
+                    return true
+                }
+            }
+            for muted in MUTED_TARGETS {
+                if target.starts_with(muted) {
+                    return false
+                }
+            }
+            if metadata.level() > self.level() {
+                return false
+            }
+            self.logger.enabled(metadata)
+        }
+
+        fn log(&self, record: &Record<'_>) {
+            if self.enabled(record.metadata()) {
+                self.logger.log(record)
+            }
+        }
+
+        fn flush(&self) {
+            self.logger.flush()
+        }
+    }
+
+    impl SharedLogger for CustomTermLogger {
+        fn level(&self) -> LevelFilter {
+            self.logger.level()
+        }
+
+        fn config(&self) -> Option<&Config> {
+            self.logger.config()
+        }
+
+        fn as_log(self: Box<Self>) -> Box<dyn Log> {
+            Box::new(self.logger).as_log()
+        }
+    }
+}
+
 pub fn setup_logging() {
     // https://gist.github.com/jb-alvarado/6e223936446bb88cd9a93e7028fc2c4f
     let mut loggers: Vec<Box<dyn SharedLogger>> = vec![];
 
-    let mut cfg = ConfigBuilder::new();
-    for target in MUTED_TARGETS {
-        cfg.add_filter_ignore_str(target);
-    }
-    let cfg = cfg.build();
+    let cfg = ConfigBuilder::new().build();
 
     if LOGS_ENABLED {
         let log_file = FileRotate::new(
@@ -133,11 +193,12 @@ pub fn setup_logging() {
 
     #[cfg(not(target_os = "android"))]
     {
+        use desktop::CustomTermLogger;
+
         // For ANSI colors in the terminal
         colored::control::set_override(true);
 
-        let term_logger =
-            TermLogger::new(LevelFilter::Debug, cfg, TerminalMode::Mixed, ColorChoice::Auto);
+        let term_logger = CustomTermLogger::new(LevelFilter::Debug, cfg);
         loggers.push(term_logger);
     }
 
