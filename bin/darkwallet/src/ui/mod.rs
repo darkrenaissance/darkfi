@@ -18,15 +18,19 @@
 
 use async_trait::async_trait;
 use futures::stream::{FuturesUnordered, StreamExt};
+use log::{log_enabled, Level::Trace};
 use miniquad::{KeyCode, KeyMods, MouseButton, TouchPhase};
-use std::sync::{Arc, Weak};
+use std::{
+    fmt::Debug,
+    sync::{Arc, Weak},
+};
 
 use crate::{
     error::{Error, Result},
     expr::{SExprMachine, SExprVal},
     gfx::{GfxBufferId, GfxDrawCall, GfxDrawMesh, GfxTextureId, Point, Rectangle},
     prop::{ModifyAction, PropertyPtr, Role},
-    scene::{Pimpl, SceneNode as SceneNode3, SceneNodeId, SceneNodePtr},
+    scene::{Pimpl, SceneNode as SceneNode3, SceneNodeId, SceneNodePtr, SceneNodeWeak},
     ExecutorPtr,
 };
 
@@ -55,6 +59,9 @@ mod text;
 pub use text::{Text, TextPtr};
 mod win;
 pub use win::{Window, WindowPtr};
+
+macro_rules! e { ($($arg:tt)*) => { error!(target: "scene::on_modify", $($arg)*); } }
+macro_rules! t { ($($arg:tt)*) => { trace!(target: "scene::on_modify", $($arg)*); } }
 
 #[async_trait]
 pub trait UIObject: Sync {
@@ -107,45 +114,41 @@ pub struct DrawUpdate {
 
 pub struct OnModify<T> {
     ex: ExecutorPtr,
-    node_name: String,
-    node_id: SceneNodeId,
+    node: SceneNodeWeak,
     me: Weak<T>,
     pub tasks: Vec<smol::Task<()>>,
 }
 
 impl<T: Send + Sync + 'static> OnModify<T> {
-    pub fn new(ex: ExecutorPtr, node_name: String, node_id: SceneNodeId, me: Weak<T>) -> Self {
-        Self { ex, node_name, node_id, me, tasks: vec![] }
+    pub fn new(ex: ExecutorPtr, node: SceneNodeWeak, me: Weak<T>) -> Self {
+        Self { ex, node, me, tasks: vec![] }
     }
 
     pub fn when_change<F>(&mut self, prop: PropertyPtr, f: impl Fn(Arc<T>) -> F + Send + 'static)
     where
         F: std::future::Future<Output = ()> + Send + 'static,
     {
-        let node_name = self.node_name.clone();
-        let node_id = self.node_id;
-
-        let mut on_modify_subs = vec![(None, prop.subscribe_modify())];
+        let mut on_modify_subs = vec![(Arc::downgrade(&prop), None, prop.subscribe_modify())];
         for dep in prop.get_depends() {
             let Some(dep_prop) = dep.prop.upgrade() else { continue };
-            on_modify_subs.push((Some(dep.i), dep_prop.subscribe_modify()));
+            on_modify_subs.push((dep.prop, Some(dep.i), dep_prop.subscribe_modify()));
         }
 
-        let prop_name = prop.name.clone();
         let me = self.me.clone();
+        let node = self.node.clone();
         let task = self.ex.spawn(async move {
             loop {
                 let mut poll_queues = FuturesUnordered::new();
-                for (i, (prop_i, on_modify_sub)) in on_modify_subs.iter().enumerate() {
+                for (i, (prop_weak, prop_i, on_modify_sub)) in on_modify_subs.iter().enumerate() {
                     let recv = on_modify_sub.receive();
                     poll_queues.push(async move {
                         let (role, action) = recv.await.ok()?;
-                        Some((i, prop_i, role, action))
+                        Some((i, prop_weak, prop_i, role, action))
                     });
                 }
 
-                let Some(Some((idx, prop_i, role, action))) = poll_queues.next().await else {
-                    error!(target: "app", "Property '{}':{}/'{}' on_modify pipe is broken", node_name, node_id, prop_name);
+                let Some(Some((idx, prop_weak, prop_i, role, action))) = poll_queues.next().await else {
+                    e!("Property {:?} on_modify pipe is broken", prop);
                     return
                 };
 
@@ -161,14 +164,19 @@ impl<T: Send + Sync + 'static> OnModify<T> {
                     }
                 }
 
-                trace!(target: "app", "Property '{}':{}/'{}' modified", node_name, node_id, prop_name);
+                if (idx == 0) {
+                    t!("Property {:?} modified [depend_idx={idx}, role={role:?}]", prop);
+                } else {
+                    t!(
+                        "Property {:?} modified -> triggering {:?} [depend_idx={idx}, role={role:?}]",
+                        prop_weak.upgrade().unwrap(),
+                        prop
+                    );
+                }
 
                 let Some(self_) = me.upgrade() else {
                     // Should not happen
-                    panic!(
-                        "'{}':{}/'{}' self destroyed before modify_task was stopped!",
-                        node_name, node_id, prop_name
-                    );
+                    panic!("{:?} self destroyed before modify_task was stopped!", prop);
                 };
 
                 //debug!(target: "app", "property modified");

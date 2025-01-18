@@ -1845,8 +1845,6 @@ impl UIObject for ChatEdit {
         let me = Arc::downgrade(&self);
 
         let node_ref = &self.node.upgrade().unwrap();
-        let node_name = node_ref.name.clone();
-        let node_id = node_ref.id;
 
         let method_sub = node_ref.subscribe_method_call("insert_text").unwrap();
         let me2 = me.clone();
@@ -1855,7 +1853,7 @@ impl UIObject for ChatEdit {
                 async move { while Self::process_insert_text_method(&me2, &method_sub).await {} },
             );
 
-        let mut on_modify = OnModify::new(ex.clone(), node_name, node_id, me.clone());
+        let mut on_modify = OnModify::new(ex.clone(), self.node.clone(), me.clone());
         on_modify.when_change(self.is_focused.prop(), Self::change_focus);
 
         // When text has been changed.

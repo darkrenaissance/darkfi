@@ -68,10 +68,6 @@ impl Window {
     pub async fn start(self: Arc<Self>, event_pub: GraphicsEventPublisherPtr, ex: ExecutorPtr) {
         let me = Arc::downgrade(&self);
 
-        let node_ref = &self.node.upgrade().unwrap();
-        let node_name = node_ref.name.clone();
-        let node_id = node_ref.id;
-
         // Start a task monitoring for window resize events
         // which updates screen_size
         let ev_sub = event_pub.subscribe_resize();
@@ -139,7 +135,7 @@ impl Window {
             self_.draw().await;
         };
 
-        let mut on_modify = OnModify::new(ex.clone(), node_name, node_id, me.clone());
+        let mut on_modify = OnModify::new(ex.clone(), self.node.clone(), me.clone());
         on_modify.when_change(self.scale.prop(), redraw_fn);
 
         let mut tasks = vec![

@@ -51,7 +51,6 @@ use crate::{
 // This is very noisy so suppress output by default
 const DEBUG_RENDER: bool = false;
 const DEBUG_GFXAPI: bool = false;
-const DEBUG_RSRC: bool = false;
 
 #[cfg(target_os = "android")]
 pub fn get_window_size_filename() -> PathBuf {
@@ -96,9 +95,6 @@ pub struct ManagedTexture {
 
 impl Drop for ManagedTexture {
     fn drop(&mut self) {
-        if DEBUG_RSRC {
-            debug!(target: "gfx", "Dropping texture ID={}", self.id);
-        }
         self.render_api.delete_unmanaged_texture(self.id);
     }
 }
@@ -246,9 +242,7 @@ impl GfxDrawMesh {
                 error!(target: "gfx", "{gfx_texture_id} => {texture_id:?}");
             }
 
-            if DEBUG_RSRC {
-                panic!("Missing texture ID={gfx_texture_id}");
-            }
+            panic!("Missing texture ID={gfx_texture_id}");
             return None
         };
 
@@ -266,9 +260,7 @@ impl GfxDrawMesh {
                 error!(target: "gfx", "{gfx_buffer_id} => {buffer_id:?}");
             }
 
-            if DEBUG_RSRC {
-                panic!("Missing buffer ID={gfx_buffer_id}");
-            }
+            panic!("Missing buffer ID={gfx_buffer_id}");
             return None
         };
         Some(*mq_buffer_id)
@@ -772,22 +764,20 @@ impl Stage {
                 error!(target: "gfx", "fatal: replace_draw_calls({timest}, ...) failed with item ID={key}");
                 continue
             };
-            self.draw_calls.insert(key, val);
-            /*
+            //self.draw_calls.insert(key, val);
             match self.draw_calls.get_mut(&key) {
                 Some(old_val) => {
                     // Only replace the draw call if it is more recent
                     if old_val.timest < timest {
                         *old_val = val;
-                    } else if DEBUG_RSRC {
-                        debug!(target: "gfx", "Rejected stale draw_call {key}: {val:?}");
+                    } else {
+                        trace!(target: "gfx", "Rejected stale draw_call {key}: {val:?}");
                     }
                 }
                 None => {
                     self.draw_calls.insert(key, val);
                 }
             }
-            */
         }
     }
 }

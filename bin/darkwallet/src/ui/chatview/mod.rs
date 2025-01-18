@@ -724,8 +724,6 @@ impl UIObject for ChatView {
         let me = Arc::downgrade(&self);
 
         let node_ref = &self.node.upgrade().unwrap();
-        let node_name = node_ref.name.clone();
-        let node_id = node_ref.id;
 
         let method_sub = node_ref.subscribe_method_call("insert_line").unwrap();
         let me2 = me.clone();
@@ -768,7 +766,7 @@ impl UIObject for ChatView {
             }
         });
 
-        let mut on_modify = OnModify::new(ex, node_name, node_id, me.clone());
+        let mut on_modify = OnModify::new(ex, self.node.clone(), me.clone());
 
         async fn reload_view(self_: Arc<ChatView>) {
             self_.scrollview(self_.scroll.get()).await;

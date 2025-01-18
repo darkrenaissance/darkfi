@@ -160,6 +160,12 @@ impl SceneNode {
     {
         let mut self_ = Arc::new(self);
         let weak_self = Arc::downgrade(&self_);
+
+        // Initial props
+        for prop in &self_.props {
+            prop.set_parent(weak_self.clone());
+        }
+
         let pimpl = pimpl_fn(weak_self).await;
         // Arc::new_cyclic() doesnt allow async so we do this instead
         unsafe {

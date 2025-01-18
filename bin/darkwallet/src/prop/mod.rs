@@ -27,7 +27,7 @@ use std::{
 use crate::{
     expr::SExprCode,
     pubsub::{Publisher, PublisherPtr, Subscription},
-    scene::SceneNodeId,
+    scene::{SceneNodeId, SceneNodeWeak},
 };
 
 mod wrap;
@@ -211,9 +211,9 @@ pub struct PropertyDepend {
     pub local_name: String,
 }
 
-#[derive(Debug)]
 pub struct Property {
     pub name: String,
+    pub node: SyncMutex<Option<SceneNodeWeak>>,
     pub typ: PropertyType,
     pub subtype: PropertySubType,
     pub defaults: Vec<PropertyValue>,
@@ -244,6 +244,7 @@ impl Property {
     pub fn new<S: Into<String>>(name: S, typ: PropertyType, subtype: PropertySubType) -> Self {
         Self {
             name: name.into(),
+            node: SyncMutex::new(None),
             typ,
             subtype,
 
@@ -265,6 +266,11 @@ impl Property {
             on_modify: Publisher::new(),
             depends: SyncMutex::new(vec![]),
         }
+    }
+
+    /// Just used for debugging
+    pub fn set_parent(&self, node: SceneNodeWeak) {
+        *self.node.lock().unwrap() = Some(node);
     }
 
     pub fn set_ui_text<S: Into<String>>(&mut self, ui_name: S, desc: S) {
@@ -702,6 +708,19 @@ impl Property {
 
     pub fn get_depends(&self) -> Vec<PropertyDepend> {
         self.depends.lock().unwrap().clone()
+    }
+}
+
+impl std::fmt::Debug for Property {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let node = {
+            let mut null_name = || write!(f, "<null>:{}", self.name);
+            let Ok(node) = self.node.lock() else { return null_name() };
+            let Some(node) = node.clone() else { return null_name() };
+            let Some(node) = node.upgrade() else { return null_name() };
+            node
+        };
+        write!(f, "{:?}:{}", node, self.name)
     }
 }
 

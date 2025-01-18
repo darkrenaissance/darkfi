@@ -444,15 +444,13 @@ impl PluginObject for DarkIrc {
         let me = Arc::downgrade(&self);
 
         let node = &self.node.upgrade().unwrap();
-        let node_name = node.name.clone();
-        let node_id = node.id;
 
         let method_sub = node.subscribe_method_call("send").unwrap();
         let me2 = me.clone();
         let send_method_task =
             ex.spawn(async move { while Self::process_send(&me2, &method_sub).await {} });
 
-        let mut on_modify = OnModify::new(ex.clone(), node_name, node_id, me.clone());
+        let mut on_modify = OnModify::new(ex.clone(), self.node.clone(), me.clone());
         async fn save_nick(self_: Arc<DarkIrc>) {
             let _ = std::fs::write(nick_filename(), self_.nick.get());
         }

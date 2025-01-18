@@ -319,15 +319,11 @@ impl UIObject for EmojiPicker {
     async fn start(self: Arc<Self>, ex: ExecutorPtr) {
         let me = Arc::downgrade(&self);
 
-        let node_ref = &self.node.upgrade().unwrap();
-        let node_name = node_ref.name.clone();
-        let node_id = node_ref.id;
-
         async fn redraw(self_: Arc<EmojiPicker>) {
             self_.redraw();
         }
 
-        let mut on_modify = OnModify::new(ex, node_name, node_id, me.clone());
+        let mut on_modify = OnModify::new(ex, self.node.clone(), me.clone());
         on_modify.when_change(self.rect.prop(), redraw);
         on_modify.when_change(self.z_index.prop(), redraw);
 

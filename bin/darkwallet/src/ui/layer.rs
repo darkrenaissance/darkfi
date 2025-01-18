@@ -145,11 +145,7 @@ impl UIObject for Layer {
     async fn start(self: Arc<Self>, ex: ExecutorPtr) {
         let me = Arc::downgrade(&self);
 
-        let node_ref = &self.node.upgrade().unwrap();
-        let node_name = node_ref.name.clone();
-        let node_id = node_ref.id;
-
-        let mut on_modify = OnModify::new(ex.clone(), node_name, node_id, me.clone());
+        let mut on_modify = OnModify::new(ex.clone(), self.node.clone(), me.clone());
         on_modify.when_change(self.is_visible.prop(), Self::redraw);
         on_modify.when_change(self.rect.prop(), Self::redraw);
         on_modify.when_change(self.z_index.prop(), Self::redraw);
