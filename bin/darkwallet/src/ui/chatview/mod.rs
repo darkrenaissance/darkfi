@@ -350,6 +350,8 @@ impl ChatView {
 
     /// Mark line as selected
     async fn select_line(&self, mut y: f32) {
+        let trace_id = rand::random();
+        t!("select_line({y}) [trace_id={trace_id}]");
         // The cursor is inside the rect. We just have to find which line it clicked.
         let rect = self.rect.get();
 
@@ -363,7 +365,7 @@ impl ChatView {
         let mut msgbuf = self.msgbuf.lock().await;
         msgbuf.select_line(y).await;
 
-        self.redraw_cached(&mut msgbuf).await;
+        self.redraw_cached(&mut msgbuf, trace_id).await;
     }
 
     fn end_touch_phase(&self, touch_y: f32) {
@@ -434,7 +436,8 @@ impl ChatView {
         nick: String,
         text: String,
     ) {
-        t!("handle_insert_line({timest}, {msg_id}, {nick}, {text})");
+        let trace_id = rand::random();
+        t!("handle_insert_line({timest}, {msg_id}, {nick}, {text}) [trace_id={trace_id}]");
 
         // Lock message buffer so background loader doesn't load the message as soon as it's
         // inserted into the DB.
@@ -460,7 +463,7 @@ impl ChatView {
             }
         }
 
-        self.redraw_cached(&mut msgbuf).await;
+        self.redraw_cached(&mut msgbuf, trace_id).await;
         self.bgload_cv.notify();
     }
     async fn handle_insert_unconf_line(
@@ -470,7 +473,8 @@ impl ChatView {
         nick: String,
         text: String,
     ) {
-        t!("handle_insert_unconf_line({timest}, {msg_id}, {nick}, {text})");
+        let trace_id = rand::random();
+        t!("handle_insert_unconf_line({timest}, {msg_id}, {nick}, {text}) [trace_id={trace_id}]");
 
         // We don't add unconfirmed lines to the db. Maybe we should?
 
@@ -478,7 +482,7 @@ impl ChatView {
         let mut msgbuf = self.msgbuf.lock().await;
         let Some(privmsg) = msgbuf.insert_privmsg(timest, msg_id, nick, text) else { return };
         privmsg.confirmed = false;
-        self.redraw_cached(&mut msgbuf).await;
+        self.redraw_cached(&mut msgbuf, trace_id).await;
         self.bgload_cv.notify();
     }
 
@@ -527,7 +531,8 @@ impl ChatView {
     }
 
     async fn handle_bgload(&self) {
-        t!("ChatView::handle_bgload()");
+        let trace_id = rand::random();
+        t!("ChatView::handle_bgload() [trace_id={trace_id}]");
         // Do we need to load some more?
         let scroll = self.scroll.get();
         let rect = self.rect.get();
@@ -540,20 +545,20 @@ impl ChatView {
         let total_height = msgbuf.calc_total_height().await;
         if total_height > top + preload_height {
             // Nothing to do here
-            t!("bgloader: buffer is sufficient");
+            t!("bgloader: buffer is sufficient [trace_id={trace_id}]");
             return
         }
 
         // Keep loading until this is below 0
         let mut remaining_load_height = top + preload_height - total_height;
         let mut remaining_visible = top - total_height;
-        t!("bgloader: remaining px = {remaining_load_height}, remaining_visible={remaining_visible}");
+        t!("bgloader: remaining px = {remaining_load_height}, remaining_visible={remaining_visible} [trace_id={trace_id}]");
 
         // Get the current earliest timestamp
         let iter = match msgbuf.oldest_timestamp() {
             Some(oldest_timest) => {
                 // iterate from there
-                t!("preloading from {oldest_timest}");
+                t!("preloading from {oldest_timest} [trace_id={trace_id}]");
                 let timest = (oldest_timest - 1).to_be_bytes();
                 let mut key = [0u8; 8 + 32];
                 key[..8].clone_from_slice(&timest);
@@ -562,7 +567,7 @@ impl ChatView {
                 iter
             }
             None => {
-                t!("initial load");
+                t!("initial load [trace_id={trace_id}]");
                 self.tree.iter().rev()
             }
         };
@@ -576,7 +581,7 @@ impl ChatView {
             let timest = Timestamp::from_be_bytes(timest_bytes);
             let chatmsg: ChatMsg = deserialize(&v).unwrap();
 
-            t!("{timest:?} {chatmsg:?}");
+            t!("{timest:?} {chatmsg:?} [trace_id={trace_id}]");
             let msg_height = msgbuf.push_privmsg(timest, msg_id, chatmsg.nick, chatmsg.text);
 
             remaining_load_height -= msg_height;
@@ -590,14 +595,15 @@ impl ChatView {
             }
             remaining_visible -= msg_height;
         }
-        t!("do_redraw = {do_redraw}");
+        t!("do_redraw = {do_redraw} [trace_id={trace_id}]");
         if do_redraw {
-            self.redraw_cached(&mut msgbuf).await;
+            self.redraw_cached(&mut msgbuf, trace_id).await;
         }
     }
 
     async fn scrollview(&self, mut scroll: f32) -> f32 {
-        t!("scrollview()");
+        let trace_id = rand::random();
+        t!("scrollview({scroll}) [trace_id={trace_id}]");
         let old_scroll = self.scroll.get();
 
         let rect = self.rect.get();
@@ -610,7 +616,7 @@ impl ChatView {
         }
 
         // 2/3 of time spent here  ~3.3ms
-        self.redraw_cached(&mut msgbuf).await;
+        self.redraw_cached(&mut msgbuf, trace_id).await;
 
         self.scroll.set(scroll);
         self.bgload_cv.notify();
@@ -683,8 +689,8 @@ impl ChatView {
         instrs
     }
 
-    async fn redraw_cached(&self, msgbuf: &mut MessageBuffer) {
-        t!("ChatView::redraw_cached()");
+    async fn redraw_cached(&self, msgbuf: &mut MessageBuffer, trace_id: u32) {
+        t!("ChatView::redraw_cached() [trace_id={trace_id}]");
         let timest = unixtime();
         let rect = self.rect.get();
 
@@ -697,20 +703,21 @@ impl ChatView {
             vec![(self.dc_key, GfxDrawCall { instrs, dcs: vec![], z_index: self.z_index.get() })];
 
         self.render_api.replace_draw_calls(timest, draw_calls);
-        t!("ChatView::redraw_cached() DONE");
+        t!("ChatView::redraw_cached() DONE [trace_id={trace_id}]");
     }
 
     /// Invalidates cache and redraws everything
     async fn redraw_all(&self) {
-        t!("ChatView::redraw_all()");
+        let trace_id = rand::random();
+        t!("ChatView::redraw_all() [trace_id={trace_id}]");
         let parent_rect = self.parent_rect.lock().unwrap().unwrap().clone();
         self.rect.eval(&parent_rect).expect("unable to eval rect");
 
         let mut msgbuf = self.msgbuf.lock().await;
         msgbuf.adjust_params();
         msgbuf.clear_meshes();
-        self.redraw_cached(&mut msgbuf).await;
-        t!("ChatView::redraw_all() DONE");
+        self.redraw_cached(&mut msgbuf, trace_id).await;
+        t!("ChatView::redraw_all() DONE [trace_id={trace_id}]");
     }
 }
 
@@ -800,8 +807,8 @@ impl UIObject for ChatView {
         self.tasks.set(tasks);
     }
 
-    async fn draw(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
-        t!("ChatView::draw({:?})", self.node.upgrade().unwrap());
+    async fn draw(&self, parent_rect: Rectangle, trace_id: u32) -> Option<DrawUpdate> {
+        t!("ChatView::draw({:?}, {trace_id})", self.node.upgrade().unwrap());
 
         *self.parent_rect.lock().unwrap() = Some(parent_rect.clone());
         self.rect.eval(&parent_rect).ok()?;

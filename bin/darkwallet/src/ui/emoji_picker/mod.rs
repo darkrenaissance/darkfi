@@ -247,10 +247,11 @@ impl EmojiPicker {
     }
 
     fn redraw(&self) {
+        let trace_id = rand::random();
         let timest = unixtime();
         let Some(parent_rect) = self.parent_rect.lock().unwrap().clone() else { return };
 
-        let Some(draw_update) = self.get_draw_calls(parent_rect) else {
+        let Some(draw_update) = self.get_draw_calls(parent_rect, trace_id) else {
             error!(target: "ui::emoji_picker", "Emoji picker failed to draw");
             return;
         };
@@ -258,7 +259,7 @@ impl EmojiPicker {
         t!("replace draw calls done");
     }
 
-    fn get_draw_calls(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
+    fn get_draw_calls(&self, parent_rect: Rectangle, trace_id: u32) -> Option<DrawUpdate> {
         if let Err(e) = self.rect.eval(&parent_rect) {
             warn!(target: "ui::emoji_picker", "Rect eval failed: {e}");
             return None
@@ -330,10 +331,10 @@ impl UIObject for EmojiPicker {
         self.tasks.set(on_modify.tasks);
     }
 
-    async fn draw(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
-        t!("EmojiPicker::draw()");
+    async fn draw(&self, parent_rect: Rectangle, trace_id: u32) -> Option<DrawUpdate> {
+        t!("EmojiPicker::draw({parent_rect:?}, {trace_id})");
         *self.parent_rect.lock().unwrap() = Some(parent_rect);
-        self.get_draw_calls(parent_rect)
+        self.get_draw_calls(parent_rect, trace_id)
     }
 
     async fn handle_mouse_move(&self, mut mouse_pos: Point) -> bool {

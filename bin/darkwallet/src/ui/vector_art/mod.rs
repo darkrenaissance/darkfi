@@ -101,12 +101,13 @@ impl VectorArt {
     }
 
     async fn redraw(self: Arc<Self>) {
+        let trace_id = rand::random();
         let timest = unixtime();
-        trace!(target: "ui::vector_art", "VectorArt::redraw({})", self.node_path());
+        trace!(target: "ui::vector_art", "VectorArt::redraw({}) [trace_id={trace_id}]", self.node_path());
         let Some(parent_rect) = self.parent_rect.lock().unwrap().clone() else { return };
 
-        let Some(draw_update) = self.get_draw_calls(parent_rect).await else {
-            error!(target: "ui::vector_art", "Mesh failed to draw");
+        let Some(draw_update) = self.get_draw_calls(parent_rect, trace_id).await else {
+            error!(target: "ui::vector_art", "Mesh failed to draw [trace_id={trace_id}]");
             return;
         };
         self.render_api.replace_draw_calls(timest, draw_update.draw_calls);
@@ -134,9 +135,9 @@ impl VectorArt {
         vec![GfxDrawInstruction::Move(rect.pos()), GfxDrawInstruction::Draw(mesh)]
     }
 
-    async fn get_draw_calls(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
+    async fn get_draw_calls(&self, parent_rect: Rectangle, trace_id: u32) -> Option<DrawUpdate> {
         if let Err(e) = self.rect.eval(&parent_rect) {
-            warn!(target: "ui::vector_art", "Rect eval failure: {e}");
+            warn!(target: "ui::vector_art", "Rect eval failure: {e} [trace_id={trace_id}]");
             return None
         }
         let instrs = self.get_draw_instrs();
@@ -167,10 +168,10 @@ impl UIObject for VectorArt {
         self.tasks.set(on_modify.tasks);
     }
 
-    async fn draw(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
-        t!("VectorArt::draw({})", self.node_path());
+    async fn draw(&self, parent_rect: Rectangle, trace_id: u32) -> Option<DrawUpdate> {
+        t!("VectorArt::draw({}) [trace_id={trace_id}]", self.node_path());
         *self.parent_rect.lock().unwrap() = Some(parent_rect);
-        self.get_draw_calls(parent_rect).await
+        self.get_draw_calls(parent_rect, trace_id).await
     }
 }
 

@@ -680,7 +680,7 @@ impl ChatEdit {
     }
 
     /// Called whenever the text or any text property changes.
-    fn regen_text_mesh(&self) -> GfxDrawMesh {
+    fn regen_text_mesh(&self, trace_id: u32) -> GfxDrawMesh {
         let is_focused = self.is_focused.get();
         let text = self.text.get();
         let font_size = self.font_size.get();
@@ -734,14 +734,12 @@ impl ChatEdit {
         );
 
         let mut clip = self.rect.get();
-        //debug!(target: "ui::chatedit", "Rendering text '{text}' rect={clip:?} width={width}");
+        t!("Rendering text '{text}' rect={clip:?} width={width} [trace_id={trace_id}]");
         clip.x = 0.;
         clip.y = 0.;
 
         let mut mesh = MeshBuilder::with_clip(clip.clone());
         let mut curr_y = -scroll;
-
-        //debug!(target: "ui::chatedit", "regen_text_mesh() selections={selections:?}");
 
         for (line_idx, wrap_line) in wrapped_lines.lines.iter().enumerate() {
             // Instead of bools, maybe we should have a GlyphStyle enum
@@ -1710,9 +1708,10 @@ impl ChatEdit {
     }
 
     async fn redraw(&self) {
+        let trace_id = rand::random();
         let timest = unixtime();
         t!("redraw()");
-        let Some(draw_update) = self.make_draw_calls() else {
+        let Some(draw_update) = self.make_draw_calls(trace_id) else {
             error!(target: "ui::chatedit", "Text failed to draw");
             return;
         };
@@ -1762,8 +1761,8 @@ impl ChatEdit {
         cursor_instrs
     }
 
-    fn make_draw_calls(&self) -> Option<DrawUpdate> {
-        let text_mesh = self.regen_text_mesh();
+    fn make_draw_calls(&self, trace_id: u32) -> Option<DrawUpdate> {
+        let text_mesh = self.regen_text_mesh(trace_id);
         let cursor_instrs = self.get_cursor_instrs();
 
         let rect = self.rect.get();
@@ -1942,11 +1941,11 @@ impl UIObject for ChatEdit {
         self.tasks.set(tasks);
     }
 
-    async fn draw(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
-        t!("ChatEdit::draw({:?})", self.node.upgrade().unwrap());
+    async fn draw(&self, parent_rect: Rectangle, trace_id: u32) -> Option<DrawUpdate> {
+        t!("ChatEdit::draw({:?}, {trace_id})", self.node.upgrade().unwrap());
         *self.parent_rect.lock() = Some(parent_rect);
 
-        self.make_draw_calls()
+        self.make_draw_calls(trace_id)
     }
 
     async fn handle_char(&self, key: char, mods: KeyMods, repeat: bool) -> bool {

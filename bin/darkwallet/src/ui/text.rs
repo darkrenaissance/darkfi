@@ -157,19 +157,20 @@ impl Text {
     }
 
     async fn redraw(self: Arc<Self>) {
+        let trace_id = rand::random();
         let timest = unixtime();
-        t!("Text::redraw({:?})", self.node.upgrade().unwrap());
+        t!("Text::redraw({:?}) [trace_id={trace_id}]", self.node.upgrade().unwrap());
         let Some(parent_rect) = self.parent_rect.lock().unwrap().clone() else { return };
 
-        let Some(draw_update) = self.get_draw_calls(parent_rect).await else {
-            error!(target: "ui::text", "Text failed to draw");
+        let Some(draw_update) = self.get_draw_calls(parent_rect, trace_id).await else {
+            error!(target: "ui::text", "Text failed to draw [trace_id={trace_id}]");
             return;
         };
         self.render_api.replace_draw_calls(timest, draw_update.draw_calls);
-        t!("replace draw calls done");
+        t!("Text::redraw() DONE [trace_id={trace_id}]");
     }
 
-    async fn get_draw_calls(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
+    async fn get_draw_calls(&self, parent_rect: Rectangle, trace_id: u32) -> Option<DrawUpdate> {
         self.rect.eval(&parent_rect).ok()?;
         let rect = self.rect.get();
 
@@ -220,10 +221,10 @@ impl UIObject for Text {
         self.tasks.set(on_modify.tasks);
     }
 
-    async fn draw(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
-        t!("Text::draw({:?})", self.node.upgrade().unwrap());
+    async fn draw(&self, parent_rect: Rectangle, trace_id: u32) -> Option<DrawUpdate> {
+        t!("Text::draw({:?}) [trace_id={trace_id}]", self.node.upgrade().unwrap());
         *self.parent_rect.lock().unwrap() = Some(parent_rect);
-        self.get_draw_calls(parent_rect).await
+        self.get_draw_calls(parent_rect, trace_id).await
     }
 }
 

@@ -439,19 +439,20 @@ impl Window {
     }
 
     pub async fn draw(&self) {
+        let trace_id = rand::random();
         let timest = unixtime();
 
         let local = self.screen_size.get() / self.scale.get();
         let rect = Rectangle::from([0., 0., local.w, local.h]);
-        t!("Window::draw({rect:?})");
+        t!("Window::draw({rect:?}) [timest={timest}, trace_id={trace_id}]");
 
         let mut draw_calls = vec![];
         let mut child_calls = vec![];
 
         for child in self.get_children() {
             let obj = get_ui_object3(&child);
-            let Some(mut draw_update) = obj.draw(rect).await else {
-                error!(target: "ui::layer", "draw() of {child:?} failed");
+            let Some(mut draw_update) = obj.draw(rect, trace_id).await else {
+                error!(target: "ui::layer", "draw() of {child:?} failed [trace_id={trace_id}]");
                 continue
             };
 
@@ -469,6 +470,6 @@ impl Window {
 
         self.render_api.replace_draw_calls(timest, draw_calls);
 
-        t!("Window::draw() - replaced draw call [timest={timest}]");
+        t!("Window::draw() - replaced draw call [timest={timest}, trace_id={trace_id}]");
     }
 }

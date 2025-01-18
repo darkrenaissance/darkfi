@@ -131,15 +131,17 @@ impl Image {
     }
 
     async fn redraw(self: Arc<Self>) {
+        let trace_id = rand::random();
         let timest = unixtime();
+        t!("redraw({:?}) [trace_id={trace_id}]", self.node.upgrade().unwrap());
         let Some(parent_rect) = self.parent_rect.lock().unwrap().clone() else { return };
 
-        let Some(draw_update) = self.get_draw_calls(parent_rect).await else {
+        let Some(draw_update) = self.get_draw_calls(parent_rect, trace_id).await else {
             error!(target: "ui::image", "Image failed to draw");
             return;
         };
         self.render_api.replace_draw_calls(timest, draw_update.draw_calls);
-        t!("replace draw calls done");
+        t!("redraw() DONE [trace_id={trace_id}]");
     }
 
     /// Called whenever any property changes.
@@ -152,7 +154,7 @@ impl Image {
         mesh.alloc(&self.render_api)
     }
 
-    async fn get_draw_calls(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
+    async fn get_draw_calls(&self, parent_rect: Rectangle, _: u32) -> Option<DrawUpdate> {
         self.rect.eval(&parent_rect).ok()?;
         let rect = self.rect.get();
         self.uv.eval(&rect).ok()?;
@@ -202,10 +204,10 @@ impl UIObject for Image {
         self.tasks.set(on_modify.tasks);
     }
 
-    async fn draw(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
-        t!("Image::draw()");
+    async fn draw(&self, parent_rect: Rectangle, trace_id: u32) -> Option<DrawUpdate> {
+        t!("Image::draw() [trace_id={trace_id}]");
         *self.parent_rect.lock().unwrap() = Some(parent_rect);
-        self.get_draw_calls(parent_rect).await
+        self.get_draw_calls(parent_rect, trace_id).await
     }
 }
 

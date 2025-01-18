@@ -69,7 +69,7 @@ pub trait UIObject: Sync {
 
     async fn start(self: Arc<Self>, ex: ExecutorPtr) {}
 
-    async fn draw(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
+    async fn draw(&self, parent_rect: Rectangle, trace_id: u32) -> Option<DrawUpdate> {
         None
     }
 

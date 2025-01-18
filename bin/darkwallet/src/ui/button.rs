@@ -78,7 +78,7 @@ impl UIObject for Button {
         self.priority.get()
     }
 
-    async fn draw(&self, parent_rect: Rectangle) -> Option<DrawUpdate> {
+    async fn draw(&self, parent_rect: Rectangle, trace_id: u32) -> Option<DrawUpdate> {
         let _ = self.rect.eval(&parent_rect);
         None
     }
