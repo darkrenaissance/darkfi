@@ -29,12 +29,9 @@ you have all the necessary dependencies. After that, in repo root folder:
 
 ```shell
 % make darkirc
-% # install system wide only if you can make sure there would be no
-% # multiple darkirc versions installed:
-% # sudo make install darkirc 
 ```
 
-## Installation
+## Installation (Optional)
 
 It is adviced to use `darkirc` directly from the repo root folder.
 Install system wide only if you can make sure there would be no
@@ -46,7 +43,7 @@ multiple darkirc versions installed:
 
 You have to reinstall `darkirc` on new versions manually.
 
-## Installation (Android)
+## Building for Android
 
 This is for Android 64 bit (which is most phones).
 You will compile darkirc on your computer then copy it to your phone
