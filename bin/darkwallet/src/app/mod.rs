@@ -49,7 +49,7 @@ macro_rules! d { ($($arg:tt)*) => { debug!(target: "app", $($arg)*); } }
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "app", $($arg)*); } }
 macro_rules! i { ($($arg:tt)*) => { info!(target: "app", $($arg)*); } }
 
-const PLUGINS_ENABLED: bool = true;
+const PLUGINS_ENABLED: bool = false;
 
 //fn print_type_of<T>(_: &T) {
 //    println!("{}", std::any::type_name::<T>())

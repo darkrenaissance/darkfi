@@ -772,7 +772,8 @@ impl Stage {
                 error!(target: "gfx", "fatal: replace_draw_calls({timest}, ...) failed with item ID={key}");
                 continue
             };
-            //self.draw_calls.insert(key, val);
+            self.draw_calls.insert(key, val);
+            /*
             match self.draw_calls.get_mut(&key) {
                 Some(old_val) => {
                     // Only replace the draw call if it is more recent
@@ -786,6 +787,7 @@ impl Stage {
                     self.draw_calls.insert(key, val);
                 }
             }
+            */
         }
     }
 }

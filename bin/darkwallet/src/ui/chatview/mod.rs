@@ -546,8 +546,8 @@ impl ChatView {
 
         // Keep loading until this is below 0
         let mut remaining_load_height = top + preload_height - total_height;
-        t!("bgloader: remaining px = {remaining_load_height}");
         let mut remaining_visible = top - total_height;
+        t!("bgloader: remaining px = {remaining_load_height}, remaining_visible={remaining_visible}");
 
         // Get the current earliest timestamp
         let iter = match msgbuf.oldest_timestamp() {
@@ -575,8 +575,8 @@ impl ChatView {
             let msg_id = MessageId(k[8..].try_into().unwrap());
             let timest = Timestamp::from_be_bytes(timest_bytes);
             let chatmsg: ChatMsg = deserialize(&v).unwrap();
-            t!("{timest:?} {chatmsg:?}");
 
+            t!("{timest:?} {chatmsg:?}");
             let msg_height = msgbuf.push_privmsg(timest, msg_id, chatmsg.nick, chatmsg.text);
 
             remaining_load_height -= msg_height;
@@ -590,6 +590,7 @@ impl ChatView {
             }
             remaining_visible -= msg_height;
         }
+        t!("do_redraw = {do_redraw}");
         if do_redraw {
             self.redraw_cached(&mut msgbuf).await;
         }

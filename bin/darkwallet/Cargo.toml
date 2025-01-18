@@ -22,7 +22,7 @@ harfbuzz-sys = { git = "https://github.com/narodnik/rust-harfbuzz2", features = 
 freetype-rs = { version = "0.37.0", features = ["bundled"] }
 
 image = "0.25.2"
-log = "0.4.22"
+log = { version = "0.4", features = ["release_max_level_info"] }
 glam = "0.29.0"
 #zmq = "0.10.0"
 #async_zmq = "0.4.0"

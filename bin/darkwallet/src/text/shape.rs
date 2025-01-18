@@ -24,7 +24,7 @@ use harfbuzz_sys::{
     hb_buffer_t, hb_font_destroy, hb_font_t, hb_glyph_info_t, hb_glyph_position_t, hb_shape,
     HB_BUFFER_CLUSTER_LEVEL_MONOTONE_GRAPHEMES, HB_BUFFER_CONTENT_TYPE_UNICODE,
 };
-use std::os;
+use std::{iter::Peekable, os, vec::IntoIter};
 
 type FreetypeFace = ft::Face<&'static [u8]>;
 
@@ -124,6 +124,15 @@ impl GlyphInfo {
     }
 }
 
+fn is_overlap(parent: &GlyphInfo, child: &GlyphInfo) -> bool {
+    assert!(child.cluster_start <= child.cluster_end);
+    // Handle this weird edgecase
+    if child.cluster_start == child.cluster_end {
+        return child.cluster_end <= parent.cluster_start
+    }
+    child.cluster_start < parent.cluster_end
+}
+
 struct ShapedGlyphs {
     glyphs: Vec<GlyphInfo>,
 }
@@ -133,45 +142,49 @@ impl ShapedGlyphs {
         Self { glyphs }
     }
 
-    fn surgery(&mut self, idx: usize, glyphs: Vec<GlyphInfo>) {
-        let tail = self.glyphs.split_off(idx);
-        let mut tail_iter = tail.into_iter().peekable();
-
-        for glyph in glyphs {
-            // We have a glyph. Lets consume tail.
-            // We continue while the glyphs are before this glyph's end.
-            while let Some(tail_glyph) = tail_iter.peek() &&
-                tail_glyph.cluster_start < glyph.cluster_end
-            {
-                tail_iter.next();
-            }
-
-            self.glyphs.push(glyph);
-
-            // Only continue while the tail starts with 0
-            if let Some(tail_glyph) = tail_iter.peek() {
-                if tail_glyph.id != 0 {
-                    break
-                }
-            }
-        }
-
-        self.glyphs.extend(tail_iter);
+    fn has_zero(&self) -> bool {
+        self.glyphs.iter().any(|g| g.id == 0)
     }
 
-    fn scan_zero(&self, start_idx: usize) -> Option<(usize, usize)> {
-        let mut glyphs_iter = self.glyphs.iter().enumerate();
+    fn fill_zeros(&mut self, fallback: Vec<GlyphInfo>) {
+        let mut primary_iter = std::mem::take(&mut self.glyphs).into_iter().peekable();
+        let mut fallback_iter = fallback.into_iter().peekable();
+        assert!(self.glyphs.is_empty());
 
-        if glyphs_iter.advance_by(start_idx).is_err() {
-            return None
-        }
-
-        for (i, glyph) in glyphs_iter {
-            if glyph.id == 0 {
-                return Some((i, glyph.cluster_start))
+        while let Some(primary_glyph) = primary_iter.next() {
+            if primary_glyph.id != 0 {
+                Self::consume(&mut fallback_iter, primary_glyph.cluster_start);
+                self.glyphs.push(primary_glyph);
+                continue
             }
+
+            let mut fallbacks = Self::consume(&mut fallback_iter, primary_glyph.cluster_start);
+
+            let Some(last_fallback) = fallbacks.last() else { continue };
+            let cluster_end = last_fallback.cluster_end;
+
+            self.glyphs.append(&mut fallbacks);
+
+            Self::drop_replaced(&mut primary_iter, cluster_end);
         }
-        None
+    }
+
+    fn consume(iter: &mut Peekable<IntoIter<GlyphInfo>>, cluster_bound: usize) -> Vec<GlyphInfo> {
+        let mut consumed = vec![];
+        while let Some(glyph) = iter.peek() &&
+            glyph.cluster_start <= cluster_bound
+        {
+            let glyph = iter.next().unwrap();
+            consumed.push(glyph);
+        }
+        consumed
+    }
+    fn drop_replaced(iter: &mut Peekable<IntoIter<GlyphInfo>>, cluster_end: usize) {
+        while let Some(glyph) = iter.peek() &&
+            glyph.cluster_start < cluster_end
+        {
+            let _ = iter.next();
+        }
     }
 }
 
@@ -188,19 +201,20 @@ fn count_leading_null_glyphs(glyphs: &Vec<GlyphInfo>) -> usize {
 }
 
 /*
-fn print_glyphs(ctx: &str, glyphs: &Vec<GlyphInfo>) {
-    println!("{} ------------------", ctx);
+fn print_glyphs(ctx: &str, glyphs: &Vec<GlyphInfo>, indent: usize) {
+    let ws = " ".repeat(2 * indent);
+    println!("{ws}{} ------------------", ctx);
     for (i, glyph) in glyphs.iter().enumerate() {
         println!(
-            "{i}: {}/{} [{}, {}]",
+            "{ws}{i}: {}/{} [{}, {}]",
             glyph.face_idx, glyph.id, glyph.cluster_start, glyph.cluster_end
         );
     }
-    println!("---------------------");
+    println!("{ws}---------------------");
 }
 */
 
-fn face_shape(face: &mut FreetypeFace, text: &str, off: usize, face_idx: usize) -> Vec<GlyphInfo> {
+fn face_shape(face: &mut FreetypeFace, text: &str, face_idx: usize) -> Vec<GlyphInfo> {
     let mut glyphs: Vec<GlyphInfo> = vec![];
     for (i, hbinf) in harfbuzz_shape(face, text).enumerate() {
         let glyph_id = hbinf.info.codepoint as u32;
@@ -212,13 +226,13 @@ fn face_shape(face: &mut FreetypeFace, text: &str, off: usize, face_idx: usize) 
         //println!("     remain_text='{remain_text}'");
 
         if i != 0 {
-            glyphs.last_mut().unwrap().cluster_end = cluster + off;
+            glyphs.last_mut().unwrap().cluster_end = cluster;
         }
 
         glyphs.push(GlyphInfo {
             face_idx,
             id: glyph_id,
-            cluster_start: cluster + off,
+            cluster_start: cluster,
             cluster_end: 0,
             x_offset: hbinf.pos.x_offset,
             y_offset: hbinf.pos.y_offset,
@@ -227,7 +241,7 @@ fn face_shape(face: &mut FreetypeFace, text: &str, off: usize, face_idx: usize) 
         });
     }
     if let Some(last) = glyphs.last_mut() {
-        last.cluster_end = text.len() + off;
+        last.cluster_end = text.len();
     }
     glyphs
 }
@@ -237,28 +251,17 @@ fn face_shape(face: &mut FreetypeFace, text: &str, off: usize, face_idx: usize) 
 /// and try to shape it. Then replace that glyph + any others in the cluster with the new one.
 /// [More info](https://zachbayl.in/blog/font_fallback_revery/)
 pub(super) fn shape(faces: &mut Vec<FreetypeFace>, text: &str) -> Vec<GlyphInfo> {
-    let glyphs = face_shape(&mut faces[0], text, 0, 0);
+    let glyphs = face_shape(&mut faces[0], text, 0);
     let mut shaped = ShapedGlyphs::new(glyphs);
 
     // Go down successively in our fallbacks
     for face_idx in 1..faces.len() {
-        // We attempt to replace each zero once. This idx keeps track so we don't
-        // keep repeating zeros we already tried to replace.
-        let mut last_idx = 0;
-        // Find the next zero
-        while let Some((off, cluster_start)) = shaped.scan_zero(last_idx) {
-            let remain_text = &text[cluster_start..];
-            let glyphs = face_shape(&mut faces[face_idx], remain_text, cluster_start, face_idx);
-
-            // We weren't successful shaping with this fallback font, so skip over these glyphs.
-            let leading_zeros = count_leading_null_glyphs(&glyphs);
-            last_idx = off + leading_zeros;
-
-            // Perform bottom surgery
-            if leading_zeros == 0 {
-                shaped.surgery(off, glyphs);
-            }
+        if !shaped.has_zero() {
+            break
         }
+
+        let glyphs = face_shape(&mut faces[face_idx], text, face_idx);
+        shaped.fill_zeros(glyphs);
     }
     shaped.glyphs
 }
@@ -420,7 +423,7 @@ mod tests {
             let glyph_id = hbinf.info.codepoint as u32;
             // Index within this substr
             let cluster = hbinf.info.cluster as usize;
-            println!("  {i}: glyph_id = {glyph_id}, cluster = {cluster}");
+            //println!("  {i}: glyph_id = {glyph_id}, cluster = {cluster}");
         }
     }
 
@@ -436,4 +439,14 @@ mod tests {
         let glyphs = shape(&mut faces, text);
         //print_glyphs("", &glyphs);
     }
+
+    /*
+    #[test]
+    fn weird_stuff() {
+        let mut faces = load_faces();
+        //let text = "( \u{361}° \u{35c}ʖ \u{361}°)";
+        let text = "\u{35c}ʖ \u{361}a";
+        let glyphs = shape(&mut faces, text);
+    }
+    */
 }

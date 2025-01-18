@@ -33,7 +33,7 @@ static MUTED_TARGETS: &[&'static str] = &[
     "event_graph::protocol",
 ];
 
-static ALLOW_TRACE: &[&'static str] = &["ui", "app"];
+static ALLOW_TRACE: &[&'static str] = &["ui", "app", "gfx"];
 
 #[cfg(target_os = "android")]
 fn logfile_path() -> PathBuf {
@@ -68,6 +68,11 @@ mod android {
     impl Log for AndroidLoggerWrapper {
         fn enabled(&self, metadata: &Metadata<'_>) -> bool {
             let target = metadata.target();
+            for allow in ALLOW_TRACE {
+                if target.starts_with(allow) {
+                    return true
+                }
+            }
             for muted in MUTED_TARGETS {
                 if target.starts_with(muted) {
                     return false
