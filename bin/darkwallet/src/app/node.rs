@@ -601,6 +601,13 @@ pub fn create_darkirc(name: &str) -> SceneNode {
     )
     .unwrap();
 
+    node.add_signal(
+        "connect",
+        "Connections and disconnects",
+        vec![("peers_count", "Peers count", CallArgType::Uint32)],
+    )
+    .unwrap();
+
     node.add_method(
         "send",
         vec![("channel", "Channel", CallArgType::Str), ("msg", "Message", CallArgType::Str)],

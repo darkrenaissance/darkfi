@@ -19,7 +19,7 @@
 use async_recursion::async_recursion;
 use chrono::{Local, NaiveDate, NaiveDateTime, TimeZone};
 use darkfi::system::CondVar;
-use darkfi_serial::{Decodable, Encodable};
+use darkfi_serial::{deserialize, Decodable, Encodable};
 use futures::{stream::FuturesUnordered, StreamExt};
 use sled_overlay::sled;
 use smol::Task;
@@ -52,7 +52,7 @@ macro_rules! d { ($($arg:tt)*) => { debug!(target: "app", $($arg)*); } }
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "app", $($arg)*); } }
 macro_rules! i { ($($arg:tt)*) => { info!(target: "app", $($arg)*); } }
 
-const PLUGINS_ENABLED: bool = true;
+const PLUGINS_ENABLED: bool = false;
 
 //fn print_type_of<T>(_: &T) {
 //    println!("{}", std::any::type_name::<T>())
@@ -252,6 +252,54 @@ impl App {
             }
         });
         self.tasks.lock().unwrap().push(listen_recv);
+
+        let (slot, recvr) = Slot::new("connect");
+        darkirc.register("connect", slot).unwrap();
+        let sg_root2 = self.sg_root.clone();
+        let listen_connect = self.ex.spawn(async move {
+            let net0 = sg_root2.clone().lookup_node("/window/netstatus_layer/net0").unwrap();
+            let net1 = sg_root2.clone().lookup_node("/window/netstatus_layer/net1").unwrap();
+            let net2 = sg_root2.clone().lookup_node("/window/netstatus_layer/net2").unwrap();
+            let net3 = sg_root2.clone().lookup_node("/window/netstatus_layer/net3").unwrap();
+
+            let net0_is_visible = PropertyBool::wrap(&net0, Role::App, "is_visible", 0).unwrap();
+            let net1_is_visible = PropertyBool::wrap(&net1, Role::App, "is_visible", 0).unwrap();
+            let net2_is_visible = PropertyBool::wrap(&net2, Role::App, "is_visible", 0).unwrap();
+            let net3_is_visible = PropertyBool::wrap(&net3, Role::App, "is_visible", 0).unwrap();
+
+            while let Ok(data) = recvr.recv().await {
+                let peers_count: u32 = deserialize(&data).unwrap();
+
+                let atom = &mut PropertyAtomicGuard::new();
+                match peers_count {
+                    0 => {
+                        net0_is_visible.set(atom, true);
+                        net1_is_visible.set(atom, false);
+                        net2_is_visible.set(atom, false);
+                        net3_is_visible.set(atom, false);
+                    }
+                    1 => {
+                        net0_is_visible.set(atom, false);
+                        net1_is_visible.set(atom, true);
+                        net2_is_visible.set(atom, false);
+                        net3_is_visible.set(atom, false);
+                    }
+                    2 => {
+                        net0_is_visible.set(atom, false);
+                        net1_is_visible.set(atom, false);
+                        net2_is_visible.set(atom, true);
+                        net3_is_visible.set(atom, false);
+                    }
+                    _ => {
+                        net0_is_visible.set(atom, false);
+                        net1_is_visible.set(atom, false);
+                        net2_is_visible.set(atom, false);
+                        net3_is_visible.set(atom, true);
+                    }
+                }
+            }
+        });
+        self.tasks.lock().unwrap().push(listen_connect);
 
         plugin.link(darkirc);
 

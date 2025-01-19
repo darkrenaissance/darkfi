@@ -28,8 +28,8 @@ use darkfi::{
     Result as DarkFiResult,
 };
 use darkfi_serial::{
-    deserialize_async, serialize_async, AsyncEncodable, Decodable, Encodable, SerialDecodable,
-    SerialEncodable,
+    deserialize_async, serialize, serialize_async, AsyncEncodable, Decodable, Encodable,
+    SerialDecodable, SerialEncodable,
 };
 use sled_overlay::sled;
 use std::{
@@ -426,6 +426,21 @@ impl DarkIrc {
 
         self.p2p.broadcast(&EventPut(event)).await;
     }
+
+    async fn connect_notify(self: Arc<Self>, channel_sub: Subscription<DarkFiResult<ChannelPtr>>) {
+        loop {
+            // Wait for a channel
+            if let Err(_) = channel_sub.receive().await {
+                e!("There was an error listening for channels. The service closed unexpectedly.");
+                return
+            }
+
+            let peers_count = self.p2p.hosts().peers().len() as u32;
+
+            let node = self.node.upgrade().unwrap();
+            node.trigger("connect", serialize(&peers_count)).await.unwrap();
+        }
+    }
 }
 
 #[async_trait]
@@ -463,7 +478,10 @@ impl PluginObject for DarkIrc {
         let channel_sub = self.p2p.hosts().subscribe_channel().await;
         let dag_task = ex.spawn(self.clone().dag_sync(channel_sub));
 
-        let mut tasks = vec![send_method_task, ev_task, dag_task];
+        let channel_sub = self.p2p.hosts().subscribe_channel().await;
+        let connect_notify_task = ex.spawn(self.clone().connect_notify(channel_sub));
+
+        let mut tasks = vec![send_method_task, ev_task, dag_task, connect_notify_task];
         tasks.append(&mut on_modify.tasks);
         self.tasks.set(tasks);
     }
