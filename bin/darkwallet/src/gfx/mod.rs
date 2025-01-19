@@ -37,6 +37,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+mod favico;
 mod linalg;
 pub use linalg::{Dimension, Point, Rectangle};
 mod shader;
@@ -904,6 +905,11 @@ pub fn run_gui(
             //blocking_event_loop: true,
             ..Default::default()
         },
+        icon: Some(miniquad::conf::Icon {
+            small: favico::SMALL,
+            medium: favico::MEDIUM,
+            big: favico::BIG,
+        }),
         ..Default::default()
     };
     let metal = std::env::args().nth(1).as_deref() == Some("metal");
