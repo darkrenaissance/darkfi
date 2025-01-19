@@ -54,6 +54,7 @@ pub const COLOR_SCHEME: ColorScheme = ColorScheme::DarkMode;
 
 mod android_ui_consts {
     pub const NETSTATUS_ICON_SIZE: f32 = 140.;
+    pub const NETLOGO_SCALE: f32 = 50.;
     pub const EMOJI_PICKER_ICON_SIZE: f32 = 100.;
 }
 
@@ -98,6 +99,7 @@ mod ui_consts {
 ))]
 mod ui_consts {
     pub const NETSTATUS_ICON_SIZE: f32 = 60.;
+    pub const NETLOGO_SCALE: f32 = 25.;
     pub const EMOJI_PICKER_ICON_SIZE: f32 = 40.;
     pub use super::desktop_paths::*;
 }
@@ -231,8 +233,10 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     let code = cc.compile("w - NETSTATUS_ICON_SIZE").unwrap();
     prop.clone().set_expr(atom, Role::App, 0, code).unwrap();
     prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
-    prop.clone().set_f32(atom, Role::App, 2, NETSTATUS_ICON_SIZE).unwrap();
-    prop.clone().set_f32(atom, Role::App, 3, NETSTATUS_ICON_SIZE).unwrap();
+    //prop.clone().set_f32(atom, Role::App, 2, NETSTATUS_ICON_SIZE).unwrap();
+    //prop.clone().set_f32(atom, Role::App, 3, NETSTATUS_ICON_SIZE).unwrap();
+    prop.clone().set_f32(atom, Role::App, 2, 1000.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 3, 1000.).unwrap();
     netlayer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     netlayer_node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
     let netlayer_node =
@@ -241,80 +245,60 @@ pub async fn make(app: &App, window: SceneNodePtr) {
 
     let node = create_vector_art("net0");
     let prop = node.get_property("rect").unwrap();
-    prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 0, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE / 2.).unwrap();
     prop.clone().set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
     prop.clone().set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-    let mut shape = VectorShape::new();
-    shape.add_filled_box(
-        expr::const_f32(0.),
-        expr::const_f32(0.),
-        expr::load_var("w"),
-        expr::load_var("h"),
-        [1., 0., 0., 1.],
-    );
+    let mut shape = shape::create_netlogo1([1., 0., 0.25, 1.]).scaled(NETLOGO_SCALE);
+    shape.join(shape::create_netlogo2([0.27, 0.4, 0.4, 1.]).scaled(NETLOGO_SCALE));
+    shape.join(shape::create_netlogo3([0.27, 0.4, 0.4, 1.]).scaled(NETLOGO_SCALE));
     let net0_node =
         node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
     netlayer_node.clone().link(net0_node);
 
     let node = create_vector_art("net1");
     let prop = node.get_property("rect").unwrap();
-    prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 0, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE / 2.).unwrap();
     prop.clone().set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
     prop.clone().set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-    let mut shape = VectorShape::new();
-    shape.add_filled_box(
-        expr::const_f32(0.),
-        expr::const_f32(0.),
-        expr::load_var("w"),
-        expr::load_var("h"),
-        [0., 0.3, 0., 1.],
-    );
+    let mut shape = shape::create_netlogo1([0.49, 0.57, 1., 1.]).scaled(NETLOGO_SCALE);
+    shape.join(shape::create_netlogo2([0.49, 0.57, 1., 1.]).scaled(NETLOGO_SCALE));
+    shape.join(shape::create_netlogo3([0.27, 0.4, 0.4, 1.]).scaled(NETLOGO_SCALE));
     let net1_node =
         node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
     netlayer_node.clone().link(net1_node);
 
     let node = create_vector_art("net2");
     let prop = node.get_property("rect").unwrap();
-    prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 0, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE / 2.).unwrap();
     prop.clone().set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
     prop.clone().set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-    let mut shape = VectorShape::new();
-    shape.add_filled_box(
-        expr::const_f32(0.),
-        expr::const_f32(0.),
-        expr::load_var("w"),
-        expr::load_var("h"),
-        [0., 0.6, 0., 1.],
-    );
+    let mut shape = shape::create_netlogo1([0., 0.94, 1., 1.]).scaled(NETLOGO_SCALE);
+    shape.join(shape::create_netlogo2([0., 0.94, 1., 1.]).scaled(NETLOGO_SCALE));
+    shape.join(shape::create_netlogo3([0., 0.94, 1., 1.]).scaled(NETLOGO_SCALE));
     let net2_node =
         node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
     netlayer_node.clone().link(net2_node);
 
     let node = create_vector_art("net3");
     let prop = node.get_property("rect").unwrap();
-    prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
-    prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 0, NETSTATUS_ICON_SIZE / 2.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 1, NETSTATUS_ICON_SIZE / 2.).unwrap();
     prop.clone().set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
     prop.clone().set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
     node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
     node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
-    let mut shape = VectorShape::new();
-    shape.add_filled_box(
-        expr::const_f32(0.),
-        expr::const_f32(0.),
-        expr::load_var("w"),
-        expr::load_var("h"),
-        [0., 1., 0., 1.],
-    );
+    let mut shape = shape::create_netlogo1([0., 0.94, 1., 1.]).scaled(NETLOGO_SCALE);
+    shape.join(shape::create_netlogo2([0., 0.94, 1., 1.]).scaled(NETLOGO_SCALE));
+    shape.join(shape::create_netlogo3([0., 0.94, 1., 1.]).scaled(NETLOGO_SCALE));
     let net3_node =
         node.setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone())).await;
     netlayer_node.clone().link(net3_node);

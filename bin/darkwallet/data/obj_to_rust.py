@@ -1,8 +1,6 @@
 #!/usr/bin/python
 import sys
 
-COLOR = "[0., 1., 1., 1.]"
-
 class Obj:
 
     def __init__(self, name):
@@ -61,12 +59,12 @@ def parse_obj(fname):
 
 def output(obj):
     name = obj.name
-    print("use crate::ui::{VectorShape, ShapeVertex};")
-    print(f"pub fn create_{name}() -> VectorShape {{")
+    print("use crate::{mesh::Color, ui::{VectorShape, ShapeVertex}};")
+    print(f"pub fn create_{name}(color: Color) -> VectorShape {{")
     print("    VectorShape {")
     print("        verts: vec![")
     for (x, y) in obj.v:
-        print(f"            ShapeVertex::from_xy({x}, {y}, {COLOR}),")
+        print(f"            ShapeVertex::from_xy({x}, {y}, color),")
     print("        ],")
     indices = ", ".join([str(f) for f in obj.f])
     print(f"        indices: vec![{indices}]")

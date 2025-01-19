@@ -85,6 +85,15 @@ impl VectorShape {
         Ok(verts)
     }
 
+    pub fn join(&mut self, mut other: Self) {
+        let off = self.verts.len() as u16;
+        for index in &mut other.indices {
+            *index += off;
+        }
+        self.verts.append(&mut other.verts);
+        self.indices.append(&mut other.indices);
+    }
+
     pub fn add_filled_box(
         &mut self,
         x1: SExprCode,

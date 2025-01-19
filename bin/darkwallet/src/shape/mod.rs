@@ -16,8 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::ui::{ShapeVertex, VectorShape};
-
 mod back_arrow;
 pub use back_arrow::create_back_arrow;
 
@@ -29,3 +27,10 @@ pub use send_arrow::create_send_arrow;
 
 mod emoji_sel;
 pub use emoji_sel::create_emoji_selector;
+
+mod netlogo1;
+pub use netlogo1::create_netlogo1;
+mod netlogo2;
+pub use netlogo2::create_netlogo2;
+mod netlogo3;
+pub use netlogo3::create_netlogo3;
