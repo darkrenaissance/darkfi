@@ -24,6 +24,7 @@ use futures::{stream::FuturesUnordered, StreamExt};
 use sled_overlay::sled;
 use smol::Task;
 use std::{
+    fs::File,
     io::Cursor,
     sync::{Arc, Mutex as SyncMutex},
     thread,
@@ -47,6 +48,7 @@ use crate::{
 mod node;
 use node::create_darkirc;
 mod schema;
+use schema::get_window_scale_filename;
 
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "app", $($arg)*); } }
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "app", $($arg)*); } }
@@ -317,6 +319,12 @@ impl App {
         let (screen_width, screen_height) = miniquad::window::screen_size();
         prop.clone().set_f32(atom, Role::App, 0, screen_width);
         prop.clone().set_f32(atom, Role::App, 1, screen_height);
+
+        let mut window_scale = 1.;
+        if let Ok(mut file) = File::open(get_window_scale_filename()) {
+            window_scale = Decodable::decode(&mut file).unwrap();
+        }
+        window_node.set_property_f32(atom, Role::App, "scale", window_scale).unwrap();
 
         drop(atom);
 

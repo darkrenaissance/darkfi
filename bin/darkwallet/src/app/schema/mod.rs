@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use darkfi_serial::Encodable;
 use sled_overlay::sled;
 use std::fs::File;
 
@@ -23,7 +24,7 @@ use crate::{
     app::{
         node::{
             create_button, create_chatedit, create_chatview, create_editbox, create_image,
-            create_layer, create_text, create_vector_art,
+            create_layer, create_shortcut, create_text, create_vector_art,
         },
         populate_tree, App,
     },
@@ -39,8 +40,8 @@ use crate::{
     shape,
     text::TextShaperPtr,
     ui::{
-        emoji_picker, Button, ChatEdit, ChatView, EditBox, Image, Layer, ShapeVertex, Text,
-        VectorArt, VectorShape, Window,
+        emoji_picker, Button, ChatEdit, ChatView, EditBox, Image, Layer, ShapeVertex, Shortcut,
+        Text, VectorArt, VectorShape, Window,
     },
     ExecutorPtr,
 };
@@ -72,6 +73,10 @@ mod ui_consts {
     pub fn get_first_time_filename() -> PathBuf {
         get_appdata_path().join("first_time")
     }
+
+    pub fn get_window_scale_filename() -> PathBuf {
+        get_appdata_path().join("window_scale")
+    }
 }
 
 #[cfg(not(target_os = "android"))]
@@ -85,6 +90,10 @@ mod desktop_paths {
     }
     pub fn get_first_time_filename() -> PathBuf {
         dirs::cache_dir().unwrap().join("darkfi/wallet/first_time")
+    }
+
+    pub fn get_window_scale_filename() -> PathBuf {
+        dirs::cache_dir().unwrap().join("darkfi/wallet/window_scale")
     }
 }
 
@@ -104,7 +113,7 @@ mod ui_consts {
     pub use super::desktop_paths::*;
 }
 
-use ui_consts::*;
+pub use ui_consts::*;
 
 pub static CHANNELS: &'static [&str] =
     &["dev", "media", "hackers", "memes", "philosophy", "markets", "math", "random"];
@@ -120,6 +129,62 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     cc.add_const_f32("NETSTATUS_ICON_SIZE", NETSTATUS_ICON_SIZE);
 
     let atom = &mut PropertyAtomicGuard::new();
+
+    let node = create_shortcut("zoom_out_shortcut");
+    node.set_property_str(atom, Role::App, "key", "ctrl+-").unwrap();
+    // Not sure what was eating my keys. This is a workaround.
+    node.set_property_u32(atom, Role::App, "priority", 10).unwrap();
+    let (slot, recvr) = Slot::new("zoom_out_pressed");
+    node.register("shortcut", slot).unwrap();
+    let window_scale = PropertyFloat32::wrap(&window, Role::App, "scale", 0).unwrap();
+    let window_scale2 = window_scale.clone();
+    let listen_zoom = app.ex.spawn(async move {
+        while let Ok(_) = recvr.recv().await {
+            let scale = 0.9 * window_scale2.get();
+
+            let filename = get_window_scale_filename();
+            if let Some(parent) = filename.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            if let Ok(mut file) = File::create(filename) {
+                scale.encode(&mut file).unwrap();
+            }
+
+            let atom = &mut PropertyAtomicGuard::new();
+            window_scale2.set(atom, scale);
+        }
+    });
+    app.tasks.lock().unwrap().push(listen_zoom);
+    let node = node.setup(|me| Shortcut::new(me)).await;
+    window.clone().link(node);
+
+    let node = create_shortcut("zoom_in_shortcut");
+    node.set_property_str(atom, Role::App, "key", "ctrl+=").unwrap();
+    // Not sure what was eating my keys. This is a workaround.
+    node.set_property_u32(atom, Role::App, "priority", 10).unwrap();
+    let (slot, recvr) = Slot::new("zoom_in_pressed");
+    node.register("shortcut", slot).unwrap();
+    let window_scale = PropertyFloat32::wrap(&window, Role::App, "scale", 0).unwrap();
+    let window_scale2 = window_scale.clone();
+    let listen_zoom = app.ex.spawn(async move {
+        while let Ok(_) = recvr.recv().await {
+            let scale = 1.1 * window_scale2.get();
+
+            let filename = get_window_scale_filename();
+            if let Some(parent) = filename.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            if let Ok(mut file) = File::create(filename) {
+                scale.encode(&mut file).unwrap();
+            }
+
+            let atom = &mut PropertyAtomicGuard::new();
+            window_scale2.set(atom, scale);
+        }
+    });
+    app.tasks.lock().unwrap().push(listen_zoom);
+    let node = node.setup(|me| Shortcut::new(me)).await;
+    window.clone().link(node);
 
     if COLOR_SCHEME == ColorScheme::DarkMode {
         // Bg layer
