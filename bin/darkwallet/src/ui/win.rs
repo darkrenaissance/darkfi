@@ -23,7 +23,7 @@ use crate::{
     gfx::{
         GfxDrawCall, GfxDrawInstruction, GraphicsEventPublisherPtr, Point, Rectangle, RenderApi,
     },
-    prop::{PropertyDimension, PropertyFloat32, PropertyPtr, Role},
+    prop::{PropertyAtomicGuard, PropertyDimension, PropertyFloat32, PropertyPtr, Role},
     pubsub::Subscription,
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
     util::unixtime,
@@ -81,8 +81,10 @@ impl Window {
                 };
 
                 d!("Window resized {size:?}");
+                let atom = &mut PropertyAtomicGuard::new();
+
                 // Now update the properties
-                screen_size2.set(size);
+                screen_size2.set(atom, size);
 
                 let Some(self_) = me2.upgrade() else {
                     // Should not happen

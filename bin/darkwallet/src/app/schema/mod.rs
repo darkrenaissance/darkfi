@@ -32,7 +32,8 @@ use crate::{
     gfx::{GraphicsEventPublisherPtr, Rectangle, RenderApi, Vertex},
     mesh::{Color, MeshBuilder},
     prop::{
-        Property, PropertyBool, PropertyFloat32, PropertyStr, PropertySubType, PropertyType, Role,
+        Property, PropertyAtomicGuard, PropertyBool, PropertyFloat32, PropertyStr, PropertySubType,
+        PropertyType, Role,
     },
     scene::{SceneNodePtr, Slot},
     shape,
@@ -112,17 +113,18 @@ enum ColorScheme {
 
 pub async fn make(app: &App, window: SceneNodePtr) {
     let mut cc = Compiler::new();
+    let atom = &mut PropertyAtomicGuard::new();
 
     if COLOR_SCHEME == ColorScheme::DarkMode {
         // Bg layer
         let layer_node = create_layer("bg_layer");
         let prop = layer_node.get_property("rect").unwrap();
-        prop.set_f32(Role::App, 0, 0.).unwrap();
-        prop.set_f32(Role::App, 1, 0.).unwrap();
-        prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
-        prop.set_expr(Role::App, 3, expr::load_var("h")).unwrap();
-        layer_node.set_property_bool(Role::App, "is_visible", true).unwrap();
-        layer_node.set_property_u32(Role::App, "z_index", 0).unwrap();
+        prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
+        prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
+        prop.clone().set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+        prop.clone().set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+        layer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
+        layer_node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
         let layer_node =
             layer_node.setup(|me| Layer::new(me, app.render_api.clone(), app.ex.clone())).await;
         window.clone().link(layer_node.clone());
@@ -130,10 +132,10 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         // Create a bg image
         let node = create_image("bg_image");
         let prop = node.get_property("rect").unwrap();
-        prop.set_f32(Role::App, 0, 0.).unwrap();
-        prop.set_f32(Role::App, 1, 0.).unwrap();
-        prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
-        prop.set_expr(Role::App, 3, expr::load_var("h")).unwrap();
+        prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
+        prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
+        prop.clone().set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+        prop.clone().set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
 
         // Image aspect ratio
         //let R = 1.78;
@@ -141,8 +143,8 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         cc.add_const_f32("R", R);
 
         let prop = node.get_property("uv").unwrap();
-        prop.set_f32(Role::App, 0, 0.).unwrap();
-        prop.set_f32(Role::App, 1, 0.).unwrap();
+        prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
+        prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
         #[rustfmt::skip]
     let code = cc.compile("
         r = w / h;
@@ -152,7 +154,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
             1
         }
     ").unwrap();
-        prop.set_expr(Role::App, 2, code).unwrap();
+        prop.clone().set_expr(atom, Role::App, 2, code).unwrap();
         #[rustfmt::skip]
     let code = cc.compile("
         r = w / h;
@@ -162,21 +164,21 @@ pub async fn make(app: &App, window: SceneNodePtr) {
             R / r
         }
     ").unwrap();
-        prop.set_expr(Role::App, 3, code).unwrap();
+        prop.clone().set_expr(atom, Role::App, 3, code).unwrap();
 
-        node.set_property_str(Role::App, "path", BG_PATH).unwrap();
-        node.set_property_u32(Role::App, "z_index", 0).unwrap();
+        node.set_property_str(atom, Role::App, "path", BG_PATH).unwrap();
+        node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
         let node = node.setup(|me| Image::new(me, app.render_api.clone(), app.ex.clone())).await;
         layer_node.clone().link(node);
 
         // Create a bg mesh on top to fade the bg image
         let node = create_vector_art("bg");
         let prop = node.get_property("rect").unwrap();
-        prop.set_f32(Role::App, 0, 0.).unwrap();
-        prop.set_f32(Role::App, 1, 0.).unwrap();
-        prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
-        prop.set_expr(Role::App, 3, expr::load_var("h")).unwrap();
-        node.set_property_u32(Role::App, "z_index", 1).unwrap();
+        prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
+        prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
+        prop.clone().set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+        prop.clone().set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+        node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
 
         //let c = if LIGHTMODE { 1. } else { 0. };
         let c = 0.;
@@ -197,11 +199,11 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     } else if COLOR_SCHEME == ColorScheme::PaperLight {
         let node = create_vector_art("bg");
         let prop = node.get_property("rect").unwrap();
-        prop.set_f32(Role::App, 0, 0.).unwrap();
-        prop.set_f32(Role::App, 1, 0.).unwrap();
-        prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
-        prop.set_expr(Role::App, 3, expr::load_var("h")).unwrap();
-        node.set_property_u32(Role::App, "z_index", 1).unwrap();
+        prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
+        prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
+        prop.clone().set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+        prop.clone().set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+        node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
 
         let c = 1.;
         // Setup the pimpl
@@ -254,7 +256,7 @@ pub async fn make(app: &App, window: SceneNodePtr) {
 
     // @@@ Debug stuff @@@
     //let chatview_node = app.sg_root.clone().lookup_node("/window/dev_chat_layer").unwrap();
-    //chatview_node.set_property_bool(Role::App, "is_visible", true).unwrap();
+    //chatview_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     //let menu_node = app.sg_root.clone().lookup_node("/window/menu_layer").unwrap();
-    //menu_node.set_property_bool(Role::App, "is_visible", false).unwrap();
+    //menu_node.set_property_bool(atom, Role::App, "is_visible", false).unwrap();
 }

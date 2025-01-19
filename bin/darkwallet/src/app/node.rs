@@ -298,6 +298,9 @@ pub fn create_chatedit(name: &str) -> SceneNode {
     let prop = Property::new("max_height", PropertyType::Float32, PropertySubType::Pixel);
     node.add_property(prop).unwrap();
 
+    let prop = Property::new("height", PropertyType::Float32, PropertySubType::Pixel);
+    node.add_property(prop).unwrap();
+
     let mut prop = Property::new("rect", PropertyType::Float32, PropertySubType::Pixel);
     prop.set_array_len(4);
     prop.allow_exprs();

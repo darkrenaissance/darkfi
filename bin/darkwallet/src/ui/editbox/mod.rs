@@ -39,8 +39,8 @@ use crate::{
     },
     mesh::{MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_WHITE},
     prop::{
-        PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyRect, PropertyStr,
-        PropertyUint32, Role,
+        PropertyAtomicGuard, PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr,
+        PropertyRect, PropertyStr, PropertyUint32, Role,
     },
     pubsub::Subscription,
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
@@ -637,7 +637,7 @@ impl EditBox {
         self.redraw().await;
     }
 
-    async fn handle_shortcut(&self, key: char, mods: &KeyMods) {
+    async fn handle_shortcut(&self, key: char, mods: &KeyMods, atom: &mut PropertyAtomicGuard) {
         t!("handle_shortcut({:?}, {:?})", key, mods);
 
         match key {
@@ -649,7 +649,7 @@ impl EditBox {
             'v' => {
                 if mods.ctrl {
                     if let Some(text) = window::clipboard_get() {
-                        self.paste_text(text).await;
+                        self.paste_text(text, atom).await;
                     }
                 }
             }
@@ -657,7 +657,7 @@ impl EditBox {
         }
     }
 
-    async fn handle_key(&self, key: &KeyCode, mods: &KeyMods) {
+    async fn handle_key(&self, key: &KeyCode, mods: &KeyMods, atom: &mut PropertyAtomicGuard) {
         t!("handle_key({:?}, {:?})", key, mods);
         match key {
             KeyCode::Left => {
@@ -689,13 +689,13 @@ impl EditBox {
             }
             KeyCode::Delete => {
                 self.delete(0, 1);
-                self.clamp_scroll();
+                self.clamp_scroll(atom);
                 self.pause_blinking();
                 self.redraw().await;
             }
             KeyCode::Backspace => {
                 self.delete(1, 0);
-                self.clamp_scroll();
+                self.clamp_scroll(atom);
                 self.pause_blinking();
                 self.redraw().await;
             }
@@ -837,7 +837,7 @@ impl EditBox {
         text
     }
 
-    fn delete_highlighted(&self) {
+    fn delete_highlighted(&self, atom: &mut PropertyAtomicGuard) {
         assert!(!self.selected.is_null(0).unwrap());
         assert!(!self.selected.is_null(1).unwrap());
 
@@ -852,11 +852,11 @@ impl EditBox {
 
         let text = Self::glyphs_to_string(&glyphs);
         t!("delete_highlighted() text='{text}', cursor_pos={sel_start}");
-        self.text.set(text);
+        self.text.set(atom, text);
 
-        self.selected.set_null(Role::Internal, 0).unwrap();
-        self.selected.set_null(Role::Internal, 1).unwrap();
-        self.cursor_pos.set(sel_start as u32);
+        self.selected.clone().set_null(atom, Role::Internal, 0).unwrap();
+        self.selected.clone().set_null(atom, Role::Internal, 1).unwrap();
+        self.cursor_pos.set(atom, sel_start as u32);
     }
 
     fn copy_highlighted(&self) -> Result<()> {
@@ -880,7 +880,7 @@ impl EditBox {
         Ok(())
     }
 
-    async fn paste_text(&self, key: String) {
+    async fn paste_text(&self, key: String, atom: &mut PropertyAtomicGuard) {
         let mut text = String::new();
 
         let cursor_pos = self.cursor_pos.get();
@@ -897,11 +897,11 @@ impl EditBox {
             }
         }
 
-        self.text.set(text);
+        self.text.set(atom, text);
         // Not always true lol
-        self.cursor_pos.set(cursor_pos + 1);
+        self.cursor_pos.set(atom, cursor_pos + 1);
 
-        self.apply_cursor_scrolling();
+        self.apply_cursor_scrolling(atom);
         self.redraw().await;
     }
 
@@ -974,6 +974,7 @@ impl EditBox {
 
     async fn handle_touch_move(&self, pos: Point) -> bool {
         t!("handle_touch_move({pos:?})");
+        let atom = &mut PropertyAtomicGuard::new();
         let touch_state = {
             let mut touch_info = self.touch_info.lock().unwrap();
             touch_info.update(&pos);
@@ -1028,7 +1029,7 @@ impl EditBox {
                 let x_dist = start_pos.x - pos.x;
                 let mut scroll = scroll_start + x_dist;
                 scroll = scroll.clamp(0., self.max_cursor_scroll());
-                self.scroll.set(scroll);
+                self.scroll.set(atom, scroll);
                 self.redraw().await;
             }
             _ => {}
@@ -1075,7 +1076,7 @@ impl EditBox {
 
     /// Whenever the cursor property is modified this MUST be called
     /// to recalculate the scroll x property.
-    fn apply_cursor_scrolling(&self) {
+    fn apply_cursor_scrolling(&self, atom: &mut PropertyAtomicGuard) {
         let rect = self.rect.get();
 
         let cursor_pos = self.cursor_pos.get() as usize;
@@ -1121,7 +1122,7 @@ impl EditBox {
             scroll = cursor_x;
         }
 
-        self.scroll.set(scroll);
+        self.scroll.set(atom, scroll);
     }
 
     fn max_cursor_scroll(&self) -> f32 {
@@ -1151,10 +1152,10 @@ impl EditBox {
         max_scroll
     }
 
-    fn clamp_scroll(&self) {
+    fn clamp_scroll(&self, atom: &mut PropertyAtomicGuard) {
         let mut scroll = self.scroll.get();
         scroll = scroll.clamp(0., self.max_cursor_scroll());
-        self.scroll.set(scroll);
+        self.scroll.set(atom, scroll);
     }
 
     fn pause_blinking(&self) {
@@ -1272,10 +1273,11 @@ impl UIObject for EditBox {
         // When text has been changed.
         // Cursor and selection might be invalidated.
         async fn reset(self_: Arc<EditBox>) {
-            self_.cursor_pos.set(0);
-            self_.selected.set_null(Role::Internal, 0).unwrap();
-            self_.selected.set_null(Role::Internal, 1).unwrap();
-            self_.scroll.set(0.);
+            let atom = &mut PropertyAtomicGuard::new();
+            self_.cursor_pos.set(atom, 0);
+            self_.selected.clone().set_null(atom, Role::Internal, 0).unwrap();
+            self_.selected.clone().set_null(atom, Role::Internal, 1).unwrap();
+            self_.scroll.set(atom, 0.);
             self_.redraw();
         }
         async fn redraw(self_: Arc<EditBox>) {
@@ -1332,10 +1334,12 @@ impl UIObject for EditBox {
 
     async fn draw(&self, parent_rect: Rectangle, trace_id: u32) -> Option<DrawUpdate> {
         t!("EditBox::draw() [trace_id={trace_id}]");
+        let atom = &mut PropertyAtomicGuard::new();
+
         *self.parent_rect.lock().unwrap() = Some(parent_rect);
         self.rect.eval(&parent_rect).ok()?;
 
-        self.clamp_scroll();
+        self.clamp_scroll(atom);
         self.make_draw_calls()
     }
 
@@ -1349,11 +1353,13 @@ impl UIObject for EditBox {
             return false
         }
 
+        let atom = &mut PropertyAtomicGuard::new();
+
         if mods.ctrl || mods.alt {
             if repeat {
                 return false
             }
-            self.handle_shortcut(key, &mods).await;
+            self.handle_shortcut(key, &mods, atom).await;
             return true
         }
 
@@ -1383,12 +1389,15 @@ impl UIObject for EditBox {
             let mut repeater = self.key_repeat.lock().unwrap();
             repeater.key_down(PressedKey::Key(key), repeat)
         };
+
+        let atom = &mut PropertyAtomicGuard::new();
+
         // Suppress noisy message
         if actions > 0 {
             t!("Key {key:?} has {actions} actions");
         }
         for _ in 0..actions {
-            self.handle_key(&key, &mods).await;
+            self.handle_key(&key, &mods, atom).await;
         }
         true
     }
@@ -1403,6 +1412,7 @@ impl UIObject for EditBox {
         }
 
         let rect = self.rect.get();
+        let atom = &mut PropertyAtomicGuard::new();
 
         // clicking inside box will:
         // 1. make it active
@@ -1410,7 +1420,7 @@ impl UIObject for EditBox {
         if !rect.contains(mouse_pos) {
             if self.is_focused.get() {
                 d!("EditBox unfocused");
-                self.is_focused.set(false);
+                self.is_focused.set(atom, false);
                 self.select.lock().unwrap().clear();
 
                 self.redraw().await;
@@ -1422,7 +1432,7 @@ impl UIObject for EditBox {
             d!("EditBox clicked");
         } else {
             d!("EditBox focused");
-            self.is_focused.set(true);
+            self.is_focused.set(atom, true);
         }
 
         let font_size = self.font_size.get();
@@ -1507,10 +1517,12 @@ impl UIObject for EditBox {
             return false
         }
 
+        let atom = &mut PropertyAtomicGuard::new();
+
         let mut scroll = self.scroll.get() + wheel_pos.y * self.scroll_speed.get();
         scroll = scroll.clamp(0., self.max_cursor_scroll());
         t!("handle_mouse_wheel({wheel_pos:?}) [scroll={scroll}]");
-        self.scroll.set(scroll);
+        self.scroll.set(atom, scroll);
         self.redraw().await;
 
         true
@@ -1546,8 +1558,9 @@ impl UIObject for EditBox {
             editable.compose(suggest_text, is_commit);
         }
 
+        let atom = &mut PropertyAtomicGuard::new();
         //self.apply_cursor_scrolling();
-        self.clamp_scroll();
+        self.clamp_scroll(atom);
         self.redraw().await;
 
         true

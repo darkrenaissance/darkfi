@@ -42,8 +42,8 @@ use crate::{
     },
     mesh::{Color, MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_RED, COLOR_WHITE},
     prop::{
-        PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyRect, PropertyStr,
-        PropertyUint32, Role,
+        PropertyAtomicGuard, PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr,
+        PropertyRect, PropertyStr, PropertyUint32, Role,
     },
     pubsub::Subscription,
     scene::{MethodCallSub, Pimpl, SceneNodePtr, SceneNodeWeak},
@@ -470,6 +470,7 @@ pub struct ChatEdit {
     is_active: PropertyBool,
     is_focused: PropertyBool,
     max_height: PropertyFloat32,
+    height: PropertyFloat32,
     rect: PropertyRect,
     baseline: PropertyFloat32,
     linespacing: PropertyFloat32,
@@ -530,6 +531,7 @@ impl ChatEdit {
         let is_active = PropertyBool::wrap(node_ref, Role::Internal, "is_active", 0).unwrap();
         let is_focused = PropertyBool::wrap(node_ref, Role::Internal, "is_focused", 0).unwrap();
         let max_height = PropertyFloat32::wrap(node_ref, Role::Internal, "max_height", 0).unwrap();
+        let height = PropertyFloat32::wrap(node_ref, Role::Internal, "height", 0).unwrap();
         let rect = PropertyRect::wrap(node_ref, Role::Internal, "rect").unwrap();
         let baseline = PropertyFloat32::wrap(node_ref, Role::Internal, "baseline", 0).unwrap();
         let linespacing =
@@ -592,6 +594,7 @@ impl ChatEdit {
             is_active,
             is_focused,
             max_height,
+            height,
             rect,
             baseline: baseline.clone(),
             linespacing: linespacing.clone(),
@@ -680,7 +683,7 @@ impl ChatEdit {
     }
 
     /// Called whenever the text or any text property changes.
-    fn regen_text_mesh(&self, trace_id: u32) -> GfxDrawMesh {
+    fn regen_text_mesh(&self, trace_id: u32, atom: &mut PropertyAtomicGuard) -> GfxDrawMesh {
         let is_focused = self.is_focused.get();
         let text = self.text.get();
         let font_size = self.font_size.get();
@@ -706,7 +709,7 @@ impl ChatEdit {
             let mut text_wrap = self.text_wrap.lock();
             // Must happen after rect eval, which is inside regen_text_mesh
             // Maybe we should take the eval out of here.
-            self.clamp_scroll(&mut text_wrap);
+            self.clamp_scroll(&mut text_wrap, atom);
 
             let rendered = text_wrap.get_render();
             let under_start = rendered.under_start;
@@ -720,7 +723,7 @@ impl ChatEdit {
         let mut height = wrapped_lines.height() + self.descent.get();
         height = height.clamp(0., self.max_height.get());
 
-        self.rect.prop().set_f32(Role::Internal, 3, height);
+        self.rect.prop().set_f32(atom, Role::Internal, 3, height);
 
         // Eval the rect
         let parent_rect = self.parent_rect.lock().clone().unwrap();
@@ -1091,13 +1094,13 @@ impl ChatEdit {
         self.redraw().await;
     }
 
-    async fn insert_char(&self, key: char) {
+    async fn insert_char(&self, key: char, atom: &mut PropertyAtomicGuard) {
         t!("insert_char({key})");
         let mut tmp = [0; 4];
         let key_str = key.encode_utf8(&mut tmp);
-        self.insert_text(key_str).await
+        self.insert_text(key_str, atom).await
     }
-    async fn insert_text(&self, text: &str) {
+    async fn insert_text(&self, text: &str, atom: &mut PropertyAtomicGuard) {
         t!("insert_text({text})");
         let text = {
             let mut text_wrap = &mut self.text_wrap.lock();
@@ -1105,7 +1108,7 @@ impl ChatEdit {
             if !text_wrap.select.is_empty() {
                 text_wrap.delete_selected();
 
-                self.update_select_text(&mut text_wrap);
+                self.update_select_text(&mut text_wrap, atom);
 
                 self.is_phone_select.store(false, Ordering::Relaxed);
                 // Reshow cursor (if hidden)
@@ -1114,13 +1117,18 @@ impl ChatEdit {
             text_wrap.editable.compose(text, true);
             text_wrap.editable.get_text()
         };
-        self.text.set(text);
+        self.text.set(atom, text);
 
         self.pause_blinking();
         self.redraw().await;
     }
 
-    async fn handle_shortcut(&self, key: char, mods: &KeyMods) -> bool {
+    async fn handle_shortcut(
+        &self,
+        key: char,
+        mods: &KeyMods,
+        atom: &mut PropertyAtomicGuard,
+    ) -> bool {
         t!("handle_shortcut({:?}, {:?})", key, mods);
 
         match key {
@@ -1135,7 +1143,7 @@ impl ChatEdit {
                         select.clear();
                         select.push(Selection::new(0, end_pos));
 
-                        self.update_select_text(&mut text_wrap);
+                        self.update_select_text(&mut text_wrap, atom);
                     }
 
                     self.redraw().await;
@@ -1152,7 +1160,7 @@ impl ChatEdit {
                 if mods.ctrl {
                     let mut clip = Clipboard::new();
                     if let Some(text) = clip.get() {
-                        self.insert_text(&text).await;
+                        self.insert_text(&text, atom).await;
                     }
                     return true
                 }
@@ -1162,11 +1170,16 @@ impl ChatEdit {
         false
     }
 
-    async fn handle_key(&self, key: &KeyCode, mods: &KeyMods) -> bool {
+    async fn handle_key(
+        &self,
+        key: &KeyCode,
+        mods: &KeyMods,
+        atom: &mut PropertyAtomicGuard,
+    ) -> bool {
         t!("handle_key({:?}, {:?})", key, mods);
         match key {
             KeyCode::Left => {
-                if !self.adjust_cursor(&mods, |editable| editable.move_cursor(-1)) {
+                if !self.adjust_cursor(&mods, |editable| editable.move_cursor(-1), atom) {
                     return false
                 }
                 self.pause_blinking();
@@ -1175,7 +1188,7 @@ impl ChatEdit {
                 return true
             }
             KeyCode::Right => {
-                if !self.adjust_cursor(&mods, |editable| editable.move_cursor(1)) {
+                if !self.adjust_cursor(&mods, |editable| editable.move_cursor(1), atom) {
                     return false
                 }
                 self.pause_blinking();
@@ -1184,47 +1197,47 @@ impl ChatEdit {
                 return true
             }
             KeyCode::Kp0 => {
-                self.insert_char('0').await;
+                self.insert_char('0', atom).await;
                 return true
             }
             KeyCode::Kp1 => {
-                self.insert_char('1').await;
+                self.insert_char('1', atom).await;
                 return true
             }
             KeyCode::Kp2 => {
-                self.insert_char('2').await;
+                self.insert_char('2', atom).await;
                 return true
             }
             KeyCode::Kp3 => {
-                self.insert_char('3').await;
+                self.insert_char('3', atom).await;
                 return true
             }
             KeyCode::Kp4 => {
-                self.insert_char('4').await;
+                self.insert_char('4', atom).await;
                 return true
             }
             KeyCode::Kp5 => {
-                self.insert_char('5').await;
+                self.insert_char('5', atom).await;
                 return true
             }
             KeyCode::Kp6 => {
-                self.insert_char('6').await;
+                self.insert_char('6', atom).await;
                 return true
             }
             KeyCode::Kp7 => {
-                self.insert_char('7').await;
+                self.insert_char('7', atom).await;
                 return true
             }
             KeyCode::Kp8 => {
-                self.insert_char('8').await;
+                self.insert_char('8', atom).await;
                 return true
             }
             KeyCode::Kp9 => {
-                self.insert_char('9').await;
+                self.insert_char('9', atom).await;
                 return true
             }
             KeyCode::KpDecimal => {
-                self.insert_char('.').await;
+                self.insert_char('.', atom).await;
                 return true
             }
             KeyCode::Enter | KeyCode::KpEnter => {
@@ -1233,28 +1246,28 @@ impl ChatEdit {
                 }
             }
             KeyCode::Delete => {
-                self.delete(0, 1);
-                self.clamp_scroll(&mut self.text_wrap.lock());
+                self.delete(0, 1, atom);
+                self.clamp_scroll(&mut self.text_wrap.lock(), atom);
                 self.pause_blinking();
                 self.redraw().await;
                 return true
             }
             KeyCode::Backspace => {
-                self.delete(1, 0);
-                self.clamp_scroll(&mut self.text_wrap.lock());
+                self.delete(1, 0, atom);
+                self.clamp_scroll(&mut self.text_wrap.lock(), atom);
                 self.pause_blinking();
                 self.redraw().await;
                 return true
             }
             KeyCode::Home => {
-                self.adjust_cursor(&mods, |editable| editable.move_start());
+                self.adjust_cursor(&mods, |editable| editable.move_start(), atom);
                 self.pause_blinking();
                 //self.apply_cursor_scrolling();
                 self.redraw().await;
                 return true
             }
             KeyCode::End => {
-                self.adjust_cursor(&mods, |editable| editable.move_end());
+                self.adjust_cursor(&mods, |editable| editable.move_end(), atom);
                 self.pause_blinking();
                 //self.apply_cursor_scrolling();
                 self.redraw().await;
@@ -1265,14 +1278,14 @@ impl ChatEdit {
         false
     }
 
-    fn delete(&self, before: usize, after: usize) {
+    fn delete(&self, before: usize, after: usize, atom: &mut PropertyAtomicGuard) {
         let mut text_wrap = &mut self.text_wrap.lock();
         if text_wrap.select.is_empty() {
             text_wrap.editable.delete(before, after);
             text_wrap.clear_cache();
         } else {
             text_wrap.delete_selected();
-            self.update_select_text(&mut text_wrap);
+            self.update_select_text(&mut text_wrap, atom);
         }
 
         self.is_phone_select.store(false, Ordering::Relaxed);
@@ -1280,10 +1293,15 @@ impl ChatEdit {
         self.hide_cursor.store(false, Ordering::Relaxed);
 
         let text = text_wrap.editable.get_text();
-        self.text.set(text);
+        self.text.set(atom, text);
     }
 
-    fn adjust_cursor(&self, mods: &KeyMods, move_cursor: impl Fn(&mut Editable)) -> bool {
+    fn adjust_cursor(
+        &self,
+        mods: &KeyMods,
+        move_cursor: impl Fn(&mut Editable),
+        atom: &mut PropertyAtomicGuard,
+    ) -> bool {
         if mods.ctrl || mods.alt || mods.logo {
             return false
         }
@@ -1310,12 +1328,12 @@ impl ChatEdit {
             select.clear();
         }
 
-        self.update_select_text(&mut text_wrap);
+        self.update_select_text(&mut text_wrap, atom);
         true
     }
 
     /// This will select the entire word rather than move the cursor to that location
-    fn start_touch_select(&self, touch_pos: Point) {
+    fn start_touch_select(&self, touch_pos: Point, atom: &mut PropertyAtomicGuard) {
         let mut text_wrap = &mut self.text_wrap.lock();
         text_wrap.clear_cache();
         text_wrap.editable.end_compose();
@@ -1338,14 +1356,14 @@ impl ChatEdit {
         }
 
         d!("Selected {select:?} from {touch_pos:?}");
-        self.update_select_text(&mut text_wrap);
+        self.update_select_text(&mut text_wrap, atom);
     }
 
     /// Call this whenever the selection changes to update the external property
-    fn update_select_text(&self, text_wrap: &mut TextWrap) {
+    fn update_select_text(&self, text_wrap: &mut TextWrap, atom: &mut PropertyAtomicGuard) {
         let select = &text_wrap.select;
         let Some(select) = select.first().cloned() else {
-            self.select_text.set_null(Role::Internal, 0).unwrap();
+            self.select_text.clone().set_null(atom, Role::Internal, 0).unwrap();
             return
         };
 
@@ -1355,13 +1373,13 @@ impl ChatEdit {
         let rendered = text_wrap.get_render();
         let glyphs = &rendered.glyphs[start..end];
         let text = text::glyph_str(glyphs);
-        self.select_text.set_str(Role::Internal, 0, text).unwrap();
+        self.select_text.clone().set_str(atom, Role::Internal, 0, text).unwrap();
     }
 
     /// Call this whenever the cursor pos changes to update the external property
-    fn update_cursor_pos(&self, text_wrap: &mut TextWrap) {
+    fn update_cursor_pos(&self, text_wrap: &mut TextWrap, atom: &mut PropertyAtomicGuard) {
         let cursor_off = text_wrap.editable.get_text_before().len() as u32;
-        self.cursor_pos.set(cursor_off);
+        self.cursor_pos.set(atom, cursor_off);
     }
 
     /*
@@ -1403,9 +1421,9 @@ impl ChatEdit {
             }
         }
 
-        self.text.set(text);
+        self.text.set(atom, text);
         // Not always true lol
-        self.cursor_pos.set(cursor_pos + 1);
+        self.cursor_pos.set(atom, cursor_pos + 1);
 
         self.apply_cursor_scrolling();
         self.redraw().await;
@@ -1487,6 +1505,7 @@ impl ChatEdit {
 
     async fn handle_touch_move(&self, mut touch_pos: Point) -> bool {
         t!("handle_touch_move({touch_pos:?})");
+        let atom = &mut PropertyAtomicGuard::new();
         // We must update with non relative touch_pos bcos when doing vertical scrolling
         // we will modify the scroll, which is used by abs_to_local(), which is used
         // to then calculate the max scroll. So it ends up jumping around.
@@ -1504,7 +1523,7 @@ impl ChatEdit {
                     node.trigger("paste_request", vec![]).await.unwrap();
                 } else {
                     self.abs_to_local(&mut touch_pos);
-                    self.start_touch_select(touch_pos);
+                    self.start_touch_select(touch_pos, atom);
                     self.redraw().await;
                 }
                 d!("touch state: StartSelect -> Select");
@@ -1552,7 +1571,7 @@ impl ChatEdit {
                         select.end = pos;
                     }
 
-                    self.update_select_text(&mut text_wrap);
+                    self.update_select_text(&mut text_wrap, atom);
                 }
                 self.redraw().await;
             }
@@ -1568,7 +1587,7 @@ impl ChatEdit {
                 if (self.scroll.get() - scroll).abs() < VERT_SCROLL_UPDATE_INC {
                     return true
                 }
-                self.scroll.set(scroll);
+                self.scroll.set(atom, scroll);
                 self.redraw().await;
             }
             TouchStateAction::SetCursorPos => {
@@ -1583,13 +1602,14 @@ impl ChatEdit {
     }
     async fn handle_touch_end(&self, mut touch_pos: Point) -> bool {
         t!("handle_touch_end({touch_pos:?})");
+        let atom = &mut PropertyAtomicGuard::new();
         self.abs_to_local(&mut touch_pos);
 
         let state = self.touch_info.lock().stop();
         match state {
             TouchStateAction::Inactive => return false,
             TouchStateAction::Started { pos: _, instant: _ } | TouchStateAction::SetCursorPos => {
-                self.touch_set_cursor_pos(touch_pos).await
+                self.touch_set_cursor_pos(touch_pos, atom).await
             }
             _ => {}
         }
@@ -1600,19 +1620,19 @@ impl ChatEdit {
         true
     }
 
-    async fn touch_set_cursor_pos(&self, mut touch_pos: Point) {
+    async fn touch_set_cursor_pos(&self, mut touch_pos: Point, atom: &mut PropertyAtomicGuard) {
         t!("touch_set_cursor_pos({touch_pos:?})");
         let width = self.wrap_width();
         {
             let mut text_wrap = self.text_wrap.lock();
             let cursor_pos = text_wrap.set_cursor_with_point(touch_pos, width);
-            self.update_cursor_pos(&mut text_wrap);
+            self.update_cursor_pos(&mut text_wrap, atom);
 
             let select = &mut text_wrap.select;
             let select_is_empty = select.is_empty();
             select.clear();
             if !select_is_empty {
-                self.update_select_text(&mut text_wrap);
+                self.update_select_text(&mut text_wrap, atom);
             }
         }
 
@@ -1626,7 +1646,7 @@ impl ChatEdit {
 
     /// Whenever the cursor property is modified this MUST be called
     /// to recalculate the scroll x property.
-    fn apply_cursor_scrolling(&self) {
+    fn apply_cursor_scrolling(&self, atom: &mut PropertyAtomicGuard) {
         let rect = self.rect.get();
 
         let cursor_pos = self.cursor_pos.get() as usize;
@@ -1672,7 +1692,7 @@ impl ChatEdit {
             scroll = cursor_x;
         }
 
-        self.scroll.set(scroll);
+        self.scroll.set(atom, scroll);
     }
 
     fn max_scroll(&self, text_wrap: &mut TextWrap) -> f32 {
@@ -1694,11 +1714,11 @@ impl ChatEdit {
 
     /// When we resize the screen, the rect changes so we may need to alter the scroll.
     /// Or if we delete text.
-    fn clamp_scroll(&self, text_wrap: &mut TextWrap) {
+    fn clamp_scroll(&self, text_wrap: &mut TextWrap, atom: &mut PropertyAtomicGuard) {
         let max_scroll = self.max_scroll(text_wrap);
         let mut scroll = self.scroll.get();
         if scroll > max_scroll {
-            self.scroll.set(max_scroll);
+            self.scroll.set(atom, max_scroll);
         }
     }
 
@@ -1708,10 +1728,11 @@ impl ChatEdit {
     }
 
     async fn redraw(&self) {
+        let atom = &mut PropertyAtomicGuard::new();
         let trace_id = rand::random();
         let timest = unixtime();
         t!("redraw()");
-        let Some(draw_update) = self.make_draw_calls(trace_id) else {
+        let Some(draw_update) = self.make_draw_calls(trace_id, atom) else {
             error!(target: "ui::chatedit", "Text failed to draw");
             return;
         };
@@ -1761,8 +1782,8 @@ impl ChatEdit {
         cursor_instrs
     }
 
-    fn make_draw_calls(&self, trace_id: u32) -> Option<DrawUpdate> {
-        let text_mesh = self.regen_text_mesh(trace_id);
+    fn make_draw_calls(&self, trace_id: u32, atom: &mut PropertyAtomicGuard) -> Option<DrawUpdate> {
+        let text_mesh = self.regen_text_mesh(trace_id, atom);
         let cursor_instrs = self.get_cursor_instrs();
 
         let rect = self.rect.get();
@@ -1822,7 +1843,8 @@ impl ChatEdit {
             panic!("self destroyed before insert_text_method_task was stopped!");
         };
 
-        self_.insert_text(&text).await;
+        let atom = &mut PropertyAtomicGuard::new();
+        self_.insert_text(&text, atom).await;
         true
     }
 }
@@ -1858,9 +1880,10 @@ impl UIObject for ChatEdit {
         // When text has been changed.
         // Cursor and selection might be invalidated.
         async fn reset(self_: Arc<ChatEdit>) {
-            self_.cursor_pos.set(0);
+            let atom = &mut PropertyAtomicGuard::new();
+            self_.cursor_pos.set(atom, 0);
             //self_.select_text.set_null(Role::Internal, 0).unwrap();
-            self_.scroll.set(0.);
+            self_.scroll.set(atom, 0.);
             self_.redraw();
         }
         async fn redraw(self_: Arc<ChatEdit>) {
@@ -1943,9 +1966,10 @@ impl UIObject for ChatEdit {
 
     async fn draw(&self, parent_rect: Rectangle, trace_id: u32) -> Option<DrawUpdate> {
         t!("ChatEdit::draw({:?}, {trace_id})", self.node.upgrade().unwrap());
+        let atom = &mut PropertyAtomicGuard::new();
         *self.parent_rect.lock() = Some(parent_rect);
 
-        self.make_draw_calls(trace_id)
+        self.make_draw_calls(trace_id, atom)
     }
 
     async fn handle_char(&self, key: char, mods: KeyMods, repeat: bool) -> bool {
@@ -1967,16 +1991,19 @@ impl UIObject for ChatEdit {
             repeater.key_down(PressedKey::Char(key), repeat)
         };
 
+        let atom = &mut PropertyAtomicGuard::new();
+
         if mods.ctrl || mods.alt {
             if repeat {
                 return false
             }
-            return self.handle_shortcut(key, &mods).await
+            return self.handle_shortcut(key, &mods, atom).await
         }
 
+        let atom = &mut PropertyAtomicGuard::new();
         t!("Key {:?} has {} actions", key, actions);
         for _ in 0..actions {
-            self.insert_char(key).await;
+            self.insert_char(key, atom).await;
         }
         true
     }
@@ -2003,9 +2030,11 @@ impl UIObject for ChatEdit {
             t!("Key {:?} has {} actions", key, actions);
         }
 
+        let atom = &mut PropertyAtomicGuard::new();
+
         let mut is_handled = false;
         for _ in 0..actions {
-            if self.handle_key(&key, &mods).await {
+            if self.handle_key(&key, &mods, atom).await {
                 is_handled = true;
             }
         }
@@ -2034,6 +2063,8 @@ impl UIObject for ChatEdit {
             return false
         }
 
+        let atom = &mut PropertyAtomicGuard::new();
+
         // clicking inside box will:
         // 1. make it active
         // 2. begin selection
@@ -2041,7 +2072,7 @@ impl UIObject for ChatEdit {
             d!("ChatEdit clicked");
         } else {
             d!("ChatEdit focused");
-            self.is_focused.set(true);
+            self.is_focused.set(atom, true);
         }
 
         // Move mouse pos within this widget
@@ -2052,7 +2083,7 @@ impl UIObject for ChatEdit {
         {
             let mut text_wrap = self.text_wrap.lock();
             let cursor_pos = text_wrap.set_cursor_with_point(mouse_pos, width);
-            self.update_cursor_pos(&mut text_wrap);
+            self.update_cursor_pos(&mut text_wrap, atom);
             d!("Mouse move cursor pos to {cursor_pos}");
 
             // begin selection
@@ -2060,7 +2091,7 @@ impl UIObject for ChatEdit {
             let select_is_empty = select.is_empty();
             select.clear();
             if !select_is_empty {
-                self.update_select_text(&mut text_wrap);
+                self.update_select_text(&mut text_wrap, atom);
             }
 
             self.mouse_btn_held.store(true, Ordering::Relaxed);
@@ -2093,6 +2124,8 @@ impl UIObject for ChatEdit {
             return false;
         }
 
+        let atom = &mut PropertyAtomicGuard::new();
+
         // if active and selection_active, then use x to modify the selection.
         // also implement scrolling when cursor is to the left or right
         // just scroll to the end
@@ -2106,7 +2139,7 @@ impl UIObject for ChatEdit {
         {
             let mut text_wrap = self.text_wrap.lock();
             let cursor_pos = text_wrap.set_cursor_with_point(mouse_pos, width);
-            self.update_cursor_pos(&mut text_wrap);
+            self.update_cursor_pos(&mut text_wrap, atom);
 
             // modify current selection
             let select = &mut text_wrap.select;
@@ -2114,7 +2147,7 @@ impl UIObject for ChatEdit {
                 select.push(Selection::new(cursor_pos, cursor_pos));
             }
             select.first_mut().unwrap().end = cursor_pos;
-            self.update_select_text(&mut text_wrap);
+            self.update_select_text(&mut text_wrap, atom);
         }
 
         self.pause_blinking();
@@ -2128,6 +2161,8 @@ impl UIObject for ChatEdit {
             return false
         }
 
+        let atom = &mut PropertyAtomicGuard::new();
+
         let max_scroll = {
             let mut text_wrap = self.text_wrap.lock();
             self.max_scroll(&mut text_wrap)
@@ -2136,7 +2171,7 @@ impl UIObject for ChatEdit {
         let mut scroll = self.scroll.get() - wheel_pos.y * self.scroll_speed.get();
         scroll = scroll.clamp(0., max_scroll);
         t!("handle_mouse_wheel({wheel_pos:?}) [scroll={scroll}]");
-        self.scroll.set(scroll);
+        self.scroll.set(atom, scroll);
         self.redraw().await;
 
         true
@@ -2162,6 +2197,7 @@ impl UIObject for ChatEdit {
 
     async fn handle_compose_text(&self, suggest_text: &str, is_commit: bool) -> bool {
         t!("handle_compose_text({suggest_text}, {is_commit})");
+        let atom = &mut PropertyAtomicGuard::new();
 
         if !self.is_active.get() {
             return false
@@ -2172,10 +2208,10 @@ impl UIObject for ChatEdit {
             text_wrap.clear_cache();
             text_wrap.editable.compose(suggest_text, is_commit);
 
-            self.clamp_scroll(&mut text_wrap);
+            self.clamp_scroll(&mut text_wrap, atom);
             text_wrap.editable.get_text()
         };
-        self.text.set(text);
+        self.text.set(atom, text);
 
         //self.apply_cursor_scrolling();
         self.redraw().await;

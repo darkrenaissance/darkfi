@@ -32,7 +32,7 @@ use std::{
 use crate::{
     error::{Error, Result},
     plugin,
-    prop::{Property, PropertyPtr, Role},
+    prop::{Property, PropertyAtomicGuard, PropertyPtr, Role},
     pubsub::{Publisher, PublisherPtr, Subscription},
     ui,
 };
@@ -239,20 +239,50 @@ impl SceneNode {
         self.get_property(name).ok_or(Error::PropertyNotFound)?.get_node_id(0)
     }
     // Setters
-    pub fn set_property_bool(&self, role: Role, name: &str, val: bool) -> Result<()> {
-        self.get_property(name).ok_or(Error::PropertyNotFound)?.set_bool(role, 0, val)
+    pub fn set_property_bool(
+        &self,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        name: &str,
+        val: bool,
+    ) -> Result<()> {
+        self.get_property(name).ok_or(Error::PropertyNotFound)?.set_bool(atom, role, 0, val)
     }
-    pub fn set_property_u32(&self, role: Role, name: &str, val: u32) -> Result<()> {
-        self.get_property(name).ok_or(Error::PropertyNotFound)?.set_u32(role, 0, val)
+    pub fn set_property_u32(
+        &self,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        name: &str,
+        val: u32,
+    ) -> Result<()> {
+        self.get_property(name).ok_or(Error::PropertyNotFound)?.set_u32(atom, role, 0, val)
     }
-    pub fn set_property_f32(&self, role: Role, name: &str, val: f32) -> Result<()> {
-        self.get_property(name).ok_or(Error::PropertyNotFound)?.set_f32(role, 0, val)
+    pub fn set_property_f32(
+        &self,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        name: &str,
+        val: f32,
+    ) -> Result<()> {
+        self.get_property(name).ok_or(Error::PropertyNotFound)?.set_f32(atom, role, 0, val)
     }
-    pub fn set_property_str<S: Into<String>>(&self, role: Role, name: &str, val: S) -> Result<()> {
-        self.get_property(name).ok_or(Error::PropertyNotFound)?.set_str(role, 0, val)
+    pub fn set_property_str<S: Into<String>>(
+        &self,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        name: &str,
+        val: S,
+    ) -> Result<()> {
+        self.get_property(name).ok_or(Error::PropertyNotFound)?.set_str(atom, role, 0, val)
     }
-    pub fn set_property_node_id(&self, role: Role, name: &str, val: SceneNodeId) -> Result<()> {
-        self.get_property(name).ok_or(Error::PropertyNotFound)?.set_node_id(role, 0, val)
+    pub fn set_property_node_id(
+        &self,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        name: &str,
+        val: SceneNodeId,
+    ) -> Result<()> {
+        self.get_property(name).ok_or(Error::PropertyNotFound)?.set_node_id(atom, role, 0, val)
     }
 
     pub fn add_signal<S: Into<String>>(

@@ -31,7 +31,8 @@ use crate::{
     gfx::{GraphicsEventPublisherPtr, Rectangle, RenderApi, Vertex},
     mesh::{Color, MeshBuilder},
     prop::{
-        Property, PropertyBool, PropertyFloat32, PropertyStr, PropertySubType, PropertyType, Role,
+        Property, PropertyAtomicGuard, PropertyBool, PropertyFloat32, PropertyStr, PropertySubType,
+        PropertyType, Role,
     },
     scene::{SceneNodePtr, Slot},
     text::TextShaperPtr,
@@ -59,6 +60,8 @@ mod ui_consts {
 use ui_consts::*;
 
 pub async fn make(app: &App, window: SceneNodePtr) {
+    let atom = &mut PropertyAtomicGuard::new();
+
     let window_scale = PropertyFloat32::wrap(&window, Role::Internal, "scale", 0).unwrap();
 
     let mut cc = Compiler::new();
@@ -66,11 +69,11 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     // Create a layer called view
     let layer_node = create_layer("view");
     let prop = layer_node.get_property("rect").unwrap();
-    prop.set_f32(Role::App, 0, 0.).unwrap();
-    prop.set_f32(Role::App, 1, 0.).unwrap();
-    prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(Role::App, 3, expr::load_var("h")).unwrap();
-    layer_node.set_property_bool(Role::App, "is_visible", true).unwrap();
+    prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.clone().set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+    prop.clone().set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    layer_node.set_property_bool(atom, Role::App, "is_visible", true).unwrap();
     let layer_node =
         layer_node.setup(|me| Layer::new(me, app.render_api.clone(), app.ex.clone())).await;
     window.link(layer_node.clone());
@@ -78,11 +81,11 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     // Create a bg mesh
     let node = create_vector_art("bg");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(Role::App, 0, 0.).unwrap();
-    prop.set_f32(Role::App, 1, 0.).unwrap();
-    prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_expr(Role::App, 3, expr::load_var("h")).unwrap();
-    node.set_property_u32(Role::App, "z_index", 0).unwrap();
+    prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
+    prop.clone().set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+    prop.clone().set_expr(atom, Role::App, 3, expr::load_var("h")).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 0).unwrap();
 
     let c = if LIGHTMODE { 1. } else { 0. };
     let mut shape = VectorShape::new();
@@ -101,11 +104,11 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     let node = create_vector_art("btnbg");
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile("w - 210").unwrap();
-    prop.set_expr(Role::App, 0, code).unwrap();
-    prop.set_f32(Role::App, 1, 10.).unwrap();
-    prop.set_f32(Role::App, 2, 200.).unwrap();
-    prop.set_f32(Role::App, 3, 60.).unwrap();
-    node.set_property_u32(Role::App, "z_index", 1).unwrap();
+    prop.clone().set_expr(atom, Role::App, 0, code).unwrap();
+    prop.clone().set_f32(atom, Role::App, 1, 10.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 2, 200.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 3, 60.).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
 
     // Setup the pimpl
     let verts = if LIGHTMODE {
@@ -131,13 +134,13 @@ pub async fn make(app: &App, window: SceneNodePtr) {
 
     // Create the button
     let node = create_button("btn");
-    node.set_property_bool(Role::App, "is_active", true).unwrap();
+    node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
     let prop = node.get_property("rect").unwrap();
     let code = cc.compile("w - 220").unwrap();
-    prop.set_expr(Role::App, 0, code).unwrap();
-    prop.set_f32(Role::App, 1, 10.).unwrap();
-    prop.set_f32(Role::App, 2, 200.).unwrap();
-    prop.set_f32(Role::App, 3, 60.).unwrap();
+    prop.clone().set_expr(atom, Role::App, 0, code).unwrap();
+    prop.clone().set_f32(atom, Role::App, 1, 10.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 2, 200.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 3, 60.).unwrap();
 
     //let (sender, btn_click_recvr) = async_channel::unbounded();
     //let slot_click = Slot { name: "button_clicked".to_string(), notify: sender };
@@ -149,11 +152,11 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     // Create another mesh
     let node = create_vector_art("box");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(Role::App, 0, 10.).unwrap();
-    prop.set_f32(Role::App, 1, 10.).unwrap();
-    prop.set_f32(Role::App, 2, 60.).unwrap();
-    prop.set_f32(Role::App, 3, 60.).unwrap();
-    node.set_property_u32(Role::App, "z_index", 1).unwrap();
+    prop.clone().set_f32(atom, Role::App, 0, 10.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 1, 10.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 2, 60.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 3, 60.).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
 
     // Setup the pimpl
     let verts = if LIGHTMODE {
@@ -180,13 +183,13 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     // Debugging tool
     let node = create_vector_art("debugtool");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(Role::App, 0, 0.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
     let code = cc.compile("h/2").unwrap();
-    prop.set_expr(Role::App, 1, code).unwrap();
-    prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
+    prop.clone().set_expr(atom, Role::App, 1, code).unwrap();
+    prop.clone().set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
     let code = cc.compile("h/2 - 200").unwrap();
-    prop.set_expr(Role::App, 3, code).unwrap();
-    node.set_property_u32(Role::App, "z_index", 2).unwrap();
+    prop.clone().set_expr(atom, Role::App, 3, code).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
 
     let mut shape = VectorShape::new();
     shape.add_filled_box(
@@ -210,11 +213,11 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     // Another debug tool for the chatedit
     let node = create_vector_art("debugtool-chatedit");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(Role::App, 0, 0.).unwrap();
-    prop.set_f32(Role::App, 1, 300. - 5.).unwrap();
-    prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
-    prop.set_f32(Role::App, 3, 400. + 10.).unwrap();
-    node.set_property_u32(Role::App, "z_index", 2).unwrap();
+    prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 1, 300. - 5.).unwrap();
+    prop.clone().set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
+    prop.clone().set_f32(atom, Role::App, 3, 400. + 10.).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 2).unwrap();
 
     let mut shape = VectorShape::new();
     shape.add_filled_box(
@@ -238,38 +241,39 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     // Create KING GNU!
     let node = create_image("king");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(Role::App, 0, 80.).unwrap();
-    prop.set_f32(Role::App, 1, 10.).unwrap();
-    prop.set_f32(Role::App, 2, 60.).unwrap();
-    prop.set_f32(Role::App, 3, 60.).unwrap();
-    node.set_property_str(Role::App, "path", KING_PATH).unwrap();
-    node.set_property_u32(Role::App, "z_index", 1).unwrap();
+    prop.clone().set_f32(atom, Role::App, 0, 80.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 1, 10.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 2, 60.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 3, 60.).unwrap();
+    node.set_property_str(atom, Role::App, "path", KING_PATH).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
     let node = node.setup(|me| Image::new(me, app.render_api.clone(), app.ex.clone())).await;
     layer_node.clone().link(node);
 
     // Create some text
     let node = create_text("label");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(Role::App, 0, 100.).unwrap();
-    prop.set_f32(Role::App, 1, 100.).unwrap();
-    prop.set_f32(Role::App, 2, 2000.).unwrap();
-    prop.set_f32(Role::App, 3, 200.).unwrap();
-    node.set_property_f32(Role::App, "baseline", 40.).unwrap();
-    node.set_property_f32(Role::App, "font_size", 60.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 0, 100.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 1, 100.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 2, 2000.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 3, 200.).unwrap();
+    node.set_property_f32(atom, Role::App, "baseline", 40.).unwrap();
+    node.set_property_f32(atom, Role::App, "font_size", 60.).unwrap();
     node.set_property_str(
+        atom,
         Role::App,
         "text",
         "\u{f0007}",
         //"hel \u{01f3f3}\u{fe0f}\u{200d}\u{26a7}\u{fe0f} 123 '\u{01f44d}\u{01f3fe}' br",
     )
     .unwrap();
-    //node.set_property_str(Role::App, "text", "anon1").unwrap();
+    //node.set_property_str(atom, Role::App, "text", "anon1").unwrap();
     let prop = node.get_property("text_color").unwrap();
-    prop.set_f32(Role::App, 0, 0.).unwrap();
-    prop.set_f32(Role::App, 1, 1.).unwrap();
-    prop.set_f32(Role::App, 2, 0.).unwrap();
-    prop.set_f32(Role::App, 3, 1.).unwrap();
-    node.set_property_u32(Role::App, "z_index", 1).unwrap();
+    prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 1, 1.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 2, 0.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
 
     let node = node
         .setup(|me| {
@@ -286,65 +290,66 @@ pub async fn make(app: &App, window: SceneNodePtr) {
 
     // Text edit
     let node = create_editbox("editz");
-    node.set_property_bool(Role::App, "is_active", true).unwrap();
-    node.set_property_bool(Role::App, "is_focused", true).unwrap();
+    node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
+    node.set_property_bool(atom, Role::App, "is_focused", true).unwrap();
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(Role::App, 0, 150.).unwrap();
-    prop.set_f32(Role::App, 1, 150.).unwrap();
-    prop.set_f32(Role::App, 2, 380.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 0, 150.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 1, 150.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 2, 380.).unwrap();
     //let code = vec![Op::Sub((
     //    Box::new(Op::LoadVar("h".to_string())),
     //    Box::new(Op::ConstFloat32(60.)),
     //))];
-    //prop.set_expr(Role::App, 1, code).unwrap();
+    //prop.clone().set_expr(atom, Role::App, 1, code).unwrap();
     //let code = vec![Op::Sub((
     //    Box::new(Op::LoadVar("w".to_string())),
     //    Box::new(Op::ConstFloat32(120.)),
     //))];
-    //prop.set_expr(Role::App, 2, code).unwrap();
-    prop.set_f32(Role::App, 3, 60.).unwrap();
-    node.set_property_f32(Role::App, "baseline", 40.).unwrap();
-    node.set_property_f32(Role::App, "font_size", 20.).unwrap();
-    node.set_property_f32(Role::App, "font_size", 40.).unwrap();
-    node.set_property_str(Role::App, "text", "\u{01f3f3}\u{fe0f}\u{200d}\u{26a7}\u{fe0f}").unwrap();
+    //prop.clone().set_expr(atom, Role::App, 2, code).unwrap();
+    prop.clone().set_f32(atom, Role::App, 3, 60.).unwrap();
+    node.set_property_f32(atom, Role::App, "baseline", 40.).unwrap();
+    node.set_property_f32(atom, Role::App, "font_size", 20.).unwrap();
+    node.set_property_f32(atom, Role::App, "font_size", 40.).unwrap();
+    node.set_property_str(atom, Role::App, "text", "\u{01f3f3}\u{fe0f}\u{200d}\u{26a7}\u{fe0f}")
+        .unwrap();
     let prop = node.get_property("text_color").unwrap();
     if LIGHTMODE {
-        prop.set_f32(Role::App, 0, 0.).unwrap();
-        prop.set_f32(Role::App, 1, 0.).unwrap();
-        prop.set_f32(Role::App, 2, 0.).unwrap();
-        prop.set_f32(Role::App, 3, 1.).unwrap();
+        prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
+        prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
+        prop.clone().set_f32(atom, Role::App, 2, 0.).unwrap();
+        prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
     } else {
-        prop.set_f32(Role::App, 0, 1.).unwrap();
-        prop.set_f32(Role::App, 1, 1.).unwrap();
-        prop.set_f32(Role::App, 2, 1.).unwrap();
-        prop.set_f32(Role::App, 3, 1.).unwrap();
+        prop.clone().set_f32(atom, Role::App, 0, 1.).unwrap();
+        prop.clone().set_f32(atom, Role::App, 1, 1.).unwrap();
+        prop.clone().set_f32(atom, Role::App, 2, 1.).unwrap();
+        prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
     }
     let prop = node.get_property("cursor_color").unwrap();
-    prop.set_f32(Role::App, 0, 1.).unwrap();
-    prop.set_f32(Role::App, 1, 0.5).unwrap();
-    prop.set_f32(Role::App, 2, 0.5).unwrap();
-    prop.set_f32(Role::App, 3, 1.).unwrap();
-    node.set_property_f32(Role::App, "cursor_ascent", 40.).unwrap();
-    node.set_property_f32(Role::App, "cursor_descent", 40.).unwrap();
-    node.set_property_f32(Role::App, "select_ascent", 60.).unwrap();
-    node.set_property_f32(Role::App, "select_descent", 60.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 0, 1.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 1, 0.5).unwrap();
+    prop.clone().set_f32(atom, Role::App, 2, 0.5).unwrap();
+    prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
+    node.set_property_f32(atom, Role::App, "cursor_ascent", 40.).unwrap();
+    node.set_property_f32(atom, Role::App, "cursor_descent", 40.).unwrap();
+    node.set_property_f32(atom, Role::App, "select_ascent", 60.).unwrap();
+    node.set_property_f32(atom, Role::App, "select_descent", 60.).unwrap();
     let prop = node.get_property("hi_bg_color").unwrap();
     if LIGHTMODE {
-        prop.set_f32(Role::App, 0, 0.5).unwrap();
-        prop.set_f32(Role::App, 1, 0.5).unwrap();
-        prop.set_f32(Role::App, 2, 0.5).unwrap();
-        prop.set_f32(Role::App, 3, 1.).unwrap();
+        prop.clone().set_f32(atom, Role::App, 0, 0.5).unwrap();
+        prop.clone().set_f32(atom, Role::App, 1, 0.5).unwrap();
+        prop.clone().set_f32(atom, Role::App, 2, 0.5).unwrap();
+        prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
     } else {
-        prop.set_f32(Role::App, 0, 1.).unwrap();
-        prop.set_f32(Role::App, 1, 1.).unwrap();
-        prop.set_f32(Role::App, 2, 1.).unwrap();
-        prop.set_f32(Role::App, 3, 0.5).unwrap();
+        prop.clone().set_f32(atom, Role::App, 0, 1.).unwrap();
+        prop.clone().set_f32(atom, Role::App, 1, 1.).unwrap();
+        prop.clone().set_f32(atom, Role::App, 2, 1.).unwrap();
+        prop.clone().set_f32(atom, Role::App, 3, 0.5).unwrap();
     }
     let prop = node.get_property("selected").unwrap();
-    prop.set_null(Role::App, 0).unwrap();
-    prop.set_null(Role::App, 1).unwrap();
-    node.set_property_u32(Role::App, "z_index", 1).unwrap();
-    //node.set_property_bool(Role::App, "debug", true).unwrap();
+    prop.clone().set_null(atom, Role::App, 0).unwrap();
+    prop.clone().set_null(atom, Role::App, 1).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
+    //node.set_property_bool(atom, Role::App, "debug", true).unwrap();
 
     //let editbox_text = PropertyStr::wrap(node, Role::App, "text", 0).unwrap();
     //let editbox_focus = PropertyBool::wrap(node, Role::App, "is_focused", 0).unwrap();
@@ -382,36 +387,36 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     // ChatView
     let node = create_chatview("chatty");
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(Role::App, 0, 10.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 0, 10.).unwrap();
     let code = cc.compile("h/2").unwrap();
-    prop.set_expr(Role::App, 1, code).unwrap();
-    prop.set_expr(Role::App, 2, expr::load_var("w")).unwrap();
+    prop.clone().set_expr(atom, Role::App, 1, code).unwrap();
+    prop.clone().set_expr(atom, Role::App, 2, expr::load_var("w")).unwrap();
     let code = cc.compile("h/2 - 200").unwrap();
-    prop.set_expr(Role::App, 3, code).unwrap();
-    node.set_property_f32(Role::App, "font_size", 20.).unwrap();
-    node.set_property_f32(Role::App, "timestamp_font_size", 10.).unwrap();
-    node.set_property_f32(Role::App, "timestamp_width", 80.).unwrap();
-    node.set_property_f32(Role::App, "line_height", 30.).unwrap();
-    node.set_property_f32(Role::App, "baseline", 20.).unwrap();
-    node.set_property_u32(Role::App, "z_index", 1).unwrap();
-    //node.set_property_bool(Role::App, "debug", true).unwrap();
+    prop.clone().set_expr(atom, Role::App, 3, code).unwrap();
+    node.set_property_f32(atom, Role::App, "font_size", 20.).unwrap();
+    node.set_property_f32(atom, Role::App, "timestamp_font_size", 10.).unwrap();
+    node.set_property_f32(atom, Role::App, "timestamp_width", 80.).unwrap();
+    node.set_property_f32(atom, Role::App, "line_height", 30.).unwrap();
+    node.set_property_f32(atom, Role::App, "baseline", 20.).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 1).unwrap();
+    //node.set_property_bool(atom, Role::App, "debug", true).unwrap();
 
     let prop = node.get_property("timestamp_color").unwrap();
-    prop.set_f32(Role::App, 0, 0.5).unwrap();
-    prop.set_f32(Role::App, 1, 0.5).unwrap();
-    prop.set_f32(Role::App, 2, 0.5).unwrap();
-    prop.set_f32(Role::App, 3, 0.5).unwrap();
+    prop.clone().set_f32(atom, Role::App, 0, 0.5).unwrap();
+    prop.clone().set_f32(atom, Role::App, 1, 0.5).unwrap();
+    prop.clone().set_f32(atom, Role::App, 2, 0.5).unwrap();
+    prop.clone().set_f32(atom, Role::App, 3, 0.5).unwrap();
     let prop = node.get_property("text_color").unwrap();
     if LIGHTMODE {
-        prop.set_f32(Role::App, 0, 0.).unwrap();
-        prop.set_f32(Role::App, 1, 0.).unwrap();
-        prop.set_f32(Role::App, 2, 0.).unwrap();
-        prop.set_f32(Role::App, 3, 1.).unwrap();
+        prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
+        prop.clone().set_f32(atom, Role::App, 1, 0.).unwrap();
+        prop.clone().set_f32(atom, Role::App, 2, 0.).unwrap();
+        prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
     } else {
-        prop.set_f32(Role::App, 0, 1.).unwrap();
-        prop.set_f32(Role::App, 1, 1.).unwrap();
-        prop.set_f32(Role::App, 2, 1.).unwrap();
-        prop.set_f32(Role::App, 3, 1.).unwrap();
+        prop.clone().set_f32(atom, Role::App, 0, 1.).unwrap();
+        prop.clone().set_f32(atom, Role::App, 1, 1.).unwrap();
+        prop.clone().set_f32(atom, Role::App, 2, 1.).unwrap();
+        prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
     }
 
     let prop = node.get_property("nick_colors").unwrap();
@@ -434,15 +439,15 @@ pub async fn make(app: &App, window: SceneNodePtr) {
 
     let prop = node.get_property("hi_bg_color").unwrap();
     if LIGHTMODE {
-        prop.set_f32(Role::App, 0, 0.5).unwrap();
-        prop.set_f32(Role::App, 1, 0.5).unwrap();
-        prop.set_f32(Role::App, 2, 0.5).unwrap();
-        prop.set_f32(Role::App, 3, 1.).unwrap();
+        prop.clone().set_f32(atom, Role::App, 0, 0.5).unwrap();
+        prop.clone().set_f32(atom, Role::App, 1, 0.5).unwrap();
+        prop.clone().set_f32(atom, Role::App, 2, 0.5).unwrap();
+        prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
     } else {
-        prop.set_f32(Role::App, 0, 0.5).unwrap();
-        prop.set_f32(Role::App, 1, 0.5).unwrap();
-        prop.set_f32(Role::App, 2, 0.5).unwrap();
-        prop.set_f32(Role::App, 3, 1.).unwrap();
+        prop.clone().set_f32(atom, Role::App, 0, 0.5).unwrap();
+        prop.clone().set_f32(atom, Role::App, 1, 0.5).unwrap();
+        prop.clone().set_f32(atom, Role::App, 2, 0.5).unwrap();
+        prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
     }
 
     let db = sled::open(CHATDB_PATH).expect("cannot open sleddb");
@@ -467,48 +472,48 @@ pub async fn make(app: &App, window: SceneNodePtr) {
 
     // Text edit
     let node = create_chatedit("editz");
-    node.set_property_bool(Role::App, "is_active", true).unwrap();
-    node.set_property_bool(Role::App, "is_focused", true).unwrap();
+    node.set_property_bool(atom, Role::App, "is_active", true).unwrap();
+    node.set_property_bool(atom, Role::App, "is_focused", true).unwrap();
 
-    node.set_property_f32(Role::App, "max_height", 400.).unwrap();
+    node.set_property_f32(atom, Role::App, "max_height", 400.).unwrap();
 
     let prop = node.get_property("rect").unwrap();
-    prop.set_f32(Role::App, 0, 0.).unwrap();
-    prop.set_f32(Role::App, 1, 300.).unwrap();
-    prop.set_expr(Role::App, 2, expr::load_var("parent_w")).unwrap();
-    prop.set_f32(Role::App, 3, 50.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 1, 300.).unwrap();
+    prop.clone().set_expr(atom, Role::App, 2, expr::load_var("parent_w")).unwrap();
+    prop.clone().set_f32(atom, Role::App, 3, 50.).unwrap();
 
-    node.set_property_f32(Role::App, "baseline", 34.).unwrap();
-    node.set_property_f32(Role::App, "linespacing", 50.).unwrap();
-    node.set_property_f32(Role::App, "descent", 10.).unwrap();
-    node.set_property_f32(Role::App, "font_size", 40.).unwrap();
-    //node.set_property_str(Role::App, "text", "hello king!😁🍆jelly 🍆1234").unwrap();
+    node.set_property_f32(atom, Role::App, "baseline", 34.).unwrap();
+    node.set_property_f32(atom, Role::App, "linespacing", 50.).unwrap();
+    node.set_property_f32(atom, Role::App, "descent", 10.).unwrap();
+    node.set_property_f32(atom, Role::App, "font_size", 40.).unwrap();
+    //node.set_property_str(atom, Role::App, "text", "hello king!😁🍆jelly 🍆1234").unwrap();
     let prop = node.get_property("text_color").unwrap();
-    prop.set_f32(Role::App, 0, 1.).unwrap();
-    prop.set_f32(Role::App, 1, 1.).unwrap();
-    prop.set_f32(Role::App, 2, 1.).unwrap();
-    prop.set_f32(Role::App, 3, 1.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 0, 1.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 1, 1.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 2, 1.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
     let prop = node.get_property("text_hi_color").unwrap();
-    prop.set_f32(Role::App, 0, 0.44).unwrap();
-    prop.set_f32(Role::App, 1, 0.96).unwrap();
-    prop.set_f32(Role::App, 2, 1.).unwrap();
-    prop.set_f32(Role::App, 3, 1.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 0, 0.44).unwrap();
+    prop.clone().set_f32(atom, Role::App, 1, 0.96).unwrap();
+    prop.clone().set_f32(atom, Role::App, 2, 1.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
     let prop = node.get_property("cursor_color").unwrap();
-    prop.set_f32(Role::App, 0, 0.816).unwrap();
-    prop.set_f32(Role::App, 1, 0.627).unwrap();
-    prop.set_f32(Role::App, 2, 1.).unwrap();
-    prop.set_f32(Role::App, 3, 1.).unwrap();
-    node.set_property_f32(Role::App, "cursor_ascent", 50.).unwrap();
-    node.set_property_f32(Role::App, "cursor_descent", 20.).unwrap();
-    node.set_property_f32(Role::App, "select_ascent", 40.).unwrap();
-    node.set_property_f32(Role::App, "select_descent", 8.).unwrap();
-    node.set_property_f32(Role::App, "handle_descent", 25.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 0, 0.816).unwrap();
+    prop.clone().set_f32(atom, Role::App, 1, 0.627).unwrap();
+    prop.clone().set_f32(atom, Role::App, 2, 1.).unwrap();
+    prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
+    node.set_property_f32(atom, Role::App, "cursor_ascent", 50.).unwrap();
+    node.set_property_f32(atom, Role::App, "cursor_descent", 20.).unwrap();
+    node.set_property_f32(atom, Role::App, "select_ascent", 40.).unwrap();
+    node.set_property_f32(atom, Role::App, "select_descent", 8.).unwrap();
+    node.set_property_f32(atom, Role::App, "handle_descent", 25.).unwrap();
     let prop = node.get_property("hi_bg_color").unwrap();
-    prop.set_f32(Role::App, 0, 0.5).unwrap();
-    prop.set_f32(Role::App, 1, 0.5).unwrap();
-    prop.set_f32(Role::App, 2, 0.5).unwrap();
-    prop.set_f32(Role::App, 3, 1.).unwrap();
-    node.set_property_u32(Role::App, "z_index", 3).unwrap();
+    prop.clone().set_f32(atom, Role::App, 0, 0.5).unwrap();
+    prop.clone().set_f32(atom, Role::App, 1, 0.5).unwrap();
+    prop.clone().set_f32(atom, Role::App, 2, 0.5).unwrap();
+    prop.clone().set_f32(atom, Role::App, 3, 1.).unwrap();
+    node.set_property_u32(atom, Role::App, "z_index", 3).unwrap();
     let node = node
         .setup(|me| {
             ChatEdit::new(

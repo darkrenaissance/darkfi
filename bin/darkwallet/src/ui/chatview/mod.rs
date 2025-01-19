@@ -45,8 +45,8 @@ use crate::{
     },
     mesh::{Color, MeshBuilder, COLOR_BLUE, COLOR_GREEN},
     prop::{
-        PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyRect, PropertyUint32,
-        Role,
+        PropertyAtomicGuard, PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr,
+        PropertyRect, PropertyUint32, Role,
     },
     pubsub::Subscription,
     scene::{MethodCallSub, Pimpl, SceneNodeWeak},
@@ -492,7 +492,7 @@ impl ChatView {
         self.motion_cv.notify();
     }
 
-    async fn handle_movement(&self) {
+    async fn handle_movement(&self, atom: &mut PropertyAtomicGuard) {
         // We need to fix this impl because it depends very much on the speed of the device
         // that it's running on.
         // Look into optimizing scrollview() so scrolling is smooth.
@@ -520,7 +520,7 @@ impl ChatView {
             }
 
             let scroll = self.scroll.get() + speed;
-            let dist = self.scrollview(scroll).await;
+            let dist = self.scrollview(scroll, atom).await;
 
             // We reached the end so just stop
             if is_zero(dist) {
@@ -601,7 +601,7 @@ impl ChatView {
         }
     }
 
-    async fn scrollview(&self, mut scroll: f32) -> f32 {
+    async fn scrollview(&self, mut scroll: f32, atom: &mut PropertyAtomicGuard) -> f32 {
         let trace_id = rand::random();
         t!("scrollview({scroll}) [trace_id={trace_id}]");
         let old_scroll = self.scroll.get();
@@ -618,7 +618,7 @@ impl ChatView {
         // 2/3 of time spent here  ~3.3ms
         self.redraw_cached(&mut msgbuf, trace_id).await;
 
-        self.scroll.set(scroll);
+        self.scroll.set(atom, scroll);
         self.bgload_cv.notify();
 
         scroll - old_scroll
@@ -754,7 +754,8 @@ impl UIObject for ChatView {
                     // Should not happen
                     panic!("self destroyed before motion_task was stopped!");
                 };
-                self_.handle_movement().await;
+                let atom = &mut PropertyAtomicGuard::new();
+                self_.handle_movement(atom).await;
                 cv.reset();
             }
         });
@@ -776,7 +777,8 @@ impl UIObject for ChatView {
         let mut on_modify = OnModify::new(ex, self.node.clone(), me.clone());
 
         async fn reload_view(self_: Arc<ChatView>) {
-            self_.scrollview(self_.scroll.get()).await;
+            let atom = &mut PropertyAtomicGuard::new();
+            self_.scrollview(self_.scroll.get(), atom).await;
         }
         on_modify.when_change(self.scroll.prop(), reload_view);
 
@@ -809,6 +811,7 @@ impl UIObject for ChatView {
 
     async fn draw(&self, parent_rect: Rectangle, trace_id: u32) -> Option<DrawUpdate> {
         t!("ChatView::draw({:?}, {trace_id})", self.node.upgrade().unwrap());
+        let atom = &mut PropertyAtomicGuard::new();
 
         *self.parent_rect.lock().unwrap() = Some(parent_rect.clone());
         self.rect.eval(&parent_rect).ok()?;
@@ -821,7 +824,7 @@ impl UIObject for ChatView {
 
         let mut scroll = self.scroll.get();
         if let Some(scroll) = self.adjust_scroll(&mut msgbuf, scroll, rect.h).await {
-            self.scroll.set(scroll);
+            self.scroll.set(atom, scroll);
         }
 
         // We may need to load more messages since the screen size has changed.
@@ -935,6 +938,7 @@ impl UIObject for ChatView {
 
         let rect = self.rect.get();
         t!("handle_touch({phase:?}, {id},{id},  {touch_pos:?})");
+        let atom = &mut PropertyAtomicGuard::new();
 
         let touch_y = touch_pos.y;
 
@@ -1020,7 +1024,7 @@ impl UIObject for ChatView {
                 }
                 let scroll = start_scroll + dist;
                 // Redraws the screen from the cache
-                self.scrollview(scroll).await;
+                self.scrollview(scroll, atom).await;
             }
             TouchPhase::Ended | TouchPhase::Cancelled => {
                 self.end_touch_phase(touch_y);

@@ -99,7 +99,10 @@ impl Layer {
             return;
         };
         self.render_api.replace_draw_calls(timest, draw_update.draw_calls);
-        t!("Layer::redraw({:?}) DONE [timest={timest}, trace_id={trace_id}]", self.node.upgrade().unwrap());
+        t!(
+            "Layer::redraw({:?}) DONE [timest={timest}, trace_id={trace_id}]",
+            self.node.upgrade().unwrap()
+        );
     }
 
     async fn get_draw_calls(&self, parent_rect: Rectangle, trace_id: u32) -> Option<DrawUpdate> {

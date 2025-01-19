@@ -35,7 +35,10 @@ use crate::{
         Rectangle, RenderApi,
     },
     mesh::{MeshBuilder, MeshInfo, COLOR_WHITE},
-    prop::{PropertyFloat32, PropertyPtr, PropertyRect, PropertyStr, PropertyUint32, Role},
+    prop::{
+        PropertyAtomicGuard, PropertyFloat32, PropertyPtr, PropertyRect, PropertyStr,
+        PropertyUint32, Role,
+    },
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
     text::{self, GlyphPositionIter, TextShaper, TextShaperPtr},
     util::unixtime,
@@ -247,11 +250,12 @@ impl EmojiPicker {
     }
 
     fn redraw(&self) {
+        let atom = &mut PropertyAtomicGuard::new();
         let trace_id = rand::random();
         let timest = unixtime();
         let Some(parent_rect) = self.parent_rect.lock().unwrap().clone() else { return };
 
-        let Some(draw_update) = self.get_draw_calls(parent_rect, trace_id) else {
+        let Some(draw_update) = self.get_draw_calls(parent_rect, trace_id, atom) else {
             error!(target: "ui::emoji_picker", "Emoji picker failed to draw");
             return;
         };
@@ -259,7 +263,12 @@ impl EmojiPicker {
         t!("replace draw calls done");
     }
 
-    fn get_draw_calls(&self, parent_rect: Rectangle, trace_id: u32) -> Option<DrawUpdate> {
+    fn get_draw_calls(
+        &self,
+        parent_rect: Rectangle,
+        trace_id: u32,
+        atom: &mut PropertyAtomicGuard,
+    ) -> Option<DrawUpdate> {
         if let Err(e) = self.rect.eval(&parent_rect) {
             warn!(target: "ui::emoji_picker", "Rect eval failed: {e}");
             return None
@@ -268,7 +277,7 @@ impl EmojiPicker {
         // Clamp scroll if needed due to window size change
         let max_scroll = self.max_scroll();
         if self.scroll.get() > max_scroll {
-            self.scroll.set(max_scroll);
+            self.scroll.set(atom, max_scroll);
         }
 
         let rect = self.rect.get();
@@ -333,8 +342,10 @@ impl UIObject for EmojiPicker {
 
     async fn draw(&self, parent_rect: Rectangle, trace_id: u32) -> Option<DrawUpdate> {
         t!("EmojiPicker::draw({parent_rect:?}, {trace_id})");
+        let atom = &mut PropertyAtomicGuard::new();
+
         *self.parent_rect.lock().unwrap() = Some(parent_rect);
-        self.get_draw_calls(parent_rect, trace_id)
+        self.get_draw_calls(parent_rect, trace_id, atom)
     }
 
     async fn handle_mouse_move(&self, mut mouse_pos: Point) -> bool {
@@ -348,11 +359,12 @@ impl UIObject for EmojiPicker {
             return false
         }
         t!("handle_mouse_wheel()");
+        let atom = &mut PropertyAtomicGuard::new();
 
         let mut scroll = self.scroll.get();
         scroll -= self.mouse_scroll_speed.get() * wheel_pos.y;
         scroll = scroll.clamp(0., self.max_scroll());
-        self.scroll.set(scroll);
+        self.scroll.set(atom, scroll);
 
         self.redraw();
 
@@ -376,6 +388,8 @@ impl UIObject for EmojiPicker {
         if id != 0 {
             return false
         }
+
+        let atom = &mut PropertyAtomicGuard::new();
 
         let rect = self.rect.get();
         let pos = touch_pos - Point::new(rect.x, rect.y);
@@ -407,7 +421,7 @@ impl UIObject for EmojiPicker {
                         if touch_info.is_scroll {
                             let mut scroll = touch_info.start_scroll + y_diff;
                             scroll = scroll.clamp(0., self.max_scroll());
-                            self.scroll.set(scroll);
+                            self.scroll.set(atom, scroll);
                             self.redraw();
                         }
                     } else {

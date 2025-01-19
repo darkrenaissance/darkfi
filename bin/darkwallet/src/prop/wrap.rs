@@ -25,7 +25,7 @@ use crate::{
     scene::SceneNode as SceneNode3,
 };
 
-use super::{PropertyPtr, Role};
+use super::{PropertyAtomicGuard, PropertyPtr, Role};
 
 #[derive(Clone)]
 pub struct PropertyBool {
@@ -48,10 +48,11 @@ impl PropertyBool {
         self.prop.get_bool(self.idx).unwrap()
     }
 
-    pub fn set(&self, val: bool) {
-        self.prop.set_bool(self.role, self.idx, val).unwrap()
+    pub fn set(&self, atom: &mut PropertyAtomicGuard, val: bool) {
+        self.prop().set_bool(atom, self.role, self.idx, val).unwrap()
     }
 
+    #[inline]
     pub fn prop(&self) -> PropertyPtr {
         self.prop.clone()
     }
@@ -85,10 +86,11 @@ impl PropertyUint32 {
         self.prop.get_u32(self.idx).unwrap()
     }
 
-    pub fn set(&self, val: u32) {
-        self.prop.set_u32(self.role, self.idx, val).unwrap()
+    pub fn set(&self, atom: &mut PropertyAtomicGuard, val: u32) {
+        self.prop().set_u32(atom, self.role, self.idx, val).unwrap()
     }
 
+    #[inline]
     pub fn prop(&self) -> PropertyPtr {
         self.prop.clone()
     }
@@ -115,8 +117,8 @@ impl PropertyFloat32 {
         self.prop.get_f32(self.idx).unwrap()
     }
 
-    pub fn set(&self, val: f32) {
-        self.prop.set_f32(self.role, self.idx, val).unwrap()
+    pub fn set(&self, atom: &mut PropertyAtomicGuard, val: f32) {
+        self.prop().set_f32(atom, self.role, self.idx, val).unwrap()
     }
 
     pub fn prop(&self) -> PropertyPtr {
@@ -145,10 +147,11 @@ impl PropertyStr {
         self.prop.get_str(self.idx).unwrap()
     }
 
-    pub fn set<S: Into<String>>(&self, val: S) {
-        self.prop.set_str(self.role, self.idx, val.into()).unwrap()
+    pub fn set<S: Into<String>>(&self, atom: &mut PropertyAtomicGuard, val: S) {
+        self.prop().set_str(atom, self.role, self.idx, val.into()).unwrap()
     }
 
+    #[inline]
     pub fn prop(&self) -> PropertyPtr {
         self.prop.clone()
     }
@@ -183,13 +186,14 @@ impl PropertyColor {
         ]
     }
 
-    pub fn set(&self, val: [f32; 4]) {
-        self.prop.set_f32(self.role, 0, val[0]).unwrap();
-        self.prop.set_f32(self.role, 1, val[1]).unwrap();
-        self.prop.set_f32(self.role, 2, val[2]).unwrap();
-        self.prop.set_f32(self.role, 3, val[3]).unwrap();
+    pub fn set(&self, atom: &mut PropertyAtomicGuard, val: [f32; 4]) {
+        self.prop().set_f32(atom, self.role, 0, val[0]).unwrap();
+        self.prop().set_f32(atom, self.role, 1, val[1]).unwrap();
+        self.prop().set_f32(atom, self.role, 2, val[2]).unwrap();
+        self.prop().set_f32(atom, self.role, 3, val[3]).unwrap();
     }
 
+    #[inline]
     pub fn prop(&self) -> PropertyPtr {
         self.prop.clone()
     }
@@ -219,11 +223,12 @@ impl PropertyDimension {
         [self.prop.get_f32(0).unwrap(), self.prop.get_f32(1).unwrap()].into()
     }
 
-    pub fn set(&self, dim: Dimension) {
-        self.prop.set_f32(self.role, 0, dim.w).unwrap();
-        self.prop.set_f32(self.role, 1, dim.h).unwrap();
+    pub fn set(&self, atom: &mut PropertyAtomicGuard, dim: Dimension) {
+        self.prop().set_f32(atom, self.role, 0, dim.w).unwrap();
+        self.prop().set_f32(atom, self.role, 1, dim.h).unwrap();
     }
 
+    #[inline]
     pub fn prop(&self) -> PropertyPtr {
         self.prop.clone()
     }
@@ -253,11 +258,12 @@ impl PropertyPoint {
         [self.prop.get_f32(0).unwrap(), self.prop.get_f32(1).unwrap()].into()
     }
 
-    pub fn set(&self, pos: Point) {
-        self.prop.set_f32(self.role, 0, pos.x).unwrap();
-        self.prop.set_f32(self.role, 1, pos.y).unwrap();
+    pub fn set(&self, atom: &mut PropertyAtomicGuard, pos: Point) {
+        self.prop().set_f32(atom, self.role, 0, pos.x).unwrap();
+        self.prop().set_f32(atom, self.role, 1, pos.y).unwrap();
     }
 
+    #[inline]
     pub fn prop(&self) -> PropertyPtr {
         self.prop.clone()
     }
@@ -342,13 +348,14 @@ impl PropertyRect {
         ]))
     }
 
-    pub fn set(&self, rect: &Rectangle) {
-        self.prop.set_f32(self.role, 0, rect.x).unwrap();
-        self.prop.set_f32(self.role, 1, rect.y).unwrap();
-        self.prop.set_f32(self.role, 2, rect.y).unwrap();
-        self.prop.set_f32(self.role, 3, rect.y).unwrap();
+    pub fn set(&self, atom: &mut PropertyAtomicGuard, rect: &Rectangle) {
+        self.prop().set_f32(atom, self.role, 0, rect.x).unwrap();
+        self.prop().set_f32(atom, self.role, 1, rect.y).unwrap();
+        self.prop().set_f32(atom, self.role, 2, rect.y).unwrap();
+        self.prop().set_f32(atom, self.role, 3, rect.y).unwrap();
     }
 
+    #[inline]
     pub fn prop(&self) -> PropertyPtr {
         self.prop.clone()
     }

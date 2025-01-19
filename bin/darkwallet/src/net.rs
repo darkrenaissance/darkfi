@@ -27,7 +27,7 @@ use zeromq::{Socket, SocketRecv, SocketSend};
 use crate::{
     error::{Error, Result},
     expr::SExprCode,
-    prop::{Property, PropertySubType, PropertyType, PropertyValue, Role},
+    prop::{Property, PropertyAtomicGuard, PropertySubType, PropertyType, PropertyValue, Role},
     scene::{SceneNodeId, SceneNodePtr, ScenePath},
     ExecutorPtr,
 };
@@ -241,38 +241,40 @@ impl ZeroMQAdapter {
                     self.sg_root.clone().lookup_node(node_path).ok_or(Error::NodeNotFound)?;
                 let prop = node.get_property(&prop_name).ok_or(Error::PropertyNotFound)?;
 
+                let atom = &mut PropertyAtomicGuard::new();
+
                 match prop_type {
                     PropertyType::Null => {
-                        prop.set_null(Role::User, prop_i)?;
+                        prop.set_null(atom, Role::User, prop_i)?;
                     }
                     PropertyType::Bool => {
                         let val = bool::decode(&mut cur).unwrap();
-                        prop.set_bool(Role::User, prop_i, val)?;
+                        prop.set_bool(atom, Role::User, prop_i, val)?;
                     }
                     PropertyType::Uint32 => {
                         let val = u32::decode(&mut cur).unwrap();
-                        prop.set_u32(Role::User, prop_i, val)?;
+                        prop.set_u32(atom, Role::User, prop_i, val)?;
                     }
                     PropertyType::Float32 => {
                         let val = f32::decode(&mut cur).unwrap();
-                        prop.set_f32(Role::User, prop_i, val)?;
+                        prop.set_f32(atom, Role::User, prop_i, val)?;
                     }
                     PropertyType::Str => {
                         let val = String::decode(&mut cur).unwrap();
-                        prop.set_str(Role::User, prop_i, val)?;
+                        prop.set_str(atom, Role::User, prop_i, val)?;
                     }
                     PropertyType::Enum => {
                         let val = String::decode(&mut cur).unwrap();
-                        prop.set_enum(Role::User, prop_i, val)?;
+                        prop.set_enum(atom, Role::User, prop_i, val)?;
                     }
                     PropertyType::SceneNodeId => {
                         let val = SceneNodeId::decode(&mut cur).unwrap();
-                        prop.set_node_id(Role::User, prop_i, val)?;
+                        prop.set_node_id(atom, Role::User, prop_i, val)?;
                     }
                     PropertyType::SExpr => {
                         let val = SExprCode::decode(&mut cur).unwrap();
                         debug!(target: "req", "  received code {:?}", val);
-                        prop.set_expr(Role::User, prop_i, val)?;
+                        prop.set_expr(atom, Role::User, prop_i, val)?;
                     }
                 }
             }

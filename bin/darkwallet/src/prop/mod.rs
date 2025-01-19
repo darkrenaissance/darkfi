@@ -30,6 +30,8 @@ use crate::{
     scene::{SceneNodeId, SceneNodeWeak},
 };
 
+mod guard;
+pub use guard::PropertyAtomicGuard;
 mod wrap;
 pub use wrap::{
     PropertyBool, PropertyColor, PropertyDimension, PropertyFloat32, PropertyPoint, PropertyRect,
@@ -201,6 +203,8 @@ pub enum ModifyAction {
     Push(usize),
 }
 
+type ModifyPublisher = PublisherPtr<(Role, ModifyAction)>;
+
 pub type PropertyPtr = Arc<Property>;
 pub type PropertyWeak = Weak<Property>;
 
@@ -236,7 +240,7 @@ pub struct Property {
     // PropertyType must be Enum
     pub enum_items: Option<Vec<String>>,
 
-    on_modify: PublisherPtr<(Role, ModifyAction)>,
+    on_modify: ModifyPublisher,
     depends: SyncMutex<Vec<PropertyDepend>>,
 }
 
@@ -360,7 +364,7 @@ impl Property {
     // Set
 
     /// This will clear all values, resetting them to the default
-    pub fn clear_values(&self, role: Role) {
+    pub fn clear_values(self: Arc<Self>, role: Role) {
         let vals = &mut self.vals.lock().unwrap();
         vals.clear();
         vals.resize(self.array_len, PropertyValue::Unset);
@@ -377,21 +381,32 @@ impl Property {
             return Err(Error::PropertyWrongIndex)
         }
         vals[i] = val;
-        self.on_modify.notify((role, ModifyAction::Set(i)));
         Ok(())
     }
 
-    pub fn unset(&self, role: Role, i: usize) -> Result<()> {
-        let vals = &mut self.vals.lock().unwrap();
-        if i >= vals.len() {
-            return Err(Error::PropertyWrongIndex)
+    pub fn unset(
+        self: Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        i: usize,
+    ) -> Result<()> {
+        {
+            let vals = &mut self.vals.lock().unwrap();
+            if i >= vals.len() {
+                return Err(Error::PropertyWrongIndex)
+            }
+            vals[i] = PropertyValue::Unset;
         }
-        vals[i] = PropertyValue::Unset;
-        self.on_modify.notify((role, ModifyAction::Set(i)));
+        atom.add(self, role, ModifyAction::Set(i));
         Ok(())
     }
 
-    pub fn set_null(&self, role: Role, i: usize) -> Result<()> {
+    pub fn set_null(
+        self: Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        i: usize,
+    ) -> Result<()> {
         if !self.is_null_allowed {
             return Err(Error::PropertyNullNotAllowed)
         }
@@ -403,14 +418,28 @@ impl Property {
         vals[i] = PropertyValue::Null;
         drop(vals);
 
-        self.on_modify.notify((role, ModifyAction::Set(i)));
+        atom.add(self, role, ModifyAction::Set(i));
         Ok(())
     }
 
-    pub fn set_bool(&self, role: Role, i: usize, val: bool) -> Result<()> {
-        self.set_raw_value(role, i, PropertyValue::Bool(val))
+    pub fn set_bool(
+        self: Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        i: usize,
+        val: bool,
+    ) -> Result<()> {
+        self.set_raw_value(role, i, PropertyValue::Bool(val))?;
+        atom.add(self, role, ModifyAction::Set(i));
+        Ok(())
     }
-    pub fn set_u32(&self, role: Role, i: usize, val: u32) -> Result<()> {
+    pub fn set_u32(
+        self: Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        i: usize,
+        val: u32,
+    ) -> Result<()> {
         if self.min_val.is_some() {
             let min = self.min_val.as_ref().unwrap().as_u32()?;
             if val < min {
@@ -423,9 +452,17 @@ impl Property {
                 return Err(Error::PropertyOutOfRange);
             }
         }
-        self.set_raw_value(role, i, PropertyValue::Uint32(val))
+        self.set_raw_value(role, i, PropertyValue::Uint32(val))?;
+        atom.add(self, role, ModifyAction::Set(i));
+        Ok(())
     }
-    pub fn set_f32(&self, role: Role, i: usize, val: f32) -> Result<()> {
+    pub fn set_f32(
+        self: Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        i: usize,
+        val: f32,
+    ) -> Result<()> {
         if self.min_val.is_some() {
             let min = self.min_val.as_ref().unwrap().as_f32()?;
             if val < min {
@@ -438,12 +475,28 @@ impl Property {
                 return Err(Error::PropertyOutOfRange);
             }
         }
-        self.set_raw_value(role, i, PropertyValue::Float32(val))
+        self.set_raw_value(role, i, PropertyValue::Float32(val))?;
+        atom.add(self, role, ModifyAction::Set(i));
+        Ok(())
     }
-    pub fn set_str<S: Into<String>>(&self, role: Role, i: usize, val: S) -> Result<()> {
-        self.set_raw_value(role, i, PropertyValue::Str(val.into()))
+    pub fn set_str<S: Into<String>>(
+        self: Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        i: usize,
+        val: S,
+    ) -> Result<()> {
+        self.set_raw_value(role, i, PropertyValue::Str(val.into()))?;
+        atom.add(self, role, ModifyAction::Set(i));
+        Ok(())
     }
-    pub fn set_enum<S: Into<String>>(&self, role: Role, i: usize, val: S) -> Result<()> {
+    pub fn set_enum<S: Into<String>>(
+        self: Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        i: usize,
+        val: S,
+    ) -> Result<()> {
         if self.typ != PropertyType::Enum {
             return Err(Error::PropertyWrongType)
         }
@@ -451,21 +504,39 @@ impl Property {
         if !self.enum_items.as_ref().unwrap().contains(&val) {
             return Err(Error::PropertyWrongEnumItem)
         }
-        self.set_raw_value(role, i, PropertyValue::Enum(val.into()))
+        self.set_raw_value(role, i, PropertyValue::Enum(val.into()))?;
+        atom.add(self, role, ModifyAction::Set(i));
+        Ok(())
     }
-    pub fn set_node_id(&self, role: Role, i: usize, val: SceneNodeId) -> Result<()> {
-        self.set_raw_value(role, i, PropertyValue::SceneNodeId(val))
+    pub fn set_node_id(
+        self: Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        i: usize,
+        val: SceneNodeId,
+    ) -> Result<()> {
+        self.set_raw_value(role, i, PropertyValue::SceneNodeId(val))?;
+        atom.add(self, role, ModifyAction::Set(i));
+        Ok(())
     }
-    pub fn set_expr(&self, role: Role, i: usize, val: SExprCode) -> Result<()> {
-        if !self.is_expr_allowed {
-            return Err(Error::PropertySExprNotAllowed)
+    pub fn set_expr(
+        self: Arc<Self>,
+        atom: &mut PropertyAtomicGuard,
+        role: Role,
+        i: usize,
+        val: SExprCode,
+    ) -> Result<()> {
+        {
+            if !self.is_expr_allowed {
+                return Err(Error::PropertySExprNotAllowed)
+            }
+            let vals = &mut self.vals.lock().unwrap();
+            if i >= vals.len() {
+                return Err(Error::PropertyWrongIndex)
+            }
+            vals[i] = PropertyValue::SExpr(Arc::new(val));
         }
-        let vals = &mut self.vals.lock().unwrap();
-        if i >= vals.len() {
-            return Err(Error::PropertyWrongIndex)
-        }
-        vals[i] = PropertyValue::SExpr(Arc::new(val));
-        self.on_modify.notify((role, ModifyAction::Set(i)));
+        atom.add(self, role, ModifyAction::Set(i));
         Ok(())
     }
 

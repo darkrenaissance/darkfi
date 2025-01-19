@@ -40,7 +40,7 @@ use std::{
 
 use crate::{
     error::{Error, Result},
-    prop::{PropertyStr, Role},
+    prop::{PropertyAtomicGuard, PropertyStr, Role},
     scene::{MethodCallSub, Pimpl, SceneNodePtr, SceneNodeWeak},
     ui::{
         chatview::{MessageId, Timestamp},
@@ -222,7 +222,7 @@ impl DarkIrc {
         };
 
         if let Ok(prev_nick) = std::fs::read_to_string(nick_filename()) {
-            nick.set(prev_nick);
+            nick.set(&mut PropertyAtomicGuard::new(), prev_nick);
         }
 
         let self_ = Arc::new(Self {
