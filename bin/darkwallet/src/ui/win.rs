@@ -441,6 +441,7 @@ impl Window {
     }
 
     pub async fn draw(&self) {
+        let atom = &mut PropertyAtomicGuard::new();
         let trace_id = rand::random();
         let timest = unixtime();
 
@@ -453,7 +454,7 @@ impl Window {
 
         for child in self.get_children() {
             let obj = get_ui_object3(&child);
-            let Some(mut draw_update) = obj.draw(rect, trace_id).await else {
+            let Some(mut draw_update) = obj.draw(rect, trace_id, atom).await else {
                 error!(target: "ui::layer", "draw() of {child:?} failed [trace_id={trace_id}]");
                 continue
             };

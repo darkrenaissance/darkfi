@@ -25,7 +25,10 @@ use std::sync::{atomic::Ordering, Arc, Mutex as SyncMutex, OnceLock, Weak};
 
 use crate::{
     gfx::{GfxDrawCall, GfxDrawInstruction, Point, Rectangle, RenderApi},
-    prop::{PropertyBool, PropertyFloat32, PropertyPtr, PropertyRect, PropertyUint32, Role},
+    prop::{
+        PropertyAtomicGuard, PropertyBool, PropertyFloat32, PropertyPtr, PropertyRect,
+        PropertyUint32, Role,
+    },
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
     util::unixtime,
     ExecutorPtr,
@@ -89,12 +92,13 @@ impl Layer {
     }
 
     async fn redraw(self: Arc<Self>) {
+        let atom = &mut PropertyAtomicGuard::new();
         let trace_id = rand::random();
         let timest = unixtime();
         t!("Layer::redraw({:?}) [trace_id={trace_id}]", self.node.upgrade().unwrap());
         let Some(parent_rect) = self.parent_rect.lock().unwrap().clone() else { return };
 
-        let Some(draw_update) = self.get_draw_calls(parent_rect, trace_id).await else {
+        let Some(draw_update) = self.get_draw_calls(parent_rect, trace_id, atom).await else {
             error!(target: "ui::layer", "Layer failed to draw [trace_id={trace_id}]");
             return;
         };
@@ -105,7 +109,12 @@ impl Layer {
         );
     }
 
-    async fn get_draw_calls(&self, parent_rect: Rectangle, trace_id: u32) -> Option<DrawUpdate> {
+    async fn get_draw_calls(
+        &self,
+        parent_rect: Rectangle,
+        trace_id: u32,
+        atom: &mut PropertyAtomicGuard,
+    ) -> Option<DrawUpdate> {
         self.rect.eval(&parent_rect).ok()?;
         let rect = self.rect.get();
         t!("Layer::get_draw_calls() [rect={rect:?}, dc={}, trace_id={trace_id}]", self.dc_key);
@@ -120,7 +129,7 @@ impl Layer {
         if self.is_visible.get() {
             for child in self.get_children() {
                 let obj = get_ui_object3(&child);
-                let Some(mut draw_update) = obj.draw(rect, trace_id).await else {
+                let Some(mut draw_update) = obj.draw(rect, trace_id, atom).await else {
                     t!("Skipped draw for {child:?} [trace_id={trace_id}]");
                     continue
                 };
@@ -162,7 +171,12 @@ impl UIObject for Layer {
         }
     }
 
-    async fn draw(&self, parent_rect: Rectangle, trace_id: u32) -> Option<DrawUpdate> {
+    async fn draw(
+        &self,
+        parent_rect: Rectangle,
+        trace_id: u32,
+        atom: &mut PropertyAtomicGuard,
+    ) -> Option<DrawUpdate> {
         t!("Layer::draw({:?}) [trace_id={trace_id}]", self.node.upgrade().unwrap());
         *self.parent_rect.lock().unwrap() = Some(parent_rect);
 
@@ -177,7 +191,7 @@ impl UIObject for Layer {
         }
         */
 
-        let update = self.get_draw_calls(parent_rect, trace_id).await;
+        let update = self.get_draw_calls(parent_rect, trace_id, atom).await;
         t!("Layer::draw({:?}) DONE [trace_id={trace_id}]", self.node.upgrade().unwrap());
         update
     }

@@ -1964,9 +1964,13 @@ impl UIObject for ChatEdit {
         self.tasks.set(tasks);
     }
 
-    async fn draw(&self, parent_rect: Rectangle, trace_id: u32) -> Option<DrawUpdate> {
+    async fn draw(
+        &self,
+        parent_rect: Rectangle,
+        trace_id: u32,
+        atom: &mut PropertyAtomicGuard,
+    ) -> Option<DrawUpdate> {
         t!("ChatEdit::draw({:?}, {trace_id})", self.node.upgrade().unwrap());
-        let atom = &mut PropertyAtomicGuard::new();
         *self.parent_rect.lock() = Some(parent_rect);
 
         self.make_draw_calls(trace_id, atom)

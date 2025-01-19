@@ -27,7 +27,10 @@ use crate::{
         GfxBufferId, GfxDrawCall, GfxDrawInstruction, GfxDrawMesh, Rectangle, RenderApi, Vertex,
     },
     mesh::Color,
-    prop::{PropertyBool, PropertyFloat32, PropertyPtr, PropertyRect, PropertyUint32, Role},
+    prop::{
+        PropertyAtomicGuard, PropertyBool, PropertyFloat32, PropertyPtr, PropertyRect,
+        PropertyUint32, Role,
+    },
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
     util::{enumerate, unixtime},
     ExecutorPtr,
@@ -168,7 +171,12 @@ impl UIObject for VectorArt {
         self.tasks.set(on_modify.tasks);
     }
 
-    async fn draw(&self, parent_rect: Rectangle, trace_id: u32) -> Option<DrawUpdate> {
+    async fn draw(
+        &self,
+        parent_rect: Rectangle,
+        trace_id: u32,
+        atom: &mut PropertyAtomicGuard,
+    ) -> Option<DrawUpdate> {
         t!("VectorArt::draw({}) [trace_id={trace_id}]", self.node_path());
         *self.parent_rect.lock().unwrap() = Some(parent_rect);
         self.get_draw_calls(parent_rect, trace_id).await

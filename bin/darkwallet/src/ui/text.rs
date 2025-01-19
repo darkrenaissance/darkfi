@@ -27,8 +27,8 @@ use crate::{
     },
     mesh::{Color, MeshBuilder, MeshInfo, COLOR_BLUE, COLOR_RED, COLOR_WHITE},
     prop::{
-        PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr, PropertyRect, PropertyStr,
-        PropertyUint32, Role,
+        PropertyAtomicGuard, PropertyBool, PropertyColor, PropertyFloat32, PropertyPtr,
+        PropertyRect, PropertyStr, PropertyUint32, Role,
     },
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
     text::{self, GlyphPositionIter, TextShaper, TextShaperPtr},
@@ -221,7 +221,12 @@ impl UIObject for Text {
         self.tasks.set(on_modify.tasks);
     }
 
-    async fn draw(&self, parent_rect: Rectangle, trace_id: u32) -> Option<DrawUpdate> {
+    async fn draw(
+        &self,
+        parent_rect: Rectangle,
+        trace_id: u32,
+        atom: &mut PropertyAtomicGuard,
+    ) -> Option<DrawUpdate> {
         t!("Text::draw({:?}) [trace_id={trace_id}]", self.node.upgrade().unwrap());
         *self.parent_rect.lock().unwrap() = Some(parent_rect);
         self.get_draw_calls(parent_rect, trace_id).await

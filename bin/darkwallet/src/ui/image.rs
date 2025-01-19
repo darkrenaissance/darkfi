@@ -30,7 +30,7 @@ use crate::{
         RenderApi,
     },
     mesh::{MeshBuilder, MeshInfo, COLOR_WHITE},
-    prop::{PropertyPtr, PropertyRect, PropertyStr, PropertyUint32, Role},
+    prop::{PropertyAtomicGuard, PropertyPtr, PropertyRect, PropertyStr, PropertyUint32, Role},
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
     util::unixtime,
     ExecutorPtr,
@@ -204,7 +204,12 @@ impl UIObject for Image {
         self.tasks.set(on_modify.tasks);
     }
 
-    async fn draw(&self, parent_rect: Rectangle, trace_id: u32) -> Option<DrawUpdate> {
+    async fn draw(
+        &self,
+        parent_rect: Rectangle,
+        trace_id: u32,
+        atom: &mut PropertyAtomicGuard,
+    ) -> Option<DrawUpdate> {
         t!("Image::draw() [trace_id={trace_id}]");
         *self.parent_rect.lock().unwrap() = Some(parent_rect);
         self.get_draw_calls(parent_rect, trace_id).await

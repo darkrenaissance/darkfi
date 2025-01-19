@@ -29,7 +29,7 @@ use crate::{
     error::{Error, Result},
     expr::{SExprMachine, SExprVal},
     gfx::{GfxBufferId, GfxDrawCall, GfxDrawMesh, GfxTextureId, Point, Rectangle},
-    prop::{ModifyAction, PropertyPtr, Role},
+    prop::{ModifyAction, PropertyAtomicGuard, PropertyPtr, Role},
     scene::{Pimpl, SceneNode as SceneNode3, SceneNodeId, SceneNodePtr, SceneNodeWeak},
     ExecutorPtr,
 };
@@ -69,7 +69,12 @@ pub trait UIObject: Sync {
 
     async fn start(self: Arc<Self>, ex: ExecutorPtr) {}
 
-    async fn draw(&self, parent_rect: Rectangle, trace_id: u32) -> Option<DrawUpdate> {
+    async fn draw(
+        &self,
+        parent_rect: Rectangle,
+        trace_id: u32,
+        atom: &mut PropertyAtomicGuard,
+    ) -> Option<DrawUpdate> {
         None
     }
 

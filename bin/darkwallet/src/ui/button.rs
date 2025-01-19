@@ -25,7 +25,7 @@ use std::sync::{
 
 use crate::{
     gfx::{GraphicsEventPublisherPtr, Point, Rectangle},
-    prop::{PropertyBool, PropertyPtr, PropertyRect, PropertyUint32, Role},
+    prop::{PropertyAtomicGuard, PropertyBool, PropertyPtr, PropertyRect, PropertyUint32, Role},
     pubsub::Subscription,
     scene::{Pimpl, SceneNodePtr, SceneNodeWeak},
     ExecutorPtr,
@@ -78,7 +78,12 @@ impl UIObject for Button {
         self.priority.get()
     }
 
-    async fn draw(&self, parent_rect: Rectangle, trace_id: u32) -> Option<DrawUpdate> {
+    async fn draw(
+        &self,
+        parent_rect: Rectangle,
+        trace_id: u32,
+        atom: &mut PropertyAtomicGuard,
+    ) -> Option<DrawUpdate> {
         let _ = self.rect.eval(&parent_rect);
         None
     }

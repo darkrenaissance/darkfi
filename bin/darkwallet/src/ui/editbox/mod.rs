@@ -1332,9 +1332,13 @@ impl UIObject for EditBox {
         self.tasks.set(tasks);
     }
 
-    async fn draw(&self, parent_rect: Rectangle, trace_id: u32) -> Option<DrawUpdate> {
+    async fn draw(
+        &self,
+        parent_rect: Rectangle,
+        trace_id: u32,
+        atom: &mut PropertyAtomicGuard,
+    ) -> Option<DrawUpdate> {
         t!("EditBox::draw() [trace_id={trace_id}]");
-        let atom = &mut PropertyAtomicGuard::new();
 
         *self.parent_rect.lock().unwrap() = Some(parent_rect);
         self.rect.eval(&parent_rect).ok()?;

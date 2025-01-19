@@ -809,9 +809,13 @@ impl UIObject for ChatView {
         self.tasks.set(tasks);
     }
 
-    async fn draw(&self, parent_rect: Rectangle, trace_id: u32) -> Option<DrawUpdate> {
+    async fn draw(
+        &self,
+        parent_rect: Rectangle,
+        trace_id: u32,
+        atom: &mut PropertyAtomicGuard,
+    ) -> Option<DrawUpdate> {
         t!("ChatView::draw({:?}, {trace_id})", self.node.upgrade().unwrap());
-        let atom = &mut PropertyAtomicGuard::new();
 
         *self.parent_rect.lock().unwrap() = Some(parent_rect.clone());
         self.rect.eval(&parent_rect).ok()?;
