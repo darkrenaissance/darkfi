@@ -791,7 +791,7 @@ impl EventHandler for Stage {
     }
 
     fn draw(&mut self) {
-        self.ctx.begin_default_pass(PassAction::Nothing);
+        self.ctx.begin_default_pass(PassAction::clear_color(0., 0., 0., 1.));
         self.ctx.apply_pipeline(&self.pipeline);
 
         // This will make the top left (0, 0) and the bottom right (1, 1)
