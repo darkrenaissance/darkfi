@@ -1,8 +1,19 @@
-# Linux
+# Unix (Linux/Mac)
+
+Install [rustup](rustup.rs) and `cargo install cargo-limit`, then run:
 
 ```
 make
 ```
+
+# Windows
+
+Install [rustup](rustup.rs) and follow the instructions.
+
+If you get the error "VCRUNTIME140.dll was not found", then
+install [Microsoft Visual C++ Redistributable][msvc++].
+
+[msvc++]: https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist?view=msvc-170#visual-studio-2015-2017-2019-and-2022
 
 # Android
 
@@ -21,7 +32,7 @@ To delete everything, run `podman system reset`.
 
 # Useful Dev Commands
 
-This is just devs.
+This is just for devs. Users ignore this.
 
 ## Debugging Missing Symbols
 

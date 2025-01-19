@@ -185,7 +185,7 @@ pub fn setup_logging() {
             #[cfg(unix)]
             None,
         );
-        let file_logger = WriteLogger::new(LevelFilter::Debug, cfg.clone(), log_file);
+        let file_logger = WriteLogger::new(LevelFilter::Trace, cfg.clone(), log_file);
         loggers.push(file_logger);
     }
 
