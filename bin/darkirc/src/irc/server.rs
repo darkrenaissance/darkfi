@@ -38,7 +38,7 @@ use smol::{
 };
 use url::Url;
 
-use super::{client::Client, IrcChannel, IrcContact, Priv, Privmsg};
+use super::{client::Client, ChaChaBox, IrcChannel, IrcContact, Priv, Privmsg};
 use crate::{
     crypto::saltbox,
     settings::{parse_autojoin_channels, parse_configured_channels, parse_configured_contacts},
@@ -67,6 +67,8 @@ pub struct IrcServer {
     pub channels: RwLock<HashMap<String, IrcChannel>>,
     /// Configured IRC contacts
     pub contacts: RwLock<HashMap<String, IrcContact>>,
+    /// Saltbox used to encrypt our nick in direct messages
+    saltbox: RwLock<Option<Arc<ChaChaBox>>>,
     /// Active client connections
     clients: Mutex<HashMap<u16, StoppableTaskPtr>>,
     /// IRC server Password
@@ -133,6 +135,7 @@ impl IrcServer {
             autojoin: RwLock::new(Vec::new()),
             channels: RwLock::new(HashMap::new()),
             contacts: RwLock::new(HashMap::new()),
+            saltbox: RwLock::new(None),
             clients: Mutex::new(HashMap::new()),
             password,
         });
@@ -161,13 +164,14 @@ impl IrcServer {
         let channels = parse_configured_channels(&contents)?;
 
         // Parse configured contacts
-        let contacts = parse_configured_contacts(&contents)?;
+        let (contacts, saltbox) = parse_configured_contacts(&contents)?;
 
         // FIXME: This will remove clients' joined channels. They need to stay.
         // Only if everything is fine, replace.
         *self.autojoin.write().await = autojoin;
         *self.channels.write().await = channels;
         *self.contacts.write().await = contacts;
+        *self.saltbox.write().await = saltbox;
 
         Ok(())
     }
@@ -301,7 +305,13 @@ impl IrcServer {
                 // We will use dummy channel and nick values of MAX_NICK_LEN,
                 // since they are not used, so all encrypted messages look the same.
                 *privmsg.channel() = saltbox::encrypt(saltbox, &[0x00; MAX_NICK_LEN]);
-                *privmsg.nick() = saltbox::encrypt(saltbox, &[0x00; MAX_NICK_LEN]);
+                // We will encrypt the dummy nick value using our own self saltbox,
+                // so we can identify our messages. We can safely unwrap here since
+                // we know that if contacts exist, our self saltbox does as well.
+                *privmsg.nick() = saltbox::encrypt(
+                    self.saltbox.read().await.as_ref().unwrap(),
+                    &[0x00; MAX_NICK_LEN],
+                );
                 *privmsg.msg() = saltbox::encrypt(saltbox, privmsg.msg().as_bytes());
                 debug!("Successfully encrypted message for {}", name);
             }
@@ -309,7 +319,7 @@ impl IrcServer {
     }
 
     /// Try decrypting a given potentially encrypted `Privmsg` object.
-    pub async fn try_decrypt(&self, privmsg: &mut Privmsg) {
+    pub async fn try_decrypt(&self, privmsg: &mut Privmsg, self_nickname: &str) {
         // If all fields have base58, then we can consider decrypting.
         let channel_ciphertext = match bs58::decode(&privmsg.channel).into_vec() {
             Ok(v) => v,
@@ -362,9 +372,18 @@ impl IrcServer {
                 continue
             };
 
-            if saltbox::try_decrypt(saltbox, &nick_ciphertext).is_none() {
-                warn!(target: "darkirc::irc::server::try_decrypt", "Could not decrypt channel ciphertext for contact: {name}");
-                continue
+            // Since everyone encrypts the dummy nick value with their self saltbox,
+            // we try to decrypt using our, to identify our messages. We can safely
+            // unwrap here since we know that if contacts exist, our self saltbox does as well.
+            let nick = if saltbox::try_decrypt(
+                self.saltbox.read().await.as_ref().unwrap(),
+                &nick_ciphertext,
+            )
+            .is_some()
+            {
+                String::from(self_nickname)
+            } else {
+                name.to_string()
             };
 
             let Some(msg_dec) = saltbox::try_decrypt(saltbox, &msg_ciphertext) else {
@@ -373,7 +392,7 @@ impl IrcServer {
             };
 
             privmsg.channel = name.to_string();
-            privmsg.nick = name.to_string();
+            privmsg.nick = nick;
             privmsg.msg = String::from_utf8_lossy(&msg_dec).into();
             debug!("Successfully decrypted message from {}", name);
             return

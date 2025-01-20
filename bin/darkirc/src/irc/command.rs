@@ -984,7 +984,7 @@ impl Client {
             };
 
             // Potentially decrypt the privmsg
-            self.server.try_decrypt(&mut privmsg).await;
+            self.server.try_decrypt(&mut privmsg, self.nickname.read().await.as_ref()).await;
 
             // If the privmsg is intented for any of the given
             // channels, contacts or oursleves, add it as a reply and

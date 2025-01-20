@@ -238,7 +238,7 @@ impl Client {
                     };
 
                     // If successful, potentially decrypt it:
-                    self.server.try_decrypt(&mut privmsg).await;
+                    self.server.try_decrypt(&mut privmsg, self.nickname.read().await.as_ref()).await;
 
                     // We should skip any attempts to contact services from the network.
                     if ["nickserv", "chanserv"].contains(&privmsg.nick.to_lowercase().as_str()) {
