@@ -57,6 +57,8 @@ parking_lot = { version = "0.12", features = ["nightly"] }
 [features]
 emulate-android = []
 enable-plugins = []
+# Network debugging. Should be disabled in release.
+enable-netdebug = []
 
 [patch.crates-io]
 # We can remove these patches. But unfortunately harfbuzz-sys is still linking
@@ -97,7 +99,7 @@ workspace = true
 [package.metadata.android]
 package_name = "darkfi.darkwallet"
 label = "DarkWallet"
-res = "res"
+res = "data/res"
 icon = "@mipmap/ic_launcher"
 assets = "assets"
 

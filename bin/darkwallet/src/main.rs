@@ -116,13 +116,15 @@ fn main() {
     let async_runtime = app::AsyncRuntime::new(ex.clone());
     async_runtime.start();
 
-    let sg_root2 = sg_root.clone();
-    let ex2 = ex.clone();
-    let zmq_task = ex.spawn(async {
-        let zmq_rpc = ZeroMQAdapter::new(sg_root2, ex2).await;
-        zmq_rpc.run().await;
-    });
-    async_runtime.push_task(zmq_task);
+    if cfg!(features = "enable-netdebug") {
+        let sg_root2 = sg_root.clone();
+        let ex2 = ex.clone();
+        let zmq_task = ex.spawn(async {
+            let zmq_rpc = ZeroMQAdapter::new(sg_root2, ex2).await;
+            zmq_rpc.run().await;
+        });
+        async_runtime.push_task(zmq_task);
+    }
 
     let (method_req, method_rep) = mpsc::channel();
     // The UI actually needs to be running for this to reply back.

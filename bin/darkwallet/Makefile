@@ -13,6 +13,7 @@ SRC = \
 
 #FEATURES = --features=emulate-android
 #FEATURES = --features=enable-plugins
+FEATURES = --features=enable-netdebug
 
 all: $(SRC) fonts
 	# You can either install cargo-limit or just s/lbuild/build

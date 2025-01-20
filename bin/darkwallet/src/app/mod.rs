@@ -384,7 +384,7 @@ impl Drop for App {
 
 // Just for testing
 fn populate_tree(tree: &sled::Tree) {
-    let chat_txt = include_str!("../../chat.txt");
+    let chat_txt = include_str!("../../data/chat.txt");
     for line in chat_txt.lines() {
         let parts: Vec<&str> = line.splitn(3, ' ').collect();
         assert_eq!(parts.len(), 3);
