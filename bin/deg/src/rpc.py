@@ -22,7 +22,7 @@ import asyncio
 class JsonRpc:
 
     async def start(self, server, port):
-        reader, writer = await asyncio.open_connection(server, port, limit=1024 * 1024)
+        reader, writer = await asyncio.open_connection(server, port, limit=1024 ** 3)
         self.reader = reader
         self.writer = writer
 
