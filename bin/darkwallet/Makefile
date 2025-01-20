@@ -12,6 +12,7 @@ SRC = \
 	$(shell find res -type f)
 
 #FEATURES = --features=emulate-android
+#FEATURES = --features=enable-plugins
 
 all: $(SRC) fonts
 	# You can either install cargo-limit or just s/lbuild/build

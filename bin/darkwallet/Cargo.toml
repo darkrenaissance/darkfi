@@ -56,6 +56,7 @@ parking_lot = { version = "0.12", features = ["nightly"] }
 
 [features]
 emulate-android = []
+enable-plugins = []
 
 [patch.crates-io]
 # We can remove these patches. But unfortunately harfbuzz-sys is still linking

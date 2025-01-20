@@ -44,6 +44,8 @@ mod editbox;
 pub use editbox::{EditBox, EditBoxPtr};
 pub mod emoji_picker;
 pub use emoji_picker::{EmojiPicker, EmojiPickerPtr};
+mod gesture;
+pub use gesture::{Gesture, GesturePtr};
 mod image;
 pub use image::{Image, ImagePtr};
 mod vector_art;
@@ -204,6 +206,7 @@ pub fn get_ui_object_ptr(node: &SceneNode3) -> Arc<dyn UIObject + Send> {
         Pimpl::Button(obj) => obj.clone(),
         Pimpl::EmojiPicker(obj) => obj.clone(),
         Pimpl::Shortcut(obj) => obj.clone(),
+        Pimpl::Gesture(obj) => obj.clone(),
         _ => panic!("unhandled type for get_ui_object: {node:?}"),
     }
 }
@@ -219,6 +222,7 @@ pub fn get_ui_object3<'a>(node: &'a SceneNode3) -> &'a dyn UIObject {
         Pimpl::Button(obj) => obj.as_ref(),
         Pimpl::EmojiPicker(obj) => obj.as_ref(),
         Pimpl::Shortcut(obj) => obj.as_ref(),
+        Pimpl::Gesture(obj) => obj.as_ref(),
         _ => panic!("unhandled type for get_ui_object: {node:?}"),
     }
 }

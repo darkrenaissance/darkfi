@@ -110,6 +110,23 @@ pub fn create_shortcut(name: &str) -> SceneNode {
     node
 }
 
+pub fn create_gesture(name: &str) -> SceneNode {
+    t!("create_gesture({name})");
+    let mut node = SceneNode::new(name, SceneNodeType::Gesture);
+
+    let prop = Property::new("priority", PropertyType::Uint32, PropertySubType::Null);
+    node.add_property(prop).unwrap();
+
+    node.add_signal(
+        "gesture",
+        "Gesture triggered",
+        vec![("distance", "Distance", CallArgType::Float32)],
+    )
+    .unwrap();
+
+    node
+}
+
 pub fn create_image(name: &str) -> SceneNode {
     t!("create_image({name})");
     let mut node = SceneNode::new(name, SceneNodeType::Image);

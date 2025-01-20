@@ -16,15 +16,15 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_serial::Encodable;
+use darkfi_serial::{deserialize, Encodable};
 use sled_overlay::sled;
 use std::fs::File;
 
 use crate::{
     app::{
         node::{
-            create_button, create_chatedit, create_chatview, create_editbox, create_image,
-            create_layer, create_shortcut, create_text, create_vector_art,
+            create_button, create_chatedit, create_chatview, create_editbox, create_gesture,
+            create_image, create_layer, create_shortcut, create_text, create_vector_art,
         },
         populate_tree, App,
     },
@@ -40,8 +40,8 @@ use crate::{
     shape,
     text::TextShaperPtr,
     ui::{
-        emoji_picker, Button, ChatEdit, ChatView, EditBox, Image, Layer, ShapeVertex, Shortcut,
-        Text, VectorArt, VectorShape, Window,
+        emoji_picker, Button, ChatEdit, ChatView, EditBox, Gesture, Image, Layer, ShapeVertex,
+        Shortcut, Text, VectorArt, VectorShape, Window,
     },
     ExecutorPtr,
 };
@@ -164,7 +164,6 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     node.set_property_u32(atom, Role::App, "priority", 10).unwrap();
     let (slot, recvr) = Slot::new("zoom_in_pressed");
     node.register("shortcut", slot).unwrap();
-    let window_scale = PropertyFloat32::wrap(&window, Role::App, "scale", 0).unwrap();
     let window_scale2 = window_scale.clone();
     let listen_zoom = app.ex.spawn(async move {
         while let Ok(_) = recvr.recv().await {
@@ -184,6 +183,33 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     });
     app.tasks.lock().unwrap().push(listen_zoom);
     let node = node.setup(|me| Shortcut::new(me)).await;
+    window.clone().link(node);
+
+    let node = create_gesture("zoom_gesture");
+    node.set_property_u32(atom, Role::App, "priority", 10).unwrap();
+    let (slot, recvr) = Slot::new("zoom_gesture");
+    node.register("gesture", slot).unwrap();
+    let listen_zoom = app.ex.spawn(async move {
+        while let Ok(data) = recvr.recv().await {
+            let distance: f32 = deserialize(&data).unwrap();
+            // Dampen it a little
+            let r = (distance - 1.) / 2. + 1.;
+            let scale = r * window_scale.get();
+
+            let filename = get_window_scale_filename();
+            if let Some(parent) = filename.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            if let Ok(mut file) = File::create(filename) {
+                scale.encode(&mut file).unwrap();
+            }
+
+            let atom = &mut PropertyAtomicGuard::new();
+            window_scale.set(atom, scale);
+        }
+    });
+    app.tasks.lock().unwrap().push(listen_zoom);
+    let node = node.setup(|me| Gesture::new(me)).await;
     window.clone().link(node);
 
     if COLOR_SCHEME == ColorScheme::DarkMode {

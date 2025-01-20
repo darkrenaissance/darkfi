@@ -117,7 +117,8 @@ pub enum SceneNodeType {
     Image = 19,
     Button = 20,
     Shortcut = 21,
-    EmojiPicker = 22,
+    Gesture = 22,
+    EmojiPicker = 23,
     PluginRoot = 100,
     Plugin = 101,
 }
@@ -423,6 +424,7 @@ impl std::fmt::Debug for SceneNode {
 pub enum CallArgType {
     Uint32,
     Uint64,
+    Float32,
     Bool,
     Str,
     Hash,
@@ -517,6 +519,7 @@ pub enum Pimpl {
     Image(ui::ImagePtr),
     Button(ui::ButtonPtr),
     Shortcut(ui::ShortcutPtr),
+    Gesture(ui::GesturePtr),
     EmojiPicker(ui::EmojiPickerPtr),
     DarkIrc(plugin::DarkIrcPtr),
 }

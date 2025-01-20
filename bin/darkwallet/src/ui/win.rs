@@ -455,7 +455,7 @@ impl Window {
         for child in self.get_children() {
             let obj = get_ui_object3(&child);
             let Some(mut draw_update) = obj.draw(rect, trace_id, atom).await else {
-                error!(target: "ui::layer", "draw() of {child:?} failed [trace_id={trace_id}]");
+                t!("{child:?} draw returned none [trace_id={trace_id}]");
                 continue
             };
 
