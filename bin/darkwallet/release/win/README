@@ -1,0 +1,5 @@
+* Use Advanced Installer to create an MSI installer.
+* Add shortcuts to:
+    * Application Shortcut Folder
+    * Desktop
+
