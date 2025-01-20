@@ -75,7 +75,7 @@ use crate::{net::ZeroMQAdapter, text::TextShaper};
 
 pub type ExecutorPtr = Arc<smol::Executor<'static>>;
 
-fn panic_hook(panic_info: &std::panic::PanicInfo) {
+fn panic_hook(panic_info: &std::panic::PanicHookInfo) {
     error!("panic occurred: {panic_info}");
     error!("{}", std::backtrace::Backtrace::force_capture().to_string());
     std::process::abort()
