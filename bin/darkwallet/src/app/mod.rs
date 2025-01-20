@@ -270,35 +270,40 @@ impl App {
             let net3_is_visible = PropertyBool::wrap(&net3, Role::App, "is_visible", 0).unwrap();
 
             while let Ok(data) = recvr.recv().await {
-                let peers_count: u32 = deserialize(&data).unwrap();
+                let (peers_count, is_dag_synced): (u32, bool) = deserialize(&data).unwrap();
 
                 let atom = &mut PropertyAtomicGuard::new();
-                match peers_count {
-                    0 => {
-                        net0_is_visible.set(atom, true);
-                        net1_is_visible.set(atom, false);
-                        net2_is_visible.set(atom, false);
-                        net3_is_visible.set(atom, false);
-                    }
-                    1 => {
-                        net0_is_visible.set(atom, false);
-                        net1_is_visible.set(atom, true);
-                        net2_is_visible.set(atom, false);
-                        net3_is_visible.set(atom, false);
-                    }
-                    2 => {
-                        net0_is_visible.set(atom, false);
-                        net1_is_visible.set(atom, false);
-                        net2_is_visible.set(atom, true);
-                        net3_is_visible.set(atom, false);
-                    }
-                    _ => {
-                        net0_is_visible.set(atom, false);
-                        net1_is_visible.set(atom, false);
-                        net2_is_visible.set(atom, false);
-                        net3_is_visible.set(atom, true);
-                    }
+
+                if peers_count == 0 {
+                    net0_is_visible.set(atom, true);
+                    net1_is_visible.set(atom, false);
+                    net2_is_visible.set(atom, false);
+                    net3_is_visible.set(atom, false);
+                    continue
                 }
+
+                assert!(peers_count > 0);
+                if !is_dag_synced {
+                    net0_is_visible.set(atom, false);
+                    net1_is_visible.set(atom, true);
+                    net2_is_visible.set(atom, false);
+                    net3_is_visible.set(atom, false);
+                    continue
+                }
+
+                assert!(peers_count > 0 && is_dag_synced);
+                if peers_count == 1 {
+                    net0_is_visible.set(atom, false);
+                    net1_is_visible.set(atom, false);
+                    net2_is_visible.set(atom, true);
+                    net3_is_visible.set(atom, false);
+                    continue
+                }
+
+                net0_is_visible.set(atom, false);
+                net1_is_visible.set(atom, false);
+                net2_is_visible.set(atom, false);
+                net3_is_visible.set(atom, true);
             }
         });
         self.tasks.lock().unwrap().push(listen_connect);

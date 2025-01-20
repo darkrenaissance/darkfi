@@ -107,6 +107,7 @@ macro_rules! t { ($($arg:tt)*) => { trace!(target: "plugin::darkirc", $($arg)*);
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "plugin::darkirc", $($arg)*); } }
 macro_rules! i { ($($arg:tt)*) => { info!(target: "plugin::darkirc", $($arg)*); } }
 macro_rules! e { ($($arg:tt)*) => { error!(target: "plugin::darkirc", $($arg)*); } }
+macro_rules! w { ($($arg:tt)*) => { warn!(target: "plugin::darkirc", $($arg)*); } }
 
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct Privmsg {
@@ -260,8 +261,12 @@ impl DarkIrc {
                 return
             }
 
+            let peers_count = self.p2p.peers_count();
+            self.notify_connect(peers_count, false).await;
+
             // Wait until we have enough connections
-            if self.p2p.hosts().peers().len() < SYNC_MIN_PEERS {
+            if peers_count < SYNC_MIN_PEERS {
+                i!("Connected to {peers_count} peers. Waiting for more connections.");
                 continue
             }
 
@@ -280,10 +285,31 @@ impl DarkIrc {
                 Err(e) => {
                     // TODO: Maybe at this point we should prune or something?
                     // TODO: Or maybe just tell the user to delete the DAG from FS.
-                    warn!("Failed DAG sync: ({e}). Waiting for more connections before retry.");
+                    w!("Failed DAG sync: ({e}). Waiting for more connections before retry.");
                 }
             }
         }
+
+        let peers_count = self.p2p.peers_count();
+        self.notify_connect(peers_count, true).await;
+
+        // Initial sync finished. Now just notify of connection changes
+        loop {
+            // Wait for a channel
+            if let Err(_) = channel_sub.receive().await {
+                e!("There was an error listening for channels. The service closed unexpectedly.");
+                // Not sure what to do here
+                return
+            }
+
+            let peers_count = self.p2p.peers_count();
+            self.notify_connect(peers_count, true).await;
+        }
+    }
+
+    async fn notify_connect(&self, peers_count: usize, is_dag_synced: bool) {
+        let node = self.node.upgrade().unwrap();
+        node.trigger("connect", serialize(&(peers_count as u32, is_dag_synced))).await.unwrap();
     }
 
     async fn relay_events(self: Arc<Self>, ev_sub: Subscription<event_graph::Event>) {
@@ -426,21 +452,6 @@ impl DarkIrc {
 
         self.p2p.broadcast(&EventPut(event)).await;
     }
-
-    async fn connect_notify(self: Arc<Self>, channel_sub: Subscription<DarkFiResult<ChannelPtr>>) {
-        loop {
-            // Wait for a channel
-            if let Err(_) = channel_sub.receive().await {
-                e!("There was an error listening for channels. The service closed unexpectedly.");
-                return
-            }
-
-            let peers_count = self.p2p.hosts().peers().len() as u32;
-
-            let node = self.node.upgrade().unwrap();
-            node.trigger("connect", serialize(&peers_count)).await.unwrap();
-        }
-    }
 }
 
 #[async_trait]
@@ -478,10 +489,7 @@ impl PluginObject for DarkIrc {
         let channel_sub = self.p2p.hosts().subscribe_channel().await;
         let dag_task = ex.spawn(self.clone().dag_sync(channel_sub));
 
-        let channel_sub = self.p2p.hosts().subscribe_channel().await;
-        let connect_notify_task = ex.spawn(self.clone().connect_notify(channel_sub));
-
-        let mut tasks = vec![send_method_task, ev_task, dag_task, connect_notify_task];
+        let mut tasks = vec![send_method_task, ev_task, dag_task];
         tasks.append(&mut on_modify.tasks);
         self.tasks.set(tasks);
     }

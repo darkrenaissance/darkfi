@@ -604,7 +604,10 @@ pub fn create_darkirc(name: &str) -> SceneNode {
     node.add_signal(
         "connect",
         "Connections and disconnects",
-        vec![("peers_count", "Peers count", CallArgType::Uint32)],
+        vec![
+            ("peers_count", "Peers Count", CallArgType::Uint32),
+            ("dag_synced", "Is DAG Synced", CallArgType::Bool),
+        ],
     )
     .unwrap();
 

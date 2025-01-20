@@ -219,6 +219,11 @@ impl P2p {
         !self.hosts().peers().is_empty()
     }
 
+    /// The number of connected peers. This means channels which are not seed or refine.
+    pub fn peers_count(&self) -> usize {
+        self.hosts().peers().len()
+    }
+
     /// Return an atomic pointer to the set network settings
     pub fn settings(&self) -> Arc<AsyncRwLock<Settings>> {
         Arc::clone(&self.settings)
