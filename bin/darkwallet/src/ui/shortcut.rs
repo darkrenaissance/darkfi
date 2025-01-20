@@ -84,6 +84,7 @@ impl UIObject for Shortcut {
         keys.sort();
 
         if shortcut != keys {
+            t!("shortcut({:?}): {shortcut:?} != {keys:?}", self.node.upgrade().unwrap());
             return false
         }
 

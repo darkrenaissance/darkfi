@@ -8,12 +8,12 @@ SRC = \
 	Cargo.toml \
 	Dockerfile \
 	$(shell find assets -type f) \
-	$(shell find src -type f) \
-	$(shell find res -type f)
+	$(shell find src -type f)
 
 #FEATURES = --features=emulate-android
 #FEATURES = --features=enable-plugins
-FEATURES = --features=enable-netdebug
+FEATURES = --features=enable-netdebug,enable-plugins
+#FEATURES = --features=enable-netdebug
 
 all: $(SRC) fonts
 	# You can either install cargo-limit or just s/lbuild/build
@@ -23,7 +23,7 @@ all: $(SRC) fonts
 	./darkwallet
 
 darkwallet.apk: $(SRC) fonts
-	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/darkwallet/ -t apk cargo quad-apk build --release
+	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/darkwallet/ -t apk cargo quad-apk build --release $(FEATURES)
 	cp -f $(APK) $@
 
 ibm-plex-mono-regular.otf:
@@ -35,7 +35,7 @@ NotoColorEmoji.ttf:
 fonts: ibm-plex-mono-regular.otf NotoColorEmoji.ttf
 
 android: $(SRC) fonts
-	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/darkwallet/ -t apk cargo quad-apk build --release
+	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/darkwallet/ -t apk cargo quad-apk build --release $(FEATURES)
 	adb uninstall darkfi.darkwallet
 	adb install $(APK)
 	reset
