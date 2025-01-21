@@ -125,8 +125,8 @@ in an accessible place.
 Open cmd and navigate to the folder. Now run `cargo build`.
 
 ```
-C:\Users\a> cd ../../darkfi/bin/darkwallet/
-C:\darkfi\bin\darkwallet> cargo build
+C:\Users\a> cd ../../darkfi/bin/app/
+C:\darkfi\bin\app> cargo build
 ```
 
 ## (Optional) Mesa GL

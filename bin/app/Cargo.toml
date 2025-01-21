@@ -1,6 +1,6 @@
 [package]
-name = "darkwallet"
-description = "Wallet UI"
+name = "darkfi-app"
+description = "DarkFi UI App"
 version = "0.1.0"
 edition = "2021"
 authors = ["Dyne.org foundation <foundation@dyne.org>"]
@@ -91,8 +91,8 @@ workspace = true
 [workspace.lints.clippy]
 
 [package.metadata.android]
-package_name = "darkfi.darkwallet"
-label = "DarkWallet"
+package_name = "darkfi.app"
+label = "DarkFi"
 res = "data/res"
 icon = "@mipmap/ic_launcher"
 assets = "assets"

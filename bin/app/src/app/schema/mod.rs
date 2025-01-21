@@ -61,7 +61,7 @@ mod android_ui_consts {
 
 #[cfg(target_os = "android")]
 mod ui_consts {
-    use crate::android::get_appdata_path;
+    use crate::android::{get_appdata_path, get_external_storage_path};
     use std::path::PathBuf;
 
     pub const BG_PATH: &str = "bg.png";
@@ -87,15 +87,15 @@ mod desktop_paths {
     pub const BG_PATH: &str = "assets/bg.png";
 
     pub fn get_chatdb_path() -> PathBuf {
-        dirs::data_local_dir().unwrap().join("darkfi/wallet/chatdb")
+        dirs::data_local_dir().unwrap().join("darkfi/app/chatdb")
     }
 
     pub fn get_first_time_filename() -> PathBuf {
-        dirs::cache_dir().unwrap().join("darkfi/wallet/first_time")
+        dirs::cache_dir().unwrap().join("darkfi/app/first_time")
     }
 
     pub fn get_window_scale_filename() -> PathBuf {
-        dirs::cache_dir().unwrap().join("darkfi/wallet/window_scale")
+        dirs::cache_dir().unwrap().join("darkfi/app/window_scale")
     }
 }
 

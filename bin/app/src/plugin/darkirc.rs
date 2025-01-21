@@ -62,7 +62,7 @@ const RECENT_TIME_DIST: u64 = 25_000;
 
 #[cfg(target_os = "android")]
 mod paths {
-    use crate::android::get_appdata_path;
+    use crate::android::{get_appdata_path, get_external_storage_path};
     use std::path::PathBuf;
 
     pub fn get_evgrdb_path() -> PathBuf {
@@ -86,18 +86,18 @@ mod paths {
     use std::path::PathBuf;
 
     pub fn get_evgrdb_path() -> PathBuf {
-        dirs::data_local_dir().unwrap().join("darkfi/evgr")
+        dirs::data_local_dir().unwrap().join("darkfi/app/evgr")
     }
 
     pub fn nick_filename() -> PathBuf {
-        dirs::cache_dir().unwrap().join("darkfi/nick.txt")
+        dirs::cache_dir().unwrap().join("darkfi/app/nick.txt")
     }
 
     pub fn p2p_datastore_path() -> PathBuf {
-        dirs::cache_dir().unwrap().join("darkfi/wallet/darkirc_p2p")
+        dirs::cache_dir().unwrap().join("darkfi/app/darkirc_p2p")
     }
     pub fn hostlist_path() -> PathBuf {
-        dirs::cache_dir().unwrap().join("darkfi/wallet/hostlist.tsv")
+        dirs::cache_dir().unwrap().join("darkfi/app/hostlist.tsv")
     }
 }
 

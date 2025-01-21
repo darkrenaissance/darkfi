@@ -47,7 +47,7 @@ const LIGHTMODE: bool = false;
 
 #[cfg(target_os = "android")]
 mod ui_consts {
-    pub const CHATDB_PATH: &str = "/data/data/darkfi.darkwallet/chatdb/";
+    pub const CHATDB_PATH: &str = "/data/data/darkfi.app/chatdb/";
     pub const KING_PATH: &str = "king.png";
 }
 

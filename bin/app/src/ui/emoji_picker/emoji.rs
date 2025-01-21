@@ -43,7 +43,7 @@ use super::default;
 
 #[cfg(target_os = "android")]
 pub fn get_emoji_list_path() -> PathBuf {
-    get_external_storage_path().join("emoji.txt")
+    crate::android::get_external_storage_path().join("emoji.txt")
 }
 
 #[cfg(not(target_os = "android"))]

@@ -49,7 +49,7 @@ pub const EMOJI_PROP_ABOVE_BASELINE: f32 = 0.8;
 
 #[cfg(target_os = "android")]
 fn custom_font_path() -> PathBuf {
-    get_external_storage_path().join("font")
+    crate::android::get_external_storage_path().join("font")
 }
 #[cfg(not(target_os = "android"))]
 fn custom_font_path() -> PathBuf {

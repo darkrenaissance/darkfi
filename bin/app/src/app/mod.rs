@@ -181,13 +181,14 @@ impl App {
         let plugin = Arc::new(SceneNode3::new("plugin", SceneNodeType3::PluginRoot));
         self.sg_root.clone().link(plugin.clone());
 
-        if cfg!(feature = "enable-plugins") {
-            self.load_plugins(plugin).await;
-        } else {
-            w!("Plugins are disabled in this build");
-        }
+        #[cfg(feature = "enable-plugins")]
+        self.load_plugins(plugin).await;
+
+        #[cfg(not(feature = "enable-plugins"))]
+        w!("Plugins are disabled in this build");
     }
 
+    #[cfg(feature = "enable-plugins")]
     async fn load_plugins(&self, plugin: SceneNodePtr) {
         let darkirc = create_darkirc("darkirc");
         let darkirc = darkirc

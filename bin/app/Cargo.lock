@@ -1237,6 +1237,47 @@ dependencies = [
 ]
 
 [[package]]
+name = "darkfi-app"
+version = "0.1.0"
+dependencies = [
+ "android_logger",
+ "arboard",
+ "async-channel 2.3.1",
+ "async-gen",
+ "async-lock",
+ "async-recursion",
+ "async-trait",
+ "atomic_float",
+ "blake3",
+ "chrono",
+ "colored",
+ "darkfi",
+ "darkfi-serial",
+ "dirs",
+ "easy-parallel",
+ "file-rotate",
+ "freetype-rs",
+ "futures",
+ "glam",
+ "harfbuzz-sys",
+ "image",
+ "log",
+ "miniquad",
+ "parking_lot 0.12.3",
+ "rand",
+ "regex",
+ "rusqlite",
+ "semver",
+ "simplelog",
+ "sled-overlay",
+ "smol",
+ "thiserror 1.0.69",
+ "tor-dirmgr",
+ "url",
+ "zeromq",
+]
+
+[[package]]
 name = "darkfi-derive"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1295,47 +1336,6 @@ dependencies = [
  "pasta_curves",
  "semver",
  "url",
-]
-
-[[package]]
-name = "darkwallet"
-version = "0.1.0"
-dependencies = [
- "android_logger",
- "arboard",
- "async-channel 2.3.1",
- "async-gen",
- "async-lock",
- "async-recursion",
- "async-trait",
- "atomic_float",
- "blake3",
- "chrono",
- "colored",
- "darkfi",
- "darkfi-serial",
- "dirs",
- "easy-parallel",
- "file-rotate",
- "freetype-rs",
- "futures",
- "glam",
- "harfbuzz-sys",
- "image",
- "log",
- "miniquad",
- "parking_lot 0.12.3",
- "rand",
- "regex",
- "rusqlite",
- "semver",
- "simplelog",
- "sled-overlay",
- "smol",
- "thiserror 1.0.69",
- "tor-dirmgr",
- "url",
- "zeromq",
 ]
 
 [[package]]

@@ -59,7 +59,7 @@ pub fn get_window_size_filename() -> PathBuf {
 }
 #[cfg(not(target_os = "android"))]
 pub fn get_window_size_filename() -> PathBuf {
-    dirs::cache_dir().unwrap().join("darkfi/wallet/window_size")
+    dirs::cache_dir().unwrap().join("darkfi/app/window_size")
 }
 
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]

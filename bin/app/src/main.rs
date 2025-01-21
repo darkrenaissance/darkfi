@@ -89,16 +89,21 @@ fn main() {
 
     #[cfg(target_os = "android")]
     {
+        use crate::android::{get_appdata_path, get_external_storage_path};
+
+        info!("App internal data path: {:?}", get_appdata_path());
+        info!("App external storage path: {:?}", get_external_storage_path());
+
         // Workaround for this bug
         // https://gitlab.torproject.org/tpo/core/arti/-/issues/999
         unsafe {
-            std::env::set_var("HOME", "/data/data/darkfi.darkwallet/");
+            std::env::set_var("HOME", get_appdata_path().as_os_str());
         }
 
-        let paths = std::fs::read_dir("/data/data/darkfi.darkwallet/").unwrap();
-        for path in paths {
-            debug!("{}", path.unwrap().path().display())
-        }
+        //let paths = std::fs::read_dir("/data/data/darkfi.darkfi/").unwrap();
+        //for path in paths {
+        //    debug!("{}", path.unwrap().path().display())
+        //}
     }
 
     let exe_path = std::env::current_exe().unwrap();
