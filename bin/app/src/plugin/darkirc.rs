@@ -285,9 +285,8 @@ impl DarkIrc {
         loop {
             // Wait for a channel
             if let Err(err) = channel_sub.receive().await {
-                e!("There was an error listening for channels. The service closed unexpectedly with error: {err}");
-                // Not sure what to do here
-                return
+                w!("There was an error listening for channels. The service closed unexpectedly with error: {err}");
+                continue
             }
 
             let peers_count = self.p2p.peers_count();
@@ -326,9 +325,8 @@ impl DarkIrc {
         loop {
             // Wait for a channel
             if let Err(err) = channel_sub.receive().await {
-                e!("There was an error listening for channels. The service closed unexpectedly with error: {err}");
-                // Not sure what to do here
-                return
+                w!("There was an error listening for channels. The service closed unexpectedly with error: {err}");
+                continue
             }
 
             let peers_count = self.p2p.peers_count();
