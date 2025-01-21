@@ -1,6 +1,7 @@
 .POSIX:
 
-APK = target/android-artifacts/release/apk/darkfi-app.apk
+RELEASE_APK = target/android-artifacts/release/apk/darkfi-app.apk
+DEBUG_APK = target/android-artifacts/debug/apk/darkfi-app.apk
 
 SRC = \
 	build.rs \
@@ -11,24 +12,50 @@ SRC = \
 	$(shell find src -type f)
 
 RELEASE_FEATURES = --features=enable-plugins
+DEBUG_FEATURES = --features=enable-filelog,enable-plugins
 
 #FEATURES = --features=enable-filelog,enable-netdebug,emulate-android
 #FEATURES = --features=enable-filelog,enable-netdebug,enable-plugins
 DEV_FEATURES = --features=enable-filelog,enable-netdebug
 
-all: $(SRC) fonts
+default: build-release
+	./darkfi-app
+
+android: android-release
+
+# Platform release builds
+
+macos-release: release-build
+	-mv darkfi-app darkfi-app.macos
+macos-debug: debug-build
+	-mv darkfi-app darkfi-app_debug.macos
+linux-release: release-build
+	-mv darkfi-app darkfi-app.linux
+linux-debug: debug-build
+	-mv darkfi-app darkfi-app_debug.linux
+win-release: $(SRC) fonts
+	cargo build --release $(RELEASE_FEATURES)
+	-mv target/release/darkfi-app.exe .
+win-debug: $(SRC) fonts
+	cargo build $(DEBUG_FEATURES)
+	-mv target/debug/darkfi-app.exe .
+android-release: $(SRC) fonts
+	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk cargo quad-apk build --release $(RELEASE_FEATURES)
+	-mv $(RELEASE_APK) .
+android-debug: $(SRC) fonts
+	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk cargo quad-apk build $(DEBUG_FEATURES)
+	-mv $(DEBUG_APK) .
+
+build-release: $(SRC) fonts
 	cargo build --release $(RELEASE_FEATURES)
 	-mv target/release/darkfi-app .
-	./darkfi-app
-
-dev: $(SRC) fonts
-	cargo lbuild $(DEV_FEATURES)
+build-debug: $(SRC) fonts
+	cargo build $(DEBUG_FEATURES)
 	-mv target/debug/darkfi-app .
-	./darkfi-app
 
-android: $(SRC) fonts
-	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk cargo quad-apk build --release $(RELEASE_FEATURES)
-	-mv $(APK) .
+# Download font data
+
+fonts: ibm-plex-mono-regular.otf NotoColorEmoji.ttf
 
 ibm-plex-mono-regular.otf:
 	wget -c https://codeberg.org/darkrenaissance/darkfi/raw/branch/data/ibm-plex-mono-regular.otf
@@ -36,7 +63,12 @@ ibm-plex-mono-regular.otf:
 NotoColorEmoji.ttf:
 	wget -c https://codeberg.org/darkrenaissance/darkfi/raw/branch/data/NotoColorEmoji.ttf
 
-fonts: ibm-plex-mono-regular.otf NotoColorEmoji.ttf
+# Developer targets
+
+dev: $(SRC) fonts
+	cargo lbuild $(DEV_FEATURES)
+	-mv target/debug/darkfi-app .
+	./darkfi-app
 
 apk: darkfi-app.apk
 	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk cargo quad-apk build $(DEV_FEATURES)
