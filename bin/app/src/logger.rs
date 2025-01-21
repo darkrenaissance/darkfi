@@ -6,12 +6,6 @@ use simplelog::{
 };
 use std::{path::PathBuf, thread::sleep, time::Duration};
 
-#[cfg(target_os = "android")]
-const LOGS_ENABLED: bool = true;
-
-#[cfg(not(target_os = "android"))]
-const LOGS_ENABLED: bool = true;
-
 // Measured in bytes
 const LOGFILE_MAXSIZE: usize = 5_000_000;
 
@@ -176,7 +170,8 @@ pub fn setup_logging() {
 
     let cfg = ConfigBuilder::new().build();
 
-    if LOGS_ENABLED {
+    #[cfg(feature = "enable-filelog")]
+    {
         let log_file = FileRotate::new(
             logfile_path(),
             AppendCount::new(0),

@@ -53,7 +53,7 @@ fn custom_font_path() -> PathBuf {
 }
 #[cfg(not(target_os = "android"))]
 fn custom_font_path() -> PathBuf {
-    dirs::data_local_dir().unwrap().join("darkfi/font")
+    dirs::data_local_dir().unwrap().join("darkfi/app/font")
 }
 
 // From https://sourceforge.net/projects/freetype/files/freetype2/2.6/

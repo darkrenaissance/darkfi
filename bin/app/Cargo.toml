@@ -51,6 +51,7 @@ regex = "1.11"
 [features]
 emulate-android = []
 enable-plugins = []
+enable-filelog = []
 # Network debugging. Should be disabled in release.
 enable-netdebug = []
 

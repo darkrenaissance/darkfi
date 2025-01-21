@@ -12,9 +12,9 @@ SRC = \
 
 RELEASE_FEATURES = --features=enable-plugins
 
-#FEATURES = --features=emulate-android
-#FEATURES = --features=enable-netdebug,enable-plugins
-DEV_FEATURES = --features=enable-netdebug
+#FEATURES = --features=enable-filelog,enable-netdebug,emulate-android
+#FEATURES = --features=enable-filelog,enable-netdebug,enable-plugins
+DEV_FEATURES = --features=enable-filelog,enable-netdebug
 
 all: $(SRC) fonts
 	cargo build --release $(RELEASE_FEATURES)
