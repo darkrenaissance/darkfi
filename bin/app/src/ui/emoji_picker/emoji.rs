@@ -135,10 +135,11 @@ fn load_custom_emoji_list(path: &Path) -> Option<Vec<String>> {
     let mut emojis = vec![];
     for mut line in reader.lines().map_while(Result::ok) {
         remove_whitespace(&mut line);
-        if line.starts_with('#') {
+        let line = strip_comment(&line);
+        if line.is_empty() {
             continue
         }
-        let emoji = unescape_unicode(&line)?;
+        let emoji = unescape_unicode(line)?;
         emojis.push(emoji);
     }
     Some(emojis)
@@ -172,4 +173,8 @@ fn unescape_unicode(input: &str) -> Option<String> {
 
 fn remove_whitespace(s: &mut String) {
     s.retain(|c| !c.is_whitespace());
+}
+
+fn strip_comment(s: &str) -> &str {
+    s.split('#').next().unwrap_or(s)
 }
