@@ -25,13 +25,13 @@ android: android-release
 
 # Platform release builds
 
-macos-release: release-build
+macos-release: build-release
 	-mv darkfi-app darkfi-app.macos
-macos-debug: debug-build
+macos-debug: build-debug
 	-mv darkfi-app darkfi-app_debug.macos
-linux-release: release-build
+linux-release: build-release
 	-mv darkfi-app darkfi-app.linux
-linux-debug: debug-build
+linux-debug: build-debug
 	-mv darkfi-app darkfi-app_debug.linux
 win-release: $(SRC) fonts
 	cargo build --release $(RELEASE_FEATURES)
