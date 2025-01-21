@@ -284,8 +284,8 @@ impl DarkIrc {
         let mut sync_attempt = 0;
         loop {
             // Wait for a channel
-            if let Err(_) = channel_sub.receive().await {
-                e!("There was an error listening for channels. The service closed unexpectedly.");
+            if let Err(err) = channel_sub.receive().await {
+                e!("There was an error listening for channels. The service closed unexpectedly with error: {err}");
                 // Not sure what to do here
                 return
             }
@@ -325,8 +325,8 @@ impl DarkIrc {
         // Initial sync finished. Now just notify of connection changes
         loop {
             // Wait for a channel
-            if let Err(_) = channel_sub.receive().await {
-                e!("There was an error listening for channels. The service closed unexpectedly.");
+            if let Err(err) = channel_sub.receive().await {
+                e!("There was an error listening for channels. The service closed unexpectedly with error: {err}");
                 // Not sure what to do here
                 return
             }
