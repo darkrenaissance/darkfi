@@ -68,6 +68,9 @@ mod paths {
     pub fn get_evgrdb_path() -> PathBuf {
         get_external_storage_path().join("evgr")
     }
+    pub fn get_use_tor_filename() -> PathBuf {
+        get_external_storage_path().join("use_tor.txt")
+    }
 
     pub fn nick_filename() -> PathBuf {
         get_appdata_path().join("/nick.txt")
@@ -87,6 +90,9 @@ mod paths {
 
     pub fn get_evgrdb_path() -> PathBuf {
         dirs::data_local_dir().unwrap().join("darkfi/app/evgr")
+    }
+    pub fn get_use_tor_filename() -> PathBuf {
+        dirs::data_local_dir().unwrap().join("darkfi/app/use_tor.txt")
     }
 
     pub fn nick_filename() -> PathBuf {
@@ -188,11 +194,34 @@ impl DarkIrc {
 
         let mut p2p_settings: NetSettings = Default::default();
         p2p_settings.app_version = semver::Version::parse("0.5.0").unwrap();
-        p2p_settings.seeds.push(url::Url::parse("tcp+tls://lilith1.dark.fi:5262").unwrap());
-        p2p_settings.seeds.push(url::Url::parse("tcp+tls://agorism.dev:26661").unwrap());
-        p2p_settings.seeds.push(url::Url::parse("tcp+tls://agorism.dev:26671").unwrap());
-        p2p_settings.outbound_connect_timeout = 40;
-        p2p_settings.channel_handshake_timeout = 30;
+        if get_use_tor_filename().exists() {
+            i!("Setup P2P network [tor]");
+            p2p_settings.outbound_connect_timeout = 60;
+            p2p_settings.channel_handshake_timeout = 55;
+            p2p_settings.channel_heartbeat_interval = 90;
+            p2p_settings.outbound_peer_discovery_cooloff_time = 60;
+
+            p2p_settings.seeds.push(
+                url::Url::parse(
+                    "tor://czzulj66rr5kq3uhidzn7fh4qvt3vaxaoldukuxnl5vipayuj7obo7id.onion:5263",
+                )
+                .unwrap(),
+            );
+            p2p_settings.seeds.push(
+                url::Url::parse(
+                    "tor://vgbfkcu5hcnlnwd2lz26nfoa6g6quciyxwbftm6ivvrx74yvv5jnaoid.onion:5273",
+                )
+                .unwrap(),
+            );
+        } else {
+            i!("Setup P2P network [clearnet]");
+            p2p_settings.outbound_connect_timeout = 40;
+            p2p_settings.channel_handshake_timeout = 30;
+
+            p2p_settings.seeds.push(url::Url::parse("tcp+tls://lilith1.dark.fi:5262").unwrap());
+            p2p_settings.seeds.push(url::Url::parse("tcp+tls://agorism.dev:26661").unwrap());
+            p2p_settings.seeds.push(url::Url::parse("tcp+tls://agorism.dev:26671").unwrap());
+        }
         p2p_settings.p2p_datastore = p2p_datastore_path().into_os_string().into_string().ok();
         p2p_settings.hostlist = hostlist_path().into_os_string().into_string().ok();
 

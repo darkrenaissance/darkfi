@@ -18,7 +18,7 @@ DEV_FEATURES = --features=enable-netdebug
 
 all: $(SRC) fonts
 	cargo build --release $(RELEASE_FEATURES)
-	-mv target/debug/darkfi-app .
+	-mv target/release/darkfi-app .
 	./darkfi-app
 
 dev: $(SRC) fonts
