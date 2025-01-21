@@ -91,7 +91,7 @@ workspace = true
 [workspace.lints.clippy]
 
 [package.metadata.android]
-package_name = "darkfi.app"
+package_name = "darkfi.darkfi-app"
 label = "DarkFi"
 res = "data/res"
 icon = "@mipmap/ic_launcher"

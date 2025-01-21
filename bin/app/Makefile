@@ -39,7 +39,7 @@ NotoColorEmoji.ttf:
 fonts: ibm-plex-mono-regular.otf NotoColorEmoji.ttf
 
 apk: darkfi-app.apk
-	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk cargo quad-apk build --release $(DEV_FEATURES)
+	podman run -v $(shell pwd)/../../:/root/darkfi -w /root/darkfi/bin/app/ -t apk cargo quad-apk build $(DEV_FEATURES)
 	-mv $(APK) .
 	adb uninstall darkfi.app
 	adb install darkfi-app.apk

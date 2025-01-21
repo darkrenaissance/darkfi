@@ -38,12 +38,12 @@ static ALLOW_TRACE: &[&'static str] = &["ui", "app", "gfx"];
 #[cfg(target_os = "android")]
 fn logfile_path() -> PathBuf {
     use crate::android::get_external_storage_path;
-    get_external_storage_path().join("Download/darkfi.log")
+    get_external_storage_path().join("darkfi-app.log")
 }
 
 #[cfg(not(target_os = "android"))]
 fn logfile_path() -> PathBuf {
-    dirs::cache_dir().unwrap().join("darkfi/darkfi.log")
+    dirs::cache_dir().unwrap().join("darkfi/darkfi-app.log")
 }
 
 #[cfg(target_os = "android")]
