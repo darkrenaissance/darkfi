@@ -223,14 +223,14 @@ fn keycode_to_strs(key: KeyCode, mods: KeyMods) -> Vec<String> {
         KeyCode::KpAdd => keys.push("kpadd"),
         KeyCode::KpEnter => keys.push("kpenter"),
         KeyCode::KpEqual => keys.push("kpequal"),
-        KeyCode::LeftShift => keys.push("leftshift"),
-        KeyCode::LeftControl => keys.push("leftcontrol"),
-        KeyCode::LeftAlt => keys.push("leftalt"),
-        KeyCode::LeftSuper => keys.push("leftsuper"),
-        KeyCode::RightShift => keys.push("rightshift"),
-        KeyCode::RightControl => keys.push("rightcontrol"),
-        KeyCode::RightAlt => keys.push("rightalt"),
-        KeyCode::RightSuper => keys.push("rightsuper"),
+        KeyCode::LeftShift |
+        KeyCode::LeftControl |
+        KeyCode::LeftAlt |
+        KeyCode::LeftSuper |
+        KeyCode::RightShift |
+        KeyCode::RightControl |
+        KeyCode::RightAlt |
+        KeyCode::RightSuper => {}
         KeyCode::Menu => keys.push("menu"),
         KeyCode::Back => keys.push("back"),
         KeyCode::Unknown => {

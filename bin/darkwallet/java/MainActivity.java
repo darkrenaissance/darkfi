@@ -19,7 +19,8 @@ public String getAppDataPath() {
     return getApplicationContext().getDataDir().getAbsolutePath();
 }
 public String getExternalStoragePath() {
-    return Environment.getExternalStorageDirectory().getAbsolutePath();
+    return getApplicationContext().getExternalFilesDir(null).getAbsolutePath();
+    //return Environment.getExternalStorageDirectory().getAbsolutePath();
 }
 
 public int getKeyboardHeight() {

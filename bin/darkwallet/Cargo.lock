@@ -1316,7 +1316,6 @@ dependencies = [
  "darkfi-serial",
  "dirs",
  "easy-parallel",
- "evgrd",
  "file-rotate",
  "freetype-rs",
  "futures",
@@ -1327,6 +1326,7 @@ dependencies = [
  "miniquad",
  "parking_lot 0.12.3",
  "rand",
+ "regex",
  "rusqlite",
  "semver",
  "simplelog",
@@ -1800,19 +1800,6 @@ checksum = "3c3e4e0dd3673c1139bf041f3008816d9cf2946bbfac2945c09e523b8d7b05b2"
 dependencies = [
  "event-listener 5.4.0",
  "pin-project-lite",
-]
-
-[[package]]
-name = "evgrd"
-version = "0.5.1"
-dependencies = [
- "blake3",
- "darkfi",
- "darkfi-serial",
- "log",
- "sled-overlay",
- "smol",
- "url",
 ]
 
 [[package]]
@@ -3054,7 +3041,7 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 [[package]]
 name = "miniquad"
 version = "0.4.7"
-source = "git+https://github.com/not-fl3/miniquad#2f716f5664551c28e8d8c0e90187e1b629cffc94"
+source = "git+https://github.com/not-fl3/miniquad#8b8dc6225693ef8c461a0cd44724e33baa9d9fe0"
 dependencies = [
  "libc",
  "ndk-sys",

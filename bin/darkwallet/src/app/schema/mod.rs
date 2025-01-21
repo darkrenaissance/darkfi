@@ -68,8 +68,9 @@ mod ui_consts {
     pub use super::android_ui_consts::*;
 
     pub fn get_chatdb_path() -> PathBuf {
-        get_appdata_path().join("chatdb")
+        get_external_storage_path().join("chatdb")
     }
+
     pub fn get_first_time_filename() -> PathBuf {
         get_appdata_path().join("first_time")
     }
@@ -88,6 +89,7 @@ mod desktop_paths {
     pub fn get_chatdb_path() -> PathBuf {
         dirs::data_local_dir().unwrap().join("darkfi/wallet/chatdb")
     }
+
     pub fn get_first_time_filename() -> PathBuf {
         dirs::cache_dir().unwrap().join("darkfi/wallet/first_time")
     }

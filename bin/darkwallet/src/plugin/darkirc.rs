@@ -66,7 +66,7 @@ mod paths {
     use std::path::PathBuf;
 
     pub fn get_evgrdb_path() -> PathBuf {
-        get_appdata_path().join("evgr")
+        get_external_storage_path().join("evgr")
     }
 
     pub fn nick_filename() -> PathBuf {

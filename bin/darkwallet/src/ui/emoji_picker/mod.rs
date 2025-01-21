@@ -47,72 +47,12 @@ use crate::{
 
 use super::{DrawUpdate, OnModify, UIObject};
 
+mod default;
 mod emoji;
+pub use emoji::{EmojiMeshes, EmojiMeshesPtr};
 
 macro_rules! d { ($($arg:tt)*) => { debug!(target: "ui::emoji_picker", $($arg)*); } }
 macro_rules! t { ($($arg:tt)*) => { trace!(target: "ui::emoji_picker", $($arg)*); } }
-
-pub type EmojiMeshesPtr = Arc<SyncMutex<EmojiMeshes>>;
-
-pub struct EmojiMeshes {
-    render_api: RenderApi,
-    text_shaper: TextShaperPtr,
-    emoji_size: f32,
-    meshes: Vec<GfxDrawMesh>,
-}
-
-impl EmojiMeshes {
-    pub fn new(
-        render_api: RenderApi,
-        text_shaper: TextShaperPtr,
-        emoji_size: f32,
-    ) -> EmojiMeshesPtr {
-        Arc::new(SyncMutex::new(Self {
-            render_api,
-            text_shaper,
-            emoji_size,
-            meshes: Vec::with_capacity(emoji::EMOJI_LIST.len()),
-        }))
-    }
-
-    /// Make mesh for this emoji centered at (0, 0)
-    fn gen_emoji_mesh(&self, emoji: &str) -> GfxDrawMesh {
-        //d!("rendering emoji: '{emoji}'");
-        // The params here don't actually matter since we're talking about BMP fixed sizes
-        let glyphs = self.text_shaper.shape(emoji.to_string(), 10., 1.);
-        assert_eq!(glyphs.len(), 1);
-        let atlas = text::make_texture_atlas(&self.render_api, &glyphs);
-        let glyph = glyphs.into_iter().next().unwrap();
-
-        // Emoji's vary in size. We make them all a consistent size.
-        let w = self.emoji_size;
-        let h =
-            (glyph.sprite.bmp_height as f32) * self.emoji_size / (glyph.sprite.bmp_width as f32);
-        // Center at origin
-        let x = -w / 2.;
-        let y = -h / 2.;
-
-        let uv = atlas.fetch_uv(glyph.glyph_id).expect("missing glyph UV rect");
-        let mut mesh = MeshBuilder::new();
-        mesh.draw_box(&Rectangle::new(x, y, w, h), COLOR_WHITE, &uv);
-        mesh.alloc(&self.render_api).draw_with_texture(atlas.texture)
-    }
-
-    pub fn get(&mut self, i: usize) -> GfxDrawMesh {
-        assert!(i < emoji::EMOJI_LIST.len());
-
-        if i >= self.meshes.len() {
-            //d!("EmojiMeshes loading new glyphs");
-            for j in self.meshes.len()..=i {
-                let emoji = emoji::EMOJI_LIST[j];
-                let mesh = self.gen_emoji_mesh(emoji);
-                self.meshes.push(mesh);
-            }
-        }
-
-        self.meshes[i].clone()
-    }
-}
 
 struct TouchInfo {
     start_pos: Point,
@@ -204,7 +144,7 @@ impl EmojiPicker {
     }
 
     fn max_scroll(&self) -> f32 {
-        let emojis_len = emoji::EMOJI_LIST.len() as f32;
+        let emojis_len = self.emoji_meshes.lock().unwrap().get_list().len() as f32;
         let emoji_size = self.emoji_size.get();
         let cols = self.emojis_per_line();
         let rows = (emojis_len / cols).ceil();
@@ -237,15 +177,26 @@ impl EmojiPicker {
         let idx = (col + row * n_cols).round() as usize;
         //d!("    = {idx}, emoji_len = {}", emoji::EMOJI_LIST.len());
 
-        if idx < emoji::EMOJI_LIST.len() {
-            let emoji = emoji::EMOJI_LIST[idx];
-            d!("Selected emoji: {emoji}");
-            let mut param_data = vec![];
-            emoji.encode(&mut param_data).unwrap();
-            let node = self.node.upgrade().unwrap();
-            node.trigger("emoji_select", param_data).await.unwrap();
-        } else {
-            d!("Index out of bounds: {idx}");
+        let emoji_selected = {
+            let mut emoji_meshes = self.emoji_meshes.lock().unwrap();
+            let emoji_list = emoji_meshes.get_list();
+
+            if idx < emoji_list.len() {
+                let emoji = emoji_list[idx].clone();
+                Some(emoji)
+            } else {
+                None
+            }
+        };
+        match emoji_selected {
+            Some(emoji) => {
+                d!("Selected emoji: {emoji}");
+                let mut param_data = vec![];
+                emoji.encode(&mut param_data).unwrap();
+                let node = self.node.upgrade().unwrap();
+                node.trigger("emoji_select", param_data).await.unwrap();
+            }
+            None => d!("Index out of bounds: {idx}"),
         }
     }
 
@@ -253,6 +204,7 @@ impl EmojiPicker {
         let atom = &mut PropertyAtomicGuard::new();
         let trace_id = rand::random();
         let timest = unixtime();
+        t!("redraw({:?}) [timest={timest}, trace_id={trace_id}]", self.node.upgrade().unwrap());
         let Some(parent_rect) = self.parent_rect.lock().unwrap().clone() else { return };
 
         let Some(draw_update) = self.get_draw_calls(parent_rect, trace_id, atom) else {
@@ -260,7 +212,7 @@ impl EmojiPicker {
             return;
         };
         self.render_api.replace_draw_calls(timest, draw_update.draw_calls);
-        t!("replace draw calls done");
+        t!("redraw DONE [trace_id={trace_id}]");
     }
 
     fn get_draw_calls(
@@ -287,10 +239,11 @@ impl EmojiPicker {
         let emoji_size = self.emoji_size.get();
 
         let mut emoji_meshes = self.emoji_meshes.lock().unwrap();
+        let emoji_list_len = emoji_meshes.get_list().len();
 
         let mut x = emoji_size / 2.;
         let mut y = emoji_size / 2. - self.scroll.get();
-        for (i, mesh) in emoji::EMOJI_LIST.iter().enumerate() {
+        for i in 0..emoji_list_len {
             let pos = Point::new(x, y);
             let mesh = emoji_meshes.get(i);
             instrs.extend_from_slice(&[
@@ -347,7 +300,6 @@ impl UIObject for EmojiPicker {
         atom: &mut PropertyAtomicGuard,
     ) -> Option<DrawUpdate> {
         t!("EmojiPicker::draw({parent_rect:?}, {trace_id})");
-
         *self.parent_rect.lock().unwrap() = Some(parent_rect);
         self.get_draw_calls(parent_rect, trace_id, atom)
     }

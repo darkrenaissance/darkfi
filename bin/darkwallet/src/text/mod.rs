@@ -25,7 +25,9 @@ use harfbuzz_sys::{
 };
 use std::{
     collections::HashMap,
+    ffi::OsStr,
     os,
+    path::PathBuf,
     sync::{Arc, Mutex as SyncMutex, Weak},
 };
 
@@ -44,6 +46,15 @@ pub use wrap::{glyph_str, wrap};
 pub const EMOJI_SCALE_FACT: f32 = 1.6;
 // How much of the emoji is above baseline?
 pub const EMOJI_PROP_ABOVE_BASELINE: f32 = 0.8;
+
+#[cfg(target_os = "android")]
+fn custom_font_path() -> PathBuf {
+    get_external_storage_path().join("font")
+}
+#[cfg(not(target_os = "android"))]
+fn custom_font_path() -> PathBuf {
+    dirs::data_local_dir().unwrap().join("darkfi/font")
+}
 
 // From https://sourceforge.net/projects/freetype/files/freetype2/2.6/
 //
@@ -153,11 +164,45 @@ impl TextShaperInternal {
 
 pub struct TextShaper {
     intern: SyncMutex<TextShaperInternal>,
+    fonts_data: Vec<Vec<u8>>,
 }
 
 impl TextShaper {
     pub fn new() -> Arc<Self> {
         let ftlib = freetype::Library::init().unwrap();
+
+        let mut fonts_data = vec![];
+        if let Ok(read_dir) = std::fs::read_dir(custom_font_path()) {
+            for entry in read_dir {
+                let Ok(entry) = entry else {
+                    warn!(target: "text", "Skipping unknown in custom font path");
+                    continue
+                };
+                let font_path = entry.path();
+                if font_path.is_dir() {
+                    warn!(target: "text", "Skipping {font_path:?} in custom font path: is directory");
+                    continue
+                }
+                let Some(font_ext) = font_path.extension().and_then(OsStr::to_str) else {
+                    warn!(target: "text", "Skipping {font_path:?} in custom font path: missing file extension");
+                    continue
+                };
+                if !["ttf", "otf"].contains(&font_ext) {
+                    warn!(target: "text", "Skipping {font_path:?} in custom font path: unsupported file extension (supported: ttf, otf)");
+                    continue
+                }
+                let font_data: Vec<u8> = match std::fs::read(&font_path) {
+                    Ok(font_data) => font_data,
+                    Err(err) => {
+                        warn!(target: "text", "Unexpected error loading {font_path:?} in custom font path: {err}");
+                        continue
+                    }
+                };
+                info!(target: "text", "Loaded custom font: {font_path:?}");
+                fonts_data.push(font_data);
+            }
+        }
+        fonts_data.reserve_exact(fonts_data.len() + 2);
 
         let mut faces = vec![];
 
@@ -165,9 +210,10 @@ impl TextShaper {
         let ft_face = ftlib.new_memory_face2(font_data, 0).unwrap();
         faces.push(ft_face);
 
-        //let font_data = include_bytes!("../../darkfi-custom-emoji.ttf") as &[u8];
-        //let ft_face = ftlib.new_memory_face2(font_data, 0).unwrap();
-        //faces.push(ft_face);
+        for font_data in &fonts_data {
+            let face = unsafe { Self::load_font_face(&ftlib, font_data) };
+            faces.push(face);
+        }
 
         let font_data = include_bytes!("../../NotoColorEmoji.ttf") as &[u8];
         let ft_face = ftlib.new_memory_face2(font_data, 0).unwrap();
@@ -178,7 +224,15 @@ impl TextShaper {
                 font_faces: FtFaces(faces),
                 cache: HashMap::new(),
             }),
+            fonts_data,
         })
+    }
+
+    /// Beware: recasts font_data as static. Make sure data outlives the face.
+    unsafe fn load_font_face(ftlib: &freetype::Library, font_data: &[u8]) -> FreetypeFace {
+        let font_data = &*(font_data as *const _);
+        let ft_face = ftlib.new_memory_face2(font_data, 0).unwrap();
+        ft_face
     }
 
     pub fn shape(&self, mut text: String, font_size: f32, window_scale: f32) -> Vec<Glyph> {

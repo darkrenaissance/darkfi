@@ -8,10 +8,6 @@ license = "AGPL-3.0-only"
 homepage = "https://dark.fi"
 repository = "https://codeberg.org/darkrenaissance/darkfi"
 
-#[[bin]]
-#name = "drawsim"
-#path = "bin/drawsim.rs"
-
 [dependencies]
 miniquad = { git = "https://github.com/not-fl3/miniquad" }
 
@@ -24,11 +20,8 @@ freetype-rs = { version = "0.37.0", features = ["bundled"] }
 image = "0.25.2"
 log = { version = "0.4", features = ["release_max_level_info"] }
 glam = "0.29.0"
-#zmq = "0.10.0"
-#async_zmq = "0.4.0"
 zeromq = { version = "0.4.1", default-features = false, features = ["async-std-runtime", "all-transport"] }
 darkfi = {path = "../../", features = ["async-daemonize", "event-graph", "net", "util", "system", "zk"]}
-evgrd = {path = "../../script/evgrd/"}
 #darkfi-sdk = {path = "../../src/sdk", features = ["async"]}
 darkfi-serial = {version = "0.4.2", features = ["async"]}
 thiserror = "1.0.64"
@@ -53,6 +46,7 @@ simplelog = "0.12.2"
 # For log files
 file-rotate = "0.7.6"
 parking_lot = { version = "0.12", features = ["nightly"] }
+regex = "1.11"
 
 [features]
 emulate-android = []
