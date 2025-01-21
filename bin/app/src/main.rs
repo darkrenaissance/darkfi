@@ -73,6 +73,10 @@ mod util;
 
 use crate::{net::ZeroMQAdapter, text::TextShaper};
 
+// Hides the cmd.exe terminal on Windows.
+// Enable this when making release builds.
+//#![windows_subsystem = "windows"]
+
 pub type ExecutorPtr = Arc<smol::Executor<'static>>;
 
 fn panic_hook(panic_info: &std::panic::PanicHookInfo) {
