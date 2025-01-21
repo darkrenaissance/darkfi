@@ -9,7 +9,7 @@ mkdir $APPDIR
 cp darkfi.desktop $APPDIR
 
 cp ../../data/res/mipmap-xxxhdpi/ic_launcher.png $APPDIR/darkfi.png
-cp ../../darkwallet $APPDIR/AppRun
+cp ../../darkfi-app.linux $APPDIR/AppRun
 cp -r ../../assets $APPDIR
 appimagetool $APPDIR
 

@@ -129,9 +129,17 @@ C:\Users\a> cd ../../darkfi/bin/app/
 C:\darkfi\bin\app> cargo build
 ```
 
-## (Optional) Mesa GL
+## Create Installer
 
-This is buggy af software renderer.
+* Use Advanced Installer to create an MSI installer.
+* Add shortcuts. Use the provided darkfi.ico icon.
+    * Application Shortcut Folder
+    * Desktop
+
+## (Optional) Mesa GL for Tesing
+
+This is buggy af software renderer. App will often randomly crash.
+For testing it's better to use a cheap laptop.
 
 * Setup OpenGL using [this guide](https://thomas.inf3.ch/2019-06-12-opengl-kvm-mesa3d/index.html).
     * Download [mesa3d-xxx-release-msvc.7z](https://github.com/pal1000/mesa-dist-win/releases)
