@@ -11,7 +11,7 @@ edition = "2021"
 darkfi = {path = "../../../../", features = ["zk"]}
 darkfi-sdk = {path = "../../../../src/sdk"}
 halo2_proofs = "0.3.0"
-halo2_gadgets = "0.3.0"
+halo2_gadgets = "0.3.1"
 rand = "0.8.5"
 hex = "0.4.3"
 
@@ -20,4 +20,3 @@ halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v3"}
 
 [lints]
 workspace = true
-

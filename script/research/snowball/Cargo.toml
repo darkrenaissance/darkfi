@@ -11,7 +11,7 @@ edition = "2021"
 darkfi = {path = "../../../", features = ["util"]}
 darkfi-serial = {path = "../../../src/serial"}
 
-blake3 = "1.5.4"
+blake3 = "1.5.5"
 num-bigint = "0.4.6"
 rand = "0.8.5"
 

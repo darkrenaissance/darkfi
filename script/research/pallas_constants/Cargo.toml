@@ -10,13 +10,12 @@ edition = "2021"
 [workspace]
 
 [dependencies]
-anyhow = "1.0.89"
+anyhow = "1.0.95"
 darkfi = {path = "../../../", features = ["blockchain"]}
 darkfi-sdk = {path = "../../../src/sdk"}
 
 [patch.crates-io]
-halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v3"}
+halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v4"}
 
 [lints]
 workspace = true
-

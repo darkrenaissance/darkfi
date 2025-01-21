@@ -15,16 +15,18 @@ miniquad = { git = "https://github.com/not-fl3/miniquad" }
 #harfbuzz-sys = "0.6.1"
 #harfbuzz-sys = { git = "https://github.com/servo/rust-harfbuzz", features = ["bundled"] }
 harfbuzz-sys = { git = "https://github.com/narodnik/rust-harfbuzz2", features = ["bundled"] }
-freetype-rs = { version = "0.37.0", features = ["bundled"] }
+freetype-rs = { version = "0.38.0", features = ["bundled"] }
 
-image = "0.25.2"
-log = { version = "0.4", features = ["release_max_level_info"] }
-glam = "0.29.0"
+image = "0.25.5"
+log = { version = "0.4.25", features = ["release_max_level_info"] }
+glam = "0.29.2"
+#zmq = "0.10.0"
+#async_zmq = "0.4.0"
 zeromq = { version = "0.4.1", default-features = false, features = ["async-std-runtime", "all-transport"] }
 darkfi = {path = "../../", features = ["async-daemonize", "event-graph", "net", "util", "system", "zk"]}
 #darkfi-sdk = {path = "../../src/sdk", features = ["async"]}
 darkfi-serial = {version = "0.4.2", features = ["async"]}
-thiserror = "1.0.64"
+thiserror = "2.0.11"
 smol = "2.0.2"
 atomic_float = "1.1.0"
 async-channel = "2.3.1"
@@ -33,19 +35,19 @@ rand = "0.8.5"
 async-lock = "3.4.0"
 futures = "0.3.31"
 async-recursion = "1.1.1"
-colored = "2.1.0"
+colored = "3.0.0"
 #rustpython-vm = "0.3.1"
 sled-overlay = "0.1.6"
-url = "2.5.2"
-semver = "1.0.23"
-chrono = "0.4.38"
+url = "2.5.4"
+semver = "1.0.25"
+chrono = "0.4.39"
 async-gen = "0.2.3"
-async-trait = "0.1.83"
-blake3 = "1.5.4"
+async-trait = "0.1.85"
+blake3 = "1.5.5"
 simplelog = "0.12.2"
 # For log files
 file-rotate = "0.7.6"
-parking_lot = { version = "0.12", features = ["nightly"] }
+parking_lot = { version = "0.12.3", features = ["nightly"] }
 regex = "1.11"
 
 [features]
@@ -75,12 +77,12 @@ dirs = "5.0.1"
 android_logger = "0.13.3"
 # Required by Arti: tor-dirmgr
 rusqlite = {version = "0.32.1", features = ["bundled"]}
-tor-dirmgr = {version="0.23.0", features=["static"]}
+tor-dirmgr = {version="0.26.0", features=["static"]}
 #android-fileopen = {path = "./android-fileopen/"}
 
 [target.'cfg(target_os = "windows")'.dependencies]
 # Used by tor-dirmgr
-rusqlite = {version = "0.32", features = ["bundled"]}
+rusqlite = {version = "0.32.1", features = ["bundled"]}
 
 [package.metadata.android.activity_attributes]
 "android:exported" = "true"
@@ -102,4 +104,3 @@ assets = "assets"
 name = "android.permission.INTERNET"
 [[package.metadata.android.permission]]
 name = "android.permission.ACCESS_NETWORK_STATE"
-

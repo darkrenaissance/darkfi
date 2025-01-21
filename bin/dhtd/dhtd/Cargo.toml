@@ -9,16 +9,16 @@ license = "AGPL-3.0-only"
 edition = "2021"
 
 [dependencies]
-async-trait = "0.1.83"
-blake3 = "1.5.4"
+async-trait = "0.1.85"
+blake3 = "1.5.5"
 darkfi = {path = "../../../", features = ["dht"]}
 darkfi-serial = {version = "0.4.2", features = ["derive", "crypto"]}
 easy-parallel = "3.3.1"
-log = "0.4.22"
+log = "0.4.25"
 rand = "0.8.5"
 simplelog = "0.12.2"
 smol = "2.0.2"
-url = "2.5.2"
+url = "2.5.4"
 
 [lints]
 workspace = true

@@ -25,16 +25,16 @@ darkfi = { path = "../../../", features = [
 darkfi-serial = "0.4.2"
 
 # Crypto
-blake3 = "1.5.4"
+blake3 = "1.5.5"
 
 # Event Graph DB
 sled-overlay = "0.1.6"
 
 # Misc
-async-trait = "0.1.83"
-log = "0.4.22"
+async-trait = "0.1.85"
+log = "0.4.25"
 tinyjson = "2.5.1"
-url = "2.5.2"
+url = "2.5.4"
 
 # Daemon
 easy-parallel = "3.3.1"
@@ -44,7 +44,7 @@ simplelog = "0.12.2"
 smol = "2.0.2"
 
 # Argument parsing
-serde = { version = "1.0.210", features = ["derive"] }
+serde = { version = "1.0.217", features = ["derive"] }
 structopt = "0.3.26"
 structopt-toml = "0.5.1"
 

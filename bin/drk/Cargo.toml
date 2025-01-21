@@ -18,17 +18,17 @@ darkfi-sdk = {path = "../../src/sdk", features = ["async"]}
 darkfi-serial = "0.4.2"
 
 # Misc
-blake3 = "1.5.4"
+blake3 = "1.5.5"
 bs58 = "0.5.1"
 lazy_static = "1.5.0"
-log = "0.4.22"
+log = "0.4.25"
 num-bigint = "0.4.6"
 prettytable-rs = "0.10.0"
 rand = "0.8.5"
-rodio = {version = "0.19.0", default-features = false, features = ["minimp3"]}
+rodio = {version = "0.20.1", default-features = false, features = ["minimp3"]}
 rusqlite = {version = "0.32.1", features = ["sqlcipher"]}
 toml = "0.8.19"
-url = "2.5.2"
+url = "2.5.4"
 
 # Daemon
 easy-parallel = "3.3.1"
@@ -38,7 +38,7 @@ simplelog = "0.12.2"
 smol = "2.0.2"
 
 # Argument parsing
-serde = {version = "1.0.210", features = ["derive"]}
+serde = {version = "1.0.217", features = ["derive"]}
 structopt = "0.3.26"
 structopt-toml = "0.5.1"
 

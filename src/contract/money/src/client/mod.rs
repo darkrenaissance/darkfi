@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+//! Contract Client API
+//!
 //! This module implements the client-side API for this contract's interaction.
 //! What we basically do here is implement an API that creates the necessary
 //! structures and is able to export them to create a DarkFi transaction

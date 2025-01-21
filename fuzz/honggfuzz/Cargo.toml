@@ -9,7 +9,7 @@ cargo-fuzz = true
 
 [dependencies]
 honggfuzz = "0.5.56"
-bitcoin = "0.32.3"
+bitcoin = "0.32.5"
 
 [dependencies.darkfi]
 path = "../.."

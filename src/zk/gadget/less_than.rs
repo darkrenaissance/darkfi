@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+//! Less-Than Gadget
+//!
 //! Given two values:
 //!     - `a`, a NUM_OF_BITS-length value and
 //!     - `b`, an arbitrary field element,

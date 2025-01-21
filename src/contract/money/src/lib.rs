@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+//! DarkFi Money Contract
+//!
 //! Smart contract implementing money transfers, atomic swaps, token
 //! minting and freezing, and staking/unstaking of consensus tokens.
 
