@@ -680,7 +680,7 @@ impl Client {
             ))])
         };
 
-        if !message.starts_with(':') || message.trim() == ":" {
+        if !message.starts_with(':') || (message.trim() == ":" && tokens.next().is_none()) {
             return Ok(vec![ReplyType::Server((
                 ERR_NOTEXTTOSEND,
                 format!("{} :No text to send", nick),
