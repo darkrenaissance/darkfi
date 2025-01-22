@@ -180,8 +180,6 @@ pub async fn make(app: &App, window: SceneNodePtr) {
     channel_y += CHANNEL_LABEL_LINESPACE;
 
     for (i, channel) in CHANNELS.iter().enumerate() {
-        let text = "#".to_string() + channel;
-
         let node = create_vector_art(&(channel.to_string() + "_channel_label_bg"));
         let prop = node.get_property("rect").unwrap();
         prop.clone().set_f32(atom, Role::App, 0, 0.).unwrap();
@@ -218,6 +216,14 @@ pub async fn make(app: &App, window: SceneNodePtr) {
             .setup(|me| VectorArt::new(me, shape, app.render_api.clone(), app.ex.clone()))
             .await;
         layer_node.clone().link(node);
+
+        // Desktop platforms
+        #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+        let text = format!("{}. #{channel}", i + 1);
+
+        // Mobile platforms
+        #[cfg(any(target_os = "android", target_os = "ios"))]
+        let text = "#".to_string() + channel;
 
         // Create some text
         let node = create_text(&(channel.to_string() + "_channel_label"));
