@@ -1256,7 +1256,7 @@ impl Hosts {
             if self.container.contains(HostColor::Black as usize, addr_) ||
                 self.block_all_ports(addr_)
             {
-                warn!(
+                debug!(
                     target: "net::hosts::filter_addresses",
                     "[{}] is blacklisted", addr_,
                 );

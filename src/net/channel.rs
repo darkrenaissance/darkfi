@@ -28,7 +28,7 @@ use std::{
 use darkfi_serial::{
     async_trait, AsyncDecodable, AsyncEncodable, SerialDecodable, SerialEncodable, VarInt,
 };
-use log::{debug, error, info, trace};
+use log::{debug, error, info, trace, warn};
 use rand::{rngs::OsRng, Rng};
 use smol::{
     io::{self, AsyncRead, AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf},
@@ -383,7 +383,11 @@ impl Channel {
                 Ok(()) => {}
                 // If we're getting messages without dispatchers, it's spam.
                 Err(Error::MissingDispatcher) => {
-                    debug!(target: "net::channel::main_receive_loop()", "Stopping channel {:?}", self);
+                    warn!(
+                    target: "net::channel::main_receive_loop()",
+                    "MissingDispatcher for command={}, channel={:?}",
+                    command, self
+                    );
                     if let BanPolicy::Strict = self.p2p().settings().read().await.ban_policy {
                         self.ban(self.address()).await;
                     }
@@ -431,6 +435,7 @@ impl Channel {
         };
 
         let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+        info!(target: "net::channel::ban()", "Blacklisting peer={}", peer);
         self.p2p().hosts().move_host(&peer, last_seen, HostColor::Black).unwrap();
         self.stop().await;
         debug!(target: "net::channel::ban()", "STOP {:?}", self);
