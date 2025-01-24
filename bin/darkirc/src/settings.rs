@@ -18,6 +18,7 @@
 
 use std::{
     collections::{HashMap, HashSet},
+    str::FromStr,
     sync::Arc,
 };
 
@@ -181,7 +182,13 @@ pub fn parse_configured_channels(data: &toml::Value) -> Result<HashMap<String, I
     let Some(chans) = chans.as_table() else { return Err(ParseFailed("`channel` not a map")) };
 
     for (name, items) in chans {
-        let mut chan = IrcChannel { topic: String::new(), nicks: HashSet::new(), saltbox: None };
+        let mut chan = IrcChannel {
+            topic: String::new(),
+            nicks: HashSet::new(),
+            saltbox: None,
+            moderators: vec![],
+            mod_secret_key: None,
+        };
 
         if let Some(topic) = items.get("topic") {
             if let Some(topic) = topic.as_str() {
@@ -210,6 +217,36 @@ pub fn parse_configured_channels(data: &toml::Value) -> Result<HashMap<String, I
             } else {
                 return Err(ParseFailed("Channel secret not a string"))
             }
+        }
+
+        if let Some(moderators) = items.get("moderators") {
+            let Some(moderators) = moderators.as_array() else {
+                return Err(ParseFailed("moderators not an array"))
+            };
+
+            for moderator in moderators {
+                let Some(public_key) = moderator.as_str() else {
+                    return Err(ParseFailed("moderator public key not a string"))
+                };
+
+                let Ok(public_key) = darkfi_sdk::crypto::PublicKey::from_str(public_key) else {
+                    return Err(ParseFailed("moderator public key is invalid"))
+                };
+
+                chan.moderators.push(public_key);
+            }
+        }
+
+        if let Some(mod_secret_key) = items.get("mod_secret_key") {
+            let Some(mod_secret_key) = mod_secret_key.as_str() else {
+                return Err(ParseFailed("moderator secret key not a string"))
+            };
+
+            let Ok(mod_secret_key) = darkfi_sdk::crypto::SecretKey::from_str(mod_secret_key) else {
+                return Err(ParseFailed("moderator secret key is invalid"))
+            };
+
+            chan.mod_secret_key = Some(mod_secret_key);
         }
 
         info!("Configured channel {}", name);

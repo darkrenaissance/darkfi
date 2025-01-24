@@ -20,7 +20,10 @@ use std::{collections::HashSet, sync::Arc};
 
 use crypto_box::ChaChaBox;
 use darkfi::{Error, Result};
-use darkfi_serial::{async_trait, deserialize_async_partial, SerialDecodable, SerialEncodable};
+use darkfi_sdk::crypto::{schnorr::SchnorrSecret, PublicKey, SecretKey};
+use darkfi_serial::{
+    async_trait, deserialize_async_partial, serialize, Encodable, SerialDecodable, SerialEncodable,
+};
 
 /// IRC client state
 pub(crate) mod client;
@@ -104,9 +107,48 @@ impl Priv for Privmsg {
     }
 }
 
+/// IRC moderation message.
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct Modmsg {
+    /// Channel this message is for
+    pub channel: String,
+    /// The moderation command
+    pub command: String,
+    /// Command parameters
+    pub params: String,
+    /// Signature bytes of the moderation message hash,
+    /// for validating moderator.
+    pub signature: Vec<u8>,
+}
+
+impl Modmsg {
+    // Generate a new `Modmsg` and sign it using provided secret key.
+    pub fn new(channel: String, command: String, params: String, secret_key: &SecretKey) -> Self {
+        let mut message = Self { channel, command, params, signature: vec![] };
+        message.signature = serialize(&secret_key.sign(&message.hash()));
+        message
+    }
+
+    /// Compute the moderation message hash. This hash consist of the blake3::Hash
+    /// of the message `channel`, `command` and `params`.
+    pub fn hash(&self) -> [u8; 32] {
+        let mut hasher = blake3::Hasher::new();
+
+        // Blake3 hasher .update() method never fails.
+        // This call returns a Result due to how the Write trait is specified.
+        // Calling unwrap() here should be safe.
+        self.channel.encode(&mut hasher).expect("blake3 hasher");
+        self.command.encode(&mut hasher).expect("blake3 hasher");
+        self.params.encode(&mut hasher).expect("blake3 hasher");
+
+        hasher.finalize().into()
+    }
+}
+
 pub enum Msg {
     V1(OldPrivmsg),
     V2(Privmsg),
+    Mod(Modmsg),
 }
 
 impl Msg {
@@ -121,6 +163,11 @@ impl Msg {
             return Ok(Msg::V2(new_msg))
         }
 
+        let mod_msg = deserialize_async_partial(bytes).await;
+        if let Ok((mod_msg, _)) = mod_msg {
+            return Ok(Msg::Mod(mod_msg))
+        }
+
         Err(Error::Custom("Unknown message format".into()))
     }
 }
@@ -131,6 +178,8 @@ pub struct IrcChannel {
     pub topic: String,
     pub nicks: HashSet<String>,
     pub saltbox: Option<Arc<ChaChaBox>>,
+    pub moderators: Vec<PublicKey>,
+    pub mod_secret_key: Option<SecretKey>,
 }
 
 /// IRC contact definition
