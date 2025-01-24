@@ -215,7 +215,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         println!("mod_secret_key = \"{}\"", moderator_keypair.secret);
         println!("#mod_mublic_key = \"{}\"", moderator_keypair.public);
         println!("\nDon't forget to add your public key in the channel moderators vector like:\n");
-        println!("moderators = \"{}\"", moderator_keypair.public);
+        println!("moderators = [\"{}\"]", moderator_keypair.public);
         return Ok(())
     }
 

@@ -22,7 +22,7 @@ use crypto_box::ChaChaBox;
 use darkfi::{Error, Result};
 use darkfi_sdk::crypto::{schnorr::SchnorrSecret, PublicKey, SecretKey};
 use darkfi_serial::{
-    async_trait, deserialize_async_partial, serialize, Encodable, SerialDecodable, SerialEncodable,
+    async_trait, deserialize_async, serialize, Encodable, SerialDecodable, SerialEncodable,
 };
 
 /// IRC client state
@@ -153,18 +153,15 @@ pub enum Msg {
 
 impl Msg {
     pub async fn deserialize(bytes: &[u8]) -> Result<Self> {
-        let old_privmsg = deserialize_async_partial(bytes).await;
-        if let Ok((old_msg, _)) = old_privmsg {
+        if let Ok(old_msg) = deserialize_async(bytes).await {
             return Ok(Msg::V1(old_msg))
         }
 
-        let new_privmsg = deserialize_async_partial(bytes).await;
-        if let Ok((new_msg, _)) = new_privmsg {
+        if let Ok(new_msg) = deserialize_async(bytes).await {
             return Ok(Msg::V2(new_msg))
         }
 
-        let mod_msg = deserialize_async_partial(bytes).await;
-        if let Ok((mod_msg, _)) = mod_msg {
+        if let Ok(mod_msg) = deserialize_async(bytes).await {
             return Ok(Msg::Mod(mod_msg))
         }
 
