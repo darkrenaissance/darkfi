@@ -571,7 +571,7 @@ impl Client {
         // TODO: Perhaps this could also be configurable. Like what
         // moderation actions we allow per channel.
         let command = modmsg.command.to_uppercase().to_string();
-        if !["MOTD"].contains(&command.as_str()) {
+        if !["TOPIC"].contains(&command.as_str()) {
             return true
         }
 
