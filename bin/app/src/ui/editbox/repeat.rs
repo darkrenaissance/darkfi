@@ -45,28 +45,31 @@ impl PressedKeysSmoothRepeat {
     }
 
     pub fn key_down(&mut self, key: PressedKey, repeat: bool) -> u32 {
-        //debug!(target: "PressedKeysSmoothRepeat", "key_down({:?}, {})", key, repeat);
+        trace!(target: "PressedKeysSmoothRepeat", "key_down({:?}, {})", key, repeat);
 
         let is_initial_keypress = !repeat;
         if is_initial_keypress {
-            //debug!(target: "PressedKeysSmoothRepeat", "remove key {:?}", key);
+            trace!(target: "PressedKeysSmoothRepeat", "remove key {:?}", key);
             self.pressed_keys.remove(&key);
             return 1;
         }
 
         // Insert key if not exists
         if !self.pressed_keys.contains_key(&key) {
-            //debug!(target: "PressedKeysSmoothRepeat", "insert key {:?}", key);
+            trace!(target: "PressedKeysSmoothRepeat", "insert key {:?}", key);
             self.pressed_keys.insert(key.clone(), RepeatingKeyTimer::new());
         }
 
         let repeater = self.pressed_keys.get_mut(&key).expect("repeat map");
-        repeater.update(self.start_delay, self.step_time)
+        let actions = repeater.update(self.start_delay, self.step_time);
+        // This is a temporary workaround due to a miniquad issue.
+        // See https://github.com/not-fl3/miniquad/issues/517
+        std::cmp::min(1, actions)
     }
 
     /*
     fn key_up(&mut self, key: &PressedKey) {
-        //debug!(target: "PressedKeysSmoothRepeat", "key_up({:?})", key);
+        //trace!(target: "PressedKeysSmoothRepeat", "key_up({:?})", key);
         assert!(self.pressed_keys.contains_key(key));
         self.pressed_keys.remove(key).expect("key was pressed");
     }
@@ -85,8 +88,8 @@ impl RepeatingKeyTimer {
 
     fn update(&mut self, start_delay: u32, step_time: u32) -> u32 {
         let elapsed = self.start.elapsed().as_millis();
-        //debug!(target: "RepeatingKeyTimer", "update() elapsed={}, actions={}",
-        //       elapsed, self.actions);
+        trace!(target: "RepeatingKeyTimer", "update() elapsed={}, actions={}",
+               elapsed, self.actions);
         if elapsed < start_delay as u128 {
             return 0
         }
