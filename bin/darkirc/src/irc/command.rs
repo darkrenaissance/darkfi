@@ -761,7 +761,11 @@ impl Client {
         }
 
         // If there's a topic, we'll set it, otherwise return the set topic.
-        let Some(topic) = tokens.next() else {
+        let full_topic = args.replacen(channel, "", 1);
+        let full_topic = full_topic.trim();
+        let topic = if !full_topic.is_empty() {
+            full_topic
+        } else {
             let topic = self.server.channels.read().await.get(channel).unwrap().topic.clone();
             if topic.is_empty() {
                 return Ok(vec![ReplyType::Server((
@@ -778,7 +782,7 @@ impl Client {
 
         // Set the new topic
         self.server.channels.write().await.get_mut(channel).unwrap().topic =
-            topic.strip_prefix(':').unwrap().to_string();
+            topic.trim().strip_prefix(':').unwrap().to_string();
 
         // Send reply
         let replies = vec![ReplyType::Client((nick, format!("TOPIC {} {}", channel, topic)))];
