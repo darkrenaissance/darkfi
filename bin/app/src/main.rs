@@ -125,7 +125,8 @@ fn main() {
     let async_runtime = app::AsyncRuntime::new(ex.clone());
     async_runtime.start();
 
-    if cfg!(features = "enable-netdebug") {
+    #[cfg(feature = "enable-netdebug")]
+    {
         let sg_root2 = sg_root.clone();
         let ex2 = ex.clone();
         let zmq_task = ex.spawn(async {

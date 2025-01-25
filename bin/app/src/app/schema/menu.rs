@@ -218,11 +218,10 @@ pub async fn make(app: &App, window: SceneNodePtr) {
         layer_node.clone().link(node);
 
         // Desktop platforms
-        #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
-        let text = format!("{}. #{channel}", i + 1);
-
-        // Mobile platforms
-        #[cfg(any(target_os = "android", target_os = "ios"))]
+        //#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
+        //let text = format!("{}. #{channel}", i + 1);
+        //// Mobile platforms
+        //#[cfg(any(target_os = "android", target_os = "ios"))]
         let text = "#".to_string() + channel;
 
         // Create some text
